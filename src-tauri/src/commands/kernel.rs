@@ -43,27 +43,53 @@ pub fn start_kernel(
         let _ = child.wait();
     }
 
-    // Determine the kernel directory — in dev mode, it's the project root
-    let resource_dir = app_handle
-        .path()
-        .resource_dir()
-        .map_err(|e| e.to_string())?;
+    // In dev mode, resolve the project root from the current exe location
+    // Tauri 2 resource_dir in dev points to src-tauri/, parent is project root
+    let project_root = if cfg!(debug_assertions) {
+        // In dev, use env CARGO_MANIFEST_DIR or fall back to resource_dir
+        let manifest = std::env::var("CARGO_MANIFEST_DIR")
+            .map(std::path::PathBuf::from)
+            .ok();
+        if let Some(ref dir) = manifest {
+            dir.parent().unwrap_or(dir).to_path_buf()
+        } else {
+            let resource_dir = app_handle
+                .path()
+                .resource_dir()
+                .map_err(|e| e.to_string())?;
+            resource_dir.parent().unwrap_or(&resource_dir).to_path_buf()
+        }
+    } else {
+        let resource_dir = app_handle
+            .path()
+            .resource_dir()
+            .map_err(|e| e.to_string())?;
+        resource_dir.parent().unwrap_or(&resource_dir).to_path_buf()
+    };
 
-    // In dev mode, the resource dir is src-tauri, so go up one level
-    let project_root = resource_dir.parent().unwrap_or(&resource_dir);
+    let kernel_script = project_root.join("kernel").join("server.py");
+    if !kernel_script.exists() {
+        return Err(format!(
+            "Kernel script not found at: {}. Project root: {}",
+            kernel_script.display(),
+            project_root.display()
+        ));
+    }
+
+    log::info!("Starting kernel: python3 {} (cwd: {})", kernel_script.display(), project_root.display());
 
     let child = Command::new("python3")
-        .arg("kernel/server.py")
-        .current_dir(project_root)
+        .arg(kernel_script.to_str().unwrap())
+        .current_dir(&project_root)
         .stdout(std::process::Stdio::piped())
         .stderr(std::process::Stdio::piped())
         .spawn()
-        .map_err(|e| format!("Failed to start kernel: {}", e))?;
+        .map_err(|e| format!("Failed to start kernel: {} (cwd: {})", e, project_root.display()))?;
 
     let pid = child.id();
     *guard = Some(child);
 
-    Ok(format!("Kernel started with PID {}", pid))
+    Ok(format!("Kernel started with PID {} (cwd: {})", pid, project_root.display()))
 }
 
 #[tauri::command]

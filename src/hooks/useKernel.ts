@@ -1,5 +1,5 @@
 import { useEffect, useRef, useCallback } from 'react';
-import { invoke } from '@tauri-apps/api/core';
+import { usePlatform } from '../platform/PlatformProvider';
 import { useEditorStore } from '../stores/editorStore';
 import { useCircuitStore } from '../stores/circuitStore';
 import { useSimulationStore } from '../stores/simulationStore';
@@ -7,25 +7,32 @@ import type { KernelResponse } from '../types/quantum';
 
 const KERNEL_URL = 'ws://localhost:9742';
 const DEBOUNCE_MS = 300;
-const CONNECT_DELAY_MS = 2000;
-const RETRY_DELAY_MS = 1500;
+const CONNECT_DELAY_MS = 3000;
+const RETRY_DELAY_MS = 2000;
+const MAX_RETRIES = 15;
 
 export function useKernel() {
   const wsRef = useRef<WebSocket | null>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const mountedRef = useRef(true);
+  const retryCountRef = useRef(0);
+  const platform = usePlatform();
 
   const setSnapshot = useCircuitStore.getState().setSnapshot;
   const setCircuitError = useCircuitStore.getState().setError;
 
   const connect = useCallback(() => {
     if (!mountedRef.current) return;
+    if (wsRef.current?.readyState === WebSocket.OPEN) return;
 
+    console.log('[Nuclei] Connecting WebSocket to', KERNEL_URL, `(attempt ${retryCountRef.current + 1})`);
     const ws = new WebSocket(KERNEL_URL);
 
     ws.onopen = () => {
-      console.log('Kernel WebSocket connected');
+      console.log('[Nuclei] Kernel WebSocket connected');
       wsRef.current = ws;
+      retryCountRef.current = 0;
+      useEditorStore.getState().setKernelConnected(true);
       // Send initial parse for current code
       const code = useEditorStore.getState().code;
       if (code.trim()) {
@@ -39,7 +46,6 @@ export function useKernel() {
         switch (msg.type) {
           case 'snapshot':
             setSnapshot(msg.data);
-            // Detect framework from snapshot
             useEditorStore.getState().setFramework(msg.data.framework);
             break;
           case 'result':
@@ -48,25 +54,36 @@ export function useKernel() {
           case 'output':
             useSimulationStore.getState().addOutput(msg.text);
             break;
-          case 'error':
+          case 'error': {
             useSimulationStore.getState().addOutput(`Error: ${msg.message}`);
             setCircuitError(msg.message);
             useSimulationStore.getState().setRunning(false);
+            const lineMatch = msg.message?.match(/line (\d+)/);
+            if (lineMatch) {
+              const line = parseInt(lineMatch[1], 10);
+              const shortMsg = msg.message.split('\n').pop() ?? msg.message;
+              useEditorStore.getState().setErrors([{ line, message: shortMsg }]);
+            }
             break;
+          }
         }
       } catch (e) {
-        console.error('Failed to parse kernel message:', e);
+        console.error('[Nuclei] Failed to parse kernel message:', e);
       }
     };
 
     ws.onclose = () => {
       wsRef.current = null;
-      if (mountedRef.current) {
+      useEditorStore.getState().setKernelConnected(false);
+      if (mountedRef.current && retryCountRef.current < MAX_RETRIES) {
+        retryCountRef.current++;
+        console.log(`[Nuclei] WebSocket closed, retrying in ${RETRY_DELAY_MS}ms...`);
         setTimeout(connect, RETRY_DELAY_MS);
       }
     };
 
     ws.onerror = () => {
+      // onerror is always followed by onclose, so just close
       ws.close();
     };
   }, [setSnapshot, setCircuitError]);
@@ -74,22 +91,31 @@ export function useKernel() {
   // Start kernel and connect
   useEffect(() => {
     mountedRef.current = true;
+    retryCountRef.current = 0;
 
-    invoke('start_kernel')
-      .then((msg) => console.log(msg))
-      .catch((err) => console.error('Failed to start kernel:', err));
-
-    // Wait for kernel to start, then connect WebSocket
-    const timer = setTimeout(connect, CONNECT_DELAY_MS);
+    console.log('[Nuclei] Starting kernel process...');
+    platform.startKernel()
+      .then((msg) => {
+        console.log('[Nuclei]', msg);
+        // Connect after kernel has time to start
+        setTimeout(connect, CONNECT_DELAY_MS);
+      })
+      .catch((err) => {
+        console.error('[Nuclei] Failed to start kernel:', err);
+        // Try connecting anyway — kernel might already be running
+        setTimeout(connect, CONNECT_DELAY_MS);
+      });
 
     return () => {
       mountedRef.current = false;
-      clearTimeout(timer);
       if (debounceRef.current) clearTimeout(debounceRef.current);
-      if (wsRef.current) wsRef.current.close();
-      invoke('stop_kernel').catch(() => {});
+      if (wsRef.current) {
+        wsRef.current.close();
+        wsRef.current = null;
+      }
+      platform.stopKernel().catch(() => {});
     };
-  }, [connect]);
+  }, [connect, platform]);
 
   // Debounced parse on code change
   useEffect(() => {

@@ -5,9 +5,10 @@ import contextlib
 
 from kernel.adapters.qiskit_adapter import QiskitAdapter
 from kernel.adapters.cirq_adapter import CirqAdapter
+from kernel.adapters.cudaq_adapter import CudaqAdapter
 from kernel.models.snapshot import CircuitSnapshot, SimulationResult
 
-ADAPTERS = [QiskitAdapter(), CirqAdapter()]
+ADAPTERS = [QiskitAdapter(), CirqAdapter(), CudaqAdapter()]
 
 
 class Executor:

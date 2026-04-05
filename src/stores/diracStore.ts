@@ -1,8 +1,17 @@
 import { create } from 'zustand';
 
+export interface ToolCall {
+  id: string;
+  name: string;
+  input: Record<string, unknown>;
+  status: 'pending' | 'accepted' | 'rejected' | 'executed';
+  result?: string;
+}
+
 export interface DiracMessage {
   role: 'user' | 'assistant';
   content: string;
+  toolCalls?: ToolCall[];
 }
 
 interface DiracState {
@@ -11,6 +20,8 @@ interface DiracState {
   apiKey: string | null;
   addMessage: (msg: DiracMessage) => void;
   updateLastAssistant: (content: string) => void;
+  updateLastToolCalls: (toolCalls: ToolCall[]) => void;
+  updateToolCallStatus: (toolId: string, status: ToolCall['status'], result?: string) => void;
   setLoading: (loading: boolean) => void;
   setApiKey: (key: string | null) => void;
   clearHistory: () => void;
@@ -27,6 +38,24 @@ export const useDiracStore = create<DiracState>((set) => ({
     if (lastIdx >= 0 && msgs[lastIdx].role === 'assistant') {
       msgs[lastIdx] = { ...msgs[lastIdx], content };
     }
+    return { messages: msgs };
+  }),
+  updateLastToolCalls: (toolCalls) => set((s) => {
+    const msgs = [...s.messages];
+    const lastIdx = msgs.length - 1;
+    if (lastIdx >= 0 && msgs[lastIdx].role === 'assistant') {
+      msgs[lastIdx] = { ...msgs[lastIdx], toolCalls };
+    }
+    return { messages: msgs };
+  }),
+  updateToolCallStatus: (toolId, status, result) => set((s) => {
+    const msgs = s.messages.map((m) => {
+      if (!m.toolCalls) return m;
+      const updated = m.toolCalls.map((tc) =>
+        tc.id === toolId ? { ...tc, status, result: result ?? tc.result } : tc
+      );
+      return { ...m, toolCalls: updated };
+    });
     return { messages: msgs };
   }),
   setLoading: (isLoading) => set({ isLoading }),
