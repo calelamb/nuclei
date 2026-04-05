@@ -2,6 +2,7 @@ import { useRef, useCallback } from 'react';
 import { useThemeStore } from '../../stores/themeStore';
 import { FileExplorer } from '../explorer/FileExplorer';
 import { LearningPathSidebar } from '../learning/LearningPathSidebar';
+import { SettingsPanel } from '../settings/SettingsPanel';
 import type { ActivityView } from './ActivityBar';
 
 interface SidebarProps {
@@ -60,19 +61,6 @@ function PluginsPanel() {
   );
 }
 
-function SettingsPanel() {
-  const colors = useThemeStore((s) => s.colors);
-  return (
-    <div style={{ padding: 12, color: colors.textMuted, fontSize: 12, fontFamily: "'Geist Sans', sans-serif" }}>
-      <div style={{ color: colors.textDim, fontSize: 10, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 8 }}>
-        Settings
-      </div>
-      <div style={{ color: colors.textDim, fontSize: 11 }}>
-        Settings panel coming soon.
-      </div>
-    </div>
-  );
-}
 
 function SidebarHeader({ title }: { title: string }) {
   const colors = useThemeStore((s) => s.colors);

@@ -3,10 +3,11 @@ import { usePlatform } from '../platform/PlatformProvider';
 import { useEditorStore } from '../stores/editorStore';
 import { useCircuitStore } from '../stores/circuitStore';
 import { useSimulationStore } from '../stores/simulationStore';
+import { useSettingsStore } from '../stores/settingsStore';
 import type { KernelResponse } from '../types/quantum';
 
 const KERNEL_URL = 'ws://localhost:9742';
-const DEBOUNCE_MS = 300;
+const DEFAULT_DEBOUNCE_MS = 300;
 const CONNECT_DELAY_MS = 3000;
 const RETRY_DELAY_MS = 2000;
 const MAX_RETRIES = 15;
@@ -155,7 +156,7 @@ export function useKernel() {
           } else if (wsRef.current?.readyState === WebSocket.OPEN) {
             wsRef.current.send(JSON.stringify({ type: 'parse', code: state.code }));
           }
-        }, DEBOUNCE_MS);
+        }, useSettingsStore.getState().kernel.parseDebounceMs ?? DEFAULT_DEBOUNCE_MS);
       }
     });
     return unsub;

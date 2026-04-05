@@ -3,6 +3,7 @@ import Editor from '@monaco-editor/react';
 import type { OnMount } from '@monaco-editor/react';
 import { useEditorStore } from '../../stores/editorStore';
 import { useThemeStore } from '../../stores/themeStore';
+import { useSettingsStore } from '../../stores/settingsStore';
 import { getExecute } from '../../App';
 import { registerGhostCompletions } from './completions/ghostCompletions';
 import { InlineEditWidget } from './inlineEdit/InlineEditWidget';
@@ -12,6 +13,7 @@ export function QuantumEditor() {
   const errors = useEditorStore((s) => s.errors);
   const mode = useThemeStore((s) => s.mode);
   const colors = useThemeStore((s) => s.colors);
+  const editorSettings = useSettingsStore((s) => s.editor);
   const editorRef = useRef<any>(null);
   const monacoRef = useRef<any>(null);
   const [showInlineEdit, setShowInlineEdit] = useState(false);
@@ -154,17 +156,19 @@ export function QuantumEditor() {
         onChange={handleChange}
         onMount={handleMount}
         options={{
-          fontSize: 14,
+          fontSize: editorSettings.fontSize,
           fontFamily: "'Fira Code', monospace",
           fontLigatures: true,
-          minimap: { enabled: false },
+          minimap: { enabled: editorSettings.minimap },
           scrollBeyondLastLine: false,
           padding: { top: 16 },
-          lineNumbers: 'on',
+          lineNumbers: editorSettings.lineNumbers ? 'on' : 'off',
           renderWhitespace: 'none',
-          bracketPairColorization: { enabled: true },
+          bracketPairColorization: { enabled: editorSettings.bracketPairColorization },
           automaticLayout: true,
-          tabSize: 4,
+          tabSize: editorSettings.tabSize,
+          wordWrap: editorSettings.wordWrap ? 'on' : 'off',
+          autoClosingBrackets: editorSettings.autoCloseBrackets ? 'always' : 'never',
           inlineSuggest: { enabled: true },
         }}
         beforeMount={(monaco) => {
