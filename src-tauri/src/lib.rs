@@ -1,16 +1,32 @@
+mod commands;
+
+use commands::kernel::KernelState;
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-  tauri::Builder::default()
-    .setup(|app| {
-      if cfg!(debug_assertions) {
-        app.handle().plugin(
-          tauri_plugin_log::Builder::default()
-            .level(log::LevelFilter::Info)
-            .build(),
-        )?;
-      }
-      Ok(())
-    })
-    .run(tauri::generate_context!())
-    .expect("error while running tauri application");
+    let kernel_state = KernelState::new();
+
+    tauri::Builder::default()
+        .manage(kernel_state)
+        .invoke_handler(tauri::generate_handler![
+            commands::kernel::start_kernel,
+            commands::kernel::stop_kernel,
+        ])
+        .setup(|app| {
+            if cfg!(debug_assertions) {
+                app.handle().plugin(
+                    tauri_plugin_log::Builder::default()
+                        .level(log::LevelFilter::Info)
+                        .build(),
+                )?;
+            }
+            Ok(())
+        })
+        .on_window_event(|_window, event| {
+            if let tauri::WindowEvent::Destroyed = event {
+                // Kernel cleanup happens via KernelState Drop
+            }
+        })
+        .run(tauri::generate_context!())
+        .expect("error while running tauri application");
 }

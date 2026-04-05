@@ -2,6 +2,7 @@ import { useRef, useCallback } from 'react';
 import Editor from '@monaco-editor/react';
 import type { OnMount } from '@monaco-editor/react';
 import { useEditorStore } from '../../stores/editorStore';
+import { getExecute } from '../../App';
 
 export function QuantumEditor() {
   const { code, setCode } = useEditorStore();
@@ -15,7 +16,8 @@ export function QuantumEditor() {
       label: 'Run Circuit',
       keybindings: [monaco.KeyMod.CtrlCmd | monaco.KeyCode.Enter],
       run: () => {
-        console.log('Run circuit — will be wired in Sprint 2');
+        const execute = getExecute();
+        if (execute) execute();
       },
     });
 
