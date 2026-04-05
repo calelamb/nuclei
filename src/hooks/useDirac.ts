@@ -8,6 +8,7 @@ import type { GateHighlight } from '../stores/circuitStore';
 import { useSimulationStore } from '../stores/simulationStore';
 import { useExerciseStore } from '../stores/exerciseStore';
 import type { Exercise } from '../stores/exerciseStore';
+import { useLearningStore } from '../stores/learningStore';
 
 const STORE_KEY = 'claude_api_key';
 const API_URL = 'https://api.anthropic.com/v1/messages';
@@ -38,6 +39,14 @@ You can help with:
 - Diagnosing errors with plain-English explanations
 - Explaining what specific gates do (with matrix representations if asked)
 - Suggesting improvements to quantum circuits`;
+
+function buildSystemPrompt(): string {
+  const { activePath, activeModuleIndex } = useLearningStore.getState();
+  if (!activePath) return SYSTEM_PROMPT;
+  const module = activePath.modules[activeModuleIndex];
+  if (!module) return SYSTEM_PROMPT;
+  return `${SYSTEM_PROMPT}\n\n## Current Learning Module\nThe student is on: "${activePath.title}" → "${module.title}"\n\n${module.diracPromptAddendum}`;
+}
 
 const TOOL_DEFINITIONS = [
   {
@@ -382,7 +391,7 @@ export function useDirac() {
       const body: Record<string, unknown> = {
         model,
         max_tokens: 4096,
-        system: SYSTEM_PROMPT,
+        system: buildSystemPrompt(),
         messages: apiMessages,
         stream: true,
       };

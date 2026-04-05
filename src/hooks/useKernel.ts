@@ -13,16 +13,46 @@ const MAX_RETRIES = 15;
 
 export function useKernel() {
   const wsRef = useRef<WebSocket | null>(null);
+  const pyodideRef = useRef<any>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const mountedRef = useRef(true);
   const retryCountRef = useRef(0);
   const platform = usePlatform();
+  const isWeb = platform.getPlatform() === 'web';
 
   const setSnapshot = useCircuitStore.getState().setSnapshot;
   const setCircuitError = useCircuitStore.getState().setError;
 
+  const handleMessage = useCallback((msg: KernelResponse) => {
+    switch (msg.type) {
+      case 'snapshot':
+        setSnapshot(msg.data);
+        useEditorStore.getState().setFramework(msg.data.framework);
+        break;
+      case 'result':
+        useSimulationStore.getState().setResult(msg.data);
+        break;
+      case 'output':
+        useSimulationStore.getState().addOutput(msg.text);
+        break;
+      case 'error': {
+        useSimulationStore.getState().addOutput(`Error: ${msg.message}`);
+        setCircuitError(msg.message);
+        useSimulationStore.getState().setRunning(false);
+        const lineMatch = msg.message?.match(/line (\d+)/);
+        if (lineMatch) {
+          const line = parseInt(lineMatch[1], 10);
+          const shortMsg = msg.message.split('\n').pop() ?? msg.message;
+          useEditorStore.getState().setErrors([{ line, message: shortMsg }]);
+        }
+        break;
+      }
+    }
+  }, [setSnapshot, setCircuitError]);
+
+  // WebSocket connection for desktop
   const connect = useCallback(() => {
-    if (!mountedRef.current) return;
+    if (!mountedRef.current || isWeb) return;
     if (wsRef.current?.readyState === WebSocket.OPEN) return;
 
     console.log('[Nuclei] Connecting WebSocket to', KERNEL_URL, `(attempt ${retryCountRef.current + 1})`);
@@ -33,7 +63,6 @@ export function useKernel() {
       wsRef.current = ws;
       retryCountRef.current = 0;
       useEditorStore.getState().setKernelConnected(true);
-      // Send initial parse for current code
       const code = useEditorStore.getState().code;
       if (code.trim()) {
         ws.send(JSON.stringify({ type: 'parse', code }));
@@ -42,31 +71,7 @@ export function useKernel() {
 
     ws.onmessage = (event) => {
       try {
-        const msg: KernelResponse = JSON.parse(event.data);
-        switch (msg.type) {
-          case 'snapshot':
-            setSnapshot(msg.data);
-            useEditorStore.getState().setFramework(msg.data.framework);
-            break;
-          case 'result':
-            useSimulationStore.getState().setResult(msg.data);
-            break;
-          case 'output':
-            useSimulationStore.getState().addOutput(msg.text);
-            break;
-          case 'error': {
-            useSimulationStore.getState().addOutput(`Error: ${msg.message}`);
-            setCircuitError(msg.message);
-            useSimulationStore.getState().setRunning(false);
-            const lineMatch = msg.message?.match(/line (\d+)/);
-            if (lineMatch) {
-              const line = parseInt(lineMatch[1], 10);
-              const shortMsg = msg.message.split('\n').pop() ?? msg.message;
-              useEditorStore.getState().setErrors([{ line, message: shortMsg }]);
-            }
-            break;
-          }
-        }
+        handleMessage(JSON.parse(event.data));
       } catch (e) {
         console.error('[Nuclei] Failed to parse kernel message:', e);
       }
@@ -77,45 +82,65 @@ export function useKernel() {
       useEditorStore.getState().setKernelConnected(false);
       if (mountedRef.current && retryCountRef.current < MAX_RETRIES) {
         retryCountRef.current++;
-        console.log(`[Nuclei] WebSocket closed, retrying in ${RETRY_DELAY_MS}ms...`);
         setTimeout(connect, RETRY_DELAY_MS);
       }
     };
 
-    ws.onerror = () => {
-      // onerror is always followed by onclose, so just close
-      ws.close();
-    };
-  }, [setSnapshot, setCircuitError]);
+    ws.onerror = () => { ws.close(); };
+  }, [handleMessage, isWeb]);
 
-  // Start kernel and connect
+  // Initialize Pyodide kernel for web
+  const initPyodide = useCallback(async () => {
+    if (!isWeb) return;
+    console.log('[Nuclei] Initializing Pyodide kernel...');
+    useEditorStore.getState().setKernelConnected(false);
+
+    try {
+      const { PyodideKernel } = await import('../platform/pyodideKernel');
+      const kernel = new PyodideKernel((msg) => handleMessage(msg as KernelResponse));
+      await kernel.init();
+      pyodideRef.current = kernel;
+      useEditorStore.getState().setKernelConnected(true);
+      console.log('[Nuclei] Pyodide kernel ready');
+
+      // Initial parse
+      const code = useEditorStore.getState().code;
+      if (code.trim()) {
+        kernel.send({ type: 'parse', code });
+      }
+    } catch (e) {
+      console.error('[Nuclei] Pyodide init failed:', e);
+      useSimulationStore.getState().addOutput(`Error: Failed to load browser Python engine: ${e}`);
+    }
+  }, [handleMessage, isWeb]);
+
+  // Start kernel
   useEffect(() => {
     mountedRef.current = true;
     retryCountRef.current = 0;
 
-    console.log('[Nuclei] Starting kernel process...');
-    platform.startKernel()
-      .then((msg) => {
-        console.log('[Nuclei]', msg);
-        // Connect after kernel has time to start
-        setTimeout(connect, CONNECT_DELAY_MS);
-      })
-      .catch((err) => {
-        console.error('[Nuclei] Failed to start kernel:', err);
-        // Try connecting anyway — kernel might already be running
-        setTimeout(connect, CONNECT_DELAY_MS);
-      });
+    if (isWeb) {
+      initPyodide();
+    } else {
+      console.log('[Nuclei] Starting kernel process...');
+      platform.startKernel()
+        .then((msg) => {
+          console.log('[Nuclei]', msg);
+          setTimeout(connect, CONNECT_DELAY_MS);
+        })
+        .catch((err) => {
+          console.error('[Nuclei] Failed to start kernel:', err);
+          setTimeout(connect, CONNECT_DELAY_MS);
+        });
+    }
 
     return () => {
       mountedRef.current = false;
       if (debounceRef.current) clearTimeout(debounceRef.current);
-      if (wsRef.current) {
-        wsRef.current.close();
-        wsRef.current = null;
-      }
-      platform.stopKernel().catch(() => {});
+      if (wsRef.current) { wsRef.current.close(); wsRef.current = null; }
+      if (!isWeb) platform.stopKernel().catch(() => {});
     };
-  }, [connect, platform]);
+  }, [connect, initPyodide, platform, isWeb]);
 
   // Debounced parse on code change
   useEffect(() => {
@@ -125,29 +150,40 @@ export function useKernel() {
         prevCode = state.code;
         if (debounceRef.current) clearTimeout(debounceRef.current);
         debounceRef.current = setTimeout(() => {
-          if (wsRef.current?.readyState === WebSocket.OPEN) {
+          if (isWeb && pyodideRef.current) {
+            pyodideRef.current.send({ type: 'parse', code: state.code });
+          } else if (wsRef.current?.readyState === WebSocket.OPEN) {
             wsRef.current.send(JSON.stringify({ type: 'parse', code: state.code }));
           }
         }, DEBOUNCE_MS);
       }
     });
     return unsub;
-  }, []);
+  }, [isWeb]);
 
   const execute = useCallback(() => {
-    const ws = wsRef.current;
-    if (!ws || ws.readyState !== WebSocket.OPEN) {
-      useSimulationStore.getState().addOutput('Error: Kernel not connected');
-      return;
-    }
-
     const { code } = useEditorStore.getState();
     const { shots } = useSimulationStore.getState();
 
-    useSimulationStore.getState().setRunning(true);
-    useSimulationStore.getState().clearOutput();
-    ws.send(JSON.stringify({ type: 'execute', code, shots }));
-  }, []);
+    if (isWeb) {
+      if (!pyodideRef.current) {
+        useSimulationStore.getState().addOutput('Error: Browser Python engine not ready');
+        return;
+      }
+      useSimulationStore.getState().setRunning(true);
+      useSimulationStore.getState().clearOutput();
+      pyodideRef.current.send({ type: 'execute', code, shots });
+    } else {
+      const ws = wsRef.current;
+      if (!ws || ws.readyState !== WebSocket.OPEN) {
+        useSimulationStore.getState().addOutput('Error: Kernel not connected');
+        return;
+      }
+      useSimulationStore.getState().setRunning(true);
+      useSimulationStore.getState().clearOutput();
+      ws.send(JSON.stringify({ type: 'execute', code, shots }));
+    }
+  }, [isWeb]);
 
   return { execute };
 }

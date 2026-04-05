@@ -5,7 +5,10 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "dev:web": "BUILD_TARGET=web vite",
     "build": "tsc -b && vite build",
+    "build:web": "tsc -b && BUILD_TARGET=web vite build",
+    "preview:web": "BUILD_TARGET=web vite preview --outDir dist-web",
     "lint": "eslint .",
     "preview": "vite preview",
     "tauri": "tauri"

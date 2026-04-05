@@ -10,6 +10,8 @@ import { useCircuitStore } from '../../stores/circuitStore';
 import { useSimulationStore } from '../../stores/simulationStore';
 import { useThemeStore } from '../../stores/themeStore';
 import { useExerciseStore } from '../../stores/exerciseStore';
+import { useLearningStore } from '../../stores/learningStore';
+import { LearningPathSidebar } from '../learning/LearningPathSidebar';
 import type { Framework } from '../../types/quantum';
 
 const DEFAULT_LEFT_WIDTH = 60;
@@ -502,8 +504,11 @@ export function PanelLayout() {
 
       {/* Main area */}
       <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
+        {/* Learning sidebar */}
+        <LearningPathSidebar />
+
         {/* Left panel — Editor */}
-        <div style={{ width: `${leftWidth}%`, height: '100%' }}>
+        <div style={{ width: `${leftWidth}%`, height: '100%', flex: 1, minWidth: 0 }}>
           <QuantumEditor />
         </div>
 

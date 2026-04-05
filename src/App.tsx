@@ -1,11 +1,12 @@
 import { useEffect, useState } from 'react';
 import { PanelLayout } from './components/layout/PanelLayout';
-import { PlatformProvider, usePlatform } from './platform/PlatformProvider';
+import { PlatformProvider, usePlatform, loadBridge, isTauri } from './platform/PlatformProvider';
 import { Onboarding } from './components/onboarding/Onboarding';
 import { KeyboardShortcuts } from './components/onboarding/KeyboardShortcuts';
 import { useKernel } from './hooks/useKernel';
 import { useFileOps } from './hooks/useFileOps';
 import { useThemeStore } from './stores/themeStore';
+import type { PlatformBridge } from './platform/bridge';
 
 // Store execute function globally so Monaco keybinding can access it
 let executeRef: (() => void) | null = null;
@@ -88,8 +89,28 @@ function AppInner() {
 }
 
 function App() {
+  const [bridge, setBridge] = useState<PlatformBridge | null>(null);
+
+  useEffect(() => {
+    loadBridge().then(setBridge);
+  }, []);
+
+  if (!bridge) {
+    // Loading screen while bridge initializes
+    return (
+      <div style={{
+        width: '100vw', height: '100vh',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        backgroundColor: '#0F1B2D', color: '#00B4D8',
+        fontFamily: 'Inter, sans-serif', fontSize: 16,
+      }}>
+        Loading Nuclei{isTauri ? '' : ' (web)'}...
+      </div>
+    );
+  }
+
   return (
-    <PlatformProvider>
+    <PlatformProvider bridge={bridge}>
       <AppInner />
     </PlatformProvider>
   );

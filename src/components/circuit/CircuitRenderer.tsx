@@ -3,6 +3,7 @@ import { useCircuitStore } from '../../stores/circuitStore';
 import { useThemeStore } from '../../stores/themeStore';
 import { renderGate, WIRE_SPACING, LAYER_SPACING, LABEL_WIDTH, PADDING, GATE_SIZE } from './gates';
 import { getGateData } from '../../data/gates';
+import { useCircuitExport } from '../../hooks/useCircuitExport';
 import type { Gate } from '../../types/quantum';
 
 interface Tooltip {
@@ -103,6 +104,73 @@ function GateExplorerPopup({ gateIndex, onClose }: { gateIndex: number; onClose:
           </div>
         )}
       </div>
+    </div>
+  );
+}
+
+function ExportMenu() {
+  const [open, setOpen] = useState(false);
+  const colors = useThemeStore((s) => s.colors);
+  const snapshot = useCircuitStore((s) => s.snapshot);
+  const { exportQasmFile, exportSvg, exportPng, copyCodeToClipboard, copyQasmToClipboard, copyShareUrl, exportJsonSnapshot } = useCircuitExport();
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const handler = (e: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [open]);
+
+  if (!snapshot || snapshot.gates.length === 0) return null;
+
+  const items = [
+    { label: 'Copy code', action: () => { copyCodeToClipboard(); setOpen(false); } },
+    { label: 'Copy QASM', action: () => { copyQasmToClipboard(); setOpen(false); } },
+    { label: 'Copy share URL', action: () => { copyShareUrl(); setOpen(false); } },
+    { label: 'Export QASM file', action: () => { exportQasmFile(); setOpen(false); } },
+    { label: 'Export SVG', action: () => { exportSvg(); setOpen(false); } },
+    { label: 'Export PNG (2x)', action: () => { exportPng(2); setOpen(false); } },
+    { label: 'Export JSON', action: () => { exportJsonSnapshot(); setOpen(false); } },
+  ];
+
+  return (
+    <div ref={menuRef} style={{ position: 'absolute', top: 6, right: 6, zIndex: 100 }}>
+      <button
+        onClick={() => setOpen(!open)}
+        style={{
+          padding: '3px 8px', background: colors.bgPanel, color: colors.textMuted,
+          border: `1px solid ${colors.border}`, borderRadius: 3, cursor: 'pointer',
+          fontSize: 11, fontFamily: 'Inter, sans-serif',
+        }}
+      >
+        Export ▾
+      </button>
+      {open && (
+        <div style={{
+          position: 'absolute', top: '100%', right: 0, marginTop: 2,
+          background: colors.bgPanel, border: `1px solid ${colors.border}`,
+          borderRadius: 4, overflow: 'hidden', minWidth: 150,
+        }}>
+          {items.map((item) => (
+            <button
+              key={item.label}
+              onClick={item.action}
+              style={{
+                display: 'block', width: '100%', padding: '6px 12px',
+                background: 'transparent', color: colors.text, border: 'none',
+                cursor: 'pointer', fontSize: 12, fontFamily: 'Inter, sans-serif', textAlign: 'left',
+              }}
+              onMouseEnter={(e) => (e.target as HTMLElement).style.background = colors.border}
+              onMouseLeave={(e) => (e.target as HTMLElement).style.background = 'transparent'}
+            >
+              {item.label}
+            </button>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -220,8 +288,10 @@ export function CircuitRenderer() {
     <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
       <div
         ref={containerRef}
+        className="circuit-renderer-container"
         style={{ flex: 1, overflow: 'auto', position: 'relative' }}
       >
+        <ExportMenu />
         <svg
           width="100%"
           height="100%"

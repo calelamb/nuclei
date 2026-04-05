@@ -114,8 +114,26 @@ export function QuantumEditor() {
     }
   }, [setCode]);
 
+  const handleDrop = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    const file = e.dataTransfer.files[0];
+    if (!file) return;
+    if (file.name.endsWith('.py') || file.name.endsWith('.qasm')) {
+      file.text().then((content) => setCode(content));
+    }
+  }, [setCode]);
+
+  const handleDragOver = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'copy';
+  }, []);
+
   return (
-    <div style={{ width: '100%', height: '100%', backgroundColor: colors.bgEditor }}>
+    <div
+      style={{ width: '100%', height: '100%', backgroundColor: colors.bgEditor }}
+      onDrop={handleDrop}
+      onDragOver={handleDragOver}
+    >
       <Editor
         defaultLanguage="python"
         theme={themeName}

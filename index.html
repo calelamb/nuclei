@@ -3,11 +3,23 @@
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="manifest" href="/manifest.json" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>nuclei-scaffold</title>
+    <meta name="theme-color" content="#00B4D8" />
+    <meta name="description" content="Nuclei — A purpose-built IDE for learning quantum computing" />
+    <meta property="og:title" content="Nuclei — Quantum Computing IDE" />
+    <meta property="og:description" content="Write quantum code, visualize circuits, and learn with an AI tutor." />
+    <meta property="og:type" content="website" />
+    <title>Nuclei</title>
   </head>
   <body>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
+    <script>
+      // Register service worker for PWA support (web only)
+      if ('serviceWorker' in navigator && !window.__TAURI_INTERNALS__) {
+        navigator.serviceWorker.register('/sw.js').catch(() => {});
+      }
+    </script>
   </body>
 </html>

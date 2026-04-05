@@ -1,0 +1,9 @@
+{
+  "name": "circuit-stats",
+  "version": "1.0.0",
+  "description": "Shows circuit statistics: gate counts by type, depth, and entanglement metrics",
+  "author": "Nuclei Team",
+  "entry": "index.js",
+  "capabilities": ["custom-panel"],
+  "permissions": ["read-circuit", "read-results"]
+}
