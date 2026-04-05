@@ -35,7 +35,7 @@ function ApiKeySetup({ onSave }: { onSave: (key: string) => void }) {
             flex: 1,
             padding: '8px 12px',
             fontSize: 13,
-            fontFamily: "'Fira Code', monospace",
+            fontFamily: "'Geist Mono', 'JetBrains Mono', monospace",
             background: colors.bgPanel,
             border: `1px solid ${colors.border}`,
             borderRadius: 4,
@@ -91,7 +91,7 @@ function ThinkingBlock({ thinking }: { thinking: string }) {
       {expanded && (
         <pre style={{
           margin: 0, padding: '6px 10px', fontSize: 11,
-          fontFamily: "'Fira Code', monospace", color: colors.textMuted,
+          fontFamily: "'Geist Mono', 'JetBrains Mono', monospace", color: colors.textMuted,
           background: colors.bg, whiteSpace: 'pre-wrap', wordBreak: 'break-word',
           maxHeight: 300, overflow: 'auto', lineHeight: 1.5,
         }}>
@@ -155,7 +155,7 @@ function ToolCallCard({ toolCall, onAction }: { toolCall: ToolCall; onAction: (i
               background: colors.bg,
               color: colors.text,
               fontSize: 12,
-              fontFamily: "'Fira Code', monospace",
+              fontFamily: "'Geist Mono', 'JetBrains Mono', monospace",
               overflow: 'auto',
               maxHeight: 200,
             }}>

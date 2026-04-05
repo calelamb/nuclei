@@ -36,7 +36,18 @@ export function SingleQubitGate({ gate, x, onHover, onLeave }: GateProps) {
       onMouseEnter={(e) => onHover(gate, e.clientX, e.clientY)}
       onMouseLeave={onLeave}
       style={{ cursor: 'pointer' }}
+      className="nuclei-gate"
     >
+      {/* Drop shadow */}
+      <rect
+        x={x - halfSize + 1}
+        y={y - halfSize + 2}
+        width={GATE_SIZE}
+        height={GATE_SIZE}
+        rx={6}
+        fill="rgba(0,0,0,0.2)"
+      />
+      {/* Main gate body */}
       <rect
         x={x - halfSize}
         y={y - halfSize}
@@ -44,9 +55,19 @@ export function SingleQubitGate({ gate, x, onHover, onLeave }: GateProps) {
         height={GATE_SIZE}
         rx={6}
         fill={COLORS.singleQubit}
-        fillOpacity={0.15}
+        fillOpacity={0.12}
         stroke={COLORS.singleQubit}
         strokeWidth={1.5}
+      />
+      {/* Subtle top highlight */}
+      <rect
+        x={x - halfSize + 1}
+        y={y - halfSize + 1}
+        width={GATE_SIZE - 2}
+        height={4}
+        rx={4}
+        fill={COLORS.singleQubit}
+        fillOpacity={0.08}
       />
       <text
         x={x}
@@ -55,7 +76,7 @@ export function SingleQubitGate({ gate, x, onHover, onLeave }: GateProps) {
         dominantBaseline="central"
         fill={COLORS.singleQubit}
         fontSize={14}
-        fontFamily="'Fira Code', monospace"
+        fontFamily="'JetBrains Mono', monospace"
         fontWeight={600}
       >
         {gate.type}
@@ -67,7 +88,7 @@ export function SingleQubitGate({ gate, x, onHover, onLeave }: GateProps) {
           textAnchor="middle"
           fill={COLORS.wire}
           fontSize={10}
-          fontFamily="'Fira Code', monospace"
+          fontFamily="'JetBrains Mono', monospace"
         >
           {gate.params.map(p => p.toFixed(2)).join(', ')}
         </text>
@@ -86,6 +107,7 @@ export function CNOTGate({ gate, x, onHover, onLeave }: GateProps) {
       onMouseEnter={(e) => onHover(gate, e.clientX, e.clientY)}
       onMouseLeave={onLeave}
       style={{ cursor: 'pointer' }}
+      className="nuclei-gate"
     >
       {/* Vertical connecting line */}
       <line
@@ -94,8 +116,14 @@ export function CNOTGate({ gate, x, onHover, onLeave }: GateProps) {
         stroke={COLORS.multiQubit}
         strokeWidth={2}
       />
-      {/* Control dot */}
-      <circle cx={x} cy={controlY} r={5} fill={COLORS.controlDot} />
+      {/* Control dot with radial gradient */}
+      <defs>
+        <radialGradient id={`ctrl-grad-${gate.layer}-${gate.controls[0]}`}>
+          <stop offset="0%" stopColor={COLORS.controlDot} stopOpacity="1" />
+          <stop offset="100%" stopColor={COLORS.controlDot} stopOpacity="0.6" />
+        </radialGradient>
+      </defs>
+      <circle cx={x} cy={controlY} r={6} fill={`url(#ctrl-grad-${gate.layer}-${gate.controls[0]})`} />
       {/* Target circle-plus */}
       <circle cx={x} cy={targetY} r={radius} fill="none" stroke={COLORS.multiQubit} strokeWidth={2} />
       <line x1={x - radius} y1={targetY} x2={x + radius} y2={targetY} stroke={COLORS.multiQubit} strokeWidth={1.5} />
@@ -117,10 +145,11 @@ export function ToffoliGate({ gate, x, onHover, onLeave }: GateProps) {
       onMouseEnter={(e) => onHover(gate, e.clientX, e.clientY)}
       onMouseLeave={onLeave}
       style={{ cursor: 'pointer' }}
+      className="nuclei-gate"
     >
       <line x1={x} y1={minY} x2={x} y2={maxY} stroke={COLORS.multiQubit} strokeWidth={2} />
-      <circle cx={x} cy={gateY(c0)} r={5} fill={COLORS.controlDot} />
-      <circle cx={x} cy={gateY(c1)} r={5} fill={COLORS.controlDot} />
+      <circle cx={x} cy={gateY(c0)} r={6} fill={COLORS.controlDot} />
+      <circle cx={x} cy={gateY(c1)} r={6} fill={COLORS.controlDot} />
       <circle cx={x} cy={targetY} r={radius} fill="none" stroke={COLORS.multiQubit} strokeWidth={2} />
       <line x1={x - radius} y1={targetY} x2={x + radius} y2={targetY} stroke={COLORS.multiQubit} strokeWidth={1.5} />
       <line x1={x} y1={targetY - radius} x2={x} y2={targetY + radius} stroke={COLORS.multiQubit} strokeWidth={1.5} />
@@ -138,9 +167,9 @@ export function SwapGate({ gate, x, onHover, onLeave }: GateProps) {
       onMouseEnter={(e) => onHover(gate, e.clientX, e.clientY)}
       onMouseLeave={onLeave}
       style={{ cursor: 'pointer' }}
+      className="nuclei-gate"
     >
       <line x1={x} y1={y0} x2={x} y2={y1} stroke={COLORS.multiQubit} strokeWidth={2} />
-      {/* X marks */}
       <line x1={x - s} y1={y0 - s} x2={x + s} y2={y0 + s} stroke={COLORS.multiQubit} strokeWidth={2} />
       <line x1={x + s} y1={y0 - s} x2={x - s} y2={y0 + s} stroke={COLORS.multiQubit} strokeWidth={2} />
       <line x1={x - s} y1={y1 - s} x2={x + s} y2={y1 + s} stroke={COLORS.multiQubit} strokeWidth={2} />
@@ -158,7 +187,17 @@ export function MeasureGate({ gate, x, onHover, onLeave }: GateProps) {
       onMouseEnter={(e) => onHover(gate, e.clientX, e.clientY)}
       onMouseLeave={onLeave}
       style={{ cursor: 'pointer' }}
+      className="nuclei-gate"
     >
+      {/* Drop shadow */}
+      <rect
+        x={x - halfSize + 1}
+        y={y - halfSize + 2}
+        width={GATE_SIZE}
+        height={GATE_SIZE}
+        rx={4}
+        fill="rgba(0,0,0,0.15)"
+      />
       <rect
         x={x - halfSize}
         y={y - halfSize}
@@ -166,7 +205,7 @@ export function MeasureGate({ gate, x, onHover, onLeave }: GateProps) {
         height={GATE_SIZE}
         rx={4}
         fill={COLORS.measurement}
-        fillOpacity={0.15}
+        fillOpacity={0.12}
         stroke={COLORS.measurement}
         strokeWidth={1.5}
       />
@@ -185,7 +224,10 @@ export function MeasureGate({ gate, x, onHover, onLeave }: GateProps) {
         y2={y - 10}
         stroke={COLORS.measurement}
         strokeWidth={1.5}
+        strokeLinecap="round"
       />
+      {/* Meter base dot */}
+      <circle cx={x} cy={y + 6} r={2} fill={COLORS.measurement} />
     </g>
   );
 }
@@ -199,10 +241,11 @@ export function CZGate({ gate, x, onHover, onLeave }: GateProps) {
       onMouseEnter={(e) => onHover(gate, e.clientX, e.clientY)}
       onMouseLeave={onLeave}
       style={{ cursor: 'pointer' }}
+      className="nuclei-gate"
     >
       <line x1={x} y1={y0} x2={x} y2={y1} stroke={COLORS.multiQubit} strokeWidth={2} />
-      <circle cx={x} cy={y0} r={5} fill={COLORS.controlDot} />
-      <circle cx={x} cy={y1} r={5} fill={COLORS.controlDot} />
+      <circle cx={x} cy={y0} r={6} fill={COLORS.controlDot} />
+      <circle cx={x} cy={y1} r={6} fill={COLORS.controlDot} />
     </g>
   );
 }
@@ -227,6 +270,5 @@ export function renderGate(gate: Gate, x: number, onHover: GateProps['onHover'],
     return <MeasureGate key={`${gate.layer}-${gate.targets[0]}`} {...props} />;
   }
 
-  // Default: single-qubit gate (or unknown)
   return <SingleQubitGate key={`${gate.layer}-${gate.targets[0]}`} {...props} />;
 }

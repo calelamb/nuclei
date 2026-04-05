@@ -1,5 +1,4 @@
 import { useEffect, useCallback } from 'react';
-import { usePlatform } from '../platform/PlatformProvider';
 import { useDiracStore } from '../stores/diracStore';
 import type { ToolCall } from '../stores/diracStore';
 import { useEditorStore } from '../stores/editorStore';
@@ -10,11 +9,7 @@ import { useExerciseStore } from '../stores/exerciseStore';
 import type { Exercise } from '../stores/exerciseStore';
 import { useLearningStore } from '../stores/learningStore';
 import { useStudentStore, studentModelToPrompt } from '../stores/studentStore';
-
-const STORE_KEY = 'claude_api_key';
-const API_URL = 'https://api.anthropic.com/v1/messages';
-const HAIKU_MODEL = 'claude-haiku-4-5-20251001';
-const SONNET_MODEL = 'claude-sonnet-4-5-20241022';
+import { DIRAC_API_KEY, DIRAC_API_URL, HAIKU_MODEL, SONNET_MODEL } from '../config/dirac';
 
 const SYSTEM_PROMPT = `You are Dirac, an AI teaching assistant for quantum computing, named after physicist Paul Dirac. You live inside Nuclei, a quantum computing IDE.
 
@@ -44,13 +39,11 @@ You can help with:
 function buildSystemPrompt(): string {
   let prompt = SYSTEM_PROMPT;
 
-  // Inject student model
   const studentModel = useStudentStore.getState().model;
   if (studentModel.totalCodeExecutions > 0) {
     prompt += '\n\n' + studentModelToPrompt(studentModel);
   }
 
-  // Inject learning module context
   const { activePath, activeModuleIndex } = useLearningStore.getState();
   if (activePath) {
     const module = activePath.modules[activeModuleIndex];
@@ -106,35 +99,35 @@ const TOOL_DEFINITIONS = [
   },
   {
     name: 'step_to',
-    description: 'Enter step-through mode and advance to a specific gate. Gates after this index are grayed out. Useful for explaining circuits step by step.',
+    description: 'Enter step-through mode and advance to a specific gate.',
     input_schema: {
       type: 'object' as const,
       properties: {
-        gate_index: { type: 'number', description: 'Gate index to step to (0-based). Gates 0..gate_index are shown, rest grayed.' },
+        gate_index: { type: 'number', description: 'Gate index to step to (0-based).' },
       },
       required: ['gate_index'],
     },
   },
   {
     name: 'create_exercise',
-    description: 'Generate a quantum computing exercise for the student. Creates a problem with starter code, expected output, and hints.',
+    description: 'Generate a quantum computing exercise for the student.',
     input_schema: {
       type: 'object' as const,
       properties: {
         title: { type: 'string', description: 'Short exercise title' },
         topic: { type: 'string', description: 'Topic: Basics, Superposition, Entanglement, Algorithms, or Error Correction' },
         difficulty: { type: 'string', enum: ['beginner', 'intermediate', 'advanced'] },
-        description: { type: 'string', description: 'Problem description — what the student should build' },
+        description: { type: 'string', description: 'Problem description' },
         starter_code: { type: 'string', description: 'Python starter code with TODO comments' },
-        expected_probabilities: { type: 'object', description: 'Target probability distribution, e.g. {"00": 0.5, "11": 0.5}' },
-        hints: { type: 'array', items: { type: 'string' }, description: 'Progressive hints (3-4), from vague to specific' },
+        expected_probabilities: { type: 'object', description: 'Target probability distribution' },
+        hints: { type: 'array', items: { type: 'string' }, description: 'Progressive hints (3-4)' },
       },
       required: ['title', 'topic', 'difficulty', 'description', 'starter_code', 'expected_probabilities', 'hints'],
     },
   },
   {
     name: 'verify_solution',
-    description: 'Check the student\'s current code against the active exercise. Runs the simulation and compares results to the expected output.',
+    description: 'Check the student\'s current code against the active exercise.',
     input_schema: {
       type: 'object' as const,
       properties: {},
@@ -183,7 +176,6 @@ function buildContextBlock(): string {
   const { code, framework } = useEditorStore.getState();
   const snapshot = useCircuitStore.getState().snapshot;
   const { result, terminalOutput } = useSimulationStore.getState();
-
   const parts: string[] = [];
 
   parts.push(`## Current Code (${framework})\n\`\`\`python\n${code}\n\`\`\``);
@@ -199,7 +191,6 @@ function buildContextBlock(): string {
       .map(([state, prob]) => `  |${state}⟩: ${(prob * 100).toFixed(1)}%`)
       .join('\n');
     parts.push(`## Simulation Results\n- Execution time: ${result.execution_time_ms}ms\n- Probabilities:\n${topProbs}`);
-
     if (result.bloch_coords.length > 0) {
       const bloch = result.bloch_coords
         .map((c, i) => `  q${i}: (${c.x.toFixed(3)}, ${c.y.toFixed(3)}, ${c.z.toFixed(3)})`)
@@ -208,7 +199,6 @@ function buildContextBlock(): string {
     }
   }
 
-  // Active exercise
   const activeExercise = useExerciseStore.getState().activeExercise;
   if (activeExercise) {
     parts.push(`## Active Exercise\n- Title: ${activeExercise.title}\n- Topic: ${activeExercise.topic}\n- Difficulty: ${activeExercise.difficulty}\n- Description: ${activeExercise.description}\n- Expected output: ${JSON.stringify(activeExercise.expectedOutput)}`);
@@ -223,7 +213,6 @@ function buildContextBlock(): string {
   return parts.join('\n\n');
 }
 
-// Execute a tool call by ID — finds it in the store and processes it
 function executeToolById(toolId: string, accepted: boolean) {
   const messages = useDiracStore.getState().messages;
   let toolCall: ToolCall | undefined;
@@ -265,10 +254,9 @@ function executeToolById(toolId: string, accepted: boolean) {
     });
   } else if (toolCall.name === 'highlight_gate') {
     const { gate_index, style, duration_ms } = toolCall.input as { gate_index: number; style: 'pulse' | 'glow' | 'outline'; duration_ms?: number };
-    const circuitStore = useCircuitStore.getState();
     const highlight: GateHighlight = { gateIndex: gate_index, style };
     if (duration_ms) highlight.expiresAt = Date.now() + duration_ms;
-    circuitStore.addHighlight(highlight);
+    useCircuitStore.getState().addHighlight(highlight);
     if (duration_ms && duration_ms > 0) {
       setTimeout(() => {
         const current = useCircuitStore.getState().highlights;
@@ -315,7 +303,6 @@ function executeToolById(toolId: string, accepted: boolean) {
       return;
     }
     useExerciseStore.getState().incrementAttempts(exercise.id);
-    // Compare probabilities with tolerance
     const expected = exercise.expectedOutput;
     let correct = true;
     for (const [state, prob] of Object.entries(expected)) {
@@ -337,29 +324,18 @@ function executeToolById(toolId: string, accepted: boolean) {
 }
 
 export function useDirac() {
-  const { apiKey, setApiKey, addMessage, updateLastAssistant, updateLastThinking, updateLastToolCalls, updateToolCallStatus, setLoading } = useDiracStore();
-  const platform = usePlatform();
+  const { addMessage, updateLastAssistant, updateLastThinking, updateLastToolCalls, setLoading } = useDiracStore();
 
+  // Initialize API key from config on mount
   useEffect(() => {
-    (async () => {
-      try {
-        const key = await platform.getStoredValue<string>(STORE_KEY);
-        if (key) setApiKey(key);
-      } catch {}
-    })();
-  }, [setApiKey, platform]);
-
-  const saveApiKey = useCallback(async (key: string) => {
-    setApiKey(key);
-    try {
-      await platform.setStoredValue(STORE_KEY, key);
-    } catch (e) {
-      console.error('Failed to save API key:', e);
+    if (DIRAC_API_KEY && DIRAC_API_KEY !== 'sk-ant-api03-PLACEHOLDER_KEY') {
+      useDiracStore.getState().setApiKey(DIRAC_API_KEY);
     }
-  }, [setApiKey, platform]);
+  }, []);
 
   const sendMessage = useCallback(async (userText: string) => {
-    if (!apiKey) return;
+    const apiKey = useDiracStore.getState().apiKey || DIRAC_API_KEY;
+    if (!apiKey || apiKey === 'sk-ant-api03-PLACEHOLDER_KEY') return;
 
     addMessage({ role: 'user', content: userText });
     setLoading(true);
@@ -368,40 +344,28 @@ export function useDirac() {
     const useTools = shouldUseTools(userText);
     const useReasoning = shouldUseReasoning(userText);
     const model = useReasoning ? SONNET_MODEL : selectModel(userText, useTools);
-    // Strip /think prefix if present
-    const cleanText = userText.replace(/^\/think\s*/i, '');
+    const cleanText = userText.replace(/^\/think\s*/i, '').replace(/^\/explain\s*/i, '').replace(/^\/fix\s*/i, '');
 
-    // Build API messages — convert our messages to Anthropic format
+    // Build API messages
     const storeMessages = useDiracStore.getState().messages;
     const apiMessages: Array<{ role: string; content: unknown }> = [];
 
     for (let i = 0; i < storeMessages.length; i++) {
       const m = storeMessages[i];
       if (m.role === 'user') {
-        // Inject context only on the last user message
         const isLast = i === storeMessages.length - 1;
         apiMessages.push({
           role: 'user',
           content: isLast ? `<ide_context>\n${context}\n</ide_context>\n\n${m.content}` : m.content,
         });
       } else {
-        // For assistant messages with tool calls, reconstruct the proper format
         if (m.toolCalls && m.toolCalls.length > 0) {
           const contentBlocks: unknown[] = [];
-          if (m.content) {
-            contentBlocks.push({ type: 'text', text: m.content });
-          }
+          if (m.content) contentBlocks.push({ type: 'text', text: m.content });
           for (const tc of m.toolCalls) {
-            contentBlocks.push({
-              type: 'tool_use',
-              id: tc.id,
-              name: tc.name,
-              input: tc.input,
-            });
+            contentBlocks.push({ type: 'tool_use', id: tc.id, name: tc.name, input: tc.input });
           }
           apiMessages.push({ role: 'assistant', content: contentBlocks });
-
-          // Add tool results
           const toolResults = m.toolCalls.map((tc) => ({
             type: 'tool_result' as const,
             tool_use_id: tc.id,
@@ -431,7 +395,7 @@ export function useDirac() {
         body.tools = TOOL_DEFINITIONS;
       }
 
-      const response = await fetch(API_URL, {
+      const response = await fetch(DIRAC_API_URL, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -523,10 +487,8 @@ export function useDirac() {
         }
       }
 
-      // Final update with all tool calls
       if (toolCalls.length > 0) {
         updateLastToolCalls([...toolCalls]);
-        // Auto-execute non-destructive tools (highlight, step)
         for (const tc of toolCalls) {
           if (tc.name === 'highlight_gate' || tc.name === 'step_to' || tc.name === 'create_exercise' || tc.name === 'verify_solution') {
             setTimeout(() => executeToolById(tc.id, true), 0);
@@ -539,11 +501,11 @@ export function useDirac() {
       updateLastAssistant(`Error: ${e instanceof Error ? e.message : 'Unknown error'}`);
       setLoading(false);
     }
-  }, [apiKey, addMessage, updateLastAssistant, updateLastThinking, updateLastToolCalls, setLoading]);
+  }, [addMessage, updateLastAssistant, updateLastThinking, updateLastToolCalls, setLoading]);
 
   const handleToolAction = useCallback((toolId: string, accepted: boolean) => {
     executeToolById(toolId, accepted);
   }, []);
 
-  return { sendMessage, saveApiKey, handleToolAction };
+  return { sendMessage, handleToolAction };
 }

@@ -15,14 +15,21 @@ export function ProbabilityHistogram() {
     return (
       <div style={{
         height: '100%',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        color: '#3D5A80',
-        fontSize: 13,
-        fontFamily: 'Inter, sans-serif',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        flexDirection: 'column', gap: 10,
       }}>
-        Press Cmd+Enter to run simulation
+        {/* Ghost histogram bars */}
+        <div style={{ display: 'flex', alignItems: 'flex-end', gap: 8, opacity: 0.12 }}>
+          {[28, 42, 18, 36].map((h, i) => (
+            <div key={i} style={{
+              width: 16, height: h, background: '#3D5A80',
+              borderRadius: '3px 3px 0 0',
+            }} />
+          ))}
+        </div>
+        <span style={{ color: '#475569', fontSize: 12, fontFamily: "'Geist Sans', sans-serif" }}>
+          Run a simulation to see results
+        </span>
       </div>
     );
   }
@@ -55,8 +62,11 @@ export function ProbabilityHistogram() {
     }
   }, [setShots]);
 
+  // Screen reader description
+  const srDescription = data.map(d => `${d.state}: ${(d.probability * 100).toFixed(1)}% probability`).join(', ');
+
   return (
-    <div style={{ height: '100%', display: 'flex', flexDirection: 'column', padding: '8px 12px' }}>
+    <div style={{ height: '100%', display: 'flex', flexDirection: 'column', padding: '8px 12px' }} role="region" aria-label="Probability histogram" aria-description={srDescription}>
       {/* Controls bar */}
       <div style={{
         display: 'flex',

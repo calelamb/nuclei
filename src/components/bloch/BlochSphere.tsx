@@ -265,6 +265,19 @@ function BlochSphere3D({ blochCoord }: BlochSphereProps) {
   );
 }
 
+/** Generate a screen-reader description for the Bloch sphere state */
+function describeBlochState(coord: { x: number; y: number; z: number }, qubitIndex: number): string {
+  const { x, y, z } = coord;
+  // Interpret the state based on coordinates
+  if (z > 0.9) return `Qubit ${qubitIndex}: near |0⟩ state (pointing up)`;
+  if (z < -0.9) return `Qubit ${qubitIndex}: near |1⟩ state (pointing down)`;
+  if (x > 0.9) return `Qubit ${qubitIndex}: near |+⟩ state (superposition, pointing +X)`;
+  if (x < -0.9) return `Qubit ${qubitIndex}: near |-⟩ state (superposition, pointing -X)`;
+  if (y > 0.9) return `Qubit ${qubitIndex}: near |+i⟩ state (pointing +Y)`;
+  if (y < -0.9) return `Qubit ${qubitIndex}: near |-i⟩ state (pointing -Y)`;
+  return `Qubit ${qubitIndex}: in superposition state (x=${x.toFixed(2)}, y=${y.toFixed(2)}, z=${z.toFixed(2)})`;
+}
+
 export function BlochPanel() {
   const result = useSimulationStore((s) => s.result);
   const [selectedQubit, setSelectedQubit] = useState(0);
@@ -283,25 +296,29 @@ export function BlochPanel() {
     return (
       <div style={{
         height: '100%',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        color: '#3D5A80',
-        fontSize: 13,
-        fontFamily: 'Inter, sans-serif',
-        flexDirection: 'column',
-        gap: 4,
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        flexDirection: 'column', gap: 8,
       }}>
-        <span>Bloch sphere</span>
-        <span style={{ fontSize: 11 }}>Run a simulation (⌘+Enter) to visualize qubit states</span>
+        {/* Ghost wireframe sphere */}
+        <svg width={64} height={64} viewBox="0 0 64 64" style={{ opacity: 0.12 }}>
+          <circle cx={32} cy={32} r={28} fill="none" stroke="#3D5A80" strokeWidth={1} />
+          <ellipse cx={32} cy={32} rx={28} ry={10} fill="none" stroke="#3D5A80" strokeWidth={0.5} />
+          <ellipse cx={32} cy={32} rx={10} ry={28} fill="none" stroke="#3D5A80" strokeWidth={0.5} />
+          <line x1={32} y1={4} x2={32} y2={60} stroke="#3D5A80" strokeWidth={0.5} strokeDasharray="2,2" />
+          <line x1={4} y1={32} x2={60} y2={32} stroke="#3D5A80" strokeWidth={0.5} strokeDasharray="2,2" />
+        </svg>
+        <span style={{ color: '#475569', fontSize: 12, fontFamily: "'Geist Sans', sans-serif" }}>
+          Run a simulation to visualize qubit states
+        </span>
       </div>
     );
   }
 
   const currentCoord = blochCoords[selectedQubit] ?? null;
+  const stateDescription = currentCoord ? describeBlochState(currentCoord, selectedQubit) : 'No qubit state to display';
 
   return (
-    <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+    <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }} role="region" aria-label="Bloch sphere visualization" aria-description={stateDescription}>
       {/* Qubit tab selector */}
       {qubitCount > 1 && (
         <div style={{

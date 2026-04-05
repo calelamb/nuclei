@@ -224,6 +224,19 @@ function StepControls() {
   );
 }
 
+/** Generate a screen-reader-friendly description of the circuit */
+function describeCircuit(snapshot: import('../../types/quantum').CircuitSnapshot): string {
+  const gates = snapshot.gates;
+  const gateTypes = [...new Set(gates.map((g) => g.type))];
+  const gateList = gates.map((g) => {
+    const targets = g.targets.map((t) => `qubit ${t}`).join(' and ');
+    const controls = g.controls.length > 0 ? `, controlled by qubit ${g.controls.join(' and qubit ')}` : '';
+    return `${g.type} on ${targets}${controls}`;
+  }).join('; ');
+
+  return `${snapshot.qubit_count}-qubit circuit with depth ${snapshot.depth}. Gates: ${gateTypes.join(', ')}. Sequence: ${gateList}.`;
+}
+
 export function CircuitRenderer() {
   const snapshot = useCircuitStore((s) => s.snapshot);
   const error = useCircuitStore((s) => s.error);
@@ -258,19 +271,30 @@ export function CircuitRenderer() {
 
   if (!snapshot || snapshot.gates.length === 0) {
     return (
-      <div style={{
+      <div className="circuit-renderer-container" style={{
         height: '100%',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        color: colors.textMuted,
-        fontSize: 14,
-        fontFamily: 'Inter, sans-serif',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        flexDirection: 'column', gap: 12,
       }}>
         {error ? (
-          <span style={{ color: colors.error }}>{error}</span>
+          <span style={{ color: colors.error, fontSize: 13, fontFamily: "'Geist Sans', sans-serif" }}>{error}</span>
         ) : (
-          'Write quantum code to see the circuit'
+          <>
+            {/* Ghost circuit outline */}
+            <svg width={160} height={60} viewBox="0 0 160 60" style={{ opacity: 0.15 }}>
+              <line x1={20} y1={15} x2={140} y2={15} stroke={colors.wire} strokeWidth={1.5} strokeDasharray="4,4" />
+              <line x1={20} y1={45} x2={140} y2={45} stroke={colors.wire} strokeWidth={1.5} strokeDasharray="4,4" />
+              <text x={8} y={15} dominantBaseline="central" fill={colors.textMuted} fontSize={10} fontFamily="'JetBrains Mono', monospace">|0⟩</text>
+              <text x={8} y={45} dominantBaseline="central" fill={colors.textMuted} fontSize={10} fontFamily="'JetBrains Mono', monospace">|1⟩</text>
+              <rect x={45} y={3} width={24} height={24} rx={4} fill="none" stroke={colors.accent} strokeWidth={1} strokeDasharray="3,3" />
+              <text x={57} y={15} textAnchor="middle" dominantBaseline="central" fill={colors.accent} fontSize={10} fontFamily="'JetBrains Mono', monospace">H</text>
+              <rect x={95} y={33} width={24} height={24} rx={4} fill="none" stroke={colors.gateMeasure} strokeWidth={1} strokeDasharray="3,3" />
+              <text x={107} y={45} textAnchor="middle" dominantBaseline="central" fill={colors.gateMeasure} fontSize={9} fontFamily="'JetBrains Mono', monospace">M</text>
+            </svg>
+            <span style={{ color: colors.textDim, fontSize: 12, fontFamily: "'Geist Sans', sans-serif" }}>
+              Write quantum code to see your circuit
+            </span>
+          </>
         )}
       </div>
     );
@@ -284,12 +308,15 @@ export function CircuitRenderer() {
 
   const highlightSet = new Set(highlights.map((h) => h.gateIndex));
 
+  const ariaDescription = snapshot ? describeCircuit(snapshot) : 'Empty circuit';
+
   return (
-    <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+    <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }} role="region" aria-label="Circuit diagram">
       <div
         ref={containerRef}
         className="circuit-renderer-container"
         style={{ flex: 1, overflow: 'auto', position: 'relative' }}
+        aria-description={ariaDescription}
       >
         <ExportMenu />
         <svg
@@ -307,7 +334,8 @@ export function CircuitRenderer() {
                 <line
                   x1={LABEL_WIDTH - 10} y1={y}
                   x2={svgWidth - PADDING} y2={y}
-                  stroke={colors.wire} strokeWidth={1}
+                  stroke={colors.wire} strokeWidth={1.5}
+                  strokeOpacity={0.7}
                 />
                 <text
                   x={LABEL_WIDTH - 20} y={y}

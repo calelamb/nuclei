@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect, useMemo } from 'react';
 import { useThemeStore } from '../../stores/themeStore';
 import { useUIModeStore } from '../../stores/uiModeStore';
-import { EASING, DURATION } from '../../lib/animations';
+import { EASING, DURATION, getDuration, prefersReducedMotion } from '../../lib/animations';
 
 export interface Command {
   id: string;
@@ -32,6 +32,7 @@ export function CommandPalette({ commands, onClose }: CommandPaletteProps) {
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
   const colors = useThemeStore((s) => s.colors);
+  const shadow = useThemeStore((s) => s.shadow);
 
   useEffect(() => {
     inputRef.current?.focus();
@@ -44,11 +45,8 @@ export function CommandPalette({ commands, onClose }: CommandPaletteProps) {
     );
   }, [query, commands]);
 
-  useEffect(() => {
-    setSelectedIdx(0);
-  }, [query]);
+  useEffect(() => { setSelectedIdx(0); }, [query]);
 
-  // Scroll selected item into view
   useEffect(() => {
     const el = listRef.current?.children[selectedIdx] as HTMLElement;
     el?.scrollIntoView({ block: 'nearest' });
@@ -88,25 +86,25 @@ export function CommandPalette({ commands, onClose }: CommandPaletteProps) {
       style={{
         position: 'fixed', inset: 0, zIndex: 5000,
         background: 'rgba(0,0,0,0.5)',
-        backdropFilter: 'blur(4px)',
+        backdropFilter: 'blur(12px)',
         display: 'flex', alignItems: 'flex-start', justifyContent: 'center',
         paddingTop: '15vh',
+        animation: prefersReducedMotion() ? 'none' : `nuclei-fade-in ${DURATION.fast}ms`,
       }}
       onClick={onClose}
       role="dialog"
       aria-label="Command palette"
+      aria-modal="true"
     >
       <div
         style={{
           background: colors.bg,
           border: `1px solid ${colors.border}`,
           borderRadius: 12,
-          width: '100%',
-          maxWidth: 520,
-          maxHeight: '50vh',
+          width: '100%', maxWidth: 520, maxHeight: '50vh',
           overflow: 'hidden',
-          boxShadow: '0 16px 48px rgba(0,0,0,0.4)',
-          transition: `transform ${DURATION.normal}ms ${EASING.spring}`,
+          boxShadow: shadow.lg,
+          animation: prefersReducedMotion() ? 'none' : `nuclei-slide-down ${DURATION.normal}ms ${EASING.spring}`,
         }}
         onClick={(e) => e.stopPropagation()}
       >
@@ -119,22 +117,22 @@ export function CommandPalette({ commands, onClose }: CommandPaletteProps) {
             onKeyDown={handleKeyDown}
             placeholder="Type a command..."
             style={{
-              width: '100%',
-              background: 'transparent',
-              border: 'none',
-              outline: 'none',
-              color: colors.text,
-              fontSize: 15,
-              fontFamily: "'IBM Plex Sans', Inter, sans-serif",
+              width: '100%', background: 'transparent',
+              border: 'none', outline: 'none',
+              color: colors.text, fontSize: 15,
+              fontFamily: "'Geist Sans', Inter, sans-serif",
             }}
             aria-label="Search commands"
+            role="combobox"
+            aria-expanded="true"
+            aria-controls="command-list"
           />
         </div>
 
         {/* Results */}
-        <div ref={listRef} style={{ maxHeight: '40vh', overflow: 'auto', padding: '4px 0' }}>
+        <div ref={listRef} id="command-list" style={{ maxHeight: '40vh', overflow: 'auto', padding: '4px 0' }} role="listbox">
           {filtered.length === 0 ? (
-            <div style={{ padding: '16px', color: colors.textMuted, fontSize: 13, fontFamily: "'IBM Plex Sans', sans-serif", textAlign: 'center' }}>
+            <div style={{ padding: 16, color: colors.textMuted, fontSize: 13, fontFamily: "'Geist Sans', sans-serif", textAlign: 'center' }}>
               No matching commands
             </div>
           ) : (
@@ -143,19 +141,14 @@ export function CommandPalette({ commands, onClose }: CommandPaletteProps) {
                 key={cmd.id}
                 onClick={() => { cmd.action(); onClose(); }}
                 style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  width: '100%',
-                  padding: '8px 16px',
+                  display: 'flex', alignItems: 'center',
+                  width: '100%', padding: '8px 16px',
                   background: i === selectedIdx ? colors.border : 'transparent',
-                  border: 'none',
-                  cursor: 'pointer',
-                  color: colors.text,
-                  fontSize: 13,
-                  fontFamily: "'IBM Plex Sans', Inter, sans-serif",
-                  textAlign: 'left',
-                  gap: 10,
-                  transition: `background ${DURATION.instant}ms`,
+                  border: 'none', cursor: 'pointer',
+                  color: colors.text, fontSize: 13,
+                  fontFamily: "'Geist Sans', Inter, sans-serif",
+                  textAlign: 'left', gap: 10,
+                  transition: `background ${getDuration(DURATION.instant)}ms`,
                 }}
                 role="option"
                 aria-selected={i === selectedIdx}
@@ -163,20 +156,16 @@ export function CommandPalette({ commands, onClose }: CommandPaletteProps) {
                 <span style={{
                   fontSize: 10, fontWeight: 600,
                   color: categoryColors[cmd.category] ?? colors.textMuted,
-                  minWidth: 48,
-                  fontFamily: "'IBM Plex Sans', sans-serif",
+                  minWidth: 48, fontFamily: "'Geist Sans', sans-serif",
                 }}>
                   {cmd.category}
                 </span>
                 <span style={{ flex: 1 }}>{cmd.label}</span>
                 {cmd.shortcut && (
                   <kbd style={{
-                    fontSize: 11,
-                    fontFamily: "'JetBrains Mono', monospace",
-                    color: colors.textMuted,
-                    background: colors.bgPanel,
-                    padding: '1px 6px',
-                    borderRadius: 3,
+                    fontSize: 11, fontFamily: "'JetBrains Mono', monospace",
+                    color: colors.textMuted, background: colors.bgPanel,
+                    padding: '1px 6px', borderRadius: 3,
                     border: `1px solid ${colors.border}`,
                   }}>
                     {cmd.shortcut}
@@ -191,7 +180,7 @@ export function CommandPalette({ commands, onClose }: CommandPaletteProps) {
   );
 }
 
-/** Build the default command list for Nuclei */
+/** Build the full command list for Nuclei */
 export function buildCommands(actions: {
   run: () => void;
   openFile: () => void;
@@ -203,13 +192,32 @@ export function buildCommands(actions: {
   toggleShortcuts: () => void;
 }): Command[] {
   return [
+    // Run
     { id: 'run', label: 'Run Circuit', category: 'Run', shortcut: '⌘+Enter', action: actions.run },
+    // File
     { id: 'open', label: 'Open File', category: 'File', shortcut: '⌘+O', action: actions.openFile },
     { id: 'save', label: 'Save File', category: 'File', shortcut: '⌘+S', action: actions.saveFile },
     { id: 'new', label: 'New File', category: 'File', shortcut: '⌘+N', action: actions.newFile },
+    // View
     { id: 'theme', label: 'Toggle Theme', category: 'View', shortcut: '⌘+Shift+T', action: actions.toggleTheme },
+    { id: 'mode', label: 'Cycle UI Mode (Beginner/Intermediate/Advanced)', category: 'View', shortcut: '⌘+Shift+L', action: actions.cycleMode },
+    // Dirac
     { id: 'dirac', label: 'Toggle Dirac Panel', category: 'Dirac', shortcut: '⌘+D', action: actions.toggleDirac },
-    { id: 'mode', label: 'Cycle UI Mode', category: 'View', shortcut: '⌘+Shift+L', action: actions.cycleMode },
+    { id: 'dirac-focus', label: 'Focus Dirac Input', category: 'Dirac', shortcut: '⌘+L', action: actions.toggleDirac },
+    // Circuit
+    { id: 'step-through', label: 'Step Through Circuit', category: 'Circuit', action: () => {
+      import('../../stores/circuitStore').then(({ useCircuitStore }) => {
+        useCircuitStore.getState().setStepMode(true);
+      });
+    }},
+    { id: 'reset-step', label: 'Reset Step-Through', category: 'Circuit', action: () => {
+      import('../../stores/circuitStore').then(({ useCircuitStore }) => {
+        useCircuitStore.getState().setStepMode(false);
+      });
+    }},
+    // Learn
+    { id: 'exercise', label: 'Start Exercise (via Dirac)', category: 'Learn', action: actions.toggleDirac },
+    // Settings
     { id: 'shortcuts', label: 'Keyboard Shortcuts', category: 'Settings', shortcut: '⌘+/', action: actions.toggleShortcuts },
   ];
 }

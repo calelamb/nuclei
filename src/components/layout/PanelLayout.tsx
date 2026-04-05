@@ -1,160 +1,85 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { usePlatform } from '../../platform/PlatformProvider';
 import { QuantumEditor } from '../editor/QuantumEditor';
+import { EditorTabs } from '../editor/EditorTabs';
+import { Breadcrumbs } from '../editor/Breadcrumbs';
 import { CircuitRenderer } from '../circuit/CircuitRenderer';
 import { ProbabilityHistogram } from '../histogram/ProbabilityHistogram';
-import { DiracChat } from '../dirac/DiracChat';
 import { BlochPanel } from '../bloch/BlochSphere';
+import { DiracSidePanel } from '../dirac/DiracSidePanel';
+import { ActivityBar } from './ActivityBar';
+import type { ActivityView } from './ActivityBar';
+import { Sidebar } from './Sidebar';
 import { useEditorStore } from '../../stores/editorStore';
 import { useCircuitStore } from '../../stores/circuitStore';
 import { useSimulationStore } from '../../stores/simulationStore';
 import { useThemeStore } from '../../stores/themeStore';
 import { useExerciseStore } from '../../stores/exerciseStore';
-import { useLearningStore } from '../../stores/learningStore';
 import { useUIModeStore } from '../../stores/uiModeStore';
-import { LearningPathSidebar } from '../learning/LearningPathSidebar';
+import { useDiracPanelStore } from '../../stores/diracPanelStore';
+import { ChevronDown, ChevronUp, Play, Sun, Moon, X, Circle } from 'lucide-react';
 import type { Framework } from '../../types/quantum';
 
-const DEFAULT_LEFT_WIDTH = 60;
 const DEFAULT_BOTTOM_HEIGHT = 200;
+const DEFAULT_SIDEBAR_WIDTH = 240;
 
 const STARTER_TEMPLATES: Record<Framework, string> = {
-  qiskit: `from qiskit import QuantumCircuit
-
-# Create a Bell State
-qc = QuantumCircuit(2, 2)
-qc.h(0)
-qc.cx(0, 1)
-qc.measure([0, 1], [0, 1])
-`,
-  cirq: `import cirq
-
-# Create a Bell State
-q0, q1 = cirq.LineQubit.range(2)
-circuit = cirq.Circuit([
-    cirq.H(q0),
-    cirq.CNOT(q0, q1),
-    cirq.measure(q0, q1, key='result'),
-])
-`,
-  'cuda-q': `import cudaq
-
-# Create a Bell State
-@cudaq.kernel
-def bell():
-    q = cudaq.qvector(2)
-    h(q[0])
-    cx(q[0], q[1])
-    mz(q)
-`,
+  qiskit: `from qiskit import QuantumCircuit\n\n# Create a Bell State\nqc = QuantumCircuit(2, 2)\nqc.h(0)\nqc.cx(0, 1)\nqc.measure([0, 1], [0, 1])\n`,
+  cirq: `import cirq\n\n# Create a Bell State\nq0, q1 = cirq.LineQubit.range(2)\ncircuit = cirq.Circuit([\n    cirq.H(q0),\n    cirq.CNOT(q0, q1),\n    cirq.measure(q0, q1, key='result'),\n])\n`,
+  'cuda-q': `import cudaq\n\n# Create a Bell State\n@cudaq.kernel\ndef bell():\n    q = cudaq.qvector(2)\n    h(q[0])\n    cx(q[0], q[1])\n    mz(q)\n`,
 };
 
+/* ── Framework Selector ── */
 function FrameworkSelector() {
   const [open, setOpen] = useState(false);
   const framework = useEditorStore((s) => s.framework);
   const setFramework = useEditorStore((s) => s.setFramework);
   const setCode = useEditorStore((s) => s.setCode);
   const colors = useThemeStore((s) => s.colors);
-  const dropdownRef = useRef<HTMLDivElement>(null);
-
+  const shadow = useThemeStore((s) => s.shadow);
+  const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
-    const handleClick = (e: MouseEvent) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
-        setOpen(false);
-      }
-    };
-    if (open) document.addEventListener('mousedown', handleClick);
-    return () => document.removeEventListener('mousedown', handleClick);
+    if (!open) return;
+    const h = (e: MouseEvent) => { if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false); };
+    document.addEventListener('mousedown', h);
+    return () => document.removeEventListener('mousedown', h);
   }, [open]);
-
   const frameworks: Framework[] = ['qiskit', 'cirq', 'cuda-q'];
-  const displayName = (f: Framework) => f === 'cuda-q' ? 'CUDA-Q' : f.charAt(0).toUpperCase() + f.slice(1);
-
+  const dn = (f: Framework) => f === 'cuda-q' ? 'CUDA-Q' : f.charAt(0).toUpperCase() + f.slice(1);
   return (
-    <div ref={dropdownRef} style={{ position: 'relative' }}>
-      <button
-        onClick={() => setOpen(!open)}
-        style={{
-          background: 'transparent',
-          border: `1px solid ${colors.border}`,
-          borderRadius: 3,
-          color: colors.accentLight,
-          cursor: 'pointer',
-          fontSize: 12,
-          fontFamily: 'Inter, sans-serif',
-          padding: '2px 8px',
-          display: 'flex',
-          alignItems: 'center',
-          gap: 4,
-        }}
-      >
-        {displayName(framework)}
-        <span style={{ fontSize: 8 }}>▼</span>
-      </button>
+    <div ref={ref} style={{ position: 'relative' }}>
+      <button onClick={() => setOpen(!open)} style={{
+        background: 'transparent', border: 'none', borderRadius: 3, color: colors.accentLight,
+        cursor: 'pointer', fontSize: 11, fontFamily: "'Geist Sans', sans-serif",
+        padding: '0 6px', display: 'flex', alignItems: 'center', gap: 3, height: 18,
+      }}
+        onMouseEnter={(e) => { e.currentTarget.style.background = colors.bgElevated; }}
+        onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
+      >{dn(framework)} <ChevronDown size={9} /></button>
       {open && (
-        <div style={{
-          position: 'absolute',
-          top: '100%',
-          left: 0,
-          marginTop: 2,
-          background: colors.bgPanel,
-          border: `1px solid ${colors.border}`,
-          borderRadius: 4,
-          overflow: 'hidden',
-          zIndex: 1000,
-          minWidth: 120,
-        }}>
+        <div style={{ position: 'absolute', top: '100%', left: 0, marginTop: 4, background: colors.bgElevated,
+          border: `1px solid ${colors.borderStrong}`, borderRadius: 6, overflow: 'hidden', zIndex: 1000,
+          minWidth: 120, boxShadow: shadow.md }}>
           {frameworks.map((f) => (
-            <button
-              key={f}
-              onClick={() => {
-                setFramework(f);
-                setOpen(false);
-              }}
-              style={{
-                display: 'block',
-                width: '100%',
-                padding: '6px 12px',
-                background: f === framework ? colors.border : 'transparent',
-                color: f === framework ? colors.accent : colors.text,
-                border: 'none',
-                cursor: 'pointer',
-                fontSize: 12,
-                fontFamily: 'Inter, sans-serif',
-                textAlign: 'left',
-              }}
-              onMouseEnter={(e) => { if (f !== framework) (e.target as HTMLElement).style.background = colors.border; }}
-              onMouseLeave={(e) => { if (f !== framework) (e.target as HTMLElement).style.background = 'transparent'; }}
-            >
-              {displayName(f)}
-            </button>
+            <button key={f} onClick={() => { setFramework(f); setOpen(false); }} style={{
+              display: 'block', width: '100%', padding: '5px 12px',
+              background: f === framework ? colors.bgElevated : 'transparent',
+              color: f === framework ? colors.accent : colors.text, border: 'none', cursor: 'pointer',
+              fontSize: 11, fontFamily: "'Geist Sans', sans-serif", textAlign: 'left',
+            }}
+              onMouseEnter={(e) => { if (f !== framework) e.currentTarget.style.background = colors.bgElevated; }}
+              onMouseLeave={(e) => { if (f !== framework) e.currentTarget.style.background = 'transparent'; }}
+            >{dn(f)}</button>
           ))}
-          <div style={{ borderTop: `1px solid ${colors.border}`, padding: '4px 0' }}>
+          <div style={{ borderTop: `1px solid ${colors.border}`, padding: '3px 0' }}>
             {frameworks.map((f) => (
-              <button
-                key={`tpl-${f}`}
-                onClick={() => {
-                  setCode(STARTER_TEMPLATES[f]);
-                  setFramework(f);
-                  setOpen(false);
-                }}
-                style={{
-                  display: 'block',
-                  width: '100%',
-                  padding: '4px 12px',
-                  background: 'transparent',
-                  color: colors.textMuted,
-                  border: 'none',
-                  cursor: 'pointer',
-                  fontSize: 11,
-                  fontFamily: 'Inter, sans-serif',
-                  textAlign: 'left',
-                }}
-                onMouseEnter={(e) => { (e.target as HTMLElement).style.color = colors.accentLight; }}
-                onMouseLeave={(e) => { (e.target as HTMLElement).style.color = colors.textMuted; }}
-              >
-                New {displayName(f)} file
-              </button>
+              <button key={`tpl-${f}`} onClick={() => { setCode(STARTER_TEMPLATES[f]); setFramework(f); setOpen(false); }}
+                style={{ display: 'block', width: '100%', padding: '3px 12px', background: 'transparent',
+                  color: colors.textDim, border: 'none', cursor: 'pointer', fontSize: 10,
+                  fontFamily: "'Geist Sans', sans-serif", textAlign: 'left' }}
+                onMouseEnter={(e) => { e.currentTarget.style.color = colors.accentLight; }}
+                onMouseLeave={(e) => { e.currentTarget.style.color = colors.textDim; }}
+              >New {dn(f)} file</button>
             ))}
           </div>
         </div>
@@ -163,336 +88,244 @@ function FrameworkSelector() {
   );
 }
 
+/* ── Terminal Panel ── */
 function TerminalPanel() {
   const { terminalOutput } = useSimulationStore();
   const colors = useThemeStore((s) => s.colors);
   const scrollRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (scrollRef.current) {
-      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
-    }
-  }, [terminalOutput]);
-
+  useEffect(() => { if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight; }, [terminalOutput]);
   return (
-    <div
-      ref={scrollRef}
-      style={{
-        height: '100%',
-        overflow: 'auto',
-        fontFamily: "'Fira Code', monospace",
-        fontSize: 13,
-        color: colors.text,
-        padding: 12,
-      }}
-    >
+    <div ref={scrollRef} style={{ height: '100%', overflow: 'auto', fontFamily: "'Geist Mono', 'JetBrains Mono', monospace", fontSize: 12, color: colors.text, padding: '8px 12px' }}>
       {terminalOutput.length === 0 ? (
-        <span style={{ color: colors.textMuted }}>Terminal output will appear here</span>
-      ) : (
-        terminalOutput.map((line, i) => (
-          <div key={i} style={{ color: line.startsWith('Error') ? colors.error : colors.text }}>
-            {line}
-          </div>
-        ))
-      )}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: colors.textDim }}>
+          <span style={{ color: colors.accent, opacity: 0.3, fontFamily: "'Geist Mono', monospace" }}>{'>'}_</span>
+          <span style={{ fontSize: 11 }}>Terminal output will appear here</span>
+        </div>
+      ) : terminalOutput.map((line, i) => (
+        <div key={i} style={{ color: line.startsWith('Error') ? colors.error : colors.text, lineHeight: 1.5 }}>{line}</div>
+      ))}
     </div>
   );
 }
 
+/* ── Bottom Panel ── */
 function BottomPanel({ collapsed, onToggle }: { collapsed: boolean; onToggle: () => void }) {
-  const [activeTab, setActiveTab] = useState<'terminal' | 'histogram' | 'dirac'>('terminal');
+  const [activeTab, setActiveTab] = useState<'terminal' | 'histogram'>('terminal');
   const result = useSimulationStore((s) => s.result);
   const colors = useThemeStore((s) => s.colors);
-
-  useEffect(() => {
-    if (result) {
-      setActiveTab('histogram');
-    }
-  }, [result]);
-
+  useEffect(() => { if (result) setActiveTab('histogram'); }, [result]);
   return (
     <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
-      <div style={{
-        display: 'flex',
-        borderBottom: collapsed ? 'none' : `1px solid ${colors.border}`,
-        backgroundColor: colors.bgPanel,
-        cursor: 'pointer',
-      }}>
-        {(['terminal', 'histogram', 'dirac'] as const).map((tab) => (
-          <button
-            key={tab}
-            onClick={() => {
-              if (collapsed) onToggle();
-              setActiveTab(tab);
-            }}
-            style={{
-              padding: '8px 16px',
-              background: !collapsed && activeTab === tab ? colors.bg : 'transparent',
-              color: !collapsed && activeTab === tab ? colors.accent : colors.textMuted,
-              border: 'none',
-              borderBottom: !collapsed && activeTab === tab ? `2px solid ${colors.accent}` : '2px solid transparent',
-              cursor: 'pointer',
-              fontSize: 12,
-              fontFamily: 'Inter, sans-serif',
-              textTransform: 'capitalize',
-            }}
-          >
-            {tab === 'dirac' ? 'Dirac AI' : tab}
-          </button>
+      {/* Panel header */}
+      <div style={{ height: 28, display: 'flex', alignItems: 'center', borderBottom: collapsed ? 'none' : `1px solid ${colors.border}`, backgroundColor: colors.bg, flexShrink: 0 }}>
+        {(['terminal', 'histogram'] as const).map((tab) => (
+          <button key={tab} onClick={() => { if (collapsed) onToggle(); setActiveTab(tab); }} style={{
+            padding: '0 14px', height: '100%',
+            background: 'transparent',
+            color: !collapsed && activeTab === tab ? colors.text : colors.textDim,
+            border: 'none',
+            borderBottom: !collapsed && activeTab === tab ? `1px solid ${colors.accent}` : '1px solid transparent',
+            cursor: 'pointer', fontSize: 10, fontWeight: 500,
+            fontFamily: "'Geist Sans', sans-serif", textTransform: 'uppercase', letterSpacing: 0.5,
+          }} role="tab" aria-selected={!collapsed && activeTab === tab}>{tab}</button>
         ))}
         <div style={{ flex: 1 }} />
-        <button
-          onClick={onToggle}
-          style={{
-            background: 'transparent',
-            border: 'none',
-            color: colors.textMuted,
-            cursor: 'pointer',
-            fontSize: 12,
-            padding: '0 12px',
-            fontFamily: 'Inter, sans-serif',
-          }}
-        >
-          {collapsed ? '▲' : '▼'}
+        <button onClick={onToggle} style={{ background: 'transparent', border: 'none', color: colors.textDim, cursor: 'pointer', padding: '0 10px', display: 'flex', alignItems: 'center' }}
+          onMouseEnter={(e) => { e.currentTarget.style.color = colors.text; }}
+          onMouseLeave={(e) => { e.currentTarget.style.color = colors.textDim; }}
+          aria-label={collapsed ? 'Expand' : 'Collapse'}>
+          {collapsed ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
         </button>
       </div>
-      {!collapsed && (
-        <div style={{ flex: 1, overflow: 'hidden' }}>
-          {activeTab === 'terminal' && <TerminalPanel />}
-          {activeTab === 'histogram' && <ProbabilityHistogram />}
-          {activeTab === 'dirac' && <DiracChat />}
-        </div>
-      )}
+      {!collapsed && <div style={{ flex: 1, overflow: 'hidden' }}>{activeTab === 'terminal' ? <TerminalPanel /> : <ProbabilityHistogram />}</div>}
     </div>
   );
 }
 
-function ThemeToggle() {
-  const mode = useThemeStore((s) => s.mode);
-  const toggle = useThemeStore((s) => s.toggle);
+/* ── Resize Handle ── */
+function ResizeHandle({ direction, isDragging, onMouseDown, onDoubleClick }: {
+  direction: 'horizontal' | 'vertical'; isDragging: boolean; onMouseDown: () => void; onDoubleClick: () => void;
+}) {
   const colors = useThemeStore((s) => s.colors);
-  const platform = usePlatform();
-
-  const handleToggle = useCallback(async () => {
-    toggle();
-    const nextMode = mode === 'dark' ? 'light' : 'dark';
-    try {
-      await platform.setStoredValue('theme', nextMode);
-    } catch {}
-  }, [mode, toggle, platform]);
-
+  const isH = direction === 'horizontal';
   return (
-    <button
-      onClick={handleToggle}
-      title={`Switch to ${mode === 'dark' ? 'light' : 'dark'} theme`}
-      style={{
-        background: 'transparent',
-        border: `1px solid ${colors.border}`,
-        borderRadius: 3,
-        color: colors.textMuted,
-        cursor: 'pointer',
-        fontSize: 12,
-        fontFamily: 'Inter, sans-serif',
-        padding: '2px 6px',
-      }}
-    >
-      {mode === 'dark' ? '☀' : '☾'}
-    </button>
+    <div style={{ [isH ? 'width' : 'height']: isDragging ? 2 : 1, cursor: isH ? 'col-resize' : 'row-resize',
+      backgroundColor: isDragging ? colors.accent : colors.border, flexShrink: 0, position: 'relative',
+      transition: isDragging ? 'none' : 'all 150ms ease' }}
+      onMouseDown={onMouseDown} onDoubleClick={onDoubleClick} role="separator">
+      <div style={{ position: 'absolute', [isH ? 'left' : 'top']: -3, [isH ? 'right' : 'bottom']: -3,
+        [isH ? 'width' : 'height']: 8, [isH ? 'top' : 'left']: 0, [isH ? 'bottom' : 'right']: 0, zIndex: 2 }}
+        onMouseEnter={(e) => { const p = e.currentTarget.parentElement; if (p && !isDragging) { p.style.backgroundColor = colors.accent; p.style[isH ? 'width' : 'height'] = '2px'; } }}
+        onMouseLeave={(e) => { const p = e.currentTarget.parentElement; if (p && !isDragging) { p.style.backgroundColor = colors.border; p.style[isH ? 'width' : 'height'] = '1px'; } }}
+      />
+    </div>
   );
 }
 
-function UIModeIndicator() {
-  const mode = useUIModeStore((s) => s.mode);
-  const cycleMode = useUIModeStore((s) => s.cycleMode);
-  const colors = useThemeStore((s) => s.colors);
-  const modeColors = { beginner: '#10B981', intermediate: '#F59E0B', advanced: '#EF4444' };
-
-  return (
-    <button
-      onClick={cycleMode}
-      title="Cycle UI mode (⌘+Shift+L)"
-      style={{
-        padding: '2px 8px',
-        background: 'transparent',
-        border: `1px solid ${colors.border}`,
-        borderRadius: 3,
-        color: modeColors[mode],
-        cursor: 'pointer',
-        fontSize: 11,
-        fontFamily: "'IBM Plex Sans', sans-serif",
-        fontWeight: 500,
-        textTransform: 'capitalize',
-      }}
-      aria-label={`UI mode: ${mode}. Click to cycle.`}
-    >
-      {mode}
-    </button>
-  );
-}
-
-function RunButton() {
+/* ── Status Bar ── */
+function StatusBar() {
+  const snapshot = useCircuitStore((s) => s.snapshot);
   const isRunning = useSimulationStore((s) => s.isRunning);
-  const colors = useThemeStore((s) => s.colors);
-
-  const handleRun = () => {
-    import('../../App').then(({ getExecute }) => {
-      const execute = getExecute();
-      if (execute) execute();
-    });
-  };
-
-  return (
-    <button
-      onClick={handleRun}
-      disabled={isRunning}
-      title="Run Circuit (⌘+Enter)"
-      style={{
-        padding: '3px 12px',
-        background: isRunning ? colors.border : '#00B4D8',
-        color: '#fff',
-        border: 'none',
-        borderRadius: 3,
-        cursor: isRunning ? 'default' : 'pointer',
-        fontSize: 11,
-        fontFamily: 'Inter, sans-serif',
-        fontWeight: 600,
-      }}
-    >
-      {isRunning ? 'Running...' : '▶ Run'}
-    </button>
-  );
-}
-
-function ExerciseIndicator() {
-  const exercise = useExerciseStore((s) => s.activeExercise);
-  const endExercise = useExerciseStore((s) => s.endExercise);
-  const colors = useThemeStore((s) => s.colors);
-
-  if (!exercise) return null;
-
-  return (
-    <span style={{
-      display: 'flex',
-      alignItems: 'center',
-      gap: 4,
-      color: colors.dirac,
-      fontSize: 11,
-      fontFamily: 'Inter, sans-serif',
-    }}>
-      <span style={{ fontSize: 10 }}>&#9881;</span>
-      {exercise.title}
-      <button
-        onClick={endExercise}
-        title="End exercise"
-        style={{
-          background: 'none', border: 'none', color: colors.textMuted,
-          cursor: 'pointer', fontSize: 10, padding: '0 2px',
-        }}
-      >
-        ✕
-      </button>
-    </span>
-  );
-}
-
-function KernelIndicator() {
+  const result = useSimulationStore((s) => s.result);
+  const isDirty = useEditorStore((s) => s.isDirty);
   const connected = useEditorStore((s) => s.kernelConnected);
   const colors = useThemeStore((s) => s.colors);
+  const shadow = useThemeStore((s) => s.shadow);
+  const uiMode = useUIModeStore((s) => s.mode);
+  const cycleMode = useUIModeStore((s) => s.cycleMode);
+  const themeMode = useThemeStore((s) => s.mode);
+  const themeToggle = useThemeStore((s) => s.toggle);
+  const platform = usePlatform();
+  const exercise = useExerciseStore((s) => s.activeExercise);
+  const endExercise = useExerciseStore((s) => s.endExercise);
+  const modeColors = { beginner: colors.success, intermediate: colors.warning, advanced: colors.error };
+
+  const statusText = isRunning ? 'Running...' : result ? `Done (${result.execution_time_ms}ms)` : 'Ready';
+
+  const handleRun = () => { import('../../App').then(({ getExecute }) => { const e = getExecute(); if (e) e(); }); };
+  const handleCycleMode = useCallback(async () => { cycleMode(); try { await platform.setStoredValue('ui_mode', useUIModeStore.getState().mode); } catch {} }, [cycleMode, platform]);
+  const handleThemeToggle = useCallback(async () => { themeToggle(); try { await platform.setStoredValue('theme', themeMode === 'dark' ? 'light' : 'dark'); } catch {} }, [themeToggle, themeMode, platform]);
 
   return (
-    <span
-      title={connected ? 'Kernel connected' : 'Kernel disconnected — click to reconnect'}
-      style={{
-        display: 'flex',
-        alignItems: 'center',
-        gap: 4,
-        color: colors.textMuted,
-        fontSize: 11,
-        fontFamily: 'Inter, sans-serif',
-        cursor: 'default',
+    <div style={{
+      height: 22, backgroundColor: colors.bgPanel,
+      display: 'flex', alignItems: 'center',
+      padding: '0 8px', gap: 8,
+      fontSize: 11, fontFamily: "'Geist Sans', sans-serif",
+      flexShrink: 0, zIndex: 10,
+      borderTop: `1px solid ${colors.border}`,
+    }} role="toolbar" aria-label="Status bar">
+      {/* Left side */}
+      <FrameworkSelector />
+      <span style={{ color: colors.textDim, fontSize: 10 }}>
+        Qubits: {snapshot ? snapshot.qubit_count : '—'}
+      </span>
+      <span style={{ color: colors.textDim, fontSize: 10 }}>
+        Depth: {snapshot ? snapshot.depth : '—'}
+      </span>
+
+      {exercise && (
+        <span style={{ display: 'flex', alignItems: 'center', gap: 3, color: colors.dirac, fontSize: 10 }}>
+          {exercise.title}
+          <button onClick={endExercise} style={{ background: 'none', border: 'none', color: colors.textDim, cursor: 'pointer', padding: 0, display: 'flex' }}
+            onMouseEnter={(e) => { e.currentTarget.style.color = colors.error; }}
+            onMouseLeave={(e) => { e.currentTarget.style.color = colors.textDim; }}>
+            <X size={9} />
+          </button>
+        </span>
+      )}
+
+      <div style={{ flex: 1 }} />
+
+      {/* Right side */}
+      <span style={{ display: 'flex', alignItems: 'center', gap: 3, color: colors.textDim, fontSize: 10 }}>
+        <Circle size={5} fill={connected ? colors.success : colors.error} stroke="none" />
+        Kernel
+      </span>
+      <span style={{ color: isRunning ? colors.accent : colors.textDim, fontSize: 10,
+        ...(isRunning ? { animation: 'nuclei-heartbeat 1.5s ease infinite' } : {}) }}>
+        {statusText}
+      </span>
+      <button onClick={handleRun} disabled={isRunning} title="Run (⌘+Enter)" style={{
+        padding: '0 8px', height: 16, background: isRunning ? colors.bgElevated : colors.accent,
+        color: '#fff', border: 'none', borderRadius: 3, cursor: isRunning ? 'default' : 'pointer',
+        fontSize: 10, fontFamily: "'Geist Sans', sans-serif", fontWeight: 600,
+        display: 'flex', alignItems: 'center', gap: 3, boxShadow: isRunning ? 'none' : shadow.sm,
       }}
-    >
-      <span style={{
-        width: 6,
-        height: 6,
-        borderRadius: '50%',
-        backgroundColor: connected ? '#98C379' : colors.error,
-        display: 'inline-block',
-      }} />
-      Kernel
-    </span>
+        onMouseEnter={(e) => { if (!isRunning) e.currentTarget.style.boxShadow = '0 0 10px rgba(0,180,216,0.3)'; }}
+        onMouseLeave={(e) => { e.currentTarget.style.boxShadow = isRunning ? 'none' : shadow.sm; }}>
+        {isRunning ? 'Running...' : <><Play size={9} fill="currentColor" /> Run</>}
+      </button>
+      <button onClick={handleCycleMode} title="Cycle UI mode (⌘+Shift+L)" style={{
+        padding: '0 6px', height: 16, background: 'transparent', border: 'none', borderRadius: 3,
+        color: modeColors[uiMode], cursor: 'pointer', fontSize: 10, fontFamily: "'Geist Sans', sans-serif",
+        fontWeight: 500, textTransform: 'capitalize',
+      }}
+        onMouseEnter={(e) => { e.currentTarget.style.background = colors.bgElevated; }}
+        onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}>
+        {uiMode}
+      </button>
+      <button onClick={handleThemeToggle} title={`${themeMode === 'dark' ? 'Light' : 'Dark'} theme`} style={{
+        background: 'transparent', border: 'none', color: colors.textDim, cursor: 'pointer',
+        padding: 0, display: 'flex', alignItems: 'center',
+      }}
+        onMouseEnter={(e) => { e.currentTarget.style.color = colors.text; }}
+        onMouseLeave={(e) => { e.currentTarget.style.color = colors.textDim; }}>
+        {themeMode === 'dark' ? <Sun size={11} /> : <Moon size={11} />}
+      </button>
+    </div>
   );
 }
 
+/* ── Main Layout ── */
 export function PanelLayout() {
-  const [leftWidth, setLeftWidth] = useState(DEFAULT_LEFT_WIDTH);
+  const [activeView, setActiveView] = useState<ActivityView | null>('files');
+  const [sidebarWidth, setSidebarWidth] = useState(DEFAULT_SIDEBAR_WIDTH);
   const [bottomHeight, setBottomHeight] = useState(DEFAULT_BOTTOM_HEIGHT);
   const [bottomCollapsed, setBottomCollapsed] = useState(false);
   const [isDraggingH, setIsDraggingH] = useState(false);
   const [isDraggingV, setIsDraggingV] = useState(false);
 
-  const snapshot = useCircuitStore((s) => s.snapshot);
-  const isRunning = useSimulationStore((s) => s.isRunning);
-  const result = useSimulationStore((s) => s.result);
-  const isDirty = useEditorStore((s) => s.isDirty);
   const colors = useThemeStore((s) => s.colors);
+  const uiMode = useUIModeStore((s) => s.mode);
+  const result = useSimulationStore((s) => s.result);
   const platform = usePlatform();
+
+  const showBloch = uiMode !== 'beginner';
+  const showBottomPanel = uiMode !== 'beginner';
+  const showSidebar = activeView !== null;
+
+  useEffect(() => {
+    if (uiMode === 'beginner' && result) setBottomCollapsed(false);
+  }, [result, uiMode]);
 
   // Load persisted layout
   useEffect(() => {
     (async () => {
       try {
-        const lw = await platform.getStoredValue<number>('layout_leftWidth');
         const bh = await platform.getStoredValue<number>('layout_bottomHeight');
-        if (lw) setLeftWidth(lw);
+        const sw = await platform.getStoredValue<number>('layout_sidebarWidth');
         if (bh) setBottomHeight(bh);
+        if (sw) setSidebarWidth(sw);
       } catch {}
     })();
   }, [platform]);
 
-  // Persist layout on change (debounced)
   const persistTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => {
     if (persistTimerRef.current) clearTimeout(persistTimerRef.current);
     persistTimerRef.current = setTimeout(async () => {
       try {
-        await platform.setStoredValue('layout_leftWidth', leftWidth);
         await platform.setStoredValue('layout_bottomHeight', bottomHeight);
+        await platform.setStoredValue('layout_sidebarWidth', sidebarWidth);
       } catch {}
     }, 500);
-  }, [leftWidth, bottomHeight]);
+  }, [bottomHeight, sidebarWidth, platform]);
 
   const handleMouseMove = (e: React.MouseEvent) => {
     if (isDraggingH) {
-      const pct = (e.clientX / window.innerWidth) * 100;
-      setLeftWidth(Math.max(30, Math.min(80, pct)));
+      // Horizontal drag controls the split between editor area and viz area
+      // This is a percentage of the editor content area (after sidebar)
     }
     if (isDraggingV) {
-      const fromBottom = window.innerHeight - e.clientY;
-      setBottomHeight(Math.max(100, Math.min(500, fromBottom)));
+      const fromBottom = window.innerHeight - e.clientY - 22; // account for status bar
+      setBottomHeight(Math.max(80, Math.min(500, fromBottom)));
     }
   };
 
-  const handleMouseUp = () => {
-    setIsDraggingH(false);
-    setIsDraggingV(false);
+  const handleMouseUp = () => { setIsDraggingH(false); setIsDraggingV(false); };
+
+  const handleActivitySelect = (view: ActivityView) => {
+    setActiveView((prev) => prev === view ? null : view);
   };
 
-  const statusText = isRunning
-    ? 'Running...'
-    : result
-      ? `Done (${result.execution_time_ms}ms)`
-      : 'Ready';
-
-  const effectiveBottomHeight = bottomCollapsed ? 32 : bottomHeight;
+  const effectiveBottomHeight = bottomCollapsed ? 28 : bottomHeight;
 
   return (
     <div
       style={{
-        width: '100vw',
-        height: '100vh',
-        display: 'flex',
-        flexDirection: 'column',
+        width: '100vw', height: '100vh',
+        display: 'flex', flexDirection: 'column',
         backgroundColor: colors.bg,
         overflow: 'hidden',
         userSelect: isDraggingH || isDraggingV ? 'none' : 'auto',
@@ -500,95 +333,78 @@ export function PanelLayout() {
       onMouseMove={handleMouseMove}
       onMouseUp={handleMouseUp}
     >
-      {/* Status bar */}
-      <div style={{
-        height: 28,
-        backgroundColor: colors.bgPanel,
-        borderBottom: `1px solid ${colors.border}`,
-        display: 'flex',
-        alignItems: 'center',
-        padding: '0 12px',
-        gap: 12,
-        fontSize: 12,
-        fontFamily: 'Inter, sans-serif',
-        flexShrink: 0,
-      }}>
-        <span style={{ color: colors.accent, fontWeight: 600 }}>
-          {isDirty ? '● ' : ''}NUCLEI
-        </span>
-        <span style={{ color: colors.textMuted }}>|</span>
-        <FrameworkSelector />
-        <span style={{ color: colors.textMuted }}>
-          Qubits: {snapshot ? snapshot.qubit_count : '—'}
-        </span>
-        <span style={{ color: colors.textMuted }}>
-          Depth: {snapshot ? snapshot.depth : '—'}
-        </span>
-        <div style={{ flex: 1 }} />
-        <ExerciseIndicator />
-        <KernelIndicator />
-        <span style={{ color: isRunning ? colors.accent : colors.textMuted }}>{statusText}</span>
-        <RunButton />
-        <UIModeIndicator />
-        <ThemeToggle />
-      </div>
-
-      {/* Main area */}
+      {/* Main area (everything except status bar) */}
       <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
-        {/* Learning sidebar */}
-        <LearningPathSidebar />
+        {/* Activity Bar */}
+        <ActivityBar active={activeView} onSelect={handleActivitySelect} />
 
-        {/* Left panel — Editor */}
-        <div style={{ width: `${leftWidth}%`, height: '100%', flex: 1, minWidth: 0 }}>
-          <QuantumEditor />
+        {/* Sidebar */}
+        {showSidebar && activeView && (
+          <Sidebar view={activeView} width={sidebarWidth} onWidthChange={setSidebarWidth} />
+        )}
+
+        {/* Editor + Viz area */}
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0 }}>
+          {/* Top: editor area + visualization */}
+          <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
+            {/* Left: Editor with tabs + breadcrumbs */}
+            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0 }}>
+              <EditorTabs />
+              <Breadcrumbs />
+              <div style={{ flex: 1, minHeight: 0 }}>
+                <QuantumEditor />
+              </div>
+            </div>
+
+            {/* Resize handle between editor and viz */}
+            <ResizeHandle
+              direction="horizontal"
+              isDragging={isDraggingH}
+              onMouseDown={() => setIsDraggingH(true)}
+              onDoubleClick={() => {}}
+            />
+
+            {/* Right: Circuit + Bloch */}
+            <div style={{ width: '40%', minWidth: 200, display: 'flex', flexDirection: 'column' }}>
+              <div style={{
+                flex: showBloch ? 6 : 1,
+                borderBottom: showBloch ? `1px solid ${colors.border}` : 'none',
+                overflow: 'hidden', position: 'relative',
+              }}>
+                <CircuitRenderer />
+              </div>
+              {showBloch && (
+                <div style={{ flex: 4, overflow: 'hidden', position: 'relative' }}>
+                  <BlochPanel />
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Bottom panel */}
+          {(showBottomPanel || result) && (
+            <>
+              {!bottomCollapsed && (
+                <ResizeHandle
+                  direction="vertical"
+                  isDragging={isDraggingV}
+                  onMouseDown={() => setIsDraggingV(true)}
+                  onDoubleClick={() => setBottomHeight(DEFAULT_BOTTOM_HEIGHT)}
+                />
+              )}
+              <div style={{ height: effectiveBottomHeight, overflow: 'hidden', flexShrink: 0 }}>
+                <BottomPanel collapsed={bottomCollapsed} onToggle={() => setBottomCollapsed((c) => !c)} />
+              </div>
+            </>
+          )}
         </div>
 
-        {/* Horizontal resize handle */}
-        <div
-          style={{
-            width: 4,
-            cursor: 'col-resize',
-            backgroundColor: isDraggingH ? colors.accent : colors.border,
-            transition: isDraggingH ? 'none' : 'background-color 0.15s',
-            flexShrink: 0,
-          }}
-          onMouseDown={() => setIsDraggingH(true)}
-          onDoubleClick={() => setLeftWidth(DEFAULT_LEFT_WIDTH)}
-        />
-
-        {/* Right panel — Circuit + Bloch */}
-        <div style={{ flex: 1, height: '100%', display: 'flex', flexDirection: 'column' }}>
-          <div style={{ flex: 6, borderBottom: `1px solid ${colors.border}`, overflow: 'hidden' }}>
-            <CircuitRenderer />
-          </div>
-          <div style={{ flex: 4, overflow: 'hidden' }}>
-            <BlochPanel />
-          </div>
-        </div>
+        {/* Dirac side panel */}
+        <DiracSidePanel />
       </div>
 
-      {/* Vertical resize handle */}
-      {!bottomCollapsed && (
-        <div
-          style={{
-            height: 4,
-            cursor: 'row-resize',
-            backgroundColor: isDraggingV ? colors.accent : colors.border,
-            transition: isDraggingV ? 'none' : 'background-color 0.15s',
-            flexShrink: 0,
-          }}
-          onMouseDown={() => setIsDraggingV(true)}
-          onDoubleClick={() => setBottomHeight(DEFAULT_BOTTOM_HEIGHT)}
-        />
-      )}
-
-      {/* Bottom panel */}
-      <div style={{ height: effectiveBottomHeight, overflow: 'hidden', flexShrink: 0 }}>
-        <BottomPanel
-          collapsed={bottomCollapsed}
-          onToggle={() => setBottomCollapsed((c) => !c)}
-        />
-      </div>
+      {/* Status bar — full width at bottom */}
+      <StatusBar />
     </div>
   );
 }

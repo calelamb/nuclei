@@ -8,6 +8,7 @@ import { useKernel } from './hooks/useKernel';
 import { useFileOps } from './hooks/useFileOps';
 import { useThemeStore } from './stores/themeStore';
 import { useUIModeStore } from './stores/uiModeStore';
+import { useDiracPanelStore } from './stores/diracPanelStore';
 import type { PlatformBridge } from './platform/bridge';
 
 // Store execute function globally so Monaco keybinding can access it
@@ -25,8 +26,13 @@ function AppInner() {
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [showShortcuts, setShowShortcuts] = useState(false);
   const [showCommandPalette, setShowCommandPalette] = useState(false);
+  const [isReturningUser, setIsReturningUser] = useState(false);
+  const [lastOpenedFile, setLastOpenedFile] = useState<string | undefined>();
+  const [daysSinceLastSession, setDaysSinceLastSession] = useState<number | undefined>();
   const themeToggle = useThemeStore((s) => s.toggle);
   const cycleMode = useUIModeStore((s) => s.cycleMode);
+  const toggleDirac = useDiracPanelStore((s) => s.toggle);
+  const focusDirac = useDiracPanelStore((s) => s.focusInput);
 
   useEffect(() => {
     executeRef = execute;
@@ -48,7 +54,26 @@ function AppInner() {
         if (uiMode) useUIModeStore.getState().setMode(uiMode);
 
         const onboarded = await platform.getStoredValue<boolean>('onboarding_complete');
-        if (!onboarded) setShowOnboarding(true);
+        if (!onboarded) {
+          setShowOnboarding(true);
+        } else {
+          // Check for returning user experience
+          const lastSession = await platform.getStoredValue<string>('last_session_date');
+          const lastFile = await platform.getStoredValue<string>('last_opened_file');
+          if (lastSession) {
+            const days = Math.floor((Date.now() - new Date(lastSession).getTime()) / (1000 * 60 * 60 * 24));
+            if (days > 0) {
+              setIsReturningUser(true);
+              setDaysSinceLastSession(days);
+              if (lastFile) setLastOpenedFile(lastFile);
+              // Only show returning screen if >1 day away
+              if (days > 1) setShowOnboarding(true);
+            }
+          }
+        }
+
+        // Record this session
+        await platform.setStoredValue('last_session_date', new Date().toISOString());
       } catch {}
     })();
   }, [platform]);
@@ -59,7 +84,6 @@ function AppInner() {
       await platform.setStoredValue('onboarding_complete', true);
       if (path) {
         await platform.setStoredValue('onboarding_path', path);
-        // Set UI mode based on path
         if (path === 'beginner') useUIModeStore.getState().setMode('beginner');
         else if (path === 'intermediate') useUIModeStore.getState().setMode('intermediate');
         else if (path === 'experienced') useUIModeStore.getState().setMode('advanced');
@@ -73,7 +97,7 @@ function AppInner() {
     saveFile: () => fileOps.saveFile(),
     newFile: () => fileOps.newFile(),
     toggleTheme: themeToggle,
-    toggleDirac: () => {}, // TODO: wire to Dirac panel toggle
+    toggleDirac,
     cycleMode: () => {
       cycleMode();
       platform.setStoredValue('ui_mode', useUIModeStore.getState().mode).catch(() => {});
@@ -112,19 +136,74 @@ function AppInner() {
       } else if (e.key === 't' && e.shiftKey) {
         e.preventDefault();
         themeToggle();
+      } else if (e.key === 'd' && !e.shiftKey) {
+        e.preventDefault();
+        toggleDirac();
+      } else if (e.key === 'l' && !e.shiftKey) {
+        e.preventDefault();
+        focusDirac();
+      } else if (e.key === 'j' && !e.shiftKey) {
+        e.preventDefault();
+        // Toggle bottom panel — handled in PanelLayout via store
       }
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [fileOps, themeToggle, cycleMode, platform]);
+  }, [fileOps, themeToggle, cycleMode, platform, toggleDirac, focusDirac]);
 
   return (
     <>
       <PanelLayout />
-      {showOnboarding && <Onboarding onComplete={completeOnboarding} />}
+      {showOnboarding && (
+        <Onboarding
+          onComplete={completeOnboarding}
+          isReturningUser={isReturningUser}
+          lastOpenedFile={lastOpenedFile}
+          daysSinceLastSession={daysSinceLastSession}
+        />
+      )}
       {showShortcuts && <KeyboardShortcuts onClose={() => setShowShortcuts(false)} />}
       {showCommandPalette && <CommandPalette commands={commands} onClose={() => setShowCommandPalette(false)} />}
     </>
+  );
+}
+
+function SplashScreen() {
+  return (
+    <div style={{
+      width: '100vw', height: '100vh',
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+      flexDirection: 'column', gap: 16,
+      backgroundColor: '#080E18',
+    }}>
+      <div style={{
+        color: '#00B4D8',
+        fontSize: 36,
+        fontWeight: 800,
+        fontFamily: "'Geist Sans', Inter, sans-serif",
+        letterSpacing: -1,
+        animation: 'nuclei-fade-in 400ms cubic-bezier(0.4, 0, 0.2, 1)',
+      }}>
+        NUCLEI
+      </div>
+      <div style={{
+        color: '#475569',
+        fontSize: 13,
+        fontFamily: "'Geist Sans', Inter, sans-serif",
+      }}>
+        Quantum Computing IDE
+      </div>
+      {/* Subtle loading indicator */}
+      <div style={{ display: 'flex', gap: 4, marginTop: 8 }}>
+        {[0, 1, 2].map((i) => (
+          <div key={i} style={{
+            width: 4, height: 4, borderRadius: '50%',
+            backgroundColor: '#00B4D8',
+            animation: `nuclei-dots 1.2s cubic-bezier(0.4, 0, 0.2, 1) ${i * 150}ms infinite`,
+          }} />
+        ))}
+      </div>
+    </div>
   );
 }
 
@@ -136,16 +215,7 @@ function App() {
   }, []);
 
   if (!bridge) {
-    return (
-      <div style={{
-        width: '100vw', height: '100vh',
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
-        backgroundColor: '#0F1B2D', color: '#00B4D8',
-        fontFamily: "'IBM Plex Sans', Inter, sans-serif", fontSize: 16,
-      }}>
-        Loading Nuclei{isTauri ? '' : ' (web)'}...
-      </div>
-    );
+    return <SplashScreen />;
   }
 
   return (

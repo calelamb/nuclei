@@ -1,6 +1,43 @@
 /* Nuclei — Global Styles */
-/* Fonts: IBM Plex Sans (UI) + JetBrains Mono (code) — per UI/UX Pro Max design system */
-@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap');
+/* Fonts: Geist Sans (UI) + JetBrains Mono (code) */
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&display=swap');
+
+/* Geist Sans font-face (from npm package) */
+@font-face {
+  font-family: 'Geist Sans';
+  src: url('/node_modules/geist/dist/fonts/geist-sans/Geist-Regular.woff2') format('woff2');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Geist Sans';
+  src: url('/node_modules/geist/dist/fonts/geist-sans/Geist-Medium.woff2') format('woff2');
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Geist Sans';
+  src: url('/node_modules/geist/dist/fonts/geist-sans/Geist-SemiBold.woff2') format('woff2');
+  font-weight: 600;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Geist Sans';
+  src: url('/node_modules/geist/dist/fonts/geist-sans/Geist-Bold.woff2') format('woff2');
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Geist Mono';
+  src: url('/node_modules/geist/dist/fonts/geist-mono/GeistMono-Regular.woff2') format('woff2');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
 
 * {
   margin: 0;
@@ -11,7 +48,7 @@
 body {
   overflow: hidden;
   background: #0F1B2D;
-  font-family: 'IBM Plex Sans', Inter, -apple-system, sans-serif;
+  font-family: 'Geist Sans', Inter, -apple-system, system-ui, sans-serif;
 }
 
 #root {
@@ -19,7 +56,7 @@ body {
   height: 100vh;
 }
 
-/* Accessibility: visible focus indicators */
+/* ── Accessibility: visible focus indicators ── */
 :focus-visible {
   outline: 2px solid #00B4D8;
   outline-offset: 2px;
@@ -29,7 +66,7 @@ button:focus:not(:focus-visible) {
   outline: none;
 }
 
-/* Animations — respect reduced motion */
+/* ── Reduced motion: disable all animations ── */
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {
     animation-duration: 0.01ms !important;
@@ -38,28 +75,119 @@ button:focus:not(:focus-visible) {
   }
 }
 
-/* Keyframes */
+/* ── Keyframes ── */
+
+/* Gentle pulse (for glow effects, loading) */
 @keyframes nuclei-pulse {
   0%, 100% { opacity: 1; }
   50% { opacity: 0.5; }
 }
 
+/* Slide up + fade in (messages, cards, list items) */
 @keyframes nuclei-slide-up {
   from { opacity: 0; transform: translateY(8px); }
   to { opacity: 1; transform: translateY(0); }
 }
 
+/* Simple fade in */
 @keyframes nuclei-fade-in {
   from { opacity: 0; }
   to { opacity: 1; }
 }
 
+/* Thinking dots bounce */
 @keyframes nuclei-dots {
   0%, 80%, 100% { transform: scale(0); }
   40% { transform: scale(1); }
 }
 
-/* Dirac markdown styling */
+/* Gate slide in from right */
+@keyframes nuclei-gate-enter {
+  from { opacity: 0; transform: translateX(12px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+/* Gate fade out and collapse */
+@keyframes nuclei-gate-exit {
+  from { opacity: 1; transform: scale(1); }
+  to { opacity: 0; transform: scale(0.8); }
+}
+
+/* Teal pulse glow (for highlighted gates) */
+@keyframes nuclei-teal-glow {
+  0%, 100% { filter: drop-shadow(0 0 4px rgba(0, 180, 216, 0.3)); }
+  50% { filter: drop-shadow(0 0 12px rgba(0, 180, 216, 0.6)); }
+}
+
+/* Lightbulb pulse (code actions) */
+@keyframes nuclei-lightbulb-pulse {
+  0%, 100% { opacity: 0.6; }
+  50% { opacity: 1; }
+}
+
+/* Histogram bar grow from zero */
+@keyframes nuclei-bar-grow {
+  from { transform: scaleY(0); transform-origin: bottom; }
+  to { transform: scaleY(1); transform-origin: bottom; }
+}
+
+/* Running heartbeat pulse */
+@keyframes nuclei-heartbeat {
+  0%, 100% { opacity: 0.6; }
+  50% { opacity: 1; }
+}
+
+/* Slide down (for inline edit, command palette) */
+@keyframes nuclei-slide-down {
+  from { opacity: 0; transform: translateY(-8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* Panel slide in from right */
+@keyframes nuclei-slide-in-right {
+  from { opacity: 0; transform: translateX(20px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+/* Panel slide in from left */
+@keyframes nuclei-slide-in-left {
+  from { opacity: 0; transform: translateX(-20px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+/* Counter tick animation */
+@keyframes nuclei-counter-tick {
+  0% { transform: translateY(0); }
+  50% { transform: translateY(-2px); }
+  100% { transform: translateY(0); }
+}
+
+/* Shake (for disconnect indicator) */
+@keyframes nuclei-shake {
+  0%, 100% { transform: translateX(0); }
+  25% { transform: translateX(-2px); }
+  75% { transform: translateX(2px); }
+}
+
+/* Wire draw animation */
+@keyframes nuclei-wire-draw {
+  from { stroke-dashoffset: 1000; }
+  to { stroke-dashoffset: 0; }
+}
+
+/* Syntax highlight shimmer */
+@keyframes nuclei-shimmer {
+  0% { background-position: -200px 0; }
+  100% { background-position: 200px 0; }
+}
+
+/* Atom orbit animation (Dirac empty state) */
+@keyframes nuclei-orbit {
+  from { transform: translateX(-50%) rotate(0deg); }
+  to { transform: translateX(-50%) rotate(360deg); }
+}
+
+/* ── Dirac markdown styling ── */
 .dirac-markdown p {
   margin: 0 0 8px 0;
 }
@@ -70,7 +198,7 @@ button:focus:not(:focus-visible) {
   background: #1A2A42;
   padding: 2px 6px;
   border-radius: 3px;
-  font-family: 'JetBrains Mono', 'Fira Code', monospace;
+  font-family: 'JetBrains Mono', monospace;
   font-size: 12px;
   color: #00B4D8;
 }
@@ -81,6 +209,7 @@ button:focus:not(:focus-visible) {
   padding: 10px;
   margin: 8px 0;
   overflow-x: auto;
+  position: relative;
 }
 .dirac-markdown pre code {
   background: none;
@@ -99,7 +228,29 @@ button:focus:not(:focus-visible) {
   margin: 8px 0 4px 0;
 }
 
-/* Scrollbar styling */
+/* ── Interactive element defaults ── */
+button, [role="button"] {
+  transition: all 150ms ease;
+}
+
+/* ── Circuit gate hover ── */
+.nuclei-gate {
+  transition: filter 150ms ease, transform 150ms ease;
+}
+.nuclei-gate:hover {
+  filter: drop-shadow(0 0 8px rgba(0, 180, 216, 0.4));
+  transform: scale(1.05);
+  transform-origin: center;
+}
+
+/* ── Circuit dot grid background ── */
+.circuit-renderer-container {
+  background-image: radial-gradient(circle, #1A2A42 0.5px, transparent 0.5px);
+  background-size: 20px 20px;
+  background-position: 10px 10px;
+}
+
+/* ── Scrollbar styling ── */
 ::-webkit-scrollbar {
   width: 6px;
   height: 6px;
@@ -109,8 +260,49 @@ button:focus:not(:focus-visible) {
 }
 ::-webkit-scrollbar-thumb {
   background: #1A2A42;
-  border-radius: 3px;
+  border-radius: 4px;
 }
 ::-webkit-scrollbar-thumb:hover {
   background: #264F78;
+  width: 8px;
+}
+
+/* ── Typography scale classes ── */
+.nuclei-h1 {
+  font-size: 28px;
+  font-weight: 700;
+  font-family: 'Geist Sans', sans-serif;
+  line-height: 1.2;
+}
+.nuclei-h2 {
+  font-size: 20px;
+  font-weight: 600;
+  font-family: 'Geist Sans', sans-serif;
+  line-height: 1.3;
+}
+.nuclei-h3 {
+  font-size: 16px;
+  font-weight: 600;
+  font-family: 'Geist Sans', sans-serif;
+  line-height: 1.4;
+}
+.nuclei-body {
+  font-size: 14px;
+  font-family: 'Geist Sans', sans-serif;
+  line-height: 1.5;
+}
+.nuclei-secondary {
+  font-size: 13px;
+  font-family: 'Geist Sans', sans-serif;
+  line-height: 1.5;
+}
+.nuclei-caption {
+  font-size: 11px;
+  font-family: 'Geist Sans', sans-serif;
+  line-height: 1.4;
+}
+.nuclei-code {
+  font-size: 13px;
+  font-family: 'JetBrains Mono', monospace;
+  line-height: 1.5;
 }
