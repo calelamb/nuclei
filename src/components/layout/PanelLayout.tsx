@@ -1,24 +1,9 @@
 import { useState, useRef, useEffect } from 'react';
 import { QuantumEditor } from '../editor/QuantumEditor';
+import { CircuitRenderer } from '../circuit/CircuitRenderer';
 import { useEditorStore } from '../../stores/editorStore';
 import { useCircuitStore } from '../../stores/circuitStore';
 import { useSimulationStore } from '../../stores/simulationStore';
-
-function CircuitPanel() {
-  return (
-    <div style={{
-      height: '100%',
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'center',
-      color: '#3D5A80',
-      fontSize: 14,
-      fontFamily: 'Inter, sans-serif',
-    }}>
-      Circuit diagram will render here
-    </div>
-  );
-}
 
 function BlochPanel() {
   return (
@@ -219,7 +204,7 @@ export function PanelLayout() {
         {/* Right panel — Circuit + Bloch */}
         <div style={{ flex: 1, height: '100%', display: 'flex', flexDirection: 'column' }}>
           <div style={{ flex: 6, borderBottom: '1px solid #1A2A42', overflow: 'hidden' }}>
-            <CircuitPanel />
+            <CircuitRenderer />
           </div>
           <div style={{ flex: 4, overflow: 'hidden' }}>
             <BlochPanel />
