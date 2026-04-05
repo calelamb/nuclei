@@ -7,6 +7,7 @@ pub fn run() {
     let kernel_state = KernelState::new();
 
     tauri::Builder::default()
+        .plugin(tauri_plugin_store::Builder::default().build())
         .manage(kernel_state)
         .invoke_handler(tauri::generate_handler![
             commands::kernel::start_kernel,

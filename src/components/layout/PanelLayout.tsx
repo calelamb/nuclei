@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from 'react';
 import { QuantumEditor } from '../editor/QuantumEditor';
 import { CircuitRenderer } from '../circuit/CircuitRenderer';
 import { ProbabilityHistogram } from '../histogram/ProbabilityHistogram';
+import { DiracChat } from '../dirac/DiracChat';
 import { useEditorStore } from '../../stores/editorStore';
 import { useCircuitStore } from '../../stores/circuitStore';
 import { useSimulationStore } from '../../stores/simulationStore';
@@ -98,11 +99,7 @@ function BottomPanel() {
       <div style={{ flex: 1, overflow: 'hidden' }}>
         {activeTab === 'terminal' && <TerminalPanel />}
         {activeTab === 'histogram' && <ProbabilityHistogram />}
-        {activeTab === 'dirac' && (
-          <div style={{ padding: 12, color: '#3D5A80', fontSize: 13, fontFamily: 'Inter, sans-serif' }}>
-            Dirac AI assistant will live here
-          </div>
-        )}
+        {activeTab === 'dirac' && <DiracChat />}
       </div>
     </div>
   );
