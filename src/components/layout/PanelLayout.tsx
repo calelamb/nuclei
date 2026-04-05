@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { QuantumEditor } from '../editor/QuantumEditor';
 import { CircuitRenderer } from '../circuit/CircuitRenderer';
+import { ProbabilityHistogram } from '../histogram/ProbabilityHistogram';
 import { useEditorStore } from '../../stores/editorStore';
 import { useCircuitStore } from '../../stores/circuitStore';
 import { useSimulationStore } from '../../stores/simulationStore';
@@ -58,6 +59,14 @@ function TerminalPanel() {
 
 function BottomPanel() {
   const [activeTab, setActiveTab] = useState<'terminal' | 'histogram' | 'dirac'>('terminal');
+  const result = useSimulationStore((s) => s.result);
+
+  // Auto-switch to histogram when results arrive
+  useEffect(() => {
+    if (result) {
+      setActiveTab('histogram');
+    }
+  }, [result]);
 
   return (
     <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
@@ -88,11 +97,7 @@ function BottomPanel() {
       </div>
       <div style={{ flex: 1, overflow: 'hidden' }}>
         {activeTab === 'terminal' && <TerminalPanel />}
-        {activeTab === 'histogram' && (
-          <div style={{ padding: 12, color: '#3D5A80', fontSize: 13, fontFamily: 'Inter, sans-serif' }}>
-            Probability histogram will render here
-          </div>
-        )}
+        {activeTab === 'histogram' && <ProbabilityHistogram />}
         {activeTab === 'dirac' && (
           <div style={{ padding: 12, color: '#3D5A80', fontSize: 13, fontFamily: 'Inter, sans-serif' }}>
             Dirac AI assistant will live here
