@@ -64,6 +64,44 @@ function ApiKeySetup({ onSave }: { onSave: (key: string) => void }) {
   );
 }
 
+function ThinkingBlock({ thinking }: { thinking: string }) {
+  const [expanded, setExpanded] = useState(false);
+  const colors = useThemeStore((s) => s.colors);
+
+  return (
+    <div style={{
+      margin: '6px 0',
+      border: `1px solid ${colors.border}`,
+      borderRadius: 4,
+      borderLeft: `3px solid ${colors.dirac}`,
+      overflow: 'hidden',
+    }}>
+      <button
+        onClick={() => setExpanded(!expanded)}
+        style={{
+          display: 'flex', alignItems: 'center', gap: 6, width: '100%',
+          padding: '4px 8px', background: colors.bgPanel, border: 'none',
+          cursor: 'pointer', color: colors.dirac, fontSize: 11,
+          fontFamily: 'Inter, sans-serif', fontStyle: 'italic',
+        }}
+      >
+        <span>{expanded ? '▼' : '▶'}</span>
+        Dirac's reasoning
+      </button>
+      {expanded && (
+        <pre style={{
+          margin: 0, padding: '6px 10px', fontSize: 11,
+          fontFamily: "'Fira Code', monospace", color: colors.textMuted,
+          background: colors.bg, whiteSpace: 'pre-wrap', wordBreak: 'break-word',
+          maxHeight: 300, overflow: 'auto', lineHeight: 1.5,
+        }}>
+          {thinking}
+        </pre>
+      )}
+    </div>
+  );
+}
+
 function ToolCallCard({ toolCall, onAction }: { toolCall: ToolCall; onAction: (id: string, accepted: boolean) => void }) {
   const [expanded, setExpanded] = useState(true);
   const colors = useThemeStore((s) => s.colors);
@@ -307,6 +345,9 @@ export function DiracChat() {
             >
               {msg.role === 'assistant' ? (
                 <div>
+                  {msg.thinking && (
+                    <ThinkingBlock thinking={msg.thinking} />
+                  )}
                   {msg.content && (
                     <div className="dirac-markdown">
                       <Markdown>{msg.content || (isLoading && i === messages.length - 1 ? '...' : '')}</Markdown>

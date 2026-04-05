@@ -1,9 +1,11 @@
-import { useRef, useCallback, useEffect } from 'react';
+import { useRef, useCallback, useEffect, useState } from 'react';
 import Editor from '@monaco-editor/react';
 import type { OnMount } from '@monaco-editor/react';
 import { useEditorStore } from '../../stores/editorStore';
 import { useThemeStore } from '../../stores/themeStore';
 import { getExecute } from '../../App';
+import { registerGhostCompletions } from './completions/ghostCompletions';
+import { InlineEditWidget } from './inlineEdit/InlineEditWidget';
 
 export function QuantumEditor() {
   const { code, setCode } = useEditorStore();
@@ -12,6 +14,7 @@ export function QuantumEditor() {
   const colors = useThemeStore((s) => s.colors);
   const editorRef = useRef<any>(null);
   const monacoRef = useRef<any>(null);
+  const [showInlineEdit, setShowInlineEdit] = useState(false);
 
   const themeName = mode === 'dark' ? 'nuclei-dark' : 'nuclei-light';
 
@@ -28,6 +31,16 @@ export function QuantumEditor() {
         if (execute) execute();
       },
     });
+
+    editor.addAction({
+      id: 'inline-edit',
+      label: 'Inline Edit (Cmd+K)',
+      keybindings: [monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyK],
+      run: () => setShowInlineEdit(true),
+    });
+
+    // Register ghost completions
+    registerGhostCompletions(monaco, editor);
 
     editor.focus();
   };
@@ -130,7 +143,7 @@ export function QuantumEditor() {
 
   return (
     <div
-      style={{ width: '100%', height: '100%', backgroundColor: colors.bgEditor }}
+      style={{ width: '100%', height: '100%', backgroundColor: colors.bgEditor, position: 'relative' }}
       onDrop={handleDrop}
       onDragOver={handleDragOver}
     >
@@ -152,6 +165,7 @@ export function QuantumEditor() {
           bracketPairColorization: { enabled: true },
           automaticLayout: true,
           tabSize: 4,
+          inlineSuggest: { enabled: true },
         }}
         beforeMount={(monaco) => {
           monaco.editor.defineTheme('nuclei-dark', {
@@ -196,6 +210,13 @@ export function QuantumEditor() {
           });
         }}
       />
+      {showInlineEdit && editorRef.current && monacoRef.current && (
+        <InlineEditWidget
+          editor={editorRef.current}
+          monaco={monacoRef.current}
+          onClose={() => setShowInlineEdit(false)}
+        />
+      )}
     </div>
   );
 }

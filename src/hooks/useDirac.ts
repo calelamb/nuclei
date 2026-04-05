@@ -9,6 +9,7 @@ import { useSimulationStore } from '../stores/simulationStore';
 import { useExerciseStore } from '../stores/exerciseStore';
 import type { Exercise } from '../stores/exerciseStore';
 import { useLearningStore } from '../stores/learningStore';
+import { useStudentStore, studentModelToPrompt } from '../stores/studentStore';
 
 const STORE_KEY = 'claude_api_key';
 const API_URL = 'https://api.anthropic.com/v1/messages';
@@ -41,11 +42,24 @@ You can help with:
 - Suggesting improvements to quantum circuits`;
 
 function buildSystemPrompt(): string {
+  let prompt = SYSTEM_PROMPT;
+
+  // Inject student model
+  const studentModel = useStudentStore.getState().model;
+  if (studentModel.totalCodeExecutions > 0) {
+    prompt += '\n\n' + studentModelToPrompt(studentModel);
+  }
+
+  // Inject learning module context
   const { activePath, activeModuleIndex } = useLearningStore.getState();
-  if (!activePath) return SYSTEM_PROMPT;
-  const module = activePath.modules[activeModuleIndex];
-  if (!module) return SYSTEM_PROMPT;
-  return `${SYSTEM_PROMPT}\n\n## Current Learning Module\nThe student is on: "${activePath.title}" → "${module.title}"\n\n${module.diracPromptAddendum}`;
+  if (activePath) {
+    const module = activePath.modules[activeModuleIndex];
+    if (module) {
+      prompt += `\n\n## Current Learning Module\nThe student is on: "${activePath.title}" → "${module.title}"\n\n${module.diracPromptAddendum}`;
+    }
+  }
+
+  return prompt;
 }
 
 const TOOL_DEFINITIONS = [
@@ -128,6 +142,18 @@ const TOOL_DEFINITIONS = [
     },
   },
 ];
+
+function shouldUseReasoning(userText: string): boolean {
+  const lower = userText.toLowerCase();
+  if (lower.startsWith('/think')) return true;
+  const reasoningKeywords = [
+    'optimize', 'simplify', 'reduce gate', 'prove', 'equivalent',
+    'why doesn\'t', 'why isn\'t', 'debug', 'what\'s wrong',
+    'state vector after', 'state at step', 'entanglement analysis',
+    'error propagation', 'decompose', 'verify correctness',
+  ];
+  return reasoningKeywords.some((kw) => lower.includes(kw));
+}
 
 function shouldUseTools(userText: string): boolean {
   const lower = userText.toLowerCase();
@@ -311,7 +337,7 @@ function executeToolById(toolId: string, accepted: boolean) {
 }
 
 export function useDirac() {
-  const { apiKey, setApiKey, addMessage, updateLastAssistant, updateLastToolCalls, updateToolCallStatus, setLoading } = useDiracStore();
+  const { apiKey, setApiKey, addMessage, updateLastAssistant, updateLastThinking, updateLastToolCalls, updateToolCallStatus, setLoading } = useDiracStore();
   const platform = usePlatform();
 
   useEffect(() => {
@@ -340,7 +366,10 @@ export function useDirac() {
 
     const context = buildContextBlock();
     const useTools = shouldUseTools(userText);
-    const model = selectModel(userText, useTools);
+    const useReasoning = shouldUseReasoning(userText);
+    const model = useReasoning ? SONNET_MODEL : selectModel(userText, useTools);
+    // Strip /think prefix if present
+    const cleanText = userText.replace(/^\/think\s*/i, '');
 
     // Build API messages — convert our messages to Anthropic format
     const storeMessages = useDiracStore.getState().messages;
@@ -390,12 +419,15 @@ export function useDirac() {
     try {
       const body: Record<string, unknown> = {
         model,
-        max_tokens: 4096,
+        max_tokens: useReasoning ? 16000 : 4096,
         system: buildSystemPrompt(),
         messages: apiMessages,
         stream: true,
       };
-      if (useTools) {
+      if (useReasoning) {
+        body.thinking = { type: 'enabled', budget_tokens: 10000 };
+      }
+      if (useTools && !useReasoning) {
         body.tools = TOOL_DEFINITIONS;
       }
 
@@ -426,6 +458,8 @@ export function useDirac() {
 
       const decoder = new TextDecoder();
       let textAccumulated = '';
+      let thinkingAccumulated = '';
+      let currentBlockType: 'text' | 'thinking' | 'tool_use' | null = null;
       const toolCalls: ToolCall[] = [];
       let currentToolIndex = -1;
       let currentToolInput = '';
@@ -446,7 +480,10 @@ export function useDirac() {
             const parsed = JSON.parse(data);
 
             if (parsed.type === 'content_block_start') {
-              if (parsed.content_block?.type === 'tool_use') {
+              if (parsed.content_block?.type === 'thinking') {
+                currentBlockType = 'thinking';
+              } else if (parsed.content_block?.type === 'tool_use') {
+                currentBlockType = 'tool_use';
                 currentToolIndex = toolCalls.length;
                 currentToolInput = '';
                 toolCalls.push({
@@ -455,16 +492,21 @@ export function useDirac() {
                   input: {},
                   status: 'pending',
                 });
+              } else if (parsed.content_block?.type === 'text') {
+                currentBlockType = 'text';
               }
             } else if (parsed.type === 'content_block_delta') {
-              if (parsed.delta?.type === 'text_delta' && parsed.delta.text) {
+              if (parsed.delta?.type === 'thinking_delta' && parsed.delta.thinking) {
+                thinkingAccumulated += parsed.delta.thinking;
+                updateLastThinking(thinkingAccumulated);
+              } else if (parsed.delta?.type === 'text_delta' && parsed.delta.text) {
                 textAccumulated += parsed.delta.text;
                 updateLastAssistant(textAccumulated);
               } else if (parsed.delta?.type === 'input_json_delta' && parsed.delta.partial_json) {
                 currentToolInput += parsed.delta.partial_json;
               }
             } else if (parsed.type === 'content_block_stop') {
-              if (currentToolIndex >= 0 && currentToolInput) {
+              if (currentBlockType === 'tool_use' && currentToolIndex >= 0 && currentToolInput) {
                 try {
                   toolCalls[currentToolIndex].input = JSON.parse(currentToolInput);
                 } catch {
@@ -497,7 +539,7 @@ export function useDirac() {
       updateLastAssistant(`Error: ${e instanceof Error ? e.message : 'Unknown error'}`);
       setLoading(false);
     }
-  }, [apiKey, addMessage, updateLastAssistant, updateLastToolCalls, setLoading]);
+  }, [apiKey, addMessage, updateLastAssistant, updateLastThinking, updateLastToolCalls, setLoading]);
 
   const handleToolAction = useCallback((toolId: string, accepted: boolean) => {
     executeToolById(toolId, accepted);

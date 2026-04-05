@@ -11,6 +11,7 @@ export interface ToolCall {
 export interface DiracMessage {
   role: 'user' | 'assistant';
   content: string;
+  thinking?: string; // extended thinking content
   toolCalls?: ToolCall[];
 }
 
@@ -20,6 +21,7 @@ interface DiracState {
   apiKey: string | null;
   addMessage: (msg: DiracMessage) => void;
   updateLastAssistant: (content: string) => void;
+  updateLastThinking: (thinking: string) => void;
   updateLastToolCalls: (toolCalls: ToolCall[]) => void;
   updateToolCallStatus: (toolId: string, status: ToolCall['status'], result?: string) => void;
   setLoading: (loading: boolean) => void;
@@ -37,6 +39,14 @@ export const useDiracStore = create<DiracState>((set) => ({
     const lastIdx = msgs.length - 1;
     if (lastIdx >= 0 && msgs[lastIdx].role === 'assistant') {
       msgs[lastIdx] = { ...msgs[lastIdx], content };
+    }
+    return { messages: msgs };
+  }),
+  updateLastThinking: (thinking) => set((s) => {
+    const msgs = [...s.messages];
+    const lastIdx = msgs.length - 1;
+    if (lastIdx >= 0 && msgs[lastIdx].role === 'assistant') {
+      msgs[lastIdx] = { ...msgs[lastIdx], thinking };
     }
     return { messages: msgs };
   }),
