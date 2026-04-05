@@ -1,7 +1,7 @@
-import { Files, Search, Cpu, GraduationCap, Blocks, Settings } from 'lucide-react';
+import { Files, Search, Cpu, GraduationCap, Blocks, Settings, Server, Users } from 'lucide-react';
 import { useThemeStore } from '../../stores/themeStore';
 
-export type ActivityView = 'files' | 'search' | 'circuit' | 'learning' | 'plugins' | 'settings';
+export type ActivityView = 'files' | 'search' | 'circuit' | 'learning' | 'plugins' | 'hardware' | 'community' | 'settings';
 
 interface ActivityBarProps {
   active: ActivityView | null;
@@ -14,6 +14,8 @@ const TOP_ITEMS: Array<{ id: ActivityView; icon: typeof Files; label: string }> 
   { id: 'circuit', icon: Cpu, label: 'Circuit' },
   { id: 'learning', icon: GraduationCap, label: 'Learning' },
   { id: 'plugins', icon: Blocks, label: 'Plugins' },
+  { id: 'hardware', icon: Server, label: 'Hardware' },
+  { id: 'community', icon: Users, label: 'Community' },
 ];
 
 const BOTTOM_ITEMS: Array<{ id: ActivityView; icon: typeof Settings; label: string }> = [

@@ -9,6 +9,9 @@ import { useExerciseStore } from '../stores/exerciseStore';
 import type { Exercise } from '../stores/exerciseStore';
 import { useLearningStore } from '../stores/learningStore';
 import { useStudentStore, studentModelToPrompt } from '../stores/studentStore';
+import { useHardwareStore } from '../stores/hardwareStore';
+import { useCapstoneStore } from '../stores/capstoneStore';
+import { useChallengeStore } from '../stores/challengeStore';
 import { DIRAC_API_KEY, DIRAC_API_URL, HAIKU_MODEL, SONNET_MODEL } from '../config/dirac';
 
 const SYSTEM_PROMPT = `You are Dirac, an AI teaching assistant for quantum computing, named after physicist Paul Dirac. You live inside Nuclei, a quantum computing IDE.
@@ -49,6 +52,21 @@ function buildSystemPrompt(): string {
     const module = activePath.modules[activeModuleIndex];
     if (module) {
       prompt += `\n\n## Current Learning Module\nThe student is on: "${activePath.title}" → "${module.title}"\n\n${module.diracPromptAddendum}`;
+    }
+  }
+
+  const capstone = useCapstoneStore.getState();
+  if (capstone.activeProject) {
+    const milestone = capstone.activeProject.milestones[capstone.activeMilestoneIndex];
+    prompt += `\n\n## Active Capstone Project\nProject: "${capstone.activeProject.title}"\nMilestone ${capstone.activeMilestoneIndex + 1}/${capstone.activeProject.milestones.length}: "${milestone?.title ?? 'Unknown'}"\n${capstone.activeProject.diracGuidancePrompt}`;
+    if (milestone) prompt += `\n${milestone.diracPromptAddendum}`;
+  }
+
+  const { selectedBackend, backends } = useHardwareStore.getState();
+  if (selectedBackend) {
+    const backend = backends.find((b) => b.name === selectedBackend);
+    if (backend) {
+      prompt += `\n\n## Hardware Context\nThe student has selected quantum backend "${backend.name}" (${backend.provider}).\n- Qubits: ${backend.qubitCount}\n- Error rate: ${backend.averageErrorRate}\n- Queue: ${backend.queueLength} jobs\n- Gate set: ${backend.gateSet.join(', ')}\n- Status: ${backend.status}\nHelp them understand hardware constraints, noise, and transpilation. Compare simulator vs hardware results when available.`;
     }
   }
 
@@ -134,6 +152,40 @@ const TOOL_DEFINITIONS = [
       required: [],
     },
   },
+  {
+    name: 'submit_hardware',
+    description: 'Submit the current circuit to run on a real quantum hardware backend.',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        backend: { type: 'string', description: 'The backend name to submit to (e.g., "sim_qasm", "ibm_brisbane")' },
+        shots: { type: 'number', description: 'Number of measurement shots' },
+      },
+      required: ['backend'],
+    },
+  },
+  {
+    name: 'challenge_hint',
+    description: 'Provide a hint for the currently active weekly challenge.',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        hint_level: { type: 'string', enum: ['gentle', 'moderate', 'strong'], description: 'How much to reveal' },
+      },
+      required: ['hint_level'],
+    },
+  },
+  {
+    name: 'glossary_lookup',
+    description: 'Look up a quantum computing term in the glossary and include its definition in your response.',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        term: { type: 'string', description: 'The quantum computing term to look up' },
+      },
+      required: ['term'],
+    },
+  },
 ];
 
 function shouldUseReasoning(userText: string): boolean {
@@ -156,6 +208,8 @@ function shouldUseTools(userText: string): boolean {
     'run', 'execute', 'simulate', 'try', 'debug', 'correct',
     'highlight', 'step', 'walk through', 'show me the',
     'exercise', 'challenge', 'practice', 'quiz', 'check', 'verify', 'solution',
+    'hardware', 'submit', 'run on', 'real quantum', 'ibm', 'backend',
+    'hint', 'glossary', 'define', 'definition', 'what is',
   ];
   return actionKeywords.some((kw) => lower.includes(kw));
 }
@@ -208,6 +262,32 @@ function buildContextBlock(): string {
   if (errors.length > 0) {
     const recentErrors = errors.slice(-3).join('\n');
     parts.push(`## Recent Errors\n\`\`\`\n${recentErrors}\n\`\`\``);
+  }
+
+  const { selectedBackend, backends, jobs, results: hwResults } = useHardwareStore.getState();
+  if (selectedBackend) {
+    const backend = backends.find((b) => b.name === selectedBackend);
+    if (backend) {
+      parts.push(`## Hardware Backend\nSelected: ${backend.name} (${backend.provider}, ${backend.qubitCount} qubits, error rate: ${backend.averageErrorRate})`);
+    }
+    const completedJobs = jobs.filter((j) => j.status === 'complete');
+    if (completedJobs.length > 0) {
+      const lastJob = completedJobs[completedJobs.length - 1];
+      const hwResult = hwResults[lastJob.id];
+      if (hwResult) {
+        const topHw = Object.entries(hwResult.probabilities)
+          .sort(([, a], [, b]) => b - a)
+          .slice(0, 8)
+          .map(([state, prob]) => `  |${state}⟩: ${(prob * 100).toFixed(1)}%`)
+          .join('\n');
+        parts.push(`## Hardware Results (${lastJob.backend})\n${topHw}`);
+      }
+    }
+  }
+
+  const activeChallenge = useChallengeStore.getState().activeChallenge;
+  if (activeChallenge) {
+    parts.push(`## Active Challenge\n- Title: ${activeChallenge.title}\n- Difficulty: ${activeChallenge.difficulty}\n- Description: ${activeChallenge.description}`);
   }
 
   return parts.join('\n\n');
@@ -291,6 +371,41 @@ function executeToolById(toolId: string, accepted: boolean) {
     useExerciseStore.getState().startExercise(exercise);
     useEditorStore.getState().setCode(exercise.starterCode);
     updateToolCallStatus(toolId, 'executed', `Exercise "${exercise.title}" started.`);
+  } else if (toolCall.name === 'submit_hardware') {
+    const { backend, shots } = toolCall.input as { backend: string; shots?: number };
+    const hwStore = useHardwareStore.getState();
+    const backendInfo = hwStore.backends.find((b) => b.name === backend);
+    if (!backendInfo) {
+      updateToolCallStatus(toolId, 'executed', `Backend "${backend}" not found. Available: ${hwStore.backends.map((b) => b.name).join(', ')}`);
+    } else {
+      const job = {
+        id: `job-${Date.now()}`, provider: backendInfo.provider, backend,
+        submittedAt: new Date().toISOString(), status: 'queued' as const,
+        queuePosition: backendInfo.queueLength, shots: shots ?? 1024,
+      };
+      hwStore.addJob(job);
+      updateToolCallStatus(toolId, 'executed', `Job submitted to ${backend} (${shots ?? 1024} shots). Check the Hardware panel for status.`);
+    }
+  } else if (toolCall.name === 'challenge_hint') {
+    const { hint_level } = toolCall.input as { hint_level: string };
+    const challenge = useChallengeStore.getState().activeChallenge;
+    if (!challenge) {
+      updateToolCallStatus(toolId, 'executed', 'No active challenge. Go to Community → Challenges to start one.');
+    } else {
+      const hintIdx = hint_level === 'gentle' ? 0 : hint_level === 'moderate' ? 1 : 2;
+      const hint = challenge.hints[Math.min(hintIdx, challenge.hints.length - 1)] ?? 'No more hints available.';
+      updateToolCallStatus(toolId, 'executed', `Hint for "${challenge.title}": ${hint}`);
+    }
+  } else if (toolCall.name === 'glossary_lookup') {
+    const { term: searchTerm } = toolCall.input as { term: string };
+    import('../data/glossary').then(({ GLOSSARY_TERMS }) => {
+      const found = GLOSSARY_TERMS.find((t) => t.term.toLowerCase() === searchTerm.toLowerCase());
+      if (found) {
+        updateToolCallStatus(toolId, 'executed', `${found.term}: ${found.plainEnglish}${found.mathDefinition ? ` (${found.mathDefinition})` : ''}`);
+      } else {
+        updateToolCallStatus(toolId, 'executed', `Term "${searchTerm}" not found in glossary.`);
+      }
+    });
   } else if (toolCall.name === 'verify_solution') {
     const exercise = useExerciseStore.getState().activeExercise;
     if (!exercise) {

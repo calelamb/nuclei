@@ -3,6 +3,9 @@ import { useThemeStore } from '../../stores/themeStore';
 import { FileExplorer } from '../explorer/FileExplorer';
 import { LearningPathSidebar } from '../learning/LearningPathSidebar';
 import { SettingsPanel } from '../settings/SettingsPanel';
+import { PluginMarketplace } from '../plugins/PluginMarketplace';
+import { HardwarePanel } from '../hardware/HardwarePanel';
+import { CommunityPanel } from '../community/CommunityPanel';
 import type { ActivityView } from './ActivityBar';
 
 interface SidebarProps {
@@ -47,19 +50,6 @@ function CircuitInfoPanel() {
   );
 }
 
-function PluginsPanel() {
-  const colors = useThemeStore((s) => s.colors);
-  return (
-    <div style={{ padding: 12, color: colors.textMuted, fontSize: 12, fontFamily: "'Geist Sans', sans-serif" }}>
-      <div style={{ color: colors.textDim, fontSize: 10, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 8 }}>
-        Plugins
-      </div>
-      <div style={{ color: colors.textDim, fontSize: 11 }}>
-        Plugin manager coming soon.
-      </div>
-    </div>
-  );
-}
 
 
 function SidebarHeader({ title }: { title: string }) {
@@ -86,6 +76,8 @@ const VIEW_TITLES: Record<ActivityView, string> = {
   circuit: 'Circuit',
   learning: 'Learning',
   plugins: 'Plugins',
+  hardware: 'Hardware',
+  community: 'Community',
   settings: 'Settings',
 };
 
@@ -127,7 +119,9 @@ export function Sidebar({ view, width, onWidthChange }: SidebarProps) {
         {view === 'search' && <SearchPanel />}
         {view === 'circuit' && <CircuitInfoPanel />}
         {view === 'learning' && <LearningPathSidebar />}
-        {view === 'plugins' && <PluginsPanel />}
+        {view === 'plugins' && <PluginMarketplace />}
+        {view === 'hardware' && <HardwarePanel />}
+        {view === 'community' && <CommunityPanel />}
         {view === 'settings' && <SettingsPanel />}
       </div>
 

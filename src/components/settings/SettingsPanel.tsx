@@ -312,6 +312,24 @@ export function SettingsPanel() {
             <Toggle value={general.autoSave}
               onChange={(v) => updateGeneral({ autoSave: v })} />
           </SettingRow>
+          <SettingRow label="Language">
+            <Select value={general.language}
+              options={[
+                { value: 'en', label: 'English' },
+                { value: 'es', label: 'Español' },
+                { value: 'zh', label: '中文' },
+                { value: 'ja', label: '日本語' },
+              ]}
+              onChange={(v) => updateGeneral({ language: v })} />
+          </SettingRow>
+          <SettingRow label="Anonymous Telemetry">
+            <Toggle value={general.telemetryEnabled}
+              onChange={(v) => updateGeneral({ telemetryEnabled: v })} />
+          </SettingRow>
+          <SettingRow label="Educator Mode">
+            <Toggle value={general.educatorMode}
+              onChange={(v) => updateGeneral({ educatorMode: v })} />
+          </SettingRow>
         </Section>
       </div>
 

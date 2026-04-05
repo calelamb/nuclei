@@ -34,6 +34,9 @@ export interface GeneralSettings {
   animationsEnabled: boolean;
   showWelcomeOnStart: boolean;
   autoSave: boolean;
+  language: 'en' | 'es' | 'zh' | 'ja';
+  telemetryEnabled: boolean;
+  educatorMode: boolean;
 }
 
 /* ── Combined ────────────────────────────────────────── */
@@ -79,6 +82,9 @@ const DEFAULT_GENERAL: GeneralSettings = {
   animationsEnabled: true,
   showWelcomeOnStart: true,
   autoSave: true,
+  language: 'en',
+  telemetryEnabled: false,
+  educatorMode: false,
 };
 
 /** Try to hydrate settings from localStorage */

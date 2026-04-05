@@ -8,9 +8,12 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import websockets
 from kernel.executor import Executor
+from kernel.hardware.manager import HardwareManager
 
 PORT = 9742
 executor = Executor()
+hardware_manager = HardwareManager()
+hardware_manager.connect_provider("simulator", {})
 
 
 async def handle_message(websocket):
@@ -74,6 +77,82 @@ async def handle_message(websocket):
                         "type": "result",
                         "data": result.to_dict(),
                     }))
+
+        elif msg_type == "hardware_connect":
+            provider = msg.get("provider", "")
+            credentials = msg.get("credentials", {})
+            try:
+                success = hardware_manager.connect_provider(provider, credentials)
+                await websocket.send(json.dumps({
+                    "type": "hardware_connected",
+                    "provider": provider,
+                    "success": success,
+                }))
+            except Exception as e:
+                await websocket.send(json.dumps({
+                    "type": "error",
+                    "message": f"Hardware connect failed: {e}",
+                }))
+
+        elif msg_type == "hardware_list_backends":
+            provider = msg.get("provider", None)
+            try:
+                backends = hardware_manager.list_backends(provider)
+                await websocket.send(json.dumps({
+                    "type": "hardware_backends",
+                    "backends": [b.to_dict() for b in backends],
+                }))
+            except Exception as e:
+                await websocket.send(json.dumps({
+                    "type": "error",
+                    "message": f"Failed to list backends: {e}",
+                }))
+
+        elif msg_type == "hardware_submit":
+            provider = msg.get("provider", "simulator")
+            backend = msg.get("backend", "sim_qasm")
+            shots = msg.get("shots", 1024)
+            code = msg.get("code", "")
+            try:
+                handle = hardware_manager.submit_job(provider, code, backend, shots)
+                await websocket.send(json.dumps({
+                    "type": "hardware_job_submitted",
+                    "job": handle.to_dict(),
+                }))
+            except Exception as e:
+                await websocket.send(json.dumps({
+                    "type": "error",
+                    "message": f"Hardware submit failed: {e}",
+                }))
+
+        elif msg_type == "hardware_status":
+            job_id = msg.get("job_id", "")
+            try:
+                handle = hardware_manager.get_job_status(job_id)
+                await websocket.send(json.dumps({
+                    "type": "hardware_job_update",
+                    "job": handle.to_dict(),
+                }))
+            except Exception as e:
+                await websocket.send(json.dumps({
+                    "type": "error",
+                    "message": f"Job status lookup failed: {e}",
+                }))
+
+        elif msg_type == "hardware_results":
+            job_id = msg.get("job_id", "")
+            try:
+                data = hardware_manager.get_results(job_id)
+                await websocket.send(json.dumps({
+                    "type": "hardware_result",
+                    "job_id": job_id,
+                    "data": data,
+                }))
+            except Exception as e:
+                await websocket.send(json.dumps({
+                    "type": "error",
+                    "message": f"Failed to get results: {e}",
+                }))
 
         else:
             await websocket.send(json.dumps({
