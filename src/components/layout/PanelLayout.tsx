@@ -11,6 +11,7 @@ import { useSimulationStore } from '../../stores/simulationStore';
 import { useThemeStore } from '../../stores/themeStore';
 import { useExerciseStore } from '../../stores/exerciseStore';
 import { useLearningStore } from '../../stores/learningStore';
+import { useUIModeStore } from '../../stores/uiModeStore';
 import { LearningPathSidebar } from '../learning/LearningPathSidebar';
 import type { Framework } from '../../types/quantum';
 
@@ -300,6 +301,35 @@ function ThemeToggle() {
   );
 }
 
+function UIModeIndicator() {
+  const mode = useUIModeStore((s) => s.mode);
+  const cycleMode = useUIModeStore((s) => s.cycleMode);
+  const colors = useThemeStore((s) => s.colors);
+  const modeColors = { beginner: '#10B981', intermediate: '#F59E0B', advanced: '#EF4444' };
+
+  return (
+    <button
+      onClick={cycleMode}
+      title="Cycle UI mode (⌘+Shift+L)"
+      style={{
+        padding: '2px 8px',
+        background: 'transparent',
+        border: `1px solid ${colors.border}`,
+        borderRadius: 3,
+        color: modeColors[mode],
+        cursor: 'pointer',
+        fontSize: 11,
+        fontFamily: "'IBM Plex Sans', sans-serif",
+        fontWeight: 500,
+        textTransform: 'capitalize',
+      }}
+      aria-label={`UI mode: ${mode}. Click to cycle.`}
+    >
+      {mode}
+    </button>
+  );
+}
+
 function RunButton() {
   const isRunning = useSimulationStore((s) => s.isRunning);
   const colors = useThemeStore((s) => s.colors);
@@ -499,6 +529,7 @@ export function PanelLayout() {
         <KernelIndicator />
         <span style={{ color: isRunning ? colors.accent : colors.textMuted }}>{statusText}</span>
         <RunButton />
+        <UIModeIndicator />
         <ThemeToggle />
       </div>
 
