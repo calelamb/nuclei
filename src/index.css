@@ -1,3 +1,7 @@
+/* Nuclei — Global Styles */
+/* Fonts: IBM Plex Sans (UI) + JetBrains Mono (code) — per UI/UX Pro Max design system */
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap');
+
 * {
   margin: 0;
   padding: 0;
@@ -7,11 +11,52 @@
 body {
   overflow: hidden;
   background: #0F1B2D;
+  font-family: 'IBM Plex Sans', Inter, -apple-system, sans-serif;
 }
 
 #root {
   width: 100vw;
   height: 100vh;
+}
+
+/* Accessibility: visible focus indicators */
+:focus-visible {
+  outline: 2px solid #00B4D8;
+  outline-offset: 2px;
+}
+
+button:focus:not(:focus-visible) {
+  outline: none;
+}
+
+/* Animations — respect reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* Keyframes */
+@keyframes nuclei-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+@keyframes nuclei-slide-up {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes nuclei-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes nuclei-dots {
+  0%, 80%, 100% { transform: scale(0); }
+  40% { transform: scale(1); }
 }
 
 /* Dirac markdown styling */
@@ -25,7 +70,7 @@ body {
   background: #1A2A42;
   padding: 2px 6px;
   border-radius: 3px;
-  font-family: 'Fira Code', monospace;
+  font-family: 'JetBrains Mono', 'Fira Code', monospace;
   font-size: 12px;
   color: #00B4D8;
 }
@@ -40,7 +85,7 @@ body {
 .dirac-markdown pre code {
   background: none;
   padding: 0;
-  color: #E0E0E0;
+  color: #E8ECF1;
 }
 .dirac-markdown ul, .dirac-markdown ol {
   padding-left: 20px;
@@ -52,4 +97,20 @@ body {
 .dirac-markdown h1, .dirac-markdown h2, .dirac-markdown h3 {
   color: #00B4D8;
   margin: 8px 0 4px 0;
+}
+
+/* Scrollbar styling */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: #1A2A42;
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #264F78;
 }

@@ -45,10 +45,11 @@ function AppInner() {
     })();
   }, [platform]);
 
-  const completeOnboarding = async () => {
+  const completeOnboarding = async (path?: string) => {
     setShowOnboarding(false);
     try {
       await platform.setStoredValue('onboarding_complete', true);
+      if (path) await platform.setStoredValue('onboarding_path', path);
     } catch {}
   };
 
