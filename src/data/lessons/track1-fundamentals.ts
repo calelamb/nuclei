@@ -169,9 +169,9 @@ In the classical world, measuring something doesn't change it. You can check the
       },
       {
         type: 'video',
-        youtubeId: 'placeholder',
-        title: 'What is Quantum Measurement?',
-        creator: 'minutephysics',
+        youtubeId: 'SMbh0GgCN7I',
+        title: 'Measuring a Qubit',
+        creator: 'Michael Nielsen',
       },
       {
         type: 'concept-card',
@@ -245,9 +245,9 @@ The H gate is useful, but it only gives you 50/50. What if you want 70/30? Or 90
       },
       {
         type: 'video',
-        youtubeId: 'placeholder',
-        title: 'Single Qubit Gates',
-        creator: 'IBM Qiskit',
+        youtubeId: 'wta0o3fLOnk',
+        title: 'X, Y, Z, H Gates Explained',
+        creator: 'Quantum Computing (DSC TIET)',
       },
       {
         type: 'concept-card',
@@ -492,9 +492,9 @@ This is the first two-qubit gate, and it's how qubits become connected.`,
       },
       {
         type: 'video',
-        youtubeId: 'placeholder',
-        title: 'Entanglement & CNOT',
-        creator: 'IBM Qiskit',
+        youtubeId: 'rLF-oHaXLtE',
+        title: 'The Controlled-NOT Gate',
+        creator: 'Michael Nielsen',
       },
       {
         type: 'concept-card',

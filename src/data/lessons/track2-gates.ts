@@ -34,9 +34,9 @@ Quantum computing has the same idea: a **universal gate set** is a small collect
       },
       {
         type: 'video',
-        youtubeId: 'placeholder',
-        title: 'Universal Quantum Gate Sets Explained',
-        creator: 'Qiskit',
+        youtubeId: 'F2okky5vD8k',
+        title: 'Universal Quantum Computation',
+        creator: 'Michael Nielsen',
       },
       {
         type: 'concept-card',
@@ -184,9 +184,9 @@ You already know **CNOT (CX)** — it flips the target when the control is |1\u2
       },
       {
         type: 'video',
-        youtubeId: 'placeholder',
-        title: 'Controlled Gates and Toffoli',
-        creator: 'Qiskit',
+        youtubeId: 'rLF-oHaXLtE',
+        title: 'The Controlled-NOT Gate',
+        creator: 'Michael Nielsen',
       },
       {
         type: 'concept-card',
@@ -486,9 +486,9 @@ For n qubits, the QFT circuit follows a regular pattern:
       },
       {
         type: 'video',
-        youtubeId: 'placeholder',
-        title: 'Quantum Fourier Transform Explained',
-        creator: 'Qiskit',
+        youtubeId: 'spUNpyF58BY',
+        title: 'But What is the Fourier Transform?',
+        creator: '3Blue1Brown',
       },
       {
         type: 'concept-card',

@@ -51,9 +51,9 @@ So how do you protect quantum information? The answer is **quantum error correct
       },
       {
         type: 'video',
-        youtubeId: 'placeholder',
-        title: 'Why Quantum Error Correction Is So Hard',
-        creator: 'Nuclei Learning',
+        youtubeId: 'r_t96FqWE4M',
+        title: 'The High-Stakes Race to Make Quantum Computers Work',
+        creator: 'TED-Ed',
       },
       {
         type: 'quiz',
