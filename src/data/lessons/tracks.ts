@@ -14,6 +14,9 @@ import { TRACK11_LESSONS } from './track11-cudaq';
 import { TRACK12_LESSONS } from './track12-ibm';
 import { TRACK13_LESSONS } from './track13-cirq';
 import { TRACK14_LESSONS } from './track14-real-hardware';
+import { TRACK15_LESSONS } from './track15-complexity';
+import { TRACK16_LESSONS } from './track16-networking';
+import { TRACK17_LESSONS } from './track17-history';
 
 export const TRACKS: Track[] = [
   {
@@ -127,6 +130,30 @@ export const TRACKS: Track[] = [
       'From simulator to real QPU — noise, job submission, queue management, statistical analysis of noisy results, and benchmarking your quantum code.',
     difficulty: 'Beginner → Intermediate',
     lessons: TRACK14_LESSONS,
+  },
+  {
+    id: 'track-15',
+    title: 'Quantum Complexity & Supremacy',
+    description:
+      'BQP, QMA, quantum supremacy experiments, and the NISQ era. Where quantum computing fits in the complexity landscape and what it can actually do today.',
+    difficulty: 'Intermediate → Advanced',
+    lessons: TRACK15_LESSONS,
+  },
+  {
+    id: 'track-16',
+    title: 'Quantum Networking',
+    description:
+      'Quantum repeaters, entanglement distribution, quantum internet architecture, and satellite communication. How quantum information travels across the globe.',
+    difficulty: 'Intermediate',
+    lessons: TRACK16_LESSONS,
+  },
+  {
+    id: 'track-17',
+    title: 'History & Careers in Quantum',
+    description:
+      'From Feynman\'s 1981 talk to the billion-dollar quantum race. Companies, labs, and career paths — everything you need to navigate the quantum industry.',
+    difficulty: 'Beginner',
+    lessons: TRACK17_LESSONS,
   },
 ];
 
