@@ -1,6 +1,9 @@
 import type { Track } from './types';
 import { TRACK0_LESSONS } from './track0-python';
 import { TRACK1_LESSONS } from './track1-fundamentals';
+import { TRACK2_LESSONS } from './track2-gates';
+import { TRACK3_LESSONS } from './track3-algorithms';
+import { TRACK4_LESSONS } from './track4-information';
 
 export const TRACKS: Track[] = [
   {
@@ -19,17 +22,24 @@ export const TRACKS: Track[] = [
   },
   {
     id: 'track-2',
-    title: 'Quantum Algorithms',
-    description: 'Bernstein-Vazirani, Simon\'s, Grover\'s search, QFT, and Shor\'s algorithm.',
-    difficulty: 'Intermediate \u2192 Advanced',
-    lessons: [],
+    title: 'Quantum Gates Deep Dive',
+    description: 'Universal gate sets, controlled gates, decomposition, QFT, phase kickback, parameterized circuits, optimization, and Clifford theory.',
+    difficulty: 'Beginner \u2192 Advanced',
+    lessons: TRACK2_LESSONS,
   },
   {
     id: 'track-3',
-    title: 'Practical Quantum Programming',
-    description: 'Qiskit deep dive, cross-framework coding, noise simulation, real hardware, and VQE.',
+    title: 'Quantum Algorithms',
+    description: 'Deutsch-Jozsa, Bernstein-Vazirani, Simon\'s, Grover\'s search, phase estimation, Shor\'s factoring, HHL, quantum walks, VQE, and QAOA.',
     difficulty: 'Intermediate \u2192 Advanced',
-    lessons: [],
+    lessons: TRACK3_LESSONS,
+  },
+  {
+    id: 'track-4',
+    title: 'Quantum Information Theory',
+    description: 'Density matrices, entropy, entanglement measures, no-cloning, teleportation, superdense coding, and state tomography.',
+    difficulty: 'Intermediate → Advanced',
+    lessons: TRACK4_LESSONS,
   },
 ];
 
