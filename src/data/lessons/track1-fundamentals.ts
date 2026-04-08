@@ -250,6 +250,13 @@ The H gate is useful, but it only gives you 50/50. What if you want 70/30? Or 90
         creator: 'Quantum Computing (DSC TIET)',
       },
       {
+        type: 'interactive-bloch',
+        initialTheta: 0,
+        initialPhi: 0,
+        availableGates: ['H', 'X', 'Y', 'Z', 'S', 'T'],
+        challenge: { targetTheta: Math.PI / 2, targetPhi: 0, description: 'Rotate the qubit to the |+⟩ state (equator). Try the H gate!' },
+      },
+      {
         type: 'concept-card',
         title: 'The Bloch Sphere',
         visual: 'bloch',

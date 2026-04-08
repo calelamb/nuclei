@@ -1,18 +1,66 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 import Editor from '@monaco-editor/react';
-import { BarChart, Bar, XAxis, YAxis, ResponsiveContainer, Cell } from 'recharts';
 import { useThemeStore } from '../../stores/themeStore';
 import { useLearnStore } from '../../stores/learnStore';
 import { useEditorStore } from '../../stores/editorStore';
 import { usePlatform } from '../../platform/PlatformProvider';
 import type { Framework, CircuitSnapshot, SimulationResult, KernelResponse } from '../../types/quantum';
-import { Play, RotateCcw, ExternalLink } from 'lucide-react';
+import { Play, RotateCcw, ExternalLink, Terminal, BarChart3 } from 'lucide-react';
 
 interface InteractiveDemoProps {
   code: string;
   framework: Framework;
   description: string;
   explorationPrompt?: string;
+}
+
+/* ── Compact probability display ── */
+function ProbabilityBars({ probabilities, accent, colors }: {
+  probabilities: Record<string, number>;
+  accent: string;
+  colors: Record<string, string>;
+}) {
+  const entries = Object.entries(probabilities)
+    .filter(([, p]) => p > 0.001)
+    .sort(([, a], [, b]) => b - a);
+
+  if (entries.length === 0) return null;
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+      {entries.map(([state, prob]) => (
+        <div key={state} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <span style={{
+            width: 48, textAlign: 'right',
+            fontFamily: "'Geist Mono', monospace", fontSize: 12,
+            color: colors.text, fontWeight: 500,
+          }}>
+            |{state}\u27E9
+          </span>
+          <div style={{
+            flex: 1, height: 18, borderRadius: 4,
+            background: colors.bgPanel, overflow: 'hidden',
+            position: 'relative',
+          }}>
+            <div style={{
+              width: `${prob * 100}%`, height: '100%',
+              background: `linear-gradient(90deg, ${accent}cc, ${accent}88)`,
+              borderRadius: 4,
+              transition: 'width 400ms ease-out',
+              minWidth: prob > 0 ? 2 : 0,
+            }} />
+          </div>
+          <span style={{
+            width: 42, textAlign: 'right',
+            fontFamily: "'Geist Mono', monospace", fontSize: 11,
+            color: colors.textMuted,
+          }}>
+            {(prob * 100).toFixed(1)}%
+          </span>
+        </div>
+      ))}
+    </div>
+  );
 }
 
 export function InteractiveDemo({ code: initialCode, framework, description, explorationPrompt }: InteractiveDemoProps) {
@@ -27,8 +75,10 @@ export function InteractiveDemo({ code: initialCode, framework, description, exp
   const [localCode, setLocalCode] = useState(initialCode);
   const [snapshot, setSnapshot] = useState<CircuitSnapshot | null>(null);
   const [result, setResult] = useState<SimulationResult | null>(null);
+  const [output, setOutput] = useState<string[]>([]);
   const [isRunning, setIsRunning] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [showOutput, setShowOutput] = useState(false);
   const wsRef = useRef<WebSocket | null>(null);
   const pyodideRef = useRef<any>(null);
 
@@ -42,6 +92,10 @@ export function InteractiveDemo({ code: initialCode, framework, description, exp
         setIsRunning(false);
         setError(null);
         break;
+      case 'output':
+        setOutput((prev) => [...prev, msg.text]);
+        setShowOutput(true);
+        break;
       case 'error':
         setError(msg.message);
         setIsRunning(false);
@@ -49,7 +103,7 @@ export function InteractiveDemo({ code: initialCode, framework, description, exp
     }
   }, []);
 
-  // Connect to kernel
+  // Connect to kernel with retry
   useEffect(() => {
     if (isWeb) {
       import('../../platform/pyodideKernel').then(({ PyodideKernel }) => {
@@ -58,14 +112,29 @@ export function InteractiveDemo({ code: initialCode, framework, description, exp
       });
       return;
     }
-    const ws = new WebSocket('ws://localhost:9742');
-    ws.onopen = () => { wsRef.current = ws; };
-    ws.onmessage = (ev) => {
-      try { handleMessage(JSON.parse(ev.data)); } catch { /* noop */ }
-    };
-    ws.onclose = () => { wsRef.current = null; };
-    ws.onerror = () => ws.close();
-    return () => { ws.close(); };
+
+    let ws: WebSocket | null = null;
+    let retries = 0;
+    const maxRetries = 3;
+
+    function connect() {
+      ws = new WebSocket('ws://localhost:9742');
+      ws.onopen = () => { wsRef.current = ws; retries = 0; };
+      ws.onmessage = (ev) => {
+        try { handleMessage(JSON.parse(ev.data)); } catch { /* noop */ }
+      };
+      ws.onclose = () => {
+        wsRef.current = null;
+        if (retries < maxRetries) {
+          retries++;
+          setTimeout(connect, 1000 * retries);
+        }
+      };
+      ws.onerror = () => ws?.close();
+    }
+
+    connect();
+    return () => { ws?.close(); };
   }, [handleMessage, isWeb]);
 
   const sendParse = useCallback((c: string) => {
@@ -79,12 +148,14 @@ export function InteractiveDemo({ code: initialCode, framework, description, exp
   const handleRun = () => {
     setIsRunning(true);
     setError(null);
+    setOutput([]);
+    setResult(null);
     if (isWeb && pyodideRef.current) {
       pyodideRef.current.send({ type: 'execute', code: localCode, shots: 1024 });
     } else if (wsRef.current?.readyState === WebSocket.OPEN) {
       wsRef.current.send(JSON.stringify({ type: 'execute', code: localCode, shots: 1024 }));
     } else {
-      setError('Kernel not connected');
+      setError('Kernel not connected. Make sure the Python kernel is running.');
       setIsRunning(false);
     }
   };
@@ -93,7 +164,9 @@ export function InteractiveDemo({ code: initialCode, framework, description, exp
     setLocalCode(initialCode);
     setResult(null);
     setSnapshot(null);
+    setOutput([]);
     setError(null);
+    setShowOutput(false);
     sendParse(initialCode);
   };
 
@@ -109,18 +182,14 @@ export function InteractiveDemo({ code: initialCode, framework, description, exp
     sendParse(v);
   };
 
-  // Parse initial code on mount
   useEffect(() => {
     const timer = setTimeout(() => sendParse(localCode), 500);
     return () => clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const histData = result
-    ? Object.entries(result.probabilities)
-        .map(([state, prob]) => ({ state: `|${state}⟩`, probability: prob }))
-        .sort((a, b) => a.state.localeCompare(b.state))
-    : null;
+  const hasResults = result && Object.keys(result.probabilities).length > 0;
+  const hasOutput = output.length > 0;
 
   return (
     <div style={{
@@ -135,36 +204,23 @@ export function InteractiveDemo({ code: initialCode, framework, description, exp
       <div style={{
         padding: '10px 16px',
         borderBottom: `1px solid ${colors.border}`,
-        display: 'flex',
-        alignItems: 'center',
-        gap: 8,
+        display: 'flex', alignItems: 'center', gap: 8,
       }}>
-        <div style={{
-          width: 6, height: 6, borderRadius: '50%',
-          background: colors.accent,
-        }} />
+        <div style={{ width: 6, height: 6, borderRadius: '50%', background: colors.accent }} />
         <span style={{
-          color: colors.textMuted,
-          fontSize: 12,
-          fontWeight: 500,
+          color: colors.textMuted, fontSize: 12, fontWeight: 500,
           fontFamily: "'Geist Sans', sans-serif",
-          textTransform: 'uppercase',
-          letterSpacing: 0.5,
+          textTransform: 'uppercase', letterSpacing: 0.5,
         }}>
           Interactive Demo
         </span>
-        <span style={{
-          color: colors.textDim,
-          fontSize: 12,
-          fontFamily: "'Geist Sans', sans-serif",
-          marginLeft: 4,
-        }}>
+        <span style={{ color: colors.textDim, fontSize: 12, fontFamily: "'Geist Sans', sans-serif", marginLeft: 4 }}>
           {description}
         </span>
       </div>
 
-      {/* Mini Editor */}
-      <div style={{ height: 200, borderBottom: `1px solid ${colors.border}` }}>
+      {/* Editor */}
+      <div style={{ height: 180, borderBottom: `1px solid ${colors.border}` }}>
         <Editor
           height="100%"
           language="python"
@@ -189,23 +245,18 @@ export function InteractiveDemo({ code: initialCode, framework, description, exp
         />
       </div>
 
-      {/* Buttons */}
+      {/* Action bar */}
       <div style={{
         padding: '8px 16px',
-        display: 'flex',
-        gap: 8,
-        borderBottom: `1px solid ${colors.border}`,
+        display: 'flex', alignItems: 'center', gap: 8,
+        borderBottom: (hasResults || hasOutput || error || (snapshot && snapshot.gates.length > 0)) ? `1px solid ${colors.border}` : 'none',
       }}>
         <button onClick={handleRun} disabled={isRunning} style={{
           display: 'flex', alignItems: 'center', gap: 6,
           padding: '6px 14px',
           background: isRunning ? colors.bgPanel : colors.accent,
-          color: '#fff',
-          border: 'none',
-          borderRadius: 6,
-          fontSize: 12,
-          fontWeight: 600,
-          fontFamily: "'Geist Sans', sans-serif",
+          color: '#fff', border: 'none', borderRadius: 6,
+          fontSize: 12, fontWeight: 600, fontFamily: "'Geist Sans', sans-serif",
           cursor: isRunning ? 'default' : 'pointer',
           boxShadow: isRunning ? 'none' : shadow.sm,
         }}>
@@ -214,49 +265,72 @@ export function InteractiveDemo({ code: initialCode, framework, description, exp
         </button>
         <button onClick={handleReset} style={{
           display: 'flex', alignItems: 'center', gap: 6,
-          padding: '6px 14px',
-          background: 'transparent',
-          color: colors.textMuted,
-          border: `1px solid ${colors.border}`,
-          borderRadius: 6,
-          fontSize: 12,
-          fontFamily: "'Geist Sans', sans-serif",
-          cursor: 'pointer',
+          padding: '6px 14px', background: 'transparent',
+          color: colors.textMuted, border: `1px solid ${colors.border}`,
+          borderRadius: 6, fontSize: 12, fontFamily: "'Geist Sans', sans-serif", cursor: 'pointer',
         }}>
           <RotateCcw size={12} /> Reset
         </button>
+
+        {/* Result toggle tabs */}
+        {(hasResults || hasOutput) && (
+          <>
+            <div style={{ width: 1, height: 16, background: colors.border, marginLeft: 4 }} />
+            {hasOutput && (
+              <button onClick={() => setShowOutput(true)} style={{
+                display: 'flex', alignItems: 'center', gap: 4,
+                padding: '4px 10px', borderRadius: 4, border: 'none',
+                background: showOutput ? `${colors.accent}18` : 'transparent',
+                color: showOutput ? colors.accent : colors.textDim,
+                fontSize: 11, fontFamily: "'Geist Sans', sans-serif", cursor: 'pointer',
+              }}>
+                <Terminal size={11} /> Output
+              </button>
+            )}
+            {hasResults && (
+              <button onClick={() => setShowOutput(false)} style={{
+                display: 'flex', alignItems: 'center', gap: 4,
+                padding: '4px 10px', borderRadius: 4, border: 'none',
+                background: !showOutput ? `${colors.accent}18` : 'transparent',
+                color: !showOutput ? colors.accent : colors.textDim,
+                fontSize: 11, fontFamily: "'Geist Sans', sans-serif", cursor: 'pointer',
+              }}>
+                <BarChart3 size={11} /> Probabilities
+              </button>
+            )}
+          </>
+        )}
+
         <div style={{ flex: 1 }} />
         <button onClick={handleOpenInEditor} style={{
           display: 'flex', alignItems: 'center', gap: 6,
-          padding: '6px 14px',
-          background: 'transparent',
-          color: colors.textMuted,
-          border: `1px solid ${colors.border}`,
-          borderRadius: 6,
-          fontSize: 12,
-          fontFamily: "'Geist Sans', sans-serif",
-          cursor: 'pointer',
+          padding: '6px 14px', background: 'transparent',
+          color: colors.textMuted, border: `1px solid ${colors.border}`,
+          borderRadius: 6, fontSize: 12, fontFamily: "'Geist Sans', sans-serif", cursor: 'pointer',
         }}>
           <ExternalLink size={12} /> Open in Editor
         </button>
       </div>
 
-      {/* Mini Circuit */}
+      {/* Circuit summary */}
       {snapshot && snapshot.gates.length > 0 && (
         <div style={{
-          padding: '8px 16px',
-          borderBottom: `1px solid ${colors.border}`,
-          fontSize: 11,
-          fontFamily: "'Geist Mono', monospace",
-          color: colors.textMuted,
+          padding: '6px 16px',
+          borderBottom: (hasResults || hasOutput || error) ? `1px solid ${colors.border}` : 'none',
+          fontSize: 11, fontFamily: "'Geist Mono', monospace", color: colors.textMuted,
+          display: 'flex', alignItems: 'center', gap: 8,
         }}>
           <span style={{ color: colors.textDim, fontSize: 10, textTransform: 'uppercase', letterSpacing: 0.5 }}>
-            Circuit: {snapshot.qubit_count}q, depth {snapshot.depth}
+            {snapshot.qubit_count}q depth-{snapshot.depth}
           </span>
-          <span style={{ marginLeft: 12 }}>
+          <span style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
             {snapshot.gates.map((g, i) => (
-              <span key={i} style={{ color: colors.accent, marginRight: 6 }}>
-                {g.type}{g.targets.length > 0 ? `(${g.targets.join(',')})` : ''}
+              <span key={i} style={{
+                padding: '1px 5px', borderRadius: 3,
+                background: `${colors.accent}12`, color: colors.accent,
+                fontSize: 10, fontWeight: 500,
+              }}>
+                {g.type}
               </span>
             ))}
           </span>
@@ -272,37 +346,37 @@ export function InteractiveDemo({ code: initialCode, framework, description, exp
           fontSize: 12,
           fontFamily: "'Geist Mono', monospace",
           borderBottom: `1px solid ${colors.border}`,
+          whiteSpace: 'pre-wrap',
+          lineHeight: 1.5,
         }}>
           {error}
         </div>
       )}
 
-      {/* Mini Histogram */}
-      {histData && (
-        <div style={{ height: 120, padding: '8px 16px' }}>
-          <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={histData} margin={{ top: 4, right: 4, bottom: 0, left: 4 }}>
-              <XAxis
-                dataKey="state"
-                tick={{ fill: colors.textMuted, fontSize: 10, fontFamily: "'Geist Mono', monospace" }}
-                axisLine={{ stroke: colors.border }}
-                tickLine={false}
-              />
-              <YAxis
-                domain={[0, 1]}
-                tick={{ fill: colors.textDim, fontSize: 9 }}
-                axisLine={false}
-                tickLine={false}
-                width={28}
-                tickFormatter={(v: number) => v.toFixed(1)}
-              />
-              <Bar dataKey="probability" radius={[3, 3, 0, 0]}>
-                {histData.map((_, i) => (
-                  <Cell key={i} fill={colors.accent} fillOpacity={0.8} />
-                ))}
-              </Bar>
-            </BarChart>
-          </ResponsiveContainer>
+      {/* Terminal output */}
+      {hasOutput && showOutput && (
+        <div style={{
+          padding: '10px 16px',
+          background: colors.bg,
+          maxHeight: 160,
+          overflowY: 'auto',
+        }}>
+          <div style={{
+            fontFamily: "'Geist Mono', monospace",
+            fontSize: 12, color: colors.text,
+            lineHeight: 1.6, whiteSpace: 'pre-wrap',
+          }}>
+            {output.map((line, i) => (
+              <div key={i}>{line}</div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Probability bars */}
+      {hasResults && !showOutput && (
+        <div style={{ padding: '10px 16px' }}>
+          <ProbabilityBars probabilities={result.probabilities} accent={colors.accent} colors={colors} />
         </div>
       )}
 
@@ -313,12 +387,8 @@ export function InteractiveDemo({ code: initialCode, framework, description, exp
           borderTop: `1px solid ${colors.border}`,
         }}>
           <p style={{
-            color: colors.textMuted,
-            fontSize: 13,
-            fontStyle: 'italic',
-            fontFamily: "'Geist Sans', sans-serif",
-            lineHeight: 1.5,
-            margin: 0,
+            color: colors.textMuted, fontSize: 13, fontStyle: 'italic',
+            fontFamily: "'Geist Sans', sans-serif", lineHeight: 1.5, margin: 0,
           }}>
             {explorationPrompt}
           </p>

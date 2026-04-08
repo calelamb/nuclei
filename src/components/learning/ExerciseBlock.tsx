@@ -1,12 +1,11 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 import Editor from '@monaco-editor/react';
-import { BarChart, Bar, XAxis, YAxis, ResponsiveContainer, Cell } from 'recharts';
 import { useThemeStore } from '../../stores/themeStore';
 import { useLearnStore } from '../../stores/learnStore';
 import { useDiracPanelStore } from '../../stores/diracPanelStore';
 import { usePlatform } from '../../platform/PlatformProvider';
 import type { Framework, SimulationResult, KernelResponse } from '../../types/quantum';
-import { Play, Lightbulb, CheckCircle, XCircle, HelpCircle } from 'lucide-react';
+import { Play, Lightbulb, CheckCircle, XCircle, HelpCircle, Terminal } from 'lucide-react';
 
 interface ExerciseBlockProps {
   id: string;
@@ -38,6 +37,7 @@ export function ExerciseBlock({
 
   const [localCode, setLocalCode] = useState(starterCode);
   const [result, setResult] = useState<SimulationResult | null>(null);
+  const [output, setOutput] = useState<string[]>([]);
   const [isRunning, setIsRunning] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [feedback, setFeedback] = useState<{ success: boolean; message: string } | null>(null);
@@ -53,6 +53,8 @@ export function ExerciseBlock({
       setResult(msg.data);
       setIsRunning(false);
       setError(null);
+    } else if (msg.type === 'output') {
+      setOutput((prev) => [...prev, msg.text]);
     } else if (msg.type === 'error') {
       setError(msg.message);
       setIsRunning(false);
@@ -67,14 +69,22 @@ export function ExerciseBlock({
       });
       return;
     }
-    const ws = new WebSocket('ws://localhost:9742');
-    ws.onopen = () => { wsRef.current = ws; };
-    ws.onmessage = (ev) => {
-      try { handleMessage(JSON.parse(ev.data)); } catch { /* noop */ }
-    };
-    ws.onclose = () => { wsRef.current = null; };
-    ws.onerror = () => ws.close();
-    return () => { ws.close(); };
+    let ws: WebSocket | null = null;
+    let retries = 0;
+    function connect() {
+      ws = new WebSocket('ws://localhost:9742');
+      ws.onopen = () => { wsRef.current = ws; retries = 0; };
+      ws.onmessage = (ev) => {
+        try { handleMessage(JSON.parse(ev.data)); } catch { /* noop */ }
+      };
+      ws.onclose = () => {
+        wsRef.current = null;
+        if (retries < 3) { retries++; setTimeout(connect, 1000 * retries); }
+      };
+      ws.onerror = () => ws?.close();
+    }
+    connect();
+    return () => { ws?.close(); };
   }, [handleMessage, isWeb]);
 
   // Inactivity timer for "Need help?" prompt
@@ -122,6 +132,7 @@ export function ExerciseBlock({
     setIsRunning(true);
     setError(null);
     setFeedback(null);
+    setOutput([]);
     if (isWeb && pyodideRef.current) {
       pyodideRef.current.send({ type: 'execute', code: localCode, shots: 1024 });
     } else if (wsRef.current?.readyState === WebSocket.OPEN) {
@@ -139,11 +150,11 @@ export function ExerciseBlock({
     }
   };
 
-  const histData = result
+  const probEntries = result
     ? Object.entries(result.probabilities)
-        .map(([state, prob]) => ({ state: `|${state}⟩`, probability: prob }))
-        .sort((a, b) => a.state.localeCompare(b.state))
-    : null;
+        .filter(([, p]) => p > 0.001)
+        .sort(([, a], [, b]) => b - a)
+    : [];
 
   return (
     <div style={{
@@ -320,25 +331,47 @@ export function ExerciseBlock({
         </div>
       )}
 
-      {/* Mini Histogram */}
-      {histData && (
-        <div style={{ height: 100, padding: '8px 16px', borderBottom: `1px solid ${colors.border}` }}>
-          <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={histData} margin={{ top: 4, right: 4, bottom: 0, left: 4 }}>
-              <XAxis
-                dataKey="state"
-                tick={{ fill: colors.textMuted, fontSize: 10, fontFamily: "'Geist Mono', monospace" }}
-                axisLine={{ stroke: colors.border }}
-                tickLine={false}
-              />
-              <YAxis domain={[0, 1]} tick={false} axisLine={false} width={0} />
-              <Bar dataKey="probability" radius={[3, 3, 0, 0]}>
-                {histData.map((_, i) => (
-                  <Cell key={i} fill={colors.accent} fillOpacity={0.8} />
-                ))}
-              </Bar>
-            </BarChart>
-          </ResponsiveContainer>
+      {/* Terminal output */}
+      {output.length > 0 && (
+        <div style={{
+          padding: '8px 16px',
+          borderBottom: `1px solid ${colors.border}`,
+          background: colors.bg,
+          maxHeight: 120, overflowY: 'auto',
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginBottom: 4 }}>
+            <Terminal size={10} color={colors.textDim} />
+            <span style={{ color: colors.textDim, fontSize: 10, fontFamily: "'Geist Sans', sans-serif", textTransform: 'uppercase', letterSpacing: 0.5 }}>Output</span>
+          </div>
+          <div style={{ fontFamily: "'Geist Mono', monospace", fontSize: 12, color: colors.text, lineHeight: 1.5, whiteSpace: 'pre-wrap' }}>
+            {output.map((line, i) => <div key={i}>{line}</div>)}
+          </div>
+        </div>
+      )}
+
+      {/* Compact probability bars */}
+      {probEntries.length > 0 && (
+        <div style={{ padding: '8px 16px', borderBottom: `1px solid ${colors.border}` }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+            {probEntries.map(([state, prob]) => (
+              <div key={state} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span style={{ width: 48, textAlign: 'right', fontFamily: "'Geist Mono', monospace", fontSize: 12, color: colors.text, fontWeight: 500 }}>
+                  |{state}{'\u27E9'}
+                </span>
+                <div style={{ flex: 1, height: 16, borderRadius: 3, background: colors.bgPanel, overflow: 'hidden' }}>
+                  <div style={{
+                    width: `${prob * 100}%`, height: '100%',
+                    background: `linear-gradient(90deg, ${colors.accent}cc, ${colors.accent}88)`,
+                    borderRadius: 3, transition: 'width 400ms ease-out',
+                    minWidth: prob > 0 ? 2 : 0,
+                  }} />
+                </div>
+                <span style={{ width: 42, textAlign: 'right', fontFamily: "'Geist Mono', monospace", fontSize: 11, color: colors.textMuted }}>
+                  {(prob * 100).toFixed(1)}%
+                </span>
+              </div>
+            ))}
+          </div>
         </div>
       )}
 
