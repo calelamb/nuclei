@@ -10,6 +10,10 @@ import { TRACK7_LESSONS } from './track7-chemistry';
 import { TRACK8_LESSONS } from './track8-cryptography';
 import { TRACK9_LESSONS } from './track9-finance';
 import { TRACK10_LESSONS } from './track10-hardware';
+import { TRACK11_LESSONS } from './track11-cudaq';
+import { TRACK12_LESSONS } from './track12-ibm';
+import { TRACK13_LESSONS } from './track13-cirq';
+import { TRACK14_LESSONS } from './track14-real-hardware';
 
 export const TRACKS: Track[] = [
   {
@@ -91,6 +95,38 @@ export const TRACKS: Track[] = [
       'Superconducting, trapped ion, photonic, neutral atom, and topological qubits — know your machine.',
     difficulty: 'Beginner → Advanced',
     lessons: TRACK10_LESSONS,
+  },
+  {
+    id: 'track-11',
+    title: 'NVIDIA CUDA-Q Mastery',
+    description:
+      'GPU-native quantum programming with NVIDIA CUDA-Q. Kernel-based circuits, GPU-accelerated simulation, hybrid workflows, multi-GPU scaling, and the cuQuantum SDK.',
+    difficulty: 'Intermediate → Advanced',
+    lessons: TRACK11_LESSONS,
+  },
+  {
+    id: 'track-12',
+    title: 'IBM Quantum & Qiskit Mastery',
+    description:
+      'Master IBM Quantum hardware access, Qiskit Runtime primitives, error mitigation, transpilation, pulse-level control, and circuit knitting.',
+    difficulty: 'Beginner → Advanced',
+    lessons: TRACK12_LESSONS,
+  },
+  {
+    id: 'track-13',
+    title: 'Google Cirq & Beyond',
+    description:
+      'Google\'s quantum framework: Cirq architecture, Moments, the Sycamore supremacy experiment, noise simulation, and error correction on the path to fault tolerance.',
+    difficulty: 'Beginner → Advanced',
+    lessons: TRACK13_LESSONS,
+  },
+  {
+    id: 'track-14',
+    title: 'Running on Real Hardware',
+    description:
+      'From simulator to real QPU — noise, job submission, queue management, statistical analysis of noisy results, and benchmarking your quantum code.',
+    difficulty: 'Beginner → Intermediate',
+    lessons: TRACK14_LESSONS,
   },
 ];
 
