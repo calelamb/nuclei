@@ -7,6 +7,9 @@ import { TRACK4_LESSONS } from './track4-information';
 import { TRACK5_LESSONS } from './track5-error-correction';
 import { TRACK6_LESSONS } from './track6-qml';
 import { TRACK7_LESSONS } from './track7-chemistry';
+import { TRACK8_LESSONS } from './track8-cryptography';
+import { TRACK9_LESSONS } from './track9-finance';
+import { TRACK10_LESSONS } from './track10-hardware';
 
 export const TRACKS: Track[] = [
   {
@@ -64,6 +67,30 @@ export const TRACKS: Track[] = [
     description: 'Molecular simulation, VQE, and how quantum computers will transform drug discovery and materials science.',
     difficulty: 'Intermediate → Advanced',
     lessons: TRACK7_LESSONS,
+  },
+  {
+    id: 'track-8',
+    title: 'Quantum Cryptography & Security',
+    description:
+      'QKD, post-quantum crypto, and the quantum threat to modern encryption.',
+    difficulty: 'Intermediate → Advanced',
+    lessons: TRACK8_LESSONS,
+  },
+  {
+    id: 'track-9',
+    title: 'Quantum Finance & Optimization',
+    description:
+      'Portfolio optimization, option pricing, and real-world business problems on quantum hardware.',
+    difficulty: 'Intermediate → Advanced',
+    lessons: TRACK9_LESSONS,
+  },
+  {
+    id: 'track-10',
+    title: 'Quantum Hardware',
+    description:
+      'Superconducting, trapped ion, photonic, neutral atom, and topological qubits — know your machine.',
+    difficulty: 'Beginner → Advanced',
+    lessons: TRACK10_LESSONS,
   },
 ];
 
