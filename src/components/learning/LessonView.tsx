@@ -12,7 +12,7 @@ import { QuizBlock } from './QuizBlock';
 import { ConceptCard } from './ConceptCard';
 import { InteractiveBlochSphere } from './InteractiveBlochSphere';
 import type { Lesson, ContentBlock } from '../../data/lessons/types';
-import { ArrowLeft, ChevronLeft, ChevronRight, CheckCircle } from 'lucide-react';
+import { ArrowLeft, ChevronLeft, ChevronRight, CheckCircle, BookOpen, Play, Code, HelpCircle, MessageSquare, Layers } from 'lucide-react';
 
 function ContentBlockRenderer({ block }: { block: ContentBlock }) {
   switch (block.type) {
@@ -236,9 +236,63 @@ export function LessonView({ lesson, trackId }: LessonViewProps) {
           </p>
         </div>
 
+        {/* Table of contents */}
+        {lesson.contentBlocks.length > 3 && (
+          <div style={{
+            display: 'flex', flexWrap: 'wrap', gap: 6,
+            padding: '12px 0 20px',
+            borderBottom: `1px solid ${colors.border}`,
+            marginBottom: 20,
+          }}>
+            {lesson.contentBlocks.map((block, i) => {
+              const icons: Record<string, typeof BookOpen> = {
+                text: BookOpen, video: Play, demo: Code,
+                exercise: HelpCircle, quiz: MessageSquare,
+                'concept-card': Layers, 'interactive-bloch': Layers,
+              };
+              const labels: Record<string, string> = {
+                text: 'Read', video: 'Watch', demo: 'Demo',
+                exercise: 'Exercise', quiz: 'Quiz',
+                'concept-card': 'Concept', 'interactive-bloch': 'Bloch Sphere',
+              };
+              const Icon = icons[block.type] ?? BookOpen;
+              const label = labels[block.type] ?? block.type;
+              const tocColors: Record<string, string> = {
+                text: colors.textDim, video: '#EF4444', demo: colors.accent,
+                exercise: colors.warning, quiz: colors.dirac,
+                'concept-card': colors.info, 'interactive-bloch': colors.success,
+              };
+              const c = tocColors[block.type] ?? colors.textDim;
+              return (
+                <button
+                  key={i}
+                  onClick={() => {
+                    const el = document.getElementById(`block-${i}`);
+                    el?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                  }}
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: 4,
+                    padding: '4px 10px', borderRadius: 6,
+                    border: `1px solid ${colors.border}`,
+                    background: 'transparent',
+                    color: c, fontSize: 11, fontWeight: 500,
+                    fontFamily: "'Geist Sans', sans-serif",
+                    cursor: 'pointer', transition: 'all 150ms',
+                  }}
+                  onMouseEnter={(e) => { e.currentTarget.style.background = `${c}12`; e.currentTarget.style.borderColor = c; }}
+                  onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.borderColor = colors.border; }}
+                >
+                  <Icon size={11} />
+                  {label}
+                </button>
+              );
+            })}
+          </div>
+        )}
+
         {/* Content blocks */}
         {lesson.contentBlocks.map((block, i) => (
-          <div key={i} style={{ marginBottom: 8 }}>
+          <div key={i} id={`block-${i}`} style={{ marginBottom: 8, scrollMarginTop: 16 }}>
             <ContentBlockRenderer block={block} />
           </div>
         ))}

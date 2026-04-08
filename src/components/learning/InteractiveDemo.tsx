@@ -97,6 +97,8 @@ export function InteractiveDemo({ code: initialCode, framework, description, exp
         setShowOutput(true);
         break;
       case 'error':
+        // Suppress framework detection noise — pure Python is fine
+        if (msg.message?.includes('No supported quantum framework')) break;
         setError(msg.message);
         setIsRunning(false);
         break;

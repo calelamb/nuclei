@@ -56,6 +56,7 @@ export function ExerciseBlock({
     } else if (msg.type === 'output') {
       setOutput((prev) => [...prev, msg.text]);
     } else if (msg.type === 'error') {
+      if (msg.message?.includes('No supported quantum framework')) return;
       setError(msg.message);
       setIsRunning(false);
     }
