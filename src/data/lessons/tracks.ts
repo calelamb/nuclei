@@ -4,6 +4,9 @@ import { TRACK1_LESSONS } from './track1-fundamentals';
 import { TRACK2_LESSONS } from './track2-gates';
 import { TRACK3_LESSONS } from './track3-algorithms';
 import { TRACK4_LESSONS } from './track4-information';
+import { TRACK5_LESSONS } from './track5-error-correction';
+import { TRACK6_LESSONS } from './track6-qml';
+import { TRACK7_LESSONS } from './track7-chemistry';
 
 export const TRACKS: Track[] = [
   {
@@ -40,6 +43,27 @@ export const TRACKS: Track[] = [
     description: 'Density matrices, entropy, entanglement measures, no-cloning, teleportation, superdense coding, and state tomography.',
     difficulty: 'Intermediate → Advanced',
     lessons: TRACK4_LESSONS,
+  },
+  {
+    id: 'track-5',
+    title: 'Quantum Error Correction',
+    description: 'From bit flips to surface codes — learn how quantum computers fight noise.',
+    difficulty: 'Intermediate → Advanced',
+    lessons: TRACK5_LESSONS,
+  },
+  {
+    id: 'track-6',
+    title: 'Quantum Machine Learning',
+    description: 'Variational circuits, quantum kernels, and hybrid classical-quantum ML pipelines.',
+    difficulty: 'Intermediate \u2192 Advanced',
+    lessons: TRACK6_LESSONS,
+  },
+  {
+    id: 'track-7',
+    title: 'Quantum Chemistry & Materials',
+    description: 'Molecular simulation, VQE, and how quantum computers will transform drug discovery and materials science.',
+    difficulty: 'Intermediate → Advanced',
+    lessons: TRACK7_LESSONS,
   },
 ];
 
