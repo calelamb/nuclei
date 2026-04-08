@@ -470,7 +470,7 @@ loss_a, loss_b = 1_000_000, 500_000
 exp_loss = (probs.get('10', 0) * loss_a +
             probs.get('01', 0) * loss_b +
             probs.get('11', 0) * (loss_a + loss_b))
-print(f"\\nExpected portfolio loss: ${exp_loss:,.0f}")`,
+print(f"\\nExpected portfolio loss: \${exp_loss:,.0f}")`,
         framework: 'qiskit',
         description:
           'Encode a 2-borrower credit model with correlated defaults. RY sets default probabilities; CRY encodes the correlation.',
