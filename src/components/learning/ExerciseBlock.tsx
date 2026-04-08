@@ -97,7 +97,7 @@ export function ExerciseBlock({
   };
 
   const checkSolution = () => {
-    if (!result || !expectedProbabilities) return;
+    if (!result || !expectedProbabilities || Object.keys(expectedProbabilities).length === 0) return;
     const tolerance = tolerancePercent / 100;
     const mismatches: string[] = [];
 
@@ -246,7 +246,7 @@ export function ExerciseBlock({
           <Play size={12} fill="currentColor" />
           {isRunning ? 'Running...' : 'Run'}
         </button>
-        {result && expectedProbabilities && (
+        {result && expectedProbabilities && Object.keys(expectedProbabilities).length > 0 && (
           <button onClick={checkSolution} style={{
             display: 'flex', alignItems: 'center', gap: 6,
             padding: '6px 14px',
@@ -258,6 +258,15 @@ export function ExerciseBlock({
             <CheckCircle size={12} />
             Check Solution
           </button>
+        )}
+        {result && (!expectedProbabilities || Object.keys(expectedProbabilities).length === 0) && (
+          <span style={{
+            color: colors.success, fontSize: 11, fontFamily: "'Geist Sans', sans-serif",
+            display: 'flex', alignItems: 'center', gap: 4,
+          }}>
+            <CheckCircle size={11} />
+            Code ran successfully — explore the output above
+          </span>
         )}
         <div style={{ flex: 1 }} />
         {hintsRevealed < hints.length && (
