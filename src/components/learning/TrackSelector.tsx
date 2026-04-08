@@ -13,9 +13,15 @@ export function TrackSelector() {
   const lessonProgress = useLearnStore((s) => s.lessonProgress);
   const [playingVideo, setPlayingVideo] = useState<string | null>(null);
 
+  const [videoCreatorFilter, setVideoCreatorFilter] = useState<string>('all');
+  const filteredVideos = videoCreatorFilter === 'all'
+    ? CURATED_VIDEOS
+    : CURATED_VIDEOS.filter((v) => v.creator === videoCreatorFilter);
+
   return (
     <div style={{
-      height: '100%',
+      flex: 1,
+      minHeight: 0,
       overflowY: 'auto',
       padding: '32px 32px 48px',
       background: colors.bg,
@@ -190,67 +196,156 @@ export function TrackSelector() {
         })}
       </div>
 
-      {/* Curated Videos */}
-      <div style={{ marginTop: 40 }}>
-        <h2 style={{
-          color: colors.text, fontSize: 18, fontWeight: 600,
-          fontFamily: "'Geist Sans', sans-serif", margin: '0 0 16px',
-        }}>
-          Curated Video Lessons
-        </h2>
+      {/* ── Video Library ── */}
+      <div style={{ marginTop: 48 }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+          <div>
+            <h2 style={{
+              color: colors.text, fontSize: 20, fontWeight: 700,
+              fontFamily: "'Geist Sans', sans-serif", margin: 0,
+            }}>
+              Video Library
+            </h2>
+            <p style={{
+              color: colors.textMuted, fontSize: 13,
+              fontFamily: "'Geist Sans', sans-serif", margin: '4px 0 0',
+            }}>
+              Curated from 3Blue1Brown, IBM, NVIDIA, and Qiskit
+            </p>
+          </div>
+          <span style={{ color: colors.textDim, fontSize: 12, fontFamily: "'Geist Sans', sans-serif" }}>
+            {CURATED_VIDEOS.length} videos
+          </span>
+        </div>
+
+        {/* Creator filter tabs */}
+        <div style={{ display: 'flex', gap: 6, marginBottom: 16, flexWrap: 'wrap' }}>
+          {[
+            { key: 'all', label: 'All', color: colors.accent },
+            { key: '3blue1brown', label: '3Blue1Brown', color: '#3b82f6' },
+            { key: 'ibm-technology', label: 'IBM Technology', color: '#2563eb' },
+            { key: 'nvidia', label: 'NVIDIA', color: '#22c55e' },
+            { key: 'qiskit', label: 'Qiskit', color: '#8b5cf6' },
+          ].map((tab) => {
+            const active = videoCreatorFilter === tab.key;
+            return (
+              <button
+                key={tab.key}
+                onClick={() => setVideoCreatorFilter(tab.key)}
+                style={{
+                  padding: '5px 14px', borderRadius: 6,
+                  border: `1px solid ${active ? tab.color : colors.border}`,
+                  background: active ? `${tab.color}18` : 'transparent',
+                  color: active ? tab.color : colors.textMuted,
+                  fontSize: 12, fontWeight: active ? 600 : 400,
+                  fontFamily: "'Geist Sans', sans-serif",
+                  cursor: 'pointer', transition: 'all 150ms',
+                }}
+                onMouseEnter={(e) => { if (!active) { e.currentTarget.style.borderColor = colors.borderStrong; e.currentTarget.style.color = colors.text; } }}
+                onMouseLeave={(e) => { if (!active) { e.currentTarget.style.borderColor = colors.border; e.currentTarget.style.color = colors.textMuted; } }}
+              >
+                {tab.label}
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Video grid — large cards with real thumbnails */}
         <div style={{
           display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))',
-          gap: 12,
+          gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))',
+          gap: 16,
         }}>
-          {CURATED_VIDEOS.slice(0, 8).map((video) => (
-            <button
-              key={video.id}
-              onClick={() => setPlayingVideo(video.youtubeId)}
-              style={{
-                display: 'flex', gap: 10, padding: 10,
-                background: colors.bgElevated, border: `1px solid ${colors.border}`,
-                borderRadius: 8, cursor: 'pointer', textAlign: 'left',
-                transition: 'border-color 150ms',
-              }}
-              onMouseEnter={(e) => { e.currentTarget.style.borderColor = colors.accent; }}
-              onMouseLeave={(e) => { e.currentTarget.style.borderColor = colors.border; }}
-            >
-              <div style={{
-                width: 80, height: 50, borderRadius: 4, overflow: 'hidden', flexShrink: 0,
-                background: colors.bgPanel, position: 'relative',
-              }}>
-                <img
-                  src={`https://img.youtube.com/vi/${video.youtubeId}/mqdefault.jpg`}
-                  alt=""
-                  style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                />
-                <div style={{
-                  position: 'absolute', inset: 0,
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  background: 'rgba(0,0,0,0.3)',
-                }}>
-                  <Play size={16} color="#fff" fill="#fff" />
+          {filteredVideos.map((video) => {
+            const creatorLabel = video.creator === '3blue1brown' ? '3Blue1Brown' : video.creator === 'ibm-technology' ? 'IBM Technology' : video.creator === 'nvidia' ? 'NVIDIA' : video.creator === 'qiskit' ? 'Qiskit' : video.creator;
+            const creatorColor = video.creator === '3blue1brown' ? '#3b82f6' : video.creator === 'ibm-technology' ? '#2563eb' : video.creator === 'nvidia' ? '#22c55e' : '#8b5cf6';
+            const diffColor = video.difficulty === 'prerequisite' ? colors.textDim : video.difficulty === 'beginner' ? '#10B981' : video.difficulty === 'intermediate' ? '#F59E0B' : '#EF4444';
+            return (
+              <button
+                key={video.id}
+                onClick={() => setPlayingVideo(video.youtubeId)}
+                style={{
+                  display: 'flex', flexDirection: 'column',
+                  background: colors.bgElevated, border: `1px solid ${colors.border}`,
+                  borderRadius: 10, cursor: 'pointer', textAlign: 'left',
+                  overflow: 'hidden', transition: 'all 200ms ease',
+                  boxShadow: shadow.sm,
+                }}
+                onMouseEnter={(e) => { e.currentTarget.style.borderColor = colors.accent; e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.boxShadow = shadow.md; }}
+                onMouseLeave={(e) => { e.currentTarget.style.borderColor = colors.border; e.currentTarget.style.transform = 'none'; e.currentTarget.style.boxShadow = shadow.sm; }}
+              >
+                {/* Thumbnail */}
+                <div style={{ width: '100%', paddingBottom: '56.25%', position: 'relative', background: colors.bgPanel }}>
+                  <img
+                    src={`https://img.youtube.com/vi/${video.youtubeId}/hqdefault.jpg`}
+                    alt=""
+                    style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', objectFit: 'cover' }}
+                    loading="lazy"
+                  />
+                  <div style={{
+                    position: 'absolute', inset: 0,
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    background: 'rgba(0,0,0,0.25)', opacity: 0, transition: 'opacity 200ms',
+                  }}
+                    onMouseEnter={(e) => { e.currentTarget.style.opacity = '1'; }}
+                    onMouseLeave={(e) => { e.currentTarget.style.opacity = '0'; }}
+                  >
+                    <div style={{
+                      width: 48, height: 48, borderRadius: '50%',
+                      background: 'rgba(0,0,0,0.7)', display: 'flex',
+                      alignItems: 'center', justifyContent: 'center',
+                    }}>
+                      <Play size={22} color="#fff" fill="#fff" />
+                    </div>
+                  </div>
+                  {/* Duration badge */}
+                  <div style={{
+                    position: 'absolute', bottom: 6, right: 6,
+                    background: 'rgba(0,0,0,0.8)', color: '#fff',
+                    padding: '2px 6px', borderRadius: 4,
+                    fontSize: 11, fontFamily: "'Geist Mono', monospace",
+                  }}>
+                    {video.duration}
+                  </div>
                 </div>
-              </div>
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{
-                  color: colors.text, fontSize: 12, fontWeight: 500,
-                  fontFamily: "'Geist Sans', sans-serif",
-                  overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-                }}>
-                  {video.title}
+                {/* Info */}
+                <div style={{ padding: '10px 12px' }}>
+                  <div style={{
+                    color: colors.text, fontSize: 13, fontWeight: 500,
+                    fontFamily: "'Geist Sans', sans-serif",
+                    lineHeight: 1.3, marginBottom: 6,
+                    display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden',
+                  }}>
+                    {video.title}
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <span style={{
+                      padding: '1px 6px', borderRadius: 3,
+                      background: `${creatorColor}15`, color: creatorColor,
+                      fontSize: 10, fontWeight: 600, fontFamily: "'Geist Sans', sans-serif",
+                    }}>
+                      {creatorLabel}
+                    </span>
+                    <span style={{
+                      padding: '1px 6px', borderRadius: 3,
+                      background: `${diffColor}15`, color: diffColor,
+                      fontSize: 10, fontWeight: 500, fontFamily: "'Geist Sans', sans-serif",
+                      textTransform: 'capitalize',
+                    }}>
+                      {video.difficulty}
+                    </span>
+                  </div>
+                  <div style={{
+                    color: colors.textDim, fontSize: 11,
+                    fontFamily: "'Geist Sans', sans-serif",
+                    marginTop: 4, lineHeight: 1.4,
+                  }}>
+                    {video.description}
+                  </div>
                 </div>
-                <div style={{
-                  color: colors.textDim, fontSize: 10,
-                  fontFamily: "'Geist Sans', sans-serif", marginTop: 2,
-                }}>
-                  {video.creator === '3blue1brown' ? '3Blue1Brown' : video.creator === 'ibm-technology' ? 'IBM' : video.creator === 'nvidia' ? 'NVIDIA' : video.creator === 'qiskit' ? 'Qiskit' : video.creator}
-                  {' '}&middot;{' '}{video.duration}
-                </div>
-              </div>
-            </button>
-          ))}
+              </button>
+            );
+          })}
         </div>
       </div>
 

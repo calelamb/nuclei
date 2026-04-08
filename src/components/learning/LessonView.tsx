@@ -79,7 +79,8 @@ export function LessonView({ lesson, trackId }: LessonViewProps) {
 
   return (
     <div style={{
-      height: '100%',
+      flex: 1,
+      minHeight: 0,
       display: 'flex',
       flexDirection: 'column',
       background: colors.bg,

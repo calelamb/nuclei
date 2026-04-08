@@ -23,7 +23,7 @@ export function LearnModeView() {
       background: colors.bg,
     }}>
       {/* Content area ~65% */}
-      <div style={{ flex: 1, minWidth: 0, overflow: 'hidden' }}>
+      <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
         {lesson && currentTrackId
           ? <LessonView lesson={lesson} trackId={currentTrackId} />
           : <TrackSelector />
