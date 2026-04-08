@@ -145,7 +145,7 @@ Light Theme Colors:
 
 **Settings Persistence**
 - Use Tauri's `tauri-plugin-store` or equivalent
-- Persist: theme preference, recent files, shot count, panel layout dimensions, API key
+- Persist: theme preference, recent files, shot count, panel layout dimensions
 
 ### Acceptance Criteria
 - [ ] Cmd+O opens a file dialog and loads a .py file into the editor

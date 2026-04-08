@@ -347,16 +347,15 @@ Dirac is implemented as a thin wrapper around the Anthropic API. All intelligenc
 - Streaming responses via the Anthropic SDK for perceived speed
 - No custom training, fine-tuning, or RAG — just Claude + a good prompt
 
-**API Key Management**
-- On first launch, prompt user for their Claude API key
-- Store API key securely via Tauri's encrypted storage
-- Settings accessible to change API key later
-- Graceful handling when no API key is set (Dirac panel shows setup instructions)
+**API Key Configuration**
+- API key is hardcoded in a config file (`src/config/dirac.ts` or environment variable)
+- No API key entry UI — the developer sets it during build
+- For open-source distribution, users will set their own key via environment variable or config file before building
+- Do NOT build any API key entry flow, modal, or setup wizard
 
 **Dirac Zustand Store — `src/stores/diracStore.ts`**
 - Message history (role + content)
 - isLoading state
-- API key state
 - addMessage, clearHistory actions
 
 ### Acceptance Criteria
@@ -365,7 +364,7 @@ Dirac is implemented as a thin wrapper around the Anthropic API. All intelligenc
 - [ ] Dirac's responses render markdown correctly
 - [ ] Dirac can see and reference the user's current code
 - [ ] Responses stream in for better UX
-- [ ] API key setup flow works on first launch
+- [ ] API key loads from config file or environment variable (no UI needed)
 - [ ] "Dirac is thinking..." indicator appears during calls
 - [ ] Conversation history maintained within session
 

@@ -221,8 +221,7 @@ New users get a guided onboarding experience, and Dirac provides smart error dia
 **Onboarding Flow**
 - First launch experience:
   1. Welcome screen introducing Nuclei
-  2. API key setup for Dirac
-  3. Quick framework selection (Qiskit/Cirq/CUDA-Q) with installation check
+  2. Quick framework selection (Qiskit/Cirq/CUDA-Q) with installation check
   4. Guided tour: Dirac walks the user through the IDE panels
   5. First exercise: "Build a Bell State" with Dirac guiding step-by-step
 - Onboarding can be replayed from Help menu

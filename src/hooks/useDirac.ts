@@ -8,6 +8,8 @@ import { useSimulationStore } from '../stores/simulationStore';
 import { useExerciseStore } from '../stores/exerciseStore';
 import type { Exercise } from '../stores/exerciseStore';
 import { useLearningStore } from '../stores/learningStore';
+import { useLearnStore } from '../stores/learnStore';
+import { getLesson, getTrack } from '../data/lessons/tracks';
 import { useStudentStore, studentModelToPrompt } from '../stores/studentStore';
 import { useHardwareStore } from '../stores/hardwareStore';
 import { useCapstoneStore } from '../stores/capstoneStore';
@@ -47,6 +49,25 @@ function buildSystemPrompt(): string {
     prompt += '\n\n' + studentModelToPrompt(studentModel);
   }
 
+  // New Learn Mode context (full-page learning)
+  const learnState = useLearnStore.getState();
+  if (learnState.isLearnMode && learnState.currentTrackId && learnState.currentLessonId) {
+    const track = getTrack(learnState.currentTrackId);
+    const lesson = getLesson(learnState.currentTrackId, learnState.currentLessonId);
+    if (track && lesson) {
+      const progress = learnState.lessonProgress[lesson.id];
+      const completedCount = learnState.completedLessons.length;
+      prompt += `\n\n## Learn Mode Active\nYou are teaching in Learn Mode. The student is on Track "${track.title}", Lesson "${lesson.title}" (${lesson.difficulty}).`;
+      prompt += `\nCompleted lessons: ${completedCount}. Current lesson exercises passed: ${progress?.exercisesPassed?.length ?? 0}. Hints used: ${progress?.hintsUsed ?? 0}.`;
+      if (learnState.assessedLevel) {
+        prompt += `\nAssessed level: ${learnState.assessedLevel}.`;
+      }
+      prompt += `\n\n### Teaching Notes for This Lesson\n${lesson.diracContext}`;
+      prompt += `\n\nIMPORTANT: You are in teaching mode. Be a patient, encouraging tutor. Reference the lesson content the student is currently viewing. Keep explanations aligned with their current difficulty level. Celebrate progress.`;
+    }
+  }
+
+  // Legacy sidebar learning path context
   const { activePath, activeModuleIndex } = useLearningStore.getState();
   if (activePath) {
     const module = activePath.modules[activeModuleIndex];

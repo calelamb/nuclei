@@ -16,7 +16,10 @@ import { useSimulationStore } from '../../stores/simulationStore';
 import { useThemeStore } from '../../stores/themeStore';
 import { useExerciseStore } from '../../stores/exerciseStore';
 import { useUIModeStore } from '../../stores/uiModeStore';
-import { useDiracPanelStore } from '../../stores/diracPanelStore';
+import { useLearnStore } from '../../stores/learnStore';
+import { useChallengeModeStore } from '../../stores/challengeModeStore';
+import { LearnModeView } from '../learning/LearnModeView';
+import { ChallengeModeView } from '../challenges/ChallengeModeView';
 import { ChevronDown, ChevronUp, Play, Sun, Moon, X, Circle } from 'lucide-react';
 import type { Framework } from '../../types/quantum';
 
@@ -49,36 +52,53 @@ function FrameworkSelector() {
   return (
     <div ref={ref} style={{ position: 'relative' }}>
       <button onClick={() => setOpen(!open)} style={{
-        background: 'transparent', border: 'none', borderRadius: 3, color: colors.accentLight,
-        cursor: 'pointer', fontSize: 11, fontFamily: "'Geist Sans', sans-serif",
-        padding: '0 6px', display: 'flex', alignItems: 'center', gap: 3, height: 18,
+        background: 'transparent', border: `1px solid ${colors.border}`, borderRadius: 4,
+        color: colors.accentLight, cursor: 'pointer', fontSize: 11,
+        fontFamily: "'Geist Sans', sans-serif",
+        padding: '1px 8px', display: 'flex', alignItems: 'center', gap: 4, height: 18,
       }}
-        onMouseEnter={(e) => { e.currentTarget.style.background = colors.bgElevated; }}
-        onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
+        onMouseEnter={(e) => { e.currentTarget.style.background = colors.bgElevated; e.currentTarget.style.borderColor = colors.borderStrong; }}
+        onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.borderColor = colors.border; }}
       >{dn(framework)} <ChevronDown size={9} /></button>
       {open && (
-        <div style={{ position: 'absolute', top: '100%', left: 0, marginTop: 4, background: colors.bgElevated,
-          border: `1px solid ${colors.borderStrong}`, borderRadius: 6, overflow: 'hidden', zIndex: 1000,
-          minWidth: 120, boxShadow: shadow.md }}>
-          {frameworks.map((f) => (
-            <button key={f} onClick={() => { setFramework(f); setOpen(false); }} style={{
-              display: 'block', width: '100%', padding: '5px 12px',
-              background: f === framework ? colors.bgElevated : 'transparent',
-              color: f === framework ? colors.accent : colors.text, border: 'none', cursor: 'pointer',
-              fontSize: 11, fontFamily: "'Geist Sans', sans-serif", textAlign: 'left',
-            }}
-              onMouseEnter={(e) => { if (f !== framework) e.currentTarget.style.background = colors.bgElevated; }}
-              onMouseLeave={(e) => { if (f !== framework) e.currentTarget.style.background = 'transparent'; }}
-            >{dn(f)}</button>
-          ))}
-          <div style={{ borderTop: `1px solid ${colors.border}`, padding: '3px 0' }}>
+        <div style={{ position: 'absolute', bottom: '100%', left: 0, marginBottom: 6,
+          background: colors.bgElevated, border: `1px solid ${colors.borderStrong}`,
+          borderRadius: 6, overflow: 'hidden', zIndex: 1000, minWidth: 160, boxShadow: shadow.md,
+        }}>
+          {/* Framework switcher */}
+          <div style={{ padding: '4px 0' }}>
+            <div style={{ padding: '4px 12px 2px', fontSize: 9, fontWeight: 600, color: colors.textDim,
+              fontFamily: "'Geist Sans', sans-serif", textTransform: 'uppercase', letterSpacing: 0.5 }}>
+              Framework
+            </div>
+            {frameworks.map((f) => (
+              <button key={f} onClick={() => { setFramework(f); setOpen(false); }} style={{
+                display: 'flex', alignItems: 'center', gap: 8, width: '100%', padding: '5px 12px',
+                background: f === framework ? `${colors.accent}12` : 'transparent',
+                color: f === framework ? colors.accent : colors.text, border: 'none', cursor: 'pointer',
+                fontSize: 12, fontFamily: "'Geist Sans', sans-serif", textAlign: 'left',
+              }}
+                onMouseEnter={(e) => { if (f !== framework) e.currentTarget.style.background = `${colors.accent}08`; }}
+                onMouseLeave={(e) => { if (f !== framework) e.currentTarget.style.background = 'transparent'; }}
+              >
+                {f === framework && <span style={{ color: colors.accent, fontSize: 10 }}>●</span>}
+                <span style={{ marginLeft: f === framework ? 0 : 18 }}>{dn(f)}</span>
+              </button>
+            ))}
+          </div>
+          {/* New file from template */}
+          <div style={{ borderTop: `1px solid ${colors.border}`, padding: '4px 0' }}>
+            <div style={{ padding: '4px 12px 2px', fontSize: 9, fontWeight: 600, color: colors.textDim,
+              fontFamily: "'Geist Sans', sans-serif", textTransform: 'uppercase', letterSpacing: 0.5 }}>
+              New from template
+            </div>
             {frameworks.map((f) => (
               <button key={`tpl-${f}`} onClick={() => { setCode(STARTER_TEMPLATES[f]); setFramework(f); setOpen(false); }}
-                style={{ display: 'block', width: '100%', padding: '3px 12px', background: 'transparent',
-                  color: colors.textDim, border: 'none', cursor: 'pointer', fontSize: 10,
+                style={{ display: 'block', width: '100%', padding: '5px 12px', background: 'transparent',
+                  color: colors.textMuted, border: 'none', cursor: 'pointer', fontSize: 12,
                   fontFamily: "'Geist Sans', sans-serif", textAlign: 'left' }}
-                onMouseEnter={(e) => { e.currentTarget.style.color = colors.accentLight; }}
-                onMouseLeave={(e) => { e.currentTarget.style.color = colors.textDim; }}
+                onMouseEnter={(e) => { e.currentTarget.style.color = colors.text; e.currentTarget.style.background = `${colors.accent}08`; }}
+                onMouseLeave={(e) => { e.currentTarget.style.color = colors.textMuted; e.currentTarget.style.background = 'transparent'; }}
               >New {dn(f)} file</button>
             ))}
           </div>
@@ -270,10 +290,16 @@ export function PanelLayout() {
   const uiMode = useUIModeStore((s) => s.mode);
   const result = useSimulationStore((s) => s.result);
   const platform = usePlatform();
+  const isLearnMode = useLearnStore((s) => s.isLearnMode);
+  const enterLearnMode = useLearnStore((s) => s.enterLearnMode);
+  const exitLearnMode = useLearnStore((s) => s.exitLearnMode);
+  const isChallengeMode = useChallengeModeStore((s) => s.isChallengeMode);
+  const enterChallengeMode = useChallengeModeStore((s) => s.enterChallengeMode);
+  const exitChallengeMode = useChallengeModeStore((s) => s.exitChallengeMode);
 
   const showBloch = uiMode !== 'beginner';
   const showBottomPanel = uiMode !== 'beginner';
-  const showSidebar = activeView !== null;
+  const showSidebar = !isLearnMode && !isChallengeMode && activeView !== null;
 
   useEffect(() => {
     if (uiMode === 'beginner' && result) setBottomCollapsed(false);
@@ -316,6 +342,29 @@ export function PanelLayout() {
   const handleMouseUp = () => { setIsDraggingH(false); setIsDraggingV(false); };
 
   const handleActivitySelect = (view: ActivityView) => {
+    if (view === 'learning') {
+      if (isLearnMode) {
+        exitLearnMode();
+      } else {
+        enterLearnMode();
+        if (isChallengeMode) exitChallengeMode();
+        setActiveView(null);
+      }
+      return;
+    }
+    if (view === 'challenges') {
+      if (isChallengeMode) {
+        exitChallengeMode();
+      } else {
+        enterChallengeMode();
+        if (isLearnMode) exitLearnMode();
+        setActiveView(null);
+      }
+      return;
+    }
+    // If in learn mode or challenge mode and clicking another view, exit first
+    if (isLearnMode) exitLearnMode();
+    if (isChallengeMode) exitChallengeMode();
     setActiveView((prev) => prev === view ? null : view);
   };
 
@@ -336,71 +385,91 @@ export function PanelLayout() {
       {/* Main area (everything except status bar) */}
       <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
         {/* Activity Bar */}
-        <ActivityBar active={activeView} onSelect={handleActivitySelect} />
+        <ActivityBar active={isChallengeMode ? 'challenges' : isLearnMode ? 'learning' : activeView} onSelect={handleActivitySelect} />
 
-        {/* Sidebar */}
+        {/* Sidebar (hidden in Learn Mode) */}
         {showSidebar && activeView && (
           <Sidebar view={activeView} width={sidebarWidth} onWidthChange={setSidebarWidth} />
         )}
 
-        {/* Editor + Viz area */}
-        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0 }}>
-          {/* Top: editor area + visualization */}
-          <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
-            {/* Left: Editor with tabs + breadcrumbs */}
-            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0 }}>
-              <EditorTabs />
-              <Breadcrumbs />
-              <div style={{ flex: 1, minHeight: 0 }}>
-                <QuantumEditor />
-              </div>
-            </div>
-
-            {/* Resize handle between editor and viz */}
-            <ResizeHandle
-              direction="horizontal"
-              isDragging={isDraggingH}
-              onMouseDown={() => setIsDraggingH(true)}
-              onDoubleClick={() => {}}
-            />
-
-            {/* Right: Circuit + Bloch */}
-            <div style={{ width: '40%', minWidth: 200, display: 'flex', flexDirection: 'column' }}>
-              <div style={{
-                flex: showBloch ? 6 : 1,
-                borderBottom: showBloch ? `1px solid ${colors.border}` : 'none',
-                overflow: 'hidden', position: 'relative',
-              }}>
-                <CircuitRenderer />
-              </div>
-              {showBloch && (
-                <div style={{ flex: 4, overflow: 'hidden', position: 'relative' }}>
-                  <BlochPanel />
-                </div>
-              )}
-            </div>
+        {isChallengeMode ? (
+          /* Challenge Mode — full content area */
+          <div style={{
+            flex: 1, minWidth: 0, overflow: 'hidden',
+            animation: 'nuclei-fade-in 200ms ease',
+          }}>
+            <ChallengeModeView />
           </div>
+        ) : isLearnMode ? (
+          /* Learn Mode — full content area + Dirac */
+          <div style={{
+            flex: 1, minWidth: 0, overflow: 'hidden',
+            animation: 'nuclei-fade-in 200ms ease',
+          }}>
+            <LearnModeView />
+          </div>
+        ) : (
+          <>
+            {/* Editor + Viz area */}
+            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0 }}>
+              {/* Top: editor area + visualization */}
+              <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
+                {/* Left: Editor with tabs + breadcrumbs */}
+                <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0 }}>
+                  <EditorTabs />
+                  <Breadcrumbs />
+                  <div style={{ flex: 1, minHeight: 0 }}>
+                    <QuantumEditor />
+                  </div>
+                </div>
 
-          {/* Bottom panel */}
-          {(showBottomPanel || result) && (
-            <>
-              {!bottomCollapsed && (
+                {/* Resize handle between editor and viz */}
                 <ResizeHandle
-                  direction="vertical"
-                  isDragging={isDraggingV}
-                  onMouseDown={() => setIsDraggingV(true)}
-                  onDoubleClick={() => setBottomHeight(DEFAULT_BOTTOM_HEIGHT)}
+                  direction="horizontal"
+                  isDragging={isDraggingH}
+                  onMouseDown={() => setIsDraggingH(true)}
+                  onDoubleClick={() => {}}
                 />
-              )}
-              <div style={{ height: effectiveBottomHeight, overflow: 'hidden', flexShrink: 0 }}>
-                <BottomPanel collapsed={bottomCollapsed} onToggle={() => setBottomCollapsed((c) => !c)} />
-              </div>
-            </>
-          )}
-        </div>
 
-        {/* Dirac side panel */}
-        <DiracSidePanel />
+                {/* Right: Circuit + Bloch */}
+                <div style={{ width: '40%', minWidth: 200, display: 'flex', flexDirection: 'column' }}>
+                  <div style={{
+                    flex: showBloch ? 6 : 1,
+                    borderBottom: showBloch ? `1px solid ${colors.border}` : 'none',
+                    overflow: 'hidden', position: 'relative',
+                  }}>
+                    <CircuitRenderer />
+                  </div>
+                  {showBloch && (
+                    <div style={{ flex: 4, overflow: 'hidden', position: 'relative' }}>
+                      <BlochPanel />
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Bottom panel */}
+              {(showBottomPanel || result) && (
+                <>
+                  {!bottomCollapsed && (
+                    <ResizeHandle
+                      direction="vertical"
+                      isDragging={isDraggingV}
+                      onMouseDown={() => setIsDraggingV(true)}
+                      onDoubleClick={() => setBottomHeight(DEFAULT_BOTTOM_HEIGHT)}
+                    />
+                  )}
+                  <div style={{ height: effectiveBottomHeight, overflow: 'hidden', flexShrink: 0 }}>
+                    <BottomPanel collapsed={bottomCollapsed} onToggle={() => setBottomCollapsed((c) => !c)} />
+                  </div>
+                </>
+              )}
+            </div>
+
+            {/* Dirac side panel (Code Mode only — Learn Mode has its own) */}
+            <DiracSidePanel />
+          </>
+        )}
       </div>
 
       {/* Status bar — full width at bottom */}

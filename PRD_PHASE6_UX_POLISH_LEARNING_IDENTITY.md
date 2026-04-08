@@ -8,7 +8,7 @@ This phase is about **identity**. Nuclei isn't an IDE with a tutorial bolted on.
 
 ## Timeline
 
-Weeks 19–24 (6 sprints)
+Weeks 19–25 (7 sprints)
 
 ## Prerequisites
 
@@ -92,32 +92,34 @@ The UI reveals complexity gradually. A beginner sees a simple, focused workspace
 Three modes, auto-selected based on StudentModel (Phase 5) but manually switchable:
 
 **Beginner Mode:**
-- Editor panel + circuit diagram only (two panels, not four)
-- Bottom panel hidden by default (auto-opens for Dirac and results)
+- Editor panel + circuit diagram + Dirac side panel only (three panels)
+- Bottom panel hidden by default (auto-opens for results when simulation runs)
 - Bloch sphere hidden (too abstract initially)
 - Status bar simplified: just framework name and "Run" button
 - Large, friendly "Run" button (not just Cmd+Enter)
-- Code actions hidden — Dirac suggests improvements conversationally instead
+- Code actions hidden — Dirac suggests improvements conversationally in the side panel
 - File explorer hidden — single-file experience
 - Gate labels on the circuit diagram are larger with emoji hints (e.g., ⚡ for H gate with tooltip "Creates superposition")
+- Dirac side panel is always visible and slightly wider by default (~360px) — it's the primary learning interface
 
 **Intermediate Mode:**
-- All four panels visible
-- Bloch sphere enabled
+- All panels visible: editor, circuit, Bloch sphere, Dirac side panel
+- Bottom panel with Terminal + Histogram tabs
 - Status bar shows qubit count and depth
 - Code actions (lightbulb) enabled
 - Histogram panel with shot control
 - File explorer available but collapsed
-- Terminal accessible
+- Dirac panel at standard width (~320px)
 
 **Advanced Mode:**
 - Everything visible
-- Multi-file projects
+- Multi-file projects with file explorer
 - All code actions and optimizations
 - Framework conversion
 - Step-through debugging
 - Performance metrics in status bar
 - Custom panel arrangements
+- Dirac panel collapsible for maximum editor space
 
 **Transition Between Modes**
 - Automatic: Dirac suggests upgrading when the student demonstrates readiness
@@ -143,7 +145,99 @@ Three modes, auto-selected based on StudentModel (Phase 5) but manually switchab
 
 ---
 
-## Sprint 3: Micro-Interactions & Animation System
+## Sprint 3: Dirac Side Panel Rework
+
+### Objective
+
+Move Dirac out of the cramped bottom tab and into a dedicated right-side panel — like Claude Code in VS Code or OpenAI Codex. Dirac becomes a persistent, always-visible coding partner instead of a hidden tab you have to click into.
+
+### Requirements
+
+**New Layout — Dirac as Right Side Panel**
+
+The overall IDE layout changes from "bottom tab with Dirac" to:
+- **Left:** Monaco editor (+ file explorer in advanced mode)
+- **Center-right:** Stacked visualizations — circuit diagram (top), Bloch sphere (bottom)
+- **Far right:** Dirac panel — full-height side panel, resizable width
+- **Bottom (collapsible):** Terminal + Histogram tabs only (Dirac moves out)
+
+Dirac Panel Design (modeled after Claude Code / Codex / Cursor chat):
+- Full height of the window, right-side, default width ~320px
+- Resizable left edge (drag to make wider/narrower, min 280px, max 50% of window)
+- Collapsible: Cmd+D toggles visibility, collapse button in panel header
+- When collapsed, a thin vertical strip remains with "Dirac" label and expand button
+
+Panel Header:
+- "Dirac" label with purple accent icon
+- New conversation button (clears history, starts fresh)
+- Collapse/expand chevron
+- Settings gear (model routing, context toggles)
+
+Message Area:
+- Full-width messages, no avatars — clean and dense like a terminal chat
+- User messages: subtle background `#1A2A42`, left-aligned
+- Dirac messages: no background, left-aligned, purple left border accent `#7B2D8E`
+- Code blocks in responses: full-width, syntax highlighted, with "Apply to Editor" button
+- Markdown rendering: headings, bold, code, lists, math (KaTeX)
+- Streaming responses render token-by-token
+- Auto-scroll to bottom, but stop auto-scrolling if user scrolls up (re-engage on new user message)
+- Timestamp on each message (subtle, secondary text)
+
+Input Area:
+- Fixed to bottom of the Dirac panel
+- Multi-line text input (auto-grows up to 5 lines, then scrolls)
+- Enter sends, Shift+Enter for newline
+- Placeholder: "Ask Dirac anything..."
+- Send button (arrow icon) appears when input is non-empty
+- Slash commands supported in input:
+  - `/explain` — explain the current circuit
+  - `/fix` — diagnose and fix the current error
+  - `/exercise` — start a new exercise
+  - `/think` — enable reasoning mode for this message
+  - `/clear` — clear conversation history
+- Slash command autocomplete dropdown when typing "/"
+
+Context Indicator:
+- Small bar above the input showing what Dirac can currently see:
+  - "Seeing: code · circuit · results" (each item as a subtle pill/tag)
+  - Items light up teal when data is available, gray when not
+  - Clickable: toggle what context gets injected into API calls
+
+**Tool Use Actions in the Panel**
+- When Dirac uses `insert_code`, show an inline code block with "Apply" / "Dismiss" buttons
+- When Dirac uses `run_simulation`, show a brief status line: "Running simulation... ✓ Done (48ms)"
+- When Dirac uses `highlight_gate`, the circuit panel highlights and Dirac's message notes which gate
+- Tool actions are visually distinct from regular text — card-style with subtle border
+
+**Conversation Persistence**
+- Conversation history persists within a session (lost on app restart — this is fine for now)
+- Each "New conversation" starts fresh but old conversations are gone (no history browser yet)
+- Context (code, circuit, results) is re-injected on each message, not carried from history
+
+**Keyboard Workflow**
+- Cmd+D: toggle Dirac panel
+- Cmd+L: focus Dirac input (same as Cursor)
+- Esc (when Dirac input focused): return focus to editor
+- Up arrow in empty input: edit last user message
+
+### Acceptance Criteria
+- [ ] Dirac renders as a full-height right-side panel, not a bottom tab
+- [ ] Panel is resizable and collapsible (Cmd+D)
+- [ ] Messages render cleanly with markdown, code blocks, and math
+- [ ] Code blocks have "Apply to Editor" button
+- [ ] Streaming responses render token-by-token
+- [ ] Slash commands work with autocomplete dropdown
+- [ ] Context indicator shows what Dirac can see
+- [ ] Tool use actions render as distinct cards
+- [ ] Cmd+L focuses the input, Esc returns to editor
+- [ ] Bottom panel no longer has a "Dirac AI" tab (only Terminal + Histogram)
+- [ ] Layout feels like Claude Code / Codex — clean, persistent, professional
+
+---
+
+## Sprint 4: Micro-Interactions & Animation System
+
+> Note: Sprint numbering shifted — the Dirac side panel rework was inserted as Sprint 3.
 
 ### Objective
 
@@ -219,7 +313,7 @@ Panel System:
 
 ---
 
-## Sprint 4: Command Palette & Keyboard-First UX
+## Sprint 5: Command Palette & Keyboard-First UX
 
 ### Objective
 
@@ -246,7 +340,7 @@ Command Categories:
 - **Dirac:** Open Dirac, Ask Dirac, Start Exercise, Open Gate Explorer, Toggle Reasoning Mode
 - **Circuit:** Export as SVG/PNG/QASM, Share, Step Through, Reset Step-Through
 - **Learn:** Open Learning Path, Continue Exercise, Show Progress
-- **Settings:** Open Settings, Change API Key, Reset Dirac Memory, Keyboard Shortcuts
+- **Settings:** Open Settings, Reset Dirac Memory, Keyboard Shortcuts
 
 Quick Switcher (Cmd+P):
 - File switcher (separate from command palette)
@@ -297,7 +391,7 @@ Quick Switcher (Cmd+P):
 
 ---
 
-## Sprint 5: Visual Identity & Typography
+## Sprint 6: Visual Identity & Typography
 
 ### Objective
 
@@ -376,7 +470,7 @@ Color Palette Refinement:
 
 ---
 
-## Sprint 6: Accessibility & Performance
+## Sprint 7: Accessibility & Performance
 
 ### Objective
 

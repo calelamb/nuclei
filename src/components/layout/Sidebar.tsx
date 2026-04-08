@@ -1,7 +1,8 @@
-import { useRef, useCallback } from 'react';
+import { useState, useRef, useCallback } from 'react';
 import { useThemeStore } from '../../stores/themeStore';
 import { FileExplorer } from '../explorer/FileExplorer';
 import { LearningPathSidebar } from '../learning/LearningPathSidebar';
+import { VideoLibrary } from '../learning/VideoLibrary';
 import { SettingsPanel } from '../settings/SettingsPanel';
 import { PluginMarketplace } from '../plugins/PluginMarketplace';
 import { HardwarePanel } from '../hardware/HardwarePanel';
@@ -75,11 +76,64 @@ const VIEW_TITLES: Record<ActivityView, string> = {
   search: 'Search',
   circuit: 'Circuit',
   learning: 'Learning',
+  challenges: 'Challenges',
   plugins: 'Plugins',
   hardware: 'Hardware',
   community: 'Community',
   settings: 'Settings',
 };
+
+type LearningTab = 'tracks' | 'videos';
+
+function LearningSidebarTabs() {
+  const colors = useThemeStore((s) => s.colors);
+  const [activeTab, setActiveTab] = useState<LearningTab>('tracks');
+
+  const tabs: { key: LearningTab; label: string }[] = [
+    { key: 'tracks', label: 'Tracks' },
+    { key: 'videos', label: 'Videos' },
+  ];
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
+      <div style={{
+        display: 'flex',
+        borderBottom: `1px solid ${colors.border}`,
+        flexShrink: 0,
+      }}>
+        {tabs.map((tab) => {
+          const isActive = activeTab === tab.key;
+          return (
+            <button
+              key={tab.key}
+              onClick={() => setActiveTab(tab.key)}
+              style={{
+                flex: 1,
+                padding: '5px 0',
+                background: 'transparent',
+                border: 'none',
+                borderBottom: isActive ? `2px solid ${colors.accent}` : '2px solid transparent',
+                color: isActive ? colors.accent : colors.textDim,
+                fontSize: 10,
+                fontWeight: 600,
+                fontFamily: "'Geist Sans', sans-serif",
+                textTransform: 'uppercase',
+                letterSpacing: 0.3,
+                cursor: 'pointer',
+                transition: 'color 150ms, border-color 150ms',
+              }}
+            >
+              {tab.label}
+            </button>
+          );
+        })}
+      </div>
+      <div style={{ flex: 1, overflow: 'hidden' }}>
+        {activeTab === 'tracks' ? <LearningPathSidebar /> : <VideoLibrary />}
+      </div>
+    </div>
+  );
+}
 
 export function Sidebar({ view, width, onWidthChange }: SidebarProps) {
   const colors = useThemeStore((s) => s.colors);
@@ -118,7 +172,7 @@ export function Sidebar({ view, width, onWidthChange }: SidebarProps) {
         {view === 'files' && <FileExplorer />}
         {view === 'search' && <SearchPanel />}
         {view === 'circuit' && <CircuitInfoPanel />}
-        {view === 'learning' && <LearningPathSidebar />}
+        {view === 'learning' && <LearningSidebarTabs />}
         {view === 'plugins' && <PluginMarketplace />}
         {view === 'hardware' && <HardwarePanel />}
         {view === 'community' && <CommunityPanel />}
