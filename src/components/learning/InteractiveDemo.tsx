@@ -80,6 +80,7 @@ export function InteractiveDemo({ code: initialCode, framework, description, exp
   const [error, setError] = useState<string | null>(null);
   const [showOutput, setShowOutput] = useState(false);
   const wsRef = useRef<WebSocket | null>(null);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const pyodideRef = useRef<any>(null);
 
   const handleMessage = useCallback((msg: KernelResponse) => {

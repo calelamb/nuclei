@@ -49,7 +49,7 @@ export function TestRunner({ challenge }: TestRunnerProps) {
         addTestResult(result);
         setRunningTestIndex(index + 1);
       },
-      (_error: string) => {
+      () => {
         // Error already encoded in individual test results
       },
     );

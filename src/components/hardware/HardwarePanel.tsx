@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
 import { ChevronDown, ChevronRight, Play, Trash2 } from 'lucide-react';
 import { useThemeStore } from '../../stores/themeStore';
 import { useHardwareStore } from '../../stores/hardwareStore';
@@ -159,7 +159,7 @@ export function HardwarePanel() {
 
   const selectedBackendInfo = availableBackends.find((b) => b.name === selectedBackend);
 
-  const handleRunOnHardware = () => {
+  const handleRunOnHardware = useCallback(() => {
     if (!selectedBackend || !code) return;
 
     const job = {
@@ -173,7 +173,7 @@ export function HardwarePanel() {
     };
 
     addJob(job);
-  };
+  }, [selectedBackend, code, selectedBackendInfo, shots, addJob]);
 
   // Get simulator probabilities for comparison
   const simProbabilities = simResult?.probabilities ?? null;

@@ -11,6 +11,13 @@ export function ProbabilityHistogram() {
   const [viewMode, setViewMode] = useState<ViewMode>('sampled');
   const chartRef = useRef<HTMLDivElement>(null);
 
+  const handleShotsChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const val = parseInt(e.target.value, 10);
+    if (!isNaN(val) && val >= 100 && val <= 100000) {
+      setShots(val);
+    }
+  }, [setShots]);
+
   if (!result) {
     return (
       <div style={{
@@ -54,13 +61,6 @@ export function ProbabilityHistogram() {
     a.click();
     URL.revokeObjectURL(url);
   };
-
-  const handleShotsChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
-    const val = parseInt(e.target.value, 10);
-    if (!isNaN(val) && val >= 100 && val <= 100000) {
-      setShots(val);
-    }
-  }, [setShots]);
 
   // Screen reader description
   const srDescription = data.map(d => `${d.state}: ${(d.probability * 100).toFixed(1)}% probability`).join(', ');

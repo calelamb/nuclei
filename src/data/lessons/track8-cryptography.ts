@@ -48,8 +48,8 @@ Alice encodes bits into one of two bases:
 
 | Bit | Z-basis (standard) | X-basis (Hadamard) |
 |-----|-------------------|-------------------|
-| 0 | \|0⟩ | \|+⟩ = (|0⟩ + |1⟩)/√2 |
-| 1 | \|1⟩ | \|−⟩ = (|0⟩ − |1⟩)/√2 |
+| 0 | |0⟩ | |+⟩ = (|0⟩ + |1⟩)/√2 |
+| 1 | |1⟩ | |−⟩ = (|0⟩ − |1⟩)/√2 |
 
 When Bob measures in the **same** basis Alice used, he gets the correct bit with 100% certainty. When he measures in the **wrong** basis, he gets a random result — 50/50.
 
@@ -771,7 +771,7 @@ A quantum banknote contains **qubits** whose states are known only to the bank:
 | Component | Description |
 |-----------|------------|
 | **Serial number** | Classical — printed visibly |
-| **Quantum state** | N qubits, each in one of four states: \|0⟩, \|1⟩, \|+⟩, \|−⟩ |
+| **Quantum state** | N qubits, each in one of four states: |0⟩, |1⟩, |+⟩, |−⟩ |
 | **Bank's record** | For each serial number, the bank stores which basis (Z or X) and which bit each qubit encodes |
 
 A counterfeiter who obtains the banknote:

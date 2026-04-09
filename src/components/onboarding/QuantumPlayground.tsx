@@ -63,8 +63,8 @@ const STEPS = [
 function QubitViz({ state, label, size = 120 }: { state: PlaygroundState['qubitState']; label?: string; size?: number }) {
   const colors = useThemeStore((s) => s.colors);
   const r = size / 2 - 4;
-
-  const angle = state === 'zero' ? -90 : state === 'one' ? 90 : state === 'superposition' ? 0 : (Math.random() > 0.5 ? -90 : 90);
+  // 'measured' state collapses to |0> or |1> — use a deterministic direction
+  const angle = state === 'zero' ? -90 : state === 'one' ? 90 : state === 'superposition' ? 0 : -90;
   const rad = (angle * Math.PI) / 180;
   const arrowX = Math.cos(rad) * r * 0.8;
   const arrowY = Math.sin(rad) * r * 0.8;

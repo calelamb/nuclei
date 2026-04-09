@@ -14,15 +14,21 @@ export function QuantumEditor() {
   const mode = useThemeStore((s) => s.mode);
   const colors = useThemeStore((s) => s.colors);
   const editorSettings = useSettingsStore((s) => s.editor);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const editorRef = useRef<any>(null);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const monacoRef = useRef<any>(null);
   const [showInlineEdit, setShowInlineEdit] = useState(false);
+  const [editorInstance, setEditorInstance] = useState<unknown>(null);
+  const [monacoInstance, setMonacoInstance] = useState<unknown>(null);
 
   const themeName = mode === 'dark' ? 'nuclei-dark' : 'nuclei-light';
 
   const handleMount: OnMount = (editor, monaco) => {
     editorRef.current = editor;
     monacoRef.current = monaco;
+    setEditorInstance(editor);
+    setMonacoInstance(monaco);
 
     editor.addAction({
       id: 'run-circuit',
@@ -42,7 +48,7 @@ export function QuantumEditor() {
     });
 
     // Register ghost completions
-    registerGhostCompletions(monaco, editor);
+    registerGhostCompletions(monaco);
 
     editor.focus();
   };
@@ -214,10 +220,10 @@ export function QuantumEditor() {
           });
         }}
       />
-      {showInlineEdit && editorRef.current && monacoRef.current && (
+      {showInlineEdit && editorInstance && monacoInstance && (
         <InlineEditWidget
-          editor={editorRef.current}
-          monaco={monacoRef.current}
+          editor={editorInstance}
+          monaco={monacoInstance}
           onClose={() => setShowInlineEdit(false)}
         />
       )}

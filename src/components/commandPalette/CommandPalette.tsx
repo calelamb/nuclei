@@ -44,6 +44,7 @@ export function CommandPalette({ commands, onClose }: CommandPaletteProps) {
     );
   }, [query, commands]);
 
+  // eslint-disable-next-line react-hooks/set-state-in-effect -- resets index on query change
   useEffect(() => { setSelectedIdx(0); }, [query]);
 
   useEffect(() => {
@@ -180,6 +181,7 @@ export function CommandPalette({ commands, onClose }: CommandPaletteProps) {
 }
 
 /** Build the full command list for Nuclei */
+// eslint-disable-next-line react-refresh/only-export-components
 export function buildCommands(actions: {
   run: () => void;
   openFile: () => void;

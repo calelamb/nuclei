@@ -194,6 +194,7 @@ export function detectFileType(content: string): 'qasm' | 'python' | 'json' | nu
   return null;
 }
 
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 export function importQasm(_qasmContent: string): string {
   // Basic QASM to Python conversion (Qiskit)
   // For a full implementation, this would parse QASM properly

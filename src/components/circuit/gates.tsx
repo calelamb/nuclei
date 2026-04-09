@@ -250,6 +250,7 @@ export function CZGate({ gate, x, onHover, onLeave }: GateProps) {
   );
 }
 
+// eslint-disable-next-line react-refresh/only-export-components
 export function renderGate(gate: Gate, x: number, onHover: GateProps['onHover'], onLeave: GateProps['onLeave']) {
   const props = { gate, x, onHover, onLeave };
   const name = gate.type.toUpperCase();

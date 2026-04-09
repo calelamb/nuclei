@@ -22,6 +22,7 @@ interface PluginManagerState {
   uninstallPlugin: (name: string) => void;
   togglePlugin: (name: string) => void;
   setPlugins: (plugins: InstalledPlugin[]) => void;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   registerExtension: (type: keyof PluginExtensions, ext: any) => void;
 }
 
@@ -29,7 +30,7 @@ export const usePluginStore = create<PluginManagerState>((set, get) => ({
   plugins: [],
   extensions: { panels: [], diracSkills: [], themes: [] },
 
-  installPlugin: (manifest, _source) => {
+  installPlugin: (manifest) => {
     const existing = get().plugins.find((p) => p.manifest.name === manifest.name);
     if (existing) return;
     set((s) => ({
@@ -62,6 +63,7 @@ export const usePluginStore = create<PluginManagerState>((set, get) => ({
 
 /** Create the sandboxed API for a specific plugin */
 export function createPluginAPI(manifest: PluginManifest): PluginAPI {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const hasPermission = (perm: string) => manifest.permissions.includes(perm as any);
 
   return {

@@ -48,10 +48,10 @@ oracle + diffuser cycle the marked state's amplitude reaches \`1\`
 
 | Target | Oracle Circuit |
 |--------|---------------|
-| \`\|11\u27E9\` | CZ(0, 1) |
-| \`\|01\u27E9\` | X(0), CZ(0, 1), X(0) |
-| \`\|10\u27E9\` | X(1), CZ(0, 1), X(1) |
-| \`\|00\u27E9\` | X(0), X(1), CZ(0, 1), X(1), X(0) |
+| \`|11\u27E9\` | CZ(0, 1) |
+| \`|01\u27E9\` | X(0), CZ(0, 1), X(0) |
+| \`|10\u27E9\` | X(1), CZ(0, 1), X(1) |
+| \`|00\u27E9\` | X(0), X(1), CZ(0, 1), X(1), X(0) |
 
 ### Your Task
 

@@ -38,6 +38,7 @@ export const webBridge: PlatformBridge = {
     // Use File System Access API if available, else fallback to <input>
     if ('showOpenFilePicker' in window) {
       try {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const [handle] = await (window as any).showOpenFilePicker({
           types: [{ description: 'Python Files', accept: { 'text/x-python': ['.py'] } }],
           multiple: false,
@@ -74,6 +75,7 @@ export const webBridge: PlatformBridge = {
   async saveFileAs(content: string, defaultPath?: string) {
     if ('showSaveFilePicker' in window) {
       try {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const handle = await (window as any).showSaveFilePicker({
           suggestedName: defaultPath ?? 'untitled.py',
           types: [{ description: 'Python Files', accept: { 'text/x-python': ['.py'] } }],

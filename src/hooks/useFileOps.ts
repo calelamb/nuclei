@@ -21,7 +21,7 @@ export function useFileOps() {
       const recents = (await platform.getStoredValue<string[]>(RECENT_FILES_KEY)) ?? [];
       const updated = [path, ...recents.filter((p) => p !== path)].slice(0, MAX_RECENT);
       await platform.setStoredValue(RECENT_FILES_KEY, updated);
-    } catch {}
+    } catch { /* non-critical recent files persistence */ }
   }, [platform]);
 
   const openFile = useCallback(async () => {
@@ -33,6 +33,14 @@ export function useFileOps() {
     await addRecent(result.path);
   }, [setCode, setFilePath, addRecent, platform]);
 
+  const saveFileAs = useCallback(async () => {
+    const result = await platform.saveFileAs(code, filePath ?? undefined);
+    if (!result) return;
+
+    setFilePath(result.path);
+    await addRecent(result.path);
+  }, [filePath, code, setFilePath, addRecent, platform]);
+
   const saveFile = useCallback(async () => {
     if (filePath) {
       await platform.saveFile(filePath, code);
@@ -41,15 +49,7 @@ export function useFileOps() {
     } else {
       await saveFileAs();
     }
-  }, [filePath, code, setFilePath, addRecent, platform]);
-
-  const saveFileAs = useCallback(async () => {
-    const result = await platform.saveFileAs(code, filePath ?? undefined);
-    if (!result) return;
-
-    setFilePath(result.path);
-    await addRecent(result.path);
-  }, [filePath, code, setFilePath, addRecent, platform]);
+  }, [filePath, code, setFilePath, addRecent, platform, saveFileAs]);
 
   const newFile = useCallback((templateCode?: string) => {
     setCode(templateCode ?? useEditorStore.getState().code);

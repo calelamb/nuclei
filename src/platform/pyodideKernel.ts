@@ -12,12 +12,14 @@
 type KernelMessage = { type: string; [key: string]: unknown };
 type MessageHandler = (msg: KernelMessage) => void;
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 let pyodideInstance: any = null;
 let loading = false;
 let ready = false;
 
 const PYODIDE_CDN = 'https://cdn.jsdelivr.net/pyodide/v0.27.0/full/pyodide.js';
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 async function loadPyodide(): Promise<any> {
   if (pyodideInstance) return pyodideInstance;
   if (loading) {
@@ -41,6 +43,7 @@ async function loadPyodide(): Promise<any> {
   });
 
   // Initialize Pyodide
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   pyodideInstance = await (window as any).loadPyodide();
 
   // Install quantum packages (micropip)
@@ -219,6 +222,7 @@ def _execute_circuit(code, shots):
 
 export class PyodideKernel {
   private onMessage: MessageHandler;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   private pyodide: any = null;
 
   constructor(onMessage: MessageHandler) {

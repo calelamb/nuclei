@@ -134,6 +134,7 @@ function BottomPanel({ collapsed, onToggle }: { collapsed: boolean; onToggle: ()
   const [activeTab, setActiveTab] = useState<'terminal' | 'histogram'>('terminal');
   const result = useSimulationStore((s) => s.result);
   const colors = useThemeStore((s) => s.colors);
+  // eslint-disable-next-line react-hooks/set-state-in-effect -- switches tab on new result
   useEffect(() => { if (result) setActiveTab('histogram'); }, [result]);
   return (
     <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
@@ -203,8 +204,8 @@ function StatusBar() {
   const statusText = isRunning ? 'Running...' : result ? `Done (${result.execution_time_ms}ms)` : 'Ready';
 
   const handleRun = () => { import('../../App').then(({ getExecute }) => { const e = getExecute(); if (e) e(); }); };
-  const handleCycleMode = useCallback(async () => { cycleMode(); try { await platform.setStoredValue('ui_mode', useUIModeStore.getState().mode); } catch {} }, [cycleMode, platform]);
-  const handleThemeToggle = useCallback(async () => { themeToggle(); try { await platform.setStoredValue('theme', themeMode === 'dark' ? 'light' : 'dark'); } catch {} }, [themeToggle, themeMode, platform]);
+  const handleCycleMode = useCallback(async () => { cycleMode(); try { await platform.setStoredValue('ui_mode', useUIModeStore.getState().mode); } catch { /* non-critical persistence */ } }, [cycleMode, platform]);
+  const handleThemeToggle = useCallback(async () => { themeToggle(); try { await platform.setStoredValue('theme', themeMode === 'dark' ? 'light' : 'dark'); } catch { /* non-critical persistence */ } }, [themeToggle, themeMode, platform]);
 
   return (
     <div style={{
@@ -302,6 +303,7 @@ export function PanelLayout() {
   const showSidebar = !isLearnMode && !isChallengeMode && activeView !== null;
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- expand bottom panel on new result
     if (uiMode === 'beginner' && result) setBottomCollapsed(false);
   }, [result, uiMode]);
 
@@ -313,7 +315,7 @@ export function PanelLayout() {
         const sw = await platform.getStoredValue<number>('layout_sidebarWidth');
         if (bh) setBottomHeight(bh);
         if (sw) setSidebarWidth(sw);
-      } catch {}
+      } catch { /* non-critical layout persistence */ }
     })();
   }, [platform]);
 
@@ -323,6 +325,7 @@ export function PanelLayout() {
     if (settingsSignal > 0) {
       if (isLearnMode) exitLearnMode();
       if (isChallengeMode) exitChallengeMode();
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- navigates in response to cross-component signal
       setActiveView('settings');
     }
   }, [settingsSignal, isLearnMode, isChallengeMode, exitLearnMode, exitChallengeMode]);
@@ -334,7 +337,7 @@ export function PanelLayout() {
       try {
         await platform.setStoredValue('layout_bottomHeight', bottomHeight);
         await platform.setStoredValue('layout_sidebarWidth', sidebarWidth);
-      } catch {}
+      } catch { /* non-critical layout persistence */ }
     }, 500);
   }, [bottomHeight, sidebarWidth, platform]);
 

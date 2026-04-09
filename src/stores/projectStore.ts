@@ -33,7 +33,7 @@ interface ProjectState {
   setFiles: (files: ProjectFile[]) => void;
 }
 
-export const useProjectStore = create<ProjectState>((set, _get) => ({
+export const useProjectStore = create<ProjectState>((set) => ({
   projectRoot: null,
   files: [],
   openTabs: [],

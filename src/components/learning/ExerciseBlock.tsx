@@ -45,6 +45,7 @@ export function ExerciseBlock({
   const [showDiracPrompt, setShowDiracPrompt] = useState(false);
 
   const wsRef = useRef<WebSocket | null>(null);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const pyodideRef = useRef<any>(null);
   const inactivityRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 

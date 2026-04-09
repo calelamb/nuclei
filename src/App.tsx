@@ -14,10 +14,12 @@ import type { PlatformBridge } from './platform/bridge';
 
 // Store execute function globally so Monaco keybinding can access it
 let executeRef: (() => void) | null = null;
+// eslint-disable-next-line react-refresh/only-export-components
 export function getExecute() { return executeRef; }
 
 // Store file ops globally for keyboard shortcuts
 let fileOpsRef: ReturnType<typeof useFileOps> | null = null;
+// eslint-disable-next-line react-refresh/only-export-components
 export function getFileOps() { return fileOpsRef; }
 
 function AppInner() {

@@ -43,8 +43,10 @@ export function PlatformProvider({ children, bridge }: { children: React.ReactNo
   );
 }
 
+// eslint-disable-next-line react-refresh/only-export-components
 export function usePlatform(): PlatformBridge {
   return useContext(PlatformContext);
 }
 
+// eslint-disable-next-line react-refresh/only-export-components
 export { isTauri, loadBridge };

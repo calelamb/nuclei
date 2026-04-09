@@ -73,6 +73,7 @@ class MockCommunityService implements CommunityService {
     return [...MOCK_CHALLENGES];
   }
 
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   async getLeaderboard(_challengeId: string): Promise<LeaderboardEntry[]> {
     await delay(50);
     return [...MOCK_LEADERBOARD];

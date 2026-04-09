@@ -26,7 +26,7 @@ qubit** (target):
 | Qubits | Role |
 |--------|------|
 | 0 to n\u22121 | Precision register \u2014 stores the binary representation of \u03C6 |
-| n | Eigenvector qubit \u2014 prepared in eigenstate \`\|1\u27E9\` |
+| n | Eigenvector qubit \u2014 prepared in eigenstate \`|1\u27E9\` |
 
 ### Algorithm Steps
 
@@ -52,9 +52,9 @@ qubit** (target):
 
 | Gate | Phase \u03C6 | Binary (3-bit) | Expected measurement |
 |------|---------|----------------|---------------------|
-| T | 1/8 | 0.001 | \`\|001\u27E9\` |
-| S | 1/4 | 0.010 | \`\|010\u27E9\` |
-| Z | 1/2 | 0.100 | \`\|100\u27E9\` |
+| T | 1/8 | 0.001 | \`|001\u27E9\` |
+| S | 1/4 | 0.010 | \`|010\u27E9\` |
+| Z | 1/2 | 0.100 | \`|100\u27E9\` |
 
 ### Gate Powers
 

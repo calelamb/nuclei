@@ -13,7 +13,9 @@ const MAX_HISTORY = 20;
 const CMDK_SYSTEM_PROMPT = `You are Dirac, a quantum computing expert. Rewrite the selected code according to the user's instruction. Return ONLY the replacement code, no explanation, no markdown backticks, no commentary. Preserve the user's coding style and variable names.`;
 
 interface InlineEditProps {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   editor: any;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   monaco: any;
   onClose: () => void;
 }
@@ -99,7 +101,7 @@ export function InlineEditWidget({ editor, monaco, onClose }: InlineEditProps) {
         setHistory(updated);
         platform.setStoredValue(HISTORY_KEY, updated).catch(() => {});
       }
-    } catch {}
+    } catch { /* API or network error — user sees no result */ }
     setLoading(false);
   }, [instruction, loading, selectedText, history, platform]);
 

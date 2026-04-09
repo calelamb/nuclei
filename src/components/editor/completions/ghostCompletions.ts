@@ -81,8 +81,10 @@ async function fetchCompletion(code: string, cursorOffset: number): Promise<stri
   }
 }
 
-export function registerGhostCompletions(monaco: any, _editor: any) {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export function registerGhostCompletions(monaco: any) {
   const provider = monaco.languages.registerInlineCompletionsProvider('python', {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     provideInlineCompletions: async (model: any, position: any, _context: any, token: any) => {
       // Don't trigger in comments or strings
       const lineContent = model.getLineContent(position.lineNumber);

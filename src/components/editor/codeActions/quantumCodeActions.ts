@@ -11,6 +11,7 @@ import type { CircuitSnapshot } from '../../../types/quantum';
 export interface CodeAction {
   title: string;
   kind: string;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   edit: { range: any; text: string } | null;
   // For API-based actions (framework conversion, complex optimization)
   requiresApi?: boolean;
@@ -96,9 +97,11 @@ export function analyzeCircuit(): CodeAction[] {
   ];
 }
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function registerCodeActionProvider(monaco: any) {
   return monaco.languages.registerCodeActionProvider('python', {
-    provideCodeActions(_model: any, _range: any, _context: any) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    provideCodeActions(_model: any) {
       const actions = analyzeCircuit();
       if (actions.length === 0) return { actions: [], dispose() {} };
 

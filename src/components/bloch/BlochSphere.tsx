@@ -285,12 +285,8 @@ export function BlochPanel() {
   const blochCoords = result?.bloch_coords ?? [];
   const qubitCount = blochCoords.length;
 
-  // Reset selection if qubit count changes
-  useEffect(() => {
-    if (selectedQubit >= qubitCount) {
-      setSelectedQubit(0);
-    }
-  }, [qubitCount, selectedQubit]);
+  // Clamp selection if qubit count shrinks
+  const displayQubit = qubitCount > 0 && selectedQubit >= qubitCount ? 0 : selectedQubit;
 
   if (!result || qubitCount === 0) {
     return (
@@ -314,8 +310,8 @@ export function BlochPanel() {
     );
   }
 
-  const currentCoord = blochCoords[selectedQubit] ?? null;
-  const stateDescription = currentCoord ? describeBlochState(currentCoord, selectedQubit) : 'No qubit state to display';
+  const currentCoord = blochCoords[displayQubit] ?? null;
+  const stateDescription = currentCoord ? describeBlochState(currentCoord, displayQubit) : 'No qubit state to display';
 
   return (
     <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }} role="region" aria-label="Bloch sphere visualization" aria-description={stateDescription}>
@@ -333,10 +329,10 @@ export function BlochPanel() {
               onClick={() => setSelectedQubit(i)}
               style={{
                 padding: '4px 12px',
-                background: selectedQubit === i ? '#0F1B2D' : 'transparent',
-                color: selectedQubit === i ? '#00B4D8' : '#3D5A80',
+                background: displayQubit === i ? '#0F1B2D' : 'transparent',
+                color: displayQubit === i ? '#00B4D8' : '#3D5A80',
                 border: 'none',
-                borderBottom: selectedQubit === i ? '2px solid #00B4D8' : '2px solid transparent',
+                borderBottom: displayQubit === i ? '2px solid #00B4D8' : '2px solid transparent',
                 cursor: 'pointer',
                 fontSize: 11,
                 fontFamily: 'Inter, sans-serif',
