@@ -1559,28 +1559,28 @@
         </p>
 
         <div class="dl-badges" id="dl-badges">
-          <a href="https://github.com/calelamb/nuclei/releases/latest/download/nuclei_0.1.0_aarch64.dmg" class="dl-badge dl-badge-primary" id="dl-primary">
+          <a href="https://github.com/calelamb/nuclei/releases/latest" class="dl-badge dl-badge-primary" id="dl-primary">
             <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
               <path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.8-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M13 3.5c.73-.83 1.94-1.46 2.94-1.5.13 1.17-.34 2.35-1.04 3.19-.69.85-1.83 1.51-2.95 1.42-.15-1.15.41-2.35 1.05-3.11z"/>
             </svg>
             <span id="dl-primary-text">macOS</span>
             <span class="dl-badge-arch" id="dl-primary-arch">Apple Silicon</span>
           </a>
-          <a href="https://github.com/calelamb/nuclei/releases/latest/download/nuclei_0.1.0_x64.dmg" class="dl-badge" id="dl-mac-intel">
+          <a href="https://github.com/calelamb/nuclei/releases/latest" class="dl-badge" id="dl-mac-intel">
             <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
               <path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.8-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M13 3.5c.73-.83 1.94-1.46 2.94-1.5.13 1.17-.34 2.35-1.04 3.19-.69.85-1.83 1.51-2.95 1.42-.15-1.15.41-2.35 1.05-3.11z"/>
             </svg>
             macOS
             <span class="dl-badge-arch">Intel</span>
           </a>
-          <a href="https://github.com/calelamb/nuclei/releases/latest/download/nuclei_0.1.0_x64-setup.exe" class="dl-badge">
+          <a href="https://github.com/calelamb/nuclei/releases/latest" class="dl-badge">
             <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
               <path d="M3 12V6.75l8-1.25V12H3zm0 .5h8v6.5l-8-1.25V12.5zM11.5 12V5.35l9.5-1.6V12H11.5zm0 .5H21v6.75l-9.5 1.5V12.5z"/>
             </svg>
             Windows
             <span class="dl-badge-arch">x64</span>
           </a>
-          <a href="https://github.com/calelamb/nuclei/releases/latest/download/nuclei_0.1.0_amd64.deb" class="dl-badge">
+          <a href="https://github.com/calelamb/nuclei/releases/latest" class="dl-badge">
             <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
               <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 14H9v-2h2v2zm0-4H9V7h2v5zm4 4h-2v-2h2v2zm0-4h-2V7h2v5z"/>
             </svg>
@@ -1699,12 +1699,12 @@
         // Windows detected
         if (heroDlBtn && heroDlText) {
           heroDlText.textContent = 'Download for Windows';
-          heroDlBtn.href = 'https://github.com/calelamb/nuclei/releases/latest/download/nuclei_0.1.0_x64-setup.exe';
+          heroDlBtn.href = 'https://github.com/calelamb/nuclei/releases/latest';
         }
         if (dlPrimary && dlPrimaryText && dlPrimaryArch) {
           dlPrimaryText.textContent = 'Windows';
           dlPrimaryArch.textContent = 'x64';
-          dlPrimary.href = 'https://github.com/calelamb/nuclei/releases/latest/download/nuclei_0.1.0_x64-setup.exe';
+          dlPrimary.href = 'https://github.com/calelamb/nuclei/releases/latest';
           // Replace Apple icon with Windows icon
           dlPrimary.querySelector('svg').innerHTML = '<path d="M3 12V6.75l8-1.25V12H3zm0 .5h8v6.5l-8-1.25V12.5zM11.5 12V5.35l9.5-1.6V12H11.5zm0 .5H21v6.75l-9.5 1.5V12.5z"/>';
         }
@@ -1712,12 +1712,12 @@
         // Linux detected
         if (heroDlBtn && heroDlText) {
           heroDlText.textContent = 'Download for Linux';
-          heroDlBtn.href = 'https://github.com/calelamb/nuclei/releases/latest/download/nuclei_0.1.0_amd64.deb';
+          heroDlBtn.href = 'https://github.com/calelamb/nuclei/releases/latest';
         }
         if (dlPrimary && dlPrimaryText && dlPrimaryArch) {
           dlPrimaryText.textContent = 'Linux';
           dlPrimaryArch.textContent = '.deb';
-          dlPrimary.href = 'https://github.com/calelamb/nuclei/releases/latest/download/nuclei_0.1.0_amd64.deb';
+          dlPrimary.href = 'https://github.com/calelamb/nuclei/releases/latest';
           dlPrimary.querySelector('svg').innerHTML = '<path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 14H9v-2h2v2zm0-4H9V7h2v5zm4 4h-2v-2h2v2zm0-4h-2V7h2v5z"/>';
         }
       }
