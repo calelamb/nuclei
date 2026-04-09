@@ -68,12 +68,17 @@ pub fn start_kernel(
     };
 
     let kernel_script = project_root.join("kernel").join("server.py");
-    if !kernel_script.exists() {
-        return Err(format!(
+    let kernel_script = kernel_script.canonicalize().map_err(|_| {
+        format!(
             "Kernel script not found at: {}. Project root: {}",
             kernel_script.display(),
             project_root.display()
-        ));
+        )
+    })?;
+
+    // Verify the kernel script is within the expected project directory
+    if !kernel_script.starts_with(&project_root) {
+        return Err("Kernel script path resolved outside project directory".to_string());
     }
 
     log::info!("Starting kernel: python3 {} (cwd: {})", kernel_script.display(), project_root.display());

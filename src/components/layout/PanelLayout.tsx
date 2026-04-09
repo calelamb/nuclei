@@ -18,6 +18,7 @@ import { useExerciseStore } from '../../stores/exerciseStore';
 import { useUIModeStore } from '../../stores/uiModeStore';
 import { useLearnStore } from '../../stores/learnStore';
 import { useChallengeModeStore } from '../../stores/challengeModeStore';
+import { useNavigationStore } from '../../stores/navigationStore';
 import { LearnModeView } from '../learning/LearnModeView';
 import { ChallengeModeView } from '../challenges/ChallengeModeView';
 import { ChevronDown, ChevronUp, Play, Sun, Moon, X, Circle } from 'lucide-react';
@@ -187,7 +188,6 @@ function StatusBar() {
   const snapshot = useCircuitStore((s) => s.snapshot);
   const isRunning = useSimulationStore((s) => s.isRunning);
   const result = useSimulationStore((s) => s.result);
-  const isDirty = useEditorStore((s) => s.isDirty);
   const connected = useEditorStore((s) => s.kernelConnected);
   const colors = useThemeStore((s) => s.colors);
   const shadow = useThemeStore((s) => s.shadow);
@@ -316,6 +316,16 @@ export function PanelLayout() {
       } catch {}
     })();
   }, [platform]);
+
+  // Listen for cross-component navigation to Settings
+  const settingsSignal = useNavigationStore((s) => s.settingsSignal);
+  useEffect(() => {
+    if (settingsSignal > 0) {
+      if (isLearnMode) exitLearnMode();
+      if (isChallengeMode) exitChallengeMode();
+      setActiveView('settings');
+    }
+  }, [settingsSignal, isLearnMode, isChallengeMode, exitLearnMode, exitChallengeMode]);
 
   const persistTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => {

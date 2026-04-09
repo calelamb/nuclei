@@ -415,7 +415,7 @@ One qubit has 2 possible outcomes: |0⟩ and |1⟩. Two qubits have 4: |00⟩, |
       },
       {
         type: 'video',
-        youtubeId: 'placeholder',
+        youtubeId: 'tsbCSkvHhMo',
         title: 'Multi-qubit States',
         creator: 'IBM Qiskit',
       },
@@ -654,7 +654,7 @@ When qubit states have the right phases, they can **interfere** — constructive
       },
       {
         type: 'video',
-        youtubeId: 'placeholder',
+        youtubeId: '7B1llCosOgE',
         title: 'Quantum Interference',
         creator: 'IBM Qiskit',
       },
@@ -743,7 +743,7 @@ It answers a question in **ONE query** that would take a classical computer up t
       },
       {
         type: 'video',
-        youtubeId: 'placeholder',
+        youtubeId: 'F_Riqjdh2oM',
         title: 'Deutsch-Jozsa Algorithm',
         creator: 'IBM Qiskit',
       },

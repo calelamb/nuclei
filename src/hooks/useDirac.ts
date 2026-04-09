@@ -1,4 +1,4 @@
-import { useEffect, useCallback } from 'react';
+import { useCallback } from 'react';
 import { useDiracStore } from '../stores/diracStore';
 import type { ToolCall } from '../stores/diracStore';
 import { useEditorStore } from '../stores/editorStore';
@@ -14,7 +14,7 @@ import { useStudentStore, studentModelToPrompt } from '../stores/studentStore';
 import { useHardwareStore } from '../stores/hardwareStore';
 import { useCapstoneStore } from '../stores/capstoneStore';
 import { useChallengeStore } from '../stores/challengeStore';
-import { DIRAC_API_KEY, DIRAC_API_URL, HAIKU_MODEL, SONNET_MODEL } from '../config/dirac';
+import { DIRAC_API_URL, HAIKU_MODEL, SONNET_MODEL } from '../config/dirac';
 
 const SYSTEM_PROMPT = `You are Dirac, an AI teaching assistant for quantum computing, named after physicist Paul Dirac. You live inside Nuclei, a quantum computing IDE.
 
@@ -462,16 +462,12 @@ function executeToolById(toolId: string, accepted: boolean) {
 export function useDirac() {
   const { addMessage, updateLastAssistant, updateLastThinking, updateLastToolCalls, setLoading } = useDiracStore();
 
-  // Initialize API key from config on mount
-  useEffect(() => {
-    if (DIRAC_API_KEY && DIRAC_API_KEY !== 'sk-ant-api03-PLACEHOLDER_KEY') {
-      useDiracStore.getState().setApiKey(DIRAC_API_KEY);
-    }
-  }, []);
+  // API key is now initialized in diracStore (from localStorage / env).
+  // No mount-time override needed.
 
   const sendMessage = useCallback(async (userText: string) => {
-    const apiKey = useDiracStore.getState().apiKey || DIRAC_API_KEY;
-    if (!apiKey || apiKey === 'sk-ant-api03-PLACEHOLDER_KEY') return;
+    const apiKey = useDiracStore.getState().apiKey;
+    if (!apiKey || apiKey.trim() === '') return;
 
     addMessage({ role: 'user', content: userText });
     setLoading(true);
@@ -480,8 +476,6 @@ export function useDirac() {
     const useTools = shouldUseTools(userText);
     const useReasoning = shouldUseReasoning(userText);
     const model = useReasoning ? SONNET_MODEL : selectModel(userText, useTools);
-    const cleanText = userText.replace(/^\/think\s*/i, '').replace(/^\/explain\s*/i, '').replace(/^\/fix\s*/i, '');
-
     // Build API messages
     const storeMessages = useDiracStore.getState().messages;
     const apiMessages: Array<{ role: string; content: unknown }> = [];

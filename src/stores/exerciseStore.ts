@@ -21,6 +21,27 @@ export interface ExerciseProgress {
   completedAt?: string;
 }
 
+const STORAGE_KEY = 'nuclei-exercises';
+
+function loadPersistedProgress(): ExerciseProgress[] {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (raw) {
+      const data = JSON.parse(raw);
+      if (Array.isArray(data)) return data;
+    }
+  } catch {
+    // ignore
+  }
+  return [];
+}
+
+function persistProgress(progress: ExerciseProgress[]) {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(progress));
+  } catch { /* noop */ }
+}
+
 interface ExerciseState {
   activeExercise: Exercise | null;
   currentHintIndex: number;
@@ -37,7 +58,7 @@ interface ExerciseState {
 export const useExerciseStore = create<ExerciseState>((set, get) => ({
   activeExercise: null,
   currentHintIndex: -1,
-  progress: [],
+  progress: loadPersistedProgress(),
 
   startExercise: (exercise) => set({ activeExercise: exercise, currentHintIndex: -1 }),
   endExercise: () => set({ activeExercise: null, currentHintIndex: -1 }),
@@ -46,31 +67,40 @@ export const useExerciseStore = create<ExerciseState>((set, get) => ({
     const maxIdx = s.activeExercise.hints.length - 1;
     return { currentHintIndex: Math.min(s.currentHintIndex + 1, maxIdx) };
   }),
-  markCompleted: (exerciseId) => set((s) => {
-    const existing = s.progress.find((p) => p.exerciseId === exerciseId);
-    if (existing) {
+  markCompleted: (exerciseId) => {
+    set((s) => {
+      const existing = s.progress.find((p) => p.exerciseId === exerciseId);
+      if (existing) {
+        return {
+          progress: s.progress.map((p) =>
+            p.exerciseId === exerciseId ? { ...p, completed: true, completedAt: new Date().toISOString() } : p
+          ),
+        };
+      }
       return {
-        progress: s.progress.map((p) =>
-          p.exerciseId === exerciseId ? { ...p, completed: true, completedAt: new Date().toISOString() } : p
-        ),
+        progress: [...s.progress, { exerciseId, completed: true, attempts: 1, completedAt: new Date().toISOString() }],
       };
-    }
-    return {
-      progress: [...s.progress, { exerciseId, completed: true, attempts: 1, completedAt: new Date().toISOString() }],
-    };
-  }),
-  incrementAttempts: (exerciseId) => set((s) => {
-    const existing = s.progress.find((p) => p.exerciseId === exerciseId);
-    if (existing) {
+    });
+    persistProgress(get().progress);
+  },
+  incrementAttempts: (exerciseId) => {
+    set((s) => {
+      const existing = s.progress.find((p) => p.exerciseId === exerciseId);
+      if (existing) {
+        return {
+          progress: s.progress.map((p) =>
+            p.exerciseId === exerciseId ? { ...p, attempts: p.attempts + 1 } : p
+          ),
+        };
+      }
       return {
-        progress: s.progress.map((p) =>
-          p.exerciseId === exerciseId ? { ...p, attempts: p.attempts + 1 } : p
-        ),
+        progress: [...s.progress, { exerciseId, completed: false, attempts: 1 }],
       };
-    }
-    return {
-      progress: [...s.progress, { exerciseId, completed: false, attempts: 1 }],
-    };
-  }),
-  setProgress: (progress) => set({ progress }),
+    });
+    persistProgress(get().progress);
+  },
+  setProgress: (progress) => {
+    set({ progress });
+    persistProgress(progress);
+  },
 }));

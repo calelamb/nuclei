@@ -178,7 +178,7 @@ export function ProbabilityHistogram() {
               }}
               labelStyle={{ color: '#E0E0E0' }}
               itemStyle={{ color: '#00B4D8' }}
-              formatter={(value: number) => [value.toFixed(4), 'Probability']}
+              formatter={(value) => [typeof value === 'number' ? value.toFixed(4) : String(value ?? ''), 'Probability']}
             />
             <Bar dataKey="probability" radius={[4, 4, 0, 0]}>
               {data.map((_, index) => (

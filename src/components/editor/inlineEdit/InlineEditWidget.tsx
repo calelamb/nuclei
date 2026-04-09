@@ -53,7 +53,12 @@ export function InlineEditWidget({ editor, monaco, onClose }: InlineEditProps) {
     setLoading(true);
 
     const apiKey = useDiracStore.getState().apiKey;
-    if (!apiKey) { setLoading(false); return; }
+    if (!apiKey || apiKey.trim() === '') {
+      setDiffResult(null);
+      setLoading(false);
+      setInstruction('Set up your API key in Settings to use AI features');
+      return;
+    }
 
     const fullCode = useEditorStore.getState().code;
     const framework = useEditorStore.getState().framework;

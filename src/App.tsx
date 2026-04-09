@@ -1,12 +1,13 @@
 import { useEffect, useState, useCallback } from 'react';
 import { PanelLayout } from './components/layout/PanelLayout';
-import { PlatformProvider, usePlatform, loadBridge, isTauri } from './platform/PlatformProvider';
+import { PlatformProvider, usePlatform, loadBridge } from './platform/PlatformProvider';
 import { Onboarding } from './components/onboarding/Onboarding';
 import { KeyboardShortcuts } from './components/onboarding/KeyboardShortcuts';
 import { CommandPalette, buildCommands } from './components/commandPalette/CommandPalette';
 import { useKernel } from './hooks/useKernel';
 import { useFileOps } from './hooks/useFileOps';
 import { useThemeStore } from './stores/themeStore';
+import { useEditorStore } from './stores/editorStore';
 import { useUIModeStore } from './stores/uiModeStore';
 import { useDiracPanelStore } from './stores/diracPanelStore';
 import type { PlatformBridge } from './platform/bridge';
@@ -30,6 +31,7 @@ function AppInner() {
   const [lastOpenedFile, setLastOpenedFile] = useState<string | undefined>();
   const [daysSinceLastSession, setDaysSinceLastSession] = useState<number | undefined>();
   const themeToggle = useThemeStore((s) => s.toggle);
+  const isDirty = useEditorStore((s) => s.isDirty);
   const cycleMode = useUIModeStore((s) => s.cycleMode);
   const toggleDirac = useDiracPanelStore((s) => s.toggle);
   const focusDirac = useDiracPanelStore((s) => s.focusInput);
@@ -42,6 +44,17 @@ function AppInner() {
   useEffect(() => {
     fileOpsRef = fileOps;
   }, [fileOps]);
+
+  // Warn before closing with unsaved changes
+  useEffect(() => {
+    const handler = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+    };
+    if (isDirty) {
+      window.addEventListener('beforeunload', handler);
+    }
+    return () => window.removeEventListener('beforeunload', handler);
+  }, [isDirty]);
 
   // Load persisted theme + UI mode + check onboarding
   useEffect(() => {
@@ -74,7 +87,9 @@ function AppInner() {
 
         // Record this session
         await platform.setStoredValue('last_session_date', new Date().toISOString());
-      } catch {}
+      } catch {
+        // Non-critical: theme/preferences persistence failure is safe to ignore
+      }
     })();
   }, [platform]);
 
@@ -88,7 +103,9 @@ function AppInner() {
         else if (path === 'intermediate') useUIModeStore.getState().setMode('intermediate');
         else if (path === 'experienced') useUIModeStore.getState().setMode('advanced');
       }
-    } catch {}
+    } catch {
+      // Non-critical: onboarding state persistence failure is safe to ignore
+    }
   }, [platform]);
 
   const commands = buildCommands({
@@ -96,10 +113,14 @@ function AppInner() {
     openFile: () => fileOps.openFile(),
     saveFile: () => fileOps.saveFile(),
     newFile: () => fileOps.newFile(),
-    toggleTheme: themeToggle,
+    toggleTheme: () => {
+      themeToggle();
+      platform.setStoredValue('theme', useThemeStore.getState().mode).catch(() => {});
+    },
     toggleDirac,
     cycleMode: () => {
       cycleMode();
+      // Non-critical: UI mode persistence failure does not affect current session
       platform.setStoredValue('ui_mode', useUIModeStore.getState().mode).catch(() => {});
     },
     toggleShortcuts: () => setShowShortcuts((s) => !s),
@@ -132,10 +153,12 @@ function AppInner() {
       } else if (e.key === 'l' && e.shiftKey) {
         e.preventDefault();
         cycleMode();
+        // Non-critical: UI mode persistence failure does not affect current session
         platform.setStoredValue('ui_mode', useUIModeStore.getState().mode).catch(() => {});
       } else if (e.key === 't' && e.shiftKey) {
         e.preventDefault();
         themeToggle();
+        platform.setStoredValue('theme', useThemeStore.getState().mode).catch(() => {});
       } else if (e.key === 'd' && !e.shiftKey) {
         e.preventDefault();
         toggleDirac();

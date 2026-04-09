@@ -6,7 +6,7 @@
  */
 
 import { useCircuitStore } from '../../../stores/circuitStore';
-import type { CircuitSnapshot, Gate } from '../../../types/quantum';
+import type { CircuitSnapshot } from '../../../types/quantum';
 
 export interface CodeAction {
   title: string;

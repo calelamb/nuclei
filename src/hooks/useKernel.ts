@@ -163,6 +163,9 @@ export function useKernel() {
   }, [isWeb]);
 
   const execute = useCallback(() => {
+    const { isRunning } = useSimulationStore.getState();
+    if (isRunning) return;
+
     const { code } = useEditorStore.getState();
     const { shots } = useSimulationStore.getState();
 

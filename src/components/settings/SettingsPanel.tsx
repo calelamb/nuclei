@@ -1,9 +1,10 @@
 import { useState, type CSSProperties, type ReactNode } from 'react';
-import { ChevronDown, ChevronRight, RotateCcw, Sun, Moon } from 'lucide-react';
+import { ChevronDown, ChevronRight, RotateCcw, Sun, Moon, Eye, EyeOff, ExternalLink } from 'lucide-react';
 import { useThemeStore } from '../../stores/themeStore';
 import { useUIModeStore, type UIMode } from '../../stores/uiModeStore';
 import { useSettingsStore } from '../../stores/settingsStore';
 import { useSimulationStore } from '../../stores/simulationStore';
+import { useDiracStore } from '../../stores/diracStore';
 
 /* ── Toggle Switch ──────────────────────────────────────── */
 
@@ -149,6 +150,115 @@ function Section({ title, defaultOpen = false, children }: {
   );
 }
 
+/* ── API Key Input ─────────────────────────────────────── */
+
+function ApiKeyInput() {
+  const colors = useThemeStore((s) => s.colors);
+  const currentKey = useDiracStore((s) => s.apiKey);
+  const [keyValue, setKeyValue] = useState(currentKey ?? '');
+  const [visible, setVisible] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const [error, setError] = useState('');
+
+  const validate = (key: string): string => {
+    if (key.trim() === '') return '';
+    if (!key.startsWith('sk-ant-')) return 'Key should start with "sk-ant-"';
+    return '';
+  };
+
+  const handleSave = () => {
+    const trimmed = keyValue.trim();
+    const validationError = validate(trimmed);
+    if (validationError) {
+      setError(validationError);
+      return;
+    }
+    setError('');
+    useDiracStore.getState().setApiKey(trimmed || null);
+    setSaved(true);
+    setTimeout(() => setSaved(false), 2000);
+  };
+
+  const handleChange = (value: string) => {
+    setKeyValue(value);
+    setSaved(false);
+    if (error) setError(validate(value.trim()));
+  };
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+        <div style={{
+          flex: 1, display: 'flex', alignItems: 'center',
+          background: colors.bgElevated,
+          border: `1px solid ${error ? colors.error : colors.border}`,
+          borderRadius: 4, overflow: 'hidden',
+        }}>
+          <input
+            type={visible ? 'text' : 'password'}
+            value={keyValue}
+            onChange={(e) => handleChange(e.target.value)}
+            placeholder="sk-ant-..."
+            style={{
+              flex: 1, padding: '5px 8px', fontSize: 11,
+              fontFamily: "'JetBrains Mono', monospace",
+              background: 'transparent', border: 'none', outline: 'none',
+              color: colors.text,
+            }}
+          />
+          <button
+            onClick={() => setVisible(!visible)}
+            style={{
+              background: 'transparent', border: 'none', cursor: 'pointer',
+              color: colors.textDim, padding: '2px 6px', display: 'flex',
+              alignItems: 'center', flexShrink: 0,
+            }}
+            aria-label={visible ? 'Hide API key' : 'Show API key'}
+          >
+            {visible ? <EyeOff size={12} /> : <Eye size={12} />}
+          </button>
+        </div>
+        <button
+          onClick={handleSave}
+          style={{
+            padding: '4px 10px', fontSize: 11, fontWeight: 500,
+            fontFamily: "'Geist Sans', sans-serif",
+            background: saved ? colors.success : colors.accent,
+            color: '#fff', border: 'none', borderRadius: 4,
+            cursor: 'pointer', flexShrink: 0, whiteSpace: 'nowrap',
+            transition: 'background 150ms ease',
+          }}
+        >
+          {saved ? 'Saved' : 'Save'}
+        </button>
+      </div>
+      {error && (
+        <span style={{ fontSize: 10, color: colors.error, fontFamily: "'Geist Sans', sans-serif" }}>
+          {error}
+        </span>
+      )}
+      <a
+        href="https://console.anthropic.com/"
+        target="_blank"
+        rel="noopener noreferrer"
+        style={{
+          display: 'inline-flex', alignItems: 'center', gap: 4,
+          fontSize: 10, color: colors.accent, textDecoration: 'none',
+          fontFamily: "'Geist Sans', sans-serif",
+        }}
+      >
+        Get an API key <ExternalLink size={9} />
+      </a>
+      <span style={{
+        fontSize: 10, color: colors.textDim, lineHeight: 1.4,
+        fontFamily: "'Geist Sans', sans-serif",
+      }}>
+        Your key is stored locally and never leaves your machine.
+      </span>
+    </div>
+  );
+}
+
 /* ── Main Panel ─────────────────────────────────────────── */
 
 export function SettingsPanel() {
@@ -240,6 +350,16 @@ export function SettingsPanel() {
 
         {/* ── Dirac AI ── */}
         <Section title="Dirac AI">
+          <div style={{ marginBottom: 8 }}>
+            <span style={{
+              fontSize: 11, color: colors.textMuted,
+              fontFamily: "'Geist Sans', sans-serif", display: 'block',
+              marginBottom: 4,
+            }}>
+              API Key
+            </span>
+            <ApiKeyInput />
+          </div>
           <SettingRow label="Ghost Completions">
             <Toggle value={dirac.ghostCompletions}
               onChange={(v) => updateDirac({ ghostCompletions: v })} />

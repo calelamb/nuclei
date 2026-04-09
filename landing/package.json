@@ -1,0 +1,10 @@
+{
+  "name": "nuclei-landing",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Landing page for Nuclei — the IDE for learning quantum computing",
+  "scripts": {
+    "start": "npx serve .",
+    "build": "echo 'Static site — no build step required'"
+  }
+}

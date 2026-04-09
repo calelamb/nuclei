@@ -1,5 +1,5 @@
 // Nuclei Service Worker — caches the app shell for offline support
-const CACHE_NAME = 'nuclei-v1';
+const CACHE_NAME = 'nuclei-v0.1.0';
 const SHELL_URLS = ['/', '/index.html'];
 
 self.addEventListener('install', (event) => {

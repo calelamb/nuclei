@@ -77,6 +77,9 @@ const PROVIDER_LABELS: Record<HardwareProviderType, string> = {
   simulator: 'Local Simulator',
 };
 
+// Providers whose kernel adapters are stubs (raise NotImplementedError)
+const STUB_PROVIDERS: ReadonlySet<HardwareProviderType> = new Set(['google', 'ionq']);
+
 /* ── Mock backends for demo ── */
 
 const MOCK_BACKENDS: BackendInfo[] = [
@@ -214,7 +217,20 @@ export function HardwarePanel() {
                 </span>
               </div>
 
-              {!p.connected && p.name !== 'simulator' && (
+              {!p.connected && p.name !== 'simulator' && STUB_PROVIDERS.has(p.name) && (
+                <span
+                  style={{
+                    fontSize: 9,
+                    color: colors.textDim,
+                    fontStyle: 'italic',
+                    ...font,
+                  }}
+                >
+                  Coming Soon
+                </span>
+              )}
+
+              {!p.connected && p.name !== 'simulator' && !STUB_PROVIDERS.has(p.name) && (
                 <button
                   onClick={() => setShowCredentialSetup(p.name)}
                   style={{

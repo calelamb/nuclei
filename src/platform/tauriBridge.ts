@@ -9,7 +9,7 @@ let storeInstance: Awaited<ReturnType<typeof load>> | null = null;
 
 async function getStore() {
   if (!storeInstance) {
-    storeInstance = await load('settings.json', { autoSave: true });
+    storeInstance = await load('settings.json', { autoSave: true, defaults: {} });
   }
   return storeInstance;
 }

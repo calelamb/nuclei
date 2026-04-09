@@ -10,6 +10,20 @@ from kernel.models.snapshot import CircuitSnapshot, SimulationResult
 
 ADAPTERS = [QiskitAdapter(), CirqAdapter(), CudaqAdapter()]
 
+EXECUTION_TIMEOUT_SECONDS = 30
+
+_HAS_SIGNAL_ALARM = hasattr(__import__("signal"), "SIGALRM")
+
+
+class ExecutionTimeout(Exception):
+    pass
+
+
+def _timeout_handler(signum, frame):
+    raise ExecutionTimeout(
+        f"Code execution timed out after {EXECUTION_TIMEOUT_SECONDS} seconds"
+    )
+
 
 class Executor:
     def __init__(self):
@@ -23,6 +37,8 @@ class Executor:
 
     def _run_code(self, code: str) -> tuple[str, str | None]:
         """Execute code and return (stdout, error_traceback_or_none)."""
+        import signal
+
         stdout_capture = io.StringIO()
         stderr_capture = io.StringIO()
 
@@ -30,9 +46,21 @@ class Executor:
         self._namespace = {"__builtins__": __builtins__}
 
         try:
-            with contextlib.redirect_stdout(stdout_capture), contextlib.redirect_stderr(stderr_capture):
-                exec(code, self._namespace)
+            # Set up timeout on Unix (macOS/Linux). signal.SIGALRM is not
+            # available on Windows, so the timeout is skipped there.
+            if _HAS_SIGNAL_ALARM:
+                old_handler = signal.signal(signal.SIGALRM, _timeout_handler)
+                signal.alarm(EXECUTION_TIMEOUT_SECONDS)
+            try:
+                with contextlib.redirect_stdout(stdout_capture), contextlib.redirect_stderr(stderr_capture):
+                    exec(code, self._namespace)
+            finally:
+                if _HAS_SIGNAL_ALARM:
+                    signal.alarm(0)
+                    signal.signal(signal.SIGALRM, old_handler)
             return stdout_capture.getvalue(), None
+        except ExecutionTimeout as e:
+            return stdout_capture.getvalue(), str(e)
         except Exception:
             tb = traceback.format_exc()
             return stdout_capture.getvalue(), tb

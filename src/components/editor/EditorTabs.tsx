@@ -5,7 +5,6 @@ import { X, FileCode } from 'lucide-react';
 export function EditorTabs() {
   const filePath = useEditorStore((s) => s.filePath);
   const isDirty = useEditorStore((s) => s.isDirty);
-  const framework = useEditorStore((s) => s.framework);
   const colors = useThemeStore((s) => s.colors);
 
   const fileName = filePath

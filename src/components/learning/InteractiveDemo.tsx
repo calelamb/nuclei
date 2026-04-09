@@ -1,6 +1,6 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 import Editor from '@monaco-editor/react';
-import { useThemeStore } from '../../stores/themeStore';
+import { useThemeStore, type ThemeColors } from '../../stores/themeStore';
 import { useLearnStore } from '../../stores/learnStore';
 import { useEditorStore } from '../../stores/editorStore';
 import { usePlatform } from '../../platform/PlatformProvider';
@@ -18,7 +18,7 @@ interface InteractiveDemoProps {
 function ProbabilityBars({ probabilities, accent, colors }: {
   probabilities: Record<string, number>;
   accent: string;
-  colors: Record<string, string>;
+  colors: ThemeColors;
 }) {
   const entries = Object.entries(probabilities)
     .filter(([, p]) => p > 0.001)

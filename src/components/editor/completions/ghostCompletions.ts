@@ -46,7 +46,7 @@ function buildCompletionContext(code: string, cursorOffset: number): string {
 
 async function fetchCompletion(code: string, cursorOffset: number): Promise<string | null> {
   const apiKey = useDiracStore.getState().apiKey;
-  if (!apiKey) return null;
+  if (!apiKey || apiKey.trim() === '') return null;
 
   // Cancel previous request
   if (abortController) abortController.abort();
@@ -81,7 +81,7 @@ async function fetchCompletion(code: string, cursorOffset: number): Promise<stri
   }
 }
 
-export function registerGhostCompletions(monaco: any, editor: any) {
+export function registerGhostCompletions(monaco: any, _editor: any) {
   const provider = monaco.languages.registerInlineCompletionsProvider('python', {
     provideInlineCompletions: async (model: any, position: any, _context: any, token: any) => {
       // Don't trigger in comments or strings

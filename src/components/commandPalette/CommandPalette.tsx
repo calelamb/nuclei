@@ -1,6 +1,5 @@
 import { useState, useRef, useEffect, useMemo } from 'react';
 import { useThemeStore } from '../../stores/themeStore';
-import { useUIModeStore } from '../../stores/uiModeStore';
 import { EASING, DURATION, getDuration, prefersReducedMotion } from '../../lib/animations';
 
 export interface Command {

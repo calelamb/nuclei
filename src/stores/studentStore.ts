@@ -23,6 +23,8 @@ export interface StudentModel {
   lastSession: string;
 }
 
+const STORAGE_KEY = 'nuclei-student';
+
 function defaultModel(): StudentModel {
   return {
     skillLevel: 'beginner',
@@ -43,6 +45,25 @@ function defaultModel(): StudentModel {
   };
 }
 
+function loadPersistedModel(): StudentModel {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (raw) {
+      const data = JSON.parse(raw);
+      return { ...defaultModel(), ...data };
+    }
+  } catch {
+    // ignore
+  }
+  return defaultModel();
+}
+
+function persistModel(model: StudentModel) {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(model));
+  } catch { /* noop */ }
+}
+
 interface StudentState {
   model: StudentModel;
   updateModel: (partial: Partial<StudentModel>) => void;
@@ -56,65 +77,91 @@ interface StudentState {
 }
 
 export const useStudentStore = create<StudentState>((set, get) => ({
-  model: defaultModel(),
+  model: loadPersistedModel(),
 
-  updateModel: (partial) => set((s) => ({ model: { ...s.model, ...partial } })),
+  updateModel: (partial) => {
+    set((s) => ({ model: { ...s.model, ...partial } }));
+    persistModel(get().model);
+  },
 
-  recordExecution: (gateCount) => set((s) => {
-    const m = s.model;
-    const avg = m.totalCodeExecutions > 0
-      ? (m.codingStyle.averageCircuitSize * m.totalCodeExecutions + gateCount) / (m.totalCodeExecutions + 1)
-      : gateCount;
-    return {
-      model: {
-        ...m,
-        totalCodeExecutions: m.totalCodeExecutions + 1,
-        lastSession: new Date().toISOString(),
-        codingStyle: { ...m.codingStyle, averageCircuitSize: Math.round(avg) },
-      },
-    };
-  }),
+  recordExecution: (gateCount) => {
+    set((s) => {
+      const m = s.model;
+      const avg = m.totalCodeExecutions > 0
+        ? (m.codingStyle.averageCircuitSize * m.totalCodeExecutions + gateCount) / (m.totalCodeExecutions + 1)
+        : gateCount;
+      return {
+        model: {
+          ...m,
+          totalCodeExecutions: m.totalCodeExecutions + 1,
+          lastSession: new Date().toISOString(),
+          codingStyle: { ...m.codingStyle, averageCircuitSize: Math.round(avg) },
+        },
+      };
+    });
+    persistModel(get().model);
+  },
 
-  recordError: (errorType) => set((s) => {
-    const m = s.model;
-    const existing = m.commonErrors.find((e) => e.errorType === errorType);
-    const errors = existing
-      ? m.commonErrors.map((e) => e.errorType === errorType ? { ...e, frequency: e.frequency + 1, lastOccurred: new Date().toISOString() } : e)
-      : [...m.commonErrors, { errorType, frequency: 1, lastOccurred: new Date().toISOString() }];
-    return { model: { ...m, commonErrors: errors } };
-  }),
+  recordError: (errorType) => {
+    set((s) => {
+      const m = s.model;
+      const existing = m.commonErrors.find((e) => e.errorType === errorType);
+      const errors = existing
+        ? m.commonErrors.map((e) => e.errorType === errorType ? { ...e, frequency: e.frequency + 1, lastOccurred: new Date().toISOString() } : e)
+        : [...m.commonErrors, { errorType, frequency: 1, lastOccurred: new Date().toISOString() }];
+      return { model: { ...m, commonErrors: errors } };
+    });
+    persistModel(get().model);
+  },
 
-  recordConceptMastered: (concept) => set((s) => {
-    const m = s.model;
-    if (m.conceptsMastered.includes(concept)) return s;
-    return {
-      model: {
-        ...m,
-        conceptsMastered: [...m.conceptsMastered, concept],
-        conceptsStruggling: m.conceptsStruggling.filter((c) => c !== concept),
-      },
-    };
-  }),
+  recordConceptMastered: (concept) => {
+    set((s) => {
+      const m = s.model;
+      if (m.conceptsMastered.includes(concept)) return s;
+      return {
+        model: {
+          ...m,
+          conceptsMastered: [...m.conceptsMastered, concept],
+          conceptsStruggling: m.conceptsStruggling.filter((c) => c !== concept),
+        },
+      };
+    });
+    persistModel(get().model);
+  },
 
-  recordConceptStruggling: (concept) => set((s) => {
-    const m = s.model;
-    if (m.conceptsStruggling.includes(concept) || m.conceptsMastered.includes(concept)) return s;
-    return { model: { ...m, conceptsStruggling: [...m.conceptsStruggling, concept] } };
-  }),
+  recordConceptStruggling: (concept) => {
+    set((s) => {
+      const m = s.model;
+      if (m.conceptsStruggling.includes(concept) || m.conceptsMastered.includes(concept)) return s;
+      return { model: { ...m, conceptsStruggling: [...m.conceptsStruggling, concept] } };
+    });
+    persistModel(get().model);
+  },
 
-  inferSkillLevel: () => set((s) => {
-    const m = s.model;
-    let level: StudentModel['skillLevel'] = 'beginner';
-    if (m.totalCodeExecutions > 50 && m.conceptsMastered.length > 5 && m.codingStyle.averageCircuitSize > 8) {
-      level = 'advanced';
-    } else if (m.totalCodeExecutions > 15 && m.conceptsMastered.length > 2) {
-      level = 'intermediate';
-    }
-    return { model: { ...m, skillLevel: level } };
-  }),
+  inferSkillLevel: () => {
+    set((s) => {
+      const m = s.model;
+      let level: StudentModel['skillLevel'] = 'beginner';
+      if (m.totalCodeExecutions > 50 && m.conceptsMastered.length > 5 && m.codingStyle.averageCircuitSize > 8) {
+        level = 'advanced';
+      } else if (m.totalCodeExecutions > 15 && m.conceptsMastered.length > 2) {
+        level = 'intermediate';
+      }
+      return { model: { ...m, skillLevel: level } };
+    });
+    persistModel(get().model);
+  },
 
-  reset: () => set({ model: defaultModel() }),
-  setModel: (model) => set({ model }),
+  reset: () => {
+    const fresh = defaultModel();
+    set({ model: fresh });
+    persistModel(fresh);
+  },
+
+  setModel: (model) => {
+    set({ model });
+    persistModel(model);
+  },
 }));
 
 /** Generate the system prompt addendum from the student model */

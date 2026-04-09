@@ -1,4 +1,27 @@
 import { create } from 'zustand';
+import { DIRAC_API_KEY } from '../config/dirac';
+
+const API_KEY_STORAGE_KEY = 'nuclei-dirac-api-key';
+
+/** Load persisted API key from localStorage, falling back to env config. */
+function loadApiKey(): string | null {
+  try {
+    const stored = localStorage.getItem(API_KEY_STORAGE_KEY);
+    if (stored) return stored;
+  } catch { /* restricted environment */ }
+  return DIRAC_API_KEY || null;
+}
+
+/** Persist API key to localStorage. Removes the entry when key is null/empty. */
+function persistApiKey(key: string | null): void {
+  try {
+    if (key) {
+      localStorage.setItem(API_KEY_STORAGE_KEY, key);
+    } else {
+      localStorage.removeItem(API_KEY_STORAGE_KEY);
+    }
+  } catch { /* restricted environment */ }
+}
 
 export interface ToolCall {
   id: string;
@@ -32,7 +55,7 @@ interface DiracState {
 export const useDiracStore = create<DiracState>((set) => ({
   messages: [],
   isLoading: false,
-  apiKey: null,
+  apiKey: loadApiKey(),
   addMessage: (msg) => set((s) => ({ messages: [...s.messages, msg] })),
   updateLastAssistant: (content) => set((s) => {
     const msgs = [...s.messages];
@@ -69,6 +92,9 @@ export const useDiracStore = create<DiracState>((set) => ({
     return { messages: msgs };
   }),
   setLoading: (isLoading) => set({ isLoading }),
-  setApiKey: (apiKey) => set({ apiKey }),
+  setApiKey: (apiKey) => {
+    persistApiKey(apiKey);
+    set({ apiKey });
+  },
   clearHistory: () => set({ messages: [] }),
 }));

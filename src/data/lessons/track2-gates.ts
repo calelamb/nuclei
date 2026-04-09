@@ -322,7 +322,7 @@ Real quantum hardware can only perform a few gates natively (e.g., Rx, Ry, Rz, a
       },
       {
         type: 'video',
-        youtubeId: 'placeholder',
+        youtubeId: 'tsbCSkvHhMo',
         title: 'Quantum Circuit Decomposition',
         creator: 'Qiskit',
       },
@@ -663,7 +663,7 @@ This is the engine behind **quantum phase estimation**, **Deutsch-Jozsa**, and *
       },
       {
         type: 'video',
-        youtubeId: 'placeholder',
+        youtubeId: 'ZN0lhYU1f5Q',
         title: 'Phase Kickback — The Key to Quantum Algorithms',
         creator: 'Qiskit',
       },
@@ -817,7 +817,7 @@ So far, most gates you've used are fixed: H always does the same thing, X always
       },
       {
         type: 'video',
-        youtubeId: 'placeholder',
+        youtubeId: 'ZN0lhYU1f5Q',
         title: 'Parameterized Quantum Circuits',
         creator: 'Qiskit',
       },
@@ -991,7 +991,7 @@ On real quantum hardware, every gate introduces a small error. Two-qubit gates (
       },
       {
         type: 'video',
-        youtubeId: 'placeholder',
+        youtubeId: 'tsbCSkvHhMo',
         title: 'Quantum Circuit Optimization Techniques',
         creator: 'Qiskit',
       },
@@ -1166,7 +1166,7 @@ The **T gate**. Adding T to the Clifford set breaks classical simulability and e
       },
       {
         type: 'video',
-        youtubeId: 'placeholder',
+        youtubeId: 'F_Riqjdh2oM',
         title: 'Clifford Gates and the Gottesman-Knill Theorem',
         creator: 'Qiskit',
       },

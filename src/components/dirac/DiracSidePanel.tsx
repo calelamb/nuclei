@@ -8,8 +8,9 @@ import { useDiracPanelStore } from '../../stores/diracPanelStore';
 import { useEditorStore } from '../../stores/editorStore';
 import { useCircuitStore } from '../../stores/circuitStore';
 import { useSimulationStore } from '../../stores/simulationStore';
-import { EASING, DURATION, getDuration, prefersReducedMotion } from '../../lib/animations';
-import { ChevronRight, ChevronDown, Plus, ArrowUp, X } from 'lucide-react';
+import { EASING, DURATION, prefersReducedMotion } from '../../lib/animations';
+import { useNavigationStore } from '../../stores/navigationStore';
+import { ChevronRight, ChevronDown, Plus, ArrowUp, Settings } from 'lucide-react';
 
 const SLASH_COMMANDS = [
   { command: '/explain', description: 'Explain the current circuit', insert: '/explain ' },
@@ -270,14 +271,79 @@ function AtomIcon() {
   );
 }
 
+/* ── API Key Setup Banner ── */
+function ApiKeyBanner() {
+  const colors = useThemeStore((s) => s.colors);
+  const openSettings = useNavigationStore((s) => s.openSettings);
+
+  return (
+    <div style={{
+      margin: 16, padding: 16, borderRadius: 8,
+      background: colors.bgElevated,
+      border: `1px solid ${colors.border}`,
+      textAlign: 'center',
+    }}>
+      <div style={{
+        width: 36, height: 36, borderRadius: '50%',
+        background: `${colors.dirac}18`,
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        margin: '0 auto 10px',
+      }}>
+        <Settings size={18} color={colors.dirac} />
+      </div>
+      <div style={{
+        fontSize: 13, fontWeight: 600, color: colors.text,
+        fontFamily: "'Geist Sans', sans-serif", marginBottom: 6,
+      }}>
+        API Key Required
+      </div>
+      <div style={{
+        fontSize: 12, color: colors.textMuted, lineHeight: 1.5,
+        fontFamily: "'Geist Sans', sans-serif", marginBottom: 12,
+      }}>
+        To use Dirac, add your Anthropic API key in Settings. Your key stays on your machine.
+      </div>
+      <button
+        onClick={openSettings}
+        style={{
+          padding: '6px 16px', fontSize: 12, fontWeight: 500,
+          fontFamily: "'Geist Sans', sans-serif",
+          background: colors.dirac, color: '#fff',
+          border: 'none', borderRadius: 6, cursor: 'pointer',
+          transition: 'box-shadow 150ms ease',
+        }}
+        onMouseEnter={(e) => { e.currentTarget.style.boxShadow = `0 0 12px ${colors.dirac}40`; }}
+        onMouseLeave={(e) => { e.currentTarget.style.boxShadow = 'none'; }}
+      >
+        Open Settings
+      </button>
+      <div style={{ marginTop: 10 }}>
+        <a
+          href="https://console.anthropic.com/"
+          target="_blank"
+          rel="noopener noreferrer"
+          style={{
+            fontSize: 11, color: colors.accent, textDecoration: 'none',
+            fontFamily: "'Geist Sans', sans-serif",
+          }}
+        >
+          Get an API key from Anthropic
+        </a>
+      </div>
+    </div>
+  );
+}
+
 /* ── Main Dirac Side Panel ── */
 export function DiracSidePanel() {
   const { messages, isLoading } = useDiracStore();
+  const apiKey = useDiracStore((s) => s.apiKey);
   const { sendMessage, handleToolAction } = useDirac();
   const colors = useThemeStore((s) => s.colors);
   const shadow = useThemeStore((s) => s.shadow);
   const { isOpen, width, focusSignal, toggle, setWidth } = useDiracPanelStore();
   const clearHistory = useDiracStore((s) => s.clearHistory);
+  const hasApiKey = Boolean(apiKey && apiKey.trim() !== '');
 
   const [input, setInput] = useState('');
   const [showSlashMenu, setShowSlashMenu] = useState(false);
@@ -439,6 +505,13 @@ export function DiracSidePanel() {
         </button>
       </div>
 
+      {!hasApiKey ? (
+        /* No API key — show setup banner instead of chat */
+        <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <ApiKeyBanner />
+        </div>
+      ) : (
+        <>
       {/* Messages */}
       <div ref={scrollRef} onScroll={handleScroll} style={{
         flex: 1, overflow: 'auto', padding: '8px 12px',
@@ -584,6 +657,8 @@ export function DiracSidePanel() {
           )}
         </div>
       </div>
+        </>
+      )}
     </div>
   );
 }

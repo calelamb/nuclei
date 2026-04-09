@@ -6,7 +6,7 @@ import { create } from 'zustand';
 import { useCircuitStore } from '../stores/circuitStore';
 import { useSimulationStore } from '../stores/simulationStore';
 import { useEditorStore } from '../stores/editorStore';
-import type { PluginManifest, PluginAPI, InstalledPlugin, PluginRegistration } from './types';
+import type { PluginManifest, PluginAPI, InstalledPlugin } from './types';
 
 // Registry for plugin-contributed extensions
 export interface PluginExtensions {
@@ -29,7 +29,7 @@ export const usePluginStore = create<PluginManagerState>((set, get) => ({
   plugins: [],
   extensions: { panels: [], diracSkills: [], themes: [] },
 
-  installPlugin: (manifest, source) => {
+  installPlugin: (manifest, _source) => {
     const existing = get().plugins.find((p) => p.manifest.name === manifest.name);
     if (existing) return;
     set((s) => ({

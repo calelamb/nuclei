@@ -1,10 +1,10 @@
 [package]
-name = "app"
+name = "nuclei"
 version = "0.1.0"
-description = "A Tauri App"
-authors = ["you"]
-license = ""
-repository = ""
+description = "A purpose-built desktop IDE for quantum computing"
+authors = ["Cale Lamb"]
+license = "MIT"
+repository = "https://github.com/calelamb/nuclei"
 edition = "2021"
 rust-version = "1.77.2"
 

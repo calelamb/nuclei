@@ -1,4 +1,4 @@
-import type { Framework, SimulationResult } from './quantum';
+import type { Framework } from './quantum';
 
 export type ChallengeDifficulty = 'easy' | 'medium' | 'hard';
 export type ChallengeCategory = 'state-preparation' | 'algorithms' | 'optimization' | 'protocols';
