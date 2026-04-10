@@ -5,6 +5,11 @@ All notable changes to Nuclei will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.3] - 2026-04-10
+
+### Changed
+- **App icon** — redesigned with a white background instead of navy. Same lucide-style atom glyph (three elliptical orbits, central nucleus) but now uses `#0891B2` teal on a white/off-white rounded-square tile, matching the IDE's light theme. Regenerated all sizes: `32x32`, `128x128`, `128x128@2x`, `icon.png` (1024), `icon.icns` (macOS iconset), `icon.ico` (Windows multi-size), Windows Store `Square*Logo` tiles, PWA `icon-192`/`icon-512`, and the landing page inline favicon.
+
 ## [0.1.2] - 2026-04-10
 
 ### Fixed
