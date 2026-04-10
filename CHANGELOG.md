@@ -5,6 +5,27 @@ All notable changes to Nuclei will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.1] - 2026-04-10
+
+### Added
+- New atom-style app icon (lucide-inspired) on a navy rounded-square background
+- macOS Gatekeeper bypass instructions in README and landing page
+- Basic Vitest setup with editorStore smoke tests
+- `.github/pull_request_template.md`
+- `src/config/kernel.ts` — WebSocket port now configurable via `VITE_KERNEL_PORT`
+
+### Changed
+- Landing page reworked to light theme matching the IDE light mode
+- Landing hero and bento cards now use the IDE light theme palette
+- Reveal animations now JS-opt-in so content is visible without JavaScript
+- Moved internal PRD and planning docs to `docs/internal/`
+- Replaced PWA favicon and icons with new atom design
+
+### Fixed
+- Removed all `console.log/warn/error` from production code (dev-gated where needed)
+- Fixed pre-existing type error in `QuantumEditor.tsx`
+- Fixed misleading claims about Rust and Python test suites in README/CONTRIBUTING
+
 ## [0.1.0] - 2026-04-09
 
 ### Added

@@ -34,6 +34,24 @@ Grab the latest release for your platform:
 - **Windows**: `.msi` installer from [GitHub Releases](https://github.com/calelamb/nuclei/releases)
 - **Linux**: `.AppImage` or `.deb` from [GitHub Releases](https://github.com/calelamb/nuclei/releases)
 
+### Opening Nuclei on macOS
+
+Because Nuclei is a free open-source project, it isn't signed with an Apple Developer certificate (Apple charges $99/year for that). When you first open it, macOS will say *"Apple could not verify 'nuclei' is free of malware."* This is **not** malware — it just means the app isn't registered with Apple.
+
+To open it:
+
+1. **Right-click** (or Control-click) the Nuclei app in Finder
+2. Select **Open** from the menu
+3. Click **Open** again in the dialog
+
+If that still doesn't work, open **System Settings → Privacy & Security**, scroll down, and click **"Open Anyway"** next to the Nuclei message.
+
+Or run this in Terminal after moving Nuclei to `/Applications`:
+
+```bash
+xattr -dr com.apple.quarantine /Applications/nuclei.app
+```
+
 ### Web Version
 
 No installation required. Try Nuclei in your browser at [nuclei.dev](https://nuclei.dev). The web version uses Pyodide to run Python entirely client-side.

@@ -5,7 +5,10 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Nuclei — The IDE for Learning Quantum Computing</title>
   <meta name="description" content="Write quantum circuits, see them come alive. A free, open-source desktop IDE with live circuit visualization, Bloch sphere, AI tutor, and support for Qiskit, Cirq, and CUDA-Q.">
-  <meta name="theme-color" content="#0A0E1A">
+  <meta name="theme-color" content="#FFFFFF">
+
+  <!-- Favicon: atom glyph -->
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 48 48'%3E%3Ccircle cx='24' cy='24' r='3' fill='%230891B2'/%3E%3Cg stroke='%230891B2' stroke-width='2.5' fill='none' stroke-linecap='round'%3E%3Cellipse cx='24' cy='24' rx='18' ry='7'/%3E%3Cellipse cx='24' cy='24' rx='18' ry='7' transform='rotate(60 24 24)'/%3E%3Cellipse cx='24' cy='24' rx='18' ry='7' transform='rotate(120 24 24)'/%3E%3C/g%3E%3C/svg%3E">
 
   <!-- Open Graph -->
   <meta property="og:title" content="Nuclei — The IDE for Learning Quantum Computing">
@@ -20,25 +23,27 @@
 
   <style>
     /* ========================================
-       TOKENS
+       TOKENS — Light theme matching IDE
        ======================================== */
     :root {
-      --bg-deep: #0A0E1A;
-      --bg-surface: #0F172A;
-      --bg-elevated: #1E293B;
-      --border-subtle: rgba(255, 255, 255, 0.06);
-      --border-hover: rgba(255, 255, 255, 0.12);
-      --accent-teal: #00B4D8;
-      --accent-teal-dim: rgba(0, 180, 216, 0.12);
-      --accent-teal-glow: rgba(0, 180, 216, 0.25);
-      --accent-purple: #7B2D8E;
-      --accent-purple-dim: rgba(123, 45, 142, 0.12);
-      --cta-green: #22C55E;
-      --cta-green-dim: rgba(34, 197, 94, 0.12);
-      --cta-green-glow: rgba(34, 197, 94, 0.25);
-      --text-primary: #F8FAFC;
-      --text-secondary: #94A3B8;
-      --text-muted: #64748B;
+      --bg-deep: #FFFFFF;
+      --bg-surface: #FAFBFC;
+      --bg-elevated: #F1F5F9;
+      --border-subtle: rgba(15, 23, 42, 0.08);
+      --border-hover: rgba(15, 23, 42, 0.16);
+      --accent-teal: #0891B2;
+      --accent-teal-strong: #0E7490;
+      --accent-teal-dim: rgba(8, 145, 178, 0.10);
+      --accent-teal-glow: rgba(8, 145, 178, 0.22);
+      --accent-purple: #6B21A8;
+      --accent-purple-dim: rgba(107, 33, 168, 0.10);
+      --cta-green: #059669;
+      --cta-green-hover: #047857;
+      --cta-green-dim: rgba(5, 150, 105, 0.10);
+      --cta-green-glow: rgba(5, 150, 105, 0.28);
+      --text-primary: #1A1A2E;
+      --text-secondary: #475569;
+      --text-muted: #94A3B8;
 
       --font-heading: 'Exo', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
       --font-mono: 'Roboto Mono', 'SF Mono', 'Fira Code', monospace;
@@ -84,8 +89,8 @@
       overflow-x: hidden;
       -webkit-font-smoothing: antialiased;
       -moz-osx-font-smoothing: grayscale;
-      /* Dot grid background */
-      background-image: radial-gradient(circle, rgba(148, 163, 184, 0.07) 1px, transparent 1px);
+      /* Dot grid background — dark dots on white for that paper feel */
+      background-image: radial-gradient(circle, rgba(15, 23, 42, 0.08) 1px, transparent 1px);
       background-size: 30px 30px;
     }
 
@@ -121,15 +126,21 @@
     }
 
     /* ========================================
-       SCROLL REVEAL
+       SCROLL REVEAL — JS-opt-in so content is
+       visible without JavaScript
        ======================================== */
     .reveal {
+      opacity: 1;
+      transform: translateY(0);
+    }
+
+    .js .reveal {
       opacity: 0;
       transform: translateY(24px);
       transition: opacity 0.6s var(--ease-out), transform 0.6s var(--ease-out);
     }
 
-    .reveal.visible {
+    .js .reveal.visible {
       opacity: 1;
       transform: translateY(0);
     }
@@ -158,7 +169,7 @@
     }
 
     .nav.scrolled {
-      background: rgba(10, 14, 26, 0.8);
+      background: rgba(255, 255, 255, 0.82);
       backdrop-filter: blur(20px) saturate(1.5);
       -webkit-backdrop-filter: blur(20px) saturate(1.5);
       border-bottom: 1px solid var(--border-subtle);
@@ -174,6 +185,24 @@
       display: flex;
       align-items: center;
       gap: 10px;
+    }
+
+    .nav-logo-link {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      color: var(--accent-teal);
+      transition: opacity var(--duration-fast) ease;
+    }
+
+    .nav-logo-link:hover {
+      opacity: 0.85;
+    }
+
+    .nav-logo {
+      width: 26px;
+      height: 26px;
+      color: var(--accent-teal);
     }
 
     .nav-wordmark {
@@ -225,17 +254,19 @@
       font-family: var(--font-heading);
       font-size: 0.875rem;
       font-weight: 600;
-      color: #0A0E1A;
+      color: #FFFFFF;
       background: var(--cta-green);
       border-radius: var(--radius-sm);
       cursor: pointer;
       transition: transform var(--duration-fast) var(--ease-out),
-                  box-shadow var(--duration-fast) var(--ease-out);
+                  box-shadow var(--duration-fast) var(--ease-out),
+                  background var(--duration-fast) ease;
     }
 
     .btn-nav-dl:hover {
       transform: translateY(-1px);
       box-shadow: 0 4px 20px var(--cta-green-glow);
+      background: var(--cta-green-hover);
     }
 
     /* ========================================
@@ -259,8 +290,8 @@
         0deg,
         transparent,
         transparent 2px,
-        rgba(148, 163, 184, 0.015) 2px,
-        rgba(148, 163, 184, 0.015) 4px
+        rgba(15, 23, 42, 0.015) 2px,
+        rgba(15, 23, 42, 0.015) 4px
       );
       pointer-events: none;
       z-index: 1;
@@ -287,9 +318,9 @@
       margin-bottom: var(--space-lg);
       font-family: var(--font-mono);
       font-size: 0.75rem;
-      font-weight: 400;
-      color: var(--accent-teal);
-      border: 1px solid rgba(0, 180, 216, 0.2);
+      font-weight: 500;
+      color: var(--accent-teal-strong);
+      border: 1px solid rgba(8, 145, 178, 0.25);
       border-radius: 100px;
       background: var(--accent-teal-dim);
     }
@@ -318,7 +349,7 @@
 
     .hero h1 .accent {
       display: block;
-      background: linear-gradient(135deg, var(--accent-teal), #38bdf8, var(--accent-teal));
+      background: linear-gradient(135deg, var(--accent-teal-strong), var(--accent-teal), var(--accent-teal-strong));
       background-size: 200% 200%;
       -webkit-background-clip: text;
       -webkit-text-fill-color: transparent;
@@ -347,17 +378,19 @@
       font-family: var(--font-heading);
       font-size: 1rem;
       font-weight: 600;
-      color: #0A0E1A;
+      color: #FFFFFF;
       background: var(--cta-green);
       border-radius: var(--radius-md);
       cursor: pointer;
       transition: transform var(--duration-fast) var(--ease-out),
-                  box-shadow var(--duration-fast) var(--ease-out);
+                  box-shadow var(--duration-fast) var(--ease-out),
+                  background var(--duration-fast) ease;
     }
 
     .btn-hero-dl:hover {
       transform: translateY(-2px);
       box-shadow: 0 8px 30px var(--cta-green-glow);
+      background: var(--cta-green-hover);
     }
 
     .btn-hero-dl:active {
@@ -389,7 +422,7 @@
 
     .btn-outline:hover {
       border-color: var(--border-hover);
-      background: rgba(255, 255, 255, 0.03);
+      background: rgba(15, 23, 42, 0.03);
       transform: translateY(-2px);
     }
 
@@ -441,8 +474,8 @@
     .qline-d7 { animation-delay: 0.8s; }
 
     @keyframes line-flow {
-      0%, 100% { opacity: 0.15; stroke-dashoffset: 0; }
-      50% { opacity: 0.5; stroke-dashoffset: 12; }
+      0%, 100% { opacity: 0.25; stroke-dashoffset: 0; }
+      50% { opacity: 0.7; stroke-dashoffset: 12; }
     }
 
     .qglow {
@@ -454,8 +487,8 @@
     .qglow-d3 { animation-delay: 1.0s; }
 
     @keyframes glow-breathe {
-      0%, 100% { opacity: 0.08; }
-      50% { opacity: 0.2; }
+      0%, 100% { opacity: 0.3; }
+      50% { opacity: 0.7; }
     }
 
     /* ========================================
@@ -508,17 +541,20 @@
     .bento-card {
       position: relative;
       padding: var(--space-xl) var(--space-xl) var(--space-lg);
-      background: rgba(15, 23, 42, 0.6);
+      background: var(--bg-surface);
       border: 1px solid var(--border-subtle);
       border-radius: var(--radius-lg);
       overflow: hidden;
+      box-shadow: 0 1px 3px rgba(15, 23, 42, 0.04);
       transition: transform var(--duration-normal) var(--ease-out),
-                  border-color var(--duration-normal) ease;
+                  border-color var(--duration-normal) ease,
+                  box-shadow var(--duration-normal) ease;
     }
 
     .bento-card:hover {
       transform: translateY(-4px);
       border-color: var(--border-hover);
+      box-shadow: 0 8px 24px rgba(15, 23, 42, 0.08);
     }
 
     /* Gradient border reveal on hover */
@@ -577,11 +613,11 @@
       line-height: 1.6;
     }
 
-    /* Mini code mockup inside the editor card */
+    /* Mini code mockup inside the editor card — matches IDE light theme */
     .bento-code-mock {
       margin-top: var(--space-md);
       padding: 14px 16px;
-      background: rgba(10, 14, 26, 0.7);
+      background: #FAFBFC;
       border: 1px solid var(--border-subtle);
       border-radius: var(--radius-sm);
       font-family: var(--font-mono);
@@ -590,14 +626,14 @@
       overflow: hidden;
     }
 
-    .bento-code-mock .kw { color: #c792ea; }
-    .bento-code-mock .fn { color: #82aaff; }
-    .bento-code-mock .str { color: #c3e88d; }
-    .bento-code-mock .num { color: #f78c6c; }
-    .bento-code-mock .cm { color: #546e7a; }
-    .bento-code-mock .op { color: #89ddff; }
-    .bento-code-mock .v { color: #eeffff; }
-    .bento-code-mock .ln { color: var(--text-muted); display: inline-block; width: 22px; user-select: none; }
+    .bento-code-mock .kw { color: #A626A4; }
+    .bento-code-mock .fn { color: #4078F2; }
+    .bento-code-mock .str { color: #22863A; }
+    .bento-code-mock .num { color: #B76E00; }
+    .bento-code-mock .cm { color: #6A737D; font-style: italic; }
+    .bento-code-mock .op { color: #0184BC; }
+    .bento-code-mock .v { color: #1A1A2E; }
+    .bento-code-mock .ln { color: #CBD5E1; display: inline-block; width: 22px; user-select: none; }
 
     /* Mini circuit SVG */
     .bento-circuit-svg {
@@ -664,7 +700,7 @@
     .bento-chat-dirac {
       align-self: flex-start;
       background: var(--accent-purple-dim);
-      color: #d4a5e0;
+      color: var(--accent-purple);
       border-bottom-left-radius: 3px;
     }
 
@@ -684,7 +720,7 @@
       border-radius: var(--radius-sm);
       border: 1px solid var(--border-subtle);
       color: var(--text-secondary);
-      background: rgba(10, 14, 26, 0.5);
+      background: var(--bg-elevated);
     }
 
     /* ========================================
@@ -831,11 +867,12 @@
     .dl-inner {
       text-align: center;
       padding: var(--space-3xl);
-      background: rgba(15, 23, 42, 0.5);
+      background: var(--bg-surface);
       border: 1px solid var(--border-subtle);
       border-radius: var(--radius-xl);
       position: relative;
       overflow: hidden;
+      box-shadow: 0 1px 3px rgba(15, 23, 42, 0.04);
     }
 
     /* Top accent line */
@@ -867,18 +904,20 @@
       font-size: 0.9375rem;
       font-weight: 500;
       color: var(--text-primary);
-      background: rgba(255, 255, 255, 0.03);
+      background: #FFFFFF;
       border: 1px solid var(--border-subtle);
       border-radius: 100px;
       cursor: pointer;
       transition: border-color var(--duration-fast) ease,
                   background var(--duration-fast) ease,
-                  transform var(--duration-fast) var(--ease-out);
+                  transform var(--duration-fast) var(--ease-out),
+                  box-shadow var(--duration-fast) ease;
     }
 
     .dl-badge:hover {
       border-color: var(--border-hover);
-      background: rgba(255, 255, 255, 0.06);
+      background: #FFFFFF;
+      box-shadow: 0 4px 12px rgba(15, 23, 42, 0.08);
       transform: translateY(-2px);
     }
 
@@ -889,15 +928,15 @@
     }
 
     .dl-badge-primary {
-      color: #0A0E1A;
+      color: #FFFFFF;
       background: var(--cta-green);
       border-color: var(--cta-green);
       font-weight: 600;
     }
 
     .dl-badge-primary:hover {
-      background: #2dd968;
-      border-color: #2dd968;
+      background: var(--cta-green-hover);
+      border-color: var(--cta-green-hover);
       box-shadow: 0 6px 24px var(--cta-green-glow);
     }
 
@@ -913,6 +952,107 @@
       font-family: var(--font-mono);
       font-size: 0.75rem;
       color: var(--text-muted);
+    }
+
+    /* macOS Gatekeeper instructions */
+    .dl-macos-note {
+      margin-top: var(--space-lg);
+      text-align: left;
+      max-width: 580px;
+      margin-left: auto;
+      margin-right: auto;
+      background: #FFF7ED;
+      border: 1px solid #FED7AA;
+      border-radius: var(--radius-md);
+      font-family: var(--font-heading);
+      font-size: 0.875rem;
+      color: #9A3412;
+    }
+
+    .dl-macos-note summary {
+      list-style: none;
+      cursor: pointer;
+      padding: 14px 18px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-weight: 600;
+      user-select: none;
+    }
+
+    .dl-macos-note summary::-webkit-details-marker {
+      display: none;
+    }
+
+    .dl-macos-note summary svg {
+      width: 18px;
+      height: 18px;
+      flex-shrink: 0;
+      color: #EA580C;
+    }
+
+    .dl-macos-note summary::after {
+      content: '+';
+      margin-left: auto;
+      font-size: 1.25rem;
+      font-weight: 400;
+      color: #C2410C;
+      transition: transform var(--duration-fast) ease;
+    }
+
+    .dl-macos-note[open] summary::after {
+      content: '−';
+    }
+
+    .dl-macos-body {
+      padding: 0 18px 18px 18px;
+      border-top: 1px solid rgba(154, 52, 18, 0.15);
+      padding-top: 14px;
+    }
+
+    .dl-macos-body p {
+      margin-bottom: 10px;
+      line-height: 1.6;
+      color: #7C2D12;
+    }
+
+    .dl-macos-body ol {
+      margin-left: 1.2em;
+      margin-bottom: 12px;
+      color: #7C2D12;
+    }
+
+    .dl-macos-body li {
+      margin-bottom: 6px;
+      line-height: 1.6;
+    }
+
+    .dl-macos-body strong {
+      color: #9A3412;
+    }
+
+    .dl-macos-body em {
+      font-style: italic;
+      color: #9A3412;
+    }
+
+    .dl-macos-alt {
+      margin-top: 10px !important;
+      padding-top: 10px;
+      border-top: 1px dashed rgba(154, 52, 18, 0.2);
+    }
+
+    .dl-macos-code {
+      margin-top: 8px;
+      padding: 10px 12px;
+      background: #431407;
+      color: #FED7AA;
+      font-family: var(--font-mono);
+      font-size: 0.75rem;
+      border-radius: var(--radius-sm);
+      overflow-x: auto;
+      white-space: nowrap;
+      user-select: all;
     }
 
     /* ========================================
@@ -947,19 +1087,25 @@
       font-size: 0.9375rem;
       font-weight: 600;
       color: var(--text-primary);
-      background: rgba(255, 255, 255, 0.04);
+      background: #FFFFFF;
       border: 1px solid var(--border-subtle);
       border-radius: var(--radius-md);
       cursor: pointer;
       transition: border-color var(--duration-fast) ease,
                   background var(--duration-fast) ease,
-                  transform var(--duration-fast) var(--ease-out);
+                  transform var(--duration-fast) var(--ease-out),
+                  box-shadow var(--duration-fast) ease;
     }
 
     .gh-star-btn:hover {
       border-color: var(--border-hover);
-      background: rgba(255, 255, 255, 0.07);
+      box-shadow: 0 4px 12px rgba(15, 23, 42, 0.08);
       transform: translateY(-2px);
+    }
+
+    .gh-star-btn:hover .gh-star-icon {
+      fill: #F5A623;
+      stroke: #F5A623;
     }
 
     .gh-star-btn svg {
@@ -1204,8 +1350,18 @@
   <nav class="nav" id="nav" aria-label="Main navigation">
     <div class="container nav-inner">
       <div class="nav-brand">
-        <a href="#" class="nav-wordmark">NUCLEI</a>
-        <span class="nav-version">v0.1.0</span>
+        <a href="#" class="nav-logo-link" aria-label="Nuclei home">
+          <svg class="nav-logo" viewBox="0 0 48 48" aria-hidden="true">
+            <circle cx="24" cy="24" r="3" fill="currentColor"/>
+            <g stroke="currentColor" stroke-width="2.5" fill="none" stroke-linecap="round">
+              <ellipse cx="24" cy="24" rx="18" ry="7"/>
+              <ellipse cx="24" cy="24" rx="18" ry="7" transform="rotate(60 24 24)"/>
+              <ellipse cx="24" cy="24" rx="18" ry="7" transform="rotate(120 24 24)"/>
+            </g>
+          </svg>
+          <span class="nav-wordmark">NUCLEI</span>
+        </a>
+        <span class="nav-version">v0.1.1</span>
       </div>
       <div class="nav-actions">
         <a href="https://github.com/calelamb/nuclei" class="nav-gh" aria-label="GitHub repository">
@@ -1255,79 +1411,80 @@
           <circle cx="220" cy="240" r="55" fill="url(#glow-purple)" class="qglow qglow-d3"/>
 
           <!-- Connection lines (entanglement) -->
-          <line x1="120" y1="100" x2="220" y2="70" stroke="#00B4D8" stroke-width="1.5" stroke-dasharray="6 8" class="qline qline-d1"/>
-          <line x1="220" y1="70" x2="320" y2="120" stroke="#00B4D8" stroke-width="1.5" stroke-dasharray="6 8" class="qline qline-d2"/>
-          <line x1="120" y1="100" x2="170" y2="180" stroke="#00B4D8" stroke-width="1.5" stroke-dasharray="6 8" class="qline qline-d3"/>
-          <line x1="170" y1="180" x2="220" y2="240" stroke="#7B2D8E" stroke-width="1.5" stroke-dasharray="6 8" class="qline qline-d4"/>
-          <line x1="220" y1="240" x2="320" y2="200" stroke="#7B2D8E" stroke-width="1.5" stroke-dasharray="6 8" class="qline qline-d5"/>
-          <line x1="320" y1="120" x2="320" y2="200" stroke="#00B4D8" stroke-width="1.5" stroke-dasharray="6 8" class="qline qline-d6"/>
-          <line x1="320" y1="200" x2="380" y2="160" stroke="#00B4D8" stroke-width="1" stroke-dasharray="4 8" class="qline qline-d7"/>
+          <line x1="120" y1="100" x2="220" y2="70" stroke="#0891B2" stroke-width="1.5" stroke-dasharray="6 8" class="qline qline-d1"/>
+          <line x1="220" y1="70" x2="320" y2="120" stroke="#0891B2" stroke-width="1.5" stroke-dasharray="6 8" class="qline qline-d2"/>
+          <line x1="120" y1="100" x2="170" y2="180" stroke="#0891B2" stroke-width="1.5" stroke-dasharray="6 8" class="qline qline-d3"/>
+          <line x1="170" y1="180" x2="220" y2="240" stroke="#6B21A8" stroke-width="1.5" stroke-dasharray="6 8" class="qline qline-d4"/>
+          <line x1="220" y1="240" x2="320" y2="200" stroke="#6B21A8" stroke-width="1.5" stroke-dasharray="6 8" class="qline qline-d5"/>
+          <line x1="320" y1="120" x2="320" y2="200" stroke="#0891B2" stroke-width="1.5" stroke-dasharray="6 8" class="qline qline-d6"/>
+          <line x1="320" y1="200" x2="380" y2="160" stroke="#0891B2" stroke-width="1" stroke-dasharray="4 8" class="qline qline-d7"/>
 
           <!-- Horizontal quantum wire segments -->
-          <line x1="50" y1="100" x2="120" y2="100" stroke="#1E293B" stroke-width="2"/>
-          <line x1="120" y1="100" x2="220" y2="100" stroke="#1E293B" stroke-width="1"/>
-          <line x1="50" y1="200" x2="170" y2="200" stroke="#1E293B" stroke-width="2"/>
-          <line x1="270" y1="280" x2="400" y2="280" stroke="#1E293B" stroke-width="1"/>
+          <line x1="50" y1="100" x2="120" y2="100" stroke="#CBD5E1" stroke-width="2"/>
+          <line x1="120" y1="100" x2="220" y2="100" stroke="#CBD5E1" stroke-width="1"/>
+          <line x1="50" y1="200" x2="170" y2="200" stroke="#CBD5E1" stroke-width="2"/>
+          <line x1="270" y1="280" x2="400" y2="280" stroke="#CBD5E1" stroke-width="1"/>
 
           <!-- Wire labels -->
-          <text x="30" y="104" fill="#64748B" font-family="'Roboto Mono', monospace" font-size="11">q0</text>
-          <text x="30" y="204" fill="#64748B" font-family="'Roboto Mono', monospace" font-size="11">q1</text>
+          <text x="30" y="104" fill="#94A3B8" font-family="'Roboto Mono', monospace" font-size="11">q0</text>
+          <text x="30" y="204" fill="#94A3B8" font-family="'Roboto Mono', monospace" font-size="11">q1</text>
 
           <!-- Gate nodes -->
           <!-- H gate -->
-          <rect x="100" y="80" width="40" height="40" rx="6" fill="#0F172A" stroke="#00B4D8" stroke-width="2" class="qnode qnode-d1"/>
-          <text x="120" y="106" fill="#00B4D8" font-family="'Roboto Mono', monospace" font-size="16" text-anchor="middle" font-weight="500">H</text>
+          <rect x="100" y="80" width="40" height="40" rx="6" fill="#FFFFFF" stroke="#0891B2" stroke-width="2" class="qnode qnode-d1"/>
+          <text x="120" y="106" fill="#0891B2" font-family="'Roboto Mono', monospace" font-size="16" text-anchor="middle" font-weight="600">H</text>
 
           <!-- X gate -->
-          <rect x="200" y="50" width="40" height="40" rx="6" fill="#0F172A" stroke="#00B4D8" stroke-width="2" class="qnode qnode-d2"/>
-          <text x="220" y="76" fill="#00B4D8" font-family="'Roboto Mono', monospace" font-size="16" text-anchor="middle" font-weight="500">X</text>
+          <rect x="200" y="50" width="40" height="40" rx="6" fill="#FFFFFF" stroke="#0891B2" stroke-width="2" class="qnode qnode-d2"/>
+          <text x="220" y="76" fill="#0891B2" font-family="'Roboto Mono', monospace" font-size="16" text-anchor="middle" font-weight="600">X</text>
 
           <!-- CNOT control dot -->
-          <circle cx="170" cy="180" r="8" fill="#00B4D8" class="qnode qnode-d3" opacity="0.9"/>
-          <line x1="170" y1="180" x2="170" y2="200" stroke="#00B4D8" stroke-width="2"/>
+          <circle cx="170" cy="180" r="8" fill="#0891B2" class="qnode qnode-d3"/>
+          <line x1="170" y1="180" x2="170" y2="200" stroke="#0891B2" stroke-width="2"/>
           <!-- CNOT target -->
-          <circle cx="170" cy="200" r="14" fill="none" stroke="#00B4D8" stroke-width="2" class="qnode qnode-d3"/>
-          <line x1="156" y1="200" x2="184" y2="200" stroke="#00B4D8" stroke-width="2"/>
+          <circle cx="170" cy="200" r="14" fill="#FFFFFF" stroke="#0891B2" stroke-width="2" class="qnode qnode-d3"/>
+          <line x1="156" y1="200" x2="184" y2="200" stroke="#0891B2" stroke-width="2"/>
+          <line x1="170" y1="186" x2="170" y2="214" stroke="#0891B2" stroke-width="2"/>
 
           <!-- RZ gate -->
-          <rect x="300" y="100" width="40" height="40" rx="6" fill="#0F172A" stroke="#7B2D8E" stroke-width="2" class="qnode qnode-d4"/>
-          <text x="320" y="124" fill="#7B2D8E" font-family="'Roboto Mono', monospace" font-size="13" text-anchor="middle" font-weight="500">Rz</text>
+          <rect x="300" y="100" width="40" height="40" rx="6" fill="#FFFFFF" stroke="#6B21A8" stroke-width="2" class="qnode qnode-d4"/>
+          <text x="320" y="124" fill="#6B21A8" font-family="'Roboto Mono', monospace" font-size="13" text-anchor="middle" font-weight="600">Rz</text>
 
           <!-- Measurement gate -->
-          <rect x="300" y="180" width="40" height="40" rx="6" fill="#0F172A" stroke="#94A3B8" stroke-width="1.5" class="qnode qnode-d5"/>
-          <path d="M311 208 Q320 194 329 208" stroke="#94A3B8" stroke-width="1.5" fill="none"/>
-          <line x1="320" y1="208" x2="320" y2="196" stroke="#94A3B8" stroke-width="1.5"/>
+          <rect x="300" y="180" width="40" height="40" rx="6" fill="#FFFFFF" stroke="#94A3B8" stroke-width="1.5" class="qnode qnode-d5"/>
+          <path d="M311 208 Q320 194 329 208" stroke="#64748B" stroke-width="1.5" fill="none"/>
+          <line x1="320" y1="208" x2="320" y2="196" stroke="#64748B" stroke-width="1.5"/>
 
           <!-- Floating atom-like decorative node -->
-          <circle cx="380" cy="160" r="6" fill="none" stroke="#00B4D8" stroke-width="1.5" class="qnode qnode-d6" opacity="0.5"/>
-          <circle cx="380" cy="160" r="2" fill="#00B4D8" opacity="0.5"/>
+          <circle cx="380" cy="160" r="6" fill="#FFFFFF" stroke="#0891B2" stroke-width="1.5" class="qnode qnode-d6" opacity="0.6"/>
+          <circle cx="380" cy="160" r="2" fill="#0891B2" opacity="0.6"/>
 
           <!-- Small decorative dots (qubit state indicators) -->
-          <circle cx="60" cy="280" r="3" fill="#1E293B"/>
-          <circle cx="80" cy="275" r="2" fill="#1E293B"/>
-          <circle cx="400" cy="100" r="3" fill="#1E293B"/>
+          <circle cx="60" cy="280" r="3" fill="#CBD5E1"/>
+          <circle cx="80" cy="275" r="2" fill="#CBD5E1"/>
+          <circle cx="400" cy="100" r="3" fill="#CBD5E1"/>
 
           <!-- Probability hint bars at bottom right -->
-          <rect x="340" y="270" width="14" height="20" rx="2" fill="#00B4D8" opacity="0.25"/>
-          <rect x="360" y="262" width="14" height="28" rx="2" fill="#00B4D8" opacity="0.35"/>
-          <rect x="380" y="278" width="14" height="12" rx="2" fill="#7B2D8E" opacity="0.25"/>
-          <rect x="400" y="266" width="14" height="24" rx="2" fill="#7B2D8E" opacity="0.3"/>
+          <rect x="340" y="270" width="14" height="20" rx="2" fill="#0891B2" opacity="0.35"/>
+          <rect x="360" y="262" width="14" height="28" rx="2" fill="#0891B2" opacity="0.55"/>
+          <rect x="380" y="278" width="14" height="12" rx="2" fill="#6B21A8" opacity="0.35"/>
+          <rect x="400" y="266" width="14" height="24" rx="2" fill="#6B21A8" opacity="0.45"/>
 
           <!-- Bloch sphere hint (wireframe circle) -->
-          <circle cx="80" cy="300" r="20" fill="none" stroke="#1E293B" stroke-width="1"/>
-          <ellipse cx="80" cy="300" rx="20" ry="8" fill="none" stroke="#1E293B" stroke-width="0.75"/>
-          <line x1="80" y1="280" x2="80" y2="320" stroke="#1E293B" stroke-width="0.75"/>
-          <circle cx="80" cy="288" r="3" fill="#00B4D8" opacity="0.6" class="qnode qnode-d1"/>
+          <circle cx="80" cy="300" r="20" fill="#FFFFFF" stroke="#CBD5E1" stroke-width="1"/>
+          <ellipse cx="80" cy="300" rx="20" ry="8" fill="none" stroke="#CBD5E1" stroke-width="0.75"/>
+          <line x1="80" y1="280" x2="80" y2="320" stroke="#CBD5E1" stroke-width="0.75"/>
+          <circle cx="80" cy="288" r="3" fill="#0891B2" opacity="0.7" class="qnode qnode-d1"/>
 
           <!-- Gradient definitions -->
           <defs>
             <radialGradient id="glow-teal" cx="50%" cy="50%" r="50%">
-              <stop offset="0%" stop-color="#00B4D8" stop-opacity="0.15"/>
-              <stop offset="100%" stop-color="#00B4D8" stop-opacity="0"/>
+              <stop offset="0%" stop-color="#0891B2" stop-opacity="0.12"/>
+              <stop offset="100%" stop-color="#0891B2" stop-opacity="0"/>
             </radialGradient>
             <radialGradient id="glow-purple" cx="50%" cy="50%" r="50%">
-              <stop offset="0%" stop-color="#7B2D8E" stop-opacity="0.12"/>
-              <stop offset="100%" stop-color="#7B2D8E" stop-opacity="0"/>
+              <stop offset="0%" stop-color="#6B21A8" stop-opacity="0.10"/>
+              <stop offset="100%" stop-color="#6B21A8" stop-opacity="0"/>
             </radialGradient>
           </defs>
         </svg>
@@ -1377,20 +1534,21 @@
           <p>Live-rendered circuit diagrams that update as you type. Every gate, wire, and connection visualized instantly.</p>
           <!-- Mini circuit -->
           <svg class="bento-circuit-svg" viewBox="0 0 180 80" fill="none" aria-hidden="true">
-            <line x1="10" y1="25" x2="170" y2="25" stroke="#1E293B" stroke-width="1.5"/>
-            <line x1="10" y1="55" x2="170" y2="55" stroke="#1E293B" stroke-width="1.5"/>
-            <rect x="30" y="10" width="30" height="30" rx="4" fill="#0F172A" stroke="#00B4D8" stroke-width="1.5"/>
-            <text x="45" y="30" fill="#00B4D8" font-family="'Roboto Mono', monospace" font-size="12" text-anchor="middle" font-weight="500">H</text>
-            <circle cx="90" cy="25" r="6" fill="#00B4D8" opacity="0.9"/>
-            <line x1="90" y1="25" x2="90" y2="55" stroke="#00B4D8" stroke-width="1.5"/>
-            <circle cx="90" cy="55" r="10" fill="none" stroke="#00B4D8" stroke-width="1.5"/>
-            <line x1="80" y1="55" x2="100" y2="55" stroke="#00B4D8" stroke-width="1.5"/>
-            <rect x="125" y="10" width="30" height="30" rx="4" fill="#0F172A" stroke="#7B2D8E" stroke-width="1.5"/>
-            <path d="M134 32 Q140 22 146 32" stroke="#7B2D8E" stroke-width="1.2" fill="none"/>
-            <line x1="140" y1="32" x2="140" y2="23" stroke="#7B2D8E" stroke-width="1.2"/>
-            <rect x="125" y="40" width="30" height="30" rx="4" fill="#0F172A" stroke="#7B2D8E" stroke-width="1.5"/>
-            <path d="M134 62 Q140 52 146 62" stroke="#7B2D8E" stroke-width="1.2" fill="none"/>
-            <line x1="140" y1="62" x2="140" y2="53" stroke="#7B2D8E" stroke-width="1.2"/>
+            <line x1="10" y1="25" x2="170" y2="25" stroke="#CBD5E1" stroke-width="1.5"/>
+            <line x1="10" y1="55" x2="170" y2="55" stroke="#CBD5E1" stroke-width="1.5"/>
+            <rect x="30" y="10" width="30" height="30" rx="4" fill="#FFFFFF" stroke="#0891B2" stroke-width="1.5"/>
+            <text x="45" y="30" fill="#0891B2" font-family="'Roboto Mono', monospace" font-size="12" text-anchor="middle" font-weight="600">H</text>
+            <circle cx="90" cy="25" r="6" fill="#0891B2"/>
+            <line x1="90" y1="25" x2="90" y2="55" stroke="#0891B2" stroke-width="1.5"/>
+            <circle cx="90" cy="55" r="10" fill="#FFFFFF" stroke="#0891B2" stroke-width="1.5"/>
+            <line x1="80" y1="55" x2="100" y2="55" stroke="#0891B2" stroke-width="1.5"/>
+            <line x1="90" y1="45" x2="90" y2="65" stroke="#0891B2" stroke-width="1.5"/>
+            <rect x="125" y="10" width="30" height="30" rx="4" fill="#FFFFFF" stroke="#6B21A8" stroke-width="1.5"/>
+            <path d="M134 32 Q140 22 146 32" stroke="#6B21A8" stroke-width="1.2" fill="none"/>
+            <line x1="140" y1="32" x2="140" y2="23" stroke="#6B21A8" stroke-width="1.2"/>
+            <rect x="125" y="40" width="30" height="30" rx="4" fill="#FFFFFF" stroke="#6B21A8" stroke-width="1.5"/>
+            <path d="M134 62 Q140 52 146 62" stroke="#6B21A8" stroke-width="1.2" fill="none"/>
+            <line x1="140" y1="62" x2="140" y2="53" stroke="#6B21A8" stroke-width="1.2"/>
           </svg>
         </div>
 
@@ -1406,14 +1564,14 @@
           <p>Interactive 3D visualization of qubit states. Rotate, zoom, and explore quantum state space in real time.</p>
           <!-- Wireframe sphere -->
           <svg class="bento-bloch-svg" viewBox="0 0 100 100" fill="none" aria-hidden="true">
-            <circle cx="50" cy="50" r="40" stroke="#1E293B" stroke-width="1.5"/>
-            <ellipse cx="50" cy="50" rx="40" ry="14" stroke="#1E293B" stroke-width="0.75"/>
-            <ellipse cx="50" cy="50" rx="14" ry="40" stroke="#1E293B" stroke-width="0.75" transform="rotate(0 50 50)"/>
-            <line x1="50" y1="10" x2="50" y2="90" stroke="#1E293B" stroke-width="0.75"/>
-            <line x1="10" y1="50" x2="90" y2="50" stroke="#1E293B" stroke-width="0.75"/>
+            <circle cx="50" cy="50" r="40" stroke="#CBD5E1" stroke-width="1.5"/>
+            <ellipse cx="50" cy="50" rx="40" ry="14" stroke="#CBD5E1" stroke-width="0.75"/>
+            <ellipse cx="50" cy="50" rx="14" ry="40" stroke="#CBD5E1" stroke-width="0.75" transform="rotate(0 50 50)"/>
+            <line x1="50" y1="10" x2="50" y2="90" stroke="#CBD5E1" stroke-width="0.75"/>
+            <line x1="10" y1="50" x2="90" y2="50" stroke="#CBD5E1" stroke-width="0.75"/>
             <!-- State vector arrow -->
-            <line x1="50" y1="50" x2="68" y2="22" stroke="#00B4D8" stroke-width="2"/>
-            <circle cx="68" cy="22" r="4" fill="#00B4D8"/>
+            <line x1="50" y1="50" x2="68" y2="22" stroke="#0891B2" stroke-width="2"/>
+            <circle cx="68" cy="22" r="4" fill="#0891B2"/>
             <!-- Axis labels -->
             <text x="50" y="7" fill="#64748B" font-family="'Roboto Mono', monospace" font-size="8" text-anchor="middle">|0></text>
             <text x="50" y="98" fill="#64748B" font-family="'Roboto Mono', monospace" font-size="8" text-anchor="middle">|1></text>
@@ -1590,6 +1748,35 @@
         </div>
 
         <p class="dl-note">Requires Python 3.10+ with Qiskit, Cirq, or CUDA-Q installed</p>
+
+        <!-- macOS Gatekeeper instructions -->
+        <details class="dl-macos-note" id="dl-macos-note">
+          <summary>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <circle cx="12" cy="12" r="10"/>
+              <line x1="12" y1="8" x2="12" y2="12"/>
+              <line x1="12" y1="16" x2="12.01" y2="16"/>
+            </svg>
+            <span>First time on macOS? Read this before opening</span>
+          </summary>
+          <div class="dl-macos-body">
+            <p>
+              Because Nuclei is a free open-source project, it isn't signed with an Apple Developer certificate ($99/year). macOS will show a warning like <em>&ldquo;Apple could not verify nuclei is free of malware.&rdquo;</em> This is not actually malware — it just means the app isn't registered with Apple. To open it:
+            </p>
+            <ol>
+              <li><strong>Right-click</strong> (or Control-click) the Nuclei app in Finder</li>
+              <li>Select <strong>Open</strong> from the menu</li>
+              <li>Click <strong>Open</strong> again in the dialog that appears</li>
+            </ol>
+            <p class="dl-macos-alt">
+              Still blocked? Open <strong>System Settings → Privacy &amp; Security</strong>, scroll down, and click <strong>&ldquo;Open Anyway&rdquo;</strong> next to the message about Nuclei.
+            </p>
+            <p class="dl-macos-alt">
+              Or run this in Terminal after moving the app to Applications:
+            </p>
+            <pre class="dl-macos-code">xattr -dr com.apple.quarantine /Applications/nuclei.app</pre>
+          </div>
+        </details>
       </div>
     </div>
   </section>
@@ -1601,7 +1788,7 @@
         <h2>Free. Open source. Built for students.</h2>
         <div class="oss-actions">
           <a href="https://github.com/calelamb/nuclei" class="gh-star-btn">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <svg class="gh-star-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
               <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
             </svg>
             Star on GitHub
@@ -1639,6 +1826,9 @@
   <script>
     (function () {
       'use strict';
+
+      // Mark html as JS-enabled so reveal animations activate
+      document.documentElement.classList.add('js');
 
       // ---- Nav frosted glass on scroll ----
       var nav = document.getElementById('nav');
@@ -1694,6 +1884,7 @@
       var dlMacIntel = document.getElementById('dl-mac-intel');
 
       var ua = navigator.userAgent || '';
+      var macosNote = document.getElementById('dl-macos-note');
 
       if (/Windows/.test(ua)) {
         // Windows detected
@@ -1708,6 +1899,8 @@
           // Replace Apple icon with Windows icon
           dlPrimary.querySelector('svg').innerHTML = '<path d="M3 12V6.75l8-1.25V12H3zm0 .5h8v6.5l-8-1.25V12.5zM11.5 12V5.35l9.5-1.6V12H11.5zm0 .5H21v6.75l-9.5 1.5V12.5z"/>';
         }
+        // Hide macOS Gatekeeper note on Windows
+        if (macosNote) macosNote.style.display = 'none';
       } else if (/Linux/.test(ua)) {
         // Linux detected
         if (heroDlBtn && heroDlText) {
@@ -1720,8 +1913,10 @@
           dlPrimary.href = 'https://github.com/calelamb/nuclei/releases/latest';
           dlPrimary.querySelector('svg').innerHTML = '<path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 14H9v-2h2v2zm0-4H9V7h2v5zm4 4h-2v-2h2v2zm0-4h-2V7h2v5z"/>';
         }
+        // Hide macOS Gatekeeper note on Linux
+        if (macosNote) macosNote.style.display = 'none';
       }
-      // Default is macOS Apple Silicon (already set in HTML)
+      // Default is macOS Apple Silicon (already set in HTML) — macOS note stays visible
     })();
   </script>
 </body>
