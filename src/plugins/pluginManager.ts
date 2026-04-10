@@ -107,10 +107,10 @@ export function createPluginAPI(manifest: PluginManifest): PluginAPI {
       });
     },
 
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     registerGateRenderer(_config) {
       if (!manifest.capabilities.includes('gate-renderer')) return;
-      // Gate renderers are stored separately and used by the circuit renderer
-      // Gate renderer registration stored for circuit renderer use
+      // Gate renderer registration is a stub — will be wired to the circuit renderer
     },
 
     registerDiracSkill(config) {
