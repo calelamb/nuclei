@@ -86,6 +86,11 @@ export function registerGhostCompletions(monaco: any) {
   const provider = monaco.languages.registerInlineCompletionsProvider('python', {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     provideInlineCompletions: async (model: any, position: any, _context: any, token: any) => {
+      // Guard against out-of-range line numbers
+      const lineCount = model.getLineCount();
+      if (position.lineNumber < 1 || position.lineNumber > lineCount) {
+        return { items: [] };
+      }
       // Don't trigger in comments or strings
       const lineContent = model.getLineContent(position.lineNumber);
       const beforeCursor = lineContent.slice(0, position.column - 1).trimStart();

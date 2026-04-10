@@ -120,14 +120,19 @@ export function QuantumEditor() {
       return;
     }
 
-    const markers = errors.map((err) => ({
-      severity: monaco.MarkerSeverity.Error,
-      message: err.message,
-      startLineNumber: err.line,
-      startColumn: 1,
-      endLineNumber: err.line,
-      endColumn: model.getLineMaxColumn(err.line),
-    }));
+    // Clamp line numbers to the valid range — kernel errors may reference
+    // lines that no longer exist if the user kept typing after the error.
+    const lineCount: number = model.getLineCount();
+    const markers = errors
+      .filter((err) => err.line >= 1 && err.line <= lineCount)
+      .map((err) => ({
+        severity: monaco.MarkerSeverity.Error,
+        message: err.message,
+        startLineNumber: err.line,
+        startColumn: 1,
+        endLineNumber: err.line,
+        endColumn: model.getLineMaxColumn(err.line),
+      }));
     monaco.editor.setModelMarkers(model, 'nuclei', markers);
   }, [errors]);
 

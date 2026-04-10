@@ -64,19 +64,16 @@ jobs:
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          # macOS code signing — produces a signed .dmg that passes codesign
-          # verification. Still shows Gatekeeper warning on first open
-          # (bypassable with right-click → Open), but the signature proves
-          # authenticity. This is enough to ship without notarization.
+          # macOS code signing + notarization — produces a signed AND
+          # notarized .dmg that opens without any Gatekeeper warning.
+          # Tauri submits the .app to Apple's notary service, waits for
+          # "Accepted", then staples the notarization ticket to the .dmg.
           APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
           APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
           APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-          # Notarization is intentionally disabled for v0.1.1 because Apple's
-          # notary service is backed up (submissions stuck "In Progress" 10+ hrs).
-          # To re-enable for v0.1.2+, uncomment these two lines:
-          # APPLE_ID: ${{ secrets.APPLE_ID }}
-          # APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
         with:
           tagName: ${{ github.ref_name }}
           releaseName: 'Nuclei ${{ github.ref_name }}'

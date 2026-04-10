@@ -1,6 +1,6 @@
 [package]
 name = "nuclei"
-version = "0.1.1"
+version = "0.1.2"
 description = "A purpose-built desktop IDE for quantum computing"
 authors = ["Cale Lamb"]
 license = "MIT"

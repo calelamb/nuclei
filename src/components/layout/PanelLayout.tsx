@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { usePlatform } from '../../platform/PlatformProvider';
+import { ErrorBoundary } from '../ErrorBoundary';
 import { QuantumEditor } from '../editor/QuantumEditor';
 import { EditorTabs } from '../editor/EditorTabs';
 import { Breadcrumbs } from '../editor/Breadcrumbs';
@@ -432,7 +433,9 @@ export function PanelLayout() {
                   <EditorTabs />
                   <Breadcrumbs />
                   <div style={{ flex: 1, minHeight: 0 }}>
-                    <QuantumEditor />
+                    <ErrorBoundary label="Code Editor">
+                      <QuantumEditor />
+                    </ErrorBoundary>
                   </div>
                 </div>
 

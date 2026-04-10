@@ -36,21 +36,9 @@ Grab the latest release for your platform:
 
 ### Opening Nuclei on macOS
 
-Because Nuclei is a free open-source project, it isn't signed with an Apple Developer certificate (Apple charges $99/year for that). When you first open it, macOS will say *"Apple could not verify 'nuclei' is free of malware."* This is **not** malware — it just means the app isn't registered with Apple.
+Starting with v0.1.2, Nuclei for macOS is **signed with an Apple Developer ID and notarized by Apple**. Double-click the `.dmg`, drag Nuclei into `/Applications`, and open it — no Gatekeeper warnings, no right-click workaround needed.
 
-To open it:
-
-1. **Right-click** (or Control-click) the Nuclei app in Finder
-2. Select **Open** from the menu
-3. Click **Open** again in the dialog
-
-If that still doesn't work, open **System Settings → Privacy & Security**, scroll down, and click **"Open Anyway"** next to the Nuclei message.
-
-Or run this in Terminal after moving Nuclei to `/Applications`:
-
-```bash
-xattr -dr com.apple.quarantine /Applications/nuclei.app
-```
+**Still on an older build?** If you see *"Apple could not verify nuclei is free of malware"* (v0.1.1 or earlier), upgrade to v0.1.2. If you must keep the old version, right-click the app in Finder → Open → Open, or run `xattr -dr com.apple.quarantine /Applications/nuclei.app`.
 
 ### Web Version
 
