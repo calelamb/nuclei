@@ -40,3 +40,10 @@ __pycache__/
 
 # Tauri
 src-tauri/target/
+
+# Apple signing certificates — never commit
+*.cer
+*.p12
+*.keychain
+*.keychain-db
+*.certSigningRequest
