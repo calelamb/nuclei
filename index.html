@@ -22,6 +22,15 @@
       if ('serviceWorker' in navigator && !window.__TAURI_INTERNALS__) {
         navigator.serviceWorker.register(new URL('sw.js', document.baseURI).href).catch(() => {});
       }
+
+      // Vercel Web Analytics — inject only in the web build, never in Tauri
+      // desktop where Vercel's injected assets don't exist.
+      if (!window.__TAURI_INTERNALS__) {
+        var va = document.createElement('script');
+        va.defer = true;
+        va.src = '/_vercel/insights/script.js';
+        document.head.appendChild(va);
+      }
     </script>
   </body>
 </html>
