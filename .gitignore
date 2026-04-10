@@ -47,3 +47,4 @@ src-tauri/target/
 *.keychain
 *.keychain-db
 *.certSigningRequest
+.vercel
