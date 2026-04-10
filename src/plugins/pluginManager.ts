@@ -36,7 +36,6 @@ export const usePluginStore = create<PluginManagerState>((set, get) => ({
     set((s) => ({
       plugins: [...s.plugins, { manifest, enabled: true, api: null }],
     }));
-    console.log(`[Plugin] Installed: ${manifest.name} v${manifest.version}`);
   },
 
   uninstallPlugin: (name) => set((s) => ({
@@ -111,7 +110,7 @@ export function createPluginAPI(manifest: PluginManifest): PluginAPI {
     registerGateRenderer(_config) {
       if (!manifest.capabilities.includes('gate-renderer')) return;
       // Gate renderers are stored separately and used by the circuit renderer
-      console.log(`[Plugin:${manifest.name}] Registered gate renderer for ${_config.gateName}`);
+      // Gate renderer registration stored for circuit renderer use
     },
 
     registerDiracSkill(config) {
@@ -131,7 +130,7 @@ export function createPluginAPI(manifest: PluginManifest): PluginAPI {
     },
 
     log(message) {
-      console.log(`[Plugin:${manifest.name}] ${message}`);
+      if (import.meta.env.DEV) console.log(`[Plugin:${manifest.name}] ${message}`);
     },
   };
 }

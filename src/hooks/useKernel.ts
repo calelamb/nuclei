@@ -5,8 +5,9 @@ import { useCircuitStore } from '../stores/circuitStore';
 import { useSimulationStore } from '../stores/simulationStore';
 import { useSettingsStore } from '../stores/settingsStore';
 import type { KernelResponse } from '../types/quantum';
+import { KERNEL_WS_URL } from '../config/kernel';
 
-const KERNEL_URL = 'ws://localhost:9742';
+const KERNEL_URL = KERNEL_WS_URL;
 const DEFAULT_DEBOUNCE_MS = 300;
 const CONNECT_DELAY_MS = 3000;
 const RETRY_DELAY_MS = 2000;
@@ -57,11 +58,9 @@ export function useKernel() {
     if (!mountedRef.current || isWeb) return;
     if (wsRef.current?.readyState === WebSocket.OPEN) return;
 
-    console.log('[Nuclei] Connecting WebSocket to', KERNEL_URL, `(attempt ${retryCountRef.current + 1})`);
     const ws = new WebSocket(KERNEL_URL);
 
     ws.onopen = () => {
-      console.log('[Nuclei] Kernel WebSocket connected');
       wsRef.current = ws;
       retryCountRef.current = 0;
       useEditorStore.getState().setKernelConnected(true);
@@ -75,7 +74,7 @@ export function useKernel() {
       try {
         handleMessage(JSON.parse(event.data));
       } catch (e) {
-        console.error('[Nuclei] Failed to parse kernel message:', e);
+        if (import.meta.env.DEV) console.error('[Nuclei] Failed to parse kernel message:', e);
       }
     };
 
@@ -94,7 +93,6 @@ export function useKernel() {
   // Initialize Pyodide kernel for web
   const initPyodide = useCallback(async () => {
     if (!isWeb) return;
-    console.log('[Nuclei] Initializing Pyodide kernel...');
     useEditorStore.getState().setKernelConnected(false);
 
     try {
@@ -103,7 +101,6 @@ export function useKernel() {
       await kernel.init();
       pyodideRef.current = kernel;
       useEditorStore.getState().setKernelConnected(true);
-      console.log('[Nuclei] Pyodide kernel ready');
 
       // Initial parse
       const code = useEditorStore.getState().code;
@@ -111,7 +108,6 @@ export function useKernel() {
         kernel.send({ type: 'parse', code });
       }
     } catch (e) {
-      console.error('[Nuclei] Pyodide init failed:', e);
       useSimulationStore.getState().addOutput(`Error: Failed to load browser Python engine: ${e}`);
     }
   }, [handleMessage, isWeb]);
@@ -124,14 +120,11 @@ export function useKernel() {
     if (isWeb) {
       initPyodide();
     } else {
-      console.log('[Nuclei] Starting kernel process...');
       platform.startKernel()
-        .then((msg) => {
-          console.log('[Nuclei]', msg);
+        .then(() => {
           setTimeout(connect, CONNECT_DELAY_MS);
         })
-        .catch((err) => {
-          console.error('[Nuclei] Failed to start kernel:', err);
+        .catch(() => {
           setTimeout(connect, CONNECT_DELAY_MS);
         });
     }

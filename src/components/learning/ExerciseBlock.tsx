@@ -4,6 +4,7 @@ import { useThemeStore } from '../../stores/themeStore';
 import { useLearnStore } from '../../stores/learnStore';
 import { useDiracPanelStore } from '../../stores/diracPanelStore';
 import { usePlatform } from '../../platform/PlatformProvider';
+import { KERNEL_WS_URL } from '../../config/kernel';
 import type { Framework, SimulationResult, KernelResponse } from '../../types/quantum';
 import { Play, Lightbulb, CheckCircle, XCircle, HelpCircle, Terminal } from 'lucide-react';
 
@@ -74,7 +75,7 @@ export function ExerciseBlock({
     let ws: WebSocket | null = null;
     let retries = 0;
     function connect() {
-      ws = new WebSocket('ws://localhost:9742');
+      ws = new WebSocket(KERNEL_WS_URL);
       ws.onopen = () => { wsRef.current = ws; retries = 0; };
       ws.onmessage = (ev) => {
         try { handleMessage(JSON.parse(ev.data)); } catch { /* noop */ }

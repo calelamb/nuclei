@@ -1,6 +1,7 @@
 import type { TestCase, TestCaseResult } from '../types/challenge';
 import type { Framework, SimulationResult, KernelResponse } from '../types/quantum';
 import { validateTestCase } from './challengeValidation';
+import { KERNEL_WS_URL } from '../config/kernel';
 
 export function buildTestCode(userCode: string, params: Record<string, unknown>): string {
   const lines: string[] = ['# === Test parameters ==='];
@@ -56,11 +57,11 @@ function executeOnKernel(
 
 function connectKernel(): Promise<WebSocket> {
   return new Promise((resolve, reject) => {
-    const ws = new WebSocket('ws://localhost:9742');
+    const ws = new WebSocket(KERNEL_WS_URL);
 
     ws.addEventListener('open', () => resolve(ws), { once: true });
     ws.addEventListener('error', () => {
-      reject(new Error('Failed to connect to kernel at ws://localhost:9742'));
+      reject(new Error(`Failed to connect to kernel at ${KERNEL_WS_URL}`));
     }, { once: true });
   });
 }

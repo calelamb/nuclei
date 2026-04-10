@@ -84,10 +84,10 @@ npm run tauri dev
 
 ```bash
 npm run tauri build        # Build distributable for your platform
-npm test                   # Frontend tests
-cargo test                 # Rust backend tests
-cd kernel && pytest        # Python kernel tests
+npm test                   # Frontend tests (Vitest)
 ```
+
+> **Note:** Rust backend tests (`cargo test`) and Python kernel tests (`pytest`) are planned. See the [issues tracker](https://github.com/calelamb/nuclei/issues) for progress. Contributions welcome!
 
 ---
 

@@ -4,6 +4,7 @@ import { useThemeStore, type ThemeColors } from '../../stores/themeStore';
 import { useLearnStore } from '../../stores/learnStore';
 import { useEditorStore } from '../../stores/editorStore';
 import { usePlatform } from '../../platform/PlatformProvider';
+import { KERNEL_WS_URL } from '../../config/kernel';
 import type { Framework, CircuitSnapshot, SimulationResult, KernelResponse } from '../../types/quantum';
 import { Play, RotateCcw, ExternalLink, Terminal, BarChart3 } from 'lucide-react';
 
@@ -121,7 +122,7 @@ export function InteractiveDemo({ code: initialCode, framework, description, exp
     const maxRetries = 3;
 
     function connect() {
-      ws = new WebSocket('ws://localhost:9742');
+      ws = new WebSocket(KERNEL_WS_URL);
       ws.onopen = () => { wsRef.current = ws; retries = 0; };
       ws.onmessage = (ev) => {
         try { handleMessage(JSON.parse(ev.data)); } catch { /* noop */ }

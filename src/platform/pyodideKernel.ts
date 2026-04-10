@@ -53,22 +53,21 @@ async function loadPyodide(): Promise<any> {
   // Try to install cirq (lighter, better Pyodide support)
   try {
     await micropip.install('cirq-core');
-    console.log('[PyodideKernel] cirq installed');
-  } catch (e) {
-    console.warn('[PyodideKernel] cirq install failed, basic mode only:', e);
+    // cirq installed successfully
+  } catch {
+    // cirq not available — basic mode only
   }
 
   // Install numpy (needed for computations)
   try {
     await pyodideInstance.loadPackage('numpy');
-    console.log('[PyodideKernel] numpy loaded');
-  } catch (e) {
-    console.warn('[PyodideKernel] numpy failed:', e);
+    // numpy loaded successfully
+  } catch {
+    // numpy not available
   }
 
   ready = true;
   loading = false;
-  console.log('[PyodideKernel] Ready');
   return pyodideInstance;
 }
 

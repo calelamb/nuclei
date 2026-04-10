@@ -19,8 +19,10 @@ export function QuantumEditor() {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const monacoRef = useRef<any>(null);
   const [showInlineEdit, setShowInlineEdit] = useState(false);
-  const [editorInstance, setEditorInstance] = useState<unknown>(null);
-  const [monacoInstance, setMonacoInstance] = useState<unknown>(null);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const [editorInstance, setEditorInstance] = useState<any>(null);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const [monacoInstance, setMonacoInstance] = useState<any>(null);
 
   const themeName = mode === 'dark' ? 'nuclei-dark' : 'nuclei-light';
 

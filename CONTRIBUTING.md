@@ -39,9 +39,9 @@ This launches the Tauri window with hot module replacement. Frontend changes ref
 
 ```bash
 npm test              # Frontend (Vitest)
-cargo test            # Rust backend
-cd kernel && pytest   # Python kernel
 ```
+
+> **Note:** Rust backend tests (`cargo test`) and Python kernel tests (`pytest`) are planned. See the [issues tracker](https://github.com/calelamb/nuclei/issues) for progress. Contributions welcome!
 
 ---
 
@@ -127,10 +127,9 @@ Keep the first line under 72 characters. Use the body for context when the chang
 4. **Run the full check suite locally** before pushing:
    ```bash
    npm test
-   cargo test
+   npm run build
    cargo fmt --check
    cargo clippy
-   cd kernel && pytest
    ```
 
 5. **Open a pull request** against `main`. Include:
