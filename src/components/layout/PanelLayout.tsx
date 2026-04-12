@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
+import { getExecute } from '../../App';
 import { usePlatform } from '../../platform/PlatformProvider';
 import { ErrorBoundary } from '../ErrorBoundary';
 import { QuantumEditor } from '../editor/QuantumEditor';
@@ -204,7 +205,7 @@ function StatusBar() {
 
   const statusText = isRunning ? 'Running...' : result ? `Done (${result.execution_time_ms}ms)` : 'Ready';
 
-  const handleRun = () => { import('../../App').then(({ getExecute }) => { const e = getExecute(); if (e) e(); }); };
+  const handleRun = () => { const e = getExecute(); if (e) e(); };
   const handleCycleMode = useCallback(async () => { cycleMode(); try { await platform.setStoredValue('ui_mode', useUIModeStore.getState().mode); } catch { /* non-critical persistence */ } }, [cycleMode, platform]);
   const handleThemeToggle = useCallback(async () => { themeToggle(); try { await platform.setStoredValue('theme', themeMode === 'dark' ? 'light' : 'dark'); } catch { /* non-critical persistence */ } }, [themeToggle, themeMode, platform]);
 

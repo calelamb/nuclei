@@ -16,6 +16,7 @@ type MessageHandler = (msg: KernelMessage) => void;
 let pyodideInstance: any = null;
 let loading = false;
 let ready = false;
+let cirqInstalled = false;
 
 const PYODIDE_CDN = 'https://cdn.jsdelivr.net/pyodide/v0.27.0/full/pyodide.js';
 
@@ -52,10 +53,10 @@ async function loadPyodide(): Promise<any> {
 
   // Try to install cirq (lighter, better Pyodide support)
   try {
-    await micropip.install('cirq-core');
-    // cirq installed successfully
+    await micropip.install('cirq-core==1.4.1');
+    cirqInstalled = true;
   } catch {
-    // cirq not available — basic mode only
+    cirqInstalled = false;
   }
 
   // Install numpy (needed for computations)
@@ -203,8 +204,45 @@ def _execute_circuit(code, shots):
                 "z": float(rho[0,0].real - rho[1,1].real),
             })
 
-        snapshot_data = _parse_circuit(code)
-        snapshot = snapshot_data[0]
+        # Extract snapshot directly from already-executed namespace (no re-exec)
+        snapshot = None
+        try:
+            all_qubits_snap = sorted(circuit.all_qubits())
+            qubit_index_snap = {q: i for i, q in enumerate(all_qubits_snap)}
+            gates_snap = []
+            for moment_idx_snap, moment_snap in enumerate(circuit.moments):
+                for op_snap in moment_snap.operations:
+                    gate_snap = op_snap.gate
+                    qubits_snap = [qubit_index_snap[q] for q in op_snap.qubits]
+                    gate_name_snap = str(type(gate_snap).__name__).replace('PowGate','')
+                    if 'HGate' in str(type(gate_snap)) or (hasattr(gate_snap,'exponent') and isinstance(gate_snap, cirq.HPowGate) and gate_snap.exponent==1):
+                        gate_name_snap = 'H'
+                    elif isinstance(gate_snap, cirq.CNotPowGate) and gate_snap.exponent == 1:
+                        gate_name_snap = 'CNOT'
+                    elif isinstance(gate_snap, cirq.MeasurementGate):
+                        gate_name_snap = 'Measure'
+                    elif isinstance(gate_snap, cirq.XPowGate) and gate_snap.exponent == 1:
+                        gate_name_snap = 'X'
+                    elif isinstance(gate_snap, cirq.ZPowGate) and gate_snap.exponent == 1:
+                        gate_name_snap = 'Z'
+                    controls_snap = qubits_snap[:1] if gate_name_snap in ('CNOT','CZ') else []
+                    targets_snap = qubits_snap[1:] if gate_name_snap in ('CNOT','CZ') else qubits_snap
+                    gates_snap.append({
+                        "type": gate_name_snap,
+                        "targets": targets_snap,
+                        "controls": controls_snap,
+                        "params": [],
+                        "layer": moment_idx_snap,
+                    })
+            snapshot = {
+                "framework": "cirq",
+                "qubit_count": len(all_qubits_snap),
+                "classical_bit_count": sum(1 for op in circuit.all_operations() if isinstance(op.gate, cirq.MeasurementGate)),
+                "depth": len(circuit.moments),
+                "gates": gates_snap,
+            }
+        except Exception:
+            pass
 
         return {
             "state_vector": state_vector,
@@ -218,6 +256,27 @@ def _execute_circuit(code, shots):
     except Exception:
         return None, None, output, traceback.format_exc()
 `;
+
+/**
+ * Translate ModuleNotFoundError for unsupported frameworks into a
+ * user-friendly message pointing to the desktop app.
+ */
+function translateModuleError(errorMsg: string): string {
+  const match = errorMsg.match(
+    /ModuleNotFoundError: No module named '(qiskit|pennylane|qutip)'/,
+  );
+  if (!match) return errorMsg;
+
+  const framework = match[1];
+  const displayName =
+    framework === 'qiskit'
+      ? 'Qiskit'
+      : framework === 'pennylane'
+        ? 'PennyLane'
+        : 'QuTiP';
+
+  return `${displayName} isn't available in the browser version. The browser IDE supports Cirq. For Qiskit/CUDA-Q support, download the desktop app from getnuclei.dev`;
+}
 
 export class PyodideKernel {
   private onMessage: MessageHandler;
@@ -234,6 +293,12 @@ export class PyodideKernel {
       // Load the kernel code
       await this.pyodide.runPythonAsync(KERNEL_PYTHON);
       this.onMessage({ type: 'output', text: 'Pyodide kernel ready (browser mode)' });
+      if (!cirqInstalled) {
+        this.onMessage({
+          type: 'output',
+          text: 'Warning: cirq-core could not be loaded. Quantum circuit features may be limited. For full framework support, download the desktop app from getnuclei.dev',
+        });
+      }
     } catch (e) {
       this.onMessage({ type: 'error', message: `Failed to initialize Pyodide: ${e}` });
     }
@@ -258,12 +323,12 @@ json.dumps({"snapshot": _snap, "output": _out, "error": _err})
           this.onMessage({ type: 'output', text: data.output });
         }
         if (data.error) {
-          this.onMessage({ type: 'error', message: data.error });
+          this.onMessage({ type: 'error', message: translateModuleError(data.error) });
         } else if (data.snapshot) {
           this.onMessage({ type: 'snapshot', data: data.snapshot });
         }
       } catch (e) {
-        this.onMessage({ type: 'error', message: String(e) });
+        this.onMessage({ type: 'error', message: translateModuleError(String(e)) });
       }
     } else if (msg.type === 'execute') {
       try {
@@ -282,7 +347,7 @@ json.dumps({"result": _result, "snapshot": _snap, "output": _out, "error": _err}
           this.onMessage({ type: 'output', text: data.output });
         }
         if (data.error) {
-          this.onMessage({ type: 'error', message: data.error });
+          this.onMessage({ type: 'error', message: translateModuleError(data.error) });
         } else {
           if (data.snapshot) {
             this.onMessage({ type: 'snapshot', data: data.snapshot });
@@ -292,7 +357,7 @@ json.dumps({"result": _result, "snapshot": _snap, "output": _out, "error": _err}
           }
         }
       } catch (e) {
-        this.onMessage({ type: 'error', message: String(e) });
+        this.onMessage({ type: 'error', message: translateModuleError(String(e)) });
       }
     }
   }

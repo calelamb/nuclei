@@ -8,6 +8,17 @@ import type { KernelResponse } from '../types/quantum';
 import { KERNEL_WS_URL } from '../config/kernel';
 
 const KERNEL_URL = KERNEL_WS_URL;
+
+const CIRQ_WEB_DEFAULT = `import cirq
+
+# Create a Bell State
+q0, q1 = cirq.LineQubit.range(2)
+circuit = cirq.Circuit([
+    cirq.H(q0),
+    cirq.CNOT(q0, q1),
+    cirq.measure(q0, q1, key='result')
+])
+`;
 const DEFAULT_DEBOUNCE_MS = 300;
 const CONNECT_DELAY_MS = 3000;
 const RETRY_DELAY_MS = 2000;
@@ -42,7 +53,9 @@ export function useKernel() {
         useSimulationStore.getState().addOutput(`Error: ${msg.message}`);
         setCircuitError(msg.message);
         useSimulationStore.getState().setRunning(false);
-        const lineMatch = msg.message?.match(/line (\d+)/);
+        const frames = msg.message?.match(/File "<(?:string|exec)>", line (\d+)/g) || [];
+        const lastFrame = frames[frames.length - 1];
+        const lineMatch = lastFrame?.match(/line (\d+)/);
         if (lineMatch) {
           const line = parseInt(lineMatch[1], 10);
           const shortMsg = msg.message.split('\n').pop() ?? msg.message;
@@ -64,6 +77,7 @@ export function useKernel() {
       wsRef.current = ws;
       retryCountRef.current = 0;
       useEditorStore.getState().setKernelConnected(true);
+      useEditorStore.getState().setKernelReady(true);
       const code = useEditorStore.getState().code;
       if (code.trim()) {
         ws.send(JSON.stringify({ type: 'parse', code }));
@@ -94,6 +108,7 @@ export function useKernel() {
   const initPyodide = useCallback(async () => {
     if (!isWeb) return;
     useEditorStore.getState().setKernelConnected(false);
+    useEditorStore.getState().setKernelReady(false);
 
     try {
       const { PyodideKernel } = await import('../platform/pyodideKernel');
@@ -101,6 +116,14 @@ export function useKernel() {
       await kernel.init();
       pyodideRef.current = kernel;
       useEditorStore.getState().setKernelConnected(true);
+      useEditorStore.getState().setKernelReady(true);
+
+      // Swap Qiskit default to Cirq for web mode (Pyodide only has Cirq)
+      const currentCode = useEditorStore.getState().code;
+      if (currentCode.includes('from qiskit import QuantumCircuit')) {
+        useEditorStore.getState().setCode(CIRQ_WEB_DEFAULT);
+        useEditorStore.getState().setFramework('cirq');
+      }
 
       // Initial parse
       const code = useEditorStore.getState().code;
@@ -159,6 +182,12 @@ export function useKernel() {
   const execute = useCallback(() => {
     const { isRunning } = useSimulationStore.getState();
     if (isRunning) return;
+
+    const { kernelReady } = useEditorStore.getState();
+    if (!kernelReady) {
+      useSimulationStore.getState().addOutput('Kernel is still loading. Please wait...');
+      return;
+    }
 
     const { code } = useEditorStore.getState();
     const { shots } = useSimulationStore.getState();

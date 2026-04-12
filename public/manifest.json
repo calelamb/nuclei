@@ -2,12 +2,12 @@
   "name": "Nuclei — Quantum Computing IDE",
   "short_name": "Nuclei",
   "description": "A purpose-built IDE for learning quantum computing",
-  "start_url": "/",
+  "start_url": "./",
   "display": "standalone",
   "background_color": "#0F1B2D",
   "theme_color": "#00B4D8",
   "icons": [
-    { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png" },
-    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png" }
+    { "src": "./icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "./icon-512.png", "sizes": "512x512", "type": "image/png" }
   ]
 }

@@ -12,11 +12,13 @@ interface EditorState {
   filePath: string | null;
   isDirty: boolean;
   kernelConnected: boolean;
+  kernelReady: boolean;
   errors: EditorError[];
   setCode: (code: string) => void;
   setFramework: (framework: Framework) => void;
   setFilePath: (path: string | null) => void;
   setKernelConnected: (connected: boolean) => void;
+  setKernelReady: (ready: boolean) => void;
   setErrors: (errors: EditorError[]) => void;
   clearErrors: () => void;
 }
@@ -34,11 +36,13 @@ qc.measure([0, 1], [0, 1])
   filePath: null,
   isDirty: false,
   kernelConnected: false,
+  kernelReady: false,
   errors: [],
   setCode: (code) => set({ code, isDirty: true, errors: [] }),
   setFramework: (framework) => set({ framework }),
   setFilePath: (filePath) => set({ filePath, isDirty: false }),
   setKernelConnected: (kernelConnected) => set({ kernelConnected }),
+  setKernelReady: (kernelReady) => set({ kernelReady }),
   setErrors: (errors) => set({ errors }),
   clearErrors: () => set({ errors: [] }),
 }));
