@@ -7,6 +7,7 @@ import { usePlatform } from '../../platform/PlatformProvider';
 import { KERNEL_WS_URL } from '../../config/kernel';
 import type { Framework, SimulationResult, KernelResponse } from '../../types/quantum';
 import { Play, Lightbulb, CheckCircle, XCircle, HelpCircle, Terminal } from 'lucide-react';
+import { hasExpectedDistribution, isQuantumCode, validateExerciseResult } from './exerciseValidation';
 
 interface ExerciseBlockProps {
   id: string;
@@ -15,6 +16,7 @@ interface ExerciseBlockProps {
   starterCode: string;
   framework: Framework;
   expectedProbabilities?: Record<string, number>;
+  expectedMeasurements?: Record<string, number>;
   tolerancePercent: number;
   hints: string[];
   successMessage: string;
@@ -22,7 +24,7 @@ interface ExerciseBlockProps {
 
 export function ExerciseBlock({
   id, title, description, starterCode,
-  expectedProbabilities, tolerancePercent, hints, successMessage,
+  expectedProbabilities, expectedMeasurements, tolerancePercent, hints, successMessage,
 }: ExerciseBlockProps) {
   const colors = useThemeStore((s) => s.colors);
   const shadow = useThemeStore((s) => s.shadow);
@@ -49,20 +51,69 @@ export function ExerciseBlock({
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const pyodideRef = useRef<any>(null);
   const inactivityRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const hasExpectations = hasExpectedDistribution(expectedProbabilities)
+    || hasExpectedDistribution(expectedMeasurements);
+
+  const completeExercise = useCallback((message: string) => {
+    setFeedback({ success: true, message });
+    if (lessonId) {
+      passExercise(lessonId, id);
+    }
+  }, [id, lessonId, passExercise]);
+
+  const checkSolution = useCallback((nextResult: SimulationResult) => {
+    const validation = validateExerciseResult(nextResult, {
+      expectedProbabilities,
+      expectedMeasurements,
+      tolerancePercent,
+    });
+
+    if (!validation) {
+      completeExercise(successMessage);
+      return;
+    }
+
+    if (validation.success) {
+      completeExercise(successMessage);
+    } else {
+      setFeedback({ success: false, message: validation.message });
+    }
+  }, [
+    completeExercise,
+    expectedMeasurements,
+    expectedProbabilities,
+    successMessage,
+    tolerancePercent,
+  ]);
 
   const handleMessage = useCallback((msg: KernelResponse) => {
     if (msg.type === 'result') {
       setResult(msg.data);
       setIsRunning(false);
       setError(null);
+      if (msg.data) {
+        if (hasExpectations) {
+          checkSolution(msg.data);
+        } else {
+          completeExercise(successMessage);
+        }
+      }
+    } else if (msg.type === 'python_result') {
+      setResult(null);
+      setIsRunning(false);
+      if (msg.success) {
+        setError(null);
+        if (!hasExpectations) {
+          completeExercise(successMessage);
+        }
+      }
     } else if (msg.type === 'output') {
       setOutput((prev) => [...prev, msg.text]);
     } else if (msg.type === 'error') {
-      if (msg.message?.includes('No supported quantum framework')) return;
       setError(msg.message);
       setIsRunning(false);
     }
-  }, []);
+  }, [checkSolution, completeExercise, hasExpectations, successMessage]);
 
   useEffect(() => {
     if (isWeb) {
@@ -109,37 +160,21 @@ export function ExerciseBlock({
     resetInactivity();
   };
 
-  const checkSolution = () => {
-    if (!result || !expectedProbabilities || Object.keys(expectedProbabilities).length === 0) return;
-    const tolerance = tolerancePercent / 100;
-    const mismatches: string[] = [];
-
-    for (const [state, expected] of Object.entries(expectedProbabilities)) {
-      const actual = result.probabilities[state] ?? 0;
-      if (Math.abs(actual - expected) > tolerance) {
-        const pctActual = (actual * 100).toFixed(0);
-        const pctExpected = (expected * 100).toFixed(0);
-        mismatches.push(`Expected ~${pctExpected}% on |${state}⟩ but got ${pctActual}%`);
-      }
-    }
-
-    if (mismatches.length === 0) {
-      setFeedback({ success: true, message: successMessage });
-      if (lessonId) passExercise(lessonId, id);
-    } else {
-      setFeedback({ success: false, message: mismatches.join('. ') + '.' });
-    }
-  };
-
   const handleRun = () => {
     setIsRunning(true);
     setError(null);
     setFeedback(null);
     setOutput([]);
+    setResult(null);
+
+    const message = isQuantumCode(localCode)
+      ? { type: 'execute' as const, code: localCode, shots: 1024 }
+      : { type: 'run_python' as const, code: localCode };
+
     if (isWeb && pyodideRef.current) {
-      pyodideRef.current.send({ type: 'execute', code: localCode, shots: 1024 });
+      pyodideRef.current.send(message);
     } else if (wsRef.current?.readyState === WebSocket.OPEN) {
-      wsRef.current.send(JSON.stringify({ type: 'execute', code: localCode, shots: 1024 }));
+      wsRef.current.send(JSON.stringify(message));
     } else {
       setError('Kernel not connected');
       setIsRunning(false);
@@ -260,8 +295,8 @@ export function ExerciseBlock({
           <Play size={12} fill="currentColor" />
           {isRunning ? 'Running...' : 'Run'}
         </button>
-        {result && expectedProbabilities && Object.keys(expectedProbabilities).length > 0 && (
-          <button onClick={checkSolution} style={{
+        {result && hasExpectations && (
+          <button onClick={() => checkSolution(result)} style={{
             display: 'flex', alignItems: 'center', gap: 6,
             padding: '6px 14px',
             background: colors.success,
@@ -273,7 +308,7 @@ export function ExerciseBlock({
             Check Solution
           </button>
         )}
-        {result && (!expectedProbabilities || Object.keys(expectedProbabilities).length === 0) && (
+        {feedback?.success && !hasExpectations && (
           <span style={{
             color: colors.success, fontSize: 11, fontFamily: "'Geist Sans', sans-serif",
             display: 'flex', alignItems: 'center', gap: 4,

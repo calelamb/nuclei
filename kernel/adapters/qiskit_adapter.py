@@ -143,6 +143,7 @@ class QiskitAdapter(FrameworkAdapter):
             measurements=measurements,
             bloch_coords=bloch_coords,
             execution_time_ms=round(elapsed, 1),
+            shot_count=shots,
         )
 
 

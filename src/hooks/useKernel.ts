@@ -24,6 +24,20 @@ const CONNECT_DELAY_MS = 3000;
 const RETRY_DELAY_MS = 2000;
 const MAX_RETRIES = 15;
 
+function getErrorContext(msg: Extract<KernelResponse, { type: 'error' }>) {
+  const detail = msg.traceback ?? msg.message;
+  const frames = detail.match(/File "<(?:string|exec)>", line (\d+)/g) || [];
+  const lastFrame = frames[frames.length - 1];
+  const lineMatch = lastFrame?.match(/line (\d+)/);
+  const line = lineMatch ? parseInt(lineMatch[1], 10) : null;
+
+  return {
+    detail,
+    line,
+    shortMessage: detail.split('\n').filter(Boolean).pop() ?? msg.message,
+  };
+}
+
 export function useKernel() {
   const wsRef = useRef<WebSocket | null>(null);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -36,35 +50,54 @@ export function useKernel() {
 
   const setSnapshot = useCircuitStore.getState().setSnapshot;
   const setCircuitError = useCircuitStore.getState().setError;
+  const clearEditorErrors = useEditorStore.getState().clearErrors;
+  const clearSimulationResult = useSimulationStore.getState().clearResult;
 
   const handleMessage = useCallback((msg: KernelResponse) => {
     switch (msg.type) {
       case 'snapshot':
         setSnapshot(msg.data);
-        useEditorStore.getState().setFramework(msg.data.framework);
+        clearEditorErrors();
+        if (msg.data) {
+          useEditorStore.getState().setFramework(msg.data.framework);
+        }
         break;
       case 'result':
         useSimulationStore.getState().setResult(msg.data);
+        clearEditorErrors();
+        break;
+      case 'python_result':
+        useSimulationStore.getState().setRunning(false);
+        clearEditorErrors();
         break;
       case 'output':
         useSimulationStore.getState().addOutput(msg.text);
         break;
       case 'error': {
-        useSimulationStore.getState().addOutput(`Error: ${msg.message}`);
-        setCircuitError(msg.message);
+        const { detail, line, shortMessage } = getErrorContext(msg);
+
+        useSimulationStore.getState().addOutput(`Error: ${detail}`);
         useSimulationStore.getState().setRunning(false);
-        const frames = msg.message?.match(/File "<(?:string|exec)>", line (\d+)/g) || [];
-        const lastFrame = frames[frames.length - 1];
-        const lineMatch = lastFrame?.match(/line (\d+)/);
-        if (lineMatch) {
-          const line = parseInt(lineMatch[1], 10);
-          const shortMsg = msg.message.split('\n').pop() ?? msg.message;
-          useEditorStore.getState().setErrors([{ line, message: shortMsg }]);
+
+        if (msg.phase === 'parse') {
+          setSnapshot(null);
+          setCircuitError(msg.message);
+        }
+
+        if (msg.phase === 'execute' || msg.phase === 'python') {
+          clearSimulationResult();
+          if (msg.phase === 'execute') {
+            setCircuitError(msg.message);
+          }
+        }
+
+        if (line !== null) {
+          useEditorStore.getState().setErrors([{ line, message: shortMessage }]);
         }
         break;
       }
     }
-  }, [setSnapshot, setCircuitError]);
+  }, [clearEditorErrors, clearSimulationResult, setSnapshot, setCircuitError]);
 
   // WebSocket connection for desktop
   const connect = useCallback(() => {
@@ -198,6 +231,7 @@ export function useKernel() {
         return;
       }
       useSimulationStore.getState().setRunning(true);
+      useSimulationStore.getState().clearResult();
       useSimulationStore.getState().clearOutput();
       pyodideRef.current.send({ type: 'execute', code, shots });
     } else {
@@ -207,6 +241,7 @@ export function useKernel() {
         return;
       }
       useSimulationStore.getState().setRunning(true);
+      useSimulationStore.getState().clearResult();
       useSimulationStore.getState().clearOutput();
       ws.send(JSON.stringify({ type: 'execute', code, shots }));
     }

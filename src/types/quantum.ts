@@ -33,14 +33,25 @@ export interface SimulationResult {
   measurements: Record<string, number>;
   bloch_coords: BlochCoord[];
   execution_time_ms: number;
+  shot_count: number;
 }
 
 export type KernelMessage =
   | { type: 'parse'; code: string }
-  | { type: 'execute'; code: string; shots: number };
+  | { type: 'execute'; code: string; shots: number }
+  | { type: 'run_python'; code: string };
 
 export type KernelResponse =
-  | { type: 'snapshot'; data: CircuitSnapshot }
-  | { type: 'result'; data: SimulationResult }
-  | { type: 'error'; message: string; traceback?: string }
+  | { type: 'snapshot'; data: CircuitSnapshot | null }
+  | { type: 'result'; data: SimulationResult | null }
+  | { type: 'python_result'; success: boolean }
+  | {
+      type: 'error';
+      message: string;
+      traceback?: string;
+      code?: string;
+      phase?: 'parse' | 'execute' | 'python';
+      framework?: Framework;
+      dependency?: string;
+    }
   | { type: 'output'; text: string };

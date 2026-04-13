@@ -38,6 +38,7 @@ class SimulationResult:
     measurements: dict[str, int]
     bloch_coords: list[dict]  # [{"x": float, "y": float, "z": float}, ...]
     execution_time_ms: float
+    shot_count: int
 
     def to_dict(self) -> dict:
         return asdict(self)

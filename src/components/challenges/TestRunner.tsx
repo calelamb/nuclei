@@ -2,6 +2,7 @@ import { useCallback } from 'react';
 import { useThemeStore } from '../../stores/themeStore';
 import { useChallengeModeStore } from '../../stores/challengeModeStore';
 import { runTestCases } from '../../services/challengeExecution';
+import { usePlatform } from '../../platform/PlatformProvider';
 import { TestCaseRow } from './TestCaseRow';
 import { Play, Check, X } from 'lucide-react';
 import type { QuantumChallenge, Submission, TestCaseResult } from '../../types/challenge';
@@ -13,6 +14,7 @@ interface TestRunnerProps {
 export function TestRunner({ challenge }: TestRunnerProps) {
   const colors = useThemeStore((s) => s.colors);
   const shadow = useThemeStore((s) => s.shadow);
+  const platform = usePlatform();
   const activeFramework = useChallengeModeStore((s) => s.activeFramework);
   const progress = useChallengeModeStore((s) => s.progress);
   const isRunning = useChallengeModeStore((s) => s.isRunning);
@@ -44,10 +46,14 @@ export function TestRunner({ challenge }: TestRunnerProps) {
       code,
       casesToRun,
       activeFramework,
+      platform.getPlatform(),
       1024,
+      (index: number) => {
+        setRunningTestIndex(index);
+      },
       (result: TestCaseResult, index: number) => {
         addTestResult(result);
-        setRunningTestIndex(index + 1);
+        setRunningTestIndex(index);
       },
       () => {
         // Error already encoded in individual test results
@@ -81,7 +87,7 @@ export function TestRunner({ challenge }: TestRunnerProps) {
       if (allPassed) markSolved(challenge.id);
     }
   }, [
-    isRunning, code, activeFramework, challenge, visibleTests,
+    isRunning, code, activeFramework, challenge, visibleTests, platform,
     clearTestResults, setRunning, setRunningTestIndex, addTestResult,
     addSubmission, markSolved,
   ]);

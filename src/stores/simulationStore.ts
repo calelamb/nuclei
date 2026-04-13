@@ -6,7 +6,8 @@ interface SimulationState {
   isRunning: boolean;
   shots: number;
   terminalOutput: string[];
-  setResult: (result: SimulationResult) => void;
+  setResult: (result: SimulationResult | null) => void;
+  clearResult: () => void;
   setRunning: (running: boolean) => void;
   setShots: (shots: number) => void;
   addOutput: (line: string) => void;
@@ -19,6 +20,7 @@ export const useSimulationStore = create<SimulationState>((set) => ({
   shots: 1024,
   terminalOutput: [],
   setResult: (result) => set({ result, isRunning: false }),
+  clearResult: () => set({ result: null, isRunning: false }),
   setRunning: (isRunning) => set({ isRunning }),
   setShots: (shots) => set({ shots }),
   addOutput: (line) => set((s) => ({ terminalOutput: [...s.terminalOutput, line] })),

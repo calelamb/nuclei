@@ -1,14 +1,13 @@
 import { useState, useCallback, useRef } from 'react';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 import { useSimulationStore } from '../../stores/simulationStore';
-
-type ViewMode = 'ideal' | 'sampled';
+import { getHistogramData, type HistogramViewMode } from './histogramData';
 
 export function ProbabilityHistogram() {
   const result = useSimulationStore((s) => s.result);
   const shots = useSimulationStore((s) => s.shots);
   const setShots = useSimulationStore((s) => s.setShots);
-  const [viewMode, setViewMode] = useState<ViewMode>('sampled');
+  const [viewMode, setViewMode] = useState<HistogramViewMode>('sampled');
   const chartRef = useRef<HTMLDivElement>(null);
 
   const handleShotsChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
@@ -41,14 +40,7 @@ export function ProbabilityHistogram() {
     );
   }
 
-  // Build chart data based on view mode
-  const data = viewMode === 'ideal'
-    ? Object.entries(result.probabilities)
-        .map(([state, prob]) => ({ state: `|${state}⟩`, probability: prob }))
-        .sort((a, b) => a.state.localeCompare(b.state))
-    : Object.entries(result.measurements)
-        .map(([state, count]) => ({ state: `|${state}⟩`, probability: count / shots }))
-        .sort((a, b) => a.state.localeCompare(b.state));
+  const data = getHistogramData(result, viewMode);
 
   const handleExportCSV = () => {
     const header = 'State,Probability\n';

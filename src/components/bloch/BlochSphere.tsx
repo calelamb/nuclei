@@ -139,6 +139,7 @@ function BlochSphere3D({ blochCoord }: BlochSphereProps) {
   const arrowRef = useRef<THREE.Group | null>(null);
   const animFrameRef = useRef<number>(0);
   const currentTarget = useRef(new THREE.Vector3(0, 1, 0));
+  const targetVectorRef = useRef(new THREE.Vector3(0, 0, 0));
   const defaultCameraPos = useRef(new THREE.Vector3(2.2, 1.8, 2.2));
 
   // Initialize Three.js scene
@@ -168,6 +169,7 @@ function BlochSphere3D({ blochCoord }: BlochSphereProps) {
 
     // State arrow
     const arrow = createStateArrow(scene);
+    arrow.visible = false;
     arrowRef.current = arrow;
 
     // OrbitControls
@@ -182,6 +184,9 @@ function BlochSphere3D({ blochCoord }: BlochSphereProps) {
     // Animation loop
     const animate = () => {
       animFrameRef.current = requestAnimationFrame(animate);
+      if (arrowRef.current) {
+        pointArrowAt(arrowRef.current, targetVectorRef.current, currentTarget, 0.15);
+      }
       controls.update();
       renderer.render(scene, camera);
     };
@@ -213,17 +218,14 @@ function BlochSphere3D({ blochCoord }: BlochSphereProps) {
 
   // Update arrow when bloch coord changes
   useEffect(() => {
-    if (!arrowRef.current) return;
-
     if (!blochCoord) {
-      arrowRef.current.visible = false;
+      targetVectorRef.current.set(0, 0, 0);
       return;
     }
 
     // Bloch sphere convention: Y axis = Z (|0⟩/|1⟩), X axis = X, Z axis = Y
     // Map quantum Bloch coords to Three.js: x→x, z→y, y→z
-    const target = new THREE.Vector3(blochCoord.x, blochCoord.z, blochCoord.y);
-    pointArrowAt(arrowRef.current, target, currentTarget, 0.15);
+    targetVectorRef.current.set(blochCoord.x, blochCoord.z, blochCoord.y);
   }, [blochCoord]);
 
   const resetView = useCallback(() => {

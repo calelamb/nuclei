@@ -12,6 +12,7 @@ import { DiracSidePanel } from '../dirac/DiracSidePanel';
 import { ActivityBar } from './ActivityBar';
 import type { ActivityView } from './ActivityBar';
 import { Sidebar } from './Sidebar';
+import { DEFAULT_EDITOR_PANE_WIDTH, computeEditorPaneWidth } from './layoutMath';
 import { useEditorStore } from '../../stores/editorStore';
 import { useCircuitStore } from '../../stores/circuitStore';
 import { useSimulationStore } from '../../stores/simulationStore';
@@ -285,6 +286,7 @@ export function PanelLayout() {
   const [activeView, setActiveView] = useState<ActivityView | null>('files');
   const [sidebarWidth, setSidebarWidth] = useState(DEFAULT_SIDEBAR_WIDTH);
   const [bottomHeight, setBottomHeight] = useState(DEFAULT_BOTTOM_HEIGHT);
+  const [editorPaneWidth, setEditorPaneWidth] = useState(DEFAULT_EDITOR_PANE_WIDTH);
   const [bottomCollapsed, setBottomCollapsed] = useState(false);
   const [isDraggingH, setIsDraggingH] = useState(false);
   const [isDraggingV, setIsDraggingV] = useState(false);
@@ -303,6 +305,7 @@ export function PanelLayout() {
   const showBloch = uiMode !== 'beginner';
   const showBottomPanel = uiMode !== 'beginner';
   const showSidebar = !isLearnMode && !isChallengeMode && activeView !== null;
+  const topSplitRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- expand bottom panel on new result
@@ -315,8 +318,10 @@ export function PanelLayout() {
       try {
         const bh = await platform.getStoredValue<number>('layout_bottomHeight');
         const sw = await platform.getStoredValue<number>('layout_sidebarWidth');
+        const epw = await platform.getStoredValue<number>('layout_editorPaneWidth');
         if (bh) setBottomHeight(bh);
         if (sw) setSidebarWidth(sw);
+        if (epw) setEditorPaneWidth(epw);
       } catch { /* non-critical layout persistence */ }
     })();
   }, [platform]);
@@ -339,14 +344,17 @@ export function PanelLayout() {
       try {
         await platform.setStoredValue('layout_bottomHeight', bottomHeight);
         await platform.setStoredValue('layout_sidebarWidth', sidebarWidth);
+        await platform.setStoredValue('layout_editorPaneWidth', editorPaneWidth);
       } catch { /* non-critical layout persistence */ }
     }, 500);
-  }, [bottomHeight, sidebarWidth, platform]);
+  }, [bottomHeight, editorPaneWidth, sidebarWidth, platform]);
 
   const handleMouseMove = (e: React.MouseEvent) => {
     if (isDraggingH) {
-      // Horizontal drag controls the split between editor area and viz area
-      // This is a percentage of the editor content area (after sidebar)
+      const rect = topSplitRef.current?.getBoundingClientRect();
+      if (rect) {
+        setEditorPaneWidth(computeEditorPaneWidth(e.clientX, rect));
+      }
     }
     if (isDraggingV) {
       const fromBottom = window.innerHeight - e.clientY - 22; // account for status bar
@@ -428,9 +436,9 @@ export function PanelLayout() {
             {/* Editor + Viz area */}
             <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0 }}>
               {/* Top: editor area + visualization */}
-              <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
+              <div ref={topSplitRef} style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
                 {/* Left: Editor with tabs + breadcrumbs */}
-                <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0 }}>
+                <div style={{ width: `${editorPaneWidth}%`, display: 'flex', flexDirection: 'column', minWidth: 0 }}>
                   <EditorTabs />
                   <Breadcrumbs />
                   <div style={{ flex: 1, minHeight: 0 }}>
@@ -445,11 +453,11 @@ export function PanelLayout() {
                   direction="horizontal"
                   isDragging={isDraggingH}
                   onMouseDown={() => setIsDraggingH(true)}
-                  onDoubleClick={() => {}}
+                  onDoubleClick={() => setEditorPaneWidth(DEFAULT_EDITOR_PANE_WIDTH)}
                 />
 
                 {/* Right: Circuit + Bloch */}
-                <div style={{ width: '40%', minWidth: 200, display: 'flex', flexDirection: 'column' }}>
+                <div style={{ width: `${100 - editorPaneWidth}%`, minWidth: 200, display: 'flex', flexDirection: 'column' }}>
                   <div style={{
                     flex: showBloch ? 6 : 1,
                     borderBottom: showBloch ? `1px solid ${colors.border}` : 'none',

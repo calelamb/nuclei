@@ -19,7 +19,7 @@ interface CircuitState {
   // Gate explorer
   explorerGateIndex: number | null;
   // Actions
-  setSnapshot: (snapshot: CircuitSnapshot) => void;
+  setSnapshot: (snapshot: CircuitSnapshot | null) => void;
   setLoading: (loading: boolean) => void;
   setError: (error: string | null) => void;
   clear: () => void;
@@ -44,10 +44,26 @@ export const useCircuitStore = create<CircuitState>((set, get) => ({
   stepIndex: -1,
   explorerGateIndex: null,
 
-  setSnapshot: (snapshot) => set({ snapshot, isLoading: false, error: null, highlights: [] }),
+  setSnapshot: (snapshot) =>
+    set({
+      snapshot,
+      isLoading: false,
+      error: null,
+      highlights: [],
+      stepMode: false,
+      stepIndex: -1,
+      explorerGateIndex: null,
+    }),
   setLoading: (isLoading) => set({ isLoading }),
   setError: (error) => set({ error, isLoading: false }),
-  clear: () => set({ snapshot: null, error: null, highlights: [], stepMode: false, stepIndex: -1 }),
+  clear: () => set({
+    snapshot: null,
+    error: null,
+    highlights: [],
+    stepMode: false,
+    stepIndex: -1,
+    explorerGateIndex: null,
+  }),
 
   addHighlight: (h) => set((s) => ({ highlights: [...s.highlights, h] })),
   clearHighlights: () => set({ highlights: [] }),

@@ -250,11 +250,26 @@ def _execute_circuit(code, shots):
             "measurements": measurements,
             "bloch_coords": bloch_coords,
             "execution_time_ms": 0,
+            "shot_count": shots,
         }, snapshot, output, None
     except ImportError:
         return None, None, output, "Cirq not available in browser. Try a Cirq circuit."
     except Exception:
         return None, None, output, traceback.format_exc()
+
+def _run_python(code):
+    namespace = {"__builtins__": __builtins__}
+    stdout = io.StringIO()
+    old_stdout = sys.stdout
+    sys.stdout = stdout
+
+    try:
+        exec(code, namespace)
+        sys.stdout = old_stdout
+        return stdout.getvalue(), None
+    except Exception:
+        sys.stdout = old_stdout
+        return stdout.getvalue(), traceback.format_exc()
 `;
 
 /**
@@ -263,7 +278,7 @@ def _execute_circuit(code, shots):
  */
 function translateModuleError(errorMsg: string): string {
   const match = errorMsg.match(
-    /ModuleNotFoundError: No module named '(qiskit|pennylane|qutip)'/,
+    /ModuleNotFoundError: No module named '(qiskit|pennylane|qutip|cudaq|cirq)'/,
   );
   if (!match) return errorMsg;
 
@@ -271,11 +286,31 @@ function translateModuleError(errorMsg: string): string {
   const displayName =
     framework === 'qiskit'
       ? 'Qiskit'
+      : framework === 'cudaq'
+        ? 'CUDA-Q'
+        : framework === 'cirq'
+          ? 'Cirq'
       : framework === 'pennylane'
         ? 'PennyLane'
         : 'QuTiP';
 
   return `${displayName} isn't available in the browser version. The browser IDE supports Cirq. For Qiskit/CUDA-Q support, download the desktop app from getnuclei.dev`;
+}
+
+function classifyKernelError(message: string): { code: string; phase?: 'parse' | 'execute' | 'python' } {
+  if (message.includes('No supported quantum framework detected')) {
+    return { code: 'unsupported_framework' };
+  }
+  if (message.includes('No circuit found')) {
+    return { code: 'no_circuit' };
+  }
+  if (message.includes('ModuleNotFoundError')) {
+    return { code: 'missing_dependency' };
+  }
+  if (message.includes('timed out')) {
+    return { code: 'timeout' };
+  }
+  return { code: 'execution_error' };
 }
 
 export class PyodideKernel {
@@ -301,6 +336,7 @@ export class PyodideKernel {
       }
     } catch (e) {
       this.onMessage({ type: 'error', message: `Failed to initialize Pyodide: ${e}` });
+      throw e;
     }
   }
 
@@ -322,13 +358,27 @@ json.dumps({"snapshot": _snap, "output": _out, "error": _err})
         if (data.output) {
           this.onMessage({ type: 'output', text: data.output });
         }
+        this.onMessage({ type: 'snapshot', data: data.snapshot ?? null });
         if (data.error) {
-          this.onMessage({ type: 'error', message: translateModuleError(data.error) });
-        } else if (data.snapshot) {
-          this.onMessage({ type: 'snapshot', data: data.snapshot });
+          const translated = translateModuleError(data.error);
+          this.onMessage({
+            type: 'error',
+            message: translated.split('\n').filter(Boolean).pop() ?? translated,
+            traceback: translated,
+            phase: 'parse',
+            code: classifyKernelError(data.error).code,
+          });
         }
       } catch (e) {
-        this.onMessage({ type: 'error', message: translateModuleError(String(e)) });
+        const translated = translateModuleError(String(e));
+        this.onMessage({ type: 'snapshot', data: null });
+        this.onMessage({
+          type: 'error',
+          message: translated.split('\n').filter(Boolean).pop() ?? translated,
+          traceback: translated,
+          phase: 'parse',
+          code: classifyKernelError(String(e)).code,
+        });
       }
     } else if (msg.type === 'execute') {
       try {
@@ -346,18 +396,67 @@ json.dumps({"result": _result, "snapshot": _snap, "output": _out, "error": _err}
         if (data.output) {
           this.onMessage({ type: 'output', text: data.output });
         }
+        if (data.snapshot || data.error) {
+          this.onMessage({ type: 'snapshot', data: data.snapshot ?? null });
+        }
         if (data.error) {
-          this.onMessage({ type: 'error', message: translateModuleError(data.error) });
+          const translated = translateModuleError(data.error);
+          this.onMessage({ type: 'result', data: null });
+          this.onMessage({
+            type: 'error',
+            message: translated.split('\n').filter(Boolean).pop() ?? translated,
+            traceback: translated,
+            phase: 'execute',
+            code: classifyKernelError(data.error).code,
+          });
         } else {
-          if (data.snapshot) {
-            this.onMessage({ type: 'snapshot', data: data.snapshot });
-          }
-          if (data.result) {
-            this.onMessage({ type: 'result', data: data.result });
-          }
+          this.onMessage({ type: 'result', data: data.result ?? null });
         }
       } catch (e) {
-        this.onMessage({ type: 'error', message: translateModuleError(String(e)) });
+        const translated = translateModuleError(String(e));
+        this.onMessage({ type: 'snapshot', data: null });
+        this.onMessage({ type: 'result', data: null });
+        this.onMessage({
+          type: 'error',
+          message: translated.split('\n').filter(Boolean).pop() ?? translated,
+          traceback: translated,
+          phase: 'execute',
+          code: classifyKernelError(String(e)).code,
+        });
+      }
+    } else if (msg.type === 'run_python') {
+      try {
+        const code = msg.code as string;
+        const result = await this.pyodide.runPythonAsync(`
+import json
+_out, _err = _run_python(${JSON.stringify(code)})
+json.dumps({"output": _out, "error": _err})
+`);
+        const data = JSON.parse(result);
+        if (data.output) {
+          this.onMessage({ type: 'output', text: data.output });
+        }
+        this.onMessage({ type: 'python_result', success: !data.error });
+        if (data.error) {
+          const translated = translateModuleError(data.error);
+          this.onMessage({
+            type: 'error',
+            message: translated.split('\n').filter(Boolean).pop() ?? translated,
+            traceback: translated,
+            phase: 'python',
+            code: classifyKernelError(data.error).code,
+          });
+        }
+      } catch (e) {
+        const translated = translateModuleError(String(e));
+        this.onMessage({ type: 'python_result', success: false });
+        this.onMessage({
+          type: 'error',
+          message: translated.split('\n').filter(Boolean).pop() ?? translated,
+          traceback: translated,
+          phase: 'python',
+          code: classifyKernelError(String(e)).code,
+        });
       }
     }
   }

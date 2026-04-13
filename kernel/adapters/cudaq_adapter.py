@@ -1,5 +1,7 @@
 import re
+import inspect
 import numpy as np
+from dataclasses import dataclass
 from kernel.adapters.base import FrameworkAdapter
 from kernel.models.snapshot import CircuitSnapshot, SimulationResult, Gate
 
@@ -30,27 +32,65 @@ GATE_NAME_MAP = {
 }
 
 
+@dataclass
+class KernelInvocation:
+    kernel: object
+    args: list[object]
+
+
 class CudaqAdapter(FrameworkAdapter):
     def detect(self, code: str) -> bool:
         return bool(re.search(r"import\s+cudaq|from\s+cudaq\s+import|@cudaq\.kernel", code))
 
     def find_circuit(self, namespace: dict):
         if not CUDAQ_AVAILABLE:
-            return None
+            raise ImportError("cudaq")
         # Look for callables decorated with @cudaq.kernel
         for val in reversed(list(namespace.values())):
-            if callable(val) and hasattr(val, '__wrapped__') or (
-                hasattr(val, '__name__') and
-                hasattr(cudaq, 'kernel') and
-                str(type(val)).find('cudaq') >= 0
+            if (callable(val) and hasattr(val, '__wrapped__')) or (
+                hasattr(val, '__name__')
+                and hasattr(cudaq, 'kernel')
+                and str(type(val)).find('cudaq') >= 0
             ):
-                return val
+                invocation = self._build_invocation(val, namespace)
+                if invocation is not None:
+                    return invocation
         # Fallback: look for any cudaq kernel type
         for val in reversed(list(namespace.values())):
             tname = str(type(val))
             if 'cudaq' in tname and 'kernel' in tname.lower():
-                return val
+                invocation = self._build_invocation(val, namespace)
+                if invocation is not None:
+                    return invocation
         return None
+
+    def _build_invocation(self, kernel_obj, namespace: dict):
+        try:
+            signature = inspect.signature(kernel_obj)
+        except (TypeError, ValueError):
+            return KernelInvocation(kernel=kernel_obj, args=[])
+
+        args: list[object] = []
+        for param in signature.parameters.values():
+            if param.kind not in (
+                inspect.Parameter.POSITIONAL_ONLY,
+                inspect.Parameter.POSITIONAL_OR_KEYWORD,
+            ):
+                continue
+            if param.name in namespace:
+                args.append(namespace[param.name])
+                continue
+            if param.default is not inspect._empty:
+                args.append(param.default)
+                continue
+            return None
+
+        return KernelInvocation(kernel=kernel_obj, args=args)
+
+    def _unwrap_kernel(self, circuit_obj):
+        if isinstance(circuit_obj, KernelInvocation):
+            return circuit_obj.kernel
+        return circuit_obj
 
     def extract_snapshot(self, circuit_obj) -> CircuitSnapshot:
         if not CUDAQ_AVAILABLE:
@@ -65,7 +105,7 @@ class CudaqAdapter(FrameworkAdapter):
         # Use CUDA-Q's circuit inspection
         try:
             # Get the kernel's string representation to parse gates
-            kernel_str = str(circuit_obj)
+            kernel_str = str(self._unwrap_kernel(circuit_obj))
             return self._parse_kernel_string(kernel_str)
         except Exception:
             # Fallback: return minimal snapshot
@@ -147,16 +187,16 @@ class CudaqAdapter(FrameworkAdapter):
 
     def simulate(self, circuit_obj, shots: int) -> SimulationResult:
         if not CUDAQ_AVAILABLE:
-            raise RuntimeError(
-                "CUDA-Q is not installed. Install it with: pip install cuda-quantum\n"
-                "Note: CUDA-Q requires an NVIDIA GPU and specific system requirements."
-            )
+            raise ImportError("cudaq")
 
         import time
         start = time.time()
 
+        kernel = self._unwrap_kernel(circuit_obj)
+        args = circuit_obj.args if isinstance(circuit_obj, KernelInvocation) else []
+
         # Sample the kernel
-        result = cudaq.sample(circuit_obj, shots_count=shots)
+        result = cudaq.sample(kernel, *args, shots_count=shots)
 
         # Build measurements from counts
         measurements = {}
@@ -171,7 +211,7 @@ class CudaqAdapter(FrameworkAdapter):
         state_vector = []
         bloch_coords = []
         try:
-            sv = cudaq.get_state(circuit_obj)
+            sv = cudaq.get_state(kernel, *args)
             n_qubits = int(np.log2(len(sv)))
             sv_data = np.array(sv)
             state_vector = [{"re": float(c.real), "im": float(c.imag)} for c in sv_data]
@@ -193,6 +233,7 @@ class CudaqAdapter(FrameworkAdapter):
             measurements=measurements,
             bloch_coords=bloch_coords,
             execution_time_ms=round(elapsed, 1),
+            shot_count=shots,
         )
 
 

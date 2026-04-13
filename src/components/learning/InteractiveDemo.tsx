@@ -7,6 +7,7 @@ import { usePlatform } from '../../platform/PlatformProvider';
 import { KERNEL_WS_URL } from '../../config/kernel';
 import type { Framework, CircuitSnapshot, SimulationResult, KernelResponse } from '../../types/quantum';
 import { Play, RotateCcw, ExternalLink, Terminal, BarChart3 } from 'lucide-react';
+import { isQuantumCode } from './exerciseValidation';
 
 interface InteractiveDemoProps {
   code: string;
@@ -94,13 +95,16 @@ export function InteractiveDemo({ code: initialCode, framework, description, exp
         setIsRunning(false);
         setError(null);
         break;
+      case 'python_result':
+        setResult(null);
+        setIsRunning(false);
+        setError(null);
+        break;
       case 'output':
         setOutput((prev) => [...prev, msg.text]);
         setShowOutput(true);
         break;
       case 'error':
-        // Suppress framework detection noise — pure Python is fine
-        if (msg.message?.includes('No supported quantum framework')) break;
         setError(msg.message);
         setIsRunning(false);
         break;
@@ -142,6 +146,10 @@ export function InteractiveDemo({ code: initialCode, framework, description, exp
   }, [handleMessage, isWeb]);
 
   const sendParse = useCallback((c: string) => {
+    if (!isQuantumCode(c)) {
+      setSnapshot(null);
+      return;
+    }
     if (isWeb && pyodideRef.current) {
       pyodideRef.current.send({ type: 'parse', code: c });
     } else if (wsRef.current?.readyState === WebSocket.OPEN) {
@@ -154,10 +162,19 @@ export function InteractiveDemo({ code: initialCode, framework, description, exp
     setError(null);
     setOutput([]);
     setResult(null);
+
+    const message = isQuantumCode(localCode)
+      ? { type: 'execute' as const, code: localCode, shots: 1024 }
+      : { type: 'run_python' as const, code: localCode };
+
+    if (!isQuantumCode(localCode)) {
+      setSnapshot(null);
+    }
+
     if (isWeb && pyodideRef.current) {
-      pyodideRef.current.send({ type: 'execute', code: localCode, shots: 1024 });
+      pyodideRef.current.send(message);
     } else if (wsRef.current?.readyState === WebSocket.OPEN) {
-      wsRef.current.send(JSON.stringify({ type: 'execute', code: localCode, shots: 1024 }));
+      wsRef.current.send(JSON.stringify(message));
     } else {
       setError('Kernel not connected. Make sure the Python kernel is running.');
       setIsRunning(false);
@@ -176,7 +193,9 @@ export function InteractiveDemo({ code: initialCode, framework, description, exp
 
   const handleOpenInEditor = () => {
     setEditorCode(localCode);
-    setEditorFramework(framework);
+    if (isQuantumCode(localCode)) {
+      setEditorFramework(framework);
+    }
     exitLearnMode();
   };
 

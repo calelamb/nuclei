@@ -1,10 +1,12 @@
 import type { TestCase, TestCaseResult } from '../types/challenge';
-import type { Framework, SimulationResult, KernelResponse } from '../types/quantum';
+import type { Framework, KernelResponse, SimulationResult } from '../types/quantum';
 import { validateTestCase } from './challengeValidation';
-import { KERNEL_WS_URL } from '../config/kernel';
+import { createKernelSession, type KernelSession, type PlatformKind } from './kernelSession';
 
-export function buildTestCode(userCode: string, params: Record<string, unknown>): string {
-  const lines: string[] = ['# === Test parameters ==='];
+const TEST_TIMEOUT_MS = 35_000;
+
+export function buildTestCode(userCode: string, params: Record<string, unknown>, framework: Framework): string {
+  const lines: string[] = [`# === Test parameters (${framework}) ===`];
 
   for (const [key, value] of Object.entries(params)) {
     if (typeof value === 'string') {
@@ -14,7 +16,7 @@ export function buildTestCode(userCode: string, params: Record<string, unknown>)
     } else if (value === null) {
       lines.push(`${key} = None`);
     } else {
-      lines.push(`import json`);
+      lines.push('import json');
       lines.push(`${key} = json.loads(${JSON.stringify(JSON.stringify(value))})`);
     }
   }
@@ -26,83 +28,142 @@ export function buildTestCode(userCode: string, params: Record<string, unknown>)
   return lines.join('\n');
 }
 
-function executeOnKernel(
-  ws: WebSocket,
-  code: string,
-  shots: number,
-): Promise<SimulationResult> {
-  return new Promise((resolve, reject) => {
-    const handler = (ev: MessageEvent) => {
-      try {
-        const msg: KernelResponse = JSON.parse(ev.data as string);
-        if (msg.type === 'result') {
-          ws.removeEventListener('message', handler);
-          resolve(msg.data);
-        }
-        if (msg.type === 'error') {
-          ws.removeEventListener('message', handler);
-          reject(new Error(msg.message));
-        }
-        // Ignore 'snapshot' and 'output' messages during test execution
-      } catch {
-        ws.removeEventListener('message', handler);
-        reject(new Error('Failed to parse kernel response'));
-      }
-    };
-
-    ws.addEventListener('message', handler);
-    ws.send(JSON.stringify({ type: 'execute', code, shots }));
-  });
+function buildFailedResult(testCase: TestCase, message: string): TestCaseResult {
+  return {
+    testCaseId: testCase.id,
+    passed: false,
+    score: 0,
+    message,
+    executionTimeMs: 0,
+  };
 }
 
-function connectKernel(): Promise<WebSocket> {
-  return new Promise((resolve, reject) => {
-    const ws = new WebSocket(KERNEL_WS_URL);
+function emitFailureResults(
+  testCases: ReadonlyArray<TestCase>,
+  message: string,
+  onResult: (result: TestCaseResult, index: number) => void,
+): TestCaseResult[] {
+  const results = testCases.map((testCase) => buildFailedResult(testCase, message));
+  results.forEach((result, index) => onResult(result, index));
+  return results;
+}
 
-    ws.addEventListener('open', () => resolve(ws), { once: true });
-    ws.addEventListener('error', () => {
-      reject(new Error(`Failed to connect to kernel at ${KERNEL_WS_URL}`));
-    }, { once: true });
-  });
+function createExecutionDriver(session: KernelSession) {
+  let pending:
+    | {
+        resolve: (result: SimulationResult) => void;
+        reject: (error: Error) => void;
+        timeoutId: ReturnType<typeof setTimeout>;
+      }
+    | null = null;
+
+  const handleMessage = (message: KernelResponse) => {
+    if (!pending) return;
+
+    if (message.type === 'result' && message.data) {
+      clearTimeout(pending.timeoutId);
+      pending.resolve(message.data);
+      pending = null;
+      return;
+    }
+
+    if (message.type === 'error' && (message.phase === 'execute' || message.phase === 'python')) {
+      clearTimeout(pending.timeoutId);
+      pending.reject(new Error(message.message));
+      pending = null;
+    }
+  };
+
+  const execute = (code: string, shots: number) => {
+    if (pending) {
+      throw new Error('A challenge test is already running');
+    }
+
+    return new Promise<SimulationResult>((resolve, reject) => {
+      const timeoutId = setTimeout(() => {
+        if (!pending) return;
+        pending.reject(new Error(`Execution timed out after ${TEST_TIMEOUT_MS / 1000} seconds`));
+        pending = null;
+      }, TEST_TIMEOUT_MS);
+
+      pending = { resolve, reject, timeoutId };
+
+      let sendResult: void | Promise<void>;
+      try {
+        sendResult = session.send({ type: 'execute', code, shots });
+      } catch (error) {
+        clearTimeout(timeoutId);
+        pending = null;
+        reject(error instanceof Error ? error : new Error('Failed to send challenge to kernel'));
+        return;
+      }
+
+      Promise.resolve(sendResult).catch((error) => {
+        clearTimeout(timeoutId);
+        pending = null;
+        reject(error instanceof Error ? error : new Error('Failed to send challenge to kernel'));
+      });
+    });
+  };
+
+  const cancel = () => {
+    if (!pending) return;
+    clearTimeout(pending.timeoutId);
+    pending.reject(new Error('Execution canceled'));
+    pending = null;
+  };
+
+  return { handleMessage, execute, cancel };
 }
 
 export async function runTestCases(
   userCode: string,
   testCases: ReadonlyArray<TestCase>,
-  _framework: Framework,
+  framework: Framework,
+  platform: PlatformKind,
   shots: number,
+  onStart: (index: number) => void,
   onResult: (result: TestCaseResult, index: number) => void,
   onError: (error: string) => void,
 ): Promise<TestCaseResult[]> {
-  const results: TestCaseResult[] = [];
+  if (platform === 'web' && framework !== 'cirq') {
+    const message = `The browser challenge runner currently supports Cirq only. Use the desktop app for ${framework}.`;
+    onError(message);
+    return emitFailureResults(testCases, message, onResult);
+  }
 
-  let ws: WebSocket;
+  let driver:
+    | ReturnType<typeof createExecutionDriver>
+    | null = null;
+
+  let session: KernelSession;
   try {
-    ws = await connectKernel();
+    session = await createKernelSession(platform, (message) => {
+      driver?.handleMessage(message);
+    });
+    driver = createExecutionDriver(session);
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : 'Kernel connection failed';
     onError(message);
-    return testCases.map((tc) => ({
-      testCaseId: tc.id,
-      passed: false,
-      score: 0,
-      message: `Connection error: ${message}`,
-      executionTimeMs: 0,
-    }));
+    return emitFailureResults(testCases, `Connection error: ${message}`, onResult);
   }
 
+  const results: TestCaseResult[] = [];
+
   try {
-    for (let i = 0; i < testCases.length; i++) {
-      const testCase = testCases[i];
-      const wrappedCode = buildTestCode(userCode, testCase.params);
+    for (let index = 0; index < testCases.length; index++) {
+      const testCase = testCases[index];
+      const wrappedCode = buildTestCode(userCode, testCase.params, framework);
       const startTime = performance.now();
 
+      onStart(index);
+
       try {
-        const simResult = await executeOnKernel(ws, wrappedCode, shots);
+        const simResult = await driver.execute(wrappedCode, shots);
         const elapsed = performance.now() - startTime;
         const testResult = validateTestCase(testCase, simResult, elapsed);
         results.push(testResult);
-        onResult(testResult, i);
+        onResult(testResult, index);
       } catch (err: unknown) {
         const elapsed = performance.now() - startTime;
         const message = err instanceof Error ? err.message : 'Unknown execution error';
@@ -114,11 +175,12 @@ export async function runTestCases(
           executionTimeMs: elapsed,
         };
         results.push(failedResult);
-        onResult(failedResult, i);
+        onResult(failedResult, index);
       }
     }
   } finally {
-    ws.close();
+    driver.cancel();
+    session.close();
   }
 
   return results;

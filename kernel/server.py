@@ -9,11 +9,28 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import websockets
 from kernel.executor import Executor
 from kernel.hardware.manager import HardwareManager
+from kernel.models import KernelError
 
 PORT = 9742
 executor = Executor()
 hardware_manager = HardwareManager()
 hardware_manager.connect_provider("simulator", {})
+
+
+def error_payload(error: KernelError, phase: str) -> dict:
+    payload = {
+        "type": "error",
+        "message": error.message,
+        "code": error.code,
+        "phase": phase,
+    }
+    if error.traceback:
+        payload["traceback"] = error.traceback
+    if error.framework:
+        payload["framework"] = error.framework
+    if error.dependency:
+        payload["dependency"] = error.dependency
+    return payload
 
 
 async def handle_message(websocket):
@@ -39,16 +56,13 @@ async def handle_message(websocket):
                     "text": stdout,
                 }))
 
+            await websocket.send(json.dumps({
+                "type": "snapshot",
+                "data": snapshot.to_dict() if snapshot else None,
+            }))
+
             if error:
-                await websocket.send(json.dumps({
-                    "type": "error",
-                    "message": error,
-                }))
-            elif snapshot:
-                await websocket.send(json.dumps({
-                    "type": "snapshot",
-                    "data": snapshot.to_dict(),
-                }))
+                await websocket.send(json.dumps(error_payload(error, "parse")))
 
         elif msg_type == "execute":
             shots = msg.get("shots", 1024)
@@ -60,23 +74,40 @@ async def handle_message(websocket):
                     "text": stdout,
                 }))
 
+            if snapshot or (error and error.code in {"unsupported_framework", "missing_dependency", "no_circuit", "execution_error", "adapter_error"}):
+                await websocket.send(json.dumps({
+                    "type": "snapshot",
+                    "data": snapshot.to_dict() if snapshot else None,
+                }))
+
             if error:
                 await websocket.send(json.dumps({
-                    "type": "error",
-                    "message": error,
-                    "traceback": error,
+                    "type": "result",
+                    "data": None,
                 }))
+                await websocket.send(json.dumps(error_payload(error, "execute")))
             else:
-                if snapshot:
-                    await websocket.send(json.dumps({
-                        "type": "snapshot",
-                        "data": snapshot.to_dict(),
-                    }))
-                if result:
-                    await websocket.send(json.dumps({
-                        "type": "result",
-                        "data": result.to_dict(),
-                    }))
+                await websocket.send(json.dumps({
+                    "type": "result",
+                    "data": result.to_dict() if result else None,
+                }))
+
+        elif msg_type == "run_python":
+            stdout, error = executor.run_python(code)
+
+            if stdout:
+                await websocket.send(json.dumps({
+                    "type": "output",
+                    "text": stdout,
+                }))
+
+            await websocket.send(json.dumps({
+                "type": "python_result",
+                "success": error is None,
+            }))
+
+            if error:
+                await websocket.send(json.dumps(error_payload(error, "python")))
 
         elif msg_type == "hardware_connect":
             provider = msg.get("provider", "")

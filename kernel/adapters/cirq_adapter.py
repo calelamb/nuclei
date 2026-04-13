@@ -1,12 +1,21 @@
 import re
 import numpy as np
-import cirq
 from kernel.adapters.base import FrameworkAdapter
 from kernel.models.snapshot import CircuitSnapshot, SimulationResult, Gate
+
+try:
+    import cirq
+
+    CIRQ_AVAILABLE = True
+except ImportError:
+    cirq = None
+    CIRQ_AVAILABLE = False
 
 
 # Map Cirq gate types to canonical names
 def _gate_name(gate) -> str:
+    if not CIRQ_AVAILABLE:
+        raise ImportError("cirq")
     if isinstance(gate, cirq.HPowGate) and gate.exponent == 1:
         return "H"
     if isinstance(gate, cirq.XPowGate) and gate.exponent == 1:
@@ -40,10 +49,14 @@ class CirqAdapter(FrameworkAdapter):
         return bool(re.search(r"import\s+cirq|from\s+cirq\s+import", code))
 
     def find_circuit(self, namespace: dict):
+        if not CIRQ_AVAILABLE:
+            raise ImportError("cirq")
         circuits = [v for v in namespace.values() if isinstance(v, cirq.Circuit)]
         return circuits[-1] if circuits else None
 
-    def extract_snapshot(self, circuit_obj: cirq.Circuit) -> CircuitSnapshot:
+    def extract_snapshot(self, circuit_obj) -> CircuitSnapshot:
+        if not CIRQ_AVAILABLE:
+            raise ImportError("cirq")
         all_qubits = sorted(circuit_obj.all_qubits())
         qubit_index = {q: i for i, q in enumerate(all_qubits)}
 
@@ -96,7 +109,9 @@ class CirqAdapter(FrameworkAdapter):
             gates=gates,
         )
 
-    def simulate(self, circuit_obj: cirq.Circuit, shots: int) -> SimulationResult:
+    def simulate(self, circuit_obj, shots: int) -> SimulationResult:
+        if not CIRQ_AVAILABLE:
+            raise ImportError("cirq")
         import time
 
         start = time.time()
@@ -150,6 +165,7 @@ class CirqAdapter(FrameworkAdapter):
             measurements=measurements,
             bloch_coords=bloch_coords,
             execution_time_ms=round(elapsed, 1),
+            shot_count=shots,
         )
 
 

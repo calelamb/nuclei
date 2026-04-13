@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { TRACKS } from '../data/lessons/tracks';
 
 export interface LessonProgress {
   startedAt: string;
@@ -39,6 +40,54 @@ interface LearnState {
   addHintUsed: (lessonId: string) => void;
   setAssessedLevel: (level: AssessedLevel) => void;
   setNeedsPythonTrack: (needs: boolean) => void;
+}
+
+function syncLessonCompletion(
+  lessonId: string,
+  lessonProgress: Record<string, LessonProgress>,
+  completedLessons: string[],
+) {
+  const lesson = TRACKS.flatMap((track) => track.lessons).find((entry) => entry.id === lessonId);
+  const progress = lessonProgress[lessonId];
+
+  if (!lesson || !progress) {
+    return { lessonProgress, completedLessons };
+  }
+
+  const exerciseIds = lesson.contentBlocks
+    .filter((block) => block.type === 'exercise')
+    .map((block) => block.id);
+  const quizIds = lesson.contentBlocks
+    .filter((block) => block.type === 'quiz')
+    .flatMap((block) => block.questions.map((question) => question.id));
+  const hasAssessments = exerciseIds.length + quizIds.length > 0;
+  const exercisesComplete = exerciseIds.every((exerciseId) => progress.exercisesPassed.includes(exerciseId));
+  const quizzesComplete = quizIds.every((quizId) => (progress.quizScores[quizId] ?? 0) >= 1);
+  const isComplete = hasAssessments && exercisesComplete && quizzesComplete;
+
+  if (isComplete) {
+    return {
+      lessonProgress: {
+        ...lessonProgress,
+        [lessonId]: {
+          ...progress,
+          completedAt: progress.completedAt ?? new Date().toISOString(),
+        },
+      },
+      completedLessons: [...new Set([...completedLessons, lessonId])],
+    };
+  }
+
+  return {
+    lessonProgress: {
+      ...lessonProgress,
+      [lessonId]: {
+        ...progress,
+        completedAt: undefined,
+      },
+    },
+    completedLessons: completedLessons.filter((id) => id !== lessonId),
+  };
 }
 
 const STORAGE_KEY = 'nuclei-learn';
@@ -128,16 +177,27 @@ export const useLearnStore = create<LearnState>((set, get) => ({
     const progress = get().lessonProgress[lessonId];
     if (!progress) return;
     const exercises = [...new Set([...progress.exercisesPassed, exerciseId])];
-    const updatedProgress = { ...get().lessonProgress, [lessonId]: { ...progress, exercisesPassed: exercises } };
-    set({ lessonProgress: updatedProgress });
+    const updatedProgress = {
+      ...get().lessonProgress,
+      [lessonId]: { ...progress, exercisesPassed: exercises },
+    };
+    const synced = syncLessonCompletion(lessonId, updatedProgress, get().completedLessons);
+    set({ lessonProgress: synced.lessonProgress, completedLessons: synced.completedLessons });
     persist(get());
   },
 
   setQuizScore: (lessonId, quizId, score) => {
     const progress = get().lessonProgress[lessonId];
     if (!progress) return;
-    const updatedProgress = { ...get().lessonProgress, [lessonId]: { ...progress, quizScores: { ...progress.quizScores, [quizId]: score } } };
-    set({ lessonProgress: updatedProgress });
+    const updatedProgress = {
+      ...get().lessonProgress,
+      [lessonId]: {
+        ...progress,
+        quizScores: { ...progress.quizScores, [quizId]: score },
+      },
+    };
+    const synced = syncLessonCompletion(lessonId, updatedProgress, get().completedLessons);
+    set({ lessonProgress: synced.lessonProgress, completedLessons: synced.completedLessons });
     persist(get());
   },
 

@@ -68,7 +68,7 @@ class SimulatorProvider(HardwareProvider):
                 shots=shots,
                 submitted_at=now,
             )
-            self._results[job_id] = {"error": error}
+            self._results[job_id] = {"error": error.to_dict()}
         else:
             handle = JobHandle(
                 id=job_id,
