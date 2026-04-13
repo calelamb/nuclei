@@ -1,14 +1,55 @@
 import { create } from 'zustand';
-import type { Framework } from '../types/quantum';
+import type { CircuitSnapshot, Framework, SimulationResult } from '../types/quantum';
 import type {
   QuantumChallenge,
   ChallengeDifficulty,
   ChallengeCategory,
   ProblemProgress,
   ProblemStatus,
+  SubmissionStatus,
   TestCaseResult,
   Submission,
 } from '../types/challenge';
+
+export type InspectionView = 'circuit' | 'histogram' | 'bloch' | 'output';
+
+export interface ChallengeInspectionState {
+  testCaseId: string;
+  label: string;
+  snapshot: CircuitSnapshot | null;
+  result: SimulationResult | null;
+  stdout: string;
+  failure?: {
+    verdict: Extract<SubmissionStatus, 'runtime_error' | 'compile_error' | 'time_limit_exceeded'>;
+    message: string;
+  };
+}
+
+export function filterChallenges(
+  challenges: QuantumChallenge[],
+  difficultyFilter: ChallengeDifficulty | null,
+  categoryFilter: ChallengeCategory | null,
+  searchQuery: string,
+  statusFilter: 'all' | 'not_started' | 'attempted' | 'solved',
+  progress: Record<string, ProblemProgress>,
+): QuantumChallenge[] {
+  return challenges.filter((challenge) => {
+    if (difficultyFilter && challenge.difficulty !== difficultyFilter) return false;
+    if (categoryFilter && challenge.category !== categoryFilter) return false;
+    if (searchQuery) {
+      const q = searchQuery.toLowerCase();
+      const matchesTitle = challenge.title.toLowerCase().includes(q);
+      const matchesTags = challenge.tags.some((tag) => tag.toLowerCase().includes(q));
+      const matchesDescription = challenge.description.toLowerCase().includes(q);
+      if (!matchesTitle && !matchesTags && !matchesDescription) return false;
+    }
+    if (statusFilter !== 'all') {
+      const status = getStatusForChallenge(progress, challenge.id);
+      if (status !== statusFilter) return false;
+    }
+    return true;
+  });
+}
 
 interface ChallengeModeState {
   // Mode
@@ -17,6 +58,7 @@ interface ChallengeModeState {
   // Challenge data
   challenges: QuantumChallenge[];
   activeProblem: QuantumChallenge | null;
+  activeProblemId: string | null;
   activeFramework: Framework;
 
   // Filters
@@ -32,6 +74,8 @@ interface ChallengeModeState {
   isRunning: boolean;
   currentTestResults: TestCaseResult[];
   runningTestIndex: number;
+  inspection: ChallengeInspectionState | null;
+  inspectionView: InspectionView;
 
   // Actions
   enterChallengeMode: () => void;
@@ -51,6 +95,8 @@ interface ChallengeModeState {
   setChallenges: (challenges: QuantumChallenge[]) => void;
   addSubmission: (challengeId: string, submission: Submission) => void;
   markSolved: (challengeId: string) => void;
+  setInspection: (inspection: ChallengeInspectionState | null) => void;
+  setInspectionView: (view: InspectionView) => void;
 }
 
 const STORAGE_KEY = 'nuclei-challenges';
@@ -62,6 +108,7 @@ function loadPersisted(): Partial<ChallengeModeState> {
     const data = JSON.parse(raw);
     return {
       progress: data.progress ?? {},
+      activeProblemId: data.activeProblemId ?? null,
       activeFramework: data.activeFramework ?? 'qiskit',
       difficultyFilter: data.difficultyFilter ?? null,
       categoryFilter: data.categoryFilter ?? null,
@@ -76,6 +123,7 @@ function persist(state: ChallengeModeState) {
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify({
       progress: state.progress,
+      activeProblemId: state.activeProblemId,
       activeFramework: state.activeFramework,
       difficultyFilter: state.difficultyFilter,
       categoryFilter: state.categoryFilter,
@@ -96,6 +144,7 @@ export const useChallengeModeStore = create<ChallengeModeState>((set, get) => ({
   isChallengeMode: false,
   challenges: [],
   activeProblem: null,
+  activeProblemId: persisted.activeProblemId ?? null,
   activeFramework: persisted.activeFramework ?? 'qiskit',
   difficultyFilter: persisted.difficultyFilter ?? null,
   categoryFilter: persisted.categoryFilter ?? null,
@@ -105,11 +154,24 @@ export const useChallengeModeStore = create<ChallengeModeState>((set, get) => ({
   isRunning: false,
   currentTestResults: [],
   runningTestIndex: -1,
+  inspection: null,
+  inspectionView: 'circuit',
 
   enterChallengeMode: () => set({ isChallengeMode: true }),
-  exitChallengeMode: () => set({ isChallengeMode: false, activeProblem: null }),
+  exitChallengeMode: () => set({ isChallengeMode: false, activeProblem: null, inspection: null }),
 
-  setActiveProblem: (challenge) => set({ activeProblem: challenge, currentTestResults: [], runningTestIndex: -1 }),
+  setActiveProblem: (challenge) => {
+    set({
+      activeProblem: challenge,
+      activeProblemId: challenge?.id ?? get().activeProblemId,
+      activeFramework: challenge?.default_framework ?? get().activeFramework,
+      currentTestResults: [],
+      runningTestIndex: -1,
+      inspection: null,
+      inspectionView: 'circuit',
+    });
+    persist(get());
+  },
 
   setActiveFramework: (framework) => {
     set({ activeFramework: framework });
@@ -135,22 +197,7 @@ export const useChallengeModeStore = create<ChallengeModeState>((set, get) => ({
 
   getFilteredChallenges: () => {
     const { challenges, difficultyFilter, categoryFilter, searchQuery, statusFilter, progress } = get();
-    return challenges.filter((c) => {
-      if (difficultyFilter && c.difficulty !== difficultyFilter) return false;
-      if (categoryFilter && c.category !== categoryFilter) return false;
-      if (searchQuery) {
-        const q = searchQuery.toLowerCase();
-        const matchesTitle = c.title.toLowerCase().includes(q);
-        const matchesTags = c.tags.some((t) => t.toLowerCase().includes(q));
-        const matchesDescription = c.description.toLowerCase().includes(q);
-        if (!matchesTitle && !matchesTags && !matchesDescription) return false;
-      }
-      if (statusFilter !== 'all') {
-        const status = getStatusForChallenge(progress, c.id);
-        if (status !== statusFilter) return false;
-      }
-      return true;
-    });
+    return filterChallenges(challenges, difficultyFilter, categoryFilter, searchQuery, statusFilter, progress);
   },
 
   updateDraftCode: (challengeId, framework, code) => {
@@ -183,7 +230,14 @@ export const useChallengeModeStore = create<ChallengeModeState>((set, get) => ({
 
   clearTestResults: () => set({ currentTestResults: [], runningTestIndex: -1 }),
 
-  setChallenges: (challenges) => set({ challenges }),
+  setChallenges: (challenges) => {
+    const activeProblemId = get().activeProblemId;
+    const activeProblem = activeProblemId
+      ? challenges.find((challenge) => challenge.id === activeProblemId) ?? null
+      : null;
+
+    set({ challenges, activeProblem });
+  },
 
   addSubmission: (challengeId, submission) => {
     const prev = get().progress[challengeId];
@@ -212,6 +266,10 @@ export const useChallengeModeStore = create<ChallengeModeState>((set, get) => ({
         submissions: [...existing.submissions, submission],
         lastAttemptedAt: submission.timestamp,
         solvedAt: newStatus === 'solved' && !existing.solvedAt ? submission.timestamp : existing.solvedAt,
+        currentCode: {
+          ...existing.currentCode,
+          [submission.framework]: submission.code,
+        },
       },
     };
     set({ progress: updatedProgress });
@@ -232,4 +290,7 @@ export const useChallengeModeStore = create<ChallengeModeState>((set, get) => ({
     set({ progress: updatedProgress });
     persist(get());
   },
+
+  setInspection: (inspection) => set({ inspection }),
+  setInspectionView: (view) => set({ inspectionView: view }),
 }));

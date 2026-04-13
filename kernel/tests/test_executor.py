@@ -73,6 +73,16 @@ def test_run_python_executes_plain_python_code():
     assert stdout.strip() == "hello from nuclei"
 
 
+def test_run_python_returns_compile_error_for_invalid_syntax():
+    executor = Executor()
+
+    stdout, error = executor.run_python("def broken(:\n    pass")
+
+    assert stdout == ""
+    assert error is not None
+    assert error.code == "compile_error"
+
+
 def test_parse_returns_empty_snapshot_for_valid_code_without_circuit(monkeypatch):
     executor = Executor()
     adapter = StubAdapter(circuit=None)

@@ -1,13 +1,25 @@
-import { useState, useRef, useCallback } from 'react';
+import { lazy, Suspense, useState, useRef, useCallback } from 'react';
 import { useThemeStore } from '../../stores/themeStore';
 import { FileExplorer } from '../explorer/FileExplorer';
-import { LearningPathSidebar } from '../learning/LearningPathSidebar';
-import { VideoLibrary } from '../learning/VideoLibrary';
 import { SettingsPanel } from '../settings/SettingsPanel';
-import { PluginMarketplace } from '../plugins/PluginMarketplace';
-import { HardwarePanel } from '../hardware/HardwarePanel';
-import { CommunityPanel } from '../community/CommunityPanel';
+import { useSettingsStore } from '../../stores/settingsStore';
 import type { ActivityView } from './ActivityBar';
+
+const LearningPathSidebar = lazy(async () => ({
+  default: (await import('../learning/LearningPathSidebar')).LearningPathSidebar,
+}));
+const VideoLibrary = lazy(async () => ({
+  default: (await import('../learning/VideoLibrary')).VideoLibrary,
+}));
+const PluginMarketplace = lazy(async () => ({
+  default: (await import('../plugins/PluginMarketplace')).PluginMarketplace,
+}));
+const HardwarePanel = lazy(async () => ({
+  default: (await import('../hardware/HardwarePanel')).HardwarePanel,
+}));
+const CommunityPanel = lazy(async () => ({
+  default: (await import('../community/CommunityPanel')).CommunityPanel,
+}));
 
 interface SidebarProps {
   view: ActivityView;
@@ -68,6 +80,25 @@ function SidebarHeader({ title }: { title: string }) {
         {title}
       </span>
     </div>
+  );
+}
+
+function SidebarSuspense({ children }: { children: React.ReactNode }) {
+  const colors = useThemeStore((s) => s.colors);
+
+  return (
+    <Suspense fallback={(
+      <div style={{
+        padding: 16,
+        color: colors.textDim,
+        fontSize: 12,
+        fontFamily: "'Geist Sans', sans-serif",
+      }}>
+        Loading…
+      </div>
+    )}>
+      {children}
+    </Suspense>
   );
 }
 
@@ -137,6 +168,7 @@ function LearningSidebarTabs() {
 
 export function Sidebar({ view, width, onWidthChange }: SidebarProps) {
   const colors = useThemeStore((s) => s.colors);
+  const experimentalFeatures = useSettingsStore((s) => s.general.experimentalFeatures);
   const isDragging = useRef(false);
 
   const handleResizeStart = useCallback((e: React.MouseEvent) => {
@@ -170,12 +202,28 @@ export function Sidebar({ view, width, onWidthChange }: SidebarProps) {
       <SidebarHeader title={VIEW_TITLES[view]} />
       <div style={{ flex: 1, overflow: 'auto' }}>
         {view === 'files' && <FileExplorer />}
-        {view === 'search' && <SearchPanel />}
-        {view === 'circuit' && <CircuitInfoPanel />}
-        {view === 'learning' && <LearningSidebarTabs />}
-        {view === 'plugins' && <PluginMarketplace />}
-        {view === 'hardware' && <HardwarePanel />}
-        {view === 'community' && <CommunityPanel />}
+        {view === 'search' && experimentalFeatures && <SearchPanel />}
+        {view === 'circuit' && experimentalFeatures && <CircuitInfoPanel />}
+        {view === 'learning' && (
+          <SidebarSuspense>
+            <LearningSidebarTabs />
+          </SidebarSuspense>
+        )}
+        {view === 'plugins' && experimentalFeatures && (
+          <SidebarSuspense>
+            <PluginMarketplace />
+          </SidebarSuspense>
+        )}
+        {view === 'hardware' && experimentalFeatures && (
+          <SidebarSuspense>
+            <HardwarePanel />
+          </SidebarSuspense>
+        )}
+        {view === 'community' && experimentalFeatures && (
+          <SidebarSuspense>
+            <CommunityPanel />
+          </SidebarSuspense>
+        )}
         {view === 'settings' && <SettingsPanel />}
       </div>
 

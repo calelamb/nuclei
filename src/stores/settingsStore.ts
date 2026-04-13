@@ -37,6 +37,7 @@ export interface GeneralSettings {
   language: 'en' | 'es' | 'zh' | 'ja';
   telemetryEnabled: boolean;
   educatorMode: boolean;
+  experimentalFeatures: boolean;
 }
 
 /* ── Combined ────────────────────────────────────────── */
@@ -85,6 +86,7 @@ const DEFAULT_GENERAL: GeneralSettings = {
   language: 'en',
   telemetryEnabled: false,
   educatorMode: false,
+  experimentalFeatures: false,
 };
 
 /** Try to hydrate settings from localStorage */

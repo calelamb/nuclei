@@ -7,13 +7,12 @@ import type { GateHighlight } from '../stores/circuitStore';
 import { useSimulationStore } from '../stores/simulationStore';
 import { useExerciseStore } from '../stores/exerciseStore';
 import type { Exercise } from '../stores/exerciseStore';
-import { useLearningStore } from '../stores/learningStore';
 import { useLearnStore } from '../stores/learnStore';
 import { getLesson, getTrack } from '../data/lessons/tracks';
 import { useStudentStore, studentModelToPrompt } from '../stores/studentStore';
 import { useHardwareStore } from '../stores/hardwareStore';
 import { useCapstoneStore } from '../stores/capstoneStore';
-import { useChallengeStore } from '../stores/challengeStore';
+import { useChallengeModeStore } from '../stores/challengeModeStore';
 import { DIRAC_API_URL, HAIKU_MODEL, SONNET_MODEL } from '../config/dirac';
 
 const SYSTEM_PROMPT = `You are Dirac, an AI teaching assistant for quantum computing, named after physicist Paul Dirac. You live inside Nuclei, a quantum computing IDE.
@@ -64,15 +63,6 @@ function buildSystemPrompt(): string {
       }
       prompt += `\n\n### Teaching Notes for This Lesson\n${lesson.diracContext}`;
       prompt += `\n\nIMPORTANT: You are in teaching mode. Be a patient, encouraging tutor. Reference the lesson content the student is currently viewing. Keep explanations aligned with their current difficulty level. Celebrate progress.`;
-    }
-  }
-
-  // Legacy sidebar learning path context
-  const { activePath, activeModuleIndex } = useLearningStore.getState();
-  if (activePath) {
-    const module = activePath.modules[activeModuleIndex];
-    if (module) {
-      prompt += `\n\n## Current Learning Module\nThe student is on: "${activePath.title}" → "${module.title}"\n\n${module.diracPromptAddendum}`;
     }
   }
 
@@ -306,9 +296,9 @@ function buildContextBlock(): string {
     }
   }
 
-  const activeChallenge = useChallengeStore.getState().activeChallenge;
-  if (activeChallenge) {
-    parts.push(`## Active Challenge\n- Title: ${activeChallenge.title}\n- Difficulty: ${activeChallenge.difficulty}\n- Description: ${activeChallenge.description}`);
+  const activeProblem = useChallengeModeStore.getState().activeProblem;
+  if (activeProblem) {
+    parts.push(`## Active Challenge\n- Title: ${activeProblem.title}\n- Difficulty: ${activeProblem.difficulty}\n- Description: ${activeProblem.description}`);
   }
 
   return parts.join('\n\n');
@@ -409,9 +399,9 @@ function executeToolById(toolId: string, accepted: boolean) {
     }
   } else if (toolCall.name === 'challenge_hint') {
     const { hint_level } = toolCall.input as { hint_level: string };
-    const challenge = useChallengeStore.getState().activeChallenge;
+    const challenge = useChallengeModeStore.getState().activeProblem;
     if (!challenge) {
-      updateToolCallStatus(toolId, 'executed', 'No active challenge. Go to Community → Challenges to start one.');
+      updateToolCallStatus(toolId, 'executed', 'No active challenge. Open Challenge Mode and start a problem first.');
     } else {
       const hintIdx = hint_level === 'gentle' ? 0 : hint_level === 'moderate' ? 1 : 2;
       const hint = challenge.hints[Math.min(hintIdx, challenge.hints.length - 1)] ?? 'No more hints available.';

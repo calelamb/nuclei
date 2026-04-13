@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useCallback } from 'react';
+import { lazy, Suspense, useState, useRef, useEffect, useCallback } from 'react';
 import { getExecute } from '../../App';
 import { usePlatform } from '../../platform/PlatformProvider';
 import { ErrorBoundary } from '../ErrorBoundary';
@@ -22,10 +22,16 @@ import { useUIModeStore } from '../../stores/uiModeStore';
 import { useLearnStore } from '../../stores/learnStore';
 import { useChallengeModeStore } from '../../stores/challengeModeStore';
 import { useNavigationStore } from '../../stores/navigationStore';
-import { LearnModeView } from '../learning/LearnModeView';
-import { ChallengeModeView } from '../challenges/ChallengeModeView';
+import { useSettingsStore } from '../../stores/settingsStore';
 import { ChevronDown, ChevronUp, Play, Sun, Moon, X, Circle } from 'lucide-react';
 import type { Framework } from '../../types/quantum';
+
+const LearnModeView = lazy(async () => ({
+  default: (await import('../learning/LearnModeView')).LearnModeView,
+}));
+const ChallengeModeView = lazy(async () => ({
+  default: (await import('../challenges/ChallengeModeView')).ChallengeModeView,
+}));
 
 const DEFAULT_BOTTOM_HEIGHT = 200;
 const DEFAULT_SIDEBAR_WIDTH = 240;
@@ -293,6 +299,7 @@ export function PanelLayout() {
 
   const colors = useThemeStore((s) => s.colors);
   const uiMode = useUIModeStore((s) => s.mode);
+  const experimentalFeatures = useSettingsStore((s) => s.general.experimentalFeatures);
   const result = useSimulationStore((s) => s.result);
   const platform = usePlatform();
   const isLearnMode = useLearnStore((s) => s.isLearnMode);
@@ -311,6 +318,14 @@ export function PanelLayout() {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- expand bottom panel on new result
     if (uiMode === 'beginner' && result) setBottomCollapsed(false);
   }, [result, uiMode]);
+
+  useEffect(() => {
+    if (experimentalFeatures) return;
+
+    if (activeView && ['search', 'circuit', 'plugins', 'hardware', 'community'].includes(activeView)) {
+      setActiveView('files');
+    }
+  }, [activeView, experimentalFeatures]);
 
   // Load persisted layout
   useEffect(() => {
@@ -421,7 +436,9 @@ export function PanelLayout() {
             flex: 1, minWidth: 0, overflow: 'hidden',
             animation: 'nuclei-fade-in 200ms ease',
           }}>
-            <ChallengeModeView />
+            <Suspense fallback={null}>
+              <ChallengeModeView />
+            </Suspense>
           </div>
         ) : isLearnMode ? (
           /* Learn Mode — full content area + Dirac */
@@ -429,7 +446,9 @@ export function PanelLayout() {
             flex: 1, minWidth: 0, overflow: 'hidden',
             animation: 'nuclei-fade-in 200ms ease',
           }}>
-            <LearnModeView />
+            <Suspense fallback={null}>
+              <LearnModeView />
+            </Suspense>
           </div>
         ) : (
           <>

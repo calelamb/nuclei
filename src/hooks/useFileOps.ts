@@ -4,6 +4,7 @@ import { useEditorStore } from '../stores/editorStore';
 
 const RECENT_FILES_KEY = 'recent_files';
 const MAX_RECENT = 10;
+const LAST_OPENED_FILE_KEY = 'last_opened_file';
 
 export function useFileOps() {
   const { code, filePath, isDirty, setCode, setFilePath } = useEditorStore();
@@ -31,6 +32,7 @@ export function useFileOps() {
     setCode(result.content);
     setFilePath(result.path);
     await addRecent(result.path);
+    await platform.setStoredValue(LAST_OPENED_FILE_KEY, result.path);
   }, [setCode, setFilePath, addRecent, platform]);
 
   const saveFileAs = useCallback(async () => {
@@ -39,6 +41,7 @@ export function useFileOps() {
 
     setFilePath(result.path);
     await addRecent(result.path);
+    await platform.setStoredValue(LAST_OPENED_FILE_KEY, result.path);
   }, [filePath, code, setFilePath, addRecent, platform]);
 
   const saveFile = useCallback(async () => {
@@ -46,13 +49,14 @@ export function useFileOps() {
       await platform.saveFile(filePath, code);
       setFilePath(filePath);
       await addRecent(filePath);
+      await platform.setStoredValue(LAST_OPENED_FILE_KEY, filePath);
     } else {
       await saveFileAs();
     }
   }, [filePath, code, setFilePath, addRecent, platform, saveFileAs]);
 
   const newFile = useCallback((templateCode?: string) => {
-    setCode(templateCode ?? useEditorStore.getState().code);
+    setCode(templateCode ?? '');
     setFilePath(null);
   }, [setCode, setFilePath]);
 

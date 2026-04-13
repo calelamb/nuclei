@@ -104,6 +104,7 @@ function ExampleBox({ example, index }: { example: ChallengeExample; index: numb
 
 export function ProblemDescription({ challenge }: ProblemDescriptionProps) {
   const colors = useThemeStore((s) => s.colors);
+  const signature = `${challenge.entrypoint_name ?? 'solve'}(${(challenge.arguments ?? []).map((arg) => arg.name).join(', ')})`;
 
   return (
     <div style={{
@@ -111,6 +112,60 @@ export function ProblemDescription({ challenge }: ProblemDescriptionProps) {
       overflowY: 'auto',
       padding: '20px 24px 48px',
     }}>
+      <div style={{
+        marginBottom: 18,
+        padding: '12px 14px',
+        borderRadius: 10,
+        border: `1px solid ${colors.border}`,
+        background: colors.bgPanel,
+      }}>
+        <div style={{
+          color: colors.textDim,
+          fontSize: 11,
+          fontWeight: 600,
+          fontFamily: "'Geist Sans', sans-serif",
+          textTransform: 'uppercase',
+          letterSpacing: 0.4,
+          marginBottom: 8,
+        }}>
+          Solver Contract
+        </div>
+        <div style={{
+          color: colors.accent,
+          fontSize: 13,
+          fontFamily: "'Geist Mono', monospace",
+          marginBottom: 8,
+        }}>
+          {signature} -&gt; QuantumCircuit
+        </div>
+        <div style={{
+          color: colors.textMuted,
+          fontSize: 12,
+          fontFamily: "'Geist Sans', sans-serif",
+          lineHeight: 1.6,
+        }}>
+          Return a measured Qiskit circuit. The harness injects the inputs below and validates the output against visible and hidden tests.
+        </div>
+        {(challenge.arguments?.length ?? 0) > 0 && (
+          <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 6 }}>
+            {challenge.arguments?.map((arg) => (
+              <div key={arg.name} style={{
+                display: 'flex',
+                gap: 8,
+                color: colors.textMuted,
+                fontSize: 12,
+                fontFamily: "'Geist Sans', sans-serif",
+              }}>
+                <code style={{ color: colors.text, fontFamily: "'Geist Mono', monospace" }}>
+                  {arg.name}: {arg.type}
+                </code>
+                <span>{arg.description}</span>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
       {/* Description (markdown) */}
       <div style={{
         color: colors.text,

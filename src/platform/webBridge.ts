@@ -67,6 +67,10 @@ export const webBridge: PlatformBridge = {
     });
   },
 
+  async readFile() {
+    return null;
+  },
+
   async saveFile(_path: string, content: string) {
     // In web, saveFile always downloads
     downloadFile(_path, content);

@@ -450,6 +450,10 @@ export function SettingsPanel() {
             <Toggle value={general.educatorMode}
               onChange={(v) => updateGeneral({ educatorMode: v })} />
           </SettingRow>
+          <SettingRow label="Experimental Surfaces">
+            <Toggle value={general.experimentalFeatures}
+              onChange={(v) => updateGeneral({ experimentalFeatures: v })} />
+          </SettingRow>
         </Section>
       </div>
 

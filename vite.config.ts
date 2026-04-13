@@ -14,6 +14,31 @@ export default defineConfig({
   // For web builds, output to dist-web; for Tauri, output to dist
   build: {
     outDir: isWeb ? 'dist-web' : 'dist',
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          if (id.includes('node_modules/monaco-editor') || id.includes('@monaco-editor/react')) {
+            return 'monaco';
+          }
+          if (id.includes('/src/components/challenges/') || id.includes('/src/data/challenges/') || id.includes('/src/stores/challengeModeStore')) {
+            return 'challenge-mode';
+          }
+          if (id.includes('/src/components/learning/') || id.includes('/src/data/lessons/') || id.includes('/src/stores/learnStore')) {
+            return 'learn-mode';
+          }
+          if (id.includes('/src/components/community/') || id.includes('/src/services/communityService') || id.includes('/src/stores/communityStore')) {
+            return 'community';
+          }
+          if (id.includes('/src/components/hardware/') || id.includes('/src/stores/hardwareStore')) {
+            return 'hardware';
+          }
+          if (id.includes('/src/components/plugins/') || id.includes('/src/plugins/')) {
+            return 'plugins';
+          }
+          return undefined;
+        },
+      },
+    },
   },
   define: {
     // Make build target available at runtime

@@ -174,6 +174,13 @@ class Executor:
                 code="timeout",
                 message=str(exc),
             )
+        except (SyntaxError, IndentationError):
+            tb = traceback.format_exc()
+            return stdout_capture.getvalue(), KernelError(
+                code="compile_error",
+                message=_short_error_message(tb),
+                traceback=tb,
+            )
         except Exception:
             tb = traceback.format_exc()
             return stdout_capture.getvalue(), KernelError(

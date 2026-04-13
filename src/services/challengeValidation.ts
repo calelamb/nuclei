@@ -18,6 +18,7 @@ export function validateTestCase(
       testCaseId: testCase.id,
       passed,
       score: score * testCase.weight,
+      verdict: passed ? 'accepted' : 'wrong_answer',
       actualOutput: result.probabilities,
       message,
       executionTimeMs,
@@ -35,6 +36,7 @@ export function validateTestCase(
       testCaseId: testCase.id,
       passed,
       score: score * testCase.weight,
+      verdict: passed ? 'accepted' : 'wrong_answer',
       actualOutput: result.measurements,
       message,
       executionTimeMs,
@@ -45,6 +47,7 @@ export function validateTestCase(
     testCaseId: testCase.id,
     passed: false,
     score: 0,
+    verdict: 'runtime_error',
     message: `Unknown validation type: ${(validation as { type: string }).type}`,
     executionTimeMs,
   };

@@ -1,5 +1,6 @@
 import { Files, Search, Cpu, GraduationCap, Blocks, Settings, Server, Users, Trophy } from 'lucide-react';
 import { useThemeStore } from '../../stores/themeStore';
+import { useSettingsStore } from '../../stores/settingsStore';
 
 export type ActivityView = 'files' | 'search' | 'circuit' | 'learning' | 'challenges' | 'plugins' | 'hardware' | 'community' | 'settings';
 
@@ -8,12 +9,15 @@ interface ActivityBarProps {
   onSelect: (view: ActivityView) => void;
 }
 
-const TOP_ITEMS: Array<{ id: ActivityView; icon: typeof Files; label: string }> = [
+const CORE_ITEMS: Array<{ id: ActivityView; icon: typeof Files; label: string }> = [
   { id: 'files', icon: Files, label: 'Explorer' },
-  { id: 'search', icon: Search, label: 'Search' },
-  { id: 'circuit', icon: Cpu, label: 'Circuit' },
   { id: 'learning', icon: GraduationCap, label: 'Learning' },
   { id: 'challenges', icon: Trophy, label: 'Challenges' },
+];
+
+const EXPERIMENTAL_ITEMS: Array<{ id: ActivityView; icon: typeof Files; label: string }> = [
+  { id: 'search', icon: Search, label: 'Search' },
+  { id: 'circuit', icon: Cpu, label: 'Circuit' },
   { id: 'plugins', icon: Blocks, label: 'Plugins' },
   { id: 'hardware', icon: Server, label: 'Hardware' },
   { id: 'community', icon: Users, label: 'Community' },
@@ -61,6 +65,10 @@ function ActivityIcon({ item, isActive, onClick }: {
 
 export function ActivityBar({ active, onSelect }: ActivityBarProps) {
   const colors = useThemeStore((s) => s.colors);
+  const experimentalFeatures = useSettingsStore((s) => s.general.experimentalFeatures);
+  const topItems = experimentalFeatures
+    ? [...CORE_ITEMS, ...EXPERIMENTAL_ITEMS]
+    : CORE_ITEMS;
 
   return (
     <div
@@ -75,7 +83,7 @@ export function ActivityBar({ active, onSelect }: ActivityBarProps) {
       aria-label="Activity bar"
       aria-orientation="vertical"
     >
-      {TOP_ITEMS.map((item) => (
+      {topItems.map((item) => (
         <ActivityIcon
           key={item.id}
           item={item}

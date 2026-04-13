@@ -11,6 +11,7 @@ import { useEditorStore } from './stores/editorStore';
 import { useUIModeStore } from './stores/uiModeStore';
 import { useDiracPanelStore } from './stores/diracPanelStore';
 import type { PlatformBridge } from './platform/bridge';
+import type { Framework } from './types/quantum';
 
 // Store execute function globally so Monaco keybinding can access it
 let executeRef: (() => void) | null = null;
@@ -34,6 +35,11 @@ function AppInner() {
   const [daysSinceLastSession, setDaysSinceLastSession] = useState<number | undefined>();
   const themeToggle = useThemeStore((s) => s.toggle);
   const isDirty = useEditorStore((s) => s.isDirty);
+  const filePath = useEditorStore((s) => s.filePath);
+  const framework = useEditorStore((s) => s.framework);
+  const setCode = useEditorStore((s) => s.setCode);
+  const setFilePath = useEditorStore((s) => s.setFilePath);
+  const setFramework = useEditorStore((s) => s.setFramework);
   const cycleMode = useUIModeStore((s) => s.cycleMode);
   const toggleDirac = useDiracPanelStore((s) => s.toggle);
   const focusDirac = useDiracPanelStore((s) => s.focusInput);
@@ -68,6 +74,9 @@ function AppInner() {
         const uiMode = await platform.getStoredValue<'beginner' | 'intermediate' | 'advanced'>('ui_mode');
         if (uiMode) useUIModeStore.getState().setMode(uiMode);
 
+        const lastFramework = await platform.getStoredValue<Framework>('last_framework');
+        if (lastFramework) setFramework(lastFramework);
+
         const onboarded = await platform.getStoredValue<boolean>('onboarding_complete');
         if (!onboarded) {
           setShowOnboarding(true);
@@ -85,6 +94,14 @@ function AppInner() {
               if (days > 1) setShowOnboarding(true);
             }
           }
+
+          if (lastFile) {
+            const restoredContent = await platform.readFile(lastFile);
+            if (restoredContent !== null) {
+              setCode(restoredContent);
+              setFilePath(lastFile);
+            }
+          }
         }
 
         // Record this session
@@ -93,7 +110,16 @@ function AppInner() {
         // Non-critical: theme/preferences persistence failure is safe to ignore
       }
     })();
-  }, [platform]);
+  }, [platform, setCode, setFilePath, setFramework]);
+
+  useEffect(() => {
+    platform.setStoredValue('last_framework', framework).catch(() => {});
+  }, [framework, platform]);
+
+  useEffect(() => {
+    if (!filePath) return;
+    platform.setStoredValue('last_opened_file', filePath).catch(() => {});
+  }, [filePath, platform]);
 
   const completeOnboarding = useCallback(async (path?: string) => {
     setShowOnboarding(false);

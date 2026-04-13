@@ -15,6 +15,7 @@ export interface PlatformBridge {
 
   // File operations
   openFile(): Promise<{ path: string; content: string } | null>;
+  readFile(path: string): Promise<string | null>;
   saveFile(path: string, content: string): Promise<void>;
   saveFileAs(content: string, defaultPath?: string): Promise<{ path: string } | null>;
 

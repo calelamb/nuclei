@@ -1,14 +1,51 @@
-import { useCallback } from 'react';
+import { useCallback, useMemo, useState } from 'react';
+import { Check, Play, SearchCode, X } from 'lucide-react';
 import { useThemeStore } from '../../stores/themeStore';
 import { useChallengeModeStore } from '../../stores/challengeModeStore';
-import { runTestCases } from '../../services/challengeExecution';
+import {
+  inspectChallengeCase,
+  runTestCases,
+} from '../../services/challengeExecution';
 import { usePlatform } from '../../platform/PlatformProvider';
 import { TestCaseRow } from './TestCaseRow';
-import { Play, Check, X } from 'lucide-react';
-import type { QuantumChallenge, Submission, TestCaseResult } from '../../types/challenge';
+import { ChallengeInspector } from './ChallengeInspector';
+import type {
+  QuantumChallenge,
+  Submission,
+  SubmissionStatus,
+  TestCase,
+  TestCaseResult,
+} from '../../types/challenge';
 
 interface TestRunnerProps {
   challenge: QuantumChallenge;
+}
+
+function formatVerdict(verdict: SubmissionStatus) {
+  switch (verdict) {
+    case 'accepted':
+      return 'Accepted';
+    case 'wrong_answer':
+      return 'Wrong Answer';
+    case 'runtime_error':
+      return 'Runtime Error';
+    case 'compile_error':
+      return 'Compile Error';
+    case 'time_limit_exceeded':
+      return 'Time Limit Exceeded';
+    case 'running':
+      return 'Running';
+    default:
+      return 'Pending';
+  }
+}
+
+function deriveSubmissionStatus(results: TestCaseResult[]): SubmissionStatus {
+  if (results.some((result) => result.verdict === 'compile_error')) return 'compile_error';
+  if (results.some((result) => result.verdict === 'time_limit_exceeded')) return 'time_limit_exceeded';
+  if (results.some((result) => result.verdict === 'runtime_error')) return 'runtime_error';
+  if (results.length > 0 && results.every((result) => result.passed)) return 'accepted';
+  return 'wrong_answer';
 }
 
 export function TestRunner({ challenge }: TestRunnerProps) {
@@ -20,30 +57,64 @@ export function TestRunner({ challenge }: TestRunnerProps) {
   const isRunning = useChallengeModeStore((s) => s.isRunning);
   const currentTestResults = useChallengeModeStore((s) => s.currentTestResults);
   const runningTestIndex = useChallengeModeStore((s) => s.runningTestIndex);
+  const inspection = useChallengeModeStore((s) => s.inspection);
   const setRunning = useChallengeModeStore((s) => s.setRunning);
   const setRunningTestIndex = useChallengeModeStore((s) => s.setRunningTestIndex);
   const addTestResult = useChallengeModeStore((s) => s.addTestResult);
   const clearTestResults = useChallengeModeStore((s) => s.clearTestResults);
   const addSubmission = useChallengeModeStore((s) => s.addSubmission);
   const markSolved = useChallengeModeStore((s) => s.markSolved);
+  const setInspection = useChallengeModeStore((s) => s.setInspection);
+  const setInspectionView = useChallengeModeStore((s) => s.setInspectionView);
+  const [activeBottomTab, setActiveBottomTab] = useState<'tests' | 'inspection'>('tests');
+  const [inspectionCaseId, setInspectionCaseId] = useState<string | null>(
+    challenge.visible_tests?.[0]?.id ?? challenge.testCases.find((testCase) => !testCase.hidden)?.id ?? null,
+  );
 
   const savedCode = progress[challenge.id]?.currentCode[activeFramework];
-  const starterCode = challenge.starterCode[activeFramework] ?? '';
-  const code = savedCode || starterCode;
+  const code = savedCode || challenge.starter_template || challenge.starterCode[activeFramework] || '';
+  const visibleTests = challenge.visible_tests ?? challenge.testCases.filter((testCase) => !testCase.hidden);
+  const hiddenTests = challenge.hidden_tests ?? challenge.testCases.filter((testCase) => testCase.hidden);
 
-  const visibleTests = challenge.testCases.filter((tc) => !tc.hidden);
-  const hiddenTests = challenge.testCases.filter((tc) => tc.hidden);
+  const overallVerdict = useMemo(() => (
+    currentTestResults.length > 0 ? deriveSubmissionStatus(currentTestResults) : null
+  ), [currentTestResults]);
+
+  const totalWeight = useMemo(() => (
+    challenge.testCases.reduce((sum, testCase) => sum + testCase.weight, 0)
+  ), [challenge.testCases]);
+
+  const visibleWeight = useMemo(() => (
+    visibleTests.reduce((sum, testCase) => sum + testCase.weight, 0)
+  ), [visibleTests]);
+
+  const totalScore = useMemo(() => {
+    if (currentTestResults.length === 0) return null;
+
+    const resultIds = new Set(currentTestResults.map((result) => result.testCaseId));
+    const denominator = hiddenTests.some((testCase) => resultIds.has(testCase.id)) ? totalWeight : visibleWeight;
+    const earned = currentTestResults.reduce((sum, result, index) => {
+      if (!result.passed) return sum;
+      const testCase = challenge.testCases.find((candidate) => candidate.id === result.testCaseId) ?? challenge.testCases[index];
+      return sum + (testCase?.weight ?? 0);
+    }, 0);
+
+    if (denominator <= 0) return 0;
+    return Math.round((earned / denominator) * 100);
+  }, [challenge.testCases, currentTestResults, hiddenTests, totalWeight, visibleTests, visibleWeight]);
 
   const handleRun = useCallback(async (submit: boolean) => {
     if (isRunning) return;
 
     clearTestResults();
+    setInspection(null);
     setRunning(true);
+    setActiveBottomTab('tests');
 
     const casesToRun = submit ? challenge.testCases : visibleTests;
-
     const results = await runTestCases(
       code,
+      challenge,
       casesToRun,
       activeFramework,
       platform.getPlatform(),
@@ -56,50 +127,110 @@ export function TestRunner({ challenge }: TestRunnerProps) {
         setRunningTestIndex(index);
       },
       () => {
-        // Error already encoded in individual test results
+        // Per-test failures are surfaced inline.
       },
     );
 
     setRunning(false);
     setRunningTestIndex(-1);
 
-    if (submit) {
-      const totalWeight = challenge.testCases.reduce((sum, tc) => sum + tc.weight, 0);
-      const earnedWeight = results.reduce((sum, r, i) => {
-        return sum + (r.passed ? challenge.testCases[i].weight : 0);
-      }, 0);
-      const totalScore = totalWeight > 0 ? Math.round((earnedWeight / totalWeight) * 100) : 0;
-      const allPassed = results.every((r) => r.passed);
+    if (!submit) return;
 
-      const submission: Submission = {
-        id: `sub-${Date.now()}`,
-        challengeId: challenge.id,
-        code,
-        framework: activeFramework,
-        timestamp: new Date().toISOString(),
-        status: allPassed ? 'accepted' : 'wrong_answer',
-        testCaseResults: results,
-        totalScore,
-        executionTimeMs: results.reduce((sum, r) => sum + r.executionTimeMs, 0),
-      };
+    const status = deriveSubmissionStatus(results);
+    const earnedWeight = results.reduce((sum, result) => {
+      if (!result.passed) return sum;
+      const testCase = challenge.testCases.find((candidate) => candidate.id === result.testCaseId);
+      return sum + (testCase?.weight ?? 0);
+    }, 0);
+    const submissionScore = totalWeight > 0
+      ? Math.round((earnedWeight / totalWeight) * 100)
+      : 0;
 
-      addSubmission(challenge.id, submission);
-      if (allPassed) markSolved(challenge.id);
+    const submission: Submission = {
+      id: `sub-${Date.now()}`,
+      challengeId: challenge.id,
+      code,
+      framework: activeFramework,
+      timestamp: new Date().toISOString(),
+      status,
+      testCaseResults: results,
+      totalScore: submissionScore,
+      executionTimeMs: results.reduce((sum, result) => sum + result.executionTimeMs, 0),
+    };
+
+    addSubmission(challenge.id, submission);
+    if (status === 'accepted') {
+      markSolved(challenge.id);
     }
   }, [
-    isRunning, code, activeFramework, challenge, visibleTests, platform,
-    clearTestResults, setRunning, setRunningTestIndex, addTestResult,
-    addSubmission, markSolved,
+    activeFramework,
+    addSubmission,
+    addTestResult,
+    challenge,
+    clearTestResults,
+    code,
+    isRunning,
+    markSolved,
+    platform,
+    setInspection,
+    setRunning,
+    setRunningTestIndex,
+    totalWeight,
+    visibleTests,
   ]);
 
-  // Derive overall status from results
-  const hasResults = currentTestResults.length > 0;
-  const allPassed = hasResults && currentTestResults.every((r) => r.passed);
-  const totalScore = hasResults
-    ? Math.round(
-        (currentTestResults.filter((r) => r.passed).length / currentTestResults.length) * 100,
-      )
-    : null;
+  const handleInspect = useCallback(async () => {
+    if (isRunning || !inspectionCaseId) return;
+
+    const selectedTestCase = visibleTests.find((testCase) => testCase.id === inspectionCaseId);
+    if (!selectedTestCase) return;
+
+    setRunning(true);
+    setRunningTestIndex(-1);
+
+    const inspectionResult = await inspectChallengeCase(
+      code,
+      challenge,
+      selectedTestCase,
+      activeFramework,
+      platform.getPlatform(),
+      1024,
+    );
+
+    setInspection({
+      testCaseId: selectedTestCase.id,
+      label: selectedTestCase.label || selectedTestCase.description,
+      snapshot: inspectionResult.snapshot,
+      result: inspectionResult.result,
+      stdout: inspectionResult.stdout,
+      failure: inspectionResult.failure,
+    });
+    setInspectionView(inspectionResult.failure ? 'output' : 'circuit');
+    setActiveBottomTab('inspection');
+    setRunning(false);
+  }, [
+    activeFramework,
+    challenge,
+    code,
+    inspectionCaseId,
+    isRunning,
+    platform,
+    setInspection,
+    setInspectionView,
+    setRunning,
+    setRunningTestIndex,
+    visibleTests,
+  ]);
+
+  const verdictColor = overallVerdict === 'accepted'
+    ? colors.success
+    : overallVerdict === 'wrong_answer'
+      ? colors.error
+      : overallVerdict === 'compile_error'
+        ? colors.warning
+        : overallVerdict === 'time_limit_exceeded'
+          ? colors.warning
+          : colors.error;
 
   return (
     <div style={{
@@ -109,7 +240,6 @@ export function TestRunner({ challenge }: TestRunnerProps) {
       overflow: 'hidden',
       background: colors.bg,
     }}>
-      {/* Action bar */}
       <div style={{
         padding: '8px 16px',
         display: 'flex',
@@ -117,6 +247,7 @@ export function TestRunner({ challenge }: TestRunnerProps) {
         gap: 8,
         borderBottom: `1px solid ${colors.border}`,
         background: colors.bgPanel,
+        flexWrap: 'wrap',
       }}>
         <button
           onClick={() => handleRun(false)}
@@ -135,17 +266,10 @@ export function TestRunner({ challenge }: TestRunnerProps) {
             fontFamily: "'Geist Sans', sans-serif",
             cursor: isRunning ? 'not-allowed' : 'pointer',
             opacity: isRunning ? 0.5 : 1,
-            transition: 'all 150ms ease',
-          }}
-          onMouseEnter={(e) => {
-            if (!isRunning) e.currentTarget.style.background = `${colors.accent}28`;
-          }}
-          onMouseLeave={(e) => {
-            if (!isRunning) e.currentTarget.style.background = `${colors.accent}18`;
           }}
         >
           <Play size={12} />
-          Run Tests
+          Run Visible Tests
         </button>
 
         <button
@@ -166,82 +290,188 @@ export function TestRunner({ challenge }: TestRunnerProps) {
             cursor: isRunning ? 'not-allowed' : 'pointer',
             opacity: isRunning ? 0.5 : 1,
             boxShadow: shadow.sm,
-            transition: 'all 150ms ease',
           }}
         >
+          <Check size={12} />
           Submit
         </button>
 
-        {/* Status badge */}
-        {hasResults && !isRunning && (
+        <div style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: 8,
+          marginLeft: 8,
+          paddingLeft: 8,
+          borderLeft: `1px solid ${colors.border}`,
+        }}>
+          <select
+            value={inspectionCaseId ?? ''}
+            onChange={(event) => setInspectionCaseId(event.target.value)}
+            style={{
+              background: colors.bgElevated,
+              border: `1px solid ${colors.border}`,
+              borderRadius: 6,
+              padding: '6px 10px',
+              color: colors.text,
+              fontSize: 11,
+              fontFamily: "'Geist Sans', sans-serif",
+            }}
+          >
+            {visibleTests.map((testCase: TestCase) => (
+              <option key={testCase.id} value={testCase.id}>
+                {testCase.label}
+              </option>
+            ))}
+          </select>
+
+          <button
+            onClick={handleInspect}
+            disabled={isRunning || !inspectionCaseId}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 6,
+              padding: '6px 14px',
+              borderRadius: 6,
+              border: `1px solid ${colors.border}`,
+              background: 'transparent',
+              color: colors.text,
+              fontSize: 12,
+              fontWeight: 600,
+              fontFamily: "'Geist Sans', sans-serif",
+              cursor: isRunning ? 'not-allowed' : 'pointer',
+              opacity: isRunning ? 0.5 : 1,
+            }}
+          >
+            <SearchCode size={12} />
+            Inspect Quantum Output
+          </button>
+        </div>
+
+        {overallVerdict && !isRunning && (
           <div style={{
             marginLeft: 'auto',
             display: 'flex',
             alignItems: 'center',
-            gap: 6,
+            gap: 10,
           }}>
             <div style={{
               display: 'flex',
               alignItems: 'center',
-              gap: 4,
+              gap: 6,
               padding: '4px 10px',
-              borderRadius: 4,
-              background: allPassed ? `${colors.success}18` : `${colors.error}18`,
-              color: allPassed ? colors.success : colors.error,
+              borderRadius: 999,
+              background: `${verdictColor}18`,
+              color: verdictColor,
               fontSize: 12,
-              fontWeight: 600,
+              fontWeight: 700,
               fontFamily: "'Geist Sans', sans-serif",
             }}>
-              {allPassed ? <Check size={12} /> : <X size={12} />}
-              {allPassed ? 'Accepted' : 'Wrong Answer'}
+              {overallVerdict === 'accepted' ? <Check size={12} /> : <X size={12} />}
+              {formatVerdict(overallVerdict)}
             </div>
-            <span style={{
-              color: colors.textMuted,
-              fontSize: 11,
-              fontFamily: "'Geist Sans', sans-serif",
-            }}>
-              Score: {totalScore}%
-            </span>
+            {totalScore !== null && (
+              <span style={{
+                color: colors.textMuted,
+                fontSize: 11,
+                fontFamily: "'Geist Sans', sans-serif",
+              }}>
+                Score: {totalScore}%
+              </span>
+            )}
           </div>
         )}
       </div>
 
-      {/* Test case list */}
       <div style={{
-        flex: 1,
-        overflowY: 'auto',
-        padding: '4px 0',
+        display: 'flex',
+        alignItems: 'center',
+        gap: 4,
+        padding: '0 12px',
+        borderBottom: `1px solid ${colors.border}`,
+        background: colors.bgPanel,
+        flexShrink: 0,
       }}>
-        {/* Visible test cases */}
-        {visibleTests.map((tc, i) => {
-          const result = currentTestResults.find((r) => r.testCaseId === tc.id);
-          const running = isRunning && runningTestIndex === i;
-          return (
-            <TestCaseRow
-              key={tc.id}
-              testCase={tc}
-              result={result}
-              isRunning={running}
-              index={i}
-            />
-          );
-        })}
+        <button
+          onClick={() => setActiveBottomTab('tests')}
+          style={{
+            padding: '6px 8px',
+            background: 'transparent',
+            border: 'none',
+            borderBottom: activeBottomTab === 'tests' ? `2px solid ${colors.accent}` : '2px solid transparent',
+            color: activeBottomTab === 'tests' ? colors.text : colors.textMuted,
+            fontSize: 11,
+            fontWeight: 600,
+            fontFamily: "'Geist Sans', sans-serif",
+            cursor: 'pointer',
+          }}
+        >
+          Test Results
+        </button>
+        <button
+          onClick={() => setActiveBottomTab('inspection')}
+          style={{
+            padding: '6px 8px',
+            background: 'transparent',
+            border: 'none',
+            borderBottom: activeBottomTab === 'inspection' ? `2px solid ${colors.accent}` : '2px solid transparent',
+            color: activeBottomTab === 'inspection' ? colors.text : colors.textMuted,
+            fontSize: 11,
+            fontWeight: 600,
+            fontFamily: "'Geist Sans', sans-serif",
+            cursor: 'pointer',
+          }}
+        >
+          Quantum Output
+        </button>
+      </div>
 
-        {/* Hidden test cases */}
-        {hiddenTests.map((tc, i) => {
-          const result = currentTestResults.find((r) => r.testCaseId === tc.id);
-          const absIdx = visibleTests.length + i;
-          const running = isRunning && runningTestIndex === absIdx;
-          return (
-            <TestCaseRow
-              key={tc.id}
-              testCase={tc}
-              result={result}
-              isRunning={running}
-              index={absIdx}
-            />
-          );
-        })}
+      <div style={{ flex: 1, overflow: 'hidden' }}>
+        {activeBottomTab === 'inspection' ? (
+          <ChallengeInspector />
+        ) : (
+          <div style={{ height: '100%', overflowY: 'auto', padding: '4px 0' }}>
+            {visibleTests.map((testCase, index) => {
+              const result = currentTestResults.find((entry) => entry.testCaseId === testCase.id);
+              const running = isRunning && runningTestIndex === index;
+              return (
+                <TestCaseRow
+                  key={testCase.id}
+                  testCase={testCase}
+                  result={result}
+                  isRunning={running}
+                  index={index}
+                />
+              );
+            })}
+
+            {hiddenTests.map((testCase, index) => {
+              const result = currentTestResults.find((entry) => entry.testCaseId === testCase.id);
+              const absoluteIndex = visibleTests.length + index;
+              const running = isRunning && runningTestIndex === absoluteIndex;
+              return (
+                <TestCaseRow
+                  key={testCase.id}
+                  testCase={testCase}
+                  result={result}
+                  isRunning={running}
+                  index={absoluteIndex}
+                />
+              );
+            })}
+
+            {!inspection && currentTestResults.length === 0 && (
+              <div style={{
+                padding: '18px 16px',
+                color: colors.textDim,
+                fontSize: 12,
+                fontFamily: "'Geist Sans', sans-serif",
+              }}>
+                Run the visible tests to validate your solver, then submit once the visible cases are passing.
+              </div>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );

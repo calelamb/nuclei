@@ -1,4 +1,5 @@
-import { useState, useCallback } from 'react';
+import { useCallback, useState } from 'react';
+import { ChevronDown, ChevronRight } from 'lucide-react';
 import { useThemeStore } from '../../stores/themeStore';
 import { useChallengeModeStore } from '../../stores/challengeModeStore';
 import { ProblemDescription } from './ProblemDescription';
@@ -6,7 +7,6 @@ import { ProblemEditor } from './ProblemEditor';
 import { TestRunner } from './TestRunner';
 import { HintPanel } from './HintPanel';
 import { SubmissionHistory } from './SubmissionHistory';
-import { Lightbulb, History, ChevronDown, ChevronRight } from 'lucide-react';
 import type { ChallengeDifficulty } from '../../types/challenge';
 
 const DIFFICULTY_COLORS: Record<ChallengeDifficulty, string> = {
@@ -15,28 +15,60 @@ const DIFFICULTY_COLORS: Record<ChallengeDifficulty, string> = {
   hard: '#EF4444',
 };
 
+type WorkspaceTab = 'description' | 'submissions' | 'hints';
+
+function WorkspaceTabButton({
+  active,
+  label,
+  onClick,
+}: {
+  active: boolean;
+  label: string;
+  onClick: () => void;
+}) {
+  const colors = useThemeStore((s) => s.colors);
+
+  return (
+    <button
+      onClick={onClick}
+      style={{
+        padding: '8px 12px',
+        background: 'transparent',
+        border: 'none',
+        borderBottom: active ? `2px solid ${colors.accent}` : '2px solid transparent',
+        color: active ? colors.text : colors.textMuted,
+        fontSize: 12,
+        fontWeight: active ? 600 : 500,
+        fontFamily: "'Geist Sans', sans-serif",
+        cursor: 'pointer',
+      }}
+    >
+      {label}
+    </button>
+  );
+}
+
 export function ProblemWorkspace() {
   const colors = useThemeStore((s) => s.colors);
   const activeProblem = useChallengeModeStore((s) => s.activeProblem);
   const progress = useChallengeModeStore((s) => s.progress);
-
-  const [showHints, setShowHints] = useState(false);
-  const [showHistory, setShowHistory] = useState(false);
+  const [tab, setTab] = useState<WorkspaceTab>('description');
   const [bottomExpanded, setBottomExpanded] = useState(true);
-  const [dividerX, setDividerX] = useState(45);
+  const [dividerX, setDividerX] = useState(44);
 
-  const handleDividerDrag = useCallback((e: React.MouseEvent) => {
-    e.preventDefault();
-    const startX = e.clientX;
+  const handleDividerDrag = useCallback((event: React.MouseEvent) => {
+    event.preventDefault();
+    const startX = event.clientX;
     const startPercent = dividerX;
 
-    const onMove = (moveEv: MouseEvent) => {
-      const container = (e.target as HTMLElement).parentElement;
+    const onMove = (moveEvent: MouseEvent) => {
+      const container = (event.target as HTMLElement).parentElement;
       if (!container) return;
+
       const rect = container.getBoundingClientRect();
-      const delta = moveEv.clientX - startX;
-      const pctDelta = (delta / rect.width) * 100;
-      const next = Math.max(25, Math.min(75, startPercent + pctDelta));
+      const delta = moveEvent.clientX - startX;
+      const deltaPercent = (delta / rect.width) * 100;
+      const next = Math.max(28, Math.min(72, startPercent + deltaPercent));
       setDividerX(next);
     };
 
@@ -51,8 +83,10 @@ export function ProblemWorkspace() {
 
   if (!activeProblem) return null;
 
-  const diffColor = DIFFICULTY_COLORS[activeProblem.difficulty];
   const submissions = progress[activeProblem.id]?.submissions ?? [];
+  const visibleTests = activeProblem.visible_tests ?? activeProblem.testCases.filter((test) => !test.hidden);
+  const hiddenTests = activeProblem.hidden_tests ?? activeProblem.testCases.filter((test) => test.hidden);
+  const diffColor = DIFFICULTY_COLORS[activeProblem.difficulty];
 
   return (
     <div style={{
@@ -60,132 +94,104 @@ export function ProblemWorkspace() {
       display: 'flex',
       flexDirection: 'column',
       overflow: 'hidden',
+      background: colors.bg,
     }}>
-      {/* Secondary toolbar */}
       <div style={{
-        height: 36,
-        flexShrink: 0,
-        display: 'flex',
-        alignItems: 'center',
-        padding: '0 16px',
-        gap: 10,
+        padding: '12px 16px',
         borderBottom: `1px solid ${colors.border}`,
         background: colors.bgPanel,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        gap: 16,
       }}>
-        <span style={{
-          padding: '2px 8px',
-          borderRadius: 4,
-          background: `${diffColor}18`,
-          color: diffColor,
-          fontSize: 11,
-          fontWeight: 600,
-          fontFamily: "'Geist Sans', sans-serif",
-          textTransform: 'capitalize',
-        }}>
-          {activeProblem.difficulty}
-        </span>
+        <div style={{ minWidth: 0 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+            <span style={{
+              padding: '3px 8px',
+              borderRadius: 999,
+              background: `${diffColor}18`,
+              color: diffColor,
+              fontSize: 11,
+              fontWeight: 600,
+              fontFamily: "'Geist Sans', sans-serif",
+              textTransform: 'capitalize',
+            }}>
+              {activeProblem.difficulty}
+            </span>
+            <span style={{
+              color: colors.textMuted,
+              fontSize: 11,
+              fontFamily: "'Geist Sans', sans-serif",
+              textTransform: 'uppercase',
+              letterSpacing: 0.4,
+            }}>
+              {activeProblem.category.replace('-', ' ')}
+            </span>
+          </div>
+          <div style={{
+            color: colors.text,
+            fontSize: 18,
+            fontWeight: 700,
+            fontFamily: "'Geist Sans', sans-serif",
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            whiteSpace: 'nowrap',
+          }}>
+            {activeProblem.title}
+          </div>
+        </div>
 
-        <span style={{
-          color: colors.text,
-          fontSize: 13,
-          fontWeight: 500,
+        <div style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: 14,
+          color: colors.textMuted,
+          fontSize: 12,
           fontFamily: "'Geist Sans', sans-serif",
-          overflow: 'hidden',
-          textOverflow: 'ellipsis',
-          whiteSpace: 'nowrap',
-          flex: 1,
         }}>
-          {activeProblem.title}
-        </span>
+          <span>{Math.round(activeProblem.acceptanceRate * 100)}% acceptance</span>
+          <span>{visibleTests.length} visible / {hiddenTests.length} hidden</span>
+          <span>{submissions.length} submissions</span>
+        </div>
+      </div>
 
-        {/* Hint toggle */}
-        <button
-          onClick={() => { setShowHints(!showHints); setShowHistory(false); }}
-          style={{
+      <div style={{
+        flex: bottomExpanded ? 0.66 : 1,
+        minHeight: 0,
+        display: 'flex',
+        overflow: 'hidden',
+      }}>
+        <div style={{ width: `${dividerX}%`, minWidth: 280, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+          <div style={{
             display: 'flex',
             alignItems: 'center',
             gap: 4,
-            padding: '3px 10px',
-            borderRadius: 4,
-            border: `1px solid ${showHints ? colors.warning : colors.border}`,
-            background: showHints ? `${colors.warning}12` : 'transparent',
-            color: showHints ? colors.warning : colors.textMuted,
-            fontSize: 11,
-            fontFamily: "'Geist Sans', sans-serif",
-            cursor: 'pointer',
-            transition: 'all 150ms ease',
-          }}
-        >
-          <Lightbulb size={12} />
-          Hints ({activeProblem.hints.length})
-        </button>
+            padding: '0 12px',
+            borderBottom: `1px solid ${colors.border}`,
+            background: colors.bgPanel,
+            flexShrink: 0,
+          }}>
+            <WorkspaceTabButton active={tab === 'description'} label="Description" onClick={() => setTab('description')} />
+            <WorkspaceTabButton active={tab === 'submissions'} label={`Submissions (${submissions.length})`} onClick={() => setTab('submissions')} />
+            <WorkspaceTabButton active={tab === 'hints'} label={`Hints (${activeProblem.hints.length})`} onClick={() => setTab('hints')} />
+          </div>
 
-        {/* History toggle */}
-        {submissions.length > 0 && (
-          <button
-            onClick={() => { setShowHistory(!showHistory); setShowHints(false); }}
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: 4,
-              padding: '3px 10px',
-              borderRadius: 4,
-              border: `1px solid ${showHistory ? colors.accent : colors.border}`,
-              background: showHistory ? `${colors.accent}12` : 'transparent',
-              color: showHistory ? colors.accent : colors.textMuted,
-              fontSize: 11,
-              fontFamily: "'Geist Sans', sans-serif",
-              cursor: 'pointer',
-              transition: 'all 150ms ease',
-            }}
-          >
-            <History size={12} />
-            History ({submissions.length})
-          </button>
-        )}
-      </div>
-
-      {/* Hints/History overlay panels */}
-      {showHints && (
-        <div style={{
-          padding: '12px 16px',
-          borderBottom: `1px solid ${colors.border}`,
-          background: colors.bgElevated,
-          maxHeight: 200,
-          overflowY: 'auto',
-        }}>
-          <HintPanel hints={activeProblem.hints} />
-        </div>
-      )}
-      {showHistory && (
-        <div style={{
-          padding: '12px 16px',
-          borderBottom: `1px solid ${colors.border}`,
-          background: colors.bgElevated,
-          maxHeight: 240,
-          overflowY: 'auto',
-        }}>
-          <SubmissionHistory submissions={submissions} />
-        </div>
-      )}
-
-      {/* Main content area: description + editor */}
-      <div style={{
-        flex: bottomExpanded ? 0.65 : 1,
-        display: 'flex',
-        overflow: 'hidden',
-        position: 'relative',
-        minHeight: 0,
-      }}>
-        {/* Left pane: description */}
-        <div style={{
-          width: `${dividerX}%`,
-          overflow: 'hidden',
-        }}>
-          <ProblemDescription challenge={activeProblem} />
+          <div style={{ flex: 1, minHeight: 0, overflow: 'hidden' }}>
+            {tab === 'description' && <ProblemDescription challenge={activeProblem} />}
+            {tab === 'submissions' && (
+              <div style={{ height: '100%', overflowY: 'auto', padding: '20px 24px 48px' }}>
+                <SubmissionHistory submissions={submissions} />
+              </div>
+            )}
+            {tab === 'hints' && (
+              <div style={{ height: '100%', overflowY: 'auto', padding: '20px 24px 48px' }}>
+                <HintPanel hints={activeProblem.hints} />
+              </div>
+            )}
+          </div>
         </div>
 
-        {/* Resizable divider */}
         <div
           onMouseDown={handleDividerDrag}
           style={{
@@ -193,42 +199,31 @@ export function ProblemWorkspace() {
             cursor: 'col-resize',
             background: colors.border,
             flexShrink: 0,
-            transition: 'background 150ms ease',
           }}
-          onMouseEnter={(e) => { e.currentTarget.style.background = colors.accent; }}
-          onMouseLeave={(e) => { e.currentTarget.style.background = colors.border; }}
+          onMouseEnter={(event) => { event.currentTarget.style.background = colors.accent; }}
+          onMouseLeave={(event) => { event.currentTarget.style.background = colors.border; }}
         />
 
-        {/* Right pane: editor */}
-        <div style={{
-          flex: 1,
-          overflow: 'hidden',
-          minWidth: 0,
-        }}>
+        <div style={{ flex: 1, minWidth: 0, overflow: 'hidden' }}>
           <ProblemEditor challenge={activeProblem} />
         </div>
       </div>
 
-      {/* Bottom pane toggle */}
       <button
-        onClick={() => setBottomExpanded(!bottomExpanded)}
+        onClick={() => setBottomExpanded((open) => !open)}
         style={{
+          width: '100%',
           display: 'flex',
           alignItems: 'center',
           gap: 6,
-          padding: '4px 16px',
+          padding: '6px 16px',
           background: colors.bgPanel,
-          borderTop: `1px solid ${colors.border}`,
-          borderBottom: bottomExpanded ? `1px solid ${colors.border}` : 'none',
           border: 'none',
-          borderTopWidth: 1,
-          borderTopStyle: 'solid',
-          borderTopColor: colors.border,
+          borderTop: `1px solid ${colors.border}`,
           color: colors.textMuted,
           fontSize: 11,
           fontFamily: "'Geist Sans', sans-serif",
           cursor: 'pointer',
-          width: '100%',
           textAlign: 'left',
         }}
       >
@@ -236,13 +231,8 @@ export function ProblemWorkspace() {
         Test Results
       </button>
 
-      {/* Bottom pane: test runner */}
       {bottomExpanded && (
-        <div style={{
-          flex: 0.35,
-          overflow: 'hidden',
-          minHeight: 120,
-        }}>
+        <div style={{ flex: 0.34, minHeight: 170, overflow: 'hidden' }}>
           <TestRunner challenge={activeProblem} />
         </div>
       )}

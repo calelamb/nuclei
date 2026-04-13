@@ -1,11 +1,53 @@
-import type { TestCase, TestCaseResult } from '../types/challenge';
-import type { Framework, KernelResponse, SimulationResult } from '../types/quantum';
+import type {
+  QuantumChallenge,
+  SubmissionStatus,
+  TestCase,
+  TestCaseResult,
+} from '../types/challenge';
+import type {
+  CircuitSnapshot,
+  Framework,
+  KernelResponse,
+  SimulationResult,
+} from '../types/quantum';
 import { validateTestCase } from './challengeValidation';
 import { createKernelSession, type KernelSession, type PlatformKind } from './kernelSession';
 
 const TEST_TIMEOUT_MS = 35_000;
 
-export function buildTestCode(userCode: string, params: Record<string, unknown>, framework: Framework): string {
+type FailureVerdict = Extract<
+  SubmissionStatus,
+  'runtime_error' | 'compile_error' | 'time_limit_exceeded'
+>;
+
+interface ChallengeExecutionFailure {
+  verdict: FailureVerdict;
+  message: string;
+}
+
+interface ChallengeExecutionArtifact {
+  result: SimulationResult;
+  snapshot: CircuitSnapshot | null;
+  stdout: string;
+}
+
+class ChallengeKernelError extends Error {
+  code?: string;
+  phase?: 'parse' | 'execute' | 'python';
+  framework?: Framework;
+
+  constructor(message: string, metadata: Partial<ChallengeKernelError> = {}) {
+    super(message);
+    this.name = 'ChallengeKernelError';
+    Object.assign(this, metadata);
+  }
+}
+
+function serializeParams(params: Record<string, unknown>) {
+  return JSON.stringify(JSON.stringify(params));
+}
+
+function buildLegacyTestCode(userCode: string, params: Record<string, unknown>, framework: Framework): string {
   const lines: string[] = [`# === Test parameters (${framework}) ===`];
 
   for (const [key, value] of Object.entries(params)) {
@@ -28,11 +70,58 @@ export function buildTestCode(userCode: string, params: Record<string, unknown>,
   return lines.join('\n');
 }
 
-function buildFailedResult(testCase: TestCase, message: string): TestCaseResult {
+function buildCanonicalTestCode(
+  userCode: string,
+  challenge: QuantumChallenge,
+  params: Record<string, unknown>,
+): string {
+  const entrypoint = challenge.entrypoint_name ?? 'solve';
+
+  return `# === Your solution ===
+${userCode}
+
+# === Challenge harness ===
+import json as __nuclei_json
+
+__nuclei_params = __nuclei_json.loads(${serializeParams(params)})
+__nuclei_circuit = ${entrypoint}(**__nuclei_params)
+
+from qiskit import QuantumCircuit as __NucleiQuantumCircuit
+
+if not isinstance(__nuclei_circuit, __NucleiQuantumCircuit):
+    raise TypeError("${entrypoint}(...) must return a QuantumCircuit")
+
+qc = __nuclei_circuit
+`;
+}
+
+export function buildTestCode(
+  userCode: string,
+  challenge: QuantumChallenge,
+  params: Record<string, unknown>,
+  framework: Framework,
+): string {
+  if (
+    framework === 'qiskit'
+    && challenge.contract_kind === 'returns_circuit'
+    && challenge.entrypoint_name
+  ) {
+    return buildCanonicalTestCode(userCode, challenge, params);
+  }
+
+  return buildLegacyTestCode(userCode, params, framework);
+}
+
+function buildFailedResult(
+  testCase: TestCase,
+  message: string,
+  verdict: FailureVerdict = 'runtime_error',
+): TestCaseResult {
   return {
     testCaseId: testCase.id,
     passed: false,
     score: 0,
+    verdict,
     message,
     executionTimeMs: 0,
   };
@@ -42,8 +131,9 @@ function emitFailureResults(
   testCases: ReadonlyArray<TestCase>,
   message: string,
   onResult: (result: TestCaseResult, index: number) => void,
+  verdict: FailureVerdict = 'runtime_error',
 ): TestCaseResult[] {
-  const results = testCases.map((testCase) => buildFailedResult(testCase, message));
+  const results = testCases.map((testCase) => buildFailedResult(testCase, message, verdict));
   results.forEach((result, index) => onResult(result, index));
   return results;
 }
@@ -51,25 +141,45 @@ function emitFailureResults(
 function createExecutionDriver(session: KernelSession) {
   let pending:
     | {
-        resolve: (result: SimulationResult) => void;
-        reject: (error: Error) => void;
+        resolve: (result: ChallengeExecutionArtifact) => void;
+        reject: (error: ChallengeKernelError) => void;
         timeoutId: ReturnType<typeof setTimeout>;
+        snapshot: CircuitSnapshot | null;
+        output: string[];
       }
     | null = null;
 
   const handleMessage = (message: KernelResponse) => {
     if (!pending) return;
 
+    if (message.type === 'output') {
+      pending.output.push(message.text);
+      return;
+    }
+
+    if (message.type === 'snapshot') {
+      pending.snapshot = message.data;
+      return;
+    }
+
     if (message.type === 'result' && message.data) {
       clearTimeout(pending.timeoutId);
-      pending.resolve(message.data);
+      pending.resolve({
+        result: message.data,
+        snapshot: pending.snapshot,
+        stdout: pending.output.join(''),
+      });
       pending = null;
       return;
     }
 
     if (message.type === 'error' && (message.phase === 'execute' || message.phase === 'python')) {
       clearTimeout(pending.timeoutId);
-      pending.reject(new Error(message.message));
+      pending.reject(new ChallengeKernelError(message.message, {
+        code: message.code,
+        phase: message.phase,
+        framework: message.framework,
+      }));
       pending = null;
     }
   };
@@ -79,14 +189,17 @@ function createExecutionDriver(session: KernelSession) {
       throw new Error('A challenge test is already running');
     }
 
-    return new Promise<SimulationResult>((resolve, reject) => {
+    return new Promise<ChallengeExecutionArtifact>((resolve, reject) => {
       const timeoutId = setTimeout(() => {
         if (!pending) return;
-        pending.reject(new Error(`Execution timed out after ${TEST_TIMEOUT_MS / 1000} seconds`));
+        pending.reject(new ChallengeKernelError(
+          `Execution timed out after ${TEST_TIMEOUT_MS / 1000} seconds`,
+          { code: 'timeout', phase: 'execute' },
+        ));
         pending = null;
       }, TEST_TIMEOUT_MS);
 
-      pending = { resolve, reject, timeoutId };
+      pending = { resolve, reject, timeoutId, snapshot: null, output: [] };
 
       let sendResult: void | Promise<void>;
       try {
@@ -94,14 +207,22 @@ function createExecutionDriver(session: KernelSession) {
       } catch (error) {
         clearTimeout(timeoutId);
         pending = null;
-        reject(error instanceof Error ? error : new Error('Failed to send challenge to kernel'));
+        reject(error instanceof ChallengeKernelError
+          ? error
+          : new ChallengeKernelError(
+            error instanceof Error ? error.message : 'Failed to send challenge to kernel',
+          ));
         return;
       }
 
       Promise.resolve(sendResult).catch((error) => {
         clearTimeout(timeoutId);
         pending = null;
-        reject(error instanceof Error ? error : new Error('Failed to send challenge to kernel'));
+        reject(error instanceof ChallengeKernelError
+          ? error
+          : new ChallengeKernelError(
+            error instanceof Error ? error.message : 'Failed to send challenge to kernel',
+          ));
       });
     });
   };
@@ -109,15 +230,49 @@ function createExecutionDriver(session: KernelSession) {
   const cancel = () => {
     if (!pending) return;
     clearTimeout(pending.timeoutId);
-    pending.reject(new Error('Execution canceled'));
+    pending.reject(new ChallengeKernelError('Execution canceled'));
     pending = null;
   };
 
   return { handleMessage, execute, cancel };
 }
 
+function classifyExecutionFailure(error: unknown): ChallengeExecutionFailure {
+  const message = error instanceof Error ? error.message : 'Unknown execution error';
+
+  const code = error instanceof ChallengeKernelError ? error.code : undefined;
+  const normalizedMessage = message.trim();
+
+  if (
+    code === 'timeout'
+    || /timed out/i.test(normalizedMessage)
+  ) {
+    return {
+      verdict: 'time_limit_exceeded',
+      message: `Time Limit Exceeded: ${normalizedMessage}`,
+    };
+  }
+
+  if (
+    code === 'compile_error'
+    || /SyntaxError|IndentationError/i.test(normalizedMessage)
+    || /name 'solve' is not defined/i.test(normalizedMessage)
+  ) {
+    return {
+      verdict: 'compile_error',
+      message: `Compile Error: ${normalizedMessage}`,
+    };
+  }
+
+  return {
+    verdict: 'runtime_error',
+    message: `Runtime Error: ${normalizedMessage}`,
+  };
+}
+
 export async function runTestCases(
   userCode: string,
+  challenge: QuantumChallenge,
   testCases: ReadonlyArray<TestCase>,
   framework: Framework,
   platform: PlatformKind,
@@ -153,25 +308,26 @@ export async function runTestCases(
   try {
     for (let index = 0; index < testCases.length; index++) {
       const testCase = testCases[index];
-      const wrappedCode = buildTestCode(userCode, testCase.params, framework);
+      const wrappedCode = buildTestCode(userCode, challenge, testCase.params, framework);
       const startTime = performance.now();
 
       onStart(index);
 
       try {
-        const simResult = await driver.execute(wrappedCode, shots);
+        const artifact = await driver.execute(wrappedCode, shots);
         const elapsed = performance.now() - startTime;
-        const testResult = validateTestCase(testCase, simResult, elapsed);
+        const testResult = validateTestCase(testCase, artifact.result, elapsed);
         results.push(testResult);
         onResult(testResult, index);
       } catch (err: unknown) {
         const elapsed = performance.now() - startTime;
-        const message = err instanceof Error ? err.message : 'Unknown execution error';
+        const failure = classifyExecutionFailure(err);
         const failedResult: TestCaseResult = {
           testCaseId: testCase.id,
           passed: false,
           score: 0,
-          message: `Runtime error: ${message}`,
+          verdict: failure.verdict,
+          message: failure.message,
           executionTimeMs: elapsed,
         };
         results.push(failedResult);
@@ -184,4 +340,63 @@ export async function runTestCases(
   }
 
   return results;
+}
+
+export async function inspectChallengeCase(
+  userCode: string,
+  challenge: QuantumChallenge,
+  testCase: TestCase,
+  framework: Framework,
+  platform: PlatformKind,
+  shots: number,
+): Promise<{
+  snapshot: CircuitSnapshot | null;
+  result: SimulationResult | null;
+  stdout: string;
+  failure?: ChallengeExecutionFailure;
+}> {
+  if (platform === 'web' && framework !== 'cirq') {
+    return {
+      snapshot: null,
+      result: null,
+      stdout: '',
+      failure: {
+        verdict: 'runtime_error',
+        message: `Runtime Error: The browser challenge runner currently supports Cirq only. Use the desktop app for ${framework}.`,
+      },
+    };
+  }
+
+  let driver:
+    | ReturnType<typeof createExecutionDriver>
+    | null = null;
+  let session: KernelSession | null = null;
+
+  try {
+    session = await createKernelSession(platform, (message) => {
+      driver?.handleMessage(message);
+    });
+    driver = createExecutionDriver(session);
+
+    const artifact = await driver.execute(
+      buildTestCode(userCode, challenge, testCase.params, framework),
+      shots,
+    );
+
+    return {
+      snapshot: artifact.snapshot,
+      result: artifact.result,
+      stdout: artifact.stdout,
+    };
+  } catch (error) {
+    return {
+      snapshot: null,
+      result: null,
+      stdout: '',
+      failure: classifyExecutionFailure(error),
+    };
+  } finally {
+    driver?.cancel();
+    session?.close();
+  }
 }

@@ -1,30 +1,30 @@
 import { useCallback } from 'react';
 import Editor from '@monaco-editor/react';
+import { Braces } from 'lucide-react';
 import { useThemeStore } from '../../stores/themeStore';
 import { useChallengeModeStore } from '../../stores/challengeModeStore';
 import type { QuantumChallenge } from '../../types/challenge';
-import type { Framework } from '../../types/quantum';
 
 interface ProblemEditorProps {
   challenge: QuantumChallenge;
 }
 
-const FRAMEWORKS: Array<{ label: string; value: Framework }> = [
-  { label: 'Qiskit', value: 'qiskit' },
-  { label: 'Cirq', value: 'cirq' },
-  { label: 'CUDA-Q', value: 'cuda-q' },
-];
+function buildSignature(challenge: QuantumChallenge) {
+  const entrypoint = challenge.entrypoint_name ?? 'solve';
+  const args = challenge.arguments ?? [];
+  const signature = args.map((arg) => arg.name).join(', ');
+  return `${entrypoint}(${signature}) -> QuantumCircuit`;
+}
 
 export function ProblemEditor({ challenge }: ProblemEditorProps) {
   const colors = useThemeStore((s) => s.colors);
+  const shadow = useThemeStore((s) => s.shadow);
   const activeFramework = useChallengeModeStore((s) => s.activeFramework);
-  const setActiveFramework = useChallengeModeStore((s) => s.setActiveFramework);
   const updateDraftCode = useChallengeModeStore((s) => s.updateDraftCode);
   const progress = useChallengeModeStore((s) => s.progress);
 
   const savedCode = progress[challenge.id]?.currentCode[activeFramework];
-  const starterCode = challenge.starterCode[activeFramework] ?? '';
-  const editorValue = savedCode || starterCode;
+  const editorValue = savedCode || challenge.starter_template || challenge.starterCode[activeFramework] || '';
 
   const handleChange = useCallback((value: string | undefined) => {
     if (value !== undefined) {
@@ -40,50 +40,59 @@ export function ProblemEditor({ challenge }: ProblemEditorProps) {
       overflow: 'hidden',
       background: colors.bg,
     }}>
-      {/* Framework tab bar */}
       <div style={{
-        height: 34,
-        flexShrink: 0,
-        display: 'flex',
-        alignItems: 'center',
-        padding: '0 8px',
-        gap: 2,
+        padding: '10px 14px',
         borderBottom: `1px solid ${colors.border}`,
         background: colors.bgPanel,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        gap: 12,
       }}>
-        {FRAMEWORKS.map((fw) => {
-          const isActive = activeFramework === fw.value;
-          return (
-            <button
-              key={fw.value}
-              onClick={() => setActiveFramework(fw.value)}
-              style={{
-                padding: '4px 14px',
-                borderRadius: 4,
-                border: 'none',
-                background: isActive ? colors.bgElevated : 'transparent',
-                color: isActive ? colors.accent : colors.textMuted,
-                fontSize: 12,
-                fontWeight: isActive ? 600 : 400,
-                fontFamily: "'Geist Sans', sans-serif",
-                cursor: 'pointer',
-                transition: 'all 150ms ease',
-                borderBottom: isActive ? `2px solid ${colors.accent}` : '2px solid transparent',
-              }}
-              onMouseEnter={(e) => {
-                if (!isActive) e.currentTarget.style.color = colors.text;
-              }}
-              onMouseLeave={(e) => {
-                if (!isActive) e.currentTarget.style.color = colors.textMuted;
-              }}
-            >
-              {fw.label}
-            </button>
-          );
-        })}
+        <div>
+          <div style={{
+            color: colors.text,
+            fontSize: 12,
+            fontWeight: 600,
+            fontFamily: "'Geist Sans', sans-serif",
+            marginBottom: 4,
+          }}>
+            Function Contract
+          </div>
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 8,
+            color: colors.accent,
+            fontSize: 12,
+            fontFamily: "'Geist Mono', 'JetBrains Mono', monospace",
+          }}>
+            <Braces size={12} />
+            <span>{buildSignature(challenge)}</span>
+          </div>
+        </div>
+
+        <div style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: 8,
+          color: colors.textMuted,
+          fontSize: 11,
+          fontFamily: "'Geist Sans', sans-serif",
+        }}>
+          <span style={{
+            padding: '3px 8px',
+            borderRadius: 999,
+            background: `${colors.accent}18`,
+            color: colors.accent,
+            boxShadow: shadow.sm,
+          }}>
+            {challenge.default_framework?.toUpperCase() ?? 'QISKIT'}
+          </span>
+          <span>Implement the solver only. The harness injects test inputs.</span>
+        </div>
       </div>
 
-      {/* Monaco editor */}
       <div style={{ flex: 1, minHeight: 0 }}>
         <Editor
           theme="vs-dark"

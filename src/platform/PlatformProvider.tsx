@@ -19,18 +19,36 @@ async function loadBridge(): Promise<PlatformBridge> {
   return defaultBridge;
 }
 
-// For synchronous access during initial render, we need a sync bridge
-// The web bridge is safe to import statically (no Tauri deps)
-import { webBridge } from './webBridge';
+const fallbackBridge: PlatformBridge = {
+  async startKernel() {
+    return 'Kernel unavailable';
+  },
+  async stopKernel() {
+    return 'Kernel unavailable';
+  },
+  async openFile() {
+    return null;
+  },
+  async readFile() {
+    return null;
+  },
+  async saveFile() {},
+  async saveFileAs() {
+    return null;
+  },
+  async getStoredValue() {
+    return null;
+  },
+  async setStoredValue() {},
+  async setWindowTitle() {},
+  getPlatform() {
+    return 'web';
+  },
+};
 
 function getSyncBridge(): PlatformBridge {
   if (defaultBridge) return defaultBridge;
-  if (isTauri) {
-    // Tauri bridge will be loaded async — use a temporary stub that queues calls
-    // In practice, the async load happens fast enough that this rarely matters
-    return webBridge; // Temporary fallback; will be replaced on mount
-  }
-  return webBridge;
+  return fallbackBridge;
 }
 
 const PlatformContext = createContext<PlatformBridge>(getSyncBridge());

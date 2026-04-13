@@ -78,6 +78,7 @@ export function TestCaseRow({ testCase, result, isRunning, index }: TestCaseRowP
   const label = isHidden
     ? `Hidden Test ${index + 1}`
     : testCase.label || `Test Case ${index + 1}`;
+  const verdictLabel = result ? result.verdict.replace(/_/g, ' ') : null;
 
   return (
     <div style={{
@@ -135,7 +136,7 @@ export function TestCaseRow({ testCase, result, isRunning, index }: TestCaseRowP
             fontWeight: 600,
             fontFamily: "'Geist Mono', monospace",
           }}>
-            {result.score}/{testCase.weight}
+            {(result.score * 100).toFixed(0)}%
           </span>
         )}
 
@@ -187,6 +188,19 @@ export function TestCaseRow({ testCase, result, isRunning, index }: TestCaseRowP
                 fontFamily: "'Geist Sans', sans-serif",
                 lineHeight: 1.5,
               }}>
+                {verdictLabel && (
+                  <div style={{
+                    color: result.passed ? colors.success : colors.error,
+                    fontSize: 10,
+                    fontWeight: 700,
+                    fontFamily: "'Geist Sans', sans-serif",
+                    textTransform: 'uppercase',
+                    letterSpacing: 0.4,
+                    marginBottom: 4,
+                  }}>
+                    {verdictLabel}
+                  </div>
+                )}
                 {result.message}
               </div>
 

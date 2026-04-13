@@ -34,6 +34,14 @@ export const tauriBridge: PlatformBridge = {
     return { path, content };
   },
 
+  async readFile(path: string) {
+    try {
+      return await readTextFile(path);
+    } catch {
+      return null;
+    }
+  },
+
   async saveFile(path: string, content: string) {
     await writeTextFile(path, content);
   },

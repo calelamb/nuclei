@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useThemeStore } from '../../stores/themeStore';
 import { Check, X, Clock, ChevronRight, ChevronDown } from 'lucide-react';
-import type { Submission } from '../../types/challenge';
+import type { Submission, SubmissionStatus } from '../../types/challenge';
 
 interface SubmissionHistoryProps {
   submissions: Submission[];
@@ -11,9 +11,17 @@ function SubmissionRow({ submission, index }: { submission: Submission; index: n
   const colors = useThemeStore((s) => s.colors);
   const [expanded, setExpanded] = useState(false);
 
+  const STATUS_META: Record<SubmissionStatus, { label: string; color: string }> = {
+    pending: { label: 'Pending', color: colors.textDim },
+    running: { label: 'Running', color: colors.accent },
+    accepted: { label: 'Accepted', color: colors.success },
+    wrong_answer: { label: 'Wrong Answer', color: colors.error },
+    runtime_error: { label: 'Runtime Error', color: colors.error },
+    compile_error: { label: 'Compile Error', color: colors.warning },
+    time_limit_exceeded: { label: 'Time Limit Exceeded', color: colors.warning },
+  };
+  const statusMeta = STATUS_META[submission.status];
   const isAccepted = submission.status === 'accepted';
-  const statusColor = isAccepted ? colors.success : colors.error;
-  const statusLabel = isAccepted ? 'Accepted' : 'Wrong Answer';
 
   const date = new Date(submission.timestamp);
   const timeStr = date.toLocaleString(undefined, {
@@ -64,14 +72,14 @@ function SubmissionRow({ submission, index }: { submission: Submission; index: n
           gap: 4,
           padding: '2px 8px',
           borderRadius: 4,
-          background: `${statusColor}18`,
-          color: statusColor,
+          background: `${statusMeta.color}18`,
+          color: statusMeta.color,
           fontSize: 11,
           fontWeight: 600,
           fontFamily: "'Geist Sans', sans-serif",
         }}>
           {isAccepted ? <Check size={10} /> : <X size={10} />}
-          {statusLabel}
+          {statusMeta.label}
         </div>
 
         {/* Score */}
@@ -148,7 +156,7 @@ function SubmissionRow({ submission, index }: { submission: Submission; index: n
                 fontWeight: 600,
                 fontFamily: "'Geist Mono', monospace",
               }}>
-                {tcr.score}pt
+                {(tcr.score * 100).toFixed(0)}%
               </span>
               {tcr.executionTimeMs > 0 && (
                 <span style={{

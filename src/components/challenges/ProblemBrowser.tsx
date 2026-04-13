@@ -1,9 +1,184 @@
 import { useEffect, useMemo } from 'react';
+import { CheckCircle2, Circle, Clock3 } from 'lucide-react';
 import { useThemeStore } from '../../stores/themeStore';
-import { useChallengeModeStore } from '../../stores/challengeModeStore';
+import {
+  filterChallenges,
+  useChallengeModeStore,
+} from '../../stores/challengeModeStore';
 import { QUANTUM_CHALLENGES } from '../../data/challenges';
 import { ProblemFilters } from './ProblemFilters';
-import { ProblemCard } from './ProblemCard';
+import type {
+  ChallengeCategory,
+  ChallengeDifficulty,
+  ProblemProgress,
+  ProblemStatus,
+  QuantumChallenge,
+} from '../../types/challenge';
+
+const DIFFICULTY_COLORS: Record<ChallengeDifficulty, string> = {
+  easy: '#10B981',
+  medium: '#F59E0B',
+  hard: '#EF4444',
+};
+
+const CATEGORY_LABELS: Record<ChallengeCategory, string> = {
+  'state-preparation': 'State Prep',
+  algorithms: 'Algorithms',
+  optimization: 'Optimization',
+  protocols: 'Protocols',
+};
+
+const STATUS_LABELS: Record<ProblemStatus, string> = {
+  not_started: 'Not Started',
+  attempted: 'Attempted',
+  solved: 'Solved',
+};
+
+function StatusCell({ status }: { status: ProblemStatus }) {
+  const colors = useThemeStore((s) => s.colors);
+
+  if (status === 'solved') {
+    return (
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: colors.success }}>
+        <CheckCircle2 size={14} />
+        <span>Solved</span>
+      </div>
+    );
+  }
+
+  if (status === 'attempted') {
+    return (
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: colors.warning }}>
+        <Circle size={14} fill={colors.warning} stroke="none" />
+        <span>Attempted</span>
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: colors.textDim }}>
+      <Circle size={14} />
+      <span>Not Started</span>
+    </div>
+  );
+}
+
+function ProblemRow({
+  challenge,
+  progress,
+  onClick,
+}: {
+  challenge: QuantumChallenge;
+  progress?: ProblemProgress;
+  onClick: () => void;
+}) {
+  const colors = useThemeStore((s) => s.colors);
+  const status = progress?.status ?? 'not_started';
+  const attempts = progress?.attempts ?? 0;
+  const solved = status === 'solved';
+  const bestScore = progress?.bestScore ?? 0;
+
+  return (
+    <button
+      onClick={onClick}
+      style={{
+        width: '100%',
+        display: 'grid',
+        gridTemplateColumns: '150px minmax(260px, 2fr) 110px 130px 110px 130px',
+        gap: 16,
+        alignItems: 'center',
+        padding: '14px 20px',
+        background: 'transparent',
+        border: 'none',
+        borderBottom: `1px solid ${colors.border}`,
+        color: colors.text,
+        cursor: 'pointer',
+        textAlign: 'left',
+      }}
+      onMouseEnter={(event) => {
+        event.currentTarget.style.background = colors.bgElevated;
+      }}
+      onMouseLeave={(event) => {
+        event.currentTarget.style.background = 'transparent';
+      }}
+    >
+      <div style={{ fontSize: 12, fontFamily: "'Geist Sans', sans-serif" }}>
+        <StatusCell status={status} />
+      </div>
+
+      <div style={{ minWidth: 0 }}>
+        <div style={{
+          color: colors.text,
+          fontSize: 14,
+          fontWeight: 600,
+          fontFamily: "'Geist Sans', sans-serif",
+          marginBottom: 4,
+          overflow: 'hidden',
+          textOverflow: 'ellipsis',
+          whiteSpace: 'nowrap',
+        }}>
+          {challenge.title}
+        </div>
+        <div style={{
+          color: colors.textMuted,
+          fontSize: 12,
+          fontFamily: "'Geist Sans', sans-serif",
+          overflow: 'hidden',
+          textOverflow: 'ellipsis',
+          whiteSpace: 'nowrap',
+        }}>
+          {challenge.tags.slice(0, 3).join(' • ')}
+        </div>
+      </div>
+
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <span style={{
+          padding: '3px 9px',
+          borderRadius: 999,
+          background: `${DIFFICULTY_COLORS[challenge.difficulty]}18`,
+          color: DIFFICULTY_COLORS[challenge.difficulty],
+          fontSize: 11,
+          fontWeight: 600,
+          fontFamily: "'Geist Sans', sans-serif",
+          textTransform: 'capitalize',
+        }}>
+          {challenge.difficulty}
+        </span>
+      </div>
+
+      <span style={{
+        color: colors.textMuted,
+        fontSize: 12,
+        fontFamily: "'Geist Sans', sans-serif",
+      }}>
+        {CATEGORY_LABELS[challenge.category]}
+      </span>
+
+      <span style={{
+        color: colors.textMuted,
+        fontSize: 12,
+        fontFamily: "'Geist Sans', sans-serif",
+      }}>
+        {Math.round(challenge.acceptanceRate * 100)}%
+      </span>
+
+      <div style={{
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        gap: 10,
+        color: colors.textMuted,
+        fontSize: 12,
+        fontFamily: "'Geist Sans', sans-serif",
+      }}>
+        <span>{solved ? 'Accepted' : `${STATUS_LABELS[status]}`}</span>
+        <span>
+          {attempts > 0 ? `${attempts} / ${bestScore}%` : '0 / --'}
+        </span>
+      </div>
+    </button>
+  );
+}
 
 export function ProblemBrowser() {
   const colors = useThemeStore((s) => s.colors);
@@ -22,23 +197,25 @@ export function ProblemBrowser() {
     }
   }, [challenges.length, setChallenges]);
 
-  // Compute filtered inline so Zustand re-renders on any filter/data change
-  const filtered = useMemo(() => {
-    return challenges.filter((c) => {
-      if (difficultyFilter && c.difficulty !== difficultyFilter) return false;
-      if (categoryFilter && c.category !== categoryFilter) return false;
-      if (searchQuery) {
-        const q = searchQuery.toLowerCase();
-        if (!c.title.toLowerCase().includes(q) && !c.tags.some((t) => t.toLowerCase().includes(q))) return false;
-      }
-      if (statusFilter !== 'all') {
-        const p = progress[c.id];
-        const status = p ? p.status : 'not_started';
-        if (status !== statusFilter) return false;
-      }
-      return true;
-    });
-  }, [challenges, difficultyFilter, categoryFilter, searchQuery, statusFilter, progress]);
+  const filtered = useMemo(() => (
+    filterChallenges(
+      challenges,
+      difficultyFilter,
+      categoryFilter,
+      searchQuery,
+      statusFilter,
+      progress,
+    )
+  ), [
+    challenges,
+    difficultyFilter,
+    categoryFilter,
+    searchQuery,
+    statusFilter,
+    progress,
+  ]);
+
+  const solvedCount = Object.values(progress).filter((entry) => entry.status === 'solved').length;
 
   return (
     <div style={{
@@ -46,40 +223,85 @@ export function ProblemBrowser() {
       display: 'flex',
       flexDirection: 'column',
       overflow: 'hidden',
+      background: colors.bg,
     }}>
       <ProblemFilters />
 
       <div style={{
-        flex: 1,
-        overflowY: 'auto',
-        padding: '20px 24px 48px',
+        padding: '18px 24px 12px',
+        borderBottom: `1px solid ${colors.border}`,
+        background: colors.bgPanel,
       }}>
+        <div style={{
+          color: colors.text,
+          fontSize: 22,
+          fontWeight: 700,
+          fontFamily: "'Geist Sans', sans-serif",
+          marginBottom: 6,
+        }}>
+          Quantum Problem Set
+        </div>
+        <div style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: 18,
+          color: colors.textMuted,
+          fontSize: 12,
+          fontFamily: "'Geist Sans', sans-serif",
+          flexWrap: 'wrap',
+        }}>
+          <span>{filtered.length} visible problems</span>
+          <span>{solvedCount} solved</span>
+          <span>Qiskit-first function contracts</span>
+          <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+            <Clock3 size={12} />
+            Solve loop: Run Visible Tests → Submit → Inspect Quantum Output
+          </span>
+        </div>
+      </div>
+
+      <div style={{ flex: 1, overflow: 'auto' }}>
         {filtered.length === 0 ? (
           <div style={{
+            height: '100%',
             display: 'flex',
-            flexDirection: 'column',
             alignItems: 'center',
             justifyContent: 'center',
-            padding: '64px 0',
+            color: colors.textDim,
+            fontSize: 14,
+            fontFamily: "'Geist Sans', sans-serif",
           }}>
-            <span style={{
-              color: colors.textDim,
-              fontSize: 14,
-              fontFamily: "'Geist Sans', sans-serif",
-            }}>
-              No challenges match your filters.
-            </span>
+            No problems match the current filters.
           </div>
         ) : (
-          <div style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))',
-            gap: 16,
-            maxWidth: 1200,
-            margin: '0 auto',
-          }}>
+          <div style={{ minWidth: 900 }}>
+            <div style={{
+              display: 'grid',
+              gridTemplateColumns: '150px minmax(260px, 2fr) 110px 130px 110px 130px',
+              gap: 16,
+              padding: '10px 20px',
+              borderBottom: `1px solid ${colors.border}`,
+              color: colors.textDim,
+              fontSize: 11,
+              fontWeight: 600,
+              fontFamily: "'Geist Sans', sans-serif",
+              textTransform: 'uppercase',
+              letterSpacing: 0.4,
+              background: colors.bgPanel,
+              position: 'sticky',
+              top: 0,
+              zIndex: 1,
+            }}>
+              <span>Status</span>
+              <span>Title</span>
+              <span>Difficulty</span>
+              <span>Category</span>
+              <span>Acceptance</span>
+              <span>Solved / Best</span>
+            </div>
+
             {filtered.map((challenge) => (
-              <ProblemCard
+              <ProblemRow
                 key={challenge.id}
                 challenge={challenge}
                 progress={progress[challenge.id]}

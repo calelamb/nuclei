@@ -2,6 +2,8 @@ import type { Framework } from './quantum';
 
 export type ChallengeDifficulty = 'easy' | 'medium' | 'hard';
 export type ChallengeCategory = 'state-preparation' | 'algorithms' | 'optimization' | 'protocols';
+export type ChallengeContractKind = 'returns_circuit';
+export type ChallengeArgumentType = 'integer' | 'number' | 'string' | 'boolean' | 'array' | 'object';
 
 export type ValidationMode =
   | { type: 'probability_match'; expected: Record<string, number>; tolerance: number }
@@ -21,6 +23,13 @@ export interface ChallengeExample {
   input: string;
   output: string;
   explanation?: string;
+}
+
+export interface ChallengeArgument {
+  name: string;
+  type: ChallengeArgumentType;
+  description: string;
+  sample?: unknown;
 }
 
 export interface ChallengeVisualization {
@@ -46,14 +55,29 @@ export interface QuantumChallenge {
   totalSubmissions: number;
   acceptanceRate: number;
   visualization?: ChallengeVisualization;
+  default_framework?: Framework;
+  entrypoint_name?: string;
+  contract_kind?: ChallengeContractKind;
+  arguments?: ChallengeArgument[];
+  visible_tests?: TestCase[];
+  hidden_tests?: TestCase[];
+  starter_template?: string;
 }
 
-export type SubmissionStatus = 'pending' | 'running' | 'accepted' | 'wrong_answer' | 'runtime_error';
+export type SubmissionStatus =
+  | 'pending'
+  | 'running'
+  | 'accepted'
+  | 'wrong_answer'
+  | 'runtime_error'
+  | 'compile_error'
+  | 'time_limit_exceeded';
 
 export interface TestCaseResult {
   testCaseId: string;
   passed: boolean;
   score: number;
+  verdict: SubmissionStatus;
   actualOutput?: Record<string, number>;
   message: string;
   executionTimeMs: number;
