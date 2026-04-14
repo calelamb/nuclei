@@ -50,3 +50,25 @@ src-tauri/target/
 *.keychain-db
 *.certSigningRequest
 .vercel
+
+# Claude Code local config & skills
+.agents/
+.claude/skills/
+
+# Internal / non-code files
+launch-posts.md
+outreach-tracker.xlsx
+.~lock.outreach-tracker.xlsx#
+nuclei-social.png
+gif-recording-checklist.md
+AGENTS.md
+docs/internal/
+design-system/
+
+# macOS duplicate files
+*\ 2.py
+*\ 2.tsx
+*\ 2.ts
+
+# Test caches
+.pytest_cache/
