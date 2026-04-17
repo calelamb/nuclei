@@ -11,8 +11,14 @@ from kernel.executor import Executor
 from kernel.hardware.manager import HardwareManager
 from kernel.models import KernelError
 
-PORT = 9742
-executor = Executor()
+DEFAULT_PORT = 9742
+PORT_FALLBACK_RANGE = 20  # Try DEFAULT_PORT .. DEFAULT_PORT + 19
+MAX_MESSAGE_SIZE = 1_048_576  # 1 MiB — blocks gigantic code payloads
+PING_INTERVAL = 30
+PING_TIMEOUT = 20
+
+# Hardware manager is shared — it holds provider credentials and job handles,
+# which are inherently multi-connection state.
 hardware_manager = HardwareManager()
 hardware_manager.connect_provider("simulator", {})
 
@@ -34,6 +40,10 @@ def error_payload(error: KernelError, phase: str) -> dict:
 
 
 async def handle_message(websocket):
+    # Per-connection executor — prevents parse/execute state bleeding across
+    # concurrent WS clients (e.g. reconnect races).
+    executor = Executor()
+
     async for raw in websocket:
         try:
             msg = json.loads(raw)
@@ -48,7 +58,9 @@ async def handle_message(websocket):
         code = msg.get("code", "")
 
         if msg_type == "parse":
-            snapshot, stdout, error = executor.parse(code)
+            # Offload blocking parse to a thread so the event loop stays
+            # responsive to heartbeats and other messages.
+            snapshot, stdout, error = await asyncio.to_thread(executor.parse, code)
 
             if stdout:
                 await websocket.send(json.dumps({
@@ -66,7 +78,10 @@ async def handle_message(websocket):
 
         elif msg_type == "execute":
             shots = msg.get("shots", 1024)
-            result, snapshot, stdout, error = executor.execute(code, shots)
+            # Simulation can take multiple seconds — must not block the loop.
+            result, snapshot, stdout, error = await asyncio.to_thread(
+                executor.execute, code, shots
+            )
 
             if stdout:
                 await websocket.send(json.dumps({
@@ -81,11 +96,13 @@ async def handle_message(websocket):
                 }))
 
             if error:
+                # Send error before result:None so the frontend can display it
+                # without a flash of "success with no data".
+                await websocket.send(json.dumps(error_payload(error, "execute")))
                 await websocket.send(json.dumps({
                     "type": "result",
                     "data": None,
                 }))
-                await websocket.send(json.dumps(error_payload(error, "execute")))
             else:
                 await websocket.send(json.dumps({
                     "type": "result",
@@ -93,7 +110,7 @@ async def handle_message(websocket):
                 }))
 
         elif msg_type == "run_python":
-            stdout, error = executor.run_python(code)
+            stdout, error = await asyncio.to_thread(executor.run_python, code)
 
             if stdout:
                 await websocket.send(json.dumps({
@@ -101,13 +118,15 @@ async def handle_message(websocket):
                     "text": stdout,
                 }))
 
+            if error:
+                # Send error before python_result so the frontend doesn't flash
+                # a "success" state with a dump of stdout.
+                await websocket.send(json.dumps(error_payload(error, "python")))
+
             await websocket.send(json.dumps({
                 "type": "python_result",
                 "success": error is None,
             }))
-
-            if error:
-                await websocket.send(json.dumps(error_payload(error, "python")))
 
         elif msg_type == "hardware_connect":
             provider = msg.get("provider", "")
@@ -192,11 +211,36 @@ async def handle_message(websocket):
             }))
 
 
+async def _try_serve(port: int):
+    return await websockets.serve(
+        handle_message,
+        "localhost",
+        port,
+        max_size=MAX_MESSAGE_SIZE,
+        ping_interval=PING_INTERVAL,
+        ping_timeout=PING_TIMEOUT,
+    )
+
+
 async def main():
-    print(f"Nuclei kernel starting on ws://localhost:{PORT}")
-    async with websockets.serve(handle_message, "localhost", PORT):
-        print(f"Nuclei kernel ready on ws://localhost:{PORT}")
-        await asyncio.Future()  # Run forever
+    last_error: Exception | None = None
+    for offset in range(PORT_FALLBACK_RANGE):
+        port = DEFAULT_PORT + offset
+        try:
+            server = await _try_serve(port)
+        except OSError as e:
+            last_error = e
+            continue
+
+        # Print chosen port on its own line so the Rust side can parse it if needed.
+        print(f"Nuclei kernel ready on ws://localhost:{port}", flush=True)
+        async with server:
+            await asyncio.Future()  # Run forever
+        return
+
+    raise RuntimeError(
+        f"Could not bind kernel on ports {DEFAULT_PORT}-{DEFAULT_PORT + PORT_FALLBACK_RANGE - 1}"
+    ) from last_error
 
 
 if __name__ == "__main__":
