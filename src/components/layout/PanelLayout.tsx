@@ -7,7 +7,7 @@ import { EditorTabs } from '../editor/EditorTabs';
 import { Breadcrumbs } from '../editor/Breadcrumbs';
 import { CircuitRenderer } from '../circuit/CircuitRenderer';
 import { ProbabilityHistogram } from '../histogram/ProbabilityHistogram';
-import { BlochPanel } from '../bloch/BlochSphere';
+import { BlochPanel } from '../bloch/BlochPanel';
 import { DiracSidePanel } from '../dirac/DiracSidePanel';
 import { ActivityBar } from './ActivityBar';
 import type { ActivityView } from './ActivityBar';
