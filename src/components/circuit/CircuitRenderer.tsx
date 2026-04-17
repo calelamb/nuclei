@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import { useCircuitStore } from '../../stores/circuitStore';
 import { useThemeStore } from '../../stores/themeStore';
 import { renderGate, WIRE_SPACING, LAYER_SPACING, LABEL_WIDTH, PADDING, GATE_SIZE } from './gates';
@@ -182,9 +182,46 @@ function StepControls() {
   const { setStepMode, stepNext, stepPrev, setStepIndex } = useCircuitStore();
   const colors = useThemeStore((s) => s.colors);
 
+  // Tracked interval handle so the Play loop can be stopped when the user
+  // exits step mode, clicks Play again, or the component unmounts. Without
+  // this the previous implementation could leak multiple intervals.
+  const playIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const [isPlaying, setIsPlaying] = useState(false);
+
+  const stopPlay = useCallback(() => {
+    if (playIntervalRef.current) {
+      clearInterval(playIntervalRef.current);
+      playIntervalRef.current = null;
+    }
+    setIsPlaying(false);
+  }, []);
+
+  // Stop playback when stepMode is turned off elsewhere, and on unmount.
+  useEffect(() => {
+    if (!stepMode) stopPlay();
+  }, [stepMode, stopPlay]);
+  useEffect(() => () => stopPlay(), [stopPlay]);
+
   if (!stepMode || !snapshot) return null;
 
   const totalGates = snapshot.gates.length;
+
+  const handlePlay = () => {
+    if (isPlaying) {
+      stopPlay();
+      return;
+    }
+    setIsPlaying(true);
+    let i = useCircuitStore.getState().stepIndex;
+    playIntervalRef.current = setInterval(() => {
+      i++;
+      if (i >= totalGates) {
+        stopPlay();
+        return;
+      }
+      setStepIndex(i);
+    }, 500);
+  };
 
   const btnStyle = {
     padding: '3px 10px',
@@ -208,14 +245,7 @@ function StepControls() {
     }}>
       <button onClick={stepPrev} disabled={stepIndex <= 0} style={{ ...btnStyle, opacity: stepIndex <= 0 ? 0.4 : 1 }}>◀ Prev</button>
       <button onClick={stepNext} disabled={stepIndex >= totalGates - 1} style={{ ...btnStyle, opacity: stepIndex >= totalGates - 1 ? 0.4 : 1 }}>Next ▶</button>
-      <button onClick={() => {
-        let i = stepIndex;
-        const interval = setInterval(() => {
-          i++;
-          if (i >= totalGates) { clearInterval(interval); return; }
-          setStepIndex(i);
-        }, 500);
-      }} style={btnStyle}>▶ Play</button>
+      <button onClick={handlePlay} style={btnStyle}>{isPlaying ? '⏸ Pause' : '▶ Play'}</button>
       <button onClick={() => setStepMode(false)} style={{ ...btnStyle, color: colors.error }}>✕ Exit</button>
       <span style={{ color: colors.textMuted, fontSize: 11, fontFamily: 'Inter, sans-serif', marginLeft: 'auto' }}>
         Step {stepIndex + 1} / {totalGates}
@@ -371,7 +401,9 @@ export function CircuitRenderer() {
                 opacity={opacity}
                 onContextMenu={(e) => handleContextMenu(e, idx, gate.type)}
               >
-                {/* Highlight glow */}
+                {/* Highlight glow — CSS animation instead of SVG SMIL so it
+                    keeps ticking smoothly across re-renders and matches the
+                    rest of the app's motion vocabulary. */}
                 {isHighlighted && !isGrayedOut && (
                   <circle
                     cx={x}
@@ -380,10 +412,11 @@ export function CircuitRenderer() {
                     fill="none"
                     stroke={colors.accent}
                     strokeWidth={2}
-                    opacity={0.6}
-                  >
-                    <animate attributeName="opacity" values="0.6;0.2;0.6" dur="1.5s" repeatCount="indefinite" />
-                  </circle>
+                    style={{
+                      animation: 'nuclei-pulse 1.5s ease-in-out infinite',
+                      transformOrigin: 'center',
+                    }}
+                  />
                 )}
                 {renderGate(gate, x, (g, mx, my) => handleHover(g, mx, my, idx), handleLeave)}
               </g>

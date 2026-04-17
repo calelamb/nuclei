@@ -153,7 +153,9 @@ function BlochSphere3D({ blochCoord }: BlochSphereProps) {
     // Renderer
     const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
     renderer.setSize(width, height);
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    // Cap at 3x so newer MacBooks (3x retina) aren't downscaled to 2x blur.
+    // Beyond 3x the GPU cost outweighs the perceptual gain.
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 3));
     container.appendChild(renderer.domElement);
     rendererRef.current = renderer;
 
