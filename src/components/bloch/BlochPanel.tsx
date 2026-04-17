@@ -36,7 +36,7 @@ export function BlochPanel() {
   );
   const qubitCount = blochCoords.length;
   const gates = snapshot?.gates ?? [];
-  const positions = useQubitLayout(qubitCount);
+  const slots = useQubitLayout(qubitCount);
 
   // Detect which qubits are touched by a newly-added gate — for the
   // gate-reaction tilt. Compare gate count; when it rises, mark the last
@@ -70,18 +70,16 @@ export function BlochPanel() {
 
   // Camera target: overview by default, or pulled in toward the selected qubit
   const cameraTarget = useMemo(() => {
-    if (selected === null || !positions[selected]) return OVERVIEW_POS;
-    const slot = positions[selected];
-    // Camera sits "behind and above" the selected qubit relative to origin,
-    // pulled closer for intimacy.
-    const dir = slot.clone().normalize();
-    return slot.clone().add(dir.multiplyScalar(2.5)).add(new Vector3(0, 0.4, 0));
-  }, [selected, positions]);
+    if (selected === null || !slots[selected]) return OVERVIEW_POS;
+    const slot = slots[selected];
+    const dir = slot.position.clone().normalize();
+    return slot.position.clone().add(dir.multiplyScalar(1.8)).add(new Vector3(0, 0.2, 0));
+  }, [selected, slots]);
 
   const cameraLookAt = useMemo(() => {
-    if (selected === null || !positions[selected]) return OVERVIEW_LOOKAT;
-    return positions[selected];
-  }, [selected, positions]);
+    if (selected === null || !slots[selected]) return OVERVIEW_LOOKAT;
+    return slots[selected].position;
+  }, [selected, slots]);
 
   const stateDescription = useMemo(() => {
     if (qubitCount === 0) return 'No qubit state to display';
@@ -103,7 +101,7 @@ export function BlochPanel() {
       aria-label="Bloch sphere visualization"
       aria-description={stateDescription}
     >
-      <BlochStage reducedMotion={reducedMotion}>
+      <BlochStage>
         <CameraDirector
           target={cameraTarget}
           overview={OVERVIEW_POS}

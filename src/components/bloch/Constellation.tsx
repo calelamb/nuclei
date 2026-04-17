@@ -10,16 +10,13 @@ interface ConstellationProps {
   gates: Gate[];
   selected: number | null;
   reducedMotion: boolean;
-  /** Set of qubit indices recently touched by an added gate — triggers one-shot tilt */
   recentlyAffected: Set<number>;
   onSelect: (idx: number) => void;
 }
 
 /**
- * Arranges floating qubits in a deterministic layout (ring for small N,
- * double ring for larger N) and draws entanglement tethers between pairs
- * that share a multi-qubit gate. Layout never depends on selection — it's
- * a pure function of qubit count, so transitions are stable.
+ * Arranges floating qubits and draws entanglement tethers. Layout is
+ * deterministic — selection never changes positions, only camera focus.
  */
 export function Constellation({
   qubits,
@@ -29,29 +26,33 @@ export function Constellation({
   recentlyAffected,
   onSelect,
 }: ConstellationProps) {
-  const positions = useQubitLayout(qubits.length);
+  const slots = useQubitLayout(qubits.length);
 
   return (
     <group>
       <EntanglementTethers
         gates={gates}
-        positions={positions}
+        slots={slots}
         selectedQubit={selected}
-        reducedMotion={reducedMotion}
       />
-      {qubits.map((coord, idx) => (
-        <FloatingBlochQubit
-          key={idx}
-          qubit={coord}
-          index={idx}
-          targetPosition={positions[idx]}
-          selected={selected === idx}
-          dimmed={selected !== null && selected !== idx}
-          gateReaction={recentlyAffected.has(idx)}
-          reducedMotion={reducedMotion}
-          onSelect={() => onSelect(idx)}
-        />
-      ))}
+      {qubits.map((coord, idx) => {
+        const slot = slots[idx];
+        if (!slot) return null;
+        return (
+          <group key={idx} scale={slot.scale}>
+            <FloatingBlochQubit
+              qubit={coord}
+              index={idx}
+              targetPosition={slot.position.clone().divideScalar(slot.scale)}
+              selected={selected === idx}
+              dimmed={selected !== null && selected !== idx}
+              gateReaction={recentlyAffected.has(idx)}
+              reducedMotion={reducedMotion}
+              onSelect={() => onSelect(idx)}
+            />
+          </group>
+        );
+      })}
     </group>
   );
 }
