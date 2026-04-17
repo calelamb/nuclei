@@ -1,4 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
+import type { Monaco } from '@monaco-editor/react';
+import type * as monaco from 'monaco-editor';
 import { useThemeStore } from '../../../stores/themeStore';
 import { useEditorStore } from '../../../stores/editorStore';
 import { useCircuitStore } from '../../../stores/circuitStore';
@@ -13,10 +15,8 @@ const MAX_HISTORY = 20;
 const CMDK_SYSTEM_PROMPT = `You are Dirac, a quantum computing expert. Rewrite the selected code according to the user's instruction. Return ONLY the replacement code, no explanation, no markdown backticks, no commentary. Preserve the user's coding style and variable names.`;
 
 interface InlineEditProps {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  editor: any;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  monaco: any;
+  editor: monaco.editor.IStandaloneCodeEditor;
+  monaco: Monaco;
   onClose: () => void;
 }
 

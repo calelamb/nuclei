@@ -1,12 +1,16 @@
 import { useRef, useCallback, useEffect, useState } from 'react';
 import Editor from '@monaco-editor/react';
-import type { OnMount } from '@monaco-editor/react';
+import type { OnMount, Monaco } from '@monaco-editor/react';
+import type * as monaco from 'monaco-editor';
 import { useEditorStore } from '../../stores/editorStore';
 import { useThemeStore } from '../../stores/themeStore';
 import { useSettingsStore } from '../../stores/settingsStore';
 import { getExecute } from '../../App';
 import { registerGhostCompletions } from './completions/ghostCompletions';
 import { InlineEditWidget } from './inlineEdit/InlineEditWidget';
+import { registerNucleiThemes } from './monacoThemes';
+
+type StandaloneEditor = monaco.editor.IStandaloneCodeEditor;
 
 export function QuantumEditor() {
   const { code, setCode } = useEditorStore();
@@ -14,28 +18,24 @@ export function QuantumEditor() {
   const mode = useThemeStore((s) => s.mode);
   const colors = useThemeStore((s) => s.colors);
   const editorSettings = useSettingsStore((s) => s.editor);
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const editorRef = useRef<any>(null);
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const monacoRef = useRef<any>(null);
+  const editorRef = useRef<StandaloneEditor | null>(null);
+  const monacoRef = useRef<Monaco | null>(null);
   const [showInlineEdit, setShowInlineEdit] = useState(false);
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const [editorInstance, setEditorInstance] = useState<any>(null);
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const [monacoInstance, setMonacoInstance] = useState<any>(null);
+  const [editorInstance, setEditorInstance] = useState<StandaloneEditor | null>(null);
+  const [monacoInstance, setMonacoInstance] = useState<Monaco | null>(null);
 
   const themeName = mode === 'dark' ? 'nuclei-dark' : 'nuclei-light';
 
-  const handleMount: OnMount = (editor, monaco) => {
+  const handleMount: OnMount = (editor, monacoApi) => {
     editorRef.current = editor;
-    monacoRef.current = monaco;
+    monacoRef.current = monacoApi;
     setEditorInstance(editor);
-    setMonacoInstance(monaco);
+    setMonacoInstance(monacoApi);
 
     editor.addAction({
       id: 'run-circuit',
       label: 'Run Circuit',
-      keybindings: [monaco.KeyMod.CtrlCmd | monaco.KeyCode.Enter],
+      keybindings: [monacoApi.KeyMod.CtrlCmd | monacoApi.KeyCode.Enter],
       run: () => {
         const execute = getExecute();
         if (execute) execute();
@@ -45,78 +45,33 @@ export function QuantumEditor() {
     editor.addAction({
       id: 'inline-edit',
       label: 'Inline Edit (Cmd+K)',
-      keybindings: [monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyK],
+      keybindings: [monacoApi.KeyMod.CtrlCmd | monacoApi.KeyCode.KeyK],
       run: () => setShowInlineEdit(true),
     });
 
-    // Register ghost completions
-    registerGhostCompletions(monaco);
-
+    registerGhostCompletions(monacoApi);
     editor.focus();
   };
 
-  // Update Monaco theme when theme mode changes
+  // Re-apply theme on mode change. Themes themselves are defined once in
+  // beforeMount; this effect just switches between them.
   useEffect(() => {
-    const monaco = monacoRef.current;
-    if (!monaco) return;
-
-    if (mode === 'dark') {
-      monaco.editor.defineTheme('nuclei-dark', {
-        base: 'vs-dark',
-        inherit: true,
-        rules: [
-          { token: 'comment', foreground: '6A737D', fontStyle: 'italic' },
-          { token: 'keyword', foreground: '00B4D8' },
-          { token: 'string', foreground: '98C379' },
-          { token: 'number', foreground: 'D19A66' },
-          { token: 'type', foreground: '48CAE4' },
-        ],
-        colors: {
-          'editor.background': '#0F1B2D',
-          'editor.foreground': '#E0E0E0',
-          'editor.lineHighlightBackground': '#1A2A42',
-          'editor.selectionBackground': '#264F78',
-          'editorCursor.foreground': '#00B4D8',
-          'editorLineNumber.foreground': '#3D5A80',
-          'editorLineNumber.activeForeground': '#00B4D8',
-        },
-      });
-    } else {
-      monaco.editor.defineTheme('nuclei-light', {
-        base: 'vs',
-        inherit: true,
-        rules: [
-          { token: 'comment', foreground: '6A737D', fontStyle: 'italic' },
-          { token: 'keyword', foreground: '0096B7' },
-          { token: 'string', foreground: '22863A' },
-          { token: 'number', foreground: 'B76E00' },
-          { token: 'type', foreground: '005F73' },
-        ],
-        colors: {
-          'editor.background': '#FAFBFC',
-          'editor.foreground': '#1A1A2E',
-          'editor.lineHighlightBackground': '#F0F2F5',
-          'editor.selectionBackground': '#B4D7FF',
-          'editorCursor.foreground': '#0096B7',
-          'editorLineNumber.foreground': '#959DA5',
-          'editorLineNumber.activeForeground': '#0096B7',
-        },
-      });
-    }
-    monaco.editor.setTheme(themeName);
-  }, [mode, themeName]);
+    const monacoApi = monacoRef.current;
+    if (!monacoApi) return;
+    monacoApi.editor.setTheme(themeName);
+  }, [themeName]);
 
   // Update Monaco error markers when errors change
   useEffect(() => {
-    const monaco = monacoRef.current;
+    const monacoApi = monacoRef.current;
     const editor = editorRef.current;
-    if (!monaco || !editor) return;
+    if (!monacoApi || !editor) return;
 
     const model = editor.getModel();
     if (!model) return;
 
     if (errors.length === 0) {
-      monaco.editor.setModelMarkers(model, 'nuclei', []);
+      monacoApi.editor.setModelMarkers(model, 'nuclei', []);
       return;
     }
 
@@ -126,14 +81,14 @@ export function QuantumEditor() {
     const markers = errors
       .filter((err) => err.line >= 1 && err.line <= lineCount)
       .map((err) => ({
-        severity: monaco.MarkerSeverity.Error,
+        severity: monacoApi.MarkerSeverity.Error,
         message: err.message,
         startLineNumber: err.line,
         startColumn: 1,
         endLineNumber: err.line,
         endColumn: model.getLineMaxColumn(err.line),
       }));
-    monaco.editor.setModelMarkers(model, 'nuclei', markers);
+    monacoApi.editor.setModelMarkers(model, 'nuclei', markers);
   }, [errors]);
 
   const handleChange = useCallback((value: string | undefined) => {
@@ -142,13 +97,32 @@ export function QuantumEditor() {
     }
   }, [setCode]);
 
+  // Race guard for file drops: reading a File is async, but the component
+  // may unmount between the drop and the read completing. Track the latest
+  // drop token so a stale read can't overwrite fresh state.
+  const dropTokenRef = useRef(0);
+  const mountedRef = useRef(true);
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => { mountedRef.current = false; };
+  }, []);
+
   const handleDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault();
     const file = e.dataTransfer.files[0];
     if (!file) return;
-    if (file.name.endsWith('.py') || file.name.endsWith('.qasm')) {
-      file.text().then((content) => setCode(content));
-    }
+    if (!(file.name.endsWith('.py') || file.name.endsWith('.qasm'))) return;
+
+    dropTokenRef.current += 1;
+    const token = dropTokenRef.current;
+
+    file.text().then((content) => {
+      if (!mountedRef.current) return;
+      if (token !== dropTokenRef.current) return;
+      setCode(content);
+    }).catch(() => {
+      // Drop-read errors are non-fatal — the user can retry.
+    });
   }, [setCode]);
 
   const handleDragOver = useCallback((e: React.DragEvent) => {
@@ -184,48 +158,7 @@ export function QuantumEditor() {
           autoClosingBrackets: editorSettings.autoCloseBrackets ? 'always' : 'never',
           inlineSuggest: { enabled: true },
         }}
-        beforeMount={(monaco) => {
-          monaco.editor.defineTheme('nuclei-dark', {
-            base: 'vs-dark',
-            inherit: true,
-            rules: [
-              { token: 'comment', foreground: '6A737D', fontStyle: 'italic' },
-              { token: 'keyword', foreground: '00B4D8' },
-              { token: 'string', foreground: '98C379' },
-              { token: 'number', foreground: 'D19A66' },
-              { token: 'type', foreground: '48CAE4' },
-            ],
-            colors: {
-              'editor.background': '#0F1B2D',
-              'editor.foreground': '#E0E0E0',
-              'editor.lineHighlightBackground': '#1A2A42',
-              'editor.selectionBackground': '#264F78',
-              'editorCursor.foreground': '#00B4D8',
-              'editorLineNumber.foreground': '#3D5A80',
-              'editorLineNumber.activeForeground': '#00B4D8',
-            },
-          });
-          monaco.editor.defineTheme('nuclei-light', {
-            base: 'vs',
-            inherit: true,
-            rules: [
-              { token: 'comment', foreground: '6A737D', fontStyle: 'italic' },
-              { token: 'keyword', foreground: '0096B7' },
-              { token: 'string', foreground: '22863A' },
-              { token: 'number', foreground: 'B76E00' },
-              { token: 'type', foreground: '005F73' },
-            ],
-            colors: {
-              'editor.background': '#FAFBFC',
-              'editor.foreground': '#1A1A2E',
-              'editor.lineHighlightBackground': '#F0F2F5',
-              'editor.selectionBackground': '#B4D7FF',
-              'editorCursor.foreground': '#0096B7',
-              'editorLineNumber.foreground': '#959DA5',
-              'editorLineNumber.activeForeground': '#0096B7',
-            },
-          });
-        }}
+        beforeMount={registerNucleiThemes}
       />
       {showInlineEdit && editorInstance && monacoInstance && (
         <InlineEditWidget
