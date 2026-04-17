@@ -26,11 +26,17 @@ describe('editorStore', () => {
     expect(isDirty).toBe(true);
   });
 
-  it('clears errors when code changes', () => {
+  it('preserves errors across keystrokes so markers do not flicker', () => {
+    // The kernel is authoritative for error state — it clears errors on the
+    // next successful snapshot. Wiping markers on every keystroke caused a
+    // flash between typing and the next debounced parse.
     useEditorStore.getState().setErrors([{ line: 1, message: 'syntax error' }]);
     expect(useEditorStore.getState().errors).toHaveLength(1);
 
-    useEditorStore.getState().setCode('fixed code');
+    useEditorStore.getState().setCode('still typing');
+    expect(useEditorStore.getState().errors).toHaveLength(1);
+
+    useEditorStore.getState().clearErrors();
     expect(useEditorStore.getState().errors).toHaveLength(0);
   });
 

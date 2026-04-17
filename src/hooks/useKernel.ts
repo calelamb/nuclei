@@ -6,6 +6,7 @@ import { useSimulationStore } from '../stores/simulationStore';
 import { useSettingsStore } from '../stores/settingsStore';
 import type { KernelResponse } from '../types/quantum';
 import { KERNEL_WS_URL } from '../config/kernel';
+import type { PyodideKernel } from '../platform/pyodideKernel';
 
 const KERNEL_URL = KERNEL_WS_URL;
 
@@ -19,8 +20,13 @@ circuit = cirq.Circuit([
     cirq.measure(q0, q1, key='result')
 ])
 `;
+const PYTHON_ONLY_WEB_DEFAULT = `# The browser IDE is in limited mode — Cirq couldn't load.
+# You can still run plain Python. For full quantum support,
+# download the desktop app from getnuclei.dev.
+
+print("Hello from Pyodide!")
+`;
 const DEFAULT_DEBOUNCE_MS = 300;
-const CONNECT_DELAY_MS = 3000;
 const RETRY_DELAY_MS = 2000;
 const MAX_RETRIES = 15;
 
@@ -40,8 +46,7 @@ function getErrorContext(msg: Extract<KernelResponse, { type: 'error' }>) {
 
 export function useKernel() {
   const wsRef = useRef<WebSocket | null>(null);
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const pyodideRef = useRef<any>(null);
+  const pyodideRef = useRef<PyodideKernel | null>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const mountedRef = useRef(true);
   const retryCountRef = useRef(0);
@@ -99,10 +104,14 @@ export function useKernel() {
     }
   }, [clearEditorErrors, clearSimulationResult, setSnapshot, setCircuitError]);
 
-  // WebSocket connection for desktop
+  // WebSocket connection for desktop. We connect optimistically; if the
+  // kernel hasn't opened its port yet, `onerror` fires fast and we retry on
+  // a short cadence until the probe budget is exhausted.
   const connect = useCallback(() => {
     if (!mountedRef.current || isWeb) return;
     if (wsRef.current?.readyState === WebSocket.OPEN) return;
+
+    useEditorStore.getState().setKernelStatus('connecting');
 
     const ws = new WebSocket(KERNEL_URL);
 
@@ -111,6 +120,7 @@ export function useKernel() {
       retryCountRef.current = 0;
       useEditorStore.getState().setKernelConnected(true);
       useEditorStore.getState().setKernelReady(true);
+      useEditorStore.getState().setKernelStatus('ready');
       const code = useEditorStore.getState().code;
       if (code.trim()) {
         ws.send(JSON.stringify({ type: 'parse', code }));
@@ -128,34 +138,50 @@ export function useKernel() {
     ws.onclose = () => {
       wsRef.current = null;
       useEditorStore.getState().setKernelConnected(false);
-      if (mountedRef.current && retryCountRef.current < MAX_RETRIES) {
+      if (!mountedRef.current) return;
+
+      if (retryCountRef.current < MAX_RETRIES) {
         retryCountRef.current++;
         setTimeout(connect, RETRY_DELAY_MS);
+      } else {
+        useEditorStore.getState().setKernelStatus(
+          'failed',
+          'Kernel is not responding. Check that Python is installed and try reconnecting.',
+        );
       }
     };
 
     ws.onerror = () => { ws.close(); };
   }, [handleMessage, isWeb]);
 
+
   // Initialize Pyodide kernel for web
   const initPyodide = useCallback(async () => {
     if (!isWeb) return;
     useEditorStore.getState().setKernelConnected(false);
     useEditorStore.getState().setKernelReady(false);
+    useEditorStore.getState().setKernelStatus('connecting');
 
     try {
-      const { PyodideKernel } = await import('../platform/pyodideKernel');
+      const { PyodideKernel, isCirqAvailable } = await import('../platform/pyodideKernel');
       const kernel = new PyodideKernel((msg) => handleMessage(msg as KernelResponse));
       await kernel.init();
       pyodideRef.current = kernel;
       useEditorStore.getState().setKernelConnected(true);
       useEditorStore.getState().setKernelReady(true);
+      useEditorStore.getState().setKernelStatus('ready');
 
-      // Swap Qiskit default to Cirq for web mode (Pyodide only has Cirq)
+      // Only rewrite the user's starting code if they're still on the Qiskit
+      // default. Pick a replacement that matches what actually works in the
+      // browser — Cirq if it loaded, plain-Python otherwise.
       const currentCode = useEditorStore.getState().code;
       if (currentCode.includes('from qiskit import QuantumCircuit')) {
-        useEditorStore.getState().setCode(CIRQ_WEB_DEFAULT);
-        useEditorStore.getState().setFramework('cirq');
+        if (isCirqAvailable()) {
+          useEditorStore.getState().setCode(CIRQ_WEB_DEFAULT);
+          useEditorStore.getState().setFramework('cirq');
+        } else {
+          useEditorStore.getState().setCode(PYTHON_ONLY_WEB_DEFAULT);
+        }
       }
 
       // Initial parse
@@ -164,11 +190,14 @@ export function useKernel() {
         kernel.send({ type: 'parse', code });
       }
     } catch (e) {
+      useEditorStore.getState().setKernelStatus('failed', `Failed to load browser Python engine: ${e}`);
       useSimulationStore.getState().addOutput(`Error: Failed to load browser Python engine: ${e}`);
     }
   }, [handleMessage, isWeb]);
 
-  // Start kernel
+  // Start kernel. The old code slept 3000ms blind after startKernel() resolved;
+  // we now rely on the retry loop instead — if the Python socket isn't open
+  // yet, the initial connect fails fast and retry picks it up in RETRY_DELAY_MS.
   useEffect(() => {
     mountedRef.current = true;
     retryCountRef.current = 0;
@@ -177,12 +206,8 @@ export function useKernel() {
       initPyodide();
     } else {
       platform.startKernel()
-        .then(() => {
-          setTimeout(connect, CONNECT_DELAY_MS);
-        })
-        .catch(() => {
-          setTimeout(connect, CONNECT_DELAY_MS);
-        });
+        .then(() => connect())
+        .catch(() => connect());
     }
 
     return () => {
@@ -201,6 +226,12 @@ export function useKernel() {
         prevCode = state.code;
         if (debounceRef.current) clearTimeout(debounceRef.current);
         debounceRef.current = setTimeout(() => {
+          // Skip parse requests while a simulation is running — the kernel
+          // processes messages serially so a queued parse just delays the
+          // result of the in-flight execute. The next keystroke after the
+          // run completes will schedule another parse.
+          if (useSimulationStore.getState().isRunning) return;
+
           if (isWeb && pyodideRef.current) {
             pyodideRef.current.send({ type: 'parse', code: state.code });
           } else if (wsRef.current?.readyState === WebSocket.OPEN) {
