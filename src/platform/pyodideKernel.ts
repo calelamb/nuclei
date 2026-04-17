@@ -12,64 +12,82 @@
 type KernelMessage = { type: string; [key: string]: unknown };
 type MessageHandler = (msg: KernelMessage) => void;
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-let pyodideInstance: any = null;
-let loading = false;
-let ready = false;
-let cirqInstalled = false;
+// Minimal structural type for the parts of the Pyodide API we actually call.
+// Pyodide's real types aren't published as a standalone package, so we model
+// just the surface we use rather than pulling in `any`.
+interface PyodideModule {
+  loadPackage(name: string): Promise<void>;
+  pyimport(name: string): { install(pkg: string): Promise<void> };
+  runPythonAsync(code: string): Promise<string>;
+}
+
+interface PyodideLoadState {
+  pyodide: PyodideModule;
+  cirqInstalled: boolean;
+}
+
+// Cache the load promise itself so concurrent callers await the same work,
+// instead of polling module-level state.
+let loadPromise: Promise<PyodideLoadState> | null = null;
+let loadState: PyodideLoadState | null = null;
 
 const PYODIDE_CDN = 'https://cdn.jsdelivr.net/pyodide/v0.27.0/full/pyodide.js';
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-async function loadPyodide(): Promise<any> {
-  if (pyodideInstance) return pyodideInstance;
-  if (loading) {
-    // Wait for the in-progress load
-    return new Promise((resolve) => {
-      const check = setInterval(() => {
-        if (pyodideInstance) { clearInterval(check); resolve(pyodideInstance); }
-      }, 200);
+type PyodideGlobal = Window & {
+  loadPyodide?: () => Promise<PyodideModule>;
+};
+
+function getState(): PyodideLoadState | null {
+  return loadState;
+}
+
+function loadPyodide(): Promise<PyodideLoadState> {
+  if (loadState) return Promise.resolve(loadState);
+  if (loadPromise) return loadPromise;
+
+  loadPromise = (async () => {
+    // Load Pyodide CDN script
+    await new Promise<void>((resolve, reject) => {
+      const script = document.createElement('script');
+      script.src = PYODIDE_CDN;
+      script.onload = () => resolve();
+      script.onerror = () => reject(new Error('Failed to load Pyodide'));
+      document.head.appendChild(script);
     });
-  }
 
-  loading = true;
+    const globalLoad = (window as PyodideGlobal).loadPyodide;
+    if (!globalLoad) {
+      throw new Error('Pyodide loader not found on window after script load');
+    }
+    const pyodide = await globalLoad();
 
-  // Load Pyodide script
-  await new Promise<void>((resolve, reject) => {
-    const script = document.createElement('script');
-    script.src = PYODIDE_CDN;
-    script.onload = () => resolve();
-    script.onerror = () => reject(new Error('Failed to load Pyodide'));
-    document.head.appendChild(script);
-  });
+    // Install quantum packages (micropip)
+    await pyodide.loadPackage('micropip');
+    const micropip = pyodide.pyimport('micropip');
 
-  // Initialize Pyodide
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  pyodideInstance = await (window as any).loadPyodide();
+    let cirqInstalled = false;
+    try {
+      await micropip.install('cirq-core==1.4.1');
+      cirqInstalled = true;
+    } catch {
+      cirqInstalled = false;
+    }
 
-  // Install quantum packages (micropip)
-  await pyodideInstance.loadPackage('micropip');
-  const micropip = pyodideInstance.pyimport('micropip');
+    // numpy is bundled with Pyodide; failure is non-fatal.
+    try {
+      await pyodide.loadPackage('numpy');
+    } catch {
+      // proceed — some features will be unavailable but parse can still work
+    }
 
-  // Try to install cirq (lighter, better Pyodide support)
-  try {
-    await micropip.install('cirq-core==1.4.1');
-    cirqInstalled = true;
-  } catch {
-    cirqInstalled = false;
-  }
+    loadState = { pyodide, cirqInstalled };
+    return loadState;
+  })();
 
-  // Install numpy (needed for computations)
-  try {
-    await pyodideInstance.loadPackage('numpy');
-    // numpy loaded successfully
-  } catch {
-    // numpy not available
-  }
+  // If the load fails, clear the promise so the next caller can retry.
+  loadPromise.catch(() => { loadPromise = null; });
 
-  ready = true;
-  loading = false;
-  return pyodideInstance;
+  return loadPromise;
 }
 
 // Python code that implements the kernel parse/execute logic for the browser
@@ -139,7 +157,9 @@ def _parse_circuit(code):
     except ImportError:
         pass
 
-    return None, output, "No supported quantum framework detected."
+    # No framework detected is not an error for plain Python — the user may
+    # just be exploring with print statements. Stay silent.
+    return None, output, None
 
 def _execute_circuit(code, shots):
     """Execute circuit and return results."""
@@ -275,6 +295,10 @@ def _run_python(code):
 /**
  * Translate ModuleNotFoundError for unsupported frameworks into a
  * user-friendly message pointing to the desktop app.
+ *
+ * Messaging adapts to whether Cirq actually installed: if Cirq failed to
+ * load, we can't claim "the browser IDE supports Cirq" — that contradicts
+ * what the user just saw.
  */
 function translateModuleError(errorMsg: string): string {
   const match = errorMsg.match(
@@ -294,7 +318,17 @@ function translateModuleError(errorMsg: string): string {
         ? 'PennyLane'
         : 'QuTiP';
 
-  return `${displayName} isn't available in the browser version. The browser IDE supports Cirq. For Qiskit/CUDA-Q support, download the desktop app from getnuclei.dev`;
+  const cirqOk = loadState?.cirqInstalled ?? false;
+
+  if (framework === 'cirq' && !cirqOk) {
+    return 'Cirq failed to load in the browser. For full framework support, download the desktop app from getnuclei.dev';
+  }
+
+  if (cirqOk) {
+    return `${displayName} isn't available in the browser version. The browser IDE supports Cirq. For Qiskit/CUDA-Q support, download the desktop app from getnuclei.dev`;
+  }
+
+  return `${displayName} isn't available in the browser version. For full framework support, download the desktop app from getnuclei.dev`;
 }
 
 function classifyKernelError(message: string): { code: string; phase?: 'parse' | 'execute' | 'python' } {
@@ -313,10 +347,13 @@ function classifyKernelError(message: string): { code: string; phase?: 'parse' |
   return { code: 'execution_error' };
 }
 
+export function isCirqAvailable(): boolean {
+  return loadState?.cirqInstalled ?? false;
+}
+
 export class PyodideKernel {
   private onMessage: MessageHandler;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  private pyodide: any = null;
+  private pyodide: PyodideModule | null = null;
 
   constructor(onMessage: MessageHandler) {
     this.onMessage = onMessage;
@@ -324,14 +361,15 @@ export class PyodideKernel {
 
   async init() {
     try {
-      this.pyodide = await loadPyodide();
-      // Load the kernel code
+      const state = await loadPyodide();
+      this.pyodide = state.pyodide;
       await this.pyodide.runPythonAsync(KERNEL_PYTHON);
-      this.onMessage({ type: 'output', text: 'Pyodide kernel ready (browser mode)' });
-      if (!cirqInstalled) {
+      if (state.cirqInstalled) {
+        this.onMessage({ type: 'output', text: 'Pyodide kernel ready (browser mode) — Cirq loaded.' });
+      } else {
         this.onMessage({
           type: 'output',
-          text: 'Warning: cirq-core could not be loaded. Quantum circuit features may be limited. For full framework support, download the desktop app from getnuclei.dev',
+          text: 'Pyodide kernel ready (browser mode) — Cirq unavailable. For full framework support, download the desktop app from getnuclei.dev',
         });
       }
     } catch (e) {
@@ -462,6 +500,6 @@ json.dumps({"output": _out, "error": _err})
   }
 
   isReady(): boolean {
-    return ready;
+    return getState() !== null;
   }
 }
