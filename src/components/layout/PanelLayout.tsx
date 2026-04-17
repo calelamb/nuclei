@@ -199,6 +199,8 @@ function StatusBar() {
   const isRunning = useSimulationStore((s) => s.isRunning);
   const result = useSimulationStore((s) => s.result);
   const connected = useEditorStore((s) => s.kernelConnected);
+  const kernelStatus = useEditorStore((s) => s.kernelStatus);
+  const kernelError = useEditorStore((s) => s.kernelError);
   const colors = useThemeStore((s) => s.colors);
   const shadow = useThemeStore((s) => s.shadow);
   const uiMode = useUIModeStore((s) => s.mode);
@@ -248,9 +250,25 @@ function StatusBar() {
       <div style={{ flex: 1 }} />
 
       {/* Right side */}
-      <span style={{ display: 'flex', alignItems: 'center', gap: 3, color: colors.textDim, fontSize: 10 }}>
-        <Circle size={5} fill={connected ? colors.success : colors.error} stroke="none" />
-        Kernel
+      <span
+        style={{ display: 'flex', alignItems: 'center', gap: 3, color: colors.textDim, fontSize: 10 }}
+        title={kernelError ?? (
+          kernelStatus === 'connecting' ? 'Kernel connecting...'
+          : kernelStatus === 'failed' ? 'Kernel not responding'
+          : connected ? 'Kernel connected' : 'Kernel disconnected'
+        )}
+      >
+        <Circle
+          size={5}
+          fill={
+            kernelStatus === 'failed' ? colors.error
+            : connected ? colors.success
+            : kernelStatus === 'connecting' ? colors.warning
+            : colors.error
+          }
+          stroke="none"
+        />
+        Kernel{kernelStatus === 'failed' ? ' — failed' : kernelStatus === 'connecting' && !connected ? '...' : ''}
       </span>
       <span style={{ color: isRunning ? colors.accent : colors.textDim, fontSize: 10,
         ...(isRunning ? { animation: 'nuclei-heartbeat 1.5s ease infinite' } : {}) }}>
@@ -323,6 +341,7 @@ export function PanelLayout() {
     if (experimentalFeatures) return;
 
     if (activeView && ['search', 'circuit', 'plugins', 'hardware', 'community'].includes(activeView)) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- redirect away from experimental views when the flag flips off
       setActiveView('files');
     }
   }, [activeView, experimentalFeatures]);

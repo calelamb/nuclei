@@ -53,10 +53,13 @@ function AppInner() {
     fileOpsRef = fileOps;
   }, [fileOps]);
 
-  // Warn before closing with unsaved changes
+  // Warn before closing with unsaved changes. Modern browsers ignore
+  // preventDefault() alone — returnValue is required for the prompt to fire,
+  // and some user-agents still read the string value.
   useEffect(() => {
     const handler = (e: BeforeUnloadEvent) => {
       e.preventDefault();
+      e.returnValue = '';
     };
     if (isDirty) {
       window.addEventListener('beforeunload', handler);
@@ -64,51 +67,67 @@ function AppInner() {
     return () => window.removeEventListener('beforeunload', handler);
   }, [isDirty]);
 
-  // Load persisted theme + UI mode + check onboarding
+  // Load persisted theme + UI mode + check onboarding.
+  //
+  // The prefs reads are individually guarded so one corrupt key doesn't
+  // prevent the rest of bootstrap from running. File restore is still
+  // best-effort — if the file moved or permissions changed, we drop the
+  // stale path instead of crashing the session.
   useEffect(() => {
     (async () => {
-      try {
-        const mode = await platform.getStoredValue<'dark' | 'light'>('theme');
-        if (mode) useThemeStore.getState().setMode(mode);
+      const safeGet = async <T,>(key: string): Promise<T | null> => {
+        try {
+          return await platform.getStoredValue<T>(key);
+        } catch (err) {
+          if (import.meta.env.DEV) console.warn('[Nuclei] pref read failed:', key, err);
+          return null;
+        }
+      };
 
-        const uiMode = await platform.getStoredValue<'beginner' | 'intermediate' | 'advanced'>('ui_mode');
-        if (uiMode) useUIModeStore.getState().setMode(uiMode);
+      const mode = await safeGet<'dark' | 'light'>('theme');
+      if (mode) useThemeStore.getState().setMode(mode);
 
-        const lastFramework = await platform.getStoredValue<Framework>('last_framework');
-        if (lastFramework) setFramework(lastFramework);
+      const uiMode = await safeGet<'beginner' | 'intermediate' | 'advanced'>('ui_mode');
+      if (uiMode) useUIModeStore.getState().setMode(uiMode);
 
-        const onboarded = await platform.getStoredValue<boolean>('onboarding_complete');
-        if (!onboarded) {
-          setShowOnboarding(true);
-        } else {
-          // Check for returning user experience
-          const lastSession = await platform.getStoredValue<string>('last_session_date');
-          const lastFile = await platform.getStoredValue<string>('last_opened_file');
-          if (lastSession) {
-            const days = Math.floor((Date.now() - new Date(lastSession).getTime()) / (1000 * 60 * 60 * 24));
-            if (days > 0) {
-              setIsReturningUser(true);
-              setDaysSinceLastSession(days);
-              if (lastFile) setLastOpenedFile(lastFile);
-              // Only show returning screen if >1 day away
-              if (days > 1) setShowOnboarding(true);
-            }
-          }
+      const lastFramework = await safeGet<Framework>('last_framework');
+      if (lastFramework) setFramework(lastFramework);
 
-          if (lastFile) {
-            const restoredContent = await platform.readFile(lastFile);
-            if (restoredContent !== null) {
-              setCode(restoredContent);
-              setFilePath(lastFile);
-            }
+      const onboarded = await safeGet<boolean>('onboarding_complete');
+      if (!onboarded) {
+        setShowOnboarding(true);
+      } else {
+        const lastSession = await safeGet<string>('last_session_date');
+        const lastFile = await safeGet<string>('last_opened_file');
+        if (lastSession) {
+          const days = Math.floor((Date.now() - new Date(lastSession).getTime()) / (1000 * 60 * 60 * 24));
+          if (days > 0) {
+            setIsReturningUser(true);
+            setDaysSinceLastSession(days);
+            if (lastFile) setLastOpenedFile(lastFile);
+            if (days > 1) setShowOnboarding(true);
           }
         }
 
-        // Record this session
-        await platform.setStoredValue('last_session_date', new Date().toISOString());
-      } catch {
-        // Non-critical: theme/preferences persistence failure is safe to ignore
+        if (lastFile) {
+          try {
+            const restoredContent = await platform.readFile(lastFile);
+            // Empty string is a valid file; only bail on null (missing/unreadable).
+            if (restoredContent !== null) {
+              setCode(restoredContent);
+              setFilePath(lastFile);
+            } else {
+              // Drop the stale path so we don't retry next session.
+              await platform.setStoredValue('last_opened_file', null).catch(() => {});
+            }
+          } catch (err) {
+            if (import.meta.env.DEV) console.warn('[Nuclei] file restore failed:', err);
+            await platform.setStoredValue('last_opened_file', null).catch(() => {});
+          }
+        }
       }
+
+      await platform.setStoredValue('last_session_date', new Date().toISOString()).catch(() => {});
     })();
   }, [platform, setCode, setFilePath, setFramework]);
 
@@ -193,9 +212,6 @@ function AppInner() {
       } else if (e.key === 'l' && !e.shiftKey) {
         e.preventDefault();
         focusDirac();
-      } else if (e.key === 'j' && !e.shiftKey) {
-        e.preventDefault();
-        // Toggle bottom panel — handled in PanelLayout via store
       }
     };
     window.addEventListener('keydown', handler);
