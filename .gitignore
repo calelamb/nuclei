@@ -72,3 +72,6 @@ design-system/
 
 # Test caches
 .pytest_cache/
+
+# Brainstorming scratch (visual companion output)
+.superpowers/
