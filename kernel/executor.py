@@ -149,14 +149,21 @@ class Executor:
 
     def _run_code(self, code: str) -> tuple[str, KernelError | None]:
         import signal
+        import threading
 
         stdout_capture = io.StringIO()
         stderr_capture = io.StringIO()
 
         self._reset_namespace()
 
+        # SIGALRM-based timeout only works from the main thread. The server
+        # now runs parse/execute inside `asyncio.to_thread`, so we fall back
+        # to running code without a timeout guard on worker threads. The WS
+        # heartbeat on the server still lets us detect a hung kernel.
+        use_signal_timeout = _HAS_SIGNAL_ALARM and threading.current_thread() is threading.main_thread()
+
         try:
-            if _HAS_SIGNAL_ALARM:
+            if use_signal_timeout:
                 old_handler = signal.signal(signal.SIGALRM, _timeout_handler)
                 signal.alarm(EXECUTION_TIMEOUT_SECONDS)
             try:
@@ -165,7 +172,7 @@ class Executor:
                 ):
                     exec(code, self._namespace)
             finally:
-                if _HAS_SIGNAL_ALARM:
+                if use_signal_timeout:
                     signal.alarm(0)
                     signal.signal(signal.SIGALRM, old_handler)
             return stdout_capture.getvalue(), None
