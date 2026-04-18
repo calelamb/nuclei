@@ -38,10 +38,26 @@ export interface DiracMessage {
   toolCalls?: ToolCall[];
 }
 
+export interface AmbientMessage {
+  id: string;
+  kind: 'parse' | 'result';
+  text: string;
+  timestamp: number;
+}
+
+export interface StoredRewrittenError {
+  explanation: string;
+  fix: string | null;
+  originalTraceback: string;
+  timestamp: number;
+}
+
 interface DiracState {
   messages: DiracMessage[];
   isLoading: boolean;
   apiKey: string | null;
+  ambientFeed: AmbientMessage[];
+  rewrittenError: StoredRewrittenError | null;
   addMessage: (msg: DiracMessage) => void;
   updateLastAssistant: (content: string) => void;
   updateLastThinking: (thinking: string) => void;
@@ -50,12 +66,18 @@ interface DiracState {
   setLoading: (loading: boolean) => void;
   setApiKey: (key: string | null) => void;
   clearHistory: () => void;
+  pushAmbient: (msg: Omit<AmbientMessage, 'id' | 'timestamp'>) => void;
+  clearAmbient: () => void;
+  setRewrittenError: (err: Omit<StoredRewrittenError, 'timestamp'>) => void;
+  clearRewrittenError: () => void;
 }
 
 export const useDiracStore = create<DiracState>((set) => ({
   messages: [],
   isLoading: false,
   apiKey: loadApiKey(),
+  ambientFeed: [],
+  rewrittenError: null,
   addMessage: (msg) => set((s) => ({ messages: [...s.messages, msg] })),
   updateLastAssistant: (content) => set((s) => {
     const msgs = [...s.messages];
@@ -97,4 +119,13 @@ export const useDiracStore = create<DiracState>((set) => ({
     set({ apiKey });
   },
   clearHistory: () => set({ messages: [] }),
+  pushAmbient: (msg) => set((s) => ({
+    ambientFeed: [
+      ...s.ambientFeed.slice(-4), // cap at last 5 including the new entry
+      { ...msg, id: crypto.randomUUID(), timestamp: Date.now() },
+    ],
+  })),
+  clearAmbient: () => set({ ambientFeed: [] }),
+  setRewrittenError: (err) => set({ rewrittenError: { ...err, timestamp: Date.now() } }),
+  clearRewrittenError: () => set({ rewrittenError: null }),
 }));
