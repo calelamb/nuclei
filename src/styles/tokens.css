@@ -1,0 +1,147 @@
+/* src/styles/tokens.css
+ *
+ * Single source of truth for design tokens as CSS custom properties.
+ * Mirrored by src/styles/tokens.ts; the sync test enforces parity.
+ *
+ * The default :root scope contains dark values so stylesheets that don't
+ * opt in to theming still render with the intended palette.
+ */
+
+:root,
+:root[data-theme='dark'] {
+  /* Surfaces */
+  --color-surface-base: #0F1B2D;
+  --color-surface-raised: #152238;
+  --color-surface-overlay: #1A2A42;
+  --color-surface-sunken: #080E18;
+
+  /* Text */
+  --color-text-primary: #E8ECF1;
+  --color-text-secondary: #94A3B8;
+  --color-text-tertiary: #64748B;
+  --color-text-disabled: #475569;
+
+  /* Borders */
+  --color-border-subtle: rgba(255, 255, 255, 0.06);
+  --color-border-strong: #1A2A42;
+
+  /* Accents */
+  --color-accent-quantum: #00B4D8;
+  --color-accent-quantum-soft: #48CAE4;
+  --color-accent-dirac: #7B2D8E;
+
+  /* Semantics */
+  --color-success: #10B981;
+  --color-warning: #F59E0B;
+  --color-danger: #EF4444;
+  --color-info: #3B82F6;
+
+  /* Kernel status */
+  --color-kernel-idle: #64748B;
+  --color-kernel-connecting: #F59E0B;
+  --color-kernel-ready: #10B981;
+  --color-kernel-error: #EF4444;
+
+  /* Syntax */
+  --color-syntax-comment: #6A737D;
+  --color-syntax-string: #98C379;
+  --color-syntax-number: #D19A66;
+  --color-syntax-keyword: #00B4D8;
+  --color-syntax-type: #48CAE4;
+
+  /* Circuit */
+  --color-gate-single: #00B4D8;
+  --color-gate-multi: #1E3A5F;
+  --color-gate-measure: #6A737D;
+  --color-wire: #3D5A80;
+
+  /* Shadows */
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
+  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.4);
+  --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.5);
+  --shadow-glow: 0 0 20px rgba(0, 180, 216, 0.15);
+}
+
+:root[data-theme='light'] {
+  --color-surface-base: #FFFFFF;
+  --color-surface-raised: #F8FAFC;
+  --color-surface-overlay: #F1F5F9;
+  --color-surface-sunken: #E2E8F0;
+
+  --color-text-primary: #1A1A2E;
+  --color-text-secondary: #475569;
+  --color-text-tertiary: #64748B;
+  --color-text-disabled: #94A3B8;
+
+  --color-border-subtle: rgba(0, 0, 0, 0.06);
+  --color-border-strong: #E2E8F0;
+
+  --color-accent-quantum: #0891B2;
+  --color-accent-quantum-soft: #00B4D8;
+  --color-accent-dirac: #6B21A8;
+
+  --color-success: #059669;
+  --color-warning: #D97706;
+  --color-danger: #DC2626;
+  --color-info: #2563EB;
+
+  --color-kernel-idle: #94A3B8;
+  --color-kernel-connecting: #D97706;
+  --color-kernel-ready: #059669;
+  --color-kernel-error: #DC2626;
+
+  --color-syntax-comment: #6A737D;
+  --color-syntax-string: #22863A;
+  --color-syntax-number: #B76E00;
+  --color-syntax-keyword: #0891B2;
+  --color-syntax-type: #005F73;
+
+  --color-gate-single: #0891B2;
+  --color-gate-multi: #3B6EA5;
+  --color-gate-measure: #6A737D;
+  --color-wire: #959DA5;
+
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.08);
+  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.1);
+  --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.15);
+  --shadow-glow: 0 0 20px rgba(8, 145, 178, 0.12);
+}
+
+/* Motion / spacing / radius / typography tokens are theme-independent */
+:root {
+  --duration-fast: 120ms;
+  --duration-normal: 200ms;
+  --duration-slow: 360ms;
+  --ease-standard: cubic-bezier(0.4, 0, 0.2, 1);
+  --ease-emphasized-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-emphasized-in: cubic-bezier(0.7, 0, 0.84, 0);
+
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-12: 48px;
+
+  --radius-sharp: 0;
+  --radius-soft: 4px;
+  --radius-round: 8px;
+  --radius-pill: 999px;
+
+  --font-sans: 'Geist Sans', Inter, -apple-system, system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', 'Geist Mono', ui-monospace, monospace;
+
+  --font-size-display: 28px;
+  --font-size-title: 20px;
+  --font-size-body: 14px;
+  --font-size-code: 13px;
+  --font-size-caption: 11px;
+  --font-size-chrome-label: 12px;
+
+  --font-weight-regular: 400;
+  --font-weight-medium: 500;
+  --font-weight-semibold: 600;
+  --font-weight-bold: 700;
+}
