@@ -12,8 +12,27 @@ import { registerNucleiThemes } from './monacoThemes';
 
 type StandaloneEditor = monaco.editor.IStandaloneCodeEditor;
 
+// Map of file extensions to Monaco language ids. Extensions Monaco doesn't
+// ship a grammar for (e.g. .qasm) fall back to plaintext rather than
+// misleading Python highlighting.
+const LANGUAGE_BY_EXTENSION: Record<string, string> = {
+  py: 'python',
+  pyw: 'python',
+  qasm: 'plaintext',
+  json: 'json',
+  md: 'markdown',
+  txt: 'plaintext',
+};
+
+function languageForPath(filePath: string | null): string {
+  if (!filePath) return 'python';
+  const ext = filePath.split(/[.\\/]/).pop()?.toLowerCase() ?? '';
+  return LANGUAGE_BY_EXTENSION[ext] ?? 'python';
+}
+
 export function QuantumEditor() {
   const { code, setCode } = useEditorStore();
+  const filePath = useEditorStore((s) => s.filePath);
   const errors = useEditorStore((s) => s.errors);
   const mode = useThemeStore((s) => s.mode);
   const colors = useThemeStore((s) => s.colors);
@@ -25,6 +44,20 @@ export function QuantumEditor() {
   const [monacoInstance, setMonacoInstance] = useState<Monaco | null>(null);
 
   const themeName = mode === 'dark' ? 'nuclei-dark' : 'nuclei-light';
+  const language = languageForPath(filePath);
+
+  // Switch the model's language when the file extension changes so
+  // syntax highlighting follows the file, not the initial buffer.
+  useEffect(() => {
+    const monacoApi = monacoRef.current;
+    const editor = editorRef.current;
+    if (!monacoApi || !editor) return;
+    const model = editor.getModel();
+    if (!model) return;
+    if (model.getLanguageId() !== language) {
+      monacoApi.editor.setModelLanguage(model, language);
+    }
+  }, [language]);
 
   const handleMount: OnMount = (editor, monacoApi) => {
     editorRef.current = editor;
@@ -138,13 +171,14 @@ export function QuantumEditor() {
     >
       <Editor
         defaultLanguage="python"
+        language={language}
         theme={themeName}
         value={code}
         onChange={handleChange}
         onMount={handleMount}
         options={{
           fontSize: editorSettings.fontSize,
-          fontFamily: "'Fira Code', monospace",
+          fontFamily: "'JetBrains Mono', 'Geist Mono', ui-monospace, monospace",
           fontLigatures: true,
           minimap: { enabled: editorSettings.minimap },
           scrollBeyondLastLine: false,
