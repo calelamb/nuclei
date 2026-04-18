@@ -14,8 +14,9 @@ export interface EditorSettings {
 
 /* ── Dirac AI Settings ───────────────────────────────── */
 export interface DiracSettings {
-  ghostCompletions: boolean;      // inline ghost suggestions
-  autoExplainErrors: boolean;     // Dirac auto-explains on error
+  ghostCompletions: boolean;      // inline ghost suggestions (off by default for beginners)
+  autoExplainErrors: boolean;     // auto-rewrite Python tracebacks into concept-level explanations
+  narration: boolean;             // ambient one-liner narration after parse / run
   extendedThinking: boolean;      // allow /think mode
   preferredModel: 'auto' | 'haiku' | 'sonnet';
   contextDepth: 'minimal' | 'standard' | 'full'; // how much context to inject
@@ -65,8 +66,9 @@ const DEFAULT_EDITOR: EditorSettings = {
 };
 
 const DEFAULT_DIRAC: DiracSettings = {
-  ghostCompletions: true,
+  ghostCompletions: false, // beginner default per AI-native design
   autoExplainErrors: true,
+  narration: true,
   extendedThinking: true,
   preferredModel: 'auto',
   contextDepth: 'standard',
