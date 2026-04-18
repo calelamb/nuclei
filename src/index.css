@@ -93,6 +93,30 @@ button:focus:not(:focus-visible) {
 @keyframes nuclei-orbit { from { transform: translateX(-50%) rotate(0deg); } to { transform: translateX(-50%) rotate(360deg); } }
 @keyframes nuclei-spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
 
+/* ── Panel reveal transitions (see PanelReveal.tsx) ── */
+[data-reveal-root] {
+  opacity: 0;
+  transform: translate3d(0, 0, 0);
+  transition: opacity 200ms cubic-bezier(0.16, 1, 0.3, 1),
+              transform 200ms cubic-bezier(0.16, 1, 0.3, 1);
+  will-change: opacity, transform;
+}
+[data-reveal-root][data-reveal-from="right"]  { transform: translate3d(12px, 0, 0); }
+[data-reveal-root][data-reveal-from="left"]   { transform: translate3d(-12px, 0, 0); }
+[data-reveal-root][data-reveal-from="bottom"] { transform: translate3d(0, 12px, 0); }
+[data-reveal-root][data-reveal-from="top"]    { transform: translate3d(0, -12px, 0); }
+[data-reveal-root][data-reveal-entered] {
+  opacity: 1;
+  transform: translate3d(0, 0, 0);
+}
+@media (prefers-reduced-motion: reduce) {
+  [data-reveal-root] {
+    transition: none !important;
+    transform: none !important;
+    opacity: 1;
+  }
+}
+
 /* ── Dirac markdown styling ── */
 .dirac-markdown p { margin: 0 0 8px 0; }
 .dirac-markdown p:last-child { margin-bottom: 0; }
