@@ -18,6 +18,11 @@ export interface PlatformBridge {
   readFile(path: string): Promise<string | null>;
   saveFile(path: string, content: string): Promise<void>;
   saveFileAs(content: string, defaultPath?: string): Promise<{ path: string } | null>;
+  // Rename a file on disk. On desktop this is an atomic rename within the
+  // same directory (or across directories if newPath is absolute). On web the
+  // platform may only update the display name since files are ephemeral —
+  // returning the new path is still correct behavior for that surface.
+  renameFile(oldPath: string, newName: string): Promise<{ path: string } | null>;
 
   // Storage (settings, preferences)
   getStoredValue<T>(key: string): Promise<T | null>;

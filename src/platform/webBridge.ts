@@ -99,6 +99,14 @@ export const webBridge: PlatformBridge = {
     return { path: name };
   },
 
+  async renameFile(_oldPath: string, newName: string) {
+    // In the web IDE files are ephemeral — there is no persistent disk to
+    // rename on. Reflect the new name back so the editor updates its display
+    // and subsequent Save As uses it as the default filename.
+    if (!newName || newName.trim() === '') return null;
+    return { path: newName.trim() };
+  },
+
   async getStoredValue<T>(key: string): Promise<T | null> {
     return storageGet<T>(key);
   },

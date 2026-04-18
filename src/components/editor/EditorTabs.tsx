@@ -1,8 +1,9 @@
+import { useEffect, useRef, useState } from 'react';
 import { useEditorStore } from '../../stores/editorStore';
 import { useSimulationStore } from '../../stores/simulationStore';
 import { useThemeStore } from '../../stores/themeStore';
 import { X, FileCode, Play, Loader2 } from 'lucide-react';
-import { getExecute } from '../../App';
+import { getExecute, getFileOps } from '../../App';
 import { FrameworkSelector } from './FrameworkSelector';
 
 export function EditorTabs() {
@@ -13,12 +14,69 @@ export function EditorTabs() {
   const colors = useThemeStore((s) => s.colors);
   const shadow = useThemeStore((s) => s.shadow);
 
+  const [tabHovered, setTabHovered] = useState(false);
+  const [renaming, setRenaming] = useState(false);
+  const [renameValue, setRenameValue] = useState('');
+  const inputRef = useRef<HTMLInputElement>(null);
+
   const fileName = filePath ? filePath.split('/').pop() ?? 'untitled.py' : 'untitled.py';
   const canRun = kernelReady && !isRunning;
+
+  useEffect(() => {
+    if (renaming) {
+      inputRef.current?.focus();
+      inputRef.current?.select();
+    }
+  }, [renaming]);
+
+  const startRename = () => {
+    setRenameValue(fileName);
+    setRenaming(true);
+  };
+
+  const cancelRename = () => {
+    setRenaming(false);
+    setRenameValue('');
+  };
+
+  const commitRename = async () => {
+    const next = renameValue.trim();
+    if (!next || next === fileName) {
+      cancelRename();
+      return;
+    }
+    const ops = getFileOps();
+    if (!ops) {
+      cancelRename();
+      return;
+    }
+    const result = await ops.renameFile(next);
+    if (!result) {
+      // Rename failed (collision or FS error). Leave the input open so the
+      // user can adjust or cancel — surfaces the problem instead of silently
+      // discarding the attempt.
+      inputRef.current?.select();
+      return;
+    }
+    setRenaming(false);
+    setRenameValue('');
+  };
 
   const handleRun = () => {
     const e = getExecute();
     if (e) e();
+  };
+
+  const handleClose = () => {
+    if (isDirty) {
+      const ok = window.confirm('You have unsaved changes. Close the tab anyway?');
+      if (!ok) return;
+    }
+    // The app keeps a single active buffer for now — closing resets to an
+    // untitled scratch. Multi-tab close is wired via the project store
+    // elsewhere.
+    const ops = getFileOps();
+    if (ops) ops.newFile();
   };
 
   const runLabel = isRunning
@@ -48,6 +106,8 @@ export function EditorTabs() {
     >
       {/* Active file tab */}
       <div
+        onMouseEnter={() => setTabHovered(true)}
+        onMouseLeave={() => setTabHovered(false)}
         style={{
           display: 'flex',
           alignItems: 'center',
@@ -60,13 +120,14 @@ export function EditorTabs() {
           fontFamily: "'Geist Sans', system-ui, sans-serif",
           color: colors.text,
           cursor: 'default',
-          maxWidth: 220,
+          maxWidth: 260,
           position: 'relative',
         }}
       >
         <FileCode size={13} style={{ color: colors.accent, flexShrink: 0 }} />
-        {isDirty && (
+        {isDirty && !renaming && (
           <span
+            title="Unsaved changes"
             style={{
               width: 6,
               height: 6,
@@ -76,36 +137,77 @@ export function EditorTabs() {
             }}
           />
         )}
-        <span
-          style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
-        >
-          {fileName}
-        </span>
-        <button
-          title="Close tab"
-          style={{
-            background: 'none',
-            border: 'none',
-            padding: 2,
-            color: colors.textDim,
-            cursor: 'pointer',
-            display: 'flex',
-            alignItems: 'center',
-            borderRadius: 3,
-            flexShrink: 0,
-            opacity: 0,
-          }}
-          onMouseEnter={(e) => {
-            e.currentTarget.style.opacity = '1';
-            e.currentTarget.style.background = colors.bgElevated;
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.opacity = '0';
-          }}
-          aria-label="Close tab"
-        >
-          <X size={12} />
-        </button>
+        {renaming ? (
+          <input
+            ref={inputRef}
+            value={renameValue}
+            onChange={(e) => setRenameValue(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                e.preventDefault();
+                void commitRename();
+              } else if (e.key === 'Escape') {
+                e.preventDefault();
+                cancelRename();
+              }
+            }}
+            onBlur={() => { void commitRename(); }}
+            aria-label="Rename file"
+            style={{
+              background: colors.bgElevated,
+              border: `1px solid ${colors.accent}`,
+              borderRadius: 3,
+              color: colors.text,
+              fontSize: 12,
+              fontFamily: "'Geist Sans', system-ui, sans-serif",
+              padding: '2px 6px',
+              outline: 'none',
+              minWidth: 120,
+            }}
+          />
+        ) : (
+          <span
+            onDoubleClick={startRename}
+            title="Double-click to rename"
+            style={{
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              whiteSpace: 'nowrap',
+              cursor: 'text',
+              userSelect: 'none',
+            }}
+          >
+            {fileName}
+          </span>
+        )}
+        {!renaming && (
+          <button
+            onClick={handleClose}
+            title="Close tab"
+            aria-label="Close tab"
+            style={{
+              background: 'none',
+              border: 'none',
+              padding: 2,
+              color: colors.textDim,
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              borderRadius: 3,
+              flexShrink: 0,
+              opacity: tabHovered ? 1 : 0,
+              transition: 'opacity 150ms ease, background 120ms ease',
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.background = colors.bgElevated;
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.background = 'transparent';
+            }}
+          >
+            <X size={12} />
+          </button>
+        )}
       </div>
 
       {/* Framework selector next to the tab */}

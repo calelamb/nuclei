@@ -36,6 +36,9 @@ const fallbackBridge: PlatformBridge = {
   async saveFileAs() {
     return null;
   },
+  async renameFile() {
+    return null;
+  },
   async getStoredValue() {
     return null;
   },

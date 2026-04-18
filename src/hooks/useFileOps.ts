@@ -60,9 +60,29 @@ export function useFileOps() {
     setFilePath(null);
   }, [setCode, setFilePath]);
 
+  // Rename the current file. Returns the new path on success, or null if
+  // the user passed an empty name, the new name collided with an existing
+  // file, or the underlying rename failed. For an untitled (unsaved) buffer
+  // we update the display name only — the actual file lands on disk at the
+  // next Save.
+  const renameFile = useCallback(async (newName: string): Promise<string | null> => {
+    const trimmed = newName.trim();
+    if (!trimmed) return null;
+    if (!filePath) {
+      setFilePath(trimmed);
+      return trimmed;
+    }
+    const result = await platform.renameFile(filePath, trimmed);
+    if (!result) return null;
+    setFilePath(result.path);
+    await addRecent(result.path);
+    await platform.setStoredValue(LAST_OPENED_FILE_KEY, result.path);
+    return result.path;
+  }, [filePath, setFilePath, addRecent, platform]);
+
   const getRecentFiles = useCallback(async (): Promise<string[]> => {
     return (await platform.getStoredValue<string[]>(RECENT_FILES_KEY)) ?? [];
   }, [platform]);
 
-  return { openFile, saveFile, saveFileAs, newFile, getRecentFiles };
+  return { openFile, saveFile, saveFileAs, newFile, renameFile, getRecentFiles };
 }
