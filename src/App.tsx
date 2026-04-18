@@ -34,6 +34,12 @@ function AppInner() {
   const [lastOpenedFile, setLastOpenedFile] = useState<string | undefined>();
   const [daysSinceLastSession, setDaysSinceLastSession] = useState<number | undefined>();
   const themeToggle = useThemeStore((s) => s.toggle);
+  const themeMode = useThemeStore((s) => s.mode);
+
+  useEffect(() => {
+    document.documentElement.dataset.theme = themeMode;
+  }, [themeMode]);
+
   const isDirty = useEditorStore((s) => s.isDirty);
   const filePath = useEditorStore((s) => s.filePath);
   const framework = useEditorStore((s) => s.framework);
@@ -241,32 +247,31 @@ function SplashScreen() {
       width: '100vw', height: '100vh',
       display: 'flex', alignItems: 'center', justifyContent: 'center',
       flexDirection: 'column', gap: 16,
-      backgroundColor: '#080E18',
+      backgroundColor: 'var(--color-surface-sunken)',
     }}>
       <div style={{
-        color: '#00B4D8',
+        color: 'var(--color-accent-quantum)',
         fontSize: 36,
         fontWeight: 800,
-        fontFamily: "'Geist Sans', Inter, sans-serif",
+        fontFamily: 'var(--font-sans)',
         letterSpacing: -1,
-        animation: 'nuclei-fade-in 400ms cubic-bezier(0.4, 0, 0.2, 1)',
+        animation: 'nuclei-fade-in var(--duration-slow) var(--ease-emphasized-out)',
       }}>
         NUCLEI
       </div>
       <div style={{
-        color: '#475569',
+        color: 'var(--color-text-tertiary)',
         fontSize: 13,
-        fontFamily: "'Geist Sans', Inter, sans-serif",
+        fontFamily: 'var(--font-sans)',
       }}>
         Quantum Computing IDE
       </div>
-      {/* Subtle loading indicator */}
       <div style={{ display: 'flex', gap: 4, marginTop: 8 }}>
         {[0, 1, 2].map((i) => (
           <div key={i} style={{
             width: 4, height: 4, borderRadius: '50%',
-            backgroundColor: '#00B4D8',
-            animation: `nuclei-dots 1.2s cubic-bezier(0.4, 0, 0.2, 1) ${i * 150}ms infinite`,
+            backgroundColor: 'var(--color-accent-quantum)',
+            animation: `nuclei-dots 1.2s var(--ease-emphasized-out) ${i * 150}ms infinite`,
           }} />
         ))}
       </div>
