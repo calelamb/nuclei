@@ -52,7 +52,7 @@ A single `src/styles/tokens.css` plus a handful of primitives under `src/compone
 
 ### Backlog (A1 is blocking; A2–A12 consume tokens and are otherwise independent)
 
-1. **A1 — Token extraction.** `tokens.css` as single source of truth (both themes). Delete scattered inline hex/rgb/px across `src/`. Wire `monacoThemes.ts` to read from tokens.
+1. **A1 — Token extraction.** ✅ Shipped 2026-04-18. `tokens.css` + `tokens.ts` are the single source of truth (both themes, with a sync test enforcing parity). `themeStore.ts`, `monacoThemes.ts`, `index.css`, and `SplashScreen` migrated; `<html data-theme>` now wired from the store so light-mode CSS rules actually activate. Component files still holding inline hex are the scope of A2–A12.
 2. **A2 — Typography pass.** Every chrome string on the role scale. No more raw `fontSize`/`fontWeight` literals in JSX.
 3. **A3 — Surface depth pass.** Each panel gets a deliberate elevation + 1px border treatment. Kill mystery-surface-under-surface layering.
 4. **A4 — Splash → loaded-app handoff.** Rewrite `SplashScreen` with tokens. Dissolve into real chrome. No cold cut, no layout jump.
