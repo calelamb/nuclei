@@ -74,10 +74,20 @@ jobs:
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          # Tauri updater signing — signs the update artifacts so the
+          # installed app can verify them with the embedded public key.
+          # Without these the build still produces a .dmg but the updater
+          # manifest won't be published.
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
           tagName: ${{ github.ref_name }}
           releaseName: 'Nuclei ${{ github.ref_name }}'
           releaseBody: 'See the release notes for details about this release.'
           releaseDraft: true
           prerelease: false
+          # updaterJsonPreferNsis keeps Windows on NSIS for the updater
+          # feed; includeUpdaterJson publishes latest.json that the app's
+          # updater endpoint points at.
+          includeUpdaterJson: true
           args: ${{ matrix.args }}

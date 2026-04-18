@@ -4,6 +4,7 @@ import { PlatformProvider, usePlatform, loadBridge } from './platform/PlatformPr
 import { Onboarding } from './components/onboarding/Onboarding';
 import { KeyboardShortcuts } from './components/onboarding/KeyboardShortcuts';
 import { CommandPalette, buildCommands } from './components/commandPalette/CommandPalette';
+import { UpdateBanner } from './components/UpdateBanner';
 import { useKernel } from './hooks/useKernel';
 import { useFileOps } from './hooks/useFileOps';
 import { useThemeStore } from './stores/themeStore';
@@ -227,6 +228,7 @@ function AppInner() {
   return (
     <>
       <PanelLayout />
+      <UpdateBanner />
       {showOnboarding && (
         <Onboarding
           onComplete={completeOnboarding}
