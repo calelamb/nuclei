@@ -2,13 +2,27 @@ import { useState } from 'react';
 import { useProjectStore } from '../../stores/projectStore';
 import { useEditorStore } from '../../stores/editorStore';
 import { useThemeStore } from '../../stores/themeStore';
+import {
+  FileCode,
+  Atom,
+  Braces,
+  FileText,
+  File as FileIconLucide,
+  type LucideIcon,
+} from 'lucide-react';
 
-function FileIcon({ name }: { name: string }) {
-  const ext = name.split('.').pop()?.toLowerCase();
-  const iconMap: Record<string, string> = {
-    py: '🐍', qasm: '⚛', json: '{}', md: '📄', txt: '📄',
-  };
-  return <span style={{ fontSize: 12, marginRight: 4 }}>{iconMap[ext ?? ''] ?? '📄'}</span>;
+const EXTENSION_ICONS: Record<string, LucideIcon> = {
+  py: FileCode,
+  qasm: Atom,
+  json: Braces,
+  md: FileText,
+  txt: FileText,
+};
+
+function FileIcon({ name, color }: { name: string; color: string }) {
+  const ext = name.split('.').pop()?.toLowerCase() ?? '';
+  const Icon = EXTENSION_ICONS[ext] ?? FileIconLucide;
+  return <Icon size={13} style={{ color, marginRight: 6, flexShrink: 0 }} />;
 }
 
 export function FileExplorer() {
@@ -83,9 +97,24 @@ export function FileExplorer() {
                 textAlign: 'left',
               }}
             >
-              <FileIcon name={file.name} />
+              <FileIcon
+                name={file.name}
+                color={activeTab === file.path ? colors.accent : colors.textMuted}
+              />
+              {file.isDirty && (
+                <span
+                  style={{
+                    width: 6,
+                    height: 6,
+                    borderRadius: '50%',
+                    backgroundColor: colors.warning,
+                    marginRight: 6,
+                    flexShrink: 0,
+                  }}
+                />
+              )}
               <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                {file.isDirty ? '● ' : ''}{file.name}
+                {file.name}
               </span>
             </button>
           ))
