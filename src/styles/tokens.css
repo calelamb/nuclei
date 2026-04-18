@@ -65,12 +65,12 @@
 :root[data-theme='light'] {
   --color-surface-base: #FFFFFF;
   --color-surface-raised: #F8FAFC;
-  --color-surface-overlay: #F1F5F9;
-  --color-surface-sunken: #E2E8F0;
+  --color-surface-overlay: #ECF0F5;
+  --color-surface-sunken: #F1F5F9;
 
   --color-text-primary: #1A1A2E;
-  --color-text-secondary: #475569;
-  --color-text-tertiary: #64748B;
+  --color-text-secondary: #64748B;
+  --color-text-tertiary: #475569;
   --color-text-disabled: #94A3B8;
 
   --color-border-subtle: rgba(0, 0, 0, 0.06);
