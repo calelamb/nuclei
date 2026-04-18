@@ -92,10 +92,13 @@ export interface TypographyTokens {
 }
 
 export const DARK_COLORS: ColorTokens = {
-  surfaceBase: 'oklch(14% 0.008 250)',
-  surfaceRaised: 'oklch(17% 0.012 250)',
-  surfaceOverlay: 'oklch(20% 0.016 250)',
-  surfaceSunken: 'oklch(10% 0.006 250)',
+  // Approximate hex equivalents of oklch(~14% 0.008 250) and siblings — a
+  // near-black with a slight cool tint. Monaco's theme API rejects oklch(),
+  // so we keep hex here. The full oklch palette is a Plan 4 polish item.
+  surfaceBase: '#0D131E',
+  surfaceRaised: '#141B29',
+  surfaceOverlay: '#1A2232',
+  surfaceSunken: '#080D16',
   textPrimary: '#E8ECF1',
   textSecondary: '#94A3B8',
   textTertiary: '#64748B',

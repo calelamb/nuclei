@@ -9,11 +9,11 @@
 
 :root,
 :root[data-theme='dark'] {
-  /* Surfaces */
-  --color-surface-base: oklch(14% 0.008 250);
-  --color-surface-raised: oklch(17% 0.012 250);
-  --color-surface-overlay: oklch(20% 0.016 250);
-  --color-surface-sunken: oklch(10% 0.006 250);
+  /* Surfaces — softer near-black with subtle cool tint (hex for Monaco compat) */
+  --color-surface-base: #0D131E;
+  --color-surface-raised: #141B29;
+  --color-surface-overlay: #1A2232;
+  --color-surface-sunken: #080D16;
 
   /* Text */
   --color-text-primary: #E8ECF1;
