@@ -44,6 +44,7 @@ export function InlineEditWidget({ editor, monaco, onClose }: InlineEditProps) {
   // Get position below selection
   const selection = editor.getSelection();
   const model = editor.getModel();
+  if (!model) return null;
   const selectedText = selection && !selection.isEmpty()
     ? model.getValueInRange(selection)
     : model.getLineContent(selection?.positionLineNumber ?? 1);

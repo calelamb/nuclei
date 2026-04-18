@@ -1,5 +1,4 @@
 import { lazy, Suspense, useState, useRef, useEffect, useCallback } from 'react';
-import { getExecute } from '../../App';
 import { usePlatform } from '../../platform/PlatformProvider';
 import { ErrorBoundary } from '../ErrorBoundary';
 import { QuantumEditor } from '../editor/QuantumEditor';
@@ -23,8 +22,7 @@ import { useLearnStore } from '../../stores/learnStore';
 import { useChallengeModeStore } from '../../stores/challengeModeStore';
 import { useNavigationStore } from '../../stores/navigationStore';
 import { useSettingsStore } from '../../stores/settingsStore';
-import { ChevronDown, ChevronUp, Play, Sun, Moon, X, Circle } from 'lucide-react';
-import type { Framework } from '../../types/quantum';
+import { ChevronDown, ChevronUp, Sun, Moon, X, Circle } from 'lucide-react';
 
 const LearnModeView = lazy(async () => ({
   default: (await import('../learning/LearnModeView')).LearnModeView,
@@ -35,88 +33,6 @@ const ChallengeModeView = lazy(async () => ({
 
 const DEFAULT_BOTTOM_HEIGHT = 200;
 const DEFAULT_SIDEBAR_WIDTH = 240;
-
-const STARTER_TEMPLATES: Record<Framework, string> = {
-  qiskit: `from qiskit import QuantumCircuit\n\n# Create a Bell State\nqc = QuantumCircuit(2, 2)\nqc.h(0)\nqc.cx(0, 1)\nqc.measure([0, 1], [0, 1])\n`,
-  cirq: `import cirq\n\n# Create a Bell State\nq0, q1 = cirq.LineQubit.range(2)\ncircuit = cirq.Circuit([\n    cirq.H(q0),\n    cirq.CNOT(q0, q1),\n    cirq.measure(q0, q1, key='result'),\n])\n`,
-  'cuda-q': `import cudaq\n\n# Create a Bell State\n@cudaq.kernel\ndef bell():\n    q = cudaq.qvector(2)\n    h(q[0])\n    cx(q[0], q[1])\n    mz(q)\n`,
-};
-
-/* ── Framework Selector ── */
-function FrameworkSelector() {
-  const [open, setOpen] = useState(false);
-  const framework = useEditorStore((s) => s.framework);
-  const setFramework = useEditorStore((s) => s.setFramework);
-  const setCode = useEditorStore((s) => s.setCode);
-  const colors = useThemeStore((s) => s.colors);
-  const shadow = useThemeStore((s) => s.shadow);
-  const ref = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    if (!open) return;
-    const h = (e: MouseEvent) => { if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false); };
-    document.addEventListener('mousedown', h);
-    return () => document.removeEventListener('mousedown', h);
-  }, [open]);
-  const frameworks: Framework[] = ['qiskit', 'cirq', 'cuda-q'];
-  const dn = (f: Framework) => f === 'cuda-q' ? 'CUDA-Q' : f.charAt(0).toUpperCase() + f.slice(1);
-  return (
-    <div ref={ref} style={{ position: 'relative' }}>
-      <button onClick={() => setOpen(!open)} style={{
-        background: 'transparent', border: `1px solid ${colors.border}`, borderRadius: 4,
-        color: colors.accentLight, cursor: 'pointer', fontSize: 11,
-        fontFamily: "'Geist Sans', sans-serif",
-        padding: '1px 8px', display: 'flex', alignItems: 'center', gap: 4, height: 18,
-      }}
-        onMouseEnter={(e) => { e.currentTarget.style.background = colors.bgElevated; e.currentTarget.style.borderColor = colors.borderStrong; }}
-        onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.borderColor = colors.border; }}
-      >{dn(framework)} <ChevronDown size={9} /></button>
-      {open && (
-        <div style={{ position: 'absolute', bottom: '100%', left: 0, marginBottom: 6,
-          background: colors.bgElevated, border: `1px solid ${colors.borderStrong}`,
-          borderRadius: 6, overflow: 'hidden', zIndex: 1000, minWidth: 160, boxShadow: shadow.md,
-        }}>
-          {/* Framework switcher */}
-          <div style={{ padding: '4px 0' }}>
-            <div style={{ padding: '4px 12px 2px', fontSize: 9, fontWeight: 600, color: colors.textDim,
-              fontFamily: "'Geist Sans', sans-serif", textTransform: 'uppercase', letterSpacing: 0.5 }}>
-              Framework
-            </div>
-            {frameworks.map((f) => (
-              <button key={f} onClick={() => { setFramework(f); setOpen(false); }} style={{
-                display: 'flex', alignItems: 'center', gap: 8, width: '100%', padding: '5px 12px',
-                background: f === framework ? `${colors.accent}12` : 'transparent',
-                color: f === framework ? colors.accent : colors.text, border: 'none', cursor: 'pointer',
-                fontSize: 12, fontFamily: "'Geist Sans', sans-serif", textAlign: 'left',
-              }}
-                onMouseEnter={(e) => { if (f !== framework) e.currentTarget.style.background = `${colors.accent}08`; }}
-                onMouseLeave={(e) => { if (f !== framework) e.currentTarget.style.background = 'transparent'; }}
-              >
-                {f === framework && <span style={{ color: colors.accent, fontSize: 10 }}>●</span>}
-                <span style={{ marginLeft: f === framework ? 0 : 18 }}>{dn(f)}</span>
-              </button>
-            ))}
-          </div>
-          {/* New file from template */}
-          <div style={{ borderTop: `1px solid ${colors.border}`, padding: '4px 0' }}>
-            <div style={{ padding: '4px 12px 2px', fontSize: 9, fontWeight: 600, color: colors.textDim,
-              fontFamily: "'Geist Sans', sans-serif", textTransform: 'uppercase', letterSpacing: 0.5 }}>
-              New from template
-            </div>
-            {frameworks.map((f) => (
-              <button key={`tpl-${f}`} onClick={() => { setCode(STARTER_TEMPLATES[f]); setFramework(f); setOpen(false); }}
-                style={{ display: 'block', width: '100%', padding: '5px 12px', background: 'transparent',
-                  color: colors.textMuted, border: 'none', cursor: 'pointer', fontSize: 12,
-                  fontFamily: "'Geist Sans', sans-serif", textAlign: 'left' }}
-                onMouseEnter={(e) => { e.currentTarget.style.color = colors.text; e.currentTarget.style.background = `${colors.accent}08`; }}
-                onMouseLeave={(e) => { e.currentTarget.style.color = colors.textMuted; e.currentTarget.style.background = 'transparent'; }}
-              >New {dn(f)} file</button>
-            ))}
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
 
 /* ── Terminal Panel ── */
 function TerminalPanel() {
@@ -202,7 +118,6 @@ function StatusBar() {
   const kernelStatus = useEditorStore((s) => s.kernelStatus);
   const kernelError = useEditorStore((s) => s.kernelError);
   const colors = useThemeStore((s) => s.colors);
-  const shadow = useThemeStore((s) => s.shadow);
   const uiMode = useUIModeStore((s) => s.mode);
   const cycleMode = useUIModeStore((s) => s.cycleMode);
   const themeMode = useThemeStore((s) => s.mode);
@@ -214,7 +129,6 @@ function StatusBar() {
 
   const statusText = isRunning ? 'Running...' : result ? `Done (${result.execution_time_ms}ms)` : 'Ready';
 
-  const handleRun = () => { const e = getExecute(); if (e) e(); };
   const handleCycleMode = useCallback(async () => { cycleMode(); try { await platform.setStoredValue('ui_mode', useUIModeStore.getState().mode); } catch { /* non-critical persistence */ } }, [cycleMode, platform]);
   const handleThemeToggle = useCallback(async () => { themeToggle(); try { await platform.setStoredValue('theme', themeMode === 'dark' ? 'light' : 'dark'); } catch { /* non-critical persistence */ } }, [themeToggle, themeMode, platform]);
 
@@ -228,7 +142,6 @@ function StatusBar() {
       borderTop: `1px solid ${colors.border}`,
     }} role="toolbar" aria-label="Status bar">
       {/* Left side */}
-      <FrameworkSelector />
       <span style={{ color: colors.textDim, fontSize: 10 }}>
         Qubits: {snapshot ? snapshot.qubit_count : '—'}
       </span>
@@ -274,16 +187,6 @@ function StatusBar() {
         ...(isRunning ? { animation: 'nuclei-heartbeat 1.5s ease infinite' } : {}) }}>
         {statusText}
       </span>
-      <button onClick={handleRun} disabled={isRunning} title="Run (⌘+Enter)" style={{
-        padding: '0 8px', height: 16, background: isRunning ? colors.bgElevated : colors.accent,
-        color: '#fff', border: 'none', borderRadius: 3, cursor: isRunning ? 'default' : 'pointer',
-        fontSize: 10, fontFamily: "'Geist Sans', sans-serif", fontWeight: 600,
-        display: 'flex', alignItems: 'center', gap: 3, boxShadow: isRunning ? 'none' : shadow.sm,
-      }}
-        onMouseEnter={(e) => { if (!isRunning) e.currentTarget.style.boxShadow = '0 0 10px rgba(0,180,216,0.3)'; }}
-        onMouseLeave={(e) => { e.currentTarget.style.boxShadow = isRunning ? 'none' : shadow.sm; }}>
-        {isRunning ? 'Running...' : <><Play size={9} fill="currentColor" /> Run</>}
-      </button>
       <button onClick={handleCycleMode} title="Cycle UI mode (⌘+Shift+L)" style={{
         padding: '0 6px', height: 16, background: 'transparent', border: 'none', borderRadius: 3,
         color: modeColors[uiMode], cursor: 'pointer', fontSize: 10, fontFamily: "'Geist Sans', sans-serif",

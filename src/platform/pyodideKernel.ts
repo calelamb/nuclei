@@ -61,23 +61,29 @@ function loadPyodide(): Promise<PyodideLoadState> {
     }
     const pyodide = await globalLoad();
 
+    // numpy is bundled with Pyodide and is a hard transitive dependency of
+    // cirq-core — load it FIRST so micropip can satisfy cirq's numpy pin
+    // from the local environment instead of trying (and failing) to pull a
+    // pure-Python numpy wheel from PyPI. Failure here is non-fatal: parse
+    // still works for plain Python.
+    try {
+      await pyodide.loadPackage('numpy');
+    } catch {
+      // proceed — some features will be unavailable but parse can still work
+    }
+
     // Install quantum packages (micropip)
     await pyodide.loadPackage('micropip');
     const micropip = pyodide.pyimport('micropip');
 
     let cirqInstalled = false;
     try {
-      await micropip.install('cirq-core==1.4.1');
+      // 1.5.0 is the first cirq-core release compatible with numpy 2.x, which
+      // Pyodide 0.27 ships. 1.4.1 required numpy~=1.22 and fails to resolve.
+      await micropip.install('cirq-core==1.5.0');
       cirqInstalled = true;
     } catch {
       cirqInstalled = false;
-    }
-
-    // numpy is bundled with Pyodide; failure is non-fatal.
-    try {
-      await pyodide.loadPackage('numpy');
-    } catch {
-      // proceed — some features will be unavailable but parse can still work
     }
 
     loadState = { pyodide, cirqInstalled };
