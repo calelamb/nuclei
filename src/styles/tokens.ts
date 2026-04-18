@@ -100,7 +100,7 @@ export const DARK_COLORS: ColorTokens = {
   textSecondary: '#94A3B8',
   textTertiary: '#64748B',
   textDisabled: '#475569',
-  borderSubtle: 'rgba(255,255,255,0.06)',
+  borderSubtle: 'rgba(255, 255, 255, 0.06)',
   borderStrong: '#1A2A42',
   accentQuantum: '#00B4D8',
   accentQuantumSoft: '#48CAE4',
@@ -133,7 +133,7 @@ export const LIGHT_COLORS: ColorTokens = {
   textSecondary: '#475569',
   textTertiary: '#64748B',
   textDisabled: '#94A3B8',
-  borderSubtle: 'rgba(0,0,0,0.06)',
+  borderSubtle: 'rgba(0, 0, 0, 0.06)',
   borderStrong: '#E2E8F0',
   accentQuantum: '#0891B2',
   accentQuantumSoft: '#00B4D8',
@@ -158,17 +158,17 @@ export const LIGHT_COLORS: ColorTokens = {
 };
 
 export const DARK_SHADOWS: ShadowTokens = {
-  sm: '0 1px 2px rgba(0,0,0,0.3)',
-  md: '0 4px 12px rgba(0,0,0,0.4)',
-  lg: '0 8px 24px rgba(0,0,0,0.5)',
-  glow: '0 0 20px rgba(0,180,216,0.15)',
+  sm: '0 1px 2px rgba(0, 0, 0, 0.3)',
+  md: '0 4px 12px rgba(0, 0, 0, 0.4)',
+  lg: '0 8px 24px rgba(0, 0, 0, 0.5)',
+  glow: '0 0 20px rgba(0, 180, 216, 0.15)',
 };
 
 export const LIGHT_SHADOWS: ShadowTokens = {
-  sm: '0 1px 3px rgba(0,0,0,0.08)',
-  md: '0 4px 12px rgba(0,0,0,0.1)',
-  lg: '0 8px 24px rgba(0,0,0,0.15)',
-  glow: '0 0 20px rgba(8,145,178,0.12)',
+  sm: '0 1px 3px rgba(0, 0, 0, 0.08)',
+  md: '0 4px 12px rgba(0, 0, 0, 0.1)',
+  lg: '0 8px 24px rgba(0, 0, 0, 0.15)',
+  glow: '0 0 20px rgba(8, 145, 178, 0.12)',
 };
 
 export const MOTION: MotionTokens = {
