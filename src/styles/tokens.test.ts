@@ -1,16 +1,9 @@
 // src/styles/tokens.test.ts
-// @ts-ignore node: modules not in types
 import { describe, it, expect } from 'vitest';
-// @ts-ignore node: modules not in types
 import { readFileSync } from 'node:fs';
-// @ts-ignore node: modules not in types
 import { fileURLToPath } from 'node:url';
-// @ts-ignore node: modules not in types
 import { dirname, join } from 'node:path';
-import {
-  DARK_COLORS, LIGHT_COLORS,
-  DARK_SHADOWS, LIGHT_SHADOWS,
-} from './tokens';
+import { DARK_COLORS, LIGHT_COLORS } from './tokens';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const cssPath = join(here, 'tokens.css');
@@ -63,16 +56,12 @@ const colorKeyMap: Record<keyof typeof DARK_COLORS, string> = {
   wire: '--color-wire',
 };
 
-const shadowKeyMap: Record<keyof typeof DARK_SHADOWS, string> = {
+const shadowKeyMap: Record<'sm' | 'md' | 'lg' | 'glow', string> = {
   sm: '--shadow-sm',
   md: '--shadow-md',
   lg: '--shadow-lg',
   glow: '--shadow-glow',
 };
-
-// LIGHT_SHADOWS used in test infrastructure but not directly referenced
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-const _lightShadowsRef = LIGHT_SHADOWS;
 
 describe('tokens.css and tokens.ts are in sync', () => {
   it('dark scope contains every color/shadow token in DARK_COLORS and DARK_SHADOWS', () => {
