@@ -1,56 +1,49 @@
 import type * as monaco from 'monaco-editor';
+import {
+  DARK_COLORS, LIGHT_COLORS,
+  type ColorTokens,
+} from '../../styles/tokens';
 
 type Monaco = typeof monaco;
+type ThemeData = monaco.editor.IStandaloneThemeData;
 
-/**
- * Monaco theme definitions for Nuclei. Extracted from QuantumEditor so
- * `beforeMount` and the theme-toggle effect share a single source of
- * truth — previously each site had its own copy and they could drift.
- */
+function stripHash(hex: string): string {
+  // Monaco's `rules[].foreground` wants the 6-char form without the leading #.
+  return hex.startsWith('#') ? hex.slice(1) : hex;
+}
 
-const nucleiDark: monaco.editor.IStandaloneThemeData = {
-  base: 'vs-dark',
-  inherit: true,
-  rules: [
-    { token: 'comment', foreground: '6A737D', fontStyle: 'italic' },
-    { token: 'keyword', foreground: '00B4D8' },
-    { token: 'string', foreground: '98C379' },
-    { token: 'number', foreground: 'D19A66' },
-    { token: 'type', foreground: '48CAE4' },
-  ],
-  colors: {
-    'editor.background': '#0F1B2D',
-    'editor.foreground': '#E0E0E0',
-    'editor.lineHighlightBackground': '#1A2A42',
-    'editor.selectionBackground': '#264F78',
-    'editorCursor.foreground': '#00B4D8',
-    'editorLineNumber.foreground': '#3D5A80',
-    'editorLineNumber.activeForeground': '#00B4D8',
-  },
-};
+function buildTheme(base: 'vs' | 'vs-dark', c: ColorTokens): ThemeData {
+  return {
+    base,
+    inherit: true,
+    rules: [
+      { token: 'comment', foreground: stripHash(c.syntaxComment), fontStyle: 'italic' },
+      { token: 'keyword', foreground: stripHash(c.syntaxKeyword) },
+      { token: 'string', foreground: stripHash(c.syntaxString) },
+      { token: 'number', foreground: stripHash(c.syntaxNumber) },
+      { token: 'type', foreground: stripHash(c.syntaxType) },
+    ],
+    colors: {
+      'editor.background': c.surfaceBase,
+      'editor.foreground': c.textPrimary,
+      'editor.lineHighlightBackground': c.surfaceOverlay,
+      'editor.selectionBackground': base === 'vs-dark' ? '#264F78' : '#B4D7FF',
+      'editorCursor.foreground': c.accentQuantum,
+      'editorLineNumber.foreground': c.wire,
+      'editorLineNumber.activeForeground': c.accentQuantum,
+    },
+  };
+}
 
-const nucleiLight: monaco.editor.IStandaloneThemeData = {
-  base: 'vs',
-  inherit: true,
-  rules: [
-    { token: 'comment', foreground: '6A737D', fontStyle: 'italic' },
-    { token: 'keyword', foreground: '0096B7' },
-    { token: 'string', foreground: '22863A' },
-    { token: 'number', foreground: 'B76E00' },
-    { token: 'type', foreground: '005F73' },
-  ],
-  colors: {
-    'editor.background': '#FAFBFC',
-    'editor.foreground': '#1A1A2E',
-    'editor.lineHighlightBackground': '#F0F2F5',
-    'editor.selectionBackground': '#B4D7FF',
-    'editorCursor.foreground': '#0096B7',
-    'editorLineNumber.foreground': '#959DA5',
-    'editorLineNumber.activeForeground': '#0096B7',
-  },
-};
+export function buildNucleiDarkTheme(): ThemeData {
+  return buildTheme('vs-dark', DARK_COLORS);
+}
+
+export function buildNucleiLightTheme(): ThemeData {
+  return buildTheme('vs', LIGHT_COLORS);
+}
 
 export function registerNucleiThemes(monacoInstance: Monaco): void {
-  monacoInstance.editor.defineTheme('nuclei-dark', nucleiDark);
-  monacoInstance.editor.defineTheme('nuclei-light', nucleiLight);
+  monacoInstance.editor.defineTheme('nuclei-dark', buildNucleiDarkTheme());
+  monacoInstance.editor.defineTheme('nuclei-light', buildNucleiLightTheme());
 }
