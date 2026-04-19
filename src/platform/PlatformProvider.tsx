@@ -56,6 +56,9 @@ const fallbackBridge: PlatformBridge = {
   async createFile() {
     return null;
   },
+  async createDirectory() {
+    return null;
+  },
   async deleteFile() {
     return false;
   },
