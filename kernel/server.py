@@ -264,6 +264,27 @@ async def handle_message(websocket):
                     "type": "hardware_job_update",
                     "job": handle.to_dict(),
                 }))
+            except KeyError:
+                # Stale job id — typically the kernel restarted mid-session,
+                # losing its in-memory job registry. Tell the frontend the
+                # job is no longer tracked in a friendly way so JobTracker
+                # can mark it stale rather than surfacing a raw traceback.
+                await websocket.send(json.dumps({
+                    "type": "hardware_job_update",
+                    "job": {
+                        "id": job_id,
+                        "provider": "unknown",
+                        "backend": "unknown",
+                        "status": "stale",
+                        "queue_position": None,
+                        "shots": 0,
+                        "submitted_at": "",
+                        "error": (
+                            "This job is no longer tracked by the kernel "
+                            "(the kernel may have restarted). Re-submit to run it again."
+                        ),
+                    },
+                }))
             except Exception as e:
                 await websocket.send(json.dumps({
                     "type": "error",
@@ -278,6 +299,18 @@ async def handle_message(websocket):
                     "type": "hardware_result",
                     "job_id": job_id,
                     "data": data,
+                }))
+            except KeyError:
+                await websocket.send(json.dumps({
+                    "type": "hardware_result",
+                    "job_id": job_id,
+                    "data": {
+                        "error": (
+                            "Results for this job are no longer available "
+                            "(the kernel may have restarted since it was submitted)."
+                        ),
+                        "status": "stale",
+                    },
                 }))
             except Exception as e:
                 await websocket.send(json.dumps({

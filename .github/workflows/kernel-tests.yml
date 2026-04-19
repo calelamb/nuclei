@@ -1,0 +1,38 @@
+name: Kernel Tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  pytest:
+    name: pytest (Python ${{ matrix.python-version }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ['3.12']
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install test dependencies
+        # Only the minimum required for the mocked test suite. Real provider
+        # SDKs (qiskit-ibm-runtime, qiskit-ionq, amazon-braket-sdk,
+        # azure-quantum, pytket-quantinuum) are intentionally NOT installed —
+        # tests mock them via sys.modules injection (see conftest.py).
+        run: |
+          python -m pip install --upgrade pip
+          pip install pytest pytest-asyncio websockets
+          # keyring is used by the credential store; it's a small, fast dep.
+          pip install keyring
+
+      - name: Run kernel tests
+        run: pytest kernel/tests/ -v

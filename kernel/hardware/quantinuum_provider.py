@@ -72,15 +72,84 @@ class QuantinuumProvider(HardwareProvider):
             ))
         return out
 
+    def _convert_to_pytket(self, circuit_obj):
+        """Ensure the circuit is a pytket.Circuit the SDK can accept.
+
+        The Quantinuum SDK expects pytket Circuits; a user editing Qiskit or
+        Cirq code would previously hit an opaque pytket TypeError on submit.
+        This helper auto-detects Qiskit / Cirq circuits and converts them via
+        the matching pytket-extensions package, or surfaces a clear install
+        hint if the extension isn't available.
+
+        Returns (pytket_circuit, error_message). Exactly one is not None.
+        """
+        # Already a pytket circuit — nothing to do. We can't cheaply verify
+        # the type without importing pytket, so fall through when nothing
+        # more specific matches.
+        try:
+            from qiskit import QuantumCircuit as _QiskitCircuit
+        except ImportError:
+            _QiskitCircuit = None
+
+        try:
+            import cirq as _cirq
+        except ImportError:
+            _cirq = None
+
+        if _QiskitCircuit is not None and isinstance(circuit_obj, _QiskitCircuit):
+            try:
+                from pytket.extensions.qiskit import qiskit_to_tk
+            except ImportError:
+                return None, (
+                    "Quantinuum requires pytket-extensions-qiskit to run "
+                    "Qiskit circuits. Install with: "
+                    "pip install pytket-extensions-qiskit"
+                )
+            try:
+                return qiskit_to_tk(circuit_obj), None
+            except Exception as e:
+                return None, f"Qiskit → pytket conversion failed: {e}"
+
+        if _cirq is not None and isinstance(circuit_obj, _cirq.Circuit):
+            try:
+                from pytket.extensions.cirq import cirq_to_tk
+            except ImportError:
+                return None, (
+                    "Quantinuum requires pytket-extensions-cirq to run "
+                    "Cirq circuits. Install with: "
+                    "pip install pytket-extensions-cirq"
+                )
+            try:
+                return cirq_to_tk(circuit_obj), None
+            except Exception as e:
+                return None, f"Cirq → pytket conversion failed: {e}"
+
+        # Assume native pytket — let the SDK surface any remaining mismatch.
+        return circuit_obj, None
+
     def submit_job(self, circuit_obj, backend: str, shots: int) -> JobHandle:
         if self._backend_cls is None:
             raise RuntimeError("Quantinuum provider not connected. Call connect() first.")
 
         job_id = str(uuid.uuid4())
         now = datetime.now(timezone.utc).isoformat()
+
+        pytket_circuit, conv_error = self._convert_to_pytket(circuit_obj)
+        if conv_error is not None:
+            return JobHandle(
+                id=job_id,
+                provider="quantinuum",
+                backend=backend,
+                status="failed",
+                queue_position=None,
+                shots=shots,
+                submitted_at=now,
+                error=conv_error,
+            )
+
         try:
             qb = self._backend_cls(device_name=backend)
-            compiled = qb.get_compiled_circuit(circuit_obj)
+            compiled = qb.get_compiled_circuit(pytket_circuit)
             handle = qb.process_circuit(compiled, n_shots=shots)
             self._jobs[job_id] = (backend, handle)
             return JobHandle(
@@ -92,7 +161,7 @@ class QuantinuumProvider(HardwareProvider):
                 shots=shots,
                 submitted_at=now,
             )
-        except Exception:
+        except Exception as e:
             return JobHandle(
                 id=job_id,
                 provider="quantinuum",
@@ -101,6 +170,7 @@ class QuantinuumProvider(HardwareProvider):
                 queue_position=None,
                 shots=shots,
                 submitted_at=now,
+                error=f"Quantinuum submit failed: {e}",
             )
 
     def get_results(self, job: JobHandle) -> dict:

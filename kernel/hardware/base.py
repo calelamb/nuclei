@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 
 @dataclass
@@ -31,10 +31,13 @@ class JobHandle:
     id: str
     provider: str
     backend: str
-    status: str  # 'queued' | 'running' | 'complete' | 'failed'
+    status: str  # 'queued' | 'running' | 'complete' | 'failed' | 'unknown' | 'stale'
     queue_position: int | None
     shots: int
     submitted_at: str
+    # Human-readable error surfaced to the frontend when submit/cancel fails
+    # or when a provider-side lookup turns up empty. None on happy paths.
+    error: str | None = None
 
     def to_dict(self) -> dict:
         return {
@@ -45,6 +48,7 @@ class JobHandle:
             "queue_position": self.queue_position,
             "shots": self.shots,
             "submitted_at": self.submitted_at,
+            "error": self.error,
         }
 
 

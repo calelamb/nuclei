@@ -118,6 +118,10 @@ class IBMProvider(HardwareProvider):
                 submitted_at=now,
             )
         except Exception as e:
+            # Surface the underlying SDK error so the frontend can show it
+            # verbatim. Common failures (circuit too large, backend offline,
+            # no credits) all produce useful messages that beat a generic
+            # "submit failed".
             return JobHandle(
                 id=job_id,
                 provider="ibm",
@@ -126,6 +130,7 @@ class IBMProvider(HardwareProvider):
                 queue_position=None,
                 shots=shots,
                 submitted_at=now,
+                error=f"IBM submit failed: {e}",
             )
 
     def get_results(self, job: JobHandle) -> dict:
@@ -133,10 +138,20 @@ class IBMProvider(HardwareProvider):
         if ibm_job is None:
             return {"error": f"Job {job.id} not found"}
 
+        # Status lookup is its own try/except: if the job was deleted from
+        # IBM's side (or their API is briefly unavailable) we must NOT
+        # propagate the exception — the polling loop would break. Return
+        # status='unknown' so the frontend stays on the last known state
+        # and retries on the next poll.
         try:
-            from qiskit_ibm_runtime import RuntimeJobV2
             status = ibm_job.status()
+        except Exception as e:
+            return {
+                "status": "unknown",
+                "error": f"IBM status check failed: {e}",
+            }
 
+        try:
             if status.name == "DONE":
                 result = ibm_job.result()
                 # Extract measurement counts from SamplerV2 result
