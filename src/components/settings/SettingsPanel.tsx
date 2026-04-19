@@ -5,6 +5,8 @@ import { useUIModeStore, type UIMode } from '../../stores/uiModeStore';
 import { useSettingsStore } from '../../stores/settingsStore';
 import { useSimulationStore } from '../../stores/simulationStore';
 import { useDiracStore } from '../../stores/diracStore';
+import { useFrameworksStore } from '../../stores/frameworksStore';
+import { usePlatform } from '../../platform/PlatformProvider';
 
 /* ── Toggle Switch ──────────────────────────────────────── */
 
@@ -392,6 +394,9 @@ export function SettingsPanel() {
           </SettingRow>
         </Section>
 
+        {/* ── Frameworks ── */}
+        <FrameworksSection />
+
         {/* ── Kernel ── */}
         <Section title="Kernel">
           <SettingRow label="Default Framework">
@@ -481,5 +486,56 @@ export function SettingsPanel() {
         </button>
       </div>
     </div>
+  );
+}
+
+/* ── Frameworks section (desktop-only) ────────────────────── */
+
+function FrameworksSection() {
+  const colors = useThemeStore((s) => s.colors);
+  const platform = usePlatform();
+  const openModal = useFrameworksStore((s) => s.openModal);
+  const status = useFrameworksStore((s) => s.status);
+
+  if (platform.getPlatform() !== 'desktop') return null;
+
+  const coreIds = ['qiskit', 'cirq', 'cuda-q'];
+  const installedCore = (status?.installed ?? []).filter((id) => coreIds.includes(id));
+
+  return (
+    <Section title="Quantum Frameworks" defaultOpen={false}>
+      <SettingRow label={status?.venv_exists ? 'Installed' : 'Not yet installed'}>
+        <span
+          style={{
+            fontSize: 11,
+            color: colors.textMuted,
+            fontFamily: "'Fira Code', monospace",
+          }}
+        >
+          {installedCore.length > 0 ? installedCore.join(', ') : '—'}
+        </span>
+      </SettingRow>
+      <div style={{ marginTop: 6 }}>
+        <button
+          onClick={() => openModal(false)}
+          style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: 6,
+            padding: '6px 12px',
+            background: colors.accent,
+            color: '#0a0f1a',
+            border: 'none',
+            borderRadius: 6,
+            fontSize: 12,
+            fontWeight: 600,
+            fontFamily: "'Geist Sans', sans-serif",
+            cursor: 'pointer',
+          }}
+        >
+          Manage frameworks…
+        </button>
+      </div>
+    </Section>
   );
 }
