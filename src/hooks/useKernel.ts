@@ -12,6 +12,7 @@ import { useDiracStore } from '../stores/diracStore';
 import { useHardwareStore } from '../stores/hardwareStore';
 import { narrateParse, narrateResult } from '../services/narration';
 import { rewritePythonError } from '../services/errorRewrite';
+import { computeNextPollDelayMs, STALE_AFTER_MS } from '../lib/pollSchedule';
 
 const KERNEL_URL = KERNEL_WS_URL;
 
@@ -533,28 +534,88 @@ export function useKernel() {
     [sendHardware],
   );
 
-  // Poll status + results for active hardware jobs. 5s is a friendly cadence
-  // for students on the free IBM tier (whose queues move in tens of seconds),
-  // and light enough to not hammer the kernel.
+  // Polling backoff for active hardware jobs. A queued IBM job can sit in
+  // the free-tier queue for an hour or more; fixed 5s polling would fire
+  // ~720 status requests at the kernel for a single waiting job. The
+  // schedule below follows the job's age since submit:
+  //
+  //   0-60s    → every 5s   (fast convergence on short queues)
+  //   60s-5m   → every 15s
+  //   5m-30m   → every 60s
+  //   >30m     → every 5m
+  //   >24h     → stop; mark 'stale'. User can re-poll manually via
+  //              JobTracker's refresh action (which updates submittedAt
+  //              in effect, resetting the schedule).
+  //
+  // Each interval gets ±10% jitter so jobs submitted in the same tick
+  // don't all fire on the same second. Whenever status changes (e.g.
+  // queued → running) the schedule resets to the fastest tier briefly
+  // so we catch the completion quickly.
+  const nextPollAtRef = useRef<Record<string, number>>({});
+  const lastStatusRef = useRef<Record<string, string>>({});
+
   useEffect(() => {
     if (isWeb) return;
+
+    // Short tick: per-job scheduling is cheap and a 2s cadence keeps the
+    // "tight tier" responsive without burning cycles when there are no
+    // active jobs.
     const interval = setInterval(() => {
       const ws = wsRef.current;
       if (!ws || ws.readyState !== WebSocket.OPEN) return;
       const jobs = useHardwareStore.getState().jobs;
       const results = useHardwareStore.getState().results;
+      const now = Date.now();
+
       for (const j of jobs) {
-        if (j.status === 'queued' || j.status === 'running') {
-          ws.send(JSON.stringify({ type: 'hardware_status', job_id: j.id }));
+        // If status changed since last tick, reset the schedule — the
+        // next loop iteration will fire immediately, catching the
+        // transition (queued→running) without waiting out the current
+        // tier's delay.
+        if (lastStatusRef.current[j.id] !== j.status) {
+          lastStatusRef.current[j.id] = j.status;
+          delete nextPollAtRef.current[j.id];
         }
+
+        const pending = j.status === 'queued' || j.status === 'running';
+
+        if (pending) {
+          const submittedMs = Date.parse(j.submittedAt);
+          const age = Number.isFinite(submittedMs)
+            ? now - submittedMs
+            : Number.POSITIVE_INFINITY;
+
+          if (age > STALE_AFTER_MS) {
+            // 24h with no terminal state — give up on automatic polling.
+            // The job may still be alive on the provider; user can hit
+            // the refresh button in JobTracker to resume.
+            useHardwareStore.getState().updateJob(j.id, { status: 'stale' });
+            delete nextPollAtRef.current[j.id];
+            continue;
+          }
+
+          const nextAt = nextPollAtRef.current[j.id] ?? 0;
+          if (now >= nextAt) {
+            ws.send(JSON.stringify({ type: 'hardware_status', job_id: j.id }));
+            nextPollAtRef.current[j.id] =
+              now + computeNextPollDelayMs(Math.max(0, age / 1000));
+          }
+        }
+
         if (j.status === 'complete' && !results[j.id]) {
-          // Job just flipped to complete (via hardware_job_update) but we
-          // haven't fetched results yet — do it now so the dual-bar chip
-          // appears without a manual refresh.
+          // Job just flipped to complete (via hardware_job_update) but
+          // we haven't fetched results yet — do it now so the dual-bar
+          // chip appears without a manual refresh.
           ws.send(JSON.stringify({ type: 'hardware_results', job_id: j.id }));
         }
+
+        if (!pending) {
+          // Clean up scheduler state for terminal jobs so the ref
+          // doesn't leak as jobs accumulate over a long session.
+          delete nextPollAtRef.current[j.id];
+        }
       }
-    }, 5000);
+    }, 2000);
     return () => clearInterval(interval);
   }, [isWeb]);
 
