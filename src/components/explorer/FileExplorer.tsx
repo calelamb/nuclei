@@ -422,6 +422,27 @@ export function FileExplorer() {
     );
   }
 
+  /**
+   * Quick-create from the empty state. Spins up an in-memory project
+   * AND opens a starter tab in one click, so a student landing on
+   * Nuclei with no project doesn't have to discover "New Project" then
+   * find the + menu — they can pick a framework directly.
+   */
+  const quickCreateCircuit = useCallback(
+    (framework: Framework) => {
+      const id = Date.now();
+      const memRoot = `${MEMORY_PREFIX}project-${id}`;
+      setProjectRoot(memRoot);
+      platform.setStoredValue('project_root', null).catch(() => {});
+      setEditorFramework(framework);
+      openTab({
+        path: `${memRoot}/${defaultCircuitFileName(framework)}`,
+        content: STARTER_TEMPLATES[framework],
+      });
+    },
+    [setProjectRoot, platform, setEditorFramework, openTab],
+  );
+
   if (!projectRoot) {
     const primaryBtn: React.CSSProperties = {
       display: 'flex',
@@ -453,6 +474,22 @@ export function FileExplorer() {
       fontFamily: "'Geist Sans', sans-serif",
       cursor: 'pointer',
     };
+    const quickChipBtn: React.CSSProperties = {
+      flex: 1,
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: 4,
+      padding: '6px 8px',
+      background: colors.bgElevated,
+      color: colors.accentLight,
+      border: `1px solid ${colors.border}`,
+      borderRadius: 6,
+      fontSize: 11,
+      fontWeight: 600,
+      fontFamily: "'Geist Sans', sans-serif",
+      cursor: 'pointer',
+    };
     return (
       <div style={{ padding: 14, display: 'flex', flexDirection: 'column', gap: 10 }}>
         <p
@@ -463,11 +500,34 @@ export function FileExplorer() {
             margin: 0,
           }}
         >
-          Start a new quantum project or open an existing folder.
+          Start a new quantum project, jump straight into a circuit, or open an
+          existing folder.
         </p>
         <button onClick={handleNewProject} style={primaryBtn}>
           <Plus size={13} /> New Project…
         </button>
+        <div
+          style={{
+            fontSize: 10,
+            textTransform: 'uppercase',
+            letterSpacing: 0.5,
+            color: colors.textDim,
+            marginTop: 2,
+          }}
+        >
+          Quick start
+        </div>
+        <div style={{ display: 'flex', gap: 6 }}>
+          <button onClick={() => quickCreateCircuit('qiskit')} style={quickChipBtn}>
+            <AtomIcon size={11} /> Qiskit
+          </button>
+          <button onClick={() => quickCreateCircuit('cirq')} style={quickChipBtn}>
+            <AtomIcon size={11} /> Cirq
+          </button>
+          <button onClick={() => quickCreateCircuit('cuda-q')} style={quickChipBtn}>
+            <AtomIcon size={11} /> CUDA-Q
+          </button>
+        </div>
         <button onClick={handleOpenFolder} style={secondaryBtn}>
           <FolderOpen size={13} /> Open Folder…
         </button>

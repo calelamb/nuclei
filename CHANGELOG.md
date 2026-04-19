@@ -5,6 +5,30 @@ All notable changes to Nuclei will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.8] - 2026-04-18
+
+### Fixed — Bloch sphere was blank inside the Tauri bundle
+
+`@react-three/drei` `<Text>` uses troika-three-text, which fetches the
+default Roboto font from `fonts.gstatic.com` when no `font` prop is
+provided. Under Tauri's bundled `tauri://` origin that fetch fails,
+troika throws inside Canvas suspense, and the whole WebGL scene stops
+rendering — which is why v0.4.5–v0.4.7 shipped with an empty dark
+panel where the Bloch sphere should have been.
+
+- Swapped all 3D labels (X/Y/Z axes + |0⟩/|1⟩ basis labels) from
+  drei `<Text>` to drei `<Html>`. HTML overlays project onto the
+  sphere's 3D positions, track orbit rotation, and require no
+  external font fetch. Works offline, works inside the bundle.
+
+### Added — quick-create circuit chips in the empty explorer
+
+- Empty-state sidebar now shows a **Quick start** row with Qiskit /
+  Cirq / CUDA-Q chips below the "New Project…" button. One click
+  creates an in-memory project + seeded tab with that framework's
+  Bell-state starter. Removes the "click New Project, then click +"
+  two-step for the common case.
+
 ## [0.4.7] - 2026-04-18
 
 ### Added — first-run framework installer
