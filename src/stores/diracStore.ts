@@ -52,12 +52,21 @@ export interface StoredRewrittenError {
   timestamp: number;
 }
 
+export interface ComposePreview {
+  id: string;
+  intent: string;
+  code: string;
+  explanation: string;
+  timestamp: number;
+}
+
 interface DiracState {
   messages: DiracMessage[];
   isLoading: boolean;
   apiKey: string | null;
   ambientFeed: AmbientMessage[];
   rewrittenError: StoredRewrittenError | null;
+  composePreview: ComposePreview | null;
   addMessage: (msg: DiracMessage) => void;
   updateLastAssistant: (content: string) => void;
   updateLastThinking: (thinking: string) => void;
@@ -70,6 +79,8 @@ interface DiracState {
   clearAmbient: () => void;
   setRewrittenError: (err: Omit<StoredRewrittenError, 'timestamp'>) => void;
   clearRewrittenError: () => void;
+  setComposePreview: (p: Omit<ComposePreview, 'id' | 'timestamp'>) => void;
+  clearComposePreview: () => void;
 }
 
 export const useDiracStore = create<DiracState>((set) => ({
@@ -78,6 +89,7 @@ export const useDiracStore = create<DiracState>((set) => ({
   apiKey: loadApiKey(),
   ambientFeed: [],
   rewrittenError: null,
+  composePreview: null,
   addMessage: (msg) => set((s) => ({ messages: [...s.messages, msg] })),
   updateLastAssistant: (content) => set((s) => {
     const msgs = [...s.messages];
@@ -128,4 +140,8 @@ export const useDiracStore = create<DiracState>((set) => ({
   clearAmbient: () => set({ ambientFeed: [] }),
   setRewrittenError: (err) => set({ rewrittenError: { ...err, timestamp: Date.now() } }),
   clearRewrittenError: () => set({ rewrittenError: null }),
+  setComposePreview: (p) => set({
+    composePreview: { ...p, id: crypto.randomUUID(), timestamp: Date.now() },
+  }),
+  clearComposePreview: () => set({ composePreview: null }),
 }));
