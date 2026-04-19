@@ -4,7 +4,6 @@ import { ErrorBoundary } from '../ErrorBoundary';
 import { QuantumEditor } from '../editor/QuantumEditor';
 import { EditorTabs } from '../editor/EditorTabs';
 import { Breadcrumbs } from '../editor/Breadcrumbs';
-import { CircuitRenderer } from '../circuit/CircuitRenderer';
 import { ProbabilityHistogram } from '../histogram/ProbabilityHistogram';
 import { BlochPanel } from '../bloch/BlochPanel';
 import { DiracSidePanel } from '../dirac/DiracSidePanel';
@@ -566,21 +565,15 @@ export function PanelLayout() {
                   onDoubleClick={() => setEditorPaneWidth(DEFAULT_EDITOR_PANE_WIDTH)}
                 />
 
-                {/* Right: Circuit + Bloch + HistogramChip */}
+                {/* Right rail: interactive Bloch sphere (full height) +
+                    histogram chip. The gate-circuit diagram previously
+                    shared this rail but was clipping against the top of
+                    the panel and competing for vertical space with the
+                    Bloch viz — removed so the sphere gets the full rail
+                    and the rail stays uncluttered. */}
                 <div style={{ width: `${100 - editorPaneWidth}%`, minWidth: 200, display: 'flex', flexDirection: 'column' }}>
-                  <PanelReveal when={visible.circuit} from="right">
-                    <div style={{
-                      flex: visible.bloch ? 6 : 1,
-                      borderBottom: visible.bloch ? `1px solid ${colors.border}` : 'none',
-                      overflow: 'hidden', position: 'relative',
-                      minHeight: 220,
-                      paddingTop: 16,
-                    }}>
-                      <CircuitRenderer />
-                    </div>
-                  </PanelReveal>
-                  <PanelReveal when={visible.bloch} from="bottom">
-                    <div style={{ flex: 4, overflow: 'hidden', position: 'relative', minHeight: 180 }}>
+                  <PanelReveal when={visible.bloch} from="right">
+                    <div style={{ flex: 1, overflow: 'hidden', position: 'relative', minHeight: 240 }}>
                       <BlochPanel />
                     </div>
                   </PanelReveal>

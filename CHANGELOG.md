@@ -5,6 +5,20 @@ All notable changes to Nuclei will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.9] - 2026-04-18
+
+### Changed — right rail is now Bloch-only
+
+The gate-circuit diagram used to share the right rail with the Bloch
+sphere, but it was clipping against the top of the panel and
+competing with the sphere for vertical space. Removed from the rail
+entirely so the interactive Bloch sphere gets the full right column
+and nothing fights it for room.
+
+- `CircuitRenderer` still exists (and still accepts clicks from
+  Dirac tools like `highlight_gate`), but no longer renders in the
+  default layout.
+
 ## [0.4.8] - 2026-04-18
 
 ### Fixed — Bloch sphere was blank inside the Tauri bundle
