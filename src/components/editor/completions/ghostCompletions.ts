@@ -37,9 +37,9 @@ function buildCompletionContext(code: string, cursorOffset: number): string {
   if (snapshot) {
     context += `Circuit: ${snapshot.qubit_count} qubits, ${snapshot.gates.length} gates, depth ${snapshot.depth}\n`;
   }
-  const recentErrors = terminalOutput.filter((l) => l.startsWith('Error')).slice(-2);
+  const recentErrors = terminalOutput.filter((l) => l.type === 'stderr').slice(-2);
   if (recentErrors.length > 0) {
-    context += `Recent errors: ${recentErrors.join('; ')}\n`;
+    context += `Recent errors: ${recentErrors.map((l) => l.text).join('; ')}\n`;
   }
 
   return `${context}\nCode before cursor:\n${beforeCursor}\n[CURSOR]\n${afterCursor ? `Code after cursor:\n${afterCursor}` : ''}`;

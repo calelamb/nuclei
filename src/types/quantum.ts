@@ -71,6 +71,7 @@ export type KernelResponse =
       dependency?: string;
     }
   | { type: 'output'; text: string }
+  | { type: 'stderr'; text: string }
   | { type: 'hardware_connected'; provider: string; success: boolean }
   | { type: 'hardware_backends'; backends: Array<Record<string, unknown>> }
   | { type: 'hardware_job_submitted'; job: HardwareJobDTO }

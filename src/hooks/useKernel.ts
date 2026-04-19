@@ -3,6 +3,7 @@ import { usePlatform } from '../platform/PlatformProvider';
 import { useEditorStore } from '../stores/editorStore';
 import { useCircuitStore } from '../stores/circuitStore';
 import { useSimulationStore } from '../stores/simulationStore';
+import { useBottomPanelStore } from '../stores/bottomPanelStore';
 import { useSettingsStore } from '../stores/settingsStore';
 import type { KernelResponse } from '../types/quantum';
 import { KERNEL_WS_URL } from '../config/kernel';
@@ -101,13 +102,19 @@ export function useKernel() {
         clearEditorErrors();
         break;
       case 'output':
-        useSimulationStore.getState().addOutput(msg.text);
+        useSimulationStore.getState().addOutput(msg.text, 'stdout');
+        useBottomPanelStore.getState().focusTerminal();
+        break;
+      case 'stderr':
+        useSimulationStore.getState().addOutput(msg.text, 'stderr');
+        useBottomPanelStore.getState().focusTerminal();
         break;
       case 'error': {
         const { detail, line, shortMessage } = getErrorContext(msg);
 
-        useSimulationStore.getState().addOutput(`Error: ${detail}`);
+        useSimulationStore.getState().addOutput(`Error: ${detail}`, 'stderr');
         useSimulationStore.getState().setRunning(false);
+        useBottomPanelStore.getState().focusTerminal();
 
         if (useSettingsStore.getState().dirac.autoExplainErrors) {
           const codeForRewrite = useEditorStore.getState().code;
@@ -323,7 +330,7 @@ export function useKernel() {
       }
     } catch (e) {
       useEditorStore.getState().setKernelStatus('failed', `Failed to load browser Python engine: ${e}`);
-      useSimulationStore.getState().addOutput(`Error: Failed to load browser Python engine: ${e}`);
+      useSimulationStore.getState().addOutput(`Error: Failed to load browser Python engine: ${e}`, 'stderr');
     }
   }, [handleMessage, isWeb]);
 
@@ -381,31 +388,39 @@ export function useKernel() {
 
     const { kernelReady } = useEditorStore.getState();
     if (!kernelReady) {
-      useSimulationStore.getState().addOutput('Kernel is still loading. Please wait...');
+      useSimulationStore.getState().addOutput('Kernel is still loading. Please wait...', 'info');
+      useBottomPanelStore.getState().focusTerminal();
       return;
     }
 
     const { code } = useEditorStore.getState();
     const { shots } = useSimulationStore.getState();
 
+    const runTime = new Date().toLocaleTimeString();
+    const separator = `─── Run at ${runTime} ──────────────────────────────`;
+
     if (isWeb) {
       if (!pyodideRef.current) {
-        useSimulationStore.getState().addOutput('Error: Browser Python engine not ready');
+        useSimulationStore.getState().addOutput('Error: Browser Python engine not ready', 'stderr');
+        useBottomPanelStore.getState().focusTerminal();
         return;
       }
       useSimulationStore.getState().setRunning(true);
       useSimulationStore.getState().clearResult();
-      useSimulationStore.getState().clearOutput();
+      useSimulationStore.getState().addOutput(separator, 'separator');
+      useBottomPanelStore.getState().focusTerminal();
       pyodideRef.current.send({ type: 'execute', code, shots });
     } else {
       const ws = wsRef.current;
       if (!ws || ws.readyState !== WebSocket.OPEN) {
-        useSimulationStore.getState().addOutput('Error: Kernel not connected');
+        useSimulationStore.getState().addOutput('Error: Kernel not connected', 'stderr');
+        useBottomPanelStore.getState().focusTerminal();
         return;
       }
       useSimulationStore.getState().setRunning(true);
       useSimulationStore.getState().clearResult();
-      useSimulationStore.getState().clearOutput();
+      useSimulationStore.getState().addOutput(separator, 'separator');
+      useBottomPanelStore.getState().focusTerminal();
       ws.send(JSON.stringify({ type: 'execute', code, shots }));
     }
   }, [isWeb]);
