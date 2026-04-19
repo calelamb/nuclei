@@ -5,6 +5,8 @@ import { Onboarding } from './components/onboarding/Onboarding';
 import { KeyboardShortcuts } from './components/onboarding/KeyboardShortcuts';
 import { CommandPalette, buildCommands } from './components/commandPalette/CommandPalette';
 import { UpdateBanner } from './components/UpdateBanner';
+import { ComposeModal } from './components/dirac/ComposeModal';
+import { DiffPreview } from './components/editor/DiffPreview';
 import { useKernel } from './hooks/useKernel';
 import { useFileOps } from './hooks/useFileOps';
 import { useThemeStore } from './stores/themeStore';
@@ -31,6 +33,7 @@ function AppInner() {
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [showShortcuts, setShowShortcuts] = useState(false);
   const [showCommandPalette, setShowCommandPalette] = useState(false);
+  const [composeOpen, setComposeOpen] = useState(false);
   const [isReturningUser, setIsReturningUser] = useState(false);
   const [lastOpenedFile, setLastOpenedFile] = useState<string | undefined>();
   const [daysSinceLastSession, setDaysSinceLastSession] = useState<number | undefined>();
@@ -219,6 +222,9 @@ function AppInner() {
       } else if (e.key === 'l' && !e.shiftKey) {
         e.preventDefault();
         focusDirac();
+      } else if (e.key === 'i' && !e.shiftKey) {
+        e.preventDefault();
+        setComposeOpen((s) => !s);
       }
     };
     window.addEventListener('keydown', handler);
@@ -239,6 +245,8 @@ function AppInner() {
       )}
       {showShortcuts && <KeyboardShortcuts onClose={() => setShowShortcuts(false)} />}
       {showCommandPalette && <CommandPalette commands={commands} onClose={() => setShowCommandPalette(false)} />}
+      <ComposeModal open={composeOpen} onClose={() => setComposeOpen(false)} />
+      <DiffPreview />
     </>
   );
 }
