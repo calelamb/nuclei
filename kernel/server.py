@@ -112,12 +112,18 @@ async def handle_message(websocket):
         if msg_type == "parse":
             # Offload blocking parse to a thread so the event loop stays
             # responsive to heartbeats and other messages.
-            snapshot, stdout, error = await asyncio.to_thread(executor.parse, code)
+            snapshot, stdout, stderr, error = await asyncio.to_thread(executor.parse, code)
 
             if stdout:
                 await websocket.send(json.dumps({
                     "type": "output",
                     "text": stdout,
+                }))
+
+            if stderr:
+                await websocket.send(json.dumps({
+                    "type": "stderr",
+                    "text": stderr,
                 }))
 
             await websocket.send(json.dumps({
@@ -131,7 +137,7 @@ async def handle_message(websocket):
         elif msg_type == "execute":
             shots = msg.get("shots", 1024)
             # Simulation can take multiple seconds — must not block the loop.
-            result, snapshot, stdout, error = await asyncio.to_thread(
+            result, snapshot, stdout, stderr, error = await asyncio.to_thread(
                 executor.execute, code, shots
             )
 
@@ -139,6 +145,12 @@ async def handle_message(websocket):
                 await websocket.send(json.dumps({
                     "type": "output",
                     "text": stdout,
+                }))
+
+            if stderr:
+                await websocket.send(json.dumps({
+                    "type": "stderr",
+                    "text": stderr,
                 }))
 
             if snapshot or (error and error.code in {"unsupported_framework", "missing_dependency", "no_circuit", "execution_error", "adapter_error"}):
@@ -162,12 +174,18 @@ async def handle_message(websocket):
                 }))
 
         elif msg_type == "run_python":
-            stdout, error = await asyncio.to_thread(executor.run_python, code)
+            stdout, stderr, error = await asyncio.to_thread(executor.run_python, code)
 
             if stdout:
                 await websocket.send(json.dumps({
                     "type": "output",
                     "text": stdout,
+                }))
+
+            if stderr:
+                await websocket.send(json.dumps({
+                    "type": "stderr",
+                    "text": stderr,
                 }))
 
             if error:

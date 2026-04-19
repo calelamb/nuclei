@@ -271,9 +271,9 @@ function buildContextBlock(): string {
     parts.push(`## Active Exercise\n- Title: ${activeExercise.title}\n- Topic: ${activeExercise.topic}\n- Difficulty: ${activeExercise.difficulty}\n- Description: ${activeExercise.description}\n- Expected output: ${JSON.stringify(activeExercise.expectedOutput)}`);
   }
 
-  const errors = terminalOutput.filter((l) => l.startsWith('Error'));
+  const errors = terminalOutput.filter((l) => l.type === 'stderr');
   if (errors.length > 0) {
-    const recentErrors = errors.slice(-3).join('\n');
+    const recentErrors = errors.slice(-3).map((l) => l.text).join('\n');
     parts.push(`## Recent Errors\n\`\`\`\n${recentErrors}\n\`\`\``);
   }
 

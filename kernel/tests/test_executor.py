@@ -54,10 +54,11 @@ def test_parse_returns_missing_dependency_when_adapter_module_unavailable(monkey
 
     monkeypatch.setattr("kernel.executor.importlib.import_module", fake_import)
 
-    snapshot, stdout, error = executor.parse("import cirq\ncircuit = None\n")
+    snapshot, stdout, stderr, error = executor.parse("import cirq\ncircuit = None\n")
 
     assert snapshot is None
     assert stdout == ""
+    assert stderr == ""
     assert error is not None
     assert error.code == "missing_dependency"
     assert error.framework == "cirq"
@@ -67,20 +68,37 @@ def test_parse_returns_missing_dependency_when_adapter_module_unavailable(monkey
 def test_run_python_executes_plain_python_code():
     executor = Executor()
 
-    stdout, error = executor.run_python("print('hello from nuclei')")
+    stdout, stderr, error = executor.run_python("print('hello from nuclei')")
 
     assert error is None
     assert stdout.strip() == "hello from nuclei"
+    assert stderr == ""
 
 
 def test_run_python_returns_compile_error_for_invalid_syntax():
     executor = Executor()
 
-    stdout, error = executor.run_python("def broken(:\n    pass")
+    stdout, stderr, error = executor.run_python("def broken(:\n    pass")
 
     assert stdout == ""
+    assert stderr == ""
     assert error is not None
     assert error.code == "compile_error"
+
+
+def test_run_python_separates_stderr_from_stdout():
+    executor = Executor()
+
+    stdout, stderr, error = executor.run_python(
+        "import sys\nprint('stdout here')\nprint('stderr here', file=sys.stderr)"
+    )
+
+    assert error is None
+    assert "stdout here" in stdout
+    assert "stderr here" in stderr
+    # Ensure the two streams didn't cross-contaminate each other.
+    assert "stderr here" not in stdout
+    assert "stdout here" not in stderr
 
 
 def test_parse_returns_empty_snapshot_for_valid_code_without_circuit(monkeypatch):
@@ -89,12 +107,13 @@ def test_parse_returns_empty_snapshot_for_valid_code_without_circuit(monkeypatch
 
     monkeypatch.setattr(executor, "_detect_adapter_spec", lambda code: FAKE_SPEC)
     monkeypatch.setattr(executor, "_load_adapter", lambda spec: (adapter, None))
-    monkeypatch.setattr(executor, "_run_code", lambda code: ("printed output\n", None))
+    monkeypatch.setattr(executor, "_run_code", lambda code: ("printed output\n", "", None))
 
-    snapshot, stdout, error = executor.parse("from qiskit import QuantumCircuit")
+    snapshot, stdout, stderr, error = executor.parse("from qiskit import QuantumCircuit")
 
     assert snapshot is None
     assert stdout == "printed output\n"
+    assert stderr == ""
     assert error is None
 
 
@@ -109,12 +128,13 @@ def test_parse_normalizes_module_not_found_to_missing_dependency(monkeypatch):
 
     monkeypatch.setattr(executor, "_detect_adapter_spec", lambda code: FAKE_SPEC)
     monkeypatch.setattr(executor, "_load_adapter", lambda spec: (adapter, None))
-    monkeypatch.setattr(executor, "_run_code", lambda code: ("", runtime_error))
+    monkeypatch.setattr(executor, "_run_code", lambda code: ("", "", runtime_error))
 
-    snapshot, stdout, error = executor.parse("import qiskit")
+    snapshot, stdout, stderr, error = executor.parse("import qiskit")
 
     assert snapshot is None
     assert stdout == ""
+    assert stderr == ""
     assert error is not None
     assert error.code == "missing_dependency"
     assert error.framework == "qiskit"
@@ -124,11 +144,12 @@ def test_parse_normalizes_module_not_found_to_missing_dependency(monkeypatch):
 def test_execute_returns_no_circuit_error_for_non_quantum_code():
     executor = Executor()
 
-    result, snapshot, stdout, error = executor.execute("print('plain python')", 256)
+    result, snapshot, stdout, stderr, error = executor.execute("print('plain python')", 256)
 
     assert result is None
     assert snapshot is None
     assert stdout == ""
+    assert stderr == ""
     assert error is not None
     assert error.code == "unsupported_framework"
 
@@ -151,13 +172,14 @@ def test_execute_returns_snapshot_and_typed_simulation_error(monkeypatch):
 
     monkeypatch.setattr(executor, "_detect_adapter_spec", lambda code: FAKE_SPEC)
     monkeypatch.setattr(executor, "_load_adapter", lambda spec: (adapter, None))
-    monkeypatch.setattr(executor, "_run_code", lambda code: ("", None))
+    monkeypatch.setattr(executor, "_run_code", lambda code: ("", "", None))
 
-    result, returned_snapshot, stdout, error = executor.execute("import qiskit", 512)
+    result, returned_snapshot, stdout, stderr, error = executor.execute("import qiskit", 512)
 
     assert result is None
     assert returned_snapshot == snapshot
     assert stdout == ""
+    assert stderr == ""
     assert error is not None
     assert error.code == "simulation_error"
 
@@ -183,11 +205,12 @@ def test_execute_returns_result_when_stub_adapter_succeeds(monkeypatch):
 
     monkeypatch.setattr(executor, "_detect_adapter_spec", lambda code: FAKE_SPEC)
     monkeypatch.setattr(executor, "_load_adapter", lambda spec: (adapter, None))
-    monkeypatch.setattr(executor, "_run_code", lambda code: ("", None))
+    monkeypatch.setattr(executor, "_run_code", lambda code: ("", "", None))
 
-    actual_result, returned_snapshot, stdout, error = executor.execute("import qiskit", 256)
+    actual_result, returned_snapshot, stdout, stderr, error = executor.execute("import qiskit", 256)
 
     assert error is None
     assert stdout == ""
+    assert stderr == ""
     assert returned_snapshot == snapshot
     assert actual_result == result
