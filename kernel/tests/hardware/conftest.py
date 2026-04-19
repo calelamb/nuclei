@@ -36,6 +36,13 @@ def _isolate_credential_store(monkeypatch):
     _credential_store.reset_memory_fallback_for_tests()
 
 
+@pytest.fixture(autouse=True)
+def _isolate_job_store(monkeypatch, tmp_path):
+    """Redirect the default job-store path to a tmp dir so no test
+    touches the dev's ~/.nuclei/jobs.json."""
+    monkeypatch.setenv("NUCLEI_DATA_DIR", str(tmp_path))
+
+
 @pytest.fixture
 def install_fake_sdk(monkeypatch):
     """Install fake modules into `sys.modules` so provider SDK imports resolve.

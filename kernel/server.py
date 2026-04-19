@@ -268,6 +268,22 @@ async def handle_message(websocket):
                     "message": f"Failed to list connected providers: {e}",
                 }))
 
+        elif msg_type == "hardware_list_jobs":
+            # Frontend asks this on WebSocket (re)connect to rehydrate
+            # JobTracker from the persistent job store. Jobs that were
+            # running when the kernel last died come back as `stale`.
+            try:
+                handles = hardware_manager.list_jobs()
+                await websocket.send(json.dumps({
+                    "type": "hardware_jobs",
+                    "jobs": [h.to_dict() for h in handles],
+                }))
+            except Exception as e:
+                await websocket.send(json.dumps({
+                    "type": "error",
+                    "message": f"Failed to list jobs: {e}",
+                }))
+
         elif msg_type == "hardware_list_backends":
             provider = msg.get("provider", None)
             try:

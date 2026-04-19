@@ -44,6 +44,7 @@ export type KernelMessage =
   | { type: 'hardware_set_credentials'; provider: string; credentials: Record<string, string> }
   | { type: 'hardware_clear_credentials'; provider: string }
   | { type: 'hardware_connected_providers' }
+  | { type: 'hardware_list_jobs' }
   | { type: 'hardware_list_backends'; provider: string }
   | { type: 'hardware_submit'; provider: string; backend: string; code: string; shots: number }
   | { type: 'hardware_status'; job_id: string }
@@ -78,6 +79,7 @@ export type KernelResponse =
   | { type: 'stderr'; text: string }
   | { type: 'hardware_connected'; provider: string; success: boolean }
   | { type: 'hardware_connected_providers'; providers: string[] }
+  | { type: 'hardware_jobs'; jobs: HardwareJobDTO[] }
   | { type: 'hardware_backends'; backends: Array<Record<string, unknown>> }
   | { type: 'hardware_job_submitted'; job: HardwareJobDTO }
   | { type: 'hardware_job_update'; job: HardwareJobDTO }

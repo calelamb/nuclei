@@ -2,6 +2,7 @@ import logging
 
 from kernel.hardware import credential_store
 from kernel.hardware.base import BackendInfo, JobHandle
+from kernel.hardware.job_store import JobRecord, JobStore
 from kernel.hardware.simulator_provider import SimulatorProvider
 from kernel.hardware.ibm_provider import IBMProvider
 from kernel.hardware.google_provider import GoogleProvider
@@ -15,7 +16,12 @@ _LOG = logging.getLogger(__name__)
 
 
 class HardwareManager:
-    def __init__(self, *, auto_reconnect: bool = True):
+    def __init__(
+        self,
+        *,
+        auto_reconnect: bool = True,
+        job_store: JobStore | None = None,
+    ):
         self._providers = {
             "simulator": SimulatorProvider(),
             "ibm": IBMProvider(),
@@ -28,8 +34,48 @@ class HardwareManager:
         }
         self._connected: set[str] = set()
         self._jobs: dict[str, tuple[str, JobHandle]] = {}  # job_id -> (provider_name, handle)
+        self._job_store = job_store if job_store is not None else JobStore()
+        self._job_store.load()
         if auto_reconnect:
             self._auto_reconnect()
+        self._rehydrate_jobs()
+
+    def _rehydrate_jobs(self) -> None:
+        """Load persisted job metadata into the in-memory registry.
+
+        Jobs that were non-terminal at shutdown come back as `stale` — the
+        kernel no longer holds the SDK handle so we can't resume live
+        polling. The UI shows the historical entry; the user can re-submit.
+
+        Terminal jobs (complete/failed/cancelled) keep their stored status
+        so history isn't lost."""
+        for record in self._job_store.all():
+            provider_name = record.provider
+            # Any non-terminal status becomes 'stale' on reload because the
+            # SDK handle is gone. Terminal statuses are preserved verbatim.
+            if record.status in ("complete", "failed", "cancelled"):
+                status = record.status
+                error = record.error
+            else:
+                status = "stale"
+                error = (
+                    record.error
+                    or (
+                        "This job was submitted before the kernel restarted. "
+                        "The kernel no longer tracks it — resubmit to run again."
+                    )
+                )
+            handle = JobHandle(
+                id=record.job_id,
+                provider=provider_name,
+                backend=record.backend,
+                status=status,
+                queue_position=record.queue_position,
+                shots=record.shots,
+                submitted_at=record.submitted_at,
+                error=error,
+            )
+            self._jobs[record.job_id] = (provider_name, handle)
 
     def _auto_reconnect(self) -> None:
         """On kernel start, rehydrate provider connections from the keyring.
@@ -110,6 +156,20 @@ class HardwareManager:
         provider = self._providers[provider_name]
         handle = provider.submit_job(circuit_obj, backend, shots)
         self._jobs[handle.id] = (provider_name, handle)
+        # Persist immediately so a kernel crash between submit and first
+        # poll doesn't orphan the job — the provider still has it, the
+        # file-backed store lets us find it again.
+        self._job_store.upsert(JobRecord(
+            job_id=handle.id,
+            provider=provider_name,
+            backend=backend,
+            status=handle.status,
+            shots=shots,
+            submitted_at=handle.submitted_at,
+            last_updated_at=handle.submitted_at,
+            queue_position=handle.queue_position,
+            error=handle.error,
+        ))
         return handle
 
     def get_job_status(self, job_id: str) -> JobHandle:
@@ -118,12 +178,27 @@ class HardwareManager:
             raise KeyError(f"Job '{job_id}' not found")
 
         provider_name, handle = entry
+        # Stale jobs (rehydrated from persistence without an SDK handle)
+        # can't actually be polled — short-circuit so we don't pass a None
+        # SDK object to provider.get_queue_position.
+        if handle.status == "stale":
+            return handle
         # Update queue position for pending jobs
         if handle.status in ("queued", "running"):
             provider = self._providers[provider_name]
             handle.queue_position = provider.get_queue_position(handle)
+            # Write-through the updated position so polling from a new
+            # session picks up where this one left off.
+            self._job_store.update_status(
+                job_id, queue_position=handle.queue_position,
+            )
 
         return handle
+
+    def list_jobs(self) -> list[JobHandle]:
+        """Return every tracked job (rehydrated + in-memory). Used by the
+        frontend to repopulate JobTracker after a page reload."""
+        return [handle for (_provider, handle) in self._jobs.values()]
 
     def get_results(self, job_id: str) -> dict:
         entry = self._jobs.get(job_id)
@@ -149,4 +224,5 @@ class HardwareManager:
             ok = False
         if ok:
             handle.status = "failed"
+            self._job_store.update_status(job_id, status="failed")
         return ok

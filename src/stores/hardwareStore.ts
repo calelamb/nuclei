@@ -33,6 +33,7 @@ interface HardwareState {
   setConnectionError: (p: HardwareProviderType, error: string | null) => void;
   clearJob: (id: string) => void;
   addJob: (job: JobHandle) => void;
+  setJobs: (jobs: JobHandle[]) => void;
   updateJob: (id: string, updates: Partial<JobHandle>) => void;
   setResult: (jobId: string, result: HardwareResult) => void;
   setProviderConnected: (provider: HardwareProviderType, connected: boolean) => void;
@@ -85,6 +86,10 @@ export const useHardwareStore = create<HardwareState>((set) => ({
       };
     }),
   addJob: (job) => set((s) => ({ jobs: [job, ...s.jobs] })),
+  // Kernel-authoritative job list — used on WS connect to rehydrate the
+  // tracker from persisted state so users see their history instead of
+  // an empty list after a page reload or kernel restart.
+  setJobs: (jobs) => set({ jobs }),
   updateJob: (id, updates) =>
     set((s) => ({
       jobs: s.jobs.map((j) => (j.id === id ? { ...j, ...updates } : j)),

@@ -175,6 +175,23 @@ export function useKernel() {
         }
         break;
       }
+      case 'hardware_jobs': {
+        // Kernel's persistent job registry. Non-terminal entries come
+        // back as 'stale' because the SDK handle didn't survive the
+        // restart — users see their history and can re-submit.
+        const hw = useHardwareStore.getState();
+        hw.setJobs(msg.jobs.map((j) => ({
+          id: j.id,
+          provider: j.provider,
+          backend: j.backend,
+          submittedAt: j.submitted_at,
+          status: j.status,
+          queuePosition: j.queue_position ?? null,
+          shots: j.shots,
+          error: j.error ?? null,
+        })));
+        break;
+      }
       case 'hardware_job_submitted': {
         useHardwareStore.getState().addJob({
           id: msg.job.id,
@@ -308,6 +325,10 @@ export function useKernel() {
       // its keyring-backed auto-reconnect, so the UI shows them as connected
       // without the user having to re-enter tokens.
       ws.send(JSON.stringify({ type: 'hardware_connected_providers' }));
+      // Rehydrate JobTracker from the kernel's persistent registry so the
+      // user sees their past jobs (marked 'stale' when not recoverable)
+      // instead of an empty list on reload.
+      ws.send(JSON.stringify({ type: 'hardware_list_jobs' }));
     };
 
     ws.onmessage = (event) => {
