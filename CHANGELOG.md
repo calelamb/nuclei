@@ -5,6 +5,14 @@ All notable changes to Nuclei will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.6] - 2026-04-18
+
+### Fixed — Bloch sphere labels no longer clip at panel edges
+
+- **Camera reframed.** The v0.4.5 Bloch sphere had the camera at distance ~2.94 with a 38° FOV, giving a vertical half-extent of ~1.01 at origin — but the axis labels sat at radius 1.29 and the basis labels (|0⟩/|1⟩) at 1.32. Result: labels were getting clipped at the panel's top and bottom edges. Camera is now at distance ~4.07 with a 45° FOV (half-extent ~1.69), and label offsets pulled in to 1.05 × axis length and ±1.22 for the poles. Comfortable margin at narrow-rail aspects.
+- **Zoom clamps.** `minDistance=2.2` (just past the sphere surface) and `maxDistance=6.5` (far enough for overview, close enough for the state arrow to stay legible).
+- **BlochPanel bottom padding** dropped from 28px → 12px so the sphere sits centered in its rail instead of floating high.
+
 ## [0.4.5] - 2026-04-18
 
 ### Changed — in-memory New Project + classic interactive Bloch sphere

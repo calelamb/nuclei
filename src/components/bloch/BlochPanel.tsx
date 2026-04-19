@@ -35,7 +35,7 @@ export function BlochPanel() {
         alignItems: 'stretch',
         justifyContent: 'center',
         gap: 6,
-        padding: '10px 8px 28px',
+        padding: '10px 10px 12px',
         position: 'relative',
       }}
       role="region"
