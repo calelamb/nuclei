@@ -3,6 +3,7 @@ from kernel.hardware.simulator_provider import SimulatorProvider
 from kernel.hardware.ibm_provider import IBMProvider
 from kernel.hardware.google_provider import GoogleProvider
 from kernel.hardware.ionq_provider import IonQProvider
+from kernel.hardware.nvidia_provider import NvidiaProvider
 
 
 class HardwareManager:
@@ -12,6 +13,7 @@ class HardwareManager:
             "ibm": IBMProvider(),
             "google": GoogleProvider(),
             "ionq": IonQProvider(),
+            "nvidia": NvidiaProvider(),
         }
         self._connected: set[str] = set()
         self._jobs: dict[str, tuple[str, JobHandle]] = {}  # job_id -> (provider_name, handle)

@@ -5,6 +5,21 @@ All notable changes to Nuclei will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.0] - 2026-04-18
+
+### Added
+
+- **Launch modal (⌘⇧R).** A dedicated full-screen surface for submitting to real quantum hardware. Provider cards with inline SVG logos (IBM, IonQ, NVIDIA CUDA-Q, Local, Google "Coming Soon"), each with pricing chip (Free / Paid / Credits / Local), status indicator, and tagline. Click a card → live backend list with queue length, error rate, and qubit count per backend. Shot stepper + prominent Launch button.
+- **Launch strip.** Thin status bar at the top of the editor that surfaces the latest hardware job in-flight — provider logo, backend name, status icon, elapsed time. Click to reopen the launch panel. Replaces the buried JobTracker list.
+- **Hardware-aware histogram chip.** When a hardware job completes, the inline histogram chip renders dual bars per outcome — classical simulator in accent color, hardware in Dirac purple — so students can see "real quantum matches the simulator (mostly)" at a glance.
+- **Prominent Launch button** in the editor toolbar next to Run. ⌘⇧R keyboard shortcut.
+- **NVIDIA CUDA-Q provider** (`kernel/hardware/nvidia_provider.py`). Exposes `nvidia`, `nvidia-fp64`, `nvidia-mgpu`, and `qpp-cpu` as CUDA-Q simulation targets. Students can submit a circuit to real GPU silicon with no credentials required beyond having `cudaq` installed.
+- **IonQ provider** (`kernel/hardware/ionq_provider.py`). Real implementation via `qiskit-ionq`. Connect with an API token, list live backends, submit_job via IonQ's sampler, poll results. Mirrors the shape of the existing IBM provider.
+
+### Changed
+
+- Google Quantum AI is now explicitly a "Coming Soon" card in the launch UI until the provider adapter lands.
+
 ## [0.2.0] - 2026-04-18
 
 ### Added

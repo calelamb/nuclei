@@ -3,6 +3,14 @@ import { useThemeStore } from '../../stores/themeStore';
 
 interface HistogramChipProps {
   probabilities: Record<string, number> | null;
+  /**
+   * Optional hardware-run probabilities. When present the chip renders two
+   * stacked bars per outcome: classical (simulator) in the accent color,
+   * hardware in the Dirac purple. Makes the "real quantum hardware matches
+   * the simulator — mostly" teaching moment visible at a glance.
+   */
+  hwProbabilities?: Record<string, number> | null;
+  hwLabel?: string;
   onDismiss?: () => void;
   onExpand?: () => void;
 }
@@ -16,19 +24,38 @@ const MAX_BARS = 3;
  * results. Replaces the full-panel `ProbabilityHistogram` in the default
  * layout to reclaim space for the editor + circuit.
  */
-export function HistogramChip({ probabilities, onDismiss, onExpand }: HistogramChipProps) {
+export function HistogramChip({
+  probabilities,
+  hwProbabilities,
+  hwLabel,
+  onDismiss,
+  onExpand,
+}: HistogramChipProps) {
   const colors = useThemeStore((s) => s.colors);
 
   if (!probabilities) return null;
 
-  // Secondary sort by state label asc so ties (e.g. Bell state 50/50) render
-  // in a stable, readable order regardless of how V8 orders integer-like keys.
-  const entries = Object.entries(probabilities)
-    .filter(([, p]) => p > EPSILON)
-    .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+  // Union of classical + hardware outcomes — we want every state that either
+  // side saw. Rank by max(p_classical, p_hardware) so the top-3 are the
+  // outcomes that actually matter regardless of which side produced them.
+  const merged: Record<string, { cls: number; hw: number; max: number }> = {};
+  for (const [s, p] of Object.entries(probabilities)) {
+    if (p > EPSILON) merged[s] = { cls: p, hw: 0, max: p };
+  }
+  if (hwProbabilities) {
+    for (const [s, p] of Object.entries(hwProbabilities)) {
+      if (p <= EPSILON) continue;
+      const prev = merged[s] ?? { cls: 0, hw: 0, max: 0 };
+      merged[s] = { cls: prev.cls, hw: p, max: Math.max(prev.max, p) };
+    }
+  }
+  const entries = Object.entries(merged)
+    .sort((a, b) => b[1].max - a[1].max || a[0].localeCompare(b[0]))
     .slice(0, MAX_BARS);
 
   if (entries.length === 0) return null;
+
+  const hasHw = !!hwProbabilities;
 
   return (
     <div
@@ -44,8 +71,8 @@ export function HistogramChip({ probabilities, onDismiss, onExpand }: HistogramC
         fontFamily: "'Geist Sans', sans-serif",
       }}
     >
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10, flex: 1 }}>
-        {entries.map(([state, p]) => (
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, flex: 1, minWidth: 0 }}>
+        {entries.map(([state, { cls, hw }]) => (
           <div
             key={state}
             data-testid="histogram-chip-bar"
@@ -63,24 +90,62 @@ export function HistogramChip({ probabilities, onDismiss, onExpand }: HistogramC
             <div
               style={{
                 flex: 1,
-                height: 6,
-                borderRadius: 3,
-                background: `${colors.accent}14`,
-                overflow: 'hidden',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: 2,
                 minWidth: 20,
               }}
             >
               <div
                 style={{
-                  height: '100%',
-                  width: `${Math.round(p * 100)}%`,
-                  background: colors.accent,
-                  transition: 'width 200ms cubic-bezier(0.16, 1, 0.3, 1)',
+                  height: hasHw ? 4 : 6,
+                  borderRadius: 3,
+                  background: `${colors.accent}14`,
+                  overflow: 'hidden',
                 }}
-              />
+                title="Classical simulation"
+              >
+                <div
+                  style={{
+                    height: '100%',
+                    width: `${Math.round(cls * 100)}%`,
+                    background: colors.accent,
+                    transition: 'width 200ms cubic-bezier(0.16, 1, 0.3, 1)',
+                  }}
+                />
+              </div>
+              {hasHw && (
+                <div
+                  style={{
+                    height: 4,
+                    borderRadius: 3,
+                    background: `${colors.dirac}14`,
+                    overflow: 'hidden',
+                  }}
+                  title={hwLabel ?? 'Hardware run'}
+                >
+                  <div
+                    style={{
+                      height: '100%',
+                      width: `${Math.round(hw * 100)}%`,
+                      background: colors.dirac,
+                      transition: 'width 200ms cubic-bezier(0.16, 1, 0.3, 1)',
+                    }}
+                  />
+                </div>
+              )}
             </div>
-            <span style={{ color: colors.textDim, width: 28, textAlign: 'right', flexShrink: 0 }}>
-              {Math.round(p * 100)}%
+            <span
+              style={{
+                color: colors.textDim,
+                minWidth: hasHw ? 54 : 28,
+                textAlign: 'right',
+                flexShrink: 0,
+              }}
+            >
+              {hasHw
+                ? `${Math.round(cls * 100)}% · ${Math.round(hw * 100)}%`
+                : `${Math.round(cls * 100)}%`}
             </span>
           </div>
         ))}

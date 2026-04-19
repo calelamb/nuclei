@@ -7,6 +7,7 @@ const PROVIDER_LABELS: Record<HardwareProviderType, string> = {
   ibm: 'IBM',
   google: 'Google',
   ionq: 'IonQ',
+  nvidia: 'NVIDIA',
   simulator: 'Sim',
 };
 

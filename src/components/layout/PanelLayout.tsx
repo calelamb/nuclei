@@ -13,6 +13,8 @@ import type { ActivityView } from './ActivityBar';
 import { Sidebar } from './Sidebar';
 import { PanelReveal } from './PanelReveal';
 import { HistogramChip } from '../histogram/HistogramChip';
+import { LaunchStrip } from '../hardware/LaunchStrip';
+import { useHardwareStore } from '../../stores/hardwareStore';
 import { useLayoutStore, computeVisiblePanels, type LayoutPreset } from '../../stores/layoutStore';
 import { useDiracStore } from '../../stores/diracStore';
 import { DEFAULT_EDITOR_PANE_WIDTH, computeEditorPaneWidth } from './layoutMath';
@@ -37,6 +39,33 @@ const ChallengeModeView = lazy(async () => ({
 
 const DEFAULT_BOTTOM_HEIGHT = 200;
 const DEFAULT_SIDEBAR_WIDTH = 240;
+
+/* ── Hardware-aware histogram chip ──
+ * Wraps HistogramChip to pipe in the most recent completed hardware-job
+ * probabilities alongside the classical-simulator run. When a hardware job
+ * has completed, the chip shows dual bars per outcome (sim vs hw).
+ */
+function HardwareAwareHistogramChip({
+  simProbabilities,
+  onDismiss,
+}: {
+  simProbabilities: Record<string, number> | null;
+  onDismiss: () => void;
+}) {
+  const jobs = useHardwareStore((s) => s.jobs);
+  const results = useHardwareStore((s) => s.results);
+  const completed = jobs.find((j) => j.status === 'complete');
+  const hwProbabilities = completed ? results[completed.id]?.probabilities ?? null : null;
+  const hwLabel = completed ? `${completed.backend} (${completed.shots} shots)` : undefined;
+  return (
+    <HistogramChip
+      probabilities={simProbabilities}
+      hwProbabilities={hwProbabilities}
+      hwLabel={hwLabel}
+      onDismiss={onDismiss}
+    />
+  );
+}
 
 /* ── Terminal Panel ── */
 function TerminalPanel() {
@@ -517,10 +546,11 @@ export function PanelLayout() {
             <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0 }}>
               {/* Top: editor area + visualization */}
               <div ref={topSplitRef} style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
-                {/* Left: Editor with tabs + breadcrumbs */}
+                {/* Left: Editor with tabs + breadcrumbs + launch strip */}
                 <div style={{ width: `${editorPaneWidth}%`, display: 'flex', flexDirection: 'column', minWidth: 0 }}>
                   <EditorTabs />
                   <Breadcrumbs />
+                  <LaunchStrip />
                   <div style={{ flex: 1, minHeight: 0 }}>
                     <ErrorBoundary label="Code Editor">
                       <QuantumEditor />
@@ -555,8 +585,8 @@ export function PanelLayout() {
                   </PanelReveal>
                   <PanelReveal when={visible.histogramChip && !chipDismissed} from="bottom">
                     <div style={{ padding: '6px 10px 10px', flexShrink: 0 }}>
-                      <HistogramChip
-                        probabilities={result?.probabilities ?? null}
+                      <HardwareAwareHistogramChip
+                        simProbabilities={result?.probabilities ?? null}
                         onDismiss={dismissChip}
                       />
                     </div>
