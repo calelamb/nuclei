@@ -60,6 +60,14 @@ const PROVIDER_CONFIG: Record<
     ],
     helpText: 'Or use Amazon Braket credentials for IonQ access',
   },
+  nvidia: {
+    label: 'NVIDIA CUDA-Q',
+    description:
+      'GPU-accelerated simulation via CUDA-Q. No credentials needed — just requires `cudaq` installed in the kernel environment.',
+    fields: [],
+    helpText: 'Install with: pip install cudaq',
+    helpUrl: 'https://nvidia.github.io/cuda-quantum/',
+  },
   simulator: {
     label: 'Local Simulator',
     description: 'The local simulator is always available.',

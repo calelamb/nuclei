@@ -8,6 +8,8 @@ import { UpdateBanner } from './components/UpdateBanner';
 import { ComposeModal } from './components/dirac/ComposeModal';
 import { DiffPreview } from './components/editor/DiffPreview';
 import { UnsavedChangesModal } from './components/dialogs/UnsavedChangesModal';
+import { LaunchModal } from './components/hardware/LaunchModal';
+import { useHardwareStore } from './stores/hardwareStore';
 import { useKernel } from './hooks/useKernel';
 import { useFileOps } from './hooks/useFileOps';
 import { useActiveTabSync } from './hooks/useActiveTabSync';
@@ -262,6 +264,11 @@ function AppInner() {
       } else if (e.key === 'i' && !e.shiftKey) {
         e.preventDefault();
         setComposeOpen((s) => !s);
+      } else if (e.key === 'r' && e.shiftKey) {
+        e.preventDefault();
+        // ⌘⇧R: open the Launch modal (submit to hardware). Separate from the
+        // plain ⌘↵ Run which stays on the classical simulator.
+        useHardwareStore.getState().openLaunch();
       }
     };
     window.addEventListener('keydown', handler);
@@ -285,6 +292,7 @@ function AppInner() {
       <ComposeModal open={composeOpen} onClose={() => setComposeOpen(false)} />
       <DiffPreview />
       <UnsavedChangesModal />
+      <LaunchModal />
     </>
   );
 }

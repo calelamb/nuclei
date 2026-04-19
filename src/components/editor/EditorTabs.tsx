@@ -4,9 +4,10 @@ import { useEditorStore } from '../../stores/editorStore';
 import { useSimulationStore } from '../../stores/simulationStore';
 import { useThemeStore } from '../../stores/themeStore';
 import { useDialogStore } from '../../stores/dialogStore';
-import { X, FileCode, Play, Loader2 } from 'lucide-react';
+import { X, FileCode, Play, Loader2, Rocket } from 'lucide-react';
 import { getExecute, getFileOps } from '../../App';
 import { FrameworkSelector } from './FrameworkSelector';
+import { useHardwareStore } from '../../stores/hardwareStore';
 
 const basename = (p: string) => p.split('/').pop() ?? p;
 
@@ -279,7 +280,40 @@ export function EditorTabs() {
 
       <div style={{ flex: 1 }} />
 
-      <div style={{ display: 'flex', alignItems: 'center' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <button
+          onClick={() => useHardwareStore.getState().openLaunch()}
+          title="Launch on hardware (⌘⇧R)"
+          aria-label="Launch on hardware"
+          style={{
+            height: 28,
+            padding: '0 12px',
+            display: 'flex',
+            alignItems: 'center',
+            gap: 6,
+            background: 'transparent',
+            color: colors.accentLight,
+            border: `1px solid ${colors.accent}40`,
+            borderRadius: 6,
+            cursor: 'pointer',
+            fontSize: 12,
+            fontFamily: "'Geist Sans', sans-serif",
+            fontWeight: 600,
+            transition: 'background 120ms ease, border-color 120ms ease',
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.background = `${colors.accent}12`;
+            e.currentTarget.style.borderColor = colors.accent;
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.background = 'transparent';
+            e.currentTarget.style.borderColor = `${colors.accent}40`;
+          }}
+        >
+          <Rocket size={12} />
+          <span>Launch</span>
+          <span style={{ fontSize: 10, opacity: 0.7, marginLeft: 2 }}>⌘⇧R</span>
+        </button>
         <button
           onClick={handleRun}
           disabled={!canRun}
