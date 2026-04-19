@@ -20,6 +20,45 @@ const SLASH_COMMANDS = [
   { command: '/clear', description: 'Clear conversation history', insert: '/clear' },
 ] as const;
 
+/* ── Ambient Feed ── */
+function AmbientFeed() {
+  const ambientFeed = useDiracStore((s) => s.ambientFeed);
+  const colors = useThemeStore((s) => s.colors);
+  if (ambientFeed.length === 0) return null;
+  return (
+    <div
+      aria-label="Dirac narration"
+      style={{
+        padding: '6px 12px',
+        borderBottom: `1px solid ${colors.border}`,
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 4,
+        maxHeight: 120,
+        overflow: 'hidden',
+        flexShrink: 0,
+      }}
+    >
+      {ambientFeed.slice(-5).map((msg) => (
+        <div
+          key={msg.id}
+          title={new Date(msg.timestamp).toLocaleTimeString()}
+          style={{
+            fontSize: 11,
+            color: colors.textDim,
+            lineHeight: 1.4,
+            fontFamily: "'Geist Sans', sans-serif",
+            opacity: 0.9,
+          }}
+        >
+          <span style={{ color: colors.accentLight, marginRight: 6 }}>·</span>
+          {msg.text}
+        </div>
+      ))}
+    </div>
+  );
+}
+
 /* ── Context Indicator ── */
 function ContextIndicator() {
   const colors = useThemeStore((s) => s.colors);
@@ -512,6 +551,8 @@ export function DiracSidePanel() {
         </div>
       ) : (
         <>
+      {/* Ambient narration feed — dim one-liners that Dirac emits automatically */}
+      <AmbientFeed />
       {/* Messages */}
       <div ref={scrollRef} onScroll={handleScroll} style={{
         flex: 1, overflow: 'auto', padding: '8px 12px',
