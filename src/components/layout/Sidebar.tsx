@@ -1,6 +1,7 @@
 import { lazy, Suspense, useState, useRef, useCallback } from 'react';
 import { useThemeStore } from '../../stores/themeStore';
 import { FileExplorer } from '../explorer/FileExplorer';
+import { LaunchPortal } from '../hardware/LaunchPortal';
 import { SettingsPanel } from '../settings/SettingsPanel';
 import { useSettingsStore } from '../../stores/settingsStore';
 import type { ActivityView } from './ActivityBar';
@@ -110,6 +111,7 @@ const VIEW_TITLES: Record<ActivityView, string> = {
   challenges: 'Challenges',
   plugins: 'Plugins',
   hardware: 'Hardware',
+  launch: 'Launch',
   community: 'Community',
   settings: 'Settings',
 };
@@ -202,6 +204,7 @@ export function Sidebar({ view, width, onWidthChange }: SidebarProps) {
       <SidebarHeader title={VIEW_TITLES[view]} />
       <div style={{ flex: 1, overflow: 'auto' }}>
         {view === 'files' && <FileExplorer />}
+        {view === 'launch' && <LaunchPortal />}
         {view === 'search' && experimentalFeatures && <SearchPanel />}
         {view === 'circuit' && experimentalFeatures && <CircuitInfoPanel />}
         {view === 'learning' && (

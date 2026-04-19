@@ -68,6 +68,55 @@ const PROVIDER_CONFIG: Record<
     helpText: 'Install with: pip install cudaq',
     helpUrl: 'https://nvidia.github.io/cuda-quantum/',
   },
+  braket: {
+    label: 'AWS Braket',
+    description:
+      'AWS Braket aggregates IonQ, Rigetti, QuEra, IQM, OQC, Pasqal, and D-Wave under one integration. Requires AWS credentials with the AmazonBraketFullAccess policy.',
+    fields: [
+      { key: 'access_key_id', label: 'AWS Access Key ID', placeholder: 'AKIA...' },
+      { key: 'secret_access_key', label: 'AWS Secret Access Key', placeholder: '••••••••' },
+      { key: 'region', label: 'Region', placeholder: 'us-east-1' },
+    ],
+    helpText: 'Attach AmazonBraketFullAccess in the IAM console.',
+    helpUrl: 'https://aws.amazon.com/braket/',
+  },
+  azure: {
+    label: 'Azure Quantum',
+    description:
+      'Azure Quantum aggregates Quantinuum, IonQ, Rigetti, Pasqal, and IQM. Requires an Azure subscription and a Quantum workspace.',
+    fields: [
+      { key: 'subscription_id', label: 'Subscription ID', placeholder: 'xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx' },
+      { key: 'resource_group', label: 'Resource Group', placeholder: 'MyQuantumRG' },
+      { key: 'workspace_name', label: 'Workspace Name', placeholder: 'my-workspace' },
+      { key: 'location', label: 'Location', placeholder: 'eastus' },
+    ],
+    helpText: 'Create a workspace at portal.azure.com.',
+    helpUrl: 'https://azure.microsoft.com/en-us/products/quantum',
+  },
+  quantinuum: {
+    label: 'Quantinuum',
+    description:
+      'Direct access to Quantinuum H1/H2 trapped-ion systems via Quantinuum Nexus.',
+    fields: [
+      { key: 'token', label: 'Nexus API Token', placeholder: 'Paste your Nexus API token...' },
+    ],
+    helpText: 'Request access at nexus.quantinuum.com.',
+    helpUrl: 'https://nexus.quantinuum.com',
+  },
+  xanadu: {
+    label: 'Xanadu',
+    description:
+      'Xanadu is a photonic quantum computer — continuous-variable gates and boson sampling. It uses a different circuit model than Qiskit/Cirq; submissions from Nuclei are not yet supported.',
+    fields: [],
+    helpText: 'Photonic circuits are a different paradigm — coming later.',
+  },
+  dwave: {
+    label: 'D-Wave',
+    description:
+      'D-Wave is a quantum annealer — it solves QUBO / Ising problems rather than running gate-model circuits. Submissions from Nuclei are not yet supported.',
+    fields: [],
+    helpText: 'Annealers are a different paradigm — coming later.',
+  },
   simulator: {
     label: 'Local Simulator',
     description: 'The local simulator is always available.',

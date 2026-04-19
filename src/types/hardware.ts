@@ -1,4 +1,14 @@
-export type HardwareProviderType = 'ibm' | 'google' | 'ionq' | 'nvidia' | 'simulator';
+export type HardwareProviderType =
+  | 'ibm'
+  | 'google'
+  | 'ionq'
+  | 'nvidia'
+  | 'braket'
+  | 'azure'
+  | 'quantinuum'
+  | 'xanadu'
+  | 'dwave'
+  | 'simulator';
 
 export interface BackendInfo {
   name: string;

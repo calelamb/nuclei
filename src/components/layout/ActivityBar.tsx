@@ -1,8 +1,8 @@
-import { Files, Search, Cpu, GraduationCap, Blocks, Settings, Server, Users, Trophy } from 'lucide-react';
+import { Files, Search, Cpu, GraduationCap, Blocks, Settings, Server, Users, Trophy, Rocket } from 'lucide-react';
 import { useThemeStore } from '../../stores/themeStore';
 import { useSettingsStore } from '../../stores/settingsStore';
 
-export type ActivityView = 'files' | 'search' | 'circuit' | 'learning' | 'challenges' | 'plugins' | 'hardware' | 'community' | 'settings';
+export type ActivityView = 'files' | 'search' | 'circuit' | 'learning' | 'challenges' | 'plugins' | 'hardware' | 'launch' | 'community' | 'settings';
 
 interface ActivityBarProps {
   active: ActivityView | null;
@@ -13,6 +13,7 @@ const CORE_ITEMS: Array<{ id: ActivityView; icon: typeof Files; label: string }>
   { id: 'files', icon: Files, label: 'Explorer' },
   { id: 'learning', icon: GraduationCap, label: 'Learning' },
   { id: 'challenges', icon: Trophy, label: 'Challenges' },
+  { id: 'launch', icon: Rocket, label: 'Launch' },
 ];
 
 const EXPERIMENTAL_ITEMS: Array<{ id: ActivityView; icon: typeof Files; label: string }> = [
