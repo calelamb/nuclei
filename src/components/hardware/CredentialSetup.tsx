@@ -3,6 +3,7 @@ import { X } from 'lucide-react';
 import { useThemeStore } from '../../stores/themeStore';
 import { useHardwareStore } from '../../stores/hardwareStore';
 import type { HardwareProviderType } from '../../types/hardware';
+import { getHardware } from '../../App';
 
 interface CredentialSetupProps {
   provider: HardwareProviderType;
@@ -142,8 +143,17 @@ export function CredentialSetup({ provider, onClose }: CredentialSetupProps) {
   };
 
   const handleSave = () => {
-    // Store credentials in localStorage
-    localStorage.setItem(`nuclei-hardware-${provider}`, JSON.stringify(values));
+    // Credentials go straight to the kernel, which persists them in the OS
+    // keyring (macOS Keychain / Windows Credential Manager / Linux Secret
+    // Service). They are NOT written to localStorage — plaintext tokens in
+    // the browser's storage is a real XSS foot-gun. The kernel's success
+    // response drives the UI's connected-state via the 'hardware_connected'
+    // message handled in useKernel.ts; setProviderConnected here is an
+    // optimistic flip so the user sees immediate feedback.
+    const hw = getHardware();
+    if (hw) {
+      hw.hardwareConnect(provider, values);
+    }
     setProviderConnected(provider, true);
     onClose();
   };

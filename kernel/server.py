@@ -202,6 +202,10 @@ async def handle_message(websocket):
             provider = msg.get("provider", "")
             credentials = msg.get("credentials", {})
             try:
+                # connect_provider persists credentials to the OS keyring on
+                # success so the next kernel start auto-reconnects without
+                # the user re-entering a token. The frontend can discard
+                # the in-memory copy as soon as the ack arrives.
                 success = hardware_manager.connect_provider(provider, credentials)
                 await websocket.send(json.dumps({
                     "type": "hardware_connected",
@@ -212,6 +216,56 @@ async def handle_message(websocket):
                 await websocket.send(json.dumps({
                     "type": "error",
                     "message": f"Hardware connect failed: {e}",
+                }))
+
+        elif msg_type == "hardware_set_credentials":
+            # Store credentials + attempt a connection in one step. Identical
+            # to `hardware_connect` today — a separate message type is kept
+            # so future work can e.g. persist-without-connect for deferred
+            # activation without breaking existing clients.
+            provider = msg.get("provider", "")
+            credentials = msg.get("credentials", {})
+            try:
+                success = hardware_manager.connect_provider(provider, credentials)
+                await websocket.send(json.dumps({
+                    "type": "hardware_connected",
+                    "provider": provider,
+                    "success": success,
+                }))
+            except Exception as e:
+                await websocket.send(json.dumps({
+                    "type": "error",
+                    "message": f"Hardware set-credentials failed: {e}",
+                }))
+
+        elif msg_type == "hardware_clear_credentials":
+            provider = msg.get("provider", "")
+            try:
+                hardware_manager.disconnect_provider(provider)
+                await websocket.send(json.dumps({
+                    "type": "hardware_connected",
+                    "provider": provider,
+                    "success": False,
+                }))
+            except Exception as e:
+                await websocket.send(json.dumps({
+                    "type": "error",
+                    "message": f"Hardware clear-credentials failed: {e}",
+                }))
+
+        elif msg_type == "hardware_connected_providers":
+            # Read the keyring index so the frontend can reconcile its
+            # "connected providers" UI after a reload without re-probing.
+            try:
+                providers = list(hardware_manager._connected)
+                await websocket.send(json.dumps({
+                    "type": "hardware_connected_providers",
+                    "providers": providers,
+                }))
+            except Exception as e:
+                await websocket.send(json.dumps({
+                    "type": "error",
+                    "message": f"Failed to list connected providers: {e}",
                 }))
 
         elif msg_type == "hardware_list_backends":

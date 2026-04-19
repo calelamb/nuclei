@@ -18,7 +18,9 @@ interface HardwareState {
   selectedProvider: HardwareProviderType | null;
   selectedSubProvider: string | null; // e.g. 'IonQ' / 'Rigetti' when provider is 'braket'
   stagedSubmission: { fileName: string; content: string } | null;
-  credentials: Partial<Record<HardwareProviderType, Record<string, string>>>;
+  // Credentials are NEVER stored on the frontend. The kernel persists them in
+  // the OS keyring and re-hydrates on startup. The store only tracks the
+  // connected boolean per provider for UI rendering.
   connectingProvider: HardwareProviderType | null;
   connectionErrors: Partial<Record<HardwareProviderType, string | null>>;
 
@@ -27,7 +29,6 @@ interface HardwareState {
   selectProvider: (p: HardwareProviderType | null) => void;
   selectSubProvider: (s: string | null) => void;
   setStagedSubmission: (s: { fileName: string; content: string } | null) => void;
-  setProviderCredentials: (p: HardwareProviderType, values: Record<string, string>) => void;
   setConnecting: (p: HardwareProviderType | null) => void;
   setConnectionError: (p: HardwareProviderType, error: string | null) => void;
   clearJob: (id: string) => void;
@@ -64,7 +65,6 @@ export const useHardwareStore = create<HardwareState>((set) => ({
   selectedProvider: null,
   selectedSubProvider: null,
   stagedSubmission: null,
-  credentials: {},
   connectingProvider: null,
   connectionErrors: {},
 
@@ -73,8 +73,6 @@ export const useHardwareStore = create<HardwareState>((set) => ({
   selectProvider: (selectedProvider) => set({ selectedProvider, selectedSubProvider: null }),
   selectSubProvider: (selectedSubProvider) => set({ selectedSubProvider }),
   setStagedSubmission: (stagedSubmission) => set({ stagedSubmission }),
-  setProviderCredentials: (p, values) =>
-    set((s) => ({ credentials: { ...s.credentials, [p]: values } })),
   setConnecting: (connectingProvider) => set({ connectingProvider }),
   setConnectionError: (p, error) =>
     set((s) => ({ connectionErrors: { ...s.connectionErrors, [p]: error } })),

@@ -20,6 +20,21 @@ from unittest.mock import MagicMock
 
 import pytest
 
+import kernel.hardware.credential_store as _credential_store
+
+
+@pytest.fixture(autouse=True)
+def _isolate_credential_store(monkeypatch):
+    """Force the in-memory fallback for every hardware test so no test
+    accidentally hits the developer's real OS keyring (which might have
+    production credentials saved from a prior session).
+
+    Each test starts with an empty store."""
+    monkeypatch.setattr(_credential_store, "_keyring_available", lambda: False)
+    _credential_store.reset_memory_fallback_for_tests()
+    yield
+    _credential_store.reset_memory_fallback_for_tests()
+
 
 @pytest.fixture
 def install_fake_sdk(monkeypatch):

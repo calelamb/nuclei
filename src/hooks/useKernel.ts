@@ -156,10 +156,22 @@ export function useKernel() {
           hw.setProviderConnected(msg.provider as never, true);
           hw.setConnectionError(msg.provider as never, null);
         } else {
+          hw.setProviderConnected(msg.provider as never, false);
           hw.setConnectionError(
             msg.provider as never,
             `Could not connect to ${msg.provider}. Check the token and try again.`,
           );
+        }
+        break;
+      }
+      case 'hardware_connected_providers': {
+        // Kernel just told us which providers it has an active connection
+        // to — mirror that into the store so the UI accurately reflects the
+        // post-restart auto-reconnect state instead of assuming "everything
+        // disconnected" on a fresh page load.
+        const hw = useHardwareStore.getState();
+        for (const p of msg.providers) {
+          hw.setProviderConnected(p as never, true);
         }
         break;
       }
@@ -264,6 +276,38 @@ export function useKernel() {
       if (code.trim()) {
         ws.send(JSON.stringify({ type: 'parse', code }));
       }
+
+      // One-time migration: earlier builds wrote provider credentials to
+      // localStorage as plaintext. On first connect after the keyring move,
+      // hand any stashed tokens to the kernel and wipe localStorage so the
+      // secrets never sit in the browser again. Safe to re-run — if there
+      // are no legacy keys, the whole block no-ops.
+      try {
+        const LEGACY_PREFIX = 'nuclei-hardware-';
+        for (let i = 0; i < localStorage.length; i++) {
+          const key = localStorage.key(i);
+          if (!key || !key.startsWith(LEGACY_PREFIX)) continue;
+          const provider = key.slice(LEGACY_PREFIX.length);
+          const raw = localStorage.getItem(key);
+          if (!raw) continue;
+          try {
+            const creds = JSON.parse(raw);
+            if (creds && typeof creds === 'object') {
+              ws.send(JSON.stringify({
+                type: 'hardware_set_credentials',
+                provider,
+                credentials: creds,
+              }));
+            }
+          } catch { /* malformed legacy entry — drop it */ }
+          localStorage.removeItem(key);
+        }
+      } catch { /* localStorage may be unavailable in some embedded webviews */ }
+
+      // Ask the kernel which providers it already has connections to from
+      // its keyring-backed auto-reconnect, so the UI shows them as connected
+      // without the user having to re-enter tokens.
+      ws.send(JSON.stringify({ type: 'hardware_connected_providers' }));
     };
 
     ws.onmessage = (event) => {

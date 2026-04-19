@@ -1,3 +1,6 @@
+import logging
+
+from kernel.hardware import credential_store
 from kernel.hardware.base import BackendInfo, JobHandle
 from kernel.hardware.simulator_provider import SimulatorProvider
 from kernel.hardware.ibm_provider import IBMProvider
@@ -8,9 +11,11 @@ from kernel.hardware.braket_provider import BraketProvider
 from kernel.hardware.azure_provider import AzureProvider
 from kernel.hardware.quantinuum_provider import QuantinuumProvider
 
+_LOG = logging.getLogger(__name__)
+
 
 class HardwareManager:
-    def __init__(self):
+    def __init__(self, *, auto_reconnect: bool = True):
         self._providers = {
             "simulator": SimulatorProvider(),
             "ibm": IBMProvider(),
@@ -23,8 +28,51 @@ class HardwareManager:
         }
         self._connected: set[str] = set()
         self._jobs: dict[str, tuple[str, JobHandle]] = {}  # job_id -> (provider_name, handle)
+        if auto_reconnect:
+            self._auto_reconnect()
 
-    def connect_provider(self, provider_name: str, credentials: dict) -> bool:
+    def _auto_reconnect(self) -> None:
+        """On kernel start, rehydrate provider connections from the keyring.
+
+        Silently skips any provider whose stored credentials no longer auth
+        (e.g. rotated token) — the user will see it as 'disconnected' in the
+        UI and can re-enter. We deliberately don't surface these failures
+        loudly; startup noise isn't what the user wants."""
+        for provider_name in credential_store.list_providers():
+            creds = credential_store.load(provider_name)
+            if creds is None:
+                continue
+            provider = self._providers.get(provider_name)
+            if provider is None:
+                # Provider was removed in a newer version — clear the stale entry.
+                credential_store.clear(provider_name)
+                continue
+            try:
+                ok = provider.connect(creds)
+            except Exception as exc:
+                _LOG.warning("Auto-reconnect to %s failed: %s", provider_name, exc)
+                continue
+            if ok:
+                self._connected.add(provider_name)
+            else:
+                _LOG.info(
+                    "Stored credentials for %s no longer authenticate; "
+                    "keeping them on disk so the user can see the failure "
+                    "and decide whether to rotate.",
+                    provider_name,
+                )
+
+    def connect_provider(
+        self,
+        provider_name: str,
+        credentials: dict,
+        *,
+        persist: bool = True,
+    ) -> bool:
+        """Connect to a provider; on success, persist credentials to the
+        OS keyring so the next kernel start auto-reconnects. Pass
+        persist=False to skip persistence (used by auto-reconnect itself
+        to avoid a redundant re-write)."""
         provider = self._providers.get(provider_name)
         if provider is None:
             return False
@@ -32,7 +80,15 @@ class HardwareManager:
         success = provider.connect(credentials)
         if success:
             self._connected.add(provider_name)
+            if persist and credentials:
+                credential_store.save(provider_name, credentials)
         return success
+
+    def disconnect_provider(self, provider_name: str) -> None:
+        """Drop the in-memory connection AND wipe stored credentials.
+        Used by the 'disconnect' UI flow."""
+        self._connected.discard(provider_name)
+        credential_store.clear(provider_name)
 
     def list_backends(self, provider_name: str = None) -> list[BackendInfo]:
         if provider_name:
