@@ -5,6 +5,26 @@ All notable changes to Nuclei will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.10] - 2026-04-19
+
+### Fixed — lesson videos failing with YouTube Error 153
+
+`VideoPlayer` was embedding lessons with `enablejsapi=1`, which makes
+YouTube validate the parent origin before initializing the embed
+player. Tauri's `tauri://localhost` webview origin doesn't satisfy
+that check, so YouTube bailed out with "Error 153 — Video player
+configuration error" on every lesson with an embedded video. Nothing
+in the frontend actually uses the YouTube JS API (chapter clicks work
+by re-rendering the iframe with a new `src`), so the flag was dead
+weight anyway.
+
+- Dropped `enablejsapi=1` from `VideoPlayer`.
+- Standardized all three YouTube embeds (`VideoPlayer`,
+  `VideoLibrary`, `TrackSelector`) to `youtube-nocookie.com`. The CSP
+  already whitelists it, it's more lenient about embedded-origin
+  checks, and it stops YouTube from setting tracking cookies on
+  students who are just watching a lesson video.
+
 ## [0.4.9] - 2026-04-18
 
 ### Changed — right rail is now Bloch-only

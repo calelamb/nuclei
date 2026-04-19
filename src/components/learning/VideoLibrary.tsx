@@ -276,7 +276,7 @@ function VideoModal({
           background: '#000',
         }}>
           <iframe
-            src={`https://www.youtube.com/embed/${video.youtubeId}?autoplay=1&rel=0`}
+            src={`https://www.youtube-nocookie.com/embed/${video.youtubeId}?autoplay=1&rel=0`}
             title={video.title}
             style={{
               position: 'absolute',
