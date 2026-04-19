@@ -472,7 +472,7 @@ export function useDirac() {
         const framework = useEditorStore.getState().framework;
         const currentCode = useEditorStore.getState().code;
         const res = await compose({ intent: intent.prompt, framework, currentCode });
-        if (res) {
+        if (res.ok) {
           useDiracStore.getState().setComposePreview({
             intent: intent.prompt,
             code: res.code,
@@ -485,7 +485,7 @@ export function useDirac() {
         } else {
           addMessage({
             role: 'assistant',
-            content: "I couldn't draft code for that. Make sure your API key is set and try again.",
+            content: `I couldn't draft code for that: ${res.error}`,
           });
         }
       } finally {

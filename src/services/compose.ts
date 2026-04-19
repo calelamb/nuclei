@@ -1,7 +1,5 @@
 import { useDiracStore } from '../stores/diracStore';
-
-const ANTHROPIC_URL = 'https://api.anthropic.com/v1/messages';
-const SONNET_MODEL = 'claude-sonnet-4-6-20250514';
+import { DIRAC_API_URL, SONNET_MODEL } from '../config/dirac';
 
 const SYSTEM_PROMPT = `You are Dirac, a quantum computing tutor that writes code for students.
 You will receive:
@@ -37,9 +35,20 @@ export interface ComposeOutput {
   explanation: string;
 }
 
-export async function compose(input: ComposeInput): Promise<ComposeOutput | null> {
+/**
+ * Result envelope so the caller can surface the actual failure reason
+ * instead of a generic "couldn't draft" message. Keeps the happy-path
+ * callsite simple: `if (res.ok) use res.code/explanation; else show res.error`.
+ */
+export type ComposeResult =
+  | { ok: true; code: string; explanation: string }
+  | { ok: false; error: string };
+
+export async function compose(input: ComposeInput): Promise<ComposeResult> {
   const apiKey = useDiracStore.getState().apiKey;
-  if (!apiKey || !apiKey.trim()) return null;
+  if (!apiKey || !apiKey.trim()) {
+    return { ok: false, error: 'No API key set. Add one in Settings → Dirac.' };
+  }
 
   const userPrompt = [
     `Framework: ${input.framework}`,
@@ -53,8 +62,9 @@ export async function compose(input: ComposeInput): Promise<ComposeOutput | null
     '```',
   ].join('\n');
 
+  let response: Response;
   try {
-    const response = await fetch(ANTHROPIC_URL, {
+    response = await fetch(DIRAC_API_URL, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -71,21 +81,54 @@ export async function compose(input: ComposeInput): Promise<ComposeOutput | null
         messages: [{ role: 'user', content: userPrompt }],
       }),
     });
-    if (!response.ok) return null;
-
-    const data = await response.json();
-    const contentArr: Array<Record<string, unknown>> = Array.isArray(data?.content) ? data.content : [];
-
-    const toolUse = contentArr.find((c) => c.type === 'tool_use' && c.name === 'insert_code');
-    const codeRaw = (toolUse?.input as { code?: unknown } | undefined)?.code;
-    if (typeof codeRaw !== 'string' || codeRaw.length === 0) return null;
-
-    const explanationBlock = contentArr.find((c) => c.type === 'text');
-    const explanation =
-      typeof explanationBlock?.text === 'string' ? explanationBlock.text : '';
-
-    return { code: codeRaw, explanation };
-  } catch {
-    return null;
+  } catch (e) {
+    return {
+      ok: false,
+      error: `Network error contacting Anthropic: ${e instanceof Error ? e.message : String(e)}`,
+    };
   }
+
+  if (!response.ok) {
+    // Parse Anthropic's error envelope — it's shaped as
+    // { type: 'error', error: { type, message } } per the public API docs.
+    let reason = `HTTP ${response.status}`;
+    try {
+      const body = await response.json();
+      const errMsg = body?.error?.message;
+      if (typeof errMsg === 'string' && errMsg.length > 0) reason = errMsg;
+    } catch {
+      // Response wasn't JSON; fall back to raw text.
+      try {
+        const txt = await response.text();
+        if (txt) reason = txt.slice(0, 280);
+      } catch { /* noop */ }
+    }
+    return { ok: false, error: reason };
+  }
+
+  let data: unknown;
+  try {
+    data = await response.json();
+  } catch {
+    return { ok: false, error: 'Anthropic returned a non-JSON response.' };
+  }
+
+  const contentArr: Array<Record<string, unknown>> =
+    Array.isArray((data as { content?: unknown })?.content)
+      ? ((data as { content: unknown }).content as Array<Record<string, unknown>>)
+      : [];
+  const toolUse = contentArr.find((c) => c.type === 'tool_use' && c.name === 'insert_code');
+  const codeRaw = (toolUse?.input as { code?: unknown } | undefined)?.code;
+  if (typeof codeRaw !== 'string' || codeRaw.length === 0) {
+    return {
+      ok: false,
+      error: 'Dirac responded but didn\'t produce code. Try rephrasing the request.',
+    };
+  }
+
+  const explanationBlock = contentArr.find((c) => c.type === 'text');
+  const explanation =
+    typeof explanationBlock?.text === 'string' ? explanationBlock.text : '';
+
+  return { ok: true, code: codeRaw, explanation };
 }

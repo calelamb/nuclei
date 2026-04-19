@@ -6,9 +6,8 @@ import { useEditorStore } from '../../../stores/editorStore';
 import { useCircuitStore } from '../../../stores/circuitStore';
 import { useDiracStore } from '../../../stores/diracStore';
 import { usePlatform } from '../../../platform/PlatformProvider';
+import { DIRAC_API_URL, SONNET_MODEL } from '../../../config/dirac';
 
-const API_URL = 'https://api.anthropic.com/v1/messages';
-const SONNET_MODEL = 'claude-sonnet-4-5-20241022';
 const HISTORY_KEY = 'cmdk_history';
 const MAX_HISTORY = 20;
 
@@ -76,7 +75,7 @@ export function InlineEditWidget({ editor, monaco, onClose }: InlineEditProps) {
     ].filter(Boolean).join('\n\n');
 
     try {
-      const response = await fetch(API_URL, {
+      const response = await fetch(DIRAC_API_URL, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
