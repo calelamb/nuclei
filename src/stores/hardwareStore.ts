@@ -16,10 +16,16 @@ interface HardwareState {
   showCredentialSetup: HardwareProviderType | null;
   launchOpen: boolean;
   selectedProvider: HardwareProviderType | null;
+  selectedSubProvider: string | null; // e.g. 'IonQ' / 'Rigetti' when provider is 'braket'
+  stagedSubmission: { fileName: string; content: string } | null;
+  credentials: Partial<Record<HardwareProviderType, Record<string, string>>>;
 
   setBackends: (backends: BackendInfo[]) => void;
   selectBackend: (name: string | null) => void;
   selectProvider: (p: HardwareProviderType | null) => void;
+  selectSubProvider: (s: string | null) => void;
+  setStagedSubmission: (s: { fileName: string; content: string } | null) => void;
+  setProviderCredentials: (p: HardwareProviderType, values: Record<string, string>) => void;
   addJob: (job: JobHandle) => void;
   updateJob: (id: string, updates: Partial<JobHandle>) => void;
   setResult: (jobId: string, result: HardwareResult) => void;
@@ -51,10 +57,17 @@ export const useHardwareStore = create<HardwareState>((set) => ({
   showCredentialSetup: null,
   launchOpen: false,
   selectedProvider: null,
+  selectedSubProvider: null,
+  stagedSubmission: null,
+  credentials: {},
 
   setBackends: (backends) => set({ backends }),
   selectBackend: (name) => set({ selectedBackend: name }),
-  selectProvider: (selectedProvider) => set({ selectedProvider }),
+  selectProvider: (selectedProvider) => set({ selectedProvider, selectedSubProvider: null }),
+  selectSubProvider: (selectedSubProvider) => set({ selectedSubProvider }),
+  setStagedSubmission: (stagedSubmission) => set({ stagedSubmission }),
+  setProviderCredentials: (p, values) =>
+    set((s) => ({ credentials: { ...s.credentials, [p]: values } })),
   addJob: (job) => set((s) => ({ jobs: [job, ...s.jobs] })),
   updateJob: (id, updates) =>
     set((s) => ({
@@ -71,6 +84,7 @@ export const useHardwareStore = create<HardwareState>((set) => ({
     })),
   setShowCredentialSetup: (provider) => set({ showCredentialSetup: provider }),
   openLaunch: () => set({ launchOpen: true }),
-  closeLaunch: () => set({ launchOpen: false, selectedProvider: null }),
+  closeLaunch: () =>
+    set({ launchOpen: false, selectedProvider: null, selectedSubProvider: null }),
   clearJobs: () => set({ jobs: [], results: {} }),
 }));

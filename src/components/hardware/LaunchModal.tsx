@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
-import { Rocket, ChevronLeft, X, Clock, Cpu, DollarSign } from 'lucide-react';
+import { Rocket, ChevronLeft, X, Clock, Cpu, DollarSign, KeyRound, FileCode } from 'lucide-react';
 import { useHardwareStore } from '../../stores/hardwareStore';
 import { useEditorStore } from '../../stores/editorStore';
 import { useSimulationStore } from '../../stores/simulationStore';
@@ -92,6 +92,41 @@ const PROVIDERS: ProviderMeta[] = [
   },
 ];
 
+// Single-field BYOK config per provider. Deliberately minimal — the full
+// multi-field credential form still lives in CredentialSetup.tsx for
+// aggregators that need multiple values (AWS keys, Azure workspace IDs).
+// Here we collect just the primary token inline to keep the flow fast.
+// Providers not in this map need no credentials (simulator, nvidia) or
+// require the richer CredentialSetup flow.
+const INLINE_KEY_FIELD: Partial<Record<HardwareProviderType, { label: string; placeholder: string; helpText?: string; helpUrl?: string }>> = {
+  ibm: {
+    label: 'IBM Quantum API token',
+    placeholder: 'Paste your IBM Quantum token',
+    helpText: 'Get a free token at quantum.ibm.com',
+    helpUrl: 'https://quantum.ibm.com',
+  },
+  ionq: {
+    label: 'IonQ API key',
+    placeholder: 'Paste your IonQ API key',
+    helpText: 'Get an API key at cloud.ionq.com',
+    helpUrl: 'https://cloud.ionq.com',
+  },
+  quantinuum: {
+    label: 'Quantinuum Nexus token',
+    placeholder: 'Paste your Nexus token',
+    helpText: 'Request access at nexus.quantinuum.com',
+    helpUrl: 'https://nexus.quantinuum.com',
+  },
+};
+
+// For aggregators, show a small sub-provider chip row at the top of Act 2
+// so students understand "this one bundle includes X, Y, Z." Clicking a
+// chip filters the backend list to that sub-provider only. 'All' resets.
+const AGGREGATOR_SUB_PROVIDERS: Partial<Record<HardwareProviderType, string[]>> = {
+  braket: ['All', 'IonQ', 'Rigetti', 'QuEra', 'IQM', 'OQC', 'Simulator'],
+  azure: ['All', 'Quantinuum', 'IonQ', 'Rigetti', 'Pasqal', 'IQM'],
+};
+
 // Mock backends the modal can display per-provider when the real kernel
 // hasn't populated live data yet. Keeps the picker useful in demos even
 // without credentials configured.
@@ -156,10 +191,22 @@ export function LaunchModal() {
   const colors = useThemeStore((s) => s.colors);
   const shadow = useThemeStore((s) => s.shadow);
 
+  const stagedSubmission = useHardwareStore((s) => s.stagedSubmission);
+  const selectedSubProvider = useHardwareStore((s) => s.selectedSubProvider);
+  const selectSubProvider = useHardwareStore((s) => s.selectSubProvider);
+  const credentials = useHardwareStore((s) => s.credentials);
+  const setProviderCredentials = useHardwareStore((s) => s.setProviderCredentials);
+  const setProviderConnected = useHardwareStore((s) => s.setProviderConnected);
+
   const [localShots, setLocalShots] = useState(shots || 1024);
+  const [keyDraft, setKeyDraft] = useState('');
   useEffect(() => {
     if (open) setLocalShots(shots || 1024);
   }, [open, shots]);
+  // Clear the in-progress key input whenever we switch provider.
+  useEffect(() => {
+    setKeyDraft('');
+  }, [selectedProvider]);
 
   useEffect(() => {
     if (!open) return;
@@ -173,8 +220,20 @@ export function LaunchModal() {
   const providerBackends = useMemo<BackendInfo[]>(() => {
     if (!selectedProvider) return [];
     const live = backends.filter((b) => b.provider === selectedProvider);
-    return live.length > 0 ? live : MOCK_BACKENDS[selectedProvider] ?? [];
-  }, [selectedProvider, backends]);
+    const all = live.length > 0 ? live : MOCK_BACKENDS[selectedProvider] ?? [];
+    // Aggregator filtering: if the user picked a sub-provider chip (e.g.
+    // "Rigetti" while viewing Braket), keep only backends whose name starts
+    // with that sub-provider. Case-insensitive, "All" disables the filter.
+    if (
+      selectedSubProvider &&
+      selectedSubProvider !== 'All' &&
+      (selectedProvider === 'braket' || selectedProvider === 'azure')
+    ) {
+      const key = selectedSubProvider.toLowerCase();
+      return all.filter((b) => b.name.toLowerCase().includes(key));
+    }
+    return all;
+  }, [selectedProvider, selectedSubProvider, backends]);
 
   if (!open) return null;
 
@@ -193,7 +252,11 @@ export function LaunchModal() {
     const providerState = providers.find((p) => p.name === selectedProvider);
     const isCredFree = selectedProvider === 'simulator' || selectedProvider === 'nvidia';
     const connected = providerState?.connected ?? isCredFree;
-    if (!connected && !isCredFree) {
+    // If this provider takes inline BYOK, the Connect button above would
+    // have flipped `connected` on already. We only fall through to the
+    // richer CredentialSetup modal for aggregators (multi-field forms)
+    // that haven't been handled inline.
+    if (!connected && !isCredFree && !INLINE_KEY_FIELD[selectedProvider]) {
       closeLaunch();
       setShowCredentialSetup(selectedProvider);
       return;
@@ -477,6 +540,172 @@ export function LaunchModal() {
             </div>
           ) : (
             <div style={{ padding: 20, display: 'flex', flexDirection: 'column', gap: 16 }}>
+              {/* Staged file indicator */}
+              {stagedSubmission && (
+                <div
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 8,
+                    padding: '6px 10px',
+                    background: `${colors.success}10`,
+                    border: `1px solid ${colors.success}30`,
+                    borderRadius: 8,
+                    fontSize: 11,
+                    color: colors.text,
+                    fontFamily: "'Geist Sans', sans-serif",
+                  }}
+                >
+                  <FileCode size={12} style={{ color: colors.success }} />
+                  <span style={{ color: colors.textDim }}>Submitting:</span>
+                  <span style={{ fontWeight: 600 }}>{stagedSubmission.fileName}</span>
+                </div>
+              )}
+
+              {/* Inline BYOK — shown when provider needs creds and isn't
+                 connected yet. Intentionally tucked above the backend list
+                 so the flow is a single continuous column rather than a
+                 separate modal. */}
+              {selectedProvider && INLINE_KEY_FIELD[selectedProvider] && !(providers.find((p) => p.name === selectedProvider)?.connected) && (
+                <div
+                  style={{
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: 6,
+                    padding: '10px 12px',
+                    background: colors.bgElevated,
+                    border: `1px solid ${colors.border}`,
+                    borderRadius: 10,
+                  }}
+                >
+                  <label
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 6,
+                      fontSize: 10,
+                      fontWeight: 600,
+                      textTransform: 'uppercase',
+                      letterSpacing: 0.5,
+                      color: colors.textDim,
+                      fontFamily: "'Geist Sans', sans-serif",
+                    }}
+                  >
+                    <KeyRound size={11} />
+                    {INLINE_KEY_FIELD[selectedProvider]?.label}
+                  </label>
+                  <div style={{ display: 'flex', gap: 6 }}>
+                    <input
+                      type="password"
+                      value={keyDraft}
+                      onChange={(e) => setKeyDraft(e.target.value)}
+                      placeholder={INLINE_KEY_FIELD[selectedProvider]?.placeholder}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' && keyDraft.trim() && selectedProvider) {
+                          e.preventDefault();
+                          setProviderCredentials(selectedProvider, { token: keyDraft.trim() });
+                          setProviderConnected(selectedProvider, true);
+                          setKeyDraft('');
+                        }
+                      }}
+                      style={{
+                        flex: 1,
+                        background: colors.bg,
+                        border: `1px solid ${colors.border}`,
+                        borderRadius: 6,
+                        color: colors.text,
+                        padding: '6px 10px',
+                        fontSize: 12,
+                        fontFamily: "'JetBrains Mono', ui-monospace, monospace",
+                        outline: 'none',
+                      }}
+                    />
+                    <button
+                      onClick={() => {
+                        if (keyDraft.trim() && selectedProvider) {
+                          setProviderCredentials(selectedProvider, { token: keyDraft.trim() });
+                          setProviderConnected(selectedProvider, true);
+                          setKeyDraft('');
+                        }
+                      }}
+                      disabled={!keyDraft.trim()}
+                      style={{
+                        background: keyDraft.trim() ? colors.accent : colors.bgElevated,
+                        color: keyDraft.trim() ? '#0a0f1a' : colors.textDim,
+                        border: 'none',
+                        borderRadius: 6,
+                        padding: '6px 12px',
+                        fontSize: 12,
+                        fontWeight: 600,
+                        fontFamily: "'Geist Sans', sans-serif",
+                        cursor: keyDraft.trim() ? 'pointer' : 'default',
+                      }}
+                    >
+                      Connect
+                    </button>
+                  </div>
+                  {INLINE_KEY_FIELD[selectedProvider]?.helpText && (
+                    <a
+                      href={INLINE_KEY_FIELD[selectedProvider]?.helpUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      style={{
+                        fontSize: 10,
+                        color: colors.accentLight,
+                        textDecoration: 'none',
+                        fontFamily: "'Geist Sans', sans-serif",
+                      }}
+                    >
+                      {INLINE_KEY_FIELD[selectedProvider]?.helpText} ↗
+                    </a>
+                  )}
+                </div>
+              )}
+              {selectedProvider && credentials[selectedProvider]?.token && (
+                <div
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 6,
+                    fontSize: 10,
+                    color: colors.success,
+                    fontFamily: "'Geist Sans', sans-serif",
+                    textTransform: 'uppercase',
+                    letterSpacing: 0.5,
+                  }}
+                >
+                  <KeyRound size={10} /> Token saved — ready to launch
+                </div>
+              )}
+
+              {/* Aggregator sub-provider chips */}
+              {selectedProvider && AGGREGATOR_SUB_PROVIDERS[selectedProvider] && (
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                  {AGGREGATOR_SUB_PROVIDERS[selectedProvider]!.map((sub) => {
+                    const isActive = (selectedSubProvider ?? 'All') === sub;
+                    return (
+                      <button
+                        key={sub}
+                        onClick={() => selectSubProvider(sub === 'All' ? null : sub)}
+                        style={{
+                          padding: '3px 10px',
+                          background: isActive ? colors.accent : 'transparent',
+                          color: isActive ? '#0a0f1a' : colors.textMuted,
+                          border: `1px solid ${isActive ? colors.accent : colors.border}`,
+                          borderRadius: 999,
+                          fontSize: 11,
+                          fontWeight: 500,
+                          fontFamily: "'Geist Sans', sans-serif",
+                          cursor: 'pointer',
+                        }}
+                      >
+                        {sub}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+
               {providerBackends.length === 0 ? (
                 <div
                   style={{
