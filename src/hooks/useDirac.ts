@@ -14,6 +14,8 @@ import { useHardwareStore } from '../stores/hardwareStore';
 import { useCapstoneStore } from '../stores/capstoneStore';
 import { useChallengeModeStore } from '../stores/challengeModeStore';
 import { DIRAC_API_URL, HAIKU_MODEL, SONNET_MODEL } from '../config/dirac';
+import { classifyIntent } from '../services/classify';
+import { compose } from '../services/compose';
 
 const SYSTEM_PROMPT = `You are Dirac, an AI teaching assistant for quantum computing, named after physicist Paul Dirac. You live inside Nuclei, a quantum computing IDE.
 
@@ -458,6 +460,39 @@ export function useDirac() {
   const sendMessage = useCallback(async (userText: string) => {
     const apiKey = useDiracStore.getState().apiKey;
     if (!apiKey || apiKey.trim() === '') return;
+
+    // Route compose-intent messages through the compose service instead of
+    // the normal chat API call. User sees a DiffPreview overlay; chat gets a
+    // short explanation recorded in history.
+    const intent = classifyIntent(userText);
+    if (intent.kind === 'compose') {
+      addMessage({ role: 'user', content: userText });
+      setLoading(true);
+      try {
+        const framework = useEditorStore.getState().framework;
+        const currentCode = useEditorStore.getState().code;
+        const res = await compose({ intent: intent.prompt, framework, currentCode });
+        if (res) {
+          useDiracStore.getState().setComposePreview({
+            intent: intent.prompt,
+            code: res.code,
+            explanation: res.explanation,
+          });
+          addMessage({
+            role: 'assistant',
+            content: res.explanation || 'Here is a draft — press Enter to apply.',
+          });
+        } else {
+          addMessage({
+            role: 'assistant',
+            content: "I couldn't draft code for that. Make sure your API key is set and try again.",
+          });
+        }
+      } finally {
+        setLoading(false);
+      }
+      return;
+    }
 
     addMessage({ role: 'user', content: userText });
     setLoading(true);
