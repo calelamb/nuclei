@@ -1,7 +1,7 @@
 import { invoke } from '@tauri-apps/api/core';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import { open, save } from '@tauri-apps/plugin-dialog';
-import { readTextFile, writeTextFile, rename, exists } from '@tauri-apps/plugin-fs';
+import { readTextFile, writeTextFile, rename, exists, readDir, remove } from '@tauri-apps/plugin-fs';
 import { load } from '@tauri-apps/plugin-store';
 import type { PlatformBridge } from './bridge';
 
@@ -98,5 +98,58 @@ export const tauriBridge: PlatformBridge = {
 
   getPlatform() {
     return 'desktop';
+  },
+
+  async openDirectory() {
+    try {
+      const selected = await open({ directory: true, multiple: false });
+      if (typeof selected !== 'string') return null;
+      return { path: selected };
+    } catch {
+      return null;
+    }
+  },
+
+  async listDirectory(path: string) {
+    try {
+      const entries = await readDir(path);
+      return entries
+        .filter((e) => {
+          if (!e.name) return false;
+          if (e.name.startsWith('.')) return false;
+          if (e.name === 'node_modules' || e.name === '__pycache__' || e.name === 'dist' || e.name === 'target') return false;
+          return true;
+        })
+        .map((e) => ({
+          name: e.name ?? '',
+          path: `${path}/${e.name}`,
+          kind: e.isDirectory ? ('directory' as const) : ('file' as const),
+        }))
+        .sort((a, b) => {
+          if (a.kind !== b.kind) return a.kind === 'directory' ? -1 : 1;
+          return a.name.localeCompare(b.name);
+        });
+    } catch {
+      return null;
+    }
+  },
+
+  async createFile(path: string, content: string) {
+    try {
+      if (await exists(path)) return null;
+      await writeTextFile(path, content);
+      return { path };
+    } catch {
+      return null;
+    }
+  },
+
+  async deleteFile(path: string) {
+    try {
+      await remove(path);
+      return true;
+    } catch {
+      return false;
+    }
   },
 };
