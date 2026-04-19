@@ -5,6 +5,23 @@ All notable changes to Nuclei will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.7] - 2026-04-18
+
+### Added — first-run framework installer
+
+Nuclei now ships with a proper framework setup wizard instead of assuming the student has `python3`, `qiskit`, `cirq`, and `cudaq` already working on their system.
+
+- **Managed Python environment.** Nuclei creates and maintains a private venv at `<appDataDir>/venv`. The kernel launches from this venv automatically, so frameworks installed through the wizard are always visible without the student touching PATH or activating anything.
+- **Framework wizard.** On first launch, a modal appears with a checklist:
+  - Core: Qiskit (recommended, ~220 MB), Cirq (recommended, ~60 MB), CUDA-Q (~500 MB, CPU sim everywhere, GPU on Linux+CUDA).
+  - Hardware providers: IBM Runtime, IonQ, AWS Braket, Azure Quantum, Quantinuum (pytket).
+  - Each row shows approximate download size and whether it's already installed.
+  - Students pick what they want, click Install, get live per-framework progress events from the Rust side.
+- **Settings → Quantum Frameworks** opens the same wizard any time, so students can add CUDA-Q later or install an extra provider mid-course without re-onboarding.
+- **Graceful degradation.** If Python 3 isn't on the system PATH at all, the wizard shows a friendly "install Python 3.10+ from python.org" instead of failing silently. If a single framework install fails (network, wheel build), the rest still install and the failure summary names which ones need retry.
+
+This is the groundwork for CUDA-Q support out of the box — you no longer need to have it pre-installed on your Mac for `@cudaq.kernel` to work.
+
 ## [0.4.6] - 2026-04-18
 
 ### Fixed — Bloch sphere labels no longer clip at panel edges

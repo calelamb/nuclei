@@ -9,6 +9,8 @@ import { ComposeModal } from './components/dirac/ComposeModal';
 import { DiffPreview } from './components/editor/DiffPreview';
 import { UnsavedChangesModal } from './components/dialogs/UnsavedChangesModal';
 import { LaunchModal } from './components/hardware/LaunchModal';
+import { FrameworkSetup } from './components/onboarding/FrameworkSetup';
+import { useFrameworksStore, needsFirstRunSetup, type FrameworkStatus } from './stores/frameworksStore';
 import { useHardwareStore } from './stores/hardwareStore';
 import { useKernel } from './hooks/useKernel';
 import { useFileOps } from './hooks/useFileOps';
@@ -71,6 +73,11 @@ function AppInner() {
   const cycleMode = useUIModeStore((s) => s.cycleMode);
   const toggleDirac = useDiracPanelStore((s) => s.toggle);
   const focusDirac = useDiracPanelStore((s) => s.focusInput);
+  const frameworksModalOpen = useFrameworksStore((s) => s.modalOpen);
+  const frameworksFirstRun = useFrameworksStore((s) => s.modalFirstRun);
+  const openFrameworksModal = useFrameworksStore((s) => s.openModal);
+  const closeFrameworksModal = useFrameworksStore((s) => s.closeModal);
+  const setFrameworksStatus = useFrameworksStore((s) => s.setStatus);
 
   useEffect(() => {
     executeRef = execute;
@@ -85,6 +92,31 @@ function AppInner() {
   useEffect(() => {
     fileOpsRef = fileOps;
   }, [fileOps]);
+
+  // First-run framework detection (desktop only). If Nuclei's managed
+  // venv doesn't exist yet, or exists but has no core quantum framework
+  // installed, surface the setup wizard. The user can skip it; we don't
+  // block the UI on it.
+  useEffect(() => {
+    if (platform.getPlatform() !== 'desktop') return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const { invoke } = await import('@tauri-apps/api/core');
+        const status = await invoke<FrameworkStatus>('framework_status');
+        if (cancelled) return;
+        setFrameworksStatus(status);
+        if (needsFirstRunSetup(status)) {
+          openFrameworksModal(true);
+        }
+      } catch {
+        // On dev builds where the command may not yet be registered we
+        // simply don't prompt — kernel fallback to system python3 still
+        // works.
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [platform, setFrameworksStatus, openFrameworksModal]);
 
   // Warn before closing with unsaved changes. Modern browsers ignore
   // preventDefault() alone — returnValue is required for the prompt to fire,
@@ -310,6 +342,11 @@ function AppInner() {
       <DiffPreview />
       <UnsavedChangesModal />
       <LaunchModal />
+      <FrameworkSetup
+        open={frameworksModalOpen}
+        firstRun={frameworksFirstRun}
+        onClose={closeFrameworksModal}
+      />
     </>
   );
 }

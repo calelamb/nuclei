@@ -16,6 +16,8 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             commands::kernel::start_kernel,
             commands::kernel::stop_kernel,
+            commands::frameworks::framework_status,
+            commands::frameworks::framework_install,
         ])
         .setup(|app| {
             let log_level = if cfg!(debug_assertions) {

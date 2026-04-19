@@ -81,9 +81,24 @@ pub fn start_kernel(
         return Err("Kernel script path resolved outside project directory".to_string());
     }
 
-    log::info!("Starting kernel: python3 {} (cwd: {})", kernel_script.display(), project_root.display());
+    // Prefer the Nuclei-managed venv's Python (created by the framework
+    // installer) so the kernel sees whichever frameworks the student
+    // picked. Fall back to the first python3 on PATH for users who
+    // haven't run the installer yet.
+    let python_path: std::path::PathBuf =
+        match crate::commands::frameworks::resolve_kernel_python(&app_handle) {
+            Some(p) => p,
+            None => std::path::PathBuf::from("python3"),
+        };
 
-    let child = Command::new("python3")
+    log::info!(
+        "Starting kernel: {} {} (cwd: {})",
+        python_path.display(),
+        kernel_script.display(),
+        project_root.display()
+    );
+
+    let child = Command::new(&python_path)
         .arg(kernel_script.to_str().unwrap())
         .current_dir(&project_root)
         .stdout(std::process::Stdio::piped())
