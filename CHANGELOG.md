@@ -5,6 +5,18 @@ All notable changes to Nuclei will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.5] - 2026-04-18
+
+### Changed — in-memory New Project + classic interactive Bloch sphere
+
+- **New Project is now an in-memory scratch, not a disk folder.** Previously the button opened Finder, made you name a project, and wrote a directory before you'd typed a single character. Wrong metaphor. Now clicking New Project opens an untitled `main.py` tab in memory with the current framework's starter code — no Finder, no disk. Write code, decide where to save it later with ⌘S. On save the tab re-paths to the real location and the sidebar tree flips from the "tab-only" view to the real filesystem view.
+- **Bloch sphere replaced with a classic interactive sphere.** Ported the bits-and-electrons simulator style (https://github.com/bits-and-electrons/bloch-sphere-simulator) into React Three Fiber. Wireframe sphere, labeled X/Y/Z axes (red/green/blue matching the reference), |0⟩/|1⟩ basis labels at the poles, cyan state arrow that reacts to simulation results. Drag to rotate, scroll to zoom. Multi-qubit circuits render spheres side-by-side in the rail, each with its own OrbitControls.
+- **Gate rail gets proper top padding.** The circuit wire diagram was rendering flush with the top edge of the panel; now has 16px breathing room so the top wire's `|0⟩` label isn't kissing the window chrome.
+
+### Removed
+
+- Deleted the floating-qubit constellation (Constellation.tsx, FloatingBlochQubit.tsx, CameraDirector.tsx, EntanglementTethers.tsx, BlochStage.tsx) and the useQubitLayout / useReducedMotion hooks that only that visual needed. The new classic sphere renders from the same kernel `bloch_coords` so nothing upstream changes.
+
 ## [0.4.4] - 2026-04-18
 
 ### Added — PyCharm-style project creation and framework-aware starters

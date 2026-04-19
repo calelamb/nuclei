@@ -28,6 +28,7 @@ import {
   displayFrameworkName,
   defaultCircuitFileName,
 } from '../../data/starterTemplates';
+import { MEMORY_PREFIX, isMemoryPath } from '../../hooks/useFileOps';
 
 const EXTENSION_ICONS: Record<string, LucideIcon> = {
   py: FileCode,
@@ -104,8 +105,9 @@ export function FileExplorer() {
     [platform],
   );
 
+  const inMemory = isMemoryPath(projectRoot);
   useEffect(() => {
-    if (projectRoot) loadRoot(projectRoot);
+    if (projectRoot && !isMemoryPath(projectRoot)) loadRoot(projectRoot);
     else setRootEntries(null);
   }, [projectRoot, loadRoot]);
 
@@ -127,33 +129,24 @@ export function FileExplorer() {
     platform.setStoredValue('project_root', picked.path).catch(() => {});
   }, [platform, setProjectRoot]);
 
-  const handleNewProject = useCallback(async () => {
-    const parent = await platform.openDirectory();
-    if (!parent) return;
-    const name = window.prompt(
-      'Project name',
-      'my-quantum-project',
-    )?.trim();
-    if (!name) return;
-    if (!/^[A-Za-z0-9_.\- ]+$/.test(name)) {
-      setError('Project name can only contain letters, numbers, spaces, dots, hyphens, and underscores.');
-      return;
-    }
-    const projectPath = `${parent.path}/${name}`;
-    const dir = await platform.createDirectory(projectPath, false);
-    if (!dir) {
-      setError(`Couldn't create "${name}" — does it already exist?`);
-      return;
-    }
+  /**
+   * Create a fresh in-memory project. No disk I/O, no native Finder dialog —
+   * a synthetic project root is stashed in projectStore and a single
+   * untitled `main.py` tab is opened with the current framework's starter
+   * code. The user writes code, then on ⌘S a native save dialog lets them
+   * pick a real location; on save the tab re-paths and the project root
+   * migrates to the saved file's parent folder (see useFileOps.saveFileAs).
+   */
+  const handleNewProject = useCallback(() => {
+    const id = Date.now();
+    const memRoot = `${MEMORY_PREFIX}project-${id}`;
     const currentFramework = useEditorStore.getState().framework;
-    const mainPath = `${projectPath}/main.py`;
-    const mainRes = await platform.createFile(mainPath, STARTER_TEMPLATES[currentFramework]);
-    await platform.createFile(`${projectPath}/README.md`, `# ${name}\n\nQuantum project scaffolded by Nuclei (${displayFrameworkName(currentFramework)}).\n`);
-    setProjectRoot(projectPath);
-    platform.setStoredValue('project_root', projectPath).catch(() => {});
-    if (mainRes) {
-      openTab({ path: mainRes.path, content: STARTER_TEMPLATES[currentFramework] });
-    }
+    setProjectRoot(memRoot);
+    platform.setStoredValue('project_root', null).catch(() => {});
+    openTab({
+      path: `${memRoot}/main.py`,
+      content: STARTER_TEMPLATES[currentFramework],
+    });
   }, [platform, setProjectRoot, openTab]);
 
   const handleRefresh = useCallback(() => {
@@ -209,6 +202,27 @@ export function FileExplorer() {
     }
     if (raw.includes('/') || raw.includes('\\')) {
       setError('Names cannot contain slashes. Use the file tree to choose a location.');
+      cancelCreate();
+      return;
+    }
+
+    // In an in-memory (unsaved) project, all "creates" produce in-memory
+    // tabs only. Folders and packages don't exist as concepts until the
+    // project has a real location on disk — we block them with a hint
+    // instead of silently doing nothing. Save the project first (⌘S on
+    // any file) to promote it to a real folder, then folder/package
+    // creation works normally.
+    if (isMemoryPath(projectRoot)) {
+      if (pending.kind === 'folder' || pending.kind === 'package') {
+        setError('Save the project first (⌘S) to add folders or packages.');
+        cancelCreate();
+        return;
+      }
+      const name = raw.endsWith('.py') || raw.includes('.') ? raw : `${raw}.py`;
+      const path = `${projectRoot}/${name}`;
+      const content = pending.kind === 'circuit' ? STARTER_TEMPLATES[pending.framework] : '';
+      if (pending.kind === 'circuit') setEditorFramework(pending.framework);
+      openTab({ path, content });
       cancelCreate();
       return;
     }
@@ -366,10 +380,27 @@ export function FileExplorer() {
     );
   };
 
-  const rootName = useMemo(
-    () => (projectRoot ? projectRoot.split('/').pop() || projectRoot : ''),
-    [projectRoot],
-  );
+  const rootName = useMemo(() => {
+    if (!projectRoot) return '';
+    if (isMemoryPath(projectRoot)) return 'Untitled project';
+    return projectRoot.split('/').pop() || projectRoot;
+  }, [projectRoot]);
+
+  /**
+   * When the project is in-memory (unsaved), the "tree" is just the list
+   * of open tabs whose paths live under this memory:// root. There's no
+   * filesystem to read, and we deliberately show nothing else.
+   */
+  const memoryTabEntries: DirEntry[] = useMemo(() => {
+    if (!projectRoot || !isMemoryPath(projectRoot)) return [];
+    return tabs
+      .filter((t) => t.path.startsWith(`${projectRoot}/`))
+      .map((t) => ({
+        name: t.path.slice(projectRoot.length + 1),
+        path: t.path,
+        kind: 'file' as const,
+      }));
+  }, [tabs, projectRoot]);
 
   if (isWeb) {
     return (
@@ -730,8 +761,37 @@ export function FileExplorer() {
             {error}
           </div>
         )}
-        {!loading && !error && rootEntries && rootEntries.map((e) => renderEntry(e, 0))}
-        {!loading && !error && rootEntries && rootEntries.length === 0 && (
+        {!loading && !error && inMemory && (
+          <>
+            <div
+              style={{
+                padding: '8px 14px 4px',
+                color: colors.textDim,
+                fontSize: 10,
+                textTransform: 'uppercase',
+                letterSpacing: 0.5,
+                fontFamily: "'Geist Sans', sans-serif",
+              }}
+            >
+              Unsaved — ⌘S to save to disk
+            </div>
+            {memoryTabEntries.map((e) => renderEntry(e, 0))}
+            {memoryTabEntries.length === 0 && (
+              <div
+                style={{
+                  padding: 14,
+                  color: colors.textDim,
+                  fontSize: 12,
+                  fontFamily: "'Geist Sans', sans-serif",
+                }}
+              >
+                Click + to add a file or circuit. ⌘S to save to disk.
+              </div>
+            )}
+          </>
+        )}
+        {!loading && !error && !inMemory && rootEntries && rootEntries.map((e) => renderEntry(e, 0))}
+        {!loading && !error && !inMemory && rootEntries && rootEntries.length === 0 && (
           <div
             style={{
               padding: 14,

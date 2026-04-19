@@ -1,10 +1,21 @@
 import { useCallback, useEffect } from 'react';
 import { usePlatform } from '../platform/PlatformProvider';
 import { useEditorStore } from '../stores/editorStore';
+import { useProjectStore } from '../stores/projectStore';
 
 const RECENT_FILES_KEY = 'recent_files';
 const MAX_RECENT = 10;
 const LAST_OPENED_FILE_KEY = 'last_opened_file';
+
+export const MEMORY_PREFIX = 'memory://';
+export const isMemoryPath = (p: string | null | undefined): boolean =>
+  !!p && p.startsWith(MEMORY_PREFIX);
+
+function parentDir(path: string): string | null {
+  const idx = path.lastIndexOf('/');
+  if (idx <= 0) return null;
+  return path.slice(0, idx);
+}
 
 export function useFileOps() {
   const { code, filePath, isDirty, setCode, setFilePath } = useEditorStore();
@@ -36,20 +47,52 @@ export function useFileOps() {
   }, [setCode, setFilePath, addRecent, platform]);
 
   const saveFileAs = useCallback(async () => {
-    const result = await platform.saveFileAs(code, filePath ?? undefined);
+    // A memory:// filePath is a synthetic id for an unsaved buffer — we must
+    // not suggest it as a default disk location, so strip it out of the hint.
+    const defaultPath = filePath && !isMemoryPath(filePath) ? filePath : undefined;
+    const result = await platform.saveFileAs(code, defaultPath);
     if (!result) return;
 
+    const priorPath = filePath;
     setFilePath(result.path);
     await addRecent(result.path);
     await platform.setStoredValue(LAST_OPENED_FILE_KEY, result.path);
+
+    // Keep projectStore in sync: rename the active tab to the saved disk
+    // path, and mark it as saved so the dirty dot clears.
+    if (priorPath) {
+      const ps = useProjectStore.getState();
+      if (ps.tabs.some((t) => t.path === priorPath)) {
+        ps.renameTab(priorPath, result.path);
+        ps.markTabSaved(result.path, code);
+      }
+    }
+
+    // If this was an in-memory project, migrate the project root to the
+    // saved file's parent folder so the sidebar tree switches from the
+    // tab-only view to the real filesystem view.
+    const ps = useProjectStore.getState();
+    if (isMemoryPath(ps.projectRoot)) {
+      const parent = parentDir(result.path);
+      if (parent) {
+        ps.setProjectRoot(parent);
+        platform.setStoredValue('project_root', parent).catch(() => {});
+      }
+    }
   }, [filePath, code, setFilePath, addRecent, platform]);
 
   const saveFile = useCallback(async () => {
-    if (filePath) {
+    if (filePath && !isMemoryPath(filePath)) {
       await platform.saveFile(filePath, code);
       setFilePath(filePath);
       await addRecent(filePath);
       await platform.setStoredValue(LAST_OPENED_FILE_KEY, filePath);
+
+      // Mirror the save into the tab so its dirty state clears.
+      const ps = useProjectStore.getState();
+      if (ps.tabs.some((t) => t.path === filePath)) {
+        ps.markTabSaved(filePath, code);
+      }
     } else {
       await saveFileAs();
     }
