@@ -9,6 +9,7 @@ import { useEditorStore } from '../../../stores/editorStore';
 import { useCircuitStore } from '../../../stores/circuitStore';
 import { useSimulationStore } from '../../../stores/simulationStore';
 import { useDiracStore } from '../../../stores/diracStore';
+import { useSettingsStore } from '../../../stores/settingsStore';
 
 const API_URL = 'https://api.anthropic.com/v1/messages';
 const HAIKU_MODEL = 'claude-haiku-4-5-20251001';
@@ -86,6 +87,10 @@ export function registerGhostCompletions(monaco: any) {
   const provider = monaco.languages.registerInlineCompletionsProvider('python', {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     provideInlineCompletions: async (model: any, position: any, _context: any, token: any) => {
+      // Respect the per-user toggle — ghost is off by default for beginners.
+      if (!useSettingsStore.getState().dirac.ghostCompletions) {
+        return { items: [] };
+      }
       // Guard against out-of-range line numbers
       const lineCount = model.getLineCount();
       if (position.lineNumber < 1 || position.lineNumber > lineCount) {
