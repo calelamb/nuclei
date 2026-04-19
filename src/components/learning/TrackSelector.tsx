@@ -375,7 +375,7 @@ export function TrackSelector() {
             </button>
             <div style={{ paddingBottom: '56.25%', position: 'relative' }}>
               <iframe
-                src={`https://www.youtube.com/embed/${playingVideo}?autoplay=1`}
+                src={`https://www.youtube-nocookie.com/embed/${playingVideo}?autoplay=1`}
                 title="Video"
                 style={{
                   position: 'absolute', top: 0, left: 0,

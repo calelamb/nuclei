@@ -89,7 +89,7 @@ export function VideoPlayer({ youtubeId, title, creator, startTime, endTime, sou
   }
 
   const effectiveStart = chapterStart ?? startTime;
-  let src = `https://www.youtube.com/embed/${youtubeId}?enablejsapi=1&rel=0`;
+  let src = `https://www.youtube-nocookie.com/embed/${youtubeId}?rel=0`;
   if (effectiveStart) src += `&start=${effectiveStart}`;
   if (endTime) src += `&end=${endTime}`;
 
