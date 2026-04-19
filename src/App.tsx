@@ -9,6 +9,7 @@ import { ComposeModal } from './components/dirac/ComposeModal';
 import { DiffPreview } from './components/editor/DiffPreview';
 import { useKernel } from './hooks/useKernel';
 import { useFileOps } from './hooks/useFileOps';
+import { useActiveTabSync } from './hooks/useActiveTabSync';
 import { useThemeStore } from './stores/themeStore';
 import { useEditorStore } from './stores/editorStore';
 import { useUIModeStore } from './stores/uiModeStore';
@@ -29,6 +30,7 @@ export function getFileOps() { return fileOpsRef; }
 function AppInner() {
   const { execute } = useKernel();
   const fileOps = useFileOps();
+  useActiveTabSync();
   const platform = usePlatform();
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [showShortcuts, setShowShortcuts] = useState(false);

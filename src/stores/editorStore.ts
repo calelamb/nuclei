@@ -30,6 +30,7 @@ interface EditorState {
   setCode: (code: string) => void;
   setFramework: (framework: Framework) => void;
   setFilePath: (path: string | null) => void;
+  setIsDirty: (isDirty: boolean) => void;
   setKernelConnected: (connected: boolean) => void;
   setKernelReady: (ready: boolean) => void;
   setKernelStatus: (status: KernelStatus, error?: string | null) => void;
@@ -58,6 +59,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   },
   setFramework: (framework) => set({ framework }),
   setFilePath: (filePath) => set({ filePath, isDirty: false }),
+  setIsDirty: (isDirty) => set({ isDirty }),
   setKernelConnected: (kernelConnected) => set({ kernelConnected }),
   setKernelReady: (kernelReady) => set({ kernelReady }),
   setKernelStatus: (kernelStatus, kernelError = null) => set({ kernelStatus, kernelError }),
