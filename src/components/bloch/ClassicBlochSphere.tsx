@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 import { Canvas } from '@react-three/fiber';
-import { OrbitControls, Line, Text } from '@react-three/drei';
+import { OrbitControls, Line, Html } from '@react-three/drei';
 import * as THREE from 'three';
 
 /**
@@ -114,19 +114,27 @@ function AxisLine({
   const [start, end] = axisPoints(dir, 1.15);
   // Tight label offset — the camera framing is finite, and pushing labels
   // too far past the axis tip clips them on narrow rail widths.
-  const labelPos = end.clone().multiplyScalar(1.05);
+  const labelPos = end.clone().multiplyScalar(1.08);
   return (
     <group>
       <Line points={[start, end]} color={color} lineWidth={1.2} />
-      <Text
+      <Html
         position={labelPos}
-        fontSize={0.14}
-        color={color}
-        anchorX="center"
-        anchorY="middle"
+        center
+        zIndexRange={[10, 0]}
+        style={{
+          color,
+          fontFamily: "'Geist Sans', sans-serif",
+          fontSize: 11,
+          fontWeight: 600,
+          pointerEvents: 'none',
+          userSelect: 'none',
+          whiteSpace: 'nowrap',
+          opacity: 0.95,
+        }}
       >
         {label}
-      </Text>
+      </Html>
     </group>
   );
 }
@@ -185,25 +193,41 @@ export function ClassicBlochSphere({
         <AxisLine dir="x" color={AXIS_X_COLOR} label="X" />
         <AxisLine dir="z" color={AXIS_Y_COLOR} label="Y" />
 
-        {/* Basis state labels at the poles. */}
-        <Text
+        {/* Basis state labels at the poles. Rendered as DOM overlays via
+            drei <Html> so we don't depend on any external font load (which
+            drei <Text> does — and that CDN fetch fails in a Tauri bundle). */}
+        <Html
           position={[0, 1.22, 0]}
-          fontSize={0.13}
-          color={LABEL_COLOR}
-          anchorX="center"
-          anchorY="middle"
+          center
+          zIndexRange={[10, 0]}
+          style={{
+            color: LABEL_COLOR,
+            fontFamily: "'Geist Sans', sans-serif",
+            fontSize: 11,
+            fontWeight: 500,
+            pointerEvents: 'none',
+            userSelect: 'none',
+            whiteSpace: 'nowrap',
+          }}
         >
           |0⟩
-        </Text>
-        <Text
+        </Html>
+        <Html
           position={[0, -1.22, 0]}
-          fontSize={0.13}
-          color={LABEL_COLOR}
-          anchorX="center"
-          anchorY="middle"
+          center
+          zIndexRange={[10, 0]}
+          style={{
+            color: LABEL_COLOR,
+            fontFamily: "'Geist Sans', sans-serif",
+            fontSize: 11,
+            fontWeight: 500,
+            pointerEvents: 'none',
+            userSelect: 'none',
+            whiteSpace: 'nowrap',
+          }}
         >
           |1⟩
-        </Text>
+        </Html>
 
         {/* State vector. */}
         {coord && <StateArrow coord={coord} />}
