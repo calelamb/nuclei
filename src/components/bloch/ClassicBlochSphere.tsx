@@ -112,7 +112,9 @@ function AxisLine({
   label: string;
 }) {
   const [start, end] = axisPoints(dir, 1.15);
-  const labelPos = end.clone().multiplyScalar(1.12);
+  // Tight label offset — the camera framing is finite, and pushing labels
+  // too far past the axis tip clips them on narrow rail widths.
+  const labelPos = end.clone().multiplyScalar(1.05);
   return (
     <group>
       <Line points={[start, end]} color={color} lineWidth={1.2} />
@@ -152,7 +154,10 @@ export function ClassicBlochSphere({
     <div style={{ ...containerStyle, position: 'relative' }}>
       <Canvas
         dpr={[1, 2]}
-        camera={{ position: [1.9, 1.2, 1.9], fov: 38 }}
+        // Framing sized so a sphere of radius 1 plus axis/basis labels at
+        // ~1.22 never clip vertically, even at narrow-rail aspect ratios.
+        // Distance ≈ 4.07, fov 45° → vertical half-extent ≈ 1.69 at origin.
+        camera={{ position: [2.6, 1.7, 2.6], fov: 45 }}
         gl={{ antialias: true, alpha: true }}
         style={{ background: 'transparent' }}
       >
@@ -182,7 +187,7 @@ export function ClassicBlochSphere({
 
         {/* Basis state labels at the poles. */}
         <Text
-          position={[0, 1.32, 0]}
+          position={[0, 1.22, 0]}
           fontSize={0.13}
           color={LABEL_COLOR}
           anchorX="center"
@@ -191,7 +196,7 @@ export function ClassicBlochSphere({
           |0⟩
         </Text>
         <Text
-          position={[0, -1.32, 0]}
+          position={[0, -1.22, 0]}
           fontSize={0.13}
           color={LABEL_COLOR}
           anchorX="center"
@@ -207,8 +212,11 @@ export function ClassicBlochSphere({
           enablePan={false}
           enableDamping
           dampingFactor={0.08}
-          minDistance={1.8}
-          maxDistance={5}
+          // Clamp zoom so labels stay inside the view. minDistance just past
+          // the sphere surface; maxDistance wide enough for comfortable
+          // overview but short enough to keep the state arrow visible.
+          minDistance={2.2}
+          maxDistance={6.5}
           rotateSpeed={0.8}
           target={[0, 0, 0]}
         />
