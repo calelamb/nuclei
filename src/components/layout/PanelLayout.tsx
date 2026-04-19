@@ -14,6 +14,7 @@ import { Sidebar } from './Sidebar';
 import { PanelReveal } from './PanelReveal';
 import { HistogramChip } from '../histogram/HistogramChip';
 import { useLayoutStore, computeVisiblePanels, type LayoutPreset } from '../../stores/layoutStore';
+import { useDiracStore } from '../../stores/diracStore';
 import { DEFAULT_EDITOR_PANE_WIDTH, computeEditorPaneWidth } from './layoutMath';
 import { useEditorStore } from '../../stores/editorStore';
 import { useCircuitStore } from '../../stores/circuitStore';
@@ -41,11 +42,58 @@ const DEFAULT_SIDEBAR_WIDTH = 240;
 function TerminalPanel() {
   const { terminalOutput } = useSimulationStore();
   const colors = useThemeStore((s) => s.colors);
+  const rewritten = useDiracStore((s) => s.rewrittenError);
+  const clearRewrittenError = useDiracStore((s) => s.clearRewrittenError);
+  const setCode = useEditorStore((s) => s.setCode);
   const scrollRef = useRef<HTMLDivElement>(null);
-  useEffect(() => { if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight; }, [terminalOutput]);
+  useEffect(() => {
+    if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+  }, [terminalOutput, rewritten]);
   return (
     <div ref={scrollRef} style={{ height: '100%', overflow: 'auto', fontFamily: "'Geist Mono', 'JetBrains Mono', monospace", fontSize: 12, color: colors.text, padding: '8px 12px' }}>
-      {terminalOutput.length === 0 ? (
+      {rewritten && (
+        <div
+          role="alert"
+          style={{
+            marginBottom: 10,
+            padding: '10px 12px',
+            border: `1px solid ${colors.dirac}40`,
+            borderRadius: 10,
+            background: `${colors.dirac}12`,
+            fontFamily: "'Geist Sans', sans-serif",
+            fontSize: 12,
+            lineHeight: 1.5,
+            color: colors.text,
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6, color: colors.dirac, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.5, fontSize: 10 }}>
+            Dirac
+          </div>
+          <div style={{ marginBottom: rewritten.fix ? 10 : 0 }}>{rewritten.explanation}</div>
+          <div style={{ display: 'flex', gap: 6 }}>
+            {rewritten.fix && (
+              <button
+                onClick={() => { setCode(rewritten.fix!); clearRewrittenError(); }}
+                style={{
+                  background: colors.dirac, color: '#fff', border: 'none',
+                  borderRadius: 6, padding: '4px 10px', fontSize: 11, fontWeight: 600,
+                  cursor: 'pointer', fontFamily: "'Geist Sans', sans-serif",
+                }}
+              >Apply fix</button>
+            )}
+            <button
+              onClick={clearRewrittenError}
+              style={{
+                background: 'transparent', color: colors.textDim,
+                border: `1px solid ${colors.border}`,
+                borderRadius: 6, padding: '4px 10px', fontSize: 11,
+                cursor: 'pointer', fontFamily: "'Geist Sans', sans-serif",
+              }}
+            >Dismiss</button>
+          </div>
+        </div>
+      )}
+      {terminalOutput.length === 0 && !rewritten ? (
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: colors.textDim }}>
           <span style={{ color: colors.accent, opacity: 0.3, fontFamily: "'Geist Mono', monospace" }}>{'>'}_</span>
           <span style={{ fontSize: 11 }}>Terminal output will appear here</span>
