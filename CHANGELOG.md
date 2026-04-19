@@ -5,9 +5,40 @@ All notable changes to Nuclei will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.11] - 2026-04-19
+
+### Fixed — YouTube Error 153 actually resolved (previous fix didn't work)
+
+v0.4.10 tried to fix Error 153 by dropping `enablejsapi=1` and
+switching from `youtube.com/embed` to `youtube-nocookie.com/embed`.
+That reasoning was wrong. YouTube's embed player validates the
+parent document's origin regardless of which domain you embed from,
+and Tauri's `tauri://localhost` (macOS) / `http://tauri.localhost`
+(Win/Linux) webview origin is rejected either way. `nocookie` is
+actually stricter than the regular embed, so the swap made the
+failure mode more visible, not less.
+
+In-iframe embedding cannot be fixed inside Tauri — the webview
+origin is fixed by the runtime. Every major desktop app (Linear,
+Slack, Notion, Discord) handles this the same way: poster thumbnail
+in-app, video plays in the OS default browser.
+
+- Added `tauri-plugin-shell` with a scoped `shell:allow-open`
+  permission limited to `youtube.com` and `youtu.be`.
+- Rewrote `VideoPlayer` as a click-to-play poster — YouTube
+  thumbnail, play button overlay, "Opens in browser" hint.
+  Chapter clicks open the video at the right timestamp via
+  `?t=Ns`. Lesson view no longer mounts an iframe at all.
+- `VideoLibrary` and `TrackSelector` now open the external browser
+  directly when a video card is clicked; the iframe modals that
+  couldn't load the videos anyway have been removed.
+- CSP `frame-src` trimmed to `'self'` since no YouTube iframes
+  remain; `img-src` still whitelists `img.youtube.com` for
+  thumbnails.
+
 ## [0.4.10] - 2026-04-19
 
-### Fixed — lesson videos failing with YouTube Error 153
+### Fixed — lesson videos failing with YouTube Error 153 (superseded by 0.4.11)
 
 `VideoPlayer` was embedding lessons with `enablejsapi=1`, which makes
 YouTube validate the parent origin before initializing the embed
@@ -24,6 +55,8 @@ weight anyway.
   already whitelists it, it's more lenient about embedded-origin
   checks, and it stops YouTube from setting tracking cookies on
   students who are just watching a lesson video.
+
+Note: This fix did not actually resolve Error 153. See 0.4.11.
 
 ## [0.4.9] - 2026-04-18
 

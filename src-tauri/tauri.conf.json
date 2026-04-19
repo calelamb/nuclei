@@ -1,7 +1,7 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "nuclei",
-  "version": "0.4.10",
+  "version": "0.4.11",
   "identifier": "com.nuclei.app",
   "build": {
     "frontendDist": "../dist",
@@ -22,7 +22,7 @@
       }
     ],
     "security": {
-      "csp": "default-src 'self'; script-src 'self' 'unsafe-eval' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; connect-src 'self' https://api.anthropic.com wss://localhost:9742 ws://localhost:9742; img-src 'self' data: blob: https://img.youtube.com https://i.ytimg.com; font-src 'self' data:; worker-src 'self' blob:; frame-src 'self' https://www.youtube.com https://www.youtube-nocookie.com; object-src 'none'; base-uri 'self'"
+      "csp": "default-src 'self'; script-src 'self' 'unsafe-eval' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; connect-src 'self' https://api.anthropic.com wss://localhost:9742 ws://localhost:9742; img-src 'self' data: blob: https://img.youtube.com https://i.ytimg.com; font-src 'self' data:; worker-src 'self' blob:; frame-src 'self'; object-src 'none'; base-uri 'self'"
     }
   },
   "bundle": {

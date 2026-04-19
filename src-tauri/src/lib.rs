@@ -12,6 +12,7 @@ pub fn run() {
         .plugin(tauri_plugin_store::Builder::default().build())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_fs::init())
+        .plugin(tauri_plugin_shell::init())
         .manage(kernel_state)
         .invoke_handler(tauri::generate_handler![
             commands::kernel::start_kernel,

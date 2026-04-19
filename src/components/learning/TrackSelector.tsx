@@ -3,7 +3,8 @@ import { useThemeStore } from '../../stores/themeStore';
 import { useLearnStore } from '../../stores/learnStore';
 import { TRACKS } from '../../data/lessons/tracks';
 import { CURATED_VIDEOS } from '../../data/videos/curatedLibrary';
-import { BookOpen, ChevronRight, CheckCircle, Lock, Play, X } from 'lucide-react';
+import { BookOpen, ChevronRight, CheckCircle, Lock, Play } from 'lucide-react';
+import { openExternal, buildYouTubeWatchUrl } from '../../lib/openExternal';
 
 export function TrackSelector() {
   const colors = useThemeStore((s) => s.colors);
@@ -11,8 +12,6 @@ export function TrackSelector() {
   const setCurrentLesson = useLearnStore((s) => s.setCurrentLesson);
   const completedLessons = useLearnStore((s) => s.completedLessons);
   const lessonProgress = useLearnStore((s) => s.lessonProgress);
-  const [playingVideo, setPlayingVideo] = useState<string | null>(null);
-
   const [videoCreatorFilter, setVideoCreatorFilter] = useState<string>('all');
   const filteredVideos = videoCreatorFilter === 'all'
     ? CURATED_VIDEOS
@@ -263,7 +262,7 @@ export function TrackSelector() {
             return (
               <button
                 key={video.id}
-                onClick={() => setPlayingVideo(video.youtubeId)}
+                onClick={() => void openExternal(buildYouTubeWatchUrl(video.youtubeId))}
                 style={{
                   display: 'flex', flexDirection: 'column',
                   background: colors.bgElevated, border: `1px solid ${colors.border}`,
@@ -349,46 +348,6 @@ export function TrackSelector() {
         </div>
       </div>
 
-      {/* Video modal */}
-      {playingVideo && (
-        <div
-          onClick={() => setPlayingVideo(null)}
-          style={{
-            position: 'fixed', inset: 0, zIndex: 9999,
-            background: 'rgba(0,0,0,0.8)',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-          }}
-        >
-          <div
-            onClick={(e) => e.stopPropagation()}
-            style={{ width: '80%', maxWidth: 800, position: 'relative' }}
-          >
-            <button
-              onClick={() => setPlayingVideo(null)}
-              style={{
-                position: 'absolute', top: -36, right: 0,
-                background: 'transparent', border: 'none',
-                color: '#fff', cursor: 'pointer',
-              }}
-            >
-              <X size={20} />
-            </button>
-            <div style={{ paddingBottom: '56.25%', position: 'relative' }}>
-              <iframe
-                src={`https://www.youtube-nocookie.com/embed/${playingVideo}?autoplay=1`}
-                title="Video"
-                style={{
-                  position: 'absolute', top: 0, left: 0,
-                  width: '100%', height: '100%', border: 'none',
-                  borderRadius: 8,
-                }}
-                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                allowFullScreen
-              />
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
