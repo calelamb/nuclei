@@ -7,6 +7,7 @@ import { CommandPalette, buildCommands } from './components/commandPalette/Comma
 import { UpdateBanner } from './components/UpdateBanner';
 import { ComposeModal } from './components/dirac/ComposeModal';
 import { DiffPreview } from './components/editor/DiffPreview';
+import { UnsavedChangesModal } from './components/dialogs/UnsavedChangesModal';
 import { useKernel } from './hooks/useKernel';
 import { useFileOps } from './hooks/useFileOps';
 import { useActiveTabSync } from './hooks/useActiveTabSync';
@@ -249,6 +250,7 @@ function AppInner() {
       {showCommandPalette && <CommandPalette commands={commands} onClose={() => setShowCommandPalette(false)} />}
       <ComposeModal open={composeOpen} onClose={() => setComposeOpen(false)} />
       <DiffPreview />
+      <UnsavedChangesModal />
     </>
   );
 }
