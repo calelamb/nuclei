@@ -50,8 +50,8 @@ export function ComposeModal({ open, onClose }: ComposeModalProps) {
     setError(null);
     const res = await compose({ intent: text, framework, currentCode });
     setLoading(false);
-    if (!res) {
-      setError("Couldn't compose. Is your API key set in Settings?");
+    if (!res.ok) {
+      setError(res.error);
       return;
     }
     setPreview({ intent: text, code: res.code, explanation: res.explanation });

@@ -5,6 +5,18 @@ All notable changes to Nuclei will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.3] - 2026-04-18
+
+### Fixed — Dirac AI paths now use real model IDs and surface real errors
+
+- **Compose fixed.** The "I couldn't draft code for that" error was caused by an invalid Sonnet model ID (`claude-sonnet-4-6-20250514`) in `src/services/compose.ts`. Anthropic rejected the request with HTTP 400, and the compose service swallowed the error and returned `null`, leaving the UI with a generic "is your API key set?" message. The ID is now `claude-sonnet-4-6`, the authoritative current Sonnet 4.6 snapshot.
+- **Single source of truth for model IDs.** `src/config/dirac.ts` is now the only place any surface defines a Claude model. Added `OPUS_MODEL = 'claude-opus-4-7'` for future reasoning-mode paths. Haiku stays on `claude-haiku-4-5-20251001`.
+- **InlineEdit (⌘K) switched to the shared config.** It was hardcoded to the old Sonnet 4.5 snapshot and therefore would silently fail the same way compose did. Now imports `SONNET_MODEL` and `DIRAC_API_URL` from `config/dirac`.
+- **Honest error propagation.** `compose()` now returns a `ComposeResult` envelope (`{ ok: true, code, explanation } | { ok: false, error }`). 4xx responses are unpacked (`body.error.message`) and shown verbatim to the user, so bad API keys, bad model IDs, rate limits, and billing issues read true instead of a catch-all "set your key in Settings" hint.
+- **ComposeModal (⌘I) and Dirac chat compose-intent** updated to consume the new envelope and display the real reason.
+
+Net effect: Dirac's agentic compose, inline edit, and chat paths all hit valid endpoints now, and when something still fails, you see why.
+
 ## [0.4.2] - 2026-04-18
 
 ### Fixed — **hardware submission is now real**
