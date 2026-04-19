@@ -31,8 +31,20 @@ let fileOpsRef: ReturnType<typeof useFileOps> | null = null;
 // eslint-disable-next-line react-refresh/only-export-components
 export function getFileOps() { return fileOpsRef; }
 
+// Hardware senders pulled out of useKernel so LaunchModal / LaunchStrip /
+// LaunchPortal can reach the WebSocket without threading the hook through
+// every prop.
+interface HardwareActions {
+  hardwareConnect: (provider: string, credentials: Record<string, string>) => void;
+  hardwareSubmit: (provider: string, backend: string, code: string, shots: number) => boolean;
+  hardwareCancel: (jobId: string) => void;
+}
+let hardwareRef: HardwareActions | null = null;
+// eslint-disable-next-line react-refresh/only-export-components
+export function getHardware() { return hardwareRef; }
+
 function AppInner() {
-  const { execute } = useKernel();
+  const { execute, hardwareConnect, hardwareSubmit, hardwareCancel } = useKernel();
   const fileOps = useFileOps();
   useActiveTabSync();
   const platform = usePlatform();
@@ -64,6 +76,11 @@ function AppInner() {
     executeRef = execute;
     return () => { executeRef = null; };
   }, [execute]);
+
+  useEffect(() => {
+    hardwareRef = { hardwareConnect, hardwareSubmit, hardwareCancel };
+    return () => { hardwareRef = null; };
+  }, [hardwareConnect, hardwareSubmit, hardwareCancel]);
 
   useEffect(() => {
     fileOpsRef = fileOps;

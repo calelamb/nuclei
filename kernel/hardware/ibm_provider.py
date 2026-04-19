@@ -177,3 +177,13 @@ class IBMProvider(HardwareProvider):
             return 0
         except Exception:
             return -1
+
+    def cancel_job(self, job: JobHandle) -> bool:
+        ibm_job = self._jobs.get(job.id)
+        if ibm_job is None:
+            return True
+        try:
+            ibm_job.cancel()
+            return True
+        except Exception:
+            return False

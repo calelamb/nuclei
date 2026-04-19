@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react';
-import { Rocket, Clock, CheckCircle2, XCircle, Loader2 } from 'lucide-react';
+import { Rocket, Clock, CheckCircle2, XCircle, Loader2, X } from 'lucide-react';
 import { useHardwareStore } from '../../stores/hardwareStore';
 import { useThemeStore } from '../../stores/themeStore';
 import { ProviderLogo } from './ProviderLogo';
+import { getHardware } from '../../App';
 import type { HardwareProviderType } from '../../types/hardware';
 
 function fmtElapsed(startIso: string): string {
@@ -61,9 +62,24 @@ export function LaunchStrip() {
           ? 'complete'
           : 'failed';
 
+  const cancellable = latestJob.status === 'queued' || latestJob.status === 'running';
+  const clearJob = useHardwareStore((s) => s.clearJob);
+  const onCancelClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    const hw = getHardware();
+    if (cancellable && hw) {
+      hw.hardwareCancel(latestJob.id);
+    } else {
+      // Completed / already failed job — just clear it from the strip so
+      // the student can move on.
+      clearJob(latestJob.id);
+    }
+  };
+
   return (
-    <button
+    <div
       onClick={() => openLaunch()}
+      role="button"
       aria-label="Open launch panel"
       style={{
         display: 'flex',
@@ -110,6 +126,36 @@ export function LaunchStrip() {
           {fmtElapsed(latestJob.submittedAt)}
         </div>
       </div>
-    </button>
+      <button
+        onClick={onCancelClick}
+        aria-label={cancellable ? 'Cancel job' : 'Dismiss job'}
+        title={cancellable ? 'Cancel this job' : 'Dismiss'}
+        style={{
+          background: 'transparent',
+          border: `1px solid ${colors.border}`,
+          color: colors.textDim,
+          cursor: 'pointer',
+          padding: '2px 8px',
+          borderRadius: 6,
+          display: 'flex',
+          alignItems: 'center',
+          gap: 4,
+          fontSize: 10,
+          fontWeight: 500,
+          fontFamily: "'Geist Sans', sans-serif",
+        }}
+        onMouseEnter={(e) => {
+          e.currentTarget.style.color = colors.error;
+          e.currentTarget.style.borderColor = `${colors.error}60`;
+        }}
+        onMouseLeave={(e) => {
+          e.currentTarget.style.color = colors.textDim;
+          e.currentTarget.style.borderColor = colors.border;
+        }}
+      >
+        <X size={10} />
+        {cancellable ? 'Cancel' : 'Dismiss'}
+      </button>
+    </div>
   );
 }

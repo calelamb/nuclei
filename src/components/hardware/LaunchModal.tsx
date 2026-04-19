@@ -4,6 +4,8 @@ import { useHardwareStore } from '../../stores/hardwareStore';
 import { useEditorStore } from '../../stores/editorStore';
 import { useSimulationStore } from '../../stores/simulationStore';
 import { useThemeStore } from '../../stores/themeStore';
+import { usePlatform } from '../../platform/PlatformProvider';
+import { getHardware } from '../../App';
 import { ProviderLogo } from './ProviderLogo';
 import type { HardwareProviderType, BackendInfo } from '../../types/hardware';
 
@@ -180,7 +182,8 @@ export function LaunchModal() {
   const selectProvider = useHardwareStore((s) => s.selectProvider);
   const selectedBackend = useHardwareStore((s) => s.selectedBackend);
   const selectBackend = useHardwareStore((s) => s.selectBackend);
-  const addJob = useHardwareStore((s) => s.addJob);
+  // Jobs are no longer added optimistically — we only record them when the
+  // kernel confirms `hardware_job_submitted`. Keeps the UI honest.
   const backends = useHardwareStore((s) => s.backends);
   const setShowCredentialSetup = useHardwareStore((s) => s.setShowCredentialSetup);
   const providers = useHardwareStore((s) => s.providers);
@@ -196,7 +199,10 @@ export function LaunchModal() {
   const selectSubProvider = useHardwareStore((s) => s.selectSubProvider);
   const credentials = useHardwareStore((s) => s.credentials);
   const setProviderCredentials = useHardwareStore((s) => s.setProviderCredentials);
-  const setProviderConnected = useHardwareStore((s) => s.setProviderConnected);
+  const connectingProvider = useHardwareStore((s) => s.connectingProvider);
+  const connectionErrors = useHardwareStore((s) => s.connectionErrors);
+  const platform = usePlatform();
+  const isWeb = platform.getPlatform() === 'web';
 
   const [localShots, setLocalShots] = useState(shots || 1024);
   const [keyDraft, setKeyDraft] = useState('');
@@ -251,27 +257,55 @@ export function LaunchModal() {
     if (!selectedProvider || !selectedBackend) return;
     const providerState = providers.find((p) => p.name === selectedProvider);
     const isCredFree = selectedProvider === 'simulator' || selectedProvider === 'nvidia';
-    const connected = providerState?.connected ?? isCredFree;
-    // If this provider takes inline BYOK, the Connect button above would
-    // have flipped `connected` on already. We only fall through to the
-    // richer CredentialSetup modal for aggregators (multi-field forms)
-    // that haven't been handled inline.
-    if (!connected && !isCredFree && !INLINE_KEY_FIELD[selectedProvider]) {
+    const connected = providerState?.connected ?? false;
+    // Hard gate: if the provider needs credentials and isn't actually
+    // connected (inline BYOK wasn't filled, or the multi-field credential
+    // form was never opened), refuse to submit. For aggregators we still
+    // route to the richer CredentialSetup flow.
+    if (!connected && !isCredFree) {
+      if (INLINE_KEY_FIELD[selectedProvider]) {
+        // Inline BYOK — the user hasn't connected yet. Don't submit a
+        // fake job; surface the state via the inline error field above.
+        useHardwareStore.getState().setConnectionError(
+          selectedProvider,
+          'Connect a token before launching.',
+        );
+        return;
+      }
       closeLaunch();
       setShowCredentialSetup(selectedProvider);
       return;
     }
 
+    // Actually send the code to the kernel for real hardware submission.
+    const hw = getHardware();
+    const codeToSubmit = stagedSubmission?.content ?? code;
+    if (!codeToSubmit.trim()) return;
+
     setShots(localShots);
-    addJob({
-      id: `job-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-      provider: selectedProvider,
-      backend: selectedBackend,
-      submittedAt: new Date().toISOString(),
-      status: 'queued',
-      queuePosition: providerBackends.find((b) => b.name === selectedBackend)?.queueLength ?? null,
-      shots: localShots,
-    });
+    if (hw && !isWeb) {
+      const ok = hw.hardwareSubmit(
+        selectedProvider,
+        selectedBackend,
+        codeToSubmit,
+        localShots,
+      );
+      if (!ok) {
+        useHardwareStore.getState().setConnectionError(
+          selectedProvider,
+          'Kernel not connected. Restart the app.',
+        );
+        return;
+      }
+      // The actual addJob happens when the kernel returns
+      // `hardware_job_submitted` with a real job id. We don't fake one here.
+    } else if (isWeb) {
+      useHardwareStore.getState().setConnectionError(
+        selectedProvider,
+        'Hardware submission requires the desktop app — download from getnuclei.dev.',
+      );
+      return;
+    }
     closeLaunch();
   };
 
@@ -600,12 +634,13 @@ export function LaunchModal() {
                       value={keyDraft}
                       onChange={(e) => setKeyDraft(e.target.value)}
                       placeholder={INLINE_KEY_FIELD[selectedProvider]?.placeholder}
+                      disabled={connectingProvider === selectedProvider}
                       onKeyDown={(e) => {
                         if (e.key === 'Enter' && keyDraft.trim() && selectedProvider) {
                           e.preventDefault();
                           setProviderCredentials(selectedProvider, { token: keyDraft.trim() });
-                          setProviderConnected(selectedProvider, true);
-                          setKeyDraft('');
+                          const hw = getHardware();
+                          if (hw) hw.hardwareConnect(selectedProvider, { token: keyDraft.trim() });
                         }
                       }}
                       style={{
@@ -624,11 +659,11 @@ export function LaunchModal() {
                       onClick={() => {
                         if (keyDraft.trim() && selectedProvider) {
                           setProviderCredentials(selectedProvider, { token: keyDraft.trim() });
-                          setProviderConnected(selectedProvider, true);
-                          setKeyDraft('');
+                          const hw = getHardware();
+                          if (hw) hw.hardwareConnect(selectedProvider, { token: keyDraft.trim() });
                         }
                       }}
-                      disabled={!keyDraft.trim()}
+                      disabled={!keyDraft.trim() || connectingProvider === selectedProvider}
                       style={{
                         background: keyDraft.trim() ? colors.accent : colors.bgElevated,
                         color: keyDraft.trim() ? '#0a0f1a' : colors.textDim,
@@ -641,9 +676,14 @@ export function LaunchModal() {
                         cursor: keyDraft.trim() ? 'pointer' : 'default',
                       }}
                     >
-                      Connect
+                      {connectingProvider === selectedProvider ? 'Connecting…' : 'Connect'}
                     </button>
                   </div>
+                  {selectedProvider && connectionErrors[selectedProvider] && (
+                    <div style={{ fontSize: 10, color: colors.error, fontFamily: "'Geist Sans', sans-serif" }}>
+                      {connectionErrors[selectedProvider]}
+                    </div>
+                  )}
                   {INLINE_KEY_FIELD[selectedProvider]?.helpText && (
                     <a
                       href={INLINE_KEY_FIELD[selectedProvider]?.helpUrl}
@@ -868,7 +908,16 @@ export function LaunchModal() {
                 </button>
                 <button
                   onClick={handleSubmit}
-                  disabled={!selectedBackend || code.trim().length === 0}
+                  disabled={(() => {
+                    if (!selectedBackend) return true;
+                    const srcCode = stagedSubmission?.content ?? code;
+                    if (srcCode.trim().length === 0) return true;
+                    // Providers that don't need credentials are always OK.
+                    if (selectedProvider === 'simulator' || selectedProvider === 'nvidia') return false;
+                    // Everything else must be actually connected.
+                    const providerState = providers.find((p) => p.name === selectedProvider);
+                    return !providerState?.connected;
+                  })()}
                   style={{
                     background:
                       !selectedBackend || code.trim().length === 0

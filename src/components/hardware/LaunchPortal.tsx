@@ -1,10 +1,11 @@
 import { useState, useCallback, useRef } from 'react';
-import { Rocket, Upload, FileCode, CheckCircle2, XCircle, Loader2, Clock } from 'lucide-react';
+import { Rocket, Upload, FileCode, CheckCircle2, XCircle, Loader2, Clock, X } from 'lucide-react';
 import { useHardwareStore } from '../../stores/hardwareStore';
 import { useEditorStore } from '../../stores/editorStore';
 import { useProjectStore } from '../../stores/projectStore';
 import { useThemeStore } from '../../stores/themeStore';
 import { ProviderLogo } from './ProviderLogo';
+import { getHardware } from '../../App';
 import type { HardwareProviderType } from '../../types/hardware';
 
 interface ProviderPortalMeta {
@@ -360,6 +361,38 @@ export function LaunchPortal() {
                   </div>
                 </div>
                 <ProviderLogo provider={j.provider as HardwareProviderType} size={14} color={colors.textDim} />
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    const hw = getHardware();
+                    if (hw) hw.hardwareCancel(j.id);
+                  }}
+                  aria-label={`Cancel ${j.backend}`}
+                  title="Cancel job"
+                  style={{
+                    background: 'transparent',
+                    border: `1px solid ${colors.border}`,
+                    color: colors.textDim,
+                    cursor: 'pointer',
+                    padding: '2px 6px',
+                    borderRadius: 4,
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 2,
+                    fontSize: 10,
+                    fontFamily: "'Geist Sans', sans-serif",
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.color = colors.error;
+                    e.currentTarget.style.borderColor = `${colors.error}60`;
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.color = colors.textDim;
+                    e.currentTarget.style.borderColor = colors.border;
+                  }}
+                >
+                  <X size={10} />
+                </button>
               </div>
             ))}
           </div>
@@ -371,16 +404,40 @@ export function LaunchPortal() {
         <div style={{ padding: '0 12px 12px' }}>
           <div
             style={{
-              fontSize: 10,
-              fontWeight: 600,
-              textTransform: 'uppercase',
-              letterSpacing: 0.5,
-              color: colors.textMuted,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
               marginBottom: 6,
-              fontFamily: "'Geist Sans', sans-serif",
             }}
           >
-            Recent results
+            <div
+              style={{
+                fontSize: 10,
+                fontWeight: 600,
+                textTransform: 'uppercase',
+                letterSpacing: 0.5,
+                color: colors.textMuted,
+                fontFamily: "'Geist Sans', sans-serif",
+              }}
+            >
+              Recent results
+            </div>
+            <button
+              onClick={() => useHardwareStore.getState().clearJobs()}
+              style={{
+                background: 'transparent',
+                border: 'none',
+                color: colors.textDim,
+                cursor: 'pointer',
+                padding: 0,
+                fontSize: 10,
+                fontFamily: "'Geist Sans', sans-serif",
+              }}
+              onMouseEnter={(e) => { e.currentTarget.style.color = colors.text; }}
+              onMouseLeave={(e) => { e.currentTarget.style.color = colors.textDim; }}
+            >
+              Clear all
+            </button>
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
             {completedJobs.map((j) => {

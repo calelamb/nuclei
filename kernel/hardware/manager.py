@@ -77,3 +77,20 @@ class HardwareManager:
         provider_name, handle = entry
         provider = self._providers[provider_name]
         return provider.get_results(handle)
+
+    def cancel_job(self, job_id: str) -> bool:
+        """Cancel a queued/running job if the provider supports it. Local
+        simulator / NVIDIA jobs complete synchronously so cancel is a no-op
+        that returns True. Unknown job ids are treated as already-gone."""
+        entry = self._jobs.get(job_id)
+        if entry is None:
+            return True
+        provider_name, handle = entry
+        provider = self._providers[provider_name]
+        try:
+            ok = provider.cancel_job(handle)
+        except Exception:
+            ok = False
+        if ok:
+            handle.status = "failed"
+        return ok

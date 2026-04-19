@@ -23,6 +23,58 @@ hardware_manager = HardwareManager()
 hardware_manager.connect_provider("simulator", {})
 
 
+def _extract_circuit_for_provider(namespace: dict, provider: str):
+    """Find the circuit object a student defined in their code.
+
+    Provider-specific search order so Qiskit code submitted to a Qiskit-native
+    provider (IBM, IonQ, Quantinuum, Braket, Azure) finds a QuantumCircuit
+    before any Cirq Circuit that may also be defined. Returns None if nothing
+    recognizable is defined — caller should surface a friendly error."""
+    # Provider → preferred framework(s) order
+    order_map = {
+        "ibm": ("qiskit", "cirq", "cudaq"),
+        "ionq": ("qiskit", "cirq", "cudaq"),
+        "braket": ("qiskit", "cirq", "cudaq"),
+        "azure": ("qiskit", "cirq", "cudaq"),
+        "quantinuum": ("qiskit", "cirq", "cudaq"),
+        "nvidia": ("cudaq", "qiskit", "cirq"),
+        "simulator": ("qiskit", "cirq", "cudaq"),
+    }
+    order = order_map.get(provider, ("qiskit", "cirq", "cudaq"))
+
+    for kind in order:
+        if kind == "qiskit":
+            try:
+                from qiskit import QuantumCircuit
+                for v in namespace.values():
+                    if isinstance(v, QuantumCircuit):
+                        return v
+            except ImportError:
+                pass
+        elif kind == "cirq":
+            try:
+                import cirq
+                for v in namespace.values():
+                    if isinstance(v, cirq.Circuit):
+                        return v
+            except ImportError:
+                pass
+        elif kind == "cudaq":
+            try:
+                import cudaq  # noqa: F401
+                # CUDA-Q kernels are functions decorated with @cudaq.kernel —
+                # detect by having an __kernel_name__ attribute the decorator
+                # attaches (fall back to any callable named 'kernel').
+                for v in namespace.values():
+                    if callable(v) and (
+                        hasattr(v, "__kernel_name__") or getattr(v, "__name__", "") in ("kernel", "circuit")
+                    ):
+                        return v
+            except ImportError:
+                pass
+    return None
+
+
 def error_payload(error: KernelError, phase: str) -> dict:
     payload = {
         "type": "error",
@@ -164,7 +216,18 @@ async def handle_message(websocket):
             shots = msg.get("shots", 1024)
             code = msg.get("code", "")
             try:
-                handle = hardware_manager.submit_job(provider, code, backend, shots)
+                # Exec the user's code to produce a circuit object. Provider
+                # adapters expect a real circuit (QuantumCircuit / cirq.Circuit
+                # / cudaq kernel), not a raw string.
+                namespace = {"__builtins__": __builtins__}
+                exec(code, namespace)
+                circuit_obj = _extract_circuit_for_provider(namespace, provider)
+                if circuit_obj is None:
+                    raise RuntimeError(
+                        "No circuit object found in the code. "
+                        "Your code must define a Qiskit QuantumCircuit, Cirq Circuit, or CUDA-Q kernel."
+                    )
+                handle = hardware_manager.submit_job(provider, circuit_obj, backend, shots)
                 await websocket.send(json.dumps({
                     "type": "hardware_job_submitted",
                     "job": handle.to_dict(),
@@ -202,6 +265,21 @@ async def handle_message(websocket):
                 await websocket.send(json.dumps({
                     "type": "error",
                     "message": f"Failed to get results: {e}",
+                }))
+
+        elif msg_type == "hardware_cancel":
+            job_id = msg.get("job_id", "")
+            try:
+                ok = hardware_manager.cancel_job(job_id)
+                await websocket.send(json.dumps({
+                    "type": "hardware_job_cancelled",
+                    "job_id": job_id,
+                    "success": ok,
+                }))
+            except Exception as e:
+                await websocket.send(json.dumps({
+                    "type": "error",
+                    "message": f"Cancel failed: {e}",
                 }))
 
         else:

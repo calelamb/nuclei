@@ -136,3 +136,15 @@ class QuantinuumProvider(HardwareProvider):
             return int(queue) if queue is not None else -1
         except Exception:
             return -1
+
+    def cancel_job(self, job: JobHandle) -> bool:
+        entry = self._jobs.get(job.id)
+        if entry is None or self._backend_cls is None:
+            return True
+        device, handle = entry
+        try:
+            qb = self._backend_cls(device_name=device)
+            qb.cancel(handle)
+            return True
+        except Exception:
+            return False
