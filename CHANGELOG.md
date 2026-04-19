@@ -5,6 +5,22 @@ All notable changes to Nuclei will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.0] - 2026-04-18
+
+### Added
+
+- **Launch Portal sidebar view.** New rocket icon in the ActivityBar opens a dedicated submission surface. Drop a `.py` / `.qasm` / `.ipynb` file into the drop zone (or click to browse) and it opens as a temp buffer in the editor. A provider grid underneath lets you pick a destination — clicking a card opens the full Launch modal with that provider pre-selected. Active jobs and recent results render below the grid with live status.
+- **AWS Braket provider** (`kernel/hardware/braket_provider.py`) — real implementation via `amazon-braket-sdk`. A single integration unlocks IonQ, Rigetti, QuEra, IQM, OQC, Pasqal, and D-Wave. Backends appear in the Launch modal labeled with their sub-provider.
+- **Azure Quantum provider** (`kernel/hardware/azure_provider.py`) — real implementation via `azure-quantum`. Unlocks Quantinuum, IonQ-via-Azure, Rigetti-via-Azure, Pasqal, and IQM.
+- **Quantinuum direct provider** (`kernel/hardware/quantinuum_provider.py`) — via `pytket-quantinuum`. Highest-fidelity trapped-ion hardware, H1 and H2 devices.
+- **Xanadu + D-Wave cards** in the Launch modal marked honestly as "different circuit model" — photonic and annealer paradigms don't accept gate-model circuits yet, but the cards surface the providers so students know they exist.
+- Provider logos for Braket, Azure, Quantinuum, Xanadu, and D-Wave — inline single-color SVG monograms, no emojis.
+
+### Changed
+
+- `HardwareProviderType` expanded to `'ibm' | 'google' | 'ionq' | 'nvidia' | 'braket' | 'azure' | 'quantinuum' | 'xanadu' | 'dwave' | 'simulator'`.
+- Credential setup flow covers every new provider with field lists and help links.
+
 ## [0.3.0] - 2026-04-18
 
 ### Added

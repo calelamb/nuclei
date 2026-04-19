@@ -4,6 +4,9 @@ from kernel.hardware.ibm_provider import IBMProvider
 from kernel.hardware.google_provider import GoogleProvider
 from kernel.hardware.ionq_provider import IonQProvider
 from kernel.hardware.nvidia_provider import NvidiaProvider
+from kernel.hardware.braket_provider import BraketProvider
+from kernel.hardware.azure_provider import AzureProvider
+from kernel.hardware.quantinuum_provider import QuantinuumProvider
 
 
 class HardwareManager:
@@ -14,6 +17,9 @@ class HardwareManager:
             "google": GoogleProvider(),
             "ionq": IonQProvider(),
             "nvidia": NvidiaProvider(),
+            "braket": BraketProvider(),
+            "azure": AzureProvider(),
+            "quantinuum": QuantinuumProvider(),
         }
         self._connected: set[str] = set()
         self._jobs: dict[str, tuple[str, JobHandle]] = {}  # job_id -> (provider_name, handle)

@@ -75,11 +75,16 @@ const PROVIDER_LABELS: Record<HardwareProviderType, string> = {
   google: 'Google Quantum AI',
   ionq: 'IonQ',
   nvidia: 'NVIDIA CUDA-Q',
+  braket: 'AWS Braket',
+  azure: 'Azure Quantum',
+  quantinuum: 'Quantinuum',
+  xanadu: 'Xanadu',
+  dwave: 'D-Wave',
   simulator: 'Local Simulator',
 };
 
 // Providers whose kernel adapters are stubs (raise NotImplementedError)
-const STUB_PROVIDERS: ReadonlySet<HardwareProviderType> = new Set(['google']);
+const STUB_PROVIDERS: ReadonlySet<HardwareProviderType> = new Set(['google', 'xanadu', 'dwave']);
 
 /* ── Mock backends for demo ── */
 

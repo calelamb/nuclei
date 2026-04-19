@@ -8,6 +8,11 @@ const PROVIDER_LABELS: Record<HardwareProviderType, string> = {
   google: 'Google',
   ionq: 'IonQ',
   nvidia: 'NVIDIA',
+  braket: 'Braket',
+  azure: 'Azure',
+  quantinuum: 'Quantinuum',
+  xanadu: 'Xanadu',
+  dwave: 'D-Wave',
   simulator: 'Sim',
 };
 
