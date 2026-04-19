@@ -9,11 +9,11 @@
 
 :root,
 :root[data-theme='dark'] {
-  /* Surfaces */
-  --color-surface-base: #0F1B2D;
-  --color-surface-raised: #152238;
-  --color-surface-overlay: #1A2A42;
-  --color-surface-sunken: #080E18;
+  /* Surfaces — softer near-black with subtle cool tint (hex for Monaco compat) */
+  --color-surface-base: #0D131E;
+  --color-surface-raised: #141B29;
+  --color-surface-overlay: #1A2232;
+  --color-surface-sunken: #080D16;
 
   /* Text */
   --color-text-primary: #E8ECF1;
@@ -56,10 +56,10 @@
   --color-wire: #3D5A80;
 
   /* Shadows */
-  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
-  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.4);
-  --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.5);
-  --shadow-glow: 0 0 20px rgba(0, 180, 216, 0.15);
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.25);
+  --shadow-md: 0 6px 18px rgba(0, 0, 0, 0.32);
+  --shadow-lg: 0 12px 32px rgba(0, 0, 0, 0.4);
+  --shadow-glow: 0 0 18px rgba(0, 180, 216, 0.14);
 }
 
 :root[data-theme='light'] {
@@ -126,8 +126,8 @@
   --space-12: 48px;
 
   --radius-sharp: 0;
-  --radius-soft: 4px;
-  --radius-round: 8px;
+  --radius-soft: 6px;
+  --radius-round: 10px;
   --radius-pill: 999px;
 
   --font-sans: 'Geist Sans', Inter, -apple-system, system-ui, sans-serif;

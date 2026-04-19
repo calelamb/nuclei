@@ -92,10 +92,13 @@ export interface TypographyTokens {
 }
 
 export const DARK_COLORS: ColorTokens = {
-  surfaceBase: '#0F1B2D',
-  surfaceRaised: '#152238',
-  surfaceOverlay: '#1A2A42',
-  surfaceSunken: '#080E18',
+  // Approximate hex equivalents of oklch(~14% 0.008 250) and siblings — a
+  // near-black with a slight cool tint. Monaco's theme API rejects oklch(),
+  // so we keep hex here. The full oklch palette is a Plan 4 polish item.
+  surfaceBase: '#0D131E',
+  surfaceRaised: '#141B29',
+  surfaceOverlay: '#1A2232',
+  surfaceSunken: '#080D16',
   textPrimary: '#E8ECF1',
   textSecondary: '#94A3B8',
   textTertiary: '#64748B',
@@ -158,10 +161,10 @@ export const LIGHT_COLORS: ColorTokens = {
 };
 
 export const DARK_SHADOWS: ShadowTokens = {
-  sm: '0 1px 2px rgba(0, 0, 0, 0.3)',
-  md: '0 4px 12px rgba(0, 0, 0, 0.4)',
-  lg: '0 8px 24px rgba(0, 0, 0, 0.5)',
-  glow: '0 0 20px rgba(0, 180, 216, 0.15)',
+  sm: '0 1px 2px rgba(0, 0, 0, 0.25)',
+  md: '0 6px 18px rgba(0, 0, 0, 0.32)',
+  lg: '0 12px 32px rgba(0, 0, 0, 0.4)',
+  glow: '0 0 18px rgba(0, 180, 216, 0.14)',
 };
 
 export const LIGHT_SHADOWS: ShadowTokens = {
@@ -187,8 +190,8 @@ export const SPACING: SpacingTokens = {
 
 export const RADIUS: RadiusTokens = {
   sharp: '0',
-  soft: '4px',
-  round: '8px',
+  soft: '6px',
+  round: '10px',
   pill: '999px',
 };
 

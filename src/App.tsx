@@ -5,8 +5,13 @@ import { Onboarding } from './components/onboarding/Onboarding';
 import { KeyboardShortcuts } from './components/onboarding/KeyboardShortcuts';
 import { CommandPalette, buildCommands } from './components/commandPalette/CommandPalette';
 import { UpdateBanner } from './components/UpdateBanner';
+import { ComposeModal } from './components/dirac/ComposeModal';
+import { DiffPreview } from './components/editor/DiffPreview';
+import { UnsavedChangesModal } from './components/dialogs/UnsavedChangesModal';
 import { useKernel } from './hooks/useKernel';
 import { useFileOps } from './hooks/useFileOps';
+import { useActiveTabSync } from './hooks/useActiveTabSync';
+import { useProjectStore } from './stores/projectStore';
 import { useThemeStore } from './stores/themeStore';
 import { useEditorStore } from './stores/editorStore';
 import { useUIModeStore } from './stores/uiModeStore';
@@ -27,10 +32,12 @@ export function getFileOps() { return fileOpsRef; }
 function AppInner() {
   const { execute } = useKernel();
   const fileOps = useFileOps();
+  useActiveTabSync();
   const platform = usePlatform();
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [showShortcuts, setShowShortcuts] = useState(false);
   const [showCommandPalette, setShowCommandPalette] = useState(false);
+  const [composeOpen, setComposeOpen] = useState(false);
   const [isReturningUser, setIsReturningUser] = useState(false);
   const [lastOpenedFile, setLastOpenedFile] = useState<string | undefined>();
   const [daysSinceLastSession, setDaysSinceLastSession] = useState<number | undefined>();
@@ -132,6 +139,25 @@ function AppInner() {
             await platform.setStoredValue('last_opened_file', null).catch(() => {});
           }
         }
+
+        // Restore last project folder + open tabs. We restore the root first
+        // so the sidebar can populate; tabs come from a per-root key so
+        // switching folders doesn't pollute the restore list.
+        const storedRoot = await safeGet<string>('project_root');
+        if (storedRoot) {
+          useProjectStore.getState().setProjectRoot(storedRoot);
+          const openPaths = await safeGet<string[]>(`project_tabs:${storedRoot}`);
+          if (openPaths) {
+            for (const p of openPaths) {
+              const content = await platform.readFile(p).catch(() => null);
+              if (content !== null) {
+                useProjectStore.getState().openTab({ path: p, content });
+              }
+            }
+          }
+          const activePath = await safeGet<string>(`project_active:${storedRoot}`);
+          if (activePath) useProjectStore.getState().setActiveTab(activePath);
+        }
       }
 
       await platform.setStoredValue('last_session_date', new Date().toISOString()).catch(() => {});
@@ -141,6 +167,20 @@ function AppInner() {
   useEffect(() => {
     platform.setStoredValue('last_framework', framework).catch(() => {});
   }, [framework, platform]);
+
+  // Persist open-tab list + active-tab per project folder so a prof comes
+  // back to exactly the same workspace on next launch.
+  const projectRoot = useProjectStore((s) => s.projectRoot);
+  const projectTabs = useProjectStore((s) => s.tabs);
+  const projectActiveTabPath = useProjectStore((s) => s.activeTabPath);
+  useEffect(() => {
+    if (!projectRoot) return;
+    const paths = projectTabs.map((t) => t.path);
+    platform.setStoredValue(`project_tabs:${projectRoot}`, paths).catch(() => {});
+    platform
+      .setStoredValue(`project_active:${projectRoot}`, projectActiveTabPath)
+      .catch(() => {});
+  }, [projectRoot, projectTabs, projectActiveTabPath, platform]);
 
   useEffect(() => {
     if (!filePath) return;
@@ -219,6 +259,9 @@ function AppInner() {
       } else if (e.key === 'l' && !e.shiftKey) {
         e.preventDefault();
         focusDirac();
+      } else if (e.key === 'i' && !e.shiftKey) {
+        e.preventDefault();
+        setComposeOpen((s) => !s);
       }
     };
     window.addEventListener('keydown', handler);
@@ -239,6 +282,9 @@ function AppInner() {
       )}
       {showShortcuts && <KeyboardShortcuts onClose={() => setShowShortcuts(false)} />}
       {showCommandPalette && <CommandPalette commands={commands} onClose={() => setShowCommandPalette(false)} />}
+      <ComposeModal open={composeOpen} onClose={() => setComposeOpen(false)} />
+      <DiffPreview />
+      <UnsavedChangesModal />
     </>
   );
 }

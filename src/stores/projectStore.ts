@@ -1,86 +1,90 @@
 import { create } from 'zustand';
 
-export interface ProjectFile {
+export interface ProjectTab {
   path: string;
-  name: string;
   content: string;
+  savedContent: string; // last-persisted content — dirty is derived from content !== savedContent
   isDirty: boolean;
-}
-
-export interface ProjectConfig {
-  framework: string;
-  pythonPath: string;
-  kernelArgs: string[];
-  defaultShots: number;
 }
 
 interface ProjectState {
   projectRoot: string | null;
-  files: ProjectFile[];
-  openTabs: string[]; // paths of open files
-  activeTab: string | null; // path of active file
-  config: ProjectConfig;
-  // Actions
-  setProjectRoot: (root: string | null) => void;
-  addFile: (file: ProjectFile) => void;
-  updateFile: (path: string, content: string) => void;
-  removeFile: (path: string) => void;
-  openTab: (path: string) => void;
-  closeTab: (path: string) => void;
-  setActiveTab: (path: string) => void;
-  markDirty: (path: string, dirty: boolean) => void;
-  setConfig: (config: Partial<ProjectConfig>) => void;
-  setFiles: (files: ProjectFile[]) => void;
+  tabs: ProjectTab[];
+  activeTabPath: string | null;
+
+  setProjectRoot(root: string | null): void;
+  openTab(input: { path: string; content: string }): void;
+  closeTab(path: string): void;
+  setActiveTab(path: string): void;
+  updateActiveTabContent(content: string): void;
+  markTabSaved(path: string, savedContent: string): void;
+  renameTab(oldPath: string, newPath: string): void;
+  closeAllTabs(): void;
+  hasAnyDirty(): boolean;
 }
 
-export const useProjectStore = create<ProjectState>((set) => ({
+export const useProjectStore = create<ProjectState>((set, get) => ({
   projectRoot: null,
-  files: [],
-  openTabs: [],
-  activeTab: null,
-  config: {
-    framework: 'qiskit',
-    pythonPath: 'python3',
-    kernelArgs: [],
-    defaultShots: 1024,
-  },
+  tabs: [],
+  activeTabPath: null,
 
   setProjectRoot: (projectRoot) => set({ projectRoot }),
 
-  addFile: (file) => set((s) => ({
-    files: [...s.files.filter((f) => f.path !== file.path), file],
-  })),
+  openTab: ({ path, content }) =>
+    set((s) => {
+      const existing = s.tabs.find((t) => t.path === path);
+      if (existing) {
+        return { activeTabPath: path };
+      }
+      const tab: ProjectTab = { path, content, savedContent: content, isDirty: false };
+      return {
+        tabs: [...s.tabs, tab],
+        activeTabPath: path,
+      };
+    }),
 
-  updateFile: (path, content) => set((s) => ({
-    files: s.files.map((f) => f.path === path ? { ...f, content, isDirty: true } : f),
-  })),
+  closeTab: (path) =>
+    set((s) => {
+      const idx = s.tabs.findIndex((t) => t.path === path);
+      if (idx < 0) return s;
+      const tabs = [...s.tabs.slice(0, idx), ...s.tabs.slice(idx + 1)];
+      let activeTabPath = s.activeTabPath;
+      if (activeTabPath === path) {
+        const newActive = tabs[idx - 1] ?? tabs[idx] ?? null;
+        activeTabPath = newActive ? newActive.path : null;
+      }
+      return { tabs, activeTabPath };
+    }),
 
-  removeFile: (path) => set((s) => ({
-    files: s.files.filter((f) => f.path !== path),
-    openTabs: s.openTabs.filter((t) => t !== path),
-    activeTab: s.activeTab === path ? (s.openTabs.filter((t) => t !== path)[0] ?? null) : s.activeTab,
-  })),
+  setActiveTab: (path) =>
+    set((s) => {
+      if (!s.tabs.some((t) => t.path === path)) return s;
+      return { activeTabPath: path };
+    }),
 
-  openTab: (path) => set((s) => ({
-    openTabs: s.openTabs.includes(path) ? s.openTabs : [...s.openTabs, path],
-    activeTab: path,
-  })),
+  updateActiveTabContent: (content) =>
+    set((s) => ({
+      tabs: s.tabs.map((t) =>
+        t.path === s.activeTabPath
+          ? { ...t, content, isDirty: content !== t.savedContent }
+          : t,
+      ),
+    })),
 
-  closeTab: (path) => set((s) => {
-    const tabs = s.openTabs.filter((t) => t !== path);
-    const idx = s.openTabs.indexOf(path);
-    const newActive = s.activeTab === path
-      ? (tabs[Math.min(idx, tabs.length - 1)] ?? null)
-      : s.activeTab;
-    return { openTabs: tabs, activeTab: newActive };
-  }),
+  markTabSaved: (path, savedContent) =>
+    set((s) => ({
+      tabs: s.tabs.map((t) =>
+        t.path === path ? { ...t, savedContent, content: savedContent, isDirty: false } : t,
+      ),
+    })),
 
-  setActiveTab: (activeTab) => set({ activeTab }),
+  renameTab: (oldPath, newPath) =>
+    set((s) => ({
+      tabs: s.tabs.map((t) => (t.path === oldPath ? { ...t, path: newPath } : t)),
+      activeTabPath: s.activeTabPath === oldPath ? newPath : s.activeTabPath,
+    })),
 
-  markDirty: (path, dirty) => set((s) => ({
-    files: s.files.map((f) => f.path === path ? { ...f, isDirty: dirty } : f),
-  })),
+  closeAllTabs: () => set({ tabs: [], activeTabPath: null }),
 
-  setConfig: (partial) => set((s) => ({ config: { ...s.config, ...partial } })),
-  setFiles: (files) => set({ files }),
+  hasAnyDirty: () => get().tabs.some((t) => t.isDirty),
 }));

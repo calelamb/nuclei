@@ -8,6 +8,12 @@
  * the TauriBridge implementation. Components access platform features
  * exclusively through this interface via PlatformProvider.
  */
+export interface DirEntry {
+  name: string;
+  path: string;
+  kind: 'file' | 'directory';
+}
+
 export interface PlatformBridge {
   // Kernel management
   startKernel(): Promise<string>;
@@ -33,4 +39,11 @@ export interface PlatformBridge {
 
   // Platform info
   getPlatform(): 'desktop' | 'web';
+
+  // Project / directory ops (desktop-primary). Web implementations return
+  // null to indicate the current surface doesn't support folder projects.
+  openDirectory(): Promise<{ path: string } | null>;
+  listDirectory(path: string): Promise<DirEntry[] | null>;
+  createFile(path: string, content: string): Promise<{ path: string } | null>;
+  deleteFile(path: string): Promise<boolean>;
 }

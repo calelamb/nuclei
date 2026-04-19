@@ -122,6 +122,19 @@ export const webBridge: PlatformBridge = {
   getPlatform() {
     return 'web';
   },
+
+  async openDirectory() {
+    return null;
+  },
+  async listDirectory() {
+    return null;
+  },
+  async createFile() {
+    return null;
+  },
+  async deleteFile() {
+    return false;
+  },
 };
 
 function downloadFile(filename: string, content: string) {

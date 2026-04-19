@@ -11,6 +11,10 @@ import { DiracSidePanel } from '../dirac/DiracSidePanel';
 import { ActivityBar } from './ActivityBar';
 import type { ActivityView } from './ActivityBar';
 import { Sidebar } from './Sidebar';
+import { PanelReveal } from './PanelReveal';
+import { HistogramChip } from '../histogram/HistogramChip';
+import { useLayoutStore, computeVisiblePanels, type LayoutPreset } from '../../stores/layoutStore';
+import { useDiracStore } from '../../stores/diracStore';
 import { DEFAULT_EDITOR_PANE_WIDTH, computeEditorPaneWidth } from './layoutMath';
 import { useEditorStore } from '../../stores/editorStore';
 import { useCircuitStore } from '../../stores/circuitStore';
@@ -38,11 +42,58 @@ const DEFAULT_SIDEBAR_WIDTH = 240;
 function TerminalPanel() {
   const { terminalOutput } = useSimulationStore();
   const colors = useThemeStore((s) => s.colors);
+  const rewritten = useDiracStore((s) => s.rewrittenError);
+  const clearRewrittenError = useDiracStore((s) => s.clearRewrittenError);
+  const setCode = useEditorStore((s) => s.setCode);
   const scrollRef = useRef<HTMLDivElement>(null);
-  useEffect(() => { if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight; }, [terminalOutput]);
+  useEffect(() => {
+    if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+  }, [terminalOutput, rewritten]);
   return (
     <div ref={scrollRef} style={{ height: '100%', overflow: 'auto', fontFamily: "'Geist Mono', 'JetBrains Mono', monospace", fontSize: 12, color: colors.text, padding: '8px 12px' }}>
-      {terminalOutput.length === 0 ? (
+      {rewritten && (
+        <div
+          role="alert"
+          style={{
+            marginBottom: 10,
+            padding: '10px 12px',
+            border: `1px solid ${colors.dirac}40`,
+            borderRadius: 10,
+            background: `${colors.dirac}12`,
+            fontFamily: "'Geist Sans', sans-serif",
+            fontSize: 12,
+            lineHeight: 1.5,
+            color: colors.text,
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6, color: colors.dirac, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.5, fontSize: 10 }}>
+            Dirac
+          </div>
+          <div style={{ marginBottom: rewritten.fix ? 10 : 0 }}>{rewritten.explanation}</div>
+          <div style={{ display: 'flex', gap: 6 }}>
+            {rewritten.fix && (
+              <button
+                onClick={() => { setCode(rewritten.fix!); clearRewrittenError(); }}
+                style={{
+                  background: colors.dirac, color: '#fff', border: 'none',
+                  borderRadius: 6, padding: '4px 10px', fontSize: 11, fontWeight: 600,
+                  cursor: 'pointer', fontFamily: "'Geist Sans', sans-serif",
+                }}
+              >Apply fix</button>
+            )}
+            <button
+              onClick={clearRewrittenError}
+              style={{
+                background: 'transparent', color: colors.textDim,
+                border: `1px solid ${colors.border}`,
+                borderRadius: 6, padding: '4px 10px', fontSize: 11,
+                cursor: 'pointer', fontFamily: "'Geist Sans', sans-serif",
+              }}
+            >Dismiss</button>
+          </div>
+        </div>
+      )}
+      {terminalOutput.length === 0 && !rewritten ? (
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: colors.textDim }}>
           <span style={{ color: colors.accent, opacity: 0.3, fontFamily: "'Geist Mono', monospace" }}>{'>'}_</span>
           <span style={{ fontSize: 11 }}>Terminal output will appear here</span>
@@ -54,18 +105,40 @@ function TerminalPanel() {
   );
 }
 
-/* ── Bottom Panel ── */
-function BottomPanel({ collapsed, onToggle }: { collapsed: boolean; onToggle: () => void }) {
+/* ── Bottom Panel ──
+ * In the new progressive-reveal layout the histogram no longer lives here;
+ * it's rendered as a compact chip beneath the Bloch sphere. The bottom
+ * panel shows Terminal by default, and the full histogram only when the
+ * user has opted into the `full` layout preset.
+ */
+function BottomPanel({
+  collapsed,
+  onToggle,
+  showFullHistogram,
+}: {
+  collapsed: boolean;
+  onToggle: () => void;
+  showFullHistogram: boolean;
+}) {
   const [activeTab, setActiveTab] = useState<'terminal' | 'histogram'>('terminal');
   const result = useSimulationStore((s) => s.result);
   const colors = useThemeStore((s) => s.colors);
+  // Auto-focus histogram tab on a new result, but only if the full histogram
+  // is actually available (otherwise the tab would be a dead link).
   // eslint-disable-next-line react-hooks/set-state-in-effect -- switches tab on new result
-  useEffect(() => { if (result) setActiveTab('histogram'); }, [result]);
+  useEffect(() => {
+    if (result && showFullHistogram) setActiveTab('histogram');
+  }, [result, showFullHistogram]);
+
+  const tabs: Array<'terminal' | 'histogram'> = showFullHistogram
+    ? ['terminal', 'histogram']
+    : ['terminal'];
+
   return (
     <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
       {/* Panel header */}
       <div style={{ height: 28, display: 'flex', alignItems: 'center', borderBottom: collapsed ? 'none' : `1px solid ${colors.border}`, backgroundColor: colors.bg, flexShrink: 0 }}>
-        {(['terminal', 'histogram'] as const).map((tab) => (
+        {tabs.map((tab) => (
           <button key={tab} onClick={() => { if (collapsed) onToggle(); setActiveTab(tab); }} style={{
             padding: '0 14px', height: '100%',
             background: 'transparent',
@@ -84,7 +157,13 @@ function BottomPanel({ collapsed, onToggle }: { collapsed: boolean; onToggle: ()
           {collapsed ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
         </button>
       </div>
-      {!collapsed && <div style={{ flex: 1, overflow: 'hidden' }}>{activeTab === 'terminal' ? <TerminalPanel /> : <ProbabilityHistogram />}</div>}
+      {!collapsed && (
+        <div style={{ flex: 1, overflow: 'hidden' }}>
+          {activeTab === 'terminal' || !showFullHistogram
+            ? <TerminalPanel />
+            : <ProbabilityHistogram />}
+        </div>
+      )}
     </div>
   );
 }
@@ -106,6 +185,43 @@ function ResizeHandle({ direction, isDragging, onMouseDown, onDoubleClick }: {
         onMouseLeave={(e) => { const p = e.currentTarget.parentElement; if (p && !isDragging) { p.style.backgroundColor = colors.border; p.style[isH ? 'width' : 'height'] = '1px'; } }}
       />
     </div>
+  );
+}
+
+/* ── Layout Preset Switcher ── */
+function LayoutPresetSwitcher() {
+  const preset = useLayoutStore((s) => s.preset);
+  const setPreset = useLayoutStore((s) => s.setPreset);
+  const colors = useThemeStore((s) => s.colors);
+  const platform = usePlatform();
+
+  const options: LayoutPreset[] = ['clean', 'balanced', 'full'];
+  const onChange = async (next: LayoutPreset) => {
+    setPreset(next);
+    try { await platform.setStoredValue('layout_preset', next); } catch { /* non-critical persistence */ }
+  };
+
+  return (
+    <select
+      value={preset}
+      onChange={(e) => onChange(e.target.value as LayoutPreset)}
+      aria-label="Layout preset"
+      title="Layout preset"
+      style={{
+        background: 'transparent',
+        color: colors.textDim,
+        border: `1px solid ${colors.border}`,
+        borderRadius: 6,
+        padding: '1px 6px',
+        fontSize: 10,
+        fontFamily: "'Geist Sans', sans-serif",
+        cursor: 'pointer',
+      }}
+    >
+      {options.map((o) => (
+        <option key={o} value={o}>{o[0].toUpperCase() + o.slice(1)}</option>
+      ))}
+    </select>
   );
 }
 
@@ -148,6 +264,7 @@ function StatusBar() {
       <span style={{ color: colors.textDim, fontSize: 10 }}>
         Depth: {snapshot ? snapshot.depth : '—'}
       </span>
+      <LayoutPresetSwitcher />
 
       {exercise && (
         <span style={{ display: 'flex', alignItems: 'center', gap: 3, color: colors.dirac, fontSize: 10 }}>
@@ -222,6 +339,8 @@ export function PanelLayout() {
   const uiMode = useUIModeStore((s) => s.mode);
   const experimentalFeatures = useSettingsStore((s) => s.general.experimentalFeatures);
   const result = useSimulationStore((s) => s.result);
+  const terminalOutput = useSimulationStore((s) => s.terminalOutput);
+  const snapshot = useCircuitStore((s) => s.snapshot);
   const platform = usePlatform();
   const isLearnMode = useLearnStore((s) => s.isLearnMode);
   const enterLearnMode = useLearnStore((s) => s.enterLearnMode);
@@ -230,10 +349,28 @@ export function PanelLayout() {
   const enterChallengeMode = useChallengeModeStore((s) => s.enterChallengeMode);
   const exitChallengeMode = useChallengeModeStore((s) => s.exitChallengeMode);
 
-  const showBloch = uiMode !== 'beginner';
-  const showBottomPanel = uiMode !== 'beginner';
+  const preset = useLayoutStore((s) => s.preset);
+  const setPreset = useLayoutStore((s) => s.setPreset);
+  const chipDismissed = useLayoutStore((s) => s.histogramChipDismissed);
+  const dismissChip = useLayoutStore((s) => s.dismissHistogramChip);
+  const resetRunArtifacts = useLayoutStore((s) => s.resetRunArtifacts);
+
+  const visible = computeVisiblePanels({
+    preset,
+    snapshot,
+    result,
+    hasTerminalOutput: terminalOutput.length > 0,
+    errorActive: false,
+  });
+
+  const showBottomPanel = visible.terminal || visible.histogramFull;
   const showSidebar = !isLearnMode && !isChallengeMode && activeView !== null;
   const topSplitRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    // Fresh run should re-show a previously-dismissed histogram chip.
+    if (result) resetRunArtifacts();
+  }, [result, resetRunArtifacts]);
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- expand bottom panel on new result
@@ -256,12 +393,14 @@ export function PanelLayout() {
         const bh = await platform.getStoredValue<number>('layout_bottomHeight');
         const sw = await platform.getStoredValue<number>('layout_sidebarWidth');
         const epw = await platform.getStoredValue<number>('layout_editorPaneWidth');
+        const lp = await platform.getStoredValue<LayoutPreset>('layout_preset');
         if (bh) setBottomHeight(bh);
         if (sw) setSidebarWidth(sw);
         if (epw) setEditorPaneWidth(epw);
+        if (lp === 'clean' || lp === 'balanced' || lp === 'full') setPreset(lp);
       } catch { /* non-critical layout persistence */ }
     })();
-  }, [platform]);
+  }, [platform, setPreset]);
 
   // Listen for cross-component navigation to Settings
   const settingsSignal = useNavigationStore((s) => s.settingsSignal);
@@ -397,20 +536,31 @@ export function PanelLayout() {
                   onDoubleClick={() => setEditorPaneWidth(DEFAULT_EDITOR_PANE_WIDTH)}
                 />
 
-                {/* Right: Circuit + Bloch */}
+                {/* Right: Circuit + Bloch + HistogramChip */}
                 <div style={{ width: `${100 - editorPaneWidth}%`, minWidth: 200, display: 'flex', flexDirection: 'column' }}>
-                  <div style={{
-                    flex: showBloch ? 6 : 1,
-                    borderBottom: showBloch ? `1px solid ${colors.border}` : 'none',
-                    overflow: 'hidden', position: 'relative',
-                  }}>
-                    <CircuitRenderer />
-                  </div>
-                  {showBloch && (
-                    <div style={{ flex: 4, overflow: 'hidden', position: 'relative' }}>
+                  <PanelReveal when={visible.circuit} from="right">
+                    <div style={{
+                      flex: visible.bloch ? 6 : 1,
+                      borderBottom: visible.bloch ? `1px solid ${colors.border}` : 'none',
+                      overflow: 'hidden', position: 'relative',
+                      minHeight: 220,
+                    }}>
+                      <CircuitRenderer />
+                    </div>
+                  </PanelReveal>
+                  <PanelReveal when={visible.bloch} from="bottom">
+                    <div style={{ flex: 4, overflow: 'hidden', position: 'relative', minHeight: 180 }}>
                       <BlochPanel />
                     </div>
-                  )}
+                  </PanelReveal>
+                  <PanelReveal when={visible.histogramChip && !chipDismissed} from="bottom">
+                    <div style={{ padding: '6px 10px 10px', flexShrink: 0 }}>
+                      <HistogramChip
+                        probabilities={result?.probabilities ?? null}
+                        onDismiss={dismissChip}
+                      />
+                    </div>
+                  </PanelReveal>
                 </div>
               </div>
 
@@ -426,7 +576,11 @@ export function PanelLayout() {
                     />
                   )}
                   <div style={{ height: effectiveBottomHeight, overflow: 'hidden', flexShrink: 0 }}>
-                    <BottomPanel collapsed={bottomCollapsed} onToggle={() => setBottomCollapsed((c) => !c)} />
+                    <BottomPanel
+                      collapsed={bottomCollapsed}
+                      onToggle={() => setBottomCollapsed((c) => !c)}
+                      showFullHistogram={visible.histogramFull}
+                    />
                   </div>
                 </>
               )}

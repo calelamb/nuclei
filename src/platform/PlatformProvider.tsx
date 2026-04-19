@@ -47,6 +47,18 @@ const fallbackBridge: PlatformBridge = {
   getPlatform() {
     return 'web';
   },
+  async openDirectory() {
+    return null;
+  },
+  async listDirectory() {
+    return null;
+  },
+  async createFile() {
+    return null;
+  },
+  async deleteFile() {
+    return false;
+  },
 };
 
 function getSyncBridge(): PlatformBridge {

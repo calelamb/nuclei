@@ -7,6 +7,9 @@ import { useSettingsStore } from '../stores/settingsStore';
 import type { KernelResponse } from '../types/quantum';
 import { KERNEL_WS_URL } from '../config/kernel';
 import type { PyodideKernel } from '../platform/pyodideKernel';
+import { useDiracStore } from '../stores/diracStore';
+import { narrateParse, narrateResult } from '../services/narration';
+import { rewritePythonError } from '../services/errorRewrite';
 
 const KERNEL_URL = KERNEL_WS_URL;
 
@@ -65,11 +68,32 @@ export function useKernel() {
         clearEditorErrors();
         if (msg.data) {
           useEditorStore.getState().setFramework(msg.data.framework);
+          useDiracStore.getState().clearRewrittenError();
+          if (useSettingsStore.getState().dirac.narration) {
+            const codeForNarration = useEditorStore.getState().code;
+            narrateParse({ code: codeForNarration, snapshot: msg.data })
+              .then((line) => {
+                if (line) useDiracStore.getState().pushAmbient({ kind: 'parse', text: line });
+              })
+              .catch(() => { /* graceful — ambient AI must never throw */ });
+          }
         }
         break;
       case 'result':
         useSimulationStore.getState().setResult(msg.data);
         clearEditorErrors();
+        if (msg.data) {
+          useDiracStore.getState().clearRewrittenError();
+          if (useSettingsStore.getState().dirac.narration) {
+            const codeForNarration = useEditorStore.getState().code;
+            const snap = useCircuitStore.getState().snapshot;
+            narrateResult({ code: codeForNarration, snapshot: snap, result: msg.data })
+              .then((line) => {
+                if (line) useDiracStore.getState().pushAmbient({ kind: 'result', text: line });
+              })
+              .catch(() => { /* graceful */ });
+          }
+        }
         break;
       case 'python_result':
         useSimulationStore.getState().setRunning(false);
@@ -83,6 +107,22 @@ export function useKernel() {
 
         useSimulationStore.getState().addOutput(`Error: ${detail}`);
         useSimulationStore.getState().setRunning(false);
+
+        if (useSettingsStore.getState().dirac.autoExplainErrors) {
+          const codeForRewrite = useEditorStore.getState().code;
+          const framework = useEditorStore.getState().framework;
+          rewritePythonError({ code: codeForRewrite, framework, traceback: detail })
+            .then((rewritten) => {
+              if (rewritten) {
+                useDiracStore.getState().setRewrittenError({
+                  explanation: rewritten.explanation,
+                  fix: rewritten.fix,
+                  originalTraceback: detail,
+                });
+              }
+            })
+            .catch(() => { /* graceful — app still works without a rewrite */ });
+        }
 
         if (msg.phase === 'parse') {
           setSnapshot(null);
