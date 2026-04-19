@@ -5,6 +5,28 @@ All notable changes to Nuclei will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.0] - 2026-04-18
+
+### Added
+
+- **Progressive-reveal layout.** Panels appear in response to code state. The circuit pane only shows up once the student has written at least one gate. Bloch sphere and a compact `|state⟩ %` histogram chip appear after a successful run. A new status-bar `Layout` dropdown lets experts pin `Clean` / `Balanced` / `Full` presets.
+- **Ambient AI — narration.** Dirac automatically describes what your circuit is doing after every parse/run. One-liner narrations stream into the Dirac sidebar. Toggle in Settings → Dirac → `narration`.
+- **Ambient AI — error rewrite.** When the kernel emits a Python traceback, Dirac replaces it with a concept-level explanation and (when possible) a one-click `Apply fix` button. Toggle in Settings → Dirac → `autoExplainErrors`.
+- **Agentic Compose (⌘I).** Press ⌘I to open a quick-ask modal. "Create a 3-qubit GHZ state" → Sonnet writes the code → a diff preview overlays the editor → Enter applies, Esc rejects. Chat messages that look like code-generation intents route through the same flow automatically.
+- **Zero-ceremony project management.** Any folder on disk is a valid Nuclei project — no config file required. Open a folder, get a live file tree, multiple tabs, per-tab dirty dots, inline rename (double-click), new-file button, and an unsaved-changes confirm when you close a tab. Last project + open tabs persist across sessions. Desktop only; web shows a "download desktop" nudge.
+- **Prominent Run button + visible framework dropdown.** Moved out of the old 16 px status-bar chip and into a proper editor-tab toolbar with a ⌘↵ shortcut hint. Framework selector next to the file tab reads as a real dropdown; Qiskit / CUDA-Q options are marked "Desktop only" in the web build.
+
+### Changed
+
+- **Softer visual identity.** Radii, surfaces, and shadows tuned toward a Cursor-minimalist feel — more breathing room, less hard contrast.
+- **Ghost completion default is now off** for beginners. Can be re-enabled via Settings → Dirac → `ghostCompletions`.
+- **Histogram demoted.** No longer a full bottom-panel tab — renders as a compact chip below the Bloch sphere. Switch the layout preset to `Full` to restore the original bottom panel.
+
+### Fixed
+
+- **Browser IDE Cirq install.** Bumped `cirq-core` from 1.4.1 → 1.5.0 and loaded numpy before micropip resolution so the dependency graph resolves against Pyodide 0.27's bundled numpy 2.0.2 instead of trying to pull a pure-Python numpy 1.22 wheel that doesn't exist.
+- **Editor null-guard** in the inline-edit widget for strict TypeScript builds.
+
 ## [0.1.3] - 2026-04-10
 
 ### Changed
