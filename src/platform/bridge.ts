@@ -45,5 +45,6 @@ export interface PlatformBridge {
   openDirectory(): Promise<{ path: string } | null>;
   listDirectory(path: string): Promise<DirEntry[] | null>;
   createFile(path: string, content: string): Promise<{ path: string } | null>;
+  createDirectory(path: string, recursive?: boolean): Promise<{ path: string } | null>;
   deleteFile(path: string): Promise<boolean>;
 }

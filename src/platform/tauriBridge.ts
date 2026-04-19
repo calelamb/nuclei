@@ -1,7 +1,7 @@
 import { invoke } from '@tauri-apps/api/core';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import { open, save } from '@tauri-apps/plugin-dialog';
-import { readTextFile, writeTextFile, rename, exists, readDir, remove } from '@tauri-apps/plugin-fs';
+import { readTextFile, writeTextFile, rename, exists, readDir, remove, mkdir } from '@tauri-apps/plugin-fs';
 import { load } from '@tauri-apps/plugin-store';
 import type { PlatformBridge } from './bridge';
 
@@ -138,6 +138,16 @@ export const tauriBridge: PlatformBridge = {
     try {
       if (await exists(path)) return null;
       await writeTextFile(path, content);
+      return { path };
+    } catch {
+      return null;
+    }
+  },
+
+  async createDirectory(path: string, recursive = false) {
+    try {
+      if (await exists(path)) return null;
+      await mkdir(path, { recursive });
       return { path };
     } catch {
       return null;

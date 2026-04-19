@@ -1,7 +1,11 @@
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import {
   FolderOpen,
   FilePlus,
+  FolderPlus,
+  Package,
+  Atom as AtomIcon,
+  Plus,
   RefreshCw,
   FileCode,
   Atom,
@@ -14,9 +18,16 @@ import {
   type LucideIcon,
 } from 'lucide-react';
 import { useProjectStore } from '../../stores/projectStore';
+import { useEditorStore } from '../../stores/editorStore';
 import { useThemeStore } from '../../stores/themeStore';
 import { usePlatform } from '../../platform/PlatformProvider';
 import type { DirEntry } from '../../platform/bridge';
+import type { Framework } from '../../types/quantum';
+import {
+  STARTER_TEMPLATES,
+  displayFrameworkName,
+  defaultCircuitFileName,
+} from '../../data/starterTemplates';
 
 const EXTENSION_ICONS: Record<string, LucideIcon> = {
   py: FileCode,
@@ -37,12 +48,28 @@ function basename(path: string): string {
   return path.split('/').pop() ?? path;
 }
 
+type CreateKind =
+  | { kind: 'file'; initial: string }
+  | { kind: 'folder'; initial: string }
+  | { kind: 'package'; initial: string }
+  | { kind: 'circuit'; framework: Framework; initial: string };
+
+function createKindLabel(c: CreateKind): string {
+  switch (c.kind) {
+    case 'file': return 'New file';
+    case 'folder': return 'New folder';
+    case 'package': return 'New Python package';
+    case 'circuit': return `New ${displayFrameworkName(c.framework)} circuit`;
+  }
+}
+
 export function FileExplorer() {
   const projectRoot = useProjectStore((s) => s.projectRoot);
   const setProjectRoot = useProjectStore((s) => s.setProjectRoot);
   const openTab = useProjectStore((s) => s.openTab);
   const tabs = useProjectStore((s) => s.tabs);
   const activeTabPath = useProjectStore((s) => s.activeTabPath);
+  const setEditorFramework = useEditorStore((s) => s.setFramework);
   const colors = useThemeStore((s) => s.colors);
   const platform = usePlatform();
   const isWeb = platform.getPlatform() === 'web';
@@ -54,8 +81,11 @@ export function FileExplorer() {
   const [error, setError] = useState<string | null>(null);
   const [renameTarget, setRenameTarget] = useState<string | null>(null);
   const [renameDraft, setRenameDraft] = useState('');
-  const [newFileMode, setNewFileMode] = useState(false);
-  const [newFileName, setNewFileName] = useState('');
+  const [pending, setPending] = useState<CreateKind | null>(null);
+  const [draft, setDraft] = useState('');
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [circuitSubmenu, setCircuitSubmenu] = useState(false);
+  const menuContainerRef = useRef<HTMLDivElement>(null);
 
   const loadRoot = useCallback(
     async (rootPath: string) => {
@@ -79,12 +109,52 @@ export function FileExplorer() {
     else setRootEntries(null);
   }, [projectRoot, loadRoot]);
 
+  useEffect(() => {
+    if (!menuOpen) return;
+    const h = (e: MouseEvent) => {
+      if (menuContainerRef.current?.contains(e.target as Node)) return;
+      setMenuOpen(false);
+      setCircuitSubmenu(false);
+    };
+    document.addEventListener('mousedown', h);
+    return () => document.removeEventListener('mousedown', h);
+  }, [menuOpen]);
+
   const handleOpenFolder = useCallback(async () => {
     const picked = await platform.openDirectory();
     if (!picked) return;
     setProjectRoot(picked.path);
     platform.setStoredValue('project_root', picked.path).catch(() => {});
   }, [platform, setProjectRoot]);
+
+  const handleNewProject = useCallback(async () => {
+    const parent = await platform.openDirectory();
+    if (!parent) return;
+    const name = window.prompt(
+      'Project name',
+      'my-quantum-project',
+    )?.trim();
+    if (!name) return;
+    if (!/^[A-Za-z0-9_.\- ]+$/.test(name)) {
+      setError('Project name can only contain letters, numbers, spaces, dots, hyphens, and underscores.');
+      return;
+    }
+    const projectPath = `${parent.path}/${name}`;
+    const dir = await platform.createDirectory(projectPath, false);
+    if (!dir) {
+      setError(`Couldn't create "${name}" — does it already exist?`);
+      return;
+    }
+    const currentFramework = useEditorStore.getState().framework;
+    const mainPath = `${projectPath}/main.py`;
+    const mainRes = await platform.createFile(mainPath, STARTER_TEMPLATES[currentFramework]);
+    await platform.createFile(`${projectPath}/README.md`, `# ${name}\n\nQuantum project scaffolded by Nuclei (${displayFrameworkName(currentFramework)}).\n`);
+    setProjectRoot(projectPath);
+    platform.setStoredValue('project_root', projectPath).catch(() => {});
+    if (mainRes) {
+      openTab({ path: mainRes.path, content: STARTER_TEMPLATES[currentFramework] });
+    }
+  }, [platform, setProjectRoot, openTab]);
 
   const handleRefresh = useCallback(() => {
     if (projectRoot) loadRoot(projectRoot);
@@ -119,32 +189,67 @@ export function FileExplorer() {
     [expanded, childEntries, platform],
   );
 
-  const handleNewFile = useCallback(async () => {
-    const name = newFileName.trim();
-    if (!name || !projectRoot) {
-      setNewFileMode(false);
-      setNewFileName('');
+  const startCreate = (c: CreateKind) => {
+    setPending(c);
+    setDraft(c.initial);
+    setMenuOpen(false);
+    setCircuitSubmenu(false);
+  };
+
+  const cancelCreate = () => {
+    setPending(null);
+    setDraft('');
+  };
+
+  const commitCreate = useCallback(async () => {
+    const raw = draft.trim();
+    if (!raw || !projectRoot || !pending) {
+      cancelCreate();
       return;
     }
-    const safe = name.endsWith('.py') || name.includes('.') ? name : `${name}.py`;
-    const path = `${projectRoot}/${safe}`;
-    const res = await platform.createFile(path, '');
-    setNewFileMode(false);
-    setNewFileName('');
-    if (!res) {
-      setError(`Couldn't create ${safe} (already exists?).`);
+    if (raw.includes('/') || raw.includes('\\')) {
+      setError('Names cannot contain slashes. Use the file tree to choose a location.');
+      cancelCreate();
       return;
     }
+
+    if (pending.kind === 'folder') {
+      const path = `${projectRoot}/${raw}`;
+      const res = await platform.createDirectory(path, false);
+      cancelCreate();
+      if (!res) { setError(`Couldn't create folder ${raw}.`); return; }
+      await loadRoot(projectRoot);
+      return;
+    }
+
+    if (pending.kind === 'package') {
+      const path = `${projectRoot}/${raw}`;
+      const dir = await platform.createDirectory(path, false);
+      if (!dir) { setError(`Couldn't create package ${raw}.`); cancelCreate(); return; }
+      await platform.createFile(`${path}/__init__.py`, '');
+      cancelCreate();
+      await loadRoot(projectRoot);
+      return;
+    }
+
+    // file / circuit share the same create-a-file path
+    const name = raw.endsWith('.py') || raw.includes('.') ? raw : `${raw}.py`;
+    const path = `${projectRoot}/${name}`;
+    const content = pending.kind === 'circuit' ? STARTER_TEMPLATES[pending.framework] : '';
+    const res = await platform.createFile(path, content);
+    cancelCreate();
+    if (!res) { setError(`Couldn't create ${name} (already exists?).`); return; }
+    if (pending.kind === 'circuit') setEditorFramework(pending.framework);
     await loadRoot(projectRoot);
-    openTab({ path: res.path, content: '' });
-  }, [newFileName, projectRoot, platform, loadRoot, openTab]);
+    openTab({ path: res.path, content });
+  }, [draft, pending, projectRoot, platform, loadRoot, openTab, setEditorFramework]);
 
   const commitRename = useCallback(
     async (oldPath: string) => {
-      const draft = renameDraft.trim();
+      const d = renameDraft.trim();
       setRenameTarget(null);
-      if (!draft || draft === basename(oldPath)) return;
-      const res = await platform.renameFile(oldPath, draft);
+      if (!d || d === basename(oldPath)) return;
+      const res = await platform.renameFile(oldPath, d);
       if (res) {
         useProjectStore.getState().renameTab(oldPath, res.path);
         if (projectRoot) loadRoot(projectRoot);
@@ -287,6 +392,36 @@ export function FileExplorer() {
   }
 
   if (!projectRoot) {
+    const primaryBtn: React.CSSProperties = {
+      display: 'flex',
+      alignItems: 'center',
+      gap: 6,
+      justifyContent: 'center',
+      padding: '8px 12px',
+      background: colors.accent,
+      color: '#0a0f1a',
+      border: 'none',
+      borderRadius: 6,
+      fontSize: 12,
+      fontWeight: 600,
+      fontFamily: "'Geist Sans', sans-serif",
+      cursor: 'pointer',
+    };
+    const secondaryBtn: React.CSSProperties = {
+      display: 'flex',
+      alignItems: 'center',
+      gap: 6,
+      justifyContent: 'center',
+      padding: '8px 12px',
+      background: 'transparent',
+      color: colors.text,
+      border: `1px solid ${colors.border}`,
+      borderRadius: 6,
+      fontSize: 12,
+      fontWeight: 500,
+      fontFamily: "'Geist Sans', sans-serif",
+      cursor: 'pointer',
+    };
     return (
       <div style={{ padding: 14, display: 'flex', flexDirection: 'column', gap: 10 }}>
         <p
@@ -297,31 +432,35 @@ export function FileExplorer() {
             margin: 0,
           }}
         >
-          Open a folder to start a project. Any folder works — no config file required.
+          Start a new quantum project or open an existing folder.
         </p>
-        <button
-          onClick={handleOpenFolder}
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: 6,
-            justifyContent: 'center',
-            padding: '7px 12px',
-            background: colors.accent,
-            color: '#0a0f1a',
-            border: 'none',
-            borderRadius: 6,
-            fontSize: 12,
-            fontWeight: 600,
-            fontFamily: "'Geist Sans', sans-serif",
-            cursor: 'pointer',
-          }}
-        >
+        <button onClick={handleNewProject} style={primaryBtn}>
+          <Plus size={13} /> New Project…
+        </button>
+        <button onClick={handleOpenFolder} style={secondaryBtn}>
           <FolderOpen size={13} /> Open Folder…
         </button>
+        {error && (
+          <div style={{ color: colors.error, fontSize: 11 }}>{error}</div>
+        )}
       </div>
     );
   }
+
+  const menuItemStyle: React.CSSProperties = {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 8,
+    width: '100%',
+    padding: '6px 12px',
+    background: 'transparent',
+    color: colors.text,
+    border: 'none',
+    cursor: 'pointer',
+    fontSize: 12,
+    fontFamily: "'Geist Sans', sans-serif",
+    textAlign: 'left',
+  };
 
   return (
     <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
@@ -332,6 +471,7 @@ export function FileExplorer() {
           display: 'flex',
           alignItems: 'center',
           gap: 4,
+          position: 'relative',
         }}
       >
         <span
@@ -351,32 +491,133 @@ export function FileExplorer() {
         >
           {rootName}
         </span>
-        <button
-          title="New file"
-          onClick={() => {
-            setNewFileMode(true);
-            setNewFileName('');
-          }}
-          style={{
-            background: 'transparent',
-            border: 'none',
-            color: colors.textDim,
-            cursor: 'pointer',
-            padding: 4,
-            display: 'flex',
-            borderRadius: 4,
-          }}
-          onMouseEnter={(e) => {
-            e.currentTarget.style.color = colors.text;
-            e.currentTarget.style.background = colors.bgElevated;
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.color = colors.textDim;
-            e.currentTarget.style.background = 'transparent';
-          }}
-        >
-          <FilePlus size={13} />
-        </button>
+        <div ref={menuContainerRef} style={{ position: 'relative' }}>
+          <button
+            title="New…"
+            onClick={() => {
+              setMenuOpen((o) => !o);
+              setCircuitSubmenu(false);
+            }}
+            aria-haspopup="menu"
+            aria-expanded={menuOpen}
+            style={{
+              background: menuOpen ? colors.bgElevated : 'transparent',
+              border: 'none',
+              color: menuOpen ? colors.text : colors.textDim,
+              cursor: 'pointer',
+              padding: 4,
+              display: 'flex',
+              borderRadius: 4,
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.color = colors.text;
+              e.currentTarget.style.background = colors.bgElevated;
+            }}
+            onMouseLeave={(e) => {
+              if (!menuOpen) {
+                e.currentTarget.style.color = colors.textDim;
+                e.currentTarget.style.background = 'transparent';
+              }
+            }}
+          >
+            <Plus size={14} />
+          </button>
+          {menuOpen && (
+            <div
+              role="menu"
+              style={{
+                position: 'absolute',
+                right: 0,
+                top: 'calc(100% + 4px)',
+                background: colors.bgPanel,
+                border: `1px solid ${colors.borderStrong}`,
+                borderRadius: 6,
+                minWidth: 220,
+                zIndex: 100,
+                overflow: 'visible',
+                boxShadow: '0 8px 24px rgba(0,0,0,0.25)',
+                padding: '4px 0',
+              }}
+            >
+              <button
+                style={menuItemStyle}
+                onClick={() => startCreate({ kind: 'file', initial: 'untitled.py' })}
+                onMouseEnter={(e) => { e.currentTarget.style.background = `${colors.accent}12`; }}
+                onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
+              >
+                <FilePlus size={13} style={{ color: colors.textDim }} /> New File
+                <span style={{ marginLeft: 'auto', fontSize: 10, color: colors.textDim }}>.py</span>
+              </button>
+
+              <div
+                style={{ position: 'relative' }}
+                onMouseEnter={() => setCircuitSubmenu(true)}
+                onMouseLeave={() => setCircuitSubmenu(false)}
+              >
+                <button
+                  style={menuItemStyle}
+                  onClick={() => setCircuitSubmenu((s) => !s)}
+                >
+                  <AtomIcon size={13} style={{ color: colors.accentLight }} /> New Circuit
+                  <ChevronRight size={12} style={{ marginLeft: 'auto', color: colors.textDim }} />
+                </button>
+                {circuitSubmenu && (
+                  <div
+                    role="menu"
+                    style={{
+                      position: 'absolute',
+                      right: '100%',
+                      top: 0,
+                      marginRight: 4,
+                      background: colors.bgPanel,
+                      border: `1px solid ${colors.borderStrong}`,
+                      borderRadius: 6,
+                      minWidth: 180,
+                      boxShadow: '0 8px 24px rgba(0,0,0,0.25)',
+                      padding: '4px 0',
+                    }}
+                  >
+                    {(['qiskit', 'cirq', 'cuda-q'] as Framework[]).map((f) => (
+                      <button
+                        key={f}
+                        style={menuItemStyle}
+                        onClick={() => startCreate({
+                          kind: 'circuit',
+                          framework: f,
+                          initial: defaultCircuitFileName(f),
+                        })}
+                        onMouseEnter={(e) => { e.currentTarget.style.background = `${colors.accent}12`; }}
+                        onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
+                      >
+                        <AtomIcon size={13} style={{ color: colors.accentLight }} />
+                        {displayFrameworkName(f)}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              <div style={{ borderTop: `1px solid ${colors.border}`, margin: '4px 0' }} />
+
+              <button
+                style={menuItemStyle}
+                onClick={() => startCreate({ kind: 'package', initial: 'new_package' })}
+                onMouseEnter={(e) => { e.currentTarget.style.background = `${colors.accent}12`; }}
+                onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
+              >
+                <Package size={13} style={{ color: colors.textDim }} /> New Python Package
+              </button>
+              <button
+                style={menuItemStyle}
+                onClick={() => startCreate({ kind: 'folder', initial: 'new_folder' })}
+                onMouseEnter={(e) => { e.currentTarget.style.background = `${colors.accent}12`; }}
+                onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
+              >
+                <FolderPlus size={13} style={{ color: colors.textDim }} /> New Folder
+              </button>
+            </div>
+          )}
+        </div>
         <button
           title="Refresh"
           onClick={handleRefresh}
@@ -426,24 +667,29 @@ export function FileExplorer() {
         </button>
       </div>
 
-      {newFileMode && (
+      {pending && (
         <div style={{ padding: '4px 8px', borderBottom: `1px solid ${colors.border}` }}>
+          <div
+            style={{
+              fontSize: 10,
+              textTransform: 'uppercase',
+              letterSpacing: 0.5,
+              color: colors.textDim,
+              padding: '2px 2px 4px',
+            }}
+          >
+            {createKindLabel(pending)}
+          </div>
           <input
             autoFocus
-            value={newFileName}
-            onChange={(e) => setNewFileName(e.target.value)}
-            onBlur={handleNewFile}
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            onBlur={commitCreate}
             onKeyDown={(e) => {
-              if (e.key === 'Enter') {
-                e.preventDefault();
-                handleNewFile();
-              }
-              if (e.key === 'Escape') {
-                setNewFileMode(false);
-                setNewFileName('');
-              }
+              if (e.key === 'Enter') { e.preventDefault(); commitCreate(); }
+              if (e.key === 'Escape') cancelCreate();
             }}
-            placeholder="filename.py"
+            placeholder={pending.initial}
             style={{
               width: '100%',
               background: colors.bgElevated,
@@ -494,7 +740,7 @@ export function FileExplorer() {
               fontFamily: "'Geist Sans', sans-serif",
             }}
           >
-            Folder is empty. Click the + to add a file.
+            Folder is empty. Click + to add a file, package, or circuit.
           </div>
         )}
       </div>

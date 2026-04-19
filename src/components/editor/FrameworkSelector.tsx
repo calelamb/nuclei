@@ -5,17 +5,25 @@ import { useEditorStore } from '../../stores/editorStore';
 import { useThemeStore } from '../../stores/themeStore';
 import { usePlatform } from '../../platform/PlatformProvider';
 import type { Framework } from '../../types/quantum';
-
-const STARTER_TEMPLATES: Record<Framework, string> = {
-  qiskit: `from qiskit import QuantumCircuit\n\n# Create a Bell State\nqc = QuantumCircuit(2, 2)\nqc.h(0)\nqc.cx(0, 1)\nqc.measure([0, 1], [0, 1])\n`,
-  cirq: `import cirq\n\n# Create a Bell State\nq0, q1 = cirq.LineQubit.range(2)\ncircuit = cirq.Circuit([\n    cirq.H(q0),\n    cirq.CNOT(q0, q1),\n    cirq.measure(q0, q1, key='result'),\n])\n`,
-  'cuda-q': `import cudaq\n\n# Create a Bell State\n@cudaq.kernel\ndef bell():\n    q = cudaq.qvector(2)\n    h(q[0])\n    cx(q[0], q[1])\n    mz(q)\n`,
-};
+import { STARTER_TEMPLATES, displayFrameworkName } from '../../data/starterTemplates';
 
 const FRAMEWORKS: Framework[] = ['qiskit', 'cirq', 'cuda-q'];
 
-function displayName(f: Framework): string {
-  return f === 'cuda-q' ? 'CUDA-Q' : f.charAt(0).toUpperCase() + f.slice(1);
+const displayName = displayFrameworkName;
+
+/**
+ * True when the buffer still looks like the untouched starter for any
+ * framework. In that case, switching framework can safely swap the
+ * template without asking — the student hasn't done any real work yet.
+ */
+function isUntouchedStarter(code: string): boolean {
+  const normalized = code.trimEnd();
+  return (
+    normalized === STARTER_TEMPLATES.qiskit.trimEnd() ||
+    normalized === STARTER_TEMPLATES.cirq.trimEnd() ||
+    normalized === STARTER_TEMPLATES['cuda-q'].trimEnd() ||
+    normalized === ''
+  );
 }
 
 export function FrameworkSelector() {
@@ -24,7 +32,9 @@ export function FrameworkSelector() {
   const framework = useEditorStore((s) => s.framework);
   const setFramework = useEditorStore((s) => s.setFramework);
   const setCode = useEditorStore((s) => s.setCode);
+  const code = useEditorStore((s) => s.code);
   const isDirty = useEditorStore((s) => s.isDirty);
+  const filePath = useEditorStore((s) => s.filePath);
   const colors = useThemeStore((s) => s.colors);
   const shadow = useThemeStore((s) => s.shadow);
   const platform = usePlatform();
@@ -88,6 +98,30 @@ export function FrameworkSelector() {
     setOpen(false);
   };
 
+  /**
+   * Switching frameworks is a meaningful choice: the quantum libraries are
+   * not source-compatible. If the buffer is an untouched starter template
+   * (or empty), silently swap to the new framework's starter so the user
+   * actually sees runnable code. If they have a real file open with real
+   * work, just flip the framework label and leave their code alone —
+   * that's how someone with mid-project code would expect to reclassify.
+   */
+  const handleFrameworkPick = (f: Framework) => {
+    if (f === framework) {
+      setOpen(false);
+      return;
+    }
+    const canAutoSwap = !filePath && (!isDirty || isUntouchedStarter(code));
+    if (canAutoSwap) {
+      setCode(STARTER_TEMPLATES[f]);
+      setFramework(f);
+      setOpen(false);
+      return;
+    }
+    setFramework(f);
+    setOpen(false);
+  };
+
   const menu = open && menuPos ? (
     <div
       ref={menuRef}
@@ -128,8 +162,7 @@ export function FrameworkSelector() {
               disabled={disabled}
               onClick={() => {
                 if (disabled) return;
-                setFramework(f);
-                setOpen(false);
+                handleFrameworkPick(f);
               }}
               title={disabled ? 'Desktop app only — download from getnuclei.dev' : undefined}
               style={{

@@ -5,6 +5,22 @@ All notable changes to Nuclei will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.4] - 2026-04-18
+
+### Added — PyCharm-style project creation and framework-aware starters
+
+- **New Project flow.** The empty-state panel now offers both "New Project…" and "Open Folder…". New Project prompts for a parent directory and a project name, scaffolds `<parent>/<name>/main.py` with the currently selected framework's starter Bell-state code, and seeds a `README.md` with the framework tagged. The new project immediately becomes the active folder and `main.py` opens in a tab.
+- **New-item dropdown in the project toolbar.** Replaced the single "+" file icon with a PyCharm-style `+` menu containing:
+  - **New File** — generic `.py` prefilled with `untitled.py`.
+  - **New Circuit ▸ Qiskit / Cirq / CUDA-Q** — creates a framework-tagged Python file (`qiskit_circuit.py` etc.) prefilled with that framework's Bell-state starter and switches the editor framework to match.
+  - **New Python Package** — folder + `__init__.py` (so imports work without extra ceremony).
+  - **New Folder** — plain directory.
+- **Shared starter templates.** Extracted Qiskit / Cirq / CUDA-Q Bell-state templates into `src/data/starterTemplates.ts` so the framework selector and the New Circuit menu stay in sync.
+
+### Changed — switching framework now updates the starter code
+
+- Picking a different framework from the top-bar selector (e.g. Qiskit → Cirq) now replaces the editor buffer with that framework's starter template, provided the buffer is untouched (empty, or still matching a known starter) and no file is open. If you've written real code or have a saved file open, the selector just flips the framework label and leaves your code alone — switching frameworks isn't a source transform.
+
 ## [0.4.3] - 2026-04-18
 
 ### Fixed — Dirac AI paths now use real model IDs and surface real errors
