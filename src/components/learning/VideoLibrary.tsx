@@ -2,7 +2,8 @@ import { useState } from 'react';
 import { useThemeStore } from '../../stores/themeStore';
 import { CURATED_VIDEOS } from '../../data/videos/curatedLibrary';
 import type { CuratedVideo } from '../../data/videos/curatedLibrary';
-import { X, Play, Clock, BarChart2 } from 'lucide-react';
+import { Play } from 'lucide-react';
+import { openExternal, buildYouTubeWatchUrl } from '../../lib/openExternal';
 
 type CreatorFilter = 'all' | CuratedVideo['creator'];
 type DifficultyFilter = 'all' | CuratedVideo['difficulty'];
@@ -179,163 +180,14 @@ function VideoCard({
   );
 }
 
-function VideoModal({
-  video,
-  onClose,
-}: {
-  video: CuratedVideo;
-  onClose: () => void;
-}) {
-  const colors = useThemeStore((s) => s.colors);
-  const shadow = useThemeStore((s) => s.shadow);
-
-  return (
-    <div
-      onClick={onClose}
-      style={{
-        position: 'fixed',
-        inset: 0,
-        zIndex: 3000,
-        background: 'rgba(0,0,0,0.7)',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        padding: 24,
-      }}
-    >
-      <div
-        onClick={(e) => e.stopPropagation()}
-        style={{
-          width: '100%',
-          maxWidth: 720,
-          background: colors.bg,
-          border: `1px solid ${colors.border}`,
-          borderRadius: 12,
-          overflow: 'hidden',
-          boxShadow: shadow.lg,
-        }}
-      >
-        {/* Close button */}
-        <div style={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          padding: '10px 16px',
-          borderBottom: `1px solid ${colors.border}`,
-        }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <span style={{
-              fontSize: 10,
-              fontFamily: "'Geist Sans', sans-serif",
-              fontWeight: 600,
-              color: CREATOR_COLORS[video.creator],
-              background: `${CREATOR_COLORS[video.creator]}18`,
-              padding: '2px 6px',
-              borderRadius: 3,
-            }}>
-              {CREATOR_LABELS[video.creator]}
-            </span>
-            <span style={{
-              color: colors.text,
-              fontSize: 13,
-              fontWeight: 500,
-              fontFamily: "'Geist Sans', sans-serif",
-            }}>
-              {video.title}
-            </span>
-          </div>
-          <button
-            onClick={onClose}
-            style={{
-              background: 'transparent',
-              border: 'none',
-              color: colors.textDim,
-              cursor: 'pointer',
-              padding: 4,
-              display: 'flex',
-              borderRadius: 4,
-            }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.color = colors.text;
-              e.currentTarget.style.background = colors.bgElevated;
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.color = colors.textDim;
-              e.currentTarget.style.background = 'transparent';
-            }}
-          >
-            <X size={16} />
-          </button>
-        </div>
-
-        {/* Iframe */}
-        <div style={{
-          width: '100%',
-          paddingBottom: '56.25%',
-          position: 'relative',
-          background: '#000',
-        }}>
-          <iframe
-            src={`https://www.youtube-nocookie.com/embed/${video.youtubeId}?autoplay=1&rel=0`}
-            title={video.title}
-            style={{
-              position: 'absolute',
-              top: 0,
-              left: 0,
-              width: '100%',
-              height: '100%',
-              border: 'none',
-            }}
-            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-            allowFullScreen
-          />
-        </div>
-
-        {/* Info footer */}
-        <div style={{ padding: '10px 16px', display: 'flex', alignItems: 'center', gap: 12 }}>
-          <span style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: 4,
-            color: colors.textDim,
-            fontSize: 11,
-            fontFamily: "'Geist Sans', sans-serif",
-          }}>
-            <Clock size={11} />
-            {video.duration}
-          </span>
-          <span style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: 4,
-            color: DIFFICULTY_COLORS[video.difficulty],
-            fontSize: 11,
-            fontFamily: "'Geist Sans', sans-serif",
-            fontWeight: 500,
-            textTransform: 'capitalize',
-          }}>
-            <BarChart2 size={11} />
-            {video.difficulty}
-          </span>
-          <div style={{ flex: 1 }} />
-          <span style={{
-            color: colors.textDim,
-            fontSize: 11,
-            fontFamily: "'Geist Sans', sans-serif",
-          }}>
-            {video.description}
-          </span>
-        </div>
-      </div>
-    </div>
-  );
-}
-
 export function VideoLibrary() {
   const colors = useThemeStore((s) => s.colors);
   const [creatorFilter, setCreatorFilter] = useState<CreatorFilter>('all');
   const [difficultyFilter, setDifficultyFilter] = useState<DifficultyFilter>('all');
-  const [activeVideo, setActiveVideo] = useState<CuratedVideo | null>(null);
+
+  const handlePlay = (video: CuratedVideo) => {
+    void openExternal(buildYouTubeWatchUrl(video.youtubeId));
+  };
 
   const filteredVideos = CURATED_VIDEOS.filter((v) => {
     if (creatorFilter !== 'all' && v.creator !== creatorFilter) return false;
@@ -449,19 +301,11 @@ export function VideoLibrary() {
             <VideoCard
               key={video.id}
               video={video}
-              onPlay={setActiveVideo}
+              onPlay={handlePlay}
             />
           ))
         )}
       </div>
-
-      {/* Modal */}
-      {activeVideo && (
-        <VideoModal
-          video={activeVideo}
-          onClose={() => setActiveVideo(null)}
-        />
-      )}
     </div>
   );
 }

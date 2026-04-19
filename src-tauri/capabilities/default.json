@@ -13,6 +13,13 @@
     "updater:default",
     "process:default",
     {
+      "identifier": "shell:allow-open",
+      "allow": [
+        { "url": "^https://(www\\.)?youtube\\.com/.*" },
+        { "url": "^https://youtu\\.be/.*" }
+      ]
+    },
+    {
       "identifier": "fs:allow-read-text-file",
       "allow": [
         { "path": "$DOCUMENT/**" },

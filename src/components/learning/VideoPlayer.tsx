@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useThemeStore } from '../../stores/themeStore';
+import { openExternal, buildYouTubeWatchUrl } from '../../lib/openExternal';
 
 type VideoSource = '3blue1brown' | 'ibm-technology' | 'nvidia' | 'qiskit' | 'other';
 
@@ -32,10 +33,10 @@ function formatChapterTime(seconds: number): string {
   return `${m}:${s.toString().padStart(2, '0')}`;
 }
 
-export function VideoPlayer({ youtubeId, title, creator, startTime, endTime, source, chapters }: VideoPlayerProps) {
+export function VideoPlayer({ youtubeId, title, creator, startTime, source, chapters }: VideoPlayerProps) {
   const colors = useThemeStore((s) => s.colors);
   const shadow = useThemeStore((s) => s.shadow);
-  const [chapterStart, setChapterStart] = useState<number | undefined>(startTime);
+  const [hovered, setHovered] = useState(false);
 
   if (youtubeId === 'placeholder') {
     return (
@@ -88,10 +89,9 @@ export function VideoPlayer({ youtubeId, title, creator, startTime, endTime, sou
     );
   }
 
-  const effectiveStart = chapterStart ?? startTime;
-  let src = `https://www.youtube-nocookie.com/embed/${youtubeId}?rel=0`;
-  if (effectiveStart) src += `&start=${effectiveStart}`;
-  if (endTime) src += `&end=${endTime}`;
+  const handlePlay = (seconds?: number) => {
+    void openExternal(buildYouTubeWatchUrl(youtubeId, seconds ?? startTime));
+  };
 
   return (
     <div style={{
@@ -103,25 +103,81 @@ export function VideoPlayer({ youtubeId, title, creator, startTime, endTime, sou
       border: `1px solid ${colors.border}`,
       boxShadow: shadow.md,
     }}>
-      <div style={{
-        width: '100%',
-        paddingBottom: '56.25%',
-        position: 'relative',
-      }}>
-        <iframe
-          src={src}
-          title={title}
-          style={{
+      <button
+        type="button"
+        onClick={() => handlePlay()}
+        onMouseEnter={() => setHovered(true)}
+        onMouseLeave={() => setHovered(false)}
+        style={{
+          display: 'block',
+          width: '100%',
+          padding: 0,
+          border: 'none',
+          background: '#000',
+          cursor: 'pointer',
+          position: 'relative',
+        }}
+        aria-label={`Play "${title}" on YouTube`}
+      >
+        <div style={{
+          width: '100%',
+          paddingBottom: '56.25%',
+          position: 'relative',
+        }}>
+          <img
+            src={`https://img.youtube.com/vi/${youtubeId}/hqdefault.jpg`}
+            alt=""
+            style={{
+              position: 'absolute',
+              top: 0, left: 0,
+              width: '100%',
+              height: '100%',
+              objectFit: 'cover',
+              display: 'block',
+            }}
+            loading="lazy"
+          />
+          <div style={{
             position: 'absolute',
-            top: 0, left: 0,
-            width: '100%',
-            height: '100%',
-            border: 'none',
-          }}
-          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-          allowFullScreen
-        />
-      </div>
+            inset: 0,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            background: hovered ? 'rgba(0,0,0,0.35)' : 'rgba(0,0,0,0.15)',
+            transition: 'background 180ms ease',
+          }}>
+            <div style={{
+              width: 64, height: 64,
+              borderRadius: '50%',
+              background: 'rgba(0,0,0,0.7)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              transform: hovered ? 'scale(1.08)' : 'scale(1)',
+              transition: 'transform 180ms ease',
+              boxShadow: '0 4px 16px rgba(0,0,0,0.4)',
+            }}>
+              <svg width="26" height="26" viewBox="0 0 24 24" fill="#fff">
+                <polygon points="6 4 20 12 6 20 6 4" />
+              </svg>
+            </div>
+          </div>
+          <div style={{
+            position: 'absolute',
+            top: 8, right: 8,
+            background: 'rgba(0,0,0,0.75)',
+            color: '#fff',
+            fontSize: 10,
+            fontFamily: "'Geist Sans', sans-serif",
+            fontWeight: 500,
+            padding: '3px 8px',
+            borderRadius: 4,
+            letterSpacing: 0.3,
+          }}>
+            Opens in browser
+          </div>
+        </div>
+      </button>
       <div style={{ padding: '10px 16px' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           <div style={{ color: colors.text, fontSize: 14, fontWeight: 500, fontFamily: "'Geist Sans', sans-serif" }}>{title}</div>
@@ -158,25 +214,21 @@ export function VideoPlayer({ youtubeId, title, creator, startTime, endTime, sou
             {chapters.map((chapter, i) => (
               <button
                 key={i}
-                onClick={() => setChapterStart(chapter.time)}
+                onClick={() => handlePlay(chapter.time)}
                 style={{
                   display: 'flex',
                   alignItems: 'center',
                   gap: 8,
                   padding: '3px 6px',
-                  background: chapterStart === chapter.time ? `${colors.accent}12` : 'transparent',
+                  background: 'transparent',
                   border: 'none',
                   borderRadius: 3,
                   cursor: 'pointer',
                   textAlign: 'left',
                   width: '100%',
                 }}
-                onMouseEnter={(e) => {
-                  if (chapterStart !== chapter.time) e.currentTarget.style.background = colors.bgElevated;
-                }}
-                onMouseLeave={(e) => {
-                  if (chapterStart !== chapter.time) e.currentTarget.style.background = 'transparent';
-                }}
+                onMouseEnter={(e) => { e.currentTarget.style.background = colors.bgElevated; }}
+                onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
               >
                 <span style={{
                   color: colors.accent,
