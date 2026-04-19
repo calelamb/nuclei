@@ -73,3 +73,9 @@ class HardwareProvider(ABC):
     def get_queue_position(self, job: JobHandle) -> int:
         """Return current queue position for a pending job."""
         pass
+
+    def cancel_job(self, job: JobHandle) -> bool:
+        """Best-effort cancel of a queued/running job. Default: no-op returning
+        True for providers whose jobs complete synchronously (local simulator
+        and NVIDIA CUDA-Q). Override for real queue-backed providers."""
+        return True

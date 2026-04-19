@@ -156,3 +156,13 @@ class AzureProvider(HardwareProvider):
             return -1
         except Exception:
             return -1
+
+    def cancel_job(self, job: JobHandle) -> bool:
+        azure_job = self._jobs.get(job.id)
+        if azure_job is None:
+            return True
+        try:
+            azure_job.cancel()
+            return True
+        except Exception:
+            return False

@@ -5,6 +5,22 @@ All notable changes to Nuclei will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.2] - 2026-04-18
+
+### Fixed — **hardware submission is now real**
+
+Previously the Launch modal would surface "queued" jobs that never actually talked to a provider. `addJob()` wrote a local record; no WebSocket `hardware_submit` was ever sent to the kernel. The Connect button did the same — flipped a UI bool without validating the token. This release wires the full path end-to-end.
+
+- **Credentials are validated** against the provider's real API. Connect now sends `hardware_connect` to the kernel, which calls `provider.connect(credentials)`; only on a real successful handshake does the UI mark the provider as connected. On failure, an inline error explains why.
+- **Launch is gated.** The Launch button is disabled for credential-required providers until the provider is actually connected. No more fake queued jobs from providers with no token.
+- **Jobs are recorded only after the kernel confirms them** — `hardware_job_submitted` with a real job_id from the underlying SDK (Qiskit Runtime, qiskit-ionq, Braket, Azure Quantum, pytket-quantinuum, or CUDA-Q) is the moment the UI learns the job exists.
+- **Live status polling.** Every 5 seconds while jobs are active, the frontend sends `hardware_status` for each, and transitions the UI through queued → running → complete based on the provider's real status. When a job completes, `hardware_results` is auto-fetched and the histogram chip sprouts a second (purple) bar for hardware outcomes.
+- **Cancel button everywhere.** LaunchStrip gets a Cancel / Dismiss control. LaunchPortal active-jobs list gets a Cancel per row. Cancel for queued/running jobs calls `hardware_cancel` on the kernel, which invokes `provider.cancel_job(handle)` — IBM, IonQ, Braket, Azure, Quantinuum all support real cancel via their SDKs. Local simulators / NVIDIA complete synchronously so cancel is a no-op. For already-completed records, the button becomes "Dismiss" and just removes the row.
+- **"Clear all"** in the Recent Results section of the LaunchPortal wipes all local job records.
+- **Circuit extraction from code.** `hardware_submit` on the kernel side now exec's the student's code and extracts the circuit object (QuantumCircuit / cirq.Circuit / CUDA-Q kernel) before handing it to the provider adapter — previously the raw string was passed through and every provider would have errored on type mismatch.
+
+Net effect: the submission flow is now a real pipeline from editor → kernel → provider SDK → queue → results, with honest status, real errors, and a working cancel path.
+
 ## [0.4.1] - 2026-04-18
 
 ### Added

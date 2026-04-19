@@ -19,6 +19,8 @@ interface HardwareState {
   selectedSubProvider: string | null; // e.g. 'IonQ' / 'Rigetti' when provider is 'braket'
   stagedSubmission: { fileName: string; content: string } | null;
   credentials: Partial<Record<HardwareProviderType, Record<string, string>>>;
+  connectingProvider: HardwareProviderType | null;
+  connectionErrors: Partial<Record<HardwareProviderType, string | null>>;
 
   setBackends: (backends: BackendInfo[]) => void;
   selectBackend: (name: string | null) => void;
@@ -26,6 +28,9 @@ interface HardwareState {
   selectSubProvider: (s: string | null) => void;
   setStagedSubmission: (s: { fileName: string; content: string } | null) => void;
   setProviderCredentials: (p: HardwareProviderType, values: Record<string, string>) => void;
+  setConnecting: (p: HardwareProviderType | null) => void;
+  setConnectionError: (p: HardwareProviderType, error: string | null) => void;
+  clearJob: (id: string) => void;
   addJob: (job: JobHandle) => void;
   updateJob: (id: string, updates: Partial<JobHandle>) => void;
   setResult: (jobId: string, result: HardwareResult) => void;
@@ -60,6 +65,8 @@ export const useHardwareStore = create<HardwareState>((set) => ({
   selectedSubProvider: null,
   stagedSubmission: null,
   credentials: {},
+  connectingProvider: null,
+  connectionErrors: {},
 
   setBackends: (backends) => set({ backends }),
   selectBackend: (name) => set({ selectedBackend: name }),
@@ -68,6 +75,17 @@ export const useHardwareStore = create<HardwareState>((set) => ({
   setStagedSubmission: (stagedSubmission) => set({ stagedSubmission }),
   setProviderCredentials: (p, values) =>
     set((s) => ({ credentials: { ...s.credentials, [p]: values } })),
+  setConnecting: (connectingProvider) => set({ connectingProvider }),
+  setConnectionError: (p, error) =>
+    set((s) => ({ connectionErrors: { ...s.connectionErrors, [p]: error } })),
+  clearJob: (id) =>
+    set((s) => {
+      const { [id]: _, ...rest } = s.results;
+      return {
+        jobs: s.jobs.filter((j) => j.id !== id),
+        results: rest,
+      };
+    }),
   addJob: (job) => set((s) => ({ jobs: [job, ...s.jobs] })),
   updateJob: (id, updates) =>
     set((s) => ({

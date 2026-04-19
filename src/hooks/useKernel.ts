@@ -8,6 +8,7 @@ import type { KernelResponse } from '../types/quantum';
 import { KERNEL_WS_URL } from '../config/kernel';
 import type { PyodideKernel } from '../platform/pyodideKernel';
 import { useDiracStore } from '../stores/diracStore';
+import { useHardwareStore } from '../stores/hardwareStore';
 import { narrateParse, narrateResult } from '../services/narration';
 import { rewritePythonError } from '../services/errorRewrite';
 
@@ -139,6 +140,97 @@ export function useKernel() {
         if (line !== null) {
           useEditorStore.getState().setErrors([{ line, message: shortMessage }]);
         }
+        break;
+      }
+      case 'hardware_connected': {
+        const hw = useHardwareStore.getState();
+        hw.setConnecting(null);
+        if (msg.success) {
+          hw.setProviderConnected(msg.provider as never, true);
+          hw.setConnectionError(msg.provider as never, null);
+        } else {
+          hw.setConnectionError(
+            msg.provider as never,
+            `Could not connect to ${msg.provider}. Check the token and try again.`,
+          );
+        }
+        break;
+      }
+      case 'hardware_job_submitted': {
+        useHardwareStore.getState().addJob({
+          id: msg.job.id,
+          provider: msg.job.provider,
+          backend: msg.job.backend,
+          submittedAt: msg.job.submitted_at,
+          status: msg.job.status,
+          queuePosition: msg.job.queue_position ?? null,
+          shots: msg.job.shots,
+        });
+        break;
+      }
+      case 'hardware_job_update': {
+        const j = msg.job;
+        useHardwareStore.getState().updateJob(j.id, {
+          status: j.status,
+          queuePosition: j.queue_position ?? null,
+        });
+        break;
+      }
+      case 'hardware_result': {
+        // Kernel returns {measurements: {state: count}, ...}. Convert the
+        // counts into normalized probabilities so the dual-bar chip can
+        // render them side-by-side with the classical simulator.
+        const counts = msg.data?.measurements ?? {};
+        const total = Object.values(counts).reduce((a, b) => a + (b as number), 0) || 1;
+        const probs: Record<string, number> = {};
+        for (const [k, v] of Object.entries(counts)) {
+          probs[k] = (v as number) / total;
+        }
+        const jobs = useHardwareStore.getState().jobs;
+        const j = jobs.find((x) => x.id === msg.job_id);
+        useHardwareStore.getState().setResult(msg.job_id, {
+          jobId: msg.job_id,
+          measurements: counts,
+          probabilities: probs,
+          executionTimeMs: 0,
+          backend: j?.backend ?? 'unknown',
+        });
+        useHardwareStore.getState().updateJob(msg.job_id, { status: 'complete' });
+        break;
+      }
+      case 'hardware_job_cancelled': {
+        useHardwareStore.getState().updateJob(msg.job_id, { status: 'failed' });
+        break;
+      }
+      case 'hardware_backends': {
+        // Normalize kernel field names (snake_case) into the TS shape
+        // (camelCase) the store + LaunchModal expect.
+        interface RawBackend {
+          name?: unknown;
+          provider?: unknown;
+          qubit_count?: unknown;
+          connectivity?: unknown;
+          queue_length?: unknown;
+          average_error_rate?: unknown;
+          gate_set?: unknown;
+          status?: unknown;
+        }
+        const normalized = (msg.backends as RawBackend[]).map((b) => ({
+          name: String(b.name ?? ''),
+          provider: String(b.provider ?? '') as never,
+          qubitCount: Number(b.qubit_count ?? 0),
+          connectivity: (Array.isArray(b.connectivity) ? b.connectivity : []).map(
+            (pair: unknown) => {
+              const arr = pair as [number, number];
+              return [arr[0], arr[1]] as [number, number];
+            },
+          ),
+          queueLength: Number(b.queue_length ?? 0),
+          averageErrorRate: Number(b.average_error_rate ?? 0),
+          gateSet: Array.isArray(b.gate_set) ? (b.gate_set as string[]) : [],
+          status: (b.status as 'online' | 'offline' | 'maintenance') ?? 'online',
+        }));
+        useHardwareStore.getState().setBackends(normalized);
         break;
       }
     }
@@ -318,5 +410,73 @@ export function useKernel() {
     }
   }, [isWeb]);
 
-  return { execute };
+  // Send a hardware request over the desktop WebSocket. No-ops on web since
+  // there's no local kernel process to talk to there.
+  const sendHardware = useCallback((payload: Record<string, unknown>) => {
+    if (isWeb) return false;
+    const ws = wsRef.current;
+    if (!ws || ws.readyState !== WebSocket.OPEN) return false;
+    ws.send(JSON.stringify(payload));
+    return true;
+  }, [isWeb]);
+
+  const hardwareConnect = useCallback(
+    (provider: string, credentials: Record<string, string>) => {
+      useHardwareStore.getState().setConnecting(provider as never);
+      useHardwareStore.getState().setConnectionError(provider as never, null);
+      const ok = sendHardware({ type: 'hardware_connect', provider, credentials });
+      if (!ok) {
+        useHardwareStore.getState().setConnecting(null);
+        useHardwareStore.getState().setConnectionError(
+          provider as never,
+          'Hardware connection requires the desktop app. Download from getnuclei.dev.',
+        );
+      }
+    },
+    [sendHardware],
+  );
+
+  const hardwareSubmit = useCallback(
+    (provider: string, backend: string, code: string, shots: number) =>
+      sendHardware({ type: 'hardware_submit', provider, backend, code, shots }),
+    [sendHardware],
+  );
+
+  const hardwareCancel = useCallback(
+    (jobId: string) => {
+      // Optimistically flip to failed so the UI responds immediately; the
+      // kernel's ack will confirm. For unknown-to-kernel jobs, the response
+      // still marks the local record as failed.
+      useHardwareStore.getState().updateJob(jobId, { status: 'failed' });
+      sendHardware({ type: 'hardware_cancel', job_id: jobId });
+    },
+    [sendHardware],
+  );
+
+  // Poll status + results for active hardware jobs. 5s is a friendly cadence
+  // for students on the free IBM tier (whose queues move in tens of seconds),
+  // and light enough to not hammer the kernel.
+  useEffect(() => {
+    if (isWeb) return;
+    const interval = setInterval(() => {
+      const ws = wsRef.current;
+      if (!ws || ws.readyState !== WebSocket.OPEN) return;
+      const jobs = useHardwareStore.getState().jobs;
+      const results = useHardwareStore.getState().results;
+      for (const j of jobs) {
+        if (j.status === 'queued' || j.status === 'running') {
+          ws.send(JSON.stringify({ type: 'hardware_status', job_id: j.id }));
+        }
+        if (j.status === 'complete' && !results[j.id]) {
+          // Job just flipped to complete (via hardware_job_update) but we
+          // haven't fetched results yet — do it now so the dual-bar chip
+          // appears without a manual refresh.
+          ws.send(JSON.stringify({ type: 'hardware_results', job_id: j.id }));
+        }
+      }
+    }, 5000);
+    return () => clearInterval(interval);
+  }, [isWeb]);
+
+  return { execute, hardwareConnect, hardwareSubmit, hardwareCancel };
 }

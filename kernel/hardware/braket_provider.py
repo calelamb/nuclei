@@ -186,3 +186,13 @@ class BraketProvider(HardwareProvider):
             return int(info) if info is not None else 0
         except Exception:
             return -1
+
+    def cancel_job(self, job: JobHandle) -> bool:
+        task = self._jobs.get(job.id)
+        if task is None:
+            return True
+        try:
+            task.cancel()
+            return True
+        except Exception:
+            return False

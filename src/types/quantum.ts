@@ -39,7 +39,23 @@ export interface SimulationResult {
 export type KernelMessage =
   | { type: 'parse'; code: string }
   | { type: 'execute'; code: string; shots: number }
-  | { type: 'run_python'; code: string };
+  | { type: 'run_python'; code: string }
+  | { type: 'hardware_connect'; provider: string; credentials: Record<string, string> }
+  | { type: 'hardware_list_backends'; provider: string }
+  | { type: 'hardware_submit'; provider: string; backend: string; code: string; shots: number }
+  | { type: 'hardware_status'; job_id: string }
+  | { type: 'hardware_results'; job_id: string }
+  | { type: 'hardware_cancel'; job_id: string };
+
+interface HardwareJobDTO {
+  id: string;
+  provider: string;
+  backend: string;
+  status: 'queued' | 'running' | 'complete' | 'failed';
+  queue_position: number | null;
+  shots: number;
+  submitted_at: string;
+}
 
 export type KernelResponse =
   | { type: 'snapshot'; data: CircuitSnapshot | null }
@@ -54,4 +70,10 @@ export type KernelResponse =
       framework?: Framework;
       dependency?: string;
     }
-  | { type: 'output'; text: string };
+  | { type: 'output'; text: string }
+  | { type: 'hardware_connected'; provider: string; success: boolean }
+  | { type: 'hardware_backends'; backends: Array<Record<string, unknown>> }
+  | { type: 'hardware_job_submitted'; job: HardwareJobDTO }
+  | { type: 'hardware_job_update'; job: HardwareJobDTO }
+  | { type: 'hardware_result'; job_id: string; data: { measurements?: Record<string, number>; error?: string; status?: string } }
+  | { type: 'hardware_job_cancelled'; job_id: string; success: boolean };
