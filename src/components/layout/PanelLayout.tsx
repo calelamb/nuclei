@@ -574,6 +574,7 @@ export function PanelLayout() {
                       borderBottom: visible.bloch ? `1px solid ${colors.border}` : 'none',
                       overflow: 'hidden', position: 'relative',
                       minHeight: 220,
+                      paddingTop: 16,
                     }}>
                       <CircuitRenderer />
                     </div>
