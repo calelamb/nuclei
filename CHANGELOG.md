@@ -5,6 +5,19 @@ All notable changes to Nuclei will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.1] - 2026-04-18
+
+### Added
+
+- **Inline BYOK in the Launch modal.** When you pick a provider that needs credentials (IBM Quantum, IonQ, Quantinuum), a compact one-field input sits at the top of the backend picker: paste your token, press Enter or click Connect, continue to submission. No separate credential-setup modal interrupts the flow for the common case.
+- **Drop-to-launch.** Dropping a file into the sidebar Launch Portal now auto-opens the Launch modal on the provider picker. One-step action: drop, pick, go.
+- **"Submitting: filename" banner.** The Launch modal shows a subtle chip confirming exactly which file is about to be launched, so there's no ambiguity between the active tab and the staged file.
+- **Aggregator sub-provider chips.** When AWS Braket or Azure Quantum is selected, a row of small chips ("IonQ / Rigetti / QuEra / …") above the backend list filters the backends to that sub-provider. Clarifies the "this is a bundle" model without forcing a full 3-act drill-down.
+
+### Changed
+
+- Closing the Launch modal now also clears the selected sub-provider, so the next open starts clean.
+
 ## [0.4.0] - 2026-04-18
 
 ### Added

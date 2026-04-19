@@ -51,21 +51,27 @@ export function LaunchPortal() {
   const [dragActive, setDragActive] = useState(false);
   const [lastDropped, setLastDropped] = useState<string | null>(null);
 
+  const setStagedSubmission = useHardwareStore((s) => s.setStagedSubmission);
   const readFile = useCallback(
     async (file: File) => {
       const content = await file.text();
-      // Open into a temp buffer — don't touch disk. User saves explicitly.
       const pseudoPath = `~dropped/${file.name}`;
+      // Open into a temp buffer so the student can see what they're about
+      // to submit; also stage it explicitly for the launcher.
       try {
         openTab({ path: pseudoPath, content });
       } catch {
-        // Fall back to replacing the legacy single-file buffer.
         setCode(content);
         setFilePath(file.name);
       }
       setLastDropped(file.name);
+      setStagedSubmission({ fileName: file.name, content });
+      // One-step action: drop a file → modal opens on the provider picker so
+      // the student doesn't have to hunt for the grid below.
+      useHardwareStore.getState().selectProvider(null);
+      useHardwareStore.getState().openLaunch();
     },
-    [openTab, setCode, setFilePath],
+    [openTab, setCode, setFilePath, setStagedSubmission],
   );
 
   const handleDrop = useCallback(
@@ -103,8 +109,11 @@ export function LaunchPortal() {
 
   const completedJobs = jobs.filter((j) => j.status === 'complete').slice(0, 5);
   const activeJobs = jobs.filter((j) => j.status === 'queued' || j.status === 'running');
-
-  const activeFileName = lastDropped ?? (currentFilePath ? currentFilePath.split('/').pop() : null);
+  const stagedSubmission = useHardwareStore((s) => s.stagedSubmission);
+  const activeFileName =
+    stagedSubmission?.fileName ??
+    lastDropped ??
+    (currentFilePath ? currentFilePath.split('/').pop() : null);
 
   return (
     <div style={{ height: '100%', display: 'flex', flexDirection: 'column', overflow: 'auto' }}>
