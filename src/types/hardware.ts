@@ -26,9 +26,13 @@ export interface JobHandle {
   provider: string;
   backend: string;
   submittedAt: string;
-  status: 'queued' | 'running' | 'complete' | 'failed';
+  // 'unknown' when the provider's status probe failed transiently (next
+  // poll may recover). 'stale' when the kernel no longer tracks the job
+  // (typically after a kernel restart before job-persistence is wired).
+  status: 'queued' | 'running' | 'complete' | 'failed' | 'unknown' | 'stale';
   queuePosition: number | null;
   shots: number;
+  error?: string | null;
 }
 
 export interface HardwareResult {

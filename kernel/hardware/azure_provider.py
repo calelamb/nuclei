@@ -101,10 +101,43 @@ class AzureProvider(HardwareProvider):
 
         job_id = str(uuid.uuid4())
         now = datetime.now(timezone.utc).isoformat()
+
+        # Target resolution and submit are separated so we can tell the user
+        # "target not found" (actionable) vs "submit exploded" (SDK error).
+        # Azure's workspace.get_targets(name=...) is infamously
+        # shape-shifting — it can return a single Target, a list of Targets
+        # (with 0, 1, or many matches), or None depending on SDK version and
+        # name matching behavior.
+        def _fail(message: str) -> JobHandle:
+            return JobHandle(
+                id=job_id,
+                provider="azure",
+                backend=backend,
+                status="failed",
+                queue_position=None,
+                shots=shots,
+                submitted_at=now,
+                error=message,
+            )
+
         try:
-            target = self._workspace.get_targets(name=backend)
-            if target is None:
-                raise RuntimeError(f"Unknown Azure target: {backend}")
+            result = self._workspace.get_targets(name=backend)
+        except Exception as e:
+            return _fail(f"Azure target lookup failed for '{backend}': {e}")
+
+        target = None
+        if result is None:
+            return _fail(f"Azure target '{backend}' not found. Check the target name.")
+        if isinstance(result, (list, tuple)):
+            if not result:
+                return _fail(f"Azure target '{backend}' not found (empty list).")
+            target = result[0]
+        else:
+            target = result
+        if target is None:
+            return _fail(f"Azure target '{backend}' returned no usable target.")
+
+        try:
             azure_job = target.submit(circuit_obj, shots=shots)
             self._jobs[job_id] = azure_job
             return JobHandle(
@@ -116,16 +149,8 @@ class AzureProvider(HardwareProvider):
                 shots=shots,
                 submitted_at=now,
             )
-        except Exception:
-            return JobHandle(
-                id=job_id,
-                provider="azure",
-                backend=backend,
-                status="failed",
-                queue_position=None,
-                shots=shots,
-                submitted_at=now,
-            )
+        except Exception as e:
+            return _fail(f"Azure submit failed: {e}")
 
     def get_results(self, job: JobHandle) -> dict:
         azure_job = self._jobs.get(job.id)
