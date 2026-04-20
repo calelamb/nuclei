@@ -5,6 +5,30 @@ All notable changes to Nuclei will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.15] - 2026-04-20
+
+### Fixed — kernel hung at "loading" after v0.4.14 update
+
+v0.4.14 started bundling `kernel/` in the release (good) but the
+Nuclei-managed venv was never installing the kernel's own runtime
+deps — `websockets`, `numpy`, `keyring`. The framework wizard in
+v0.4.7 taught the venv to install user-selected frameworks (Qiskit,
+Cirq, etc.), but it never installed the kernel's core imports. On
+v0.4.14 (the first release where the kernel actually launches from
+that venv), Python died immediately on `import websockets` and the
+frontend stared at a "loading kernel..." spinner forever.
+
+- New `ensure_kernel_runtime` hook creates the venv if missing and
+  installs `websockets`, `numpy`, `keyring` when they're not
+  already there. Fast-checked via a `python -c 'import ...'` probe
+  so the hot path is a ~50ms no-op when everything's satisfied.
+  Called by the kernel spawn path every launch.
+- Kernel stdout/stderr are now piped into the Rust logger. Prior
+  releases left both handles piped but never read them, so Python
+  crashes (like this one) left no breadcrumbs — just a defunct PID
+  and a frontend reconnecting to a dead WebSocket forever. The
+  next mystery kernel crash will leave a trail in `nuclei.log`.
+
 ## [0.4.14] - 2026-04-19
 
 ### Fixed — kernel is now actually shipped in the release bundle
