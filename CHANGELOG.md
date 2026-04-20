@@ -5,6 +5,24 @@ All notable changes to Nuclei will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.13] - 2026-04-19
+
+### Added — Open Files section in the sidebar
+
+Open editor tabs now show at the top of the Explorer sidebar. Clicking
+a row switches to that tab; the hover-reveal X closes it; a dirty-dot
+shows unsaved changes. The section is collapsible, shows the tab count
+in the header, and self-hides when nothing is open. Pinned above the
+file tree's scroll container so deep trees don't push it off-screen.
+
+### Fixed — File > Open now registers a tab
+
+File > Open loaded a file into the editor but never called
+`projectStore.openTab`, so opening a second file orphaned the first
+with no way to switch back from the sidebar. It now flows through
+the same tab machinery as every other open path, so both the top
+EditorTabs bar and the new sidebar section light up correctly.
+
 ## [0.4.12] - 2026-04-19
 
 ### Added — Terminal polish
