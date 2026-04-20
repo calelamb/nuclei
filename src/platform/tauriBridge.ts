@@ -24,8 +24,17 @@ export const tauriBridge: PlatformBridge = {
   },
 
   async openFile() {
+    // Multiple filter groups so macOS renders a dropdown at the bottom
+    // of the open panel. The default group covers the common code
+    // extensions a Nuclei user actually opens; the "All Files" fallback
+    // is the escape hatch for .py files that macOS greys out (happens
+    // when the UTI registry doesn't recognize the file's type, e.g. on
+    // freshly-imaged machines or for files with mis-tagged metadata).
     const selected = await open({
-      filters: [{ name: 'Python', extensions: ['py'] }],
+      filters: [
+        { name: 'Source files', extensions: ['py', 'qasm', 'ipynb', 'json', 'txt', 'md'] },
+        { name: 'All Files', extensions: ['*'] },
+      ],
       multiple: false,
     });
     if (!selected) return null;
@@ -48,7 +57,10 @@ export const tauriBridge: PlatformBridge = {
 
   async saveFileAs(content: string, defaultPath?: string) {
     const path = await save({
-      filters: [{ name: 'Python', extensions: ['py'] }],
+      filters: [
+        { name: 'Python', extensions: ['py'] },
+        { name: 'All Files', extensions: ['*'] },
+      ],
       defaultPath: defaultPath ?? 'untitled.py',
     });
     if (!path) return null;
