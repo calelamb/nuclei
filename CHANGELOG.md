@@ -5,6 +5,51 @@ All notable changes to Nuclei will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.14] - 2026-04-19
+
+### Fixed — kernel is now actually shipped in the release bundle
+
+Every release prior to this one built the `.dmg` / `.msi` / `.deb`
+without the `kernel/` Python source inside it (no `resources` entry
+in `tauri.conf.json`). The packaged app silently relied on whatever
+stale kernel process happened to be running on the user's machine —
+typically a zombie from an earlier install still holding port 9742.
+
+Symptom users saw: `Error: Unknown message type:
+hardware_connected_providers` (and similar for `hardware_list_jobs`),
+because the zombie kernel was running pre-v0.4.12 server code and
+didn't know about handlers added in v0.4.12 / v0.4.13.
+
+- `tauri.conf.json` gains `resources: {"../kernel": "kernel"}` so
+  the full kernel source ships inside every bundle at
+  `<resource_dir>/kernel/`. The Rust kernel spawner in
+  `src-tauri/src/commands/kernel.rs` was updated in tandem to read
+  from `resource_dir.join("kernel")` rather than `resource_dir
+  .parent()` (which was always wrong in production — the parent is
+  `Contents/` on macOS and doesn't contain our source).
+- Before spawning a new kernel, Rust now kills whatever is currently
+  holding port 9742 (`lsof -ti :9742 | xargs kill -9` on unix,
+  `netstat | taskkill` on windows). Best-effort — no-ops cleanly
+  if the port is free — and eliminates the "first zombie wins"
+  class of bug.
+
+### Fixed — .py files greyed out in the macOS open dialog
+
+The single `extensions: ['py']` filter on `openFile` was routed
+through Cocoa's `NSOpenPanel.allowedFileTypes`, which greyed out any
+file whose UTI didn't resolve to `public.python-script` — common on
+freshly-imaged machines, for files with mis-tagged metadata, or for
+Python files with uppercase extensions.
+
+- `openFile` now offers a broader default group (`py`, `qasm`,
+  `ipynb`, `json`, `txt`, `md`) plus an "All Files" fallback.
+  macOS renders these as a dropdown at the bottom of the open
+  panel, so users who still see their file greyed out can switch
+  to "All Files" and select it.
+- `saveFileAs` gained the same "All Files" fallback so you can
+  name a destination with a non-default extension without the
+  picker fighting you.
+
 ## [0.4.13] - 2026-04-19
 
 ### Added — Open Files section in the sidebar
