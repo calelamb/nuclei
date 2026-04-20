@@ -1,5 +1,7 @@
+use std::io::{BufRead, BufReader};
 use std::process::{Child, Command};
 use std::sync::Mutex;
+use std::thread;
 use tauri::{Manager, State};
 
 // Canonical kernel port. The frontend connects here by hardcoded URL
@@ -137,14 +139,28 @@ pub fn start_kernel(
         return Err("Kernel script resolved outside expected directory".to_string());
     }
 
-    // Prefer the Nuclei-managed venv's Python (created by the framework
-    // installer) so the kernel sees whichever frameworks the student
-    // picked. Fall back to the first python3 on PATH for users who
-    // haven't run the installer yet.
+    // Prefer the Nuclei-managed venv's Python. `ensure_kernel_runtime`
+    // creates the venv if missing AND installs the kernel's core
+    // import-time deps (websockets / numpy / keyring) when they're not
+    // already there — skipping this is what caused v0.4.14's "loading
+    // kernel forever" bug: the freshly-bundled kernel launched OK but
+    // immediately died on `import websockets` because nobody had ever
+    // installed it into the managed venv. The check is a cheap no-op
+    // when deps are already present.
+    //
+    // Falls back to system `python3` if the managed venv can't be
+    // bootstrapped (no Python installed at all). Those users get
+    // whatever's globally available — not great, but better than no
+    // kernel at all.
     let python_path: std::path::PathBuf =
-        match crate::commands::frameworks::resolve_kernel_python(&app_handle) {
-            Some(p) => p,
-            None => std::path::PathBuf::from("python3"),
+        match crate::commands::frameworks::ensure_kernel_runtime(&app_handle) {
+            Ok(p) => p,
+            Err(e) => {
+                log::warn!(
+                    "Managed venv unavailable ({e}); falling back to system python3"
+                );
+                std::path::PathBuf::from("python3")
+            }
         };
 
     log::info!(
@@ -154,13 +170,35 @@ pub fn start_kernel(
         kernel_cwd.display()
     );
 
-    let child = Command::new(&python_path)
+    let mut child = Command::new(&python_path)
         .arg(kernel_script.to_str().unwrap())
         .current_dir(&kernel_cwd)
         .stdout(std::process::Stdio::piped())
         .stderr(std::process::Stdio::piped())
         .spawn()
         .map_err(|e| format!("Failed to start kernel: {} (cwd: {})", e, kernel_cwd.display()))?;
+
+    // Drain kernel stdout + stderr into the Rust logger. Prior releases
+    // piped both streams but never read them — so when Python crashed
+    // with an ImportError (see the v0.4.14 websockets-missing bug) we
+    // got a defunct PID and the frontend just retried a dead WebSocket
+    // forever, with no trace of the actual error. Reading the streams
+    // drains the pipes AND emits the Python output into nuclei.log so
+    // the next diagnostic round has something to work with.
+    if let Some(stdout) = child.stdout.take() {
+        thread::spawn(move || {
+            for line in BufReader::new(stdout).lines().map_while(Result::ok) {
+                log::info!("[kernel stdout] {}", line);
+            }
+        });
+    }
+    if let Some(stderr) = child.stderr.take() {
+        thread::spawn(move || {
+            for line in BufReader::new(stderr).lines().map_while(Result::ok) {
+                log::warn!("[kernel stderr] {}", line);
+            }
+        });
+    }
 
     let pid = child.id();
     *guard = Some(child);
