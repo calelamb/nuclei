@@ -5,6 +5,42 @@ All notable changes to Nuclei will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.16] - 2026-04-20
+
+### Fixed — managed venv auto-rebuilds from Python 3.10+
+
+v0.4.14 and v0.4.15 landed the kernel bundle and the core-dep
+install, but users whose managed venv had been created from Python
+3.9 (Xcode's default `python3` on many Macs) still saw "loading
+kernel..." forever — the kernel code uses PEP 604 union syntax
+(`str | None`) in class bodies, which crashes at import time under
+3.9 with `TypeError: unsupported operand type(s) for |: 'type' and
+'NoneType'`. v0.4.15 exposed the traceback via stderr piping; this
+release actually resolves it.
+
+- New `find_best_python` probes candidates in newest-first order
+  (`python3.13`, `python3.12`, ... `python3.10`, then generic
+  `python3` / `python`) and only returns interpreters that are
+  >= 3.10. A box with both 3.9 and 3.12 now always picks 3.12.
+- `ensure_kernel_runtime` now checks the venv's Python version at
+  every kernel spawn. Venvs built from < 3.10 are automatically
+  rebuilt with a newer interpreter, with the user's previously-
+  installed frameworks (Qiskit, Cirq, etc.) re-installed from the
+  catalog so the setup wizard doesn't have to be re-run. The old
+  venv is moved aside to `venv.broken` during the rebuild and
+  removed on success.
+- Fresh venv creation also requires 3.10+. If no suitable Python
+  is found on PATH, the user gets a clear "install Python 3.10+
+  from python.org" error instead of a silently-broken kernel.
+
+### Changed — Dirac no longer uses emojis
+
+Prompt tweak: Dirac's system prompt now explicitly forbids emojis
+and decorative unicode (✨ 🎉 🚀 etc.) in chat responses. Inline
+code, braket notation (|0⟩, |ψ⟩), and bullet lists stay because
+they carry meaning. Also discourages the "Great question!"
+preamble pattern so replies get to the point faster.
+
 ## [0.4.15] - 2026-04-20
 
 ### Fixed — kernel hung at "loading" after v0.4.14 update
