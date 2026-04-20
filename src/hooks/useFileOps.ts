@@ -42,6 +42,12 @@ export function useFileOps() {
 
     setCode(result.content);
     setFilePath(result.path);
+    // Register the opened file as a tab in projectStore so it shows up in
+    // the sidebar's Open Files section and the top EditorTabs bar. Without
+    // this, File > Open would put the buffer in the editor but leave no
+    // trace in the tab list — users had nowhere to click to switch back to
+    // a previously-opened file once they opened a second one.
+    useProjectStore.getState().openTab({ path: result.path, content: result.content });
     await addRecent(result.path);
     await platform.setStoredValue(LAST_OPENED_FILE_KEY, result.path);
   }, [setCode, setFilePath, addRecent, platform]);
