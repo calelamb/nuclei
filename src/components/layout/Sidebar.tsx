@@ -1,6 +1,7 @@
 import { lazy, Suspense, useState, useRef, useCallback } from 'react';
 import { useThemeStore } from '../../stores/themeStore';
 import { FileExplorer } from '../explorer/FileExplorer';
+import { OpenFilesSection } from '../explorer/OpenFilesSection';
 import { LaunchPortal } from '../hardware/LaunchPortal';
 import { SettingsPanel } from '../settings/SettingsPanel';
 import { useSettingsStore } from '../../stores/settingsStore';
@@ -202,6 +203,11 @@ export function Sidebar({ view, width, onWidthChange }: SidebarProps) {
       borderRight: `1px solid ${colors.border}`,
     }}>
       <SidebarHeader title={VIEW_TITLES[view]} />
+      {/* Open Files sits OUTSIDE the scroll container so it stays pinned at
+          the top of the Explorer regardless of how deep the tree is scrolled.
+          Rendered only for the files view; self-hides when there are no open
+          tabs so it doesn't add empty chrome. */}
+      {view === 'files' && <OpenFilesSection />}
       <div style={{ flex: 1, overflow: 'auto' }}>
         {view === 'files' && <FileExplorer />}
         {view === 'launch' && <LaunchPortal />}
