@@ -211,17 +211,71 @@ fn installed_frameworks(venv_py: &Path) -> Vec<String> {
     out
 }
 
-/// The venv's python, or `None` if the venv doesn't yet exist. Called
-/// by the kernel spawn path so the kernel loads whatever the user
-/// installed via the framework wizard.
-pub fn resolve_kernel_python(app: &AppHandle) -> Option<PathBuf> {
-    let venv = venv_path(app).ok()?;
-    let py = venv_python(&venv);
-    if py.exists() {
-        Some(py)
-    } else {
-        None
+/// Kernel-side runtime dependencies. Separate from the framework catalog
+/// because these aren't optional — without them the kernel process
+/// crashes on module import the moment it's spawned, leaving the user
+/// staring at a "loading kernel..." spinner forever (see v0.4.14 field
+/// report). `ensure_venv` only bootstraps pip; these are the deps the
+/// kernel itself imports at module load.
+const KERNEL_CORE_DEPS: &[&str] = &[
+    "websockets>=12.0,<14.0",
+    "numpy>=1.26,<3.0",
+    "keyring>=24",
+];
+
+/// Fast-check whether the venv already has the kernel's core runtime
+/// deps. A `-c import ...` takes ~50ms when Python can find everything,
+/// which is cheap to run on every kernel launch. Returns false on any
+/// ImportError so the caller knows to pip-install.
+fn kernel_core_deps_present(python: &Path) -> bool {
+    Command::new(python)
+        .args(["-c", "import websockets, numpy, keyring"])
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .status()
+        .map(|s| s.success())
+        .unwrap_or(false)
+}
+
+/// Install the kernel's core runtime deps into the given venv. Idempotent
+/// when the deps are already present (pip no-ops on satisfied
+/// requirements). Caller should gate this behind `kernel_core_deps_present`
+/// to skip pip entirely on the common hot path.
+pub fn install_kernel_core_deps(app: &AppHandle, venv: &Path) -> Result<(), String> {
+    let pip = venv_pip(venv);
+    if !pip.exists() {
+        return Err(format!(
+            "pip not found in venv at {} — venv may be corrupt",
+            venv.display()
+        ));
     }
+    emit(app, "installing-core-deps", None, Some("websockets, numpy, keyring"));
+    let mut args: Vec<&str> = vec!["install", "--upgrade"];
+    args.extend(KERNEL_CORE_DEPS.iter().copied());
+    let out = Command::new(&pip)
+        .args(&args)
+        .output()
+        .map_err(|e| format!("pip core-deps install failed to start: {e}"))?;
+    if !out.status.success() {
+        let stderr = String::from_utf8_lossy(&out.stderr);
+        return Err(format!("pip core-deps install failed: {stderr}"));
+    }
+    emit(app, "installed-core-deps", None, None);
+    Ok(())
+}
+
+/// Guarantee the venv has everything the kernel needs to boot. Creates
+/// the venv if missing, then installs core deps if they're not already
+/// there. Called by the kernel spawn path every launch — cheap no-op
+/// when the install is already satisfied.
+pub fn ensure_kernel_runtime(app: &AppHandle) -> Result<PathBuf, String> {
+    let venv = venv_path(app)?;
+    ensure_venv(app, &venv)?;
+    let py = venv_python(&venv);
+    if !kernel_core_deps_present(&py) {
+        install_kernel_core_deps(app, &venv)?;
+    }
+    Ok(py)
 }
 
 #[tauri::command]
