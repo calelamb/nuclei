@@ -207,11 +207,11 @@ export function LaunchModal() {
   const [localShots, setLocalShots] = useState(shots || 1024);
   const [keyDraft, setKeyDraft] = useState('');
   useEffect(() => {
-    if (open) setLocalShots(shots || 1024);
+    if (open) queueMicrotask(() => setLocalShots(shots || 1024));
   }, [open, shots]);
   // Clear the in-progress key input whenever we switch provider.
   useEffect(() => {
-    setKeyDraft('');
+    queueMicrotask(() => setKeyDraft(''));
   }, [selectedProvider]);
 
   useEffect(() => {

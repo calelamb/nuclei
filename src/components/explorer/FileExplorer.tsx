@@ -107,8 +107,10 @@ export function FileExplorer() {
 
   const inMemory = isMemoryPath(projectRoot);
   useEffect(() => {
-    if (projectRoot && !isMemoryPath(projectRoot)) loadRoot(projectRoot);
-    else setRootEntries(null);
+    queueMicrotask(() => {
+      if (projectRoot && !isMemoryPath(projectRoot)) void loadRoot(projectRoot);
+      else setRootEntries(null);
+    });
   }, [projectRoot, loadRoot]);
 
   useEffect(() => {
@@ -402,26 +404,6 @@ export function FileExplorer() {
       }));
   }, [tabs, projectRoot]);
 
-  if (isWeb) {
-    return (
-      <div
-        style={{
-          padding: 14,
-          color: colors.textDim,
-          fontSize: 12,
-          fontFamily: "'Geist Sans', sans-serif",
-          lineHeight: 1.6,
-        }}
-      >
-        Folder projects are a desktop-only feature right now. Download Nuclei from{' '}
-        <a href="https://getnuclei.dev" style={{ color: colors.accent }}>
-          getnuclei.dev
-        </a>{' '}
-        to open a whole lecture folder. You can still edit and simulate circuits here.
-      </div>
-    );
-  }
-
   /**
    * Quick-create from the empty state. Spins up an in-memory project
    * AND opens a starter tab in one click, so a student landing on
@@ -442,6 +424,26 @@ export function FileExplorer() {
     },
     [setProjectRoot, platform, setEditorFramework, openTab],
   );
+
+  if (isWeb) {
+    return (
+      <div
+        style={{
+          padding: 14,
+          color: colors.textDim,
+          fontSize: 12,
+          fontFamily: "'Geist Sans', sans-serif",
+          lineHeight: 1.6,
+        }}
+      >
+        Folder projects are a desktop-only feature right now. Download Nuclei from{' '}
+        <a href="https://getnuclei.dev" style={{ color: colors.accent }}>
+          getnuclei.dev
+        </a>{' '}
+        to open a whole lecture folder. You can still edit and simulate circuits here.
+      </div>
+    );
+  }
 
   if (!projectRoot) {
     const primaryBtn: React.CSSProperties = {

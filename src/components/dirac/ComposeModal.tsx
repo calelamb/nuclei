@@ -28,8 +28,10 @@ export function ComposeModal({ open, onClose }: ComposeModalProps) {
 
   useEffect(() => {
     if (open) {
-      setIntent('');
-      setError(null);
+      queueMicrotask(() => {
+        setIntent('');
+        setError(null);
+      });
       setTimeout(() => inputRef.current?.focus(), 10);
     }
   }, [open]);

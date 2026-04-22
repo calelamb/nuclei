@@ -480,7 +480,6 @@ json.dumps({"output": _out, "error": _err})
         if (data.output) {
           this.onMessage({ type: 'output', text: data.output });
         }
-        this.onMessage({ type: 'python_result', success: !data.error });
         if (data.error) {
           const translated = translateModuleError(data.error);
           this.onMessage({
@@ -491,9 +490,9 @@ json.dumps({"output": _out, "error": _err})
             code: classifyKernelError(data.error).code,
           });
         }
+        this.onMessage({ type: 'python_result', success: !data.error });
       } catch (e) {
         const translated = translateModuleError(String(e));
-        this.onMessage({ type: 'python_result', success: false });
         this.onMessage({
           type: 'error',
           message: translated.split('\n').filter(Boolean).pop() ?? translated,
@@ -501,6 +500,7 @@ json.dumps({"output": _out, "error": _err})
           phase: 'python',
           code: classifyKernelError(String(e)).code,
         });
+        this.onMessage({ type: 'python_result', success: false });
       }
     }
   }

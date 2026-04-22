@@ -35,6 +35,24 @@ const challenges: QuantumChallenge[] = [
     totalSubmissions: 10,
     acceptanceRate: 0.4,
   },
+  {
+    id: 'qkd-bb84',
+    title: 'BB84 Key Sifter',
+    difficulty: 'easy',
+    category: 'protocols',
+    practiceTrack: 'qkd',
+    contract_kind: 'returns_value',
+    description: 'Sift BB84 key bits',
+    constraints: [],
+    examples: [],
+    testCases: [],
+    starterCode: { qiskit: '', cirq: '', 'cuda-q': '' },
+    hints: [],
+    tags: ['QKD', 'BB84', 'protocols'],
+    estimatedMinutes: 10,
+    totalSubmissions: 10,
+    acceptanceRate: 0.7,
+  },
 ];
 
 const progress: Record<string, ProblemProgress> = {
@@ -62,5 +80,14 @@ describe('challengeModeStore filtering', () => {
     expect(filterChallenges(challenges, 'hard', null, '', 'all', progress)).toHaveLength(1);
     expect(filterChallenges(challenges, null, null, '', 'solved', progress)).toHaveLength(1);
     expect(filterChallenges(challenges, null, null, '', 'attempted', progress)).toHaveLength(1);
+  });
+
+  it('defaults to all practice and composes QKD tab filtering with search/status filters', () => {
+    expect(filterChallenges(challenges, null, null, '', 'all', progress)).toHaveLength(3);
+    expect(filterChallenges(challenges, null, null, '', 'all', progress, 'qkd')).toEqual([
+      expect.objectContaining({ id: 'qkd-bb84' }),
+    ]);
+    expect(filterChallenges(challenges, null, null, 'qkd', 'all', progress, 'qkd')).toHaveLength(1);
+    expect(filterChallenges(challenges, null, null, '', 'solved', progress, 'qkd')).toHaveLength(0);
   });
 });

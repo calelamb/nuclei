@@ -80,7 +80,8 @@ export const useHardwareStore = create<HardwareState>((set) => ({
     set((s) => ({ connectionErrors: { ...s.connectionErrors, [p]: error } })),
   clearJob: (id) =>
     set((s) => {
-      const { [id]: _, ...rest } = s.results;
+      const rest = { ...s.results };
+      delete rest[id];
       return {
         jobs: s.jobs.filter((j) => j.id !== id),
         results: rest,

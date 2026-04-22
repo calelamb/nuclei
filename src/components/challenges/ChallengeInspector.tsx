@@ -60,12 +60,17 @@ export function ChallengeInspector() {
         fontSize: 12,
         fontFamily: "'Geist Sans', sans-serif",
       }}>
-        Run “Inspect Quantum Output” to inspect a visible case.
+        Run inspection to inspect a visible case.
       </div>
     );
   }
 
   const failure = inspection.failure;
+  const hasQuantumOutput = Boolean(inspection.snapshot || inspection.result);
+  const visibleViews: InspectionView[] = hasQuantumOutput
+    ? ['circuit', 'histogram', 'bloch', 'output']
+    : ['output'];
+  const activeView = visibleViews.includes(inspectionView) ? inspectionView : 'output';
 
   return (
     <div style={{ height: '100%', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
@@ -80,11 +85,11 @@ export function ChallengeInspector() {
         flexShrink: 0,
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-          {(['circuit', 'histogram', 'bloch', 'output'] as InspectionView[]).map((view) => (
+          {visibleViews.map((view) => (
             <TabButton
               key={view}
-              active={inspectionView === view}
-              label={view === 'bloch' ? 'Bloch' : view[0].toUpperCase() + view.slice(1)}
+              active={activeView === view}
+              label={view === 'bloch' ? 'Bloch' : view === 'output' && !hasQuantumOutput ? 'Return Output' : view[0].toUpperCase() + view.slice(1)}
               onClick={() => setInspectionView(view)}
             />
           ))}
@@ -115,7 +120,7 @@ export function ChallengeInspector() {
           </div>
         )}
 
-        {!failure && inspectionView === 'circuit' && (
+        {!failure && activeView === 'circuit' && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
             <div style={{
               color: colors.textMuted,
@@ -148,7 +153,7 @@ export function ChallengeInspector() {
           </div>
         )}
 
-        {!failure && inspectionView === 'histogram' && (
+        {!failure && activeView === 'histogram' && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
             {histogramData.map(([state, probability]) => (
               <div key={state}>
@@ -181,7 +186,7 @@ export function ChallengeInspector() {
           </div>
         )}
 
-        {!failure && inspectionView === 'bloch' && (
+        {!failure && activeView === 'bloch' && (
           <div style={{
             display: 'grid',
             gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
@@ -220,7 +225,7 @@ export function ChallengeInspector() {
           </div>
         )}
 
-        {inspectionView === 'output' && (
+        {activeView === 'output' && (
           <div style={{
             padding: '12px 14px',
             borderRadius: 10,

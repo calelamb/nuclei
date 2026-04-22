@@ -153,9 +153,8 @@ function BottomPanel({
   const colors = useThemeStore((s) => s.colors);
   // Auto-focus histogram tab on a new result, but only if the full histogram
   // is actually available (otherwise the tab would be a dead link).
-  // eslint-disable-next-line react-hooks/set-state-in-effect -- switches tab on new result
   useEffect(() => {
-    if (result && showFullHistogram) setActiveTab('histogram');
+    if (result && showFullHistogram) queueMicrotask(() => setActiveTab('histogram'));
   }, [result, showFullHistogram]);
 
   const tabs: Array<'terminal' | 'histogram'> = showFullHistogram

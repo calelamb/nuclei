@@ -1,4 +1,5 @@
 import type {
+  ChallengeJsonValue,
   QuantumChallenge,
   SubmissionStatus,
   TestCase,
@@ -10,10 +11,11 @@ import type {
   KernelResponse,
   SimulationResult,
 } from '../types/quantum';
-import { validateTestCase } from './challengeValidation';
+import { validateTestCase, validateValueTestCase } from './challengeValidation';
 import { createKernelSession, type KernelSession, type PlatformKind } from './kernelSession';
 
 const TEST_TIMEOUT_MS = 35_000;
+const VALUE_RESULT_MARKER = '__NUCLEI_CHALLENGE_VALUE__=';
 
 type FailureVerdict = Extract<
   SubmissionStatus,
@@ -28,6 +30,11 @@ interface ChallengeExecutionFailure {
 interface ChallengeExecutionArtifact {
   result: SimulationResult;
   snapshot: CircuitSnapshot | null;
+  stdout: string;
+}
+
+interface ChallengeValueArtifact {
+  value: ChallengeJsonValue;
   stdout: string;
 }
 
@@ -95,12 +102,41 @@ qc = __nuclei_circuit
 `;
 }
 
+export function buildValueTestCode(
+  userCode: string,
+  challenge: QuantumChallenge,
+  params: Record<string, unknown>,
+): string {
+  const entrypoint = challenge.entrypoint_name ?? 'solve';
+
+  return `# === Your solution ===
+${userCode}
+
+# === Challenge harness ===
+import json as __nuclei_json
+
+__nuclei_params = __nuclei_json.loads(${serializeParams(params)})
+__nuclei_value = ${entrypoint}(**__nuclei_params)
+
+try:
+    __nuclei_payload = __nuclei_json.dumps(__nuclei_value, sort_keys=True)
+except TypeError as __nuclei_error:
+    raise TypeError("${entrypoint}(...) must return a JSON-serializable value") from __nuclei_error
+
+print("${VALUE_RESULT_MARKER}" + __nuclei_payload)
+`;
+}
+
 export function buildTestCode(
   userCode: string,
   challenge: QuantumChallenge,
   params: Record<string, unknown>,
   framework: Framework,
 ): string {
+  if (challenge.contract_kind === 'returns_value') {
+    return buildValueTestCode(userCode, challenge, params);
+  }
+
   if (
     framework === 'qiskit'
     && challenge.contract_kind === 'returns_circuit'
@@ -110,6 +146,30 @@ export function buildTestCode(
   }
 
   return buildLegacyTestCode(userCode, params, framework);
+}
+
+function parseValueResult(stdout: string): ChallengeJsonValue {
+  const line = stdout
+    .split(/\r?\n/)
+    .reverse()
+    .find((candidate) => candidate.trim().startsWith(VALUE_RESULT_MARKER));
+
+  if (!line) {
+    throw new ChallengeKernelError(
+      `No challenge return marker found. Make sure solve(...) returns a JSON-serializable value.`,
+      { phase: 'python', code: 'bad_response' },
+    );
+  }
+
+  const rawJson = line.trim().slice(VALUE_RESULT_MARKER.length);
+  try {
+    return JSON.parse(rawJson) as ChallengeJsonValue;
+  } catch {
+    throw new ChallengeKernelError(
+      `Challenge return marker was not valid JSON: ${rawJson}`,
+      { phase: 'python', code: 'bad_response' },
+    );
+  }
 }
 
 function buildFailedResult(
@@ -141,11 +201,20 @@ function emitFailureResults(
 function createExecutionDriver(session: KernelSession) {
   let pending:
     | {
+        kind: 'circuit';
         resolve: (result: ChallengeExecutionArtifact) => void;
         reject: (error: ChallengeKernelError) => void;
         timeoutId: ReturnType<typeof setTimeout>;
         snapshot: CircuitSnapshot | null;
         output: string[];
+      }
+    | {
+        kind: 'value';
+        resolve: (result: ChallengeValueArtifact) => void;
+        reject: (error: ChallengeKernelError) => void;
+        timeoutId: ReturnType<typeof setTimeout>;
+        output: string[];
+        error: ChallengeKernelError | null;
       }
     | null = null;
 
@@ -157,12 +226,12 @@ function createExecutionDriver(session: KernelSession) {
       return;
     }
 
-    if (message.type === 'snapshot') {
+    if (pending.kind === 'circuit' && message.type === 'snapshot') {
       pending.snapshot = message.data;
       return;
     }
 
-    if (message.type === 'result' && message.data) {
+    if (pending.kind === 'circuit' && message.type === 'result' && message.data) {
       clearTimeout(pending.timeoutId);
       pending.resolve({
         result: message.data,
@@ -173,13 +242,45 @@ function createExecutionDriver(session: KernelSession) {
       return;
     }
 
-    if (message.type === 'error' && (message.phase === 'execute' || message.phase === 'python')) {
+    if (message.type === 'python_result' && pending.kind === 'value') {
       clearTimeout(pending.timeoutId);
-      pending.reject(new ChallengeKernelError(message.message, {
+      if (!message.success) {
+        pending.reject(pending.error ?? new ChallengeKernelError(
+          'Python execution failed',
+          { phase: 'python', code: 'execution_error' },
+        ));
+        pending = null;
+        return;
+      }
+
+      try {
+        pending.resolve({
+          value: parseValueResult(pending.output.join('')),
+          stdout: pending.output.join(''),
+        });
+      } catch (error) {
+        pending.reject(error instanceof ChallengeKernelError
+          ? error
+          : new ChallengeKernelError(error instanceof Error ? error.message : 'Failed to parse challenge return value'));
+      }
+      pending = null;
+      return;
+    }
+
+    if (message.type === 'error' && (message.phase === 'execute' || message.phase === 'python')) {
+      const error = new ChallengeKernelError(message.message, {
         code: message.code,
         phase: message.phase,
         framework: message.framework,
-      }));
+      });
+
+      if (pending.kind === 'value') {
+        pending.error = error;
+        return;
+      }
+
+      clearTimeout(pending.timeoutId);
+      pending.reject(error);
       pending = null;
     }
   };
@@ -199,11 +300,54 @@ function createExecutionDriver(session: KernelSession) {
         pending = null;
       }, TEST_TIMEOUT_MS);
 
-      pending = { resolve, reject, timeoutId, snapshot: null, output: [] };
+      pending = { kind: 'circuit', resolve, reject, timeoutId, snapshot: null, output: [] };
 
       let sendResult: void | Promise<void>;
       try {
         sendResult = session.send({ type: 'execute', code, shots });
+      } catch (error) {
+        clearTimeout(timeoutId);
+        pending = null;
+        reject(error instanceof ChallengeKernelError
+          ? error
+          : new ChallengeKernelError(
+            error instanceof Error ? error.message : 'Failed to send challenge to kernel',
+          ));
+        return;
+      }
+
+      Promise.resolve(sendResult).catch((error) => {
+        clearTimeout(timeoutId);
+        pending = null;
+        reject(error instanceof ChallengeKernelError
+          ? error
+          : new ChallengeKernelError(
+            error instanceof Error ? error.message : 'Failed to send challenge to kernel',
+          ));
+      });
+    });
+  };
+
+  const runPython = (code: string) => {
+    if (pending) {
+      throw new Error('A challenge test is already running');
+    }
+
+    return new Promise<ChallengeValueArtifact>((resolve, reject) => {
+      const timeoutId = setTimeout(() => {
+        if (!pending) return;
+        pending.reject(new ChallengeKernelError(
+          `Execution timed out after ${TEST_TIMEOUT_MS / 1000} seconds`,
+          { code: 'timeout', phase: 'python' },
+        ));
+        pending = null;
+      }, TEST_TIMEOUT_MS);
+
+      pending = { kind: 'value', resolve, reject, timeoutId, output: [], error: null };
+
+      let sendResult: void | Promise<void>;
+      try {
+        sendResult = session.send({ type: 'run_python', code });
       } catch (error) {
         clearTimeout(timeoutId);
         pending = null;
@@ -234,7 +378,7 @@ function createExecutionDriver(session: KernelSession) {
     pending = null;
   };
 
-  return { handleMessage, execute, cancel };
+  return { handleMessage, execute, runPython, cancel };
 }
 
 function classifyExecutionFailure(error: unknown): ChallengeExecutionFailure {
@@ -281,8 +425,10 @@ export async function runTestCases(
   onResult: (result: TestCaseResult, index: number) => void,
   onError: (error: string) => void,
 ): Promise<TestCaseResult[]> {
-  if (platform === 'web' && framework !== 'cirq') {
-    const message = `The browser challenge runner currently supports Cirq only. Use the desktop app for ${framework}.`;
+  const isValueContract = challenge.contract_kind === 'returns_value';
+
+  if (!isValueContract && platform === 'web' && framework !== 'cirq') {
+    const message = `This circuit challenge requires the desktop Qiskit kernel. QKD protocol challenges work in browser.`;
     onError(message);
     return emitFailureResults(testCases, message, onResult);
   }
@@ -314,11 +460,19 @@ export async function runTestCases(
       onStart(index);
 
       try {
-        const artifact = await driver.execute(wrappedCode, shots);
-        const elapsed = performance.now() - startTime;
-        const testResult = validateTestCase(testCase, artifact.result, elapsed);
-        results.push(testResult);
-        onResult(testResult, index);
+        if (isValueContract) {
+          const artifact = await driver.runPython(wrappedCode);
+          const elapsed = performance.now() - startTime;
+          const testResult = validateValueTestCase(testCase, artifact.value, elapsed);
+          results.push(testResult);
+          onResult(testResult, index);
+        } else {
+          const artifact = await driver.execute(wrappedCode, shots);
+          const elapsed = performance.now() - startTime;
+          const testResult = validateTestCase(testCase, artifact.result, elapsed);
+          results.push(testResult);
+          onResult(testResult, index);
+        }
       } catch (err: unknown) {
         const elapsed = performance.now() - startTime;
         const failure = classifyExecutionFailure(err);
@@ -355,14 +509,16 @@ export async function inspectChallengeCase(
   stdout: string;
   failure?: ChallengeExecutionFailure;
 }> {
-  if (platform === 'web' && framework !== 'cirq') {
+  const isValueContract = challenge.contract_kind === 'returns_value';
+
+  if (!isValueContract && platform === 'web' && framework !== 'cirq') {
     return {
       snapshot: null,
       result: null,
       stdout: '',
       failure: {
         verdict: 'runtime_error',
-        message: `Runtime Error: The browser challenge runner currently supports Cirq only. Use the desktop app for ${framework}.`,
+        message: `Runtime Error: This circuit challenge requires the desktop Qiskit kernel. QKD protocol challenges work in browser.`,
       },
     };
   }
@@ -378,10 +534,17 @@ export async function inspectChallengeCase(
     });
     driver = createExecutionDriver(session);
 
-    const artifact = await driver.execute(
-      buildTestCode(userCode, challenge, testCase.params, framework),
-      shots,
-    );
+    const wrappedCode = buildTestCode(userCode, challenge, testCase.params, framework);
+    if (isValueContract) {
+      const artifact = await driver.runPython(wrappedCode);
+      return {
+        snapshot: null,
+        result: null,
+        stdout: `${artifact.stdout.trim()}\n\nReturned value:\n${JSON.stringify(artifact.value, null, 2)}`,
+      };
+    }
+
+    const artifact = await driver.execute(wrappedCode, shots);
 
     return {
       snapshot: artifact.snapshot,

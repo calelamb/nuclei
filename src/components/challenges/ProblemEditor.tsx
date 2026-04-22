@@ -13,7 +13,9 @@ function buildSignature(challenge: QuantumChallenge) {
   const entrypoint = challenge.entrypoint_name ?? 'solve';
   const args = challenge.arguments ?? [];
   const signature = args.map((arg) => arg.name).join(', ');
-  return `${entrypoint}(${signature}) -> QuantumCircuit`;
+  return challenge.contract_kind === 'returns_value'
+    ? `${entrypoint}(${signature}) -> JSON value`
+    : `${entrypoint}(${signature}) -> QuantumCircuit`;
 }
 
 export function ProblemEditor({ challenge }: ProblemEditorProps) {
@@ -25,6 +27,7 @@ export function ProblemEditor({ challenge }: ProblemEditorProps) {
 
   const savedCode = progress[challenge.id]?.currentCode[activeFramework];
   const editorValue = savedCode || challenge.starter_template || challenge.starterCode[activeFramework] || '';
+  const isValueContract = challenge.contract_kind === 'returns_value';
 
   const handleChange = useCallback((value: string | undefined) => {
     if (value !== undefined) {
@@ -87,9 +90,13 @@ export function ProblemEditor({ challenge }: ProblemEditorProps) {
             color: colors.accent,
             boxShadow: shadow.sm,
           }}>
-            {challenge.default_framework?.toUpperCase() ?? 'QISKIT'}
+            {isValueContract ? 'PYTHON VALUE' : (challenge.default_framework?.toUpperCase() ?? 'QISKIT')}
           </span>
-          <span>Implement the solver only. The harness injects test inputs.</span>
+          <span>
+            {isValueContract
+              ? 'Return a JSON-serializable value. The harness injects test inputs.'
+              : 'Implement the solver only. The harness injects test inputs.'}
+          </span>
         </div>
       </div>
 

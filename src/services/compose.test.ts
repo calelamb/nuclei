@@ -12,7 +12,10 @@ describe('compose', () => {
   it('returns null when no api key', async () => {
     useDiracStore.setState({ apiKey: '' });
     const out = await compose({ intent: 'make bell', framework: 'cirq', currentCode: '' });
-    expect(out).toBeNull();
+    expect(out).toEqual({
+      ok: false,
+      error: 'No API key set. Add one in Settings → Dirac.',
+    });
   });
 
   it('returns { code, explanation } when Sonnet uses the insert_code tool', async () => {
@@ -33,8 +36,10 @@ describe('compose', () => {
       ),
     );
     const out = await compose({ intent: 'make bell', framework: 'cirq', currentCode: '' });
-    expect(out?.code).toContain('LineQubit');
-    expect(out?.explanation).toContain('Bell');
+    expect(out.ok).toBe(true);
+    if (!out.ok) throw new Error(out.error);
+    expect(out.code).toContain('LineQubit');
+    expect(out.explanation).toContain('Bell');
   });
 
   it('returns null if no tool_use block', async () => {
@@ -45,12 +50,18 @@ describe('compose', () => {
       ),
     );
     const out = await compose({ intent: 'make bell', framework: 'cirq', currentCode: '' });
-    expect(out).toBeNull();
+    expect(out).toEqual({
+      ok: false,
+      error: 'Dirac responded but didn\'t produce code. Try rephrasing the request.',
+    });
   });
 
   it('returns null on http error', async () => {
     vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response('nope', { status: 500 }));
     const out = await compose({ intent: 'make bell', framework: 'cirq', currentCode: '' });
-    expect(out).toBeNull();
+    expect(out).toEqual({
+      ok: false,
+      error: 'HTTP 500',
+    });
   });
 });

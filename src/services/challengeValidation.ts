@@ -1,4 +1,4 @@
-import type { TestCase, TestCaseResult } from '../types/challenge';
+import type { ChallengeJsonValue, TestCase, TestCaseResult } from '../types/challenge';
 import type { SimulationResult } from '../types/quantum';
 
 export function validateTestCase(
@@ -50,6 +50,179 @@ export function validateTestCase(
     verdict: 'runtime_error',
     message: `Unknown validation type: ${(validation as { type: string }).type}`,
     executionTimeMs,
+  };
+}
+
+export function validateValueTestCase(
+  testCase: TestCase,
+  actualOutput: ChallengeJsonValue,
+  executionTimeMs: number,
+): TestCaseResult {
+  const validation = testCase.validation;
+
+  if (validation.type === 'value_match') {
+    const { passed, message } = validateValueMatch(
+      actualOutput,
+      validation.expected,
+      validation.tolerance ?? 0,
+    );
+    return {
+      testCaseId: testCase.id,
+      passed,
+      score: passed ? testCase.weight : 0,
+      verdict: passed ? 'accepted' : 'wrong_answer',
+      actualOutput,
+      message,
+      executionTimeMs,
+    };
+  }
+
+  if (validation.type === 'numeric_match') {
+    const { passed, message } = validateNumericMatch(
+      actualOutput,
+      validation.expected,
+      validation.tolerance,
+      validation.path,
+    );
+    return {
+      testCaseId: testCase.id,
+      passed,
+      score: passed ? testCase.weight : 0,
+      verdict: passed ? 'accepted' : 'wrong_answer',
+      actualOutput,
+      message,
+      executionTimeMs,
+    };
+  }
+
+  return {
+    testCaseId: testCase.id,
+    passed: false,
+    score: 0,
+    verdict: 'runtime_error',
+    actualOutput,
+    message: `Validation type ${validation.type} cannot validate a value-return challenge`,
+    executionTimeMs,
+  };
+}
+
+function describeValue(value: ChallengeJsonValue): string {
+  return JSON.stringify(value);
+}
+
+function pathLabel(path: string): string {
+  return path || 'return value';
+}
+
+function isJsonObject(value: ChallengeJsonValue): value is { [key: string]: ChallengeJsonValue } {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function compareJsonValues(
+  actual: ChallengeJsonValue,
+  expected: ChallengeJsonValue,
+  tolerance: number,
+  path = '',
+): string[] {
+  if (typeof expected === 'number' && typeof actual === 'number') {
+    const diff = Math.abs(actual - expected);
+    return diff <= tolerance
+      ? []
+      : [`${pathLabel(path)}: expected ${expected}, got ${actual}`];
+  }
+
+  if (Array.isArray(expected)) {
+    if (!Array.isArray(actual)) {
+      return [`${pathLabel(path)}: expected array, got ${typeof actual}`];
+    }
+    const mismatches: string[] = [];
+    if (actual.length !== expected.length) {
+      mismatches.push(`${pathLabel(path)}: expected ${expected.length} items, got ${actual.length}`);
+    }
+    const sharedLength = Math.min(actual.length, expected.length);
+    for (let i = 0; i < sharedLength; i++) {
+      mismatches.push(...compareJsonValues(actual[i], expected[i], tolerance, `${path}[${i}]`));
+    }
+    return mismatches;
+  }
+
+  if (isJsonObject(expected)) {
+    if (!isJsonObject(actual)) {
+      return [`${pathLabel(path)}: expected object, got ${Array.isArray(actual) ? 'array' : typeof actual}`];
+    }
+    const mismatches: string[] = [];
+    for (const key of Object.keys(expected)) {
+      if (!(key in actual)) {
+        mismatches.push(`${pathLabel(path ? `${path}.${key}` : key)}: missing key`);
+        continue;
+      }
+      mismatches.push(...compareJsonValues(
+        actual[key],
+        expected[key],
+        tolerance,
+        path ? `${path}.${key}` : key,
+      ));
+    }
+    for (const key of Object.keys(actual)) {
+      if (!(key in expected)) {
+        mismatches.push(`${pathLabel(path ? `${path}.${key}` : key)}: unexpected key`);
+      }
+    }
+    return mismatches;
+  }
+
+  if (actual === expected) return [];
+  return [`${pathLabel(path)}: expected ${describeValue(expected)}, got ${describeValue(actual)}`];
+}
+
+function validateValueMatch(
+  actual: ChallengeJsonValue,
+  expected: ChallengeJsonValue,
+  tolerance: number,
+): { passed: boolean; message: string } {
+  const mismatches = compareJsonValues(actual, expected, tolerance);
+  if (mismatches.length === 0) {
+    return { passed: true, message: 'Returned value matches expected output' };
+  }
+  return {
+    passed: false,
+    message: `Value mismatch:\n${mismatches.join('\n')}`,
+  };
+}
+
+function readPath(value: ChallengeJsonValue, path?: string): ChallengeJsonValue | undefined {
+  if (!path) return value;
+  let current: ChallengeJsonValue | undefined = value;
+  for (const part of path.split('.')) {
+    if (!isJsonObject(current) || !(part in current)) return undefined;
+    current = current[part];
+  }
+  return current;
+}
+
+function validateNumericMatch(
+  actual: ChallengeJsonValue,
+  expected: number,
+  tolerance: number,
+  path?: string,
+): { passed: boolean; message: string } {
+  const value = readPath(actual, path);
+  if (typeof value !== 'number') {
+    return {
+      passed: false,
+      message: `${pathLabel(path ?? '')}: expected a numeric return value, got ${value === undefined ? 'undefined' : typeof value}`,
+    };
+  }
+  const diff = Math.abs(value - expected);
+  if (diff <= tolerance) {
+    return {
+      passed: true,
+      message: `${pathLabel(path ?? '')} ${value.toFixed(6)} is within tolerance ${tolerance}`,
+    };
+  }
+  return {
+    passed: false,
+    message: `${pathLabel(path ?? '')}: expected ${expected} +/- ${tolerance}, got ${value}`,
   };
 }
 

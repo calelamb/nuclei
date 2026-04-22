@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { buildTestCode, runTestCases } from './challengeExecution';
+import { buildTestCode, buildValueTestCode, runTestCases } from './challengeExecution';
 import type { QuantumChallenge, TestCase } from '../types/challenge';
 
 vi.mock('./kernelSession', () => ({
@@ -47,6 +47,18 @@ describe('challengeExecution', () => {
     expect(code).toContain("must return a QuantumCircuit");
   });
 
+  it('builds a marked JSON harness for value-return challenges', () => {
+    const code = buildValueTestCode(
+      'def solve(alice_bits):\n    return alice_bits\n',
+      { ...baseChallenge, contract_kind: 'returns_value' },
+      { alice_bits: [1, 0, 1] },
+    );
+
+    expect(code).toContain('__nuclei_value = solve(**__nuclei_params)');
+    expect(code).toContain('__NUCLEI_CHALLENGE_VALUE__=');
+    expect(code).toContain('must return a JSON-serializable value');
+  });
+
   it('creates visible failure results when the kernel is unavailable', async () => {
     const { createKernelSession } = await import('./kernelSession');
     vi.mocked(createKernelSession).mockRejectedValue(new Error('offline'));
@@ -91,5 +103,56 @@ describe('challengeExecution', () => {
     expect(results.every((result) => result.passed === false)).toBe(true);
     expect(results[0].message).toContain('Connection error');
     expect(results[0].verdict).toBe('runtime_error');
+  });
+
+  it('runs value-return challenges through run_python in web mode', async () => {
+    const { createKernelSession } = await import('./kernelSession');
+    vi.mocked(createKernelSession).mockImplementation(async (_platform, onMessage) => ({
+      send: vi.fn((message) => {
+        expect(message.type).toBe('run_python');
+        onMessage({ type: 'output', text: '__NUCLEI_CHALLENGE_VALUE__={"kept":[1,0]}\n' });
+        onMessage({ type: 'python_result', success: true });
+      }),
+      close: vi.fn(),
+    }));
+
+    const testCases: TestCase[] = [
+      {
+        id: 'tc-value',
+        label: 'Value Case',
+        description: 'desc',
+        params: { alice_bits: [1, 0] },
+        validation: { type: 'value_match', expected: { kept: [1, 0] } },
+        hidden: false,
+        weight: 1,
+      },
+    ];
+    const onResult = vi.fn();
+    const onError = vi.fn();
+
+    const results = await runTestCases(
+      'def solve(alice_bits):\n    return {"kept": alice_bits}\n',
+      {
+        ...baseChallenge,
+        contract_kind: 'returns_value',
+        practiceTrack: 'qkd',
+        testCases,
+      },
+      testCases,
+      'qiskit',
+      'web',
+      1024,
+      vi.fn(),
+      onResult,
+      onError,
+    );
+
+    expect(onError).not.toHaveBeenCalled();
+    expect(onResult).toHaveBeenCalledTimes(1);
+    expect(results[0]).toEqual(expect.objectContaining({
+      passed: true,
+      verdict: 'accepted',
+      actualOutput: { kept: [1, 0] },
+    }));
   });
 });
