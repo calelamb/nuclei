@@ -21,8 +21,13 @@ import { useEditorStore } from './stores/editorStore';
 import { useUIModeStore } from './stores/uiModeStore';
 import { useDiracPanelStore } from './stores/diracPanelStore';
 import { useBottomPanelStore } from './stores/bottomPanelStore';
+import { useSettingsStore } from './stores/settingsStore';
+import { runInstallTelemetry } from './services/installTelemetry';
 import type { PlatformBridge } from './platform/bridge';
 import type { Framework } from './types/quantum';
+
+declare const __APP_VERSION__: string;
+const APP_VERSION: string = typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : '0.0.0';
 
 // Store execute function globally so Monaco keybinding can access it
 let executeRef: (() => void) | null = null;
@@ -93,6 +98,19 @@ function AppInner() {
   useEffect(() => {
     fileOpsRef = fileOps;
   }, [fileOps]);
+
+  // Anonymous install + weekly heartbeat ping. Runs once per mount;
+  // deduped internally via localStorage. Skipped in dev to avoid polluting
+  // stats with our own hot reloads. Respects the anonymous usage stats
+  // setting — users can opt out in preferences.
+  useEffect(() => {
+    if (import.meta.env.DEV) return;
+    runInstallTelemetry({
+      appVersion: APP_VERSION,
+      isEnabled: () =>
+        useSettingsStore.getState().general.anonymousUsageStats,
+    }).catch(() => { /* never surface telemetry errors */ });
+  }, []);
 
   // First-run framework detection (desktop only). If Nuclei's managed
   // venv doesn't exist yet, or exists but has no core quantum framework

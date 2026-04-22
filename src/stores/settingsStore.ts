@@ -37,6 +37,13 @@ export interface GeneralSettings {
   autoSave: boolean;
   language: 'en' | 'es' | 'zh' | 'ja';
   telemetryEnabled: boolean;
+  /**
+   * Anonymous install ping + weekly heartbeat. Sends only an opaque UUID,
+   * OS, app version, and locale. No code, no PHI, no identifiers. Default
+   * on — distinct from `telemetryEnabled` which gates richer in-app usage
+   * events and stays opt-in.
+   */
+  anonymousUsageStats: boolean;
   educatorMode: boolean;
   experimentalFeatures: boolean;
 }
@@ -87,6 +94,7 @@ const DEFAULT_GENERAL: GeneralSettings = {
   autoSave: true,
   language: 'en',
   telemetryEnabled: false,
+  anonymousUsageStats: true,
   educatorMode: false,
   experimentalFeatures: false,
 };
