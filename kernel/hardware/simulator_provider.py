@@ -56,7 +56,11 @@ class SimulatorProvider(HardwareProvider):
 
         # Use the executor to run the simulation via the appropriate adapter
         code = circuit_obj if isinstance(circuit_obj, str) else ""
-        result, snapshot, stdout, error = self._executor.execute(code, shots)
+        result, snapshot, stdout, stderr, error = self._executor.execute(code, shots)
+        # stderr from the simulated backend is currently unused — the outer
+        # JobHandle carries status/error separately — but the return tuple
+        # exposes it for future surfacing.
+        _ = stderr
 
         if error:
             handle = JobHandle(

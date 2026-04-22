@@ -129,10 +129,34 @@ class BraketProvider(HardwareProvider):
 
         job_id = str(uuid.uuid4())
         now = datetime.now(timezone.utc).isoformat()
+
+        # ARN lookup is checked separately so the frontend gets a precise,
+        # actionable error (hint to refresh the backend list) rather than
+        # a silent 'failed' with no explanation. Also log the known names so
+        # kernel logs show what was expected vs provided.
+        arn = self._device_arns.get(backend)
+        if arn is None:
+            known = sorted(self._device_arns.keys())
+            print(
+                f"[braket] Unknown device '{backend}'. Known devices: "
+                f"{', '.join(known) if known else '(none — run list_backends first)'}"
+            )
+            return JobHandle(
+                id=job_id,
+                provider="braket",
+                backend=backend,
+                status="failed",
+                queue_position=None,
+                shots=shots,
+                submitted_at=now,
+                error=(
+                    f"Braket device '{backend}' not found. Try refreshing the "
+                    "backend list — the device may have been delisted or the "
+                    "name may have changed."
+                ),
+            )
+
         try:
-            arn = self._device_arns.get(backend)
-            if not arn:
-                raise RuntimeError(f"Unknown Braket device: {backend}")
             aws_session = AwsSession(boto_session=self._aws_session)
             device = AwsDevice(arn, aws_session=aws_session)
             task = device.run(circuit_obj, shots=shots)
@@ -146,7 +170,7 @@ class BraketProvider(HardwareProvider):
                 shots=shots,
                 submitted_at=now,
             )
-        except Exception:
+        except Exception as e:
             return JobHandle(
                 id=job_id,
                 provider="braket",
@@ -155,6 +179,7 @@ class BraketProvider(HardwareProvider):
                 queue_position=None,
                 shots=shots,
                 submitted_at=now,
+                error=f"Braket submit failed: {e}",
             )
 
     def get_results(self, job: JobHandle) -> dict:

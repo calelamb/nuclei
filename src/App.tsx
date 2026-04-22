@@ -20,6 +20,7 @@ import { useThemeStore } from './stores/themeStore';
 import { useEditorStore } from './stores/editorStore';
 import { useUIModeStore } from './stores/uiModeStore';
 import { useDiracPanelStore } from './stores/diracPanelStore';
+import { useBottomPanelStore } from './stores/bottomPanelStore';
 import type { PlatformBridge } from './platform/bridge';
 import type { Framework } from './types/quantum';
 
@@ -318,6 +319,18 @@ function AppInner() {
         // ⌘⇧R: open the Launch modal (submit to hardware). Separate from the
         // plain ⌘↵ Run which stays on the classical simulator.
         useHardwareStore.getState().openLaunch();
+      } else if (e.key === '`') {
+        e.preventDefault();
+        // ⌘`: toggle the bottom panel; opening it always focuses the terminal
+        // tab so print-debug output is immediately visible.
+        const store = useBottomPanelStore.getState();
+        if (store.collapsed) {
+          store.focusTerminal();
+        } else if (store.activeTab !== 'terminal') {
+          store.setActiveTab('terminal');
+        } else {
+          store.setCollapsed(true);
+        }
       }
     };
     window.addEventListener('keydown', handler);

@@ -98,7 +98,7 @@ class IonQProvider(HardwareProvider):
                 shots=shots,
                 submitted_at=now,
             )
-        except Exception:
+        except Exception as e:
             return JobHandle(
                 id=job_id,
                 provider="ionq",
@@ -107,6 +107,7 @@ class IonQProvider(HardwareProvider):
                 queue_position=None,
                 shots=shots,
                 submitted_at=now,
+                error=f"IonQ submit failed: {e}",
             )
 
     def get_results(self, job: JobHandle) -> dict:

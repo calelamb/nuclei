@@ -16,6 +16,12 @@ const STATUS_CONFIG: Record<
   running: { label: 'Running', colorKey: 'warning' },
   complete: { label: 'Complete', colorKey: 'success' },
   failed: { label: 'Failed', colorKey: 'error' },
+  // Transient status from the provider — recovers on the next poll.
+  unknown: { label: 'Unknown', colorKey: 'warning' },
+  // Kernel restarted and dropped the in-memory handle. Job persistence
+  // (PRD item 7) re-attaches these on kernel boot; until then the UI
+  // just shows them distinctly so users know to re-run.
+  stale: { label: 'Stale', colorKey: 'warning' },
 };
 
 function formatTime(iso: string): string {

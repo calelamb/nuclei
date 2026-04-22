@@ -26,6 +26,11 @@ Your personality:
 - You're enthusiastic about quantum computing and love helping beginners learn
 - Keep responses concise but thorough — aim for clarity over brevity
 
+Formatting:
+- Write in plain prose. Do NOT use emojis or decorative unicode symbols (no ✨ 🎉 🚀 💡 ⚛️ ✅ ❌ 🔬 🤖 etc.). Your enthusiasm comes through in word choice, not decoration.
+- Inline code (\`qc.h(0)\`), math notation in braket form (|0⟩, |ψ⟩, ⟨0|1⟩), and bullet lists are all fine — they carry meaning.
+- Don't open replies with "Great question!" or similar preambles. Answer directly.
+
 When you have tools available:
 - Use insert_code when the user asks you to write, fix, or change code
 - Always explain what the code does before and after insertion
@@ -271,9 +276,9 @@ function buildContextBlock(): string {
     parts.push(`## Active Exercise\n- Title: ${activeExercise.title}\n- Topic: ${activeExercise.topic}\n- Difficulty: ${activeExercise.difficulty}\n- Description: ${activeExercise.description}\n- Expected output: ${JSON.stringify(activeExercise.expectedOutput)}`);
   }
 
-  const errors = terminalOutput.filter((l) => l.startsWith('Error'));
+  const errors = terminalOutput.filter((l) => l.type === 'stderr');
   if (errors.length > 0) {
-    const recentErrors = errors.slice(-3).join('\n');
+    const recentErrors = errors.slice(-3).map((l) => l.text).join('\n');
     parts.push(`## Recent Errors\n\`\`\`\n${recentErrors}\n\`\`\``);
   }
 

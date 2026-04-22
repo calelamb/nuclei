@@ -3,6 +3,7 @@ import { usePlatform } from '../platform/PlatformProvider';
 import { useEditorStore } from '../stores/editorStore';
 import { useCircuitStore } from '../stores/circuitStore';
 import { useSimulationStore } from '../stores/simulationStore';
+import { useBottomPanelStore } from '../stores/bottomPanelStore';
 import { useSettingsStore } from '../stores/settingsStore';
 import type { KernelResponse } from '../types/quantum';
 import { KERNEL_WS_URL } from '../config/kernel';
@@ -11,6 +12,7 @@ import { useDiracStore } from '../stores/diracStore';
 import { useHardwareStore } from '../stores/hardwareStore';
 import { narrateParse, narrateResult } from '../services/narration';
 import { rewritePythonError } from '../services/errorRewrite';
+import { computeNextPollDelayMs, STALE_AFTER_MS } from '../lib/pollSchedule';
 
 const KERNEL_URL = KERNEL_WS_URL;
 
@@ -101,13 +103,19 @@ export function useKernel() {
         clearEditorErrors();
         break;
       case 'output':
-        useSimulationStore.getState().addOutput(msg.text);
+        useSimulationStore.getState().addOutput(msg.text, 'stdout');
+        useBottomPanelStore.getState().focusTerminal();
+        break;
+      case 'stderr':
+        useSimulationStore.getState().addOutput(msg.text, 'stderr');
+        useBottomPanelStore.getState().focusTerminal();
         break;
       case 'error': {
         const { detail, line, shortMessage } = getErrorContext(msg);
 
-        useSimulationStore.getState().addOutput(`Error: ${detail}`);
+        useSimulationStore.getState().addOutput(`Error: ${detail}`, 'stderr');
         useSimulationStore.getState().setRunning(false);
+        useBottomPanelStore.getState().focusTerminal();
 
         if (useSettingsStore.getState().dirac.autoExplainErrors) {
           const codeForRewrite = useEditorStore.getState().code;
@@ -149,11 +157,40 @@ export function useKernel() {
           hw.setProviderConnected(msg.provider as never, true);
           hw.setConnectionError(msg.provider as never, null);
         } else {
+          hw.setProviderConnected(msg.provider as never, false);
           hw.setConnectionError(
             msg.provider as never,
             `Could not connect to ${msg.provider}. Check the token and try again.`,
           );
         }
+        break;
+      }
+      case 'hardware_connected_providers': {
+        // Kernel just told us which providers it has an active connection
+        // to — mirror that into the store so the UI accurately reflects the
+        // post-restart auto-reconnect state instead of assuming "everything
+        // disconnected" on a fresh page load.
+        const hw = useHardwareStore.getState();
+        for (const p of msg.providers) {
+          hw.setProviderConnected(p as never, true);
+        }
+        break;
+      }
+      case 'hardware_jobs': {
+        // Kernel's persistent job registry. Non-terminal entries come
+        // back as 'stale' because the SDK handle didn't survive the
+        // restart — users see their history and can re-submit.
+        const hw = useHardwareStore.getState();
+        hw.setJobs(msg.jobs.map((j) => ({
+          id: j.id,
+          provider: j.provider,
+          backend: j.backend,
+          submittedAt: j.submitted_at,
+          status: j.status,
+          queuePosition: j.queue_position ?? null,
+          shots: j.shots,
+          error: j.error ?? null,
+        })));
         break;
       }
       case 'hardware_job_submitted': {
@@ -257,6 +294,42 @@ export function useKernel() {
       if (code.trim()) {
         ws.send(JSON.stringify({ type: 'parse', code }));
       }
+
+      // One-time migration: earlier builds wrote provider credentials to
+      // localStorage as plaintext. On first connect after the keyring move,
+      // hand any stashed tokens to the kernel and wipe localStorage so the
+      // secrets never sit in the browser again. Safe to re-run — if there
+      // are no legacy keys, the whole block no-ops.
+      try {
+        const LEGACY_PREFIX = 'nuclei-hardware-';
+        for (let i = 0; i < localStorage.length; i++) {
+          const key = localStorage.key(i);
+          if (!key || !key.startsWith(LEGACY_PREFIX)) continue;
+          const provider = key.slice(LEGACY_PREFIX.length);
+          const raw = localStorage.getItem(key);
+          if (!raw) continue;
+          try {
+            const creds = JSON.parse(raw);
+            if (creds && typeof creds === 'object') {
+              ws.send(JSON.stringify({
+                type: 'hardware_set_credentials',
+                provider,
+                credentials: creds,
+              }));
+            }
+          } catch { /* malformed legacy entry — drop it */ }
+          localStorage.removeItem(key);
+        }
+      } catch { /* localStorage may be unavailable in some embedded webviews */ }
+
+      // Ask the kernel which providers it already has connections to from
+      // its keyring-backed auto-reconnect, so the UI shows them as connected
+      // without the user having to re-enter tokens.
+      ws.send(JSON.stringify({ type: 'hardware_connected_providers' }));
+      // Rehydrate JobTracker from the kernel's persistent registry so the
+      // user sees their past jobs (marked 'stale' when not recoverable)
+      // instead of an empty list on reload.
+      ws.send(JSON.stringify({ type: 'hardware_list_jobs' }));
     };
 
     ws.onmessage = (event) => {
@@ -323,7 +396,7 @@ export function useKernel() {
       }
     } catch (e) {
       useEditorStore.getState().setKernelStatus('failed', `Failed to load browser Python engine: ${e}`);
-      useSimulationStore.getState().addOutput(`Error: Failed to load browser Python engine: ${e}`);
+      useSimulationStore.getState().addOutput(`Error: Failed to load browser Python engine: ${e}`, 'stderr');
     }
   }, [handleMessage, isWeb]);
 
@@ -381,31 +454,39 @@ export function useKernel() {
 
     const { kernelReady } = useEditorStore.getState();
     if (!kernelReady) {
-      useSimulationStore.getState().addOutput('Kernel is still loading. Please wait...');
+      useSimulationStore.getState().addOutput('Kernel is still loading. Please wait...', 'info');
+      useBottomPanelStore.getState().focusTerminal();
       return;
     }
 
     const { code } = useEditorStore.getState();
     const { shots } = useSimulationStore.getState();
 
+    const runTime = new Date().toLocaleTimeString();
+    const separator = `─── Run at ${runTime} ──────────────────────────────`;
+
     if (isWeb) {
       if (!pyodideRef.current) {
-        useSimulationStore.getState().addOutput('Error: Browser Python engine not ready');
+        useSimulationStore.getState().addOutput('Error: Browser Python engine not ready', 'stderr');
+        useBottomPanelStore.getState().focusTerminal();
         return;
       }
       useSimulationStore.getState().setRunning(true);
       useSimulationStore.getState().clearResult();
-      useSimulationStore.getState().clearOutput();
+      useSimulationStore.getState().addOutput(separator, 'separator');
+      useBottomPanelStore.getState().focusTerminal();
       pyodideRef.current.send({ type: 'execute', code, shots });
     } else {
       const ws = wsRef.current;
       if (!ws || ws.readyState !== WebSocket.OPEN) {
-        useSimulationStore.getState().addOutput('Error: Kernel not connected');
+        useSimulationStore.getState().addOutput('Error: Kernel not connected', 'stderr');
+        useBottomPanelStore.getState().focusTerminal();
         return;
       }
       useSimulationStore.getState().setRunning(true);
       useSimulationStore.getState().clearResult();
-      useSimulationStore.getState().clearOutput();
+      useSimulationStore.getState().addOutput(separator, 'separator');
+      useBottomPanelStore.getState().focusTerminal();
       ws.send(JSON.stringify({ type: 'execute', code, shots }));
     }
   }, [isWeb]);
@@ -453,28 +534,88 @@ export function useKernel() {
     [sendHardware],
   );
 
-  // Poll status + results for active hardware jobs. 5s is a friendly cadence
-  // for students on the free IBM tier (whose queues move in tens of seconds),
-  // and light enough to not hammer the kernel.
+  // Polling backoff for active hardware jobs. A queued IBM job can sit in
+  // the free-tier queue for an hour or more; fixed 5s polling would fire
+  // ~720 status requests at the kernel for a single waiting job. The
+  // schedule below follows the job's age since submit:
+  //
+  //   0-60s    → every 5s   (fast convergence on short queues)
+  //   60s-5m   → every 15s
+  //   5m-30m   → every 60s
+  //   >30m     → every 5m
+  //   >24h     → stop; mark 'stale'. User can re-poll manually via
+  //              JobTracker's refresh action (which updates submittedAt
+  //              in effect, resetting the schedule).
+  //
+  // Each interval gets ±10% jitter so jobs submitted in the same tick
+  // don't all fire on the same second. Whenever status changes (e.g.
+  // queued → running) the schedule resets to the fastest tier briefly
+  // so we catch the completion quickly.
+  const nextPollAtRef = useRef<Record<string, number>>({});
+  const lastStatusRef = useRef<Record<string, string>>({});
+
   useEffect(() => {
     if (isWeb) return;
+
+    // Short tick: per-job scheduling is cheap and a 2s cadence keeps the
+    // "tight tier" responsive without burning cycles when there are no
+    // active jobs.
     const interval = setInterval(() => {
       const ws = wsRef.current;
       if (!ws || ws.readyState !== WebSocket.OPEN) return;
       const jobs = useHardwareStore.getState().jobs;
       const results = useHardwareStore.getState().results;
+      const now = Date.now();
+
       for (const j of jobs) {
-        if (j.status === 'queued' || j.status === 'running') {
-          ws.send(JSON.stringify({ type: 'hardware_status', job_id: j.id }));
+        // If status changed since last tick, reset the schedule — the
+        // next loop iteration will fire immediately, catching the
+        // transition (queued→running) without waiting out the current
+        // tier's delay.
+        if (lastStatusRef.current[j.id] !== j.status) {
+          lastStatusRef.current[j.id] = j.status;
+          delete nextPollAtRef.current[j.id];
         }
+
+        const pending = j.status === 'queued' || j.status === 'running';
+
+        if (pending) {
+          const submittedMs = Date.parse(j.submittedAt);
+          const age = Number.isFinite(submittedMs)
+            ? now - submittedMs
+            : Number.POSITIVE_INFINITY;
+
+          if (age > STALE_AFTER_MS) {
+            // 24h with no terminal state — give up on automatic polling.
+            // The job may still be alive on the provider; user can hit
+            // the refresh button in JobTracker to resume.
+            useHardwareStore.getState().updateJob(j.id, { status: 'stale' });
+            delete nextPollAtRef.current[j.id];
+            continue;
+          }
+
+          const nextAt = nextPollAtRef.current[j.id] ?? 0;
+          if (now >= nextAt) {
+            ws.send(JSON.stringify({ type: 'hardware_status', job_id: j.id }));
+            nextPollAtRef.current[j.id] =
+              now + computeNextPollDelayMs(Math.max(0, age / 1000));
+          }
+        }
+
         if (j.status === 'complete' && !results[j.id]) {
-          // Job just flipped to complete (via hardware_job_update) but we
-          // haven't fetched results yet — do it now so the dual-bar chip
-          // appears without a manual refresh.
+          // Job just flipped to complete (via hardware_job_update) but
+          // we haven't fetched results yet — do it now so the dual-bar
+          // chip appears without a manual refresh.
           ws.send(JSON.stringify({ type: 'hardware_results', job_id: j.id }));
         }
+
+        if (!pending) {
+          // Clean up scheduler state for terminal jobs so the ref
+          // doesn't leak as jobs accumulate over a long session.
+          delete nextPollAtRef.current[j.id];
+        }
       }
-    }, 5000);
+    }, 2000);
     return () => clearInterval(interval);
   }, [isWeb]);
 

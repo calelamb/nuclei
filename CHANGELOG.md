@@ -5,6 +5,209 @@ All notable changes to Nuclei will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.16] - 2026-04-20
+
+### Fixed — managed venv auto-rebuilds from Python 3.10+
+
+v0.4.14 and v0.4.15 landed the kernel bundle and the core-dep
+install, but users whose managed venv had been created from Python
+3.9 (Xcode's default `python3` on many Macs) still saw "loading
+kernel..." forever — the kernel code uses PEP 604 union syntax
+(`str | None`) in class bodies, which crashes at import time under
+3.9 with `TypeError: unsupported operand type(s) for |: 'type' and
+'NoneType'`. v0.4.15 exposed the traceback via stderr piping; this
+release actually resolves it.
+
+- New `find_best_python` probes candidates in newest-first order
+  (`python3.13`, `python3.12`, ... `python3.10`, then generic
+  `python3` / `python`) and only returns interpreters that are
+  >= 3.10. A box with both 3.9 and 3.12 now always picks 3.12.
+- `ensure_kernel_runtime` now checks the venv's Python version at
+  every kernel spawn. Venvs built from < 3.10 are automatically
+  rebuilt with a newer interpreter, with the user's previously-
+  installed frameworks (Qiskit, Cirq, etc.) re-installed from the
+  catalog so the setup wizard doesn't have to be re-run. The old
+  venv is moved aside to `venv.broken` during the rebuild and
+  removed on success.
+- Fresh venv creation also requires 3.10+. If no suitable Python
+  is found on PATH, the user gets a clear "install Python 3.10+
+  from python.org" error instead of a silently-broken kernel.
+
+### Changed — Dirac no longer uses emojis
+
+Prompt tweak: Dirac's system prompt now explicitly forbids emojis
+and decorative unicode (✨ 🎉 🚀 etc.) in chat responses. Inline
+code, braket notation (|0⟩, |ψ⟩), and bullet lists stay because
+they carry meaning. Also discourages the "Great question!"
+preamble pattern so replies get to the point faster.
+
+## [0.4.15] - 2026-04-20
+
+### Fixed — kernel hung at "loading" after v0.4.14 update
+
+v0.4.14 started bundling `kernel/` in the release (good) but the
+Nuclei-managed venv was never installing the kernel's own runtime
+deps — `websockets`, `numpy`, `keyring`. The framework wizard in
+v0.4.7 taught the venv to install user-selected frameworks (Qiskit,
+Cirq, etc.), but it never installed the kernel's core imports. On
+v0.4.14 (the first release where the kernel actually launches from
+that venv), Python died immediately on `import websockets` and the
+frontend stared at a "loading kernel..." spinner forever.
+
+- New `ensure_kernel_runtime` hook creates the venv if missing and
+  installs `websockets`, `numpy`, `keyring` when they're not
+  already there. Fast-checked via a `python -c 'import ...'` probe
+  so the hot path is a ~50ms no-op when everything's satisfied.
+  Called by the kernel spawn path every launch.
+- Kernel stdout/stderr are now piped into the Rust logger. Prior
+  releases left both handles piped but never read them, so Python
+  crashes (like this one) left no breadcrumbs — just a defunct PID
+  and a frontend reconnecting to a dead WebSocket forever. The
+  next mystery kernel crash will leave a trail in `nuclei.log`.
+
+## [0.4.14] - 2026-04-19
+
+### Fixed — kernel is now actually shipped in the release bundle
+
+Every release prior to this one built the `.dmg` / `.msi` / `.deb`
+without the `kernel/` Python source inside it (no `resources` entry
+in `tauri.conf.json`). The packaged app silently relied on whatever
+stale kernel process happened to be running on the user's machine —
+typically a zombie from an earlier install still holding port 9742.
+
+Symptom users saw: `Error: Unknown message type:
+hardware_connected_providers` (and similar for `hardware_list_jobs`),
+because the zombie kernel was running pre-v0.4.12 server code and
+didn't know about handlers added in v0.4.12 / v0.4.13.
+
+- `tauri.conf.json` gains `resources: {"../kernel": "kernel"}` so
+  the full kernel source ships inside every bundle at
+  `<resource_dir>/kernel/`. The Rust kernel spawner in
+  `src-tauri/src/commands/kernel.rs` was updated in tandem to read
+  from `resource_dir.join("kernel")` rather than `resource_dir
+  .parent()` (which was always wrong in production — the parent is
+  `Contents/` on macOS and doesn't contain our source).
+- Before spawning a new kernel, Rust now kills whatever is currently
+  holding port 9742 (`lsof -ti :9742 | xargs kill -9` on unix,
+  `netstat | taskkill` on windows). Best-effort — no-ops cleanly
+  if the port is free — and eliminates the "first zombie wins"
+  class of bug.
+
+### Fixed — .py files greyed out in the macOS open dialog
+
+The single `extensions: ['py']` filter on `openFile` was routed
+through Cocoa's `NSOpenPanel.allowedFileTypes`, which greyed out any
+file whose UTI didn't resolve to `public.python-script` — common on
+freshly-imaged machines, for files with mis-tagged metadata, or for
+Python files with uppercase extensions.
+
+- `openFile` now offers a broader default group (`py`, `qasm`,
+  `ipynb`, `json`, `txt`, `md`) plus an "All Files" fallback.
+  macOS renders these as a dropdown at the bottom of the open
+  panel, so users who still see their file greyed out can switch
+  to "All Files" and select it.
+- `saveFileAs` gained the same "All Files" fallback so you can
+  name a destination with a non-default extension without the
+  picker fighting you.
+
+## [0.4.13] - 2026-04-19
+
+### Added — Open Files section in the sidebar
+
+Open editor tabs now show at the top of the Explorer sidebar. Clicking
+a row switches to that tab; the hover-reveal X closes it; a dirty-dot
+shows unsaved changes. The section is collapsible, shows the tab count
+in the header, and self-hides when nothing is open. Pinned above the
+file tree's scroll container so deep trees don't push it off-screen.
+
+### Fixed — File > Open now registers a tab
+
+File > Open loaded a file into the editor but never called
+`projectStore.openTab`, so opening a second file orphaned the first
+with no way to switch back from the sidebar. It now flows through
+the same tab machinery as every other open path, so both the top
+EditorTabs bar and the new sidebar section light up correctly.
+
+## [0.4.12] - 2026-04-19
+
+### Added — Terminal polish
+
+Toolbar with clear, copy-all, auto-scroll toggle, timestamps toggle,
+client-side filter, live line count. Typed terminal lines (stdout /
+stderr / separator / info) render distinctly — stderr is italic and
+red, separators dim, tracebacks-via-stdout highlighted. ANSI escape
+codes stripped at the store layer. Execution separators
+(`─── Run at HH:MM:SS ──────`) delimit multiple runs instead of
+clearing history on each Cmd+Enter. New ⌘\` keyboard shortcut
+toggles the bottom panel with focus on terminal. Kernel now emits
+stderr as a separate WebSocket message type, captured and styled
+independently from stdout.
+
+### Added — Hardware pipeline hardening
+
+- Mock-based test suite for all seven provider adapters (IBM, IonQ,
+  Braket, Azure, Quantinuum, NVIDIA, Simulator) + the hardware
+  manager — 104 tests, no network calls, runs in under 200ms. Gated
+  in CI via a new kernel-tests workflow so future SDK upgrades that
+  break provider integrations are caught on the PR, not weeks later
+  when a user reports a broken submission.
+- Quantinuum auto-converts Qiskit and Cirq circuits via
+  pytket-extensions (or returns a clear install hint).
+- Azure handles `workspace.get_targets(name=...)` returning None,
+  empty list, multi-match list, or single Target.
+- Braket surfaces ARN-not-found with a "refresh backend list" hint.
+- IBM wraps `job.status()` in its own try/except so a deleted job
+  returns status=`unknown` instead of breaking the polling loop.
+- Server catches `KeyError` on stale job IDs with a friendly
+  status=`stale` response, not a raw traceback.
+- Every failed submit now populates `JobHandle.error` with a
+  readable provider-specific message.
+
+### Added — Credentials moved to OS keyring
+
+Provider tokens no longer live in browser `localStorage`. The kernel
+receives them over WebSocket, persists via the `keyring` package
+(macOS Keychain / Windows Credential Manager / Linux Secret Service),
+and auto-reconnects every previously-connected provider on kernel
+start. A one-time migration on WS connect drains any legacy
+`nuclei-hardware-*` localStorage entries into the keyring and wipes
+them. `CredentialSetup` form layout unchanged.
+
+### Added — Job persistence across kernel restarts
+
+Jobs persist to `~/.nuclei/jobs.json` (override via `NUCLEI_DATA_DIR`).
+Atomic temp-file-plus-rename writes, LRU cap at 200 entries, 7-day
+TTL for terminal jobs. On kernel restart, non-terminal jobs
+re-appear in JobTracker as `stale` — users see their history
+instead of the list going empty.
+
+### Added — Exponential polling backoff
+
+Hardware job polling: 5s tier for 0–60s after submit, 15s to 5min,
+60s to 30min, 5min past that. ±10% jitter, 24h stale cutoff, snap
+back to fast tier on status change. A 1-hour queued IBM job now
+fires ~30 status requests instead of 720.
+
+### Added — Dirac conversation persistence
+
+One conversation per project, auto-saved to
+`<projectRoot>/.nuclei/dirac.json` with a default `.gitignore` so
+AI chats don't get committed. Ephemeral fallback for work outside a
+project — localStorage on web, platform key-value store on desktop.
+300ms debounced writes with at-most-one-in-flight coalescing so
+streaming responses don't thrash the disk. `DiracMessage` gained
+required `id` and `timestamp` fields (auto-generated by the store).
+Auto-restore on project open and app start. Past tool calls render
+as display-only history on reload; never re-execute.
+`clearHistory` now writes `messages: []` to disk while keeping
+`conversation_id` stable (friendly to a future multi-conversation
+feature). No UI changes — the Dirac side panel renders identically.
+
+### Fixed — JobHandle.error, unknown/stale statuses surfaced to UI
+
+`JobHandle` gained an optional `error` field and two new status
+values (`unknown`, `stale`). `JobTracker` renders both distinctly.
+
 ## [0.4.11] - 2026-04-19
 
 ### Fixed — YouTube Error 153 actually resolved (previous fix didn't work)

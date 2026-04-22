@@ -197,8 +197,7 @@ export function LaunchModal() {
   const stagedSubmission = useHardwareStore((s) => s.stagedSubmission);
   const selectedSubProvider = useHardwareStore((s) => s.selectedSubProvider);
   const selectSubProvider = useHardwareStore((s) => s.selectSubProvider);
-  const credentials = useHardwareStore((s) => s.credentials);
-  const setProviderCredentials = useHardwareStore((s) => s.setProviderCredentials);
+  const connectedProviders = useHardwareStore((s) => s.providers);
   const connectingProvider = useHardwareStore((s) => s.connectingProvider);
   const connectionErrors = useHardwareStore((s) => s.connectionErrors);
   const platform = usePlatform();
@@ -638,9 +637,11 @@ export function LaunchModal() {
                       onKeyDown={(e) => {
                         if (e.key === 'Enter' && keyDraft.trim() && selectedProvider) {
                           e.preventDefault();
-                          setProviderCredentials(selectedProvider, { token: keyDraft.trim() });
                           const hw = getHardware();
                           if (hw) hw.hardwareConnect(selectedProvider, { token: keyDraft.trim() });
+                          // Clear the in-memory draft immediately; the kernel
+                          // now owns persistence via the OS keyring.
+                          setKeyDraft('');
                         }
                       }}
                       style={{
@@ -658,9 +659,9 @@ export function LaunchModal() {
                     <button
                       onClick={() => {
                         if (keyDraft.trim() && selectedProvider) {
-                          setProviderCredentials(selectedProvider, { token: keyDraft.trim() });
                           const hw = getHardware();
                           if (hw) hw.hardwareConnect(selectedProvider, { token: keyDraft.trim() });
+                          setKeyDraft('');
                         }
                       }}
                       disabled={!keyDraft.trim() || connectingProvider === selectedProvider}
@@ -701,7 +702,7 @@ export function LaunchModal() {
                   )}
                 </div>
               )}
-              {selectedProvider && credentials[selectedProvider]?.token && (
+              {selectedProvider && connectedProviders.find((p) => p.name === selectedProvider)?.connected && (
                 <div
                   style={{
                     display: 'flex',

@@ -112,12 +112,18 @@ async def handle_message(websocket):
         if msg_type == "parse":
             # Offload blocking parse to a thread so the event loop stays
             # responsive to heartbeats and other messages.
-            snapshot, stdout, error = await asyncio.to_thread(executor.parse, code)
+            snapshot, stdout, stderr, error = await asyncio.to_thread(executor.parse, code)
 
             if stdout:
                 await websocket.send(json.dumps({
                     "type": "output",
                     "text": stdout,
+                }))
+
+            if stderr:
+                await websocket.send(json.dumps({
+                    "type": "stderr",
+                    "text": stderr,
                 }))
 
             await websocket.send(json.dumps({
@@ -131,7 +137,7 @@ async def handle_message(websocket):
         elif msg_type == "execute":
             shots = msg.get("shots", 1024)
             # Simulation can take multiple seconds — must not block the loop.
-            result, snapshot, stdout, error = await asyncio.to_thread(
+            result, snapshot, stdout, stderr, error = await asyncio.to_thread(
                 executor.execute, code, shots
             )
 
@@ -139,6 +145,12 @@ async def handle_message(websocket):
                 await websocket.send(json.dumps({
                     "type": "output",
                     "text": stdout,
+                }))
+
+            if stderr:
+                await websocket.send(json.dumps({
+                    "type": "stderr",
+                    "text": stderr,
                 }))
 
             if snapshot or (error and error.code in {"unsupported_framework", "missing_dependency", "no_circuit", "execution_error", "adapter_error"}):
@@ -162,12 +174,18 @@ async def handle_message(websocket):
                 }))
 
         elif msg_type == "run_python":
-            stdout, error = await asyncio.to_thread(executor.run_python, code)
+            stdout, stderr, error = await asyncio.to_thread(executor.run_python, code)
 
             if stdout:
                 await websocket.send(json.dumps({
                     "type": "output",
                     "text": stdout,
+                }))
+
+            if stderr:
+                await websocket.send(json.dumps({
+                    "type": "stderr",
+                    "text": stderr,
                 }))
 
             if error:
@@ -184,6 +202,10 @@ async def handle_message(websocket):
             provider = msg.get("provider", "")
             credentials = msg.get("credentials", {})
             try:
+                # connect_provider persists credentials to the OS keyring on
+                # success so the next kernel start auto-reconnects without
+                # the user re-entering a token. The frontend can discard
+                # the in-memory copy as soon as the ack arrives.
                 success = hardware_manager.connect_provider(provider, credentials)
                 await websocket.send(json.dumps({
                     "type": "hardware_connected",
@@ -194,6 +216,72 @@ async def handle_message(websocket):
                 await websocket.send(json.dumps({
                     "type": "error",
                     "message": f"Hardware connect failed: {e}",
+                }))
+
+        elif msg_type == "hardware_set_credentials":
+            # Store credentials + attempt a connection in one step. Identical
+            # to `hardware_connect` today — a separate message type is kept
+            # so future work can e.g. persist-without-connect for deferred
+            # activation without breaking existing clients.
+            provider = msg.get("provider", "")
+            credentials = msg.get("credentials", {})
+            try:
+                success = hardware_manager.connect_provider(provider, credentials)
+                await websocket.send(json.dumps({
+                    "type": "hardware_connected",
+                    "provider": provider,
+                    "success": success,
+                }))
+            except Exception as e:
+                await websocket.send(json.dumps({
+                    "type": "error",
+                    "message": f"Hardware set-credentials failed: {e}",
+                }))
+
+        elif msg_type == "hardware_clear_credentials":
+            provider = msg.get("provider", "")
+            try:
+                hardware_manager.disconnect_provider(provider)
+                await websocket.send(json.dumps({
+                    "type": "hardware_connected",
+                    "provider": provider,
+                    "success": False,
+                }))
+            except Exception as e:
+                await websocket.send(json.dumps({
+                    "type": "error",
+                    "message": f"Hardware clear-credentials failed: {e}",
+                }))
+
+        elif msg_type == "hardware_connected_providers":
+            # Read the keyring index so the frontend can reconcile its
+            # "connected providers" UI after a reload without re-probing.
+            try:
+                providers = list(hardware_manager._connected)
+                await websocket.send(json.dumps({
+                    "type": "hardware_connected_providers",
+                    "providers": providers,
+                }))
+            except Exception as e:
+                await websocket.send(json.dumps({
+                    "type": "error",
+                    "message": f"Failed to list connected providers: {e}",
+                }))
+
+        elif msg_type == "hardware_list_jobs":
+            # Frontend asks this on WebSocket (re)connect to rehydrate
+            # JobTracker from the persistent job store. Jobs that were
+            # running when the kernel last died come back as `stale`.
+            try:
+                handles = hardware_manager.list_jobs()
+                await websocket.send(json.dumps({
+                    "type": "hardware_jobs",
+                    "jobs": [h.to_dict() for h in handles],
+                }))
+            except Exception as e:
+                await websocket.send(json.dumps({
+                    "type": "error",
+                    "message": f"Failed to list jobs: {e}",
                 }))
 
         elif msg_type == "hardware_list_backends":
@@ -246,6 +334,27 @@ async def handle_message(websocket):
                     "type": "hardware_job_update",
                     "job": handle.to_dict(),
                 }))
+            except KeyError:
+                # Stale job id — typically the kernel restarted mid-session,
+                # losing its in-memory job registry. Tell the frontend the
+                # job is no longer tracked in a friendly way so JobTracker
+                # can mark it stale rather than surfacing a raw traceback.
+                await websocket.send(json.dumps({
+                    "type": "hardware_job_update",
+                    "job": {
+                        "id": job_id,
+                        "provider": "unknown",
+                        "backend": "unknown",
+                        "status": "stale",
+                        "queue_position": None,
+                        "shots": 0,
+                        "submitted_at": "",
+                        "error": (
+                            "This job is no longer tracked by the kernel "
+                            "(the kernel may have restarted). Re-submit to run it again."
+                        ),
+                    },
+                }))
             except Exception as e:
                 await websocket.send(json.dumps({
                     "type": "error",
@@ -260,6 +369,18 @@ async def handle_message(websocket):
                     "type": "hardware_result",
                     "job_id": job_id,
                     "data": data,
+                }))
+            except KeyError:
+                await websocket.send(json.dumps({
+                    "type": "hardware_result",
+                    "job_id": job_id,
+                    "data": {
+                        "error": (
+                            "Results for this job are no longer available "
+                            "(the kernel may have restarted since it was submitted)."
+                        ),
+                        "status": "stale",
+                    },
                 }))
             except Exception as e:
                 await websocket.send(json.dumps({

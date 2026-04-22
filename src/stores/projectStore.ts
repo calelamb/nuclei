@@ -1,4 +1,9 @@
 import { create } from 'zustand';
+import {
+  __setProjectRootGetter,
+  loadDiracConversationForProject,
+  useDiracStore,
+} from './diracStore';
 
 export interface ProjectTab {
   path: string;
@@ -28,7 +33,21 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
   tabs: [],
   activeTabPath: null,
 
-  setProjectRoot: (projectRoot) => set({ projectRoot }),
+  // Setting the project root doubles as the trigger for Dirac
+  // conversation load/save. The diracStore subscribes to its own
+  // `messages` changes for the auto-save (debounced 300ms), so the
+  // outgoing project's latest state is already on disk before we flip
+  // roots here — we only need to load the incoming project's file.
+  setProjectRoot: (projectRoot) =>
+    set((s) => {
+      if (s.projectRoot === projectRoot) return s;
+      // Load the new project's persisted conversation (or reset to empty
+      // when closing a project — decision (a) from PRD 05: don't surface
+      // the ephemeral scratchpad when transitioning from a real project
+      // back to no-project).
+      void loadDiracConversationForProject(projectRoot);
+      return { projectRoot };
+    }),
 
   openTab: ({ path, content }) =>
     set((s) => {
@@ -88,3 +107,21 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
 
   hasAnyDirty: () => get().tabs.some((t) => t.isDirty),
 }));
+
+// Register the project-root getter with diracStore so its auto-save
+// listener writes to the correct location (project file when a project
+// is open, ephemeral store otherwise). Kept as a getter rather than a
+// direct import to avoid the circular dep projectStore ⇄ diracStore.
+__setProjectRootGetter(() => useProjectStore.getState().projectRoot);
+
+// If the App boots without a project root (ephemeral session), try to
+// restore the ephemeral scratchpad exactly once. No-op when a project
+// was restored first — setProjectRoot would have already loaded its
+// conversation. Deferred to microtask so tests can mock loadBridge
+// before the read fires.
+queueMicrotask(() => {
+  if (useProjectStore.getState().projectRoot === null &&
+      useDiracStore.getState().messages.length === 0) {
+    void loadDiracConversationForProject(null);
+  }
+});

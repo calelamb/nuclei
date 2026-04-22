@@ -147,7 +147,14 @@ class Executor:
             dependency=dependency,
         )
 
-    def _run_code(self, code: str) -> tuple[str, KernelError | None]:
+    def _run_code(self, code: str) -> tuple[str, str, KernelError | None]:
+        """Execute user code and return (stdout, stderr, error).
+
+        stdout and stderr are captured separately so the frontend can
+        style them differently in the terminal. A Python-level exception
+        is surfaced as the KernelError (with stdout/stderr still returned
+        so the user sees what was printed before the failure).
+        """
         import signal
         import threading
 
@@ -175,92 +182,92 @@ class Executor:
                 if use_signal_timeout:
                     signal.alarm(0)
                     signal.signal(signal.SIGALRM, old_handler)
-            return stdout_capture.getvalue(), None
+            return stdout_capture.getvalue(), stderr_capture.getvalue(), None
         except ExecutionTimeout as exc:
-            return stdout_capture.getvalue(), KernelError(
+            return stdout_capture.getvalue(), stderr_capture.getvalue(), KernelError(
                 code="timeout",
                 message=str(exc),
             )
         except (SyntaxError, IndentationError):
             tb = traceback.format_exc()
-            return stdout_capture.getvalue(), KernelError(
+            return stdout_capture.getvalue(), stderr_capture.getvalue(), KernelError(
                 code="compile_error",
                 message=_short_error_message(tb),
                 traceback=tb,
             )
         except Exception:
             tb = traceback.format_exc()
-            return stdout_capture.getvalue(), KernelError(
+            return stdout_capture.getvalue(), stderr_capture.getvalue(), KernelError(
                 code="execution_error",
                 message=_short_error_message(tb),
                 traceback=tb,
             )
 
-    def run_python(self, code: str) -> tuple[str, KernelError | None]:
+    def run_python(self, code: str) -> tuple[str, str, KernelError | None]:
         return self._run_code(code)
 
     def parse(
         self, code: str
-    ) -> tuple[CircuitSnapshot | None, str, KernelError | None]:
+    ) -> tuple[CircuitSnapshot | None, str, str, KernelError | None]:
         spec = self._detect_adapter_spec(code)
         if spec is None:
-            return None, "", KernelError(
+            return None, "", "", KernelError(
                 code="unsupported_framework",
                 message="No supported quantum framework detected in code.",
             )
 
         adapter, adapter_error = self._load_adapter(spec)
         if adapter_error:
-            return None, "", adapter_error
+            return None, "", "", adapter_error
 
-        stdout, error = self._run_code(code)
+        stdout, stderr, error = self._run_code(code)
         if error:
             error = self._normalize_runtime_error(spec, error)
             error.framework = spec.framework
-            return None, stdout, error
+            return None, stdout, stderr, error
 
         try:
             circuit = adapter.find_circuit(self._namespace)
         except Exception as exc:
-            return None, stdout, self._capability_error(spec, exc, "adapter_error")
+            return None, stdout, stderr, self._capability_error(spec, exc, "adapter_error")
 
         if circuit is None:
-            return None, stdout, None
+            return None, stdout, stderr, None
 
         try:
             snapshot = adapter.extract_snapshot(circuit)
         except Exception as exc:
-            return None, stdout, self._capability_error(spec, exc, "adapter_error")
+            return None, stdout, stderr, self._capability_error(spec, exc, "adapter_error")
 
-        return snapshot, stdout, None
+        return snapshot, stdout, stderr, None
 
     def execute(
         self, code: str, shots: int
-    ) -> tuple[SimulationResult | None, CircuitSnapshot | None, str, KernelError | None]:
+    ) -> tuple[SimulationResult | None, CircuitSnapshot | None, str, str, KernelError | None]:
         spec = self._detect_adapter_spec(code)
         if spec is None:
-            return None, None, "", KernelError(
+            return None, None, "", "", KernelError(
                 code="unsupported_framework",
                 message="No supported quantum framework detected in code.",
             )
 
         adapter, adapter_error = self._load_adapter(spec)
         if adapter_error:
-            return None, None, "", adapter_error
+            return None, None, "", "", adapter_error
 
-        stdout, error = self._run_code(code)
+        stdout, stderr, error = self._run_code(code)
         if error:
             error = self._normalize_runtime_error(spec, error)
             error.framework = spec.framework
-            return None, None, stdout, error
+            return None, None, stdout, stderr, error
 
         try:
             circuit = adapter.find_circuit(self._namespace)
         except Exception as exc:
-            return None, None, stdout, self._capability_error(spec, exc, "adapter_error")
+            return None, None, stdout, stderr, self._capability_error(spec, exc, "adapter_error")
 
         if circuit is None:
-            return None, None, stdout, KernelError(
+            return None, None, stdout, stderr, KernelError(
                 code="no_circuit",
                 message="No quantum circuit found in code.",
                 framework=spec.framework,
@@ -269,13 +276,13 @@ class Executor:
         try:
             snapshot = adapter.extract_snapshot(circuit)
         except Exception as exc:
-            return None, None, stdout, self._capability_error(spec, exc, "adapter_error")
+            return None, None, stdout, stderr, self._capability_error(spec, exc, "adapter_error")
 
         try:
             result = adapter.simulate(circuit, shots)
         except Exception as exc:
-            return None, snapshot, stdout, self._capability_error(
+            return None, snapshot, stdout, stderr, self._capability_error(
                 spec, exc, "simulation_error"
             )
 
-        return result, snapshot, stdout, None
+        return result, snapshot, stdout, stderr, None

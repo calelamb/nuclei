@@ -2,6 +2,11 @@
 websockets>=12.0,<14.0
 numpy>=1.26,<3.0
 
+# Provider credential storage via OS keyring
+# (macOS Keychain, Windows Credential Manager, Linux Secret Service).
+# Falls back to in-memory if no backend is available.
+keyring>=24
+
 # Quantum frameworks (install at least one)
 qiskit>=1.2,<2.0
 qiskit-aer>=0.15,<1.0
@@ -12,3 +17,8 @@ cirq-core>=1.4,<2.0
 
 # Optional: NVIDIA CUDA-Q (requires NVIDIA GPU)
 # Install via: pip install cuda-quantum
+
+# Optional: Quantinuum (requires pytket-quantinuum + either extension
+# for Qiskit or Cirq circuit conversion)
+# pytket-extensions-qiskit>=0.40
+# pytket-extensions-cirq>=0.30
