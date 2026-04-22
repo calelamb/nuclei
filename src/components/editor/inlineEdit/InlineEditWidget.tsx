@@ -43,10 +43,9 @@ export function InlineEditWidget({ editor, monaco, onClose }: InlineEditProps) {
   // Get position below selection
   const selection = editor.getSelection();
   const model = editor.getModel();
-  if (!model) return null;
-  const selectedText = selection && !selection.isEmpty()
+  const selectedText = model && selection && !selection.isEmpty()
     ? model.getValueInRange(selection)
-    : model.getLineContent(selection?.positionLineNumber ?? 1);
+    : model?.getLineContent(selection?.positionLineNumber ?? 1) ?? '';
 
   const widgetTop = editor.getTopForLineNumber((selection?.endLineNumber ?? 1) + 1) - editor.getScrollTop() + 30;
 
@@ -106,7 +105,7 @@ export function InlineEditWidget({ editor, monaco, onClose }: InlineEditProps) {
   }, [instruction, loading, selectedText, history, platform]);
 
   const handleAccept = useCallback(() => {
-    if (!diffResult || !selection) return;
+    if (!diffResult || !selection || !model) return;
     editor.executeEdits('cmdk', [{
       range: selection.isEmpty()
         ? new monaco.Range(selection.positionLineNumber, 1, selection.positionLineNumber, model.getLineMaxColumn(selection.positionLineNumber))
@@ -137,6 +136,8 @@ export function InlineEditWidget({ editor, monaco, onClose }: InlineEditProps) {
       setInstruction(history[newIdx]);
     }
   };
+
+  if (!model) return null;
 
   return (
     <div style={{

@@ -87,6 +87,7 @@ export function ProblemWorkspace() {
   const visibleTests = activeProblem.visible_tests ?? activeProblem.testCases.filter((test) => !test.hidden);
   const hiddenTests = activeProblem.hidden_tests ?? activeProblem.testCases.filter((test) => test.hidden);
   const diffColor = DIFFICULTY_COLORS[activeProblem.difficulty];
+  const isValueContract = activeProblem.contract_kind === 'returns_value';
 
   return (
     <div style={{
@@ -149,7 +150,33 @@ export function ProblemWorkspace() {
           color: colors.textMuted,
           fontSize: 12,
           fontFamily: "'Geist Sans', sans-serif",
+          flexWrap: 'wrap',
+          justifyContent: 'flex-end',
         }}>
+          {isValueContract && (
+            <>
+              <span style={{
+                padding: '3px 8px',
+                borderRadius: 999,
+                border: `1px solid ${colors.accent}55`,
+                background: `${colors.accent}14`,
+                color: colors.accent,
+                fontWeight: 700,
+              }}>
+                Python value contract
+              </span>
+              <span style={{
+                padding: '3px 8px',
+                borderRadius: 999,
+                border: `1px solid ${colors.success}55`,
+                background: `${colors.success}12`,
+                color: colors.success,
+                fontWeight: 700,
+              }}>
+                Browser + Desktop
+              </span>
+            </>
+          )}
           <span>{Math.round(activeProblem.acceptanceRate * 100)}% acceptance</span>
           <span>{visibleTests.length} visible / {hiddenTests.length} hidden</span>
           <span>{submissions.length} submissions</span>

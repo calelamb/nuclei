@@ -23,20 +23,28 @@ export function PanelReveal({ when, from = 'right', children }: PanelRevealProps
   const exitTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
+    let raf: number | null = null;
     if (when) {
       if (exitTimeout.current) {
         clearTimeout(exitTimeout.current);
         exitTimeout.current = null;
       }
-      setMounted(true);
-      // Defer 'entered' by one frame so the browser paints the
-      // pre-transition state before transitioning.
-      const raf = requestAnimationFrame(() => setEntered(true));
-      return () => cancelAnimationFrame(raf);
+      queueMicrotask(() => {
+        setMounted(true);
+        // Defer 'entered' by one frame so the browser paints the
+        // pre-transition state before transitioning.
+        raf = requestAnimationFrame(() => setEntered(true));
+      });
+      return () => {
+        if (raf !== null) cancelAnimationFrame(raf);
+      };
     }
-    setEntered(false);
-    exitTimeout.current = setTimeout(() => setMounted(false), 160);
+    queueMicrotask(() => {
+      setEntered(false);
+      exitTimeout.current = setTimeout(() => setMounted(false), 160);
+    });
     return () => {
+      if (raf !== null) cancelAnimationFrame(raf);
       if (exitTimeout.current) clearTimeout(exitTimeout.current);
     };
   }, [when]);

@@ -12,6 +12,7 @@ import type {
 } from '../types/challenge';
 
 export type InspectionView = 'circuit' | 'histogram' | 'bloch' | 'output';
+export type ChallengePracticeTab = 'all' | 'qkd';
 
 export interface ChallengeInspectionState {
   testCaseId: string;
@@ -32,8 +33,10 @@ export function filterChallenges(
   searchQuery: string,
   statusFilter: 'all' | 'not_started' | 'attempted' | 'solved',
   progress: Record<string, ProblemProgress>,
+  practiceTab: ChallengePracticeTab = 'all',
 ): QuantumChallenge[] {
   return challenges.filter((challenge) => {
+    if (practiceTab === 'qkd' && challenge.practiceTrack !== 'qkd') return false;
     if (difficultyFilter && challenge.difficulty !== difficultyFilter) return false;
     if (categoryFilter && challenge.category !== categoryFilter) return false;
     if (searchQuery) {
@@ -66,6 +69,7 @@ interface ChallengeModeState {
   categoryFilter: ChallengeCategory | null;
   searchQuery: string;
   statusFilter: 'all' | 'not_started' | 'attempted' | 'solved';
+  practiceTab: ChallengePracticeTab;
 
   // Progress
   progress: Record<string, ProblemProgress>;
@@ -86,6 +90,7 @@ interface ChallengeModeState {
   setCategoryFilter: (category: ChallengeCategory | null) => void;
   setSearchQuery: (query: string) => void;
   setStatusFilter: (status: 'all' | 'not_started' | 'attempted' | 'solved') => void;
+  setPracticeTab: (tab: ChallengePracticeTab) => void;
   getFilteredChallenges: () => QuantumChallenge[];
   updateDraftCode: (challengeId: string, framework: Framework, code: string) => void;
   setRunning: (running: boolean) => void;
@@ -101,6 +106,10 @@ interface ChallengeModeState {
 
 const STORAGE_KEY = 'nuclei-challenges';
 
+function normalizePracticeTab(value: unknown): ChallengePracticeTab {
+  return value === 'qkd' ? 'qkd' : 'all';
+}
+
 function loadPersisted(): Partial<ChallengeModeState> {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
@@ -113,6 +122,7 @@ function loadPersisted(): Partial<ChallengeModeState> {
       difficultyFilter: data.difficultyFilter ?? null,
       categoryFilter: data.categoryFilter ?? null,
       statusFilter: data.statusFilter ?? 'all',
+      practiceTab: normalizePracticeTab(data.practiceTab),
     };
   } catch {
     return {};
@@ -128,6 +138,7 @@ function persist(state: ChallengeModeState) {
       difficultyFilter: state.difficultyFilter,
       categoryFilter: state.categoryFilter,
       statusFilter: state.statusFilter,
+      practiceTab: state.practiceTab,
     }));
   } catch { /* noop */ }
 }
@@ -150,6 +161,7 @@ export const useChallengeModeStore = create<ChallengeModeState>((set, get) => ({
   categoryFilter: persisted.categoryFilter ?? null,
   searchQuery: '',
   statusFilter: persisted.statusFilter ?? 'all',
+  practiceTab: persisted.practiceTab ?? 'all',
   progress: persisted.progress ?? {},
   isRunning: false,
   currentTestResults: [],
@@ -195,9 +207,30 @@ export const useChallengeModeStore = create<ChallengeModeState>((set, get) => ({
     persist(get());
   },
 
+  setPracticeTab: (tab) => {
+    set({ practiceTab: tab });
+    persist(get());
+  },
+
   getFilteredChallenges: () => {
-    const { challenges, difficultyFilter, categoryFilter, searchQuery, statusFilter, progress } = get();
-    return filterChallenges(challenges, difficultyFilter, categoryFilter, searchQuery, statusFilter, progress);
+    const {
+      challenges,
+      difficultyFilter,
+      categoryFilter,
+      searchQuery,
+      statusFilter,
+      progress,
+      practiceTab,
+    } = get();
+    return filterChallenges(
+      challenges,
+      difficultyFilter,
+      categoryFilter,
+      searchQuery,
+      statusFilter,
+      progress,
+      practiceTab,
+    );
   },
 
   updateDraftCode: (challengeId, framework, code) => {

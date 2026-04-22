@@ -2,12 +2,22 @@ import type { Framework } from './quantum';
 
 export type ChallengeDifficulty = 'easy' | 'medium' | 'hard';
 export type ChallengeCategory = 'state-preparation' | 'algorithms' | 'optimization' | 'protocols';
-export type ChallengeContractKind = 'returns_circuit';
+export type ChallengePracticeTrack = 'general' | 'qkd';
+export type ChallengeContractKind = 'returns_circuit' | 'returns_value';
 export type ChallengeArgumentType = 'integer' | 'number' | 'string' | 'boolean' | 'array' | 'object';
+export type ChallengeJsonValue =
+  | string
+  | number
+  | boolean
+  | null
+  | ChallengeJsonValue[]
+  | { [key: string]: ChallengeJsonValue };
 
 export type ValidationMode =
   | { type: 'probability_match'; expected: Record<string, number>; tolerance: number }
-  | { type: 'metric'; metric: 'approximation_ratio'; threshold: number; optimal: number };
+  | { type: 'metric'; metric: 'approximation_ratio'; threshold: number; optimal: number }
+  | { type: 'value_match'; expected: ChallengeJsonValue; tolerance?: number }
+  | { type: 'numeric_match'; expected: number; tolerance: number; path?: string };
 
 export interface TestCase {
   id: string;
@@ -54,6 +64,7 @@ export interface QuantumChallenge {
   estimatedMinutes: number;
   totalSubmissions: number;
   acceptanceRate: number;
+  practiceTrack?: ChallengePracticeTrack;
   visualization?: ChallengeVisualization;
   default_framework?: Framework;
   entrypoint_name?: string;
@@ -78,7 +89,7 @@ export interface TestCaseResult {
   passed: boolean;
   score: number;
   verdict: SubmissionStatus;
-  actualOutput?: Record<string, number>;
+  actualOutput?: ChallengeJsonValue | Record<string, number>;
   message: string;
   executionTimeMs: number;
 }

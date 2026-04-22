@@ -405,13 +405,15 @@ function BottomPanel({
   // here rather than in the store so we can condition on showFullHistogram,
   // which is a layout-preset-derived prop owned by the parent.
   useEffect(() => {
-    if (result && showFullHistogram) setActiveTab('histogram');
+    if (result && showFullHistogram) queueMicrotask(() => setActiveTab('histogram'));
   }, [result, showFullHistogram, setActiveTab]);
 
   // When the full histogram tab disappears (layout preset changed), snap
   // back to terminal so we never render an invisible tab.
   useEffect(() => {
-    if (!showFullHistogram && activeTab === 'histogram') setActiveTab('terminal');
+    if (!showFullHistogram && activeTab === 'histogram') {
+      queueMicrotask(() => setActiveTab('terminal'));
+    }
   }, [showFullHistogram, activeTab, setActiveTab]);
 
   const tabs: Array<'terminal' | 'histogram'> = showFullHistogram

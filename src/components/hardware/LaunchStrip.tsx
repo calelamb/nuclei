@@ -24,9 +24,10 @@ function fmtElapsed(startIso: string): string {
 export function LaunchStrip() {
   const jobs = useHardwareStore((s) => s.jobs);
   const openLaunch = useHardwareStore((s) => s.openLaunch);
+  const clearJob = useHardwareStore((s) => s.clearJob);
   const colors = useThemeStore((s) => s.colors);
 
-  const [_now, setNow] = useState(Date.now());
+  const [, setNow] = useState(0);
   const latestJob = jobs[0] ?? null;
   useEffect(() => {
     if (!latestJob) return;
@@ -63,7 +64,6 @@ export function LaunchStrip() {
           : 'failed';
 
   const cancellable = latestJob.status === 'queued' || latestJob.status === 'running';
-  const clearJob = useHardwareStore((s) => s.clearJob);
   const onCancelClick = (e: React.MouseEvent) => {
     e.stopPropagation();
     const hw = getHardware();

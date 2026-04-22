@@ -1,6 +1,7 @@
 import type {
   ChallengeArgument,
   ChallengeArgumentType,
+  ChallengeContractKind,
   QuantumChallenge,
 } from '../../types/challenge';
 import { bellStateFactory } from './bellStateFactory';
@@ -13,6 +14,10 @@ import { groversSearch } from './groversSearch';
 import { maxcutWeighted } from './maxcutWeighted';
 import { quantumPhaseEstimation } from './quantumPhaseEstimation';
 import { simonsAlgorithm } from './simonsAlgorithm';
+import { bb84KeySifter } from './qkdBb84KeySifter';
+import { qkdDetectEve } from './qkdDetectEve';
+import { qkdInterceptResendAudit } from './qkdInterceptResendAudit';
+import { e91BellWitness } from './qkdE91BellWitness';
 
 const DEFAULT_ENTRYPOINT_NAME = 'solve';
 
@@ -56,7 +61,7 @@ function collectArguments(challenge: QuantumChallenge): ChallengeArgument[] {
   }));
 }
 
-function buildStarterTemplate(rawCode: string, args: ChallengeArgument[]): string {
+function splitStarterCode(rawCode: string): { imports: string; body: string } {
   const lines = rawCode.trim().split('\n');
   const importLines: string[] = [];
   const bodyLines: string[] = [];
@@ -73,36 +78,59 @@ function buildStarterTemplate(rawCode: string, args: ChallengeArgument[]): strin
     bodyLines.push(line);
   }
 
+  return {
+    imports: importLines.join('\n'),
+    body: bodyLines
+      .join('\n')
+      .replace(/\n+$/, '')
+      .split('\n')
+      .map((line) => (line.length > 0 ? `    ${line}` : ''))
+      .join('\n'),
+  };
+}
+
+function buildStarterTemplate(
+  rawCode: string,
+  args: ChallengeArgument[],
+  contractKind: ChallengeContractKind,
+): string {
+  const { imports, body } = splitStarterCode(rawCode);
   const signature = args.map((arg) => arg.name).join(', ');
-  const body = bodyLines
-    .join('\n')
-    .replace(/\n+$/, '')
-    .split('\n')
-    .map((line) => (line.length > 0 ? `    ${line}` : ''))
-    .join('\n');
-  const imports = importLines.join('\n');
+  const returnHint = contractKind === 'returns_value'
+    ? 'Return the JSON-serializable value requested by the current challenge.'
+    : 'Return a QuantumCircuit for the current challenge.';
 
   return `${imports}
 
 def ${DEFAULT_ENTRYPOINT_NAME}(${signature}):
-    """Return a QuantumCircuit for the current challenge."""
+    """${returnHint}"""
 ${body}
-    return qc
+${contractKind === 'returns_circuit' ? '    return qc\n' : ''}
 `;
+}
+
+function resolveContractKind(challenge: QuantumChallenge): ChallengeContractKind {
+  return challenge.contract_kind ?? 'returns_circuit';
+}
+
+function buildStarterTemplateForChallenge(challenge: QuantumChallenge, args: ChallengeArgument[]): string {
+  return buildStarterTemplate(challenge.starterCode.qiskit, args, resolveContractKind(challenge));
 }
 
 function normalizeChallenge(challenge: QuantumChallenge): QuantumChallenge {
   const args = collectArguments(challenge);
+  const contractKind = resolveContractKind(challenge);
 
   return {
     ...challenge,
-    default_framework: 'qiskit',
+    default_framework: challenge.default_framework ?? 'qiskit',
     entrypoint_name: DEFAULT_ENTRYPOINT_NAME,
-    contract_kind: 'returns_circuit',
+    contract_kind: contractKind,
+    practiceTrack: challenge.practiceTrack ?? 'general',
     arguments: args,
     visible_tests: challenge.testCases.filter((testCase) => !testCase.hidden),
     hidden_tests: challenge.testCases.filter((testCase) => testCase.hidden),
-    starter_template: buildStarterTemplate(challenge.starterCode.qiskit, args),
+    starter_template: buildStarterTemplateForChallenge(challenge, args),
   };
 }
 
@@ -117,6 +145,10 @@ const RAW_CHALLENGES: QuantumChallenge[] = [
   maxcutWeighted,
   quantumPhaseEstimation,
   simonsAlgorithm,
+  bb84KeySifter,
+  qkdDetectEve,
+  qkdInterceptResendAudit,
+  e91BellWitness,
 ];
 
 export const QUANTUM_CHALLENGES: QuantumChallenge[] = RAW_CHALLENGES.map(normalizeChallenge);
@@ -132,4 +164,8 @@ export {
   maxcutWeighted,
   quantumPhaseEstimation,
   simonsAlgorithm,
+  bb84KeySifter,
+  qkdDetectEve,
+  qkdInterceptResendAudit,
+  e91BellWitness,
 };

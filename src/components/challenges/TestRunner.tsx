@@ -75,6 +75,7 @@ export function TestRunner({ challenge }: TestRunnerProps) {
   const code = savedCode || challenge.starter_template || challenge.starterCode[activeFramework] || '';
   const visibleTests = challenge.visible_tests ?? challenge.testCases.filter((testCase) => !testCase.hidden);
   const hiddenTests = challenge.hidden_tests ?? challenge.testCases.filter((testCase) => testCase.hidden);
+  const isValueContract = challenge.contract_kind === 'returns_value';
 
   const overallVerdict = useMemo(() => (
     currentTestResults.length > 0 ? deriveSubmissionStatus(currentTestResults) : null
@@ -101,7 +102,7 @@ export function TestRunner({ challenge }: TestRunnerProps) {
 
     if (denominator <= 0) return 0;
     return Math.round((earned / denominator) * 100);
-  }, [challenge.testCases, currentTestResults, hiddenTests, totalWeight, visibleTests, visibleWeight]);
+  }, [challenge.testCases, currentTestResults, hiddenTests, totalWeight, visibleWeight]);
 
   const handleRun = useCallback(async (submit: boolean) => {
     if (isRunning) return;
@@ -205,7 +206,7 @@ export function TestRunner({ challenge }: TestRunnerProps) {
       stdout: inspectionResult.stdout,
       failure: inspectionResult.failure,
     });
-    setInspectionView(inspectionResult.failure ? 'output' : 'circuit');
+    setInspectionView(inspectionResult.failure || isValueContract ? 'output' : 'circuit');
     setActiveBottomTab('inspection');
     setRunning(false);
   }, [
@@ -215,6 +216,7 @@ export function TestRunner({ challenge }: TestRunnerProps) {
     inspectionCaseId,
     isRunning,
     platform,
+    isValueContract,
     setInspection,
     setInspectionView,
     setRunning,
@@ -344,7 +346,7 @@ export function TestRunner({ challenge }: TestRunnerProps) {
             }}
           >
             <SearchCode size={12} />
-            Inspect Quantum Output
+            {isValueContract ? 'Inspect Return Value' : 'Inspect Quantum Output'}
           </button>
         </div>
 
@@ -422,7 +424,7 @@ export function TestRunner({ challenge }: TestRunnerProps) {
             cursor: 'pointer',
           }}
         >
-          Quantum Output
+          {isValueContract ? 'Return Output' : 'Quantum Output'}
         </button>
       </div>
 
