@@ -304,18 +304,23 @@ async def handle_message(websocket):
             shots = msg.get("shots", 1024)
             code = msg.get("code", "")
             try:
-                # Exec the user's code to produce a circuit object. Provider
-                # adapters expect a real circuit (QuantumCircuit / cirq.Circuit
-                # / cudaq kernel), not a raw string.
-                namespace = {"__builtins__": __builtins__}
-                exec(code, namespace)
-                circuit_obj = _extract_circuit_for_provider(namespace, provider)
-                if circuit_obj is None:
-                    raise RuntimeError(
-                        "No circuit object found in the code. "
-                        "Your code must define a Qiskit QuantumCircuit, Cirq Circuit, or CUDA-Q kernel."
-                    )
-                handle = hardware_manager.submit_job(provider, circuit_obj, backend, shots)
+                # The local simulator re-runs the raw code through the
+                # existing executor pipeline, which already handles all
+                # three frameworks. Real hardware adapters need a concrete
+                # circuit object so we exec + extract for those.
+                if provider == "simulator":
+                    payload = code
+                else:
+                    namespace = {"__builtins__": __builtins__}
+                    exec(code, namespace)
+                    circuit_obj = _extract_circuit_for_provider(namespace, provider)
+                    if circuit_obj is None:
+                        raise RuntimeError(
+                            "No circuit object found in the code. "
+                            "Your code must define a Qiskit QuantumCircuit, Cirq Circuit, or CUDA-Q kernel."
+                        )
+                    payload = circuit_obj
+                handle = hardware_manager.submit_job(provider, payload, backend, shots)
                 await websocket.send(json.dumps({
                     "type": "hardware_job_submitted",
                     "job": handle.to_dict(),

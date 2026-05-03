@@ -815,7 +815,9 @@ export function PanelLayout() {
                 <div style={{ width: `${editorPaneWidth}%`, display: 'flex', flexDirection: 'column', minWidth: 0 }}>
                   <EditorTabs />
                   <Breadcrumbs />
-                  <LaunchStrip />
+                  <ErrorBoundary label="Launch Strip">
+                    <LaunchStrip />
+                  </ErrorBoundary>
                   <div style={{ flex: 1, minHeight: 0 }}>
                     <ErrorBoundary label="Code Editor">
                       <QuantumEditor />

@@ -5,6 +5,37 @@ All notable changes to Nuclei will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.17] - 2026-05-02
+
+### Fixed — critical Local Simulator crash + white-page on click
+
+Clicking Local Simulator → Launch in the submit tab caused the
+entire IDE to white-page, and reloading kept it broken. Two bugs
+compounded:
+
+- `LaunchStrip` violated the Rules of Hooks: `useHardwareStore((s)
+  => s.clearJob)` was called after the `if (!latestJob) return null`
+  early return. The first render with `jobs=[]` ran 5 hooks; the
+  moment `addJob` fired in response to a successful submit, the
+  re-render needed 6 hooks and React threw "Rendered more hooks
+  than during the previous render." Because `LaunchStrip` was not
+  wrapped in an `ErrorBoundary`, the whole React tree unmounted.
+  Fix: hoist the `clearJob` selector above the early return. Added
+  a regression test (`LaunchStrip.test.tsx`) that mounts empty,
+  dispatches `addJob`, and asserts no hooks-mismatch error fires.
+
+- `kernel/server.py` was passing the post-`exec` circuit object to
+  `SimulatorProvider.submit_job`, which then ran
+  `code = circuit_obj if isinstance(circuit_obj, str) else ""` —
+  every Local Simulator submission silently no-op'd. The simulator
+  path now passes the raw code string straight through to the
+  existing executor pipeline. Real-hardware adapters still receive
+  a concrete circuit object.
+
+- `LaunchStrip` is now wrapped in an `ErrorBoundary` in
+  `PanelLayout` so any future render bug there degrades to an
+  inline retry card instead of white-paging the IDE.
+
 ## [0.4.16] - 2026-04-20
 
 ### Fixed — managed venv auto-rebuilds from Python 3.10+
