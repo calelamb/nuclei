@@ -1,0 +1,130 @@
+{
+  "run_date": "2026-05-11",
+  "baseline_date": "2026-05-02",
+  "repo": "calelamb/nuclei",
+  "repo_signal": {
+    "stars": 3,
+    "forks": 0,
+    "watchers": 3,
+    "open_issues": 0,
+    "stars_delta_wow": 0,
+    "forks_delta_wow": 0
+  },
+  "platform_totals": {
+    "macos": { "current": 49, "baseline": 38, "delta_wow": 11 },
+    "windows": { "current": 32, "baseline": 22, "delta_wow": 10 },
+    "linux": { "current": 38, "baseline": 26, "delta_wow": 12 },
+    "updater_manifests": { "current": 94, "baseline": 86, "delta_wow": 8 },
+    "grand_total": { "current": 213, "baseline": 172, "delta_wow": 41 }
+  },
+  "releases": [
+    {
+      "tag": "v0.4.17",
+      "published": "2026-05-03",
+      "total_downloads": 16,
+      "delta_wow": 16,
+      "macos": 3,
+      "windows": 2,
+      "linux": 3,
+      "updater": 8
+    },
+    {
+      "tag": "v0.4.16",
+      "published": "2026-04-20",
+      "total_downloads": 10,
+      "delta_wow": 0,
+      "macos": 1,
+      "windows": 1,
+      "linux": 0,
+      "updater": 8
+    },
+    {
+      "tag": "v0.4.15",
+      "published": "2026-04-20",
+      "total_downloads": 19,
+      "delta_wow": null,
+      "macos": 3,
+      "windows": 2,
+      "linux": 3,
+      "updater": 11
+    },
+    {
+      "tag": "v0.4.14",
+      "published": "2026-04-20",
+      "total_downloads": 4,
+      "delta_wow": null,
+      "macos": 2,
+      "windows": 0,
+      "linux": 0,
+      "updater": 2
+    },
+    {
+      "tag": "v0.4.13",
+      "published": "2026-04-20",
+      "total_downloads": 2,
+      "delta_wow": null,
+      "macos": 1,
+      "windows": 0,
+      "linux": 0,
+      "updater": 1
+    },
+    {
+      "tag": "v0.4.12",
+      "published": "2026-04-19",
+      "total_downloads": 3,
+      "delta_wow": null,
+      "macos": 1,
+      "windows": 0,
+      "linux": 0,
+      "updater": 2
+    },
+    {
+      "tag": "v0.4.11",
+      "published": "2026-04-19",
+      "total_downloads": 26,
+      "delta_wow": null,
+      "macos": 6,
+      "windows": 4,
+      "linux": 6,
+      "updater": 10
+    },
+    {
+      "tag": "v0.4.10",
+      "published": "2026-04-19",
+      "total_downloads": 3,
+      "delta_wow": null,
+      "macos": 1,
+      "windows": 0,
+      "linux": 0,
+      "updater": 2
+    },
+    {
+      "tag": "v0.4.9",
+      "published": "2026-04-19",
+      "total_downloads": 6,
+      "delta_wow": null,
+      "macos": 1,
+      "windows": 1,
+      "linux": 0,
+      "updater": 4
+    },
+    {
+      "tag": "v0.4.7",
+      "published": "2026-04-19",
+      "total_downloads": 28,
+      "delta_wow": null,
+      "macos": 5,
+      "windows": 4,
+      "linux": 6,
+      "updater": 13
+    }
+  ],
+  "traffic": {
+    "available": false,
+    "reason": "GitHub MCP server does not expose /traffic/* endpoints"
+  },
+  "vercel_analytics": {
+    "available": false,
+    "reason": "No VERCEL_TOKEN in environment"
+  }
+}
