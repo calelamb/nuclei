@@ -18,6 +18,9 @@ cirq-core>=1.4,<2.0
 # Optional: NVIDIA CUDA-Q (requires NVIDIA GPU)
 # Install via: pip install cuda-quantum
 
+# Optional: Microsoft QDK (Q#) — enables the source-mode Q# adapter
+# qdk>=1.29,<2
+
 # Optional: Quantinuum (requires pytket-quantinuum + either extension
 # for Qiskit or Cirq circuit conversion)
 # pytket-extensions-qiskit>=0.40

@@ -33,6 +33,9 @@ jobs:
           pip install pytest pytest-asyncio websockets
           # keyring is used by the credential store; it's a small, fast dep.
           pip install keyring
+          # Microsoft QDK (Q#) — the qsharp adapter tests run against the
+          # real interpreter; numpy is needed by the shared adapter math.
+          pip install "qdk>=1.29,<2" "numpy>=1.26,<3.0"
 
       - name: Run kernel tests
         run: pytest kernel/tests/ -v

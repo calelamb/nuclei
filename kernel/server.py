@@ -109,10 +109,16 @@ async def handle_message(websocket):
         msg_type = msg.get("type")
         code = msg.get("code", "")
 
+        # Optional language hint ("qsharp" / "python") from the frontend;
+        # omitted by older clients, in which case detection stays regex-based.
+        language = msg.get("language")
+
         if msg_type == "parse":
             # Offload blocking parse to a thread so the event loop stays
             # responsive to heartbeats and other messages.
-            snapshot, stdout, stderr, error = await asyncio.to_thread(executor.parse, code)
+            snapshot, stdout, stderr, error = await asyncio.to_thread(
+                executor.parse, code, language=language
+            )
 
             if stdout:
                 await websocket.send(json.dumps({
@@ -138,7 +144,7 @@ async def handle_message(websocket):
             shots = msg.get("shots", 1024)
             # Simulation can take multiple seconds — must not block the loop.
             result, snapshot, stdout, stderr, error = await asyncio.to_thread(
-                executor.execute, code, shots
+                executor.execute, code, shots, language=language
             )
 
             if stdout:

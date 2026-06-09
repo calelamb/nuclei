@@ -18,9 +18,25 @@ class AdapterSpec:
     class_name: str
     detect_pattern: re.Pattern[str]
     dependencies: tuple[str, ...]
+    # Source-mode adapters (Q#) compile source through their own toolchain;
+    # the code never reaches Python exec().
+    source_mode: bool = False
 
 
 ADAPTER_SPECS = (
+    # Q# first: its source would be a syntax error under every Python spec,
+    # and none of the Python patterns can false-positive on Q# keywords.
+    AdapterSpec(
+        framework="qsharp",
+        module="kernel.adapters.qsharp_adapter",
+        class_name="QsharpAdapter",
+        detect_pattern=re.compile(
+            r"^\s*(namespace\s+[\w.]+|operation\s+\w+\s*\(|import\s+Std|open\s+Microsoft\.Quantum)",
+            re.MULTILINE,
+        ),
+        dependencies=("qdk",),
+        source_mode=True,
+    ),
     AdapterSpec(
         framework="qiskit",
         module="kernel.adapters.qiskit_adapter",
@@ -66,6 +82,7 @@ def _missing_dependency_message(framework: str, dependency: str) -> str:
         "qiskit_aer": "Qiskit Aer",
         "cirq": "Cirq",
         "cudaq": "CUDA-Q",
+        "qdk": "Microsoft QDK",
     }.get(dependency, dependency)
     return (
         f"{display} is not installed, so {framework} code cannot run in this environment."
@@ -84,6 +101,29 @@ class Executor:
             if spec.detect_pattern.search(code):
                 return spec
         return None
+
+    def _resolve_spec(self, code: str, language: str | None) -> AdapterSpec | None:
+        """Pick the adapter spec, honoring an explicit language hint.
+
+        The frontend knows the file type, so its hint beats regex detection:
+        "qsharp" routes straight to the Q# spec, "python" excludes
+        source-mode specs so Q#-looking text in Python strings or comments
+        can't hijack routing. No hint falls back to pure regex detection.
+        """
+        if language == "qsharp":
+            return next(
+                (spec for spec in ADAPTER_SPECS if spec.framework == "qsharp"), None
+            )
+        if language == "python":
+            return next(
+                (
+                    spec
+                    for spec in ADAPTER_SPECS
+                    if not spec.source_mode and spec.detect_pattern.search(code)
+                ),
+                None,
+            )
+        return self._detect_adapter_spec(code)
 
     def _load_adapter(self, spec: AdapterSpec):
         try:
@@ -207,9 +247,9 @@ class Executor:
         return self._run_code(code)
 
     def parse(
-        self, code: str
+        self, code: str, *, language: str | None = None
     ) -> tuple[CircuitSnapshot | None, str, str, KernelError | None]:
-        spec = self._detect_adapter_spec(code)
+        spec = self._resolve_spec(code, language)
         if spec is None:
             return None, "", "", KernelError(
                 code="unsupported_framework",
@@ -219,6 +259,14 @@ class Executor:
         adapter, adapter_error = self._load_adapter(spec)
         if adapter_error:
             return None, "", "", adapter_error
+
+        if spec.source_mode:
+            # Source-mode adapters own the whole pipeline — their source
+            # never reaches exec(). Their return shape matches ours exactly.
+            try:
+                return adapter.parse_source(code)
+            except Exception as exc:
+                return None, "", "", self._capability_error(spec, exc, "adapter_error")
 
         stdout, stderr, error = self._run_code(code)
         if error:
@@ -242,9 +290,9 @@ class Executor:
         return snapshot, stdout, stderr, None
 
     def execute(
-        self, code: str, shots: int
+        self, code: str, shots: int, *, language: str | None = None
     ) -> tuple[SimulationResult | None, CircuitSnapshot | None, str, str, KernelError | None]:
-        spec = self._detect_adapter_spec(code)
+        spec = self._resolve_spec(code, language)
         if spec is None:
             return None, None, "", "", KernelError(
                 code="unsupported_framework",
@@ -254,6 +302,14 @@ class Executor:
         adapter, adapter_error = self._load_adapter(spec)
         if adapter_error:
             return None, None, "", "", adapter_error
+
+        if spec.source_mode:
+            try:
+                return adapter.execute_source(code, shots)
+            except Exception as exc:
+                return None, None, "", "", self._capability_error(
+                    spec, exc, "execution_error"
+                )
 
         stdout, stderr, error = self._run_code(code)
         if error:
