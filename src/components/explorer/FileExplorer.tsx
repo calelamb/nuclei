@@ -15,6 +15,7 @@ import {
   File as FileIconLucide,
   ChevronRight,
   ChevronDown,
+  Sigma,
   type LucideIcon,
 } from 'lucide-react';
 import { useProjectStore } from '../../stores/projectStore';
@@ -32,6 +33,7 @@ import { MEMORY_PREFIX, isMemoryPath } from '../../hooks/useFileOps';
 
 const EXTENSION_ICONS: Record<string, LucideIcon> = {
   py: FileCode,
+  qs: Sigma,
   qasm: Atom,
   json: Braces,
   md: FileText,
@@ -529,6 +531,9 @@ export function FileExplorer() {
           <button onClick={() => quickCreateCircuit('cuda-q')} style={quickChipBtn}>
             <AtomIcon size={11} /> CUDA-Q
           </button>
+          <button onClick={() => quickCreateCircuit('qsharp')} style={quickChipBtn}>
+            <AtomIcon size={11} /> Q#
+          </button>
         </div>
         <button onClick={handleOpenFolder} style={secondaryBtn}>
           <FolderOpen size={13} /> Open Folder…
@@ -670,7 +675,7 @@ export function FileExplorer() {
                       padding: '4px 0',
                     }}
                   >
-                    {(['qiskit', 'cirq', 'cuda-q'] as Framework[]).map((f) => (
+                    {(['qiskit', 'cirq', 'cuda-q', 'qsharp'] as Framework[]).map((f) => (
                       <button
                         key={f}
                         style={menuItemStyle}

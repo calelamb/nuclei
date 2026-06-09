@@ -1,5 +1,13 @@
 import type { Framework } from './quantum';
 
+/**
+ * Per-framework code for challenge content. Challenge content is
+ * Python-only today, so the Python frameworks stay required while Q#
+ * is optional until challenges ship Q# starters.
+ */
+export type ChallengeCodeByFramework =
+  Record<Exclude<Framework, 'qsharp'>, string> & Partial<Record<'qsharp', string>>;
+
 export type ChallengeDifficulty = 'easy' | 'medium' | 'hard';
 export type ChallengeCategory = 'state-preparation' | 'algorithms' | 'optimization' | 'protocols';
 export type ChallengePracticeTrack = 'general' | 'qkd';
@@ -58,7 +66,7 @@ export interface QuantumChallenge {
   constraints: string[];
   examples: ChallengeExample[];
   testCases: TestCase[];
-  starterCode: Record<Framework, string>;
+  starterCode: ChallengeCodeByFramework;
   hints: string[];
   tags: string[];
   estimatedMinutes: number;
@@ -116,5 +124,5 @@ export interface ProblemProgress {
   submissions: Submission[];
   lastAttemptedAt?: string;
   solvedAt?: string;
-  currentCode: Record<Framework, string>;
+  currentCode: ChallengeCodeByFramework;
 }

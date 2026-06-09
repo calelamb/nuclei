@@ -1,4 +1,15 @@
-export type Framework = 'qiskit' | 'cirq' | 'cuda-q';
+export type Framework = 'qiskit' | 'cirq' | 'cuda-q' | 'qsharp';
+
+/** Source language the kernel should use when parsing/executing a buffer. */
+export type KernelLanguage = 'python' | 'qsharp';
+
+/**
+ * Map a framework to the source language the kernel must interpret the
+ * buffer as. Q# is its own language; everything else is Python.
+ */
+export function kernelLanguageFor(framework: Framework): KernelLanguage {
+  return framework === 'qsharp' ? 'qsharp' : 'python';
+}
 
 export interface Gate {
   type: string;          // 'H', 'CNOT', 'RZ', etc.
@@ -37,8 +48,8 @@ export interface SimulationResult {
 }
 
 export type KernelMessage =
-  | { type: 'parse'; code: string }
-  | { type: 'execute'; code: string; shots: number }
+  | { type: 'parse'; code: string; language?: KernelLanguage }
+  | { type: 'execute'; code: string; shots: number; language?: KernelLanguage }
   | { type: 'run_python'; code: string }
   | { type: 'hardware_connect'; provider: string; credentials: Record<string, string> }
   | { type: 'hardware_set_credentials'; provider: string; credentials: Record<string, string> }
@@ -46,7 +57,7 @@ export type KernelMessage =
   | { type: 'hardware_connected_providers' }
   | { type: 'hardware_list_jobs' }
   | { type: 'hardware_list_backends'; provider: string }
-  | { type: 'hardware_submit'; provider: string; backend: string; code: string; shots: number }
+  | { type: 'hardware_submit'; provider: string; backend: string; code: string; shots: number; language?: KernelLanguage }
   | { type: 'hardware_status'; job_id: string }
   | { type: 'hardware_results'; job_id: string }
   | { type: 'hardware_cancel'; job_id: string };

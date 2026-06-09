@@ -20,6 +20,12 @@ export type KernelStatus = 'idle' | 'connecting' | 'ready' | 'failed';
 interface EditorState {
   code: string;
   framework: Framework;
+  /**
+   * Last Python-family framework (qiskit/cirq/cuda-q) the editor held.
+   * Maintained by setFramework so that leaving a Q# buffer can restore the
+   * student's actual framework instead of hardcoding 'qiskit'.
+   */
+  lastPythonFramework: Framework;
   filePath: string | null;
   isDirty: boolean;
   kernelConnected: boolean;
@@ -41,6 +47,7 @@ interface EditorState {
 export const useEditorStore = create<EditorState>((set, get) => ({
   code: DEFAULT_CODE,
   framework: 'qiskit',
+  lastPythonFramework: 'qiskit',
   filePath: null,
   isDirty: false,
   kernelConnected: false,
@@ -57,7 +64,12 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     // after the next parse. Wiping on every keystroke caused marker flicker.
     set({ code, isDirty: nextDirty });
   },
-  setFramework: (framework) => set({ framework }),
+  setFramework: (framework) =>
+    set(
+      framework === 'qsharp'
+        ? { framework }
+        : { framework, lastPythonFramework: framework },
+    ),
   setFilePath: (filePath) => set({ filePath, isDirty: false }),
   setIsDirty: (isDirty) => set({ isDirty }),
   setKernelConnected: (kernelConnected) => set({ kernelConnected }),

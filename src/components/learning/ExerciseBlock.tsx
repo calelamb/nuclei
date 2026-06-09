@@ -167,8 +167,9 @@ export function ExerciseBlock({
     setOutput([]);
     setResult(null);
 
+    // Learning content is Python-only today, so the language is fixed.
     const message = isQuantumCode(localCode)
-      ? { type: 'execute' as const, code: localCode, shots: 1024 }
+      ? { type: 'execute' as const, code: localCode, shots: 1024, language: 'python' as const }
       : { type: 'run_python' as const, code: localCode };
 
     if (isWeb && pyodideRef.current) {

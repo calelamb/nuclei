@@ -405,6 +405,7 @@ export function SettingsPanel() {
                 { value: 'qiskit', label: 'Qiskit' },
                 { value: 'cirq', label: 'Cirq' },
                 { value: 'cuda-q', label: 'CUDA-Q' },
+                { value: 'qsharp', label: 'Q# (QDK)' },
               ]}
               onChange={(v) => updateKernel({ defaultFramework: v })} />
           </SettingRow>
