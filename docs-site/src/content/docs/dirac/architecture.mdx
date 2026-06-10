@@ -1,0 +1,147 @@
+---
+title: "Dirac Architecture"
+description: "How Dirac works: BYOK Claude API calls direct from the client, model routing per surface, context injection, and what leaves your machine."
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+Dirac is not a custom model. It is the Claude API — called **directly from
+the app with the user's own Anthropic key** — wrapped in a tutor system
+prompt, a context-injection pipeline, and tool definitions. There is no
+Nuclei server in the loop.
+
+## Key handling
+
+{/* src/stores/diracStore.ts:11-31; src/config/dirac.ts:13; SettingsPanel.tsx:157-179 */}
+
+- Entered in **Settings → Dirac AI** (validated against the `sk-ant-`
+  prefix), stored in WebView localStorage under `nuclei-dirac-api-key` —
+  details and the keychain caveat are on the
+  [configuration page](/docs/reference/configuration/#anthropic-api-key-dirac).
+- A build-time `VITE_CLAUDE_API_KEY` env var is an optional fallback for
+  development. Because Vite inlines it statically, a key set at build time
+  is **baked into the shipped JS bundle** — never set it for distribution
+  builds.
+- The key is sent to exactly one place: `api.anthropic.com`, as the
+  `x-api-key` header on each call. ("Never leaves your machine" would be
+  imprecise — it leaves with every request, to Anthropic only.)
+
+## Direct browser calls — no middleman
+
+All five Anthropic call sites POST to `https://api.anthropic.com/v1/messages`
+with `anthropic-version: 2023-06-01` and
+`anthropic-dangerous-direct-browser-access: 'true'`. No proxy, no Nuclei
+backend, no logging of prompts in transit.
+{/* claudeClient.ts:35-42, compose.ts:85-92, ghostCompletions.ts:99-106,
+InlineEditWidget.tsx:84-91, useDirac.ts:559-567 */}
+
+<Aside type="note" title="Why the scary header name">
+Anthropic blocks browser-origin (CORS) requests by default because an API
+key embedded in a public website would be stealable by anyone. The
+`anthropic-dangerous-direct-browser-access` header is the deliberate opt-in
+for the BYOK case: the key lives on the user's machine, the call originates
+from their machine, and only their key is at stake. It is what makes the
+no-middleman architecture possible.
+</Aside>
+
+## Model routing
+
+Model IDs live in `src/config/dirac.ts` — plus two **duplicated local
+constants** (`claudeClient.ts:3-4`, `ghostCompletions.ts:14-15`), so a model
+bump touches three files. `OPUS_MODEL` is exported but never used; routing
+is Haiku/Sonnet only.
+
+| Surface | Model | `max_tokens` | Source |
+|---------|-------|--------------|--------|
+| Chat — short, simple Q&A | `claude-haiku-4-5-20251001` | 4096 | `useDirac.ts:235-245` |
+| Chat — >100 chars, explain-keywords, or action-keywords (tools) | `claude-sonnet-4-6` | 4096 | `useDirac.ts:221-245` |
+| Chat — `/think` or reasoning keywords | `claude-sonnet-4-6` + `thinking: {budget_tokens: 10000}` | 16000 | `useDirac.ts:209-219,546-553` |
+| Compose (`/compose` or intent-classified) | `claude-sonnet-4-6` | 2048 | `compose.ts:94-95` |
+| Cmd+K inline edit | `claude-sonnet-4-6` | 2048 | `InlineEditWidget.tsx:92-94` |
+| Ghost completions | `claude-haiku-4-5-20251001` (local constant) | 150 | `ghostCompletions.ts:15,109` |
+| Narration (ambient one-liners) | Haiku (claudeClient default) | 120 | `narration.ts:44,66` |
+| Error rewrite | Haiku (claudeClient default) | 500 | `errorRewrite.ts:42` |
+
+Chat routing is a **keyword/length heuristic**, not a strict rule: common
+verbs like "make", "check", "try" escalate to Sonnet with tools. The
+Settings knobs `preferredModel`, `contextDepth`, and `extendedThinking`
+are displayed and persisted but **not consumed by any routing code** —
+don't document workflows around them. {/* settingsStore.ts:16-23; useDirac.ts:235-245 */}
+
+## Context injection — what each surface sends
+
+This table doubles as the privacy statement: per surface, exactly this
+data accompanies the request to Anthropic.
+
+| Surface | Data sent | Source |
+|---------|-----------|--------|
+| Chat | **Full editor code**, circuit summary (framework, qubits, classical bits, depth, gate types), top-8 probabilities + per-qubit Bloch coords + exec time, active exercise metadata, **last 3 stderr lines**, selected hardware backend + last completed hardware-job probabilities, active challenge metadata — wrapped in `<ide_context>` around the last user message; full conversation history including prior tool calls | `useDirac.ts:247-312,513-539` |
+| Chat system prompt | Tutor persona + student model (skill level, mastered/struggling concepts, common errors — only after first code execution), Learn Mode track/lesson progress, active capstone milestone, selected backend specs | `useDirac.ts:50-92` |
+| Compose | Framework, the request, **full editor code** (language-aware fence) | `compose.ts:71-81` |
+| Cmd+K | Framework, snapshot qubits/depth, **full file**, selected code (or current line), the instruction | `InlineEditWidget.tsx:75-81` |
+| Ghost completions | Framework, circuit summary, **last 2 stderr lines**, the **entire buffer** split around a `[CURSOR]` marker | `ghostCompletions.ts:69-86` |
+| Narration | Framework, qubit/depth/gate-type summary, top-3 probabilities (result), code **sliced to 1500 chars** | `narration.ts:34-66` |
+| Error rewrite | Framework, code **sliced to 2000 chars**, traceback **sliced to 2500 chars** | `errorRewrite.ts:32-40` |
+
+Per-feature toggles: `narration` and `autoExplainErrors` default **on**,
+`ghostCompletions` defaults **off** (beginner default). With no API key,
+every surface silently no-ops. {/* settingsStore.ts:69-75; claudeClient.ts:29-32 */}
+
+## The `insert_code` forced-tool pattern
+
+Compose never asks Claude to "reply with code" — it forces a tool call:
+`tool_choice: { type: 'tool', name: 'insert_code' }`, and the tool's
+contract is a **complete, runnable file** (the full next editor buffer,
+never a diff). The prompt embeds the current code in a language-aware
+fence (`python` or `qsharp`), and the one-sentence explanation rides along
+as a separate text block. Cmd+K uses the same complete-file contract
+without the tool wrapper. {/* compose.ts:31-42,70-81,93-100 */}
+
+When the framework is Q#, every generating surface (compose, Cmd+K)
+appends `QSHARP_STYLE_GUIDE` to its system prompt so output is modern
+QDK 1.x rather than legacy `Microsoft.Quantum` dialect; ghost completions
+carry a manually-synced distilled subset to fit Haiku's budget.
+{/* qsharpStyle.ts:1-20; ghostCompletions.ts:27-35 */}
+
+## What leaves your machine
+
+Verified against the codebase (not just asserted):
+
+1. **Dirac calls** — to `api.anthropic.com` only, with your key and the
+   context listed above. The only AI endpoint in the app.
+2. **Hardware submissions** — circuit source/QIR and credentials go to the
+   provider **you** connect (IBM/IonQ/Azure/…); credentials persist in the
+   OS keyring, not in browser storage. See
+   [hardware overview](/docs/hardware/overview/).
+3. **Auto-updater** — the desktop shell polls
+   `github.com/calelamb/nuclei/releases/latest/download/latest.json`.
+   {/* src-tauri/tauri.conf.json:47-55 */}
+4. **App telemetry: none is sent.** The Settings toggle "Anonymous
+   Telemetry" (default off) writes a flag that no code reads; the
+   `TelemetryService` in `src/services/telemetry.ts` has zero importers and
+   its `flush()` clears the queue without any network call. The Rust shell
+   makes no HTTP requests beyond the updater. (Vercel analytics run on the
+   marketing **website**, not in the app.)
+   {/* src/services/telemetry.ts:46-49; settingsStore.ts:89 */}
+
+<Aside type="caution" title="One third-party exception: Microsoft's qdk package">
+The optional `qdk` package (Q# support) ships Microsoft's own usage
+telemetry to Azure Application Insights, enabled by default in release
+builds of that package. Nuclei's kernel does not currently override it.
+Opt out by setting `QDK_PYTHON_TELEMETRY=none` in the kernel's
+environment. This is the qdk package phoning Microsoft, not Nuclei
+phoning anyone.
+</Aside>
+
+## Tools
+
+Chat passes nine tool definitions when action keywords are detected:
+`insert_code`, `run_simulation`, `highlight_gate`, `step_to`,
+`create_exercise`, `verify_solution`, `submit_hardware`, `challenge_hint`,
+`glossary_lookup`. Read-only/teaching tools (`highlight_gate`, `step_to`,
+`create_exercise`, `verify_solution`) auto-execute; everything that touches
+the editor, kernel, or hardware stays pending until the user accepts.
+Tools are omitted in reasoning mode. {/* useDirac.ts:94-207,554-556,650-657 */}
+
+Adding tools and prompt fragments is covered in
+[Extending Dirac](/docs/dirac/extending/).

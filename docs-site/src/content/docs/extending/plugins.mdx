@@ -1,0 +1,168 @@
+---
+title: "Plugin System (Preview)"
+description: "The plugin system's design contract — manifest, PluginAPI, extension points — and an honest account of what is and isn't implemented yet."
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+<Aside type="caution" title="Read this before anything else on the page">
+The plugin system is a **design preview**: type definitions, a store, and
+marketplace UI. **Plugin code loading and execution are not implemented.**
+`manifest.entry` is never fetched or evaluated, `createPluginAPI` has no
+callers (`src/plugins/pluginManager.ts:64`), and nothing in the app
+consumes the extension registries. The in-app marketplace is a
+**non-functional preview** backed by a hardcoded mock catalog. Every
+interface on this page may change without notice. **Do not build against
+this yet** — watch the
+[CHANGELOG](https://github.com/calelamb/nuclei/blob/main/CHANGELOG.md).
+</Aside>
+
+What follows documents the **design contract** — the API surface a future
+plugin runtime would honor — so prospective plugin authors can evaluate
+the direction and contributors can implement against it.
+
+## Status at a glance
+
+| Piece | State |
+|-------|-------|
+| Type definitions (`src/plugins/types.ts`) | Coherent; the anchor for a real implementation |
+| Install/uninstall/toggle store (`usePluginStore`) | Works in-memory, within one session |
+| Marketplace UI (sidebar, behind Settings → experimental features) | Browses/installs against the **mock catalog** only |
+| Plugin code loading / execution | **Does not exist** — no fetch, no eval, no import of `manifest.entry` |
+| Extension consumption (panels, Dirac skills, themes) | **None** — registries are write-only {/* pluginManager.ts:12-16 */} |
+| Persistence | **None** — installs vanish on reload (plain `create()`, no storage) |
+| Isolation / security boundary | **None** — see below |
+
+## The manifest
+
+{/* src/plugins/types.ts:8-16 */}
+
+```ts
+interface PluginManifest {
+  name: string;
+  version: string;
+  description: string;
+  author: string;
+  entry: string;                    // relative path to a JS entry point — never loaded today
+  capabilities: PluginCapability[];
+  permissions: PluginPermission[];
+}
+```
+
+No manifest *file* format or loader exists; manifests are constructed
+in-memory. Marketplace installs fabricate one from the catalog entry with
+**empty `capabilities` and `permissions`** — so even under a future
+runtime, marketplace-installed plugins as currently created could register
+nothing and read nothing. {/* PluginMarketplace.tsx:71-84 */}
+
+## Capability and permission vocabulary
+
+Capabilities gate what a plugin may *register*; permissions gate what it
+may *read*. {/* types.ts:18-29 */}
+
+| Capability | Unlocks | Reality check |
+|-----------|---------|---------------|
+| `custom-panel` | `registerPanel` | Registry exists; no layout code renders plugin panels |
+| `dirac-skill` | `registerDiracSkill` | Registry exists; never injected into Dirac prompts — see [Extending Dirac](/docs/dirac/extending/) |
+| `theme` | `registerTheme` | Registry exists; never reaches the theme store |
+| `gate-renderer` | `registerGateRenderer` | **Explicit stub** — the method body is a comment {/* pluginManager.ts:110-114 */} |
+| `kernel-extension` | — | **No corresponding API method at all** |
+
+| Permission | Grants | Reality check |
+|-----------|--------|---------------|
+| `read-circuit` | `getCircuitSnapshot`, `onCircuitChange` | Designed |
+| `read-results` | `getSimulationResult`, `onResultChange` | Designed |
+| `read-editor` | `getEditorCode` | Designed |
+| `write-editor` | — | **No API method uses it** — there is no write/insert method on `PluginAPI` |
+
+<Aside type="danger" title="Permissions are a declaration convention, not isolation">
+The permission checks inside `createPluginAPI` are same-realm JavaScript
+`if` statements. There is no iframe, no worker, no separate realm —
+nothing that would prevent plugin code (if it ever ran) from importing the
+Zustand stores directly and bypassing every check. Treat the
+capability/permission vocabulary as a **declaration convention** that a
+future runtime would have to enforce with a real boundary. These docs
+deliberately never call this design "sandboxed".
+</Aside>
+
+## The `PluginAPI` surface
+
+What a plugin's entry point would receive. {/* types.ts:39-58; pluginManager.ts:64-136 */}
+
+| Method | Gate | Behavior as implemented |
+|--------|------|------------------------|
+| `getCircuitSnapshot()` | `read-circuit` | Current snapshot or `null` |
+| `getSimulationResult()` | `read-results` | Last result or `null` |
+| `getEditorCode()` | `read-editor` | Buffer contents or `''` |
+| `getFramework()` | none | Active framework id |
+| `onCircuitChange(cb)` / `onResultChange(cb)` | `read-circuit` / `read-results` | Store subscription; no-op unsubscriber when denied |
+| `registerPanel({id, title, render})` | `custom-panel` | Pushes into the (unconsumed) panels registry |
+| `registerGateRenderer(...)` | `gate-renderer` | **Stub — does nothing** |
+| `registerDiracSkill({name, systemPromptFragment, tools?})` | `dirac-skill` | Pushes into the (unconsumed) skills registry |
+| `registerTheme({name, colors})` | `theme` | Pushes into the (unconsumed) themes registry |
+| `log(message)` | none | Console log, dev builds only |
+
+## The marketplace is mock data
+
+`PLUGIN_REGISTRY` (`src/data/pluginRegistry.ts`) is a hardcoded array of
+12 fictional plugins with invented download counts, ratings, and
+repository URLs. None are real, installable, third-party software. Its
+`capabilities` strings are freeform marketing tags, not the
+`PluginCapability` vocabulary, and they're discarded on install. The whole
+Plugins view only appears when **experimental features** are enabled in
+Settings (default off). {/* pluginRegistry.ts:1-12; Sidebar.tsx:221-225; settingsStore.ts:91 */}
+
+## Sketch: a histogram-exporter panel
+
+<Aside type="note" title="Illustrative — cannot run today">
+This is what a plugin would look like against the typed API **if** the
+runtime existed. There is currently no way to load or execute it.
+</Aside>
+
+```ts
+// manifest (illustrative)
+{
+  "name": "histogram-exporter",
+  "version": "0.1.0",
+  "description": "Export the probability histogram as CSV.",
+  "author": "you",
+  "entry": "index.js",
+  "capabilities": ["custom-panel"],
+  "permissions": ["read-results"]
+}
+```
+
+```ts
+// index.js (illustrative) — the runtime would call activate(api)
+export function activate(api: PluginAPI) {
+  api.registerPanel({
+    id: 'histogram-exporter',
+    title: 'Export Histogram',
+    render(container) {
+      const button = document.createElement('button');
+      button.textContent = 'Download CSV';
+      button.onclick = () => {
+        const result = api.getSimulationResult() as
+          { probabilities: Record<string, number> } | null;
+        if (!result) return;
+        const csv = ['state,probability',
+          ...Object.entries(result.probabilities)
+            .map(([s, p]) => `${s},${p}`)].join('\n');
+        const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }));
+        Object.assign(document.createElement('a'),
+          { href: url, download: 'histogram.csv' }).click();
+      };
+      container.appendChild(button);
+      api.onResultChange(() => { /* re-enable / refresh */ });
+    },
+  });
+}
+```
+
+## If you want to extend Nuclei today
+
+Skip the plugin system. The extension points that actually work are
+in-tree: [framework adapters](/docs/extending/framework-adapters/),
+[hardware providers](/docs/extending/hardware-providers/), and direct
+[Dirac prompt changes](/docs/dirac/extending/) — all via normal PRs
+([contributing](/docs/extending/contributing/)).

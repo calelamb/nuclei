@@ -1,0 +1,133 @@
+---
+title: "Framework Adapters"
+description: "Write a kernel adapter for a new quantum framework: the two adapter shapes, AdapterSpec registration, shared math helpers, and a tested worked example."
+---
+
+import { Code, Aside } from '@astrojs/starlight/components';
+import toyAdapterSource from '../../../../fixtures/examples/toy_adapter.py?raw';
+
+An adapter converts one framework's circuit objects into the universal
+[`CircuitSnapshot`](/docs/kernel-api/schemas/#circuitsnapshot) and
+[`SimulationResult`](/docs/kernel-api/schemas/#simulationresult). Add one
+file, register one spec, and the editor, circuit renderer, Bloch sphere,
+and histogram all work for the new framework.
+
+## The two adapter shapes
+
+**Exec-mode** (Qiskit, Cirq, CUDA-Q): the executor `exec()`s the user's
+Python, then hands your adapter the resulting namespace. Implement the
+four-method ABC: {/* kernel/adapters/base.py:6-25 */}
+
+| Method | Contract |
+|--------|----------|
+| `detect(code) -> bool` | Regex check (mirrors the spec's `detect_pattern`; the executor uses the spec, but the method keeps adapters independently testable). |
+| `find_circuit(namespace)` | Return the framework's circuit object from the exec'd namespace, or `None`. Convention: **newest wins** when several exist. |
+| `extract_snapshot(circuit_obj)` | Gate list + layering, **no simulation** — this runs on every debounced keystroke. |
+| `simulate(circuit_obj, shots)` | Full simulation; only on explicit execute. |
+
+**Source-mode** (Q# today): the code never reaches Python `exec()` —
+your adapter owns the whole pipeline by overriding `parse_source(code)` and
+`execute_source(code, shots)`, which return the **executor's own tuple
+shapes** `(snapshot, stdout, stderr, error)` and
+`(result, snapshot, stdout, stderr, error)` so the executor passes them
+through unchanged. Set `source_mode=True` on the spec. The Q# adapter
+(`kernel/adapters/qsharp_adapter.py`) is the reference implementation.
+{/* base.py:27-53; executor.py:263-269,306-312 */}
+
+You never raise to signal user errors — return a `KernelError` (in
+source-mode) or just raise and let the executor classify: exceptions from
+`find_circuit`/`extract_snapshot` become `adapter_error`, from `simulate`
+become `simulation_error`, and `ImportError`s anywhere normalize to
+`missing_dependency`. See [errors](/docs/kernel-api/errors/#error-codes).
+{/* executor.py:142-188,277-343 */}
+
+## Canonical gate names and shared math
+
+Emit [canonical gate names](/docs/kernel-api/schemas/#canonical-gate-names)
+(`H`, `CNOT`, `RZ`, `Toffoli`, `Measure`, …) — the renderer keys off them.
+Unknown gates: uppercase passthrough, like the Qiskit adapter's fallback.
+{/* qiskit_adapter.py:50-58 */}
+
+Two helpers in `kernel/adapters/_math.py` exist so every framework's
+layout and Bloch coordinates agree — use them, don't reimplement:
+
+- `assign_layer(qubit_layers, qubits)` — greedy layering: places each gate
+  in the earliest layer where all its qubits are free (depth is
+  `max(qubit_layers.values())` afterwards). {/* _math.py:24-34 */}
+- `partial_trace_qubit(statevector, n_qubits, qubit)` — single-qubit
+  reduced density matrix for Bloch coords:
+  `x = 2·Re ρ₀₁`, `y = 2·Im ρ₀₁`, `z = ρ₀₀ − ρ₁₁`. {/* _math.py:13-21; qiskit_adapter.py:124-133 */}
+
+## Registration: `AdapterSpec`
+
+Adapters are lazy-loaded — the executor imports your module only when the
+detect regex matches, so a missing SDK costs nothing until someone uses it.
+Add a spec to the `ADAPTER_SPECS` tuple in `kernel/executor.py`:
+{/* executor.py:14-61 */}
+
+| Field | Meaning |
+|-------|---------|
+| `framework` | Snapshot's `framework` string and error tagging. |
+| `module` / `class_name` | Import path (`kernel.adapters.foo_adapter`) and adapter class. |
+| `detect_pattern` | Compiled regex tried against the raw source. |
+| `dependencies` | Package names whose `ModuleNotFoundError` should normalize to `missing_dependency` instead of a raw traceback. {/* executor.py:166-188 */} |
+| `source_mode` | `True` only for non-Python frameworks (Q#). |
+
+<Aside type="caution" title="Ordering matters — first match wins">
+Detection tries specs **in tuple order** ([details](/docs/frameworks/overview/#detection)).
+Insert your spec before any spec whose regex could also match your code —
+Q# sits first precisely because its keywords would otherwise be unreachable.
+Keep your own regex anchored to import statements so it can't false-positive
+on other frameworks' code.
+</Aside>
+
+Two more registration touchpoints:
+
+1. **Friendly error name** — add your dependency to the display-name map in
+   `_missing_dependency_message` (`executor.py:79-89`) so students see
+   "FooSDK is not installed…" instead of a pip name.
+2. **Install wizard** — add a `FrameworkInfo` entry to `CATALOG` in
+   `src-tauri/src/commands/frameworks.rs:32` (`id`, `label`, `description`,
+   `pip_name`, `import_name`, `group: "core"`, size estimate,
+   `recommended`) so the desktop app can offer the package in its
+   first-launch checklist and install it into the
+   [managed venv](/docs/introduction/install-and-build/#the-managed-python-venv).
+   Field semantics: [framework catalog](/docs/reference/framework-catalog/).
+
+## Worked example: the `toyq` adapter
+
+A complete exec-mode adapter for a fake micro-framework. This is not
+pseudo-code — the file below lives at
+`docs-site/fixtures/examples/toy_adapter.py` and
+`kernel/tests/test_docs_examples.py` registers it against a **real
+`Executor`**, runs `TOY_SNIPPET` through `parse` and `execute`, and asserts
+the snapshot layering and the deterministic result. If an adapter
+interface changes, that test fails before this page can lie.
+
+<Code code={toyAdapterSource} lang="python" title="docs-site/fixtures/examples/toy_adapter.py" />
+
+What the test verifies, which is exactly what the kernel guarantees:
+
+- `parse(TOY_SNIPPET)` → snapshot with `framework: "toy"`, gates
+  `[H@0, CNOT@1, Measure@2, Measure@2]`, depth 3 — the greedy layering
+  from `assign_layer`.
+- `execute(TOY_SNIPPET, shots=64)` → `probabilities {"00": 1.0}`,
+  `measurements {"00": 64}`, `shot_count 64`.
+- Prepending `TOY_SPEC` does not shadow the other frameworks' detection.
+
+## Testing expectations
+
+Kernel tests live in `kernel/tests/` (plain pytest, no SDK installs
+required in CI — mock or skip-guard anything that imports a real
+framework). The established patterns:
+
+| Pattern | Model |
+|---------|-------|
+| Unit-test the executor pipeline with a stub adapter + monkeypatched seams (`_detect_adapter_spec`, `_load_adapter`, `_run_code`) | `kernel/tests/test_executor.py` |
+| Skip-guard tests that need the real SDK (`pytest.importorskip`) | `kernel/tests/test_qsharp_adapter.py` |
+| Register a real adapter from a file via `ADAPTER_SPECS` monkeypatch | `kernel/tests/test_docs_examples.py` |
+
+Run with `python3 -m pytest kernel/tests -q` from the repo root. A new
+adapter PR should cover: detection (positive + negative), snapshot
+extraction including layering and control/target splits, the no-circuit
+case, and at least one simulated result.

@@ -15,6 +15,7 @@ protocol changes, the test suite goes red before the docs can lie.
 | Session | `NAME.session.json` | `[{"request": {...}, "responses": [...]}, ...]` — replayed in order over a single connection (one kernel `Executor`, shared hardware job state). Used for flows like connect → submit → results. |
 | Clients | `clients/` | Runnable example clients. `example_client.py` is executed as a subprocess against a live in-process server by the test suite; `example_client.ts` mirrors it and is documentation-only. |
 | Illustrative | `illustrative/` | Examples that need real credentials or hardware (Azure Quantum). Rendered in the docs, clearly labeled illustrative, **not** replayed. Inventory in [UNTESTED.md](./UNTESTED.md). |
+| Worked examples | `examples/` | Complete Python examples embedded by the Extending guides (`toy_adapter.py`, `echo_provider.py`). Executed against the real `Executor` / `HardwareManager` by `kernel/tests/test_docs_examples.py`. |
 
 ## Matcher convention
 

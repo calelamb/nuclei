@@ -1,0 +1,83 @@
+---
+title: "Extending Dirac"
+description: "The diracSkills extension point as designed, its current (not yet wired) status, and the way to change Dirac's behavior that works today."
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+There are two stories here, and only one of them works today. This page is
+honest about which is which.
+
+## The `diracSkills` extension point (designed, not wired)
+
+The plugin system's type contract defines a Dirac skill as a named system
+prompt fragment plus optional tool definitions:
+{/* src/plugins/types.ts:53; src/plugins/pluginManager.ts:14 */}
+
+```ts
+registerDiracSkill(config: {
+  name: string;
+  systemPromptFragment: string;
+  tools?: unknown[];          // Claude tool-use definitions
+}): void;
+```
+
+Registration (gated on the `dirac-skill` capability) pushes the skill into
+`usePluginStore`'s `extensions.diracSkills` array. {/* pluginManager.ts:116-122 */}
+
+**Current status — registered, never consumed.** Dirac's prompt assembly
+(`buildSystemPrompt`, `src/hooks/useDirac.ts:50-92`) reads the student
+model, Learn Mode, capstone, and hardware stores — it never touches the
+plugin store. A repo-wide search for `diracSkills` /
+`systemPromptFragment` finds exactly one reader outside the store itself:
+`PluginManagerPanel.tsx:94`, a component that displays a count and is
+itself never mounted anywhere. Registered fragments change nothing about
+what Dirac says, and registered tools are never added to
+`TOOL_DEFINITIONS`.
+
+<Aside type="caution" title="Do not build against this yet">
+The whole plugin pipeline upstream of this extension point (code loading,
+the API object) is also unimplemented — see
+[Plugin system (preview)](/docs/extending/plugins/). The skill interface
+may change without notice before it ships. Watch the
+[CHANGELOG](https://github.com/calelamb/nuclei/blob/main/CHANGELOG.md).
+</Aside>
+
+When it lands, the intended behavior is: enabled plugins' fragments are
+appended to the chat system prompt, and their `tools` merge into the chat
+tool list with the plugin name namespacing the tool ids. A registration
+would look like this — **illustrative; this code cannot execute today**:
+
+```ts
+// illustrative — the plugin runtime that would call this does not exist yet
+api.registerDiracSkill({
+  name: 'stabilizer-codes',
+  systemPromptFragment:
+    'When the student works with repetition or surface codes, relate every ' +
+    'gate to its effect on the stabilizer group before showing matrices.',
+});
+```
+
+## What works today: edit the prompts directly
+
+Dirac's behavior is plain TypeScript in the repo, and prompt PRs are
+welcome. Every surface's system prompt lives in one of these files:
+
+| Surface | Prompt location |
+|---------|-----------------|
+| Chat persona + context assembly | `src/hooks/useDirac.ts` (`SYSTEM_PROMPT`, `buildSystemPrompt`, `buildContextBlock`) |
+| Chat tools | `src/hooks/useDirac.ts` (`TOOL_DEFINITIONS`) |
+| Compose (Python / Q#) | `src/services/compose.ts` |
+| Error rewrite | `src/services/errorRewrite.ts` |
+| Narration | `src/services/narration.ts` |
+| Ghost completions (Python / Q#) | `src/components/editor/completions/ghostCompletions.ts` |
+| Cmd+K inline edit | `src/components/editor/inlineEdit/InlineEditWidget.tsx` |
+| Q# style guide (shared) | `src/services/qsharpStyle.ts` |
+| Compose-vs-chat routing | `src/services/classify.ts` (pure function, trivially testable) |
+
+Adding a chat tool today means: add its definition to `TOOL_DEFINITIONS`,
+handle it in the tool-execution switch in the same file, and decide whether
+it auto-executes or waits for user acceptance (the safety split is
+described in [Dirac architecture](/docs/dirac/architecture/#tools)).
+
+See [Contributing](/docs/extending/contributing/) for the PR workflow.
