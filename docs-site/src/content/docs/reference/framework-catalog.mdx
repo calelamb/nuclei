@@ -1,0 +1,49 @@
+---
+title: "Framework Catalog"
+description: "The installable framework and provider catalog that drives the setup wizard and managed venv."
+---
+
+The catalog is a static Rust constant — the single source of truth for what
+the setup wizard offers and what a venv rebuild restores. The frontend
+fetches it via the `framework_status` IPC command; it is **not** the gate
+mapping (that lives in the [schemas page](/docs/kernel-api/schemas/#canonical-gate-names)).
+
+Verbatim from `CATALOG` at the time of writing:
+{/* src-tauri/src/commands/frameworks.rs:32-124 */}
+
+| id | Label | pip package(s) | Import probe | Group | ~Size (MB) | Recommended |
+|----|-------|----------------|--------------|-------|-----------:|-------------|
+| `qiskit` | Qiskit | `qiskit qiskit-aer` | `qiskit` | core | 220 | yes |
+| `cirq` | Cirq | `cirq` | `cirq` | core | 60 | yes |
+| `cuda-q` | CUDA-Q | `cuda-quantum` | `cudaq` | core | 500 | no |
+| `qsharp` | Microsoft QDK (Q#) | `qdk` | `qdk` | core | 25 | yes |
+| `ibm-runtime` | IBM Quantum Runtime | `qiskit-ibm-runtime` | `qiskit_ibm_runtime` | provider | 20 | no |
+| `ionq` | IonQ | `qiskit-ionq` | `qiskit_ionq` | provider | 15 | no |
+| `braket` | AWS Braket | `amazon-braket-sdk` | `braket` | provider | 45 | no |
+| `azure` | Azure Quantum | `azure-quantum` | `azure.quantum` | provider | 30 | no |
+| `quantinuum` | Quantinuum (pytket) | `pytket-quantinuum` | `pytket.extensions.quantinuum` | provider | 35 | no |
+
+## How it's used
+
+- **Setup wizard / install.** `framework_install` runs
+  `pip install --upgrade <pip package(s)>` inside the managed venv for each
+  selected id. Multi-package entries (Qiskit) are split on whitespace.
+  Per-framework failures don't abort the batch — the caller gets a summary.
+  {/* frameworks.rs:536-584 */}
+- **Detection.** "Installed" means the import probe succeeds: the shell
+  runs `python -c "import <import_name>"` with the venv interpreter, one
+  subprocess per entry, on status refresh. {/* frameworks.rs:263-281 */}
+- **Venv rebuild.** When the managed venv is rebuilt (Python < 3.10 — see
+  [install & build](/docs/introduction/install-and-build/#the-managed-python-venv)),
+  the set of importable catalog ids is snapshotted first and re-installed
+  into the fresh venv. {/* frameworks.rs:377-446 */}
+- **Groups.** `core` entries are quantum frameworks; `provider` entries are
+  hardware SDKs. The wizard sections the checklist by group.
+
+Note the QDK entry standardizes on the `qdk` PyPI package — the standalone
+`qsharp` package is a deprecated shim and is deliberately avoided.
+{/* CHANGELOG.md 0.5.0 */}
+
+The kernel's own runtime deps (`websockets`, `numpy`, `keyring`) are not in
+the catalog — they aren't optional, and are installed automatically on
+every launch if missing. {/* frameworks.rs:289-293 */}

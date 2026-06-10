@@ -1,0 +1,31 @@
+---
+title: "Protocol Changelog"
+description: "Versioned history of changes to the kernel WebSocket protocol."
+---
+
+The kernel WebSocket protocol is at **v1** — the version shipped since the
+protocol stabilized, documented in the [Kernel API](/docs/kernel-api/overview/)
+section.
+
+## Evolution policy
+
+- **Additive** changes — new message types, new optional request fields,
+  new fields on responses — can land in any release without notice.
+  Clients must ignore unknown fields and unknown response types.
+- **Breaking** changes — removing or renaming fields, changing semantics of
+  existing messages — ship only with a protocol version bump and an entry
+  in this table.
+- Every protocol-relevant change is also announced in the repo
+  [CHANGELOG](https://github.com/calelamb/nuclei/blob/main/CHANGELOG.md).
+
+## History
+
+{/* CHANGELOG.md 0.5.0; kernel/server.py:85, 105-127, 180-182 */}
+
+| App version | Protocol change |
+|-------------|-----------------|
+| 0.5.0 | Optional `language` field (`"python"` \| `"qsharp"`) added to `parse`, `execute`, and `hardware_submit` requests. Omitted by older clients, in which case framework detection stays regex-based — fully backward compatible. |
+| 0.5.0 | Q# source-mode routing: when `language` is `"qsharp"`, or the source matches Q# syntax, code routes to the QDK adapter instead of Python `exec`. |
+| 0.5.0 | `Reset` added to the canonical gate vocabulary in `CircuitSnapshot` (emitted by the Q# adapter for mid-circuit `\|0⟩` preparation). |
+| 0.5.0 | `hardware_submit` semantics for Q#: source compiles to QIR before submission (`base` profile; `adaptive_ri` for Quantinuum targets). Provider allowlist for Q# is `simulator` and `azure` — every other provider answers with an `error` message. |
+| ≤ 0.4.x | Protocol v1 baseline: `parse` / `execute` / `run_python` plus the `hardware_*` family as documented in the [message catalog](/docs/kernel-api/overview/#message-catalog). |

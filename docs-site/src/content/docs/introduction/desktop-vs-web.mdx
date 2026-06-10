@@ -1,0 +1,40 @@
+---
+title: "Desktop vs Web"
+description: "What differs between the Tauri desktop app and the browser build at /try."
+---
+
+The same React frontend ships twice: as the desktop app (Tauri WebView,
+real Python kernel) and as the browser build at
+[nuclei.dev/try](https://nuclei.dev/try/) (Pyodide, no backend). A
+`PlatformBridge` interface (`src/platform/bridge.ts`) abstracts the
+difference; `tauriBridge` and `webBridge` implement it.
+
+## Capability matrix
+
+{/* Pyodide: src/platform/pyodideKernel.ts:34-97, 387-404; hardware: src/hooks/useKernel.ts:518-526 */}
+
+| Capability | Desktop | Web (`/try`) |
+|------------|---------|--------------|
+| Python kernel | Managed-venv CPython subprocess over WebSocket | Pyodide v0.27.0, loaded from the jsDelivr CDN, in-page |
+| Qiskit | Yes (Aer simulator) | No — `ModuleNotFoundError` is translated to a "download the desktop app" message |
+| Cirq | Yes (full `cirq`) | Yes — `cirq-core==1.5.0` installed via micropip; statevector, sampled counts, and Bloch coords all work |
+| CUDA-Q | Yes (CPU everywhere; GPU on Linux + CUDA) | No — same translated error as Qiskit |
+| Q# execution | Yes (QDK via the `qdk` package) | No — rejected *before* Pyodide with code `unsupported_framework` and a desktop-only message |
+| Q# editor intelligence | Yes — `qsharp-lang` WASM compiler in a web worker: live diagnostics, completions, hover | Yes — same worker loads lazily in both builds {/* QuantumEditor.tsx:78-83 */} |
+| Plain Python (`run_python`) | Yes | Yes |
+| Hardware submission | All providers via the kernel | None — `sendHardware` returns `false` on web; the kernel that talks to providers doesn't exist there |
+| Dirac AI | Yes — BYO Anthropic key, direct calls to `api.anthropic.com` | Yes — identical; the key lives in browser localStorage either way |
+| File system | Native open/save dialogs, project folders, multi-file tabs | File System Access API where available; save always downloads the file |
+| Persistence | `settings.json` in the app data dir + WebView localStorage ([details](/docs/reference/configuration/)) | Browser localStorage only, keys prefixed `nuclei:` |
+| Plugins | Marketplace UI is a preview in both builds — no plugin code is loaded yet | Same |
+
+Framework auto-detection, circuit rendering, the Bloch sphere, histograms,
+and the snapshot/result schemas are identical across both builds — the web
+kernel emits the same `CircuitSnapshot` and `SimulationResult` shapes.
+{/* pyodideKernel.ts:100-299 */}
+
+## Choosing
+
+**Choose desktop** when you need Qiskit, CUDA-Q, or Q# execution, real
+hardware submission, or real files. **Choose web** for zero-install Cirq
+experimentation, demos, and classrooms where installing anything is a fight.

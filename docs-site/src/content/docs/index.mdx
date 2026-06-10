@@ -3,30 +3,50 @@ title: Nuclei Developer Docs
 description: Developer and researcher documentation for Nuclei — the open-source quantum computing IDE.
 ---
 
-:::caution[Draft]
-This site is an early scaffold. Every page is a stub; full content lands phase by phase.
-:::
+import { Aside } from '@astrojs/starlight/components';
 
-This is the developer and researcher documentation for [Nuclei](https://nuclei.dev),
-the free, open-source IDE for learning quantum computing. If you want to *use*
-Nuclei, [download the app](https://nuclei.dev/#download) or
+Nuclei is a free, open-source, local-first quantum computing IDE. For
+developers it is four things: a scriptable simulation kernel behind a plain
+[WebSocket JSON protocol](/docs/kernel-api/overview/), a multi-framework
+abstraction that normalizes Qiskit, Cirq, CUDA-Q, and Q# into one
+[`CircuitSnapshot`](/docs/kernel-api/schemas/) format, a gateway that submits
+the same circuits to real quantum hardware, and an AI layer (Dirac) that
+calls `api.anthropic.com` directly with a user-supplied key — no Nuclei
+backend in the loop. If you want to *use* Nuclei,
+[download the app](https://nuclei.dev/#download) or
 [try it in the browser](https://nuclei.dev/try/) — this site is for people
 **building on** Nuclei.
 
+## What can I run?
+
+{/* Catalog: src-tauri/src/commands/frameworks.rs:32-124; portal: src/components/hardware/LaunchPortal.tsx:19-30 */}
+
+| | Supported today |
+|---|---|
+| **Languages** | Python · [Q#](/docs/frameworks/qsharp/) |
+| **Frameworks / SDKs** | [Qiskit](/docs/frameworks/qiskit/) · [Cirq](/docs/frameworks/cirq/) · [CUDA-Q](/docs/frameworks/cudaq/) · [Microsoft QDK](/docs/frameworks/qsharp/) |
+| **Simulators** | [Aer](/docs/frameworks/qiskit/) · [`cirq.Simulator`](/docs/frameworks/cirq/) · [CUDA-Q CPU/GPU](/docs/frameworks/cudaq/) · [QDK sparse simulator](/docs/frameworks/qsharp/) |
+| **Hardware** | [IBM](/docs/hardware/overview/) · [IonQ](/docs/hardware/overview/) · [Quantinuum](/docs/hardware/overview/) · [AWS Braket](/docs/hardware/overview/) · [Azure Quantum](/docs/hardware/azure-quantum/) · [NVIDIA CUDA-Q GPU](/docs/hardware/overview/) |
+
+Google Quantum AI is **scaffolded only**: a provider stub exists in the
+kernel but always refuses to connect, and its Launch-portal tile is disabled
+("Research access only"). Don't build against it yet.
+{/* kernel/hardware/google_provider.py:5-8; LaunchPortal.tsx:27 */}
+
 ## Find your path
 
-- **Contributing to the IDE?** Start with the [architecture](/docs/introduction/architecture/)
-  and [install &amp; build](/docs/introduction/install-and-build/) pages.
-- **Talking to the kernel from your own client?** Head to the
+- **Integrate** — drive the kernel from your own client, grader, or notebook:
   [Kernel API overview](/docs/kernel-api/overview/).
-- **Adding a quantum framework or hardware backend?** See
-  [framework adapters](/docs/extending/framework-adapters/) and
-  [hardware providers](/docs/extending/hardware-providers/).
-- **Curious how the AI assistant works?** Read the
-  [Dirac architecture](/docs/dirac/architecture/).
+- **Extend** — add a framework adapter, hardware provider, or contribute to
+  the IDE: [framework adapters](/docs/extending/framework-adapters/),
+  [hardware providers](/docs/extending/hardware-providers/),
+  [contributing](/docs/extending/contributing/).
+- **Evaluate** — understand how the pieces fit before committing:
+  [architecture](/docs/introduction/architecture/) and
+  [desktop vs web](/docs/introduction/desktop-vs-web/).
 
-## Protocol versioning
-
-These docs describe **kernel protocol v1**, the WebSocket protocol shipped with
-Nuclei 0.5.x. Breaking protocol changes will be versioned and tracked in the
+<Aside type="note" title="Protocol v1">
+These docs describe **kernel protocol v1**, shipped with Nuclei 0.5.x.
+Additive changes land without notice; breaking changes are tracked in the
 [protocol changelog](/docs/reference/protocol-changelog/).
+</Aside>
