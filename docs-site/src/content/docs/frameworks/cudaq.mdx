@@ -1,0 +1,70 @@
+---
+title: "CUDA-Q"
+description: "CUDA-Q support in Nuclei: kernel discovery, sample-based simulation, best-effort circuit extraction, and known gotchas."
+---
+
+The in-app starter (Bell state — runnable as-is):
+{/* src/data/starterTemplates.ts:28-37 */}
+
+```python
+import cudaq
+
+# Create a Bell State
+@cudaq.kernel
+def bell():
+    q = cudaq.qvector(2)
+    h(q[0])
+    cx(q[0], q[1])
+    mz(q)
+```
+
+## What the adapter does
+
+| Stage | Behavior |
+|-------|----------|
+| Discovery | The namespace is scanned **newest-first** for `@cudaq.kernel`-decorated callables (with a looser type-name fallback). {/* kernel/adapters/cudaq_adapter.py:45-65 */} |
+| Kernel arguments | Positional parameters are resolved **by name from the namespace** (a kernel `def sweep(theta: float)` picks up a global `theta`), falling back to defaults. A kernel with an unresolvable required parameter is skipped — if no other kernel matches, `execute` returns `no_circuit`. {/* cudaq_adapter.py:67-88 */} |
+| Snapshot | **Best-effort text parsing of `str(kernel)`** — the kernel's printed representation is scanned line-by-line for gate calls with literal qubit indices. On any failure it degrades to an *empty snapshot* (0 qubits, no gates) rather than erroring. {/* cudaq_adapter.py:95-186 */} |
+| Layering | Greedy, like Qiskit/Q#. `classical_bit_count` counts parsed `mz` lines. |
+
+Gate coverage (string-parser keys → canonical): `h x y z s t rx ry rz` →
+themselves; `cx`/`cnot` → `CNOT`, `cz` → `CZ`, `swap` → `SWAP`, `ccx` →
+`Toffoli`, `mz` → `Measure`. Rotations keep their first float argument as
+the angle. {/* cudaq_adapter.py:16-32,152-156 */}
+
+## Simulation
+
+{/* cudaq_adapter.py:188-237 */}
+
+1. **Counts** — `cudaq.sample(kernel, *args, shots_count=shots)` fills
+   `measurements`.
+2. **Probabilities are sampled frequencies** (`count / total`), *not* exact
+   amplitudes — even when the statevector is available.
+3. **Statevector + Bloch are best-effort** — `cudaq.get_state(kernel,
+   *args)` with partial-trace Bloch coordinates; any failure silently
+   leaves `state_vector` and `bloch_coords` empty.
+
+### GPU vs CPU
+
+In-editor simulation runs on whatever target CUDA-Q selects by default —
+CPU (`qpp-cpu`) on machines without a CUDA GPU. GPU-accelerated runs go
+through the **NVIDIA provider** in the hardware panel, which exposes the
+`nvidia`, `nvidia-fp64`, `nvidia-mgpu`, and `qpp-cpu` targets as
+submission backends and needs no credentials — see the
+[hardware overview](/docs/hardware/overview/).
+{/* kernel/hardware/nvidia_provider.py:20-42 */}
+
+## Gotchas
+
+- **The circuit diagram is a best-effort reconstruction.** Gates addressed
+  with runtime indices (loops, computed indices, `qvector` slices) don't
+  parse out of the kernel's string form — the simulation is still correct,
+  but the diagram may be empty or partial. Qiskit/Cirq/Q# extraction is
+  exact; CUDA-Q's is not.
+- **Kernel-argument capture is name-based.** Rename the global without
+  renaming the kernel parameter and discovery silently skips that kernel.
+- **No exact probabilities.** Expect shot noise in the histogram even for
+  deterministic circuits; raise `shots` to tighten it.
+- **Heaviest install** (~500 MB, see the
+  [catalog](/docs/reference/framework-catalog/)), and not available in the
+  [web build](/docs/introduction/desktop-vs-web/#capability-matrix).

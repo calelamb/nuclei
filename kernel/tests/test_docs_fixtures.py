@@ -387,3 +387,38 @@ def test_python_example_client_against_live_server():
     assert re.search(r"^[01]{2}: \d+$", stdout, re.MULTILINE), (
         f"expected a histogram line on stdout, got:\n{stdout}"
     )
+
+
+def test_sweep_driver_against_live_server():
+    """Run docs-site/fixtures/clients/sweep_driver.py (the worked example on
+    the hardware/pipelines page) against a live in-process server: a 3-point
+    RY(theta) sweep at 64 shots must exit 0 and print one table row per
+    point. Same live-server harness as the example-client test above."""
+    pytest.importorskip("qiskit")
+    pytest.importorskip("qiskit_aer")
+    import websockets
+
+    driver_path = FIXTURES_DIR / "clients" / "sweep_driver.py"
+    assert driver_path.is_file(), f"missing sweep driver: {driver_path}"
+
+    async def run() -> tuple[int, str, str]:
+        async with websockets.serve(
+            server.handle_message, "127.0.0.1", 0,
+            max_size=server.MAX_MESSAGE_SIZE,
+        ) as ws_server:
+            port = ws_server.sockets[0].getsockname()[1]
+            process = await asyncio.create_subprocess_exec(
+                sys.executable, str(driver_path),
+                f"ws://127.0.0.1:{port}", "64", "3",
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+            )
+            stdout, stderr = await asyncio.wait_for(
+                process.communicate(), timeout=120
+            )
+            return process.returncode, stdout.decode(), stderr.decode()
+
+    returncode, stdout, stderr = asyncio.run(run())
+    assert returncode == 0, f"sweep driver failed:\nstdout:\n{stdout}\nstderr:\n{stderr}"
+    rows = re.findall(r"^theta=[0-9.]+ +P\(1\)=[0-9.]+", stdout, re.MULTILINE)
+    assert len(rows) == 3, f"expected 3 sweep rows, got {len(rows)}:\n{stdout}"

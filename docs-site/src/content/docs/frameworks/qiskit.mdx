@@ -1,0 +1,67 @@
+---
+title: "Qiskit"
+description: "Qiskit support in Nuclei: circuit discovery, AerSimulator behavior, gate coverage, and known gotchas."
+---
+
+The in-app starter (Bell state — runnable as-is):
+{/* src/data/starterTemplates.ts:10-17 */}
+
+```python
+from qiskit import QuantumCircuit
+
+# Create a Bell State
+qc = QuantumCircuit(2, 2)
+qc.h(0)
+qc.cx(0, 1)
+qc.measure([0, 1], [0, 1])
+```
+
+## What the adapter does
+
+| Stage | Behavior |
+|-------|----------|
+| Discovery | After `exec()`, the **last `QuantumCircuit` instance in the namespace wins** — define two circuits and the most recently assigned one is rendered/simulated. {/* kernel/adapters/qiskit_adapter.py:35-39 */} |
+| Gate names | Three-tier mapping: gate **class name** via `GATE_NAME_MAP` (`HGate` → `H`, `CXGate` → `CNOT`, `CCXGate` → `Toffoli`, …) → lowercase `op.name` fallback (`cx` → `CNOT`, …) → unknown gates pass through as `op.name.upper()`. {/* qiskit_adapter.py:8-28,50-58 */} |
+| Layering | Shared greedy algorithm: each gate lands in the earliest layer where all of its qubits are free. {/* adapters/_math.py:24-34 */} |
+| `classical_bit_count` | The circuit's `num_clbits`. |
+
+Canonical gate vocabulary (incl. the Qiskit-only `U1`/`U2`/`U3`) is on the
+[schemas page](/docs/kernel-api/schemas/#canonical-gate-names).
+
+## Simulation
+
+Two separate AerSimulator passes per `execute`:
+{/* qiskit_adapter.py:96-144 */}
+
+1. **Exact statevector** — a *copy* of the circuit with
+   `remove_final_measurements()` + `save_statevector()`, run once on
+   `AerSimulator(method="statevector")`. Produces `state_vector`, exact
+   `probabilities`, and per-qubit Bloch coordinates via partial trace.
+2. **Sampled counts** — the *original* circuit (measurements intact) on a
+   default `AerSimulator` with the requested `shots`. Produces
+   `measurements`.
+
+Bitstring keys follow Qiskit's little-endian convention — qubit 0 is the
+**rightmost** character. See
+[bitstring-key conventions](/docs/kernel-api/schemas/#bitstring-key-conventions-read-this-twice).
+
+## Gotchas
+
+- **Symbolic `Parameter`s raise.** Snapshot extraction calls `float()` on
+  every gate parameter, so an unbound `Parameter` fails the parse —
+  surfaced as `adapter_error`. Call `assign_parameters(...)` with concrete
+  values first. {/* qiskit_adapter.py:59 */}
+- **Measurement-less circuits fail on execute.** The sampled pass calls
+  `get_counts()`, which Aer rejects when the circuit has no measurements —
+  surfaced as `simulation_error` (the snapshot still arrives, so the
+  diagram renders; live-typing `parse` is unaffected). Add `qc.measure(...)`
+  or `qc.measure_all()`. {/* qiskit_adapter.py:119-121, executor.py:337-342 */}
+- **No transpilation locally.** The local simulation runs your circuit
+  verbatim; transpilation to a basis gate set only happens on hardware
+  submission (e.g. [IBM](/docs/hardware/overview/#what-each-provider-accepts)
+  transpiles against the selected backend).
+- **Mid-circuit measurements** are kept in the sampled pass but stripped
+  only as *final* measurements in the statevector pass —
+  `remove_final_measurements()` does not remove mid-circuit ones, and Aer's
+  statevector method will then sample them, making `state_vector`
+  shot-dependent for such circuits.

@@ -1,0 +1,118 @@
+---
+title: "Hardware Overview"
+description: "The provider model: what each provider accepts, credential fields, the job lifecycle state machine, and persistence guarantees."
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+One process-wide `HardwareManager` registers eight providers — seven
+connectable plus a non-functional Google scaffold; the kernel connects
+`simulator` itself at startup, so a local target is always available.
+{/* kernel/hardware/manager.py:25-34; kernel/server.py:22-23 */}
+
+All hardware state — connections, credentials, jobs — is shared across
+WebSocket connections. The wire protocol is on the
+[hardware messages page](/docs/kernel-api/messages-hardware/).
+
+## What each provider accepts
+
+For `hardware_submit`, the kernel prepares a provider-appropriate payload
+from your source `code`: the simulator takes raw source; real providers get
+a circuit *object* extracted from the exec'd namespace, searched in a
+provider-aware framework order; Q# is special-cased (QIR for Azure,
+rejected elsewhere). {/* server.py:26-143 */}
+
+| Provider | Search order | What `submit` actually does |
+|----------|-------------|------------------------------|
+| `simulator` | n/a — raw source | Re-runs the source through the executor pipeline (any framework, Q# included). Completes synchronously. {/* simulator_provider.py:53-88 */} |
+| `ibm` | qiskit → cirq → cudaq | `transpile(circuit, backend)` + `SamplerV2.run` — effectively requires a Qiskit `QuantumCircuit`. {/* ibm_provider.py:104-108 */} |
+| `ionq` | qiskit → cirq → cudaq | `qiskit-ionq` `backend.run(circuit, shots)` — Qiskit circuits. {/* ionq_provider.py:89-90 */} |
+| `braket` | qiskit → cirq → cudaq | Passes the extracted object straight to `AwsDevice.run` — **no conversion is performed**; whether a Qiskit/Cirq object is accepted is up to the Braket SDK. {/* braket_provider.py:159-163 */} |
+| `azure` | qiskit → cirq → cudaq | `target.submit(circuit, shots)` — translation relies on azure-quantum's SDK plugins. Q# source is compiled to QIR first. [Deep dive](/docs/hardware/azure-quantum/). {/* azure_provider.py:251-252 */} |
+| `quantinuum` | qiskit → cirq → cudaq | **Auto-converts** Qiskit/Cirq circuits to pytket via `pytket-extensions` (clear install hint if missing), compiles, then `process_circuit`. {/* quantinuum_provider.py:75-153 */} |
+| `nvidia` | cudaq → qiskit → cirq | `cudaq.sample` on the selected GPU/CPU target — needs a CUDA-Q kernel (or `(kernel, *args)` tuple). Completes synchronously. {/* nvidia_provider.py:83-121 */} |
+| `google` | — | **Scaffolded only**: `connect` always returns `false`; submission raises. Honest status: not usable yet. {/* google_provider.py:4-19 */} |
+
+Q# programs can run on the **simulator** and **Azure Quantum** only; other
+providers reject Q# with a message suggesting Azure or a Qiskit rewrite.
+{/* server.py:85,109-115 */}
+
+## Credential fields
+
+Keys the kernel's `connect()` actually reads from the
+`hardware_connect.credentials` object — scripted clients must use these
+exact names:
+
+| Provider | Required keys | Optional keys (default) | Get one at |
+|----------|---------------|--------------------------|------------|
+| `simulator` | — | — | always available |
+| `ibm` | `token` | `instance` (`ibm-q/open/main`) | quantum.ibm.com {/* ibm_provider.py:22-30 */} |
+| `ionq` | `token` | — | IonQ console (or use Braket) {/* ionq_provider.py:28-36 */} |
+| `nvidia` | — | — | needs `cudaq` importable, nothing else {/* nvidia_provider.py:20-31 */} |
+| `braket` | `access_key_id`, `secret_access_key` | `region` (`us-east-1`), `session_token` | AWS IAM with `AmazonBraketFullAccess` {/* braket_provider.py:36-48 */} |
+| `azure` | `subscription_id`, `resource_group`, `workspace_name` | `location` (`eastus`) | portal.azure.com — **no token field**; auth uses the Azure default credential chain {/* azure_provider.py:141-147 */} |
+| `quantinuum` | `token` (Nexus API token) | — | nexus.quantinuum.com {/* quantinuum_provider.py:30-38 */} |
+
+<Aside type="caution" title="Desktop dialog mismatch for IBM and IonQ">
+The desktop credential dialogs currently send `apiToken` (IBM) and `apiKey`
+(IonQ), which the kernel does not read — scripted clients should send
+`token` as documented above. Tracked as a known bug.
+{/* src/components/hardware/CredentialSetup.tsx:27-61 vs ibm_provider.py:22, ionq_provider.py:28 */}
+</Aside>
+
+On a successful connect, non-empty credentials persist to the **OS
+keyring**, and the next kernel start auto-reconnects silently (failures are
+logged, not surfaced — the provider just shows as disconnected).
+{/* manager.py:80-131 */}
+
+## Job lifecycle
+
+```text
+ hardware_submit
+      │
+      ├─ routing/compilation raised ──────────▶ error envelope (no job exists)
+      │
+      ▼
+   JobHandle
+      ├─ provider error at submit ────────────▶ failed   (terminal)
+      ├─ synchronous provider (simulator,
+      │  nvidia) ─────────────────────────────▶ complete (terminal)
+      ▼
+   queued ──▶ running ──▶ complete            (terminal)
+      │          │
+      │          ├─ provider failure ─────────▶ failed   (terminal)
+      └──────────┴─ hardware_cancel ──────────▶ failed   (no "cancelled" wire status)
+
+   any non-terminal status + kernel restart ──▶ stale    (re-submit to run again)
+   unrecognized provider state ───────────────▶ unknown
+```
+
+Two sharp conventions, both documented with replay-tested fixtures on the
+[hardware messages page](/docs/kernel-api/messages-hardware/):
+
+- **Failed handle vs error envelope.** A failed submission arrives either
+  as an `error` envelope (no job exists) or as a normal
+  `hardware_job_submitted` whose handle has `status: "failed"` — handle
+  both. {/* server.py:390-398 */}
+- **`hardware_status` never re-queries job status** — it only refreshes
+  `queue_position`. Poll `hardware_results` to discover completion.
+  {/* manager.py:175-196 */}
+
+## Persistence and the resubmit caveat
+
+Job **metadata** persists to `~/.nuclei/jobs.json` (override the directory
+with `NUCLEI_DATA_DIR`): atomic temp-file-and-rename writes, capped at 200
+entries, terminal jobs pruned after 7 days. The write happens immediately
+at submit, so a crash between submit and first poll can't orphan the
+record. {/* job_store.py:21-41,128-151; manager.py:160-172 */}
+
+What does **not** persist is the provider **SDK handle**. After a kernel
+restart: {/* manager.py:43-78 */}
+
+- Terminal jobs (`complete`/`failed`) keep their stored status — history
+  survives.
+- Non-terminal jobs come back as **`stale`**: polling can't resume and
+  **results are unrecoverable through Nuclei** — re-submit to run again.
+  The job usually *did* keep running provider-side; you can find it in the
+  provider's own console, but note the kernel's job id is a locally
+  generated UUID, not the provider's id, so cross-referencing is manual.
