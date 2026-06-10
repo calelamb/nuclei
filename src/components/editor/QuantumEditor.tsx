@@ -10,6 +10,7 @@ import { registerGhostCompletions } from './completions/ghostCompletions';
 import { InlineEditWidget } from './inlineEdit/InlineEditWidget';
 import { registerNucleiThemes } from './monacoThemes';
 import { registerQsharpLanguage } from './qsharpLanguage';
+import { ensureQsharpLanguageService } from './qsharpLanguageService';
 import type { Framework } from '../../types/quantum';
 
 type StandaloneEditor = monaco.editor.IStandaloneCodeEditor;
@@ -70,6 +71,18 @@ export function QuantumEditor() {
       monacoApi.editor.setModelLanguage(model, language);
     }
   }, [language]);
+
+  // Boot the QDK language service (real compiler diagnostics, completions,
+  // hover, signature help) the first time a Q# buffer is active. Lazy so
+  // Python-only sessions never download the WASM; fire-and-forget because
+  // ensureQsharpLanguageService degrades to Monarch-only highlighting on
+  // failure instead of rejecting.
+  useEffect(() => {
+    if (language !== 'qsharp' || !monacoInstance) return;
+    ensureQsharpLanguageService(monacoInstance).catch(() => {
+      // Defensive only — ensureQsharpLanguageService never rejects.
+    });
+  }, [language, monacoInstance]);
 
   const handleMount: OnMount = (editor, monacoApi) => {
     editorRef.current = editor;

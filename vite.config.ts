@@ -20,6 +20,11 @@ export default defineConfig({
           if (id.includes('node_modules/monaco-editor') || id.includes('@monaco-editor/react')) {
             return 'monaco';
           }
+          // QDK language service (WASM compiler glue + worker proxy) — only
+          // ever loaded via dynamic import when a Q# buffer becomes active.
+          if (id.includes('node_modules/qsharp-lang')) {
+            return 'qsharp-ls';
+          }
           if (id.includes('/src/components/challenges/') || id.includes('/src/data/challenges/') || id.includes('/src/stores/challengeModeStore')) {
             return 'challenge-mode';
           }
