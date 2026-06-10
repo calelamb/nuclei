@@ -150,10 +150,11 @@ export function InteractiveDemo({ code: initialCode, framework, description, exp
       setSnapshot(null);
       return;
     }
+    // Learning content is Python-only today, so the language is fixed.
     if (isWeb && pyodideRef.current) {
-      pyodideRef.current.send({ type: 'parse', code: c });
+      pyodideRef.current.send({ type: 'parse', code: c, language: 'python' });
     } else if (wsRef.current?.readyState === WebSocket.OPEN) {
-      wsRef.current.send(JSON.stringify({ type: 'parse', code: c }));
+      wsRef.current.send(JSON.stringify({ type: 'parse', code: c, language: 'python' }));
     }
   }, [isWeb]);
 
@@ -163,8 +164,9 @@ export function InteractiveDemo({ code: initialCode, framework, description, exp
     setOutput([]);
     setResult(null);
 
+    // Learning content is Python-only today, so the language is fixed.
     const message = isQuantumCode(localCode)
-      ? { type: 'execute' as const, code: localCode, shots: 1024 }
+      ? { type: 'execute' as const, code: localCode, shots: 1024, language: 'python' as const }
       : { type: 'run_python' as const, code: localCode };
 
     if (!isQuantumCode(localCode)) {

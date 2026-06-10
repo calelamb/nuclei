@@ -6,10 +6,121 @@ Credentials: Azure subscription ID + resource group + workspace name + AAD
 credentials (service principal or browser auth).
 """
 
+import re
 import uuid
 from datetime import datetime, timezone
 
 from kernel.hardware.base import HardwareProvider, BackendInfo, JobHandle
+
+# A string key shaped like a stringified array/tuple ("[0, 1]", "(1, 0)")
+# gets element-wise parsing; anything else passes through verbatim.
+_ARRAY_KEY_RE = re.compile(r"^\s*[\[\(].*[\]\)]\s*$")
+
+# Float values are treated as probabilities only when they sum to ~1.0;
+# real-hardware providers round-trip through JSON so allow a little slack.
+_PROBABILITY_SUM_TOLERANCE = 1e-2
+
+
+def _normalize_array_element(element: object) -> str | None:
+    """One element of an array-style key.
+
+    Nested tuples/lists recurse; everything else must read as a
+    non-negative integer after stripping. Returns None when the element
+    can't be parsed — the caller treats that as an unrecognized result.
+    """
+    if isinstance(element, (tuple, list)):
+        parts = [_normalize_array_element(part) for part in element]
+        if any(part is None for part in parts):
+            return None
+        return "".join(parts)  # type: ignore[arg-type]
+    if isinstance(element, bool):
+        return None
+    text = str(element).strip()
+    # isdigit() rejects "", "-1", "a", "0.5" in one check.
+    return text if text.isdigit() else None
+
+
+def _normalize_key(key: object) -> str | None:
+    """Coerce an Azure result key to a plain bitstring-style string.
+
+    Tuples/lists join element-wise ((1, 0) → "10", nested tuples recurse);
+    strings shaped like arrays ("[0, 1]") split on commas and join the
+    elements ("01"). Array elements must be non-negative integers — any
+    parse failure returns None so the caller can reject the whole result
+    set instead of guessing. Plain strings and ints pass through as str(k)
+    VERBATIM: IonQ-style integer state keys ({"0": …, "3": …}) are
+    legitimate and must not be bitstring-validated or mangled.
+    """
+    if isinstance(key, (tuple, list)):
+        return _normalize_array_element(key)
+    if isinstance(key, str) and _ARRAY_KEY_RE.match(key):
+        inner = key.strip()[1:-1]
+        parts = [_normalize_array_element(part) for part in inner.split(",")]
+        if any(part is None for part in parts):
+            return None
+        return "".join(parts)  # type: ignore[arg-type]
+    return str(key)
+
+
+def _coerce_counts(results: object, shots: int) -> dict[str, int] | None:
+    """Coerce Azure's shape-shifting results into integer counts.
+
+    Providers behind Azure Quantum disagree about result shape: Quantinuum
+    returns integer counts, IonQ returns float probabilities (which the old
+    int() coercion truncated to 0), and some report states as stringified
+    arrays. Float distributions (all in [0, 1], summing to ~1.0) scale by
+    the shot count; other floats round to the nearest integer. Keys that
+    normalize to the same state have their counts summed. Returns None for
+    anything unrecognizable — non-dicts, empty dicts, non-numeric or
+    negative values, malformed array-style keys — and the caller surfaces
+    that instead of silently reporting an empty success.
+    """
+    if not isinstance(results, dict):
+        return None
+    # An empty histogram from a "Succeeded" job is a provider anomaly, not
+    # a valid result — surface it as unrecognized rather than empty success.
+    if not results:
+        return None
+    values = list(results.values())
+    if not all(isinstance(v, (int, float)) and not isinstance(v, bool) for v in values):
+        return None
+    # Negative counts/probabilities are provider nonsense, not data.
+    if any(v < 0 for v in values):
+        return None
+
+    keys = [_normalize_key(k) for k in results.keys()]
+    if any(k is None for k in keys):
+        # One malformed array-style key poisons trust in the whole histogram.
+        return None
+
+    if all(isinstance(v, int) for v in values):
+        counts = [int(v) for v in values]
+    else:
+        floats = [float(v) for v in values]
+        looks_like_probabilities = all(v <= 1.0 for v in floats) and (
+            abs(sum(floats) - 1.0) <= _PROBABILITY_SUM_TOLERANCE
+        )
+        if looks_like_probabilities:
+            # Deliberate: this includes the single-entry {"0": 1.0} case.
+            # Probability-returning targets (e.g. IonQ) legitimately emit it
+            # for deterministic circuits, and scaling by shots is correct for
+            # them; a literal count of 1.0 only makes sense when shots == 1,
+            # which is rare.
+            counts = [round(v * shots) for v in floats]
+        else:
+            # Floats that aren't probabilities are counts serialized as floats.
+            counts = [round(v) for v in floats]
+
+    merged: dict[str, int] = {}
+    for key, count in zip(keys, counts):
+        assert key is not None  # narrowed above; keeps the type honest
+        if key in merged:
+            # Two raw keys normalized to the same state (e.g. "[0, 1]" and
+            # "01" in one dict) denote the same measurement outcome — sum
+            # their counts rather than silently letting the last one win.
+            print(f"Azure result keys collided after normalization; summing counts for '{key}'")
+        merged[key] = merged.get(key, 0) + count
+    return merged
 
 
 class AzureProvider(HardwareProvider):
@@ -160,10 +271,19 @@ class AzureProvider(HardwareProvider):
             status = azure_job.details.status.lower() if azure_job.details else "unknown"
             if status == "succeeded":
                 results = azure_job.get_results()
-                # Counts shape varies by provider; coerce to a flat dict.
-                counts = {}
-                if isinstance(results, dict):
-                    counts = {str(k): int(v) for k, v in results.items() if isinstance(v, (int, float))}
+                # Counts shape varies by provider; coerce to a flat dict of
+                # integer counts (float probabilities scale by shot count).
+                counts = _coerce_counts(results, job.shots)
+                if counts is None:
+                    preview = repr(results)
+                    if len(preview) > 200:
+                        preview = preview[:200] + "…"
+                    print(f"Azure job {job.id} returned an unrecognized result shape: {preview}")
+                    return {
+                        "error": f"Unrecognized result format from Azure: {type(results).__name__}",
+                        "status": "complete",
+                        "raw": preview,
+                    }
                 return {"measurements": counts, "status": "complete"}
             if status in ("failed", "cancelled"):
                 return {"error": f"Job ended: {status}", "status": "failed"}

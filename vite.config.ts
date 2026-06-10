@@ -1,7 +1,11 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
+import { readFileSync } from 'node:fs'
+import { fileURLToPath } from 'node:url'
 
 const isWeb = process.env.BUILD_TARGET === 'web';
+const pkgPath = fileURLToPath(new URL('./package.json', import.meta.url));
+const pkgVersion = JSON.parse(readFileSync(pkgPath, 'utf8')).version as string;
 // Web IDE is deployed at getnuclei.dev/try alongside the landing page,
 // so all asset URLs need the /try/ prefix. Override with VITE_BASE_PATH
 // if deploying to a different path.
@@ -19,6 +23,11 @@ export default defineConfig({
         manualChunks(id) {
           if (id.includes('node_modules/monaco-editor') || id.includes('@monaco-editor/react')) {
             return 'monaco';
+          }
+          // QDK language service (WASM compiler glue + worker proxy) — only
+          // ever loaded via dynamic import when a Q# buffer becomes active.
+          if (id.includes('node_modules/qsharp-lang')) {
+            return 'qsharp-ls';
           }
           if (id.includes('/src/components/challenges/') || id.includes('/src/data/challenges/') || id.includes('/src/stores/challengeModeStore')) {
             return 'challenge-mode';
@@ -43,5 +52,8 @@ export default defineConfig({
   define: {
     // Make build target available at runtime
     '__BUILD_TARGET__': JSON.stringify(isWeb ? 'web' : 'desktop'),
+    // App version from package.json, inlined at build time (drives the
+    // post-update "What's New" card, among other things).
+    '__APP_VERSION__': JSON.stringify(pkgVersion),
   },
 })

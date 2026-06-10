@@ -7,6 +7,8 @@ import { useCircuitStore } from '../../../stores/circuitStore';
 import { useDiracStore } from '../../../stores/diracStore';
 import { usePlatform } from '../../../platform/PlatformProvider';
 import { DIRAC_API_URL, SONNET_MODEL } from '../../../config/dirac';
+import { QSHARP_STYLE_GUIDE } from '../../../services/qsharpStyle';
+import { kernelLanguageFor } from '../../../types/quantum';
 
 const HISTORY_KEY = 'cmdk_history';
 const MAX_HISTORY = 20;
@@ -64,12 +66,17 @@ export function InlineEditWidget({ editor, monaco, onClose }: InlineEditProps) {
     const fullCode = useEditorStore.getState().code;
     const framework = useEditorStore.getState().framework;
     const snapshot = useCircuitStore.getState().snapshot;
+    const fenceLanguage = kernelLanguageFor(framework);
+    const systemPrompt =
+      framework === 'qsharp'
+        ? `${CMDK_SYSTEM_PROMPT}\n\nThe code is Q# (Microsoft QDK), not Python.\n\n${QSHARP_STYLE_GUIDE}`
+        : CMDK_SYSTEM_PROMPT;
 
     const contextParts = [
       `Framework: ${framework}`,
       snapshot ? `Circuit: ${snapshot.qubit_count} qubits, depth ${snapshot.depth}` : '',
-      `Full file:\n\`\`\`python\n${fullCode}\n\`\`\``,
-      `Selected code to rewrite:\n\`\`\`python\n${selectedText}\n\`\`\``,
+      `Full file:\n\`\`\`${fenceLanguage}\n${fullCode}\n\`\`\``,
+      `Selected code to rewrite:\n\`\`\`${fenceLanguage}\n${selectedText}\n\`\`\``,
       `Instruction: ${instruction}`,
     ].filter(Boolean).join('\n\n');
 
@@ -85,7 +92,7 @@ export function InlineEditWidget({ editor, monaco, onClose }: InlineEditProps) {
         body: JSON.stringify({
           model: SONNET_MODEL,
           max_tokens: 2048,
-          system: CMDK_SYSTEM_PROMPT,
+          system: systemPrompt,
           messages: [{ role: 'user', content: contextParts }],
         }),
       });

@@ -9,6 +9,9 @@ import { getExecute } from '../../App';
 import { registerGhostCompletions } from './completions/ghostCompletions';
 import { InlineEditWidget } from './inlineEdit/InlineEditWidget';
 import { registerNucleiThemes } from './monacoThemes';
+import { registerQsharpLanguage } from './qsharpLanguage';
+import { ensureQsharpLanguageService } from './qsharpLanguageService';
+import type { Framework } from '../../types/quantum';
 
 type StandaloneEditor = monaco.editor.IStandaloneCodeEditor;
 
@@ -18,21 +21,31 @@ type StandaloneEditor = monaco.editor.IStandaloneCodeEditor;
 const LANGUAGE_BY_EXTENSION: Record<string, string> = {
   py: 'python',
   pyw: 'python',
+  qs: 'qsharp',
   qasm: 'plaintext',
   json: 'json',
   md: 'markdown',
   txt: 'plaintext',
 };
 
-function languageForPath(filePath: string | null): string {
-  if (!filePath) return 'python';
+function languageForPath(filePath: string | null, framework: Framework): string {
+  // Untitled buffers have no extension to go on — fall back to the active
+  // framework so a fresh Q# starter still gets Q# highlighting.
+  if (!filePath) return framework === 'qsharp' ? 'qsharp' : 'python';
   const ext = filePath.split(/[.\\/]/).pop()?.toLowerCase() ?? '';
   return LANGUAGE_BY_EXTENSION[ext] ?? 'python';
+}
+
+// Single beforeMount hook composing theme + language registration.
+function setupMonaco(monacoApi: Monaco): void {
+  registerNucleiThemes(monacoApi);
+  registerQsharpLanguage(monacoApi);
 }
 
 export function QuantumEditor() {
   const { code, setCode } = useEditorStore();
   const filePath = useEditorStore((s) => s.filePath);
+  const framework = useEditorStore((s) => s.framework);
   const errors = useEditorStore((s) => s.errors);
   const mode = useThemeStore((s) => s.mode);
   const colors = useThemeStore((s) => s.colors);
@@ -44,7 +57,7 @@ export function QuantumEditor() {
   const [monacoInstance, setMonacoInstance] = useState<Monaco | null>(null);
 
   const themeName = mode === 'dark' ? 'nuclei-dark' : 'nuclei-light';
-  const language = languageForPath(filePath);
+  const language = languageForPath(filePath, framework);
 
   // Switch the model's language when the file extension changes so
   // syntax highlighting follows the file, not the initial buffer.
@@ -58,6 +71,18 @@ export function QuantumEditor() {
       monacoApi.editor.setModelLanguage(model, language);
     }
   }, [language]);
+
+  // Boot the QDK language service (real compiler diagnostics, completions,
+  // hover, signature help) the first time a Q# buffer is active. Lazy so
+  // Python-only sessions never download the WASM; fire-and-forget because
+  // ensureQsharpLanguageService degrades to Monarch-only highlighting on
+  // failure instead of rejecting.
+  useEffect(() => {
+    if (language !== 'qsharp' || !monacoInstance) return;
+    ensureQsharpLanguageService(monacoInstance).catch(() => {
+      // Defensive only — ensureQsharpLanguageService never rejects.
+    });
+  }, [language, monacoInstance]);
 
   const handleMount: OnMount = (editor, monacoApi) => {
     editorRef.current = editor;
@@ -144,7 +169,7 @@ export function QuantumEditor() {
     e.preventDefault();
     const file = e.dataTransfer.files[0];
     if (!file) return;
-    if (!(file.name.endsWith('.py') || file.name.endsWith('.qasm'))) return;
+    if (!(file.name.endsWith('.py') || file.name.endsWith('.qasm') || file.name.endsWith('.qs'))) return;
 
     dropTokenRef.current += 1;
     const token = dropTokenRef.current;
@@ -192,7 +217,7 @@ export function QuantumEditor() {
           autoClosingBrackets: editorSettings.autoCloseBrackets ? 'always' : 'never',
           inlineSuggest: { enabled: true },
         }}
-        beforeMount={registerNucleiThemes}
+        beforeMount={setupMonaco}
       />
       {showInlineEdit && editorInstance && monacoInstance && (
         <InlineEditWidget

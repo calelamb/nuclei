@@ -32,7 +32,7 @@ export const tauriBridge: PlatformBridge = {
     // freshly-imaged machines or for files with mis-tagged metadata).
     const selected = await open({
       filters: [
-        { name: 'Source files', extensions: ['py', 'qasm', 'ipynb', 'json', 'txt', 'md'] },
+        { name: 'Source files', extensions: ['py', 'qs', 'qasm', 'ipynb', 'json', 'txt', 'md'] },
         { name: 'All Files', extensions: ['*'] },
       ],
       multiple: false,
@@ -59,6 +59,7 @@ export const tauriBridge: PlatformBridge = {
     const path = await save({
       filters: [
         { name: 'Python', extensions: ['py'] },
+        { name: 'Q#', extensions: ['qs'] },
         { name: 'All Files', extensions: ['*'] },
       ],
       defaultPath: defaultPath ?? 'untitled.py',

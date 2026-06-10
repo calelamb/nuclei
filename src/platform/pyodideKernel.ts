@@ -385,6 +385,24 @@ export class PyodideKernel {
   }
 
   async send(msg: KernelMessage) {
+    // Q# has no browser runtime yet — reject before touching Pyodide so the
+    // user gets a clear "desktop only" message instead of a Python traceback.
+    if (msg.language === 'qsharp' && (msg.type === 'parse' || msg.type === 'execute')) {
+      const message =
+        'Q# runs in the desktop app today. Download Nuclei for macOS/Windows/Linux to use the QDK — web support is coming.';
+      this.onMessage({ type: 'snapshot', data: null });
+      if (msg.type === 'execute') {
+        this.onMessage({ type: 'result', data: null });
+      }
+      this.onMessage({
+        type: 'error',
+        message,
+        phase: msg.type,
+        code: 'unsupported_framework',
+      });
+      return;
+    }
+
     if (!this.pyodide) {
       this.onMessage({ type: 'error', message: 'Pyodide not initialized' });
       return;

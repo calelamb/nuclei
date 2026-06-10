@@ -7,7 +7,7 @@ import os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import websockets
-from kernel.executor import Executor
+from kernel.executor import ADAPTER_SPECS, Executor
 from kernel.hardware.manager import HardwareManager
 from kernel.models import KernelError
 
@@ -75,6 +75,74 @@ def _extract_circuit_for_provider(namespace: dict, provider: str):
     return None
 
 
+# The Q# spec's detect pattern is the single source of truth for "does this
+# source look like Q#?" — reused here so hardware submissions from older
+# clients (which omit the `language` field) still route correctly.
+_QSHARP_SPEC = next(spec for spec in ADAPTER_SPECS if spec.framework == "qsharp")
+
+# Providers whose submit path can accept a Q# program: the local simulator
+# re-runs raw source through the executor, Azure Quantum accepts compiled QIR.
+_QSHARP_HARDWARE_PROVIDERS = {"simulator", "azure"}
+
+
+def _prepare_hardware_payload(
+    code: str, provider: str, backend: str, language: str | None
+) -> object:
+    """Build the payload `hardware_manager.submit_job` receives for `code`.
+
+    Four routes:
+    - Q# → non-Azure hardware: rejected with a friendly RuntimeError — those
+      provider SDKs take Python circuit objects, not Q# source or QIR.
+    - Q# → Azure Quantum: compiled to QIR via QsharpAdapter.compile_qir.
+      Quantinuum targets get the Adaptive_RI profile (they support
+      mid-circuit measurement + classical feedback); everything else Base.
+    - Local simulator: raw source passes through unchanged (Q# or Python
+      alike) — the simulator re-runs it through the executor pipeline,
+      which already handles every framework.
+    - Python → real hardware: exec + extract a concrete circuit object,
+      exactly as before.
+    """
+    is_qsharp = (
+        language == "qsharp" or _QSHARP_SPEC.detect_pattern.search(code) is not None
+    )
+
+    if is_qsharp:
+        if provider not in _QSHARP_HARDWARE_PROVIDERS:
+            raise RuntimeError(
+                "Q# programs can currently run on the Local Simulator and "
+                "Azure Quantum targets. Switch the provider to Azure Quantum, "
+                "or rewrite the circuit in Qiskit to use " + provider + "."
+            )
+        if provider == "simulator":
+            return code
+        profile = "adaptive_ri" if "quantinuum" in backend.lower() else "base"
+        # Lazy import: the adapter module is import-safe without qdk, but
+        # there is no reason to load it for Python submissions.
+        from kernel.adapters.qsharp_adapter import QsharpAdapter
+
+        try:
+            return QsharpAdapter().compile_qir(code, profile)
+        except ImportError as exc:
+            raise RuntimeError(
+                "Microsoft QDK (qdk) is not installed in the kernel "
+                "environment, so Q# cannot be compiled for hardware. "
+                "Install it from the setup wizard."
+            ) from exc
+
+    if provider == "simulator":
+        return code
+
+    namespace = {"__builtins__": __builtins__}
+    exec(code, namespace)
+    circuit_obj = _extract_circuit_for_provider(namespace, provider)
+    if circuit_obj is None:
+        raise RuntimeError(
+            "No circuit object found in the code. "
+            "Your code must define a Qiskit QuantumCircuit, Cirq Circuit, or CUDA-Q kernel."
+        )
+    return circuit_obj
+
+
 def error_payload(error: KernelError, phase: str) -> dict:
     payload = {
         "type": "error",
@@ -109,10 +177,16 @@ async def handle_message(websocket):
         msg_type = msg.get("type")
         code = msg.get("code", "")
 
+        # Optional language hint ("qsharp" / "python") from the frontend;
+        # omitted by older clients, in which case detection stays regex-based.
+        language = msg.get("language")
+
         if msg_type == "parse":
             # Offload blocking parse to a thread so the event loop stays
             # responsive to heartbeats and other messages.
-            snapshot, stdout, stderr, error = await asyncio.to_thread(executor.parse, code)
+            snapshot, stdout, stderr, error = await asyncio.to_thread(
+                executor.parse, code, language=language
+            )
 
             if stdout:
                 await websocket.send(json.dumps({
@@ -138,7 +212,7 @@ async def handle_message(websocket):
             shots = msg.get("shots", 1024)
             # Simulation can take multiple seconds — must not block the loop.
             result, snapshot, stdout, stderr, error = await asyncio.to_thread(
-                executor.execute, code, shots
+                executor.execute, code, shots, language=language
             )
 
             if stdout:
@@ -304,22 +378,14 @@ async def handle_message(websocket):
             shots = msg.get("shots", 1024)
             code = msg.get("code", "")
             try:
-                # The local simulator re-runs the raw code through the
-                # existing executor pipeline, which already handles all
-                # three frameworks. Real hardware adapters need a concrete
-                # circuit object so we exec + extract for those.
-                if provider == "simulator":
-                    payload = code
-                else:
-                    namespace = {"__builtins__": __builtins__}
-                    exec(code, namespace)
-                    circuit_obj = _extract_circuit_for_provider(namespace, provider)
-                    if circuit_obj is None:
-                        raise RuntimeError(
-                            "No circuit object found in the code. "
-                            "Your code must define a Qiskit QuantumCircuit, Cirq Circuit, or CUDA-Q kernel."
-                        )
-                    payload = circuit_obj
+                # Routing (simulator passthrough, Q# → QIR for Azure, exec +
+                # extract for Python on real hardware) lives in
+                # _prepare_hardware_payload so it's unit-testable.
+                # Off-thread because QIR compilation can take seconds and
+                # would otherwise freeze the event loop for every client.
+                payload = await asyncio.to_thread(
+                    _prepare_hardware_payload, code, provider, backend, language
+                )
                 handle = hardware_manager.submit_job(provider, payload, backend, shots)
                 await websocket.send(json.dumps({
                     "type": "hardware_job_submitted",

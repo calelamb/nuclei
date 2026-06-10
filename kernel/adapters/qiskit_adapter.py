@@ -1,6 +1,6 @@
 import re
-import numpy as np
 from kernel.adapters.base import FrameworkAdapter
+from kernel.adapters._math import assign_layer, partial_trace_qubit
 from kernel.models.snapshot import CircuitSnapshot, SimulationResult, Gate
 
 
@@ -73,10 +73,7 @@ class QiskitAdapter(FrameworkAdapter):
 
             # Greedy layer assignment: place gate in the earliest layer
             # where all involved qubits are free
-            all_qubits = controls + targets
-            layer = max(qubit_layers.get(q, 0) for q in all_qubits) if all_qubits else 0
-            for q in all_qubits:
-                qubit_layers[q] = layer + 1
+            layer = assign_layer(qubit_layers, controls + targets)
 
             gates.append(Gate(
                 type=gate_name,
@@ -147,10 +144,6 @@ class QiskitAdapter(FrameworkAdapter):
         )
 
 
-def _partial_trace_qubit(statevector, n_qubits: int, qubit: int):
-    """Compute the reduced density matrix for a single qubit."""
-    sv = np.array(statevector).reshape([2] * n_qubits)
-    # Sum over all qubits except the target
-    axes_to_trace = [i for i in range(n_qubits) if i != qubit]
-    rho = np.tensordot(sv, sv.conj(), axes=(axes_to_trace, axes_to_trace))
-    return rho
+# Kept as a module-level alias so existing call sites and imports keep
+# working; the implementation now lives in _math.py for reuse.
+_partial_trace_qubit = partial_trace_qubit

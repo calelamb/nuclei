@@ -42,6 +42,65 @@ describe('compose', () => {
     expect(out.explanation).toContain('Bell');
   });
 
+  it('builds a Q# system prompt and qsharp fence when framework is qsharp', async () => {
+    const spy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          content: [
+            { type: 'text', text: 'A Bell state in Q#.' },
+            {
+              type: 'tool_use',
+              id: 'toolu_1',
+              name: 'insert_code',
+              input: { code: 'operation Main() : Result[] { return []; }' },
+            },
+          ],
+        }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } },
+      ),
+    );
+    const out = await compose({
+      intent: 'make bell',
+      framework: 'qsharp',
+      currentCode: 'operation Main() : Result[] { return []; }',
+    });
+    expect(out.ok).toBe(true);
+
+    const body = JSON.parse(spy.mock.calls[0][1]?.body as string);
+    expect(body.system).toContain('Q#');
+    // Stable marker proving the QDK style guide was appended.
+    expect(body.system).toContain('ResetAll');
+    const userPrompt: string = body.messages[0].content;
+    expect(userPrompt).toContain('```qsharp');
+    expect(userPrompt).not.toContain('```python');
+  });
+
+  it('keeps the original Python system prompt for qiskit', async () => {
+    const spy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          content: [
+            { type: 'text', text: 'Bell state.' },
+            {
+              type: 'tool_use',
+              id: 'toolu_1',
+              name: 'insert_code',
+              input: { code: 'from qiskit import QuantumCircuit\n' },
+            },
+          ],
+        }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } },
+      ),
+    );
+    await compose({ intent: 'make bell', framework: 'qiskit', currentCode: '' });
+
+    const body = JSON.parse(spy.mock.calls[0][1]?.body as string);
+    expect(body.system).toContain('a COMPLETE, runnable Python file');
+    expect(body.system).toContain('(cirq, qiskit, cuda-q)');
+    expect(body.system).not.toContain('ResetAll');
+    expect(body.messages[0].content).toContain('```python');
+  });
+
   it('returns null if no tool_use block', async () => {
     vi.spyOn(globalThis, 'fetch').mockResolvedValue(
       new Response(

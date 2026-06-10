@@ -304,7 +304,8 @@ function createExecutionDriver(session: KernelSession) {
 
       let sendResult: void | Promise<void>;
       try {
-        sendResult = session.send({ type: 'execute', code, shots });
+        // Challenge content is Python-only today, so the language is fixed.
+        sendResult = session.send({ type: 'execute', code, shots, language: 'python' });
       } catch (error) {
         clearTimeout(timeoutId);
         pending = null;

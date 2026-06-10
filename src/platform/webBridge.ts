@@ -40,7 +40,10 @@ export const webBridge: PlatformBridge = {
       try {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const [handle] = await (window as any).showOpenFilePicker({
-          types: [{ description: 'Python Files', accept: { 'text/x-python': ['.py'] } }],
+          types: [{
+            description: 'Source Files',
+            accept: { 'text/x-python': ['.py'], 'text/plain': ['.qs'] },
+          }],
           multiple: false,
         });
         const file = await handle.getFile();
@@ -55,7 +58,7 @@ export const webBridge: PlatformBridge = {
     return new Promise((resolve) => {
       const input = document.createElement('input');
       input.type = 'file';
-      input.accept = '.py,.qasm';
+      input.accept = '.py,.qs,.qasm';
       input.onchange = async () => {
         const file = input.files?.[0];
         if (!file) { resolve(null); return; }
@@ -82,7 +85,10 @@ export const webBridge: PlatformBridge = {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const handle = await (window as any).showSaveFilePicker({
           suggestedName: defaultPath ?? 'untitled.py',
-          types: [{ description: 'Python Files', accept: { 'text/x-python': ['.py'] } }],
+          types: [{
+            description: 'Source Files',
+            accept: { 'text/x-python': ['.py'], 'text/plain': ['.qs'] },
+          }],
         });
         const writable = await handle.createWritable();
         await writable.write(content);

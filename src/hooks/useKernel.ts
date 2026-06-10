@@ -5,13 +5,14 @@ import { useCircuitStore } from '../stores/circuitStore';
 import { useSimulationStore } from '../stores/simulationStore';
 import { useBottomPanelStore } from '../stores/bottomPanelStore';
 import { useSettingsStore } from '../stores/settingsStore';
-import type { KernelResponse } from '../types/quantum';
+import { kernelLanguageFor } from '../types/quantum';
+import type { KernelLanguage, KernelResponse } from '../types/quantum';
 import { KERNEL_WS_URL } from '../config/kernel';
 import type { PyodideKernel } from '../platform/pyodideKernel';
 import { useDiracStore } from '../stores/diracStore';
 import { useHardwareStore } from '../stores/hardwareStore';
 import { narrateParse, narrateResult } from '../services/narration';
-import { rewritePythonError } from '../services/errorRewrite';
+import { rewriteExecutionError } from '../services/errorRewrite';
 import { computeNextPollDelayMs, STALE_AFTER_MS } from '../lib/pollSchedule';
 
 const KERNEL_URL = KERNEL_WS_URL;
@@ -36,12 +37,20 @@ const DEFAULT_DEBOUNCE_MS = 300;
 const RETRY_DELAY_MS = 2000;
 const MAX_RETRIES = 15;
 
-function getErrorContext(msg: Extract<KernelResponse, { type: 'error' }>) {
+export function getErrorContext(msg: Extract<KernelResponse, { type: 'error' }>) {
   const detail = msg.traceback ?? msg.message;
   const frames = detail.match(/File "<(?:string|exec)>", line (\d+)/g) || [];
   const lastFrame = frames[frames.length - 1];
   const lineMatch = lastFrame?.match(/line (\d+)/);
-  const line = lineMatch ? parseInt(lineMatch[1], 10) : null;
+  let line = lineMatch ? parseInt(lineMatch[1], 10) : null;
+
+  // Q# compile errors arrive as miette-rendered spans like `,-[line_0:3:11]`
+  // (file:line:col, 1-based line within the buffer). Fall back to that when
+  // no Python traceback frame matched.
+  if (line === null) {
+    const qsharpSpan = detail.match(/\[line_\d+:(\d+):\d+\]/);
+    if (qsharpSpan) line = parseInt(qsharpSpan[1], 10);
+  }
 
   return {
     detail,
@@ -70,7 +79,18 @@ export function useKernel() {
         setSnapshot(msg.data);
         clearEditorErrors();
         if (msg.data) {
-          useEditorStore.getState().setFramework(msg.data.framework);
+          // Every parse/execute send is tagged with an explicit `language`,
+          // so the kernel can never legitimately return a snapshot whose
+          // framework crosses the python<->qsharp boundary relative to the
+          // framework we currently hold. A cross-boundary snapshot is a
+          // stale response from the previous buffer (e.g. a Python parse
+          // landing after a .qs tab eagerly set framework='qsharp') — drop
+          // that feedback, but keep within-family qiskit<->cirq<->cuda-q
+          // refinement working as before.
+          const currentFramework = useEditorStore.getState().framework;
+          if (kernelLanguageFor(msg.data.framework) === kernelLanguageFor(currentFramework)) {
+            useEditorStore.getState().setFramework(msg.data.framework);
+          }
           useDiracStore.getState().clearRewrittenError();
           if (useSettingsStore.getState().dirac.narration) {
             const codeForNarration = useEditorStore.getState().code;
@@ -120,7 +140,7 @@ export function useKernel() {
         if (useSettingsStore.getState().dirac.autoExplainErrors) {
           const codeForRewrite = useEditorStore.getState().code;
           const framework = useEditorStore.getState().framework;
-          rewritePythonError({ code: codeForRewrite, framework, traceback: detail })
+          rewriteExecutionError({ code: codeForRewrite, framework, traceback: detail })
             .then((rewritten) => {
               if (rewritten) {
                 useDiracStore.getState().setRewrittenError({
@@ -292,7 +312,8 @@ export function useKernel() {
       useEditorStore.getState().setKernelStatus('ready');
       const code = useEditorStore.getState().code;
       if (code.trim()) {
-        ws.send(JSON.stringify({ type: 'parse', code }));
+        const language = kernelLanguageFor(useEditorStore.getState().framework);
+        ws.send(JSON.stringify({ type: 'parse', code, language }));
       }
 
       // One-time migration: earlier builds wrote provider credentials to
@@ -392,7 +413,8 @@ export function useKernel() {
       // Initial parse
       const code = useEditorStore.getState().code;
       if (code.trim()) {
-        kernel.send({ type: 'parse', code });
+        const language = kernelLanguageFor(useEditorStore.getState().framework);
+        kernel.send({ type: 'parse', code, language });
       }
     } catch (e) {
       useEditorStore.getState().setKernelStatus('failed', `Failed to load browser Python engine: ${e}`);
@@ -437,10 +459,11 @@ export function useKernel() {
           // run completes will schedule another parse.
           if (useSimulationStore.getState().isRunning) return;
 
+          const language = kernelLanguageFor(useEditorStore.getState().framework);
           if (isWeb && pyodideRef.current) {
-            pyodideRef.current.send({ type: 'parse', code: state.code });
+            pyodideRef.current.send({ type: 'parse', code: state.code, language });
           } else if (wsRef.current?.readyState === WebSocket.OPEN) {
-            wsRef.current.send(JSON.stringify({ type: 'parse', code: state.code }));
+            wsRef.current.send(JSON.stringify({ type: 'parse', code: state.code, language }));
           }
         }, useSettingsStore.getState().kernel.parseDebounceMs ?? DEFAULT_DEBOUNCE_MS);
       }
@@ -461,6 +484,7 @@ export function useKernel() {
 
     const { code } = useEditorStore.getState();
     const { shots } = useSimulationStore.getState();
+    const language = kernelLanguageFor(useEditorStore.getState().framework);
 
     const runTime = new Date().toLocaleTimeString();
     const separator = `─── Run at ${runTime} ──────────────────────────────`;
@@ -475,7 +499,7 @@ export function useKernel() {
       useSimulationStore.getState().clearResult();
       useSimulationStore.getState().addOutput(separator, 'separator');
       useBottomPanelStore.getState().focusTerminal();
-      pyodideRef.current.send({ type: 'execute', code, shots });
+      pyodideRef.current.send({ type: 'execute', code, shots, language });
     } else {
       const ws = wsRef.current;
       if (!ws || ws.readyState !== WebSocket.OPEN) {
@@ -487,7 +511,7 @@ export function useKernel() {
       useSimulationStore.getState().clearResult();
       useSimulationStore.getState().addOutput(separator, 'separator');
       useBottomPanelStore.getState().focusTerminal();
-      ws.send(JSON.stringify({ type: 'execute', code, shots }));
+      ws.send(JSON.stringify({ type: 'execute', code, shots, language }));
     }
   }, [isWeb]);
 
@@ -518,8 +542,18 @@ export function useKernel() {
   );
 
   const hardwareSubmit = useCallback(
-    (provider: string, backend: string, code: string, shots: number) =>
-      sendHardware({ type: 'hardware_submit', provider, backend, code, shots }),
+    (provider: string, backend: string, code: string, shots: number, language?: KernelLanguage) =>
+      sendHardware({
+        type: 'hardware_submit',
+        provider,
+        backend,
+        code,
+        shots,
+        // Callers that know the submission's true language (e.g. a staged
+        // .qs file dropped on the launcher) pass it explicitly; otherwise
+        // fall back to the editor's active framework as before.
+        language: language ?? kernelLanguageFor(useEditorStore.getState().framework),
+      }),
     [sendHardware],
   );
 

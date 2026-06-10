@@ -10,7 +10,7 @@ Download from [GitHub Releases](https://github.com/calelamb/nuclei/releases) or 
 
 ## Features
 
-**Monaco Code Editor** -- The same editor engine that powers VS Code, configured with quantum-aware syntax highlighting, autocomplete, and inline AI assistance for Qiskit, Cirq, and CUDA-Q.
+**Monaco Code Editor** -- The same editor engine that powers VS Code, configured with quantum-aware syntax highlighting, autocomplete, and inline AI assistance for Qiskit, Cirq, CUDA-Q, and Q#.
 
 **Live Circuit Visualization** -- Circuits render as you type. The D3.js-powered SVG diagram updates on every keystroke (300ms debounce), so you always see the circuit your code describes without running anything.
 
@@ -20,7 +20,7 @@ Download from [GitHub Releases](https://github.com/calelamb/nuclei/releases) or 
 
 **Dirac AI Assistant** -- A Claude-powered tutor named Dirac that sees your code, circuit, and simulation results. Dirac explains concepts at a beginner level, diagnoses errors in plain English, generates exercises, and can insert code or run simulations on your behalf.
 
-**Multi-Framework Support** -- Write in Qiskit, Cirq, or CUDA-Q. Nuclei auto-detects the framework from your imports and handles the rest. Switch frameworks without changing your workflow.
+**Multi-Framework Support** -- Write in Qiskit, Cirq, CUDA-Q, or Q# (QDK). Nuclei auto-detects the framework from your code and handles the rest. Switch frameworks without changing your workflow.
 
 ---
 
@@ -120,8 +120,9 @@ For detailed architecture documentation, see [CLAUDE.md](CLAUDE.md).
 | **Qiskit** | IBM | General-purpose quantum SDK with broad gate support and AerSimulator |
 | **Cirq** | Google | Fine-grained circuit control, native noise modeling |
 | **CUDA-Q** | NVIDIA | GPU-accelerated quantum simulation, hybrid quantum-classical workflows |
+| **Q# (QDK)** | Microsoft | Quantum language that compiles to QIR and submits to Azure Quantum hardware |
 
-Nuclei auto-detects which framework you are using by analyzing your import statements. All three frameworks produce the same universal `CircuitSnapshot` format, so visualizations work identically regardless of your choice.
+Nuclei auto-detects which framework you are using by analyzing your code — Python import statements for Qiskit, Cirq, and CUDA-Q, and Q# syntax for Q#. All four frameworks produce the same universal `CircuitSnapshot` format, so visualizations work identically regardless of your choice. Q# is Nuclei's first non-Python language: it uses a source-mode adapter, so your Q# source goes straight to the QDK interpreter rather than through a Python circuit object.
 
 ---
 

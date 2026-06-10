@@ -42,6 +42,17 @@ export function useFileOps() {
 
     setCode(result.content);
     setFilePath(result.path);
+    // Q# files can't be inferred from kernel snapshot feedback the way
+    // Python framework files are mid-stream — set the framework eagerly
+    // from the extension so the first parse goes out as Q#. Conversely,
+    // leaving Q# for a non-.qs file restores the last Python-family
+    // framework the user held, so the kernel's detection + snapshot
+    // feedback take over again from where they left off.
+    if (result.path.toLowerCase().endsWith('.qs')) {
+      useEditorStore.getState().setFramework('qsharp');
+    } else if (useEditorStore.getState().framework === 'qsharp') {
+      useEditorStore.getState().setFramework(useEditorStore.getState().lastPythonFramework);
+    }
     // Register the opened file as a tab in projectStore so it shows up in
     // the sidebar's Open Files section and the top EditorTabs bar. Without
     // this, File > Open would put the buffer in the editor but leave no

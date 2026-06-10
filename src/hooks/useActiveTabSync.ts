@@ -35,6 +35,18 @@ export function useActiveTabSync() {
       setCode(activeTab.content);
       setFilePath(activeTab.path);
       setIsDirty(activeTab.isDirty);
+      // Keep the framework in step with the file's language. A `.qs` tab
+      // must flip to Q# eagerly (the parse is routed by the framework's
+      // language, so feedback can't infer it), and leaving Q# for a
+      // non-.qs tab restores the last Python-family framework the user
+      // held, so the kernel's regex detection + snapshot feedback take
+      // over again from where they left off.
+      const fw = useEditorStore.getState().framework;
+      if (activeTab.path.toLowerCase().endsWith('.qs')) {
+        if (fw !== 'qsharp') useEditorStore.getState().setFramework('qsharp');
+      } else if (fw === 'qsharp') {
+        useEditorStore.getState().setFramework(useEditorStore.getState().lastPythonFramework);
+      }
     } else {
       setIsDirty(activeTab.isDirty);
     }

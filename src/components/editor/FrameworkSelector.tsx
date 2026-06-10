@@ -4,10 +4,11 @@ import { ChevronDown } from 'lucide-react';
 import { useEditorStore } from '../../stores/editorStore';
 import { useThemeStore } from '../../stores/themeStore';
 import { usePlatform } from '../../platform/PlatformProvider';
+import { kernelLanguageFor } from '../../types/quantum';
 import type { Framework } from '../../types/quantum';
 import { STARTER_TEMPLATES, displayFrameworkName } from '../../data/starterTemplates';
 
-const FRAMEWORKS: Framework[] = ['qiskit', 'cirq', 'cuda-q'];
+const FRAMEWORKS: Framework[] = ['qiskit', 'cirq', 'cuda-q', 'qsharp'];
 
 const displayName = displayFrameworkName;
 
@@ -22,6 +23,7 @@ function isUntouchedStarter(code: string): boolean {
     normalized === STARTER_TEMPLATES.qiskit.trimEnd() ||
     normalized === STARTER_TEMPLATES.cirq.trimEnd() ||
     normalized === STARTER_TEMPLATES['cuda-q'].trimEnd() ||
+    normalized === STARTER_TEMPLATES.qsharp.trimEnd() ||
     normalized === ''
   );
 }
@@ -32,6 +34,7 @@ export function FrameworkSelector() {
   const framework = useEditorStore((s) => s.framework);
   const setFramework = useEditorStore((s) => s.setFramework);
   const setCode = useEditorStore((s) => s.setCode);
+  const setFilePath = useEditorStore((s) => s.setFilePath);
   const code = useEditorStore((s) => s.code);
   const isDirty = useEditorStore((s) => s.isDirty);
   const filePath = useEditorStore((s) => s.filePath);
@@ -105,6 +108,13 @@ export function FrameworkSelector() {
    * actually sees runnable code. If they have a real file open with real
    * work, just flip the framework label and leave their code alone —
    * that's how someone with mid-project code would expect to reclassify.
+   *
+   * The label-only flip is safe within the Python family because the
+   * kernel's snapshot feedback self-corrects a wrong label on the next
+   * parse. Across the python<->qsharp boundary it cannot: the buffer would
+   * be parsed as the wrong language and every line would squiggle. For
+   * those picks we confirm, swap in the target starter, and detach the
+   * file path so we don't pretend e.g. a .py file contains Q#.
    */
   const handleFrameworkPick = (f: Framework) => {
     if (f === framework) {
@@ -115,6 +125,17 @@ export function FrameworkSelector() {
     if (canAutoSwap) {
       setCode(STARTER_TEMPLATES[f]);
       setFramework(f);
+      setOpen(false);
+      return;
+    }
+    if (kernelLanguageFor(f) !== kernelLanguageFor(framework)) {
+      const ok = window.confirm(
+        `Switching languages replaces the editor buffer with a ${displayName(f)} starter template. Unsaved changes will be lost. Continue?`,
+      );
+      if (!ok) return;
+      setCode(STARTER_TEMPLATES[f]);
+      setFramework(f);
+      setFilePath(null);
       setOpen(false);
       return;
     }

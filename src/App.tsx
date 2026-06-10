@@ -5,6 +5,7 @@ import { Onboarding } from './components/onboarding/Onboarding';
 import { KeyboardShortcuts } from './components/onboarding/KeyboardShortcuts';
 import { CommandPalette, buildCommands } from './components/commandPalette/CommandPalette';
 import { UpdateBanner } from './components/UpdateBanner';
+import { WhatsNewCard } from './components/WhatsNewCard';
 import { ComposeModal } from './components/dirac/ComposeModal';
 import { DiffPreview } from './components/editor/DiffPreview';
 import { UnsavedChangesModal } from './components/dialogs/UnsavedChangesModal';
@@ -22,7 +23,7 @@ import { useUIModeStore } from './stores/uiModeStore';
 import { useDiracPanelStore } from './stores/diracPanelStore';
 import { useBottomPanelStore } from './stores/bottomPanelStore';
 import type { PlatformBridge } from './platform/bridge';
-import type { Framework } from './types/quantum';
+import type { Framework, KernelLanguage } from './types/quantum';
 
 // Store execute function globally so Monaco keybinding can access it
 let executeRef: (() => void) | null = null;
@@ -39,7 +40,7 @@ export function getFileOps() { return fileOpsRef; }
 // every prop.
 interface HardwareActions {
   hardwareConnect: (provider: string, credentials: Record<string, string>) => void;
-  hardwareSubmit: (provider: string, backend: string, code: string, shots: number) => boolean;
+  hardwareSubmit: (provider: string, backend: string, code: string, shots: number, language?: KernelLanguage) => boolean;
   hardwareCancel: (jobId: string) => void;
 }
 let hardwareRef: HardwareActions | null = null;
@@ -341,6 +342,7 @@ function AppInner() {
     <>
       <PanelLayout />
       <UpdateBanner />
+      <WhatsNewCard />
       {showOnboarding && (
         <Onboarding
           onComplete={completeOnboarding}

@@ -35,10 +35,25 @@ def bell():
     cx(q[0], q[1])
     mz(q)
 `,
+  qsharp: `import Std.Diagnostics.DumpMachine;
+
+// Create a Bell State
+operation Main() : Result[] {
+    use qs = Qubit[2];
+    H(qs[0]);
+    CNOT(qs[0], qs[1]);
+    DumpMachine();        // shows the live quantum state in Nuclei's panels
+    let results = [M(qs[0]), M(qs[1])];
+    ResetAll(qs);
+    return results;
+}
+`,
 };
 
 export function displayFrameworkName(f: Framework): string {
-  return f === 'cuda-q' ? 'CUDA-Q' : f.charAt(0).toUpperCase() + f.slice(1);
+  if (f === 'cuda-q') return 'CUDA-Q';
+  if (f === 'qsharp') return 'Q# (QDK)';
+  return f.charAt(0).toUpperCase() + f.slice(1);
 }
 
 /**
@@ -47,6 +62,7 @@ export function displayFrameworkName(f: Framework): string {
  * apart in the tree at a glance.
  */
 export function defaultCircuitFileName(f: Framework): string {
+  if (f === 'qsharp') return 'qsharp_circuit.qs';
   const slug = f === 'cuda-q' ? 'cudaq' : f;
   return `${slug}_circuit.py`;
 }

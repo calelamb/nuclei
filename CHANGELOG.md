@@ -5,6 +5,91 @@ All notable changes to Nuclei will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.0] - 2026-06-09
+
+### Added — Q# (Microsoft QDK), Nuclei's fourth framework
+
+Q# lands alongside Qiskit, Cirq, and CUDA-Q — and it's the first
+language in Nuclei that isn't Python. A student can now write Q#
+in the editor, watch the circuit diagram, Bloch sphere, and
+histogram update live, ask Dirac for help, get real compiler
+diagnostics as they type, and launch the same program to Azure
+Quantum hardware.
+
+Q# source can't flow through the Python `exec` pipeline, so the
+kernel grew a source-mode adapter concept: `AdapterSpec.source_mode`
+routes raw Q# source to the new `kernel/adapters/qsharp_adapter.py`
+instead of executing it as Python. Nuclei standardizes on the `qdk`
+PyPI package (`from qdk import qsharp`) — the standalone `qsharp`
+package is a deprecated shim and is deliberately avoided.
+
+Everything is backward compatible: `parse` / `execute` /
+`hardware_submit` messages gain an optional `language` field
+(`'python' | 'qsharp'`), and the three Python frameworks see zero
+changes.
+
+### Added — kernel: source-mode Q# adapter
+
+- Snapshots come from `qsharp.circuit()` JSON; simulation runs via
+  `qsharp.run()` with `DumpMachine` state capture and a
+  sampled-marginal fallback when the full state isn't available.
+- `compile_qir()` lowers the current program to QIR for hardware
+  submission.
+- All interpreter work is serialized on a dedicated thread — the
+  qdk interpreter is process-global and thread-pinned, so the
+  adapter never touches it from two threads.
+- Shared state-vector math extracted to `kernel/adapters/_math.py`
+  for reuse across adapters.
+- The optional `qdk` dependency is documented in
+  `kernel/requirements.txt`; the setup wizard installs it
+  (`pip install qdk`) via a new core catalog entry.
+
+### Added — frontend: Q# as a first-class framework
+
+- `Framework` union gains `'qsharp'`; `.qs` files open with
+  framework inference, and the FrameworkSelector gains a
+  "Q# (QDK)" entry.
+- Q# Bell-state starter template, with a `DumpMachine` teaching
+  comment explaining how state inspection works.
+- Monaco `qsharp` language registration (Monarch tokenizer) for
+  syntax highlighting.
+- Gate explorer shows Q# syntax for all 14 gates.
+- The web build shows a friendly desktop-only message for Q#
+  execution instead of failing silently.
+
+### Added — editor: the real QDK language service
+
+The Monarch tokenizer was the floor, not the ceiling. Q# buffers
+now get the same compiler the QDK ships: `qsharp-lang` WASM
+running in a web worker provides live compiler diagnostics,
+completions, hover docs, and signature help. The worker is
+lazy-loaded only when a Q# buffer opens, so Python users pay
+nothing.
+
+### Added — Dirac speaks Q#
+
+- A Q# style guide (`src/services/qsharpStyle.ts`) is injected
+  into compose and inline-edit prompts, so generated code is
+  idiomatic modern QDK 1.x Q#.
+- Ghost completions are registered for Q# buffers with Q#-aware
+  prompts.
+- Error rewriting understands Q# compiler diagnostics and explains
+  them in plain English.
+
+### Added — hardware: Q# to Azure Quantum via QIR
+
+- The Launch portal submits Q# to Azure Quantum: the kernel
+  compiles to QIR (`base` profile; `adaptive_ri` for Quantinuum
+  targets) and the existing AzureProvider submits it unchanged.
+- The Local Simulator runs Q# directly; other providers reject Q#
+  with a friendly message instead of a traceback.
+
+### Fixed — Azure results coercion hardened
+
+- Float probability distributions are scaled by shot count,
+  array-style keys are normalized to bitstrings, and colliding
+  keys are summed instead of overwritten.
+
 ## [0.4.17] - 2026-05-02
 
 ### Fixed — critical Local Simulator crash + white-page on click
