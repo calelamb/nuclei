@@ -3,9 +3,11 @@
  *
  * The WASM compiler and web worker cannot run under vitest/jsdom, so these
  * tests cover the pure mapping helpers, the Monaco wiring (with plain-object
- * fakes), and the ensureQsharpLanguageService failure guard (qsharp-lang is
- * mocked to fail on import). Real-WASM behavior is covered by the manual
- * checklist in the Phase E report.
+ * fakes), the lifecycle disposables (provider unregistration, listener
+ * detach, debounce-timer cleanup), the init timeout race, and the
+ * ensureQsharpLanguageService failure guard (qsharp-lang is mocked to fail
+ * on import). Real-WASM behavior is covered by the manual checklist in the
+ * Phase E report.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import type * as monaco from 'monaco-editor';
@@ -24,7 +26,9 @@ import {
   registerQsharpProviders,
   attachQsharpDiagnostics,
   attachQsharpDocumentSync,
+  raceWithInitTimeout,
   ensureQsharpLanguageService,
+  disposeQsharpLanguageService,
 } from './qsharpLanguageService';
 
 // Simulate the dynamic import of qsharp-lang failing (e.g. WASM chunk
@@ -281,6 +285,8 @@ function createFakeMonaco(models: FakeModel[]) {
   const completionProviders: unknown[] = [];
   const hoverProviders: unknown[] = [];
   const signatureProviders: unknown[] = [];
+  // Records which registrations/listeners have been disposed, in order.
+  const disposedTags: string[] = [];
 
   const api = {
     Uri: { parse: (s: string) => ({ toString: () => s }) },
@@ -292,30 +298,30 @@ function createFakeMonaco(models: FakeModel[]) {
       setModelMarkers,
       onDidCreateModel: (listener: (m: FakeModel) => void) => {
         createListeners.push(listener);
-        return { dispose: () => {} };
+        return { dispose: () => disposedTags.push('onDidCreateModel') };
       },
       onDidChangeModelLanguage: (listener: (e: { model: FakeModel }) => void) => {
         languageListeners.push(listener);
-        return { dispose: () => {} };
+        return { dispose: () => disposedTags.push('onDidChangeModelLanguage') };
       },
       onWillDisposeModel: (listener: (m: FakeModel) => void) => {
         disposeListeners.push(listener);
-        return { dispose: () => {} };
+        return { dispose: () => disposedTags.push('onWillDisposeModel') };
       },
     },
     languages: {
       CompletionItemKind: COMPLETION_KIND,
       registerCompletionItemProvider: vi.fn((_id: string, provider: unknown) => {
         completionProviders.push(provider);
-        return { dispose: () => {} };
+        return { dispose: () => disposedTags.push('completion') };
       }),
       registerHoverProvider: vi.fn((_id: string, provider: unknown) => {
         hoverProviders.push(provider);
-        return { dispose: () => {} };
+        return { dispose: () => disposedTags.push('hover') };
       }),
       registerSignatureHelpProvider: vi.fn((_id: string, provider: unknown) => {
         signatureProviders.push(provider);
-        return { dispose: () => {} };
+        return { dispose: () => disposedTags.push('signatureHelp') };
       }),
     },
   };
@@ -325,6 +331,7 @@ function createFakeMonaco(models: FakeModel[]) {
     setModelMarkers,
     completionProviders,
     hoverProviders,
+    disposedTags,
     fireCreate: (m: FakeModel) => createListeners.forEach((l) => l(m)),
     fireLanguageChange: (m: FakeModel) => languageListeners.forEach((l) => l({ model: m })),
     fireWillDispose: (m: FakeModel) => disposeListeners.forEach((l) => l(m)),
@@ -341,6 +348,10 @@ function createFakeLanguageService() {
     getSignatureHelp: vi.fn(() => Promise.resolve(undefined)),
     addEventListener: vi.fn((_type: string, listener: (evt: unknown) => void) => {
       diagnosticsListeners.push(listener);
+    }),
+    removeEventListener: vi.fn((_type: string, listener: (evt: unknown) => void) => {
+      const index = diagnosticsListeners.indexOf(listener);
+      if (index !== -1) diagnosticsListeners.splice(index, 1);
     }),
   };
   return {
@@ -385,6 +396,51 @@ describe('attachQsharpDiagnostics', () => {
     model.markDisposed();
     fireDiagnostics({ uri: 'inmemory://model/1', version: 1, diagnostics: [] });
 
+    expect(fake.setModelMarkers).not.toHaveBeenCalled();
+  });
+
+  it('clears markers when a live tracked model reports zero diagnostics', () => {
+    const model = createFakeModel('inmemory://model/1', 'qsharp');
+    const fake = createFakeMonaco([model]);
+    const { ls, fireDiagnostics } = createFakeLanguageService();
+
+    attachQsharpDiagnostics(fake.api, ls);
+    fireDiagnostics({
+      uri: 'inmemory://model/1',
+      version: 1,
+      diagnostics: [{ range: LS_RANGE, message: 'syntax error', severity: 'error' }],
+    });
+    // The fix compiles clean — an empty diagnostics list must clear markers.
+    fireDiagnostics({ uri: 'inmemory://model/1', version: 2, diagnostics: [] });
+
+    expect(fake.setModelMarkers).toHaveBeenCalledTimes(2);
+    expect(fake.setModelMarkers).toHaveBeenLastCalledWith(
+      model,
+      QSHARP_LS_MARKER_OWNER,
+      [],
+    );
+  });
+
+  it('dispose detaches the listener via removeEventListener', () => {
+    const model = createFakeModel('inmemory://model/1', 'qsharp');
+    const fake = createFakeMonaco([model]);
+    const { ls, mocks, fireDiagnostics } = createFakeLanguageService();
+
+    const disposable = attachQsharpDiagnostics(fake.api, ls);
+    disposable.dispose();
+
+    expect(mocks.removeEventListener).toHaveBeenCalledTimes(1);
+    expect(mocks.removeEventListener.mock.calls[0][0]).toBe('diagnostics');
+    // Must be the identical function reference, or removal silently no-ops.
+    expect(mocks.removeEventListener.mock.calls[0][1]).toBe(
+      mocks.addEventListener.mock.calls[0][1],
+    );
+
+    fireDiagnostics({
+      uri: 'inmemory://model/1',
+      version: 1,
+      diagnostics: [{ range: LS_RANGE, message: 'syntax error', severity: 'error' }],
+    });
     expect(fake.setModelMarkers).not.toHaveBeenCalled();
   });
 });
@@ -491,6 +547,35 @@ describe('attachQsharpDocumentSync', () => {
     expect(mocks.closeDocument).toHaveBeenCalledWith('inmemory://model/1');
     expect(fake.setModelMarkers).not.toHaveBeenCalled();
   });
+
+  it('dispose drops global listeners, model subscriptions, and pending timers', () => {
+    const model = createFakeModel('inmemory://model/1', 'qsharp');
+    const fake = createFakeMonaco([model]);
+    const { ls, mocks } = createFakeLanguageService();
+
+    const disposable = attachQsharpDocumentSync(fake.api, ls);
+    mocks.updateDocument.mockClear();
+
+    // Leave a debounce timer pending, then tear down.
+    model.type('operation Main() : Unit { H(q); }');
+    disposable.dispose();
+    vi.advanceTimersByTime(QSHARP_LS_UPDATE_DEBOUNCE_MS * 2);
+    expect(mocks.updateDocument).not.toHaveBeenCalled();
+
+    // The per-model content subscription is gone — later edits never sync.
+    model.type('operation Main() : Unit {}');
+    vi.advanceTimersByTime(QSHARP_LS_UPDATE_DEBOUNCE_MS * 2);
+    expect(mocks.updateDocument).not.toHaveBeenCalled();
+
+    // All three global Monaco listeners were disposed.
+    expect(fake.disposedTags).toEqual(
+      expect.arrayContaining([
+        'onDidCreateModel',
+        'onDidChangeModelLanguage',
+        'onWillDisposeModel',
+      ]),
+    );
+  });
 });
 
 describe('registerQsharpProviders', () => {
@@ -547,6 +632,51 @@ describe('registerQsharpProviders', () => {
     ).resolves.toEqual({ suggestions: [] });
     await expect(hover.provideHover(model, { lineNumber: 1, column: 1 })).resolves.toBeNull();
   });
+
+  it('returns the three registration disposables so providers can be unregistered', () => {
+    const fake = createFakeMonaco([]);
+    const { ls } = createFakeLanguageService();
+
+    const disposables = registerQsharpProviders(fake.api, ls);
+
+    expect(disposables).toHaveLength(3);
+    disposables.forEach((disposable) => disposable.dispose());
+    expect(fake.disposedTags).toEqual(['completion', 'hover', 'signatureHelp']);
+  });
+});
+
+describe('raceWithInitTimeout', () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('rejects with a descriptive error when init hangs past the timeout', async () => {
+    const hangingInit = new Promise<never>(() => {});
+    const raced = raceWithInitTimeout(hangingInit, 15_000);
+    const assertion = expect(raced).rejects.toThrow(
+      /timed out after 15000ms.*stalled/s,
+    );
+
+    await vi.advanceTimersByTimeAsync(15_000);
+    await assertion;
+  });
+
+  it('passes through a fast init and clears the pending timeout timer', async () => {
+    const raced = raceWithInitTimeout(Promise.resolve('ready'), 15_000);
+
+    await expect(raced).resolves.toBe('ready');
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it('passes through a fast rejection (init failure beats the timeout)', async () => {
+    const raced = raceWithInitTimeout(Promise.reject(new Error('wasm 404')), 15_000);
+
+    await expect(raced).rejects.toThrow('wasm 404');
+    expect(vi.getTimerCount()).toBe(0);
+  });
 });
 
 describe('ensureQsharpLanguageService', () => {
@@ -564,6 +694,26 @@ describe('ensureQsharpLanguageService', () => {
 
     // Still idempotent after settling — no second init, no second warning.
     await expect(ensureQsharpLanguageService(stubMonaco)).resolves.toBeUndefined();
+    expect(warnSpy).toHaveBeenCalledTimes(1);
+
+    warnSpy.mockRestore();
+  });
+
+  it('disposeQsharpLanguageService resets the latch so the next ensure re-inits', async () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const stubMonaco = {} as Monaco;
+
+    const before = ensureQsharpLanguageService(stubMonaco);
+    await before;
+
+    // Simulates the HMR dispose hook: the module-level latch must reset so
+    // the re-evaluated module (or a retry) starts a fresh init.
+    disposeQsharpLanguageService();
+
+    const after = ensureQsharpLanguageService(stubMonaco);
+    expect(after).not.toBe(before);
+    await expect(after).resolves.toBeUndefined();
+    // A fresh init attempt was made (and failed again under the mock).
     expect(warnSpy).toHaveBeenCalledTimes(1);
 
     warnSpy.mockRestore();

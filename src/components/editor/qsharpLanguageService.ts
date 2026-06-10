@@ -34,8 +34,23 @@ type Monaco = typeof monaco;
  */
 export const QSHARP_LS_MARKER_OWNER = 'qsharp-ls';
 
-/** Matches the repo-wide 300ms debounce culture (see kernel parse debounce). */
+/**
+ * Matches the repo-wide 300ms debounce culture (see kernel parse debounce).
+ *
+ * Known tradeoff: completions/hover may run against a service-side document
+ * that is up to 300ms stale (the provider queries by URI while the latest
+ * edit is still sitting in the debounce window). The official QDK VS Code
+ * extension makes the same tradeoff — do not "fix" this by zero-debouncing,
+ * which would push a full document to the worker on every keystroke.
+ */
 export const QSHARP_LS_UPDATE_DEBOUNCE_MS = 300;
+
+/**
+ * Upper bound on language-service startup (package chunk + ~5 MB WASM fetch +
+ * worker handshake). Without it, a stalled asset fetch leaves the init
+ * promise pending forever and the failure is never logged.
+ */
+export const QSHARP_LS_INIT_TIMEOUT_MS = 15_000;
 
 // ---------------------------------------------------------------------------
 // Language-service result shapes.
@@ -257,12 +272,15 @@ export function mapSignatureHelp(
  * Register completion / hover / signature-help providers for the `qsharp`
  * language id. Provider failures degrade to empty results — a language
  * service hiccup must never surface as an editor error.
+ *
+ * Returns the Monaco registration disposables so the bootstrap can unregister
+ * the providers on teardown (Monaco outlives this module under Vite HMR).
  */
 export function registerQsharpProviders(
   monacoApi: Monaco,
   languageService: ILanguageService,
-): void {
-  monacoApi.languages.registerCompletionItemProvider(QSHARP_LANGUAGE_ID, {
+): monaco.IDisposable[] {
+  const completionDisposable = monacoApi.languages.registerCompletionItemProvider(QSHARP_LANGUAGE_ID, {
     // Mirrors the official playground / VS Code extension trigger set.
     triggerCharacters: ['.', '@'],
     provideCompletionItems: async (model, position) => {
@@ -289,7 +307,7 @@ export function registerQsharpProviders(
     },
   });
 
-  monacoApi.languages.registerHoverProvider(QSHARP_LANGUAGE_ID, {
+  const hoverDisposable = monacoApi.languages.registerHoverProvider(QSHARP_LANGUAGE_ID, {
     provideHover: async (model, position) => {
       try {
         const hover = await languageService.getHover(
@@ -303,33 +321,43 @@ export function registerQsharpProviders(
     },
   });
 
-  monacoApi.languages.registerSignatureHelpProvider(QSHARP_LANGUAGE_ID, {
-    signatureHelpTriggerCharacters: ['(', ','],
-    provideSignatureHelp: async (model, position) => {
-      try {
-        const signatureHelp = await languageService.getSignatureHelp(
-          model.uri.toString(),
-          monacoPositionToLsPosition(position),
-        );
-        return signatureHelp
-          ? { value: mapSignatureHelp(signatureHelp), dispose: () => {} }
-          : null;
-      } catch {
-        return null;
-      }
+  const signatureDisposable = monacoApi.languages.registerSignatureHelpProvider(
+    QSHARP_LANGUAGE_ID,
+    {
+      signatureHelpTriggerCharacters: ['(', ','],
+      provideSignatureHelp: async (model, position) => {
+        try {
+          const signatureHelp = await languageService.getSignatureHelp(
+            model.uri.toString(),
+            monacoPositionToLsPosition(position),
+          );
+          return signatureHelp
+            ? { value: mapSignatureHelp(signatureHelp), dispose: () => {} }
+            : null;
+        } catch {
+          return null;
+        }
+      },
     },
-  });
+  );
+
+  return [completionDisposable, hoverDisposable, signatureDisposable];
 }
 
 /**
  * Subscribe to the language service's `diagnostics` event and surface
  * compiler errors/warnings as Monaco markers under the 'qsharp-ls' owner.
+ *
+ * Returns a disposable that detaches the listener (via the service's
+ * `removeEventListener`) so a torn-down instance stops writing markers.
  */
 export function attachQsharpDiagnostics(
   monacoApi: Monaco,
   languageService: ILanguageService,
-): void {
-  languageService.addEventListener('diagnostics', (evt) => {
+): monaco.IDisposable {
+  const onDiagnostics = (evt: {
+    detail: { uri: string; diagnostics: VSDiagnostic[] };
+  }): void => {
     const { uri, diagnostics } = evt.detail;
     const model = monacoApi.editor.getModel(monacoApi.Uri.parse(uri));
     if (!model || model.isDisposed()) return;
@@ -338,7 +366,11 @@ export function attachQsharpDiagnostics(
       QSHARP_LS_MARKER_OWNER,
       diagnostics.map((diag) => mapDiagnosticToMarker(diag, monacoApi.MarkerSeverity)),
     );
-  });
+  };
+  languageService.addEventListener('diagnostics', onDiagnostics);
+  return {
+    dispose: () => languageService.removeEventListener('diagnostics', onDiagnostics),
+  };
 }
 
 interface ModelSyncState {
@@ -352,11 +384,14 @@ interface ModelSyncState {
  * - content changes are pushed after a 300ms debounce (not per keystroke);
  * - switching a model away from qsharp closes the document and clears the
  *   'qsharp-ls' markers; disposing a model closes the document.
+ *
+ * Returns a disposable that detaches the three global Monaco listeners and
+ * drops every per-model subscription and pending debounce timer.
  */
 export function attachQsharpDocumentSync(
   monacoApi: Monaco,
   languageService: ILanguageService,
-): void {
+): monaco.IDisposable {
   const tracked = new Map<string, ModelSyncState>();
 
   const pushDocument = (model: monaco.editor.ITextModel): void => {
@@ -402,25 +437,47 @@ export function attachQsharpDocumentSync(
   };
 
   monacoApi.editor.getModels().forEach(track);
-  monacoApi.editor.onDidCreateModel(track);
-  monacoApi.editor.onDidChangeModelLanguage(({ model }) => {
-    if (model.getLanguageId() === QSHARP_LANGUAGE_ID) {
-      track(model);
-    } else {
-      untrack(model, true);
-    }
-  });
-  monacoApi.editor.onWillDisposeModel((model) => {
-    // Markers die with the model; only the service-side document needs closing.
-    untrack(model, false);
-  });
+  const globalListeners: monaco.IDisposable[] = [
+    monacoApi.editor.onDidCreateModel(track),
+    monacoApi.editor.onDidChangeModelLanguage(({ model }) => {
+      if (model.getLanguageId() === QSHARP_LANGUAGE_ID) {
+        track(model);
+      } else {
+        untrack(model, true);
+      }
+    }),
+    monacoApi.editor.onWillDisposeModel((model) => {
+      // Markers die with the model; only the service-side document needs closing.
+      untrack(model, false);
+    }),
+  ];
+
+  return {
+    dispose: () => {
+      globalListeners.forEach((listener) => listener.dispose());
+      // No closeDocument here: teardown happens because the worker (and with
+      // it the whole service) is going away, so there is no service to notify.
+      tracked.forEach((state) => {
+        if (state.timer !== null) clearTimeout(state.timer);
+        state.subscription.dispose();
+      });
+      tracked.clear();
+    },
+  };
 }
 
 // ---------------------------------------------------------------------------
 // Lazy, idempotent bootstrap.
 // ---------------------------------------------------------------------------
 
-async function initQsharpLanguageService(monacoApi: Monaco): Promise<void> {
+/** Everything a live language-service instance owns, for teardown. */
+interface QsharpLsHandle {
+  /** Provider registrations, diagnostics listener, document-sync wiring. */
+  disposables: monaco.IDisposable[];
+  worker: Worker;
+}
+
+async function initQsharpLanguageService(monacoApi: Monaco): Promise<QsharpLsHandle> {
   // Package import first: if the chunk fails to load, we bail before
   // touching the (much larger) WASM asset.
   const qsharp = await import('qsharp-lang');
@@ -439,40 +496,107 @@ async function initQsharpLanguageService(monacoApi: Monaco): Promise<void> {
     new URL('./qsharpLanguageServiceWorker.ts', import.meta.url),
     { type: 'module' },
   );
-  const languageService = qsharp.getLanguageServiceWorker({
-    postMessage: (msg: unknown) => worker.postMessage(msg),
-    onMessage: (handler: (e: MessageEvent) => void) => {
-      worker.onmessage = handler;
-    },
-    onError: (handler: (e: Event) => void) => {
-      worker.onerror = handler;
-    },
-    terminate: () => worker.terminate(),
-  });
+  const disposables: monaco.IDisposable[] = [];
+  try {
+    const languageService = qsharp.getLanguageServiceWorker({
+      postMessage: (msg: unknown) => worker.postMessage(msg),
+      onMessage: (handler: (e: MessageEvent) => void) => {
+        worker.onmessage = handler;
+      },
+      onError: (handler: (e: Event) => void) => {
+        worker.onerror = handler;
+      },
+      terminate: () => worker.terminate(),
+    });
 
-  // Nuclei targets the simulator, so the unrestricted profile avoids
-  // spurious "not supported by the target profile" diagnostics.
-  await languageService.updateConfiguration({
-    packageType: 'exe',
-    targetProfile: 'unrestricted',
-  });
+    // Nuclei targets the simulator, so the unrestricted profile avoids
+    // spurious "not supported by the target profile" diagnostics.
+    await languageService.updateConfiguration({
+      packageType: 'exe',
+      targetProfile: 'unrestricted',
+    });
 
-  registerQsharpProviders(monacoApi, languageService);
-  attachQsharpDiagnostics(monacoApi, languageService);
-  attachQsharpDocumentSync(monacoApi, languageService);
+    disposables.push(...registerQsharpProviders(monacoApi, languageService));
+    disposables.push(attachQsharpDiagnostics(monacoApi, languageService));
+    disposables.push(attachQsharpDocumentSync(monacoApi, languageService));
+    return { disposables, worker };
+  } catch (err) {
+    // Don't leak a half-initialized instance: whatever got wired before the
+    // failure is unwound and the worker is terminated.
+    disposables.forEach((disposable) => disposable.dispose());
+    worker.terminate();
+    throw err;
+  }
+}
+
+/**
+ * Reject if `promise` does not settle within `timeoutMs`. The timer is
+ * cleared once the race settles so a fast init doesn't leave a stray timeout
+ * alive. Exported for unit testing.
+ */
+export function raceWithInitTimeout<T>(promise: Promise<T>, timeoutMs: number): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => {
+      reject(
+        new Error(
+          `Q# language service init timed out after ${timeoutMs}ms — ` +
+            'the qsharp-lang chunk, WASM asset, or worker handshake stalled.',
+        ),
+      );
+    }, timeoutMs);
+  });
+  return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
 }
 
 let ensurePromise: Promise<void> | null = null;
+let activeHandle: QsharpLsHandle | null = null;
+/** Bumped on dispose so an in-flight init knows its result is unwanted. */
+let generation = 0;
+
+function disposeHandle(handle: QsharpLsHandle): void {
+  handle.disposables.forEach((disposable) => disposable.dispose());
+  handle.worker.terminate();
+}
+
+/**
+ * Tear down the running language-service instance: unregister the Monaco
+ * providers, detach the diagnostics + document-sync listeners (clearing any
+ * pending debounce timers), terminate the worker, and reset the idempotency
+ * latch so a later `ensureQsharpLanguageService` call starts fresh.
+ */
+export function disposeQsharpLanguageService(): void {
+  generation += 1;
+  ensurePromise = null;
+  if (activeHandle) {
+    disposeHandle(activeHandle);
+    activeHandle = null;
+  }
+}
 
 /**
  * Start the QDK language service exactly once. Lazy (call it when a Q#
  * buffer becomes active, not at app startup), idempotent (every call after
- * the first returns the same promise), and non-throwing: on failure it
- * warns and resolves, leaving Monarch-only highlighting in place.
+ * the first returns the same promise), and non-throwing: on failure —
+ * including an init that hangs past `timeoutMs` — it warns and resolves,
+ * leaving Monarch-only highlighting in place.
  */
-export function ensureQsharpLanguageService(monacoApi: Monaco): Promise<void> {
+export function ensureQsharpLanguageService(
+  monacoApi: Monaco,
+  timeoutMs: number = QSHARP_LS_INIT_TIMEOUT_MS,
+): Promise<void> {
   if (!ensurePromise) {
-    ensurePromise = initQsharpLanguageService(monacoApi).catch((err: unknown) => {
+    const startGeneration = generation;
+    const init = initQsharpLanguageService(monacoApi).then((handle) => {
+      if (startGeneration !== generation) {
+        // Disposed (HMR teardown) while init was in flight — the surviving
+        // Monaco instance must not keep this orphaned registration.
+        disposeHandle(handle);
+        return;
+      }
+      activeHandle = handle;
+    });
+    ensurePromise = raceWithInitTimeout(init, timeoutMs).catch((err: unknown) => {
       console.warn(
         '[qsharp-ls] Q# language service unavailable — falling back to syntax highlighting only.',
         err,
@@ -481,3 +605,11 @@ export function ensureQsharpLanguageService(monacoApi: Monaco): Promise<void> {
   }
   return ensurePromise;
 }
+
+// Vite HMR re-evaluates this module while the Monaco instance (and its
+// registered providers) survives — without teardown, every HMR cycle of this
+// chunk would stack a duplicate set of providers and spawn another worker.
+// `import.meta.hot` is undefined in production builds, so this is dev-only.
+import.meta.hot?.dispose(() => {
+  disposeQsharpLanguageService();
+});
