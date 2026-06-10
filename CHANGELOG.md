@@ -10,7 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added — developer docs at nuclei.dev/docs
 
 Nuclei now has a full developer documentation site at
-[nuclei.dev/docs](https://nuclei.dev/docs) — API/SDK-style docs for
+[getnuclei.dev/docs](https://getnuclei.dev/docs) — API/SDK-style docs for
 researchers and developers, not a user manual. 27 pages across seven
 sections: Introduction, Kernel API, Frameworks, Hardware, Dirac AI,
 Extending, and Reference.

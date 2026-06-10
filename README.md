@@ -4,13 +4,13 @@
 
 Nuclei is a free, open-source desktop IDE purpose-built for students taking their first quantum computing course. Write quantum code in a full-featured editor, see your circuits render in real time, explore qubit states on an interactive Bloch sphere, and get help from an AI tutor that understands your code.
 
-Download from [GitHub Releases](https://github.com/calelamb/nuclei/releases) or try the [web version](https://nuclei.dev).
+Download from [GitHub Releases](https://github.com/calelamb/nuclei/releases) or try the [web version](https://getnuclei.dev).
 
 ---
 
 ## Documentation
 
-Developer and researcher docs live at **[nuclei.dev/docs](https://nuclei.dev/docs)** -- the kernel WebSocket API (protocol v1), data schemas, framework adapters, hardware providers, plugin system, and runnable client examples. If you want to drive the kernel from your own scripts, integrate hardware pipelines, or extend Nuclei, start there.
+Developer and researcher docs live at **[getnuclei.dev/docs](https://getnuclei.dev/docs)** -- the kernel WebSocket API (protocol v1), data schemas, framework adapters, hardware providers, plugin system, and runnable client examples. If you want to drive the kernel from your own scripts, integrate hardware pipelines, or extend Nuclei, start there.
 
 ---
 
@@ -48,7 +48,7 @@ Starting with v0.1.2, Nuclei for macOS is **signed with an Apple Developer ID an
 
 ### Web Version
 
-No installation required. Try Nuclei in your browser at [nuclei.dev](https://nuclei.dev). The web version uses Pyodide to run Python entirely client-side.
+No installation required. Try Nuclei in your browser at [getnuclei.dev](https://getnuclei.dev). The web version uses Pyodide to run Python entirely client-side.
 
 ---
 

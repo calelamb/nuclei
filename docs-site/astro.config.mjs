@@ -3,11 +3,13 @@ import { defineConfig } from 'astro/config';
 import starlight from '@astrojs/starlight';
 import starlightLinksValidator from 'starlight-links-validator';
 
-// Nuclei developer docs — served at https://nuclei.dev/docs
+// Nuclei developer docs — served at https://getnuclei.dev/docs
+// (nuclei.dev appears in older copy but has no DNS today; switch `site`
+// back if that domain ever goes live.)
 // Built standalone (own package.json) and copied into dist-vercel/docs/
 // by scripts/build-vercel.sh.
 export default defineConfig({
-  site: 'https://nuclei.dev',
+  site: 'https://getnuclei.dev',
   base: '/docs',
   integrations: [
     starlight({
