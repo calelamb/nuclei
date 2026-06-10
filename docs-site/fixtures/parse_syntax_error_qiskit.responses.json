@@ -1,0 +1,14 @@
+[
+  {
+    "type": "snapshot",
+    "data": null
+  },
+  {
+    "type": "error",
+    "message": "SyntaxError: '(' was never closed",
+    "code": "compile_error",
+    "phase": "parse",
+    "traceback": "<any>",
+    "framework": "qiskit"
+  }
+]

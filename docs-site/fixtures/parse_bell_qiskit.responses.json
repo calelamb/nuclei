@@ -1,0 +1,17 @@
+[
+  {
+    "type": "snapshot",
+    "data": {
+      "framework": "qiskit",
+      "qubit_count": 2,
+      "classical_bit_count": 2,
+      "depth": 3,
+      "gates": [
+        { "type": "H", "targets": [0], "controls": [], "params": [], "layer": 0 },
+        { "type": "CNOT", "targets": [1], "controls": [0], "params": [], "layer": 1 },
+        { "type": "Measure", "targets": [0], "controls": [], "params": [], "layer": 2 },
+        { "type": "Measure", "targets": [1], "controls": [], "params": [], "layer": 2 }
+      ]
+    }
+  }
+]

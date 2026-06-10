@@ -1,0 +1,262 @@
+---
+title: "Hardware messages"
+description: "All hardware_* request types: provider connection, credential persistence, job submission, polling, results, and cancellation."
+---
+
+import { Code, Aside } from '@astrojs/starlight/components';
+import simulatorSession from '../../../../fixtures/hardware_simulator.session.json?raw';
+import credentialsSession from '../../../../fixtures/hardware_credentials.session.json?raw';
+import submitNoCircuitSession from '../../../../fixtures/hardware_submit_no_circuit.session.json?raw';
+import statusStaleReq from '../../../../fixtures/hardware_status_stale.request.json?raw';
+import statusStaleRes from '../../../../fixtures/hardware_status_stale.responses.json?raw';
+import resultsStaleReq from '../../../../fixtures/hardware_results_stale.request.json?raw';
+import resultsStaleRes from '../../../../fixtures/hardware_results_stale.responses.json?raw';
+import azureConnectReq from '../../../../fixtures/illustrative/hardware_connect_azure.request.json?raw';
+import azureConnectRes from '../../../../fixtures/illustrative/hardware_connect_azure.responses.json?raw';
+import azureSubmitReq from '../../../../fixtures/illustrative/hardware_submit_azure_qsharp.request.json?raw';
+import azureSubmitRes from '../../../../fixtures/illustrative/hardware_submit_azure_qsharp.responses.json?raw';
+
+Ten `hardware_*` request types manage provider connections and hardware
+jobs. Unlike the streaming execution messages, every hardware request gets
+exactly **one** reply — either its named response type or an `error`
+envelope (`{"type": "error", "message": "..."}` with no `code`/`phase`; see
+[errors](/docs/kernel-api/errors/)).
+
+Hardware state is **shared across all connections** — provider connections,
+credentials, and the job registry live in one process-wide manager, unlike
+the per-connection execution state. {/* server.py:20-23 */}
+
+Registered provider names: `simulator`, `ibm`, `google`, `ionq`, `nvidia`,
+`braket`, `azure`, `quantinuum`. The kernel connects `simulator` itself at
+startup, so the local simulator is always available. {/* server.py:22-23,
+manager.py:25-34 */}
+
+## Connection and credentials
+
+### `hardware_connect`
+
+| Field | Type | Required | Default | Notes |
+|-------|------|----------|---------|-------|
+| `type` | `"hardware_connect"` | yes | — | |
+| `provider` | string | no | `""` | One of the registered provider names. |
+| `credentials` | object | no | `{}` | Provider-specific string fields. |
+
+Reply: `hardware_connected` with `{ "provider": ..., "success": true | false }`.
+`success: false` covers both unknown provider names and failed
+authentication; an `error` envelope (`"Hardware connect failed: ..."`) is
+sent only if the connect attempt raised. {/* server.py:275-293 */}
+
+Semantics worth knowing:
+
+- **Synchronous, on the event loop.** The connect handshake (which for real
+  providers can include network validation) blocks the kernel until it
+  finishes — expect the connection to be quiet during a slow handshake.
+- **Credentials persist on success.** They are saved to the OS keyring
+  (macOS Keychain, Windows Credential Manager, Linux Secret Service), so the
+  next kernel start **auto-reconnects** without the user re-entering tokens.
+  The frontend can discard its in-memory copy as soon as the ack arrives.
+- **Empty credentials are NOT persisted.** `connect_provider` only writes
+  the keyring when the credentials object is non-empty — connecting the
+  simulator with `{}` never touches the keyring. {/* manager.py:126-131 */}
+- If no keyring backend exists (headless CI, some containers), the store
+  degrades to in-memory: the session works, persistence doesn't.
+
+### `hardware_set_credentials`
+
+Identical behavior to `hardware_connect` today (store + connect in one
+step); it is a separate message type so a future kernel can persist without
+connecting, without breaking older clients. Same fields, same
+`hardware_connected` reply. {/* server.py:295-313 */}
+
+### `hardware_clear_credentials`
+
+| Field | Type | Required | Default |
+|-------|------|----------|---------|
+| `type` | `"hardware_clear_credentials"` | yes | — |
+| `provider` | string | no | `""` |
+
+Drops the in-memory connection **and** wipes the stored keyring entry.
+Reply: `hardware_connected` with `success: false` — the provider is now
+disconnected. {/* server.py:315-328 */}
+
+### `hardware_connected_providers`
+
+No fields besides `type`. Reply: `hardware_connected_providers` with
+`{ "providers": ["simulator", ...] }` — used by the frontend to reconcile
+its UI after a reload. Order is not guaranteed.
+
+This replay-tested session shows set → clear → list:
+
+<Code code={credentialsSession} lang="json" title="hardware_credentials.session.json" />
+
+## Backends and jobs
+
+### `hardware_list_backends`
+
+| Field | Type | Required | Default | Notes |
+|-------|------|----------|---------|-------|
+| `type` | `"hardware_list_backends"` | yes | — | |
+| `provider` | string | no | `null` | Omitted/`null` lists backends from **all connected** providers. Unknown or disconnected provider → empty list, not an error. |
+
+Reply: `hardware_backends` with `{ "backends": [BackendInfo, ...] }` — see
+[schemas](/docs/kernel-api/schemas/#backendinfo).
+
+### `hardware_submit`
+
+| Field | Type | Required | Default | Notes |
+|-------|------|----------|---------|-------|
+| `type` | `"hardware_submit"` | yes | — | |
+| `provider` | string | no | `"simulator"` | |
+| `backend` | string | no | `"sim_qasm"` | Backend/target name from `hardware_list_backends`. |
+| `shots` | integer | no | `1024` | |
+| `code` | string | no | `""` | Source text — not a circuit object. |
+| `language` | `"python"` \| `"qsharp"` | no | omitted | Q# is also recognized by regex when omitted, for older clients. |
+
+Reply: `hardware_job_submitted` with a [`JobHandle`](/docs/kernel-api/schemas/#jobhandle).
+
+The kernel routes `code` by language and provider before submission
+(payload preparation runs off-thread; the provider's submit call itself
+runs on the event loop): {/* server.py:88-143, 375-398 */}
+
+| Source | Provider | Route |
+|--------|----------|-------|
+| Q# | `simulator` | Raw source passes through — the simulator re-runs it through the executor pipeline. |
+| Q# | `azure` | Compiled to QIR. Targets containing `quantinuum` get the `Adaptive_RI` profile (mid-circuit measurement + classical feedback); everything else gets `Base`. |
+| Q# | anything else | Rejected — those provider SDKs take Python circuit objects, not Q# source or QIR. The error message suggests Azure Quantum or a Qiskit rewrite. |
+| Python | `simulator` | Raw source passes through. |
+| Python | real hardware | `exec()` the code, then extract a circuit object from the namespace (Qiskit `QuantumCircuit`, Cirq `Circuit`, or CUDA-Q kernel — search order is provider-aware). No recognizable circuit → error. |
+
+<Aside type="caution" title="Submit failures arrive two different ways">
+A failed submission can come back as **either**:
+
+1. An `error` envelope — when routing/compilation/extraction raised, or the
+   provider isn't connected (`"Hardware submit failed: ..."`). No job
+   exists.
+2. A normal `hardware_job_submitted` carrying a job with
+   `"status": "failed"` — when the provider accepted the call but failed
+   internally (e.g. Azure target lookup/submit errors set a human-readable
+   `error` field on the handle; the local simulator sets `status: "failed"`
+   with `error: null` and puts the diagnostic in `hardware_results`
+   instead).
+
+Clients must handle both. {/* server.py:390-398, azure_provider.py:222-264,
+simulator_provider.py:65-75 */}
+</Aside>
+
+**The local simulator completes synchronously**: the simulation runs during
+the submit call (blocking the kernel's event loop for its duration), and the
+job arrives already in `status: "complete"` with `queue_position: null`.
+
+### `hardware_status`
+
+| Field | Type | Required | Default |
+|-------|------|----------|---------|
+| `type` | `"hardware_status"` | yes | — |
+| `job_id` | string | no | `""` |
+
+Reply: `hardware_job_update` with the current `JobHandle`.
+
+Polling semantics — read carefully: {/* manager.py:175-196 */}
+
+- Status lookup **never re-queries the provider for job status**. For
+  `queued`/`running` jobs it refreshes **only** `queue_position`; the
+  `status` field changes only via submission, `hardware_cancel`, or a kernel
+  restart. For real providers, completion is discovered by polling
+  `hardware_results`, not `hardware_status`.
+- `stale` jobs (see below) short-circuit: the stored handle is returned
+  without touching the provider.
+- An **unknown** `job_id` is not an error — the kernel synthesizes a
+  `stale` handle so clients can mark the job as no-longer-tracked instead of
+  surfacing a raw failure:
+
+<Code code={statusStaleReq} lang="json" title="hardware_status_stale.request.json" />
+<Code code={statusStaleRes} lang="json" title="hardware_status_stale.responses.json" />
+
+**`stale` semantics:** job metadata persists to disk
+(`~/.nuclei/jobs.json`), and on kernel start every job that was non-terminal
+at shutdown is rehydrated with `status: "stale"` — the kernel no longer
+holds the provider SDK handle, so live polling cannot resume; re-submit to
+run again. Terminal jobs (`complete`/`failed`) keep their stored status so
+history survives restarts. {/* manager.py:43-78 */}
+
+### `hardware_list_jobs`
+
+No fields besides `type`. Reply: `hardware_jobs` with
+`{ "jobs": [JobHandle, ...] }` — every tracked job, including rehydrated
+ones. The frontend calls this on (re)connect to repopulate its job tracker.
+
+### `hardware_results`
+
+| Field | Type | Required | Default |
+|-------|------|----------|---------|
+| `type` | `"hardware_results"` | yes | — |
+| `job_id` | string | no | `""` |
+
+Reply: `hardware_result` with `{ "job_id": ..., "data": {...} }`. `data` is
+a **free-form provider dictionary** — its shape depends on the provider:
+
+- The local simulator returns a full
+  [`SimulationResult`](/docs/kernel-api/schemas/#simulationresult) for
+  successful jobs, and `{ "error": KernelError }` for failed ones.
+- Real providers return counts-style dictionaries, or
+  `{ "error": "...", "status": "..." }` while the job is still pending or
+  after a failure. Treat `data.error` as the failure signal.
+- An unknown `job_id` returns a stale marker rather than an error:
+
+<Code code={resultsStaleReq} lang="json" title="hardware_results_stale.request.json" />
+<Code code={resultsStaleRes} lang="json" title="hardware_results_stale.responses.json" />
+
+### `hardware_cancel`
+
+| Field | Type | Required | Default |
+|-------|------|----------|---------|
+| `type` | `"hardware_cancel"` | yes | — |
+| `job_id` | string | no | `""` |
+
+Reply: `hardware_job_cancelled` with `{ "job_id": ..., "success": true | false }`.
+
+Cancel is best-effort and has sharp edges worth knowing:
+{/* manager.py:212-228, base.py:81-85 */}
+
+- On success the job's status is set to **`failed`** — there is no separate
+  `cancelled` wire status in protocol v1.
+- Providers whose jobs complete synchronously (simulator, NVIDIA) inherit a
+  no-op cancel that returns `true` — so cancelling an already-`complete`
+  simulator job "succeeds" and flips its status to `failed`. Don't offer
+  cancel for terminal jobs in your UI.
+- Unknown job ids are treated as already-gone: `success: true`.
+
+## Replay-tested simulator walkthrough
+
+The full lifecycle against the always-available local simulator — connect,
+list, submit, poll, fetch results, list jobs, cancel — as a session fixture
+the test suite replays end-to-end (the `"<job-id>"` marker carries the
+server-generated id between steps):
+
+<Code code={simulatorSession} lang="json" title="hardware_simulator.session.json" />
+
+And the failed-submission path — note `status: "failed"` with
+`error: null` on the handle, with the actual diagnostic delivered by
+`hardware_results`:
+
+<Code code={submitNoCircuitSession} lang="json" title="hardware_submit_no_circuit.session.json" />
+
+## Azure Quantum examples (illustrative)
+
+<Aside type="caution" title="Illustrative — not replay-tested">
+These two examples require a real Azure Quantum workspace and a live
+submission, so unlike everything above they are **not** verified by the
+fixture test suite (see `docs-site/fixtures/UNTESTED.md`). Field names match
+the provider source; ids and timestamps are invented.
+</Aside>
+
+<Code code={azureConnectReq} lang="json" title="illustrative/hardware_connect_azure.request.json" />
+<Code code={azureConnectRes} lang="json" title="illustrative/hardware_connect_azure.responses.json" />
+
+A Q# submission to a Quantinuum target via Azure compiles to QIR with the
+`Adaptive_RI` profile and comes back `queued`. `queue_position` is `null` at
+submission; Azure does not expose queue positions, so later `hardware_status`
+polls report `-1` ("unknown") rather than a real position:
+
+<Code code={azureSubmitReq} lang="json" title="illustrative/hardware_submit_azure_qsharp.request.json" />
+<Code code={azureSubmitRes} lang="json" title="illustrative/hardware_submit_azure_qsharp.responses.json" />

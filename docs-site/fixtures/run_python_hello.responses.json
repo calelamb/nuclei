@@ -1,0 +1,10 @@
+[
+  {
+    "type": "output",
+    "text": "hello from the kernel\n"
+  },
+  {
+    "type": "python_result",
+    "success": true
+  }
+]

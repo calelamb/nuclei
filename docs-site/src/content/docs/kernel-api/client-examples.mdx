@@ -1,0 +1,76 @@
+---
+title: "Client examples"
+description: "Minimal, runnable kernel-protocol clients in Python and TypeScript, plus a websocat one-liner."
+---
+
+import { Code, Aside, Tabs, TabItem } from '@astrojs/starlight/components';
+import pythonClient from '../../../../fixtures/clients/example_client.py?raw';
+import tsClient from '../../../../fixtures/clients/example_client.ts?raw';
+
+Two complete clients that connect, parse a Bell circuit, execute it, and
+print the measurement histogram. Both implement the one pattern every
+kernel client needs: **drain messages until the terminal type arrives**,
+relaying any interleaved `output`/`stderr`/`error` along the way (see
+[the streaming model](/docs/kernel-api/overview/#the-streaming-model)).
+
+Start a kernel first:
+
+```bash
+cd kernel && python server.py
+# Nuclei kernel ready on ws://localhost:9742
+```
+
+<Tabs>
+<TabItem label="Python">
+
+Requires `pip install websockets`. This exact file is executed by the kernel
+test suite against a live server on every CI run
+(`kernel/tests/test_docs_fixtures.py`), so it is guaranteed to speak the
+current protocol.
+
+<Code code={pythonClient} lang="python" title="example_client.py" />
+
+```bash
+python example_client.py            # default ws://localhost:9742
+python example_client.py ws://localhost:9743
+```
+
+</TabItem>
+<TabItem label="TypeScript">
+
+Requires the `ws` package (`npm install ws`); run directly with
+[`tsx`](https://tsx.is) — no build step. This client mirrors the Python one,
+which is the replay-tested variant.
+
+<Code code={tsClient} lang="ts" title="example_client.ts" />
+
+```bash
+npx tsx example_client.ts           # default ws://localhost:9742
+```
+
+</TabItem>
+</Tabs>
+
+Expected output for either client (counts vary run to run):
+
+```text
+circuit: 4 gates, depth 3
+00: 251
+11: 261
+```
+
+## One-off requests from the shell
+
+For poking at the protocol without writing code,
+[websocat](https://github.com/vi/websocat) works well with the fixture files
+from `docs-site/fixtures/` — every documented request is sitting there as
+ready-to-send JSON:
+
+```bash
+# jq -c compacts the pretty-printed fixture to one line (websocat sends one
+# frame per input line); --no-close keeps the connection open after stdin
+# EOF so the response frames have time to arrive.
+jq -c . docs-site/fixtures/run_python_hello.request.json | websocat --no-close ws://localhost:9742
+```
+
+Each response frame prints on its own line; exit with Ctrl-C.

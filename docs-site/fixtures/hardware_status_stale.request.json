@@ -1,0 +1,4 @@
+{
+  "type": "hardware_status",
+  "job_id": "job-from-before-restart"
+}

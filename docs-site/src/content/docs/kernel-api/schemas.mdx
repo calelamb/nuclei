@@ -1,0 +1,174 @@
+---
+title: "Schemas"
+description: "Field-by-field reference for CircuitSnapshot, Gate, SimulationResult, BackendInfo, and JobHandle — including bitstring-key conventions per framework."
+---
+
+import { Code, Aside } from '@astrojs/starlight/components';
+import parseBellRes from '../../../../fixtures/parse_bell_qiskit.responses.json?raw';
+
+The payload shapes referenced by [execution](/docs/kernel-api/messages-execution/)
+and [hardware](/docs/kernel-api/messages-hardware/) messages. Python sources
+of truth: `kernel/models/snapshot.py`, `kernel/models/errors.py`,
+`kernel/hardware/base.py`. TypeScript mirror: `src/types/quantum.ts`.
+
+## CircuitSnapshot
+
+Carried in `snapshot.data`. Lightweight — produced on every parse, no
+simulation.
+
+| Field | Type | Notes |
+|-------|------|-------|
+| `framework` | `"qiskit"` \| `"cirq"` \| `"cuda-q"` \| `"qsharp"` | Which adapter produced the snapshot. |
+| `qubit_count` | integer | |
+| `classical_bit_count` | integer | Qiskit: the circuit's classical register size. Cirq and Q#: the number of measurement operations. |
+| `depth` | integer | Number of layers (see layering below). `0` for an empty circuit. |
+| `gates` | `Gate[]` | In extraction order. |
+
+<Code code={parseBellRes} lang="json" title="A replay-tested snapshot (parse_bell_qiskit.responses.json)" />
+
+## Gate
+
+| Field | Type | Notes |
+|-------|------|-------|
+| `type` | string | Canonical gate name (table below). |
+| `targets` | `int[]` | Target qubit indices. |
+| `controls` | `int[]` | Control qubit indices — empty for uncontrolled gates. Both SWAP qubits are `targets`. |
+| `params` | `float[]` | Rotation angles in radians (e.g. `RZ`); empty otherwise. |
+| `layer` | integer | Column in the circuit diagram, 0-based. |
+
+### Canonical gate names
+
+Adapters normalize framework-native gate names to this registry:
+
+| Canonical | Notes |
+|-----------|-------|
+| `H`, `X`, `Y`, `Z` | Pauli + Hadamard. |
+| `S`, `Sdg`, `T`, `Tdg` | Phase gates and adjoints. |
+| `RX`, `RY`, `RZ` | One angle in `params`. |
+| `U1`, `U2`, `U3` | Qiskit only. |
+| `CNOT`, `CZ` | One qubit in `controls`, one in `targets`. |
+| `SWAP` | Both qubits in `targets`. |
+| `Toffoli` | Two qubits in `controls`, one in `targets`. |
+| `Measure` | One target per measured qubit. |
+| `Reset` | Q# only — mid-circuit `\|0⟩` preparation. |
+
+**Uppercase-passthrough rule:** a gate that maps to no canonical name passes
+through as its native name uppercased (controls preserved). Clients should
+render unknown `type` values as labeled boxes rather than failing.
+{/* qiskit_adapter.py:50-58, qsharp_adapter.py:190-193 */}
+
+### Layering
+
+- **Qiskit and Q#** use a shared greedy algorithm: each gate lands in the
+  earliest layer where all of its qubits are free. `depth` is the number of
+  occupied layers. {/* adapters/_math.py:assign_layer */}
+- **Cirq** uses the circuit's native moment indices as layers, and `depth`
+  is the moment count — Cirq's own layout is preserved rather than
+  re-packed. {/* cirq_adapter.py:64,94,102 */}
+
+## SimulationResult
+
+Carried in `result.data` (execute) and in simulator `hardware_result.data`.
+
+| Field | Type | Notes |
+|-------|------|-------|
+| `state_vector` | `{re, im}[]` | Final statevector with measurements stripped, length `2^n`. May be **empty** for Q# (below). |
+| `probabilities` | `{bitstring: float}` | Derived from the exact statevector when available; entries with probability ≤ `1e-10` omitted. Q# without a state dump: sampled frequencies instead. |
+| `measurements` | `{bitstring: int}` | Sampled counts over `shots` runs. Empty when the circuit has no measurements. |
+| `bloch_coords` | `{x, y, z}[]` | Per-qubit Bloch vector from the reduced density matrix. Entangled qubits sit near the origin. |
+| `execution_time_ms` | float | Wall-clock simulation time, rounded to 0.1 ms. |
+| `shot_count` | integer | Echo of the requested `shots`. |
+
+### Bitstring-key conventions (read this twice)
+
+The frontend treats `probabilities`/`measurements` keys as **opaque
+labels** — and it has to, because the bit order differs per framework:
+
+| Framework | `probabilities` keys | `measurements` keys |
+|-----------|----------------------|---------------------|
+| `qiskit` | Statevector index in binary. Qiskit is little-endian: **qubit 0 is the rightmost character**. {/* qiskit_adapter.py:112-116 */} | Aer counts, Qiskit convention: classical bit 0 rightmost. |
+| `cirq` | Statevector index in binary with qubits in sorted order. Cirq is big-endian: **qubit 0 is the leftmost character**. {/* cirq_adapter.py:133-137 */} | Per-measurement-key arrays concatenated in **sorted key-name order**; within a key, bits follow the measured qubit order. |
+| `qsharp` | Dense-state index in binary; qdk states are big-endian: **qubit 0 is the leftmost character** (same as Q#'s own `DumpMachine` display). {/* qsharp_adapter.py:524-534 */} | Flattened `Result` values **in the order the entry point returns them** — return order, not qubit index. |
+
+If you correlate keys across frameworks (e.g. a grader comparing a Qiskit
+and a Q# solution), reverse the Qiskit keys first.
+
+### Q# statevector is best-effort
+
+Q# runs are sampled shot-by-shot; the exact state is only recoverable when
+the program itself calls `DumpMachine()`: {/* qsharp_adapter.py:515-550 */}
+
+- **Dump present** (last `DumpMachine` of the first shot, qubit count
+  matching): `state_vector` is the exact dense state, `probabilities` are
+  exact (replacing sampled frequencies), and Bloch coordinates come from
+  partial traces.
+- **No dump**: `state_vector` is `[]`, `probabilities` are sampled
+  frequencies (`count / shots`), and Bloch coordinates use measurement
+  marginals — only *z* is observable from counts, so `x = y = 0`.
+
+## KernelError
+
+The payload merged into `error` messages — see
+[errors](/docs/kernel-api/errors/) for the envelope and code table. When a
+`KernelError` appears as a plain object (e.g. simulator
+`hardware_result.data.error`), all five fields are present, `null` when
+unset: `code`, `message`, `traceback`, `framework`, `dependency`.
+
+## BackendInfo
+
+Elements of `hardware_backends.backends`.
+
+| Field | Type | Notes |
+|-------|------|-------|
+| `name` | string | Backend/target id — pass as `backend` in `hardware_submit`. |
+| `provider` | string | Owning provider name. |
+| `qubit_count` | integer | |
+| `connectivity` | `[int, int][]` | Coupled qubit pairs. |
+| `queue_length` | integer | Provider-reported queue depth (0 for simulators). |
+| `average_error_rate` | float | Representative gate error rate. |
+| `gate_set` | `string[]` | Canonical gate names the backend supports. |
+| `status` | `"online"` \| `"offline"` \| `"maintenance"` | |
+
+```json
+{
+  "name": "sim_qasm",
+  "provider": "simulator",
+  "qubit_count": 32,
+  "connectivity": [[0, 1], [1, 2]],
+  "queue_length": 0,
+  "average_error_rate": 0.0005,
+  "gate_set": ["H", "X", "Y", "Z", "CNOT", "CZ", "RX", "RY", "RZ", "T", "S", "Toffoli", "SWAP", "Measure"],
+  "status": "online"
+}
+```
+
+(Schema illustration with `connectivity` truncated — the full, replay-tested
+backend list is embedded on the
+[hardware messages page](/docs/kernel-api/messages-hardware/#hardware_list_backends).)
+
+## JobHandle
+
+Carried by `hardware_job_submitted.job`, `hardware_job_update.job`, and
+`hardware_jobs.jobs[]`.
+
+| Field | Type | Notes |
+|-------|------|-------|
+| `id` | string | Kernel-generated UUID — not the provider's own job id. |
+| `provider` | string | `"unknown"` only in synthesized stale handles. |
+| `backend` | string | |
+| `status` | string | Vocabulary below. |
+| `queue_position` | integer \| null | `null` before the first poll or when not applicable. Refreshed only by `hardware_status` for `queued`/`running` jobs; providers report `-1` when they cannot determine a position (e.g. Azure). |
+| `shots` | integer | |
+| `submitted_at` | string | ISO-8601 UTC timestamp. Empty string in synthesized stale handles. |
+| `error` | string \| null | Human-readable failure detail. May be `null` even for `failed` simulator jobs — the diagnostic lives in `hardware_results` instead. |
+
+### Status vocabulary
+
+| Status | Meaning |
+|--------|---------|
+| `queued` | Accepted by the provider, waiting. |
+| `running` | Executing on the backend. |
+| `complete` | Finished; fetch `hardware_results`. |
+| `failed` | Submission/run failed — **or the job was cancelled** (`hardware_cancel` sets `failed`; there is no separate cancelled wire status). |
+| `unknown` | Provider returned an unrecognized state. |
+| `stale` | Rehydrated after a kernel restart without a live SDK handle, or the id is no longer tracked. Re-submit to run again. |

@@ -1,0 +1,4 @@
+{
+  "type": "run_python",
+  "code": "print('hello from the kernel')\n"
+}

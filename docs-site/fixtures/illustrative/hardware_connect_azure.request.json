@@ -1,0 +1,10 @@
+{
+  "type": "hardware_connect",
+  "provider": "azure",
+  "credentials": {
+    "subscription_id": "00000000-0000-0000-0000-000000000000",
+    "resource_group": "my-quantum-rg",
+    "workspace_name": "my-workspace",
+    "location": "eastus"
+  }
+}

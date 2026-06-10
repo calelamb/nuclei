@@ -1,0 +1,15 @@
+[
+  {
+    "type": "hardware_job_update",
+    "job": {
+      "id": "job-from-before-restart",
+      "provider": "unknown",
+      "backend": "unknown",
+      "status": "stale",
+      "queue_position": null,
+      "shots": 0,
+      "submitted_at": "",
+      "error": "This job is no longer tracked by the kernel (the kernel may have restarted). Re-submit to run it again."
+    }
+  }
+]

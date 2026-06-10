@@ -1,0 +1,169 @@
+---
+title: "Execution messages"
+description: "Full reference for parse, execute, and run_python: request fields, response sequences, and ordering rules."
+---
+
+import { Code, Aside } from '@astrojs/starlight/components';
+import parseBellReq from '../../../../fixtures/parse_bell_qiskit.request.json?raw';
+import parseBellRes from '../../../../fixtures/parse_bell_qiskit.responses.json?raw';
+import parseErrReq from '../../../../fixtures/parse_syntax_error_qiskit.request.json?raw';
+import parseErrRes from '../../../../fixtures/parse_syntax_error_qiskit.responses.json?raw';
+import parseQsharpReq from '../../../../fixtures/parse_bell_qsharp.request.json?raw';
+import parseQsharpRes from '../../../../fixtures/parse_bell_qsharp.responses.json?raw';
+import executeReq from '../../../../fixtures/execute_bell_qiskit.request.json?raw';
+import executeRes from '../../../../fixtures/execute_bell_qiskit.responses.json?raw';
+import executeNoCircuitReq from '../../../../fixtures/execute_no_circuit.request.json?raw';
+import executeNoCircuitRes from '../../../../fixtures/execute_no_circuit.responses.json?raw';
+import runPythonReq from '../../../../fixtures/run_python_hello.request.json?raw';
+import runPythonRes from '../../../../fixtures/run_python_hello.responses.json?raw';
+
+Three request types drive the editor loop: `parse` (cheap, on every code
+change — no simulation), `execute` (full simulation, on Cmd+Enter), and
+`run_python` (plain Python, no circuit semantics). All response payload
+schemas are defined in [schemas](/docs/kernel-api/schemas/); error codes in
+[errors](/docs/kernel-api/errors/).
+
+## Framework routing and the `language` field
+
+Each request carries the source in `code` and an optional `language` hint:
+
+{/* Routing: executor.py:105-126; detection patterns: executor.py:26-61 */}
+
+| `language` | Behavior |
+|------------|----------|
+| `"qsharp"` | Route straight to the Q# adapter, skipping all detection. |
+| `"python"` | Regex detection among Python frameworks only — Q#-looking text inside Python strings or comments cannot hijack routing. |
+| omitted | Pure regex detection, in order: Q#, Qiskit, Cirq, CUDA-Q (first match wins). |
+
+Detection regexes (first match in this order):
+
+| Framework | Pattern |
+|-----------|---------|
+| `qsharp` | `^\s*(namespace\s+[\w.]+\|operation\s+\w+\s*\(\|import\s+Std\|open\s+Microsoft\.Quantum)` (multiline) |
+| `qiskit` | `from\s+qiskit\s+import\|import\s+qiskit` |
+| `cirq` | `import\s+cirq\|from\s+cirq\s+import` |
+| `cuda-q` | `import\s+cudaq\|from\s+cudaq\s+import\|@cudaq\.kernel` |
+
+Q# is a *source-mode* framework: its source is compiled by the QDK
+interpreter and never reaches Python `exec()`. Python frameworks are
+executed with `exec()` and the resulting namespace is scanned for a circuit
+object (the **last** one defined wins).
+
+## `parse`
+
+Extracts a `CircuitSnapshot` without simulating. Sent by the frontend on a
+300 ms debounce as the user types.
+
+| Field | Type | Required | Default | Notes |
+|-------|------|----------|---------|-------|
+| `type` | `"parse"` | yes | — | |
+| `code` | string | no | `""` | Source text (Python or Q#). |
+| `language` | `"python"` \| `"qsharp"` | no | omitted | See routing above. |
+
+Response sequence, in order: {/* server.py:184-209 */}
+
+| # | Message | When |
+|---|---------|------|
+| 1 | `output` | Only if the code printed to stdout. |
+| 2 | `stderr` | Only if the code wrote to stderr. |
+| 3 | `snapshot` | **Always.** `data` is the `CircuitSnapshot`, or `null` when there is no circuit or the code failed. |
+| 4 | `error` | Only on failure, with `phase: "parse"`. |
+
+A source file with no circuit in it is **not** a parse error: the kernel
+sends `snapshot` with `data: null` and no `error`, so live-typing students
+see a quietly empty diagram instead of a red banner. (`execute` treats the
+same situation as a `no_circuit` error — see below.)
+
+<Code code={parseBellReq} lang="json" title="parse_bell_qiskit.request.json" />
+<Code code={parseBellRes} lang="json" title="parse_bell_qiskit.responses.json" />
+
+On failure, `snapshot: null` still arrives first (so stale diagrams clear),
+then the error:
+
+<Code code={parseErrReq} lang="json" title="parse_syntax_error_qiskit.request.json" />
+<Code code={parseErrRes} lang="json" title="parse_syntax_error_qiskit.responses.json" />
+
+Q# parses through the same message — only the payload's `framework` and the
+compile pipeline differ:
+
+<Code code={parseQsharpReq} lang="json" title="parse_bell_qsharp.request.json" />
+<Code code={parseQsharpRes} lang="json" title="parse_bell_qsharp.responses.json" />
+
+## `execute`
+
+Runs the full pipeline: build the circuit, extract a snapshot, simulate.
+
+| Field | Type | Required | Default | Notes |
+|-------|------|----------|---------|-------|
+| `type` | `"execute"` | yes | — | |
+| `code` | string | no | `""` | Source text. |
+| `shots` | integer | no | `1024` | Sampled-measurement count. {/* server.py:212 */} |
+| `language` | `"python"` \| `"qsharp"` | no | omitted | See routing above. |
+
+Response sequence, in order: {/* server.py:211-248 */}
+
+| # | Message | When |
+|---|---------|------|
+| 1 | `output` | Only if stdout was produced. |
+| 2 | `stderr` | Only if stderr was produced. |
+| 3 | `snapshot` | If a snapshot was extracted, **or** the error code is one of `unsupported_framework`, `missing_dependency`, `no_circuit`, `execution_error`, `adapter_error` (sent with `data: null` so the frontend clears the diagram). Not sent for `compile_error`. |
+| 4a | `error` then `result` with `data: null` | On failure. The error is deliberately sent **before** the null result so a client that keys its UI off `result` never flashes "success with no data" before learning why. {/* server.py:236-243 */} |
+| 4b | `result` | On success, with the `SimulationResult` in `data`. |
+
+`result` is the terminal message of every `execute`, success or failure —
+drain until you see it.
+
+A subtlety worth knowing: when simulation itself fails (`simulation_error`),
+the snapshot was already extracted, so the sequence is `snapshot` (with
+data) → `error` → `result: null` — the diagram stays useful even though the
+run failed.
+
+<Code code={executeReq} lang="json" title="execute_bell_qiskit.request.json" />
+<Code code={executeRes} lang="json" title="execute_bell_qiskit.responses.json" />
+
+The `no_circuit` failure path (framework imported, no circuit defined):
+
+<Code code={executeNoCircuitReq} lang="json" title="execute_no_circuit.request.json" />
+<Code code={executeNoCircuitRes} lang="json" title="execute_no_circuit.responses.json" />
+
+## `run_python`
+
+Executes arbitrary Python with stdout/stderr capture — no framework
+detection, no snapshot, no simulation. Used for terminal-style scratch code.
+
+| Field | Type | Required | Default |
+|-------|------|----------|---------|
+| `type` | `"run_python"` | yes | — |
+| `code` | string | no | `""` |
+
+Response sequence, in order: {/* server.py:250-273 */}
+
+| # | Message | When |
+|---|---------|------|
+| 1 | `output` | Only if stdout was produced. |
+| 2 | `stderr` | Only if stderr was produced. |
+| 3 | `error` | Only on failure, with `phase: "python"` — sent before `python_result` so failure UI never flashes success. |
+| 4 | `python_result` | **Always.** `{ "success": true \| false }`. |
+
+<Code code={runPythonReq} lang="json" title="run_python_hello.request.json" />
+<Code code={runPythonRes} lang="json" title="run_python_hello.responses.json" />
+
+## Timeout semantics, honestly
+
+The executor defines a 30-second timeout (`EXECUTION_TIMEOUT_SECONDS`)
+enforced with `SIGALRM` — which only works on the **main thread** of a
+POSIX process. The production server runs `parse`/`execute`/`run_python`
+inside `asyncio.to_thread` worker threads to keep the event loop responsive,
+so in practice **the timeout never fires and long-running programs run to
+completion**. {/* executor.py:206-215, server.py:186-188 */}
+
+What protects clients instead:
+
+- The WebSocket heartbeat (ping 30 s / timeout 20 s) detects a hung kernel
+  process; the IDE restarts the kernel when the connection dies.
+- Requests on one connection are serialized, so a long `execute` delays
+  *your* next message, not other connections.
+
+The `timeout` error code still exists in the protocol: it fires when the
+`Executor` is embedded directly on a main thread (e.g. scripts and tests),
+and clients should handle it. See [errors](/docs/kernel-api/errors/).

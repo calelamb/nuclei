@@ -1,0 +1,48 @@
+[
+  {
+    "request": {
+      "type": "hardware_submit",
+      "provider": "simulator",
+      "backend": "sim_qasm",
+      "shots": 128,
+      "code": "x = 1\n",
+      "language": "python"
+    },
+    "responses": [
+      {
+        "type": "hardware_job_submitted",
+        "job": {
+          "id": "<job-id>",
+          "provider": "simulator",
+          "backend": "sim_qasm",
+          "status": "failed",
+          "queue_position": null,
+          "shots": 128,
+          "submitted_at": "<any>",
+          "error": null
+        }
+      }
+    ]
+  },
+  {
+    "request": {
+      "type": "hardware_results",
+      "job_id": "<job-id>"
+    },
+    "responses": [
+      {
+        "type": "hardware_result",
+        "job_id": "<job-id>",
+        "data": {
+          "error": {
+            "code": "unsupported_framework",
+            "message": "No supported quantum framework detected in code.",
+            "traceback": null,
+            "framework": null,
+            "dependency": null
+          }
+        }
+      }
+    ]
+  }
+]
