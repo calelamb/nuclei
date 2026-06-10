@@ -1,0 +1,111 @@
+/* ============================================================
+   Nuclei docs theme — overrides for Starlight custom properties.
+
+   Dark theme (default-designed): the Nuclei app palette —
+   navy #0F1B2D surfaces, teal #00B4D8 accent.
+   Light theme: the nuclei.dev landing page palette —
+   #FFFFFF / #FAFBFC / #F1F5F9 surfaces, teal #0891B2 accent.
+
+   Fonts: Exo for headings + wordmark, system-ui for body,
+   Roboto Mono for code (self-hosted via @fontsource).
+   ============================================================ */
+
+/* ---------- Dark theme (Starlight default scope) ---------- */
+:root {
+  /* Navy gray scale built around #0F1B2D (hue ~215) */
+  --sl-color-white: #f2f7fc;
+  --sl-color-gray-1: #dce6f2;
+  --sl-color-gray-2: #b4c4d8;
+  --sl-color-gray-3: #8298b3;
+  --sl-color-gray-4: #4f647f;
+  --sl-color-gray-5: #2c4156;
+  --sl-color-gray-6: #16263c;
+  --sl-color-black: #0f1b2d;
+
+  /* Teal accent — links, active nav, highlights */
+  --sl-color-accent-low: #093a4d;
+  --sl-color-accent: #00b4d8;
+  --sl-color-accent-high: #8fe3f7;
+
+  /* Slightly deeper nav/sidebar than the content surface */
+  --sl-color-bg-nav: #0b1422;
+  --sl-color-bg-sidebar: #0b1422;
+
+  /* Code font */
+  --sl-font-mono: 'Roboto Mono';
+
+  /* Nuclei brand extras */
+  --nuclei-purple: #7b2d8e;
+}
+
+/* ---------- Light theme (landing page palette) ---------- */
+:root[data-theme='light'] {
+  --sl-color-white: #1a1a2e;   /* strongest text — landing --text-primary */
+  --sl-color-gray-1: #243047;
+  --sl-color-gray-2: #475569;  /* landing --text-secondary */
+  --sl-color-gray-3: #64748b;
+  --sl-color-gray-4: #94a3b8;  /* landing --text-muted */
+  --sl-color-gray-5: #cbd5e1;
+  --sl-color-gray-6: #f1f5f9;  /* landing --bg-elevated */
+  --sl-color-gray-7: #fafbfc;  /* landing --bg-surface */
+  --sl-color-black: #ffffff;   /* landing --bg-deep */
+
+  --sl-color-accent-low: #d3eef6;
+  --sl-color-accent: #0891b2;       /* landing --accent-teal */
+  --sl-color-accent-high: #0e7490;  /* landing --accent-teal-strong */
+
+  --sl-color-bg-nav: #fafbfc;
+  --sl-color-bg-sidebar: #fafbfc;
+
+  --nuclei-purple: #6b21a8; /* landing --accent-purple */
+}
+
+/* ---------- Typography ---------- */
+/* Headings in Exo; body stays on the system stack. */
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+  font-family: 'Exo', var(--sl-font-system);
+}
+
+/* Wordmark: "NUCLEI Docs" in Exo, letterspaced like the landing nav. */
+.site-title {
+  font-family: 'Exo', var(--sl-font-system);
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: var(--sl-color-white);
+}
+
+/* ---------- Dirac asides ----------
+   Hook for Dirac AI callouts: wrap a `:::note[Dirac]` aside in a
+   `<div class="dirac">` to get the purple Dirac treatment instead of
+   the default note styling:
+
+     <div class="dirac">
+
+     :::note[Dirac]
+     ...
+     :::
+
+     </div>
+*/
+.dirac .starlight-aside,
+.starlight-aside.dirac {
+  /* Override the variable Starlight's border shorthand reads, rather than
+     fighting the shorthand with a longhand — survives @layer reordering. */
+  --sl-color-asides-border: var(--nuclei-purple);
+  --sl-color-asides-text-accent: var(--nuclei-purple);
+}
+
+:root[data-theme='light'] .dirac .starlight-aside,
+:root[data-theme='light'] .starlight-aside.dirac {
+  background-color: rgba(107, 33, 168, 0.08);
+}
+
+:root:not([data-theme='light']) .dirac .starlight-aside,
+:root:not([data-theme='light']) .starlight-aside.dirac {
+  background-color: rgba(123, 45, 142, 0.16);
+}

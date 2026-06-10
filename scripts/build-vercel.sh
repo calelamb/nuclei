@@ -2,6 +2,7 @@
 # Build the combined Vercel output:
 #   dist-vercel/         ← landing page (served at /)
 #   dist-vercel/try/     ← web IDE (served at /try)
+#   dist-vercel/docs/    ← developer docs (served at /docs)
 #
 # This is the buildCommand for the root vercel.json.
 set -euo pipefail
@@ -24,9 +25,16 @@ cp landing/index.html dist-vercel/
 mkdir -p dist-vercel/try
 cp -R dist-web/. dist-vercel/try/
 
+echo "[build-vercel] building docs site"
+(cd docs-site && npm ci && npm run build)
+mkdir -p dist-vercel/docs
+cp -R docs-site/dist/. dist-vercel/docs/
+
 echo "[build-vercel] contents:"
 ls -la dist-vercel/ | head -20
 echo "  try/:"
 ls dist-vercel/try/ | head -20
+echo "  docs/:"
+ls dist-vercel/docs/ | head -20
 
 echo "[build-vercel] done"
