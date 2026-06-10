@@ -121,7 +121,7 @@ runs on the event loop): {/* server.py:88-143, 375-398 */}
 | Source | Provider | Route |
 |--------|----------|-------|
 | Q# | `simulator` | Raw source passes through — the simulator re-runs it through the executor pipeline. |
-| Q# | `azure` | Compiled to QIR. Targets containing `quantinuum` get the `Adaptive_RI` profile (mid-circuit measurement + classical feedback); everything else gets `Base`. |
+| Q# | `azure` | Compiled to QIR; the QIR profile is selected per target — see [submitting Q#](/docs/hardware/azure-quantum/#submitting-q). |
 | Q# | anything else | Rejected — those provider SDKs take Python circuit objects, not Q# source or QIR. The error message suggests Azure Quantum or a Qiskit rewrite. |
 | Python | `simulator` | Raw source passes through. |
 | Python | real hardware | `exec()` the code, then extract a circuit object from the namespace (Qiskit `QuantumCircuit`, Cirq `Circuit`, or CUDA-Q kernel — search order is provider-aware). No recognizable circuit → error. |
@@ -254,7 +254,8 @@ the provider source; ids and timestamps are invented.
 <Code code={azureConnectRes} lang="json" title="illustrative/hardware_connect_azure.responses.json" />
 
 A Q# submission to a Quantinuum target via Azure compiles to QIR with the
-`Adaptive_RI` profile and comes back `queued`. `queue_position` is `null` at
+`Adaptive_RI` [profile](/docs/hardware/azure-quantum/#submitting-q) and
+comes back `queued`. `queue_position` is `null` at
 submission; Azure does not expose queue positions, so later `hardware_status`
 polls report `-1` ("unknown") rather than a real position:
 

@@ -1,5 +1,5 @@
 ---
-title: "Framework Adapters"
+title: "Framework adapters"
 description: "Write a kernel adapter for a new quantum framework: the two adapter shapes, AdapterSpec registration, shared math helpers, and a tested worked example."
 ---
 
@@ -84,7 +84,7 @@ on other frameworks' code.
 Two more registration touchpoints:
 
 1. **Friendly error name** — add your dependency to the display-name map in
-   `_missing_dependency_message` (`executor.py:79-89`) so students see
+   `_missing_dependency_message` (`executor.py:79-89`) so users see
    "FooSDK is not installed…" instead of a pip name.
 2. **Install wizard** — add a `FrameworkInfo` entry to `CATALOG` in
    `src-tauri/src/commands/frameworks.rs:32` (`id`, `label`, `description`,

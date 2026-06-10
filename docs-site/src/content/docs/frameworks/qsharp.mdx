@@ -48,7 +48,7 @@ Only **zero-parameter operations** are runnable. Resolution order:
 
 1. An operation named `Main` — `Main()` wins.
 2. Otherwise the **last** zero-parameter operation defined in the file
-   (the newest one wins, matching how students iterate).
+   (the newest one wins).
 3. None defined → `parse` quietly returns an empty circuit (no error while
    live-typing); `execute` returns `no_circuit` with a hint to define
    `operation Main() : Result[]`. {/* qsharp_adapter.py:303-310,349-354 */}
@@ -96,11 +96,10 @@ Two distinct paths:
 - **Editor runs** use the unrestricted local interpreter, per-shot, as
   above.
 - **Hardware submission to Azure Quantum** compiles the same source to QIR
-  via `compile_qir(code, profile)` with profile `base` or `adaptive_ri`
-  (mid-circuit measurement + classical feedback; selected automatically for
-  Quantinuum targets). The interpreter profile is restored to Unrestricted
-  afterwards. {/* qsharp_adapter.py:368-425; kernel/server.py:105-130 */}
-  Details: [Azure Quantum](/docs/hardware/azure-quantum/#submitting-q).
+  via `compile_qir(code, profile)`; the profile is selected per target —
+  see [submitting Q#](/docs/hardware/azure-quantum/#submitting-q). The
+  interpreter profile is restored to Unrestricted afterwards.
+  {/* qsharp_adapter.py:368-425; kernel/server.py:105-130 */}
 
 The qdk interpreter is process-global and pinned to one dedicated thread —
 all Q# work (every connection's) serializes through it.

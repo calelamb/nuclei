@@ -1,6 +1,6 @@
 ---
-title: Nuclei Developer Docs
-description: Developer and researcher documentation for Nuclei — the open-source quantum computing IDE.
+title: Nuclei developer docs
+description: Build on Nuclei, the open-source quantum IDE — the kernel WebSocket protocol, framework adapters, hardware providers, and the Dirac AI layer.
 ---
 
 import { Aside } from '@astrojs/starlight/components';
@@ -10,9 +10,9 @@ developers it is four things: a scriptable simulation kernel behind a plain
 [WebSocket JSON protocol](/docs/kernel-api/overview/), a multi-framework
 abstraction that normalizes Qiskit, Cirq, CUDA-Q, and Q# into one
 [`CircuitSnapshot`](/docs/kernel-api/schemas/) format, a gateway that submits
-the same circuits to real quantum hardware, and an AI layer (Dirac) that
-calls `api.anthropic.com` directly with a user-supplied key — no Nuclei
-backend in the loop. If you want to *use* Nuclei,
+the same circuits to real quantum hardware, and an AI layer
+([Dirac](/docs/dirac/architecture/)) that calls `api.anthropic.com` directly
+with a user-supplied key — no Nuclei server in the loop. If you want to *use* Nuclei,
 [download the app](https://nuclei.dev/#download) or
 [try it in the browser](https://nuclei.dev/try/) — this site is for people
 **building on** Nuclei.
@@ -46,7 +46,8 @@ kernel but always refuses to connect, and its Launch-portal tile is disabled
   [desktop vs web](/docs/introduction/desktop-vs-web/).
 
 <Aside type="note" title="Protocol v1">
-These docs describe **kernel protocol v1**, shipped with Nuclei 0.5.x.
-Additive changes land without notice; breaking changes are tracked in the
+These docs describe **kernel protocol v1** as of Nuclei 0.5.x. Additive
+changes land without notice; breaking changes ship only with a protocol
+version bump and an entry in the
 [protocol changelog](/docs/reference/protocol-changelog/).
 </Aside>

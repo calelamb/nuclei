@@ -11,7 +11,9 @@ Two complete clients that connect, parse a Bell circuit, execute it, and
 print the measurement histogram. Both implement the one pattern every
 kernel client needs: **drain messages until the terminal type arrives**,
 relaying any interleaved `output`/`stderr`/`error` along the way (see
-[the streaming model](/docs/kernel-api/overview/#the-streaming-model)).
+[the streaming model](/docs/kernel-api/overview/#the-streaming-model)). For
+scripted `hardware_submit` loops built on the same pattern, see
+[pipelines](/docs/hardware/pipelines/).
 
 Start a kernel first:
 

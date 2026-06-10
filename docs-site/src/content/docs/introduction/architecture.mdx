@@ -6,7 +6,7 @@ description: "How Nuclei's three layers — Tauri shell, React frontend, and Pyt
 Nuclei is three processes pretending to be one app: a Rust shell, a React
 frontend in the shell's WebView, and a Python kernel subprocess. The
 frontend never touches Python directly — everything quantum goes over a
-localhost WebSocket. Dirac (the AI layer) never touches a Nuclei server —
+localhost WebSocket. [Dirac](/docs/dirac/architecture/) (the AI layer) never touches a Nuclei server —
 the frontend calls `api.anthropic.com` directly with a user-supplied key.
 
 ![Nuclei architecture: the Tauri shell spawns the Python kernel; the frontend talks to the kernel over WebSocket, to the shell over IPC, and to api.anthropic.com directly; the kernel fans out to framework adapters and hardware providers.](../../../assets/architecture.svg)

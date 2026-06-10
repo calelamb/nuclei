@@ -1,11 +1,11 @@
 ---
-title: "Desktop vs Web"
+title: "Desktop vs web"
 description: "What differs between the Tauri desktop app and the browser build at /try."
 ---
 
 The same React frontend ships twice: as the desktop app (Tauri WebView,
 real Python kernel) and as the browser build at
-[nuclei.dev/try](https://nuclei.dev/try/) (Pyodide, no backend). A
+[nuclei.dev/try](https://nuclei.dev/try/) (Pyodide, no server). A
 `PlatformBridge` interface (`src/platform/bridge.ts`) abstracts the
 difference; `tauriBridge` and `webBridge` implement it.
 

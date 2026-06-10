@@ -1,6 +1,6 @@
 ---
 title: "Configuration"
-description: "Every user- and developer-facing configuration option in one place."
+description: "Where Nuclei stores state — settings.json, WebView localStorage, ~/.nuclei, the OS keyring — plus every environment variable and the kernel port."
 ---
 
 Nuclei persists state in **three separate roots** — don't conflate them:
@@ -71,7 +71,7 @@ working but credentials don't survive a restart.
 
 {/* src/stores/diracStore.ts:11-31; src/config/dirac.ts:13-15 */}
 
-The Dirac API key is stored in **plaintext WebView localStorage** under the
+The [Dirac](/docs/dirac/architecture/) API key is stored in **plaintext WebView localStorage** under the
 key `nuclei-dirac-api-key` — *not* in the OS keychain and *not* in
 `settings.json`. "Credentials are in the keychain" applies to hardware
 providers only. The key is sent only to `https://api.anthropic.com/v1/messages`

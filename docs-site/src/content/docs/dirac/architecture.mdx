@@ -1,5 +1,5 @@
 ---
-title: "Dirac Architecture"
+title: "Dirac architecture"
 description: "How Dirac works: BYOK Claude API calls direct from the client, model routing per surface, context injection, and what leaves your machine."
 ---
 
@@ -31,7 +31,7 @@ Nuclei server in the loop.
 All five Anthropic call sites POST to `https://api.anthropic.com/v1/messages`
 with `anthropic-version: 2023-06-01` and
 `anthropic-dangerous-direct-browser-access: 'true'`. No proxy, no Nuclei
-backend, no logging of prompts in transit.
+server, no logging of prompts in transit.
 {/* claudeClient.ts:35-42, compose.ts:85-92, ghostCompletions.ts:99-106,
 InlineEditWidget.tsx:84-91, useDirac.ts:559-567 */}
 

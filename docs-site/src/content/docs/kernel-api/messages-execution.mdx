@@ -70,8 +70,8 @@ Response sequence, in order: {/* server.py:184-209 */}
 | 4 | `error` | Only on failure, with `phase: "parse"`. |
 
 A source file with no circuit in it is **not** a parse error: the kernel
-sends `snapshot` with `data: null` and no `error`, so live-typing students
-see a quietly empty diagram instead of a red banner. (`execute` treats the
+sends `snapshot` with `data: null` and no `error`, so a live-typing user
+sees a quietly empty diagram instead of a red banner. (`execute` treats the
 same situation as a `no_circuit` error — see below.)
 
 <Code code={parseBellReq} lang="json" title="parse_bell_qiskit.request.json" />
