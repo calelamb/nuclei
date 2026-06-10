@@ -12,7 +12,7 @@ import type { PyodideKernel } from '../platform/pyodideKernel';
 import { useDiracStore } from '../stores/diracStore';
 import { useHardwareStore } from '../stores/hardwareStore';
 import { narrateParse, narrateResult } from '../services/narration';
-import { rewritePythonError } from '../services/errorRewrite';
+import { rewriteExecutionError } from '../services/errorRewrite';
 import { computeNextPollDelayMs, STALE_AFTER_MS } from '../lib/pollSchedule';
 
 const KERNEL_URL = KERNEL_WS_URL;
@@ -140,7 +140,7 @@ export function useKernel() {
         if (useSettingsStore.getState().dirac.autoExplainErrors) {
           const codeForRewrite = useEditorStore.getState().code;
           const framework = useEditorStore.getState().framework;
-          rewritePythonError({ code: codeForRewrite, framework, traceback: detail })
+          rewriteExecutionError({ code: codeForRewrite, framework, traceback: detail })
             .then((rewritten) => {
               if (rewritten) {
                 useDiracStore.getState().setRewrittenError({

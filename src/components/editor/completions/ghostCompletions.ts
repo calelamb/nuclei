@@ -14,7 +14,7 @@ import { useSettingsStore } from '../../../stores/settingsStore';
 const API_URL = 'https://api.anthropic.com/v1/messages';
 const HAIKU_MODEL = 'claude-haiku-4-5-20251001';
 
-const COMPLETION_SYSTEM_PROMPT = `You are Dirac, a quantum computing code completion engine inside the Nuclei IDE. Complete the next 1-3 lines of quantum computing Python code. Rules:
+export const PYTHON_COMPLETION_SYSTEM_PROMPT = `You are Dirac, a quantum computing code completion engine inside the Nuclei IDE. Complete the next 1-3 lines of quantum computing Python code. Rules:
 - Return ONLY the completion code, no explanation, no markdown, no backticks
 - Be aware of the framework (Qiskit/Cirq/CUDA-Q) and use correct syntax
 - Never suggest gates on qubits that don't exist (respect qubit count)
@@ -23,6 +23,46 @@ const COMPLETION_SYSTEM_PROMPT = `You are Dirac, a quantum computing code comple
 - After qc.measure, suggest the classical bit mapping
 - Match the user's coding style (variable names, spacing)
 - If the code is complete, return empty string`;
+
+// The Q# rules below are a deliberately distilled subset of QSHARP_STYLE_GUIDE
+// (src/services/qsharpStyle.ts), trimmed to fit the token budget of Haiku ghost
+// completions. Keep the two in sync manually when the style guide changes.
+const QSHARP_COMPLETION_SYSTEM_PROMPT = `You are Dirac, a quantum computing code completion engine inside the Nuclei IDE. Complete the next 1-3 lines of Q# (Microsoft QDK) code. The buffer is Q#, NOT Python — never emit Python syntax. Rules:
+- Return ONLY the completion code, no explanation, no markdown, no backticks
+- Modern QDK 1.x syntax: top-level operations (no namespace wrapper), \`import Std.*\` (never \`open Microsoft.Quantum.*\`), \`use q = Qubit();\`, measure with \`M(q)\`, Reset/ResetAll qubits before release
+- Never suggest gates on qubits that don't exist (respect qubit count)
+- Match the user's coding style (variable names, spacing)
+- If the code is complete, return empty string`;
+
+/** Pick the completion system prompt for the active framework. */
+export function buildCompletionSystemPrompt(framework: string): string {
+  return framework === 'qsharp'
+    ? QSHARP_COMPLETION_SYSTEM_PROMPT
+    : PYTHON_COMPLETION_SYSTEM_PROMPT;
+}
+
+/**
+ * True when the (left-trimmed) text before the cursor sits inside a comment
+ * or string for the given Monaco language id. Q# uses \`//\` comments and
+ * \`"\`/\`$"\` strings; Python uses \`#\` and quotes.
+ */
+export function isInCommentOrString(beforeCursor: string, languageId: string): boolean {
+  if (languageId === 'qsharp') {
+    return (
+      beforeCursor.startsWith('//') ||
+      beforeCursor.startsWith('"') ||
+      beforeCursor.startsWith('$"')
+    );
+  }
+  return (
+    beforeCursor.startsWith('#') ||
+    beforeCursor.startsWith("'") ||
+    beforeCursor.startsWith('"')
+  );
+}
+
+/** Monaco language ids that get ghost completions. */
+const GHOST_LANGUAGE_IDS = ['python', 'qsharp'] as const;
 
 let abortController: AbortController | null = null;
 
@@ -67,7 +107,7 @@ async function fetchCompletion(code: string, cursorOffset: number): Promise<stri
       body: JSON.stringify({
         model: HAIKU_MODEL,
         max_tokens: 150,
-        system: COMPLETION_SYSTEM_PROMPT,
+        system: buildCompletionSystemPrompt(useEditorStore.getState().framework),
         messages: [{ role: 'user', content: context }],
       }),
       signal: abortController.signal,
@@ -84,7 +124,7 @@ async function fetchCompletion(code: string, cursorOffset: number): Promise<stri
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function registerGhostCompletions(monaco: any) {
-  const provider = monaco.languages.registerInlineCompletionsProvider('python', {
+  const provider = {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     provideInlineCompletions: async (model: any, position: any, _context: any, token: any) => {
       // Respect the per-user toggle — ghost is off by default for beginners.
@@ -96,10 +136,12 @@ export function registerGhostCompletions(monaco: any) {
       if (position.lineNumber < 1 || position.lineNumber > lineCount) {
         return { items: [] };
       }
-      // Don't trigger in comments or strings
+      // Don't trigger in comments or strings (per-language syntax)
+      const languageId =
+        typeof model.getLanguageId === 'function' ? model.getLanguageId() : 'python';
       const lineContent = model.getLineContent(position.lineNumber);
       const beforeCursor = lineContent.slice(0, position.column - 1).trimStart();
-      if (beforeCursor.startsWith('#') || beforeCursor.startsWith("'") || beforeCursor.startsWith('"')) {
+      if (isInCommentOrString(beforeCursor, languageId)) {
         return { items: [] };
       }
 
@@ -125,9 +167,17 @@ export function registerGhostCompletions(monaco: any) {
     },
 
     freeInlineCompletions() {},
-  });
+  };
 
-  return provider;
+  const disposables = GHOST_LANGUAGE_IDS.map((id) =>
+    monaco.languages.registerInlineCompletionsProvider(id, provider),
+  );
+
+  return {
+    dispose() {
+      for (const d of disposables) d?.dispose?.();
+    },
+  };
 }
 
 export function cancelCompletion() {

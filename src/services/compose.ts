@@ -1,7 +1,8 @@
 import { useDiracStore } from '../stores/diracStore';
 import { DIRAC_API_URL, SONNET_MODEL } from '../config/dirac';
+import { QSHARP_STYLE_GUIDE } from './qsharpStyle';
 
-const SYSTEM_PROMPT = `You are Dirac, a quantum computing tutor that writes code for students.
+const PYTHON_SYSTEM_PROMPT = `You are Dirac, a quantum computing tutor that writes code for students.
 You will receive:
 - The target framework (cirq, qiskit, cuda-q)
 - The student's current code (possibly empty)
@@ -11,10 +12,26 @@ ALWAYS respond with exactly one tool_use call to the \`insert_code\` tool. The \
 
 Along with the tool call, include a ONE-SENTENCE plain-text explanation of what the code does.`;
 
+const QSHARP_SYSTEM_PROMPT = `You are Dirac, a quantum computing tutor that writes code for students.
+You will receive:
+- The target framework (qsharp — Q# with the Microsoft Quantum Development Kit)
+- The student's current code (possibly empty)
+- The student's request
+
+ALWAYS respond with exactly one tool_use call to the \`insert_code\` tool. The \`code\` argument must be a COMPLETE, runnable Q# file for the Microsoft QDK. Keep it minimal — the student is learning. Include a short comment that says what the circuit does. Do not include any preamble text in the tool input.
+
+Along with the tool call, include a ONE-SENTENCE plain-text explanation of what the code does.
+
+${QSHARP_STYLE_GUIDE}`;
+
+function systemPromptFor(framework: string): string {
+  return framework === 'qsharp' ? QSHARP_SYSTEM_PROMPT : PYTHON_SYSTEM_PROMPT;
+}
+
 const INSERT_CODE_TOOL = {
   name: 'insert_code',
   description:
-    'Insert a complete runnable Python program for the target quantum framework into the editor.',
+    'Insert a complete runnable program for the target quantum framework (Python for qiskit/cirq/cuda-q, Q# for qsharp) into the editor.',
   input_schema: {
     type: 'object' as const,
     properties: {
@@ -50,6 +67,7 @@ export async function compose(input: ComposeInput): Promise<ComposeResult> {
     return { ok: false, error: 'No API key set. Add one in Settings → Dirac.' };
   }
 
+  const fenceLanguage = input.framework === 'qsharp' ? 'qsharp' : 'python';
   const userPrompt = [
     `Framework: ${input.framework}`,
     '',
@@ -57,7 +75,7 @@ export async function compose(input: ComposeInput): Promise<ComposeResult> {
     input.intent,
     '',
     'Current code (may be empty):',
-    '```python',
+    '```' + fenceLanguage,
     input.currentCode,
     '```',
   ].join('\n');
@@ -75,7 +93,7 @@ export async function compose(input: ComposeInput): Promise<ComposeResult> {
       body: JSON.stringify({
         model: SONNET_MODEL,
         max_tokens: 2048,
-        system: SYSTEM_PROMPT,
+        system: systemPromptFor(input.framework),
         tools: [INSERT_CODE_TOOL],
         tool_choice: { type: 'tool', name: 'insert_code' },
         messages: [{ role: 'user', content: userPrompt }],

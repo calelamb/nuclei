@@ -1,6 +1,6 @@
 import { callClaude } from './claudeClient';
 
-const SYSTEM_PROMPT = `You are Dirac, a patient quantum computing tutor. A student's code hit an error. Rewrite the Python traceback into a ONE-PARAGRAPH concept-level explanation that a first-semester student can understand. Use quantum-computing vocabulary only when the student's code uses it. If a minimal correct fix exists, include it.
+const SYSTEM_PROMPT = `You are Dirac, a patient quantum computing tutor. A student's code hit an error. Rewrite the error output (a Python traceback or Q# compiler diagnostic) into a ONE-PARAGRAPH concept-level explanation that a first-semester student can understand. Use quantum-computing vocabulary only when the student's code uses it. If a minimal correct fix exists, include it. For Q# compiler errors, name the construct the student got wrong and show the corrected line.
 
 Respond ONLY with a JSON object matching this shape:
 {"explanation": "string", "fix": "string or null"}
@@ -28,14 +28,14 @@ function extractJson(raw: string): unknown | null {
   }
 }
 
-export async function rewritePythonError(input: RewriteInput): Promise<RewrittenError | null> {
+export async function rewriteExecutionError(input: RewriteInput): Promise<RewrittenError | null> {
   const userPrompt = [
     `Framework: ${input.framework}`,
     '',
     'Student code:',
     input.code.slice(0, 2000),
     '',
-    'Traceback:',
+    'Error output:',
     input.traceback.slice(0, 2500),
   ].join('\n');
 
