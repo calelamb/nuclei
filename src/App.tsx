@@ -5,6 +5,7 @@ import { Onboarding } from './components/onboarding/Onboarding';
 import { KeyboardShortcuts } from './components/onboarding/KeyboardShortcuts';
 import { CommandPalette, buildCommands } from './components/commandPalette/CommandPalette';
 import { UpdateBanner } from './components/UpdateBanner';
+import { WhatsNewCard } from './components/WhatsNewCard';
 import { ComposeModal } from './components/dirac/ComposeModal';
 import { DiffPreview } from './components/editor/DiffPreview';
 import { UnsavedChangesModal } from './components/dialogs/UnsavedChangesModal';
@@ -341,6 +342,7 @@ function AppInner() {
     <>
       <PanelLayout />
       <UpdateBanner />
+      <WhatsNewCard />
       {showOnboarding && (
         <Onboarding
           onComplete={completeOnboarding}
