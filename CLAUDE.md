@@ -17,7 +17,8 @@ Nuclei is a purpose-built desktop IDE for quantum computing. It combines a Monac
 | Circuit Rendering | **D3.js** + custom SVG | Live circuit diagrams that update as you type |
 | 3D Rendering | **Three.js** | Bloch sphere visualization |
 | Charts | **D3.js or Recharts** | Probability histograms |
-| Python Kernel | **Managed subprocess + WebSocket** | Executes Qiskit/Cirq/CUDA-Q code |
+| Python Kernel | **Managed subprocess + WebSocket** | Executes Qiskit/Cirq/CUDA-Q code; routes Q# source through the `qdk` package |
+| Q# / QDK | **qdk (Python) + qsharp-lang (WASM)** | Source-mode kernel adapter; QDK language service in Monaco (diagnostics, completions, hover) |
 | AI Assistant | **Claude API** (Haiku for fast, Sonnet for complex) | Dirac — Claude API wrapper with tutor persona, system prompt, context injection, and tool definitions |
 | Build | **Vite + Tauri CLI** | HMR in dev, .dmg packaging for release |
 | Python Bundling | **conda-pack** (later) | So users don't need Python installed |
@@ -52,7 +53,7 @@ Three-layer architecture:
 ```typescript
 // Sent from kernel to frontend on every code change (lightweight, no simulation)
 interface CircuitSnapshot {
-  framework: 'qiskit' | 'cirq' | 'cuda-q';
+  framework: 'qiskit' | 'cirq' | 'cuda-q' | 'qsharp';
   qubit_count: number;
   classical_bit_count: number;
   depth: number;
@@ -84,6 +85,8 @@ interface SimulationResult {
 5. Frontend renders circuit diagram from snapshot in real time
 6. User presses Cmd+Enter → kernel runs full simulation → returns SimulationResult
 7. Frontend updates Bloch sphere + histogram panels
+
+Q# follows the same path but routes through a source-mode adapter: the kernel hands raw Q# source to the `qdk` interpreter and never runs it through Python `exec`.
 
 ## Project Structure
 
@@ -121,12 +124,14 @@ nuclei/
 │   ├── executor.py              # Code execution engine
 │   ├── adapters/
 │   │   ├── base.py              # Abstract adapter interface
+│   │   ├── _math.py             # Shared state-vector math helpers
 │   │   ├── qiskit_adapter.py
 │   │   ├── cirq_adapter.py
-│   │   └── cudaq_adapter.py
+│   │   ├── cudaq_adapter.py
+│   │   └── qsharp_adapter.py    # Source-mode Q# adapter (qdk package)
 │   ├── models/
-│   │   ├── snapshot.py          # CircuitSnapshot dataclass
-│   │   └── result.py            # SimulationResult dataclass
+│   │   ├── snapshot.py          # CircuitSnapshot + SimulationResult dataclasses
+│   │   └── errors.py            # KernelError dataclass
 │   └── requirements.txt
 ├── package.json
 ├── tsconfig.json
@@ -136,23 +141,24 @@ nuclei/
 
 ## Framework Abstraction
 
-Each quantum framework has an adapter in `kernel/adapters/` that converts framework-specific circuit objects into the universal CircuitSnapshot format. The kernel auto-detects which framework the user is using by analyzing imports.
+Each quantum framework has an adapter in `kernel/adapters/` that converts framework-specific circuit objects into the universal CircuitSnapshot format. The kernel auto-detects which framework the user is using by analyzing imports (or Q# syntax — auto-detection is not limited to Python imports). Q# is a source-mode framework: `AdapterSpec.source_mode` routes raw Q# source straight to the adapter, never through Python `exec`.
 
 | Framework | Circuit Object | Simulator | Adapter |
 |-----------|---------------|-----------|---------|
 | Qiskit | QuantumCircuit | AerSimulator | qiskit_adapter.py |
 | Cirq | cirq.Circuit | cirq.Simulator | cirq_adapter.py |
 | CUDA-Q | cudaq.kernel | cudaq.sample() | cudaq_adapter.py |
+| Q# | (source-mode — Q# source, no Python circuit object) | qsharp (qdk package) sparse simulator | qsharp_adapter.py |
 
 ## Gate Mapping (Universal Registry)
 
-| Canonical | Qiskit | Cirq | CUDA-Q |
-|-----------|--------|------|--------|
-| H | qc.h(q) | cirq.H(q) | h(q) |
-| CNOT | qc.cx(c, t) | cirq.CNOT(c, t) | cx(c, t) |
-| RZ | qc.rz(θ, q) | cirq.rz(θ)(q) | rz(θ, q) |
-| Measure | qc.measure(q, c) | cirq.measure(q) | mz(q) |
-| Toffoli | qc.ccx(c1, c2, t) | cirq.TOFFOLI(c1,c2,t) | x.ctrl(c1, c2, t) |
+| Canonical | Qiskit | Cirq | CUDA-Q | Q# |
+|-----------|--------|------|--------|----|
+| H | qc.h(q) | cirq.H(q) | h(q) | H(q) |
+| CNOT | qc.cx(c, t) | cirq.CNOT(c, t) | cx(c, t) | CNOT(c, t) |
+| RZ | qc.rz(θ, q) | cirq.rz(θ)(q) | rz(θ, q) | Rz(θ, q) |
+| Measure | qc.measure(q, c) | cirq.measure(q) | mz(q) | M(q) / MResetZ(q) |
+| Toffoli | qc.ccx(c1, c2, t) | cirq.TOFFOLI(c1,c2,t) | x.ctrl(c1, c2, t) | CCNOT(c1, c2, t) |
 
 ## UI Layout
 
