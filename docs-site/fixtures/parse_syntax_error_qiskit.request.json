@@ -1,0 +1,5 @@
+{
+  "type": "parse",
+  "code": "from qiskit import QuantumCircuit\nqc = QuantumCircuit(2\n",
+  "language": "python"
+}

@@ -1,0 +1,69 @@
+---
+title: "Contributing"
+description: "The contribution workflow in brief: setup, conventions, test commands, and PR flow — with a pointer to the canonical CONTRIBUTING.md."
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+The canonical contribution guide is
+[CONTRIBUTING.md](https://github.com/calelamb/nuclei/blob/main/CONTRIBUTING.md)
+in the repo — setup details, style rules, commit format, issue templates.
+This page is the short version plus corrections where the file has gone
+stale.
+
+## Setup
+
+Prereqs and the clone → `npm install` → `pip install -r
+kernel/requirements.txt` → `npm run tauri dev` loop are covered in
+[Install & build](/docs/introduction/install-and-build/). Fork first;
+branch from `main` as `feat/...` or `fix/...`.
+
+## Conventions (the short list)
+
+- **TypeScript**: strict mode, no `any`; functional components + hooks
+  only; all shared state through Zustand stores.
+- **Python (kernel)**: type hints on all signatures; dataclasses for
+  structured data (`kernel/models/`); Black + Ruff.
+- **Rust**: `cargo fmt --check` and `cargo clippy` must pass (clippy
+  warnings are CI errors).
+- **Commits**: `<type>: <description>` with `feat` / `fix` / `refactor` /
+  `docs` / `test` / `chore` / `perf`; first line under 72 chars.
+- **Tests are required** for new features; bug fixes need a regression
+  test.
+- Files under 800 lines, functions under 50, no hardcoded secrets.
+
+## Test commands
+
+| Layer | Command | Status |
+|-------|---------|--------|
+| Frontend | `npm test` (Vitest) | Working |
+| Kernel | `python3 -m pytest kernel/tests -q` (from repo root) | Working — 365 tests, run in CI (`kernel-tests.yml`) |
+| Docs honesty suites | included in the kernel run: `test_docs_fixtures.py` replays every protocol fixture, `test_docs_examples.py` runs the extending-guide worked examples | Working |
+| Rust | `cargo test` | No tests exist yet — planned |
+| Docs site | `cd docs-site && npm run build` | Working |
+
+<Aside type="note" title="CONTRIBUTING.md is stale about kernel tests">
+CONTRIBUTING.md currently says Python kernel tests are "planned". That
+predates the kernel suite — `kernel/tests/` has hundreds of passing tests
+and runs in CI. Trust the table above; the file is being updated. (Its
+claim that Rust tests are planned is still accurate.)
+</Aside>
+
+## PR flow
+
+1. Keep the PR focused on one concern.
+2. Run locally before pushing: `npm test`, `npm run build`,
+   `python3 -m pytest kernel/tests -q`, `cargo fmt --check`, `cargo clippy`.
+3. Open against `main` with a conventional title, a what/why description,
+   and screenshots for UI changes.
+4. Push follow-up commits during review (no force-pushes); approved PRs
+   are **squash-merged**.
+
+## Where extensions go
+
+| You're adding | Guide |
+|---------------|-------|
+| A quantum framework | [Framework adapters](/docs/extending/framework-adapters/) |
+| A hardware provider | [Hardware providers](/docs/extending/hardware-providers/) |
+| Dirac behavior / prompts | [Extending Dirac](/docs/dirac/extending/) |
+| Protocol changes | Update fixtures + [protocol changelog](/docs/reference/protocol-changelog/) |

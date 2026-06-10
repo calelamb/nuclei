@@ -1,0 +1,67 @@
+---
+title: "Frameworks overview"
+description: "The two languages Nuclei runs, how the kernel detects which framework your code uses, and what each framework supports."
+---
+
+Nuclei runs two quantum programming languages:
+
+- **Python**, hosting three SDKs — **Qiskit**, **Cirq**, and **CUDA-Q**. The
+  kernel `exec()`s your code, then inspects the resulting namespace for a
+  circuit object.
+- **Q#** (Microsoft QDK). Source-mode: the text is compiled by the qdk
+  interpreter and **never** reaches Python `exec()`.
+
+**OpenQASM is not yet supported** as an input language (planned). Pasting
+QASM produces `unsupported_framework`.
+
+Whatever the framework, the adapter layer normalizes everything into one
+[`CircuitSnapshot`](/docs/kernel-api/schemas/#circuitsnapshot) /
+[`SimulationResult`](/docs/kernel-api/schemas/#simulationresult) shape — the
+circuit renderer, Bloch sphere, and histogram never see framework-native
+objects.
+
+## Detection
+
+The executor tries each adapter's regex against the source **in declaration
+order — first match wins**. Verbatim from `ADAPTER_SPECS`:
+{/* kernel/executor.py:26-61 */}
+
+| Order | Framework | Detection regex |
+|-------|-----------|-----------------|
+| 1 | `qsharp` | `^\s*(namespace\s+[\w.]+\|operation\s+\w+\s*\(\|import\s+Std\|open\s+Microsoft\.Quantum)` (multiline) |
+| 2 | `qiskit` | `from\s+qiskit\s+import\|import\s+qiskit` |
+| 3 | `cirq` | `import\s+cirq\|from\s+cirq\s+import` |
+| 4 | `cuda-q` | `import\s+cudaq\|from\s+cudaq\s+import\|@cudaq\.kernel` |
+
+Q# is checked **first**, deliberately: Q# source would be a syntax error
+under every Python spec, and none of the Python patterns can false-positive
+on Q# keywords. {/* executor.py:27-29 */}
+
+### The `language` field overrides detection
+
+`parse` / `execute` / `hardware_submit` messages accept an optional
+`language` hint that beats the regexes: {/* executor.py:105-126 */}
+
+| `language` | Effect |
+|------------|--------|
+| `"qsharp"` | Routes straight to the Q# adapter — no regex consulted. |
+| `"python"` | Excludes source-mode specs, so Q#-looking text inside Python strings or comments can't hijack routing. Python regexes still pick the SDK. |
+| omitted | Pure regex detection (older clients). |
+
+## Support matrix
+
+Install sizes come from the
+[framework catalog](/docs/reference/framework-catalog/); web availability
+from the [desktop vs web matrix](/docs/introduction/desktop-vs-web/#capability-matrix).
+
+| Framework | Vendor | Simulator | ~Install (MB) | Desktop | Web (`/try`) |
+|-----------|--------|-----------|--------------:|---------|--------------|
+| [Qiskit](/docs/frameworks/qiskit/) | IBM | AerSimulator (exact statevector + sampled counts) | 220 | yes | no |
+| [Cirq](/docs/frameworks/cirq/) | Google | `cirq.Simulator` | 60 | yes | yes (`cirq-core` via micropip) |
+| [CUDA-Q](/docs/frameworks/cudaq/) | NVIDIA | `cudaq.sample()` (+ best-effort `get_state`) | 500 | yes | no |
+| [Q#](/docs/frameworks/qsharp/) | Microsoft | qdk per-shot interpreter | 25 | yes | editor intelligence only — no execution |
+
+Every framework feeds the same visualization pipeline; the per-framework
+pages document what each adapter recognizes, how it simulates, and its
+sharp edges. Hardware submission rules are provider-specific — see the
+[hardware overview](/docs/hardware/overview/).

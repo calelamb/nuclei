@@ -1,0 +1,105 @@
+---
+title: "Pipelines"
+description: "Scripted batch submission over the WebSocket API: a tested parameter-sweep driver, getting counts into pandas, and simulator-vs-hardware guidance."
+---
+
+import { Code, Aside } from '@astrojs/starlight/components';
+import sweepDriver from '../../../../fixtures/clients/sweep_driver.py?raw';
+
+The hardware API is just WebSocket JSON — anything the IDE can do, a script
+can do. That makes Nuclei's kernel usable as a batch driver for parameter
+sweeps, calibration curves, and simulator-vs-hardware comparisons.
+
+Prerequisites: the [client examples](/docs/kernel-api/client-examples/)
+(connection + message-draining patterns) and the
+[replay-tested simulator session](/docs/kernel-api/messages-hardware/#replay-tested-simulator-walkthrough)
+(the exact submit → status → results message shapes this page builds on).
+
+## The scripted loop
+
+Per job, the protocol sequence is always:
+
+1. `hardware_submit` with the **source code** (not a circuit object) →
+   `hardware_job_submitted` with a [`JobHandle`](/docs/kernel-api/schemas/#jobhandle).
+2. Poll **`hardware_results`** until `data` carries `measurements` (or
+   `error`). `hardware_status` only refreshes queue position — it will
+   never tell you a real-hardware job finished.
+   {/* kernel/hardware/manager.py:175-196 */}
+3. Handle both failure shapes: an `error` envelope (no job exists) *and* a
+   handle with `status: "failed"`
+   ([the convention](/docs/hardware/overview/#job-lifecycle)).
+
+## Worked example: parameter sweep
+
+`sweep_driver.py` drives an RY(θ) rotation sweep — θ over a linspace, one
+`hardware_submit` per point against the always-available simulator
+provider, polled to completion, printed as a θ → P(1) table. The expected
+curve is P(1) = sin²(θ/2).
+
+This exact file is executed by the kernel test suite against a live server
+on every CI run (`kernel/tests/test_docs_fixtures.py`), so it speaks the
+current protocol.
+
+<Code code={sweepDriver} lang="python" title="sweep_driver.py" />
+
+```bash
+cd kernel && python server.py          # terminal 1
+python sweep_driver.py                 # terminal 2 — 9 points, 256 shots
+python sweep_driver.py ws://localhost:9742 1024 17
+```
+
+Sample output, abridged (counts vary run to run):
+
+```text
+sweep: RY(theta) on simulator/sim_qasm, 256 shots/point
+theta=0.0000  P(1)=0.0000  counts={'0': 256}
+theta=0.7854  P(1)=0.1484  counts={'0': 218, '1': 38}
+theta=1.5708  P(1)=0.5039  counts={'1': 129, '0': 127}
+...
+theta=3.1416  P(1)=1.0000  counts={'1': 256}
+```
+
+## Into analysis
+
+Collect the table into a DataFrame and plot it (illustrative — adapt
+freely, not replay-tested):
+
+```python
+import pandas as pd
+import matplotlib.pyplot as plt
+import numpy as np
+
+# rows collected from run_point(): [(theta, counts), ...]
+df = pd.DataFrame(
+    {"theta": theta, "p1": counts.get("1", 0) / shots}
+    for theta, counts in rows
+)
+
+ax = df.plot(x="theta", y="p1", marker="o", label="measured")
+thetas = np.linspace(0, np.pi, 200)
+ax.plot(thetas, np.sin(thetas / 2) ** 2, "--", label="sin²(θ/2)")
+ax.set_xlabel("θ (rad)"); ax.set_ylabel("P(1)"); ax.legend()
+plt.savefig("ry_sweep.png", dpi=150)
+```
+
+Remember the per-framework bitstring-key conventions before aggregating
+counts across frameworks — see
+[schemas](/docs/kernel-api/schemas/#bitstring-key-conventions-read-this-twice).
+
+## Simulator vs real hardware
+
+The driver is provider-agnostic by design — switch `PROVIDER`/`BACKEND`
+(after a `hardware_connect` with
+[credentials](/docs/hardware/overview/#credential-fields)) and the same
+loop runs on real devices. Adjust expectations:
+
+| | Simulator | Real hardware |
+|---|-----------|----------------|
+| Submit | Completes synchronously — the handle arrives already `complete`. | Returns `queued`; minutes-to-hours in queue is normal. |
+| Polling | First `hardware_results` has the data. | `{"status": "running"}` until done — poll with backoff (seconds, not the driver's 1 s, for long queues). |
+| Results | Full [`SimulationResult`](/docs/kernel-api/schemas/#simulationresult). | Counts-style dict only — no statevector, no Bloch coordinates. |
+| Failure modes | `data.error` carries a `KernelError`. | SDK error strings; plus queue cancellations and per-job credit limits. |
+| Restart safety | Cheap to re-run. | A kernel restart mid-sweep turns in-flight jobs [`stale`](/docs/hardware/overview/#persistence-and-the-resubmit-caveat) — results unrecoverable through Nuclei. Keep sweeps short or checkpoint your own (point → counts) pairs as you go. |
+
+For sweeps on Azure Quantum specifically, start with the free targets
+listed in [testing tips](/docs/hardware/azure-quantum/#testing-tips).

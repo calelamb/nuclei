@@ -1,0 +1,110 @@
+---
+title: "Configuration"
+description: "Where Nuclei stores state — settings.json, WebView localStorage, ~/.nuclei, the OS keyring — plus every environment variable and the kernel port."
+---
+
+Nuclei persists state in **three separate roots** — don't conflate them:
+the Tauri app data directory (`com.nuclei.app`), the kernel's own data
+directory (`~/.nuclei`), and the WebView's internal localStorage. Plus the
+OS keyring for hardware credentials and a per-project `.nuclei/` directory.
+
+## File locations
+
+{/* venv: src-tauri/src/commands/frameworks.rs:143-149; settings store: src/platform/tauriBridge.ts:12; jobs: kernel/hardware/job_store.py:44-52; logs: src-tauri/src/lib.rs:29-33 */}
+
+| What | macOS | Windows | Linux |
+|------|-------|---------|-------|
+| Managed Python venv | `~/Library/Application Support/com.nuclei.app/venv` | `%APPDATA%\com.nuclei.app\venv` | `~/.local/share/com.nuclei.app/venv` (respects `$XDG_DATA_HOME`) |
+| Session settings (`settings.json`) | `~/Library/Application Support/com.nuclei.app/settings.json` | `%APPDATA%\com.nuclei.app\settings.json` | `~/.local/share/com.nuclei.app/settings.json` |
+| Hardware job registry | `~/.nuclei/jobs.json` | `%USERPROFILE%\.nuclei\jobs.json` | `~/.nuclei/jobs.json` |
+| App + kernel logs | `~/Library/Logs/com.nuclei.app/` | `%LOCALAPPDATA%\com.nuclei.app\logs` | `~/.local/share/com.nuclei.app/logs` |
+| Dirac conversation (project open) | `<projectRoot>/.nuclei/dirac.json` (auto-gitignored) | same | same |
+
+## Settings persistence — two layers
+
+Settings live in **two different stores**, and which one depends on the
+setting:
+
+1. **Settings dialog state** (editor font size, Dirac toggles, kernel
+   defaults like `defaultShots: 1024` and `parseDebounceMs: 300`, general
+   preferences) is hand-rolled JSON in WebView localStorage under the key
+   `nuclei-settings`. It is app-internal browser storage, not a
+   user-editable file. {/* src/stores/settingsStore.ts:97-114 */}
+2. **Session keys** go through tauri-plugin-store into `settings.json`
+   (paths above): `theme`, `ui_mode`, `last_framework`,
+   `onboarding_complete`, `last_opened_file`, `recent_files`,
+   `project_root`, `project_tabs:<root>`, `cmdk_history`, and the
+   ephemeral Dirac conversation when no project is open.
+   {/* src/App.tsx:154-168; src/hooks/useFileOps.ts:6-8 */}
+
+The web build maps layer 2 onto browser localStorage with a `nuclei:`
+prefix. {/* src/platform/webBridge.ts:14-25 */}
+
+**Layout does not persist.** Panel preset and panel open/closed state are
+in-memory only and reset every launch; of the visual state, only `theme`
+and `ui_mode` survive a restart. {/* src/stores/layoutStore.ts:71-77 */}
+
+## Hardware job registry
+
+{/* kernel/hardware/job_store.py:38-52, 141-151 */}
+
+`~/.nuclei/jobs.json` — written atomically by the kernel's `JobStore`.
+Capped at 200 entries (LRU by last update); jobs in a terminal state are
+pruned after 7 days. Jobs that were still running when the kernel died
+rehydrate as `stale` (see the
+[status vocabulary](/docs/kernel-api/schemas/#status-vocabulary)).
+`NUCLEI_DATA_DIR` relocates the whole directory.
+
+## Hardware credentials — OS keyring
+
+{/* kernel/hardware/credential_store.py:31-54 */}
+
+Provider credentials (IBM tokens, Azure connection info, …) are stored via
+the Python `keyring` package under service name **`nuclei`** — macOS
+Keychain, Windows Credential Manager, or Linux Secret Service. The frontend
+never holds them; the kernel auto-reconnects saved providers on startup.
+If no keyring backend exists, an in-memory fallback keeps the session
+working but credentials don't survive a restart.
+`NUCLEI_DISABLE_CRED_STORE=1` turns persistence off entirely.
+
+## Anthropic API key (Dirac)
+
+{/* src/stores/diracStore.ts:11-31; src/config/dirac.ts:13-15 */}
+
+The [Dirac](/docs/dirac/architecture/) API key is stored in **plaintext WebView localStorage** under the
+key `nuclei-dirac-api-key` — *not* in the OS keychain and *not* in
+`settings.json`. "Credentials are in the keychain" applies to hardware
+providers only. The key is sent only to `https://api.anthropic.com/v1/messages`
+as the `x-api-key` header; every Dirac call goes direct from the client to
+Anthropic with no Nuclei server in between. A build-time
+`VITE_CLAUDE_API_KEY` fallback exists for dev builds — note that any value
+set there is baked into the shipped JS bundle.
+
+## Environment variables
+
+{/* Inventory: vite.config.ts:6-12, 52-58; job_store.py:45; credential_store.py:44 */}
+
+| Variable | Consumed by | Effect |
+|----------|-------------|--------|
+| `VITE_CLAUDE_API_KEY` | frontend, **build time** | Default Dirac API key (dev/self-build only; baked into the bundle) |
+| `VITE_KERNEL_PORT` | frontend, **build time** | Kernel WebSocket port, default `9742` |
+| `VITE_BASE_PATH` | build | Asset base path (web build defaults to `/try/`) |
+| `BUILD_TARGET` | build | `web` → browser build into `dist-web/`; anything else → desktop |
+| `NUCLEI_DATA_DIR` | kernel, runtime | Overrides the `~/.nuclei` data directory |
+| `NUCLEI_DISABLE_CRED_STORE` | kernel, runtime | `1` disables keyring persistence (save/load/clear become no-ops) |
+| `CARGO_MANIFEST_DIR` | Rust shell, dev only | Locates the repo-root kernel in `tauri dev` |
+
+`.env.example` documents the two `VITE_*` variables. They are Vite
+build-time substitutions — in a packaged app they are frozen at build, so
+treat them as developer options, not user configuration.
+
+## Kernel port
+
+{/* kernel/server.py:14-15, 496-513; src-tauri/src/commands/kernel.rs:14, 49-75; tauri.conf.json:25 */}
+
+Default `9742`. Run standalone, the kernel scans `9742`–`9761` and prints
+the chosen port in its ready line. The **desktop app does not use the
+fallback range**: the frontend URL is hardcoded, the CSP whitelists only
+`ws://localhost:9742`, and the shell kills any port squatter before
+spawning. Changing the port is only meaningful for standalone kernel
+clients — see the [Kernel API overview](/docs/kernel-api/overview/#connection).

@@ -1,0 +1,184 @@
+[
+  {
+    "request": {
+      "type": "hardware_connect",
+      "provider": "simulator",
+      "credentials": {}
+    },
+    "responses": [
+      { "type": "hardware_connected", "provider": "simulator", "success": true }
+    ]
+  },
+  {
+    "request": {
+      "type": "hardware_connected_providers"
+    },
+    "responses": [
+      { "type": "hardware_connected_providers", "providers": ["simulator"] }
+    ]
+  },
+  {
+    "request": {
+      "type": "hardware_list_backends",
+      "provider": "simulator"
+    },
+    "responses": [
+      {
+        "type": "hardware_backends",
+        "backends": [
+          {
+            "name": "sim_qasm",
+            "provider": "simulator",
+            "qubit_count": 32,
+            "connectivity": "<any>",
+            "queue_length": 0,
+            "average_error_rate": 0.0005,
+            "gate_set": ["H", "X", "Y", "Z", "CNOT", "CZ", "RX", "RY", "RZ", "T", "S", "Toffoli", "SWAP", "Measure"],
+            "status": "online"
+          },
+          {
+            "name": "sim_statevector",
+            "provider": "simulator",
+            "qubit_count": 24,
+            "connectivity": "<any>",
+            "queue_length": 0,
+            "average_error_rate": 0.0,
+            "gate_set": ["H", "X", "Y", "Z", "CNOT", "CZ", "RX", "RY", "RZ", "T", "S", "Toffoli", "SWAP"],
+            "status": "online"
+          },
+          {
+            "name": "sim_noise",
+            "provider": "simulator",
+            "qubit_count": 20,
+            "connectivity": "<any>",
+            "queue_length": 0,
+            "average_error_rate": 0.001,
+            "gate_set": ["H", "X", "Y", "Z", "CNOT", "CZ", "RX", "RY", "RZ", "T", "S", "Measure"],
+            "status": "online"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "request": {
+      "type": "hardware_submit",
+      "provider": "simulator",
+      "backend": "sim_qasm",
+      "shots": 256,
+      "code": "from qiskit import QuantumCircuit\n\nqc = QuantumCircuit(2, 2)\nqc.h(0)\nqc.cx(0, 1)\nqc.measure([0, 1], [0, 1])\n",
+      "language": "python"
+    },
+    "responses": [
+      {
+        "type": "hardware_job_submitted",
+        "job": {
+          "id": "<job-id>",
+          "provider": "simulator",
+          "backend": "sim_qasm",
+          "status": "complete",
+          "queue_position": null,
+          "shots": 256,
+          "submitted_at": "<any>",
+          "error": null
+        }
+      }
+    ]
+  },
+  {
+    "request": {
+      "type": "hardware_status",
+      "job_id": "<job-id>"
+    },
+    "responses": [
+      {
+        "type": "hardware_job_update",
+        "job": {
+          "id": "<job-id>",
+          "provider": "simulator",
+          "backend": "sim_qasm",
+          "status": "complete",
+          "queue_position": null,
+          "shots": 256,
+          "submitted_at": "<any>",
+          "error": null
+        }
+      }
+    ]
+  },
+  {
+    "request": {
+      "type": "hardware_results",
+      "job_id": "<job-id>"
+    },
+    "responses": [
+      {
+        "type": "hardware_result",
+        "job_id": "<job-id>",
+        "data": {
+          "state_vector": "<any>",
+          "probabilities": {
+            "00": "<approx:0.5:0.000001>",
+            "11": "<approx:0.5:0.000001>"
+          },
+          "measurements": "<any>",
+          "bloch_coords": "<any>",
+          "execution_time_ms": "<any>",
+          "shot_count": 256
+        }
+      }
+    ]
+  },
+  {
+    "request": {
+      "type": "hardware_list_jobs"
+    },
+    "responses": [
+      {
+        "type": "hardware_jobs",
+        "jobs": [
+          {
+            "id": "<job-id>",
+            "provider": "simulator",
+            "backend": "sim_qasm",
+            "status": "complete",
+            "queue_position": null,
+            "shots": 256,
+            "submitted_at": "<any>",
+            "error": null
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "request": {
+      "type": "hardware_cancel",
+      "job_id": "<job-id>"
+    },
+    "responses": [
+      { "type": "hardware_job_cancelled", "job_id": "<job-id>", "success": true }
+    ]
+  },
+  {
+    "request": {
+      "type": "hardware_status",
+      "job_id": "<job-id>"
+    },
+    "responses": [
+      {
+        "type": "hardware_job_update",
+        "job": {
+          "id": "<job-id>",
+          "provider": "simulator",
+          "backend": "sim_qasm",
+          "status": "failed",
+          "queue_position": null,
+          "shots": 256,
+          "submitted_at": "<any>",
+          "error": null
+        }
+      }
+    ]
+  }
+]

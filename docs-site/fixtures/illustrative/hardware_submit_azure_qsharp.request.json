@@ -1,0 +1,8 @@
+{
+  "type": "hardware_submit",
+  "provider": "azure",
+  "backend": "quantinuum.sim.h1-1e",
+  "shots": 500,
+  "code": "operation Main() : Result[] {\n    use qs = Qubit[2];\n    H(qs[0]);\n    CNOT(qs[0], qs[1]);\n    return [M(qs[0]), M(qs[1])];\n}\n",
+  "language": "qsharp"
+}

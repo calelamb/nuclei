@@ -1,0 +1,15 @@
+[
+  {
+    "type": "hardware_job_submitted",
+    "job": {
+      "id": "8f4b8f6e-1c2d-4e5f-9a0b-3c4d5e6f7a8b",
+      "provider": "azure",
+      "backend": "quantinuum.sim.h1-1e",
+      "status": "queued",
+      "queue_position": null,
+      "shots": 500,
+      "submitted_at": "2026-06-10T12:00:00.000000+00:00",
+      "error": null
+    }
+  }
+]

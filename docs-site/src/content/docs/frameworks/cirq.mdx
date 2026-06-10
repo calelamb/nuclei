@@ -1,0 +1,80 @@
+---
+title: "Cirq"
+description: "Cirq support in Nuclei: circuit discovery, moment-to-layer mapping, gate recognition via PowGates, and known gotchas."
+---
+
+The in-app starter (Bell state — runnable as-is):
+{/* src/data/starterTemplates.ts:18-27 */}
+
+```python
+import cirq
+
+# Create a Bell State
+q0, q1 = cirq.LineQubit.range(2)
+circuit = cirq.Circuit([
+    cirq.H(q0),
+    cirq.CNOT(q0, q1),
+    cirq.measure(q0, q1, key='result'),
+])
+```
+
+## What the adapter does
+
+| Stage | Behavior |
+|-------|----------|
+| Availability | `import cirq` happens at adapter-module import; if it fails, every call raises `ImportError("cirq")` → `missing_dependency`. {/* kernel/adapters/cirq_adapter.py:6-12 */} |
+| Discovery | After `exec()`, the **last `cirq.Circuit` in the namespace wins**. {/* cirq_adapter.py:51-55 */} |
+| Qubit indices | `sorted(circuit.all_qubits())` defines snapshot indices 0..n-1. {/* cirq_adapter.py:60-61 */} |
+| Layering | **Native moments are preserved**: each operation's layer is its moment index, and `depth` is the moment count — Cirq's own layout is *not* re-packed by the greedy algorithm the other frameworks use. {/* cirq_adapter.py:64,94,102 */} |
+| `classical_bit_count` | The number of `MeasurementGate` operations. {/* cirq_adapter.py:98-101 */} |
+
+### Gate recognition
+
+Cirq gates are recognized by `isinstance` checks on PowGate classes with
+`exponent == 1` (exact equality): {/* cirq_adapter.py:16-44 */}
+
+| Cirq | Canonical |
+|------|-----------|
+| `HPowGate`/`XPowGate`/`YPowGate`/`ZPowGate`, exponent 1 | `H` / `X` / `Y` / `Z` |
+| `ZPowGate`, exponent 0.5 / 0.25 | `S` / `T` |
+| `XPowGate`/`YPowGate`/`ZPowGate`, any other exponent *t* | `RX`/`RY`/`RZ` with `params = [t·π]` |
+| `CNotPowGate` / `CZPowGate` / `SwapPowGate` / `CCXPowGate`, exponent 1 | `CNOT` / `CZ` / `SWAP` / `Toffoli` |
+| `MeasurementGate` | `Measure` |
+| anything else | `str(gate).upper()` passthrough — rendered as a labeled box |
+
+This means `cirq.rz(θ)` is recognized (it *is* a `ZPowGate`), but
+`cirq.CNOT**0.5` is **not** a `CNOT` — it falls to the passthrough rule.
+
+## Simulation
+
+One `cirq.Simulator`, two passes: {/* cirq_adapter.py:112-169 */}
+
+1. **Exact statevector** — a rebuilt circuit with every `MeasurementGate`
+   stripped, simulated with `qubit_order=sorted(all_qubits)`. Produces
+   `state_vector`, exact `probabilities`, and partial-trace Bloch
+   coordinates.
+2. **Sampled run** — the original circuit with `repetitions=shots`.
+   Per-measurement-key result arrays are concatenated **in sorted key-name
+   order** into one bitstring per shot. {/* cirq_adapter.py:140-149 */}
+
+Probability keys are big-endian over the sorted qubit order — qubit 0 is the
+**leftmost** character. See
+[bitstring-key conventions](/docs/kernel-api/schemas/#bitstring-key-conventions-read-this-twice).
+
+## Gotchas
+
+- **Qubit order is sorted order, not declaration order.** A circuit on
+  `LineQubit(5)` and `LineQubit(2)` maps qubit 2 → index 0 and qubit 5 →
+  index 1; `GridQubit`s sort row-major. Sparse qubit ids are compacted.
+- **Measurement-key names control bitstring layout.** Keys are concatenated
+  alphabetically — `measure(q1, key='a')` sorts before `measure(q0,
+  key='b')`, so the `measurements` keys put q1's bit first. One
+  multi-qubit `measure(..., key='result')` avoids the surprise.
+- **Partial exponents become rotations with angle `t·π`** — equal to
+  `RZ(t·π)` only up to global phase (a `ZPowGate` carries an extra phase
+  factor relative to the canonical `RZ` matrix). The Bloch sphere is
+  unaffected; amplitude phases in `state_vector` reflect the true
+  `ZPowGate`, not the relabeled `RZ`.
+- **Exact-equality exponent checks.** `cirq.X**1.0` is `X`, but a float
+  artifact like `cirq.X**0.9999999` silently becomes `RX` with a
+  near-π angle.

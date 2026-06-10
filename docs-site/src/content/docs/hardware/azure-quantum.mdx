@@ -1,0 +1,150 @@
+---
+title: "Azure Quantum"
+description: "The Azure Quantum provider: workspace setup, credentials, targets, Python vs Q# submission, QIR profile selection, results coercion, and caveats."
+---
+
+import { Code, Aside } from '@astrojs/starlight/components';
+import azureConnectReq from '../../../../fixtures/illustrative/hardware_connect_azure.request.json?raw';
+import azureSubmitReq from '../../../../fixtures/illustrative/hardware_submit_azure_qsharp.request.json?raw';
+import azureSubmitRes from '../../../../fixtures/illustrative/hardware_submit_azure_qsharp.responses.json?raw';
+
+Azure Quantum is an aggregator: one connection unlocks Quantinuum,
+IonQ-via-Azure, Rigetti, Pasqal, and IQM targets. It is also the **only
+provider that runs Q# programs on real hardware** (compiled to QIR).
+{/* kernel/hardware/azure_provider.py:1-7; kernel/server.py:85 */}
+
+<Aside type="caution" title="Examples on this page are illustrative">
+Everything here needs a real Azure workspace and network access, so unlike
+the simulator examples these are **not replay-tested** — they are listed in
+`docs-site/fixtures/UNTESTED.md`. Field names and routing match the
+provider source; ids, names, and timestamps are invented.
+</Aside>
+
+## Workspace setup
+
+1. In the Azure portal, create a **Quantum workspace** (subscription →
+   resource group → workspace; note the location).
+2. Install the SDK in the kernel environment — the setup wizard's `azure`
+   entry, i.e. `pip install azure-quantum`
+   ([catalog](/docs/reference/framework-catalog/)).
+3. Authenticate the *machine*: the kernel uses azure.quantum's **default
+   credential chain** (`az login`, a browser prompt, environment service
+   principal, managed identity — in the standard Azure order). There is
+   deliberately **no token field** in Nuclei's credential form.
+
+## Credentials
+
+Four fields, sent via `hardware_connect`: {/* azure_provider.py:141-147 */}
+
+| Key | Required | Default |
+|-----|----------|---------|
+| `subscription_id` | yes | — |
+| `resource_group` | yes | — |
+| `workspace_name` | yes | — |
+| `location` | no | `eastus` |
+
+<Code code={azureConnectReq} lang="json" title="illustrative/hardware_connect_azure.request.json" />
+
+`connect` validates by listing the workspace's targets over the network —
+`success: false` usually means wrong workspace coordinates or a missing
+`az login`. On success the four fields persist to the OS keyring like any
+provider ([overview](/docs/hardware/overview/#credential-fields)).
+{/* azure_provider.py:149-163 */}
+
+## Targets
+
+`hardware_list_backends` with `provider: "azure"` maps workspace targets to
+[`BackendInfo`](/docs/kernel-api/schemas/#backendinfo) — with caveats worth
+knowing: {/* azure_provider.py:165-207 */}
+
+- `status` is `online` when Azure reports availability containing
+  `available`, otherwise `maintenance`.
+- `queue_length` is filled from Azure's **average queue time** — it is a
+  time figure, not a number of jobs.
+- `qubit_count` is **hardcoded by name prefix** (`quantinuum` 56, `ionq`
+  29, `rigetti` 80, `pasqal` 100, `iqm` 20) — estimates, not live
+  calibration data; unrecognized targets report 0.
+- `connectivity`, `gate_set`, and `average_error_rate` are not populated.
+
+## Submitting Python
+
+Python code goes through the standard extraction path: the kernel `exec()`s
+it, pulls the Qiskit `QuantumCircuit` (search order qiskit → cirq → cudaq),
+and calls `target.submit(circuit, shots=shots)`. Translation to the
+target's native format relies on the azure-quantum SDK's framework plugins
+— install the matching extra (e.g. `pip install "azure-quantum[qiskit]"`)
+in the kernel environment. {/* server.py:132-143; azure_provider.py:251-252 */}
+
+```python
+# Submitted as hardware_submit code with provider "azure",
+# backend e.g. "ionq.simulator" — illustrative, not replay-tested.
+from qiskit import QuantumCircuit
+
+qc = QuantumCircuit(2, 2)
+qc.h(0)
+qc.cx(0, 1)
+qc.measure([0, 1], [0, 1])
+```
+
+## Submitting Q#
+
+Q# source never runs as Python — it is compiled to **QIR** via the Q#
+adapter and the resulting QIR program object is what `target.submit`
+receives. Profile selection is automatic: {/* server.py:105-130;
+kernel/adapters/qsharp_adapter.py:368-425 */}
+
+| Backend name contains | QIR target profile |
+|-----------------------|--------------------|
+| `quantinuum` (case-insensitive) | `Adaptive_RI` — mid-circuit measurement + classical feedback |
+| anything else | `Base` |
+
+<Code code={azureSubmitReq} lang="json" title="illustrative/hardware_submit_azure_qsharp.request.json" />
+<Code code={azureSubmitRes} lang="json" title="illustrative/hardware_submit_azure_qsharp.responses.json" />
+
+The usual Q# [entry-point rules](/docs/frameworks/qsharp/#entry-point-convention)
+apply (`Main()`, else the last zero-parameter operation). A program that
+compiles locally under the Unrestricted profile can still fail QIR
+compilation under `Base` — surfaced in the `error` envelope.
+
+## Results coercion
+
+Providers behind Azure disagree about result shape, so the kernel coerces
+everything into integer counts before `hardware_result.data.measurements`:
+{/* azure_provider.py:65-123,266-292 */}
+
+| Provider returns | Coercion |
+|------------------|----------|
+| Integer counts (Quantinuum style) | Passed through. |
+| Float distribution — all values in [0, 1] summing to ~1.0 (±0.01) | Treated as probabilities, **scaled by the shot count** (IonQ style; includes the deterministic `{"0": 1.0}` case). |
+| Other floats | Rounded to the nearest integer (counts serialized as floats). |
+| Array-style keys — `[0, 1]`, `(1, 0)`, nested | Normalized element-wise to `"01"`-style strings. Plain string/int keys pass through verbatim (IonQ integer state keys are legitimate). |
+| Two keys normalizing to the same state | Counts **summed**, not last-wins. |
+| Anything unrecognizable (empty dict, negative values, malformed keys) | `data.error` with a truncated raw preview — never a silent empty success. |
+
+While the job is pending, `hardware_results` returns
+`{"status": "running", "message": ...}` — keep polling.
+
+## Testing tips
+
+- **`ionq.simulator`** — IonQ's cloud simulator, free, the cheapest way to
+  prove the whole pipeline end-to-end.
+- **`quantinuum.sim.h1-1sc`** — Quantinuum's syntax checker: validates
+  compilation/submission for free but returns no meaningful counts.
+- Quantinuum emulator targets (e.g. `quantinuum.sim.h1-1e`) consume
+  workspace credit but model real-device noise.
+- Start with low `shots` and confirm the coerced `measurements` shape
+  before burning hardware credit.
+
+## Caveats
+
+- **The job id is Nuclei's, not Azure's.** Handles carry a locally
+  generated UUID; the Azure portal shows Azure's own id — cross-referencing
+  is manual. {/* azure_provider.py:213 */}
+- **Restart semantics:** kernel restart turns in-flight Azure jobs `stale`;
+  results are then unrecoverable through Nuclei (the job itself survives in
+  the Azure portal). [Details](/docs/hardware/overview/#persistence-and-the-resubmit-caveat).
+- **No queue positions:** Azure doesn't expose one, so `hardware_status`
+  reports `queue_position: -1` ("unknown") for pending jobs.
+  {/* azure_provider.py:294-303 */}
+- **Cancellation** maps to `status: "failed"` like every provider — there
+  is no `cancelled` wire status.

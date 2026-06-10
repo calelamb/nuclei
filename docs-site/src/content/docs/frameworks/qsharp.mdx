@@ -1,0 +1,110 @@
+---
+title: "Q#"
+description: "Q# support in Nuclei: source-mode execution, entry-point rules, the DumpMachine contract, gate mapping, and QIR compilation."
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+The in-app starter (Bell state — note the `DumpMachine()` call, which is
+what lights up the statevector panels; see [the contract](#the-dumpmachine-contract)):
+{/* src/data/starterTemplates.ts:38-50 */}
+
+```qsharp
+import Std.Diagnostics.DumpMachine;
+
+// Create a Bell State
+operation Main() : Result[] {
+    use qs = Qubit[2];
+    H(qs[0]);
+    CNOT(qs[0], qs[1]);
+    DumpMachine();        // shows the live quantum state in Nuclei's panels
+    let results = [M(qs[0]), M(qs[1])];
+    ResetAll(qs);
+    return results;
+}
+```
+
+## Source-mode execution
+
+Q# is the one framework whose code **never reaches Python `exec()`**. Its
+`AdapterSpec` is marked `source_mode`, so the executor hands the raw text
+to `parse_source` / `execute_source`, which drive the qdk interpreter
+(`qsharp.init` → `qsharp.eval` → `qsharp.circuit` / `qsharp.run`).
+{/* kernel/executor.py:22-23,263-269,306-312; kernel/adapters/qsharp_adapter.py:289-366 */}
+
+Q# compile errors come back as `compile_error` with the qdk diagnostic as
+the traceback — there is no Python traceback for Q# code.
+
+<Aside type="note" title="The package is qdk, not qsharp">
+Nuclei standardizes on the `qdk` PyPI package; the standalone `qsharp`
+package is a deprecated shim and is deliberately avoided. See the
+[framework catalog](/docs/reference/framework-catalog/).
+</Aside>
+
+## Entry-point convention
+
+Only **zero-parameter operations** are runnable. Resolution order:
+{/* qsharp_adapter.py:106,119-130 */}
+
+1. An operation named `Main` — `Main()` wins.
+2. Otherwise the **last** zero-parameter operation defined in the file
+   (the newest one wins).
+3. None defined → `parse` quietly returns an empty circuit (no error while
+   live-typing); `execute` returns `no_circuit` with a hint to define
+   `operation Main() : Result[]`. {/* qsharp_adapter.py:303-310,349-354 */}
+
+## The DumpMachine contract
+
+Q# runs are **sampled shot-by-shot** (`qsharp.run(entry, shots=...)`); the
+exact quantum state is only recoverable when the program itself calls
+`DumpMachine()`: {/* qsharp_adapter.py:515-550 */}
+
+| | With `DumpMachine()` | Without |
+|---|---------------------|---------|
+| `state_vector` | Exact dense state — the **last** dump of the **first** shot, if its qubit count matches the circuit | `[]` (empty) |
+| `probabilities` | Exact (replaces sampled frequencies) | Sampled `count / shots` |
+| `bloch_coords` | Partial trace of the dumped state | Measurement marginals — only *z* is observable from counts, so `x = y = 0` |
+| `measurements` | Sampled counts either way: flattened `Result` values **in entry-point return order** {/* qsharp_adapter.py:248-261,506-513 */} | same |
+
+Dump text and `Message()` output from the first shot appear as terminal
+`output`. Key conventions (qubit 0 leftmost — big-endian, like
+`DumpMachine`'s own display) are on the
+[schemas page](/docs/kernel-api/schemas/#q-statevector-is-best-effort).
+
+## Gate mapping
+
+The snapshot is built from `qsharp.circuit(entry)`'s JSON, flattened and
+re-layered with the same greedy algorithm as Qiskit — so Q# circuits lay
+out identically in the renderer. {/* qsharp_adapter.py:167-245 */}
+
+| Q# circuit-JSON | Canonical |
+|------------------|-----------|
+| `X` with 1 control | `CNOT` |
+| `X` with 2 controls | `Toffoli` |
+| `Z` with 1 control | `CZ` |
+| `Rx` / `Ry` / `Rz` | `RX` / `RY` / `RZ` (adjoint is already folded into the emitted angle — not re-applied) |
+| `S` / `T` with `isAdjoint` | `Sdg` / `Tdg` |
+| `H X Y Z S T SWAP` (uncontrolled) | unchanged |
+| measurement components | `Measure` |
+| `ket` (mid-circuit \|0⟩ preparation) | `Reset` — Q# is the only framework that emits it |
+| anything else | uppercase passthrough, controls preserved |
+
+## Local simulation vs `compile_qir`
+
+Two distinct paths:
+
+- **Editor runs** use the unrestricted local interpreter, per-shot, as
+  above.
+- **Hardware submission to Azure Quantum** compiles the same source to QIR
+  via `compile_qir(code, profile)`; the profile is selected per target —
+  see [submitting Q#](/docs/hardware/azure-quantum/#submitting-q). The
+  interpreter profile is restored to Unrestricted afterwards.
+  {/* qsharp_adapter.py:368-425; kernel/server.py:105-130 */}
+
+The qdk interpreter is process-global and pinned to one dedicated thread —
+all Q# work (every connection's) serializes through it.
+{/* qsharp_adapter.py:44-71 */}
+
+**Desktop-only:** the web build rejects Q# execution outright (editor
+diagnostics/completions still work there) — see
+[desktop vs web](/docs/introduction/desktop-vs-web/#capability-matrix).

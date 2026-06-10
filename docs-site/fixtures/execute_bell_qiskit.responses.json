@@ -1,0 +1,39 @@
+[
+  {
+    "type": "snapshot",
+    "data": {
+      "framework": "qiskit",
+      "qubit_count": 2,
+      "classical_bit_count": 2,
+      "depth": 3,
+      "gates": [
+        { "type": "H", "targets": [0], "controls": [], "params": [], "layer": 0 },
+        { "type": "CNOT", "targets": [1], "controls": [0], "params": [], "layer": 1 },
+        { "type": "Measure", "targets": [0], "controls": [], "params": [], "layer": 2 },
+        { "type": "Measure", "targets": [1], "controls": [], "params": [], "layer": 2 }
+      ]
+    }
+  },
+  {
+    "type": "result",
+    "data": {
+      "state_vector": [
+        { "re": "<approx:0.70710678:0.0000001>", "im": "<approx:0:0.0000001>" },
+        { "re": "<approx:0:0.0000001>", "im": "<approx:0:0.0000001>" },
+        { "re": "<approx:0:0.0000001>", "im": "<approx:0:0.0000001>" },
+        { "re": "<approx:0.70710678:0.0000001>", "im": "<approx:0:0.0000001>" }
+      ],
+      "probabilities": {
+        "00": "<approx:0.5:0.000001>",
+        "11": "<approx:0.5:0.000001>"
+      },
+      "measurements": "<any>",
+      "bloch_coords": [
+        { "x": "<approx:0:0.000001>", "y": "<approx:0:0.000001>", "z": "<approx:0:0.000001>" },
+        { "x": "<approx:0:0.000001>", "y": "<approx:0:0.000001>", "z": "<approx:0:0.000001>" }
+      ],
+      "execution_time_ms": "<any>",
+      "shot_count": 1024
+    }
+  }
+]

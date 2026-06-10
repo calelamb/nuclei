@@ -1,0 +1,53 @@
+---
+title: Nuclei developer docs
+description: Build on Nuclei, the open-source quantum IDE — the kernel WebSocket protocol, framework adapters, hardware providers, and the Dirac AI layer.
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+Nuclei is a free, open-source, local-first quantum computing IDE. For
+developers it is four things: a scriptable simulation kernel behind a plain
+[WebSocket JSON protocol](/docs/kernel-api/overview/), a multi-framework
+abstraction that normalizes Qiskit, Cirq, CUDA-Q, and Q# into one
+[`CircuitSnapshot`](/docs/kernel-api/schemas/) format, a gateway that submits
+the same circuits to real quantum hardware, and an AI layer
+([Dirac](/docs/dirac/architecture/)) that calls `api.anthropic.com` directly
+with a user-supplied key — no Nuclei server in the loop. If you want to *use* Nuclei,
+[download the app](https://nuclei.dev/#download) or
+[try it in the browser](https://nuclei.dev/try/) — this site is for people
+**building on** Nuclei.
+
+## What can I run?
+
+{/* Catalog: src-tauri/src/commands/frameworks.rs:32-124; portal: src/components/hardware/LaunchPortal.tsx:19-30 */}
+
+| | Supported today |
+|---|---|
+| **Languages** | Python · [Q#](/docs/frameworks/qsharp/) |
+| **Frameworks / SDKs** | [Qiskit](/docs/frameworks/qiskit/) · [Cirq](/docs/frameworks/cirq/) · [CUDA-Q](/docs/frameworks/cudaq/) · [Microsoft QDK](/docs/frameworks/qsharp/) |
+| **Simulators** | [Aer](/docs/frameworks/qiskit/) · [`cirq.Simulator`](/docs/frameworks/cirq/) · [CUDA-Q CPU/GPU](/docs/frameworks/cudaq/) · [QDK sparse simulator](/docs/frameworks/qsharp/) |
+| **Hardware** | [IBM](/docs/hardware/overview/) · [IonQ](/docs/hardware/overview/) · [Quantinuum](/docs/hardware/overview/) · [AWS Braket](/docs/hardware/overview/) · [Azure Quantum](/docs/hardware/azure-quantum/) · [NVIDIA CUDA-Q GPU](/docs/hardware/overview/) |
+
+Google Quantum AI is **scaffolded only**: a provider stub exists in the
+kernel but always refuses to connect, and its Launch-portal tile is disabled
+("Research access only"). Don't build against it yet.
+{/* kernel/hardware/google_provider.py:5-8; LaunchPortal.tsx:27 */}
+
+## Find your path
+
+- **Integrate** — drive the kernel from your own client, grader, or notebook:
+  [Kernel API overview](/docs/kernel-api/overview/).
+- **Extend** — add a framework adapter, hardware provider, or contribute to
+  the IDE: [framework adapters](/docs/extending/framework-adapters/),
+  [hardware providers](/docs/extending/hardware-providers/),
+  [contributing](/docs/extending/contributing/).
+- **Evaluate** — understand how the pieces fit before committing:
+  [architecture](/docs/introduction/architecture/) and
+  [desktop vs web](/docs/introduction/desktop-vs-web/).
+
+<Aside type="note" title="Protocol v1">
+These docs describe **kernel protocol v1** as of Nuclei 0.5.x. Additive
+changes land without notice; breaking changes ship only with a protocol
+version bump and an entry in the
+[protocol changelog](/docs/reference/protocol-changelog/).
+</Aside>

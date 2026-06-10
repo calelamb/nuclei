@@ -2,6 +2,7 @@
 # Build the combined Vercel output:
 #   dist-vercel/         ← landing page (served at /)
 #   dist-vercel/try/     ← web IDE (served at /try)
+#   dist-vercel/docs/    ← developer docs (served at /docs)
 #
 # This is the buildCommand for the root vercel.json.
 set -euo pipefail
@@ -19,14 +20,23 @@ echo "[build-vercel] assembling output dir"
 mkdir -p dist-vercel
 # Copy only the static files we want — NOT dotfiles, package.json, or old vercel.json
 cp landing/index.html dist-vercel/
+# Root robots.txt (allow all; points crawlers at the docs sitemap)
+cp landing/robots.txt dist-vercel/
 
 # Copy web IDE build output into dist-vercel/try/
 mkdir -p dist-vercel/try
 cp -R dist-web/. dist-vercel/try/
 
+echo "[build-vercel] building docs site"
+(cd docs-site && npm ci && npm run build)
+mkdir -p dist-vercel/docs
+cp -R docs-site/dist/. dist-vercel/docs/
+
 echo "[build-vercel] contents:"
 ls -la dist-vercel/ | head -20
 echo "  try/:"
 ls dist-vercel/try/ | head -20
+echo "  docs/:"
+ls dist-vercel/docs/ | head -20
 
 echo "[build-vercel] done"

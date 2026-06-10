@@ -1,0 +1,139 @@
+---
+title: "Hardware providers"
+description: "Implement a HardwareProvider: the six-method ABC, the failed-handle-vs-raise convention, credential wiring, JobStore interplay, and a tested worked example."
+---
+
+import { Code, Aside } from '@astrojs/starlight/components';
+import echoProviderSource from '../../../../fixtures/examples/echo_provider.py?raw';
+
+A hardware provider connects the kernel to one vendor's queue. Implement
+the ABC in `kernel/hardware/base.py`, register one instance in the
+manager, add a credential form entry in the frontend — the job tracker,
+persistence, and polling come for free.
+
+## The `HardwareProvider` ABC
+
+{/* kernel/hardware/base.py:55-85 */}
+
+| Method | Contract |
+|--------|----------|
+| `connect(credentials) -> bool` | Authenticate with the vendor SDK. Return `False` on bad credentials or missing SDK — **don't raise**. Print a hint (it reaches the kernel log). |
+| `list_backends() -> list[BackendInfo]` | Return [`BackendInfo`](/docs/kernel-api/schemas/#backendinfo) entries; `[]` when not connected. Swallow per-backend SDK errors and skip the entry. {/* ionq_provider.py:44-80 */} |
+| `submit_job(circuit_obj, backend, shots) -> JobHandle` | Submit and return a [`JobHandle`](/docs/kernel-api/schemas/#jobhandle). See the failure convention below. |
+| `get_results(job) -> dict` | `{"measurements": {...}, "status": "complete"}` when done; `{"status": "running", ...}` while pending; `{"error": ...}` on failure or unknown id — **dicts, not exceptions**. |
+| `get_queue_position(job) -> int` | Current position; `-1` when unknown. |
+| `cancel_job(job) -> bool` | Optional override. The inherited default no-ops and returns `True` — correct for synchronous providers (local simulator, NVIDIA). |
+
+### The failure convention: return a failed handle, don't raise
+
+The Azure provider is the model: {/* azure_provider.py:209-264 */}
+
+- **Raise** (`RuntimeError`) only for *misuse* — `submit_job` called before
+  `connect`. The manager raises the same way for unconnected providers
+  {/* manager.py:152-154 */}, and the server turns the exception into the
+  bare [hardware error envelope](/docs/kernel-api/errors/#the-hardware-error-convention).
+- **Every provider-side failure returns** a `JobHandle` with
+  `status="failed"` and a human-readable `error` — target lookup failed,
+  target not found, SDK submit exploded. The frontend then receives a
+  structured `hardware_job_submitted` carrying the failed job instead of a
+  string, and the job appears in the tracker with its error.
+- Distinguish failure messages by *actionability*: "target not found —
+  check the name" (user can act) vs "submit failed: \<SDK error\>" (file a
+  bug / retry).
+
+## Registering the provider
+
+One line in `HardwareManager.__init__` — the dict key is the provider id
+used in every `hardware_*` message: {/* kernel/hardware/manager.py:25-34 */}
+
+```python
+self._providers = {
+    "simulator": SimulatorProvider(),
+    ...
+    "echo": EchoProvider(),   # your provider
+}
+```
+
+The constructor must be cheap and must not import the vendor SDK —
+providers are instantiated unconditionally at kernel start; import the SDK
+lazily inside `connect()` like every existing provider does.
+{/* ionq_provider.py:18-26 */}
+
+## What the manager does for you (JobStore interplay)
+
+You keep SDK job objects in memory; the manager owns everything durable:
+{/* manager.py:43-78,152-196 */}
+
+- **On submit**: registers the handle and immediately persists a
+  `JobRecord` (id, provider, backend, status, shots, timestamps) to the
+  file-backed JobStore, so a kernel crash between submit and first poll
+  doesn't orphan the job.
+- **On polling**: write-through of queue-position updates for
+  `queued`/`running` jobs.
+- **On restart**: terminal jobs (`complete`/`failed`/`cancelled`) reload
+  verbatim; non-terminal jobs come back as `stale` (your SDK handle is
+  gone) and are never polled against your provider. You don't handle
+  rehydration at all.
+- **On connect**: credentials persist to the **OS keyring** and
+  auto-reconnect on the next kernel start — silently, with failures logged
+  not raised. {/* manager.py:80-131 */}
+
+## Credential wiring (and the key-name gotcha)
+
+The **kernel-side field names are the contract.** Whatever keys your
+`connect(credentials)` reads must be exactly the keys the frontend sends.
+
+1. Define the keys your provider reads, e.g.
+   `credentials.get("token", "")`. {/* ionq_provider.py:28 */}
+2. Add an entry to `PROVIDER_CONFIG` in
+   `src/components/hardware/CredentialSetup.tsx:13` — label, description,
+   and `fields: [{ key, label, placeholder }]`. The `key` of each field
+   becomes the credentials-dict key sent to the kernel, and the dialog
+   sends credentials straight to the kernel (never to localStorage).
+   {/* CredentialSetup.tsx:145-158 */}
+3. Add the provider id to the `HardwareProviderType` union in
+   `src/types/hardware.ts`.
+
+<Aside type="caution" title="Match the kernel-side key names exactly">
+This has already gone wrong once: the desktop dialogs send `apiToken` (IBM)
+and `apiKey` (IonQ) while the kernel providers read `token` — a live
+mismatch documented in the
+[credential-fields table](/docs/hardware/overview/#credential-fields) and
+tracked as a known bug. When you add a provider, make the
+`PROVIDER_CONFIG` field `key` strings identical to what your `connect()`
+reads, and add a test asserting the keys.
+</Aside>
+
+## Worked example: `EchoProvider`
+
+The smallest possible provider, modeled on
+`kernel/hardware/simulator_provider.py`: connect always succeeds, one fake
+backend, and `submit_job` completes synchronously, echoing the requested
+shot count into a fake counts dict. The file lives at
+`docs-site/fixtures/examples/echo_provider.py` and
+`kernel/tests/test_docs_examples.py` injects it into a **real
+`HardwareManager`** (the same injection pattern as
+`kernel/tests/hardware/test_manager.py`), connects, submits, and asserts
+the results round-trip — so this example cannot rot.
+
+<Code code={echoProviderSource} lang="python" title="docs-site/fixtures/examples/echo_provider.py" />
+
+What the test verifies:
+
+- `connect_provider("echo", {})` → `True`; `list_backends("echo")` returns
+  the one backend (and `[]` before connecting — manager-enforced).
+- `submit_job` returns a `complete` handle; the manager registered and
+  persisted it (`get_job_status` works immediately).
+- `get_results` returns `{"measurements": {"00": shots}, "status": "complete"}`.
+- Submitting while unconnected raises `RuntimeError` — from the *manager*,
+  per the convention above.
+
+## Testing expectations
+
+Provider tests live in `kernel/tests/hardware/`, whose `conftest.py`
+isolates the OS keyring and job store automatically. Mock the vendor SDK
+at the import boundary (see `test_ionq_provider.py`,
+`test_azure_provider.py`) — CI installs no vendor SDKs. Cover at minimum:
+connect success/failure, `list_backends` when disconnected, the
+failed-handle submit path, and the results dict shapes for
+complete/running/failed/unknown.

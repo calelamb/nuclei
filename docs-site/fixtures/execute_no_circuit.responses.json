@@ -1,0 +1,17 @@
+[
+  {
+    "type": "snapshot",
+    "data": null
+  },
+  {
+    "type": "error",
+    "message": "No quantum circuit found in code.",
+    "code": "no_circuit",
+    "phase": "execute",
+    "framework": "qiskit"
+  },
+  {
+    "type": "result",
+    "data": null
+  }
+]

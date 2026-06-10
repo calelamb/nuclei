@@ -1,0 +1,105 @@
+---
+title: "Kernel API overview"
+description: "The kernel WebSocket protocol: connection details, the streaming response model, and protocol versioning."
+---
+
+import { Code, Aside } from '@astrojs/starlight/components';
+import executeReq from '../../../../fixtures/execute_bell_qiskit.request.json?raw';
+import executeRes from '../../../../fixtures/execute_bell_qiskit.responses.json?raw';
+
+The Nuclei kernel is a standalone WebSocket service. The desktop frontend is
+just its first client — anything that can open a WebSocket and speak JSON can
+parse circuits, run simulations, and submit hardware jobs. This section
+documents that protocol as a public API.
+
+<Aside type="note" title="Protocol v1">
+The kernel protocol is public and stable-intent. Until Nuclei 1.0 it may
+still evolve: **additive** changes (new message types, new optional fields)
+can land without notice, and clients must ignore unknown fields and unknown
+response types. **Breaking** changes ship only with a protocol version bump
+and an entry in the
+[protocol changelog](/docs/reference/protocol-changelog/).
+</Aside>
+
+## Connection
+
+{/* Constants: server.py:14-18; bind loop: server.py:495-513 */}
+
+| Property | Value |
+|----------|-------|
+| URL | `ws://localhost:9742` |
+| Port fallback | If 9742 is taken, the kernel scans upward through `9742`–`9761` (range of 20) and binds the first free port |
+| Framing | JSON text frames — one request or response object per frame |
+| Max inbound message | 1 MiB (`1_048_576` bytes); larger frames close the connection |
+| Heartbeat | WebSocket ping every 30 s; connection dropped after a 20 s pong timeout |
+| Auth | None — the kernel binds to `localhost` only |
+
+Requests on one connection are processed strictly in order: the handler
+fully finishes (and sends every response for) request *N* before reading
+request *N + 1*. For concurrent work, open multiple connections — each
+connection gets its own isolated `Executor` (parse/execute state never
+bleeds between clients), while hardware state (provider connections, job
+registry) is shared process-wide. {/* server.py:20-23, 162-167 */}
+
+## Running the kernel standalone
+
+```bash
+cd kernel && python server.py
+```
+
+On success the kernel prints exactly one ready line to stdout:
+
+```text
+Nuclei kernel ready on ws://localhost:9742
+```
+
+This line is the port-discovery contract: when the default port was taken,
+the chosen port appears in this line, on its own line, flushed — parse it
+rather than assuming 9742. {/* server.py:506 */}
+
+## The streaming model
+
+A request does not get *a* reply. It produces an ordered **sequence** of
+response messages on the same connection, ending with a request-specific
+final message (`result` for `execute`, `python_result` for `run_python`,
+`snapshot` for `parse` — though a failed parse appends one `error` after
+it — and a single reply for every `hardware_*` request). Streamed `output` / `stderr` messages may interleave before the
+terminal message, so a robust client loops until it sees the terminal type
+— see [client examples](/docs/kernel-api/client-examples/).
+
+The canonical example — `execute` on a Bell circuit produces two messages,
+`snapshot` then `result`:
+
+<Code code={executeReq} lang="json" title="execute_bell_qiskit.request.json" />
+<Code code={executeRes} lang="json" title="execute_bell_qiskit.responses.json" />
+
+Values like `"<any>"` and `"<approx:0.5:0.000001>"` are matcher markers, not
+protocol values: every example in this section is a fixture file that the
+kernel test suite replays against the real handler
+(`kernel/tests/test_docs_fixtures.py`), and markers absorb nondeterminism
+(sampled counts, timings). The shapes and orderings you read here are
+machine-checked on every CI run.
+
+## Message catalog
+
+| Request `type` | Terminal response | Reference |
+|----------------|-------------------|-----------|
+| `parse` | `snapshot` (an `error` follows it on failure) | [Execution messages](/docs/kernel-api/messages-execution/) |
+| `execute` | `result` | [Execution messages](/docs/kernel-api/messages-execution/) |
+| `run_python` | `python_result` | [Execution messages](/docs/kernel-api/messages-execution/) |
+| `hardware_connect` | `hardware_connected` | [Hardware messages](/docs/kernel-api/messages-hardware/) |
+| `hardware_set_credentials` | `hardware_connected` | [Hardware messages](/docs/kernel-api/messages-hardware/) |
+| `hardware_clear_credentials` | `hardware_connected` | [Hardware messages](/docs/kernel-api/messages-hardware/) |
+| `hardware_connected_providers` | `hardware_connected_providers` | [Hardware messages](/docs/kernel-api/messages-hardware/) |
+| `hardware_list_jobs` | `hardware_jobs` | [Hardware messages](/docs/kernel-api/messages-hardware/) |
+| `hardware_list_backends` | `hardware_backends` | [Hardware messages](/docs/kernel-api/messages-hardware/) |
+| `hardware_submit` | `hardware_job_submitted` | [Hardware messages](/docs/kernel-api/messages-hardware/) |
+| `hardware_status` | `hardware_job_update` | [Hardware messages](/docs/kernel-api/messages-hardware/) |
+| `hardware_results` | `hardware_result` | [Hardware messages](/docs/kernel-api/messages-hardware/) |
+| `hardware_cancel` | `hardware_job_cancelled` | [Hardware messages](/docs/kernel-api/messages-hardware/) |
+
+Any other `type` (and any frame that is not valid JSON) produces a bare
+`error` message — see [errors](/docs/kernel-api/errors/). Payload schemas
+are in [schemas](/docs/kernel-api/schemas/). The TypeScript mirror of the
+whole protocol — the types the frontend itself compiles against — lives at
+[`src/types/quantum.ts`](https://github.com/calelamb/nuclei/blob/main/src/types/quantum.ts).

@@ -1,0 +1,96 @@
+---
+title: "Install & build"
+description: "Build Nuclei from source: prerequisites, the dev/build command table, repo layout, and the managed Python venv that runs the kernel."
+---
+
+## Prerequisites
+
+{/* README.md:63-68; docs-site/package.json engines */}
+
+| Tool | Version | Notes |
+|------|---------|-------|
+| Node.js | 20+ | 22.12+ if you also build the docs site (`docs-site/`) |
+| Rust | latest stable | via [rustup](https://rustup.rs/) |
+| Python | 3.10+ | with pip — the kernel uses PEP 604 syntax at import time, so 3.9 crashes |
+| Tauri CLI | 2.x | `cargo install tauri-cli` |
+
+## Clone and run
+
+```bash
+git clone https://github.com/calelamb/nuclei.git
+cd nuclei
+npm install
+pip install -r kernel/requirements.txt   # for running the kernel standalone
+cp .env.example .env                     # optional — Dirac dev key, kernel port
+npm run tauri dev
+```
+
+`npm run tauri dev` gives you frontend HMR and automatic Rust rebuilds. In
+dev the shell finds the kernel at `<repo>/kernel/server.py`; in packaged
+builds the `kernel/` directory is bundled as a Tauri resource.
+{/* src-tauri/src/commands/kernel.rs:108-125 */}
+
+## Command table
+
+All verified against `package.json` scripts:
+
+| Command | Where | What it does |
+|---------|-------|--------------|
+| `npm run tauri dev` | repo root | Desktop app with hot reload |
+| `npm run tauri build` | repo root | Package installers (.dmg / .msi / .AppImage, .deb) |
+| `npm run dev:web` | repo root | Browser build dev server (Pyodide kernel) |
+| `npm run build:web` | repo root | Browser build → `dist-web/` |
+| `npm test` | repo root | Frontend tests (Vitest) |
+| `npm run lint` | repo root | ESLint |
+| `python3 -m pytest kernel/tests` | repo root | Kernel test suite — including the protocol fixtures the [Kernel API docs](/docs/kernel-api/overview/) replay |
+| `cargo test` | `src-tauri/` | Compiles and runs the Rust suite — currently no unit tests exist, so this is a build check |
+| `cd kernel && python server.py` | — | Run the kernel standalone (see [Kernel API](/docs/kernel-api/overview/#running-the-kernel-standalone)) |
+| `npm install && npm run build` | `docs-site/` | Build this docs site (Astro/Starlight, Node 22.12+) |
+
+## Repo layout (trimmed)
+
+```text
+nuclei/
+├── src-tauri/        # Rust shell: kernel spawn, venv management, IPC commands
+├── src/              # React frontend (also the browser build)
+│   ├── components/   # editor, circuit, bloch, histogram, dirac, hardware, layout
+│   ├── stores/       # Zustand state
+│   ├── hooks/        # useKernel, useDirac, ...
+│   └── platform/     # PlatformBridge: tauriBridge vs webBridge + pyodideKernel
+├── kernel/           # Python kernel
+│   ├── server.py     # WebSocket entry point
+│   ├── executor.py   # framework detection + execution
+│   ├── adapters/     # qiskit / cirq / cudaq / qsharp → CircuitSnapshot
+│   ├── hardware/     # providers, credential store, job store
+│   └── tests/        # pytest suite + docs protocol fixtures
+├── docs-site/        # this site (standalone Astro project)
+├── landing/          # nuclei.dev landing page
+└── scripts/          # build helpers
+```
+
+## The managed Python venv
+
+The packaged app does **not** bundle Python. Instead, the shell maintains a
+private venv in the app data directory and runs the kernel from it —
+keeping kernel dependencies out of the user's site-packages and surviving
+their Python upgrades. {/* src-tauri/src/commands/frameworks.rs:1-8, 143-149 */}
+
+| | |
+|---|---|
+| Location | `<appDataDir>/venv` — concrete per-OS paths in [configuration](/docs/reference/configuration/#file-locations) |
+| Interpreter probe order | `python3.13` → `python3.12` → `python3.11` → `python3.10` → `python3` → `python`; first hit with minor ≥ 10 wins, so a version-specific binary beats a generic symlink {/* frameworks.rs:204-227 */} |
+| Minimum Python | 3.10 (`MIN_PYTHON_MINOR`) — older interpreters fail at kernel import on PEP 604 unions {/* frameworks.rs:167-171 */} |
+| Core deps | `websockets`, `numpy`, `keyring` — force-installed on every launch if missing {/* frameworks.rs:289-293 */} |
+| Frameworks | Installed on demand from the [framework catalog](/docs/reference/framework-catalog/) via the setup wizard |
+
+**Auto-rebuild:** if an existing venv was built from Python < 3.10 (a real
+field failure — Xcode shipped 3.9 for years), `ensure_kernel_runtime`
+snapshots which catalog frameworks were importable, renames the old venv to
+`venv.broken`, rebuilds from the newest 3.10+ interpreter, re-installs core
+deps plus the snapshotted frameworks, then deletes the backup on success.
+Failures keep `venv.broken` around for inspection.
+{/* frameworks.rs:341-364, 377-452 */}
+
+If no Python 3.10+ exists on `PATH` at all, the kernel spawn falls back to
+system `python3` — and the UI tells the user to install Python from
+python.org. {/* kernel.rs:155-164; frameworks.rs:497-503 */}

@@ -1,0 +1,10 @@
+[
+  {
+    "type": "hardware_result",
+    "job_id": "job-from-before-restart",
+    "data": {
+      "error": "Results for this job are no longer available (the kernel may have restarted since it was submitted).",
+      "status": "stale"
+    }
+  }
+]

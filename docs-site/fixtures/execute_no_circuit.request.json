@@ -1,0 +1,6 @@
+{
+  "type": "execute",
+  "code": "from qiskit import QuantumCircuit\n",
+  "shots": 1024,
+  "language": "python"
+}

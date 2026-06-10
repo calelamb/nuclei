@@ -64,11 +64,17 @@ def install_fake_sdk(monkeypatch):
     def _install(module_name: str, **attrs) -> types.ModuleType:
         parts = module_name.split(".")
         # Build each prefix as a module so `from pkg.subpkg import x` resolves.
+        # Modules already in sys.modules are reused ONLY if this fixture
+        # created them (earlier _install call in the same test). A REAL
+        # already-imported module (e.g. qiskit, lazily imported by a prior
+        # test) is replaced wholesale with a fresh fake via
+        # monkeypatch.setitem so the real module object is never mutated —
+        # setattr on the real module would leak fakes into every later test.
         cumulative = ""
         parent: types.ModuleType | None = None
         for part in parts:
             cumulative = f"{cumulative}.{part}" if cumulative else part
-            if cumulative not in sys.modules:
+            if cumulative not in installed:
                 fresh = types.ModuleType(cumulative)
                 monkeypatch.setitem(sys.modules, cumulative, fresh)
                 installed.append(cumulative)
