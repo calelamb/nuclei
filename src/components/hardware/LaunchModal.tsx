@@ -7,6 +7,7 @@ import { useThemeStore } from '../../stores/themeStore';
 import { usePlatform } from '../../platform/PlatformProvider';
 import { getHardware } from '../../App';
 import { ProviderLogo } from './ProviderLogo';
+import { providerAllowsQsharp, submissionLanguage, QSHARP_GATE_TOOLTIP } from './launchGating';
 import type { HardwareProviderType, BackendInfo } from '../../types/hardware';
 
 interface ProviderMeta {
@@ -191,6 +192,7 @@ export function LaunchModal() {
   const shots = useSimulationStore((s) => s.shots);
   const setShots = useSimulationStore((s) => s.setShots);
   const code = useEditorStore((s) => s.code);
+  const framework = useEditorStore((s) => s.framework);
   const colors = useThemeStore((s) => s.colors);
   const shadow = useThemeStore((s) => s.shadow);
 
@@ -242,8 +244,15 @@ export function LaunchModal() {
 
   if (!open) return null;
 
+  // What language the submission would carry: a staged file's extension
+  // wins (its content is what gets submitted), else the editor framework.
+  // The kernel enforces the same Q# allowlist — this gating is cosmetic.
+  const submitLanguage = submissionLanguage(stagedSubmission?.fileName ?? null, framework);
+  const qsharpBlocks = (provider: HardwareProviderType) =>
+    submitLanguage === 'qsharp' && !providerAllowsQsharp(provider);
+
   const handlePickProvider = (p: ProviderMeta) => {
-    if (p.comingSoon) return;
+    if (p.comingSoon || qsharpBlocks(p.name)) return;
     selectProvider(p.name);
   };
 
@@ -288,6 +297,7 @@ export function LaunchModal() {
         selectedBackend,
         codeToSubmit,
         localShots,
+        submitLanguage,
       );
       if (!ok) {
         useHardwareStore.getState().setConnectionError(
@@ -448,12 +458,14 @@ export function LaunchModal() {
                 {PROVIDERS.map((p) => {
                   const providerState = providers.find((pp) => pp.name === p.name);
                   const connected = providerState?.connected ?? p.name === 'simulator';
-                  const disabled = p.comingSoon;
+                  const qsharpBlocked = qsharpBlocks(p.name);
+                  const disabled = p.comingSoon || qsharpBlocked;
                   return (
                     <button
                       key={p.name}
                       onClick={() => handlePickProvider(p)}
                       disabled={disabled}
+                      title={qsharpBlocked ? QSHARP_GATE_TOOLTIP : undefined}
                       style={{
                         textAlign: 'left',
                         background: disabled ? `${colors.textDim}08` : colors.bgElevated,
@@ -540,6 +552,8 @@ export function LaunchModal() {
                       >
                         {p.comingSoon ? (
                           <span style={{ color: colors.textDim }}>Coming soon</span>
+                        ) : qsharpBlocked ? (
+                          <span style={{ color: colors.textDim }}>{QSHARP_GATE_TOOLTIP}</span>
                         ) : connected || p.name === 'simulator' || p.name === 'nvidia' ? (
                           <>
                             <span

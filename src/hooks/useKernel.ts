@@ -6,7 +6,7 @@ import { useSimulationStore } from '../stores/simulationStore';
 import { useBottomPanelStore } from '../stores/bottomPanelStore';
 import { useSettingsStore } from '../stores/settingsStore';
 import { kernelLanguageFor } from '../types/quantum';
-import type { KernelResponse } from '../types/quantum';
+import type { KernelLanguage, KernelResponse } from '../types/quantum';
 import { KERNEL_WS_URL } from '../config/kernel';
 import type { PyodideKernel } from '../platform/pyodideKernel';
 import { useDiracStore } from '../stores/diracStore';
@@ -542,14 +542,17 @@ export function useKernel() {
   );
 
   const hardwareSubmit = useCallback(
-    (provider: string, backend: string, code: string, shots: number) =>
+    (provider: string, backend: string, code: string, shots: number, language?: KernelLanguage) =>
       sendHardware({
         type: 'hardware_submit',
         provider,
         backend,
         code,
         shots,
-        language: kernelLanguageFor(useEditorStore.getState().framework),
+        // Callers that know the submission's true language (e.g. a staged
+        // .qs file dropped on the launcher) pass it explicitly; otherwise
+        // fall back to the editor's active framework as before.
+        language: language ?? kernelLanguageFor(useEditorStore.getState().framework),
       }),
     [sendHardware],
   );

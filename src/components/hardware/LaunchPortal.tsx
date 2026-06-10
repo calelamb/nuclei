@@ -6,6 +6,7 @@ import { useProjectStore } from '../../stores/projectStore';
 import { useThemeStore } from '../../stores/themeStore';
 import { ProviderLogo } from './ProviderLogo';
 import { getHardware } from '../../App';
+import { providerAllowsQsharp, QSHARP_GATE_TOOLTIP } from './launchGating';
 import type { HardwareProviderType } from '../../types/hardware';
 
 interface ProviderPortalMeta {
@@ -46,6 +47,7 @@ export function LaunchPortal() {
   const selectProvider = useHardwareStore((s) => s.selectProvider);
   const setCode = useEditorStore((s) => s.setCode);
   const setFilePath = useEditorStore((s) => s.setFilePath);
+  const framework = useEditorStore((s) => s.framework);
   const openTab = useProjectStore((s) => s.openTab);
   const currentFilePath = useEditorStore((s) => s.filePath);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -81,7 +83,7 @@ export function LaunchPortal() {
       setDragActive(false);
       const file = e.dataTransfer.files?.[0];
       if (!file) return;
-      if (!/\.(py|qasm|ipynb)$/i.test(file.name)) return;
+      if (!/\.(py|qasm|ipynb|qs)$/i.test(file.name)) return;
       void readFile(file);
     },
     [readFile],
@@ -97,8 +99,17 @@ export function LaunchPortal() {
     [readFile],
   );
 
+  // When the editor holds Q#, only Azure Quantum + the Local Simulator can
+  // take the submission. Cosmetic — the kernel enforces the same allowlist.
+  // Deliberate asymmetry with LaunchModal: the portal gates on the editor's
+  // framework because no staged file exists yet at provider-pick time;
+  // LaunchModal re-derives from submissionLanguage(), which a staged
+  // .qs/.py file can override.
+  const qsharpBlocks = (provider: HardwareProviderType) =>
+    framework === 'qsharp' && !providerAllowsQsharp(provider);
+
   const handlePickProvider = (p: ProviderPortalMeta) => {
-    if (p.disabled) return;
+    if (p.disabled || qsharpBlocks(p.name)) return;
     selectProvider(p.name);
     openLaunch();
   };
@@ -170,6 +181,7 @@ export function LaunchPortal() {
           <Upload size={18} style={{ color: dragActive ? colors.accent : colors.textMuted }} />
           <div style={{ fontSize: 11, color: colors.text, textAlign: 'center', lineHeight: 1.5 }}>
             Drop a <code style={{ fontFamily: "'JetBrains Mono', monospace", color: colors.accentLight }}>.py</code>{' '}
+            or <code style={{ fontFamily: "'JetBrains Mono', monospace", color: colors.accentLight }}>.qs</code>{' '}
             or click to browse
           </div>
           {activeFileName && (
@@ -194,7 +206,7 @@ export function LaunchPortal() {
         <input
           ref={fileInputRef}
           type="file"
-          accept=".py,.qasm,.ipynb"
+          accept=".py,.qasm,.ipynb,.qs"
           onChange={handleFilePick}
           style={{ display: 'none' }}
         />
@@ -216,29 +228,32 @@ export function LaunchPortal() {
           Choose a destination
         </div>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
-          {PORTAL_PROVIDERS.map((p) => (
+          {PORTAL_PROVIDERS.map((p) => {
+            const qsharpBlocked = qsharpBlocks(p.name);
+            const isDisabled = p.disabled || qsharpBlocked;
+            return (
             <button
               key={p.name}
               onClick={() => handlePickProvider(p)}
-              disabled={p.disabled}
-              title={p.tagline}
+              disabled={isDisabled}
+              title={qsharpBlocked ? QSHARP_GATE_TOOLTIP : p.tagline}
               style={{
                 textAlign: 'left',
                 background: colors.bgElevated,
                 border: `1px solid ${colors.border}`,
                 borderRadius: 8,
                 padding: 10,
-                cursor: p.disabled ? 'not-allowed' : 'pointer',
+                cursor: isDisabled ? 'not-allowed' : 'pointer',
                 color: colors.text,
                 fontFamily: "'Geist Sans', sans-serif",
                 display: 'flex',
                 flexDirection: 'column',
                 gap: 6,
-                opacity: p.disabled ? 0.5 : 1,
+                opacity: isDisabled ? 0.5 : 1,
                 transition: 'border-color 120ms ease, background 120ms ease, transform 120ms ease',
               }}
               onMouseEnter={(e) => {
-                if (p.disabled) return;
+                if (isDisabled) return;
                 e.currentTarget.style.borderColor = colors.accent;
                 e.currentTarget.style.transform = 'translateY(-1px)';
               }}
@@ -276,7 +291,8 @@ export function LaunchPortal() {
                 {p.tagline}
               </div>
             </button>
-          ))}
+            );
+          })}
         </div>
 
         <button

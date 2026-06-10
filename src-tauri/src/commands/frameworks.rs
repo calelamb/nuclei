@@ -62,6 +62,16 @@ const CATALOG: &[FrameworkInfo] = &[
         recommended: false,
     },
     FrameworkInfo {
+        id: "qsharp",
+        label: "Microsoft QDK (Q#)",
+        description: "Microsoft's quantum language. Compiles to QIR for Azure Quantum hardware.",
+        pip_name: "qdk",
+        import_name: "qdk",
+        group: "core",
+        approximate_size_mb: 25,
+        recommended: true,
+    },
+    FrameworkInfo {
         id: "ibm-runtime",
         label: "IBM Quantum Runtime",
         description: "Run circuits on real IBM quantum hardware.",

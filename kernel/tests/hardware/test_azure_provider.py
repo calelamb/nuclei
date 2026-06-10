@@ -205,6 +205,179 @@ def test_get_results_unknown_job():
     assert "error" in provider.get_results(handle)
 
 
+# ───────────────────────── get_results() — result coercion ─────────────────────────
+
+
+def _succeeded_job(results) -> MagicMock:
+    """Mock SDK job in the Succeeded state returning `results`."""
+    azure_job = MagicMock()
+    details = MagicMock()
+    details.status = "Succeeded"
+    azure_job.details = details
+    azure_job.get_results.return_value = results
+    return azure_job
+
+
+def test_get_results_int_counts_pass_through_unchanged():
+    """Integer counts must never be rescaled, whatever the shot total."""
+    provider = AzureProvider()
+    provider._jobs["j"] = _succeeded_job({"0": 300, "1": 700})
+
+    handle = JobHandle(id="j", provider="azure", backend="x", status="queued",
+                       queue_position=None, shots=512, submitted_at="now")
+    results = provider.get_results(handle)
+    assert results["status"] == "complete"
+    assert results["measurements"] == {"0": 300, "1": 700}
+
+
+def test_get_results_float_probabilities_scaled_by_shots():
+    """IonQ-via-Azure reports probabilities; the old int() coercion
+    truncated 0.5 → 0 and silently reported empty counts."""
+    provider = AzureProvider()
+    provider._jobs["j"] = _succeeded_job({"00": 0.5, "11": 0.5})
+
+    handle = JobHandle(id="j", provider="azure", backend="x", status="queued",
+                       queue_position=None, shots=1000, submitted_at="now")
+    results = provider.get_results(handle)
+    assert results["status"] == "complete"
+    assert results["measurements"] == {"00": 500, "11": 500}
+
+
+def test_get_results_non_probability_floats_round_to_counts():
+    """Floats that don't sum to ~1.0 are counts serialized as floats."""
+    provider = AzureProvider()
+    provider._jobs["j"] = _succeeded_job({"00": 512.0, "11": 488.0})
+
+    handle = JobHandle(id="j", provider="azure", backend="x", status="queued",
+                       queue_position=None, shots=1000, submitted_at="now")
+    results = provider.get_results(handle)
+    assert results["status"] == "complete"
+    assert results["measurements"] == {"00": 512, "11": 488}
+
+
+def test_get_results_array_style_keys_normalized_to_bitstrings():
+    provider = AzureProvider()
+    provider._jobs["j"] = _succeeded_job({"[0, 1]": 512, "(1, 0)": 488})
+
+    handle = JobHandle(id="j", provider="azure", backend="x", status="queued",
+                       queue_position=None, shots=1000, submitted_at="now")
+    results = provider.get_results(handle)
+    assert results["measurements"] == {"01": 512, "10": 488}
+
+
+def test_get_results_tuple_keys_normalized_to_bitstrings():
+    provider = AzureProvider()
+    provider._jobs["j"] = _succeeded_job({(0, 0): 600, (1, 1): 400})
+
+    handle = JobHandle(id="j", provider="azure", backend="x", status="queued",
+                       queue_position=None, shots=1000, submitted_at="now")
+    results = provider.get_results(handle)
+    assert results["measurements"] == {"00": 600, "11": 400}
+
+
+def test_get_results_colliding_normalized_keys_sum_with_warning(capsys):
+    """"[0, 1]" and "01" denote the same state — counts must sum, not
+    silently last-wins."""
+    provider = AzureProvider()
+    provider._jobs["j"] = _succeeded_job({"[0, 1]": 300, "01": 700})
+
+    handle = JobHandle(id="j", provider="azure", backend="x", status="queued",
+                       queue_position=None, shots=1000, submitted_at="now")
+    results = provider.get_results(handle)
+    assert results["status"] == "complete"
+    assert results["measurements"] == {"01": 1000}
+    out = capsys.readouterr().out
+    assert "collided" in out.lower()
+    assert "01" in out
+
+
+def test_get_results_malformed_array_key_is_error(capsys):
+    """Array-style keys whose elements aren't non-negative integers poison
+    the whole result set — error dict, not an empty/mangled success."""
+    provider = AzureProvider()
+    provider._jobs["j"] = _succeeded_job({"[-1, 0]": 5})
+
+    handle = JobHandle(id="j", provider="azure", backend="x", status="queued",
+                       queue_position=None, shots=5, submitted_at="now")
+    results = provider.get_results(handle)
+    assert "error" in results
+    assert results.get("measurements") is None
+    assert "unrecognized" in capsys.readouterr().out.lower()
+
+
+def test_get_results_ionq_integer_state_keys_pass_through_verbatim():
+    """IonQ-style integer state keys ({"0": …, "3": …}) are legitimate and
+    must not be bitstring-validated or mangled."""
+    provider = AzureProvider()
+    provider._jobs["j"] = _succeeded_job({"0": 0.5, "3": 0.5})
+
+    handle = JobHandle(id="j", provider="azure", backend="x", status="queued",
+                       queue_position=None, shots=1000, submitted_at="now")
+    results = provider.get_results(handle)
+    assert results["status"] == "complete"
+    assert results["measurements"] == {"0": 500, "3": 500}
+
+
+def test_get_results_single_entry_probability_scales_by_shots():
+    """Deliberate: {"0": 1.0} from a probability-returning target is a
+    deterministic circuit's distribution, not a literal count of 1."""
+    provider = AzureProvider()
+    provider._jobs["j"] = _succeeded_job({"0": 1.0})
+
+    handle = JobHandle(id="j", provider="azure", backend="x", status="queued",
+                       queue_position=None, shots=1000, submitted_at="now")
+    results = provider.get_results(handle)
+    assert results["status"] == "complete"
+    assert results["measurements"] == {"0": 1000}
+
+
+def test_get_results_negative_int_counts_are_error():
+    provider = AzureProvider()
+    provider._jobs["j"] = _succeeded_job({"0": -5, "1": 10})
+
+    handle = JobHandle(id="j", provider="azure", backend="x", status="queued",
+                       queue_position=None, shots=5, submitted_at="now")
+    results = provider.get_results(handle)
+    assert "error" in results
+    assert results.get("measurements") is None
+
+
+def test_get_results_empty_dict_is_error_not_empty_success():
+    """An empty histogram from a Succeeded job is a provider anomaly."""
+    provider = AzureProvider()
+    provider._jobs["j"] = _succeeded_job({})
+
+    handle = JobHandle(id="j", provider="azure", backend="x", status="queued",
+                       queue_position=None, shots=100, submitted_at="now")
+    results = provider.get_results(handle)
+    assert "error" in results
+    assert results.get("measurements") is None
+
+
+def test_get_results_nested_tuple_keys_recurse():
+    provider = AzureProvider()
+    provider._jobs["j"] = _succeeded_job({((0, 1), (1, 0)): 1000})
+
+    handle = JobHandle(id="j", provider="azure", backend="x", status="queued",
+                       queue_position=None, shots=1000, submitted_at="now")
+    results = provider.get_results(handle)
+    assert results["measurements"] == {"0110": 1000}
+
+
+def test_get_results_non_dict_is_error_not_empty_success(capsys):
+    """Unknown result shapes must surface an error, not {} + complete."""
+    provider = AzureProvider()
+    provider._jobs["j"] = _succeeded_job(["histogram", 0.5, 0.5])
+
+    handle = JobHandle(id="j", provider="azure", backend="x", status="queued",
+                       queue_position=None, shots=1000, submitted_at="now")
+    results = provider.get_results(handle)
+    assert "error" in results
+    assert "list" in results["error"]
+    assert results.get("measurements") in (None,)  # no fake empty counts
+    assert "unrecognized" in capsys.readouterr().out.lower()
+
+
 # ───────────────────────── cancel ─────────────────────────
 
 

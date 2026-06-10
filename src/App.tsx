@@ -22,7 +22,7 @@ import { useUIModeStore } from './stores/uiModeStore';
 import { useDiracPanelStore } from './stores/diracPanelStore';
 import { useBottomPanelStore } from './stores/bottomPanelStore';
 import type { PlatformBridge } from './platform/bridge';
-import type { Framework } from './types/quantum';
+import type { Framework, KernelLanguage } from './types/quantum';
 
 // Store execute function globally so Monaco keybinding can access it
 let executeRef: (() => void) | null = null;
@@ -39,7 +39,7 @@ export function getFileOps() { return fileOpsRef; }
 // every prop.
 interface HardwareActions {
   hardwareConnect: (provider: string, credentials: Record<string, string>) => void;
-  hardwareSubmit: (provider: string, backend: string, code: string, shots: number) => boolean;
+  hardwareSubmit: (provider: string, backend: string, code: string, shots: number, language?: KernelLanguage) => boolean;
   hardwareCancel: (jobId: string) => void;
 }
 let hardwareRef: HardwareActions | null = null;
