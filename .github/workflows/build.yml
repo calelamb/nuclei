@@ -85,6 +85,8 @@ jobs:
         run: npm ci
         working-directory: docs-site
 
-      - name: Build docs site
+      # `astro build` runs starlight-links-validator (astro.config.mjs plugins),
+      # so any broken internal link or anchor fails this job.
+      - name: Build docs site (validates internal links)
         run: npm run build
         working-directory: docs-site

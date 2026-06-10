@@ -8,6 +8,12 @@ Download from [GitHub Releases](https://github.com/calelamb/nuclei/releases) or 
 
 ---
 
+## Documentation
+
+Developer and researcher docs live at **[nuclei.dev/docs](https://nuclei.dev/docs)** -- the kernel WebSocket API (protocol v1), data schemas, framework adapters, hardware providers, plugin system, and runnable client examples. If you want to drive the kernel from your own scripts, integrate hardware pipelines, or extend Nuclei, start there.
+
+---
+
 ## Features
 
 **Monaco Code Editor** -- The same editor engine that powers VS Code, configured with quantum-aware syntax highlighting, autocomplete, and inline AI assistance for Qiskit, Cirq, CUDA-Q, and Q#.

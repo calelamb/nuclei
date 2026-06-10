@@ -1,6 +1,7 @@
 // @ts-check
 import { defineConfig } from 'astro/config';
 import starlight from '@astrojs/starlight';
+import starlightLinksValidator from 'starlight-links-validator';
 
 // Nuclei developer docs — served at https://nuclei.dev/docs
 // Built standalone (own package.json) and copied into dist-vercel/docs/
@@ -14,6 +15,19 @@ export default defineConfig({
       description:
         'Developer and researcher documentation for Nuclei — the open-source quantum computing IDE.',
       favicon: '/favicon.svg',
+      head: [
+        // Starlight already emits og:title/og:description/og:url per page;
+        // add the Twitter card type so shares render a summary card.
+        {
+          tag: 'meta',
+          attrs: { name: 'twitter:card', content: 'summary' },
+        },
+      ],
+      plugins: [
+        // Fails `astro build` on any broken internal link or anchor,
+        // so broken links can never reach a deploy (CI runs this build).
+        starlightLinksValidator(),
+      ],
       social: [
         { icon: 'github', label: 'GitHub', href: 'https://github.com/calelamb/nuclei' },
       ],

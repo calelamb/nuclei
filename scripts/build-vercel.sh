@@ -20,6 +20,8 @@ echo "[build-vercel] assembling output dir"
 mkdir -p dist-vercel
 # Copy only the static files we want — NOT dotfiles, package.json, or old vercel.json
 cp landing/index.html dist-vercel/
+# Root robots.txt (allow all; points crawlers at the docs sitemap)
+cp landing/robots.txt dist-vercel/
 
 # Copy web IDE build output into dist-vercel/try/
 mkdir -p dist-vercel/try

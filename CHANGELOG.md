@@ -5,6 +5,32 @@ All notable changes to Nuclei will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added — developer docs at nuclei.dev/docs
+
+Nuclei now has a full developer documentation site at
+[nuclei.dev/docs](https://nuclei.dev/docs) — API/SDK-style docs for
+researchers and developers, not a user manual. 27 pages across seven
+sections: Introduction, Kernel API, Frameworks, Hardware, Dirac AI,
+Extending, and Reference.
+
+- The kernel WebSocket protocol and data schemas are documented as a
+  public **v1** API. Every request/response example lives as a JSON
+  fixture replayed against the live kernel by
+  `kernel/tests/test_docs_fixtures.py`, so protocol drift breaks CI,
+  not readers.
+- Runnable Python and TypeScript client examples
+  (`docs-site/fixtures/clients/`), validated in the test suite.
+- Built with Astro Starlight (`docs-site/`), themed to match
+  nuclei.dev, with build-time Pagefind full-text search and a
+  sitemap.
+- Internal links are validated at build time
+  (`starlight-links-validator`) — a broken link fails the docs build
+  in CI.
+- A root `robots.txt` now ships with the Vercel deploy and points
+  crawlers at the docs sitemap.
+
 ## [0.5.0] - 2026-06-09
 
 ### Added — Q# (Microsoft QDK), Nuclei's fourth framework
