@@ -116,9 +116,13 @@ Two sharp conventions, both documented with replay-tested fixtures on the
 
 Job **metadata** persists to `~/.nuclei/jobs.json` (override the directory
 with `NUCLEI_DATA_DIR`): atomic temp-file-and-rename writes, capped at 200
-entries, terminal jobs pruned after 7 days. The write happens immediately
-at submit, so a crash between submit and first poll can't orphan the
-record. {/* job_store.py:21-41,128-151; manager.py:160-172 */}
+entries, terminal jobs pruned after 7 days — the prune runs on every write
+**and at kernel start** when the store is loaded, so expired records
+disappear even if you never submit another job. The write happens
+immediately at submit, so a crash between submit and first poll can't
+orphan the record. Individual records can also be removed on demand with
+[`hardware_dismiss`](/docs/kernel-api/messages-hardware/#hardware_dismiss).
+{/* job_store.py:21-44,105-137; manager.py:160-172 */}
 
 What does **not** persist is the provider **SDK handle**. After a kernel
 restart: {/* manager.py:43-78 */}

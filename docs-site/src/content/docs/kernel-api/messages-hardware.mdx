@@ -1,10 +1,11 @@
 ---
 title: "Hardware messages"
-description: "All hardware_* request types: provider connection, credential persistence, job submission, polling, results, and cancellation."
+description: "All hardware_* request types: provider connection, credential persistence, job submission, polling, results, cancellation, and dismissal."
 ---
 
 import { Code, Aside } from '@astrojs/starlight/components';
 import simulatorSession from '../../../../fixtures/hardware_simulator.session.json?raw';
+import dismissSession from '../../../../fixtures/hardware_dismiss.session.json?raw';
 import credentialsSession from '../../../../fixtures/hardware_credentials.session.json?raw';
 import submitNoCircuitSession from '../../../../fixtures/hardware_submit_no_circuit.session.json?raw';
 import statusStaleReq from '../../../../fixtures/hardware_status_stale.request.json?raw';
@@ -16,7 +17,7 @@ import azureConnectRes from '../../../../fixtures/illustrative/hardware_connect_
 import azureSubmitReq from '../../../../fixtures/illustrative/hardware_submit_azure_qsharp.request.json?raw';
 import azureSubmitRes from '../../../../fixtures/illustrative/hardware_submit_azure_qsharp.responses.json?raw';
 
-Ten `hardware_*` request types manage provider connections and hardware
+Eleven `hardware_*` request types manage provider connections and hardware
 jobs. Unlike the streaming execution messages, every hardware request gets
 exactly **one** reply — either its named response type or an `error`
 envelope (`{"type": "error", "message": "..."}` with no `code`/`phase`; see
@@ -225,6 +226,31 @@ Cancel is best-effort and has sharp edges worth knowing:
   simulator job "succeeds" and flips its status to `failed`. Don't offer
   cancel for terminal jobs in your UI.
 - Unknown job ids are treated as already-gone: `success: true`.
+
+### `hardware_dismiss`
+
+| Field | Type | Required | Default |
+|-------|------|----------|---------|
+| `type` | `"hardware_dismiss"` | yes | — |
+| `job_id` | string | no | `""` |
+
+Reply: `hardware_job_dismissed` with `{ "job_id": ..., "success": true | false }`.
+
+Dismiss is pure bookkeeping: it removes the job's record from the kernel's
+registry **and** the persistent store (`~/.nuclei/jobs.json`), so the job
+stops appearing in `hardware_list_jobs` — including after a kernel restart.
+{/* manager.py:230-241, server.py:484-502 */}
+
+- It does **not** cancel anything provider-side — a running job keeps
+  running. Use [`hardware_cancel`](#hardware_cancel) to stop a job;
+  dismiss to drop its record from the tracker.
+- Unknown job ids are treated as already-gone: `success: true` — the
+  desired end state ("this record is gone") holds either way.
+
+The full flow as a replay-tested session fixture — submit, dismiss, then
+`hardware_list_jobs` confirming the record is gone:
+
+<Code code={dismissSession} lang="json" title="hardware_dismiss.session.json" />
 
 ## Replay-tested simulator walkthrough
 

@@ -1,0 +1,63 @@
+[
+  {
+    "request": {
+      "type": "hardware_connect",
+      "provider": "simulator",
+      "credentials": {}
+    },
+    "responses": [
+      { "type": "hardware_connected", "provider": "simulator", "success": true }
+    ]
+  },
+  {
+    "request": {
+      "type": "hardware_submit",
+      "provider": "simulator",
+      "backend": "sim_qasm",
+      "shots": 128,
+      "code": "from qiskit import QuantumCircuit\n\nqc = QuantumCircuit(2, 2)\nqc.h(0)\nqc.cx(0, 1)\nqc.measure([0, 1], [0, 1])\n",
+      "language": "python"
+    },
+    "responses": [
+      {
+        "type": "hardware_job_submitted",
+        "job": {
+          "id": "<job-id>",
+          "provider": "simulator",
+          "backend": "sim_qasm",
+          "status": "complete",
+          "queue_position": null,
+          "shots": 128,
+          "submitted_at": "<any>",
+          "error": null
+        }
+      }
+    ]
+  },
+  {
+    "request": {
+      "type": "hardware_dismiss",
+      "job_id": "<job-id>"
+    },
+    "responses": [
+      { "type": "hardware_job_dismissed", "job_id": "<job-id>", "success": true }
+    ]
+  },
+  {
+    "request": {
+      "type": "hardware_list_jobs"
+    },
+    "responses": [
+      { "type": "hardware_jobs", "jobs": [] }
+    ]
+  },
+  {
+    "request": {
+      "type": "hardware_dismiss",
+      "job_id": "no-such-job"
+    },
+    "responses": [
+      { "type": "hardware_job_dismissed", "job_id": "no-such-job", "success": true }
+    ]
+  }
+]

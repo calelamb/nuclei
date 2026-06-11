@@ -60,7 +60,8 @@ export type KernelMessage =
   | { type: 'hardware_submit'; provider: string; backend: string; code: string; shots: number; language?: KernelLanguage }
   | { type: 'hardware_status'; job_id: string }
   | { type: 'hardware_results'; job_id: string }
-  | { type: 'hardware_cancel'; job_id: string };
+  | { type: 'hardware_cancel'; job_id: string }
+  | { type: 'hardware_dismiss'; job_id: string };
 
 interface HardwareJobDTO {
   id: string;
@@ -95,4 +96,5 @@ export type KernelResponse =
   | { type: 'hardware_job_submitted'; job: HardwareJobDTO }
   | { type: 'hardware_job_update'; job: HardwareJobDTO }
   | { type: 'hardware_result'; job_id: string; data: { measurements?: Record<string, number>; error?: string; status?: string } }
-  | { type: 'hardware_job_cancelled'; job_id: string; success: boolean };
+  | { type: 'hardware_job_cancelled'; job_id: string; success: boolean }
+  | { type: 'hardware_job_dismissed'; job_id: string; success: boolean };

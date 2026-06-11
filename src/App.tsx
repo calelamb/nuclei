@@ -42,13 +42,14 @@ interface HardwareActions {
   hardwareConnect: (provider: string, credentials: Record<string, string>) => void;
   hardwareSubmit: (provider: string, backend: string, code: string, shots: number, language?: KernelLanguage) => boolean;
   hardwareCancel: (jobId: string) => void;
+  hardwareDismiss: (jobId: string) => void;
 }
 let hardwareRef: HardwareActions | null = null;
 // eslint-disable-next-line react-refresh/only-export-components
 export function getHardware() { return hardwareRef; }
 
 function AppInner() {
-  const { execute, hardwareConnect, hardwareSubmit, hardwareCancel } = useKernel();
+  const { execute, hardwareConnect, hardwareSubmit, hardwareCancel, hardwareDismiss } = useKernel();
   const fileOps = useFileOps();
   useActiveTabSync();
   const platform = usePlatform();
@@ -87,9 +88,9 @@ function AppInner() {
   }, [execute]);
 
   useEffect(() => {
-    hardwareRef = { hardwareConnect, hardwareSubmit, hardwareCancel };
+    hardwareRef = { hardwareConnect, hardwareSubmit, hardwareCancel, hardwareDismiss };
     return () => { hardwareRef = null; };
-  }, [hardwareConnect, hardwareSubmit, hardwareCancel]);
+  }, [hardwareConnect, hardwareSubmit, hardwareCancel, hardwareDismiss]);
 
   useEffect(() => {
     fileOpsRef = fileOps;

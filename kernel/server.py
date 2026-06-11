@@ -481,6 +481,24 @@ async def handle_message(websocket):
                     "message": f"Cancel failed: {e}",
                 }))
 
+        elif msg_type == "hardware_dismiss":
+            # Bookkeeping only: drops the job record from the registry and
+            # the persistent store. Never cancels provider-side work — use
+            # hardware_cancel for that.
+            job_id = msg.get("job_id", "")
+            try:
+                ok = hardware_manager.dismiss_job(job_id)
+                await websocket.send(json.dumps({
+                    "type": "hardware_job_dismissed",
+                    "job_id": job_id,
+                    "success": ok,
+                }))
+            except Exception as e:
+                await websocket.send(json.dumps({
+                    "type": "error",
+                    "message": f"Dismiss failed: {e}",
+                }))
+
         else:
             await websocket.send(json.dumps({
                 "type": "error",

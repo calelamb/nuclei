@@ -31,6 +31,26 @@ Extending, and Reference.
 - A root `robots.txt` now ships with the Vercel deploy and points
   crawlers at the docs sitemap.
 
+### Fixed — stale failed jobs no longer haunt the launch strip
+
+- A simulator job that failed weeks ago could still sit in the LaunchStrip
+  banner with a live elapsed timer reading "56309m 29s". Three causes,
+  three fixes:
+- The job store's 7-day TTL for terminal jobs only ran inside `save()` —
+  a user who never submitted another job never triggered a write, so
+  expired records survived forever and were re-served to the frontend on
+  every connect. The prune now also runs in `load()` at kernel start, and
+  rewrites the file (atomically) when anything was dropped.
+- Dismiss was frontend-only: it cleared the local store but no protocol
+  message removed the kernel's persisted record, so dismissed jobs
+  reappeared next session. New additive `hardware_dismiss` message
+  (reply: `hardware_job_dismissed`) deletes the record from the registry
+  and `jobs.json` for good — bookkeeping only, it never cancels
+  provider-side work (that's still `hardware_cancel`).
+- Terminal jobs (`failed`/`complete`/`stale`) no longer render a ticking
+  elapsed-since-submit counter; they show a static relative age instead
+  ("failed · 5w ago"). Running and queued jobs keep the live timer.
+
 ### Fixed — runaway Q# programs no longer silently wedge the kernel
 
 - All Q# interpreter work runs on one dedicated thread (the qdk
