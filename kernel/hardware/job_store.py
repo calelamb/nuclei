@@ -16,7 +16,9 @@ Scope for this PRD:
   re-attachment (calling e.g. `QiskitRuntimeService.job(id)` to rebind
   the SDK handle) is explicitly deferred — that's a future PRD.
 - LRU cap at 200 entries; terminal jobs older than 7 days are pruned
-  on save so the file can't grow unbounded.
+  on load and on save so the file can't grow unbounded — and so stale
+  entries disappear at kernel start even if the user never submits
+  another job.
 
 Storage: JSON file at `<NUCLEI_DATA_DIR or ~/.nuclei>/jobs.json`.
 Writes are atomic via a temp-file-and-rename pattern so a crash during
@@ -124,6 +126,15 @@ class JobStore:
             except (KeyError, TypeError, ValueError):
                 continue
             self._records[record.job_id] = record
+        # Prune on load, not just on save: a user who never submits another
+        # job would otherwise keep expired terminal entries forever (the
+        # frontend re-lists them on every connect). If anything was dropped,
+        # rewrite so the file shrinks too — pruning only in memory would
+        # resurrect the stale records on the next kernel start.
+        loaded_count = len(self._records)
+        self._prune()
+        if len(self._records) != loaded_count:
+            self.save()
 
     def save(self) -> None:
         """Atomically write the registry to disk after pruning."""

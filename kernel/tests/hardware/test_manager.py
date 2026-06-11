@@ -193,6 +193,28 @@ def test_cancel_swallows_provider_exception(manager_with_stub):
     assert manager.cancel_job(handle.id) is False
 
 
+def test_dismiss_removes_job_from_memory_and_store(manager_with_stub):
+    """Dismiss is bookkeeping: the record leaves the in-memory registry AND
+    the persistent store (so it can't reappear after a kernel restart), but
+    the provider is never asked to cancel anything."""
+    manager, stub = manager_with_stub
+    manager.connect_provider("stub", {})
+    handle = manager.submit_job("stub", MagicMock(), "stub_backend", 100)
+
+    assert manager.dismiss_job(handle.id) is True
+    assert manager.list_jobs() == []
+    assert manager._job_store.get(handle.id) is None
+    # Bookkeeping only — never routed to the provider.
+    assert stub.cancelled == []
+
+
+def test_dismiss_unknown_job_returns_true(manager_with_stub):
+    """Already-gone semantics, mirroring cancel_job: dismissing an id the
+    kernel doesn't know is a success — the desired end state holds."""
+    manager, _ = manager_with_stub
+    assert manager.dismiss_job("unknown-job-id") is True
+
+
 # ─────────────── credential persistence + auto-reconnect ───────────────
 
 

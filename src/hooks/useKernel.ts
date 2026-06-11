@@ -259,6 +259,13 @@ export function useKernel() {
         useHardwareStore.getState().updateJob(msg.job_id, { status: 'failed' });
         break;
       }
+      case 'hardware_job_dismissed': {
+        // Usually a no-op: hardwareDismiss() already cleared the job
+        // optimistically. The ack covers dismissals initiated elsewhere
+        // (e.g. another window sharing the kernel).
+        useHardwareStore.getState().clearJob(msg.job_id);
+        break;
+      }
       case 'hardware_backends': {
         // Normalize kernel field names (snake_case) into the TS shape
         // (camelCase) the store + LaunchModal expect.
@@ -568,6 +575,18 @@ export function useKernel() {
     [sendHardware],
   );
 
+  const hardwareDismiss = useCallback(
+    (jobId: string) => {
+      // Optimistically drop the job locally (mirrors hardwareCancel's
+      // optimistic update, and keeps the web/no-kernel build working since
+      // sendHardware no-ops there); the kernel removes the persisted record
+      // so the job can't reappear next session.
+      useHardwareStore.getState().clearJob(jobId);
+      sendHardware({ type: 'hardware_dismiss', job_id: jobId });
+    },
+    [sendHardware],
+  );
+
   // Polling backoff for active hardware jobs. A queued IBM job can sit in
   // the free-tier queue for an hour or more; fixed 5s polling would fire
   // ~720 status requests at the kernel for a single waiting job. The
@@ -653,5 +672,5 @@ export function useKernel() {
     return () => clearInterval(interval);
   }, [isWeb]);
 
-  return { execute, hardwareConnect, hardwareSubmit, hardwareCancel };
+  return { execute, hardwareConnect, hardwareSubmit, hardwareCancel, hardwareDismiss };
 }

@@ -113,6 +113,43 @@ def test_prune_drops_old_terminal_jobs(store):
     assert "old" not in surviving_ids
 
 
+def test_load_prunes_old_terminal_jobs_and_rewrites_file(store):
+    """Regression: the TTL prune only ran inside save(), so a user who never
+    submitted another job kept stale terminal jobs forever — load() must
+    prune too, and shrink the file on disk so the cleanup persists."""
+    old_ts = (datetime.now(timezone.utc) - timedelta(seconds=TERMINAL_TTL_SECONDS + 60)).isoformat()
+    fresh = _make_record("fresh", status="complete")
+    old_failed = _make_record("old-failed", status="failed", submitted_at=old_ts, last_updated_at=old_ts)
+    # Old NON-terminal record must survive — it becomes 'stale' via the
+    # manager's rehydration, never silently pruned.
+    old_running = _make_record("old-running", status="running", submitted_at=old_ts, last_updated_at=old_ts)
+    payload = {"jobs": [r.to_dict() for r in (fresh, old_failed, old_running)]}
+    with open(store.path, "w", encoding="utf-8") as fh:
+        json.dump(payload, fh)
+
+    store.load()
+
+    surviving_ids = {r.job_id for r in store.all()}
+    assert surviving_ids == {"fresh", "old-running"}
+    # The file itself must have shrunk — pruning only in memory would
+    # resurrect the stale record on the next kernel start.
+    with open(store.path, "r", encoding="utf-8") as fh:
+        on_disk = {entry["job_id"] for entry in json.load(fh)["jobs"]}
+    assert on_disk == {"fresh", "old-running"}
+
+
+def test_load_does_not_rewrite_when_nothing_pruned(store, monkeypatch):
+    """load() must stay read-only when there's nothing to drop."""
+    store.upsert(_make_record("fresh", status="complete"))
+
+    reopened = JobStore(path=store.path)
+    saves: list[bool] = []
+    monkeypatch.setattr(reopened, "save", lambda: saves.append(True))
+    reopened.load()
+    assert saves == []
+    assert [r.job_id for r in reopened.all()] == ["fresh"]
+
+
 def test_prune_enforces_max_entries(store):
     # Write one more than the cap, all terminal + recent; the oldest
     # should be pruned.

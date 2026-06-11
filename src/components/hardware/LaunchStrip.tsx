@@ -16,6 +16,26 @@ function fmtElapsed(startIso: string): string {
 }
 
 /**
+ * Static relative age for terminal jobs ("5w ago"), replacing the live
+ * elapsed counter — a 38-day-old failure should not render as a ticking
+ * "56309m 29s".
+ */
+// eslint-disable-next-line react-refresh/only-export-components -- same pattern as getHardware in App.tsx
+export function relativeAge(iso: string): string {
+  const s = Math.max(0, Math.floor((Date.now() - new Date(iso).getTime()) / 1000));
+  if (s < 60) return `${s}s ago`;
+  const m = Math.floor(s / 60);
+  if (m < 60) return `${m}m ago`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return `${h}h ago`;
+  const d = Math.floor(h / 24);
+  if (d < 7) return `${d}d ago`;
+  return `${Math.floor(d / 7)}w ago`;
+}
+
+const TERMINAL_STATUSES = new Set(['complete', 'failed', 'stale']);
+
+/**
  * Persistent strip at the top of the editor that surfaces the most recent
  * hardware job. Click to reopen details. Replaces the buried "jobs list"
  * with a live, always-visible status indicator — the way CI status bars do
@@ -31,7 +51,9 @@ export function LaunchStrip() {
   const latestJob = jobs[0] ?? null;
   useEffect(() => {
     if (!latestJob) return;
-    if (latestJob.status === 'complete' || latestJob.status === 'failed') return;
+    // Terminal jobs (incl. rehydrated 'stale' ones) show a static age — no
+    // ticking, so no interval to run.
+    if (TERMINAL_STATUSES.has(latestJob.status)) return;
     const t = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(t);
   }, [latestJob]);
@@ -63,6 +85,7 @@ export function LaunchStrip() {
           ? 'complete'
           : 'failed';
 
+  const isTerminal = TERMINAL_STATUSES.has(latestJob.status);
   const cancellable = latestJob.status === 'queued' || latestJob.status === 'running';
   const onCancelClick = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -70,8 +93,11 @@ export function LaunchStrip() {
     if (cancellable && hw) {
       hw.hardwareCancel(latestJob.id);
     } else {
-      // Completed / already failed job — just clear it from the strip so
-      // the student can move on.
+      // Completed / already failed job — tell the kernel to drop the
+      // persisted record too, so the job doesn't reappear next session.
+      // The local clear keeps the web/no-kernel build working (sendHardware
+      // no-ops there).
+      hw?.hardwareDismiss(latestJob.id);
       clearJob(latestJob.id);
     }
   };
@@ -123,7 +149,7 @@ export function LaunchStrip() {
           />
           {label}
           <Clock size={10} style={{ marginLeft: 4 }} />
-          {fmtElapsed(latestJob.submittedAt)}
+          {isTerminal ? relativeAge(latestJob.submittedAt) : fmtElapsed(latestJob.submittedAt)}
         </div>
       </div>
       <button

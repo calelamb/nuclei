@@ -226,3 +226,15 @@ class HardwareManager:
             handle.status = "failed"
             self._job_store.update_status(job_id, status="failed")
         return ok
+
+    def dismiss_job(self, job_id: str) -> bool:
+        """Remove a job record from the in-memory registry and the on-disk
+        store so it never reappears after a kernel restart.
+
+        Pure bookkeeping — the provider is never called, so dismissing a
+        running job does NOT cancel it (use cancel_job for that). Unknown
+        ids are treated as already-gone and return True, mirroring
+        cancel_job's semantics."""
+        self._jobs.pop(job_id, None)
+        self._job_store.remove(job_id)
+        return True

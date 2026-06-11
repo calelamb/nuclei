@@ -24,6 +24,7 @@ section.
 
 | App version | Protocol change |
 |-------------|-----------------|
+| Unreleased | `hardware_dismiss` request added (additive): removes a job record from the kernel's registry and the persistent job store without cancelling provider-side work. Reply is `hardware_job_dismissed`; unknown ids succeed (already-gone semantics). See the [message catalog](/docs/kernel-api/messages-hardware/#hardware_dismiss). |
 | 0.5.0 | Optional `language` field (`"python"` \| `"qsharp"`) added to `parse`, `execute`, and `hardware_submit` requests. Omitted by older clients, in which case framework detection stays regex-based — fully backward compatible. |
 | 0.5.0 | Q# source-mode routing: when `language` is `"qsharp"`, or the source matches Q# syntax, code routes to the QDK adapter instead of Python `exec`. |
 | 0.5.0 | `Reset` added to the canonical gate vocabulary in `CircuitSnapshot` (emitted by the Q# adapter for mid-circuit `\|0⟩` preparation). |
