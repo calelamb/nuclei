@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Added — developer docs at nuclei.dev/docs
+### Added — developer docs at getnuclei.dev/docs
 
 Nuclei now has a full developer documentation site at
 [getnuclei.dev/docs](https://getnuclei.dev/docs) — API/SDK-style docs for
@@ -30,6 +30,107 @@ Extending, and Reference.
   in CI.
 - A root `robots.txt` now ships with the Vercel deploy and points
   crawlers at the docs sitemap.
+
+### Fixed — runaway Q# programs no longer silently wedge the kernel
+
+- All Q# interpreter work runs on one dedicated thread (the qdk
+  interpreter context is thread-pinned), and callers blocked on it with
+  **no timeout**. A runaway Q# program (an infinite loop) hung the
+  calling request forever — and every future Q# request queued silently
+  behind it while the kernel looked perfectly healthy (the heartbeat
+  never notices a wedged interpreter), until a kernel restart.
+- Q# calls now have a watchdog budget: **30 s** for parse and QIR
+  compilation (compiler-only work) and **300 s** for execute (user
+  programs at user shot counts). On expiry the caller gets a `timeout`
+  error explaining, in plain language, that the program is still
+  running and the kernel needs a restart — check for infinite loops.
+- Honest about the limits: qdk offers no cancellation, so the watchdog
+  frees the *caller*, not the interpreter — the runaway program keeps
+  the interpreter thread busy. The kernel now tracks that wedged state:
+  subsequent Q# requests fail **fast** (instead of waiting a full
+  budget each) with a "previous Q# run is still occupying the
+  interpreter — restart the kernel" message, and the wedge clears
+  automatically if the runaway run eventually finishes on its own.
+  Python frameworks (Qiskit, Cirq, CUDA-Q) are unchanged.
+
+### Fixed — Dirac settings knobs now do what they say
+
+- Settings → Dirac AI displayed and persisted **Preferred Model**,
+  **Extended Thinking**, and **Context Depth**, but no routing code
+  ever read them. They are wired now, scoped to the chat surface
+  (ghost completions, narration, and error rewrite stay on Haiku for
+  latency; compose and Cmd+K stay on Sonnet for generation quality):
+  - **Preferred Model** — `haiku`/`sonnet` force that model for chat
+    Q&A; `auto` (default) keeps the heuristic. Tool-use and `/think`
+    turns still run Sonnet because they require it.
+  - **Extended Thinking** — off stops reasoning-keyword
+    auto-escalation to the thinking variant; an explicit `/think`
+    always works.
+  - **Context Depth** — Minimal sends code + circuit summary +
+    recent errors only; Standard (default) is exactly the previous
+    assembly; Full adds detail (top-16 probabilities, last 10 stderr
+    lines).
+- Defaults are unchanged and the default route is identical to the
+  previous behavior — the chat routing heuristics moved verbatim into
+  `src/services/diracRouting.ts`, where unit tests pin the
+  defaults-equivalence.
+
+### Fixed — Quantinuum connect now validates the token (pytket-quantinuum<0.26 only)
+
+- `connect()` accepted any non-empty string as a Nexus API token: it
+  stored the token, constructed a backend object, and returned `true`
+  without ever talking to Quantinuum — auth failures surfaced only at
+  submit time, and confusingly, because the token never reached
+  pytket's auth at all (pytket-quantinuum authenticates through its
+  own `QuantinuumAPI` handler and credential storage, not a token
+  kwarg). `connect()` now seeds an in-memory credential store with
+  the token (id-token slot only — seeding the refresh slot with the
+  same value made the SDK's mid-session renewal fail silently), makes
+  one authenticated device-list call through that handler — failing
+  fast with a clear hint when the token is rejected — and reuses the
+  validated handler for submission, polling, and cancellation.
+- Honest version reality: the credential-storage seam this rides on
+  (`MemoryCredentialStorage`, `QuantinuumAPI(token_store=...)`) only
+  exists in **pytket-quantinuum < 0.26**. Modern releases replaced it
+  with Quantinuum's own login flow / the qnexus package, and their
+  `QuantinuumAPI` is an offline alias whose device list needs no auth
+  — so there is nothing there a token could be validated against. On
+  a modern SDK, `connect()` now says exactly that (install
+  `pytket-quantinuum<0.26`, or use Azure Quantum's Quantinuum
+  targets, which work today) instead of the misleading "requires
+  pytket-quantinuum" install hint it printed even when the package
+  was installed. The setup wizard's catalog entry now pins
+  `pytket-quantinuum<0.26` accordingly.
+
+### Fixed — Bloch sphere showed Qiskit qubits in reversed order
+
+- The Qiskit adapter traced the wrong statevector axis when computing
+  per-qubit Bloch vectors: the shared partial-trace helper indexes
+  C-order reshape axes (axis 0 = MSB), but Qiskit statevectors are
+  little-endian (qubit 0 = LSB) — so `bloch_coords[i]` carried qubit
+  `n−1−i` and the Bloch panel rendered Qiskit circuits mirrored. The
+  adapter now traces axis `n−1−i` for display qubit `i`. Cirq and Q#
+  were unaffected (their big-endian states already matched the
+  helper's axis order), and symmetric states like Bell — every demo
+  and fixture — masked the bug, which is how it survived.
+
+### Fixed — credential dialog sent wrong keys for IBM and IonQ
+
+- The desktop credential dialog (provider card → Connect) sent
+  `apiToken` (IBM) and `apiKey` (IonQ), but the kernel reads
+  `credentials.get("token")` — so connects from that dialog silently
+  sent an empty token. The dialog now sends `token`, matching the
+  documented kernel contract. The launch modal's inline key field was
+  unaffected (it already sent `token`).
+
+### Changed — kernel opts out of Microsoft qdk telemetry
+
+- The optional `qdk` package (Q# support) ships Microsoft usage
+  telemetry to Azure Application Insights, on by default. The kernel
+  now sets `QDK_PYTHON_TELEMETRY=none` before qdk loads (in both
+  `kernel/server.py` and the Q# adapter), so nothing phones home from
+  a Nuclei install. Exporting the variable yourself before launch
+  still wins — `setdefault` preserves explicit choices.
 
 ## [0.5.0] - 2026-06-09
 

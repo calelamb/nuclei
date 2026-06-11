@@ -17,9 +17,9 @@ export interface DiracSettings {
   ghostCompletions: boolean;      // inline ghost suggestions (off by default for beginners)
   autoExplainErrors: boolean;     // auto-rewrite Python tracebacks into concept-level explanations
   narration: boolean;             // ambient one-liner narration after parse / run
-  extendedThinking: boolean;      // allow /think mode
-  preferredModel: 'auto' | 'haiku' | 'sonnet';
-  contextDepth: 'minimal' | 'standard' | 'full'; // how much context to inject
+  extendedThinking: boolean;      // auto-escalate reasoning-keyword chats to thinking; /think always works
+  preferredModel: 'auto' | 'haiku' | 'sonnet'; // chat model; tool turns always run Sonnet
+  contextDepth: 'minimal' | 'standard' | 'full'; // how much IDE context chat injects (see diracRouting.ts)
 }
 
 /* ── Kernel Settings ─────────────────────────────────── */

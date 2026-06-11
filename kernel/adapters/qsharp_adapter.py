@@ -14,23 +14,42 @@ unraisable RuntimeError and leaks the foreign-thread context. Every
 interpreter touch therefore runs on ONE dedicated thread (_QSHARP_EXECUTOR),
 which both serializes calls and guarantees contexts are created and dropped
 on the same thread.
+
+The single thread has a failure mode: qdk offers NO cancellation, so a
+runaway Q# program (an infinite loop) occupies the interpreter thread
+forever, and every later call queues silently behind it while the kernel
+looks healthy. A watchdog timeout on the caller's future (see
+_on_interpreter_thread) cannot recover the thread — it can only free the
+caller and make the wedged state legible: timed-out calls surface a
+`timeout` KernelError, the module marks the interpreter wedged, and
+subsequent calls fail fast (instead of waiting a full budget each) until
+the runaway task finishes — at which point the queue drains and the wedge
+clears itself. The only real recovery is a kernel restart.
 """
 
 from __future__ import annotations
 
 import json
+import os
 import re
 import threading
 import time
 import traceback
 from collections.abc import Callable, Mapping
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import Future, ThreadPoolExecutor
+from concurrent.futures import TimeoutError as FuturesTimeoutError
 from typing import Any, TypeVar
 
 from kernel.adapters._math import assign_layer, partial_trace_qubit
 from kernel.adapters.base import FrameworkAdapter
 from kernel.models.errors import KernelError
 from kernel.models.snapshot import CircuitSnapshot, Gate, SimulationResult
+
+# Microsoft's qdk package ships usage telemetry to Azure Application
+# Insights, enabled by default and configured at import time. Nuclei opts
+# its users out; setdefault means anyone who explicitly exported
+# QDK_PYTHON_TELEMETRY before launch keeps their own choice.
+os.environ.setdefault("QDK_PYTHON_TELEMETRY", "none")
 
 try:
     from qdk import qsharp
@@ -57,7 +76,83 @@ _QSHARP_EXECUTOR = ThreadPoolExecutor(max_workers=1, thread_name_prefix="qsharp-
 _T = TypeVar("_T")
 
 
-def _on_interpreter_thread(fn: Callable[[], _T]) -> _T:
+# ───────── watchdog budgets ─────────
+# Differentiated on purpose: parse/compile run the Q# COMPILER only — fast
+# for any real source file, so the budget is tight. Execute runs the user's
+# PROGRAM at the user's shot count, so its budget is generous. Both are
+# module constants (and per-call overridable via the methods' `timeout`
+# kwarg) so tests can inject tiny budgets instead of waiting 30s.
+QSHARP_COMPILE_TIMEOUT_SECONDS: float = 30.0
+QSHARP_EXECUTE_TIMEOUT_SECONDS: float = 300.0
+
+
+class _WatchdogError(Exception):
+    """Base for watchdog failures raised by _on_interpreter_thread.
+
+    str(exc) is the full student-readable message; the public methods map
+    it to KernelError(code="timeout") or RuntimeError as their contracts
+    require.
+    """
+
+
+class _WatchdogTimeout(_WatchdogError):
+    """The caller's budget expired; the task may still be running."""
+
+
+class _InterpreterWedged(_WatchdogError):
+    """A previously timed-out task still occupies the interpreter thread."""
+
+
+def _timeout_message(budget: float | None) -> str:
+    return (
+        f"Q# took longer than {budget:g} seconds, so Nuclei stopped waiting "
+        "— but the program is still running: qdk cannot cancel it, so the "
+        "Q# interpreter stays busy until the kernel restarts. Check your "
+        "code for infinite loops, then restart the kernel."
+    )
+
+
+_WEDGED_MESSAGE = (
+    "A previous Q# run timed out and is still occupying the interpreter, "
+    "so this request cannot run. Restart the kernel to recover, and check "
+    "the earlier program for infinite loops."
+)
+
+# why: a timed-out task cannot be cancelled (qdk has no cancellation), so it
+# keeps the single interpreter thread busy and every later submit would
+# queue behind it and time out too — silently, one full budget at a time.
+# This counter makes that state legible: >0 means wedged, and new calls
+# fail fast in _on_interpreter_thread instead of queueing. It counts (rather
+# than flags) because a tight race can leave more than one timed-out task
+# in flight; the wedge must hold until ALL of them have drained.
+_WEDGE_LOCK = threading.Lock()
+_wedged_count = 0
+
+
+def _interpreter_wedged() -> bool:
+    with _WEDGE_LOCK:
+        return _wedged_count > 0
+
+
+def _mark_wedged(future: Future) -> None:
+    global _wedged_count
+    with _WEDGE_LOCK:
+        _wedged_count += 1
+    # The done-callback clears the wedge when the runaway task FINISHES —
+    # the queue then drains normally, so Q# works again without a restart.
+    # Registered after the increment: if the task completed in the race
+    # window after the timeout, the callback fires synchronously here and
+    # the net count is zero, as it should be.
+    future.add_done_callback(_clear_wedged)
+
+
+def _clear_wedged(_future: Future) -> None:
+    global _wedged_count
+    with _WEDGE_LOCK:
+        _wedged_count = max(0, _wedged_count - 1)
+
+
+def _on_interpreter_thread(fn: Callable[[], _T], timeout: float | None = None) -> _T:
     """Run fn on the dedicated interpreter thread and block for its result.
 
     Safe with respect to deadlock: the caller (typically an
@@ -67,8 +162,27 @@ def _on_interpreter_thread(fn: Callable[[], _T]) -> _T:
     plain Python data — nothing qdk-owned may escape the interpreter thread.
     NEVER call the public adapter methods from within fn itself: the single
     worker would self-deadlock.
+
+    timeout is the watchdog budget in seconds (None waits forever). qdk
+    offers no cancellation, so on expiry only the CALLER is freed: fn keeps
+    running on the interpreter thread, the module marks the interpreter
+    wedged (raising _WatchdogTimeout), and subsequent calls raise
+    _InterpreterWedged immediately — without submitting — until the runaway
+    task completes and the wedge clears itself.
     """
-    return _QSHARP_EXECUTOR.submit(fn).result()
+    if _interpreter_wedged():
+        raise _InterpreterWedged(_WEDGED_MESSAGE)
+    future = _QSHARP_EXECUTOR.submit(fn)
+    try:
+        return future.result(timeout=timeout)
+    except FuturesTimeoutError:
+        # cancel() succeeds only if fn never STARTED (it was queued behind
+        # another task in a race window) — then it will never occupy the
+        # thread and must not count toward the wedge; whatever is actually
+        # occupying the thread is tracked by its own caller's timeout.
+        if not future.cancel():
+            _mark_wedged(future)
+        raise _WatchdogTimeout(_timeout_message(timeout)) from None
 
 
 def _dispose_qdk_thread_state() -> None:
@@ -93,7 +207,11 @@ def _dispose_qdk_thread_state() -> None:
         qdk_interpreter._default_context = None
 
     try:
-        _QSHARP_EXECUTOR.submit(_dispose).result()
+        # Bounded wait: dispose only drops references, so 5 s is generous.
+        # If a runaway Q# program has the interpreter thread wedged, an
+        # unbounded .result() would block process exit until the OS kills
+        # us — time out instead and accept the old stderr noise.
+        _QSHARP_EXECUTOR.submit(_dispose).result(timeout=5.0)
     except Exception:
         pass
 
@@ -287,22 +405,32 @@ class QsharpAdapter(FrameworkAdapter):
     # ───────── source-mode pipeline ─────────
 
     def parse_source(
-        self, code: str
+        self, code: str, *, timeout: float | None = None
     ) -> tuple[CircuitSnapshot | None, str, str, KernelError | None]:
         """Compile Q# source and return (snapshot, stdout, stderr, error).
+
+        timeout overrides QSHARP_COMPILE_TIMEOUT_SECONDS (tests inject tiny
+        budgets here). On expiry — or while a previous timed-out run still
+        occupies the interpreter — the error is KernelError(code="timeout").
 
         Raises ImportError("qdk") when the QDK is not installed — the
         executor maps that to a missing_dependency KernelError. All other
         failures are returned as KernelErrors, never raised.
         """
+        budget = QSHARP_COMPILE_TIMEOUT_SECONDS if timeout is None else timeout
         # why: the interpreter is process-global and thread-pinned — the
         # whole init → eval → circuit sequence runs as one task on the
         # dedicated interpreter thread, and only plain-data results (the
         # snapshot is built from the circuit's JSON string inside the task)
         # cross back to this thread.
-        snapshot, _entry, error = _on_interpreter_thread(
-            lambda: self._compile_and_snapshot(code)
-        )
+        try:
+            snapshot, _entry, error = _on_interpreter_thread(
+                lambda: self._compile_and_snapshot(code), timeout=budget
+            )
+        except _WatchdogError as exc:
+            return None, "", "", KernelError(
+                code="timeout", message=str(exc), framework="qsharp"
+            )
         if error is not None:
             return None, "", "", error
         # No runnable operation is NOT an error during parse — students see
@@ -310,12 +438,17 @@ class QsharpAdapter(FrameworkAdapter):
         return snapshot, "", "", None
 
     def execute_source(
-        self, code: str, shots: int
+        self, code: str, shots: int, *, timeout: float | None = None
     ) -> tuple[
         SimulationResult | None, CircuitSnapshot | None, str, str, KernelError | None
     ]:
         """Compile + simulate Q# source; returns
         (result, snapshot, stdout, stderr, error).
+
+        timeout overrides QSHARP_EXECUTE_TIMEOUT_SECONDS — generous,
+        because this runs the user's program at the user's shot count. On
+        expiry — or while a previous timed-out run still occupies the
+        interpreter — the error is KernelError(code="timeout").
 
         Raises ImportError("qdk") when the QDK is not installed — the
         executor maps that to a missing_dependency KernelError. All other
@@ -363,9 +496,17 @@ class QsharpAdapter(FrameworkAdapter):
             stdout = self._collect_stdout(shot_results)
             return result, snapshot, stdout, "", None
 
-        return _on_interpreter_thread(_pipeline)
+        budget = QSHARP_EXECUTE_TIMEOUT_SECONDS if timeout is None else timeout
+        try:
+            return _on_interpreter_thread(_pipeline, timeout=budget)
+        except _WatchdogError as exc:
+            return None, None, "", "", KernelError(
+                code="timeout", message=str(exc), framework="qsharp"
+            )
 
-    def compile_qir(self, code: str, target_profile: str) -> object:
+    def compile_qir(
+        self, code: str, target_profile: str, *, timeout: float | None = None
+    ) -> object:
         """Compile Q# source to QIR for hardware submission (Phase D).
 
         Returns the qdk QirInputData object itself: it satisfies the
@@ -375,7 +516,12 @@ class QsharpAdapter(FrameworkAdapter):
 
         The init is restored to Unrestricted in a finally block because the
         interpreter is process-global — leaving a restricted profile active
-        would break the next parse/execute call.
+        would break the next parse/execute call. NOTE: on a watchdog
+        timeout that finally has not run yet — it runs whenever the wedged
+        task eventually finishes, which may be never (kernel restart).
+
+        timeout overrides QSHARP_COMPILE_TIMEOUT_SECONDS (compiler-only
+        work, same tight budget as parse_source).
 
         Raises:
             ImportError: with a full human-readable message when the QDK is
@@ -383,8 +529,10 @@ class QsharpAdapter(FrameworkAdapter):
                 executor wrapper mapping a bare module name to a
                 missing_dependency error — the server calls this directly.
             ValueError: for an unknown target_profile.
-            RuntimeError: when the source fails to compile or has no
-                runnable entry point.
+            RuntimeError: when the source fails to compile, has no runnable
+                entry point, exceeds the watchdog budget, or a previous
+                timed-out run still occupies the interpreter — the server
+                wraps the message into "Hardware submit failed: ...".
         """
         if not QSHARP_AVAILABLE:
             raise ImportError(
@@ -422,7 +570,11 @@ class QsharpAdapter(FrameworkAdapter):
             finally:
                 qsharp.init(target_profile=qsharp.TargetProfile.Unrestricted)
 
-        return _on_interpreter_thread(_pipeline)
+        budget = QSHARP_COMPILE_TIMEOUT_SECONDS if timeout is None else timeout
+        try:
+            return _on_interpreter_thread(_pipeline, timeout=budget)
+        except _WatchdogError as exc:
+            raise RuntimeError(str(exc)) from exc
 
     # ───────── internals ─────────
 

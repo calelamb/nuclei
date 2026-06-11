@@ -14,6 +14,7 @@ from kernel.hardware.base import HardwareProvider, BackendInfo, JobHandle
 class QuantinuumProvider(HardwareProvider):
     def __init__(self):
         self._backend_cls = None  # QuantinuumBackend class
+        self._api_handler = None  # QuantinuumAPI validated at connect()
         self._token = None
         self._jobs: dict[str, tuple[str, object]] = {}  # job_id -> (device, handle)
 
@@ -27,24 +28,83 @@ class QuantinuumProvider(HardwareProvider):
             )
             return False
 
+        # pytket-quantinuum >= ~0.26 removed the programmatic token seam
+        # this provider relies on: `QuantinuumAPI` there is an offline
+        # alias whose `available_devices` returns a hardcoded list without
+        # authenticating, and `MemoryCredentialStorage` / the `token_store`
+        # kwarg no longer exist (auth moved to Quantinuum's own login flow
+        # and the qnexus package). On those versions, refuse honestly —
+        # there is nothing here we could validate a token against.
+        try:
+            from pytket.extensions.quantinuum import QuantinuumAPI
+            from pytket.extensions.quantinuum.backends.credential_storage import (
+                MemoryCredentialStorage,
+            )
+        except (ImportError, AttributeError):
+            print(
+                "pytket-quantinuum is installed, but this version does not "
+                "support direct API-token authentication — newer releases "
+                "(>=0.26) use Quantinuum's own login flow / the qnexus "
+                "package instead. Nuclei's Quantinuum provider currently "
+                "requires pytket-quantinuum<0.26 "
+                "(pip install 'pytket-quantinuum<0.26'), or use Azure "
+                "Quantum's Quantinuum targets instead — they work today "
+                "via the azure provider."
+            )
+            return False
+
         token = credentials.get("token", "")
         if not token:
             print("Quantinuum connection requires a Nexus API token.")
             return False
 
         try:
-            # Light-touch validation: constructing a backend against the
-            # default device will raise if the token is rejected.
-            _ = QuantinuumBackend(device_name="H1-1LE", api_handler=None)
+            # Validate the token NOW with one cheap authenticated call,
+            # instead of accepting any non-empty string. Previously a bad
+            # token "connected" fine and only failed at submit time — and
+            # confusingly, because the token never reached pytket's auth.
+            #
+            # Pre-0.26 pytket-quantinuum has no first-class raw-token
+            # parameter: it authenticates through a QuantinuumAPI handler
+            # backed by its own credential storage (normally filled by the
+            # SDK's interactive login). Seeding an in-memory store with the
+            # token is the closest programmatic seam the SDK exposes; the
+            # device-list call below is what actually proves the token
+            # works. The user-supplied Nexus token is an *id* token, so
+            # the refresh slot stays empty — seeding it with the same
+            # value made the SDK's mid-session renewal fail silently with
+            # a nonsense refresh token instead of failing cleanly.
+            cred_store = MemoryCredentialStorage()
+            cred_store.save_tokens(id_token=token, refresh_token="")
+            api_handler = QuantinuumAPI(token_store=cred_store)
+            QuantinuumBackend.available_devices(api_handler=api_handler)
+
             self._backend_cls = QuantinuumBackend
+            self._api_handler = api_handler
             self._token = token
             print("Connected to Quantinuum")
             return True
         except Exception as e:
             print(f"Quantinuum connection failed: {e}")
+            print(
+                "Check the Nexus API token (nexus.quantinuum.com). If your "
+                "pytket-quantinuum version only supports its own login flow "
+                "(QuantinuumAPI().login() / saved config credentials), "
+                "complete that login and retry."
+            )
             self._backend_cls = None
+            self._api_handler = None
             self._token = None
             return False
+
+    def _make_backend(self, device: str):
+        """Construct a backend bound to the api_handler validated at
+        connect(), so submits/polls authenticate with the same credentials
+        the validation proved. Tests that wire `_backend_cls` directly
+        (no handler) fall back to the SDK default."""
+        if self._api_handler is not None:
+            return self._backend_cls(device_name=device, api_handler=self._api_handler)
+        return self._backend_cls(device_name=device)
 
     def list_backends(self) -> list[BackendInfo]:
         if self._backend_cls is None:
@@ -148,7 +208,7 @@ class QuantinuumProvider(HardwareProvider):
             )
 
         try:
-            qb = self._backend_cls(device_name=backend)
+            qb = self._make_backend(backend)
             compiled = qb.get_compiled_circuit(pytket_circuit)
             handle = qb.process_circuit(compiled, n_shots=shots)
             self._jobs[job_id] = (backend, handle)
@@ -179,7 +239,7 @@ class QuantinuumProvider(HardwareProvider):
             return {"error": f"Job {job.id} not found"}
         device, handle = entry
         try:
-            qb = self._backend_cls(device_name=device)
+            qb = self._make_backend(device)
             status = qb.circuit_status(handle).status.name.lower()
             if status == "completed":
                 result = qb.get_result(handle)
@@ -199,7 +259,7 @@ class QuantinuumProvider(HardwareProvider):
             return -1
         device, handle = entry
         try:
-            qb = self._backend_cls(device_name=device)
+            qb = self._make_backend(device)
             # pytket's CircuitStatus.queue_position is optional; best-effort.
             st = qb.circuit_status(handle)
             queue = getattr(st, "queue_position", None)
@@ -213,7 +273,7 @@ class QuantinuumProvider(HardwareProvider):
             return True
         device, handle = entry
         try:
-            qb = self._backend_cls(device_name=device)
+            qb = self._make_backend(device)
             qb.cancel(handle)
             return True
         except Exception:

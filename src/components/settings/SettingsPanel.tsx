@@ -36,16 +36,23 @@ function Toggle({ value, onChange }: { value: boolean; onChange: (v: boolean) =>
 
 /* ── Shared Controls ────────────────────────────────────── */
 
-function SettingRow({ label, children }: { label: string; children: ReactNode }) {
+function SettingRow({ label, hint, children }: { label: string; hint?: string; children: ReactNode }) {
   const colors = useThemeStore((s) => s.colors);
   return (
     <div style={{
       display: 'flex', alignItems: 'center', justifyContent: 'space-between',
       padding: '6px 0', gap: 8,
     }}>
-      <span style={{ fontSize: 12, color: colors.textMuted, fontFamily: "'Geist Sans', sans-serif", flex: 1 }}>
-        {label}
-      </span>
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 2 }}>
+        <span style={{ fontSize: 12, color: colors.textMuted, fontFamily: "'Geist Sans', sans-serif" }}>
+          {label}
+        </span>
+        {hint && (
+          <span style={{ fontSize: 10, color: colors.textDim, fontFamily: "'Geist Sans', sans-serif", lineHeight: 1.4 }}>
+            {hint}
+          </span>
+        )}
+      </div>
       {children}
     </div>
   );
@@ -370,11 +377,13 @@ export function SettingsPanel() {
             <Toggle value={dirac.autoExplainErrors}
               onChange={(v) => updateDirac({ autoExplainErrors: v })} />
           </SettingRow>
-          <SettingRow label="Extended Thinking">
+          <SettingRow label="Extended Thinking"
+            hint="Auto-escalate hard chat questions to deep reasoning. /think always works.">
             <Toggle value={dirac.extendedThinking}
               onChange={(v) => updateDirac({ extendedThinking: v })} />
           </SettingRow>
-          <SettingRow label="Preferred Model">
+          <SettingRow label="Preferred Model"
+            hint="Chat only. Auto picks per message; actions that use tools always run Sonnet.">
             <Select value={dirac.preferredModel}
               options={[
                 { value: 'auto', label: 'Auto' },
@@ -383,7 +392,8 @@ export function SettingsPanel() {
               ]}
               onChange={(v) => updateDirac({ preferredModel: v })} />
           </SettingRow>
-          <SettingRow label="Context Depth">
+          <SettingRow label="Context Depth"
+            hint="IDE state sent with chat. Minimal: code, circuit, errors. Standard: + results, exercise, hardware. Full: extra detail.">
             <Select value={dirac.contextDepth}
               options={[
                 { value: 'minimal', label: 'Minimal' },

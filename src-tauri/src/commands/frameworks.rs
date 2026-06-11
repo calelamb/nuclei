@@ -115,7 +115,12 @@ const CATALOG: &[FrameworkInfo] = &[
         id: "quantinuum",
         label: "Quantinuum (pytket)",
         description: "Quantinuum trapped-ion hardware via pytket.",
-        pip_name: "pytket-quantinuum",
+        // Pinned <0.26: newer pytket-quantinuum dropped the direct
+        // API-token auth the kernel provider uses (see
+        // kernel/hardware/quantinuum_provider.py). The pin is a single
+        // whitespace-free token, so the split_whitespace install path
+        // passes it to pip as one requirement-spec argument (no shell).
+        pip_name: "pytket-quantinuum<0.26",
         import_name: "pytket.extensions.quantinuum",
         group: "provider",
         approximate_size_mb: 35,

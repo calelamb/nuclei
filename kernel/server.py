@@ -6,6 +6,13 @@ import os
 # Add project root to path so kernel package is importable
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+# Opt out of Microsoft qdk's Azure Application Insights telemetry for the
+# whole kernel process — must precede any qdk import, including user code
+# running `import qdk` through run_python. setdefault keeps an explicit
+# user override. (Also set in kernel/adapters/qsharp_adapter.py for
+# embedders that use the adapter without this server.)
+os.environ.setdefault("QDK_PYTHON_TELEMETRY", "none")
+
 import websockets
 from kernel.executor import ADAPTER_SPECS, Executor
 from kernel.hardware.manager import HardwareManager
