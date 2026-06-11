@@ -31,6 +31,18 @@ Extending, and Reference.
 - A root `robots.txt` now ships with the Vercel deploy and points
   crawlers at the docs sitemap.
 
+### Fixed — Bloch sphere showed Qiskit qubits in reversed order
+
+- The Qiskit adapter traced the wrong statevector axis when computing
+  per-qubit Bloch vectors: the shared partial-trace helper indexes
+  C-order reshape axes (axis 0 = MSB), but Qiskit statevectors are
+  little-endian (qubit 0 = LSB) — so `bloch_coords[i]` carried qubit
+  `n−1−i` and the Bloch panel rendered Qiskit circuits mirrored. The
+  adapter now traces axis `n−1−i` for display qubit `i`. Cirq and Q#
+  were unaffected (their big-endian states already matched the
+  helper's axis order), and symmetric states like Bell — every demo
+  and fixture — masked the bug, which is how it survived.
+
 ### Fixed — credential dialog sent wrong keys for IBM and IonQ
 
 - The desktop credential dialog (provider card → Connect) sent

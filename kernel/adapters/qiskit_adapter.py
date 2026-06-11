@@ -125,8 +125,13 @@ class QiskitAdapter(FrameworkAdapter):
         bloch_coords = []
         n_qubits = circuit_obj.num_qubits
         for i in range(n_qubits):
-            # Partial trace to get single-qubit density matrix
-            rho = _partial_trace_qubit(sv_data, n_qubits, i)
+            # Partial trace to get single-qubit density matrix.
+            # why: partial_trace_qubit reshapes C-order, so its axis 0 is
+            # the MSB of the statevector index. Qiskit statevectors are
+            # little-endian (qubit 0 = LSB), so Qiskit qubit i lives on
+            # axis n-1-i. The frontend labels bloch_coords[i] as q{i};
+            # tracing axis i directly would mirror the qubit order.
+            rho = _partial_trace_qubit(sv_data, n_qubits, n_qubits - 1 - i)
             x = 2 * rho[0, 1].real
             y = 2 * rho[0, 1].imag
             z = rho[0, 0].real - rho[1, 1].real

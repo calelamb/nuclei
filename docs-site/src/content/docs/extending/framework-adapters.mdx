@@ -56,7 +56,12 @@ layout and Bloch coordinates agree — use them, don't reimplement:
   `max(qubit_layers.values())` afterwards). {/* _math.py:24-34 */}
 - `partial_trace_qubit(statevector, n_qubits, qubit)` — single-qubit
   reduced density matrix for Bloch coords:
-  `x = 2·Re ρ₀₁`, `y = 2·Im ρ₀₁`, `z = ρ₀₀ − ρ₁₁`. {/* _math.py:13-21; qiskit_adapter.py:124-133 */}
+  `x = 2·Re ρ₀₁`, `y = 2·Im ρ₀₁`, `z = ρ₀₀ − ρ₁₁`. The `qubit` argument
+  is the **C-order reshape axis** (axis 0 = MSB of the statevector
+  index), so big-endian states (Cirq, Q#) pass qubit `i` directly while
+  little-endian states (Qiskit) must pass `n_qubits - 1 - i` — the
+  frontend renders `bloch_coords[i]` as qubit `i`.
+  {/* _math.py:13-21; qiskit_adapter.py:124-138 */}
 
 ## Registration: `AdapterSpec`
 
