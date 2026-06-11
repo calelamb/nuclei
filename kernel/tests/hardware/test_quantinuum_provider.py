@@ -20,6 +20,31 @@ from kernel.tests.hardware.conftest import assert_handle_failed
 # ───────────────────────── connect() ─────────────────────────
 
 
+def _install_quantinuum_auth_sdk(install_fake_sdk):
+    """Install the full fake pytket-quantinuum auth surface.
+
+    connect() validates the token by seeding a MemoryCredentialStorage,
+    wrapping it in a QuantinuumAPI handler, and listing devices through
+    that handler — so the fakes model all three names.
+    """
+    FakeBackend = MagicMock()
+    FakeBackend.available_devices.return_value = [{"name": "H1-1LE"}]
+    fake_api = MagicMock(name="api_handler")
+    FakeAPI = MagicMock(return_value=fake_api)
+    fake_store = MagicMock(name="cred_store")
+    FakeStorage = MagicMock(return_value=fake_store)
+    install_fake_sdk(
+        "pytket.extensions.quantinuum",
+        QuantinuumBackend=FakeBackend,
+        QuantinuumAPI=FakeAPI,
+    )
+    install_fake_sdk(
+        "pytket.extensions.quantinuum.backends.credential_storage",
+        MemoryCredentialStorage=FakeStorage,
+    )
+    return FakeBackend, FakeAPI, fake_api, FakeStorage, fake_store
+
+
 def test_connect_missing_dependency_returns_false(block_sdk_import, capsys):
     block_sdk_import("pytket")
     assert QuantinuumProvider().connect({"token": "x"}) is False
@@ -27,19 +52,88 @@ def test_connect_missing_dependency_returns_false(block_sdk_import, capsys):
 
 
 def test_connect_requires_token(install_fake_sdk, capsys):
-    install_fake_sdk("pytket.extensions.quantinuum", QuantinuumBackend=MagicMock())
+    _install_quantinuum_auth_sdk(install_fake_sdk)
     assert QuantinuumProvider().connect({}) is False
     assert "token" in capsys.readouterr().out.lower()
 
 
 def test_connect_happy_path(install_fake_sdk):
-    FakeBackend = MagicMock()
-    install_fake_sdk("pytket.extensions.quantinuum", QuantinuumBackend=FakeBackend)
+    FakeBackend, _FakeAPI, fake_api, _FakeStorage, _store = (
+        _install_quantinuum_auth_sdk(install_fake_sdk)
+    )
 
     provider = QuantinuumProvider()
     assert provider.connect({"token": "tok"}) is True
     assert provider._backend_cls is FakeBackend
     assert provider._token == "tok"
+    # The validated handler is kept so later submits authenticate the
+    # same way the validation did.
+    assert provider._api_handler is fake_api
+
+
+def test_connect_validates_token_via_authenticated_device_list(install_fake_sdk):
+    """The latent bug: connect() returned True for ANY non-empty string
+    without talking to Quantinuum — auth failures surfaced only at submit
+    time. connect() must now route the token into the SDK's credential
+    store and make one cheap authenticated call (device listing)."""
+    FakeBackend, FakeAPI, fake_api, _FakeStorage, fake_store = (
+        _install_quantinuum_auth_sdk(install_fake_sdk)
+    )
+
+    assert QuantinuumProvider().connect({"token": "tok"}) is True
+
+    # The token reached the SDK's credential store...
+    fake_store.save_tokens.assert_called_once_with(
+        id_token="tok", refresh_token="tok"
+    )
+    # ...the API handler was built from that store...
+    FakeAPI.assert_called_once_with(token_store=fake_store)
+    # ...and the validation call went through the authenticated handler.
+    FakeBackend.available_devices.assert_called_once_with(api_handler=fake_api)
+
+
+def test_connect_rejected_token_returns_false_with_hint(install_fake_sdk, capsys):
+    """A bad token must fail fast at connect() — not at submit time —
+    with the SDK error plus a hint about pytket-quantinuum's login flow."""
+    FakeBackend, _FakeAPI, _api, _FakeStorage, _store = (
+        _install_quantinuum_auth_sdk(install_fake_sdk)
+    )
+    FakeBackend.available_devices.side_effect = PermissionError(
+        "401 Unauthorized: invalid token"
+    )
+
+    provider = QuantinuumProvider()
+    assert provider.connect({"token": "bad-token"}) is False
+
+    out = capsys.readouterr().out
+    assert "Quantinuum connection failed" in out
+    assert "401 Unauthorized" in out
+    assert "pytket-quantinuum" in out  # names the SDK's own login flow
+
+    # No partial connected state leaks out of a failed validation.
+    assert provider._backend_cls is None
+    assert provider._token is None
+    assert provider._api_handler is None
+    assert provider.list_backends() == []
+
+
+def test_submit_uses_connected_api_handler(install_fake_sdk):
+    """The handler validated at connect() must be the one used at submit,
+    otherwise the token we validated isn't the credential that submits."""
+    FakeBackend, _FakeAPI, fake_api, _FakeStorage, _store = (
+        _install_quantinuum_auth_sdk(install_fake_sdk)
+    )
+    qb = MagicMock()
+    qb.get_compiled_circuit.return_value = "compiled"
+    qb.process_circuit.return_value = "handle-obj"
+    FakeBackend.return_value = qb
+
+    provider = QuantinuumProvider()
+    assert provider.connect({"token": "tok"}) is True
+
+    handle = provider.submit_job(MagicMock(), "H1-1LE", 100)
+    assert handle.status == "queued"
+    FakeBackend.assert_called_once_with(device_name="H1-1LE", api_handler=fake_api)
 
 
 # ───────────────────────── list_backends() ─────────────────────────

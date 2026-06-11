@@ -29,7 +29,7 @@ rejected elsewhere). {/* server.py:26-143 */}
 | `ionq` | qiskit → cirq → cudaq | `qiskit-ionq` `backend.run(circuit, shots)` — Qiskit circuits. {/* ionq_provider.py:89-90 */} |
 | `braket` | qiskit → cirq → cudaq | Passes the extracted object straight to `AwsDevice.run` — **no conversion is performed**; whether a Qiskit/Cirq object is accepted is up to the Braket SDK. {/* braket_provider.py:159-163 */} |
 | `azure` | qiskit → cirq → cudaq | `target.submit(circuit, shots)` — translation relies on azure-quantum's SDK plugins. Q# source is compiled to QIR first. [Deep dive](/docs/hardware/azure-quantum/). {/* azure_provider.py:251-252 */} |
-| `quantinuum` | qiskit → cirq → cudaq | **Auto-converts** Qiskit/Cirq circuits to pytket via `pytket-extensions` (clear install hint if missing), compiles, then `process_circuit`. {/* quantinuum_provider.py:75-153 */} |
+| `quantinuum` | qiskit → cirq → cudaq | **Auto-converts** Qiskit/Cirq circuits to pytket via `pytket-extensions` (clear install hint if missing), compiles, then `process_circuit`. {/* quantinuum_provider.py:112-190 */} |
 | `nvidia` | cudaq → qiskit → cirq | `cudaq.sample` on the selected GPU/CPU target — needs a CUDA-Q kernel (or `(kernel, *args)` tuple). Completes synchronously. {/* nvidia_provider.py:83-121 */} |
 | `google` | — | **Scaffolded only**: `connect` always returns `false`; submission raises. Honest status: not usable yet. {/* google_provider.py:4-19 */} |
 
@@ -51,7 +51,7 @@ exact names:
 | `nvidia` | — | — | needs `cudaq` importable, nothing else {/* nvidia_provider.py:20-31 */} |
 | `braket` | `access_key_id`, `secret_access_key` | `region` (`us-east-1`), `session_token` | AWS IAM with `AmazonBraketFullAccess` {/* braket_provider.py:36-48 */} |
 | `azure` | `subscription_id`, `resource_group`, `workspace_name` | `location` (`eastus`) | portal.azure.com — **no token field**; auth uses the Azure default credential chain {/* azure_provider.py:141-147 */} |
-| `quantinuum` | `token` (Nexus API token) | — | nexus.quantinuum.com {/* quantinuum_provider.py:30-38 */} |
+| `quantinuum` | `token` (Nexus API token) | — | nexus.quantinuum.com — the token is validated at connect with an authenticated device-list call (was accepted unvalidated before unreleased main) {/* quantinuum_provider.py:34-57 */} |
 
 <Aside type="note" title="IBM and IonQ dialog keys — fixed in unreleased main">
 In v0.5.0 and earlier, the desktop credential dialogs sent `apiToken` (IBM)

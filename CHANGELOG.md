@@ -31,6 +31,20 @@ Extending, and Reference.
 - A root `robots.txt` now ships with the Vercel deploy and points
   crawlers at the docs sitemap.
 
+### Fixed — Quantinuum connect now validates the token
+
+- `connect()` accepted any non-empty string as a Nexus API token: it
+  stored the token, constructed a backend object, and returned `true`
+  without ever talking to Quantinuum — auth failures surfaced only at
+  submit time, and confusingly, because the token never reached
+  pytket's auth at all (pytket-quantinuum authenticates through its
+  own `QuantinuumAPI` handler and credential storage, not a token
+  kwarg). `connect()` now seeds an in-memory credential store with
+  the token, makes one authenticated device-list call through that
+  handler — failing fast with a clear hint when the token is rejected
+  or the installed SDK only supports its own login flow — and reuses
+  the validated handler for submission, polling, and cancellation.
+
 ### Fixed — Bloch sphere showed Qiskit qubits in reversed order
 
 - The Qiskit adapter traced the wrong statevector axis when computing
