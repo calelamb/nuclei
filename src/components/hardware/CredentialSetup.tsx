@@ -25,7 +25,9 @@ const PROVIDER_CONFIG: Record<
     description: 'Connect to IBM Quantum to run circuits on real quantum hardware.',
     fields: [
       {
-        key: 'apiToken',
+        // Key name is the kernel contract: ibm_provider.py reads
+        // credentials.get("token") (optional "instance" has a default).
+        key: 'token',
         label: 'IBM Quantum API Token',
         placeholder: 'Paste your IBM Quantum API token...',
       },
@@ -54,7 +56,9 @@ const PROVIDER_CONFIG: Record<
     description: 'Connect to IonQ trapped-ion quantum computers.',
     fields: [
       {
-        key: 'apiKey',
+        // Key name is the kernel contract: ionq_provider.py reads
+        // credentials.get("token").
+        key: 'token',
         label: 'IonQ API Key',
         placeholder: 'Paste your IonQ API key...',
       },

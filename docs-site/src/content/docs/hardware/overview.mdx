@@ -53,11 +53,13 @@ exact names:
 | `azure` | `subscription_id`, `resource_group`, `workspace_name` | `location` (`eastus`) | portal.azure.com — **no token field**; auth uses the Azure default credential chain {/* azure_provider.py:141-147 */} |
 | `quantinuum` | `token` (Nexus API token) | — | nexus.quantinuum.com {/* quantinuum_provider.py:30-38 */} |
 
-<Aside type="caution" title="Desktop dialog mismatch for IBM and IonQ">
-The desktop credential dialogs currently send `apiToken` (IBM) and `apiKey`
-(IonQ), which the kernel does not read — scripted clients should send
-`token` as documented above. Tracked as a known bug.
-{/* src/components/hardware/CredentialSetup.tsx:27-61 vs ibm_provider.py:22, ionq_provider.py:28 */}
+<Aside type="note" title="IBM and IonQ dialog keys — fixed in unreleased main">
+In v0.5.0 and earlier, the desktop credential dialogs sent `apiToken` (IBM)
+and `apiKey` (IonQ), which the kernel does not read — connects from those
+dialogs silently sent an empty token. Fixed in unreleased main: the dialogs
+now send `token`, matching the table above. On affected versions, scripted
+clients (or the launch modal's inline key field) work as documented.
+{/* src/components/hardware/CredentialSetup.tsx vs ibm_provider.py:22, ionq_provider.py:28 */}
 </Aside>
 
 On a successful connect, non-empty credentials persist to the **OS

@@ -31,6 +31,15 @@ Extending, and Reference.
 - A root `robots.txt` now ships with the Vercel deploy and points
   crawlers at the docs sitemap.
 
+### Fixed — credential dialog sent wrong keys for IBM and IonQ
+
+- The desktop credential dialog (provider card → Connect) sent
+  `apiToken` (IBM) and `apiKey` (IonQ), but the kernel reads
+  `credentials.get("token")` — so connects from that dialog silently
+  sent an empty token. The dialog now sends `token`, matching the
+  documented kernel contract. The launch modal's inline key field was
+  unaffected (it already sent `token`).
+
 ## [0.5.0] - 2026-06-09
 
 ### Added — Q# (Microsoft QDK), Nuclei's fourth framework
