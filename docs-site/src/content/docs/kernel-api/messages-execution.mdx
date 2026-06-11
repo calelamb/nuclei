@@ -150,20 +150,40 @@ Response sequence, in order: {/* server.py:250-273 */}
 
 ## Timeout semantics, honestly
 
-The executor defines a 30-second timeout (`EXECUTION_TIMEOUT_SECONDS`)
-enforced with `SIGALRM` — which only works on the **main thread** of a
-POSIX process. The production server runs `parse`/`execute`/`run_python`
-inside `asyncio.to_thread` worker threads to keep the event loop responsive,
-so in practice **the timeout never fires and long-running programs run to
-completion**. {/* executor.py:206-215, server.py:186-188 */}
+**Python frameworks** (Qiskit, Cirq, CUDA-Q): the executor defines a
+30-second timeout (`EXECUTION_TIMEOUT_SECONDS`) enforced with `SIGALRM` —
+which only works on the **main thread** of a POSIX process. The production
+server runs `parse`/`execute`/`run_python` inside `asyncio.to_thread`
+worker threads to keep the event loop responsive, so in practice **the
+timeout never fires and long-running Python programs run to completion**.
+{/* executor.py:206-215, server.py:186-188 */}
 
-What protects clients instead:
+**Q#** is different: it now has a real watchdog.
+{/* qsharp_adapter.py: _on_interpreter_thread + QSHARP_*_TIMEOUT_SECONDS */}
+All qdk interpreter work runs on one dedicated thread (the interpreter
+context is thread-pinned), and the caller waits on that thread's future
+with a budget: **30 s** for `parse` (compiler-only work) and **300 s** for
+`execute` (user programs at user shot counts). On expiry the caller gets a
+`timeout` error — but qdk offers **no cancellation**, so only the caller is
+freed: the runaway program keeps the interpreter thread busy. The kernel
+tracks that wedged state, and subsequent Q# requests fail fast (no second
+full wait) with a `timeout` error saying a previous Q# run is still
+occupying the interpreter. Restarting the kernel recovers; if the runaway
+program eventually finishes on its own, the wedge clears and Q# requests
+flow again without a restart. Hardware QIR compilation gets the same 30 s
+budget (surfaced as a `Hardware submit failed: ...` message).
+
+What protects clients beyond that:
 
 - The WebSocket heartbeat (ping 30 s / timeout 20 s) detects a hung kernel
-  process; the IDE restarts the kernel when the connection dies.
+  process; the IDE restarts the kernel when the connection dies. Note that
+  a wedged Q# interpreter does **not** hang the kernel process — the
+  heartbeat stays healthy, which is exactly why the watchdog reports the
+  state explicitly.
 - Requests on one connection are serialized, so a long `execute` delays
   *your* next message, not other connections.
 
-The `timeout` error code still exists in the protocol: it fires when the
-`Executor` is embedded directly on a main thread (e.g. scripts and tests),
-and clients should handle it. See [errors](/docs/kernel-api/errors/).
+The `timeout` error code is therefore reachable two ways: always for Q#
+(the watchdog), and for Python frameworks only when the `Executor` is
+embedded directly on a main thread (e.g. scripts and tests). See
+[errors](/docs/kernel-api/errors/).

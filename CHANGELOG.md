@@ -31,6 +31,28 @@ Extending, and Reference.
 - A root `robots.txt` now ships with the Vercel deploy and points
   crawlers at the docs sitemap.
 
+### Fixed — runaway Q# programs no longer silently wedge the kernel
+
+- All Q# interpreter work runs on one dedicated thread (the qdk
+  interpreter context is thread-pinned), and callers blocked on it with
+  **no timeout**. A runaway Q# program (an infinite loop) hung the
+  calling request forever — and every future Q# request queued silently
+  behind it while the kernel looked perfectly healthy (the heartbeat
+  never notices a wedged interpreter), until a kernel restart.
+- Q# calls now have a watchdog budget: **30 s** for parse and QIR
+  compilation (compiler-only work) and **300 s** for execute (user
+  programs at user shot counts). On expiry the caller gets a `timeout`
+  error explaining, in plain language, that the program is still
+  running and the kernel needs a restart — check for infinite loops.
+- Honest about the limits: qdk offers no cancellation, so the watchdog
+  frees the *caller*, not the interpreter — the runaway program keeps
+  the interpreter thread busy. The kernel now tracks that wedged state:
+  subsequent Q# requests fail **fast** (instead of waiting a full
+  budget each) with a "previous Q# run is still occupying the
+  interpreter — restart the kernel" message, and the wedge clears
+  automatically if the runaway run eventually finishes on its own.
+  Python frameworks (Qiskit, Cirq, CUDA-Q) are unchanged.
+
 ### Fixed — Dirac settings knobs now do what they say
 
 - Settings → Dirac AI displayed and persisted **Preferred Model**,

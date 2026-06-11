@@ -12,9 +12,11 @@ from __future__ import annotations
 import concurrent.futures
 import sys
 import threading
+import time
 
 import pytest
 
+from kernel.adapters import qsharp_adapter
 from kernel.adapters.qsharp_adapter import QsharpAdapter
 from kernel.executor import ADAPTER_SPECS, Executor
 
@@ -292,6 +294,150 @@ def test_concurrent_parse_and_execute_do_not_corrupt_sessions(monkeypatch):
     # Every qdk critical section ran on the single dedicated thread.
     assert len(interp_thread_names) == len(jobs)
     assert all(name.startswith("qsharp-interp") for name in interp_thread_names)
+
+
+# ───────── watchdog timeout ─────────
+#
+# qdk offers no cancellation, so a runaway Q# program permanently occupies
+# the single dedicated interpreter thread. The watchdog cannot recover that
+# thread — it can only free the CALLER and make the wedged state legible.
+# These tests inject a threading.Event-blocked callable through the real
+# _on_interpreter_thread path with tiny budgets; no real 30s waits.
+
+
+def _wait_until_unwedged(timeout: float = 5.0) -> None:
+    """Block until the adapter's wedged flag clears (runaway task finished)."""
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        if not qsharp_adapter._interpreter_wedged():
+            return
+        time.sleep(0.01)
+    raise AssertionError("interpreter wedge flag never cleared")
+
+
+@pytest.fixture
+def release_event():
+    """An Event the blocked task waits on; teardown releases it and waits
+    for the wedge to clear so later tests get a drained interpreter queue."""
+    release = threading.Event()
+    yield release
+    release.set()
+    _wait_until_unwedged()
+
+
+def _block_compile_on(monkeypatch, release: threading.Event) -> None:
+    """Make _compile_and_snapshot block on the interpreter thread until
+    release is set — same seam the concurrency test instruments."""
+
+    def blocked(self, code):
+        release.wait()
+        return None, None, None  # the quiet "no entry point" shape
+
+    monkeypatch.setattr(QsharpAdapter, "_compile_and_snapshot", blocked)
+
+
+def test_parse_source_timeout_returns_timeout_kernel_error(
+    monkeypatch, release_event
+):
+    _block_compile_on(monkeypatch, release_event)
+    adapter = QsharpAdapter()
+
+    start = time.monotonic()
+    snapshot, stdout, stderr, error = adapter.parse_source(BELL, timeout=0.1)
+    elapsed = time.monotonic() - start
+
+    # Tuple shape preserved; caller freed within ~the budget, not forever.
+    assert snapshot is None
+    assert stdout == ""
+    assert stderr == ""
+    assert elapsed < 5.0
+    assert error is not None
+    assert error.code == "timeout"
+    assert error.framework == "qsharp"
+    # Student-readable: the program is still running, the interpreter stays
+    # busy until restart, check for infinite loops.
+    assert "still running" in error.message
+    assert "restart" in error.message.lower()
+    assert "infinite loop" in error.message
+
+
+def test_execute_source_timeout_returns_timeout_kernel_error(
+    monkeypatch, release_event
+):
+    _block_compile_on(monkeypatch, release_event)
+    adapter = QsharpAdapter()
+
+    result, snapshot, stdout, stderr, error = adapter.execute_source(
+        BELL, 10, timeout=0.1
+    )
+
+    assert result is None
+    assert snapshot is None
+    assert stdout == ""
+    assert stderr == ""
+    assert error is not None
+    assert error.code == "timeout"
+    assert error.framework == "qsharp"
+    assert "still running" in error.message
+
+
+def test_second_call_while_wedged_fails_fast(monkeypatch, release_event):
+    _block_compile_on(monkeypatch, release_event)
+    adapter = QsharpAdapter()
+
+    _, _, _, first = adapter.parse_source(BELL, timeout=0.05)
+    assert first is not None and first.code == "timeout"
+
+    # The interpreter thread is still occupied. A second call with a
+    # GENEROUS budget must not wait it out — it fails fast with a message
+    # naming the previous run.
+    start = time.monotonic()
+    snapshot, _, _, second = adapter.parse_source(BELL, timeout=30.0)
+    elapsed = time.monotonic() - start
+
+    assert elapsed < 1.0
+    assert snapshot is None
+    assert second is not None
+    assert second.code == "timeout"
+    assert second.framework == "qsharp"
+    assert "previous Q# run" in second.message
+    assert "restart" in second.message.lower()
+
+
+def test_wedge_clears_when_runaway_finishes(monkeypatch, release_event):
+    _block_compile_on(monkeypatch, release_event)
+    adapter = QsharpAdapter()
+
+    _, _, _, error = adapter.parse_source(BELL, timeout=0.05)
+    assert error is not None and error.code == "timeout"
+    assert qsharp_adapter._interpreter_wedged()
+
+    # The runaway task finally finishes: the queue drains, the flag clears,
+    # and a NORMAL parse (real qdk) succeeds again without a restart.
+    release_event.set()
+    _wait_until_unwedged()
+    monkeypatch.undo()  # restore the real _compile_and_snapshot
+
+    snapshot, _, _, error = QsharpAdapter().parse_source(BELL)
+    assert error is None
+    assert snapshot is not None
+    assert snapshot.qubit_count == 2
+
+
+def test_compile_qir_timeout_raises_runtime_error(monkeypatch, release_event):
+    # compile_qir's pipeline touches qsharp.init directly (no
+    # _compile_and_snapshot), so block the init call itself.
+    real_init = qsharp_adapter.qsharp.init
+
+    def blocking_init(*args, **kwargs):
+        release_event.wait()
+        return real_init(*args, **kwargs)
+
+    monkeypatch.setattr(qsharp_adapter.qsharp, "init", blocking_init)
+    adapter = QsharpAdapter()
+
+    with pytest.raises(RuntimeError, match="still running"):
+        adapter.compile_qir(BELL_NO_DUMP, "base", timeout=0.1)
 
 
 # ───────── gate mapping ─────────
