@@ -51,6 +51,42 @@ def test_connect_missing_dependency_returns_false(block_sdk_import, capsys):
     assert "pytket-quantinuum" in capsys.readouterr().out
 
 
+def test_connect_modern_sdk_without_token_auth_explains_version(install_fake_sdk, capsys):
+    """pytket-quantinuum >= ~0.26 dropped the credential-storage seam this
+    provider authenticates through (`MemoryCredentialStorage` and the
+    `QuantinuumAPI(token_store=...)` kwarg are gone; `QuantinuumAPI` is an
+    offline alias whose available_devices needs no auth). connect() must
+    refuse with a version-support message — NOT the misleading
+    "requires pytket-quantinuum" install hint (the package IS installed),
+    and NOT a fake validated connection."""
+    # Modern SDK shape: the package and QuantinuumAPI name exist, but the
+    # credential_storage module (and MemoryCredentialStorage) do not.
+    FakeBackend = MagicMock()
+    install_fake_sdk(
+        "pytket.extensions.quantinuum",
+        QuantinuumBackend=FakeBackend,
+        QuantinuumAPI=MagicMock(name="offline_api_alias"),
+    )
+
+    provider = QuantinuumProvider()
+    assert provider.connect({"token": "tok"}) is False
+
+    out = capsys.readouterr().out
+    # The honest message: version support, the pin, and the Azure path.
+    assert "does not support direct API-token authentication" in out
+    assert "pytket-quantinuum<0.26" in out
+    assert "Azure" in out
+    # NOT the missing-package install hint — the package is installed.
+    assert "Install with: pip install pytket-quantinuum" not in out
+
+    # No fake validation happened and no connected state leaked.
+    FakeBackend.available_devices.assert_not_called()
+    assert provider._backend_cls is None
+    assert provider._api_handler is None
+    assert provider._token is None
+    assert provider.list_backends() == []
+
+
 def test_connect_requires_token(install_fake_sdk, capsys):
     _install_quantinuum_auth_sdk(install_fake_sdk)
     assert QuantinuumProvider().connect({}) is False
@@ -82,9 +118,11 @@ def test_connect_validates_token_via_authenticated_device_list(install_fake_sdk)
 
     assert QuantinuumProvider().connect({"token": "tok"}) is True
 
-    # The token reached the SDK's credential store...
+    # The token reached the SDK's credential store. The Nexus token is an
+    # *id* token — the refresh slot must stay empty, otherwise the SDK's
+    # mid-session renewal silently fails with a nonsense refresh token.
     fake_store.save_tokens.assert_called_once_with(
-        id_token="tok", refresh_token="tok"
+        id_token="tok", refresh_token=""
     )
     # ...the API handler was built from that store...
     FakeAPI.assert_called_once_with(token_store=fake_store)

@@ -20,14 +20,36 @@ class QuantinuumProvider(HardwareProvider):
 
     def connect(self, credentials: dict) -> bool:
         try:
-            from pytket.extensions.quantinuum import QuantinuumAPI, QuantinuumBackend
-            from pytket.extensions.quantinuum.backends.credential_storage import (
-                MemoryCredentialStorage,
-            )
+            from pytket.extensions.quantinuum import QuantinuumBackend
         except ImportError:
             print(
                 "Quantinuum provider requires pytket-quantinuum. "
                 "Install with: pip install pytket-quantinuum"
+            )
+            return False
+
+        # pytket-quantinuum >= ~0.26 removed the programmatic token seam
+        # this provider relies on: `QuantinuumAPI` there is an offline
+        # alias whose `available_devices` returns a hardcoded list without
+        # authenticating, and `MemoryCredentialStorage` / the `token_store`
+        # kwarg no longer exist (auth moved to Quantinuum's own login flow
+        # and the qnexus package). On those versions, refuse honestly —
+        # there is nothing here we could validate a token against.
+        try:
+            from pytket.extensions.quantinuum import QuantinuumAPI
+            from pytket.extensions.quantinuum.backends.credential_storage import (
+                MemoryCredentialStorage,
+            )
+        except (ImportError, AttributeError):
+            print(
+                "pytket-quantinuum is installed, but this version does not "
+                "support direct API-token authentication — newer releases "
+                "(>=0.26) use Quantinuum's own login flow / the qnexus "
+                "package instead. Nuclei's Quantinuum provider currently "
+                "requires pytket-quantinuum<0.26 "
+                "(pip install 'pytket-quantinuum<0.26'), or use Azure "
+                "Quantum's Quantinuum targets instead — they work today "
+                "via the azure provider."
             )
             return False
 
@@ -42,17 +64,18 @@ class QuantinuumProvider(HardwareProvider):
             # token "connected" fine and only failed at submit time — and
             # confusingly, because the token never reached pytket's auth.
             #
-            # pytket-quantinuum has no first-class raw-token parameter:
-            # it authenticates through a QuantinuumAPI handler backed by
-            # its own credential storage (normally filled by the SDK's
-            # interactive login). Seeding an in-memory store with the
+            # Pre-0.26 pytket-quantinuum has no first-class raw-token
+            # parameter: it authenticates through a QuantinuumAPI handler
+            # backed by its own credential storage (normally filled by the
+            # SDK's interactive login). Seeding an in-memory store with the
             # token is the closest programmatic seam the SDK exposes; the
             # device-list call below is what actually proves the token
-            # works. If the installed SDK version only supports its own
-            # login flow, this fails fast here with the hint printed
-            # below rather than pretending to be connected.
+            # works. The user-supplied Nexus token is an *id* token, so
+            # the refresh slot stays empty — seeding it with the same
+            # value made the SDK's mid-session renewal fail silently with
+            # a nonsense refresh token instead of failing cleanly.
             cred_store = MemoryCredentialStorage()
-            cred_store.save_tokens(id_token=token, refresh_token=token)
+            cred_store.save_tokens(id_token=token, refresh_token="")
             api_handler = QuantinuumAPI(token_store=cred_store)
             QuantinuumBackend.available_devices(api_handler=api_handler)
 

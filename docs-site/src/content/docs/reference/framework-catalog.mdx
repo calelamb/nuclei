@@ -21,7 +21,13 @@ Verbatim from `CATALOG` at the time of writing:
 | `ionq` | IonQ | `qiskit-ionq` | `qiskit_ionq` | provider | 15 | no |
 | `braket` | AWS Braket | `amazon-braket-sdk` | `braket` | provider | 45 | no |
 | `azure` | Azure Quantum | `azure-quantum` | `azure.quantum` | provider | 30 | no |
-| `quantinuum` | Quantinuum (pytket) | `pytket-quantinuum` | `pytket.extensions.quantinuum` | provider | 35 | no |
+| `quantinuum` | Quantinuum (pytket) | `pytket-quantinuum<0.26` | `pytket.extensions.quantinuum` | provider | 35 | no |
+
+The Quantinuum entry pins `<0.26` because newer pytket-quantinuum releases
+dropped the direct API-token auth the kernel's provider uses — see the
+[hardware overview](/docs/hardware/overview/#credential-fields) for the
+version note and why Azure Quantum is the recommended path to Quantinuum
+hardware today. {/* kernel/hardware/quantinuum_provider.py:30-54 */}
 
 ## How it's used
 

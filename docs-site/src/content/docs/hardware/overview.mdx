@@ -51,7 +51,19 @@ exact names:
 | `nvidia` | — | — | needs `cudaq` importable, nothing else {/* nvidia_provider.py:20-31 */} |
 | `braket` | `access_key_id`, `secret_access_key` | `region` (`us-east-1`), `session_token` | AWS IAM with `AmazonBraketFullAccess` {/* braket_provider.py:36-48 */} |
 | `azure` | `subscription_id`, `resource_group`, `workspace_name` | `location` (`eastus`) | portal.azure.com — **no token field**; auth uses the Azure default credential chain {/* azure_provider.py:141-147 */} |
-| `quantinuum` | `token` (Nexus API token) | — | nexus.quantinuum.com — the token is validated at connect with an authenticated device-list call (was accepted unvalidated before unreleased main) {/* quantinuum_provider.py:34-57 */} |
+| `quantinuum` | `token` (Nexus API token) | — | nexus.quantinuum.com — **requires `pytket-quantinuum<0.26`** (see note below); the token is validated at connect with an authenticated device-list call (was accepted unvalidated before unreleased main) {/* quantinuum_provider.py:21-99 */} |
+
+<Aside type="caution" title="Quantinuum direct connect requires pytket-quantinuum &lt; 0.26">
+pytket-quantinuum 0.26+ removed the credential-storage API the kernel
+authenticates through — newer releases use Quantinuum's own login flow /
+the qnexus package, which the provider does not drive. With a modern SDK
+installed, `connect` returns `false` and explains the version requirement
+instead of pretending to validate. Install
+`pip install 'pytket-quantinuum<0.26'` for direct-token connect — or,
+**recommended today**, reach Quantinuum hardware through
+[Azure Quantum's Quantinuum targets](/docs/hardware/azure-quantum/),
+which work with current SDKs. {/* quantinuum_provider.py:30-54 */}
+</Aside>
 
 <Aside type="note" title="IBM and IonQ dialog keys — fixed in unreleased main">
 In v0.5.0 and earlier, the desktop credential dialogs sent `apiToken` (IBM)

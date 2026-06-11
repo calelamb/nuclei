@@ -23,5 +23,6 @@ cirq-core>=1.4,<2.0
 
 # Optional: Quantinuum (requires pytket-quantinuum + either extension
 # for Qiskit or Cirq circuit conversion)
+# pytket-quantinuum<0.26  (newer versions dropped direct token auth; see quantinuum_provider.py)
 # pytket-extensions-qiskit>=0.40
 # pytket-extensions-cirq>=0.30

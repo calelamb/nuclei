@@ -10,7 +10,11 @@ import azureSubmitRes from '../../../../fixtures/illustrative/hardware_submit_az
 
 Azure Quantum is an aggregator: one connection unlocks Quantinuum,
 IonQ-via-Azure, Rigetti, Pasqal, and IQM targets. It is also the **only
-provider that runs Q# programs on real hardware** (compiled to QIR).
+provider that runs Q# programs on real hardware** (compiled to QIR), and
+the **recommended path to Quantinuum hardware** — the direct `quantinuum`
+provider requires `pytket-quantinuum<0.26`
+([why](/docs/hardware/overview/#credential-fields)), while Azure's
+Quantinuum targets work with current SDKs.
 {/* kernel/hardware/azure_provider.py:1-7; kernel/server.py:85 */}
 
 <Aside type="caution" title="Examples on this page are illustrative">

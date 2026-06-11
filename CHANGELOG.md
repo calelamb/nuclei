@@ -75,7 +75,7 @@ Extending, and Reference.
   `src/services/diracRouting.ts`, where unit tests pin the
   defaults-equivalence.
 
-### Fixed — Quantinuum connect now validates the token
+### Fixed — Quantinuum connect now validates the token (pytket-quantinuum<0.26 only)
 
 - `connect()` accepted any non-empty string as a Nexus API token: it
   stored the token, constructed a backend object, and returned `true`
@@ -84,10 +84,23 @@ Extending, and Reference.
   pytket's auth at all (pytket-quantinuum authenticates through its
   own `QuantinuumAPI` handler and credential storage, not a token
   kwarg). `connect()` now seeds an in-memory credential store with
-  the token, makes one authenticated device-list call through that
-  handler — failing fast with a clear hint when the token is rejected
-  or the installed SDK only supports its own login flow — and reuses
-  the validated handler for submission, polling, and cancellation.
+  the token (id-token slot only — seeding the refresh slot with the
+  same value made the SDK's mid-session renewal fail silently), makes
+  one authenticated device-list call through that handler — failing
+  fast with a clear hint when the token is rejected — and reuses the
+  validated handler for submission, polling, and cancellation.
+- Honest version reality: the credential-storage seam this rides on
+  (`MemoryCredentialStorage`, `QuantinuumAPI(token_store=...)`) only
+  exists in **pytket-quantinuum < 0.26**. Modern releases replaced it
+  with Quantinuum's own login flow / the qnexus package, and their
+  `QuantinuumAPI` is an offline alias whose device list needs no auth
+  — so there is nothing there a token could be validated against. On
+  a modern SDK, `connect()` now says exactly that (install
+  `pytket-quantinuum<0.26`, or use Azure Quantum's Quantinuum
+  targets, which work today) instead of the misleading "requires
+  pytket-quantinuum" install hint it printed even when the package
+  was installed. The setup wizard's catalog entry now pins
+  `pytket-quantinuum<0.26` accordingly.
 
 ### Fixed — Bloch sphere showed Qiskit qubits in reversed order
 

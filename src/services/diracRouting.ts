@@ -26,6 +26,8 @@ export function isExplicitThink(userText: string): boolean {
 
 export function hasReasoningKeyword(userText: string): boolean {
   const lower = userText.toLowerCase();
+  // 'debug' is deliberately also an action keyword in shouldUseTools;
+  // routeChat resolves the overlap in favor of thinking (tools suppressed).
   const reasoningKeywords = [
     'optimize', 'simplify', 'reduce gate', 'prove', 'equivalent',
     'why doesn\'t', 'why isn\'t', 'debug', 'what\'s wrong',
@@ -37,6 +39,8 @@ export function hasReasoningKeyword(userText: string): boolean {
 
 export function shouldUseTools(userText: string): boolean {
   const lower = userText.toLowerCase();
+  // 'debug' deliberately overlaps hasReasoningKeyword's list; when both
+  // fire, routeChat lets thinking win and suppresses tools.
   const actionKeywords = [
     'write', 'fix', 'show me', 'insert', 'change', 'create', 'build',
     'make', 'add', 'modify', 'replace', 'implement', 'code', 'generate',

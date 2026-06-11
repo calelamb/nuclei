@@ -155,6 +155,15 @@ describe('routeChat with default settings (auto + extendedThinking on) reproduce
       maxTokens: 16000,
     });
   });
+
+  it("'debug' is in BOTH keyword lists (intentional overlap) — thinking wins, tools suppressed", () => {
+    expect(routeChat('debug this circuit', DEFAULTS)).toEqual({
+      model: SONNET_MODEL,
+      thinking: true,
+      tools: false,
+      maxTokens: 16000,
+    });
+  });
 });
 
 describe('routeChat with non-default settings', () => {

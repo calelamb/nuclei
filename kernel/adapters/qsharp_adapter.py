@@ -207,7 +207,11 @@ def _dispose_qdk_thread_state() -> None:
         qdk_interpreter._default_context = None
 
     try:
-        _QSHARP_EXECUTOR.submit(_dispose).result()
+        # Bounded wait: dispose only drops references, so 5 s is generous.
+        # If a runaway Q# program has the interpreter thread wedged, an
+        # unbounded .result() would block process exit until the OS kills
+        # us — time out instead and accept the old stderr noise.
+        _QSHARP_EXECUTOR.submit(_dispose).result(timeout=5.0)
     except Exception:
         pass
 
