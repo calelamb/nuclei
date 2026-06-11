@@ -15,13 +15,13 @@ export interface WhatsNewEntry {
 }
 
 export const WHATS_NEW: WhatsNewEntry = {
-  version: '0.5.0',
-  title: 'Q# has landed',
+  version: '0.5.1',
+  title: 'Sharper edges, fixed',
   highlights: [
-    { icon: 'qsharp', text: "Write Q# — Microsoft's quantum language, now built in" },
-    { icon: 'circuit', text: 'Live circuits, Bloch sphere & histograms for Q# programs' },
-    { icon: 'editor', text: 'Real QDK compiler intelligence: diagnostics, completions, hover' },
-    { icon: 'dirac', text: 'Dirac speaks fluent Q#' },
-    { icon: 'hardware', text: 'Launch Q# straight to Azure Quantum hardware' },
+    { icon: 'hardware', text: 'Stale failed jobs no longer haunt the launch strip' },
+    { icon: 'hardware', text: 'IBM and IonQ connections from Settings actually work now' },
+    { icon: 'circuit', text: 'Bloch sphere shows Qiskit qubits in the right order' },
+    { icon: 'dirac', text: 'Dirac settings (model, thinking, context depth) now apply' },
+    { icon: 'qsharp', text: 'Runaway Q# programs time out with a clear message' },
   ],
 };
