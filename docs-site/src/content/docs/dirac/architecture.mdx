@@ -124,13 +124,14 @@ Verified against the codebase (not just asserted):
    marketing **website**, not in the app.)
    {/* src/services/telemetry.ts:46-49; settingsStore.ts:89 */}
 
-<Aside type="caution" title="One third-party exception: Microsoft's qdk package">
+<Aside type="note" title="One third-party exception: Microsoft's qdk package">
 The optional `qdk` package (Q# support) ships Microsoft's own usage
 telemetry to Azure Application Insights, enabled by default in release
-builds of that package. Nuclei's kernel does not currently override it.
-Opt out by setting `QDK_PYTHON_TELEMETRY=none` in the kernel's
-environment. This is the qdk package phoning Microsoft, not Nuclei
-phoning anyone.
+builds of that package. **Nuclei opts out for you**: the kernel sets
+`QDK_PYTHON_TELEMETRY=none` before qdk loads (unreleased main; in
+v0.5.0 the default still applied). Exporting the variable yourself
+before launch keeps your own choice.
+{/* kernel/server.py, kernel/adapters/qsharp_adapter.py — setdefault before qdk import */}
 </Aside>
 
 ## Tools

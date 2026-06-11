@@ -412,3 +412,53 @@ def test_plain_python_still_unsupported_framework():
     assert snapshot is None
     assert error is not None
     assert error.code == "unsupported_framework"
+
+
+# ───────── qdk telemetry opt-out ─────────
+
+
+def test_adapter_import_disables_qdk_telemetry_by_default():
+    """Importing the adapter must opt out of Microsoft's qdk telemetry.
+
+    Run in a subprocess because the env var only matters BEFORE the first
+    qdk import in a process; this process has long since imported it.
+    """
+    import subprocess
+    import sys
+
+    code = (
+        "import os; os.environ.pop('QDK_PYTHON_TELEMETRY', None); "
+        "import kernel.adapters.qsharp_adapter; "
+        "print(os.environ.get('QDK_PYTHON_TELEMETRY'))"
+    )
+    out = subprocess.run(
+        [sys.executable, "-c", code],
+        capture_output=True,
+        text=True,
+        check=True,
+        cwd=str(__import__("pathlib").Path(__file__).resolve().parents[2]),
+    )
+    assert out.stdout.strip() == "none"
+
+
+def test_adapter_import_respects_explicit_telemetry_choice():
+    """A user who exported QDK_PYTHON_TELEMETRY themselves keeps their value."""
+    import os
+    import subprocess
+    import sys
+
+    env = dict(os.environ, QDK_PYTHON_TELEMETRY="1")
+    code = (
+        "import os; "
+        "import kernel.adapters.qsharp_adapter; "
+        "print(os.environ.get('QDK_PYTHON_TELEMETRY'))"
+    )
+    out = subprocess.run(
+        [sys.executable, "-c", code],
+        capture_output=True,
+        text=True,
+        check=True,
+        env=env,
+        cwd=str(__import__("pathlib").Path(__file__).resolve().parents[2]),
+    )
+    assert out.stdout.strip() == "1"

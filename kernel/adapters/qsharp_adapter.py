@@ -19,6 +19,7 @@ on the same thread.
 from __future__ import annotations
 
 import json
+import os
 import re
 import threading
 import time
@@ -31,6 +32,12 @@ from kernel.adapters._math import assign_layer, partial_trace_qubit
 from kernel.adapters.base import FrameworkAdapter
 from kernel.models.errors import KernelError
 from kernel.models.snapshot import CircuitSnapshot, Gate, SimulationResult
+
+# Microsoft's qdk package ships usage telemetry to Azure Application
+# Insights, enabled by default and configured at import time. Nuclei opts
+# its users out; setdefault means anyone who explicitly exported
+# QDK_PYTHON_TELEMETRY before launch keeps their own choice.
+os.environ.setdefault("QDK_PYTHON_TELEMETRY", "none")
 
 try:
     from qdk import qsharp

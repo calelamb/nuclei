@@ -92,6 +92,7 @@ set there is baked into the shipped JS bundle.
 | `BUILD_TARGET` | build | `web` → browser build into `dist-web/`; anything else → desktop |
 | `NUCLEI_DATA_DIR` | kernel, runtime | Overrides the `~/.nuclei` data directory |
 | `NUCLEI_DISABLE_CRED_STORE` | kernel, runtime | `1` disables keyring persistence (save/load/clear become no-ops) |
+| `QDK_PYTHON_TELEMETRY` | kernel, import time | Nuclei sets `none` before loading Microsoft's `qdk` package (its telemetry is otherwise on by default); export it yourself to override |
 | `CARGO_MANIFEST_DIR` | Rust shell, dev only | Locates the repo-root kernel in `tauri dev` |
 
 `.env.example` documents the two `VITE_*` variables. They are Vite

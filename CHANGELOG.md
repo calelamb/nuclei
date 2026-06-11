@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Added — developer docs at nuclei.dev/docs
+### Added — developer docs at getnuclei.dev/docs
 
 Nuclei now has a full developer documentation site at
 [getnuclei.dev/docs](https://getnuclei.dev/docs) — API/SDK-style docs for
@@ -39,6 +39,15 @@ Extending, and Reference.
   sent an empty token. The dialog now sends `token`, matching the
   documented kernel contract. The launch modal's inline key field was
   unaffected (it already sent `token`).
+
+### Changed — kernel opts out of Microsoft qdk telemetry
+
+- The optional `qdk` package (Q# support) ships Microsoft usage
+  telemetry to Azure Application Insights, on by default. The kernel
+  now sets `QDK_PYTHON_TELEMETRY=none` before qdk loads (in both
+  `kernel/server.py` and the Q# adapter), so nothing phones home from
+  a Nuclei install. Exporting the variable yourself before launch
+  still wins — `setdefault` preserves explicit choices.
 
 ## [0.5.0] - 2026-06-09
 
