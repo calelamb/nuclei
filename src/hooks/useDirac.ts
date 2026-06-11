@@ -13,9 +13,12 @@ import { useStudentStore, studentModelToPrompt } from '../stores/studentStore';
 import { useHardwareStore } from '../stores/hardwareStore';
 import { useCapstoneStore } from '../stores/capstoneStore';
 import { useChallengeModeStore } from '../stores/challengeModeStore';
-import { DIRAC_API_URL, HAIKU_MODEL, SONNET_MODEL } from '../config/dirac';
+import { DIRAC_API_URL } from '../config/dirac';
 import { classifyIntent } from '../services/classify';
 import { compose } from '../services/compose';
+import { routeChat, selectContextSections } from '../services/diracRouting';
+import type { ContextPlan } from '../services/diracRouting';
+import { useSettingsStore } from '../stores/settingsStore';
 
 const SYSTEM_PROMPT = `You are Dirac, an AI teaching assistant for quantum computing, named after physicist Paul Dirac. You live inside Nuclei, a quantum computing IDE.
 
@@ -206,45 +209,11 @@ const TOOL_DEFINITIONS = [
   },
 ];
 
-function shouldUseReasoning(userText: string): boolean {
-  const lower = userText.toLowerCase();
-  if (lower.startsWith('/think')) return true;
-  const reasoningKeywords = [
-    'optimize', 'simplify', 'reduce gate', 'prove', 'equivalent',
-    'why doesn\'t', 'why isn\'t', 'debug', 'what\'s wrong',
-    'state vector after', 'state at step', 'entanglement analysis',
-    'error propagation', 'decompose', 'verify correctness',
-  ];
-  return reasoningKeywords.some((kw) => lower.includes(kw));
-}
+// Chat routing heuristics (tools / thinking / model pick) live in
+// services/diracRouting.ts so the Settings → Dirac AI knobs are applied
+// in one pure, tested place.
 
-function shouldUseTools(userText: string): boolean {
-  const lower = userText.toLowerCase();
-  const actionKeywords = [
-    'write', 'fix', 'show me', 'insert', 'change', 'create', 'build',
-    'make', 'add', 'modify', 'replace', 'implement', 'code', 'generate',
-    'run', 'execute', 'simulate', 'try', 'debug', 'correct',
-    'highlight', 'step', 'walk through', 'show me the',
-    'exercise', 'challenge', 'practice', 'quiz', 'check', 'verify', 'solution',
-    'hardware', 'submit', 'run on', 'real quantum', 'ibm', 'backend',
-    'hint', 'glossary', 'define', 'definition', 'what is',
-  ];
-  return actionKeywords.some((kw) => lower.includes(kw));
-}
-
-function selectModel(userText: string, useTools: boolean): string {
-  if (useTools) return SONNET_MODEL;
-  const lower = userText.toLowerCase();
-  const complexKeywords = [
-    'explain', 'why', 'how does', 'what does', 'teach', 'concept',
-    'difference between', 'compare', 'derive', 'prove', 'understand',
-    'step by step', 'in detail', 'elaborate', 'deep dive',
-  ];
-  const isComplex = userText.length > 100 || complexKeywords.some((kw) => lower.includes(kw));
-  return isComplex ? SONNET_MODEL : HAIKU_MODEL;
-}
-
-function buildContextBlock(): string {
+function buildContextBlock(plan: ContextPlan): string {
   const { code, framework } = useEditorStore.getState();
   const snapshot = useCircuitStore.getState().snapshot;
   const { result, terminalOutput } = useSimulationStore.getState();
@@ -256,14 +225,14 @@ function buildContextBlock(): string {
     parts.push(`## Circuit Summary\n- Framework: ${snapshot.framework}\n- Qubits: ${snapshot.qubit_count}\n- Classical bits: ${snapshot.classical_bit_count}\n- Depth: ${snapshot.depth}\n- Gates: ${snapshot.gates.length} (${[...new Set(snapshot.gates.map((g) => g.type))].join(', ')})`);
   }
 
-  if (result) {
+  if (plan.results && result) {
     const topProbs = Object.entries(result.probabilities)
       .sort(([, a], [, b]) => b - a)
-      .slice(0, 8)
+      .slice(0, plan.probabilityLimit)
       .map(([state, prob]) => `  |${state}⟩: ${(prob * 100).toFixed(1)}%`)
       .join('\n');
     parts.push(`## Simulation Results\n- Execution time: ${result.execution_time_ms}ms\n- Probabilities:\n${topProbs}`);
-    if (result.bloch_coords.length > 0) {
+    if (plan.bloch && result.bloch_coords.length > 0) {
       const bloch = result.bloch_coords
         .map((c, i) => `  q${i}: (${c.x.toFixed(3)}, ${c.y.toFixed(3)}, ${c.z.toFixed(3)})`)
         .join('\n');
@@ -272,18 +241,18 @@ function buildContextBlock(): string {
   }
 
   const activeExercise = useExerciseStore.getState().activeExercise;
-  if (activeExercise) {
+  if (plan.exercise && activeExercise) {
     parts.push(`## Active Exercise\n- Title: ${activeExercise.title}\n- Topic: ${activeExercise.topic}\n- Difficulty: ${activeExercise.difficulty}\n- Description: ${activeExercise.description}\n- Expected output: ${JSON.stringify(activeExercise.expectedOutput)}`);
   }
 
   const errors = terminalOutput.filter((l) => l.type === 'stderr');
-  if (errors.length > 0) {
-    const recentErrors = errors.slice(-3).map((l) => l.text).join('\n');
+  if (plan.errors && errors.length > 0) {
+    const recentErrors = errors.slice(-plan.errorLineLimit).map((l) => l.text).join('\n');
     parts.push(`## Recent Errors\n\`\`\`\n${recentErrors}\n\`\`\``);
   }
 
   const { selectedBackend, backends, jobs, results: hwResults } = useHardwareStore.getState();
-  if (selectedBackend) {
+  if (plan.hardware && selectedBackend) {
     const backend = backends.find((b) => b.name === selectedBackend);
     if (backend) {
       parts.push(`## Hardware Backend\nSelected: ${backend.name} (${backend.provider}, ${backend.qubitCount} qubits, error rate: ${backend.averageErrorRate})`);
@@ -295,7 +264,7 @@ function buildContextBlock(): string {
       if (hwResult) {
         const topHw = Object.entries(hwResult.probabilities)
           .sort(([, a], [, b]) => b - a)
-          .slice(0, 8)
+          .slice(0, plan.probabilityLimit)
           .map(([state, prob]) => `  |${state}⟩: ${(prob * 100).toFixed(1)}%`)
           .join('\n');
         parts.push(`## Hardware Results (${lastJob.backend})\n${topHw}`);
@@ -304,7 +273,7 @@ function buildContextBlock(): string {
   }
 
   const activeProblem = useChallengeModeStore.getState().activeProblem;
-  if (activeProblem) {
+  if (plan.challenge && activeProblem) {
     parts.push(`## Active Challenge\n- Title: ${activeProblem.title}\n- Difficulty: ${activeProblem.difficulty}\n- Description: ${activeProblem.description}`);
   }
 
@@ -502,10 +471,12 @@ export function useDirac() {
     addMessage({ role: 'user', content: userText });
     setLoading(true);
 
-    const context = buildContextBlock();
-    const useTools = shouldUseTools(userText);
-    const useReasoning = shouldUseReasoning(userText);
-    const model = useReasoning ? SONNET_MODEL : selectModel(userText, useTools);
+    // Settings → Dirac AI knobs apply to this chat surface only; with the
+    // defaults (auto / extended thinking on / standard depth) the route is
+    // identical to the pre-settings behavior (see diracRouting.test.ts).
+    const diracSettings = useSettingsStore.getState().dirac;
+    const context = buildContextBlock(selectContextSections(diracSettings.contextDepth));
+    const route = routeChat(userText, diracSettings);
     // Build API messages
     const storeMessages = useDiracStore.getState().messages;
     const apiMessages: Array<{ role: string; content: unknown }> = [];
@@ -542,16 +513,16 @@ export function useDirac() {
 
     try {
       const body: Record<string, unknown> = {
-        model,
-        max_tokens: useReasoning ? 16000 : 4096,
+        model: route.model,
+        max_tokens: route.maxTokens,
         system: buildSystemPrompt(),
         messages: apiMessages,
         stream: true,
       };
-      if (useReasoning) {
+      if (route.thinking) {
         body.thinking = { type: 'enabled', budget_tokens: 10000 };
       }
-      if (useTools && !useReasoning) {
+      if (route.tools) {
         body.tools = TOOL_DEFINITIONS;
       }
 

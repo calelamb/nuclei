@@ -33,7 +33,7 @@ with `anthropic-version: 2023-06-01` and
 `anthropic-dangerous-direct-browser-access: 'true'`. No proxy, no Nuclei
 server, no logging of prompts in transit.
 {/* claudeClient.ts:35-42, compose.ts:85-92, ghostCompletions.ts:99-106,
-InlineEditWidget.tsx:84-91, useDirac.ts:559-567 */}
+InlineEditWidget.tsx:84-91, useDirac.ts:529-537 */}
 
 <Aside type="note" title="Why the scary header name">
 Anthropic blocks browser-origin (CORS) requests by default because an API
@@ -53,20 +53,29 @@ is Haiku/Sonnet only.
 
 | Surface | Model | `max_tokens` | Source |
 |---------|-------|--------------|--------|
-| Chat — short, simple Q&A | `claude-haiku-4-5-20251001` | 4096 | `useDirac.ts:235-245` |
-| Chat — >100 chars, explain-keywords, or action-keywords (tools) | `claude-sonnet-4-6` | 4096 | `useDirac.ts:221-245` |
-| Chat — `/think` or reasoning keywords | `claude-sonnet-4-6` + `thinking: {budget_tokens: 10000}` | 16000 | `useDirac.ts:209-219,546-553` |
+| Chat — short, simple Q&A | `claude-haiku-4-5-20251001` | 4096 | `diracRouting.ts:52-84` |
+| Chat — >100 chars, explain-keywords, or action-keywords (tools) | `claude-sonnet-4-6` | 4096 | `diracRouting.ts:38-84` |
+| Chat — `/think` or reasoning keywords | `claude-sonnet-4-6` + `thinking: {budget_tokens: 10000}` | 16000 | `diracRouting.ts:23-35,87-126` |
 | Compose (`/compose` or intent-classified) | `claude-sonnet-4-6` | 2048 | `compose.ts:94-95` |
 | Cmd+K inline edit | `claude-sonnet-4-6` | 2048 | `InlineEditWidget.tsx:92-94` |
 | Ghost completions | `claude-haiku-4-5-20251001` (local constant) | 150 | `ghostCompletions.ts:15,109` |
 | Narration (ambient one-liners) | Haiku (claudeClient default) | 120 | `narration.ts:44,66` |
 | Error rewrite | Haiku (claudeClient default) | 500 | `errorRewrite.ts:42` |
 
-Chat routing is a **keyword/length heuristic**, not a strict rule: common
-verbs like "make", "check", "try" escalate to Sonnet with tools. The
-Settings knobs `preferredModel`, `contextDepth`, and `extendedThinking`
-are displayed and persisted but **not consumed by any routing code** —
-don't document workflows around them. {/* settingsStore.ts:16-23; useDirac.ts:235-245 */}
+The chat rows describe the **default settings**. Chat routing is a
+**keyword/length heuristic**, not a strict rule: common verbs like "make",
+"check", "try" escalate to Sonnet with tools. Two Settings → Dirac AI
+knobs adjust the chat rows only — the other surfaces in the table are
+fixed by design (ghost completions, narration, and error rewrite stay on
+Haiku for latency; compose and Cmd+K stay on Sonnet for generation
+quality):
+
+- **Preferred Model** (`auto`, default): `haiku`/`sonnet` force that model
+  for chat Q&A. Tool-use and `/think` turns still run Sonnet even with a
+  Haiku preference — capability wins.
+- **Extended Thinking** (default on): when off, reasoning *keywords* no
+  longer auto-escalate to the thinking variant; an explicit `/think`
+  always does. {/* settingsStore.ts:16-23; diracRouting.ts:71-126; useDirac.ts:475-479 */}
 
 ## Context injection — what each surface sends
 
@@ -75,13 +84,23 @@ data accompanies the request to Anthropic.
 
 | Surface | Data sent | Source |
 |---------|-----------|--------|
-| Chat | **Full editor code**, circuit summary (framework, qubits, classical bits, depth, gate types), top-8 probabilities + per-qubit Bloch coords + exec time, active exercise metadata, **last 3 stderr lines**, selected hardware backend + last completed hardware-job probabilities, active challenge metadata — wrapped in `<ide_context>` around the last user message; full conversation history including prior tool calls | `useDirac.ts:247-312,513-539` |
-| Chat system prompt | Tutor persona + student model (skill level, mastered/struggling concepts, common errors — only after first code execution), Learn Mode track/lesson progress, active capstone milestone, selected backend specs | `useDirac.ts:50-92` |
+| Chat | **Full editor code**, circuit summary (framework, qubits, classical bits, depth, gate types), top-8 probabilities + per-qubit Bloch coords + exec time, active exercise metadata, **last 3 stderr lines**, selected hardware backend + last completed hardware-job probabilities, active challenge metadata — wrapped in `<ide_context>` around the last user message; full conversation history including prior tool calls | `useDirac.ts:216-280,484-510` |
+| Chat system prompt | Tutor persona + student model (skill level, mastered/struggling concepts, common errors — only after first code execution), Learn Mode track/lesson progress, active capstone milestone, selected backend specs | `useDirac.ts:53-95` |
 | Compose | Framework, the request, **full editor code** (language-aware fence) | `compose.ts:71-81` |
 | Cmd+K | Framework, snapshot qubits/depth, **full file**, selected code (or current line), the instruction | `InlineEditWidget.tsx:75-81` |
 | Ghost completions | Framework, circuit summary, **last 2 stderr lines**, the **entire buffer** split around a `[CURSOR]` marker | `ghostCompletions.ts:69-86` |
 | Narration | Framework, qubit/depth/gate-type summary, top-3 probabilities (result), code **sliced to 1500 chars** | `narration.ts:34-66` |
 | Error rewrite | Framework, code **sliced to 2000 chars**, traceback **sliced to 2500 chars** | `errorRewrite.ts:32-40` |
+
+The Chat row describes **Context Depth: Standard** (the default). The
+third Settings knob, **Context Depth**, trims what chat sends — code and
+the circuit summary are always included:
+
+- **Minimal**: code + circuit summary + recent errors only (no simulation
+  results, Bloch coords, exercise, hardware, or challenge context).
+- **Standard** (default): everything in the Chat row above.
+- **Full**: same sections with deeper detail — top-16 probabilities and
+  the last 10 stderr lines. {/* diracRouting.ts:135-184 */}
 
 Per-feature toggles: `narration` and `autoExplainErrors` default **on**,
 `ghostCompletions` defaults **off** (beginner default). With no API key,
@@ -142,7 +161,7 @@ Chat passes nine tool definitions when action keywords are detected:
 `glossary_lookup`. Read-only/teaching tools (`highlight_gate`, `step_to`,
 `create_exercise`, `verify_solution`) auto-execute; everything that touches
 the editor, kernel, or hardware stays pending until the user accepts.
-Tools are omitted in reasoning mode. {/* useDirac.ts:94-207,554-556,650-657 */}
+Tools are omitted in reasoning mode. {/* useDirac.ts:97-210,525-527,621-628 */}
 
 Adding tools and prompt fragments is covered in
 [Extending Dirac](/docs/dirac/extending/).

@@ -31,6 +31,28 @@ Extending, and Reference.
 - A root `robots.txt` now ships with the Vercel deploy and points
   crawlers at the docs sitemap.
 
+### Fixed — Dirac settings knobs now do what they say
+
+- Settings → Dirac AI displayed and persisted **Preferred Model**,
+  **Extended Thinking**, and **Context Depth**, but no routing code
+  ever read them. They are wired now, scoped to the chat surface
+  (ghost completions, narration, and error rewrite stay on Haiku for
+  latency; compose and Cmd+K stay on Sonnet for generation quality):
+  - **Preferred Model** — `haiku`/`sonnet` force that model for chat
+    Q&A; `auto` (default) keeps the heuristic. Tool-use and `/think`
+    turns still run Sonnet because they require it.
+  - **Extended Thinking** — off stops reasoning-keyword
+    auto-escalation to the thinking variant; an explicit `/think`
+    always works.
+  - **Context Depth** — Minimal sends code + circuit summary +
+    recent errors only; Standard (default) is exactly the previous
+    assembly; Full adds detail (top-16 probabilities, last 10 stderr
+    lines).
+- Defaults are unchanged and the default route is identical to the
+  previous behavior — the chat routing heuristics moved verbatim into
+  `src/services/diracRouting.ts`, where unit tests pin the
+  defaults-equivalence.
+
 ### Fixed — Quantinuum connect now validates the token
 
 - `connect()` accepted any non-empty string as a Nexus API token: it
