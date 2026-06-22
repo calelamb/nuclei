@@ -1,0 +1,41 @@
+{
+  "run_date": "2026-06-22",
+  "prior_snapshot_date": "2026-06-15",
+  "repo": "calelamb/nuclei",
+  "repo_signal": {
+    "stars": 3,
+    "forks": 0,
+    "watchers": 3,
+    "open_issues": 0,
+    "note": "Live data unavailable — GitHub MCP server does not expose GET /repos/{owner}/{repo}; values carried forward from 2026-06-15 snapshot",
+    "wow_delta": { "stars": 0, "forks": 0 }
+  },
+  "platform_totals": {
+    "macos": { "current": 54, "prior": 54, "delta": 0 },
+    "windows": { "current": 32, "prior": 32, "delta": 0 },
+    "linux": { "current": 43, "prior": 42, "delta": 1 },
+    "updater_manifests": { "current": 102, "prior": 100, "delta": 2 },
+    "grand_total": { "current": 231, "prior": 228, "delta": 3 }
+  },
+  "releases": [
+    { "tag": "v0.5.1", "published_at": "2026-06-11", "total_downloads": 6, "macos": 1, "windows": 0, "linux": 1, "updater": 4, "wow_delta": 3 },
+    { "tag": "v0.5.0", "published_at": "2026-06-10", "total_downloads": 4, "macos": 1, "windows": 0, "linux": 0, "updater": 3, "wow_delta": 0 },
+    { "tag": "v0.4.17", "published_at": "2026-05-03", "total_downloads": 19, "macos": 5, "windows": 2, "linux": 3, "updater": 9, "wow_delta": 0 },
+    { "tag": "v0.4.16", "published_at": "2026-04-20", "total_downloads": 10, "macos": 1, "windows": 1, "linux": 0, "updater": 8, "wow_delta": 0 },
+    { "tag": "v0.4.15", "published_at": "2026-04-20", "total_downloads": 19, "macos": 3, "windows": 2, "linux": 3, "updater": 11, "wow_delta": 0 },
+    { "tag": "v0.4.14", "published_at": "2026-04-20", "total_downloads": 4, "macos": 2, "windows": 0, "linux": 0, "updater": 2, "wow_delta": 0 },
+    { "tag": "v0.4.13", "published_at": "2026-04-20", "total_downloads": 2, "macos": 1, "windows": 0, "linux": 0, "updater": 1, "wow_delta": 0 },
+    { "tag": "v0.4.12", "published_at": "2026-04-19", "total_downloads": 3, "macos": 1, "windows": 0, "linux": 0, "updater": 2, "wow_delta": 0 },
+    { "tag": "v0.4.11", "published_at": "2026-04-19", "total_downloads": 29, "macos": 7, "windows": 4, "linux": 8, "updater": 10, "wow_delta": 0 },
+    { "tag": "v0.4.10", "published_at": "2026-04-19", "total_downloads": 3, "macos": 1, "windows": 0, "linux": 0, "updater": 2, "wow_delta": 0 }
+  ],
+  "traffic": {
+    "available": false,
+    "reason": "GitHub MCP server does not expose /traffic/* endpoints"
+  },
+  "vercel_analytics": {
+    "available": false,
+    "reason": "No VERCEL_TOKEN in environment",
+    "dashboard_url": "https://vercel.com/calelambs-projects/landing/analytics"
+  }
+}
