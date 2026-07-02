@@ -35,11 +35,21 @@ export default defineConfig({
       ],
       customCss: [
         // Self-hosted fonts (no render-blocking Google Fonts requests).
-        '@fontsource/exo/400.css',
-        '@fontsource/exo/600.css',
-        '@fontsource/exo/700.css',
-        '@fontsource/roboto-mono/400.css',
-        '@fontsource/roboto-mono/500.css',
+        // Blue-brand redesign (v0.5.0): Space Grotesk display, IBM Plex Sans
+        // body, JetBrains Mono code.
+        '@fontsource/space-grotesk/400.css',
+        '@fontsource/space-grotesk/500.css',
+        '@fontsource/space-grotesk/600.css',
+        '@fontsource/space-grotesk/700.css',
+        '@fontsource/ibm-plex-sans/300.css',
+        '@fontsource/ibm-plex-sans/400.css',
+        '@fontsource/ibm-plex-sans/500.css',
+        '@fontsource/ibm-plex-sans/600.css',
+        '@fontsource/ibm-plex-sans/700.css',
+        '@fontsource/jetbrains-mono/400.css',
+        '@fontsource/jetbrains-mono/500.css',
+        '@fontsource/jetbrains-mono/600.css',
+        '@fontsource/jetbrains-mono/700.css',
         // Nuclei theme overrides.
         './src/styles/nuclei.css',
       ],
