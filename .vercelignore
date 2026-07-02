@@ -1,0 +1,24 @@
+# Local build outputs (Vercel rebuilds via scripts/build-vercel.sh)
+dist
+dist-web
+dist-vercel
+.astro
+docs-site/dist
+docs-site/.astro
+src-tauri/target
+
+# macOS / sync duplicate artifacts ("Foo 2.ext", "Foo 3.ext", "Foo 2/")
+* 2.*
+* 3.*
+* 2
+* 3
+
+# Non-deploy assets / backups
+*.zip
+*.xlsx
+nuclei-social.png
+nuclei-signing-backup
+outreach
+.hypothesis
+.pytest_cache
+.ruff_cache

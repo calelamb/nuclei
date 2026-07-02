@@ -13,8 +13,9 @@
   },
   "dependencies": {
     "@astrojs/starlight": "^0.40.0",
-    "@fontsource/exo": "^5.2.8",
-    "@fontsource/roboto-mono": "^5.2.9",
+    "@fontsource/ibm-plex-sans": "^5.2.8",
+    "@fontsource/jetbrains-mono": "^5.2.8",
+    "@fontsource/space-grotesk": "^5.2.10",
     "astro": "^6.4.5",
     "sharp": "^0.34.0"
   },
