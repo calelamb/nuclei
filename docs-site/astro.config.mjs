@@ -30,6 +30,12 @@ export default defineConfig({
         // so broken links can never reach a deploy (CI runs this build).
         starlightLinksValidator(),
       ],
+      components: {
+        // Default the docs to the light blue-white theme on first visit to
+        // match the v0.5.0 redesign (marketing site is light-only). Keeps the
+        // full auto/light/dark picker; user choice still persists.
+        ThemeProvider: './src/components/ThemeProvider.astro',
+      },
       social: [
         { icon: 'github', label: 'GitHub', href: 'https://github.com/calelamb/nuclei' },
       ],
