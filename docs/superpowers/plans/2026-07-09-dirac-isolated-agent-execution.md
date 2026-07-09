@@ -4,7 +4,7 @@
 
 **Goal:** Run each model-generated parse or simulation request in a disposable, credential-free worker with enforced and self-tested filesystem, environment, network, subprocess, resource, output, timeout, and cancellation boundaries.
 
-**Architecture:** `createAgentSandboxSession` invokes one Tauri command per request and never calls the long-lived WebSocket kernel. Rust validates a versioned request, requires a qualified OS sandbox, launches a fresh worker in a process group, treats every worker byte as untrusted, and reaps the worker on every terminal path. The worker applies rlimits before constructing the existing `Executor`, checks the declared framework against its lexical adapter selection for routing correctness, cooperatively emits a capped versioned JSON object, and exits; Rust remains authoritative for raw-byte caps and exact-one-JSON framing, while the common boundary matrix covers every installed framework package regardless of lexical selection. macOS uses Seatbelt, Linux requires bubblewrap plus delegated cgroup v2 and seccomp, and Windows/web fail closed.
+**Architecture:** `createAgentSandboxSession` invokes one Tauri command per request and never calls the long-lived WebSocket kernel. Rust validates a versioned request, requires a qualified OS sandbox and descendant-containment primitive, launches a fresh worker only through that qualified platform backend, treats every worker byte as untrusted, and reaps the worker on every terminal path. The worker applies rlimits before constructing the existing `Executor`, checks the declared framework against its lexical adapter selection for routing correctness, cooperatively emits a capped versioned JSON object, and exits; Rust remains authoritative for raw-byte caps and exact-one-JSON framing, while the common boundary matrix covers every installed framework package regardless of lexical selection. macOS uses Seatbelt with fork/exec denial, Linux requires bubblewrap plus delegated cgroup v2 and seccomp, and Windows/web fail closed.
 
 **Tech Stack:** Tauri 2, Rust 2021, serde, Tokio, macOS `sandbox-exec`, Linux bubblewrap/cgroup v2/seccomp-BPF/rlimit, Python 3.10+, existing quantum adapters, TypeScript 5.9, Vitest 4, pytest.
 
@@ -572,13 +572,12 @@ git commit -m "feat: add disposable bounded agent worker"
 Task 3's implemented contract additionally requires strict typed worker response
 payloads, semantic response validation, an OS-visible per-app-data provisioning
 lock, fail-closed stale staging/backup cleanup, and an immutable app-owned copy
-of the exact requirements bytes supplied to pip. On supported Unix hosts,
-provisioning commands run in a dedicated process group with bounded time,
-output, and reader completion; command failures expose only capped, redacted
-stderr diagnostics. Windows returns the stable unavailable error before any
-provisioning filesystem mutation or spawn. `EnvironmentFilesystem` includes a
-`set_readonly` operation, and `SystemCommandRunner::run_with_limits` exists for
-deterministic containment tests.
+of the exact requirements bytes supplied to pip. The production
+`SystemCommandRunner` is deliberately unavailable and never spawns: a process
+group is lifecycle cleanup, not descendant containment because a child can
+call `setsid`. Provisioning requires an injected runner whose containment
+qualification is explicit; otherwise it returns unavailable before filesystem
+mutation. `EnvironmentFilesystem` includes a `set_readonly` operation.
 
 **Files:**
 - Create: `kernel/agent-requirements.txt`
@@ -750,12 +749,20 @@ pub struct WorkerResponseV1 {
 required even when nullable. It rejects unknown nested fields, non-v1
 responses, invalid request IDs, non-finite or out-of-range numeric values,
 inconsistent state-vector/Bloch lengths, and contradictory status/error pairs.
+`validate(&WorkerRequestV1)` then enforces correlation: response ID and
+framework match, parse has no result, successful simulation has snapshot and
+result, and returned shots equal requested shots. Parse snapshots permit up to
+4,096 qubits/gates; exponential state-vector dimension checks apply only when
+a simulation vector is nonempty.
 Qiskit/Cirq probability keys have allocated qubit-state width. Q# `Result[]`
 may represent repeated measurements or a subset, so its probability width is
 independent of allocated qubit count. All probability and measurement keys
 must be nonempty binary strings no longer than the explicit 4,096-bit protocol
-maximum (well within the 1 MiB response cap). Measurement keys are not forced
-to match classical-bit width or sum to shots; empty Q# measurements are valid.
+maximum (well within the 1 MiB response cap). Qiskit measurements may contain
+one or more whitespace characters between nonempty binary register segments;
+Cirq/Q# keys remain plain binary. Probabilities are individually bounded and
+sum to one within tolerance; measurement totals cannot exceed requested shots.
+Empty Q# measurements are valid.
 
 - [ ] **Step 6: Implement resource validation and dedicated-environment contract**
 
@@ -776,22 +783,20 @@ pub fn validate_requirements(text: &str) -> Result<(), String> {
     else { Err("Agent requirements must exactly match approved constraints".into()) }
 }
 
-pub trait CommandRunner { fn run(&self, spec: &CommandSpec) -> Result<CommandOutput, String>; }
-pub struct SystemCommandRunner;
-impl SystemCommandRunner {
-    pub fn run_with_limits(
-        spec: &CommandSpec, wall: std::time::Duration, output_bytes: usize,
-    ) -> Result<CommandOutput, String>;
+pub enum RunnerContainment { Unavailable, Contained }
+pub trait CommandRunner {
+    fn containment(&self) -> RunnerContainment;
+    fn run(&self, spec: &CommandSpec) -> Result<CommandOutput, String>;
 }
+pub struct SystemCommandRunner;
 ```
 
 Both resource constructors canonicalize the allowed parent, kernel root,
-worker, and requirements and reject symlink escapes. On Unix the system runner
-creates a fresh session/process group, bounds wall time and both byte streams
-before buffering, terminates and reaps the complete tree even after a
-successful direct-parent exit, then gives pipe readers only a bounded drain
-interval. On Windows both the runner and provisioning entry point return
-`Agent isolation is unavailable on this platform` before spawning.
+worker, and requirements and reject symlink escapes. `SystemCommandRunner`
+returns `Agent isolation is unavailable on this platform` without spawning on
+every platform. Tests use deterministic contained fakes for staging logic.
+Later platform tasks must provide the real contained provisioning runner;
+without one, provisioning and capability remain unavailable.
 
 Add the capability data types to `agent_runtime/mod.rs` now so later platform
 tasks implement one stable contract:
@@ -834,10 +839,11 @@ file, and only that copy is passed to pip.
 The venv is created and probed in `v1.staging`; replacement uses explicit
 `v1.previous` rollback with every cleanup/restore failure surfaced. Returned
 root, Python, and site-packages paths are canonical and contained by the
-canonical runtime parent. All subprocesses use `SystemCommandRunner`; stderr
-diagnostics are capped and redacted. Any lock, cleanup, process containment,
-probe, rollback, or path-validation error keeps capability unavailable. There
-is no execution fallback to system Python or the normal kernel venv.
+canonical runtime parent. Every subprocess uses a qualified contained runner;
+stderr diagnostics are control-escaped, URL/secret-redacted, and capped. Any
+missing containment qualification, lock, cleanup, probe, rollback, or
+path-validation error keeps capability unavailable. There is no execution
+fallback to system Python or the normal kernel venv.
 
 - [ ] **Step 7: Export modules and run tests**
 
@@ -877,29 +883,30 @@ fn python_spec(script: &str) -> ProcessSpec {
         env: std::collections::BTreeMap::new(),
     }
 }
+fn agent_request(id: &str) -> WorkerRequestV1 { /* valid bounded parse request with request_id=id */ }
 
 #[tokio::test]
 async fn raw_bytes_are_capped_before_utf8_or_json_decode() {
     let s = Supervisor::new(SupervisorLimits::testing());
-    assert_eq!(s.run("flood", python_spec("import os; os.write(1,b'x'*5000)"), b"").await.unwrap_err().code, "response_too_large");
-    assert_eq!(s.run("utf8", python_spec("import os; os.write(1,b'\\xff\\n')"), b"").await.unwrap_err().code, "malformed_response");
-    assert_eq!(s.run("multi", python_spec("print('{}'); print('{}')"), b"").await.unwrap_err().code, "malformed_response");
+    assert_eq!(s.run(&agent_request("flood"), python_spec("import os; os.write(1,b'x'*5000)"), b"").await.unwrap_err().code, "response_too_large");
+    assert_eq!(s.run(&agent_request("utf8"), python_spec("import os; os.write(1,b'\\xff\\n')"), b"").await.unwrap_err().code, "malformed_response");
+    assert_eq!(s.run(&agent_request("multi"), python_spec("print('{}'); print('{}')"), b"").await.unwrap_err().code, "malformed_response");
 }
 
 #[tokio::test]
 async fn timeout_cancel_and_crash_leave_the_next_worker_healthy() {
     let s = std::sync::Arc::new(Supervisor::new(SupervisorLimits::testing()));
-    assert_eq!(s.run("timeout", python_spec("import time; time.sleep(5)"), b"").await.unwrap_err().code, "wall_timeout");
-    assert_eq!(s.run("crash", python_spec("raise SystemExit(2)"), b"").await.unwrap_err().code, "worker_failed");
+    assert_eq!(s.run(&agent_request("timeout"), python_spec("import time; time.sleep(5)"), b"").await.unwrap_err().code, "wall_timeout");
+    assert_eq!(s.run(&agent_request("crash"), python_spec("raise SystemExit(2)"), b"").await.unwrap_err().code, "worker_failed");
     let task = {
         let s = s.clone();
-        tokio::spawn(async move { s.run("cancel", python_spec("import time; time.sleep(5)"), b"").await })
+        tokio::spawn(async move { s.run(&agent_request("cancel"), python_spec("import time; time.sleep(5)"), b"").await })
     };
     tokio::time::sleep(std::time::Duration::from_millis(30)).await;
     s.cancel("cancel").await.unwrap();
     assert_eq!(task.await.unwrap().unwrap_err().code, "cancelled");
     let valid = r#"{"protocol_version":1,"request_id":"fresh","status":"ok","snapshot":null,"result":null,"stdout":"","stderr":"","error":null}"#;
-    assert_eq!(s.run("fresh", python_spec(&format!("print({valid:?})")), b"").await.unwrap().request_id, "fresh");
+    assert_eq!(s.run(&agent_request("fresh"), python_spec(&format!("print({valid:?})")), b"").await.unwrap().request_id, "fresh");
 }
 ```
 
@@ -913,7 +920,7 @@ Expected: FAIL because `process` does not exist.
 
 ```rust
 // src-tauri/src/agent_runtime/process.rs
-use crate::agent_runtime::protocol::WorkerResponseV1;
+use crate::agent_runtime::protocol::{WorkerRequestV1, WorkerResponseV1};
 use std::{collections::{BTreeMap, HashMap}, path::PathBuf, time::Duration};
 use tokio::sync::Mutex;
 
@@ -934,25 +941,26 @@ impl Supervisor {
     pub fn new(limits: SupervisorLimits) -> Self { Self { limits, active: Mutex::new(HashMap::new()) } }
 }
 pub trait ProcessSupervisor {
-    async fn run(&self, id: &str, spec: ProcessSpec, stdin: &[u8]) -> Result<WorkerResponseV1, RuntimeError>;
+    async fn run(&self, request: &WorkerRequestV1, spec: ProcessSpec, stdin: &[u8]) -> Result<WorkerResponseV1, RuntimeError>;
     async fn cancel(&self, id: &str) -> Result<(), RuntimeError>;
     async fn cancel_all(&self);
 }
 ```
 
 On qualified Unix platforms, implement `run` with `tokio::process::Command`,
-`env_clear`, piped stdio, `setsid`, immediate insertion into `active`,
-concurrent byte-capped stdout/stderr readers, and a wall timeout. Windows never
-constructs a `ProcessSpec` or enters the supervisor; capability and
-provisioning return the stable unavailable result before spawn.
-One cleanup path terminates and reaps the entire process group/tree on success,
-failure, timeout, cancellation, overflow, or direct-parent exit; pipe draining
-has a separate bounded deadline so descendants retaining inherited descriptors
-cannot hang the supervisor. Remove the active-map entry only after cleanup.
+`env_clear`, piped stdio, immediate insertion into `active`, concurrent
+byte-capped stdout/stderr readers, and a wall timeout. Windows never constructs
+a `ProcessSpec` or enters the supervisor. A process group may be used for
+lifecycle cleanup, but never counted as descendant containment: the qualified
+macOS profile must deny fork/exec and Linux must place the worker in its
+delegated cgroup before execution. Remove the active-map entry only after
+bounded cleanup.
 
 After bounded cleanup, reject cap overflow, nonzero status, non-UTF-8, anything
-except one trailing-newline JSON object, protocol/version/correlation failures,
-or any strict typed `WorkerResponseV1` deserialization/semantic error. Snapshot,
+except one trailing-newline JSON object or any strict typed
+`WorkerResponseV1` deserialization/semantic error. Call
+`response.validate(request)` before returning so request ID, framework, action,
+required payloads, and shots are correlated. Snapshot,
 simulation result, and kernel error are typed deny-unknown structures; their
 contents are display data only and are never interpreted as commands, paths,
 environment, or capabilities.
@@ -998,7 +1006,7 @@ pub async fn agent_sandbox_capability(
 Implement `AgentRuntimeCommands` for `AgentRuntimeState`: `execute` reads the
 cached report, rejects unavailable/unqualified frameworks, resolves the
 qualified platform `ProcessSpec`, serializes `WorkerRequestV1`, and delegates to
-`Supervisor::run`; `capability` provisions/verifies resources and runs platform
+`Supervisor::run` with that same request for response correlation; `capability` provisions/verifies resources and runs platform
 qualification before caching. Register state and all commands in `lib.rs`;
 export the command module. App shutdown calls `ProcessSupervisor::cancel_all`.
 
@@ -1096,7 +1104,7 @@ pub trait MacosSandbox {
 }
 ```
 
-`seatbelt_program` writes a `(deny default)` profile allowing read only for the dedicated venv, bundled agent kernel, `/System/Library`, and `/usr/lib`; write only under request temp; denies `network*`, `process-fork`, and child exec; sets cwd to request temp; and passes only `HOME=/home/agent`, dedicated `PATH`, `LANG=C.UTF-8`, `PYTHONNOUSERSITE=1`, `QDK_PYTHON_TELEMETRY=none`, and single-thread numerical-library variables. It launches `/usr/bin/sandbox-exec -f <profile> <agent-python> -I <worker>`.
+`seatbelt_program` writes a `(deny default)` profile allowing read only for the dedicated venv, bundled agent kernel, `/System/Library`, and `/usr/lib`; write only under request temp; denies `network*`, `process-fork`, and child exec; sets cwd to request temp; and passes only `HOME=/home/agent`, dedicated `PATH`, `LANG=C.UTF-8`, `PYTHONNOUSERSITE=1`, `QDK_PYTHON_TELEMETRY=none`, and single-thread numerical-library variables. It launches `/usr/bin/sandbox-exec -f <profile> <agent-python> -I <worker>`. A separate qualified provisioning profile may execute only the venv interpreter/pip against app-bundled offline wheels, with network and fork denied; if that profile and offline wheelhouse cannot be proven, `RunnerContainment::Contained` is never issued and capability remains unavailable.
 
 `qualify_macos` creates random sentinel files in the project and real home, injects fake `ANTHROPIC_API_KEY`, `IBM_QUANTUM_TOKEN`, and `AWS_SECRET_ACCESS_KEY` into the parent, then runs fresh workers containing these exact attacks:
 
@@ -1183,7 +1191,7 @@ pub trait LinuxSandboxApi: Sized {
 }
 ```
 
-`discover` requires executable `bwrap`, successful user/mount/PID/network namespace probe, writable delegated cgroup v2 subtree, and seccomp-BPF support. `process_spec` uses `--unshare-all --unshare-net --die-with-parent --new-session --clearenv`, read-only binds only system runtime libraries, agent venv, and bundled agent kernel; tmpfs `/tmp`; synthetic `/home/agent`; no project/home bind. It creates a unique cgroup with `memory.max=1073741824`, `pids.max=4`, and `cpu.max=100000 100000`, moves the child PID into `cgroup.procs`, and removes the cgroup after reaping.
+`discover` requires executable `bwrap`, successful user/mount/PID/network namespace probe, writable delegated cgroup v2 subtree, and seccomp-BPF support. `process_spec` uses `--unshare-all --unshare-net --die-with-parent --new-session --clearenv`, read-only binds only system runtime libraries, agent venv, and bundled agent kernel; tmpfs `/tmp`; synthetic `/home/agent`; no project/home bind. It creates a unique cgroup with `memory.max=1073741824`, `pids.max=4`, and `cpu.max=100000 100000`, moves the child PID into `cgroup.procs`, and removes the cgroup after reaping. Linux provisioning likewise requires a dedicated delegated cgroup plus network namespace/seccomp containment and app-bundled offline wheels before its runner may report `RunnerContainment::Contained`; otherwise capability remains unavailable without invoking pip.
 
 Compile a seccomp filter passed through `bwrap --seccomp FD` that denies socket operations, `fork`, `vfork`, `clone3`, and `clone` unless `CLONE_THREAD` is set. The worker still applies all rlimits before `Executor`. `qualify` executes fresh workers for: `open(PROJECT_SENTINEL).read()`, `open(HOME_SENTINEL).read()`, exact `os.environ` enumeration, IPv4/IPv6/Unix sockets, `subprocess.run(["/usr/bin/id"])`, `os.fork()`, `while True: pass`, `bytearray(2_000_000_000)`, unbounded `print`, 1,000 `open("/dev/null")` calls, cancellation, malformed JSON, and process clone. Failure to provision or verify any primitive returns unavailable with no frameworks.
 
@@ -1322,7 +1330,7 @@ Expected: FAIL until framework evidence and bundle mapping are implemented.
 
 Create `qualification.rs` with `FrameworkEvidence { package: &'static str, common_boundary_passed: bool, functional_probe_passed: bool }`, `FrameworkPolicy { available: bool, qualified_frameworks: Vec<String> }`, and pure `evaluate_framework_policy`. Its input enumerates every framework package actually installed in the dedicated runtime. It returns unavailable with an empty framework list if any installed package lacks common boundary evidence or if CUDA-Q is installed. Only after every installed package passes the common boundary matrix does it populate `qualified_frameworks` from packages whose functional probes passed. Thus a boundary-unqualified package cannot be hidden by omitting it from API exposure, while a boundary-qualified package may remain functionally unavailable.
 
-After OS controls qualify, run the common boundary matrix against every installed framework package, then run a Bell parse/simulation in a fresh worker for Qiskit and Cirq and a finite `MResetZ` parse/simulation for Q#. Feed all boundary and functional evidence through `evaluate_framework_policy`; never derive package confinement from the worker's lexical adapter selection. Dynamic cross-import among installed packages is acceptable because every installed package has the same boundary evidence. For Q# specifically, launch an infinite-loop operation, require Rust wall timeout to kill its process group, then launch the finite operation in a new worker and require success. Never use QDK's thread watchdog as recovery. CUDA-Q has no enum variant, must not be installed in the dedicated runtime, and cannot qualify.
+After OS controls qualify, run the common boundary matrix against every installed framework package, then run a Bell parse/simulation in a fresh worker for Qiskit and Cirq and a finite `MResetZ` parse/simulation for Q#. Feed all boundary and functional evidence through `evaluate_framework_policy`; never derive package confinement from the worker's lexical adapter selection. Dynamic cross-import among installed packages is acceptable because every installed package has the same boundary evidence. For Q# specifically, launch an infinite-loop operation, require Rust wall timeout plus the qualified platform containment primitive to terminate every descendant, then launch the finite operation in a new worker and require success. Never use QDK's thread watchdog or a process group alone as recovery. CUDA-Q has no enum variant, must not be installed in the dedicated runtime, and cannot qualify.
 
 Map only these worker resources in `tauri.conf.json`: worker, protocol, limits, executor, adapters, models, and agent requirements under `agent-runtime/kernel`. The normal kernel may remain separately packaged for IDE use but is never mounted/read-allowed in the worker sandbox.
 

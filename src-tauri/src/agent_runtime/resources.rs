@@ -6,22 +6,8 @@ use std::ffi::OsString;
 use std::fs;
 #[cfg(not(windows))]
 use std::fs::OpenOptions;
-#[cfg(unix)]
-use std::io::Read;
 use std::path::{Path, PathBuf};
-#[cfg(unix)]
-use std::process::{Command, Stdio};
-#[cfg(unix)]
-use std::sync::atomic::{AtomicBool, Ordering};
-#[cfg(unix)]
-use std::sync::mpsc;
-#[cfg(unix)]
-use std::sync::Arc;
-#[cfg(unix)]
-use std::thread;
 use std::time::Duration;
-#[cfg(unix)]
-use std::time::Instant;
 
 const APPROVED_REQUIREMENTS: &str =
     "numpy>=1.26,<3\nqiskit>=1.2,<2\nqiskit-aer>=0.15,<1\ncirq-core>=1.4,<2\nqdk>=1.29,<2\n";
@@ -113,7 +99,14 @@ pub struct CommandOutput {
     pub stderr: Vec<u8>,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum RunnerContainment {
+    Unavailable,
+    Contained,
+}
+
 pub trait CommandRunner {
+    fn containment(&self) -> RunnerContainment;
     fn run(&self, spec: &CommandSpec) -> Result<CommandOutput, String>;
 }
 
@@ -199,13 +192,17 @@ fn make_tree_writable(path: &Path) -> Result<(), String> {
 pub struct SystemCommandRunner;
 
 impl CommandRunner for SystemCommandRunner {
+    fn containment(&self) -> RunnerContainment {
+        RunnerContainment::Unavailable
+    }
+
     fn run(&self, spec: &CommandSpec) -> Result<CommandOutput, String> {
-        Self::run_with_limits(spec, Duration::from_secs(600), 1024 * 1024)
+        let _ = spec;
+        Err(crate::agent_runtime::unsupported::UNAVAILABLE_MESSAGE.into())
     }
 }
 
 impl SystemCommandRunner {
-    #[cfg(not(unix))]
     pub fn run_with_limits(
         spec: &CommandSpec,
         timeout: Duration,
@@ -213,172 +210,6 @@ impl SystemCommandRunner {
     ) -> Result<CommandOutput, String> {
         let _ = (spec, timeout, output_limit);
         Err(crate::agent_runtime::unsupported::UNAVAILABLE_MESSAGE.into())
-    }
-
-    #[cfg(unix)]
-    pub fn run_with_limits(
-        spec: &CommandSpec,
-        timeout: Duration,
-        output_limit: usize,
-    ) -> Result<CommandOutput, String> {
-        let mut command = Command::new(&spec.program);
-        command.args(&spec.args);
-        if spec.clear_environment {
-            command.env_clear();
-        }
-        command.envs(spec.environment.iter().cloned());
-        command.stdout(Stdio::piped()).stderr(Stdio::piped());
-        configure_process_group(&mut command);
-        let mut child = command.spawn().map_err(|error| error.to_string())?;
-        let mut process_tree = ProcessTree::attach(&mut child)?;
-        let stdout = child
-            .stdout
-            .take()
-            .ok_or("Failed to capture command stdout")?;
-        let stderr = child
-            .stderr
-            .take()
-            .ok_or("Failed to capture command stderr")?;
-        let overflowed = Arc::new(AtomicBool::new(false));
-        let stdout_reader = capture_bounded(stdout, output_limit, Arc::clone(&overflowed));
-        let stderr_reader = capture_bounded(stderr, output_limit, Arc::clone(&overflowed));
-        let started = Instant::now();
-        let (status, failure) = loop {
-            if overflowed.load(Ordering::Acquire) {
-                break (
-                    None,
-                    Some("Provisioning command output exceeded the safety limit".to_owned()),
-                );
-            }
-            if started.elapsed() >= timeout {
-                break (None, Some("Provisioning command timed out".to_owned()));
-            }
-            match child.try_wait() {
-                Ok(Some(status)) => break (Some(status), None),
-                Ok(None) => {}
-                Err(error) => {
-                    break (
-                        None,
-                        Some(format!("Failed to query provisioning command: {error}")),
-                    )
-                }
-            }
-            thread::sleep(Duration::from_millis(10));
-        };
-
-        let tree_result = process_tree.terminate_and_reap(&mut child);
-        let streams_result = collect_reader_output(stdout_reader, stderr_reader);
-        if let Err(tree_error) = tree_result {
-            return Err(match streams_result {
-                Ok(_) => tree_error,
-                Err(stream_error) => format!("{tree_error}; {stream_error}"),
-            });
-        }
-        let (stdout, stderr) = streams_result?;
-        if let Some(message) = failure {
-            return Err(message);
-        }
-        if overflowed.load(Ordering::Acquire) {
-            return Err("Provisioning command output exceeded the safety limit".into());
-        }
-        let status = status.ok_or("Provisioning command ended without an exit status")?;
-        Ok(CommandOutput {
-            success: status.success(),
-            stdout,
-            stderr,
-        })
-    }
-}
-
-#[cfg(unix)]
-fn capture_bounded(
-    mut reader: impl Read + Send + 'static,
-    limit: usize,
-    overflowed: Arc<AtomicBool>,
-) -> mpsc::Receiver<Result<Vec<u8>, String>> {
-    let (sender, receiver) = mpsc::sync_channel(1);
-    thread::spawn(move || {
-        let mut captured = Vec::new();
-        let mut buffer = [0_u8; 8192];
-        loop {
-            let count = match reader.read(&mut buffer) {
-                Ok(count) => count,
-                Err(error) => {
-                    let _ = sender.send(Err(error.to_string()));
-                    return;
-                }
-            };
-            if count == 0 {
-                let _ = sender.send(Ok(captured));
-                return;
-            }
-            let remaining = limit.saturating_sub(captured.len());
-            captured.extend_from_slice(&buffer[..count.min(remaining)]);
-            if count > remaining {
-                overflowed.store(true, Ordering::Release);
-            }
-        }
-    });
-    receiver
-}
-
-#[cfg(unix)]
-fn collect_reader_output(
-    stdout: mpsc::Receiver<Result<Vec<u8>, String>>,
-    stderr: mpsc::Receiver<Result<Vec<u8>, String>>,
-) -> Result<(Vec<u8>, Vec<u8>), String> {
-    const READER_COMPLETION_TIMEOUT: Duration = Duration::from_secs(2);
-    let deadline = Instant::now() + READER_COMPLETION_TIMEOUT;
-    let receive = |reader: mpsc::Receiver<Result<Vec<u8>, String>>,
-                   description: &str|
-     -> Result<Vec<u8>, String> {
-        let remaining = deadline.saturating_duration_since(Instant::now());
-        reader
-            .recv_timeout(remaining)
-            .map_err(|_| format!("{description} did not close after process-tree termination"))?
-    };
-    let stdout = receive(stdout, "Command stdout")?;
-    let stderr = receive(stderr, "Command stderr")?;
-    Ok((stdout, stderr))
-}
-
-#[cfg(unix)]
-fn configure_process_group(command: &mut Command) {
-    use std::os::unix::process::CommandExt;
-    unsafe {
-        command.pre_exec(|| {
-            if libc::setsid() == -1 {
-                return Err(std::io::Error::last_os_error());
-            }
-            Ok(())
-        });
-    }
-}
-
-#[cfg(unix)]
-struct ProcessTree {
-    process_group: i32,
-}
-
-#[cfg(unix)]
-impl ProcessTree {
-    fn attach(child: &mut std::process::Child) -> Result<Self, String> {
-        Ok(Self {
-            process_group: child.id() as i32,
-        })
-    }
-
-    fn terminate_and_reap(&mut self, child: &mut std::process::Child) -> Result<(), String> {
-        let kill_result = unsafe { libc::kill(-self.process_group, libc::SIGKILL) };
-        let kill_error = std::io::Error::last_os_error();
-        let wait_result = child.wait().map_err(|error| error.to_string());
-        if kill_result == -1 && kill_error.raw_os_error() != Some(libc::ESRCH) {
-            return Err(format!(
-                "Failed to terminate provisioning process group: {kill_error}"
-            ));
-        }
-        wait_result?;
-        Ok(())
     }
 }
 
@@ -439,6 +270,9 @@ impl AgentEnvironment {
         runner: &dyn CommandRunner,
         filesystem: &dyn EnvironmentFilesystem,
     ) -> Result<Self, String> {
+        if runner.containment() != RunnerContainment::Contained {
+            return Err(crate::agent_runtime::unsupported::UNAVAILABLE_MESSAGE.into());
+        }
         let parent = app_data.join("agent-runtime");
         let root = parent.join("v1");
         let staging = parent.join("v1.staging");
@@ -879,9 +713,12 @@ fn safe_stderr_diagnostic(stderr: &[u8]) -> String {
             "api_key",
         ]
         .iter()
-        .any(|word| lowercase.contains(word))
-            || (lowercase.contains("://") && lowercase.contains('@'));
-        let safe_line = if sensitive { "[redacted]" } else { line };
+        .any(|word| lowercase.contains(word));
+        let safe_line = if sensitive {
+            "[redacted]".to_owned()
+        } else {
+            escape_controls(&redact_urls(line))
+        };
         if !result.is_empty() {
             result.push('\n');
         }
@@ -899,6 +736,42 @@ fn safe_stderr_diagnostic(stderr: &[u8]) -> String {
     if result.len() == DIAGNOSTIC_LIMIT && stderr.len() > DIAGNOSTIC_LIMIT {
         result.truncate(DIAGNOSTIC_LIMIT.saturating_sub(3));
         result.push_str("...");
+    }
+    result
+}
+
+#[cfg(not(windows))]
+fn redact_urls(line: &str) -> String {
+    let mut result = String::new();
+    let mut remaining = line;
+    loop {
+        let http = remaining.find("http://");
+        let https = remaining.find("https://");
+        let Some(start) = (match (http, https) {
+            (Some(left), Some(right)) => Some(left.min(right)),
+            (Some(start), None) | (None, Some(start)) => Some(start),
+            (None, None) => None,
+        }) else {
+            result.push_str(remaining);
+            return result;
+        };
+        result.push_str(&remaining[..start]);
+        result.push_str("[redacted-url]");
+        let url = &remaining[start..];
+        let end = url.find(char::is_whitespace).unwrap_or(url.len());
+        remaining = &url[end..];
+    }
+}
+
+#[cfg(not(windows))]
+fn escape_controls(text: &str) -> String {
+    let mut result = String::new();
+    for character in text.chars() {
+        if character.is_control() {
+            result.push_str(&format!("\\u{{{:x}}}", character as u32));
+        } else {
+            result.push(character);
+        }
     }
     result
 }

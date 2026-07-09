@@ -11,7 +11,7 @@ use app_lib::agent_runtime::protocol::{
 use app_lib::agent_runtime::resources::SystemCommandRunner;
 use app_lib::agent_runtime::resources::{
     validate_requirements, AgentEnvironment, CommandOutput, CommandRunner, CommandSpec,
-    EnvironmentFilesystem, ResourcePaths,
+    EnvironmentFilesystem, ResourcePaths, RunnerContainment,
 };
 use serde_json::{json, Value};
 use sha2::Digest;
@@ -143,6 +143,23 @@ fn response(changes: &[(&str, Value)]) -> Value {
     value
 }
 
+fn worker_request(action: Action, framework: Framework, shots: Option<u32>) -> WorkerRequestV1 {
+    WorkerRequestV1 {
+        protocol_version: 1,
+        request_id: "request_1".into(),
+        action,
+        framework,
+        language: if framework == Framework::Qsharp {
+            "qsharp"
+        } else {
+            "python"
+        }
+        .into(),
+        code: String::new(),
+        shots,
+    }
+}
+
 fn valid_snapshot() -> Value {
     json!({
         "framework": "cirq",
@@ -172,7 +189,9 @@ fn worker_response_is_strict_and_validates_identity() {
     let raw = response(&[]);
     let parsed: WorkerResponseV1 = serde_json::from_value(raw).unwrap();
     assert_eq!(parsed.status, ResponseStatus::Ok);
-    parsed.validate("request_1").unwrap();
+    parsed
+        .validate(&worker_request(Action::Parse, Framework::Cirq, None))
+        .unwrap();
 
     let mut unknown = response(&[]);
     unknown["extra"] = json!(true);
@@ -194,7 +213,9 @@ fn worker_response_is_strict_and_validates_identity() {
 
     let parsed: WorkerResponseV1 =
         serde_json::from_value(response(&[("request_id", json!("other"))])).unwrap();
-    assert!(parsed.validate("request_1").is_err());
+    assert!(parsed
+        .validate(&worker_request(Action::Parse, Framework::Cirq, None))
+        .is_err());
 }
 
 #[test]
@@ -300,6 +321,16 @@ fn worker_response_rejects_payload_shape_semantics_and_status_contradictions() {
         vec![("result", {
             let mut value = valid_result();
             value["probabilities"]["00"] = json!(-0.1);
+            value
+        })],
+        vec![("result", {
+            let mut value = valid_result();
+            value["probabilities"] = json!({"00": 0.7, "11": 0.7});
+            value
+        })],
+        vec![("result", {
+            let mut value = valid_result();
+            value["measurements"] = json!({"00": 4, "11": 4});
             value
         })],
     ] {
@@ -441,6 +472,105 @@ fn worker_response_bounds_binary_result_keys() {
     }
 }
 
+#[test]
+fn worker_response_correlates_action_framework_and_shots() {
+    let request = worker_request(Action::Simulate, Framework::Qiskit, Some(5));
+    let mut result = valid_result();
+    result["measurements"] = json!({"00 11": 5});
+    let mut snapshot = valid_snapshot();
+    snapshot["framework"] = json!("qiskit");
+    let parsed: WorkerResponseV1 = serde_json::from_value(response(&[
+        ("snapshot", snapshot.clone()),
+        ("result", result.clone()),
+    ]))
+    .unwrap();
+    parsed.validate(&request).unwrap();
+
+    let mismatches = [
+        worker_request(Action::Simulate, Framework::Cirq, Some(5)),
+        worker_request(Action::Simulate, Framework::Qiskit, Some(4)),
+    ];
+    for mismatch in mismatches {
+        assert!(parsed.validate(&mismatch).is_err());
+    }
+
+    let parse = worker_request(Action::Parse, Framework::Qiskit, None);
+    assert!(parsed.validate(&parse).is_err());
+
+    let missing_payload: WorkerResponseV1 = serde_json::from_value(response(&[])).unwrap();
+    assert!(missing_payload.validate(&request).is_err());
+}
+
+#[test]
+fn measurement_keys_are_framework_aware_and_register_safe() {
+    for valid in ["00 11", "00  \t 11"] {
+        let mut result = valid_result();
+        let mut measurements = serde_json::Map::new();
+        measurements.insert(valid.into(), json!(5));
+        result["measurements"] = Value::Object(measurements);
+        let mut snapshot = valid_snapshot();
+        snapshot["framework"] = json!("qiskit");
+        let parsed: WorkerResponseV1 =
+            serde_json::from_value(response(&[("snapshot", snapshot), ("result", result)]))
+                .unwrap();
+        parsed
+            .validate(&worker_request(
+                Action::Simulate,
+                Framework::Qiskit,
+                Some(5),
+            ))
+            .unwrap();
+    }
+
+    for malformed in [" 00", "00 ", "00 x1", "00  "] {
+        let mut result = valid_result();
+        let mut measurements = serde_json::Map::new();
+        measurements.insert(malformed.into(), json!(5));
+        result["measurements"] = Value::Object(measurements);
+        assert!(
+            serde_json::from_value::<WorkerResponseV1>(response(&[("result", result)])).is_err()
+        );
+    }
+
+    let mut result = valid_result();
+    result["measurements"] = json!({"00 11": 5});
+    let parsed: WorkerResponseV1 = serde_json::from_value(response(&[
+        ("snapshot", valid_snapshot()),
+        ("result", result),
+    ]))
+    .unwrap();
+    assert!(parsed
+        .validate(&worker_request(Action::Simulate, Framework::Cirq, Some(5),))
+        .is_err());
+}
+
+#[test]
+fn parse_snapshot_supports_large_bounded_circuits_without_simulation_dimension() {
+    let snapshot = json!({
+        "framework": "qsharp",
+        "qubit_count": 4096,
+        "classical_bit_count": 4096,
+        "depth": 0,
+        "gates": []
+    });
+    let parsed: WorkerResponseV1 =
+        serde_json::from_value(response(&[("snapshot", snapshot)])).unwrap();
+    parsed
+        .validate(&worker_request(Action::Parse, Framework::Qsharp, None))
+        .unwrap();
+
+    let oversized = json!({
+        "framework": "qsharp",
+        "qubit_count": 4097,
+        "classical_bit_count": 0,
+        "depth": 0,
+        "gates": []
+    });
+    assert!(
+        serde_json::from_value::<WorkerResponseV1>(response(&[("snapshot", oversized)])).is_err()
+    );
+}
+
 #[cfg(windows)]
 #[test]
 fn unsupported_windows_provisioning_never_attempts_to_spawn() {
@@ -448,6 +578,10 @@ fn unsupported_windows_provisioning_never_attempts_to_spawn() {
 
     struct PanicRunner;
     impl CommandRunner for PanicRunner {
+        fn containment(&self) -> RunnerContainment {
+            RunnerContainment::Contained
+        }
+
         fn run(&self, _spec: &CommandSpec) -> Result<CommandOutput, String> {
             panic!("unsupported Windows provisioning attempted to spawn")
         }
@@ -578,6 +712,10 @@ struct FakeRunner {
 }
 
 impl CommandRunner for FakeRunner {
+    fn containment(&self) -> RunnerContainment {
+        RunnerContainment::Contained
+    }
+
     fn run(&self, spec: &CommandSpec) -> Result<CommandOutput, String> {
         self.commands.lock().unwrap().push(spec.clone());
         let args: Vec<String> = spec
@@ -647,7 +785,7 @@ fn failed_commands_report_capped_redacted_stderr() {
         fail_install: true,
         failure_stderr: Some(
             format!(
-                "useful diagnostic\nAuthorization: Bearer secret-token\n{}",
+                "useful\u{0}\u{1b} diagnostic https://user:pass@example.test/path?session=abc\nAuthorization: Bearer secret-token\n{}",
                 "x".repeat(5000)
             )
             .into_bytes(),
@@ -661,9 +799,17 @@ fn failed_commands_report_capped_redacted_stderr() {
         &runner,
     )
     .unwrap_err();
-    assert!(error.contains("useful diagnostic"));
+    assert!(error.contains("useful"));
+    assert!(error.contains("diagnostic"));
     assert!(error.contains("[redacted]"));
+    assert!(error.contains("[redacted-url]"));
     assert!(!error.contains("secret-token"));
+    assert!(!error.contains("example.test"));
+    assert!(!error.contains("session=abc"));
+    assert!(error.contains("\\u{0}\\u{1b}"));
+    assert!(error
+        .chars()
+        .all(|character| character == '\n' || !character.is_control()));
     assert!(error.len() < 2_200);
 }
 
@@ -975,6 +1121,10 @@ struct MutatingRequirementsRunner {
 }
 
 impl CommandRunner for MutatingRequirementsRunner {
+    fn containment(&self) -> RunnerContainment {
+        RunnerContainment::Contained
+    }
+
     fn run(&self, spec: &CommandSpec) -> Result<CommandOutput, String> {
         if spec.args.iter().any(|arg| arg == "venv") {
             fs::write(&self.source, "keyring>=25\n").unwrap();
@@ -1026,105 +1176,38 @@ fn provisioning_installs_immutable_bytes_read_before_resource_mutation() {
     );
 }
 
-#[cfg(unix)]
 #[test]
-fn system_runner_bounds_timeout_output_and_recovers_after_termination() {
-    fn shell(script: &str) -> CommandSpec {
-        CommandSpec {
-            program: PathBuf::from("/bin/sh"),
-            args: vec![OsStr::new("-c").to_owned(), OsStr::new(script).to_owned()],
-            environment: vec![],
-            clear_environment: false,
-        }
-    }
-
-    let temp = TempDir::new().unwrap();
-    let descendant_marker = temp.path().join("descendant-survived");
-    let timeout_script = format!(
-        "(sleep 0.3; touch '{}') & sleep 5",
-        descendant_marker.display()
-    );
-    let timeout = SystemCommandRunner::run_with_limits(
-        &shell(&timeout_script),
-        Duration::from_millis(75),
-        4096,
-    )
-    .unwrap_err();
-    assert!(timeout.contains("timed out"));
-    thread::sleep(Duration::from_millis(400));
-    assert!(!descendant_marker.exists());
-
-    let overflow = SystemCommandRunner::run_with_limits(
-        &shell("while :; do printf 1234567890; done"),
-        Duration::from_secs(2),
-        256,
-    )
-    .unwrap_err();
-    assert!(overflow.contains("safety limit"));
-
-    let recovered = SystemCommandRunner::run_with_limits(
-        &shell("printf recovered"),
-        Duration::from_secs(1),
-        256,
-    )
-    .unwrap();
-    assert_eq!(recovered.stdout, b"recovered");
-}
-
-#[cfg(unix)]
-#[test]
-fn system_runner_terminates_descendants_holding_pipes_after_parent_exit() {
-    use std::sync::mpsc;
+fn production_runner_and_provisioning_fail_before_spawn_or_mutation() {
+    use app_lib::agent_runtime::unsupported::UNAVAILABLE_MESSAGE;
 
     let temporary = TempDir::new().unwrap();
-    let descendant_marker = temporary.path().join("lingering-descendant");
+    let marker = temporary.path().join("must-not-exist");
     let spec = CommandSpec {
-        program: PathBuf::from("/bin/sh"),
-        args: vec![
-            OsStr::new("-c").to_owned(),
-            OsStr::new(&format!(
-                "(sleep 0.3; touch '{}') & printf parent-complete",
-                descendant_marker.display()
-            ))
-            .to_owned(),
-        ],
-        environment: vec![],
-        clear_environment: false,
-    };
-    let (sender, receiver) = mpsc::channel();
-    thread::spawn(move || {
-        sender
-            .send(SystemCommandRunner::run_with_limits(
-                &spec,
-                Duration::from_secs(2),
-                256,
-            ))
-            .unwrap();
-    });
-
-    let output = receiver
-        .recv_timeout(Duration::from_secs(1))
-        .expect("runner blocked on a descendant-owned pipe")
-        .unwrap();
-    assert_eq!(output.stdout, b"parent-complete");
-    thread::sleep(Duration::from_millis(400));
-    assert!(!descendant_marker.exists());
-
-    let recovery = CommandSpec {
-        program: PathBuf::from("/bin/sh"),
-        args: vec![
-            OsStr::new("-c").to_owned(),
-            OsStr::new("printf next").to_owned(),
-        ],
+        program: PathBuf::from("definitely-not-a-contained-runner"),
+        args: vec![marker.as_os_str().to_owned()],
         environment: vec![],
         clear_environment: false,
     };
     assert_eq!(
-        SystemCommandRunner::run_with_limits(&recovery, Duration::from_secs(1), 256)
-            .unwrap()
-            .stdout,
-        b"next"
+        SystemCommandRunner::run_with_limits(&spec, Duration::from_secs(1), 256).unwrap_err(),
+        UNAVAILABLE_MESSAGE
     );
+    assert!(!marker.exists());
+
+    let repository = TempDir::new().unwrap();
+    write_resource_tree(repository.path());
+    let resources = ResourcePaths::development(repository.path()).unwrap();
+    let app_data = TempDir::new().unwrap();
+    assert_eq!(
+        AgentEnvironment::provision(
+            app_data.path(),
+            Path::new("/unqualified/python"),
+            &resources,
+        )
+        .unwrap_err(),
+        UNAVAILABLE_MESSAGE
+    );
+    assert!(!app_data.path().join("agent-runtime").exists());
 }
 
 #[test]

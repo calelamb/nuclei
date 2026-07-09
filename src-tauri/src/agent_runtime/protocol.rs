@@ -6,6 +6,9 @@ pub const PROTOCOL_VERSION: u8 = 1;
 pub const MAX_CODE_BYTES: usize = 262_144;
 pub const MAX_SHOTS: u32 = 10_000;
 const MAX_RESULT_KEY_BITS: usize = 4_096;
+const MAX_SNAPSHOT_QUBITS: u32 = 4_096;
+const MAX_SNAPSHOT_GATES: usize = 4_096;
+const PROBABILITY_SUM_TOLERANCE: f64 = 0.000_001;
 
 #[derive(Clone, Copy, Debug, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
@@ -255,13 +258,51 @@ pub struct WorkerErrorV1 {
 }
 
 impl WorkerResponseV1 {
-    pub fn validate(&self, expected_request_id: &str) -> Result<(), String> {
+    pub fn validate(&self, request: &WorkerRequestV1) -> Result<(), String> {
+        self.validate_payloads()?;
+        if request.protocol_version != PROTOCOL_VERSION {
+            return Err("Unsupported request protocol version".into());
+        }
+        validate_request_id(&request.request_id)?;
         if self.protocol_version != PROTOCOL_VERSION {
             return Err("Unsupported worker protocol version".into());
         }
         validate_request_id(&self.request_id)?;
-        if self.request_id != expected_request_id {
+        if self.request_id != request.request_id {
             return Err("Worker response request ID mismatch".into());
+        }
+        if self
+            .snapshot
+            .as_ref()
+            .is_some_and(|snapshot| snapshot.framework != request.framework)
+        {
+            return Err("Worker response framework mismatch".into());
+        }
+        if request.action == Action::Parse && self.result.is_some() {
+            return Err("Parse response contained a simulation result".into());
+        }
+        if let Some(result) = &self.result {
+            if Some(result.shot_count) != request.shots {
+                return Err("Worker response shot count mismatch".into());
+            }
+        }
+        if self.status == ResponseStatus::Ok && request.action == Action::Simulate {
+            if self.snapshot.is_none() || self.result.is_none() {
+                return Err("Successful simulation omitted snapshot or result".into());
+            }
+        }
+        self.validate_framework_measurements(request.framework)?;
+        Ok(())
+    }
+
+    fn validate_framework_measurements(&self, framework: Framework) -> Result<(), String> {
+        let Some(result) = &self.result else {
+            return Ok(());
+        };
+        if framework != Framework::Qiskit
+            && result.measurements.keys().any(|key| !is_binary_key(key))
+        {
+            return Err("Worker measurement key is invalid for its framework".into());
         }
         Ok(())
     }
@@ -278,10 +319,10 @@ impl WorkerResponseV1 {
         }
 
         if let Some(snapshot) = &self.snapshot {
-            if snapshot.qubit_count > 63
-                || snapshot.classical_bit_count > 1_000_000
-                || snapshot.depth > 1_000_000
-                || snapshot.gates.len() > 1_000_000
+            if snapshot.qubit_count > MAX_SNAPSHOT_QUBITS
+                || snapshot.classical_bit_count > MAX_SNAPSHOT_QUBITS
+                || snapshot.depth > MAX_SNAPSHOT_GATES as u32
+                || snapshot.gates.len() > MAX_SNAPSHOT_GATES
             {
                 return Err("Worker snapshot exceeds supported bounds".into());
             }
@@ -331,24 +372,38 @@ impl WorkerResponseV1 {
                         || !key.bytes().all(|byte| matches!(byte, b'0' | b'1'))
                         || !value.is_finite()
                         || value < 0.0
+                        || value > 1.0
                 })
             {
                 return Err("Worker simulation result contains invalid numeric data".into());
             }
+            let probability_total: f64 = result.probabilities.values().sum();
+            if !result.probabilities.is_empty()
+                && (probability_total - 1.0).abs() > PROBABILITY_SUM_TOLERANCE
+            {
+                return Err("Worker probabilities do not sum to one".into());
+            }
             if result.measurements.iter().any(|(key, &count)| {
-                key.is_empty()
-                    || key.len() > MAX_RESULT_KEY_BITS
-                    || !key.bytes().all(|byte| matches!(byte, b'0' | b'1'))
-                    || count > u64::from(result.shot_count)
+                !is_binary_register_key(key) || count > u64::from(result.shot_count)
             }) {
                 return Err("Worker measurements contain invalid keys or counts".into());
             }
+            let measurement_total = result
+                .measurements
+                .values()
+                .try_fold(0_u64, |total, count| total.checked_add(*count))
+                .ok_or("Worker measurement count overflow")?;
+            if measurement_total > u64::from(result.shot_count) {
+                return Err("Worker measurement total exceeds shot_count".into());
+            }
             if let Some(snapshot) = &self.snapshot {
-                let expected_state_len = 1_usize.checked_shl(snapshot.qubit_count);
-                if !result.state_vector.is_empty()
-                    && Some(result.state_vector.len()) != expected_state_len
-                {
-                    return Err("Worker state vector size does not match qubit_count".into());
+                if !result.state_vector.is_empty() {
+                    let expected_state_len = 1_usize
+                        .checked_shl(snapshot.qubit_count)
+                        .ok_or("Worker state vector qubit count exceeds platform dimension")?;
+                    if result.state_vector.len() != expected_state_len {
+                        return Err("Worker state vector size does not match qubit_count".into());
+                    }
                 }
                 if !result.bloch_coords.is_empty()
                     && result.bloch_coords.len() != snapshot.qubit_count as usize
@@ -369,6 +424,34 @@ impl WorkerResponseV1 {
         }
         Ok(())
     }
+}
+
+fn is_binary_key(key: &str) -> bool {
+    !key.is_empty()
+        && key.len() <= MAX_RESULT_KEY_BITS
+        && key.bytes().all(|byte| matches!(byte, b'0' | b'1'))
+}
+
+fn is_binary_register_key(key: &str) -> bool {
+    if key.is_empty()
+        || key.len() > MAX_RESULT_KEY_BITS
+        || key.starts_with(char::is_whitespace)
+        || key.ends_with(char::is_whitespace)
+    {
+        return false;
+    }
+    let mut saw_separator = false;
+    for character in key.chars() {
+        if character.is_whitespace() {
+            saw_separator = true;
+        } else if !matches!(character, '0' | '1') {
+            return false;
+        }
+    }
+    if !saw_separator {
+        return is_binary_key(key);
+    }
+    key.split_whitespace().all(is_binary_key)
 }
 
 fn deserialize_protocol_version<'de, D>(deserializer: D) -> Result<u8, D::Error>
