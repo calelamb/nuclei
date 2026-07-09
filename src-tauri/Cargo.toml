@@ -33,6 +33,7 @@ tokio = { version = "1.52.3", features = ["process", "io-util", "time", "macros"
 uuid = { version = "1.20.0", features = ["v4"] }
 sha2 = "0.10.9"
 hex = "0.4.3"
+fs2 = "0.4.3"
 
 [target."cfg(unix)".dependencies]
 libc = "0.2.186"

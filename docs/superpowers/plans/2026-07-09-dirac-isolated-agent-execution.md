@@ -569,6 +569,15 @@ git commit -m "feat: add disposable bounded agent worker"
 
 ### Task 3: Define Rust contracts and dedicated resources
 
+Task 3's implemented contract additionally requires strict typed worker response
+payloads, semantic response validation, an OS-visible per-app-data provisioning
+lock, fail-closed stale staging/backup cleanup, and an immutable app-owned copy
+of the exact requirements bytes supplied to pip. Provisioning commands run in a
+dedicated process group with bounded time and output; command failures expose
+only capped, redacted stderr diagnostics. `EnvironmentFilesystem` includes a
+`set_readonly` operation, and `SystemCommandRunner::run_with_limits` exists for
+deterministic containment tests.
+
 **Files:**
 - Create: `kernel/agent-requirements.txt`
 - Create: `src-tauri/src/agent_runtime/protocol.rs`
@@ -640,11 +649,11 @@ Expected: FAIL because the runtime modules and requirements file do not exist.
 
 ```text
 # kernel/agent-requirements.txt
-numpy>=1.26,<3.0
-qiskit>=1.2,<2.0
-qiskit-aer>=0.15,<1.0
-cirq-core>=1.4,<2.0
-qdk>=1.29,<2.0
+numpy>=1.26,<3
+qiskit>=1.2,<2
+qiskit-aer>=0.15,<1
+cirq-core>=1.4,<2
+qdk>=1.29,<2
 ```
 
 - [ ] **Step 5: Implement the public Rust protocol**

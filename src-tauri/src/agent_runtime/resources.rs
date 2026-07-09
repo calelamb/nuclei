@@ -1,11 +1,18 @@
+use fs2::FileExt;
 use sha2::{Digest, Sha256};
-use std::collections::BTreeSet;
 use std::ffi::OsString;
 use std::fs;
+use std::fs::OpenOptions;
+use std::io::Read;
 use std::path::{Path, PathBuf};
-use std::process::Command;
+use std::process::{Command, Stdio};
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
+use std::thread;
+use std::time::{Duration, Instant};
 
-const ALLOWED_REQUIREMENTS: [&str; 5] = ["cirq-core", "numpy", "qdk", "qiskit", "qiskit-aer"];
+const APPROVED_REQUIREMENTS: &str =
+    "numpy>=1.26,<3\nqiskit>=1.2,<2\nqiskit-aer>=0.15,<1\ncirq-core>=1.4,<2\nqdk>=1.29,<2\n";
 const EXPECTED_IMPORTS: [&str; 5] = ["numpy", "qiskit", "qiskit_aer", "cirq", "qdk"];
 const DENIED_IMPORTS: [&str; 7] = [
     "keyring",
@@ -69,68 +76,12 @@ fn canonical_file(path: &Path, description: &str) -> Result<PathBuf, String> {
 }
 
 pub fn validate_requirements(text: &str) -> Result<(), String> {
-    let allowed: BTreeSet<&str> = ALLOWED_REQUIREMENTS.into_iter().collect();
-    let mut found = BTreeSet::new();
-
-    for (index, raw_line) in text.lines().enumerate() {
-        let line = raw_line
-            .split_once('#')
-            .map_or(raw_line, |(value, _)| value)
-            .trim();
-        if line.is_empty() {
-            continue;
-        }
-
-        let name_end = line
-            .find(|character: char| {
-                !(character.is_ascii_alphanumeric()
-                    || character == '-'
-                    || character == '_'
-                    || character == '.')
-            })
-            .unwrap_or(line.len());
-        if name_end == 0 {
-            return Err(format!("Invalid agent requirement on line {}", index + 1));
-        }
-        let remainder = line[name_end..].trim_start();
-        if remainder.starts_with('[') || remainder.starts_with('@') || remainder.contains(';') {
-            return Err(format!(
-                "Agent requirement extras, URLs, and markers are denied on line {}",
-                index + 1
-            ));
-        }
-
-        let normalized = normalize_package_name(&line[..name_end]);
-        if !allowed.contains(normalized.as_str()) {
-            return Err(format!("Denied agent package: {normalized}"));
-        }
-        if !found.insert(normalized) {
-            return Err(format!("Duplicate agent requirement on line {}", index + 1));
-        }
-    }
-
-    let expected: BTreeSet<String> = allowed.into_iter().map(str::to_owned).collect();
-    if found != expected {
-        return Err("Agent requirements must contain the complete package allowlist".into());
+    if text != APPROVED_REQUIREMENTS {
+        return Err(
+            "Agent requirements must exactly match the approved package constraints".into(),
+        );
     }
     Ok(())
-}
-
-fn normalize_package_name(name: &str) -> String {
-    let mut normalized = String::with_capacity(name.len());
-    let mut separator = false;
-    for character in name.chars() {
-        if matches!(character, '-' | '_' | '.') {
-            if !separator {
-                normalized.push('-');
-                separator = true;
-            }
-        } else {
-            normalized.push(character.to_ascii_lowercase());
-            separator = false;
-        }
-    }
-    normalized
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -157,6 +108,7 @@ pub trait EnvironmentFilesystem {
     fn read_to_string(&self, path: &Path) -> Result<String, String>;
     fn create_dir_all(&self, path: &Path) -> Result<(), String>;
     fn write(&self, path: &Path, contents: &[u8]) -> Result<(), String>;
+    fn set_readonly(&self, path: &Path) -> Result<(), String>;
     fn remove_dir_all(&self, path: &Path) -> Result<(), String>;
     fn rename(&self, from: &Path, to: &Path) -> Result<(), String>;
     fn canonicalize(&self, path: &Path) -> Result<PathBuf, String>;
@@ -183,7 +135,17 @@ impl EnvironmentFilesystem for SystemEnvironmentFilesystem {
         fs::write(path, contents).map_err(|error| error.to_string())
     }
 
+    fn set_readonly(&self, path: &Path) -> Result<(), String> {
+        let mut permissions = fs::metadata(path)
+            .map_err(|error| error.to_string())?
+            .permissions();
+        permissions.set_readonly(true);
+        fs::set_permissions(path, permissions).map_err(|error| error.to_string())
+    }
+
     fn remove_dir_all(&self, path: &Path) -> Result<(), String> {
+        #[cfg(windows)]
+        make_tree_writable(path)?;
         fs::remove_dir_all(path).map_err(|error| error.to_string())
     }
 
@@ -200,24 +162,162 @@ impl EnvironmentFilesystem for SystemEnvironmentFilesystem {
     }
 }
 
+#[cfg(windows)]
+fn make_tree_writable(path: &Path) -> Result<(), String> {
+    let metadata = fs::symlink_metadata(path).map_err(|error| error.to_string())?;
+    if metadata.file_type().is_symlink() {
+        return Ok(());
+    }
+    if metadata.is_dir() {
+        for entry in fs::read_dir(path).map_err(|error| error.to_string())? {
+            make_tree_writable(&entry.map_err(|error| error.to_string())?.path())?;
+        }
+    }
+    let mut permissions = metadata.permissions();
+    if permissions.readonly() {
+        permissions.set_readonly(false);
+        fs::set_permissions(path, permissions).map_err(|error| error.to_string())?;
+    }
+    Ok(())
+}
+
 #[derive(Clone, Copy, Debug, Default)]
 pub struct SystemCommandRunner;
 
 impl CommandRunner for SystemCommandRunner {
     fn run(&self, spec: &CommandSpec) -> Result<CommandOutput, String> {
+        Self::run_with_limits(spec, Duration::from_secs(600), 1024 * 1024)
+    }
+}
+
+impl SystemCommandRunner {
+    pub fn run_with_limits(
+        spec: &CommandSpec,
+        timeout: Duration,
+        output_limit: usize,
+    ) -> Result<CommandOutput, String> {
         let mut command = Command::new(&spec.program);
         command.args(&spec.args);
         if spec.clear_environment {
             command.env_clear();
         }
         command.envs(spec.environment.iter().cloned());
-        let output = command.output().map_err(|error| error.to_string())?;
+        command.stdout(Stdio::piped()).stderr(Stdio::piped());
+        configure_process_group(&mut command);
+        let mut child = command.spawn().map_err(|error| error.to_string())?;
+        let stdout = child
+            .stdout
+            .take()
+            .ok_or("Failed to capture command stdout")?;
+        let stderr = child
+            .stderr
+            .take()
+            .ok_or("Failed to capture command stderr")?;
+        let overflowed = Arc::new(AtomicBool::new(false));
+        let stdout_thread = capture_bounded(stdout, output_limit, Arc::clone(&overflowed));
+        let stderr_thread = capture_bounded(stderr, output_limit, Arc::clone(&overflowed));
+        let started = Instant::now();
+        let status = loop {
+            if overflowed.load(Ordering::Acquire) {
+                terminate_process_tree(&mut child)?;
+                let _ = stdout_thread.join();
+                let _ = stderr_thread.join();
+                return Err("Provisioning command output exceeded the safety limit".into());
+            }
+            if started.elapsed() >= timeout {
+                terminate_process_tree(&mut child)?;
+                let _ = stdout_thread.join();
+                let _ = stderr_thread.join();
+                return Err("Provisioning command timed out".into());
+            }
+            if let Some(status) = child.try_wait().map_err(|error| error.to_string())? {
+                break status;
+            }
+            thread::sleep(Duration::from_millis(10));
+        };
+        let stdout = stdout_thread
+            .join()
+            .map_err(|_| "Command stdout reader panicked")??;
+        let stderr = stderr_thread
+            .join()
+            .map_err(|_| "Command stderr reader panicked")??;
+        if overflowed.load(Ordering::Acquire) {
+            return Err("Provisioning command output exceeded the safety limit".into());
+        }
         Ok(CommandOutput {
-            success: output.status.success(),
-            stdout: output.stdout,
-            stderr: output.stderr,
+            success: status.success(),
+            stdout,
+            stderr,
         })
     }
+}
+
+fn capture_bounded(
+    mut reader: impl Read + Send + 'static,
+    limit: usize,
+    overflowed: Arc<AtomicBool>,
+) -> thread::JoinHandle<Result<Vec<u8>, String>> {
+    thread::spawn(move || {
+        let mut captured = Vec::new();
+        let mut buffer = [0_u8; 8192];
+        loop {
+            let count = reader
+                .read(&mut buffer)
+                .map_err(|error| error.to_string())?;
+            if count == 0 {
+                return Ok(captured);
+            }
+            let remaining = limit.saturating_sub(captured.len());
+            captured.extend_from_slice(&buffer[..count.min(remaining)]);
+            if count > remaining {
+                overflowed.store(true, Ordering::Release);
+            }
+        }
+    })
+}
+
+#[cfg(unix)]
+fn configure_process_group(command: &mut Command) {
+    use std::os::unix::process::CommandExt;
+    unsafe {
+        command.pre_exec(|| {
+            if libc::setsid() == -1 {
+                return Err(std::io::Error::last_os_error());
+            }
+            Ok(())
+        });
+    }
+}
+
+#[cfg(windows)]
+fn configure_process_group(command: &mut Command) {
+    use std::os::windows::process::CommandExt;
+    const CREATE_NEW_PROCESS_GROUP: u32 = 0x0000_0200;
+    command.creation_flags(CREATE_NEW_PROCESS_GROUP);
+}
+
+#[cfg(unix)]
+fn terminate_process_tree(child: &mut std::process::Child) -> Result<(), String> {
+    let process_group = -(child.id() as i32);
+    unsafe {
+        libc::kill(process_group, libc::SIGKILL);
+    }
+    child.wait().map_err(|error| error.to_string())?;
+    Ok(())
+}
+
+#[cfg(windows)]
+fn terminate_process_tree(child: &mut std::process::Child) -> Result<(), String> {
+    let status = Command::new("taskkill")
+        .args(["/PID", &child.id().to_string(), "/T", "/F"])
+        .status()
+        .map_err(|error| format!("Failed to terminate provisioning process tree: {error}"))?;
+    let _ = child.kill();
+    child.wait().map_err(|error| error.to_string())?;
+    if !status.success() {
+        return Err("Failed to guarantee provisioning descendant termination".into());
+    }
+    Ok(())
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -264,20 +364,40 @@ impl AgentEnvironment {
         runner: &dyn CommandRunner,
         filesystem: &dyn EnvironmentFilesystem,
     ) -> Result<Self, String> {
-        let requirements_bytes = filesystem.read(&resources.requirements)?;
-        let requirements_text =
-            std::str::from_utf8(&requirements_bytes).map_err(|_| "Requirements are not UTF-8")?;
-        validate_requirements(requirements_text)?;
-
         let parent = app_data.join("agent-runtime");
         let root = parent.join("v1");
         let staging = parent.join("v1.staging");
         let backup = parent.join("v1.previous");
         filesystem.create_dir_all(&parent)?;
+        let lock_path = parent.join(".provision.lock");
+        let lock = OpenOptions::new()
+            .read(true)
+            .write(true)
+            .create(true)
+            .open(&lock_path)
+            .map_err(|error| format!("Agent provisioning lock is unavailable: {error}"))?;
+        lock.lock_exclusive()
+            .map_err(|error| format!("Agent provisioning lock failed: {error}"))?;
+
         let canonical_parent = filesystem
             .canonicalize(&parent)
             .map_err(|error| format!("Agent runtime parent is unavailable: {error}"))?;
+        let canonical_lock = filesystem
+            .canonicalize(&lock_path)
+            .map_err(|error| format!("Agent provisioning lock is invalid: {error}"))?;
+        if !canonical_lock.starts_with(&canonical_parent) {
+            return Err("Agent provisioning lock escaped app-data agent-runtime".into());
+        }
         reject_root_escape(filesystem, &root, &canonical_parent)?;
+        remove_dir_if_present(filesystem, &staging)
+            .map_err(|error| format!("Failed to remove stale staging environment: {error}"))?;
+        remove_dir_if_present(filesystem, &backup)
+            .map_err(|error| format!("Failed to remove stale previous environment: {error}"))?;
+
+        let requirements_bytes = filesystem.read(&resources.requirements)?;
+        let requirements_text =
+            std::str::from_utf8(&requirements_bytes).map_err(|_| "Requirements are not UTF-8")?;
+        validate_requirements(requirements_text)?;
 
         let digest = hex::encode(Sha256::digest(&requirements_bytes));
         let marker_matches = filesystem
@@ -287,8 +407,6 @@ impl AgentEnvironment {
             == Some(digest.as_str());
 
         if !marker_matches {
-            remove_dir_if_present(filesystem, &staging)?;
-
             let create = clean_command(
                 system_python,
                 [
@@ -309,11 +427,26 @@ impl AgentEnvironment {
 
             let staging_python = python_path(&staging);
             let empty_pip_config = staging.join("pip-empty.conf");
+            let staged_requirements = staging.join(".agent-requirements.txt");
             if let Err(error) = filesystem.write(&empty_pip_config, &[]) {
                 return Err(cleanup_staging(
                     filesystem,
                     &staging,
                     format!("Failed to write isolated pip configuration: {error}"),
+                ));
+            }
+            if let Err(error) = filesystem.write(&staged_requirements, &requirements_bytes) {
+                return Err(cleanup_staging(
+                    filesystem,
+                    &staging,
+                    format!("Failed to stage agent requirements: {error}"),
+                ));
+            }
+            if let Err(error) = filesystem.set_readonly(&staged_requirements) {
+                return Err(cleanup_staging(
+                    filesystem,
+                    &staging,
+                    format!("Failed to protect staged agent requirements: {error}"),
                 ));
             }
             let install = clean_command(
@@ -326,7 +459,7 @@ impl AgentEnvironment {
                     OsString::from("--disable-pip-version-check"),
                     OsString::from("--no-input"),
                     OsString::from("-r"),
-                    resources.requirements.as_os_str().to_owned(),
+                    staged_requirements.as_os_str().to_owned(),
                 ],
                 vec![
                     (
@@ -639,8 +772,54 @@ fn require_success(output: CommandOutput, message: &str) -> Result<(), String> {
     if output.success {
         Ok(())
     } else {
-        Err(message.into())
+        let diagnostic = safe_stderr_diagnostic(&output.stderr);
+        if diagnostic.is_empty() {
+            Err(message.into())
+        } else {
+            Err(format!("{message}: {diagnostic}"))
+        }
     }
+}
+
+fn safe_stderr_diagnostic(stderr: &[u8]) -> String {
+    const DIAGNOSTIC_LIMIT: usize = 2_048;
+    let text = String::from_utf8_lossy(stderr);
+    let mut result = String::new();
+    for line in text.lines() {
+        let lowercase = line.to_ascii_lowercase();
+        let sensitive = [
+            "authorization",
+            "bearer",
+            "credential",
+            "password",
+            "passwd",
+            "secret",
+            "token",
+            "api_key",
+        ]
+        .iter()
+        .any(|word| lowercase.contains(word))
+            || (lowercase.contains("://") && lowercase.contains('@'));
+        let safe_line = if sensitive { "[redacted]" } else { line };
+        if !result.is_empty() {
+            result.push('\n');
+        }
+        let remaining = DIAGNOSTIC_LIMIT.saturating_sub(result.len());
+        if remaining == 0 {
+            break;
+        }
+        for character in safe_line.chars() {
+            if character.len_utf8() > DIAGNOSTIC_LIMIT.saturating_sub(result.len()) {
+                break;
+            }
+            result.push(character);
+        }
+    }
+    if result.len() == DIAGNOSTIC_LIMIT && stderr.len() > DIAGNOSTIC_LIMIT {
+        result.truncate(DIAGNOSTIC_LIMIT.saturating_sub(3));
+        result.push_str("...");
+    }
+    result
 }
 
 fn remove_dir_if_present(

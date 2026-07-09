@@ -1,16 +1,22 @@
 use std::ffi::OsStr;
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::sync::Mutex;
+use std::sync::{Arc, Barrier, Mutex};
+use std::thread;
+#[cfg(unix)]
+use std::time::Duration;
 
 use app_lib::agent_runtime::protocol::{
     Action, Framework, FrontendRequestV1, ResponseStatus, WorkerRequestV1, WorkerResponseV1,
 };
+#[cfg(unix)]
+use app_lib::agent_runtime::resources::SystemCommandRunner;
 use app_lib::agent_runtime::resources::{
     validate_requirements, AgentEnvironment, CommandOutput, CommandRunner, CommandSpec,
     EnvironmentFilesystem, ResourcePaths,
 };
 use serde_json::{json, Value};
+use sha2::Digest;
 use tempfile::TempDir;
 
 const REQUIREMENTS: &str = include_str!("../../kernel/agent-requirements.txt");
@@ -139,6 +145,30 @@ fn response(changes: &[(&str, Value)]) -> Value {
     value
 }
 
+fn valid_snapshot() -> Value {
+    json!({
+        "framework": "cirq",
+        "qubit_count": 2,
+        "classical_bit_count": 2,
+        "depth": 1,
+        "gates": [{"type":"H","targets":[0],"controls":[],"params":[],"layer":0}]
+    })
+}
+
+fn valid_result() -> Value {
+    json!({
+        "state_vector": [
+            {"re":1.0,"im":0.0},{"re":0.0,"im":0.0},
+            {"re":0.0,"im":0.0},{"re":0.0,"im":0.0}
+        ],
+        "probabilities": {"00": 1.0},
+        "measurements": {"00": 5},
+        "bloch_coords": [{"x":0.0,"y":0.0,"z":1.0},{"x":0.0,"y":0.0,"z":1.0}],
+        "execution_time_ms": 1.0,
+        "shot_count": 5
+    })
+}
+
 #[test]
 fn worker_response_is_strict_and_validates_identity() {
     let raw = response(&[]);
@@ -203,8 +233,8 @@ fn worker_response_nullable_payloads_are_object_or_null_only() {
         serde_json::from_value::<WorkerResponseV1>(response(&[(field, Value::Null)])).unwrap();
     }
     serde_json::from_value::<WorkerResponseV1>(response(&[
-        ("snapshot", json!({"qubit_count": 2})),
-        ("result", json!({"measurements": {"00": 5}})),
+        ("snapshot", valid_snapshot()),
+        ("result", valid_result()),
     ]))
     .unwrap();
 }
@@ -227,7 +257,11 @@ fn worker_error_matches_strict_python_kernel_error_shape() {
         "framework": "cirq",
         "dependency": null
     });
-    serde_json::from_value::<WorkerResponseV1>(response(&[("error", valid)])).unwrap();
+    serde_json::from_value::<WorkerResponseV1>(response(&[
+        ("status", json!("error")),
+        ("error", valid),
+    ]))
+    .unwrap();
 
     for invalid in [
         json!({"message": "missing code"}),
@@ -236,9 +270,37 @@ fn worker_error_matches_strict_python_kernel_error_shape() {
         json!({"code": 1, "message": "bad"}),
         json!({"code": "bad", "message": "bad", "traceback": 1}),
     ] {
-        assert!(
-            serde_json::from_value::<WorkerResponseV1>(response(&[("error", invalid)])).is_err()
-        );
+        assert!(serde_json::from_value::<WorkerResponseV1>(response(&[
+            ("status", json!("error")),
+            ("error", invalid),
+        ]))
+        .is_err());
+    }
+}
+
+#[test]
+fn worker_response_rejects_payload_shape_semantics_and_status_contradictions() {
+    for changed in [
+        vec![("status", json!("error"))],
+        vec![("error", json!({"code":"bad","message":"bad"}))],
+        vec![("snapshot", json!({"framework":"cirq"}))],
+        vec![("snapshot", {
+            let mut value = valid_snapshot();
+            value["gates"][0]["target"] = json!([99]);
+            value
+        })],
+        vec![("result", {
+            let mut value = valid_result();
+            value["shot_count"] = json!(4);
+            value
+        })],
+        vec![("result", {
+            let mut value = valid_result();
+            value["bloch_coords"][0]["extra"] = json!(true);
+            value
+        })],
+    ] {
+        assert!(serde_json::from_value::<WorkerResponseV1>(response(&changed)).is_err());
     }
 }
 
@@ -264,9 +326,14 @@ fn dedicated_requirements_are_exact_and_safe() {
         assert!(validate_requirements(&format!("{REQUIREMENTS}{denied}\n")).is_err());
     }
 
-    // Package names are parsed, so harmless version/comments do not trigger substring checks.
-    validate_requirements(&REQUIREMENTS.replace("numpy>=1.26,<3", "numpy>=1.26,<3 # no cuda"))
-        .unwrap();
+    for changed in [
+        REQUIREMENTS.replace(">=1.26,<3", ">=1.25,<3"),
+        REQUIREMENTS.replace("numpy>=1.26,<3", "numpy>=1.26,<3 # changed"),
+        REQUIREMENTS.replace("qdk>=1.29,<2", "qdk"),
+        format!("--index-url https://example.invalid\n{REQUIREMENTS}"),
+    ] {
+        assert!(validate_requirements(&changed).is_err());
+    }
 }
 
 fn write_resource_tree(root: &Path) -> PathBuf {
@@ -330,6 +397,7 @@ struct FakeRunner {
     error_install: bool,
     fail_promoted_probe: bool,
     fail_staging_probe: bool,
+    failure_stderr: Option<Vec<u8>>,
 }
 
 impl CommandRunner for FakeRunner {
@@ -351,7 +419,10 @@ impl CommandRunner for FakeRunner {
             return Ok(CommandOutput {
                 success: false,
                 stdout: vec![],
-                stderr: b"install failed".to_vec(),
+                stderr: self
+                    .failure_stderr
+                    .clone()
+                    .unwrap_or_else(|| b"install failed".to_vec()),
             });
         }
         if args.iter().any(|arg| arg == "pip") && self.error_install {
@@ -387,6 +458,36 @@ impl CommandRunner for FakeRunner {
             stderr: vec![],
         })
     }
+}
+
+#[test]
+fn failed_commands_report_capped_redacted_stderr() {
+    let repository = TempDir::new().unwrap();
+    write_resource_tree(repository.path());
+    let resources = ResourcePaths::development(repository.path()).unwrap();
+    let app_data = TempDir::new().unwrap();
+    let runner = FakeRunner {
+        fail_install: true,
+        failure_stderr: Some(
+            format!(
+                "useful diagnostic\nAuthorization: Bearer secret-token\n{}",
+                "x".repeat(5000)
+            )
+            .into_bytes(),
+        ),
+        ..Default::default()
+    };
+    let error = AgentEnvironment::provision_with_runner(
+        app_data.path(),
+        Path::new("/fixed/python3"),
+        &resources,
+        &runner,
+    )
+    .unwrap_err();
+    assert!(error.contains("useful diagnostic"));
+    assert!(error.contains("[redacted]"));
+    assert!(!error.contains("secret-token"));
+    assert!(error.len() < 2_200);
 }
 
 fn venv_python(root: &Path) -> PathBuf {
@@ -515,6 +616,15 @@ impl EnvironmentFilesystem for FakeFilesystem {
         fs::write(path, contents).map_err(|error| error.to_string())
     }
 
+    fn set_readonly(&self, path: &Path) -> Result<(), String> {
+        self.maybe_fail_path("set_readonly", path)?;
+        let mut permissions = fs::metadata(path)
+            .map_err(|error| error.to_string())?
+            .permissions();
+        permissions.set_readonly(true);
+        fs::set_permissions(path, permissions).map_err(|error| error.to_string())
+    }
+
     fn remove_dir_all(&self, path: &Path) -> Result<(), String> {
         self.maybe_fail_path("remove_dir_all", path)?;
         fs::remove_dir_all(path).map_err(|error| error.to_string())
@@ -563,6 +673,225 @@ fn failure_injection_matches_file_names_not_rendered_path_substrings() {
 
     filesystem.remove_dir_all(&unrelated).unwrap();
     assert!(filesystem.remove_dir_all(&exact).is_err());
+}
+
+#[test]
+fn marker_matched_root_is_not_accepted_until_stale_state_cleanup_succeeds() {
+    let repository = TempDir::new().unwrap();
+    write_resource_tree(repository.path());
+    let resources = ResourcePaths::development(repository.path()).unwrap();
+    let app_data = TempDir::new().unwrap();
+    let runner = FakeRunner::default();
+    AgentEnvironment::provision_with_runner(
+        app_data.path(),
+        Path::new("/fixed/python3"),
+        &resources,
+        &runner,
+    )
+    .unwrap();
+
+    let stale = app_data.path().join("agent-runtime/v1.staging");
+    fs::create_dir_all(&stale).unwrap();
+    let filesystem = FakeFilesystem::new(vec![
+        path_failure("remove_dir_all", "v1.staging", 0),
+        path_failure("remove_dir_all", "v1.previous", 0),
+    ]);
+    assert!(AgentEnvironment::provision_with_filesystem(
+        app_data.path(),
+        Path::new("/fixed/python3"),
+        &resources,
+        &runner,
+        &filesystem,
+    )
+    .is_err());
+    assert!(stale.exists());
+
+    AgentEnvironment::provision_with_filesystem(
+        app_data.path(),
+        Path::new("/fixed/python3"),
+        &resources,
+        &runner,
+        &filesystem,
+    )
+    .unwrap();
+    assert!(!stale.exists());
+
+    let stale_backup = app_data.path().join("agent-runtime/v1.previous");
+    fs::create_dir_all(&stale_backup).unwrap();
+    assert!(AgentEnvironment::provision_with_filesystem(
+        app_data.path(),
+        Path::new("/fixed/python3"),
+        &resources,
+        &runner,
+        &filesystem,
+    )
+    .is_err());
+    assert!(stale_backup.exists());
+    AgentEnvironment::provision_with_filesystem(
+        app_data.path(),
+        Path::new("/fixed/python3"),
+        &resources,
+        &runner,
+        &filesystem,
+    )
+    .unwrap();
+    assert!(!stale_backup.exists());
+
+    let installations = runner
+        .commands
+        .lock()
+        .unwrap()
+        .iter()
+        .filter(|command| command.args.iter().any(|arg| arg == "venv"))
+        .count();
+    assert_eq!(installations, 1);
+}
+
+#[test]
+fn concurrent_provisioning_serializes_installation_and_reuses_verified_root() {
+    let repository = TempDir::new().unwrap();
+    write_resource_tree(repository.path());
+    let resources = Arc::new(ResourcePaths::development(repository.path()).unwrap());
+    let app_data = Arc::new(TempDir::new().unwrap());
+    let runner = Arc::new(FakeRunner::default());
+    let start = Arc::new(Barrier::new(3));
+
+    let handles = (0..2)
+        .map(|_| {
+            let resources = Arc::clone(&resources);
+            let app_data = Arc::clone(&app_data);
+            let runner = Arc::clone(&runner);
+            let start = Arc::clone(&start);
+            thread::spawn(move || {
+                start.wait();
+                AgentEnvironment::provision_with_runner(
+                    app_data.path(),
+                    Path::new("/fixed/python3"),
+                    &resources,
+                    runner.as_ref(),
+                )
+                .unwrap()
+            })
+        })
+        .collect::<Vec<_>>();
+    start.wait();
+    let environments = handles
+        .into_iter()
+        .map(|handle| handle.join().unwrap())
+        .collect::<Vec<_>>();
+    assert_eq!(environments[0], environments[1]);
+    let installations = runner
+        .commands
+        .lock()
+        .unwrap()
+        .iter()
+        .filter(|command| command.args.iter().any(|arg| arg == "venv"))
+        .count();
+    assert_eq!(installations, 1);
+}
+
+struct MutatingRequirementsRunner {
+    inner: FakeRunner,
+    source: PathBuf,
+    installed_bytes: Mutex<Option<Vec<u8>>>,
+    staged_readonly: Mutex<Option<bool>>,
+}
+
+impl CommandRunner for MutatingRequirementsRunner {
+    fn run(&self, spec: &CommandSpec) -> Result<CommandOutput, String> {
+        if spec.args.iter().any(|arg| arg == "venv") {
+            fs::write(&self.source, "keyring>=25\n").unwrap();
+        }
+        if spec.args.iter().any(|arg| arg == "pip") {
+            let requirements = spec.args.last().unwrap();
+            *self.installed_bytes.lock().unwrap() = Some(fs::read(requirements).unwrap());
+            *self.staged_readonly.lock().unwrap() =
+                Some(fs::metadata(requirements).unwrap().permissions().readonly());
+        }
+        self.inner.run(spec)
+    }
+}
+
+#[test]
+fn provisioning_installs_immutable_bytes_read_before_resource_mutation() {
+    let repository = TempDir::new().unwrap();
+    write_resource_tree(repository.path());
+    let resources = ResourcePaths::development(repository.path()).unwrap();
+    let runner = MutatingRequirementsRunner {
+        inner: FakeRunner::default(),
+        source: resources.requirements.clone(),
+        installed_bytes: Mutex::new(None),
+        staged_readonly: Mutex::new(None),
+    };
+    let app_data = TempDir::new().unwrap();
+    AgentEnvironment::provision_with_runner(
+        app_data.path(),
+        Path::new("/fixed/python3"),
+        &resources,
+        &runner,
+    )
+    .unwrap();
+
+    assert_eq!(
+        runner.installed_bytes.lock().unwrap().as_deref(),
+        Some(REQUIREMENTS.as_bytes())
+    );
+    assert_eq!(*runner.staged_readonly.lock().unwrap(), Some(true));
+    let expected_hash = hex::encode(sha2::Sha256::digest(REQUIREMENTS.as_bytes()));
+    assert_eq!(
+        fs::read_to_string(
+            app_data
+                .path()
+                .join("agent-runtime/v1/.requirements-sha256")
+        )
+        .unwrap(),
+        expected_hash
+    );
+}
+
+#[cfg(unix)]
+#[test]
+fn system_runner_bounds_timeout_output_and_recovers_after_termination() {
+    fn shell(script: &str) -> CommandSpec {
+        CommandSpec {
+            program: PathBuf::from("/bin/sh"),
+            args: vec![OsStr::new("-c").to_owned(), OsStr::new(script).to_owned()],
+            environment: vec![],
+            clear_environment: false,
+        }
+    }
+
+    let temp = TempDir::new().unwrap();
+    let descendant_marker = temp.path().join("descendant-survived");
+    let timeout_script = format!(
+        "(sleep 0.3; touch '{}') & sleep 5",
+        descendant_marker.display()
+    );
+    let timeout = SystemCommandRunner::run_with_limits(
+        &shell(&timeout_script),
+        Duration::from_millis(75),
+        4096,
+    )
+    .unwrap_err();
+    assert!(timeout.contains("timed out"));
+    thread::sleep(Duration::from_millis(400));
+    assert!(!descendant_marker.exists());
+
+    let overflow = SystemCommandRunner::run_with_limits(
+        &shell("while :; do printf 1234567890; done"),
+        Duration::from_secs(2),
+        256,
+    )
+    .unwrap_err();
+    assert!(overflow.contains("safety limit"));
+
+    let recovered = SystemCommandRunner::run_with_limits(
+        &shell("printf recovered"),
+        Duration::from_secs(1),
+        256,
+    )
+    .unwrap();
+    assert_eq!(recovered.stdout, b"recovered");
 }
 
 #[test]
