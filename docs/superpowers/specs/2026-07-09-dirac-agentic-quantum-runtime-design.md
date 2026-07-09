@@ -1,6 +1,6 @@
 # Dirac Agentic Quantum Runtime
 
-**Status:** approved design, pending written-spec review  
+**Status:** approved design, pending written-spec review
 **Date:** 2026-07-09
 
 ## 1. Purpose
