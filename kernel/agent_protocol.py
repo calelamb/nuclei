@@ -82,7 +82,7 @@ def parse_request(raw: bytes) -> AgentRequest:
         raise ProtocolError("invalid_code") from exc
     if len(code_bytes) > MAX_CODE_BYTES:
         raise ProtocolError("code_too_large")
-    if action == "parse" and shots is not None:
+    if action == "parse" and "shots" in value:
         raise ProtocolError("parse_forbids_shots")
     if action == "simulate" and (type(shots) is not int or not 1 <= shots <= MAX_SHOTS):
         raise ProtocolError("invalid_shots")

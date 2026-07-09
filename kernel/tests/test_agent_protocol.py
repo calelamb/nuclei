@@ -94,6 +94,7 @@ def test_accepts_parse_without_shots() -> None:
         ),
         ("non-string code", request_bytes(code=None), "invalid_code"),
         ("parse with shots", request_bytes(action="parse", shots=1), "parse_forbids_shots"),
+        ("parse with null shots", request_bytes(action="parse", shots=None), "parse_forbids_shots"),
         ("simulate without shots", request_bytes(shots=None), "invalid_shots"),
         ("zero shots", request_bytes(shots=0), "invalid_shots"),
         ("too many shots", request_bytes(shots=MAX_SHOTS + 1), "invalid_shots"),
