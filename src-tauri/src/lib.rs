@@ -1,3 +1,4 @@
+pub mod agent_runtime;
 mod commands;
 
 use commands::kernel::KernelState;

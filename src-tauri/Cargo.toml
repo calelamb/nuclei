@@ -29,3 +29,13 @@ tauri-plugin-fs = "2"
 tauri-plugin-updater = "2.10.1"
 tauri-plugin-process = "2.3.1"
 tauri-plugin-shell = "2"
+tokio = { version = "1.52.3", features = ["process", "io-util", "time", "macros", "rt-multi-thread", "sync"] }
+uuid = { version = "1.20.0", features = ["v4"] }
+sha2 = "0.10.9"
+hex = "0.4.3"
+
+[target."cfg(unix)".dependencies]
+libc = "0.2.186"
+
+[dev-dependencies]
+tempfile = "3.23.0"
