@@ -34,7 +34,7 @@ This plan implements Stage 0 from `docs/superpowers/specs/2026-07-09-dirac-agent
 - Create `kernel/agent-requirements.txt` — dedicated environment allowlist.
 - Create `kernel/tests/test_agent_protocol.py`.
 - Create `kernel/tests/test_agent_worker.py`.
-- Modify `kernel/executor.py` — optional capture factory only.
+- Modify `kernel/executor.py` — optional capture factory plus non-executing framework resolution used to bind requests before execution.
 - Modify `kernel/tests/test_executor.py`.
 
 ### Rust
@@ -232,7 +232,7 @@ git commit -m "feat: define isolated agent protocol"
 - Create: `kernel/agent_limits.py`
 - Create: `kernel/agent_worker.py`
 - Create: `kernel/tests/test_agent_worker.py`
-- Modify: `kernel/executor.py:92-97,190-225`
+- Modify: `kernel/executor.py` — bounded capture and public non-executing framework resolution.
 - Modify: `kernel/tests/test_executor.py`
 - Modify: `kernel/adapters/qsharp_adapter.py`
 - Modify: `kernel/tests/test_qsharp_adapter.py`
@@ -360,9 +360,9 @@ def test_optional_capture_limit_does_not_change_default_executor():
 
 - [ ] **Step 2: Run tests to verify they fail**
 
-Run: `python -m pytest kernel/tests/test_agent_worker.py kernel/tests/test_executor.py::test_optional_capture_limit_does_not_change_default_executor -v`
+Run: `python -m pytest kernel/tests/test_agent_worker.py kernel/tests/test_executor.py::test_optional_capture_limit_does_not_change_default_executor kernel/tests/test_qsharp_adapter.py::test_configure_disposable_worker_runs_qdk_work_on_calling_thread -v`
 
-Expected: FAIL because worker/limits files and `capture_limit_bytes` do not exist.
+Expected: FAIL because the worker/limits files, `capture_limit_bytes`, and public Q# disposable-worker configuration do not exist.
 
 - [ ] **Step 3: Implement limits and bounded capture**
 
@@ -417,12 +417,12 @@ def apply_worker_limits(value):
         resource.setrlimit(resource_id, (limit, limit))
 ```
 
-These unit tests verify rlimit configuration calls only. Later macOS/Linux boundary qualification must prove real kernel enforcement. Modify `Executor.__init__` to store `capture_limit_bytes`; add `_new_capture()` returning `io.StringIO()` by default and lazily importing `BoundedTextCapture(limit)` only when configured; replace both `io.StringIO()` constructions in `_run_code` with `_new_capture()`. Add public `resolve_framework(code, language=...)` that performs detection without adapter import or source execution. No server call site passes the capture option.
+These unit tests verify rlimit configuration calls only. Later macOS/Linux boundary qualification must prove real kernel enforcement. Modify `Executor.__init__` to store `capture_limit_bytes`; add `_new_capture()` returning `io.StringIO()` by default and lazily importing `BoundedTextCapture(limit)` only when configured; replace both `io.StringIO()` constructions in `_run_code` with `_new_capture()`. Add public `resolve_framework(code, language=language)` that performs detection without adapter import or source execution. No server call site passes the capture option.
 
-- [ ] **Step 4: Implement the complete worker entry point**
+- [ ] **Step 4: Implement the worker security functions and complete entry point**
 
 ```python
-# kernel/agent_worker.py
+# Focused security functions from kernel/agent_worker.py.
 from __future__ import annotations
 import argparse
 import os
@@ -507,20 +507,22 @@ def execute_request(request, limits):
     )
 
 # Cooperative capture is not a framing boundary: generated code can call
-# os.write(1, ...) or mutate Python import hooks. The Rust supervisor MUST cap
-# raw stdout bytes, require exactly one JSON response, and enforce the OS sandbox.
+# os.write(1, raw_bytes) or mutate Python import hooks. The Rust supervisor MUST
+# cap raw stdout bytes, require exactly one JSON response, and enforce the OS sandbox.
 ```
 
-- [ ] **Step 5: Run worker and executor tests**
+Complete `kernel/agent_worker.py` around those focused functions as follows: its module docstring states that Python capture/import hooks are cooperative and Rust raw-byte/framing validation plus the OS sandbox are authoritative; startup pins OpenBLAS/OMP to one thread and adds the repository root before kernel imports; `truncate_utf8` returns a valid UTF-8 prefix within its byte limit. `main()` parses only `--test-limits`, chooses production or testing limits, applies all rlimits before importing `Executor`, reads at most 270,001 stdin bytes, and initializes the response request ID to `invalid`. It strictly parses one request, delegates valid requests to `execute_request`, converts `ProtocolError` to `protocol_error`, converts every other `BaseException` to a generic `worker_error` containing only the exception type, and creates every response through `bounded_response`. It then writes the selected response bytes once to `sys.stdout.buffer`, flushes, returns zero, and is invoked through `raise SystemExit(main())`. In `kernel/adapters/qsharp_adapter.py`, add public `configure_disposable_worker()` and make `_on_interpreter_thread` execute on the caller only after that one-request mode is configured; persistent-kernel behavior remains on the dedicated QDK thread.
 
-Run: `python -m pytest kernel/tests/test_agent_worker.py kernel/tests/test_executor.py -v`
+- [ ] **Step 5: Run worker, executor, and Q# adapter tests**
+
+Run: `python -m pytest kernel/tests/test_agent_worker.py kernel/tests/test_executor.py kernel/tests/test_qsharp_adapter.py -v`
 
 Expected: PASS; cooperative output and the whole serialized response are byte-capped, framework mismatches cannot execute source, blocked imports fail, Q# uses its public disposable-worker mode, and the ordinary kernel remains uncapped. The adversarial raw-fd test deliberately proves that Python alone cannot guarantee framing; Task 4's Rust supervisor is authoritative for the 1,048,576-byte raw stdout cap and exact-one-JSON validation.
 
 - [ ] **Step 6: Commit**
 
 ```bash
-git add kernel/agent_limits.py kernel/agent_worker.py kernel/executor.py kernel/tests/test_agent_worker.py kernel/tests/test_executor.py
+git add kernel/agent_limits.py kernel/agent_worker.py kernel/executor.py kernel/adapters/qsharp_adapter.py kernel/tests/test_agent_worker.py kernel/tests/test_executor.py kernel/tests/test_qsharp_adapter.py
 git commit -m "feat: add disposable bounded agent worker"
 ```
 
