@@ -596,6 +596,13 @@ Run: `cd src-tauri && cargo add tokio --features process,io-util,time,macros,rt-
 
 Expected: dependencies resolve and `Cargo.lock` updates.
 
+Although isolated execution is unavailable on Windows, Tauri's desktop target
+still resolves updater/shell dependencies there. Pin `zip = "=4.2.0"` (the
+newest 4.x release supporting Rust 1.77; 4.3+ requires 1.82) and
+`open = "=5.3.3"` (5.3.4+ uses `std::path::absolute`, unavailable on 1.77) as
+Windows-only compatibility constraints. Keep both locked and verify the actual
+Windows target with Rust 1.77.2.
+
 - [ ] **Step 2: Write failing public-contract tests without custom helpers**
 
 ```rust
@@ -744,10 +751,11 @@ required even when nullable. It rejects unknown nested fields, non-v1
 responses, invalid request IDs, non-finite or out-of-range numeric values,
 inconsistent state-vector/Bloch lengths, and contradictory status/error pairs.
 Qiskit/Cirq probability keys have allocated qubit-state width. Q# `Result[]`
-may represent a subset, so its nonempty binary keys may be shorter but never
-wider than the allocated qubit count or global key bound. Measurement keys are
-bounded nonempty binary strings, but are not forced to match classical-bit
-width or sum to shots; empty Q# measurements are valid.
+may represent repeated measurements or a subset, so its probability width is
+independent of allocated qubit count. All probability and measurement keys
+must be nonempty binary strings no longer than the explicit 4,096-bit protocol
+maximum (well within the 1 MiB response cap). Measurement keys are not forced
+to match classical-bit width or sum to shots; empty Q# measurements are valid.
 
 - [ ] **Step 6: Implement resource validation and dedicated-environment contract**
 

@@ -356,10 +356,7 @@ impl WorkerResponseV1 {
                     return Err("Worker Bloch coordinates do not match qubit_count".into());
                 }
                 let invalid_probability_width = match snapshot.framework {
-                    Framework::Qsharp => result
-                        .probabilities
-                        .keys()
-                        .any(|key| key.len() > snapshot.qubit_count as usize),
+                    Framework::Qsharp => false,
                     Framework::Qiskit | Framework::Cirq => result
                         .probabilities
                         .keys()

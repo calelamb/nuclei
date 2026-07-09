@@ -388,6 +388,27 @@ fn worker_response_accepts_actual_qiskit_cirq_and_qsharp_result_shapes() {
         ("result", qsharp_subset_result),
     ]))
     .unwrap();
+
+    let qsharp_repeated_snapshot = json!({
+        "framework": "qsharp",
+        "qubit_count": 2,
+        "classical_bit_count": 0,
+        "depth": 1,
+        "gates": [{"type":"H","targets":[0],"controls":[],"params":[],"layer":0}]
+    });
+    let qsharp_repeated_result = json!({
+        "state_vector": [],
+        "probabilities": {"0101": 0.5, "1010": 0.5},
+        "measurements": {},
+        "bloch_coords": [],
+        "execution_time_ms": 2.0,
+        "shot_count": 100
+    });
+    serde_json::from_value::<WorkerResponseV1>(response(&[
+        ("snapshot", qsharp_repeated_snapshot),
+        ("result", qsharp_repeated_result),
+    ]))
+    .unwrap();
 }
 
 #[test]
@@ -418,16 +439,6 @@ fn worker_response_bounds_binary_result_keys() {
             serde_json::from_value::<WorkerResponseV1>(response(&[("result", result)])).is_err()
         );
     }
-
-    let mut qsharp_snapshot = valid_snapshot();
-    qsharp_snapshot["framework"] = json!("qsharp");
-    let mut result = valid_result();
-    result["probabilities"] = json!({"000": 1.0});
-    assert!(serde_json::from_value::<WorkerResponseV1>(response(&[
-        ("snapshot", qsharp_snapshot),
-        ("result", result),
-    ]))
-    .is_err());
 }
 
 #[cfg(windows)]
