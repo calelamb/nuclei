@@ -53,6 +53,65 @@ def test_accepts_parse_without_shots() -> None:
 
 
 @pytest.mark.parametrize(
+    ("framework", "language", "shots"),
+    [
+        ("qiskit", "python", 1),
+        ("qsharp", "qsharp", MAX_SHOTS),
+    ],
+)
+def test_accepts_admitted_framework_and_shot_endpoints(
+    framework: str, language: str, shots: int
+) -> None:
+    parsed = parse_request(
+        request_bytes(framework=framework, language=language, shots=shots)
+    )
+
+    assert (parsed.framework, parsed.language, parsed.shots) == (
+        framework,
+        language,
+        shots,
+    )
+
+
+def test_accepts_64_character_request_id() -> None:
+    parsed = parse_request(request_bytes(request_id="a" * 64))
+
+    assert parsed.request_id == "a" * 64
+
+
+def test_accepts_request_at_exact_byte_limit() -> None:
+    value = json.loads(request_bytes(action="parse"))
+    del value["shots"]
+    raw = json.dumps(value).encode("utf-8")
+    raw += b" " * (MAX_REQUEST_BYTES - len(raw))
+
+    assert len(raw) == MAX_REQUEST_BYTES
+    assert parse_request(raw).action == "parse"
+
+
+def test_rejects_duplicate_json_object_keys() -> None:
+    raw = b'{"protocol_version":1,' + request_bytes()[1:]
+
+    with pytest.raises(ProtocolError):
+        parse_request(raw)
+
+
+@pytest.mark.parametrize("encoding", ["utf-16", "utf-32"])
+def test_rejects_non_utf8_json_bytes(encoding: str) -> None:
+    raw = request_bytes().decode("utf-8").encode(encoding)
+
+    with pytest.raises(ProtocolError, match="^malformed_json$"):
+        parse_request(raw)
+
+
+def test_translates_deep_json_recursion_to_protocol_error() -> None:
+    raw = b"[" * 100_000 + b"]" * 100_000
+
+    with pytest.raises(ProtocolError, match="^malformed_json$"):
+        parse_request(raw)
+
+
+@pytest.mark.parametrize(
     ("name", "raw", "error"),
     [
         ("malformed JSON", b"{not-json", "malformed_json"),

@@ -41,13 +41,27 @@ def _reject_json_constant(value: str) -> None:
     raise ValueError(f"invalid JSON constant: {value}")
 
 
+def _strict_object(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
+    value: dict[str, Any] = {}
+    for key, item in pairs:
+        if key in value:
+            raise ValueError(f"duplicate JSON object key: {key}")
+        value[key] = item
+    return value
+
+
 def parse_request(raw: bytes) -> AgentRequest:
     if len(raw) > MAX_REQUEST_BYTES:
         raise ProtocolError("request_too_large")
 
     try:
-        value = json.loads(raw, parse_constant=_reject_json_constant)
-    except (UnicodeDecodeError, json.JSONDecodeError, ValueError) as exc:
+        text = raw.decode("utf-8")
+        value = json.loads(
+            text,
+            parse_constant=_reject_json_constant,
+            object_pairs_hook=_strict_object,
+        )
+    except (UnicodeDecodeError, ValueError, RecursionError) as exc:
         raise ProtocolError("malformed_json") from exc
 
     if not isinstance(value, dict):
