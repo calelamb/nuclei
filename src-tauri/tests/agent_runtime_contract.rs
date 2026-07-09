@@ -1,3 +1,4 @@
+use std::ffi::OsStr;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
@@ -399,8 +400,17 @@ fn venv_python(root: &Path) -> PathBuf {
 #[derive(Clone)]
 struct FailureRule {
     operation: &'static str,
-    needle: &'static str,
+    target: FailureTarget,
     skip: usize,
+}
+
+#[derive(Clone)]
+enum FailureTarget {
+    FileName(&'static str),
+    Rename {
+        from: &'static str,
+        to: &'static str,
+    },
 }
 
 struct FakeFilesystem {
@@ -414,18 +424,55 @@ impl FakeFilesystem {
         }
     }
 
-    fn maybe_fail(&self, operation: &'static str, detail: &str) -> Result<(), String> {
+    fn should_fail(
+        &self,
+        operation: &'static str,
+        matches_target: impl Fn(&FailureTarget) -> bool,
+    ) -> bool {
         let mut failures = self.failures.lock().unwrap();
         if let Some(index) = failures
             .iter()
-            .position(|failure| failure.operation == operation && detail.contains(failure.needle))
+            .position(|failure| failure.operation == operation && matches_target(&failure.target))
         {
             if failures[index].skip > 0 {
                 failures[index].skip -= 1;
             } else {
                 failures.remove(index);
-                return Err(format!("injected {operation} failure for {detail}"));
+                return true;
             }
+        }
+        false
+    }
+
+    fn maybe_fail_path(&self, operation: &'static str, path: &Path) -> Result<(), String> {
+        if self.should_fail(operation, |target| match target {
+            FailureTarget::FileName(name) => path.file_name() == Some(OsStr::new(name)),
+            FailureTarget::Rename { .. } => false,
+        }) {
+            return Err(format!(
+                "injected {operation} failure for {}",
+                path.display()
+            ));
+        }
+        Ok(())
+    }
+
+    fn maybe_fail_rename(&self, from: &Path, to: &Path) -> Result<(), String> {
+        if self.should_fail("rename", |target| match target {
+            FailureTarget::Rename {
+                from: expected_from,
+                to: expected_to,
+            } => {
+                from.file_name() == Some(OsStr::new(expected_from))
+                    && to.file_name() == Some(OsStr::new(expected_to))
+            }
+            FailureTarget::FileName(_) => false,
+        }) {
+            return Err(format!(
+                "injected rename failure for {} -> {}",
+                from.display(),
+                to.display()
+            ));
         }
         Ok(())
     }
@@ -433,38 +480,37 @@ impl FakeFilesystem {
 
 impl EnvironmentFilesystem for FakeFilesystem {
     fn read(&self, path: &Path) -> Result<Vec<u8>, String> {
-        self.maybe_fail("read", &path.display().to_string())?;
+        self.maybe_fail_path("read", path)?;
         fs::read(path).map_err(|error| error.to_string())
     }
 
     fn read_to_string(&self, path: &Path) -> Result<String, String> {
-        self.maybe_fail("read_to_string", &path.display().to_string())?;
+        self.maybe_fail_path("read_to_string", path)?;
         fs::read_to_string(path).map_err(|error| error.to_string())
     }
 
     fn create_dir_all(&self, path: &Path) -> Result<(), String> {
-        self.maybe_fail("create_dir_all", &path.display().to_string())?;
+        self.maybe_fail_path("create_dir_all", path)?;
         fs::create_dir_all(path).map_err(|error| error.to_string())
     }
 
     fn write(&self, path: &Path, contents: &[u8]) -> Result<(), String> {
-        self.maybe_fail("write", &path.display().to_string())?;
+        self.maybe_fail_path("write", path)?;
         fs::write(path, contents).map_err(|error| error.to_string())
     }
 
     fn remove_dir_all(&self, path: &Path) -> Result<(), String> {
-        self.maybe_fail("remove_dir_all", &path.display().to_string())?;
+        self.maybe_fail_path("remove_dir_all", path)?;
         fs::remove_dir_all(path).map_err(|error| error.to_string())
     }
 
     fn rename(&self, from: &Path, to: &Path) -> Result<(), String> {
-        let detail = format!("{} -> {}", from.display(), to.display());
-        self.maybe_fail("rename", &detail)?;
+        self.maybe_fail_rename(from, to)?;
         fs::rename(from, to).map_err(|error| error.to_string())
     }
 
     fn canonicalize(&self, path: &Path) -> Result<PathBuf, String> {
-        self.maybe_fail("canonicalize", &path.display().to_string())?;
+        self.maybe_fail_path("canonicalize", path)?;
         path.canonicalize().map_err(|error| error.to_string())
     }
 
@@ -473,12 +519,34 @@ impl EnvironmentFilesystem for FakeFilesystem {
     }
 }
 
-fn failure(operation: &'static str, needle: &'static str, skip: usize) -> FailureRule {
+fn path_failure(operation: &'static str, file_name: &'static str, skip: usize) -> FailureRule {
     FailureRule {
         operation,
-        needle,
+        target: FailureTarget::FileName(file_name),
         skip,
     }
+}
+
+fn rename_failure(from: &'static str, to: &'static str, skip: usize) -> FailureRule {
+    FailureRule {
+        operation: "rename",
+        target: FailureTarget::Rename { from, to },
+        skip,
+    }
+}
+
+#[test]
+fn failure_injection_matches_file_names_not_rendered_path_substrings() {
+    let temporary = TempDir::new().unwrap();
+    let parent = temporary.path().join("parent-containing-v1");
+    let unrelated = parent.join("unrelated");
+    let exact = parent.join("v1");
+    fs::create_dir_all(&unrelated).unwrap();
+    fs::create_dir_all(&exact).unwrap();
+    let filesystem = FakeFilesystem::new(vec![path_failure("remove_dir_all", "v1", 0)]);
+
+    filesystem.remove_dir_all(&unrelated).unwrap();
+    assert!(filesystem.remove_dir_all(&exact).is_err());
 }
 
 #[test]
@@ -615,11 +683,11 @@ fn failed_promoted_verification_rolls_back_previous_environment() {
 fn staging_write_and_probe_failures_clean_staging() {
     for (filesystem, runner) in [
         (
-            FakeFilesystem::new(vec![failure("write", "pip-empty.conf", 0)]),
+            FakeFilesystem::new(vec![path_failure("write", "pip-empty.conf", 0)]),
             FakeRunner::default(),
         ),
         (
-            FakeFilesystem::new(vec![failure("write", ".requirements-sha256", 0)]),
+            FakeFilesystem::new(vec![path_failure("write", ".requirements-sha256", 0)]),
             FakeRunner::default(),
         ),
         (
@@ -656,7 +724,7 @@ fn cleanup_failure_is_combined_with_primary_staging_error() {
         fail_install: true,
         ..Default::default()
     };
-    let filesystem = FakeFilesystem::new(vec![failure("remove_dir_all", "v1.staging", 0)]);
+    let filesystem = FakeFilesystem::new(vec![path_failure("remove_dir_all", "v1.staging", 0)]);
 
     let error = AgentEnvironment::provision_with_filesystem(
         app_data.path(),
@@ -674,8 +742,8 @@ fn cleanup_failure_is_combined_with_primary_staging_error() {
 #[test]
 fn root_move_or_promotion_failure_cleans_staging_and_restores_previous_root() {
     for rule in [
-        failure("rename", "v1 ->", 0),
-        failure("rename", "v1.staging ->", 0),
+        rename_failure("v1", "v1.previous", 0),
+        rename_failure("v1.staging", "v1", 0),
     ] {
         let repository = TempDir::new().unwrap();
         write_resource_tree(repository.path());
@@ -712,8 +780,8 @@ fn promotion_and_restore_failure_reports_both_errors() {
     fs::create_dir_all(&root).unwrap();
     fs::write(root.join("sentinel"), "previous").unwrap();
     let filesystem = FakeFilesystem::new(vec![
-        failure("rename", "v1.staging ->", 0),
-        failure("rename", "v1.previous ->", 0),
+        rename_failure("v1.staging", "v1", 0),
+        rename_failure("v1.previous", "v1", 0),
     ]);
 
     let error = AgentEnvironment::provision_with_filesystem(
@@ -737,7 +805,7 @@ fn stale_backup_removal_failure_cleans_staging_and_is_reported() {
     let app_data = TempDir::new().unwrap();
     let backup = app_data.path().join("agent-runtime/v1.previous");
     fs::create_dir_all(&backup).unwrap();
-    let filesystem = FakeFilesystem::new(vec![failure("remove_dir_all", "v1.previous", 0)]);
+    let filesystem = FakeFilesystem::new(vec![path_failure("remove_dir_all", "v1.previous", 0)]);
 
     let error = AgentEnvironment::provision_with_filesystem(
         app_data.path(),
@@ -760,7 +828,7 @@ fn promoted_probe_restore_failure_is_explicit() {
     let root = app_data.path().join("agent-runtime/v1");
     fs::create_dir_all(&root).unwrap();
     fs::write(root.join("sentinel"), "previous").unwrap();
-    let filesystem = FakeFilesystem::new(vec![failure("rename", "v1.previous ->", 0)]);
+    let filesystem = FakeFilesystem::new(vec![rename_failure("v1.previous", "v1", 0)]);
     let runner = FakeRunner {
         fail_promoted_probe: true,
         ..Default::default()
@@ -786,12 +854,12 @@ fn promoted_probe_cleanup_and_backup_removal_failures_are_reported() {
                 fail_promoted_probe: true,
                 ..Default::default()
             },
-            FakeFilesystem::new(vec![failure("remove_dir_all", "/v1", 0)]),
+            FakeFilesystem::new(vec![path_failure("remove_dir_all", "v1", 0)]),
             "remove failed promoted",
         ),
         (
             FakeRunner::default(),
-            FakeFilesystem::new(vec![failure("remove_dir_all", "v1.previous", 0)]),
+            FakeFilesystem::new(vec![path_failure("remove_dir_all", "v1.previous", 0)]),
             "remove previous",
         ),
     ] {
