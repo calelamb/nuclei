@@ -101,6 +101,19 @@ def test_run_python_separates_stderr_from_stdout():
     assert "stdout here" not in stderr
 
 
+def test_optional_capture_limit_does_not_change_default_executor():
+    bounded = Executor(capture_limit_bytes=16)
+
+    stdout, stderr, error = bounded.run_python(
+        "import sys\nprint('x' * 100)\nprint('y' * 100, file=sys.stderr)"
+    )
+
+    assert error is None
+    assert len(stdout.encode("utf-8")) <= 16
+    assert len(stderr.encode("utf-8")) <= 16
+    assert Executor().run_python("print('complete')")[0] == "complete\n"
+
+
 def test_parse_returns_empty_snapshot_for_valid_code_without_circuit(monkeypatch):
     executor = Executor()
     adapter = StubAdapter(circuit=None)
