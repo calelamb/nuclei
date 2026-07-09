@@ -5,7 +5,6 @@ import re
 import traceback
 from dataclasses import dataclass
 
-from kernel.agent_limits import BoundedTextCapture
 from kernel.models import CircuitSnapshot, KernelError, SimulationResult
 
 EXECUTION_TIMEOUT_SECONDS = 30
@@ -95,9 +94,12 @@ class Executor:
         self._namespace: dict = {}
         self._capture_limit_bytes = capture_limit_bytes
 
-    def _new_capture(self) -> io.StringIO | BoundedTextCapture:
+    def _new_capture(self) -> io.TextIOBase:
         if self._capture_limit_bytes is None:
             return io.StringIO()
+
+        from kernel.agent_limits import BoundedTextCapture
+
         return BoundedTextCapture(self._capture_limit_bytes)
 
     def _reset_namespace(self) -> None:

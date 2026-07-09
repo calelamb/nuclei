@@ -81,20 +81,6 @@ def require_qdk() -> None:
         pytest.skip("qdk is not installed")
 
 
-def available_python_framework() -> tuple[str, str] | None:
-    if importlib.util.find_spec("cirq") is not None:
-        return "cirq", "import cirq\ncircuit = cirq.Circuit()"
-    if (
-        importlib.util.find_spec("qiskit") is not None
-        and importlib.util.find_spec("qiskit_aer") is not None
-    ):
-        return (
-            "qiskit",
-            "from qiskit import QuantumCircuit\ncircuit = QuantumCircuit(1)",
-        )
-    return None
-
-
 def test_worker_limits_have_production_and_testing_defaults() -> None:
     assert WorkerLimits() == WorkerLimits(
         cpu_seconds=10,
@@ -152,23 +138,29 @@ def test_bounded_capture_never_returns_invalid_utf8() -> None:
     capture.getvalue().encode("utf-8", errors="strict")
 
 
+def test_bounded_capture_does_not_resume_after_partial_utf8_write() -> None:
+    capture = BoundedTextCapture(3)
+
+    assert capture.write("éé") == 2
+    assert capture.write("x") == 1
+
+    assert capture.getvalue() == "é"
+
+
 def test_worker_writes_exactly_one_capped_response_for_output_flood() -> None:
-    require_qdk()
-    source = f"""\
-operation Main() : Result[] {{
-    use q = Qubit();
-    Message("{'é' * 40_000}");
-    return [MResetZ(q)];
-}}
-"""
+    source = "print('é' * 40_000)\nimport cirq\ncircuit = cirq.Circuit()\n"
 
     completed, response = run_worker(
-        make_request(source, action="simulate", shots=1), timeout=30
+        make_request(
+            source,
+            framework="cirq",
+            language="python",
+        )
     )
 
     assert completed.returncode == 0
     assert response["status"] == "ok"
-    assert 0 < len(response["stdout"].encode("utf-8")) <= OUTPUT_LIMIT
+    assert len(response["stdout"].encode("utf-8")) == OUTPUT_LIMIT
 
 
 def test_worker_rejects_malformed_input_without_loading_executor() -> None:
@@ -181,23 +173,23 @@ def test_worker_rejects_malformed_input_without_loading_executor() -> None:
     assert response["error"]["message"] == "malformed_json"
 
 
-def test_generated_python_cannot_see_keyring_server_or_hardware_modules() -> None:
-    framework = available_python_framework()
-    if framework is None:
-        pytest.skip("no supported Python framework adapter is installed")
-    framework_name, circuit_source = framework
+def test_generated_python_cannot_see_sensitive_or_provider_modules() -> None:
     code = (
         "import sys\n"
+        "blocked = ('keyring', 'kernel.server', 'kernel.hardware', "
+        "'qiskit_ibm_runtime', 'braket', 'azure.quantum', 'qiskit_ionq', "
+        "'pytket', 'cudaq')\n"
         "print(','.join(sorted(name for name in sys.modules "
-        "if name == 'keyring' or name == 'kernel.server' "
-        "or name.startswith('kernel.hardware'))))\n"
-        f"{circuit_source}\n"
+        "if any(name == prefix or name.startswith(prefix + '.') "
+        "for prefix in blocked))))\n"
+        "import cirq\n"
+        "circuit = cirq.Circuit()\n"
     )
 
     _, response = run_worker(
         make_request(
             code,
-            framework=framework_name,
+            framework="cirq",
             language="python",
         )
     )

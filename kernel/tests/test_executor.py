@@ -1,7 +1,13 @@
+from pathlib import Path
+import subprocess
+import sys
 from types import SimpleNamespace
 
 from kernel.executor import AdapterSpec, Executor
 from kernel.models import CircuitSnapshot, Gate, KernelError, SimulationResult
+
+
+ROOT = Path(__file__).resolve().parents[2]
 
 
 class StubAdapter:
@@ -44,6 +50,29 @@ def test_executor_initializes_without_importing_adapters(monkeypatch):
     Executor()
 
     assert imported_modules == []
+
+
+def test_executor_import_does_not_require_unix_resource_module():
+    script = """\
+import builtins
+real_import = builtins.__import__
+def guarded_import(name, *args, **kwargs):
+    if name == "resource":
+        raise ModuleNotFoundError("resource is unavailable")
+    return real_import(name, *args, **kwargs)
+builtins.__import__ = guarded_import
+import kernel.executor
+"""
+
+    completed = subprocess.run(
+        [sys.executable, "-c", script],
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert completed.returncode == 0, completed.stderr
 
 
 def test_parse_returns_missing_dependency_when_adapter_module_unavailable(monkeypatch):

@@ -26,10 +26,16 @@ class BoundedTextCapture(io.TextIOBase):
         super().__init__()
         self._limit = limit
         self._data = bytearray()
+        self._truncated = False
 
     def write(self, text: str) -> int:
+        if self._truncated:
+            return len(text)
+
         encoded = text.encode("utf-8", errors="replace")
         remaining = max(0, self._limit - len(self._data))
+        if len(encoded) > remaining:
+            self._truncated = True
         complete_utf8 = encoded[:remaining].decode("utf-8", errors="ignore")
         self._data.extend(complete_utf8.encode("utf-8"))
         return len(text)
