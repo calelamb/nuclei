@@ -572,6 +572,28 @@ fn worker_response_correlates_action_framework_and_shots() {
 }
 
 #[test]
+fn worker_error_framework_must_match_the_request() {
+    let parsed: WorkerResponseV1 = serde_json::from_value(response(&[
+        ("status", json!("error")),
+        (
+            "error",
+            json!({
+                "code": "execution_error",
+                "message": "failed",
+                "traceback": null,
+                "framework": "cirq",
+                "dependency": null
+            }),
+        ),
+    ]))
+    .unwrap();
+
+    assert!(parsed
+        .validate(&worker_request(Action::Parse, Framework::Qiskit, None))
+        .is_err());
+}
+
+#[test]
 fn measurement_keys_are_framework_aware_and_register_safe() {
     for valid in ["00 11", "00  \t 11"] {
         let mut result = valid_result();
@@ -1871,6 +1893,104 @@ async fn wall_timeout_covers_descendants_holding_worker_pipes() {
 
 #[cfg(unix)]
 #[tokio::test]
+async fn successful_leader_cleanup_kills_same_group_descendants_before_reap() {
+    let supervisor = Supervisor::new(SupervisorLimits::testing());
+    let temporary = TempDir::new().unwrap();
+    let marker = temporary.path().join("same-group-descendant-survived");
+    let valid = json!({
+        "protocol_version": 1,
+        "request_id": "same_group",
+        "status": "ok",
+        "snapshot": null,
+        "result": null,
+        "stdout": "",
+        "stderr": "",
+        "error": null
+    })
+    .to_string();
+    let script = format!(
+        "import os,time,sys\npid=os.fork()\nif pid==0:\n os.close(0);os.close(1);os.close(2);time.sleep(.3);open({:?},'w').write('survived');os._exit(0)\nsys.stdout.write({valid:?}+'\\n');sys.stdout.flush();os._exit(0)",
+        marker.to_string_lossy()
+    );
+
+    let response = supervisor
+        .run(&agent_request("same_group"), python_spec(&script), b"")
+        .await
+        .unwrap();
+    assert_eq!(response.request_id, "same_group");
+    tokio::time::sleep(Duration::from_millis(400)).await;
+    assert!(
+        !marker.exists(),
+        "same-process-group descendant escaped cleanup"
+    );
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn escaped_process_group_pipe_holder_cannot_extend_the_wall_deadline() {
+    let supervisor = Supervisor::new(SupervisorLimits::testing());
+    let request = agent_request("escaped_pipe_holder");
+    let started = tokio::time::Instant::now();
+    let run = supervisor.run(
+        &request,
+        python_spec(
+            "import os,time\nif os.fork()==0:\n os.setsid();time.sleep(.25);os._exit(0)\nos._exit(0)",
+        ),
+        b"",
+    );
+    let error = tokio::time::timeout(Duration::from_millis(500), run)
+        .await
+        .expect("supervisor must abort readers at its own deadline")
+        .unwrap_err();
+    assert_eq!(error.code, "wall_timeout");
+    assert!(started.elapsed() < Duration::from_millis(200));
+    assert!(
+        !error.message.to_ascii_lowercase().contains("contain"),
+        "process-group cleanup must not claim descendant containment"
+    );
+    tokio::time::sleep(Duration::from_millis(200)).await;
+    assert_fresh_worker(&supervisor, "fresh_escaped_pipe_holder").await;
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn aborted_run_drops_guard_clears_registry_and_allows_id_reuse() {
+    let supervisor = Arc::new(Supervisor::new(SupervisorLimits::testing()));
+    let task = {
+        let supervisor = Arc::clone(&supervisor);
+        tokio::spawn(async move {
+            supervisor
+                .run(
+                    &agent_request("aborted"),
+                    python_spec("import time;time.sleep(5)"),
+                    b"",
+                )
+                .await
+        })
+    };
+
+    tokio::time::timeout(Duration::from_millis(200), async {
+        while supervisor.active_count() != 1 {
+            tokio::task::yield_now().await;
+        }
+    })
+    .await
+    .expect("worker registers before abort");
+    task.abort();
+    assert!(task.await.unwrap_err().is_cancelled());
+    tokio::time::timeout(Duration::from_millis(200), async {
+        while supervisor.active_count() != 0 {
+            tokio::task::yield_now().await;
+        }
+    })
+    .await
+    .expect("run guard synchronously clears active state");
+
+    assert_fresh_worker(&supervisor, "aborted").await;
+}
+
+#[cfg(unix)]
+#[tokio::test]
 async fn cancellation_and_cancel_all_are_idempotent_and_reap_workers() {
     let supervisor = Arc::new(Supervisor::new(SupervisorLimits::testing()));
     let task = {
@@ -1887,6 +2007,7 @@ async fn cancellation_and_cancel_all_are_idempotent_and_reap_workers() {
     };
     tokio::time::sleep(Duration::from_millis(20)).await;
     supervisor.cancel("cancel").await.unwrap();
+    assert_eq!(supervisor.active_count(), 0);
     supervisor.cancel("cancel").await.unwrap();
     let error = task.await.unwrap().unwrap_err();
     assert_eq!(error.code, "cancelled");
@@ -1907,6 +2028,7 @@ async fn cancellation_and_cancel_all_are_idempotent_and_reap_workers() {
     };
     tokio::time::sleep(Duration::from_millis(20)).await;
     supervisor.cancel_all().await;
+    assert_eq!(supervisor.active_count(), 0);
     supervisor.cancel_all().await;
     assert_eq!(task.await.unwrap().unwrap_err().code, "cancelled");
     assert_fresh_worker(&supervisor, "fresh_cancel_all").await;

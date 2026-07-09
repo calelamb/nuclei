@@ -278,6 +278,14 @@ impl WorkerResponseV1 {
         {
             return Err("Worker response framework mismatch".into());
         }
+        if self
+            .error
+            .as_ref()
+            .and_then(|error| error.framework)
+            .is_some_and(|framework| framework != request.framework)
+        {
+            return Err("Worker error framework mismatch".into());
+        }
         if request.action == Action::Parse && self.result.is_some() {
             return Err("Parse response contained a simulation result".into());
         }

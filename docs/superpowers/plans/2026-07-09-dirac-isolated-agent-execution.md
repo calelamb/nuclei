@@ -870,6 +870,7 @@ git commit -m "feat: define agent runtime resources"
 **Files:**
 - Create: `src-tauri/src/agent_runtime/process.rs`
 - Create: `src-tauri/src/commands/agent_runtime.rs`
+- Modify: `src-tauri/src/agent_runtime/protocol.rs`
 - Modify: `src-tauri/src/commands/mod.rs`
 - Modify: `src-tauri/src/lib.rs`
 - Modify: `src-tauri/tests/agent_runtime_contract.rs`
@@ -935,13 +936,13 @@ impl SupervisorLimits {
     pub fn testing() -> Self { Self { wall: Duration::from_millis(100), stdout_bytes: 1024, stderr_bytes: 1024 } }
 }
 #[derive(Debug)] pub struct RuntimeError { pub code: String, pub message: String }
-struct Active {
-    pid: u32,
-    process_group: i32,
-    cancelled: AtomicBool,
+struct RunToken {
+    deadline: tokio::time::Instant,
+    state: Mutex<TokenState>,
     cancellation: tokio::sync::Notify,
+    completion: tokio::sync::Notify,
 }
-pub struct Supervisor { limits: SupervisorLimits, active: Mutex<HashMap<String, Arc<Active>>> }
+pub struct Supervisor { limits: SupervisorLimits, active: Arc<Mutex<HashMap<String, Arc<RunToken>>>> }
 impl Supervisor {
     pub fn new(limits: SupervisorLimits) -> Self { Self { limits, active: Mutex::new(HashMap::new()) } }
 }
@@ -956,20 +957,28 @@ pub trait ProcessSupervisor {
 
 On qualified Unix platforms, implement `run` with `tokio::process::Command`,
 `env_clear`, piped stdio, immediate insertion into `active`, concurrent
-byte-capped stdout/stderr readers, and a wall timeout covering child wait and
-pipe closure. The `run` future exclusively owns and reaps `Child`; cancellation
-only marks/notifies the matching active generation, so it cannot double-wait or
-signal a reused PID. Windows never constructs a `ProcessSpec` or enters the
-supervisor. A process group is used for lifecycle cleanup, but never counted as
-descendant containment: the qualified macOS profile must deny fork/exec and
-Linux must place the worker in its delegated cgroup before execution. Remove
-the active-map entry only after bounded cleanup.
+byte-capped stdout/stderr readers, and one absolute deadline covering stdin,
+pipe EOF, cancellation, group kill, leader wait, and cleanup. The active map
+contains only cancellation/completion tokens; the `run` future and its RAII
+guard exclusively own `Child` and the pgid. External cancellation notifies that
+owner and waits only until the run deadline. No code signals a pgid after
+`child.wait()` has reaped the leader.
+
+On normal framing completion, consume both raw pipes to EOF, kill the group
+while an exited leader is still unreaped, then wait exactly once. This clears
+same-group descendants even when they closed inherited stdio. At the deadline,
+kill the still-live group, abort reader tasks, return a fail-closed timeout, and
+perform only bounded background reap. The RAII guard performs the same
+synchronous kill/registry cleanup if the run future is dropped. A process group
+is lifecycle cleanup, never descendant containment: an escaped `setsid` child
+is bounded by reader abortion but only the later platform sandbox/cgroup can
+contain it. Windows never spawns.
 
 After bounded cleanup, reject cap overflow, nonzero status, non-UTF-8, anything
 except one trailing-newline JSON object or any strict typed
 `WorkerResponseV1` deserialization/semantic error. Call
 `response.validate(request)` before returning so request ID, framework, action,
-required payloads, and shots are correlated. Snapshot,
+required payloads, shots, and any `KernelError.framework` are correlated. Snapshot,
 simulation result, and kernel error are typed deny-unknown structures; their
 contents are display data only and are never interpreted as commands, paths,
 environment, or capabilities.
@@ -1019,19 +1028,24 @@ frameworks, and no unsandboxed `ProcessSpec` can be constructed. Platform Tasks
 fallback spawn path before then. The command-facing trait uses a stable
 Rust-1.77-compatible `impl Future + Send` return rather than `async-trait`.
 Register state and all commands in `lib.rs`; export the command module. App
-shutdown calls `ProcessSupervisor::cancel_all`, with synchronous cancellation
-notification as a drop fallback.
+shutdown handles `RunEvent::ExitRequested`/`RunEvent::Exit` and blocks on the
+bounded `ProcessSupervisor::cancel_all`; individual window destruction does
+not cancel workers. Synchronous RAII cancellation remains the drop fallback.
+Task 4 adds no CI workflow—mandatory qualification and release workflow changes
+belong exclusively to Task 9.
 
 - [ ] **Step 5: Run lifecycle tests**
 
 Run: `cd src-tauri && cargo test --test agent_runtime_contract -- --nocapture`
 
-Expected: PASS; malformed bytes, flood, timeout, crash, and cancellation are reaped and a fresh worker succeeds.
+Expected: PASS; malformed bytes, flood, timeout, crash, cancellation, dropped
+run futures, same-group descendants, and escaped-pgid pipe holders are bounded;
+active state is cleared and a fresh worker succeeds.
 
 - [ ] **Step 6: Commit**
 
 ```bash
-git add src-tauri/src/agent_runtime/process.rs src-tauri/src/commands/agent_runtime.rs src-tauri/src/commands/mod.rs src-tauri/src/lib.rs src-tauri/tests/agent_runtime_contract.rs
+git add src-tauri/src/agent_runtime/process.rs src-tauri/src/agent_runtime/protocol.rs src-tauri/src/commands/agent_runtime.rs src-tauri/src/commands/mod.rs src-tauri/src/lib.rs src-tauri/tests/agent_runtime_contract.rs
 git commit -m "feat: supervise untrusted agent workers"
 ```
 

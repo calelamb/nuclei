@@ -4,7 +4,6 @@ use serde::Deserialize;
 use std::collections::{BTreeMap, HashMap};
 use std::future::Future;
 use std::path::PathBuf;
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
@@ -74,20 +73,51 @@ impl RuntimeError {
     }
 }
 
-struct Active {
-    #[cfg(unix)]
-    pid: u32,
-    #[cfg(unix)]
-    process_group: i32,
-    killable: AtomicBool,
-    cancelled: AtomicBool,
+struct RunToken {
+    deadline: tokio::time::Instant,
+    state: Mutex<TokenState>,
     cancellation: tokio::sync::Notify,
+    completion: tokio::sync::Notify,
+}
+
+#[derive(Default)]
+struct TokenState {
+    cancel_requested: bool,
+    completed: bool,
+}
+
+impl RunToken {
+    fn state(&self) -> std::sync::MutexGuard<'_, TokenState> {
+        self.state
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+    }
+
+    fn request_cancel(&self) -> bool {
+        let mut state = self.state();
+        if state.completed {
+            return false;
+        }
+        state.cancel_requested = true;
+        drop(state);
+        self.cancellation.notify_one();
+        true
+    }
+
+    #[cfg(unix)]
+    fn is_cancelled(&self) -> bool {
+        self.state().cancel_requested
+    }
+
+    fn is_completed(&self) -> bool {
+        self.state().completed
+    }
 }
 
 pub struct Supervisor {
     #[cfg(unix)]
     limits: SupervisorLimits,
-    active: Mutex<HashMap<String, Arc<Active>>>,
+    active: Arc<Mutex<HashMap<String, Arc<RunToken>>>>,
 }
 
 impl Supervisor {
@@ -97,11 +127,11 @@ impl Supervisor {
         Self {
             #[cfg(unix)]
             limits,
-            active: Mutex::new(HashMap::new()),
+            active: Arc::new(Mutex::new(HashMap::new())),
         }
     }
 
-    fn active(&self) -> std::sync::MutexGuard<'_, HashMap<String, Arc<Active>>> {
+    fn active(&self) -> std::sync::MutexGuard<'_, HashMap<String, Arc<RunToken>>> {
         self.active
             .lock()
             .unwrap_or_else(|poisoned| poisoned.into_inner())
@@ -125,38 +155,14 @@ impl Supervisor {
         Ok(())
     }
 
-    #[cfg(unix)]
-    fn remove_active(&self, request_id: &str, active: &Arc<Active>) {
-        let mut entries = self.active();
-        if entries
-            .get(request_id)
-            .is_some_and(|registered| Arc::ptr_eq(registered, active))
-        {
-            entries.remove(request_id);
-        }
-    }
-
-    #[cfg(unix)]
-    fn mark_reaped(&self, request_id: &str, active: &Arc<Active>) -> bool {
-        let entries = self.active();
-        if entries
-            .get(request_id)
-            .is_some_and(|registered| Arc::ptr_eq(registered, active))
-        {
-            // cancel() takes this same mutex, preventing any later signal from
-            // targeting a process-group ID after its leader has been reaped.
-            active.killable.store(false, Ordering::Release);
-        }
-        active.cancelled.load(Ordering::Acquire)
+    pub fn active_count(&self) -> usize {
+        self.active().len()
     }
 
     pub(crate) fn cancel_all_now(&self) {
         let active = self.active();
-        for process in active.values() {
-            if process.killable.load(Ordering::Acquire) {
-                process.cancelled.store(true, Ordering::Release);
-                process.cancellation.notify_one();
-            }
+        for token in active.values() {
+            token.request_cancel();
         }
     }
 
@@ -178,7 +184,8 @@ impl Supervisor {
             ));
         }
 
-        let (mut child, active) = {
+        let deadline = tokio::time::Instant::now() + self.limits.wall;
+        let (child, token) = {
             let mut entries = self.active();
             if entries.contains_key(&request.request_id) {
                 return Err(RuntimeError::new(
@@ -212,20 +219,34 @@ impl Supervisor {
             let pid = child.id().ok_or_else(|| {
                 RuntimeError::new("worker_start_failed", "Worker process could not be started")
             })?;
-            let active = Arc::new(Active {
-                pid,
-                process_group: pid as i32,
-                killable: AtomicBool::new(true),
-                cancelled: AtomicBool::new(false),
+            let token = Arc::new(RunToken {
+                deadline,
+                state: Mutex::new(TokenState::default()),
                 cancellation: tokio::sync::Notify::new(),
+                completion: tokio::sync::Notify::new(),
             });
-            entries.insert(request.request_id.clone(), Arc::clone(&active));
-            (child, active)
+            entries.insert(request.request_id.clone(), Arc::clone(&token));
+            debug_assert_eq!(child.id(), Some(pid));
+            (child, token)
         };
 
-        let child_stdin = child.stdin.take().expect("piped worker stdin");
-        let stdout = child.stdout.take().expect("piped worker stdout");
-        let stderr = child.stderr.take().expect("piped worker stderr");
+        let mut guard = RunGuard::new(
+            request.request_id.clone(),
+            Arc::clone(&self.active),
+            Arc::clone(&token),
+            child,
+        );
+        let child_stdin = guard.child_mut().stdin.take().expect("piped worker stdin");
+        let stdout = guard
+            .child_mut()
+            .stdout
+            .take()
+            .expect("piped worker stdout");
+        let stderr = guard
+            .child_mut()
+            .stderr
+            .take()
+            .expect("piped worker stderr");
         let input = stdin.to_vec();
         let stdin_task = tokio::spawn(async move {
             let mut child_stdin = child_stdin;
@@ -234,79 +255,70 @@ impl Supervisor {
         });
         let stdout_task = tokio::spawn(read_capped(stdout, self.limits.stdout_bytes));
         let stderr_task = tokio::spawn(read_capped(stderr, self.limits.stderr_bytes));
+        guard.track(&stdin_task);
+        guard.track(&stdout_task);
+        guard.track(&stderr_task);
 
-        let deadline = tokio::time::Instant::now() + self.limits.wall;
-        enum Termination {
-            Exited(std::process::ExitStatus),
-            Cancelled,
-            TimedOut,
-            WaitFailed,
-        }
-
-        let mut termination = if active.cancelled.load(Ordering::Acquire) {
-            kill_process_group(&active);
-            match child.wait().await {
-                Ok(_) => Termination::Cancelled,
-                Err(_) => {
-                    let _ = child.wait().await;
-                    Termination::WaitFailed
-                }
-            }
-        } else {
-            tokio::select! {
-                result = child.wait() => match result {
-                    Ok(status) => Termination::Exited(status),
-                    Err(_) => {
-                        kill_process_group(&active);
-                        let _ = child.wait().await;
-                        Termination::WaitFailed
-                    },
-                },
-                _ = active.cancellation.notified() => {
-                    kill_process_group(&active);
-                    match child.wait().await {
-                        Ok(_) => Termination::Cancelled,
-                        Err(_) => {
-                            let _ = child.wait().await;
-                            Termination::WaitFailed
-                        },
-                    }
-                },
-                _ = tokio::time::sleep_until(deadline) => {
-                    kill_process_group(&active);
-                    match child.wait().await {
-                        Ok(_) => Termination::TimedOut,
-                        Err(_) => {
-                            let _ = child.wait().await;
-                            Termination::WaitFailed
-                        },
-                    }
-                }
-            }
-        };
-
-        let cancelled_before_reap = self.mark_reaped(&request.request_id, &active);
         let io = async move { tokio::join!(stdin_task, stdout_task, stderr_task) };
         tokio::pin!(io);
-        let io_results = if matches!(
-            termination,
-            Termination::Cancelled | Termination::TimedOut | Termination::WaitFailed
-        ) {
-            io.await
+        let io_results = if token.is_cancelled() {
+            guard.kill_group();
+            tokio::time::timeout_at(deadline, &mut io).await
         } else {
             tokio::select! {
-                results = &mut io => results,
+                results = &mut io => Ok(results),
+                _ = token.cancellation.notified() => {
+                    guard.kill_group();
+                    tokio::time::timeout_at(deadline, &mut io).await
+                },
                 _ = tokio::time::sleep_until(deadline) => {
-                    // If I/O remains open after the leader exits, a descendant
-                    // still owns a pipe and therefore still owns this pgid.
-                    kill_process_group(&active);
-                    termination = Termination::TimedOut;
-                    io.await
+                    guard.kill_group();
+                    guard.abort_tasks();
+                    return Err(RuntimeError::new(
+                        "wall_timeout",
+                        "Worker exceeded the wall-clock limit",
+                    ));
                 }
             }
         };
 
-        self.remove_active(&request.request_id, &active);
+        let io_results = match io_results {
+            Ok(results) => results,
+            Err(_) => {
+                guard.kill_group();
+                guard.abort_tasks();
+                return Err(RuntimeError::new(
+                    "wall_timeout",
+                    "Worker exceeded the wall-clock limit",
+                ));
+            }
+        };
+
+        // EOF is consumed before wait(), so an exited leader remains unreaped
+        // and its process-group ID cannot be reused. Killing now also clears
+        // same-group descendants that closed inherited stdio. This is lifecycle
+        // cleanup only; platform sandboxes/cgroups provide containment.
+        guard.kill_group();
+        let status = match tokio::time::timeout_at(deadline, guard.child_mut().wait()).await {
+            Ok(Ok(status)) => {
+                guard.mark_reaped();
+                status
+            }
+            Ok(Err(_)) => {
+                return Err(RuntimeError::new(
+                    "worker_wait_failed",
+                    "Worker process could not be reaped",
+                ));
+            }
+            Err(_) => {
+                guard.abort_tasks();
+                return Err(RuntimeError::new(
+                    "cleanup_timeout",
+                    "Worker cleanup exceeded the wall-clock limit",
+                ));
+            }
+        };
+        let cancelled = guard.complete();
 
         let (stdin_result, stdout_result, stderr_result) = io_results;
         let stdout_capture = stdout_result.map_err(|_| {
@@ -316,22 +328,10 @@ impl Supervisor {
             RuntimeError::new("worker_io_failed", "Worker output could not be read")
         })??;
 
-        if cancelled_before_reap || matches!(termination, Termination::Cancelled) {
+        if cancelled {
             return Err(RuntimeError::new(
                 "cancelled",
                 "Worker request was cancelled",
-            ));
-        }
-        if matches!(termination, Termination::TimedOut) {
-            return Err(RuntimeError::new(
-                "wall_timeout",
-                "Worker exceeded the wall-clock limit",
-            ));
-        }
-        if matches!(termination, Termination::WaitFailed) {
-            return Err(RuntimeError::new(
-                "worker_wait_failed",
-                "Worker process could not be reaped",
             ));
         }
         if stdout_capture.overflow {
@@ -340,9 +340,6 @@ impl Supervisor {
                 "Worker response exceeded the byte limit",
             ));
         }
-        let Termination::Exited(status) = termination else {
-            unreachable!()
-        };
         if !status.success() {
             return Err(RuntimeError::new(
                 "worker_failed",
@@ -413,28 +410,157 @@ impl ProcessSupervisor for Supervisor {
     }
 
     async fn cancel<'a>(&'a self, id: &'a str) -> Result<(), RuntimeError> {
-        let active = self.active();
-        if let Some(active) = active.get(id) {
-            if active.killable.load(Ordering::Acquire) {
-                active.cancelled.store(true, Ordering::Release);
-                active.cancellation.notify_one();
-            }
+        let token = self.active().get(id).cloned();
+        let Some(token) = token else {
+            return Ok(());
+        };
+        if !token.request_cancel() {
+            return Ok(());
         }
-        Ok(())
+        if wait_for_completion(&token).await {
+            Ok(())
+        } else {
+            Err(RuntimeError::new(
+                "cleanup_timeout",
+                "Worker cleanup exceeded the wall-clock limit",
+            ))
+        }
     }
 
     async fn cancel_all(&self) {
-        self.cancel_all_now();
+        let tokens = {
+            let active = self.active();
+            active.values().cloned().collect::<Vec<_>>()
+        };
+        for token in &tokens {
+            token.request_cancel();
+        }
+        for token in tokens {
+            let _ = wait_for_completion(&token).await;
+        }
     }
 }
 
 #[cfg(unix)]
-fn kill_process_group(active: &Active) {
-    // This group is a lifecycle handle only. Platform sandboxes/cgroups are
-    // authoritative for descendant containment.
-    debug_assert_eq!(active.pid as i32, active.process_group);
-    unsafe {
-        libc::kill(-active.process_group, libc::SIGKILL);
+struct RunGuard {
+    request_id: String,
+    registry: Arc<Mutex<HashMap<String, Arc<RunToken>>>>,
+    token: Arc<RunToken>,
+    child: Option<tokio::process::Child>,
+    process_group: i32,
+    leader_reaped: bool,
+    tasks: Vec<tokio::task::AbortHandle>,
+}
+
+#[cfg(unix)]
+impl RunGuard {
+    fn new(
+        request_id: String,
+        registry: Arc<Mutex<HashMap<String, Arc<RunToken>>>>,
+        token: Arc<RunToken>,
+        child: tokio::process::Child,
+    ) -> Self {
+        let process_group = child.id().expect("spawned child has an ID") as i32;
+        Self {
+            request_id,
+            registry,
+            token,
+            child: Some(child),
+            process_group,
+            leader_reaped: false,
+            tasks: Vec::new(),
+        }
+    }
+
+    fn child_mut(&mut self) -> &mut tokio::process::Child {
+        self.child.as_mut().expect("run guard owns child")
+    }
+
+    fn track<T>(&mut self, task: &tokio::task::JoinHandle<T>) {
+        self.tasks.push(task.abort_handle());
+    }
+
+    fn abort_tasks(&self) {
+        for task in &self.tasks {
+            task.abort();
+        }
+    }
+
+    fn kill_group(&self) {
+        if !self.leader_reaped {
+            // Lifecycle handle only. Platform sandboxes/cgroups are
+            // authoritative for descendant containment.
+            unsafe {
+                libc::kill(-self.process_group, libc::SIGKILL);
+            }
+        }
+    }
+
+    fn mark_reaped(&mut self) {
+        self.leader_reaped = true;
+    }
+
+    fn complete(&self) -> bool {
+        let mut registry = self
+            .registry
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        let mut state = self.token.state();
+        if state.completed {
+            return state.cancel_requested;
+        }
+        state.completed = true;
+        let cancelled = state.cancel_requested;
+        if registry
+            .get(&self.request_id)
+            .is_some_and(|registered| Arc::ptr_eq(registered, &self.token))
+        {
+            registry.remove(&self.request_id);
+        }
+        drop(state);
+        drop(registry);
+        self.token.completion.notify_waiters();
+        cancelled
+    }
+}
+
+#[cfg(unix)]
+impl Drop for RunGuard {
+    fn drop(&mut self) {
+        self.abort_tasks();
+        if !self.leader_reaped {
+            self.kill_group();
+            if let Some(child) = self.child.as_mut() {
+                let _ = child.start_kill();
+            }
+            if let Some(mut child) = self.child.take() {
+                if let Ok(runtime) = tokio::runtime::Handle::try_current() {
+                    runtime.spawn(async move {
+                        let _ =
+                            tokio::time::timeout(Duration::from_millis(250), child.wait()).await;
+                    });
+                }
+            }
+        }
+        let _ = self.complete();
+    }
+}
+
+async fn wait_for_completion(token: &RunToken) -> bool {
+    loop {
+        if token.is_completed() {
+            return true;
+        }
+        let notified = token.completion.notified();
+        if token.is_completed() {
+            return true;
+        }
+        if tokio::time::timeout_at(token.deadline, notified)
+            .await
+            .is_err()
+        {
+            return token.is_completed();
+        }
     }
 }
 

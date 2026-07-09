@@ -11,7 +11,7 @@ pub fn run() {
     let kernel_state = KernelState::new();
     let agent_runtime_state = AgentRuntimeState::new();
 
-    tauri::Builder::default()
+    let app = tauri::Builder::default()
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_process::init())
         .plugin(tauri_plugin_store::Builder::default().build())
@@ -42,17 +42,16 @@ pub fn run() {
             )?;
             Ok(())
         })
-        .on_window_event(|window, event| {
-            if let tauri::WindowEvent::Destroyed = event {
-                let app = window.app_handle().clone();
-                tauri::async_runtime::spawn(async move {
-                    app.state::<AgentRuntimeState>()
-                        .supervisor
-                        .cancel_all()
-                        .await;
-                });
-            }
-        })
-        .run(tauri::generate_context!())
+        .build(tauri::generate_context!())
         .expect("error while running tauri application");
+
+    app.run(|app_handle, event| {
+        if matches!(
+            event,
+            tauri::RunEvent::Exit | tauri::RunEvent::ExitRequested { .. }
+        ) {
+            let state = app_handle.state::<AgentRuntimeState>();
+            tauri::async_runtime::block_on(state.supervisor.cancel_all());
+        }
+    });
 }
