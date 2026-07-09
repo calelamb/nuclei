@@ -36,6 +36,8 @@ This plan implements Stage 0 from `docs/superpowers/specs/2026-07-09-dirac-agent
 - Create `kernel/tests/test_agent_worker.py`.
 - Modify `kernel/executor.py` — optional capture factory plus non-executing framework resolution used to bind requests before execution.
 - Modify `kernel/tests/test_executor.py`.
+- Modify `kernel/adapters/qsharp_adapter.py` — public disposable-worker mode that keeps one-request QDK work on the caller thread.
+- Modify `kernel/tests/test_qsharp_adapter.py` — disposable-worker mode coverage.
 
 ### Rust
 - Create `src-tauri/src/agent_runtime/mod.rs`.
@@ -356,6 +358,17 @@ def test_optional_capture_limit_does_not_change_default_executor():
     assert error is None
     assert len(stdout.encode()) <= 16 and len(stderr.encode()) <= 16
     assert Executor().run_python("print('complete')")[0] == "complete\n"
+```
+
+```python
+# append to kernel/tests/test_qsharp_adapter.py
+def test_configure_disposable_worker_runs_qdk_work_on_calling_thread(monkeypatch):
+    monkeypatch.setattr(qsharp_adapter, "_DISPOSABLE_WORKER", False, raising=False)
+    caller_thread = threading.get_ident()
+
+    qsharp_adapter.configure_disposable_worker()
+
+    assert qsharp_adapter._on_interpreter_thread(threading.get_ident) == caller_thread
 ```
 
 - [ ] **Step 2: Run tests to verify they fail**
