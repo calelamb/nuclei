@@ -397,6 +397,22 @@ fn venv_python(root: &Path) -> PathBuf {
     }
 }
 
+fn assert_same_canonical_path(actual: &Path, expected: &Path) {
+    assert_eq!(
+        actual.canonicalize().unwrap(),
+        expected.canonicalize().unwrap()
+    );
+}
+
+#[test]
+fn canonical_path_comparison_normalizes_lexical_aliases() {
+    let temporary = TempDir::new().unwrap();
+    let nested = temporary.path().join("nested");
+    fs::create_dir_all(&nested).unwrap();
+
+    assert_same_canonical_path(&nested, &temporary.path().join(".").join("nested"));
+}
+
 #[derive(Clone)]
 struct FailureRule {
     operation: &'static str,
@@ -565,7 +581,7 @@ fn provisioning_uses_only_a_dedicated_versioned_environment_and_clean_commands()
     )
     .unwrap();
 
-    assert_eq!(environment.root, app_data.path().join("agent-runtime/v1"));
+    assert_same_canonical_path(&environment.root, &app_data.path().join("agent-runtime/v1"));
     environment.verify().unwrap();
     let commands = runner.commands.lock().unwrap();
     assert!(commands.iter().all(|command| command.clear_environment));
