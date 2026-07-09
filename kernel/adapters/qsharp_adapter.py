@@ -13,7 +13,9 @@ pinned to the thread that created it. Dropping it from any other thread
 unraisable RuntimeError and leaks the foreign-thread context. Every
 interpreter touch therefore runs on ONE dedicated thread (_QSHARP_EXECUTOR),
 which both serializes calls and guarantees contexts are created and dropped
-on the same thread.
+on the same thread. The one-request agent worker explicitly calls
+configure_disposable_worker(), which instead keeps every touch on its main
+thread because that process has no concurrent or reusable QDK state.
 
 The single thread has a failure mode: qdk offers NO cancellation, so a
 runaway Q# program (an infinite loop) occupies the interpreter thread
@@ -72,6 +74,7 @@ except ImportError:
 # init → eval → [circuit | run | compile] critical section, so no separate
 # lock is needed. The worker thread is only spawned on first submit.
 _QSHARP_EXECUTOR = ThreadPoolExecutor(max_workers=1, thread_name_prefix="qsharp-interp")
+_DISPOSABLE_WORKER = False
 
 _T = TypeVar("_T")
 
@@ -118,6 +121,18 @@ _WEDGED_MESSAGE = (
     "the earlier program for infinite loops."
 )
 
+def configure_disposable_worker() -> None:
+    """Keep QDK work on the caller in a process dedicated to one request.
+
+    The normal kernel needs a persistent thread because QDK state is
+    process-global and thread-pinned. A disposable worker has no concurrent
+    requests or reusable interpreter state, and its process limit may forbid
+    creating that thread. Call this before its first interpreter operation.
+    """
+    global _DISPOSABLE_WORKER
+    _DISPOSABLE_WORKER = True
+
+
 # why: a timed-out task cannot be cancelled (qdk has no cancellation), so it
 # keeps the single interpreter thread busy and every later submit would
 # queue behind it and time out too — silently, one full budget at a time.
@@ -155,6 +170,9 @@ def _clear_wedged(_future: Future) -> None:
 def _on_interpreter_thread(fn: Callable[[], _T], timeout: float | None = None) -> _T:
     """Run fn on the dedicated interpreter thread and block for its result.
 
+    Disposable-worker mode runs fn directly on the one-request process's
+    calling thread instead.
+
     Safe with respect to deadlock: the caller (typically an
     asyncio.to_thread worker) and the qsharp-interp worker are independent
     threads. Exceptions raised by fn (e.g. ImportError("qdk")) propagate to
@@ -170,6 +188,8 @@ def _on_interpreter_thread(fn: Callable[[], _T], timeout: float | None = None) -
     _InterpreterWedged immediately — without submitting — until the runaway
     task completes and the wedge clears itself.
     """
+    if _DISPOSABLE_WORKER:
+        return fn()
     if _interpreter_wedged():
         raise _InterpreterWedged(_WEDGED_MESSAGE)
     future = _QSHARP_EXECUTOR.submit(fn)

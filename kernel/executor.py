@@ -134,6 +134,11 @@ class Executor:
             )
         return self._detect_adapter_spec(code)
 
+    def resolve_framework(self, code: str, *, language: str | None = None) -> str | None:
+        """Resolve the framework from source without importing or executing it."""
+        spec = self._resolve_spec(code, language)
+        return spec.framework if spec is not None else None
+
     def _load_adapter(self, spec: AdapterSpec):
         try:
             module = importlib.import_module(spec.module)

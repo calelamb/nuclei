@@ -52,6 +52,15 @@ operation Main() : Result[] {
 QSHARP_SPEC = next(spec for spec in ADAPTER_SPECS if spec.framework == "qsharp")
 
 
+def test_configure_disposable_worker_runs_qdk_work_on_calling_thread(monkeypatch):
+    monkeypatch.setattr(qsharp_adapter, "_DISPOSABLE_WORKER", False, raising=False)
+    caller_thread = threading.get_ident()
+
+    qsharp_adapter.configure_disposable_worker()
+
+    assert qsharp_adapter._on_interpreter_thread(threading.get_ident) == caller_thread
+
+
 # ───────── parse_source ─────────
 
 

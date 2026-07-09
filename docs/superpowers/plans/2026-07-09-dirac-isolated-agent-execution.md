@@ -4,7 +4,7 @@
 
 **Goal:** Run each model-generated parse or simulation request in a disposable, credential-free worker with enforced and self-tested filesystem, environment, network, subprocess, resource, output, timeout, and cancellation boundaries.
 
-**Architecture:** `createAgentSandboxSession` invokes one Tauri command per request and never calls the long-lived WebSocket kernel. Rust validates a versioned request, requires a qualified OS sandbox, launches a fresh worker in a process group, treats every worker byte as untrusted, and reaps the worker on every terminal path. The worker applies rlimits before constructing the existing `Executor`, returns one capped versioned JSON object, and exits; macOS uses Seatbelt, Linux requires bubblewrap plus delegated cgroup v2 and seccomp, and Windows/web fail closed.
+**Architecture:** `createAgentSandboxSession` invokes one Tauri command per request and never calls the long-lived WebSocket kernel. Rust validates a versioned request, requires a qualified OS sandbox, launches a fresh worker in a process group, treats every worker byte as untrusted, and reaps the worker on every terminal path. The worker applies rlimits before constructing the existing `Executor`, binds the declared framework before generated code can run, cooperatively emits a capped versioned JSON object, and exits; Rust remains authoritative for raw-byte caps and exact-one-JSON framing. macOS uses Seatbelt, Linux requires bubblewrap plus delegated cgroup v2 and seccomp, and Windows/web fail closed.
 
 **Tech Stack:** Tauri 2, Rust 2021, serde, Tokio, macOS `sandbox-exec`, Linux bubblewrap/cgroup v2/seccomp-BPF/rlimit, Python 3.10+, existing quantum adapters, TypeScript 5.9, Vitest 4, pytest.
 
@@ -17,6 +17,7 @@ This plan implements Stage 0 from `docs/superpowers/specs/2026-07-09-dirac-agent
 - Generated source never enters `kernel/server.py`, its credential-bearing `HardwareManager`, or `createKernelSession`.
 - The dedicated environment is `<app-data>/agent-runtime/v1`, not `<app-data>/venv`. Its manifest excludes keyring, provider SDKs, and CUDA-Q.
 - Request source is at most 262,144 UTF-8 bytes. Simulation shots are 1–10,000.
+- The worker resolves the source framework without execution and rejects a declared/detected mismatch with `framework_mismatch` before loading an adapter or running source.
 - macOS is available only after mandatory Seatbelt probes pass.
 - Linux is available only after mandatory bwrap, cgroup v2, rlimit, seccomp, and boundary probes pass.
 - Windows and web are unavailable in Stage 0.
@@ -233,6 +234,8 @@ git commit -m "feat: define isolated agent protocol"
 - Create: `kernel/tests/test_agent_worker.py`
 - Modify: `kernel/executor.py:92-97,190-225`
 - Modify: `kernel/tests/test_executor.py`
+- Modify: `kernel/adapters/qsharp_adapter.py`
+- Modify: `kernel/tests/test_qsharp_adapter.py`
 
 - [ ] **Step 1: Write failing worker tests with all test helpers defined first**
 
@@ -259,7 +262,7 @@ def make_request(code, *, action="parse", framework="cirq", language="python", s
     return value
 
 
-def run_worker(value, timeout=5):
+def run_worker_process(value, timeout=5):
     env = {
         "PATH": os.environ.get("PATH", ""),
         "LANG": "C.UTF-8",
@@ -271,15 +274,39 @@ def run_worker(value, timeout=5):
         input=json.dumps(value).encode(), stdout=subprocess.PIPE, stderr=subprocess.PIPE,
         env=env, cwd=ROOT, timeout=timeout, check=False,
     )
+    return completed
+
+
+def run_worker(value, timeout=5):
+    completed = run_worker_process(value, timeout)
+    assert completed.stdout.count(b"\n") == 1
     return completed, json.loads(completed.stdout)
 
 
-def test_worker_writes_exactly_one_capped_response():
+def test_cooperative_print_flood_returns_one_capped_response():
     completed, response = run_worker(make_request(
         "print('x' * 1_000_000)\nimport cirq\ncircuit = cirq.Circuit()"
     ))
     assert completed.stdout.count(b"\n") == 1
     assert len(response["stdout"].encode()) <= 65_536
+
+
+def test_raw_fd_write_proves_worker_framing_is_not_authoritative():
+    completed = run_worker_process(make_request(
+        "import os\nos.write(1, b'INJECTED\\n')\nimport cirq\ncircuit = cirq.Circuit()"
+    ))
+    assert completed.stdout.startswith(b"INJECTED\n")
+    assert completed.stdout.count(b"\n") == 2
+
+
+def test_framework_mismatch_does_not_execute_source(tmp_path):
+    marker = tmp_path / "executed"
+    response = run_worker(make_request(
+        f"open({str(marker)!r}, 'w').close()\nfrom qiskit import QuantumCircuit",
+        framework="cirq",
+    ))[1]
+    assert response["error"]["code"] == "framework_mismatch"
+    assert not marker.exists()
 
 
 def test_worker_rejects_malformed_input_without_executor():
@@ -292,13 +319,21 @@ def test_worker_rejects_malformed_input_without_executor():
     assert response["error"]["code"] == "protocol_error"
 
 
-def test_worker_does_not_import_server_hardware_or_keyring():
-    _, response = run_worker(make_request(
-        "import sys\nprint(','.join(sorted(n for n in sys.modules "
-        "if n == 'keyring' or n.startswith('kernel.hardware'))))\n"
-        "import cirq\ncircuit = cirq.Circuit()"
-    ))
-    assert response["stdout"].strip() == ""
+def test_worker_blocks_sensitive_import_attempts():
+    source = """\
+import importlib
+for name in ("keyring", "kernel.server", "kernel.hardware",
+             "qiskit_ibm_runtime", "braket", "azure.quantum",
+             "qiskit_ionq", "pytket", "cudaq"):
+    try:
+        importlib.import_module(name)
+    except ImportError as exc:
+        print(f"{name}:{exc}")
+import cirq
+circuit = cirq.Circuit()
+"""
+    _, response = run_worker(make_request(source))
+    assert "blocked in the disposable agent worker" in response["stdout"]
 
 
 def test_qsharp_worker_is_fresh_after_normal_exit():
@@ -354,15 +389,20 @@ class WorkerLimits:
 
 class BoundedTextCapture(io.TextIOBase):
     def __init__(self, limit):
-        self.limit, self.data = limit, bytearray()
+        self.limit, self.data, self.truncated = limit, bytearray(), False
 
     def write(self, text):
+        if self.truncated:
+            return len(text)
         encoded = text.encode("utf-8", errors="replace")
-        self.data.extend(encoded[: max(0, self.limit - len(self.data))])
+        remaining = max(0, self.limit - len(self.data))
+        self.truncated = len(encoded) > remaining
+        prefix = encoded[:remaining].decode("utf-8", errors="ignore")
+        self.data.extend(prefix.encode("utf-8"))
         return len(text)
 
     def getvalue(self):
-        return self.data.decode("utf-8", errors="replace")
+        return self.data.decode("utf-8")
 
 
 def apply_worker_limits(value):
@@ -377,7 +417,7 @@ def apply_worker_limits(value):
         resource.setrlimit(resource_id, (limit, limit))
 ```
 
-Modify `Executor.__init__` to store `capture_limit_bytes`; add `_new_capture()` returning `io.StringIO()` by default or `BoundedTextCapture(limit)`; replace both `io.StringIO()` constructions in `_run_code` with `_new_capture()`. No server call site passes the option.
+These unit tests verify rlimit configuration calls only. Later macOS/Linux boundary qualification must prove real kernel enforcement. Modify `Executor.__init__` to store `capture_limit_bytes`; add `_new_capture()` returning `io.StringIO()` by default and lazily importing `BoundedTextCapture(limit)` only when configured; replace both `io.StringIO()` constructions in `_run_code` with `_new_capture()`. Add public `resolve_framework(code, language=...)` that performs detection without adapter import or source execution. No server call site passes the capture option.
 
 - [ ] **Step 4: Implement the complete worker entry point**
 
@@ -392,60 +432,90 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from kernel.agent_limits import WorkerLimits, apply_worker_limits
 from kernel.agent_protocol import ProtocolError, parse_request, response_bytes
 
+MAX_RESPONSE_BYTES = 1_048_576
+BLOCKED_IMPORTS = (
+    "keyring", "kernel.server", "kernel.hardware", "qiskit_ibm_runtime",
+    "braket", "azure.quantum", "qiskit_ionq", "pytket", "cudaq",
+)
 
-def truncate_utf8(value, limit):
-    return value.encode("utf-8", errors="replace")[:limit].decode("utf-8", errors="ignore")
 
-
-def main():
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--test-limits", action="store_true")
-    limits = WorkerLimits.testing() if parser.parse_args().test_limits else WorkerLimits()
-    apply_worker_limits(limits)
-    raw = sys.stdin.buffer.read(270_001)
-    request_id = "invalid"
-    try:
-        request = parse_request(raw)
-        request_id = request.request_id
-        from kernel.executor import Executor
-        executor = Executor(capture_limit_bytes=limits.output_bytes)
-        if request.action == "parse":
-            snapshot, stdout, stderr, error = executor.parse(request.code, language=request.language)
-            result = None
-        else:
-            result, snapshot, stdout, stderr, error = executor.execute(
-                request.code, request.shots, language=request.language
+class BlockedImportFinder:
+    def find_spec(self, fullname, path=None, target=None):
+        if any(fullname == name or fullname.startswith(name + ".")
+               for name in BLOCKED_IMPORTS):
+            raise ImportError(
+                f"Import of {fullname} is blocked in the disposable agent worker."
             )
-        output = response_bytes(
-            request_id, "error" if error else "ok",
-            snapshot.to_dict() if snapshot else None,
-            result.to_dict() if result else None,
-            truncate_utf8(stdout, limits.output_bytes),
-            truncate_utf8(stderr, limits.output_bytes),
-            error.to_dict() if error else None,
+        return None
+
+
+def install_import_blocker():
+    for loaded in tuple(sys.modules):
+        if any(loaded == name or loaded.startswith(name + ".")
+               for name in BLOCKED_IMPORTS):
+            del sys.modules[loaded]
+    sys.meta_path.insert(0, BlockedImportFinder())
+
+
+def bounded_response(request_id, status, snapshot, result, stdout, stderr, error):
+    candidate = response_bytes(
+        request_id, status, snapshot, result, stdout, stderr, error
+    )
+    if len(candidate) < MAX_RESPONSE_BYTES:
+        return candidate
+    replacement = response_bytes(request_id, "error", None, None, "", "", {
+        "code": "response_too_large",
+        "message": "Worker response exceeded the byte limit.",
+    })
+    assert len(replacement) < MAX_RESPONSE_BYTES
+    return replacement
+
+def execute_request(request, limits):
+    from kernel.executor import Executor
+    executor = Executor(capture_limit_bytes=limits.output_bytes)
+    detected = executor.resolve_framework(request.code, language=request.language)
+    if detected != request.framework:
+        return bounded_response(request.request_id, "error", None, None, "", "", {
+            "code": "framework_mismatch",
+            "message": "Declared and detected frameworks differ.",
+            "framework": detected,
+        })
+
+    if request.language == "python":
+        install_import_blocker()
+    if request.framework == "qsharp":
+        from kernel.adapters.qsharp_adapter import configure_disposable_worker
+        configure_disposable_worker()
+
+    if request.action == "parse":
+        snapshot, stdout, stderr, error = executor.parse(
+            request.code, language=request.language
         )
-    except ProtocolError as exc:
-        output = response_bytes(request_id, "error", None, None, "", "", {
-            "code": "protocol_error", "message": str(exc),
-        })
-    except BaseException as exc:
-        output = response_bytes(request_id, "error", None, None, "", "", {
-            "code": "worker_error", "message": type(exc).__name__,
-        })
-    sys.stdout.buffer.write(output)
-    sys.stdout.buffer.flush()
-    return 0
+        result = None
+    else:
+        result, snapshot, stdout, stderr, error = executor.execute(
+            request.code, request.shots, language=request.language
+        )
+    return bounded_response(
+        request.request_id,
+        "error" if error else "ok",
+        snapshot.to_dict() if snapshot else None,
+        result.to_dict() if result else None,
+        truncate_utf8(stdout, limits.output_bytes),
+        truncate_utf8(stderr, limits.output_bytes),
+        error.to_dict() if error else None,
+    )
 
-
-if __name__ == "__main__":
-    raise SystemExit(main())
+# Cooperative capture is not a framing boundary: generated code can call
+# os.write(1, ...) or mutate Python import hooks. The Rust supervisor MUST cap
+# raw stdout bytes, require exactly one JSON response, and enforce the OS sandbox.
 ```
 
 - [ ] **Step 5: Run worker and executor tests**
 
 Run: `python -m pytest kernel/tests/test_agent_worker.py kernel/tests/test_executor.py -v`
 
-Expected: PASS; output is byte-capped and the ordinary kernel remains uncapped.
+Expected: PASS; cooperative output and the whole serialized response are byte-capped, framework mismatches cannot execute source, blocked imports fail, Q# uses its public disposable-worker mode, and the ordinary kernel remains uncapped. The adversarial raw-fd test deliberately proves that Python alone cannot guarantee framing; Task 4's Rust supervisor is authoritative for the 1,048,576-byte raw stdout cap and exact-one-JSON validation.
 
 - [ ] **Step 6: Commit**
 

@@ -75,6 +75,19 @@ import kernel.executor
     assert completed.returncode == 0, completed.stderr
 
 
+def test_resolve_framework_detects_without_executing_source(tmp_path):
+    marker = tmp_path / "executed"
+    code = (
+        f"from pathlib import Path\nPath({str(marker)!r}).write_text('ran')\n"
+        "from qiskit import QuantumCircuit\n"
+    )
+
+    framework = Executor().resolve_framework(code, language="python")
+
+    assert framework == "qiskit"
+    assert not marker.exists()
+
+
 def test_parse_returns_missing_dependency_when_adapter_module_unavailable(monkeypatch):
     executor = Executor()
 
