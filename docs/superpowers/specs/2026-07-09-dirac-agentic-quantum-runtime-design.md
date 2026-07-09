@@ -438,12 +438,19 @@ Live QPU smoke tests are opt-in, tightly budgeted, and never required for the de
 
 ## 14. Delivery sequence
 
+### Stage 0: Isolated agent execution
+
+- Run model-generated programs in a dedicated worker with enforced time, memory, network, environment, output, and filesystem boundaries.
+- Keep provider credentials and the user's project tree outside the worker.
+- Expose a typed agent-only parse/simulate protocol that fails closed on platforms where isolation is unavailable.
+- Prove boundary enforcement with adversarial filesystem, network, subprocess, environment, timeout, memory, and output tests.
+
 ### Stage 1: Closed-loop simulator agent
 
 - Extract orchestration from `useDirac`.
 - Add true multi-turn tool results.
 - Add project manifests and patch transactions.
-- Support write, validate, simulate, inspect, and bounded repair.
+- Support write, validate, simulate, inspect, and bounded repair through the isolated agent execution protocol.
 
 ### Stage 2: Quantum intelligence
 
