@@ -6,6 +6,11 @@ use std::thread;
 use std::time::Duration;
 
 #[cfg(unix)]
+use std::future::Future;
+#[cfg(unix)]
+use std::pin::Pin;
+
+#[cfg(unix)]
 use app_lib::agent_runtime::process::{
     ProcessSpec, ProcessSupervisor, Supervisor, SupervisorLimits,
 };
@@ -17,6 +22,8 @@ use app_lib::agent_runtime::resources::{
     validate_requirements, AgentEnvironment, CommandOutput, CommandRunner, CommandSpec,
     EnvironmentFilesystem, ResourcePaths, RunnerContainment,
 };
+#[cfg(unix)]
+use app_lib::agent_runtime::{AgentProcessResolver, CapabilityReport};
 use app_lib::agent_runtime::{AgentRuntimeCommands, AgentRuntimeState};
 use serde_json::{json, Value};
 use sha2::Digest;
@@ -221,6 +228,18 @@ fn worker_response_is_strict_and_validates_identity() {
     assert!(parsed
         .validate(&worker_request(Action::Parse, Framework::Cirq, None))
         .is_err());
+}
+
+#[test]
+fn validated_worker_response_serializes_with_worker_snake_case_schema() {
+    let parsed: WorkerResponseV1 = serde_json::from_value(response(&[])).unwrap();
+    let value = serde_json::to_value(parsed).unwrap();
+
+    assert_eq!(value["protocol_version"], 1);
+    assert_eq!(value["request_id"], "request_1");
+    assert_eq!(value["status"], "ok");
+    assert!(value.get("protocolVersion").is_none());
+    assert!(value.get("requestId").is_none());
 }
 
 #[test]
@@ -1787,6 +1806,52 @@ async fn assert_fresh_worker(supervisor: &Supervisor, id: &str) {
 }
 
 #[cfg(unix)]
+struct BlockingResolver {
+    blocked_id: String,
+    entered: Arc<tokio::sync::Notify>,
+    release: Arc<tokio::sync::Notify>,
+    spawn_marker: PathBuf,
+}
+
+#[cfg(unix)]
+impl AgentProcessResolver for BlockingResolver {
+    fn resolve<'a>(
+        &'a self,
+        request: &'a WorkerRequestV1,
+    ) -> Pin<Box<dyn Future<Output = Result<ProcessSpec, String>> + Send + 'a>> {
+        Box::pin(async move {
+            if self.blocked_id == "*" || request.request_id == self.blocked_id {
+                self.entered.notify_one();
+                self.release.notified().await;
+            }
+            let script = if request.request_id == "other" {
+                format!(
+                    "import pathlib,time;pathlib.Path({:?}).write_text('spawned');time.sleep(5)",
+                    self.spawn_marker.to_string_lossy()
+                )
+            } else {
+                format!(
+                    "import pathlib;pathlib.Path({:?}).write_text('spawned');{}",
+                    self.spawn_marker.to_string_lossy(),
+                    valid_worker_script(&request.request_id)
+                )
+            };
+            Ok(python_spec(&script))
+        })
+    }
+}
+
+#[cfg(unix)]
+fn available_cirq_capability() -> CapabilityReport {
+    CapabilityReport {
+        available: true,
+        reason: None,
+        qualified_frameworks: vec!["cirq".into()],
+        controls: Vec::new(),
+    }
+}
+
+#[cfg(unix)]
 #[test]
 fn supervisor_limits_and_errors_are_stable() {
     let production = SupervisorLimits::production();
@@ -1798,6 +1863,153 @@ fn supervisor_limits_and_errors_are_stable() {
     assert!(testing.wall < production.wall);
     assert!(testing.stdout_bytes < production.stdout_bytes);
     assert!(testing.stderr_bytes < production.stderr_bytes);
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn cancellation_reserved_before_blocked_resolution_prevents_spawn() {
+    let temporary = TempDir::new().unwrap();
+    let marker = temporary.path().join("must-not-spawn");
+    let entered = Arc::new(tokio::sync::Notify::new());
+    let release = Arc::new(tokio::sync::Notify::new());
+    let state = AgentRuntimeState::with_resolver(
+        Supervisor::new(SupervisorLimits {
+            wall: Duration::from_secs(1),
+            stdout_bytes: 1_024,
+            stderr_bytes: 1_024,
+        }),
+        available_cirq_capability(),
+        Arc::new(BlockingResolver {
+            blocked_id: "pending".into(),
+            entered: Arc::clone(&entered),
+            release: Arc::clone(&release),
+            spawn_marker: marker.clone(),
+        }),
+    );
+    let execute = state.execute_request(agent_request("pending"));
+    assert_eq!(state.supervisor.active_count(), 1);
+
+    let controller = async {
+        entered.notified().await;
+        let cancel = state.supervisor.cancel("pending");
+        assert!(state.supervisor.is_cancelled("pending"));
+        release.notify_one();
+        cancel.await.unwrap();
+    };
+    let (result, ()) = tokio::join!(execute, controller);
+
+    assert_eq!(result.unwrap_err(), "Worker request was cancelled");
+    assert!(!marker.exists());
+    assert_eq!(state.supervisor.active_count(), 0);
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn blocked_resolution_does_not_block_cancelling_another_worker() {
+    let temporary = TempDir::new().unwrap();
+    let marker = temporary.path().join("other-spawned");
+    let entered = Arc::new(tokio::sync::Notify::new());
+    let release = Arc::new(tokio::sync::Notify::new());
+    let state = Arc::new(AgentRuntimeState::with_resolver(
+        Supervisor::new(SupervisorLimits {
+            wall: Duration::from_secs(1),
+            stdout_bytes: 1_024,
+            stderr_bytes: 1_024,
+        }),
+        available_cirq_capability(),
+        Arc::new(BlockingResolver {
+            blocked_id: "slow".into(),
+            entered: Arc::clone(&entered),
+            release: Arc::clone(&release),
+            spawn_marker: marker.clone(),
+        }),
+    ));
+    let slow = {
+        let state = Arc::clone(&state);
+        tokio::spawn(async move { state.execute_request(agent_request("slow")).await })
+    };
+    entered.notified().await;
+    let other = {
+        let state = Arc::clone(&state);
+        tokio::spawn(async move { state.execute_request(agent_request("other")).await })
+    };
+    tokio::time::timeout(Duration::from_millis(300), async {
+        while !marker.exists() {
+            tokio::task::yield_now().await;
+        }
+    })
+    .await
+    .expect("other worker spawns while slow resolution is pending");
+
+    tokio::time::timeout(Duration::from_millis(300), state.supervisor.cancel("other"))
+        .await
+        .expect("slow resolution must not hold the active registry lock")
+        .unwrap();
+    assert_eq!(
+        other.await.unwrap().unwrap_err(),
+        "Worker request was cancelled"
+    );
+    tokio::time::timeout(Duration::from_millis(300), state.supervisor.cancel("slow"))
+        .await
+        .expect("pending resolution cancellation completes")
+        .unwrap();
+    release.notify_one();
+    assert_eq!(
+        slow.await.unwrap().unwrap_err(),
+        "Worker request was cancelled"
+    );
+    assert_eq!(state.supervisor.active_count(), 0);
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn unavailable_execute_and_cancel_all_preserve_pending_cancellation_order() {
+    let unavailable = AgentRuntimeState::new();
+    let execute = unavailable.execute_request(agent_request("unavailable_pending"));
+    let cancel = unavailable.supervisor.cancel("unavailable_pending");
+    let (result, cancel_result) = tokio::join!(execute, cancel);
+    cancel_result.unwrap();
+    assert_eq!(result.unwrap_err(), "Worker request was cancelled");
+
+    let temporary = TempDir::new().unwrap();
+    let state = AgentRuntimeState::with_resolver(
+        Supervisor::new(SupervisorLimits {
+            wall: Duration::from_secs(1),
+            stdout_bytes: 1_024,
+            stderr_bytes: 1_024,
+        }),
+        available_cirq_capability(),
+        Arc::new(BlockingResolver {
+            blocked_id: "*".into(),
+            entered: Arc::new(tokio::sync::Notify::new()),
+            release: Arc::new(tokio::sync::Notify::new()),
+            spawn_marker: temporary.path().join("must-not-spawn"),
+        }),
+    );
+    let first = state.execute_request(agent_request("pending_all_1"));
+    let second = state.execute_request(agent_request("pending_all_2"));
+    assert_eq!(state.supervisor.active_count(), 2);
+    let cancel_all = state.supervisor.cancel_all();
+    let (first, second, ()) = tokio::join!(first, second, cancel_all);
+    assert_eq!(first.unwrap_err(), "Worker request was cancelled");
+    assert_eq!(second.unwrap_err(), "Worker request was cancelled");
+    assert_eq!(state.supervisor.active_count(), 0);
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn direct_run_reserves_request_id_before_the_future_is_polled() {
+    let supervisor = Supervisor::new(SupervisorLimits::testing());
+    let request = agent_request("reserved_direct");
+    let run = supervisor.run(
+        &request,
+        python_spec(&valid_worker_script("reserved_direct")),
+        b"",
+    );
+
+    assert_eq!(supervisor.active_count(), 1);
+    drop(run);
+    assert_eq!(supervisor.active_count(), 0);
 }
 
 #[cfg(unix)]
@@ -1839,6 +2051,35 @@ async fn raw_stdout_is_capped_before_utf8_and_json_validation() {
         .unwrap_err();
     assert_eq!(error.code, "malformed_response");
     assert_fresh_worker(&supervisor, "fresh_multi").await;
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn endless_raw_floods_are_killed_as_soon_as_the_cap_is_observed() {
+    for (id, fd, expected) in [
+        ("endless_stdout", 1, "response_too_large"),
+        ("endless_stderr", 2, "stderr_too_large"),
+    ] {
+        let supervisor = Supervisor::new(SupervisorLimits {
+            wall: Duration::from_secs(1),
+            stdout_bytes: 1_024,
+            stderr_bytes: 1_024,
+        });
+        let started = tokio::time::Instant::now();
+        let script = format!("import os\nwhile True: os.write({fd},b'x'*8192)");
+        let error = supervisor
+            .run(&agent_request(id), python_spec(&script), b"")
+            .await
+            .unwrap_err();
+
+        assert_eq!(error.code, expected);
+        assert!(
+            started.elapsed() < Duration::from_millis(300),
+            "overflow waited for the wall deadline: {:?}",
+            started.elapsed()
+        );
+        assert_fresh_worker(&supervisor, &format!("fresh_{id}")).await;
+    }
 }
 
 #[cfg(unix)]
@@ -1956,21 +2197,27 @@ async fn escaped_process_group_pipe_holder_cannot_extend_the_wall_deadline() {
 #[tokio::test]
 async fn aborted_run_drops_guard_clears_registry_and_allows_id_reuse() {
     let supervisor = Arc::new(Supervisor::new(SupervisorLimits::testing()));
+    let temporary = TempDir::new().unwrap();
+    let pid_file = temporary.path().join("aborted-leader-pid");
+    let script = format!(
+        "import os,pathlib,time;pathlib.Path({:?}).write_text(str(os.getpid()));time.sleep(5)",
+        pid_file.to_string_lossy()
+    );
     let task = {
         let supervisor = Arc::clone(&supervisor);
         tokio::spawn(async move {
             supervisor
-                .run(
-                    &agent_request("aborted"),
-                    python_spec("import time;time.sleep(5)"),
-                    b"",
-                )
+                .run(&agent_request("aborted"), python_spec(&script), b"")
                 .await
         })
     };
 
     tokio::time::timeout(Duration::from_millis(200), async {
-        while supervisor.active_count() != 1 {
+        while supervisor.active_count() != 1
+            || !fs::read_to_string(&pid_file)
+                .map(|contents| !contents.is_empty())
+                .unwrap_or(false)
+        {
             tokio::task::yield_now().await;
         }
     })
@@ -1985,6 +2232,19 @@ async fn aborted_run_drops_guard_clears_registry_and_allows_id_reuse() {
     })
     .await
     .expect("run guard synchronously clears active state");
+    tokio::time::timeout(Duration::from_millis(500), async {
+        while supervisor.background_reap_count() != 0 {
+            tokio::task::yield_now().await;
+        }
+    })
+    .await
+    .expect("background leader reap is observable and bounded");
+    let pid: i32 = fs::read_to_string(&pid_file).unwrap().parse().unwrap();
+    assert_eq!(unsafe { libc::kill(pid, 0) }, -1);
+    assert_eq!(
+        std::io::Error::last_os_error().raw_os_error(),
+        Some(libc::ESRCH)
+    );
 
     assert_fresh_worker(&supervisor, "aborted").await;
 }

@@ -942,9 +942,11 @@ struct RunToken {
     cancellation: tokio::sync::Notify,
     completion: tokio::sync::Notify,
 }
+pub struct RunReservation { /* request ID + token + shared registry, no PID/pgid */ }
 pub struct Supervisor { limits: SupervisorLimits, active: Arc<Mutex<HashMap<String, Arc<RunToken>>>> }
 impl Supervisor {
     pub fn new(limits: SupervisorLimits) -> Self { Self { limits, active: Mutex::new(HashMap::new()) } }
+    pub fn reserve(&self, request_id: &str) -> Result<RunReservation, RuntimeError>;
 }
 pub trait ProcessSupervisor {
     fn run<'a>(&'a self, request: &'a WorkerRequestV1, spec: ProcessSpec, stdin: &'a [u8])
@@ -956,7 +958,8 @@ pub trait ProcessSupervisor {
 ```
 
 On qualified Unix platforms, implement `run` with `tokio::process::Command`,
-`env_clear`, piped stdio, immediate insertion into `active`, concurrent
+`env_clear`, piped stdio, synchronous reservation in `active` before the
+returned future is polled, concurrent
 byte-capped stdout/stderr readers, and one absolute deadline covering stdin,
 pipe EOF, cancellation, group kill, leader wait, and cleanup. The active map
 contains only cancellation/completion tokens; the `run` future and its RAII
@@ -973,6 +976,13 @@ synchronous kill/registry cleanup if the run future is dropped. A process group
 is lifecycle cleanup, never descendant containment: an escaped `setsid` child
 is bounded by reader abortion but only the later platform sandbox/cgroup can
 contain it. Windows never spawns.
+
+Readers stop immediately upon observing byte `limit + 1` and notify the run
+owner, which kills the group and performs bounded cleanup without draining an
+attacker's endless output. Reservation and spawn are separate: neither
+capability/resolver awaits nor `Command::spawn` hold the global registry lock.
+The token's pending-to-launch transition is synchronized with cancellation, so
+a cancellation that wins while resolution is pending prevents spawn.
 
 After bounded cleanup, reject cap overflow, nonzero status, non-UTF-8, anything
 except one trailing-newline JSON object or any strict typed
@@ -991,6 +1001,7 @@ Add the state and its command-facing trait before the command functions:
 pub struct AgentRuntimeState {
     pub supervisor: Supervisor,
     pub capability: tokio::sync::RwLock<CapabilityReport>,
+    resolver: Arc<dyn AgentProcessResolver>,
 }
 pub trait AgentRuntimeCommands {
     async fn execute(
@@ -1027,6 +1038,11 @@ frameworks, and no unsandboxed `ProcessSpec` can be constructed. Platform Tasks
 5 and 6 add the authoritative resolver and qualification flow; there is no
 fallback spawn path before then. The command-facing trait uses a stable
 Rust-1.77-compatible `impl Future + Send` return rather than `async-trait`.
+`execute` synchronously reserves before capability or resolver work, races each
+await against cancellation/deadline, and passes that same reservation into
+launch. Validated `WorkerResponseV1` and nested response types derive `Serialize`
+directly, preserving the worker's snake_case wire schema without a duplicate
+command-side JSON mapper.
 Register state and all commands in `lib.rs`; export the command module. App
 shutdown handles `RunEvent::ExitRequested`/`RunEvent::Exit` and blocks on the
 bounded `ProcessSupervisor::cancel_all`; individual window destruction does
@@ -1040,7 +1056,10 @@ Run: `cd src-tauri && cargo test --test agent_runtime_contract -- --nocapture`
 
 Expected: PASS; malformed bytes, flood, timeout, crash, cancellation, dropped
 run futures, same-group descendants, and escaped-pgid pipe holders are bounded;
-active state is cleared and a fresh worker succeeds.
+endless stdout/stderr floods are killed immediately at `limit + 1`; pending
+resolution cancellation causes zero spawns; concurrent cancellation is not
+blocked by another resolver/spawn; active/background-reap state is observable,
+cleared, and a fresh worker succeeds.
 
 - [ ] **Step 6: Commit**
 

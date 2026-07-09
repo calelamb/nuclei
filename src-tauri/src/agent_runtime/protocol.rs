@@ -142,14 +142,14 @@ impl TryFrom<FrontendRequestV1> for WorkerRequestV1 {
     }
 }
 
-#[derive(Clone, Copy, Debug, Deserialize, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
 pub enum ResponseStatus {
     Ok,
     Error,
 }
 
-#[derive(Clone, Debug, Deserialize, PartialEq)]
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq)]
 #[serde(deny_unknown_fields)]
 pub struct GateV1 {
     #[serde(rename = "type")]
@@ -160,7 +160,7 @@ pub struct GateV1 {
     pub layer: u32,
 }
 
-#[derive(Clone, Debug, Deserialize, PartialEq)]
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq)]
 #[serde(deny_unknown_fields)]
 pub struct CircuitSnapshotV1 {
     pub framework: Framework,
@@ -170,14 +170,14 @@ pub struct CircuitSnapshotV1 {
     pub gates: Vec<GateV1>,
 }
 
-#[derive(Clone, Debug, Deserialize, PartialEq)]
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq)]
 #[serde(deny_unknown_fields)]
 pub struct ComplexAmplitudeV1 {
     pub re: f64,
     pub im: f64,
 }
 
-#[derive(Clone, Debug, Deserialize, PartialEq)]
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq)]
 #[serde(deny_unknown_fields)]
 pub struct BlochCoordinatesV1 {
     pub x: f64,
@@ -185,7 +185,7 @@ pub struct BlochCoordinatesV1 {
     pub z: f64,
 }
 
-#[derive(Clone, Debug, Deserialize, PartialEq)]
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq)]
 #[serde(deny_unknown_fields)]
 pub struct SimulationResultV1 {
     pub state_vector: Vec<ComplexAmplitudeV1>,
@@ -196,7 +196,7 @@ pub struct SimulationResultV1 {
     pub shot_count: u32,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Serialize)]
 pub struct WorkerResponseV1 {
     pub protocol_version: u8,
     pub request_id: String,
@@ -247,7 +247,7 @@ impl<'de> Deserialize<'de> for WorkerResponseV1 {
     }
 }
 
-#[derive(Clone, Debug, Deserialize, PartialEq, Eq)]
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(deny_unknown_fields)]
 pub struct WorkerErrorV1 {
     pub code: String,

@@ -4,6 +4,7 @@ use serde::Deserialize;
 use std::collections::{BTreeMap, HashMap};
 use std::future::Future;
 use std::path::PathBuf;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
@@ -84,6 +85,7 @@ struct RunToken {
 struct TokenState {
     cancel_requested: bool,
     completed: bool,
+    launch_started: bool,
 }
 
 impl RunToken {
@@ -104,7 +106,6 @@ impl RunToken {
         true
     }
 
-    #[cfg(unix)]
     fn is_cancelled(&self) -> bool {
         self.state().cancel_requested
     }
@@ -112,22 +113,100 @@ impl RunToken {
     fn is_completed(&self) -> bool {
         self.state().completed
     }
+
+    fn begin_launch(&self) -> bool {
+        let mut state = self.state();
+        if state.cancel_requested || state.completed {
+            return false;
+        }
+        state.launch_started = true;
+        true
+    }
+}
+
+pub struct RunReservation {
+    request_id: String,
+    registry: Arc<Mutex<HashMap<String, Arc<RunToken>>>>,
+    token: Arc<RunToken>,
+}
+
+impl RunReservation {
+    pub fn request_id(&self) -> &str {
+        &self.request_id
+    }
+
+    pub fn is_cancelled(&self) -> bool {
+        self.token.is_cancelled()
+    }
+
+    pub async fn cancelled(&self) {
+        loop {
+            if self.is_cancelled() {
+                return;
+            }
+            let notified = self.token.cancellation.notified();
+            if self.is_cancelled() {
+                return;
+            }
+            notified.await;
+        }
+    }
+
+    pub fn begin_launch(&self) -> bool {
+        self.token.begin_launch()
+    }
+
+    pub fn deadline(&self) -> tokio::time::Instant {
+        self.token.deadline
+    }
+
+    #[cfg(unix)]
+    fn token(&self) -> &Arc<RunToken> {
+        &self.token
+    }
+
+    fn complete(&self) -> bool {
+        let mut registry = self
+            .registry
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        let mut state = self.token.state();
+        if state.completed {
+            return state.cancel_requested;
+        }
+        state.completed = true;
+        let cancelled = state.cancel_requested;
+        if registry
+            .get(&self.request_id)
+            .is_some_and(|registered| Arc::ptr_eq(registered, &self.token))
+        {
+            registry.remove(&self.request_id);
+        }
+        drop(state);
+        drop(registry);
+        self.token.completion.notify_waiters();
+        cancelled
+    }
+}
+
+impl Drop for RunReservation {
+    fn drop(&mut self) {
+        let _ = self.complete();
+    }
 }
 
 pub struct Supervisor {
-    #[cfg(unix)]
     limits: SupervisorLimits,
     active: Arc<Mutex<HashMap<String, Arc<RunToken>>>>,
+    background_reaps: Arc<AtomicUsize>,
 }
 
 impl Supervisor {
     pub fn new(limits: SupervisorLimits) -> Self {
-        #[cfg(not(unix))]
-        let _ = limits;
         Self {
-            #[cfg(unix)]
             limits,
             active: Arc::new(Mutex::new(HashMap::new())),
+            background_reaps: Arc::new(AtomicUsize::new(0)),
         }
     }
 
@@ -159,6 +238,58 @@ impl Supervisor {
         self.active().len()
     }
 
+    pub fn background_reap_count(&self) -> usize {
+        self.background_reaps.load(Ordering::Acquire)
+    }
+
+    pub fn reserve(&self, request_id: &str) -> Result<RunReservation, RuntimeError> {
+        let mut entries = self.active();
+        if entries.contains_key(request_id) {
+            return Err(RuntimeError::new(
+                "duplicate_request",
+                "Worker request ID is already active",
+            ));
+        }
+        let token = Arc::new(RunToken {
+            deadline: tokio::time::Instant::now() + self.limits.wall,
+            state: Mutex::new(TokenState::default()),
+            cancellation: tokio::sync::Notify::new(),
+            completion: tokio::sync::Notify::new(),
+        });
+        entries.insert(request_id.into(), Arc::clone(&token));
+        Ok(RunReservation {
+            request_id: request_id.into(),
+            registry: Arc::clone(&self.active),
+            token,
+        })
+    }
+
+    pub fn is_cancelled(&self, request_id: &str) -> bool {
+        self.active()
+            .get(request_id)
+            .is_some_and(|token| token.is_cancelled())
+    }
+
+    pub fn run_reserved<'a>(
+        &'a self,
+        request: &'a WorkerRequestV1,
+        spec: ProcessSpec,
+        stdin: &'a [u8],
+        reservation: RunReservation,
+    ) -> impl Future<Output = Result<WorkerResponseV1, RuntimeError>> + Send + 'a {
+        async move {
+            #[cfg(unix)]
+            {
+                self.run_unix(request, spec, stdin, reservation).await
+            }
+            #[cfg(not(unix))]
+            {
+                self.run_unsupported(request, spec, stdin, reservation)
+                    .await
+            }
+        }
+    }
+
     pub(crate) fn cancel_all_now(&self) {
         let active = self.active();
         for token in active.values() {
@@ -172,6 +303,7 @@ impl Supervisor {
         request: &WorkerRequestV1,
         spec: ProcessSpec,
         stdin: &[u8],
+        reservation: RunReservation,
     ) -> Result<WorkerResponseV1, RuntimeError> {
         use std::process::Stdio;
         use tokio::io::AsyncWriteExt;
@@ -184,58 +316,57 @@ impl Supervisor {
             ));
         }
 
-        let deadline = tokio::time::Instant::now() + self.limits.wall;
-        let (child, token) = {
-            let mut entries = self.active();
-            if entries.contains_key(&request.request_id) {
-                return Err(RuntimeError::new(
-                    "duplicate_request",
-                    "Worker request ID is already active",
-                ));
-            }
+        if reservation.request_id() != request.request_id {
+            return Err(RuntimeError::new(
+                "invalid_reservation",
+                "Worker reservation does not match the request",
+            ));
+        }
+        if reservation.is_cancelled() {
+            return Err(RuntimeError::new(
+                "cancelled",
+                "Worker request was cancelled",
+            ));
+        }
+        let deadline = reservation.deadline();
+        if tokio::time::Instant::now() >= deadline {
+            return Err(RuntimeError::new(
+                "wall_timeout",
+                "Worker exceeded the wall-clock limit",
+            ));
+        }
+        let token = Arc::clone(reservation.token());
 
-            let mut command = tokio::process::Command::new(&spec.executable);
-            command
-                .args(&spec.args)
-                .current_dir(&spec.cwd)
-                .env_clear()
-                .envs(&spec.env)
-                .stdin(Stdio::piped())
-                .stdout(Stdio::piped())
-                .stderr(Stdio::piped())
-                .kill_on_drop(true);
-            unsafe {
-                command.pre_exec(|| {
-                    if libc::setsid() == -1 {
-                        return Err(std::io::Error::last_os_error());
-                    }
-                    Ok(())
-                });
-            }
-
-            let child = command.spawn().map_err(|_| {
-                RuntimeError::new("worker_start_failed", "Worker process could not be started")
-            })?;
-            let pid = child.id().ok_or_else(|| {
-                RuntimeError::new("worker_start_failed", "Worker process could not be started")
-            })?;
-            let token = Arc::new(RunToken {
-                deadline,
-                state: Mutex::new(TokenState::default()),
-                cancellation: tokio::sync::Notify::new(),
-                completion: tokio::sync::Notify::new(),
+        let mut command = tokio::process::Command::new(&spec.executable);
+        command
+            .args(&spec.args)
+            .current_dir(&spec.cwd)
+            .env_clear()
+            .envs(&spec.env)
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .kill_on_drop(true);
+        unsafe {
+            command.pre_exec(|| {
+                if libc::setsid() == -1 {
+                    return Err(std::io::Error::last_os_error());
+                }
+                Ok(())
             });
-            entries.insert(request.request_id.clone(), Arc::clone(&token));
-            debug_assert_eq!(child.id(), Some(pid));
-            (child, token)
-        };
+        }
+        if !reservation.begin_launch() {
+            return Err(RuntimeError::new(
+                "cancelled",
+                "Worker request was cancelled",
+            ));
+        }
+        // No registry lock is held while the platform performs spawn.
+        let child = command.spawn().map_err(|_| {
+            RuntimeError::new("worker_start_failed", "Worker process could not be started")
+        })?;
 
-        let mut guard = RunGuard::new(
-            request.request_id.clone(),
-            Arc::clone(&self.active),
-            Arc::clone(&token),
-            child,
-        );
+        let mut guard = RunGuard::new(reservation, child, Arc::clone(&self.background_reaps));
         let child_stdin = guard.child_mut().stdin.take().expect("piped worker stdin");
         let stdout = guard
             .child_mut()
@@ -253,14 +384,27 @@ impl Supervisor {
             child_stdin.write_all(&input).await?;
             child_stdin.shutdown().await
         });
-        let stdout_task = tokio::spawn(read_capped(stdout, self.limits.stdout_bytes));
-        let stderr_task = tokio::spawn(read_capped(stderr, self.limits.stderr_bytes));
+        let (overflow_tx, mut overflow_rx) = tokio::sync::mpsc::unbounded_channel();
+        let stdout_task = tokio::spawn(read_capped(
+            stdout,
+            self.limits.stdout_bytes,
+            overflow_tx.clone(),
+            StreamOverflow::Stdout,
+        ));
+        let stderr_task = tokio::spawn(read_capped(
+            stderr,
+            self.limits.stderr_bytes,
+            overflow_tx.clone(),
+            StreamOverflow::Stderr,
+        ));
+        drop(overflow_tx);
         guard.track(&stdin_task);
         guard.track(&stdout_task);
         guard.track(&stderr_task);
 
         let io = async move { tokio::join!(stdin_task, stdout_task, stderr_task) };
         tokio::pin!(io);
+        let mut overflow = None;
         let io_results = if token.is_cancelled() {
             guard.kill_group();
             tokio::time::timeout_at(deadline, &mut io).await
@@ -268,6 +412,11 @@ impl Supervisor {
             tokio::select! {
                 results = &mut io => Ok(results),
                 _ = token.cancellation.notified() => {
+                    guard.kill_group();
+                    tokio::time::timeout_at(deadline, &mut io).await
+                },
+                Some(stream) = overflow_rx.recv() => {
+                    overflow = Some(stream);
                     guard.kill_group();
                     tokio::time::timeout_at(deadline, &mut io).await
                 },
@@ -334,6 +483,18 @@ impl Supervisor {
                 "Worker request was cancelled",
             ));
         }
+        if matches!(overflow, Some(StreamOverflow::Stdout)) {
+            return Err(RuntimeError::new(
+                "response_too_large",
+                "Worker response exceeded the byte limit",
+            ));
+        }
+        if matches!(overflow, Some(StreamOverflow::Stderr)) {
+            return Err(RuntimeError::new(
+                "stderr_too_large",
+                "Worker diagnostics exceeded the byte limit",
+            ));
+        }
         if stdout_capture.overflow {
             return Err(RuntimeError::new(
                 "response_too_large",
@@ -368,7 +529,14 @@ impl Supervisor {
         _request: &WorkerRequestV1,
         _spec: ProcessSpec,
         _stdin: &[u8],
+        reservation: RunReservation,
     ) -> Result<WorkerResponseV1, RuntimeError> {
+        if reservation.is_cancelled() {
+            return Err(RuntimeError::new(
+                "cancelled",
+                "Worker request was cancelled",
+            ));
+        }
         Err(RuntimeError::new(
             "isolation_unavailable",
             crate::agent_runtime::unsupported::UNAVAILABLE_MESSAGE,
@@ -393,37 +561,37 @@ pub trait ProcessSupervisor {
 }
 
 impl ProcessSupervisor for Supervisor {
-    async fn run<'a>(
+    fn run<'a>(
         &'a self,
         request: &'a WorkerRequestV1,
         spec: ProcessSpec,
         stdin: &'a [u8],
-    ) -> Result<WorkerResponseV1, RuntimeError> {
-        #[cfg(unix)]
-        {
-            self.run_unix(request, spec, stdin).await
-        }
-        #[cfg(not(unix))]
-        {
-            self.run_unsupported(request, spec, stdin).await
+    ) -> impl Future<Output = Result<WorkerResponseV1, RuntimeError>> + Send + 'a {
+        let reservation = self.reserve(&request.request_id);
+        async move {
+            let reservation = reservation?;
+            self.run_reserved(request, spec, stdin, reservation).await
         }
     }
 
-    async fn cancel<'a>(&'a self, id: &'a str) -> Result<(), RuntimeError> {
+    fn cancel<'a>(
+        &'a self,
+        id: &'a str,
+    ) -> impl Future<Output = Result<(), RuntimeError>> + Send + 'a {
         let token = self.active().get(id).cloned();
-        let Some(token) = token else {
-            return Ok(());
-        };
-        if !token.request_cancel() {
-            return Ok(());
-        }
-        if wait_for_completion(&token).await {
-            Ok(())
-        } else {
-            Err(RuntimeError::new(
-                "cleanup_timeout",
-                "Worker cleanup exceeded the wall-clock limit",
-            ))
+        let should_wait = token.as_ref().is_some_and(|token| token.request_cancel());
+        async move {
+            let Some(token) = token else {
+                return Ok(());
+            };
+            if !should_wait || wait_for_completion(&token).await {
+                Ok(())
+            } else {
+                Err(RuntimeError::new(
+                    "cleanup_timeout",
+                    "Worker cleanup exceeded the wall-clock limit",
+                ))
+            }
         }
     }
 
@@ -443,32 +611,29 @@ impl ProcessSupervisor for Supervisor {
 
 #[cfg(unix)]
 struct RunGuard {
-    request_id: String,
-    registry: Arc<Mutex<HashMap<String, Arc<RunToken>>>>,
-    token: Arc<RunToken>,
+    reservation: RunReservation,
     child: Option<tokio::process::Child>,
     process_group: i32,
     leader_reaped: bool,
     tasks: Vec<tokio::task::AbortHandle>,
+    background_reaps: Arc<AtomicUsize>,
 }
 
 #[cfg(unix)]
 impl RunGuard {
     fn new(
-        request_id: String,
-        registry: Arc<Mutex<HashMap<String, Arc<RunToken>>>>,
-        token: Arc<RunToken>,
+        reservation: RunReservation,
         child: tokio::process::Child,
+        background_reaps: Arc<AtomicUsize>,
     ) -> Self {
         let process_group = child.id().expect("spawned child has an ID") as i32;
         Self {
-            request_id,
-            registry,
-            token,
+            reservation,
             child: Some(child),
             process_group,
             leader_reaped: false,
             tasks: Vec::new(),
+            background_reaps,
         }
     }
 
@@ -501,26 +666,7 @@ impl RunGuard {
     }
 
     fn complete(&self) -> bool {
-        let mut registry = self
-            .registry
-            .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner());
-        let mut state = self.token.state();
-        if state.completed {
-            return state.cancel_requested;
-        }
-        state.completed = true;
-        let cancelled = state.cancel_requested;
-        if registry
-            .get(&self.request_id)
-            .is_some_and(|registered| Arc::ptr_eq(registered, &self.token))
-        {
-            registry.remove(&self.request_id);
-        }
-        drop(state);
-        drop(registry);
-        self.token.completion.notify_waiters();
-        cancelled
+        self.reservation.complete()
     }
 }
 
@@ -535,9 +681,12 @@ impl Drop for RunGuard {
             }
             if let Some(mut child) = self.child.take() {
                 if let Ok(runtime) = tokio::runtime::Handle::try_current() {
+                    self.background_reaps.fetch_add(1, Ordering::AcqRel);
+                    let background_reaps = Arc::clone(&self.background_reaps);
                     runtime.spawn(async move {
                         let _ =
                             tokio::time::timeout(Duration::from_millis(250), child.wait()).await;
+                        background_reaps.fetch_sub(1, Ordering::AcqRel);
                     });
                 }
             }
@@ -571,9 +720,18 @@ struct Capture {
 }
 
 #[cfg(unix)]
+#[derive(Clone, Copy)]
+enum StreamOverflow {
+    Stdout,
+    Stderr,
+}
+
+#[cfg(unix)]
 async fn read_capped(
     mut reader: impl tokio::io::AsyncRead + Unpin,
     limit: usize,
+    overflow_tx: tokio::sync::mpsc::UnboundedSender<StreamOverflow>,
+    stream: StreamOverflow,
 ) -> Result<Capture, RuntimeError> {
     use tokio::io::AsyncReadExt;
 
@@ -591,6 +749,10 @@ async fn read_capped(
         let retained = remaining.min(read);
         bytes.extend_from_slice(&buffer[..retained]);
         overflow |= read > retained || bytes.len() > limit;
+        if overflow {
+            let _ = overflow_tx.send(stream);
+            break;
+        }
     }
     Ok(Capture { bytes, overflow })
 }
