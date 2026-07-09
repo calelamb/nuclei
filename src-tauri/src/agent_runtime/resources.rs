@@ -152,6 +152,54 @@ pub trait CommandRunner {
     fn run(&self, spec: &CommandSpec) -> Result<CommandOutput, String>;
 }
 
+pub trait EnvironmentFilesystem {
+    fn read(&self, path: &Path) -> Result<Vec<u8>, String>;
+    fn read_to_string(&self, path: &Path) -> Result<String, String>;
+    fn create_dir_all(&self, path: &Path) -> Result<(), String>;
+    fn write(&self, path: &Path, contents: &[u8]) -> Result<(), String>;
+    fn remove_dir_all(&self, path: &Path) -> Result<(), String>;
+    fn rename(&self, from: &Path, to: &Path) -> Result<(), String>;
+    fn canonicalize(&self, path: &Path) -> Result<PathBuf, String>;
+    fn exists(&self, path: &Path) -> bool;
+}
+
+#[derive(Clone, Copy, Debug, Default)]
+pub struct SystemEnvironmentFilesystem;
+
+impl EnvironmentFilesystem for SystemEnvironmentFilesystem {
+    fn read(&self, path: &Path) -> Result<Vec<u8>, String> {
+        fs::read(path).map_err(|error| error.to_string())
+    }
+
+    fn read_to_string(&self, path: &Path) -> Result<String, String> {
+        fs::read_to_string(path).map_err(|error| error.to_string())
+    }
+
+    fn create_dir_all(&self, path: &Path) -> Result<(), String> {
+        fs::create_dir_all(path).map_err(|error| error.to_string())
+    }
+
+    fn write(&self, path: &Path, contents: &[u8]) -> Result<(), String> {
+        fs::write(path, contents).map_err(|error| error.to_string())
+    }
+
+    fn remove_dir_all(&self, path: &Path) -> Result<(), String> {
+        fs::remove_dir_all(path).map_err(|error| error.to_string())
+    }
+
+    fn rename(&self, from: &Path, to: &Path) -> Result<(), String> {
+        fs::rename(from, to).map_err(|error| error.to_string())
+    }
+
+    fn canonicalize(&self, path: &Path) -> Result<PathBuf, String> {
+        path.canonicalize().map_err(|error| error.to_string())
+    }
+
+    fn exists(&self, path: &Path) -> bool {
+        path.exists()
+    }
+}
+
 #[derive(Clone, Copy, Debug, Default)]
 pub struct SystemCommandRunner;
 
@@ -185,7 +233,13 @@ impl AgentEnvironment {
         system_python: &Path,
         resources: &ResourcePaths,
     ) -> Result<Self, String> {
-        Self::provision_with_runner(app_data, system_python, resources, &SystemCommandRunner)
+        Self::provision_with_filesystem(
+            app_data,
+            system_python,
+            resources,
+            &SystemCommandRunner,
+            &SystemEnvironmentFilesystem,
+        )
     }
 
     pub fn provision_with_runner(
@@ -194,8 +248,23 @@ impl AgentEnvironment {
         resources: &ResourcePaths,
         runner: &dyn CommandRunner,
     ) -> Result<Self, String> {
-        let requirements_bytes =
-            fs::read(&resources.requirements).map_err(|error| error.to_string())?;
+        Self::provision_with_filesystem(
+            app_data,
+            system_python,
+            resources,
+            runner,
+            &SystemEnvironmentFilesystem,
+        )
+    }
+
+    pub fn provision_with_filesystem(
+        app_data: &Path,
+        system_python: &Path,
+        resources: &ResourcePaths,
+        runner: &dyn CommandRunner,
+        filesystem: &dyn EnvironmentFilesystem,
+    ) -> Result<Self, String> {
+        let requirements_bytes = filesystem.read(&resources.requirements)?;
         let requirements_text =
             std::str::from_utf8(&requirements_bytes).map_err(|_| "Requirements are not UTF-8")?;
         validate_requirements(requirements_text)?;
@@ -204,15 +273,21 @@ impl AgentEnvironment {
         let root = parent.join("v1");
         let staging = parent.join("v1.staging");
         let backup = parent.join("v1.previous");
+        filesystem.create_dir_all(&parent)?;
+        let canonical_parent = filesystem
+            .canonicalize(&parent)
+            .map_err(|error| format!("Agent runtime parent is unavailable: {error}"))?;
+        reject_root_escape(filesystem, &root, &canonical_parent)?;
+
         let digest = hex::encode(Sha256::digest(&requirements_bytes));
-        let marker_matches = fs::read_to_string(root.join(".requirements-sha256"))
+        let marker_matches = filesystem
+            .read_to_string(&root.join(".requirements-sha256"))
             .ok()
             .as_deref()
             == Some(digest.as_str());
 
         if !marker_matches {
-            remove_dir_if_present(&staging)?;
-            fs::create_dir_all(&parent).map_err(|error| error.to_string())?;
+            remove_dir_if_present(filesystem, &staging)?;
 
             let create = clean_command(
                 system_python,
@@ -229,13 +304,18 @@ impl AgentEnvironment {
                 require_success(output, "Failed to create dedicated agent environment")
             });
             if let Err(error) = create_result {
-                let _ = remove_dir_if_present(&staging);
-                return Err(error);
+                return Err(cleanup_staging(filesystem, &staging, error));
             }
 
             let staging_python = python_path(&staging);
             let empty_pip_config = staging.join("pip-empty.conf");
-            fs::write(&empty_pip_config, []).map_err(|error| error.to_string())?;
+            if let Err(error) = filesystem.write(&empty_pip_config, &[]) {
+                return Err(cleanup_staging(
+                    filesystem,
+                    &staging,
+                    format!("Failed to write isolated pip configuration: {error}"),
+                ));
+            }
             let install = clean_command(
                 &staging_python,
                 [
@@ -264,48 +344,47 @@ impl AgentEnvironment {
                 .run(&install)
                 .and_then(|output| require_success(output, "Agent dependency installation failed"));
             if let Err(error) = install_result {
-                let _ = remove_dir_if_present(&staging);
-                return Err(error);
+                return Err(cleanup_staging(filesystem, &staging, error));
             }
 
-            fs::write(staging.join(".requirements-sha256"), &digest)
-                .map_err(|error| error.to_string())?;
+            if let Err(error) =
+                filesystem.write(&staging.join(".requirements-sha256"), digest.as_bytes())
+            {
+                return Err(cleanup_staging(
+                    filesystem,
+                    &staging,
+                    format!("Failed to write agent requirements marker: {error}"),
+                ));
+            }
             if let Err(error) = probe_environment(&staging, &staging_python, runner) {
-                let _ = remove_dir_if_present(&staging);
-                return Err(error);
+                return Err(cleanup_staging(filesystem, &staging, error));
             }
 
-            remove_dir_if_present(&backup)?;
-            if root.exists() {
-                fs::rename(&root, &backup).map_err(|error| error.to_string())?;
-            }
-            if let Err(error) = fs::rename(&staging, &root) {
-                if backup.exists() {
-                    let _ = fs::rename(&backup, &root);
-                }
-                return Err(error.to_string());
-            }
+            let had_previous = replace_with_staging(filesystem, &root, &staging, &backup)?;
 
             let promoted_python = python_path(&root);
             if let Err(error) = probe_environment(&root, &promoted_python, runner) {
-                let _ = remove_dir_if_present(&root);
-                if backup.exists() {
-                    let _ = fs::rename(&backup, &root);
-                }
-                return Err(error);
+                return Err(rollback_promoted(
+                    filesystem,
+                    &root,
+                    &backup,
+                    had_previous,
+                    error,
+                ));
             }
-            remove_dir_if_present(&backup)?;
+            remove_dir_if_present(filesystem, &backup)
+                .map_err(|error| format!("Failed to remove previous agent environment: {error}"))?;
         }
 
         let python = python_path(&root);
         let site_packages = probe_environment(&root, &python, runner)?;
-        let environment = Self {
-            root,
-            python,
-            site_packages,
-        };
-        environment.verify()?;
-        Ok(environment)
+        canonical_environment(
+            filesystem,
+            &canonical_parent,
+            &root,
+            &python,
+            &site_packages,
+        )
     }
 
     pub fn verify(&self) -> Result<(), String> {
@@ -325,6 +404,140 @@ impl AgentEnvironment {
             }
         }
         Ok(())
+    }
+}
+
+fn reject_root_escape(
+    filesystem: &dyn EnvironmentFilesystem,
+    root: &Path,
+    canonical_parent: &Path,
+) -> Result<(), String> {
+    if filesystem.exists(root) {
+        let canonical_root = filesystem
+            .canonicalize(root)
+            .map_err(|error| format!("Existing agent environment is invalid: {error}"))?;
+        if !canonical_root.starts_with(canonical_parent) {
+            return Err("Existing agent environment escaped app-data agent-runtime".into());
+        }
+    }
+    Ok(())
+}
+
+fn canonical_environment(
+    filesystem: &dyn EnvironmentFilesystem,
+    canonical_parent: &Path,
+    root: &Path,
+    python: &Path,
+    site_packages: &Path,
+) -> Result<AgentEnvironment, String> {
+    let canonical_root = filesystem
+        .canonicalize(root)
+        .map_err(|error| format!("Dedicated agent root is unavailable: {error}"))?;
+    if !canonical_root.starts_with(canonical_parent) {
+        return Err("Dedicated agent root escaped app-data agent-runtime".into());
+    }
+    let canonical_python = canonical_child(filesystem, &canonical_root, python, "Agent Python")?;
+    let canonical_site_packages = canonical_child(
+        filesystem,
+        &canonical_root,
+        site_packages,
+        "Agent site-packages",
+    )?;
+    Ok(AgentEnvironment {
+        root: canonical_root,
+        python: canonical_python,
+        site_packages: canonical_site_packages,
+    })
+}
+
+fn canonical_child(
+    filesystem: &dyn EnvironmentFilesystem,
+    canonical_root: &Path,
+    path: &Path,
+    description: &str,
+) -> Result<PathBuf, String> {
+    let canonical = filesystem
+        .canonicalize(path)
+        .map_err(|error| format!("{description} is unavailable: {error}"))?;
+    if !canonical.starts_with(canonical_root) {
+        return Err(format!("{description} escaped the dedicated agent root"));
+    }
+    Ok(canonical)
+}
+
+fn replace_with_staging(
+    filesystem: &dyn EnvironmentFilesystem,
+    root: &Path,
+    staging: &Path,
+    backup: &Path,
+) -> Result<bool, String> {
+    if let Err(error) = remove_dir_if_present(filesystem, backup) {
+        return Err(cleanup_staging(
+            filesystem,
+            staging,
+            format!("Failed to remove stale previous agent environment: {error}"),
+        ));
+    }
+
+    let had_previous = filesystem.exists(root);
+    if had_previous {
+        if let Err(error) = filesystem.rename(root, backup) {
+            return Err(cleanup_staging(
+                filesystem,
+                staging,
+                format!("Failed to move previous agent environment: {error}"),
+            ));
+        }
+    }
+
+    if let Err(promotion_error) = filesystem.rename(staging, root) {
+        let mut error = format!("Agent environment promotion failed: {promotion_error}");
+        if had_previous {
+            if let Err(restore_error) = filesystem.rename(backup, root) {
+                error.push_str(&format!(
+                    "; failed to restore previous agent environment: {restore_error}"
+                ));
+            }
+        }
+        return Err(cleanup_staging(filesystem, staging, error));
+    }
+    Ok(had_previous)
+}
+
+fn rollback_promoted(
+    filesystem: &dyn EnvironmentFilesystem,
+    root: &Path,
+    backup: &Path,
+    had_previous: bool,
+    primary_error: String,
+) -> String {
+    let mut error = primary_error;
+    if let Err(remove_error) = remove_dir_if_present(filesystem, root) {
+        error.push_str(&format!(
+            "; remove failed promoted agent environment: {remove_error}"
+        ));
+        return error;
+    }
+    if had_previous {
+        if let Err(restore_error) = filesystem.rename(backup, root) {
+            error.push_str(&format!(
+                "; failed to restore previous agent environment: {restore_error}"
+            ));
+        }
+    }
+    error
+}
+
+fn cleanup_staging(
+    filesystem: &dyn EnvironmentFilesystem,
+    staging: &Path,
+    primary_error: String,
+) -> String {
+    match remove_dir_if_present(filesystem, staging) {
+        Ok(()) => primary_error,
+        Err(cleanup_error) => {
+            format!("{primary_error}; failed to clean staging environment: {cleanup_error}")
+        }
     }
 }
 
@@ -430,10 +643,13 @@ fn require_success(output: CommandOutput, message: &str) -> Result<(), String> {
     }
 }
 
-fn remove_dir_if_present(path: &Path) -> Result<(), String> {
-    match fs::remove_dir_all(path) {
-        Ok(()) => Ok(()),
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
-        Err(error) => Err(error.to_string()),
+fn remove_dir_if_present(
+    filesystem: &dyn EnvironmentFilesystem,
+    path: &Path,
+) -> Result<(), String> {
+    if filesystem.exists(path) {
+        filesystem.remove_dir_all(path)
+    } else {
+        Ok(())
     }
 }

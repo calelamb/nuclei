@@ -1,3 +1,4 @@
+use serde::de::Error as _;
 use serde::{Deserialize, Deserializer, Serialize};
 
 pub const PROTOCOL_VERSION: u8 = 1;
@@ -146,14 +147,29 @@ pub enum ResponseStatus {
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct WorkerResponseV1 {
+    #[serde(deserialize_with = "deserialize_protocol_version")]
     pub protocol_version: u8,
+    #[serde(deserialize_with = "deserialize_request_id")]
     pub request_id: String,
     pub status: ResponseStatus,
-    pub snapshot: Option<serde_json::Value>,
-    pub result: Option<serde_json::Value>,
+    #[serde(deserialize_with = "deserialize_nullable_object")]
+    pub snapshot: Option<serde_json::Map<String, serde_json::Value>>,
+    #[serde(deserialize_with = "deserialize_nullable_object")]
+    pub result: Option<serde_json::Map<String, serde_json::Value>>,
     pub stdout: String,
     pub stderr: String,
-    pub error: Option<serde_json::Value>,
+    #[serde(deserialize_with = "deserialize_nullable_error")]
+    pub error: Option<WorkerErrorV1>,
+}
+
+#[derive(Clone, Debug, Deserialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
+pub struct WorkerErrorV1 {
+    pub code: String,
+    pub message: String,
+    pub traceback: Option<String>,
+    pub framework: Option<String>,
+    pub dependency: Option<String>,
 }
 
 impl WorkerResponseV1 {
@@ -167,6 +183,42 @@ impl WorkerResponseV1 {
         }
         Ok(())
     }
+}
+
+fn deserialize_protocol_version<'de, D>(deserializer: D) -> Result<u8, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let version = u8::deserialize(deserializer)?;
+    if version != PROTOCOL_VERSION {
+        return Err(D::Error::custom("unsupported worker protocol version"));
+    }
+    Ok(version)
+}
+
+fn deserialize_request_id<'de, D>(deserializer: D) -> Result<String, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let request_id = String::deserialize(deserializer)?;
+    validate_request_id(&request_id).map_err(D::Error::custom)?;
+    Ok(request_id)
+}
+
+fn deserialize_nullable_object<'de, D>(
+    deserializer: D,
+) -> Result<Option<serde_json::Map<String, serde_json::Value>>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    Option::<serde_json::Map<String, serde_json::Value>>::deserialize(deserializer)
+}
+
+fn deserialize_nullable_error<'de, D>(deserializer: D) -> Result<Option<WorkerErrorV1>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    Option::<WorkerErrorV1>::deserialize(deserializer)
 }
 
 fn validate_request_id(request_id: &str) -> Result<(), String> {

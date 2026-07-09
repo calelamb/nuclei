@@ -7,7 +7,7 @@ use app_lib::agent_runtime::protocol::{
 };
 use app_lib::agent_runtime::resources::{
     validate_requirements, AgentEnvironment, CommandOutput, CommandRunner, CommandSpec,
-    ResourcePaths,
+    EnvironmentFilesystem, ResourcePaths,
 };
 use serde_json::{json, Value};
 use tempfile::TempDir;
@@ -157,14 +157,88 @@ fn worker_response_is_strict_and_validates_identity() {
     for changed in [
         response(&[("protocol_version", json!(2))]),
         response(&[("request_id", json!("bad.id"))]),
+        response(&[("request_id", json!(""))]),
+        response(&[("request_id", json!("x".repeat(65)))]),
     ] {
-        let parsed: WorkerResponseV1 = serde_json::from_value(changed).unwrap();
-        assert!(parsed.validate("request_1").is_err());
+        assert!(serde_json::from_value::<WorkerResponseV1>(changed).is_err());
     }
 
     let parsed: WorkerResponseV1 =
         serde_json::from_value(response(&[("request_id", json!("other"))])).unwrap();
     assert!(parsed.validate("request_1").is_err());
+}
+
+#[test]
+fn worker_response_requires_every_top_level_field_even_when_nullable() {
+    for field in [
+        "protocol_version",
+        "request_id",
+        "status",
+        "snapshot",
+        "result",
+        "stdout",
+        "stderr",
+        "error",
+    ] {
+        let mut value = response(&[]);
+        value.as_object_mut().unwrap().remove(field);
+        assert!(
+            serde_json::from_value::<WorkerResponseV1>(value).is_err(),
+            "missing {field} was accepted"
+        );
+    }
+}
+
+#[test]
+fn worker_response_nullable_payloads_are_object_or_null_only() {
+    for field in ["snapshot", "result", "error"] {
+        for invalid in [json!(false), json!(1), json!("bad"), json!([])] {
+            assert!(
+                serde_json::from_value::<WorkerResponseV1>(response(&[(field, invalid.clone())]))
+                    .is_err(),
+                "{field} accepted {invalid}"
+            );
+        }
+        serde_json::from_value::<WorkerResponseV1>(response(&[(field, Value::Null)])).unwrap();
+    }
+    serde_json::from_value::<WorkerResponseV1>(response(&[
+        ("snapshot", json!({"qubit_count": 2})),
+        ("result", json!({"measurements": {"00": 5}})),
+    ]))
+    .unwrap();
+}
+
+#[test]
+fn worker_response_rejects_malformed_and_duplicate_json() {
+    assert!(serde_json::from_str::<WorkerResponseV1>("{").is_err());
+    assert!(serde_json::from_str::<WorkerResponseV1>(
+        r#"{"protocol_version":1,"protocol_version":1,"request_id":"r","status":"ok","snapshot":null,"result":null,"stdout":"","stderr":"","error":null}"#
+    )
+    .is_err());
+}
+
+#[test]
+fn worker_error_matches_strict_python_kernel_error_shape() {
+    let valid = json!({
+        "code": "execution_error",
+        "message": "Circuit failed",
+        "traceback": null,
+        "framework": "cirq",
+        "dependency": null
+    });
+    serde_json::from_value::<WorkerResponseV1>(response(&[("error", valid)])).unwrap();
+
+    for invalid in [
+        json!({"message": "missing code"}),
+        json!({"code": "missing_message"}),
+        json!({"code": "bad", "message": "bad", "unknown": true}),
+        json!({"code": 1, "message": "bad"}),
+        json!({"code": "bad", "message": "bad", "traceback": 1}),
+    ] {
+        assert!(
+            serde_json::from_value::<WorkerResponseV1>(response(&[("error", invalid)])).is_err()
+        );
+    }
 }
 
 #[test]
@@ -254,6 +328,7 @@ struct FakeRunner {
     fail_install: bool,
     error_install: bool,
     fail_promoted_probe: bool,
+    fail_staging_probe: bool,
 }
 
 impl CommandRunner for FakeRunner {
@@ -267,9 +342,9 @@ impl CommandRunner for FakeRunner {
 
         if args.iter().any(|arg| arg == "venv") {
             let root = PathBuf::from(args.last().unwrap());
-            fs::create_dir_all(root.join("bin")).unwrap();
+            fs::create_dir_all(venv_python(&root).parent().unwrap()).unwrap();
             fs::create_dir_all(root.join("lib/site-packages")).unwrap();
-            fs::write(root.join("bin/python3"), "# python\n").unwrap();
+            fs::write(venv_python(&root), "# python\n").unwrap();
         }
         if args.iter().any(|arg| arg == "pip") && self.fail_install {
             return Ok(CommandOutput {
@@ -290,6 +365,13 @@ impl CommandRunner for FakeRunner {
                     stderr: b"probe failed".to_vec(),
                 });
             }
+            if self.fail_staging_probe && root.ends_with("v1.staging") {
+                return Ok(CommandOutput {
+                    success: false,
+                    stdout: vec![],
+                    stderr: b"staging probe failed".to_vec(),
+                });
+            }
             let site_packages = root.join("lib/site-packages");
             return Ok(CommandOutput {
                 success: true,
@@ -303,6 +385,99 @@ impl CommandRunner for FakeRunner {
             stdout: vec![],
             stderr: vec![],
         })
+    }
+}
+
+fn venv_python(root: &Path) -> PathBuf {
+    if cfg!(windows) {
+        root.join("Scripts/python.exe")
+    } else {
+        root.join("bin/python3")
+    }
+}
+
+#[derive(Clone)]
+struct FailureRule {
+    operation: &'static str,
+    needle: &'static str,
+    skip: usize,
+}
+
+struct FakeFilesystem {
+    failures: Mutex<Vec<FailureRule>>,
+}
+
+impl FakeFilesystem {
+    fn new(failures: Vec<FailureRule>) -> Self {
+        Self {
+            failures: Mutex::new(failures),
+        }
+    }
+
+    fn maybe_fail(&self, operation: &'static str, detail: &str) -> Result<(), String> {
+        let mut failures = self.failures.lock().unwrap();
+        if let Some(index) = failures
+            .iter()
+            .position(|failure| failure.operation == operation && detail.contains(failure.needle))
+        {
+            if failures[index].skip > 0 {
+                failures[index].skip -= 1;
+            } else {
+                failures.remove(index);
+                return Err(format!("injected {operation} failure for {detail}"));
+            }
+        }
+        Ok(())
+    }
+}
+
+impl EnvironmentFilesystem for FakeFilesystem {
+    fn read(&self, path: &Path) -> Result<Vec<u8>, String> {
+        self.maybe_fail("read", &path.display().to_string())?;
+        fs::read(path).map_err(|error| error.to_string())
+    }
+
+    fn read_to_string(&self, path: &Path) -> Result<String, String> {
+        self.maybe_fail("read_to_string", &path.display().to_string())?;
+        fs::read_to_string(path).map_err(|error| error.to_string())
+    }
+
+    fn create_dir_all(&self, path: &Path) -> Result<(), String> {
+        self.maybe_fail("create_dir_all", &path.display().to_string())?;
+        fs::create_dir_all(path).map_err(|error| error.to_string())
+    }
+
+    fn write(&self, path: &Path, contents: &[u8]) -> Result<(), String> {
+        self.maybe_fail("write", &path.display().to_string())?;
+        fs::write(path, contents).map_err(|error| error.to_string())
+    }
+
+    fn remove_dir_all(&self, path: &Path) -> Result<(), String> {
+        self.maybe_fail("remove_dir_all", &path.display().to_string())?;
+        fs::remove_dir_all(path).map_err(|error| error.to_string())
+    }
+
+    fn rename(&self, from: &Path, to: &Path) -> Result<(), String> {
+        let detail = format!("{} -> {}", from.display(), to.display());
+        self.maybe_fail("rename", &detail)?;
+        fs::rename(from, to).map_err(|error| error.to_string())
+    }
+
+    fn canonicalize(&self, path: &Path) -> Result<PathBuf, String> {
+        self.maybe_fail("canonicalize", &path.display().to_string())?;
+        path.canonicalize().map_err(|error| error.to_string())
+    }
+
+    fn exists(&self, path: &Path) -> bool {
+        path.exists()
+    }
+}
+
+fn failure(operation: &'static str, needle: &'static str, skip: usize) -> FailureRule {
+    FailureRule {
+        operation,
+        needle,
+        skip,
     }
 }
 
@@ -326,10 +501,16 @@ fn provisioning_uses_only_a_dedicated_versioned_environment_and_clean_commands()
     environment.verify().unwrap();
     let commands = runner.commands.lock().unwrap();
     assert!(commands.iter().all(|command| command.clear_environment));
+    #[cfg(unix)]
     assert!(commands.iter().all(|command| command
         .environment
         .iter()
         .any(|(name, value)| name == "PATH" && value == "/usr/bin:/bin")));
+    #[cfg(windows)]
+    assert!(commands.iter().all(|command| command
+        .environment
+        .iter()
+        .any(|(name, value)| name == "PATH" && value == r"C:\Windows\System32")));
     let install = commands
         .iter()
         .find(|command| command.args.iter().any(|arg| arg == "pip"))
@@ -431,16 +612,273 @@ fn failed_promoted_verification_rolls_back_previous_environment() {
 }
 
 #[test]
+fn staging_write_and_probe_failures_clean_staging() {
+    for (filesystem, runner) in [
+        (
+            FakeFilesystem::new(vec![failure("write", "pip-empty.conf", 0)]),
+            FakeRunner::default(),
+        ),
+        (
+            FakeFilesystem::new(vec![failure("write", ".requirements-sha256", 0)]),
+            FakeRunner::default(),
+        ),
+        (
+            FakeFilesystem::new(vec![]),
+            FakeRunner {
+                fail_staging_probe: true,
+                ..Default::default()
+            },
+        ),
+    ] {
+        let repository = TempDir::new().unwrap();
+        write_resource_tree(repository.path());
+        let resources = ResourcePaths::development(repository.path()).unwrap();
+        let app_data = TempDir::new().unwrap();
+        assert!(AgentEnvironment::provision_with_filesystem(
+            app_data.path(),
+            Path::new("/fixed/python3"),
+            &resources,
+            &runner,
+            &filesystem,
+        )
+        .is_err());
+        assert!(!app_data.path().join("agent-runtime/v1.staging").exists());
+    }
+}
+
+#[test]
+fn cleanup_failure_is_combined_with_primary_staging_error() {
+    let repository = TempDir::new().unwrap();
+    write_resource_tree(repository.path());
+    let resources = ResourcePaths::development(repository.path()).unwrap();
+    let app_data = TempDir::new().unwrap();
+    let runner = FakeRunner {
+        fail_install: true,
+        ..Default::default()
+    };
+    let filesystem = FakeFilesystem::new(vec![failure("remove_dir_all", "v1.staging", 0)]);
+
+    let error = AgentEnvironment::provision_with_filesystem(
+        app_data.path(),
+        Path::new("/fixed/python3"),
+        &resources,
+        &runner,
+        &filesystem,
+    )
+    .unwrap_err();
+    assert!(error.contains("dependency installation"));
+    assert!(error.contains("clean staging"));
+    assert!(app_data.path().join("agent-runtime/v1.staging").exists());
+}
+
+#[test]
+fn root_move_or_promotion_failure_cleans_staging_and_restores_previous_root() {
+    for rule in [
+        failure("rename", "v1 ->", 0),
+        failure("rename", "v1.staging ->", 0),
+    ] {
+        let repository = TempDir::new().unwrap();
+        write_resource_tree(repository.path());
+        let resources = ResourcePaths::development(repository.path()).unwrap();
+        let app_data = TempDir::new().unwrap();
+        let root = app_data.path().join("agent-runtime/v1");
+        fs::create_dir_all(&root).unwrap();
+        fs::write(root.join("sentinel"), "previous").unwrap();
+        let filesystem = FakeFilesystem::new(vec![rule]);
+
+        assert!(AgentEnvironment::provision_with_filesystem(
+            app_data.path(),
+            Path::new("/fixed/python3"),
+            &resources,
+            &FakeRunner::default(),
+            &filesystem,
+        )
+        .is_err());
+        assert_eq!(
+            fs::read_to_string(root.join("sentinel")).unwrap(),
+            "previous"
+        );
+        assert!(!app_data.path().join("agent-runtime/v1.staging").exists());
+    }
+}
+
+#[test]
+fn promotion_and_restore_failure_reports_both_errors() {
+    let repository = TempDir::new().unwrap();
+    write_resource_tree(repository.path());
+    let resources = ResourcePaths::development(repository.path()).unwrap();
+    let app_data = TempDir::new().unwrap();
+    let root = app_data.path().join("agent-runtime/v1");
+    fs::create_dir_all(&root).unwrap();
+    fs::write(root.join("sentinel"), "previous").unwrap();
+    let filesystem = FakeFilesystem::new(vec![
+        failure("rename", "v1.staging ->", 0),
+        failure("rename", "v1.previous ->", 0),
+    ]);
+
+    let error = AgentEnvironment::provision_with_filesystem(
+        app_data.path(),
+        Path::new("/fixed/python3"),
+        &resources,
+        &FakeRunner::default(),
+        &filesystem,
+    )
+    .unwrap_err();
+    assert!(error.contains("promotion"));
+    assert!(error.contains("restore"));
+    assert!(app_data.path().join("agent-runtime/v1.previous").exists());
+}
+
+#[test]
+fn stale_backup_removal_failure_cleans_staging_and_is_reported() {
+    let repository = TempDir::new().unwrap();
+    write_resource_tree(repository.path());
+    let resources = ResourcePaths::development(repository.path()).unwrap();
+    let app_data = TempDir::new().unwrap();
+    let backup = app_data.path().join("agent-runtime/v1.previous");
+    fs::create_dir_all(&backup).unwrap();
+    let filesystem = FakeFilesystem::new(vec![failure("remove_dir_all", "v1.previous", 0)]);
+
+    let error = AgentEnvironment::provision_with_filesystem(
+        app_data.path(),
+        Path::new("/fixed/python3"),
+        &resources,
+        &FakeRunner::default(),
+        &filesystem,
+    )
+    .unwrap_err();
+    assert!(error.contains("stale previous"), "{error}");
+    assert!(!app_data.path().join("agent-runtime/v1.staging").exists());
+}
+
+#[test]
+fn promoted_probe_restore_failure_is_explicit() {
+    let repository = TempDir::new().unwrap();
+    write_resource_tree(repository.path());
+    let resources = ResourcePaths::development(repository.path()).unwrap();
+    let app_data = TempDir::new().unwrap();
+    let root = app_data.path().join("agent-runtime/v1");
+    fs::create_dir_all(&root).unwrap();
+    fs::write(root.join("sentinel"), "previous").unwrap();
+    let filesystem = FakeFilesystem::new(vec![failure("rename", "v1.previous ->", 0)]);
+    let runner = FakeRunner {
+        fail_promoted_probe: true,
+        ..Default::default()
+    };
+
+    let error = AgentEnvironment::provision_with_filesystem(
+        app_data.path(),
+        Path::new("/fixed/python3"),
+        &resources,
+        &runner,
+        &filesystem,
+    )
+    .unwrap_err();
+    assert!(error.contains("restore previous"), "{error}");
+    assert!(app_data.path().join("agent-runtime/v1.previous").exists());
+}
+
+#[test]
+fn promoted_probe_cleanup_and_backup_removal_failures_are_reported() {
+    for (runner, filesystem, expected) in [
+        (
+            FakeRunner {
+                fail_promoted_probe: true,
+                ..Default::default()
+            },
+            FakeFilesystem::new(vec![failure("remove_dir_all", "/v1", 0)]),
+            "remove failed promoted",
+        ),
+        (
+            FakeRunner::default(),
+            FakeFilesystem::new(vec![failure("remove_dir_all", "v1.previous", 0)]),
+            "remove previous",
+        ),
+    ] {
+        let repository = TempDir::new().unwrap();
+        write_resource_tree(repository.path());
+        let resources = ResourcePaths::development(repository.path()).unwrap();
+        let app_data = TempDir::new().unwrap();
+        let root = app_data.path().join("agent-runtime/v1");
+        fs::create_dir_all(&root).unwrap();
+        fs::write(root.join("sentinel"), "previous").unwrap();
+
+        let error = AgentEnvironment::provision_with_filesystem(
+            app_data.path(),
+            Path::new("/fixed/python3"),
+            &resources,
+            &runner,
+            &filesystem,
+        )
+        .unwrap_err();
+        assert!(error.contains(expected), "{error}");
+    }
+}
+
+#[cfg(unix)]
+#[test]
+fn existing_environment_symlink_escaping_app_data_is_rejected() {
+    use std::os::unix::fs::symlink;
+
+    let repository = TempDir::new().unwrap();
+    write_resource_tree(repository.path());
+    let resources = ResourcePaths::development(repository.path()).unwrap();
+    let app_data = TempDir::new().unwrap();
+    let outside = TempDir::new().unwrap();
+    fs::create_dir_all(app_data.path().join("agent-runtime")).unwrap();
+    symlink(outside.path(), app_data.path().join("agent-runtime/v1")).unwrap();
+
+    assert!(AgentEnvironment::provision_with_runner(
+        app_data.path(),
+        Path::new("/fixed/python3"),
+        &resources,
+        &FakeRunner::default(),
+    )
+    .is_err());
+}
+
+#[cfg(unix)]
+#[test]
+fn returned_environment_paths_are_canonical_under_canonical_app_data() {
+    use std::os::unix::fs::symlink;
+
+    let repository = TempDir::new().unwrap();
+    write_resource_tree(repository.path());
+    let resources = ResourcePaths::development(repository.path()).unwrap();
+    let actual_app_data = TempDir::new().unwrap();
+    let alias_parent = TempDir::new().unwrap();
+    let alias = alias_parent.path().join("app-data-link");
+    symlink(actual_app_data.path(), &alias).unwrap();
+
+    let environment = AgentEnvironment::provision_with_runner(
+        &alias,
+        Path::new("/fixed/python3"),
+        &resources,
+        &FakeRunner::default(),
+    )
+    .unwrap();
+    let canonical_parent = actual_app_data.path().canonicalize().unwrap();
+    for path in [
+        &environment.root,
+        &environment.python,
+        &environment.site_packages,
+    ] {
+        assert_eq!(path, &path.canonicalize().unwrap());
+        assert!(path.starts_with(&canonical_parent));
+    }
+}
+
+#[test]
 fn environment_verification_rejects_paths_outside_dedicated_root() {
     let app_data = TempDir::new().unwrap();
     let root = app_data.path().join("agent-runtime/v1");
-    fs::create_dir_all(root.join("bin")).unwrap();
-    fs::write(root.join("bin/python3"), "").unwrap();
+    fs::create_dir_all(venv_python(&root).parent().unwrap()).unwrap();
+    fs::write(venv_python(&root), "").unwrap();
     let outside = TempDir::new().unwrap();
 
     let environment = AgentEnvironment {
-        root,
-        python: app_data.path().join("agent-runtime/v1/bin/python3"),
+        root: root.clone(),
+        python: venv_python(&root),
         site_packages: outside.path().to_path_buf(),
     };
     assert!(environment.verify().is_err());
