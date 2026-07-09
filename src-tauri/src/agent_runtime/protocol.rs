@@ -355,12 +355,18 @@ impl WorkerResponseV1 {
                 {
                     return Err("Worker Bloch coordinates do not match qubit_count".into());
                 }
-                if result
-                    .probabilities
-                    .keys()
-                    .any(|key| key.len() != snapshot.qubit_count as usize)
-                {
-                    return Err("Worker probability width does not match qubit_count".into());
+                let invalid_probability_width = match snapshot.framework {
+                    Framework::Qsharp => result
+                        .probabilities
+                        .keys()
+                        .any(|key| key.len() > snapshot.qubit_count as usize),
+                    Framework::Qiskit | Framework::Cirq => result
+                        .probabilities
+                        .keys()
+                        .any(|key| key.len() != snapshot.qubit_count as usize),
+                };
+                if invalid_probability_width {
+                    return Err("Worker probability width is invalid for its framework".into());
                 }
             }
         }

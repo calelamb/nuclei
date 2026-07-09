@@ -572,12 +572,13 @@ git commit -m "feat: add disposable bounded agent worker"
 Task 3's implemented contract additionally requires strict typed worker response
 payloads, semantic response validation, an OS-visible per-app-data provisioning
 lock, fail-closed stale staging/backup cleanup, and an immutable app-owned copy
-of the exact requirements bytes supplied to pip. Provisioning commands run in a
-dedicated Unix process group or Windows Job Object with bounded time, output,
-and reader completion; command failures expose only capped, redacted stderr
-diagnostics. `EnvironmentFilesystem` includes a `set_readonly` operation, and
-`SystemCommandRunner::run_with_limits` exists for deterministic containment
-tests.
+of the exact requirements bytes supplied to pip. On supported Unix hosts,
+provisioning commands run in a dedicated process group with bounded time,
+output, and reader completion; command failures expose only capped, redacted
+stderr diagnostics. Windows returns the stable unavailable error before any
+provisioning filesystem mutation or spawn. `EnvironmentFilesystem` includes a
+`set_readonly` operation, and `SystemCommandRunner::run_with_limits` exists for
+deterministic containment tests.
 
 **Files:**
 - Create: `kernel/agent-requirements.txt`
@@ -591,7 +592,7 @@ tests.
 
 - [ ] **Step 1: Add dependencies**
 
-Run: `cd src-tauri && cargo add tokio --features process,io-util,time,macros,rt-multi-thread,sync && cargo add uuid --features v4 && cargo add sha2 && cargo add hex && cargo add fs2 && cargo add libc --target 'cfg(unix)' && cargo add winapi --target 'cfg(windows)' --features handleapi,jobapi2,processthreadsapi,winbase,winnt && cargo add --dev tempfile`
+Run: `cd src-tauri && cargo add tokio --features process,io-util,time,macros,rt-multi-thread,sync && cargo add uuid --features v4 && cargo add sha2 && cargo add hex && cargo add fs2 && cargo add libc --target 'cfg(unix)' && cargo add --dev tempfile`
 
 Expected: dependencies resolve and `Cargo.lock` updates.
 
@@ -742,9 +743,11 @@ pub struct WorkerResponseV1 {
 required even when nullable. It rejects unknown nested fields, non-v1
 responses, invalid request IDs, non-finite or out-of-range numeric values,
 inconsistent state-vector/Bloch lengths, and contradictory status/error pairs.
-Probability keys have qubit-state width when a snapshot is present.
-Measurement keys are bounded nonempty binary strings, but are not forced to
-match classical-bit width or sum to shots; empty Q# measurements are valid.
+Qiskit/Cirq probability keys have allocated qubit-state width. Q# `Result[]`
+may represent a subset, so its nonempty binary keys may be shorter but never
+wider than the allocated qubit count or global key bound. Measurement keys are
+bounded nonempty binary strings, but are not forced to match classical-bit
+width or sum to shots; empty Q# measurements are valid.
 
 - [ ] **Step 6: Implement resource validation and dedicated-environment contract**
 
@@ -775,11 +778,12 @@ impl SystemCommandRunner {
 ```
 
 Both resource constructors canonicalize the allowed parent, kernel root,
-worker, and requirements and reject symlink escapes. The system runner creates
-a fresh Unix session/process group or Windows Job Object, bounds wall time and
-both byte streams before buffering, terminates and reaps the complete tree even
-after a successful direct-parent exit, then gives pipe readers only a bounded
-drain interval.
+worker, and requirements and reject symlink escapes. On Unix the system runner
+creates a fresh session/process group, bounds wall time and both byte streams
+before buffering, terminates and reaps the complete tree even after a
+successful direct-parent exit, then gives pipe readers only a bounded drain
+interval. On Windows both the runner and provisioning entry point return
+`Agent isolation is unavailable on this platform` before spawning.
 
 Add the capability data types to `agent_runtime/mod.rs` now so later platform
 tasks implement one stable contract:
@@ -912,13 +916,9 @@ impl SupervisorLimits {
     pub fn testing() -> Self { Self { wall: Duration::from_millis(100), stdout_bytes: 1024, stderr_bytes: 1024 } }
 }
 #[derive(Debug)] pub struct RuntimeError { pub code: String, pub message: String }
-enum ProcessContainment {
-    #[cfg(unix)] ProcessGroup(i32),
-    #[cfg(windows)] JobObject(OwnedJobHandle),
-}
 struct Active {
     child: tokio::process::Child,
-    containment: ProcessContainment,
+    process_group: i32,
     cancelled: bool,
 }
 pub struct Supervisor { limits: SupervisorLimits, active: Mutex<HashMap<String, Active>> }
@@ -932,9 +932,11 @@ pub trait ProcessSupervisor {
 }
 ```
 
-Implement `run` with `tokio::process::Command`, `env_clear`, piped stdio,
-`setsid` on Unix and a kill-on-close Job Object on Windows, immediate insertion
-into `active`, concurrent byte-capped stdout/stderr readers, and a wall timeout.
+On qualified Unix platforms, implement `run` with `tokio::process::Command`,
+`env_clear`, piped stdio, `setsid`, immediate insertion into `active`,
+concurrent byte-capped stdout/stderr readers, and a wall timeout. Windows never
+constructs a `ProcessSpec` or enters the supervisor; capability and
+provisioning return the stable unavailable result before spawn.
 One cleanup path terminates and reaps the entire process group/tree on success,
 failure, timeout, cancellation, overflow, or direct-parent exit; pipe draining
 has a separate bounded deadline so descendants retaining inherited descriptors
@@ -1597,7 +1599,7 @@ Before `tauri-action` in `.github/workflows/release.yml`, add:
         run: cargo test --manifest-path src-tauri/Cargo.toml --test agent_runtime_boundary linux_required -- --nocapture
       - name: Verify Windows fails closed
         if: runner.os == 'Windows'
-        run: cargo test --manifest-path src-tauri/Cargo.toml --test agent_runtime_contract windows_is_unavailable -- --nocapture
+        run: cargo test --manifest-path src-tauri/Cargo.toml --test agent_runtime_contract unsupported_windows_provisioning_never_attempts_to_spawn -- --nocapture
 ```
 
 Add `windows_is_unavailable` to `agent_runtime_contract.rs`; it calls

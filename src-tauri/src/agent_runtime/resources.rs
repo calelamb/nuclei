@@ -1,20 +1,33 @@
+#[cfg(not(windows))]
 use fs2::FileExt;
+#[cfg(not(windows))]
 use sha2::{Digest, Sha256};
 use std::ffi::OsString;
 use std::fs;
+#[cfg(not(windows))]
 use std::fs::OpenOptions;
+#[cfg(unix)]
 use std::io::Read;
 use std::path::{Path, PathBuf};
+#[cfg(unix)]
 use std::process::{Command, Stdio};
+#[cfg(unix)]
 use std::sync::atomic::{AtomicBool, Ordering};
+#[cfg(unix)]
 use std::sync::mpsc;
+#[cfg(unix)]
 use std::sync::Arc;
+#[cfg(unix)]
 use std::thread;
-use std::time::{Duration, Instant};
+use std::time::Duration;
+#[cfg(unix)]
+use std::time::Instant;
 
 const APPROVED_REQUIREMENTS: &str =
     "numpy>=1.26,<3\nqiskit>=1.2,<2\nqiskit-aer>=0.15,<1\ncirq-core>=1.4,<2\nqdk>=1.29,<2\n";
+#[cfg(not(windows))]
 const EXPECTED_IMPORTS: [&str; 5] = ["numpy", "qiskit", "qiskit_aer", "cirq", "qdk"];
+#[cfg(not(windows))]
 const DENIED_IMPORTS: [&str; 7] = [
     "keyring",
     "qiskit_ibm_runtime",
@@ -192,6 +205,17 @@ impl CommandRunner for SystemCommandRunner {
 }
 
 impl SystemCommandRunner {
+    #[cfg(not(unix))]
+    pub fn run_with_limits(
+        spec: &CommandSpec,
+        timeout: Duration,
+        output_limit: usize,
+    ) -> Result<CommandOutput, String> {
+        let _ = (spec, timeout, output_limit);
+        Err(crate::agent_runtime::unsupported::UNAVAILABLE_MESSAGE.into())
+    }
+
+    #[cfg(unix)]
     pub fn run_with_limits(
         spec: &CommandSpec,
         timeout: Duration,
@@ -266,6 +290,7 @@ impl SystemCommandRunner {
     }
 }
 
+#[cfg(unix)]
 fn capture_bounded(
     mut reader: impl Read + Send + 'static,
     limit: usize,
@@ -297,6 +322,7 @@ fn capture_bounded(
     receiver
 }
 
+#[cfg(unix)]
 fn collect_reader_output(
     stdout: mpsc::Receiver<Result<Vec<u8>, String>>,
     stderr: mpsc::Receiver<Result<Vec<u8>, String>>,
@@ -329,13 +355,6 @@ fn configure_process_group(command: &mut Command) {
     }
 }
 
-#[cfg(windows)]
-fn configure_process_group(command: &mut Command) {
-    use std::os::windows::process::CommandExt;
-    const CREATE_NEW_PROCESS_GROUP: u32 = 0x0000_0200;
-    command.creation_flags(CREATE_NEW_PROCESS_GROUP);
-}
-
 #[cfg(unix)]
 struct ProcessTree {
     process_group: i32,
@@ -360,89 +379,6 @@ impl ProcessTree {
         }
         wait_result?;
         Ok(())
-    }
-}
-
-#[cfg(windows)]
-struct ProcessTree {
-    job: winapi::um::winnt::HANDLE,
-}
-
-#[cfg(windows)]
-impl ProcessTree {
-    fn attach(child: &mut std::process::Child) -> Result<Self, String> {
-        use std::mem::{size_of, zeroed};
-        use std::os::windows::io::AsRawHandle;
-        use std::ptr::{null, null_mut};
-        use winapi::shared::minwindef::DWORD;
-        use winapi::um::handleapi::CloseHandle;
-        use winapi::um::jobapi2::{
-            AssignProcessToJobObject, CreateJobObjectW, SetInformationJobObject,
-        };
-        use winapi::um::winnt::{
-            JobObjectExtendedLimitInformation, JOBOBJECT_EXTENDED_LIMIT_INFORMATION,
-            JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE,
-        };
-
-        unsafe {
-            let job = CreateJobObjectW(null_mut(), null());
-            if job.is_null() {
-                return Err(format!(
-                    "Failed to create provisioning job object: {}",
-                    std::io::Error::last_os_error()
-                ));
-            }
-            let mut limits: JOBOBJECT_EXTENDED_LIMIT_INFORMATION = zeroed();
-            limits.BasicLimitInformation.LimitFlags = JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE;
-            if SetInformationJobObject(
-                job,
-                JobObjectExtendedLimitInformation,
-                &mut limits as *mut _ as *mut _,
-                size_of::<JOBOBJECT_EXTENDED_LIMIT_INFORMATION>() as DWORD,
-            ) == 0
-                || AssignProcessToJobObject(job, child.as_raw_handle() as *mut _) == 0
-            {
-                let error = std::io::Error::last_os_error();
-                CloseHandle(job);
-                let _ = child.kill();
-                let _ = child.wait();
-                return Err(format!(
-                    "Failed to contain provisioning process tree: {error}"
-                ));
-            }
-            Ok(Self { job })
-        }
-    }
-
-    fn terminate_and_reap(&mut self, child: &mut std::process::Child) -> Result<(), String> {
-        use std::ptr::null_mut;
-        use winapi::um::handleapi::CloseHandle;
-        use winapi::um::jobapi2::TerminateJobObject;
-
-        let terminate_result = unsafe { TerminateJobObject(self.job, 1) };
-        let terminate_error = std::io::Error::last_os_error();
-        unsafe {
-            CloseHandle(self.job);
-        }
-        self.job = null_mut();
-        child.wait().map_err(|error| error.to_string())?;
-        if terminate_result == 0 {
-            return Err(format!(
-                "Failed to terminate provisioning job object: {terminate_error}"
-            ));
-        }
-        Ok(())
-    }
-}
-
-#[cfg(windows)]
-impl Drop for ProcessTree {
-    fn drop(&mut self) {
-        if !self.job.is_null() {
-            unsafe {
-                winapi::um::handleapi::CloseHandle(self.job);
-            }
-        }
     }
 }
 
@@ -483,6 +419,19 @@ impl AgentEnvironment {
         )
     }
 
+    #[cfg(windows)]
+    pub fn provision_with_filesystem(
+        app_data: &Path,
+        system_python: &Path,
+        resources: &ResourcePaths,
+        runner: &dyn CommandRunner,
+        filesystem: &dyn EnvironmentFilesystem,
+    ) -> Result<Self, String> {
+        let _ = (app_data, system_python, resources, runner, filesystem);
+        Err(crate::agent_runtime::unsupported::UNAVAILABLE_MESSAGE.into())
+    }
+
+    #[cfg(not(windows))]
     pub fn provision_with_filesystem(
         app_data: &Path,
         system_python: &Path,
@@ -666,6 +615,7 @@ impl AgentEnvironment {
     }
 }
 
+#[cfg(not(windows))]
 fn reject_root_escape(
     filesystem: &dyn EnvironmentFilesystem,
     root: &Path,
@@ -682,6 +632,7 @@ fn reject_root_escape(
     Ok(())
 }
 
+#[cfg(not(windows))]
 fn canonical_environment(
     filesystem: &dyn EnvironmentFilesystem,
     canonical_parent: &Path,
@@ -709,6 +660,7 @@ fn canonical_environment(
     })
 }
 
+#[cfg(not(windows))]
 fn canonical_child(
     filesystem: &dyn EnvironmentFilesystem,
     canonical_root: &Path,
@@ -724,6 +676,7 @@ fn canonical_child(
     Ok(canonical)
 }
 
+#[cfg(not(windows))]
 fn replace_with_staging(
     filesystem: &dyn EnvironmentFilesystem,
     root: &Path,
@@ -763,6 +716,7 @@ fn replace_with_staging(
     Ok(had_previous)
 }
 
+#[cfg(not(windows))]
 fn rollback_promoted(
     filesystem: &dyn EnvironmentFilesystem,
     root: &Path,
@@ -787,6 +741,7 @@ fn rollback_promoted(
     error
 }
 
+#[cfg(not(windows))]
 fn cleanup_staging(
     filesystem: &dyn EnvironmentFilesystem,
     staging: &Path,
@@ -800,6 +755,7 @@ fn cleanup_staging(
     }
 }
 
+#[cfg(not(windows))]
 fn clean_command<I>(
     program: &Path,
     args: I,
@@ -822,11 +778,7 @@ fn installer_path() -> &'static str {
     "/usr/bin:/bin"
 }
 
-#[cfg(windows)]
-fn installer_path() -> &'static str {
-    r"C:\Windows\System32"
-}
-
+#[cfg(not(windows))]
 fn python_path(root: &Path) -> PathBuf {
     if cfg!(windows) {
         root.join("Scripts").join("python.exe")
@@ -835,6 +787,7 @@ fn python_path(root: &Path) -> PathBuf {
     }
 }
 
+#[cfg(not(windows))]
 fn probe_environment(
     root: &Path,
     python: &Path,
@@ -894,6 +847,7 @@ print(paths[0])
     Ok(site_packages)
 }
 
+#[cfg(not(windows))]
 fn require_success(output: CommandOutput, message: &str) -> Result<(), String> {
     if output.success {
         Ok(())
@@ -907,6 +861,7 @@ fn require_success(output: CommandOutput, message: &str) -> Result<(), String> {
     }
 }
 
+#[cfg(not(windows))]
 fn safe_stderr_diagnostic(stderr: &[u8]) -> String {
     const DIAGNOSTIC_LIMIT: usize = 2_048;
     let text = String::from_utf8_lossy(stderr);
@@ -948,6 +903,7 @@ fn safe_stderr_diagnostic(stderr: &[u8]) -> String {
     result
 }
 
+#[cfg(not(windows))]
 fn remove_dir_if_present(
     filesystem: &dyn EnvironmentFilesystem,
     path: &Path,

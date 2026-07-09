@@ -3,13 +3,11 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Barrier, Mutex};
 use std::thread;
-#[cfg(unix)]
 use std::time::Duration;
 
 use app_lib::agent_runtime::protocol::{
     Action, Framework, FrontendRequestV1, ResponseStatus, WorkerRequestV1, WorkerResponseV1,
 };
-#[cfg(unix)]
 use app_lib::agent_runtime::resources::SystemCommandRunner;
 use app_lib::agent_runtime::resources::{
     validate_requirements, AgentEnvironment, CommandOutput, CommandRunner, CommandSpec,
@@ -369,6 +367,27 @@ fn worker_response_accepts_actual_qiskit_cirq_and_qsharp_result_shapes() {
         ("result", qsharp_result),
     ]))
     .unwrap();
+
+    let qsharp_subset_snapshot = json!({
+        "framework": "qsharp",
+        "qubit_count": 3,
+        "classical_bit_count": 0,
+        "depth": 1,
+        "gates": [{"type":"H","targets":[0],"controls":[],"params":[],"layer":0}]
+    });
+    let qsharp_subset_result = json!({
+        "state_vector": [],
+        "probabilities": {"0": 0.5, "1": 0.5},
+        "measurements": {},
+        "bloch_coords": [],
+        "execution_time_ms": 2.0,
+        "shot_count": 100
+    });
+    serde_json::from_value::<WorkerResponseV1>(response(&[
+        ("snapshot", qsharp_subset_snapshot),
+        ("result", qsharp_subset_result),
+    ]))
+    .unwrap();
 }
 
 #[test]
@@ -385,12 +404,70 @@ fn worker_response_bounds_binary_result_keys() {
             },
         );
         result[field] = Value::Object(oversized);
-        assert!(serde_json::from_value::<WorkerResponseV1>(response(&[
-            ("snapshot", valid_snapshot()),
-            ("result", result),
-        ]))
-        .is_err());
+        assert!(
+            serde_json::from_value::<WorkerResponseV1>(response(&[("result", result),])).is_err()
+        );
     }
+
+    for malformed in ["", "012", "0 1"] {
+        let mut result = valid_result();
+        let mut probabilities = serde_json::Map::new();
+        probabilities.insert(malformed.to_owned(), json!(1.0));
+        result["probabilities"] = Value::Object(probabilities);
+        assert!(
+            serde_json::from_value::<WorkerResponseV1>(response(&[("result", result)])).is_err()
+        );
+    }
+
+    let mut qsharp_snapshot = valid_snapshot();
+    qsharp_snapshot["framework"] = json!("qsharp");
+    let mut result = valid_result();
+    result["probabilities"] = json!({"000": 1.0});
+    assert!(serde_json::from_value::<WorkerResponseV1>(response(&[
+        ("snapshot", qsharp_snapshot),
+        ("result", result),
+    ]))
+    .is_err());
+}
+
+#[cfg(windows)]
+#[test]
+fn unsupported_windows_provisioning_never_attempts_to_spawn() {
+    use app_lib::agent_runtime::unsupported::UNAVAILABLE_MESSAGE;
+
+    struct PanicRunner;
+    impl CommandRunner for PanicRunner {
+        fn run(&self, _spec: &CommandSpec) -> Result<CommandOutput, String> {
+            panic!("unsupported Windows provisioning attempted to spawn")
+        }
+    }
+
+    let spec = CommandSpec {
+        program: PathBuf::from(r"Z:\definitely-does-not-exist.exe"),
+        args: vec![],
+        environment: vec![],
+        clear_environment: true,
+    };
+    assert_eq!(
+        SystemCommandRunner::run_with_limits(&spec, Duration::from_secs(1), 256).unwrap_err(),
+        UNAVAILABLE_MESSAGE
+    );
+
+    let repository = TempDir::new().unwrap();
+    write_resource_tree(repository.path());
+    let resources = ResourcePaths::development(repository.path()).unwrap();
+    let app_data = TempDir::new().unwrap();
+    assert_eq!(
+        AgentEnvironment::provision_with_runner(
+            app_data.path(),
+            Path::new(r"Z:\python.exe"),
+            &resources,
+            &PanicRunner,
+        )
+        .unwrap_err(),
+        UNAVAILABLE_MESSAGE
+    );
+    assert!(!app_data.path().join("agent-runtime").exists());
 }
 
 #[test]
