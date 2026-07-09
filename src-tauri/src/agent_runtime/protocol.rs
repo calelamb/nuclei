@@ -290,6 +290,14 @@ impl WorkerResponseV1 {
             if self.snapshot.is_none() || self.result.is_none() {
                 return Err("Successful simulation omitted snapshot or result".into());
             }
+            if request.framework != Framework::Qsharp
+                && self
+                    .result
+                    .as_ref()
+                    .is_some_and(|result| result.probabilities.is_empty())
+            {
+                return Err("Successful simulation omitted probabilities".into());
+            }
         }
         self.validate_framework_measurements(request.framework)?;
         Ok(())
@@ -379,9 +387,9 @@ impl WorkerResponseV1 {
             }
             let probability_total: f64 = result.probabilities.values().sum();
             if !result.probabilities.is_empty()
-                && (probability_total - 1.0).abs() > PROBABILITY_SUM_TOLERANCE
+                && (probability_total <= 0.0 || probability_total > 1.0 + PROBABILITY_SUM_TOLERANCE)
             {
-                return Err("Worker probabilities do not sum to one".into());
+                return Err("Worker probability total is invalid".into());
             }
             if result.measurements.iter().any(|(key, &count)| {
                 !is_binary_register_key(key) || count > u64::from(result.shot_count)

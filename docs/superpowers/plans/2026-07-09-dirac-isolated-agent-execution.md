@@ -760,9 +760,12 @@ independent of allocated qubit count. All probability and measurement keys
 must be nonempty binary strings no longer than the explicit 4,096-bit protocol
 maximum (well within the 1 MiB response cap). Qiskit measurements may contain
 one or more whitespace characters between nonempty binary register segments;
-Cirq/Q# keys remain plain binary. Probabilities are individually bounded and
-sum to one within tolerance; measurement totals cannot exceed requested shots.
-Empty Q# measurements are valid.
+Cirq/Q# keys remain plain binary. Sparse maps are valid because adapters omit
+tiny amplitudes: each probability is finite and in `[0,1]`, and a nonempty map
+has total `> 0` and at most `1 + tolerance`; it need not sum near one.
+Successful Qiskit/Cirq simulation requires a nonempty map, while Q# may return
+an empty map when no `Result[]`/dump evidence is available. Measurement totals
+cannot exceed requested shots; empty Q# measurements are valid.
 
 - [ ] **Step 6: Implement resource validation and dedicated-environment contract**
 
@@ -794,9 +797,11 @@ pub struct SystemCommandRunner;
 Both resource constructors canonicalize the allowed parent, kernel root,
 worker, and requirements and reject symlink escapes. `SystemCommandRunner`
 returns `Agent isolation is unavailable on this platform` without spawning on
-every platform. Tests use deterministic contained fakes for staging logic.
-Later platform tasks must provide the real contained provisioning runner;
-without one, provisioning and capability remain unavailable.
+every platform, so production `AgentEnvironment::provision` fails before
+mutation. Explicit `provision_with_runner`/`provision_with_filesystem` calls
+remain cross-platform for deterministic contained fakes and later qualified
+platform runners. Without a real contained runner, capability stays
+unavailable.
 
 Add the capability data types to `agent_runtime/mod.rs` now so later platform
 tasks implement one stable contract:
@@ -1615,7 +1620,7 @@ Before `tauri-action` in `.github/workflows/release.yml`, add:
         run: cargo test --manifest-path src-tauri/Cargo.toml --test agent_runtime_boundary linux_required -- --nocapture
       - name: Verify Windows fails closed
         if: runner.os == 'Windows'
-        run: cargo test --manifest-path src-tauri/Cargo.toml --test agent_runtime_contract unsupported_windows_provisioning_never_attempts_to_spawn -- --nocapture
+        run: cargo test --manifest-path src-tauri/Cargo.toml --test agent_runtime_contract windows_production_fails_closed_but_contained_injection_remains_testable -- --nocapture
 ```
 
 Add `windows_is_unavailable` to `agent_runtime_contract.rs`; it calls

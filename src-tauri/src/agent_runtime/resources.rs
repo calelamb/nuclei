@@ -1,19 +1,14 @@
-#[cfg(not(windows))]
 use fs2::FileExt;
-#[cfg(not(windows))]
 use sha2::{Digest, Sha256};
 use std::ffi::OsString;
 use std::fs;
-#[cfg(not(windows))]
 use std::fs::OpenOptions;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 const APPROVED_REQUIREMENTS: &str =
     "numpy>=1.26,<3\nqiskit>=1.2,<2\nqiskit-aer>=0.15,<1\ncirq-core>=1.4,<2\nqdk>=1.29,<2\n";
-#[cfg(not(windows))]
 const EXPECTED_IMPORTS: [&str; 5] = ["numpy", "qiskit", "qiskit_aer", "cirq", "qdk"];
-#[cfg(not(windows))]
 const DENIED_IMPORTS: [&str; 7] = [
     "keyring",
     "qiskit_ibm_runtime",
@@ -250,19 +245,6 @@ impl AgentEnvironment {
         )
     }
 
-    #[cfg(windows)]
-    pub fn provision_with_filesystem(
-        app_data: &Path,
-        system_python: &Path,
-        resources: &ResourcePaths,
-        runner: &dyn CommandRunner,
-        filesystem: &dyn EnvironmentFilesystem,
-    ) -> Result<Self, String> {
-        let _ = (app_data, system_python, resources, runner, filesystem);
-        Err(crate::agent_runtime::unsupported::UNAVAILABLE_MESSAGE.into())
-    }
-
-    #[cfg(not(windows))]
     pub fn provision_with_filesystem(
         app_data: &Path,
         system_python: &Path,
@@ -449,7 +431,6 @@ impl AgentEnvironment {
     }
 }
 
-#[cfg(not(windows))]
 fn reject_root_escape(
     filesystem: &dyn EnvironmentFilesystem,
     root: &Path,
@@ -466,7 +447,6 @@ fn reject_root_escape(
     Ok(())
 }
 
-#[cfg(not(windows))]
 fn canonical_environment(
     filesystem: &dyn EnvironmentFilesystem,
     canonical_parent: &Path,
@@ -494,7 +474,6 @@ fn canonical_environment(
     })
 }
 
-#[cfg(not(windows))]
 fn canonical_child(
     filesystem: &dyn EnvironmentFilesystem,
     canonical_root: &Path,
@@ -510,7 +489,6 @@ fn canonical_child(
     Ok(canonical)
 }
 
-#[cfg(not(windows))]
 fn replace_with_staging(
     filesystem: &dyn EnvironmentFilesystem,
     root: &Path,
@@ -550,7 +528,6 @@ fn replace_with_staging(
     Ok(had_previous)
 }
 
-#[cfg(not(windows))]
 fn rollback_promoted(
     filesystem: &dyn EnvironmentFilesystem,
     root: &Path,
@@ -575,7 +552,6 @@ fn rollback_promoted(
     error
 }
 
-#[cfg(not(windows))]
 fn cleanup_staging(
     filesystem: &dyn EnvironmentFilesystem,
     staging: &Path,
@@ -589,7 +565,6 @@ fn cleanup_staging(
     }
 }
 
-#[cfg(not(windows))]
 fn clean_command<I>(
     program: &Path,
     args: I,
@@ -612,7 +587,11 @@ fn installer_path() -> &'static str {
     "/usr/bin:/bin"
 }
 
-#[cfg(not(windows))]
+#[cfg(windows)]
+fn installer_path() -> &'static str {
+    r"C:\Windows\System32"
+}
+
 fn python_path(root: &Path) -> PathBuf {
     if cfg!(windows) {
         root.join("Scripts").join("python.exe")
@@ -621,7 +600,6 @@ fn python_path(root: &Path) -> PathBuf {
     }
 }
 
-#[cfg(not(windows))]
 fn probe_environment(
     root: &Path,
     python: &Path,
@@ -681,7 +659,6 @@ print(paths[0])
     Ok(site_packages)
 }
 
-#[cfg(not(windows))]
 fn require_success(output: CommandOutput, message: &str) -> Result<(), String> {
     if output.success {
         Ok(())
@@ -695,7 +672,6 @@ fn require_success(output: CommandOutput, message: &str) -> Result<(), String> {
     }
 }
 
-#[cfg(not(windows))]
 fn safe_stderr_diagnostic(stderr: &[u8]) -> String {
     const DIAGNOSTIC_LIMIT: usize = 2_048;
     let text = String::from_utf8_lossy(stderr);
@@ -740,7 +716,6 @@ fn safe_stderr_diagnostic(stderr: &[u8]) -> String {
     result
 }
 
-#[cfg(not(windows))]
 fn redact_urls(line: &str) -> String {
     let mut result = String::new();
     let mut remaining = line;
@@ -763,7 +738,6 @@ fn redact_urls(line: &str) -> String {
     }
 }
 
-#[cfg(not(windows))]
 fn escape_controls(text: &str) -> String {
     let mut result = String::new();
     for character in text.chars() {
@@ -776,7 +750,6 @@ fn escape_controls(text: &str) -> String {
     result
 }
 
-#[cfg(not(windows))]
 fn remove_dir_if_present(
     filesystem: &dyn EnvironmentFilesystem,
     path: &Path,

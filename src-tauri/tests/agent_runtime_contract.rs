@@ -330,6 +330,11 @@ fn worker_response_rejects_payload_shape_semantics_and_status_contradictions() {
         })],
         vec![("result", {
             let mut value = valid_result();
+            value["probabilities"] = json!({"00": 0.0});
+            value
+        })],
+        vec![("result", {
+            let mut value = valid_result();
             value["measurements"] = json!({"00": 4, "11": 4});
             value
         })],
@@ -440,6 +445,57 @@ fn worker_response_accepts_actual_qiskit_cirq_and_qsharp_result_shapes() {
         ("result", qsharp_repeated_result),
     ]))
     .unwrap();
+
+    let sparse_snapshot = json!({
+        "framework": "qiskit",
+        "qubit_count": 12,
+        "classical_bit_count": 12,
+        "depth": 1,
+        "gates": [{"type":"H","targets":[0],"controls":[],"params":[],"layer":0}]
+    });
+    let sparse_result = json!({
+        "state_vector": [],
+        "probabilities": {"000000000000": 0.625},
+        "measurements": {"000000000000": 5},
+        "bloch_coords": [],
+        "execution_time_ms": 1.0,
+        "shot_count": 5
+    });
+    let sparse: WorkerResponseV1 = serde_json::from_value(response(&[
+        ("snapshot", sparse_snapshot),
+        ("result", sparse_result),
+    ]))
+    .unwrap();
+    sparse
+        .validate(&worker_request(
+            Action::Simulate,
+            Framework::Qiskit,
+            Some(5),
+        ))
+        .unwrap();
+
+    let qsharp_empty_result = json!({
+        "state_vector": [],
+        "probabilities": {},
+        "measurements": {},
+        "bloch_coords": [],
+        "execution_time_ms": 1.0,
+        "shot_count": 5
+    });
+    let mut qsharp_empty_snapshot = valid_snapshot();
+    qsharp_empty_snapshot["framework"] = json!("qsharp");
+    let empty: WorkerResponseV1 = serde_json::from_value(response(&[
+        ("snapshot", qsharp_empty_snapshot),
+        ("result", qsharp_empty_result),
+    ]))
+    .unwrap();
+    empty
+        .validate(&worker_request(
+            Action::Simulate,
+            Framework::Qsharp,
+            Some(5),
+        ))
+        .unwrap();
 }
 
 #[test]
@@ -499,6 +555,15 @@ fn worker_response_correlates_action_framework_and_shots() {
 
     let missing_payload: WorkerResponseV1 = serde_json::from_value(response(&[])).unwrap();
     assert!(missing_payload.validate(&request).is_err());
+
+    let mut empty_probabilities = valid_result();
+    empty_probabilities["probabilities"] = json!({});
+    let empty: WorkerResponseV1 = serde_json::from_value(response(&[
+        ("snapshot", snapshot),
+        ("result", empty_probabilities),
+    ]))
+    .unwrap();
+    assert!(empty.validate(&request).is_err());
 }
 
 #[test]
@@ -573,19 +638,8 @@ fn parse_snapshot_supports_large_bounded_circuits_without_simulation_dimension()
 
 #[cfg(windows)]
 #[test]
-fn unsupported_windows_provisioning_never_attempts_to_spawn() {
+fn windows_production_fails_closed_but_contained_injection_remains_testable() {
     use app_lib::agent_runtime::unsupported::UNAVAILABLE_MESSAGE;
-
-    struct PanicRunner;
-    impl CommandRunner for PanicRunner {
-        fn containment(&self) -> RunnerContainment {
-            RunnerContainment::Contained
-        }
-
-        fn run(&self, _spec: &CommandSpec) -> Result<CommandOutput, String> {
-            panic!("unsupported Windows provisioning attempted to spawn")
-        }
-    }
 
     let spec = CommandSpec {
         program: PathBuf::from(r"Z:\definitely-does-not-exist.exe"),
@@ -603,16 +657,27 @@ fn unsupported_windows_provisioning_never_attempts_to_spawn() {
     let resources = ResourcePaths::development(repository.path()).unwrap();
     let app_data = TempDir::new().unwrap();
     assert_eq!(
-        AgentEnvironment::provision_with_runner(
-            app_data.path(),
-            Path::new(r"Z:\python.exe"),
-            &resources,
-            &PanicRunner,
-        )
-        .unwrap_err(),
+        AgentEnvironment::provision(app_data.path(), Path::new(r"Z:\python.exe"), &resources,)
+            .unwrap_err(),
         UNAVAILABLE_MESSAGE
     );
     assert!(!app_data.path().join("agent-runtime").exists());
+
+    let runner = FakeRunner::default();
+    let environment = AgentEnvironment::provision_with_runner(
+        app_data.path(),
+        Path::new(r"Z:\python.exe"),
+        &resources,
+        &runner,
+    )
+    .unwrap();
+    assert_same_canonical_path(&environment.root, &app_data.path().join("agent-runtime/v1"));
+    assert!(runner
+        .commands
+        .lock()
+        .unwrap()
+        .iter()
+        .any(|command| command.args.iter().any(|argument| argument == "venv")));
 }
 
 #[test]
