@@ -7,6 +7,7 @@ use std::io::Read;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::mpsc;
 use std::sync::Arc;
 use std::thread;
 use std::time::{Duration, Instant};
@@ -205,6 +206,7 @@ impl SystemCommandRunner {
         command.stdout(Stdio::piped()).stderr(Stdio::piped());
         configure_process_group(&mut command);
         let mut child = command.spawn().map_err(|error| error.to_string())?;
+        let mut process_tree = ProcessTree::attach(&mut child)?;
         let stdout = child
             .stdout
             .take()
@@ -214,36 +216,48 @@ impl SystemCommandRunner {
             .take()
             .ok_or("Failed to capture command stderr")?;
         let overflowed = Arc::new(AtomicBool::new(false));
-        let stdout_thread = capture_bounded(stdout, output_limit, Arc::clone(&overflowed));
-        let stderr_thread = capture_bounded(stderr, output_limit, Arc::clone(&overflowed));
+        let stdout_reader = capture_bounded(stdout, output_limit, Arc::clone(&overflowed));
+        let stderr_reader = capture_bounded(stderr, output_limit, Arc::clone(&overflowed));
         let started = Instant::now();
-        let status = loop {
+        let (status, failure) = loop {
             if overflowed.load(Ordering::Acquire) {
-                terminate_process_tree(&mut child)?;
-                let _ = stdout_thread.join();
-                let _ = stderr_thread.join();
-                return Err("Provisioning command output exceeded the safety limit".into());
+                break (
+                    None,
+                    Some("Provisioning command output exceeded the safety limit".to_owned()),
+                );
             }
             if started.elapsed() >= timeout {
-                terminate_process_tree(&mut child)?;
-                let _ = stdout_thread.join();
-                let _ = stderr_thread.join();
-                return Err("Provisioning command timed out".into());
+                break (None, Some("Provisioning command timed out".to_owned()));
             }
-            if let Some(status) = child.try_wait().map_err(|error| error.to_string())? {
-                break status;
+            match child.try_wait() {
+                Ok(Some(status)) => break (Some(status), None),
+                Ok(None) => {}
+                Err(error) => {
+                    break (
+                        None,
+                        Some(format!("Failed to query provisioning command: {error}")),
+                    )
+                }
             }
             thread::sleep(Duration::from_millis(10));
         };
-        let stdout = stdout_thread
-            .join()
-            .map_err(|_| "Command stdout reader panicked")??;
-        let stderr = stderr_thread
-            .join()
-            .map_err(|_| "Command stderr reader panicked")??;
+
+        let tree_result = process_tree.terminate_and_reap(&mut child);
+        let streams_result = collect_reader_output(stdout_reader, stderr_reader);
+        if let Err(tree_error) = tree_result {
+            return Err(match streams_result {
+                Ok(_) => tree_error,
+                Err(stream_error) => format!("{tree_error}; {stream_error}"),
+            });
+        }
+        let (stdout, stderr) = streams_result?;
+        if let Some(message) = failure {
+            return Err(message);
+        }
         if overflowed.load(Ordering::Acquire) {
             return Err("Provisioning command output exceeded the safety limit".into());
         }
+        let status = status.ok_or("Provisioning command ended without an exit status")?;
         Ok(CommandOutput {
             success: status.success(),
             stdout,
@@ -256,16 +270,22 @@ fn capture_bounded(
     mut reader: impl Read + Send + 'static,
     limit: usize,
     overflowed: Arc<AtomicBool>,
-) -> thread::JoinHandle<Result<Vec<u8>, String>> {
+) -> mpsc::Receiver<Result<Vec<u8>, String>> {
+    let (sender, receiver) = mpsc::sync_channel(1);
     thread::spawn(move || {
         let mut captured = Vec::new();
         let mut buffer = [0_u8; 8192];
         loop {
-            let count = reader
-                .read(&mut buffer)
-                .map_err(|error| error.to_string())?;
+            let count = match reader.read(&mut buffer) {
+                Ok(count) => count,
+                Err(error) => {
+                    let _ = sender.send(Err(error.to_string()));
+                    return;
+                }
+            };
             if count == 0 {
-                return Ok(captured);
+                let _ = sender.send(Ok(captured));
+                return;
             }
             let remaining = limit.saturating_sub(captured.len());
             captured.extend_from_slice(&buffer[..count.min(remaining)]);
@@ -273,7 +293,27 @@ fn capture_bounded(
                 overflowed.store(true, Ordering::Release);
             }
         }
-    })
+    });
+    receiver
+}
+
+fn collect_reader_output(
+    stdout: mpsc::Receiver<Result<Vec<u8>, String>>,
+    stderr: mpsc::Receiver<Result<Vec<u8>, String>>,
+) -> Result<(Vec<u8>, Vec<u8>), String> {
+    const READER_COMPLETION_TIMEOUT: Duration = Duration::from_secs(2);
+    let deadline = Instant::now() + READER_COMPLETION_TIMEOUT;
+    let receive = |reader: mpsc::Receiver<Result<Vec<u8>, String>>,
+                   description: &str|
+     -> Result<Vec<u8>, String> {
+        let remaining = deadline.saturating_duration_since(Instant::now());
+        reader
+            .recv_timeout(remaining)
+            .map_err(|_| format!("{description} did not close after process-tree termination"))?
+    };
+    let stdout = receive(stdout, "Command stdout")?;
+    let stderr = receive(stderr, "Command stderr")?;
+    Ok((stdout, stderr))
 }
 
 #[cfg(unix)]
@@ -297,27 +337,113 @@ fn configure_process_group(command: &mut Command) {
 }
 
 #[cfg(unix)]
-fn terminate_process_tree(child: &mut std::process::Child) -> Result<(), String> {
-    let process_group = -(child.id() as i32);
-    unsafe {
-        libc::kill(process_group, libc::SIGKILL);
+struct ProcessTree {
+    process_group: i32,
+}
+
+#[cfg(unix)]
+impl ProcessTree {
+    fn attach(child: &mut std::process::Child) -> Result<Self, String> {
+        Ok(Self {
+            process_group: child.id() as i32,
+        })
     }
-    child.wait().map_err(|error| error.to_string())?;
-    Ok(())
+
+    fn terminate_and_reap(&mut self, child: &mut std::process::Child) -> Result<(), String> {
+        let kill_result = unsafe { libc::kill(-self.process_group, libc::SIGKILL) };
+        let kill_error = std::io::Error::last_os_error();
+        let wait_result = child.wait().map_err(|error| error.to_string());
+        if kill_result == -1 && kill_error.raw_os_error() != Some(libc::ESRCH) {
+            return Err(format!(
+                "Failed to terminate provisioning process group: {kill_error}"
+            ));
+        }
+        wait_result?;
+        Ok(())
+    }
 }
 
 #[cfg(windows)]
-fn terminate_process_tree(child: &mut std::process::Child) -> Result<(), String> {
-    let status = Command::new("taskkill")
-        .args(["/PID", &child.id().to_string(), "/T", "/F"])
-        .status()
-        .map_err(|error| format!("Failed to terminate provisioning process tree: {error}"))?;
-    let _ = child.kill();
-    child.wait().map_err(|error| error.to_string())?;
-    if !status.success() {
-        return Err("Failed to guarantee provisioning descendant termination".into());
+struct ProcessTree {
+    job: winapi::um::winnt::HANDLE,
+}
+
+#[cfg(windows)]
+impl ProcessTree {
+    fn attach(child: &mut std::process::Child) -> Result<Self, String> {
+        use std::mem::{size_of, zeroed};
+        use std::os::windows::io::AsRawHandle;
+        use std::ptr::{null, null_mut};
+        use winapi::shared::minwindef::DWORD;
+        use winapi::um::handleapi::CloseHandle;
+        use winapi::um::jobapi2::{
+            AssignProcessToJobObject, CreateJobObjectW, SetInformationJobObject,
+        };
+        use winapi::um::winnt::{
+            JobObjectExtendedLimitInformation, JOBOBJECT_EXTENDED_LIMIT_INFORMATION,
+            JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE,
+        };
+
+        unsafe {
+            let job = CreateJobObjectW(null_mut(), null());
+            if job.is_null() {
+                return Err(format!(
+                    "Failed to create provisioning job object: {}",
+                    std::io::Error::last_os_error()
+                ));
+            }
+            let mut limits: JOBOBJECT_EXTENDED_LIMIT_INFORMATION = zeroed();
+            limits.BasicLimitInformation.LimitFlags = JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE;
+            if SetInformationJobObject(
+                job,
+                JobObjectExtendedLimitInformation,
+                &mut limits as *mut _ as *mut _,
+                size_of::<JOBOBJECT_EXTENDED_LIMIT_INFORMATION>() as DWORD,
+            ) == 0
+                || AssignProcessToJobObject(job, child.as_raw_handle() as *mut _) == 0
+            {
+                let error = std::io::Error::last_os_error();
+                CloseHandle(job);
+                let _ = child.kill();
+                let _ = child.wait();
+                return Err(format!(
+                    "Failed to contain provisioning process tree: {error}"
+                ));
+            }
+            Ok(Self { job })
+        }
     }
-    Ok(())
+
+    fn terminate_and_reap(&mut self, child: &mut std::process::Child) -> Result<(), String> {
+        use std::ptr::null_mut;
+        use winapi::um::handleapi::CloseHandle;
+        use winapi::um::jobapi2::TerminateJobObject;
+
+        let terminate_result = unsafe { TerminateJobObject(self.job, 1) };
+        let terminate_error = std::io::Error::last_os_error();
+        unsafe {
+            CloseHandle(self.job);
+        }
+        self.job = null_mut();
+        child.wait().map_err(|error| error.to_string())?;
+        if terminate_result == 0 {
+            return Err(format!(
+                "Failed to terminate provisioning job object: {terminate_error}"
+            ));
+        }
+        Ok(())
+    }
+}
+
+#[cfg(windows)]
+impl Drop for ProcessTree {
+    fn drop(&mut self) {
+        if !self.job.is_null() {
+            unsafe {
+                winapi::um::handleapi::CloseHandle(self.job);
+            }
+        }
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]

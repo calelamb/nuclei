@@ -286,7 +286,7 @@ fn worker_response_rejects_payload_shape_semantics_and_status_contradictions() {
         vec![("snapshot", json!({"framework":"cirq"}))],
         vec![("snapshot", {
             let mut value = valid_snapshot();
-            value["gates"][0]["target"] = json!([99]);
+            value["gates"][0]["targets"] = json!([99]);
             value
         })],
         vec![("result", {
@@ -299,8 +299,97 @@ fn worker_response_rejects_payload_shape_semantics_and_status_contradictions() {
             value["bloch_coords"][0]["extra"] = json!(true);
             value
         })],
+        vec![("result", {
+            let mut value = valid_result();
+            value["probabilities"]["00"] = json!(-0.1);
+            value
+        })],
     ] {
         assert!(serde_json::from_value::<WorkerResponseV1>(response(&changed)).is_err());
+    }
+}
+
+#[test]
+fn worker_response_accepts_actual_qiskit_cirq_and_qsharp_result_shapes() {
+    let qiskit_snapshot = json!({
+        "framework": "qiskit",
+        "qubit_count": 2,
+        "classical_bit_count": 1,
+        "depth": 1,
+        "gates": [{"type":"H","targets":[0],"controls":[],"params":[],"layer":0}]
+    });
+    let qiskit_result = json!({
+        "state_vector": [
+            {"re":0.707106,"im":0.0},{"re":0.0,"im":0.0},
+            {"re":0.707106,"im":0.0},{"re":0.0,"im":0.0}
+        ],
+        "probabilities": {"00": 0.5, "10": 0.5},
+        "measurements": {"0": 51, "1": 49},
+        "bloch_coords": [{"x":1.0,"y":0.0,"z":0.0},{"x":0.0,"y":0.0,"z":1.0}],
+        "execution_time_ms": 1.2,
+        "shot_count": 100
+    });
+    serde_json::from_value::<WorkerResponseV1>(response(&[
+        ("snapshot", qiskit_snapshot),
+        ("result", qiskit_result),
+    ]))
+    .unwrap();
+
+    let cirq_result = json!({
+        "state_vector": [],
+        "probabilities": {"00": 0.25, "01": 0.25, "10": 0.25, "11": 0.25},
+        "measurements": {"00": 1, "01": 3, "10": 2, "11": 2},
+        "bloch_coords": [],
+        "execution_time_ms": 0.5,
+        "shot_count": 8
+    });
+    serde_json::from_value::<WorkerResponseV1>(response(&[
+        ("snapshot", valid_snapshot()),
+        ("result", cirq_result),
+    ]))
+    .unwrap();
+
+    let qsharp_snapshot = json!({
+        "framework": "qsharp",
+        "qubit_count": 2,
+        "classical_bit_count": 0,
+        "depth": 1,
+        "gates": [{"type":"H","targets":[0],"controls":[],"params":[],"layer":0}]
+    });
+    let qsharp_result = json!({
+        "state_vector": [],
+        "probabilities": {"00": 0.5, "11": 0.5},
+        "measurements": {},
+        "bloch_coords": [{"x":0.0,"y":0.0,"z":0.0},{"x":0.0,"y":0.0,"z":0.0}],
+        "execution_time_ms": 2.0,
+        "shot_count": 100
+    });
+    serde_json::from_value::<WorkerResponseV1>(response(&[
+        ("snapshot", qsharp_snapshot),
+        ("result", qsharp_result),
+    ]))
+    .unwrap();
+}
+
+#[test]
+fn worker_response_bounds_binary_result_keys() {
+    for field in ["probabilities", "measurements"] {
+        let mut result = valid_result();
+        let mut oversized = serde_json::Map::new();
+        oversized.insert(
+            "0".repeat(4097),
+            if field == "probabilities" {
+                json!(1.0)
+            } else {
+                json!(5)
+            },
+        );
+        result[field] = Value::Object(oversized);
+        assert!(serde_json::from_value::<WorkerResponseV1>(response(&[
+            ("snapshot", valid_snapshot()),
+            ("result", result),
+        ]))
+        .is_err());
     }
 }
 
@@ -892,6 +981,62 @@ fn system_runner_bounds_timeout_output_and_recovers_after_termination() {
     )
     .unwrap();
     assert_eq!(recovered.stdout, b"recovered");
+}
+
+#[cfg(unix)]
+#[test]
+fn system_runner_terminates_descendants_holding_pipes_after_parent_exit() {
+    use std::sync::mpsc;
+
+    let temporary = TempDir::new().unwrap();
+    let descendant_marker = temporary.path().join("lingering-descendant");
+    let spec = CommandSpec {
+        program: PathBuf::from("/bin/sh"),
+        args: vec![
+            OsStr::new("-c").to_owned(),
+            OsStr::new(&format!(
+                "(sleep 0.3; touch '{}') & printf parent-complete",
+                descendant_marker.display()
+            ))
+            .to_owned(),
+        ],
+        environment: vec![],
+        clear_environment: false,
+    };
+    let (sender, receiver) = mpsc::channel();
+    thread::spawn(move || {
+        sender
+            .send(SystemCommandRunner::run_with_limits(
+                &spec,
+                Duration::from_secs(2),
+                256,
+            ))
+            .unwrap();
+    });
+
+    let output = receiver
+        .recv_timeout(Duration::from_secs(1))
+        .expect("runner blocked on a descendant-owned pipe")
+        .unwrap();
+    assert_eq!(output.stdout, b"parent-complete");
+    thread::sleep(Duration::from_millis(400));
+    assert!(!descendant_marker.exists());
+
+    let recovery = CommandSpec {
+        program: PathBuf::from("/bin/sh"),
+        args: vec![
+            OsStr::new("-c").to_owned(),
+            OsStr::new("printf next").to_owned(),
+        ],
+        environment: vec![],
+        clear_environment: false,
+    };
+    assert_eq!(
+        SystemCommandRunner::run_with_limits(&recovery, Duration::from_secs(1), 256)
+            .unwrap()
+            .stdout,
+        b"next"
+    );
 }
 
 #[test]

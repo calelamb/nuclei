@@ -5,6 +5,7 @@ use std::collections::BTreeMap;
 pub const PROTOCOL_VERSION: u8 = 1;
 pub const MAX_CODE_BYTES: usize = 262_144;
 pub const MAX_SHOTS: u32 = 10_000;
+const MAX_RESULT_KEY_BITS: usize = 4_096;
 
 #[derive(Clone, Copy, Debug, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
@@ -326,30 +327,21 @@ impl WorkerResponseV1 {
                 })
                 || result.probabilities.iter().any(|(key, &value)| {
                     key.is_empty()
+                        || key.len() > MAX_RESULT_KEY_BITS
                         || !key.bytes().all(|byte| matches!(byte, b'0' | b'1'))
                         || !value.is_finite()
                         || value < 0.0
-                        || value > 1.0
                 })
             {
                 return Err("Worker simulation result contains invalid numeric data".into());
             }
-            let probability_sum: f64 = result.probabilities.values().sum();
-            if !result.probabilities.is_empty() && (probability_sum - 1.0).abs() > 0.000_001 {
-                return Err("Worker probabilities do not sum to one".into());
-            }
-            let measurements: u64 = result
-                .measurements
-                .values()
-                .try_fold(0_u64, |sum, value| sum.checked_add(*value))
-                .ok_or("Worker measurement counts overflow")?;
-            if result
-                .measurements
-                .keys()
-                .any(|key| key.is_empty() || !key.bytes().all(|byte| matches!(byte, b'0' | b'1')))
-                || measurements != u64::from(result.shot_count)
-            {
-                return Err("Worker measurement counts do not match shot_count".into());
+            if result.measurements.iter().any(|(key, &count)| {
+                key.is_empty()
+                    || key.len() > MAX_RESULT_KEY_BITS
+                    || !key.bytes().all(|byte| matches!(byte, b'0' | b'1'))
+                    || count > u64::from(result.shot_count)
+            }) {
+                return Err("Worker measurements contain invalid keys or counts".into());
             }
             if let Some(snapshot) = &self.snapshot {
                 let expected_state_len = 1_usize.checked_shl(snapshot.qubit_count);
@@ -363,18 +355,12 @@ impl WorkerResponseV1 {
                 {
                     return Err("Worker Bloch coordinates do not match qubit_count".into());
                 }
-                let bit_width = if snapshot.classical_bit_count == 0 {
-                    snapshot.qubit_count
-                } else {
-                    snapshot.classical_bit_count
-                } as usize;
                 if result
                     .probabilities
                     .keys()
-                    .chain(result.measurements.keys())
-                    .any(|key| key.len() != bit_width)
+                    .any(|key| key.len() != snapshot.qubit_count as usize)
                 {
-                    return Err("Worker bitstring width does not match classical_bit_count".into());
+                    return Err("Worker probability width does not match qubit_count".into());
                 }
             }
         }

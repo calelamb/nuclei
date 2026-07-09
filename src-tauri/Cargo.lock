@@ -2317,6 +2317,7 @@ dependencies = [
  "tempfile",
  "tokio",
  "uuid",
+ "winapi",
 ]
 
 [[package]]

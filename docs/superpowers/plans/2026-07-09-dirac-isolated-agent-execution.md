@@ -573,10 +573,11 @@ Task 3's implemented contract additionally requires strict typed worker response
 payloads, semantic response validation, an OS-visible per-app-data provisioning
 lock, fail-closed stale staging/backup cleanup, and an immutable app-owned copy
 of the exact requirements bytes supplied to pip. Provisioning commands run in a
-dedicated process group with bounded time and output; command failures expose
-only capped, redacted stderr diagnostics. `EnvironmentFilesystem` includes a
-`set_readonly` operation, and `SystemCommandRunner::run_with_limits` exists for
-deterministic containment tests.
+dedicated Unix process group or Windows Job Object with bounded time, output,
+and reader completion; command failures expose only capped, redacted stderr
+diagnostics. `EnvironmentFilesystem` includes a `set_readonly` operation, and
+`SystemCommandRunner::run_with_limits` exists for deterministic containment
+tests.
 
 **Files:**
 - Create: `kernel/agent-requirements.txt`
@@ -590,7 +591,7 @@ deterministic containment tests.
 
 - [ ] **Step 1: Add dependencies**
 
-Run: `cd src-tauri && cargo add tokio --features process,io-util,time,macros,rt-multi-thread,sync && cargo add uuid --features v4 && cargo add sha2 && cargo add hex && cargo add libc --target 'cfg(unix)' && cargo add --dev tempfile`
+Run: `cd src-tauri && cargo add tokio --features process,io-util,time,macros,rt-multi-thread,sync && cargo add uuid --features v4 && cargo add sha2 && cargo add hex && cargo add fs2 && cargo add libc --target 'cfg(unix)' && cargo add winapi --target 'cfg(windows)' --features handleapi,jobapi2,processthreadsapi,winbase,winnt && cargo add --dev tempfile`
 
 Expected: dependencies resolve and `Cargo.lock` updates.
 
@@ -666,7 +667,7 @@ use serde::{Deserialize, Serialize};
 #[serde(rename_all = "lowercase")]
 pub enum Action { Parse, Simulate }
 #[derive(Clone, Copy, Debug, Deserialize, Serialize, PartialEq)]
-#[serde(rename_all = "kebab-case")]
+#[serde(rename_all = "lowercase")]
 pub enum Framework { Qiskit, Cirq, Qsharp }
 
 #[derive(Clone, Debug, Deserialize)]
@@ -701,14 +702,49 @@ impl TryFrom<FrontendRequestV1> for WorkerRequestV1 {
     }
 }
 
-#[derive(Debug, Deserialize)]
-#[serde(deny_unknown_fields)]
+#[derive(Debug, Deserialize)] #[serde(deny_unknown_fields)]
+pub struct GateV1 {
+    #[serde(rename = "type")] pub gate_type: String,
+    pub targets: Vec<u32>, pub controls: Vec<u32>, pub params: Vec<f64>, pub layer: u32,
+}
+#[derive(Debug, Deserialize)] #[serde(deny_unknown_fields)]
+pub struct CircuitSnapshotV1 {
+    pub framework: Framework, pub qubit_count: u32, pub classical_bit_count: u32,
+    pub depth: u32, pub gates: Vec<GateV1>,
+}
+#[derive(Debug, Deserialize)] #[serde(deny_unknown_fields)]
+pub struct ComplexAmplitudeV1 { pub re: f64, pub im: f64 }
+#[derive(Debug, Deserialize)] #[serde(deny_unknown_fields)]
+pub struct BlochCoordinatesV1 { pub x: f64, pub y: f64, pub z: f64 }
+#[derive(Debug, Deserialize)] #[serde(deny_unknown_fields)]
+pub struct SimulationResultV1 {
+    pub state_vector: Vec<ComplexAmplitudeV1>,
+    pub probabilities: std::collections::BTreeMap<String, f64>,
+    pub measurements: std::collections::BTreeMap<String, u64>,
+    pub bloch_coords: Vec<BlochCoordinatesV1>,
+    pub execution_time_ms: f64, pub shot_count: u32,
+}
+#[derive(Debug, Deserialize)] #[serde(deny_unknown_fields)]
+pub struct WorkerErrorV1 {
+    pub code: String, pub message: String, pub traceback: Option<String>,
+    pub framework: Option<Framework>, pub dependency: Option<String>,
+}
+#[derive(Debug, Deserialize)] #[serde(rename_all = "lowercase")]
+pub enum ResponseStatus { Ok, Error }
 pub struct WorkerResponseV1 {
-    pub protocol_version: u8, pub request_id: String, pub status: String,
-    pub snapshot: Option<serde_json::Value>, pub result: Option<serde_json::Value>,
-    pub stdout: String, pub stderr: String, pub error: Option<serde_json::Value>,
+    pub protocol_version: u8, pub request_id: String, pub status: ResponseStatus,
+    pub snapshot: Option<CircuitSnapshotV1>, pub result: Option<SimulationResultV1>,
+    pub stdout: String, pub stderr: String, pub error: Option<WorkerErrorV1>,
 }
 ```
+
+`WorkerResponseV1` uses a custom strict deserializer so every top-level field is
+required even when nullable. It rejects unknown nested fields, non-v1
+responses, invalid request IDs, non-finite or out-of-range numeric values,
+inconsistent state-vector/Bloch lengths, and contradictory status/error pairs.
+Probability keys have qubit-state width when a snapshot is present.
+Measurement keys are bounded nonempty binary strings, but are not forced to
+match classical-bit width or sum to shots; empty Q# measurements are valid.
 
 - [ ] **Step 6: Implement resource validation and dedicated-environment contract**
 
@@ -718,28 +754,32 @@ use std::path::{Path, PathBuf};
 
 pub struct ResourcePaths { pub kernel_root: PathBuf, pub worker: PathBuf, pub requirements: PathBuf }
 impl ResourcePaths {
-    pub fn development(repo: &Path) -> Result<Self, String> { Self::from_root(repo.join("kernel")) }
-    pub fn bundled(resources: &Path) -> Result<Self, String> {
-        Self::from_root(resources.join("agent-runtime/kernel"))
-    }
-    fn from_root(root: PathBuf) -> Result<Self, String> {
-        let kernel_root = root.canonicalize().map_err(|e| e.to_string())?;
-        let worker = kernel_root.join("agent_worker.py").canonicalize().map_err(|e| e.to_string())?;
-        let requirements = kernel_root.join("agent-requirements.txt").canonicalize().map_err(|e| e.to_string())?;
-        if !worker.starts_with(&kernel_root) || !requirements.starts_with(&kernel_root) {
-            return Err("Agent resource escaped root".into());
-        }
-        Ok(Self { kernel_root, worker, requirements })
-    }
+    pub fn development(repo: &Path) -> Result<Self, String>;
+    pub fn bundled(resources: &Path) -> Result<Self, String>;
 }
 
+const APPROVED_REQUIREMENTS: &str =
+    "numpy>=1.26,<3\nqiskit>=1.2,<2\nqiskit-aer>=0.15,<1\ncirq-core>=1.4,<2\nqdk>=1.29,<2\n";
 pub fn validate_requirements(text: &str) -> Result<(), String> {
-    let denied = ["keyring", "ibm-runtime", "braket", "azure-quantum", "ionq", "quantinuum", "cuda"];
-    if denied.iter().any(|name| text.to_ascii_lowercase().contains(name)) {
-        Err("Denied agent package".into())
-    } else { Ok(()) }
+    if text == APPROVED_REQUIREMENTS { Ok(()) }
+    else { Err("Agent requirements must exactly match approved constraints".into()) }
+}
+
+pub trait CommandRunner { fn run(&self, spec: &CommandSpec) -> Result<CommandOutput, String>; }
+pub struct SystemCommandRunner;
+impl SystemCommandRunner {
+    pub fn run_with_limits(
+        spec: &CommandSpec, wall: std::time::Duration, output_bytes: usize,
+    ) -> Result<CommandOutput, String>;
 }
 ```
+
+Both resource constructors canonicalize the allowed parent, kernel root,
+worker, and requirements and reject symlink escapes. The system runner creates
+a fresh Unix session/process group or Windows Job Object, bounds wall time and
+both byte streams before buffering, terminates and reaps the complete tree even
+after a successful direct-parent exit, then gives pipe readers only a bounded
+drain interval.
 
 Add the capability data types to `agent_runtime/mod.rs` now so later platform
 tasks implement one stable contract:
@@ -764,76 +804,28 @@ Add `AgentEnvironment::provision(app_data, system_python, resources)` in this fi
 ```rust
 pub struct AgentEnvironment { pub root: PathBuf, pub python: PathBuf, pub site_packages: PathBuf }
 impl AgentEnvironment {
-    pub fn provision(app_data: &Path, system_python: &Path, r: &ResourcePaths) -> Result<Self, String> {
-        use sha2::{Digest, Sha256};
-        use std::process::Command;
-        validate_requirements(&std::fs::read_to_string(&r.requirements).map_err(|e| e.to_string())?)?;
-        let parent = app_data.join("agent-runtime");
-        let root = parent.join("v1");
-        let staging = parent.join("v1.staging");
-        let digest = hex::encode(Sha256::digest(std::fs::read(&r.requirements).map_err(|e| e.to_string())?));
-        let marker_matches = std::fs::read_to_string(root.join(".requirements-sha256")).ok().as_deref() == Some(&digest);
-        if !marker_matches {
-            let _ = std::fs::remove_dir_all(&staging);
-            std::fs::create_dir_all(&parent).map_err(|e| e.to_string())?;
-            let status = Command::new(system_python).args(["-m", "venv"]).arg(&staging)
-                .env_clear().env("PATH", "/usr/bin:/bin").status().map_err(|e| e.to_string())?;
-            if !status.success() { return Err("Failed to create dedicated agent environment".into()); }
-            let python = staging.join(if cfg!(windows) { "Scripts/python.exe" } else { "bin/python3" });
-            let empty_pip = staging.join("pip-empty.conf");
-            std::fs::write(&empty_pip, b"").map_err(|e| e.to_string())?;
-            let status = Command::new(&python)
-                .args(["-m", "pip", "install", "--disable-pip-version-check", "--no-input", "-r"])
-                .arg(&r.requirements).env_clear().env("PATH", "/usr/bin:/bin")
-                .env("PIP_CONFIG_FILE", &empty_pip).status().map_err(|e| e.to_string())?;
-            if !status.success() { let _ = std::fs::remove_dir_all(&staging); return Err("Agent dependency install failed".into()); }
-            std::fs::write(staging.join(".requirements-sha256"), &digest).map_err(|e| e.to_string())?;
-            let backup = parent.join("v1.previous");
-            let _ = std::fs::remove_dir_all(&backup);
-            if root.exists() { std::fs::rename(&root, &backup).map_err(|e| e.to_string())?; }
-            if let Err(error) = std::fs::rename(&staging, &root) {
-                if backup.exists() { let _ = std::fs::rename(&backup, &root); }
-                return Err(error.to_string());
-            }
-            let _ = std::fs::remove_dir_all(backup);
-        }
-        let python = root.join(if cfg!(windows) { "Scripts/python.exe" } else { "bin/python3" });
-        let probe = r#"import importlib.util, pathlib, site, sys
-root = pathlib.Path(sys.argv[1]).resolve()
-for name in ("numpy", "qiskit", "qiskit_aer", "cirq", "qdk"):
-    spec = importlib.util.find_spec(name)
-    assert spec and spec.origin and pathlib.Path(spec.origin).resolve().is_relative_to(root)
-for name in ("keyring", "qiskit_ibm_runtime", "braket", "azure", "cudaq"):
-    assert importlib.util.find_spec(name) is None
-paths = [pathlib.Path(p).resolve() for p in site.getsitepackages()]
-assert len(paths) == 1 and paths[0].is_relative_to(root)
-print(paths[0])
-"#;
-        let output = Command::new(&python).args(["-I", "-c", probe]).arg(&root)
-            .env_clear().env("PATH", "/usr/bin:/bin").env("PYTHONNOUSERSITE", "1")
-            .output().map_err(|e| e.to_string())?;
-        if !output.status.success() { return Err("Agent environment verification failed".into()); }
-        let site_packages = PathBuf::from(String::from_utf8(output.stdout).map_err(|e| e.to_string())?.trim());
-        let environment = Self { root, python, site_packages };
-        environment.verify()?;
-        Ok(environment)
-    }
-
-    pub fn verify(&self) -> Result<(), String> {
-        for path in [&self.python, &self.site_packages] {
-            let canonical = path.canonicalize().map_err(|e| e.to_string())?;
-            if !canonical.starts_with(self.root.canonicalize().map_err(|e| e.to_string())?) {
-                return Err("Agent environment path escaped dedicated root".into());
-            }
-        }
-        Ok(())
-    }
+    pub fn provision(
+        app_data: &Path, system_python: &Path, resources: &ResourcePaths,
+    ) -> Result<Self, String>;
+    pub fn verify(&self) -> Result<(), String>;
 }
 ```
 
-The capability path calls `provision` and `verify`; any error keeps capability
-unavailable. There is no execution fallback to system Python or the normal
-kernel venv.
+Provisioning creates `<app-data>/agent-runtime`, acquires its OS-visible
+exclusive `.provision.lock`, and holds that lock through manifest validation,
+stale-state cleanup, staging, promotion, probing, and rollback. Before a
+marker-matched root can be reused, both `v1.staging` and `v1.previous` must be
+absent or successfully removed. The requirements resource is read once,
+validated byte-for-byte, hashed, copied into staging as an app-owned read-only
+file, and only that copy is passed to pip.
+
+The venv is created and probed in `v1.staging`; replacement uses explicit
+`v1.previous` rollback with every cleanup/restore failure surfaced. Returned
+root, Python, and site-packages paths are canonical and contained by the
+canonical runtime parent. All subprocesses use `SystemCommandRunner`; stderr
+diagnostics are capped and redacted. Any lock, cleanup, process containment,
+probe, rollback, or path-validation error keeps capability unavailable. There
+is no execution fallback to system Python or the normal kernel venv.
 
 - [ ] **Step 7: Export modules and run tests**
 
@@ -920,7 +912,15 @@ impl SupervisorLimits {
     pub fn testing() -> Self { Self { wall: Duration::from_millis(100), stdout_bytes: 1024, stderr_bytes: 1024 } }
 }
 #[derive(Debug)] pub struct RuntimeError { pub code: String, pub message: String }
-struct Active { child: tokio::process::Child, process_group: i32, cancelled: bool }
+enum ProcessContainment {
+    #[cfg(unix)] ProcessGroup(i32),
+    #[cfg(windows)] JobObject(OwnedJobHandle),
+}
+struct Active {
+    child: tokio::process::Child,
+    containment: ProcessContainment,
+    cancelled: bool,
+}
 pub struct Supervisor { limits: SupervisorLimits, active: Mutex<HashMap<String, Active>> }
 impl Supervisor {
     pub fn new(limits: SupervisorLimits) -> Self { Self { limits, active: Mutex::new(HashMap::new()) } }
@@ -932,7 +932,20 @@ pub trait ProcessSupervisor {
 }
 ```
 
-Implement `run` with `tokio::process::Command`, `env_clear`, piped stdio, `setsid`, immediate insertion into `active`, concurrent capped stdout/stderr readers, wall timeout, and one cleanup function that sends `SIGKILL` to the negative process-group ID, awaits the child, and removes the map entry. Only after the child exits: reject cap overflow, nonzero status, non-UTF-8, anything except one trailing-newline JSON object, serde unknown fields, protocol version other than 1, invalid status, or mismatched correlation ID. A matching ID does not make content trusted; snapshot/result/error remain `serde_json::Value` and are never interpreted as commands, paths, environment, or capabilities.
+Implement `run` with `tokio::process::Command`, `env_clear`, piped stdio,
+`setsid` on Unix and a kill-on-close Job Object on Windows, immediate insertion
+into `active`, concurrent byte-capped stdout/stderr readers, and a wall timeout.
+One cleanup path terminates and reaps the entire process group/tree on success,
+failure, timeout, cancellation, overflow, or direct-parent exit; pipe draining
+has a separate bounded deadline so descendants retaining inherited descriptors
+cannot hang the supervisor. Remove the active-map entry only after cleanup.
+
+After bounded cleanup, reject cap overflow, nonzero status, non-UTF-8, anything
+except one trailing-newline JSON object, protocol/version/correlation failures,
+or any strict typed `WorkerResponseV1` deserialization/semantic error. Snapshot,
+simulation result, and kernel error are typed deny-unknown structures; their
+contents are display data only and are never interpreted as commands, paths,
+environment, or capabilities.
 
 - [ ] **Step 4: Register Tauri lifecycle commands**
 
