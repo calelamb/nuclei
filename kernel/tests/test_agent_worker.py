@@ -204,7 +204,7 @@ def test_raw_fd_write_proves_worker_framing_is_not_authoritative() -> None:
     assert json.loads(completed.stdout.splitlines()[1])["status"] == "ok"
 
 
-def test_worker_rejects_framework_mismatch_before_source_side_effect(
+def test_worker_rejects_adapter_selection_mismatch_before_source_side_effect(
     tmp_path: Path,
 ) -> None:
     marker = tmp_path / "executed"

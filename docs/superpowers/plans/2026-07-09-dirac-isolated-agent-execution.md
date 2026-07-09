@@ -4,7 +4,7 @@
 
 **Goal:** Run each model-generated parse or simulation request in a disposable, credential-free worker with enforced and self-tested filesystem, environment, network, subprocess, resource, output, timeout, and cancellation boundaries.
 
-**Architecture:** `createAgentSandboxSession` invokes one Tauri command per request and never calls the long-lived WebSocket kernel. Rust validates a versioned request, requires a qualified OS sandbox, launches a fresh worker in a process group, treats every worker byte as untrusted, and reaps the worker on every terminal path. The worker applies rlimits before constructing the existing `Executor`, binds the declared framework before generated code can run, cooperatively emits a capped versioned JSON object, and exits; Rust remains authoritative for raw-byte caps and exact-one-JSON framing. macOS uses Seatbelt, Linux requires bubblewrap plus delegated cgroup v2 and seccomp, and Windows/web fail closed.
+**Architecture:** `createAgentSandboxSession` invokes one Tauri command per request and never calls the long-lived WebSocket kernel. Rust validates a versioned request, requires a qualified OS sandbox, launches a fresh worker in a process group, treats every worker byte as untrusted, and reaps the worker on every terminal path. The worker applies rlimits before constructing the existing `Executor`, checks the declared framework against its lexical adapter selection for routing correctness, cooperatively emits a capped versioned JSON object, and exits; Rust remains authoritative for raw-byte caps and exact-one-JSON framing, while the common boundary matrix covers every installed framework package regardless of lexical selection. macOS uses Seatbelt, Linux requires bubblewrap plus delegated cgroup v2 and seccomp, and Windows/web fail closed.
 
 **Tech Stack:** Tauri 2, Rust 2021, serde, Tokio, macOS `sandbox-exec`, Linux bubblewrap/cgroup v2/seccomp-BPF/rlimit, Python 3.10+, existing quantum adapters, TypeScript 5.9, Vitest 4, pytest.
 
@@ -15,13 +15,13 @@
 This plan implements Stage 0 from `docs/superpowers/specs/2026-07-09-dirac-agentic-quantum-runtime-design.md` and supplies the exact `src/services/agentSandboxSession.ts` prerequisite consumed by `docs/superpowers/plans/2026-07-09-dirac-closed-loop-simulator-agent.md`.
 
 - Generated source never enters `kernel/server.py`, its credential-bearing `HardwareManager`, or `createKernelSession`.
-- The dedicated environment is `<app-data>/agent-runtime/v1`, not `<app-data>/venv`. Its manifest excludes keyring, provider SDKs, and CUDA-Q.
+- The dedicated environment is `<app-data>/agent-runtime/v1`, not `<app-data>/venv`. Its manifest excludes keyring, provider SDKs, and CUDA-Q. Every framework package that is installed in this runtime must pass the common OS boundary matrix before capability can become available.
 - Request source is at most 262,144 UTF-8 bytes. Simulation shots are 1–10,000.
-- The worker resolves the source framework without execution and rejects a declared/detected mismatch with `framework_mismatch` before loading an adapter or running source.
+- The worker lexically selects an adapter without execution and rejects an ordinary declared/selected routing mismatch with `framework_mismatch` before loading an adapter or running source. This is a correctness check, not package confinement: comments and dynamic imports can differ from the selected adapter.
 - macOS is available only after mandatory Seatbelt probes pass.
 - Linux is available only after mandatory bwrap, cgroup v2, rlimit, seccomp, and boundary probes pass.
 - Windows and web are unavailable in Stage 0.
-- Qiskit, Cirq, and Q# qualify independently. CUDA-Q remains unavailable until a later plan runs the same native/GPU boundary suite.
+- Once every installed framework package has common boundary evidence, `qualifiedFrameworks` controls which of Qiskit, Cirq, and Q# have functional/API exposure. A package lacking common boundary evidence may not remain installed and merely be omitted from `qualifiedFrameworks`; capability fails closed instead. Dynamic cross-import among installed packages is therefore boundary-qualified rather than treated as a lexical-policy bypass. CUDA-Q remains absent from the dedicated runtime.
 - A matching `request_id` is correlation only, never an integrity guarantee. Rust caps raw stdout/stderr before decoding, validates UTF-8, one-object JSON framing, protocol version, exact fields, value bounds, and response shape, and uses worker data only as untrusted simulation evidence.
 - If environment cleanup, resource isolation, a mandatory probe, or cleanup verification cannot be enforced, capability remains unavailable. No partial-control mode is exposed.
 
@@ -34,7 +34,7 @@ This plan implements Stage 0 from `docs/superpowers/specs/2026-07-09-dirac-agent
 - Create `kernel/agent-requirements.txt` — dedicated environment allowlist.
 - Create `kernel/tests/test_agent_protocol.py`.
 - Create `kernel/tests/test_agent_worker.py`.
-- Modify `kernel/executor.py` — optional capture factory plus non-executing framework resolution used to bind requests before execution.
+- Modify `kernel/executor.py` — optional capture factory plus non-executing lexical adapter selection used to catch routing mismatches before execution.
 - Modify `kernel/tests/test_executor.py`.
 - Modify `kernel/adapters/qsharp_adapter.py` — public disposable-worker mode that keeps one-request QDK work on the caller thread.
 - Modify `kernel/tests/test_qsharp_adapter.py` — disposable-worker mode coverage.
@@ -234,7 +234,7 @@ git commit -m "feat: define isolated agent protocol"
 - Create: `kernel/agent_limits.py`
 - Create: `kernel/agent_worker.py`
 - Create: `kernel/tests/test_agent_worker.py`
-- Modify: `kernel/executor.py` — bounded capture and public non-executing framework resolution.
+- Modify: `kernel/executor.py` — bounded capture and public non-executing lexical adapter selection for routing correctness.
 - Modify: `kernel/tests/test_executor.py`
 - Modify: `kernel/adapters/qsharp_adapter.py`
 - Modify: `kernel/tests/test_qsharp_adapter.py`
@@ -301,7 +301,7 @@ def test_raw_fd_write_proves_worker_framing_is_not_authoritative():
     assert completed.stdout.count(b"\n") == 2
 
 
-def test_framework_mismatch_does_not_execute_source(tmp_path):
+def test_adapter_selection_mismatch_does_not_execute_source(tmp_path):
     marker = tmp_path / "executed"
     response = run_worker(make_request(
         f"open({str(marker)!r}, 'w').close()\nfrom qiskit import QuantumCircuit",
@@ -358,22 +358,49 @@ def test_optional_capture_limit_does_not_change_default_executor():
     assert error is None
     assert len(stdout.encode()) <= 16 and len(stderr.encode()) <= 16
     assert Executor().run_python("print('complete')")[0] == "complete\n"
+
+
+def test_resolve_framework_is_lexical_selection_not_import_confinement():
+    code = (
+        "# import qiskit\n"
+        "import importlib\n"
+        "cirq = importlib.import_module('cirq')\n"
+    )
+
+    framework = Executor().resolve_framework(code, language="python")
+
+    assert framework == "qiskit"
 ```
 
 ```python
 # append to kernel/tests/test_qsharp_adapter.py
-def test_configure_disposable_worker_runs_qdk_work_on_calling_thread(monkeypatch):
+def test_disposable_worker_runs_qdk_operation_and_exit_cleanup_on_calling_thread(
+    monkeypatch,
+):
+    from qdk import _interpreter as qdk_interpreter
+
     monkeypatch.setattr(qsharp_adapter, "_DISPOSABLE_WORKER", False, raising=False)
+    disposal_threads: list[int] = []
+    monkeypatch.setattr(
+        qdk_interpreter,
+        "_clear_code_module",
+        lambda: disposal_threads.append(threading.get_ident()),
+    )
+    monkeypatch.setattr(qdk_interpreter, "_default_context", object())
     caller_thread = threading.get_ident()
 
     qsharp_adapter.configure_disposable_worker()
+    operation_thread = qsharp_adapter._on_interpreter_thread(threading.get_ident)
+    qsharp_adapter._dispose_qdk_thread_state()
 
-    assert qsharp_adapter._on_interpreter_thread(threading.get_ident) == caller_thread
+    assert operation_thread == caller_thread
+    assert disposal_threads == [caller_thread]
+    assert qdk_interpreter._default_context is None
 ```
 
 - [ ] **Step 2: Run tests to verify they fail**
 
-Run: `python -m pytest kernel/tests/test_agent_worker.py kernel/tests/test_executor.py::test_optional_capture_limit_does_not_change_default_executor kernel/tests/test_qsharp_adapter.py::test_configure_disposable_worker_runs_qdk_work_on_calling_thread -v`
+Run: `python -m pytest kernel/tests/test_agent_worker.py kernel/tests/test_executor.py::test_optional_capture_limit_does_not_change_default_executor kernel/tests/test_qsharp_adapter.py::test_disposable_worker_runs_qdk_operation_and_exit_cleanup_on_calling_thread -v`
 
 Expected: FAIL because the worker/limits files, `capture_limit_bytes`, and public Q# disposable-worker configuration do not exist.
 
@@ -430,7 +457,7 @@ def apply_worker_limits(value):
         resource.setrlimit(resource_id, (limit, limit))
 ```
 
-These unit tests verify rlimit configuration calls only. Later macOS/Linux boundary qualification must prove real kernel enforcement. Modify `Executor.__init__` to store `capture_limit_bytes`; add `_new_capture()` returning `io.StringIO()` by default and lazily importing `BoundedTextCapture(limit)` only when configured; replace both `io.StringIO()` constructions in `_run_code` with `_new_capture()`. Add public `resolve_framework(code, language=language)` that performs detection without adapter import or source execution. No server call site passes the capture option.
+These unit tests verify rlimit configuration calls only. Later macOS/Linux boundary qualification must prove real kernel enforcement. Modify `Executor.__init__` to store `capture_limit_bytes`; add `_new_capture()` returning `io.StringIO()` by default and lazily importing `BoundedTextCapture(limit)` only when configured; replace both `io.StringIO()` constructions in `_run_code` with `_new_capture()`. Add public `resolve_framework(code, language=language)` that lexically selects an adapter without importing or executing source. Its mismatch response prevents ordinary routing errors from executing, but comments and dynamic imports make it unsuitable for package confinement; Task 7 qualifies every installed framework package against the common OS boundary matrix. No server call site passes the capture option.
 
 - [ ] **Step 4: Implement the worker security functions and complete entry point**
 
@@ -486,12 +513,13 @@ def bounded_response(request_id, status, snapshot, result, stdout, stderr, error
 def execute_request(request, limits):
     from kernel.executor import Executor
     executor = Executor(capture_limit_bytes=limits.output_bytes)
-    detected = executor.resolve_framework(request.code, language=request.language)
-    if detected != request.framework:
+    selected = executor.resolve_framework(request.code, language=request.language)
+    # Correctness check only; lexical selection cannot confine dynamic imports.
+    if selected != request.framework:
         return bounded_response(request.request_id, "error", None, None, "", "", {
             "code": "framework_mismatch",
-            "message": "Declared and detected frameworks differ.",
-            "framework": detected,
+            "message": "Declared framework and selected adapter differ.",
+            "framework": selected,
         })
 
     if request.language == "python":
@@ -524,13 +552,13 @@ def execute_request(request, limits):
 # cap raw stdout bytes, require exactly one JSON response, and enforce the OS sandbox.
 ```
 
-Complete `kernel/agent_worker.py` around those focused functions as follows: its module docstring states that Python capture/import hooks are cooperative and Rust raw-byte/framing validation plus the OS sandbox are authoritative; startup pins OpenBLAS/OMP to one thread and adds the repository root before kernel imports; `truncate_utf8` returns a valid UTF-8 prefix within its byte limit. `main()` parses only `--test-limits`, chooses production or testing limits, applies all rlimits before importing `Executor`, reads at most 270,001 stdin bytes, and initializes the response request ID to `invalid`. It strictly parses one request, delegates valid requests to `execute_request`, converts `ProtocolError` to `protocol_error`, converts every other `BaseException` to a generic `worker_error` containing only the exception type, and creates every response through `bounded_response`. It then writes the selected response bytes once to `sys.stdout.buffer`, flushes, returns zero, and is invoked through `raise SystemExit(main())`. In `kernel/adapters/qsharp_adapter.py`, add public `configure_disposable_worker()` and make `_on_interpreter_thread` execute on the caller only after that one-request mode is configured; persistent-kernel behavior remains on the dedicated QDK thread.
+Complete `kernel/agent_worker.py` around those focused functions as follows: its module docstring states that Python capture/import hooks are cooperative, lexical adapter selection is only a correctness check, and Rust raw-byte/framing validation plus the OS sandbox are authoritative; startup pins OpenBLAS/OMP to one thread and adds the repository root before kernel imports; `truncate_utf8` returns a valid UTF-8 prefix within its byte limit. `main()` parses only `--test-limits`, chooses production or testing limits, applies all rlimits before importing `Executor`, reads at most 270,001 stdin bytes, and initializes the response request ID to `invalid`. It strictly parses one request, delegates valid requests to `execute_request`, converts `ProtocolError` to `protocol_error`, converts every other `BaseException` to a generic `worker_error` containing only the exception type, and creates every response through `bounded_response`. It then writes the selected response bytes once to `sys.stdout.buffer`, flushes, returns zero, and is invoked through `raise SystemExit(main())`. In `kernel/adapters/qsharp_adapter.py`, add public `configure_disposable_worker()` and make both `_on_interpreter_thread` and `_dispose_qdk_thread_state` run directly on the caller after one-request mode is configured; persistent-kernel operation and disposal remain on the dedicated QDK thread.
 
 - [ ] **Step 5: Run worker, executor, and Q# adapter tests**
 
 Run: `python -m pytest kernel/tests/test_agent_worker.py kernel/tests/test_executor.py kernel/tests/test_qsharp_adapter.py -v`
 
-Expected: PASS; cooperative output and the whole serialized response are byte-capped, framework mismatches cannot execute source, blocked imports fail, Q# uses its public disposable-worker mode, and the ordinary kernel remains uncapped. The adversarial raw-fd test deliberately proves that Python alone cannot guarantee framing; Task 4's Rust supervisor is authoritative for the 1,048,576-byte raw stdout cap and exact-one-JSON validation.
+Expected: PASS; cooperative output and the whole serialized response are byte-capped, ordinary adapter-selection mismatches cannot execute source, lexical-bypass behavior is characterized without a security claim, blocked imports fail as defense in depth, Q# operation and disposal preserve caller-thread affinity in public disposable-worker mode, and the ordinary kernel remains uncapped. The adversarial raw-fd test deliberately proves that Python alone cannot guarantee framing; Task 4's Rust supervisor is authoritative for the 1,048,576-byte raw stdout cap and exact-one-JSON validation.
 
 - [ ] **Step 6: Commit**
 
@@ -1145,12 +1173,87 @@ git commit -m "feat: qualify Linux agent sandbox"
 **Files:**
 - Modify: `src-tauri/tests/agent_runtime_boundary.rs`
 - Modify: `src-tauri/src/agent_runtime/mod.rs`
+- Create: `src-tauri/src/agent_runtime/qualification.rs`
 - Modify: `src-tauri/tauri.conf.json`
 
 - [ ] **Step 1: Add concrete qualification tests through public APIs**
 
 ```rust
 // append to src-tauri/tests/agent_runtime_boundary.rs
+use app_lib::agent_runtime::qualification::{
+    evaluate_framework_policy, FrameworkEvidence,
+};
+
+#[test]
+fn qualified_frameworks_fail_closed_when_installed_package_lacks_boundary_evidence() {
+    let policy = evaluate_framework_policy(&[
+        FrameworkEvidence {
+            package: "qiskit",
+            common_boundary_passed: true,
+            functional_probe_passed: true,
+        },
+        FrameworkEvidence {
+            package: "cirq",
+            common_boundary_passed: false,
+            functional_probe_passed: true,
+        },
+        FrameworkEvidence {
+            package: "qsharp",
+            common_boundary_passed: true,
+            functional_probe_passed: false,
+        },
+    ]);
+
+    assert!(!policy.available);
+    assert!(policy.qualified_frameworks.is_empty());
+}
+
+#[test]
+fn qualified_frameworks_filter_api_only_after_all_installed_packages_pass_boundaries() {
+    let policy = evaluate_framework_policy(&[
+        FrameworkEvidence {
+            package: "qiskit",
+            common_boundary_passed: true,
+            functional_probe_passed: true,
+        },
+        FrameworkEvidence {
+            package: "cirq",
+            common_boundary_passed: true,
+            functional_probe_passed: false,
+        },
+        FrameworkEvidence {
+            package: "qsharp",
+            common_boundary_passed: true,
+            functional_probe_passed: true,
+        },
+    ]);
+
+    assert!(policy.available);
+    assert_eq!(
+        policy.qualified_frameworks,
+        vec!["qiskit".to_string(), "qsharp".to_string()],
+    );
+}
+
+#[test]
+fn qualified_frameworks_fail_closed_if_cuda_q_is_installed() {
+    let policy = evaluate_framework_policy(&[
+        FrameworkEvidence {
+            package: "qiskit",
+            common_boundary_passed: true,
+            functional_probe_passed: true,
+        },
+        FrameworkEvidence {
+            package: "cuda-q",
+            common_boundary_passed: true,
+            functional_probe_passed: false,
+        },
+    ]);
+
+    assert!(!policy.available);
+    assert!(policy.qualified_frameworks.is_empty());
+}
+
 #[tokio::test]
 async fn qualified_frameworks_have_functional_and_boundary_evidence() {
     let report = qualify_current_host(QualificationMode::AllowUnavailable).await;
@@ -1183,9 +1286,11 @@ Run: `cd src-tauri && cargo test --test agent_runtime_boundary qualified_framewo
 
 Expected: FAIL until framework evidence and bundle mapping are implemented.
 
-- [ ] **Step 3: Implement individual framework qualification**
+- [ ] **Step 3: Implement all-installed-package boundary policy and individual functional qualification**
 
-After OS controls qualify, run a Bell parse/simulation in a fresh worker for Qiskit and Cirq and a finite `MResetZ` parse/simulation for Q#. Add a framework only when its imports, functional probe, and the common boundary matrix all pass. For Q# specifically, launch an infinite-loop operation, require Rust wall timeout to kill its process group, then launch the finite operation in a new worker and require success. Never use QDK's thread watchdog as recovery. CUDA-Q has no enum variant or package and cannot qualify.
+Create `qualification.rs` with `FrameworkEvidence { package: &'static str, common_boundary_passed: bool, functional_probe_passed: bool }`, `FrameworkPolicy { available: bool, qualified_frameworks: Vec<String> }`, and pure `evaluate_framework_policy`. Its input enumerates every framework package actually installed in the dedicated runtime. It returns unavailable with an empty framework list if any installed package lacks common boundary evidence or if CUDA-Q is installed. Only after every installed package passes the common boundary matrix does it populate `qualified_frameworks` from packages whose functional probes passed. Thus a boundary-unqualified package cannot be hidden by omitting it from API exposure, while a boundary-qualified package may remain functionally unavailable.
+
+After OS controls qualify, run the common boundary matrix against every installed framework package, then run a Bell parse/simulation in a fresh worker for Qiskit and Cirq and a finite `MResetZ` parse/simulation for Q#. Feed all boundary and functional evidence through `evaluate_framework_policy`; never derive package confinement from the worker's lexical adapter selection. Dynamic cross-import among installed packages is acceptable because every installed package has the same boundary evidence. For Q# specifically, launch an infinite-loop operation, require Rust wall timeout to kill its process group, then launch the finite operation in a new worker and require success. Never use QDK's thread watchdog as recovery. CUDA-Q has no enum variant, must not be installed in the dedicated runtime, and cannot qualify.
 
 Map only these worker resources in `tauri.conf.json`: worker, protocol, limits, executor, adapters, models, and agent requirements under `agent-runtime/kernel`. The normal kernel may remain separately packaged for IDE use but is never mounted/read-allowed in the worker sandbox.
 
@@ -1193,12 +1298,12 @@ Map only these worker resources in `tauri.conf.json`: worker, protocol, limits, 
 
 Run: `cd src-tauri && cargo test --test agent_runtime_boundary qualified_frameworks packaged_resource -- --nocapture`
 
-Expected: PASS; unavailable frameworks remain absent, Q# timeout does not poison the fresh worker, and bundle resolution does not depend on a repository parent.
+Expected: PASS; capability fails closed if any installed package lacks common boundary evidence, `qualifiedFrameworks` filters only functional/API exposure after that all-installed check, CUDA-Q is absent, Q# timeout does not poison the fresh worker, and bundle resolution does not depend on a repository parent.
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src-tauri/src/agent_runtime/mod.rs src-tauri/tauri.conf.json src-tauri/tests/agent_runtime_boundary.rs
+git add src-tauri/src/agent_runtime/mod.rs src-tauri/src/agent_runtime/qualification.rs src-tauri/tauri.conf.json src-tauri/tests/agent_runtime_boundary.rs
 git commit -m "test: qualify agent frameworks and resources"
 ```
 

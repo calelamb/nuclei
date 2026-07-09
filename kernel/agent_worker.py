@@ -3,7 +3,9 @@
 Python stdout redirection and the import blocker reduce accidental leakage,
 but generated code can bypass or mutate both (for example with os.write or
 sys.meta_path). The Rust supervisor's raw-byte cap, exact-one-JSON validation,
-and OS sandbox are the authoritative security and framing boundaries.
+and OS sandbox are the authoritative security and framing boundaries. Lexical
+adapter selection is only a correctness check; every framework package in the
+runtime must independently pass the supervisor's common boundary matrix.
 """
 
 from __future__ import annotations
@@ -107,11 +109,13 @@ def execute_request(request, limits: WorkerLimits) -> bytes:
     from kernel.executor import Executor
 
     executor = Executor(capture_limit_bytes=limits.output_bytes)
-    detected_framework = executor.resolve_framework(
+    selected_framework = executor.resolve_framework(
         request.code,
         language=request.language,
     )
-    if detected_framework != request.framework:
+    # The lexical selection check catches ordinary routing mistakes before
+    # execution. It cannot confine imports: comments and importlib can differ.
+    if selected_framework != request.framework:
         return bounded_response(
             request.request_id,
             "error",
@@ -123,9 +127,9 @@ def execute_request(request, limits: WorkerLimits) -> bytes:
                 "code": "framework_mismatch",
                 "message": (
                     f"Declared framework {request.framework} does not match "
-                    f"detected framework {detected_framework or 'none'}."
+                    f"selected adapter {selected_framework or 'none'}."
                 ),
-                "framework": detected_framework,
+                "framework": selected_framework,
             },
         )
 

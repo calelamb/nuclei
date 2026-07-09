@@ -75,7 +75,7 @@ import kernel.executor
     assert completed.returncode == 0, completed.stderr
 
 
-def test_resolve_framework_detects_without_executing_source(tmp_path):
+def test_resolve_framework_selects_adapter_without_executing_source(tmp_path):
     marker = tmp_path / "executed"
     code = (
         f"from pathlib import Path\nPath({str(marker)!r}).write_text('ran')\n"
@@ -86,6 +86,18 @@ def test_resolve_framework_detects_without_executing_source(tmp_path):
 
     assert framework == "qiskit"
     assert not marker.exists()
+
+
+def test_resolve_framework_is_lexical_selection_not_import_confinement():
+    code = (
+        "# import qiskit\n"
+        "import importlib\n"
+        "cirq = importlib.import_module('cirq')\n"
+    )
+
+    framework = Executor().resolve_framework(code, language="python")
+
+    assert framework == "qiskit"
 
 
 def test_parse_returns_missing_dependency_when_adapter_module_unavailable(monkeypatch):

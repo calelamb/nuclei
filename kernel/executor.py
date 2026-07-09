@@ -135,7 +135,12 @@ class Executor:
         return self._detect_adapter_spec(code)
 
     def resolve_framework(self, code: str, *, language: str | None = None) -> str | None:
-        """Resolve the framework from source without importing or executing it."""
+        """Select an adapter without importing or executing generated source.
+
+        Selection uses the language hint and lexical patterns. It is a routing
+        correctness check, not package confinement: comments and dynamic
+        imports can intentionally differ from the selected adapter.
+        """
         spec = self._resolve_spec(code, language)
         return spec.framework if spec is not None else None
 

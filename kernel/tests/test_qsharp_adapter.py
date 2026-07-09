@@ -52,13 +52,28 @@ operation Main() : Result[] {
 QSHARP_SPEC = next(spec for spec in ADAPTER_SPECS if spec.framework == "qsharp")
 
 
-def test_configure_disposable_worker_runs_qdk_work_on_calling_thread(monkeypatch):
+def test_disposable_worker_runs_qdk_operation_and_exit_cleanup_on_calling_thread(
+    monkeypatch,
+):
+    from qdk import _interpreter as qdk_interpreter
+
     monkeypatch.setattr(qsharp_adapter, "_DISPOSABLE_WORKER", False, raising=False)
+    disposal_threads: list[int] = []
+    monkeypatch.setattr(
+        qdk_interpreter,
+        "_clear_code_module",
+        lambda: disposal_threads.append(threading.get_ident()),
+    )
+    monkeypatch.setattr(qdk_interpreter, "_default_context", object())
     caller_thread = threading.get_ident()
 
     qsharp_adapter.configure_disposable_worker()
+    operation_thread = qsharp_adapter._on_interpreter_thread(threading.get_ident)
+    qsharp_adapter._dispose_qdk_thread_state()
 
-    assert qsharp_adapter._on_interpreter_thread(threading.get_ident) == caller_thread
+    assert operation_thread == caller_thread
+    assert disposal_threads == [caller_thread]
+    assert qdk_interpreter._default_context is None
 
 
 # ───────── parse_source ─────────

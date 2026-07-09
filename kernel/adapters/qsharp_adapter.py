@@ -206,7 +206,7 @@ def _on_interpreter_thread(fn: Callable[[], _T], timeout: float | None = None) -
 
 
 def _dispose_qdk_thread_state() -> None:
-    """Drop thread-pinned qdk globals on the interpreter thread at exit.
+    """Drop thread-pinned qdk globals on their owning thread at exit.
 
     qdk parks its Context (holding the pyo3 Interpreter) in
     qdk._interpreter._default_context and GlobalCallable wrappers in the
@@ -216,8 +216,10 @@ def _dispose_qdk_thread_state() -> None:
     on another thread" to stderr at every process exit. This hook is
     registered via threading._register_atexit, which fires before
     concurrent.futures' own join hook — so the executor still accepts the
-    dispose task. Best effort: qdk internals may change shape, and failing
-    here must never break process exit (worst case is the old stderr noise).
+    dispose task. Disposable mode created the context on the caller thread,
+    so cleanup also runs there instead of submitting to the executor. Best
+    effort: qdk internals may change shape, and failing here must never break
+    process exit (worst case is the old stderr noise).
     """
 
     def _dispose() -> None:
@@ -227,6 +229,9 @@ def _dispose_qdk_thread_state() -> None:
         qdk_interpreter._default_context = None
 
     try:
+        if _DISPOSABLE_WORKER:
+            _dispose()
+            return
         # Bounded wait: dispose only drops references, so 5 s is generous.
         # If a runaway Q# program has the interpreter thread wedged, an
         # unbounded .result() would block process exit until the OS kills
