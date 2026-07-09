@@ -5,6 +5,10 @@ use std::sync::{Arc, Barrier, Mutex};
 use std::thread;
 use std::time::Duration;
 
+#[cfg(unix)]
+use app_lib::agent_runtime::process::{
+    ProcessSpec, ProcessSupervisor, Supervisor, SupervisorLimits,
+};
 use app_lib::agent_runtime::protocol::{
     Action, Framework, FrontendRequestV1, ResponseStatus, WorkerRequestV1, WorkerResponseV1,
 };
@@ -13,6 +17,7 @@ use app_lib::agent_runtime::resources::{
     validate_requirements, AgentEnvironment, CommandOutput, CommandRunner, CommandSpec,
     EnvironmentFilesystem, ResourcePaths, RunnerContainment,
 };
+use app_lib::agent_runtime::{AgentRuntimeCommands, AgentRuntimeState};
 use serde_json::{json, Value};
 use sha2::Digest;
 use tempfile::TempDir;
@@ -1684,4 +1689,301 @@ fn unsupported_platform_message_is_stable() {
         app_lib::agent_runtime::unsupported::unavailable_message(),
         "Agent isolation is unavailable on this platform"
     );
+}
+
+#[tokio::test]
+async fn agent_runtime_state_starts_unavailable_and_is_command_capable() {
+    fn assert_command_state<T: AgentRuntimeCommands>() {}
+    assert_command_state::<AgentRuntimeState>();
+
+    let state = AgentRuntimeState::new();
+    let report = state.capability.read().await.clone();
+    assert!(!report.available);
+    assert_eq!(
+        report.reason.as_deref(),
+        Some("Agent isolation is unavailable on this platform")
+    );
+    assert!(report.qualified_frameworks.is_empty());
+    assert!(report.controls.is_empty());
+}
+
+#[cfg(unix)]
+fn python_spec(script: &str) -> ProcessSpec {
+    let executable = ["/usr/bin/python3", "/usr/local/bin/python3"]
+        .into_iter()
+        .map(PathBuf::from)
+        .find(|path| path.is_file())
+        .expect("fixed Python test harness");
+    ProcessSpec {
+        executable,
+        args: vec!["-c".into(), script.into()],
+        cwd: std::env::temp_dir(),
+        env: std::collections::BTreeMap::new(),
+    }
+}
+
+#[cfg(unix)]
+fn agent_request(id: &str) -> WorkerRequestV1 {
+    WorkerRequestV1 {
+        protocol_version: 1,
+        request_id: id.into(),
+        action: Action::Parse,
+        framework: Framework::Cirq,
+        language: "python".into(),
+        code: String::new(),
+        shots: None,
+    }
+}
+
+#[cfg(unix)]
+fn valid_worker_script(id: &str) -> String {
+    let response = json!({
+        "protocol_version": 1,
+        "request_id": id,
+        "status": "ok",
+        "snapshot": null,
+        "result": null,
+        "stdout": "",
+        "stderr": "",
+        "error": null
+    })
+    .to_string();
+    format!("import sys;sys.stdout.write({response:?}+'\\n')")
+}
+
+#[cfg(unix)]
+async fn assert_fresh_worker(supervisor: &Supervisor, id: &str) {
+    let response = supervisor
+        .run(
+            &agent_request(id),
+            python_spec(&valid_worker_script(id)),
+            b"",
+        )
+        .await
+        .expect("fresh worker succeeds after terminal path");
+    assert_eq!(response.request_id, id);
+}
+
+#[cfg(unix)]
+#[test]
+fn supervisor_limits_and_errors_are_stable() {
+    let production = SupervisorLimits::production();
+    assert_eq!(production.wall, Duration::from_secs(15));
+    assert_eq!(production.stdout_bytes, 1_048_576);
+    assert_eq!(production.stderr_bytes, 65_536);
+
+    let testing = SupervisorLimits::testing();
+    assert!(testing.wall < production.wall);
+    assert!(testing.stdout_bytes < production.stdout_bytes);
+    assert!(testing.stderr_bytes < production.stderr_bytes);
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn raw_stdout_is_capped_before_utf8_and_json_validation() {
+    let supervisor = Supervisor::new(SupervisorLimits::testing());
+
+    let error = supervisor
+        .run(
+            &agent_request("flood"),
+            python_spec("import os;os.write(1,b'\\xff'*5000)"),
+            b"",
+        )
+        .await
+        .unwrap_err();
+    assert_eq!(error.code, "response_too_large");
+    assert_eq!(error.message, "Worker response exceeded the byte limit");
+    assert_fresh_worker(&supervisor, "fresh_flood").await;
+
+    let error = supervisor
+        .run(
+            &agent_request("utf8"),
+            python_spec("import os;os.write(1,b'\\xff\\n')"),
+            b"",
+        )
+        .await
+        .unwrap_err();
+    assert_eq!(error.code, "malformed_response");
+    assert_eq!(error.message, "Worker returned a malformed response");
+    assert_fresh_worker(&supervisor, "fresh_utf8").await;
+
+    let error = supervisor
+        .run(
+            &agent_request("multi"),
+            python_spec("print('{}');print('{}')"),
+            b"",
+        )
+        .await
+        .unwrap_err();
+    assert_eq!(error.code, "malformed_response");
+    assert_fresh_worker(&supervisor, "fresh_multi").await;
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn timeout_crash_stderr_overflow_and_bad_framing_reap_workers() {
+    let supervisor = Supervisor::new(SupervisorLimits::testing());
+    for (id, script, code) in [
+        ("timeout", "import time;time.sleep(5)", "wall_timeout"),
+        ("crash", "raise SystemExit(2)", "worker_failed"),
+        (
+            "stderr",
+            "import os;os.write(2,b'x'*5000)",
+            "stderr_too_large",
+        ),
+        (
+            "spacing",
+            "print('{ \"protocol_version\": 1 }')",
+            "malformed_response",
+        ),
+        (
+            "nonewline",
+            "import sys;sys.stdout.write('{}')",
+            "malformed_response",
+        ),
+    ] {
+        let error = supervisor
+            .run(&agent_request(id), python_spec(script), b"")
+            .await
+            .unwrap_err();
+        assert_eq!(error.code, code, "{id}: {}", error.message);
+        assert_fresh_worker(&supervisor, &format!("fresh_{id}")).await;
+    }
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn wall_timeout_covers_descendants_holding_worker_pipes() {
+    let supervisor = Supervisor::new(SupervisorLimits::testing());
+    let request = agent_request("pipe_holder");
+    let run = supervisor.run(
+        &request,
+        python_spec("import os,time\nif os.fork()==0:\n time.sleep(5)\nelse:\n os._exit(0)"),
+        b"",
+    );
+    let error = tokio::time::timeout(Duration::from_millis(500), run)
+        .await
+        .expect("supervisor itself must not hang")
+        .unwrap_err();
+    assert_eq!(error.code, "wall_timeout");
+    assert_fresh_worker(&supervisor, "fresh_pipe_holder").await;
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn cancellation_and_cancel_all_are_idempotent_and_reap_workers() {
+    let supervisor = Arc::new(Supervisor::new(SupervisorLimits::testing()));
+    let task = {
+        let supervisor = Arc::clone(&supervisor);
+        tokio::spawn(async move {
+            supervisor
+                .run(
+                    &agent_request("cancel"),
+                    python_spec("import time;time.sleep(5)"),
+                    b"",
+                )
+                .await
+        })
+    };
+    tokio::time::sleep(Duration::from_millis(20)).await;
+    supervisor.cancel("cancel").await.unwrap();
+    supervisor.cancel("cancel").await.unwrap();
+    let error = task.await.unwrap().unwrap_err();
+    assert_eq!(error.code, "cancelled");
+    assert_eq!(error.message, "Worker request was cancelled");
+    assert_fresh_worker(&supervisor, "fresh_cancel").await;
+
+    let task = {
+        let supervisor = Arc::clone(&supervisor);
+        tokio::spawn(async move {
+            supervisor
+                .run(
+                    &agent_request("cancel_all"),
+                    python_spec("import time;time.sleep(5)"),
+                    b"",
+                )
+                .await
+        })
+    };
+    tokio::time::sleep(Duration::from_millis(20)).await;
+    supervisor.cancel_all().await;
+    supervisor.cancel_all().await;
+    assert_eq!(task.await.unwrap().unwrap_err().code, "cancelled");
+    assert_fresh_worker(&supervisor, "fresh_cancel_all").await;
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn duplicate_id_invalid_spec_and_oversized_stdin_fail_closed() {
+    let supervisor = Arc::new(Supervisor::new(SupervisorLimits::testing()));
+    let active = {
+        let supervisor = Arc::clone(&supervisor);
+        tokio::spawn(async move {
+            supervisor
+                .run(
+                    &agent_request("duplicate"),
+                    python_spec("import time;time.sleep(5)"),
+                    b"",
+                )
+                .await
+        })
+    };
+    tokio::time::sleep(Duration::from_millis(20)).await;
+    let duplicate = supervisor
+        .run(
+            &agent_request("duplicate"),
+            python_spec(&valid_worker_script("duplicate")),
+            b"",
+        )
+        .await
+        .unwrap_err();
+    assert_eq!(duplicate.code, "duplicate_request");
+    assert_eq!(duplicate.message, "Worker request ID is already active");
+    supervisor.cancel("duplicate").await.unwrap();
+    assert_eq!(active.await.unwrap().unwrap_err().code, "cancelled");
+    assert_fresh_worker(&supervisor, "fresh_duplicate").await;
+
+    let mut relative = python_spec(&valid_worker_script("relative"));
+    relative.executable = PathBuf::from("python3");
+    let error = supervisor
+        .run(&agent_request("relative"), relative, b"")
+        .await
+        .unwrap_err();
+    assert_eq!(error.code, "invalid_process_spec");
+
+    let error = supervisor
+        .run(
+            &agent_request("oversized_stdin"),
+            python_spec("pass"),
+            &vec![b'x'; 270_001],
+        )
+        .await
+        .unwrap_err();
+    assert_eq!(error.code, "request_too_large");
+    assert_fresh_worker(&supervisor, "fresh_stdin").await;
+
+    let valid = json!({
+        "protocol_version": 1,
+        "request_id": "closed_stdin",
+        "status": "ok",
+        "snapshot": null,
+        "result": null,
+        "stdout": "",
+        "stderr": "",
+        "error": null
+    })
+    .to_string();
+    let script = format!(
+        "import os,time,sys\nos.close(0)\ntime.sleep(.02)\nsys.stdout.write({valid:?}+'\\n')"
+    );
+    let error = supervisor
+        .run(
+            &agent_request("closed_stdin"),
+            python_spec(&script),
+            &vec![b'x'; 200_000],
+        )
+        .await
+        .unwrap_err();
+    assert_eq!(error.code, "stdin_failed");
+    assert_fresh_worker(&supervisor, "fresh_closed_stdin").await;
 }

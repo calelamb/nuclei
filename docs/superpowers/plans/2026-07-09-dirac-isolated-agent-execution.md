@@ -882,7 +882,7 @@ use app_lib::agent_runtime::process::{ProcessSpec, ProcessSupervisor, Supervisor
 
 fn python_spec(script: &str) -> ProcessSpec {
     ProcessSpec {
-        executable: std::path::PathBuf::from("python3"),
+        executable: std::path::PathBuf::from("/usr/bin/python3"),
         args: vec!["-c".into(), script.into()],
         cwd: std::env::temp_dir(),
         env: std::collections::BTreeMap::new(),
@@ -926,8 +926,7 @@ Expected: FAIL because `process` does not exist.
 ```rust
 // src-tauri/src/agent_runtime/process.rs
 use crate::agent_runtime::protocol::{WorkerRequestV1, WorkerResponseV1};
-use std::{collections::{BTreeMap, HashMap}, path::PathBuf, time::Duration};
-use tokio::sync::Mutex;
+use std::{collections::{BTreeMap, HashMap}, path::PathBuf, sync::{Arc, Mutex}, time::Duration};
 
 pub struct ProcessSpec { pub executable: PathBuf, pub args: Vec<String>, pub cwd: PathBuf, pub env: BTreeMap<String, String> }
 #[derive(Clone)] pub struct SupervisorLimits { pub wall: Duration, pub stdout_bytes: usize, pub stderr_bytes: usize }
@@ -937,29 +936,34 @@ impl SupervisorLimits {
 }
 #[derive(Debug)] pub struct RuntimeError { pub code: String, pub message: String }
 struct Active {
-    child: tokio::process::Child,
+    pid: u32,
     process_group: i32,
-    cancelled: bool,
+    cancelled: AtomicBool,
+    cancellation: tokio::sync::Notify,
 }
-pub struct Supervisor { limits: SupervisorLimits, active: Mutex<HashMap<String, Active>> }
+pub struct Supervisor { limits: SupervisorLimits, active: Mutex<HashMap<String, Arc<Active>>> }
 impl Supervisor {
     pub fn new(limits: SupervisorLimits) -> Self { Self { limits, active: Mutex::new(HashMap::new()) } }
 }
 pub trait ProcessSupervisor {
-    async fn run(&self, request: &WorkerRequestV1, spec: ProcessSpec, stdin: &[u8]) -> Result<WorkerResponseV1, RuntimeError>;
-    async fn cancel(&self, id: &str) -> Result<(), RuntimeError>;
-    async fn cancel_all(&self);
+    fn run<'a>(&'a self, request: &'a WorkerRequestV1, spec: ProcessSpec, stdin: &'a [u8])
+        -> impl Future<Output = Result<WorkerResponseV1, RuntimeError>> + Send + 'a;
+    fn cancel<'a>(&'a self, id: &'a str)
+        -> impl Future<Output = Result<(), RuntimeError>> + Send + 'a;
+    fn cancel_all(&self) -> impl Future<Output = ()> + Send + '_;
 }
 ```
 
 On qualified Unix platforms, implement `run` with `tokio::process::Command`,
 `env_clear`, piped stdio, immediate insertion into `active`, concurrent
-byte-capped stdout/stderr readers, and a wall timeout. Windows never constructs
-a `ProcessSpec` or enters the supervisor. A process group may be used for
-lifecycle cleanup, but never counted as descendant containment: the qualified
-macOS profile must deny fork/exec and Linux must place the worker in its
-delegated cgroup before execution. Remove the active-map entry only after
-bounded cleanup.
+byte-capped stdout/stderr readers, and a wall timeout covering child wait and
+pipe closure. The `run` future exclusively owns and reaps `Child`; cancellation
+only marks/notifies the matching active generation, so it cannot double-wait or
+signal a reused PID. Windows never constructs a `ProcessSpec` or enters the
+supervisor. A process group is used for lifecycle cleanup, but never counted as
+descendant containment: the qualified macOS profile must deny fork/exec and
+Linux must place the worker in its delegated cgroup before execution. Remove
+the active-map entry only after bounded cleanup.
 
 After bounded cleanup, reject cap overflow, nonzero status, non-UTF-8, anything
 except one trailing-newline JSON object or any strict typed
@@ -1008,12 +1012,15 @@ pub async fn agent_sandbox_capability(
 ) -> CapabilityReport { state.capability(&app).await }
 ```
 
-Implement `AgentRuntimeCommands` for `AgentRuntimeState`: `execute` reads the
-cached report, rejects unavailable/unqualified frameworks, resolves the
-qualified platform `ProcessSpec`, serializes `WorkerRequestV1`, and delegates to
-`Supervisor::run` with that same request for response correlation; `capability` provisions/verifies resources and runs platform
-qualification before caching. Register state and all commands in `lib.rs`;
-export the command module. App shutdown calls `ProcessSupervisor::cancel_all`.
+Implement `AgentRuntimeCommands` for `AgentRuntimeState`: in Task 4 the cached
+report is initialized unavailable, `execute` rejects unavailable or unqualified
+frameworks, and no unsandboxed `ProcessSpec` can be constructed. Platform Tasks
+5 and 6 add the authoritative resolver and qualification flow; there is no
+fallback spawn path before then. The command-facing trait uses a stable
+Rust-1.77-compatible `impl Future + Send` return rather than `async-trait`.
+Register state and all commands in `lib.rs`; export the command module. App
+shutdown calls `ProcessSupervisor::cancel_all`, with synchronous cancellation
+notification as a drop fallback.
 
 - [ ] **Step 5: Run lifecycle tests**
 
