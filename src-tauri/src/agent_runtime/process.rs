@@ -37,6 +37,7 @@ pub struct ProcessSpec {
     pub env: BTreeMap<String, String>,
     pub cleanup_root: Option<PathBuf>,
     pub resource_limits: ResourceLimits,
+    pub runtime_guard: Option<Arc<std::fs::File>>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

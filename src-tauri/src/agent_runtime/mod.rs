@@ -106,7 +106,10 @@ impl AgentProcessResolver for MacContextResolver {
         _request: &'a WorkerRequestV1,
     ) -> Pin<Box<dyn Future<Output = Result<ProcessSpec, String>> + Send + 'a>> {
         Box::pin(async move {
-            if macos::qualification_cache_key(&self.context)? != self.installed_key {
+            let runtime_guard = macos::MacBackend::runtime_lease(&self.context)?;
+            if macos::qualification_cache_key_async(self.context.clone()).await?
+                != self.installed_key
+            {
                 return Err(
                     "Qualified macOS backend identity changed; requalification required".into(),
                 );
@@ -121,7 +124,10 @@ impl AgentProcessResolver for MacContextResolver {
                 .canonicalize()
                 .map_err(|error| format!("Request temp is unavailable: {error}"))?;
             match macos::MacBackend::worker_spec(&self.context, &request_temp) {
-                Ok(spec) => Ok(spec),
+                Ok(mut spec) => {
+                    spec.runtime_guard = Some(runtime_guard);
+                    Ok(spec)
+                }
                 Err(error) => {
                     let cleanup = std::fs::remove_dir_all(&request_temp);
                     match cleanup {
@@ -249,10 +255,21 @@ impl AgentRuntimeState {
             }
             let mut stdin = serde_json::to_vec(&request).map_err(|error| error.to_string())?;
             stdin.push(b'\n');
-            self.supervisor
+            let result = self
+                .supervisor
                 .run_reserved(&request, spec, &stdin, reservation)
-                .await
-                .map_err(|error| error.message)
+                .await;
+            if let Err(error) = &result {
+                if matches!(error.code.as_str(), "cleanup_failed" | "cleanup_timeout") {
+                    self.clear_backend_if_current(
+                        backend_generation,
+                        backend_key.as_deref(),
+                        error.message.clone(),
+                    )
+                    .await;
+                }
+            }
+            result.map_err(|error| error.message)
         }
     }
 }
@@ -323,7 +340,7 @@ impl AgentRuntimeCommands for AgentRuntimeState {
                 return self.cached_capability().await;
             }
         };
-        let cache_key = match macos::qualification_cache_key(&context) {
+        let cache_key = match macos::qualification_cache_key_async(context.clone()).await {
             Ok(key) => key,
             Err(error) => {
                 let report = unavailable_report(error);
@@ -561,6 +578,7 @@ mod refresh_tests {
                     env: BTreeMap::new(),
                     cleanup_root: None,
                     resource_limits: process::ResourceLimits::testing(),
+                    runtime_guard: None,
                 })
             })
         }

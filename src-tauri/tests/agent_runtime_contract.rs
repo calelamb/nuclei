@@ -1762,6 +1762,7 @@ fn python_spec(script: &str) -> ProcessSpec {
         env: std::collections::BTreeMap::new(),
         cleanup_root: None,
         resource_limits: ResourceLimits::testing(),
+        runtime_guard: None,
     }
 }
 
@@ -1895,12 +1896,29 @@ struct BlockingResolver {
 struct FailingResolver;
 
 #[cfg(unix)]
+struct CleanupFailingResolver(PathBuf);
+
+#[cfg(unix)]
 impl AgentProcessResolver for FailingResolver {
     fn resolve<'a>(
         &'a self,
         _request: &'a WorkerRequestV1,
     ) -> Pin<Box<dyn Future<Output = Result<ProcessSpec, String>> + Send + 'a>> {
         Box::pin(async { Err("qualified backend identity changed".into()) })
+    }
+}
+
+#[cfg(unix)]
+impl AgentProcessResolver for CleanupFailingResolver {
+    fn resolve<'a>(
+        &'a self,
+        request: &'a WorkerRequestV1,
+    ) -> Pin<Box<dyn Future<Output = Result<ProcessSpec, String>> + Send + 'a>> {
+        Box::pin(async move {
+            let mut spec = python_spec(&valid_worker_script(&request.request_id));
+            spec.cleanup_root = Some(self.0.clone());
+            Ok(spec)
+        })
     }
 }
 
@@ -1962,6 +1980,28 @@ async fn resolver_identity_failure_atomically_clears_capability() {
     assert!(!report.available);
     assert!(report.qualified_frameworks.is_empty());
     assert!(report.controls.is_empty());
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn supervisor_cleanup_failure_atomically_revokes_matching_capability() {
+    let temporary = TempDir::new().unwrap();
+    let not_a_directory = temporary.path().join("cleanup-root");
+    fs::write(&not_a_directory, "file").unwrap();
+    let state = AgentRuntimeState::with_resolver(
+        Supervisor::new(SupervisorLimits::testing()),
+        available_cirq_capability(),
+        Arc::new(CleanupFailingResolver(not_a_directory)),
+    );
+
+    assert_eq!(
+        state
+            .execute_request(agent_request("cleanup_revokes"))
+            .await
+            .unwrap_err(),
+        "Worker request directory could not be removed"
+    );
+    assert!(!state.cached_capability().await.available);
 }
 
 #[cfg(unix)]

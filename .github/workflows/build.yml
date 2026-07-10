@@ -12,10 +12,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: '20'
           cache: 'npm'
@@ -31,10 +31,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: '20'
           cache: 'npm'
@@ -51,10 +51,10 @@ jobs:
     needs: [lint, typecheck]
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: '20'
           cache: 'npm'
@@ -71,10 +71,10 @@ jobs:
     needs: [lint]
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           # Astro 6 requires Node >= 22.12
           node-version: '22'
@@ -96,15 +96,15 @@ jobs:
     runs-on: macos-latest
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
 
       - name: Setup uv
-        uses: astral-sh/setup-uv@v6
+        uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e # v6
         with:
           enable-cache: false
 
       - name: Install Rust 1.77.2
-        uses: dtolnay/rust-toolchain@1.77.2
+        uses: dtolnay/rust-toolchain@cc21eb1640117f28f1e845649b8aa54ecd04daab # 1.77.2
 
       # This venv is an ephemeral qualification fixture. It is not the
       # hash-verified, app-bundled wheelhouse required for offline provisioning.
@@ -112,15 +112,19 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          environment_root="$RUNNER_TEMP/nuclei-agent-runtime"
+          runtime_root="$RUNNER_TEMP/nuclei-agent-runtime"
+          generation_id="$(shasum -a 256 kernel/agent-requirements.lock | awk '{print $1}')"
+          generation_parent="$runtime_root/generations"
+          environment_root="$generation_parent/sha256-$generation_id"
           managed_root="$environment_root/managed"
           venv_root="$environment_root/venv"
           request_root="$RUNNER_TEMP/nuclei-agent-requests"
           sentinel_root="$RUNNER_TEMP/nuclei-agent-sentinels"
           export UV_PYTHON_INSTALL_DIR="$managed_root"
           mkdir -p "$environment_root"
-          uv python install 3.12
-          managed_python="$(uv python find --managed-python 3.12)"
+          : > "$generation_parent/.provision.lock"
+          uv python install 3.12.11
+          managed_python="$(uv python find --managed-python 3.12.11)"
 
           # The runtime identity rejects every symlink. Materialize the managed
           # standalone distribution so every executable/importable input is a
@@ -129,14 +133,12 @@ jobs:
           cp -R -L "$managed_root" "$materialized_root"
           rm -rf "$managed_root"
           mv "$materialized_root" "$managed_root"
-          managed_python="$(uv python find --managed-python 3.12)"
+          managed_python="$(uv python find --managed-python 3.12.11)"
 
           "$managed_python" -m venv --copies "$venv_root"
-          uv pip install --python "$venv_root/bin/python" --requirement kernel/agent-requirements.txt
+          uv pip sync --python "$venv_root/bin/python" --require-hashes kernel/agent-requirements.lock
           site_packages="$("$venv_root/bin/python" -c 'import sysconfig; print(sysconfig.get_paths()["purelib"])')"
           mkdir -p "$request_root" "$sentinel_root/project" "$sentinel_root/home"
-          printf '%s\n' 'project qualification sentinel' > "$sentinel_root/project/sentinel"
-          printf '%s\n' 'home qualification sentinel' > "$sentinel_root/home/sentinel"
 
           NUCLEI_AGENT_ENVIRONMENT_ROOT="$environment_root" \
           NUCLEI_AGENT_SITE_PACKAGES="$site_packages" \
@@ -168,10 +170,14 @@ jobs:
             echo "NUCLEI_AGENT_PYTHON=$venv_root/bin/python"
             echo "NUCLEI_AGENT_SITE_PACKAGES=$site_packages"
             echo "NUCLEI_AGENT_REQUEST_TEMP_ROOT=$request_root"
-            echo "NUCLEI_AGENT_PROJECT_SENTINEL=$sentinel_root/project/sentinel"
-            echo "NUCLEI_AGENT_HOME_SENTINEL=$sentinel_root/home/sentinel"
+            echo "NUCLEI_AGENT_PROJECT_ROOT=$sentinel_root/project"
+            echo "NUCLEI_AGENT_HOME_ROOT=$sentinel_root/home"
           } >> "$GITHUB_ENV"
 
       - name: Require runtime-proven macOS isolation
         run: cargo test --test agent_runtime_boundary macos_required -- --nocapture
         working-directory: src-tauri
+        env:
+          ANTHROPIC_API_KEY: qualification-fake-anthropic
+          IBM_QUANTUM_TOKEN: qualification-fake-ibm
+          AWS_SECRET_ACCESS_KEY: qualification-fake-aws

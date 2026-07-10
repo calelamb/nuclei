@@ -1,5 +1,6 @@
 use app_lib::agent_runtime::macos::{
-    build_seatbelt_profile, cirq_rlimit_probe_source, qualification_cache_key,
+    active_identity_hashers_for_test, build_seatbelt_profile, cirq_rlimit_probe_source,
+    qualification_cache_key, qualification_cache_key_async, qualification_cache_key_with_deadline,
     resource_limit_probe_script, worker_environment, MacBackend, OfflineProvisioningContainment,
     QualificationContext, SystemPaths,
 };
@@ -7,14 +8,21 @@ use app_lib::agent_runtime::process::{ProcessSpec, ResourceLimits};
 #[cfg(any(target_os = "linux", target_os = "macos"))]
 use app_lib::agent_runtime::qualify_current_host_with_context;
 use app_lib::agent_runtime::resources::RunnerContainment;
-use app_lib::agent_runtime::resources::{AgentEnvironment, ResourcePaths};
+use app_lib::agent_runtime::resources::{
+    validate_requirements_lock, AgentEnvironment, ResourcePaths,
+};
 use app_lib::agent_runtime::{qualify_current_host, QualificationMode};
-use std::collections::{BTreeMap, BTreeSet};
+#[cfg(target_os = "macos")]
+use std::collections::BTreeMap;
+use std::collections::BTreeSet;
 use std::fs;
+use std::fs::OpenOptions;
 use std::path::{Path, PathBuf};
+use std::time::Duration;
 use tempfile::TempDir;
 
 const REQUIREMENTS: &str = include_str!("../../kernel/agent-requirements.txt");
+const REQUIREMENTS_LOCK: &str = include_str!("../../kernel/agent-requirements.lock");
 
 struct Fixture {
     _root: TempDir,
@@ -37,7 +45,9 @@ fn fixture() -> Fixture {
     fs::write(kernel.join("executor.py"), "# fixed executor\n").unwrap();
     let resources = ResourcePaths::development(&repository).unwrap();
 
-    let runtime = root.path().join("runtime");
+    let runtime = root.path().join("generations/sha256-fixture");
+    fs::create_dir_all(runtime.parent().unwrap()).unwrap();
+    fs::write(runtime.parent().unwrap().join(".provision.lock"), "").unwrap();
     let python = runtime.join("bin/python3");
     let site_packages = runtime.join("lib/python3.12/site-packages");
     fs::create_dir_all(python.parent().unwrap()).unwrap();
@@ -64,10 +74,6 @@ fn fixture() -> Fixture {
     fs::create_dir_all(&request_temp_root).unwrap();
     fs::create_dir_all(&project).unwrap();
     fs::create_dir_all(&home).unwrap();
-    let project_sentinel = project.join("sentinel");
-    let home_sentinel = home.join("sentinel");
-    fs::write(&project_sentinel, "project secret").unwrap();
-    fs::write(&home_sentinel, "home secret").unwrap();
     let system = root.path().join("system");
     let system_library = system.join("System/Library");
     let usr_lib = system.join("usr/lib");
@@ -96,12 +102,12 @@ fn fixture() -> Fixture {
         resources,
         environment,
         &request_temp_root,
-        &project_sentinel,
-        &home_sentinel,
-        BTreeMap::from([
-            ("ANTHROPIC_API_KEY".into(), "fake-anthropic-secret".into()),
-            ("IBM_QUANTUM_TOKEN".into(), "fake-ibm-secret".into()),
-            ("AWS_SECRET_ACCESS_KEY".into(), "fake-aws-secret".into()),
+        &project,
+        &home,
+        BTreeSet::from([
+            "ANTHROPIC_API_KEY".into(),
+            "IBM_QUANTUM_TOKEN".into(),
+            "AWS_SECRET_ACCESS_KEY".into(),
         ]),
         system_paths,
     )
@@ -134,6 +140,11 @@ fn offline_provisioning_remains_unavailable_without_a_bundled_verified_wheelhous
         OfflineProvisioningContainment.containment(),
         RunnerContainment::Unavailable
     );
+}
+
+#[test]
+fn agent_test_lock_is_hash_locked_and_matches_the_direct_allowlist() {
+    validate_requirements_lock(REQUIREMENTS, REQUIREMENTS_LOCK).unwrap();
 }
 
 #[cfg(target_os = "linux")]
@@ -242,7 +253,7 @@ fn worker_command_has_only_the_fixed_environment_and_seatbelt_entrypoint() {
             .unwrap()
             .to_string_lossy()
     );
-    for secret in fixture.context.parent_environment.keys() {
+    for secret in &fixture.context.parent_secret_names {
         assert!(!spec.env.contains_key(secret));
     }
 }
@@ -286,6 +297,30 @@ fn qualification_harness_uses_the_production_spec_and_parent_limits() {
 }
 
 #[test]
+fn shared_runtime_lease_blocks_an_exclusive_update_lock() {
+    use fs2::FileExt;
+
+    let fixture = fixture();
+    let lease = MacBackend::runtime_lease(&fixture.context).unwrap();
+    let update = OpenOptions::new()
+        .read(true)
+        .write(true)
+        .open(
+            fixture
+                .context
+                .environment
+                .root
+                .parent()
+                .unwrap()
+                .join(".provision.lock"),
+        )
+        .unwrap();
+    assert!(update.try_lock_exclusive().is_err());
+    drop(lease);
+    update.try_lock_exclusive().unwrap();
+}
+
+#[test]
 fn standalone_environment_builder_is_exact_and_does_not_inherit_parent_values() {
     let fixture = fixture();
     let request = fixture.context.request_temp_root.join("env-request");
@@ -308,6 +343,18 @@ fn standalone_environment_builder_is_exact_and_does_not_inherit_parent_values() 
     }
 }
 
+#[test]
+fn qualification_context_accepts_canonical_roots_without_precreated_evidence() {
+    let fixture = fixture();
+    assert!(fixture.context.project_root.is_dir());
+    assert!(fixture.context.home_root.is_dir());
+    assert_eq!(
+        fs::read_dir(&fixture.context.project_root).unwrap().count(),
+        0
+    );
+    assert_eq!(fs::read_dir(&fixture.context.home_root).unwrap().count(), 0);
+}
+
 #[cfg(unix)]
 #[test]
 fn qualification_context_rejects_symlink_escapes_and_noncanonical_inputs() {
@@ -322,9 +369,9 @@ fn qualification_context_rejects_symlink_escapes_and_noncanonical_inputs() {
         fixture.context.resources.clone(),
         fixture.context.environment.clone(),
         &alias,
-        &fixture.context.project_sentinel,
-        &fixture.context.home_sentinel,
-        fixture.context.parent_environment.clone(),
+        &fixture.context.project_root,
+        &fixture.context.home_root,
+        fixture.context.parent_secret_names.clone(),
         fixture.context.system_paths.clone(),
     );
     assert!(result.is_err());
@@ -450,6 +497,22 @@ fn cache_key_covers_every_executable_runtime_input() {
     )
     .unwrap();
     assert_ne!(original, qualification_cache_key(&fixture.context).unwrap());
+    fs::write(
+        fixture.context.environment.root.join("libpython.dylib"),
+        b"fixed native library",
+    )
+    .unwrap();
+
+    fs::write(
+        fixture
+            .context
+            .environment
+            .root
+            .join("unexpected-runtime-file"),
+        b"unexpected",
+    )
+    .unwrap();
+    assert_ne!(original, qualification_cache_key(&fixture.context).unwrap());
 }
 
 #[cfg(unix)]
@@ -505,9 +568,96 @@ fn cache_identity_rejects_symlinks_anywhere_in_environment_root() {
     assert!(qualification_cache_key(&fixture.context).is_err());
 }
 
+#[cfg(unix)]
+#[test]
+fn cache_identity_rejects_group_or_world_writable_runtime_paths() {
+    use std::os::unix::fs::PermissionsExt;
+
+    let fixture = fixture();
+    let path = fixture.context.environment.root.join("stdlib/os.py");
+    fs::set_permissions(&path, fs::Permissions::from_mode(0o666)).unwrap();
+    assert!(qualification_cache_key(&fixture.context)
+        .unwrap_err()
+        .contains("group/world writable"));
+}
+
+#[tokio::test]
+async fn async_identity_hash_deadline_fails_closed() {
+    let fixture = fixture();
+    let error = qualification_cache_key_with_deadline(fixture.context, Duration::ZERO)
+        .await
+        .unwrap_err();
+    assert!(error.contains("deadline"));
+}
+
+#[tokio::test]
+async fn complete_identity_hash_does_not_block_the_async_runtime() {
+    let fixture = fixture();
+    fs::write(
+        fixture
+            .context
+            .environment
+            .root
+            .join("large-native-library"),
+        vec![0x5a; 32 * 1024 * 1024],
+    )
+    .unwrap();
+    let hash = tokio::spawn(qualification_cache_key_async(fixture.context));
+    tokio::time::timeout(
+        Duration::from_millis(50),
+        tokio::time::sleep(Duration::from_millis(1)),
+    )
+    .await
+    .expect("event loop was blocked by identity hashing");
+    assert!(hash.await.unwrap().is_ok());
+}
+
+#[tokio::test]
+async fn cancelled_identity_hash_stops_cooperatively_without_detached_work() {
+    let fixture = fixture();
+    let large =
+        fs::File::create(fixture.context.environment.root.join("slow-native-library")).unwrap();
+    large.set_len(512 * 1024 * 1024).unwrap();
+    let hash = tokio::spawn(qualification_cache_key_async(fixture.context));
+    tokio::time::timeout(Duration::from_secs(1), async {
+        while active_identity_hashers_for_test() == 0 {
+            tokio::task::yield_now().await;
+        }
+    })
+    .await
+    .expect("identity hasher did not start");
+    hash.abort();
+    tokio::time::timeout(Duration::from_secs(1), async {
+        while active_identity_hashers_for_test() != 0 {
+            tokio::task::yield_now().await;
+        }
+    })
+    .await
+    .expect("cancelled identity hasher remained detached");
+}
+
 #[cfg(target_os = "macos")]
 #[tokio::test]
 async fn macos_required_qualification_passes() {
+    static ENVIRONMENT: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
+    let _serial = ENVIRONMENT.lock().await;
+    let parent_secrets = [
+        "ANTHROPIC_API_KEY",
+        "IBM_QUANTUM_TOKEN",
+        "AWS_SECRET_ACCESS_KEY",
+    ];
+    for name in parent_secrets {
+        std::env::set_var(name, format!("qualification-fake-{name}"));
+    }
+    struct EnvironmentCleanup([&'static str; 3]);
+    impl Drop for EnvironmentCleanup {
+        fn drop(&mut self) {
+            for name in self.0 {
+                std::env::remove_var(name);
+            }
+        }
+    }
+    let _environment_cleanup = EnvironmentCleanup(parent_secrets);
     let report = qualify_current_host(QualificationMode::RequireAvailable).await;
     assert!(report.available, "{:?}", report.reason);
     assert_eq!(report.qualified_frameworks, vec!["cirq"]);

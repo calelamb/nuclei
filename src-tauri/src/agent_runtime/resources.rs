@@ -79,6 +79,56 @@ pub fn validate_requirements(text: &str) -> Result<(), String> {
     Ok(())
 }
 
+pub fn validate_requirements_lock(requirements: &str, locked: &str) -> Result<(), String> {
+    validate_requirements(requirements)?;
+    let direct = requirements
+        .lines()
+        .map(|line| {
+            line.split(['<', '>', '=', '!', '~'])
+                .next()
+                .unwrap_or_default()
+                .trim()
+                .to_ascii_lowercase()
+                .replace('_', "-")
+        })
+        .collect::<std::collections::BTreeSet<_>>();
+    let mut locked_names = std::collections::BTreeSet::new();
+    let mut current_hashed = true;
+    let mut saw_package = false;
+    for line in locked.lines() {
+        if !line.starts_with(char::is_whitespace)
+            && !line.starts_with('#')
+            && !line.trim().is_empty()
+        {
+            if saw_package && !current_hashed {
+                return Err("Agent requirements lock contains an unhashed package".into());
+            }
+            let name = line
+                .split("==")
+                .next()
+                .ok_or("Agent requirements lock contains an unpinned package")?
+                .trim()
+                .to_ascii_lowercase()
+                .replace('_', "-");
+            if !line.contains("==") || name.is_empty() {
+                return Err("Agent requirements lock contains an unpinned package".into());
+            }
+            locked_names.insert(name);
+            current_hashed = line.contains("--hash=sha256:");
+            saw_package = true;
+        } else if line.trim_start().starts_with("--hash=sha256:") {
+            current_hashed = true;
+        }
+    }
+    if !saw_package || !current_hashed {
+        return Err("Agent requirements lock is empty or unhashed".into());
+    }
+    if !direct.is_subset(&locked_names) {
+        return Err("Agent requirements lock does not cover the approved direct allowlist".into());
+    }
+    Ok(())
+}
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct CommandSpec {
     pub program: PathBuf,

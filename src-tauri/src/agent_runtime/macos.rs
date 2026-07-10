@@ -1,27 +1,36 @@
 #[cfg(target_os = "macos")]
 use crate::agent_runtime::process::unix_command;
 use crate::agent_runtime::process::{ProcessSpec, ResourceLimits};
+#[cfg(target_os = "macos")]
+use crate::agent_runtime::process::{ProcessSupervisor, Supervisor, SupervisorLimits};
+#[cfg(target_os = "macos")]
+use crate::agent_runtime::protocol::{Action, Framework, WorkerRequestV1};
 use crate::agent_runtime::resources::{AgentEnvironment, ResourcePaths, RunnerContainment};
 #[cfg(target_os = "macos")]
 use crate::agent_runtime::{CapabilityReport, ControlResult};
+use fs2::FileExt;
 use sha2::{Digest, Sha256};
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 use std::io::Read;
 use std::path::{Path, PathBuf};
-#[cfg(target_os = "macos")]
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
 use std::time::Duration;
 
 const SANDBOX_EXEC: &str = "/usr/bin/sandbox-exec";
 const PROFILE_VERSION: &str = "nuclei-seatbelt-v1";
-const MAX_IDENTITY_ENTRIES: usize = 200_000;
-const MAX_IDENTITY_BYTES: u64 = 8 * 1024 * 1024 * 1024;
+const MAX_IDENTITY_ENTRIES: usize = 50_000;
+const MAX_IDENTITY_BYTES: u64 = 2 * 1024 * 1024 * 1024;
+const IDENTITY_TIMEOUT: Duration = Duration::from_secs(10);
+static ACTIVE_IDENTITY_HASHERS: std::sync::atomic::AtomicUsize =
+    std::sync::atomic::AtomicUsize::new(0);
 #[cfg(target_os = "macos")]
 const PROBE_TIMEOUT: Duration = Duration::from_secs(4);
 #[cfg(target_os = "macos")]
 const PROBE_OUTPUT_LIMIT: usize = 65_536;
 
-/// All path and parent-environment inputs used to qualify one immutable backend.
+/// Canonical paths and credential names used to qualify one immutable backend.
 ///
 /// Construction canonicalizes every filesystem object up front. Qualification
 /// never consults the process cwd or ambient home directory, and a context
@@ -32,9 +41,10 @@ pub struct QualificationContext {
     pub resources: ResourcePaths,
     pub environment: AgentEnvironment,
     pub request_temp_root: PathBuf,
-    pub project_sentinel: PathBuf,
-    pub home_sentinel: PathBuf,
-    pub parent_environment: BTreeMap<String, String>,
+    pub runtime_lock: PathBuf,
+    pub project_root: PathBuf,
+    pub home_root: PathBuf,
+    pub parent_secret_names: BTreeSet<String>,
     pub system_paths: SystemPaths,
 }
 
@@ -161,9 +171,9 @@ impl QualificationContext {
         resources: ResourcePaths,
         environment: AgentEnvironment,
         request_temp_root: &Path,
-        project_sentinel: &Path,
-        home_sentinel: &Path,
-        parent_environment: BTreeMap<String, String>,
+        project_root: &Path,
+        home_root: &Path,
+        parent_secret_names: BTreeSet<String>,
         system_paths: SystemPaths,
     ) -> Result<Self, String> {
         environment.verify()?;
@@ -171,13 +181,30 @@ impl QualificationContext {
         require_canonical(&resources.worker, "Agent worker", false)?;
         require_canonical(&resources.requirements, "Agent requirements", false)?;
         require_canonical(&environment.root, "Agent environment root", true)?;
+        if !environment
+            .root
+            .file_name()
+            .and_then(|name| name.to_str())
+            .is_some_and(|name| name.starts_with("sha256-") && name.len() > "sha256-".len())
+        {
+            return Err("Agent environment must be a content-addressed runtime generation".into());
+        }
         require_canonical(&environment.python, "Agent Python", false)?;
         require_canonical(&environment.site_packages, "Agent site-packages", true)?;
         let request_temp_root =
             require_canonical(request_temp_root, "Agent request temp root", true)?;
-        let project_sentinel =
-            require_canonical(project_sentinel, "Project qualification sentinel", false)?;
-        let home_sentinel = require_canonical(home_sentinel, "Home qualification sentinel", false)?;
+        let runtime_lock = require_canonical(
+            &environment
+                .root
+                .parent()
+                .ok_or("Agent environment root has no generation parent")?
+                .join(".provision.lock"),
+            "Agent runtime generation lock",
+            false,
+        )?;
+        require_regular_file(&runtime_lock, "Agent runtime generation lock")?;
+        let project_root = require_canonical(project_root, "Project qualification root", true)?;
+        let home_root = require_canonical(home_root, "Home qualification root", true)?;
         if !resources.worker.starts_with(&resources.kernel_root)
             || !resources.requirements.starts_with(&resources.kernel_root)
         {
@@ -190,17 +217,17 @@ impl QualificationContext {
         {
             return Err("Agent request temp overlaps a read-only runtime root".into());
         }
-        if project_sentinel.starts_with(&request_temp_root)
-            || home_sentinel.starts_with(&request_temp_root)
-            || project_sentinel.starts_with(&environment.root)
-            || home_sentinel.starts_with(&environment.root)
-            || project_sentinel.starts_with(&resources.kernel_root)
-            || home_sentinel.starts_with(&resources.kernel_root)
+        if project_root.starts_with(&request_temp_root)
+            || home_root.starts_with(&request_temp_root)
+            || project_root.starts_with(&environment.root)
+            || home_root.starts_with(&environment.root)
+            || project_root.starts_with(&resources.kernel_root)
+            || home_root.starts_with(&resources.kernel_root)
         {
             return Err("Qualification sentinels must be outside sandbox-readable roots".into());
         }
-        if parent_environment
-            .keys()
+        if parent_secret_names
+            .iter()
             .any(|name| name.is_empty() || name.contains('=') || name.contains('\0'))
         {
             return Err("Parent qualification environment contains an invalid name".into());
@@ -210,9 +237,10 @@ impl QualificationContext {
             resources,
             environment,
             request_temp_root,
-            project_sentinel,
-            home_sentinel,
-            parent_environment,
+            runtime_lock,
+            project_root,
+            home_root,
+            parent_secret_names,
             system_paths,
         })
     }
@@ -253,22 +281,22 @@ impl QualificationContext {
             )?,
             root: environment_root,
         };
-        let parent_environment = [
+        let parent_secret_names = [
             "ANTHROPIC_API_KEY",
             "IBM_QUANTUM_TOKEN",
             "AWS_SECRET_ACCESS_KEY",
         ]
         .into_iter()
-        .map(|name| (name.into(), format!("qualification-fake-{name}")))
+        .map(str::to_string)
         .collect();
         Self::new(
             app_version,
             resources,
             environment,
             &required("NUCLEI_AGENT_REQUEST_TEMP_ROOT")?,
-            &required("NUCLEI_AGENT_PROJECT_SENTINEL")?,
-            &required("NUCLEI_AGENT_HOME_SENTINEL")?,
-            parent_environment,
+            &required("NUCLEI_AGENT_PROJECT_ROOT")?,
+            &required("NUCLEI_AGENT_HOME_ROOT")?,
+            parent_secret_names,
             SystemPaths::production()?,
         )
     }
@@ -305,6 +333,19 @@ impl OfflineProvisioningContainment {
 pub struct MacBackend;
 
 impl MacBackend {
+    pub fn runtime_lease(context: &QualificationContext) -> Result<Arc<fs::File>, String> {
+        let metadata = fs::symlink_metadata(&context.runtime_lock)
+            .map_err(|error| format!("Agent runtime lock metadata is unavailable: {error}"))?;
+        require_owned_nonwritable(&metadata)?;
+        let file = fs::OpenOptions::new()
+            .read(true)
+            .open(&context.runtime_lock)
+            .map_err(|error| format!("Agent runtime generation lock is unavailable: {error}"))?;
+        file.lock_shared()
+            .map_err(|error| format!("Agent runtime shared lock failed: {error}"))?;
+        Ok(Arc::new(file))
+    }
+
     pub fn worker_spec(
         context: &QualificationContext,
         request_temp: &Path,
@@ -329,6 +370,7 @@ impl MacBackend {
             env: worker_environment(&context.environment, &request_temp)?,
             cleanup_root: Some(request_temp),
             resource_limits: ResourceLimits::production(),
+            runtime_guard: None,
         })
     }
 
@@ -537,15 +579,125 @@ fn escape_seatbelt_literal(literal: &str) -> Result<String, String> {
 }
 
 pub fn qualification_cache_key(context: &QualificationContext) -> Result<String, String> {
-    let first = compute_qualification_cache_key(context)?;
-    let second = compute_qualification_cache_key(context)?;
+    let control = HashControl::new(IDENTITY_TIMEOUT);
+    let first = compute_qualification_cache_key(context, &control)?;
+    let second = compute_qualification_cache_key(context, &control)?;
     if first != second {
         return Err("Runtime identity changed during hashing".into());
     }
     Ok(first)
 }
 
-fn compute_qualification_cache_key(context: &QualificationContext) -> Result<String, String> {
+pub async fn qualification_cache_key_async(
+    context: QualificationContext,
+) -> Result<String, String> {
+    qualification_cache_key_with_deadline(context, IDENTITY_TIMEOUT).await
+}
+
+pub async fn qualification_cache_key_with_deadline(
+    context: QualificationContext,
+    timeout: Duration,
+) -> Result<String, String> {
+    let cancelled = Arc::new(AtomicBool::new(false));
+    let mut cancellation = HashCancellation {
+        cancelled: Arc::clone(&cancelled),
+        armed: true,
+    };
+    let mut work = tokio::task::spawn_blocking(move || {
+        let _active = ActiveHasher::new();
+        let control = HashControl {
+            cancelled,
+            deadline: std::time::Instant::now() + timeout,
+        };
+        let first = compute_qualification_cache_key(&context, &control)?;
+        let second = compute_qualification_cache_key(&context, &control)?;
+        if first != second {
+            return Err("Runtime identity changed during hashing".into());
+        }
+        Ok(first)
+    });
+    let result = tokio::select! {
+        joined = &mut work => {
+            joined.map_err(|_| "Runtime identity hashing task failed".to_string())?
+        }
+        _ = tokio::time::sleep(timeout) => {
+            cancellation.cancelled.store(true, Ordering::Release);
+            let _ = work.await;
+            return Err("Runtime identity hashing exceeded its deadline".into());
+        }
+    };
+    cancellation.disarm();
+    result
+}
+
+#[doc(hidden)]
+pub fn active_identity_hashers_for_test() -> usize {
+    ACTIVE_IDENTITY_HASHERS.load(Ordering::Acquire)
+}
+
+struct ActiveHasher;
+
+impl ActiveHasher {
+    fn new() -> Self {
+        ACTIVE_IDENTITY_HASHERS.fetch_add(1, Ordering::AcqRel);
+        Self
+    }
+}
+
+impl Drop for ActiveHasher {
+    fn drop(&mut self) {
+        ACTIVE_IDENTITY_HASHERS.fetch_sub(1, Ordering::AcqRel);
+    }
+}
+
+struct HashCancellation {
+    cancelled: Arc<AtomicBool>,
+    armed: bool,
+}
+
+impl HashCancellation {
+    fn disarm(&mut self) {
+        self.armed = false;
+    }
+}
+
+impl Drop for HashCancellation {
+    fn drop(&mut self) {
+        if self.armed {
+            self.cancelled.store(true, Ordering::Release);
+        }
+    }
+}
+
+struct HashControl {
+    cancelled: Arc<AtomicBool>,
+    deadline: std::time::Instant,
+}
+
+impl HashControl {
+    fn new(timeout: Duration) -> Self {
+        Self {
+            cancelled: Arc::new(AtomicBool::new(false)),
+            deadline: std::time::Instant::now() + timeout,
+        }
+    }
+
+    fn checkpoint(&self) -> Result<(), String> {
+        if self.cancelled.load(Ordering::Acquire) {
+            return Err("Runtime identity hashing was cancelled".into());
+        }
+        if std::time::Instant::now() >= self.deadline {
+            return Err("Runtime identity hashing exceeded its deadline".into());
+        }
+        Ok(())
+    }
+}
+
+fn compute_qualification_cache_key(
+    context: &QualificationContext,
+    control: &HashControl,
+) -> Result<String, String> {
+    control.checkpoint()?;
     context.system_paths.verify()?;
     let mut digest = Sha256::new();
     hash_field(&mut digest, b"format", b"nuclei-runtime-identity-v3");
@@ -575,24 +727,28 @@ fn compute_qualification_cache_key(context: &QualificationContext) -> Result<Str
         b"requirements",
         &context.resources.requirements,
         &mut budget,
+        control,
     )?;
     hash_tree(
         &mut digest,
         b"kernel-tree",
         &context.resources.kernel_root,
         &mut budget,
+        control,
     )?;
     hash_tree(
         &mut digest,
         b"environment-tree",
         &context.environment.root,
         &mut budget,
+        control,
     )?;
     hash_regular_file(
         &mut digest,
         b"sandbox-exec",
         &context.system_paths.sandbox_exec,
         &mut budget,
+        control,
     )?;
     Ok(hex::encode(digest.finalize()))
 }
@@ -615,8 +771,14 @@ fn hash_tree(
     tag: &[u8],
     root: &Path,
     budget: &mut IdentityBudget,
+    control: &HashControl,
 ) -> Result<(), String> {
+    control.checkpoint()?;
     let canonical = require_canonical(root, "Runtime identity tree", true)?;
+    require_owned_nonwritable(
+        &fs::symlink_metadata(&canonical)
+            .map_err(|error| format!("Runtime identity root metadata failed: {error}"))?,
+    )?;
     hash_field(
         digest,
         tag,
@@ -633,6 +795,7 @@ fn hash_tree(
             .map_err(|error| format!("Runtime identity entry could not be read: {error}"))?;
         entries.sort_by_key(|entry| entry.file_name());
         for entry in entries.into_iter().rev() {
+            control.checkpoint()?;
             budget.entries = budget
                 .entries
                 .checked_add(1)
@@ -649,6 +812,7 @@ fn hash_tree(
                 .ok_or("Runtime identity entry path is not valid UTF-8")?;
             let metadata = fs::symlink_metadata(&path)
                 .map_err(|error| format!("Runtime identity metadata failed: {error}"))?;
+            require_owned_nonwritable(&metadata)?;
             if metadata.file_type().is_symlink() {
                 return Err("Runtime identity tree contains a symlink".into());
             }
@@ -657,7 +821,7 @@ fn hash_tree(
                 pending.push(path);
             } else if metadata.is_file() {
                 hash_field(digest, b"file-path", relative.as_bytes());
-                hash_regular_file(digest, b"file-content", &path, budget)?;
+                hash_regular_file(digest, b"file-content", &path, budget, control)?;
             } else {
                 return Err("Runtime identity tree contains a nonregular entry".into());
             }
@@ -666,12 +830,32 @@ fn hash_tree(
     Ok(())
 }
 
+#[cfg(unix)]
+fn require_owned_nonwritable(metadata: &fs::Metadata) -> Result<(), String> {
+    use std::os::unix::fs::{MetadataExt, PermissionsExt};
+
+    if metadata.uid() != unsafe { libc::geteuid() } {
+        return Err("Runtime identity tree entry is not owned by the current uid".into());
+    }
+    if metadata.permissions().mode() & 0o022 != 0 {
+        return Err("Runtime identity tree entry is group/world writable".into());
+    }
+    Ok(())
+}
+
+#[cfg(not(unix))]
+fn require_owned_nonwritable(_metadata: &fs::Metadata) -> Result<(), String> {
+    Ok(())
+}
+
 fn hash_regular_file(
     digest: &mut Sha256,
     tag: &[u8],
     path: &Path,
     budget: &mut IdentityBudget,
+    control: &HashControl,
 ) -> Result<(), String> {
+    control.checkpoint()?;
     let metadata_before = fs::symlink_metadata(path)
         .map_err(|error| format!("Runtime identity file metadata failed: {error}"))?;
     if !metadata_before.is_file() || metadata_before.file_type().is_symlink() {
@@ -706,6 +890,7 @@ fn hash_regular_file(
     let mut remaining = metadata_before.len();
     let mut buffer = [0_u8; 64 * 1024];
     while remaining > 0 {
+        control.checkpoint()?;
         let requested = usize::try_from(remaining.min(buffer.len() as u64))
             .map_err(|_| "Runtime identity read size overflowed")?;
         let read = file
@@ -786,17 +971,20 @@ async fn qualify_macos(context: &QualificationContext) -> CapabilityReport {
 async fn qualify_macos_inner(context: &QualificationContext) -> Result<(), String> {
     context.environment.verify()?;
     context.system_paths.verify_production()?;
-    let _cache_key = qualification_cache_key(context)?;
+    let _runtime_lease = MacBackend::runtime_lease(context)?;
+    let _cache_key = qualification_cache_key_async(context.clone()).await?;
+    let baseline = ParentBaseline::create(context)?;
+    let qualification = async {
 
     denied_probe(
         context,
-        &format!("open({:?}).read()", context.project_sentinel),
+        &format!("open({:?}).read()", baseline.project_sentinel),
         "project sentinel read",
     )
     .await?;
     denied_probe(
         context,
-        &format!("open({:?}).read()", context.home_sentinel),
+        &format!("open({:?}).read()", baseline.home_sentinel),
         "home sentinel read",
     )
     .await?;
@@ -806,25 +994,35 @@ async fn qualify_macos_inner(context: &QualificationContext) -> Result<(), Strin
         "import json,os;print(json.dumps(dict(sorted(os.environ.items())),separators=(',',':')))",
     )
     .await?;
-    require_success(&clean, "clean environment probe")?;
-    let actual: BTreeMap<String, String> = serde_json::from_slice(trim_ascii(&clean.stdout))
-        .map_err(|_| "Clean environment probe returned malformed JSON")?;
-    let probe_temp = clean
-        .request_temp
-        .as_ref()
-        .ok_or("Clean environment probe lost its request directory")?;
-    let expected = worker_environment(&context.environment, probe_temp)?;
-    if actual != expected {
-        return Err("Worker environment did not exactly match the allowlist".into());
+    let clean_validation = (|| {
+        if !clean.success {
+            return Err("clean environment probe failed".to_string());
+        }
+        let actual: BTreeMap<String, String> = serde_json::from_slice(trim_ascii(&clean.stdout))
+            .map_err(|_| "Clean environment probe returned malformed JSON".to_string())?;
+        let probe_temp = clean
+            .request_temp
+            .as_ref()
+            .ok_or("Clean environment probe lost its request directory")?;
+        let expected = worker_environment(&context.environment, probe_temp)?;
+        if actual != expected {
+            return Err("Worker environment did not exactly match the allowlist".into());
+        }
+        if context
+            .parent_secret_names
+            .iter()
+            .any(|name| actual.contains_key(name))
+        {
+            return Err("A parent credential reached the worker environment".into());
+        }
+        Ok(())
+    })();
+    match (clean_validation, clean.cleanup()) {
+        (Ok(()), Ok(())) => {}
+        (Err(error), Ok(())) => return Err(error),
+        (Ok(()), Err(cleanup)) => return Err(cleanup),
+        (Err(error), Err(cleanup)) => return Err(format!("{error}; {cleanup}")),
     }
-    if context
-        .parent_environment
-        .keys()
-        .any(|name| actual.contains_key(name))
-    {
-        return Err("A parent credential reached the worker environment".into());
-    }
-    clean.cleanup()?;
 
     for (name, script) in [
         (
@@ -848,27 +1046,131 @@ async fn qualify_macos_inner(context: &QualificationContext) -> Result<(), Strin
         denied_probe(context, script, name).await?;
     }
 
-    let write_target = context
-        .project_sentinel
-        .parent()
-        .ok_or("Project sentinel has no parent")?
-        .join(format!("nuclei-write-probe-{}", uuid::Uuid::new_v4()));
     denied_probe(
         context,
-        &format!("open({write_target:?},'w').write('escaped')"),
+        &format!("open({:?},'w').write('escaped')", baseline.write_target),
         "write outside request temp",
     )
     .await?;
-    if write_target.exists() {
+    if baseline.write_target.exists() {
         return Err("Write-outside-temp probe unexpectedly created a file".into());
     }
 
-    symlink_probe(context).await?;
-    same_interpreter_exec_probe(context).await?;
+    symlink_probe(context, &baseline.project_sentinel).await?;
+    same_interpreter_exec_probe(context, &baseline.project_sentinel).await?;
     stdout_flood_probe(context).await?;
     rlimit_probe(context).await?;
     cirq_probe(context).await?;
     Ok(())
+    }
+    .await;
+    let cleanup = baseline.cleanup();
+    match (qualification, cleanup) {
+        (Ok(()), Ok(())) => Ok(()),
+        (Err(error), Ok(())) => Err(error),
+        (Ok(()), Err(cleanup)) => Err(cleanup),
+        (Err(error), Err(cleanup)) => Err(format!("{error}; {cleanup}")),
+    }
+}
+
+#[cfg(target_os = "macos")]
+struct ParentBaseline {
+    project_sentinel: PathBuf,
+    home_sentinel: PathBuf,
+    write_target: PathBuf,
+}
+
+#[cfg(target_os = "macos")]
+impl ParentBaseline {
+    fn create(context: &QualificationContext) -> Result<Self, String> {
+        use std::io::Write;
+
+        let nonce = uuid::Uuid::new_v4();
+        let baseline = Self {
+            project_sentinel: context
+                .project_root
+                .join(format!(".nuclei-seatbelt-read-{nonce}")),
+            home_sentinel: context
+                .home_root
+                .join(format!(".nuclei-seatbelt-read-{nonce}")),
+            write_target: context
+                .project_root
+                .join(format!(".nuclei-seatbelt-write-{nonce}")),
+        };
+        let evidence = format!("nuclei-parent-baseline-{nonce}");
+        for path in [&baseline.project_sentinel, &baseline.home_sentinel] {
+            let mut file = fs::OpenOptions::new()
+                .write(true)
+                .create_new(true)
+                .open(path)
+                .map_err(|error| format!("Trusted parent could not create sentinel: {error}"))?;
+            file.write_all(evidence.as_bytes())
+                .map_err(|error| format!("Trusted parent could not write sentinel: {error}"))?;
+            if fs::read_to_string(path)
+                .map_err(|error| format!("Trusted parent could not read sentinel: {error}"))?
+                != evidence
+            {
+                return Err("Trusted parent sentinel evidence was inconsistent".into());
+            }
+        }
+        let mut target = fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&baseline.write_target)
+            .map_err(|error| {
+                format!("Trusted parent could not create outside-write target: {error}")
+            })?;
+        target.write_all(evidence.as_bytes()).map_err(|error| {
+            format!("Trusted parent could not write outside-write target: {error}")
+        })?;
+        drop(target);
+        if fs::read_to_string(&baseline.write_target).map_err(|error| {
+            format!("Trusted parent could not read outside-write target: {error}")
+        })? != evidence
+        {
+            return Err("Trusted parent outside-write evidence was inconsistent".into());
+        }
+        fs::remove_file(&baseline.write_target).map_err(|error| {
+            format!("Trusted parent could not remove outside-write target: {error}")
+        })?;
+        Ok(baseline)
+    }
+
+    fn cleanup(mut self) -> Result<(), String> {
+        let mut failure = None;
+        for path in [
+            &self.project_sentinel,
+            &self.home_sentinel,
+            &self.write_target,
+        ] {
+            if path.exists() {
+                if let Err(error) = fs::remove_file(path) {
+                    failure.get_or_insert_with(|| {
+                        format!("Trusted parent qualification cleanup failed: {error}")
+                    });
+                }
+            }
+        }
+        self.project_sentinel.clear();
+        self.home_sentinel.clear();
+        self.write_target.clear();
+        failure.map_or(Ok(()), Err)
+    }
+}
+
+#[cfg(target_os = "macos")]
+impl Drop for ParentBaseline {
+    fn drop(&mut self) {
+        for path in [
+            &self.project_sentinel,
+            &self.home_sentinel,
+            &self.write_target,
+        ] {
+            if !path.as_os_str().is_empty() {
+                let _ = fs::remove_file(path);
+            }
+        }
+    }
 }
 
 #[cfg(target_os = "macos")]
@@ -878,6 +1180,16 @@ struct ProbeResult {
     stdout: Vec<u8>,
     stderr: Vec<u8>,
     request_temp: Option<PathBuf>,
+}
+
+#[cfg(target_os = "macos")]
+fn probe_error_with_cleanup(path: &Path, error: impl Into<String>) -> String {
+    let error = error.into();
+    match fs::remove_dir_all(path) {
+        Ok(()) if !path.exists() => error,
+        Ok(()) => format!("{error}; qualification cleanup left a request directory"),
+        Err(cleanup) => format!("{error}; qualification cleanup failed: {cleanup}"),
+    }
 }
 
 #[cfg(target_os = "macos")]
@@ -900,6 +1212,14 @@ impl Drop for ProbeResult {
         if let Some(path) = self.request_temp.take() {
             let _ = fs::remove_dir_all(path);
         }
+    }
+}
+
+#[cfg(target_os = "macos")]
+fn probe_failure(result: ProbeResult, reason: String) -> String {
+    match result.cleanup() {
+        Ok(()) => reason,
+        Err(cleanup) => format!("{reason}; {cleanup}"),
     }
 }
 
@@ -928,10 +1248,7 @@ async fn run_probe_with_limit(
         .map_err(|error| format!("Qualification request temp is unavailable: {error}"))?;
     let spec = match MacBackend::probe_spec(context, &request_temp, body) {
         Ok(spec) => spec,
-        Err(error) => {
-            let _ = fs::remove_dir_all(&request_temp);
-            return Err(error);
-        }
+        Err(error) => return Err(probe_error_with_cleanup(&request_temp, error)),
     };
     let mut command = unix_command(&spec);
     command
@@ -940,8 +1257,10 @@ async fn run_probe_with_limit(
         .stderr(Stdio::piped())
         .kill_on_drop(true);
     let mut child = command.spawn().map_err(|error| {
-        let _ = fs::remove_dir_all(&request_temp);
-        format!("Qualification probe could not start: {error}")
+        probe_error_with_cleanup(
+            &request_temp,
+            format!("Qualification probe could not start: {error}"),
+        )
     })?;
     let stdout = child.stdout.take().ok_or("Probe stdout was not piped")?;
     let stderr = child.stderr.take().ok_or("Probe stderr was not piped")?;
@@ -965,14 +1284,19 @@ async fn run_probe_with_limit(
         Ok(Ok(status)) => status,
         Ok(Err(error)) => {
             let _ = child.start_kill();
-            let _ = fs::remove_dir_all(&request_temp);
-            return Err(format!("Qualification probe wait failed: {error}"));
+            let _ = child.wait().await;
+            return Err(probe_error_with_cleanup(
+                &request_temp,
+                format!("Qualification probe wait failed: {error}"),
+            ));
         }
         Err(_) => {
             let _ = child.start_kill();
             let _ = child.wait().await;
-            let _ = fs::remove_dir_all(&request_temp);
-            return Err("Qualification probe exceeded its deadline".into());
+            return Err(probe_error_with_cleanup(
+                &request_temp,
+                "Qualification probe exceeded its deadline",
+            ));
         }
     };
     use std::os::unix::process::ExitStatusExt;
@@ -1011,16 +1335,19 @@ async fn denied_probe(
         .is_some_and(|errno| matches!(errno, libc::EACCES | libc::EPERM));
     if !result.success || !denied_errno || output.contains("UNEXPECTED_SUCCESS") {
         let diagnostic = String::from_utf8_lossy(&result.stderr).into_owned();
-        let _ = result.cleanup();
-        return Err(format!(
-            "{description} was not denied for a sandbox permission reason: {diagnostic}"
+        return Err(probe_failure(
+            result,
+            format!("{description} was not denied for a sandbox permission reason: {diagnostic}"),
         ));
     }
     result.cleanup()
 }
 
 #[cfg(target_os = "macos")]
-async fn symlink_probe(context: &QualificationContext) -> Result<(), String> {
+async fn symlink_probe(
+    context: &QualificationContext,
+    outside_sentinel: &Path,
+) -> Result<(), String> {
     use std::os::unix::fs::symlink;
 
     let request_temp = context
@@ -1032,8 +1359,7 @@ async fn symlink_probe(context: &QualificationContext) -> Result<(), String> {
         .canonicalize()
         .map_err(|error| format!("Symlink probe temp is unavailable: {error}"))?;
     let escape = request_temp.join("escape");
-    let outside = context
-        .project_sentinel
+    let outside = outside_sentinel
         .parent()
         .ok_or("Project sentinel has no parent")?;
     symlink(outside, &escape)
@@ -1049,8 +1375,10 @@ async fn symlink_probe(context: &QualificationContext) -> Result<(), String> {
         .and_then(|value| value.trim().parse::<i32>().ok())
         .is_some_and(|errno| matches!(errno, libc::EACCES | libc::EPERM));
     if !result.success || !denied || target.exists() {
-        let _ = result.cleanup();
-        return Err("Symlink escape was not denied by Seatbelt".into());
+        return Err(probe_failure(
+            result,
+            "Symlink escape was not denied by Seatbelt".into(),
+        ));
     }
     result.cleanup()
 }
@@ -1065,14 +1393,27 @@ async fn run_existing_probe(
 
     let spec = MacBackend::probe_spec(context, request_temp, body)?;
     let mut command = unix_command(&spec);
-    command.stdin(Stdio::null());
-    let output = tokio::time::timeout(PROBE_TIMEOUT, command.output())
-        .await
-        .map_err(|_| "Qualification probe exceeded its deadline")?
-        .map_err(|error| format!("Qualification probe failed to run: {error}"))?;
+    command.stdin(Stdio::null()).kill_on_drop(true);
+    let output = match tokio::time::timeout(PROBE_TIMEOUT, command.output()).await {
+        Ok(Ok(output)) => output,
+        Ok(Err(error)) => {
+            return Err(probe_error_with_cleanup(
+                request_temp,
+                format!("Qualification probe failed to run: {error}"),
+            ))
+        }
+        Err(_) => {
+            return Err(probe_error_with_cleanup(
+                request_temp,
+                "Qualification probe exceeded its deadline",
+            ))
+        }
+    };
     if output.stdout.len() > PROBE_OUTPUT_LIMIT || output.stderr.len() > PROBE_OUTPUT_LIMIT {
-        let _ = fs::remove_dir_all(request_temp);
-        return Err("Qualification probe output exceeded its cap".into());
+        return Err(probe_error_with_cleanup(
+            request_temp,
+            "Qualification probe output exceeded its cap",
+        ));
     }
     Ok(ProbeResult {
         success: output.status.success(),
@@ -1087,10 +1428,13 @@ async fn run_existing_probe(
 }
 
 #[cfg(target_os = "macos")]
-async fn same_interpreter_exec_probe(context: &QualificationContext) -> Result<(), String> {
+async fn same_interpreter_exec_probe(
+    context: &QualificationContext,
+    project_sentinel: &Path,
+) -> Result<(), String> {
     let child = format!(
         "import errno\ntry:\n open({:?}).read()\nexcept OSError as error:\n print('SAME_EXEC_DENIED',error.errno)\n raise SystemExit(0)\nprint('UNEXPECTED_SUCCESS')",
-        context.project_sentinel
+        project_sentinel
     );
     let script = format!(
         "import os,sys;os.execve(sys.executable,[sys.executable,'-I','-c',{child:?}],dict(os.environ))"
@@ -1102,30 +1446,53 @@ async fn same_interpreter_exec_probe(context: &QualificationContext) -> Result<(
         .and_then(|value| value.trim().parse::<i32>().ok())
         .is_some_and(|errno| matches!(errno, libc::EACCES | libc::EPERM));
     if !result.success || !denied {
-        let _ = result.cleanup();
-        return Err(
+        return Err(probe_failure(
+            result,
             "Same-interpreter exec did not remain inside the qualified Seatbelt policy".into(),
-        );
+        ));
     }
     result.cleanup()
 }
 
 #[cfg(target_os = "macos")]
 async fn stdout_flood_probe(context: &QualificationContext) -> Result<(), String> {
-    let result = run_probe_with_limit(
+    let request_temp = context
+        .request_temp_root
+        .join(format!("qualification-{}", uuid::Uuid::new_v4()));
+    fs::create_dir(&request_temp)
+        .map_err(|error| format!("Failed to create stdout probe temp: {error}"))?;
+    let request_temp = request_temp
+        .canonicalize()
+        .map_err(|error| format!("Stdout probe temp is unavailable: {error}"))?;
+    let spec = MacBackend::probe_spec(
         context,
+        &request_temp,
         "import os\nwhile True: os.write(1,b'x'*8192)",
-        1_024,
-        Duration::from_secs(1),
     )
-    .await;
-    match result {
-        Ok(result) if !result.success && result.stdout.len() > 1_024 => result.cleanup(),
-        Ok(result) => {
-            let _ = result.cleanup();
-            Err("Stdout flood probe did not reach the authoritative byte cap".into())
-        }
-        Err(error) => Err(error),
+    .map_err(|error| probe_error_with_cleanup(&request_temp, error))?;
+    let request = WorkerRequestV1 {
+        protocol_version: 1,
+        request_id: format!("qualification_stdout_{}", uuid::Uuid::new_v4()),
+        action: Action::Parse,
+        framework: Framework::Cirq,
+        language: "python".into(),
+        code: String::new(),
+        shots: None,
+    };
+    let error = match Supervisor::new(SupervisorLimits::production())
+        .run(&request, spec, b"")
+        .await
+    {
+        Ok(_) => return Err("Stdout flood unexpectedly produced a worker response".into()),
+        Err(error) => error,
+    };
+    if error.code == "response_too_large" && !request_temp.exists() {
+        Ok(())
+    } else {
+        Err(format!(
+            "Stdout flood did not traverse the production capped reader: {}",
+            error.message
+        ))
     }
 }
 
@@ -1136,10 +1503,17 @@ async fn rlimit_probe(context: &QualificationContext) -> Result<(), String> {
         &resource_limit_probe_script(ResourceLimits::production()),
     )
     .await?;
-    require_success(&result, "memory/fd rlimit probe")?;
+    if !result.success {
+        return Err(probe_failure(
+            result,
+            "memory/fd rlimit probe failed".into(),
+        ));
+    }
     if trim_ascii(&result.stdout) != b"PARENT_RLIMITS_OK" {
-        let _ = result.cleanup();
-        return Err("Parent rlimit probe returned malformed evidence".into());
+        return Err(probe_failure(
+            result,
+            "Parent rlimit probe returned malformed evidence".into(),
+        ));
     }
     result.cleanup()?;
 
@@ -1151,17 +1525,16 @@ async fn rlimit_probe(context: &QualificationContext) -> Result<(), String> {
     )
     .await?;
     if cpu.success || !matches!(cpu.signal, Some(libc::SIGXCPU) | Some(libc::SIGKILL)) {
-        let _ = cpu.cleanup();
-        return Err("CPU rlimit probe did not terminate for the expected signal".into());
+        return Err(probe_failure(
+            cpu,
+            "CPU rlimit probe did not terminate for the expected signal".into(),
+        ));
     }
     cpu.cleanup()
 }
 
 #[cfg(target_os = "macos")]
 async fn cirq_probe(context: &QualificationContext) -> Result<(), String> {
-    use std::process::Stdio;
-    use tokio::io::AsyncWriteExt;
-
     let request_temp = context
         .request_temp_root
         .join(format!("qualification-{}", uuid::Uuid::new_v4()));
@@ -1170,67 +1543,25 @@ async fn cirq_probe(context: &QualificationContext) -> Result<(), String> {
     let request_temp = request_temp
         .canonicalize()
         .map_err(|error| format!("Cirq probe temp is unavailable: {error}"))?;
-    let spec = MacBackend::worker_spec(context, &request_temp)?;
-    let mut request = serde_json::to_vec(&serde_json::json!({
-        "protocol_version": 1,
-        "request_id": "qualification_cirq",
-        "action": "parse",
-        "framework": "cirq",
-        "language": "python",
-        "code": cirq_rlimit_probe_source(ResourceLimits::production())
-    }))
-    .map_err(|_| "Cirq probe request could not be encoded")?;
-    request.push(b'\n');
-    let mut command = unix_command(&spec);
-    let mut child = command
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .kill_on_drop(true)
-        .spawn()
-        .map_err(|error| format!("Cirq probe could not start: {error}"))?;
-    child
-        .stdin
-        .as_mut()
-        .ok_or("Cirq probe stdin was unavailable")?
-        .write_all(&request)
+    let spec = MacBackend::worker_spec(context, &request_temp)
+        .map_err(|error| probe_error_with_cleanup(&request_temp, error))?;
+    let request = WorkerRequestV1 {
+        protocol_version: 1,
+        request_id: "qualification_cirq".into(),
+        action: Action::Parse,
+        framework: Framework::Cirq,
+        language: "python".into(),
+        code: cirq_rlimit_probe_source(ResourceLimits::production()),
+        shots: None,
+    };
+    let mut input =
+        serde_json::to_vec(&request).map_err(|_| "Cirq probe request could not be encoded")?;
+    input.push(b'\n');
+    Supervisor::new(SupervisorLimits::production())
+        .run(&request, spec, &input)
         .await
-        .map_err(|error| format!("Cirq probe request failed: {error}"))?;
-    drop(child.stdin.take());
-    let output = tokio::time::timeout(PROBE_TIMEOUT, child.wait_with_output())
-        .await
-        .map_err(|_| "Cirq probe exceeded its deadline")?
-        .map_err(|error| format!("Cirq probe wait failed: {error}"))?;
-    if output.stdout.len() > PROBE_OUTPUT_LIMIT || output.stderr.len() > PROBE_OUTPUT_LIMIT {
-        let _ = fs::remove_dir_all(&request_temp);
-        return Err("Cirq probe output exceeded its cap".into());
-    }
-    if !output.status.success() {
-        let _ = fs::remove_dir_all(&request_temp);
-        return Err("Cirq parse probe failed".into());
-    }
-    let response: serde_json::Value = serde_json::from_slice(trim_ascii(&output.stdout))
-        .map_err(|_| "Cirq parse probe returned malformed JSON")?;
-    let valid = response.get("protocol_version") == Some(&serde_json::json!(1))
-        && response.get("request_id") == Some(&serde_json::json!("qualification_cirq"))
-        && response.get("status") == Some(&serde_json::json!("ok"))
-        && response
-            .pointer("/snapshot/framework")
-            .is_some_and(|framework| framework == "cirq");
-    if !valid {
-        let _ = fs::remove_dir_all(&request_temp);
-        return Err("Cirq parse probe returned invalid evidence".into());
-    }
-    fs::remove_dir_all(&request_temp).map_err(|error| format!("Cirq probe cleanup failed: {error}"))
-}
-
-#[cfg(target_os = "macos")]
-fn require_success(result: &ProbeResult, description: &str) -> Result<(), String> {
-    if result.success {
-        Ok(())
-    } else {
-        Err(format!("{description} exited unsuccessfully"))
-    }
+        .map_err(|error| format!("Cirq parse probe failed: {}", error.message))?;
+    Ok(())
 }
 
 #[cfg(target_os = "macos")]

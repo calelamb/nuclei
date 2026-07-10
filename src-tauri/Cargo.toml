@@ -38,10 +38,6 @@ fs2 = "0.4.3"
 [target."cfg(unix)".dependencies]
 libc = "0.2.186"
 
-[target."cfg(target_os = \"macos\")".dependencies]
-# security-framework 3.7 requires Rust 1.85; keep macOS compatible with rust-version 1.77.2.
-security-framework = "=3.6.0"
-
 [target."cfg(windows)".dependencies]
 # zip 4.3+ requires Rust 1.82; keep the updater compatible with rust-version 1.77.2.
 zip = { version = "=4.2.0", default-features = false }

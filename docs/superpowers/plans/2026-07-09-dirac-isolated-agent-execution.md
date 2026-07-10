@@ -1147,15 +1147,18 @@ pub struct QualificationContext {
     pub resources: ResourcePaths,
     pub environment: AgentEnvironment,
     pub request_temp_root: PathBuf,
-    pub project_sentinel: PathBuf,
-    pub home_sentinel: PathBuf,
-    pub parent_environment: BTreeMap<String, String>,
+    pub runtime_lock: PathBuf,
+    pub project_root: PathBuf,
+    pub home_root: PathBuf,
+    pub parent_secret_names: BTreeSet<String>,
     pub system_paths: SystemPaths,
 }
 pub fn build_seatbelt_profile(
     context: &QualificationContext, request_temp: &Path,
 ) -> Result<String, String>;
-pub fn qualification_cache_key(context: &QualificationContext) -> Result<String, String>;
+pub async fn qualification_cache_key_async(
+    context: QualificationContext,
+) -> Result<String, String>;
 pub async fn qualify_current_host_with_context(
     mode: QualificationMode, context: QualificationContext,
 ) -> CapabilityReport;
@@ -1179,6 +1182,19 @@ kernel tree and complete canonical `AgentEnvironment.root` (interpreter,
 stdlib, native libraries, and site-packages), and sandbox-exec. Symlinks,
 nonregular entries, traversal overflow, byte overflow, and a changing tree fail
 closed.
+Hashing runs cooperatively in `spawn_blocking`, checks cancellation and a
+10-second deadline during traversal and every 64 KiB read, and is limited to
+50,000 entries and 2 GiB. Qualification and every launch hash while holding the
+runtime generation's shared app-owned lock; updates require its exclusive lock.
+The generation is content-addressed and versioned. Tree entries must be owned by
+the current uid and cannot be group/world writable. A pre-launch mismatch or
+cleanup failure revokes only the matching installed generation.
+
+The threat model does not claim protection from malicious local same-user
+tampering: that user can replace the application binaries and bypass these
+checks. The lock, permissions, and repeated hash prevent the generated,
+sandboxed worker from mutating its runtime and prevent normal application
+updates from racing launches.
 The no-context host entry point and application command require explicit macOS
 qualification paths; they never derive cwd/home implicitly. Linux remains
 unavailable until Task 6.
@@ -1200,7 +1216,14 @@ launching sandbox-exec. Python applies the same limits again as defense in
 depth. A separate provisioning contract remains unavailable until bundled
 offline wheels and containment are hash-verified and self-tested.
 
-`qualify_macos` creates random sentinel files in the project and real home, injects fake `ANTHROPIC_API_KEY`, `IBM_QUANTUM_TOKEN`, and `AWS_SECRET_ACCESS_KEY` into the parent, then runs fresh workers containing these exact attacks:
+`qualify_macos` receives canonical project and home roots. A trusted-parent RAII
+baseline creates and reads random sentinels, creates/reads/deletes an
+outside-write target, then runs the sandbox attacks. Host DAC failures fail
+qualification rather than count as Seatbelt evidence. The macOS test serializes
+environment mutation, injects fake `ANTHROPIC_API_KEY`, `IBM_QUANTUM_TOKEN`,
+and `AWS_SECRET_ACCESS_KEY`, and proves `env_clear` omits their names; production
+stores names only and never secret values. Every probe owns RAII child and
+request-directory guards, and cleanup failures fail qualification.
 
 ```python
 open(PROJECT_SENTINEL).read()
@@ -1218,15 +1241,19 @@ authoritative output caps, parent-enforced CPU/AS/FSIZE/NOFILE/NPROC/CORE
 evidence, and a valid Cirq parse whose worker source confirms the inherited
 limits after Python's defense-in-depth application. Every harness starts from
 `MacBackend::probe_spec`, which derives from the production worker spec and uses
-the same command/pre-exec path. Any unexpected success, missing fixture,
+the same command/pre-exec path. The stdout flood runs through the production
+`Supervisor` capped-reader/overflow path rather than a duplicate harness. Any
+unexpected success, missing fixture,
 missing sandbox-exec/runtime/framework, malformed evidence, profile error,
 identity mismatch, or cleanup failure returns unavailable with no frameworks or
 controls. The nonignored `RequireAvailable` macOS test requires explicit CI
 fixture environment variables and asserts the exact Cirq-only report.
 `.github/workflows/build.yml` uses `setup-uv` and
 `UV_PYTHON_INSTALL_DIR` to place a managed standalone Python and copied venv
-under one `$RUNNER_TEMP/nuclei-agent-runtime` root, materializes symlinks, and
-installs exactly `kernel/agent-requirements.txt`. Before Rust starts, the fixture
+under one content-addressed `$RUNNER_TEMP/nuclei-agent-runtime` generation,
+materializes symlinks, and syncs the committed universal
+`kernel/agent-requirements.lock` with hash verification. GitHub actions use
+commit SHAs and Python is pinned to 3.12.11. Before Rust starts, the fixture
 asserts canonical `sys.base_prefix`, stdlib, executable, and site-packages paths
 all remain under that common environment root. It then exports every explicit
 fixture path and runs this test with Rust 1.77.2 on `macos-latest`. This online
