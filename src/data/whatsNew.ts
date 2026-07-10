@@ -23,34 +23,29 @@ export interface WhatsNewEntry {
 }
 
 export const WHATS_NEW: WhatsNewEntry = {
-  version: '0.5.2',
-  title: 'Dirac goes agentic',
-  tagline: 'Dirac can now write, simulate, verify, and repair quantum programs — and reason about real hardware.',
+  version: '0.5.3',
+  title: 'Dirac reaches the hardware',
+  tagline: 'Dirac can now run circuits on quantum backends, on a native Rust core, with your API key kept in the system keychain.',
   highlights: [
     {
-      icon: 'dirac',
-      title: 'Closed-loop coding',
-      text: 'Give Dirac a goal and it writes a circuit, simulates it, checks the result, and fixes its own mistakes.',
+      icon: 'hardware',
+      title: 'Agentic hardware runs',
+      text: 'Dirac can submit circuits and monitor results — the free simulator now, real hardware once you enable it.',
     },
     {
-      icon: 'circuit',
-      title: 'Algorithm-aware verification',
-      text: 'Dirac recognizes Bell, GHZ, and superposition circuits and checks them against their known-correct results.',
+      icon: 'dirac',
+      title: 'A native Rust agent core',
+      text: "Dirac's agent now runs on a native Rust runtime, with a tamper-proof budget and policy engine.",
     },
     {
       icon: 'editor',
-      title: 'Isolated, safe execution',
-      text: 'Code Dirac runs executes in a disposable sandbox, walled off from your files and credentials.',
+      title: 'Your API key, in the keychain',
+      text: 'Your Anthropic key now lives in the operating-system keychain instead of the browser.',
     },
     {
       icon: 'hardware',
-      title: 'Real transpilation previews',
-      text: "See a circuit's true depth and gate cost on a target backend before you ever submit.",
-    },
-    {
-      icon: 'hardware',
-      title: 'Explainable backend picks',
-      text: 'Dirac recommends a compatible quantum backend and shows exactly why.',
+      title: 'Off by default, on your terms',
+      text: 'Autonomous paid-hardware submission stays off until you switch it on, with hard spend limits.',
     },
   ],
 };
