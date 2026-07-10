@@ -49,3 +49,8 @@ seccompiler = "0.5.0"
 
 [dev-dependencies]
 tempfile = "3.23.0"
+
+# Identity qualification hashes the full locked Python generation twice.
+# Optimize Nuclei's test code without rebuilding every dependency optimized.
+[profile.test.package.nuclei]
+opt-level = 2

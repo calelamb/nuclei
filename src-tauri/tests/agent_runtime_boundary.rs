@@ -203,6 +203,9 @@ fn linux_seccomp_filter_is_nonempty_and_architecture_checked() {
 #[test]
 fn production_identity_budget_covers_cold_locked_fixture_hashing() {
     assert!(production_identity_timeout_for_test() >= Duration::from_secs(120));
+    let manifest = include_str!("../Cargo.toml");
+    assert!(manifest.contains("[profile.test.package.nuclei]"));
+    assert!(manifest.contains("opt-level = 2"));
 }
 
 #[cfg(target_os = "linux")]
@@ -317,7 +320,6 @@ fn linux_ci_caches_every_artifact_before_hostile_parent_environment() {
     assert!(before.contains("uv pip sync"));
     assert!(before.contains("libwebkit2gtk-4.1-dev"));
     assert!(before.contains("libayatana-appindicator3-dev"));
-    assert!(linux_job.contains("RUSTFLAGS: -C opt-level=2"));
     assert!(before.contains("cargo fetch --locked --target x86_64-unknown-linux-gnu"));
     assert!(before.contains("cargo test --locked --no-run"));
     assert!(after.contains("cargo test --locked --offline"));
