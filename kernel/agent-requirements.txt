@@ -1,0 +1,5 @@
+numpy>=1.26,<3
+qiskit>=1.2,<2
+qiskit-aer>=0.15,<1
+cirq-core>=1.4,<2
+qdk>=1.29,<2

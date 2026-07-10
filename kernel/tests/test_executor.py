@@ -1,7 +1,13 @@
+from pathlib import Path
+import subprocess
+import sys
 from types import SimpleNamespace
 
 from kernel.executor import AdapterSpec, Executor
 from kernel.models import CircuitSnapshot, Gate, KernelError, SimulationResult
+
+
+ROOT = Path(__file__).resolve().parents[2]
 
 
 class StubAdapter:
@@ -44,6 +50,54 @@ def test_executor_initializes_without_importing_adapters(monkeypatch):
     Executor()
 
     assert imported_modules == []
+
+
+def test_executor_import_does_not_require_unix_resource_module():
+    script = """\
+import builtins
+real_import = builtins.__import__
+def guarded_import(name, *args, **kwargs):
+    if name == "resource":
+        raise ModuleNotFoundError("resource is unavailable")
+    return real_import(name, *args, **kwargs)
+builtins.__import__ = guarded_import
+import kernel.executor
+"""
+
+    completed = subprocess.run(
+        [sys.executable, "-c", script],
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert completed.returncode == 0, completed.stderr
+
+
+def test_resolve_framework_selects_adapter_without_executing_source(tmp_path):
+    marker = tmp_path / "executed"
+    code = (
+        f"from pathlib import Path\nPath({str(marker)!r}).write_text('ran')\n"
+        "from qiskit import QuantumCircuit\n"
+    )
+
+    framework = Executor().resolve_framework(code, language="python")
+
+    assert framework == "qiskit"
+    assert not marker.exists()
+
+
+def test_resolve_framework_is_lexical_selection_not_import_confinement():
+    code = (
+        "# import qiskit\n"
+        "import importlib\n"
+        "cirq = importlib.import_module('cirq')\n"
+    )
+
+    framework = Executor().resolve_framework(code, language="python")
+
+    assert framework == "qiskit"
 
 
 def test_parse_returns_missing_dependency_when_adapter_module_unavailable(monkeypatch):
@@ -99,6 +153,19 @@ def test_run_python_separates_stderr_from_stdout():
     # Ensure the two streams didn't cross-contaminate each other.
     assert "stderr here" not in stdout
     assert "stdout here" not in stderr
+
+
+def test_optional_capture_limit_does_not_change_default_executor():
+    bounded = Executor(capture_limit_bytes=16)
+
+    stdout, stderr, error = bounded.run_python(
+        "import sys\nprint('x' * 100)\nprint('y' * 100, file=sys.stderr)"
+    )
+
+    assert error is None
+    assert len(stdout.encode("utf-8")) <= 16
+    assert len(stderr.encode("utf-8")) <= 16
+    assert Executor().run_python("print('complete')")[0] == "complete\n"
 
 
 def test_parse_returns_empty_snapshot_for_valid_code_without_circuit(monkeypatch):

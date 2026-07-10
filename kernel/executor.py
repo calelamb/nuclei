@@ -90,8 +90,17 @@ def _missing_dependency_message(framework: str, dependency: str) -> str:
 
 
 class Executor:
-    def __init__(self):
+    def __init__(self, capture_limit_bytes: int | None = None):
         self._namespace: dict = {}
+        self._capture_limit_bytes = capture_limit_bytes
+
+    def _new_capture(self) -> io.TextIOBase:
+        if self._capture_limit_bytes is None:
+            return io.StringIO()
+
+        from kernel.agent_limits import BoundedTextCapture
+
+        return BoundedTextCapture(self._capture_limit_bytes)
 
     def _reset_namespace(self) -> None:
         self._namespace = {"__builtins__": __builtins__}
@@ -124,6 +133,16 @@ class Executor:
                 None,
             )
         return self._detect_adapter_spec(code)
+
+    def resolve_framework(self, code: str, *, language: str | None = None) -> str | None:
+        """Select an adapter without importing or executing generated source.
+
+        Selection uses the language hint and lexical patterns. It is a routing
+        correctness check, not package confinement: comments and dynamic
+        imports can intentionally differ from the selected adapter.
+        """
+        spec = self._resolve_spec(code, language)
+        return spec.framework if spec is not None else None
 
     def _load_adapter(self, spec: AdapterSpec):
         try:
@@ -198,8 +217,8 @@ class Executor:
         import signal
         import threading
 
-        stdout_capture = io.StringIO()
-        stderr_capture = io.StringIO()
+        stdout_capture = self._new_capture()
+        stderr_capture = self._new_capture()
 
         self._reset_namespace()
 
