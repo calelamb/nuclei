@@ -1,6 +1,5 @@
 import io
 import resource
-import sys
 from dataclasses import dataclass
 
 
@@ -56,16 +55,19 @@ class BoundedTextCapture(io.TextIOBase):
 def apply_worker_limits(limits: WorkerLimits) -> None:
     """Apply best-effort resource limits to the current (worker) process.
 
-    Limits are applied independently: a platform that rejects one limit must not
-    prevent the others from taking effect. In particular, modern macOS (Darwin)
-    returns EINVAL for *any* finite ``RLIMIT_AS`` value, so an address-space cap is
-    silently skipped there and containment relies on ``RLIMIT_CPU``/``RLIMIT_FSIZE``
-    plus the import denylist. On Linux the full set applies.
-    """
-    # Darwin rejects a finite RLIMIT_AS with EINVAL; requesting it aborts the
-    # worker before any code runs, so drop it on macOS rather than fail closed.
-    address_space_supported = not sys.platform.startswith("darwin")
+    Limits are applied independently: a platform that rejects one must not
+    prevent the others from taking effect.
 
+    ``RLIMIT_AS`` is intentionally NOT enforced. It caps *virtual* address
+    space, which numpy/BLAS and qiskit's rustworkx routing transpiler
+    over-reserve (several GiB even for a two-qubit circuit), so any finite value
+    is either too tight for legitimate work — surfacing as a MemoryError or, in
+    the Rust routing path, an allocation-abort ``PanicException`` — or too loose
+    to matter. macOS already ran without it (Darwin rejects a finite RLIMIT_AS
+    with EINVAL); dropping it on Linux too keeps both platforms consistent.
+    Worker memory is instead bounded by ``RLIMIT_CPU``, the supervisor's wall
+    timeout, and the worker's short single-request lifetime.
+    """
     limit_plan = [
         (resource.RLIMIT_CPU, limits.cpu_seconds),
         (resource.RLIMIT_FSIZE, limits.file_bytes),
@@ -73,8 +75,6 @@ def apply_worker_limits(limits: WorkerLimits) -> None:
         (resource.RLIMIT_NPROC, limits.processes),
         (resource.RLIMIT_CORE, 0),
     ]
-    if address_space_supported:
-        limit_plan.insert(1, (resource.RLIMIT_AS, limits.address_space_bytes))
 
     for resource_id, limit in limit_plan:
         try:

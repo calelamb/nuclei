@@ -121,36 +121,30 @@ def test_worker_limits_have_production_and_testing_defaults() -> None:
 def test_apply_worker_limits_sets_every_required_rlimit(monkeypatch) -> None:
     # Configuration calls are all a unit test can prove here. Later OS boundary
     # qualification must verify that each limit is enforced by the real worker.
-    # RLIMIT_AS is applied on Linux but skipped on macOS, where a finite value
-    # is rejected with EINVAL (see apply_worker_limits).
+    # RLIMIT_AS is intentionally NOT set (see apply_worker_limits): it breaks the
+    # qiskit/numpy stack's virtual reservations; memory is bounded by CPU + wall.
     calls: list[tuple[int, tuple[int, int]]] = []
     monkeypatch.setattr(resource, "setrlimit", lambda key, value: calls.append((key, value)))
 
     limits = WorkerLimits()
     apply_worker_limits(limits)
 
-    expected = [(resource.RLIMIT_CPU, (limits.cpu_seconds, limits.cpu_seconds))]
-    if not sys.platform.startswith("darwin"):
-        expected.append(
-            (resource.RLIMIT_AS, (limits.address_space_bytes, limits.address_space_bytes))
-        )
-    expected.extend(
-        [
-            (resource.RLIMIT_FSIZE, (limits.file_bytes, limits.file_bytes)),
-            (resource.RLIMIT_NOFILE, (limits.open_files, limits.open_files)),
-            (resource.RLIMIT_NPROC, (limits.processes, limits.processes)),
-            (resource.RLIMIT_CORE, (0, 0)),
-        ]
-    )
-    assert calls == expected
+    assert calls == [
+        (resource.RLIMIT_CPU, (limits.cpu_seconds, limits.cpu_seconds)),
+        (resource.RLIMIT_FSIZE, (limits.file_bytes, limits.file_bytes)),
+        (resource.RLIMIT_NOFILE, (limits.open_files, limits.open_files)),
+        (resource.RLIMIT_NPROC, (limits.processes, limits.processes)),
+        (resource.RLIMIT_CORE, (0, 0)),
+    ]
 
 
-def test_apply_worker_limits_skips_address_space_on_macos(monkeypatch) -> None:
-    # Regression guard for the Darwin EINVAL bug that made the original OS-sandbox
-    # runtime unspawnable on macOS: a finite RLIMIT_AS must never be requested there.
+def test_apply_worker_limits_never_sets_address_space(monkeypatch) -> None:
+    # RLIMIT_AS caps virtual memory, which numpy/BLAS and qiskit's rustworkx
+    # routing over-reserve — a finite value crashes legitimate transpiles
+    # (MemoryError / Rust allocation-abort PanicException). It must never be set,
+    # on any platform.
     calls: list[tuple[int, tuple[int, int]]] = []
     monkeypatch.setattr(resource, "setrlimit", lambda key, value: calls.append((key, value)))
-    monkeypatch.setattr(sys, "platform", "darwin")
 
     apply_worker_limits(WorkerLimits())
 
