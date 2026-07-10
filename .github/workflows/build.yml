@@ -246,11 +246,17 @@ jobs:
       - name: Install Rust 1.77.2
         uses: dtolnay/rust-toolchain@cc21eb1640117f28f1e845649b8aa54ecd04daab # 1.77.2
 
-      - name: Install bubblewrap
+      - name: Install bubblewrap and Linux build dependencies
         run: |
           set -euo pipefail
           sudo apt-get update
-          sudo apt-get install --yes bubblewrap
+          sudo apt-get install --yes \
+            bubblewrap \
+            libayatana-appindicator3-dev \
+            librsvg2-dev \
+            libssl-dev \
+            libwebkit2gtk-4.1-dev \
+            libxdo-dev
           test "$(readlink -f "$(command -v bwrap)")" = /usr/bin/bwrap
 
       - name: Create delegated cgroup v2 subtree
