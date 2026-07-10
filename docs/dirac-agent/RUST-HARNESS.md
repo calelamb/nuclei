@@ -52,6 +52,38 @@ that never asserts an unobserved result and verifies every claim by simulation.
 - **R5 — Frontend rewire.** Run-card observes Rust events; `useDiracAgent` calls Tauri commands; thin the TS orchestrator.
 - **R6 — Packaging + CI hardening.** Bundle the worker, cross-platform build, green pipeline.
 
+## Delivered status (PR #41)
+
+- **R1 Execution supervisor** — DONE. Rust spawns the isolated worker in its own process
+  group with a wall-timeout group-kill; `dirac_execute`. First Rust CI job (fmt/clippy/test, cached).
+- **R2 Secure model gateway** — DONE. Anthropic key in the OS keychain (`keyring`); Messages
+  API from Rust (`reqwest`/rustls); key never reaches the frontend/model. Fully mocked tests.
+- **R3 Trusted-runtime cores** — DONE. policy, budget, workspace (mem + fs with path
+  containment), analysis (resources/validators/comparison/algorithm invariants/planner) ported.
+- **R4 Orchestrator core** — DONE. State machine + multi-turn tool loop + journaling; the
+  zero-submission-under-default-policy safety invariant is test-enforced.
+- **R5a Tauri command + event layer** — DONE. `dirac_start_run`/`dirac_cancel_run` +
+  `dirac://run-event` stream via a testable `drive_run`.
+- **R5b Frontend rewire** — DONE. The desktop agent now runs on the Rust harness; the API
+  key migrated to the keychain; patches stream to the editor; rollback is client-side.
+- **R6 Packaging** — DONE (no change needed): the worker ships in the existing `kernel/`
+  resource bundle and shares the managed venv.
+
+Totals: **126 Rust tests + 506 frontend tests**, all green; `cargo build -D warnings`/clippy/fmt
+clean; frontend tsc/eslint/build clean.
+
+### Deferred (documented follow-ups — the machinery is in place)
+
+- **Real hardware submission transport.** The policy gate + budget ledger are wired, but the
+  `SubmitPort` is stubbed (`UnavailableSubmitPort`) — the Rust agent cannot yet submit even to
+  the free simulator (the TS version could, over the kernel WS). Needs a Rust→kernel hardware
+  transport. Until then the Rust agent is a full closed-loop *coder* (write/simulate/verify/
+  repair/analyze/transpile-preview/plan) but does not submit jobs.
+- **Journal persistence + restart recovery** (runner uses an in-memory journal).
+- **Live end-to-end validation** against a running app + real API key (the model-gateway path
+  is unit-tested with mocks but not yet exercised live).
+- **Retiring the superseded TS orchestrator** (kept, unused on desktop, tests still green).
+
 ## Non-negotiables (carried from the spec)
 
 - The Anthropic key lives in the OS keychain and never reaches the frontend or model context.
