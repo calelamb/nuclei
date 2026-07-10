@@ -20,7 +20,7 @@ use app_lib::agent_runtime::protocol::{
 use app_lib::agent_runtime::resources::SystemCommandRunner;
 use app_lib::agent_runtime::resources::{
     validate_requirements, AgentEnvironment, CommandOutput, CommandRunner, CommandSpec,
-    EnvironmentFilesystem, ResourcePaths, RunnerContainment,
+    EnvironmentFilesystem, ResourcePaths, RunnerContainment, AGENT_KERNEL_FILES,
 };
 #[cfg(unix)]
 use app_lib::agent_runtime::{AgentProcessResolver, CapabilityReport};
@@ -760,9 +760,19 @@ fn dedicated_requirements_are_exact_and_safe() {
 
 fn write_resource_tree(root: &Path) -> PathBuf {
     let kernel = root.join("kernel");
-    fs::create_dir_all(&kernel).unwrap();
-    fs::write(kernel.join("agent_worker.py"), "# worker\n").unwrap();
-    fs::write(kernel.join("agent-requirements.txt"), REQUIREMENTS).unwrap();
+    for relative in AGENT_KERNEL_FILES {
+        let path = kernel.join(relative);
+        fs::create_dir_all(path.parent().unwrap()).unwrap();
+        let contents = if relative == "agent-requirements.txt" {
+            REQUIREMENTS
+        } else if relative == "agent_worker.py" {
+            "# worker\n"
+        } else {
+            "# allowlisted agent kernel file\n"
+        };
+        fs::write(path, contents).unwrap();
+    }
+    fs::write(kernel.join("server.py"), "# must not enter agent runtime\n").unwrap();
     kernel
 }
 
@@ -782,6 +792,32 @@ fn development_and_bundled_resources_are_canonical_and_complete() {
     let expected = write_resource_tree(&resources).canonicalize().unwrap();
     let paths = ResourcePaths::bundled(bundled.path()).unwrap();
     assert_eq!(paths.kernel_root, expected);
+}
+
+#[test]
+fn provisioning_copies_only_agent_kernel_allowlist_into_generation() {
+    let repository = TempDir::new().unwrap();
+    write_resource_tree(repository.path());
+    let source = ResourcePaths::development(repository.path()).unwrap();
+    let app_data = TempDir::new().unwrap();
+    let environment = AgentEnvironment::provision_with_runner(
+        app_data.path(),
+        Path::new("/fixed/python3"),
+        &source,
+        &FakeRunner::default(),
+    )
+    .unwrap();
+
+    let generated = ResourcePaths::generation(&environment).unwrap();
+    assert_eq!(generated.kernel_root, environment.root.join("kernel"));
+    assert_eq!(fs::read_to_string(&generated.worker).unwrap(), "# worker\n");
+    assert!(!generated.kernel_root.join("server.py").exists());
+    fs::write(
+        generated.kernel_root.join("unexpected.py"),
+        "# unexpected\n",
+    )
+    .unwrap();
+    assert!(ResourcePaths::generation(&environment).is_err());
 }
 
 #[cfg(unix)]
@@ -1793,6 +1829,38 @@ fn valid_worker_script(id: &str) -> String {
     })
     .to_string();
     format!("import sys;sys.stdout.write({response:?}+'\\n')")
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn supervisor_holds_runtime_generation_lease_until_worker_reaped() {
+    use fs2::FileExt;
+    use std::fs::OpenOptions;
+
+    let root = TempDir::new().unwrap();
+    let lock_path = root.path().join(".provision.lock");
+    fs::write(&lock_path, "").unwrap();
+    let lease = OpenOptions::new().read(true).open(&lock_path).unwrap();
+    lease.lock_shared().unwrap();
+    let response_script = valid_worker_script("lease-held");
+    let mut spec = python_spec(&format!("import time;time.sleep(0.05);{response_script}"));
+    spec.runtime_guard = Some(Arc::new(lease));
+    let request = agent_request("lease-held");
+    let run = tokio::spawn(async move {
+        Supervisor::new(SupervisorLimits::testing())
+            .run(&request, spec, b"")
+            .await
+    });
+
+    tokio::time::sleep(Duration::from_millis(10)).await;
+    let update = OpenOptions::new()
+        .read(true)
+        .write(true)
+        .open(&lock_path)
+        .unwrap();
+    assert!(update.try_lock_exclusive().is_err());
+    run.await.unwrap().unwrap();
+    update.try_lock_exclusive().unwrap();
 }
 
 #[cfg(unix)]

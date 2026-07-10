@@ -18,6 +18,22 @@ const DENIED_IMPORTS: [&str; 7] = [
     "quantinuum",
     "cudaq",
 ];
+pub const AGENT_KERNEL_FILES: [&str; 14] = [
+    "agent-requirements.lock",
+    "agent-requirements.txt",
+    "agent_limits.py",
+    "agent_protocol.py",
+    "agent_worker.py",
+    "executor.py",
+    "adapters/_math.py",
+    "adapters/base.py",
+    "adapters/cirq_adapter.py",
+    "adapters/qiskit_adapter.py",
+    "adapters/qsharp_adapter.py",
+    "models/__init__.py",
+    "models/errors.py",
+    "models/snapshot.py",
+];
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ResourcePaths {
@@ -33,6 +49,12 @@ impl ResourcePaths {
 
     pub fn bundled(resources: &Path) -> Result<Self, String> {
         Self::from_root(resources.join("agent-runtime").join("kernel"), resources)
+    }
+
+    pub fn generation(environment: &AgentEnvironment) -> Result<Self, String> {
+        let paths = Self::from_root(environment.root.join("kernel"), &environment.root)?;
+        paths.verify_generation_tree()?;
+        Ok(paths)
     }
 
     fn from_root(root: PathBuf, allowed_parent: &Path) -> Result<Self, String> {
@@ -63,6 +85,50 @@ impl ResourcePaths {
             requirements,
         })
     }
+
+    fn verify_generation_tree(&self) -> Result<(), String> {
+        let expected = AGENT_KERNEL_FILES
+            .iter()
+            .map(PathBuf::from)
+            .collect::<std::collections::BTreeSet<_>>();
+        let mut actual = std::collections::BTreeSet::new();
+        collect_regular_relative_paths(&self.kernel_root, &self.kernel_root, &mut actual)?;
+        if actual != expected {
+            return Err("Generated agent kernel does not exactly match the file allowlist".into());
+        }
+        Ok(())
+    }
+}
+
+fn collect_regular_relative_paths(
+    root: &Path,
+    directory: &Path,
+    files: &mut std::collections::BTreeSet<PathBuf>,
+) -> Result<(), String> {
+    for entry in fs::read_dir(directory)
+        .map_err(|error| format!("Generated agent kernel could not be enumerated: {error}"))?
+    {
+        let entry =
+            entry.map_err(|error| format!("Generated agent kernel entry is invalid: {error}"))?;
+        let path = entry.path();
+        let metadata = fs::symlink_metadata(&path)
+            .map_err(|error| format!("Generated agent kernel metadata is unavailable: {error}"))?;
+        if metadata.file_type().is_symlink() {
+            return Err("Generated agent kernel contains a symlink".into());
+        }
+        if metadata.is_dir() {
+            collect_regular_relative_paths(root, &path, files)?;
+        } else if metadata.is_file() {
+            files.insert(
+                path.strip_prefix(root)
+                    .map_err(|_| "Generated agent kernel path escaped its root")?
+                    .to_path_buf(),
+            );
+        } else {
+            return Err("Generated agent kernel contains a non-regular entry".into());
+        }
+    }
+    Ok(())
 }
 
 fn canonical_file(path: &Path, description: &str) -> Result<PathBuf, String> {
@@ -339,13 +405,20 @@ impl AgentEnvironment {
         let requirements_text =
             std::str::from_utf8(&requirements_bytes).map_err(|_| "Requirements are not UTF-8")?;
         validate_requirements(requirements_text)?;
+        let kernel_files = read_allowlisted_kernel(resources, filesystem)?;
 
         let digest = hex::encode(Sha256::digest(&requirements_bytes));
+        let kernel_digest = digest_kernel_files(&kernel_files);
         let marker_matches = filesystem
             .read_to_string(&root.join(".requirements-sha256"))
             .ok()
             .as_deref()
-            == Some(digest.as_str());
+            == Some(digest.as_str())
+            && filesystem
+                .read_to_string(&root.join(".kernel-sha256"))
+                .ok()
+                .as_deref()
+                == Some(kernel_digest.as_str());
 
         if !marker_matches {
             let create = clean_command(
@@ -430,6 +503,18 @@ impl AgentEnvironment {
                     format!("Failed to write agent requirements marker: {error}"),
                 ));
             }
+            if let Err(error) = stage_allowlisted_kernel(filesystem, &staging, &kernel_files) {
+                return Err(cleanup_staging(filesystem, &staging, error));
+            }
+            if let Err(error) =
+                filesystem.write(&staging.join(".kernel-sha256"), kernel_digest.as_bytes())
+            {
+                return Err(cleanup_staging(
+                    filesystem,
+                    &staging,
+                    format!("Failed to write agent kernel marker: {error}"),
+                ));
+            }
             if let Err(error) = probe_environment(&staging, &staging_python, runner) {
                 return Err(cleanup_staging(filesystem, &staging, error));
             }
@@ -479,6 +564,66 @@ impl AgentEnvironment {
         }
         Ok(())
     }
+}
+
+fn read_allowlisted_kernel(
+    resources: &ResourcePaths,
+    filesystem: &dyn EnvironmentFilesystem,
+) -> Result<Vec<(PathBuf, Vec<u8>)>, String> {
+    AGENT_KERNEL_FILES
+        .iter()
+        .map(|relative| {
+            let relative = PathBuf::from(relative);
+            let source = resources.kernel_root.join(&relative);
+            let canonical = canonical_file(&source, "Allowlisted agent kernel file")?;
+            if canonical != source || !canonical.starts_with(&resources.kernel_root) {
+                return Err("Allowlisted agent kernel file is noncanonical or escaped".into());
+            }
+            let metadata = fs::symlink_metadata(&source)
+                .map_err(|error| format!("Allowlisted agent kernel metadata failed: {error}"))?;
+            if !metadata.is_file() || metadata.file_type().is_symlink() {
+                return Err("Allowlisted agent kernel entry is not a regular file".into());
+            }
+            Ok((relative, filesystem.read(&canonical)?))
+        })
+        .collect()
+}
+
+fn digest_kernel_files(files: &[(PathBuf, Vec<u8>)]) -> String {
+    let mut digest = Sha256::new();
+    for (relative, bytes) in files {
+        digest.update((relative.as_os_str().len() as u64).to_le_bytes());
+        digest.update(relative.to_string_lossy().as_bytes());
+        digest.update((bytes.len() as u64).to_le_bytes());
+        digest.update(bytes);
+    }
+    hex::encode(digest.finalize())
+}
+
+fn stage_allowlisted_kernel(
+    filesystem: &dyn EnvironmentFilesystem,
+    staging: &Path,
+    files: &[(PathBuf, Vec<u8>)],
+) -> Result<(), String> {
+    let kernel = staging.join("kernel");
+    filesystem
+        .create_dir_all(&kernel)
+        .map_err(|error| format!("Failed to create generated agent kernel: {error}"))?;
+    for (relative, bytes) in files {
+        let destination = kernel.join(relative);
+        if let Some(parent) = destination.parent() {
+            filesystem
+                .create_dir_all(parent)
+                .map_err(|error| format!("Failed to create agent kernel directory: {error}"))?;
+        }
+        filesystem
+            .write(&destination, bytes)
+            .map_err(|error| format!("Failed to stage allowlisted agent kernel file: {error}"))?;
+        filesystem
+            .set_readonly(&destination)
+            .map_err(|error| format!("Failed to protect generated agent kernel file: {error}"))?;
+    }
+    Ok(())
 }
 
 fn reject_root_escape(

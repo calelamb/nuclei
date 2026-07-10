@@ -1183,9 +1183,9 @@ resolver bound to the new generation/key before atomically installing the
 refreshed backend; it never mutates the backend generation around a stale
 resolver. Resolver launch recomputes a deterministic,
 bounded, double-checked Merkle identity covering app version, complete profile,
-requirements, every regular path/type/content entry in the complete canonical
-kernel tree and complete canonical `AgentEnvironment.root` (interpreter,
-stdlib, native libraries, and site-packages), and sandbox-exec. Symlinks,
+requirements, and every regular path/type/content entry in the complete
+canonical `AgentEnvironment.root` (the allowlisted kernel copy, interpreter,
+stdlib, native libraries, and site-packages), plus sandbox-exec. Symlinks,
 nonregular entries, traversal overflow, byte overflow, and a changing tree fail
 closed.
 Hashing runs cooperatively in `spawn_blocking`, checks cancellation and a
@@ -1195,10 +1195,16 @@ app-owned lock before explicit context validation and the first hash, then holds
 that same lease continuously through all probes, the final equality hash, and
 atomic report/resolver installation. Cached reuse commits under the same lease.
 Every launch also hashes while holding a shared lease; updates require the
-exclusive lock.
-The generation is content-addressed and versioned. Tree entries must be owned by
-the current uid and cannot be group/world writable. A pre-launch mismatch or
-cleanup failure revokes only the matching installed generation.
+exclusive lock. The lease is retained by the production `ProcessSpec` through
+worker termination and reap, so an updater cannot replace either Python or the
+generated kernel while any worker uses that generation.
+The directory is a versioned generation; its computed full-tree Merkle key, not
+its directory name, is the authoritative content identity. Tree entries must be
+owned by the current uid and cannot be group/world writable. A pre-launch
+mismatch or cleanup failure revokes only the matching installed generation.
+The production context accepts only `AgentEnvironment.root/kernel`, populated
+from the fixed agent-kernel file allowlist while the generation is staged. It
+never executes the mutable repository or separately packaged application copy.
 
 The threat model does not claim protection from malicious local same-user
 tampering: that user can replace the application binaries and bypass these
@@ -1210,7 +1216,7 @@ qualification paths; they never derive cwd/home implicitly. Linux remains
 unavailable until Task 6.
 
 `worker_spec` builds a `(deny default)` inline profile allowing read only for
-the dedicated runtime, bundled agent kernel, canonical `/System/Library` and
+the dedicated locked generation (including its kernel copy), canonical `/System/Library` and
 `/usr/lib`, and canonical entropy/null devices; write only under the unique
 request temp; denies `network*` and `process-fork`; and permits exec only for
 the canonical agent Python. The production `SystemPaths` constructor accepts no
@@ -1232,8 +1238,11 @@ outside-write target, then runs the sandbox attacks. Host DAC failures fail
 qualification rather than count as Seatbelt evidence. The macOS test serializes
 environment mutation, injects fake `ANTHROPIC_API_KEY`, `IBM_QUANTUM_TOKEN`,
 and `AWS_SECRET_ACCESS_KEY`, and proves `env_clear` omits their names; production
-stores names only and never secret values. Every probe owns RAII child and
-request-directory guards, and cleanup failures fail qualification.
+stores names only and never secret values. Every probe acquires one checked
+request-directory guard immediately after directory creation. Canonicalization,
+spec/symlink setup, spawn, reader, wait, timeout, and result validation all
+finalize through that guard; explicit cleanup errors fail qualification, while
+`Drop` is best-effort last resort only.
 
 ```python
 open(PROJECT_SENTINEL).read()
@@ -1260,8 +1269,9 @@ controls. The nonignored `RequireAvailable` macOS test requires explicit CI
 fixture environment variables and asserts the exact Cirq-only report.
 `.github/workflows/build.yml` uses `setup-uv`, `uv python install`, `uv venv`
 (without `ensurepip`), and `uv pip sync` to install a managed standalone Python
-and venv under one content-addressed `$RUNNER_TEMP/nuclei-agent-runtime`
-generation. After installation it dereferences the complete common environment
+and venv under one versioned `$RUNNER_TEMP/nuclei-agent-runtime` generation.
+It copies exactly the agent-kernel allowlist into that same generation before
+qualification. After installation it dereferences the complete common environment
 into a sibling staging generation and publishes that tree by rename, then
 recomputes interpreter and site-package paths and rejects every remaining
 symlink. It syncs the committed universal
@@ -1343,7 +1353,7 @@ pub trait LinuxSandboxApi: Sized {
 }
 ```
 
-`discover` requires executable `bwrap`, successful user/mount/PID/network namespace probe, writable delegated cgroup v2 subtree, and seccomp-BPF support. `process_spec` uses `--unshare-all --unshare-net --die-with-parent --new-session --clearenv`, read-only binds only system runtime libraries, agent venv, and bundled agent kernel; tmpfs `/tmp`; synthetic `/home/agent`; no project/home bind. It creates a unique cgroup with `memory.max=1073741824`, `pids.max=4`, and `cpu.max=100000 100000`, moves the child PID into `cgroup.procs`, and removes the cgroup after reaping. Linux provisioning likewise requires a dedicated delegated cgroup plus network namespace/seccomp containment and app-bundled offline wheels before its runner may report `RunnerContainment::Contained`; otherwise capability remains unavailable without invoking pip.
+`discover` requires executable `bwrap`, successful user/mount/PID/network namespace probe, writable delegated cgroup v2 subtree, and seccomp-BPF support. `process_spec` uses `--unshare-all --unshare-net --die-with-parent --new-session --clearenv`, read-only binds only system runtime libraries and the locked versioned generation containing the agent environment and allowlisted kernel copy; tmpfs `/tmp`; synthetic `/home/agent`; no project/home bind. It creates a unique cgroup with `memory.max=1073741824`, `pids.max=4`, and `cpu.max=100000 100000`, moves the child PID into `cgroup.procs`, and removes the cgroup after reaping. Linux provisioning likewise requires a dedicated delegated cgroup plus network namespace/seccomp containment and app-bundled offline wheels before its runner may report `RunnerContainment::Contained`; otherwise capability remains unavailable without invoking pip.
 
 Compile a seccomp filter passed through `bwrap --seccomp FD` that denies socket operations, `fork`, `vfork`, `clone3`, and `clone` unless `CLONE_THREAD` is set. The worker still applies all rlimits before `Executor`. `qualify` executes fresh workers for: `open(PROJECT_SENTINEL).read()`, `open(HOME_SENTINEL).read()`, exact `os.environ` enumeration, IPv4/IPv6/Unix sockets, `subprocess.run(["/usr/bin/id"])`, `os.fork()`, `while True: pass`, `bytearray(2_000_000_000)`, unbounded `print`, 1,000 `open("/dev/null")` calls, cancellation, malformed JSON, and process clone. Failure to provision or verify any primitive returns unavailable with no frameworks.
 
@@ -1484,7 +1494,13 @@ Create `qualification.rs` with `FrameworkEvidence { package: &'static str, commo
 
 After OS controls qualify, run the common boundary matrix against every installed framework package, then run a Bell parse/simulation in a fresh worker for Qiskit and Cirq and a finite `MResetZ` parse/simulation for Q#. Feed all boundary and functional evidence through `evaluate_framework_policy`; never derive package confinement from the worker's lexical adapter selection. Dynamic cross-import among installed packages is acceptable because every installed package has the same boundary evidence. For Q# specifically, launch an infinite-loop operation, require Rust wall timeout plus the qualified platform containment primitive to terminate every descendant, then launch the finite operation in a new worker and require success. Never use QDK's thread watchdog or a process group alone as recovery. CUDA-Q has no enum variant, must not be installed in the dedicated runtime, and cannot qualify.
 
-Map only these worker resources in `tauri.conf.json`: worker, protocol, limits, executor, adapters, models, and agent requirements under `agent-runtime/kernel`. The normal kernel may remain separately packaged for IDE use but is never mounted/read-allowed in the worker sandbox.
+Map only these source resources in `tauri.conf.json`: worker, protocol, limits,
+executor, adapters, models, and agent requirements under
+`agent-runtime/kernel`. Provisioning must copy only that allowlist into the
+versioned runtime generation while holding the exclusive generation lock.
+Qualification and execution resolve only the generated copy. The packaged
+source and normal IDE kernel are never mounted/read-allowed or executed by the
+worker sandbox.
 
 - [ ] **Step 4: Run framework and packaging tests**
 

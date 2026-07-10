@@ -340,6 +340,9 @@ impl Supervisor {
         reservation: RunReservation,
     ) -> Result<WorkerResponseV1, RuntimeError> {
         let mut cleanup = RequestCleanup::new(spec.cleanup_root.clone());
+        // Keep the generation lease explicit in this outer scope through child
+        // termination and checked request-directory cleanup.
+        let _runtime_guard = spec.runtime_guard.clone();
         let result = self.run_unix_inner(request, spec, stdin, reservation).await;
         cleanup.cleanup()?;
         result

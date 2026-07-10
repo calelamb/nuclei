@@ -1,15 +1,16 @@
 use app_lib::agent_runtime::macos::{
     active_identity_hashers_for_test, build_seatbelt_profile, cirq_rlimit_probe_source,
-    qualification_cache_key, qualification_cache_key_async, qualification_cache_key_with_deadline,
-    resource_limit_probe_script, worker_environment, LockedRuntimeIdentity, MacBackend,
-    OfflineProvisioningContainment, QualificationContext, SystemPaths,
+    probe_request_guard_failure_for_test, qualification_cache_key, qualification_cache_key_async,
+    qualification_cache_key_with_deadline, resource_limit_probe_script, worker_environment,
+    LockedRuntimeIdentity, MacBackend, OfflineProvisioningContainment, QualificationContext,
+    SystemPaths,
 };
 use app_lib::agent_runtime::process::{ProcessSpec, ResourceLimits};
 #[cfg(any(target_os = "linux", target_os = "macos"))]
 use app_lib::agent_runtime::qualify_current_host_with_context;
 use app_lib::agent_runtime::resources::RunnerContainment;
 use app_lib::agent_runtime::resources::{
-    validate_requirements_lock, AgentEnvironment, ResourcePaths,
+    validate_requirements_lock, AgentEnvironment, ResourcePaths, AGENT_KERNEL_FILES,
 };
 use app_lib::agent_runtime::{qualify_current_host, QualificationMode};
 #[cfg(target_os = "macos")]
@@ -26,6 +27,7 @@ const REQUIREMENTS_LOCK: &str = include_str!("../../kernel/agent-requirements.lo
 
 struct Fixture {
     _root: TempDir,
+    source_kernel: PathBuf,
     context: QualificationContext,
 }
 
@@ -37,15 +39,19 @@ fn fixture() -> Fixture {
     let root = TempDir::new().unwrap();
     let repository = root.path().join("repo \"quoted\"");
     let kernel = repository.join("kernel");
-    fs::create_dir_all(&kernel).unwrap();
-    fs::write(kernel.join("agent_worker.py"), "# fixed worker\n").unwrap();
-    fs::write(kernel.join("agent-requirements.txt"), REQUIREMENTS).unwrap();
-    fs::create_dir_all(kernel.join("adapters")).unwrap();
-    fs::write(kernel.join("adapters/cirq_adapter.py"), "# fixed adapter\n").unwrap();
-    fs::write(kernel.join("executor.py"), "# fixed executor\n").unwrap();
-    let resources = ResourcePaths::development(&repository).unwrap();
+    for relative in AGENT_KERNEL_FILES {
+        let path = kernel.join(relative);
+        fs::create_dir_all(path.parent().unwrap()).unwrap();
+        let contents = if relative == "agent-requirements.txt" {
+            REQUIREMENTS
+        } else {
+            "# fixed agent kernel file\n"
+        };
+        fs::write(path, contents).unwrap();
+    }
+    let source_kernel = canonical(&kernel);
 
-    let runtime = root.path().join("generations/sha256-fixture");
+    let runtime = root.path().join("generations \"quoted\"/generation-v1");
     fs::create_dir_all(runtime.parent().unwrap()).unwrap();
     fs::write(runtime.parent().unwrap().join(".provision.lock"), "").unwrap();
     let python = runtime.join("bin/python3");
@@ -67,6 +73,12 @@ fn fixture() -> Fixture {
         python: canonical(&python),
         site_packages: canonical(&site_packages),
     };
+    for relative in AGENT_KERNEL_FILES {
+        let destination = environment.root.join("kernel").join(relative);
+        fs::create_dir_all(destination.parent().unwrap()).unwrap();
+        fs::copy(source_kernel.join(relative), destination).unwrap();
+    }
+    let resources = ResourcePaths::generation(&environment).unwrap();
 
     let request_temp_root = root.path().join("requests");
     let project = root.path().join("project");
@@ -114,6 +126,7 @@ fn fixture() -> Fixture {
     .unwrap();
     Fixture {
         _root: root,
+        source_kernel,
         context,
     }
 }
@@ -174,7 +187,7 @@ fn profile_is_deny_by_default_and_escapes_every_path_literal() {
     for denial in ["(deny network*)", "(deny process-fork)"] {
         assert!(profile.contains(denial), "{denial}");
     }
-    assert!(profile.contains(r#"repo \"quoted\""#));
+    assert!(profile.contains(r#"generations \"quoted\""#));
     assert!(profile.contains(r#"request\\one"#));
     assert!(!profile.contains("(allow network"));
     assert!(!profile.contains("(allow process-fork"));
@@ -182,10 +195,14 @@ fn profile_is_deny_by_default_and_escapes_every_path_literal() {
     assert!(!profile.contains(r#"(subpath "/Applications")"#));
     assert!(!profile.contains(r#"(literal "/bin/sh")"#));
     assert!(!profile.contains(r#"(literal "/usr/bin/env")"#));
-    assert!(profile.contains(&format!(
-        r#"(literal "{}")"#,
-        fixture.context.environment.python.display()
-    )));
+    let escaped_python = fixture
+        .context
+        .environment
+        .python
+        .to_string_lossy()
+        .replace('\\', "\\\\")
+        .replace('"', "\\\"");
+    assert!(profile.contains(&format!(r#"(literal "{escaped_python}")"#)));
 }
 
 #[test]
@@ -331,7 +348,10 @@ async fn locked_identity_blocks_updates_until_commit_and_detects_the_new_generat
         .unwrap();
     let original_key = qualified.cache_key().to_string();
     let lock_path = context.runtime_lock.clone();
-    let changed_file = context.environment.root.join("stdlib/os.py");
+    let changed_file = context
+        .resources
+        .kernel_root
+        .join("adapters/cirq_adapter.py");
     let (acquired_tx, mut acquired_rx) = tokio::sync::oneshot::channel();
     let update = tokio::task::spawn_blocking(move || {
         let lock = OpenOptions::new()
@@ -393,6 +413,65 @@ fn qualification_context_accepts_canonical_roots_without_precreated_evidence() {
         0
     );
     assert_eq!(fs::read_dir(&fixture.context.home_root).unwrap().count(), 0);
+}
+
+#[test]
+fn qualified_kernel_is_the_generation_copy_not_mutable_source() {
+    let fixture = fixture();
+    assert_eq!(
+        fixture.context.resources.kernel_root,
+        fixture.context.environment.root.join("kernel")
+    );
+    let original = qualification_cache_key(&fixture.context).unwrap();
+    fs::write(
+        fixture.source_kernel.join("adapters/cirq_adapter.py"),
+        "# changed mutable source\n",
+    )
+    .unwrap();
+    assert_eq!(original, qualification_cache_key(&fixture.context).unwrap());
+}
+
+#[test]
+fn qualification_rejects_kernel_source_outside_locked_generation() {
+    let fixture = fixture();
+    let source_repository = fixture.source_kernel.parent().unwrap();
+    let source = ResourcePaths::development(source_repository).unwrap();
+    let context = &fixture.context;
+    assert!(QualificationContext::new(
+        context.app_version.clone(),
+        source,
+        context.environment.clone(),
+        &context.request_temp_root,
+        &context.project_root,
+        &context.home_root,
+        context.parent_secret_names.clone(),
+        context.system_paths.clone(),
+    )
+    .is_err());
+}
+
+#[test]
+fn every_pre_result_probe_failure_checks_request_directory_cleanup() {
+    for stage in [
+        "canonicalize",
+        "spec",
+        "symlink",
+        "spawn",
+        "wait",
+        "stdout-reader",
+        "stderr-reader",
+        "timeout",
+    ] {
+        let root = TempDir::new().unwrap();
+        let error = probe_request_guard_failure_for_test(root.path(), stage, false).unwrap_err();
+        assert!(error.contains(stage));
+        assert_eq!(fs::read_dir(root.path()).unwrap().count(), 0, "{stage}");
+    }
+
+    let root = TempDir::new().unwrap();
+    let error = probe_request_guard_failure_for_test(root.path(), "spec", true).unwrap_err();
+    assert!(error.contains("qualification cleanup failed"));
+    assert_eq!(fs::read_dir(root.path()).unwrap().count(), 0);
 }
 
 #[cfg(unix)]

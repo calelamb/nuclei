@@ -113,9 +113,8 @@ jobs:
         run: |
           set -euo pipefail
           runtime_root="$RUNNER_TEMP/nuclei-agent-runtime"
-          generation_id="$(shasum -a 256 kernel/agent-requirements.lock | awk '{print $1}')"
           generation_parent="$runtime_root/generations"
-          environment_root="$generation_parent/sha256-$generation_id"
+          environment_root="$generation_parent/generation-v1"
           managed_root="$environment_root/managed"
           venv_root="$environment_root/venv"
           request_root="$RUNNER_TEMP/nuclei-agent-requests"
@@ -129,17 +128,44 @@ jobs:
           test "$managed_python_relative" != "$managed_python"
           uv venv --python "$managed_python" "$venv_root"
           uv pip sync --python "$venv_root/bin/python" --require-hashes kernel/agent-requirements.lock
+          managed_bin="$(dirname "$managed_python")"
+          managed_libpython=("$managed_bin"/../lib/libpython3.12.*)
+          test -e "${managed_libpython[0]}"
+          cp "${managed_libpython[@]}" "$venv_root/lib/"
+
+          kernel_root="$environment_root/kernel"
+          agent_kernel_files=(
+            agent-requirements.lock
+            agent-requirements.txt
+            agent_limits.py
+            agent_protocol.py
+            agent_worker.py
+            executor.py
+            adapters/_math.py
+            adapters/base.py
+            adapters/cirq_adapter.py
+            adapters/qiskit_adapter.py
+            adapters/qsharp_adapter.py
+            models/__init__.py
+            models/errors.py
+            models/snapshot.py
+          )
+          for relative in "${agent_kernel_files[@]}"; do
+            mkdir -p "$kernel_root/$(dirname "$relative")"
+            cp "kernel/$relative" "$kernel_root/$relative"
+          done
 
           # uv's managed Python and venv may contain links. Dereference the
           # complete installed generation only after package installation, then
           # publish it with one rename from a sibling staging path.
-          materialized_root="$generation_parent/.sha256-$generation_id-materialized"
+          materialized_root="$generation_parent/.generation-v1-materialized"
           rm -rf "$materialized_root"
           cp -R -L "$environment_root" "$materialized_root"
           rm -rf "$environment_root"
           mv "$materialized_root" "$environment_root"
           managed_python="$environment_root/$managed_python_relative"
           venv_root="$environment_root/venv"
+          kernel_root="$environment_root/kernel"
           test -x "$managed_python"
           test -x "$venv_root/bin/python"
 
@@ -163,17 +189,32 @@ jobs:
               "stdlib": Path(sysconfig.get_path("stdlib")),
               "executable": Path(sys.executable),
               "site_packages": Path(os.environ["NUCLEI_AGENT_SITE_PACKAGES"]),
+            "kernel_root": root / "kernel",
           }
           for name, path in paths.items():
               canonical = path.resolve(strict=True)
               assert path == canonical, f"{name} is not canonical: {path} -> {canonical}"
               canonical.relative_to(root)
+          expected_kernel = {
+              "agent-requirements.lock", "agent-requirements.txt",
+              "agent_limits.py", "agent_protocol.py", "agent_worker.py", "executor.py",
+              "adapters/_math.py", "adapters/base.py", "adapters/cirq_adapter.py",
+              "adapters/qiskit_adapter.py", "adapters/qsharp_adapter.py",
+              "models/__init__.py",
+              "models/errors.py", "models/snapshot.py",
+          }
+          actual_kernel = {
+              str(path.relative_to(root / "kernel"))
+              for path in (root / "kernel").rglob("*")
+              if path.is_file()
+          }
+          assert actual_kernel == expected_kernel
           for path in root.rglob("*"):
               assert not path.is_symlink(), f"runtime contains symlink: {path}"
           PY
 
           {
-            echo "NUCLEI_AGENT_KERNEL_ROOT=$GITHUB_WORKSPACE/kernel"
+            echo "NUCLEI_AGENT_KERNEL_ROOT=$kernel_root"
             echo "NUCLEI_AGENT_ENVIRONMENT_ROOT=$environment_root"
             echo "NUCLEI_AGENT_PYTHON=$venv_root/bin/python"
             echo "NUCLEI_AGENT_SITE_PACKAGES=$site_packages"

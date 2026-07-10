@@ -181,16 +181,14 @@ impl QualificationContext {
         require_canonical(&resources.worker, "Agent worker", false)?;
         require_canonical(&resources.requirements, "Agent requirements", false)?;
         require_canonical(&environment.root, "Agent environment root", true)?;
-        if !environment
-            .root
-            .file_name()
-            .and_then(|name| name.to_str())
-            .is_some_and(|name| name.starts_with("sha256-") && name.len() > "sha256-".len())
-        {
-            return Err("Agent environment must be a content-addressed runtime generation".into());
-        }
         require_canonical(&environment.python, "Agent Python", false)?;
         require_canonical(&environment.site_packages, "Agent site-packages", true)?;
+        if resources != ResourcePaths::generation(&environment)? {
+            return Err(
+                "Agent kernel must be the allowlisted copy inside the locked runtime generation"
+                    .into(),
+            );
+        }
         let request_temp_root =
             require_canonical(request_temp_root, "Agent request temp root", true)?;
         let runtime_lock = require_canonical(
@@ -251,22 +249,11 @@ impl QualificationContext {
                 .map(PathBuf::from)
                 .ok_or_else(|| format!("{name} is required for explicit macOS qualification"))
         };
-        let kernel_root = require_canonical(
+        let supplied_kernel_root = require_canonical(
             &required("NUCLEI_AGENT_KERNEL_ROOT")?,
             "Agent kernel root",
             true,
         )?;
-        let resources = ResourcePaths {
-            worker: kernel_root
-                .join("agent_worker.py")
-                .canonicalize()
-                .map_err(|error| format!("Explicit agent worker is unavailable: {error}"))?,
-            requirements: kernel_root
-                .join("agent-requirements.txt")
-                .canonicalize()
-                .map_err(|error| format!("Explicit agent requirements are unavailable: {error}"))?,
-            kernel_root,
-        };
         let environment_root = require_canonical(
             &required("NUCLEI_AGENT_ENVIRONMENT_ROOT")?,
             "Agent environment root",
@@ -281,6 +268,10 @@ impl QualificationContext {
             )?,
             root: environment_root,
         };
+        let resources = ResourcePaths::generation(&environment)?;
+        if resources.kernel_root != supplied_kernel_root {
+            return Err("Explicit agent kernel is not the locked generation copy".into());
+        }
         let parent_secret_names = [
             "ANTHROPIC_API_KEY",
             "IBM_QUANTUM_TOKEN",
@@ -1070,6 +1061,7 @@ async fn qualify_macos_inner(
         let probe_temp = clean
             .request_temp
             .as_ref()
+            .map(ProbeRequestDirectory::path)
             .ok_or("Clean environment probe lost its request directory")?;
         let expected = worker_environment(&context.environment, probe_temp)?;
         if actual != expected {
@@ -1250,39 +1242,95 @@ struct ProbeResult {
     signal: Option<i32>,
     stdout: Vec<u8>,
     stderr: Vec<u8>,
-    request_temp: Option<PathBuf>,
+    request_temp: Option<ProbeRequestDirectory>,
 }
 
-#[cfg(target_os = "macos")]
-fn probe_error_with_cleanup(path: &Path, error: impl Into<String>) -> String {
-    let error = error.into();
-    match fs::remove_dir_all(path) {
-        Ok(()) if !path.exists() => error,
-        Ok(()) => format!("{error}; qualification cleanup left a request directory"),
-        Err(cleanup) => format!("{error}; qualification cleanup failed: {cleanup}"),
+struct ProbeRequestDirectory {
+    path: Option<PathBuf>,
+    inject_cleanup_failure: bool,
+}
+
+impl ProbeRequestDirectory {
+    fn create(root: &Path, description: &str) -> Result<Self, String> {
+        let path = root.join(format!("qualification-{}", uuid::Uuid::new_v4()));
+        fs::create_dir(&path)
+            .map_err(|error| format!("Failed to create {description} temp: {error}"))?;
+        // Ownership starts immediately after create_dir succeeds. No fallible
+        // probe setup is allowed before this guard exists.
+        let mut guard = Self {
+            path: Some(path),
+            inject_cleanup_failure: false,
+        };
+        match guard.path().canonicalize() {
+            Ok(canonical) => {
+                guard.path = Some(canonical);
+                Ok(guard)
+            }
+            Err(error) => {
+                guard.finalize(Err(format!("{description} temp is unavailable: {error}")))
+            }
+        }
     }
+
+    fn path(&self) -> &Path {
+        self.path
+            .as_deref()
+            .expect("probe request directory was already finalized")
+    }
+
+    fn finalize<T>(mut self, result: Result<T, String>) -> Result<T, String> {
+        let path = self
+            .path
+            .take()
+            .ok_or("Qualification request directory was already finalized")?;
+        let cleanup = match fs::remove_dir_all(&path) {
+            Ok(()) if !path.exists() => Ok(()),
+            Ok(()) => Err("qualification cleanup left a request directory".to_string()),
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
+            Err(error) => Err(format!("qualification cleanup failed: {error}")),
+        }
+        .and_then(|()| {
+            if self.inject_cleanup_failure {
+                Err("qualification cleanup failed: injected failure".into())
+            } else {
+                Ok(())
+            }
+        });
+        match (result, cleanup) {
+            (Ok(value), Ok(())) => Ok(value),
+            (Err(error), Ok(())) => Err(error),
+            (Ok(_), Err(cleanup)) => Err(cleanup),
+            (Err(error), Err(cleanup)) => Err(format!("{error}; {cleanup}")),
+        }
+    }
+}
+
+impl Drop for ProbeRequestDirectory {
+    fn drop(&mut self) {
+        if let Some(path) = self.path.take() {
+            let _ = fs::remove_dir_all(path);
+        }
+    }
+}
+
+#[doc(hidden)]
+pub fn probe_request_guard_failure_for_test(
+    root: &Path,
+    stage: &str,
+    cleanup_failure: bool,
+) -> Result<(), String> {
+    let mut guard = ProbeRequestDirectory::create(root, "qualification request")?;
+    guard.inject_cleanup_failure = cleanup_failure;
+    guard.finalize(Err(format!("injected {stage} failure")))
 }
 
 #[cfg(target_os = "macos")]
 impl ProbeResult {
     fn cleanup(mut self) -> Result<(), String> {
-        if let Some(path) = self.request_temp.take() {
-            fs::remove_dir_all(&path)
-                .map_err(|error| format!("Qualification cleanup failed: {error}"))?;
-            if path.exists() {
-                return Err("Qualification cleanup left a request directory".into());
-            }
+        if let Some(request_temp) = self.request_temp.take() {
+            request_temp.finalize(Ok(()))?;
         }
         Ok(())
-    }
-}
-
-#[cfg(target_os = "macos")]
-impl Drop for ProbeResult {
-    fn drop(&mut self) {
-        if let Some(path) = self.request_temp.take() {
-            let _ = fs::remove_dir_all(path);
-        }
     }
 }
 
@@ -1309,84 +1357,77 @@ async fn run_probe_with_limit(
     use std::process::Stdio;
     use tokio::io::AsyncReadExt;
 
-    let request_temp = context
-        .request_temp_root
-        .join(format!("qualification-{}", uuid::Uuid::new_v4()));
-    fs::create_dir(&request_temp)
-        .map_err(|error| format!("Failed to create qualification request temp: {error}"))?;
-    let request_temp = request_temp
-        .canonicalize()
-        .map_err(|error| format!("Qualification request temp is unavailable: {error}"))?;
-    let spec = match MacBackend::probe_spec(context, &request_temp, body) {
-        Ok(spec) => spec,
-        Err(error) => return Err(probe_error_with_cleanup(&request_temp, error)),
-    };
-    let mut command = unix_command(&spec);
-    command
-        .stdin(Stdio::null())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .kill_on_drop(true);
-    let mut child = command.spawn().map_err(|error| {
-        probe_error_with_cleanup(
-            &request_temp,
-            format!("Qualification probe could not start: {error}"),
-        )
-    })?;
-    let stdout = child.stdout.take().ok_or("Probe stdout was not piped")?;
-    let stderr = child.stderr.take().ok_or("Probe stderr was not piped")?;
-    let read_stdout = tokio::spawn(async move {
-        let mut bytes = Vec::new();
-        stdout
-            .take((output_limit + 1) as u64)
-            .read_to_end(&mut bytes)
+    let request_temp =
+        ProbeRequestDirectory::create(&context.request_temp_root, "qualification request")?;
+    let outcome = async {
+        let spec = MacBackend::probe_spec(context, request_temp.path(), body)?;
+        let mut command = unix_command(&spec);
+        command
+            .stdin(Stdio::null())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .kill_on_drop(true);
+        let mut child = command
+            .spawn()
+            .map_err(|error| format!("Qualification probe could not start: {error}"))?;
+        let stdout = child.stdout.take().ok_or("Probe stdout was not piped")?;
+        let stderr = child.stderr.take().ok_or("Probe stderr was not piped")?;
+        let read_stdout = tokio::spawn(async move {
+            let mut bytes = Vec::new();
+            stdout
+                .take((output_limit + 1) as u64)
+                .read_to_end(&mut bytes)
+                .await
+                .map(|_| bytes)
+        });
+        let read_stderr = tokio::spawn(async move {
+            let mut bytes = Vec::new();
+            stderr
+                .take((PROBE_OUTPUT_LIMIT + 1) as u64)
+                .read_to_end(&mut bytes)
+                .await
+                .map(|_| bytes)
+        });
+        let status = match tokio::time::timeout(timeout, child.wait()).await {
+            Ok(Ok(status)) => status,
+            Ok(Err(error)) => {
+                let kill = child.start_kill();
+                let reap = child.wait().await;
+                return Err(format!(
+                    "Qualification probe wait failed: {error}; kill={kill:?}; reap={reap:?}"
+                ));
+            }
+            Err(_) => {
+                let kill = child.start_kill();
+                let reap = child.wait().await;
+                return Err(format!(
+                    "Qualification probe exceeded its deadline; kill={kill:?}; reap={reap:?}"
+                ));
+            }
+        };
+        use std::os::unix::process::ExitStatusExt;
+        let signal = status.signal();
+        let stdout = read_stdout
             .await
-            .map(|_| bytes)
-    });
-    let read_stderr = tokio::spawn(async move {
-        let mut bytes = Vec::new();
-        stderr
-            .take((PROBE_OUTPUT_LIMIT + 1) as u64)
-            .read_to_end(&mut bytes)
+            .map_err(|_| "Qualification stdout reader failed")?
+            .map_err(|_| "Qualification stdout could not be read")?;
+        let stderr = read_stderr
             .await
-            .map(|_| bytes)
-    });
-    let status = match tokio::time::timeout(timeout, child.wait()).await {
-        Ok(Ok(status)) => status,
-        Ok(Err(error)) => {
-            let _ = child.start_kill();
-            let _ = child.wait().await;
-            return Err(probe_error_with_cleanup(
-                &request_temp,
-                format!("Qualification probe wait failed: {error}"),
-            ));
-        }
-        Err(_) => {
-            let _ = child.start_kill();
-            let _ = child.wait().await;
-            return Err(probe_error_with_cleanup(
-                &request_temp,
-                "Qualification probe exceeded its deadline",
-            ));
-        }
-    };
-    use std::os::unix::process::ExitStatusExt;
-    let signal = status.signal();
-    let stdout = read_stdout
-        .await
-        .map_err(|_| "Qualification stdout reader failed")?
-        .map_err(|_| "Qualification stdout could not be read")?;
-    let stderr = read_stderr
-        .await
-        .map_err(|_| "Qualification stderr reader failed")?
-        .map_err(|_| "Qualification stderr could not be read")?;
-    Ok(ProbeResult {
-        success: status.success(),
-        signal,
-        stdout,
-        stderr,
-        request_temp: Some(request_temp),
-    })
+            .map_err(|_| "Qualification stderr reader failed")?
+            .map_err(|_| "Qualification stderr could not be read")?;
+        Ok((status.success(), signal, stdout, stderr))
+    }
+    .await;
+    match outcome {
+        Ok((success, signal, stdout, stderr)) => Ok(ProbeResult {
+            success,
+            signal,
+            stdout,
+            stderr,
+            request_temp: Some(request_temp),
+        }),
+        Err(error) => request_temp.finalize(Err(error)),
+    }
 }
 
 #[cfg(target_os = "macos")]
@@ -1421,25 +1462,24 @@ async fn symlink_probe(
 ) -> Result<(), String> {
     use std::os::unix::fs::symlink;
 
-    let request_temp = context
-        .request_temp_root
-        .join(format!("qualification-{}", uuid::Uuid::new_v4()));
-    fs::create_dir(&request_temp)
-        .map_err(|error| format!("Failed to create symlink probe temp: {error}"))?;
-    let request_temp = request_temp
-        .canonicalize()
-        .map_err(|error| format!("Symlink probe temp is unavailable: {error}"))?;
-    let escape = request_temp.join("escape");
-    let outside = outside_sentinel
-        .parent()
-        .ok_or("Project sentinel has no parent")?;
-    symlink(outside, &escape)
-        .map_err(|error| format!("Failed to create escape symlink: {error}"))?;
-    let target = escape.join(format!("escaped-{}", uuid::Uuid::new_v4()));
+    let request_temp = ProbeRequestDirectory::create(&context.request_temp_root, "symlink probe")?;
+    let setup = (|| {
+        let escape = request_temp.path().join("escape");
+        let outside = outside_sentinel
+            .parent()
+            .ok_or("Project sentinel has no parent")?;
+        symlink(outside, &escape)
+            .map_err(|error| format!("Failed to create escape symlink: {error}"))?;
+        Ok(escape.join(format!("escaped-{}", uuid::Uuid::new_v4())))
+    })();
+    let target = match setup {
+        Ok(target) => target,
+        Err(error) => return request_temp.finalize(Err(error)),
+    };
     let script = format!(
         "import errno\ntry:\n open({target:?},'w').write('escaped')\nexcept OSError as error:\n print('DENIED',error.errno)\n raise SystemExit(0)\nprint('UNEXPECTED_SUCCESS')"
     );
-    let result = run_existing_probe(context, &request_temp, &script).await?;
+    let result = run_existing_probe(context, request_temp, &script).await?;
     let output = String::from_utf8_lossy(&result.stdout);
     let denied = output
         .strip_prefix("DENIED ")
@@ -1457,45 +1497,39 @@ async fn symlink_probe(
 #[cfg(target_os = "macos")]
 async fn run_existing_probe(
     context: &QualificationContext,
-    request_temp: &Path,
+    request_temp: ProbeRequestDirectory,
     body: &str,
 ) -> Result<ProbeResult, String> {
     use std::process::Stdio;
 
-    let spec = MacBackend::probe_spec(context, request_temp, body)?;
-    let mut command = unix_command(&spec);
-    command.stdin(Stdio::null()).kill_on_drop(true);
-    let output = match tokio::time::timeout(PROBE_TIMEOUT, command.output()).await {
-        Ok(Ok(output)) => output,
-        Ok(Err(error)) => {
-            return Err(probe_error_with_cleanup(
-                request_temp,
-                format!("Qualification probe failed to run: {error}"),
-            ))
+    let outcome = async {
+        let spec = MacBackend::probe_spec(context, request_temp.path(), body)?;
+        let mut command = unix_command(&spec);
+        command.stdin(Stdio::null()).kill_on_drop(true);
+        let output = match tokio::time::timeout(PROBE_TIMEOUT, command.output()).await {
+            Ok(Ok(output)) => output,
+            Ok(Err(error)) => return Err(format!("Qualification probe failed to run: {error}")),
+            Err(_) => return Err("Qualification probe exceeded its deadline".into()),
+        };
+        if output.stdout.len() > PROBE_OUTPUT_LIMIT || output.stderr.len() > PROBE_OUTPUT_LIMIT {
+            return Err("Qualification probe output exceeded its cap".into());
         }
-        Err(_) => {
-            return Err(probe_error_with_cleanup(
-                request_temp,
-                "Qualification probe exceeded its deadline",
-            ))
-        }
-    };
-    if output.stdout.len() > PROBE_OUTPUT_LIMIT || output.stderr.len() > PROBE_OUTPUT_LIMIT {
-        return Err(probe_error_with_cleanup(
-            request_temp,
-            "Qualification probe output exceeded its cap",
-        ));
+        Ok(output)
     }
-    Ok(ProbeResult {
-        success: output.status.success(),
-        signal: {
-            use std::os::unix::process::ExitStatusExt;
-            output.status.signal()
-        },
-        stdout: output.stdout,
-        stderr: output.stderr,
-        request_temp: Some(request_temp.to_path_buf()),
-    })
+    .await;
+    match outcome {
+        Ok(output) => Ok(ProbeResult {
+            success: output.status.success(),
+            signal: {
+                use std::os::unix::process::ExitStatusExt;
+                output.status.signal()
+            },
+            stdout: output.stdout,
+            stderr: output.stderr,
+            request_temp: Some(request_temp),
+        }),
+        Err(error) => request_temp.finalize(Err(error)),
+    }
 }
 
 #[cfg(target_os = "macos")]
@@ -1527,20 +1561,15 @@ async fn same_interpreter_exec_probe(
 
 #[cfg(target_os = "macos")]
 async fn stdout_flood_probe(context: &QualificationContext) -> Result<(), String> {
-    let request_temp = context
-        .request_temp_root
-        .join(format!("qualification-{}", uuid::Uuid::new_v4()));
-    fs::create_dir(&request_temp)
-        .map_err(|error| format!("Failed to create stdout probe temp: {error}"))?;
-    let request_temp = request_temp
-        .canonicalize()
-        .map_err(|error| format!("Stdout probe temp is unavailable: {error}"))?;
-    let spec = MacBackend::probe_spec(
+    let request_temp = ProbeRequestDirectory::create(&context.request_temp_root, "stdout probe")?;
+    let spec = match MacBackend::probe_spec(
         context,
-        &request_temp,
+        request_temp.path(),
         "import os\nwhile True: os.write(1,b'x'*8192)",
-    )
-    .map_err(|error| probe_error_with_cleanup(&request_temp, error))?;
+    ) {
+        Ok(spec) => spec,
+        Err(error) => return request_temp.finalize(Err(error)),
+    };
     let request = WorkerRequestV1 {
         protocol_version: 1,
         request_id: format!("qualification_stdout_{}", uuid::Uuid::new_v4()),
@@ -1550,21 +1579,18 @@ async fn stdout_flood_probe(context: &QualificationContext) -> Result<(), String
         code: String::new(),
         shots: None,
     };
-    let error = match Supervisor::new(SupervisorLimits::production())
+    let outcome = match Supervisor::new(SupervisorLimits::production())
         .run(&request, spec, b"")
         .await
     {
-        Ok(_) => return Err("Stdout flood unexpectedly produced a worker response".into()),
-        Err(error) => error,
-    };
-    if error.code == "response_too_large" && !request_temp.exists() {
-        Ok(())
-    } else {
-        Err(format!(
+        Ok(_) => Err("Stdout flood unexpectedly produced a worker response".into()),
+        Err(error) if error.code == "response_too_large" => Ok(()),
+        Err(error) => Err(format!(
             "Stdout flood did not traverse the production capped reader: {}",
             error.message
-        ))
-    }
+        )),
+    };
+    request_temp.finalize(outcome)
 }
 
 #[cfg(target_os = "macos")]
@@ -1606,16 +1632,11 @@ async fn rlimit_probe(context: &QualificationContext) -> Result<(), String> {
 
 #[cfg(target_os = "macos")]
 async fn cirq_probe(context: &QualificationContext) -> Result<(), String> {
-    let request_temp = context
-        .request_temp_root
-        .join(format!("qualification-{}", uuid::Uuid::new_v4()));
-    fs::create_dir(&request_temp)
-        .map_err(|error| format!("Failed to create Cirq probe temp: {error}"))?;
-    let request_temp = request_temp
-        .canonicalize()
-        .map_err(|error| format!("Cirq probe temp is unavailable: {error}"))?;
-    let spec = MacBackend::worker_spec(context, &request_temp)
-        .map_err(|error| probe_error_with_cleanup(&request_temp, error))?;
+    let request_temp = ProbeRequestDirectory::create(&context.request_temp_root, "Cirq probe")?;
+    let spec = match MacBackend::worker_spec(context, request_temp.path()) {
+        Ok(spec) => spec,
+        Err(error) => return request_temp.finalize(Err(error)),
+    };
     let request = WorkerRequestV1 {
         protocol_version: 1,
         request_id: "qualification_cirq".into(),
@@ -1625,14 +1646,19 @@ async fn cirq_probe(context: &QualificationContext) -> Result<(), String> {
         code: cirq_rlimit_probe_source(ResourceLimits::production()),
         shots: None,
     };
-    let mut input =
-        serde_json::to_vec(&request).map_err(|_| "Cirq probe request could not be encoded")?;
+    let mut input = match serde_json::to_vec(&request) {
+        Ok(input) => input,
+        Err(_) => {
+            return request_temp.finalize(Err("Cirq probe request could not be encoded".into()))
+        }
+    };
     input.push(b'\n');
-    Supervisor::new(SupervisorLimits::production())
+    let outcome = Supervisor::new(SupervisorLimits::production())
         .run(&request, spec, &input)
         .await
-        .map_err(|error| format!("Cirq parse probe failed: {}", error.message))?;
-    Ok(())
+        .map(|_| ())
+        .map_err(|error| format!("Cirq parse probe failed: {}", error.message));
+    request_temp.finalize(outcome)
 }
 
 #[cfg(target_os = "macos")]
