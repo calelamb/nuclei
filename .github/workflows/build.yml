@@ -355,7 +355,7 @@ jobs:
         working-directory: src-tauri
         run: |
           set -euo pipefail
-          cargo fetch --locked
+          cargo fetch --locked --target x86_64-unknown-linux-gnu
           cargo test --locked --no-run --test agent_runtime_boundary
 
       - name: Require runtime-proven Linux isolation

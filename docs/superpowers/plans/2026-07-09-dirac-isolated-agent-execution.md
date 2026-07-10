@@ -1363,10 +1363,12 @@ tracks the exact random cgroup leaves and request directories it creates and
 checks only those paths; concurrent legitimate requests cannot invalidate a
 refresh.
 
-The Linux CI job completes uv Python/package installation, then caches both
-`cargo fetch --locked` and `cargo test --locked --no-run` before fake secrets,
-proxies, or loader variables are injected. The hostile qualification step runs
-`cargo test --locked --offline`, and no later step can perform network I/O.
+The Linux CI job completes uv Python/package installation, then caches both a
+host-scoped `cargo fetch --locked --target x86_64-unknown-linux-gnu` (so Cargo
+1.77 never parses unused newer-target manifests). It also completes locked
+no-run test compilation before fake secrets, proxies, or loader variables are
+injected. The hostile qualification step runs `cargo test --locked --offline`,
+and no later step can perform network I/O.
 
 The pure-Rust `seccompiler` filter is compiled for the verified host
 architecture, serialized into a sealed memfd, and inherited only by bwrap.
