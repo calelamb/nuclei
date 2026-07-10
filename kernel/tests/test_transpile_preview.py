@@ -51,7 +51,7 @@ def test_transpile_bell_to_basis_gates_returns_real_metrics() -> None:
 
     response = _run(request)
 
-    assert response["status"] == "ok"
+    assert response["status"] == "ok", response.get("error")
     assert response["error"] is None
     result = response["result"]
     assert result is not None
@@ -78,7 +78,7 @@ def test_transpile_with_coupling_map_forces_routing() -> None:
 
     response = _run(request)
 
-    assert response["status"] == "ok"
+    assert response["status"] == "ok", response.get("error")
     result = response["result"]
     assert result is not None
     assert result["coupling_mapped"] is True

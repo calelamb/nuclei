@@ -16,8 +16,15 @@ import sys
 from typing import Any
 
 
+# Pin every numeric/parallel backend to a single thread. Beyond determinism,
+# this keeps the qiskit transpiler's Rust routing (rustworkx/rayon) from
+# spawning a CPU-count-sized thread pool that would trip the worker's
+# RLIMIT_NPROC cap and fail with a thread-creation error on Linux.
 os.environ["OPENBLAS_NUM_THREADS"] = "1"
 os.environ["OMP_NUM_THREADS"] = "1"
+os.environ["MKL_NUM_THREADS"] = "1"
+os.environ["NUMEXPR_NUM_THREADS"] = "1"
+os.environ["RAYON_NUM_THREADS"] = "1"
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from kernel.agent_limits import WorkerLimits, apply_worker_limits
