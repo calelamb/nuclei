@@ -43,6 +43,9 @@ fn fixture() -> Fixture {
     fs::create_dir_all(python.parent().unwrap()).unwrap();
     fs::create_dir_all(&site_packages).unwrap();
     fs::write(&python, b"fixed agent python").unwrap();
+    fs::create_dir_all(runtime.join("stdlib")).unwrap();
+    fs::write(runtime.join("stdlib/os.py"), "# fixed stdlib\n").unwrap();
+    fs::write(runtime.join("libpython.dylib"), b"fixed native library").unwrap();
     fs::create_dir_all(site_packages.join("cirq")).unwrap();
     fs::write(
         site_packages.join("cirq/__init__.py"),
@@ -72,17 +75,16 @@ fn fixture() -> Fixture {
     fs::create_dir_all(&system_library).unwrap();
     fs::create_dir_all(&usr_lib).unwrap();
     fs::create_dir_all(&devices).unwrap();
-    for device in ["null", "random", "urandom"] {
+    for device in ["null", "urandom"] {
         fs::write(devices.join(device), "").unwrap();
     }
     let sandbox_exec = system.join("usr/bin/sandbox-exec");
     fs::create_dir_all(sandbox_exec.parent().unwrap()).unwrap();
     fs::write(&sandbox_exec, "sandbox").unwrap();
-    let system_paths = SystemPaths::new(
+    let system_paths = SystemPaths::for_tests(
         vec![canonical(system_library), canonical(usr_lib)],
         vec![
             canonical(devices.join("null")),
-            canonical(devices.join("random")),
             canonical(devices.join("urandom")),
         ],
         canonical(sandbox_exec),
@@ -336,12 +338,22 @@ fn system_roots_reject_symlink_and_noncanonical_substitutions() {
     let fixture = fixture();
     let alias = fixture.context.request_temp_root.join("system-alias");
     symlink(&fixture.context.system_paths.read_roots[0], &alias).unwrap();
-    assert!(SystemPaths::new(
-        vec![alias],
+    assert!(SystemPaths::for_tests(
+        vec![alias, fixture.context.system_paths.read_roots[1].clone()],
         fixture.context.system_paths.devices.clone(),
         fixture.context.system_paths.sandbox_exec.clone(),
     )
     .is_err());
+    assert!(SystemPaths::for_tests(
+        vec![
+            PathBuf::from("/"),
+            fixture.context.system_paths.read_roots[1].clone(),
+        ],
+        fixture.context.system_paths.devices.clone(),
+        fixture.context.system_paths.sandbox_exec.clone(),
+    )
+    .is_err());
+    assert!(fixture.context.system_paths.verify_production().is_err());
 
     let replaced = fixture.context.system_paths.read_roots[0].clone();
     fs::remove_dir(&replaced).unwrap();
@@ -418,6 +430,26 @@ fn cache_key_covers_every_executable_runtime_input() {
     )
     .unwrap();
     assert_ne!(original, qualification_cache_key(&fixture.context).unwrap());
+    fs::write(&fixture.context.resources.requirements, REQUIREMENTS).unwrap();
+
+    fs::write(
+        fixture.context.environment.root.join("stdlib/os.py"),
+        "# changed stdlib\n",
+    )
+    .unwrap();
+    assert_ne!(original, qualification_cache_key(&fixture.context).unwrap());
+    fs::write(
+        fixture.context.environment.root.join("stdlib/os.py"),
+        "# fixed stdlib\n",
+    )
+    .unwrap();
+
+    fs::write(
+        fixture.context.environment.root.join("libpython.dylib"),
+        b"changed native library",
+    )
+    .unwrap();
+    assert_ne!(original, qualification_cache_key(&fixture.context).unwrap());
 }
 
 #[cfg(unix)]
@@ -435,6 +467,39 @@ fn cache_identity_rejects_symlinks_and_nonregular_tree_entries() {
             .resources
             .kernel_root
             .join("adapters/escape.py"),
+    )
+    .unwrap();
+    assert!(qualification_cache_key(&fixture.context).is_err());
+
+    fs::remove_file(
+        fixture
+            .context
+            .resources
+            .kernel_root
+            .join("adapters/escape.py"),
+    )
+    .unwrap();
+    let fifo = fixture
+        .context
+        .resources
+        .kernel_root
+        .join("adapters/special");
+    let fifo_path = std::ffi::CString::new(fifo.as_os_str().as_encoded_bytes()).unwrap();
+    assert_eq!(unsafe { libc::mkfifo(fifo_path.as_ptr(), 0o600) }, 0);
+    assert!(qualification_cache_key(&fixture.context).is_err());
+}
+
+#[cfg(unix)]
+#[test]
+fn cache_identity_rejects_symlinks_anywhere_in_environment_root() {
+    use std::os::unix::fs::symlink;
+
+    let fixture = fixture();
+    let outside = fixture.context.request_temp_root.join("outside-library");
+    fs::write(&outside, "outside").unwrap();
+    symlink(
+        &outside,
+        fixture.context.environment.root.join("escaped-library"),
     )
     .unwrap();
     assert!(qualification_cache_key(&fixture.context).is_err());

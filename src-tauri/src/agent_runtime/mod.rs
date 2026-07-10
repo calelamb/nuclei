@@ -40,6 +40,10 @@ pub struct AgentRuntimeState {
 }
 
 pub trait AgentProcessResolver: Send + Sync {
+    fn installed_identity(&self) -> Option<(u64, &str)> {
+        None
+    }
+
     fn resolve<'a>(
         &'a self,
         request: &'a WorkerRequestV1,
@@ -68,16 +72,21 @@ struct InstalledBackend {
 
 struct MacContextResolver {
     context: macos::QualificationContext,
-    cache_key: String,
+    installed_generation: u64,
+    installed_key: String,
 }
 
 impl AgentProcessResolver for MacContextResolver {
+    fn installed_identity(&self) -> Option<(u64, &str)> {
+        Some((self.installed_generation, &self.installed_key))
+    }
+
     fn resolve<'a>(
         &'a self,
         _request: &'a WorkerRequestV1,
     ) -> Pin<Box<dyn Future<Output = Result<ProcessSpec, String>> + Send + 'a>> {
         Box::pin(async move {
-            if macos::qualification_cache_key(&self.context)? != self.cache_key {
+            if macos::qualification_cache_key(&self.context)? != self.installed_key {
                 return Err(
                     "Qualified macOS backend identity changed; requalification required".into(),
                 );
@@ -166,6 +175,14 @@ impl AgentRuntimeState {
             };
             let backend_generation = backend.generation;
             let backend_key = backend.cache_key.clone();
+            if let Some((resolver_generation, resolver_key)) = backend.resolver.installed_identity()
+            {
+                if resolver_generation != backend_generation
+                    || Some(resolver_key) != backend_key.as_deref()
+                {
+                    return Err("Installed agent report/resolver identity mismatch".into());
+                }
+            }
             let report = backend.report;
             if !report.available {
                 return Err(report
@@ -316,7 +333,8 @@ impl AgentRuntimeCommands for AgentRuntimeState {
         let resolver: Arc<dyn AgentProcessResolver> = if report.available {
             Arc::new(MacContextResolver {
                 context,
-                cache_key: cache_key.clone(),
+                installed_generation: generation,
+                installed_key: cache_key.clone(),
             })
         } else {
             Arc::new(UnavailableResolver)
@@ -395,13 +413,12 @@ impl AgentRuntimeState {
         failed_key: Option<&str>,
         reason: String,
     ) {
-        let clear_generation = self.begin_refresh();
         let refresh_key = format!(
             "resolver-failure:{failed_generation}:{}",
             failed_key.unwrap_or("unkeyed")
         );
         let mut installed = self.backend.write().await;
-        if self.refresh_generation.load(Ordering::Acquire) != clear_generation
+        if self.refresh_generation.load(Ordering::Acquire) != failed_generation
             || installed.generation != failed_generation
             || installed.cache_key.as_deref() != failed_key
         {
@@ -412,7 +429,7 @@ impl AgentRuntimeState {
             resolver: Arc::new(UnavailableResolver),
             cache_key: None,
             refresh_key,
-            generation: clear_generation,
+            generation: failed_generation,
         };
     }
 }
@@ -642,6 +659,115 @@ mod refresh_tests {
             state.backend.read().await.cache_key.as_deref(),
             Some("mutated-adapter")
         );
+    }
+
+    #[tokio::test]
+    async fn stale_resolver_failure_cannot_clear_while_newer_refresh_is_pending() {
+        let state = AgentRuntimeState::new();
+        let installed = state.begin_refresh();
+        assert!(
+            state
+                .commit_refresh(
+                    installed,
+                    "old-key",
+                    candidate(true, "old-resolver", "old-key", installed),
+                )
+                .await
+        );
+        let newer = state.begin_refresh();
+
+        state
+            .clear_backend_if_current(installed, Some("old-key"), "stale resolver failure".into())
+            .await;
+        {
+            let snapshot = state.backend.read().await.clone();
+            assert!(snapshot.report.available);
+            assert_eq!(snapshot.generation, installed);
+            assert_eq!(
+                snapshot
+                    .resolver
+                    .resolve(&test_request("pending-refresh"))
+                    .await
+                    .unwrap_err(),
+                "old-resolver"
+            );
+        }
+
+        assert!(
+            state
+                .commit_refresh(
+                    newer,
+                    "new-key",
+                    candidate(true, "new-resolver", "new-key", newer),
+                )
+                .await
+        );
+        let snapshot = state.backend.read().await.clone();
+        assert!(snapshot.report.available);
+        assert_eq!(snapshot.generation, newer);
+        assert_eq!(
+            snapshot
+                .resolver
+                .resolve(&test_request("new-success"))
+                .await
+                .unwrap_err(),
+            "new-resolver"
+        );
+    }
+
+    #[tokio::test]
+    async fn stale_resolver_failure_cannot_modify_newer_failure_pair() {
+        let state = AgentRuntimeState::new();
+        let installed = state.begin_refresh();
+        assert!(
+            state
+                .commit_refresh(
+                    installed,
+                    "old-key",
+                    candidate(true, "old-resolver", "old-key", installed),
+                )
+                .await
+        );
+        let newer = state.begin_refresh();
+        assert!(
+            state
+                .commit_refresh(
+                    newer,
+                    "new-failure-key",
+                    candidate(false, "new-refresh-failure", "new-failure-key", newer),
+                )
+                .await
+        );
+
+        state
+            .clear_backend_if_current(installed, Some("old-key"), "stale resolver failure".into())
+            .await;
+
+        let snapshot = state.backend.read().await.clone();
+        assert!(!snapshot.report.available);
+        assert_eq!(snapshot.reason(), Some("new-refresh-failure"));
+        assert_eq!(snapshot.generation, newer);
+        assert_eq!(state.refresh_generation.load(Ordering::Acquire), newer);
+        assert_eq!(
+            snapshot
+                .resolver
+                .resolve(&test_request("new-failure"))
+                .await
+                .unwrap_err(),
+            "new-refresh-failure"
+        );
+    }
+
+    fn test_request(id: &str) -> WorkerRequestV1 {
+        WorkerRequestV1 {
+            protocol_version: 1,
+            request_id: id.into(),
+            action: protocol::Action::Parse,
+            framework: Framework::Cirq,
+            language: "python".into(),
+            code: String::new(),
+            shots: None,
+        }
     }
 
     trait InstalledReason {

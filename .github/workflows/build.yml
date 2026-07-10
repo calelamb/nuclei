@@ -90,3 +90,48 @@ jobs:
       - name: Build docs site (validates internal links)
         run: npm run build
         working-directory: docs-site
+
+  macos-agent-isolation:
+    name: macOS Agent Isolation
+    runs-on: macos-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install Rust 1.77.2
+        uses: dtolnay/rust-toolchain@1.77.2
+
+      # This venv is an ephemeral qualification fixture. It is not the
+      # hash-verified, app-bundled wheelhouse required for offline provisioning.
+      - name: Create macOS qualification fixture
+        shell: bash
+        run: |
+          set -euo pipefail
+          fixture_root="$RUNNER_TEMP/nuclei-agent-qualification"
+          venv_root="$fixture_root/runtime"
+          request_root="$fixture_root/requests"
+          sentinel_root="$fixture_root/sentinels"
+          python -m venv --copies "$venv_root"
+          "$venv_root/bin/python" -m pip install --requirement kernel/agent-requirements.txt
+          site_packages="$("$venv_root/bin/python" -c 'import sysconfig; print(sysconfig.get_paths()["purelib"])')"
+          mkdir -p "$request_root" "$sentinel_root/project" "$sentinel_root/home"
+          printf '%s\n' 'project qualification sentinel' > "$sentinel_root/project/sentinel"
+          printf '%s\n' 'home qualification sentinel' > "$sentinel_root/home/sentinel"
+          {
+            echo "NUCLEI_AGENT_KERNEL_ROOT=$GITHUB_WORKSPACE/kernel"
+            echo "NUCLEI_AGENT_ENVIRONMENT_ROOT=$venv_root"
+            echo "NUCLEI_AGENT_PYTHON=$venv_root/bin/python"
+            echo "NUCLEI_AGENT_SITE_PACKAGES=$site_packages"
+            echo "NUCLEI_AGENT_REQUEST_TEMP_ROOT=$request_root"
+            echo "NUCLEI_AGENT_PROJECT_SENTINEL=$sentinel_root/project/sentinel"
+            echo "NUCLEI_AGENT_HOME_SENTINEL=$sentinel_root/home/sentinel"
+          } >> "$GITHUB_ENV"
+
+      - name: Require runtime-proven macOS isolation
+        run: cargo test --test agent_runtime_boundary macos_required -- --nocapture
+        working-directory: src-tauri

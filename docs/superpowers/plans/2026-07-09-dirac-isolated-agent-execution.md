@@ -1166,11 +1166,16 @@ pub async fn qualify_current_host_with_context(
 single lock. Refresh probes run without that lock. A monotonic generation and
 identity-key conditional commit ensure only the newest attempt can install or
 clear the report/resolver pair; a stale resolver failure can clear only the
-exact generation it executed. Resolver launch recomputes a deterministic,
+exact generation/key it executed and only when no newer refresh is pending or
+committed. Resolver failure never allocates a refresh generation. Each resolver
+carries its installed generation/key, and execution checks that identity
+against the atomically read report. Resolver launch recomputes a deterministic,
 bounded, double-checked Merkle identity covering app version, complete profile,
-requirements, every regular path/type/content entry in the kernel and
-site-packages trees, agent Python, and sandbox-exec. Symlinks, nonregular
-entries, traversal overflow, byte overflow, and a changing tree fail closed.
+requirements, every regular path/type/content entry in the complete canonical
+kernel tree and complete canonical `AgentEnvironment.root` (interpreter,
+stdlib, native libraries, and site-packages), and sandbox-exec. Symlinks,
+nonregular entries, traversal overflow, byte overflow, and a changing tree fail
+closed.
 The no-context host entry point and application command require explicit macOS
 qualification paths; they never derive cwd/home implicitly. Linux remains
 unavailable until Task 6.
@@ -1179,8 +1184,12 @@ unavailable until Task 6.
 the dedicated runtime, bundled agent kernel, canonical `/System/Library` and
 `/usr/lib`, and canonical entropy/null devices; write only under the unique
 request temp; denies `network*` and `process-fork`; and permits exec only for
-the canonical agent Python. Every fixed system path and `/usr/bin/sandbox-exec`
-must exist with its exact canonical identity before profile creation. The spec
+the canonical agent Python. The production `SystemPaths` constructor accepts no
+paths: it canonicalizes exactly `/System/Library`, `/usr/lib`, `/dev/null`,
+`/dev/urandom`, and `/usr/bin/sandbox-exec`, verifies directory/file/character
+device types and raw-to-canonical identity, and rejects substitutions. Injected
+test paths can exercise the pure profile builder but cannot qualify a production
+backend. The spec
 sets cwd, HOME, and TMPDIR inside request temp and carries exact parent-enforced
 CPU, AS, FSIZE, NOFILE, NPROC, and CORE=0 limits. The shared production command
 builder applies every limit with checked `setrlimit` calls in `pre_exec` before
@@ -1211,6 +1220,11 @@ missing sandbox-exec/runtime/framework, malformed evidence, profile error,
 identity mismatch, or cleanup failure returns unavailable with no frameworks or
 controls. The nonignored `RequireAvailable` macOS test requires explicit CI
 fixture environment variables and asserts the exact Cirq-only report.
+`.github/workflows/build.yml` creates an ephemeral copied Python 3.12 venv,
+installs exactly `kernel/agent-requirements.txt`, exports every explicit fixture
+path, and runs this test with Rust 1.77.2 on `macos-latest`. This online CI setup
+is test setup only and does not satisfy the unavailable production offline
+provisioning contract.
 
 - [ ] **Step 4: Run macOS qualification**
 

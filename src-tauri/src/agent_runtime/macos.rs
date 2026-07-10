@@ -43,60 +43,115 @@ pub struct SystemPaths {
     pub read_roots: Vec<PathBuf>,
     pub devices: Vec<PathBuf>,
     pub sandbox_exec: PathBuf,
+    production: bool,
 }
 
 impl SystemPaths {
-    pub fn new(
+    pub fn for_tests(
         read_roots: Vec<PathBuf>,
         devices: Vec<PathBuf>,
         sandbox_exec: PathBuf,
     ) -> Result<Self, String> {
-        if read_roots.len() != 2 || devices.len() != 3 {
+        let paths = Self {
+            read_roots,
+            devices,
+            sandbox_exec,
+            production: false,
+        };
+        paths.verify_shape_and_canonical_types(false)?;
+        Ok(paths)
+    }
+
+    pub fn production() -> Result<Self, String> {
+        let paths = Self {
+            read_roots: vec![PathBuf::from("/System/Library"), PathBuf::from("/usr/lib")],
+            devices: vec![PathBuf::from("/dev/null"), PathBuf::from("/dev/urandom")],
+            sandbox_exec: PathBuf::from(SANDBOX_EXEC),
+            production: true,
+        };
+        paths.verify_shape_and_canonical_types(true)?;
+        Ok(paths)
+    }
+
+    fn verify_shape_and_canonical_types(&self, production: bool) -> Result<(), String> {
+        if self.read_roots.len() != 2 || self.devices.len() != 2 {
             return Err("macOS system path set has an unexpected shape".into());
         }
-        for root in &read_roots {
+        for root in &self.read_roots {
+            if root == Path::new("/") {
+                return Err("Broad macOS system read roots are forbidden".into());
+            }
             require_canonical(root, "macOS system read root", true)?;
         }
-        for device in &devices {
+        for device in &self.devices {
             require_canonical(device, "macOS system device", false)?;
+            if production {
+                require_character_device(device)?;
+            }
         }
-        require_canonical(&sandbox_exec, "sandbox-exec", false)?;
-        let mut identities = read_roots
+        require_canonical(&self.sandbox_exec, "sandbox-exec", false)?;
+        require_regular_file(&self.sandbox_exec, "sandbox-exec")?;
+        let mut identities = self
+            .read_roots
             .iter()
-            .chain(devices.iter())
-            .chain(std::iter::once(&sandbox_exec))
+            .chain(self.devices.iter())
+            .chain(std::iter::once(&self.sandbox_exec))
             .collect::<Vec<_>>();
         identities.sort();
         if identities.windows(2).any(|pair| pair[0] == pair[1]) {
             return Err("macOS system path identities overlap".into());
         }
-        Ok(Self {
-            read_roots,
-            devices,
-            sandbox_exec,
-        })
+        if production
+            && (self.read_roots != [PathBuf::from("/System/Library"), PathBuf::from("/usr/lib")]
+                || self.devices != [PathBuf::from("/dev/null"), PathBuf::from("/dev/urandom")]
+                || self.sandbox_exec != Path::new(SANDBOX_EXEC))
+        {
+            return Err("macOS production system paths do not have fixed identities".into());
+        }
+        Ok(())
     }
 
-    fn macos() -> Result<Self, String> {
-        Self::new(
-            vec![PathBuf::from("/System/Library"), PathBuf::from("/usr/lib")],
-            vec![
-                PathBuf::from("/dev/null"),
-                PathBuf::from("/dev/random"),
-                PathBuf::from("/dev/urandom"),
-            ],
-            PathBuf::from(SANDBOX_EXEC),
-        )
+    pub fn verify_production(&self) -> Result<(), String> {
+        if !self.production {
+            return Err("Injected system paths cannot qualify a production backend".into());
+        }
+        self.verify_shape_and_canonical_types(true)
     }
 
     fn verify(&self) -> Result<(), String> {
-        Self::new(
-            self.read_roots.clone(),
-            self.devices.clone(),
-            self.sandbox_exec.clone(),
-        )
-        .map(|_| ())
+        self.verify_shape_and_canonical_types(self.production)
     }
+}
+
+fn require_regular_file(path: &Path, description: &str) -> Result<(), String> {
+    let kind = fs::symlink_metadata(path)
+        .map_err(|error| format!("{description} metadata is unavailable: {error}"))?
+        .file_type();
+    if !kind.is_file() {
+        return Err(format!("{description} is not a regular file"));
+    }
+    Ok(())
+}
+
+#[cfg(unix)]
+fn require_character_device(path: &Path) -> Result<(), String> {
+    use std::os::unix::fs::FileTypeExt;
+
+    let kind = fs::symlink_metadata(path)
+        .map_err(|error| format!("macOS system device metadata is unavailable: {error}"))?
+        .file_type();
+    if !kind.is_char_device() {
+        return Err(format!(
+            "macOS system device is not a character device: {}",
+            path.display()
+        ));
+    }
+    Ok(())
+}
+
+#[cfg(not(unix))]
+fn require_character_device(_path: &Path) -> Result<(), String> {
+    Err("macOS production system devices require Unix identity checks".into())
 }
 
 impl QualificationContext {
@@ -214,7 +269,7 @@ impl QualificationContext {
             &required("NUCLEI_AGENT_PROJECT_SENTINEL")?,
             &required("NUCLEI_AGENT_HOME_SENTINEL")?,
             parent_environment,
-            SystemPaths::macos()?,
+            SystemPaths::production()?,
         )
     }
 }
@@ -493,7 +548,7 @@ pub fn qualification_cache_key(context: &QualificationContext) -> Result<String,
 fn compute_qualification_cache_key(context: &QualificationContext) -> Result<String, String> {
     context.system_paths.verify()?;
     let mut digest = Sha256::new();
-    hash_field(&mut digest, b"format", b"nuclei-runtime-identity-v2");
+    hash_field(&mut digest, b"format", b"nuclei-runtime-identity-v3");
     hash_field(&mut digest, b"app-version", context.app_version.as_bytes());
     let profile = build_profile_for_canonical_paths(
         context,
@@ -527,16 +582,10 @@ fn compute_qualification_cache_key(context: &QualificationContext) -> Result<Str
         &context.resources.kernel_root,
         &mut budget,
     )?;
-    hash_regular_file(
-        &mut digest,
-        b"agent-python",
-        &context.environment.python,
-        &mut budget,
-    )?;
     hash_tree(
         &mut digest,
-        b"site-packages-tree",
-        &context.environment.site_packages,
+        b"environment-tree",
+        &context.environment.root,
         &mut budget,
     )?;
     hash_regular_file(
@@ -736,17 +785,7 @@ async fn qualify_macos(context: &QualificationContext) -> CapabilityReport {
 #[cfg(target_os = "macos")]
 async fn qualify_macos_inner(context: &QualificationContext) -> Result<(), String> {
     context.environment.verify()?;
-    let canonical_sandbox = context
-        .system_paths
-        .sandbox_exec
-        .canonicalize()
-        .map_err(|error| format!("sandbox-exec is unavailable: {error}"))?;
-    if canonical_sandbox != Path::new(SANDBOX_EXEC)
-        || context.system_paths.sandbox_exec != Path::new(SANDBOX_EXEC)
-        || !canonical_sandbox.is_file()
-    {
-        return Err("sandbox-exec does not have the required canonical identity".into());
-    }
+    context.system_paths.verify_production()?;
     let _cache_key = qualification_cache_key(context)?;
 
     denied_probe(
