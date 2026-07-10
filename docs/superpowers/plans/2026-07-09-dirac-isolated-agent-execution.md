@@ -1137,17 +1137,36 @@ Expected on macOS: FAIL because Seatbelt qualification is absent. Elsewhere: zer
 
 - [ ] **Step 3: Implement Seatbelt launch and concrete probes**
 
-`macos.rs` exposes:
+Implementation API update: the original `qualify_macos()` API was too implicit
+for a security decision. `macos.rs` instead exposes canonical, testable inputs:
 
 ```rust
 pub struct MacBackend;
-pub trait MacosSandbox {
-    fn seatbelt_program(
-        env: &AgentEnvironment, resources: &ResourcePaths, temp: &std::path::Path,
-    ) -> Result<ProcessSpec, String>;
-    async fn qualify_macos() -> CapabilityReport;
+pub struct QualificationContext {
+    pub app_version: String,
+    pub resources: ResourcePaths,
+    pub environment: AgentEnvironment,
+    pub request_temp_root: PathBuf,
+    pub project_sentinel: PathBuf,
+    pub home_sentinel: PathBuf,
+    pub parent_environment: BTreeMap<String, String>,
 }
+pub fn build_seatbelt_profile(
+    context: &QualificationContext, request_temp: &Path,
+) -> Result<String, String>;
+pub fn qualification_cache_key(context: &QualificationContext) -> Result<String, String>;
+pub async fn qualify_current_host_with_context(
+    mode: QualificationMode, context: QualificationContext,
+) -> CapabilityReport;
 ```
+
+`AgentRuntimeState` stores one immutable `{ report, resolver, cache_key }` backend
+behind a single lock. Refresh probes run without that lock and atomically install
+the qualified resolver only after success; failures install an unavailable
+resolver and clear frameworks/controls. Resolver launch rechecks the app,
+profile, worker, and Python cache identity. The no-context host entry point and
+application command require explicit macOS qualification paths; they never
+derive cwd/home implicitly. Linux remains unavailable until Task 6.
 
 `seatbelt_program` writes a `(deny default)` profile allowing read only for the dedicated venv, bundled agent kernel, `/System/Library`, and `/usr/lib`; write only under request temp; denies `network*`, `process-fork`, and child exec; sets cwd to request temp; and passes only `HOME=/home/agent`, dedicated `PATH`, `LANG=C.UTF-8`, `PYTHONNOUSERSITE=1`, `QDK_PYTHON_TELEMETRY=none`, and single-thread numerical-library variables. It launches `/usr/bin/sandbox-exec -f <profile> <agent-python> -I <worker>`. A separate qualified provisioning profile may execute only the venv interpreter/pip against app-bundled offline wheels, with network and fork denied; if that profile and offline wheelhouse cannot be proven, `RunnerContainment::Contained` is never issued and capability remains unavailable.
 

@@ -1738,7 +1738,7 @@ async fn agent_runtime_state_starts_unavailable_and_is_command_capable() {
     assert_command_state::<AgentRuntimeState>();
 
     let state = AgentRuntimeState::new();
-    let report = state.capability.read().await.clone();
+    let report = state.cached_capability().await;
     assert!(!report.available);
     assert_eq!(
         report.reason.as_deref(),
@@ -1760,6 +1760,7 @@ fn python_spec(script: &str) -> ProcessSpec {
         args: vec!["-c".into(), script.into()],
         cwd: std::env::temp_dir(),
         env: std::collections::BTreeMap::new(),
+        cleanup_root: None,
     }
 }
 
@@ -1806,11 +1807,42 @@ async fn assert_fresh_worker(supervisor: &Supervisor, id: &str) {
 }
 
 #[cfg(unix)]
+#[tokio::test]
+async fn supervisor_removes_the_unique_request_directory_after_execution() {
+    let parent = TempDir::new().unwrap();
+    let request_root = parent.path().join("request");
+    fs::create_dir(&request_root).unwrap();
+    let mut spec = python_spec(&valid_worker_script("cleanup"));
+    spec.cwd = request_root.clone();
+    spec.cleanup_root = Some(request_root.clone());
+    let supervisor = Supervisor::new(SupervisorLimits::testing());
+
+    supervisor
+        .run(&agent_request("cleanup"), spec, b"")
+        .await
+        .unwrap();
+    assert!(!request_root.exists());
+}
+
+#[cfg(unix)]
 struct BlockingResolver {
     blocked_id: String,
     entered: Arc<tokio::sync::Notify>,
     release: Arc<tokio::sync::Notify>,
     spawn_marker: PathBuf,
+}
+
+#[cfg(unix)]
+struct FailingResolver;
+
+#[cfg(unix)]
+impl AgentProcessResolver for FailingResolver {
+    fn resolve<'a>(
+        &'a self,
+        _request: &'a WorkerRequestV1,
+    ) -> Pin<Box<dyn Future<Output = Result<ProcessSpec, String>> + Send + 'a>> {
+        Box::pin(async { Err("qualified backend identity changed".into()) })
+    }
 }
 
 #[cfg(unix)]
@@ -1849,6 +1881,28 @@ fn available_cirq_capability() -> CapabilityReport {
         qualified_frameworks: vec!["cirq".into()],
         controls: Vec::new(),
     }
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn resolver_identity_failure_atomically_clears_capability() {
+    let state = AgentRuntimeState::with_resolver(
+        Supervisor::new(SupervisorLimits::testing()),
+        available_cirq_capability(),
+        Arc::new(FailingResolver),
+    );
+
+    assert_eq!(
+        state
+            .execute_request(agent_request("stale_backend"))
+            .await
+            .unwrap_err(),
+        "qualified backend identity changed"
+    );
+    let report = state.cached_capability().await;
+    assert!(!report.available);
+    assert!(report.qualified_frameworks.is_empty());
+    assert!(report.controls.is_empty());
 }
 
 #[cfg(unix)]

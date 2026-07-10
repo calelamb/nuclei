@@ -16,8 +16,11 @@ const ALLOWED_ENVIRONMENT: &[&str] = &[
     "LANG",
     "LC_ALL",
     "PATH",
+    "TMPDIR",
+    "CUDA_VISIBLE_DEVICES",
     "PYTHONHASHSEED",
     "PYTHONNOUSERSITE",
+    "PYTHONSAFEPATH",
     "PYTHONDONTWRITEBYTECODE",
     "QDK_PYTHON_TELEMETRY",
     "OPENBLAS_NUM_THREADS",
@@ -32,6 +35,7 @@ pub struct ProcessSpec {
     pub args: Vec<String>,
     pub cwd: PathBuf,
     pub env: BTreeMap<String, String>,
+    pub cleanup_root: Option<PathBuf>,
 }
 
 #[derive(Clone, Debug)]
@@ -305,6 +309,20 @@ impl Supervisor {
         stdin: &[u8],
         reservation: RunReservation,
     ) -> Result<WorkerResponseV1, RuntimeError> {
+        let mut cleanup = RequestCleanup::new(spec.cleanup_root.clone());
+        let result = self.run_unix_inner(request, spec, stdin, reservation).await;
+        cleanup.cleanup()?;
+        result
+    }
+
+    #[cfg(unix)]
+    async fn run_unix_inner(
+        &self,
+        request: &WorkerRequestV1,
+        spec: ProcessSpec,
+        stdin: &[u8],
+        reservation: RunReservation,
+    ) -> Result<WorkerResponseV1, RuntimeError> {
         use std::process::Stdio;
         use tokio::io::AsyncWriteExt;
 
@@ -541,6 +559,39 @@ impl Supervisor {
             "isolation_unavailable",
             crate::agent_runtime::unsupported::UNAVAILABLE_MESSAGE,
         ))
+    }
+}
+
+#[cfg(unix)]
+struct RequestCleanup {
+    root: Option<PathBuf>,
+}
+
+#[cfg(unix)]
+impl RequestCleanup {
+    fn new(root: Option<PathBuf>) -> Self {
+        Self { root }
+    }
+
+    fn cleanup(&mut self) -> Result<(), RuntimeError> {
+        let Some(root) = self.root.take() else {
+            return Ok(());
+        };
+        std::fs::remove_dir_all(root).map_err(|_| {
+            RuntimeError::new(
+                "cleanup_failed",
+                "Worker request directory could not be removed",
+            )
+        })
+    }
+}
+
+#[cfg(unix)]
+impl Drop for RequestCleanup {
+    fn drop(&mut self) {
+        if let Some(root) = self.root.take() {
+            let _ = std::fs::remove_dir_all(root);
+        }
     }
 }
 
