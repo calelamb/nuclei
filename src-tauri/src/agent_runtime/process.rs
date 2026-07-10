@@ -36,6 +36,35 @@ pub struct ProcessSpec {
     pub cwd: PathBuf,
     pub env: BTreeMap<String, String>,
     pub cleanup_root: Option<PathBuf>,
+    pub resource_limits: ResourceLimits,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct ResourceLimits {
+    pub cpu_seconds: u64,
+    pub address_space_bytes: u64,
+    pub file_bytes: u64,
+    pub open_files: u64,
+    pub processes: u64,
+}
+
+impl ResourceLimits {
+    pub const fn production() -> Self {
+        Self {
+            cpu_seconds: 10,
+            address_space_bytes: 1_073_741_824,
+            file_bytes: 1_048_576,
+            open_files: 64,
+            processes: 4,
+        }
+    }
+
+    pub const fn testing() -> Self {
+        Self {
+            processes: 1_024,
+            ..Self::production()
+        }
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -355,24 +384,12 @@ impl Supervisor {
         }
         let token = Arc::clone(reservation.token());
 
-        let mut command = tokio::process::Command::new(&spec.executable);
+        let mut command = unix_command(&spec);
         command
-            .args(&spec.args)
-            .current_dir(&spec.cwd)
-            .env_clear()
-            .envs(&spec.env)
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
             .kill_on_drop(true);
-        unsafe {
-            command.pre_exec(|| {
-                if libc::setsid() == -1 {
-                    return Err(std::io::Error::last_os_error());
-                }
-                Ok(())
-            });
-        }
         if !reservation.begin_launch() {
             return Err(RuntimeError::new(
                 "cancelled",
@@ -593,6 +610,58 @@ impl Drop for RequestCleanup {
             let _ = std::fs::remove_dir_all(root);
         }
     }
+}
+
+#[cfg(unix)]
+pub(crate) fn apply_resource_limits(limits: ResourceLimits) -> std::io::Result<()> {
+    macro_rules! set_limit {
+        ($resource:expr, $value:expr) => {{
+            let value = $value;
+            let native = value as libc::rlim_t;
+            if native as u64 != value {
+                return Err(std::io::Error::new(
+                    std::io::ErrorKind::InvalidInput,
+                    "resource limit is not representable",
+                ));
+            }
+            let pair = libc::rlimit {
+                rlim_cur: native,
+                rlim_max: native,
+            };
+            if unsafe { libc::setrlimit($resource, &pair) } == -1 {
+                return Err(std::io::Error::last_os_error());
+            }
+        }};
+    }
+
+    set_limit!(libc::RLIMIT_CPU, limits.cpu_seconds);
+    set_limit!(libc::RLIMIT_AS, limits.address_space_bytes);
+    set_limit!(libc::RLIMIT_FSIZE, limits.file_bytes);
+    set_limit!(libc::RLIMIT_NOFILE, limits.open_files);
+    set_limit!(libc::RLIMIT_NPROC, limits.processes);
+    set_limit!(libc::RLIMIT_CORE, 0);
+    Ok(())
+}
+
+#[cfg(unix)]
+pub(crate) fn unix_command(spec: &ProcessSpec) -> tokio::process::Command {
+    let mut command = tokio::process::Command::new(&spec.executable);
+    command
+        .args(&spec.args)
+        .current_dir(&spec.cwd)
+        .env_clear()
+        .envs(&spec.env);
+    unsafe {
+        let resource_limits = spec.resource_limits;
+        command.pre_exec(move || {
+            apply_resource_limits(resource_limits)?;
+            if libc::setsid() == -1 {
+                return Err(std::io::Error::last_os_error());
+            }
+            Ok(())
+        });
+    }
+    command
 }
 
 pub trait ProcessSupervisor {

@@ -62,6 +62,8 @@ struct InstalledBackend {
     report: CapabilityReport,
     resolver: Arc<dyn AgentProcessResolver>,
     cache_key: Option<String>,
+    refresh_key: String,
+    generation: u64,
 }
 
 struct MacContextResolver {
@@ -130,6 +132,8 @@ impl AgentRuntimeState {
                 report: capability,
                 resolver,
                 cache_key: None,
+                refresh_key: "initial".into(),
+                generation: 0,
             }),
             refresh_generation: AtomicU64::new(0),
         }
@@ -160,6 +164,8 @@ impl AgentRuntimeState {
                 }
                 backend = self.backend.read() => backend.clone(),
             };
+            let backend_generation = backend.generation;
+            let backend_key = backend.cache_key.clone();
             let report = backend.report;
             if !report.available {
                 return Err(report
@@ -192,7 +198,12 @@ impl AgentRuntimeState {
             let spec = match spec_result {
                 Ok(spec) => spec,
                 Err(error) => {
-                    self.clear_backend(error.clone()).await;
+                    self.clear_backend_if_current(
+                        backend_generation,
+                        backend_key.as_deref(),
+                        error.clone(),
+                    )
+                    .await;
                     return Err(error);
                 }
             };
@@ -244,7 +255,7 @@ impl AgentRuntimeCommands for AgentRuntimeState {
     }
 
     async fn capability<'a>(&'a self, app: &'a tauri::AppHandle) -> CapabilityReport {
-        let generation = self.refresh_generation.fetch_add(1, Ordering::AcqRel) + 1;
+        let generation = self.begin_refresh();
         let context = macos::QualificationContext::from_explicit_environment(
             &app.package_info().version.to_string(),
         );
@@ -262,10 +273,13 @@ impl AgentRuntimeCommands for AgentRuntimeState {
                 );
                 self.install_if_current(
                     generation,
+                    "context-unavailable",
                     InstalledBackend {
                         report: report.clone(),
                         resolver: Arc::new(UnavailableResolver),
                         cache_key: None,
+                        refresh_key: "context-unavailable".into(),
+                        generation,
                     },
                 )
                 .await;
@@ -278,21 +292,21 @@ impl AgentRuntimeCommands for AgentRuntimeState {
                 let report = unavailable_report(error);
                 self.install_if_current(
                     generation,
+                    "identity-unavailable",
                     InstalledBackend {
                         report,
                         resolver: Arc::new(UnavailableResolver),
                         cache_key: None,
+                        refresh_key: "identity-unavailable".into(),
+                        generation,
                     },
                 )
                 .await;
                 return self.cached_capability().await;
             }
         };
-        {
-            let backend = self.backend.read().await;
-            if backend.report.available && backend.cache_key.as_deref() == Some(&cache_key) {
-                return backend.report.clone();
-            }
+        if let Some(report) = self.reuse_if_identity_matches(generation, &cache_key).await {
+            return report;
         }
 
         // No state lock is held while the platform launches long-running probes.
@@ -309,10 +323,13 @@ impl AgentRuntimeCommands for AgentRuntimeState {
         };
         self.install_if_current(
             generation,
+            &cache_key,
             InstalledBackend {
-                cache_key: report.available.then_some(cache_key),
+                cache_key: report.available.then_some(cache_key.clone()),
                 report,
                 resolver,
+                refresh_key: cache_key.clone(),
+                generation,
             },
         )
         .await;
@@ -321,23 +338,81 @@ impl AgentRuntimeCommands for AgentRuntimeState {
 }
 
 impl AgentRuntimeState {
-    async fn install_if_current(&self, generation: u64, backend: InstalledBackend) {
-        if self.refresh_generation.load(Ordering::Acquire) != generation {
-            return;
+    fn begin_refresh(&self) -> u64 {
+        self.refresh_generation
+            .fetch_update(Ordering::AcqRel, Ordering::Acquire, |generation| {
+                generation.checked_add(1)
+            })
+            .expect("agent runtime refresh generation exhausted")
+            + 1
+    }
+
+    async fn commit_refresh(&self, generation: u64, key: &str, backend: InstalledBackend) -> bool {
+        if backend.generation != generation
+            || backend.refresh_key != key
+            || self.refresh_generation.load(Ordering::Acquire) != generation
+        {
+            return false;
         }
         let mut installed = self.backend.write().await;
-        if self.refresh_generation.load(Ordering::Acquire) == generation {
-            *installed = backend;
+        if self.refresh_generation.load(Ordering::Acquire) != generation
+            || generation <= installed.generation
+        {
+            return false;
+        }
+        *installed = backend;
+        true
+    }
+
+    async fn reuse_if_identity_matches(
+        &self,
+        generation: u64,
+        key: &str,
+    ) -> Option<CapabilityReport> {
+        let mut refreshed = {
+            let installed = self.backend.read().await;
+            if !installed.report.available || installed.cache_key.as_deref() != Some(key) {
+                return None;
+            }
+            installed.clone()
+        };
+        refreshed.generation = generation;
+        refreshed.refresh_key = key.into();
+        if self.commit_refresh(generation, key, refreshed).await {
+            Some(self.cached_capability().await)
+        } else {
+            None
         }
     }
 
-    async fn clear_backend(&self, reason: String) {
-        self.refresh_generation.fetch_add(1, Ordering::AcqRel);
+    async fn install_if_current(&self, generation: u64, key: &str, backend: InstalledBackend) {
+        let _ = self.commit_refresh(generation, key, backend).await;
+    }
+
+    async fn clear_backend_if_current(
+        &self,
+        failed_generation: u64,
+        failed_key: Option<&str>,
+        reason: String,
+    ) {
+        let clear_generation = self.begin_refresh();
+        let refresh_key = format!(
+            "resolver-failure:{failed_generation}:{}",
+            failed_key.unwrap_or("unkeyed")
+        );
         let mut installed = self.backend.write().await;
+        if self.refresh_generation.load(Ordering::Acquire) != clear_generation
+            || installed.generation != failed_generation
+            || installed.cache_key.as_deref() != failed_key
+        {
+            return;
+        }
         *installed = InstalledBackend {
             report: unavailable_report(reason),
             resolver: Arc::new(UnavailableResolver),
             cache_key: None,
+            refresh_key,
+            generation: clear_generation,
         };
     }
 }
@@ -394,4 +469,188 @@ fn required_mode(mut report: CapabilityReport, mode: QualificationMode) -> Capab
         report.controls.clear();
     }
     report
+}
+
+#[cfg(test)]
+mod refresh_tests {
+    use super::*;
+
+    struct TaggedResolver(&'static str);
+
+    impl AgentProcessResolver for TaggedResolver {
+        fn resolve<'a>(
+            &'a self,
+            _request: &'a WorkerRequestV1,
+        ) -> Pin<Box<dyn Future<Output = Result<ProcessSpec, String>> + Send + 'a>> {
+            Box::pin(async move { Err(self.0.into()) })
+        }
+    }
+
+    fn candidate(
+        available: bool,
+        tag: &'static str,
+        key: &str,
+        generation: u64,
+    ) -> InstalledBackend {
+        InstalledBackend {
+            report: CapabilityReport {
+                available,
+                reason: (!available).then(|| tag.into()),
+                qualified_frameworks: available.then(|| vec!["cirq".into()]).unwrap_or_default(),
+                controls: Vec::new(),
+            },
+            resolver: Arc::new(TaggedResolver(tag)),
+            cache_key: available.then(|| key.into()),
+            refresh_key: key.into(),
+            generation,
+        }
+    }
+
+    #[tokio::test]
+    async fn older_failure_cannot_erase_newer_success() {
+        let state = Arc::new(AgentRuntimeState::new());
+        let old = state.begin_refresh();
+        let old_entered = Arc::new(tokio::sync::Notify::new());
+        let release_old = Arc::new(tokio::sync::Notify::new());
+        let old_completion = {
+            let state = Arc::clone(&state);
+            let entered = Arc::clone(&old_entered);
+            let release = Arc::clone(&release_old);
+            tokio::spawn(async move {
+                entered.notify_one();
+                release.notified().await;
+                state
+                    .commit_refresh(old, "old-key", candidate(false, "old", "old-key", old))
+                    .await
+            })
+        };
+        old_entered.notified().await;
+        let new = state.begin_refresh();
+
+        assert!(
+            state
+                .commit_refresh(new, "new-key", candidate(true, "new", "new-key", new))
+                .await
+        );
+        release_old.notify_one();
+        assert!(!old_completion.await.unwrap());
+        let installed = state.backend.read().await;
+        assert!(installed.report.available);
+        assert_eq!(installed.cache_key.as_deref(), Some("new-key"));
+        assert_eq!(installed.generation, new);
+    }
+
+    #[tokio::test]
+    async fn older_success_cannot_overwrite_newer_failure() {
+        let state = Arc::new(AgentRuntimeState::new());
+        let old = state.begin_refresh();
+        let old_entered = Arc::new(tokio::sync::Notify::new());
+        let release_old = Arc::new(tokio::sync::Notify::new());
+        let old_completion = {
+            let state = Arc::clone(&state);
+            let entered = Arc::clone(&old_entered);
+            let release = Arc::clone(&release_old);
+            tokio::spawn(async move {
+                entered.notify_one();
+                release.notified().await;
+                state
+                    .commit_refresh(
+                        old,
+                        "old-key",
+                        candidate(true, "old-success", "old-key", old),
+                    )
+                    .await
+            })
+        };
+        old_entered.notified().await;
+        let new = state.begin_refresh();
+
+        assert!(
+            state
+                .commit_refresh(
+                    new,
+                    "new-key",
+                    candidate(false, "new-failure", "new-key", new)
+                )
+                .await
+        );
+        release_old.notify_one();
+        assert!(!old_completion.await.unwrap());
+        let installed = state.backend.read().await;
+        assert!(!installed.report.available);
+        assert_eq!(installed.reason(), Some("new-failure"));
+        assert_eq!(installed.generation, new);
+    }
+
+    #[tokio::test]
+    async fn execute_observes_report_and_resolver_from_one_generation() {
+        let state = AgentRuntimeState::new();
+        let generation = state.begin_refresh();
+        state
+            .commit_refresh(
+                generation,
+                "atomic-key",
+                candidate(true, "atomic-resolver", "atomic-key", generation),
+            )
+            .await;
+        let request = WorkerRequestV1 {
+            protocol_version: 1,
+            request_id: "atomic_snapshot".into(),
+            action: protocol::Action::Parse,
+            framework: Framework::Cirq,
+            language: "python".into(),
+            code: String::new(),
+            shots: None,
+        };
+
+        assert_eq!(
+            state.execute_request(request).await.unwrap_err(),
+            "atomic-resolver"
+        );
+    }
+
+    #[tokio::test]
+    async fn changed_identity_cannot_reuse_the_cached_backend() {
+        let state = AgentRuntimeState::new();
+        let initial = state.begin_refresh();
+        assert!(
+            state
+                .commit_refresh(
+                    initial,
+                    "original-tree",
+                    candidate(true, "original", "original-tree", initial),
+                )
+                .await
+        );
+        let refresh = state.begin_refresh();
+
+        assert!(state
+            .reuse_if_identity_matches(refresh, "mutated-adapter")
+            .await
+            .is_none());
+        assert_eq!(state.backend.read().await.generation, initial);
+        assert!(
+            state
+                .commit_refresh(
+                    refresh,
+                    "mutated-adapter",
+                    candidate(true, "requalified", "mutated-adapter", refresh),
+                )
+                .await
+        );
+        assert_eq!(
+            state.backend.read().await.cache_key.as_deref(),
+            Some("mutated-adapter")
+        );
+    }
+
+    trait InstalledReason {
+        fn reason(&self) -> Option<&str>;
+    }
+
+    impl InstalledReason for InstalledBackend {
+        fn reason(&self) -> Option<&str> {
+            self.report.reason.as_deref()
+        }
+    }
 }

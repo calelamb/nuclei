@@ -1,16 +1,21 @@
-use crate::agent_runtime::process::ProcessSpec;
+#[cfg(target_os = "macos")]
+use crate::agent_runtime::process::unix_command;
+use crate::agent_runtime::process::{ProcessSpec, ResourceLimits};
 use crate::agent_runtime::resources::{AgentEnvironment, ResourcePaths, RunnerContainment};
 #[cfg(target_os = "macos")]
 use crate::agent_runtime::{CapabilityReport, ControlResult};
 use sha2::{Digest, Sha256};
 use std::collections::BTreeMap;
 use std::fs;
+use std::io::Read;
 use std::path::{Path, PathBuf};
 #[cfg(target_os = "macos")]
 use std::time::Duration;
 
 const SANDBOX_EXEC: &str = "/usr/bin/sandbox-exec";
 const PROFILE_VERSION: &str = "nuclei-seatbelt-v1";
+const MAX_IDENTITY_ENTRIES: usize = 200_000;
+const MAX_IDENTITY_BYTES: u64 = 8 * 1024 * 1024 * 1024;
 #[cfg(target_os = "macos")]
 const PROBE_TIMEOUT: Duration = Duration::from_secs(4);
 #[cfg(target_os = "macos")]
@@ -30,6 +35,68 @@ pub struct QualificationContext {
     pub project_sentinel: PathBuf,
     pub home_sentinel: PathBuf,
     pub parent_environment: BTreeMap<String, String>,
+    pub system_paths: SystemPaths,
+}
+
+#[derive(Clone, Debug)]
+pub struct SystemPaths {
+    pub read_roots: Vec<PathBuf>,
+    pub devices: Vec<PathBuf>,
+    pub sandbox_exec: PathBuf,
+}
+
+impl SystemPaths {
+    pub fn new(
+        read_roots: Vec<PathBuf>,
+        devices: Vec<PathBuf>,
+        sandbox_exec: PathBuf,
+    ) -> Result<Self, String> {
+        if read_roots.len() != 2 || devices.len() != 3 {
+            return Err("macOS system path set has an unexpected shape".into());
+        }
+        for root in &read_roots {
+            require_canonical(root, "macOS system read root", true)?;
+        }
+        for device in &devices {
+            require_canonical(device, "macOS system device", false)?;
+        }
+        require_canonical(&sandbox_exec, "sandbox-exec", false)?;
+        let mut identities = read_roots
+            .iter()
+            .chain(devices.iter())
+            .chain(std::iter::once(&sandbox_exec))
+            .collect::<Vec<_>>();
+        identities.sort();
+        if identities.windows(2).any(|pair| pair[0] == pair[1]) {
+            return Err("macOS system path identities overlap".into());
+        }
+        Ok(Self {
+            read_roots,
+            devices,
+            sandbox_exec,
+        })
+    }
+
+    fn macos() -> Result<Self, String> {
+        Self::new(
+            vec![PathBuf::from("/System/Library"), PathBuf::from("/usr/lib")],
+            vec![
+                PathBuf::from("/dev/null"),
+                PathBuf::from("/dev/random"),
+                PathBuf::from("/dev/urandom"),
+            ],
+            PathBuf::from(SANDBOX_EXEC),
+        )
+    }
+
+    fn verify(&self) -> Result<(), String> {
+        Self::new(
+            self.read_roots.clone(),
+            self.devices.clone(),
+            self.sandbox_exec.clone(),
+        )
+        .map(|_| ())
+    }
 }
 
 impl QualificationContext {
@@ -42,6 +109,7 @@ impl QualificationContext {
         project_sentinel: &Path,
         home_sentinel: &Path,
         parent_environment: BTreeMap<String, String>,
+        system_paths: SystemPaths,
     ) -> Result<Self, String> {
         environment.verify()?;
         require_canonical(&resources.kernel_root, "Agent kernel root", true)?;
@@ -90,6 +158,7 @@ impl QualificationContext {
             project_sentinel,
             home_sentinel,
             parent_environment,
+            system_paths,
         })
     }
 
@@ -99,7 +168,11 @@ impl QualificationContext {
                 .map(PathBuf::from)
                 .ok_or_else(|| format!("{name} is required for explicit macOS qualification"))
         };
-        let kernel_root = required("NUCLEI_AGENT_KERNEL_ROOT")?;
+        let kernel_root = require_canonical(
+            &required("NUCLEI_AGENT_KERNEL_ROOT")?,
+            "Agent kernel root",
+            true,
+        )?;
         let resources = ResourcePaths {
             worker: kernel_root
                 .join("agent_worker.py")
@@ -109,20 +182,20 @@ impl QualificationContext {
                 .join("agent-requirements.txt")
                 .canonicalize()
                 .map_err(|error| format!("Explicit agent requirements are unavailable: {error}"))?,
-            kernel_root: kernel_root
-                .canonicalize()
-                .map_err(|error| format!("Explicit agent kernel root is unavailable: {error}"))?,
+            kernel_root,
         };
-        let environment_root = required("NUCLEI_AGENT_ENVIRONMENT_ROOT")?
-            .canonicalize()
-            .map_err(|error| format!("Explicit agent environment is unavailable: {error}"))?;
+        let environment_root = require_canonical(
+            &required("NUCLEI_AGENT_ENVIRONMENT_ROOT")?,
+            "Agent environment root",
+            true,
+        )?;
         let environment = AgentEnvironment {
-            python: required("NUCLEI_AGENT_PYTHON")?
-                .canonicalize()
-                .map_err(|error| format!("Explicit agent Python is unavailable: {error}"))?,
-            site_packages: required("NUCLEI_AGENT_SITE_PACKAGES")?
-                .canonicalize()
-                .map_err(|error| format!("Explicit agent site-packages is unavailable: {error}"))?,
+            python: require_canonical(&required("NUCLEI_AGENT_PYTHON")?, "Agent Python", false)?,
+            site_packages: require_canonical(
+                &required("NUCLEI_AGENT_SITE_PACKAGES")?,
+                "Agent site-packages",
+                true,
+            )?,
             root: environment_root,
         };
         let parent_environment = [
@@ -141,6 +214,7 @@ impl QualificationContext {
             &required("NUCLEI_AGENT_PROJECT_SENTINEL")?,
             &required("NUCLEI_AGENT_HOME_SENTINEL")?,
             parent_environment,
+            SystemPaths::macos()?,
         )
     }
 }
@@ -188,7 +262,7 @@ impl MacBackend {
             .map_err(|error| format!("Failed to create worker TMPDIR: {error}"))?;
         let profile = build_seatbelt_profile(context, &request_temp)?;
         Ok(ProcessSpec {
-            executable: PathBuf::from(SANDBOX_EXEC),
+            executable: context.system_paths.sandbox_exec.clone(),
             args: vec![
                 "-p".into(),
                 profile,
@@ -199,8 +273,70 @@ impl MacBackend {
             cwd: request_temp.clone(),
             env: worker_environment(&context.environment, &request_temp)?,
             cleanup_root: Some(request_temp),
+            resource_limits: ResourceLimits::production(),
         })
     }
+
+    pub fn probe_spec(
+        context: &QualificationContext,
+        request_temp: &Path,
+        script: &str,
+    ) -> Result<ProcessSpec, String> {
+        let mut spec = Self::worker_spec(context, request_temp)?;
+        spec.args.truncate(3);
+        spec.args.extend(["-I".into(), "-c".into(), script.into()]);
+        Ok(spec)
+    }
+}
+
+pub fn resource_limit_probe_script(limits: ResourceLimits) -> String {
+    format!(
+        r#"import errno,os,resource,signal,tempfile
+expected=[({cpu},{cpu}),({address_space},{address_space}),({file_size},{file_size}),({open_files},{open_files}),({processes},{processes}),(0,0)]
+actual=[resource.getrlimit(item) for item in [resource.RLIMIT_CPU,resource.RLIMIT_AS,resource.RLIMIT_FSIZE,resource.RLIMIT_NOFILE,resource.RLIMIT_NPROC,resource.RLIMIT_CORE]]
+assert actual == expected, (actual,expected)
+memory=False
+try: bytearray({memory_attack})
+except (MemoryError,OSError): memory=True
+fds=[]
+fd_limited=False
+try:
+ while True: fds.append(open('/dev/null'))
+except OSError as error:
+ fd_limited=error.errno in (errno.EMFILE,errno.ENFILE)
+signal.signal(signal.SIGXFSZ,signal.SIG_IGN)
+file_limited=False
+try:
+ with tempfile.NamedTemporaryFile() as target:
+  target.write(b'x'*{file_attack});target.flush()
+except OSError as error:
+ file_limited=error.errno in (errno.EFBIG,errno.ENOSPC)
+print('PARENT_RLIMITS_OK' if memory and fd_limited and file_limited else 'PARENT_RLIMITS_BAD')"#,
+        cpu = limits.cpu_seconds,
+        address_space = limits.address_space_bytes,
+        file_size = limits.file_bytes,
+        open_files = limits.open_files,
+        processes = limits.processes,
+        memory_attack = limits.address_space_bytes.saturating_add(268_435_456),
+        file_attack = limits.file_bytes.saturating_add(1),
+    )
+}
+
+pub fn cirq_rlimit_probe_source(limits: ResourceLimits) -> String {
+    format!(
+        r#"import cirq
+import resource
+expected=[({cpu},{cpu}),({address_space},{address_space}),({file_size},{file_size}),({open_files},{open_files}),({processes},{processes}),(0,0)]
+actual=[resource.getrlimit(item) for item in [resource.RLIMIT_CPU,resource.RLIMIT_AS,resource.RLIMIT_FSIZE,resource.RLIMIT_NOFILE,resource.RLIMIT_NPROC,resource.RLIMIT_CORE]]
+assert actual == expected, (actual,expected)
+q=cirq.LineQubit(0)
+circuit=cirq.Circuit(cirq.H(q))"#,
+        cpu = limits.cpu_seconds,
+        address_space = limits.address_space_bytes,
+        file_size = limits.file_bytes,
+        open_files = limits.open_files,
+        processes = limits.processes,
+    )
 }
 
 fn validate_request_temp(
@@ -258,6 +394,7 @@ pub fn build_seatbelt_profile(
     context: &QualificationContext,
     request_temp: &Path,
 ) -> Result<String, String> {
+    context.system_paths.verify()?;
     let request_temp = validate_request_temp(context, request_temp)?;
     build_profile_for_canonical_paths(context, &request_temp)
 }
@@ -274,19 +411,13 @@ fn build_profile_for_canonical_paths(
     );
     push_filter(&mut profile, "literal", &context.environment.python, "  ")?;
     profile.push_str(")\n(allow file-read*\n");
-    for root in [
-        &context.environment.root,
-        &context.resources.kernel_root,
-        Path::new("/System/Library"),
-        Path::new("/usr/lib"),
-    ] {
+    for root in [&context.environment.root, &context.resources.kernel_root]
+        .into_iter()
+        .chain(context.system_paths.read_roots.iter())
+    {
         push_filter(&mut profile, "subpath", root, "  ")?;
     }
-    for device in [
-        Path::new("/dev/null"),
-        Path::new("/dev/random"),
-        Path::new("/dev/urandom"),
-    ] {
+    for device in &context.system_paths.devices {
         push_filter(&mut profile, "literal", device, "  ")?;
     }
     profile.push_str(")\n(allow file-read-metadata\n");
@@ -351,37 +482,209 @@ fn escape_seatbelt_literal(literal: &str) -> Result<String, String> {
 }
 
 pub fn qualification_cache_key(context: &QualificationContext) -> Result<String, String> {
+    let first = compute_qualification_cache_key(context)?;
+    let second = compute_qualification_cache_key(context)?;
+    if first != second {
+        return Err("Runtime identity changed during hashing".into());
+    }
+    Ok(first)
+}
+
+fn compute_qualification_cache_key(context: &QualificationContext) -> Result<String, String> {
+    context.system_paths.verify()?;
     let mut digest = Sha256::new();
-    digest.update(PROFILE_VERSION.as_bytes());
-    digest.update(context.app_version.as_bytes());
-    digest.update(
-        build_profile_for_canonical_paths(
-            context,
-            &context.request_temp_root.join("CACHE_REQUEST"),
-        )?
-        .as_bytes(),
-    );
+    hash_field(&mut digest, b"format", b"nuclei-runtime-identity-v2");
+    hash_field(&mut digest, b"app-version", context.app_version.as_bytes());
+    let profile = build_profile_for_canonical_paths(
+        context,
+        &context.request_temp_root.join("CACHE_REQUEST"),
+    )?;
+    hash_field(&mut digest, b"profile-version", PROFILE_VERSION.as_bytes());
+    hash_field(&mut digest, b"profile", profile.as_bytes());
     for path in [
         &context.resources.kernel_root,
         &context.environment.root,
         &context.request_temp_root,
     ] {
-        digest.update(
+        hash_field(
+            &mut digest,
+            b"canonical-path",
             path.to_str()
                 .ok_or("Qualification cache path is not valid UTF-8")?
                 .as_bytes(),
         );
     }
-    for (description, path) in [
-        ("Agent worker", &context.resources.worker),
-        ("Agent Python", &context.environment.python),
-    ] {
-        let bytes = fs::read(path)
-            .map_err(|error| format!("{description} could not be hashed: {error}"))?;
-        digest.update((bytes.len() as u64).to_le_bytes());
-        digest.update(&bytes);
-    }
+    let mut budget = IdentityBudget::default();
+    hash_regular_file(
+        &mut digest,
+        b"requirements",
+        &context.resources.requirements,
+        &mut budget,
+    )?;
+    hash_tree(
+        &mut digest,
+        b"kernel-tree",
+        &context.resources.kernel_root,
+        &mut budget,
+    )?;
+    hash_regular_file(
+        &mut digest,
+        b"agent-python",
+        &context.environment.python,
+        &mut budget,
+    )?;
+    hash_tree(
+        &mut digest,
+        b"site-packages-tree",
+        &context.environment.site_packages,
+        &mut budget,
+    )?;
+    hash_regular_file(
+        &mut digest,
+        b"sandbox-exec",
+        &context.system_paths.sandbox_exec,
+        &mut budget,
+    )?;
     Ok(hex::encode(digest.finalize()))
+}
+
+#[derive(Default)]
+struct IdentityBudget {
+    entries: usize,
+    bytes: u64,
+}
+
+fn hash_field(digest: &mut Sha256, tag: &[u8], value: &[u8]) {
+    digest.update((tag.len() as u64).to_le_bytes());
+    digest.update(tag);
+    digest.update((value.len() as u64).to_le_bytes());
+    digest.update(value);
+}
+
+fn hash_tree(
+    digest: &mut Sha256,
+    tag: &[u8],
+    root: &Path,
+    budget: &mut IdentityBudget,
+) -> Result<(), String> {
+    let canonical = require_canonical(root, "Runtime identity tree", true)?;
+    hash_field(
+        digest,
+        tag,
+        canonical
+            .to_str()
+            .ok_or("Runtime identity tree path is not valid UTF-8")?
+            .as_bytes(),
+    );
+    let mut pending = vec![canonical.clone()];
+    while let Some(directory) = pending.pop() {
+        let mut entries = fs::read_dir(&directory)
+            .map_err(|error| format!("Runtime identity tree could not be read: {error}"))?
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|error| format!("Runtime identity entry could not be read: {error}"))?;
+        entries.sort_by_key(|entry| entry.file_name());
+        for entry in entries.into_iter().rev() {
+            budget.entries = budget
+                .entries
+                .checked_add(1)
+                .ok_or("Runtime identity entry count overflowed")?;
+            if budget.entries > MAX_IDENTITY_ENTRIES {
+                return Err("Runtime identity tree exceeded the entry limit".into());
+            }
+            let path = entry.path();
+            let relative = path
+                .strip_prefix(&canonical)
+                .map_err(|_| "Runtime identity entry escaped its root")?;
+            let relative = relative
+                .to_str()
+                .ok_or("Runtime identity entry path is not valid UTF-8")?;
+            let metadata = fs::symlink_metadata(&path)
+                .map_err(|error| format!("Runtime identity metadata failed: {error}"))?;
+            if metadata.file_type().is_symlink() {
+                return Err("Runtime identity tree contains a symlink".into());
+            }
+            if metadata.is_dir() {
+                hash_field(digest, b"directory", relative.as_bytes());
+                pending.push(path);
+            } else if metadata.is_file() {
+                hash_field(digest, b"file-path", relative.as_bytes());
+                hash_regular_file(digest, b"file-content", &path, budget)?;
+            } else {
+                return Err("Runtime identity tree contains a nonregular entry".into());
+            }
+        }
+    }
+    Ok(())
+}
+
+fn hash_regular_file(
+    digest: &mut Sha256,
+    tag: &[u8],
+    path: &Path,
+    budget: &mut IdentityBudget,
+) -> Result<(), String> {
+    let metadata_before = fs::symlink_metadata(path)
+        .map_err(|error| format!("Runtime identity file metadata failed: {error}"))?;
+    if !metadata_before.is_file() || metadata_before.file_type().is_symlink() {
+        return Err("Runtime identity input is not a regular file".into());
+    }
+    let canonical = path
+        .canonicalize()
+        .map_err(|error| format!("Runtime identity file is unavailable: {error}"))?;
+    if canonical != path {
+        return Err("Runtime identity file must be canonical".into());
+    }
+    budget.bytes = budget
+        .bytes
+        .checked_add(metadata_before.len())
+        .ok_or("Runtime identity byte count overflowed")?;
+    if budget.bytes > MAX_IDENTITY_BYTES {
+        return Err("Runtime identity inputs exceeded the byte limit".into());
+    }
+    hash_field(
+        digest,
+        b"file-identity",
+        canonical
+            .to_str()
+            .ok_or("Runtime identity file path is not valid UTF-8")?
+            .as_bytes(),
+    );
+    digest.update((tag.len() as u64).to_le_bytes());
+    digest.update(tag);
+    digest.update(metadata_before.len().to_le_bytes());
+    let mut file = fs::File::open(&canonical)
+        .map_err(|error| format!("Runtime identity file could not be opened: {error}"))?;
+    let mut remaining = metadata_before.len();
+    let mut buffer = [0_u8; 64 * 1024];
+    while remaining > 0 {
+        let requested = usize::try_from(remaining.min(buffer.len() as u64))
+            .map_err(|_| "Runtime identity read size overflowed")?;
+        let read = file
+            .read(&mut buffer[..requested])
+            .map_err(|error| format!("Runtime identity file could not be read: {error}"))?;
+        if read == 0 {
+            return Err("Runtime identity file was truncated while hashing".into());
+        }
+        digest.update(&buffer[..read]);
+        remaining -= read as u64;
+    }
+    let mut extra = [0_u8; 1];
+    if file
+        .read(&mut extra)
+        .map_err(|error| format!("Runtime identity file could not be completed: {error}"))?
+        != 0
+    {
+        return Err("Runtime identity file grew while hashing".into());
+    }
+    let metadata_after = file
+        .metadata()
+        .map_err(|error| format!("Runtime identity file could not be rechecked: {error}"))?;
+    if metadata_after.len() != metadata_before.len()
+        || metadata_after.modified().ok() != metadata_before.modified().ok()
+    {
+        return Err("Runtime identity file changed while hashing".into());
+    }
+    Ok(())
 }
 
 #[cfg(target_os = "macos")]
@@ -433,10 +736,15 @@ async fn qualify_macos(context: &QualificationContext) -> CapabilityReport {
 #[cfg(target_os = "macos")]
 async fn qualify_macos_inner(context: &QualificationContext) -> Result<(), String> {
     context.environment.verify()?;
-    let canonical_sandbox = Path::new(SANDBOX_EXEC)
+    let canonical_sandbox = context
+        .system_paths
+        .sandbox_exec
         .canonicalize()
         .map_err(|error| format!("sandbox-exec is unavailable: {error}"))?;
-    if canonical_sandbox != Path::new(SANDBOX_EXEC) || !canonical_sandbox.is_file() {
+    if canonical_sandbox != Path::new(SANDBOX_EXEC)
+        || context.system_paths.sandbox_exec != Path::new(SANDBOX_EXEC)
+        || !canonical_sandbox.is_file()
+    {
         return Err("sandbox-exec does not have the required canonical identity".into());
     }
     let _cache_key = qualification_cache_key(context)?;
@@ -527,6 +835,7 @@ async fn qualify_macos_inner(context: &QualificationContext) -> Result<(), Strin
 #[cfg(target_os = "macos")]
 struct ProbeResult {
     success: bool,
+    signal: Option<i32>,
     stdout: Vec<u8>,
     stderr: Vec<u8>,
     request_temp: Option<PathBuf>,
@@ -578,22 +887,15 @@ async fn run_probe_with_limit(
     let request_temp = request_temp
         .canonicalize()
         .map_err(|error| format!("Qualification request temp is unavailable: {error}"))?;
-    let mut spec = match MacBackend::worker_spec(context, &request_temp) {
+    let spec = match MacBackend::probe_spec(context, &request_temp, body) {
         Ok(spec) => spec,
         Err(error) => {
             let _ = fs::remove_dir_all(&request_temp);
             return Err(error);
         }
     };
-    spec.args.truncate(3);
-    spec.args.extend(["-I".into(), "-c".into(), body.into()]);
-    let mut command = tokio::process::Command::new(&spec.executable);
+    let mut command = unix_command(&spec);
     command
-        .args(&spec.args)
-        .current_dir(&spec.cwd)
-        .envs(&context.parent_environment)
-        .env_clear()
-        .envs(&spec.env)
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
@@ -602,8 +904,8 @@ async fn run_probe_with_limit(
         let _ = fs::remove_dir_all(&request_temp);
         format!("Qualification probe could not start: {error}")
     })?;
-    let mut stdout = child.stdout.take().ok_or("Probe stdout was not piped")?;
-    let mut stderr = child.stderr.take().ok_or("Probe stderr was not piped")?;
+    let stdout = child.stdout.take().ok_or("Probe stdout was not piped")?;
+    let stderr = child.stderr.take().ok_or("Probe stderr was not piped")?;
     let read_stdout = tokio::spawn(async move {
         let mut bytes = Vec::new();
         stdout
@@ -634,6 +936,8 @@ async fn run_probe_with_limit(
             return Err("Qualification probe exceeded its deadline".into());
         }
     };
+    use std::os::unix::process::ExitStatusExt;
+    let signal = status.signal();
     let stdout = read_stdout
         .await
         .map_err(|_| "Qualification stdout reader failed")?
@@ -644,6 +948,7 @@ async fn run_probe_with_limit(
         .map_err(|_| "Qualification stderr could not be read")?;
     Ok(ProbeResult {
         success: status.success(),
+        signal,
         stdout,
         stderr,
         request_temp: Some(request_temp),
@@ -719,29 +1024,23 @@ async fn run_existing_probe(
 ) -> Result<ProbeResult, String> {
     use std::process::Stdio;
 
-    let mut spec = MacBackend::worker_spec(context, request_temp)?;
-    spec.args.truncate(3);
-    spec.args.extend(["-I".into(), "-c".into(), body.into()]);
-    let output = tokio::time::timeout(
-        PROBE_TIMEOUT,
-        tokio::process::Command::new(&spec.executable)
-            .args(&spec.args)
-            .current_dir(&spec.cwd)
-            .envs(&context.parent_environment)
-            .env_clear()
-            .envs(&spec.env)
-            .stdin(Stdio::null())
-            .output(),
-    )
-    .await
-    .map_err(|_| "Qualification probe exceeded its deadline")?
-    .map_err(|error| format!("Qualification probe failed to run: {error}"))?;
+    let spec = MacBackend::probe_spec(context, request_temp, body)?;
+    let mut command = unix_command(&spec);
+    command.stdin(Stdio::null());
+    let output = tokio::time::timeout(PROBE_TIMEOUT, command.output())
+        .await
+        .map_err(|_| "Qualification probe exceeded its deadline")?
+        .map_err(|error| format!("Qualification probe failed to run: {error}"))?;
     if output.stdout.len() > PROBE_OUTPUT_LIMIT || output.stderr.len() > PROBE_OUTPUT_LIMIT {
         let _ = fs::remove_dir_all(request_temp);
         return Err("Qualification probe output exceeded its cap".into());
     }
     Ok(ProbeResult {
         success: output.status.success(),
+        signal: {
+            use std::os::unix::process::ExitStatusExt;
+            output.status.signal()
+        },
         stdout: output.stdout,
         stderr: output.stderr,
         request_temp: Some(request_temp.to_path_buf()),
@@ -793,38 +1092,28 @@ async fn stdout_flood_probe(context: &QualificationContext) -> Result<(), String
 
 #[cfg(target_os = "macos")]
 async fn rlimit_probe(context: &QualificationContext) -> Result<(), String> {
-    let script = r#"import os,resource,tempfile
-limits=((resource.RLIMIT_AS,268435456),(resource.RLIMIT_FSIZE,1048576),(resource.RLIMIT_NOFILE,32),(resource.RLIMIT_NPROC,1),(resource.RLIMIT_CORE,0))
-for item,value in limits: resource.setrlimit(item,(value,value))
-assert all(resource.getrlimit(item)==(value,value) for item,value in limits)
-memory=False
-try: bytearray(536870912)
-except (MemoryError,OSError): memory=True
-fds=[]
-fd_limited=False
-try:
- while True: fds.append(open('/dev/null'))
-except OSError as error:
- fd_limited=error.errno in (23,24)
-print('RLIMITS_OK' if memory and fd_limited else 'RLIMITS_BAD')"#;
-    let result = run_probe(context, script).await?;
+    let result = run_probe(
+        context,
+        &resource_limit_probe_script(ResourceLimits::production()),
+    )
+    .await?;
     require_success(&result, "memory/fd rlimit probe")?;
-    if trim_ascii(&result.stdout) != b"RLIMITS_OK" {
+    if trim_ascii(&result.stdout) != b"PARENT_RLIMITS_OK" {
         let _ = result.cleanup();
-        return Err("Memory/fd rlimit probe returned malformed evidence".into());
+        return Err("Parent rlimit probe returned malformed evidence".into());
     }
     result.cleanup()?;
 
     let cpu = run_probe_with_limit(
         context,
-        "import resource;resource.setrlimit(resource.RLIMIT_CPU,(1,1))\nwhile True: pass",
+        "while True: pass",
         1_024,
-        Duration::from_secs(3),
+        Duration::from_secs(ResourceLimits::production().cpu_seconds + 3),
     )
     .await?;
-    if cpu.success {
+    if cpu.success || !matches!(cpu.signal, Some(libc::SIGXCPU) | Some(libc::SIGKILL)) {
         let _ = cpu.cleanup();
-        return Err("CPU rlimit probe unexpectedly succeeded".into());
+        return Err("CPU rlimit probe did not terminate for the expected signal".into());
     }
     cpu.cleanup()
 }
@@ -849,16 +1138,12 @@ async fn cirq_probe(context: &QualificationContext) -> Result<(), String> {
         "action": "parse",
         "framework": "cirq",
         "language": "python",
-        "code": "import cirq\nq=cirq.LineQubit(0)\ncircuit=cirq.Circuit(cirq.H(q))"
+        "code": cirq_rlimit_probe_source(ResourceLimits::production())
     }))
     .map_err(|_| "Cirq probe request could not be encoded")?;
     request.push(b'\n');
-    let mut child = tokio::process::Command::new(&spec.executable)
-        .args(&spec.args)
-        .current_dir(&spec.cwd)
-        .envs(&context.parent_environment)
-        .env_clear()
-        .envs(&spec.env)
+    let mut command = unix_command(&spec);
+    let mut child = command
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())

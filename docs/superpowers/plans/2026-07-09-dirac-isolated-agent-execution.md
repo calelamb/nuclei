@@ -1150,6 +1150,7 @@ pub struct QualificationContext {
     pub project_sentinel: PathBuf,
     pub home_sentinel: PathBuf,
     pub parent_environment: BTreeMap<String, String>,
+    pub system_paths: SystemPaths,
 }
 pub fn build_seatbelt_profile(
     context: &QualificationContext, request_temp: &Path,
@@ -1160,15 +1161,32 @@ pub async fn qualify_current_host_with_context(
 ) -> CapabilityReport;
 ```
 
-`AgentRuntimeState` stores one immutable `{ report, resolver, cache_key }` backend
-behind a single lock. Refresh probes run without that lock and atomically install
-the qualified resolver only after success; failures install an unavailable
-resolver and clear frameworks/controls. Resolver launch rechecks the app,
-profile, worker, and Python cache identity. The no-context host entry point and
-application command require explicit macOS qualification paths; they never
-derive cwd/home implicitly. Linux remains unavailable until Task 6.
+`AgentRuntimeState` stores one immutable
+`{ report, resolver, cache_key, refresh_key, generation }` backend behind a
+single lock. Refresh probes run without that lock. A monotonic generation and
+identity-key conditional commit ensure only the newest attempt can install or
+clear the report/resolver pair; a stale resolver failure can clear only the
+exact generation it executed. Resolver launch recomputes a deterministic,
+bounded, double-checked Merkle identity covering app version, complete profile,
+requirements, every regular path/type/content entry in the kernel and
+site-packages trees, agent Python, and sandbox-exec. Symlinks, nonregular
+entries, traversal overflow, byte overflow, and a changing tree fail closed.
+The no-context host entry point and application command require explicit macOS
+qualification paths; they never derive cwd/home implicitly. Linux remains
+unavailable until Task 6.
 
-`seatbelt_program` writes a `(deny default)` profile allowing read only for the dedicated venv, bundled agent kernel, `/System/Library`, and `/usr/lib`; write only under request temp; denies `network*`, `process-fork`, and child exec; sets cwd to request temp; and passes only `HOME=/home/agent`, dedicated `PATH`, `LANG=C.UTF-8`, `PYTHONNOUSERSITE=1`, `QDK_PYTHON_TELEMETRY=none`, and single-thread numerical-library variables. It launches `/usr/bin/sandbox-exec -f <profile> <agent-python> -I <worker>`. A separate qualified provisioning profile may execute only the venv interpreter/pip against app-bundled offline wheels, with network and fork denied; if that profile and offline wheelhouse cannot be proven, `RunnerContainment::Contained` is never issued and capability remains unavailable.
+`worker_spec` builds a `(deny default)` inline profile allowing read only for
+the dedicated runtime, bundled agent kernel, canonical `/System/Library` and
+`/usr/lib`, and canonical entropy/null devices; write only under the unique
+request temp; denies `network*` and `process-fork`; and permits exec only for
+the canonical agent Python. Every fixed system path and `/usr/bin/sandbox-exec`
+must exist with its exact canonical identity before profile creation. The spec
+sets cwd, HOME, and TMPDIR inside request temp and carries exact parent-enforced
+CPU, AS, FSIZE, NOFILE, NPROC, and CORE=0 limits. The shared production command
+builder applies every limit with checked `setrlimit` calls in `pre_exec` before
+launching sandbox-exec. Python applies the same limits again as defense in
+depth. A separate provisioning contract remains unavailable until bundled
+offline wheels and containment are hash-verified and self-tested.
 
 `qualify_macos` creates random sentinel files in the project and real home, injects fake `ANTHROPIC_API_KEY`, `IBM_QUANTUM_TOKEN`, and `AWS_SECRET_ACCESS_KEY` into the parent, then runs fresh workers containing these exact attacks:
 
@@ -1183,7 +1201,16 @@ import subprocess; subprocess.run(["/usr/bin/id"], check=True)
 import os; os.fork()
 ```
 
-It requires read/network/process failures, exact environment equality, output/memory/fd/CPU rlimit probes, and a valid Cirq parse. Any unexpected success, missing `sandbox-exec`, profile error, cleanup failure, or environment mismatch returns `available: false` and no frameworks. It reports only the controls whose probes passed.
+It requires read/network/process failures, exact environment equality,
+authoritative output caps, parent-enforced CPU/AS/FSIZE/NOFILE/NPROC/CORE
+evidence, and a valid Cirq parse whose worker source confirms the inherited
+limits after Python's defense-in-depth application. Every harness starts from
+`MacBackend::probe_spec`, which derives from the production worker spec and uses
+the same command/pre-exec path. Any unexpected success, missing fixture,
+missing sandbox-exec/runtime/framework, malformed evidence, profile error,
+identity mismatch, or cleanup failure returns unavailable with no frameworks or
+controls. The nonignored `RequireAvailable` macOS test requires explicit CI
+fixture environment variables and asserts the exact Cirq-only report.
 
 - [ ] **Step 4: Run macOS qualification**
 

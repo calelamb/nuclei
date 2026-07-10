@@ -12,7 +12,7 @@ use std::pin::Pin;
 
 #[cfg(unix)]
 use app_lib::agent_runtime::process::{
-    ProcessSpec, ProcessSupervisor, Supervisor, SupervisorLimits,
+    ProcessSpec, ProcessSupervisor, ResourceLimits, Supervisor, SupervisorLimits,
 };
 use app_lib::agent_runtime::protocol::{
     Action, Framework, FrontendRequestV1, ResponseStatus, WorkerRequestV1, WorkerResponseV1,
@@ -1761,6 +1761,7 @@ fn python_spec(script: &str) -> ProcessSpec {
         cwd: std::env::temp_dir(),
         env: std::collections::BTreeMap::new(),
         cleanup_root: None,
+        resource_limits: ResourceLimits::testing(),
     }
 }
 
@@ -1822,6 +1823,64 @@ async fn supervisor_removes_the_unique_request_directory_after_execution() {
         .await
         .unwrap();
     assert!(!request_root.exists());
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn parent_applies_every_resource_limit_before_python_starts() {
+    let limits = ResourceLimits::production();
+    let payload = json!({
+        "protocol_version": 1,
+        "request_id": "parent_limits",
+        "status": "ok",
+        "snapshot": null,
+        "result": null,
+        "stdout": "",
+        "stderr": "",
+        "error": null
+    })
+    .to_string();
+    let script = format!(
+        "import json,resource\npairs=[resource.getrlimit(item) for item in [resource.RLIMIT_CPU,resource.RLIMIT_AS,resource.RLIMIT_FSIZE,resource.RLIMIT_NOFILE,resource.RLIMIT_NPROC,resource.RLIMIT_CORE]]\nvalue=json.loads({payload:?});value['stdout']=json.dumps(pairs,separators=(',',':'));print(json.dumps(value,separators=(',',':')))"
+    );
+    let mut spec = python_spec(&script);
+    spec.resource_limits = limits;
+
+    let response = Supervisor::new(SupervisorLimits::production())
+        .run(&agent_request("parent_limits"), spec, b"")
+        .await
+        .unwrap();
+    let expected = vec![
+        vec![limits.cpu_seconds, limits.cpu_seconds],
+        vec![limits.address_space_bytes, limits.address_space_bytes],
+        vec![limits.file_bytes, limits.file_bytes],
+        vec![limits.open_files, limits.open_files],
+        vec![limits.processes, limits.processes],
+        vec![0, 0],
+    ];
+    assert_eq!(
+        serde_json::from_str::<Vec<Vec<u64>>>(&response.stdout).unwrap(),
+        expected
+    );
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn parent_resource_limit_failure_aborts_before_exec() {
+    let temporary = TempDir::new().unwrap();
+    let marker = temporary.path().join("must-not-exec");
+    let mut spec = python_spec(&format!(
+        "open({:?},'w').write('executed')",
+        marker.to_string_lossy()
+    ));
+    spec.resource_limits.open_files = u64::MAX - 1;
+
+    let error = Supervisor::new(SupervisorLimits::testing())
+        .run(&agent_request("invalid_parent_limit"), spec, b"")
+        .await
+        .unwrap_err();
+    assert_eq!(error.code, "worker_start_failed");
+    assert!(!marker.exists());
 }
 
 #[cfg(unix)]
