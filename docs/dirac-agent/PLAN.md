@@ -79,6 +79,31 @@ for a free educational IDE and works on macOS and Linux without kernel surgery.
   explicit, off-by-default setting** — flipping it on is a human decision, not an
   overnight one.
 
+## Status as delivered (this branch)
+
+- **Stage 0 — Salvage & green pipeline** — DONE. Disposable worker + macOS RLIMIT_AS
+  fix + kernel-tests deps. 309 kernel tests. Green in CI.
+- **Stage 1 — Closed-loop simulator agent** — DONE. Multi-turn orchestrator core
+  (framework-neutral, injectable ports), isolated `agent_execute` kernel path,
+  StoreWorkspace with reversible patch transactions, agentRunStore + live journal,
+  `useDiracAgent` hook, AgentRunCard + entry point in the Dirac panel. Wired end to end.
+- **Stage 2 — Quantum intelligence** — DONE (right-sized). Resource estimation,
+  curated no-false-positive validators, distribution comparison (worst-delta + TVD)
+  as agent tools. (Deferred: full symbolic IR, T-count, algorithm-invariant library,
+  golden corpus.)
+- **Stage 3 — Hardware planner (shadow)** — DONE. Compatibility filtering + explainable
+  scoring + `plan_hardware_run` recommendation tool. No submission. (Deferred: real
+  backend-specific transpilation previews — needs provider SDKs in the kernel.)
+- **Stage 4 — Budgeted hardware autonomy** — DONE as gated machinery. Deterministic
+  policy engine, atomic budget ledger + idempotency, submit/poll/cancel/analyze tools,
+  live `SocketSubmitPort`, Settings toggle. **Real-money autonomous submission ships
+  OFF by default** and cannot be enabled by model text — only by a human flipping the
+  Settings toggle. The simulator path runs freely; real QPU returns `needs_approval`
+  under the default policy. (Deferred: provider-specific cost models, the full
+  reconciliation state machine, live-QPU smoke tests.)
+
+Total: 461 frontend tests + 309 kernel tests, all green; tsc/eslint/build clean.
+
 ## Safety invariants (non-negotiable)
 
 - Claude proposes typed actions; deterministic services authorize/execute.
