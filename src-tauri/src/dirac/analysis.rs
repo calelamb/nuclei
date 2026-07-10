@@ -19,12 +19,10 @@
 //! `kernel/models/snapshot.py` and the `CircuitSnapshot` shape documented in
 //! the top-level `CLAUDE.md`).
 //!
-//! Stage R4's orchestrator is the first live caller of this module; until
-//! then it is exercised only by its own unit tests. The allow below covers
-//! both the not-yet-called functions and the re-exports below (which have
-//! no live caller yet either) — every path already has a unit test in this
-//! module or its submodules.
-#![allow(dead_code, unused_imports)] // remove-me: wired up by the Stage R4 orchestrator.
+//! Stage R4's tool executors (`estimate_quantum_resources`,
+//! `validate_quantum_program`, `compare_quantum_results`,
+//! `check_algorithm_invariant`, `plan_hardware_run`,
+//! `preview_backend_transpilation`) are this module's live callers.
 
 pub mod algorithms;
 pub mod planner;
@@ -40,7 +38,8 @@ pub use planner::{
 };
 pub use resources::{estimate_resources, ResourceEstimate};
 pub use validate::{
-    compare_distributions, ComparisonPerState, ComparisonReport, Diagnostic, DiagnosticSeverity,
+    compare_distributions, validate_program, ComparisonPerState, ComparisonReport, Diagnostic,
+    DiagnosticSeverity, DEFAULT_COMPARE_TOLERANCE,
 };
 
 use serde::{Deserialize, Serialize};

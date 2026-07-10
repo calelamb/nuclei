@@ -7,9 +7,10 @@
 //! submission idempotency keys so the same logical submission is never sent
 //! twice.
 //!
-//! Stage R4's orchestrator is the first live caller of this module; until
-//! then it is exercised only by its own unit tests.
-#![allow(dead_code)] // remove-me: wired up by the Stage R4 orchestrator.
+//! Stage R4's `submit_hardware_job` tool executor is this module's live
+//! caller: it reserves/commits/releases spend and enforces submission
+//! idempotency around a hardware submission. `to_json`/`from_json` persistence
+//! helpers are carried for R5's run recovery.
 
 use std::collections::HashMap;
 

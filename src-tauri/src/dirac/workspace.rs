@@ -21,12 +21,10 @@
 //! TS side), and SHA-256 gives a much lower collision probability for a
 //! conflict-detection mechanism that gates file mutation.
 //!
-//! Stage R4's orchestrator is the first live caller of this module; until
-//! then it is exercised only by its own unit tests. The allow below covers
-//! both the not-yet-called functions and the re-exports below (which have
-//! no live caller yet either) — every path already has a unit test in this
-//! module or its submodules.
-#![allow(dead_code, unused_imports)] // remove-me: wired up by the Stage R4 orchestrator.
+//! Stage R4's `apply_patch`/`rollback_patch`/`read_quantum_file`/
+//! `inspect_project` tool executors are this module's live callers via the
+//! [`Workspace`] trait; [`FsWorkspace`] is the production impl the R5 command
+//! layer selects.
 
 pub mod fs;
 pub mod mem;

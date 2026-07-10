@@ -1,5 +1,11 @@
 mod commands;
-mod dirac;
+// The Dirac trusted-runtime harness is the crate's agent API surface: the R4
+// orchestrator, model gateway, execution port, policy/budget, and analysis are
+// consumed by the R5 Tauri command layer (and are a legitimate library API for
+// the `app_lib` rlib). Exposing the module makes those items reachable from a
+// live crate root, so the trusted-runtime code needs no blanket dead_code
+// allows to build warning-clean under `-D warnings`.
+pub mod dirac;
 
 use commands::kernel::KernelState;
 

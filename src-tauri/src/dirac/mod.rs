@@ -16,7 +16,13 @@ pub mod analysis;
 pub mod budget;
 pub mod executor;
 pub mod gateway;
+pub mod journal;
+pub mod kernel;
+pub mod orchestrator;
 pub mod policy;
+pub mod submit;
+pub mod tool_exec;
+pub mod tools;
 pub mod types;
 pub mod workspace;
 

@@ -16,15 +16,11 @@
 //! - This file — [`GatewayError`] and [`ModelGateway`] itself, which wires the
 //!   above together.
 //!
-//! Only the API-key commands (`dirac_set_api_key`/`dirac_has_api_key`/
-//! `dirac_clear_api_key` in `mod.rs`) have a live caller at this stage —
-//! `ModelGateway::complete` and its supporting types (plus the `MemoryStore`/
-//! `MockTransport` test doubles, re-exported here for the same reason) are
-//! the gateway's public surface for Stage R4's orchestrator, which is the
-//! loop that will actually call the model. The allow below silences the
-//! interim "never used"/"unused import" warnings for that surface; every
-//! path it covers already has a unit test in this module or its submodules.
-#![allow(dead_code, unused_imports)]
+//! `ModelGateway::complete` is now wired to the Stage R4 orchestrator's
+//! `GatewayModel` model port, so the gateway's public surface (and the
+//! `MemoryStore`/`MockTransport` test doubles re-exported below) are all live
+//! API — no module-level dead_code allow is needed now that `dirac` is a
+//! public module.
 
 pub mod protocol;
 pub mod store;
