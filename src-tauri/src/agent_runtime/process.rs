@@ -233,6 +233,7 @@ pub struct Supervisor {
     limits: SupervisorLimits,
     active: Arc<Mutex<HashMap<String, Arc<RunToken>>>>,
     background_reaps: Arc<AtomicUsize>,
+    background_reap_gate: Arc<Mutex<Option<Arc<tokio::sync::Notify>>>>,
 }
 
 impl Supervisor {
@@ -241,6 +242,7 @@ impl Supervisor {
             limits,
             active: Arc::new(Mutex::new(HashMap::new())),
             background_reaps: Arc::new(AtomicUsize::new(0)),
+            background_reap_gate: Arc::new(Mutex::new(None)),
         }
     }
 
@@ -274,6 +276,14 @@ impl Supervisor {
 
     pub fn background_reap_count(&self) -> usize {
         self.background_reaps.load(Ordering::Acquire)
+    }
+
+    #[doc(hidden)]
+    pub fn install_background_reap_gate_for_test(&self, gate: Arc<tokio::sync::Notify>) {
+        *self
+            .background_reap_gate
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner()) = Some(gate);
     }
 
     pub fn reserve(&self, request_id: &str) -> Result<RunReservation, RuntimeError> {
@@ -339,12 +349,16 @@ impl Supervisor {
         stdin: &[u8],
         reservation: RunReservation,
     ) -> Result<WorkerResponseV1, RuntimeError> {
-        let mut cleanup = RequestCleanup::new(spec.cleanup_root.clone());
-        // Keep the generation lease explicit in this outer scope through child
-        // termination and checked request-directory cleanup.
-        let _runtime_guard = spec.runtime_guard.clone();
-        let result = self.run_unix_inner(request, spec, stdin, reservation).await;
-        cleanup.cleanup()?;
+        let mut resources = Some(RunResources::new(
+            spec.cleanup_root.clone(),
+            spec.runtime_guard.clone(),
+        ));
+        let result = self
+            .run_unix_inner(request, spec, stdin, reservation, &mut resources)
+            .await;
+        if let Some(resources) = resources {
+            resources.finish()?;
+        }
         result
     }
 
@@ -355,6 +369,7 @@ impl Supervisor {
         spec: ProcessSpec,
         stdin: &[u8],
         reservation: RunReservation,
+        resources: &mut Option<RunResources>,
     ) -> Result<WorkerResponseV1, RuntimeError> {
         use std::process::Stdio;
         use tokio::io::AsyncWriteExt;
@@ -405,7 +420,20 @@ impl Supervisor {
             RuntimeError::new("worker_start_failed", "Worker process could not be started")
         })?;
 
-        let mut guard = RunGuard::new(reservation, child, Arc::clone(&self.background_reaps));
+        let reap_gate = self
+            .background_reap_gate
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .clone();
+        let mut guard = RunGuard::new(
+            reservation,
+            child,
+            resources
+                .take()
+                .expect("run resources transfer exactly once after spawn"),
+            Arc::clone(&self.background_reaps),
+            reap_gate,
+        );
         let child_stdin = guard.child_mut().stdin.take().expect("piped worker stdin");
         let stdout = guard
             .child_mut()
@@ -490,6 +518,7 @@ impl Supervisor {
         let status = match tokio::time::timeout_at(deadline, guard.child_mut().wait()).await {
             Ok(Ok(status)) => {
                 guard.mark_reaped();
+                guard.finish_resources()?;
                 status
             }
             Ok(Err(_)) => {
@@ -617,6 +646,29 @@ impl Drop for RequestCleanup {
 }
 
 #[cfg(unix)]
+struct RunResources {
+    cleanup: RequestCleanup,
+    runtime_guard: Option<Arc<std::fs::File>>,
+}
+
+#[cfg(unix)]
+impl RunResources {
+    fn new(cleanup_root: Option<PathBuf>, runtime_guard: Option<Arc<std::fs::File>>) -> Self {
+        Self {
+            cleanup: RequestCleanup::new(cleanup_root),
+            runtime_guard,
+        }
+    }
+
+    fn finish(mut self) -> Result<(), RuntimeError> {
+        let cleanup = self.cleanup.cleanup();
+        // The lease is released only after checked cleanup returns.
+        self.runtime_guard.take();
+        cleanup
+    }
+}
+
+#[cfg(unix)]
 pub(crate) fn apply_resource_limits(limits: ResourceLimits) -> std::io::Result<()> {
     macro_rules! set_limit {
         ($resource:expr, $value:expr) => {{
@@ -735,12 +787,14 @@ impl ProcessSupervisor for Supervisor {
 
 #[cfg(unix)]
 struct RunGuard {
-    reservation: RunReservation,
+    reservation: Option<RunReservation>,
     child: Option<tokio::process::Child>,
     process_group: i32,
     leader_reaped: bool,
     tasks: Vec<tokio::task::AbortHandle>,
+    resources: Option<RunResources>,
     background_reaps: Arc<AtomicUsize>,
+    background_reap_gate: Option<Arc<tokio::sync::Notify>>,
 }
 
 #[cfg(unix)]
@@ -748,16 +802,20 @@ impl RunGuard {
     fn new(
         reservation: RunReservation,
         child: tokio::process::Child,
+        resources: RunResources,
         background_reaps: Arc<AtomicUsize>,
+        background_reap_gate: Option<Arc<tokio::sync::Notify>>,
     ) -> Self {
         let process_group = child.id().expect("spawned child has an ID") as i32;
         Self {
-            reservation,
+            reservation: Some(reservation),
             child: Some(child),
             process_group,
             leader_reaped: false,
             tasks: Vec::new(),
+            resources: Some(resources),
             background_reaps,
+            background_reap_gate,
         }
     }
 
@@ -790,7 +848,17 @@ impl RunGuard {
     }
 
     fn complete(&self) -> bool {
-        self.reservation.complete()
+        self.reservation
+            .as_ref()
+            .expect("run reservation remains until completion")
+            .complete()
+    }
+
+    fn finish_resources(&mut self) -> Result<(), RuntimeError> {
+        self.resources
+            .take()
+            .expect("run resources finish exactly once")
+            .finish()
     }
 }
 
@@ -807,15 +875,31 @@ impl Drop for RunGuard {
                 if let Ok(runtime) = tokio::runtime::Handle::try_current() {
                     self.background_reaps.fetch_add(1, Ordering::AcqRel);
                     let background_reaps = Arc::clone(&self.background_reaps);
+                    let reap_gate = self.background_reap_gate.take();
+                    let resources = self.resources.take();
+                    let reservation = self.reservation.take();
                     runtime.spawn(async move {
-                        let _ =
-                            tokio::time::timeout(Duration::from_millis(250), child.wait()).await;
+                        if let Some(gate) = reap_gate {
+                            gate.notified().await;
+                        }
+                        loop {
+                            match child.wait().await {
+                                Ok(_) => break,
+                                Err(_) => tokio::time::sleep(Duration::from_millis(10)).await,
+                            }
+                        }
+                        if let Some(resources) = resources {
+                            let _ = resources.finish();
+                        }
+                        drop(reservation);
                         background_reaps.fetch_sub(1, Ordering::AcqRel);
                     });
                 }
             }
         }
-        let _ = self.complete();
+        if let Some(reservation) = self.reservation.as_ref() {
+            let _ = reservation.complete();
+        }
     }
 }
 

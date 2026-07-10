@@ -1195,9 +1195,12 @@ app-owned lock before explicit context validation and the first hash, then holds
 that same lease continuously through all probes, the final equality hash, and
 atomic report/resolver installation. Cached reuse commits under the same lease.
 Every launch also hashes while holding a shared lease; updates require the
-exclusive lock. The lease is retained by the production `ProcessSpec` through
-worker termination and reap, so an updater cannot replace either Python or the
-generated kernel while any worker uses that generation.
+exclusive lock. At spawn, `RunGuard` takes ownership of the lease and checked
+request cleanup. Cancellation, wait failure, cleanup timeout, or future drop
+transfers the child, lease, reservation, and cleanup to the background reaper;
+the lease is released only after termination is observed and cleanup is
+attempted. An updater therefore cannot replace either Python or the generated
+kernel while any worker uses that generation.
 The directory is a versioned generation; its computed full-tree Merkle key, not
 its directory name, is the authoritative content identity. Tree entries must be
 owned by the current uid and cannot be group/world writable. A pre-launch

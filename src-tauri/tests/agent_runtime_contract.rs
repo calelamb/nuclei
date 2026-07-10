@@ -2472,6 +2472,81 @@ async fn aborted_run_drops_guard_clears_registry_and_allows_id_reuse() {
 
 #[cfg(unix)]
 #[tokio::test]
+async fn aborted_run_retains_generation_lease_until_background_reap_and_cleanup() {
+    use fs2::FileExt;
+    use std::fs::OpenOptions;
+
+    let supervisor = Arc::new(Supervisor::new(SupervisorLimits::testing()));
+    let reap_gate = Arc::new(tokio::sync::Notify::new());
+    supervisor.install_background_reap_gate_for_test(Arc::clone(&reap_gate));
+    let temporary = TempDir::new().unwrap();
+    let lock_path = temporary.path().join(".provision.lock");
+    fs::write(&lock_path, "").unwrap();
+    let lease = OpenOptions::new().read(true).open(&lock_path).unwrap();
+    lease.lock_shared().unwrap();
+    let request_root = temporary.path().join("request");
+    fs::create_dir(&request_root).unwrap();
+    let pid_file = temporary.path().join("lease-leader-pid");
+    let script = format!(
+        "import os,pathlib,time;pathlib.Path({:?}).write_text(str(os.getpid()));time.sleep(5)",
+        pid_file.to_string_lossy()
+    );
+    let mut spec = python_spec(&script);
+    spec.cleanup_root = Some(request_root.clone());
+    spec.runtime_guard = Some(Arc::new(lease));
+    let task = {
+        let supervisor = Arc::clone(&supervisor);
+        tokio::spawn(async move {
+            supervisor
+                .run(&agent_request("lease-abort"), spec, b"")
+                .await
+        })
+    };
+    tokio::time::timeout(Duration::from_millis(200), async {
+        while !pid_file.exists() {
+            tokio::task::yield_now().await;
+        }
+    })
+    .await
+    .expect("worker starts before abort");
+
+    task.abort();
+    assert!(task.await.unwrap_err().is_cancelled());
+    tokio::time::timeout(Duration::from_millis(200), async {
+        while supervisor.background_reap_count() != 1 {
+            tokio::task::yield_now().await;
+        }
+    })
+    .await
+    .expect("background reap takes ownership");
+    let update = OpenOptions::new()
+        .read(true)
+        .write(true)
+        .open(&lock_path)
+        .unwrap();
+    assert!(update.try_lock_exclusive().is_err());
+    assert!(request_root.exists());
+
+    reap_gate.notify_one();
+    tokio::time::timeout(Duration::from_millis(500), async {
+        while supervisor.background_reap_count() != 0 {
+            tokio::task::yield_now().await;
+        }
+    })
+    .await
+    .expect("background reap and cleanup complete");
+    assert!(!request_root.exists());
+    tokio::time::timeout(Duration::from_millis(200), async {
+        while update.try_lock_exclusive().is_err() {
+            tokio::task::yield_now().await;
+        }
+    })
+    .await
+    .expect("exclusive generation lock becomes available after reap");
+}
+
+#[cfg(unix)]
+#[tokio::test]
 async fn cancellation_and_cancel_all_are_idempotent_and_reap_workers() {
     let supervisor = Arc::new(Supervisor::new(SupervisorLimits::testing()));
     let task = {
