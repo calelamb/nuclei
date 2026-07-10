@@ -12,9 +12,13 @@
 //! `dirac_clear_api_key` commands below are the frontend's only touchpoint —
 //! the key itself never crosses the Tauri IPC boundary in either direction.
 
+pub mod analysis;
+pub mod budget;
 pub mod executor;
 pub mod gateway;
+pub mod policy;
 pub mod types;
+pub mod workspace;
 
 pub use executor::{run_agent_request, DEFAULT_WALL};
 pub use gateway::ModelGateway;

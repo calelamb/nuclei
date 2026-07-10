@@ -37,7 +37,17 @@ reqwest = { version = "0.12", default-features = false, features = ["blocking", 
 # macOS/Windows, pure-Rust Secret Service on Linux (compiles headless; only
 # touches D-Bus at runtime).
 keyring = { version = "3", features = ["apple-native", "windows-native", "sync-secret-service"] }
+# Stage R3 workspace patch transactions: content hashing for conflict
+# detection (`dirac::workspace`). Cross-language exactness with the TS
+# FNV-1a hash is not required (the Rust side is desktop-authoritative), so a
+# real digest is used instead of a hand-rolled one.
+sha2 = "0.10"
+hex = "0.4"
 
 [target.'cfg(unix)'.dependencies]
 # Process-group control for the execution supervisor (setsid + killpg).
 libc = "0.2"
+
+[dev-dependencies]
+# Filesystem-backed workspace tests (Stage R3 `dirac::workspace::fs`).
+tempfile = "3"
