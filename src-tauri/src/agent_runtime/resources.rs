@@ -867,7 +867,7 @@ fn require_success(output: CommandOutput, message: &str) -> Result<(), String> {
     }
 }
 
-fn safe_stderr_diagnostic(stderr: &[u8]) -> String {
+pub(crate) fn safe_stderr_diagnostic(stderr: &[u8]) -> String {
     const DIAGNOSTIC_LIMIT: usize = 2_048;
     let text = String::from_utf8_lossy(stderr);
     let mut result = String::new();

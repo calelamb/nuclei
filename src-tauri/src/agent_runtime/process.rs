@@ -893,10 +893,14 @@ impl Supervisor {
             ));
         }
         if !status.success() {
-            return Err(RuntimeError::new(
-                "worker_failed",
-                "Worker process exited unsuccessfully",
-            ));
+            let diagnostic =
+                crate::agent_runtime::resources::safe_stderr_diagnostic(&stderr_capture.bytes);
+            let message = if diagnostic.is_empty() {
+                "Worker process exited unsuccessfully".into()
+            } else {
+                format!("Worker process exited unsuccessfully: {diagnostic}")
+            };
+            return Err(RuntimeError::cleanup("worker_failed", message));
         }
         if !matches!(stdin_result, Ok(Ok(()))) {
             return Err(RuntimeError::new(

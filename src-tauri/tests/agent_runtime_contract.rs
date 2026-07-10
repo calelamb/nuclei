@@ -1960,6 +1960,24 @@ async fn parent_resource_limit_failure_aborts_before_exec() {
 }
 
 #[cfg(unix)]
+#[tokio::test]
+async fn failed_worker_reports_only_safe_bounded_stderr() {
+    let spec = python_spec(
+        "import sys;sys.stderr.write('bubblewrap setup failed\\nAuthorization: Bearer secret\\n');raise SystemExit(2)",
+    );
+
+    let error = Supervisor::new(SupervisorLimits::testing())
+        .run(&agent_request("safe_worker_diagnostic"), spec, b"")
+        .await
+        .unwrap_err();
+
+    assert_eq!(error.code, "worker_failed");
+    assert!(error.message.contains("bubblewrap setup failed"));
+    assert!(error.message.contains("[redacted]"));
+    assert!(!error.message.contains("Bearer secret"));
+}
+
+#[cfg(unix)]
 struct BlockingResolver {
     blocked_id: String,
     entered: Arc<tokio::sync::Notify>,
