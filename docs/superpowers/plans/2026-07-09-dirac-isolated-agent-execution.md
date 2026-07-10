@@ -1169,7 +1169,10 @@ clear the report/resolver pair; a stale resolver failure can clear only the
 exact generation/key it executed and only when no newer refresh is pending or
 committed. Resolver failure never allocates a refresh generation. Each resolver
 carries its installed generation/key, and execution checks that identity
-against the atomically read report. Resolver launch recomputes a deterministic,
+against the atomically read report. Cached qualification reuse constructs a new
+resolver bound to the new generation/key before atomically installing the
+refreshed backend; it never mutates the backend generation around a stale
+resolver. Resolver launch recomputes a deterministic,
 bounded, double-checked Merkle identity covering app version, complete profile,
 requirements, every regular path/type/content entry in the complete canonical
 kernel tree and complete canonical `AgentEnvironment.root` (interpreter,
@@ -1220,11 +1223,15 @@ missing sandbox-exec/runtime/framework, malformed evidence, profile error,
 identity mismatch, or cleanup failure returns unavailable with no frameworks or
 controls. The nonignored `RequireAvailable` macOS test requires explicit CI
 fixture environment variables and asserts the exact Cirq-only report.
-`.github/workflows/build.yml` creates an ephemeral copied Python 3.12 venv,
-installs exactly `kernel/agent-requirements.txt`, exports every explicit fixture
-path, and runs this test with Rust 1.77.2 on `macos-latest`. This online CI setup
-is test setup only and does not satisfy the unavailable production offline
-provisioning contract.
+`.github/workflows/build.yml` uses `setup-uv` and
+`UV_PYTHON_INSTALL_DIR` to place a managed standalone Python and copied venv
+under one `$RUNNER_TEMP/nuclei-agent-runtime` root, materializes symlinks, and
+installs exactly `kernel/agent-requirements.txt`. Before Rust starts, the fixture
+asserts canonical `sys.base_prefix`, stdlib, executable, and site-packages paths
+all remain under that common environment root. It then exports every explicit
+fixture path and runs this test with Rust 1.77.2 on `macos-latest`. This online
+CI setup is test setup only and does not satisfy the unavailable production
+offline provisioning contract.
 
 - [ ] **Step 4: Run macOS qualification**
 

@@ -98,10 +98,10 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Setup Python 3.12
-        uses: actions/setup-python@v5
+      - name: Setup uv
+        uses: astral-sh/setup-uv@v6
         with:
-          python-version: '3.12'
+          enable-cache: false
 
       - name: Install Rust 1.77.2
         uses: dtolnay/rust-toolchain@1.77.2
@@ -112,19 +112,59 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          fixture_root="$RUNNER_TEMP/nuclei-agent-qualification"
-          venv_root="$fixture_root/runtime"
-          request_root="$fixture_root/requests"
-          sentinel_root="$fixture_root/sentinels"
-          python -m venv --copies "$venv_root"
-          "$venv_root/bin/python" -m pip install --requirement kernel/agent-requirements.txt
+          environment_root="$RUNNER_TEMP/nuclei-agent-runtime"
+          managed_root="$environment_root/managed"
+          venv_root="$environment_root/venv"
+          request_root="$RUNNER_TEMP/nuclei-agent-requests"
+          sentinel_root="$RUNNER_TEMP/nuclei-agent-sentinels"
+          export UV_PYTHON_INSTALL_DIR="$managed_root"
+          mkdir -p "$environment_root"
+          uv python install 3.12
+          managed_python="$(uv python find --managed-python 3.12)"
+
+          # The runtime identity rejects every symlink. Materialize the managed
+          # standalone distribution so every executable/importable input is a
+          # regular file beneath the one environment root.
+          materialized_root="$environment_root/managed-materialized"
+          cp -R -L "$managed_root" "$materialized_root"
+          rm -rf "$managed_root"
+          mv "$materialized_root" "$managed_root"
+          managed_python="$(uv python find --managed-python 3.12)"
+
+          "$managed_python" -m venv --copies "$venv_root"
+          uv pip install --python "$venv_root/bin/python" --requirement kernel/agent-requirements.txt
           site_packages="$("$venv_root/bin/python" -c 'import sysconfig; print(sysconfig.get_paths()["purelib"])')"
           mkdir -p "$request_root" "$sentinel_root/project" "$sentinel_root/home"
           printf '%s\n' 'project qualification sentinel' > "$sentinel_root/project/sentinel"
           printf '%s\n' 'home qualification sentinel' > "$sentinel_root/home/sentinel"
+
+          NUCLEI_AGENT_ENVIRONMENT_ROOT="$environment_root" \
+          NUCLEI_AGENT_SITE_PACKAGES="$site_packages" \
+          "$venv_root/bin/python" - <<'PY'
+          import os
+          import sys
+          import sysconfig
+          from pathlib import Path
+
+          root = Path(os.environ["NUCLEI_AGENT_ENVIRONMENT_ROOT"])
+          assert root == root.resolve(strict=True)
+          paths = {
+              "base_prefix": Path(sys.base_prefix),
+              "stdlib": Path(sysconfig.get_path("stdlib")),
+              "executable": Path(sys.executable),
+              "site_packages": Path(os.environ["NUCLEI_AGENT_SITE_PACKAGES"]),
+          }
+          for name, path in paths.items():
+              canonical = path.resolve(strict=True)
+              assert path == canonical, f"{name} is not canonical: {path} -> {canonical}"
+              canonical.relative_to(root)
+          for path in root.rglob("*"):
+              assert not path.is_symlink(), f"runtime contains symlink: {path}"
+          PY
+
           {
             echo "NUCLEI_AGENT_KERNEL_ROOT=$GITHUB_WORKSPACE/kernel"
-            echo "NUCLEI_AGENT_ENVIRONMENT_ROOT=$venv_root"
+            echo "NUCLEI_AGENT_ENVIRONMENT_ROOT=$environment_root"
             echo "NUCLEI_AGENT_PYTHON=$venv_root/bin/python"
             echo "NUCLEI_AGENT_SITE_PACKAGES=$site_packages"
             echo "NUCLEI_AGENT_REQUEST_TEMP_ROOT=$request_root"

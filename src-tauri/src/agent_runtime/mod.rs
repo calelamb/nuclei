@@ -44,6 +44,14 @@ pub trait AgentProcessResolver: Send + Sync {
         None
     }
 
+    fn rebind_installed_identity(
+        &self,
+        _generation: u64,
+        _key: &str,
+    ) -> Option<Arc<dyn AgentProcessResolver>> {
+        None
+    }
+
     fn resolve<'a>(
         &'a self,
         request: &'a WorkerRequestV1,
@@ -79,6 +87,18 @@ struct MacContextResolver {
 impl AgentProcessResolver for MacContextResolver {
     fn installed_identity(&self) -> Option<(u64, &str)> {
         Some((self.installed_generation, &self.installed_key))
+    }
+
+    fn rebind_installed_identity(
+        &self,
+        generation: u64,
+        key: &str,
+    ) -> Option<Arc<dyn AgentProcessResolver>> {
+        Some(Arc::new(Self {
+            context: self.context.clone(),
+            installed_generation: generation,
+            installed_key: key.into(),
+        }))
     }
 
     fn resolve<'a>(
@@ -394,6 +414,9 @@ impl AgentRuntimeState {
             }
             installed.clone()
         };
+        refreshed.resolver = refreshed
+            .resolver
+            .rebind_installed_identity(generation, key)?;
         refreshed.generation = generation;
         refreshed.refresh_key = key.into();
         if self.commit_refresh(generation, key, refreshed).await {
@@ -491,6 +514,8 @@ fn required_mode(mut report: CapabilityReport, mode: QualificationMode) -> Capab
 #[cfg(test)]
 mod refresh_tests {
     use super::*;
+    use std::collections::BTreeMap;
+    use std::path::PathBuf;
 
     struct TaggedResolver(&'static str);
 
@@ -500,6 +525,44 @@ mod refresh_tests {
             _request: &'a WorkerRequestV1,
         ) -> Pin<Box<dyn Future<Output = Result<ProcessSpec, String>> + Send + 'a>> {
             Box::pin(async move { Err(self.0.into()) })
+        }
+    }
+
+    struct IdentifiedResolver {
+        generation: u64,
+        key: String,
+    }
+
+    impl AgentProcessResolver for IdentifiedResolver {
+        fn installed_identity(&self) -> Option<(u64, &str)> {
+            Some((self.generation, &self.key))
+        }
+
+        fn rebind_installed_identity(
+            &self,
+            generation: u64,
+            key: &str,
+        ) -> Option<Arc<dyn AgentProcessResolver>> {
+            Some(Arc::new(Self {
+                generation,
+                key: key.into(),
+            }))
+        }
+
+        fn resolve<'a>(
+            &'a self,
+            _request: &'a WorkerRequestV1,
+        ) -> Pin<Box<dyn Future<Output = Result<ProcessSpec, String>> + Send + 'a>> {
+            Box::pin(async {
+                Ok(ProcessSpec {
+                    executable: PathBuf::from("/qualified/agent-python"),
+                    args: Vec::new(),
+                    cwd: PathBuf::from("/qualified/request"),
+                    env: BTreeMap::new(),
+                    cleanup_root: None,
+                    resource_limits: process::ResourceLimits::testing(),
+                })
+            })
         }
     }
 
@@ -659,6 +722,54 @@ mod refresh_tests {
             state.backend.read().await.cache_key.as_deref(),
             Some("mutated-adapter")
         );
+    }
+
+    #[tokio::test]
+    async fn cached_refresh_rebinds_resolver_to_the_new_installed_identity() {
+        let state = AgentRuntimeState::new();
+        let qualified = state.begin_refresh();
+        assert!(
+            state
+                .commit_refresh(
+                    qualified,
+                    "same-runtime",
+                    InstalledBackend {
+                        report: CapabilityReport {
+                            available: true,
+                            reason: None,
+                            qualified_frameworks: vec!["cirq".into()],
+                            controls: Vec::new(),
+                        },
+                        resolver: Arc::new(IdentifiedResolver {
+                            generation: qualified,
+                            key: "same-runtime".into(),
+                        }),
+                        cache_key: Some("same-runtime".into()),
+                        refresh_key: "same-runtime".into(),
+                        generation: qualified,
+                    },
+                )
+                .await
+        );
+
+        let cached_refresh = state.begin_refresh();
+        assert!(state
+            .reuse_if_identity_matches(cached_refresh, "same-runtime")
+            .await
+            .is_some());
+
+        let installed = state.backend.read().await.clone();
+        assert!(installed.report.available);
+        assert_eq!(installed.generation, cached_refresh);
+        assert_eq!(
+            installed.resolver.installed_identity(),
+            Some((cached_refresh, "same-runtime"))
+        );
+        assert!(installed
+            .resolver
+            .resolve(&test_request("cached-resolve"))
+            .await
+            .is_ok());
     }
 
     #[tokio::test]
