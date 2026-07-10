@@ -275,8 +275,11 @@ jobs:
             grep -qw "$controller" "$cgroup_root/cgroup.controllers"
             grep -qw "$controller" "$cgroup_root/cgroup.subtree_control"
           done
+          manager_cgroup="$cgroup_root/qualification-manager"
+          mkdir "$manager_cgroup"
           test -w "$cgroup_root/cgroup.procs"
           echo "NUCLEI_AGENT_CGROUP_ROOT=$cgroup_root" >> "$GITHUB_ENV"
+          echo "NUCLEI_AGENT_CGROUP_MANAGER=$manager_cgroup" >> "$GITHUB_ENV"
           echo "NUCLEI_AGENT_BWRAP=/usr/bin/bwrap" >> "$GITHUB_ENV"
 
       # Ephemeral qualification fixture only. Production provisioning remains
@@ -384,7 +387,10 @@ jobs:
           cargo test --locked --no-run --test agent_runtime_boundary
 
       - name: Require runtime-proven Linux isolation
-        run: cargo test --locked --offline --test agent_runtime_boundary linux_required_qualification_passes_when_explicitly_required -- --nocapture
+        run: |
+          set -euo pipefail
+          sudo tee "$NUCLEI_AGENT_CGROUP_MANAGER/cgroup.procs" <<< "$$" >/dev/null
+          exec cargo test --locked --offline --test agent_runtime_boundary linux_required_qualification_passes_when_explicitly_required -- --nocapture
         working-directory: src-tauri
         env:
           ANTHROPIC_API_KEY: qualification-fake-anthropic

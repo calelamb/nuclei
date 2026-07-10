@@ -319,19 +319,26 @@ fn linux_ci_caches_every_artifact_before_hostile_parent_environment() {
     let after = &linux_job[qualification..];
 
     assert!(before.contains("uv pip sync"));
-    assert!(before.contains(
-        "uv pip sync --break-system-packages --python \"$managed_python\""
-    ));
+    assert!(before.contains("uv pip sync --break-system-packages --python \"$managed_python\""));
     assert!(!before.contains("uv venv --python \"$managed_python\""));
     assert!(before.contains("non_runtime_stdlib"));
     assert!(before.contains("\"test\", \"idlelib\", \"tkinter\", \"turtledemo\", \"ensurepip\""));
     assert!(before.contains("libwebkit2gtk-4.1-dev"));
     assert!(before.contains("libayatana-appindicator3-dev"));
     assert!(before.contains("kernel.apparmor_restrict_unprivileged_userns=0"));
+    assert!(before.contains("manager_cgroup=\"$cgroup_root/qualification-manager\""));
+    assert!(before.contains("NUCLEI_AGENT_CGROUP_MANAGER=$manager_cgroup"));
     assert!(before.contains("cargo fetch --locked --target x86_64-unknown-linux-gnu"));
     assert!(before.contains("cargo test --locked --no-run"));
     assert!(after.contains("cargo test --locked --offline"));
     assert!(after.contains("HTTP_PROXY: qualification-fake-http-proxy"));
+    let manager_move = after
+        .find("NUCLEI_AGENT_CGROUP_MANAGER/cgroup.procs")
+        .expect("qualification shell moves into delegated manager leaf");
+    let offline_test = after
+        .find("cargo test --locked --offline")
+        .expect("offline qualification command");
+    assert!(manager_move < offline_test);
     assert!(!after.contains("\n      - name:"));
 }
 

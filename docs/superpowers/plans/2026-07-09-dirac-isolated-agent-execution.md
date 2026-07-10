@@ -1368,8 +1368,12 @@ libraries, completes uv Python/package installation, then caches a host-scoped
 `cargo fetch --locked --target x86_64-unknown-linux-gnu` (so Cargo 1.77 never
 parses unused newer-target manifests). It also completes locked no-run test
 compilation before fake secrets, proxies, or loader variables are injected.
-The hostile qualification step runs `cargo test --locked --offline`, and no
-later step can perform network I/O. The production Merkle identity pass retains
+The fixture gives the qualification process a dedicated manager leaf beneath
+the delegated root before launching Cargo. Worker cgroups are siblings of that
+leaf, so trusted pre-exec placement has a writable delegated common ancestor
+without putting a process in the controller-owning root. The hostile
+qualification step runs `cargo test --locked --offline`, and no later step can
+perform network I/O. The production Merkle identity pass retains
 a hard cooperative deadline, sized to 120 seconds for the full managed-Python
 plus venv generation under the existing 50,000-entry/2 GiB work caps. CI
 uses a package-scoped Cargo test profile to optimize Nuclei's qualification
