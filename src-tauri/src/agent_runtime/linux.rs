@@ -26,11 +26,16 @@ use std::time::{Duration, Instant};
 
 const BWRAP: &str = "/usr/bin/bwrap";
 const IDENTITY_VERSION: &str = "nuclei-linux-runtime-v1";
-const IDENTITY_TIMEOUT: Duration = Duration::from_secs(10);
+const IDENTITY_TIMEOUT: Duration = Duration::from_secs(30);
 const CGROUP_CLEANUP_TIMEOUT: Duration = Duration::from_secs(2);
 const MAX_IDENTITY_ENTRIES: usize = 50_000;
 const MAX_IDENTITY_BYTES: u64 = 2 * 1024 * 1024 * 1024;
 const CGROUP2_SUPER_MAGIC: libc::c_long = 0x6367_7270;
+
+#[doc(hidden)]
+pub const fn production_identity_timeout_for_test() -> Duration {
+    IDENTITY_TIMEOUT
+}
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum CgroupBackend {

@@ -1369,7 +1369,10 @@ libraries, completes uv Python/package installation, then caches a host-scoped
 parses unused newer-target manifests). It also completes locked no-run test
 compilation before fake secrets, proxies, or loader variables are injected.
 The hostile qualification step runs `cargo test --locked --offline`, and no
-later step can perform network I/O.
+later step can perform network I/O. The production Merkle identity pass retains
+a hard cooperative deadline, sized to 30 seconds so a cold hosted-runner hash
+of the locked Cirq fixture can complete; fault tests continue to inject much
+shorter deadlines to prove fail-closed cancellation.
 
 The pure-Rust `seccompiler` filter is compiled for the verified host
 architecture, serialized into a sealed memfd, and inherited only by bwrap.

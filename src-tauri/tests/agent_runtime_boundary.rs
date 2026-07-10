@@ -1,11 +1,11 @@
 #[cfg(target_os = "linux")]
 use app_lib::agent_runtime::linux::{
     cgroup_construction_cleanup_failure_for_test, cgroup_construction_failure_for_test,
-    compile_seccomp_bpf, qualification_cgroup_policy_for_test,
-    qualification_owned_cgroups_absent_for_test, qualification_owned_request_dirs_absent_for_test,
-    verify_cgroup_event_delta_for_test, verify_production_cgroup_for_test,
-    verify_worker_cgroup_placement_for_test, CgroupProbeKind, LinuxBackend,
-    LinuxQualificationContext, LinuxSystemPaths, OfflineLinuxProvisioningContainment,
+    compile_seccomp_bpf, production_identity_timeout_for_test,
+    qualification_cgroup_policy_for_test, qualification_owned_cgroups_absent_for_test,
+    qualification_owned_request_dirs_absent_for_test, verify_cgroup_event_delta_for_test,
+    verify_production_cgroup_for_test, verify_worker_cgroup_placement_for_test, CgroupProbeKind,
+    LinuxBackend, LinuxQualificationContext, LinuxSystemPaths, OfflineLinuxProvisioningContainment,
 };
 use app_lib::agent_runtime::macos::{
     active_identity_hashers_for_test, build_seatbelt_profile, cirq_rlimit_probe_source,
@@ -197,6 +197,12 @@ fn linux_seccomp_filter_is_nonempty_and_architecture_checked() {
     let bpf = compile_seccomp_bpf().expect("supported CI architecture");
     assert!(!bpf.is_empty());
     assert_eq!(bpf.len() % 8, 0, "classic BPF instructions are 8 bytes");
+}
+
+#[cfg(target_os = "linux")]
+#[test]
+fn production_identity_budget_covers_cold_locked_fixture_hashing() {
+    assert!(production_identity_timeout_for_test() >= Duration::from_secs(30));
 }
 
 #[cfg(target_os = "linux")]
