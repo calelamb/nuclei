@@ -38,12 +38,14 @@ describe('AGENT_TOOLS', () => {
       [
         'apply_patch',
         'compare_quantum_results',
+        'estimate_quantum_resources',
         'finish',
         'inspect_project',
         'parse_quantum_program',
         'read_quantum_file',
         'rollback_patch',
         'run_simulation',
+        'validate_quantum_program',
       ].sort(),
     );
   });

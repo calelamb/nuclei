@@ -1,5 +1,6 @@
 import type { Framework, SimulationResult } from '../../types/quantum';
 import { kernelLanguageFor } from '../../types/quantum';
+import { compareDistributions, estimateResources, validateProgram } from './analysis';
 import type { KernelPort, WorkspacePort } from './interfaces';
 import type { ToolEvidence } from './types';
 
@@ -161,6 +162,69 @@ async function execParseQuantumProgram(
   });
 }
 
+async function execValidateQuantumProgram(
+  input: Record<string, unknown>,
+  toolCallId: string,
+  ctx: ToolContext,
+): Promise<ToolEvidence> {
+  const path = resolvePath(input, ctx);
+  const file = ctx.workspace.readFile(path);
+  if (!file) return fail('validate_quantum_program', toolCallId, `No file at path: ${path}`);
+
+  const framework = ctx.resolveFramework(path);
+  const language = kernelLanguageFor(framework);
+  const outcome = await ctx.kernel.parse(file.content, language);
+
+  if (!outcome.ok) {
+    return fail('validate_quantum_program', toolCallId, outcome.error, { path, line: outcome.line ?? null });
+  }
+
+  const diagnostics = validateProgram(outcome.snapshot);
+  const errorCount = diagnostics.filter((d) => d.severity === 'error').length;
+  const warningCount = diagnostics.filter((d) => d.severity === 'warning').length;
+  const resources = estimateResources(outcome.snapshot);
+
+  const evidence = ok('validate_quantum_program', toolCallId, {
+    path,
+    diagnostics,
+    errorCount,
+    warningCount,
+    resources,
+  });
+
+  if (errorCount > 0) {
+    const summary = diagnostics
+      .filter((d) => d.severity === 'error')
+      .map((d) => `[${d.code}] ${d.message}`)
+      .join('; ');
+    return { ...evidence, diagnostics: summary };
+  }
+
+  return evidence;
+}
+
+async function execEstimateQuantumResources(
+  input: Record<string, unknown>,
+  toolCallId: string,
+  ctx: ToolContext,
+): Promise<ToolEvidence> {
+  const path = resolvePath(input, ctx);
+  const file = ctx.workspace.readFile(path);
+  if (!file) return fail('estimate_quantum_resources', toolCallId, `No file at path: ${path}`);
+
+  const framework = ctx.resolveFramework(path);
+  const language = kernelLanguageFor(framework);
+  const outcome = await ctx.kernel.parse(file.content, language);
+
+  if (!outcome.ok) {
+    return fail('estimate_quantum_resources', toolCallId, outcome.error, { path, line: outcome.line ?? null });
+  }
+
+  const resources = estimateResources(outcome.snapshot);
+
+  return ok('estimate_quantum_resources', toolCallId, { path, ...resources });
+}
+
 async function execRunSimulation(
   input: Record<string, unknown>,
   toolCallId: string,
@@ -212,21 +276,30 @@ function execCompareQuantumResults(input: Record<string, unknown>, toolCallId: s
     return fail('compare_quantum_results', toolCallId, 'No simulation result available — call run_simulation first.');
   }
 
-  const states = new Set([...Object.keys(expected), ...Object.keys(actual.probabilities)]);
-  const perState: Record<string, { expected: number; actual: number; delta: number }> = {};
-  let worstDelta = 0;
-
-  for (const state of states) {
-    const expectedValue = asNumber(expected[state]) ?? 0;
-    const actualValue = actual.probabilities[state] ?? 0;
-    const delta = Math.abs(expectedValue - actualValue);
-    perState[state] = { expected: expectedValue, actual: actualValue, delta };
-    if (delta > worstDelta) worstDelta = delta;
+  // Normalize expected's values (which arrive as unvalidated tool input) to
+  // numbers before handing off to the pure comparator.
+  const normalizedExpected: Record<string, number> = {};
+  for (const [state, value] of Object.entries(expected)) {
+    normalizedExpected[state] = asNumber(value) ?? 0;
   }
 
-  const matches = worstDelta <= tolerance;
+  const report = compareDistributions(actual.probabilities, normalizedExpected, tolerance);
 
-  return ok('compare_quantum_results', toolCallId, { matches, worstDelta, tolerance, perState });
+  // Preserve the original perState shape (object keyed by state) for
+  // backward compatibility alongside the richer ordered array.
+  const perState: Record<string, { expected: number; actual: number; delta: number }> = {};
+  for (const entry of report.perState) {
+    perState[entry.state] = { expected: entry.expected, actual: entry.actual, delta: entry.delta };
+  }
+
+  return ok('compare_quantum_results', toolCallId, {
+    matches: report.matches,
+    worstDelta: report.worstDelta,
+    tolerance,
+    perState,
+    totalVariationDistance: report.totalVariationDistance,
+    perStateOrdered: report.perState,
+  });
 }
 
 function execFinish(input: Record<string, unknown>, toolCallId: string): ToolEvidence {
@@ -259,6 +332,10 @@ export async function executeTool(
         return execRollbackPatch(args, toolCallId, ctx);
       case 'parse_quantum_program':
         return await execParseQuantumProgram(args, toolCallId, ctx);
+      case 'validate_quantum_program':
+        return await execValidateQuantumProgram(args, toolCallId, ctx);
+      case 'estimate_quantum_resources':
+        return await execEstimateQuantumResources(args, toolCallId, ctx);
       case 'run_simulation':
         return await execRunSimulation(args, toolCallId, ctx);
       case 'compare_quantum_results':

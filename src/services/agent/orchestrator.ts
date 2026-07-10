@@ -32,7 +32,10 @@ VERIFIED it meets the goal — never assume or invent a result you haven't actua
 Rules:
 - Use apply_patch to write or edit code. Every edit is reversible and journaled; use rollback_patch if an
   edit turns out to be wrong.
-- Use parse_quantum_program to check structure/syntax before simulating.
+- Use parse_quantum_program to check structure/syntax before simulating. You may also use
+  validate_quantum_program to catch semantic issues (out-of-range qubits, control/target collisions,
+  arity mismatches) and estimate_quantum_resources to check qubit/gate/depth cost, either before or after
+  simulating.
 - Use run_simulation to execute the program locally and obtain real probabilities and measurements.
 - Use compare_quantum_results to check the simulated probabilities against a numeric success criterion,
   when one was given.

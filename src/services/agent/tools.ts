@@ -72,6 +72,34 @@ export const PARSE_QUANTUM_PROGRAM_TOOL: AgentToolSchema = {
   },
 };
 
+export const VALIDATE_QUANTUM_PROGRAM_TOOL: AgentToolSchema = {
+  name: 'validate_quantum_program',
+  description:
+    'Parse the program and run structural/semantic validators (out-of-range qubits, control/target ' +
+    'collisions, gate arity mismatches, empty circuits); returns a list of diagnostics.',
+  input_schema: {
+    type: 'object',
+    properties: {
+      path: { type: 'string', description: 'Workspace-relative file path; defaults to the active file.' },
+    },
+    required: [],
+    additionalProperties: false,
+  },
+};
+
+export const ESTIMATE_QUANTUM_RESOURCES_TOOL: AgentToolSchema = {
+  name: 'estimate_quantum_resources',
+  description: 'Parse the program and report qubit/gate/depth resource metrics, without running a simulation.',
+  input_schema: {
+    type: 'object',
+    properties: {
+      path: { type: 'string', description: 'Workspace-relative file path; defaults to the active file.' },
+    },
+    required: [],
+    additionalProperties: false,
+  },
+};
+
 export const RUN_SIMULATION_TOOL: AgentToolSchema = {
   name: 'run_simulation',
   description: 'Simulate a quantum program locally and return probabilities and measurement facts.',
@@ -124,6 +152,8 @@ export const AGENT_TOOLS: AgentToolSchema[] = [
   APPLY_PATCH_TOOL,
   ROLLBACK_PATCH_TOOL,
   PARSE_QUANTUM_PROGRAM_TOOL,
+  VALIDATE_QUANTUM_PROGRAM_TOOL,
+  ESTIMATE_QUANTUM_RESOURCES_TOOL,
   RUN_SIMULATION_TOOL,
   COMPARE_QUANTUM_RESULTS_TOOL,
   FINISH_TOOL,
