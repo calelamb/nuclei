@@ -7,7 +7,15 @@ from dataclasses import dataclass
 @dataclass(frozen=True)
 class WorkerLimits:
     cpu_seconds: int = 10
-    address_space_bytes: int = 1_073_741_824
+    # RLIMIT_AS caps *virtual* address space, and the qiskit stack (numpy/scipy
+    # plus rustworkx's Rust allocator used by the Sabre routing transpiler)
+    # reserves several GiB of virtual space even for tiny circuits and even
+    # with OPENBLAS/OMP threads pinned to 1. A 1 GiB cap let basis-only
+    # transpiles through but made coupling-map routing fail with MemoryError on
+    # Linux (invisible on macOS, which cannot set a finite RLIMIT_AS at all).
+    # 4 GiB fits the stack's fixed reservations while still stopping a runaway
+    # allocation; RLIMIT_CPU + the wall timeout bound runaway compute.
+    address_space_bytes: int = 4_294_967_296
     file_bytes: int = 1_048_576
     open_files: int = 64
     processes: int = 4
@@ -17,7 +25,7 @@ class WorkerLimits:
     def testing(cls) -> "WorkerLimits":
         return cls(
             cpu_seconds=2,
-            address_space_bytes=536_870_912,
+            address_space_bytes=2_147_483_648,
             open_files=32,
         )
 

@@ -102,7 +102,7 @@ def require_qdk() -> None:
 def test_worker_limits_have_production_and_testing_defaults() -> None:
     assert WorkerLimits() == WorkerLimits(
         cpu_seconds=10,
-        address_space_bytes=1_073_741_824,
+        address_space_bytes=4_294_967_296,
         file_bytes=1_048_576,
         open_files=64,
         processes=4,
@@ -110,7 +110,7 @@ def test_worker_limits_have_production_and_testing_defaults() -> None:
     )
     assert WorkerLimits.testing() == WorkerLimits(
         cpu_seconds=2,
-        address_space_bytes=536_870_912,
+        address_space_bytes=2_147_483_648,
         file_bytes=1_048_576,
         open_files=32,
         processes=4,
