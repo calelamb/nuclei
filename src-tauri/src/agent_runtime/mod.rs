@@ -6,7 +6,9 @@ pub mod protocol;
 pub mod resources;
 pub mod unsupported;
 
-use process::{ProcessSpec, Supervisor, SupervisorLimits};
+use process::{
+    CleanupFailureReporter, CleanupFailureSink, ProcessSpec, Supervisor, SupervisorLimits,
+};
 use protocol::{Framework, WorkerRequestV1, WorkerResponseV1};
 use std::future::Future;
 use std::pin::Pin;
@@ -42,6 +44,8 @@ pub struct AgentRuntimeState {
 }
 
 pub trait AgentProcessResolver: Send + Sync {
+    fn set_cleanup_failure_reporter(&self, _reporter: CleanupFailureSink) {}
+
     fn installed_identity(&self) -> Option<(u64, &str)> {
         None
     }
@@ -78,6 +82,51 @@ struct InstalledBackend {
     cache_key: Option<String>,
     refresh_key: String,
     generation: u64,
+    cleanup_revocation: Arc<CleanupRevocation>,
+}
+
+#[derive(Default)]
+struct CleanupRevocation {
+    revoked: std::sync::atomic::AtomicBool,
+    diagnostic: std::sync::Mutex<Option<String>>,
+}
+
+impl CleanupRevocation {
+    fn effective_report(&self, report: &CapabilityReport) -> CapabilityReport {
+        if !self.revoked.load(Ordering::Acquire) {
+            return report.clone();
+        }
+        let reason = self
+            .diagnostic
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .clone()
+            .unwrap_or_else(|| "Agent cleanup failed; requalification required".into());
+        unavailable_report(reason)
+    }
+
+    fn failure(&self) -> Option<String> {
+        if !self.revoked.load(Ordering::Acquire) {
+            return None;
+        }
+        self.diagnostic
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .clone()
+    }
+}
+
+impl CleanupFailureReporter for CleanupRevocation {
+    fn report_cleanup_failure(&self, diagnostic: &str) {
+        let mut recorded = self
+            .diagnostic
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        if recorded.is_none() {
+            *recorded = Some(diagnostic.into());
+        }
+        self.revoked.store(true, Ordering::Release);
+    }
 }
 
 struct MacContextResolver {
@@ -163,6 +212,8 @@ impl AgentRuntimeState {
         capability: CapabilityReport,
         resolver: Arc<dyn AgentProcessResolver>,
     ) -> Self {
+        let cleanup_revocation = Arc::new(CleanupRevocation::default());
+        resolver.set_cleanup_failure_reporter(CleanupFailureSink::new(cleanup_revocation.clone()));
         Self {
             supervisor,
             backend: tokio::sync::RwLock::new(InstalledBackend {
@@ -171,13 +222,15 @@ impl AgentRuntimeState {
                 cache_key: None,
                 refresh_key: "initial".into(),
                 generation: 0,
+                cleanup_revocation,
             }),
             refresh_generation: AtomicU64::new(0),
         }
     }
 
     pub async fn cached_capability(&self) -> CapabilityReport {
-        self.backend.read().await.report.clone()
+        let backend = self.backend.read().await;
+        backend.cleanup_revocation.effective_report(&backend.report)
     }
 
     pub fn execute_request(
@@ -212,6 +265,9 @@ impl AgentRuntimeState {
                 }
             }
             let report = backend.report;
+            if let Some(failure) = backend.cleanup_revocation.failure() {
+                return Err(failure);
+            }
             if !report.available {
                 return Err(report
                     .reason
@@ -252,6 +308,10 @@ impl AgentRuntimeState {
                     return Err(error);
                 }
             };
+            if let Some(failure) = backend.cleanup_revocation.failure() {
+                drop(spec);
+                return Err(failure);
+            }
             if reservation.is_cancelled() {
                 return Err("Worker request was cancelled".into());
             }
@@ -331,6 +391,7 @@ impl AgentRuntimeCommands for AgentRuntimeState {
                             cache_key: None,
                             refresh_key: "linux-identity-unavailable".into(),
                             generation,
+                            cleanup_revocation: Arc::new(CleanupRevocation::default()),
                         },
                     )
                     .await;
@@ -361,6 +422,7 @@ impl AgentRuntimeCommands for AgentRuntimeState {
                     resolver,
                     refresh_key: cache_key.clone(),
                     generation,
+                    cleanup_revocation: Arc::new(CleanupRevocation::default()),
                 },
             )
             .await;
@@ -386,6 +448,7 @@ impl AgentRuntimeCommands for AgentRuntimeState {
                         cache_key: None,
                         refresh_key: "identity-unavailable".into(),
                         generation,
+                        cleanup_revocation: Arc::new(CleanupRevocation::default()),
                     },
                 )
                 .await;
@@ -430,6 +493,7 @@ impl AgentRuntimeCommands for AgentRuntimeState {
                     resolver,
                     refresh_key: cache_key.clone(),
                     generation,
+                    cleanup_revocation: Arc::new(CleanupRevocation::default()),
                 },
             )
             .await;
@@ -461,6 +525,11 @@ impl AgentRuntimeState {
         {
             return false;
         }
+        backend
+            .resolver
+            .set_cleanup_failure_reporter(CleanupFailureSink::new(
+                backend.cleanup_revocation.clone(),
+            ));
         *installed = backend;
         true
     }
@@ -480,6 +549,7 @@ impl AgentRuntimeState {
         refreshed.resolver = refreshed
             .resolver
             .rebind_installed_identity(generation, key)?;
+        refreshed.cleanup_revocation = Arc::new(CleanupRevocation::default());
         refreshed.generation = generation;
         refreshed.refresh_key = key.into();
         if self.commit_refresh(generation, key, refreshed).await {
@@ -516,6 +586,7 @@ impl AgentRuntimeState {
             cache_key: None,
             refresh_key,
             generation: failed_generation,
+            cleanup_revocation: Arc::new(CleanupRevocation::default()),
         };
     }
 }
@@ -639,6 +710,8 @@ mod refresh_tests {
                     cleanup_root: None,
                     resource_limits: process::ResourceLimits::testing(),
                     runtime_guard: None,
+                    cleanup_resources: Vec::new(),
+                    cleanup_reporter: None,
                     #[cfg(target_os = "linux")]
                     linux: None,
                 })
@@ -663,6 +736,7 @@ mod refresh_tests {
             cache_key: available.then(|| key.into()),
             refresh_key: key.into(),
             generation,
+            cleanup_revocation: Arc::new(CleanupRevocation::default()),
         }
     }
 
@@ -827,6 +901,7 @@ mod refresh_tests {
                         cache_key: Some("same-runtime".into()),
                         refresh_key: "same-runtime".into(),
                         generation: qualified,
+                        cleanup_revocation: Arc::new(CleanupRevocation::default()),
                     },
                 )
                 .await
@@ -850,6 +925,30 @@ mod refresh_tests {
             .resolve(&test_request("cached-resolve"))
             .await
             .is_ok());
+    }
+
+    #[tokio::test]
+    async fn cleanup_reporter_revokes_only_its_installed_generation() {
+        let state = AgentRuntimeState::new();
+        let old_cleanup = state.backend.read().await.cleanup_revocation.clone();
+        let newer = state.begin_refresh();
+        assert!(
+            state
+                .commit_refresh(newer, "new-key", candidate(true, "new", "new-key", newer))
+                .await
+        );
+
+        CleanupFailureSink::new(old_cleanup).report("stale generation cgroup cleanup failed");
+        assert!(state.cached_capability().await.available);
+
+        let current_cleanup = state.backend.read().await.cleanup_revocation.clone();
+        CleanupFailureSink::new(current_cleanup).report(&format!(
+            "current cgroup cleanup failed: {}",
+            "x".repeat(4_096)
+        ));
+        let report = state.cached_capability().await;
+        assert!(!report.available);
+        assert!(report.reason.unwrap().len() <= 1_024);
     }
 
     #[tokio::test]

@@ -29,6 +29,194 @@ const ALLOWED_ENVIRONMENT: &[&str] = &[
     "NUMEXPR_NUM_THREADS",
 ];
 
+const MAX_CLEANUP_DIAGNOSTIC_BYTES: usize = 1_024;
+
+pub trait CleanupFailureReporter: Send + Sync {
+    fn report_cleanup_failure(&self, diagnostic: &str);
+}
+
+struct NoopCleanupFailureReporter;
+
+impl CleanupFailureReporter for NoopCleanupFailureReporter {
+    fn report_cleanup_failure(&self, _diagnostic: &str) {}
+}
+
+struct CleanupFailureSinkInner {
+    reporter: Arc<dyn CleanupFailureReporter>,
+    reported: std::sync::atomic::AtomicBool,
+}
+
+#[derive(Clone)]
+pub struct CleanupFailureSink {
+    inner: Arc<CleanupFailureSinkInner>,
+}
+
+impl std::fmt::Debug for CleanupFailureSink {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter
+            .debug_struct("CleanupFailureSink")
+            .field("reported", &self.inner.reported.load(Ordering::Acquire))
+            .finish_non_exhaustive()
+    }
+}
+
+impl CleanupFailureSink {
+    pub fn new(reporter: Arc<dyn CleanupFailureReporter>) -> Self {
+        Self {
+            inner: Arc::new(CleanupFailureSinkInner {
+                reporter,
+                reported: std::sync::atomic::AtomicBool::new(false),
+            }),
+        }
+    }
+
+    pub fn noop() -> Self {
+        Self::new(Arc::new(NoopCleanupFailureReporter))
+    }
+
+    pub fn report(&self, diagnostic: &str) {
+        if self
+            .inner
+            .reported
+            .compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire)
+            .is_err()
+        {
+            return;
+        }
+        let diagnostic = bounded_cleanup_diagnostic(diagnostic);
+        self.inner.reporter.report_cleanup_failure(&diagnostic);
+    }
+}
+
+fn bounded_cleanup_diagnostic(diagnostic: &str) -> String {
+    let mut bounded = String::with_capacity(diagnostic.len().min(MAX_CLEANUP_DIAGNOSTIC_BYTES));
+    for character in diagnostic.chars() {
+        let rendered = if character.is_control() && !matches!(character, '\n' | '\t') {
+            '\u{fffd}'
+        } else {
+            character
+        };
+        if bounded.len() + rendered.len_utf8() > MAX_CLEANUP_DIAGNOSTIC_BYTES {
+            break;
+        }
+        bounded.push(rendered);
+    }
+    bounded
+}
+
+pub trait ProcessCleanupResource: Send + Sync {
+    fn name(&self) -> &'static str;
+    fn terminate(&self) -> Result<(), String>;
+    fn finish(&self) -> Result<(), String>;
+}
+
+struct CleanupResourceInner {
+    resource: Arc<dyn ProcessCleanupResource>,
+    reporter: Mutex<Option<CleanupFailureSink>>,
+    failures: Mutex<Vec<String>>,
+    finished: std::sync::atomic::AtomicBool,
+}
+
+#[derive(Clone)]
+pub struct CleanupResource {
+    inner: Arc<CleanupResourceInner>,
+}
+
+impl std::fmt::Debug for CleanupResource {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter
+            .debug_struct("CleanupResource")
+            .field("name", &self.inner.resource.name())
+            .finish_non_exhaustive()
+    }
+}
+
+impl CleanupResource {
+    pub fn new(resource: Arc<dyn ProcessCleanupResource>) -> Self {
+        Self {
+            inner: Arc::new(CleanupResourceInner {
+                resource,
+                reporter: Mutex::new(None),
+                failures: Mutex::new(Vec::new()),
+                finished: std::sync::atomic::AtomicBool::new(false),
+            }),
+        }
+    }
+
+    #[cfg(unix)]
+    fn bind_reporter(&self, reporter: Option<CleanupFailureSink>) {
+        *self
+            .inner
+            .reporter
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner()) = reporter;
+    }
+
+    fn record_failure(&self, operation: &str, error: String) -> String {
+        let diagnostic = format!(
+            "{} {operation} cleanup failed: {error}",
+            self.inner.resource.name()
+        );
+        let mut failures = self
+            .inner
+            .failures
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        if !failures.contains(&diagnostic) {
+            failures.push(diagnostic.clone());
+        }
+        drop(failures);
+        if let Some(reporter) = self
+            .inner
+            .reporter
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .as_ref()
+        {
+            reporter.report(&diagnostic);
+        }
+        diagnostic
+    }
+
+    #[cfg(unix)]
+    fn terminate(&self) -> Result<(), String> {
+        self.inner
+            .resource
+            .terminate()
+            .map_err(|error| self.record_failure("termination", error))
+    }
+
+    fn finish(&self) -> Result<(), String> {
+        if self.inner.finished.load(Ordering::Acquire) {
+            return Ok(());
+        }
+        match self.inner.resource.finish() {
+            Ok(()) => {
+                self.inner.finished.store(true, Ordering::Release);
+                Ok(())
+            }
+            Err(error) => Err(self.record_failure("finalization", error)),
+        }
+    }
+
+    #[cfg(unix)]
+    fn recorded_failures(&self) -> Vec<String> {
+        self.inner
+            .failures
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .clone()
+    }
+}
+
+impl Drop for CleanupResource {
+    fn drop(&mut self) {
+        if Arc::strong_count(&self.inner) == 1 && !self.inner.finished.load(Ordering::Acquire) {
+            let _ = self.finish();
+        }
+    }
+}
+
 #[derive(Clone, Debug)]
 pub struct ProcessSpec {
     pub executable: PathBuf,
@@ -38,6 +226,8 @@ pub struct ProcessSpec {
     pub cleanup_root: Option<PathBuf>,
     pub resource_limits: ResourceLimits,
     pub runtime_guard: Option<Arc<std::fs::File>>,
+    pub cleanup_resources: Vec<CleanupResource>,
+    pub cleanup_reporter: Option<CleanupFailureSink>,
     #[cfg(target_os = "linux")]
     pub linux: Option<crate::agent_runtime::linux::LinuxLaunchSpec>,
 }
@@ -106,6 +296,14 @@ impl RuntimeError {
         Self {
             code: code.into(),
             message: message.into(),
+        }
+    }
+
+    #[cfg(unix)]
+    fn cleanup(code: &'static str, message: String) -> Self {
+        Self {
+            code: code.into(),
+            message,
         }
     }
 }
@@ -365,8 +563,8 @@ impl Supervisor {
         let mut resources = Some(RunResources::new(
             spec.cleanup_root.clone(),
             spec.runtime_guard.clone(),
-            #[cfg(target_os = "linux")]
-            spec.linux.clone(),
+            spec.cleanup_resources.clone(),
+            spec.cleanup_reporter.clone(),
         ));
         let result = self
             .run_unix_inner(request, spec, stdin, reservation, &mut resources)
@@ -664,8 +862,9 @@ impl Drop for RequestCleanup {
 struct RunResources {
     cleanup: RequestCleanup,
     runtime_guard: Option<Arc<std::fs::File>>,
-    #[cfg(target_os = "linux")]
-    linux: Option<crate::agent_runtime::linux::LinuxLaunchSpec>,
+    cleanup_resources: Vec<CleanupResource>,
+    reporter: Option<CleanupFailureSink>,
+    finalized: bool,
 }
 
 #[cfg(unix)]
@@ -673,39 +872,71 @@ impl RunResources {
     fn new(
         cleanup_root: Option<PathBuf>,
         runtime_guard: Option<Arc<std::fs::File>>,
-        #[cfg(target_os = "linux")] linux: Option<crate::agent_runtime::linux::LinuxLaunchSpec>,
+        cleanup_resources: Vec<CleanupResource>,
+        reporter: Option<CleanupFailureSink>,
     ) -> Self {
+        for resource in &cleanup_resources {
+            resource.bind_reporter(reporter.clone());
+        }
         Self {
             cleanup: RequestCleanup::new(cleanup_root),
             runtime_guard,
-            #[cfg(target_os = "linux")]
-            linux,
+            cleanup_resources,
+            reporter,
+            finalized: false,
         }
     }
 
-    fn finish(mut self) -> Result<(), RuntimeError> {
-        #[cfg(target_os = "linux")]
-        let linux_cleanup = self.linux.take().map_or(Ok(()), |linux| linux.finish());
-        let cleanup = self.cleanup.cleanup();
+    fn terminate(&self) {
+        for resource in &self.cleanup_resources {
+            let _ = resource.terminate();
+        }
+    }
+
+    fn finish_inner(&mut self) -> Result<(), RuntimeError> {
+        if self.finalized {
+            return Ok(());
+        }
+        let mut failures = Vec::new();
+        for resource in &self.cleanup_resources {
+            let _ = resource.finish();
+            failures.extend(resource.recorded_failures());
+        }
+        if let Err(error) = self.cleanup.cleanup() {
+            failures.push(error.message);
+        }
         // The lease is released only after checked cleanup returns.
         self.runtime_guard.take();
-        #[cfg(target_os = "linux")]
-        {
-            match (linux_cleanup, cleanup) {
-                (Ok(()), Ok(())) => Ok(()),
-                (Err(error), _) if error.contains("deadline") => Err(RuntimeError::new(
-                    "cleanup_timeout",
-                    "Linux cgroup containment cleanup exceeded its deadline",
-                )),
-                (Err(_), _) => Err(RuntimeError::new(
-                    "cleanup_failed",
-                    "Linux cgroup containment could not be cleaned",
-                )),
-                (Ok(()), Err(error)) => Err(error),
+        self.finalized = failures.is_empty();
+        if failures.is_empty() {
+            return Ok(());
+        }
+        failures.dedup();
+        let combined = failures.join("; ");
+        if let Some(reporter) = &self.reporter {
+            reporter.report(&combined);
+        }
+        let code = if combined.contains("deadline") {
+            "cleanup_timeout"
+        } else {
+            "cleanup_failed"
+        };
+        Err(RuntimeError::cleanup(code, combined))
+    }
+
+    fn finish(mut self) -> Result<(), RuntimeError> {
+        self.finish_inner()
+    }
+}
+
+#[cfg(unix)]
+impl Drop for RunResources {
+    fn drop(&mut self) {
+        if let Err(error) = self.finish_inner() {
+            if let Some(reporter) = &self.reporter {
+                reporter.report(&error.message);
             }
         }
-        #[cfg(not(target_os = "linux"))]
-        cleanup
     }
 }
 
@@ -881,11 +1112,8 @@ impl RunGuard {
     }
 
     fn kill_group(&self) {
-        #[cfg(target_os = "linux")]
         if let Some(resources) = &self.resources {
-            if let Some(linux) = &resources.linux {
-                let _ = linux.kill();
-            }
+            resources.terminate();
         }
         if !self.leader_reaped {
             // Lifecycle handle only. Platform sandboxes/cgroups are

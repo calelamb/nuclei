@@ -1,6 +1,7 @@
 use std::ffi::OsStr;
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::{Arc, Barrier, Mutex};
 use std::thread;
 use std::time::Duration;
@@ -12,7 +13,8 @@ use std::pin::Pin;
 
 #[cfg(unix)]
 use app_lib::agent_runtime::process::{
-    ProcessSpec, ProcessSupervisor, ResourceLimits, Supervisor, SupervisorLimits,
+    CleanupFailureSink, CleanupResource, ProcessCleanupResource, ProcessSpec, ProcessSupervisor,
+    ResourceLimits, Supervisor, SupervisorLimits,
 };
 use app_lib::agent_runtime::protocol::{
     Action, Framework, FrontendRequestV1, ResponseStatus, WorkerRequestV1, WorkerResponseV1,
@@ -1799,6 +1801,8 @@ fn python_spec(script: &str) -> ProcessSpec {
         cleanup_root: None,
         resource_limits: ResourceLimits::testing(),
         runtime_guard: None,
+        cleanup_resources: Vec::new(),
+        cleanup_reporter: None,
         #[cfg(target_os = "linux")]
         linux: None,
     }
@@ -1969,6 +1973,72 @@ struct FailingResolver;
 struct CleanupFailingResolver(PathBuf);
 
 #[cfg(unix)]
+struct InjectedCleanupResolver {
+    reporter: Mutex<Option<CleanupFailureSink>>,
+    resolves: AtomicUsize,
+    drop_started: Arc<AtomicBool>,
+    allow_drop: Arc<AtomicBool>,
+}
+
+#[cfg(unix)]
+struct InjectedCleanupFailure {
+    drop_started: Arc<AtomicBool>,
+    allow_drop: Arc<AtomicBool>,
+}
+
+#[cfg(unix)]
+impl ProcessCleanupResource for InjectedCleanupFailure {
+    fn name(&self) -> &'static str {
+        "injected-cgroup"
+    }
+
+    fn terminate(&self) -> Result<(), String> {
+        Err("injected cgroup.kill failure".into())
+    }
+
+    fn finish(&self) -> Result<(), String> {
+        Err("injected cgroup populated/removal failure".into())
+    }
+}
+
+#[cfg(unix)]
+impl Drop for InjectedCleanupFailure {
+    fn drop(&mut self) {
+        self.drop_started.store(true, Ordering::Release);
+        while !self.allow_drop.load(Ordering::Acquire) {
+            std::thread::sleep(Duration::from_millis(1));
+        }
+    }
+}
+
+#[cfg(unix)]
+impl AgentProcessResolver for InjectedCleanupResolver {
+    fn set_cleanup_failure_reporter(&self, reporter: CleanupFailureSink) {
+        *self.reporter.lock().unwrap() = Some(reporter);
+    }
+
+    fn resolve<'a>(
+        &'a self,
+        request: &'a WorkerRequestV1,
+    ) -> Pin<Box<dyn Future<Output = Result<ProcessSpec, String>> + Send + 'a>> {
+        self.resolves.fetch_add(1, Ordering::AcqRel);
+        Box::pin(async move {
+            let mut spec = python_spec(&format!(
+                "import time;time.sleep(5);{}",
+                valid_worker_script(&request.request_id)
+            ));
+            spec.cleanup_reporter = self.reporter.lock().unwrap().clone();
+            spec.cleanup_resources
+                .push(CleanupResource::new(Arc::new(InjectedCleanupFailure {
+                    drop_started: Arc::clone(&self.drop_started),
+                    allow_drop: Arc::clone(&self.allow_drop),
+                })));
+            Ok(spec)
+        })
+    }
+}
+
+#[cfg(unix)]
 impl AgentProcessResolver for FailingResolver {
     fn resolve<'a>(
         &'a self,
@@ -2072,6 +2142,129 @@ async fn supervisor_cleanup_failure_atomically_revokes_matching_capability() {
         "Worker request directory could not be removed"
     );
     assert!(!state.cached_capability().await.available);
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn aborted_background_cleanup_failure_revokes_before_resource_drop() {
+    let drop_started = Arc::new(AtomicBool::new(false));
+    let allow_drop = Arc::new(AtomicBool::new(false));
+    let resolver = Arc::new(InjectedCleanupResolver {
+        reporter: Mutex::new(None),
+        resolves: AtomicUsize::new(0),
+        drop_started: Arc::clone(&drop_started),
+        allow_drop: Arc::clone(&allow_drop),
+    });
+    let state = Arc::new(AgentRuntimeState::with_resolver(
+        Supervisor::new(SupervisorLimits::production()),
+        available_cirq_capability(),
+        resolver.clone(),
+    ));
+    let running_state = Arc::clone(&state);
+    let task = tokio::spawn(async move {
+        running_state
+            .execute_request(agent_request("aborted_cleanup_failure"))
+            .await
+    });
+    tokio::time::timeout(Duration::from_secs(1), async {
+        while state.supervisor.active_count() != 1 {
+            tokio::task::yield_now().await;
+        }
+    })
+    .await
+    .expect("worker reservation starts");
+
+    task.abort();
+    assert!(task.await.unwrap_err().is_cancelled());
+    tokio::time::timeout(Duration::from_secs(1), async {
+        while state.cached_capability().await.available {
+            tokio::task::yield_now().await;
+        }
+    })
+    .await
+    .expect("background cleanup failure synchronously revokes backend");
+    assert!(!drop_started.load(Ordering::Acquire));
+    assert!(!allow_drop.load(Ordering::Acquire));
+    let report = state.cached_capability().await;
+    assert!(report
+        .reason
+        .as_deref()
+        .unwrap()
+        .contains("injected cgroup"));
+    assert!(state
+        .execute_request(agent_request("denied_after_aborted_cleanup"))
+        .await
+        .unwrap_err()
+        .contains("injected cgroup"));
+    assert_eq!(resolver.resolves.load(Ordering::Acquire), 1);
+
+    allow_drop.store(true, Ordering::Release);
+    tokio::time::timeout(Duration::from_secs(1), async {
+        while state.supervisor.background_reap_count() != 0 {
+            tokio::task::yield_now().await;
+        }
+    })
+    .await
+    .expect("background cleanup resource finishes dropping");
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn cancellation_cleanup_failure_is_observable_and_denies_next_execute() {
+    let drop_started = Arc::new(AtomicBool::new(false));
+    let allow_drop = Arc::new(AtomicBool::new(false));
+    let resolver = Arc::new(InjectedCleanupResolver {
+        reporter: Mutex::new(None),
+        resolves: AtomicUsize::new(0),
+        drop_started: Arc::clone(&drop_started),
+        allow_drop: Arc::clone(&allow_drop),
+    });
+    let state = Arc::new(AgentRuntimeState::with_resolver(
+        Supervisor::new(SupervisorLimits::production()),
+        available_cirq_capability(),
+        resolver.clone(),
+    ));
+    let running_state = Arc::clone(&state);
+    let execute = tokio::spawn(async move {
+        running_state
+            .execute_request(agent_request("cancel_cleanup_failure"))
+            .await
+    });
+    tokio::time::timeout(Duration::from_secs(1), async {
+        while state.supervisor.active_count() != 1 {
+            tokio::task::yield_now().await;
+        }
+    })
+    .await
+    .expect("worker reservation starts");
+    let cancelling_state = Arc::clone(&state);
+    let cancel = tokio::spawn(async move {
+        cancelling_state
+            .supervisor
+            .cancel("cancel_cleanup_failure")
+            .await
+    });
+
+    tokio::time::timeout(Duration::from_secs(1), async {
+        while state.cached_capability().await.available {
+            tokio::task::yield_now().await;
+        }
+    })
+    .await
+    .expect("cancellation cleanup failure revokes backend");
+    assert!(!drop_started.load(Ordering::Acquire));
+    assert!(state
+        .execute_request(agent_request("denied_after_cancel_cleanup"))
+        .await
+        .unwrap_err()
+        .contains("injected cgroup"));
+    assert_eq!(resolver.resolves.load(Ordering::Acquire), 1);
+
+    allow_drop.store(true, Ordering::Release);
+    cancel.await.unwrap().unwrap();
+    let error = execute.await.unwrap().unwrap_err();
+    assert!(error.contains("injected cgroup.kill failure"));
+    assert!(error.contains("injected cgroup populated/removal failure"));
 }
 
 #[cfg(unix)]

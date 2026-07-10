@@ -1,5 +1,6 @@
 #[cfg(target_os = "linux")]
 use app_lib::agent_runtime::linux::{
+    cgroup_construction_cleanup_failure_for_test, cgroup_construction_failure_for_test,
     compile_seccomp_bpf, LinuxBackend, LinuxQualificationContext, LinuxSystemPaths,
     OfflineLinuxProvisioningContainment,
 };
@@ -10,7 +11,9 @@ use app_lib::agent_runtime::macos::{
     LockedRuntimeIdentity, MacBackend, OfflineProvisioningContainment, QualificationContext,
     SystemPaths,
 };
-use app_lib::agent_runtime::process::{ProcessSpec, ResourceLimits};
+use app_lib::agent_runtime::process::{
+    CleanupFailureReporter, CleanupFailureSink, ProcessCleanupResource, ProcessSpec, ResourceLimits,
+};
 #[cfg(target_os = "macos")]
 use app_lib::agent_runtime::qualify_current_host_with_context;
 use app_lib::agent_runtime::resources::RunnerContainment;
@@ -24,8 +27,21 @@ use std::collections::BTreeSet;
 use std::fs;
 use std::fs::OpenOptions;
 use std::path::{Path, PathBuf};
+#[cfg(target_os = "linux")]
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use tempfile::TempDir;
+
+#[cfg(target_os = "linux")]
+#[derive(Default)]
+struct RecordingCleanupReporter(Mutex<Vec<String>>);
+
+#[cfg(target_os = "linux")]
+impl CleanupFailureReporter for RecordingCleanupReporter {
+    fn report_cleanup_failure(&self, diagnostic: &str) {
+        self.0.lock().unwrap().push(diagnostic.into());
+    }
+}
 
 const REQUIREMENTS: &str = include_str!("../../kernel/agent-requirements.txt");
 const REQUIREMENTS_LOCK: &str = include_str!("../../kernel/agent-requirements.lock");
@@ -257,6 +273,58 @@ fn linux_worker_spec_uses_fixed_bwrap_boundary_and_cgroup_limits() {
         fs::read_to_string(child.join("cpu.max")).unwrap(),
         "100000 100000"
     );
+    ProcessCleanupResource::finish(spec.linux.as_ref().unwrap()).unwrap();
+    assert!(!child.exists());
+}
+
+#[cfg(target_os = "linux")]
+#[test]
+fn partial_cgroup_construction_cleans_every_setup_failure_stage() {
+    for stage in [
+        "memory.max",
+        "memory.swap.max",
+        "pids.max",
+        "cpu.max",
+        "cgroup.procs",
+        "cgroup.kill",
+        "cgroup.events",
+    ] {
+        let root = TempDir::new().unwrap();
+        let reporter = Arc::new(RecordingCleanupReporter::default());
+        let sink = CleanupFailureSink::new(reporter.clone());
+        let error =
+            cgroup_construction_failure_for_test(root.path(), stage, false, sink).unwrap_err();
+        assert!(error.contains(stage), "{stage}: {error}");
+        assert_eq!(fs::read_dir(root.path()).unwrap().count(), 0, "{stage}");
+        assert!(reporter.0.lock().unwrap().is_empty(), "{stage}");
+    }
+}
+
+#[cfg(target_os = "linux")]
+#[test]
+fn partial_cgroup_cleanup_failure_is_combined_and_reported() {
+    for cleanup_stage in ["cgroup.kill", "cgroup.events", "populated", "remove"] {
+        let root = TempDir::new().unwrap();
+        let reporter = Arc::new(RecordingCleanupReporter::default());
+        let sink = CleanupFailureSink::new(reporter.clone());
+
+        let error = cgroup_construction_cleanup_failure_for_test(
+            root.path(),
+            "pids.max",
+            cleanup_stage,
+            sink,
+        )
+        .unwrap_err();
+
+        assert!(error.contains("pids.max"));
+        assert!(error.contains(cleanup_stage), "{cleanup_stage}: {error}");
+        let diagnostics = reporter.0.lock().unwrap();
+        assert_eq!(diagnostics.len(), 1, "{cleanup_stage}");
+        assert!(
+            diagnostics[0].contains(cleanup_stage),
+            "{cleanup_stage}: {diagnostics:?}"
+        );
+    }
 }
 
 #[cfg(target_os = "linux")]

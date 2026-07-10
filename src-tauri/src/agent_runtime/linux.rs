@@ -1,5 +1,7 @@
 use crate::agent_runtime::macos::worker_environment;
-use crate::agent_runtime::process::{ProcessSpec, ResourceLimits};
+use crate::agent_runtime::process::{
+    CleanupFailureSink, CleanupResource, ProcessCleanupResource, ProcessSpec, ResourceLimits,
+};
 use crate::agent_runtime::protocol::WorkerRequestV1;
 use crate::agent_runtime::resources::{AgentEnvironment, ResourcePaths, RunnerContainment};
 use crate::agent_runtime::{AgentProcessResolver, CapabilityReport, ControlResult};
@@ -368,18 +370,28 @@ struct LinuxContainment {
     cgroup_path: PathBuf,
     cgroup_procs: CString,
     seccomp: fs::File,
+    reporter: CleanupFailureSink,
     recursive_cleanup: bool,
     cleaned: AtomicBool,
     cleanup_lock: Mutex<()>,
 }
 
 impl LinuxContainment {
+    fn report<T>(&self, result: Result<T, String>) -> Result<T, String> {
+        if let Err(error) = &result {
+            self.reporter.report(error);
+        }
+        result
+    }
+
     fn kill(&self) -> Result<(), String> {
         if self.cleaned.load(Ordering::Acquire) {
             return Ok(());
         }
-        fs::write(self.cgroup_path.join("cgroup.kill"), b"1")
-            .map_err(|error| format!("Failed to kill Linux worker cgroup: {error}"))
+        self.report(
+            fs::write(self.cgroup_path.join("cgroup.kill"), b"1")
+                .map_err(|error| format!("Failed to kill Linux worker cgroup: {error}")),
+        )
     }
 
     fn finish(&self) -> Result<(), String> {
@@ -390,38 +402,59 @@ impl LinuxContainment {
         if self.cleaned.load(Ordering::Acquire) {
             return Ok(());
         }
-        self.kill()?;
-        let deadline = Instant::now() + CGROUP_CLEANUP_TIMEOUT;
-        loop {
-            let events = fs::read_to_string(self.cgroup_path.join("cgroup.events"))
-                .map_err(|error| format!("Failed to read Linux cgroup events: {error}"))?;
-            if events
-                .lines()
-                .any(|line| line.split_whitespace().eq(["populated", "0"]))
-            {
-                break;
+        let result = (|| {
+            self.kill()?;
+            let deadline = Instant::now() + CGROUP_CLEANUP_TIMEOUT;
+            loop {
+                let events = fs::read_to_string(self.cgroup_path.join("cgroup.events"))
+                    .map_err(|error| format!("Failed to read Linux cgroup events: {error}"))?;
+                if events
+                    .lines()
+                    .any(|line| line.split_whitespace().eq(["populated", "0"]))
+                {
+                    break;
+                }
+                if Instant::now() >= deadline {
+                    return Err(
+                        "Linux worker cgroup remained populated past cleanup deadline".into(),
+                    );
+                }
+                std::thread::sleep(Duration::from_millis(10));
             }
-            if Instant::now() >= deadline {
-                return Err("Linux worker cgroup remained populated past cleanup deadline".into());
+            if self.recursive_cleanup {
+                fs::remove_dir_all(&self.cgroup_path)
+            } else {
+                fs::remove_dir(&self.cgroup_path)
             }
-            std::thread::sleep(Duration::from_millis(10));
-        }
-        if self.recursive_cleanup {
-            fs::remove_dir_all(&self.cgroup_path)
-        } else {
-            fs::remove_dir(&self.cgroup_path)
-        }
-        .map_err(|error| format!("Failed to remove Linux worker cgroup: {error}"))?;
-        self.cleaned.store(true, Ordering::Release);
-        Ok(())
+            .map_err(|error| format!("Failed to remove Linux worker cgroup: {error}"))?;
+            self.cleaned.store(true, Ordering::Release);
+            Ok(())
+        })();
+        self.report(result)
     }
 }
 
 impl Drop for LinuxContainment {
     fn drop(&mut self) {
         if !self.cleaned.load(Ordering::Acquire) {
-            let _ = self.finish();
+            if let Err(error) = self.finish() {
+                self.reporter.report(&error);
+            }
         }
+    }
+}
+
+impl ProcessCleanupResource for LinuxLaunchSpec {
+    fn name(&self) -> &'static str {
+        "linux-cgroup"
+    }
+
+    fn terminate(&self) -> Result<(), String> {
+        LinuxLaunchSpec::kill(self)
+    }
+
+    fn finish(&self) -> Result<(), String> {
+        LinuxLaunchSpec::finish(self)
     }
 }
 
@@ -445,10 +478,23 @@ impl LinuxBackend {
         context: &LinuxQualificationContext,
         request_temp: &Path,
     ) -> Result<ProcessSpec, String> {
+        Self::worker_spec_with_reporter(context, request_temp, CleanupFailureSink::noop())
+    }
+
+    fn worker_spec_with_reporter(
+        context: &LinuxQualificationContext,
+        request_temp: &Path,
+        reporter: CleanupFailureSink,
+    ) -> Result<ProcessSpec, String> {
         let request_temp = validate_request_temp(context, request_temp)?;
         let seccomp = sealed_seccomp_file()?;
         let seccomp_fd = seccomp.as_raw_fd();
-        let cgroup_path = create_worker_cgroup(&context.system_paths.cgroup_root)?;
+        let cgroup_guard = create_worker_cgroup(
+            &context.system_paths.cgroup_root,
+            reporter.clone(),
+            CgroupConstructionFault::default(),
+        )?;
+        let cgroup_path = cgroup_guard.path().to_path_buf();
         let cgroup_procs = CString::new(
             cgroup_path
                 .join("cgroup.procs")
@@ -456,20 +502,6 @@ impl LinuxBackend {
                 .as_encoded_bytes(),
         )
         .map_err(|_| "Linux cgroup path contains NUL")?;
-        let linux = LinuxLaunchSpec {
-            inner: Arc::new(LinuxContainment {
-                bwrap: context.system_paths.bwrap.clone(),
-                cgroup_path,
-                cgroup_procs,
-                seccomp,
-                recursive_cleanup: !context
-                    .system_paths
-                    .cgroup_root
-                    .starts_with("/sys/fs/cgroup"),
-                cleaned: AtomicBool::new(false),
-                cleanup_lock: Mutex::new(()),
-            }),
-        };
         let environment = sandbox_environment(&context.environment)?;
         let mut args = vec![
             "--die-with-parent".into(),
@@ -511,7 +543,24 @@ impl LinuxBackend {
             "-I".into(),
             sandbox_path(&context.environment.root, &context.resources.worker)?,
         ]);
-        Ok(ProcessSpec {
+        let linux = LinuxLaunchSpec {
+            inner: Arc::new(LinuxContainment {
+                bwrap: context.system_paths.bwrap.clone(),
+                cgroup_path: cgroup_path.clone(),
+                cgroup_procs,
+                seccomp,
+                reporter: reporter.clone(),
+                recursive_cleanup: !context
+                    .system_paths
+                    .cgroup_root
+                    .starts_with("/sys/fs/cgroup"),
+                cleaned: AtomicBool::new(false),
+                cleanup_lock: Mutex::new(()),
+            }),
+        };
+        let committed = cgroup_guard.commit();
+        debug_assert_eq!(committed, cgroup_path);
+        let spec = ProcessSpec {
             executable: context.system_paths.bwrap.clone(),
             args,
             cwd: request_temp.clone(),
@@ -519,8 +568,11 @@ impl LinuxBackend {
             cleanup_root: Some(request_temp),
             resource_limits: ResourceLimits::production(),
             runtime_guard: None,
+            cleanup_resources: vec![CleanupResource::new(Arc::new(linux.clone()))],
+            cleanup_reporter: Some(reporter),
             linux: Some(linux),
-        })
+        };
+        Ok(spec)
     }
 
     pub fn probe_spec(
@@ -545,6 +597,7 @@ pub struct LinuxResolver {
     context: LinuxQualificationContext,
     installed_generation: u64,
     installed_key: String,
+    cleanup_reporter: Mutex<CleanupFailureSink>,
 }
 
 impl LinuxResolver {
@@ -557,6 +610,7 @@ impl LinuxResolver {
             context,
             installed_generation,
             installed_key,
+            cleanup_reporter: Mutex::new(CleanupFailureSink::noop()),
         }
     }
 
@@ -578,7 +632,14 @@ impl LinuxResolver {
             .map_err(|error| format!("Linux request temp is unavailable: {error}"))?;
         let result = match probe {
             Some(script) => LinuxBackend::probe_spec(&self.context, &request_temp, script),
-            None => LinuxBackend::worker_spec(&self.context, &request_temp),
+            None => LinuxBackend::worker_spec_with_reporter(
+                &self.context,
+                &request_temp,
+                self.cleanup_reporter
+                    .lock()
+                    .unwrap_or_else(|poisoned| poisoned.into_inner())
+                    .clone(),
+            ),
         };
         match result {
             Ok(mut spec) => {
@@ -600,6 +661,13 @@ impl LinuxResolver {
 }
 
 impl AgentProcessResolver for LinuxResolver {
+    fn set_cleanup_failure_reporter(&self, reporter: CleanupFailureSink) {
+        *self
+            .cleanup_reporter
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner()) = reporter;
+    }
+
     fn installed_identity(&self) -> Option<(u64, &str)> {
         Some((self.installed_generation, &self.installed_key))
     }
@@ -713,49 +781,184 @@ fn sealed_seccomp_file() -> Result<fs::File, String> {
     Ok(file)
 }
 
-fn create_worker_cgroup(root: &Path) -> Result<PathBuf, String> {
+#[derive(Clone, Debug, Default)]
+struct CgroupConstructionFault {
+    setup_stage: Option<String>,
+    cleanup_stage: Option<String>,
+}
+
+struct CgroupConstructionGuard {
+    path: Option<PathBuf>,
+    reporter: CleanupFailureSink,
+    recursive_cleanup: bool,
+    cleanup_stage: Option<String>,
+}
+
+impl CgroupConstructionGuard {
+    fn path(&self) -> &Path {
+        self.path
+            .as_deref()
+            .expect("cgroup construction guard already finalized")
+    }
+
+    fn cleanup(&mut self) -> Result<(), String> {
+        let Some(path) = self.path.as_ref() else {
+            return Ok(());
+        };
+        if self.cleanup_stage.as_deref() == Some("cgroup.kill") {
+            return Err("injected cgroup construction cleanup failure at cgroup.kill".into());
+        }
+        fs::write(path.join("cgroup.kill"), "1")
+            .map_err(|error| format!("cgroup construction kill cleanup failed: {error}"))?;
+        if self.cleanup_stage.as_deref() == Some("cgroup.events") {
+            return Err("injected cgroup construction cleanup failure at cgroup.events".into());
+        }
+        if self.cleanup_stage.as_deref() == Some("populated") {
+            return Err("injected cgroup construction cleanup failure at populated".into());
+        }
+        let deadline = Instant::now() + CGROUP_CLEANUP_TIMEOUT;
+        loop {
+            let events = fs::read_to_string(path.join("cgroup.events"))
+                .map_err(|error| format!("cgroup construction events cleanup failed: {error}"))?;
+            if events
+                .lines()
+                .any(|line| line.split_whitespace().eq(["populated", "0"]))
+            {
+                break;
+            }
+            if Instant::now() >= deadline {
+                return Err("cgroup construction cleanup exceeded populated deadline".into());
+            }
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        if self.cleanup_stage.as_deref() == Some("remove") {
+            return Err("injected cgroup construction cleanup failure at remove".into());
+        }
+        if self.recursive_cleanup {
+            fs::remove_dir_all(path)
+        } else {
+            fs::remove_dir(path)
+        }
+        .map_err(|error| format!("cgroup construction removal cleanup failed: {error}"))?;
+        self.path.take();
+        Ok(())
+    }
+
+    fn fail<T>(mut self, setup_error: String) -> Result<T, String> {
+        match self.cleanup() {
+            Ok(()) => Err(setup_error),
+            Err(cleanup_error) => {
+                self.reporter.report(&cleanup_error);
+                Err(format!("{setup_error}; {cleanup_error}"))
+            }
+        }
+    }
+
+    fn commit(mut self) -> PathBuf {
+        self.path
+            .take()
+            .expect("cgroup construction guard commits exactly once")
+    }
+}
+
+impl Drop for CgroupConstructionGuard {
+    fn drop(&mut self) {
+        if self.path.is_some() {
+            if let Err(error) = self.cleanup() {
+                self.reporter.report(&error);
+            }
+        }
+    }
+}
+
+fn create_worker_cgroup(
+    root: &Path,
+    reporter: CleanupFailureSink,
+    fault: CgroupConstructionFault,
+) -> Result<CgroupConstructionGuard, String> {
     let child = root.join(format!("request-{}", uuid::Uuid::new_v4()));
     fs::create_dir(&child)
         .map_err(|error| format!("Failed to create Linux worker cgroup: {error}"))?;
-    let setup = (|| {
+    let recursive_cleanup = !root.starts_with("/sys/fs/cgroup");
+    let guard = CgroupConstructionGuard {
+        path: Some(child),
+        reporter,
+        recursive_cleanup,
+        cleanup_stage: fault.cleanup_stage,
+    };
+    if recursive_cleanup {
         for (name, value) in [
-            ("memory.max", "1073741824"),
-            ("memory.swap.max", "0"),
-            ("pids.max", "4"),
-            ("cpu.max", "100000 100000"),
+            ("memory.max", ""),
+            ("memory.swap.max", ""),
+            ("pids.max", ""),
+            ("cpu.max", ""),
+            ("cgroup.procs", ""),
+            ("cgroup.kill", ""),
+            ("cgroup.events", "populated 0\n"),
         ] {
-            let path = child.join(name);
-            if !path.exists() && !root.starts_with("/sys/fs/cgroup") {
-                fs::write(&path, "").map_err(|error| {
-                    format!("Failed to create test Linux cgroup control {name}: {error}")
-                })?;
-            }
-            fs::write(&path, value)
-                .map_err(|error| format!("Failed to set Linux cgroup {name}: {error}"))?;
-        }
-        for name in ["cgroup.procs", "cgroup.kill", "cgroup.events"] {
-            let path = child.join(name);
-            if !path.exists() && !root.starts_with("/sys/fs/cgroup") {
-                let value = if name == "cgroup.events" {
-                    "populated 0\n"
-                } else {
-                    ""
-                };
-                fs::write(&path, value).map_err(|error| {
-                    format!("Failed to create test Linux cgroup control {name}: {error}")
-                })?;
-            }
-            if !path.exists() {
-                return Err(format!("Linux worker cgroup lacks {name}"));
+            if let Err(error) = fs::write(guard.path().join(name), value) {
+                return guard.fail(format!(
+                    "Failed to create test Linux cgroup control {name}: {error}"
+                ));
             }
         }
-        Ok(())
-    })();
-    if let Err(error) = setup {
-        let _ = fs::remove_dir_all(&child);
-        return Err(error);
     }
-    Ok(child)
+    for (name, value) in [
+        ("memory.max", "1073741824"),
+        ("memory.swap.max", "0"),
+        ("pids.max", "4"),
+        ("cpu.max", "100000 100000"),
+    ] {
+        if fault.setup_stage.as_deref() == Some(name) {
+            return guard.fail(format!("injected cgroup setup failure at {name}"));
+        }
+        if let Err(error) = fs::write(guard.path().join(name), value) {
+            return guard.fail(format!("Failed to set Linux cgroup {name}: {error}"));
+        }
+    }
+    for name in ["cgroup.procs", "cgroup.kill", "cgroup.events"] {
+        if fault.setup_stage.as_deref() == Some(name) {
+            return guard.fail(format!("injected cgroup setup failure at {name}"));
+        }
+        if !guard.path().join(name).exists() {
+            return guard.fail(format!("Linux worker cgroup lacks {name}"));
+        }
+    }
+    Ok(guard)
+}
+
+#[doc(hidden)]
+pub fn cgroup_construction_failure_for_test(
+    root: &Path,
+    stage: &str,
+    cleanup_failure: bool,
+    reporter: CleanupFailureSink,
+) -> Result<(), String> {
+    let fault = CgroupConstructionFault {
+        setup_stage: Some(stage.into()),
+        cleanup_stage: cleanup_failure.then(|| "remove".into()),
+    };
+    match create_worker_cgroup(root, reporter, fault) {
+        Ok(guard) => guard.fail("injected setup stage did not fire".into()),
+        Err(error) => Err(error),
+    }
+}
+
+#[doc(hidden)]
+pub fn cgroup_construction_cleanup_failure_for_test(
+    root: &Path,
+    setup_stage: &str,
+    cleanup_stage: &str,
+    reporter: CleanupFailureSink,
+) -> Result<(), String> {
+    let fault = CgroupConstructionFault {
+        setup_stage: Some(setup_stage.into()),
+        cleanup_stage: Some(cleanup_stage.into()),
+    };
+    match create_worker_cgroup(root, reporter, fault) {
+        Ok(guard) => guard.fail("injected setup stage did not fire".into()),
+        Err(error) => Err(error),
+    }
 }
 
 fn verify_cgroup_delegation(root: &Path, probe: bool) -> Result<(), String> {
@@ -780,48 +983,30 @@ fn verify_cgroup_delegation(root: &Path, probe: bool) -> Result<(), String> {
         }
     }
     if probe {
-        let child = create_worker_cgroup(root)?;
-        let guard = CgroupProbeGuard { path: Some(child) };
-        fs::write(guard.path().join("cgroup.kill"), "1")
-            .map_err(|error| format!("cgroup.kill probe failed: {error}"))?;
-        let events = fs::read_to_string(guard.path().join("cgroup.events"))
-            .map_err(|error| format!("cgroup.events probe failed: {error}"))?;
-        if !events.contains("populated 0") {
-            return Err("Fresh cgroup probe unexpectedly reported processes".into());
+        let mut guard = create_worker_cgroup(
+            root,
+            CleanupFailureSink::noop(),
+            CgroupConstructionFault::default(),
+        )?;
+        let probe_result = (|| {
+            fs::write(guard.path().join("cgroup.kill"), "1")
+                .map_err(|error| format!("cgroup.kill probe failed: {error}"))?;
+            let events = fs::read_to_string(guard.path().join("cgroup.events"))
+                .map_err(|error| format!("cgroup.events probe failed: {error}"))?;
+            if !events.contains("populated 0") {
+                return Err("Fresh cgroup probe unexpectedly reported processes".into());
+            }
+            Ok(())
+        })();
+        let cleanup = guard.cleanup();
+        match (probe_result, cleanup) {
+            (Ok(()), Ok(())) => {}
+            (Err(error), Ok(())) => return Err(error),
+            (Ok(()), Err(cleanup)) => return Err(cleanup),
+            (Err(error), Err(cleanup)) => return Err(format!("{error}; {cleanup}")),
         }
-        guard.finish()?;
     }
     Ok(())
-}
-
-struct CgroupProbeGuard {
-    path: Option<PathBuf>,
-}
-
-impl CgroupProbeGuard {
-    fn path(&self) -> &Path {
-        self.path
-            .as_deref()
-            .expect("cgroup probe guard already finalized")
-    }
-
-    fn finish(mut self) -> Result<(), String> {
-        let path = self
-            .path
-            .take()
-            .ok_or("cgroup probe guard already finalized")?;
-        fs::remove_dir(path)
-            .map_err(|error| format!("Delegated cgroup probe cleanup failed: {error}"))
-    }
-}
-
-impl Drop for CgroupProbeGuard {
-    fn drop(&mut self) {
-        if let Some(path) = self.path.take() {
-            let _ = fs::write(path.join("cgroup.kill"), "1");
-            let _ = fs::remove_dir(path);
-        }
-    }
 }
 
 fn words(value: &str) -> BTreeSet<&str> {

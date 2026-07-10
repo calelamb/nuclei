@@ -1317,6 +1317,24 @@ for `populated 0` with a deadline, removes the child, and surfaces cleanup
 failure so the matching backend generation is revoked. Process groups remain
 lifecycle helpers only.
 
+Cleanup revocation is synchronous and generation scoped. The installed backend,
+Linux containment, and generic `RunGuard` cleanup resources share one bounded
+`CleanupFailureSink`; `cgroup.kill`, populated-wait, or removal failure marks
+that exact generation unavailable before a failing cleanup resource can drop.
+Explicit completion returns the combined termination/finalization/request-dir
+error, while cancellation, future drop, and background reap report through the
+same sink even when their return value has no caller. A stale generation's sink
+cannot revoke a newer backend, and subsequent execution fails before resolver
+or spawn.
+
+Cgroup construction is RAII from the successful `mkdir`. The construction
+guard owns the partial leaf across every controller write, control-file
+validation, CString/argument build, and containment handoff. Setup failure runs
+checked kill, populated-zero wait, and removal; setup and cleanup errors are
+combined, and failed fallback cleanup reports/revokes from `Drop`. Fault tests
+cover every setup stage plus kill, events, populated, and removal cleanup
+failures; no unchecked partial-leaf removal remains.
+
 The pure-Rust `seccompiler` filter is compiled for the verified host
 architecture, serialized into a sealed memfd, and inherited only by bwrap.
 Bubblewrap applies it after namespace/mount setup. It denies the socket family

@@ -368,6 +368,8 @@ impl MacBackend {
             cleanup_root: Some(request_temp),
             resource_limits: ResourceLimits::production(),
             runtime_guard: None,
+            cleanup_resources: Vec::new(),
+            cleanup_reporter: None,
             #[cfg(target_os = "linux")]
             linux: None,
         })
