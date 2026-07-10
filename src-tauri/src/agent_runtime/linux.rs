@@ -570,7 +570,7 @@ impl LinuxBackend {
             request_temp,
             reporter,
             CgroupLimits::production(),
-            ResourceLimits::production(),
+            linux_resource_limits(),
             None,
         )
     }
@@ -988,8 +988,7 @@ pub struct QualificationCgroupPolicy {
 }
 
 fn qualification_cgroup_policy(kind: CgroupProbeKind) -> QualificationCgroupPolicy {
-    let mut resource_limits = ResourceLimits::production();
-    resource_limits.processes = 1_024;
+    let mut resource_limits = linux_resource_limits();
     match kind {
         CgroupProbeKind::Memory => {
             resource_limits.address_space_bytes = 2_147_483_648;
@@ -1016,6 +1015,15 @@ fn qualification_cgroup_policy(kind: CgroupProbeKind) -> QualificationCgroupPoli
             resource_limits,
         },
     }
+}
+
+fn linux_resource_limits() -> ResourceLimits {
+    let mut limits = ResourceLimits::production();
+    // RLIMIT_NPROC is uid-wide, so a tiny value can block bwrap namespace
+    // setup based on unrelated parent processes. The request cgroup's
+    // pids.max remains the authoritative per-worker process limit.
+    limits.processes = 1_024;
+    limits
 }
 
 #[doc(hidden)]

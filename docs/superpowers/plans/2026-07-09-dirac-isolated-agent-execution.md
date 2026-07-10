@@ -1355,6 +1355,12 @@ allowed thread clones, and requires a `pids.events max` delta; its cpu policy
 sets restrictive `cpu.max` below the parent CPU/wall budget and requires
 `cpu.stat` throttling deltas before accepting `cgroup_v2`.
 
+Linux keeps the parent `RLIMIT_NPROC` defense above the authoritative request
+`pids.max`: `RLIMIT_NPROC` is uid-wide and a tiny value can otherwise block
+bwrap namespace setup because of unrelated host processes. The cgroup remains
+the strict per-worker process boundary, and the pids probe proves its event
+counter independently.
+
 Background reaping has both a hard deadline and a wait-error retry budget.
 Exhaustion synchronously revokes the matching generation and reaches an
 observable bounded terminal state, but retains the unconfirmed child, runtime

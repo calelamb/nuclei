@@ -405,7 +405,11 @@ fn linux_worker_spec_uses_fixed_bwrap_boundary_and_cgroup_limits() {
     }));
     assert_eq!(spec.env["HOME"], "/home/agent");
     assert_eq!(spec.env["TMPDIR"], "/tmp");
-    assert_eq!(spec.resource_limits, ResourceLimits::production());
+    assert_eq!(
+        spec.resource_limits.processes, 1_024,
+        "Linux RLIMIT_NPROC must not preempt authoritative pids.max"
+    );
+    assert!(spec.resource_limits.processes > 4);
     assert!(spec.launch_verifier.is_some());
     let child = spec
         .linux
