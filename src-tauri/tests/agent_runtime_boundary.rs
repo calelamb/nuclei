@@ -205,6 +205,7 @@ fn production_identity_budget_covers_cold_locked_fixture_hashing() {
     assert!(production_identity_timeout_for_test() >= Duration::from_secs(120));
     let manifest = include_str!("../Cargo.toml");
     assert!(manifest.contains("[profile.test.package.nuclei]"));
+    assert!(manifest.contains("[profile.test.package.sha2]"));
     assert!(manifest.contains("opt-level = 2"));
 }
 

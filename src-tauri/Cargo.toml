@@ -54,3 +54,6 @@ tempfile = "3.23.0"
 # Optimize Nuclei's test code without rebuilding every dependency optimized.
 [profile.test.package.nuclei]
 opt-level = 2
+
+[profile.test.package.sha2]
+opt-level = 3

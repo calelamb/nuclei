@@ -1373,10 +1373,11 @@ later step can perform network I/O. The production Merkle identity pass retains
 a hard cooperative deadline, sized to 120 seconds for the full managed-Python
 plus venv generation under the existing 50,000-entry/2 GiB work caps. CI
 uses a package-scoped Cargo test profile to optimize Nuclei's qualification
-code without rebuilding every GTK/Tauri dependency optimized, so repeated
-full-tree identity checks represent the shipped release rather than debug SHA
-performance. Fault tests continue to inject much shorter deadlines to prove
-fail-closed cancellation. The Linux fixture installs the locked packages
+code and the `sha2` compression dependency without rebuilding every GTK/Tauri
+dependency optimized, so repeated full-tree identity checks represent the
+shipped release rather than debug SHA performance. Fault tests continue to
+inject much shorter deadlines to prove fail-closed cancellation. The Linux
+fixture installs the locked packages
 directly into its dedicated uv-managed interpreter using uv's explicit
 PEP 668 override for that disposable interpreter; it does not modify the runner
 Python or dereference a second venv copy of the same managed tree. Before the
