@@ -318,7 +318,9 @@ fn linux_ci_caches_every_artifact_before_hostile_parent_environment() {
     let after = &linux_job[qualification..];
 
     assert!(before.contains("uv pip sync"));
-    assert!(before.contains("uv pip sync --system --python \"$managed_python\""));
+    assert!(before.contains(
+        "uv pip sync --break-system-packages --python \"$managed_python\""
+    ));
     assert!(!before.contains("uv venv --python \"$managed_python\""));
     assert!(before.contains("libwebkit2gtk-4.1-dev"));
     assert!(before.contains("libayatana-appindicator3-dev"));

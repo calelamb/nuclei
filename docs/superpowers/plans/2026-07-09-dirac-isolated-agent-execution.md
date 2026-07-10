@@ -1378,8 +1378,8 @@ full-tree identity checks represent the shipped release rather than debug SHA
 performance. Fault tests continue to inject much shorter deadlines to prove
 fail-closed cancellation. The Linux fixture installs the locked packages
 directly into its dedicated uv-managed interpreter using uv's explicit
-`--system` override for that disposable interpreter; it does not modify the
-runner Python or dereference a second venv copy of the same managed tree.
+PEP 668 override for that disposable interpreter; it does not modify the runner
+Python or dereference a second venv copy of the same managed tree.
 
 The pure-Rust `seccompiler` filter is compiled for the verified host
 architecture, serialized into a sealed memfd, and inherited only by bwrap.

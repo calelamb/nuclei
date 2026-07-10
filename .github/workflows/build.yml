@@ -295,7 +295,7 @@ jobs:
           managed_python="$(uv python find --managed-python 3.12.11)"
           managed_python_relative="${managed_python#"$environment_root/"}"
           test "$managed_python_relative" != "$managed_python"
-          uv pip sync --system --python "$managed_python" --require-hashes kernel/agent-requirements.lock
+          uv pip sync --break-system-packages --python "$managed_python" --require-hashes kernel/agent-requirements.lock
 
           kernel_root="$environment_root/kernel"
           agent_kernel_files=(
