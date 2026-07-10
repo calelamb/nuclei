@@ -68,17 +68,18 @@ that never asserts an unobserved result and verifies every claim by simulation.
   key migrated to the keychain; patches stream to the editor; rollback is client-side.
 - **R6 Packaging** — DONE (no change needed): the worker ships in the existing `kernel/`
   resource bundle and shares the managed venv.
+- **R7 Hardware submission transport** — DONE. `KernelSubmitPort` (blocking `tungstenite` WS
+  client, hard read timeout) submits/polls/cancels through the running kernel; wired into
+  `dirac_start_run`. The Rust agent now submits to the free simulator (parity with the TS
+  version), still behind the R3 policy gate (real QPU off by default). Verified LIVE against a
+  real kernel (Bell → simulator submit → `{00,11}` results).
 
-Totals: **126 Rust tests + 506 frontend tests**, all green; `cargo build -D warnings`/clippy/fmt
-clean; frontend tsc/eslint/build clean.
+Totals: **145 Rust tests + 506 frontend tests**, all green; `cargo build -D warnings`/clippy/fmt
+clean; frontend tsc/eslint/build clean. The Rust model gateway is byte-for-byte parity with the
+shipped, working TS client (endpoint/headers/body/response parsing).
 
 ### Deferred (documented follow-ups — the machinery is in place)
 
-- **Real hardware submission transport.** The policy gate + budget ledger are wired, but the
-  `SubmitPort` is stubbed (`UnavailableSubmitPort`) — the Rust agent cannot yet submit even to
-  the free simulator (the TS version could, over the kernel WS). Needs a Rust→kernel hardware
-  transport. Until then the Rust agent is a full closed-loop *coder* (write/simulate/verify/
-  repair/analyze/transpile-preview/plan) but does not submit jobs.
 - **Journal persistence + restart recovery** (runner uses an in-memory journal).
 - **Live end-to-end validation** against a running app + real API key (the model-gateway path
   is unit-tested with mocks but not yet exercised live).

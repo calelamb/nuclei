@@ -19,6 +19,7 @@ pub mod executor;
 pub mod gateway;
 pub mod journal;
 pub mod kernel;
+pub mod kernel_submit;
 pub mod orchestrator;
 pub mod policy;
 pub mod runner;

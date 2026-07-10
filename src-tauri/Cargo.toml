@@ -43,6 +43,11 @@ keyring = { version = "3", features = ["apple-native", "windows-native", "sync-s
 # real digest is used instead of a hand-rolled one.
 sha2 = "0.10"
 hex = "0.4"
+# Stage R7 hardware-submission transport: a blocking WebSocket client to the
+# local Python kernel (ws://localhost:9742). `default-features = false` +
+# `handshake` keeps the client synchronous and pulls NO TLS/OpenSSL — the
+# kernel is plaintext localhost, and the rest of the harness has no tokio.
+tungstenite = { version = "0.24", default-features = false, features = ["handshake"] }
 
 [target.'cfg(unix)'.dependencies]
 # Process-group control for the execution supervisor (setsid + killpg).

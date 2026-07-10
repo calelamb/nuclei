@@ -23,13 +23,12 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use tauri::{Emitter, State};
 
-use super::analysis::BackendInfo;
 use super::gateway::ModelGateway;
 use super::kernel::RealKernel;
+use super::kernel_submit::KernelSubmitPort;
 use super::orchestrator::GatewayModel;
 use super::policy::AutonomyPolicy;
 use super::runner::{drive_run, RunConfig, RunDeps, RunEvent, RunSeedFile};
-use super::submit::UnavailableSubmitPort;
 
 /// The window event channel every run streams its [`RunEvent`]s over.
 const RUN_EVENT: &str = "dirac://run-event";
@@ -119,9 +118,14 @@ pub fn dirac_start_run(
 
         let gateway = ModelGateway::default();
         let model_port = GatewayModel::new(&gateway).with_model(model.clone());
-        let submit = UnavailableSubmitPort;
+        // R7: the live kernel WebSocket transport. The policy gate
+        // (`AutonomyPolicy::safe_default`, real-money OFF) still guards every
+        // submission — this port is only the plumbing it gates.
+        let submit = KernelSubmitPort::default();
         let policy = AutonomyPolicy::safe_default();
-        let get_backends = || Vec::<BackendInfo>::new();
+        // Let the submit tool resolve a backend's provider / `is_simulator`
+        // from the kernel's live backend list ([] if the kernel is down).
+        let get_backends = || submit.list_backends();
 
         let emit = |event: RunEvent| {
             if let Err(e) = app_for_thread.emit(RUN_EVENT, &event) {
