@@ -1,4 +1,5 @@
 mod commands;
+mod dirac;
 
 use commands::kernel::KernelState;
 
@@ -19,6 +20,7 @@ pub fn run() {
             commands::kernel::stop_kernel,
             commands::frameworks::framework_status,
             commands::frameworks::framework_install,
+            dirac::dirac_execute,
         ])
         .setup(|app| {
             let log_level = if cfg!(debug_assertions) {

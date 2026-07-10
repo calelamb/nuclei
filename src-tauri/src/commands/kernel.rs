@@ -156,9 +156,7 @@ pub fn start_kernel(
         match crate::commands::frameworks::ensure_kernel_runtime(&app_handle) {
             Ok(p) => p,
             Err(e) => {
-                log::warn!(
-                    "Managed venv unavailable ({e}); falling back to system python3"
-                );
+                log::warn!("Managed venv unavailable ({e}); falling back to system python3");
                 std::path::PathBuf::from("python3")
             }
         };
@@ -176,7 +174,13 @@ pub fn start_kernel(
         .stdout(std::process::Stdio::piped())
         .stderr(std::process::Stdio::piped())
         .spawn()
-        .map_err(|e| format!("Failed to start kernel: {} (cwd: {})", e, kernel_cwd.display()))?;
+        .map_err(|e| {
+            format!(
+                "Failed to start kernel: {} (cwd: {})",
+                e,
+                kernel_cwd.display()
+            )
+        })?;
 
     // Drain kernel stdout + stderr into the Rust logger. Prior releases
     // piped both streams but never read them — so when Python crashed
@@ -203,7 +207,11 @@ pub fn start_kernel(
     let pid = child.id();
     *guard = Some(child);
 
-    Ok(format!("Kernel started with PID {} (cwd: {})", pid, kernel_cwd.display()))
+    Ok(format!(
+        "Kernel started with PID {} (cwd: {})",
+        pid,
+        kernel_cwd.display()
+    ))
 }
 
 #[tauri::command]

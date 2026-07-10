@@ -198,7 +198,11 @@ fn python_executable_path(py: &str) -> Option<String> {
         return None;
     }
     let path = String::from_utf8_lossy(&out.stdout).trim().to_string();
-    if path.is_empty() { None } else { Some(path) }
+    if path.is_empty() {
+        None
+    } else {
+        Some(path)
+    }
 }
 
 /// Find the newest usable system Python (>= MIN_PYTHON_MINOR). We probe
@@ -209,23 +213,38 @@ fn python_executable_path(py: &str) -> Option<String> {
 fn find_best_python() -> Option<(String, String)> {
     // Ordered newest-first. `python3` and `python` come last so that a
     // specific-version binary always wins over a generic symlink.
+    // The windows/unix arms are intentionally kept separate so the candidate
+    // list can diverge per-platform later; today they happen to match.
+    #[allow(clippy::if_same_then_else)]
     let candidates: Vec<&str> = if cfg!(target_os = "windows") {
         vec![
-            "python3.13", "python3.12", "python3.11", "python3.10",
-            "python3", "python",
+            "python3.13",
+            "python3.12",
+            "python3.11",
+            "python3.10",
+            "python3",
+            "python",
         ]
     } else {
         vec![
-            "python3.13", "python3.12", "python3.11", "python3.10",
-            "python3", "python",
+            "python3.13",
+            "python3.12",
+            "python3.11",
+            "python3.10",
+            "python3",
+            "python",
         ]
     };
     for name in candidates {
-        let Some(minor) = python_minor_version(name) else { continue };
+        let Some(minor) = python_minor_version(name) else {
+            continue;
+        };
         if minor < MIN_PYTHON_MINOR {
             continue;
         }
-        let Some(path) = python_executable_path(name) else { continue };
+        let Some(path) = python_executable_path(name) else {
+            continue;
+        };
         return Some((path, format!("Python 3.{minor}")));
     }
     None
@@ -291,11 +310,7 @@ fn installed_frameworks(venv_py: &Path) -> Vec<String> {
 /// staring at a "loading kernel..." spinner forever (see v0.4.14 field
 /// report). `ensure_venv` only bootstraps pip; these are the deps the
 /// kernel itself imports at module load.
-const KERNEL_CORE_DEPS: &[&str] = &[
-    "websockets>=12.0,<14.0",
-    "numpy>=1.26,<3.0",
-    "keyring>=24",
-];
+const KERNEL_CORE_DEPS: &[&str] = &["websockets>=12.0,<14.0", "numpy>=1.26,<3.0", "keyring>=24"];
 
 /// Fast-check whether the venv already has the kernel's core runtime
 /// deps. A `-c import ...` takes ~50ms when Python can find everything,
@@ -323,7 +338,12 @@ pub fn install_kernel_core_deps(app: &AppHandle, venv: &Path) -> Result<(), Stri
             venv.display()
         ));
     }
-    emit(app, "installing-core-deps", None, Some("websockets, numpy, keyring"));
+    emit(
+        app,
+        "installing-core-deps",
+        None,
+        Some("websockets, numpy, keyring"),
+    );
     let mut args: Vec<&str> = vec!["install", "--upgrade"];
     args.extend(KERNEL_CORE_DEPS.iter().copied());
     let out = Command::new(&pip)
@@ -404,8 +424,7 @@ fn rebuild_venv_with_supported_python(app: &AppHandle, venv: &Path) -> Result<()
     let backup = venv.with_extension("broken");
     let _ = std::fs::remove_dir_all(&backup);
     if venv.exists() {
-        std::fs::rename(venv, &backup)
-            .map_err(|e| format!("failed to back up old venv: {e}"))?;
+        std::fs::rename(venv, &backup).map_err(|e| format!("failed to back up old venv: {e}"))?;
     }
 
     let out = Command::new(&new_py)
@@ -430,7 +449,9 @@ fn rebuild_venv_with_supported_python(app: &AppHandle, venv: &Path) -> Result<()
     // framework install here doesn't fail the whole rebuild, we just
     // log it. The user can re-run the wizard to retry individuals.
     for id in &previously_installed {
-        let Some(fw) = CATALOG.iter().find(|f| f.id == id.as_str()) else { continue };
+        let Some(fw) = CATALOG.iter().find(|f| f.id == id.as_str()) else {
+            continue;
+        };
         emit(app, "restoring-framework", Some(fw.id), Some(fw.pip_name));
         let mut args: Vec<&str> = vec!["install", "--upgrade"];
         args.extend(fw.pip_name.split_whitespace());
@@ -539,10 +560,7 @@ fn ensure_venv(app: &AppHandle, venv: &Path) -> Result<(), String> {
 /// events for progress. Failures on one framework don't abort the rest —
 /// the caller gets a summary so partial installs are recoverable.
 #[tauri::command]
-pub fn framework_install(
-    app: AppHandle,
-    frameworks: Vec<String>,
-) -> Result<Vec<String>, String> {
+pub fn framework_install(app: AppHandle, frameworks: Vec<String>) -> Result<Vec<String>, String> {
     let venv = venv_path(&app)?;
     ensure_venv(&app, &venv)?;
     let pip = venv_pip(&venv);
