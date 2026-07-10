@@ -3,6 +3,7 @@ import { usePlatform } from '../platform/PlatformProvider';
 import { useDiracStore } from '../stores/diracStore';
 import { useEditorStore } from '../stores/editorStore';
 import { useAgentRunStore } from '../stores/agentRunStore';
+import { useHardwareStore } from '../stores/hardwareStore';
 import type { AgentRunUi } from '../stores/agentRunStore';
 import { KERNEL_WS_URL } from '../config/kernel';
 import { SONNET_MODEL } from '../config/dirac';
@@ -145,6 +146,7 @@ export function useDiracAgent(): UseDiracAgentResult {
           journal,
           signal: controller.signal,
           runId,
+          getBackends: () => useHardwareStore.getState().backends,
         });
         useAgentRunStore.getState().finishRun(result);
       } catch (e) {

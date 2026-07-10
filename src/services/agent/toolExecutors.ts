@@ -1,6 +1,8 @@
+import type { BackendInfo } from '../../types/hardware';
 import type { Framework, SimulationResult } from '../../types/quantum';
 import { kernelLanguageFor } from '../../types/quantum';
 import { compareDistributions, estimateResources, validateProgram } from './analysis';
+import { planHardwareRun } from './hardwarePlanner';
 import type { KernelPort, WorkspacePort } from './interfaces';
 import type { ToolEvidence } from './types';
 
@@ -30,6 +32,11 @@ export interface ToolContext {
    * conflict-check baseline for apply_patch. Updated on every successful
    * patch. */
   lastKnownHash: Map<string, string>;
+  /** Optional accessor for the currently known hardware backends, used only
+   * by plan_hardware_run. Undefined/omitted (or an empty list) means no
+   * connected hardware — a normal state, not an error. Shadow-mode only:
+   * nothing in this context ever submits a job. */
+  getBackends?: () => BackendInfo[];
 }
 
 function ok(tool: string, toolCallId: string, facts: Record<string, unknown>): ToolEvidence {
@@ -302,6 +309,42 @@ function execCompareQuantumResults(input: Record<string, unknown>, toolCallId: s
   });
 }
 
+async function execPlanHardwareRun(
+  input: Record<string, unknown>,
+  toolCallId: string,
+  ctx: ToolContext,
+): Promise<ToolEvidence> {
+  const path = resolvePath(input, ctx);
+  const file = ctx.workspace.readFile(path);
+  if (!file) return fail('plan_hardware_run', toolCallId, `No file at path: ${path}`);
+
+  const framework = ctx.resolveFramework(path);
+  const language = kernelLanguageFor(framework);
+  const outcome = await ctx.kernel.parse(file.content, language);
+
+  if (!outcome.ok) {
+    return fail('plan_hardware_run', toolCallId, outcome.error, { path, line: outcome.line ?? null });
+  }
+
+  const backends = ctx.getBackends?.() ?? [];
+  if (backends.length === 0) {
+    return ok('plan_hardware_run', toolCallId, {
+      available: false,
+      message: 'No connected hardware backends to plan against.',
+    });
+  }
+
+  const plan = planHardwareRun(outcome.snapshot, backends);
+
+  return ok('plan_hardware_run', toolCallId, {
+    available: true,
+    selected: plan.selected?.name ?? null,
+    candidates: plan.candidates.map((c) => ({ name: c.backend.name, provider: c.backend.provider, score: c.score })),
+    rejected: plan.rejected.map((r) => ({ name: r.backend.name, reasons: r.reasons })),
+    rationale: plan.rationale,
+  });
+}
+
 function execFinish(input: Record<string, unknown>, toolCallId: string): ToolEvidence {
   const summary = asString(input.summary);
   const success = asBoolean(input.success);
@@ -340,6 +383,8 @@ export async function executeTool(
         return await execRunSimulation(args, toolCallId, ctx);
       case 'compare_quantum_results':
         return execCompareQuantumResults(args, toolCallId, ctx);
+      case 'plan_hardware_run':
+        return await execPlanHardwareRun(args, toolCallId, ctx);
       case 'finish':
         return execFinish(args, toolCallId);
       default:

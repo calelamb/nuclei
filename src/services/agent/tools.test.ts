@@ -27,6 +27,13 @@ describe('AGENT_TOOLS', () => {
     expect(finish?.input_schema.required).toEqual(expect.arrayContaining(['summary', 'success']));
   });
 
+  it('includes a plan_hardware_run tool with an optional path input', () => {
+    const plan = AGENT_TOOLS.find((t) => t.name === 'plan_hardware_run');
+    expect(plan).toBeDefined();
+    expect(plan?.input_schema.required).toEqual([]);
+    expect(Object.keys(plan?.input_schema.properties ?? {})).toEqual(['path']);
+  });
+
   it('has no duplicate tool names', () => {
     const names = AGENT_TOOLS.map((t) => t.name);
     expect(new Set(names).size).toBe(names.length);
@@ -42,6 +49,7 @@ describe('AGENT_TOOLS', () => {
         'finish',
         'inspect_project',
         'parse_quantum_program',
+        'plan_hardware_run',
         'read_quantum_file',
         'rollback_patch',
         'run_simulation',

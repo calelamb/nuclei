@@ -1,9 +1,10 @@
 import type { AgentToolSchema } from './interfaces';
 
-// Local-simulation-only tool set for the closed-loop agent. No hardware
-// tools here — hardware submission is out of scope for this task. Every
-// schema pins `additionalProperties: false` and an explicit `required` list
-// so the model (and tests) can rely on strict, minimal inputs.
+// Local-simulation tool set for the closed-loop agent, plus one shadow-mode
+// hardware analysis tool (plan_hardware_run). No hardware SUBMISSION tools
+// here — actually running on real hardware is out of scope for this task.
+// Every schema pins `additionalProperties: false` and an explicit `required`
+// list so the model (and tests) can rely on strict, minimal inputs.
 
 export const INSPECT_PROJECT_TOOL: AgentToolSchema = {
   name: 'inspect_project',
@@ -132,6 +133,22 @@ export const COMPARE_QUANTUM_RESULTS_TOOL: AgentToolSchema = {
   },
 };
 
+export const PLAN_HARDWARE_RUN_TOOL: AgentToolSchema = {
+  name: 'plan_hardware_run',
+  description:
+    'SHADOW MODE ONLY: analyze the parsed circuit against currently known hardware backends and recommend ' +
+    "a compatible one with an explainable score. This is a recommendation for the user's consideration — " +
+    'it never submits a job or contacts a provider.',
+  input_schema: {
+    type: 'object',
+    properties: {
+      path: { type: 'string', description: 'Workspace-relative file path; defaults to the active file.' },
+    },
+    required: [],
+    additionalProperties: false,
+  },
+};
+
 export const FINISH_TOOL: AgentToolSchema = {
   name: 'finish',
   description: 'Terminate the run with a final summary and a verdict on whether the goal was met.',
@@ -156,5 +173,6 @@ export const AGENT_TOOLS: AgentToolSchema[] = [
   ESTIMATE_QUANTUM_RESOURCES_TOOL,
   RUN_SIMULATION_TOOL,
   COMPARE_QUANTUM_RESULTS_TOOL,
+  PLAN_HARDWARE_RUN_TOOL,
   FINISH_TOOL,
 ];

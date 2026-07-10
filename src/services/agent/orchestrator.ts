@@ -1,3 +1,4 @@
+import type { BackendInfo } from '../../types/hardware';
 import { AGENT_TOOLS } from './tools';
 import { defaultFrameworkResolver, executeTool } from './toolExecutors';
 import type { ToolContext } from './toolExecutors';
@@ -22,6 +23,10 @@ export interface AgentDeps {
   runId?: string;
   now?: () => number;
   signal?: AbortSignal;
+  /** Optional accessor for the currently known hardware backends, forwarded
+   * to plan_hardware_run's ToolContext. Omitted in tests that don't care
+   * about hardware planning — the tool degrades to an "unavailable" result. */
+  getBackends?: () => BackendInfo[];
 }
 
 const SYSTEM_PROMPT = `You are Dirac, an autonomous quantum-programming agent embedded in the Nuclei IDE.
@@ -39,6 +44,9 @@ Rules:
 - Use run_simulation to execute the program locally and obtain real probabilities and measurements.
 - Use compare_quantum_results to check the simulated probabilities against a numeric success criterion,
   when one was given.
+- You may call plan_hardware_run to get a shadow-mode recommendation of a compatible hardware backend for
+  the circuit, with an explainable score; this is analysis only for the user's consideration — it never
+  submits a job or contacts a provider, and it is not a substitute for run_simulation.
 - Only call finish once you have verified your result via run_simulation (and compare_quantum_results when
   a numeric target was given), or once you are truly blocked and cannot proceed further. Never call finish
   with success: true without having actually run the simulation.
@@ -69,7 +77,7 @@ export async function runAgent(goal: string, deps: AgentDeps): Promise<AgentRunR
   const runId = deps.runId ?? generateRunId();
   const now = deps.now ?? (() => Date.now());
   const budget = deps.budget ?? DEFAULT_BUDGET;
-  const { model, kernel, workspace, journal, signal } = deps;
+  const { model, kernel, workspace, journal, signal, getBackends } = deps;
 
   const startedAt = now();
   let state: AgentRunState = 'planning';
@@ -87,6 +95,7 @@ export async function runAgent(goal: string, deps: AgentDeps): Promise<AgentRunR
     lastSim: {},
     resolveFramework: defaultFrameworkResolver(workspace),
     lastKnownHash: new Map<string, string>(),
+    getBackends,
   };
 
   let messages: ModelMessage[] = [buildSeedMessage(goal, workspace)];

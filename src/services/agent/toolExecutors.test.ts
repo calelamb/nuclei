@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import type { BackendInfo } from '../../types/hardware';
 import type { Gate } from '../../types/quantum';
 import type { KernelPort, ParseOutcome, SimOutcome } from './interfaces';
 import { defaultFrameworkResolver, executeTool } from './toolExecutors';
@@ -36,7 +37,10 @@ function makeFakeKernel(overrides: Partial<KernelPort> = {}): KernelPort {
   };
 }
 
-function makeCtx(kernel: KernelPort = makeFakeKernel()): { ctx: ToolContext; workspace: InMemoryWorkspace } {
+function makeCtx(
+  kernel: KernelPort = makeFakeKernel(),
+  getBackends?: () => BackendInfo[],
+): { ctx: ToolContext; workspace: InMemoryWorkspace } {
   const workspace = new InMemoryWorkspace([
     { path: FILE_PATH, framework: 'qiskit', content: BELL_CODE, dirty: false },
   ]);
@@ -46,8 +50,23 @@ function makeCtx(kernel: KernelPort = makeFakeKernel()): { ctx: ToolContext; wor
     lastSim: {},
     resolveFramework: defaultFrameworkResolver(workspace),
     lastKnownHash: new Map(),
+    getBackends,
   };
   return { ctx, workspace };
+}
+
+function makeBackend(overrides: Partial<BackendInfo> = {}): BackendInfo {
+  return {
+    name: 'test-backend',
+    provider: 'ibm',
+    qubitCount: 5,
+    connectivity: [],
+    queueLength: 2,
+    averageErrorRate: 0.01,
+    gateSet: ['h', 'cx', 'measure'],
+    status: 'online',
+    ...overrides,
+  };
 }
 
 describe('executeTool', () => {
@@ -283,6 +302,56 @@ describe('executeTool', () => {
   it('validate_quantum_program fails without throwing for an unknown path', async () => {
     const { ctx } = makeCtx();
     const evidence = await executeTool('validate_quantum_program', { path: 'missing.py' }, ctx, 'tc1');
+    expect(evidence.ok).toBe(false);
+  });
+
+  it('plan_hardware_run reports unavailable when no getBackends is provided', async () => {
+    const { ctx } = makeCtx();
+    const evidence = await executeTool('plan_hardware_run', {}, ctx, 'tc1');
+    expect(evidence.ok).toBe(true);
+    expect(evidence.facts.available).toBe(false);
+  });
+
+  it('plan_hardware_run reports unavailable when getBackends returns an empty list', async () => {
+    const { ctx } = makeCtx(makeFakeKernel(), () => []);
+    const evidence = await executeTool('plan_hardware_run', {}, ctx, 'tc1');
+    expect(evidence.ok).toBe(true);
+    expect(evidence.facts.available).toBe(false);
+  });
+
+  it('plan_hardware_run returns a selected/candidates shape with a mock getBackends', async () => {
+    const kernel = makeFakeKernel({
+      parse: async (): Promise<ParseOutcome> => ({
+        ok: true,
+        snapshot: { framework: 'qiskit', qubit_count: 2, classical_bit_count: 2, depth: 3, gates: BELL_GATES },
+      }),
+    });
+    const backend = makeBackend({ name: 'ibm-brisbane' });
+    const { ctx } = makeCtx(kernel, () => [backend]);
+    const evidence = await executeTool('plan_hardware_run', {}, ctx, 'tc1');
+
+    expect(evidence.ok).toBe(true);
+    expect(evidence.facts.available).toBe(true);
+    expect(evidence.facts.selected).toBe('ibm-brisbane');
+    expect(Array.isArray(evidence.facts.candidates)).toBe(true);
+    expect(evidence.facts.candidates).toEqual([{ name: 'ibm-brisbane', provider: 'ibm', score: expect.any(Number) }]);
+    expect(evidence.facts.rejected).toEqual([]);
+    expect(typeof evidence.facts.rationale).toBe('string');
+  });
+
+  it('plan_hardware_run fails without throwing on a parse error', async () => {
+    const kernel = makeFakeKernel({
+      parse: async (): Promise<ParseOutcome> => ({ ok: false, error: 'SyntaxError: bad', line: 1 }),
+    });
+    const { ctx } = makeCtx(kernel, () => [makeBackend()]);
+    const evidence = await executeTool('plan_hardware_run', {}, ctx, 'tc1');
+    expect(evidence.ok).toBe(false);
+    expect(evidence.diagnostics).toBe('SyntaxError: bad');
+  });
+
+  it('plan_hardware_run fails without throwing for an unknown path', async () => {
+    const { ctx } = makeCtx(makeFakeKernel(), () => [makeBackend()]);
+    const evidence = await executeTool('plan_hardware_run', { path: 'missing.py' }, ctx, 'tc1');
     expect(evidence.ok).toBe(false);
   });
 
