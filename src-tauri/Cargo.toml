@@ -29,3 +29,30 @@ tauri-plugin-fs = "2"
 tauri-plugin-updater = "2.10.1"
 tauri-plugin-process = "2.3.1"
 tauri-plugin-shell = "2"
+# Secure model gateway (Stage R2): rustls (not native-tls) so Linux CI needs no
+# OpenSSL system lib; the blocking client keeps the gateway synchronous, matching
+# the rest of the harness (no tokio in this crate).
+reqwest = { version = "0.12", default-features = false, features = ["blocking", "json", "rustls-tls"] }
+# OS keychain access for the Anthropic API key: native keychains on
+# macOS/Windows, pure-Rust Secret Service on Linux (compiles headless; only
+# touches D-Bus at runtime).
+keyring = { version = "3", features = ["apple-native", "windows-native", "sync-secret-service"] }
+# Stage R3 workspace patch transactions: content hashing for conflict
+# detection (`dirac::workspace`). Cross-language exactness with the TS
+# FNV-1a hash is not required (the Rust side is desktop-authoritative), so a
+# real digest is used instead of a hand-rolled one.
+sha2 = "0.10"
+hex = "0.4"
+# Stage R7 hardware-submission transport: a blocking WebSocket client to the
+# local Python kernel (ws://localhost:9742). `default-features = false` +
+# `handshake` keeps the client synchronous and pulls NO TLS/OpenSSL — the
+# kernel is plaintext localhost, and the rest of the harness has no tokio.
+tungstenite = { version = "0.24", default-features = false, features = ["handshake"] }
+
+[target.'cfg(unix)'.dependencies]
+# Process-group control for the execution supervisor (setsid + killpg).
+libc = "0.2"
+
+[dev-dependencies]
+# Filesystem-backed workspace tests (Stage R3 `dirac::workspace::fs`).
+tempfile = "3"

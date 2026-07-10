@@ -1,4 +1,11 @@
 mod commands;
+// The Dirac trusted-runtime harness is the crate's agent API surface: the R4
+// orchestrator, model gateway, execution port, policy/budget, and analysis are
+// consumed by the R5 Tauri command layer (and are a legitimate library API for
+// the `app_lib` rlib). Exposing the module makes those items reachable from a
+// live crate root, so the trusted-runtime code needs no blanket dead_code
+// allows to build warning-clean under `-D warnings`.
+pub mod dirac;
 
 use commands::kernel::KernelState;
 
@@ -14,11 +21,19 @@ pub fn run() {
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_shell::init())
         .manage(kernel_state)
+        .manage(dirac::ModelGateway::default())
+        .manage(dirac::DiracRuns::default())
         .invoke_handler(tauri::generate_handler![
             commands::kernel::start_kernel,
             commands::kernel::stop_kernel,
             commands::frameworks::framework_status,
             commands::frameworks::framework_install,
+            dirac::dirac_execute,
+            dirac::dirac_set_api_key,
+            dirac::dirac_has_api_key,
+            dirac::dirac_clear_api_key,
+            dirac::commands::dirac_start_run,
+            dirac::commands::dirac_cancel_run,
         ])
         .setup(|app| {
             let log_level = if cfg!(debug_assertions) {
