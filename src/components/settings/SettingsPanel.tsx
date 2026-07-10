@@ -100,6 +100,28 @@ function NumberStepper({ value, min, max, step, onChange }: {
   );
 }
 
+function CurrencyInput({ value, onChange }: { value: number; onChange: (v: number) => void }) {
+  const colors = useThemeStore((s) => s.colors);
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+      <span style={{ fontSize: 11, color: colors.textDim, fontFamily: "'Geist Sans', sans-serif" }}>$</span>
+      <input
+        type="number"
+        min={0}
+        step={1}
+        value={value}
+        onChange={(e) => onChange(Math.max(0, Number(e.target.value) || 0))}
+        style={{
+          width: 56, background: colors.bgElevated, color: colors.text,
+          border: `1px solid ${colors.border}`, borderRadius: 4,
+          padding: '3px 6px', fontSize: 11, fontFamily: "'Geist Sans', sans-serif",
+          outline: 'none',
+        }}
+      />
+    </div>
+  );
+}
+
 function Slider({ value, min, max, step, onChange, displayValue }: {
   value: number; min: number; max: number; step: number;
   onChange: (v: number) => void; displayValue?: string;
@@ -281,10 +303,12 @@ export function SettingsPanel() {
   const dirac = useSettingsStore((s) => s.dirac);
   const kernel = useSettingsStore((s) => s.kernel);
   const general = useSettingsStore((s) => s.general);
+  const agentHardware = useSettingsStore((s) => s.agentHardware);
   const updateEditor = useSettingsStore((s) => s.updateEditor);
   const updateDirac = useSettingsStore((s) => s.updateDirac);
   const updateKernel = useSettingsStore((s) => s.updateKernel);
   const updateGeneral = useSettingsStore((s) => s.updateGeneral);
+  const updateAgentHardware = useSettingsStore((s) => s.updateAgentHardware);
   const resetAll = useSettingsStore((s) => s.resetAll);
   const setSimShots = useSimulationStore((s) => s.setShots);
 
@@ -401,6 +425,33 @@ export function SettingsPanel() {
                 { value: 'full', label: 'Full' },
               ]}
               onChange={(v) => updateDirac({ contextDepth: v })} />
+          </SettingRow>
+        </Section>
+
+        {/* ── Agent Hardware Autonomy ── */}
+        <Section title="Agent Hardware Autonomy">
+          <div style={{
+            marginBottom: 8, padding: '8px 10px', borderRadius: 4,
+            background: `${colors.error}12`, border: `1px solid ${colors.error}40`,
+          }}>
+            <span style={{
+              fontSize: 10, color: colors.textMuted, lineHeight: 1.5,
+              fontFamily: "'Geist Sans', sans-serif", display: 'block',
+            }}>
+              Enabling this lets Dirac submit jobs to real, paid quantum hardware on your behalf,
+              within the budget below, without asking first. This is off by default — leave it off
+              unless you understand the cost implications.
+            </span>
+          </div>
+          <SettingRow label="Autonomous Hardware Submission"
+            hint="When off, any hardware job Dirac proposes always needs your approval first.">
+            <Toggle value={agentHardware.autonomousHardwareEnabled}
+              onChange={(v) => updateAgentHardware({ autonomousHardwareEnabled: v })} />
+          </SettingRow>
+          <SettingRow label="Max Spend"
+            hint="Per-run budget ceiling for autonomous hardware jobs, in USD.">
+            <CurrencyInput value={agentHardware.maxSpend}
+              onChange={(v) => updateAgentHardware({ maxSpend: v })} />
           </SettingRow>
         </Section>
 

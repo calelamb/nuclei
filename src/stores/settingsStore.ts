@@ -41,17 +41,32 @@ export interface GeneralSettings {
   experimentalFeatures: boolean;
 }
 
+/* ── Agent Hardware Autonomy Settings ───────────────────
+ * Governs whether Dirac's agent runtime may submit jobs to real, paid
+ * quantum hardware on its own. THIS MUST DEFAULT TO OFF — see
+ * DEFAULT_AGENT_HARDWARE below and services/agent/policyFromSettings.ts,
+ * which maps this group onto the runtime's AutonomyPolicy. */
+export interface AgentHardwareSettings {
+  autonomousHardwareEnabled: boolean; // master switch; OFF by default
+  allowQpu: boolean;
+  maxSpend: number;                   // per-run USD budget ceiling
+  maxShots: number;
+  providerAllowlist: string[];        // empty = no restriction
+}
+
 /* ── Combined ────────────────────────────────────────── */
 export interface SettingsState {
   editor: EditorSettings;
   dirac: DiracSettings;
   kernel: KernelSettings;
   general: GeneralSettings;
+  agentHardware: AgentHardwareSettings;
 
   updateEditor: (patch: Partial<EditorSettings>) => void;
   updateDirac: (patch: Partial<DiracSettings>) => void;
   updateKernel: (patch: Partial<KernelSettings>) => void;
   updateGeneral: (patch: Partial<GeneralSettings>) => void;
+  updateAgentHardware: (patch: Partial<AgentHardwareSettings>) => void;
   resetAll: () => void;
 }
 
@@ -91,6 +106,16 @@ const DEFAULT_GENERAL: GeneralSettings = {
   experimentalFeatures: false,
 };
 
+/** SAFE default: autonomous real-hardware submission is OFF. Do not change
+ * this default — see policyFromSettings.ts and services/agent/policy.ts. */
+const DEFAULT_AGENT_HARDWARE: AgentHardwareSettings = {
+  autonomousHardwareEnabled: false,
+  allowQpu: false,
+  maxSpend: 0,
+  maxShots: 4096,
+  providerAllowlist: [],
+};
+
 /** Try to hydrate settings from localStorage */
 function loadPersistedSettings(): Partial<SettingsState> {
   try {
@@ -102,13 +127,14 @@ function loadPersistedSettings(): Partial<SettingsState> {
   }
 }
 
-function persistSettings(state: Pick<SettingsState, 'editor' | 'dirac' | 'kernel' | 'general'>) {
+function persistSettings(state: Pick<SettingsState, 'editor' | 'dirac' | 'kernel' | 'general' | 'agentHardware'>) {
   try {
     localStorage.setItem('nuclei-settings', JSON.stringify({
       editor: state.editor,
       dirac: state.dirac,
       kernel: state.kernel,
       general: state.general,
+      agentHardware: state.agentHardware,
     }));
   } catch { /* silently fail in restricted environments */ }
 }
@@ -121,6 +147,9 @@ export const useSettingsStore = create<SettingsState>((set, get) => {
     dirac: { ...DEFAULT_DIRAC, ...(persisted.dirac ?? {}) },
     kernel: { ...DEFAULT_KERNEL, ...(persisted.kernel ?? {}) },
     general: { ...DEFAULT_GENERAL, ...(persisted.general ?? {}) },
+    // Always overlay onto the SAFE default so a corrupted/partial persisted
+    // blob can never silently turn autonomous hardware submission on.
+    agentHardware: { ...DEFAULT_AGENT_HARDWARE, ...(persisted.agentHardware ?? {}) },
 
     updateEditor: (patch) => {
       set((s) => ({ editor: { ...s.editor, ...patch } }));
@@ -138,12 +167,17 @@ export const useSettingsStore = create<SettingsState>((set, get) => {
       set((s) => ({ general: { ...s.general, ...patch } }));
       persistSettings(get());
     },
+    updateAgentHardware: (patch) => {
+      set((s) => ({ agentHardware: { ...s.agentHardware, ...patch } }));
+      persistSettings(get());
+    },
     resetAll: () => {
       set({
         editor: DEFAULT_EDITOR,
         dirac: DEFAULT_DIRAC,
         kernel: DEFAULT_KERNEL,
         general: DEFAULT_GENERAL,
+        agentHardware: DEFAULT_AGENT_HARDWARE,
       });
       localStorage.removeItem('nuclei-settings');
     },

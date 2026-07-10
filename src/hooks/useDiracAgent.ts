@@ -4,12 +4,17 @@ import { useDiracStore } from '../stores/diracStore';
 import { useEditorStore } from '../stores/editorStore';
 import { useAgentRunStore } from '../stores/agentRunStore';
 import { useHardwareStore } from '../stores/hardwareStore';
+import { useSettingsStore } from '../stores/settingsStore';
 import type { AgentRunUi } from '../stores/agentRunStore';
 import { KERNEL_WS_URL } from '../config/kernel';
 import { SONNET_MODEL } from '../config/dirac';
 import { HttpModel } from '../services/agent/liveModel';
 import { SessionKernel } from '../services/agent/liveKernel';
 import type { KernelTransport } from '../services/agent/liveKernel';
+import { SocketSubmitPort } from '../services/agent/liveSubmit';
+import { BudgetLedger } from '../services/agent/budgetLedger';
+import { policyFromSettings } from '../services/agent/policyFromSettings';
+import { estimateSubmissionCost } from '../services/agent/costEstimate';
 import { storeWorkspace } from '../services/agent/storeWorkspace';
 import { StoreJournal } from '../services/agent/storeJournal';
 import { runAgent } from '../services/agent/orchestrator';
@@ -53,11 +58,16 @@ export function useDiracAgent(): UseDiracAgentResult {
 
   const socketRef = useRef<WebSocket | null>(null);
   const controllerRef = useRef<AbortController | null>(null);
+  const submitPortRef = useRef<SocketSubmitPort | null>(null);
 
   const closeSocket = useCallback(() => {
     if (socketRef.current) {
       socketRef.current.close();
       socketRef.current = null;
+    }
+    if (submitPortRef.current) {
+      submitPortRef.current.dispose();
+      submitPortRef.current = null;
     }
   }, []);
 
@@ -138,6 +148,17 @@ export function useDiracAgent(): UseDiracAgentResult {
       const kernel = new SessionKernel(transport, () => useEditorStore.getState().framework);
       const model = new HttpModel({ apiKey, model: SONNET_MODEL });
 
+      // Reuse the SAME transport as SessionKernel for hardware submission —
+      // one socket per run. The policy/ledger below are derived fresh from
+      // Settings on every run start, so a mid-run settings change never
+      // retroactively affects an in-flight run, and a run always reflects
+      // whatever the user had configured (SAFE default: autonomous hardware
+      // submission OFF) at the moment they clicked "start".
+      const submitPort = new SocketSubmitPort(transport);
+      submitPortRef.current = submitPort;
+      const policy = policyFromSettings(useSettingsStore.getState());
+      const ledger = new BudgetLedger(useSettingsStore.getState().agentHardware.maxSpend);
+
       try {
         const result = await runAgent(goal, {
           model,
@@ -147,6 +168,10 @@ export function useDiracAgent(): UseDiracAgentResult {
           signal: controller.signal,
           runId,
           getBackends: () => useHardwareStore.getState().backends,
+          policy,
+          ledger,
+          submitPort,
+          estimateCost: estimateSubmissionCost,
         });
         useAgentRunStore.getState().finishRun(result);
       } catch (e) {
