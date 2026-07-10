@@ -1371,9 +1371,11 @@ compilation before fake secrets, proxies, or loader variables are injected.
 The hostile qualification step runs `cargo test --locked --offline`, and no
 later step can perform network I/O. The production Merkle identity pass retains
 a hard cooperative deadline, sized to 120 seconds for the full managed-Python
-plus venv generation under the existing 50,000-entry/2 GiB work caps; fault
-tests continue to inject much shorter deadlines to prove fail-closed
-cancellation.
+plus venv generation under the existing 50,000-entry/2 GiB work caps. CI
+compiles the qualification binary with optimization enabled so its repeated
+full-tree identity checks represent the shipped release rather than debug SHA
+performance; fault tests continue to inject much shorter deadlines to prove
+fail-closed cancellation.
 
 The pure-Rust `seccompiler` filter is compiled for the verified host
 architecture, serialized into a sealed memfd, and inherited only by bwrap.
