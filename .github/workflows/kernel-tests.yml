@@ -24,10 +24,11 @@ jobs:
           python-version: ${{ matrix.python-version }}
 
       - name: Install test dependencies
-        # Only the minimum required for the mocked test suite. Real provider
-        # SDKs (qiskit-ibm-runtime, qiskit-ionq, amazon-braket-sdk,
-        # azure-quantum, pytket-quantinuum) are intentionally NOT installed —
-        # tests mock them via sys.modules injection (see conftest.py).
+        # Real *provider* SDKs (qiskit-ibm-runtime, qiskit-ionq, amazon-braket-sdk,
+        # azure-quantum, pytket-quantinuum) are intentionally NOT installed — hardware
+        # provider tests mock them. The *simulation* frameworks (qiskit, qiskit-aer,
+        # cirq) ARE installed: the disposable agent worker executes real generated
+        # circuits, so its tests need the real frameworks, not mocks.
         run: |
           python -m pip install --upgrade pip
           pip install pytest pytest-asyncio websockets
@@ -36,6 +37,8 @@ jobs:
           # Microsoft QDK (Q#) — the qsharp adapter tests run against the
           # real interpreter; numpy is needed by the shared adapter math.
           pip install "qdk>=1.29,<2" "numpy>=1.26,<3.0"
+          # Simulation frameworks for the disposable agent worker + executor tests.
+          pip install "qiskit>=1.2,<2" "qiskit-aer>=0.15,<1" "cirq-core>=1.4,<2"
 
       - name: Run kernel tests
         run: pytest kernel/tests/ -v

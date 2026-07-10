@@ -10,6 +10,7 @@ import { useCircuitStore } from '../../stores/circuitStore';
 import { useSimulationStore } from '../../stores/simulationStore';
 import { EASING, DURATION, prefersReducedMotion } from '../../lib/animations';
 import { useNavigationStore } from '../../stores/navigationStore';
+import { AgentEntryPoint } from './AgentEntryPoint';
 import { ChevronRight, ChevronDown, Plus, ArrowUp, Settings } from 'lucide-react';
 
 const SLASH_COMMANDS = [
@@ -543,6 +544,8 @@ export function DiracSidePanel() {
           <ChevronRight size={14} />
         </button>
       </div>
+
+      <AgentEntryPoint />
 
       {!hasApiKey ? (
         /* No API key — show setup banner instead of chat */

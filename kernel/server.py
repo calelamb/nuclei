@@ -24,6 +24,71 @@ MAX_MESSAGE_SIZE = 1_048_576  # 1 MiB — blocks gigantic code payloads
 PING_INTERVAL = 30
 PING_TIMEOUT = 20
 
+# Disposable agent worker: model-generated code that Dirac runs autonomously in
+# its verify/repair loop executes in a fresh subprocess (kernel/agent_worker.py)
+# with resource limits + an import denylist, isolated from provider credentials
+# and the user's editor state. -I runs the interpreter in isolated mode.
+_AGENT_WORKER_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "agent_worker.py")
+_AGENT_WORKER_WALL_SECONDS = 25  # > the worker's 10s RLIMIT_CPU; catches wall hangs
+
+
+async def run_agent_worker(request: dict) -> dict:
+    """Execute one agent request in a disposable worker subprocess.
+
+    Returns the worker's parsed JSON response (a dict with status/snapshot/
+    result/stdout/stderr/error), or a synthesized error response if the worker
+    times out, crashes, or emits unparseable output. Never raises.
+    """
+    request_id = request.get("request_id", "invalid")
+    payload = json.dumps(request, separators=(",", ":"), allow_nan=False).encode("utf-8")
+
+    try:
+        proc = await asyncio.create_subprocess_exec(
+            sys.executable, "-I", _AGENT_WORKER_PATH,
+            stdin=asyncio.subprocess.PIPE,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.DEVNULL,
+        )
+    except OSError as exc:
+        return _agent_error(request_id, "worker_spawn_failed", str(exc))
+
+    try:
+        stdout, _ = await asyncio.wait_for(
+            proc.communicate(input=payload), timeout=_AGENT_WORKER_WALL_SECONDS
+        )
+    except asyncio.TimeoutError:
+        try:
+            proc.kill()
+        except ProcessLookupError:
+            pass
+        await proc.wait()
+        return _agent_error(request_id, "worker_timeout", "Agent worker exceeded its time budget.")
+
+    if not stdout:
+        return _agent_error(request_id, "worker_no_output", "Agent worker produced no response.")
+
+    try:
+        response = json.loads(stdout.decode("utf-8"))
+    except (ValueError, UnicodeDecodeError):
+        return _agent_error(request_id, "worker_bad_output", "Agent worker response was not valid JSON.")
+
+    if not isinstance(response, dict):
+        return _agent_error(request_id, "worker_bad_output", "Agent worker response was not an object.")
+    return response
+
+
+def _agent_error(request_id: str, code: str, message: str) -> dict:
+    return {
+        "protocol_version": 1,
+        "request_id": request_id,
+        "status": "error",
+        "snapshot": None,
+        "result": None,
+        "stdout": "",
+        "stderr": "",
+        "error": {"code": code, "message": message},
+    }
+
 # Hardware manager is shared — it holds provider credentials and job handles,
 # which are inherently multi-connection state.
 hardware_manager = HardwareManager()
@@ -498,6 +563,33 @@ async def handle_message(websocket):
                     "type": "error",
                     "message": f"Dismiss failed: {e}",
                 }))
+
+        elif msg_type == "agent_execute":
+            # Dirac agent execution: run model-generated code in the disposable
+            # worker subprocess (isolated from credentials + editor state) and
+            # return a correlated result the frontend orchestrator awaits by
+            # request_id. Field names match kernel/agent_protocol.py.
+            request = {
+                "protocol_version": 1,
+                "request_id": str(msg.get("request_id", "invalid")),
+                "action": msg.get("action"),
+                "framework": msg.get("framework"),
+                "language": msg.get("language"),
+                "code": code,
+            }
+            if "shots" in msg:
+                request["shots"] = msg.get("shots")
+            worker_response = await run_agent_worker(request)
+            await websocket.send(json.dumps({
+                "type": "agent_result",
+                "request_id": worker_response.get("request_id", request["request_id"]),
+                "status": worker_response.get("status", "error"),
+                "snapshot": worker_response.get("snapshot"),
+                "result": worker_response.get("result"),
+                "stdout": worker_response.get("stdout", ""),
+                "stderr": worker_response.get("stderr", ""),
+                "error": worker_response.get("error"),
+            }))
 
         else:
             await websocket.send(json.dumps({
