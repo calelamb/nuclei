@@ -322,6 +322,8 @@ fn linux_ci_caches_every_artifact_before_hostile_parent_environment() {
         "uv pip sync --break-system-packages --python \"$managed_python\""
     ));
     assert!(!before.contains("uv venv --python \"$managed_python\""));
+    assert!(before.contains("non_runtime_stdlib"));
+    assert!(before.contains("\"test\", \"idlelib\", \"tkinter\", \"turtledemo\", \"ensurepip\""));
     assert!(before.contains("libwebkit2gtk-4.1-dev"));
     assert!(before.contains("libayatana-appindicator3-dev"));
     assert!(before.contains("cargo fetch --locked --target x86_64-unknown-linux-gnu"));

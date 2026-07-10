@@ -296,6 +296,22 @@ jobs:
           managed_python_relative="${managed_python#"$environment_root/"}"
           test "$managed_python_relative" != "$managed_python"
           uv pip sync --break-system-packages --python "$managed_python" --require-hashes kernel/agent-requirements.lock
+          "$managed_python" - <<'PY'
+          import shutil
+          import sys
+          import sysconfig
+          from pathlib import Path
+
+          runtime = Path(sys.prefix).resolve(strict=True)
+          stdlib = Path(sysconfig.get_paths()["stdlib"]).resolve(strict=True)
+          non_runtime_stdlib = ("test", "idlelib", "tkinter", "turtledemo", "ensurepip")
+          for name in non_runtime_stdlib:
+              shutil.rmtree(stdlib / name, ignore_errors=True)
+          for name in ("include", "share"):
+              shutil.rmtree(runtime / name, ignore_errors=True)
+          for cache in sorted(runtime.rglob("__pycache__"), reverse=True):
+              shutil.rmtree(cache, ignore_errors=True)
+          PY
 
           kernel_root="$environment_root/kernel"
           agent_kernel_files=(

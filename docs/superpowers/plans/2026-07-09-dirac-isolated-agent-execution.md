@@ -1379,7 +1379,11 @@ performance. Fault tests continue to inject much shorter deadlines to prove
 fail-closed cancellation. The Linux fixture installs the locked packages
 directly into its dedicated uv-managed interpreter using uv's explicit
 PEP 668 override for that disposable interpreter; it does not modify the runner
-Python or dereference a second venv copy of the same managed tree.
+Python or dereference a second venv copy of the same managed tree. Before the
+generation is locked, the fixture removes only known non-worker assets
+(headers/share data, stdlib tests, IDLE/tkinter/turtle demos, ensurepip, and
+bytecode caches); the production Cirq import/parse probe proves the pruned
+runtime remains sufficient.
 
 The pure-Rust `seccompiler` filter is compiled for the verified host
 architecture, serialized into a sealed memfd, and inherited only by bwrap.
