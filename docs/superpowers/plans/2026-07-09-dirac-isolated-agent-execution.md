@@ -1159,6 +1159,12 @@ pub fn build_seatbelt_profile(
 pub async fn qualification_cache_key_async(
     context: QualificationContext,
 ) -> Result<String, String>;
+pub struct LockedRuntimeIdentity { /* context + key + shared lease */ }
+impl LockedRuntimeIdentity {
+    pub async fn from_explicit_environment(
+        app_version: &str,
+    ) -> Result<Self, String>;
+}
 pub async fn qualify_current_host_with_context(
     mode: QualificationMode, context: QualificationContext,
 ) -> CapabilityReport;
@@ -1184,8 +1190,12 @@ nonregular entries, traversal overflow, byte overflow, and a changing tree fail
 closed.
 Hashing runs cooperatively in `spawn_blocking`, checks cancellation and a
 10-second deadline during traversal and every 64 KiB read, and is limited to
-50,000 entries and 2 GiB. Qualification and every launch hash while holding the
-runtime generation's shared app-owned lock; updates require its exclusive lock.
+50,000 entries and 2 GiB. Refresh acquires the runtime generation's shared
+app-owned lock before explicit context validation and the first hash, then holds
+that same lease continuously through all probes, the final equality hash, and
+atomic report/resolver installation. Cached reuse commits under the same lease.
+Every launch also hashes while holding a shared lease; updates require the
+exclusive lock.
 The generation is content-addressed and versioned. Tree entries must be owned by
 the current uid and cannot be group/world writable. A pre-launch mismatch or
 cleanup failure revokes only the matching installed generation.
@@ -1248,10 +1258,13 @@ missing sandbox-exec/runtime/framework, malformed evidence, profile error,
 identity mismatch, or cleanup failure returns unavailable with no frameworks or
 controls. The nonignored `RequireAvailable` macOS test requires explicit CI
 fixture environment variables and asserts the exact Cirq-only report.
-`.github/workflows/build.yml` uses `setup-uv` and
-`UV_PYTHON_INSTALL_DIR` to place a managed standalone Python and copied venv
-under one content-addressed `$RUNNER_TEMP/nuclei-agent-runtime` generation,
-materializes symlinks, and syncs the committed universal
+`.github/workflows/build.yml` uses `setup-uv`, `uv python install`, `uv venv`
+(without `ensurepip`), and `uv pip sync` to install a managed standalone Python
+and venv under one content-addressed `$RUNNER_TEMP/nuclei-agent-runtime`
+generation. After installation it dereferences the complete common environment
+into a sibling staging generation and publishes that tree by rename, then
+recomputes interpreter and site-package paths and rejects every remaining
+symlink. It syncs the committed universal
 `kernel/agent-requirements.lock` with hash verification. GitHub actions use
 commit SHAs and Python is pinned to 3.12.11. Before Rust starts, the fixture
 asserts canonical `sys.base_prefix`, stdlib, executable, and site-packages paths

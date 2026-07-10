@@ -310,38 +310,12 @@ impl AgentRuntimeCommands for AgentRuntimeState {
 
     async fn capability<'a>(&'a self, app: &'a tauri::AppHandle) -> CapabilityReport {
         let generation = self.begin_refresh();
-        let context = macos::QualificationContext::from_explicit_environment(
+        let locked = macos::LockedRuntimeIdentity::from_explicit_environment(
             &app.package_info().version.to_string(),
-        );
-        let context = match context {
-            Ok(context) => context,
-            Err(error) => {
-                let report = required_mode(
-                    CapabilityReport {
-                        available: false,
-                        reason: Some(error),
-                        qualified_frameworks: Vec::new(),
-                        controls: Vec::new(),
-                    },
-                    QualificationMode::AllowUnavailable,
-                );
-                self.install_if_current(
-                    generation,
-                    "context-unavailable",
-                    InstalledBackend {
-                        report: report.clone(),
-                        resolver: Arc::new(UnavailableResolver),
-                        cache_key: None,
-                        refresh_key: "context-unavailable".into(),
-                        generation,
-                    },
-                )
-                .await;
-                return self.cached_capability().await;
-            }
-        };
-        let cache_key = match macos::qualification_cache_key_async(context.clone()).await {
-            Ok(key) => key,
+        )
+        .await;
+        let locked = match locked {
+            Ok(locked) => locked,
             Err(error) => {
                 let report = unavailable_report(error);
                 self.install_if_current(
@@ -359,11 +333,16 @@ impl AgentRuntimeCommands for AgentRuntimeState {
                 return self.cached_capability().await;
             }
         };
+        let context = locked.context().clone();
+        let cache_key = locked.cache_key().to_string();
         if let Some(report) = self.reuse_if_identity_matches(generation, &cache_key).await {
             return report;
         }
 
         // No state lock is held while the platform launches long-running probes.
+        #[cfg(target_os = "macos")]
+        let report = macos::qualify_locked(&locked).await;
+        #[cfg(not(target_os = "macos"))]
         let report =
             qualify_current_host_with_context(QualificationMode::AllowUnavailable, context.clone())
                 .await;
@@ -477,13 +456,15 @@ impl AgentRuntimeState {
 pub async fn qualify_current_host(mode: QualificationMode) -> CapabilityReport {
     #[cfg(target_os = "macos")]
     {
-        let context =
-            match macos::QualificationContext::from_explicit_environment(env!("CARGO_PKG_VERSION"))
-            {
-                Ok(context) => context,
-                Err(error) => return required_mode(unavailable_report(error), mode),
-            };
-        qualify_current_host_with_context(mode, context).await
+        let locked = match macos::LockedRuntimeIdentity::from_explicit_environment(env!(
+            "CARGO_PKG_VERSION"
+        ))
+        .await
+        {
+            Ok(locked) => locked,
+            Err(error) => return required_mode(unavailable_report(error), mode),
+        };
+        required_mode(macos::qualify_locked(&locked).await, mode)
     }
     #[cfg(not(target_os = "macos"))]
     {

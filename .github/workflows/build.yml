@@ -125,18 +125,26 @@ jobs:
           : > "$generation_parent/.provision.lock"
           uv python install 3.12.11
           managed_python="$(uv python find --managed-python 3.12.11)"
-
-          # The runtime identity rejects every symlink. Materialize the managed
-          # standalone distribution so every executable/importable input is a
-          # regular file beneath the one environment root.
-          materialized_root="$environment_root/managed-materialized"
-          cp -R -L "$managed_root" "$materialized_root"
-          rm -rf "$managed_root"
-          mv "$materialized_root" "$managed_root"
-          managed_python="$(uv python find --managed-python 3.12.11)"
-
-          "$managed_python" -m venv --copies "$venv_root"
+          managed_python_relative="${managed_python#"$environment_root/"}"
+          test "$managed_python_relative" != "$managed_python"
+          uv venv --python "$managed_python" "$venv_root"
           uv pip sync --python "$venv_root/bin/python" --require-hashes kernel/agent-requirements.lock
+
+          # uv's managed Python and venv may contain links. Dereference the
+          # complete installed generation only after package installation, then
+          # publish it with one rename from a sibling staging path.
+          materialized_root="$generation_parent/.sha256-$generation_id-materialized"
+          rm -rf "$materialized_root"
+          cp -R -L "$environment_root" "$materialized_root"
+          rm -rf "$environment_root"
+          mv "$materialized_root" "$environment_root"
+          managed_python="$environment_root/$managed_python_relative"
+          venv_root="$environment_root/venv"
+          test -x "$managed_python"
+          test -x "$venv_root/bin/python"
+
+          # Recompute every exported interpreter-dependent path from the
+          # materialized generation; never retain a pre-publication path.
           site_packages="$("$venv_root/bin/python" -c 'import sysconfig; print(sysconfig.get_paths()["purelib"])')"
           mkdir -p "$request_root" "$sentinel_root/project" "$sentinel_root/home"
 

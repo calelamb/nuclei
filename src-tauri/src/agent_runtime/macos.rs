@@ -333,17 +333,23 @@ impl OfflineProvisioningContainment {
 pub struct MacBackend;
 
 impl MacBackend {
-    pub fn runtime_lease(context: &QualificationContext) -> Result<Arc<fs::File>, String> {
-        let metadata = fs::symlink_metadata(&context.runtime_lock)
+    fn runtime_lease_path(path: &Path) -> Result<Arc<fs::File>, String> {
+        require_canonical(path, "Agent runtime generation lock", false)?;
+        require_regular_file(path, "Agent runtime generation lock")?;
+        let metadata = fs::symlink_metadata(path)
             .map_err(|error| format!("Agent runtime lock metadata is unavailable: {error}"))?;
         require_owned_nonwritable(&metadata)?;
         let file = fs::OpenOptions::new()
             .read(true)
-            .open(&context.runtime_lock)
+            .open(path)
             .map_err(|error| format!("Agent runtime generation lock is unavailable: {error}"))?;
         file.lock_shared()
             .map_err(|error| format!("Agent runtime shared lock failed: {error}"))?;
         Ok(Arc::new(file))
+    }
+
+    pub fn runtime_lease(context: &QualificationContext) -> Result<Arc<fs::File>, String> {
+        Self::runtime_lease_path(&context.runtime_lock)
     }
 
     pub fn worker_spec(
@@ -383,6 +389,58 @@ impl MacBackend {
         spec.args.truncate(3);
         spec.args.extend(["-I".into(), "-c".into(), script.into()]);
         Ok(spec)
+    }
+}
+
+pub struct LockedRuntimeIdentity {
+    context: QualificationContext,
+    cache_key: String,
+    _lease: Arc<fs::File>,
+}
+
+impl LockedRuntimeIdentity {
+    pub async fn acquire(context: QualificationContext) -> Result<Self, String> {
+        let lease = MacBackend::runtime_lease(&context)?;
+        context.environment.verify()?;
+        let cache_key = qualification_cache_key_async(context.clone()).await?;
+        Ok(Self {
+            context,
+            cache_key,
+            _lease: lease,
+        })
+    }
+
+    pub async fn from_explicit_environment(app_version: &str) -> Result<Self, String> {
+        let environment_root = std::env::var_os("NUCLEI_AGENT_ENVIRONMENT_ROOT")
+            .map(PathBuf::from)
+            .ok_or_else(|| {
+                "NUCLEI_AGENT_ENVIRONMENT_ROOT is required for explicit macOS qualification"
+                    .to_string()
+            })?;
+        let lock_path = environment_root
+            .parent()
+            .ok_or("Explicit agent environment root has no generation parent")?
+            .join(".provision.lock");
+        let lease = MacBackend::runtime_lease_path(&lock_path)?;
+        let context = QualificationContext::from_explicit_environment(app_version)?;
+        if context.runtime_lock != lock_path {
+            return Err("Explicit runtime lock identity changed during validation".into());
+        }
+        context.environment.verify()?;
+        let cache_key = qualification_cache_key_async(context.clone()).await?;
+        Ok(Self {
+            context,
+            cache_key,
+            _lease: lease,
+        })
+    }
+
+    pub fn context(&self) -> &QualificationContext {
+        &self.context
+    }
+
+    pub fn cache_key(&self) -> &str {
+        &self.cache_key
     }
 }
 
@@ -923,7 +981,15 @@ fn hash_regular_file(
 
 #[cfg(target_os = "macos")]
 pub(crate) async fn qualify(context: &QualificationContext) -> CapabilityReport {
-    qualify_macos(context).await
+    match LockedRuntimeIdentity::acquire(context.clone()).await {
+        Ok(locked) => qualify_locked(&locked).await,
+        Err(error) => unavailable(error),
+    }
+}
+
+#[cfg(target_os = "macos")]
+pub(crate) async fn qualify_locked(locked: &LockedRuntimeIdentity) -> CapabilityReport {
+    qualify_macos(locked.context(), locked.cache_key()).await
 }
 
 #[cfg(target_os = "macos")]
@@ -937,8 +1003,8 @@ fn unavailable(reason: impl Into<String>) -> CapabilityReport {
 }
 
 #[cfg(target_os = "macos")]
-async fn qualify_macos(context: &QualificationContext) -> CapabilityReport {
-    match qualify_macos_inner(context).await {
+async fn qualify_macos(context: &QualificationContext, expected_key: &str) -> CapabilityReport {
+    match qualify_macos_inner(context, expected_key).await {
         Ok(()) => CapabilityReport {
             available: true,
             reason: None,
@@ -968,11 +1034,12 @@ async fn qualify_macos(context: &QualificationContext) -> CapabilityReport {
 }
 
 #[cfg(target_os = "macos")]
-async fn qualify_macos_inner(context: &QualificationContext) -> Result<(), String> {
+async fn qualify_macos_inner(
+    context: &QualificationContext,
+    expected_key: &str,
+) -> Result<(), String> {
     context.environment.verify()?;
     context.system_paths.verify_production()?;
-    let _runtime_lease = MacBackend::runtime_lease(context)?;
-    let _cache_key = qualification_cache_key_async(context.clone()).await?;
     let baseline = ParentBaseline::create(context)?;
     let qualification = async {
 
@@ -1061,6 +1128,10 @@ async fn qualify_macos_inner(context: &QualificationContext) -> Result<(), Strin
     stdout_flood_probe(context).await?;
     rlimit_probe(context).await?;
     cirq_probe(context).await?;
+        let final_key = qualification_cache_key_async(context.clone()).await?;
+        if final_key != expected_key {
+            return Err("Runtime identity changed during macOS qualification".into());
+        }
     Ok(())
     }
     .await;

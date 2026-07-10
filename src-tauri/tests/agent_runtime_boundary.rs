@@ -1,8 +1,8 @@
 use app_lib::agent_runtime::macos::{
     active_identity_hashers_for_test, build_seatbelt_profile, cirq_rlimit_probe_source,
     qualification_cache_key, qualification_cache_key_async, qualification_cache_key_with_deadline,
-    resource_limit_probe_script, worker_environment, MacBackend, OfflineProvisioningContainment,
-    QualificationContext, SystemPaths,
+    resource_limit_probe_script, worker_environment, LockedRuntimeIdentity, MacBackend,
+    OfflineProvisioningContainment, QualificationContext, SystemPaths,
 };
 use app_lib::agent_runtime::process::{ProcessSpec, ResourceLimits};
 #[cfg(any(target_os = "linux", target_os = "macos"))]
@@ -318,6 +318,46 @@ fn shared_runtime_lease_blocks_an_exclusive_update_lock() {
     assert!(update.try_lock_exclusive().is_err());
     drop(lease);
     update.try_lock_exclusive().unwrap();
+}
+
+#[tokio::test]
+async fn locked_identity_blocks_updates_until_commit_and_detects_the_new_generation() {
+    use fs2::FileExt;
+
+    let fixture = fixture();
+    let context = fixture.context.clone();
+    let qualified = LockedRuntimeIdentity::acquire(context.clone())
+        .await
+        .unwrap();
+    let original_key = qualified.cache_key().to_string();
+    let lock_path = context.runtime_lock.clone();
+    let changed_file = context.environment.root.join("stdlib/os.py");
+    let (acquired_tx, mut acquired_rx) = tokio::sync::oneshot::channel();
+    let update = tokio::task::spawn_blocking(move || {
+        let lock = OpenOptions::new()
+            .read(true)
+            .write(true)
+            .open(lock_path)
+            .unwrap();
+        lock.lock_exclusive().unwrap();
+        let _ = acquired_tx.send(());
+        fs::write(changed_file, "# provisioned next generation\n").unwrap();
+    });
+
+    tokio::time::sleep(Duration::from_millis(25)).await;
+    assert!(matches!(
+        acquired_rx.try_recv(),
+        Err(tokio::sync::oneshot::error::TryRecvError::Empty)
+    ));
+
+    // Represents atomic report/resolver commit under the same qualification
+    // lease.
+    drop(qualified);
+    acquired_rx.await.unwrap();
+    update.await.unwrap();
+
+    let refreshed = LockedRuntimeIdentity::acquire(context).await.unwrap();
+    assert_ne!(original_key, refreshed.cache_key());
 }
 
 #[test]
