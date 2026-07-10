@@ -202,7 +202,7 @@ fn linux_seccomp_filter_is_nonempty_and_architecture_checked() {
 #[cfg(target_os = "linux")]
 #[test]
 fn production_identity_budget_covers_cold_locked_fixture_hashing() {
-    assert!(production_identity_timeout_for_test() >= Duration::from_secs(30));
+    assert!(production_identity_timeout_for_test() >= Duration::from_secs(120));
 }
 
 #[cfg(target_os = "linux")]

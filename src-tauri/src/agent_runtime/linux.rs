@@ -26,7 +26,7 @@ use std::time::{Duration, Instant};
 
 const BWRAP: &str = "/usr/bin/bwrap";
 const IDENTITY_VERSION: &str = "nuclei-linux-runtime-v1";
-const IDENTITY_TIMEOUT: Duration = Duration::from_secs(30);
+const IDENTITY_TIMEOUT: Duration = Duration::from_secs(120);
 const CGROUP_CLEANUP_TIMEOUT: Duration = Duration::from_secs(2);
 const MAX_IDENTITY_ENTRIES: usize = 50_000;
 const MAX_IDENTITY_BYTES: u64 = 2 * 1024 * 1024 * 1024;
