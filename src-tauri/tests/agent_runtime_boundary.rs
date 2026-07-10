@@ -277,6 +277,10 @@ fn qualification_controller_policies_are_independent_of_parent_rlimits() {
         linux_source.contains("chunk[::4096]"),
         "memory qualification must dirty every allocated page"
     );
+    assert!(
+        linux_source.contains("\"import cirq\\nchunks=[]"),
+        "memory qualification must select and execute the Cirq adapter"
+    );
 }
 
 #[cfg(target_os = "linux")]
