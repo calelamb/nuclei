@@ -286,7 +286,6 @@ jobs:
           generation_parent="$runtime_root/generations"
           environment_root="$generation_parent/generation-v1"
           managed_root="$environment_root/managed"
-          venv_root="$environment_root/venv"
           request_root="$RUNNER_TEMP/nuclei-linux-agent-requests"
           sentinel_root="$RUNNER_TEMP/nuclei-linux-agent-sentinels"
           export UV_PYTHON_INSTALL_DIR="$managed_root"
@@ -294,8 +293,9 @@ jobs:
           : > "$generation_parent/.provision.lock"
           uv python install 3.12.11
           managed_python="$(uv python find --managed-python 3.12.11)"
-          uv venv --python "$managed_python" "$venv_root"
-          uv pip sync --python "$venv_root/bin/python" --require-hashes kernel/agent-requirements.lock
+          managed_python_relative="${managed_python#"$environment_root/"}"
+          test "$managed_python_relative" != "$managed_python"
+          uv pip sync --python "$managed_python" --require-hashes kernel/agent-requirements.lock
 
           kernel_root="$environment_root/kernel"
           agent_kernel_files=(
@@ -323,16 +323,16 @@ jobs:
           cp -aL "$environment_root" "$materialized_root"
           rm -rf "$environment_root"
           mv "$materialized_root" "$environment_root"
-          venv_root="$environment_root/venv"
+          managed_python="$environment_root/$managed_python_relative"
           kernel_root="$environment_root/kernel"
-          site_packages="$("$venv_root/bin/python" -c 'import sysconfig; print(sysconfig.get_paths()["purelib"])')"
+          site_packages="$("$managed_python" -c 'import sysconfig; print(sysconfig.get_paths()["purelib"])')"
           mkdir -p "$request_root" "$sentinel_root/project" "$sentinel_root/home"
           chmod -R go-w "$environment_root" "$generation_parent/.provision.lock"
 
           NUCLEI_AGENT_ENVIRONMENT_ROOT="$environment_root" \
-          NUCLEI_AGENT_PYTHON="$venv_root/bin/python" \
+          NUCLEI_AGENT_PYTHON="$managed_python" \
           NUCLEI_AGENT_SITE_PACKAGES="$site_packages" \
-          "$venv_root/bin/python" - <<'PY'
+          "$managed_python" - <<'PY'
           import os
           from pathlib import Path
 
@@ -349,7 +349,7 @@ jobs:
           {
             echo "NUCLEI_AGENT_KERNEL_ROOT=$kernel_root"
             echo "NUCLEI_AGENT_ENVIRONMENT_ROOT=$environment_root"
-            echo "NUCLEI_AGENT_PYTHON=$venv_root/bin/python"
+            echo "NUCLEI_AGENT_PYTHON=$managed_python"
             echo "NUCLEI_AGENT_SITE_PACKAGES=$site_packages"
             echo "NUCLEI_AGENT_REQUEST_TEMP_ROOT=$request_root"
             echo "NUCLEI_AGENT_PROJECT_ROOT=$sentinel_root/project"
