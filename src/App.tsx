@@ -16,6 +16,7 @@ import { useHardwareStore } from './stores/hardwareStore';
 import { useKernel } from './hooks/useKernel';
 import { useFileOps } from './hooks/useFileOps';
 import { useActiveTabSync } from './hooks/useActiveTabSync';
+import { useKeychainKeyMigration } from './hooks/useKeychainKeyMigration';
 import { useProjectStore } from './stores/projectStore';
 import { useThemeStore } from './stores/themeStore';
 import { useEditorStore } from './stores/editorStore';
@@ -52,6 +53,7 @@ function AppInner() {
   const { execute, hardwareConnect, hardwareSubmit, hardwareCancel, hardwareDismiss } = useKernel();
   const fileOps = useFileOps();
   useActiveTabSync();
+  useKeychainKeyMigration();
   const platform = usePlatform();
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [showShortcuts, setShowShortcuts] = useState(false);

@@ -2,7 +2,7 @@ import { useThemeStore } from '../../stores/themeStore';
 import type { ThemeColors } from '../../stores/themeStore';
 import { useAgentRunStore } from '../../stores/agentRunStore';
 import type { AgentRunUi } from '../../stores/agentRunStore';
-import { storeWorkspace } from '../../services/agent/storeWorkspace';
+import { useEditorStore } from '../../stores/editorStore';
 import type { JournalEntry, PatchTransaction } from '../../services/agent/types';
 
 const RUNNING_STATES = new Set(['planning', 'working', 'paused']);
@@ -96,10 +96,16 @@ function PatchRow({ tx }: { tx: PatchTransaction }) {
   const colors = useThemeStore((s) => s.colors);
 
   const handleRollback = () => {
-    const rolledBack = storeWorkspace.rollback(tx.id);
-    const latest = storeWorkspace.getTransaction(tx.id);
-    if (latest) useAgentRunStore.getState().recordPatch(latest);
-    else if (rolledBack) useAgentRunStore.getState().recordPatch({ ...tx, rolledBack: true });
+    // Client-side revert: the frontend owns the editor, and the patch carries
+    // its own before/after content, so we restore beforeContent directly. This
+    // works for patches produced by the Rust harness (which never touch the TS
+    // workspace registry). Guard on the editor still holding exactly what the
+    // patch produced, so a rollback can't clobber edits the user made since.
+    const editor = useEditorStore.getState();
+    if (editor.code === tx.afterContent) {
+      editor.setCode(tx.beforeContent);
+      useAgentRunStore.getState().recordPatch({ ...tx, rolledBack: true });
+    }
   };
 
   return (

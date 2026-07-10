@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { DIRAC_API_KEY } from '../config/dirac';
+import { isTauri } from '../platform/PlatformProvider';
 import {
   buildConversation,
   newConversation,
@@ -28,6 +29,23 @@ function persistApiKey(key: string | null): void {
       localStorage.removeItem(API_KEY_STORAGE_KEY);
     }
   } catch { /* restricted environment */ }
+}
+
+/**
+ * Mirror a newly-saved key into the OS keychain on desktop, so the Rust
+ * agent harness (which reads the key via `dirac_has_api_key` /
+ * `dirac_start_run`, never from localStorage) picks it up immediately.
+ * Best-effort and fire-and-forget: chat (useDirac) reads `apiKey` off this
+ * store regardless of whether the keychain push succeeds, so a failure
+ * here never blocks the non-agent surface.
+ */
+function pushKeyToKeychain(key: string | null): void {
+  if (!key || !isTauri) return;
+  void import('@tauri-apps/api/core')
+    .then(({ invoke }) => invoke('dirac_set_api_key', { key }))
+    .catch(() => {
+      // Non-critical — see doc comment above.
+    });
 }
 
 export interface ToolCall {
@@ -181,6 +199,7 @@ export const useDiracStore = create<DiracState>((set) => ({
   setLoading: (isLoading) => set({ isLoading }),
   setApiKey: (apiKey) => {
     persistApiKey(apiKey);
+    pushKeyToKeychain(apiKey);
     set({ apiKey });
   },
   // Keep the conversationId stable on clear so the persisted file stays

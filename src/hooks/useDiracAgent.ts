@@ -1,24 +1,15 @@
 import { useCallback, useEffect, useRef } from 'react';
+import { invoke } from '@tauri-apps/api/core';
+import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 import { usePlatform } from '../platform/PlatformProvider';
-import { useDiracStore } from '../stores/diracStore';
 import { useEditorStore } from '../stores/editorStore';
+import { useProjectStore } from '../stores/projectStore';
 import { useAgentRunStore } from '../stores/agentRunStore';
-import { useHardwareStore } from '../stores/hardwareStore';
-import { useSettingsStore } from '../stores/settingsStore';
 import type { AgentRunUi } from '../stores/agentRunStore';
-import { KERNEL_WS_URL } from '../config/kernel';
 import { SONNET_MODEL } from '../config/dirac';
-import { HttpModel } from '../services/agent/liveModel';
-import { SessionKernel } from '../services/agent/liveKernel';
-import type { KernelTransport } from '../services/agent/liveKernel';
-import { SocketSubmitPort } from '../services/agent/liveSubmit';
-import { BudgetLedger } from '../services/agent/budgetLedger';
-import { policyFromSettings } from '../services/agent/policyFromSettings';
-import { estimateSubmissionCost } from '../services/agent/costEstimate';
-import { storeWorkspace } from '../services/agent/storeWorkspace';
-import { StoreJournal } from '../services/agent/storeJournal';
-import { runAgent } from '../services/agent/orchestrator';
-import type { AgentRunResult, JournalEntry } from '../services/agent/types';
+import { hashContent } from '../services/agent/hash';
+import type { AgentRunResult, AgentRunState, PatchTransaction } from '../services/agent/types';
+import type { Framework } from '../types/quantum';
 
 function generateRunId(): string {
   return `run_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 10)}`;
@@ -28,12 +19,40 @@ function guardRailFailure(runId: string, summary: string): AgentRunResult {
   return { runId, state: 'failed', success: false, iterations: 0, summary, journal: [] };
 }
 
-/** Reads `transactionId` out of an apply_patch tool_result's evidence facts,
- * if present, without assuming its shape. */
-function transactionIdFromFacts(facts: Record<string, unknown>): string | null {
-  const value = facts.transactionId;
-  return typeof value === 'string' ? value : null;
+/** One seed file handed to the Rust runner — mirrors `RunSeedFile` in
+ * `src-tauri/src/dirac/runner.rs`. */
+interface RunSeedFile {
+  path: string;
+  framework: Framework;
+  content: string;
 }
+
+/**
+ * The `dirac://run-event` payload shapes emitted by the Rust runner
+ * (`src-tauri/src/dirac/runner.rs::RunEvent`), serialized `#[serde(tag =
+ * "kind", rename_all = "camelCase")]`. Kept local to this hook since it's
+ * the only consumer of the raw wire shape — everything downstream goes
+ * through agentRunStore's existing `JournalEntry`/`PatchTransaction` types.
+ */
+type RunEvent =
+  | { kind: 'started'; runId: string; goal: string }
+  | { kind: 'state'; runId: string; state: AgentRunState }
+  | { kind: 'modelText'; runId: string; text: string }
+  | { kind: 'toolCall'; runId: string; toolCallId: string; tool: string; input: Record<string, unknown> }
+  | {
+      kind: 'toolResult';
+      runId: string;
+      toolCallId: string;
+      tool: string;
+      ok: boolean;
+      facts: Record<string, unknown>;
+      diagnostics: string | null;
+    }
+  | { kind: 'patch'; runId: string; path: string; beforeContent: string; afterContent: string; transactionId: string }
+  | { kind: 'error'; runId: string; message: string }
+  | { kind: 'finished'; runId: string; success: boolean; iterations: number; summary: string };
+
+const RUN_EVENT_CHANNEL = 'dirac://run-event';
 
 export interface UseDiracAgentResult {
   start: (goal: string) => Promise<void>;
@@ -43,10 +62,12 @@ export interface UseDiracAgentResult {
 }
 
 /**
- * Wires the Stage 1A agent orchestrator core to live app state: the desktop
- * kernel's isolated-worker `agent_execute` WebSocket protocol, the editor
- * buffer (via the StoreWorkspace singleton), Dirac's stored API key, and
- * agentRunStore for live UI updates. Additive to the existing chat surface
+ * Wires the desktop Dirac agent (Rust harness, `src-tauri/src/dirac/`) to
+ * the frontend: starts a run via the `dirac_start_run` Tauri command,
+ * streams its progress off the `dirac://run-event` window event, and
+ * projects each event onto agentRunStore for live UI updates — patch
+ * events are also applied to the editor buffer when they target the
+ * active file. Desktop-only; additive to the existing chat surface
  * (useDirac) — nothing here touches it.
  */
 export function useDiracAgent(): UseDiracAgentResult {
@@ -56,22 +77,108 @@ export function useDiracAgent(): UseDiracAgentResult {
   const activeRun = useAgentRunStore((s) => s.activeRun);
   const isRunning = useAgentRunStore((s) => s.isRunning);
 
-  const socketRef = useRef<WebSocket | null>(null);
-  const controllerRef = useRef<AbortController | null>(null);
-  const submitPortRef = useRef<SocketSubmitPort | null>(null);
+  const runIdRef = useRef<string | null>(null);
+  const unlistenRef = useRef<UnlistenFn | null>(null);
 
-  const closeSocket = useCallback(() => {
-    if (socketRef.current) {
-      socketRef.current.close();
-      socketRef.current = null;
+  const teardown = useCallback(() => {
+    if (unlistenRef.current) {
+      unlistenRef.current();
+      unlistenRef.current = null;
     }
-    if (submitPortRef.current) {
-      submitPortRef.current.dispose();
-      submitPortRef.current = null;
-    }
+    runIdRef.current = null;
   }, []);
 
-  useEffect(() => () => closeSocket(), [closeSocket]);
+  useEffect(() => () => teardown(), [teardown]);
+
+  const applyRunEvent = useCallback((event: RunEvent) => {
+    const ts = Date.now();
+    switch (event.kind) {
+      case 'started':
+        // beginRun() already ran (with this same runId) before the run was
+        // started — nothing further to reconcile.
+        break;
+
+      case 'state':
+        useAgentRunStore.getState().appendJournal({
+          kind: 'state_change',
+          ts,
+          from: useAgentRunStore.getState().activeRun?.state ?? 'planning',
+          to: event.state,
+        });
+        break;
+
+      case 'modelText':
+        useAgentRunStore.getState().appendJournal({ kind: 'model_text', ts, text: event.text });
+        break;
+
+      case 'toolCall':
+        useAgentRunStore.getState().appendJournal({
+          kind: 'tool_call',
+          ts,
+          toolCallId: event.toolCallId,
+          tool: event.tool,
+          input: event.input,
+        });
+        break;
+
+      case 'toolResult':
+        useAgentRunStore.getState().appendJournal({
+          kind: 'tool_result',
+          ts,
+          evidence: {
+            toolCallId: event.toolCallId,
+            tool: event.tool,
+            ok: event.ok,
+            facts: event.facts,
+            diagnostics: event.diagnostics ?? undefined,
+          },
+        });
+        break;
+
+      case 'patch': {
+        const tx: PatchTransaction = {
+          id: event.transactionId,
+          path: event.path,
+          beforeContent: event.beforeContent,
+          afterContent: event.afterContent,
+          // The Rust runner doesn't ship content hashes over the wire —
+          // derive them locally with the same FNV-1a helper the TS
+          // orchestrator's workspace uses, so the shape stored here is
+          // identical to a locally-applied patch.
+          beforeHash: hashContent(event.beforeContent),
+          afterHash: hashContent(event.afterContent),
+          appliedAt: ts,
+          rolledBack: false,
+        };
+        useAgentRunStore.getState().recordPatch(tx);
+
+        const activePath = useProjectStore.getState().activeTabPath ?? 'editor';
+        if (event.path === activePath) {
+          useEditorStore.getState().setCode(event.afterContent);
+        }
+        break;
+      }
+
+      case 'error':
+        useAgentRunStore.getState().appendJournal({ kind: 'error', ts, message: event.message });
+        break;
+
+      case 'finished': {
+        const journal = useAgentRunStore.getState().activeRun?.journal ?? [];
+        const state = useAgentRunStore.getState().activeRun?.state ?? (event.success ? 'completed' : 'failed');
+        useAgentRunStore.getState().finishRun({
+          runId: event.runId,
+          state,
+          success: event.success,
+          iterations: event.iterations,
+          summary: event.summary,
+          journal,
+        });
+        teardown();
+        break;
+      }
+    }
+  }, [teardown]);
 
   const start = useCallback(
     async (goal: string) => {
@@ -84,115 +191,77 @@ export function useDiracAgent(): UseDiracAgentResult {
         return;
       }
 
-      const apiKey = useDiracStore.getState().apiKey;
-      if (!apiKey || apiKey.trim() === '') {
+      try {
+        const hasApiKey = await invoke<boolean>('dirac_has_api_key');
+        if (!hasApiKey) {
+          const runId = generateRunId();
+          useAgentRunStore.getState().beginRun(goal, runId);
+          useAgentRunStore.getState().finishRun(
+            guardRailFailure(runId, 'Add your Anthropic API key in Settings before running the agent.'),
+          );
+          return;
+        }
+
+        const activePath = useProjectStore.getState().activeTabPath ?? 'editor';
+        const files: RunSeedFile[] = [
+          {
+            path: activePath,
+            framework: useEditorStore.getState().framework,
+            content: useEditorStore.getState().code,
+          },
+        ];
+
+        // Register the listener BEFORE invoking dirac_start_run so no event
+        // emitted right after the run thread spawns is missed. We don't know
+        // the real run id yet (invoke() hasn't resolved), so buffer events
+        // until it's known, then flush the ones that match.
+        let resolvedRunId: string | null = null;
+        const buffered: RunEvent[] = [];
+
+        const unlisten = await listen<RunEvent>(RUN_EVENT_CHANNEL, (e) => {
+          if (resolvedRunId === null) {
+            buffered.push(e.payload);
+            return;
+          }
+          if (e.payload.runId !== resolvedRunId) return;
+          applyRunEvent(e.payload);
+        });
+        unlistenRef.current = unlisten;
+
+        const runId = await invoke<string>('dirac_start_run', {
+          goal,
+          files,
+          activePath,
+          model: SONNET_MODEL,
+        });
+
+        runIdRef.current = runId;
+        resolvedRunId = runId;
+        useAgentRunStore.getState().beginRun(goal, runId);
+
+        for (const bufferedEvent of buffered) {
+          if (bufferedEvent.runId === runId) applyRunEvent(bufferedEvent);
+        }
+      } catch (e) {
+        teardown();
         const runId = generateRunId();
         useAgentRunStore.getState().beginRun(goal, runId);
         useAgentRunStore.getState().finishRun(
-          guardRailFailure(runId, 'Add your Anthropic API key in Settings before running the agent.'),
+          guardRailFailure(runId, e instanceof Error ? e.message : 'Agent run failed unexpectedly.'),
         );
-        return;
-      }
-
-      const runId = generateRunId();
-      const controller = new AbortController();
-      controllerRef.current = controller;
-
-      useAgentRunStore.getState().beginRun(goal, runId);
-
-      const journal = new StoreJournal({
-        onEntry: (entry: JournalEntry) => {
-          useAgentRunStore.getState().appendJournal(entry);
-          if (entry.kind === 'tool_result' && entry.evidence.tool === 'apply_patch' && entry.evidence.ok) {
-            const transactionId = transactionIdFromFacts(entry.evidence.facts);
-            const tx = transactionId ? storeWorkspace.getTransaction(transactionId) : undefined;
-            if (tx) useAgentRunStore.getState().recordPatch(tx);
-          }
-        },
-      });
-
-      const socket = new WebSocket(KERNEL_WS_URL);
-      socketRef.current = socket;
-
-      const opened = await new Promise<boolean>((resolve) => {
-        socket.onopen = () => resolve(true);
-        socket.onerror = () => resolve(false);
-      });
-
-      if (!opened) {
-        useAgentRunStore.getState().finishRun(
-          guardRailFailure(runId, 'Could not connect to the local kernel. Is Nuclei still starting up?'),
-        );
-        closeSocket();
-        controllerRef.current = null;
-        return;
-      }
-
-      const transport: KernelTransport = {
-        send: (message) => {
-          if (socket.readyState === WebSocket.OPEN) socket.send(JSON.stringify(message));
-        },
-        onMessage: (handler) => {
-          const listener = (event: MessageEvent) => {
-            try {
-              handler(JSON.parse(event.data));
-            } catch {
-              // Malformed frame — nothing a pending request could match on.
-            }
-          };
-          socket.addEventListener('message', listener);
-          return () => socket.removeEventListener('message', listener);
-        },
-      };
-
-      const kernel = new SessionKernel(transport, () => useEditorStore.getState().framework);
-      const model = new HttpModel({ apiKey, model: SONNET_MODEL });
-
-      // Reuse the SAME transport as SessionKernel for hardware submission —
-      // one socket per run. The policy/ledger below are derived fresh from
-      // Settings on every run start, so a mid-run settings change never
-      // retroactively affects an in-flight run, and a run always reflects
-      // whatever the user had configured (SAFE default: autonomous hardware
-      // submission OFF) at the moment they clicked "start".
-      const submitPort = new SocketSubmitPort(transport);
-      submitPortRef.current = submitPort;
-      const policy = policyFromSettings(useSettingsStore.getState());
-      const ledger = new BudgetLedger(useSettingsStore.getState().agentHardware.maxSpend);
-
-      try {
-        const result = await runAgent(goal, {
-          model,
-          kernel,
-          workspace: storeWorkspace,
-          journal,
-          signal: controller.signal,
-          runId,
-          getBackends: () => useHardwareStore.getState().backends,
-          policy,
-          ledger,
-          submitPort,
-          estimateCost: estimateSubmissionCost,
-        });
-        useAgentRunStore.getState().finishRun(result);
-      } catch (e) {
-        useAgentRunStore.getState().finishRun({
-          runId,
-          state: 'failed',
-          success: false,
-          iterations: 0,
-          summary: e instanceof Error ? e.message : 'Agent run failed unexpectedly.',
-          journal: journal.entries(),
-        });
-      } finally {
-        closeSocket();
-        controllerRef.current = null;
       }
     },
-    [isWeb, closeSocket],
+    [isWeb, applyRunEvent, teardown],
   );
 
   const cancel = useCallback(() => {
-    controllerRef.current?.abort();
+    const runId = runIdRef.current;
+    if (!runId) return;
+    void invoke('dirac_cancel_run', { runId }).catch(() => {
+      // Best-effort — if this fails the run keeps going until it finishes
+      // (or the backend's own budget guard stops it) and the UI reflects
+      // whatever state events keep arriving.
+    });
   }, []);
 
   return { start, cancel, isRunning, activeRun };
