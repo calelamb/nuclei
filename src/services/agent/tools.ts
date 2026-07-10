@@ -135,6 +135,30 @@ export const COMPARE_QUANTUM_RESULTS_TOOL: AgentToolSchema = {
   },
 };
 
+export const CHECK_ALGORITHM_INVARIANT_TOOL: AgentToolSchema = {
+  name: 'check_algorithm_invariant',
+  description:
+    'After running a simulation, check the most recent result against the known-correct reference ' +
+    'distribution for a recognized canonical algorithm (Bell, GHZ, or uniform superposition). Auto-detects ' +
+    "the algorithm from the last parsed circuit when not given explicitly. Returns checked:false with a " +
+    "reason when there's no simulation yet or no fixed reference distribution applies (e.g. teleportation, " +
+    'whose correct output depends on the input state) — use compare_quantum_results with your own ' +
+    'expected_probabilities in that case instead.',
+  input_schema: {
+    type: 'object',
+    properties: {
+      algorithm: {
+        type: 'string',
+        enum: ['bell', 'ghz', 'uniform_superposition', 'teleportation', 'unknown'],
+        description: 'Override the auto-detected algorithm classification.',
+      },
+      tolerance: { type: 'number', description: 'Allowed absolute delta per state; defaults to 0.1.' },
+    },
+    required: [],
+    additionalProperties: false,
+  },
+};
+
 export const PLAN_HARDWARE_RUN_TOOL: AgentToolSchema = {
   name: 'plan_hardware_run',
   description:
@@ -145,6 +169,24 @@ export const PLAN_HARDWARE_RUN_TOOL: AgentToolSchema = {
     type: 'object',
     properties: {
       path: { type: 'string', description: 'Workspace-relative file path; defaults to the active file.' },
+    },
+    required: [],
+    additionalProperties: false,
+  },
+};
+
+export const PREVIEW_BACKEND_TRANSPILATION_TOOL: AgentToolSchema = {
+  name: 'preview_backend_transpilation',
+  description:
+    'Transpile the parsed circuit against a target hardware backend\'s real basis gates and coupling map ' +
+    "using qiskit's transpiler, and report the resulting depth, gate counts, and two-qubit-gate count. " +
+    'Qiskit circuits only — other frameworks report unavailable rather than erroring. This is analysis only; ' +
+    'it never submits a job.',
+  input_schema: {
+    type: 'object',
+    properties: {
+      path: { type: 'string', description: 'Workspace-relative file path; defaults to the active file.' },
+      backend: { type: 'string', description: 'Name of the backend to target; defaults to the first online backend.' },
     },
     required: [],
     additionalProperties: false,
@@ -241,7 +283,9 @@ export const AGENT_TOOLS: AgentToolSchema[] = [
   ESTIMATE_QUANTUM_RESOURCES_TOOL,
   RUN_SIMULATION_TOOL,
   COMPARE_QUANTUM_RESULTS_TOOL,
+  CHECK_ALGORITHM_INVARIANT_TOOL,
   PLAN_HARDWARE_RUN_TOOL,
+  PREVIEW_BACKEND_TRANSPILATION_TOOL,
   SUBMIT_HARDWARE_JOB_TOOL,
   POLL_HARDWARE_JOB_TOOL,
   CANCEL_HARDWARE_JOB_TOOL,

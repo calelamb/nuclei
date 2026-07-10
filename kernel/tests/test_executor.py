@@ -251,6 +251,65 @@ def test_execute_returns_snapshot_and_typed_simulation_error(monkeypatch):
     assert error.code == "simulation_error"
 
 
+def test_transpile_returns_unsupported_framework_for_non_qiskit_code():
+    executor = Executor()
+
+    metrics, stdout, stderr, error = executor.transpile("import cirq\ncircuit = None\n")
+
+    assert metrics is None
+    assert stdout == ""
+    assert stderr == ""
+    assert error is not None
+    assert error.code == "transpile_unsupported_framework"
+    assert error.framework == "cirq"
+
+
+def test_transpile_returns_unsupported_framework_for_plain_python():
+    executor = Executor()
+
+    metrics, stdout, stderr, error = executor.transpile("print('hi')")
+
+    assert metrics is None
+    assert error is not None
+    assert error.code == "transpile_unsupported_framework"
+    assert error.framework is None
+
+
+def test_transpile_returns_no_circuit_error_when_no_circuit_object_present():
+    executor = Executor()
+
+    metrics, stdout, stderr, error = executor.transpile("from qiskit import QuantumCircuit\n")
+
+    assert metrics is None
+    assert error is not None
+    assert error.code == "no_circuit"
+    assert error.framework == "qiskit"
+
+
+def test_transpile_returns_real_metrics_for_bell_circuit():
+    executor = Executor()
+    code = (
+        "from qiskit import QuantumCircuit\n"
+        "qc = QuantumCircuit(2, 2)\n"
+        "qc.h(0)\n"
+        "qc.cx(0, 1)\n"
+        "qc.measure([0, 1], [0, 1])\n"
+    )
+
+    metrics, stdout, stderr, error = executor.transpile(
+        code, basis_gates=["u", "cx"], optimization_level=1
+    )
+
+    assert error is None
+    assert metrics is not None
+    assert metrics["num_qubits"] == 2
+    assert metrics["depth"] > 0
+    assert metrics["two_qubit_count"] >= 1
+    assert metrics["basis_gates"] == ["u", "cx"]
+    assert metrics["coupling_mapped"] is False
+    assert set(metrics["gate_counts"]) <= {"u", "cx", "measure"}
+
+
 def test_execute_returns_result_when_stub_adapter_succeeds(monkeypatch):
     executor = Executor()
     snapshot = CircuitSnapshot(

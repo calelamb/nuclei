@@ -1,4 +1,5 @@
 import { kernelLanguageFor } from '../../types/quantum';
+import { execCheckAlgorithmInvariant } from './algorithmInvariantExecutor';
 import { compareDistributions, estimateResources, validateProgram } from './analysis';
 import {
   execAnalyzeHardwareResult,
@@ -9,6 +10,7 @@ import {
 import { planHardwareRun } from './hardwarePlanner';
 import type { ToolContext } from './toolContext';
 import { asBoolean, asNumber, asRecord, asString, fail, ok } from './toolHelpers';
+import { execPreviewBackendTranspilation } from './transpilePreviewExecutor';
 import type { ToolEvidence } from './types';
 
 export type { FrameworkResolver, ToolContext } from './toolContext';
@@ -340,8 +342,12 @@ export async function executeTool(
         return await execRunSimulation(args, toolCallId, ctx);
       case 'compare_quantum_results':
         return execCompareQuantumResults(args, toolCallId, ctx);
+      case 'check_algorithm_invariant':
+        return execCheckAlgorithmInvariant(args, toolCallId, ctx);
       case 'plan_hardware_run':
         return await execPlanHardwareRun(args, toolCallId, ctx);
+      case 'preview_backend_transpilation':
+        return await execPreviewBackendTranspilation(args, toolCallId, ctx);
       case 'submit_hardware_job':
         return await execSubmitHardwareJob(args, toolCallId, ctx);
       case 'poll_hardware_job':

@@ -16,8 +16,15 @@ import sys
 from typing import Any
 
 
+# Pin every numeric/parallel backend to a single thread. Beyond determinism,
+# this keeps the qiskit transpiler's Rust routing (rustworkx/rayon) from
+# spawning a CPU-count-sized thread pool that would trip the worker's
+# RLIMIT_NPROC cap and fail with a thread-creation error on Linux.
 os.environ["OPENBLAS_NUM_THREADS"] = "1"
 os.environ["OMP_NUM_THREADS"] = "1"
+os.environ["MKL_NUM_THREADS"] = "1"
+os.environ["NUMEXPR_NUM_THREADS"] = "1"
+os.environ["RAYON_NUM_THREADS"] = "1"
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from kernel.agent_limits import WorkerLimits, apply_worker_limits
@@ -105,6 +112,20 @@ def bounded_response(
     return replacement
 
 
+def _result_payload(result: Any) -> dict[str, Any] | None:
+    """Normalize a parse/simulate/transpile payload to a JSON-able dict.
+
+    parse()/execute() return typed dataclasses (CircuitSnapshot,
+    SimulationResult) with a `to_dict()` method; transpile() returns a
+    plain metrics dict directly, since there is no dataclass equivalent
+    for a transpile preview. Both shapes end up as an ordinary dict here.
+    """
+    if result is None:
+        return None
+    to_dict = getattr(result, "to_dict", None)
+    return to_dict() if callable(to_dict) else result
+
+
 def execute_request(request, limits: WorkerLimits) -> bytes:
     from kernel.executor import Executor
 
@@ -146,18 +167,26 @@ def execute_request(request, limits: WorkerLimits) -> bytes:
             language=request.language,
         )
         result = None
-    else:
+    elif request.action == "simulate":
         result, snapshot, stdout, stderr, error = executor.execute(
             request.code,
             request.shots,
             language=request.language,
         )
+    else:  # transpile
+        result, stdout, stderr, error = executor.transpile(
+            request.code,
+            basis_gates=request.basis_gates,
+            coupling_map=request.coupling_map,
+            optimization_level=request.optimization_level or 1,
+        )
+        snapshot = None
 
     return bounded_response(
         request.request_id,
         "error" if error else "ok",
         snapshot.to_dict() if snapshot else None,
-        result.to_dict() if result else None,
+        _result_payload(result),
         truncate_utf8(stdout, limits.output_bytes),
         truncate_utf8(stderr, limits.output_bytes),
         error.to_dict() if error else None,

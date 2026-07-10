@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { BackendInfo } from '../../types/hardware';
 import type { Gate } from '../../types/quantum';
 import { BudgetLedger } from './budgetLedger';
-import type { KernelPort, ParseOutcome, SimOutcome } from './interfaces';
+import type { KernelPort, ParseOutcome, SimOutcome, TranspileOutcome } from './interfaces';
 import { DEFAULT_POLICY } from './policy';
 import type { AutonomyPolicy, SubmissionFacts } from './policy';
 import { FakeSubmitPort } from './submitPort';
@@ -37,6 +37,10 @@ function makeFakeKernel(overrides: Partial<KernelPort> = {}): KernelPort {
         execution_time_ms: 3,
         shot_count: shots,
       },
+    }),
+    transpile: async (): Promise<TranspileOutcome> => ({
+      ok: true,
+      metrics: { depth: 2, gateCounts: { u: 2, cx: 1 }, twoQubitCount: 1, numQubits: 2, couplingMapped: false },
     }),
     ...overrides,
   };
@@ -91,6 +95,34 @@ function makeHardwareCtx(opts: HardwareCtxOptions = {}): { ctx: ToolContext; wor
     estimateCost: opts.estimateCost,
   };
   return { ctx, workspace };
+}
+
+/** Kernel whose parse() returns a correct 2-qubit Bell circuit snapshot and
+ * whose simulate() returns the given probabilities — lets tests drive
+ * check_algorithm_invariant against a "correct" or "wrong" simulation of
+ * the same classified circuit. */
+function makeBellKernel(probabilities: Record<string, number> = { '00': 0.5, '11': 0.5 }): KernelPort {
+  return {
+    parse: async (): Promise<ParseOutcome> => ({
+      ok: true,
+      snapshot: { framework: 'qiskit', qubit_count: 2, classical_bit_count: 2, depth: 3, gates: BELL_GATES },
+    }),
+    simulate: async (_code: string, shots: number): Promise<SimOutcome> => ({
+      ok: true,
+      result: {
+        state_vector: [],
+        probabilities,
+        measurements: {},
+        bloch_coords: [],
+        execution_time_ms: 3,
+        shot_count: shots,
+      },
+    }),
+    transpile: async (): Promise<TranspileOutcome> => ({
+      ok: false,
+      error: 'transpile not exercised by makeBellKernel',
+    }),
+  };
 }
 
 function makeBackend(overrides: Partial<BackendInfo> = {}): BackendInfo {
@@ -264,6 +296,61 @@ describe('executeTool', () => {
     expect(evidence.ok).toBe(false);
   });
 
+  it('check_algorithm_invariant reports checked:false with a reason when no simulation has run yet', async () => {
+    const { ctx } = makeHardwareCtx({ kernel: makeBellKernel() });
+    const evidence = await executeTool('check_algorithm_invariant', {}, ctx, 'tc1');
+    expect(evidence.ok).toBe(true);
+    expect(evidence.facts.checked).toBe(false);
+    expect(evidence.facts.reason).toMatch(/run a simulation/i);
+  });
+
+  it('check_algorithm_invariant auto-classifies a Bell circuit and matches a correct simulation', async () => {
+    const { ctx } = makeHardwareCtx({ kernel: makeBellKernel({ '00': 0.5, '11': 0.5 }) });
+    await executeTool('parse_quantum_program', {}, ctx, 'tc1');
+    await executeTool('run_simulation', {}, ctx, 'tc2');
+    const evidence = await executeTool('check_algorithm_invariant', {}, ctx, 'tc3');
+    expect(evidence.ok).toBe(true);
+    expect(evidence.facts.checked).toBe(true);
+    expect(evidence.facts.algorithm).toBe('bell');
+    expect(evidence.facts.matches).toBe(true);
+    expect(evidence.facts.expected).toEqual({ '00': 0.5, '11': 0.5 });
+  });
+
+  it('check_algorithm_invariant flags a mismatch when the simulation diverges from the Bell reference', async () => {
+    const { ctx } = makeHardwareCtx({ kernel: makeBellKernel({ '00': 1.0 }) });
+    await executeTool('parse_quantum_program', {}, ctx, 'tc1');
+    await executeTool('run_simulation', {}, ctx, 'tc2');
+    const evidence = await executeTool('check_algorithm_invariant', {}, ctx, 'tc3');
+    expect(evidence.ok).toBe(true);
+    expect(evidence.facts.checked).toBe(true);
+    expect(evidence.facts.algorithm).toBe('bell');
+    expect(evidence.facts.matches).toBe(false);
+  });
+
+  it('check_algorithm_invariant reports checked:false for an algorithm with no fixed reference distribution', async () => {
+    const { ctx } = makeHardwareCtx({ kernel: makeBellKernel() });
+    await executeTool('run_simulation', {}, ctx, 'tc1');
+    const evidence = await executeTool('check_algorithm_invariant', { algorithm: 'teleportation' }, ctx, 'tc2');
+    expect(evidence.ok).toBe(true);
+    expect(evidence.facts.checked).toBe(false);
+    expect(evidence.facts.algorithm).toBe('teleportation');
+    expect(evidence.facts.reason).toMatch(/no fixed reference distribution/i);
+  });
+
+  it('check_algorithm_invariant rejects an invalid algorithm override without throwing', async () => {
+    const { ctx } = makeHardwareCtx({ kernel: makeBellKernel() });
+    await executeTool('run_simulation', {}, ctx, 'tc1');
+    const evidence = await executeTool('check_algorithm_invariant', { algorithm: 'shor' }, ctx, 'tc2');
+    expect(evidence.ok).toBe(false);
+  });
+
+  it('check_algorithm_invariant rejects a non-numeric tolerance without throwing', async () => {
+    const { ctx } = makeHardwareCtx({ kernel: makeBellKernel() });
+    await executeTool('run_simulation', {}, ctx, 'tc1');
+    const evidence = await executeTool('check_algorithm_invariant', { tolerance: 'loose' }, ctx, 'tc2');
+    expect(evidence.ok).toBe(false);
+  });
+
   it('estimate_quantum_resources returns resource facts on a successful parse', async () => {
     const kernel = makeFakeKernel({
       parse: async (): Promise<ParseOutcome> => ({
@@ -390,6 +477,98 @@ describe('executeTool', () => {
   it('plan_hardware_run fails without throwing for an unknown path', async () => {
     const { ctx } = makeCtx(makeFakeKernel(), () => [makeBackend()]);
     const evidence = await executeTool('plan_hardware_run', { path: 'missing.py' }, ctx, 'tc1');
+    expect(evidence.ok).toBe(false);
+  });
+
+  it('preview_backend_transpilation reports unavailable when the active framework is not qiskit', async () => {
+    const workspace = new InMemoryWorkspace([
+      { path: 'main.qs', framework: 'qsharp', content: 'operation Main() : Unit {}', dirty: false },
+    ]);
+    const ctx: ToolContext = {
+      workspace,
+      kernel: makeFakeKernel(),
+      lastSim: {},
+      resolveFramework: defaultFrameworkResolver(workspace),
+      lastKnownHash: new Map(),
+      getBackends: () => [makeBackend()],
+    };
+    const evidence = await executeTool('preview_backend_transpilation', { path: 'main.qs' }, ctx, 'tc1');
+    expect(evidence.ok).toBe(true);
+    expect(evidence.facts.available).toBe(false);
+    expect(evidence.facts.message).toMatch(/qiskit/i);
+  });
+
+  it('preview_backend_transpilation reports unavailable when no backend is available', async () => {
+    const { ctx } = makeCtx(makeFakeKernel(), () => []);
+    const evidence = await executeTool('preview_backend_transpilation', {}, ctx, 'tc1');
+    expect(evidence.ok).toBe(true);
+    expect(evidence.facts.available).toBe(false);
+  });
+
+  it('preview_backend_transpilation reports unavailable for an unknown named backend', async () => {
+    const { ctx } = makeCtx(makeFakeKernel(), () => [makeBackend({ name: 'ibm-brisbane' })]);
+    const evidence = await executeTool(
+      'preview_backend_transpilation',
+      { backend: 'nope' },
+      ctx,
+      'tc1',
+    );
+    expect(evidence.ok).toBe(true);
+    expect(evidence.facts.available).toBe(false);
+    expect(evidence.facts.message).toMatch(/nope/);
+  });
+
+  it('preview_backend_transpilation calls kernel.transpile with the backend gate set/coupling map and returns metrics', async () => {
+    const seen: Array<{ code: string; target: unknown }> = [];
+    const kernel = makeFakeKernel({
+      transpile: async (code, target) => {
+        seen.push({ code, target });
+        return {
+          ok: true,
+          metrics: { depth: 4, gateCounts: { u: 3, cx: 2 }, twoQubitCount: 2, numQubits: 2, couplingMapped: true },
+        };
+      },
+    });
+    const backend = makeBackend({
+      name: 'ibm-brisbane',
+      gateSet: ['H', 'CX', 'Measure'],
+      connectivity: [[0, 1], [1, 2]],
+    });
+    const { ctx } = makeCtx(kernel, () => [backend]);
+
+    const evidence = await executeTool('preview_backend_transpilation', {}, ctx, 'tc1');
+
+    expect(evidence.ok).toBe(true);
+    expect(evidence.facts.available).toBe(true);
+    expect(evidence.facts.backend).toBe('ibm-brisbane');
+    expect(evidence.facts.metrics).toEqual({
+      depth: 4,
+      gateCounts: { u: 3, cx: 2 },
+      twoQubitCount: 2,
+      numQubits: 2,
+      couplingMapped: true,
+    });
+    expect(typeof evidence.facts.note).toBe('string');
+    expect(seen).toHaveLength(1);
+    expect(seen[0].code).toBe(BELL_CODE);
+    expect(seen[0].target).toEqual({ basisGates: ['h', 'cx', 'measure'], couplingMap: [[0, 1], [1, 2]] });
+  });
+
+  it('preview_backend_transpilation fails without throwing when the kernel reports an error', async () => {
+    const kernel = makeFakeKernel({
+      transpile: async () => ({ ok: false, error: 'TranspilerError: could not map to coupling map' }),
+    });
+    const { ctx } = makeCtx(kernel, () => [makeBackend()]);
+
+    const evidence = await executeTool('preview_backend_transpilation', {}, ctx, 'tc1');
+
+    expect(evidence.ok).toBe(false);
+    expect(evidence.diagnostics).toMatch(/TranspilerError/);
+  });
+
+  it('preview_backend_transpilation fails without throwing for an unknown path', async () => {
+    const { ctx } = makeCtx(makeFakeKernel(), () => [makeBackend()]);
+    const evidence = await executeTool('preview_backend_transpilation', { path: 'missing.py' }, ctx, 'tc1');
     expect(evidence.ok).toBe(false);
   });
 

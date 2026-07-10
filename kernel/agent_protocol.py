@@ -19,8 +19,12 @@ _ALLOWED_FIELDS = {
     "language",
     "code",
     "shots",
+    "basis_gates",
+    "coupling_map",
+    "optimization_level",
 }
-_REQUIRED_FIELDS = _ALLOWED_FIELDS - {"shots"}
+_TRANSPILE_ONLY_FIELDS = {"basis_gates", "coupling_map", "optimization_level"}
+_REQUIRED_FIELDS = _ALLOWED_FIELDS - {"shots"} - _TRANSPILE_ONLY_FIELDS
 
 
 class ProtocolError(ValueError):
@@ -30,11 +34,14 @@ class ProtocolError(ValueError):
 @dataclass(frozen=True)
 class AgentRequest:
     request_id: str
-    action: Literal["parse", "simulate"]
+    action: Literal["parse", "simulate", "transpile"]
     framework: Literal["qiskit", "cirq", "qsharp"]
     language: Literal["python", "qsharp"]
     code: str
     shots: int | None
+    basis_gates: list[str] | None = None
+    coupling_map: list[list[int]] | None = None
+    optimization_level: int | None = None
 
 
 def _reject_json_constant(value: str) -> None:
@@ -48,6 +55,34 @@ def _strict_object(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
             raise ValueError(f"duplicate JSON object key: {key}")
         value[key] = item
     return value
+
+
+def _validate_basis_gates(value: Any) -> None:
+    if value is None:
+        return
+    if not isinstance(value, list) or not all(isinstance(g, str) for g in value):
+        raise ProtocolError("invalid_basis_gates")
+
+
+def _validate_coupling_map(value: Any) -> None:
+    if value is None:
+        return
+    if not isinstance(value, list):
+        raise ProtocolError("invalid_coupling_map")
+    for pair in value:
+        if (
+            not isinstance(pair, list)
+            or len(pair) != 2
+            or not all(type(x) is int for x in pair)
+        ):
+            raise ProtocolError("invalid_coupling_map")
+
+
+def _validate_optimization_level(value: Any) -> None:
+    if value is None:
+        return
+    if type(value) is not int or not 0 <= value <= 3:
+        raise ProtocolError("invalid_optimization_level")
 
 
 def parse_request(raw: bytes) -> AgentRequest:
@@ -79,10 +114,13 @@ def parse_request(raw: bytes) -> AgentRequest:
     language = value["language"]
     code = value["code"]
     shots = value.get("shots")
+    basis_gates = value.get("basis_gates")
+    coupling_map = value.get("coupling_map")
+    optimization_level = value.get("optimization_level")
 
     if not isinstance(request_id, str) or _REQUEST_ID.fullmatch(request_id) is None:
         raise ProtocolError("invalid_request_id")
-    if not isinstance(action, str) or action not in {"parse", "simulate"}:
+    if not isinstance(action, str) or action not in {"parse", "simulate", "transpile"}:
         raise ProtocolError("invalid_action")
     if not isinstance(framework, str) or framework not in {"qiskit", "cirq", "qsharp"}:
         raise ProtocolError("framework_unavailable")
@@ -98,10 +136,30 @@ def parse_request(raw: bytes) -> AgentRequest:
         raise ProtocolError("code_too_large")
     if action == "parse" and "shots" in value:
         raise ProtocolError("parse_forbids_shots")
+    if action == "transpile" and "shots" in value:
+        raise ProtocolError("transpile_forbids_shots")
     if action == "simulate" and (type(shots) is not int or not 1 <= shots <= MAX_SHOTS):
         raise ProtocolError("invalid_shots")
+    if action == "transpile":
+        if framework != "qiskit":
+            raise ProtocolError("transpile_requires_qiskit")
+        _validate_basis_gates(basis_gates)
+        _validate_coupling_map(coupling_map)
+        _validate_optimization_level(optimization_level)
+    elif _TRANSPILE_ONLY_FIELDS & set(value):
+        raise ProtocolError("transpile_fields_forbidden")
 
-    return AgentRequest(request_id, action, framework, language, code, shots)
+    return AgentRequest(
+        request_id,
+        action,
+        framework,
+        language,
+        code,
+        shots,
+        basis_gates,
+        coupling_map,
+        optimization_level,
+    )
 
 
 def response_bytes(

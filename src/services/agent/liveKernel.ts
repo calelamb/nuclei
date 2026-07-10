@@ -1,5 +1,5 @@
 import type { CircuitSnapshot, Framework, KernelLanguage, SimulationResult } from '../../types/quantum';
-import type { KernelPort, ParseOutcome, SimOutcome } from './interfaces';
+import type { KernelPort, ParseOutcome, SimOutcome, TranspileMetrics, TranspileOutcome, TranspileTarget } from './interfaces';
 
 /**
  * Minimal transport shape SessionKernel needs to speak the isolated-worker
@@ -18,7 +18,7 @@ export interface KernelTransport {
   onMessage(handler: (message: unknown) => void): () => void;
 }
 
-type AgentExecuteAction = 'parse' | 'simulate';
+type AgentExecuteAction = 'parse' | 'simulate' | 'transpile';
 
 interface AgentExecuteRequest {
   type: 'agent_execute';
@@ -28,6 +28,21 @@ interface AgentExecuteRequest {
   language: KernelLanguage;
   code: string;
   shots?: number;
+  basis_gates?: string[];
+  coupling_map?: Array<[number, number]>;
+  optimization_level?: number;
+}
+
+/** Snake-cased transpile metrics dict shape as returned by
+ * kernel/agent_protocol.py's `result` field for a transpile action —
+ * see kernel/executor.py's Executor.transpile(). */
+interface TranspileResultPayload {
+  depth: number;
+  gate_counts: Record<string, number>;
+  two_qubit_count: number;
+  num_qubits: number;
+  basis_gates: string[] | null;
+  coupling_mapped: boolean;
 }
 
 interface AgentResultMessage {
@@ -35,7 +50,7 @@ interface AgentResultMessage {
   request_id: string;
   status: 'ok' | 'error';
   snapshot: CircuitSnapshot | null;
-  result: SimulationResult | null;
+  result: SimulationResult | TranspileResultPayload | null;
   stdout: string;
   stderr: string;
   error: { code?: string; message: string } | null;
@@ -47,9 +62,21 @@ function isAgentResultMessage(value: unknown): value is AgentResultMessage {
   return v.type === 'agent_result' && typeof v.request_id === 'string';
 }
 
+function metricsFromPayload(payload: TranspileResultPayload): TranspileMetrics {
+  return {
+    depth: payload.depth,
+    gateCounts: payload.gate_counts,
+    twoQubitCount: payload.two_qubit_count,
+    numQubits: payload.num_qubits,
+    couplingMapped: payload.coupling_mapped,
+  };
+}
+
+type AgentOutcome = ParseOutcome | SimOutcome | TranspileOutcome;
+
 interface PendingRequest {
   kind: AgentExecuteAction;
-  resolve: (outcome: ParseOutcome | SimOutcome) => void;
+  resolve: (outcome: AgentOutcome) => void;
   timeoutHandle: ReturnType<typeof setTimeout>;
 }
 
@@ -62,14 +89,21 @@ function generateRequestId(): string {
   return `agent_${Date.now().toString(36)}_${requestCounter}`;
 }
 
-function outcomeFromAgentResult(kind: AgentExecuteAction, msg: AgentResultMessage): ParseOutcome | SimOutcome {
+function outcomeFromAgentResult(kind: AgentExecuteAction, msg: AgentResultMessage): AgentOutcome {
   if (msg.status === 'ok') {
     if (kind === 'parse') {
       if (!msg.snapshot) return { ok: false, error: 'Kernel returned an empty snapshot.' };
       return { ok: true, snapshot: msg.snapshot };
     }
+    if (kind === 'transpile') {
+      if (!msg.result) return { ok: false, error: 'Kernel returned an empty transpile result.' };
+      return { ok: true, metrics: metricsFromPayload(msg.result as TranspileResultPayload) };
+    }
     if (!msg.result) return { ok: false, error: 'Kernel returned an empty result.' };
-    return { ok: true, result: msg.result };
+    return { ok: true, result: msg.result as SimulationResult };
+  }
+  if (kind === 'transpile') {
+    return { ok: false, error: msg.error?.message ?? `${kind} failed` };
   }
   return { ok: false, error: msg.error?.message ?? `${kind} failed`, line: null };
 }
@@ -101,7 +135,7 @@ export class SessionKernel implements KernelPort {
     this.unsubscribe = transport.onMessage((msg) => this.handleMessage(msg));
   }
 
-  private settle(requestId: string, outcome: ParseOutcome | SimOutcome): void {
+  private settle(requestId: string, outcome: AgentOutcome): void {
     const pending = this.pending.get(requestId);
     if (!pending) return;
     this.pending.delete(requestId);
@@ -119,7 +153,7 @@ export class SessionKernel implements KernelPort {
   private request(
     kind: AgentExecuteAction,
     build: (requestId: string) => AgentExecuteRequest,
-  ): Promise<ParseOutcome | SimOutcome> {
+  ): Promise<AgentOutcome> {
     return new Promise((resolve) => {
       const requestId = generateRequestId();
       const entry: PendingRequest = {
@@ -158,6 +192,28 @@ export class SessionKernel implements KernelPort {
       shots,
     }));
     return outcome as SimOutcome;
+  }
+
+  /** Transpilation preview against a target backend's basis gates /
+   * coupling map. Unlike parse/simulate, framework and language are NOT
+   * resolved from the active file: transpile is qiskit-only, so the
+   * request always declares framework:'qiskit', language:'python'
+   * regardless of what resolveFramework() currently returns — the worker's
+   * own framework_mismatch / transpile_requires_qiskit checks reject
+   * non-qiskit code. */
+  async transpile(code: string, target: TranspileTarget): Promise<TranspileOutcome> {
+    const outcome = await this.request('transpile', (requestId) => ({
+      type: 'agent_execute',
+      request_id: requestId,
+      action: 'transpile',
+      framework: 'qiskit',
+      language: 'python',
+      code,
+      basis_gates: target.basisGates,
+      coupling_map: target.couplingMap,
+      optimization_level: target.optimizationLevel,
+    }));
+    return outcome as TranspileOutcome;
   }
 
   /** Detach from the transport. Safe to call once; further messages are
