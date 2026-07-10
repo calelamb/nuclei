@@ -1,0 +1,1558 @@
+use crate::agent_runtime::macos::worker_environment;
+use crate::agent_runtime::process::{ProcessSpec, ResourceLimits};
+use crate::agent_runtime::protocol::WorkerRequestV1;
+use crate::agent_runtime::resources::{AgentEnvironment, ResourcePaths, RunnerContainment};
+use crate::agent_runtime::{AgentProcessResolver, CapabilityReport, ControlResult};
+use fs2::FileExt;
+use seccompiler::{
+    BpfProgram, SeccompAction, SeccompCmpArgLen, SeccompCmpOp, SeccompCondition, SeccompFilter,
+    SeccompRule, TargetArch,
+};
+use sha2::{Digest, Sha256};
+use std::collections::{BTreeMap, BTreeSet};
+use std::convert::TryInto;
+use std::ffi::CString;
+use std::fs;
+use std::io::{Read, Seek, SeekFrom, Write};
+use std::os::fd::{AsRawFd, FromRawFd};
+use std::os::unix::fs::{MetadataExt, PermissionsExt};
+use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Arc, Mutex};
+use std::time::{Duration, Instant};
+
+const BWRAP: &str = "/usr/bin/bwrap";
+const IDENTITY_VERSION: &str = "nuclei-linux-runtime-v1";
+const IDENTITY_TIMEOUT: Duration = Duration::from_secs(10);
+const CGROUP_CLEANUP_TIMEOUT: Duration = Duration::from_secs(2);
+const MAX_IDENTITY_ENTRIES: usize = 50_000;
+const MAX_IDENTITY_BYTES: u64 = 2 * 1024 * 1024 * 1024;
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct RuntimeBind {
+    pub source: PathBuf,
+    pub destination: PathBuf,
+}
+
+#[derive(Clone, Debug)]
+pub struct LinuxSystemPaths {
+    pub runtime_binds: Vec<RuntimeBind>,
+    pub devices: Vec<PathBuf>,
+    pub bwrap: PathBuf,
+    pub cgroup_root: PathBuf,
+    production: bool,
+}
+
+impl LinuxSystemPaths {
+    pub fn for_tests(
+        read_roots: Vec<PathBuf>,
+        devices: Vec<PathBuf>,
+        bwrap: PathBuf,
+        cgroup_root: PathBuf,
+    ) -> Result<Self, String> {
+        let paths = Self {
+            runtime_binds: read_roots
+                .into_iter()
+                .map(|path| RuntimeBind {
+                    source: path.clone(),
+                    destination: path,
+                })
+                .collect(),
+            devices,
+            bwrap,
+            cgroup_root,
+            production: false,
+        };
+        paths.verify(false)?;
+        Ok(paths)
+    }
+
+    pub fn production() -> Result<Self, String> {
+        let mut runtime_binds = Vec::new();
+        for (source, destination) in [
+            ("/usr/lib", "/usr/lib"),
+            ("/usr/lib", "/lib"),
+            ("/usr/lib64", "/usr/lib64"),
+            ("/usr/lib64", "/lib64"),
+            ("/etc/ld.so.cache", "/etc/ld.so.cache"),
+        ] {
+            let source = PathBuf::from(source);
+            if source.exists() {
+                runtime_binds.push(RuntimeBind {
+                    source: source
+                        .canonicalize()
+                        .map_err(|error| format!("Linux runtime root is unavailable: {error}"))?,
+                    destination: PathBuf::from(destination),
+                });
+            }
+        }
+        let cgroup_root = std::env::var_os("NUCLEI_AGENT_CGROUP_ROOT")
+            .map(PathBuf::from)
+            .ok_or("NUCLEI_AGENT_CGROUP_ROOT is required for explicit Linux qualification")?;
+        let bwrap = std::env::var_os("NUCLEI_AGENT_BWRAP")
+            .map(PathBuf::from)
+            .unwrap_or_else(|| PathBuf::from(BWRAP));
+        let paths = Self {
+            runtime_binds,
+            devices: Vec::new(),
+            bwrap,
+            cgroup_root,
+            production: true,
+        };
+        paths.verify(true)?;
+        Ok(paths)
+    }
+
+    fn verify(&self, production: bool) -> Result<(), String> {
+        require_canonical(&self.bwrap, "bubblewrap executable", false)?;
+        require_regular_file(&self.bwrap, "bubblewrap executable")?;
+        require_trusted_executable(&self.bwrap)?;
+        require_canonical(&self.cgroup_root, "delegated cgroup v2 root", true)?;
+        for bind in &self.runtime_binds {
+            require_canonical(
+                &bind.source,
+                "Linux host runtime bind source",
+                bind.source.is_dir(),
+            )?;
+            if !bind.destination.is_absolute() || bind.destination == Path::new("/") {
+                return Err("Linux host runtime bind destination is too broad".into());
+            }
+        }
+        for device in &self.devices {
+            require_canonical(device, "Linux host device", false)?;
+        }
+        if production && !self.production {
+            return Err("Injected Linux system paths cannot qualify production".into());
+        }
+        Ok(())
+    }
+
+    pub fn verify_production(&self) -> Result<(), String> {
+        self.verify(true)
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct LinuxQualificationContext {
+    pub app_version: String,
+    pub resources: ResourcePaths,
+    pub environment: AgentEnvironment,
+    pub request_temp_root: PathBuf,
+    pub runtime_lock: PathBuf,
+    pub project_root: PathBuf,
+    pub home_root: PathBuf,
+    pub parent_secret_names: BTreeSet<String>,
+    pub system_paths: LinuxSystemPaths,
+}
+
+impl LinuxQualificationContext {
+    #[allow(clippy::too_many_arguments)]
+    pub fn new(
+        app_version: impl Into<String>,
+        resources: ResourcePaths,
+        environment: AgentEnvironment,
+        request_temp_root: &Path,
+        project_root: &Path,
+        home_root: &Path,
+        parent_secret_names: BTreeSet<String>,
+        system_paths: LinuxSystemPaths,
+    ) -> Result<Self, String> {
+        environment.verify()?;
+        let environment_root =
+            require_canonical(&environment.root, "Agent environment root", true)?;
+        let python = require_canonical(&environment.python, "Agent Python", false)?;
+        let site_packages =
+            require_canonical(&environment.site_packages, "Agent site-packages", true)?;
+        let environment = AgentEnvironment {
+            root: environment_root,
+            python,
+            site_packages,
+        };
+        if resources != ResourcePaths::generation(&environment)? {
+            return Err(
+                "Agent kernel must be the allowlisted copy inside the locked runtime generation"
+                    .into(),
+            );
+        }
+        let request_temp_root =
+            require_canonical(request_temp_root, "Agent request temp root", true)?;
+        let project_root = require_canonical(project_root, "Project qualification root", true)?;
+        let home_root = require_canonical(home_root, "Home qualification root", true)?;
+        let runtime_lock = require_canonical(
+            &environment
+                .root
+                .parent()
+                .ok_or("Agent environment has no generation parent")?
+                .join(".provision.lock"),
+            "Agent runtime generation lock",
+            false,
+        )?;
+        require_regular_file(&runtime_lock, "Agent runtime generation lock")?;
+        for outside in [&request_temp_root, &project_root, &home_root] {
+            if outside.starts_with(&environment.root) || environment.root.starts_with(outside) {
+                return Err("Linux qualification roots overlap the locked generation".into());
+            }
+        }
+        if parent_secret_names
+            .iter()
+            .any(|name| name.is_empty() || name.contains(['=', '\0']))
+        {
+            return Err("Parent qualification environment contains an invalid name".into());
+        }
+        system_paths.verify(system_paths.production)?;
+        Ok(Self {
+            app_version: app_version.into(),
+            resources,
+            environment,
+            request_temp_root,
+            runtime_lock,
+            project_root,
+            home_root,
+            parent_secret_names,
+            system_paths,
+        })
+    }
+
+    pub fn from_explicit_environment(app_version: &str) -> Result<Self, String> {
+        let required = |name: &str| {
+            std::env::var_os(name)
+                .map(PathBuf::from)
+                .ok_or_else(|| format!("{name} is required for explicit Linux qualification"))
+        };
+        let environment = AgentEnvironment {
+            root: require_canonical(
+                &required("NUCLEI_AGENT_ENVIRONMENT_ROOT")?,
+                "Agent environment root",
+                true,
+            )?,
+            python: require_canonical(&required("NUCLEI_AGENT_PYTHON")?, "Agent Python", false)?,
+            site_packages: require_canonical(
+                &required("NUCLEI_AGENT_SITE_PACKAGES")?,
+                "Agent site-packages",
+                true,
+            )?,
+        };
+        let resources = ResourcePaths::generation(&environment)?;
+        let supplied_kernel = require_canonical(
+            &required("NUCLEI_AGENT_KERNEL_ROOT")?,
+            "Agent kernel root",
+            true,
+        )?;
+        if supplied_kernel != resources.kernel_root {
+            return Err("Explicit agent kernel is not the locked generation copy".into());
+        }
+        Self::new(
+            app_version,
+            resources,
+            environment,
+            &required("NUCLEI_AGENT_REQUEST_TEMP_ROOT")?,
+            &required("NUCLEI_AGENT_PROJECT_ROOT")?,
+            &required("NUCLEI_AGENT_HOME_ROOT")?,
+            [
+                "ANTHROPIC_API_KEY",
+                "IBM_QUANTUM_TOKEN",
+                "AWS_SECRET_ACCESS_KEY",
+            ]
+            .into_iter()
+            .map(str::to_owned)
+            .collect(),
+            LinuxSystemPaths::production()?,
+        )
+    }
+}
+
+pub struct LockedLinuxRuntimeIdentity {
+    context: LinuxQualificationContext,
+    cache_key: String,
+    _lease: Arc<fs::File>,
+}
+
+impl LockedLinuxRuntimeIdentity {
+    pub async fn acquire(context: LinuxQualificationContext) -> Result<Self, String> {
+        let lease = LinuxBackend::runtime_lease(&context)?;
+        let cache_key = qualification_cache_key_async(context.clone()).await?;
+        Ok(Self {
+            context,
+            cache_key,
+            _lease: lease,
+        })
+    }
+
+    pub async fn from_explicit_environment(app_version: &str) -> Result<Self, String> {
+        let root = std::env::var_os("NUCLEI_AGENT_ENVIRONMENT_ROOT")
+            .map(PathBuf::from)
+            .ok_or("NUCLEI_AGENT_ENVIRONMENT_ROOT is required for explicit Linux qualification")?;
+        let lock = root
+            .parent()
+            .ok_or("Explicit Linux environment has no generation parent")?
+            .join(".provision.lock");
+        let lease = runtime_lease_path(&lock)?;
+        let context = LinuxQualificationContext::from_explicit_environment(app_version)?;
+        if context.runtime_lock != lock {
+            return Err("Explicit Linux runtime lock changed during validation".into());
+        }
+        let cache_key = qualification_cache_key_async(context.clone()).await?;
+        Ok(Self {
+            context,
+            cache_key,
+            _lease: lease,
+        })
+    }
+
+    pub fn context(&self) -> &LinuxQualificationContext {
+        &self.context
+    }
+
+    pub fn cache_key(&self) -> &str {
+        &self.cache_key
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct LinuxLaunchSpec {
+    inner: Arc<LinuxContainment>,
+}
+
+impl LinuxLaunchSpec {
+    pub fn cgroup_path(&self) -> &Path {
+        &self.inner.cgroup_path
+    }
+
+    pub(crate) fn prepare_pre_exec(&self) -> std::io::Result<()> {
+        let fd = self.inner.seccomp.as_raw_fd();
+        if unsafe { libc::fcntl(fd, libc::F_SETFD, 0) } == -1 {
+            return Err(std::io::Error::last_os_error());
+        }
+        let cgroup_fd = unsafe {
+            libc::open(
+                self.inner.cgroup_procs.as_ptr(),
+                libc::O_WRONLY | libc::O_CLOEXEC,
+            )
+        };
+        if cgroup_fd == -1 {
+            return Err(std::io::Error::last_os_error());
+        }
+        let joined = unsafe { libc::write(cgroup_fd, b"0".as_ptr().cast(), 1) };
+        let write_error = (joined != 1).then(std::io::Error::last_os_error);
+        let close_result = unsafe { libc::close(cgroup_fd) };
+        if let Some(error) = write_error {
+            return Err(error);
+        }
+        if close_result == -1 {
+            return Err(std::io::Error::last_os_error());
+        }
+        Ok(())
+    }
+
+    pub(crate) fn kill(&self) -> Result<(), String> {
+        self.inner.kill()
+    }
+
+    pub(crate) fn finish(&self) -> Result<(), String> {
+        self.inner.finish()
+    }
+
+    pub(crate) fn validates_command(&self, executable: &Path, args: &[String]) -> bool {
+        if executable != self.inner.bwrap {
+            return false;
+        }
+        let fd = self.inner.seccomp.as_raw_fd().to_string();
+        args.windows(2)
+            .any(|pair| pair[0] == "--seccomp" && pair[1] == fd)
+    }
+}
+
+#[derive(Debug)]
+struct LinuxContainment {
+    bwrap: PathBuf,
+    cgroup_path: PathBuf,
+    cgroup_procs: CString,
+    seccomp: fs::File,
+    recursive_cleanup: bool,
+    cleaned: AtomicBool,
+    cleanup_lock: Mutex<()>,
+}
+
+impl LinuxContainment {
+    fn kill(&self) -> Result<(), String> {
+        if self.cleaned.load(Ordering::Acquire) {
+            return Ok(());
+        }
+        fs::write(self.cgroup_path.join("cgroup.kill"), b"1")
+            .map_err(|error| format!("Failed to kill Linux worker cgroup: {error}"))
+    }
+
+    fn finish(&self) -> Result<(), String> {
+        let _serial = self
+            .cleanup_lock
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        if self.cleaned.load(Ordering::Acquire) {
+            return Ok(());
+        }
+        self.kill()?;
+        let deadline = Instant::now() + CGROUP_CLEANUP_TIMEOUT;
+        loop {
+            let events = fs::read_to_string(self.cgroup_path.join("cgroup.events"))
+                .map_err(|error| format!("Failed to read Linux cgroup events: {error}"))?;
+            if events
+                .lines()
+                .any(|line| line.split_whitespace().eq(["populated", "0"]))
+            {
+                break;
+            }
+            if Instant::now() >= deadline {
+                return Err("Linux worker cgroup remained populated past cleanup deadline".into());
+            }
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        if self.recursive_cleanup {
+            fs::remove_dir_all(&self.cgroup_path)
+        } else {
+            fs::remove_dir(&self.cgroup_path)
+        }
+        .map_err(|error| format!("Failed to remove Linux worker cgroup: {error}"))?;
+        self.cleaned.store(true, Ordering::Release);
+        Ok(())
+    }
+}
+
+impl Drop for LinuxContainment {
+    fn drop(&mut self) {
+        if !self.cleaned.load(Ordering::Acquire) {
+            let _ = self.finish();
+        }
+    }
+}
+
+pub struct LinuxBackend;
+
+impl LinuxBackend {
+    pub fn runtime_lease(context: &LinuxQualificationContext) -> Result<Arc<fs::File>, String> {
+        runtime_lease_path(&context.runtime_lock)
+    }
+
+    pub fn discover(context: &LinuxQualificationContext) -> Result<(), String> {
+        context.system_paths.verify_production()?;
+        verify_user_namespaces()?;
+        verify_cgroup_delegation(&context.system_paths.cgroup_root, true)?;
+        compile_seccomp_bpf()?;
+        bwrap_namespace_self_test(&context.system_paths)?;
+        Ok(())
+    }
+
+    pub fn worker_spec(
+        context: &LinuxQualificationContext,
+        request_temp: &Path,
+    ) -> Result<ProcessSpec, String> {
+        let request_temp = validate_request_temp(context, request_temp)?;
+        let seccomp = sealed_seccomp_file()?;
+        let seccomp_fd = seccomp.as_raw_fd();
+        let cgroup_path = create_worker_cgroup(&context.system_paths.cgroup_root)?;
+        let cgroup_procs = CString::new(
+            cgroup_path
+                .join("cgroup.procs")
+                .as_os_str()
+                .as_encoded_bytes(),
+        )
+        .map_err(|_| "Linux cgroup path contains NUL")?;
+        let linux = LinuxLaunchSpec {
+            inner: Arc::new(LinuxContainment {
+                bwrap: context.system_paths.bwrap.clone(),
+                cgroup_path,
+                cgroup_procs,
+                seccomp,
+                recursive_cleanup: !context
+                    .system_paths
+                    .cgroup_root
+                    .starts_with("/sys/fs/cgroup"),
+                cleaned: AtomicBool::new(false),
+                cleanup_lock: Mutex::new(()),
+            }),
+        };
+        let environment = sandbox_environment(&context.environment)?;
+        let mut args = vec![
+            "--die-with-parent".into(),
+            "--new-session".into(),
+            "--unshare-all".into(),
+            "--unshare-net".into(),
+            "--clearenv".into(),
+            "--tmpfs".into(),
+            "/tmp".into(),
+            "--proc".into(),
+            "/proc".into(),
+            "--dev".into(),
+            "/dev".into(),
+            "--dir".into(),
+            "/home".into(),
+            "--dir".into(),
+            "/home/agent".into(),
+            "--ro-bind".into(),
+            context.environment.root.to_string_lossy().into_owned(),
+            context.environment.root.to_string_lossy().into_owned(),
+        ];
+        for bind in &context.system_paths.runtime_binds {
+            args.extend([
+                "--ro-bind".into(),
+                bind.source.to_string_lossy().into_owned(),
+                bind.destination.to_string_lossy().into_owned(),
+            ]);
+        }
+        for (name, value) in &environment {
+            args.extend(["--setenv".into(), name.clone(), value.clone()]);
+        }
+        args.extend([
+            "--chdir".into(),
+            "/tmp".into(),
+            "--seccomp".into(),
+            seccomp_fd.to_string(),
+            "--".into(),
+            sandbox_path(&context.environment.root, &context.environment.python)?,
+            "-I".into(),
+            sandbox_path(&context.environment.root, &context.resources.worker)?,
+        ]);
+        Ok(ProcessSpec {
+            executable: context.system_paths.bwrap.clone(),
+            args,
+            cwd: request_temp.clone(),
+            env: environment,
+            cleanup_root: Some(request_temp),
+            resource_limits: ResourceLimits::production(),
+            runtime_guard: None,
+            linux: Some(linux),
+        })
+    }
+
+    pub fn probe_spec(
+        context: &LinuxQualificationContext,
+        request_temp: &Path,
+        script: &str,
+    ) -> Result<ProcessSpec, String> {
+        let mut spec = Self::worker_spec(context, request_temp)?;
+        let worker = sandbox_path(&context.environment.root, &context.resources.worker)?;
+        let position = spec
+            .args
+            .iter()
+            .rposition(|arg| arg == &worker)
+            .ok_or("Linux worker argument was not found")?;
+        spec.args.truncate(position);
+        spec.args.extend(["-I".into(), "-c".into(), script.into()]);
+        Ok(spec)
+    }
+}
+
+pub struct LinuxResolver {
+    context: LinuxQualificationContext,
+    installed_generation: u64,
+    installed_key: String,
+}
+
+impl LinuxResolver {
+    pub fn new(
+        context: LinuxQualificationContext,
+        installed_generation: u64,
+        installed_key: String,
+    ) -> Self {
+        Self {
+            context,
+            installed_generation,
+            installed_key,
+        }
+    }
+
+    async fn resolve_spec(&self, probe: Option<&str>) -> Result<ProcessSpec, String> {
+        let runtime_guard = LinuxBackend::runtime_lease(&self.context)?;
+        if qualification_cache_key_async(self.context.clone()).await? != self.installed_key {
+            return Err(
+                "Qualified Linux backend identity changed; requalification required".into(),
+            );
+        }
+        let request_temp = self
+            .context
+            .request_temp_root
+            .join(format!("request-{}", uuid::Uuid::new_v4()));
+        fs::create_dir(&request_temp)
+            .map_err(|error| format!("Failed to create Linux request temp: {error}"))?;
+        let request_temp = request_temp
+            .canonicalize()
+            .map_err(|error| format!("Linux request temp is unavailable: {error}"))?;
+        let result = match probe {
+            Some(script) => LinuxBackend::probe_spec(&self.context, &request_temp, script),
+            None => LinuxBackend::worker_spec(&self.context, &request_temp),
+        };
+        match result {
+            Ok(mut spec) => {
+                spec.runtime_guard = Some(runtime_guard);
+                Ok(spec)
+            }
+            Err(error) => match fs::remove_dir_all(&request_temp) {
+                Ok(()) => Err(error),
+                Err(cleanup) => Err(format!(
+                    "{error}; failed to clean Linux request temp: {cleanup}"
+                )),
+            },
+        }
+    }
+
+    async fn resolve_probe(&self, script: &str) -> Result<ProcessSpec, String> {
+        self.resolve_spec(Some(script)).await
+    }
+}
+
+impl AgentProcessResolver for LinuxResolver {
+    fn installed_identity(&self) -> Option<(u64, &str)> {
+        Some((self.installed_generation, &self.installed_key))
+    }
+
+    fn rebind_installed_identity(
+        &self,
+        generation: u64,
+        key: &str,
+    ) -> Option<Arc<dyn AgentProcessResolver>> {
+        Some(Arc::new(Self::new(
+            self.context.clone(),
+            generation,
+            key.into(),
+        )))
+    }
+
+    fn resolve<'a>(
+        &'a self,
+        _request: &'a WorkerRequestV1,
+    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<ProcessSpec, String>> + Send + 'a>>
+    {
+        Box::pin(self.resolve_spec(None))
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct OfflineLinuxProvisioningContainment;
+
+impl OfflineLinuxProvisioningContainment {
+    pub fn containment(self) -> RunnerContainment {
+        RunnerContainment::Unavailable
+    }
+}
+
+pub fn compile_seccomp_bpf() -> Result<Vec<u8>, String> {
+    let arch: TargetArch = std::env::consts::ARCH
+        .try_into()
+        .map_err(|_| "Linux seccomp architecture is unsupported")?;
+    let mut rules = BTreeMap::new();
+    for syscall in [
+        libc::SYS_socket,
+        libc::SYS_socketpair,
+        libc::SYS_connect,
+        libc::SYS_bind,
+        libc::SYS_listen,
+        libc::SYS_accept,
+        libc::SYS_accept4,
+        libc::SYS_fork,
+        libc::SYS_vfork,
+        libc::SYS_clone3,
+        libc::SYS_execveat,
+    ] {
+        rules.insert(syscall, Vec::new());
+    }
+    let clone_without_thread = SeccompCondition::new(
+        0,
+        SeccompCmpArgLen::Qword,
+        SeccompCmpOp::MaskedEq(libc::CLONE_THREAD as u64),
+        0,
+    )
+    .map_err(|error| format!("Linux clone seccomp condition failed: {error}"))?;
+    rules.insert(
+        libc::SYS_clone,
+        vec![SeccompRule::new(vec![clone_without_thread])
+            .map_err(|error| format!("Linux clone seccomp rule failed: {error}"))?],
+    );
+    let program: BpfProgram = SeccompFilter::new(
+        rules,
+        SeccompAction::Allow,
+        SeccompAction::Errno(libc::EPERM as u32),
+        arch,
+    )
+    .map_err(|error| format!("Linux seccomp filter is invalid: {error}"))?
+    .try_into()
+    .map_err(|error| format!("Linux seccomp filter compilation failed: {error}"))?;
+    let mut bytes = Vec::with_capacity(program.len() * 8);
+    for instruction in program {
+        bytes.extend_from_slice(&instruction.code.to_ne_bytes());
+        bytes.push(instruction.jt);
+        bytes.push(instruction.jf);
+        bytes.extend_from_slice(&instruction.k.to_ne_bytes());
+    }
+    if bytes.is_empty() {
+        return Err("Linux seccomp compiler returned an empty filter".into());
+    }
+    Ok(bytes)
+}
+
+fn sealed_seccomp_file() -> Result<fs::File, String> {
+    let name = CString::new("nuclei-seccomp").expect("constant has no NUL");
+    let fd =
+        unsafe { libc::memfd_create(name.as_ptr(), libc::MFD_CLOEXEC | libc::MFD_ALLOW_SEALING) };
+    if fd == -1 {
+        return Err(format!(
+            "Linux seccomp memfd is unavailable: {}",
+            std::io::Error::last_os_error()
+        ));
+    }
+    let mut file = unsafe { fs::File::from_raw_fd(fd) };
+    file.write_all(&compile_seccomp_bpf()?)
+        .map_err(|error| format!("Linux seccomp filter write failed: {error}"))?;
+    file.seek(SeekFrom::Start(0))
+        .map_err(|error| format!("Linux seccomp filter rewind failed: {error}"))?;
+    let seals = libc::F_SEAL_SEAL | libc::F_SEAL_SHRINK | libc::F_SEAL_GROW | libc::F_SEAL_WRITE;
+    if unsafe { libc::fcntl(file.as_raw_fd(), libc::F_ADD_SEALS, seals) } == -1 {
+        return Err(format!(
+            "Linux seccomp filter sealing failed: {}",
+            std::io::Error::last_os_error()
+        ));
+    }
+    Ok(file)
+}
+
+fn create_worker_cgroup(root: &Path) -> Result<PathBuf, String> {
+    let child = root.join(format!("request-{}", uuid::Uuid::new_v4()));
+    fs::create_dir(&child)
+        .map_err(|error| format!("Failed to create Linux worker cgroup: {error}"))?;
+    let setup = (|| {
+        for (name, value) in [
+            ("memory.max", "1073741824"),
+            ("memory.swap.max", "0"),
+            ("pids.max", "4"),
+            ("cpu.max", "100000 100000"),
+        ] {
+            let path = child.join(name);
+            if !path.exists() && !root.starts_with("/sys/fs/cgroup") {
+                fs::write(&path, "").map_err(|error| {
+                    format!("Failed to create test Linux cgroup control {name}: {error}")
+                })?;
+            }
+            fs::write(&path, value)
+                .map_err(|error| format!("Failed to set Linux cgroup {name}: {error}"))?;
+        }
+        for name in ["cgroup.procs", "cgroup.kill", "cgroup.events"] {
+            let path = child.join(name);
+            if !path.exists() && !root.starts_with("/sys/fs/cgroup") {
+                let value = if name == "cgroup.events" {
+                    "populated 0\n"
+                } else {
+                    ""
+                };
+                fs::write(&path, value).map_err(|error| {
+                    format!("Failed to create test Linux cgroup control {name}: {error}")
+                })?;
+            }
+            if !path.exists() {
+                return Err(format!("Linux worker cgroup lacks {name}"));
+            }
+        }
+        Ok(())
+    })();
+    if let Err(error) = setup {
+        let _ = fs::remove_dir_all(&child);
+        return Err(error);
+    }
+    Ok(child)
+}
+
+fn verify_cgroup_delegation(root: &Path, probe: bool) -> Result<(), String> {
+    if fs::metadata(root)
+        .map_err(|error| format!("Delegated cgroup metadata is unavailable: {error}"))?
+        .uid()
+        != unsafe { libc::geteuid() }
+    {
+        return Err("Delegated cgroup root is not owned by the application uid".into());
+    }
+    let controller_text = fs::read_to_string(root.join("cgroup.controllers"))
+        .map_err(|error| format!("cgroup v2 controllers are unavailable: {error}"))?;
+    let enabled_text = fs::read_to_string(root.join("cgroup.subtree_control"))
+        .map_err(|error| format!("cgroup v2 subtree controls are unavailable: {error}"))?;
+    let controllers = words(&controller_text);
+    let enabled = words(&enabled_text);
+    for required in ["cpu", "memory", "pids"] {
+        if !controllers.contains(required) || !enabled.contains(required) {
+            return Err(format!(
+                "Delegated cgroup v2 subtree has not enabled {required}"
+            ));
+        }
+    }
+    if probe {
+        let child = create_worker_cgroup(root)?;
+        let guard = CgroupProbeGuard { path: Some(child) };
+        fs::write(guard.path().join("cgroup.kill"), "1")
+            .map_err(|error| format!("cgroup.kill probe failed: {error}"))?;
+        let events = fs::read_to_string(guard.path().join("cgroup.events"))
+            .map_err(|error| format!("cgroup.events probe failed: {error}"))?;
+        if !events.contains("populated 0") {
+            return Err("Fresh cgroup probe unexpectedly reported processes".into());
+        }
+        guard.finish()?;
+    }
+    Ok(())
+}
+
+struct CgroupProbeGuard {
+    path: Option<PathBuf>,
+}
+
+impl CgroupProbeGuard {
+    fn path(&self) -> &Path {
+        self.path
+            .as_deref()
+            .expect("cgroup probe guard already finalized")
+    }
+
+    fn finish(mut self) -> Result<(), String> {
+        let path = self
+            .path
+            .take()
+            .ok_or("cgroup probe guard already finalized")?;
+        fs::remove_dir(path)
+            .map_err(|error| format!("Delegated cgroup probe cleanup failed: {error}"))
+    }
+}
+
+impl Drop for CgroupProbeGuard {
+    fn drop(&mut self) {
+        if let Some(path) = self.path.take() {
+            let _ = fs::write(path.join("cgroup.kill"), "1");
+            let _ = fs::remove_dir(path);
+        }
+    }
+}
+
+fn words(value: &str) -> BTreeSet<&str> {
+    value
+        .split_whitespace()
+        .map(|word| word.trim_start_matches('+'))
+        .collect()
+}
+
+fn verify_user_namespaces() -> Result<(), String> {
+    if let Ok(value) = fs::read_to_string("/proc/sys/kernel/unprivileged_userns_clone") {
+        if value.trim() != "1" {
+            return Err("Unprivileged Linux user namespaces are disabled".into());
+        }
+    }
+    Ok(())
+}
+
+fn bwrap_namespace_self_test(paths: &LinuxSystemPaths) -> Result<(), String> {
+    let true_path = require_canonical(Path::new("/usr/bin/true"), "namespace probe", false)?;
+    let mut command = std::process::Command::new(&paths.bwrap);
+    command
+        .env_clear()
+        .args([
+            "--die-with-parent",
+            "--new-session",
+            "--unshare-all",
+            "--unshare-net",
+            "--clearenv",
+            "--proc",
+            "/proc",
+            "--dev",
+            "/dev",
+            "--ro-bind",
+        ])
+        .arg(&true_path)
+        .arg("/probe");
+    for bind in &paths.runtime_binds {
+        command
+            .arg("--ro-bind")
+            .arg(&bind.source)
+            .arg(&bind.destination);
+    }
+    let output = command
+        .args(["--", "/probe"])
+        .output()
+        .map_err(|error| format!("bubblewrap namespace self-test could not start: {error}"))?;
+    if !output.status.success() {
+        return Err(format!(
+            "bubblewrap user/mount/PID/network namespace self-test failed: {}",
+            String::from_utf8_lossy(&output.stderr).trim()
+        ));
+    }
+    Ok(())
+}
+
+fn sandbox_environment(
+    agent_environment: &AgentEnvironment,
+) -> Result<BTreeMap<String, String>, String> {
+    let mut environment = worker_environment(agent_environment, Path::new(""))?;
+    environment.insert("HOME".into(), "/home/agent".into());
+    environment.insert("TMPDIR".into(), "/tmp".into());
+    Ok(environment)
+}
+
+fn sandbox_path(root: &Path, child: &Path) -> Result<String, String> {
+    child
+        .strip_prefix(root)
+        .map_err(|_| "Linux sandbox path escaped the locked generation")?;
+    child
+        .to_str()
+        .map(str::to_owned)
+        .ok_or("Linux sandbox path is not UTF-8".into())
+}
+
+fn validate_request_temp(
+    context: &LinuxQualificationContext,
+    request_temp: &Path,
+) -> Result<PathBuf, String> {
+    let request_temp = require_canonical(request_temp, "Agent request directory", true)?;
+    if request_temp.parent() != Some(context.request_temp_root.as_path()) {
+        return Err("Agent request directory escaped its canonical temp root".into());
+    }
+    Ok(request_temp)
+}
+
+fn runtime_lease_path(path: &Path) -> Result<Arc<fs::File>, String> {
+    require_canonical(path, "Agent runtime generation lock", false)?;
+    require_regular_file(path, "Agent runtime generation lock")?;
+    require_owned_nonwritable(
+        &fs::symlink_metadata(path)
+            .map_err(|error| format!("Agent runtime generation lock metadata failed: {error}"))?,
+    )?;
+    let file = fs::OpenOptions::new()
+        .read(true)
+        .open(path)
+        .map_err(|error| format!("Agent runtime generation lock is unavailable: {error}"))?;
+    file.lock_shared()
+        .map_err(|error| format!("Agent runtime shared lock failed: {error}"))?;
+    Ok(Arc::new(file))
+}
+
+pub async fn qualification_cache_key_async(
+    context: LinuxQualificationContext,
+) -> Result<String, String> {
+    let cancelled = Arc::new(AtomicBool::new(false));
+    let mut cancellation = IdentityCancellation {
+        cancelled: Arc::clone(&cancelled),
+        armed: true,
+    };
+    let worker_cancelled = Arc::clone(&cancelled);
+    let mut worker = tokio::task::spawn_blocking(move || {
+        let first = compute_identity(
+            &context,
+            &worker_cancelled,
+            Instant::now() + IDENTITY_TIMEOUT,
+        )?;
+        let second = compute_identity(
+            &context,
+            &worker_cancelled,
+            Instant::now() + IDENTITY_TIMEOUT,
+        )?;
+        if first != second {
+            return Err("Linux runtime identity changed while hashing".into());
+        }
+        Ok(first)
+    });
+    let result = tokio::select! {
+        joined = &mut worker => joined.map_err(|_| "Linux runtime identity task failed".to_string())?,
+        _ = tokio::time::sleep(IDENTITY_TIMEOUT) => {
+            cancelled.store(true, Ordering::Release);
+            let _ = worker.await;
+            Err("Linux runtime identity exceeded its deadline".into())
+        }
+    };
+    cancellation.armed = false;
+    result
+}
+
+struct IdentityCancellation {
+    cancelled: Arc<AtomicBool>,
+    armed: bool,
+}
+
+impl Drop for IdentityCancellation {
+    fn drop(&mut self) {
+        if self.armed {
+            self.cancelled.store(true, Ordering::Release);
+        }
+    }
+}
+
+fn compute_identity(
+    context: &LinuxQualificationContext,
+    cancelled: &AtomicBool,
+    deadline: Instant,
+) -> Result<String, String> {
+    context
+        .system_paths
+        .verify(context.system_paths.production)?;
+    let mut digest = Sha256::new();
+    digest.update(IDENTITY_VERSION.as_bytes());
+    digest.update(context.app_version.as_bytes());
+    digest.update(context.environment.root.as_os_str().as_encoded_bytes());
+    digest.update(context.system_paths.bwrap.as_os_str().as_encoded_bytes());
+    for bind in &context.system_paths.runtime_binds {
+        digest.update(bind.source.as_os_str().as_encoded_bytes());
+        digest.update(bind.destination.as_os_str().as_encoded_bytes());
+        let metadata = fs::symlink_metadata(&bind.source)
+            .map_err(|error| format!("Linux runtime bind identity failed: {error}"))?;
+        require_trusted_nonwritable(&metadata, "Linux runtime bind")?;
+        digest.update(metadata.dev().to_le_bytes());
+        digest.update(metadata.ino().to_le_bytes());
+        digest.update(metadata.len().to_le_bytes());
+        digest.update(metadata.permissions().mode().to_le_bytes());
+        if let Ok(modified) = metadata.modified() {
+            if let Ok(elapsed) = modified.duration_since(std::time::UNIX_EPOCH) {
+                digest.update(elapsed.as_nanos().to_le_bytes());
+            }
+        }
+    }
+    let bpf = compile_seccomp_bpf()?;
+    digest.update((bpf.len() as u64).to_le_bytes());
+    digest.update(bpf);
+    let mut entries = 0_usize;
+    let mut bytes = 0_u64;
+    hash_tree(
+        &mut digest,
+        &context.environment.root,
+        &mut entries,
+        &mut bytes,
+        cancelled,
+        deadline,
+    )?;
+    hash_file(
+        &mut digest,
+        &context.system_paths.bwrap,
+        &mut bytes,
+        cancelled,
+        deadline,
+        false,
+    )?;
+    Ok(hex::encode(digest.finalize()))
+}
+
+fn checkpoint(cancelled: &AtomicBool, deadline: Instant) -> Result<(), String> {
+    if cancelled.load(Ordering::Acquire) {
+        return Err("Linux runtime identity was cancelled".into());
+    }
+    if Instant::now() >= deadline {
+        return Err("Linux runtime identity exceeded its deadline".into());
+    }
+    Ok(())
+}
+
+fn hash_tree(
+    digest: &mut Sha256,
+    root: &Path,
+    entries: &mut usize,
+    bytes: &mut u64,
+    cancelled: &AtomicBool,
+    deadline: Instant,
+) -> Result<(), String> {
+    require_owned_nonwritable(&fs::symlink_metadata(root).map_err(|error| error.to_string())?)?;
+    let mut pending = vec![root.to_path_buf()];
+    while let Some(directory) = pending.pop() {
+        checkpoint(cancelled, deadline)?;
+        let mut children = fs::read_dir(&directory)
+            .map_err(|error| format!("Linux runtime identity could not be read: {error}"))?
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|error| format!("Linux runtime identity entry failed: {error}"))?;
+        children.sort_by_key(|entry| entry.file_name());
+        for child in children {
+            checkpoint(cancelled, deadline)?;
+            *entries += 1;
+            if *entries > MAX_IDENTITY_ENTRIES {
+                return Err("Linux runtime identity exceeded its entry limit".into());
+            }
+            let path = child.path();
+            let relative = path
+                .strip_prefix(root)
+                .map_err(|_| "Linux runtime identity escaped its root")?;
+            digest.update(relative.as_os_str().as_encoded_bytes());
+            let metadata = fs::symlink_metadata(&path)
+                .map_err(|error| format!("Linux runtime identity metadata failed: {error}"))?;
+            require_owned_nonwritable(&metadata)?;
+            if metadata.file_type().is_symlink() {
+                return Err("Linux runtime identity contains a symlink".into());
+            }
+            if metadata.is_dir() {
+                digest.update(b"d");
+                pending.push(path);
+            } else if metadata.is_file() {
+                digest.update(b"f");
+                hash_file(digest, &path, bytes, cancelled, deadline, true)?;
+            } else {
+                return Err("Linux runtime identity contains a nonregular entry".into());
+            }
+        }
+    }
+    Ok(())
+}
+
+fn hash_file(
+    digest: &mut Sha256,
+    path: &Path,
+    bytes: &mut u64,
+    cancelled: &AtomicBool,
+    deadline: Instant,
+    require_current_owner: bool,
+) -> Result<(), String> {
+    let before = fs::symlink_metadata(path)
+        .map_err(|error| format!("Linux runtime identity file failed: {error}"))?;
+    if require_current_owner {
+        require_owned_nonwritable(&before)?;
+    } else {
+        require_trusted_executable(path)?;
+    }
+    if !before.is_file() || before.file_type().is_symlink() {
+        return Err("Linux runtime identity input is not a regular file".into());
+    }
+    *bytes = bytes
+        .checked_add(before.len())
+        .ok_or("Linux runtime identity byte count overflowed")?;
+    if *bytes > MAX_IDENTITY_BYTES {
+        return Err("Linux runtime identity exceeded its byte limit".into());
+    }
+    digest.update(before.len().to_le_bytes());
+    let mut file = fs::File::open(path)
+        .map_err(|error| format!("Linux runtime identity file open failed: {error}"))?;
+    let mut remaining = before.len();
+    let mut buffer = [0_u8; 64 * 1024];
+    while remaining > 0 {
+        checkpoint(cancelled, deadline)?;
+        let requested = remaining.min(buffer.len() as u64) as usize;
+        let read = file
+            .read(&mut buffer[..requested])
+            .map_err(|error| format!("Linux runtime identity read failed: {error}"))?;
+        if read == 0 {
+            return Err("Linux runtime identity file was truncated".into());
+        }
+        digest.update(&buffer[..read]);
+        remaining -= read as u64;
+    }
+    let after = file
+        .metadata()
+        .map_err(|error| format!("Linux runtime identity recheck failed: {error}"))?;
+    if before.len() != after.len()
+        || before.modified().ok() != after.modified().ok()
+        || before.dev() != after.dev()
+        || before.ino() != after.ino()
+        || before.uid() != after.uid()
+        || before.permissions().mode() != after.permissions().mode()
+    {
+        return Err("Linux runtime identity changed while hashing".into());
+    }
+    Ok(())
+}
+
+fn require_canonical(path: &Path, description: &str, directory: bool) -> Result<PathBuf, String> {
+    let canonical = path
+        .canonicalize()
+        .map_err(|error| format!("{description} is unavailable: {error}"))?;
+    if canonical != path {
+        return Err(format!(
+            "{description} must be supplied as a canonical path"
+        ));
+    }
+    if fs::metadata(&canonical)
+        .map_err(|error| format!("{description} metadata failed: {error}"))?
+        .is_dir()
+        != directory
+    {
+        return Err(format!("{description} has the wrong filesystem type"));
+    }
+    Ok(canonical)
+}
+
+fn require_regular_file(path: &Path, description: &str) -> Result<(), String> {
+    let metadata =
+        fs::symlink_metadata(path).map_err(|error| format!("{description} failed: {error}"))?;
+    if !metadata.is_file() || metadata.file_type().is_symlink() {
+        return Err(format!("{description} is not a regular file"));
+    }
+    Ok(())
+}
+
+fn require_owned_nonwritable(metadata: &fs::Metadata) -> Result<(), String> {
+    if metadata.uid() != unsafe { libc::geteuid() } {
+        return Err("Linux runtime identity is not owned by the application uid".into());
+    }
+    if metadata.permissions().mode() & 0o022 != 0 {
+        return Err("Linux runtime identity is group/world writable".into());
+    }
+    Ok(())
+}
+
+fn require_trusted_executable(path: &Path) -> Result<(), String> {
+    let metadata = fs::symlink_metadata(path)
+        .map_err(|error| format!("bubblewrap metadata is unavailable: {error}"))?;
+    require_trusted_nonwritable(&metadata, "bubblewrap")?;
+    if metadata.permissions().mode() & 0o111 == 0 {
+        return Err("bubblewrap permissions are not trusted executable permissions".into());
+    }
+    Ok(())
+}
+
+fn require_trusted_nonwritable(metadata: &fs::Metadata, description: &str) -> Result<(), String> {
+    let uid = metadata.uid();
+    if uid != 0 && uid != unsafe { libc::geteuid() } {
+        return Err(format!(
+            "{description} is not owned by root or the application uid"
+        ));
+    }
+    if metadata.permissions().mode() & 0o022 != 0 {
+        return Err(format!("{description} is group/world writable"));
+    }
+    Ok(())
+}
+
+pub(crate) async fn qualify_locked(locked: &LockedLinuxRuntimeIdentity) -> CapabilityReport {
+    match qualify_inner(locked.context(), locked.cache_key()).await {
+        Ok(()) => CapabilityReport {
+            available: true,
+            reason: None,
+            qualified_frameworks: vec!["cirq".into()],
+            controls: [
+                "bwrap",
+                "user_namespace",
+                "mount_namespace",
+                "pid_namespace",
+                "network_namespace",
+                "cgroup_v2",
+                "seccomp",
+                "rlimits",
+                "clean_environment",
+                "filesystem",
+                "subprocess",
+                "output_caps",
+                "cleanup",
+                "cirq",
+            ]
+            .into_iter()
+            .map(|name| ControlResult {
+                name: name.into(),
+                self_test_passed: true,
+            })
+            .collect(),
+        },
+        Err(error) => CapabilityReport {
+            available: false,
+            reason: Some(error),
+            qualified_frameworks: Vec::new(),
+            controls: Vec::new(),
+        },
+    }
+}
+
+async fn qualify_inner(
+    context: &LinuxQualificationContext,
+    expected_key: &str,
+) -> Result<(), String> {
+    LinuxBackend::discover(context)?;
+    // Full adversarial qualification is deliberately routed through the same
+    // ProcessSpec/Supervisor path below; no discovery result is reported alone.
+    qualification_probes(context).await?;
+    let final_key = qualification_cache_key_async(context.clone()).await?;
+    if final_key != expected_key {
+        return Err("Linux runtime identity changed during qualification".into());
+    }
+    Ok(())
+}
+
+async fn qualification_probes(context: &LinuxQualificationContext) -> Result<(), String> {
+    use crate::agent_runtime::process::{ProcessSupervisor, Supervisor, SupervisorLimits};
+    use crate::agent_runtime::protocol::{Action, Framework};
+    let baseline = LinuxParentBaseline::create(context)?;
+    let resolver = LinuxResolver::new(
+        context.clone(),
+        0,
+        qualification_cache_key_async(context.clone()).await?,
+    );
+    let initial_cgroups = cgroup_children(&context.system_paths.cgroup_root)?;
+
+    let cirq_tail = "\nq=cirq.LineQubit(0)\ncircuit=cirq.Circuit(cirq.H(q))\n";
+    for (description, body) in [
+        (
+            "project read",
+            format!(
+                "import cirq,errno\ntry: open({:?}).read()\nexcept OSError as e: assert e.errno in (errno.ENOENT,errno.EACCES,errno.EPERM),e\nelse: raise AssertionError('project read escaped')",
+                baseline.project_sentinel
+            ),
+        ),
+        (
+            "home read",
+            format!(
+                "import cirq,errno\ntry: open({:?}).read()\nexcept OSError as e: assert e.errno in (errno.ENOENT,errno.EACCES,errno.EPERM),e\nelse: raise AssertionError('home read escaped')",
+                baseline.home_sentinel
+            ),
+        ),
+        (
+            "symlink read",
+            format!(
+                "import cirq,errno,os\nos.symlink({:?},'/tmp/escape')\ntry: open('/tmp/escape').read()\nexcept OSError as e: assert e.errno in (errno.ENOENT,errno.EACCES,errno.EPERM),e\nelse: raise AssertionError('symlink read escaped')",
+                baseline.project_sentinel
+            ),
+        ),
+        (
+            "IPv4 socket",
+            "import cirq,errno,socket\ntry: socket.socket(socket.AF_INET,socket.SOCK_STREAM)\nexcept OSError as e: assert e.errno==errno.EPERM,e\nelse: raise AssertionError('IPv4 socket escaped')".into(),
+        ),
+        (
+            "IPv6 socket",
+            "import cirq,errno,socket\ntry: socket.socket(socket.AF_INET6,socket.SOCK_STREAM)\nexcept OSError as e: assert e.errno==errno.EPERM,e\nelse: raise AssertionError('IPv6 socket escaped')".into(),
+        ),
+        (
+            "Unix socket",
+            "import cirq,errno,socket\ntry: socket.socket(socket.AF_UNIX,socket.SOCK_STREAM)\nexcept OSError as e: assert e.errno==errno.EPERM,e\nelse: raise AssertionError('Unix socket escaped')".into(),
+        ),
+        (
+            "subprocess id",
+            "import cirq,errno,subprocess\ntry: subprocess.run(['/usr/bin/id'],check=True)\nexcept OSError as e: assert e.errno==errno.EPERM,e\nelse: raise AssertionError('subprocess escaped')".into(),
+        ),
+        (
+            "fork setsid",
+            "import cirq,errno,os\ntry:\n p=os.fork()\n if p==0: os.setsid();os._exit(0)\nexcept OSError as e: assert e.errno==errno.EPERM,e\nelse: raise AssertionError('fork escaped')".into(),
+        ),
+        (
+            "clone",
+            "import cirq,ctypes,errno,os,platform,signal\nnumber={'x86_64':56,'aarch64':220,'riscv64':220}[platform.machine()]\nctypes.set_errno(0)\nr=ctypes.CDLL(None,use_errno=True).syscall(number,signal.SIGCHLD,0,0,0,0)\nassert r==-1 and ctypes.get_errno()==errno.EPERM,(r,ctypes.get_errno())".into(),
+        ),
+        (
+            "execveat",
+            "import cirq,ctypes,errno,platform\nnumber={'x86_64':322,'aarch64':281,'riscv64':281}[platform.machine()]\nctypes.set_errno(0)\nr=ctypes.CDLL(None,use_errno=True).syscall(number,-1,0,0,0,0)\nassert r==-1 and ctypes.get_errno()==errno.EPERM,(r,ctypes.get_errno())".into(),
+        ),
+        (
+            "memory cgroup and rlimit",
+            "import cirq\ntry: bytearray(2_000_000_000)\nexcept (MemoryError,OSError): pass\nelse: raise AssertionError('2GB allocation escaped')".into(),
+        ),
+        (
+            "fd rlimit",
+            "import cirq,errno\nfds=[]\ntry:\n while True: fds.append(open('/dev/null'))\nexcept OSError as e: assert e.errno in (errno.EMFILE,errno.ENFILE),e".into(),
+        ),
+        (
+            "cgroup escape",
+            "import cirq,errno\ntry: open('/sys/fs/cgroup/cgroup.procs','w').write('0')\nexcept OSError as e: assert e.errno in (errno.ENOENT,errno.EACCES,errno.EPERM,errno.EROFS),e\nelse: raise AssertionError('cgroup escape succeeded')".into(),
+        ),
+        (
+            "cgroup placement",
+            "import cirq\nmembership=open('/proc/self/cgroup').read()\nassert '/request-' in membership,membership".into(),
+        ),
+        (
+            "PID namespace",
+            "import cirq,os\nassert os.getpid() <= 2,os.getpid()".into(),
+        ),
+        (
+            "sealed descriptor",
+            "import cirq,os\nopen_fds=[]\nfor fd in range(3,64):\n try: os.fstat(fd);open_fds.append(fd)\n except OSError: pass\nassert not open_fds,open_fds".into(),
+        ),
+    ] {
+        run_valid_worker(
+            &resolver,
+            &format!("{body}{cirq_tail}"),
+            &format!("Linux {description} probe"),
+        )
+        .await?;
+    }
+
+    let expected_environment = sandbox_environment(&context.environment)?;
+    let environment_json = serde_json::to_string(&expected_environment)
+        .map_err(|error| format!("Linux environment evidence encode failed: {error}"))?;
+    let secrets_json = serde_json::to_string(&context.parent_secret_names)
+        .map_err(|error| format!("Linux secret evidence encode failed: {error}"))?;
+    run_valid_worker(
+        &resolver,
+        &format!(
+            "import cirq,json,os\nexpected=json.loads({environment_json:?})\nassert dict(os.environ)==expected,(dict(os.environ),expected)\nfor name in json.loads({secrets_json:?}): assert name not in os.environ{cirq_tail}"
+        ),
+        "Linux exact clean environment probe",
+    )
+    .await?;
+
+    run_expected_supervisor_failure(
+        &resolver,
+        "while True: pass",
+        &["worker_failed", "wall_timeout"],
+        "CPU loop",
+    )
+    .await?;
+    run_expected_supervisor_failure(
+        &resolver,
+        "import os\nwhile True: os.write(1,b'x'*8192)",
+        &["response_too_large"],
+        "stdout flood",
+    )
+    .await?;
+    run_expected_supervisor_failure(
+        &resolver,
+        "import os\nwhile True: os.write(2,b'x'*8192)",
+        &["stderr_too_large"],
+        "stderr flood",
+    )
+    .await?;
+    run_expected_supervisor_failure(
+        &resolver,
+        "print('not-json')",
+        &["malformed_response"],
+        "malformed protocol",
+    )
+    .await?;
+
+    let cancellation_request = WorkerRequestV1 {
+        protocol_version: 1,
+        request_id: format!("linux-cancel-{}", uuid::Uuid::new_v4()),
+        action: Action::Parse,
+        framework: Framework::Cirq,
+        language: "python".into(),
+        code: "while True: pass".into(),
+        shots: None,
+    };
+    let cancellation_spec = resolver.resolve(&cancellation_request).await?;
+    let mut cancellation_input = serde_json::to_vec(&cancellation_request)
+        .map_err(|error| format!("Linux cancellation request encode failed: {error}"))?;
+    cancellation_input.push(b'\n');
+    let cancellation_supervisor = Arc::new(Supervisor::new(SupervisorLimits::production()));
+    let run_supervisor = Arc::clone(&cancellation_supervisor);
+    let cancellation_id = cancellation_request.request_id.clone();
+    let cancellation_run = tokio::spawn(async move {
+        run_supervisor
+            .run(
+                &cancellation_request,
+                cancellation_spec,
+                &cancellation_input,
+            )
+            .await
+    });
+    tokio::time::sleep(Duration::from_millis(100)).await;
+    cancellation_supervisor
+        .cancel(&cancellation_id)
+        .await
+        .map_err(|error| format!("Linux cancellation cleanup failed: {}", error.message))?;
+    let cancellation_error = cancellation_run
+        .await
+        .map_err(|_| "Linux cancellation probe task failed")?
+        .expect_err("Linux cancellation probe unexpectedly succeeded");
+    if cancellation_error.code != "cancelled" {
+        return Err(format!(
+            "Linux cancellation returned unexpected evidence: {}",
+            cancellation_error.code
+        ));
+    }
+
+    if cgroup_children(&context.system_paths.cgroup_root)? != initial_cgroups {
+        return Err("Linux qualification leaked a worker cgroup".into());
+    }
+    if fs::read_dir(&context.request_temp_root)
+        .map_err(|error| format!("Linux request root could not be checked: {error}"))?
+        .next()
+        .is_some()
+    {
+        return Err("Linux qualification leaked a request directory".into());
+    }
+    drop(baseline);
+    Ok(())
+}
+
+async fn run_valid_worker(
+    resolver: &LinuxResolver,
+    code: &str,
+    description: &str,
+) -> Result<(), String> {
+    use crate::agent_runtime::process::{ProcessSupervisor, Supervisor, SupervisorLimits};
+    use crate::agent_runtime::protocol::{Action, Framework};
+
+    let request = WorkerRequestV1 {
+        protocol_version: 1,
+        request_id: format!("linux-probe-{}", uuid::Uuid::new_v4()),
+        action: Action::Parse,
+        framework: Framework::Cirq,
+        language: "python".into(),
+        code: code.into(),
+        shots: None,
+    };
+    let spec = resolver.resolve(&request).await?;
+    let mut input = serde_json::to_vec(&request)
+        .map_err(|error| format!("{description} request encode failed: {error}"))?;
+    input.push(b'\n');
+    Supervisor::new(SupervisorLimits::production())
+        .run(&request, spec, &input)
+        .await
+        .map(|_| ())
+        .map_err(|error| format!("{description} failed: {}", error.message))
+}
+
+async fn run_expected_supervisor_failure(
+    resolver: &LinuxResolver,
+    script: &str,
+    expected_codes: &[&str],
+    description: &str,
+) -> Result<(), String> {
+    use crate::agent_runtime::process::{ProcessSupervisor, Supervisor, SupervisorLimits};
+    use crate::agent_runtime::protocol::{Action, Framework};
+
+    let spec = resolver.resolve_probe(script).await?;
+    let request = WorkerRequestV1 {
+        protocol_version: 1,
+        request_id: format!("linux-failure-{}", uuid::Uuid::new_v4()),
+        action: Action::Parse,
+        framework: Framework::Cirq,
+        language: "python".into(),
+        code: String::new(),
+        shots: None,
+    };
+    let error = Supervisor::new(SupervisorLimits::production())
+        .run(&request, spec, b"")
+        .await
+        .expect_err("Linux negative probe unexpectedly returned a response");
+    if !expected_codes.contains(&error.code.as_str()) {
+        return Err(format!(
+            "{description} returned {}, expected one of {expected_codes:?}",
+            error.code
+        ));
+    }
+    Ok(())
+}
+
+fn cgroup_children(root: &Path) -> Result<BTreeSet<PathBuf>, String> {
+    fs::read_dir(root)
+        .map_err(|error| format!("Linux delegated cgroup could not be enumerated: {error}"))?
+        .filter_map(|entry| match entry {
+            Ok(entry) if entry.path().is_dir() => Some(Ok(entry.path())),
+            Ok(_) => None,
+            Err(error) => Some(Err(format!("Linux cgroup entry failed: {error}"))),
+        })
+        .collect()
+}
+
+struct LinuxParentBaseline {
+    project_sentinel: PathBuf,
+    home_sentinel: PathBuf,
+}
+
+impl LinuxParentBaseline {
+    fn create(context: &LinuxQualificationContext) -> Result<Self, String> {
+        let nonce = uuid::Uuid::new_v4();
+        let baseline = Self {
+            project_sentinel: context
+                .project_root
+                .join(format!(".nuclei-linux-project-{nonce}")),
+            home_sentinel: context
+                .home_root
+                .join(format!(".nuclei-linux-home-{nonce}")),
+        };
+        let evidence = format!("trusted-parent-{nonce}");
+        for path in [&baseline.project_sentinel, &baseline.home_sentinel] {
+            fs::write(path, &evidence)
+                .map_err(|error| format!("Trusted parent sentinel write failed: {error}"))?;
+            if fs::read_to_string(path)
+                .map_err(|error| format!("Trusted parent sentinel read failed: {error}"))?
+                != evidence
+            {
+                return Err("Trusted parent sentinel evidence was inconsistent".into());
+            }
+        }
+        Ok(baseline)
+    }
+}
+
+impl Drop for LinuxParentBaseline {
+    fn drop(&mut self) {
+        let _ = fs::remove_file(&self.project_sentinel);
+        let _ = fs::remove_file(&self.home_sentinel);
+    }
+}

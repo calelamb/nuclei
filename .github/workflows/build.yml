@@ -230,3 +230,134 @@ jobs:
           ANTHROPIC_API_KEY: qualification-fake-anthropic
           IBM_QUANTUM_TOKEN: qualification-fake-ibm
           AWS_SECRET_ACCESS_KEY: qualification-fake-aws
+
+  linux-agent-isolation:
+    name: Linux Agent Isolation
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+      - name: Setup uv
+        uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e # v6
+        with:
+          enable-cache: false
+
+      - name: Install Rust 1.77.2
+        uses: dtolnay/rust-toolchain@cc21eb1640117f28f1e845649b8aa54ecd04daab # 1.77.2
+
+      - name: Install bubblewrap
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install --yes bubblewrap
+          test "$(readlink -f "$(command -v bwrap)")" = /usr/bin/bwrap
+
+      - name: Create delegated cgroup v2 subtree
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(stat -fc %T /sys/fs/cgroup)" = cgroup2fs
+          cgroup_root=/sys/fs/cgroup/nuclei-agents
+          sudo mkdir "$cgroup_root"
+          sudo chown -R "$(id -u):$(id -g)" "$cgroup_root"
+          printf '%s\n' '+cpu +memory +pids' > "$cgroup_root/cgroup.subtree_control"
+          for controller in cpu memory pids; do
+            grep -qw "$controller" "$cgroup_root/cgroup.controllers"
+            grep -qw "$controller" "$cgroup_root/cgroup.subtree_control"
+          done
+          test -w "$cgroup_root/cgroup.procs"
+          echo "NUCLEI_AGENT_CGROUP_ROOT=$cgroup_root" >> "$GITHUB_ENV"
+          echo "NUCLEI_AGENT_BWRAP=/usr/bin/bwrap" >> "$GITHUB_ENV"
+
+      # Ephemeral qualification fixture only. Production provisioning remains
+      # unavailable until an offline wheel runner has this complete containment.
+      - name: Create locked Linux qualification fixture
+        shell: bash
+        run: |
+          set -euo pipefail
+          runtime_root="$RUNNER_TEMP/nuclei-linux-agent-runtime"
+          generation_parent="$runtime_root/generations"
+          environment_root="$generation_parent/generation-v1"
+          managed_root="$environment_root/managed"
+          venv_root="$environment_root/venv"
+          request_root="$RUNNER_TEMP/nuclei-linux-agent-requests"
+          sentinel_root="$RUNNER_TEMP/nuclei-linux-agent-sentinels"
+          export UV_PYTHON_INSTALL_DIR="$managed_root"
+          mkdir -p "$environment_root"
+          : > "$generation_parent/.provision.lock"
+          uv python install 3.12.11
+          managed_python="$(uv python find --managed-python 3.12.11)"
+          uv venv --python "$managed_python" "$venv_root"
+          uv pip sync --python "$venv_root/bin/python" --require-hashes kernel/agent-requirements.lock
+
+          kernel_root="$environment_root/kernel"
+          agent_kernel_files=(
+            agent-requirements.lock
+            agent-requirements.txt
+            agent_limits.py
+            agent_protocol.py
+            agent_worker.py
+            executor.py
+            adapters/_math.py
+            adapters/base.py
+            adapters/cirq_adapter.py
+            adapters/qiskit_adapter.py
+            adapters/qsharp_adapter.py
+            models/__init__.py
+            models/errors.py
+            models/snapshot.py
+          )
+          for relative in "${agent_kernel_files[@]}"; do
+            mkdir -p "$kernel_root/$(dirname "$relative")"
+            cp "kernel/$relative" "$kernel_root/$relative"
+          done
+
+          materialized_root="$generation_parent/.generation-v1-materialized"
+          cp -aL "$environment_root" "$materialized_root"
+          rm -rf "$environment_root"
+          mv "$materialized_root" "$environment_root"
+          venv_root="$environment_root/venv"
+          kernel_root="$environment_root/kernel"
+          site_packages="$("$venv_root/bin/python" -c 'import sysconfig; print(sysconfig.get_paths()["purelib"])')"
+          mkdir -p "$request_root" "$sentinel_root/project" "$sentinel_root/home"
+          chmod -R go-w "$environment_root" "$generation_parent/.provision.lock"
+
+          NUCLEI_AGENT_ENVIRONMENT_ROOT="$environment_root" \
+          NUCLEI_AGENT_PYTHON="$venv_root/bin/python" \
+          NUCLEI_AGENT_SITE_PACKAGES="$site_packages" \
+          "$venv_root/bin/python" - <<'PY'
+          import os
+          from pathlib import Path
+
+          root = Path(os.environ["NUCLEI_AGENT_ENVIRONMENT_ROOT"])
+          assert root == root.resolve(strict=True)
+          for name in ("NUCLEI_AGENT_PYTHON", "NUCLEI_AGENT_SITE_PACKAGES"):
+              path = Path(os.environ[name])
+              assert path == path.resolve(strict=True), (name, path)
+              path.relative_to(root)
+          for path in root.rglob("*"):
+              assert not path.is_symlink(), path
+          PY
+
+          {
+            echo "NUCLEI_AGENT_KERNEL_ROOT=$kernel_root"
+            echo "NUCLEI_AGENT_ENVIRONMENT_ROOT=$environment_root"
+            echo "NUCLEI_AGENT_PYTHON=$venv_root/bin/python"
+            echo "NUCLEI_AGENT_SITE_PACKAGES=$site_packages"
+            echo "NUCLEI_AGENT_REQUEST_TEMP_ROOT=$request_root"
+            echo "NUCLEI_AGENT_PROJECT_ROOT=$sentinel_root/project"
+            echo "NUCLEI_AGENT_HOME_ROOT=$sentinel_root/home"
+            echo "NUCLEI_REQUIRE_LINUX_AGENT_ISOLATION=1"
+          } >> "$GITHUB_ENV"
+
+      - name: Require runtime-proven Linux isolation
+        run: cargo test --test agent_runtime_boundary linux_required_qualification_passes_when_explicitly_required -- --nocapture
+        working-directory: src-tauri
+        env:
+          ANTHROPIC_API_KEY: qualification-fake-anthropic
+          IBM_QUANTUM_TOKEN: qualification-fake-ibm
+          AWS_SECRET_ACCESS_KEY: qualification-fake-aws
+          HTTP_PROXY: qualification-fake-http-proxy
+          HTTPS_PROXY: qualification-fake-https-proxy
+          LD_PRELOAD: ''

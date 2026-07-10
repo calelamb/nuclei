@@ -1301,6 +1301,43 @@ git commit -m "feat: qualify macOS agent Seatbelt"
 
 ### Task 6: Add Linux bwrap, cgroup, rlimit, and seccomp
 
+**Authoritative implementation note (2026-07-10):** Linux is an
+all-or-nothing backend. It accepts only explicit canonical fixture/runtime
+paths, a trusted canonical bubblewrap executable, and an explicitly delegated
+cgroup v2 subtree with `cpu`, `memory`, and `pids` enabled. Discovery performs
+the real bubblewrap user/mount/PID/network namespace self-test, cgroup child
+creation/limit/kill/removal probe, and seccomp compilation. Any missing
+primitive returns an unavailable report with no controls or frameworks.
+
+Each request holds the locked generation's shared lease through reap and
+checked cleanup. Its unique cgroup is configured before spawn and joined from
+trusted `pre_exec` code by async-signal-safe `open`/`write` calls, eliminating
+the post-spawn placement race. Every terminal path invokes `cgroup.kill`, waits
+for `populated 0` with a deadline, removes the child, and surfaces cleanup
+failure so the matching backend generation is revoked. Process groups remain
+lifecycle helpers only.
+
+The pure-Rust `seccompiler` filter is compiled for the verified host
+architecture, serialized into a sealed memfd, and inherited only by bwrap.
+Bubblewrap applies it after namespace/mount setup. It denies the socket family
+operations, `fork`, `vfork`, `clone3`, `execveat`, and non-`CLONE_THREAD`
+`clone`, while parent rlimits and Python limits remain defense in depth.
+Production specifications expose only the locked generation, narrowly scoped
+loader/library roots, tmpfs `/tmp`, proc, minimal dev, and synthetic home, with
+an exact environment allowlist.
+
+Qualification uses the production resolver, specification, and supervisor
+paths with trusted-parent random sentinels. It requires concrete denial or
+limit evidence for project/home/symlink reads, exact environment, IPv4/IPv6/
+Unix sockets, subprocess/fork/setsid/clone/execveat, PID and cgroup placement,
+cgroup escape, CPU, 2GB allocation, stdout/stderr caps, descriptor exhaustion,
+cancellation, malformed protocol, descriptor closure, cleanup, and valid Cirq
+parse. The nonignored required test is activated only by
+`NUCLEI_REQUIRE_LINUX_AGENT_ISOLATION=1`; the pinned GitHub job provisions the
+fixture and must fail if the hosted runner cannot delegate cgroup v2. Dynamic
+provisioning remains unavailable because no independently contained offline
+wheel runner exists.
+
 **Files:**
 - Create: `src-tauri/src/agent_runtime/linux.rs`
 - Modify: `src-tauri/src/agent_runtime/mod.rs`
@@ -1308,13 +1345,13 @@ git commit -m "feat: qualify macOS agent Seatbelt"
 - Modify: `src-tauri/tests/agent_runtime_boundary.rs`
 - Modify: `src-tauri/Cargo.toml`
 
-- [ ] **Step 1: Add the pure-Rust seccomp compiler**
+- [x] **Step 1: Add the pure-Rust seccomp compiler**
 
 Run: `cd src-tauri && cargo add seccompiler --target 'cfg(target_os = "linux")'`
 
 Expected: dependency resolves without requiring a host `libseccomp.so`.
 
-- [ ] **Step 2: Add the required Linux test**
+- [x] **Step 2: Add the required Linux test**
 
 ```rust
 // append to src-tauri/tests/agent_runtime_boundary.rs
@@ -1335,7 +1372,7 @@ Run: `cd src-tauri && cargo test --test agent_runtime_boundary linux_required --
 
 Expected on Linux: FAIL because Linux qualification is absent.
 
-- [ ] **Step 4: Implement all-or-nothing Linux APIs**
+- [x] **Step 4: Implement all-or-nothing Linux APIs**
 
 ```rust
 // src-tauri/src/agent_runtime/linux.rs
@@ -1361,6 +1398,11 @@ pub trait LinuxSandboxApi: Sized {
 Compile a seccomp filter passed through `bwrap --seccomp FD` that denies socket operations, `fork`, `vfork`, `clone3`, and `clone` unless `CLONE_THREAD` is set. The worker still applies all rlimits before `Executor`. `qualify` executes fresh workers for: `open(PROJECT_SENTINEL).read()`, `open(HOME_SENTINEL).read()`, exact `os.environ` enumeration, IPv4/IPv6/Unix sockets, `subprocess.run(["/usr/bin/id"])`, `os.fork()`, `while True: pass`, `bytearray(2_000_000_000)`, unbounded `print`, 1,000 `open("/dev/null")` calls, cancellation, malformed JSON, and process clone. Failure to provision or verify any primitive returns unavailable with no frameworks.
 
 - [ ] **Step 5: Run Linux qualification**
+
+The local `AllowUnavailable` boundary suite passes truthfully. The current
+host has no explicit locked runtime/delegated-cgroup fixture, so its required
+qualification remains unavailable; the pinned CI fixture is the authoritative
+available-path run.
 
 Run: `cd src-tauri && cargo test --test agent_runtime_boundary linux_required -- --nocapture`
 

@@ -1799,6 +1799,8 @@ fn python_spec(script: &str) -> ProcessSpec {
         cleanup_root: None,
         resource_limits: ResourceLimits::testing(),
         runtime_guard: None,
+        #[cfg(target_os = "linux")]
+        linux: None,
     }
 }
 

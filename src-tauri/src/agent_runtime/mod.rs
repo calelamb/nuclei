@@ -1,3 +1,5 @@
+#[cfg(target_os = "linux")]
+pub mod linux;
 pub mod macos;
 pub mod process;
 pub mod protocol;
@@ -310,10 +312,67 @@ impl AgentRuntimeCommands for AgentRuntimeState {
 
     async fn capability<'a>(&'a self, app: &'a tauri::AppHandle) -> CapabilityReport {
         let generation = self.begin_refresh();
+        #[cfg(target_os = "linux")]
+        {
+            let locked = match linux::LockedLinuxRuntimeIdentity::from_explicit_environment(
+                &app.package_info().version.to_string(),
+            )
+            .await
+            {
+                Ok(locked) => locked,
+                Err(error) => {
+                    let report = unavailable_report(error);
+                    self.install_if_current(
+                        generation,
+                        "linux-identity-unavailable",
+                        InstalledBackend {
+                            report,
+                            resolver: Arc::new(UnavailableResolver),
+                            cache_key: None,
+                            refresh_key: "linux-identity-unavailable".into(),
+                            generation,
+                        },
+                    )
+                    .await;
+                    return self.cached_capability().await;
+                }
+            };
+            let context = locked.context().clone();
+            let cache_key = locked.cache_key().to_string();
+            if let Some(report) = self.reuse_if_identity_matches(generation, &cache_key).await {
+                return report;
+            }
+            let report = linux::qualify_locked(&locked).await;
+            let resolver: Arc<dyn AgentProcessResolver> = if report.available {
+                Arc::new(linux::LinuxResolver::new(
+                    context,
+                    generation,
+                    cache_key.clone(),
+                ))
+            } else {
+                Arc::new(UnavailableResolver)
+            };
+            self.install_if_current(
+                generation,
+                &cache_key,
+                InstalledBackend {
+                    cache_key: report.available.then_some(cache_key.clone()),
+                    report,
+                    resolver,
+                    refresh_key: cache_key.clone(),
+                    generation,
+                },
+            )
+            .await;
+            #[allow(clippy::needless_return)]
+            return self.cached_capability().await;
+        }
+        #[cfg(not(target_os = "linux"))]
         let locked = macos::LockedRuntimeIdentity::from_explicit_environment(
             &app.package_info().version.to_string(),
         )
         .await;
+        #[cfg(not(target_os = "linux"))]
         let locked = match locked {
             Ok(locked) => locked,
             Err(error) => {
@@ -333,41 +392,49 @@ impl AgentRuntimeCommands for AgentRuntimeState {
                 return self.cached_capability().await;
             }
         };
+        #[cfg(not(target_os = "linux"))]
         let context = locked.context().clone();
+        #[cfg(not(target_os = "linux"))]
         let cache_key = locked.cache_key().to_string();
+        #[cfg(not(target_os = "linux"))]
         if let Some(report) = self.reuse_if_identity_matches(generation, &cache_key).await {
             return report;
         }
 
-        // No state lock is held while the platform launches long-running probes.
-        #[cfg(target_os = "macos")]
-        let report = macos::qualify_locked(&locked).await;
-        #[cfg(not(target_os = "macos"))]
-        let report =
-            qualify_current_host_with_context(QualificationMode::AllowUnavailable, context.clone())
-                .await;
-        let resolver: Arc<dyn AgentProcessResolver> = if report.available {
-            Arc::new(MacContextResolver {
-                context,
-                installed_generation: generation,
-                installed_key: cache_key.clone(),
-            })
-        } else {
-            Arc::new(UnavailableResolver)
-        };
-        self.install_if_current(
-            generation,
-            &cache_key,
-            InstalledBackend {
-                cache_key: report.available.then_some(cache_key.clone()),
-                report,
-                resolver,
-                refresh_key: cache_key.clone(),
+        #[cfg(not(target_os = "linux"))]
+        {
+            // No state lock is held while the platform launches long-running probes.
+            #[cfg(target_os = "macos")]
+            let report = macos::qualify_locked(&locked).await;
+            #[cfg(not(target_os = "macos"))]
+            let report = qualify_current_host_with_context(
+                QualificationMode::AllowUnavailable,
+                context.clone(),
+            )
+            .await;
+            let resolver: Arc<dyn AgentProcessResolver> = if report.available {
+                Arc::new(MacContextResolver {
+                    context,
+                    installed_generation: generation,
+                    installed_key: cache_key.clone(),
+                })
+            } else {
+                Arc::new(UnavailableResolver)
+            };
+            self.install_if_current(
                 generation,
-            },
-        )
-        .await;
-        self.cached_capability().await
+                &cache_key,
+                InstalledBackend {
+                    cache_key: report.available.then_some(cache_key.clone()),
+                    report,
+                    resolver,
+                    refresh_key: cache_key.clone(),
+                    generation,
+                },
+            )
+            .await;
+            self.cached_capability().await
+        }
     }
 }
 
@@ -466,7 +533,19 @@ pub async fn qualify_current_host(mode: QualificationMode) -> CapabilityReport {
         };
         required_mode(macos::qualify_locked(&locked).await, mode)
     }
-    #[cfg(not(target_os = "macos"))]
+    #[cfg(target_os = "linux")]
+    {
+        let locked = match linux::LockedLinuxRuntimeIdentity::from_explicit_environment(env!(
+            "CARGO_PKG_VERSION"
+        ))
+        .await
+        {
+            Ok(locked) => locked,
+            Err(error) => return required_mode(unavailable_report(error), mode),
+        };
+        required_mode(linux::qualify_locked(&locked).await, mode)
+    }
+    #[cfg(not(any(target_os = "macos", target_os = "linux")))]
     {
         required_mode(unavailable_report(unsupported::UNAVAILABLE_MESSAGE), mode)
     }
@@ -560,6 +639,8 @@ mod refresh_tests {
                     cleanup_root: None,
                     resource_limits: process::ResourceLimits::testing(),
                     runtime_guard: None,
+                    #[cfg(target_os = "linux")]
+                    linux: None,
                 })
             })
         }

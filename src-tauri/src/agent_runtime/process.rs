@@ -38,6 +38,8 @@ pub struct ProcessSpec {
     pub cleanup_root: Option<PathBuf>,
     pub resource_limits: ResourceLimits,
     pub runtime_guard: Option<Arc<std::fs::File>>,
+    #[cfg(target_os = "linux")]
+    pub linux: Option<crate::agent_runtime::linux::LinuxLaunchSpec>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -267,6 +269,17 @@ impl Supervisor {
                 "Worker process specification is invalid",
             ));
         }
+        #[cfg(target_os = "linux")]
+        if spec
+            .linux
+            .as_ref()
+            .is_some_and(|linux| !linux.validates_command(&spec.executable, &spec.args))
+        {
+            return Err(RuntimeError::new(
+                "invalid_process_spec",
+                "Linux containment does not match the worker command",
+            ));
+        }
         Ok(())
     }
 
@@ -352,6 +365,8 @@ impl Supervisor {
         let mut resources = Some(RunResources::new(
             spec.cleanup_root.clone(),
             spec.runtime_guard.clone(),
+            #[cfg(target_os = "linux")]
+            spec.linux.clone(),
         ));
         let result = self
             .run_unix_inner(request, spec, stdin, reservation, &mut resources)
@@ -569,16 +584,16 @@ impl Supervisor {
                 "Worker response exceeded the byte limit",
             ));
         }
-        if !status.success() {
-            return Err(RuntimeError::new(
-                "worker_failed",
-                "Worker process exited unsuccessfully",
-            ));
-        }
         if stderr_capture.overflow {
             return Err(RuntimeError::new(
                 "stderr_too_large",
                 "Worker diagnostics exceeded the byte limit",
+            ));
+        }
+        if !status.success() {
+            return Err(RuntimeError::new(
+                "worker_failed",
+                "Worker process exited unsuccessfully",
             ));
         }
         if !matches!(stdin_result, Ok(Ok(()))) {
@@ -649,21 +664,47 @@ impl Drop for RequestCleanup {
 struct RunResources {
     cleanup: RequestCleanup,
     runtime_guard: Option<Arc<std::fs::File>>,
+    #[cfg(target_os = "linux")]
+    linux: Option<crate::agent_runtime::linux::LinuxLaunchSpec>,
 }
 
 #[cfg(unix)]
 impl RunResources {
-    fn new(cleanup_root: Option<PathBuf>, runtime_guard: Option<Arc<std::fs::File>>) -> Self {
+    fn new(
+        cleanup_root: Option<PathBuf>,
+        runtime_guard: Option<Arc<std::fs::File>>,
+        #[cfg(target_os = "linux")] linux: Option<crate::agent_runtime::linux::LinuxLaunchSpec>,
+    ) -> Self {
         Self {
             cleanup: RequestCleanup::new(cleanup_root),
             runtime_guard,
+            #[cfg(target_os = "linux")]
+            linux,
         }
     }
 
     fn finish(mut self) -> Result<(), RuntimeError> {
+        #[cfg(target_os = "linux")]
+        let linux_cleanup = self.linux.take().map_or(Ok(()), |linux| linux.finish());
         let cleanup = self.cleanup.cleanup();
         // The lease is released only after checked cleanup returns.
         self.runtime_guard.take();
+        #[cfg(target_os = "linux")]
+        {
+            match (linux_cleanup, cleanup) {
+                (Ok(()), Ok(())) => Ok(()),
+                (Err(error), _) if error.contains("deadline") => Err(RuntimeError::new(
+                    "cleanup_timeout",
+                    "Linux cgroup containment cleanup exceeded its deadline",
+                )),
+                (Err(_), _) => Err(RuntimeError::new(
+                    "cleanup_failed",
+                    "Linux cgroup containment could not be cleaned",
+                )),
+                (Ok(()), Err(error)) => Err(error),
+            }
+        }
+        #[cfg(not(target_os = "linux"))]
         cleanup
     }
 }
@@ -709,10 +750,16 @@ pub(crate) fn unix_command(spec: &ProcessSpec) -> tokio::process::Command {
         .envs(&spec.env);
     unsafe {
         let resource_limits = spec.resource_limits;
+        #[cfg(target_os = "linux")]
+        let linux = spec.linux.clone();
         command.pre_exec(move || {
             apply_resource_limits(resource_limits)?;
             if libc::setsid() == -1 {
                 return Err(std::io::Error::last_os_error());
+            }
+            #[cfg(target_os = "linux")]
+            if let Some(linux) = &linux {
+                linux.prepare_pre_exec()?;
             }
             Ok(())
         });
@@ -834,6 +881,12 @@ impl RunGuard {
     }
 
     fn kill_group(&self) {
+        #[cfg(target_os = "linux")]
+        if let Some(resources) = &self.resources {
+            if let Some(linux) = &resources.linux {
+                let _ = linux.kill();
+            }
+        }
         if !self.leader_reaped {
             // Lifecycle handle only. Platform sandboxes/cgroups are
             // authoritative for descendant containment.

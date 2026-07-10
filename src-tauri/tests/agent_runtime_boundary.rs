@@ -1,3 +1,8 @@
+#[cfg(target_os = "linux")]
+use app_lib::agent_runtime::linux::{
+    compile_seccomp_bpf, LinuxBackend, LinuxQualificationContext, LinuxSystemPaths,
+    OfflineLinuxProvisioningContainment,
+};
 use app_lib::agent_runtime::macos::{
     active_identity_hashers_for_test, build_seatbelt_profile, cirq_rlimit_probe_source,
     probe_request_guard_failure_for_test, qualification_cache_key, qualification_cache_key_async,
@@ -6,7 +11,7 @@ use app_lib::agent_runtime::macos::{
     SystemPaths,
 };
 use app_lib::agent_runtime::process::{ProcessSpec, ResourceLimits};
-#[cfg(any(target_os = "linux", target_os = "macos"))]
+#[cfg(target_os = "macos")]
 use app_lib::agent_runtime::qualify_current_host_with_context;
 use app_lib::agent_runtime::resources::RunnerContainment;
 use app_lib::agent_runtime::resources::{
@@ -153,6 +158,11 @@ fn offline_provisioning_remains_unavailable_without_a_bundled_verified_wheelhous
         OfflineProvisioningContainment.containment(),
         RunnerContainment::Unavailable
     );
+    #[cfg(target_os = "linux")]
+    assert_eq!(
+        OfflineLinuxProvisioningContainment.containment(),
+        RunnerContainment::Unavailable
+    );
 }
 
 #[test]
@@ -161,17 +171,128 @@ fn agent_test_lock_is_hash_locked_and_matches_the_direct_allowlist() {
 }
 
 #[cfg(target_os = "linux")]
-#[tokio::test]
-async fn linux_remains_unavailable_until_the_linux_backend_exists() {
+#[test]
+fn linux_seccomp_filter_is_nonempty_and_architecture_checked() {
+    let bpf = compile_seccomp_bpf().expect("supported CI architecture");
+    assert!(!bpf.is_empty());
+    assert_eq!(bpf.len() % 8, 0, "classic BPF instructions are 8 bytes");
+}
+
+#[cfg(target_os = "linux")]
+#[test]
+fn linux_worker_spec_uses_fixed_bwrap_boundary_and_cgroup_limits() {
     let fixture = fixture();
-    for mode in [
-        QualificationMode::AllowUnavailable,
-        QualificationMode::RequireAvailable,
+    let cgroup = fixture.context.request_temp_root.join("delegated-cgroup");
+    fs::create_dir(&cgroup).unwrap();
+    fs::write(cgroup.join("cgroup.controllers"), "cpu memory pids\n").unwrap();
+    fs::write(cgroup.join("cgroup.subtree_control"), "cpu memory pids\n").unwrap();
+    fs::write(cgroup.join("cgroup.procs"), "").unwrap();
+    fs::write(cgroup.join("cgroup.kill"), "").unwrap();
+    fs::write(cgroup.join("cgroup.events"), "populated 0\n").unwrap();
+    let bwrap = fixture.context.request_temp_root.join("bwrap");
+    fs::write(&bwrap, "#!/bin/sh\n").unwrap();
+    use std::os::unix::fs::PermissionsExt;
+    fs::set_permissions(&bwrap, fs::Permissions::from_mode(0o755)).unwrap();
+    let system_paths = LinuxSystemPaths::for_tests(
+        vec![fixture.context.system_paths.read_roots[1].clone()],
+        fixture.context.system_paths.devices.clone(),
+        canonical(bwrap),
+        canonical(cgroup),
+    )
+    .unwrap();
+    let context = LinuxQualificationContext::new(
+        fixture.context.app_version.clone(),
+        fixture.context.resources.clone(),
+        fixture.context.environment.clone(),
+        &fixture.context.request_temp_root,
+        &fixture.context.project_root,
+        &fixture.context.home_root,
+        fixture.context.parent_secret_names.clone(),
+        system_paths,
+    )
+    .unwrap();
+    let request = context.request_temp_root.join("linux-request");
+    fs::create_dir(&request).unwrap();
+    let spec = LinuxBackend::worker_spec(&context, &canonical(request)).unwrap();
+
+    assert_eq!(spec.executable, context.system_paths.bwrap);
+    for required in [
+        "--die-with-parent",
+        "--new-session",
+        "--unshare-all",
+        "--unshare-net",
+        "--clearenv",
+        "--tmpfs",
+        "/tmp",
+        "--proc",
+        "/proc",
+        "--dev",
+        "/dev",
+        "--seccomp",
     ] {
-        let report = qualify_current_host_with_context(mode, fixture.context.clone()).await;
-        assert!(!report.available);
-        assert!(report.qualified_frameworks.is_empty());
-        assert!(report.controls.is_empty());
+        assert!(spec.args.iter().any(|arg| arg == required), "{required}");
+    }
+    assert!(!spec.args.iter().any(|arg| {
+        arg == fixture.context.project_root.to_str().unwrap()
+            || arg == fixture.context.home_root.to_str().unwrap()
+    }));
+    assert_eq!(spec.env["HOME"], "/home/agent");
+    assert_eq!(spec.env["TMPDIR"], "/tmp");
+    assert_eq!(spec.resource_limits, ResourceLimits::production());
+    let child = spec
+        .linux
+        .as_ref()
+        .expect("Linux containment")
+        .cgroup_path();
+    assert_eq!(
+        fs::read_to_string(child.join("memory.max")).unwrap(),
+        "1073741824"
+    );
+    assert_eq!(
+        fs::read_to_string(child.join("memory.swap.max")).unwrap(),
+        "0"
+    );
+    assert_eq!(fs::read_to_string(child.join("pids.max")).unwrap(), "4");
+    assert_eq!(
+        fs::read_to_string(child.join("cpu.max")).unwrap(),
+        "100000 100000"
+    );
+}
+
+#[cfg(target_os = "linux")]
+#[tokio::test]
+async fn linux_required_qualification_passes_when_explicitly_required() {
+    if std::env::var_os("NUCLEI_REQUIRE_LINUX_AGENT_ISOLATION").as_deref()
+        != Some(std::ffi::OsStr::new("1"))
+    {
+        return;
+    }
+    let report = qualify_current_host(QualificationMode::RequireAvailable).await;
+    assert!(report.available, "{:?}", report.reason);
+    assert_eq!(report.qualified_frameworks, vec!["cirq"]);
+    for required in [
+        "bwrap",
+        "user_namespace",
+        "mount_namespace",
+        "pid_namespace",
+        "network_namespace",
+        "cgroup_v2",
+        "seccomp",
+        "rlimits",
+        "clean_environment",
+        "filesystem",
+        "subprocess",
+        "output_caps",
+        "cleanup",
+        "cirq",
+    ] {
+        assert!(
+            report
+                .controls
+                .iter()
+                .any(|control| control.name == required && control.self_test_passed),
+            "{required}"
+        );
     }
 }
 
