@@ -1,4 +1,5 @@
 import { kernelLanguageFor } from '../../types/quantum';
+import { execCheckAlgorithmInvariant } from './algorithmInvariantExecutor';
 import { compareDistributions, estimateResources, validateProgram } from './analysis';
 import {
   execAnalyzeHardwareResult,
@@ -340,6 +341,8 @@ export async function executeTool(
         return await execRunSimulation(args, toolCallId, ctx);
       case 'compare_quantum_results':
         return execCompareQuantumResults(args, toolCallId, ctx);
+      case 'check_algorithm_invariant':
+        return execCheckAlgorithmInvariant(args, toolCallId, ctx);
       case 'plan_hardware_run':
         return await execPlanHardwareRun(args, toolCallId, ctx);
       case 'submit_hardware_job':

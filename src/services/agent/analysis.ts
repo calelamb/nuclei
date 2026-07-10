@@ -16,9 +16,22 @@ export interface ResourceEstimate {
   multiQubitGateCount: number;
   measurementCount: number;
   gateHistogram: Record<string, number>;
+  /** Count of T / T-dagger gates — the standard proxy for non-Clifford
+   * ("magic state") cost in fault-tolerant resource estimation. */
+  tCount: number;
+  /** Count of gates acting on exactly one qubit (the complement of
+   * multiQubitGateCount among non-measurement-agnostic gates). */
+  singleQubitGateCount: number;
+  /** Count of gates that are not measurements — i.e. the "computational"
+   * portion of the circuit, useful for algorithm classification and
+   * resource reporting that wants to exclude readout. */
+  nonMeasurementGateCount: number;
 }
 
 const MEASUREMENT_TYPE_RE = /^(measure|m|mz|mresetz)$/i;
+
+/** T and T-dagger, in every spelling this codebase's adapters/tests use. */
+const T_GATE_TYPES = new Set(['T', 'TDG', 'T†', 'TDAGGER']);
 
 function involvedQubitCount(gate: Gate): number {
   return new Set([...gate.targets, ...gate.controls]).size;
@@ -31,6 +44,9 @@ export function estimateResources(snapshot: CircuitSnapshot): ResourceEstimate {
   let twoQubitGateCount = 0;
   let multiQubitGateCount = 0;
   let measurementCount = 0;
+  let tCount = 0;
+  let singleQubitGateCount = 0;
+  let nonMeasurementGateCount = 0;
 
   for (const gate of snapshot.gates) {
     const key = gate.type.toUpperCase();
@@ -39,7 +55,12 @@ export function estimateResources(snapshot: CircuitSnapshot): ResourceEstimate {
     const involved = involvedQubitCount(gate);
     if (involved === 2) twoQubitGateCount += 1;
     if (involved >= 2) multiQubitGateCount += 1;
-    if (MEASUREMENT_TYPE_RE.test(gate.type)) measurementCount += 1;
+    if (involved === 1) singleQubitGateCount += 1;
+    if (T_GATE_TYPES.has(key)) tCount += 1;
+
+    const isMeasurement = MEASUREMENT_TYPE_RE.test(gate.type);
+    if (isMeasurement) measurementCount += 1;
+    else nonMeasurementGateCount += 1;
   }
 
   return {
@@ -51,6 +72,9 @@ export function estimateResources(snapshot: CircuitSnapshot): ResourceEstimate {
     multiQubitGateCount,
     measurementCount,
     gateHistogram,
+    tCount,
+    singleQubitGateCount,
+    nonMeasurementGateCount,
   };
 }
 

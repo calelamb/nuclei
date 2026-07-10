@@ -65,6 +65,9 @@ Rules:
 - Use run_simulation to execute the program locally and obtain real probabilities and measurements.
 - Use compare_quantum_results to check the simulated probabilities against a numeric success criterion,
   when one was given.
+- After simulating a circuit you recognize as a canonical educational algorithm (Bell pair, GHZ state, or
+  uniform superposition), you may call check_algorithm_invariant to verify the result against that
+  algorithm's known-correct reference distribution instead of hand-deriving expected_probabilities yourself.
 - You may call plan_hardware_run to get a shadow-mode recommendation of a compatible hardware backend for
   the circuit, with an explainable score; this is analysis only for the user's consideration — it never
   submits a job or contacts a provider, and it is not a substitute for run_simulation.

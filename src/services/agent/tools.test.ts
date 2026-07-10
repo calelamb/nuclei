@@ -34,6 +34,15 @@ describe('AGENT_TOOLS', () => {
     expect(Object.keys(plan?.input_schema.properties ?? {})).toEqual(['path']);
   });
 
+  it('includes a check_algorithm_invariant tool with optional algorithm and tolerance inputs', () => {
+    const tool = AGENT_TOOLS.find((t) => t.name === 'check_algorithm_invariant');
+    expect(tool).toBeDefined();
+    expect(tool?.input_schema.required).toEqual([]);
+    expect(Object.keys(tool?.input_schema.properties ?? {})).toEqual(
+      expect.arrayContaining(['algorithm', 'tolerance']),
+    );
+  });
+
   it('has no duplicate tool names', () => {
     const names = AGENT_TOOLS.map((t) => t.name);
     expect(new Set(names).size).toBe(names.length);
@@ -46,6 +55,7 @@ describe('AGENT_TOOLS', () => {
         'analyze_hardware_result',
         'apply_patch',
         'cancel_hardware_job',
+        'check_algorithm_invariant',
         'compare_quantum_results',
         'estimate_quantum_resources',
         'finish',

@@ -93,6 +93,30 @@ function makeHardwareCtx(opts: HardwareCtxOptions = {}): { ctx: ToolContext; wor
   return { ctx, workspace };
 }
 
+/** Kernel whose parse() returns a correct 2-qubit Bell circuit snapshot and
+ * whose simulate() returns the given probabilities — lets tests drive
+ * check_algorithm_invariant against a "correct" or "wrong" simulation of
+ * the same classified circuit. */
+function makeBellKernel(probabilities: Record<string, number> = { '00': 0.5, '11': 0.5 }): KernelPort {
+  return {
+    parse: async (): Promise<ParseOutcome> => ({
+      ok: true,
+      snapshot: { framework: 'qiskit', qubit_count: 2, classical_bit_count: 2, depth: 3, gates: BELL_GATES },
+    }),
+    simulate: async (_code: string, shots: number): Promise<SimOutcome> => ({
+      ok: true,
+      result: {
+        state_vector: [],
+        probabilities,
+        measurements: {},
+        bloch_coords: [],
+        execution_time_ms: 3,
+        shot_count: shots,
+      },
+    }),
+  };
+}
+
 function makeBackend(overrides: Partial<BackendInfo> = {}): BackendInfo {
   return {
     name: 'test-backend',
@@ -261,6 +285,61 @@ describe('executeTool', () => {
       ctx,
       'tc1',
     );
+    expect(evidence.ok).toBe(false);
+  });
+
+  it('check_algorithm_invariant reports checked:false with a reason when no simulation has run yet', async () => {
+    const { ctx } = makeHardwareCtx({ kernel: makeBellKernel() });
+    const evidence = await executeTool('check_algorithm_invariant', {}, ctx, 'tc1');
+    expect(evidence.ok).toBe(true);
+    expect(evidence.facts.checked).toBe(false);
+    expect(evidence.facts.reason).toMatch(/run a simulation/i);
+  });
+
+  it('check_algorithm_invariant auto-classifies a Bell circuit and matches a correct simulation', async () => {
+    const { ctx } = makeHardwareCtx({ kernel: makeBellKernel({ '00': 0.5, '11': 0.5 }) });
+    await executeTool('parse_quantum_program', {}, ctx, 'tc1');
+    await executeTool('run_simulation', {}, ctx, 'tc2');
+    const evidence = await executeTool('check_algorithm_invariant', {}, ctx, 'tc3');
+    expect(evidence.ok).toBe(true);
+    expect(evidence.facts.checked).toBe(true);
+    expect(evidence.facts.algorithm).toBe('bell');
+    expect(evidence.facts.matches).toBe(true);
+    expect(evidence.facts.expected).toEqual({ '00': 0.5, '11': 0.5 });
+  });
+
+  it('check_algorithm_invariant flags a mismatch when the simulation diverges from the Bell reference', async () => {
+    const { ctx } = makeHardwareCtx({ kernel: makeBellKernel({ '00': 1.0 }) });
+    await executeTool('parse_quantum_program', {}, ctx, 'tc1');
+    await executeTool('run_simulation', {}, ctx, 'tc2');
+    const evidence = await executeTool('check_algorithm_invariant', {}, ctx, 'tc3');
+    expect(evidence.ok).toBe(true);
+    expect(evidence.facts.checked).toBe(true);
+    expect(evidence.facts.algorithm).toBe('bell');
+    expect(evidence.facts.matches).toBe(false);
+  });
+
+  it('check_algorithm_invariant reports checked:false for an algorithm with no fixed reference distribution', async () => {
+    const { ctx } = makeHardwareCtx({ kernel: makeBellKernel() });
+    await executeTool('run_simulation', {}, ctx, 'tc1');
+    const evidence = await executeTool('check_algorithm_invariant', { algorithm: 'teleportation' }, ctx, 'tc2');
+    expect(evidence.ok).toBe(true);
+    expect(evidence.facts.checked).toBe(false);
+    expect(evidence.facts.algorithm).toBe('teleportation');
+    expect(evidence.facts.reason).toMatch(/no fixed reference distribution/i);
+  });
+
+  it('check_algorithm_invariant rejects an invalid algorithm override without throwing', async () => {
+    const { ctx } = makeHardwareCtx({ kernel: makeBellKernel() });
+    await executeTool('run_simulation', {}, ctx, 'tc1');
+    const evidence = await executeTool('check_algorithm_invariant', { algorithm: 'shor' }, ctx, 'tc2');
+    expect(evidence.ok).toBe(false);
+  });
+
+  it('check_algorithm_invariant rejects a non-numeric tolerance without throwing', async () => {
+    const { ctx } = makeHardwareCtx({ kernel: makeBellKernel() });
+    await executeTool('run_simulation', {}, ctx, 'tc1');
+    const evidence = await executeTool('check_algorithm_invariant', { tolerance: 'loose' }, ctx, 'tc2');
     expect(evidence.ok).toBe(false);
   });
 

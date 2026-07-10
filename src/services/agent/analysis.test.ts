@@ -58,6 +58,10 @@ describe('estimateResources', () => {
     expect(estimate.multiQubitGateCount).toBe(1);
     expect(estimate.measurementCount).toBe(2);
     expect(estimate.gateHistogram).toEqual({ H: 1, CNOT: 1, MEASURE: 2 });
+    expect(estimate.tCount).toBe(0);
+    // H(0) plus the two single-qubit measure gates are each single-qubit.
+    expect(estimate.singleQubitGateCount).toBe(3);
+    expect(estimate.nonMeasurementGateCount).toBe(2);
   });
 
   it('summarizes a GHZ circuit', () => {
@@ -67,6 +71,29 @@ describe('estimateResources', () => {
     expect(estimate.twoQubitGateCount).toBe(2);
     expect(estimate.measurementCount).toBe(1);
     expect(estimate.gateHistogram).toEqual({ H: 1, CNOT: 2, MEASURE: 1 });
+    expect(estimate.tCount).toBe(0);
+    expect(estimate.singleQubitGateCount).toBe(1);
+    expect(estimate.nonMeasurementGateCount).toBe(3);
+  });
+
+  it('counts T and T-dagger gates as tCount regardless of spelling', () => {
+    const snapshot: CircuitSnapshot = {
+      framework: 'qiskit',
+      qubit_count: 1,
+      classical_bit_count: 0,
+      depth: 5,
+      gates: [
+        gate({ type: 'T', targets: [0] }),
+        gate({ type: 'tdg', targets: [0] }),
+        gate({ type: 'T†', targets: [0] }),
+        gate({ type: 'TDAGGER', targets: [0] }),
+        gate({ type: 'H', targets: [0] }),
+      ],
+    };
+    const estimate = estimateResources(snapshot);
+    expect(estimate.tCount).toBe(4);
+    expect(estimate.singleQubitGateCount).toBe(5);
+    expect(estimate.nonMeasurementGateCount).toBe(5);
   });
 
   it('uppercases gate types in the histogram regardless of source casing', () => {
@@ -87,6 +114,9 @@ describe('estimateResources', () => {
     expect(estimate.twoQubitGateCount).toBe(0);
     expect(estimate.measurementCount).toBe(0);
     expect(estimate.gateHistogram).toEqual({});
+    expect(estimate.tCount).toBe(0);
+    expect(estimate.singleQubitGateCount).toBe(0);
+    expect(estimate.nonMeasurementGateCount).toBe(0);
   });
 });
 
