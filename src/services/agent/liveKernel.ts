@@ -1,121 +1,163 @@
-import type { KernelLanguage, KernelMessage, KernelResponse } from '../../types/quantum';
+import type { CircuitSnapshot, Framework, KernelLanguage, SimulationResult } from '../../types/quantum';
 import type { KernelPort, ParseOutcome, SimOutcome } from './interfaces';
 
 /**
- * Minimal transport shape SessionKernel needs. The real desktop/web
- * transport (`KernelSession` in ../kernelSession.ts) exposes `send` plus a
- * message callback threaded through its constructor rather than a
- * subscribable `onMessage`; adapting one to the other at the call site is a
- * couple of lines. Keeping the port shape subscription-based here is what
- * makes SessionKernel unit-testable with a bare fake.
+ * Minimal transport shape SessionKernel needs to speak the isolated-worker
+ * `agent_execute` protocol (see kernel/agent_protocol.py + the
+ * `agent_execute` handler in kernel/server.py). This protocol is
+ * deliberately separate from the normal parse/execute KernelMessage /
+ * KernelResponse wire shapes used by useKernel.ts — every agent run
+ * executes in a disposable worker subprocess, correlated by request_id,
+ * rather than against the shared serial kernel session. Keeping the
+ * message types as `object`/`unknown` here (rather than importing the
+ * normal KernelMessage/KernelResponse union) keeps this adapter decoupled
+ * from that unrelated protocol and easy to fake in tests.
  */
 export interface KernelTransport {
-  send(message: KernelMessage): void | Promise<void>;
-  onMessage(handler: (message: KernelResponse) => void): () => void;
+  send(message: object): void;
+  onMessage(handler: (message: unknown) => void): () => void;
 }
 
-type PendingKind = 'parse' | 'execute';
+type AgentExecuteAction = 'parse' | 'simulate';
+
+interface AgentExecuteRequest {
+  type: 'agent_execute';
+  request_id: string;
+  action: AgentExecuteAction;
+  framework: Framework;
+  language: KernelLanguage;
+  code: string;
+  shots?: number;
+}
+
+interface AgentResultMessage {
+  type: 'agent_result';
+  request_id: string;
+  status: 'ok' | 'error';
+  snapshot: CircuitSnapshot | null;
+  result: SimulationResult | null;
+  stdout: string;
+  stderr: string;
+  error: { code?: string; message: string } | null;
+}
+
+function isAgentResultMessage(value: unknown): value is AgentResultMessage {
+  if (value === null || typeof value !== 'object') return false;
+  const v = value as Record<string, unknown>;
+  return v.type === 'agent_result' && typeof v.request_id === 'string';
+}
 
 interface PendingRequest {
-  kind: PendingKind;
+  kind: AgentExecuteAction;
   resolve: (outcome: ParseOutcome | SimOutcome) => void;
   timeoutHandle: ReturnType<typeof setTimeout>;
 }
 
 const DEFAULT_TIMEOUT_MS = 30_000;
 
+let requestCounter = 0;
+
+function generateRequestId(): string {
+  requestCounter += 1;
+  return `agent_${Date.now().toString(36)}_${requestCounter}`;
+}
+
+function outcomeFromAgentResult(kind: AgentExecuteAction, msg: AgentResultMessage): ParseOutcome | SimOutcome {
+  if (msg.status === 'ok') {
+    if (kind === 'parse') {
+      if (!msg.snapshot) return { ok: false, error: 'Kernel returned an empty snapshot.' };
+      return { ok: true, snapshot: msg.snapshot };
+    }
+    if (!msg.result) return { ok: false, error: 'Kernel returned an empty result.' };
+    return { ok: true, result: msg.result };
+  }
+  return { ok: false, error: msg.error?.message ?? `${kind} failed`, line: null };
+}
+
 /**
- * KernelPort backed by a live (or fake) serial kernel transport. The kernel
- * processes one message at a time and pushes back exactly one terminal
- * response per request (`snapshot`/`error` for parse, `result`/`error` for
- * execute) — so a simple FIFO queue of pending resolvers, matched by
- * response type and (for errors) phase, is enough to correlate requests
- * with responses without needing request ids on the wire.
+ * KernelPort backed by the isolated-worker `agent_execute` protocol. Every
+ * parse/simulate call is a fully self-contained request-response pair
+ * correlated by `request_id`, so unlike the normal serial kernel session,
+ * multiple requests may be in flight concurrently — there is no ordering
+ * assumption on the wire.
+ *
+ * The framework is not part of the KernelPort interface (parse/simulate
+ * only take `code` and `language`, matching orchestrator.ts and
+ * toolExecutors.ts unchanged), so it's supplied via a resolver function
+ * injected at construction time — typically reading the live workspace's
+ * currently active framework.
  */
 export class SessionKernel implements KernelPort {
-  private readonly queue: PendingRequest[] = [];
+  private readonly pending = new Map<string, PendingRequest>();
   private readonly unsubscribe: () => void;
   private readonly transport: KernelTransport;
+  private readonly resolveFramework: () => Framework;
   private readonly timeoutMs: number;
 
-  constructor(transport: KernelTransport, timeoutMs: number = DEFAULT_TIMEOUT_MS) {
+  constructor(transport: KernelTransport, resolveFramework: () => Framework, timeoutMs: number = DEFAULT_TIMEOUT_MS) {
     this.transport = transport;
+    this.resolveFramework = resolveFramework;
     this.timeoutMs = timeoutMs;
     this.unsubscribe = transport.onMessage((msg) => this.handleMessage(msg));
   }
 
-  private dequeueAndResolve(outcome: ParseOutcome | SimOutcome): void {
-    const pending = this.queue.shift();
+  private settle(requestId: string, outcome: ParseOutcome | SimOutcome): void {
+    const pending = this.pending.get(requestId);
     if (!pending) return;
+    this.pending.delete(requestId);
     clearTimeout(pending.timeoutHandle);
     pending.resolve(outcome);
   }
 
-  private handleMessage(msg: KernelResponse): void {
-    const pending = this.queue[0];
+  private handleMessage(msg: unknown): void {
+    if (!isAgentResultMessage(msg)) return;
+    const pending = this.pending.get(msg.request_id);
     if (!pending) return;
-
-    if (msg.type === 'snapshot' && pending.kind === 'parse') {
-      if (msg.data) {
-        this.dequeueAndResolve({ ok: true, snapshot: msg.data });
-      } else {
-        this.dequeueAndResolve({ ok: false, error: 'Kernel returned an empty snapshot.' });
-      }
-      return;
-    }
-
-    if (msg.type === 'result' && pending.kind === 'execute') {
-      if (msg.data) {
-        this.dequeueAndResolve({ ok: true, result: msg.data });
-      } else {
-        this.dequeueAndResolve({ ok: false, error: 'Kernel returned an empty result.' });
-      }
-      return;
-    }
-
-    if (msg.type === 'error') {
-      const matchesParse = pending.kind === 'parse' && (msg.phase === 'parse' || msg.phase === undefined);
-      const matchesExecute =
-        pending.kind === 'execute' && (msg.phase === 'execute' || msg.phase === 'python' || msg.phase === undefined);
-
-      if (matchesParse || matchesExecute) {
-        this.dequeueAndResolve({ ok: false, error: msg.message, line: null });
-      }
-    }
-    // All other response types (output/stderr/hardware_*) are not relevant
-    // to a pending parse/execute request and are ignored here.
+    this.settle(msg.request_id, outcomeFromAgentResult(pending.kind, msg));
   }
 
-  parse(code: string, language: KernelLanguage): Promise<ParseOutcome> {
-    return new Promise<ParseOutcome>((resolve) => {
+  private request(
+    kind: AgentExecuteAction,
+    build: (requestId: string) => AgentExecuteRequest,
+  ): Promise<ParseOutcome | SimOutcome> {
+    return new Promise((resolve) => {
+      const requestId = generateRequestId();
       const entry: PendingRequest = {
-        kind: 'parse',
-        resolve: resolve as (outcome: ParseOutcome | SimOutcome) => void,
+        kind,
+        resolve,
         timeoutHandle: setTimeout(() => {
-          const idx = this.queue.indexOf(entry);
-          if (idx !== -1) this.queue.splice(idx, 1);
-          resolve({ ok: false, error: 'Timed out waiting for the kernel to parse.' });
+          this.pending.delete(requestId);
+          resolve({ ok: false, error: 'Timed out waiting for the kernel.' });
         }, this.timeoutMs),
       };
-      this.queue.push(entry);
-      void this.transport.send({ type: 'parse', code, language });
+      this.pending.set(requestId, entry);
+      this.transport.send(build(requestId));
     });
   }
 
-  simulate(code: string, shots: number, language: KernelLanguage): Promise<SimOutcome> {
-    return new Promise<SimOutcome>((resolve) => {
-      const entry: PendingRequest = {
-        kind: 'execute',
-        resolve: resolve as (outcome: ParseOutcome | SimOutcome) => void,
-        timeoutHandle: setTimeout(() => {
-          const idx = this.queue.indexOf(entry);
-          if (idx !== -1) this.queue.splice(idx, 1);
-          resolve({ ok: false, error: 'Timed out waiting for the kernel to execute.' });
-        }, this.timeoutMs),
-      };
-      this.queue.push(entry);
-      void this.transport.send({ type: 'execute', code, shots, language });
-    });
+  async parse(code: string, language: KernelLanguage): Promise<ParseOutcome> {
+    const outcome = await this.request('parse', (requestId) => ({
+      type: 'agent_execute',
+      request_id: requestId,
+      action: 'parse',
+      framework: this.resolveFramework(),
+      language,
+      code,
+    }));
+    return outcome as ParseOutcome;
+  }
+
+  async simulate(code: string, shots: number, language: KernelLanguage): Promise<SimOutcome> {
+    const outcome = await this.request('simulate', (requestId) => ({
+      type: 'agent_execute',
+      request_id: requestId,
+      action: 'simulate',
+      framework: this.resolveFramework(),
+      language,
+      code,
+      shots,
+    }));
+    return outcome as SimOutcome;
   }
 
   /** Detach from the transport. Safe to call once; further messages are
