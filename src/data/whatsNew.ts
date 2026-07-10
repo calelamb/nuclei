@@ -23,34 +23,34 @@ export interface WhatsNewEntry {
 }
 
 export const WHATS_NEW: WhatsNewEntry = {
-  version: '0.5.1',
-  title: 'Sharper edges, fixed',
-  tagline: 'A cleanup release — hardware, Bloch, Dirac, and Q# all get more trustworthy.',
+  version: '0.5.2',
+  title: 'Dirac goes agentic',
+  tagline: 'Dirac can now write, simulate, verify, and repair quantum programs — and reason about real hardware.',
   highlights: [
     {
-      icon: 'hardware',
-      title: 'No more haunted job strip',
-      text: 'Stale failed jobs no longer linger in the launch strip after a run.',
-    },
-    {
-      icon: 'hardware',
-      title: 'Hardware connections that work',
-      text: 'IBM and IonQ connections configured from Settings actually authenticate now.',
+      icon: 'dirac',
+      title: 'Closed-loop coding',
+      text: 'Give Dirac a goal and it writes a circuit, simulates it, checks the result, and fixes its own mistakes.',
     },
     {
       icon: 'circuit',
-      title: 'Bloch sphere, correctly ordered',
-      text: 'Qiskit qubits map to the right axes on the Bloch sphere again.',
+      title: 'Algorithm-aware verification',
+      text: 'Dirac recognizes Bell, GHZ, and superposition circuits and checks them against their known-correct results.',
     },
     {
-      icon: 'dirac',
-      title: 'Dirac settings that apply',
-      text: 'Model, thinking mode, and context depth changes now actually take effect.',
+      icon: 'editor',
+      title: 'Isolated, safe execution',
+      text: 'Code Dirac runs executes in a disposable sandbox, walled off from your files and credentials.',
     },
     {
-      icon: 'qsharp',
-      title: 'Runaway Q# times out cleanly',
-      text: 'Long-running Q# programs stop with a clear message instead of hanging.',
+      icon: 'hardware',
+      title: 'Real transpilation previews',
+      text: "See a circuit's true depth and gate cost on a target backend before you ever submit.",
+    },
+    {
+      icon: 'hardware',
+      title: 'Explainable backend picks',
+      text: 'Dirac recommends a compatible quantum backend and shows exactly why.',
     },
   ],
 };
