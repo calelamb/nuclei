@@ -1406,7 +1406,10 @@ The pure-Rust `seccompiler` filter is compiled for the verified host
 architecture, serialized into a sealed memfd, and inherited only by bwrap.
 Bubblewrap applies it after namespace/mount setup. It denies the socket family
 operations, `fork`, `vfork`, `clone3`, `execveat`, and non-`CLONE_THREAD`
-`clone`, while parent rlimits and Python limits remain defense in depth.
+`clone`. Denials return `ENOSYS`, so modern libc safely falls back from denied
+`clone3` to the argument-filtered `clone` path for `pthread_create`; the pids
+probe proves threads remain available while process creation stays denied.
+Parent rlimits and Python limits remain defense in depth.
 Production specifications expose only the locked generation, narrowly scoped
 loader/library roots, tmpfs `/tmp`, proc, minimal dev, and synthetic home, with
 an exact environment allowlist.

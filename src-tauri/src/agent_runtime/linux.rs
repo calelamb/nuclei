@@ -913,7 +913,10 @@ pub fn compile_seccomp_bpf() -> Result<Vec<u8>, String> {
     let program: BpfProgram = SeccompFilter::new(
         rules,
         SeccompAction::Allow,
-        SeccompAction::Errno(libc::EPERM as u32),
+        // ENOSYS keeps every matched syscall denied while allowing glibc's
+        // pthread_create path to fall back from denied clone3 to the
+        // argument-filtered clone syscall.
+        SeccompAction::Errno(libc::ENOSYS as u32),
         arch,
     )
     .map_err(|error| format!("Linux seccomp filter is invalid: {error}"))?
@@ -1956,31 +1959,31 @@ async fn qualification_probes(context: &LinuxQualificationContext) -> Result<(),
         ),
         (
             "IPv4 socket",
-            "import cirq,errno,socket\ntry: socket.socket(socket.AF_INET,socket.SOCK_STREAM)\nexcept OSError as e: assert e.errno==errno.EPERM,e\nelse: raise AssertionError('IPv4 socket escaped')".into(),
+            "import cirq,errno,socket\ntry: socket.socket(socket.AF_INET,socket.SOCK_STREAM)\nexcept OSError as e: assert e.errno==errno.ENOSYS,e\nelse: raise AssertionError('IPv4 socket escaped')".into(),
         ),
         (
             "IPv6 socket",
-            "import cirq,errno,socket\ntry: socket.socket(socket.AF_INET6,socket.SOCK_STREAM)\nexcept OSError as e: assert e.errno==errno.EPERM,e\nelse: raise AssertionError('IPv6 socket escaped')".into(),
+            "import cirq,errno,socket\ntry: socket.socket(socket.AF_INET6,socket.SOCK_STREAM)\nexcept OSError as e: assert e.errno==errno.ENOSYS,e\nelse: raise AssertionError('IPv6 socket escaped')".into(),
         ),
         (
             "Unix socket",
-            "import cirq,errno,socket\ntry: socket.socket(socket.AF_UNIX,socket.SOCK_STREAM)\nexcept OSError as e: assert e.errno==errno.EPERM,e\nelse: raise AssertionError('Unix socket escaped')".into(),
+            "import cirq,errno,socket\ntry: socket.socket(socket.AF_UNIX,socket.SOCK_STREAM)\nexcept OSError as e: assert e.errno==errno.ENOSYS,e\nelse: raise AssertionError('Unix socket escaped')".into(),
         ),
         (
             "subprocess id",
-            "import cirq,errno,subprocess\ntry: subprocess.run(['/usr/bin/id'],check=True)\nexcept OSError as e: assert e.errno==errno.EPERM,e\nelse: raise AssertionError('subprocess escaped')".into(),
+            "import cirq,errno,subprocess\ntry: subprocess.run(['/usr/bin/id'],check=True)\nexcept OSError as e: assert e.errno==errno.ENOSYS,e\nelse: raise AssertionError('subprocess escaped')".into(),
         ),
         (
             "fork setsid",
-            "import cirq,errno,os\ntry:\n p=os.fork()\n if p==0: os.setsid();os._exit(0)\nexcept OSError as e: assert e.errno==errno.EPERM,e\nelse: raise AssertionError('fork escaped')".into(),
+            "import cirq,errno,os\ntry:\n p=os.fork()\n if p==0: os.setsid();os._exit(0)\nexcept OSError as e: assert e.errno==errno.ENOSYS,e\nelse: raise AssertionError('fork escaped')".into(),
         ),
         (
             "clone",
-            "import cirq,ctypes,errno,os,platform,signal\nnumber={'x86_64':56,'aarch64':220,'riscv64':220}[platform.machine()]\nctypes.set_errno(0)\nr=ctypes.CDLL(None,use_errno=True).syscall(number,signal.SIGCHLD,0,0,0,0)\nassert r==-1 and ctypes.get_errno()==errno.EPERM,(r,ctypes.get_errno())".into(),
+            "import cirq,ctypes,errno,os,platform,signal\nnumber={'x86_64':56,'aarch64':220,'riscv64':220}[platform.machine()]\nctypes.set_errno(0)\nr=ctypes.CDLL(None,use_errno=True).syscall(number,signal.SIGCHLD,0,0,0,0)\nassert r==-1 and ctypes.get_errno()==errno.ENOSYS,(r,ctypes.get_errno())".into(),
         ),
         (
             "execveat",
-            "import cirq,ctypes,errno,platform\nnumber={'x86_64':322,'aarch64':281,'riscv64':281}[platform.machine()]\nctypes.set_errno(0)\nr=ctypes.CDLL(None,use_errno=True).syscall(number,-1,0,0,0,0)\nassert r==-1 and ctypes.get_errno()==errno.EPERM,(r,ctypes.get_errno())".into(),
+            "import cirq,ctypes,errno,platform\nnumber={'x86_64':322,'aarch64':281,'riscv64':281}[platform.machine()]\nctypes.set_errno(0)\nr=ctypes.CDLL(None,use_errno=True).syscall(number,-1,0,0,0,0)\nassert r==-1 and ctypes.get_errno()==errno.ENOSYS,(r,ctypes.get_errno())".into(),
         ),
         (
             "fd rlimit",

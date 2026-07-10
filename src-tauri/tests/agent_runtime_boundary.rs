@@ -197,6 +197,11 @@ fn linux_seccomp_filter_is_nonempty_and_architecture_checked() {
     let bpf = compile_seccomp_bpf().expect("supported CI architecture");
     assert!(!bpf.is_empty());
     assert_eq!(bpf.len() % 8, 0, "classic BPF instructions are 8 bytes");
+    assert!(
+        include_str!("../src/agent_runtime/linux.rs")
+            .contains("SeccompAction::Errno(libc::ENOSYS as u32)"),
+        "denied clone3 must permit libc's safe clone fallback for threads"
+    );
 }
 
 #[cfg(target_os = "linux")]
