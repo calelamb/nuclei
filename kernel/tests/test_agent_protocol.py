@@ -199,3 +199,95 @@ def test_response_is_exactly_one_compact_utf8_json_line() -> None:
 def test_response_rejects_non_finite_numbers() -> None:
     with pytest.raises(ValueError):
         response_bytes("r-1", "ok", None, {"value": float("nan")}, "", "", None)
+
+
+def transpile_request_bytes(**changes: object) -> bytes:
+    value = {
+        "protocol_version": PROTOCOL_VERSION,
+        "request_id": "r-1",
+        "action": "transpile",
+        "framework": "qiskit",
+        "language": "python",
+        "code": "from qiskit import QuantumCircuit\nqc = QuantumCircuit(1)",
+    }
+    value.update(changes)
+    return json.dumps(value, ensure_ascii=False).encode("utf-8")
+
+
+def test_accepts_minimal_transpile_request() -> None:
+    parsed = parse_request(transpile_request_bytes())
+
+    assert parsed == AgentRequest(
+        request_id="r-1",
+        action="transpile",
+        framework="qiskit",
+        language="python",
+        code="from qiskit import QuantumCircuit\nqc = QuantumCircuit(1)",
+        shots=None,
+        basis_gates=None,
+        coupling_map=None,
+        optimization_level=None,
+    )
+
+
+def test_accepts_transpile_request_with_all_optional_fields() -> None:
+    parsed = parse_request(
+        transpile_request_bytes(
+            basis_gates=["u", "cx"],
+            coupling_map=[[0, 1], [1, 0]],
+            optimization_level=3,
+        )
+    )
+
+    assert parsed.basis_gates == ["u", "cx"]
+    assert parsed.coupling_map == [[0, 1], [1, 0]]
+    assert parsed.optimization_level == 3
+
+
+def test_accepts_transpile_request_with_explicit_null_optional_fields() -> None:
+    parsed = parse_request(
+        transpile_request_bytes(basis_gates=None, coupling_map=None, optimization_level=None)
+    )
+
+    assert parsed.basis_gates is None
+    assert parsed.coupling_map is None
+    assert parsed.optimization_level is None
+
+
+@pytest.mark.parametrize(
+    ("name", "changes", "error"),
+    [
+        ("non-qiskit framework", {"framework": "cirq", "language": "python"}, "transpile_requires_qiskit"),
+        ("shots present", {"shots": 128}, "transpile_forbids_shots"),
+        ("non-list basis_gates", {"basis_gates": "u"}, "invalid_basis_gates"),
+        ("non-string basis_gates entries", {"basis_gates": [1, 2]}, "invalid_basis_gates"),
+        ("non-list coupling_map", {"coupling_map": "bad"}, "invalid_coupling_map"),
+        ("coupling_map pair wrong length", {"coupling_map": [[0, 1, 2]]}, "invalid_coupling_map"),
+        ("coupling_map non-int entries", {"coupling_map": [[0, 1.5]]}, "invalid_coupling_map"),
+        ("coupling_map boolean entries", {"coupling_map": [[0, True]]}, "invalid_coupling_map"),
+        ("optimization_level too high", {"optimization_level": 4}, "invalid_optimization_level"),
+        ("optimization_level negative", {"optimization_level": -1}, "invalid_optimization_level"),
+        ("optimization_level boolean", {"optimization_level": True}, "invalid_optimization_level"),
+        ("optimization_level non-int", {"optimization_level": 1.5}, "invalid_optimization_level"),
+    ],
+)
+def test_rejects_invalid_transpile_request_matrix(name: str, changes: dict, error: str) -> None:
+    with pytest.raises(ProtocolError, match=f"^{error}$"):
+        parse_request(transpile_request_bytes(**changes))
+
+
+def test_parse_forbids_transpile_only_fields() -> None:
+    value = json.loads(request_bytes(action="parse"))
+    del value["shots"]
+    value["basis_gates"] = ["u"]
+
+    with pytest.raises(ProtocolError, match="^transpile_fields_forbidden$"):
+        parse_request(json.dumps(value).encode("utf-8"))
+
+
+def test_simulate_forbids_transpile_only_fields() -> None:
+    value = json.loads(request_bytes())
+    value["optimization_level"] = 1
+
+    with pytest.raises(ProtocolError, match="^transpile_fields_forbidden$"):
+        parse_request(json.dumps(value).encode("utf-8"))

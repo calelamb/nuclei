@@ -41,6 +41,7 @@ function makeCtx(snapshot?: CircuitSnapshot, sim?: SimulationResult): ToolContex
     kernel: {
       parse: async () => ({ ok: true, snapshot: snapshot ?? { framework: 'qiskit', qubit_count: 0, classical_bit_count: 0, depth: 0, gates: [] } }),
       simulate: async () => ({ ok: true, result: sim ?? simResult({}) }),
+      transpile: async () => ({ ok: false, error: 'transpile not exercised by the golden corpus' }),
     },
     lastSim: { result: sim },
     lastSnapshot: { snapshot },

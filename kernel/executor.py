@@ -361,3 +361,101 @@ class Executor:
             )
 
         return result, snapshot, stdout, stderr, None
+
+    def transpile(
+        self,
+        code: str,
+        *,
+        basis_gates: list[str] | None = None,
+        coupling_map: list[list[int]] | None = None,
+        optimization_level: int = 1,
+        language: str | None = None,
+    ) -> tuple[dict | None, str, str, KernelError | None]:
+        """Build a Qiskit circuit from `code` and transpile it against a target.
+
+        Return shape mirrors parse()/execute(): (payload, stdout, stderr,
+        error). The payload is a plain metrics dict rather than a typed
+        dataclass — there is no CircuitSnapshot/SimulationResult equivalent
+        for a transpile preview, just depth/gate-count/mapping facts.
+
+        Qiskit-only: any other detected (or absent) framework returns a
+        `transpile_unsupported_framework` KernelError instead of running,
+        since qiskit.transpile has no meaning for cirq/Q# circuit objects.
+        qiskit is imported lazily inside this method, matching the rest of
+        the module's no-import-time-dependency pattern.
+        """
+        spec = self._resolve_spec(code, language)
+        if spec is None or spec.framework != "qiskit":
+            return None, "", "", KernelError(
+                code="transpile_unsupported_framework",
+                message="Transpilation preview currently supports Qiskit circuits.",
+                framework=spec.framework if spec else None,
+            )
+
+        adapter, adapter_error = self._load_adapter(spec)
+        if adapter_error:
+            return None, "", "", adapter_error
+
+        stdout, stderr, error = self._run_code(code)
+        if error:
+            error = self._normalize_runtime_error(spec, error)
+            error.framework = spec.framework
+            return None, stdout, stderr, error
+
+        try:
+            circuit = adapter.find_circuit(self._namespace)
+        except Exception as exc:
+            return None, stdout, stderr, self._capability_error(spec, exc, "adapter_error")
+
+        if circuit is None:
+            return None, stdout, stderr, KernelError(
+                code="no_circuit",
+                message="No quantum circuit found in code.",
+                framework=spec.framework,
+            )
+
+        try:
+            from qiskit import transpile as qiskit_transpile
+        except ImportError as exc:
+            dependency = exc.name or "qiskit"
+            return None, stdout, stderr, KernelError(
+                code="missing_dependency",
+                message=_missing_dependency_message(spec.framework, dependency),
+                framework=spec.framework,
+                dependency=dependency,
+            )
+
+        try:
+            transpiled = qiskit_transpile(
+                circuit,
+                basis_gates=basis_gates or None,
+                coupling_map=coupling_map or None,
+                optimization_level=optimization_level,
+            )
+        except Exception:
+            tb = traceback.format_exc()
+            return None, stdout, stderr, KernelError(
+                code="adapter_error",
+                message=_short_error_message(tb),
+                traceback=tb,
+                framework=spec.framework,
+            )
+
+        gate_counts: dict[str, int] = {}
+        two_qubit_count = 0
+        for instruction in transpiled.data:
+            name = instruction.operation.name
+            gate_counts[name] = gate_counts.get(name, 0) + 1
+            if len(instruction.qubits) == 2:
+                two_qubit_count += 1
+
+        metrics = {
+            "depth": transpiled.depth(),
+            "gate_counts": gate_counts,
+            "two_qubit_count": two_qubit_count,
+            "num_qubits": transpiled.num_qubits,
+            "basis_gates": list(basis_gates) if basis_gates else None,
+            "coupling_mapped": bool(coupling_map),
+        }
+
+        return metrics, stdout, stderr, None

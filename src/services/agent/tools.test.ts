@@ -27,6 +27,15 @@ describe('AGENT_TOOLS', () => {
     expect(finish?.input_schema.required).toEqual(expect.arrayContaining(['summary', 'success']));
   });
 
+  it('includes a preview_backend_transpilation tool with optional path and backend inputs', () => {
+    const tool = AGENT_TOOLS.find((t) => t.name === 'preview_backend_transpilation');
+    expect(tool).toBeDefined();
+    expect(tool?.input_schema.required).toEqual([]);
+    expect(Object.keys(tool?.input_schema.properties ?? {})).toEqual(
+      expect.arrayContaining(['path', 'backend']),
+    );
+  });
+
   it('includes a plan_hardware_run tool with an optional path input', () => {
     const plan = AGENT_TOOLS.find((t) => t.name === 'plan_hardware_run');
     expect(plan).toBeDefined();
@@ -63,6 +72,7 @@ describe('AGENT_TOOLS', () => {
         'parse_quantum_program',
         'plan_hardware_run',
         'poll_hardware_job',
+        'preview_backend_transpilation',
         'read_quantum_file',
         'rollback_patch',
         'run_simulation',

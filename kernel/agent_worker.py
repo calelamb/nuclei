@@ -105,6 +105,20 @@ def bounded_response(
     return replacement
 
 
+def _result_payload(result: Any) -> dict[str, Any] | None:
+    """Normalize a parse/simulate/transpile payload to a JSON-able dict.
+
+    parse()/execute() return typed dataclasses (CircuitSnapshot,
+    SimulationResult) with a `to_dict()` method; transpile() returns a
+    plain metrics dict directly, since there is no dataclass equivalent
+    for a transpile preview. Both shapes end up as an ordinary dict here.
+    """
+    if result is None:
+        return None
+    to_dict = getattr(result, "to_dict", None)
+    return to_dict() if callable(to_dict) else result
+
+
 def execute_request(request, limits: WorkerLimits) -> bytes:
     from kernel.executor import Executor
 
@@ -146,18 +160,26 @@ def execute_request(request, limits: WorkerLimits) -> bytes:
             language=request.language,
         )
         result = None
-    else:
+    elif request.action == "simulate":
         result, snapshot, stdout, stderr, error = executor.execute(
             request.code,
             request.shots,
             language=request.language,
         )
+    else:  # transpile
+        result, stdout, stderr, error = executor.transpile(
+            request.code,
+            basis_gates=request.basis_gates,
+            coupling_map=request.coupling_map,
+            optimization_level=request.optimization_level or 1,
+        )
+        snapshot = None
 
     return bounded_response(
         request.request_id,
         "error" if error else "ok",
         snapshot.to_dict() if snapshot else None,
-        result.to_dict() if result else None,
+        _result_payload(result),
         truncate_utf8(stdout, limits.output_bytes),
         truncate_utf8(stderr, limits.output_bytes),
         error.to_dict() if error else None,

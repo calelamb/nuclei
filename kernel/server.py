@@ -579,6 +579,9 @@ async def handle_message(websocket):
             }
             if "shots" in msg:
                 request["shots"] = msg.get("shots")
+            for field in ("basis_gates", "coupling_map", "optimization_level"):
+                if field in msg:
+                    request[field] = msg.get(field)
             worker_response = await run_agent_worker(request)
             await websocket.send(json.dumps({
                 "type": "agent_result",

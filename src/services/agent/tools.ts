@@ -175,6 +175,24 @@ export const PLAN_HARDWARE_RUN_TOOL: AgentToolSchema = {
   },
 };
 
+export const PREVIEW_BACKEND_TRANSPILATION_TOOL: AgentToolSchema = {
+  name: 'preview_backend_transpilation',
+  description:
+    'Transpile the parsed circuit against a target hardware backend\'s real basis gates and coupling map ' +
+    "using qiskit's transpiler, and report the resulting depth, gate counts, and two-qubit-gate count. " +
+    'Qiskit circuits only — other frameworks report unavailable rather than erroring. This is analysis only; ' +
+    'it never submits a job.',
+  input_schema: {
+    type: 'object',
+    properties: {
+      path: { type: 'string', description: 'Workspace-relative file path; defaults to the active file.' },
+      backend: { type: 'string', description: 'Name of the backend to target; defaults to the first online backend.' },
+    },
+    required: [],
+    additionalProperties: false,
+  },
+};
+
 export const SUBMIT_HARDWARE_JOB_TOOL: AgentToolSchema = {
   name: 'submit_hardware_job',
   description:
@@ -267,6 +285,7 @@ export const AGENT_TOOLS: AgentToolSchema[] = [
   COMPARE_QUANTUM_RESULTS_TOOL,
   CHECK_ALGORITHM_INVARIANT_TOOL,
   PLAN_HARDWARE_RUN_TOOL,
+  PREVIEW_BACKEND_TRANSPILATION_TOOL,
   SUBMIT_HARDWARE_JOB_TOOL,
   POLL_HARDWARE_JOB_TOOL,
   CANCEL_HARDWARE_JOB_TOOL,

@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { BackendInfo } from '../../types/hardware';
 import type { Gate } from '../../types/quantum';
 import { BudgetLedger } from './budgetLedger';
-import type { KernelPort, ParseOutcome, SimOutcome } from './interfaces';
+import type { KernelPort, ParseOutcome, SimOutcome, TranspileOutcome } from './interfaces';
 import { DEFAULT_POLICY } from './policy';
 import type { AutonomyPolicy, SubmissionFacts } from './policy';
 import { FakeSubmitPort } from './submitPort';
@@ -37,6 +37,10 @@ function makeFakeKernel(overrides: Partial<KernelPort> = {}): KernelPort {
         execution_time_ms: 3,
         shot_count: shots,
       },
+    }),
+    transpile: async (): Promise<TranspileOutcome> => ({
+      ok: true,
+      metrics: { depth: 2, gateCounts: { u: 2, cx: 1 }, twoQubitCount: 1, numQubits: 2, couplingMapped: false },
     }),
     ...overrides,
   };
@@ -113,6 +117,10 @@ function makeBellKernel(probabilities: Record<string, number> = { '00': 0.5, '11
         execution_time_ms: 3,
         shot_count: shots,
       },
+    }),
+    transpile: async (): Promise<TranspileOutcome> => ({
+      ok: false,
+      error: 'transpile not exercised by makeBellKernel',
     }),
   };
 }
@@ -469,6 +477,98 @@ describe('executeTool', () => {
   it('plan_hardware_run fails without throwing for an unknown path', async () => {
     const { ctx } = makeCtx(makeFakeKernel(), () => [makeBackend()]);
     const evidence = await executeTool('plan_hardware_run', { path: 'missing.py' }, ctx, 'tc1');
+    expect(evidence.ok).toBe(false);
+  });
+
+  it('preview_backend_transpilation reports unavailable when the active framework is not qiskit', async () => {
+    const workspace = new InMemoryWorkspace([
+      { path: 'main.qs', framework: 'qsharp', content: 'operation Main() : Unit {}', dirty: false },
+    ]);
+    const ctx: ToolContext = {
+      workspace,
+      kernel: makeFakeKernel(),
+      lastSim: {},
+      resolveFramework: defaultFrameworkResolver(workspace),
+      lastKnownHash: new Map(),
+      getBackends: () => [makeBackend()],
+    };
+    const evidence = await executeTool('preview_backend_transpilation', { path: 'main.qs' }, ctx, 'tc1');
+    expect(evidence.ok).toBe(true);
+    expect(evidence.facts.available).toBe(false);
+    expect(evidence.facts.message).toMatch(/qiskit/i);
+  });
+
+  it('preview_backend_transpilation reports unavailable when no backend is available', async () => {
+    const { ctx } = makeCtx(makeFakeKernel(), () => []);
+    const evidence = await executeTool('preview_backend_transpilation', {}, ctx, 'tc1');
+    expect(evidence.ok).toBe(true);
+    expect(evidence.facts.available).toBe(false);
+  });
+
+  it('preview_backend_transpilation reports unavailable for an unknown named backend', async () => {
+    const { ctx } = makeCtx(makeFakeKernel(), () => [makeBackend({ name: 'ibm-brisbane' })]);
+    const evidence = await executeTool(
+      'preview_backend_transpilation',
+      { backend: 'nope' },
+      ctx,
+      'tc1',
+    );
+    expect(evidence.ok).toBe(true);
+    expect(evidence.facts.available).toBe(false);
+    expect(evidence.facts.message).toMatch(/nope/);
+  });
+
+  it('preview_backend_transpilation calls kernel.transpile with the backend gate set/coupling map and returns metrics', async () => {
+    const seen: Array<{ code: string; target: unknown }> = [];
+    const kernel = makeFakeKernel({
+      transpile: async (code, target) => {
+        seen.push({ code, target });
+        return {
+          ok: true,
+          metrics: { depth: 4, gateCounts: { u: 3, cx: 2 }, twoQubitCount: 2, numQubits: 2, couplingMapped: true },
+        };
+      },
+    });
+    const backend = makeBackend({
+      name: 'ibm-brisbane',
+      gateSet: ['H', 'CX', 'Measure'],
+      connectivity: [[0, 1], [1, 2]],
+    });
+    const { ctx } = makeCtx(kernel, () => [backend]);
+
+    const evidence = await executeTool('preview_backend_transpilation', {}, ctx, 'tc1');
+
+    expect(evidence.ok).toBe(true);
+    expect(evidence.facts.available).toBe(true);
+    expect(evidence.facts.backend).toBe('ibm-brisbane');
+    expect(evidence.facts.metrics).toEqual({
+      depth: 4,
+      gateCounts: { u: 3, cx: 2 },
+      twoQubitCount: 2,
+      numQubits: 2,
+      couplingMapped: true,
+    });
+    expect(typeof evidence.facts.note).toBe('string');
+    expect(seen).toHaveLength(1);
+    expect(seen[0].code).toBe(BELL_CODE);
+    expect(seen[0].target).toEqual({ basisGates: ['h', 'cx', 'measure'], couplingMap: [[0, 1], [1, 2]] });
+  });
+
+  it('preview_backend_transpilation fails without throwing when the kernel reports an error', async () => {
+    const kernel = makeFakeKernel({
+      transpile: async () => ({ ok: false, error: 'TranspilerError: could not map to coupling map' }),
+    });
+    const { ctx } = makeCtx(kernel, () => [makeBackend()]);
+
+    const evidence = await executeTool('preview_backend_transpilation', {}, ctx, 'tc1');
+
+    expect(evidence.ok).toBe(false);
+    expect(evidence.diagnostics).toMatch(/TranspilerError/);
+  });
+
+  it('preview_backend_transpilation fails without throwing for an unknown path', async () => {
+    const { ctx } = makeCtx(makeFakeKernel(), () => [makeBackend()]);
+    const evidence = await executeTool('preview_backend_transpilation', { path: 'missing.py' }, ctx, 'tc1');
     expect(evidence.ok).toBe(false);
   });
 

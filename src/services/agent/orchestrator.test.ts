@@ -1,5 +1,14 @@
 import { describe, expect, it } from 'vitest';
-import type { KernelPort, ModelMessage, ModelPort, ModelReply, ModelToolUse, ParseOutcome, SimOutcome } from './interfaces';
+import type {
+  KernelPort,
+  ModelMessage,
+  ModelPort,
+  ModelReply,
+  ModelToolUse,
+  ParseOutcome,
+  SimOutcome,
+  TranspileOutcome,
+} from './interfaces';
 import { InMemoryJournal } from './journal';
 import { runAgent } from './orchestrator';
 import type { JournalEntry } from './types';
@@ -63,6 +72,9 @@ function makeKernel(): KernelPort {
           shot_count: shots,
         },
       };
+    },
+    async transpile(): Promise<TranspileOutcome> {
+      return { ok: false, error: 'transpile not exercised by this test kernel' };
     },
   };
 }

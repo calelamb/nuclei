@@ -64,9 +64,35 @@ export type SimOutcome =
   | { ok: true; result: SimulationResult }
   | { ok: false; error: string; line?: number | null };
 
+// ---------------------------------------------------------------------------
+// Transpile preview — real qiskit-transpiler metrics for a target backend's
+// basis gates / coupling map. Qiskit-only for now; cirq/qsharp/no-circuit
+// cases surface as an ok:false outcome with a plain-English reason rather
+// than throwing, matching ParseOutcome/SimOutcome's shape.
+// ---------------------------------------------------------------------------
+
+export interface TranspileTarget {
+  basisGates?: string[];
+  couplingMap?: Array<[number, number]>;
+  optimizationLevel?: number;
+}
+
+export interface TranspileMetrics {
+  depth: number;
+  gateCounts: Record<string, number>;
+  twoQubitCount: number;
+  numQubits: number;
+  couplingMapped: boolean;
+}
+
+export type TranspileOutcome =
+  | { ok: true; metrics: TranspileMetrics }
+  | { ok: false; error: string };
+
 export interface KernelPort {
   parse(code: string, language: KernelLanguage): Promise<ParseOutcome>;
   simulate(code: string, shots: number, language: KernelLanguage): Promise<SimOutcome>;
+  transpile(code: string, target: TranspileTarget): Promise<TranspileOutcome>;
 }
 
 // ---------------------------------------------------------------------------

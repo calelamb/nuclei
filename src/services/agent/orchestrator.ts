@@ -71,6 +71,9 @@ Rules:
 - You may call plan_hardware_run to get a shadow-mode recommendation of a compatible hardware backend for
   the circuit, with an explainable score; this is analysis only for the user's consideration — it never
   submits a job or contacts a provider, and it is not a substitute for run_simulation.
+- You may call preview_backend_transpilation to see real post-transpile depth, gate-count, and two-qubit-
+  count metrics for a target backend's basis gates and coupling map (Qiskit circuits only) before
+  recommending or (if enabled) submitting a hardware run.
 - You may submit a job to real quantum hardware ONLY via submit_hardware_job. This tool is policy-gated by a
   human-controlled autonomy setting: real, paid QPU submissions are disabled by default, and a
   "needs_approval" or "deny" result means NOTHING was submitted. That is the expected, safe outcome — do not

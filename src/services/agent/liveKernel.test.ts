@@ -236,6 +236,98 @@ describe('SessionKernel (agent_execute protocol)', () => {
     expect(outcome.ok).toBe(true);
   });
 
+  it('transpile sends a qiskit/python agent_execute request with the target fields and resolves metrics on ok', async () => {
+    const { transport, sent, push } = makeFakeTransport();
+    const kernel = new SessionKernel(transport, qiskitFramework);
+
+    const promise = kernel.transpile('code', { basisGates: ['u', 'cx'], couplingMap: [[0, 1]], optimizationLevel: 2 });
+    expect(sent).toHaveLength(1);
+    expect(sent[0]).toMatchObject({
+      type: 'agent_execute',
+      action: 'transpile',
+      framework: 'qiskit',
+      language: 'python',
+      code: 'code',
+      basis_gates: ['u', 'cx'],
+      coupling_map: [[0, 1]],
+      optimization_level: 2,
+    });
+
+    push({
+      type: 'agent_result',
+      request_id: sent[0].request_id,
+      status: 'ok',
+      snapshot: null,
+      result: {
+        depth: 3,
+        gate_counts: { u: 2, cx: 1 },
+        two_qubit_count: 1,
+        num_qubits: 2,
+        basis_gates: ['u', 'cx'],
+        coupling_mapped: true,
+      },
+      stdout: '',
+      stderr: '',
+      error: null,
+    });
+
+    const outcome = await promise;
+    expect(outcome.ok).toBe(true);
+    if (!outcome.ok) throw new Error('expected ok');
+    expect(outcome.metrics).toEqual({
+      depth: 3,
+      gateCounts: { u: 2, cx: 1 },
+      twoQubitCount: 1,
+      numQubits: 2,
+      couplingMapped: true,
+    });
+  });
+
+  it('transpile resolves ok:false on an error status, without a snapshot/simulate-style line field', async () => {
+    const { transport, sent, push } = makeFakeTransport();
+    const kernel = new SessionKernel(transport, qiskitFramework);
+
+    const promise = kernel.transpile('bad code', {});
+    push({
+      type: 'agent_result',
+      request_id: sent[0].request_id,
+      status: 'error',
+      snapshot: null,
+      result: null,
+      stdout: '',
+      stderr: '',
+      error: { code: 'transpile_unsupported_framework', message: 'Transpilation preview currently supports Qiskit circuits.' },
+    });
+
+    const outcome = await promise;
+    expect(outcome.ok).toBe(false);
+    if (outcome.ok) throw new Error('expected failure');
+    expect(outcome.error).toBe('Transpilation preview currently supports Qiskit circuits.');
+    expect('line' in outcome).toBe(false);
+  });
+
+  it('transpile resolves ok:false when the kernel returns an empty result', async () => {
+    const { transport, sent, push } = makeFakeTransport();
+    const kernel = new SessionKernel(transport, qiskitFramework);
+
+    const promise = kernel.transpile('code', {});
+    push({
+      type: 'agent_result',
+      request_id: sent[0].request_id,
+      status: 'ok',
+      snapshot: null,
+      result: null,
+      stdout: '',
+      stderr: '',
+      error: null,
+    });
+
+    const outcome = await promise;
+    expect(outcome.ok).toBe(false);
+    if (outcome.ok) throw new Error('expected failure');
+    expect(outcome.error).toMatch(/empty transpile result/i);
+  });
+
   it('times out if the kernel never responds', async () => {
     const { transport } = makeFakeTransport();
     const kernel = new SessionKernel(transport, qiskitFramework, 20);
