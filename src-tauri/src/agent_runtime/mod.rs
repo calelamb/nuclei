@@ -712,6 +712,8 @@ mod refresh_tests {
                     runtime_guard: None,
                     cleanup_resources: Vec::new(),
                     cleanup_reporter: None,
+                    #[cfg(unix)]
+                    launch_verifier: None,
                     #[cfg(target_os = "linux")]
                     linux: None,
                 })

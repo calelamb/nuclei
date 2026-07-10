@@ -1,6 +1,7 @@
 use crate::agent_runtime::macos::worker_environment;
 use crate::agent_runtime::process::{
-    CleanupFailureSink, CleanupResource, ProcessCleanupResource, ProcessSpec, ResourceLimits,
+    CleanupFailureSink, CleanupResource, LaunchVerifier, ParentLaunchVerifier,
+    ProcessCleanupResource, ProcessSpec, ResourceLimits,
 };
 use crate::agent_runtime::protocol::WorkerRequestV1;
 use crate::agent_runtime::resources::{AgentEnvironment, ResourcePaths, RunnerContainment};
@@ -29,6 +30,13 @@ const IDENTITY_TIMEOUT: Duration = Duration::from_secs(10);
 const CGROUP_CLEANUP_TIMEOUT: Duration = Duration::from_secs(2);
 const MAX_IDENTITY_ENTRIES: usize = 50_000;
 const MAX_IDENTITY_BYTES: u64 = 2 * 1024 * 1024 * 1024;
+const CGROUP2_SUPER_MAGIC: libc::c_long = 0x6367_7270;
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum CgroupBackend {
+    Production,
+    InjectedTest,
+}
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct RuntimeBind {
@@ -46,6 +54,7 @@ pub struct LinuxSystemPaths {
 }
 
 impl LinuxSystemPaths {
+    #[doc(hidden)]
     pub fn for_tests(
         read_roots: Vec<PathBuf>,
         devices: Vec<PathBuf>,
@@ -131,6 +140,14 @@ impl LinuxSystemPaths {
 
     pub fn verify_production(&self) -> Result<(), String> {
         self.verify(true)
+    }
+
+    fn cgroup_backend(&self) -> CgroupBackend {
+        if self.production {
+            CgroupBackend::Production
+        } else {
+            CgroupBackend::InjectedTest
+        }
     }
 }
 
@@ -371,7 +388,8 @@ struct LinuxContainment {
     cgroup_procs: CString,
     seccomp: fs::File,
     reporter: CleanupFailureSink,
-    recursive_cleanup: bool,
+    backend: CgroupBackend,
+    evidence_expectation: Option<CgroupEvidenceExpectation>,
     cleaned: AtomicBool,
     cleanup_lock: Mutex<()>,
 }
@@ -394,6 +412,20 @@ impl LinuxContainment {
         )
     }
 
+    fn verify_expected_evidence(&self) -> Result<(), String> {
+        let Some(expectation) = &self.evidence_expectation else {
+            return Ok(());
+        };
+        let current = fs::read_to_string(self.cgroup_path.join(evidence_file(expectation.kind)))
+            .map_err(|error| {
+                format!(
+                    "Failed to read Linux {} evidence: {error}",
+                    evidence_file(expectation.kind)
+                )
+            })?;
+        verify_cgroup_event_delta(expectation.kind, &expectation.baseline, &current)
+    }
+
     fn finish(&self) -> Result<(), String> {
         let _serial = self
             .cleanup_lock
@@ -402,7 +434,8 @@ impl LinuxContainment {
         if self.cleaned.load(Ordering::Acquire) {
             return Ok(());
         }
-        let result = (|| {
+        let evidence = self.verify_expected_evidence();
+        let cleanup = (|| {
             self.kill()?;
             let deadline = Instant::now() + CGROUP_CLEANUP_TIMEOUT;
             loop {
@@ -421,7 +454,7 @@ impl LinuxContainment {
                 }
                 std::thread::sleep(Duration::from_millis(10));
             }
-            if self.recursive_cleanup {
+            if self.backend == CgroupBackend::InjectedTest {
                 fs::remove_dir_all(&self.cgroup_path)
             } else {
                 fs::remove_dir(&self.cgroup_path)
@@ -430,6 +463,11 @@ impl LinuxContainment {
             self.cleaned.store(true, Ordering::Release);
             Ok(())
         })();
+        let result = match (evidence, cleanup) {
+            (Ok(()), Ok(())) => Ok(()),
+            (Err(error), Ok(())) | (Ok(()), Err(error)) => Err(error),
+            (Err(evidence), Err(cleanup)) => Err(format!("{evidence}; {cleanup}")),
+        };
         self.report(result)
     }
 }
@@ -458,6 +496,38 @@ impl ProcessCleanupResource for LinuxLaunchSpec {
     }
 }
 
+impl ParentLaunchVerifier for LinuxLaunchSpec {
+    fn verify_child(&self, pid: u32) -> Result<(), String> {
+        let result = verify_worker_cgroup_placement(&self.inner.cgroup_path, pid);
+        if let Err(error) = &result {
+            self.inner.reporter.report(error);
+        }
+        result
+    }
+}
+
+fn verify_worker_cgroup_placement(path: &Path, pid: u32) -> Result<(), String> {
+    let membership = fs::read_to_string(path.join("cgroup.procs"))
+        .map_err(|error| format!("Trusted parent could not read worker cgroup.procs: {error}"))?;
+    let expected = pid.to_string();
+    if !membership.lines().any(|line| line.trim() == expected) {
+        return Err(format!(
+            "Trusted parent did not find the exact worker PID {pid} in its unique cgroup"
+        ));
+    }
+    let events = fs::read_to_string(path.join("cgroup.events"))
+        .map_err(|error| format!("Trusted parent could not read worker cgroup.events: {error}"))?;
+    if counter_value(&events, "populated")? == 0 {
+        return Err("Trusted parent observed an unpopulated worker cgroup after spawn".into());
+    }
+    Ok(())
+}
+
+#[doc(hidden)]
+pub fn verify_worker_cgroup_placement_for_test(path: &Path, pid: u32) -> Result<(), String> {
+    verify_worker_cgroup_placement(path, pid)
+}
+
 pub struct LinuxBackend;
 
 impl LinuxBackend {
@@ -468,7 +538,11 @@ impl LinuxBackend {
     pub fn discover(context: &LinuxQualificationContext) -> Result<(), String> {
         context.system_paths.verify_production()?;
         verify_user_namespaces()?;
-        verify_cgroup_delegation(&context.system_paths.cgroup_root, true)?;
+        verify_cgroup_delegation(
+            &context.system_paths.cgroup_root,
+            true,
+            CgroupBackend::Production,
+        )?;
         compile_seccomp_bpf()?;
         bwrap_namespace_self_test(&context.system_paths)?;
         Ok(())
@@ -486,6 +560,24 @@ impl LinuxBackend {
         request_temp: &Path,
         reporter: CleanupFailureSink,
     ) -> Result<ProcessSpec, String> {
+        Self::worker_spec_config(
+            context,
+            request_temp,
+            reporter,
+            CgroupLimits::production(),
+            ResourceLimits::production(),
+            None,
+        )
+    }
+
+    fn worker_spec_config(
+        context: &LinuxQualificationContext,
+        request_temp: &Path,
+        reporter: CleanupFailureSink,
+        cgroup_limits: CgroupLimits,
+        resource_limits: ResourceLimits,
+        evidence_kind: Option<CgroupProbeKind>,
+    ) -> Result<ProcessSpec, String> {
         let request_temp = validate_request_temp(context, request_temp)?;
         let seccomp = sealed_seccomp_file()?;
         let seccomp_fd = seccomp.as_raw_fd();
@@ -493,7 +585,21 @@ impl LinuxBackend {
             &context.system_paths.cgroup_root,
             reporter.clone(),
             CgroupConstructionFault::default(),
+            context.system_paths.cgroup_backend(),
+            cgroup_limits,
         )?;
+        let evidence_expectation = match evidence_kind {
+            Some(kind) => match fs::read_to_string(cgroup_guard.path().join(evidence_file(kind))) {
+                Ok(baseline) => Some(CgroupEvidenceExpectation { kind, baseline }),
+                Err(error) => {
+                    return cgroup_guard.fail(format!(
+                        "Failed to read baseline Linux {}: {error}",
+                        evidence_file(kind)
+                    ))
+                }
+            },
+            None => None,
+        };
         let cgroup_path = cgroup_guard.path().to_path_buf();
         let cgroup_procs = CString::new(
             cgroup_path
@@ -550,10 +656,8 @@ impl LinuxBackend {
                 cgroup_procs,
                 seccomp,
                 reporter: reporter.clone(),
-                recursive_cleanup: !context
-                    .system_paths
-                    .cgroup_root
-                    .starts_with("/sys/fs/cgroup"),
+                backend: context.system_paths.cgroup_backend(),
+                evidence_expectation,
                 cleaned: AtomicBool::new(false),
                 cleanup_lock: Mutex::new(()),
             }),
@@ -566,10 +670,11 @@ impl LinuxBackend {
             cwd: request_temp.clone(),
             env: environment,
             cleanup_root: Some(request_temp),
-            resource_limits: ResourceLimits::production(),
+            resource_limits,
             runtime_guard: None,
             cleanup_resources: vec![CleanupResource::new(Arc::new(linux.clone()))],
             cleanup_reporter: Some(reporter),
+            launch_verifier: Some(LaunchVerifier::new(Arc::new(linux.clone()))),
             linux: Some(linux),
         };
         Ok(spec)
@@ -581,6 +686,15 @@ impl LinuxBackend {
         script: &str,
     ) -> Result<ProcessSpec, String> {
         let mut spec = Self::worker_spec(context, request_temp)?;
+        Self::replace_worker_with_probe(context, &mut spec, script)?;
+        Ok(spec)
+    }
+
+    fn replace_worker_with_probe(
+        context: &LinuxQualificationContext,
+        spec: &mut ProcessSpec,
+        script: &str,
+    ) -> Result<(), String> {
         let worker = sandbox_path(&context.environment.root, &context.resources.worker)?;
         let position = spec
             .args
@@ -589,7 +703,7 @@ impl LinuxBackend {
             .ok_or("Linux worker argument was not found")?;
         spec.args.truncate(position);
         spec.args.extend(["-I".into(), "-c".into(), script.into()]);
-        Ok(spec)
+        Ok(())
     }
 }
 
@@ -598,6 +712,8 @@ pub struct LinuxResolver {
     installed_generation: u64,
     installed_key: String,
     cleanup_reporter: Mutex<CleanupFailureSink>,
+    created_cgroups: Mutex<BTreeSet<PathBuf>>,
+    created_request_dirs: Mutex<BTreeSet<PathBuf>>,
 }
 
 impl LinuxResolver {
@@ -611,10 +727,16 @@ impl LinuxResolver {
             installed_generation,
             installed_key,
             cleanup_reporter: Mutex::new(CleanupFailureSink::noop()),
+            created_cgroups: Mutex::new(BTreeSet::new()),
+            created_request_dirs: Mutex::new(BTreeSet::new()),
         }
     }
 
-    async fn resolve_spec(&self, probe: Option<&str>) -> Result<ProcessSpec, String> {
+    async fn resolve_spec(
+        &self,
+        probe: Option<&str>,
+        policy: Option<CgroupProbeKind>,
+    ) -> Result<ProcessSpec, String> {
         let runtime_guard = LinuxBackend::runtime_lease(&self.context)?;
         if qualification_cache_key_async(self.context.clone()).await? != self.installed_key {
             return Err(
@@ -630,19 +752,43 @@ impl LinuxResolver {
         let request_temp = request_temp
             .canonicalize()
             .map_err(|error| format!("Linux request temp is unavailable: {error}"))?;
-        let result = match probe {
-            Some(script) => LinuxBackend::probe_spec(&self.context, &request_temp, script),
-            None => LinuxBackend::worker_spec_with_reporter(
-                &self.context,
-                &request_temp,
-                self.cleanup_reporter
-                    .lock()
-                    .unwrap_or_else(|poisoned| poisoned.into_inner())
-                    .clone(),
-            ),
+        self.created_request_dirs
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .insert(request_temp.clone());
+        let reporter = self
+            .cleanup_reporter
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .clone();
+        let result = match (probe, policy) {
+            (Some(_), Some(_)) => {
+                return Err("Linux cgroup policy probes must use the worker protocol".into())
+            }
+            (Some(script), None) => LinuxBackend::probe_spec(&self.context, &request_temp, script),
+            (None, Some(kind)) => {
+                let policy = qualification_cgroup_policy(kind);
+                LinuxBackend::worker_spec_config(
+                    &self.context,
+                    &request_temp,
+                    reporter,
+                    CgroupLimits::from_policy(policy),
+                    policy.resource_limits,
+                    Some(kind),
+                )
+            }
+            (None, None) => {
+                LinuxBackend::worker_spec_with_reporter(&self.context, &request_temp, reporter)
+            }
         };
         match result {
             Ok(mut spec) => {
+                if let Some(path) = spec.linux.as_ref().map(LinuxLaunchSpec::cgroup_path) {
+                    self.created_cgroups
+                        .lock()
+                        .unwrap_or_else(|poisoned| poisoned.into_inner())
+                        .insert(path.to_path_buf());
+                }
                 spec.runtime_guard = Some(runtime_guard);
                 Ok(spec)
             }
@@ -656,7 +802,32 @@ impl LinuxResolver {
     }
 
     async fn resolve_probe(&self, script: &str) -> Result<ProcessSpec, String> {
-        self.resolve_spec(Some(script)).await
+        self.resolve_spec(Some(script), None).await
+    }
+
+    async fn resolve_worker_with_policy(
+        &self,
+        kind: CgroupProbeKind,
+    ) -> Result<ProcessSpec, String> {
+        self.resolve_spec(None, Some(kind)).await
+    }
+
+    fn created_cgroups(&self) -> Vec<PathBuf> {
+        self.created_cgroups
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .iter()
+            .cloned()
+            .collect()
+    }
+
+    fn created_request_dirs(&self) -> Vec<PathBuf> {
+        self.created_request_dirs
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .iter()
+            .cloned()
+            .collect()
     }
 }
 
@@ -689,7 +860,7 @@ impl AgentProcessResolver for LinuxResolver {
         _request: &'a WorkerRequestV1,
     ) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<ProcessSpec, String>> + Send + 'a>>
     {
-        Box::pin(self.resolve_spec(None))
+        Box::pin(self.resolve_spec(None, None))
     }
 }
 
@@ -787,10 +958,152 @@ struct CgroupConstructionFault {
     cleanup_stage: Option<String>,
 }
 
+#[derive(Clone, Copy, Debug)]
+struct CgroupLimits {
+    memory_max: u64,
+    pids_max: u64,
+    cpu_quota: u64,
+    cpu_period: u64,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum CgroupProbeKind {
+    Memory,
+    Pids,
+    Cpu,
+}
+
+#[derive(Clone, Copy, Debug)]
+pub struct QualificationCgroupPolicy {
+    pub memory_max: u64,
+    pub pids_max: u64,
+    pub cpu_quota: u64,
+    pub cpu_period: u64,
+    pub resource_limits: ResourceLimits,
+}
+
+fn qualification_cgroup_policy(kind: CgroupProbeKind) -> QualificationCgroupPolicy {
+    let mut resource_limits = ResourceLimits::production();
+    resource_limits.processes = 1_024;
+    match kind {
+        CgroupProbeKind::Memory => {
+            resource_limits.address_space_bytes = 2_147_483_648;
+            QualificationCgroupPolicy {
+                memory_max: 402_653_184,
+                pids_max: 64,
+                cpu_quota: 100_000,
+                cpu_period: 100_000,
+                resource_limits,
+            }
+        }
+        CgroupProbeKind::Pids => QualificationCgroupPolicy {
+            memory_max: 1_073_741_824,
+            pids_max: 12,
+            cpu_quota: 100_000,
+            cpu_period: 100_000,
+            resource_limits,
+        },
+        CgroupProbeKind::Cpu => QualificationCgroupPolicy {
+            memory_max: 1_073_741_824,
+            pids_max: 64,
+            cpu_quota: 25_000,
+            cpu_period: 100_000,
+            resource_limits,
+        },
+    }
+}
+
+#[doc(hidden)]
+pub fn qualification_cgroup_policy_for_test(kind: CgroupProbeKind) -> QualificationCgroupPolicy {
+    qualification_cgroup_policy(kind)
+}
+
+#[derive(Debug)]
+struct CgroupEvidenceExpectation {
+    kind: CgroupProbeKind,
+    baseline: String,
+}
+
+fn evidence_file(kind: CgroupProbeKind) -> &'static str {
+    match kind {
+        CgroupProbeKind::Memory => "memory.events",
+        CgroupProbeKind::Pids => "pids.events",
+        CgroupProbeKind::Cpu => "cpu.stat",
+    }
+}
+
+fn counter_value(contents: &str, name: &str) -> Result<u64, String> {
+    let mut matching = contents.lines().filter_map(|line| {
+        let mut fields = line.split_whitespace();
+        let key = fields.next()?;
+        let value = fields.next()?;
+        (key == name && fields.next().is_none()).then_some(value)
+    });
+    let value = matching
+        .next()
+        .ok_or_else(|| format!("cgroup evidence lacks {name}"))?;
+    if matching.next().is_some() {
+        return Err(format!("cgroup evidence duplicates {name}"));
+    }
+    value
+        .parse()
+        .map_err(|_| format!("cgroup evidence has invalid {name}"))
+}
+
+fn verify_cgroup_event_delta(
+    kind: CgroupProbeKind,
+    before: &str,
+    after: &str,
+) -> Result<(), String> {
+    let increased = |name| -> Result<bool, String> {
+        Ok(counter_value(after, name)? > counter_value(before, name)?)
+    };
+    let passed = match kind {
+        CgroupProbeKind::Memory => increased("oom")? && increased("oom_kill")?,
+        CgroupProbeKind::Pids => increased("max")?,
+        CgroupProbeKind::Cpu => increased("nr_throttled")? && increased("throttled_usec")?,
+    };
+    if !passed {
+        return Err(format!(
+            "Linux {kind:?} cgroup controller produced no required counter delta"
+        ));
+    }
+    Ok(())
+}
+
+#[doc(hidden)]
+pub fn verify_cgroup_event_delta_for_test(
+    kind: CgroupProbeKind,
+    before: &str,
+    after: &str,
+) -> Result<(), String> {
+    verify_cgroup_event_delta(kind, before, after)
+}
+
+impl CgroupLimits {
+    const fn production() -> Self {
+        Self {
+            memory_max: 1_073_741_824,
+            pids_max: 4,
+            cpu_quota: 100_000,
+            cpu_period: 100_000,
+        }
+    }
+
+    const fn from_policy(policy: QualificationCgroupPolicy) -> Self {
+        Self {
+            memory_max: policy.memory_max,
+            pids_max: policy.pids_max,
+            cpu_quota: policy.cpu_quota,
+            cpu_period: policy.cpu_period,
+        }
+    }
+}
+
 struct CgroupConstructionGuard {
     path: Option<PathBuf>,
     reporter: CleanupFailureSink,
-    recursive_cleanup: bool,
+    backend: CgroupBackend,
     cleanup_stage: Option<String>,
 }
 
@@ -834,7 +1147,7 @@ impl CgroupConstructionGuard {
         if self.cleanup_stage.as_deref() == Some("remove") {
             return Err("injected cgroup construction cleanup failure at remove".into());
         }
-        if self.recursive_cleanup {
+        if self.backend == CgroupBackend::InjectedTest {
             fs::remove_dir_all(path)
         } else {
             fs::remove_dir(path)
@@ -875,19 +1188,21 @@ fn create_worker_cgroup(
     root: &Path,
     reporter: CleanupFailureSink,
     fault: CgroupConstructionFault,
+    backend: CgroupBackend,
+    limits: CgroupLimits,
 ) -> Result<CgroupConstructionGuard, String> {
     let child = root.join(format!("request-{}", uuid::Uuid::new_v4()));
     fs::create_dir(&child)
         .map_err(|error| format!("Failed to create Linux worker cgroup: {error}"))?;
-    let recursive_cleanup = !root.starts_with("/sys/fs/cgroup");
     let guard = CgroupConstructionGuard {
         path: Some(child),
         reporter,
-        recursive_cleanup,
+        backend,
         cleanup_stage: fault.cleanup_stage,
     };
-    if recursive_cleanup {
+    if backend == CgroupBackend::InjectedTest {
         for (name, value) in [
+            ("cgroup.type", "domain\n"),
             ("memory.max", ""),
             ("memory.swap.max", ""),
             ("pids.max", ""),
@@ -895,6 +1210,9 @@ fn create_worker_cgroup(
             ("cgroup.procs", ""),
             ("cgroup.kill", ""),
             ("cgroup.events", "populated 0\n"),
+            ("memory.events", "oom 0\noom_kill 0\n"),
+            ("pids.events", "max 0\n"),
+            ("cpu.stat", "nr_throttled 0\nthrottled_usec 0\n"),
         ] {
             if let Err(error) = fs::write(guard.path().join(name), value) {
                 return guard.fail(format!(
@@ -903,11 +1221,14 @@ fn create_worker_cgroup(
             }
         }
     }
+    let memory_max = limits.memory_max.to_string();
+    let pids_max = limits.pids_max.to_string();
+    let cpu_max = format!("{} {}", limits.cpu_quota, limits.cpu_period);
     for (name, value) in [
-        ("memory.max", "1073741824"),
+        ("memory.max", memory_max.as_str()),
         ("memory.swap.max", "0"),
-        ("pids.max", "4"),
-        ("cpu.max", "100000 100000"),
+        ("pids.max", pids_max.as_str()),
+        ("cpu.max", cpu_max.as_str()),
     ] {
         if fault.setup_stage.as_deref() == Some(name) {
             return guard.fail(format!("injected cgroup setup failure at {name}"));
@@ -916,13 +1237,33 @@ fn create_worker_cgroup(
             return guard.fail(format!("Failed to set Linux cgroup {name}: {error}"));
         }
     }
-    for name in ["cgroup.procs", "cgroup.kill", "cgroup.events"] {
+    for name in [
+        "cgroup.type",
+        "cgroup.procs",
+        "cgroup.kill",
+        "cgroup.events",
+        "memory.events",
+        "pids.events",
+        "cpu.stat",
+    ] {
         if fault.setup_stage.as_deref() == Some(name) {
             return guard.fail(format!("injected cgroup setup failure at {name}"));
         }
         if !guard.path().join(name).exists() {
             return guard.fail(format!("Linux worker cgroup lacks {name}"));
         }
+    }
+    let cgroup_type = fs::read_to_string(guard.path().join("cgroup.type"))
+        .map_err(|error| format!("Linux worker cgroup type is unavailable: {error}"));
+    match cgroup_type {
+        Ok(value) if value.trim() == "domain" => {}
+        Ok(value) => {
+            return guard.fail(format!(
+                "Linux worker cgroup has invalid type {}",
+                value.trim()
+            ))
+        }
+        Err(error) => return guard.fail(error),
     }
     Ok(guard)
 }
@@ -938,7 +1279,13 @@ pub fn cgroup_construction_failure_for_test(
         setup_stage: Some(stage.into()),
         cleanup_stage: cleanup_failure.then(|| "remove".into()),
     };
-    match create_worker_cgroup(root, reporter, fault) {
+    match create_worker_cgroup(
+        root,
+        reporter,
+        fault,
+        CgroupBackend::InjectedTest,
+        CgroupLimits::production(),
+    ) {
         Ok(guard) => guard.fail("injected setup stage did not fire".into()),
         Err(error) => Err(error),
     }
@@ -955,19 +1302,50 @@ pub fn cgroup_construction_cleanup_failure_for_test(
         setup_stage: Some(setup_stage.into()),
         cleanup_stage: Some(cleanup_stage.into()),
     };
-    match create_worker_cgroup(root, reporter, fault) {
+    match create_worker_cgroup(
+        root,
+        reporter,
+        fault,
+        CgroupBackend::InjectedTest,
+        CgroupLimits::production(),
+    ) {
         Ok(guard) => guard.fail("injected setup stage did not fire".into()),
         Err(error) => Err(error),
     }
 }
 
-fn verify_cgroup_delegation(root: &Path, probe: bool) -> Result<(), String> {
-    if fs::metadata(root)
-        .map_err(|error| format!("Delegated cgroup metadata is unavailable: {error}"))?
-        .uid()
-        != unsafe { libc::geteuid() }
-    {
+fn verify_cgroup_delegation(
+    root: &Path,
+    probe: bool,
+    backend: CgroupBackend,
+) -> Result<(), String> {
+    if backend == CgroupBackend::Production {
+        verify_production_cgroup_filesystem(root)?;
+    }
+    let root_metadata = fs::metadata(root)
+        .map_err(|error| format!("Delegated cgroup metadata is unavailable: {error}"))?;
+    if root_metadata.uid() != unsafe { libc::geteuid() } {
         return Err("Delegated cgroup root is not owned by the application uid".into());
+    }
+    if root_metadata.permissions().mode() & 0o022 != 0 {
+        return Err("Delegated cgroup root is group/world writable".into());
+    }
+    require_delegated_writable(root, "delegated cgroup root")?;
+    require_delegated_writable(
+        &root.join("cgroup.subtree_control"),
+        "delegated cgroup subtree control",
+    )?;
+    require_delegated_writable(
+        &root.join("cgroup.procs"),
+        "delegated cgroup process membership",
+    )?;
+    let root_type = fs::read_to_string(root.join("cgroup.type"))
+        .map_err(|error| format!("Delegated cgroup type is unavailable: {error}"))?;
+    if root_type.trim() != "domain" {
+        return Err(format!(
+            "Delegated cgroup has invalid cgroup.type {}; memory/pids policy requires a domain",
+            root_type.trim()
+        ));
     }
     let controller_text = fs::read_to_string(root.join("cgroup.controllers"))
         .map_err(|error| format!("cgroup v2 controllers are unavailable: {error}"))?;
@@ -987,6 +1365,8 @@ fn verify_cgroup_delegation(root: &Path, probe: bool) -> Result<(), String> {
             root,
             CleanupFailureSink::noop(),
             CgroupConstructionFault::default(),
+            backend,
+            CgroupLimits::production(),
         )?;
         let probe_result = (|| {
             fs::write(guard.path().join("cgroup.kill"), "1")
@@ -1007,6 +1387,94 @@ fn verify_cgroup_delegation(root: &Path, probe: bool) -> Result<(), String> {
         }
     }
     Ok(())
+}
+
+fn verify_production_cgroup_filesystem(root: &Path) -> Result<(), String> {
+    let canonical = root
+        .canonicalize()
+        .map_err(|error| format!("Delegated cgroup canonicalization failed: {error}"))?;
+    if canonical != root {
+        return Err("Delegated cgroup root is not canonical".into());
+    }
+    if filesystem_magic(root)? != CGROUP2_SUPER_MAGIC {
+        return Err("Delegated cgroup root is not on an actual cgroup v2 filesystem".into());
+    }
+    let mount = cgroup2_mount_for(root)?;
+    if mount == root || !root.starts_with(&mount) {
+        return Err(
+            "Delegated cgroup root is not a strict descendant of its canonical cgroup v2 mount"
+                .into(),
+        );
+    }
+    Ok(())
+}
+
+fn filesystem_magic(path: &Path) -> Result<libc::c_long, String> {
+    let encoded = CString::new(path.as_os_str().as_encoded_bytes())
+        .map_err(|_| "Filesystem path contains NUL")?;
+    let mut stat = std::mem::MaybeUninit::<libc::statfs>::uninit();
+    if unsafe { libc::statfs(encoded.as_ptr(), stat.as_mut_ptr()) } != 0 {
+        return Err(format!(
+            "Could not stat delegated cgroup filesystem: {}",
+            std::io::Error::last_os_error()
+        ));
+    }
+    Ok(unsafe { stat.assume_init() }.f_type as libc::c_long)
+}
+
+fn cgroup2_mount_for(root: &Path) -> Result<PathBuf, String> {
+    let mountinfo = fs::read_to_string("/proc/self/mountinfo")
+        .map_err(|error| format!("Linux mount table is unavailable: {error}"))?;
+    let mut matches = mountinfo
+        .lines()
+        .filter_map(|line| {
+            let (left, right) = line.split_once(" - ")?;
+            if right.split_whitespace().next()? != "cgroup2" {
+                return None;
+            }
+            let encoded_mount = left.split_whitespace().nth(4)?;
+            let mount = PathBuf::from(unescape_mountinfo(encoded_mount));
+            let canonical = mount.canonicalize().ok()?;
+            root.starts_with(&canonical).then_some(canonical)
+        })
+        .collect::<Vec<_>>();
+    matches.sort_by_key(|path| path.components().count());
+    matches
+        .pop()
+        .ok_or_else(|| "Delegated cgroup root has no canonical cgroup v2 mount parent".into())
+}
+
+fn unescape_mountinfo(value: &str) -> String {
+    value
+        .replace("\\040", " ")
+        .replace("\\011", "\t")
+        .replace("\\012", "\n")
+        .replace("\\134", "\\")
+}
+
+fn require_delegated_writable(path: &Path, description: &str) -> Result<(), String> {
+    let metadata =
+        fs::metadata(path).map_err(|error| format!("{description} metadata failed: {error}"))?;
+    if metadata.uid() != unsafe { libc::geteuid() } {
+        return Err(format!("{description} is not owned by the application uid"));
+    }
+    if metadata.permissions().mode() & 0o022 != 0 {
+        return Err(format!("{description} is group/world writable"));
+    }
+    let encoded =
+        CString::new(path.as_os_str().as_encoded_bytes()).map_err(|_| "Path contains NUL")?;
+    if unsafe { libc::access(encoded.as_ptr(), libc::W_OK) } != 0 {
+        return Err(format!(
+            "{description} is not writable: {}",
+            std::io::Error::last_os_error()
+        ));
+    }
+    Ok(())
+}
+
+#[doc(hidden)]
+pub fn verify_production_cgroup_for_test(root: &Path) -> Result<(), String> {
+    verify_cgroup_delegation(root, false, CgroupBackend::Production)
 }
 
 fn words(value: &str) -> BTreeSet<&str> {
@@ -1449,7 +1917,6 @@ async fn qualification_probes(context: &LinuxQualificationContext) -> Result<(),
         0,
         qualification_cache_key_async(context.clone()).await?,
     );
-    let initial_cgroups = cgroup_children(&context.system_paths.cgroup_root)?;
 
     let cirq_tail = "\nq=cirq.LineQubit(0)\ncircuit=cirq.Circuit(cirq.H(q))\n";
     for (description, body) in [
@@ -1503,20 +1970,12 @@ async fn qualification_probes(context: &LinuxQualificationContext) -> Result<(),
             "import cirq,ctypes,errno,platform\nnumber={'x86_64':322,'aarch64':281,'riscv64':281}[platform.machine()]\nctypes.set_errno(0)\nr=ctypes.CDLL(None,use_errno=True).syscall(number,-1,0,0,0,0)\nassert r==-1 and ctypes.get_errno()==errno.EPERM,(r,ctypes.get_errno())".into(),
         ),
         (
-            "memory cgroup and rlimit",
-            "import cirq\ntry: bytearray(2_000_000_000)\nexcept (MemoryError,OSError): pass\nelse: raise AssertionError('2GB allocation escaped')".into(),
-        ),
-        (
             "fd rlimit",
             "import cirq,errno\nfds=[]\ntry:\n while True: fds.append(open('/dev/null'))\nexcept OSError as e: assert e.errno in (errno.EMFILE,errno.ENFILE),e".into(),
         ),
         (
             "cgroup escape",
             "import cirq,errno\ntry: open('/sys/fs/cgroup/cgroup.procs','w').write('0')\nexcept OSError as e: assert e.errno in (errno.ENOENT,errno.EACCES,errno.EPERM,errno.EROFS),e\nelse: raise AssertionError('cgroup escape succeeded')".into(),
-        ),
-        (
-            "cgroup placement",
-            "import cirq\nmembership=open('/proc/self/cgroup').read()\nassert '/request-' in membership,membership".into(),
         ),
         (
             "PID namespace",
@@ -1549,11 +2008,30 @@ async fn qualification_probes(context: &LinuxQualificationContext) -> Result<(),
     )
     .await?;
 
-    run_expected_supervisor_failure(
+    run_expected_worker_failure_with_policy(
         &resolver,
-        "while True: pass",
-        &["worker_failed", "wall_timeout"],
-        "CPU loop",
+        "chunks=[]\nwhile True: chunks.append(bytearray(64*1024*1024))",
+        CgroupProbeKind::Memory,
+        &["worker_failed"],
+        "memory cgroup OOM",
+    )
+    .await?;
+    run_valid_worker_with_policy(
+        &resolver,
+        &format!(
+            "import cirq,threading\nrelease=threading.Event()\nthreads=[]\ntry:\n for _ in range(64):\n  thread=threading.Thread(target=release.wait)\n  thread.start()\n  threads.append(thread)\nexcept RuntimeError: pass\nelse: raise AssertionError('pids.max did not reject threads')\nrelease.set()\nfor thread in threads: thread.join(){cirq_tail}"
+        ),
+        CgroupProbeKind::Pids,
+        "pids cgroup thread limit",
+    )
+    .await?;
+    run_valid_worker_with_policy(
+        &resolver,
+        &format!(
+            "import cirq,time\nend=time.monotonic()+1.2\nwhile time.monotonic()<end: pass{cirq_tail}"
+        ),
+        CgroupProbeKind::Cpu,
+        "CPU cgroup throttling",
     )
     .await?;
     run_expected_supervisor_failure(
@@ -1619,16 +2097,8 @@ async fn qualification_probes(context: &LinuxQualificationContext) -> Result<(),
         ));
     }
 
-    if cgroup_children(&context.system_paths.cgroup_root)? != initial_cgroups {
-        return Err("Linux qualification leaked a worker cgroup".into());
-    }
-    if fs::read_dir(&context.request_temp_root)
-        .map_err(|error| format!("Linux request root could not be checked: {error}"))?
-        .next()
-        .is_some()
-    {
-        return Err("Linux qualification leaked a request directory".into());
-    }
+    qualification_owned_cgroups_absent(&resolver.created_cgroups())?;
+    qualification_owned_request_dirs_absent(&resolver.created_request_dirs())?;
     drop(baseline);
     Ok(())
 }
@@ -1659,6 +2129,71 @@ async fn run_valid_worker(
         .await
         .map(|_| ())
         .map_err(|error| format!("{description} failed: {}", error.message))
+}
+
+async fn run_valid_worker_with_policy(
+    resolver: &LinuxResolver,
+    code: &str,
+    kind: CgroupProbeKind,
+    description: &str,
+) -> Result<(), String> {
+    use crate::agent_runtime::process::{ProcessSupervisor, Supervisor, SupervisorLimits};
+    use crate::agent_runtime::protocol::{Action, Framework};
+
+    let request = WorkerRequestV1 {
+        protocol_version: 1,
+        request_id: format!("linux-cgroup-probe-{}", uuid::Uuid::new_v4()),
+        action: Action::Parse,
+        framework: Framework::Cirq,
+        language: "python".into(),
+        code: code.into(),
+        shots: None,
+    };
+    let spec = resolver.resolve_worker_with_policy(kind).await?;
+    let mut input = serde_json::to_vec(&request)
+        .map_err(|error| format!("{description} request encode failed: {error}"))?;
+    input.push(b'\n');
+    Supervisor::new(SupervisorLimits::production())
+        .run(&request, spec, &input)
+        .await
+        .map(|_| ())
+        .map_err(|error| format!("{description} failed: {}", error.message))
+}
+
+async fn run_expected_worker_failure_with_policy(
+    resolver: &LinuxResolver,
+    code: &str,
+    kind: CgroupProbeKind,
+    expected_codes: &[&str],
+    description: &str,
+) -> Result<(), String> {
+    use crate::agent_runtime::process::{ProcessSupervisor, Supervisor, SupervisorLimits};
+    use crate::agent_runtime::protocol::{Action, Framework};
+
+    let request = WorkerRequestV1 {
+        protocol_version: 1,
+        request_id: format!("linux-cgroup-failure-{}", uuid::Uuid::new_v4()),
+        action: Action::Parse,
+        framework: Framework::Cirq,
+        language: "python".into(),
+        code: code.into(),
+        shots: None,
+    };
+    let spec = resolver.resolve_worker_with_policy(kind).await?;
+    let mut input = serde_json::to_vec(&request)
+        .map_err(|error| format!("{description} request encode failed: {error}"))?;
+    input.push(b'\n');
+    let error = Supervisor::new(SupervisorLimits::production())
+        .run(&request, spec, &input)
+        .await
+        .expect_err("Linux cgroup negative probe unexpectedly returned a response");
+    if !expected_codes.contains(&error.code.as_str()) {
+        return Err(format!(
+            "{description} returned {}, expected one of {expected_codes:?}: {}",
+            error.code, error.message
+        ));
+    }
+    Ok(())
 }
 
 async fn run_expected_supervisor_failure(
@@ -1693,15 +2228,34 @@ async fn run_expected_supervisor_failure(
     Ok(())
 }
 
-fn cgroup_children(root: &Path) -> Result<BTreeSet<PathBuf>, String> {
-    fs::read_dir(root)
-        .map_err(|error| format!("Linux delegated cgroup could not be enumerated: {error}"))?
-        .filter_map(|entry| match entry {
-            Ok(entry) if entry.path().is_dir() => Some(Ok(entry.path())),
-            Ok(_) => None,
-            Err(error) => Some(Err(format!("Linux cgroup entry failed: {error}"))),
-        })
-        .collect()
+fn qualification_owned_cgroups_absent(paths: &[PathBuf]) -> Result<(), String> {
+    if let Some(path) = paths.iter().find(|path| path.exists()) {
+        return Err(format!(
+            "Linux qualification leaked its own worker cgroup {}",
+            path.display()
+        ));
+    }
+    Ok(())
+}
+
+fn qualification_owned_request_dirs_absent(paths: &[PathBuf]) -> Result<(), String> {
+    if let Some(path) = paths.iter().find(|path| path.exists()) {
+        return Err(format!(
+            "Linux qualification leaked its own request directory {}",
+            path.display()
+        ));
+    }
+    Ok(())
+}
+
+#[doc(hidden)]
+pub fn qualification_owned_request_dirs_absent_for_test(paths: &[PathBuf]) -> Result<(), String> {
+    qualification_owned_request_dirs_absent(paths)
+}
+
+#[doc(hidden)]
+pub fn qualification_owned_cgroups_absent_for_test(paths: &[PathBuf]) -> Result<(), String> {
+    qualification_owned_cgroups_absent(paths)
 }
 
 struct LinuxParentBaseline {

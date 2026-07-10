@@ -1803,6 +1803,7 @@ fn python_spec(script: &str) -> ProcessSpec {
         runtime_guard: None,
         cleanup_resources: Vec::new(),
         cleanup_reporter: None,
+        launch_verifier: None,
         #[cfg(target_os = "linux")]
         linux: None,
     }
@@ -1984,6 +1985,39 @@ struct InjectedCleanupResolver {
 struct InjectedCleanupFailure {
     drop_started: Arc<AtomicBool>,
     allow_drop: Arc<AtomicBool>,
+}
+
+#[cfg(unix)]
+struct PermanentWaitFailureResolver {
+    reporter: Mutex<Option<CleanupFailureSink>>,
+    resolves: AtomicUsize,
+    marker: PathBuf,
+    cleanup_root: PathBuf,
+    runtime_guard: Arc<std::fs::File>,
+}
+
+#[cfg(unix)]
+impl AgentProcessResolver for PermanentWaitFailureResolver {
+    fn set_cleanup_failure_reporter(&self, reporter: CleanupFailureSink) {
+        *self.reporter.lock().unwrap() = Some(reporter);
+    }
+
+    fn resolve<'a>(
+        &'a self,
+        _request: &'a WorkerRequestV1,
+    ) -> Pin<Box<dyn Future<Output = Result<ProcessSpec, String>> + Send + 'a>> {
+        self.resolves.fetch_add(1, Ordering::AcqRel);
+        Box::pin(async move {
+            let mut spec = python_spec(&format!(
+                "import pathlib,time;pathlib.Path({:?}).write_text('started');time.sleep(5)",
+                self.marker
+            ));
+            spec.cleanup_reporter = self.reporter.lock().unwrap().clone();
+            spec.cleanup_root = Some(self.cleanup_root.clone());
+            spec.runtime_guard = Some(Arc::clone(&self.runtime_guard));
+            Ok(spec)
+        })
+    }
 }
 
 #[cfg(unix)]
@@ -2206,6 +2240,82 @@ async fn aborted_background_cleanup_failure_revokes_before_resource_drop() {
     })
     .await
     .expect("background cleanup resource finishes dropping");
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn permanent_background_wait_failure_is_bounded_revokes_and_quarantines_resources() {
+    use fs2::FileExt;
+    use std::fs::OpenOptions;
+
+    let temporary = TempDir::new().unwrap();
+    let marker = temporary.path().join("started");
+    let cleanup_root = temporary.path().join("request");
+    fs::create_dir(&cleanup_root).unwrap();
+    let lock_path = temporary.path().join("generation.lock");
+    fs::write(&lock_path, "").unwrap();
+    let lease = OpenOptions::new().read(true).open(&lock_path).unwrap();
+    lease.lock_shared().unwrap();
+    let supervisor = Supervisor::new(SupervisorLimits::production());
+    supervisor.install_permanent_background_wait_failure_for_test(Duration::from_millis(50), 2);
+    let resolver = Arc::new(PermanentWaitFailureResolver {
+        reporter: Mutex::new(None),
+        resolves: AtomicUsize::new(0),
+        marker: marker.clone(),
+        cleanup_root: cleanup_root.clone(),
+        runtime_guard: Arc::new(lease),
+    });
+    let state = Arc::new(AgentRuntimeState::with_resolver(
+        supervisor,
+        available_cirq_capability(),
+        resolver.clone(),
+    ));
+    let running_state = Arc::clone(&state);
+    let task = tokio::spawn(async move {
+        running_state
+            .execute_request(agent_request("permanent_wait_failure"))
+            .await
+    });
+    tokio::time::timeout(Duration::from_secs(1), async {
+        while !marker.exists() {
+            tokio::task::yield_now().await;
+        }
+    })
+    .await
+    .expect("worker starts before abort");
+
+    task.abort();
+    assert!(task.await.unwrap_err().is_cancelled());
+    tokio::time::timeout(Duration::from_secs(1), async {
+        while state.supervisor.background_reap_count() != 0 {
+            tokio::task::yield_now().await;
+        }
+    })
+    .await
+    .expect("background wait reaches its hard budget");
+
+    assert_eq!(state.supervisor.quarantined_reap_count(), 1);
+    assert_eq!(state.supervisor.active_count(), 1);
+    assert!(cleanup_root.exists());
+    let update = OpenOptions::new()
+        .read(true)
+        .write(true)
+        .open(lock_path)
+        .unwrap();
+    assert!(update.try_lock_exclusive().is_err());
+    let report = state.cached_capability().await;
+    assert!(!report.available);
+    assert!(report
+        .reason
+        .as_deref()
+        .unwrap()
+        .contains("background worker wait"));
+    assert!(state
+        .execute_request(agent_request("denied_after_wait_failure"))
+        .await
+        .unwrap_err()
+        .contains("background worker wait"));
+    assert_eq!(resolver.resolves.load(Ordering::Acquire), 1);
 }
 
 #[cfg(unix)]

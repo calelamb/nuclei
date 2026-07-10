@@ -110,6 +110,37 @@ pub trait ProcessCleanupResource: Send + Sync {
     fn finish(&self) -> Result<(), String>;
 }
 
+#[cfg(unix)]
+pub trait ParentLaunchVerifier: Send + Sync {
+    fn verify_child(&self, pid: u32) -> Result<(), String>;
+}
+
+#[cfg(unix)]
+#[derive(Clone)]
+pub struct LaunchVerifier {
+    inner: Arc<dyn ParentLaunchVerifier>,
+}
+
+#[cfg(unix)]
+impl std::fmt::Debug for LaunchVerifier {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter
+            .debug_struct("LaunchVerifier")
+            .finish_non_exhaustive()
+    }
+}
+
+#[cfg(unix)]
+impl LaunchVerifier {
+    pub fn new(inner: Arc<dyn ParentLaunchVerifier>) -> Self {
+        Self { inner }
+    }
+
+    fn verify_child(&self, pid: u32) -> Result<(), String> {
+        self.inner.verify_child(pid)
+    }
+}
+
 struct CleanupResourceInner {
     resource: Arc<dyn ProcessCleanupResource>,
     reporter: Mutex<Option<CleanupFailureSink>>,
@@ -228,6 +259,8 @@ pub struct ProcessSpec {
     pub runtime_guard: Option<Arc<std::fs::File>>,
     pub cleanup_resources: Vec<CleanupResource>,
     pub cleanup_reporter: Option<CleanupFailureSink>,
+    #[cfg(unix)]
+    pub launch_verifier: Option<LaunchVerifier>,
     #[cfg(target_os = "linux")]
     pub linux: Option<crate::agent_runtime::linux::LinuxLaunchSpec>,
 }
@@ -429,11 +462,30 @@ impl Drop for RunReservation {
     }
 }
 
+#[cfg(unix)]
+#[derive(Clone, Copy)]
+struct BackgroundReapPolicy {
+    deadline: Duration,
+    max_wait_errors: usize,
+    inject_wait_failure: bool,
+}
+
+#[cfg(unix)]
+struct QuarantinedReap {
+    _child: tokio::process::Child,
+    _resources: Option<RunResources>,
+    _reservation: Option<RunReservation>,
+}
+
 pub struct Supervisor {
     limits: SupervisorLimits,
     active: Arc<Mutex<HashMap<String, Arc<RunToken>>>>,
     background_reaps: Arc<AtomicUsize>,
     background_reap_gate: Arc<Mutex<Option<Arc<tokio::sync::Notify>>>>,
+    #[cfg(unix)]
+    background_reap_policy: Arc<Mutex<BackgroundReapPolicy>>,
+    #[cfg(unix)]
+    quarantined_reaps: Arc<Mutex<Vec<QuarantinedReap>>>,
 }
 
 impl Supervisor {
@@ -443,6 +495,14 @@ impl Supervisor {
             active: Arc::new(Mutex::new(HashMap::new())),
             background_reaps: Arc::new(AtomicUsize::new(0)),
             background_reap_gate: Arc::new(Mutex::new(None)),
+            #[cfg(unix)]
+            background_reap_policy: Arc::new(Mutex::new(BackgroundReapPolicy {
+                deadline: Duration::from_secs(2),
+                max_wait_errors: 16,
+                inject_wait_failure: false,
+            })),
+            #[cfg(unix)]
+            quarantined_reaps: Arc::new(Mutex::new(Vec::new())),
         }
     }
 
@@ -489,12 +549,37 @@ impl Supervisor {
         self.background_reaps.load(Ordering::Acquire)
     }
 
+    #[cfg(unix)]
+    pub fn quarantined_reap_count(&self) -> usize {
+        self.quarantined_reaps
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .len()
+    }
+
     #[doc(hidden)]
     pub fn install_background_reap_gate_for_test(&self, gate: Arc<tokio::sync::Notify>) {
         *self
             .background_reap_gate
             .lock()
             .unwrap_or_else(|poisoned| poisoned.into_inner()) = Some(gate);
+    }
+
+    #[cfg(unix)]
+    #[doc(hidden)]
+    pub fn install_permanent_background_wait_failure_for_test(
+        &self,
+        deadline: Duration,
+        max_wait_errors: usize,
+    ) {
+        *self
+            .background_reap_policy
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner()) = BackgroundReapPolicy {
+            deadline,
+            max_wait_errors,
+            inject_wait_failure: true,
+        };
     }
 
     pub fn reserve(&self, request_id: &str) -> Result<RunReservation, RuntimeError> {
@@ -638,6 +723,10 @@ impl Supervisor {
             .lock()
             .unwrap_or_else(|poisoned| poisoned.into_inner())
             .clone();
+        let background_reap_policy = *self
+            .background_reap_policy
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
         let mut guard = RunGuard::new(
             reservation,
             child,
@@ -646,7 +735,22 @@ impl Supervisor {
                 .expect("run resources transfer exactly once after spawn"),
             Arc::clone(&self.background_reaps),
             reap_gate,
+            background_reap_policy,
+            Arc::clone(&self.quarantined_reaps),
         );
+        if let Some(verifier) = &spec.launch_verifier {
+            let pid = guard
+                .child
+                .as_ref()
+                .and_then(tokio::process::Child::id)
+                .expect("spawned child has an ID");
+            if let Err(error) = verifier.verify_child(pid) {
+                if let Some(resources) = &guard.resources {
+                    resources.report_failure(&error);
+                }
+                return Err(RuntimeError::cleanup("containment_failed", error));
+            }
+        }
         let child_stdin = guard.child_mut().stdin.take().expect("piped worker stdin");
         let stdout = guard
             .child_mut()
@@ -893,6 +997,12 @@ impl RunResources {
         }
     }
 
+    fn report_failure(&self, diagnostic: &str) {
+        if let Some(reporter) = &self.reporter {
+            reporter.report(diagnostic);
+        }
+    }
+
     fn finish_inner(&mut self) -> Result<(), RuntimeError> {
         if self.finalized {
             return Ok(());
@@ -1073,6 +1183,8 @@ struct RunGuard {
     resources: Option<RunResources>,
     background_reaps: Arc<AtomicUsize>,
     background_reap_gate: Option<Arc<tokio::sync::Notify>>,
+    background_reap_policy: BackgroundReapPolicy,
+    quarantined_reaps: Arc<Mutex<Vec<QuarantinedReap>>>,
 }
 
 #[cfg(unix)]
@@ -1083,6 +1195,8 @@ impl RunGuard {
         resources: RunResources,
         background_reaps: Arc<AtomicUsize>,
         background_reap_gate: Option<Arc<tokio::sync::Notify>>,
+        background_reap_policy: BackgroundReapPolicy,
+        quarantined_reaps: Arc<Mutex<Vec<QuarantinedReap>>>,
     ) -> Self {
         let process_group = child.id().expect("spawned child has an ID") as i32;
         Self {
@@ -1094,6 +1208,8 @@ impl RunGuard {
             resources: Some(resources),
             background_reaps,
             background_reap_gate,
+            background_reap_policy,
+            quarantined_reaps,
         }
     }
 
@@ -1159,20 +1275,73 @@ impl Drop for RunGuard {
                     let reap_gate = self.background_reap_gate.take();
                     let resources = self.resources.take();
                     let reservation = self.reservation.take();
+                    let policy = self.background_reap_policy;
+                    let quarantined_reaps = Arc::clone(&self.quarantined_reaps);
                     runtime.spawn(async move {
                         if let Some(gate) = reap_gate {
                             gate.notified().await;
                         }
+                        let mut resources = resources;
+                        let mut reservation = reservation;
+                        let deadline = tokio::time::Instant::now() + policy.deadline;
+                        let mut wait_errors = 0usize;
+                        let mut quarantine_reason = None;
                         loop {
-                            match child.wait().await {
+                            if tokio::time::Instant::now() >= deadline {
+                                quarantine_reason = Some(
+                                    "background worker wait exceeded its hard cleanup deadline; process death is unconfirmed and resources are quarantined",
+                                );
+                                break;
+                            }
+                            let wait_result = if policy.inject_wait_failure {
+                                tokio::time::sleep(Duration::from_millis(10)).await;
+                                Err(std::io::Error::new(
+                                    std::io::ErrorKind::Other,
+                                    "injected permanent wait failure",
+                                ))
+                            } else {
+                                match tokio::time::timeout_at(deadline, child.wait()).await {
+                                    Ok(result) => result,
+                                    Err(_) => {
+                                        quarantine_reason = Some(
+                                            "background worker wait exceeded its hard cleanup deadline; process death is unconfirmed and resources are quarantined",
+                                        );
+                                        break;
+                                    }
+                                }
+                            };
+                            match wait_result {
                                 Ok(_) => break,
-                                Err(_) => tokio::time::sleep(Duration::from_millis(10)).await,
+                                Err(_) => {
+                                    wait_errors += 1;
+                                    if wait_errors >= policy.max_wait_errors.max(1) {
+                                        quarantine_reason = Some(
+                                            "background worker wait failed permanently; process death is unconfirmed and resources are quarantined",
+                                        );
+                                        break;
+                                    }
+                                    tokio::time::sleep(Duration::from_millis(10)).await;
+                                }
                             }
                         }
-                        if let Some(resources) = resources {
-                            let _ = resources.finish();
+                        if let Some(reason) = quarantine_reason {
+                            if let Some(resources) = &resources {
+                                resources.report_failure(reason);
+                            }
+                            quarantined_reaps
+                                .lock()
+                                .unwrap_or_else(|poisoned| poisoned.into_inner())
+                                .push(QuarantinedReap {
+                                    _child: child,
+                                    _resources: resources.take(),
+                                    _reservation: reservation.take(),
+                                });
+                        } else {
+                            if let Some(resources) = resources.take() {
+                                let _ = resources.finish();
+                            }
+                            drop(reservation.take());
                         }
-                        drop(reservation);
                         background_reaps.fetch_sub(1, Ordering::AcqRel);
                     });
                 }

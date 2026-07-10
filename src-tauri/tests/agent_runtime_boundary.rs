@@ -1,8 +1,11 @@
 #[cfg(target_os = "linux")]
 use app_lib::agent_runtime::linux::{
     cgroup_construction_cleanup_failure_for_test, cgroup_construction_failure_for_test,
-    compile_seccomp_bpf, LinuxBackend, LinuxQualificationContext, LinuxSystemPaths,
-    OfflineLinuxProvisioningContainment,
+    compile_seccomp_bpf, qualification_cgroup_policy_for_test,
+    qualification_owned_cgroups_absent_for_test, qualification_owned_request_dirs_absent_for_test,
+    verify_cgroup_event_delta_for_test, verify_production_cgroup_for_test,
+    verify_worker_cgroup_placement_for_test, CgroupProbeKind, LinuxBackend,
+    LinuxQualificationContext, LinuxSystemPaths, OfflineLinuxProvisioningContainment,
 };
 use app_lib::agent_runtime::macos::{
     active_identity_hashers_for_test, build_seatbelt_profile, cirq_rlimit_probe_source,
@@ -28,7 +31,9 @@ use std::fs;
 use std::fs::OpenOptions;
 use std::path::{Path, PathBuf};
 #[cfg(target_os = "linux")]
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Barrier, Mutex};
+#[cfg(target_os = "linux")]
+use std::thread;
 use std::time::Duration;
 use tempfile::TempDir;
 
@@ -196,6 +201,123 @@ fn linux_seccomp_filter_is_nonempty_and_architecture_checked() {
 
 #[cfg(target_os = "linux")]
 #[test]
+fn production_cgroup_discovery_rejects_a_normal_directory_fixture() {
+    let root = TempDir::new().unwrap();
+    for (name, value) in [
+        ("cgroup.type", "domain\n"),
+        ("cgroup.controllers", "cpu memory pids\n"),
+        ("cgroup.subtree_control", "cpu memory pids\n"),
+        ("cgroup.procs", ""),
+    ] {
+        fs::write(root.path().join(name), value).unwrap();
+    }
+
+    let error = verify_production_cgroup_for_test(root.path()).unwrap_err();
+
+    assert!(error.contains("cgroup v2 filesystem"), "{error}");
+}
+
+#[cfg(target_os = "linux")]
+#[test]
+fn trusted_parent_placement_requires_exact_pid_and_populated_evidence() {
+    let root = TempDir::new().unwrap();
+    fs::write(root.path().join("cgroup.procs"), "111\n4242\n").unwrap();
+    fs::write(root.path().join("cgroup.events"), "populated 1\nfrozen 0\n").unwrap();
+
+    verify_worker_cgroup_placement_for_test(root.path(), 4242).unwrap();
+    let wrong_pid = verify_worker_cgroup_placement_for_test(root.path(), 424).unwrap_err();
+    assert!(wrong_pid.contains("exact worker PID"), "{wrong_pid}");
+    fs::write(root.path().join("cgroup.events"), "populated 0\n").unwrap();
+    let empty = verify_worker_cgroup_placement_for_test(root.path(), 4242).unwrap_err();
+    assert!(empty.contains("populated"), "{empty}");
+}
+
+#[cfg(target_os = "linux")]
+#[test]
+fn qualification_controller_policies_are_independent_of_parent_rlimits() {
+    let memory = qualification_cgroup_policy_for_test(CgroupProbeKind::Memory);
+    assert!(memory.memory_max < memory.resource_limits.address_space_bytes);
+    let pids = qualification_cgroup_policy_for_test(CgroupProbeKind::Pids);
+    assert!(pids.pids_max < pids.resource_limits.processes);
+    let cpu = qualification_cgroup_policy_for_test(CgroupProbeKind::Cpu);
+    assert!(cpu.cpu_quota < cpu.cpu_period);
+    assert!(cpu.resource_limits.cpu_seconds >= 10);
+
+    verify_cgroup_event_delta_for_test(
+        CgroupProbeKind::Memory,
+        "oom 0\noom_kill 0\n",
+        "oom 1\noom_kill 1\n",
+    )
+    .unwrap();
+    verify_cgroup_event_delta_for_test(CgroupProbeKind::Pids, "max 0\n", "max 1\n").unwrap();
+    verify_cgroup_event_delta_for_test(
+        CgroupProbeKind::Cpu,
+        "nr_throttled 0\nthrottled_usec 0\n",
+        "nr_throttled 2\nthrottled_usec 5000\n",
+    )
+    .unwrap();
+    assert!(verify_cgroup_event_delta_for_test(
+        CgroupProbeKind::Memory,
+        "oom 0\noom_kill 0\n",
+        "oom 0\noom_kill 0\n",
+    )
+    .is_err());
+}
+
+#[cfg(target_os = "linux")]
+#[test]
+fn qualification_ignores_concurrent_cgroups_it_did_not_create() {
+    let root = TempDir::new().unwrap();
+    let concurrent = root.path().join("request-concurrent");
+    let barrier = Arc::new(Barrier::new(2));
+    let concurrent_task = {
+        let concurrent = concurrent.clone();
+        let barrier = Arc::clone(&barrier);
+        thread::spawn(move || {
+            fs::create_dir(&concurrent).unwrap();
+            barrier.wait();
+            thread::sleep(Duration::from_millis(50));
+        })
+    };
+    barrier.wait();
+    let owned = root.path().join("request-owned");
+
+    qualification_owned_cgroups_absent_for_test(&[owned.clone()]).unwrap();
+    qualification_owned_request_dirs_absent_for_test(&[root
+        .path()
+        .join("qualification-request-owned")])
+    .unwrap();
+    assert!(concurrent.exists());
+    concurrent_task.join().unwrap();
+    fs::create_dir(&owned).unwrap();
+    assert!(qualification_owned_cgroups_absent_for_test(&[owned]).is_err());
+    assert!(concurrent.exists());
+}
+
+#[cfg(target_os = "linux")]
+#[test]
+fn linux_ci_caches_every_artifact_before_hostile_parent_environment() {
+    let workflow = include_str!("../../.github/workflows/build.yml");
+    let linux_job = workflow
+        .split("  linux-agent-isolation:")
+        .nth(1)
+        .expect("Linux isolation job");
+    let qualification = linux_job
+        .find("- name: Require runtime-proven Linux isolation")
+        .expect("qualification step");
+    let before = &linux_job[..qualification];
+    let after = &linux_job[qualification..];
+
+    assert!(before.contains("uv pip sync"));
+    assert!(before.contains("cargo fetch --locked"));
+    assert!(before.contains("cargo test --locked --no-run"));
+    assert!(after.contains("cargo test --locked --offline"));
+    assert!(after.contains("HTTP_PROXY: qualification-fake-http-proxy"));
+    assert!(!after.contains("\n      - name:"));
+}
+
+#[cfg(target_os = "linux")]
+#[test]
 fn linux_worker_spec_uses_fixed_bwrap_boundary_and_cgroup_limits() {
     let fixture = fixture();
     let cgroup = fixture.context.request_temp_root.join("delegated-cgroup");
@@ -229,6 +351,9 @@ fn linux_worker_spec_uses_fixed_bwrap_boundary_and_cgroup_limits() {
     .unwrap();
     let request = context.request_temp_root.join("linux-request");
     fs::create_dir(&request).unwrap();
+    assert!(LinuxBackend::discover(&context)
+        .unwrap_err()
+        .contains("Injected Linux system paths cannot qualify production"));
     let spec = LinuxBackend::worker_spec(&context, &canonical(request)).unwrap();
 
     assert_eq!(spec.executable, context.system_paths.bwrap);
@@ -255,6 +380,7 @@ fn linux_worker_spec_uses_fixed_bwrap_boundary_and_cgroup_limits() {
     assert_eq!(spec.env["HOME"], "/home/agent");
     assert_eq!(spec.env["TMPDIR"], "/tmp");
     assert_eq!(spec.resource_limits, ResourceLimits::production());
+    assert!(spec.launch_verifier.is_some());
     let child = spec
         .linux
         .as_ref()
@@ -281,6 +407,7 @@ fn linux_worker_spec_uses_fixed_bwrap_boundary_and_cgroup_limits() {
 #[test]
 fn partial_cgroup_construction_cleans_every_setup_failure_stage() {
     for stage in [
+        "cgroup.type",
         "memory.max",
         "memory.swap.max",
         "pids.max",
@@ -288,6 +415,9 @@ fn partial_cgroup_construction_cleans_every_setup_failure_stage() {
         "cgroup.procs",
         "cgroup.kill",
         "cgroup.events",
+        "memory.events",
+        "pids.events",
+        "cpu.stat",
     ] {
         let root = TempDir::new().unwrap();
         let reporter = Arc::new(RecordingCleanupReporter::default());

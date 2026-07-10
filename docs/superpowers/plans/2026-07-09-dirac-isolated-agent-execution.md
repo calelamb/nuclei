@@ -1335,6 +1335,39 @@ combined, and failed fallback cleanup reports/revokes from `Drop`. Fault tests
 cover every setup stage plus kill, events, populated, and removal cleanup
 failures; no unchecked partial-leaf removal remains.
 
+The Linux review hardening requires runtime evidence rather than path-shaped
+fixtures. Production discovery verifies `CGROUP2_SUPER_MAGIC`, resolves the
+canonical cgroup2 mount from `/proc/self/mountinfo`, requires the delegated root
+to be a strict owned/writable domain descendant, and validates writable
+membership/subtree controls and enabled cpu/memory/pids controllers. Injected
+normal-directory cgroup files remain available only through the non-production
+test backend and cannot qualify an installed backend.
+
+Every production spawn is synchronously checked by the trusted parent after the
+`pre_exec` join: the exact host bwrap/worker PID must appear in that unique
+leaf's `cgroup.procs`, and `cgroup.events` must report populated. The sandbox
+does not assert a host cgroup path because its cgroup namespace correctly shows
+that leaf as `/`. Qualification applies probe-specific limits through the same
+creation, pre-exec placement, supervisor, and cleanup path. Its memory policy
+sets `memory.max` below `RLIMIT_AS` and requires `memory.events` oom and
+oom_kill deltas; its pids policy sets `pids.max` below `RLIMIT_NPROC`, exercises
+allowed thread clones, and requires a `pids.events max` delta; its cpu policy
+sets restrictive `cpu.max` below the parent CPU/wall budget and requires
+`cpu.stat` throttling deltas before accepting `cgroup_v2`.
+
+Background reaping has both a hard deadline and a wait-error retry budget.
+Exhaustion synchronously revokes the matching generation and reaches an
+observable bounded terminal state, but retains the unconfirmed child, runtime
+lease, request directory, cgroup, and reservation in quarantine. Qualification
+tracks the exact random cgroup leaves and request directories it creates and
+checks only those paths; concurrent legitimate requests cannot invalidate a
+refresh.
+
+The Linux CI job completes uv Python/package installation, then caches both
+`cargo fetch --locked` and `cargo test --locked --no-run` before fake secrets,
+proxies, or loader variables are injected. The hostile qualification step runs
+`cargo test --locked --offline`, and no later step can perform network I/O.
+
 The pure-Rust `seccompiler` filter is compiled for the verified host
 architecture, serialized into a sealed memfd, and inherited only by bwrap.
 Bubblewrap applies it after namespace/mount setup. It denies the socket family
@@ -1347,10 +1380,11 @@ an exact environment allowlist.
 Qualification uses the production resolver, specification, and supervisor
 paths with trusted-parent random sentinels. It requires concrete denial or
 limit evidence for project/home/symlink reads, exact environment, IPv4/IPv6/
-Unix sockets, subprocess/fork/setsid/clone/execveat, PID and cgroup placement,
-cgroup escape, CPU, 2GB allocation, stdout/stderr caps, descriptor exhaustion,
-cancellation, malformed protocol, descriptor closure, cleanup, and valid Cirq
-parse. The nonignored required test is activated only by
+Unix sockets, subprocess/fork/setsid/clone/execveat, trusted-parent PID
+placement, cgroup escape, independent memory/pids/cpu event deltas,
+stdout/stderr caps, descriptor exhaustion, cancellation, malformed protocol,
+descriptor closure, cleanup, and valid Cirq parse. The nonignored required test
+is activated only by
 `NUCLEI_REQUIRE_LINUX_AGENT_ISOLATION=1`; the pinned GitHub job provisions the
 fixture and must fail if the hosted runner cannot delegate cgroup v2. Dynamic
 provisioning remains unavailable because no independently contained offline

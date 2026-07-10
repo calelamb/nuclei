@@ -351,8 +351,15 @@ jobs:
             echo "NUCLEI_REQUIRE_LINUX_AGENT_ISOLATION=1"
           } >> "$GITHUB_ENV"
 
+      - name: Cache Linux qualification Rust artifacts
+        working-directory: src-tauri
+        run: |
+          set -euo pipefail
+          cargo fetch --locked
+          cargo test --locked --no-run --test agent_runtime_boundary
+
       - name: Require runtime-proven Linux isolation
-        run: cargo test --test agent_runtime_boundary linux_required_qualification_passes_when_explicitly_required -- --nocapture
+        run: cargo test --locked --offline --test agent_runtime_boundary linux_required_qualification_passes_when_explicitly_required -- --nocapture
         working-directory: src-tauri
         env:
           ANTHROPIC_API_KEY: qualification-fake-anthropic
