@@ -272,6 +272,11 @@ fn qualification_controller_policies_are_independent_of_parent_rlimits() {
         "oom 0\noom_kill 0\n",
     )
     .is_err());
+    let linux_source = include_str!("../src/agent_runtime/linux.rs");
+    assert!(
+        linux_source.contains("chunk[::4096]"),
+        "memory qualification must dirty every allocated page"
+    );
 }
 
 #[cfg(target_os = "linux")]

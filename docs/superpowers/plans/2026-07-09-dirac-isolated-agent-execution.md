@@ -1350,10 +1350,12 @@ does not assert a host cgroup path because its cgroup namespace correctly shows
 that leaf as `/`. Qualification applies probe-specific limits through the same
 creation, pre-exec placement, supervisor, and cleanup path. Its memory policy
 sets `memory.max` below `RLIMIT_AS` and requires `memory.events` oom and
-oom_kill deltas; its pids policy sets `pids.max` below `RLIMIT_NPROC`, exercises
-allowed thread clones, and requires a `pids.events max` delta; its cpu policy
-sets restrictive `cpu.max` below the parent CPU/wall budget and requires
-`cpu.stat` throttling deltas before accepting `cgroup_v2`.
+oom_kill deltas while explicitly dirtying every allocated page (rather than
+merely reserving zero-backed virtual memory); its pids policy sets `pids.max`
+below `RLIMIT_NPROC`, exercises allowed thread clones, and requires a
+`pids.events max` delta; its cpu policy sets restrictive `cpu.max` below the
+parent CPU/wall budget and requires `cpu.stat` throttling deltas before
+accepting `cgroup_v2`.
 
 Linux keeps the parent `RLIMIT_NPROC` defense above the authoritative request
 `pids.max`: `RLIMIT_NPROC` is uid-wide and a tiny value can otherwise block

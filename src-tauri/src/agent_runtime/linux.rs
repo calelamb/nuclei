@@ -2023,7 +2023,7 @@ async fn qualification_probes(context: &LinuxQualificationContext) -> Result<(),
 
     run_expected_worker_failure_with_policy(
         &resolver,
-        "chunks=[]\nwhile True: chunks.append(bytearray(64*1024*1024))",
+        "chunks=[]\nwhile True:\n chunk=bytearray(64*1024*1024)\n chunk[::4096]=b'x'*(len(chunk)//4096)\n chunks.append(chunk)",
         CgroupProbeKind::Memory,
         &["worker_failed"],
         "memory cgroup OOM",
