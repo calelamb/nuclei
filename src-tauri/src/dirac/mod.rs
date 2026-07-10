@@ -5,15 +5,23 @@
 //! the disposable Python worker (`kernel/agent_worker.py`), isolated in its own
 //! process group with a hard wall-timeout that kills the whole group. Quantum
 //! work stays in Python; Rust owns supervision, limits, and framing.
+//!
+//! Stage R2 adds the **secure model gateway** (`gateway.rs`): the Anthropic
+//! API key lives only in the OS keychain, and only Rust ever attaches it to
+//! an outbound request. The `dirac_set_api_key`/`dirac_has_api_key`/
+//! `dirac_clear_api_key` commands below are the frontend's only touchpoint —
+//! the key itself never crosses the Tauri IPC boundary in either direction.
 
 pub mod executor;
+pub mod gateway;
 pub mod types;
 
 pub use executor::{run_agent_request, DEFAULT_WALL};
+pub use gateway::ModelGateway;
 pub use types::{AgentExecuteRequest, AgentExecuteResponse};
 
 use std::path::PathBuf;
-use tauri::Manager;
+use tauri::{Manager, State};
 
 /// Run one agent request in the disposable worker and return a structured
 /// response. Worker failures are returned as an `AgentExecuteResponse` with
@@ -89,4 +97,26 @@ fn resolve_worker_paths(app_handle: &tauri::AppHandle) -> Result<(PathBuf, PathB
     }
 
     Ok((worker_script, cwd))
+}
+
+/// Store the Anthropic API key in the OS keychain. The key is never returned
+/// to the frontend, logged, or placed in the model's context — this command
+/// is write-only from the frontend's point of view. Errors are stringified
+/// via `GatewayError`'s `Display`, which never includes the key.
+#[tauri::command]
+pub fn dirac_set_api_key(gateway: State<'_, ModelGateway>, key: String) -> Result<(), String> {
+    gateway.set_api_key(&key).map_err(|e| e.to_string())
+}
+
+/// Whether an Anthropic API key is currently stored. Used by the frontend to
+/// decide whether to show the "connect Dirac" flow.
+#[tauri::command]
+pub fn dirac_has_api_key(gateway: State<'_, ModelGateway>) -> bool {
+    gateway.has_api_key()
+}
+
+/// Remove the stored Anthropic API key.
+#[tauri::command]
+pub fn dirac_clear_api_key(gateway: State<'_, ModelGateway>) -> Result<(), String> {
+    gateway.clear_api_key().map_err(|e| e.to_string())
 }
