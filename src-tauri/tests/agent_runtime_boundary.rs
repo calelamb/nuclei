@@ -326,6 +326,7 @@ fn linux_ci_caches_every_artifact_before_hostile_parent_environment() {
     assert!(before.contains("\"test\", \"idlelib\", \"tkinter\", \"turtledemo\", \"ensurepip\""));
     assert!(before.contains("libwebkit2gtk-4.1-dev"));
     assert!(before.contains("libayatana-appindicator3-dev"));
+    assert!(before.contains("kernel.apparmor_restrict_unprivileged_userns=0"));
     assert!(before.contains("cargo fetch --locked --target x86_64-unknown-linux-gnu"));
     assert!(before.contains("cargo test --locked --no-run"));
     assert!(after.contains("cargo test --locked --offline"));

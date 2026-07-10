@@ -257,6 +257,9 @@ jobs:
             libssl-dev \
             libwebkit2gtk-4.1-dev \
             libxdo-dev
+          if test -e /proc/sys/kernel/apparmor_restrict_unprivileged_userns; then
+            sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+          fi
           test "$(readlink -f "$(command -v bwrap)")" = /usr/bin/bwrap
 
       - name: Create delegated cgroup v2 subtree

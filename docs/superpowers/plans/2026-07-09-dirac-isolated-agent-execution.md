@@ -1383,7 +1383,11 @@ Python or dereference a second venv copy of the same managed tree. Before the
 generation is locked, the fixture removes only known non-worker assets
 (headers/share data, stdlib tests, IDLE/tkinter/turtle demos, ensurepip, and
 bytecode caches); the production Cirq import/parse probe proves the pruned
-runtime remains sufficient.
+runtime remains sufficient. On Ubuntu 24.04 hosted runners, the explicit fixture
+also disables the AppArmor unprivileged-user-namespace restriction that
+otherwise blocks bwrap from configuring loopback inside its newly created
+network namespace; discovery itself is not weakened and unprepared hosts remain
+unavailable.
 
 The pure-Rust `seccompiler` filter is compiled for the verified host
 architecture, serialized into a sealed memfd, and inherited only by bwrap.
