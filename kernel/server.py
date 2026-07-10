@@ -1,5 +1,6 @@
 import asyncio
 import json
+import signal
 import sys
 import os
 
@@ -48,6 +49,10 @@ async def run_agent_worker(request: dict) -> dict:
             stdin=asyncio.subprocess.PIPE,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.DEVNULL,
+            # New session/process group so a timeout can reap the worker AND any
+            # children it spawned (fork-bomb containment, since the worker no
+            # longer sets RLIMIT_NPROC — see kernel/agent_limits.py).
+            start_new_session=True,
         )
     except OSError as exc:
         return _agent_error(request_id, "worker_spawn_failed", str(exc))
@@ -57,10 +62,7 @@ async def run_agent_worker(request: dict) -> dict:
             proc.communicate(input=payload), timeout=_AGENT_WORKER_WALL_SECONDS
         )
     except asyncio.TimeoutError:
-        try:
-            proc.kill()
-        except ProcessLookupError:
-            pass
+        _kill_process_group(proc)
         await proc.wait()
         return _agent_error(request_id, "worker_timeout", "Agent worker exceeded its time budget.")
 
@@ -75,6 +77,19 @@ async def run_agent_worker(request: dict) -> dict:
     if not isinstance(response, dict):
         return _agent_error(request_id, "worker_bad_output", "Agent worker response was not an object.")
     return response
+
+
+def _kill_process_group(proc) -> None:
+    """SIGKILL the worker's whole process group (it was started in its own
+    session), reaping any children a runaway request spawned. Falls back to
+    killing just the process if the group can't be resolved."""
+    try:
+        os.killpg(os.getpgid(proc.pid), signal.SIGKILL)
+    except (ProcessLookupError, PermissionError, OSError):
+        try:
+            proc.kill()
+        except ProcessLookupError:
+            pass
 
 
 def _agent_error(request_id: str, code: str, message: str) -> dict:

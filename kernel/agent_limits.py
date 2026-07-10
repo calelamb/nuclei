@@ -58,21 +58,27 @@ def apply_worker_limits(limits: WorkerLimits) -> None:
     Limits are applied independently: a platform that rejects one must not
     prevent the others from taking effect.
 
-    ``RLIMIT_AS`` is intentionally NOT enforced. It caps *virtual* address
-    space, which numpy/BLAS and qiskit's rustworkx routing transpiler
-    over-reserve (several GiB even for a two-qubit circuit), so any finite value
-    is either too tight for legitimate work — surfacing as a MemoryError or, in
-    the Rust routing path, an allocation-abort ``PanicException`` — or too loose
-    to matter. macOS already ran without it (Darwin rejects a finite RLIMIT_AS
-    with EINVAL); dropping it on Linux too keeps both platforms consistent.
-    Worker memory is instead bounded by ``RLIMIT_CPU``, the supervisor's wall
-    timeout, and the worker's short single-request lifetime.
+    Two rlimits are intentionally NOT enforced, because both are blunt caps
+    that break qiskit's numpy/Rust stack while providing little real safety:
+
+    - ``RLIMIT_AS`` caps *virtual* address space, which numpy/BLAS over-reserve
+      (several GiB even for a two-qubit circuit); a finite value surfaces as a
+      MemoryError or a Rust allocation-abort ``PanicException``.
+    - ``RLIMIT_NPROC`` caps processes/threads *for the whole real user ID
+      system-wide*, so on a multi-process host it is already exceeded — any new
+      thread ``clone()`` then fails, and qiskit's rustworkx routing (rayon)
+      panics when it cannot spawn a worker thread.
+
+    macOS already ran without RLIMIT_AS (Darwin rejects a finite value with
+    EINVAL); dropping both on Linux too keeps the platforms consistent. Runaway
+    memory/CPU is instead bounded by ``RLIMIT_CPU``, the supervisor's wall
+    timeout, and the worker's short single-request lifetime; a fork bomb is
+    reaped by the process-group kill the server applies on timeout.
     """
     limit_plan = [
         (resource.RLIMIT_CPU, limits.cpu_seconds),
         (resource.RLIMIT_FSIZE, limits.file_bytes),
         (resource.RLIMIT_NOFILE, limits.open_files),
-        (resource.RLIMIT_NPROC, limits.processes),
         (resource.RLIMIT_CORE, 0),
     ]
 

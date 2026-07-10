@@ -133,7 +133,6 @@ def test_apply_worker_limits_sets_every_required_rlimit(monkeypatch) -> None:
         (resource.RLIMIT_CPU, (limits.cpu_seconds, limits.cpu_seconds)),
         (resource.RLIMIT_FSIZE, (limits.file_bytes, limits.file_bytes)),
         (resource.RLIMIT_NOFILE, (limits.open_files, limits.open_files)),
-        (resource.RLIMIT_NPROC, (limits.processes, limits.processes)),
         (resource.RLIMIT_CORE, (0, 0)),
     ]
 
