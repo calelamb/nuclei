@@ -14,18 +14,21 @@
 
 pub mod analysis;
 pub mod budget;
+pub mod commands;
 pub mod executor;
 pub mod gateway;
 pub mod journal;
 pub mod kernel;
 pub mod orchestrator;
 pub mod policy;
+pub mod runner;
 pub mod submit;
 pub mod tool_exec;
 pub mod tools;
 pub mod types;
 pub mod workspace;
 
+pub use commands::{dirac_cancel_run, dirac_start_run, DiracRuns};
 pub use executor::{run_agent_request, DEFAULT_WALL};
 pub use gateway::ModelGateway;
 pub use types::{AgentExecuteRequest, AgentExecuteResponse};
@@ -53,13 +56,7 @@ pub fn dirac_execute(
 
     // Prefer the Nuclei-managed venv's Python (same resolution the kernel uses).
     // Fall back to system `python3` if the managed venv can't be bootstrapped.
-    let python = match crate::commands::frameworks::ensure_kernel_runtime(&app_handle) {
-        Ok(p) => p,
-        Err(e) => {
-            log::warn!("Managed venv unavailable ({e}); falling back to system python3");
-            PathBuf::from("python3")
-        }
-    };
+    let python = resolve_python(&app_handle);
 
     log::info!(
         "dirac_execute: {} -I {} (cwd: {})",
@@ -107,6 +104,20 @@ fn resolve_worker_paths(app_handle: &tauri::AppHandle) -> Result<(PathBuf, PathB
     }
 
     Ok((worker_script, cwd))
+}
+
+/// Resolve the Python interpreter for the disposable worker: prefer the
+/// Nuclei-managed venv (the same one the kernel uses), falling back to system
+/// `python3` if the managed venv can't be bootstrapped. Shared by
+/// `dirac_execute` and the R5 run driver's `RealKernel`.
+pub(super) fn resolve_python(app_handle: &tauri::AppHandle) -> PathBuf {
+    match crate::commands::frameworks::ensure_kernel_runtime(app_handle) {
+        Ok(p) => p,
+        Err(e) => {
+            log::warn!("Managed venv unavailable ({e}); falling back to system python3");
+            PathBuf::from("python3")
+        }
+    }
 }
 
 /// Store the Anthropic API key in the OS keychain. The key is never returned

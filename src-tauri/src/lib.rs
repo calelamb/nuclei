@@ -22,6 +22,7 @@ pub fn run() {
         .plugin(tauri_plugin_shell::init())
         .manage(kernel_state)
         .manage(dirac::ModelGateway::default())
+        .manage(dirac::DiracRuns::default())
         .invoke_handler(tauri::generate_handler![
             commands::kernel::start_kernel,
             commands::kernel::stop_kernel,
@@ -31,6 +32,8 @@ pub fn run() {
             dirac::dirac_set_api_key,
             dirac::dirac_has_api_key,
             dirac::dirac_clear_api_key,
+            dirac::commands::dirac_start_run,
+            dirac::commands::dirac_cancel_run,
         ])
         .setup(|app| {
             let log_level = if cfg!(debug_assertions) {

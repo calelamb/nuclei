@@ -60,6 +60,13 @@ impl MemWorkspace {
         self.files.iter().find(|(p, _)| p == path).map(|(_, r)| r)
     }
 
+    /// Look up a recorded patch transaction by id. Used by the R5 run driver to
+    /// recover a patch's before/after content when emitting a `Patch` run event
+    /// (the tool evidence carries only the id + hashes, not the full content).
+    pub fn transaction(&self, id: &str) -> Option<PatchTransaction> {
+        self.transactions.get(id).cloned()
+    }
+
     fn upsert(&mut self, path: &str, record: FileRecord) {
         if let Some(entry) = self.files.iter_mut().find(|(p, _)| p == path) {
             entry.1 = record;

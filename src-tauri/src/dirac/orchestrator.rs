@@ -95,6 +95,15 @@ impl<'a> GatewayModel<'a> {
             max_tokens: DEFAULT_MAX_TOKENS,
         }
     }
+
+    /// Override the Anthropic model id (e.g. the frontend intent router's
+    /// Haiku/Sonnet choice). An empty string is ignored, keeping the default.
+    pub fn with_model(mut self, model: String) -> Self {
+        if !model.trim().is_empty() {
+            self.model = model;
+        }
+        self
+    }
 }
 
 impl ModelPort for GatewayModel<'_> {
