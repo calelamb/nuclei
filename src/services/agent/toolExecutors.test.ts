@@ -1,7 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import type { BackendInfo } from '../../types/hardware';
 import type { Gate } from '../../types/quantum';
+import { BudgetLedger } from './budgetLedger';
 import type { KernelPort, ParseOutcome, SimOutcome } from './interfaces';
+import { DEFAULT_POLICY } from './policy';
+import type { AutonomyPolicy, SubmissionFacts } from './policy';
+import { FakeSubmitPort } from './submitPort';
+import type { SubmitPort } from './submitPort';
 import { defaultFrameworkResolver, executeTool } from './toolExecutors';
 import type { ToolContext } from './toolExecutors';
 import { InMemoryWorkspace } from './workspace';
@@ -51,6 +56,39 @@ function makeCtx(
     resolveFramework: defaultFrameworkResolver(workspace),
     lastKnownHash: new Map(),
     getBackends,
+  };
+  return { ctx, workspace };
+}
+
+interface HardwareCtxOptions {
+  kernel?: KernelPort;
+  getBackends?: () => BackendInfo[];
+  submitPort?: SubmitPort;
+  policy?: AutonomyPolicy;
+  ledger?: BudgetLedger;
+  estimateCost?: (facts: SubmissionFacts) => number | null;
+}
+
+/** Like makeCtx, but exposes the full hardware-submission dependency set
+ * (submitPort/policy/ledger/estimateCost) for testing submit_hardware_job
+ * and friends. */
+function makeHardwareCtx(opts: HardwareCtxOptions = {}): { ctx: ToolContext; workspace: InMemoryWorkspace } {
+  const kernel = opts.kernel ?? makeFakeKernel();
+  const workspace = new InMemoryWorkspace([
+    { path: FILE_PATH, framework: 'qiskit', content: BELL_CODE, dirty: false },
+  ]);
+  const ctx: ToolContext = {
+    workspace,
+    kernel,
+    lastSim: {},
+    lastSnapshot: {},
+    resolveFramework: defaultFrameworkResolver(workspace),
+    lastKnownHash: new Map(),
+    getBackends: opts.getBackends,
+    submitPort: opts.submitPort,
+    policy: opts.policy,
+    ledger: opts.ledger,
+    estimateCost: opts.estimateCost,
   };
   return { ctx, workspace };
 }
@@ -374,6 +412,197 @@ describe('executeTool', () => {
   it('malformed (non-object) input never throws', async () => {
     const { ctx } = makeCtx();
     const evidence = await executeTool('read_quantum_file', 'not-an-object', ctx, 'tc1');
+    expect(evidence.ok).toBe(false);
+  });
+});
+
+describe('executeTool — hardware submission (safety-critical)', () => {
+  it(
+    'submit_hardware_job under DEFAULT_POLICY returns needs_approval for a real QPU backend and NEVER ' +
+      'calls the submit port — the core safety invariant',
+    async () => {
+      const submitPort = new FakeSubmitPort();
+      const qpuBackend = makeBackend({ name: 'ibm-brisbane', provider: 'ibm' });
+      const { ctx } = makeHardwareCtx({ getBackends: () => [qpuBackend], submitPort, policy: DEFAULT_POLICY });
+
+      const evidence = await executeTool(
+        'submit_hardware_job',
+        { backend: 'ibm-brisbane', shots: 100 },
+        ctx,
+        'tc1',
+      );
+
+      expect(evidence.ok).toBe(true);
+      expect(evidence.facts.submitted).toBe(false);
+      expect(evidence.facts.decision).toBe('needs_approval');
+      expect(Array.isArray(evidence.facts.reasons)).toBe(true);
+      expect((evidence.facts.reasons as string[]).length).toBeGreaterThan(0);
+      expect(submitPort.submissions).toHaveLength(0);
+    },
+  );
+
+  it('submit_hardware_job under DEFAULT_POLICY allows and submits a simulator backend', async () => {
+    const submitPort = new FakeSubmitPort();
+    const simBackend = makeBackend({ name: 'local-sim', provider: 'simulator' });
+    const { ctx } = makeHardwareCtx({ getBackends: () => [simBackend], submitPort, policy: DEFAULT_POLICY });
+
+    const evidence = await executeTool('submit_hardware_job', { backend: 'local-sim', shots: 256 }, ctx, 'tc1');
+
+    expect(evidence.ok).toBe(true);
+    expect(evidence.facts.submitted).toBe(true);
+    expect(evidence.facts.decision).toBe('allow');
+    expect(typeof evidence.facts.jobId).toBe('string');
+    expect(submitPort.submissions).toHaveLength(1);
+    expect(submitPort.submissions[0]).toMatchObject({ provider: 'simulator', backend: 'local-sim', shots: 256 });
+  });
+
+  it('submit_hardware_job de-duplicates an identical repeated allowed submission via the ledger', async () => {
+    const submitPort = new FakeSubmitPort();
+    const simBackend = makeBackend({ name: 'local-sim', provider: 'simulator' });
+    const ledger = new BudgetLedger(1000);
+    const { ctx } = makeHardwareCtx({
+      getBackends: () => [simBackend],
+      submitPort,
+      policy: DEFAULT_POLICY,
+      ledger,
+    });
+
+    const first = await executeTool('submit_hardware_job', { backend: 'local-sim', shots: 100 }, ctx, 'tc1');
+    expect(first.facts.submitted).toBe(true);
+
+    const second = await executeTool('submit_hardware_job', { backend: 'local-sim', shots: 100 }, ctx, 'tc2');
+    expect(second.ok).toBe(true);
+    expect(second.facts.submitted).toBe(false);
+    expect(second.facts.decision).toBe('duplicate');
+    expect(second.facts.jobId).toBe(first.facts.jobId);
+
+    // Still exactly one real submission — the duplicate never reached the port.
+    expect(submitPort.submissions).toHaveLength(1);
+  });
+
+  it('submit_hardware_job fails without throwing for an unknown backend, and never touches the submit port', async () => {
+    const submitPort = new FakeSubmitPort();
+    const { ctx } = makeHardwareCtx({ getBackends: () => [], submitPort, policy: DEFAULT_POLICY });
+
+    const evidence = await executeTool('submit_hardware_job', { backend: 'nope', shots: 10 }, ctx, 'tc1');
+
+    expect(evidence.ok).toBe(false);
+    expect(submitPort.submissions).toHaveLength(0);
+  });
+
+  it('submit_hardware_job reports "unavailable" when allowed but no submitPort is configured', async () => {
+    const simBackend = makeBackend({ name: 'local-sim', provider: 'simulator' });
+    const { ctx } = makeHardwareCtx({ getBackends: () => [simBackend], policy: DEFAULT_POLICY });
+
+    const evidence = await executeTool('submit_hardware_job', { backend: 'local-sim', shots: 10 }, ctx, 'tc1');
+
+    expect(evidence.ok).toBe(true);
+    expect(evidence.facts.submitted).toBe(false);
+    expect(evidence.facts.decision).toBe('unavailable');
+  });
+
+  it('submit_hardware_job fails without throwing on malformed input', async () => {
+    const { ctx } = makeHardwareCtx();
+    const evidence = await executeTool('submit_hardware_job', {}, ctx, 'tc1');
+    expect(evidence.ok).toBe(false);
+  });
+
+  it('poll_hardware_job reports status and queue position via the submit port', async () => {
+    const submitPort = new FakeSubmitPort();
+    const simBackend = makeBackend({ name: 'local-sim', provider: 'simulator' });
+    const { ctx } = makeHardwareCtx({ getBackends: () => [simBackend], submitPort, policy: DEFAULT_POLICY });
+
+    const submitted = await executeTool('submit_hardware_job', { backend: 'local-sim', shots: 10 }, ctx, 'tc1');
+    const jobId = submitted.facts.jobId as string;
+    submitPort.setStatus(jobId, 'running', 3);
+
+    const evidence = await executeTool('poll_hardware_job', { job_id: jobId }, ctx, 'tc2');
+    expect(evidence.ok).toBe(true);
+    expect(evidence.facts.status).toBe('running');
+    expect(evidence.facts.queuePosition).toBe(3);
+  });
+
+  it('poll_hardware_job reports unavailable without a submitPort, without throwing', async () => {
+    const { ctx } = makeHardwareCtx();
+    const evidence = await executeTool('poll_hardware_job', { job_id: 'job-1' }, ctx, 'tc1');
+    expect(evidence.ok).toBe(true);
+    expect(evidence.facts.available).toBe(false);
+  });
+
+  it('poll_hardware_job fails without throwing when job_id is missing', async () => {
+    const { ctx } = makeHardwareCtx({ submitPort: new FakeSubmitPort() });
+    const evidence = await executeTool('poll_hardware_job', {}, ctx, 'tc1');
+    expect(evidence.ok).toBe(false);
+  });
+
+  it('cancel_hardware_job cancels a pending job via the submit port', async () => {
+    const submitPort = new FakeSubmitPort();
+    const simBackend = makeBackend({ name: 'local-sim', provider: 'simulator' });
+    const { ctx } = makeHardwareCtx({ getBackends: () => [simBackend], submitPort, policy: DEFAULT_POLICY });
+
+    const submitted = await executeTool('submit_hardware_job', { backend: 'local-sim', shots: 10 }, ctx, 'tc1');
+    const jobId = submitted.facts.jobId as string;
+
+    const evidence = await executeTool('cancel_hardware_job', { job_id: jobId }, ctx, 'tc2');
+    expect(evidence.ok).toBe(true);
+    expect(evidence.facts.cancelled).toBe(true);
+  });
+
+  it('cancel_hardware_job reports unavailable without a submitPort, without throwing', async () => {
+    const { ctx } = makeHardwareCtx();
+    const evidence = await executeTool('cancel_hardware_job', { job_id: 'job-1' }, ctx, 'tc1');
+    expect(evidence.ok).toBe(true);
+    expect(evidence.facts.available).toBe(false);
+  });
+
+  it('analyze_hardware_result reports probabilities and an expected-distribution comparison', async () => {
+    const submitPort = new FakeSubmitPort();
+    const simBackend = makeBackend({ name: 'local-sim', provider: 'simulator' });
+    const { ctx } = makeHardwareCtx({ getBackends: () => [simBackend], submitPort, policy: DEFAULT_POLICY });
+
+    const submitted = await executeTool('submit_hardware_job', { backend: 'local-sim', shots: 10 }, ctx, 'tc1');
+    const jobId = submitted.facts.jobId as string;
+    submitPort.setResult(jobId, { jobId, probabilities: { '00': 0.5, '11': 0.5 } });
+
+    const evidence = await executeTool(
+      'analyze_hardware_result',
+      { job_id: jobId, expected_probabilities: { '00': 0.5, '11': 0.5 } },
+      ctx,
+      'tc2',
+    );
+
+    expect(evidence.ok).toBe(true);
+    expect(evidence.facts.probabilities).toEqual({ '00': 0.5, '11': 0.5 });
+    expect(evidence.facts.comparison).toBeDefined();
+    expect((evidence.facts.comparison as { matches: boolean }).matches).toBe(true);
+  });
+
+  it('analyze_hardware_result omits comparison when no expected distribution is given', async () => {
+    const submitPort = new FakeSubmitPort();
+    const simBackend = makeBackend({ name: 'local-sim', provider: 'simulator' });
+    const { ctx } = makeHardwareCtx({ getBackends: () => [simBackend], submitPort, policy: DEFAULT_POLICY });
+
+    const submitted = await executeTool('submit_hardware_job', { backend: 'local-sim', shots: 10 }, ctx, 'tc1');
+    const jobId = submitted.facts.jobId as string;
+    submitPort.setResult(jobId, { jobId, probabilities: { '00': 1 } });
+
+    const evidence = await executeTool('analyze_hardware_result', { job_id: jobId }, ctx, 'tc2');
+    expect(evidence.ok).toBe(true);
+    expect(evidence.facts.comparison).toBeUndefined();
+  });
+
+  it('analyze_hardware_result reports unavailable without a submitPort, without throwing', async () => {
+    const { ctx } = makeHardwareCtx();
+    const evidence = await executeTool('analyze_hardware_result', { job_id: 'job-1' }, ctx, 'tc1');
+    expect(evidence.ok).toBe(true);
+    expect(evidence.facts.available).toBe(false);
+  });
+
+  it('analyze_hardware_result surfaces an error for an unknown job without throwing', async () => {
+    const submitPort = new FakeSubmitPort();
+    const { ctx } = makeHardwareCtx({ submitPort, policy: DEFAULT_POLICY });
+
+    const evidence = await executeTool('analyze_hardware_result', { job_id: 'nope' }, ctx, 'tc1');
     expect(evidence.ok).toBe(false);
   });
 });

@@ -39,22 +39,49 @@ describe('AGENT_TOOLS', () => {
     expect(new Set(names).size).toBe(names.length);
   });
 
-  it('covers the full local-simulation tool set', () => {
+  it('covers the full local-simulation plus hardware tool set', () => {
     const names = AGENT_TOOLS.map((t) => t.name).sort();
     expect(names).toEqual(
       [
+        'analyze_hardware_result',
         'apply_patch',
+        'cancel_hardware_job',
         'compare_quantum_results',
         'estimate_quantum_resources',
         'finish',
         'inspect_project',
         'parse_quantum_program',
         'plan_hardware_run',
+        'poll_hardware_job',
         'read_quantum_file',
         'rollback_patch',
         'run_simulation',
+        'submit_hardware_job',
         'validate_quantum_program',
       ].sort(),
+    );
+  });
+
+  it('submit_hardware_job requires backend and shots', () => {
+    const tool = AGENT_TOOLS.find((t) => t.name === 'submit_hardware_job');
+    expect(tool).toBeDefined();
+    expect(tool?.input_schema.required).toEqual(expect.arrayContaining(['backend', 'shots']));
+  });
+
+  it('poll_hardware_job and cancel_hardware_job require job_id', () => {
+    for (const name of ['poll_hardware_job', 'cancel_hardware_job']) {
+      const tool = AGENT_TOOLS.find((t) => t.name === name);
+      expect(tool).toBeDefined();
+      expect(tool?.input_schema.required).toEqual(['job_id']);
+    }
+  });
+
+  it('analyze_hardware_result requires job_id and allows optional expected_probabilities', () => {
+    const tool = AGENT_TOOLS.find((t) => t.name === 'analyze_hardware_result');
+    expect(tool).toBeDefined();
+    expect(tool?.input_schema.required).toEqual(['job_id']);
+    expect(Object.keys(tool?.input_schema.properties ?? {})).toEqual(
+      expect.arrayContaining(['job_id', 'expected_probabilities']),
     );
   });
 });

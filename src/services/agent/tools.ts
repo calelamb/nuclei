@@ -1,8 +1,10 @@
 import type { AgentToolSchema } from './interfaces';
 
-// Local-simulation tool set for the closed-loop agent, plus one shadow-mode
-// hardware analysis tool (plan_hardware_run). No hardware SUBMISSION tools
-// here — actually running on real hardware is out of scope for this task.
+// Local-simulation tool set for the closed-loop agent, a shadow-mode
+// hardware analysis tool (plan_hardware_run), and a POLICY-GATED hardware
+// submission/monitoring tool set (submit_hardware_job, poll_hardware_job,
+// cancel_hardware_job, analyze_hardware_result). Real-hardware submission is
+// never autonomous by default — see policy.ts and hardwareSubmitExecutors.ts.
 // Every schema pins `additionalProperties: false` and an explicit `required`
 // list so the model (and tests) can rely on strict, minimal inputs.
 
@@ -149,6 +151,72 @@ export const PLAN_HARDWARE_RUN_TOOL: AgentToolSchema = {
   },
 };
 
+export const SUBMIT_HARDWARE_JOB_TOOL: AgentToolSchema = {
+  name: 'submit_hardware_job',
+  description:
+    'Submit the active circuit to a named hardware backend for execution. POLICY-GATED: a real, paid QPU ' +
+    'submission is only ever sent if a human has explicitly enabled autonomous hardware submission in ' +
+    "Settings; otherwise this returns a needs_approval (or deny) result and NOTHING is submitted — that is " +
+    'the expected, safe outcome, not an error. Simulator backends run for free under the separate simulator ' +
+    'policy toggle. Never retry this tool to try to force a submission after a needs_approval or deny result ' +
+    '— report the outcome to the user instead.',
+  input_schema: {
+    type: 'object',
+    properties: {
+      backend: { type: 'string', description: 'Name of the backend to submit to.' },
+      shots: { type: 'number', description: 'Number of shots to request.' },
+    },
+    required: ['backend', 'shots'],
+    additionalProperties: false,
+  },
+};
+
+export const POLL_HARDWARE_JOB_TOOL: AgentToolSchema = {
+  name: 'poll_hardware_job',
+  description: 'Check the current status and queue position of a previously submitted hardware job.',
+  input_schema: {
+    type: 'object',
+    properties: {
+      job_id: { type: 'string', description: 'The job id returned by submit_hardware_job.' },
+    },
+    required: ['job_id'],
+    additionalProperties: false,
+  },
+};
+
+export const CANCEL_HARDWARE_JOB_TOOL: AgentToolSchema = {
+  name: 'cancel_hardware_job',
+  description: 'Cancel a previously submitted, still-pending hardware job.',
+  input_schema: {
+    type: 'object',
+    properties: {
+      job_id: { type: 'string', description: 'The job id to cancel.' },
+    },
+    required: ['job_id'],
+    additionalProperties: false,
+  },
+};
+
+export const ANALYZE_HARDWARE_RESULT_TOOL: AgentToolSchema = {
+  name: 'analyze_hardware_result',
+  description:
+    'Fetch the measured probabilities for a completed hardware job, optionally comparing them against an ' +
+    'expected distribution the same way compare_quantum_results does for local simulations.',
+  input_schema: {
+    type: 'object',
+    properties: {
+      job_id: { type: 'string', description: 'The job id to fetch results for.' },
+      expected_probabilities: {
+        type: 'object',
+        description: 'Optional map of measured bitstring state to expected probability (0-1).',
+        additionalProperties: { type: 'number' },
+      },
+    },
+    required: ['job_id'],
+    additionalProperties: false,
+  },
+};
+
 export const FINISH_TOOL: AgentToolSchema = {
   name: 'finish',
   description: 'Terminate the run with a final summary and a verdict on whether the goal was met.',
@@ -174,5 +242,9 @@ export const AGENT_TOOLS: AgentToolSchema[] = [
   RUN_SIMULATION_TOOL,
   COMPARE_QUANTUM_RESULTS_TOOL,
   PLAN_HARDWARE_RUN_TOOL,
+  SUBMIT_HARDWARE_JOB_TOOL,
+  POLL_HARDWARE_JOB_TOOL,
+  CANCEL_HARDWARE_JOB_TOOL,
+  ANALYZE_HARDWARE_RESULT_TOOL,
   FINISH_TOOL,
 ];

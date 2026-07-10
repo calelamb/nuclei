@@ -1,7 +1,5 @@
 import type { BackendInfo } from '../../types/hardware';
-import { AGENT_TOOLS } from './tools';
-import { defaultFrameworkResolver, executeTool } from './toolExecutors';
-import type { ToolContext } from './toolExecutors';
+import type { BudgetLedger } from './budgetLedger';
 import type {
   JournalPort,
   KernelPort,
@@ -11,6 +9,12 @@ import type {
   ModelReply,
   WorkspacePort,
 } from './interfaces';
+import { DEFAULT_POLICY } from './policy';
+import type { AutonomyPolicy, SubmissionFacts } from './policy';
+import type { SubmitPort } from './submitPort';
+import { AGENT_TOOLS } from './tools';
+import { defaultFrameworkResolver, executeTool } from './toolExecutors';
+import type { ToolContext } from './toolExecutors';
 import type { AgentBudget, AgentRunResult, AgentRunState, JournalEntry, ToolEvidence } from './types';
 import { DEFAULT_BUDGET } from './types';
 
@@ -24,9 +28,26 @@ export interface AgentDeps {
   now?: () => number;
   signal?: AbortSignal;
   /** Optional accessor for the currently known hardware backends, forwarded
-   * to plan_hardware_run's ToolContext. Omitted in tests that don't care
-   * about hardware planning — the tool degrades to an "unavailable" result. */
+   * to plan_hardware_run's and submit_hardware_job's ToolContext. Omitted in
+   * tests that don't care about hardware — those tools degrade to an
+   * "unavailable" result. */
   getBackends?: () => BackendInfo[];
+  /** Optional hardware submission channel, forwarded to ToolContext.
+   * Omitted means submit_hardware_job/poll_hardware_job/cancel_hardware_job/
+   * analyze_hardware_result all degrade to an "unavailable" evidence result
+   * rather than erroring — no live socket implementation lives here. */
+  submitPort?: SubmitPort;
+  /** Autonomy policy gating submit_hardware_job. Defaults to DEFAULT_POLICY
+   * (autonomous real-hardware submission OFF) — this is the safety default
+   * for every run unless a caller explicitly opts a policy in. */
+  policy?: AutonomyPolicy;
+  /** Optional spend ledger for reserve/commit/release budget tracking and
+   * submission idempotency around submit_hardware_job. */
+  ledger?: BudgetLedger;
+  /** Optional cost estimator for submit_hardware_job; defaults to a function
+   * that always returns null (cost unknown), which DEFAULT_POLICY treats as
+   * `needs_approval` for real hardware. */
+  estimateCost?: (facts: SubmissionFacts) => number | null;
 }
 
 const SYSTEM_PROMPT = `You are Dirac, an autonomous quantum-programming agent embedded in the Nuclei IDE.
@@ -47,6 +68,13 @@ Rules:
 - You may call plan_hardware_run to get a shadow-mode recommendation of a compatible hardware backend for
   the circuit, with an explainable score; this is analysis only for the user's consideration — it never
   submits a job or contacts a provider, and it is not a substitute for run_simulation.
+- You may submit a job to real quantum hardware ONLY via submit_hardware_job. This tool is policy-gated by a
+  human-controlled autonomy setting: real, paid QPU submissions are disabled by default, and a
+  "needs_approval" or "deny" result means NOTHING was submitted. That is the expected, safe outcome — do not
+  retry submit_hardware_job to try to force it through; instead, report the result plainly to the user and
+  stop. Once a job has actually been submitted, use poll_hardware_job to check its status and
+  analyze_hardware_result to read back its measured probabilities (optionally against an expected
+  distribution); cancel_hardware_job cancels a still-pending job. Real hardware costs real money.
 - Only call finish once you have verified your result via run_simulation (and compare_quantum_results when
   a numeric target was given), or once you are truly blocked and cannot proceed further. Never call finish
   with success: true without having actually run the simulation.
@@ -77,7 +105,9 @@ export async function runAgent(goal: string, deps: AgentDeps): Promise<AgentRunR
   const runId = deps.runId ?? generateRunId();
   const now = deps.now ?? (() => Date.now());
   const budget = deps.budget ?? DEFAULT_BUDGET;
-  const { model, kernel, workspace, journal, signal, getBackends } = deps;
+  const { model, kernel, workspace, journal, signal, getBackends, submitPort, ledger } = deps;
+  const policy = deps.policy ?? DEFAULT_POLICY;
+  const estimateCost = deps.estimateCost ?? (() => null);
 
   const startedAt = now();
   let state: AgentRunState = 'planning';
@@ -93,9 +123,14 @@ export async function runAgent(goal: string, deps: AgentDeps): Promise<AgentRunR
     workspace,
     kernel,
     lastSim: {},
+    lastSnapshot: {},
     resolveFramework: defaultFrameworkResolver(workspace),
     lastKnownHash: new Map<string, string>(),
     getBackends,
+    submitPort,
+    policy,
+    ledger,
+    estimateCost,
   };
 
   let messages: ModelMessage[] = [buildSeedMessage(goal, workspace)];

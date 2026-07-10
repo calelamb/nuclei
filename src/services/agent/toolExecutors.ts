@@ -1,69 +1,18 @@
-import type { BackendInfo } from '../../types/hardware';
-import type { Framework, SimulationResult } from '../../types/quantum';
 import { kernelLanguageFor } from '../../types/quantum';
 import { compareDistributions, estimateResources, validateProgram } from './analysis';
+import {
+  execAnalyzeHardwareResult,
+  execCancelHardwareJob,
+  execPollHardwareJob,
+  execSubmitHardwareJob,
+} from './hardwareSubmitExecutors';
 import { planHardwareRun } from './hardwarePlanner';
-import type { KernelPort, WorkspacePort } from './interfaces';
+import type { ToolContext } from './toolContext';
+import { asBoolean, asNumber, asRecord, asString, fail, ok } from './toolHelpers';
 import type { ToolEvidence } from './types';
 
-/** Resolves which framework a path's contents should be interpreted as.
- * Falls back to inspecting the workspace file when present; callers that
- * need a different strategy (e.g. inferring from a not-yet-created path's
- * extension) can supply their own resolver. */
-export type FrameworkResolver = (path: string) => Framework;
-
-export function defaultFrameworkResolver(workspace: WorkspacePort): FrameworkResolver {
-  return (path: string) => {
-    const file = workspace.readFile(path);
-    if (file) return file.framework;
-    return path.endsWith('.qs') ? 'qsharp' : 'qiskit';
-  };
-}
-
-export interface ToolContext {
-  workspace: WorkspacePort;
-  kernel: KernelPort;
-  /** Mutable slot holding the most recent simulation result, so
-   * compare_quantum_results can reference it without threading it through
-   * every tool call explicitly. */
-  lastSim: { result?: SimulationResult };
-  resolveFramework: FrameworkResolver;
-  /** Per-path hash the orchestrator last observed, used as the
-   * conflict-check baseline for apply_patch. Updated on every successful
-   * patch. */
-  lastKnownHash: Map<string, string>;
-  /** Optional accessor for the currently known hardware backends, used only
-   * by plan_hardware_run. Undefined/omitted (or an empty list) means no
-   * connected hardware — a normal state, not an error. Shadow-mode only:
-   * nothing in this context ever submits a job. */
-  getBackends?: () => BackendInfo[];
-}
-
-function ok(tool: string, toolCallId: string, facts: Record<string, unknown>): ToolEvidence {
-  return { toolCallId, tool, ok: true, facts };
-}
-
-function fail(tool: string, toolCallId: string, diagnostics: string, facts: Record<string, unknown> = {}): ToolEvidence {
-  return { toolCallId, tool, ok: false, facts, diagnostics };
-}
-
-function asString(value: unknown): string | null {
-  return typeof value === 'string' ? value : null;
-}
-
-function asNumber(value: unknown): number | null {
-  return typeof value === 'number' && Number.isFinite(value) ? value : null;
-}
-
-function asBoolean(value: unknown): boolean | null {
-  return typeof value === 'boolean' ? value : null;
-}
-
-function asRecord(value: unknown): Record<string, unknown> | null {
-  return value !== null && typeof value === 'object' && !Array.isArray(value)
-    ? (value as Record<string, unknown>)
-    : null;
-}
+export type { FrameworkResolver, ToolContext } from './toolContext';
+export { defaultFrameworkResolver } from './toolContext';
 
 function resolvePath(input: Record<string, unknown>, ctx: ToolContext): string {
   const explicit = asString(input.path);
@@ -159,6 +108,8 @@ async function execParseQuantumProgram(
     return fail('parse_quantum_program', toolCallId, outcome.error, { path, line: outcome.line ?? null });
   }
 
+  if (ctx.lastSnapshot) ctx.lastSnapshot.snapshot = outcome.snapshot;
+
   return ok('parse_quantum_program', toolCallId, {
     path,
     framework: outcome.snapshot.framework,
@@ -185,6 +136,8 @@ async function execValidateQuantumProgram(
   if (!outcome.ok) {
     return fail('validate_quantum_program', toolCallId, outcome.error, { path, line: outcome.line ?? null });
   }
+
+  if (ctx.lastSnapshot) ctx.lastSnapshot.snapshot = outcome.snapshot;
 
   const diagnostics = validateProgram(outcome.snapshot);
   const errorCount = diagnostics.filter((d) => d.severity === 'error').length;
@@ -226,6 +179,8 @@ async function execEstimateQuantumResources(
   if (!outcome.ok) {
     return fail('estimate_quantum_resources', toolCallId, outcome.error, { path, line: outcome.line ?? null });
   }
+
+  if (ctx.lastSnapshot) ctx.lastSnapshot.snapshot = outcome.snapshot;
 
   const resources = estimateResources(outcome.snapshot);
 
@@ -326,6 +281,8 @@ async function execPlanHardwareRun(
     return fail('plan_hardware_run', toolCallId, outcome.error, { path, line: outcome.line ?? null });
   }
 
+  if (ctx.lastSnapshot) ctx.lastSnapshot.snapshot = outcome.snapshot;
+
   const backends = ctx.getBackends?.() ?? [];
   if (backends.length === 0) {
     return ok('plan_hardware_run', toolCallId, {
@@ -385,6 +342,14 @@ export async function executeTool(
         return execCompareQuantumResults(args, toolCallId, ctx);
       case 'plan_hardware_run':
         return await execPlanHardwareRun(args, toolCallId, ctx);
+      case 'submit_hardware_job':
+        return await execSubmitHardwareJob(args, toolCallId, ctx);
+      case 'poll_hardware_job':
+        return await execPollHardwareJob(args, toolCallId, ctx);
+      case 'cancel_hardware_job':
+        return await execCancelHardwareJob(args, toolCallId, ctx);
+      case 'analyze_hardware_result':
+        return await execAnalyzeHardwareResult(args, toolCallId, ctx);
       case 'finish':
         return execFinish(args, toolCallId);
       default:
