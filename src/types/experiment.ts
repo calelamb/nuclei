@@ -224,7 +224,7 @@ function defaultNameFromFilename(filename: string): string {
   return base.replace(/\.experiment\.yaml$/i, '').replace(/\.ya?ml$/i, '');
 }
 
-function inferLanguage(entry: unknown): KernelLanguage {
+export function inferLanguage(entry: unknown): KernelLanguage {
   return typeof entry === 'string' && entry.toLowerCase().endsWith('.qs')
     ? 'qsharp'
     : 'python';

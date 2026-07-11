@@ -28,6 +28,8 @@ import { useChallengeModeStore } from '../../stores/challengeModeStore';
 import { useNavigationStore } from '../../stores/navigationStore';
 import { useSettingsStore } from '../../stores/settingsStore';
 import { useWorkspaceStore } from '../../stores/workspaceStore';
+import { useExperimentUiStore } from '../../stores/experimentUiStore';
+import { useExperimentRunStore } from '../../stores/experimentRunStore';
 import { activityViewsForMode } from './panelRegistry';
 import { ChevronDown, ChevronUp, Sun, Moon, X, Circle, Trash2, Copy, Clock } from 'lucide-react';
 import { useBottomPanelStore } from '../../stores/bottomPanelStore';
@@ -38,6 +40,12 @@ const LearnModeView = lazy(async () => ({
 }));
 const ChallengeModeView = lazy(async () => ({
   default: (await import('../challenges/ChallengeModeView')).ChallengeModeView,
+}));
+const RunsTable = lazy(async () => ({
+  default: (await import('../experiments/RunsTable')).RunsTable,
+}));
+const RunDetail = lazy(async () => ({
+  default: (await import('../experiments/RunDetail')).RunDetail,
 }));
 
 const DEFAULT_BOTTOM_HEIGHT = 200;
@@ -536,6 +544,7 @@ function StatusBar() {
   const themeToggle = useThemeStore((s) => s.toggle);
   const workspaceMode = useWorkspaceStore((s) => s.mode);
   const setWorkspaceMode = useWorkspaceStore((s) => s.setMode);
+  const activeRun = useExperimentRunStore((s) => s.active);
   const platform = usePlatform();
   const exercise = useExerciseStore((s) => s.activeExercise);
   const endExercise = useExerciseStore((s) => s.endExercise);
@@ -576,6 +585,18 @@ function StatusBar() {
             onMouseLeave={(e) => { e.currentTarget.style.color = colors.textDim; }}>
             <X size={9} />
           </button>
+        </span>
+      )}
+
+      {/* PRD 09 Phase D — compact sweep indicator, Research mode only. */}
+      {workspaceMode === 'research' && activeRun && (
+        <span
+          title={`${activeRun.experimentName}: ${activeRun.progress.completed}/${activeRun.progress.total} runs`}
+          style={{ display: 'flex', alignItems: 'center', gap: 4, color: colors.accent, fontSize: 10 }}
+        >
+          <Circle size={5} fill={colors.accent} stroke="none" style={{ animation: 'nuclei-heartbeat 1.5s ease infinite' }} />
+          {activeRun.experimentName}: {activeRun.progress.completed}/{activeRun.progress.total}
+          {activeRun.progress.failures > 0 ? ` (${activeRun.progress.failures} failed)` : ''}
         </span>
       )}
 
@@ -666,6 +687,8 @@ export function PanelLayout() {
   const isChallengeMode = useChallengeModeStore((s) => s.isChallengeMode);
   const enterChallengeMode = useChallengeModeStore((s) => s.enterChallengeMode);
   const exitChallengeMode = useChallengeModeStore((s) => s.exitChallengeMode);
+  const selectedExperimentFileName = useExperimentUiStore((s) => s.selectedExperimentFileName);
+  const selectedRunDir = useExperimentUiStore((s) => s.selectedRunDir);
 
   const preset = useLayoutStore((s) => s.preset);
   const setPreset = useLayoutStore((s) => s.setPreset);
@@ -684,6 +707,15 @@ export function PanelLayout() {
   const showBottomPanel = visible.terminal || visible.histogramFull;
   const showSidebar = !isLearnMode && !isChallengeMode && activeView !== null;
   const topSplitRef = useRef<HTMLDivElement>(null);
+
+  // PRD 09 Phase D — Research mode swaps the main content area for the
+  // runs table (or run detail, once a row is picked) whenever the
+  // Experiments rail item is active AND an experiment is selected. With no
+  // selection yet, Research mode still shows the ordinary editor+viz area
+  // (Explorer/editor stay available — Experiments isn't the only thing you
+  // can do in Research mode).
+  const showExperimentsMain =
+    workspaceMode === 'research' && activeView === 'experiments' && selectedExperimentFileName !== null;
 
   // Single source of truth for which activity-bar views exist right now —
   // see panelRegistry.ts. Learn mode reproduces today's exact set; Research
@@ -853,6 +885,18 @@ export function PanelLayout() {
           }}>
             <Suspense fallback={null}>
               <LearnModeView />
+            </Suspense>
+          </div>
+        ) : showExperimentsMain ? (
+          /* PRD 09 Phase D — Research mode's runs table / run detail,
+             swapped in for the ordinary editor+viz area while an experiment
+             is selected in the Experiments rail. */
+          <div style={{
+            flex: 1, minWidth: 0, overflow: 'hidden',
+            animation: 'nuclei-fade-in 200ms ease',
+          }}>
+            <Suspense fallback={null}>
+              {selectedRunDir ? <RunDetail /> : <RunsTable />}
             </Suspense>
           </div>
         ) : (

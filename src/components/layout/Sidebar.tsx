@@ -22,6 +22,9 @@ const HardwarePanel = lazy(async () => ({
 const CommunityPanel = lazy(async () => ({
   default: (await import('../community/CommunityPanel')).CommunityPanel,
 }));
+const ExperimentsPanel = lazy(async () => ({
+  default: (await import('../experiments/ExperimentsPanel')).ExperimentsPanel,
+}));
 
 interface SidebarProps {
   view: ActivityView;
@@ -117,25 +120,6 @@ const VIEW_TITLES: Record<ActivityView, string> = {
   settings: 'Settings',
   experiments: 'Experiments',
 };
-
-/**
- * Placeholder for the Research-mode Experiments panel. PRD 09 Phase D
- * (`src/services/experimentStore.ts`, `RunsTable`, etc.) fills this in;
- * this Phase A stub only makes the rail item coherent.
- */
-function ExperimentsPlaceholder() {
-  const colors = useThemeStore((s) => s.colors);
-  return (
-    <div style={{ padding: 12, color: colors.textMuted, fontSize: 12, fontFamily: "'Geist Sans', sans-serif" }}>
-      <div style={{ color: colors.textDim, fontSize: 10, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 8 }}>
-        Experiments
-      </div>
-      <div style={{ color: colors.textDim, fontSize: 11 }}>
-        Experiments — coming soon.
-      </div>
-    </div>
-  );
-}
 
 type LearningTab = 'tracks' | 'videos';
 
@@ -254,7 +238,11 @@ export function Sidebar({ view, width, onWidthChange }: SidebarProps) {
           </SidebarSuspense>
         )}
         {view === 'settings' && <SettingsPanel />}
-        {view === 'experiments' && <ExperimentsPlaceholder />}
+        {view === 'experiments' && (
+          <SidebarSuspense>
+            <ExperimentsPanel />
+          </SidebarSuspense>
+        )}
       </div>
 
       {/* Resize handle on right edge */}
