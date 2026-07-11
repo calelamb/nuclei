@@ -33,7 +33,8 @@
         { "x": "<approx:0:0.000001>", "y": "<approx:0:0.000001>", "z": "<approx:0:0.000001>" }
       ],
       "execution_time_ms": "<any>",
-      "shot_count": 1024
+      "shot_count": 1024,
+      "metrics": {}
     }
   }
 ]

@@ -1,0 +1,13 @@
+[
+  {
+    "type": "environment",
+    "python": "<any>",
+    "platform": "<any>",
+    "packages": {
+      "qiskit": "<any>",
+      "qiskit_aer": "<any>",
+      "cirq": "<any>",
+      "qsharp": "<any>"
+    }
+  }
+]

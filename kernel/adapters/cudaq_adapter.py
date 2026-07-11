@@ -185,12 +185,24 @@ class CudaqAdapter(FrameworkAdapter):
             gates=gates,
         )
 
-    def simulate(self, circuit_obj, shots: int) -> SimulationResult:
+    def simulate(self, circuit_obj, shots: int, seed: int | None = None) -> SimulationResult:
         if not CUDAQ_AVAILABLE:
             raise ImportError("cudaq")
 
         import time
         start = time.time()
+
+        # cudaq's seeding API is process-global (no per-call seed kwarg on
+        # sample()/get_state()) and only exists on some builds — guard with
+        # hasattr so an older/newer cudaq without it degrades honestly
+        # instead of raising.
+        seed_honored: bool | None = None
+        if seed is not None:
+            if hasattr(cudaq, "set_random_seed"):
+                cudaq.set_random_seed(seed)
+                seed_honored = True
+            else:
+                seed_honored = False
 
         kernel = self._unwrap_kernel(circuit_obj)
         args = circuit_obj.args if isinstance(circuit_obj, KernelInvocation) else []
@@ -234,6 +246,7 @@ class CudaqAdapter(FrameworkAdapter):
             bloch_coords=bloch_coords,
             execution_time_ms=round(elapsed, 1),
             shot_count=shots,
+            seed_honored=seed_honored,
         )
 
 

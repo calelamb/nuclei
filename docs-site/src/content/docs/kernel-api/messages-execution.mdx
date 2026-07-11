@@ -1,6 +1,6 @@
 ---
 title: "Execution messages"
-description: "Full reference for parse, execute, and run_python: request fields, response sequences, and ordering rules."
+description: "Full reference for parse, execute, run_python, and environment: request fields, response sequences, and ordering rules."
 ---
 
 import { Code, Aside } from '@astrojs/starlight/components';
@@ -16,11 +16,21 @@ import executeNoCircuitReq from '../../../../fixtures/execute_no_circuit.request
 import executeNoCircuitRes from '../../../../fixtures/execute_no_circuit.responses.json?raw';
 import runPythonReq from '../../../../fixtures/run_python_hello.request.json?raw';
 import runPythonRes from '../../../../fixtures/run_python_hello.responses.json?raw';
+import executeParamsSeedSession from '../../../../fixtures/execute_params_seed.session.json?raw';
+import executeMetricsReq from '../../../../fixtures/execute_metrics.request.json?raw';
+import executeMetricsRes from '../../../../fixtures/execute_metrics.responses.json?raw';
+import executeQsharpParamsReq from '../../../../fixtures/execute_qsharp_params.request.json?raw';
+import executeQsharpParamsRes from '../../../../fixtures/execute_qsharp_params.responses.json?raw';
+import executeQsharpParamsMissingReq from '../../../../fixtures/execute_qsharp_params_missing.request.json?raw';
+import executeQsharpParamsMissingRes from '../../../../fixtures/execute_qsharp_params_missing.responses.json?raw';
+import environmentReq from '../../../../fixtures/environment.request.json?raw';
+import environmentRes from '../../../../fixtures/environment.responses.json?raw';
 
 Three request types drive the editor loop: `parse` (cheap, on every code
 change — no simulation), `execute` (full simulation, on Cmd+Enter), and
-`run_python` (plain Python, no circuit semantics). All response payload
-schemas are defined in [schemas](/docs/kernel-api/schemas/); error codes in
+`run_python` (plain Python, no circuit semantics). `environment` (protocol
+v1.1) is a fourth, standalone message reporting the kernel's own versions.
+All response payload schemas are defined in [schemas](/docs/kernel-api/schemas/); error codes in
 [errors](/docs/kernel-api/errors/).
 
 ## Framework routing and the `language` field
@@ -99,6 +109,8 @@ Runs the full pipeline: build the circuit, extract a snapshot, simulate.
 | `code` | string | no | `""` | Source text. |
 | `shots` | integer | no | `1024` | Sampled-measurement count. {/* server.py:212 */} |
 | `language` | `"python"` \| `"qsharp"` | no | omitted | See routing above. |
+| `params` | `{string: number}` | no | omitted | **Protocol v1.1.** Python: injected into the exec namespace as `params` (always a dict — `{}` when this field is omitted, so `params.get("theta", default)` is portable). Q#: binds by name to the entry operation's declared arguments (`Double`/`Int` only) — see below. |
+| `seed` | integer | no | omitted | **Protocol v1.1.** Requests reproducible sampling. Whether it was actually honored comes back as `result.data.seed_honored`. Also seeds Python's `random` and `numpy.random` before `exec` for Python code. |
 
 Response sequence, in order: {/* server.py:211-248 */}
 
@@ -126,6 +138,68 @@ The `no_circuit` failure path (framework imported, no circuit defined):
 <Code code={executeNoCircuitReq} lang="json" title="execute_no_circuit.request.json" />
 <Code code={executeNoCircuitRes} lang="json" title="execute_no_circuit.responses.json" />
 
+## Parameters, seeding, and metrics (protocol v1.1)
+
+Three additive fields on `execute` — introduced for [Research mode
+experiments](/docs/reference/protocol-changelog/) but useful any time you
+want reproducible or parameterized runs from any client:
+
+- **`params`** — for Python code, always injected into the exec namespace
+  as a dict named `params` (empty when the field is omitted), so
+  `params.get("theta", default)` works identically whether or not a
+  caller supplied values. For Q# code, `params` binds **by name** to the
+  entry operation's declared arguments — see the Q# subsection below.
+- **`seed`** — forwarded to the framework's simulator (`AerSimulator(seed_simulator=...)`
+  for Qiskit, `cirq.Simulator(seed=...)` for Cirq, `qsharp.run(..., seed=...)`
+  for Q#, `cudaq.set_random_seed(...)` for CUDA-Q when the installed build
+  exposes it) and used to seed Python's `random` and `numpy.random` before
+  `exec`, so a seeded run's `print(random.random())` is reproducible too.
+  Whether the backend actually honored the seed comes back as
+  `result.data.seed_honored` — see [schemas](/docs/kernel-api/schemas/#simulationresult).
+- **`record_metric(name, value)`** — always available in the Python exec
+  namespace (no request field needed). Calls accumulate into
+  `result.data.metrics`; recording the same name twice overwrites
+  (last write wins). Empty object when nothing was recorded.
+
+Same seed, same measurements — replayed twice in one session:
+
+<Code code={executeParamsSeedSession} lang="json" title="execute_params_seed.session.json" />
+
+Metrics recorded without params or a seed (both are independent — you can
+use one without the other):
+
+<Code code={executeMetricsReq} lang="json" title="execute_metrics.request.json" />
+<Code code={executeMetricsRes} lang="json" title="execute_metrics.responses.json" />
+
+### Q# parameter binding
+
+The entry operation's signature is parsed with a regex over its
+declaration (not a real parser — approximate by design, `Double`/`Int`
+only in v1) and its arguments are bound by name to `params`. `Double`
+values are always rendered with a decimal point (`2` → `2.0`) so Q#
+doesn't parse them as `Int`.
+
+<Aside type="caution" title="Don't name a parameterized entry operation Main">
+The qdk compiler itself rejects an operation literally named `Main` if it
+declares any parameters (`entry point cannot have parameters`) — this
+happens at `qsharp.eval()`, before Nuclei's own binding logic ever runs.
+Give a swept Q# entry operation any other name (`Rotate`, `Ansatz`, ...);
+`Main` stays reserved for zero-parameter entries, exactly as in the v1
+[entry resolution rule](/docs/kernel-api/messages-execution/) (an operation
+named `Main`, else the last zero-parameter operation, else none).
+</Aside>
+
+<Code code={executeQsharpParamsReq} lang="json" title="execute_qsharp_params.request.json" />
+<Code code={executeQsharpParamsRes} lang="json" title="execute_qsharp_params.responses.json" />
+
+A missing/extra/mis-typed parameter is a `compile_error` returned **before**
+any Q# code runs — note there's no `snapshot` message at all here, because
+`compile_error` isn't one of the codes that gets a `data: null` snapshot
+(see the response-sequence table above):
+
+<Code code={executeQsharpParamsMissingReq} lang="json" title="execute_qsharp_params_missing.request.json" />
+<Code code={executeQsharpParamsMissingRes} lang="json" title="execute_qsharp_params_missing.responses.json" />
+
 ## `run_python`
 
 Executes arbitrary Python with stdout/stderr capture — no framework
@@ -147,6 +221,28 @@ Response sequence, in order: {/* server.py:250-273 */}
 
 <Code code={runPythonReq} lang="json" title="run_python_hello.request.json" />
 <Code code={runPythonRes} lang="json" title="run_python_hello.responses.json" />
+
+## `environment`
+
+**Protocol v1.1** — a new message type. Reports the kernel's own
+interpreter, platform, and installed framework versions — useful for
+stamping reproducibility manifests (Research mode experiments) and for bug
+reports. Takes no request fields beyond `type`.
+
+| Field | Type | Required | Default |
+|-------|------|----------|---------|
+| `type` | `"environment"` | yes | — |
+
+Response (single message, `environment`):
+
+| Field | Type | Notes |
+|-------|------|-------|
+| `python` | string | `platform.python_version()` on the kernel host. |
+| `platform` | string | `platform.platform()` on the kernel host. |
+| `packages` | `{string: string}` | Installed version per framework, keyed `qiskit`, `qiskit_aer`, `cirq`, `cudaq`, `qsharp`. A key is **omitted** (never a placeholder) when that framework isn't installed — resolved via `importlib.metadata`, trying each framework's actual PyPI distribution name(s) since those can diverge from the import name (e.g. `cirq` is commonly provided by the `cirq-core` distribution alone; the Q# runtime is the `qdk` package, with `qsharp` installed as a compatibility shim in some setups). Never raises — a metadata lookup failure just omits that key. |
+
+<Code code={environmentReq} lang="json" title="environment.request.json" />
+<Code code={environmentRes} lang="json" title="environment.responses.json" />
 
 ## Timeout semantics, honestly
 

@@ -1,0 +1,8 @@
+{
+  "type": "execute",
+  "code": "operation Rotate(theta : Double) : Result {\n    use q = Qubit();\n    Rx(theta, q);\n    let r = M(q);\n    Reset(q);\n    return r;\n}\n",
+  "shots": 100,
+  "language": "qsharp",
+  "params": {},
+  "seed": 42
+}

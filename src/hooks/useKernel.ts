@@ -122,6 +122,12 @@ export function useKernel() {
         useSimulationStore.getState().setRunning(false);
         clearEditorErrors();
         break;
+      case 'environment':
+        // Protocol v1.1 (PRD 09 Phase B) — the fetch/consume side (caching
+        // per session, stamping experiment manifests) is Phase C. For now
+        // this is a recognized no-op so the switch never falls through to
+        // an "unhandled message type" surprise.
+        break;
       case 'output':
         useSimulationStore.getState().addOutput(msg.text, 'stdout');
         useBottomPanelStore.getState().focusTerminal();

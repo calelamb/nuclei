@@ -93,14 +93,20 @@ class QiskitAdapter(FrameworkAdapter):
             gates=gates,
         )
 
-    def simulate(self, circuit_obj, shots: int) -> SimulationResult:
+    def simulate(self, circuit_obj, shots: int, seed: int | None = None) -> SimulationResult:
         import time
         from qiskit_aer import AerSimulator
 
         start = time.time()
 
+        # AerSimulator's seed_simulator=None (the default) means "unseeded" —
+        # passing seed through unconditionally is safe either way. Qiskit Aer
+        # always honors an explicit integer seed, so seed_honored tracks
+        # only whether one was requested, not whether it "worked".
+        seed_honored = True if seed is not None else None
+
         # Get statevector
-        sim_sv = AerSimulator(method="statevector")
+        sim_sv = AerSimulator(method="statevector", seed_simulator=seed)
         circuit_sv = circuit_obj.copy()
         circuit_sv.remove_final_measurements()
         circuit_sv.save_statevector()
@@ -116,7 +122,7 @@ class QiskitAdapter(FrameworkAdapter):
         }
 
         # Run sampled measurements
-        sim_qasm = AerSimulator()
+        sim_qasm = AerSimulator(seed_simulator=seed)
         result_qasm = sim_qasm.run(circuit_obj, shots=shots).result()
         counts = result_qasm.get_counts()
         measurements = {k: int(v) for k, v in counts.items()}
@@ -146,6 +152,7 @@ class QiskitAdapter(FrameworkAdapter):
             bloch_coords=bloch_coords,
             execution_time_ms=round(elapsed, 1),
             shot_count=shots,
+            seed_honored=seed_honored,
         )
 
 

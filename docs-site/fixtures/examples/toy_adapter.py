@@ -80,9 +80,12 @@ class ToyAdapter(FrameworkAdapter):
             gates=gates,
         )
 
-    def simulate(self, circuit_obj: ToyCircuit, shots: int) -> SimulationResult:
+    def simulate(
+        self, circuit_obj: ToyCircuit, shots: int, seed: int | None = None
+    ) -> SimulationResult:
         # toyq's "simulator" is deliberately fake: every circuit collapses
-        # to |0...0⟩. A real adapter calls the framework's simulator here.
+        # to |0...0⟩ regardless of seed. A real adapter would seed its
+        # backend here and set SimulationResult.seed_honored accordingly.
         start = time.time()
         zeros = "0" * circuit_obj.qubits
         return SimulationResult(
