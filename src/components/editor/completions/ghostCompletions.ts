@@ -10,10 +10,13 @@ import { useCircuitStore } from '../../../stores/circuitStore';
 import { useSimulationStore } from '../../../stores/simulationStore';
 import { useDiracStore } from '../../../stores/diracStore';
 import { useSettingsStore } from '../../../stores/settingsStore';
+import { useWorkspaceStore, type WorkspaceMode } from '../../../stores/workspaceStore';
+import { personaPreamble } from '../../../services/diracPersona';
 
 const API_URL = 'https://api.anthropic.com/v1/messages';
 const HAIKU_MODEL = 'claude-haiku-4-5-20251001';
 
+// Learn-mode text is unchanged from before PRD 09 (see ghostCompletions.test.ts).
 export const PYTHON_COMPLETION_SYSTEM_PROMPT = `You are Dirac, a quantum computing code completion engine inside the Nuclei IDE. Complete the next 1-3 lines of quantum computing Python code. Rules:
 - Return ONLY the completion code, no explanation, no markdown, no backticks
 - Be aware of the framework (Qiskit/Cirq/CUDA-Q) and use correct syntax
@@ -34,8 +37,37 @@ const QSHARP_COMPLETION_SYSTEM_PROMPT = `You are Dirac, a quantum computing code
 - Match the user's coding style (variable names, spacing)
 - If the code is complete, return empty string`;
 
-/** Pick the completion system prompt for the active framework. */
-export function buildCompletionSystemPrompt(framework: string): string {
+// Research variants (PRD 09 Phase A4): same completion contract, collaborator
+// tone — the persona preamble replaces "code completion engine" framing but
+// the hard rules (code-only output, respect qubit count) are unchanged.
+const RESEARCH_PYTHON_COMPLETION_SYSTEM_PROMPT = `${personaPreamble('research')} Complete the next 1-3 lines of quantum computing Python code. Rules:
+- Return ONLY the completion code, no explanation, no markdown, no backticks
+- Be aware of the framework (Qiskit/Cirq/CUDA-Q) and use correct syntax
+- Never suggest gates on qubits that don't exist (respect qubit count)
+- After H gate, favor CNOT for Bell state patterns
+- After import statements, suggest common setup boilerplate
+- After qc.measure, suggest the classical bit mapping
+- Match the user's coding style (variable names, spacing)
+- If the code is complete, return empty string`;
+
+const RESEARCH_QSHARP_COMPLETION_SYSTEM_PROMPT = `${personaPreamble('research')} Complete the next 1-3 lines of Q# (Microsoft QDK) code. The buffer is Q#, NOT Python — never emit Python syntax. Rules:
+- Return ONLY the completion code, no explanation, no markdown, no backticks
+- Modern QDK 1.x syntax: top-level operations (no namespace wrapper), \`import Std.*\` (never \`open Microsoft.Quantum.*\`), \`use q = Qubit();\`, measure with \`M(q)\`, Reset/ResetAll qubits before release
+- Never suggest gates on qubits that don't exist (respect qubit count)
+- Match the user's coding style (variable names, spacing)
+- If the code is complete, return empty string`;
+
+/**
+ * Pick the completion system prompt for the active framework (and,
+ * optionally, workspace mode — defaults to 'learn' so existing single-arg
+ * call sites/tests are unaffected).
+ */
+export function buildCompletionSystemPrompt(framework: string, mode: WorkspaceMode = 'learn'): string {
+  if (mode === 'research') {
+    return framework === 'qsharp'
+      ? RESEARCH_QSHARP_COMPLETION_SYSTEM_PROMPT
+      : RESEARCH_PYTHON_COMPLETION_SYSTEM_PROMPT;
+  }
   return framework === 'qsharp'
     ? QSHARP_COMPLETION_SYSTEM_PROMPT
     : PYTHON_COMPLETION_SYSTEM_PROMPT;
@@ -107,7 +139,10 @@ async function fetchCompletion(code: string, cursorOffset: number): Promise<stri
       body: JSON.stringify({
         model: HAIKU_MODEL,
         max_tokens: 150,
-        system: buildCompletionSystemPrompt(useEditorStore.getState().framework),
+        system: buildCompletionSystemPrompt(
+          useEditorStore.getState().framework,
+          useWorkspaceStore.getState().mode,
+        ),
         messages: [{ role: 'user', content: context }],
       }),
       signal: abortController.signal,

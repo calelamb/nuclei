@@ -21,6 +21,7 @@ import { useProjectStore } from './stores/projectStore';
 import { useThemeStore } from './stores/themeStore';
 import { useEditorStore } from './stores/editorStore';
 import { useUIModeStore } from './stores/uiModeStore';
+import { useWorkspaceStore } from './stores/workspaceStore';
 import { useDiracPanelStore } from './stores/diracPanelStore';
 import { useBottomPanelStore } from './stores/bottomPanelStore';
 import type { PlatformBridge } from './platform/bridge';
@@ -252,6 +253,7 @@ function AppInner() {
         if (path === 'beginner') useUIModeStore.getState().setMode('beginner');
         else if (path === 'intermediate') useUIModeStore.getState().setMode('intermediate');
         else if (path === 'experienced') useUIModeStore.getState().setMode('advanced');
+        else if (path === 'research') useWorkspaceStore.getState().setMode('research');
       }
     } catch {
       // Non-critical: onboarding state persistence failure is safe to ignore
@@ -274,6 +276,10 @@ function AppInner() {
       platform.setStoredValue('ui_mode', useUIModeStore.getState().mode).catch(() => {});
     },
     toggleShortcuts: () => setShowShortcuts((s) => !s),
+    switchWorkspaceMode: () => {
+      const store = useWorkspaceStore.getState();
+      store.setMode(store.mode === 'learn' ? 'research' : 'learn');
+    },
   });
 
   // Global keyboard shortcuts

@@ -1,7 +1,13 @@
 import { useDiracStore } from '../stores/diracStore';
 import { DIRAC_API_URL, SONNET_MODEL } from '../config/dirac';
 import { QSHARP_STYLE_GUIDE } from './qsharpStyle';
+import { useWorkspaceStore, type WorkspaceMode } from '../stores/workspaceStore';
+import { personaPreamble } from './diracPersona';
 
+// Learn-mode text is unchanged from before PRD 09 — kept as literal
+// hardcoded strings (not derived from personaPreamble, which is a
+// different, longer persona used by the chat surface) so Learn-mode
+// output stays byte-identical. See compose.test.ts.
 const PYTHON_SYSTEM_PROMPT = `You are Dirac, a quantum computing tutor that writes code for students.
 You will receive:
 - The target framework (cirq, qiskit, cuda-q)
@@ -24,7 +30,37 @@ Along with the tool call, include a ONE-SENTENCE plain-text explanation of what 
 
 ${QSHARP_STYLE_GUIDE}`;
 
-function systemPromptFor(framework: string): string {
+// Research variants (PRD 09 Phase A4): same task, collaborator tone —
+// assumes the researcher can read the framework's API, skips teaching
+// padding. No tools/autonomy beyond what Learn already has (that's PRD 12).
+const RESEARCH_PYTHON_SYSTEM_PROMPT = `${personaPreamble('research')}
+
+You will receive:
+- The target framework (cirq, qiskit, cuda-q)
+- The researcher's current code (possibly empty)
+- The researcher's request
+
+ALWAYS respond with exactly one tool_use call to the \`insert_code\` tool. The \`code\` argument must be a COMPLETE, runnable Python file for the target framework. Do not pad it with teaching comments unless asked. Do not include any preamble text in the tool input.
+
+Along with the tool call, include a terse plain-text note on what the code does and any assumptions you made.`;
+
+const RESEARCH_QSHARP_SYSTEM_PROMPT = `${personaPreamble('research')}
+
+You will receive:
+- The target framework (qsharp — Q# with the Microsoft Quantum Development Kit)
+- The researcher's current code (possibly empty)
+- The researcher's request
+
+ALWAYS respond with exactly one tool_use call to the \`insert_code\` tool. The \`code\` argument must be a COMPLETE, runnable Q# file for the Microsoft QDK. Do not pad it with teaching comments unless asked. Do not include any preamble text in the tool input.
+
+Along with the tool call, include a terse plain-text note on what the code does and any assumptions you made.
+
+${QSHARP_STYLE_GUIDE}`;
+
+function systemPromptFor(framework: string, mode: WorkspaceMode): string {
+  if (mode === 'research') {
+    return framework === 'qsharp' ? RESEARCH_QSHARP_SYSTEM_PROMPT : RESEARCH_PYTHON_SYSTEM_PROMPT;
+  }
   return framework === 'qsharp' ? QSHARP_SYSTEM_PROMPT : PYTHON_SYSTEM_PROMPT;
 }
 
@@ -93,7 +129,7 @@ export async function compose(input: ComposeInput): Promise<ComposeResult> {
       body: JSON.stringify({
         model: SONNET_MODEL,
         max_tokens: 2048,
-        system: systemPromptFor(input.framework),
+        system: systemPromptFor(input.framework, useWorkspaceStore.getState().mode),
         tools: [INSERT_CODE_TOOL],
         tool_choice: { type: 'tool', name: 'insert_code' },
         messages: [{ role: 'user', content: userPrompt }],

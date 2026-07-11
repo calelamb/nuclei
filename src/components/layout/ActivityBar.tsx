@@ -1,32 +1,48 @@
-import { Files, Search, Cpu, GraduationCap, Blocks, Settings, Server, Users, Trophy, Rocket } from 'lucide-react';
+import { Files, Search, Cpu, GraduationCap, Blocks, Settings, Server, Users, Trophy, Rocket, FlaskConical } from 'lucide-react';
 import { useThemeStore } from '../../stores/themeStore';
-import { useSettingsStore } from '../../stores/settingsStore';
+import { bottomViewsForMode } from './panelRegistry';
+import type { WorkspaceMode } from '../../stores/workspaceStore';
 
-export type ActivityView = 'files' | 'search' | 'circuit' | 'learning' | 'challenges' | 'plugins' | 'hardware' | 'launch' | 'community' | 'settings';
+export type ActivityView =
+  | 'files'
+  | 'search'
+  | 'circuit'
+  | 'learning'
+  | 'challenges'
+  | 'plugins'
+  | 'hardware'
+  | 'launch'
+  | 'community'
+  | 'settings'
+  | 'experiments';
 
 interface ActivityBarProps {
   active: ActivityView | null;
   onSelect: (view: ActivityView) => void;
+  /**
+   * The ordered list of views to render, already filtered for the current
+   * workspace mode (and, in Learn mode, `experimentalFeatures`). Computed
+   * once at the registration point via `activityViewsForMode` — see
+   * `panelRegistry.ts` — rather than re-derived here.
+   */
+  visibleViews: ActivityView[];
+  /** Workspace mode — only used to pick which views are "bottom-pinned". */
+  workspaceMode: WorkspaceMode;
 }
 
-const CORE_ITEMS: Array<{ id: ActivityView; icon: typeof Files; label: string }> = [
-  { id: 'files', icon: Files, label: 'Explorer' },
-  { id: 'learning', icon: GraduationCap, label: 'Learning' },
-  { id: 'challenges', icon: Trophy, label: 'Challenges' },
-  { id: 'launch', icon: Rocket, label: 'Launch' },
-];
-
-const EXPERIMENTAL_ITEMS: Array<{ id: ActivityView; icon: typeof Files; label: string }> = [
-  { id: 'search', icon: Search, label: 'Search' },
-  { id: 'circuit', icon: Cpu, label: 'Circuit' },
-  { id: 'plugins', icon: Blocks, label: 'Plugins' },
-  { id: 'hardware', icon: Server, label: 'Hardware' },
-  { id: 'community', icon: Users, label: 'Community' },
-];
-
-const BOTTOM_ITEMS: Array<{ id: ActivityView; icon: typeof Settings; label: string }> = [
-  { id: 'settings', icon: Settings, label: 'Settings' },
-];
+const ITEM_META: Record<ActivityView, { icon: typeof Files; label: string }> = {
+  files: { icon: Files, label: 'Explorer' },
+  learning: { icon: GraduationCap, label: 'Learning' },
+  challenges: { icon: Trophy, label: 'Challenges' },
+  launch: { icon: Rocket, label: 'Launch' },
+  search: { icon: Search, label: 'Search' },
+  circuit: { icon: Cpu, label: 'Circuit' },
+  plugins: { icon: Blocks, label: 'Plugins' },
+  hardware: { icon: Server, label: 'Hardware' },
+  community: { icon: Users, label: 'Community' },
+  settings: { icon: Settings, label: 'Settings' },
+  experiments: { icon: FlaskConical, label: 'Experiments' },
+};
 
 function ActivityIcon({ item, isActive, onClick }: {
   item: { id: ActivityView; icon: typeof Files; label: string };
@@ -64,12 +80,11 @@ function ActivityIcon({ item, isActive, onClick }: {
   );
 }
 
-export function ActivityBar({ active, onSelect }: ActivityBarProps) {
+export function ActivityBar({ active, onSelect, visibleViews, workspaceMode }: ActivityBarProps) {
   const colors = useThemeStore((s) => s.colors);
-  const experimentalFeatures = useSettingsStore((s) => s.general.experimentalFeatures);
-  const topItems = experimentalFeatures
-    ? [...CORE_ITEMS, ...EXPERIMENTAL_ITEMS]
-    : CORE_ITEMS;
+  const bottomIds = new Set(bottomViewsForMode(workspaceMode));
+  const topViews = visibleViews.filter((id) => !bottomIds.has(id));
+  const bottomViews = visibleViews.filter((id) => bottomIds.has(id));
 
   return (
     <div
@@ -84,21 +99,21 @@ export function ActivityBar({ active, onSelect }: ActivityBarProps) {
       aria-label="Activity bar"
       aria-orientation="vertical"
     >
-      {topItems.map((item) => (
+      {topViews.map((id) => (
         <ActivityIcon
-          key={item.id}
-          item={item}
-          isActive={active === item.id}
-          onClick={() => onSelect(item.id)}
+          key={id}
+          item={{ id, ...ITEM_META[id] }}
+          isActive={active === id}
+          onClick={() => onSelect(id)}
         />
       ))}
       <div style={{ flex: 1 }} />
-      {BOTTOM_ITEMS.map((item) => (
+      {bottomViews.map((id) => (
         <ActivityIcon
-          key={item.id}
-          item={item}
-          isActive={active === item.id}
-          onClick={() => onSelect(item.id)}
+          key={id}
+          item={{ id, ...ITEM_META[id] }}
+          isActive={active === id}
+          onClick={() => onSelect(id)}
         />
       ))}
     </div>

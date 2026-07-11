@@ -27,6 +27,8 @@ import { useLearnStore } from '../../stores/learnStore';
 import { useChallengeModeStore } from '../../stores/challengeModeStore';
 import { useNavigationStore } from '../../stores/navigationStore';
 import { useSettingsStore } from '../../stores/settingsStore';
+import { useWorkspaceStore } from '../../stores/workspaceStore';
+import { activityViewsForMode } from './panelRegistry';
 import { ChevronDown, ChevronUp, Sun, Moon, X, Circle, Trash2, Copy, Clock } from 'lucide-react';
 import { useBottomPanelStore } from '../../stores/bottomPanelStore';
 import type { TerminalLine } from '../../stores/simulationStore';
@@ -532,10 +534,16 @@ function StatusBar() {
   const cycleMode = useUIModeStore((s) => s.cycleMode);
   const themeMode = useThemeStore((s) => s.mode);
   const themeToggle = useThemeStore((s) => s.toggle);
+  const workspaceMode = useWorkspaceStore((s) => s.mode);
+  const setWorkspaceMode = useWorkspaceStore((s) => s.setMode);
   const platform = usePlatform();
   const exercise = useExerciseStore((s) => s.activeExercise);
   const endExercise = useExerciseStore((s) => s.endExercise);
   const modeColors = { beginner: colors.success, intermediate: colors.warning, advanced: colors.error };
+
+  const handleWorkspaceModeToggle = useCallback(() => {
+    setWorkspaceMode(workspaceMode === 'learn' ? 'research' : 'learn');
+  }, [setWorkspaceMode, workspaceMode]);
 
   const statusText = isRunning ? 'Running...' : result ? `Done (${result.execution_time_ms}ms)` : 'Ready';
 
@@ -598,6 +606,20 @@ function StatusBar() {
         ...(isRunning ? { animation: 'nuclei-heartbeat 1.5s ease infinite' } : {}) }}>
         {statusText}
       </span>
+      <button
+        onClick={handleWorkspaceModeToggle}
+        title="Switch workspace mode"
+        aria-label="Switch workspace mode"
+        style={{
+          padding: '0 6px', height: 16, background: 'transparent', border: `1px solid ${colors.border}`, borderRadius: 3,
+          color: workspaceMode === 'research' ? colors.dirac : colors.textDim, cursor: 'pointer', fontSize: 10,
+          fontFamily: "'Geist Sans', sans-serif", fontWeight: 500,
+        }}
+        onMouseEnter={(e) => { e.currentTarget.style.background = colors.bgElevated; }}
+        onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
+      >
+        {workspaceMode === 'research' ? 'Research' : 'Learn'}
+      </button>
       <button onClick={handleCycleMode} title="Cycle UI mode (⌘+Shift+L)" style={{
         padding: '0 6px', height: 16, background: 'transparent', border: 'none', borderRadius: 3,
         color: modeColors[uiMode], cursor: 'pointer', fontSize: 10, fontFamily: "'Geist Sans', sans-serif",
@@ -633,6 +655,7 @@ export function PanelLayout() {
   const colors = useThemeStore((s) => s.colors);
   const uiMode = useUIModeStore((s) => s.mode);
   const experimentalFeatures = useSettingsStore((s) => s.general.experimentalFeatures);
+  const workspaceMode = useWorkspaceStore((s) => s.mode);
   const result = useSimulationStore((s) => s.result);
   const terminalOutput = useSimulationStore((s) => s.terminalOutput);
   const snapshot = useCircuitStore((s) => s.snapshot);
@@ -662,6 +685,12 @@ export function PanelLayout() {
   const showSidebar = !isLearnMode && !isChallengeMode && activeView !== null;
   const topSplitRef = useRef<HTMLDivElement>(null);
 
+  // Single source of truth for which activity-bar views exist right now —
+  // see panelRegistry.ts. Learn mode reproduces today's exact set; Research
+  // mode hides learning/challenges/community and adds the Experiments
+  // placeholder.
+  const visibleActivityViews = activityViewsForMode(workspaceMode, { experimentalFeatures });
+
   useEffect(() => {
     // Fresh run should re-show a previously-dismissed histogram chip.
     if (result) resetRunArtifacts();
@@ -672,13 +701,30 @@ export function PanelLayout() {
   }, [result, uiMode, setBottomCollapsed]);
 
   useEffect(() => {
-    if (experimentalFeatures) return;
-
-    if (activeView && ['search', 'circuit', 'plugins', 'hardware', 'community'].includes(activeView)) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect -- redirect away from experimental views when the flag flips off
+    if (activeView && !visibleActivityViews.includes(activeView)) {
       setActiveView('files');
     }
-  }, [activeView, experimentalFeatures]);
+    // visibleActivityViews is recomputed every render (new array identity);
+    // depend on its inputs instead so this doesn't refire spuriously.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeView, experimentalFeatures, workspaceMode]);
+
+  // Workspace mode switch (PRD 09 A3): Learn-only full-view surfaces
+  // (Learn Mode, Challenge Mode) are unreachable in Research, so exiting
+  // them here is what actually enforces the gate — the activity-bar item
+  // being hidden only stops new entry. A ref guards this so it only fires
+  // on an actual mode transition, never on ordinary in-mode navigation
+  // (e.g. toggling Learn Mode off leaves activeView untouched today, and
+  // must keep doing so for byte-compatibility).
+  const prevWorkspaceModeRef = useRef(workspaceMode);
+  useEffect(() => {
+    if (prevWorkspaceModeRef.current === workspaceMode) return;
+    prevWorkspaceModeRef.current = workspaceMode;
+    if (isLearnMode) exitLearnMode();
+    if (isChallengeMode) exitChallengeMode();
+    setActiveView((prev) => (prev && visibleActivityViews.includes(prev) ? prev : 'files'));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [workspaceMode, isLearnMode, isChallengeMode, exitLearnMode, exitChallengeMode]);
 
   // Load persisted layout
   useEffect(() => {
@@ -702,7 +748,6 @@ export function PanelLayout() {
     if (settingsSignal > 0) {
       if (isLearnMode) exitLearnMode();
       if (isChallengeMode) exitChallengeMode();
-      // eslint-disable-next-line react-hooks/set-state-in-effect -- navigates in response to cross-component signal
       setActiveView('settings');
     }
   }, [settingsSignal, isLearnMode, isChallengeMode, exitLearnMode, exitChallengeMode]);
@@ -778,7 +823,12 @@ export function PanelLayout() {
       {/* Main area (everything except status bar) */}
       <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
         {/* Activity Bar */}
-        <ActivityBar active={isChallengeMode ? 'challenges' : isLearnMode ? 'learning' : activeView} onSelect={handleActivitySelect} />
+        <ActivityBar
+          active={isChallengeMode ? 'challenges' : isLearnMode ? 'learning' : activeView}
+          onSelect={handleActivitySelect}
+          visibleViews={visibleActivityViews}
+          workspaceMode={workspaceMode}
+        />
 
         {/* Sidebar (hidden in Learn Mode) */}
         {showSidebar && activeView && (

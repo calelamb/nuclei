@@ -1,7 +1,16 @@
 import { callClaude } from './claudeClient';
 import type { CircuitSnapshot, SimulationResult } from '../types/quantum';
+import { useWorkspaceStore, type WorkspaceMode } from '../stores/workspaceStore';
+import { personaPreamble } from './diracPersona';
 
+// Learn-mode text is unchanged from before PRD 09 (see narration.test.ts).
 const SYSTEM_PROMPT = `You are Dirac, a friendly quantum computing tutor embedded in an IDE. The student just changed their code. Your job is to narrate what their circuit is doing right now in ONE short sentence (max 120 characters). No preamble, no "here's what happened", just the observation. If there's nothing interesting yet, return an empty string.`;
+
+const RESEARCH_SYSTEM_PROMPT = `${personaPreamble('research')} The user just changed their code. Narrate what their circuit is doing right now in ONE short, precise sentence (max 120 characters). No preamble. If there's nothing worth noting yet, return an empty string.`;
+
+function systemPromptFor(mode: WorkspaceMode): string {
+  return mode === 'research' ? RESEARCH_SYSTEM_PROMPT : SYSTEM_PROMPT;
+}
 
 function firstLine(text: string): string {
   const trimmed = text.trim();
@@ -41,7 +50,7 @@ export async function narrateParse(input: NarrateParseInput): Promise<string | n
     input.code.slice(0, 1500),
   ].join('\n');
 
-  const res = await callClaude({ system: SYSTEM_PROMPT, user: prompt, maxTokens: 120 });
+  const res = await callClaude({ system: systemPromptFor(useWorkspaceStore.getState().mode), user: prompt, maxTokens: 120 });
   if (!res.text) return null;
   const line = firstLine(res.text);
   return line.length > 0 ? line : null;
@@ -63,7 +72,7 @@ export async function narrateResult(input: NarrateResultInput): Promise<string |
     'Code:',
     input.code.slice(0, 1500),
   ];
-  const res = await callClaude({ system: SYSTEM_PROMPT, user: parts.join('\n'), maxTokens: 120 });
+  const res = await callClaude({ system: systemPromptFor(useWorkspaceStore.getState().mode), user: parts.join('\n'), maxTokens: 120 });
   if (!res.text) return null;
   const line = firstLine(res.text);
   return line.length > 0 ? line : null;
