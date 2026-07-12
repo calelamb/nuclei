@@ -48,7 +48,10 @@ from kernel.models import KernelError
 
 DEFAULT_PROGRESS_INTERVAL_S = 1.0
 MIN_PROGRESS_INTERVAL_S = 0.1
-MAX_CAMPAIGN_TASKS = 2_000
+# Backstop only. PRD 10 D3: above 2,000 tasks the FRONTEND warns (sinter's
+# adaptive allocation keeps large grids sane) — the kernel rejects only
+# absurdity.
+MAX_CAMPAIGN_TASKS = 10_000
 
 
 class _CampaignCancelled(Exception):

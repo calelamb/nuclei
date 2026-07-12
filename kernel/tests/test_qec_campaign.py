@@ -135,7 +135,7 @@ def test_start_rejects_task_count_above_cap():
     try:
         started, error = manager.start(
             campaign_id="c1",
-            tasks_payload=[task_entry(i) for i in range(2_001)],
+            tasks_payload=[task_entry(i) for i in range(10_001)],
             max_shots=10,
             loop=loop,
             send_json=None,
@@ -145,7 +145,7 @@ def test_start_rejects_task_count_above_cap():
 
     assert started is None
     assert error is not None and error.code == "qec_campaign_invalid"
-    assert "2001" in error.message.replace(",", "")
+    assert "10001" in error.message.replace(",", "")
 
 
 # ───────── end-to-end over the real handler ─────────
