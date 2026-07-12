@@ -1,6 +1,6 @@
 ---
 title: "Schemas"
-description: "Field-by-field reference for CircuitSnapshot, Gate, SimulationResult, BackendInfo, and JobHandle — including bitstring-key conventions per framework."
+description: "Field-by-field reference for CircuitSnapshot, Gate, SimulationResult, Environment, BackendInfo, and JobHandle — including bitstring-key conventions per framework."
 ---
 
 import { Code, Aside } from '@astrojs/starlight/components';
@@ -78,6 +78,8 @@ Carried in `result.data` (execute) and in simulator `hardware_result.data`.
 | `bloch_coords` | `{x, y, z}[]` | Per-qubit Bloch vector from the reduced density matrix. Entangled qubits sit near the origin. |
 | `execution_time_ms` | float | Wall-clock simulation time, rounded to 0.1 ms. |
 | `shot_count` | integer | Echo of the requested `shots`. |
+| `metrics` | `{string: float}` | **Protocol v1.1.** Accumulated `record_metric(name, value)` calls the user's code made during this run. Always present — `{}` when nothing was recorded. Recording the same name twice overwrites (last write wins). |
+| `seed_honored` | boolean | **Protocol v1.1, optional.** Present only when the `execute` request carried a `seed`: whether the backend actually honored it. **Omitted entirely** (not `false`) when no seed was requested — see [execution messages](/docs/kernel-api/messages-execution/#parameters-seeding-and-metrics-protocol-v11). |
 
 ### Bitstring-key conventions (read this twice)
 
@@ -105,6 +107,17 @@ the program itself calls `DumpMachine()`: {/* qsharp_adapter.py:515-550 */}
 - **No dump**: `state_vector` is `[]`, `probabilities` are sampled
   frequencies (`count / shots`), and Bloch coordinates use measurement
   marginals — only *z* is observable from counts, so `x = y = 0`.
+
+## Environment
+
+**Protocol v1.1.** The whole payload of an `environment` response (see
+[execution messages](/docs/kernel-api/messages-execution/#environment)).
+
+| Field | Type | Notes |
+|-------|------|-------|
+| `python` | string | `platform.python_version()` on the kernel host. |
+| `platform` | string | `platform.platform()` on the kernel host. |
+| `packages` | `{string: string}` | Installed version per framework — keys present only for frameworks actually resolvable via `importlib.metadata` on the kernel host: `qiskit`, `qiskit_aer`, `cirq`, `cudaq`, `qsharp`. |
 
 ## KernelError
 

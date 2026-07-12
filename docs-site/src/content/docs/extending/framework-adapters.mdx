@@ -23,16 +23,17 @@ four-method ABC: {/* kernel/adapters/base.py:6-25 */}
 | `detect(code) -> bool` | Regex check (mirrors the spec's `detect_pattern`; the executor uses the spec, but the method keeps adapters independently testable). |
 | `find_circuit(namespace)` | Return the framework's circuit object from the exec'd namespace, or `None`. Convention: **newest wins** when several exist. |
 | `extract_snapshot(circuit_obj)` | Gate list + layering, **no simulation** — this runs on every debounced keystroke. |
-| `simulate(circuit_obj, shots)` | Full simulation; only on explicit execute. |
+| `simulate(circuit_obj, shots, seed=None)` | Full simulation; only on explicit execute. `seed` is optional (protocol v1.1) — seed your backend when given and set `SimulationResult.seed_honored` (`True`/`False`); leave it `None` when no seed was requested. |
 
 **Source-mode** (Q# today): the code never reaches Python `exec()` —
 your adapter owns the whole pipeline by overriding `parse_source(code)` and
-`execute_source(code, shots)`, which return the **executor's own tuple
-shapes** `(snapshot, stdout, stderr, error)` and
+`execute_source(code, shots, params=None, seed=None)`, which return the
+**executor's own tuple shapes** `(snapshot, stdout, stderr, error)` and
 `(result, snapshot, stdout, stderr, error)` so the executor passes them
 through unchanged. Set `source_mode=True` on the spec. The Q# adapter
-(`kernel/adapters/qsharp_adapter.py`) is the reference implementation.
-{/* base.py:27-53; executor.py:263-269,306-312 */}
+(`kernel/adapters/qsharp_adapter.py`) is the reference implementation,
+including protocol v1.1's parameter binding and seeding.
+{/* base.py:27-63; executor.py Phase B */}
 
 You never raise to signal user errors — return a `KernelError` (in
 source-mode) or just raise and let the executor classify: exceptions from

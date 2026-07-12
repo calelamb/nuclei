@@ -23,7 +23,7 @@ class StubAdapter:
     def extract_snapshot(self, circuit_obj):
         return self._snapshot
 
-    def simulate(self, circuit_obj, shots: int):
+    def simulate(self, circuit_obj, shots: int, seed: int | None = None):
         if self._simulate_error:
             raise self._simulate_error
         return self._result
@@ -174,7 +174,7 @@ def test_parse_returns_empty_snapshot_for_valid_code_without_circuit(monkeypatch
 
     monkeypatch.setattr(executor, "_detect_adapter_spec", lambda code: FAKE_SPEC)
     monkeypatch.setattr(executor, "_load_adapter", lambda spec: (adapter, None))
-    monkeypatch.setattr(executor, "_run_code", lambda code: ("printed output\n", "", None))
+    monkeypatch.setattr(executor, "_run_code", lambda code, **kwargs: ("printed output\n", "", None))
 
     snapshot, stdout, stderr, error = executor.parse("from qiskit import QuantumCircuit")
 
@@ -195,7 +195,7 @@ def test_parse_normalizes_module_not_found_to_missing_dependency(monkeypatch):
 
     monkeypatch.setattr(executor, "_detect_adapter_spec", lambda code: FAKE_SPEC)
     monkeypatch.setattr(executor, "_load_adapter", lambda spec: (adapter, None))
-    monkeypatch.setattr(executor, "_run_code", lambda code: ("", "", runtime_error))
+    monkeypatch.setattr(executor, "_run_code", lambda code, **kwargs: ("", "", runtime_error))
 
     snapshot, stdout, stderr, error = executor.parse("import qiskit")
 
@@ -239,7 +239,7 @@ def test_execute_returns_snapshot_and_typed_simulation_error(monkeypatch):
 
     monkeypatch.setattr(executor, "_detect_adapter_spec", lambda code: FAKE_SPEC)
     monkeypatch.setattr(executor, "_load_adapter", lambda spec: (adapter, None))
-    monkeypatch.setattr(executor, "_run_code", lambda code: ("", "", None))
+    monkeypatch.setattr(executor, "_run_code", lambda code, **kwargs: ("", "", None))
 
     result, returned_snapshot, stdout, stderr, error = executor.execute("import qiskit", 512)
 
@@ -331,7 +331,7 @@ def test_execute_returns_result_when_stub_adapter_succeeds(monkeypatch):
 
     monkeypatch.setattr(executor, "_detect_adapter_spec", lambda code: FAKE_SPEC)
     monkeypatch.setattr(executor, "_load_adapter", lambda spec: (adapter, None))
-    monkeypatch.setattr(executor, "_run_code", lambda code: ("", "", None))
+    monkeypatch.setattr(executor, "_run_code", lambda code, **kwargs: ("", "", None))
 
     actual_result, returned_snapshot, stdout, stderr, error = executor.execute("import qiskit", 256)
 

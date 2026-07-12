@@ -1,4 +1,5 @@
 import contextlib
+import dataclasses
 import importlib
 import io
 import re
@@ -93,6 +94,9 @@ class Executor:
     def __init__(self, capture_limit_bytes: int | None = None):
         self._namespace: dict = {}
         self._capture_limit_bytes = capture_limit_bytes
+        # Accumulated record_metric(name, value) calls from the most recent
+        # run (protocol v1.1 / PRD 09 Phase B). Reset on every _run_code.
+        self._metrics: dict[str, float] = {}
 
     def _new_capture(self) -> io.TextIOBase:
         if self._capture_limit_bytes is None:
@@ -104,6 +108,15 @@ class Executor:
 
     def _reset_namespace(self) -> None:
         self._namespace = {"__builtins__": __builtins__}
+        self._metrics = {}
+
+    def _record_metric(self, name: str, value: float) -> None:
+        """The `record_metric` closure injected into user code's namespace.
+
+        Last write wins per name — documented in PRD 09: recording the same
+        name twice overwrites rather than accumulating.
+        """
+        self._metrics[str(name)] = float(value)
 
     def _detect_adapter_spec(self, code: str) -> AdapterSpec | None:
         for spec in ADAPTER_SPECS:
@@ -206,14 +219,29 @@ class Executor:
             dependency=dependency,
         )
 
-    def _run_code(self, code: str) -> tuple[str, str, KernelError | None]:
+    def _run_code(
+        self,
+        code: str,
+        *,
+        params: dict[str, float] | None = None,
+        seed: int | None = None,
+    ) -> tuple[str, str, KernelError | None]:
         """Execute user code and return (stdout, stderr, error).
 
         stdout and stderr are captured separately so the frontend can
         style them differently in the terminal. A Python-level exception
         is surfaced as the KernelError (with stdout/stderr still returned
         so the user sees what was printed before the failure).
+
+        Protocol v1.1 (PRD 09 Phase B), additive: `params` is ALWAYS
+        injected into the namespace as a dict (empty when not supplied),
+        so `params.get("theta", default)` is portable between casual runs
+        and experiment runs. `record_metric(name, value)` is always
+        injected too. When `seed` is given, Python's `random` and (if
+        installed) `numpy.random` are seeded before exec so user-side
+        randomness is captured by reproducible runs as well.
         """
+        import random
         import signal
         import threading
 
@@ -221,6 +249,17 @@ class Executor:
         stderr_capture = self._new_capture()
 
         self._reset_namespace()
+        self._namespace["params"] = dict(params) if params else {}
+        self._namespace["record_metric"] = self._record_metric
+
+        if seed is not None:
+            random.seed(seed)
+            try:
+                import numpy as np
+
+                np.random.seed(seed)
+            except ImportError:
+                pass
 
         # SIGALRM-based timeout only works from the main thread. The server
         # now runs parse/execute inside `asyncio.to_thread`, so we fall back
@@ -309,8 +348,25 @@ class Executor:
         return snapshot, stdout, stderr, None
 
     def execute(
-        self, code: str, shots: int, *, language: str | None = None
+        self,
+        code: str,
+        shots: int,
+        *,
+        language: str | None = None,
+        params: dict[str, float] | None = None,
+        seed: int | None = None,
     ) -> tuple[SimulationResult | None, CircuitSnapshot | None, str, str, KernelError | None]:
+        """Run the full pipeline: build the circuit, snapshot, simulate.
+
+        `params`/`seed` are optional (protocol v1.1 / PRD 09 Phase B),
+        additive over the v1 contract — omitting both reproduces the exact
+        v1 behavior. `params` is injected into the exec namespace (always a
+        dict, `{}` when omitted); `seed` requests reproducible sampling and
+        is forwarded to the adapter's `simulate`/`execute_source`, which
+        reports back via `SimulationResult.seed_honored`. Any
+        `record_metric(name, value)` calls the user's code made are merged
+        into the returned result's `metrics` (empty dict when none).
+        """
         spec = self._resolve_spec(code, language)
         if spec is None:
             return None, None, "", "", KernelError(
@@ -324,13 +380,13 @@ class Executor:
 
         if spec.source_mode:
             try:
-                return adapter.execute_source(code, shots)
+                return adapter.execute_source(code, shots, params=params, seed=seed)
             except Exception as exc:
                 return None, None, "", "", self._capability_error(
                     spec, exc, "execution_error"
                 )
 
-        stdout, stderr, error = self._run_code(code)
+        stdout, stderr, error = self._run_code(code, params=params, seed=seed)
         if error:
             error = self._normalize_runtime_error(spec, error)
             error.framework = spec.framework
@@ -354,11 +410,15 @@ class Executor:
             return None, None, stdout, stderr, self._capability_error(spec, exc, "adapter_error")
 
         try:
-            result = adapter.simulate(circuit, shots)
+            result = adapter.simulate(circuit, shots, seed=seed)
         except Exception as exc:
             return None, snapshot, stdout, stderr, self._capability_error(
                 spec, exc, "simulation_error"
             )
+
+        # Merge whatever the user's code recorded via record_metric — always
+        # present on the wire (empty dict when nothing was recorded).
+        result = dataclasses.replace(result, metrics=dict(self._metrics))
 
         return result, snapshot, stdout, stderr, None
 

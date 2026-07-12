@@ -1,8 +1,10 @@
 import asyncio
 import json
+import platform
 import signal
 import sys
 import os
+from importlib import metadata as importlib_metadata
 
 # Add project root to path so kernel package is importable
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -230,6 +232,61 @@ def _prepare_hardware_payload(
     return circuit_obj
 
 
+# ───────── environment (protocol v1.1 / PRD 09 Phase B) ─────────
+#
+# Reports interpreter + platform + installed-framework versions, used by
+# the experiment runner (PRD 09 Phase C) to stamp manifests and generally
+# useful for bug reports. Each canonical key tries its candidate PyPI
+# distribution names in order — this is deliberately NOT just the adapters'
+# import-name dependency tuples, because a distribution's import name and
+# PyPI name diverge in practice (e.g. `import cirq` is provided by the
+# `cirq-core` distribution in a minimal install with no `cirq` metapackage;
+# the Q# runtime is the `qdk` package with a `qsharp` compatibility shim
+# also installed under some setups). Verified empirically against the
+# kernel venv at implementation time rather than assumed.
+_ENVIRONMENT_PACKAGE_CANDIDATES: dict[str, tuple[str, ...]] = {
+    "qiskit": ("qiskit",),
+    "qiskit_aer": ("qiskit_aer", "qiskit-aer"),
+    "cirq": ("cirq", "cirq-core"),
+    "cudaq": ("cudaq", "cuda-quantum"),
+    "qsharp": ("qdk", "qsharp"),
+}
+
+
+def _collect_package_versions() -> dict[str, str]:
+    """Best-effort installed-version lookup — never raises.
+
+    Omits any canonical package whose candidate distributions are all
+    absent (or whose metadata lookup fails for any other reason).
+    """
+    versions: dict[str, str] = {}
+    for key, candidates in _ENVIRONMENT_PACKAGE_CANDIDATES.items():
+        for candidate in candidates:
+            try:
+                versions[key] = importlib_metadata.version(candidate)
+                break
+            except Exception:
+                continue
+    return versions
+
+
+def _build_environment_payload() -> dict:
+    """Build the `environment` response payload. Never raises."""
+    try:
+        python_version = platform.python_version()
+    except Exception:
+        python_version = "unknown"
+    try:
+        platform_str = platform.platform()
+    except Exception:
+        platform_str = "unknown"
+    return {
+        "python": python_version,
+        "platform": platform_str,
+        "packages": _collect_package_versions(),
+    }
+
+
 def error_payload(error: KernelError, phase: str) -> dict:
     payload = {
         "type": "error",
@@ -297,9 +354,27 @@ async def handle_message(websocket):
 
         elif msg_type == "execute":
             shots = msg.get("shots", 1024)
+
+            # Optional protocol v1.1 fields (PRD 09 Phase B) — both
+            # additive, omitted by older clients. Validate defensively at
+            # this boundary rather than trusting the wire payload: a
+            # malformed `params` degrades to "no params" instead of
+            # crashing the connection, and a non-numeric `seed` is dropped
+            # the same way.
+            params = msg.get("params")
+            if not isinstance(params, dict):
+                params = None
+
+            seed = msg.get("seed")
+            if seed is not None:
+                try:
+                    seed = int(seed)
+                except (TypeError, ValueError):
+                    seed = None
+
             # Simulation can take multiple seconds — must not block the loop.
             result, snapshot, stdout, stderr, error = await asyncio.to_thread(
-                executor.execute, code, shots, language=language
+                executor.execute, code, shots, language=language, params=params, seed=seed
             )
 
             if stdout:
@@ -357,6 +432,17 @@ async def handle_message(websocket):
             await websocket.send(json.dumps({
                 "type": "python_result",
                 "success": error is None,
+            }))
+
+        elif msg_type == "environment":
+            # Cheap (importlib.metadata lookups only) — no need to offload
+            # to a thread. Never raises: see _build_environment_payload.
+            payload = _build_environment_payload()
+            await websocket.send(json.dumps({
+                "type": "environment",
+                "python": payload["python"],
+                "platform": payload["platform"],
+                "packages": payload["packages"],
             }))
 
         elif msg_type == "hardware_connect":

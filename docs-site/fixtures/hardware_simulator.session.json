@@ -124,7 +124,8 @@
           "measurements": "<any>",
           "bloch_coords": "<any>",
           "execution_time_ms": "<any>",
-          "shot_count": 256
+          "shot_count": 256,
+          "metrics": {}
         }
       }
     ]

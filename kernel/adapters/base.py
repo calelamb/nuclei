@@ -20,8 +20,16 @@ class FrameworkAdapter(ABC):
         pass
 
     @abstractmethod
-    def simulate(self, circuit_obj, shots: int) -> SimulationResult:
-        """Run full simulation and return results."""
+    def simulate(self, circuit_obj, shots: int, seed: int | None = None) -> SimulationResult:
+        """Run full simulation and return results.
+
+        `seed` is optional (protocol v1.1 / PRD 09 Phase B) — when given, an
+        implementation SHOULD seed its backend for reproducible sampling and
+        set `SimulationResult.seed_honored = True` on the object it returns.
+        When a backend has no seeding API, set `seed_honored = False` instead
+        of silently ignoring the request. The default of None preserves
+        every existing caller's behavior unchanged.
+        """
         pass
 
     def parse_source(
@@ -38,7 +46,12 @@ class FrameworkAdapter(ABC):
         )
 
     def execute_source(
-        self, code: str, shots: int
+        self,
+        code: str,
+        shots: int,
+        *,
+        params: dict[str, float] | None = None,
+        seed: int | None = None,
     ) -> tuple[
         SimulationResult | None, CircuitSnapshot | None, str, str, KernelError | None
     ]:
@@ -47,6 +60,11 @@ class FrameworkAdapter(ABC):
 
         Same contract as Executor.execute — source-mode adapters return the
         full tuple so the executor can pass it through unchanged.
+
+        `params`/`seed` are optional (protocol v1.1 / PRD 09 Phase B):
+        `params` binds to the entry operation's declared arguments by name
+        when supplied; `seed` requests reproducible sampling. Both default
+        to None so existing callers are unaffected.
         """
         raise NotImplementedError(
             f"{type(self).__name__} does not support source-mode execution"

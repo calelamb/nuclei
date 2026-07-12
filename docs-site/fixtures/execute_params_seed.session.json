@@ -1,0 +1,82 @@
+[
+  {
+    "request": {
+      "type": "execute",
+      "code": "from qiskit import QuantumCircuit\n\nqc = QuantumCircuit(2, 2)\nqc.h(0)\nqc.cx(0, 1)\nqc.measure([0, 1], [0, 1])\nrecord_metric(\"theta\", params.get(\"theta\", 0.0))\n",
+      "shots": 256,
+      "language": "python",
+      "params": { "theta": 0.7854 },
+      "seed": 1234
+    },
+    "responses": [
+      {
+        "type": "snapshot",
+        "data": {
+          "framework": "qiskit",
+          "qubit_count": 2,
+          "classical_bit_count": 2,
+          "depth": 3,
+          "gates": [
+            { "type": "H", "targets": [0], "controls": [], "params": [], "layer": 0 },
+            { "type": "CNOT", "targets": [1], "controls": [0], "params": [], "layer": 1 },
+            { "type": "Measure", "targets": [0], "controls": [], "params": [], "layer": 2 },
+            { "type": "Measure", "targets": [1], "controls": [], "params": [], "layer": 2 }
+          ]
+        }
+      },
+      {
+        "type": "result",
+        "data": {
+          "state_vector": "<any>",
+          "probabilities": "<any>",
+          "measurements": { "00": 136, "11": 120 },
+          "bloch_coords": "<any>",
+          "execution_time_ms": "<any>",
+          "shot_count": 256,
+          "metrics": { "theta": 0.7854 },
+          "seed_honored": true
+        }
+      }
+    ]
+  },
+  {
+    "request": {
+      "type": "execute",
+      "code": "from qiskit import QuantumCircuit\n\nqc = QuantumCircuit(2, 2)\nqc.h(0)\nqc.cx(0, 1)\nqc.measure([0, 1], [0, 1])\nrecord_metric(\"theta\", params.get(\"theta\", 0.0))\n",
+      "shots": 256,
+      "language": "python",
+      "params": { "theta": 0.7854 },
+      "seed": 1234
+    },
+    "responses": [
+      {
+        "type": "snapshot",
+        "data": {
+          "framework": "qiskit",
+          "qubit_count": 2,
+          "classical_bit_count": 2,
+          "depth": 3,
+          "gates": [
+            { "type": "H", "targets": [0], "controls": [], "params": [], "layer": 0 },
+            { "type": "CNOT", "targets": [1], "controls": [0], "params": [], "layer": 1 },
+            { "type": "Measure", "targets": [0], "controls": [], "params": [], "layer": 2 },
+            { "type": "Measure", "targets": [1], "controls": [], "params": [], "layer": 2 }
+          ]
+        }
+      },
+      {
+        "type": "result",
+        "data": {
+          "state_vector": "<any>",
+          "probabilities": "<any>",
+          "measurements": { "00": 136, "11": 120 },
+          "bloch_coords": "<any>",
+          "execution_time_ms": "<any>",
+          "shot_count": 256,
+          "metrics": { "theta": 0.7854 },
+          "seed_honored": true
+        }
+      }
+    ]
+  }
+]

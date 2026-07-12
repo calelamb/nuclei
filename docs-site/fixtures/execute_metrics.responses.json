@@ -1,0 +1,27 @@
+[
+  {
+    "type": "snapshot",
+    "data": {
+      "framework": "qiskit",
+      "qubit_count": 1,
+      "classical_bit_count": 1,
+      "depth": 2,
+      "gates": [
+        { "type": "H", "targets": [0], "controls": [], "params": [], "layer": 0 },
+        { "type": "Measure", "targets": [0], "controls": [], "params": [], "layer": 1 }
+      ]
+    }
+  },
+  {
+    "type": "result",
+    "data": {
+      "state_vector": "<any>",
+      "probabilities": "<any>",
+      "measurements": "<any>",
+      "bloch_coords": "<any>",
+      "execution_time_ms": "<any>",
+      "shot_count": 512,
+      "metrics": { "energy": -1.1372, "iterations": 40 }
+    }
+  }
+]

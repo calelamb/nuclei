@@ -1,0 +1,13 @@
+[
+  {
+    "type": "error",
+    "message": "Missing value for parameter 'theta' (Double) of Rotate().",
+    "code": "compile_error",
+    "phase": "execute",
+    "framework": "qsharp"
+  },
+  {
+    "type": "result",
+    "data": null
+  }
+]

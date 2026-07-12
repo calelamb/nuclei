@@ -31,6 +31,7 @@ clears itself. The only real recovery is a kernel restart.
 
 from __future__ import annotations
 
+import dataclasses
 import json
 import os
 import re
@@ -273,6 +274,134 @@ def _resolve_entry(code: str) -> str | None:
     return f"{names[-1]}()"
 
 
+# ───────── B4: parameter binding for swept experiment runs ─────────
+#
+# When an `execute` request carries `params` (PRD 09 Phase B), the entry
+# operation is allowed to declare arguments — unlike the zero-param-only
+# resolution above, used only when no params were supplied at all (so
+# every existing parse_source/execute_source caller is unaffected).
+# Approximate by design (regex over the declaration, not a real parser);
+# acceptable for v1's Double/Int-only sweep parameters per PRD 09 risk #4.
+
+# Matches ANY operation declaration (not just zero-param ones), capturing
+# its name and raw parameter-list text.
+_OPERATION_DECL = re.compile(r"operation\s+(\w+)\s*\(([^)]*)\)\s*:", re.MULTILINE)
+
+# Q# types this binder understands. Anything else (Bool, String, Qubit,
+# arrays, tuples, ...) is a compile_error — v1 sweep parameters are numeric.
+_SUPPORTED_PARAM_TYPES = {"Double", "Int"}
+
+
+class _ParamBindingError(Exception):
+    """Internal only — callers convert this to KernelError(code='compile_error')."""
+
+
+def _resolve_entry_declaration(code: str) -> tuple[str, str] | None:
+    """Return (name, raw_param_list) for the entry operation, ANY arity.
+
+    Same priority as _resolve_entry: an operation literally named Main
+    (last declaration if redefined), else the last operation declared in
+    the file. Returns None when the source declares no operations at all.
+    """
+    matches = _OPERATION_DECL.findall(code)
+    if not matches:
+        return None
+    names = [name for name, _ in matches]
+    if "Main" in names:
+        for name, raw_params in reversed(matches):
+            if name == "Main":
+                return name, raw_params
+    return matches[-1]
+
+
+def _parse_param_list(raw: str) -> list[tuple[str, str]]:
+    """Parse a Q# parameter-list string ('theta : Double, layers : Int')
+    into [(name, type), ...]. Empty/whitespace-only input -> []."""
+    raw = raw.strip()
+    if not raw:
+        return []
+    declared: list[tuple[str, str]] = []
+    for part in raw.split(","):
+        part = part.strip()
+        if not part:
+            continue
+        name, sep, type_ = part.partition(":")
+        declared.append((name.strip(), type_.strip() if sep else ""))
+    return declared
+
+
+def _format_double_literal(value: float) -> str:
+    """Render a float as a Q# Double literal — ALWAYS with a decimal point
+    (Q# would otherwise parse a bare integer-looking literal as Int)."""
+    f = float(value)
+    text = repr(f)
+    for marker in ("e", "E"):
+        if marker in text:
+            mantissa, _, exponent = text.partition(marker)
+            if "." not in mantissa:
+                mantissa += ".0"
+            return f"{mantissa}e{exponent}"
+    if "." not in text:
+        text += ".0"
+    return text
+
+
+def _bind_entry_params(
+    name: str, raw_param_list: str, params: Mapping[str, float]
+) -> str:
+    """Build the entry expression ('Main(2.0, 3)') binding `params` to the
+    operation's declared arguments BY NAME.
+
+    Raises _ParamBindingError — with a message naming the offending
+    parameter and why — for any of: a params key the operation doesn't
+    declare, a declared parameter with no value supplied, or a declared
+    type outside {Double, Int}. Never partially binds: the caller must
+    receive either a complete, valid entry expression or an error, before
+    any Q# code runs.
+    """
+    declared = _parse_param_list(raw_param_list)
+    declared_names = {param_name for param_name, _ in declared}
+
+    extra = sorted(set(params) - declared_names)
+    if extra:
+        raise _ParamBindingError(
+            f"{name}() does not declare parameter(s) {', '.join(extra)} "
+            f"— sweep keys must match the entry operation's argument names."
+        )
+
+    args: list[str] = []
+    for param_name, param_type in declared:
+        if param_name not in params:
+            raise _ParamBindingError(
+                f"Missing value for parameter '{param_name}' ({param_type or 'unknown type'}) "
+                f"of {name}()."
+            )
+        if param_type not in _SUPPORTED_PARAM_TYPES:
+            raise _ParamBindingError(
+                f"Parameter '{param_name}' of {name}() has unsupported type "
+                f"'{param_type or 'unknown'}' — only Double and Int are supported."
+            )
+        value = params[param_name]
+        if param_type == "Double":
+            args.append(_format_double_literal(value))
+        else:  # Int
+            try:
+                as_float = float(value)
+            except (TypeError, ValueError):
+                raise _ParamBindingError(
+                    f"Parameter '{param_name}' of {name}() is Int but got "
+                    f"non-numeric value {value!r}."
+                ) from None
+            if not as_float.is_integer():
+                raise _ParamBindingError(
+                    f"Parameter '{param_name}' of {name}() is Int but got "
+                    f"non-integer value {value!r}."
+                )
+            args.append(str(int(as_float)))
+
+    return f"{name}({', '.join(args)})"
+
+
 def _short_diagnostic(text: str) -> str:
     """Extract the one-line human summary from a miette-rendered diagnostic.
 
@@ -463,7 +592,13 @@ class QsharpAdapter(FrameworkAdapter):
         return snapshot, "", "", None
 
     def execute_source(
-        self, code: str, shots: int, *, timeout: float | None = None
+        self,
+        code: str,
+        shots: int,
+        *,
+        params: Mapping[str, float] | None = None,
+        seed: int | None = None,
+        timeout: float | None = None,
     ) -> tuple[
         SimulationResult | None, CircuitSnapshot | None, str, str, KernelError | None
     ]:
@@ -474,6 +609,19 @@ class QsharpAdapter(FrameworkAdapter):
         because this runs the user's program at the user's shot count. On
         expiry — or while a previous timed-out run still occupies the
         interpreter — the error is KernelError(code="timeout").
+
+        `params` (protocol v1.1 / PRD 09 Phase B): when given (even an empty
+        dict), the entry operation is resolved and its arguments bound BY
+        NAME to `params` — see _bind_entry_params. A name mismatch, missing
+        value, or unsupported declared type (only Double/Int are supported)
+        surfaces as KernelError(code="compile_error") BEFORE anything runs.
+        When `params` is None (the default), entry resolution is unchanged
+        from before this feature: only a zero-parameter operation can be
+        the entry point.
+
+        `seed`: forwarded to qsharp.run's own `seed` kwarg, which qdk
+        honors natively for reproducible sampling — verified empirically
+        (same seed twice yields identical measurements).
 
         Raises ImportError("qdk") when the QDK is not installed — the
         executor maps that to a missing_dependency KernelError. All other
@@ -501,7 +649,7 @@ class QsharpAdapter(FrameworkAdapter):
             str,
             KernelError | None,
         ]:
-            snapshot, entry, error = self._compile_and_snapshot(code)
+            snapshot, entry, error = self._compile_and_snapshot(code, params=params)
             if error is not None:
                 return None, None, "", "", error
             if entry is None or snapshot is None:
@@ -512,12 +660,20 @@ class QsharpAdapter(FrameworkAdapter):
                 )
 
             start = time.time()
+            run_kwargs: dict[str, Any] = {"save_events": True}
+            if seed is not None:
+                run_kwargs["seed"] = seed
             try:
-                shot_results = qsharp.run(entry, shots=shots, save_events=True)
+                shot_results = qsharp.run(entry, shots=shots, **run_kwargs)
             except Exception as exc:
                 return None, snapshot, "", "", self._runtime_error(exc)
 
             result = self._build_result(snapshot, shot_results, shots, start)
+            if seed is not None:
+                # qsharp.run's own `seed` kwarg is honored natively by qdk
+                # (empirically verified: identical seed -> identical
+                # measurements), so a requested seed is always honored here.
+                result = dataclasses.replace(result, seed_honored=True)
             stdout = self._collect_stdout(shot_results)
             return result, snapshot, stdout, "", None
 
@@ -604,7 +760,7 @@ class QsharpAdapter(FrameworkAdapter):
     # ───────── internals ─────────
 
     def _compile_and_snapshot(
-        self, code: str
+        self, code: str, *, params: Mapping[str, float] | None = None
     ) -> tuple[CircuitSnapshot | None, str | None, KernelError | None]:
         """Init the interpreter, eval the source, and build a snapshot.
 
@@ -617,6 +773,13 @@ class QsharpAdapter(FrameworkAdapter):
         Returns (snapshot, entry_expr, error). A (None, None, None) result
         means the source compiled but has no runnable entry point.
         Raises ImportError("qdk") when the QDK is not installed.
+
+        `params` (protocol v1.1 / PRD 09 Phase B): None (the default)
+        preserves the original zero-parameter-only entry resolution exactly.
+        When params is not None (even {}), the entry operation is resolved
+        at ANY arity and its declared arguments are bound BY NAME to
+        `params` — a mismatch surfaces as a compile_error KernelError
+        BEFORE `qsharp.circuit`/`qsharp.run` ever touches the source.
         """
         if not QSHARP_AVAILABLE:
             raise ImportError("qdk")
@@ -633,9 +796,23 @@ class QsharpAdapter(FrameworkAdapter):
                 framework="qsharp",
             )
 
-        entry = _resolve_entry(code)
-        if entry is None:
-            return None, None, None
+        if params is None:
+            entry = _resolve_entry(code)
+            if entry is None:
+                return None, None, None
+        else:
+            declared = _resolve_entry_declaration(code)
+            if declared is None:
+                return None, None, None
+            name, raw_param_list = declared
+            try:
+                entry = _bind_entry_params(name, raw_param_list, params)
+            except _ParamBindingError as exc:
+                return None, None, KernelError(
+                    code="compile_error",
+                    message=str(exc),
+                    framework="qsharp",
+                )
 
         try:
             circuit = qsharp.circuit(entry, group_by_scope=False)

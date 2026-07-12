@@ -39,6 +39,19 @@ class SimulationResult:
     bloch_coords: list[dict]  # [{"x": float, "y": float, "z": float}, ...]
     execution_time_ms: float
     shot_count: int
+    # Protocol v1.1 (PRD 09 Phase B) — both additive/optional on the wire.
+    # `metrics` accumulates any `record_metric(name, value)` calls the
+    # user's code made during this run; always present (empty when none
+    # were recorded), never omitted.
+    metrics: dict[str, float] = field(default_factory=dict)
+    # `seed_honored` is None when no seed was requested for this run — in
+    # that case the field is omitted from the wire payload entirely (see
+    # to_dict below). When a seed WAS requested, this is True/False
+    # depending on whether the backend actually honored it.
+    seed_honored: bool | None = None
 
     def to_dict(self) -> dict:
-        return asdict(self)
+        data = asdict(self)
+        if self.seed_honored is None:
+            data.pop("seed_honored", None)
+        return data

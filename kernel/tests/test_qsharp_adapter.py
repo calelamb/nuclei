@@ -274,11 +274,11 @@ def test_concurrent_parse_and_execute_do_not_corrupt_sessions(monkeypatch):
     interp_thread_names: list[str] = []
     original_compile = QsharpAdapter._compile_and_snapshot
 
-    def recording_compile(self, code):
+    def recording_compile(self, code, *, params=None):
         # Tiny instrumentation hook: _compile_and_snapshot is the qdk work
         # (init/eval/circuit) shared by both parse and execute pipelines.
         interp_thread_names.append(threading.current_thread().name)
-        return original_compile(self, code)
+        return original_compile(self, code, params=params)
 
     monkeypatch.setattr(QsharpAdapter, "_compile_and_snapshot", recording_compile)
 
@@ -353,7 +353,7 @@ def _block_compile_on(monkeypatch, release: threading.Event) -> None:
     """Make _compile_and_snapshot block on the interpreter thread until
     release is set — same seam the concurrency test instruments."""
 
-    def blocked(self, code):
+    def blocked(self, code, *, params=None):
         release.wait()
         return None, None, None  # the quiet "no entry point" shape
 

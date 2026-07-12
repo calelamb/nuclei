@@ -45,12 +45,44 @@ export interface SimulationResult {
   bloch_coords: BlochCoord[];
   execution_time_ms: number;
   shot_count: number;
+  // Protocol v1.1 (PRD 09 Phase B) — additive. Accumulated
+  // `record_metric(name, value)` calls from the run; always present,
+  // empty when the user's code recorded nothing.
+  metrics: Record<string, number>;
+  // Present only when the request carried a `seed`: whether the backend
+  // actually honored it. Omitted (not just false) when no seed was
+  // requested — see kernel/models/snapshot.py SimulationResult.to_dict.
+  seed_honored?: boolean;
+}
+
+/** `kernel/server.py`'s `environment` response payload — installed
+ * interpreter/platform/framework versions. Package keys are present only
+ * when that framework's distribution could be resolved on the kernel host;
+ * absent keys mean "not installed", never a placeholder value. */
+export interface KernelEnvironment {
+  python: string;
+  platform: string;
+  packages: Partial<Record<'qiskit' | 'qiskit_aer' | 'cirq' | 'cudaq' | 'qsharp', string>>;
 }
 
 export type KernelMessage =
   | { type: 'parse'; code: string; language?: KernelLanguage }
-  | { type: 'execute'; code: string; shots: number; language?: KernelLanguage }
+  | {
+      type: 'execute';
+      code: string;
+      shots: number;
+      language?: KernelLanguage;
+      // Protocol v1.1 (PRD 09 Phase B) — both optional/additive. `params`
+      // binds into the exec namespace (Python) or the Q# entry operation's
+      // arguments by name (Q#, Double/Int only in v1). `seed` requests
+      // reproducible sampling — see `result.seed_honored` on the response.
+      params?: Record<string, number>;
+      seed?: number;
+    }
   | { type: 'run_python'; code: string }
+  // Protocol v1.1 (PRD 09 Phase B) — new message type. No request fields;
+  // the kernel reports its own interpreter/platform/package versions.
+  | { type: 'environment' }
   | { type: 'hardware_connect'; provider: string; credentials: Record<string, string> }
   | { type: 'hardware_set_credentials'; provider: string; credentials: Record<string, string> }
   | { type: 'hardware_clear_credentials'; provider: string }
@@ -89,6 +121,8 @@ export type KernelResponse =
     }
   | { type: 'output'; text: string }
   | { type: 'stderr'; text: string }
+  // Protocol v1.1 (PRD 09 Phase B) — reply to the `environment` request.
+  | ({ type: 'environment' } & KernelEnvironment)
   | { type: 'hardware_connected'; provider: string; success: boolean }
   | { type: 'hardware_connected_providers'; providers: string[] }
   | { type: 'hardware_jobs'; jobs: HardwareJobDTO[] }

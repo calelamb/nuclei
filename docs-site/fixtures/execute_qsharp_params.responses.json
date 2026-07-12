@@ -1,0 +1,31 @@
+[
+  {
+    "type": "snapshot",
+    "data": {
+      "framework": "qsharp",
+      "qubit_count": 1,
+      "classical_bit_count": 1,
+      "depth": 3,
+      "gates": [
+        { "type": "RX", "targets": [0], "controls": [], "params": ["<approx:3.14159:0.0001>"], "layer": 0 },
+        { "type": "Measure", "targets": [0], "controls": [], "params": [], "layer": 1 },
+        { "type": "Reset", "targets": [0], "controls": [], "params": [], "layer": 2 }
+      ]
+    }
+  },
+  {
+    "type": "result",
+    "data": {
+      "state_vector": [],
+      "probabilities": { "1": "<approx:1.0:0.000001>" },
+      "measurements": { "1": 100 },
+      "bloch_coords": [
+        { "x": "<approx:0:0.000001>", "y": "<approx:0:0.000001>", "z": "<approx:-1:0.000001>" }
+      ],
+      "execution_time_ms": "<any>",
+      "shot_count": 100,
+      "metrics": {},
+      "seed_honored": true
+    }
+  }
+]

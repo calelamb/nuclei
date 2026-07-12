@@ -109,7 +109,7 @@ class CirqAdapter(FrameworkAdapter):
             gates=gates,
         )
 
-    def simulate(self, circuit_obj, shots: int) -> SimulationResult:
+    def simulate(self, circuit_obj, shots: int, seed: int | None = None) -> SimulationResult:
         if not CIRQ_AVAILABLE:
             raise ImportError("cirq")
         import time
@@ -118,14 +118,21 @@ class CirqAdapter(FrameworkAdapter):
         all_qubits = sorted(circuit_obj.all_qubits())
         n_qubits = len(all_qubits)
 
+        # cirq.Simulator(seed=None) means "unseeded" — passing seed through
+        # unconditionally is safe either way. Cirq always honors an
+        # explicit seed, so seed_honored tracks only whether one was
+        # requested.
+        seed_honored = True if seed is not None else None
+
         # Strip measurements for statevector
         circuit_no_meas = cirq.Circuit(
             op for moment in circuit_obj.moments for op in moment.operations
             if not isinstance(op.gate, cirq.MeasurementGate)
         )
 
-        # Statevector simulation
-        sim = cirq.Simulator()
+        # Statevector simulation. Reuse the same seeded simulator for the
+        # sampled run below so one `seed` reproduces the whole result.
+        sim = cirq.Simulator(seed=seed)
         result_sv = sim.simulate(circuit_no_meas, qubit_order=all_qubits)
         sv_data = result_sv.final_state_vector
 
@@ -166,6 +173,7 @@ class CirqAdapter(FrameworkAdapter):
             bloch_coords=bloch_coords,
             execution_time_ms=round(elapsed, 1),
             shot_count=shots,
+            seed_honored=seed_honored,
         )
 
 

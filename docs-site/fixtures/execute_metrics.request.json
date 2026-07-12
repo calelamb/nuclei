@@ -1,0 +1,6 @@
+{
+  "type": "execute",
+  "code": "from qiskit import QuantumCircuit\n\nqc = QuantumCircuit(1, 1)\nqc.h(0)\nqc.measure(0, 0)\nrecord_metric(\"energy\", -1.1372)\nrecord_metric(\"iterations\", 40)\n",
+  "shots": 512,
+  "language": "python"
+}
