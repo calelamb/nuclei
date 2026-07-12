@@ -28,6 +28,7 @@ pub fn run() {
             commands::kernel::stop_kernel,
             commands::frameworks::framework_status,
             commands::frameworks::framework_install,
+            commands::git_info::git_project_info,
             dirac::dirac_execute,
             dirac::dirac_set_api_key,
             dirac::dirac_has_api_key,
