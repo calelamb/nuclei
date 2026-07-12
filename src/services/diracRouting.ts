@@ -186,3 +186,24 @@ export function selectContextSections(depth: ContextDepth): ContextPlan {
       };
   }
 }
+
+/**
+ * PRD 09 Phase E (E4) — whether the Research-mode experiment context
+ * section (active experiment YAML + selected runs, built by
+ * `buildExperimentContext`) is included in the Dirac chat context block.
+ *
+ * Deliberately NOT a field on `ContextPlan`: that interface's exact shape is
+ * asserted with `toEqual` by the pre-existing `selectContextSections` tests
+ * (Learn-mode byte-compatibility territory), so this is a separate,
+ * independently-testable decision that `useDirac.buildContextBlock` applies
+ * only when `useWorkspaceStore` is in Research mode with an experiment
+ * selected — Learn mode never calls this at all.
+ *
+ * `minimal` stays lean (code + circuit + recent errors only, same
+ * philosophy as it applies to results/hardware/challenge); `standard` and
+ * `full` both include it — `buildExperimentContext`'s run cap already
+ * bounds the size, so `full` doesn't need a deeper variant.
+ */
+export function includeExperimentContext(depth: ContextDepth): boolean {
+  return depth !== 'minimal';
+}

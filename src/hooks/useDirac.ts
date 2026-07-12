@@ -16,11 +16,15 @@ import { useChallengeModeStore } from '../stores/challengeModeStore';
 import { DIRAC_API_URL } from '../config/dirac';
 import { classifyIntent } from '../services/classify';
 import { compose } from '../services/compose';
-import { routeChat, selectContextSections } from '../services/diracRouting';
+import { routeChat, selectContextSections, includeExperimentContext } from '../services/diracRouting';
 import type { ContextPlan } from '../services/diracRouting';
 import { useSettingsStore } from '../stores/settingsStore';
 import { useWorkspaceStore } from '../stores/workspaceStore';
 import { personaPreamble } from '../services/diracPersona';
+import { useExperimentUiStore } from '../stores/experimentUiStore';
+import { useExperimentStore } from '../services/experimentStore';
+import { buildExperimentContext } from '../services/experimentContext';
+import type { RunRecord } from '../types/experiment';
 
 // The capabilities/tools section is appended after the persona preamble
 // (see personaPreamble in services/diracPersona.ts) for both workspace
@@ -271,6 +275,33 @@ function buildContextBlock(plan: ContextPlan): string {
   const activeProblem = useChallengeModeStore.getState().activeProblem;
   if (plan.challenge && activeProblem) {
     parts.push(`## Active Challenge\n- Title: ${activeProblem.title}\n- Difficulty: ${activeProblem.difficulty}\n- Description: ${activeProblem.description}`);
+  }
+
+  // PRD 09 Phase E (E4) — Research-mode experiment context, minimal (tone/
+  // context only — no tools, no autonomy; that's PRD 12). Deliberately NOT
+  // gated through `ContextPlan` (see `includeExperimentContext`'s doc
+  // comment): it's read directly here, guarded by workspace mode, so Learn
+  // mode's context assembly is entirely unaffected.
+  const workspaceMode = useWorkspaceStore.getState().mode;
+  const contextDepth = useSettingsStore.getState().dirac.contextDepth;
+  if (workspaceMode === 'research' && includeExperimentContext(contextDepth)) {
+    const experimentUi = useExperimentUiStore.getState();
+    const selectedFileName = experimentUi.selectedExperimentFileName;
+    const experiment = selectedFileName
+      ? useExperimentStore.getState().experiments.find((e) => e.fileName === selectedFileName)
+      : undefined;
+    if (experiment) {
+      const allRuns = useExperimentStore.getState().runsByExperiment[selectedFileName!] ?? [];
+      const selectedDirs = experimentUi.compareSelection.length > 0
+        ? experimentUi.compareSelection
+        : experimentUi.selectedRunDir
+          ? [experimentUi.selectedRunDir]
+          : [];
+      const selectedRuns = selectedDirs
+        .map((dir) => allRuns.find((r) => r.dir === dir))
+        .filter((r): r is RunRecord => r !== undefined);
+      parts.push(buildExperimentContext(experiment, selectedRuns));
+    }
   }
 
   return parts.join('\n\n');

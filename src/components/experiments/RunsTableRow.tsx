@@ -26,11 +26,22 @@ interface RunsTableRowProps {
   columns: RunColumn[];
   gridTemplateColumns: string;
   top: number;
+  /** PRD 09 Phase E — whether this row is checked for the Compare view. */
+  compareSelected: boolean;
   onSelect(dir: string): void;
+  onToggleCompare(dir: string): void;
 }
 
 /** One virtualized, absolutely-positioned row in `RunsTable`. */
-export function RunsTableRow({ run, columns, gridTemplateColumns, top, onSelect }: RunsTableRowProps) {
+export function RunsTableRow({
+  run,
+  columns,
+  gridTemplateColumns,
+  top,
+  compareSelected,
+  onSelect,
+  onToggleCompare,
+}: RunsTableRowProps) {
   const colors = useThemeStore((s) => s.colors);
   const statusKey = STATUS_COLOR_KEY[run.manifest.status];
 
@@ -48,14 +59,27 @@ export function RunsTableRow({ run, columns, gridTemplateColumns, top, onSelect 
         gridTemplateColumns,
         alignItems: 'center',
         borderBottom: `1px solid ${colors.border}`,
+        background: compareSelected ? colors.bgElevated : 'transparent',
         cursor: 'pointer',
         fontSize: 11,
         fontFamily: "'Fira Code', monospace",
         color: colors.text,
       }}
       onMouseEnter={(e) => { e.currentTarget.style.background = colors.bgElevated; }}
-      onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
+      onMouseLeave={(e) => { e.currentTarget.style.background = compareSelected ? colors.bgElevated : 'transparent'; }}
     >
+      <div
+        role="cell"
+        style={{ padding: '0 8px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <input
+          type="checkbox"
+          checked={compareSelected}
+          onChange={() => onToggleCompare(run.dir)}
+          aria-label={`Select ${run.dir} for comparison`}
+        />
+      </div>
       <div role="cell" style={{ padding: '0 8px', color: colors.textDim, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
         {run.dir}
       </div>
