@@ -6,7 +6,7 @@ export interface FrameworkInfo {
   description: string;
   pip_name: string;
   import_name: string;
-  group: 'core' | 'provider';
+  group: 'core' | 'provider' | 'research';
   approximate_size_mb: number;
   recommended: boolean;
 }

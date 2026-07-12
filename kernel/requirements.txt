@@ -26,3 +26,11 @@ cirq-core>=1.4,<2.0
 # pytket-quantinuum<0.26  (newer versions dropped direct token auth; see quantinuum_provider.py)
 # pytket-extensions-qiskit>=0.40
 # pytket-extensions-cirq>=0.30
+
+# Optional: QEC Studio research toolchain (PRD 10) — installed via the
+# in-app catalog (Research group); the kernel degrades to friendly
+# missing_dependency prompts without them.
+# stim>=1.14,<2
+# sinter>=1.14,<2
+# pymatching>=2.1,<3
+# fusion-blossom>=0.2.10,<0.3

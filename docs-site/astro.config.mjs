@@ -83,6 +83,7 @@ export default defineConfig({
             'kernel-api/overview',
             'kernel-api/messages-execution',
             'kernel-api/messages-hardware',
+            'kernel-api/messages-qec',
             'kernel-api/schemas',
             'kernel-api/errors',
             'kernel-api/client-examples',

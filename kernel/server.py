@@ -250,6 +250,12 @@ _ENVIRONMENT_PACKAGE_CANDIDATES: dict[str, tuple[str, ...]] = {
     "cirq": ("cirq", "cirq-core"),
     "cudaq": ("cudaq", "cuda-quantum"),
     "qsharp": ("qdk", "qsharp"),
+    # QEC toolchain (protocol v1.2 / PRD 10) — campaign manifests stamp
+    # these versions; absent keys mean "not installed", as everywhere.
+    "stim": ("stim",),
+    "sinter": ("sinter",),
+    "pymatching": ("pymatching",),
+    "fusion_blossom": ("fusion-blossom", "fusion_blossom"),
 }
 
 
@@ -349,6 +355,19 @@ async def handle_message(websocket):
                 "data": snapshot.to_dict() if snapshot else None,
             }))
 
+            # QEC sidecar (protocol v1.2 / PRD 10 Phase A): stim circuits
+            # additionally get detector-graph + coordinate data. Additive —
+            # non-stim frameworks and older clients see no new messages.
+            if snapshot is not None and snapshot.framework == "stim":
+                qec_payload, qec_error = await asyncio.to_thread(
+                    executor.qec_snapshot_payload
+                )
+                if qec_payload is not None and qec_error is None:
+                    await websocket.send(json.dumps({
+                        "type": "qec_snapshot",
+                        "data": qec_payload,
+                    }))
+
             if error:
                 await websocket.send(json.dumps(error_payload(error, "parse")))
 
@@ -394,6 +413,19 @@ async def handle_message(websocket):
                     "type": "snapshot",
                     "data": snapshot.to_dict() if snapshot else None,
                 }))
+
+            # QEC sidecar (protocol v1.2 / PRD 10 Phase A) — see the parse
+            # handler. Sent between snapshot and result so clients that
+            # await `result` as the exchange terminator see it in-stream.
+            if snapshot is not None and snapshot.framework == "stim" and error is None:
+                qec_payload, qec_error = await asyncio.to_thread(
+                    executor.qec_snapshot_payload
+                )
+                if qec_payload is not None and qec_error is None:
+                    await websocket.send(json.dumps({
+                        "type": "qec_snapshot",
+                        "data": qec_payload,
+                    }))
 
             if error:
                 # Send error before result:None so the frontend can display it
@@ -444,6 +476,74 @@ async def handle_message(websocket):
                 "platform": payload["platform"],
                 "packages": payload["packages"],
             }))
+
+        elif msg_type == "qec_generate":
+            # Protocol v1.2 (PRD 10 Phase A): generate a built-in QEC
+            # circuit (stim's generator set) and return its text. The
+            # frontend writes it into a real project file — never a hidden
+            # circuit.
+            gen_code = msg.get("code", "")
+            distance = msg.get("distance")
+            rounds = msg.get("rounds")
+            noise = msg.get("noise")
+            if not isinstance(noise, dict):
+                noise = None
+            try:
+                from kernel.qec.generate import QecGenerateError, generate_circuit
+
+                try:
+                    circuit_text = await asyncio.to_thread(
+                        generate_circuit, gen_code, distance, rounds, noise
+                    )
+                except QecGenerateError as e:
+                    await websocket.send(json.dumps({
+                        "type": "error",
+                        "message": str(e),
+                        "code": "qec_generate_invalid",
+                        "phase": "qec_generate",
+                    }))
+                    continue
+                await websocket.send(json.dumps({
+                    "type": "qec_generated",
+                    "code": gen_code,
+                    "distance": distance,
+                    "rounds": rounds,
+                    "circuit_text": circuit_text,
+                }))
+            except ImportError:
+                await websocket.send(json.dumps({
+                    "type": "error",
+                    "message": "Stim is not installed, so QEC circuits cannot be generated in this environment.",
+                    "code": "missing_dependency",
+                    "phase": "qec_generate",
+                    "framework": "stim",
+                    "dependency": "stim",
+                }))
+
+        elif msg_type == "qec_snapshot":
+            # Protocol v1.2 (PRD 10 Phase A): (re)compute the QEC sidecar,
+            # optionally at a caller-chosen DEM edge cap ("render anyway").
+            # With `code` it is stateless; without, it reuses the last stim
+            # circuit this connection parsed or executed.
+            max_edges = msg.get("max_edges")
+            if max_edges is not None:
+                try:
+                    max_edges = int(max_edges)
+                except (TypeError, ValueError):
+                    max_edges = None
+            qec_code = msg.get("code") if isinstance(msg.get("code"), str) else None
+            qec_payload, qec_error = await asyncio.to_thread(
+                lambda: executor.qec_snapshot_payload(
+                    code=qec_code, language=language, max_edges=max_edges
+                )
+            )
+            if qec_error is not None:
+                await websocket.send(json.dumps(error_payload(qec_error, "qec_snapshot")))
+            else:
+                await websocket.send(json.dumps({
+                    "type": "qec_snapshot",
+                    "data": qec_payload,
+                }))
 
         elif msg_type == "hardware_connect":
             provider = msg.get("provider", "")

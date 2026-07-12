@@ -10,6 +10,7 @@ import { registerGhostCompletions } from './completions/ghostCompletions';
 import { InlineEditWidget } from './inlineEdit/InlineEditWidget';
 import { registerNucleiThemes } from './monacoThemes';
 import { registerQsharpLanguage } from './qsharpLanguage';
+import { registerStimLanguage } from './stimLanguage';
 import { ensureQsharpLanguageService } from './qsharpLanguageService';
 import type { Framework } from '../../types/quantum';
 
@@ -22,6 +23,7 @@ const LANGUAGE_BY_EXTENSION: Record<string, string> = {
   py: 'python',
   pyw: 'python',
   qs: 'qsharp',
+  stim: 'stim',
   qasm: 'plaintext',
   json: 'json',
   md: 'markdown',
@@ -40,6 +42,7 @@ function languageForPath(filePath: string | null, framework: Framework): string 
 function setupMonaco(monacoApi: Monaco): void {
   registerNucleiThemes(monacoApi);
   registerQsharpLanguage(monacoApi);
+  registerStimLanguage(monacoApi);
 }
 
 export function QuantumEditor() {

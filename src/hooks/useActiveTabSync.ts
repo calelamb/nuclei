@@ -42,8 +42,14 @@ export function useActiveTabSync() {
       // held, so the kernel's regex detection + snapshot feedback take
       // over again from where they left off.
       const fw = useEditorStore.getState().framework;
-      if (activeTab.path.toLowerCase().endsWith('.qs')) {
+      const tabPath = activeTab.path.toLowerCase();
+      if (tabPath.endsWith('.qs')) {
         if (fw !== 'qsharp') useEditorStore.getState().setFramework('qsharp');
+      } else if (tabPath.endsWith('.stim')) {
+        // Raw .stim files are extension-pinned exactly like .qs — their
+        // text has no lexical signature the kernel could detect, so the
+        // first parse must go out as language "stim".
+        if (fw !== 'stim') useEditorStore.getState().setFramework('stim');
       } else if (fw === 'qsharp') {
         useEditorStore.getState().setFramework(useEditorStore.getState().lastPythonFramework);
       }
