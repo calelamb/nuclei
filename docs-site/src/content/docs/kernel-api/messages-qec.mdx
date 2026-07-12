@@ -207,3 +207,18 @@ matches.
 
 <Code code={qecDecodeReq} lang="json" title="qec_decode_sample.request.json" />
 <Code code={qecDecodeRes} lang="json" title="qec_decode_sample.responses.json" />
+
+A concrete response, captured on one machine (values are seed-and-machine
+deterministic — like all stim sampling, they vary across CPUs, which is why
+the replayed fixture above pins the shape rather than the values):
+
+```json
+{
+  "type": "qec_decode_sample",
+  "num_detectors": 8,
+  "syndrome": [5, 7],
+  "matched_edges": [{ "d1": 5, "d2": 7 }],
+  "predicted_observable_flips": [0],
+  "actual_observable_flips": [0]
+}
+```
