@@ -559,6 +559,28 @@ async def handle_message(websocket):
                     "data": qec_payload,
                 }))
 
+        elif msg_type == "qec_materialize":
+            # Protocol v1.2 (PRD 10 Phase C): run a campaign's Python entry
+            # source and collect its labeled circuits via the
+            # nuclei_circuits(noise) contract.
+            from kernel.qec.materialize import materialize_circuits
+
+            noise = msg.get("noise")
+            circuits, mat_stdout, mat_stderr, mat_error = await asyncio.to_thread(
+                materialize_circuits, executor, code, noise
+            )
+            if mat_stdout:
+                await websocket.send(json.dumps({"type": "output", "text": mat_stdout}))
+            if mat_stderr:
+                await websocket.send(json.dumps({"type": "stderr", "text": mat_stderr}))
+            if mat_error is not None:
+                await websocket.send(json.dumps(error_payload(mat_error, "qec_materialize")))
+            else:
+                await websocket.send(json.dumps({
+                    "type": "qec_circuits",
+                    "circuits": circuits,
+                }))
+
         elif msg_type == "qec_campaign_start":
             # Protocol v1.2 (PRD 10 Phase B): launch a sinter Monte Carlo
             # campaign. Ack immediately; qec_campaign_progress (throttled)

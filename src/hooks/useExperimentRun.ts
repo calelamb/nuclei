@@ -117,6 +117,11 @@ export function useExperimentRun() {
       };
 
       try {
+        if (experiment.spec.type === 'qec_campaign') {
+          throw new Error(
+            'Campaign experiments run through QEC Studio (arriving with its UI phases) — this button drives parameter sweeps.',
+          );
+        }
         const summary = await runExperiment(experiment.spec, ctx, deps, {
           signal,
           onProgress: (progress) => {

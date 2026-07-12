@@ -25,6 +25,11 @@ export function RunButton({ experiment, projectRoot, pointCount }: RunButtonProp
   const active = useExperimentRunStore((s) => s.active);
   const [showGuard, setShowGuard] = useState(false);
 
+  // Campaign runs get their UI with QEC Studio's visualization phases
+  // (PRD 10 D — gated on PRD 11 Phase C); the runner service already
+  // exists (qecCampaignRunner.ts). Sweep semantics below are unchanged.
+  if (experiment.spec.type === 'qec_campaign') return null;
+
   const isThisActive = active?.experimentFileName === experiment.fileName;
   const anyActive = active !== null;
   const isHardware = experiment.spec.backend.provider !== 'simulator';

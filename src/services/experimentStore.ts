@@ -2,10 +2,11 @@ import { create } from 'zustand';
 import {
   parseExperimentYaml,
   runManifestSchema,
-  type ExperimentSpec,
+  type AnyExperimentSpec,
   type RunManifest,
   type RunRecord,
 } from '../types/experiment';
+import { parseNoiseModelYaml, type NoiseModelDef } from '../types/noiseModel';
 
 /**
  * PRD 09 Phase C — experiment discovery + run-scan store.
@@ -51,7 +52,7 @@ export interface DiscoveredExperiment {
   fileName: string;
   /** Absolute path to the yaml file. */
   path: string;
-  spec: ExperimentSpec;
+  spec: AnyExperimentSpec;
 }
 
 export interface ExperimentValidationError {
@@ -93,6 +94,47 @@ function experimentBaseName(fileName: string): string {
 interface DiscoveryResult {
   experiments: DiscoveredExperiment[];
   validationErrors: ExperimentValidationError[];
+}
+
+/**
+ * Discover `noise/*.noise.yaml` models in the project (PRD 10 D5).
+ * Malformed files surface as validation errors alongside the experiments'
+ * — same files-are-the-truth treatment, never a crash. Project models
+ * shadow built-ins of the same name (resolveNoiseModel handles that).
+ */
+export async function discoverNoiseModels(
+  projectRoot: string,
+  fs: ExperimentFs,
+): Promise<{ models: NoiseModelDef[]; validationErrors: ExperimentValidationError[] }> {
+  const noiseDir = fs.join(projectRoot, 'noise');
+  const out = { models: [] as NoiseModelDef[], validationErrors: [] as ExperimentValidationError[] };
+  if (!(await fs.exists(noiseDir))) return out;
+  let entries: ExperimentDirEntry[];
+  try {
+    entries = await fs.readDir(noiseDir);
+  } catch {
+    return out;
+  }
+  for (const entry of entries) {
+    if (entry.isDirectory || !/\.noise\.ya?ml$/i.test(entry.name)) continue;
+    const path = fs.join(noiseDir, entry.name);
+    let text: string;
+    try {
+      text = await fs.readTextFile(path);
+    } catch (e) {
+      out.validationErrors.push({
+        fileName: entry.name,
+        path,
+        errors: [`could not read file: ${e instanceof Error ? e.message : String(e)}`],
+      });
+      continue;
+    }
+    const parsed = parseNoiseModelYaml(text);
+    if (parsed.ok) out.models.push(parsed.model);
+    else out.validationErrors.push({ fileName: entry.name, path, errors: parsed.errors });
+  }
+  out.models.sort((a, b) => a.name.localeCompare(b.name));
+  return out;
 }
 
 async function discover(projectRoot: string, fs: ExperimentFs): Promise<DiscoveryResult> {

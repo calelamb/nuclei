@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import { useExperimentStore, type ExperimentFs } from './experimentStore';
+import { discoverNoiseModels, useExperimentStore, type ExperimentFs } from './experimentStore';
 import type { RunManifest } from '../types/experiment';
 
 // ---------------------------------------------------------------------------
@@ -215,5 +215,52 @@ describe('experimentStore', () => {
     await useExperimentStore.getState().reload('/proj', empty);
     expect(useExperimentStore.getState().experiments).toEqual([]);
     expect(useExperimentStore.getState().runsByExperiment).toEqual({});
+  });
+});
+
+describe('discoverNoiseModels (PRD 10 D5)', () => {
+  it('discovers valid models and surfaces malformed ones as validation errors', async () => {
+    const files: Record<string, string> = {
+      '/proj/noise/custom.noise.yaml': [
+        'schema: 1',
+        'name: custom',
+        'description: Measurement-only ablation model.',
+        'generator_args:',
+        '  before_measure_flip_probability: 3',
+      ].join('\n'),
+      '/proj/noise/broken.noise.yaml': 'schema: 99\nname: broken\n',
+    };
+    const fs = {
+      readTextFile: async (path: string) => {
+        if (path in files) return files[path];
+        throw new Error('not found');
+      },
+      readDir: async () => [
+        { name: 'custom.noise.yaml', isDirectory: false },
+        { name: 'broken.noise.yaml', isDirectory: false },
+        { name: 'notes.txt', isDirectory: false },
+      ],
+      exists: async () => true,
+      join: (...parts: string[]) => parts.join('/'),
+    };
+
+    const result = await discoverNoiseModels('/proj', fs);
+
+    expect(result.models.map((m) => m.name)).toEqual(['custom']);
+    expect(result.models[0].builtin).toBe(false);
+    expect(result.validationErrors).toHaveLength(1);
+    expect(result.validationErrors[0].fileName).toBe('broken.noise.yaml');
+  });
+
+  it('a project without a noise/ directory yields nothing, quietly', async () => {
+    const fs = {
+      readTextFile: async () => '',
+      readDir: async () => [],
+      exists: async () => false,
+      join: (...parts: string[]) => parts.join('/'),
+    };
+    const result = await discoverNoiseModels('/proj', fs);
+    expect(result.models).toEqual([]);
+    expect(result.validationErrors).toEqual([]);
   });
 });

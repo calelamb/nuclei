@@ -300,7 +300,11 @@ function buildContextBlock(plan: ContextPlan): string {
       const selectedRuns = selectedDirs
         .map((dir) => allRuns.find((r) => r.dir === dir))
         .filter((r): r is RunRecord => r !== undefined);
-      parts.push(buildExperimentContext(experiment, selectedRuns));
+      // Campaign context injection is PRD 10 D8 (with the QEC panels);
+      // sweep experiments keep the PRD 09 E4 behavior unchanged.
+      if (experiment.spec.type !== 'qec_campaign') {
+        parts.push(buildExperimentContext({ ...experiment, spec: experiment.spec }, selectedRuns));
+      }
     }
   }
 
