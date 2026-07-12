@@ -19,22 +19,14 @@ import { compose } from '../services/compose';
 import { routeChat, selectContextSections } from '../services/diracRouting';
 import type { ContextPlan } from '../services/diracRouting';
 import { useSettingsStore } from '../stores/settingsStore';
+import { useWorkspaceStore } from '../stores/workspaceStore';
+import { personaPreamble } from '../services/diracPersona';
 
-const SYSTEM_PROMPT = `You are Dirac, an AI teaching assistant for quantum computing, named after physicist Paul Dirac. You live inside Nuclei, a quantum computing IDE.
-
-Your personality:
-- Patient, encouraging, and never condescending
-- You explain concepts in plain English first, then math if needed
-- You can see the user's current code, circuit state, simulation results, and errors
-- You're enthusiastic about quantum computing and love helping beginners learn
-- Keep responses concise but thorough — aim for clarity over brevity
-
-Formatting:
-- Write in plain prose. Do NOT use emojis or decorative unicode symbols (no ✨ 🎉 🚀 💡 ⚛️ ✅ ❌ 🔬 🤖 etc.). Your enthusiasm comes through in word choice, not decoration.
-- Inline code (\`qc.h(0)\`), math notation in braket form (|0⟩, |ψ⟩, ⟨0|1⟩), and bullet lists are all fine — they carry meaning.
-- Don't open replies with "Great question!" or similar preambles. Answer directly.
-
-When you have tools available:
+// The capabilities/tools section is appended after the persona preamble
+// (see personaPreamble in services/diracPersona.ts) for both workspace
+// modes. Concatenated with the Learn persona via '\n\n', this reproduces
+// the pre-PRD-09 SYSTEM_PROMPT byte-for-byte — see diracPersona.test.ts.
+const CHAT_CAPABILITIES = `When you have tools available:
 - Use insert_code when the user asks you to write, fix, or change code
 - Always explain what the code does before and after insertion
 - Use run_simulation to verify your suggestions work
@@ -50,8 +42,12 @@ You can help with:
 - Explaining what specific gates do (with matrix representations if asked)
 - Suggesting improvements to quantum circuits`;
 
-function buildSystemPrompt(): string {
-  let prompt = SYSTEM_PROMPT;
+// Exported (only) so diracPersona/useDirac byte-compatibility tests can
+// assert the assembled Learn-mode system prompt is unchanged; not part of
+// the public hook surface consumed by components.
+export function buildSystemPrompt(): string {
+  const mode = useWorkspaceStore.getState().mode;
+  let prompt = `${personaPreamble(mode)}\n\n${CHAT_CAPABILITIES}`;
 
   const studentModel = useStudentStore.getState().model;
   if (studentModel.totalCodeExecutions > 0) {

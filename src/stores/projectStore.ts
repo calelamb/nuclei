@@ -4,6 +4,7 @@ import {
   loadDiracConversationForProject,
   useDiracStore,
 } from './diracStore';
+import { __notifyProjectRootChanged } from './workspaceStore';
 
 export interface ProjectTab {
   path: string;
@@ -46,6 +47,9 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
       // the ephemeral scratchpad when transitioning from a real project
       // back to no-project).
       void loadDiracConversationForProject(projectRoot);
+      // PRD 09: adopt the incoming project's remembered workspace mode (or
+      // the global default when it has none / when closing to no-project).
+      __notifyProjectRootChanged(projectRoot);
       return { projectRoot };
     }),
 
