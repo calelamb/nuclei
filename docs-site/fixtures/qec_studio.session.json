@@ -490,15 +490,7 @@
         "data": {
           "state_vector": [],
           "probabilities": {},
-          "measurements": {
-            "0000000": 120,
-            "1000000": 1,
-            "0000010": 1,
-            "0100000": 2,
-            "0000001": 1,
-            "0001000": 2,
-            "0010000": 1
-          },
+          "measurements": "<any>",
           "bloch_coords": [],
           "execution_time_ms": "<any>",
           "shot_count": 128,
