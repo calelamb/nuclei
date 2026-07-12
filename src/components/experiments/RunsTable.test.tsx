@@ -84,7 +84,10 @@ function visibleRunDirs(container: HTMLElement): string[] {
 describe('RunsTable', () => {
   beforeEach(() => {
     useProjectStore.setState({ projectRoot: '/proj', tabs: [], activeTabPath: null });
-    useExperimentUiStore.setState({ selectedExperimentFileName: FILE_NAME, selectedRunDir: null });
+    useExperimentUiStore.setState({
+      selectedExperimentFileName: FILE_NAME, selectedRunDir: null,
+      compareSelection: [], compareOpen: false,
+    });
     useExperimentRunStore.setState({ active: null, lastSummary: null, lastError: null });
     installFixtureStore();
   });
@@ -92,7 +95,10 @@ describe('RunsTable', () => {
   afterEach(() => {
     cleanup();
     useProjectStore.setState({ projectRoot: null, tabs: [], activeTabPath: null });
-    useExperimentUiStore.setState({ selectedExperimentFileName: null, selectedRunDir: null });
+    useExperimentUiStore.setState({
+      selectedExperimentFileName: null, selectedRunDir: null,
+      compareSelection: [], compareOpen: false,
+    });
   });
 
   it('renders one row per fixture run manifest', () => {
@@ -134,5 +140,35 @@ describe('RunsTable', () => {
     useExperimentUiStore.setState({ selectedExperimentFileName: null, selectedRunDir: null });
     const { getByText } = render(<RunsTable />);
     expect(getByText(/select an experiment/i)).toBeTruthy();
+  });
+
+  it('checking a row does not also select it for detail (checkbox click is isolated from row click)', () => {
+    const { container } = render(<RunsTable />);
+    const checkbox = container.querySelector('input[type="checkbox"]') as HTMLInputElement;
+    fireEvent.click(checkbox);
+    expect(useExperimentUiStore.getState().selectedRunDir).toBeNull();
+    expect(useExperimentUiStore.getState().compareSelection).toEqual(['20260712-000001-aaaa']);
+  });
+
+  it('Compare button is disabled until 2+ runs are checked, then opens the compare view', () => {
+    const { container, getByText } = render(<RunsTable />);
+    const checkboxes = Array.from(container.querySelectorAll('input[type="checkbox"]'));
+    const compareButton = getByText(/^Compare/) as HTMLButtonElement;
+    expect(compareButton.disabled).toBe(true);
+
+    fireEvent.click(checkboxes[0]);
+    expect(compareButton.disabled).toBe(true);
+
+    fireEvent.click(checkboxes[1]);
+    expect(compareButton.disabled).toBe(false);
+
+    fireEvent.click(compareButton);
+    expect(useExperimentUiStore.getState().compareOpen).toBe(true);
+  });
+
+  it('switches to the sweep plot tab when the experiment has swept parameters', () => {
+    const { getByText, queryByLabelText } = render(<RunsTable />);
+    fireEvent.click(getByText('Sweep plot'));
+    expect(queryByLabelText('X parameter')).toBeTruthy();
   });
 });

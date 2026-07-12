@@ -47,6 +47,9 @@ const RunsTable = lazy(async () => ({
 const RunDetail = lazy(async () => ({
   default: (await import('../experiments/RunDetail')).RunDetail,
 }));
+const CompareView = lazy(async () => ({
+  default: (await import('../experiments/CompareView')).CompareView,
+}));
 
 const DEFAULT_BOTTOM_HEIGHT = 200;
 const DEFAULT_SIDEBAR_WIDTH = 240;
@@ -689,6 +692,7 @@ export function PanelLayout() {
   const exitChallengeMode = useChallengeModeStore((s) => s.exitChallengeMode);
   const selectedExperimentFileName = useExperimentUiStore((s) => s.selectedExperimentFileName);
   const selectedRunDir = useExperimentUiStore((s) => s.selectedRunDir);
+  const compareOpen = useExperimentUiStore((s) => s.compareOpen);
 
   const preset = useLayoutStore((s) => s.preset);
   const setPreset = useLayoutStore((s) => s.setPreset);
@@ -896,7 +900,7 @@ export function PanelLayout() {
             animation: 'nuclei-fade-in 200ms ease',
           }}>
             <Suspense fallback={null}>
-              {selectedRunDir ? <RunDetail /> : <RunsTable />}
+              {compareOpen ? <CompareView /> : selectedRunDir ? <RunDetail /> : <RunsTable />}
             </Suspense>
           </div>
         ) : (

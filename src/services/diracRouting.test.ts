@@ -9,6 +9,7 @@ import {
   pickChatModel,
   routeChat,
   selectContextSections,
+  includeExperimentContext,
 } from './diracRouting';
 
 describe('pickChatModel', () => {
@@ -99,6 +100,20 @@ describe('selectContextSections', () => {
       probabilityLimit: 16,
       errorLineLimit: 10,
     });
+  });
+});
+
+describe('includeExperimentContext', () => {
+  it('excludes the experiment context section at minimal depth', () => {
+    expect(includeExperimentContext('minimal')).toBe(false);
+  });
+
+  it('includes the experiment context section at standard depth', () => {
+    expect(includeExperimentContext('standard')).toBe(true);
+  });
+
+  it('includes the experiment context section at full depth', () => {
+    expect(includeExperimentContext('full')).toBe(true);
   });
 });
 
