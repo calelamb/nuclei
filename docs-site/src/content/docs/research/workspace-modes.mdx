@@ -1,0 +1,108 @@
+---
+title: "Learn and Research modes"
+description: "The two workspaces Nuclei splits into: what each shows, how to switch, and what stays exactly the same either way."
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+Nuclei is one app with two workspaces over a shared core: **Learn** (everything
+Nuclei has always been) and **Research** (a workspace for parameter sweeps,
+reproducible runs, and run comparison). Picking one doesn't change the
+binary you downloaded or the kernel you're talking to — it changes which
+panels are registered and how Dirac talks to you.
+{/* src/stores/workspaceStore.ts; src/components/layout/panelRegistry.ts */}
+
+<Aside type="note" title="Learn is unchanged and is still the default">
+Every Research-mode feature is additive and gated. A student who never
+switches modes sees byte-identical Learn mode — enforced by a panel-registry
+snapshot test, not just a design intention. If you've used Nuclei before
+v0.6.0, nothing about your workflow changes unless you explicitly switch.
+</Aside>
+
+## What each mode shows
+
+| | Learn | Research |
+|---|---|---|
+| Audience | Students taking a first quantum computing course | People doing quantum computing: multi-file projects, sweeps, hardware comparison |
+| Activity bar | Files, Learning, Challenges, Launch, (Settings) — plus Search/Circuit/Plugins/Hardware/Community behind the experimental-features setting | Files, **Experiments**, Hardware, Launch, Settings |
+| Lessons, challenges, community, onboarding/playground, educator panels | Present | Hidden entirely |
+| Dirac's persona | Patient tutor — explains in plain English first, never condescending | Terse collaborator — assumes graduate-level QM, states uncertainty precisely, no hand-holding |
+| `uiModeStore` (beginner → advanced progressive disclosure) | Governs Learn's own UI | Ignored — Research is always "advanced" |
+
+Panel visibility is computed once, in one place —
+`src/components/layout/panelRegistry.ts`'s `activityViewsForMode(mode, options)`
+— rather than as scattered `if (mode === ...)` conditionals through the
+component tree. Nothing else in the codebase is allowed to re-derive that
+list.
+
+## Switching modes
+
+There is no buried settings toggle. Three surfaces do it:
+
+1. **First launch / no project open** — a two-card chooser: "Learn quantum
+   computing" (guided lessons, challenges, Dirac as tutor) or "Research
+   workspace" (multi-file workspace, experiments, Dirac as collaborator).
+   Shown before the existing Learn onboarding for first-time users only.
+2. **Command palette** — "Switch workspace mode (Learn/Research)", under the
+   View category.
+3. **Status bar** — a small `Learn` / `Research` pill on the right side of
+   the status bar. Click it to toggle; its color follows the active mode
+   (Dirac purple in Research, dim otherwise).
+
+## Persistence
+
+The mode preference is the *only* new app-level persistence this feature
+introduces (see [reproducibility](/docs/research/reproducibility/) for why
+everything else stays in project files). Two localStorage keys:
+
+- `nuclei:workspace_mode` — the global default: what a brand-new project, or
+  the no-project chooser, opens into.
+- `nuclei:workspace_mode_by_project` — a `{ [projectRoot]: mode }` map. A
+  project you've explicitly flipped to Research reopens in Research next
+  time, without changing what *other* projects (or new ones) default to.
+
+Switching mode while no project is open updates the global default.
+Switching mode while a project is open updates only that project's entry —
+flipping one project to Research doesn't silently make every future new
+project open in Research too.
+
+## Dirac's persona per mode
+
+Every Dirac surface (chat panel, error rewriting, narration, ghost
+completions) threads a persona preamble through
+`src/services/diracPersona.ts`'s `personaPreamble(mode)`:
+
+- **Learn** — reproduced verbatim from the tutor persona that shipped
+  before this PRD: patient, encouraging, explains plain English before math.
+- **Research** — a collaborator preamble: assumes graduate-level quantum
+  mechanics, doesn't re-derive basics unless asked, is terse, and says
+  "that's not measurable from this data" instead of guessing.
+
+This is tone and assumptions only. Dirac doesn't gain new tools or autonomy
+in Research mode — it can read the active experiment and selected runs (see
+[experiments](/docs/research/experiments/#dirac-context)), but designing or
+launching experiments autonomously is out of scope here (a later PRD in the
+series covers an agentic research Dirac).
+
+## What Research mode adds
+
+- **Explorer**, open by default, for multi-file project navigation (this
+  reuses the existing project/file infrastructure — Research mode doesn't
+  introduce a new file model).
+- **Experiments panel** — list experiments, create new ones, run sweeps, see
+  a live progress indicator in the status bar while a sweep runs. See
+  [experiments](/docs/research/experiments/).
+- **Runs table** and **run detail** for one experiment at a time, and a
+  **compare view** across two or more selected runs.
+- Hardware and the terminal stay available, same as Learn.
+
+## What Research mode is not
+
+- Not a different app build, install, or kernel — one Nuclei, one kernel
+  protocol (v1.1 as of this release — see the
+  [kernel API changelog](/docs/reference/protocol-changelog/)).
+- Not available on the web build (`/try`) in this release — Research mode
+  is desktop-only; the web build only ever shows Learn.
+- Not a new persistence layer — experiments and runs are plain files in the
+  project directory, not a database. See
+  [experiments](/docs/research/experiments/) for the file layout.

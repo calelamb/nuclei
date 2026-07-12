@@ -1,0 +1,117 @@
+---
+title: "Reproducibility"
+description: "What a run manifest guarantees, and what it honestly can't: hardware noise, unseedable backends, the dirty git flag, and version drift."
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+Every experiment run writes a `manifest.json` capturing params, seed, code
+hash, git commit, and framework versions — see the
+[full schema](/docs/research/experiments/#manifestjson). The design goal is
+**honest reproducibility**: anywhere determinism can't be guaranteed, the
+manifest and the UI say so explicitly, rather than implying a precision
+that isn't there. This page is the "what it can't do" half of that
+promise.
+
+<Aside type="note" title="Design principle">
+Nuclei never fabricates a commit, a seed-honored flag, or a version string.
+A field is either accurate or absent/`false` — never a plausible-looking
+placeholder.
+</Aside>
+
+## What the manifest guarantees
+
+Given a manifest from a **simulator** run where `seed_honored: true` and
+`git.dirty: false`:
+
+- The exact code that ran is recoverable — `code_sha256` is the hash of the
+  entry file's contents at the moment that point executed, and `git.commit`
+  (when the project is a clean repo) pins the whole tree it came from.
+- Re-running the same entry file with the same `params`, `seed`, `shots`,
+  and `backend` against the same framework version reproduces **identical**
+  `measurements`. This is asserted in CI for Qiskit and Cirq: the same seed
+  replayed twice in one kernel session yields byte-identical measurement
+  counts.
+- `versions.nuclei`, plus the framework versions the kernel reports
+  (`python`, `qiskit`, `qiskit_aer`, `cirq`, `cudaq`, `qsharp`, ...), are
+  captured from a real `environment` kernel call — not inferred or
+  hardcoded — via `importlib.metadata`. A framework that isn't installed is
+  simply **omitted** as a key, never shown as a fake `"unknown"`.
+
+## What it can't guarantee
+
+### Hardware noise
+
+Real quantum hardware is not deterministic in the way a simulator is — gate
+errors, readout errors, crosstalk, and calibration drift mean the *same*
+circuit submitted twice to the *same* device can return different
+`measurements`, seed or no seed. A hardware run's manifest still records
+everything it can (params, code hash, backend, git, versions) — it's a
+faithful record of *what was submitted*, not a promise that submitting it
+again gives the same answer.
+
+### Unseedable backends — `seed_honored`
+
+`seed_honored` in the manifest is the honest signal for whether a seed
+actually did anything:
+
+| Backend | `seed_honored` |
+|---------|----------------|
+| Qiskit (`AerSimulator`) | `true` whenever a seed was requested — Aer always honors an explicit integer seed. |
+| Cirq (`cirq.Simulator`) | `true` whenever a seed was requested — same reasoning. |
+| Q# (qdk `qsharp.run(..., seed=...)`) | `true` whenever a seed was requested — qdk honors its own `seed` kwarg natively. |
+| CUDA-Q | `true` only if the installed `cudaq` build exposes `set_random_seed` — **`false`** on older/different builds where the seeding hook isn't available. Verify per install; don't assume. |
+| Any real hardware provider | Always **`false`** — hardware backends are not seedable in v1. Recorded honestly rather than pretending a seed did something it didn't. |
+
+When a seed is supplied, the kernel *also* seeds Python's `random` and
+`numpy.random` before `exec`, so user-side randomness (e.g. classical
+post-processing in a hybrid algorithm) is captured too — that part is
+always honored regardless of which quantum backend you're using.
+
+### The `dirty` git flag
+
+`git.dirty: true` means the working tree had uncommitted changes (staged,
+unstaged, or untracked — anything `git status --porcelain` reports) at the
+moment the run started. It is **not** a guarantee that the *entry file*
+itself changed — `code_sha256` is the more precise signal for that. A dirty
+tree with an unrelated file open in another editor still reports
+`dirty: true`; treat it as "the commit alone doesn't fully pin what ran,
+check `code_sha256` too" rather than "this run is unreliable."
+
+`git` is `null` — not a fabricated commit — whenever the project directory
+isn't a git repository at all, or has no commits yet (`git rev-parse HEAD`
+fails). Nuclei shells out to the system `git` for this (no bundled
+libgit2); if `git` itself isn't installed, you get the same honest `null`.
+
+### Framework/app version drift
+
+`versions` captures what was installed **at run time**, on **that
+machine**. Re-running a manifest with a different Qiskit/Cirq/CUDA-Q/qdk
+version installed is not guaranteed to reproduce the original result even
+with matching params, seed, and code — floating-point summation order,
+default transpilation passes, and simulator internals can all change
+between framework releases. Comparing `versions` between two manifests is
+the first thing to check before concluding a discrepancy is a real physics
+result rather than an environment difference.
+
+## Practical checklist for a reproducible claim
+
+Before treating two runs as "the same experiment, reproduced":
+
+1. Same `backend.provider` — hardware noise means cross-run comparison on
+   real devices is inherently a distribution, not a point value.
+2. `seed_honored: true` on both, and the same `seed` — otherwise you're
+   comparing unseeded (or unseedable) runs, expect the same sampling
+   variance an ordinary unseeded simulation would have.
+3. Same `versions` — a framework upgrade between runs is a confound.
+4. Same `code_sha256` — confirms the entry file itself, not just the git
+   commit, matches (a `dirty` tree can still hash identically if you never
+   touched the entry file).
+5. `git.dirty: false` on both, or accept that `code_sha256` is doing the
+   real work of pinning what ran.
+
+Everything above lives as plain files in your project directory — nothing
+here depends on Nuclei's own storage surviving. A `git clone` of a project
+with committed experiment files onto a second machine sees the same
+experiments and the same historical runs, with the same honesty about what
+each one can and can't promise.

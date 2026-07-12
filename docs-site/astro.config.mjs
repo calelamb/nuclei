@@ -70,6 +70,14 @@ export default defineConfig({
           ],
         },
         {
+          label: 'Research',
+          items: [
+            'research/workspace-modes',
+            'research/experiments',
+            'research/reproducibility',
+          ],
+        },
+        {
           label: 'Kernel API',
           items: [
             'kernel-api/overview',

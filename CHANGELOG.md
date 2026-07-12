@@ -5,6 +5,70 @@ All notable changes to Nuclei will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.0] - 2026-07-11
+
+### Added — Research mode and experiments as first-class objects
+
+Nuclei splits into two workspaces over one shared core. **Learn** is
+everything Nuclei has always been — lessons, challenges, Dirac as tutor,
+progressive disclosure — completely unchanged, and still the default a
+fresh install lands in. **Research** is a new workspace for people *doing*
+quantum computing: a multi-file project view, an Experiments panel, and
+Dirac as a terse research collaborator instead of a patient tutor. Switch
+between them from the first-launch chooser, the command palette ("Switch
+workspace mode"), or a status-bar pill — no buried settings toggle. The
+mode you pick sticks per project.
+
+- **Experiments** are plain, git-friendly files, not a database: a
+  `*.experiment.yaml` you can write by hand or generate from a form
+  declares an entry file, a backend, shots, a seed, and an optional
+  parameter sweep (a numeric `range` or an explicit `values` list per
+  parameter; the full grid is the cartesian product, hard-capped at 500
+  points). Hit Run and each point streams into a sortable, virtualized runs
+  table as it completes — status, duration, seed, and every recorded or
+  derived metric as columns. A failed point doesn't stop the sweep; a
+  cancel button stops after the current point and keeps everything already
+  written.
+- **Reproducibility, honestly.** Every run writes a `manifest.json`:
+  params, seed, a hash of the exact code that ran, the git commit and a
+  `dirty` flag, and the framework/app versions in play. Re-running a
+  simulator point with the same seed reproduces identical measurements
+  (verified for Qiskit and Cirq). Where determinism genuinely can't be
+  guaranteed — real hardware noise, simulators without a seeding hook, an
+  uncommitted working tree — the manifest says so explicitly
+  (`seed_honored: false`, `git: null`) instead of implying a precision that
+  isn't there. A sweep against real hardware warns with the total
+  point × shot count first, and above 10 hardware points requires typing
+  the experiment's name to confirm.
+- **Comparison and sweep plots.** Select two or more runs to overlay their
+  histograms, diff their manifests (only the differing fields highlighted),
+  and compare their metrics side by side. For a swept experiment, plot any
+  metric against any swept parameter, grouped by a second parameter when
+  the grid is two-dimensional — an energy-vs-theta curve per circuit depth,
+  without leaving the IDE. Both views export SVG and CSV.
+- **Dirac, research collaborator.** In Research mode, Dirac's persona drops
+  the tutor framing for a terser, more precise one — assumes graduate-level
+  quantum mechanics, states uncertainty plainly, and (when the Experiments
+  panel is focused) sees the active experiment's YAML and selected runs'
+  manifests and metrics. Tone and context only in this release — no new
+  tools or autonomy.
+- **Kernel protocol v1.1** (fully additive — nothing here changes behavior
+  for a client that doesn't use it): `execute` accepts optional `params`
+  (injected as a `params` dict for Python, bound by name to Q# entry-point
+  arguments) and `seed`; its `result` response gains `metrics` (via a new
+  `record_metric(name, value)` function available in Python) and
+  `seed_honored`. A new `environment` message reports the kernel's Python
+  version, platform, and installed framework versions. Note for Q# authors:
+  a swept entry operation cannot be named `Main` — qdk's own compiler
+  rejects a parameterized `Main`; name it anything else (`Rotate`, etc.).
+- New developer docs at
+  [getnuclei.dev/docs/research](https://getnuclei.dev/docs/research/workspace-modes/):
+  workspace modes, the full experiment schema reference, and an honest
+  accounting of what reproducibility does and doesn't guarantee.
+
+Research mode is desktop-only in this release; the web build continues to
+show Learn mode only.
+
 ## [0.5.1] - 2026-06-10
 
 ### Added — developer docs at getnuclei.dev/docs

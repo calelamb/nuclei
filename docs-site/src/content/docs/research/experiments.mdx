@@ -1,0 +1,291 @@
+---
+title: "Experiments"
+description: "The *.experiment.yaml schema reference: every field, the run directory layout, manifest.json, how parameters reach your code, metrics, and the grid cap."
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+An **experiment** is a named, declarative, git-friendly object that captures
+*code + parameters + backend + seed + environment + results*. It's a plain
+YAML file plus a directory of run outputs — both live inside your project
+directory, both survive `git clone` onto another machine, and the GUI is a
+view over the same file you could write by hand.
+{/* src/types/experiment.ts; docs/internal/PRD_09_RESEARCH_MODE_EXPERIMENTS.md */}
+
+<Aside type="note" title="The YAML file is the source of truth">
+Anything the Experiments panel can do, hand-editing the YAML can do too.
+The form re-reads the file on change, so editing by hand and editing
+through the form converge on the same state. A feature that only works when
+an experiment was created via the GUI is a bug.
+</Aside>
+
+## File layout
+
+```text
+myproject/
+├── vqe_h2.py                        # ordinary user code, any framework
+├── experiments/
+│   ├── theta-sweep.experiment.yaml  # experiment definition (source of truth)
+│   └── theta-sweep/                 # results for that experiment
+│       └── runs/
+│           ├── 20260712-141530-a3f9/
+│           │   ├── manifest.json
+│           │   ├── result.json      # SimulationResult or hardware result
+│           │   ├── snapshot.json    # CircuitSnapshot for this point
+│           │   ├── metrics.json     # derived + user-recorded metrics
+│           │   ├── stdout.txt
+│           │   └── stderr.txt
+│           └── 20260712-141541-b2c1/ ...
+```
+
+The run directory name is `YYYYMMDD-HHMMSS-<4-hex of manifest hash>`. Nothing
+in the GUI requires these files to exist in any particular state — deleting
+a run directory is a legitimate, supported thing to do.
+
+Nuclei discovers experiments by scanning `experiments/*.experiment.yaml` in
+the open project. Malformed YAML is surfaced as a validation card in the
+panel — it never crashes the app.
+
+## `*.experiment.yaml` schema (v1)
+
+```yaml
+# experiments/theta-sweep.experiment.yaml
+schema: 1                       # experiment schema version, required, must equal 1
+name: theta-sweep               # display name; defaults to the filename (minus .experiment.yaml)
+entry: vqe_h2.py                # file to execute, relative to project root; must exist
+language: python                # python | qsharp; default inferred from the entry extension (.qs -> qsharp)
+backend:
+  provider: simulator            # any provider id from the hardware layer, or 'simulator' for the local kernel path
+  target: statevector             # provider-specific target string
+shots: 2048                     # positive integer
+seed: 42                        # base seed; point i runs with seed + i
+sweep:                          # optional; absent = single run, a single empty params point
+  theta:                        # parameter name — must be a valid Python identifier
+    range: [0, 3.14159, 0.31416]   # [start, stop, step] — expands like numpy.arange, WITH an epsilon
+  layers:
+    values: [1, 2, 4]           # explicit list; the full grid is the cartesian product of all params
+notes: >                        # optional free text, shown in UI, no validation
+  H2 ansatz angle sweep at three circuit depths.
+```
+
+### Field reference
+
+| Field | Type | Required | Notes |
+|-------|------|-----------|-------|
+| `schema` | integer | yes | Must equal `1`. Reserved for a future breaking schema bump. |
+| `name` | string | no | Defaults to the filename with `.experiment.yaml` (or `.yaml`/`.yml`) stripped. |
+| `entry` | string | yes | Path to the file to execute, relative to the project root. Must exist. |
+| `language` | `"python"` \| `"qsharp"` | no | Defaults from the `entry` extension: `.qs` → `qsharp`, everything else → `python`. |
+| `backend.provider` | string | yes | `"simulator"` for the local kernel path, or any provider id from the hardware layer (`ibm`, `ionq`, `braket`, `azure`, `quantinuum`, `nvidia`). `google` is scaffolded only — see [hardware overview](/docs/hardware/overview/). |
+| `backend.target` | string | yes | Provider-specific target/backend string. |
+| `shots` | integer | yes | Must be a positive integer. |
+| `seed` | integer | yes | Base seed. Sweep point *i* (0-indexed, in grid order) runs with `seed + i`. |
+| `sweep` | map of parameter → spec | no | Absent means a single run with an empty params object. Each key is a parameter name; each value is either `range` or `values` (see below). |
+| `notes` | string | no | Free text, shown in the UI. No validation. |
+
+A swept parameter is either:
+
+- **`range: [start, stop, step]`** — expands like `numpy.arange`, but with an
+  epsilon added to the point count so a `stop` that's an exact multiple of
+  `step` is *included* rather than dropped to floating-point error. `step`
+  must be a positive, finite number; `[0, 1, 0.25]` produces `[0, 0.25, 0.5,
+  0.75, 1.0]` — 5 points, not 4.
+- **`values: [...]`** — an explicit list of numbers, used as-is.
+
+Every parameter name must be a valid Python identifier (and not a Python
+keyword) — it's injected straight into the Python exec namespace, so
+`2theta` or `layer count` are validation errors, not runtime surprises.
+
+### Grid expansion and the 500-point cap
+
+The full sweep is the **cartesian product** of every swept parameter's
+values. Grid size is computed eagerly at parse time (not deferred to run
+time) and hard-capped at **500 points** — exceeding it is a validation error
+that shows the computed count, before any run starts.
+{/* src/types/experiment.ts: MAX_GRID_POINTS, expandGrid */}
+
+Point ordering is a documented convention, not an implementation detail:
+parameters vary in **declaration order**, with the **first-declared**
+parameter varying fastest (innermost loop) and the last-declared varying
+slowest (outermost loop). For `{theta: 10 values, layers: 3 values}` the
+sequence is `(theta₀,layers₀), (theta₁,layers₀), … (theta₉,layers₀),
+(theta₀,layers₁), …` — this is why the sweep plot's natural grouping key
+(color/legend) is the *last*-declared (slowest-varying) parameter.
+
+<Aside type="caution" title="Real hardware sweeps require confirmation">
+500 points × real hardware quota is a lot of money and queue time. Before
+launching any sweep against a non-simulator provider, Nuclei shows a
+warning with the total point count × shots. Above 10 hardware points, you
+must type the experiment's name to confirm before it submits anything.
+</Aside>
+
+## How parameters reach your code
+
+- **Python** — the kernel injects a `params: dict[str, float | int]` into
+  the exec namespace *before every* `execute`, experiment or not. Read it as
+  `params.get("theta", default)` so the same file runs identically from a
+  casual Cmd+Enter (`params` is `{}`) and from a sweep (`params` has the
+  point's values). This is the one portability pattern to follow for code
+  that's meant to work both ways.
+- **Q#** — parameters bind **by name** to the entry operation's declared
+  arguments. Only `Double` and `Int` are supported in v1. Given
+
+  ```qsharp
+  operation Rotate(theta : Double, layers : Int) : Result[] {
+      // ...
+  }
+  ```
+
+  a sweep point `{theta: 2.19911, layers: 2}` builds the entry expression
+  `Rotate(2.19911, 2)` (`Double` values are always rendered with a decimal
+  point, so `2` becomes `2.0` — otherwise Q# would parse it as `Int`). A
+  sweep key the operation doesn't declare, a declared parameter with no
+  value supplied, or a declared type outside `{Double, Int}` is a
+  `compile_error` — surfaced **before any Q# code runs**, naming the
+  offending parameter and why.
+
+  <Aside type="caution" title="Don't name a parameterized entry operation Main">
+  The qdk compiler itself rejects an operation literally named `Main` if it
+  declares any parameters (`entry point cannot have parameters`) — this
+  happens inside the compiler, before Nuclei's own parameter-binding logic
+  ever runs. Give a swept Q# entry operation any other name (`Rotate`,
+  `Ansatz`, ...); `Main` stays reserved for the zero-parameter entry
+  resolution used outside experiments (an operation named `Main`, else the
+  last zero-parameter operation, else none — see
+  [execution messages](/docs/kernel-api/messages-execution/#q-parameter-binding)).
+  </Aside>
+
+## Recording metrics
+
+The kernel injects a function `record_metric(name: str, value: float)` into
+the Python exec namespace — no request field needed, always available.
+Calls accumulate into that run's `metrics.json`; recording the same name
+twice **overwrites** (last write wins). A run that records nothing still
+gets a `metrics.json` — see derived metrics below.
+
+```python
+# vqe_h2.py
+theta = params.get("theta", 0.0)
+energy = run_vqe(theta)
+record_metric("energy", energy)
+record_metric("iterations", 40)
+```
+
+Q# has no in-language metric recording in v1. Instead, the runner **always**
+computes two derived metrics for every run, both languages, so sweep plots
+work out of the box even when nothing was explicitly recorded:
+
+| Metric | Definition |
+|--------|------------|
+| `counts_entropy` | Shannon entropy (base 2, in bits) of the run's measured-counts distribution. Zero for a determinate or empty distribution. |
+| `top_state_probability` | The highest single-outcome probability in the measured-counts distribution. |
+
+Derived metrics are computed **frontend-side** (not by the kernel) from
+`SimulationResult.measurements`, and merged with user-recorded metrics —
+derived first, so an explicitly recorded metric of the same name wins.
+
+## `manifest.json`
+
+Written by the frontend runner after every point, success or failure:
+
+```json
+{
+  "schema": 1,
+  "experiment": "theta-sweep",
+  "point_index": 7,
+  "params": {"theta": 2.19911, "layers": 2},
+  "seed": 49,
+  "seed_honored": true,
+  "backend": {"provider": "simulator", "target": "statevector"},
+  "shots": 2048,
+  "language": "python",
+  "entry": "vqe_h2.py",
+  "code_sha256": "…",
+  "git": {"commit": "…", "dirty": true},
+  "versions": {"nuclei": "0.6.0", "python": "3.12.4", "qiskit": "1.4.1"},
+  "started_at": "2026-07-12T14:15:30Z",
+  "duration_ms": 1834,
+  "status": "complete",
+  "error": null
+}
+```
+
+| Field | Notes |
+|-------|-------|
+| `point_index` | Position in the expanded grid (see ordering above), 0-indexed. |
+| `params` | The concrete values for this point (`{}` for a non-swept experiment). |
+| `seed` | `spec.seed + point_index`. |
+| `seed_honored` | Whether the backend actually honored the seed — `false` for hardware and for any simulator backend that can't be seeded. See [reproducibility](/docs/research/reproducibility/). |
+| `code_sha256` | SHA-256 of the entry file's contents *at the moment this point ran* — not the whole project, and not tracked by git alone (a `dirty` tree can still hash identically to a clean commit if you haven't touched the entry file). |
+| `git` | `{commit, dirty}` from a new Tauri command that shells out to `git rev-parse HEAD` / `git status --porcelain` (no bundled libgit2). `null` when the project isn't a git repository at all. |
+| `versions` | `nuclei` is always stamped; other keys (`python`, `qiskit`, `cirq`, `cudaq`, `qsharp`, ...) come from the kernel's `environment` message, cached per session and refreshed on kernel restart. |
+| `status` | `"complete"` \| `"failed"` \| `"running"` \| `"stale"`. `"stale"` marks a hardware point that was still in flight when the app was closed/restarted — consistent with how the hardware job store handles interrupted jobs generally. |
+| `error` | `null` on success; a short message on failure. A failed point does **not** stop the sweep — the run continues, and a summary of failures shows at the end. |
+
+## Running a sweep
+
+The sweep loop lives in a **frontend service**
+(`src/services/experimentRunner.ts`); the kernel stays dumb. For each point,
+in order: read the entry file's current contents → send one `execute`
+(simulator) with `params`, `seed = base + i`, `shots`, `language`, or one
+`hardware_submit` (any other provider) followed by polling
+`hardware_status`/`hardware_results` → write the run directory → compute
+derived metrics → emit a progress event. Sweeps in v1 are **sequential** —
+no concurrency; the kernel's per-connection executor is single-threaded.
+
+- **Cancel** — a stop-after-current-point button; already-written runs are
+  kept.
+- **Failure policy** — a failed point still writes a manifest
+  (`status: "failed"`, `error` set) and the sweep continues.
+- **Restart mid-sweep** — an in-flight hardware point that was never
+  resolved when the app closed rehydrates as `stale` on the next launch,
+  the same semantics the hardware job store already uses for interrupted
+  jobs.
+
+## The Experiments panel, runs table, and run detail
+
+The Experiments panel (Research mode's left rail) lists experiments with
+name, entry, backend, grid size, and last-run time, with a Run button and a
+"New experiment" form that writes the YAML and opens it in the editor.
+
+Selecting an experiment shows a **runs table** — one row per run, point
+params as columns, plus status, duration, seed, and derived + user metrics,
+sortable by any column and virtualized (sweeps are capped at 500 points per
+invocation, but runs accumulate across many invocations). Row click opens
+**run detail**: the manifest as a definition list, a histogram of
+`measurements`, the circuit snapshot, stdout/stderr tabs, and an "open run
+folder" button.
+
+## Comparison and sweep plots
+
+Select two or more runs in the table to open **Compare**: overlaid/grouped
+histograms with a legend, a manifest diff (only differing fields
+highlighted), and a metrics table (runs × metrics). Both the compare view
+and the sweep plot export **SVG** (the chart) and **CSV** (the underlying
+data, and the runs table itself) — no server round-trip, straight from the
+browser.
+
+The **sweep plot** is the payoff for a swept experiment: any recorded or
+derived metric (Y) against any swept parameter (X), grouped by the other
+parameter when the grid is 2-D — an energy-vs-theta curve per layer count,
+without leaving the IDE.
+
+## Dirac context
+
+When the Experiments panel is focused, Dirac's context (subject to the
+existing `contextDepth` setting) includes the active experiment's YAML and
+the selected runs' manifests and metrics — capped at 10 runs in full, with
+only metrics included beyond that. This is context only: no tools, no
+autonomy. It's enough to ask "why is energy flat above theta=2?" — designing
+or launching experiments autonomously is out of scope for this release.
+
+## Protocol changes behind experiments (v1.1)
+
+Experiments are built entirely on additive kernel protocol changes — see
+the [execution messages](/docs/kernel-api/messages-execution/#parameters-seeding-and-metrics-protocol-v11)
+reference and the [protocol changelog](/docs/reference/protocol-changelog/)
+for the full wire-level detail: `execute` gains optional `params` and
+`seed` request fields, its `result` response gains optional `metrics` and
+`seed_honored` fields, and a new `environment` message reports kernel and
+framework versions. Every addition is backward compatible — an old client
+that never sends `params`/`seed` sees no behavior change at all.

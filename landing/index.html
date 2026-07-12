@@ -201,6 +201,18 @@
     .step h3 { font-family: var(--font-display); font-size: 19px; font-weight: 600; margin-bottom: 8px; }
     .step p { font-size: 14px; color: var(--sec); line-height: 1.6; }
 
+    /* ---------- research callout ---------- */
+    .research { padding-bottom: 76px; }
+    .research-card {
+      border: 1px solid var(--bd); border-radius: 14px; background: var(--surf);
+      padding: 40px 48px; display: flex; align-items: center; justify-content: space-between;
+      gap: 32px; flex-wrap: wrap;
+    }
+    .research-card .lead { max-width: 560px; }
+    .research-card .lead h2 { font-family: var(--font-display); font-size: 24px; font-weight: 600; letter-spacing: -0.02em; margin-bottom: 8px; }
+    .research-card .lead p { font-size: 14px; line-height: 1.65; color: var(--sec); }
+    .research-card .btn-outline { background: var(--bg); flex-shrink: 0; }
+
     /* ---------- download CTA ---------- */
     .cta { padding-bottom: 80px; }
     .cta-panel {
@@ -252,6 +264,7 @@
       .feature-grid { grid-template-columns: 1fr; }
       .fw-card { padding: 32px 28px; }
       .fw-list { gap: 28px; }
+      .research-card { padding: 32px 28px; flex-direction: column; align-items: flex-start; }
       .steps { grid-template-columns: 1fr; gap: 32px; }
       .cta-panel { padding: 48px 28px; }
       .footer-inner { padding: 22px 24px; flex-direction: column; gap: 10px; text-align: center; }
@@ -408,6 +421,18 @@
         <div class="step"><div class="num">01</div><h3>Write</h3><p>Write quantum code with autocomplete, highlighting, and instant error feedback.</p></div>
         <div class="step"><div class="num">02</div><h3>Visualize</h3><p>Circuit, Bloch sphere and histogram update live as you type. No re-runs.</p></div>
         <div class="step"><div class="num">03</div><h3>Learn</h3><p>Ask Dirac to explain concepts, debug your circuit, or generate exercises.</p></div>
+      </div>
+    </section>
+
+    <!-- ============ RESEARCH MODE ============ -->
+    <section class="research" aria-labelledby="research-heading">
+      <div class="research-card">
+        <div class="lead">
+          <div class="eyebrow">New in v0.6.0</div>
+          <h2 id="research-heading">Also doing real quantum research?</h2>
+          <p>Switch to Research mode for multi-file projects, declarative parameter-sweep experiments, and reproducible run manifests — with Dirac as a terse collaborator instead of a tutor. Learn mode stays exactly as it is.</p>
+        </div>
+        <a class="btn-outline" href="/docs/research/workspace-modes/">Read the docs</a>
       </div>
     </section>
 

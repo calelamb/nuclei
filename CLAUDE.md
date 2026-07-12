@@ -208,6 +208,116 @@ Dirac is a Claude API wrapper with a quantum computing tutor persona. Named afte
 
 **Model selection:** Haiku for fast Q&A and ghost completions. Sonnet for tool use, code generation, reasoning mode, and complex explanations. Selection logic lives in the frontend — route based on detected intent.
 
+## Workspace Modes (Learn / Research)
+
+Nuclei is one app with two workspaces over a shared core, chosen via
+`src/stores/workspaceStore.ts` (`mode: 'learn' | 'research'`, persisted
+globally and per-project — a project explicitly switched to Research
+reopens in Research):
+
+- **Learn** — everything Nuclei has always been: lessons, challenges, Dirac
+  as tutor, progressive disclosure via `uiModeStore` (beginner→advanced).
+  Unchanged and still the default; byte-compatibility is enforced by a
+  panel-registry snapshot test.
+- **Research** — a workspace for people *doing* quantum computing:
+  multi-file projects, the Experiments panel (declarative parameter sweeps,
+  runs table, run detail, comparison, sweep plots — see below), and Dirac
+  as a terse collaborator instead of a tutor. `uiModeStore` is ignored in
+  Research — it's always "advanced".
+
+Panel visibility per mode is computed once in
+`src/components/layout/panelRegistry.ts` (`activityViewsForMode`), not via
+scattered conditionals. Entry points: the first-launch/no-project chooser
+("Learn quantum computing" / "Research workspace"), the command palette
+("Switch workspace mode"), and a status-bar toggle pill. Dirac's persona
+per mode lives in `src/services/diracPersona.ts` (`personaPreamble(mode)`),
+threaded through `compose.ts`, `errorRewrite.ts`, `narration.ts`, ghost
+completions, and the chat panel.
+
+## Experiments (Research Mode)
+
+An **experiment** is a named, declarative, git-friendly object — plain
+files in the project directory, no database — capturing code + parameters
++ backend + seed + environment + results. Source of truth is a hand- or
+GUI-editable YAML file; everything downstream (runs, manifests, plots) is
+generated from it.
+
+```
+myproject/
+├── vqe_h2.py                        # ordinary user code, any framework
+├── experiments/
+│   ├── theta-sweep.experiment.yaml  # experiment definition (source of truth)
+│   └── theta-sweep/runs/
+│       └── 20260712-141530-a3f9/
+│           ├── manifest.json        # reproducibility record (see below)
+│           ├── result.json          # SimulationResult or hardware result
+│           ├── snapshot.json        # CircuitSnapshot for this point
+│           ├── metrics.json         # derived + user-recorded metrics
+│           ├── stdout.txt
+│           └── stderr.txt
+```
+
+`*.experiment.yaml` (schema `1`): `name`, `entry` (file to run), `language`
+(`python` | `qsharp`, inferred from extension), `backend` (`{provider,
+target}`, `simulator` or any hardware provider id), `shots`, `seed` (base;
+point *i* runs with `seed + i`), an optional `sweep` (map of parameter name
+→ `range: [start, stop, step]` or `values: [...]`; cartesian product across
+parameters, first-declared varies fastest, hard-capped at **500 points**),
+and optional `notes`. Grid expansion and the full schema live in
+`src/types/experiment.ts`; the sequential sweep runner (frontend
+orchestrates, kernel stays dumb — one `execute`/`hardware_submit` per
+point) lives in `src/services/experimentRunner.ts`.
+
+Parameters reach code via a `params` dict always injected into the Python
+exec namespace (`{}` outside experiments — `params.get("theta", default)`
+is the portable pattern), or by name-binding to a Q# entry operation's
+declared `Double`/`Int` arguments. **A parameterized Q# entry operation
+must not be named `Main`** — qdk's compiler itself rejects a parameterized
+`Main` (`entry point cannot have parameters`); use any other name (e.g.
+`Rotate`). Full schema reference, `manifest.json` shape, metrics, and the
+`range` epsilon semantics: `docs-site/src/content/docs/research/experiments.mdx`.
+Reproducibility guarantees and honest limits (hardware noise, unseedable
+backends, the `dirty` git flag): `docs-site/src/content/docs/research/reproducibility.mdx`.
+
+## Kernel Protocol v1.1
+
+Additive-only extensions to the `execute` message and one new message type,
+introduced for Research-mode experiments but usable from any client:
+
+- `execute` request gains optional `params: {string: number}` and
+  `seed: number`.
+- `execute`'s `result` response gains optional `metrics: {string: float}`
+  (accumulated via a `record_metric(name, value)` function injected into
+  the Python exec namespace; empty when nothing was recorded) and
+  `seed_honored: boolean` (present only when a `seed` was requested —
+  `false` for hardware and any simulator backend that can't be seeded,
+  honest by design).
+- New message `environment` → response reporting the kernel's Python
+  version, platform string, and installed framework versions
+  (`importlib.metadata`; absent keys mean "not installed").
+
+Old clients that never send `params`/`seed` see no behavior change. Full
+wire-level detail: `docs-site/src/content/docs/kernel-api/messages-execution.mdx`
+and `docs-site/src/content/docs/reference/protocol-changelog.mdx`.
+
+## PRD Series (Research Direction)
+
+PRD 09 (this document's workspace/experiments work) is the foundation for
+Nuclei's research direction; later PRDs build on the Experiment object it
+defines:
+
+- **PRD 09** — Research Mode & Experiments-as-First-Class-Objects (Learn/
+  Research workspaces, the Experiment object, sweep runner, comparison and
+  sweep plots).
+- **PRD 10** — Simulation backends + remote kernel (GPU/tensor-network/Stim
+  backends; kernels not on localhost).
+- **PRD 11** — Hardware fleet benchmarking (multi-backend fan-out of one
+  experiment; the schema's `backend` is validated as a list-of-one in v1
+  specifically so this can widen it without a breaking change).
+- **PRD 12** — Dirac research agent (an agentic Dirac that designs and
+  launches experiments autonomously; PRD 09 only injects experiment context
+  into Dirac, no tools/autonomy).
+
 ## Development Phases
 
 ### Phase 1: Foundation (Weeks 1–4)

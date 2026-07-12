@@ -23,29 +23,29 @@ export interface WhatsNewEntry {
 }
 
 export const WHATS_NEW: WhatsNewEntry = {
-  version: '0.5.3',
-  title: 'Dirac reaches the hardware',
-  tagline: 'Dirac can now run circuits on quantum backends, on a native Rust core, with your API key kept in the system keychain.',
+  version: '0.6.0',
+  title: 'Research mode',
+  tagline: 'A second workspace for people doing quantum computing: parameter sweeps, reproducible runs, and comparison — Learn mode stays exactly as it was.',
   highlights: [
     {
-      icon: 'hardware',
-      title: 'Agentic hardware runs',
-      text: 'Dirac can submit circuits and monitor results — the free simulator now, real hardware once you enable it.',
+      icon: 'circuit',
+      title: 'Experiments as first-class objects',
+      text: 'Declare a parameter sweep in a plain YAML file, hit Run, and watch results stream into a sortable runs table.',
     },
     {
-      icon: 'dirac',
-      title: 'A native Rust agent core',
-      text: "Dirac's agent now runs on a native Rust runtime, with a tamper-proof budget and policy engine.",
+      icon: 'qsharp',
+      title: 'Reproducible by design',
+      text: "Every run writes a manifest — params, seed, code hash, git commit, framework versions — honest about what it can and can't reproduce.",
     },
     {
       icon: 'editor',
-      title: 'Your API key, in the keychain',
-      text: 'Your Anthropic key now lives in the operating-system keychain instead of the browser.',
+      title: 'Compare runs and plot sweeps',
+      text: 'Overlay histograms, diff manifests, and chart any metric against a swept parameter without leaving the IDE.',
     },
     {
-      icon: 'hardware',
-      title: 'Off by default, on your terms',
-      text: 'Autonomous paid-hardware submission stays off until you switch it on, with hard spend limits.',
+      icon: 'dirac',
+      title: 'Dirac, the research collaborator',
+      text: 'Switch modes and Dirac drops the tutor tone for terse, precise answers grounded in your active experiment.',
     },
   ],
 };
