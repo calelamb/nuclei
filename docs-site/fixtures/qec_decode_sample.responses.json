@@ -1,0 +1,22 @@
+[
+  {
+    "type": "qec_decode_sample",
+    "num_detectors": 8,
+    "syndrome": [
+      5,
+      7
+    ],
+    "matched_edges": [
+      {
+        "d1": 5,
+        "d2": 7
+      }
+    ],
+    "predicted_observable_flips": [
+      0
+    ],
+    "actual_observable_flips": [
+      0
+    ]
+  }
+]

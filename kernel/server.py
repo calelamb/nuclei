@@ -111,6 +111,20 @@ def _agent_error(request_id: str, code: str, message: str) -> dict:
 hardware_manager = HardwareManager()
 hardware_manager.connect_provider("simulator", {})
 
+# QEC campaign manager (protocol v1.2 / PRD 10 Phase B) — one campaign at a
+# time per kernel; lazily constructed so the kernel imports cleanly without
+# the QEC toolchain installed.
+_campaign_manager = None
+
+
+def get_campaign_manager():
+    global _campaign_manager
+    if _campaign_manager is None:
+        from kernel.qec.campaign import CampaignManager
+
+        _campaign_manager = CampaignManager()
+    return _campaign_manager
+
 
 def _extract_circuit_for_provider(namespace: dict, provider: str):
     """Find the circuit object a student defined in their code.
@@ -543,6 +557,65 @@ async def handle_message(websocket):
                 await websocket.send(json.dumps({
                     "type": "qec_snapshot",
                     "data": qec_payload,
+                }))
+
+        elif msg_type == "qec_campaign_start":
+            # Protocol v1.2 (PRD 10 Phase B): launch a sinter Monte Carlo
+            # campaign. Ack immediately; qec_campaign_progress (throttled)
+            # and qec_campaign_result stream back from the collect thread.
+            collect_options = msg.get("collect")
+            if not isinstance(collect_options, dict):
+                collect_options = {}
+
+            async def _send_json(payload: dict) -> None:
+                try:
+                    await websocket.send(json.dumps(payload))
+                except Exception:
+                    # Connection gone mid-campaign — the campaign finishes
+                    # (or is cancelled) on its own; nothing to notify.
+                    pass
+
+            started, campaign_error = get_campaign_manager().start(
+                campaign_id=msg.get("campaign_id"),
+                tasks_payload=msg.get("tasks"),
+                max_shots=collect_options.get("max_shots"),
+                max_errors=collect_options.get("max_errors"),
+                workers=msg.get("workers", "auto"),
+                existing_stats_csv=msg.get("existing_stats_csv"),
+                progress_interval_s=msg.get("progress_interval_s"),
+                loop=asyncio.get_running_loop(),
+                send_json=_send_json,
+            )
+            if campaign_error is not None:
+                await websocket.send(json.dumps(error_payload(campaign_error, "qec_campaign")))
+            else:
+                await websocket.send(json.dumps(started))
+
+        elif msg_type == "qec_campaign_cancel":
+            accepted = get_campaign_manager().cancel(msg.get("campaign_id"))
+            # Ack synchronously; the partial qec_campaign_result follows
+            # from the collect thread once sinter's workers wind down.
+            await websocket.send(json.dumps({
+                "type": "qec_campaign_cancelled",
+                "campaign_id": msg.get("campaign_id"),
+                "accepted": accepted,
+            }))
+
+        elif msg_type == "qec_decode_sample":
+            from kernel.qec.campaign import decode_sample
+
+            decoded, decode_error = await asyncio.to_thread(
+                decode_sample,
+                msg.get("circuit_text", ""),
+                msg.get("decoder", "pymatching"),
+                msg.get("seed"),
+            )
+            if decode_error is not None:
+                await websocket.send(json.dumps(error_payload(decode_error, "qec_decode_sample")))
+            else:
+                await websocket.send(json.dumps({
+                    "type": "qec_decode_sample",
+                    **decoded,
                 }))
 
         elif msg_type == "hardware_connect":

@@ -72,3 +72,63 @@ export interface QecGenerateNoise {
   before_measure_flip_probability?: number;
   after_reset_flip_probability?: number;
 }
+
+// ───────── campaigns (protocol v1.2, PRD 10 Phase B) ─────────
+
+/** One sinter task on the wire: a circuit, a decoder, and free metadata
+ * that comes back verbatim on every stats row. */
+export interface QecCampaignTask {
+  circuit_text: string;
+  decoder: string;
+  json_metadata?: unknown;
+}
+
+/** Accumulated per-task statistics — sinter's standard CSV columns,
+ * JSON-encoded. Merge by `strong_id`; progress updates carry totals for
+ * changed tasks only. */
+export interface QecCampaignStatsRow {
+  strong_id: string;
+  decoder: string;
+  json_metadata: unknown;
+  shots: number;
+  errors: number;
+  discards: number;
+  seconds: number;
+  custom_counts: Record<string, number>;
+}
+
+export interface QecCampaignProgress {
+  campaign_id: string;
+  /** Accumulated totals for tasks whose numbers changed since the last
+   * update — never the full table. */
+  tasks: QecCampaignStatsRow[];
+  tasks_complete: number;
+  tasks_total: number;
+  /** sinter's free-form ETA/status text — display only, never parse. */
+  status_message: string;
+}
+
+export interface QecCampaignResult {
+  campaign_id: string;
+  /** True after a cancel or worker failure — stats hold everything
+   * collected (plus resumed prior data). */
+  partial: boolean;
+  /** Shots newly sampled THIS run — 0 when resume found nothing to do. */
+  sampled_shots: number;
+  stats: QecCampaignStatsRow[];
+  /** sinter-native CSV — write to stats.csv as-is (the on-disk truth,
+   * loadable by researchers' existing scripts). */
+  csv: string;
+  /** First line of the failure, present only when a worker died. */
+  error?: string;
+}
+
+/** One decoded shot for the detector-graph overlay. `d2: null` marks a
+ * boundary match. Deterministic for a given seed. */
+export interface QecDecodeSampleResult {
+  num_detectors: number;
+  syndrome: number[];
+  matched_edges: Array<{ d1: number; d2: number | null }>;
+  predicted_observable_flips: number[];
+  actual_observable_flips: number[];
+}

@@ -8,6 +8,7 @@ access. Each is labeled "illustrative" where it appears in the docs.
 |---------|----------|--------------|
 | `illustrative/hardware_connect_azure.request.json` / `.responses.json` | kernel-api/messages-hardware, hardware/azure-quantum | Requires a real Azure Quantum workspace; `connect` validates by listing targets over the network. |
 | `illustrative/hardware_submit_azure_qsharp.request.json` / `.responses.json` | kernel-api/messages-hardware, hardware/azure-quantum | Requires a connected Azure workspace and QIR submission to a live target; job id/timestamp are invented. |
+| `illustrative/qec_campaign.session.json` | kernel-api/messages-qec | Captured from a REAL local run (not invented), but the number and content of streamed `qec_campaign_progress` messages depend on worker timing and sinter's adaptive batching, so the sequence can't replay deterministically. The campaign semantics (start/progress/throttle/cancel/partial/resume) are covered by `kernel/tests/test_qec_campaign.py` instead. |
 
 ## Inline illustrative snippets on guide pages
 
