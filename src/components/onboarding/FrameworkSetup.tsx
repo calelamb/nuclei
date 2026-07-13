@@ -116,6 +116,10 @@ export function FrameworkSetup({ open, onClose, firstRun = false }: FrameworkSet
     () => status?.catalog.filter((f) => f.group === 'provider') ?? [],
     [status],
   );
+  const research = useMemo(
+    () => status?.catalog.filter((f) => f.group === 'research') ?? [],
+    [status],
+  );
   const totalMb = useMemo(() => {
     if (!status) return 0;
     return [...selected]
@@ -258,6 +262,19 @@ export function FrameworkSetup({ open, onClose, firstRun = false }: FrameworkSet
               <div style={{ height: 10 }} />
               <SectionHeader label="Hardware providers (optional)" />
               {providers.map((fw) => (
+                <FrameworkRow
+                  key={fw.id}
+                  fw={fw}
+                  checked={selected.has(fw.id)}
+                  installed={status.installed.includes(fw.id)}
+                  disabled={installing}
+                  onToggle={() => toggle(fw.id)}
+                />
+              ))}
+
+              <div style={{ height: 10 }} />
+              <SectionHeader label="Research — QEC Studio (optional)" />
+              {research.map((fw) => (
                 <FrameworkRow
                   key={fw.id}
                   fw={fw}

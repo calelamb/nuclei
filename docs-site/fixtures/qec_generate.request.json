@@ -1,0 +1,9 @@
+{
+  "type": "qec_generate",
+  "code": "repetition_code:memory",
+  "distance": 3,
+  "rounds": 2,
+  "noise": {
+    "before_measure_flip_probability": 0.01
+  }
+}

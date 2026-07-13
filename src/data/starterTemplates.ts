@@ -48,11 +48,24 @@ operation Main() : Result[] {
     return results;
 }
 `,
+  stim: `import stim
+
+# Distance-3 repetition code memory experiment (3 rounds).
+# Swap in surface_code:rotated_memory_z to go 2D.
+circuit = stim.Circuit.generated(
+    "repetition_code:memory",
+    distance=3,
+    rounds=3,
+    after_clifford_depolarization=0.001,
+    before_measure_flip_probability=0.001,
+)
+`,
 };
 
 export function displayFrameworkName(f: Framework): string {
   if (f === 'cuda-q') return 'CUDA-Q';
   if (f === 'qsharp') return 'Q# (QDK)';
+  if (f === 'stim') return 'Stim';
   return f.charAt(0).toUpperCase() + f.slice(1);
 }
 

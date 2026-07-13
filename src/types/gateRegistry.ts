@@ -7,7 +7,10 @@ export interface GateInfo {
   qubitCount: number;
   paramCount: number;
   matrix?: string;
-  frameworkNames: Record<Framework, string>;
+  /** Stim optional: the gate explorer teaches the circuit-model frameworks;
+   * Stim's instruction mnemonics arrive with QEC Studio content (PRD 10). */
+  frameworkNames: Record<Exclude<Framework, 'stim'>, string> &
+    Partial<Record<'stim', string>>;
 }
 
 export const GATE_REGISTRY: Record<string, GateInfo> = {

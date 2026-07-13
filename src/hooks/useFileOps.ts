@@ -50,6 +50,10 @@ export function useFileOps() {
     // feedback take over again from where they left off.
     if (result.path.toLowerCase().endsWith('.qs')) {
       useEditorStore.getState().setFramework('qsharp');
+    } else if (result.path.toLowerCase().endsWith('.stim')) {
+      // Extension-pinned like .qs: raw .stim text has no lexical signature
+      // the kernel could detect, so set the framework eagerly.
+      useEditorStore.getState().setFramework('stim');
     } else if (useEditorStore.getState().framework === 'qsharp') {
       useEditorStore.getState().setFramework(useEditorStore.getState().lastPythonFramework);
     }

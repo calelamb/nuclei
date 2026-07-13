@@ -59,6 +59,26 @@ ADAPTER_SPECS = (
         detect_pattern=re.compile(r"import\s+cudaq|from\s+cudaq\s+import|@cudaq\.kernel"),
         dependencies=("cudaq",),
     ),
+    AdapterSpec(
+        framework="stim",
+        module="kernel.adapters.stim_adapter",
+        class_name="StimAdapter",
+        detect_pattern=re.compile(r"import\s+stim|from\s+stim\s+import"),
+        dependencies=("stim",),
+    ),
+)
+
+# Raw `.stim` text (language: "stim") routes through the SAME adapter class
+# but source-mode style: stim.Circuit(text), never Python exec. Kept out of
+# ADAPTER_SPECS because raw stim text has no reliable lexical signature —
+# it is reachable only via the explicit language hint. (PRD 10 D2)
+STIM_SOURCE_SPEC = AdapterSpec(
+    framework="stim",
+    module="kernel.adapters.stim_adapter",
+    class_name="StimAdapter",
+    detect_pattern=re.compile(r"(?!)"),  # never matches; hint-only routing
+    dependencies=("stim",),
+    source_mode=True,
 )
 
 
@@ -84,6 +104,9 @@ def _missing_dependency_message(framework: str, dependency: str) -> str:
         "cirq": "Cirq",
         "cudaq": "CUDA-Q",
         "qdk": "Microsoft QDK",
+        "stim": "Stim",
+        "sinter": "Sinter",
+        "pymatching": "PyMatching",
     }.get(dependency, dependency)
     return (
         f"{display} is not installed, so {framework} code cannot run in this environment."
@@ -97,6 +120,10 @@ class Executor:
         # Accumulated record_metric(name, value) calls from the most recent
         # run (protocol v1.1 / PRD 09 Phase B). Reset on every _run_code.
         self._metrics: dict[str, float] = {}
+        # Most recent stim.Circuit seen by parse/execute (protocol v1.2 /
+        # PRD 10 Phase A). Lets the qec_snapshot message re-derive the DEM
+        # payload at a different edge cap without re-running user code.
+        self._last_qec_circuit = None
 
     def _new_capture(self) -> io.TextIOBase:
         if self._capture_limit_bytes is None:
@@ -136,6 +163,10 @@ class Executor:
             return next(
                 (spec for spec in ADAPTER_SPECS if spec.framework == "qsharp"), None
             )
+        if language == "stim":
+            # Raw .stim interchange text — hint-only routing, source-mode
+            # style (stim.Circuit(text), no Python exec). PRD 10 D2.
+            return STIM_SOURCE_SPEC
         if language == "python":
             return next(
                 (
@@ -322,9 +353,12 @@ class Executor:
             # Source-mode adapters own the whole pipeline — their source
             # never reaches exec(). Their return shape matches ours exactly.
             try:
-                return adapter.parse_source(code)
+                outcome = adapter.parse_source(code)
             except Exception as exc:
                 return None, "", "", self._capability_error(spec, exc, "adapter_error")
+            if spec.framework == "stim":
+                self._last_qec_circuit = getattr(adapter, "last_circuit", None)
+            return outcome
 
         stdout, stderr, error = self._run_code(code)
         if error:
@@ -336,6 +370,9 @@ class Executor:
             circuit = adapter.find_circuit(self._namespace)
         except Exception as exc:
             return None, stdout, stderr, self._capability_error(spec, exc, "adapter_error")
+
+        if spec.framework == "stim":
+            self._last_qec_circuit = circuit
 
         if circuit is None:
             return None, stdout, stderr, None
@@ -380,11 +417,14 @@ class Executor:
 
         if spec.source_mode:
             try:
-                return adapter.execute_source(code, shots, params=params, seed=seed)
+                outcome = adapter.execute_source(code, shots, params=params, seed=seed)
             except Exception as exc:
                 return None, None, "", "", self._capability_error(
                     spec, exc, "execution_error"
                 )
+            if spec.framework == "stim":
+                self._last_qec_circuit = getattr(adapter, "last_circuit", None)
+            return outcome
 
         stdout, stderr, error = self._run_code(code, params=params, seed=seed)
         if error:
@@ -396,6 +436,9 @@ class Executor:
             circuit = adapter.find_circuit(self._namespace)
         except Exception as exc:
             return None, None, stdout, stderr, self._capability_error(spec, exc, "adapter_error")
+
+        if spec.framework == "stim":
+            self._last_qec_circuit = circuit
 
         if circuit is None:
             return None, None, stdout, stderr, KernelError(
@@ -421,6 +464,88 @@ class Executor:
         result = dataclasses.replace(result, metrics=dict(self._metrics))
 
         return result, snapshot, stdout, stderr, None
+
+    def qec_snapshot_payload(
+        self,
+        *,
+        code: str | None = None,
+        language: str | None = None,
+        max_edges: int | None = None,
+    ) -> tuple[dict | None, KernelError | None]:
+        """Build the `qec_snapshot` payload (protocol v1.2 / PRD 10 Phase A).
+
+        Two forms:
+        - With `code`: stateless — build the circuit fresh (raw .stim text
+          parses cheaply; Python stim code re-runs through exec, which is
+          documented as having side effects, exactly like `parse`).
+        - Without `code`: reuse the most recent stim circuit this
+          connection parsed/executed — the "render anyway" path, where the
+          frontend re-requests the DEM at a higher edge cap without
+          re-running anything.
+        """
+        from kernel.qec.dem import MAX_DEM_EDGES
+
+        cap = MAX_DEM_EDGES if max_edges is None else max(1, int(max_edges))
+
+        circuit = self._last_qec_circuit
+        if code is not None:
+            spec = self._resolve_spec(code, language)
+            if spec is None or spec.framework != "stim":
+                return None, KernelError(
+                    code="unsupported_framework",
+                    message=(
+                        "qec_snapshot requires a Stim circuit — send raw .stim "
+                        'text with language "stim", or Python code that builds '
+                        "a stim.Circuit."
+                    ),
+                )
+            adapter, adapter_error = self._load_adapter(spec)
+            if adapter_error:
+                return None, adapter_error
+            if spec.source_mode:
+                try:
+                    circuit = adapter.build_from_source(code)
+                except ValueError as exc:
+                    return None, KernelError(
+                        code="compile_error",
+                        message=str(exc).strip().splitlines()[0],
+                        framework="stim",
+                    )
+            else:
+                stdout, stderr, error = self._run_code(code)
+                if error:
+                    error = self._normalize_runtime_error(spec, error)
+                    error.framework = spec.framework
+                    return None, error
+                try:
+                    circuit = adapter.find_circuit(self._namespace)
+                except Exception as exc:
+                    return None, self._capability_error(spec, exc, "adapter_error")
+            self._last_qec_circuit = circuit
+
+        if circuit is None:
+            return None, KernelError(
+                code="no_circuit",
+                message=(
+                    "No Stim circuit available for qec_snapshot — parse or "
+                    "execute one first, or include `code` in the request."
+                ),
+                framework="stim",
+            )
+
+        try:
+            from kernel.qec.dem import build_qec_payload
+
+            return build_qec_payload(circuit, max_edges=cap), None
+        except ImportError:
+            return None, KernelError(
+                code="missing_dependency",
+                message=_missing_dependency_message("stim", "stim"),
+                framework="stim",
+                dependency="stim",
+            )
+        except Exception as exc:
+            return None, self._capability_error(None, exc, "adapter_error")
 
     def transpile(
         self,

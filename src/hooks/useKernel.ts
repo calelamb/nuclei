@@ -325,7 +325,7 @@ export function useKernel() {
       useEditorStore.getState().setKernelStatus('ready');
       const code = useEditorStore.getState().code;
       if (code.trim()) {
-        const language = kernelLanguageFor(useEditorStore.getState().framework);
+        const language = kernelLanguageFor(useEditorStore.getState().framework, useEditorStore.getState().filePath);
         ws.send(JSON.stringify({ type: 'parse', code, language }));
       }
 
@@ -426,7 +426,7 @@ export function useKernel() {
       // Initial parse
       const code = useEditorStore.getState().code;
       if (code.trim()) {
-        const language = kernelLanguageFor(useEditorStore.getState().framework);
+        const language = kernelLanguageFor(useEditorStore.getState().framework, useEditorStore.getState().filePath);
         kernel.send({ type: 'parse', code, language });
       }
     } catch (e) {
@@ -472,7 +472,7 @@ export function useKernel() {
           // run completes will schedule another parse.
           if (useSimulationStore.getState().isRunning) return;
 
-          const language = kernelLanguageFor(useEditorStore.getState().framework);
+          const language = kernelLanguageFor(useEditorStore.getState().framework, useEditorStore.getState().filePath);
           if (isWeb && pyodideRef.current) {
             pyodideRef.current.send({ type: 'parse', code: state.code, language });
           } else if (wsRef.current?.readyState === WebSocket.OPEN) {
@@ -497,7 +497,7 @@ export function useKernel() {
 
     const { code } = useEditorStore.getState();
     const { shots } = useSimulationStore.getState();
-    const language = kernelLanguageFor(useEditorStore.getState().framework);
+    const language = kernelLanguageFor(useEditorStore.getState().framework, useEditorStore.getState().filePath);
 
     const runTime = new Date().toLocaleTimeString();
     const separator = `─── Run at ${runTime} ──────────────────────────────`;

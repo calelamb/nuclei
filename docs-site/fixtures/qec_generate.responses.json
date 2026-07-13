@@ -1,0 +1,9 @@
+[
+  {
+    "type": "qec_generated",
+    "code": "repetition_code:memory",
+    "distance": 3,
+    "rounds": 2,
+    "circuit_text": "R 0 1 2 3 4\nTICK\nCX 0 1 2 3\nTICK\nCX 2 1 4 3\nTICK\nX_ERROR(0.01) 1 3\nMR 1 3\nDETECTOR(1, 0) rec[-2]\nDETECTOR(3, 0) rec[-1]\nTICK\nCX 0 1 2 3\nTICK\nCX 2 1 4 3\nTICK\nX_ERROR(0.01) 1 3\nMR 1 3\nSHIFT_COORDS(0, 1)\nDETECTOR(1, 0) rec[-2] rec[-4]\nDETECTOR(3, 0) rec[-1] rec[-3]\nX_ERROR(0.01) 0 2 4\nM 0 2 4\nDETECTOR(1, 1) rec[-2] rec[-3] rec[-5]\nDETECTOR(3, 1) rec[-1] rec[-2] rec[-4]\nOBSERVABLE_INCLUDE(0) rec[-1]"
+  }
+]

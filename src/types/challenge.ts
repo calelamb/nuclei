@@ -2,11 +2,14 @@ import type { Framework } from './quantum';
 
 /**
  * Per-framework code for challenge content. Challenge content is
- * Python-only today, so the Python frameworks stay required while Q#
- * is optional until challenges ship Q# starters.
+ * Python-only today, so the Python teaching frameworks stay required
+ * while Q# is optional until challenges ship Q# starters. Stim is a
+ * research framework (QEC Studio, PRD 10) — challenges never target it,
+ * so it stays optional permanently.
  */
 export type ChallengeCodeByFramework =
-  Record<Exclude<Framework, 'qsharp'>, string> & Partial<Record<'qsharp', string>>;
+  Record<Exclude<Framework, 'qsharp' | 'stim'>, string> &
+    Partial<Record<'qsharp' | 'stim', string>>;
 
 export type ChallengeDifficulty = 'easy' | 'medium' | 'hard';
 export type ChallengeCategory = 'state-preparation' | 'algorithms' | 'optimization' | 'protocols';

@@ -1,0 +1,118 @@
+---
+title: "QEC messages"
+description: "Protocol v1.2 (in progress): qec_generate, the qec_snapshot sidecar, Stim circuits as a kernel framework, and the language: stim path."
+---
+
+import { Code, Aside } from '@astrojs/starlight/components';
+import qecGenerateReq from '../../../../fixtures/qec_generate.request.json?raw';
+import qecGenerateRes from '../../../../fixtures/qec_generate.responses.json?raw';
+import qecStudioSession from '../../../../fixtures/qec_studio.session.json?raw';
+
+<Aside type="note" title="Protocol v1.2 — QEC Studio Phase A">
+Everything on this page is additive over v1.1: two new message types and one
+new sidecar response. Clients that never send QEC messages see exactly one
+new thing — the `qec_snapshot` response after a Stim circuit's `snapshot` —
+and may ignore it. The campaign messages (`qec_campaign_*`,
+`qec_decode_sample`) land in the next protocol increment.
+</Aside>
+
+## Stim as a framework
+
+[Stim](https://github.com/quantumlib/Stim) stabilizer circuits are a
+first-class kernel framework, reachable two ways:
+
+- **Python mode** — code that `import stim` and builds `stim.Circuit`
+  objects runs through the ordinary `parse`/`execute` pipeline (framework
+  detection, last-circuit-in-namespace, `params`/`seed`/`record_metric`
+  all work). This is the power path for parameterized experiments.
+- **Raw `.stim` text** — send `language: "stim"` and the `code` field is
+  parsed with `stim.Circuit(text)` directly, never through Python `exec`
+  (the same source-mode routing Q# uses). This is the interchange path:
+  researchers share bare `.stim` files constantly.
+
+Simulation uses Stim's compiled sampler. An explicit integer `seed` is
+always honored (`seed_honored: true`). Because stabilizer circuits
+routinely exceed statevector sizes, the `result` is honest about being a
+sampler: `state_vector`, `probabilities`, and `bloch_coords` are empty,
+and `measurements` keys are measurement-record bitstrings (first recorded
+measurement rightmost, matching the Python frameworks' bit order).
+
+## `qec_generate`
+
+Generates one of Stim's built-in QEC circuits and returns its text. The
+desktop app writes the result into a real project file — the circuit you
+run is always a file you can read and edit, never hidden state.
+
+<Code code={qecGenerateReq} lang="json" title="qec_generate.request.json" />
+<Code code={qecGenerateRes} lang="json" title="qec_generate.responses.json" />
+
+Request fields:
+
+| Field | Type | Notes |
+|-------|------|-------|
+| `code` | string | One of `repetition_code:memory`, `surface_code:rotated_memory_x`, `surface_code:rotated_memory_z`, `surface_code:unrotated_memory_x`, `surface_code:unrotated_memory_z`, `color_code:memory_xyz` |
+| `distance` | int ≥ 2 | Code distance (stim itself rejects invalid combinations, e.g. even distances for surface codes) |
+| `rounds` | int ≥ 1 | Syndrome-extraction rounds |
+| `noise` | object, optional | Any of stim's generator noise arguments: `after_clifford_depolarization`, `before_round_data_depolarization`, `before_measure_flip_probability`, `after_reset_flip_probability` — each a probability in [0, 1] |
+
+Validation failures answer with an `error` of code `qec_generate_invalid`
+whose `message` is safe to show verbatim. A kernel without Stim installed
+answers `missing_dependency` (install it from the setup wizard's Research
+group).
+
+## The `qec_snapshot` sidecar
+
+When `parse` or `execute` produces a Stim circuit, one extra response
+follows the `snapshot` (and precedes the `result`): the QEC sidecar with
+detector/observable counts, qubit and detector coordinates, and the
+**Detector Error Model** reduced to a graph.
+
+```json
+{
+  "type": "qec_snapshot",
+  "data": {
+    "num_qubits": 5, "num_detectors": 4, "num_observables": 1,
+    "num_ticks": 6,
+    "coords": { "qubits": [[1.0, 0.0], null, "…"], "detectors": [[1.0, 0.0, 0.0], "…"] },
+    "dem": {
+      "nodes": 4,
+      "edge_count": 5, "boundary_edge_count": 2, "hyperedges_count": 0,
+      "truncated": false,
+      "edges": [{ "d1": 0, "d2": 1, "obs": [], "p": 0.01 }],
+      "boundary_edges": [{ "d": 2, "obs": [0], "p": 0.0066 }]
+    },
+    "sample_decode": null
+  }
+}
+```
+
+Reading it honestly:
+
+- The DEM is extracted with `decompose_errors=True`, so edges are the
+  matchable components decoders like PyMatching consume. Parallel error
+  mechanisms on the same detector pair are merged with the XOR rule
+  `p = p₁(1−p₂) + p₂(1−p₁)`.
+- Circuits whose errors don't decompose (non-matchable codes) fall back to
+  the undecomposed model with `hyperedges_count > 0` — render the pairwise
+  projection with a badge, don't pretend it's a matching graph.
+- Circuits with no valid DEM at all (e.g. a non-deterministic observable)
+  keep their stats but carry `dem: null` plus a `dem_error` string.
+- **Payload cap:** above 5,000 total edges the lists are emptied,
+  `truncated: true`, and the counts remain — never a silently missing
+  graph. Re-request with a higher cap to render anyway (below).
+- `coords` arrays are index-aligned (entry *i* = qubit/detector *i*),
+  `null` where stim has no coordinates. `sample_decode` is reserved for
+  the campaign protocol increment.
+
+## `qec_snapshot` as a request
+
+The same payload is available on demand — with `code` (stateless, any
+`.stim` text or stim-building Python), or without `code` to reuse the last
+Stim circuit this connection parsed or executed, optionally at a different
+DEM cap. That second form is the graph view's "render anyway" button.
+
+The full loop — generate, execute (watch the sidecar arrive between
+`snapshot` and `result`), then re-request the DEM at a deliberately tiny
+cap to see truncation:
+
+<Code code={qecStudioSession} lang="json" title="qec_studio.session.json" />

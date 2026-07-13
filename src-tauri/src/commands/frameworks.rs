@@ -126,6 +126,50 @@ const CATALOG: &[FrameworkInfo] = &[
         approximate_size_mb: 35,
         recommended: false,
     },
+    // QEC Studio research toolchain (PRD 10). All optional: the kernel
+    // degrades to missing_dependency prompts without them. Pins mirror
+    // kernel-tests.yml; each pip_name is a single whitespace-free
+    // requirement spec (same rule as the pytket pin above).
+    FrameworkInfo {
+        id: "stim",
+        label: "Stim",
+        description: "Stabilizer circuit simulator — the core of QEC Studio's circuits, sampling, and detector error models.",
+        pip_name: "stim>=1.14,<2",
+        import_name: "stim",
+        group: "research",
+        approximate_size_mb: 6,
+        recommended: false,
+    },
+    FrameworkInfo {
+        id: "sinter",
+        label: "Sinter",
+        description: "Multiprocess Monte Carlo campaign runner for QEC (pulls scipy + matplotlib).",
+        pip_name: "sinter>=1.14,<2",
+        import_name: "sinter",
+        group: "research",
+        approximate_size_mb: 90,
+        recommended: false,
+    },
+    FrameworkInfo {
+        id: "pymatching",
+        label: "PyMatching",
+        description: "Minimum-weight perfect matching decoder (sparse blossom).",
+        pip_name: "pymatching>=2.1,<3",
+        import_name: "pymatching",
+        group: "research",
+        approximate_size_mb: 3,
+        recommended: false,
+    },
+    FrameworkInfo {
+        id: "fusion-blossom",
+        label: "Fusion Blossom",
+        description: "Alternative MWPM decoder for decoder comparisons.",
+        pip_name: "fusion-blossom>=0.2.10,<0.3",
+        import_name: "fusion_blossom",
+        group: "research",
+        approximate_size_mb: 2,
+        recommended: false,
+    },
 ];
 
 #[derive(Debug, Serialize)]

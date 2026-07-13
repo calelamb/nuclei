@@ -9,7 +9,10 @@ export interface GateData {
   blochRotation?: { axis: string; angle: string };
   description: string;
   relatedGates: string[];
-  frameworkSyntax: Record<Framework, string>;
+  /** Stim optional — see gateRegistry.ts: gate explorer content targets the
+   * circuit-model frameworks; Stim mnemonics come with QEC Studio content. */
+  frameworkSyntax: Record<Exclude<Framework, 'stim'>, string> &
+    Partial<Record<'stim', string>>;
 }
 
 export const GATE_DATABASE: Record<string, GateData> = {

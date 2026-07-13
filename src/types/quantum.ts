@@ -1,14 +1,22 @@
-export type Framework = 'qiskit' | 'cirq' | 'cuda-q' | 'qsharp';
+export type Framework = 'qiskit' | 'cirq' | 'cuda-q' | 'qsharp' | 'stim';
 
 /** Source language the kernel should use when parsing/executing a buffer. */
-export type KernelLanguage = 'python' | 'qsharp';
+export type KernelLanguage = 'python' | 'qsharp' | 'stim';
 
 /**
  * Map a framework to the source language the kernel must interpret the
  * buffer as. Q# is its own language; everything else is Python.
+ *
+ * Stim is Python-family here deliberately: `framework: 'stim'` normally
+ * means Python code building `stim.Circuit` objects. Raw `.stim` text is
+ * language-driven, not framework-driven — the editor sets the language
+ * from the file extension (see useActiveTabSync/useFileOps), and only a
+ * `.stim` buffer sends `language: "stim"`.
  */
-export function kernelLanguageFor(framework: Framework): KernelLanguage {
-  return framework === 'qsharp' ? 'qsharp' : 'python';
+export function kernelLanguageFor(framework: Framework, filePath?: string | null): KernelLanguage {
+  if (framework === 'qsharp') return 'qsharp';
+  if (filePath && filePath.toLowerCase().endsWith('.stim')) return 'stim';
+  return 'python';
 }
 
 export interface Gate {
@@ -65,6 +73,8 @@ export interface KernelEnvironment {
   packages: Partial<Record<'qiskit' | 'qiskit_aer' | 'cirq' | 'cudaq' | 'qsharp', string>>;
 }
 
+import type { QecGeneratedCode, QecGenerateNoise, QecSnapshot } from './qec';
+
 export type KernelMessage =
   | { type: 'parse'; code: string; language?: KernelLanguage }
   | {
@@ -93,7 +103,13 @@ export type KernelMessage =
   | { type: 'hardware_status'; job_id: string }
   | { type: 'hardware_results'; job_id: string }
   | { type: 'hardware_cancel'; job_id: string }
-  | { type: 'hardware_dismiss'; job_id: string };
+  | { type: 'hardware_dismiss'; job_id: string }
+  // Protocol v1.2 (PRD 10 Phase A) — QEC Studio. `qec_generate` returns a
+  // built-in QEC circuit's text; `qec_snapshot` (re)computes the detector
+  // graph sidecar, statelessly with `code` or from the connection's last
+  // Stim circuit without it ("render anyway" uses a raised max_edges).
+  | { type: 'qec_generate'; code: QecGeneratedCode; distance: number; rounds: number; noise?: QecGenerateNoise }
+  | { type: 'qec_snapshot'; code?: string; language?: KernelLanguage; max_edges?: number };
 
 interface HardwareJobDTO {
   id: string;
@@ -131,4 +147,8 @@ export type KernelResponse =
   | { type: 'hardware_job_update'; job: HardwareJobDTO }
   | { type: 'hardware_result'; job_id: string; data: { measurements?: Record<string, number>; error?: string; status?: string } }
   | { type: 'hardware_job_cancelled'; job_id: string; success: boolean }
-  | { type: 'hardware_job_dismissed'; job_id: string; success: boolean };
+  | { type: 'hardware_job_dismissed'; job_id: string; success: boolean }
+  // Protocol v1.2 (PRD 10 Phase A). `qec_snapshot` also arrives unsolicited
+  // as a sidecar between `snapshot` and `result` for Stim circuits.
+  | { type: 'qec_snapshot'; data: QecSnapshot }
+  | { type: 'qec_generated'; code: QecGeneratedCode; distance: number; rounds: number; circuit_text: string };
