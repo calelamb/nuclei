@@ -279,7 +279,8 @@ export type LeftPanelId =
   | 'hardware'
   | 'community'
   | 'settings'
-  | 'experiments';
+  | 'experiments'
+  | 'estimator';
 
 export interface LeftPanelDef {
   id: LeftPanelId;
@@ -297,6 +298,9 @@ export const LEFT_PANEL_REGISTRY: readonly LeftPanelDef[] = [
   { id: 'experiments', modes: ['research'], order: 1 },
   { id: 'challenges', modes: ['learn'], order: 2 },
   { id: 'hardware', modes: ['research'], order: 2 },
+  // Resource Estimator (PRD 10 Phase F) — Research-only; sits between the
+  // hardware and launch views (shared order 3, ordered ahead of launch here).
+  { id: 'estimator', modes: ['research'], order: 3 },
   { id: 'launch', modes: ['learn', 'research'], order: 3 },
   { id: 'community', modes: ['learn'], order: 4 },
   { id: 'plugins', modes: ['research'], order: 4 },

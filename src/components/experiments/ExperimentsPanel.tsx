@@ -7,6 +7,7 @@ import { useExperimentUiStore } from '../../stores/experimentUiStore';
 import { createTauriExperimentFs } from '../../services/experimentFs';
 import { campaignTaskCount, expandGrid } from '../../types/experiment';
 import { NewExperimentForm } from './NewExperimentForm';
+import { NewQecExperimentMenu } from './NewQecExperimentMenu';
 import { RunButton } from './RunButton';
 
 /**
@@ -147,7 +148,8 @@ export function ExperimentsPanel() {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
-      <div style={{ padding: '8px 10px', display: 'flex', justifyContent: 'flex-end', borderBottom: `1px solid ${colors.border}` }}>
+      <div style={{ padding: '8px 10px', display: 'flex', gap: 6, justifyContent: 'flex-end', borderBottom: `1px solid ${colors.border}` }}>
+        <NewQecExperimentMenu projectRoot={projectRoot} />
         <button
           onClick={() => { setEditing(undefined); setFormOpen((v) => !v); }}
           style={{

@@ -40,3 +40,28 @@ export function setQecSnapshotSender(next: QecSnapshotSender | null): void {
 export function requestQecSnapshot(maxEdges: number): void {
   snapshotSender?.(maxEdges);
 }
+
+/** Request a resource estimate for the given source (PRD 10 Phase F). */
+export type QecEstimateLanguage = 'qsharp' | 'qasm3' | 'qiskit';
+
+export type QecEstimateSender = (
+  code: string,
+  language: QecEstimateLanguage,
+  options?: Record<string, unknown>,
+) => void;
+
+let estimateSender: QecEstimateSender | null = null;
+
+export function setQecEstimateSender(next: QecEstimateSender | null): void {
+  estimateSender = next;
+}
+
+export function requestQecEstimate(
+  code: string,
+  language: QecEstimateLanguage,
+  options?: Record<string, unknown>,
+): boolean {
+  if (!estimateSender) return false;
+  estimateSender(code, language, options);
+  return true;
+}

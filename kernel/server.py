@@ -581,6 +581,28 @@ async def handle_message(websocket):
                     "circuits": circuits,
                 }))
 
+        elif msg_type == "qec_estimate":
+            # Protocol v1.2 (PRD 10 Phase F): Azure Quantum Resource Estimator
+            # over Q# source or OpenQASM 3. Off-thread (estimation can take
+            # several seconds); the estimator itself runs on the pinned qdk
+            # interpreter thread inside estimate_resources.
+            from kernel.qec.estimate import estimate_resources
+
+            est_language = msg.get("language", "qsharp")
+            est_options = msg.get("options")
+            if not isinstance(est_options, dict):
+                est_options = None
+            payload, est_error = await asyncio.to_thread(
+                estimate_resources, code, est_language, est_options
+            )
+            if est_error is not None:
+                await websocket.send(json.dumps(error_payload(est_error, "qec_estimate")))
+            else:
+                await websocket.send(json.dumps({
+                    "type": "qec_estimate_result",
+                    "data": payload,
+                }))
+
         elif msg_type == "qec_campaign_start":
             # Protocol v1.2 (PRD 10 Phase B): launch a sinter Monte Carlo
             # campaign. Ack immediately; qec_campaign_progress (throttled)

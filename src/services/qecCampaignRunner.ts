@@ -99,6 +99,22 @@ export interface MaterializeContext {
 }
 
 /**
+ * Parse a code distance out of an entry-source circuit label following the
+ * `d=<n>` convention (also `d<n>`, case-insensitive). `generate:` sources tag
+ * distance structurally; entry sources emit free-form labels, so this lets an
+ * editable Python template opt into the threshold/Λ analysis (which groups and
+ * fits by distance) simply by naming its circuits `d=3`, `d=5`, … Returns null
+ * when the label carries no distance — the row still plots, it just doesn't
+ * join a Λ fit. Exported for testing.
+ */
+export function distanceFromLabel(label: string): number | null {
+  const m = /\bd\s*=?\s*(\d+)\b/i.exec(label);
+  if (!m) return null;
+  const d = Number.parseInt(m[1], 10);
+  return Number.isInteger(d) && d >= 2 ? d : null;
+}
+
+/**
  * Expand the campaign spec into concrete sinter tasks:
  * labels × noise points × decoders, with every circuit's provenance in
  * `json_metadata` (label, p, noise model, decoder — the workbench and
@@ -174,11 +190,21 @@ export async function materializeCampaignTasks(
       );
     }
     for (const [label, circuitText] of Object.entries(circuits)) {
+      // Distance is optional for entry sources; when the label follows the
+      // `d=<n>` convention we tag it so the threshold panel can fit Λ across
+      // distances exactly as it does for `generate:` sources.
+      const d = distanceFromLabel(label);
       for (const decoder of spec.decoders) {
         tasks.push({
           circuit_text: circuitText,
           decoder,
-          json_metadata: { label, p, noise_model: model.name, decoder },
+          json_metadata: {
+            label,
+            p,
+            noise_model: model.name,
+            decoder,
+            ...(d !== null ? { d } : {}),
+          },
         });
       }
     }
