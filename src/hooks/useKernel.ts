@@ -11,6 +11,8 @@ import { KERNEL_WS_URL } from '../config/kernel';
 import type { PyodideKernel } from '../platform/pyodideKernel';
 import { useDiracStore } from '../stores/diracStore';
 import { useHardwareStore } from '../stores/hardwareStore';
+import { useQecStore } from '../stores/qecStore';
+import { setQecDecodeSender, setQecSnapshotSender } from '../lib/qecDecodeSender';
 import { narrateParse, narrateResult } from '../services/narration';
 import { rewriteExecutionError } from '../services/errorRewrite';
 import { computeNextPollDelayMs, STALE_AFTER_MS } from '../lib/pollSchedule';
@@ -78,6 +80,11 @@ export function useKernel() {
       case 'snapshot':
         setSnapshot(msg.data);
         clearEditorErrors();
+        // Non-stim circuits have no QEC sidecar — drop any stale one so the
+        // detector graph / lattice don't flash old data on a framework swap.
+        if (!msg.data || msg.data.framework !== 'stim') {
+          useQecStore.getState().clear();
+        }
         if (msg.data) {
           // Every parse/execute send is tagged with an explicit `language`,
           // so the kernel can never legitimately return a snapshot whose
@@ -127,6 +134,22 @@ export function useKernel() {
         // per session, stamping experiment manifests) is Phase C. For now
         // this is a recognized no-op so the switch never falls through to
         // an "unhandled message type" surprise.
+        break;
+      case 'qec_snapshot':
+        // Protocol v1.2 (PRD 10) — the coords + DEM sidecar for Stim circuits,
+        // arriving after the mapped `snapshot`. Stash it (with the source that
+        // produced it, for decode-sample requests) for the QEC viz panels.
+        useQecStore.getState().setSnapshot(msg.data, useEditorStore.getState().code);
+        break;
+      case 'qec_decode_sample':
+        // Response to the detector graph's "Sample a shot" request.
+        useQecStore.getState().setDecodeSample({
+          num_detectors: msg.num_detectors,
+          syndrome: msg.syndrome,
+          matched_edges: msg.matched_edges,
+          predicted_observable_flips: msg.predicted_observable_flips,
+          actual_observable_flips: msg.actual_observable_flips,
+        });
         break;
       case 'output':
         useSimulationStore.getState().addOutput(msg.text, 'stdout');
@@ -592,6 +615,34 @@ export function useKernel() {
     },
     [sendHardware],
   );
+
+  // Detector graph "Sample a shot" (PRD 10 Phase D). Registered as a
+  // module-level sender so the panel can request a decode without the socket
+  // threaded through props; the response arrives via the qec_decode_sample
+  // message handler → qecStore. web/no-kernel builds no-op (sendHardware).
+  const qecDecodeSample = useCallback(
+    (circuitText: string, decoder: string, seed: number) => {
+      useQecStore.getState().setDecodePending(true);
+      sendHardware({ type: 'qec_decode_sample', circuit_text: circuitText, decoder, seed });
+    },
+    [sendHardware],
+  );
+  const qecSnapshotReRequest = useCallback(
+    (maxEdges: number) => {
+      // No `code` → the kernel reuses the connection's last stim circuit at
+      // the higher cap (the "render anyway" path from PRD 10 Phase A).
+      sendHardware({ type: 'qec_snapshot', max_edges: maxEdges });
+    },
+    [sendHardware],
+  );
+  useEffect(() => {
+    setQecDecodeSender(qecDecodeSample);
+    setQecSnapshotSender(qecSnapshotReRequest);
+    return () => {
+      setQecDecodeSender(null);
+      setQecSnapshotSender(null);
+    };
+  }, [qecDecodeSample, qecSnapshotReRequest]);
 
   // Polling backoff for active hardware jobs. A queued IBM job can sit in
   // the free-tier queue for an hour or more; fixed 5s polling would fire

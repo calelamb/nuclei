@@ -5,7 +5,7 @@ import { QuantumEditor } from '../editor/QuantumEditor';
 import { EditorTabs } from '../editor/EditorTabs';
 import { Breadcrumbs, ExperimentBreadcrumbs } from '../editor/Breadcrumbs';
 import { ProbabilityHistogram } from '../histogram/ProbabilityHistogram';
-import { BlochPanel } from '../bloch/BlochPanel';
+import { VizZone } from '../qec/VizZone';
 import { DiracSidePanel } from '../dirac/DiracSidePanel';
 import { ActivityBar } from './ActivityBar';
 import type { ActivityView } from './ActivityBar';
@@ -818,26 +818,25 @@ export function PanelLayout() {
                   onDoubleClick={() => setEditorPaneWidth(DEFAULT_EDITOR_PANE_WIDTH)}
                 />
 
-                {/* Right rail: interactive Bloch sphere (full height) +
-                    histogram chip. The gate-circuit diagram previously
-                    shared this rail but was clipping against the top of
-                    the panel and competing for vertical space with the
-                    Bloch viz — removed so the sphere gets the full rail
-                    and the rail stays uncluttered. */}
+                {/* Right rail (viz zone). Registry-driven (PRD 10 Phase D):
+                    the Bloch sphere for circuit-model frameworks, the QEC
+                    panels for stim — the swap is the registry's affinity cap,
+                    with no framework conditional here. ≤2 panels stack (the
+                    non-stim Bloch case is byte-identical to before); >2 tab. */}
                 <div style={{ width: `${100 - editorPaneWidth}%`, minWidth: 200, display: 'flex', flexDirection: 'column' }}>
-                  <PanelReveal when={visible.bloch} from="right">
-                    <div style={{ flex: 1, overflow: 'hidden', position: 'relative', minHeight: 240 }}>
-                      <BlochPanel />
-                    </div>
-                  </PanelReveal>
-                  <PanelReveal when={visible.histogramChip && !chipDismissed} from="bottom">
-                    <div style={{ padding: '6px 10px 10px', flexShrink: 0 }}>
-                      <HardwareAwareHistogramChip
-                        simProbabilities={result?.probabilities ?? null}
-                        onDismiss={dismissChip}
-                      />
-                    </div>
-                  </PanelReveal>
+                  <VizZone
+                    visible={visible}
+                    chip={
+                      <PanelReveal when={visible.histogramChip && !chipDismissed} from="bottom">
+                        <div style={{ padding: '6px 10px 10px', flexShrink: 0 }}>
+                          <HardwareAwareHistogramChip
+                            simProbabilities={result?.probabilities ?? null}
+                            onDismiss={dismissChip}
+                          />
+                        </div>
+                      </PanelReveal>
+                    }
+                  />
                 </div>
               </div>
 
