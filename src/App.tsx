@@ -27,6 +27,15 @@ import { useResearchTourStore } from './stores/researchTourStore';
 import { useModeIdentity } from './hooks/useModeIdentity';
 import { useDiracPanelStore } from './stores/diracPanelStore';
 import { useBottomPanelStore } from './stores/bottomPanelStore';
+import { useNavigationStore } from './stores/navigationStore';
+import { useLayoutStore } from './stores/layoutStore';
+import { useSettingsStore } from './stores/settingsStore';
+import { useExperimentStore } from './services/experimentStore';
+import { useExperimentUiStore } from './stores/experimentUiStore';
+import { useExperimentRun } from './hooks/useExperimentRun';
+import { openRunFolder } from './lib/openRunFolder';
+import { leftPanelsForMode, bottomLeftPanelsForMode } from './layout/panelRegistry';
+import type { LeftPanelId } from './layout/panelRegistry';
 import type { PlatformBridge } from './platform/bridge';
 import type { Framework, KernelLanguage } from './types/quantum';
 
@@ -83,6 +92,14 @@ function AppInner() {
   const cycleMode = useUIModeStore((s) => s.cycleMode);
   const toggleDirac = useDiracPanelStore((s) => s.toggle);
   const focusDirac = useDiracPanelStore((s) => s.focusInput);
+  // Workspace navigation + command-palette context (PRD 11 Phase D).
+  const navigate = useNavigationStore((s) => s.setActiveView);
+  const togglePanel = useLayoutStore((s) => s.togglePanel);
+  const workspaceMode = useWorkspaceStore((s) => s.mode);
+  const experimentalFeatures = useSettingsStore((s) => s.general.experimentalFeatures);
+  const experiments = useExperimentStore((s) => s.experiments);
+  const selectedRunDir = useExperimentUiStore((s) => s.selectedRunDir);
+  const { run: runExperimentInternal } = useExperimentRun();
   const frameworksModalOpen = useFrameworksStore((s) => s.modalOpen);
   const frameworksFirstRun = useFrameworksStore((s) => s.modalFirstRun);
   const openFrameworksModal = useFrameworksStore((s) => s.openModal);
@@ -284,6 +301,22 @@ function AppInner() {
     // sweep/campaign prompts a confirm before the switch; jobs never cancel.
     switchWorkspaceMode: () => useModeSwitchStore.getState().requestToggle(),
     startResearchTour: () => useResearchTourStore.getState().start(),
+    navigate,
+    togglePanel,
+    runExperiment: (fileName: string) => {
+      const experiment = experiments.find((e) => e.fileName === fileName);
+      if (!experiment || !projectRoot) return;
+      // Land on the experiment in the Research rail, then start it.
+      useExperimentUiStore.getState().selectExperiment(fileName);
+      navigate('experiments');
+      void runExperimentInternal(experiment, projectRoot);
+    },
+    openRunFolder: () => { if (selectedRunDir) void openRunFolder(selectedRunDir); },
+  }, {
+    mode: workspaceMode,
+    developerViews: experimentalFeatures,
+    experiments: experiments.map((e) => ({ fileName: e.fileName, name: e.spec.name })),
+    hasSelectedRun: selectedRunDir !== null,
   });
 
   // Global keyboard shortcuts
@@ -333,6 +366,23 @@ function AppInner() {
         // ⌘⇧R: open the Launch modal (submit to hardware). Separate from the
         // plain ⌘↵ Run which stays on the classical simulator.
         useHardwareStore.getState().openLaunch();
+      } else if ((e.key === 'm' || e.key === 'M') && e.shiftKey) {
+        e.preventDefault();
+        // ⌘⇧M: switch workspace mode (Learn/Research), through the same
+        // in-flight-work guard the palette uses (PRD 11 Phase D).
+        useModeSwitchStore.getState().requestToggle();
+      } else if (!e.shiftKey && /^[1-9]$/.test(e.key)) {
+        e.preventDefault();
+        // ⌘1..9: jump to the Nth top-rail view for the current mode. Read the
+        // mode + developer flag fresh so the mapping tracks the live rail.
+        const mode = useWorkspaceStore.getState().mode;
+        const dev = useSettingsStore.getState().general.experimentalFeatures;
+        const bottom = new Set(bottomLeftPanelsForMode(mode));
+        const topViews = leftPanelsForMode(mode, { developerViews: dev }).filter(
+          (v: LeftPanelId) => !bottom.has(v),
+        );
+        const view = topViews[Number(e.key) - 1];
+        if (view) useNavigationStore.getState().setActiveView(view);
       } else if (e.key === '`') {
         e.preventDefault();
         // ⌘`: toggle the bottom panel; opening it always focuses the terminal

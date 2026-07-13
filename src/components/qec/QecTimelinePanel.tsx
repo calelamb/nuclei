@@ -33,7 +33,7 @@ export function QecTimelinePanel() {
     return (
       <div style={{ height: '100%', display: 'flex', flexDirection: 'column', background: colors.bg }}>
         {header}
-        <QecEmptyState title="No circuit yet" body="Parse a Stim circuit to see its moment-by-moment timeline." />
+        <QecEmptyState title="No circuit yet" body="Parse a Stim circuit to see its moment-by-moment timeline." docsHref={DOCS} />
       </div>
     );
   }

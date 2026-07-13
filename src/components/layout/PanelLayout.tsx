@@ -506,7 +506,11 @@ function ResizeHandle({ direction, isDragging, onMouseDown, onDoubleClick }: {
 
 /* ── Main Layout ── */
 export function PanelLayout() {
-  const [activeView, setActiveView] = useState<ActivityView | null>('files');
+  // Rail navigation now lives in the navigation store (PRD 11 Phase D) so the
+  // palette, ⌘1..9 shortcuts, and the Dirac gear can drive it.
+  const activeView = useNavigationStore((s) => s.activeView);
+  const setActiveView = useNavigationStore((s) => s.setActiveView);
+  const toggleView = useNavigationStore((s) => s.toggleView);
   const [sidebarWidth, setSidebarWidth] = useState(DEFAULT_SIDEBAR_WIDTH);
   const [bottomHeight, setBottomHeight] = useState(DEFAULT_BOTTOM_HEIGHT);
   const [editorPaneWidth, setEditorPaneWidth] = useState(DEFAULT_EDITOR_PANE_WIDTH);
@@ -616,7 +620,7 @@ export function PanelLayout() {
     prevWorkspaceModeRef.current = workspaceMode;
     if (isLearnMode) exitLearnMode();
     if (isChallengeMode) exitChallengeMode();
-    setActiveView((prev) => (prev && visibleActivityViews.includes(prev) ? prev : 'files'));
+    setActiveView(activeView && visibleActivityViews.includes(activeView) ? activeView : 'files');
     // First entry into Research shows the orientation tour once (PRD 11 B).
     if (workspaceMode === 'research') maybeAutoStartTour();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -671,15 +675,9 @@ export function PanelLayout() {
     }, 500);
   }, [panelOverrides, overridesKey, platform]);
 
-  // Listen for cross-component navigation to Settings
-  const settingsSignal = useNavigationStore((s) => s.settingsSignal);
-  useEffect(() => {
-    if (settingsSignal > 0) {
-      if (isLearnMode) exitLearnMode();
-      if (isChallengeMode) exitChallengeMode();
-      setActiveView('settings');
-    }
-  }, [settingsSignal, isLearnMode, isChallengeMode, exitLearnMode, exitChallengeMode]);
+  // Cross-component navigation to Settings (the Dirac gear) now flows through
+  // navigationStore.openSettings, which sets `activeView` and leaves any
+  // full-view surface itself — no signal/effect needed here (PRD 11 Phase D).
 
   const persistTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => {
@@ -729,10 +727,9 @@ export function PanelLayout() {
       }
       return;
     }
-    // If in learn mode or challenge mode and clicking another view, exit first
-    if (isLearnMode) exitLearnMode();
-    if (isChallengeMode) exitChallengeMode();
-    setActiveView((prev) => prev === view ? null : view);
+    // Any other view: toggleView both selects (collapsing on re-click) and
+    // leaves Learn/Challenge full-view surfaces (handled in the store).
+    toggleView(view);
   };
 
   const effectiveBottomHeight = bottomCollapsed ? 28 : bottomHeight;

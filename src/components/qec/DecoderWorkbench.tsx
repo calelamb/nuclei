@@ -58,7 +58,7 @@ export function DecoderWorkbench() {
     return (
       <div style={{ height: '100%', display: 'flex', flexDirection: 'column', background: colors.bg }}>
         {header}
-        <QecEmptyState title="No campaign results yet" body="Run a QEC campaign to compare decoders side by side." />
+        <QecEmptyState title="No campaign results yet" body="Run a QEC campaign to compare decoders side by side." docsHref={DOCS} />
       </div>
     );
   }
