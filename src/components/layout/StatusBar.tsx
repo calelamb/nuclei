@@ -10,6 +10,7 @@ import { useWorkspaceStore } from '../../stores/workspaceStore';
 import { useExperimentRunStore } from '../../stores/experimentRunStore';
 import { useExerciseStore } from '../../stores/exerciseStore';
 import { useLayoutStore, type LayoutPreset } from '../../stores/layoutStore';
+import { ModeChip } from './ModeChip';
 
 /**
  * PRD 11 Phase A — the status bar, extracted VERBATIM from `PanelLayout.tsx`.
@@ -73,16 +74,11 @@ export function StatusBar() {
   const themeMode = useThemeStore((s) => s.mode);
   const themeToggle = useThemeStore((s) => s.toggle);
   const workspaceMode = useWorkspaceStore((s) => s.mode);
-  const setWorkspaceMode = useWorkspaceStore((s) => s.setMode);
   const activeRun = useExperimentRunStore((s) => s.active);
   const platform = usePlatform();
   const exercise = useExerciseStore((s) => s.activeExercise);
   const endExercise = useExerciseStore((s) => s.endExercise);
   const modeColors = { beginner: colors.success, intermediate: colors.warning, advanced: colors.error };
-
-  const handleWorkspaceModeToggle = useCallback(() => {
-    setWorkspaceMode(workspaceMode === 'learn' ? 'research' : 'learn');
-  }, [setWorkspaceMode, workspaceMode]);
 
   const statusText = isRunning ? 'Running...' : result ? `Done (${result.execution_time_ms}ms)` : 'Ready';
 
@@ -98,6 +94,9 @@ export function StatusBar() {
       flexShrink: 0, zIndex: 10,
       borderTop: `1px solid ${colors.border}`,
     }} role="toolbar" aria-label="Status bar">
+      {/* Mode chip — far-left mode identity + switcher (PRD 11 Phase B). */}
+      <ModeChip />
+
       {/* Left side */}
       <span style={{ color: colors.textDim, fontSize: 10 }}>
         Qubits: {snapshot ? snapshot.qubit_count : '—'}
@@ -157,20 +156,8 @@ export function StatusBar() {
         ...(isRunning ? { animation: 'nuclei-heartbeat 1.5s ease infinite' } : {}) }}>
         {statusText}
       </span>
-      <button
-        onClick={handleWorkspaceModeToggle}
-        title="Switch workspace mode"
-        aria-label="Switch workspace mode"
-        style={{
-          padding: '0 6px', height: 16, background: 'transparent', border: `1px solid ${colors.border}`, borderRadius: 3,
-          color: workspaceMode === 'research' ? colors.dirac : colors.textDim, cursor: 'pointer', fontSize: 10,
-          fontFamily: "'Geist Sans', sans-serif", fontWeight: 500,
-        }}
-        onMouseEnter={(e) => { e.currentTarget.style.background = colors.bgElevated; }}
-        onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
-      >
-        {workspaceMode === 'research' ? 'Research' : 'Learn'}
-      </button>
+      {/* The workspace-mode toggle moved to the far-left ModeChip (Phase B);
+          the redundant right-side text toggle was removed. */}
       <button onClick={handleCycleMode} title="Cycle UI mode (⌘+Shift+L)" style={{
         padding: '0 6px', height: 16, background: 'transparent', border: 'none', borderRadius: 3,
         color: modeColors[uiMode], cursor: 'pointer', fontSize: 10, fontFamily: "'Geist Sans', sans-serif",

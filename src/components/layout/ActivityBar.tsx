@@ -58,6 +58,7 @@ function ActivityIcon({ item, isActive, onClick }: {
       title={item.label}
       aria-label={item.label}
       aria-pressed={isActive}
+      data-tour-target={`activity-${item.id}`}
       style={{
         width: 48, height: 44,
         display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -94,6 +95,11 @@ export function ActivityBar({ active, onSelect, visibleViews, workspaceMode }: A
         display: 'flex', flexDirection: 'column',
         flexShrink: 0,
         borderRight: `1px solid ${colors.border}`,
+        // Mode signature (PRD 11 Phase B): a 2px accent stripe driven by the
+        // --mode-accent variable useModeIdentity sets from the workspace mode
+        // (teal in Learn, violet in Research). Falls back to transparent so a
+        // context without the variable is unchanged.
+        borderTop: '2px solid var(--mode-accent, transparent)',
       }}
       role="toolbar"
       aria-label="Activity bar"

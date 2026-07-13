@@ -192,6 +192,7 @@ export function buildCommands(actions: {
   cycleMode: () => void;
   toggleShortcuts: () => void;
   switchWorkspaceMode: () => void;
+  startResearchTour: () => void;
 }): Command[] {
   return [
     // Run
@@ -204,6 +205,7 @@ export function buildCommands(actions: {
     { id: 'theme', label: 'Toggle Theme', category: 'View', shortcut: '⌘+Shift+T', action: actions.toggleTheme },
     { id: 'mode', label: 'Cycle UI Mode (Beginner/Intermediate/Advanced)', category: 'View', shortcut: '⌘+Shift+L', action: actions.cycleMode },
     { id: 'workspace-mode', label: 'Switch workspace mode (Learn/Research)', category: 'View', action: actions.switchWorkspaceMode },
+    { id: 'research-tour', label: 'Research mode tour', category: 'View', action: actions.startResearchTour },
     // Dirac
     { id: 'dirac', label: 'Toggle Dirac Panel', category: 'Dirac', shortcut: '⌘+D', action: actions.toggleDirac },
     { id: 'dirac-focus', label: 'Focus Dirac Input', category: 'Dirac', shortcut: '⌘+L', action: actions.toggleDirac },
