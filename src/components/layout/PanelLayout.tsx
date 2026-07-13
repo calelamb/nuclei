@@ -14,24 +14,25 @@ import { PanelReveal } from './PanelReveal';
 import { HistogramChip } from '../histogram/HistogramChip';
 import { LaunchStrip } from '../hardware/LaunchStrip';
 import { useHardwareStore } from '../../stores/hardwareStore';
-import { useLayoutStore, computeVisiblePanels, type LayoutPreset } from '../../stores/layoutStore';
+import { useLayoutStore, type LayoutPreset } from '../../stores/layoutStore';
+import { resolveVisiblePanels } from '../../layout/panelRegistry';
+import { StatusBar } from './StatusBar';
 import { useDiracStore } from '../../stores/diracStore';
 import { DEFAULT_EDITOR_PANE_WIDTH, computeEditorPaneWidth } from './layoutMath';
 import { useEditorStore } from '../../stores/editorStore';
 import { useCircuitStore } from '../../stores/circuitStore';
 import { useSimulationStore } from '../../stores/simulationStore';
 import { useThemeStore } from '../../stores/themeStore';
-import { useExerciseStore } from '../../stores/exerciseStore';
 import { useUIModeStore } from '../../stores/uiModeStore';
 import { useLearnStore } from '../../stores/learnStore';
 import { useChallengeModeStore } from '../../stores/challengeModeStore';
 import { useNavigationStore } from '../../stores/navigationStore';
 import { useSettingsStore } from '../../stores/settingsStore';
 import { useWorkspaceStore } from '../../stores/workspaceStore';
+import { useProjectStore } from '../../stores/projectStore';
 import { useExperimentUiStore } from '../../stores/experimentUiStore';
-import { useExperimentRunStore } from '../../stores/experimentRunStore';
 import { activityViewsForMode } from './panelRegistry';
-import { ChevronDown, ChevronUp, Sun, Moon, X, Circle, Trash2, Copy, Clock } from 'lucide-react';
+import { ChevronDown, ChevronUp, Trash2, Copy, Clock } from 'lucide-react';
 import { useBottomPanelStore } from '../../stores/bottomPanelStore';
 import type { TerminalLine } from '../../stores/simulationStore';
 
@@ -495,176 +496,6 @@ function ResizeHandle({ direction, isDragging, onMouseDown, onDoubleClick }: {
   );
 }
 
-/* ── Layout Preset Switcher ── */
-function LayoutPresetSwitcher() {
-  const preset = useLayoutStore((s) => s.preset);
-  const setPreset = useLayoutStore((s) => s.setPreset);
-  const colors = useThemeStore((s) => s.colors);
-  const platform = usePlatform();
-
-  const options: LayoutPreset[] = ['clean', 'balanced', 'full'];
-  const onChange = async (next: LayoutPreset) => {
-    setPreset(next);
-    try { await platform.setStoredValue('layout_preset', next); } catch { /* non-critical persistence */ }
-  };
-
-  return (
-    <select
-      value={preset}
-      onChange={(e) => onChange(e.target.value as LayoutPreset)}
-      aria-label="Layout preset"
-      title="Layout preset"
-      style={{
-        background: 'transparent',
-        color: colors.textDim,
-        border: `1px solid ${colors.border}`,
-        borderRadius: 6,
-        padding: '1px 6px',
-        fontSize: 10,
-        fontFamily: "'Geist Sans', sans-serif",
-        cursor: 'pointer',
-      }}
-    >
-      {options.map((o) => (
-        <option key={o} value={o}>{o[0].toUpperCase() + o.slice(1)}</option>
-      ))}
-    </select>
-  );
-}
-
-/* ── Status Bar ── */
-function StatusBar() {
-  const snapshot = useCircuitStore((s) => s.snapshot);
-  const isRunning = useSimulationStore((s) => s.isRunning);
-  const result = useSimulationStore((s) => s.result);
-  const connected = useEditorStore((s) => s.kernelConnected);
-  const kernelStatus = useEditorStore((s) => s.kernelStatus);
-  const kernelError = useEditorStore((s) => s.kernelError);
-  const colors = useThemeStore((s) => s.colors);
-  const uiMode = useUIModeStore((s) => s.mode);
-  const cycleMode = useUIModeStore((s) => s.cycleMode);
-  const themeMode = useThemeStore((s) => s.mode);
-  const themeToggle = useThemeStore((s) => s.toggle);
-  const workspaceMode = useWorkspaceStore((s) => s.mode);
-  const setWorkspaceMode = useWorkspaceStore((s) => s.setMode);
-  const activeRun = useExperimentRunStore((s) => s.active);
-  const platform = usePlatform();
-  const exercise = useExerciseStore((s) => s.activeExercise);
-  const endExercise = useExerciseStore((s) => s.endExercise);
-  const modeColors = { beginner: colors.success, intermediate: colors.warning, advanced: colors.error };
-
-  const handleWorkspaceModeToggle = useCallback(() => {
-    setWorkspaceMode(workspaceMode === 'learn' ? 'research' : 'learn');
-  }, [setWorkspaceMode, workspaceMode]);
-
-  const statusText = isRunning ? 'Running...' : result ? `Done (${result.execution_time_ms}ms)` : 'Ready';
-
-  const handleCycleMode = useCallback(async () => { cycleMode(); try { await platform.setStoredValue('ui_mode', useUIModeStore.getState().mode); } catch { /* non-critical persistence */ } }, [cycleMode, platform]);
-  const handleThemeToggle = useCallback(async () => { themeToggle(); try { await platform.setStoredValue('theme', themeMode === 'dark' ? 'light' : 'dark'); } catch { /* non-critical persistence */ } }, [themeToggle, themeMode, platform]);
-
-  return (
-    <div style={{
-      height: 22, backgroundColor: colors.bgPanel,
-      display: 'flex', alignItems: 'center',
-      padding: '0 8px', gap: 8,
-      fontSize: 11, fontFamily: "'Geist Sans', sans-serif",
-      flexShrink: 0, zIndex: 10,
-      borderTop: `1px solid ${colors.border}`,
-    }} role="toolbar" aria-label="Status bar">
-      {/* Left side */}
-      <span style={{ color: colors.textDim, fontSize: 10 }}>
-        Qubits: {snapshot ? snapshot.qubit_count : '—'}
-      </span>
-      <span style={{ color: colors.textDim, fontSize: 10 }}>
-        Depth: {snapshot ? snapshot.depth : '—'}
-      </span>
-      <LayoutPresetSwitcher />
-
-      {exercise && (
-        <span style={{ display: 'flex', alignItems: 'center', gap: 3, color: colors.dirac, fontSize: 10 }}>
-          {exercise.title}
-          <button onClick={endExercise} style={{ background: 'none', border: 'none', color: colors.textDim, cursor: 'pointer', padding: 0, display: 'flex' }}
-            onMouseEnter={(e) => { e.currentTarget.style.color = colors.error; }}
-            onMouseLeave={(e) => { e.currentTarget.style.color = colors.textDim; }}>
-            <X size={9} />
-          </button>
-        </span>
-      )}
-
-      {/* PRD 09 Phase D — compact sweep indicator, Research mode only. */}
-      {workspaceMode === 'research' && activeRun && (
-        <span
-          title={`${activeRun.experimentName}: ${activeRun.progress.completed}/${activeRun.progress.total} runs`}
-          style={{ display: 'flex', alignItems: 'center', gap: 4, color: colors.accent, fontSize: 10 }}
-        >
-          <Circle size={5} fill={colors.accent} stroke="none" style={{ animation: 'nuclei-heartbeat 1.5s ease infinite' }} />
-          {activeRun.experimentName}: {activeRun.progress.completed}/{activeRun.progress.total}
-          {activeRun.progress.failures > 0 ? ` (${activeRun.progress.failures} failed)` : ''}
-        </span>
-      )}
-
-      <div style={{ flex: 1 }} />
-
-      {/* Right side */}
-      <span
-        style={{ display: 'flex', alignItems: 'center', gap: 3, color: colors.textDim, fontSize: 10 }}
-        title={kernelError ?? (
-          kernelStatus === 'connecting' ? 'Kernel connecting...'
-          : kernelStatus === 'failed' ? 'Kernel not responding'
-          : connected ? 'Kernel connected' : 'Kernel disconnected'
-        )}
-      >
-        <Circle
-          size={5}
-          fill={
-            kernelStatus === 'failed' ? colors.error
-            : connected ? colors.success
-            : kernelStatus === 'connecting' ? colors.warning
-            : colors.error
-          }
-          stroke="none"
-        />
-        Kernel{kernelStatus === 'failed' ? ' — failed' : kernelStatus === 'connecting' && !connected ? '...' : ''}
-      </span>
-      <span style={{ color: isRunning ? colors.accent : colors.textDim, fontSize: 10,
-        ...(isRunning ? { animation: 'nuclei-heartbeat 1.5s ease infinite' } : {}) }}>
-        {statusText}
-      </span>
-      <button
-        onClick={handleWorkspaceModeToggle}
-        title="Switch workspace mode"
-        aria-label="Switch workspace mode"
-        style={{
-          padding: '0 6px', height: 16, background: 'transparent', border: `1px solid ${colors.border}`, borderRadius: 3,
-          color: workspaceMode === 'research' ? colors.dirac : colors.textDim, cursor: 'pointer', fontSize: 10,
-          fontFamily: "'Geist Sans', sans-serif", fontWeight: 500,
-        }}
-        onMouseEnter={(e) => { e.currentTarget.style.background = colors.bgElevated; }}
-        onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
-      >
-        {workspaceMode === 'research' ? 'Research' : 'Learn'}
-      </button>
-      <button onClick={handleCycleMode} title="Cycle UI mode (⌘+Shift+L)" style={{
-        padding: '0 6px', height: 16, background: 'transparent', border: 'none', borderRadius: 3,
-        color: modeColors[uiMode], cursor: 'pointer', fontSize: 10, fontFamily: "'Geist Sans', sans-serif",
-        fontWeight: 500, textTransform: 'capitalize',
-      }}
-        onMouseEnter={(e) => { e.currentTarget.style.background = colors.bgElevated; }}
-        onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}>
-        {uiMode}
-      </button>
-      <button onClick={handleThemeToggle} title={`${themeMode === 'dark' ? 'Light' : 'Dark'} theme`} style={{
-        background: 'transparent', border: 'none', color: colors.textDim, cursor: 'pointer',
-        padding: 0, display: 'flex', alignItems: 'center',
-      }}
-        onMouseEnter={(e) => { e.currentTarget.style.color = colors.text; }}
-        onMouseLeave={(e) => { e.currentTarget.style.color = colors.textDim; }}>
-        {themeMode === 'dark' ? <Sun size={11} /> : <Moon size={11} />}
-      </button>
-    </div>
-  );
-}
-
 /* ── Main Layout ── */
 export function PanelLayout() {
   const [activeView, setActiveView] = useState<ActivityView | null>('files');
@@ -699,14 +530,25 @@ export function PanelLayout() {
   const chipDismissed = useLayoutStore((s) => s.histogramChipDismissed);
   const dismissChip = useLayoutStore((s) => s.dismissHistogramChip);
   const resetRunArtifacts = useLayoutStore((s) => s.resetRunArtifacts);
+  const panelOverrides = useLayoutStore((s) => s.overrides);
+  const hydrateOverrides = useLayoutStore((s) => s.hydrateOverrides);
+  const projectRoot = useProjectStore((s) => s.projectRoot);
 
-  const visible = computeVisiblePanels({
-    preset,
-    snapshot,
-    result,
-    hasTerminalOutput: terminalOutput.length > 0,
-    errorActive: false,
-  });
+  // Registry-driven visibility (PRD 11 Phase A). With no user overrides —
+  // the default — this returns exactly what computeVisiblePanels returned;
+  // the parity is locked by src/layout/panelRegistry.test.ts.
+  const visible = resolveVisiblePanels(
+    {
+      preset,
+      snapshot,
+      result,
+      hasTerminalOutput: terminalOutput.length > 0,
+      errorActive: false,
+      mode: workspaceMode,
+      framework: snapshot?.framework ?? null,
+    },
+    panelOverrides,
+  );
 
   const showBottomPanel = visible.terminal || visible.histogramFull;
   const showSidebar = !isLearnMode && !isChallengeMode && activeView !== null;
@@ -777,6 +619,39 @@ export function PanelLayout() {
       } catch { /* non-critical layout persistence */ }
     })();
   }, [platform, setPreset]);
+
+  // Per-project panel visibility overrides (PRD 11 Phase A). Loaded when the
+  // open project changes; persisted (debounced) when the user toggles a panel
+  // via the PanelHeader (arriving in Phase C). Keyed by project root so each
+  // project keeps its own arrangement; a null root (no project open) uses a
+  // shared bucket. No override exists by default, so this is inert until a
+  // toggle UI ships — the resolved panel set stays identical to v0.6.x.
+  const overridesKey = `layout_panelOverrides:${projectRoot ?? '__global__'}`;
+  const loadedOverridesForRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (loadedOverridesForRef.current === overridesKey) return;
+    loadedOverridesForRef.current = overridesKey;
+    (async () => {
+      try {
+        const stored = await platform.getStoredValue<Record<string, boolean>>(overridesKey);
+        hydrateOverrides(stored && typeof stored === 'object' ? stored : {});
+      } catch {
+        hydrateOverrides({});
+      }
+    })();
+  }, [overridesKey, platform, hydrateOverrides]);
+
+  const overridesPersistTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => {
+    // Skip the persist that would immediately follow a project-load hydrate.
+    if (loadedOverridesForRef.current !== overridesKey) return;
+    if (overridesPersistTimerRef.current) clearTimeout(overridesPersistTimerRef.current);
+    overridesPersistTimerRef.current = setTimeout(async () => {
+      try {
+        await platform.setStoredValue(overridesKey, panelOverrides);
+      } catch { /* non-critical layout persistence */ }
+    }, 500);
+  }, [panelOverrides, overridesKey, platform]);
 
   // Listen for cross-component navigation to Settings
   const settingsSignal = useNavigationStore((s) => s.settingsSignal);

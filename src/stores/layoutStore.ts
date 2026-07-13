@@ -1,77 +1,57 @@
 import { create } from 'zustand';
-import type { CircuitSnapshot, SimulationResult } from '../types/quantum';
+import type { PanelId } from '../layout/panelRegistry';
 
 export type LayoutPreset = 'clean' | 'balanced' | 'full';
 
-export interface VisiblePanels {
-  circuit: boolean;
-  bloch: boolean;
-  histogramChip: boolean;
-  histogramFull: boolean;
-  terminal: boolean;
-}
-
-export interface VisibilityInputs {
-  preset: LayoutPreset;
-  snapshot: CircuitSnapshot | null;
-  result: SimulationResult | null;
-  hasTerminalOutput: boolean;
-  errorActive: boolean;
-}
-
 /**
- * Given the layout preset plus current circuit/sim state, return the set
- * of panels that should be visible. Pure and side-effect free so the
- * reveal rules can be exhaustively tested without React.
+ * Reveal rules relocated (PRD 11 Phase A): the pure `computeVisiblePanels`
+ * that used to live here now lives in `src/layout/panelRegistry.ts` as
+ * per-panel `defaultVisible` functions + `resolveVisiblePanels`. This store
+ * keeps only stateful layout concerns: the preset, the dismissable histogram
+ * chip, and per-project panel visibility overrides.
  */
-export function computeVisiblePanels(input: VisibilityInputs): VisiblePanels {
-  const { preset, snapshot, result, hasTerminalOutput, errorActive } = input;
-
-  if (preset === 'full') {
-    return {
-      circuit: true,
-      bloch: true,
-      histogramChip: false,
-      histogramFull: true,
-      terminal: true,
-    };
-  }
-
-  if (preset === 'balanced') {
-    return {
-      circuit: true,
-      bloch: true,
-      histogramChip: Boolean(result),
-      histogramFull: false,
-      terminal: hasTerminalOutput || errorActive,
-    };
-  }
-
-  // 'clean' — every panel is driven by evidence of the student's code.
-  const hasGates = Boolean(snapshot && snapshot.gates.length > 0);
-  const hasResult = Boolean(result);
-
-  return {
-    circuit: hasGates,
-    bloch: hasResult,
-    histogramChip: hasResult,
-    histogramFull: false,
-    terminal: hasTerminalOutput || errorActive,
-  };
-}
 
 interface LayoutStoreState {
   preset: LayoutPreset;
   histogramChipDismissed: boolean;
+  /**
+   * Explicit per-project panel visibility overrides (PRD 11 Phase A). An
+   * entry here wins over the reveal rule (subject to framework affinity —
+   * see `resolveVisiblePanels`). Empty by default, so with no user toggles
+   * the resolved set is identical to the old reveal-rule output. Persisted
+   * per project via `hydrateOverrides` / the caller's persistence layer.
+   */
+  overrides: Partial<Record<PanelId, boolean>>;
   setPreset(p: LayoutPreset): void;
   dismissHistogramChip(): void;
   resetRunArtifacts(): void;
+  /** Force a panel visible/hidden (the PanelHeader "Hide panel" action, Phase C). */
+  setPanelOverride(id: PanelId, visible: boolean): void;
+  /** Drop a single override, returning the panel to its reveal rule. */
+  clearPanelOverride(id: PanelId): void;
+  /** Drop every override ("Reset layout"). */
+  resetPanelOverrides(): void;
+  /** Replace the override map wholesale — used when loading a project's
+   * persisted layout. */
+  hydrateOverrides(overrides: Partial<Record<PanelId, boolean>>): void;
 }
 
 export const useLayoutStore = create<LayoutStoreState>((set) => ({
   preset: 'clean',
   histogramChipDismissed: false,
+  overrides: {},
   setPreset: (preset) => set({ preset }),
   dismissHistogramChip: () => set({ histogramChipDismissed: true }),
   resetRunArtifacts: () => set({ histogramChipDismissed: false }),
+  setPanelOverride: (id, visible) =>
+    set((state) => ({ overrides: { ...state.overrides, [id]: visible } })),
+  clearPanelOverride: (id) =>
+    set((state) => {
+      if (!(id in state.overrides)) return state;
+      const next = { ...state.overrides };
+      delete next[id];
+      return { overrides: next };
+    }),
+  resetPanelOverrides: () => set({ overrides: {} }),
+  hydrateOverrides: (overrides) => set({ overrides: { ...overrides } }),
 }));
