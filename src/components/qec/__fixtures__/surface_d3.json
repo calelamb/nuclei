@@ -1,0 +1,1591 @@
+{
+  "snapshot": {
+    "framework": "stim",
+    "qubit_count": 26,
+    "classical_bit_count": 17,
+    "depth": 8,
+    "gates": [
+      {
+        "type": "Reset",
+        "targets": [
+          1
+        ],
+        "controls": [],
+        "params": [],
+        "layer": 0
+      },
+      {
+        "type": "Reset",
+        "targets": [
+          3
+        ],
+        "controls": [],
+        "params": [],
+        "layer": 0
+      },
+      {
+        "type": "Reset",
+        "targets": [
+          5
+        ],
+        "controls": [],
+        "params": [],
+        "layer": 0
+      },
+      {
+        "type": "Reset",
+        "targets": [
+          8
+        ],
+        "controls": [],
+        "params": [],
+        "layer": 0
+      },
+      {
+        "type": "Reset",
+        "targets": [
+          10
+        ],
+        "controls": [],
+        "params": [],
+        "layer": 0
+      },
+      {
+        "type": "Reset",
+        "targets": [
+          12
+        ],
+        "controls": [],
+        "params": [],
+        "layer": 0
+      },
+      {
+        "type": "Reset",
+        "targets": [
+          15
+        ],
+        "controls": [],
+        "params": [],
+        "layer": 0
+      },
+      {
+        "type": "Reset",
+        "targets": [
+          17
+        ],
+        "controls": [],
+        "params": [],
+        "layer": 0
+      },
+      {
+        "type": "Reset",
+        "targets": [
+          19
+        ],
+        "controls": [],
+        "params": [],
+        "layer": 0
+      },
+      {
+        "type": "Reset",
+        "targets": [
+          2
+        ],
+        "controls": [],
+        "params": [],
+        "layer": 0
+      },
+      {
+        "type": "Reset",
+        "targets": [
+          9
+        ],
+        "controls": [],
+        "params": [],
+        "layer": 0
+      },
+      {
+        "type": "Reset",
+        "targets": [
+          11
+        ],
+        "controls": [],
+        "params": [],
+        "layer": 0
+      },
+      {
+        "type": "Reset",
+        "targets": [
+          13
+        ],
+        "controls": [],
+        "params": [],
+        "layer": 0
+      },
+      {
+        "type": "Reset",
+        "targets": [
+          14
+        ],
+        "controls": [],
+        "params": [],
+        "layer": 0
+      },
+      {
+        "type": "Reset",
+        "targets": [
+          16
+        ],
+        "controls": [],
+        "params": [],
+        "layer": 0
+      },
+      {
+        "type": "Reset",
+        "targets": [
+          18
+        ],
+        "controls": [],
+        "params": [],
+        "layer": 0
+      },
+      {
+        "type": "Reset",
+        "targets": [
+          25
+        ],
+        "controls": [],
+        "params": [],
+        "layer": 0
+      },
+      {
+        "type": "H",
+        "targets": [
+          2
+        ],
+        "controls": [],
+        "params": [],
+        "layer": 1
+      },
+      {
+        "type": "H",
+        "targets": [
+          11
+        ],
+        "controls": [],
+        "params": [],
+        "layer": 1
+      },
+      {
+        "type": "H",
+        "targets": [
+          16
+        ],
+        "controls": [],
+        "params": [],
+        "layer": 1
+      },
+      {
+        "type": "H",
+        "targets": [
+          25
+        ],
+        "controls": [],
+        "params": [],
+        "layer": 1
+      },
+      {
+        "type": "NOISE:DEPOLARIZE1",
+        "targets": [
+          2
+        ],
+        "controls": [],
+        "params": [
+          0.005
+        ],
+        "layer": 1
+      },
+      {
+        "type": "NOISE:DEPOLARIZE1",
+        "targets": [
+          11
+        ],
+        "controls": [],
+        "params": [
+          0.005
+        ],
+        "layer": 1
+      },
+      {
+        "type": "NOISE:DEPOLARIZE1",
+        "targets": [
+          16
+        ],
+        "controls": [],
+        "params": [
+          0.005
+        ],
+        "layer": 1
+      },
+      {
+        "type": "NOISE:DEPOLARIZE1",
+        "targets": [
+          25
+        ],
+        "controls": [],
+        "params": [
+          0.005
+        ],
+        "layer": 1
+      },
+      {
+        "type": "CNOT",
+        "targets": [
+          3
+        ],
+        "controls": [
+          2
+        ],
+        "params": [],
+        "layer": 2
+      },
+      {
+        "type": "CNOT",
+        "targets": [
+          17
+        ],
+        "controls": [
+          16
+        ],
+        "params": [],
+        "layer": 2
+      },
+      {
+        "type": "CNOT",
+        "targets": [
+          12
+        ],
+        "controls": [
+          11
+        ],
+        "params": [],
+        "layer": 2
+      },
+      {
+        "type": "CNOT",
+        "targets": [
+          14
+        ],
+        "controls": [
+          15
+        ],
+        "params": [],
+        "layer": 2
+      },
+      {
+        "type": "CNOT",
+        "targets": [
+          9
+        ],
+        "controls": [
+          10
+        ],
+        "params": [],
+        "layer": 2
+      },
+      {
+        "type": "CNOT",
+        "targets": [
+          18
+        ],
+        "controls": [
+          19
+        ],
+        "params": [],
+        "layer": 2
+      },
+      {
+        "type": "NOISE:DEPOLARIZE2",
+        "targets": [
+          2,
+          3
+        ],
+        "controls": [],
+        "params": [
+          0.005
+        ],
+        "layer": 2
+      },
+      {
+        "type": "NOISE:DEPOLARIZE2",
+        "targets": [
+          16,
+          17
+        ],
+        "controls": [],
+        "params": [
+          0.005
+        ],
+        "layer": 2
+      },
+      {
+        "type": "NOISE:DEPOLARIZE2",
+        "targets": [
+          11,
+          12
+        ],
+        "controls": [],
+        "params": [
+          0.005
+        ],
+        "layer": 2
+      },
+      {
+        "type": "NOISE:DEPOLARIZE2",
+        "targets": [
+          15,
+          14
+        ],
+        "controls": [],
+        "params": [
+          0.005
+        ],
+        "layer": 2
+      },
+      {
+        "type": "NOISE:DEPOLARIZE2",
+        "targets": [
+          10,
+          9
+        ],
+        "controls": [],
+        "params": [
+          0.005
+        ],
+        "layer": 2
+      },
+      {
+        "type": "NOISE:DEPOLARIZE2",
+        "targets": [
+          19,
+          18
+        ],
+        "controls": [],
+        "params": [
+          0.005
+        ],
+        "layer": 2
+      },
+      {
+        "type": "CNOT",
+        "targets": [
+          1
+        ],
+        "controls": [
+          2
+        ],
+        "params": [],
+        "layer": 3
+      },
+      {
+        "type": "CNOT",
+        "targets": [
+          15
+        ],
+        "controls": [
+          16
+        ],
+        "params": [],
+        "layer": 3
+      },
+      {
+        "type": "CNOT",
+        "targets": [
+          10
+        ],
+        "controls": [
+          11
+        ],
+        "params": [],
+        "layer": 3
+      },
+      {
+        "type": "CNOT",
+        "targets": [
+          14
+        ],
+        "controls": [
+          8
+        ],
+        "params": [],
+        "layer": 3
+      },
+      {
+        "type": "CNOT",
+        "targets": [
+          9
+        ],
+        "controls": [
+          3
+        ],
+        "params": [],
+        "layer": 3
+      },
+      {
+        "type": "CNOT",
+        "targets": [
+          18
+        ],
+        "controls": [
+          12
+        ],
+        "params": [],
+        "layer": 3
+      },
+      {
+        "type": "NOISE:DEPOLARIZE2",
+        "targets": [
+          2,
+          1
+        ],
+        "controls": [],
+        "params": [
+          0.005
+        ],
+        "layer": 3
+      },
+      {
+        "type": "NOISE:DEPOLARIZE2",
+        "targets": [
+          16,
+          15
+        ],
+        "controls": [],
+        "params": [
+          0.005
+        ],
+        "layer": 3
+      },
+      {
+        "type": "NOISE:DEPOLARIZE2",
+        "targets": [
+          11,
+          10
+        ],
+        "controls": [],
+        "params": [
+          0.005
+        ],
+        "layer": 3
+      },
+      {
+        "type": "NOISE:DEPOLARIZE2",
+        "targets": [
+          8,
+          14
+        ],
+        "controls": [],
+        "params": [
+          0.005
+        ],
+        "layer": 3
+      },
+      {
+        "type": "NOISE:DEPOLARIZE2",
+        "targets": [
+          3,
+          9
+        ],
+        "controls": [],
+        "params": [
+          0.005
+        ],
+        "layer": 3
+      },
+      {
+        "type": "NOISE:DEPOLARIZE2",
+        "targets": [
+          12,
+          18
+        ],
+        "controls": [],
+        "params": [
+          0.005
+        ],
+        "layer": 3
+      },
+      {
+        "type": "CNOT",
+        "targets": [
+          10
+        ],
+        "controls": [
+          16
+        ],
+        "params": [],
+        "layer": 4
+      },
+      {
+        "type": "CNOT",
+        "targets": [
+          5
+        ],
+        "controls": [
+          11
+        ],
+        "params": [],
+        "layer": 4
+      },
+      {
+        "type": "CNOT",
+        "targets": [
+          19
+        ],
+        "controls": [
+          25
+        ],
+        "params": [],
+        "layer": 4
+      },
+      {
+        "type": "CNOT",
+        "targets": [
+          9
+        ],
+        "controls": [
+          8
+        ],
+        "params": [],
+        "layer": 4
+      },
+      {
+        "type": "CNOT",
+        "targets": [
+          18
+        ],
+        "controls": [
+          17
+        ],
+        "params": [],
+        "layer": 4
+      },
+      {
+        "type": "CNOT",
+        "targets": [
+          13
+        ],
+        "controls": [
+          12
+        ],
+        "params": [],
+        "layer": 4
+      },
+      {
+        "type": "NOISE:DEPOLARIZE2",
+        "targets": [
+          16,
+          10
+        ],
+        "controls": [],
+        "params": [
+          0.005
+        ],
+        "layer": 4
+      },
+      {
+        "type": "NOISE:DEPOLARIZE2",
+        "targets": [
+          11,
+          5
+        ],
+        "controls": [],
+        "params": [
+          0.005
+        ],
+        "layer": 4
+      },
+      {
+        "type": "NOISE:DEPOLARIZE2",
+        "targets": [
+          25,
+          19
+        ],
+        "controls": [],
+        "params": [
+          0.005
+        ],
+        "layer": 4
+      },
+      {
+        "type": "NOISE:DEPOLARIZE2",
+        "targets": [
+          8,
+          9
+        ],
+        "controls": [],
+        "params": [
+          0.005
+        ],
+        "layer": 4
+      },
+      {
+        "type": "NOISE:DEPOLARIZE2",
+        "targets": [
+          17,
+          18
+        ],
+        "controls": [],
+        "params": [
+          0.005
+        ],
+        "layer": 4
+      },
+      {
+        "type": "NOISE:DEPOLARIZE2",
+        "targets": [
+          12,
+          13
+        ],
+        "controls": [],
+        "params": [
+          0.005
+        ],
+        "layer": 4
+      },
+      {
+        "type": "CNOT",
+        "targets": [
+          8
+        ],
+        "controls": [
+          16
+        ],
+        "params": [],
+        "layer": 5
+      },
+      {
+        "type": "CNOT",
+        "targets": [
+          3
+        ],
+        "controls": [
+          11
+        ],
+        "params": [],
+        "layer": 5
+      },
+      {
+        "type": "CNOT",
+        "targets": [
+          17
+        ],
+        "controls": [
+          25
+        ],
+        "params": [],
+        "layer": 5
+      },
+      {
+        "type": "CNOT",
+        "targets": [
+          9
+        ],
+        "controls": [
+          1
+        ],
+        "params": [],
+        "layer": 5
+      },
+      {
+        "type": "CNOT",
+        "targets": [
+          18
+        ],
+        "controls": [
+          10
+        ],
+        "params": [],
+        "layer": 5
+      },
+      {
+        "type": "CNOT",
+        "targets": [
+          13
+        ],
+        "controls": [
+          5
+        ],
+        "params": [],
+        "layer": 5
+      },
+      {
+        "type": "NOISE:DEPOLARIZE2",
+        "targets": [
+          16,
+          8
+        ],
+        "controls": [],
+        "params": [
+          0.005
+        ],
+        "layer": 5
+      },
+      {
+        "type": "NOISE:DEPOLARIZE2",
+        "targets": [
+          11,
+          3
+        ],
+        "controls": [],
+        "params": [
+          0.005
+        ],
+        "layer": 5
+      },
+      {
+        "type": "NOISE:DEPOLARIZE2",
+        "targets": [
+          25,
+          17
+        ],
+        "controls": [],
+        "params": [
+          0.005
+        ],
+        "layer": 5
+      },
+      {
+        "type": "NOISE:DEPOLARIZE2",
+        "targets": [
+          1,
+          9
+        ],
+        "controls": [],
+        "params": [
+          0.005
+        ],
+        "layer": 5
+      },
+      {
+        "type": "NOISE:DEPOLARIZE2",
+        "targets": [
+          10,
+          18
+        ],
+        "controls": [],
+        "params": [
+          0.005
+        ],
+        "layer": 5
+      },
+      {
+        "type": "NOISE:DEPOLARIZE2",
+        "targets": [
+          5,
+          13
+        ],
+        "controls": [],
+        "params": [
+          0.005
+        ],
+        "layer": 5
+      },
+      {
+        "type": "H",
+        "targets": [
+          2
+        ],
+        "controls": [],
+        "params": [],
+        "layer": 6
+      },
+      {
+        "type": "H",
+        "targets": [
+          11
+        ],
+        "controls": [],
+        "params": [],
+        "layer": 6
+      },
+      {
+        "type": "H",
+        "targets": [
+          16
+        ],
+        "controls": [],
+        "params": [],
+        "layer": 6
+      },
+      {
+        "type": "H",
+        "targets": [
+          25
+        ],
+        "controls": [],
+        "params": [],
+        "layer": 6
+      },
+      {
+        "type": "NOISE:DEPOLARIZE1",
+        "targets": [
+          2
+        ],
+        "controls": [],
+        "params": [
+          0.005
+        ],
+        "layer": 6
+      },
+      {
+        "type": "NOISE:DEPOLARIZE1",
+        "targets": [
+          11
+        ],
+        "controls": [],
+        "params": [
+          0.005
+        ],
+        "layer": 6
+      },
+      {
+        "type": "NOISE:DEPOLARIZE1",
+        "targets": [
+          16
+        ],
+        "controls": [],
+        "params": [
+          0.005
+        ],
+        "layer": 6
+      },
+      {
+        "type": "NOISE:DEPOLARIZE1",
+        "targets": [
+          25
+        ],
+        "controls": [],
+        "params": [
+          0.005
+        ],
+        "layer": 6
+      },
+      {
+        "type": "NOISE:X_ERROR",
+        "targets": [
+          2
+        ],
+        "controls": [],
+        "params": [
+          0.005
+        ],
+        "layer": 7
+      },
+      {
+        "type": "NOISE:X_ERROR",
+        "targets": [
+          9
+        ],
+        "controls": [],
+        "params": [
+          0.005
+        ],
+        "layer": 7
+      },
+      {
+        "type": "NOISE:X_ERROR",
+        "targets": [
+          11
+        ],
+        "controls": [],
+        "params": [
+          0.005
+        ],
+        "layer": 7
+      },
+      {
+        "type": "NOISE:X_ERROR",
+        "targets": [
+          13
+        ],
+        "controls": [],
+        "params": [
+          0.005
+        ],
+        "layer": 7
+      },
+      {
+        "type": "NOISE:X_ERROR",
+        "targets": [
+          14
+        ],
+        "controls": [],
+        "params": [
+          0.005
+        ],
+        "layer": 7
+      },
+      {
+        "type": "NOISE:X_ERROR",
+        "targets": [
+          16
+        ],
+        "controls": [],
+        "params": [
+          0.005
+        ],
+        "layer": 7
+      },
+      {
+        "type": "NOISE:X_ERROR",
+        "targets": [
+          18
+        ],
+        "controls": [],
+        "params": [
+          0.005
+        ],
+        "layer": 7
+      },
+      {
+        "type": "NOISE:X_ERROR",
+        "targets": [
+          25
+        ],
+        "controls": [],
+        "params": [
+          0.005
+        ],
+        "layer": 7
+      },
+      {
+        "type": "MR",
+        "targets": [
+          2
+        ],
+        "controls": [],
+        "params": [],
+        "layer": 7
+      },
+      {
+        "type": "MR",
+        "targets": [
+          9
+        ],
+        "controls": [],
+        "params": [],
+        "layer": 7
+      },
+      {
+        "type": "MR",
+        "targets": [
+          11
+        ],
+        "controls": [],
+        "params": [],
+        "layer": 7
+      },
+      {
+        "type": "MR",
+        "targets": [
+          13
+        ],
+        "controls": [],
+        "params": [],
+        "layer": 7
+      },
+      {
+        "type": "MR",
+        "targets": [
+          14
+        ],
+        "controls": [],
+        "params": [],
+        "layer": 7
+      },
+      {
+        "type": "MR",
+        "targets": [
+          16
+        ],
+        "controls": [],
+        "params": [],
+        "layer": 7
+      },
+      {
+        "type": "MR",
+        "targets": [
+          18
+        ],
+        "controls": [],
+        "params": [],
+        "layer": 7
+      },
+      {
+        "type": "MR",
+        "targets": [
+          25
+        ],
+        "controls": [],
+        "params": [],
+        "layer": 7
+      },
+      {
+        "type": "DETECTOR",
+        "targets": [],
+        "controls": [],
+        "params": [
+          0.0,
+          4.0,
+          0.0
+        ],
+        "layer": 7
+      },
+      {
+        "type": "DETECTOR",
+        "targets": [],
+        "controls": [],
+        "params": [
+          2.0,
+          2.0,
+          0.0
+        ],
+        "layer": 7
+      },
+      {
+        "type": "DETECTOR",
+        "targets": [],
+        "controls": [],
+        "params": [
+          4.0,
+          4.0,
+          0.0
+        ],
+        "layer": 7
+      },
+      {
+        "type": "DETECTOR",
+        "targets": [],
+        "controls": [],
+        "params": [
+          6.0,
+          2.0,
+          0.0
+        ],
+        "layer": 7
+      },
+      {
+        "type": "NOISE:X_ERROR",
+        "targets": [
+          1
+        ],
+        "controls": [],
+        "params": [
+          0.005
+        ],
+        "layer": 7
+      },
+      {
+        "type": "NOISE:X_ERROR",
+        "targets": [
+          3
+        ],
+        "controls": [],
+        "params": [
+          0.005
+        ],
+        "layer": 7
+      },
+      {
+        "type": "NOISE:X_ERROR",
+        "targets": [
+          5
+        ],
+        "controls": [],
+        "params": [
+          0.005
+        ],
+        "layer": 7
+      },
+      {
+        "type": "NOISE:X_ERROR",
+        "targets": [
+          8
+        ],
+        "controls": [],
+        "params": [
+          0.005
+        ],
+        "layer": 7
+      },
+      {
+        "type": "NOISE:X_ERROR",
+        "targets": [
+          10
+        ],
+        "controls": [],
+        "params": [
+          0.005
+        ],
+        "layer": 7
+      },
+      {
+        "type": "NOISE:X_ERROR",
+        "targets": [
+          12
+        ],
+        "controls": [],
+        "params": [
+          0.005
+        ],
+        "layer": 7
+      },
+      {
+        "type": "NOISE:X_ERROR",
+        "targets": [
+          15
+        ],
+        "controls": [],
+        "params": [
+          0.005
+        ],
+        "layer": 7
+      },
+      {
+        "type": "NOISE:X_ERROR",
+        "targets": [
+          17
+        ],
+        "controls": [],
+        "params": [
+          0.005
+        ],
+        "layer": 7
+      },
+      {
+        "type": "NOISE:X_ERROR",
+        "targets": [
+          19
+        ],
+        "controls": [],
+        "params": [
+          0.005
+        ],
+        "layer": 7
+      },
+      {
+        "type": "Measure",
+        "targets": [
+          1
+        ],
+        "controls": [],
+        "params": [],
+        "layer": 7
+      },
+      {
+        "type": "Measure",
+        "targets": [
+          3
+        ],
+        "controls": [],
+        "params": [],
+        "layer": 7
+      },
+      {
+        "type": "Measure",
+        "targets": [
+          5
+        ],
+        "controls": [],
+        "params": [],
+        "layer": 7
+      },
+      {
+        "type": "Measure",
+        "targets": [
+          8
+        ],
+        "controls": [],
+        "params": [],
+        "layer": 7
+      },
+      {
+        "type": "Measure",
+        "targets": [
+          10
+        ],
+        "controls": [],
+        "params": [],
+        "layer": 7
+      },
+      {
+        "type": "Measure",
+        "targets": [
+          12
+        ],
+        "controls": [],
+        "params": [],
+        "layer": 7
+      },
+      {
+        "type": "Measure",
+        "targets": [
+          15
+        ],
+        "controls": [],
+        "params": [],
+        "layer": 7
+      },
+      {
+        "type": "Measure",
+        "targets": [
+          17
+        ],
+        "controls": [],
+        "params": [],
+        "layer": 7
+      },
+      {
+        "type": "Measure",
+        "targets": [
+          19
+        ],
+        "controls": [],
+        "params": [],
+        "layer": 7
+      },
+      {
+        "type": "DETECTOR",
+        "targets": [],
+        "controls": [],
+        "params": [
+          0.0,
+          4.0,
+          1.0
+        ],
+        "layer": 7
+      },
+      {
+        "type": "DETECTOR",
+        "targets": [],
+        "controls": [],
+        "params": [
+          2.0,
+          2.0,
+          1.0
+        ],
+        "layer": 7
+      },
+      {
+        "type": "DETECTOR",
+        "targets": [],
+        "controls": [],
+        "params": [
+          4.0,
+          4.0,
+          1.0
+        ],
+        "layer": 7
+      },
+      {
+        "type": "DETECTOR",
+        "targets": [],
+        "controls": [],
+        "params": [
+          6.0,
+          2.0,
+          1.0
+        ],
+        "layer": 7
+      },
+      {
+        "type": "OBSERVABLE",
+        "targets": [],
+        "controls": [],
+        "params": [
+          0.0
+        ],
+        "layer": 7
+      }
+    ]
+  },
+  "qec": {
+    "num_qubits": 26,
+    "num_detectors": 8,
+    "num_observables": 1,
+    "num_ticks": 7,
+    "coords": {
+      "qubits": [
+        null,
+        [
+          1.0,
+          1.0
+        ],
+        [
+          2.0,
+          0.0
+        ],
+        [
+          3.0,
+          1.0
+        ],
+        null,
+        [
+          5.0,
+          1.0
+        ],
+        null,
+        null,
+        [
+          1.0,
+          3.0
+        ],
+        [
+          2.0,
+          2.0
+        ],
+        [
+          3.0,
+          3.0
+        ],
+        [
+          4.0,
+          2.0
+        ],
+        [
+          5.0,
+          3.0
+        ],
+        [
+          6.0,
+          2.0
+        ],
+        [
+          0.0,
+          4.0
+        ],
+        [
+          1.0,
+          5.0
+        ],
+        [
+          2.0,
+          4.0
+        ],
+        [
+          3.0,
+          5.0
+        ],
+        [
+          4.0,
+          4.0
+        ],
+        [
+          5.0,
+          5.0
+        ],
+        null,
+        null,
+        null,
+        null,
+        null,
+        [
+          4.0,
+          6.0
+        ]
+      ],
+      "detectors": [
+        [
+          0.0,
+          4.0,
+          0.0
+        ],
+        [
+          2.0,
+          2.0,
+          0.0
+        ],
+        [
+          4.0,
+          4.0,
+          0.0
+        ],
+        [
+          6.0,
+          2.0,
+          0.0
+        ],
+        [
+          0.0,
+          4.0,
+          1.0
+        ],
+        [
+          2.0,
+          2.0,
+          1.0
+        ],
+        [
+          4.0,
+          4.0,
+          1.0
+        ],
+        [
+          6.0,
+          2.0,
+          1.0
+        ]
+      ]
+    },
+    "dem": {
+      "nodes": 8,
+      "edge_count": 15,
+      "boundary_edge_count": 8,
+      "hyperedges_count": 0,
+      "truncated": false,
+      "edges": [
+        {
+          "d1": 0,
+          "d2": 1,
+          "obs": [],
+          "p": 0.001335115868
+        },
+        {
+          "d1": 0,
+          "d2": 4,
+          "obs": [],
+          "p": 0.006321764709
+        },
+        {
+          "d1": 1,
+          "d2": 2,
+          "obs": [],
+          "p": 0.001335115868
+        },
+        {
+          "d1": 1,
+          "d2": 4,
+          "obs": [],
+          "p": 0.002666666667
+        },
+        {
+          "d1": 1,
+          "d2": 5,
+          "obs": [],
+          "p": 0.00764
+        },
+        {
+          "d1": 2,
+          "d2": 3,
+          "obs": [],
+          "p": 0.005319111111
+        },
+        {
+          "d1": 2,
+          "d2": 4,
+          "obs": [],
+          "p": 0.001335115868
+        },
+        {
+          "d1": 2,
+          "d2": 5,
+          "obs": [],
+          "p": 0.005319111111
+        },
+        {
+          "d1": 2,
+          "d2": 6,
+          "obs": [],
+          "p": 0.00764
+        },
+        {
+          "d1": 3,
+          "d2": 5,
+          "obs": [],
+          "p": 0.001335115868
+        },
+        {
+          "d1": 3,
+          "d2": 6,
+          "obs": [],
+          "p": 0.002666666667
+        },
+        {
+          "d1": 3,
+          "d2": 7,
+          "obs": [],
+          "p": 0.006321764709
+        },
+        {
+          "d1": 4,
+          "d2": 5,
+          "obs": [],
+          "p": 0.01026592
+        },
+        {
+          "d1": 5,
+          "d2": 6,
+          "obs": [],
+          "p": 0.006321764709
+        },
+        {
+          "d1": 6,
+          "d2": 7,
+          "obs": [],
+          "p": 0.006321764709
+        }
+      ],
+      "boundary_edges": [
+        {
+          "d": 0,
+          "obs": [],
+          "p": 0.002666666667
+        },
+        {
+          "d": 1,
+          "obs": [
+            0
+          ],
+          "p": 0.010581636336
+        },
+        {
+          "d": 2,
+          "obs": [],
+          "p": 0.010581636336
+        },
+        {
+          "d": 3,
+          "obs": [
+            0
+          ],
+          "p": 0.005319111111
+        },
+        {
+          "d": 4,
+          "obs": [],
+          "p": 0.01026592
+        },
+        {
+          "d": 5,
+          "obs": [
+            0
+          ],
+          "p": 0.020321061773
+        },
+        {
+          "d": 6,
+          "obs": [],
+          "p": 0.020321061773
+        },
+        {
+          "d": 7,
+          "obs": [
+            0
+          ],
+          "p": 0.00764
+        }
+      ]
+    },
+    "sample_decode": null
+  }
+}

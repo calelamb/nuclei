@@ -1,0 +1,616 @@
+{
+  "snapshot": {
+    "framework": "stim",
+    "qubit_count": 5,
+    "classical_bit_count": 7,
+    "depth": 7,
+    "gates": [
+      {
+        "type": "Reset",
+        "targets": [
+          0
+        ],
+        "controls": [],
+        "params": [],
+        "layer": 0
+      },
+      {
+        "type": "Reset",
+        "targets": [
+          1
+        ],
+        "controls": [],
+        "params": [],
+        "layer": 0
+      },
+      {
+        "type": "Reset",
+        "targets": [
+          2
+        ],
+        "controls": [],
+        "params": [],
+        "layer": 0
+      },
+      {
+        "type": "Reset",
+        "targets": [
+          3
+        ],
+        "controls": [],
+        "params": [],
+        "layer": 0
+      },
+      {
+        "type": "Reset",
+        "targets": [
+          4
+        ],
+        "controls": [],
+        "params": [],
+        "layer": 0
+      },
+      {
+        "type": "CNOT",
+        "targets": [
+          1
+        ],
+        "controls": [
+          0
+        ],
+        "params": [],
+        "layer": 1
+      },
+      {
+        "type": "CNOT",
+        "targets": [
+          3
+        ],
+        "controls": [
+          2
+        ],
+        "params": [],
+        "layer": 1
+      },
+      {
+        "type": "NOISE:DEPOLARIZE2",
+        "targets": [
+          0,
+          1
+        ],
+        "controls": [],
+        "params": [
+          0.01
+        ],
+        "layer": 1
+      },
+      {
+        "type": "NOISE:DEPOLARIZE2",
+        "targets": [
+          2,
+          3
+        ],
+        "controls": [],
+        "params": [
+          0.01
+        ],
+        "layer": 1
+      },
+      {
+        "type": "CNOT",
+        "targets": [
+          1
+        ],
+        "controls": [
+          2
+        ],
+        "params": [],
+        "layer": 2
+      },
+      {
+        "type": "CNOT",
+        "targets": [
+          3
+        ],
+        "controls": [
+          4
+        ],
+        "params": [],
+        "layer": 2
+      },
+      {
+        "type": "NOISE:DEPOLARIZE2",
+        "targets": [
+          2,
+          1
+        ],
+        "controls": [],
+        "params": [
+          0.01
+        ],
+        "layer": 2
+      },
+      {
+        "type": "NOISE:DEPOLARIZE2",
+        "targets": [
+          4,
+          3
+        ],
+        "controls": [],
+        "params": [
+          0.01
+        ],
+        "layer": 2
+      },
+      {
+        "type": "NOISE:X_ERROR",
+        "targets": [
+          1
+        ],
+        "controls": [],
+        "params": [
+          0.02
+        ],
+        "layer": 3
+      },
+      {
+        "type": "NOISE:X_ERROR",
+        "targets": [
+          3
+        ],
+        "controls": [],
+        "params": [
+          0.02
+        ],
+        "layer": 3
+      },
+      {
+        "type": "MR",
+        "targets": [
+          1
+        ],
+        "controls": [],
+        "params": [],
+        "layer": 3
+      },
+      {
+        "type": "MR",
+        "targets": [
+          3
+        ],
+        "controls": [],
+        "params": [],
+        "layer": 3
+      },
+      {
+        "type": "DETECTOR",
+        "targets": [],
+        "controls": [],
+        "params": [
+          1.0,
+          0.0
+        ],
+        "layer": 3
+      },
+      {
+        "type": "DETECTOR",
+        "targets": [],
+        "controls": [],
+        "params": [
+          3.0,
+          0.0
+        ],
+        "layer": 3
+      },
+      {
+        "type": "CNOT",
+        "targets": [
+          1
+        ],
+        "controls": [
+          0
+        ],
+        "params": [],
+        "layer": 4
+      },
+      {
+        "type": "CNOT",
+        "targets": [
+          3
+        ],
+        "controls": [
+          2
+        ],
+        "params": [],
+        "layer": 4
+      },
+      {
+        "type": "NOISE:DEPOLARIZE2",
+        "targets": [
+          0,
+          1
+        ],
+        "controls": [],
+        "params": [
+          0.01
+        ],
+        "layer": 4
+      },
+      {
+        "type": "NOISE:DEPOLARIZE2",
+        "targets": [
+          2,
+          3
+        ],
+        "controls": [],
+        "params": [
+          0.01
+        ],
+        "layer": 4
+      },
+      {
+        "type": "CNOT",
+        "targets": [
+          1
+        ],
+        "controls": [
+          2
+        ],
+        "params": [],
+        "layer": 5
+      },
+      {
+        "type": "CNOT",
+        "targets": [
+          3
+        ],
+        "controls": [
+          4
+        ],
+        "params": [],
+        "layer": 5
+      },
+      {
+        "type": "NOISE:DEPOLARIZE2",
+        "targets": [
+          2,
+          1
+        ],
+        "controls": [],
+        "params": [
+          0.01
+        ],
+        "layer": 5
+      },
+      {
+        "type": "NOISE:DEPOLARIZE2",
+        "targets": [
+          4,
+          3
+        ],
+        "controls": [],
+        "params": [
+          0.01
+        ],
+        "layer": 5
+      },
+      {
+        "type": "NOISE:X_ERROR",
+        "targets": [
+          1
+        ],
+        "controls": [],
+        "params": [
+          0.02
+        ],
+        "layer": 6
+      },
+      {
+        "type": "NOISE:X_ERROR",
+        "targets": [
+          3
+        ],
+        "controls": [],
+        "params": [
+          0.02
+        ],
+        "layer": 6
+      },
+      {
+        "type": "MR",
+        "targets": [
+          1
+        ],
+        "controls": [],
+        "params": [],
+        "layer": 6
+      },
+      {
+        "type": "MR",
+        "targets": [
+          3
+        ],
+        "controls": [],
+        "params": [],
+        "layer": 6
+      },
+      {
+        "type": "DETECTOR",
+        "targets": [],
+        "controls": [],
+        "params": [
+          1.0,
+          1.0
+        ],
+        "layer": 6
+      },
+      {
+        "type": "DETECTOR",
+        "targets": [],
+        "controls": [],
+        "params": [
+          3.0,
+          1.0
+        ],
+        "layer": 6
+      },
+      {
+        "type": "NOISE:X_ERROR",
+        "targets": [
+          0
+        ],
+        "controls": [],
+        "params": [
+          0.02
+        ],
+        "layer": 6
+      },
+      {
+        "type": "NOISE:X_ERROR",
+        "targets": [
+          2
+        ],
+        "controls": [],
+        "params": [
+          0.02
+        ],
+        "layer": 6
+      },
+      {
+        "type": "NOISE:X_ERROR",
+        "targets": [
+          4
+        ],
+        "controls": [],
+        "params": [
+          0.02
+        ],
+        "layer": 6
+      },
+      {
+        "type": "Measure",
+        "targets": [
+          0
+        ],
+        "controls": [],
+        "params": [],
+        "layer": 6
+      },
+      {
+        "type": "Measure",
+        "targets": [
+          2
+        ],
+        "controls": [],
+        "params": [],
+        "layer": 6
+      },
+      {
+        "type": "Measure",
+        "targets": [
+          4
+        ],
+        "controls": [],
+        "params": [],
+        "layer": 6
+      },
+      {
+        "type": "DETECTOR",
+        "targets": [],
+        "controls": [],
+        "params": [
+          1.0,
+          2.0
+        ],
+        "layer": 6
+      },
+      {
+        "type": "DETECTOR",
+        "targets": [],
+        "controls": [],
+        "params": [
+          3.0,
+          2.0
+        ],
+        "layer": 6
+      },
+      {
+        "type": "OBSERVABLE",
+        "targets": [],
+        "controls": [],
+        "params": [
+          0.0
+        ],
+        "layer": 6
+      }
+    ]
+  },
+  "qec": {
+    "num_qubits": 5,
+    "num_detectors": 6,
+    "num_observables": 1,
+    "num_ticks": 6,
+    "coords": {
+      "qubits": [
+        null,
+        null,
+        null,
+        null,
+        null
+      ],
+      "detectors": [
+        [
+          1.0,
+          0.0,
+          0.0
+        ],
+        [
+          3.0,
+          0.0,
+          0.0
+        ],
+        [
+          1.0,
+          1.0,
+          0.0
+        ],
+        [
+          3.0,
+          1.0,
+          0.0
+        ],
+        [
+          1.0,
+          2.0,
+          0.0
+        ],
+        [
+          3.0,
+          2.0,
+          0.0
+        ]
+      ]
+    },
+    "dem": {
+      "nodes": 6,
+      "edge_count": 9,
+      "boundary_edge_count": 6,
+      "hyperedges_count": 0,
+      "truncated": false,
+      "edges": [
+        {
+          "d1": 0,
+          "d2": 1,
+          "obs": [],
+          "p": 0.002673815958
+        },
+        {
+          "d1": 0,
+          "d2": 2,
+          "obs": [],
+          "p": 0.02256686332
+        },
+        {
+          "d1": 0,
+          "d2": 3,
+          "obs": [],
+          "p": 0.005333333333
+        },
+        {
+          "d1": 1,
+          "d2": 3,
+          "obs": [],
+          "p": 0.02256686332
+        },
+        {
+          "d1": 2,
+          "d2": 3,
+          "obs": [],
+          "p": 0.005333333333
+        },
+        {
+          "d1": 2,
+          "d2": 4,
+          "obs": [],
+          "p": 0.02256686332
+        },
+        {
+          "d1": 2,
+          "d2": 5,
+          "obs": [],
+          "p": 0.005333333333
+        },
+        {
+          "d1": 3,
+          "d2": 5,
+          "obs": [],
+          "p": 0.02256686332
+        },
+        {
+          "d1": 4,
+          "d2": 5,
+          "obs": [],
+          "p": 0.02256686332
+        }
+      ],
+      "boundary_edges": [
+        {
+          "d": 0,
+          "obs": [],
+          "p": 0.005333333333
+        },
+        {
+          "d": 1,
+          "obs": [
+            0
+          ],
+          "p": 0.005333333333
+        },
+        {
+          "d": 2,
+          "obs": [],
+          "p": 0.010609777778
+        },
+        {
+          "d": 3,
+          "obs": [
+            0
+          ],
+          "p": 0.010609777778
+        },
+        {
+          "d": 4,
+          "obs": [],
+          "p": 0.02512
+        },
+        {
+          "d": 5,
+          "obs": [
+            0
+          ],
+          "p": 0.02512
+        }
+      ]
+    },
+    "sample_decode": null
+  },
+  "decode": {
+    "num_detectors": 6,
+    "syndrome": [
+      3,
+      5
+    ],
+    "matched_edges": [
+      {
+        "d1": 3,
+        "d2": 5
+      }
+    ],
+    "predicted_observable_flips": [
+      0
+    ],
+    "actual_observable_flips": [
+      0
+    ]
+  }
+}

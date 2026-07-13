@@ -117,6 +117,9 @@ describe('resolveVisiblePanels — reveal rules (relocated from layoutStore)', (
         histogramChip: false,
         histogramFull: false,
         terminal: false,
+        qecTimeline: false,
+        qecLattice: false,
+        qecDetectorGraph: false,
       });
     });
 
@@ -170,6 +173,10 @@ describe('resolveVisiblePanels — reveal rules (relocated from layoutStore)', (
         histogramChip: false,
         histogramFull: true,
         terminal: true,
+        // QEC panels require a stim framework; null (no circuit) keeps them off.
+        qecTimeline: false,
+        qecLattice: false,
+        qecDetectorGraph: false,
       });
     });
   });
@@ -193,7 +200,20 @@ describe('resolveVisiblePanels parity with v0.6.x computeVisiblePanels', () => {
               const resolved = resolveVisiblePanels(
                 ctx({ ...input, mode: 'learn', framework: snapshot?.framework ?? null }),
               );
-              expect(resolved).toEqual(legacyComputeVisiblePanels(input));
+              // Compare only the five legacy panels; the QEC panels (added in
+              // Phase D) are always false here (non-stim frameworks) and are
+              // asserted separately.
+              const legacyKeys = legacyComputeVisiblePanels(input);
+              expect({
+                circuit: resolved.circuit,
+                bloch: resolved.bloch,
+                histogramChip: resolved.histogramChip,
+                histogramFull: resolved.histogramFull,
+                terminal: resolved.terminal,
+              }).toEqual(legacyKeys);
+              expect(resolved.qecTimeline).toBe(false);
+              expect(resolved.qecLattice).toBe(false);
+              expect(resolved.qecDetectorGraph).toBe(false);
             }
           }
         }
@@ -217,7 +237,20 @@ describe('resolved Learn-mode output snapshot (PRD 11 Phase A parity lock)', () 
       ['full/empty', { preset: 'full' }],
     ];
     for (const [name, partial] of cases) {
-      scenarios[name] = resolveVisiblePanels(ctx({ ...partial, mode: 'learn' }));
+      const full = resolveVisiblePanels(ctx({ ...partial, mode: 'learn' }));
+      // Snapshot the five core panels — the Learn pedagogy lock. QEC panels
+      // (Phase D) are asserted-false separately below; excluding them keeps
+      // this snapshot the exact v0.6.x parity proof.
+      scenarios[name] = {
+        circuit: full.circuit,
+        bloch: full.bloch,
+        histogramChip: full.histogramChip,
+        histogramFull: full.histogramFull,
+        terminal: full.terminal,
+      } as VisiblePanels;
+      expect(full.qecTimeline).toBe(false);
+      expect(full.qecLattice).toBe(false);
+      expect(full.qecDetectorGraph).toBe(false);
     }
     expect(scenarios).toMatchInlineSnapshot(`
       {
@@ -278,10 +311,15 @@ describe('resolved Learn-mode output snapshot (PRD 11 Phase A parity lock)', () 
 // ── Framework affinity mechanism (Phase A ships it; PRD 10 D applies it) ──
 
 describe('framework affinity', () => {
-  it("every Phase A panel is 'any' — zero behavior change from the registry", () => {
-    for (const panel of PANEL_REGISTRY) {
-      expect(panel.frameworks).toBe('any');
-    }
+  it('Bloch is non-stim; the QEC panels are stim-only (PRD 10 Phase D swap)', () => {
+    const byId = Object.fromEntries(PANEL_REGISTRY.map((p) => [p.id, p]));
+    expect(byId.bloch.frameworks).toEqual(['qiskit', 'cirq', 'cuda-q', 'qsharp']);
+    expect(byId.qecTimeline.frameworks).toEqual(['stim']);
+    expect(byId.qecLattice.frameworks).toEqual(['stim']);
+    expect(byId.qecDetectorGraph.frameworks).toEqual(['stim']);
+    // The non-viz panels stay framework-agnostic.
+    expect(byId.circuit.frameworks).toBe('any');
+    expect(byId.terminal.frameworks).toBe('any');
   });
 
   it("panelPassesFramework admits everything for 'any'", () => {
@@ -303,16 +341,27 @@ describe('framework affinity', () => {
     expect(panelPassesFramework(nonStim, null)).toBe(true);
   });
 
-  it('resolveVisiblePanels applies affinity as a hard gate over defaultVisible', () => {
-    // Synthetic proof the resolver gates on affinity: build a ctx that would
-    // reveal bloch, then confirm a stim-excluding affinity would hide it.
-    const revealCtx = ctx({ preset: 'full', framework: 'stim' });
-    // With the real 'any' registry, bloch shows for stim in Phase A.
-    expect(resolveVisiblePanels(revealCtx).bloch).toBe(true);
-    // The gate itself: a non-stim affinity + stim framework → hidden.
-    expect(
-      panelPassesFramework({ frameworks: ['qiskit', 'cirq', 'cuda-q', 'qsharp'] }, 'stim'),
-    ).toBe(false);
+  it('the Bloch→QEC swap: stim hides Bloch and shows the QEC panels; qiskit is the reverse', () => {
+    const stim = resolveVisiblePanels(ctx({ preset: 'full', framework: 'stim', snapshot: GATE_SNAPSHOT }));
+    expect(stim.bloch).toBe(false);
+    expect(stim.qecTimeline).toBe(true);
+    expect(stim.qecLattice).toBe(true);
+    expect(stim.qecDetectorGraph).toBe(true);
+
+    const qiskit = resolveVisiblePanels(ctx({ preset: 'full', framework: 'qiskit', snapshot: GATE_SNAPSHOT }));
+    expect(qiskit.bloch).toBe(true);
+    expect(qiskit.qecTimeline).toBe(false);
+    expect(qiskit.qecLattice).toBe(false);
+    expect(qiskit.qecDetectorGraph).toBe(false);
+  });
+
+  it('QEC panels never show pre-circuit (framework null), keeping Learn untouched', () => {
+    const v = resolveVisiblePanels(ctx({ preset: 'full', framework: null }));
+    expect(v.qecTimeline).toBe(false);
+    expect(v.qecLattice).toBe(false);
+    expect(v.qecDetectorGraph).toBe(false);
+    // Bloch's pre-circuit behavior is preserved (full preset shows it).
+    expect(v.bloch).toBe(true);
   });
 });
 
@@ -340,18 +389,23 @@ describe('resolveVisiblePanels overrides', () => {
 });
 
 describe('registry shape', () => {
-  it('declares the five viz/bottom panels in stable order', () => {
+  it('declares all viz/bottom panels in stable order (incl. the QEC panels)', () => {
     expect(PANEL_REGISTRY.map((p) => p.id)).toEqual([
       'circuit',
       'bloch',
       'histogramChip',
       'histogramFull',
       'terminal',
+      'qecTimeline',
+      'qecLattice',
+      'qecDetectorGraph',
     ]);
   });
 
   it('groups panels by zone', () => {
-    expect(panelsInZone('viz').map((p) => p.id)).toEqual(['circuit', 'bloch', 'histogramChip']);
+    expect(panelsInZone('viz').map((p) => p.id)).toEqual([
+      'circuit', 'bloch', 'histogramChip', 'qecTimeline', 'qecLattice', 'qecDetectorGraph',
+    ]);
     expect(panelsInZone('bottom').map((p) => p.id)).toEqual(['histogramFull', 'terminal']);
   });
 
@@ -360,7 +414,7 @@ describe('registry shape', () => {
     expect(new Set(ids).size).toBe(ids.length);
     // Compile-time: PanelId covers every registry id.
     const _check: PanelId[] = ids;
-    expect(_check.length).toBe(5);
+    expect(_check.length).toBe(8);
   });
 });
 

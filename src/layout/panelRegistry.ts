@@ -32,14 +32,20 @@ import type { LayoutPreset } from '../stores/layoutStore';
 export type PanelZone = 'left' | 'viz' | 'bottom';
 
 /** Visualization + bottom panels whose visibility the reveal rules govern.
- * Extended by PRD 10 Phase D (lattice, detector-graph, …) and PRD 11 Phase C
- * (left-rail views). */
+ * PRD 10 Phase D adds the three stim-affine QEC viz panels. */
 export type PanelId =
   | 'circuit'
   | 'bloch'
   | 'histogramChip'
   | 'histogramFull'
-  | 'terminal';
+  | 'terminal'
+  | 'qecTimeline'
+  | 'qecLattice'
+  | 'qecDetectorGraph';
+
+/** The non-stim quantum frameworks — bloch/state visualizations apply to
+ * these but not to Stim stabilizer circuits (whose state is the QEC panels). */
+export const NON_STIM_FRAMEWORKS: Framework[] = ['qiskit', 'cirq', 'cuda-q', 'qsharp'];
 
 /** Everything a reveal rule may read. `framework` and `mode` are new inputs
  * the registry threads through for affinity; the four preset/evidence inputs
@@ -109,10 +115,11 @@ export const PANEL_REGISTRY: readonly PanelDef[] = [
     title: 'Bloch Sphere',
     zone: 'viz',
     modes: ['learn', 'research'],
-    // Stays 'any' in Phase A (zero behavior change). PRD 10 Phase D narrows
-    // this to the non-stim frameworks and registers lattice/detector-graph
-    // with `['stim']` to complete the swap.
-    frameworks: 'any',
+    // Narrowed to the non-stim frameworks (PRD 10 Phase D): a stabilizer
+    // circuit has no meaningful single-qubit Bloch state, so the resolver's
+    // affinity cap hides Bloch for stim and the QEC panels below take its
+    // place — no component-level `if (stim)` anywhere.
+    frameworks: NON_STIM_FRAMEWORKS,
     order: 1,
     defaultVisible: ({ preset, result }) => {
       if (preset === 'full') return true;
@@ -158,6 +165,42 @@ export const PANEL_REGISTRY: readonly PanelDef[] = [
       // balanced + clean share the same terminal rule.
       return hasTerminalOutput || errorActive;
     },
+  },
+  // ── QEC viz panels (PRD 10 Phase D) — stim-affine; they take the viz zone
+  // when Bloch steps aside. All three become visible once a stim circuit has
+  // gates; the VizZone additionally hides those with no data to show (e.g.
+  // the lattice when the circuit carries no qubit coordinates). ──
+  // The stim check in defaultVisible (not just affinity) keeps these hidden
+  // when there is no circuit yet: affinity's `null` framework admits every
+  // panel to preserve Bloch's pre-circuit behavior, so the QEC panels gate on
+  // `framework === 'stim'` themselves. With a stim circuit the affinity cap
+  // hides Bloch and these take the zone.
+  {
+    id: 'qecTimeline',
+    title: 'Timeline',
+    zone: 'viz',
+    modes: ['learn', 'research'],
+    frameworks: ['stim'],
+    order: 5,
+    defaultVisible: ({ snapshot, framework }) => framework === 'stim' && hasGates(snapshot),
+  },
+  {
+    id: 'qecLattice',
+    title: 'Code Lattice',
+    zone: 'viz',
+    modes: ['learn', 'research'],
+    frameworks: ['stim'],
+    order: 6,
+    defaultVisible: ({ snapshot, framework }) => framework === 'stim' && hasGates(snapshot),
+  },
+  {
+    id: 'qecDetectorGraph',
+    title: 'Detector Graph',
+    zone: 'viz',
+    modes: ['learn', 'research'],
+    frameworks: ['stim'],
+    order: 7,
+    defaultVisible: ({ snapshot, framework }) => framework === 'stim' && hasGates(snapshot),
   },
 ];
 
