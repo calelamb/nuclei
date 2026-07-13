@@ -1,45 +1,49 @@
 import type { ActivityView } from './ActivityBar';
 import type { WorkspaceMode } from '../../stores/workspaceStore';
+import {
+  leftPanelsForMode,
+  bottomLeftPanelsForMode,
+  type LeftPanelId,
+} from '../../layout/panelRegistry';
+
+/**
+ * Activity-bar (left-rail) view selection.
+ *
+ * As of PRD 11 Phase C this delegates to the unified panel registry
+ * (`src/layout/panelRegistry.ts`), which owns the left-panel definitions and
+ * the mode/developer-flag gating. This module stays as the ActivityBar-facing
+ * API and the type bridge between the registry's `LeftPanelId` and the
+ * component's `ActivityView` (they are the same set — asserted below).
+ */
+
+// Compile-time proof the two id unions stay in lock-step.
+type _AssertSame = LeftPanelId extends ActivityView
+  ? ActivityView extends LeftPanelId
+    ? true
+    : never
+  : never;
+const _same: _AssertSame = true;
+void _same;
 
 export interface PanelRegistryOptions {
+  /**
+   * The developer-views flag (Settings → Advanced), formerly the broad
+   * "experimental features" flag. It now governs ONLY the Search and Circuit
+   * inspector views — every other view is gated by mode alone, so no view is
+   * double-gated (PRD 11 Phase C).
+   */
   experimentalFeatures: boolean;
 }
 
-// Learn mode — EXACTLY today's set, same order. Do not reorder or edit
-// these two arrays without updating the ActivityBar snapshot test; that
-// test is the byte-compatibility enforcement mechanism for PRD 09
-// Constraint 1 (Learn mode byte-compatibility).
-const LEARN_CORE: ActivityView[] = ['files', 'learning', 'challenges', 'launch'];
-const LEARN_EXPERIMENTAL: ActivityView[] = ['search', 'circuit', 'plugins', 'hardware', 'community'];
-const LEARN_BOTTOM: ActivityView[] = ['settings'];
-
-// Research mode — hides learning/challenges/community (and onboarding/
-// playground/educator surfaces, which aren't activity views at all).
-// Shows Explorer (default active), the Experiments placeholder (Phase D
-// fills it in), hardware, launch, settings. Unlike Learn, this set does
-// not depend on `experimentalFeatures` — hardware/launch are core to the
-// research workflow, not experimental extras gated behind a settings flag.
-const RESEARCH_TOP: ActivityView[] = ['files', 'experiments', 'hardware', 'launch'];
-const RESEARCH_BOTTOM: ActivityView[] = ['settings'];
-
-/**
- * Single source of truth for which activity-bar views exist in a given
- * workspace mode. Pure function — no component may re-derive this list
- * with its own `if (mode === ...)` conditionals; compute it once here and
- * pass the result down.
- */
+/** Ordered activity-bar views for a mode (top + bottom-pinned). */
 export function activityViewsForMode(
   mode: WorkspaceMode,
   { experimentalFeatures }: PanelRegistryOptions,
 ): ActivityView[] {
-  if (mode === 'research') {
-    return [...RESEARCH_TOP, ...RESEARCH_BOTTOM];
-  }
-  const top = experimentalFeatures ? [...LEARN_CORE, ...LEARN_EXPERIMENTAL] : [...LEARN_CORE];
-  return [...top, ...LEARN_BOTTOM];
+  return leftPanelsForMode(mode, { developerViews: experimentalFeatures });
 }
 
-/** Views rendered pinned to the bottom of the rail, regardless of mode. */
+/** Views rendered pinned to the bottom of the rail for a mode. */
 export function bottomViewsForMode(mode: WorkspaceMode): ActivityView[] {
-  return mode === 'research' ? RESEARCH_BOTTOM : LEARN_BOTTOM;
+  return bottomLeftPanelsForMode(mode);
 }

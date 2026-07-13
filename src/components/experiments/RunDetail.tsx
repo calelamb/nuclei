@@ -9,6 +9,7 @@ import { createTauriExperimentFs } from '../../services/experimentFs';
 import { openRunFolder } from '../../lib/openRunFolder';
 import { RunHistogram } from './RunHistogram';
 import { RunCircuitDiagram } from './RunCircuitDiagram';
+import { PanelHeader } from '../layout/PanelHeader';
 import type { CircuitSnapshot, SimulationResult } from '../../types/quantum';
 import type { RunRecord } from '../../types/experiment';
 
@@ -150,36 +151,40 @@ export function RunDetail() {
 
   return (
     <div style={{ height: '100%', overflow: 'auto', background: colors.bg }}>
-      <div style={{
-        display: 'flex', alignItems: 'center', gap: 10,
-        padding: '10px 14px', borderBottom: `1px solid ${colors.border}`,
-      }}>
-        <button
-          onClick={() => selectRun(null)}
-          style={{
-            display: 'flex', alignItems: 'center', gap: 4, background: 'transparent',
-            border: 'none', color: colors.textMuted, cursor: 'pointer', fontSize: 12,
-            fontFamily: "'Geist Sans', sans-serif", padding: 0,
-          }}
-        >
-          <ArrowLeft size={13} /> Back to runs
-        </button>
-        <span style={{ color: colors.text, fontSize: 13, fontWeight: 600, fontFamily: "'Fira Code', monospace" }}>
-          {run.dir}
-        </span>
-        <button
-          onClick={() => void openRunFolder(runDirPath)}
-          title="Open run folder"
-          style={{
-            marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 4,
-            background: 'transparent', border: `1px solid ${colors.border}`, borderRadius: 4,
-            color: colors.textMuted, cursor: 'pointer', fontSize: 11, padding: '4px 8px',
-            fontFamily: "'Geist Sans', sans-serif",
-          }}
-        >
-          <FolderOpen size={12} /> Open run folder
-        </button>
-      </div>
+      {/* Shared PanelHeader (PRD 11 Phase C) — replaces the hand-rolled header.
+          Leading = back-to-runs, title = run dir, actions = open run folder,
+          overflow = Help→docs. */}
+      <PanelHeader
+        title={run.dir}
+        context={experiment.spec.name}
+        helpHref="https://getnuclei.dev/docs/research/experiments/"
+        leading={
+          <button
+            onClick={() => selectRun(null)}
+            style={{
+              display: 'flex', alignItems: 'center', gap: 4, background: 'transparent',
+              border: 'none', color: colors.textMuted, cursor: 'pointer', fontSize: 12,
+              fontFamily: "'Geist Sans', sans-serif", padding: 0,
+            }}
+          >
+            <ArrowLeft size={13} /> Back to runs
+          </button>
+        }
+        actions={
+          <button
+            onClick={() => void openRunFolder(runDirPath)}
+            title="Open run folder"
+            style={{
+              display: 'flex', alignItems: 'center', gap: 4,
+              background: 'transparent', border: `1px solid ${colors.border}`, borderRadius: 4,
+              color: colors.textMuted, cursor: 'pointer', fontSize: 11, padding: '4px 8px',
+              fontFamily: "'Geist Sans', sans-serif",
+            }}
+          >
+            <FolderOpen size={12} /> Open run folder
+          </button>
+        }
+      />
 
       <div style={{ padding: 14, display: 'flex', flexDirection: 'column', gap: 20 }}>
         <section>

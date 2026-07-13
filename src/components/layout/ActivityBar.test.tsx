@@ -16,10 +16,11 @@ describe('<ActivityBar>', () => {
     const labels = Array.from(toolbar.querySelectorAll('button')).map((b) =>
       b.getAttribute('aria-label'),
     );
-    expect(labels).toEqual(['Explorer', 'Learning', 'Challenges', 'Launch', 'Settings']);
+    // PRD 11 Phase C: Community graduated into the Learn rail.
+    expect(labels).toEqual(['Explorer', 'Learning', 'Challenges', 'Launch', 'Community', 'Settings']);
   });
 
-  it('renders Research-mode items including the Experiments placeholder, without Learning/Challenges/Community', () => {
+  it('renders Research-mode items (Experiments, Hardware, Plugins), without Learning/Challenges/Community', () => {
     const views = activityViewsForMode('research', { experimentalFeatures: false });
     const { getByRole } = render(
       <ActivityBar active="files" onSelect={vi.fn()} visibleViews={views} workspaceMode="research" />,
@@ -28,7 +29,8 @@ describe('<ActivityBar>', () => {
     const labels = Array.from(toolbar.querySelectorAll('button')).map((b) =>
       b.getAttribute('aria-label'),
     );
-    expect(labels).toEqual(['Explorer', 'Experiments', 'Hardware', 'Launch', 'Settings']);
+    // Plugins graduated into the Research rail (Phase C).
+    expect(labels).toEqual(['Explorer', 'Experiments', 'Hardware', 'Launch', 'Plugins', 'Settings']);
     expect(labels).not.toContain('Learning');
     expect(labels).not.toContain('Challenges');
     expect(labels).not.toContain('Community');

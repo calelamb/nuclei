@@ -3,7 +3,7 @@ import { usePlatform } from '../../platform/PlatformProvider';
 import { ErrorBoundary } from '../ErrorBoundary';
 import { QuantumEditor } from '../editor/QuantumEditor';
 import { EditorTabs } from '../editor/EditorTabs';
-import { Breadcrumbs } from '../editor/Breadcrumbs';
+import { Breadcrumbs, ExperimentBreadcrumbs } from '../editor/Breadcrumbs';
 import { ProbabilityHistogram } from '../histogram/ProbabilityHistogram';
 import { BlochPanel } from '../bloch/BlochPanel';
 import { DiracSidePanel } from '../dirac/DiracSidePanel';
@@ -776,14 +776,19 @@ export function PanelLayout() {
         ) : showExperimentsMain ? (
           /* PRD 09 Phase D — Research mode's runs table / run detail,
              swapped in for the ordinary editor+viz area while an experiment
-             is selected in the Experiments rail. */
+             is selected in the Experiments rail. PRD 11 Phase C adds the
+             experiment→run breadcrumb trail at the top. */
           <div style={{
             flex: 1, minWidth: 0, overflow: 'hidden',
+            display: 'flex', flexDirection: 'column',
             animation: 'nuclei-fade-in 200ms ease',
           }}>
-            <Suspense fallback={null}>
-              {compareOpen ? <CompareView /> : selectedRunDir ? <RunDetail /> : <RunsTable />}
-            </Suspense>
+            <ExperimentBreadcrumbs />
+            <div style={{ flex: 1, minHeight: 0, overflow: 'hidden' }}>
+              <Suspense fallback={null}>
+                {compareOpen ? <CompareView /> : selectedRunDir ? <RunDetail /> : <RunsTable />}
+              </Suspense>
+            </div>
           </div>
         ) : (
           <>
