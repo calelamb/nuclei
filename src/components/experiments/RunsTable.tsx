@@ -127,8 +127,9 @@ export function RunsTable() {
     );
   }
 
-  const pointCount = expandGrid(experiment.spec.sweep).length;
-  const hasSweep = Object.keys(experiment.spec.sweep ?? {}).length > 0;
+  const sweep = experiment.spec.type !== 'qec_campaign' ? experiment.spec.sweep : undefined;
+  const pointCount = expandGrid(sweep).length;
+  const hasSweep = Object.keys(sweep ?? {}).length > 0;
 
   return (
     <div style={{ height: '100%', display: 'flex', flexDirection: 'column', background: colors.bg }} role="table" aria-label={`Runs for ${experiment.spec.name}`}>

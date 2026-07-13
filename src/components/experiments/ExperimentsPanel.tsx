@@ -5,7 +5,7 @@ import { useProjectStore } from '../../stores/projectStore';
 import { useExperimentStore, type DiscoveredExperiment } from '../../services/experimentStore';
 import { useExperimentUiStore } from '../../stores/experimentUiStore';
 import { createTauriExperimentFs } from '../../services/experimentFs';
-import { expandGrid } from '../../types/experiment';
+import { campaignTaskCount, expandGrid } from '../../types/experiment';
 import { NewExperimentForm } from './NewExperimentForm';
 import { RunButton } from './RunButton';
 
@@ -27,8 +27,13 @@ function formatLastRun(experiment: DiscoveredExperiment, runsByExperiment: Recor
 }
 
 function gridSizeLabel(experiment: DiscoveredExperiment): string {
+  const { spec } = experiment;
+  if (spec.type === 'qec_campaign') {
+    const count = campaignTaskCount(spec);
+    return count === null ? '?' : String(count);
+  }
   try {
-    return String(expandGrid(experiment.spec.sweep).length);
+    return String(expandGrid(spec.sweep).length);
   } catch {
     // Discovered experiments already passed grid validation at parse time;
     // this only guards against a future schema change surfacing here first.
@@ -79,14 +84,20 @@ function ExperimentRow({
         </button>
       </div>
       <div style={{ color: colors.textDim, fontSize: 10, fontFamily: "'Fira Code', monospace" }}>
-        {spec.entry} · {spec.backend.provider}/{spec.backend.target}
+        {spec.type === 'qec_campaign'
+          ? `${'generate' in spec.source ? spec.source.generate.code : spec.source.entry} · ${spec.noise.model} · ${spec.decoders.join('+')}`
+          : `${spec.entry} · ${spec.backend.provider}/${spec.backend.target}`}
       </div>
       <div style={{ color: colors.textDim, fontSize: 10, fontFamily: "'Geist Sans', sans-serif" }}>
-        {gridSizeLabel(experiment)} point{gridSizeLabel(experiment) === '1' ? '' : 's'} · last run: {lastRun}
+        {spec.type === 'qec_campaign'
+          ? `campaign · ${gridSizeLabel(experiment)} task${gridSizeLabel(experiment) === '1' ? '' : 's'} · last run: ${lastRun}`
+          : `${gridSizeLabel(experiment)} point${gridSizeLabel(experiment) === '1' ? '' : 's'} · last run: ${lastRun}`}
       </div>
-      <div onClick={(e) => e.stopPropagation()}>
-        <RunButton experiment={experiment} projectRoot={projectRoot} pointCount={Number(gridSizeLabel(experiment)) || 0} />
-      </div>
+      {spec.type !== 'qec_campaign' && (
+        <div onClick={(e) => e.stopPropagation()}>
+          <RunButton experiment={experiment} projectRoot={projectRoot} pointCount={Number(gridSizeLabel(experiment)) || 0} />
+        </div>
+      )}
     </div>
   );
 }

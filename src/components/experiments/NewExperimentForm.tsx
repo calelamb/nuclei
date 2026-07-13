@@ -73,7 +73,9 @@ export function NewExperimentForm({ projectRoot, existing, onClose }: NewExperim
   const rowIdRef = useRef(0);
   const nextRowId = () => `row-${rowIdRef.current++}`;
 
-  const initial = existing
+  // The form edits SWEEP experiments; campaign yamls are edited as text
+  // until QEC Studio's UI phases land (PRD 10 D–F).
+  const initial = existing && existing.spec.type !== 'qec_campaign'
     ? fieldFromSpec(existing.spec, nextRowId)
     : { name: '', entry: '', backendName: SIMULATOR_BACKEND.name, shots: '1024', seed: '42', notes: '', sweepRows: [] as SweepRowState[] };
 
@@ -109,7 +111,7 @@ export function NewExperimentForm({ projectRoot, existing, onClose }: NewExperim
     return useExperimentStore.subscribe((state) => {
       if (dirtyRef.current) return;
       const updated = state.experiments.find((e) => e.fileName === existing.fileName);
-      if (!updated) return;
+      if (!updated || updated.spec.type === 'qec_campaign') return;
       const fields = fieldFromSpec(updated.spec, nextRowId);
       setName(fields.name);
       setEntry(fields.entry);

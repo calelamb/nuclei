@@ -1,0 +1,7 @@
+{
+  "type": "qec_materialize",
+  "code": "import stim\n\ndef nuclei_circuits(noise):\n    p = noise[\"p\"]\n    return {\n        \"rep_d3\": stim.Circuit.generated(\n            \"repetition_code:memory\", distance=3, rounds=2,\n            before_measure_flip_probability=p,\n        ),\n    }\n",
+  "noise": {
+    "p": 0.01
+  }
+}

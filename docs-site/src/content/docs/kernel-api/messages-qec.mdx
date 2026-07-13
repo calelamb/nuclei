@@ -12,6 +12,8 @@ import qecDecodeRes from '../../../../fixtures/qec_decode_sample.responses.json?
 import qecCampaignInvalidReq from '../../../../fixtures/qec_campaign_start_invalid.request.json?raw';
 import qecCampaignInvalidRes from '../../../../fixtures/qec_campaign_start_invalid.responses.json?raw';
 import qecCampaignSession from '../../../../fixtures/illustrative/qec_campaign.session.json?raw';
+import qecMaterializeReq from '../../../../fixtures/qec_materialize.request.json?raw';
+import qecMaterializeRes from '../../../../fixtures/qec_materialize.responses.json?raw';
 
 <Aside type="note" title="Protocol v1.2 — QEC Studio">
 Everything on this page is additive over v1.1: new message types plus one
@@ -196,6 +198,20 @@ result. Illustrative (timing-dependent message counts; the semantics are
 pinned by `kernel/tests/test_qec_campaign.py` instead):
 
 <Code code={qecCampaignSession} lang="json" title="illustrative/qec_campaign.session.json" />
+
+### `qec_materialize`
+
+Campaigns whose `source` is a Python `entry:` file provide circuits via the
+**`nuclei_circuits(noise)` contract**: the file defines
+`nuclei_circuits(noise: dict) -> dict[str, stim.Circuit]`, the runner sends
+the file's code plus one grid point's resolved noise dict, and the kernel
+returns `{label: circuit_text}` (`qec_circuits`). Arbitrary custom noise
+stays possible — the user applies the dict however they like. Contract
+violations (missing function, wrong return shape, non-Circuit values) are
+`qec_materialize_invalid` errors with the exact complaint.
+
+<Code code={qecMaterializeReq} lang="json" title="qec_materialize.request.json" />
+<Code code={qecMaterializeRes} lang="json" title="qec_materialize.responses.json" />
 
 ### `qec_decode_sample`
 

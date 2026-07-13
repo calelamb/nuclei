@@ -133,6 +133,9 @@ export type KernelMessage =
       existing_stats_csv?: string;
     }
   | { type: 'qec_campaign_cancel'; campaign_id: string }
+  // Protocol v1.2 (PRD 10 Phase C) — run a campaign entry source's
+  // nuclei_circuits(noise) and collect its labeled circuits.
+  | { type: 'qec_materialize'; code: string; noise?: Record<string, number> }
   | { type: 'qec_decode_sample'; circuit_text: string; decoder: 'pymatching'; seed?: number };
 
 interface HardwareJobDTO {
@@ -181,4 +184,6 @@ export type KernelResponse =
   | ({ type: 'qec_campaign_progress' } & QecCampaignProgress)
   | ({ type: 'qec_campaign_result' } & QecCampaignResult)
   | { type: 'qec_campaign_cancelled'; campaign_id: string; accepted: boolean }
+  // Protocol v1.2 (PRD 10 Phase C) — reply to qec_materialize.
+  | { type: 'qec_circuits'; circuits: Record<string, string> }
   | ({ type: 'qec_decode_sample' } & QecDecodeSampleResult);

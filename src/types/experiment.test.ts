@@ -12,6 +12,10 @@ import {
   runRecordSchema,
   topStateProbability,
   type RunManifest,
+  campaignManifestSchema,
+  campaignRoundsSchema,
+  campaignTaskCount,
+  resolveRounds,
 } from './experiment';
 
 // ---------------------------------------------------------------------------
@@ -374,5 +378,167 @@ describe('runManifestSchema', () => {
   it('validates a full RunRecord', () => {
     const record = { dir: '20260712-141530-a3f9', manifest: VALID_MANIFEST, metrics: { energy: -1.1 } };
     expect(runRecordSchema.safeParse(record).success).toBe(true);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Schema v2 (PRD 10 Phase C): back-compat + qec_campaign
+// ---------------------------------------------------------------------------
+
+const V1_ON_DISK = `
+schema: 1
+name: theta-sweep
+entry: vqe_h2.py
+backend:
+  provider: simulator
+  target: statevector
+shots: 2048
+seed: 42
+sweep:
+  theta:
+    range: [0, 3.14159, 0.31416]
+`;
+
+const V2_CAMPAIGN = `
+schema: 2
+type: qec_campaign
+name: surface-vs-repetition
+source:
+  generate:
+    code: surface_code:rotated_memory_z
+    distances: [3, 5, 7]
+    rounds: 3d
+noise:
+  model: SI1000
+  p: { range: [0.001, 0.01, 0.001] }
+decoders: [pymatching, fusion_blossom]
+collect:
+  max_shots: 1000000
+  max_errors: 1000
+workers: auto
+`;
+
+describe('schema v2 (PRD 10 Phase C)', () => {
+  it('BACK-COMPAT: a schema-1 file (no type key) parses exactly as before, normalized to type sweep', () => {
+    const result = parseExperimentYaml(V1_ON_DISK, 'theta-sweep.experiment.yaml');
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.spec).toEqual({
+      schema: 1,
+      type: 'sweep',
+      name: 'theta-sweep',
+      entry: 'vqe_h2.py',
+      language: 'python',
+      backend: { provider: 'simulator', target: 'statevector' },
+      shots: 2048,
+      seed: 42,
+      sweep: { theta: { range: [0, 3.14159, 0.31416] } },
+    });
+  });
+
+  it('schema-2 type sweep validates with identical semantics', () => {
+    const result = parseExperimentYaml(
+      V1_ON_DISK.replace('schema: 1', 'schema: 2\ntype: sweep'),
+      'theta-sweep.experiment.yaml',
+    );
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.spec.type).toBe('sweep');
+    if (result.spec.type !== 'sweep') return;
+    // 3.14159 is NOT an exact multiple of 0.31416 (9.99997...), so the
+    // arange-with-epsilon stops at 2.82744 — 10 points, same as v1.
+    expect(expandGrid(result.spec.sweep)).toHaveLength(10);
+  });
+
+  it('parses a full qec_campaign spec', () => {
+    const result = parseExperimentYaml(V2_CAMPAIGN, 'surface-vs-repetition.experiment.yaml');
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.spec.type).toBe('qec_campaign');
+    if (result.spec.type !== 'qec_campaign') return;
+    expect(result.spec.decoders).toEqual(['pymatching', 'fusion_blossom']);
+    expect(result.spec.workers).toBe('auto');
+    // grid: 3 distances x 10 noise points x 2 decoders
+    expect(campaignTaskCount(result.spec)).toBe(60);
+  });
+
+  it('campaign task count is null for entry sources (labels unknown until materialization)', () => {
+    const yaml = V2_CAMPAIGN.replace(
+      /source:[\s\S]*?rounds: 3d\n/,
+      'source:\n  entry: make_circuits.py\n',
+    );
+    const result = parseExperimentYaml(yaml, 'c.experiment.yaml');
+    expect(result.ok).toBe(true);
+    if (!result.ok || result.spec.type !== 'qec_campaign') return;
+    expect(campaignTaskCount(result.spec)).toBeNull();
+  });
+
+  it('rejects a campaign seed with the honest sinter explanation', () => {
+    const result = parseExperimentYaml(V2_CAMPAIGN + 'seed: 42\n', 'c.experiment.yaml');
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.errors[0]).toMatch(/not seed-reproducible/);
+  });
+
+  it('requires a collection bound', () => {
+    const yaml = V2_CAMPAIGN.replace(/collect:[\s\S]*?max_errors: 1000\n/, 'collect: {}\n');
+    const result = parseExperimentYaml(yaml, 'c.experiment.yaml');
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.errors.join(' ')).toMatch(/max_shots \/ max_errors/);
+  });
+
+  it('schema 2 without a type is a readable error', () => {
+    const result = parseExperimentYaml(
+      V1_ON_DISK.replace('schema: 1', 'schema: 2'),
+      't.experiment.yaml',
+    );
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.errors[0]).toMatch(/explicit type/);
+  });
+
+  it('qec_campaign under schema 1 is a readable error', () => {
+    const result = parseExperimentYaml(
+      V2_CAMPAIGN.replace('schema: 2', 'schema: 1'),
+      'c.experiment.yaml',
+    );
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.errors[0]).toMatch(/requires schema: 2/);
+  });
+
+  it('resolveRounds handles integers and "<n>d"', () => {
+    expect(resolveRounds(7, 5)).toBe(7);
+    expect(resolveRounds('3d', 5)).toBe(15);
+    expect(campaignRoundsSchema.safeParse('0d').success).toBe(false);
+    expect(campaignRoundsSchema.safeParse('d3').success).toBe(false);
+  });
+
+  it('campaignManifestSchema accepts a complete campaign manifest', () => {
+    const manifest = {
+      schema: 1,
+      type: 'qec_campaign',
+      experiment: 'surface-vs-repetition',
+      source: { generate: { code: 'surface_code:rotated_memory_z', distances: [3, 5], rounds: '3d' } },
+      noise_model: 'SI1000',
+      noise_points: [0.001, 0.002],
+      decoders: ['pymatching'],
+      tasks_total: 4,
+      collect: { max_shots: 1000 },
+      workers: 'auto',
+      code_sha256: 'abc123',
+      git: null,
+      versions: { nuclei: '0.7.0', stim: '1.16.0', sinter: '1.16.0' },
+      started_at: '2026-07-12T00:00:00.000Z',
+      duration_ms: 1234,
+      status: 'complete',
+      partial: false,
+      sampled_shots: 4000,
+      resumed_from: null,
+      error: null,
+    };
+    const parsed = campaignManifestSchema.safeParse(manifest);
+    expect(parsed.success).toBe(true);
   });
 });

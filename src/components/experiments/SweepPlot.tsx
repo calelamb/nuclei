@@ -41,7 +41,9 @@ export function SweepPlot() {
   );
 
   const sweepParams = useMemo(
-    () => Object.keys(experiment?.spec.sweep ?? {}),
+    () => Object.keys(
+      (experiment && experiment.spec.type !== 'qec_campaign' ? experiment.spec.sweep : undefined) ?? {},
+    ),
     [experiment],
   );
   const metricNames = useMemo(

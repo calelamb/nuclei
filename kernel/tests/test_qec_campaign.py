@@ -395,3 +395,76 @@ def test_decode_sample_bad_circuit_is_compile_error():
 
     assert decoded is None
     assert error is not None and error.code == "compile_error"
+
+
+# ───────── qec_materialize: the nuclei_circuits(noise) contract (Phase C) ─────────
+
+
+ENTRY_SOURCE = """\
+import stim
+
+def nuclei_circuits(noise):
+    p = noise.get("p", 0.001)
+    return {
+        "rep_d3": stim.Circuit.generated(
+            "repetition_code:memory", distance=3, rounds=3,
+            before_measure_flip_probability=p,
+        ),
+        "rep_d5": stim.Circuit.generated(
+            "repetition_code:memory", distance=5, rounds=5,
+            before_measure_flip_probability=p,
+        ),
+    }
+"""
+
+
+def test_materialize_returns_labeled_circuit_texts():
+    from kernel.executor import Executor
+    from kernel.qec.materialize import materialize_circuits
+
+    circuits, stdout, stderr, error = materialize_circuits(
+        Executor(), ENTRY_SOURCE, {"p": 0.01}
+    )
+
+    assert error is None
+    assert set(circuits) == {"rep_d3", "rep_d5"}
+    for text in circuits.values():
+        parsed = stim.Circuit(text)
+        assert parsed.num_detectors > 0
+    # The noise dict reached user code: p=0.01 appears in the emitted text.
+    assert "X_ERROR(0.01)" in circuits["rep_d3"]
+
+
+@pytest.mark.parametrize(
+    ("code", "match"),
+    [
+        ("x = 1\n", "no such function"),
+        ("def nuclei_circuits(noise):\n    return {}\n", "non-empty dict"),
+        ("def nuclei_circuits(noise):\n    return [1]\n", "non-empty dict"),
+        ("def nuclei_circuits(noise):\n    return {'a': 42}\n", "expected stim.Circuit"),
+        ("def nuclei_circuits(noise):\n    raise RuntimeError('boom')\n", "raised: boom"),
+    ],
+)
+def test_materialize_contract_violations_are_user_readable(code, match):
+    from kernel.executor import Executor
+    from kernel.qec.materialize import materialize_circuits
+
+    circuits, _stdout, _stderr, error = materialize_circuits(Executor(), code, {})
+
+    assert circuits is None
+    assert error is not None
+    assert error.code == "qec_materialize_invalid"
+    assert match in error.message
+
+
+def test_materialize_entry_code_error_propagates_as_execution_error():
+    from kernel.executor import Executor
+    from kernel.qec.materialize import materialize_circuits
+
+    circuits, _stdout, _stderr, error = materialize_circuits(
+        Executor(), "1/0\n", {}
+    )
+
+    assert circuits is None
+    assert error is not None
+    assert error.code == "execution_error"
