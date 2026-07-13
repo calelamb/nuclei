@@ -17,6 +17,10 @@ import { useHardwareStore } from '../../stores/hardwareStore';
 import { useLayoutStore, type LayoutPreset } from '../../stores/layoutStore';
 import { resolveVisiblePanels } from '../../layout/panelRegistry';
 import { StatusBar } from './StatusBar';
+import { ModeSwitchDialog } from './ModeSwitchDialog';
+import { ResearchTour } from './ResearchTour';
+import { useModeSwitchStore } from '../../stores/modeSwitchStore';
+import { useResearchTourStore } from '../../stores/researchTourStore';
 import { useDiracStore } from '../../stores/diracStore';
 import { DEFAULT_EDITOR_PANE_WIDTH, computeEditorPaneWidth } from './layoutMath';
 import { useEditorStore } from '../../stores/editorStore';
@@ -595,12 +599,15 @@ export function PanelLayout() {
   // (e.g. toggling Learn Mode off leaves activeView untouched today, and
   // must keep doing so for byte-compatibility).
   const prevWorkspaceModeRef = useRef(workspaceMode);
+  const maybeAutoStartTour = useResearchTourStore((s) => s.maybeAutoStart);
   useEffect(() => {
     if (prevWorkspaceModeRef.current === workspaceMode) return;
     prevWorkspaceModeRef.current = workspaceMode;
     if (isLearnMode) exitLearnMode();
     if (isChallengeMode) exitChallengeMode();
     setActiveView((prev) => (prev && visibleActivityViews.includes(prev) ? prev : 'files'));
+    // First entry into Research shows the orientation tour once (PRD 11 B).
+    if (workspaceMode === 'research') maybeAutoStartTour();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [workspaceMode, isLearnMode, isChallengeMode, exitLearnMode, exitChallengeMode]);
 
@@ -857,6 +864,37 @@ export function PanelLayout() {
 
       {/* Status bar — full width at bottom */}
       <StatusBar />
+
+      {/* Mode identity chrome (PRD 11 Phase B) — dialog + tour portal to
+          document.body; the announcer is a visually-hidden polite live
+          region that reads out mode changes for screen readers. */}
+      <ModeSwitchDialog />
+      <ResearchTour />
+      <ModeAnnouncer />
+    </div>
+  );
+}
+
+/** Visually-hidden aria-live region announcing workspace-mode changes. */
+function ModeAnnouncer() {
+  const announcement = useModeSwitchStore((s) => s.announcement);
+  return (
+    <div
+      aria-live="polite"
+      aria-atomic="true"
+      style={{
+        position: 'absolute',
+        width: 1,
+        height: 1,
+        padding: 0,
+        margin: -1,
+        overflow: 'hidden',
+        clip: 'rect(0 0 0 0)',
+        whiteSpace: 'nowrap',
+        border: 0,
+      }}
+    >
+      {announcement}
     </div>
   );
 }

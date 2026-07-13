@@ -60,9 +60,10 @@ describe('<StatusBar> (extracted from PanelLayout, Phase A)', () => {
     expect(getByText('Qubits: —')).toBeTruthy();
     expect(getByText('Depth: —')).toBeTruthy();
     expect(getByRole('combobox', { name: 'Layout preset' })).toBeTruthy();
-    // Right slots: kernel state, run status, mode toggle
+    // Right slots: kernel state, run status
     expect(getByText(/^Kernel/)).toBeTruthy();
     expect(getByText('Ready')).toBeTruthy();
+    // Far-left mode chip carries the "Switch workspace mode" control (Phase B).
     expect(getByRole('button', { name: 'Switch workspace mode' })).toBeTruthy();
   });
 
@@ -81,11 +82,11 @@ describe('<StatusBar> (extracted from PanelLayout, Phase A)', () => {
     expect(getByText('Depth: 5')).toBeTruthy();
   });
 
-  it('labels the workspace-mode toggle by the active mode', () => {
+  it('the mode chip shows the active mode label', () => {
     useWorkspaceStore.setState({ mode: 'research' });
     const { getByRole } = renderStatusBar();
-    const toggle = getByRole('button', { name: 'Switch workspace mode' });
-    expect(toggle.textContent).toBe('Research');
+    const chip = getByRole('button', { name: 'Switch workspace mode' });
+    expect(chip.textContent).toBe('RESEARCH');
   });
 
   it('shows the Research-mode sweep indicator when a run is active', () => {

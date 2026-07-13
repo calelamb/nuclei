@@ -22,6 +22,9 @@ import { useThemeStore } from './stores/themeStore';
 import { useEditorStore } from './stores/editorStore';
 import { useUIModeStore } from './stores/uiModeStore';
 import { useWorkspaceStore } from './stores/workspaceStore';
+import { useModeSwitchStore } from './stores/modeSwitchStore';
+import { useResearchTourStore } from './stores/researchTourStore';
+import { useModeIdentity } from './hooks/useModeIdentity';
 import { useDiracPanelStore } from './stores/diracPanelStore';
 import { useBottomPanelStore } from './stores/bottomPanelStore';
 import type { PlatformBridge } from './platform/bridge';
@@ -55,6 +58,7 @@ function AppInner() {
   const fileOps = useFileOps();
   useActiveTabSync();
   useKeychainKeyMigration();
+  useModeIdentity();
   const platform = usePlatform();
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [showShortcuts, setShowShortcuts] = useState(false);
@@ -276,10 +280,10 @@ function AppInner() {
       platform.setStoredValue('ui_mode', useUIModeStore.getState().mode).catch(() => {});
     },
     toggleShortcuts: () => setShowShortcuts((s) => !s),
-    switchWorkspaceMode: () => {
-      const store = useWorkspaceStore.getState();
-      store.setMode(store.mode === 'learn' ? 'research' : 'learn');
-    },
+    // Route through the in-flight-work guard (PRD 11 Phase B): a running
+    // sweep/campaign prompts a confirm before the switch; jobs never cancel.
+    switchWorkspaceMode: () => useModeSwitchStore.getState().requestToggle(),
+    startResearchTour: () => useResearchTourStore.getState().start(),
   });
 
   // Global keyboard shortcuts
