@@ -3,16 +3,16 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Nuclei — The IDE for Learning Quantum Computing</title>
-  <meta name="description" content="A free, open-source desktop IDE for learning quantum computing. Write circuits in Qiskit, Cirq, CUDA-Q, or Q#, watch them render live, simulate with one keypress, and learn from an AI tutor that reads your code.">
+  <title>Nuclei — The open-source quantum workspace</title>
+  <meta name="description" content="The open-source quantum workspace. Learn it, research it, run it on real hardware: 4 frameworks, QEC campaigns, 8 hardware providers, local and private. Free and open source.">
   <meta name="theme-color" content="#FBFCFE">
 
   <!-- Favicon: blue atom glyph (matches new brand accent #2563EB) -->
   <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 48 48'%3E%3Ccircle cx='24' cy='24' r='3' fill='%232563EB'/%3E%3Cg stroke='%232563EB' stroke-width='2.5' fill='none' stroke-linecap='round'%3E%3Cellipse cx='24' cy='24' rx='18' ry='7'/%3E%3Cellipse cx='24' cy='24' rx='18' ry='7' transform='rotate(60 24 24)'/%3E%3Cellipse cx='24' cy='24' rx='18' ry='7' transform='rotate(120 24 24)'/%3E%3C/g%3E%3C/svg%3E">
 
   <!-- Open Graph -->
-  <meta property="og:title" content="Nuclei — The IDE for Learning Quantum Computing">
-  <meta property="og:description" content="Write circuits in Qiskit, Cirq, CUDA-Q, or Q#. Watch them render live, simulate with one keypress, and learn from an AI tutor. Free and open source.">
+  <meta property="og:title" content="Nuclei — The open-source quantum workspace">
+  <meta property="og:description" content="Learn it. Research it. Run it on real hardware. 4 frameworks, QEC campaigns, 8 hardware providers, local and private. Free and open source.">
   <meta property="og:type" content="website">
   <meta property="og:url" content="https://getnuclei.dev">
   <meta name="twitter:card" content="summary">
@@ -41,6 +41,8 @@
       --bd:   rgba(30, 58, 138, .10); /* hairline borders */
       --bdh:  rgba(30, 58, 138, .22); /* border on hover */
       --tint: rgba(37, 99, 235, .09); /* icon tiles, NEW badges */
+      --mode-teal: #00B4D8;           /* Learn door (in-app --mode-accent) */
+      --mode-violet: #7B2D8E;         /* Research door (in-app --mode-accent) */
 
       --font-display: 'Space Grotesk', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
       --font-body: 'IBM Plex Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
@@ -149,6 +151,30 @@
     .hero h1 .accent { color: var(--blue); }
     .hero-sub { font-size: 18px; line-height: 1.65; color: var(--sec); max-width: 470px; margin-bottom: 34px; }
     .hero-actions { display: flex; gap: 14px; flex-wrap: wrap; }
+
+    /* two-door mode chooser — mirrors the in-app --mode-accent system
+       (teal Learn / violet Research) so site and app tell one story. */
+    .doors { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 26px; max-width: 470px; }
+    .door {
+      display: block; text-decoration: none; border-radius: 12px; padding: 18px 18px 20px;
+      border: 1px solid var(--bd); background: var(--surf); transition: transform .18s ease, border-color .18s ease, box-shadow .18s ease;
+    }
+    .door:hover { transform: translateY(-2px); box-shadow: 0 10px 30px rgba(30,58,138,.10); }
+    .door-learn { border-top: 3px solid var(--mode-teal); }
+    .door-learn:hover { border-color: var(--mode-teal); }
+    .door-research { border-top: 3px solid var(--mode-violet); }
+    .door-research:hover { border-color: var(--mode-violet); }
+    .door-eyebrow { font-family: var(--font-mono); font-size: 11px; letter-spacing: .04em; text-transform: uppercase; margin-bottom: 6px; }
+    .door-learn .door-eyebrow { color: var(--mode-teal); }
+    .door-research .door-eyebrow { color: var(--mode-violet); }
+    .door-title { font-family: var(--font-display); font-size: 17px; font-weight: 600; color: var(--ink); margin-bottom: 4px; }
+    .door-desc { font-size: 13px; line-height: 1.5; color: var(--sec); }
+
+    /* capabilities strip — "complete" energy shown, not stated. */
+    .caps { display: flex; flex-wrap: wrap; gap: 10px 20px; align-items: center; font-size: 13.5px; color: var(--sec); }
+    .caps .cap { display: inline-flex; align-items: center; gap: 8px; }
+    .caps .cap::before { content: ""; width: 5px; height: 5px; border-radius: 50%; background: var(--blue); }
+
     .visual { position: relative; display: flex; justify-content: center; }
     .glow { position: absolute; border-radius: 50%; }
     .glow-a { width: 200px; height: 200px; background: radial-gradient(circle, rgba(37,99,235,.14), transparent 70%); top: 10%; left: 6%; animation: glowBreathe 5s ease-in-out infinite; }
@@ -261,6 +287,7 @@
       .nav-inner { padding: 16px 24px; }
       .nav-links { gap: 18px; }
       .hero h1 { font-size: 40px; }
+      .doors { grid-template-columns: 1fr; }
       .feature-grid { grid-template-columns: 1fr; }
       .fw-card { padding: 32px 28px; }
       .fw-list { gap: 28px; }
@@ -288,7 +315,7 @@
       <a class="brand" href="#" aria-label="Nuclei home">
         <svg width="26" height="26" viewBox="0 0 48 48" aria-hidden="true"><circle cx="24" cy="24" r="3" fill="currentColor"/><g stroke="currentColor" stroke-width="2.5" fill="none" stroke-linecap="round"><ellipse cx="24" cy="24" rx="18" ry="7"/><ellipse cx="24" cy="24" rx="18" ry="7" transform="rotate(60 24 24)"/><ellipse cx="24" cy="24" rx="18" ry="7" transform="rotate(120 24 24)"/></g></svg>
         <span class="wordmark">NUCLEI</span>
-        <span class="ver">v0.5.0</span>
+        <span class="ver">v0.7.0</span>
       </a>
       <nav class="nav-links" aria-label="Primary">
         <a href="/docs" class="nav-secondary">Docs</a>
@@ -304,14 +331,36 @@
     <section class="hero" aria-labelledby="hero-heading">
       <div>
         <div class="badge"><span class="dot" aria-hidden="true"></span>Free &amp; open source</div>
-        <h1 id="hero-heading">The IDE for learning <span class="accent">quantum computing</span></h1>
-        <p class="hero-sub">Write circuits in Qiskit, Cirq, CUDA-Q, or Q#. Watch them render live, simulate with one keypress, and learn from an AI tutor that reads your code.</p>
+        <h1 id="hero-heading">The open-source <span class="accent">quantum workspace</span></h1>
+        <p class="hero-sub">Learn it. Research it. Run it on real hardware.</p>
+
+        <!-- two-door mode chooser — mirrors the in-app Learn/Research chooser -->
+        <div class="doors">
+          <a class="door door-learn" href="/docs/introduction/getting-started/">
+            <div class="door-eyebrow">Learn</div>
+            <div class="door-title">Start learning</div>
+            <div class="door-desc">Lessons, live circuits, and a patient AI tutor from your first qubit.</div>
+          </a>
+          <a class="door door-research" href="/docs/research/workspace-modes/">
+            <div class="door-eyebrow">Research</div>
+            <div class="door-title">Open the research workspace</div>
+            <div class="door-desc">Experiments, QEC campaigns, and hardware, in a workspace built for real work.</div>
+          </a>
+        </div>
+
         <div class="hero-actions">
           <a class="btn-primary" id="hero-dl-btn" href="https://github.com/calelamb/nuclei/releases/latest">
             <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
             <span id="hero-dl-text">Download for macOS</span>
           </a>
           <a class="btn-outline" href="/try/">Try in browser</a>
+        </div>
+
+        <div class="caps" style="margin-top: 26px;">
+          <span class="cap">4 frameworks</span>
+          <span class="cap">QEC campaigns</span>
+          <span class="cap">8 hardware providers</span>
+          <span class="cap">local &amp; private</span>
         </div>
       </div>
 
@@ -428,9 +477,9 @@
     <section class="research" aria-labelledby="research-heading">
       <div class="research-card">
         <div class="lead">
-          <div class="eyebrow">New in v0.6.0</div>
+          <div class="eyebrow">New in v0.7.0</div>
           <h2 id="research-heading">Also doing real quantum research?</h2>
-          <p>Switch to Research mode for multi-file projects, declarative parameter-sweep experiments, and reproducible run manifests — with Dirac as a terse collaborator instead of a tutor. Learn mode stays exactly as it is.</p>
+          <p>Switch to Research mode for multi-file projects, declarative parameter-sweep experiments, QEC Studio (Stim circuits, sinter campaigns, threshold and Λ plots, resource estimation), and reproducible run manifests — with Dirac as a terse collaborator instead of a tutor. Learn mode stays exactly as it is.</p>
         </div>
         <a class="btn-outline" href="/docs/research/workspace-modes/">Read the docs</a>
       </div>

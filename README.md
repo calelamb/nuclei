@@ -1,8 +1,8 @@
 # Nuclei
 
-**The IDE for learning quantum computing.**
+**The open-source quantum workspace. Learn it. Research it. Run it on real hardware.**
 
-Nuclei is a free, open-source desktop IDE purpose-built for students taking their first quantum computing course. Write quantum code in a full-featured editor, see your circuits render in real time, explore qubit states on an interactive Bloch sphere, and get help from an AI tutor that understands your code.
+Nuclei is a free, open-source desktop workspace for quantum computing. In **Learn mode** it's a purpose-built IDE for your first quantum course — write quantum code in a full-featured editor, see circuits render in real time, explore qubit states on an interactive Bloch sphere, and get help from an AI tutor that understands your code. In **Research mode** it's a workspace for real work: multi-file projects, declarative parameter-sweep experiments, a QEC Studio (Stim circuits, sinter campaigns, threshold/Λ plots, resource estimation), and eight hardware providers — all local and private. Four frameworks (Qiskit, Cirq, CUDA-Q, Q#), one workspace.
 
 Download from [GitHub Releases](https://github.com/calelamb/nuclei/releases) or try the [web version](https://getnuclei.dev).
 

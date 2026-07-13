@@ -1,0 +1,64 @@
+---
+title: "Noise models"
+description: "The noise model library and the *.noise.yaml schema: built-in models, generator-argument coefficients over p, entry-only models, and duplicate-to-edit."
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+A **noise model** describes how a QEC campaign's circuits are corrupted. A
+campaign references one by name in its `noise.model`; the model resolves to a
+built-in or a project `noise/*.noise.yaml` file. Files are the source of truth —
+the library GUI reads them and writes copies, it never edits in place.
+
+## The library
+
+Open **Experiments → Noise models**. The dialog lists built-in and project
+models; select one to see its description, citation, generator-argument
+coefficients, and YAML. Two actions:
+
+- **Duplicate to edit** — writes an editable `noise/<name>.noise.yaml` carrying
+  the source model's channels under a new name, and opens it. From there it's
+  yours to change.
+- **Compare with** — diffs two models' generator-argument coefficients, showing
+  only the channels that differ.
+
+## The `*.noise.yaml` schema
+
+```yaml
+schema: 1
+name: my-model
+description: One sentence on what this model represents.
+citation: optional provenance
+generator_args:                     # or `null` for an entry-only model
+  after_clifford_depolarization: 1
+  before_round_data_depolarization: 1
+  before_measure_flip_probability: 1
+  after_reset_flip_probability: 1
+```
+
+`generator_args` are **coefficients over the swept parameter `p`**: at physical
+error rate `p`, each channel is applied at `coefficient × p`. A model lists only
+the channels it uses; omit the rest. The four channels map directly onto Stim's
+`Circuit.generated` noise arguments.
+
+## Built-in models
+
+| Name | Shape |
+|---|---|
+| `uniform_depolarizing` | Every channel at `p` — the textbook baseline. |
+| `SI1000` | Superconducting-inspired: measurement 5p, reset 2p, gates p, idling p/10. A generator-argument approximation of the full model. |
+| `measurement_heavy` | Measurement flip at 10p, gate depolarization at p — readout-limited regimes. |
+| `biased_z` | Z-biased (dephasing-dominated). Entry-only. |
+
+## Entry-only models
+
+Some noise can't be expressed through Stim's uniform generator arguments — Pauli
+bias, for instance. Such a model sets `generator_args: null`. It can only be
+used from an **`entry:` campaign source**, where `nuclei_circuits(noise)`
+receives `{p}` (plus any custom keys you add) and applies the structure itself.
+
+<Aside type="note">
+Editing a `*.noise.yaml` and saving it re-discovers the model from disk — no
+restart, no import step. A malformed file surfaces as a validation message in
+the library, never a crash.
+</Aside>

@@ -5,6 +5,64 @@ All notable changes to Nuclei will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.0] - 2026-07-13
+
+### Added — QEC Studio: quantum error correction as a first-class research surface
+
+Research mode gains a full quantum-error-correction workflow, built on the
+experiment object from 0.6.0. It's the headline of this release.
+
+- **QEC campaigns.** A `qec_campaign` experiment (schema v2) sweeps a
+  stabilizer code over a noise grid and collects logical error rates with
+  [Stim](https://github.com/quantumlib/Stim) + [sinter](https://pypi.org/project/sinter/).
+  Circuits come from a built-in generator (`generate:`) or — the honest
+  path — a **real, editable Python entry** (`nuclei_circuits(noise)`) you
+  own and can change. Campaigns run as managed kernel jobs with a live
+  progress chip, and a stopped campaign **resumes without re-sampling**
+  from the stats it already has. Sampling is Monte-Carlo and unseedable by
+  design; the protocol refuses to imply otherwise.
+- **Visualizations no other desktop tool has:** a moment-by-moment circuit
+  timeline, a code-lattice view from qubit coordinates, and an interactive
+  **detector graph** with a "sample a shot" overlay that shows the fired
+  detectors and the decoder's matching. Every degenerate case is a designed
+  state, never a blank box.
+- **Threshold / Λ analysis.** Logical error rate vs physical error on
+  log-log axes, per distance and decoder, with Wilson confidence intervals
+  and the fitted error-suppression factor Λ. Entry-source campaigns join the
+  fit via a `d=<n>` circuit-label convention.
+- **Resource Estimator.** A new Research panel wraps the Azure Quantum
+  Resource Estimator (via the `qdk` package) over Q# and Qiskit circuits,
+  leading with the headline fault-tolerant cost — physical qubits, runtime,
+  code distance, T-factory count — with a full document and JSON export.
+- **New QEC experiment templates** (repetition + rotated surface memory)
+  and a **noise model library** (list, view, duplicate-to-edit, and diff
+  built-in and project `noise/*.noise.yaml` models — files stay the truth).
+- **Dirac** gains QEC campaign context (source, noise model, detector error
+  model, capped stats rows, Λ) and QEC vocabulary in its research persona.
+
+Protocol **v1.2** adds `qec_generate`, `qec_snapshot`, `qec_campaign_*`,
+`qec_decode_sample`, `qec_materialize`, and `qec_estimate` — all additive;
+old clients are unaffected.
+
+### Added — Workspace navigation and mode identity
+
+- **Command palette, registry-driven.** Every rail view has a *Go to* command
+  and every panel a *Toggle* command, generated from the panel registry so
+  the palette can never drift from the UI. Plus *Switch workspace mode*,
+  *Run experiment <name>* (fuzzy), *Open run folder*, and tour replay.
+- **Keyboard navigation.** `⌘⇧M` switches workspace mode; `⌘1`…`⌘9` jump to
+  the Nth top-rail view (mode-aware). Rail tooltips show the binding.
+- Mode identity carries a teal (Learn) / violet (Research) accent through the
+  activity bar and status bar.
+
+### Changed — Brand
+
+Nuclei is now presented as **the open-source quantum workspace** — "Learn it.
+Research it. Run it on real hardware." The landing page leads with a two-door
+Learn/Research chooser mirroring the in-app mode picker, and a capabilities
+strip (4 frameworks · QEC campaigns · 8 hardware providers · local &
+private). No absolute claims — capability is shown, not asserted.
+
 ## [0.6.0] - 2026-07-11
 
 ### Added — Research mode and experiments as first-class objects

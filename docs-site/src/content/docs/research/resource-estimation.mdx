@@ -1,0 +1,47 @@
+---
+title: "Resource estimation"
+description: "The Resource Estimator panel: what the Azure Quantum Resource Estimator reports for a Q# or Qiskit circuit, the qubit-parameter / QEC-scheme / error-budget options, and the qdk API note."
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+The **Resource Estimator** answers the question a working algorithm eventually
+runs into: to run *this* circuit fault-tolerantly, how many physical qubits and
+how much wall-clock time would it actually take? It wraps the Azure Quantum
+Resource Estimator shipped in the [`qdk`](https://pypi.org/project/qdk/) package.
+
+## Using it
+
+Open the **Resource Estimator** view in the Research rail (or `⌘`-jump to it).
+It estimates the **active editor buffer**:
+
+- **Q#** — the entry operation is compiled and estimated directly.
+- **Qiskit** — the circuit is exported to OpenQASM 3 kernel-side and estimated.
+- Other frameworks (Cirq, CUDA-Q, Stim) aren't supported; the panel says so
+  rather than sending a request that can only fail.
+
+Set three assumptions, then **Run estimate**:
+
+- **Qubit parameters** — a hardware profile preset (gate-based ns/µs at 10⁻³ or
+  10⁻⁴, or Majorana ns at 10⁻⁴/10⁻⁶).
+- **QEC scheme** — `surface_code` or `floquet_code`.
+- **Error budget** — the total allowed failure probability (0 < ε < 1).
+
+## What it reports
+
+The panel leads with the headline fault-tolerant cost — **physical qubits,
+runtime, code distance, T-factory count, rQOPS, logical error rate** — with the
+algorithm/T-factory qubit split beneath. The full estimator document is
+available under a collapsible detail and via **Export JSON**.
+
+The estimate is deterministic for a given program and options, so the numbers
+are stable; only the assumptions change them.
+
+<Aside type="note" title="qdk API version">
+This release calls the estimator through qdk's QRE **v2** API
+(`qsharp.estimate` / `qdk.openqasm.estimate`), which the shipped `qdk` (1.29)
+still provides. That API emits a deprecation notice pointing at the newer
+`qdk.qre` (QREv3); migrating to it is a planned follow-up and does not change
+what the panel reports today. Without `qdk` installed, the panel degrades to a
+`missing_dependency` prompt.
+</Aside>

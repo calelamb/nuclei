@@ -1,0 +1,82 @@
+---
+title: "QEC campaigns"
+description: "The qec_campaign experiment schema (v2): source (generate vs Python entry), noise, decoders, collect, workers — plus the no-seed rule and the d=<n> entry-label convention that feeds the Λ fit."
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+A **QEC campaign** is an experiment (schema v2) that sweeps a stabilizer code
+over a noise grid and measures its logical error rate. Like every Nuclei
+experiment it's a plain, git-friendly `*.experiment.yaml` — hand-writable or
+generated from a template.
+
+## Schema
+
+```yaml
+schema: 2
+type: qec_campaign
+name: surface-memory
+source:            # exactly one of `generate:` or `entry:`
+  entry: qec/surface_memory.py
+noise:
+  model: uniform_depolarizing   # built-in name or a noise/*.noise.yaml name
+  p:
+    range: [0.001, 0.006, 0.001] # [start, stop, step] — or `values: [...]`
+decoders:
+  - pymatching                   # and/or fusion_blossom
+collect:
+  max_shots: 100000              # stop each task at whichever limit comes first
+  max_errors: 500
+workers: auto                    # 'auto' or a positive integer
+notes: optional free text
+```
+
+### `source` — exactly one of two shapes
+
+- **`generate:`** — a built-in Stim generator: `{ code, distances, rounds }`.
+  `code` is a generator target (e.g. `surface_code:rotated_memory_z`),
+  `distances` a list, `rounds` an integer or `"<n>d"` (n × distance).
+- **`entry:`** — a project-relative Python file defining
+  `nuclei_circuits(noise) -> dict[str, stim.Circuit]`. The runner calls it once
+  per noise point with the resolved noise dict and collects the returned
+  `{label: circuit}`. This is the editable path — you own the circuits.
+
+### `noise`
+
+`model` names a [built-in or project noise model](/docs/research/noise-models/).
+`p` is a sweep parameter: a `range: [start, stop, step]` (stop-inclusive within
+an epsilon) or an explicit `values: [...]` list. For an `entry:` source the
+resolved dict handed to `nuclei_circuits` is `{p, ...stim generator args}`.
+
+### `decoders`, `collect`, `workers`
+
+One task is generated per (label × noise point × decoder). `collect` bounds each
+task by `max_shots` and/or `max_errors` (first to hit wins). `workers` sets
+sinter's process pool.
+
+<Aside type="caution" title="Campaigns are not seed-reproducible">
+There is **no `seed` field**. sinter exposes no seeding API, so campaign
+sampling is Monte-Carlo and will differ run to run. The schema omits `seed`
+rather than accept one it can't honor. (Single-shot `qec_decode_sample` — the
+detector-graph overlay — *is* seedable; campaigns are not.)
+</Aside>
+
+## The `d=<n>` label convention
+
+The threshold panel fits **Λ** by grouping results by code distance. A
+`generate:` source tags distance structurally. An `entry:` source emits
+free-form labels, so to join the Λ fit it should name its circuits with the
+distance embedded: `d=3`, `d=5`, `d=7` (also `d3`, case-insensitive). Nuclei
+parses that convention into a numeric distance; a label without one still
+plots, it just doesn't join a Λ fit. The built-in templates follow this
+convention already.
+
+## Run directory
+
+Each campaign run writes under
+`experiments/<name>/runs/<timestamp-id>/`: a `manifest.json` reproducibility
+record, the sinter-native stats `csv`, and per-point `snapshot.json` /
+`metrics.json`. Resuming a stopped campaign reuses that `csv` so completed
+tasks are never re-sampled. See
+[Reproducibility](/docs/research/reproducibility/) for the manifest shape and
+its honest limits.
