@@ -1,0 +1,8 @@
+[
+  {
+    "type": "error",
+    "message": "at least one of collect.max_shots / collect.max_errors is required \u2014 an unbounded campaign never terminates",
+    "code": "qec_campaign_invalid",
+    "phase": "qec_campaign"
+  }
+]

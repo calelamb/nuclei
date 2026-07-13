@@ -1,19 +1,23 @@
 ---
 title: "QEC messages"
-description: "Protocol v1.2 (in progress): qec_generate, the qec_snapshot sidecar, Stim circuits as a kernel framework, and the language: stim path."
+description: "Protocol v1.2: qec_generate, the qec_snapshot sidecar, Stim as a framework, sinter campaigns (start/progress/result/cancel), and single-shot decoding."
 ---
 
 import { Code, Aside } from '@astrojs/starlight/components';
 import qecGenerateReq from '../../../../fixtures/qec_generate.request.json?raw';
 import qecGenerateRes from '../../../../fixtures/qec_generate.responses.json?raw';
 import qecStudioSession from '../../../../fixtures/qec_studio.session.json?raw';
+import qecDecodeReq from '../../../../fixtures/qec_decode_sample.request.json?raw';
+import qecDecodeRes from '../../../../fixtures/qec_decode_sample.responses.json?raw';
+import qecCampaignInvalidReq from '../../../../fixtures/qec_campaign_start_invalid.request.json?raw';
+import qecCampaignInvalidRes from '../../../../fixtures/qec_campaign_start_invalid.responses.json?raw';
+import qecCampaignSession from '../../../../fixtures/illustrative/qec_campaign.session.json?raw';
 
-<Aside type="note" title="Protocol v1.2 — QEC Studio Phase A">
-Everything on this page is additive over v1.1: two new message types and one
-new sidecar response. Clients that never send QEC messages see exactly one
-new thing — the `qec_snapshot` response after a Stim circuit's `snapshot` —
-and may ignore it. The campaign messages (`qec_campaign_*`,
-`qec_decode_sample`) land in the next protocol increment.
+<Aside type="note" title="Protocol v1.2 — QEC Studio">
+Everything on this page is additive over v1.1: new message types plus one
+sidecar response. Clients that never send QEC messages see exactly one new
+thing — the `qec_snapshot` response after a Stim circuit's `snapshot` —
+and may ignore it.
 </Aside>
 
 ## Stim as a framework
@@ -31,7 +35,10 @@ first-class kernel framework, reachable two ways:
   researchers share bare `.stim` files constantly.
 
 Simulation uses Stim's compiled sampler. An explicit integer `seed` is
-always honored (`seed_honored: true`). Because stabilizer circuits
+always honored (`seed_honored: true`) — with Stim's documented scope:
+same seed + same stim version + **same machine** reproduces identical
+samples, but results can differ across CPUs (SIMD width) and stim
+versions. Manifests remain honest either way. Because stabilizer circuits
 routinely exceed statevector sizes, the `result` is honest about being a
 sampler: `state_vector`, `probabilities`, and `bloch_coords` are empty,
 and `measurements` keys are measurement-record bitstrings (first recorded
@@ -116,3 +123,102 @@ The full loop — generate, execute (watch the sidecar arrive between
 cap to see truncation:
 
 <Code code={qecStudioSession} lang="json" title="qec_studio.session.json" />
+
+## Campaigns
+
+A **campaign** is a sinter Monte Carlo collection — tasks (circuit ×
+decoder), adaptive shot allocation, multiprocess workers — wrapped as a
+managed kernel job. This is the deliberate exception to the "frontend
+orchestrates, kernel stays dumb" rule: sinter *is* the orchestrator.
+
+### `qec_campaign_start`
+
+```json
+{
+  "type": "qec_campaign_start",
+  "campaign_id": "surface-vs-repetition",
+  "tasks": [
+    { "circuit_text": "R 0 1 2 3 4\n…", "decoder": "pymatching",
+      "json_metadata": { "code": "repetition", "d": 3, "p": 0.02 } }
+  ],
+  "collect": { "max_shots": 50000, "max_errors": 500 },
+  "workers": "auto",
+  "progress_interval_s": 1.0,
+  "existing_stats_csv": "     shots,    errors, …"
+}
+```
+
+- At least one of `collect.max_shots` / `collect.max_errors` is required —
+  an unbounded campaign never terminates.
+- `workers: "auto"` (default) means CPU count − 1. Task count is capped at
+  2,000 (an explicit error above — sinter's adaptive allocation makes
+  large grids sane, but not unbounded ones).
+- **One campaign at a time per kernel**: a second start answers an `error`
+  with code `campaign_already_running` (409-style) naming the running id.
+- **Resume:** pass the previous run's `csv` text as `existing_stats_csv`.
+  It loads through sinter's own `existing_data` machinery, counts toward
+  the collection bounds, and **completed tasks are never re-sampled** —
+  the result's `sampled_shots` reports newly collected shots only (0 for
+  an already-complete campaign). Kernel restarts kill workers by design;
+  resume is what makes that acceptable.
+- **No `seed` field.** `sinter.collect` has no seeding API — Monte Carlo
+  campaigns are not shot-for-shot reproducible, and the protocol refuses
+  to imply otherwise. (Single runs and `qec_decode_sample` do seed.)
+
+The ack is `qec_campaign_started {campaign_id, tasks_total, workers}`;
+progress and the final result then stream on the same connection:
+
+- **`qec_campaign_progress`** (throttled — at most one per
+  `progress_interval_s`, default 1s): `tasks` holds accumulated totals for
+  tasks whose numbers changed since the last update (merge client-side by
+  `strong_id`), plus `tasks_complete`/`tasks_total` and sinter's free-form
+  `status_message` (its ETA text, version-dependent — display, don't parse).
+- **`qec_campaign_result`**: `partial` (true after cancel or a worker
+  failure), `sampled_shots`, `stats` rows, and `csv` — the stats in
+  **sinter's native CSV format**, bit-for-bit loadable by existing
+  researcher scripts. Write it to disk as-is; never invent a private format.
+
+A validation failure is a plain `error` (code `qec_campaign_invalid`)
+naming exactly what's wrong — this one omitted the collection bounds:
+
+<Code code={qecCampaignInvalidReq} lang="json" title="qec_campaign_start_invalid.request.json" />
+<Code code={qecCampaignInvalidRes} lang="json" title="qec_campaign_start_invalid.responses.json" />
+
+### `qec_campaign_cancel`
+
+`{type: "qec_campaign_cancel", campaign_id}` → immediate ack
+`qec_campaign_cancelled {campaign_id, accepted}`, then a graceful sinter
+shutdown: everything already collected (plus any resumed prior data) comes
+back as a `qec_campaign_result` with `"partial": true`.
+
+A full captured session — start, one progress update, cancel, partial
+result. Illustrative (timing-dependent message counts; the semantics are
+pinned by `kernel/tests/test_qec_campaign.py` instead):
+
+<Code code={qecCampaignSession} lang="json" title="illustrative/qec_campaign.session.json" />
+
+### `qec_decode_sample`
+
+One sampled shot, decoded — the detector-graph overlay's "sample a shot"
+button. Cheap, synchronous, and deterministic for a given seed. v1 decodes
+with `pymatching` only (campaigns support every decoder sinter knows);
+`matched_edges` pairs detector indices, with `d2: null` for boundary
+matches.
+
+<Code code={qecDecodeReq} lang="json" title="qec_decode_sample.request.json" />
+<Code code={qecDecodeRes} lang="json" title="qec_decode_sample.responses.json" />
+
+A concrete response, captured on one machine (values are seed-and-machine
+deterministic — like all stim sampling, they vary across CPUs, which is why
+the replayed fixture above pins the shape rather than the values):
+
+```json
+{
+  "type": "qec_decode_sample",
+  "num_detectors": 8,
+  "syndrome": [5, 7],
+  "matched_edges": [{ "d1": 5, "d2": 7 }],
+  "predicted_observable_flips": [0],
+  "actual_observable_flips": [0]
+}
+```

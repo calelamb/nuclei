@@ -1,3 +1,13 @@
+import type {
+  QecCampaignProgress,
+  QecCampaignResult,
+  QecCampaignTask,
+  QecDecodeSampleResult,
+  QecGeneratedCode,
+  QecGenerateNoise,
+  QecSnapshot,
+} from './qec';
+
 export type Framework = 'qiskit' | 'cirq' | 'cuda-q' | 'qsharp' | 'stim';
 
 /** Source language the kernel should use when parsing/executing a buffer. */
@@ -73,8 +83,6 @@ export interface KernelEnvironment {
   packages: Partial<Record<'qiskit' | 'qiskit_aer' | 'cirq' | 'cudaq' | 'qsharp', string>>;
 }
 
-import type { QecGeneratedCode, QecGenerateNoise, QecSnapshot } from './qec';
-
 export type KernelMessage =
   | { type: 'parse'; code: string; language?: KernelLanguage }
   | {
@@ -109,7 +117,23 @@ export type KernelMessage =
   // graph sidecar, statelessly with `code` or from the connection's last
   // Stim circuit without it ("render anyway" uses a raised max_edges).
   | { type: 'qec_generate'; code: QecGeneratedCode; distance: number; rounds: number; noise?: QecGenerateNoise }
-  | { type: 'qec_snapshot'; code?: string; language?: KernelLanguage; max_edges?: number };
+  | { type: 'qec_snapshot'; code?: string; language?: KernelLanguage; max_edges?: number }
+  // Protocol v1.2 (PRD 10 Phase B) — sinter campaigns as managed kernel
+  // jobs. One campaign at a time per kernel; at least one collect bound
+  // required; NO seed field (sinter has no seeding API — campaigns are
+  // not shot-reproducible and the protocol refuses to imply otherwise).
+  | {
+      type: 'qec_campaign_start';
+      campaign_id: string;
+      tasks: QecCampaignTask[];
+      collect: { max_shots?: number; max_errors?: number };
+      workers?: number | 'auto';
+      progress_interval_s?: number;
+      /** Previous run's result `csv` — resume without re-sampling. */
+      existing_stats_csv?: string;
+    }
+  | { type: 'qec_campaign_cancel'; campaign_id: string }
+  | { type: 'qec_decode_sample'; circuit_text: string; decoder: 'pymatching'; seed?: number };
 
 interface HardwareJobDTO {
   id: string;
@@ -151,4 +175,10 @@ export type KernelResponse =
   // Protocol v1.2 (PRD 10 Phase A). `qec_snapshot` also arrives unsolicited
   // as a sidecar between `snapshot` and `result` for Stim circuits.
   | { type: 'qec_snapshot'; data: QecSnapshot }
-  | { type: 'qec_generated'; code: QecGeneratedCode; distance: number; rounds: number; circuit_text: string };
+  | { type: 'qec_generated'; code: QecGeneratedCode; distance: number; rounds: number; circuit_text: string }
+  // Protocol v1.2 (PRD 10 Phase B).
+  | { type: 'qec_campaign_started'; campaign_id: string; tasks_total: number; workers: number }
+  | ({ type: 'qec_campaign_progress' } & QecCampaignProgress)
+  | ({ type: 'qec_campaign_result' } & QecCampaignResult)
+  | { type: 'qec_campaign_cancelled'; campaign_id: string; accepted: boolean }
+  | ({ type: 'qec_decode_sample' } & QecDecodeSampleResult);

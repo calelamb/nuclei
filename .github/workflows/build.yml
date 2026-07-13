@@ -3,8 +3,11 @@ name: Build & Check
 on:
   push:
     branches: [main]
+  # No base-branch filter on pull_request: stacked PRs (feature-on-feature,
+  # like the PRD 10 phase chain) must get full CI too — GitHub does not
+  # re-trigger workflows when a PR is retargeted to main after its base
+  # merges, so filtering to main left stacked PRs entirely unchecked.
   pull_request:
-    branches: [main]
 
 jobs:
   lint:
