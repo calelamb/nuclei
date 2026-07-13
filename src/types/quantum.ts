@@ -3,6 +3,8 @@ import type {
   QecCampaignResult,
   QecCampaignTask,
   QecDecodeSampleResult,
+  QecEstimate,
+  QecEstimateOptions,
   QecGeneratedCode,
   QecGenerateNoise,
   QecSnapshot,
@@ -136,7 +138,10 @@ export type KernelMessage =
   // Protocol v1.2 (PRD 10 Phase C) — run a campaign entry source's
   // nuclei_circuits(noise) and collect its labeled circuits.
   | { type: 'qec_materialize'; code: string; noise?: Record<string, number> }
-  | { type: 'qec_decode_sample'; circuit_text: string; decoder: 'pymatching'; seed?: number };
+  | { type: 'qec_decode_sample'; circuit_text: string; decoder: 'pymatching'; seed?: number }
+  // Protocol v1.2 (PRD 10 Phase F) — Azure Quantum Resource Estimator over
+  // Q# source or OpenQASM 3.
+  | { type: 'qec_estimate'; code: string; language: 'qsharp' | 'qasm3' | 'qiskit'; options?: QecEstimateOptions };
 
 interface HardwareJobDTO {
   id: string;
@@ -158,7 +163,7 @@ export type KernelResponse =
       message: string;
       traceback?: string;
       code?: string;
-      phase?: 'parse' | 'execute' | 'python';
+      phase?: 'parse' | 'execute' | 'python' | 'qec_estimate' | 'qec_generate' | 'qec_snapshot' | 'qec_materialize' | 'qec_campaign' | 'qec_decode_sample';
       framework?: Framework;
       dependency?: string;
     }
@@ -186,4 +191,5 @@ export type KernelResponse =
   | { type: 'qec_campaign_cancelled'; campaign_id: string; accepted: boolean }
   // Protocol v1.2 (PRD 10 Phase C) — reply to qec_materialize.
   | { type: 'qec_circuits'; circuits: Record<string, string> }
-  | ({ type: 'qec_decode_sample' } & QecDecodeSampleResult);
+  | ({ type: 'qec_decode_sample' } & QecDecodeSampleResult)
+  | { type: 'qec_estimate_result'; data: QecEstimate };

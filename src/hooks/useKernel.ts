@@ -12,7 +12,8 @@ import type { PyodideKernel } from '../platform/pyodideKernel';
 import { useDiracStore } from '../stores/diracStore';
 import { useHardwareStore } from '../stores/hardwareStore';
 import { useQecStore } from '../stores/qecStore';
-import { setQecDecodeSender, setQecSnapshotSender } from '../lib/qecDecodeSender';
+import { useQecEstimateStore } from '../stores/qecEstimateStore';
+import { setQecDecodeSender, setQecSnapshotSender, setQecEstimateSender } from '../lib/qecDecodeSender';
 import { narrateParse, narrateResult } from '../services/narration';
 import { rewriteExecutionError } from '../services/errorRewrite';
 import { computeNextPollDelayMs, STALE_AFTER_MS } from '../lib/pollSchedule';
@@ -151,6 +152,9 @@ export function useKernel() {
           actual_observable_flips: msg.actual_observable_flips,
         });
         break;
+      case 'qec_estimate_result':
+        useQecEstimateStore.getState().setResult(msg.data);
+        break;
       case 'output':
         useSimulationStore.getState().addOutput(msg.text, 'stdout');
         useBottomPanelStore.getState().focusTerminal();
@@ -160,6 +164,13 @@ export function useKernel() {
         useBottomPanelStore.getState().focusTerminal();
         break;
       case 'error': {
+        // Resource-estimate failures belong to the Estimator panel, not the
+        // terminal/editor error surfaces (PRD 10 Phase F).
+        if (msg.phase === 'qec_estimate') {
+          useQecEstimateStore.getState().setError(msg.message);
+          break;
+        }
+
         const { detail, line, shortMessage } = getErrorContext(msg);
 
         useSimulationStore.getState().addOutput(`Error: ${detail}`, 'stderr');
@@ -635,14 +646,23 @@ export function useKernel() {
     },
     [sendHardware],
   );
+  const qecEstimate = useCallback(
+    (code: string, language: 'qsharp' | 'qasm3' | 'qiskit', options?: Record<string, unknown>) => {
+      useQecEstimateStore.getState().setPending(true);
+      sendHardware({ type: 'qec_estimate', code, language, options });
+    },
+    [sendHardware],
+  );
   useEffect(() => {
     setQecDecodeSender(qecDecodeSample);
     setQecSnapshotSender(qecSnapshotReRequest);
+    setQecEstimateSender(qecEstimate);
     return () => {
       setQecDecodeSender(null);
       setQecSnapshotSender(null);
+      setQecEstimateSender(null);
     };
-  }, [qecDecodeSample, qecSnapshotReRequest]);
+  }, [qecDecodeSample, qecSnapshotReRequest, qecEstimate]);
 
   // Polling backoff for active hardware jobs. A queued IBM job can sit in
   // the free-tier queue for an hour or more; fixed 5s polling would fire

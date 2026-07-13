@@ -24,6 +24,9 @@ const CommunityPanel = lazy(async () => ({
 const ExperimentsPanel = lazy(async () => ({
   default: (await import('../experiments/ExperimentsPanel')).ExperimentsPanel,
 }));
+const EstimatorPanel = lazy(async () => ({
+  default: (await import('../qec/EstimatorPanel')).EstimatorPanel,
+}));
 
 interface SidebarProps {
   view: ActivityView;
@@ -118,6 +121,7 @@ const VIEW_TITLES: Record<ActivityView, string> = {
   community: 'Community',
   settings: 'Settings',
   experiments: 'Experiments',
+  estimator: 'Estimator',
 };
 
 type LearningTab = 'tracks' | 'videos';
@@ -243,6 +247,11 @@ export function Sidebar({ view, width, onWidthChange }: SidebarProps) {
         {view === 'experiments' && (
           <SidebarSuspense>
             <ExperimentsPanel />
+          </SidebarSuspense>
+        )}
+        {view === 'estimator' && (
+          <SidebarSuspense>
+            <EstimatorPanel />
           </SidebarSuspense>
         )}
       </div>

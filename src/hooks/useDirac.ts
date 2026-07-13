@@ -24,6 +24,10 @@ import { personaPreamble } from '../services/diracPersona';
 import { useExperimentUiStore } from '../stores/experimentUiStore';
 import { useExperimentStore } from '../services/experimentStore';
 import { buildExperimentContext } from '../services/experimentContext';
+import { buildQecContext } from '../services/qecContext';
+import { useQecStore } from '../stores/qecStore';
+import { useQecCampaignStore } from '../stores/qecCampaignStore';
+import { resolveNoiseModel } from '../types/noiseModel';
 import type { RunRecord } from '../types/experiment';
 
 // The capabilities/tools section is appended after the persona preamble
@@ -300,9 +304,23 @@ function buildContextBlock(plan: ContextPlan): string {
       const selectedRuns = selectedDirs
         .map((dir) => allRuns.find((r) => r.dir === dir))
         .filter((r): r is RunRecord => r !== undefined);
-      // Campaign context injection is PRD 10 D8 (with the QEC panels);
-      // sweep experiments keep the PRD 09 E4 behavior unchanged.
-      if (experiment.spec.type !== 'qec_campaign') {
+      // PRD 10 D8 — QEC campaigns inject a dedicated context (campaign +
+      // noise model + current DEM + capped stats rows + Λ); sweep experiments
+      // keep the PRD 09 E4 behavior unchanged.
+      if (experiment.spec.type === 'qec_campaign') {
+        const spec = experiment.spec;
+        parts.push(
+          buildQecContext({
+            campaignName: spec.name,
+            spec,
+            noiseModel: resolveNoiseModel(spec.noise.model),
+            snapshot: useQecStore.getState().snapshot,
+            circuit: useCircuitStore.getState().snapshot,
+            rows: Object.values(useQecCampaignStore.getState().rowsByStrongId),
+            running: useQecCampaignStore.getState().running,
+          }),
+        );
+      } else {
         parts.push(buildExperimentContext({ ...experiment, spec: experiment.spec }, selectedRuns));
       }
     }

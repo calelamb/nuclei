@@ -1,0 +1,19 @@
+[
+  {
+    "type": "qec_estimate_result",
+    "data": {
+      "physical_qubits": "<any>",
+      "runtime_ns": "<any>",
+      "rqops": "<any>",
+      "code_distance": "<any>",
+      "logical_error_rate": "<any>",
+      "num_tfactories": "<any>",
+      "physical_qubits_algorithm": "<any>",
+      "physical_qubits_tfactories": "<any>",
+      "qubit_params": "<any>",
+      "qec_scheme": "<any>",
+      "formatted": "<any>",
+      "full": "<any>"
+    }
+  }
+]

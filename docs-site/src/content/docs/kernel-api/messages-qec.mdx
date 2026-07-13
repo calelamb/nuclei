@@ -7,6 +7,8 @@ import { Code, Aside } from '@astrojs/starlight/components';
 import qecGenerateReq from '../../../../fixtures/qec_generate.request.json?raw';
 import qecGenerateRes from '../../../../fixtures/qec_generate.responses.json?raw';
 import qecStudioSession from '../../../../fixtures/qec_studio.session.json?raw';
+import qecEstimateReq from '../../../../fixtures/qec_estimate.request.json?raw';
+import qecEstimateRes from '../../../../fixtures/qec_estimate.responses.json?raw';
 import qecDecodeReq from '../../../../fixtures/qec_decode_sample.request.json?raw';
 import qecDecodeRes from '../../../../fixtures/qec_decode_sample.responses.json?raw';
 import qecCampaignInvalidReq from '../../../../fixtures/qec_campaign_start_invalid.request.json?raw';
@@ -125,6 +127,27 @@ The full loop — generate, execute (watch the sidecar arrive between
 cap to see truncation:
 
 <Code code={qecStudioSession} lang="json" title="qec_studio.session.json" />
+
+## `qec_estimate`
+
+Azure Quantum Resource Estimator over a circuit, wrapping the estimator that
+ships in `qdk`. `language: "qsharp"` compiles the Q# source and estimates its
+entry expression; `language: "qasm3"` estimates OpenQASM 3 (e.g.
+`qiskit.qasm3.dumps` of the active qiskit circuit). `options` carries a qubit
+model preset, a QEC scheme, and an error budget; the reply's `data` leads with
+the headline numbers (physical qubits, runtime, code distance, T-factory
+count) plus the estimator's pre-formatted strings and the full document for
+export. Available for any framework — not just stim.
+
+<Code code={qecEstimateReq} lang="json" title="qec_estimate.request.json" />
+<Code code={qecEstimateRes} lang="json" title="qec_estimate.responses.json" />
+
+<Aside type="note" title="Q# vs OpenQASM 3">
+The shipped qdk (1.29) exposes both `qsharp.estimate` and
+`qdk.openqasm.estimate`, so both paths work. If a future qdk drops the QASM
+path, `qec_estimate` answers with a plain error rather than crashing, and the
+panel falls back to Q#-only.
+</Aside>
 
 ## Campaigns
 

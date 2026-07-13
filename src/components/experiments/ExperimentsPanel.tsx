@@ -7,6 +7,8 @@ import { useExperimentUiStore } from '../../stores/experimentUiStore';
 import { createTauriExperimentFs } from '../../services/experimentFs';
 import { campaignTaskCount, expandGrid } from '../../types/experiment';
 import { NewExperimentForm } from './NewExperimentForm';
+import { NewQecExperimentMenu } from './NewQecExperimentMenu';
+import { NoiseModelLibrary } from './NoiseModelLibrary';
 import { RunButton } from './RunButton';
 
 /**
@@ -116,6 +118,7 @@ export function ExperimentsPanel() {
 
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState<DiscoveredExperiment | undefined>(undefined);
+  const [noiseLibOpen, setNoiseLibOpen] = useState(false);
 
   useEffect(() => {
     if (!projectRoot) return;
@@ -147,7 +150,18 @@ export function ExperimentsPanel() {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
-      <div style={{ padding: '8px 10px', display: 'flex', justifyContent: 'flex-end', borderBottom: `1px solid ${colors.border}` }}>
+      <div style={{ padding: '8px 10px', display: 'flex', gap: 6, justifyContent: 'flex-end', borderBottom: `1px solid ${colors.border}` }}>
+        <button
+          onClick={() => setNoiseLibOpen(true)}
+          style={{
+            padding: '4px 10px', background: 'transparent', border: `1px solid ${colors.border}`,
+            borderRadius: 4, color: colors.textMuted, cursor: 'pointer', fontSize: 11, fontWeight: 600,
+            fontFamily: "'Geist Sans', sans-serif",
+          }}
+        >
+          Noise models
+        </button>
+        <NewQecExperimentMenu projectRoot={projectRoot} />
         <button
           onClick={() => { setEditing(undefined); setFormOpen((v) => !v); }}
           style={{
@@ -203,6 +217,10 @@ export function ExperimentsPanel() {
           existing={editing}
           onClose={() => { setFormOpen(false); setEditing(undefined); }}
         />
+      )}
+
+      {noiseLibOpen && (
+        <NoiseModelLibrary projectRoot={projectRoot} onClose={() => setNoiseLibOpen(false)} />
       )}
     </div>
   );

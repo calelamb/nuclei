@@ -29,8 +29,9 @@ describe('<ActivityBar>', () => {
     const labels = Array.from(toolbar.querySelectorAll('button')).map((b) =>
       b.getAttribute('aria-label'),
     );
-    // Plugins graduated into the Research rail (Phase C).
-    expect(labels).toEqual(['Explorer', 'Experiments', 'Hardware', 'Launch', 'Plugins', 'Settings']);
+    // Plugins graduated into the Research rail (Phase C); the Resource
+    // Estimator (PRD 10 Phase F) sits between Hardware and Launch.
+    expect(labels).toEqual(['Explorer', 'Experiments', 'Hardware', 'Resource Estimator', 'Launch', 'Plugins', 'Settings']);
     expect(labels).not.toContain('Learning');
     expect(labels).not.toContain('Challenges');
     expect(labels).not.toContain('Community');

@@ -132,3 +132,40 @@ export interface QecDecodeSampleResult {
   predicted_observable_flips: number[];
   actual_observable_flips: number[];
 }
+
+// ───────── Resource Estimator (protocol v1.2, PRD 10 Phase F) ─────────
+
+export const QEC_QUBIT_PRESETS = [
+  'qubit_gate_ns_e3',
+  'qubit_gate_ns_e4',
+  'qubit_gate_us_e3',
+  'qubit_gate_us_e4',
+  'qubit_maj_ns_e4',
+  'qubit_maj_ns_e6',
+] as const;
+export type QecQubitPreset = (typeof QEC_QUBIT_PRESETS)[number];
+export const QEC_ESTIMATE_SCHEMES = ['surface_code', 'floquet_code'] as const;
+export type QecEstimateScheme = (typeof QEC_ESTIMATE_SCHEMES)[number];
+
+export interface QecEstimateOptions {
+  qubit_params?: QecQubitPreset;
+  qec_scheme?: QecEstimateScheme;
+  error_budget?: number;
+}
+
+/** The `qec_estimate_result` payload — headline numbers + the estimator's
+ * pre-formatted strings + the full document (for collapsible detail/export). */
+export interface QecEstimate {
+  physical_qubits: number | null;
+  runtime_ns: number | null;
+  rqops: number | null;
+  code_distance: number | null;
+  logical_error_rate: number | null;
+  num_tfactories: number | null;
+  physical_qubits_algorithm: number | null;
+  physical_qubits_tfactories: number | null;
+  qubit_params: string | null;
+  qec_scheme: string | null;
+  formatted: Record<string, string>;
+  full: unknown;
+}
