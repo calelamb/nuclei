@@ -35,6 +35,7 @@ import { useSettingsStore } from '../../stores/settingsStore';
 import { useWorkspaceStore } from '../../stores/workspaceStore';
 import { useProjectStore } from '../../stores/projectStore';
 import { useExperimentUiStore } from '../../stores/experimentUiStore';
+import { useExperimentStore } from '../../services/experimentStore';
 import { activityViewsForMode } from './panelRegistry';
 import { ChevronDown, ChevronUp, Trash2, Copy, Clock } from 'lucide-react';
 import { useBottomPanelStore } from '../../stores/bottomPanelStore';
@@ -54,6 +55,9 @@ const RunDetail = lazy(async () => ({
 }));
 const CompareView = lazy(async () => ({
   default: (await import('../experiments/CompareView')).CompareView,
+}));
+const QecAnalysisView = lazy(async () => ({
+  default: (await import('../qec/QecAnalysisView')).QecAnalysisView,
 }));
 
 const DEFAULT_BOTTOM_HEIGHT = 200;
@@ -567,6 +571,13 @@ export function PanelLayout() {
   const showExperimentsMain =
     workspaceMode === 'research' && activeView === 'experiments' && selectedExperimentFileName !== null;
 
+  // A selected QEC campaign experiment shows the analysis surface (threshold +
+  // decoder workbench, PRD 10 Phase E) instead of the sweep runs table.
+  const selectedExperiment = useExperimentStore((s) =>
+    s.experiments.find((e) => e.fileName === selectedExperimentFileName),
+  );
+  const selectedIsCampaign = selectedExperiment?.spec.type === 'qec_campaign';
+
   // Single source of truth for which activity-bar views exist right now —
   // see panelRegistry.ts. Learn mode reproduces today's exact set; Research
   // mode hides learning/challenges/community and adds the Experiments
@@ -786,7 +797,15 @@ export function PanelLayout() {
             <ExperimentBreadcrumbs />
             <div style={{ flex: 1, minHeight: 0, overflow: 'hidden' }}>
               <Suspense fallback={null}>
-                {compareOpen ? <CompareView /> : selectedRunDir ? <RunDetail /> : <RunsTable />}
+                {selectedIsCampaign ? (
+                  <QecAnalysisView />
+                ) : compareOpen ? (
+                  <CompareView />
+                ) : selectedRunDir ? (
+                  <RunDetail />
+                ) : (
+                  <RunsTable />
+                )}
               </Suspense>
             </div>
           </div>
