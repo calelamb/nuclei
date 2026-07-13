@@ -1,0 +1,76 @@
+---
+title: "Navigating the workspace"
+description: "The command palette and keyboard shortcuts: switch modes, jump between rail views with ⌘1..9, toggle panels, run experiments — all without the mouse. Includes the full binding table."
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+Nuclei is fully keyboard-drivable. Everything the left rail and the panels can
+do is reachable from the **command palette**, and the views you visit most
+have direct shortcuts. Nothing here is mode-specific unless noted — the palette
+simply offers the commands that apply to the workspace mode you're in.
+
+## Command palette
+
+Press <kbd>⌘⇧P</kbd> (Ctrl+Shift+P on Windows/Linux) to open the palette, then
+type to fuzzy-match. The palette is generated from the panel registry, so it
+can never drift from the rail: every view a mode offers has a **Go to …**
+command, and every visualization/bottom panel has a **Toggle …** command. A
+parity test enforces this.
+
+What you'll find:
+
+- **Go to `<view>`** — open any rail view (Explorer, Experiments, Hardware,
+  Resource Estimator, …). The first nine top-rail views also carry their
+  <kbd>⌘1</kbd>…<kbd>⌘9</kbd> binding.
+- **Switch workspace mode (Learn/Research)** — <kbd>⌘⇧M</kbd>. Routes through
+  the in-flight-work guard: a running sweep or campaign asks before switching;
+  jobs never cancel.
+- **Toggle `<panel>`** — show or hide a visualization/bottom panel (Circuit,
+  Bloch, Histogram, Timeline, Code Lattice, Detector Graph, Terminal).
+- **Run experiment: `<name>`** — start any discovered experiment by name
+  (Research mode).
+- **Open run folder** — reveal the selected run's directory in your OS file
+  manager (Research mode, when a run is selected).
+- **Replay the Research mode tour** — re-run the orientation tour any time.
+
+## Keyboard shortcuts
+
+`⌘` is Command on macOS and Control on Windows/Linux. Existing bindings always
+win a collision — the navigation bindings below were added only on keys that
+were free.
+
+| Binding | Action |
+| --- | --- |
+| <kbd>⌘⇧P</kbd> | Open the command palette |
+| <kbd>⌘1</kbd>…<kbd>⌘9</kbd> | Jump to the Nth top-rail view (mode-aware) |
+| <kbd>⌘⇧M</kbd> | Switch workspace mode (Learn/Research) |
+| <kbd>⌘⇧L</kbd> | Cycle UI mode (Beginner/Intermediate/Advanced) |
+| <kbd>⌘⇧T</kbd> | Toggle theme |
+| <kbd>⌘\`</kbd> | Toggle the bottom panel (focuses Terminal) |
+| <kbd>⌘D</kbd> | Toggle the Dirac panel |
+| <kbd>⌘L</kbd> | Focus the Dirac input |
+| <kbd>⌘I</kbd> | Inline compose (Cmd+K-style) |
+| <kbd>⌘↵</kbd> | Run on the simulator |
+| <kbd>⌘⇧R</kbd> | Open the hardware Launch modal |
+| <kbd>⌘O</kbd> / <kbd>⌘S</kbd> / <kbd>⌘⇧S</kbd> / <kbd>⌘N</kbd> | Open / Save / Save As / New file |
+| <kbd>⌘/</kbd> | Keyboard shortcuts reference |
+
+<Aside type="note">
+The <kbd>⌘1</kbd>…<kbd>⌘9</kbd> mapping follows the **current mode's** top-rail
+order, so the same key lands on different views in Learn vs Research. Hover any
+rail icon to see its number in the tooltip.
+</Aside>
+
+## The left rail
+
+The rail's contents are mode-specific and computed once from the panel
+registry — there are no per-view feature-flag conditionals scattered through
+the UI. Learn mode shows Learning, Challenges, and Community; Research mode
+shows Experiments, Hardware, the Resource Estimator, and Plugins. Files,
+Launch, and Settings appear in both. Search and Circuit are developer-view
+tools, gated behind Settings → Advanced.
+
+Selecting a rail view while a full-view surface (Learn Mode, Challenge Mode) is
+open leaves that surface first, so a keyboard jump always lands somewhere
+visible.

@@ -137,6 +137,7 @@ export function EstimatorPanel() {
         <QecEmptyState
           title="Resource estimation supports Q# and Qiskit"
           body={`The active buffer is ${framework}. Switch to a Q# or Qiskit circuit to estimate the physical qubits and runtime a fault-tolerant implementation would need.`}
+          docsHref={DOCS}
         />
       </div>
     );
@@ -207,7 +208,8 @@ export function EstimatorPanel() {
         {!result && !error && !pending && (
           <QecEmptyState
             title="No estimate yet"
-            body="Run the estimator to see the physical qubits, wall-clock runtime, and code distance a fault-tolerant run of this circuit would require."
+            body="Use Run estimate above to see the physical qubits, wall-clock runtime, and code distance a fault-tolerant run of this circuit would require."
+            docsHref={DOCS}
           />
         )}
 

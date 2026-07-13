@@ -1,6 +1,15 @@
 import { useState, useRef, useEffect, useMemo } from 'react';
 import { useThemeStore } from '../../stores/themeStore';
 import { EASING, DURATION, getDuration, prefersReducedMotion } from '../../lib/animations';
+import {
+  PANEL_REGISTRY,
+  leftPanelsForMode,
+  bottomLeftPanelsForMode,
+  leftPanelLabel,
+  type PanelId,
+  type LeftPanelId,
+} from '../../layout/panelRegistry';
+import type { WorkspaceMode } from '../../stores/workspaceStore';
 
 export interface Command {
   id: string;
@@ -79,6 +88,8 @@ export function CommandPalette({ commands, onClose }: CommandPaletteProps) {
     Circuit: '#E06C75',
     Learn: '#10B981',
     Settings: '#6A737D',
+    Go: '#48CAE4',
+    Experiment: '#B78AF0',
   };
 
   return (
@@ -180,9 +191,23 @@ export function CommandPalette({ commands, onClose }: CommandPaletteProps) {
   );
 }
 
-/** Build the full command list for Nuclei */
+/** ⌘1..9 map onto the first nine top-rail views, in registry order (PRD 11
+ * Phase D). Exported so App.tsx binds the same mapping the palette displays. */
 // eslint-disable-next-line react-refresh/only-export-components
-export function buildCommands(actions: {
+export function railShortcutFor(index: number): string | undefined {
+  return index < 9 ? `⌘${index + 1}` : undefined;
+}
+
+export interface CommandContext {
+  mode: WorkspaceMode;
+  developerViews: boolean;
+  /** Discovered experiments, for "Run experiment <name>". */
+  experiments: ReadonlyArray<{ fileName: string; name: string }>;
+  /** Whether a run is selected (enables "Open run folder"). */
+  hasSelectedRun: boolean;
+}
+
+export interface CommandActions {
   run: () => void;
   openFile: () => void;
   saveFile: () => void;
@@ -193,23 +218,82 @@ export function buildCommands(actions: {
   toggleShortcuts: () => void;
   switchWorkspaceMode: () => void;
   startResearchTour: () => void;
-}): Command[] {
-  return [
-    // Run
+  /** Open a rail view (navigationStore.setActiveView). */
+  navigate: (view: LeftPanelId) => void;
+  /** Flip a viz/bottom panel's visibility (layoutStore.togglePanel). */
+  togglePanel: (id: PanelId) => void;
+  /** Start a discovered experiment by its yaml file name. */
+  runExperiment: (fileName: string) => void;
+  /** Reveal the selected run's folder in the OS file manager. */
+  openRunFolder: () => void;
+}
+
+/**
+ * Build the palette's command list from the panel registry + current context
+ * (PRD 11 Phase D). Registry-driven so the palette can never drift from the
+ * rail: every view a mode offers gets a "Go to …", every viz/bottom panel a
+ * mode offers gets a "Toggle …" — asserted by the palette↔registry parity
+ * test. Static app commands (Run/File/Dirac/…) follow.
+ */
+// eslint-disable-next-line react-refresh/only-export-components
+export function buildCommands(actions: CommandActions, context: CommandContext): Command[] {
+  const commands: Command[] = [];
+
+  // Workspace + orientation.
+  commands.push({ id: 'workspace-mode', label: 'Switch workspace mode (Learn/Research)', category: 'Go', shortcut: '⌘⇧M', action: actions.switchWorkspaceMode });
+  commands.push({ id: 'research-tour', label: 'Replay the Research mode tour', category: 'Go', action: actions.startResearchTour });
+
+  // Go to <view> — every rail view this mode offers, in registry order.
+  const views = leftPanelsForMode(context.mode, { developerViews: context.developerViews });
+  const bottomPinned = new Set(bottomLeftPanelsForMode(context.mode));
+  let railIndex = 0;
+  for (const view of views) {
+    const isTop = !bottomPinned.has(view);
+    const shortcut = isTop ? railShortcutFor(railIndex) : undefined;
+    if (isTop) railIndex += 1;
+    commands.push({
+      id: `goto-${view}`,
+      label: `Go to ${leftPanelLabel(view)}`,
+      category: 'Go',
+      shortcut,
+      action: () => actions.navigate(view),
+    });
+  }
+
+  // Toggle <panel> — every viz/bottom panel this mode offers.
+  for (const panel of PANEL_REGISTRY) {
+    if (!panel.modes.includes(context.mode)) continue;
+    commands.push({
+      id: `toggle-panel-${panel.id}`,
+      label: `Toggle ${panel.title} panel`,
+      category: 'View',
+      action: () => actions.togglePanel(panel.id),
+    });
+  }
+
+  // Run experiment <name> (Research) — fuzzy-matchable by the experiment name.
+  for (const exp of context.experiments) {
+    commands.push({
+      id: `run-exp-${exp.fileName}`,
+      label: `Run experiment: ${exp.name}`,
+      category: 'Experiment',
+      action: () => actions.runExperiment(exp.fileName),
+    });
+  }
+  if (context.hasSelectedRun) {
+    commands.push({ id: 'open-run-folder', label: 'Open run folder', category: 'Experiment', action: actions.openRunFolder });
+  }
+
+  // Static app commands.
+  commands.push(
     { id: 'run', label: 'Run Circuit', category: 'Run', shortcut: '⌘+Enter', action: actions.run },
-    // File
     { id: 'open', label: 'Open File', category: 'File', shortcut: '⌘+O', action: actions.openFile },
     { id: 'save', label: 'Save File', category: 'File', shortcut: '⌘+S', action: actions.saveFile },
     { id: 'new', label: 'New File', category: 'File', shortcut: '⌘+N', action: actions.newFile },
-    // View
     { id: 'theme', label: 'Toggle Theme', category: 'View', shortcut: '⌘+Shift+T', action: actions.toggleTheme },
     { id: 'mode', label: 'Cycle UI Mode (Beginner/Intermediate/Advanced)', category: 'View', shortcut: '⌘+Shift+L', action: actions.cycleMode },
-    { id: 'workspace-mode', label: 'Switch workspace mode (Learn/Research)', category: 'View', action: actions.switchWorkspaceMode },
-    { id: 'research-tour', label: 'Research mode tour', category: 'View', action: actions.startResearchTour },
-    // Dirac
     { id: 'dirac', label: 'Toggle Dirac Panel', category: 'Dirac', shortcut: '⌘+D', action: actions.toggleDirac },
     { id: 'dirac-focus', label: 'Focus Dirac Input', category: 'Dirac', shortcut: '⌘+L', action: actions.toggleDirac },
-    // Circuit
     { id: 'step-through', label: 'Step Through Circuit', category: 'Circuit', action: () => {
       import('../../stores/circuitStore').then(({ useCircuitStore }) => {
         useCircuitStore.getState().setStepMode(true);
@@ -220,9 +304,9 @@ export function buildCommands(actions: {
         useCircuitStore.getState().setStepMode(false);
       });
     }},
-    // Learn
     { id: 'exercise', label: 'Start Exercise (via Dirac)', category: 'Learn', action: actions.toggleDirac },
-    // Settings
     { id: 'shortcuts', label: 'Keyboard Shortcuts', category: 'Settings', shortcut: '⌘+/', action: actions.toggleShortcuts },
-  ];
+  );
+
+  return commands;
 }

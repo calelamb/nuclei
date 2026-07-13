@@ -64,6 +64,7 @@ export function DetectorGraphPanel() {
         <QecEmptyState
           title="No detector error model"
           body={snapshot.dem_error ?? 'stim could not build a detector error model for this circuit.'}
+          docsHref={DOCS}
         />
       </div>
     );

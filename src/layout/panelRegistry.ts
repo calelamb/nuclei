@@ -284,6 +284,10 @@ export type LeftPanelId =
 
 export interface LeftPanelDef {
   id: LeftPanelId;
+  /** Human label — the ActivityBar tooltip and the palette "Go to …" command
+   * (PRD 11 Phase D). Kept here so the palette↔registry parity test has a
+   * single source for every view. */
+  label: string;
   modes: WorkspaceMode[];
   /** Pinned to the bottom of the rail (Settings). */
   pinnedBottom?: boolean;
@@ -293,21 +297,26 @@ export interface LeftPanelDef {
 }
 
 export const LEFT_PANEL_REGISTRY: readonly LeftPanelDef[] = [
-  { id: 'files', modes: ['learn', 'research'], order: 0 },
-  { id: 'learning', modes: ['learn'], order: 1 },
-  { id: 'experiments', modes: ['research'], order: 1 },
-  { id: 'challenges', modes: ['learn'], order: 2 },
-  { id: 'hardware', modes: ['research'], order: 2 },
+  { id: 'files', label: 'Explorer', modes: ['learn', 'research'], order: 0 },
+  { id: 'learning', label: 'Learning', modes: ['learn'], order: 1 },
+  { id: 'experiments', label: 'Experiments', modes: ['research'], order: 1 },
+  { id: 'challenges', label: 'Challenges', modes: ['learn'], order: 2 },
+  { id: 'hardware', label: 'Hardware', modes: ['research'], order: 2 },
   // Resource Estimator (PRD 10 Phase F) — Research-only; sits between the
   // hardware and launch views (shared order 3, ordered ahead of launch here).
-  { id: 'estimator', modes: ['research'], order: 3 },
-  { id: 'launch', modes: ['learn', 'research'], order: 3 },
-  { id: 'community', modes: ['learn'], order: 4 },
-  { id: 'plugins', modes: ['research'], order: 4 },
-  { id: 'search', modes: ['learn', 'research'], dev: true, order: 5 },
-  { id: 'circuit', modes: ['learn', 'research'], dev: true, order: 6 },
-  { id: 'settings', modes: ['learn', 'research'], pinnedBottom: true, order: 100 },
+  { id: 'estimator', label: 'Resource Estimator', modes: ['research'], order: 3 },
+  { id: 'launch', label: 'Launch', modes: ['learn', 'research'], order: 3 },
+  { id: 'community', label: 'Community', modes: ['learn'], order: 4 },
+  { id: 'plugins', label: 'Plugins', modes: ['research'], order: 4 },
+  { id: 'search', label: 'Search', modes: ['learn', 'research'], dev: true, order: 5 },
+  { id: 'circuit', label: 'Circuit', modes: ['learn', 'research'], dev: true, order: 6 },
+  { id: 'settings', label: 'Settings', modes: ['learn', 'research'], pinnedBottom: true, order: 100 },
 ];
+
+/** A view's display label (palette Go-to, ActivityBar tooltip). */
+export function leftPanelLabel(id: LeftPanelId): string {
+  return LEFT_PANEL_REGISTRY.find((p) => p.id === id)?.label ?? id;
+}
 
 export interface LeftRailOptions {
   /** The developer-views flag (Settings → Advanced). Governs search/circuit. */
