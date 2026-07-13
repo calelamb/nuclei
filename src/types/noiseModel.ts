@@ -177,3 +177,48 @@ export function generatorArgsFor(model: NoiseModelDef, p: number): QecGenerateNo
 export function noiseDictFor(model: NoiseModelDef, p: number): Record<string, number> {
   return { p, ...(generatorArgsFor(model, p) ?? {}) };
 }
+
+/**
+ * Serialize a model to a `*.noise.yaml` schema-1 document. Round-trips through
+ * `parseNoiseModelYaml` (the library GUI's "duplicate to edit" writes this,
+ * then re-discovers it from disk — the file stays the source of truth). The
+ * `builtin` flag is intentionally NOT written; it's runtime provenance, not
+ * file content.
+ */
+export function noiseModelToYaml(model: NoiseModelDef): string {
+  const lines: string[] = ['schema: 1', `name: ${model.name}`];
+  // Quote the description so colons/newlines can't break the document.
+  lines.push(`description: ${JSON.stringify(model.description)}`);
+  if (model.citation) lines.push(`citation: ${JSON.stringify(model.citation)}`);
+  if (model.generator_args === null) {
+    lines.push('generator_args: null');
+  } else {
+    lines.push('generator_args:');
+    for (const key of GENERATOR_ARG_NAMES) {
+      const v = model.generator_args[key];
+      if (typeof v === 'number') lines.push(`  ${key}: ${v}`);
+    }
+  }
+  return lines.join('\n') + '\n';
+}
+
+/** A single generator-arg difference between two models (coefficients over p).
+ * `null` on a side means that model doesn't use the channel (or is entry-only). */
+export interface NoiseArgDiff {
+  arg: GeneratorArgName;
+  a: number | null;
+  b: number | null;
+}
+
+/** Diff two models' generator-arg coefficients — powers the library's compare
+ * view. Only channels that differ are returned. Entry-only models (null args)
+ * compare as "all channels absent". */
+export function diffNoiseModels(a: NoiseModelDef, b: NoiseModelDef): NoiseArgDiff[] {
+  const out: NoiseArgDiff[] = [];
+  for (const arg of GENERATOR_ARG_NAMES) {
+    const av = a.generator_args?.[arg] ?? null;
+    const bv = b.generator_args?.[arg] ?? null;
+    if (av !== bv) out.push({ arg, a: av, b: bv });
+  }
+  return out;
+}
