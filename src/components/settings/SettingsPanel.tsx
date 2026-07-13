@@ -517,7 +517,8 @@ export function SettingsPanel() {
             <Toggle value={general.educatorMode}
               onChange={(v) => updateGeneral({ educatorMode: v })} />
           </SettingRow>
-          <SettingRow label="Experimental Surfaces">
+          <SettingRow label="Developer views"
+            hint="Adds the Search and Circuit-inspector views to the activity bar in both modes. Everything else is chosen by workspace mode.">
             <Toggle value={general.experimentalFeatures}
               onChange={(v) => updateGeneral({ experimentalFeatures: v })} />
           </SettingRow>

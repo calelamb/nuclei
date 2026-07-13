@@ -198,3 +198,93 @@ export function resolveVisiblePanels(
 export function panelsInZone(zone: PanelZone): PanelDef[] {
   return PANEL_REGISTRY.filter((p) => p.zone === zone).sort((a, b) => a.order - b.order);
 }
+
+// ─────────────────────────── Left rail (PRD 11 Phase C) ───────────────────────────
+//
+// The activity-bar (left-zone) views, folded into the registry so the
+// ActivityBar is registry-driven per mode and `experimentalFeatures` stops
+// being a per-view `&&` gate sprinkled across components.
+//
+// GATING DECISIONS (one per view — no view is gated by BOTH flag AND mode):
+//   files/settings  → both modes (settings bottom-pinned)
+//   learning        → Learn only
+//   challenges      → Learn only
+//   community       → Learn only        (graduated from experimental → core Learn)
+//   experiments     → Research only
+//   hardware        → Research only     (core to research; removed from Learn)
+//   plugins         → Research only     (graduated from experimental → core Research)
+//   launch          → both modes        (hardware-launch portal — unchanged)
+//   search          → developer flag, both modes  (inspection tool)
+//   circuit         → developer flag, both modes  (inspection tool)
+//   QEC             → Research only, arrives with PRD 10 Phase D
+//
+// `search`/`circuit` are the ONLY views the developer flag governs now, so
+// nothing is double-gated: dev views are flag-only, everything else is
+// mode-only.
+
+/** Activity-bar view ids — mirrors ActivityBar's `ActivityView`. Kept as a
+ * local string union so the registry has no runtime import from the
+ * component tree (avoids a component→registry→component cycle). */
+export type LeftPanelId =
+  | 'files'
+  | 'learning'
+  | 'challenges'
+  | 'launch'
+  | 'search'
+  | 'circuit'
+  | 'plugins'
+  | 'hardware'
+  | 'community'
+  | 'settings'
+  | 'experiments';
+
+export interface LeftPanelDef {
+  id: LeftPanelId;
+  modes: WorkspaceMode[];
+  /** Pinned to the bottom of the rail (Settings). */
+  pinnedBottom?: boolean;
+  /** Gated behind the developer-views flag (Settings → Advanced). */
+  dev?: boolean;
+  order: number;
+}
+
+export const LEFT_PANEL_REGISTRY: readonly LeftPanelDef[] = [
+  { id: 'files', modes: ['learn', 'research'], order: 0 },
+  { id: 'learning', modes: ['learn'], order: 1 },
+  { id: 'experiments', modes: ['research'], order: 1 },
+  { id: 'challenges', modes: ['learn'], order: 2 },
+  { id: 'hardware', modes: ['research'], order: 2 },
+  { id: 'launch', modes: ['learn', 'research'], order: 3 },
+  { id: 'community', modes: ['learn'], order: 4 },
+  { id: 'plugins', modes: ['research'], order: 4 },
+  { id: 'search', modes: ['learn', 'research'], dev: true, order: 5 },
+  { id: 'circuit', modes: ['learn', 'research'], dev: true, order: 6 },
+  { id: 'settings', modes: ['learn', 'research'], pinnedBottom: true, order: 100 },
+];
+
+export interface LeftRailOptions {
+  /** The developer-views flag (Settings → Advanced). Governs search/circuit. */
+  developerViews: boolean;
+}
+
+function railFor(mode: WorkspaceMode, developerViews: boolean, bottom: boolean): LeftPanelId[] {
+  return LEFT_PANEL_REGISTRY.filter(
+    (p) =>
+      Boolean(p.pinnedBottom) === bottom &&
+      p.modes.includes(mode) &&
+      (!p.dev || developerViews),
+  )
+    .slice()
+    .sort((a, b) => a.order - b.order)
+    .map((p) => p.id);
+}
+
+/** Ordered activity-bar views for a mode (top rail + bottom-pinned). */
+export function leftPanelsForMode(mode: WorkspaceMode, { developerViews }: LeftRailOptions): LeftPanelId[] {
+  return [...railFor(mode, developerViews, false), ...railFor(mode, developerViews, true)];
+}
+
+/** Views pinned to the bottom of the rail for a mode. */
+export function bottomLeftPanelsForMode(mode: WorkspaceMode): LeftPanelId[] {
+  return railFor(mode, true, true);
+}

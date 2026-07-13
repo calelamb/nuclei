@@ -4,6 +4,9 @@ import {
   panelPassesFramework,
   resolveVisiblePanels,
   panelsInZone,
+  leftPanelsForMode,
+  bottomLeftPanelsForMode,
+  LEFT_PANEL_REGISTRY,
   type PanelDef,
   type PanelId,
   type VisibilityCtx,
@@ -358,5 +361,50 @@ describe('registry shape', () => {
     // Compile-time: PanelId covers every registry id.
     const _check: PanelId[] = ids;
     expect(_check.length).toBe(5);
+  });
+});
+
+// ── Left-rail registry (PRD 11 Phase C) ──
+
+describe('left-rail registry', () => {
+  it('gives each mode its intended rail with developer views off', () => {
+    expect(leftPanelsForMode('learn', { developerViews: false })).toEqual([
+      'files', 'learning', 'challenges', 'launch', 'community', 'settings',
+    ]);
+    expect(leftPanelsForMode('research', { developerViews: false })).toEqual([
+      'files', 'experiments', 'hardware', 'launch', 'plugins', 'settings',
+    ]);
+  });
+
+  it('the developer flag governs ONLY search + circuit — no other view is flag-gated', () => {
+    for (const mode of ['learn', 'research'] as const) {
+      const off = leftPanelsForMode(mode, { developerViews: false });
+      const on = leftPanelsForMode(mode, { developerViews: true });
+      expect(on.filter((v) => !off.includes(v)).sort()).toEqual(['circuit', 'search']);
+    }
+  });
+
+  it('no view is double-gated: dev-flagged views are never also mode-restricted', () => {
+    // Structural invariant — the only panels with dev:true are search/circuit,
+    // and they belong to both modes (flag-only, never mode-only).
+    for (const p of LEFT_PANEL_REGISTRY) {
+      if (p.dev) {
+        expect(p.modes).toEqual(['learn', 'research']);
+      }
+    }
+  });
+
+  it('settings is the only bottom-pinned view, in both modes', () => {
+    expect(bottomLeftPanelsForMode('learn')).toEqual(['settings']);
+    expect(bottomLeftPanelsForMode('research')).toEqual(['settings']);
+  });
+
+  it('hardware/plugins are research-only; learning/challenges/community are learn-only', () => {
+    const research = leftPanelsForMode('research', { developerViews: true });
+    const learn = leftPanelsForMode('learn', { developerViews: true });
+    expect(research).toEqual(expect.arrayContaining(['hardware', 'plugins', 'experiments']));
+    expect(research).not.toEqual(expect.arrayContaining(['learning', 'challenges', 'community']));
+    expect(learn).toEqual(expect.arrayContaining(['learning', 'challenges', 'community']));
+    expect(learn).not.toEqual(expect.arrayContaining(['hardware', 'plugins', 'experiments']));
   });
 });

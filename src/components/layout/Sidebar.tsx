@@ -4,7 +4,6 @@ import { FileExplorer } from '../explorer/FileExplorer';
 import { OpenFilesSection } from '../explorer/OpenFilesSection';
 import { LaunchPortal } from '../hardware/LaunchPortal';
 import { SettingsPanel } from '../settings/SettingsPanel';
-import { useSettingsStore } from '../../stores/settingsStore';
 import type { ActivityView } from './ActivityBar';
 
 const LearningPathSidebar = lazy(async () => ({
@@ -175,7 +174,6 @@ function LearningSidebarTabs() {
 
 export function Sidebar({ view, width, onWidthChange }: SidebarProps) {
   const colors = useThemeStore((s) => s.colors);
-  const experimentalFeatures = useSettingsStore((s) => s.general.experimentalFeatures);
   const isDragging = useRef(false);
 
   const handleResizeStart = useCallback((e: React.MouseEvent) => {
@@ -213,26 +211,30 @@ export function Sidebar({ view, width, onWidthChange }: SidebarProps) {
           tabs so it doesn't add empty chrome. */}
       {view === 'files' && <OpenFilesSection />}
       <div style={{ flex: 1, overflow: 'auto' }}>
+        {/* Visibility is decided upstream by the activity-bar registry
+            (mode + developer flag) — a view can only be active if the rail
+            offered it, so the Sidebar renders it unconditionally (PRD 11
+            Phase C removed the per-view developer-flag conjunction gates). */}
         {view === 'files' && <FileExplorer />}
         {view === 'launch' && <LaunchPortal />}
-        {view === 'search' && experimentalFeatures && <SearchPanel />}
-        {view === 'circuit' && experimentalFeatures && <CircuitInfoPanel />}
+        {view === 'search' && <SearchPanel />}
+        {view === 'circuit' && <CircuitInfoPanel />}
         {view === 'learning' && (
           <SidebarSuspense>
             <LearningSidebarTabs />
           </SidebarSuspense>
         )}
-        {view === 'plugins' && experimentalFeatures && (
+        {view === 'plugins' && (
           <SidebarSuspense>
             <PluginMarketplace />
           </SidebarSuspense>
         )}
-        {view === 'hardware' && experimentalFeatures && (
+        {view === 'hardware' && (
           <SidebarSuspense>
             <HardwarePanel />
           </SidebarSuspense>
         )}
-        {view === 'community' && experimentalFeatures && (
+        {view === 'community' && (
           <SidebarSuspense>
             <CommunityPanel />
           </SidebarSuspense>
