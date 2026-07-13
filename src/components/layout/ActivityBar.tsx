@@ -46,18 +46,21 @@ const ITEM_META: Record<ActivityView, { icon: typeof Files; label: string }> = {
   estimator: { icon: Calculator, label: 'Resource Estimator' },
 };
 
-function ActivityIcon({ item, isActive, onClick }: {
+function ActivityIcon({ item, isActive, onClick, shortcut }: {
   item: { id: ActivityView; icon: typeof Files; label: string };
   isActive: boolean;
   onClick: () => void;
+  /** ⌘N binding shown in the tooltip (PRD 11 Phase D) — top-rail views only. */
+  shortcut?: string;
 }) {
   const colors = useThemeStore((s) => s.colors);
   const Icon = item.icon;
+  const title = shortcut ? `${item.label} (${shortcut})` : item.label;
 
   return (
     <button
       onClick={onClick}
-      title={item.label}
+      title={title}
       aria-label={item.label}
       aria-pressed={isActive}
       data-tour-target={`activity-${item.id}`}
@@ -107,12 +110,14 @@ export function ActivityBar({ active, onSelect, visibleViews, workspaceMode }: A
       aria-label="Activity bar"
       aria-orientation="vertical"
     >
-      {topViews.map((id) => (
+      {topViews.map((id, i) => (
         <ActivityIcon
           key={id}
           item={{ id, ...ITEM_META[id] }}
           isActive={active === id}
           onClick={() => onSelect(id)}
+          // ⌘1..9 map onto the first nine top-rail views (PRD 11 Phase D).
+          shortcut={i < 9 ? `⌘${i + 1}` : undefined}
         />
       ))}
       <div style={{ flex: 1 }} />

@@ -38,6 +38,7 @@ export function CodeLatticePanel() {
         <QecEmptyState
           title="No qubit coordinates"
           body="This circuit doesn't declare qubit coordinates, so there's no lattice to draw. Generated surface/repetition codes include them."
+          docsHref={DOCS}
         />
       </div>
     );

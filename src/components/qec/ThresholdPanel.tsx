@@ -57,6 +57,7 @@ export function ThresholdPanel() {
         <QecEmptyState
           title="No campaign results yet"
           body="Run a QEC campaign over a noise sweep to see logical error rate vs physical error, per distance."
+          docsHref={DOCS}
         />
       </div>
     );

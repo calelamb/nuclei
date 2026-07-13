@@ -73,6 +73,7 @@ export default defineConfig({
           label: 'Research',
           items: [
             'research/workspace-modes',
+            'research/navigating-the-workspace',
             'research/experiments',
             'research/qec-studio',
             'research/campaigns',
