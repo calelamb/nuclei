@@ -8,6 +8,7 @@ import { useThemeStore } from '../../stores/themeStore';
 import { useUIModeStore } from '../../stores/uiModeStore';
 import { useWorkspaceStore } from '../../stores/workspaceStore';
 import { useExperimentRunStore } from '../../stores/experimentRunStore';
+import { useQecCampaignStore } from '../../stores/qecCampaignStore';
 import { useExerciseStore } from '../../stores/exerciseStore';
 import { useLayoutStore, type LayoutPreset } from '../../stores/layoutStore';
 import { ModeChip } from './ModeChip';
@@ -75,6 +76,10 @@ export function StatusBar() {
   const themeToggle = useThemeStore((s) => s.toggle);
   const workspaceMode = useWorkspaceStore((s) => s.mode);
   const activeRun = useExperimentRunStore((s) => s.active);
+  const campaignRunning = useQecCampaignStore((s) => s.running);
+  const campaignProgress = useQecCampaignStore((s) => s.progress);
+  const campaignName = useQecCampaignStore((s) => s.campaignName);
+  const campaignResumable = useQecCampaignStore((s) => s.resumable);
   const platform = usePlatform();
   const exercise = useExerciseStore((s) => s.activeExercise);
   const endExercise = useExerciseStore((s) => s.endExercise);
@@ -126,6 +131,27 @@ export function StatusBar() {
           <Circle size={5} fill={colors.accent} stroke="none" style={{ animation: 'nuclei-heartbeat 1.5s ease infinite' }} />
           {activeRun.experimentName}: {activeRun.progress.completed}/{activeRun.progress.total}
           {activeRun.progress.failures > 0 ? ` (${activeRun.progress.failures} failed)` : ''}
+        </span>
+      )}
+
+      {/* PRD 10 Phase E — QEC campaign chip (Research mode). Running progress
+          from strong_id-keyed changed-row events, or a resumable prior run. */}
+      {workspaceMode === 'research' && campaignRunning && campaignProgress && (
+        <span
+          title={`${campaignName ?? 'Campaign'}: ${campaignProgress.tasksComplete}/${campaignProgress.tasksTotal} tasks, ${campaignProgress.sampledShots.toLocaleString()} shots`}
+          style={{ display: 'flex', alignItems: 'center', gap: 4, color: colors.dirac, fontSize: 10 }}
+        >
+          <Circle size={5} fill={colors.dirac} stroke="none" style={{ animation: 'nuclei-heartbeat 1.5s ease infinite' }} />
+          {campaignName ?? 'campaign'}: {campaignProgress.tasksComplete}/{campaignProgress.tasksTotal}
+        </span>
+      )}
+      {workspaceMode === 'research' && !campaignRunning && campaignResumable && (
+        <span
+          title={`${campaignResumable.name} was interrupted — resumable`}
+          style={{ display: 'flex', alignItems: 'center', gap: 4, color: colors.warning, fontSize: 10 }}
+        >
+          <Circle size={5} fill={colors.warning} stroke="none" />
+          {campaignResumable.name}: resumable
         </span>
       )}
 

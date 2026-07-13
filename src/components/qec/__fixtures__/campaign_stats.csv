@@ -1,0 +1,9 @@
+     shots,    errors,  discards, seconds,decoder,strong_id,json_metadata,custom_counts
+     20000,        66,         0,   0.060,pymatching,3-0.001-pymatching,"{""d"":3,""decoder"":""pymatching"",""label"":""surface"",""noise_model"":""SI1000"",""p"":0.001}",
+     20000,        66,         0,   0.060,fusion_blossom,3-0.001-fusion_blossom,"{""d"":3,""decoder"":""fusion_blossom"",""label"":""surface"",""noise_model"":""SI1000"",""p"":0.001}",
+     20000,       666,         0,   0.060,pymatching,3-0.01-pymatching,"{""d"":3,""decoder"":""pymatching"",""label"":""surface"",""noise_model"":""SI1000"",""p"":0.01}",
+     20000,       666,         0,   0.060,fusion_blossom,3-0.01-fusion_blossom,"{""d"":3,""decoder"":""fusion_blossom"",""label"":""surface"",""noise_model"":""SI1000"",""p"":0.01}",
+     20000,        40,         0,   0.100,pymatching,5-0.001-pymatching,"{""d"":5,""decoder"":""pymatching"",""label"":""surface"",""noise_model"":""SI1000"",""p"":0.001}",
+     20000,        40,         0,   0.100,fusion_blossom,5-0.001-fusion_blossom,"{""d"":5,""decoder"":""fusion_blossom"",""label"":""surface"",""noise_model"":""SI1000"",""p"":0.001}",
+     20000,       400,         0,   0.100,pymatching,5-0.01-pymatching,"{""d"":5,""decoder"":""pymatching"",""label"":""surface"",""noise_model"":""SI1000"",""p"":0.01}",
+     20000,       400,         0,   0.100,fusion_blossom,5-0.01-fusion_blossom,"{""d"":5,""decoder"":""fusion_blossom"",""label"":""surface"",""noise_model"":""SI1000"",""p"":0.01}",
