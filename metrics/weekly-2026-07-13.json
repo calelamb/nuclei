@@ -1,0 +1,42 @@
+{
+  "run_date": "2026-07-13",
+  "prior_snapshot_date": "2026-07-06",
+  "repo": "calelamb/nuclei",
+  "repo_signal": {
+    "stars": 3,
+    "forks": 0,
+    "watchers": 3,
+    "open_issues": 0,
+    "note": "Live data unavailable — GitHub MCP server does not expose GET /repos/{owner}/{repo}; values carried forward from 2026-07-06 snapshot",
+    "wow_delta": { "stars": 0, "forks": 0 }
+  },
+  "platform_totals": {
+    "macos": { "current": 57, "prior": 55, "delta": 2 },
+    "windows": { "current": 32, "prior": 32, "delta": 0 },
+    "linux": { "current": 45, "prior": 45, "delta": 0 },
+    "updater_manifests": { "current": 108, "prior": 102, "delta": 6 },
+    "grand_total": { "current": 242, "prior": 234, "delta": 8 }
+  },
+  "releases": [
+    { "tag": "v0.6.0", "published_at": "2026-07-12", "total_downloads": 0, "macos": 0, "windows": 0, "linux": 0, "updater": 0, "wow_delta": "new", "source": "live" },
+    { "tag": "v0.5.3", "published_at": "2026-07-10", "total_downloads": 4, "macos": 1, "windows": 0, "linux": 0, "updater": 3, "wow_delta": "new", "source": "live" },
+    { "tag": "v0.5.2", "published_at": "2026-07-10", "total_downloads": 1, "macos": 0, "windows": 0, "linux": 0, "updater": 1, "wow_delta": "new", "source": "live" },
+    { "tag": "v0.5.1", "published_at": "2026-06-11", "total_downloads": 9, "macos": 2, "windows": 0, "linux": 1, "updater": 6, "wow_delta": 3, "source": "live" },
+    { "tag": "v0.5.0", "published_at": "2026-06-10", "total_downloads": 4, "macos": 1, "windows": 0, "linux": 0, "updater": 3, "wow_delta": 0, "source": "live" },
+    { "tag": "v0.4.17", "published_at": "2026-05-03", "total_downloads": 19, "macos": 5, "windows": 2, "linux": 3, "updater": 9, "wow_delta": 0, "source": "live" },
+    { "tag": "v0.4.16", "published_at": "2026-04-20", "total_downloads": 10, "macos": 1, "windows": 1, "linux": 0, "updater": 8, "wow_delta": 0, "source": "live" },
+    { "tag": "v0.4.15", "published_at": "2026-04-20", "total_downloads": 19, "macos": 3, "windows": 2, "linux": 3, "updater": 11, "wow_delta": 0, "source": "live" },
+    { "tag": "v0.4.14", "published_at": "2026-04-20", "total_downloads": 4, "macos": 2, "windows": 0, "linux": 0, "updater": 2, "wow_delta": 0, "source": "live" },
+    { "tag": "v0.4.13", "published_at": "2026-04-20", "total_downloads": 2, "macos": 1, "windows": 0, "linux": 0, "updater": 1, "wow_delta": 0, "source": "live" }
+  ],
+  "traffic": {
+    "available": false,
+    "reason": "GitHub MCP server does not expose /traffic/* endpoints; direct GitHub API blocked by environment proxy"
+  },
+  "vercel_analytics": {
+    "available": false,
+    "reason": "No VERCEL_TOKEN in environment",
+    "dashboard_url": "https://vercel.com/calelambs-projects/landing/analytics"
+  },
+  "asset_data_source": "mcp__github__get_release_by_tag (live) for v0.6.0, v0.5.3, v0.5.2, v0.5.1, v0.5.0, v0.4.17, v0.4.16, v0.4.15, v0.4.14, v0.4.13; prior snapshot carried forward for v0.4.12, v0.4.11, v0.4.10, and all older releases"
+}
