@@ -300,6 +300,51 @@ Old clients that never send `params`/`seed` see no behavior change. Full
 wire-level detail: `docs-site/src/content/docs/kernel-api/messages-execution.mdx`
 and `docs-site/src/content/docs/reference/protocol-changelog.mdx`.
 
+## Kernel Protocol v1.2 (QEC Studio)
+
+Additive-only. Stim is a kernel framework (Python building `stim.Circuit`, or
+`language: "stim"` raw `.stim` text — never Python `exec`), and new messages
+power QEC Studio:
+
+- `qec_generate` → `qec_generated` (built-in QEC circuit text) and the
+  `qec_snapshot` sidecar (detector error model graph; sent between `snapshot`
+  and `result` for Stim, requestable on demand with an explicit `truncated`
+  edge cap — never silently trimmed).
+- `qec_campaign_start` / `_progress` / `_result` / `_cancel` — sinter
+  campaigns as managed kernel jobs. One at a time; resume via
+  `existing_stats_csv` never re-samples; **no `seed`** (sinter can't seed).
+- `qec_materialize` → `qec_circuits` (runs a campaign entry's
+  `nuclei_circuits(noise)`), `qec_decode_sample` (one decoded shot for the
+  detector-graph overlay, seedable), and `qec_estimate` → `qec_estimate_result`
+  (Azure Quantum Resource Estimator over Q# / OpenQASM 3 via `qdk`; QRE v2 API
+  today, QREv3 migration pending).
+
+The `environment` response's `packages` may include `stim`/`sinter`/
+`pymatching`/`fusion_blossom`. Full detail:
+`docs-site/src/content/docs/kernel-api/messages-qec.mdx` and the protocol
+changelog.
+
+## QEC Studio (Research Mode)
+
+Research mode's quantum-error-correction workflow: Stim circuits with timeline /
+code-lattice / detector-graph visualizations (`src/components/qec/`), sinter
+`qec_campaign` experiments (schema v2 — `source: generate|entry`, no seed,
+`d=<n>` entry labels feed the Λ fit; runner in `src/services/qecCampaignRunner.ts`),
+threshold/Λ analysis, a noise model library over `noise/*.noise.yaml`
+(`src/types/noiseModel.ts`), and a Resource Estimator panel
+(`kernel/qec/estimate.py`). Templates + scaffolding: `src/services/qecTemplates.ts`,
+`qecScaffold.ts`. Docs: `docs-site/src/content/docs/research/qec-studio.mdx`,
+`campaigns.mdx`, `noise-models.mdx`, `resource-estimation.mdx`.
+
+## Workspace Navigation
+
+The left-rail `activeView` lives in `src/stores/navigationStore.ts` (lifted out
+of PanelLayout). The command palette (`src/components/commandPalette/`) is
+registry-driven — a Go-to per rail view, a Toggle per panel — with a
+palette↔registry parity test. Shortcuts: `⌘⇧M` (switch workspace mode),
+`⌘1..9` (Nth top-rail view, mode-aware). Binding table:
+`docs-site/src/content/docs/research/navigating-the-workspace.mdx`.
+
 ## PRD Series (Research Direction)
 
 PRD 09 (this document's workspace/experiments work) is the foundation for

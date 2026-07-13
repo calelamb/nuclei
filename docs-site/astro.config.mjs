@@ -74,6 +74,10 @@ export default defineConfig({
           items: [
             'research/workspace-modes',
             'research/experiments',
+            'research/qec-studio',
+            'research/campaigns',
+            'research/noise-models',
+            'research/resource-estimation',
             'research/reproducibility',
           ],
         },

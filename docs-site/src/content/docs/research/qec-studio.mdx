@@ -1,0 +1,85 @@
+---
+title: "QEC Studio"
+description: "A walkthrough of quantum error correction in Research mode: Stim circuits, the timeline / lattice / detector-graph visualizations, sampling a shot, running a campaign, and reading the threshold / Λ plot."
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+**QEC Studio** is Research mode's quantum-error-correction workflow. It turns a
+[Stim](https://github.com/quantumlib/Stim) stabilizer circuit into a set of
+visualizations no other desktop tool has, then sweeps it over noise to measure
+how well the code protects logical information.
+
+<Aside type="note">
+The QEC toolchain (`stim`, `sinter`, `pymatching`) is installed from the in-app
+catalog (Research group), not bundled. Without it, the panels show a friendly
+`missing_dependency` prompt rather than failing.
+</Aside>
+
+## Start from a template
+
+The fastest way in is **Experiments → New QEC experiment**. Pick **Repetition
+code memory** or **Rotated surface code memory** and Nuclei writes two *real,
+editable* files into your project:
+
+- `qec/<name>.py` — a Stim-generating entry defining
+  `nuclei_circuits(noise) -> dict[str, stim.Circuit]`. Nothing is hidden; open
+  it and change the distances, the code task, or build circuits by hand.
+- `experiments/<name>.experiment.yaml` — a `qec_campaign` spec pointing at that
+  entry. See [Campaigns](/docs/research/campaigns/) for every field.
+
+The entry labels its circuits `d=3`, `d=5`, `d=7`; that convention is what lets
+the threshold panel fit Λ across distances.
+
+## The visualizations
+
+Open a `.stim` file (or run Stim-building Python) and the visualization zone
+swaps its Bloch sphere for three QEC panels:
+
+- **Timeline** — the circuit moment by moment: resets, gates, measurements, and
+  detector/observable annotations per tick.
+- **Code Lattice** — data and measure qubits laid out from the circuit's qubit
+  coordinates (generated codes include them; hand-built circuits may not, and
+  the panel says so).
+- **Detector Graph** — detector nodes, probability-weighted edges, and boundary
+  edges to a virtual node, built from the circuit's **detector error model**
+  (DEM). Press **Sample a shot** to overlay one Monte-Carlo shot: the fired
+  detectors light up and the decoder's matching is drawn on top, with an honest
+  "logical error this shot" / "corrected" verdict.
+
+Large graphs are capped and flagged (`truncated`) with a **Render anyway**
+button — never silently trimmed. A circuit with no DEM shows the reason, not a
+blank box.
+
+## Run a campaign
+
+With a `qec_campaign` experiment selected, the analysis view gives you a
+**Run campaign** button and a live progress chip (tasks complete / shots
+sampled). A campaign is a set of Stim tasks — labels × noise points × decoders
+— sampled by sinter across worker processes.
+
+Quit mid-campaign and the next run **resumes without re-sampling**: the stats
+already collected are handed back to sinter as a starting point. Campaigns are
+Monte-Carlo and **not seed-reproducible** — sinter has no seeding API, and
+Nuclei doesn't pretend otherwise.
+
+## Read the threshold / Λ plot
+
+Results stream into the **Threshold / Λ** panel: logical error rate per shot
+vs the physical error parameter, on log-log axes, one series per (label ×
+distance × decoder), with Wilson confidence intervals. Below threshold, higher
+distances sit lower and the curves fan out; the panel reports the fitted **Λ**
+(the error-suppression factor between successive distances, Λ > 1 = below
+threshold) and a projected distance to reach a target logical error rate.
+
+<Aside type="caution">
+Read logical error rates *with* their confidence intervals. Two distances whose
+error bars overlap are not evidence of suppression — collect more shots before
+claiming a code is below threshold.
+</Aside>
+
+## Estimate the cost
+
+The [Resource Estimator](/docs/research/resource-estimation/) panel answers the
+next question: given a Q# or Qiskit algorithm, how many physical qubits and how
+much wall-clock time would a fault-tolerant implementation actually need?
