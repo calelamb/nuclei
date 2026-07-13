@@ -94,9 +94,26 @@ def run_worker(
     return run_worker_raw(json.dumps(value).encode("utf-8"), timeout)
 
 
+def _qdk_visible_to_worker() -> bool:
+    """The worker runs under ``python -I`` (isolated: no user site-packages),
+    so qdk being importable in THIS process does not mean the worker can see
+    it — e.g. a ``pip install --user`` qdk exists here but not there. Probe
+    with the same interpreter flags and environment the worker gets."""
+    completed = subprocess.run(
+        [sys.executable, "-I", "-c", "import qdk"],
+        env=worker_env(),
+        capture_output=True,
+        timeout=60,
+        check=False,
+    )
+    return completed.returncode == 0
+
+
 def require_qdk() -> None:
     if importlib.util.find_spec("qdk") is None:
         pytest.skip("qdk is not installed")
+    if not _qdk_visible_to_worker():
+        pytest.skip("qdk is not importable under 'python -I' (user-site install?)")
 
 
 def test_worker_limits_have_production_and_testing_defaults() -> None:
