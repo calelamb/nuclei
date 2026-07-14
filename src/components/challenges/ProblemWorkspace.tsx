@@ -1,7 +1,8 @@
 import { useCallback, useState } from 'react';
-import { ChevronDown, ChevronRight } from 'lucide-react';
+import { ChevronDown, ChevronRight, ShieldCheck } from 'lucide-react';
 import { useThemeStore } from '../../stores/themeStore';
 import { useChallengeModeStore } from '../../stores/challengeModeStore';
+import { isStateVerified } from '../../services/challengeGrading';
 import { ProblemDescription } from './ProblemDescription';
 import { ProblemEditor } from './ProblemEditor';
 import { TestRunner } from './TestRunner';
@@ -129,6 +130,27 @@ export function ProblemWorkspace() {
             }}>
               {activeProblem.category.replace('-', ' ')}
             </span>
+            {isStateVerified(activeProblem) && (
+              <span
+                title="Graded on the actual quantum state (fidelity / oracle) — can't be passed by hardcoding the answer."
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 4,
+                  padding: '2px 8px',
+                  borderRadius: 999,
+                  background: `${colors.success}16`,
+                  border: `1px solid ${colors.success}44`,
+                  color: colors.success,
+                  fontSize: 10.5,
+                  fontWeight: 700,
+                  fontFamily: "'Geist Sans', sans-serif",
+                }}
+              >
+                <ShieldCheck size={11} />
+                State-verified
+              </span>
+            )}
           </div>
           <div style={{
             color: colors.text,
