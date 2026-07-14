@@ -1,6 +1,12 @@
 import type { ChallengeJsonValue, TestCase, TestCaseResult } from '../types/challenge';
 import type { SimulationResult } from '../types/quantum';
 
+/**
+ * `TestCaseResult.score` is the RAW per-test fraction in [0, 1] — how well
+ * this single case did, independent of its weight. The test's `weight` is
+ * applied only when aggregating the submission total (see TestRunner), so a
+ * fully-passing case reads as 100% in the UI regardless of weight.
+ */
 export function validateTestCase(
   testCase: TestCase,
   result: SimulationResult,
@@ -17,7 +23,7 @@ export function validateTestCase(
     return {
       testCaseId: testCase.id,
       passed,
-      score: score * testCase.weight,
+      score,
       verdict: passed ? 'accepted' : 'wrong_answer',
       actualOutput: result.probabilities,
       message,
@@ -35,7 +41,7 @@ export function validateTestCase(
     return {
       testCaseId: testCase.id,
       passed,
-      score: score * testCase.weight,
+      score,
       verdict: passed ? 'accepted' : 'wrong_answer',
       actualOutput: result.measurements,
       message,
@@ -69,7 +75,7 @@ export function validateValueTestCase(
     return {
       testCaseId: testCase.id,
       passed,
-      score: passed ? testCase.weight : 0,
+      score: passed ? 1 : 0,
       verdict: passed ? 'accepted' : 'wrong_answer',
       actualOutput,
       message,
@@ -87,7 +93,7 @@ export function validateValueTestCase(
     return {
       testCaseId: testCase.id,
       passed,
-      score: passed ? testCase.weight : 0,
+      score: passed ? 1 : 0,
       verdict: passed ? 'accepted' : 'wrong_answer',
       actualOutput,
       message,
