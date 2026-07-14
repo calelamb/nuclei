@@ -219,7 +219,7 @@ export function RunsTable() {
       </div>
 
       {mainTab === 'sweep' ? (
-        <div style={{ flex: 1, overflow: 'auto' }}>
+        <div style={{ flex: 1, minHeight: 0, overflow: 'auto' }}>
           <SweepPlot />
         </div>
       ) : (
@@ -264,7 +264,7 @@ export function RunsTable() {
           ) : (
             <div
               ref={scrollRef}
-              style={{ flex: 1, overflow: 'auto', position: 'relative' }}
+              style={{ flex: 1, minHeight: 0, overflow: 'auto', position: 'relative' }}
               onScroll={(e) => setScrollTop(e.currentTarget.scrollTop)}
               role="rowgroup"
             >

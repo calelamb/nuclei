@@ -131,7 +131,7 @@ const PROVIDER_CONFIG: Record<
 
 export function CredentialSetup({ provider, onClose }: CredentialSetupProps) {
   const colors = useThemeStore((s) => s.colors);
-  const setProviderConnected = useHardwareStore((s) => s.setProviderConnected);
+  const setConnectionError = useHardwareStore((s) => s.setConnectionError);
   const config = PROVIDER_CONFIG[provider];
 
   const [values, setValues] = useState<Record<string, string>>(() => {
@@ -150,15 +150,21 @@ export function CredentialSetup({ provider, onClose }: CredentialSetupProps) {
     // Credentials go straight to the kernel, which persists them in the OS
     // keyring (macOS Keychain / Windows Credential Manager / Linux Secret
     // Service). They are NOT written to localStorage — plaintext tokens in
-    // the browser's storage is a real XSS foot-gun. The kernel's success
-    // response drives the UI's connected-state via the 'hardware_connected'
-    // message handled in useKernel.ts; setProviderConnected here is an
-    // optimistic flip so the user sees immediate feedback.
+    // the browser's storage is a real XSS foot-gun.
     const hw = getHardware();
-    if (hw) {
-      hw.hardwareConnect(provider, values);
+    if (!hw) {
+      // No kernel (web build) — we can't validate the credentials, so don't
+      // fake a connected state. Surface it instead of silently "connecting".
+      setConnectionError(provider as never, 'Hardware connections need the desktop app.');
+      onClose();
+      return;
     }
-    setProviderConnected(provider, true);
+    // hardwareConnect flips the store to "connecting"; the kernel's
+    // 'hardware_connected' response is what actually marks the provider
+    // connected (or sets a connection error). We do NOT optimistically flip to
+    // connected here — that showed a false "connected" when the token was
+    // wrong or the socket was down.
+    hw.hardwareConnect(provider, values);
     onClose();
   };
 

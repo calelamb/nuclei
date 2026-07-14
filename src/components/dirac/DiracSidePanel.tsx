@@ -558,7 +558,7 @@ export function DiracSidePanel() {
       <AmbientFeed />
       {/* Messages */}
       <div ref={scrollRef} onScroll={handleScroll} style={{
-        flex: 1, overflow: 'auto', padding: '8px 12px',
+        flex: 1, minHeight: 0, overflow: 'auto', padding: '8px 12px',
         display: 'flex', flexDirection: 'column', gap: 10,
       }}>
         {messages.length === 0 && (

@@ -105,7 +105,9 @@ export function LaunchStrip() {
   return (
     <div
       onClick={() => openLaunch()}
+      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openLaunch(); } }}
       role="button"
+      tabIndex={0}
       aria-label="Open launch panel"
       style={{
         display: 'flex',

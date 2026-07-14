@@ -172,6 +172,7 @@ export function CircuitGallery() {
       <div
         style={{
           flex: 1,
+          minHeight: 0,
           overflowY: 'auto',
           display: 'grid',
           gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))',

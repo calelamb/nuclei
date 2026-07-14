@@ -345,7 +345,7 @@ export function CircuitRenderer() {
       <div
         ref={containerRef}
         className="circuit-renderer-container"
-        style={{ flex: 1, overflow: 'auto', position: 'relative' }}
+        style={{ flex: 1, minHeight: 0, overflow: 'auto', position: 'relative' }}
         aria-description={ariaDescription}
       >
         <ExportMenu />

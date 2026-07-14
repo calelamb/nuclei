@@ -806,7 +806,7 @@ export function FileExplorer() {
         </div>
       )}
 
-      <div style={{ flex: 1, overflow: 'auto' }}>
+      <div style={{ flex: 1, minHeight: 0, overflow: 'auto' }}>
         {loading && (
           <div
             style={{

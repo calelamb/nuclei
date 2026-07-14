@@ -428,7 +428,7 @@ export function TestRunner({ challenge }: TestRunnerProps) {
         </button>
       </div>
 
-      <div style={{ flex: 1, overflow: 'hidden' }}>
+      <div style={{ flex: 1, minHeight: 0, overflow: 'hidden' }}>
         {activeBottomTab === 'inspection' ? (
           <ChallengeInspector />
         ) : (

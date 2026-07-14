@@ -202,7 +202,7 @@ export function FrameworkSetup({ open, onClose, firstRun = false }: FrameworkSet
         </div>
 
         {/* Body */}
-        <div style={{ overflow: 'auto', padding: '14px 18px' }}>
+        <div style={{ flex: 1, minHeight: 0, overflow: 'auto', padding: '14px 18px' }}>
           {loading && (
             <div style={{ color: colors.textDim, fontSize: 12, padding: '20px 0' }}>
               Detecting Python + installed frameworks…
