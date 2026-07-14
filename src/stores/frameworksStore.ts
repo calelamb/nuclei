@@ -20,8 +20,29 @@ export interface FrameworkStatus {
   catalog: FrameworkInfo[];
 }
 
+/** Progress stage emitted on the `framework-install` event channel by the
+ * Rust env commands. Kept as a documented union of every stage the backend
+ * sends (install, uninstall, venv rebuild, and Python bootstrap). */
+export type InstallStage =
+  | 'creating-venv'
+  | 'installing'
+  | 'installed'
+  | 'failed'
+  | 'done'
+  | 'installing-core-deps'
+  | 'installed-core-deps'
+  | 'rebuilding-venv'
+  | 'rebuilt-venv'
+  | 'restoring-framework'
+  | 'restored-framework'
+  | 'uninstalling'
+  | 'uninstalled'
+  | 'installing-python'
+  | 'python-installed'
+  | 'python-install-failed';
+
 export interface InstallEvent {
-  stage: 'creating-venv' | 'installing' | 'installed' | 'failed' | 'done';
+  stage: InstallStage;
   framework: string | null;
   line: string | null;
 }

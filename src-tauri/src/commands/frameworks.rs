@@ -632,15 +632,7 @@ pub fn framework_install(app: AppHandle, frameworks: Vec<String>) -> Result<Vec<
         if out.status.success() {
             emit(&app, "installed", Some(fw.id), None);
         } else {
-            let tail: String = String::from_utf8_lossy(&out.stderr)
-                .lines()
-                .rev()
-                .take(8)
-                .collect::<Vec<&str>>()
-                .into_iter()
-                .rev()
-                .collect::<Vec<&str>>()
-                .join("\n");
+            let tail = tail_lines(&String::from_utf8_lossy(&out.stderr), 8);
             emit(&app, "failed", Some(fw.id), Some(&tail));
             failed.push(format!("{id}: {tail}"));
         }
@@ -648,4 +640,436 @@ pub fn framework_install(app: AppHandle, frameworks: Vec<String>) -> Result<Vec<
 
     emit(&app, "done", None, None);
     Ok(failed)
+}
+
+/// Last `n` lines of a (possibly multi-line) string, order preserved. Used to
+/// surface the meaningful tail of a pip/venv failure without the full log.
+fn tail_lines(s: &str, n: usize) -> String {
+    let lines: Vec<&str> = s.lines().collect();
+    let start = lines.len().saturating_sub(n);
+    lines[start..].join("\n")
+}
+
+// ───────────────────────── Missing-dependency resolution ─────────────────────────
+
+/// Resolve a name from a kernel `missing_dependency` error — an import name
+/// (`qiskit`), a submodule (`qiskit.qasm3`), a pip/import id (`qdk`), or a
+/// catalog id — to its installable catalog entry, so the UI can offer a
+/// one-click install for exactly what's missing instead of a dead end.
+fn resolve_framework(name: &str) -> Option<&'static FrameworkInfo> {
+    let needle = name.trim().to_ascii_lowercase();
+    if needle.is_empty() {
+        return None;
+    }
+    // Pass 1 — exact id / import name / label wins over a loose module match.
+    if let Some(fw) = CATALOG.iter().find(|f| {
+        f.id.eq_ignore_ascii_case(&needle)
+            || f.import_name.eq_ignore_ascii_case(&needle)
+            || f.label.eq_ignore_ascii_case(&needle)
+    }) {
+        return Some(fw);
+    }
+    // Pass 2 — top-level module of a dotted name: `qiskit.qasm3` -> `qiskit`.
+    let top = needle.split(['.', '/']).next().unwrap_or(&needle);
+    CATALOG.iter().find(|f| {
+        f.import_name
+            .split('.')
+            .next()
+            .map(|module| module.eq_ignore_ascii_case(top))
+            .unwrap_or(false)
+    })
+}
+
+/// Map a missing-dependency name to its catalog entry (or `None` if it isn't
+/// something Nuclei knows how to install).
+#[tauri::command]
+pub fn framework_resolve(name: String) -> Option<FrameworkInfo> {
+    resolve_framework(&name).cloned()
+}
+
+// ───────────────────────── Python bootstrap + guidance ─────────────────────────
+
+/// OS family as a stable lowercase string the UI switches on.
+fn current_os() -> &'static str {
+    if cfg!(target_os = "macos") {
+        "macos"
+    } else if cfg!(target_os = "windows") {
+        "windows"
+    } else {
+        "linux"
+    }
+}
+
+fn python_download_url() -> &'static str {
+    "https://www.python.org/downloads/"
+}
+
+/// Extract the minor version from a `python --version` style string such as
+/// `Python 3.12.1` or a bare `3.11`. Returns `None` for anything that isn't a
+/// Python 3.x version. Pure — unit tested.
+fn parse_minor_from_version(version: &str) -> Option<u32> {
+    let digits = version.trim_start_matches(|c: char| !c.is_ascii_digit());
+    let mut parts = digits.split('.');
+    let major: u32 = parts.next()?.parse().ok()?;
+    if major != 3 {
+        return None;
+    }
+    let minor: String = parts
+        .next()?
+        .chars()
+        .take_while(|c| c.is_ascii_digit())
+        .collect();
+    minor.parse().ok()
+}
+
+/// Whether a command is runnable — used to detect package managers.
+fn command_exists(cmd: &str, version_flag: &str) -> bool {
+    Command::new(cmd)
+        .arg(version_flag)
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .status()
+        .map(|s| s.success())
+        .unwrap_or(false)
+}
+
+/// The system package manager Nuclei can drive to install Python, if any.
+fn detect_package_manager() -> Option<&'static str> {
+    let candidates: &[(&str, &str)] = if cfg!(target_os = "macos") {
+        &[("brew", "--version")]
+    } else if cfg!(target_os = "windows") {
+        &[("winget", "--version")]
+    } else {
+        &[
+            ("apt-get", "--version"),
+            ("dnf", "--version"),
+            ("pacman", "--version"),
+        ]
+    };
+    candidates
+        .iter()
+        .find(|(cmd, flag)| command_exists(cmd, flag))
+        .map(|(cmd, _)| *cmd)
+}
+
+/// The shell command that installs a modern Python via `pm`, for display.
+/// Pure — unit tested. (Auto-install runs the argv form directly, no shell.)
+fn package_manager_install_command(pm: &str) -> Option<String> {
+    let cmd = match pm {
+        "brew" => "brew install python",
+        "winget" => "winget install -e --id Python.Python.3.12",
+        "apt-get" => "sudo apt-get install -y python3 python3-venv python3-pip",
+        "dnf" => "sudo dnf install -y python3 python3-pip",
+        "pacman" => "sudo pacman -S --noconfirm python python-pip",
+        _ => return None,
+    };
+    Some(cmd.to_string())
+}
+
+#[derive(Debug, Serialize)]
+pub struct PythonSetup {
+    pub found: bool,
+    pub version: Option<String>,
+    pub path: Option<String>,
+    pub supported: bool,
+    pub too_old: bool,
+    pub min_version: String,
+    pub os: String,
+    pub package_manager: Option<String>,
+    pub install_command: Option<String>,
+    pub download_url: String,
+}
+
+/// Report the Python situation and how to fix it — the backend half of the
+/// "no Python / too-old Python" onboarding. You can't `pip install python`,
+/// so when it's missing this tells the UI which package manager (if any) can
+/// install it and the exact command, plus the python.org fallback.
+#[tauri::command]
+pub fn python_setup() -> PythonSetup {
+    let (found, version, path, minor) = match find_system_python() {
+        Some((p, v)) => {
+            let minor = parse_minor_from_version(&v);
+            (true, Some(v), Some(p), minor)
+        }
+        None => (false, None, None, None),
+    };
+    let supported = minor.map(|m| m >= MIN_PYTHON_MINOR).unwrap_or(false);
+    let pm = detect_package_manager();
+    PythonSetup {
+        found,
+        version,
+        path,
+        supported,
+        too_old: found && !supported,
+        min_version: format!("3.{MIN_PYTHON_MINOR}"),
+        os: current_os().to_string(),
+        package_manager: pm.map(|s| s.to_string()),
+        install_command: pm.and_then(package_manager_install_command),
+        download_url: python_download_url().to_string(),
+    }
+}
+
+/// Install a modern Python via the detected package manager (brew on macOS,
+/// winget on Windows). Linux managers need root, which a GUI subprocess can't
+/// answer, so those return the exact command to run instead. Emits
+/// `framework-install` progress events; returns the resulting version.
+#[tauri::command]
+pub fn python_install(app: AppHandle) -> Result<String, String> {
+    // Already have a supported interpreter — nothing to do.
+    if let Some((_, v)) = find_best_python() {
+        return Ok(v);
+    }
+    let pm = detect_package_manager().ok_or_else(|| {
+        format!(
+            "No supported package manager found. Install Python 3.{}+ from {}, \
+             then relaunch Nuclei.",
+            MIN_PYTHON_MINOR,
+            python_download_url()
+        )
+    })?;
+    emit(&app, "installing-python", None, Some(pm));
+
+    let (cmd, args): (&str, Vec<&str>) = match pm {
+        "brew" => ("brew", vec!["install", "python"]),
+        "winget" => (
+            "winget",
+            vec![
+                "install",
+                "-e",
+                "--id",
+                "Python.Python.3.12",
+                "--accept-package-agreements",
+                "--accept-source-agreements",
+            ],
+        ),
+        other => {
+            let guidance = package_manager_install_command(other).unwrap_or_default();
+            return Err(format!(
+                "Installing Python here needs elevated permissions. Run:\n{guidance}"
+            ));
+        }
+    };
+
+    let out = Command::new(cmd)
+        .args(&args)
+        .output()
+        .map_err(|e| format!("{pm} failed to start: {e}"))?;
+    if !out.status.success() {
+        let tail = tail_lines(&String::from_utf8_lossy(&out.stderr), 8);
+        emit(&app, "python-install-failed", None, Some(&tail));
+        return Err(format!("{pm} could not install Python:\n{tail}"));
+    }
+
+    match find_best_python() {
+        Some((_, v)) => {
+            emit(&app, "python-installed", None, Some(&v));
+            Ok(v)
+        }
+        None => Err(
+            "Python installed, but a 3.10+ interpreter still isn't on PATH. \
+             Open a new terminal or relaunch Nuclei."
+                .to_string(),
+        ),
+    }
+}
+
+// ───────────────────────── Environment diagnostics ─────────────────────────
+
+#[derive(Debug, Serialize)]
+pub struct EnvironmentReport {
+    pub os: String,
+    pub system_python_version: Option<String>,
+    pub system_python_path: Option<String>,
+    pub python_supported: bool,
+    pub venv_path: String,
+    pub venv_exists: bool,
+    pub venv_python_version: Option<String>,
+    pub kernel_core_deps_ok: bool,
+    pub installed_frameworks: Vec<String>,
+    pub healthy: bool,
+}
+
+/// One-call environment doctor: system Python, the managed venv, kernel core
+/// deps, and installed frameworks, with an overall health verdict. Backs a
+/// diagnostics view and support ("paste your environment report").
+#[tauri::command]
+pub fn environment_report(app: AppHandle) -> Result<EnvironmentReport, String> {
+    let venv = venv_path(&app)?;
+    let venv_py = venv_python(&venv);
+    let venv_exists = venv_py.exists();
+
+    let (sys_path, sys_version) = match find_system_python() {
+        Some((p, v)) => (Some(p), Some(v)),
+        None => (None, None),
+    };
+    let python_supported = find_best_python().is_some();
+
+    let venv_python_version = if venv_exists {
+        python_minor_version(&venv_py.to_string_lossy()).map(|m| format!("Python 3.{m}"))
+    } else {
+        None
+    };
+    let core_ok = venv_exists && kernel_core_deps_present(&venv_py);
+    let installed = if venv_exists {
+        installed_frameworks(&venv_py)
+    } else {
+        Vec::new()
+    };
+
+    Ok(EnvironmentReport {
+        os: current_os().to_string(),
+        system_python_version: sys_version,
+        system_python_path: sys_path,
+        python_supported,
+        venv_path: venv.to_string_lossy().to_string(),
+        venv_exists,
+        venv_python_version,
+        kernel_core_deps_ok: core_ok,
+        installed_frameworks: installed,
+        healthy: venv_exists && core_ok && python_supported,
+    })
+}
+
+// ───────────────────────── Uninstall + repair ─────────────────────────
+
+/// Base package names from a pip requirement spec, for uninstall. `qiskit
+/// qiskit-aer` -> `[qiskit, qiskit-aer]`; `stim>=1.14,<2` -> `[stim]`. Pure.
+fn base_pkg_names(pip_name: &str) -> Vec<String> {
+    pip_name
+        .split_whitespace()
+        .map(|spec| {
+            spec.split(['<', '>', '=', '!', '~', '['])
+                .next()
+                .unwrap_or(spec)
+                .to_string()
+        })
+        .filter(|s| !s.is_empty())
+        .collect()
+}
+
+/// Remove frameworks from the managed venv (the symmetric counterpart of
+/// `framework_install`) so users can reclaim space. Failures on one don't
+/// abort the rest; the caller gets a summary.
+#[tauri::command]
+pub fn framework_uninstall(app: AppHandle, frameworks: Vec<String>) -> Result<Vec<String>, String> {
+    let venv = venv_path(&app)?;
+    let pip = venv_pip(&venv);
+    if !pip.exists() {
+        return Err("No managed environment yet — nothing to uninstall.".to_string());
+    }
+
+    let mut failed: Vec<String> = Vec::new();
+    for id in &frameworks {
+        let Some(fw) = CATALOG.iter().find(|f| f.id == id) else {
+            failed.push(format!("{id}: unknown framework"));
+            continue;
+        };
+        emit(&app, "uninstalling", Some(fw.id), None);
+        let names = base_pkg_names(fw.pip_name);
+        let mut args: Vec<&str> = vec!["uninstall", "-y"];
+        args.extend(names.iter().map(String::as_str));
+        let out = Command::new(&pip)
+            .args(&args)
+            .output()
+            .map_err(|e| format!("pip failed to start for {id}: {e}"))?;
+        if out.status.success() {
+            emit(&app, "uninstalled", Some(fw.id), None);
+        } else {
+            let tail = tail_lines(&String::from_utf8_lossy(&out.stderr), 8);
+            emit(&app, "failed", Some(fw.id), Some(&tail));
+            failed.push(format!("{id}: {tail}"));
+        }
+    }
+    emit(&app, "done", None, None);
+    Ok(failed)
+}
+
+/// Rebuild the managed venv from scratch, preserving installed frameworks —
+/// the escape hatch for a wedged environment (corrupt venv, half-finished
+/// install, or a venv built from a since-removed Python). Returns the new
+/// interpreter version.
+#[tauri::command]
+pub fn venv_repair(app: AppHandle) -> Result<String, String> {
+    let venv = venv_path(&app)?;
+    rebuild_venv_with_supported_python(&app, &venv)?;
+    let py = venv_python(&venv);
+    Ok(python_minor_version(&py.to_string_lossy())
+        .map(|m| format!("Python 3.{m}"))
+        .unwrap_or_else(|| "unknown".to_string()))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn resolves_by_id_import_and_top_level_module() {
+        assert_eq!(resolve_framework("qiskit").map(|f| f.id), Some("qiskit"));
+        assert_eq!(resolve_framework("QISKIT").map(|f| f.id), Some("qiskit"));
+        // by import_name
+        assert_eq!(resolve_framework("cudaq").map(|f| f.id), Some("cuda-q"));
+        assert_eq!(resolve_framework("qdk").map(|f| f.id), Some("qsharp"));
+        // dotted submodule -> top-level module
+        assert_eq!(
+            resolve_framework("qiskit.qasm3").map(|f| f.id),
+            Some("qiskit")
+        );
+        assert_eq!(
+            resolve_framework("qiskit_ibm_runtime").map(|f| f.id),
+            Some("ibm-runtime")
+        );
+        assert_eq!(resolve_framework("stim").map(|f| f.id), Some("stim"));
+        assert!(resolve_framework("nonsense-pkg").is_none());
+        assert!(resolve_framework("   ").is_none());
+    }
+
+    #[test]
+    fn parses_python_minor_version() {
+        assert_eq!(parse_minor_from_version("Python 3.12.1"), Some(12));
+        assert_eq!(parse_minor_from_version("3.11"), Some(11));
+        assert_eq!(parse_minor_from_version("Python 3.9.6"), Some(9));
+        assert_eq!(parse_minor_from_version("Python 2.7.18"), None);
+        assert_eq!(parse_minor_from_version("garbage"), None);
+    }
+
+    #[test]
+    fn base_pkg_names_strips_version_specs() {
+        assert_eq!(
+            base_pkg_names("qiskit qiskit-aer"),
+            vec!["qiskit", "qiskit-aer"]
+        );
+        assert_eq!(base_pkg_names("stim>=1.14,<2"), vec!["stim"]);
+        assert_eq!(
+            base_pkg_names("pytket-quantinuum<0.26"),
+            vec!["pytket-quantinuum"]
+        );
+    }
+
+    #[test]
+    fn install_commands_cover_known_managers() {
+        for pm in ["brew", "winget", "apt-get", "dnf", "pacman"] {
+            assert!(
+                package_manager_install_command(pm).is_some(),
+                "missing: {pm}"
+            );
+        }
+        assert!(package_manager_install_command("nope").is_none());
+    }
+
+    #[test]
+    fn current_os_is_known() {
+        assert!(matches!(current_os(), "macos" | "windows" | "linux"));
+    }
+
+    #[test]
+    fn every_catalog_entry_resolves_by_its_own_import_name() {
+        for fw in CATALOG {
+            let top = fw.import_name.split('.').next().unwrap_or(fw.import_name);
+            assert!(
+                resolve_framework(top).is_some(),
+                "catalog import {} did not resolve",
+                fw.import_name
+            );
+        }
+    }
 }
