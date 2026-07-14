@@ -166,4 +166,8 @@ def bell_state(bell_index: int):
   estimatedMinutes: 10,
   totalSubmissions: 1247,
   acceptanceRate: 0.82,
+  // A Bell state is provably reachable with exactly one entangling gate (the
+  // correlated distribution can't be made by a product state), so 1 is a true
+  // lower bound — the ★ rewards a clean, minimal circuit, not a hardcode.
+  efficiency: { twoQubitGates: 1 },
 };

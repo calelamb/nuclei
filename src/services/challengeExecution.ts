@@ -425,6 +425,7 @@ export async function runTestCases(
   onStart: (index: number) => void,
   onResult: (result: TestCaseResult, index: number) => void,
   onError: (error: string) => void,
+  onArtifact?: (snapshot: CircuitSnapshot | null, index: number) => void,
 ): Promise<TestCaseResult[]> {
   const isValueContract = challenge.contract_kind === 'returns_value';
 
@@ -473,6 +474,7 @@ export async function runTestCases(
           const testResult = validateTestCase(testCase, artifact.result, elapsed);
           results.push(testResult);
           onResult(testResult, index);
+          onArtifact?.(artifact.snapshot, index);
         }
       } catch (err: unknown) {
         const elapsed = performance.now() - startTime;

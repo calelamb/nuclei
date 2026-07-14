@@ -7,15 +7,24 @@ import {
   runTestCases,
 } from '../../services/challengeExecution';
 import { usePlatform } from '../../platform/PlatformProvider';
+import {
+  aggregateMetrics,
+  computeCircuitMetrics,
+  computeEfficiency,
+} from '../../services/challengeEfficiency';
 import { TestCaseRow } from './TestCaseRow';
 import { ChallengeInspector } from './ChallengeInspector';
+import { PerformancePanel } from './PerformancePanel';
 import type {
+  CircuitMetrics,
+  EfficiencyReport,
   QuantumChallenge,
   Submission,
   SubmissionStatus,
   TestCase,
   TestCaseResult,
 } from '../../types/challenge';
+import type { CircuitSnapshot } from '../../types/quantum';
 
 interface TestRunnerProps {
   challenge: QuantumChallenge;
@@ -67,6 +76,9 @@ export function TestRunner({ challenge }: TestRunnerProps) {
   const setInspection = useChallengeModeStore((s) => s.setInspection);
   const setInspectionView = useChallengeModeStore((s) => s.setInspectionView);
   const [activeBottomTab, setActiveBottomTab] = useState<'tests' | 'inspection'>('tests');
+  // Efficiency report from the most recent accepted submission — surfaced as a
+  // LeetCode-style performance panel above the test rows.
+  const [perfReport, setPerfReport] = useState<EfficiencyReport | null>(null);
   const [inspectionCaseId, setInspectionCaseId] = useState<string | null>(
     challenge.visible_tests?.[0]?.id ?? challenge.testCases.find((testCase) => !testCase.hidden)?.id ?? null,
   );
@@ -109,10 +121,12 @@ export function TestRunner({ challenge }: TestRunnerProps) {
 
     clearTestResults();
     setInspection(null);
+    setPerfReport(null);
     setRunning(true);
     setActiveBottomTab('tests');
 
     const casesToRun = submit ? challenge.testCases : visibleTests;
+    const capturedMetrics: CircuitMetrics[] = [];
     const results = await runTestCases(
       code,
       challenge,
@@ -129,6 +143,9 @@ export function TestRunner({ challenge }: TestRunnerProps) {
       },
       () => {
         // Per-test failures are surfaced inline.
+      },
+      (snapshot: CircuitSnapshot | null) => {
+        if (snapshot) capturedMetrics.push(computeCircuitMetrics(snapshot));
       },
     );
 
@@ -147,6 +164,16 @@ export function TestRunner({ challenge }: TestRunnerProps) {
       ? Math.round((earnedWeight / totalWeight) * 100)
       : 0;
 
+    // Worst-case circuit efficiency across the graded cases (circuit
+    // challenges only; value/QKD contracts capture no snapshot).
+    const aggregated = aggregateMetrics(capturedMetrics);
+    const metricsWithTime = aggregated
+      ? { ...aggregated, executionTimeMs: Math.max(0, ...results.map((r) => r.executionTimeMs)) }
+      : undefined;
+    const efficiency = metricsWithTime
+      ? computeEfficiency(metricsWithTime, challenge.efficiency)
+      : undefined;
+
     const submission: Submission = {
       id: `sub-${Date.now()}`,
       challengeId: challenge.id,
@@ -157,11 +184,14 @@ export function TestRunner({ challenge }: TestRunnerProps) {
       testCaseResults: results,
       totalScore: submissionScore,
       executionTimeMs: results.reduce((sum, result) => sum + result.executionTimeMs, 0),
+      metrics: metricsWithTime,
+      efficiency,
     };
 
     addSubmission(challenge.id, submission);
     if (status === 'accepted') {
       markSolved(challenge.id);
+      if (efficiency) setPerfReport(efficiency);
     }
   }, [
     activeFramework,
@@ -433,6 +463,10 @@ export function TestRunner({ challenge }: TestRunnerProps) {
           <ChallengeInspector />
         ) : (
           <div style={{ height: '100%', overflowY: 'auto', padding: '4px 0' }}>
+            {perfReport && overallVerdict === 'accepted' && !isRunning && (
+              <PerformancePanel report={perfReport} />
+            )}
+
             {visibleTests.map((testCase, index) => {
               const result = currentTestResults.find((entry) => entry.testCaseId === testCase.id);
               const running = isRunning && runningTestIndex === index;

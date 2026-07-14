@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { bestMetrics } from '../services/challengeEfficiency';
 import type { CircuitSnapshot, Framework, SimulationResult } from '../types/quantum';
 import type {
   QuantumChallenge,
@@ -289,6 +290,15 @@ export const useChallengeModeStore = create<ChallengeModeState>((set, get) => ({
       ? 'solved'
       : existing.status === 'solved' ? 'solved' : 'attempted';
 
+    // Fold circuit efficiency into progress: keep the best (lowest) metrics
+    // seen, and latch "solved optimally" once an accepted submission hits every
+    // authored target (drives the ★ in the problem list).
+    const newBestMetrics = submission.metrics
+      ? (existing.bestMetrics ? bestMetrics(existing.bestMetrics, submission.metrics) : submission.metrics)
+      : existing.bestMetrics;
+    const newSolvedOptimally = existing.solvedOptimally
+      || (submission.status === 'accepted' && submission.efficiency?.isOptimal === true);
+
     const updatedProgress = {
       ...get().progress,
       [challengeId]: {
@@ -299,6 +309,8 @@ export const useChallengeModeStore = create<ChallengeModeState>((set, get) => ({
         submissions: [...existing.submissions, submission],
         lastAttemptedAt: submission.timestamp,
         solvedAt: newStatus === 'solved' && !existing.solvedAt ? submission.timestamp : existing.solvedAt,
+        bestMetrics: newBestMetrics,
+        solvedOptimally: newSolvedOptimally,
         currentCode: {
           ...existing.currentCode,
           [submission.framework]: submission.code,
