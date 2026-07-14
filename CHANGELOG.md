@@ -5,6 +5,67 @@ All notable changes to Nuclei will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.8.0] - 2026-07-14
+
+A features-and-polish release on top of QEC Studio: a real plugin authoring
+system, in-app environment setup, a rebuilt Learn-mode navigation, and a broad
+UX bug sweep.
+
+### Added — Plugin authoring system
+
+Nuclei plugins are now real, not a mock marketplace. A developer can scaffold,
+load, and run a local plugin that adds a live panel to the app.
+
+- A zod-validated `plugin.json` manifest and an `activate(api)` entry contract;
+  the loader reads a plugin folder, validates it, and runs the plugin with the
+  capability API (registered panels now actually render, themes actually
+  apply). Reload / enable / disable / uninstall, plus boot-time restore of the
+  plugins you loaded.
+- **Load plugin…** and **Create plugin…** in the plugins view (the scaffold
+  writes a working starter), two example plugins, and a full authoring guide.
+- **Honest security posture:** plugins are local, user-authored, trusted code
+  and run with the app's privileges — they are **not** sandboxed in v1, and the
+  docs say so plainly rather than implying a sandbox.
+
+### Added — In-app environment setup
+
+Set up your Python toolchain from inside Nuclei, no terminal:
+
+- A **Settings → Environment** panel: install Python via the OS package manager
+  (Homebrew / winget) when it's missing or too old, install/remove quantum
+  frameworks into the managed venv, repair a wedged environment, and copy a
+  diagnostics report.
+- A **missing-dependency banner**: run Qiskit code without Qiskit and a
+  one-click "Install Qiskit" appears instead of a dead-end traceback.
+
+### Changed — Learn mode navigation
+
+- A new in-lesson navigation sidebar shows the track (the overarching topic),
+  the full lesson list with your progress, and a scroll-spy outline of the
+  current lesson — so you always know where you are.
+- A real breadcrumb and a within-lesson progress bar; the Learn rail and the
+  full view now use **one** track/lesson model (the old parallel paths/modules
+  hierarchy is gone).
+
+### Fixed
+
+- **Scrolling**: a systemic flexbox bug (a scroll container missing
+  `min-height: 0`) that clipped content instead of scrolling — fixed in ~20
+  places, including tall circuits, long Dirac conversations, the runs table,
+  and most side panels.
+- **Stuck spinners**: the Resource Estimator and detector-graph "Sample a shot"
+  no longer spin forever when the kernel isn't connected.
+- **Hardware**: a credential save no longer shows a false "connected"; a
+  connect attempt now times out instead of hanging on "Connecting…"; and
+  "Run on Hardware" no longer queues a duplicate job per click.
+- **Editor**: Dirac inline suggestions render in Dirac violet, the selection is
+  on-brand, the active file is unmistakable across tabs/tree/open-files, and
+  ⌘K inline edit surfaces errors instead of failing silently.
+- Confirmations on destructive actions (uninstall plugin, reset settings, clear
+  jobs); the update banner can no longer trap you on a stalled download; and
+  the fabricated community leaderboard / gallery / plugin listings were removed
+  in favor of honest empty states.
+
 ## [0.7.0] - 2026-07-13
 
 ### Added — QEC Studio: quantum error correction as a first-class research surface
