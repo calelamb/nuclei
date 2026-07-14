@@ -1,6 +1,7 @@
 import { Heart, Bookmark } from 'lucide-react';
 import { useThemeStore } from '../../stores/themeStore';
 import type { GalleryCircuit } from '../../data/community/mockGallery';
+import { activateOnKey } from '../../lib/a11y';
 
 interface CircuitCardProps {
   circuit: GalleryCircuit;
@@ -29,7 +30,10 @@ export function CircuitCard({ circuit, isLiked, isBookmarked, onLike, onBookmark
 
   return (
     <div
+      role="button"
+      tabIndex={0}
       onClick={onClick}
+      onKeyDown={activateOnKey(onClick)}
       style={{
         background: colors.bgElevated,
         border: `1px solid ${colors.border}`,

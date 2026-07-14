@@ -4,6 +4,7 @@ import { useThemeStore } from '../../stores/themeStore';
 import { useHardwareStore } from '../../stores/hardwareStore';
 import type { HardwareProviderType } from '../../types/hardware';
 import { getHardware } from '../../App';
+import { useEscapeToClose } from '../../hooks/useEscapeToClose';
 
 interface CredentialSetupProps {
   provider: HardwareProviderType;
@@ -134,6 +135,8 @@ export function CredentialSetup({ provider, onClose }: CredentialSetupProps) {
   const setConnectionError = useHardwareStore((s) => s.setConnectionError);
   const config = PROVIDER_CONFIG[provider];
 
+  useEscapeToClose(onClose);
+
   const [values, setValues] = useState<Record<string, string>>(() => {
     const initial: Record<string, string> = {};
     config.fields.forEach((f) => {
@@ -175,7 +178,10 @@ export function CredentialSetup({ provider, onClose }: CredentialSetupProps) {
       style={{
         position: 'fixed',
         inset: 0,
-        zIndex: 1000,
+        // Above every app-chrome overlay (UpdateBanner 2000, WhatsNew 3000,
+        // KeyboardShortcuts 4500, CommandPalette 5000) — a credential prompt
+        // whose Save/Cancel is hidden behind the update banner is unusable.
+        zIndex: 9000,
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
@@ -241,6 +247,7 @@ export function CredentialSetup({ provider, onClose }: CredentialSetupProps) {
           {config.fields.map((field) => (
             <div key={field.key} style={{ marginBottom: 12 }}>
               <label
+                htmlFor={`credential-${provider}-${field.key}`}
                 style={{
                   display: 'block',
                   fontSize: 10,
@@ -255,6 +262,7 @@ export function CredentialSetup({ provider, onClose }: CredentialSetupProps) {
                 {field.label}
               </label>
               <input
+                id={`credential-${provider}-${field.key}`}
                 type={field.type || 'text'}
                 value={values[field.key]}
                 onChange={(e) =>
@@ -293,12 +301,14 @@ export function CredentialSetup({ provider, onClose }: CredentialSetupProps) {
               }}
             >
               {config.helpUrl ? (
-                <span
+                <a
+                  href={config.helpUrl}
+                  target="_blank"
+                  rel="noreferrer"
                   style={{ color: colors.accent, cursor: 'pointer' }}
-                  onClick={() => window.open(config.helpUrl, '_blank')}
                 >
                   {config.helpText}
-                </span>
+                </a>
               ) : (
                 config.helpText
               )}

@@ -13,6 +13,7 @@ import {
   buildSweepFromRows,
   discoverEntryFiles,
   newSweepRow,
+  parseNumberField,
   slugify,
   specToYamlDoc,
   sweepToRows,
@@ -137,8 +138,8 @@ export function NewExperimentForm({ projectRoot, existing, onClose }: NewExperim
     backend: selectedBackend
       ? { provider: selectedBackend.provider, target: selectedBackend.name }
       : { provider: 'simulator', target: 'statevector' },
-    shots: Number(shots),
-    seed: Number(seed),
+    shots: parseNumberField(shots),
+    seed: parseNumberField(seed),
     sweep: buildSweepFromRows(sweepRows),
     ...(notes.trim() ? { notes: notes.trim() } : {}),
   }), [name, entry, selectedBackend, shots, seed, sweepRows, notes]);

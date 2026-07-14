@@ -1,5 +1,6 @@
 import { useThemeStore } from '../../stores/themeStore';
 import { EASING, DURATION, prefersReducedMotion } from '../../lib/animations';
+import { useEscapeToClose } from '../../hooks/useEscapeToClose';
 
 interface KeyboardShortcutsProps {
   onClose: () => void;
@@ -48,6 +49,7 @@ const SHORTCUT_GROUPS = [
 
 export function KeyboardShortcuts({ onClose }: KeyboardShortcutsProps) {
   const colors = useThemeStore((s) => s.colors);
+  useEscapeToClose(onClose);
 
   return (
     <div

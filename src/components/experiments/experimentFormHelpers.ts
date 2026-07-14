@@ -20,6 +20,16 @@ export function newSweepRow(id: string): SweepRowState {
   return { id, name: '', mode: 'range', rangeStart: '0', rangeStop: '1', rangeStep: '0.1', valuesText: '' };
 }
 
+/**
+ * Parse a numeric form field. A blank / whitespace-only field returns `NaN`
+ * (which zod's `z.number()` rejects) rather than letting `Number('') === 0`
+ * silently coerce an empty Seed or sweep-range box to 0 — a wrong value that
+ * would otherwise pass validation unnoticed.
+ */
+export function parseNumberField(raw: string): number {
+  return raw.trim() === '' ? NaN : Number(raw);
+}
+
 /** Convert the form's sweep rows into the `Sweep` shape the schema expects.
  * Rows with a blank name are dropped (they're just an in-progress add). */
 export function buildSweepFromRows(rows: readonly SweepRowState[]): Sweep | undefined {
@@ -31,7 +41,11 @@ export function buildSweepFromRows(rows: readonly SweepRowState[]): Sweep | unde
     const name = row.name.trim();
     if (row.mode === 'range') {
       sweep[name] = {
-        range: [Number(row.rangeStart), Number(row.rangeStop), Number(row.rangeStep)],
+        range: [
+          parseNumberField(row.rangeStart),
+          parseNumberField(row.rangeStop),
+          parseNumberField(row.rangeStep),
+        ],
       };
     } else {
       const values = row.valuesText

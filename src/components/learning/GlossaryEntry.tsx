@@ -1,5 +1,6 @@
 import type { GlossaryTerm } from '../../data/glossary';
 import { useThemeStore } from '../../stores/themeStore';
+import { activateOnKey } from '../../lib/a11y';
 
 interface GlossaryEntryProps {
   term: GlossaryTerm;
@@ -28,7 +29,11 @@ export function GlossaryEntry({ term, isSelected, onClick }: GlossaryEntryProps)
 
   return (
     <div
+      role="button"
+      tabIndex={0}
+      aria-expanded={isSelected}
       onClick={onClick}
+      onKeyDown={activateOnKey(onClick)}
       style={{
         padding: '8px 10px',
         background: colors.bgElevated,

@@ -1,6 +1,7 @@
 import { useThemeStore } from '../../stores/themeStore';
 import { getRunValue, type RunColumn } from './runsTableColumns';
 import type { RunRecord, RunStatus } from '../../types/experiment';
+import { activateOnKey } from '../../lib/a11y';
 
 export const ROW_HEIGHT = 30;
 
@@ -48,7 +49,9 @@ export function RunsTableRow({
   return (
     <div
       role="row"
+      tabIndex={0}
       onClick={() => onSelect(run.dir)}
+      onKeyDown={activateOnKey(() => onSelect(run.dir))}
       style={{
         position: 'absolute',
         top,

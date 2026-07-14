@@ -164,6 +164,7 @@ export function PluginMarketplace() {
               if (e.key === 'Enter' && !busy) handleCreate();
             }}
             placeholder="plugin name"
+            aria-label="New plugin name"
             style={{
               flex: 1,
               minWidth: 0,

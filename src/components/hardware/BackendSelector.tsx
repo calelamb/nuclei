@@ -46,10 +46,20 @@ export function BackendSelector({ backends, selected, onSelect }: BackendSelecto
           fontFamily: "'Geist Sans', sans-serif",
           cursor: 'pointer',
           outline: 'none',
+          gap: 6,
         }}
       >
-        <span>{selectedBackend ? selectedBackend.name : 'Select backend...'}</span>
-        {open ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
+        <span
+          style={{
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            whiteSpace: 'nowrap',
+            minWidth: 0,
+          }}
+        >
+          {selectedBackend ? selectedBackend.name : 'Select backend...'}
+        </span>
+        {open ? <ChevronUp size={12} style={{ flexShrink: 0 }} /> : <ChevronDown size={12} style={{ flexShrink: 0 }} />}
       </button>
 
       {open && (
@@ -135,6 +145,10 @@ export function BackendSelector({ backends, selected, onSelect }: BackendSelecto
                         color: colors.text,
                         fontFamily: "'Geist Sans', sans-serif",
                         flex: 1,
+                        minWidth: 0,
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        whiteSpace: 'nowrap',
                       }}
                     >
                       {b.name}
@@ -150,6 +164,7 @@ export function BackendSelector({ backends, selected, onSelect }: BackendSelecto
                         background: `${colors.accent}18`,
                         color: colors.accent,
                         fontFamily: "'Geist Sans', sans-serif",
+                        flexShrink: 0,
                       }}
                     >
                       {PROVIDER_LABELS[b.provider]}

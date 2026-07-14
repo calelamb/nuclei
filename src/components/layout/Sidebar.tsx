@@ -40,6 +40,7 @@ function SearchPanel() {
     <div style={{ padding: 12, display: 'flex', flexDirection: 'column', gap: 8 }}>
       <input
         placeholder="Search files..."
+        aria-label="Search files"
         style={{
           width: '100%', padding: '6px 10px',
           fontSize: 12, fontFamily: "'Geist Sans', system-ui, sans-serif",

@@ -157,6 +157,9 @@ export function LaunchPortal() {
       {/* Drop zone */}
       <div style={{ padding: 12 }}>
         <div
+          role="button"
+          tabIndex={0}
+          aria-label="Choose a .py or .qs file to launch"
           onDragOver={(e) => {
             e.preventDefault();
             setDragActive(true);
@@ -164,6 +167,12 @@ export function LaunchPortal() {
           onDragLeave={() => setDragActive(false)}
           onDrop={handleDrop}
           onClick={() => fileInputRef.current?.click()}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault();
+              fileInputRef.current?.click();
+            }
+          }}
           style={{
             border: `1.5px dashed ${dragActive ? colors.accent : colors.border}`,
             background: dragActive ? `${colors.accent}08` : colors.bgElevated,
@@ -196,10 +205,21 @@ export function LaunchPortal() {
                 border: `1px solid ${colors.success}30`,
                 borderRadius: 6,
                 padding: '3px 8px',
+                maxWidth: '100%',
+                minWidth: 0,
               }}
             >
-              <FileCode size={11} style={{ color: colors.success }} />
-              <span>{activeFileName}</span>
+              <FileCode size={11} style={{ color: colors.success, flexShrink: 0 }} />
+              <span
+                style={{
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  whiteSpace: 'nowrap',
+                  minWidth: 0,
+                }}
+              >
+                {activeFileName}
+              </span>
             </div>
           )}
         </div>

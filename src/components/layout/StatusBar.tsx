@@ -87,6 +87,17 @@ export function StatusBar() {
 
   const statusText = isRunning ? 'Running...' : result ? `Done (${result.execution_time_ms}ms)` : 'Ready';
 
+  // User-supplied names (experiment / campaign / exercise) must not push the
+  // right-side kernel/theme controls off-screen — cap each and ellipsize.
+  const truncName: React.CSSProperties = {
+    maxWidth: 140,
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+    display: 'inline-block',
+    verticalAlign: 'bottom',
+  };
+
   const handleCycleMode = useCallback(async () => { cycleMode(); try { await platform.setStoredValue('ui_mode', useUIModeStore.getState().mode); } catch { /* non-critical persistence */ } }, [cycleMode, platform]);
   const handleThemeToggle = useCallback(async () => { themeToggle(); try { await platform.setStoredValue('theme', themeMode === 'dark' ? 'light' : 'dark'); } catch { /* non-critical persistence */ } }, [themeToggle, themeMode, platform]);
 
@@ -112,8 +123,8 @@ export function StatusBar() {
       <LayoutPresetSwitcher />
 
       {exercise && (
-        <span style={{ display: 'flex', alignItems: 'center', gap: 3, color: colors.dirac, fontSize: 10 }}>
-          {exercise.title}
+        <span style={{ display: 'flex', alignItems: 'center', gap: 3, color: colors.dirac, fontSize: 10, minWidth: 0 }}>
+          <span style={truncName}>{exercise.title}</span>
           <button onClick={endExercise} style={{ background: 'none', border: 'none', color: colors.textDim, cursor: 'pointer', padding: 0, display: 'flex' }}
             onMouseEnter={(e) => { e.currentTarget.style.color = colors.error; }}
             onMouseLeave={(e) => { e.currentTarget.style.color = colors.textDim; }}>
@@ -126,11 +137,12 @@ export function StatusBar() {
       {workspaceMode === 'research' && activeRun && (
         <span
           title={`${activeRun.experimentName}: ${activeRun.progress.completed}/${activeRun.progress.total} runs`}
-          style={{ display: 'flex', alignItems: 'center', gap: 4, color: colors.accent, fontSize: 10 }}
+          style={{ display: 'flex', alignItems: 'center', gap: 4, color: colors.accent, fontSize: 10, minWidth: 0 }}
         >
-          <Circle size={5} fill={colors.accent} stroke="none" style={{ animation: 'nuclei-heartbeat 1.5s ease infinite' }} />
-          {activeRun.experimentName}: {activeRun.progress.completed}/{activeRun.progress.total}
-          {activeRun.progress.failures > 0 ? ` (${activeRun.progress.failures} failed)` : ''}
+          <Circle size={5} fill={colors.accent} stroke="none" style={{ animation: 'nuclei-heartbeat 1.5s ease infinite', flexShrink: 0 }} />
+          <span style={truncName}>{activeRun.experimentName}</span>
+          <span style={{ flexShrink: 0 }}>: {activeRun.progress.completed}/{activeRun.progress.total}
+          {activeRun.progress.failures > 0 ? ` (${activeRun.progress.failures} failed)` : ''}</span>
         </span>
       )}
 
@@ -139,19 +151,21 @@ export function StatusBar() {
       {workspaceMode === 'research' && campaignRunning && campaignProgress && (
         <span
           title={`${campaignName ?? 'Campaign'}: ${campaignProgress.tasksComplete}/${campaignProgress.tasksTotal} tasks, ${campaignProgress.sampledShots.toLocaleString()} shots`}
-          style={{ display: 'flex', alignItems: 'center', gap: 4, color: colors.dirac, fontSize: 10 }}
+          style={{ display: 'flex', alignItems: 'center', gap: 4, color: colors.dirac, fontSize: 10, minWidth: 0 }}
         >
-          <Circle size={5} fill={colors.dirac} stroke="none" style={{ animation: 'nuclei-heartbeat 1.5s ease infinite' }} />
-          {campaignName ?? 'campaign'}: {campaignProgress.tasksComplete}/{campaignProgress.tasksTotal}
+          <Circle size={5} fill={colors.dirac} stroke="none" style={{ animation: 'nuclei-heartbeat 1.5s ease infinite', flexShrink: 0 }} />
+          <span style={truncName}>{campaignName ?? 'campaign'}</span>
+          <span style={{ flexShrink: 0 }}>: {campaignProgress.tasksComplete}/{campaignProgress.tasksTotal}</span>
         </span>
       )}
       {workspaceMode === 'research' && !campaignRunning && campaignResumable && (
         <span
           title={`${campaignResumable.name} was interrupted — resumable`}
-          style={{ display: 'flex', alignItems: 'center', gap: 4, color: colors.warning, fontSize: 10 }}
+          style={{ display: 'flex', alignItems: 'center', gap: 4, color: colors.warning, fontSize: 10, minWidth: 0 }}
         >
-          <Circle size={5} fill={colors.warning} stroke="none" />
-          {campaignResumable.name}: resumable
+          <Circle size={5} fill={colors.warning} stroke="none" style={{ flexShrink: 0 }} />
+          <span style={truncName}>{campaignResumable.name}</span>
+          <span style={{ flexShrink: 0 }}>: resumable</span>
         </span>
       )}
 

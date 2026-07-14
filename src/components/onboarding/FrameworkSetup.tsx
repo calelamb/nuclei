@@ -3,6 +3,7 @@ import { invoke } from '@tauri-apps/api/core';
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 import { X, Check, AlertCircle, Loader2, Download, Sparkles } from 'lucide-react';
 import { useThemeStore } from '../../stores/themeStore';
+import { useEscapeToClose } from '../../hooks/useEscapeToClose';
 import {
   useFrameworksStore,
   type FrameworkInfo,
@@ -31,6 +32,9 @@ interface FrameworkSetupProps {
 export function FrameworkSetup({ open, onClose, firstRun = false }: FrameworkSetupProps) {
   const colors = useThemeStore((s) => s.colors);
   const shadow = useThemeStore((s) => s.shadow);
+  // Escape closes the dialog — but not during a forced first-run setup, where
+  // the backdrop click is likewise disabled.
+  useEscapeToClose(onClose, open && !firstRun);
   const status = useFrameworksStore((s) => s.status);
   const loading = useFrameworksStore((s) => s.loading);
   const installing = useFrameworksStore((s) => s.installing);

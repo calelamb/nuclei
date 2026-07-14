@@ -34,6 +34,7 @@ export function Glossary() {
           <input
             type="text"
             placeholder="Search terms..."
+            aria-label="Search glossary terms"
             value={searchQuery}
             onChange={(e) => setSearch(e.target.value)}
             style={{
