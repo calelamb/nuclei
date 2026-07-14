@@ -88,8 +88,10 @@ export function OpenFilesSection() {
             const isActive = tab.path === activeTabPath;
             const isHovered = hoveredPath === tab.path;
             const name = basename(tab.path);
+            // Active file gets the accent tint + left bar (matching the tabs and
+            // the file tree), so it never reads the same as a plain hover.
             const background = isActive
-              ? colors.bgElevated
+              ? `${colors.accent}14`
               : isHovered
                 ? colors.bgElevated
                 : 'transparent';
@@ -114,7 +116,9 @@ export function OpenFilesSection() {
                   padding: '3px 8px 3px 22px',
                   cursor: 'pointer',
                   background,
+                  boxShadow: isActive ? `inset 2px 0 0 ${colors.accent}` : 'none',
                   color: isActive ? colors.text : colors.textMuted,
+                  fontWeight: isActive ? 500 : 400,
                   fontSize: 12,
                   fontFamily: "'Geist Sans', sans-serif",
                   outline: 'none',

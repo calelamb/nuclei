@@ -283,7 +283,10 @@ export function FileExplorer() {
     fontSize: 12,
     fontFamily: "'Geist Sans', sans-serif",
     color: isActive ? colors.accent : colors.text,
-    background: isActive ? `${colors.accent}10` : 'transparent',
+    background: isActive ? `${colors.accent}14` : 'transparent',
+    // Accent left bar on the open file — same signal as the tabs and the
+    // Open Files list, so the active file is unmistakable in all three.
+    boxShadow: isActive ? `inset 2px 0 0 ${colors.accent}` : 'none',
     cursor: 'pointer',
     userSelect: 'none',
   });
@@ -370,7 +373,7 @@ export function FileExplorer() {
         }}
         onMouseLeave={(e) => {
           e.currentTarget.style.background = isActive
-            ? `${colors.accent}10`
+            ? `${colors.accent}14`
             : 'transparent';
         }}
       >

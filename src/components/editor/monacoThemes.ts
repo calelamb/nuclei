@@ -27,10 +27,18 @@ function buildTheme(base: 'vs' | 'vs-dark', c: ColorTokens): ThemeData {
       'editor.background': c.surfaceBase,
       'editor.foreground': c.textPrimary,
       'editor.lineHighlightBackground': c.surfaceOverlay,
-      'editor.selectionBackground': base === 'vs-dark' ? '#264F78' : '#B4D7FF',
+      // Selection tinted toward the quantum accent instead of generic VS blue,
+      // so the editor reads as part of Nuclei's palette (8-digit hex = alpha,
+      // kept translucent so highlighted text stays legible).
+      'editor.selectionBackground': base === 'vs-dark' ? '#00B4D83B' : '#00B4D82E',
+      'editor.selectionHighlightBackground': base === 'vs-dark' ? '#00B4D81F' : '#00B4D817',
       'editorCursor.foreground': c.accentQuantum,
       'editorLineNumber.foreground': c.wire,
       'editorLineNumber.activeForeground': c.accentQuantum,
+      // Dirac's inline suggestions render in Dirac violet (dimmed, since ghost
+      // text is a proposal) — visually distinct from grey IntelliSense so it's
+      // always clear which hand is writing. See registerGhostCompletions.
+      'editorGhostText.foreground': base === 'vs-dark' ? '#A578D6' : '#8B3FB8',
     },
   };
 }
