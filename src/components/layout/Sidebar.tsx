@@ -214,7 +214,7 @@ export function Sidebar({ view, width, onWidthChange }: SidebarProps) {
           Rendered only for the files view; self-hides when there are no open
           tabs so it doesn't add empty chrome. */}
       {view === 'files' && <OpenFilesSection />}
-      <div style={{ flex: 1, overflow: 'auto' }}>
+      <div style={{ flex: 1, minHeight: 0, overflow: 'auto' }}>
         {/* Visibility is decided upstream by the activity-bar registry
             (mode + developer flag) — a view can only be active if the rail
             offered it, so the Sidebar renders it unconditionally (PRD 11

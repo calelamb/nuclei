@@ -21,10 +21,16 @@ export function CircuitDetail({ circuit, onClose, onOpenInEditor }: CircuitDetai
   const [copied, setCopied] = useState(false);
 
   const handleCopy = () => {
-    navigator.clipboard.writeText(circuit.code).then(() => {
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    });
+    navigator.clipboard.writeText(circuit.code).then(
+      () => {
+        setCopied(true);
+        setTimeout(() => setCopied(false), 2000);
+      },
+      () => {
+        // Clipboard can reject in an insecure context or without permission —
+        // don't leave the click feeling dead; fall through with no "Copied".
+      },
+    );
   };
 
   return (

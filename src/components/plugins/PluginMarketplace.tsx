@@ -223,7 +223,7 @@ export function PluginMarketplace() {
       </div>
 
       {/* Content */}
-      <div style={{ flex: 1, overflowY: 'auto' }}>
+      <div style={{ flex: 1, minHeight: 0, overflowY: 'auto' }}>
         {tab === 'installed' ? <InstalledTab plugins={plugins} busy={busy} run={run} /> : <PanelsTab />}
       </div>
     </div>
@@ -395,7 +395,7 @@ function PluginRow({
           icon={<Trash2 size={11} />}
           tone="danger"
           disabled={busy}
-          onClick={() => run(() => uninstallPlugin(name))}
+          onClick={() => { if (window.confirm(`Uninstall "${name}"? It will be removed from Nuclei.`)) run(() => uninstallPlugin(name)); }}
         />
       </div>
     </div>

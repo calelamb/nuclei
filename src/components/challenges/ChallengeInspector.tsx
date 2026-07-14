@@ -103,7 +103,7 @@ export function ChallengeInspector() {
         </div>
       </div>
 
-      <div style={{ flex: 1, overflow: 'auto', padding: 16 }}>
+      <div style={{ flex: 1, minHeight: 0, overflow: 'auto', padding: 16 }}>
         {failure && (
           <div style={{
             padding: '10px 12px',

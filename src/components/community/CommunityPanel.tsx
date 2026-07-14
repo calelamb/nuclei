@@ -23,13 +23,27 @@ export function CommunityPanel() {
   const setLeaderboard = useChallengeStore((s) => s.setLeaderboard);
 
   useEffect(() => {
-    communityService.getGalleryCircuits().then(setCircuits);
-    communityService.getChallenges().then((ch) => {
-      setChallenges(ch);
-      if (ch.length > 0) {
-        communityService.getLeaderboard(ch[0].id).then(setLeaderboard);
+    // Guard against a rejection + a late resolve after unmount. Harmless today
+    // (the service is local) but correct the moment it's wired to a backend.
+    let cancelled = false;
+    (async () => {
+      try {
+        const [circuits, challenges] = await Promise.all([
+          communityService.getGalleryCircuits(),
+          communityService.getChallenges(),
+        ]);
+        if (cancelled) return;
+        setCircuits(circuits);
+        setChallenges(challenges);
+        if (challenges.length > 0) {
+          const board = await communityService.getLeaderboard(challenges[0].id);
+          if (!cancelled) setLeaderboard(board);
+        }
+      } catch {
+        // Nothing to show is fine — the panels render their empty states.
       }
-    });
+    })();
+    return () => { cancelled = true; };
   }, [setCircuits, setChallenges, setLeaderboard]);
 
   return (

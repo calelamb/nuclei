@@ -146,7 +146,7 @@ export function EstimatorPanel() {
   return (
     <div style={shell}>
       {toolbar}
-      <div style={{ padding: 12, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 14 }}>
+      <div style={{ flex: 1, minHeight: 0, padding: 12, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 14 }}>
         {/* Assumption controls: qubit model, QEC scheme, error budget. */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
           <Field label="Qubit parameters" colors={colors}>

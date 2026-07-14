@@ -195,7 +195,7 @@ export function HardwarePanel() {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
-      <div style={{ flex: 1, overflowY: 'auto' }}>
+      <div style={{ flex: 1, minHeight: 0, overflowY: 'auto' }}>
         {/* ── Providers ── */}
         <Section title="Providers" defaultOpen>
           {providers.map((p) => (
@@ -440,7 +440,7 @@ export function HardwarePanel() {
           <JobTracker jobs={jobs} results={results} />
           {jobs.length > 0 && (
             <button
-              onClick={clearJobs}
+              onClick={() => { if (window.confirm('Clear all hardware jobs from the list?')) clearJobs(); }}
               style={{
                 display: 'flex',
                 alignItems: 'center',

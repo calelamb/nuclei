@@ -314,7 +314,7 @@ export function SettingsPanel() {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
-      <div style={{ flex: 1, overflowY: 'auto' }}>
+      <div style={{ flex: 1, minHeight: 0, overflowY: 'auto' }}>
         {/* ── Appearance ── */}
         <Section title="Appearance" defaultOpen>
           <SettingRow label="Theme">
@@ -528,7 +528,7 @@ export function SettingsPanel() {
       {/* ── Reset Button ── */}
       <div style={{ padding: 12, borderTop: `1px solid ${colors.border}`, flexShrink: 0 }}>
         <button
-          onClick={resetAll}
+          onClick={() => { if (window.confirm('Reset all settings to their defaults? This cannot be undone.')) resetAll(); }}
           style={{
             width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center',
             gap: 6, padding: '6px 0', border: `1px solid ${colors.border}`,

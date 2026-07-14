@@ -69,7 +69,17 @@ export function useQecCampaignRun() {
 
       const signal = { aborted: false };
       abortRef.current = signal;
-      const experimentYamlText = (await platform.readFile(experiment.path)) ?? '';
+      // Guard the read: if it throws, close the just-opened session and release
+      // the start lock — otherwise "Run campaign" would be wedged (and the
+      // kernel session leaked) for the rest of the session.
+      let experimentYamlText: string;
+      try {
+        experimentYamlText = (await platform.readFile(experiment.path)) ?? '';
+      } catch {
+        close();
+        startingRef.current = false;
+        return;
+      }
 
       const deps: RunnerDeps = {
         session,

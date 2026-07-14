@@ -642,7 +642,12 @@ export function useKernel() {
   const qecDecodeSample = useCallback(
     (circuitText: string, decoder: string, seed: number) => {
       useQecStore.getState().setDecodePending(true);
-      sendHardware({ type: 'qec_decode_sample', circuit_text: circuitText, decoder, seed });
+      // If the message can't be sent (web build / closed socket) no response
+      // will ever arrive to clear the flag — reset it so the button doesn't
+      // spin forever.
+      if (!sendHardware({ type: 'qec_decode_sample', circuit_text: circuitText, decoder, seed })) {
+        useQecStore.getState().setDecodePending(false);
+      }
     },
     [sendHardware],
   );
@@ -656,8 +661,13 @@ export function useKernel() {
   );
   const qecEstimate = useCallback(
     (code: string, language: 'qsharp' | 'qasm3' | 'qiskit', options?: Record<string, unknown>) => {
-      useQecEstimateStore.getState().setPending(true);
-      sendHardware({ type: 'qec_estimate', code, language, options });
+      const store = useQecEstimateStore.getState();
+      store.setPending(true);
+      // No socket → no result will ever arrive; surface it instead of spinning
+      // forever (setError also clears the pending flag).
+      if (!sendHardware({ type: 'qec_estimate', code, language, options })) {
+        store.setError("The kernel isn't connected. Start it and try again.");
+      }
     },
     [sendHardware],
   );

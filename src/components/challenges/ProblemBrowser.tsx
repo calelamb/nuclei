@@ -413,7 +413,7 @@ export function ProblemBrowser() {
         </div>
       </div>
 
-      <div style={{ flex: 1, overflow: 'auto' }}>
+      <div style={{ flex: 1, minHeight: 0, overflow: 'auto' }}>
         {filtered.length === 0 ? (
           <div style={{
             height: '100%',

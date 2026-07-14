@@ -174,7 +174,7 @@ export function ExperimentsPanel() {
         </button>
       </div>
 
-      <div style={{ flex: 1, overflow: 'auto' }}>
+      <div style={{ flex: 1, minHeight: 0, overflow: 'auto' }}>
         {experiments.length === 0 && validationErrors.length === 0 && (
           <div style={{ padding: 16, color: colors.textDim, fontSize: 12, fontFamily: "'Geist Sans', sans-serif" }}>
             No experiments yet. Create one to declare a parameter sweep.

@@ -439,7 +439,7 @@ export function LaunchPortal() {
               Recent results
             </div>
             <button
-              onClick={() => useHardwareStore.getState().clearJobs()}
+              onClick={() => { if (window.confirm('Clear all hardware jobs from the list?')) useHardwareStore.getState().clearJobs(); }}
               style={{
                 background: 'transparent',
                 border: 'none',

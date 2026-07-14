@@ -64,7 +64,7 @@ export function CapstoneProjectView() {
       </div>
 
       {/* Milestone timeline */}
-      <div style={{ flex: 1, overflowY: 'auto', padding: '8px 12px' }}>
+      <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: '8px 12px' }}>
         {activeProject.milestones.map((milestone, i) => {
           const isCompleted = projectCompleted.includes(milestone.id);
           const isCurrent = i === activeMilestoneIndex;

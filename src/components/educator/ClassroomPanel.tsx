@@ -146,7 +146,7 @@ export function ClassroomPanel() {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', fontFamily: font }}>
-      <div style={{ flex: 1, overflowY: 'auto' }}>
+      <div style={{ flex: 1, minHeight: 0, overflowY: 'auto' }}>
         {/* Classroom name header */}
         <div style={{
           display: 'flex', alignItems: 'center', gap: 6,

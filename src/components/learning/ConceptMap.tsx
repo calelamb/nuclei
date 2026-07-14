@@ -99,7 +99,7 @@ export function ConceptMap() {
       </div>
 
       {/* SVG container with horizontal scroll */}
-      <div style={{ flex: 1, overflowX: 'auto', overflowY: 'auto' }}>
+      <div style={{ flex: 1, minHeight: 0, overflowX: 'auto', overflowY: 'auto' }}>
         <svg width={svgWidth} height={svgHeight} style={{ display: 'block' }}>
           {/* Category labels */}
           {Object.entries(CATEGORY_X).map(([cat, x]) => (
