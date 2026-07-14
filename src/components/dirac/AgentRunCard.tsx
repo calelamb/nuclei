@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { useThemeStore } from '../../stores/themeStore';
 import type { ThemeColors } from '../../stores/themeStore';
 import { useAgentRunStore } from '../../stores/agentRunStore';
@@ -94,6 +95,7 @@ function TimelineRow({ text }: { text: string }) {
 
 function PatchRow({ tx }: { tx: PatchTransaction }) {
   const colors = useThemeStore((s) => s.colors);
+  const [blocked, setBlocked] = useState(false);
 
   const handleRollback = () => {
     // Client-side revert: the frontend owns the editor, and the patch carries
@@ -105,6 +107,10 @@ function PatchRow({ tx }: { tx: PatchTransaction }) {
     if (editor.code === tx.afterContent) {
       editor.setCode(tx.beforeContent);
       useAgentRunStore.getState().recordPatch({ ...tx, rolledBack: true });
+    } else {
+      // The file changed since the patch — rolling back would overwrite the
+      // user's edits, so we refuse and say so instead of silently doing nothing.
+      setBlocked(true);
     }
   };
 
@@ -136,6 +142,13 @@ function PatchRow({ tx }: { tx: PatchTransaction }) {
       {tx.rolledBack ? (
         <span style={{ fontSize: 10, color: colors.textDim, fontFamily: "'Geist Sans', sans-serif" }}>
           Rolled back
+        </span>
+      ) : blocked ? (
+        <span
+          title="Undo your own edits to this file first, then roll back."
+          style={{ fontSize: 10, color: colors.warning, fontFamily: "'Geist Sans', sans-serif" }}
+        >
+          File changed — can’t roll back
         </span>
       ) : (
         <button

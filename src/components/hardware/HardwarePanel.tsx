@@ -2,6 +2,7 @@ import { useState, useCallback } from 'react';
 import { ChevronDown, ChevronRight, Play, Trash2 } from 'lucide-react';
 import { useThemeStore } from '../../stores/themeStore';
 import { useHardwareStore } from '../../stores/hardwareStore';
+import { hasActiveJobForBackend } from '../../lib/hardwareJobs';
 import { useEditorStore } from '../../stores/editorStore';
 import { useSimulationStore } from '../../stores/simulationStore';
 import { BackendSelector } from './BackendSelector';
@@ -167,6 +168,9 @@ export function HardwarePanel() {
 
   const handleRunOnHardware = useCallback(() => {
     if (!selectedBackend || !code) return;
+    // Don't queue a duplicate if this backend already has an in-flight job —
+    // otherwise repeated clicks fabricate a new job each time.
+    if (hasActiveJobForBackend(jobs, selectedBackend)) return;
 
     const job = {
       id: `job-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
@@ -179,7 +183,9 @@ export function HardwarePanel() {
     };
 
     addJob(job);
-  }, [selectedBackend, code, selectedBackendInfo, shots, addJob]);
+  }, [selectedBackend, code, selectedBackendInfo, shots, addJob, jobs]);
+
+  const backendBusy = hasActiveJobForBackend(jobs, selectedBackend ?? null);
 
   // Get simulator probabilities for comparison
   const simProbabilities = simResult?.probabilities ?? null;
@@ -393,7 +399,8 @@ export function HardwarePanel() {
             {/* Run button */}
             <button
               onClick={handleRunOnHardware}
-              disabled={!selectedBackend}
+              disabled={!selectedBackend || backendBusy}
+              title={backendBusy ? 'This backend already has a job in the queue' : undefined}
               style={{
                 width: '100%',
                 display: 'flex',
@@ -404,23 +411,23 @@ export function HardwarePanel() {
                 padding: '8px 0',
                 borderRadius: 4,
                 border: 'none',
-                background: selectedBackend ? colors.accent : colors.borderStrong,
-                color: selectedBackend ? '#fff' : colors.textDim,
+                background: selectedBackend && !backendBusy ? colors.accent : colors.borderStrong,
+                color: selectedBackend && !backendBusy ? '#fff' : colors.textDim,
                 fontSize: 11,
                 fontWeight: 600,
-                cursor: selectedBackend ? 'pointer' : 'not-allowed',
+                cursor: selectedBackend && !backendBusy ? 'pointer' : 'not-allowed',
                 transition: 'opacity 0.15s',
                 ...font,
               }}
               onMouseEnter={(e) => {
-                if (selectedBackend) e.currentTarget.style.opacity = '0.85';
+                if (selectedBackend && !backendBusy) e.currentTarget.style.opacity = '0.85';
               }}
               onMouseLeave={(e) => {
                 e.currentTarget.style.opacity = '1';
               }}
             >
               <Play size={12} />
-              Run on Hardware
+              {backendBusy ? 'Job in queue' : 'Run on Hardware'}
             </button>
           </Section>
         )}

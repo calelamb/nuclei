@@ -21,6 +21,10 @@ import { computeNextPollDelayMs, STALE_AFTER_MS } from '../lib/pollSchedule';
 
 const KERNEL_URL = KERNEL_WS_URL;
 
+/** How long to wait for a `hardware_connected` reply before giving up on a
+ * connect attempt (provider auth can hang without ever answering). */
+export const HARDWARE_CONNECT_TIMEOUT_MS = 45_000;
+
 const CIRQ_WEB_DEFAULT = `import cirq
 
 # Create a Bell State
@@ -69,6 +73,11 @@ export function useKernel() {
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const mountedRef = useRef(true);
   const retryCountRef = useRef(0);
+  // Per-provider "connecting" watchdogs: a hardware_connect that's sent but
+  // never answered (provider auth hangs) would leave the UI stuck on
+  // "Connecting…" forever. Each connect arms a timer here; the
+  // hardware_connected handler clears it.
+  const connectTimersRef = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
   const platform = usePlatform();
   const isWeb = platform.getPlatform() === 'web';
 
@@ -220,6 +229,9 @@ export function useKernel() {
       }
       case 'hardware_connected': {
         const hw = useHardwareStore.getState();
+        // The provider answered — cancel its connect watchdog.
+        clearTimeout(connectTimersRef.current[msg.provider]);
+        delete connectTimersRef.current[msg.provider];
         hw.setConnecting(null);
         if (msg.success) {
           hw.setProviderConnected(msg.provider as never, true);
@@ -495,6 +507,8 @@ export function useKernel() {
     return () => {
       mountedRef.current = false;
       if (debounceRef.current) clearTimeout(debounceRef.current);
+      Object.values(connectTimersRef.current).forEach(clearTimeout);
+      connectTimersRef.current = {};
       if (wsRef.current) { wsRef.current.close(); wsRef.current = null; }
       if (!isWeb) platform.stopKernel().catch(() => {});
     };
@@ -591,7 +605,23 @@ export function useKernel() {
           provider as never,
           'Hardware connection requires the desktop app. Download from getnuclei.dev.',
         );
+        return;
       }
+      // Sent OK, but the provider might never answer (auth hangs). Arm a
+      // watchdog that ends the "Connecting…" state with an honest error if no
+      // hardware_connected arrives; cleared by that handler on success.
+      clearTimeout(connectTimersRef.current[provider]);
+      connectTimersRef.current[provider] = setTimeout(() => {
+        const hw = useHardwareStore.getState();
+        if (hw.connectingProvider === provider) {
+          hw.setConnecting(null);
+          hw.setConnectionError(
+            provider as never,
+            'Connection timed out — the provider didn’t respond. Check your token and try again.',
+          );
+        }
+        delete connectTimersRef.current[provider];
+      }, HARDWARE_CONNECT_TIMEOUT_MS);
     },
     [sendHardware],
   );
