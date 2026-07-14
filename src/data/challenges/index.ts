@@ -6,6 +6,8 @@ import type {
 } from '../../types/challenge';
 import { bellStateFactory } from './bellStateFactory';
 import { uniformSuperposition } from './uniformSuperposition';
+import { ghzState } from './ghzState';
+import { wState } from './wState';
 import { quantumParity } from './quantumParity';
 import { maxcutSmall } from './maxcutSmall';
 import { bernsteinVazirani } from './bernsteinVazirani';
@@ -137,6 +139,8 @@ function normalizeChallenge(challenge: QuantumChallenge): QuantumChallenge {
 const RAW_CHALLENGES: QuantumChallenge[] = [
   bellStateFactory,
   uniformSuperposition,
+  ghzState,
+  wState,
   quantumParity,
   maxcutSmall,
   bernsteinVazirani,
@@ -156,6 +160,8 @@ export const QUANTUM_CHALLENGES: QuantumChallenge[] = RAW_CHALLENGES.map(normali
 export {
   bellStateFactory,
   uniformSuperposition,
+  ghzState,
+  wState,
   quantumParity,
   maxcutSmall,
   bernsteinVazirani,
