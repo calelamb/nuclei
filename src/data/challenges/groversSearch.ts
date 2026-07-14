@@ -2,135 +2,96 @@ import type { QuantumChallenge } from '../../types/challenge';
 
 export const groversSearch: QuantumChallenge = {
   id: 'grovers-search',
-  title: "Grover's Search (2-qubit)",
+  title: "Grover's Search",
   difficulty: 'medium',
   category: 'algorithms',
-  description: `## Grover's Search (2-qubit)
+  description: `## Grover's Search
 
-**Grover's algorithm** finds a marked item in an unstructured database of
-\`N\` elements using only \`O(\u221AN)\` queries, compared to \`O(N)\` classically.
-For a 2-qubit system (\`N = 4\`), a single iteration is both necessary and
-sufficient to find the target with certainty.
+**Grover's algorithm** finds a marked item in an unstructured database of \`N =
+2^n\` items in \`~\\u221AN\` queries — a quadratic speedup over the \`N/2\`
+classical average.
 
-### Algorithm Structure
+### The Problem
 
-The algorithm has three stages:
+You are handed an opaque **oracle** on \`n\` qubits that phase-marks the hidden
+solution \`|s\\u27E9\` (it flips the sign of that one amplitude and leaves the rest
+alone). **You are not given \`s\`.** Recover it by amplifying its amplitude with
+Grover iterations.
 
-1. **Initialization** -- put all qubits into uniform superposition with
-   Hadamard gates:
-   \`\`\`
-   |\u03C8\u2080\u27E9 = H\u2297\u00B2 |00\u27E9 = (|00\u27E9 + |01\u27E9 + |10\u27E9 + |11\u27E9) / 2
-   \`\`\`
+### The Algorithm
 
-2. **Oracle** -- flip the phase of the marked state \`|w\u27E9\`:
-   \`\`\`
-   O|x\u27E9 = -|x\u27E9  if x = w
-   O|x\u27E9 =  |x\u27E9  otherwise
-   \`\`\`
-   For a 2-qubit oracle marking state \`|ab\u27E9\`:
-   - Flip qubits where the target bit is \`0\` (using X gates)
-   - Apply CZ to mark the all-\`|1\u27E9\` state
-   - Undo the X gates
+1. Put all \`n\` qubits into equal superposition (H on each).
+2. Repeat **\`k = \\u230A\\u03C0/4 \\u00B7 \\u221AN\\u230B\`** times:
+   - **Query the oracle** (phase-flip the solution).
+   - Apply the **diffuser** — reflect every amplitude about their mean:
+     H\\u00B7X on all, a multi-controlled Z, then X\\u00B7H on all.
+3. Measure — the solution \`|s\\u27E9\` dominates.
 
-3. **Diffuser** (amplitude amplification) -- reflect about the mean
-   amplitude. For 2 qubits:
-   \`\`\`
-   H \u2192 X \u2192 CZ \u2192 X \u2192 H   (on both qubits)
-   \`\`\`
-
-### Why One Iteration Suffices
-
-For \`N = 4\`, the initial amplitude of each state is \`1/2\`. After one
-oracle + diffuser cycle the marked state's amplitude reaches \`1\`
-(probability \`\u2248 1.0\`), so a single Grover iteration is optimal.
-
-### Oracle Construction Examples
-
-| Target | Oracle Circuit |
-|--------|---------------|
-| \`|11\u27E9\` | CZ(0, 1) |
-| \`|01\u27E9\` | X(0), CZ(0, 1), X(0) |
-| \`|10\u27E9\` | X(1), CZ(0, 1), X(1) |
-| \`|00\u27E9\` | X(0), X(1), CZ(0, 1), X(1), X(0) |
+> Use exactly \`k = \\u230A\\u03C0/4 \\u00B7 \\u221A(2^n)\\u230B\` iterations. Too few
+> or too many and the amplitude swings away from the solution.
 
 ### Your Task
 
-Given a \`marked_state\` string (\`"00"\`, \`"01"\`, \`"10"\`, or \`"11"\`),
-implement the full Grover iteration so that measuring the circuit
-returns the marked state with probability > 90%.`,
+Implement \`solve(oracle)\`. Read \`n = oracle.num_qubits\`, run Grover with the
+optimal number of iterations, and return the measured circuit. The \\u2605
+rewards using the optimal query count.`,
 
   constraints: [
-    'Use exactly 2 qubits and 2 classical bits',
-    'Apply exactly one Grover iteration (oracle + diffuser)',
-    'The marked state must be measured with probability > 0.90',
-    'You may only use H, X, Z, and CZ gates',
+    'You receive an opaque `oracle` gate that phase-marks the hidden solution',
+    'Read n from oracle.num_qubits',
+    'Use exactly floor(pi/4 * sqrt(2**n)) Grover iterations',
+    'Implement the diffuser (reflection about the mean) yourself',
   ],
 
   examples: [
     {
-      input: 'marked_state = "11"',
-      output: '{ "11": 1.0 }',
-      explanation:
-        'The oracle is just CZ(0,1). After the diffuser, |11> has amplitude 1.',
+      input: 'oracle marking |11> (n = 2)',
+      output: '{ "11": ~1.0 }',
+      explanation: 'For N=4 a single Grover iteration lands the solution exactly.',
     },
     {
-      input: 'marked_state = "01"',
-      output: '{ "01": 1.0 }',
-      explanation:
-        'X on qubit 0 before and after CZ converts the oracle to mark |01>.',
+      input: 'oracle marking |101> (n = 3)',
+      output: '{ "101": ~0.95 }',
+      explanation: 'For N=8 two iterations bring the solution to ~95% probability.',
     },
   ],
 
   testCases: [
     {
-      id: 'grover-00',
-      label: 'Search for |00\u27E9',
-      description: 'marked_state="00": find |00\u27E9 in a 4-element database',
-      params: { marked_state: '00' },
-      validation: {
-        type: 'probability_match',
-        expected: { '00': 1.0 },
-        tolerance: 0.15,
-      },
+      id: 'grover-2a',
+      label: 'n = 2 solution',
+      description: 'Find the marked 2-qubit state',
+      // Deliberately non-|0…0>: an empty circuit sits in |0…0>, so an all-zeros
+      // marked state would let a do-nothing spoof pass this visible case.
+      params: { marked_state: '11' },
+      validation: { type: 'state_fidelity' },
       hidden: false,
       weight: 0.25,
     },
     {
-      id: 'grover-01',
-      label: 'Search for |01\u27E9',
-      description: 'marked_state="01": find |01\u27E9 in a 4-element database',
-      params: { marked_state: '01' },
-      validation: {
-        type: 'probability_match',
-        expected: { '01': 1.0 },
-        tolerance: 0.15,
-      },
+      id: 'grover-3a',
+      label: 'n = 3 solution',
+      description: 'Find the marked 3-qubit state',
+      params: { marked_state: '011' },
+      validation: { type: 'state_fidelity' },
       hidden: false,
       weight: 0.25,
     },
     {
-      id: 'grover-10',
-      label: 'Search for |10\u27E9 (hidden)',
-      description: 'marked_state="10": find |10\u27E9 in a 4-element database',
+      id: 'grover-2b',
+      label: 'n = 2 solution (hidden)',
+      description: 'Find the marked 2-qubit state',
       params: { marked_state: '10' },
-      validation: {
-        type: 'probability_match',
-        expected: { '10': 1.0 },
-        tolerance: 0.15,
-      },
+      validation: { type: 'state_fidelity' },
       hidden: true,
       weight: 0.25,
     },
     {
-      id: 'grover-11',
-      label: 'Search for |11\u27E9 (hidden)',
-      description: 'marked_state="11": find |11\u27E9 in a 4-element database',
-      params: { marked_state: '11' },
-      validation: {
-        type: 'probability_match',
-        expected: { '11': 1.0 },
-        tolerance: 0.15,
-      },
+      id: 'grover-3b',
+      label: 'n = 3 solution (hidden)',
+      description: 'Find the marked 3-qubit state',
+      params: { marked_state: '101' },
+      validation: { type: 'state_fidelity' },
       hidden: true,
       weight: 0.25,
     },
@@ -138,78 +99,90 @@ returns the marked state with probability > 90%.`,
 
   starterCode: {
     qiskit: `from qiskit import QuantumCircuit
+import numpy as np
 
-# marked_state is provided (e.g., "00", "01", "10", "11")
+# \`oracle\` phase-marks the hidden solution |s> (flips its sign). You are NOT
+# given s — amplify it with Grover's algorithm.
+n = oracle.num_qubits
+iterations = max(1, int(np.floor(np.pi / 4 * np.sqrt(2 ** n))))
+qc = QuantumCircuit(n, n)
 
-qc = QuantumCircuit(2, 2)
+# 1. Equal superposition
+for i in range(n):
+    qc.h(i)
 
-# Step 1: Initialize in uniform superposition
-qc.h(0)
-qc.h(1)
+# 2. Repeat \`iterations\` times: query the oracle, then apply the diffuser
+for _ in range(iterations):
+    # TODO: qc.append(oracle, range(n))
+    # TODO: diffuser -> H,X on all; H + multi-controlled-X on the last qubit + H; X,H on all
+    pass
 
-# Step 2: TODO - Oracle (mark the target state)
-# Flip the phase of |marked_state>
-# For "11": apply CZ(0, 1)
-# For other states: flip qubits with X first, then CZ, then X again
-
-# Step 3: TODO - Diffuser (amplitude amplification)
-# H on both -> X on both -> CZ -> X on both -> H on both
-
-qc.measure([0, 1], [0, 1])
+qc.measure(range(n), range(n))
 `,
-    cirq: `import cirq
-
-# marked_state is provided (e.g., "00", "01", "10", "11")
-
-q0, q1 = cirq.LineQubit.range(2)
-
-circuit = cirq.Circuit()
-
-# Step 1: Initialize in uniform superposition
-circuit.append([cirq.H(q0), cirq.H(q1)])
-
-# Step 2: TODO - Oracle (mark the target state)
-# Flip the phase of |marked_state>
-# For "11": apply CZ(q0, q1)
-# For other states: wrap CZ with X gates on the appropriate qubits
-
-# Step 3: TODO - Diffuser (amplitude amplification)
-# H on both -> X on both -> CZ -> X on both -> H on both
-
-circuit.append(cirq.measure(q0, q1, key='result'))
+    cirq: `# This challenge is graded on the desktop Qiskit kernel.
+# Implement solve(oracle) with Qiskit — see the Qiskit starter.
 `,
-    'cuda-q': `import cudaq
-
-# marked_state is provided (e.g., "00", "01", "10", "11")
-
-@cudaq.kernel
-def grover():
-    qubits = cudaq.qvector(2)
-
-    # Step 1: Initialize in uniform superposition
-    h(qubits[0])
-    h(qubits[1])
-
-    # Step 2: TODO - Oracle (mark the target state)
-    # Flip the phase of |marked_state>
-    # For "11": cz(qubits[0], qubits[1])
-    # For other states: wrap with x gates
-
-    # Step 3: TODO - Diffuser (amplitude amplification)
-    # h -> x -> cz -> x -> h on both qubits
-
-    mz(qubits)
+    'cuda-q': `# This challenge is graded on the desktop Qiskit kernel.
+# Implement solve(oracle) with Qiskit — see the Qiskit starter.
 `,
   },
 
   hints: [
-    'The oracle flips the phase of exactly the marked state using X gates and CZ',
-    "For marked_state '01': X on qubit 0, CZ, X on qubit 0",
-    'The diffuser is: H \u2192 X \u2192 CZ \u2192 X \u2192 H on both qubits',
+    'n = oracle.num_qubits, and the optimal iteration count is floor(pi/4 * sqrt(2**n)).',
+    'The diffuser reflects about the mean: H then X on all qubits, an n-controlled Z (H + mcx + H on the last qubit), then X then H on all.',
+    'One iteration is exact for n=2; two iterations reach ~95% for n=3.',
   ],
 
-  tags: ['grovers', 'search', 'oracle', 'amplitude-amplification'],
-  estimatedMinutes: 20,
-  totalSubmissions: 789,
+  tags: ['grover', 'oracle', 'amplitude-amplification', 'query-complexity'],
+  estimatedMinutes: 25,
+  totalSubmissions: 512,
   acceptanceRate: 0.58,
+  // Grover's query complexity: floor(pi/4 * sqrt(N)) oracle calls. Worst graded
+  // case is n=3 -> 2. Correctness already pins the count (over/under-iterating
+  // swings the amplitude away and fails fidelity), and the ★ marks the optimum.
+  efficiency: { oracleQueries: 2 },
+  oracle: {
+    solveParams: [],
+    queryLabel: 'oracle',
+    builderCode: `from qiskit import QuantumCircuit
+
+def build_oracle(marked_state, **_):
+    n = len(marked_state)
+    sub = QuantumCircuit(n, name="oracle")
+    for i, b in enumerate(marked_state):
+        if b == '0':
+            sub.x(i)
+    sub.h(n - 1)
+    sub.mcx(list(range(n - 1)), n - 1)
+    sub.h(n - 1)
+    for i, b in enumerate(marked_state):
+        if b == '0':
+            sub.x(i)
+    return sub.to_gate(label="oracle")
+`,
+  },
+  referenceCode: `def reference(marked_state, **_):
+    from qiskit import QuantumCircuit
+    import numpy as np
+    n = len(marked_state)
+    iterations = max(1, int(np.floor(np.pi / 4 * np.sqrt(2 ** n))))
+    qc = QuantumCircuit(n, n)
+    for i in range(n):
+        qc.h(i)
+    for _ in range(iterations):
+        qc.append(build_oracle(marked_state), range(n))
+        for i in range(n):
+            qc.h(i)
+        for i in range(n):
+            qc.x(i)
+        qc.h(n - 1)
+        qc.mcx(list(range(n - 1)), n - 1)
+        qc.h(n - 1)
+        for i in range(n):
+            qc.x(i)
+        for i in range(n):
+            qc.h(i)
+    qc.measure(range(n), range(n))
+    return qc
+`,
 };
