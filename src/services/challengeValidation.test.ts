@@ -25,9 +25,12 @@ describe('challengeValidation value-return contracts', () => {
       12,
     );
 
+    // score is the raw per-test fraction (0..1); weight is applied only when
+    // aggregating the submission total, so a passing case is 1 regardless of
+    // its weight (2 here).
     expect(result).toEqual(expect.objectContaining({
       passed: true,
-      score: 2,
+      score: 1,
       verdict: 'accepted',
     }));
   });

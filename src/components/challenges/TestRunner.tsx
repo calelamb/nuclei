@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useState } from 'react';
-import { Check, Play, SearchCode, X } from 'lucide-react';
+import { Check, Loader, Play, SearchCode, X } from 'lucide-react';
 import { useThemeStore } from '../../stores/themeStore';
 import { useChallengeModeStore } from '../../stores/challengeModeStore';
 import {
@@ -462,7 +462,23 @@ export function TestRunner({ challenge }: TestRunnerProps) {
               );
             })}
 
-            {!inspection && currentTestResults.length === 0 && (
+            {isRunning && currentTestResults.length === 0 && (
+              <div style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 8,
+                padding: '18px 16px',
+                color: colors.textMuted,
+                fontSize: 12,
+                fontFamily: "'Geist Sans', sans-serif",
+              }}>
+                <Loader size={13} color={colors.accent} style={{ animation: 'spin 1s linear infinite' }} />
+                <style>{`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
+                Preparing the kernel and running tests… the first run downloads the in-browser Python kernel and can take a few seconds.
+              </div>
+            )}
+
+            {!isRunning && !inspection && currentTestResults.length === 0 && (
               <div style={{
                 padding: '18px 16px',
                 color: colors.textDim,
