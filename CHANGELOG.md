@@ -5,6 +5,33 @@ All notable changes to Nuclei will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.8.1] - 2026-07-14
+
+A UX and accessibility patch: several dialogs, chips, and forms got the polish
+they were missing.
+
+### Fixed
+
+- **Modals** can now be dismissed with **Escape** — the hardware credential
+  prompt, the unsaved-changes guard (Escape maps to Cancel, never a destructive
+  discard), the framework setup, keyboard shortcuts, and the noise-model
+  library.
+- The **hardware credential dialog** no longer renders *behind* the update
+  banner or command palette; its help text is a real link and its inputs are
+  announced by screen readers.
+- **Long names no longer overflow**: backend ids in the selector, experiment /
+  campaign names in the status bar (which could push the kernel and theme
+  controls off-screen), and the launcher's active-file pill now truncate.
+- **Keyboard navigation**: run-history rows, community circuit cards, glossary
+  entries, and the launcher's drop zone are now focusable and activate with
+  Enter/Space; search fields are labeled for screen readers.
+- The **shots field** in the launch dialog can be cleared and retyped instead of
+  snapping to 1 on the first keystroke.
+- A **blank Seed or sweep-range** field in a new experiment is now flagged
+  instead of silently becoming 0.
+- The hardware **jobs panel** no longer blanks out if the kernel reports an
+  unexpected job status.
+
 ## [0.8.0] - 2026-07-14
 
 A features-and-polish release on top of QEC Studio: a real plugin authoring
