@@ -1,6 +1,7 @@
 import { useEffect, useMemo } from 'react';
 import { CheckCircle2, Circle, Clock3, ListChecks, ShieldCheck, Star } from 'lucide-react';
 import { useThemeStore } from '../../stores/themeStore';
+import { isStateVerified } from '../../services/challengeGrading';
 import {
   type ChallengePracticeTab,
   filterChallenges,
@@ -228,16 +229,31 @@ function ProblemRow({
 
       <div style={{ minWidth: 0 }}>
         <div style={{
-          color: colors.text,
-          fontSize: 14,
-          fontWeight: 600,
-          fontFamily: "'Geist Sans', sans-serif",
+          display: 'flex',
+          alignItems: 'center',
+          gap: 6,
           marginBottom: 4,
-          overflow: 'hidden',
-          textOverflow: 'ellipsis',
-          whiteSpace: 'nowrap',
+          minWidth: 0,
         }}>
-          {challenge.title}
+          <span style={{
+            color: colors.text,
+            fontSize: 14,
+            fontWeight: 600,
+            fontFamily: "'Geist Sans', sans-serif",
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            whiteSpace: 'nowrap',
+          }}>
+            {challenge.title}
+          </span>
+          {isStateVerified(challenge) && (
+            <ShieldCheck
+              size={12}
+              color={colors.success}
+              style={{ flexShrink: 0 }}
+              aria-label="State-verified grading"
+            />
+          )}
         </div>
         <div style={{
           color: colors.textMuted,
