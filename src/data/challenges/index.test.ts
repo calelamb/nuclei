@@ -32,6 +32,20 @@ describe('challenge catalog normalization', () => {
     expect(w?.efficiency).toBeUndefined();
   });
 
+  it('makes Bernstein-Vazirani an oracle-injection challenge (secret hidden from solve)', () => {
+    const bv = QUANTUM_CHALLENGES.find((c) => c.id === 'bernstein-vazirani');
+
+    expect(bv?.oracle?.builderCode).toContain('def build_oracle');
+    expect(bv?.referenceCode).toContain('def reference');
+    // graded by fidelity, par on oracle queries (single-query optimal)
+    expect(bv?.testCases.every((tc) => tc.validation.type === 'state_fidelity')).toBe(true);
+    expect(bv?.efficiency?.oracleQueries).toBe(1);
+    // the displayed signature is solve(oracle) — the secret is never an argument
+    expect(bv?.arguments?.map((a) => a.name)).toEqual(['oracle']);
+    expect(bv?.starter_template).toContain('solve(oracle)');
+    expect(bv?.starter_template).not.toContain('hidden_string');
+  });
+
   it('registers QKD challenges as visible and hidden value-return protocol practice', () => {
     const qkdChallenges = QUANTUM_CHALLENGES.filter((challenge) => challenge.practiceTrack === 'qkd');
 

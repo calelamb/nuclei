@@ -105,6 +105,38 @@ describe('bestMetrics', () => {
   });
 });
 
+describe('oracleQueries metric', () => {
+  it('includes oracleQueries only when provided', () => {
+    const snap = snapshot([gate('H', [0])], 1, 2);
+    expect(computeCircuitMetrics(snap).oracleQueries).toBeUndefined();
+    expect(computeCircuitMetrics(snap, undefined, 1).oracleQueries).toBe(1);
+  });
+
+  it('aggregates and best-of oracleQueries alongside gate metrics', () => {
+    const a = { twoQubitGates: 1, depth: 2, gateCount: 3, qubits: 2, oracleQueries: 1 };
+    const b = { twoQubitGates: 1, depth: 2, gateCount: 3, qubits: 2, oracleQueries: 3 };
+    expect(aggregateMetrics([a, b])?.oracleQueries).toBe(3); // worst case
+    expect(bestMetrics(a, b).oracleQueries).toBe(1); // best (min)
+  });
+
+  it('tiers oracleQueries as a primary metric and leads the report', () => {
+    const report = computeEfficiency(
+      { twoQubitGates: 1, depth: 2, gateCount: 3, qubits: 2, oracleQueries: 1 },
+      { oracleQueries: 1 },
+    );
+    const oq = report.reports.find((r) => r.key === 'oracleQueries');
+    expect(oq?.primary).toBe(true);
+    expect(oq?.tier).toBe('optimal');
+    expect(report.reports[0].key).toBe('oracleQueries'); // leads
+    expect(report.isOptimal).toBe(true);
+  });
+
+  it('does not report oracleQueries for a non-oracle solution', () => {
+    const report = computeEfficiency({ twoQubitGates: 1, depth: 2, gateCount: 3, qubits: 2 });
+    expect(report.reports.some((r) => r.key === 'oracleQueries')).toBe(false);
+  });
+});
+
 describe('computeEfficiency', () => {
   const metrics = { twoQubitGates: 1, depth: 2, gateCount: 3, qubits: 2 };
 

@@ -68,6 +68,25 @@ export interface ChallengeVisualization {
 }
 
 /**
+ * Query-model (oracle-injection) spec. The harness builds an opaque oracle
+ * `Gate` from the (hidden) secret params and passes it to `solve(oracle, …)` —
+ * the secret itself is NOT passed, so the student must query the oracle rather
+ * than hardcode the answer. Correctness is graded by `state_fidelity` against
+ * the challenge's `referenceCode` (which uses the same oracle), and the number
+ * of oracle applications is recorded as `metrics.oracle_queries`.
+ */
+export interface OracleSpec {
+  /** Python defining `build_oracle(**params) -> qiskit Gate` (labelled). */
+  builderCode: string;
+  /** Param names passed to `solve` alongside `oracle` (e.g. `['n']`). Any param
+   * NOT listed here is secret — used only to build the oracle, never seen by
+   * the student's solve. */
+  solveParams: string[];
+  /** Gate label counted for `oracle_queries` (default `'oracle'`). */
+  queryLabel?: string;
+}
+
+/**
  * Optimal ("par") circuit-efficiency targets for a challenge, authored per
  * problem. Every field is optional — a problem grades only on the metrics it
  * declares a target for. `twoQubitGates` and `depth` are the primary
@@ -80,20 +99,27 @@ export interface EfficiencyTarget {
   depth?: number;
   gateCount?: number;
   qubits?: number;
+  /** Optimal number of oracle applications (query-model challenges). This is
+   * the meaningful efficiency metric for BV/Grover/Simon — the algorithm's
+   * query complexity — where raw gate counts are dominated by the injected
+   * oracle's internals. */
+  oracleQueries?: number;
 }
 
 /** Measured efficiency metrics of a submitted circuit (worst case across the
  * graded test cases). Execution time is wall-clock and noisy — informational
- * only, never part of the tier/star. */
+ * only, never part of the tier/star. `oracleQueries` is present only for
+ * oracle-injection challenges (recorded by the harness). */
 export interface CircuitMetrics {
   twoQubitGates: number;
   depth: number;
   gateCount: number;
   qubits: number;
   executionTimeMs?: number;
+  oracleQueries?: number;
 }
 
-export type EfficiencyMetricKey = 'twoQubitGates' | 'depth' | 'gateCount' | 'qubits';
+export type EfficiencyMetricKey = 'twoQubitGates' | 'depth' | 'gateCount' | 'qubits' | 'oracleQueries';
 
 /** How a measured metric compares to its authored optimum. */
 export type EfficiencyTier = 'optimal' | 'efficient' | 'accepted';
@@ -149,6 +175,9 @@ export interface QuantumChallenge {
    * appends it and records `metrics.fidelity` = |⟨reference|student⟩|². Never
    * shown to the student. */
   referenceCode?: string;
+  /** Query-model spec. When set, the harness injects an opaque oracle into
+   * `solve` and records `oracle_queries`. Pairs with `referenceCode`. */
+  oracle?: OracleSpec;
 }
 
 export type SubmissionStatus =
