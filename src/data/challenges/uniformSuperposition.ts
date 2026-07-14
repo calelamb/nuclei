@@ -65,11 +65,7 @@ and each outcome appears with probability **0.25**.`,
       label: '2 qubits',
       description: 'n_qubits=2: equal superposition over 4 basis states',
       params: { n_qubits: 2 },
-      validation: {
-        type: 'probability_match',
-        expected: { '00': 0.25, '01': 0.25, '10': 0.25, '11': 0.25 },
-        tolerance: 0.06,
-      },
+      validation: { type: 'state_fidelity' },
       hidden: false,
       weight: 0.35,
     },
@@ -78,20 +74,7 @@ and each outcome appears with probability **0.25**.`,
       label: '3 qubits',
       description: 'n_qubits=3: equal superposition over 8 basis states',
       params: { n_qubits: 3 },
-      validation: {
-        type: 'probability_match',
-        expected: {
-          '000': 0.125,
-          '001': 0.125,
-          '010': 0.125,
-          '011': 0.125,
-          '100': 0.125,
-          '101': 0.125,
-          '110': 0.125,
-          '111': 0.125,
-        },
-        tolerance: 0.06,
-      },
+      validation: { type: 'state_fidelity' },
       hidden: false,
       weight: 0.35,
     },
@@ -100,28 +83,7 @@ and each outcome appears with probability **0.25**.`,
       label: '4 qubits (hidden)',
       description: 'n_qubits=4: equal superposition over 16 basis states',
       params: { n_qubits: 4 },
-      validation: {
-        type: 'probability_match',
-        expected: {
-          '0000': 0.0625,
-          '0001': 0.0625,
-          '0010': 0.0625,
-          '0011': 0.0625,
-          '0100': 0.0625,
-          '0101': 0.0625,
-          '0110': 0.0625,
-          '0111': 0.0625,
-          '1000': 0.0625,
-          '1001': 0.0625,
-          '1010': 0.0625,
-          '1011': 0.0625,
-          '1100': 0.0625,
-          '1101': 0.0625,
-          '1110': 0.0625,
-          '1111': 0.0625,
-        },
-        tolerance: 0.04,
-      },
+      validation: { type: 'state_fidelity' },
       hidden: true,
       weight: 0.3,
     },
@@ -180,4 +142,15 @@ def uniform(n: int):
   // entangling gates. 0 is optimal, so the ★ rewards resisting the urge to add
   // unnecessary two-qubit gates.
   efficiency: { twoQubitGates: 0 },
+  // Graded by state fidelity: a GHZ or any entangled state shares nothing with
+  // the target's amplitudes, so only the true product superposition passes.
+  referenceCode: `from qiskit import QuantumCircuit
+
+def reference(n_qubits):
+    qc = QuantumCircuit(n_qubits, n_qubits)
+    for i in range(n_qubits):
+        qc.h(i)
+    qc.measure(range(n_qubits), range(n_qubits))
+    return qc
+`,
 };

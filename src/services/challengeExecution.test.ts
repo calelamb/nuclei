@@ -47,6 +47,30 @@ describe('challengeExecution', () => {
     expect(code).toContain("must return a QuantumCircuit");
   });
 
+  it('appends the reference + fidelity recording when referenceCode is set', () => {
+    const code = buildTestCode(
+      'def solve(bell_index):\n    from qiskit import QuantumCircuit\n    return QuantumCircuit(2, 2)\n',
+      { ...baseChallenge, referenceCode: 'from qiskit import QuantumCircuit\n\ndef reference(bell_index):\n    return QuantumCircuit(2, 2)\n' },
+      { bell_index: 0 },
+      'qiskit',
+    );
+
+    expect(code).toContain('def reference(bell_index)');
+    expect(code).toContain('state_fidelity');
+    expect(code).toContain('record_metric("fidelity"');
+    expect(code).toContain('remove_final_measurements');
+  });
+
+  it('omits the fidelity block when no referenceCode is present', () => {
+    const code = buildTestCode(
+      'def solve(bell_index):\n    pass\n',
+      baseChallenge,
+      { bell_index: 0 },
+      'qiskit',
+    );
+    expect(code).not.toContain('record_metric("fidelity"');
+  });
+
   it('builds a marked JSON harness for value-return challenges', () => {
     const code = buildValueTestCode(
       'def solve(alice_bits):\n    return alice_bits\n',

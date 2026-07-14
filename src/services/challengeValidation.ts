@@ -49,6 +49,22 @@ export function validateTestCase(
     };
   }
 
+  if (validation.type === 'state_fidelity') {
+    const { passed, score, message } = validateStateFidelity(
+      result.metrics,
+      validation.min_fidelity ?? DEFAULT_MIN_FIDELITY,
+    );
+    return {
+      testCaseId: testCase.id,
+      passed,
+      score,
+      verdict: passed ? 'accepted' : 'wrong_answer',
+      actualOutput: { fidelity: result.metrics?.fidelity ?? 0 },
+      message,
+      executionTimeMs,
+    };
+  }
+
   return {
     testCaseId: testCase.id,
     passed: false,
@@ -229,6 +245,42 @@ function validateNumericMatch(
   return {
     passed: false,
     message: `${pathLabel(path ?? '')}: expected ${expected} +/- ${tolerance}, got ${value}`,
+  };
+}
+
+export const DEFAULT_MIN_FIDELITY = 0.99;
+
+/**
+ * State-fidelity grading. The harness records `metrics.fidelity =
+ * |⟨reference|student⟩|²` (statevector sim → exact, so a correct solution is
+ * 1.0 and a hardcoded product state can't reach the threshold for an entangled
+ * target). Passes iff fidelity ≥ min.
+ */
+function validateStateFidelity(
+  metrics: Record<string, number> | undefined,
+  minFidelity: number,
+): { passed: boolean; score: number; message: string } {
+  const fidelity = metrics?.fidelity;
+  if (typeof fidelity !== 'number' || Number.isNaN(fidelity)) {
+    return {
+      passed: false,
+      score: 0,
+      message:
+        'No fidelity was recorded — this challenge needs the desktop Qiskit kernel to grade the prepared state.',
+    };
+  }
+  const clamped = Math.max(0, Math.min(1, fidelity));
+  if (clamped >= minFidelity) {
+    return {
+      passed: true,
+      score: clamped,
+      message: `State fidelity ${clamped.toFixed(4)} ≥ ${minFidelity} — the prepared state matches the target.`,
+    };
+  }
+  return {
+    passed: false,
+    score: clamped,
+    message: `State fidelity ${clamped.toFixed(4)} < ${minFidelity}. The measurement histogram may look right, but the actual quantum state (phase / entanglement) differs from the target.`,
   };
 }
 
