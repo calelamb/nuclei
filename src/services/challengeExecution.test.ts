@@ -61,6 +61,31 @@ describe('challengeExecution', () => {
     expect(code).toContain('remove_final_measurements');
   });
 
+  it('injects an opaque oracle and never passes the secret to solve', () => {
+    const code = buildTestCode(
+      'def solve(oracle):\n    from qiskit import QuantumCircuit\n    return QuantumCircuit(oracle.num_qubits, oracle.num_qubits - 1)\n',
+      {
+        ...baseChallenge,
+        oracle: {
+          solveParams: [],
+          queryLabel: 'oracle',
+          builderCode: 'from qiskit import QuantumCircuit\n\ndef build_oracle(hidden_string, **_):\n    return QuantumCircuit(len(hidden_string) + 1, name="oracle").to_gate(label="oracle")\n',
+        },
+        referenceCode: 'def reference(hidden_string, **_):\n    from qiskit import QuantumCircuit\n    return QuantumCircuit(len(hidden_string) + 1, len(hidden_string))\n',
+      },
+      { hidden_string: '101' },
+      'qiskit',
+    );
+
+    expect(code).toContain('def build_oracle');
+    expect(code).toContain('__nuclei_oracle = build_oracle(**__nuclei_params)');
+    expect(code).toContain('solve(__nuclei_oracle)');
+    expect(code).toContain('record_metric("oracle_queries"');
+    expect(code).toContain('record_metric("fidelity"');
+    // the secret must never be handed to solve as an argument
+    expect(code).not.toContain("solve(__nuclei_oracle, hidden_string");
+  });
+
   it('omits the fidelity block when no referenceCode is present', () => {
     const code = buildTestCode(
       'def solve(bell_index):\n    pass\n',

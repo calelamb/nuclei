@@ -154,6 +154,70 @@ print("${VALUE_RESULT_MARKER}" + __nuclei_payload)
 `;
 }
 
+function buildOracleTestCode(
+  userCode: string,
+  challenge: QuantumChallenge,
+  params: Record<string, unknown>,
+): string {
+  const entrypoint = challenge.entrypoint_name ?? 'solve';
+  const oracle = challenge.oracle;
+  if (!oracle) return buildCanonicalTestCode(userCode, challenge, params);
+  const queryLabel = oracle.queryLabel ?? 'oracle';
+
+  // Only the whitelisted public params reach solve — the secret stays behind
+  // the oracle, so the student must query it rather than read the answer.
+  const solveKwargs = oracle.solveParams
+    .map((name) => `${name}=__nuclei_params[${JSON.stringify(name)}]`)
+    .join(', ');
+  const solveCall = solveKwargs
+    ? `${entrypoint}(__nuclei_oracle, ${solveKwargs})`
+    : `${entrypoint}(__nuclei_oracle)`;
+
+  return `# === Your solution ===
+${userCode}
+
+# === Oracle builder (hidden) ===
+${oracle.builderCode}
+
+# === Reference (hidden) ===
+${challenge.referenceCode ?? ''}
+
+# === Challenge harness ===
+import json as __nuclei_json
+
+__nuclei_params = __nuclei_json.loads(${serializeParams(params)})
+__nuclei_oracle = build_oracle(**__nuclei_params)
+__nuclei_circuit = ${solveCall}
+
+from qiskit import QuantumCircuit as __NucleiQuantumCircuit
+
+if not isinstance(__nuclei_circuit, __NucleiQuantumCircuit):
+    raise TypeError("${entrypoint}(...) must return a QuantumCircuit")
+
+qc = __nuclei_circuit
+
+from qiskit.quantum_info import Statevector as __NucleiSV, state_fidelity as __nuclei_state_fidelity
+
+try:
+    __nuclei_ref_circuit = reference(**__nuclei_params)
+    __nuclei_fidelity = float(__nuclei_state_fidelity(
+        __NucleiSV(qc.remove_final_measurements(inplace=False)),
+        __NucleiSV(__nuclei_ref_circuit.remove_final_measurements(inplace=False)),
+    ))
+except Exception:
+    __nuclei_fidelity = 0.0
+
+record_metric("fidelity", __nuclei_fidelity)
+
+try:
+    __nuclei_queries = float(qc.count_ops().get(${JSON.stringify(queryLabel)}, 0))
+except Exception:
+    __nuclei_queries = 0.0
+
+record_metric("oracle_queries", __nuclei_queries)
+`;
+}
+
 export function buildTestCode(
   userCode: string,
   challenge: QuantumChallenge,
@@ -169,6 +233,9 @@ export function buildTestCode(
     && challenge.contract_kind === 'returns_circuit'
     && challenge.entrypoint_name
   ) {
+    if (challenge.oracle) {
+      return buildOracleTestCode(userCode, challenge, params);
+    }
     return buildCanonicalTestCode(userCode, challenge, params);
   }
 
@@ -452,7 +519,7 @@ export async function runTestCases(
   onStart: (index: number) => void,
   onResult: (result: TestCaseResult, index: number) => void,
   onError: (error: string) => void,
-  onArtifact?: (snapshot: CircuitSnapshot | null, index: number) => void,
+  onArtifact?: (snapshot: CircuitSnapshot | null, result: SimulationResult | null, index: number) => void,
 ): Promise<TestCaseResult[]> {
   const isValueContract = challenge.contract_kind === 'returns_value';
 
@@ -501,7 +568,7 @@ export async function runTestCases(
           const testResult = validateTestCase(testCase, artifact.result, elapsed);
           results.push(testResult);
           onResult(testResult, index);
-          onArtifact?.(artifact.snapshot, index);
+          onArtifact?.(artifact.snapshot, artifact.result, index);
         }
       } catch (err: unknown) {
         const elapsed = performance.now() - startTime;

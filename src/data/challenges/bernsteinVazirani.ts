@@ -7,69 +7,55 @@ export const bernsteinVazirani: QuantumChallenge = {
   category: 'algorithms',
   description: `## Bernstein-Vazirani Algorithm
 
-The **Bernstein-Vazirani algorithm** demonstrates an exponential separation
-between classical and quantum query complexity for a specific promise problem.
+The **Bernstein-Vazirani algorithm** recovers a hidden bit-string \`s\` from a
+black-box function using a **single quantum query** — where any classical
+strategy needs \`n\`.
 
 ### The Problem
 
-You are given a black-box function (oracle) that computes:
+You are handed an opaque **oracle** — a gate on \`n + 1\` qubits (\`n\` input +
+1 output) that computes
 
-\`f(x) = s \\u00B7 x  mod 2\`
+\`f(x) = s \\u00B7 x  (mod 2)\`
 
-where \`s\` is a hidden bit-string and \`s \\u00B7 x\` denotes the bitwise inner product:
+into the output qubit, where \`s \\u00B7 x = s\\u2080x\\u2080 \\u2295 s\\u2081x\\u2081 \\u2295 \\u2026\`.
+**You are not given \`s\`.** You must recover it by *querying* the oracle — a
+hardcoded guess can't work, because the secret differs across the hidden tests.
 
-\`s \\u00B7 x = s\\u2080 x\\u2080 \\u2295 s\\u2081 x\\u2081 \\u2295 ... \\u2295 s\\u2099\\u208B\\u2081 x\\u2099\\u208B\\u2081\`
+### The Algorithm
 
-**Classically**, finding \`s\` requires \`n\` queries (one per bit).
-**Quantumly**, a single query suffices.
-
-### The Circuit
-
-\`\`\`
-|0\\u27E9 \\u2500 H \\u2500\\u2500\\u2500 Oracle \\u2500\\u2500\\u2500 H \\u2500 Measure
-|0\\u27E9 \\u2500 H \\u2500\\u2500\\u2500   ...   \\u2500\\u2500\\u2500 H \\u2500 Measure
- ...          ...           ...
-|1\\u27E9 \\u2500 H \\u2500\\u2500\\u2500 (ancilla) \\u2500
-\`\`\`
-
-1. Prepare the ancilla in the \`|\\u2212\\u27E9\` state: apply X then H to the last qubit
-2. Apply H to all input qubits
-3. Apply the oracle: for each position \`i\` where \`s[i] = 1\`, apply CNOT from qubit \`i\` to the ancilla
-4. Apply H to all input qubits again
-5. Measure the input register \u2014 the result is \`s\` directly
-
-### Why It Works
-
-The \`|\\u2212\\u27E9\` ancilla causes **phase kickback**: each CNOT that fires
-flips the sign of the corresponding input qubit's \`|1\\u27E9\` component.
-The final Hadamard layer converts these phase differences back into
-bit values, revealing \`s\` in a single shot.
+1. Put the output qubit into \`|\\u2212\\u27E9\` (X then H) so the oracle kicks its
+   result back as a **phase**.
+2. Apply H to all \`n\` input qubits.
+3. **Query the oracle once.**
+4. Apply H to all \`n\` input qubits again.
+5. Measure the input register — it now reads \`s\` directly.
 
 ### Your Task
 
-Given a \`hidden_string\`, implement the oracle and the surrounding
-Bernstein-Vazirani circuit. The measurement outcome must equal the
-hidden string with high probability.`,
+Implement \`solve(oracle)\`. Read \`n\` from \`oracle.num_qubits - 1\`, build the
+Bernstein-Vazirani circuit around the oracle, and return it. **One query** is
+optimal — the \\u2605 rewards using exactly one.`,
 
   constraints: [
-    'Use n + 1 qubits: n input qubits plus 1 ancilla',
-    'The oracle must implement f(x) = s . x mod 2 using only CNOT gates',
-    'The hidden string must be recovered in a single query (no repeated measurements needed)',
-    'Measure only the n input qubits',
+    'You receive an opaque `oracle` gate — the secret string is never given to you',
+    'Recover the hidden string with a SINGLE oracle query',
+    'Use n + 1 qubits (n input + 1 output) and measure only the n input qubits',
+    'Read n from oracle.num_qubits - 1',
   ],
 
   examples: [
     {
-      input: 'hidden_string = "101"',
+      input: 'oracle for s = "101"',
       output: '{ "101": ~1.0 }',
       explanation:
-        'After one query, measuring the 3 input qubits yields "101" with near certainty.',
+        'One query + the Hadamard sandwich makes the input register read "101" with certainty.',
     },
     {
-      input: 'hidden_string = "110"',
+      input: 'oracle for s = "110"',
       output: '{ "110": ~1.0 }',
       explanation:
-        'The oracle CNOTs from qubits 0 and 1 (where s has 1s) to the ancilla. The result directly reveals "110".',
+        'The same circuit recovers any secret — you never had to know it in advance.',
     },
   ],
 
@@ -77,52 +63,36 @@ hidden string with high probability.`,
     {
       id: 'bv-101',
       label: 's = "101"',
-      description: 'hidden_string="101": recover 3-bit secret in one query',
+      description: 'Recover a 3-bit secret in one query',
       params: { hidden_string: '101' },
-      validation: {
-        type: 'probability_match',
-        expected: { '101': 1.0 },
-        tolerance: 0.15,
-      },
+      validation: { type: 'state_fidelity' },
       hidden: false,
       weight: 0.25,
     },
     {
       id: 'bv-110',
       label: 's = "110"',
-      description: 'hidden_string="110": recover 3-bit secret in one query',
+      description: 'Recover a 3-bit secret in one query',
       params: { hidden_string: '110' },
-      validation: {
-        type: 'probability_match',
-        expected: { '110': 1.0 },
-        tolerance: 0.15,
-      },
+      validation: { type: 'state_fidelity' },
       hidden: false,
       weight: 0.25,
     },
     {
-      id: 'bv-1001',
-      label: 's = "1001" (hidden)',
-      description: 'hidden_string="1001": recover 4-bit secret in one query',
-      params: { hidden_string: '1001' },
-      validation: {
-        type: 'probability_match',
-        expected: { '1001': 1.0 },
-        tolerance: 0.15,
-      },
+      id: 'bv-1011',
+      label: 's = "1011" (hidden)',
+      description: 'Recover a 4-bit secret in one query',
+      params: { hidden_string: '1011' },
+      validation: { type: 'state_fidelity' },
       hidden: true,
       weight: 0.25,
     },
     {
-      id: 'bv-0011',
-      label: 's = "0011" (hidden)',
-      description: 'hidden_string="0011": recover 4-bit secret in one query',
-      params: { hidden_string: '0011' },
-      validation: {
-        type: 'probability_match',
-        expected: { '0011': 1.0 },
-        tolerance: 0.15,
-      },
+      id: 'bv-0110',
+      label: 's = "0110" (hidden)',
+      description: 'Recover a 4-bit secret in one query',
+      params: { hidden_string: '0110' },
+      validation: { type: 'state_fidelity' },
       hidden: true,
       weight: 0.25,
     },
@@ -131,94 +101,73 @@ hidden string with high probability.`,
   starterCode: {
     qiskit: `from qiskit import QuantumCircuit
 
-# hidden_string is provided (e.g., "101")
-n = len(hidden_string)
+# \`oracle\` is a black-box gate on n+1 qubits (n input + 1 output) computing
+# f(x) = s . x (mod 2) into the output qubit. You are NOT given s — query it.
+n = oracle.num_qubits - 1
+qc = QuantumCircuit(n + 1, n)
 
-qc = QuantumCircuit(n + 1, n)  # n input qubits + 1 ancilla
-
-# Step 1: Prepare ancilla in |-> state
+# 1. Output qubit into |-> for phase kickback
 qc.x(n)
 qc.h(n)
+# 2. Hadamard the input register
+for i in range(n):
+    qc.h(i)
+# 3. TODO: query the oracle once  ->  qc.append(oracle, range(n + 1))
 
-# Step 2: Apply H to all input qubits
+# 4. Hadamard the input register again
 for i in range(n):
     qc.h(i)
 
-# Step 3: TODO - Apply the oracle
-# For each position i where hidden_string[i] == '1', apply CNOT(i, n)
-
-# Step 4: Apply H to all input qubits again
-for i in range(n):
-    qc.h(i)
-
-# Measure input qubits only
-qc.measure(list(range(n)), list(range(n)))
+qc.measure(range(n), range(n))
 `,
-    cirq: `import cirq
-
-# hidden_string is provided (e.g., "101")
-n = len(hidden_string)
-
-input_qubits = cirq.LineQubit.range(n)
-ancilla = cirq.LineQubit(n)
-
-circuit = cirq.Circuit()
-
-# Step 1: Prepare ancilla in |-> state
-circuit.append([cirq.X(ancilla), cirq.H(ancilla)])
-
-# Step 2: Apply H to all input qubits
-circuit.append(cirq.H.on_each(*input_qubits))
-
-# Step 3: TODO - Apply the oracle
-# For each position i where hidden_string[i] == '1',
-# apply CNOT(input_qubits[i], ancilla)
-
-# Step 4: Apply H to all input qubits again
-circuit.append(cirq.H.on_each(*input_qubits))
-
-# Measure input qubits only
-circuit.append(cirq.measure(*input_qubits, key='result'))
+    cirq: `# This challenge is graded on the desktop Qiskit kernel.
+# Implement solve(oracle) with Qiskit — see the Qiskit starter.
 `,
-    'cuda-q': `import cudaq
-
-# hidden_string is provided (e.g., "101")
-
-@cudaq.kernel
-def bernstein_vazirani(secret: list[int]):
-    n = len(secret)
-    qubits = cudaq.qvector(n + 1)  # n input + 1 ancilla
-
-    # Step 1: Prepare ancilla in |-> state
-    x(qubits[n])
-    h(qubits[n])
-
-    # Step 2: Apply H to all input qubits
-    for i in range(n):
-        h(qubits[i])
-
-    # Step 3: TODO - Apply the oracle
-    # For each position i where secret[i] == 1,
-    # apply cx(qubits[i], qubits[n])
-
-    # Step 4: Apply H to all input qubits again
-    for i in range(n):
-        h(qubits[i])
-
-    # Measure input qubits only
-    for i in range(n):
-        mz(qubits[i])
+    'cuda-q': `# This challenge is graded on the desktop Qiskit kernel.
+# Implement solve(oracle) with Qiskit — see the Qiskit starter.
 `,
   },
 
   hints: [
-    'The oracle applies CNOT(i, ancilla) for each bit of s that is 1',
-    'After the final Hadamards, measuring the input register gives s directly',
-    'This works because of phase kickback from the |-> ancilla',
+    'n = oracle.num_qubits - 1 tells you how many input qubits there are.',
+    'Sandwich a single oracle query between two layers of Hadamards on the input register.',
+    'The |-> output qubit turns the oracle output into a phase (phase kickback) that the final Hadamards decode into s.',
   ],
 
-  tags: ['bernstein-vazirani', 'oracle', 'phase-kickback'],
+  tags: ['bernstein-vazirani', 'oracle', 'phase-kickback', 'query-complexity'],
   estimatedMinutes: 20,
   totalSubmissions: 654,
   acceptanceRate: 0.67,
+  // Bernstein-Vazirani is the canonical single-query result. Raw gate counts
+  // are dominated by the injected oracle's internals, so the meaningful,
+  // un-spoofable efficiency metric is the number of oracle queries — 1.
+  efficiency: { oracleQueries: 1 },
+  oracle: {
+    solveParams: [],
+    queryLabel: 'oracle',
+    builderCode: `from qiskit import QuantumCircuit
+
+def build_oracle(hidden_string, **_):
+    n = len(hidden_string)
+    sub = QuantumCircuit(n + 1, name="oracle")
+    for i, b in enumerate(hidden_string):
+        if b == '1':
+            sub.cx(i, n)
+    return sub.to_gate(label="oracle")
+`,
+  },
+  referenceCode: `def reference(hidden_string, **_):
+    from qiskit import QuantumCircuit
+    n = len(hidden_string)
+    qc = QuantumCircuit(n + 1, n)
+    qc.x(n)
+    qc.h(n)
+    for i in range(n):
+        qc.h(i)
+    qc.append(build_oracle(hidden_string), range(n + 1))
+    for i in range(n):
+        qc.h(i)
+    qc.measure(range(n), range(n))
+    return qc
+`,
 };

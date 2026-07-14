@@ -45,6 +45,24 @@ function describeArgument(name: string): string {
 }
 
 function collectArguments(challenge: QuantumChallenge): ChallengeArgument[] {
+  // Oracle challenges: the student receives an opaque `oracle` (plus any public
+  // solve params) — never the secret test params. The displayed signature must
+  // reflect that, not the raw params.
+  if (challenge.oracle) {
+    return [
+      {
+        name: 'oracle',
+        type: 'object',
+        description: 'A black-box oracle gate on n+1 qubits — query it, you cannot read its secret.',
+      },
+      ...challenge.oracle.solveParams.map((name) => ({
+        name,
+        type: 'integer' as ChallengeArgumentType,
+        description: describeArgument(name),
+      })),
+    ];
+  }
+
   const samples = new Map<string, unknown>();
 
   for (const testCase of challenge.testCases) {

@@ -144,8 +144,11 @@ export function TestRunner({ challenge }: TestRunnerProps) {
       () => {
         // Per-test failures are surfaced inline.
       },
-      (snapshot: CircuitSnapshot | null) => {
-        if (snapshot) capturedMetrics.push(computeCircuitMetrics(snapshot));
+      (snapshot: CircuitSnapshot | null, result) => {
+        if (snapshot) {
+          const oracleQueries = result?.metrics?.oracle_queries;
+          capturedMetrics.push(computeCircuitMetrics(snapshot, undefined, oracleQueries));
+        }
       },
     );
 
