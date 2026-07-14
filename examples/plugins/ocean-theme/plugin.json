@@ -1,0 +1,9 @@
+{
+  "name": "ocean-theme",
+  "version": "1.0.0",
+  "description": "A deep-ocean colour overlay — exercises the theme capability.",
+  "author": "Nuclei",
+  "entry": "entry.js",
+  "capabilities": ["theme"],
+  "permissions": []
+}

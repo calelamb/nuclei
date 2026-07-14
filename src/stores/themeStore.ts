@@ -80,22 +80,53 @@ interface ThemeState {
   mode: ThemeMode;
   colors: ThemeColors;
   shadow: ThemeShadows;
+  /**
+   * A plugin-contributed colour overlay merged on top of the active theme.
+   * Null when no plugin theme is applied. Only keys that exist on
+   * `ThemeColors` are kept — a plugin's unknown keys are ignored.
+   */
+  pluginOverlay: Partial<ThemeColors> | null;
   setMode: (mode: ThemeMode) => void;
   toggle: () => void;
+  /** Apply a plugin theme's colours (intersected against known theme keys). */
+  applyPluginTheme: (colors: Record<string, string>) => void;
+  /** Remove any applied plugin theme, restoring the base theme. */
+  clearPluginTheme: () => void;
 }
 
-function snapshot(mode: ThemeMode) {
+// The set of legacy colour keys a plugin theme is allowed to override. Derived
+// from a real snapshot so it can never drift from `ThemeColors`.
+const THEME_COLOR_KEYS = Object.keys(legacyFromTokens(DARK_COLORS)) as (keyof ThemeColors)[];
+
+/** Keep only the string values whose key is a real `ThemeColors` field. */
+function intersectThemeColors(raw: Record<string, string>): Partial<ThemeColors> {
+  const overlay: Partial<ThemeColors> = {};
+  for (const key of THEME_COLOR_KEYS) {
+    const value = raw[key];
+    if (typeof value === 'string' && value.length > 0) overlay[key] = value;
+  }
+  return overlay;
+}
+
+function snapshot(mode: ThemeMode, overlay: Partial<ThemeColors> | null) {
   const colors = mode === 'dark' ? DARK_COLORS : LIGHT_COLORS;
   const shadow = mode === 'dark' ? DARK_SHADOWS : LIGHT_SHADOWS;
+  const base = legacyFromTokens(colors);
   return {
     mode,
-    colors: legacyFromTokens(colors),
+    colors: overlay ? { ...base, ...overlay } : base,
     shadow: shadowsFromTokens(shadow),
   };
 }
 
-export const useThemeStore = create<ThemeState>((set) => ({
-  ...snapshot('dark'),
-  setMode: (mode) => set(snapshot(mode)),
-  toggle: () => set((s) => snapshot(s.mode === 'dark' ? 'light' : 'dark')),
+export const useThemeStore = create<ThemeState>((set, get) => ({
+  ...snapshot('dark', null),
+  pluginOverlay: null,
+  setMode: (mode) => set(snapshot(mode, get().pluginOverlay)),
+  toggle: () => set((s) => snapshot(s.mode === 'dark' ? 'light' : 'dark', s.pluginOverlay)),
+  applyPluginTheme: (raw) => {
+    const overlay = intersectThemeColors(raw);
+    set((s) => ({ ...snapshot(s.mode, overlay), pluginOverlay: overlay }));
+  },
+  clearPluginTheme: () => set((s) => ({ ...snapshot(s.mode, null), pluginOverlay: null })),
 }));

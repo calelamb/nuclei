@@ -1,5 +1,5 @@
 import { MOCK_GALLERY, type GalleryCircuit } from '../data/community/mockGallery';
-import { MOCK_CHALLENGES, MOCK_LEADERBOARD, type Challenge, type LeaderboardEntry } from '../data/community/mockChallenges';
+import { MOCK_CHALLENGES, type Challenge, type LeaderboardEntry } from '../data/community/mockChallenges';
 
 export interface CommunityService {
   getGalleryCircuits(options?: {
@@ -76,7 +76,8 @@ class MockCommunityService implements CommunityService {
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   async getLeaderboard(_challengeId: string): Promise<LeaderboardEntry[]> {
     await delay(50);
-    return [...MOCK_LEADERBOARD];
+    // Leaderboards aren't live — there is no backend collecting submissions yet.
+    return [];
   }
 }
 

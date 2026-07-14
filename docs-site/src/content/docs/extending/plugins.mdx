@@ -1,168 +1,361 @@
 ---
-title: "Plugin system (preview)"
-description: "The plugin system's design contract — manifest, PluginAPI, extension points — and an honest account of what is and isn't implemented yet."
+title: "Plugins"
+description: "Author a Nuclei plugin: the plugin.json manifest schema, the activate(api) entry contract and full PluginAPI surface, scaffolding and loading a local plugin, and an honest account of the (non-sandboxed) trust model."
 ---
 
 import { Aside } from '@astrojs/starlight/components';
 
-<Aside type="caution" title="Read this before anything else on the page">
-The plugin system is a **design preview**: type definitions, a store, and
-marketplace UI. **Plugin code loading and execution are not implemented.**
-`manifest.entry` is never fetched or evaluated, `createPluginAPI` has no
-callers (`src/plugins/pluginManager.ts:64`), and nothing in the app
-consumes the extension registries. The in-app marketplace is a
-**non-functional preview** backed by a hardcoded mock catalog. Every
-interface on this page may change without notice. **Do not build against
-this yet** — watch the
-[CHANGELOG](https://github.com/calelamb/nuclei/blob/main/CHANGELOG.md).
+A Nuclei plugin is a **single folder** on your disk containing two files: a
+[`plugin.json`](#the-manifest) manifest and a **single, dependency-free ES
+module** whose `activate(api)` export registers what the plugin
+contributes — a custom panel, a theme, a Dirac skill, a gate renderer.
+Nuclei reads the folder, validates the manifest, loads the module, and
+hands it a [`PluginAPI`](#the-pluginapi-surface). There is no build step,
+no bundler, no `npm install`, and no remote registry: you point Nuclei at a
+folder and it runs.
+
+<Aside type="danger" title="Plugins are trusted code, not sandboxed">
+A plugin's entry JS runs as **ordinary JavaScript in the Nuclei webview**,
+with the same privileges as the app — full DOM, `window`, and `fetch`
+access. It is **not** isolated in a Worker or iframe. The manifest's
+`permissions` list only gates the friendly `api.getCircuit…` /
+`api.getEditor…` reads; a plugin can reach around the API entirely. Only
+load plugin folders you wrote or trust, exactly as you would a shell
+script. See [the trust model](#the-trust-model) for the full story.
 </Aside>
 
-What follows documents the **design contract** — the API surface a future
-plugin runtime would honor — so prospective plugin authors can evaluate
-the direction and contributors can implement against it.
+The Plugins view lives in the activity bar in **Research mode**. It has a
+"Load plugin…" and a "Create plugin…" button, an **Installed** tab, and a
+**Panels** tab that renders enabled panels and lists enabled themes.
 
-## Status at a glance
+## Anatomy of a plugin
 
-| Piece | State |
-|-------|-------|
-| Type definitions (`src/plugins/types.ts`) | Coherent; the anchor for a real implementation |
-| Install/uninstall/toggle store (`usePluginStore`) | Works in-memory, within one session |
-| Marketplace UI (sidebar, behind Settings → experimental features) | Browses/installs against the **mock catalog** only |
-| Plugin code loading / execution | **Does not exist** — no fetch, no eval, no import of `manifest.entry` |
-| Extension consumption (panels, Dirac skills, themes) | **None** — registries are write-only {/* pluginManager.ts:12-16 */} |
-| Persistence | **None** — installs vanish on reload (plain `create()`, no storage) |
-| Isolation / security boundary | **None** — see below |
+```text
+my-plugin/
+├── plugin.json     # the manifest — validated before anything loads
+└── entry.js        # the ES module — exports activate(api)
+```
+
+The manifest's `entry` field names the module file (`"entry.js"` by
+convention, but any relative path inside the folder works). Everything the
+module needs arrives through `api` — there is **no bare `import`**, because
+the module is loaded from a blob URL that has no module resolver.
 
 ## The manifest
 
-{/* src/plugins/types.ts:8-16 */}
+`plugin.json` is validated against a [zod](https://zod.dev) schema
+(`src/plugins/manifestSchema.ts`) before the entry module is ever read. A
+malformed file fails the load with a field-addressed error and registers
+nothing.
 
-```ts
-interface PluginManifest {
-  name: string;
-  version: string;
-  description: string;
-  author: string;
-  entry: string;                    // relative path to a JS entry point — never loaded today
-  capabilities: PluginCapability[];
-  permissions: PluginPermission[];
+```json
+{
+  "name": "hello-panel",
+  "version": "1.0.0",
+  "description": "Live panel showing the current circuit's qubit count and depth.",
+  "author": "Nuclei",
+  "entry": "entry.js",
+  "capabilities": ["custom-panel"],
+  "permissions": ["read-circuit"]
 }
 ```
 
-No manifest *file* format or loader exists; manifests are constructed
-in-memory. Marketplace installs fabricate one from the catalog entry with
-**empty `capabilities` and `permissions`** — so even under a future
-runtime, marketplace-installed plugins as currently created could register
-nothing and read nothing. {/* PluginMarketplace.tsx:71-84 */}
+| Field | Type | Rule |
+|-------|------|------|
+| `name` | string | **Required.** Kebab-case: `^[a-z0-9][a-z0-9-]*$` (lowercase letters, digits, hyphens). This is the plugin's identity — installs are deduplicated by it. |
+| `version` | string | **Required.** Semver `x.y.z` (`^\d+\.\d+\.\d+$`). |
+| `description` | string | Optional, defaults to `""`. |
+| `author` | string | Optional, defaults to `""`. |
+| `entry` | string | **Required.** Relative path to the ES module, inside the folder. Absolute paths (`/…`, `C:\…`, `\\…`) and any `..` segment are rejected — the entry can't escape the plugin folder. |
+| `capabilities` | array | **Required, non-empty.** One or more of `custom-panel`, `gate-renderer`, `kernel-extension`, `dirac-skill`, `theme`. Gates what the plugin may *register* (see below). |
+| `permissions` | array | Optional, defaults to `[]`. Any of `read-circuit`, `read-results`, `read-editor`, `write-editor`. Gates what the plugin may *read*. |
 
-## Capability and permission vocabulary
-
-Capabilities gate what a plugin may *register*; permissions gate what it
-may *read*. {/* types.ts:18-29 */}
-
-| Capability | Unlocks | Reality check |
-|-----------|---------|---------------|
-| `custom-panel` | `registerPanel` | Registry exists; no layout code renders plugin panels |
-| `dirac-skill` | `registerDiracSkill` | Registry exists; never injected into Dirac prompts — see [Extending Dirac](/docs/dirac/extending/) |
-| `theme` | `registerTheme` | Registry exists; never reaches the theme store |
-| `gate-renderer` | `registerGateRenderer` | **Explicit stub** — the method body is a comment {/* pluginManager.ts:110-114 */} |
-| `kernel-extension` | — | **No corresponding API method at all** |
-
-| Permission | Grants | Reality check |
-|-----------|--------|---------------|
-| `read-circuit` | `getCircuitSnapshot`, `onCircuitChange` | Designed |
-| `read-results` | `getSimulationResult`, `onResultChange` | Designed |
-| `read-editor` | `getEditorCode` | Designed |
-| `write-editor` | — | **No API method uses it** — there is no write/insert method on `PluginAPI` |
-
-<Aside type="danger" title="Permissions are a declaration convention, not isolation">
-The permission checks inside `createPluginAPI` are same-realm JavaScript
-`if` statements. There is no iframe, no worker, no separate realm —
-nothing that would prevent plugin code (if it ever ran) from importing the
-Zustand stores directly and bypassing every check. Treat the
-capability/permission vocabulary as a **declaration convention** that a
-future runtime would have to enforce with a real boundary. These docs
-deliberately never call this design "sandboxed".
+<Aside type="note" title="Unknown keys are rejected">
+The schema is strict: a typo like `"capabilties"` or an extra key fails
+validation rather than being silently ignored, so mistakes surface at load
+time instead of as a plugin that quietly does nothing.
 </Aside>
+
+### Capabilities
+
+A capability must be declared before the matching `register…` call does
+anything — calling `api.registerPanel(…)` without `custom-panel` in
+`capabilities` is a silent no-op.
+
+| Capability | Unlocks | Status in v1 |
+|-----------|---------|--------------|
+| `custom-panel` | `registerPanel` | **Live.** Rendered in the Panels tab. |
+| `theme` | `registerTheme` | **Live.** Appears in Panels → Themes with Apply / Clear. |
+| `dirac-skill` | `registerDiracSkill` | Stored, **not yet** injected into Dirac's prompt (planned for v1.1). |
+| `gate-renderer` | `registerGateRenderer` | Accepted and gated, **not yet** consumed by the circuit renderer (planned for v1.1). |
+| `kernel-extension` | — | Reserved vocabulary; no API method yet. |
+
+### Permissions
+
+Permissions gate the read side of the API. Without the matching permission,
+the getter returns an empty value and the subscription is a no-op — the
+plugin still loads and runs.
+
+| Permission | Grants | Denied behavior |
+|-----------|--------|-----------------|
+| `read-circuit` | `getCircuitSnapshot()`, `onCircuitChange()` | getter returns `null`; subscribe is a no-op |
+| `read-results` | `getSimulationResult()`, `onResultChange()` | getter returns `null`; subscribe is a no-op |
+| `read-editor` | `getEditorCode()` | getter returns `''` |
+| `write-editor` | — | reserved; no write method on the API yet |
+
+## The `activate(api)` entry contract
+
+The entry module exports an `activate` function — as a **named export** or
+the **default export** (named is tried first). Nuclei calls it once with the
+plugin's `api`. `activate` may return a cleanup function that runs when the
+plugin is disabled, uninstalled, or reloaded.
+
+```js
+// entry.js — a single-file, dependency-free ES module.
+export function activate(api) {
+  api.registerPanel({
+    id: 'my-panel',
+    title: 'My Panel',
+    render(container) {
+      container.textContent = 'hello';
+      // Optional: return a cleanup run when the panel unmounts.
+      return () => { /* teardown DOM listeners, timers, etc. */ };
+    },
+  });
+
+  // Optional: return a cleanup run on disable / uninstall / reload.
+  return () => api.log('deactivated');
+}
+```
+
+The signature is `(api: PluginAPI) => (() => void) | void`. Everything the
+plugin does happens through `api`; there is no other entry point.
 
 ## The `PluginAPI` surface
 
-What a plugin's entry point would receive. {/* types.ts:39-58; pluginManager.ts:64-136 */}
+The full object passed to `activate` (`src/plugins/types.ts`):
 
-| Method | Gate | Behavior as implemented |
-|--------|------|------------------------|
-| `getCircuitSnapshot()` | `read-circuit` | Current snapshot or `null` |
-| `getSimulationResult()` | `read-results` | Last result or `null` |
-| `getEditorCode()` | `read-editor` | Buffer contents or `''` |
-| `getFramework()` | none | Active framework id |
-| `onCircuitChange(cb)` / `onResultChange(cb)` | `read-circuit` / `read-results` | Store subscription; no-op unsubscriber when denied |
-| `registerPanel({id, title, render})` | `custom-panel` | Pushes into the (unconsumed) panels registry |
-| `registerGateRenderer(...)` | `gate-renderer` | **Stub — does nothing** |
-| `registerDiracSkill({name, systemPromptFragment, tools?})` | `dirac-skill` | Pushes into the (unconsumed) skills registry |
-| `registerTheme({name, colors})` | `theme` | Pushes into the (unconsumed) themes registry |
-| `log(message)` | none | Console log, dev builds only |
+### State access
 
-## The marketplace is mock data
+| Method | Requires | Returns |
+|--------|----------|---------|
+| `getCircuitSnapshot()` | `read-circuit` | the current [`CircuitSnapshot`](/docs/kernel-api/schemas/#circuitsnapshot), or `null` |
+| `getSimulationResult()` | `read-results` | the last [`SimulationResult`](/docs/kernel-api/schemas/#simulationresult), or `null` |
+| `getEditorCode()` | `read-editor` | the active editor buffer's text, or `''` |
+| `getFramework()` | — | the active framework id (`'qiskit'`, `'cirq'`, `'cuda-q'`, `'qsharp'`) |
 
-`PLUGIN_REGISTRY` (`src/data/pluginRegistry.ts`) is a hardcoded array of
-12 fictional plugins with invented download counts, ratings, and
-repository URLs. None are real, installable, third-party software. Its
-`capabilities` strings are freeform marketing tags, not the
-`PluginCapability` vocabulary, and they're discarded on install. The whole
-Plugins view only appears when **experimental features** are enabled in
-Settings (default off). {/* pluginRegistry.ts:1-12; Sidebar.tsx:221-225; settingsStore.ts:91 */}
+### Subscriptions
 
-## Sketch: a histogram-exporter panel
+| Method | Requires | Behavior |
+|--------|----------|----------|
+| `onCircuitChange(cb)` | `read-circuit` | calls `cb(snapshot)` whenever the circuit changes; returns an unsubscribe function |
+| `onResultChange(cb)` | `read-results` | calls `cb(result)` whenever a new simulation result arrives; returns an unsubscribe function |
 
-<Aside type="note" title="Illustrative — cannot run today">
-This is what a plugin would look like against the typed API **if** the
-runtime existed. There is currently no way to load or execute it.
-</Aside>
+Both return an unsubscribe function. If the permission is missing the
+returned unsubscribe is a harmless no-op, so you can call it
+unconditionally in your cleanup.
 
-```ts
-// manifest (illustrative)
-{
-  "name": "histogram-exporter",
-  "version": "0.1.0",
-  "description": "Export the probability histogram as CSV.",
-  "author": "you",
-  "entry": "index.js",
-  "capabilities": ["custom-panel"],
-  "permissions": ["read-results"]
-}
-```
+### Registration
 
-```ts
-// index.js (illustrative) — the runtime would call activate(api)
-export function activate(api: PluginAPI) {
+| Method | Requires | Notes |
+|--------|----------|-------|
+| `registerPanel({ id, title, render })` | `custom-panel` | `render(container)` mounts imperative DOM into a host element and may return a cleanup run on unmount. |
+| `registerTheme({ name, colors })` | `theme` | `colors` is a `Record<string, string>` of token → CSS color; see [theme keys](#registering-a-theme). |
+| `registerDiracSkill({ name, systemPromptFragment, tools? })` | `dirac-skill` | Stored; not injected into Dirac in v1. |
+| `registerGateRenderer({ gateName, render })` | `gate-renderer` | `render(ctx, x, y, size)` draws onto a 2D canvas context. Accepted but not consumed in v1. |
+
+### Utility
+
+| Method | Notes |
+|--------|-------|
+| `log(message)` | Prefixed `console.log` — **only in dev builds** (`import.meta.env.DEV`). Silent in a packaged app. |
+
+### Registering a panel
+
+`render` receives a fresh `HTMLElement` to mount into. Build DOM
+imperatively, subscribe to state, and return a cleanup:
+
+```js
+export function activate(api) {
   api.registerPanel({
-    id: 'histogram-exporter',
-    title: 'Export Histogram',
+    id: 'qubit-counter',
+    title: 'Qubit Counter',
     render(container) {
-      const button = document.createElement('button');
-      button.textContent = 'Download CSV';
-      button.onclick = () => {
-        const result = api.getSimulationResult() as
-          { probabilities: Record<string, number> } | null;
-        if (!result) return;
-        const csv = ['state,probability',
-          ...Object.entries(result.probabilities)
-            .map(([s, p]) => `${s},${p}`)].join('\n');
-        const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }));
-        Object.assign(document.createElement('a'),
-          { href: url, download: 'histogram.csv' }).click();
+      const el = document.createElement('div');
+      el.style.cssText = 'padding:12px;font:12px system-ui';
+
+      const paint = (snapshot) => {
+        el.textContent = snapshot
+          ? `Qubits: ${snapshot.qubit_count} · Depth: ${snapshot.depth}`
+          : 'No circuit yet — start typing quantum code.';
       };
-      container.appendChild(button);
-      api.onResultChange(() => { /* re-enable / refresh */ });
+
+      paint(api.getCircuitSnapshot());
+      const unsubscribe = api.onCircuitChange(paint);
+      container.appendChild(el);
+      return unsubscribe; // runs when the panel unmounts
     },
   });
 }
 ```
 
-## If you want to extend Nuclei today
+Each panel is mounted in its own error-isolated host: if your `render`
+throws, Nuclei shows an inline error card for that panel instead of taking
+down the app.
 
-Skip the plugin system. The extension points that actually work are
-in-tree: [framework adapters](/docs/extending/framework-adapters/),
-[hardware providers](/docs/extending/hardware-providers/), and direct
-[Dirac prompt changes](/docs/dirac/extending/) — all via normal PRs
-([contributing](/docs/extending/contributing/)).
+### Registering a theme
+
+A theme plugin registers a named color set. Nuclei intersects your keys
+against its own theme tokens — **unknown keys are ignored**, so you only
+need to override the tokens you care about. The user applies it from
+Panels → Themes (Apply / Clear).
+
+```js
+export function activate(api) {
+  api.registerTheme({
+    name: 'Ocean',
+    colors: {
+      bg: '#08131f',
+      bgPanel: '#0b1a2b',
+      bgElevated: '#102438',
+      accent: '#00B4D8',
+      accentLight: '#48cae4',
+    },
+  });
+}
+```
+
+Recognized token keys: `bg`, `bgPanel`, `bgEditor`, `bgElevated`, `border`,
+`borderStrong`, `text`, `textMuted`, `textDim`, `accent`, `accentLight`,
+`dirac`, `success`, `warning`, `error`. Values are any valid CSS color.
+
+## Scaffolding a plugin from the app
+
+The fastest way to start is **Create plugin…** in the Plugins view
+(Research mode):
+
+1. Click **Create plugin…**, type a display name, and click **Choose
+   folder…**.
+2. Nuclei slugifies the name to a kebab-case id, creates
+   `` `<folder>`/`<slug>`/ `` with a `plugin.json` and a working `entry.js`
+   (a live circuit panel), and refuses to overwrite an existing plugin
+   folder.
+3. The `entry.js` opens in the editor so the code is never a black box, and
+   the plugin loads immediately — its panel appears live in the Panels tab
+   and updates as you edit quantum code.
+
+Edit `entry.js` on disk, then hit **Reload** on the Installed tab to pick
+up your changes — that's the tight authoring loop.
+
+## Loading a local plugin
+
+To load a plugin you already have on disk, click **Load plugin…** and pick
+its folder. Nuclei validates the manifest, loads the entry module, and
+activates it. On failure it shows a field-addressed error card and
+registers nothing.
+
+Installed plugins persist across restarts: Nuclei stores each folder path
+and its enabled state, and re-loads them on boot (enabled plugins are
+re-activated; disabled ones are listed manifest-only; a folder that has
+gone missing or broken becomes an honest error record rather than a silent
+drop).
+
+On the **Installed** tab each plugin shows its version, author,
+capabilities, and a status pill, with **Enable / Disable**, **Reload**, and
+**Uninstall** actions. Disabling runs the plugin's cleanup and removes its
+panels and themes; enabling re-activates it from disk.
+
+## Example: `hello-panel`
+
+The repo ships two runnable examples under `examples/plugins/`. The
+smallest, `hello-panel`, is a custom panel that mirrors the live circuit.
+
+`examples/plugins/hello-panel/plugin.json`:
+
+```json
+{
+  "name": "hello-panel",
+  "version": "1.0.0",
+  "description": "Live panel showing the current circuit's qubit count and depth.",
+  "author": "Nuclei",
+  "entry": "entry.js",
+  "capabilities": ["custom-panel"],
+  "permissions": ["read-circuit"]
+}
+```
+
+`examples/plugins/hello-panel/entry.js`:
+
+```js
+export function activate(api) {
+  api.registerPanel({
+    id: 'hello-panel',
+    title: 'Hello Panel',
+    render(container) {
+      const el = document.createElement('div');
+      el.style.cssText = 'padding:12px;font:12px system-ui,sans-serif;line-height:1.6';
+
+      const paint = (snapshot) => {
+        if (!snapshot) {
+          el.textContent = 'No circuit yet — start typing quantum code.';
+          return;
+        }
+        el.innerHTML =
+          `<strong>Qubits:</strong> ${snapshot.qubit_count}<br>` +
+          `<strong>Depth:</strong> ${snapshot.depth}<br>` +
+          `<strong>Gates:</strong> ${snapshot.gates.length}<br>` +
+          `<strong>Framework:</strong> ${snapshot.framework}`;
+      };
+
+      paint(api.getCircuitSnapshot());
+      const unsubscribe = api.onCircuitChange(paint);
+      container.appendChild(el);
+      return unsubscribe; // cleanup on panel unmount
+    },
+  });
+
+  api.log('hello-panel activated');
+}
+```
+
+To try it: **Load plugin…** → pick `examples/plugins/hello-panel`. The
+panel appears in the Panels tab and updates on every keystroke. It declares
+only `read-circuit`, so `getSimulationResult()` would return `null` — grant
+`read-results` in the manifest if you want to react to executions.
+
+The sibling `examples/plugins/ocean-theme` exercises the theme path: load
+it, then Apply it from Panels → Themes to recolor the UI.
+
+## The trust model
+
+<Aside type="danger" title="Not a sandbox — read this">
+Nuclei plugins are **not** sandboxed. `entry.js` runs as ordinary
+JavaScript in the webview with the same privileges as the app: full DOM,
+`window`, and `fetch`. The `permissions` list is a **transparency and
+convenience** mechanism — it decides what the friendly `api.getCircuit…`
+getters return, nothing more. A plugin can import Nuclei's stores directly
+or call `fetch` and bypass every check.
+</Aside>
+
+What Nuclei *does* guarantee is protection from **broken** plugins, not
+**malicious** ones:
+
+- **Manifest validation** — a bad `plugin.json` fails the load cleanly.
+- **Path-traversal guard** — `entry` can't point outside the plugin folder.
+- **Per-plugin error isolation** — a panel that throws shows an error card;
+  an `activate` that throws marks the plugin errored and registers nothing,
+  rather than crashing the app.
+
+Because there is no remote registry and plugins load only from a folder you
+explicitly pick, the security posture is the same as running a local
+script: **only load plugins you wrote or trust.** Real isolation
+(Worker/iframe message passing) is future work — Nuclei would rather be
+honest about the boundary than ship a fake sandbox.
+
+## Other ways to extend Nuclei
+
+Plugins are for UI and read-only integrations that live outside the tree.
+To add a whole quantum framework or a hardware backend, extend the kernel
+directly: [framework adapters](/docs/extending/framework-adapters/),
+[hardware providers](/docs/extending/hardware-providers/), and
+[contributing](/docs/extending/contributing/).
