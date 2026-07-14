@@ -12,6 +12,11 @@ type Phase = PhaseIdle | PhaseAvailable | PhaseDownloading | PhaseReady | PhaseE
 
 const DISMISS_STORAGE_KEY = 'nuclei:update_dismissed_version';
 
+/** If a download makes no progress for this long, treat it as stalled and
+ * surface an error (with a working Dismiss) rather than freezing on a
+ * percentage forever. */
+const UPDATE_STALL_MS = 60_000;
+
 /**
  * Quiet update banner. On desktop, checks the configured updater endpoint a
  * few seconds after launch. If a newer signed release is available it asks
@@ -59,6 +64,13 @@ export function UpdateBanner() {
 
   const handleInstall = useCallback(async () => {
     if (phase.kind !== 'available') return;
+    let stallTimer: ReturnType<typeof setTimeout> | undefined;
+    const armStall = () => {
+      if (stallTimer) clearTimeout(stallTimer);
+      stallTimer = setTimeout(() => {
+        setPhase({ kind: 'error', message: 'Download stalled — check your connection and try again.' });
+      }, UPDATE_STALL_MS);
+    };
     try {
       const { check } = await import('@tauri-apps/plugin-updater');
       const update = await check();
@@ -66,18 +78,24 @@ export function UpdateBanner() {
       setPhase({ kind: 'downloading', version: update.version, percent: 0 });
       let downloaded = 0;
       let total = 0;
+      armStall();
       await update.downloadAndInstall((event) => {
         if (event.event === 'Started') {
           total = event.data.contentLength ?? 0;
+          armStall();
         } else if (event.event === 'Progress') {
           downloaded += event.data.chunkLength;
           const percent = total > 0 ? Math.min(100, Math.round((downloaded / total) * 100)) : 0;
           setPhase({ kind: 'downloading', version: update.version, percent });
+          armStall();
         } else if (event.event === 'Finished') {
+          if (stallTimer) clearTimeout(stallTimer);
           setPhase({ kind: 'ready', version: update.version });
         }
       });
+      if (stallTimer) clearTimeout(stallTimer);
     } catch (err) {
+      if (stallTimer) clearTimeout(stallTimer);
       setPhase({
         kind: 'error',
         message: err instanceof Error ? err.message : 'Update failed',
@@ -206,24 +224,25 @@ export function UpdateBanner() {
             {subtitle}
           </div>
         </div>
-        {phase.kind !== 'downloading' && (
-          <button
-            onClick={handleDismiss}
-            aria-label="Dismiss update notification"
-            style={{
-              background: 'none',
-              border: 'none',
-              color: colors.textDim,
-              cursor: 'pointer',
-              padding: 2,
-              display: 'flex',
-              alignItems: 'center',
-              borderRadius: 4,
-            }}
-          >
-            <X size={14} />
-          </button>
-        )}
+        {/* Always available — a stalled download must never trap the user
+            with no way to dismiss the banner. */}
+        <button
+          onClick={handleDismiss}
+          aria-label={phase.kind === 'downloading' ? 'Hide update banner' : 'Dismiss update notification'}
+          title={phase.kind === 'downloading' ? 'Hide (the download continues in the background)' : undefined}
+          style={{
+            background: 'none',
+            border: 'none',
+            color: colors.textDim,
+            cursor: 'pointer',
+            padding: 2,
+            display: 'flex',
+            alignItems: 'center',
+            borderRadius: 4,
+          }}
+        >
+          <X size={14} />
+        </button>
       </div>
       {phase.kind === 'downloading' && (
         <div

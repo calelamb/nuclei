@@ -24,6 +24,7 @@ interface InlineEditProps {
 export function InlineEditWidget({ editor, monaco, onClose }: InlineEditProps) {
   const [instruction, setInstruction] = useState('');
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [diffResult, setDiffResult] = useState<string | null>(null);
   const [history, setHistory] = useState<string[]>([]);
   const [historyIdx, setHistoryIdx] = useState(-1);
@@ -54,6 +55,7 @@ export function InlineEditWidget({ editor, monaco, onClose }: InlineEditProps) {
   const handleSubmit = useCallback(async () => {
     if (!instruction.trim() || loading) return;
     setLoading(true);
+    setError(null);
 
     const apiKey = useDiracStore.getState().apiKey;
     if (!apiKey || apiKey.trim() === '') {
@@ -97,7 +99,11 @@ export function InlineEditWidget({ editor, monaco, onClose }: InlineEditProps) {
         }),
       });
 
-      if (!response.ok) { setLoading(false); return; }
+      if (!response.ok) {
+        setError(`Dirac request failed (${response.status}). Try again.`);
+        setLoading(false);
+        return;
+      }
       const data = await response.json();
       const result = data.content?.[0]?.text?.trim() ?? '';
       if (result) {
@@ -106,8 +112,12 @@ export function InlineEditWidget({ editor, monaco, onClose }: InlineEditProps) {
         const updated = [instruction, ...history.filter((h) => h !== instruction)].slice(0, MAX_HISTORY);
         setHistory(updated);
         platform.setStoredValue(HISTORY_KEY, updated).catch(() => {});
+      } else {
+        setError('Dirac returned no change to apply.');
       }
-    } catch { /* API or network error — user sees no result */ }
+    } catch {
+      setError("Couldn't reach Dirac — check your connection and try again.");
+    }
     setLoading(false);
   }, [instruction, loading, selectedText, history, platform]);
 
@@ -181,6 +191,13 @@ export function InlineEditWidget({ editor, monaco, onClose }: InlineEditProps) {
         />
         {loading && <span style={{ color: colors.accent, fontSize: 11 }}>Thinking...</span>}
       </div>
+
+      {/* Error */}
+      {error && !loading && (
+        <div style={{ padding: '0 10px 8px', color: colors.error, fontSize: 11.5, fontFamily: 'Inter, sans-serif', lineHeight: 1.4 }}>
+          {error}
+        </div>
+      )}
 
       {/* Diff preview */}
       {diffResult && (
