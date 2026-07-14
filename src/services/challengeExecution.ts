@@ -84,7 +84,7 @@ function buildCanonicalTestCode(
 ): string {
   const entrypoint = challenge.entrypoint_name ?? 'solve';
 
-  return `# === Your solution ===
+  const base = `# === Your solution ===
 ${userCode}
 
 # === Challenge harness ===
@@ -99,6 +99,33 @@ if not isinstance(__nuclei_circuit, __NucleiQuantumCircuit):
     raise TypeError("${entrypoint}(...) must return a QuantumCircuit")
 
 qc = __nuclei_circuit
+`;
+
+  if (!challenge.referenceCode) return base;
+
+  // State-fidelity grading: append the hidden reference solution and record
+  // |⟨reference|student⟩|² as `metrics.fidelity`. The reference is defined
+  // AFTER the student's solve() has already run, so it can't be shadowed. We
+  // strip only FINAL measurements before taking the statevector (mid-circuit
+  // measurement is unsupported here by design — those challenges use other
+  // grading). `record_metric` is injected into the exec namespace by the kernel.
+  return `${base}
+
+# === Reference (hidden) + fidelity grading ===
+${challenge.referenceCode}
+
+from qiskit.quantum_info import Statevector as __NucleiSV, state_fidelity as __nuclei_state_fidelity
+
+try:
+    __nuclei_ref_circuit = reference(**__nuclei_params)
+    __nuclei_fidelity = float(__nuclei_state_fidelity(
+        __NucleiSV(qc.remove_final_measurements(inplace=False)),
+        __NucleiSV(__nuclei_ref_circuit.remove_final_measurements(inplace=False)),
+    ))
+except Exception:
+    __nuclei_fidelity = 0.0
+
+record_metric("fidelity", __nuclei_fidelity)
 `;
 }
 

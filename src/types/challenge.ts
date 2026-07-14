@@ -28,7 +28,14 @@ export type ValidationMode =
   | { type: 'probability_match'; expected: Record<string, number>; tolerance: number }
   | { type: 'metric'; metric: 'approximation_ratio'; threshold: number; optimal: number }
   | { type: 'value_match'; expected: ChallengeJsonValue; tolerance?: number }
-  | { type: 'numeric_match'; expected: number; tolerance: number; path?: string };
+  | { type: 'numeric_match'; expected: number; tolerance: number; path?: string }
+  // State-based grading: the harness compares the student's pre-measurement
+  // statevector to a hidden reference solution's via |⟨ref|ψ⟩|², recorded as
+  // `metrics.fidelity`. Unlike marginal grading it can't be spoofed with a
+  // hardcoded product state — it sees phase and entanglement. Requires the
+  // challenge to provide `referenceCode` (qiskit). `min_fidelity` defaults to
+  // 0.99 (statevector sim is exact; 0.99 only absorbs float noise).
+  | { type: 'state_fidelity'; min_fidelity?: number };
 
 export interface TestCase {
   id: string;
@@ -137,6 +144,11 @@ export interface QuantumChallenge {
    * absent for value-return (QKD) problems and parameterized problems whose
    * optimum isn't a single fixed number. */
   efficiency?: EfficiencyTarget;
+  /** Hidden qiskit reference solution for `state_fidelity` grading. Must define
+   * `def reference(**params)` returning the target QuantumCircuit; the harness
+   * appends it and records `metrics.fidelity` = |⟨reference|student⟩|². Never
+   * shown to the student. */
+  referenceCode?: string;
 }
 
 export type SubmissionStatus =

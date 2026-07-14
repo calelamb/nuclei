@@ -58,11 +58,7 @@ expected outcome for that state.
       label: 'Phi+',
       description: 'bell_index=0: produce |Phi+> = (|00> + |11>) / sqrt(2)',
       params: { bell_index: 0 },
-      validation: {
-        type: 'probability_match',
-        expected: { '00': 0.5, '11': 0.5 },
-        tolerance: 0.08,
-      },
+      validation: { type: 'state_fidelity' },
       hidden: false,
       weight: 0.25,
     },
@@ -71,11 +67,7 @@ expected outcome for that state.
       label: 'Phi-',
       description: 'bell_index=1: produce |Phi-> = (|00> - |11>) / sqrt(2)',
       params: { bell_index: 1 },
-      validation: {
-        type: 'probability_match',
-        expected: { '00': 0.5, '11': 0.5 },
-        tolerance: 0.08,
-      },
+      validation: { type: 'state_fidelity' },
       hidden: false,
       weight: 0.25,
     },
@@ -84,11 +76,7 @@ expected outcome for that state.
       label: 'Psi+',
       description: 'bell_index=2: produce |Psi+> = (|01> + |10>) / sqrt(2)',
       params: { bell_index: 2 },
-      validation: {
-        type: 'probability_match',
-        expected: { '01': 0.5, '10': 0.5 },
-        tolerance: 0.08,
-      },
+      validation: { type: 'state_fidelity' },
       hidden: false,
       weight: 0.25,
     },
@@ -97,11 +85,7 @@ expected outcome for that state.
       label: 'Psi-',
       description: 'bell_index=3: produce |Psi-> = (|01> - |10>) / sqrt(2)',
       params: { bell_index: 3 },
-      validation: {
-        type: 'probability_match',
-        expected: { '01': 0.5, '10': 0.5 },
-        tolerance: 0.08,
-      },
+      validation: { type: 'state_fidelity' },
       hidden: false,
       weight: 0.25,
     },
@@ -170,4 +154,20 @@ def bell_state(bell_index: int):
   // correlated distribution can't be made by a product state), so 1 is a true
   // lower bound — the ★ rewards a clean, minimal circuit, not a hardcode.
   efficiency: { twoQubitGates: 1 },
+  // Graded by state fidelity, not marginals: |Phi+> and |Phi-> share a
+  // histogram but differ in relative phase, so this now requires the exact
+  // requested Bell state — and a hardcoded product state can't reach it.
+  referenceCode: `from qiskit import QuantumCircuit
+
+def reference(bell_index):
+    qc = QuantumCircuit(2, 2)
+    if bell_index in (2, 3):
+        qc.x(1)
+    qc.h(0)
+    qc.cx(0, 1)
+    if bell_index in (1, 3):
+        qc.z(0)
+    qc.measure([0, 1], [0, 1])
+    return qc
+`,
 };
