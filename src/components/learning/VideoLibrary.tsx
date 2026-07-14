@@ -283,6 +283,7 @@ export function VideoLibrary() {
       {/* Video list */}
       <div style={{
         flex: 1,
+        minHeight: 0,
         overflow: 'auto',
         padding: '0 4px 8px',
       }}>

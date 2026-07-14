@@ -74,7 +74,7 @@ export function Glossary() {
       </div>
 
       {/* Term list */}
-      <div style={{ flex: 1, overflowY: 'auto', padding: '0 12px 12px' }}>
+      <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: '0 12px 12px' }}>
         {filteredTerms.length === 0 ? (
           <div style={{ color: colors.textDim, fontSize: 12, fontFamily: 'Geist Sans, Inter, sans-serif', textAlign: 'center', paddingTop: 24 }}>
             No terms found.
