@@ -1,6 +1,6 @@
-import { describe, expect, it } from 'vitest';
-import { filterChallenges } from './challengeModeStore';
-import type { ProblemProgress, QuantumChallenge } from '../types/challenge';
+import { beforeEach, describe, expect, it } from 'vitest';
+import { filterChallenges, useChallengeModeStore } from './challengeModeStore';
+import type { CircuitMetrics, EfficiencyReport, ProblemProgress, QuantumChallenge, Submission } from '../types/challenge';
 
 const challenges: QuantumChallenge[] = [
   {
@@ -89,5 +89,61 @@ describe('challengeModeStore filtering', () => {
     ]);
     expect(filterChallenges(challenges, null, null, 'qkd', 'all', progress, 'qkd')).toHaveLength(1);
     expect(filterChallenges(challenges, null, null, '', 'solved', progress, 'qkd')).toHaveLength(0);
+  });
+});
+
+describe('challengeModeStore addSubmission efficiency folding', () => {
+  function metrics(twoQ: number, depth: number): CircuitMetrics {
+    return { twoQubitGates: twoQ, depth, gateCount: twoQ + depth, qubits: 2 };
+  }
+  function submission(over: Partial<Submission>): Submission {
+    return {
+      id: `sub-${over.id ?? '1'}`,
+      challengeId: 'c1',
+      code: 'x',
+      framework: 'qiskit',
+      timestamp: '2026-07-14T00:00:00.000Z',
+      status: 'accepted',
+      testCaseResults: [],
+      totalScore: 100,
+      executionTimeMs: 1,
+      ...over,
+    };
+  }
+  const optimalReport = { isOptimal: true, hasTarget: true } as EfficiencyReport;
+  const nonOptimalReport = { isOptimal: false, hasTarget: true } as EfficiencyReport;
+
+  beforeEach(() => {
+    useChallengeModeStore.setState({ progress: {} });
+  });
+
+  it('records best metrics and latches solvedOptimally on an optimal accepted submission', () => {
+    useChallengeModeStore.getState().addSubmission('c1', submission({
+      metrics: metrics(1, 2),
+      efficiency: optimalReport,
+    }));
+    const p = useChallengeModeStore.getState().progress.c1;
+    expect(p.solvedOptimally).toBe(true);
+    expect(p.bestMetrics).toEqual(metrics(1, 2));
+  });
+
+  it('keeps the element-wise best metrics and never un-latches the star', () => {
+    const store = useChallengeModeStore.getState();
+    store.addSubmission('c1', submission({ id: '1', metrics: metrics(1, 4), efficiency: optimalReport }));
+    store.addSubmission('c1', submission({ id: '2', metrics: metrics(3, 2), efficiency: nonOptimalReport }));
+    const p = useChallengeModeStore.getState().progress.c1;
+    // best is the min of each metric across submissions
+    expect(p.bestMetrics?.twoQubitGates).toBe(1);
+    expect(p.bestMetrics?.depth).toBe(2);
+    // a later non-optimal submission doesn't remove an earned star
+    expect(p.solvedOptimally).toBe(true);
+  });
+
+  it('does not mark solvedOptimally when the accepted submission missed a target', () => {
+    useChallengeModeStore.getState().addSubmission('c1', submission({
+      metrics: metrics(3, 2),
+      efficiency: nonOptimalReport,
+    }));
+    expect(useChallengeModeStore.getState().progress.c1.solvedOptimally).toBe(false);
   });
 });

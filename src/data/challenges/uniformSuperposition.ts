@@ -176,4 +176,8 @@ def uniform(n: int):
   estimatedMinutes: 5,
   totalSubmissions: 2103,
   acceptanceRate: 0.91,
+  // A uniform superposition is a product state — one Hadamard per qubit, zero
+  // entangling gates. 0 is optimal, so the ★ rewards resisting the urge to add
+  // unnecessary two-qubit gates.
+  efficiency: { twoQubitGates: 0 },
 };

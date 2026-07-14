@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useThemeStore } from '../../stores/themeStore';
-import { Check, X, Clock, ChevronRight, ChevronDown } from 'lucide-react';
+import { Check, X, Clock, ChevronRight, ChevronDown, Star } from 'lucide-react';
 import type { Submission, SubmissionStatus } from '../../types/challenge';
 
 interface SubmissionHistoryProps {
@@ -171,6 +171,39 @@ function SubmissionRow({ submission, index }: { submission: Submission; index: n
               )}
             </div>
           ))}
+
+          {submission.metrics && (
+            <div style={{
+              marginTop: 4,
+              padding: '6px 0 2px',
+              borderTop: `1px solid ${colors.border}`,
+              display: 'flex',
+              alignItems: 'center',
+              gap: 12,
+              flexWrap: 'wrap',
+              color: colors.textDim,
+              fontSize: 10,
+              fontFamily: "'Geist Mono', monospace",
+            }}>
+              {submission.efficiency?.isOptimal && (
+                <span style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 3,
+                  color: colors.success,
+                  fontWeight: 700,
+                  fontFamily: "'Geist Sans', sans-serif",
+                }}>
+                  <Star size={10} fill={colors.success} strokeWidth={0} />
+                  Optimal
+                </span>
+              )}
+              <span>2q gates: <span style={{ color: colors.textMuted, fontWeight: 600 }}>{submission.metrics.twoQubitGates}</span></span>
+              <span>depth: <span style={{ color: colors.textMuted, fontWeight: 600 }}>{submission.metrics.depth}</span></span>
+              <span>gates: <span style={{ color: colors.textMuted, fontWeight: 600 }}>{submission.metrics.gateCount}</span></span>
+              <span>qubits: <span style={{ color: colors.textMuted, fontWeight: 600 }}>{submission.metrics.qubits}</span></span>
+            </div>
+          )}
 
           <div style={{
             marginTop: 4,

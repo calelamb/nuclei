@@ -1,5 +1,5 @@
 import { useEffect, useMemo } from 'react';
-import { CheckCircle2, Circle, Clock3, ListChecks, ShieldCheck } from 'lucide-react';
+import { CheckCircle2, Circle, Clock3, ListChecks, ShieldCheck, Star } from 'lucide-react';
 import { useThemeStore } from '../../stores/themeStore';
 import {
   type ChallengePracticeTab,
@@ -146,7 +146,7 @@ function PracticeTabButton({
   );
 }
 
-function StatusCell({ status }: { status: ProblemStatus }) {
+function StatusCell({ status, optimal }: { status: ProblemStatus; optimal?: boolean }) {
   const colors = useThemeStore((s) => s.colors);
 
   if (status === 'solved') {
@@ -154,6 +154,14 @@ function StatusCell({ status }: { status: ProblemStatus }) {
       <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: colors.success }}>
         <CheckCircle2 size={14} />
         <span>Solved</span>
+        {optimal && (
+          <Star
+            size={12}
+            fill={colors.success}
+            strokeWidth={0}
+            aria-label="Solved optimally"
+          />
+        )}
       </div>
     );
   }
@@ -215,7 +223,7 @@ function ProblemRow({
       }}
     >
       <div style={{ fontSize: 12, fontFamily: "'Geist Sans', sans-serif" }}>
-        <StatusCell status={status} />
+        <StatusCell status={status} optimal={progress?.solvedOptimally} />
       </div>
 
       <div style={{ minWidth: 0 }}>
