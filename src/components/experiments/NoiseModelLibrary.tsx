@@ -1,6 +1,7 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { X, Copy, GitCompare } from 'lucide-react';
 import { useThemeStore } from '../../stores/themeStore';
+import { useEscapeToClose } from '../../hooks/useEscapeToClose';
 import { createTauriExperimentFs } from '../../services/experimentFs';
 import { discoverNoiseModels } from '../../services/experimentStore';
 import { duplicateNoiseModel } from '../../services/noiseModelScaffold';
@@ -54,12 +55,20 @@ export function NoiseModelLibrary({ projectRoot, onClose }: { projectRoot: strin
     }
   };
 
+  // Escape cancels the inline duplicate form if it's open, otherwise closes
+  // the whole library — so a stray Escape mid-edit doesn't lose the modal.
+  const handleEscape = useCallback(() => {
+    if (dupOpen) setDupOpen(false);
+    else onClose();
+  }, [dupOpen, onClose]);
+  useEscapeToClose(handleEscape);
+
   return (
     <div
       role="dialog"
       aria-label="Noise model library"
       style={{
-        position: 'fixed', inset: 0, zIndex: 60, display: 'flex', alignItems: 'center', justifyContent: 'center',
+        position: 'fixed', inset: 0, zIndex: 9000, display: 'flex', alignItems: 'center', justifyContent: 'center',
         background: 'rgba(0,0,0,0.5)', fontFamily: "'Geist Sans', sans-serif",
       }}
       onClick={onClose}
@@ -196,6 +205,12 @@ export function NoiseModelLibrary({ projectRoot, onClose }: { projectRoot: strin
             <input
               value={dupName}
               onChange={(e) => setDupName(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && dupName.trim()) {
+                  e.preventDefault();
+                  void doDuplicate();
+                }
+              }}
               autoFocus
               style={{ flex: 1, background: colors.bg, color: colors.text, border: `1px solid ${colors.border}`, borderRadius: 4, padding: '5px 8px', fontSize: 12 }}
             />

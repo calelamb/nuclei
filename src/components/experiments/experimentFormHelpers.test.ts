@@ -3,12 +3,32 @@ import {
   buildSweepFromRows,
   discoverEntryFiles,
   newSweepRow,
+  parseNumberField,
   slugify,
   specToYamlDoc,
   sweepToRows,
   type SweepRowState,
 } from './experimentFormHelpers';
 import type { ExperimentSpec } from '../../types/experiment';
+
+describe('parseNumberField', () => {
+  it('parses a numeric string', () => {
+    expect(parseNumberField('42')).toBe(42);
+    expect(parseNumberField('  0.5 ')).toBe(0.5);
+    expect(parseNumberField('0')).toBe(0);
+  });
+
+  it('returns NaN for a blank / whitespace-only field (not 0)', () => {
+    // Number('') === 0 would silently coerce an empty Seed box to seed 0 and
+    // pass zod's z.number().int() — NaN makes validation flag it instead.
+    expect(parseNumberField('')).toBeNaN();
+    expect(parseNumberField('   ')).toBeNaN();
+  });
+
+  it('returns NaN for non-numeric text', () => {
+    expect(parseNumberField('abc')).toBeNaN();
+  });
+});
 
 describe('slugify', () => {
   it('lowercases and hyphenates', () => {
@@ -34,6 +54,15 @@ describe('buildSweepFromRows', () => {
   it('builds a range sweep param', () => {
     const row: SweepRowState = { ...newSweepRow('r1'), name: 'theta', mode: 'range', rangeStart: '0', rangeStop: '1', rangeStep: '0.5' };
     expect(buildSweepFromRows([row])).toEqual({ theta: { range: [0, 1, 0.5] } });
+  });
+
+  it('yields NaN (not 0) for a blank range bound so the schema rejects it', () => {
+    const row: SweepRowState = { ...newSweepRow('r1'), name: 'theta', mode: 'range', rangeStart: '0', rangeStop: '', rangeStep: '0.5' };
+    const built = buildSweepFromRows([row]);
+    const range = (built?.theta as { range: number[] }).range;
+    expect(range[0]).toBe(0);
+    expect(range[1]).toBeNaN();
+    expect(range[2]).toBe(0.5);
   });
 
   it('builds a values sweep param, trimming and dropping blanks', () => {

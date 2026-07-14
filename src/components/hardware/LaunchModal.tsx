@@ -206,9 +206,15 @@ export function LaunchModal() {
   const isWeb = platform.getPlatform() === 'web';
 
   const [localShots, setLocalShots] = useState(shots || 1024);
+  // Raw text draft so the field can be cleared and retyped. `localShots` stays
+  // a valid clamped number (submit reads it); the draft reconciles on blur.
+  const [shotsDraft, setShotsDraft] = useState(String(shots || 1024));
   const [keyDraft, setKeyDraft] = useState('');
   useEffect(() => {
-    if (open) queueMicrotask(() => setLocalShots(shots || 1024));
+    if (open) queueMicrotask(() => {
+      setLocalShots(shots || 1024);
+      setShotsDraft(String(shots || 1024));
+    });
   }, [open, shots]);
   // Clear the in-progress key input whenever we switch provider.
   useEffect(() => {
@@ -871,8 +877,24 @@ export function LaunchModal() {
                     type="number"
                     min={1}
                     max={100000}
-                    value={localShots}
-                    onChange={(e) => setLocalShots(Math.max(1, Math.min(100000, Number(e.target.value) || 0)))}
+                    value={shotsDraft}
+                    onChange={(e) => {
+                      const raw = e.target.value;
+                      setShotsDraft(raw);
+                      const n = Number(raw);
+                      if (raw.trim() !== '' && Number.isFinite(n)) {
+                        setLocalShots(Math.max(1, Math.min(100000, Math.floor(n))));
+                      }
+                    }}
+                    onBlur={() => {
+                      const n = Number(shotsDraft);
+                      const clamped =
+                        shotsDraft.trim() === '' || !Number.isFinite(n)
+                          ? localShots
+                          : Math.max(1, Math.min(100000, Math.floor(n)));
+                      setLocalShots(clamped);
+                      setShotsDraft(String(clamped));
+                    }}
                     style={{
                       background: colors.bgElevated,
                       border: `1px solid ${colors.border}`,

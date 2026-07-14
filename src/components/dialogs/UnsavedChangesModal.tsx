@@ -1,11 +1,22 @@
+import { useCallback } from 'react';
 import { useDialogStore } from '../../stores/dialogStore';
 import { useThemeStore } from '../../stores/themeStore';
+import { useEscapeToClose } from '../../hooks/useEscapeToClose';
 
 export function UnsavedChangesModal() {
   const pending = useDialogStore((s) => s.pendingClose);
   const clearPending = useDialogStore((s) => s.clearPendingClose);
   const colors = useThemeStore((s) => s.colors);
   const shadow = useThemeStore((s) => s.shadow);
+
+  // Escape maps to Cancel (the safe, non-destructive choice) — never to
+  // "Don't save", so a stray keypress can't discard the user's edits.
+  const onCancelPending = pending?.onCancel;
+  const handleEscape = useCallback(() => {
+    onCancelPending?.();
+    clearPending();
+  }, [onCancelPending, clearPending]);
+  useEscapeToClose(handleEscape, !!pending);
 
   if (!pending) return null;
   const { fileName, onSave, onDontSave, onCancel } = pending;

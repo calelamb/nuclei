@@ -42,7 +42,10 @@ function JobRow({
 }) {
   const colors = useThemeStore((s) => s.colors);
   const [expanded, setExpanded] = useState(false);
-  const cfg = STATUS_CONFIG[job.status];
+  // Fall back to the `unknown` config if the kernel ever forwards a status
+  // outside the mapped union — a missing key would otherwise throw and unmount
+  // the whole jobs list (blank hardware panel).
+  const cfg = STATUS_CONFIG[job.status] ?? STATUS_CONFIG.unknown;
   const statusColor = colors[cfg.colorKey];
   const canExpand = job.status === 'complete' && result;
 

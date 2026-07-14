@@ -100,6 +100,10 @@ describe('<StatusBar> (extracted from PanelLayout, Phase A)', () => {
       },
     });
     const { getByText } = renderStatusBar();
-    expect(getByText(/theta-sweep: 3\/8/)).toBeTruthy();
+    // The name and the progress live in separate spans now (the name is
+    // truncated with an ellipsis so long names can't push the right-side
+    // controls off-screen), so assert on each piece.
+    expect(getByText('theta-sweep')).toBeTruthy();
+    expect(getByText(/: 3\/8/)).toBeTruthy();
   });
 });

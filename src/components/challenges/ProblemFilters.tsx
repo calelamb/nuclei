@@ -109,6 +109,7 @@ export function ProblemFilters() {
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
           placeholder="Search challenges..."
+          aria-label="Search challenges"
           style={{
             flex: 1,
             border: 'none',
