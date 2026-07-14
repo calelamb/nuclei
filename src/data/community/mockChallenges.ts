@@ -249,15 +249,6 @@ print("After correction:", counts)`,
   },
 ];
 
-export const MOCK_LEADERBOARD: LeaderboardEntry[] = [
-  { rank: 1, displayName: 'quantum_wizard', score: 980, submittedAt: '2026-03-28T08:15:00Z' },
-  { rank: 2, displayName: 'alice_q', score: 955, submittedAt: '2026-03-28T10:30:00Z' },
-  { rank: 3, displayName: 'entangle_me', score: 940, submittedAt: '2026-03-29T14:22:00Z' },
-  { rank: 4, displayName: 'bob_quantum', score: 920, submittedAt: '2026-03-29T16:45:00Z' },
-  { rank: 5, displayName: 'qubit_master', score: 895, submittedAt: '2026-03-30T09:00:00Z' },
-  { rank: 6, displayName: 'diana_dirac', score: 870, submittedAt: '2026-03-30T11:30:00Z' },
-  { rank: 7, displayName: 'superpose_this', score: 845, submittedAt: '2026-03-31T13:15:00Z' },
-  { rank: 8, displayName: 'charlie_gates', score: 830, submittedAt: '2026-03-31T15:00:00Z' },
-  { rank: 9, displayName: 'hadamard_fan', score: 810, submittedAt: '2026-04-01T08:45:00Z' },
-  { rank: 10, displayName: 'eve_entangled', score: 790, submittedAt: '2026-04-01T17:20:00Z' },
-];
+// Community leaderboards are not live yet — there is no backend collecting
+// submissions, so there are no real entries to show. The LeaderboardEntry type
+// is intentionally kept (consumers import it) for when scoring goes live.

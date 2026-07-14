@@ -1,0 +1,9 @@
+{
+  "name": "hello-panel",
+  "version": "1.0.0",
+  "description": "Live panel showing the current circuit's qubit count and depth.",
+  "author": "Nuclei",
+  "entry": "entry.js",
+  "capabilities": ["custom-panel"],
+  "permissions": ["read-circuit"]
+}

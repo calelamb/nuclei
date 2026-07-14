@@ -201,7 +201,7 @@ export function CircuitGallery() {
               fontFamily: "'Geist Sans', sans-serif",
             }}
           >
-            No circuits found
+            No community circuits shared yet — publishing isn't live yet.
           </div>
         )}
       </div>

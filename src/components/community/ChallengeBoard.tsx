@@ -317,7 +317,7 @@ export function ChallengeBoard() {
                     color: colors.textDim,
                   }}
                 >
-                  No entries yet
+                  No submissions yet — be the first.
                 </td>
               </tr>
             )}

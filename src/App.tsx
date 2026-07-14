@@ -35,6 +35,7 @@ import { useExperimentStore } from './services/experimentStore';
 import { useExperimentUiStore } from './stores/experimentUiStore';
 import { useExperimentRun } from './hooks/useExperimentRun';
 import { openRunFolder } from './lib/openRunFolder';
+import { restorePersistedPlugins } from './plugins/pluginLoader';
 import { leftPanelsForMode, bottomLeftPanelsForMode } from './layout/panelRegistry';
 import type { LeftPanelId } from './layout/panelRegistry';
 import type { PlatformBridge } from './platform/bridge';
@@ -246,6 +247,12 @@ function AppInner() {
   useEffect(() => {
     platform.setStoredValue('last_framework', framework).catch(() => {});
   }, [framework, platform]);
+
+  // Restore user-loaded plugins from their persisted folder paths. Best-effort:
+  // a moved/broken plugin folder becomes an honest error record, never a crash.
+  useEffect(() => {
+    void restorePersistedPlugins();
+  }, []);
 
   // Persist open-tab list + active-tab per project folder so a prof comes
   // back to exactly the same workspace on next launch.
