@@ -5,6 +5,7 @@ import { Onboarding } from './components/onboarding/Onboarding';
 import { KeyboardShortcuts } from './components/onboarding/KeyboardShortcuts';
 import { CommandPalette, buildCommands } from './components/commandPalette/CommandPalette';
 import { UpdateBanner } from './components/UpdateBanner';
+import { MissingDependencyBanner } from './components/onboarding/MissingDependencyBanner';
 import { WhatsNewModal } from './components/WhatsNewModal';
 import { ComposeModal } from './components/dirac/ComposeModal';
 import { DiffPreview } from './components/editor/DiffPreview';
@@ -405,6 +406,7 @@ function AppInner() {
     <>
       <PanelLayout />
       <UpdateBanner />
+      <MissingDependencyBanner />
       <WhatsNewModal />
       {showOnboarding && (
         <Onboarding

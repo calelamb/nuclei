@@ -13,6 +13,7 @@ import { useDiracStore } from '../stores/diracStore';
 import { useHardwareStore } from '../stores/hardwareStore';
 import { useQecStore } from '../stores/qecStore';
 import { useQecEstimateStore } from '../stores/qecEstimateStore';
+import { useMissingDependencyStore } from '../stores/missingDependencyStore';
 import { setQecDecodeSender, setQecSnapshotSender, setQecEstimateSender } from '../lib/qecDecodeSender';
 import { narrateParse, narrateResult } from '../services/narration';
 import { rewriteExecutionError } from '../services/errorRewrite';
@@ -169,6 +170,13 @@ export function useKernel() {
         if (msg.phase === 'qec_estimate') {
           useQecEstimateStore.getState().setError(msg.message);
           break;
+        }
+
+        // A missing framework is recoverable in one click — surface it to the
+        // install banner (still falls through to the normal error handling so
+        // the terminal shows the traceback too).
+        if (msg.code === 'missing_dependency' && msg.dependency) {
+          useMissingDependencyStore.getState().report(msg.dependency, msg.framework ?? null);
         }
 
         const { detail, line, shortMessage } = getErrorContext(msg);
