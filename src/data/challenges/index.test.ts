@@ -46,6 +46,26 @@ describe('challenge catalog normalization', () => {
     expect(bv?.starter_template).not.toContain('hidden_string');
   });
 
+  it('makes Grover and Simon oracle-injection challenges with query-count pars', () => {
+    const grover = QUANTUM_CHALLENGES.find((c) => c.id === 'grovers-search');
+    const simon = QUANTUM_CHALLENGES.find((c) => c.id === 'simons-algorithm');
+
+    for (const challenge of [grover, simon]) {
+      expect(challenge?.oracle?.builderCode).toContain('def build_oracle');
+      expect(challenge?.referenceCode).toContain('def reference');
+      expect(challenge?.testCases.every((tc) => tc.validation.type === 'state_fidelity')).toBe(true);
+      // the secret is never an argument — the student only ever sees `oracle`
+      expect(challenge?.arguments?.map((a) => a.name)).toEqual(['oracle']);
+      expect(challenge?.starter_template).toContain('solve(oracle)');
+    }
+    // Grover's query complexity (worst graded case n=3 → 2); Simon is single-query
+    expect(grover?.efficiency?.oracleQueries).toBe(2);
+    expect(simon?.efficiency?.oracleQueries).toBe(1);
+    // no readable secret leaks into the starter
+    expect(grover?.starter_template).not.toContain('marked_state');
+    expect(simon?.starter_template).not.toContain('hidden_period');
+  });
+
   it('registers QKD challenges as visible and hidden value-return protocol practice', () => {
     const qkdChallenges = QUANTUM_CHALLENGES.filter((challenge) => challenge.practiceTrack === 'qkd');
 

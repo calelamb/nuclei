@@ -8,228 +8,161 @@ export const simonsAlgorithm: QuantumChallenge = {
   description: `## Simon's Algorithm
 
 **Simon's algorithm** finds the hidden period \`s\` of a 2-to-1 function
-\`f: {0,1}^n \u2192 {0,1}^n\` where \`f(x) = f(x \u2295 s)\` for a secret bitstring
-\`s \u2260 0\`. Classically this requires \`O(2^{n/2})\` queries; Simon's algorithm
-solves it with \`O(n)\` quantum queries.
+\`f(x) = f(x \\u2295 s)\` with an **exponential** quantum speedup — the first
+problem to prove one over classical query complexity.
 
-### Problem Structure
+### The Problem
 
-The function \`f\` satisfies the **Simon promise**: for every pair of inputs
-\`x\` and \`y\`, \`f(x) = f(y)\` if and only if \`y = x\` or \`y = x \u2295 s\`.
+You are handed an opaque **oracle** on \`2n\` qubits (\`n\` input + \`n\` output)
+that computes such an \`f\`. **You are not given \`s\`.** A single run of Simon's
+circuit yields a random bit-string \`y\` satisfying
 
-For \`n = 2\` with \`s = "01"\`:
+\`y \\u00B7 s = 0  (mod 2)\`.
 
-| \`x\` | \`f(x)\` | Note |
-|-------|---------|------|
-| 00 | 00 | \`f(00) = f(00 \u2295 01) = f(01)\` |
-| 01 | 00 | same as f(00) |
-| 10 | 10 | \`f(10) = f(10 \u2295 01) = f(11)\` |
-| 11 | 10 | same as f(10) |
+Collecting \`n\\u22121\` independent \`y\`'s and solving the linear system recovers
+\`s\` — but that post-processing is classical. Your job is the **quantum circuit**,
+which needs just **one oracle query**.
 
-### Circuit Architecture
+### The Circuit
 
-The circuit uses \`2n\` qubits: \`n\` input qubits and \`n\` output qubits.
-
-1. **Hadamard** on all \`n\` input qubits to create uniform superposition.
-
-2. **Oracle \`U_f\`** that maps \`|x\u27E9|0\u27E9 \u2192 |x\u27E9|f(x)\u27E9\`. The oracle is built from:
-   - **Copy step**: CNOT from each input qubit \`i\` to the corresponding
-     output qubit \`n + i\`. This computes \`f(x) = x\` as a baseline.
-   - **Period step**: for each bit position \`j\` where \`s[j] = "1"\`, apply
-     CNOT from a **trigger qubit** (the first input qubit where \`s\` has a
-     \`"1"\`) to output qubit \`n + j\`. This XORs \`s\` into the output when
-     the trigger qubit is \`|1\u27E9\`, creating the 2-to-1 property.
-
-3. **Hadamard** on all input qubits again.
-
-4. **Measure** only the input qubits.
-
-### Oracle Construction Example
-
-For \`s = "01"\` with 2 input + 2 output qubits (q0, q1 = input; q2, q3 = output):
-
-\`\`\`python
-# Copy step: CNOT from each input to its output
-CNOT(q0, q2)  # input[0] -> output[0]
-CNOT(q1, q3)  # input[1] -> output[1]
-
-# Period step: s = "01", so s[1] = "1"
-# Trigger qubit = q1 (first input where s has a "1")
-CNOT(q1, q2)  # XOR output[0] when s[0]="0"? No -- only XOR positions where s="1"
-# Actually: CNOT from trigger (q1) to output positions where s has "1"
-CNOT(q1, q3)  # s[1]="1", so CNOT(trigger, output[1])
-\`\`\`
-
-Wait -- let's simplify. The canonical construction:
-- Copy: CNOT(input[i], output[i]) for all i
-- Find the first index \`t\` where \`s[t] = "1"\`
-- For every index \`j\` where \`s[j] = "1"\`: CNOT(input[t], output[j])
-
-### Measurement Outcomes
-
-Every measured bitstring \`b\` satisfies \`b \u00B7 s = 0 mod 2\`. After \`O(n)\`
-runs, enough independent equations accumulate to solve for \`s\` via
-Gaussian elimination.
-
-| Hidden period \`s\` | Orthogonality constraint | Valid outcomes |
-|-------------------|------------------------|----------------|
-| \`01\` | \`b\u2081 = 0\` | \`|00\u27E9, |10\u27E9\` each ~50% |
-| \`10\` | \`b\u2080 = 0\` | \`|00\u27E9, |01\u27E9\` each ~50% |
-| \`11\` | \`b\u2080 \u2295 b\u2081 = 0\` | \`|00\u27E9, |11\u27E9\` each ~50% |
+1. Apply H to all \`n\` input qubits.
+2. **Query the oracle once** (entangling input with output).
+3. Apply H to all \`n\` input qubits again.
+4. Measure the input register — every outcome is orthogonal to \`s\`.
 
 ### Your Task
 
-Given a \`hidden_period\` bitstring, implement Simon's circuit so that
-measuring the input qubits yields only bitstrings orthogonal to \`s\`.`,
+Implement \`solve(oracle)\`. Read \`n = oracle.num_qubits // 2\`, build Simon's
+circuit, and return it. The \\u2605 rewards the single-query solution.`,
 
   constraints: [
-    'Use 2*n qubits (n input + n output) and n classical bits',
-    'Hadamard all input qubits before and after the oracle',
-    'The oracle must implement a valid 2-to-1 function with period s',
-    'Measure only the input qubits (qubits 0 to n-1)',
-    'You may use H and CNOT gates',
+    'You receive an opaque `oracle` gate on 2n qubits — the period is never given',
+    'Read n from oracle.num_qubits // 2',
+    'Use a SINGLE oracle query',
+    'Measure only the n input qubits',
   ],
 
   examples: [
     {
-      input: 'hidden_period = "01"',
-      output: '{ "00": 0.5, "10": 0.5 }',
-      explanation:
-        'Bitstrings b where b\u00B701 = 0 mod 2, meaning b\u2081 = 0. Valid outcomes: 00 and 10.',
+      input: 'oracle with period s = "11" (n = 2)',
+      output: '{ "00": 0.5, "11": 0.5 }',
+      explanation: 'Both measured strings satisfy y . s = 0: 00.11=0 and 11.11=0 (mod 2).',
     },
     {
-      input: 'hidden_period = "10"',
-      output: '{ "00": 0.5, "01": 0.5 }',
-      explanation:
-        'Bitstrings b where b\u00B710 = 0 mod 2, meaning b\u2080 = 0. Valid outcomes: 00 and 01.',
+      input: 'oracle with period s = "101" (n = 3)',
+      output: 'uniform over the 4 strings y with y . 101 = 0',
+      explanation: 'Each measurement gives one linear constraint on s.',
     },
   ],
 
   testCases: [
     {
-      id: 'simon-01',
-      label: 'Period s = "01"',
-      description: 'hidden_period="01": measure bitstrings orthogonal to 01',
-      params: { hidden_period: '01' },
-      validation: {
-        type: 'probability_match',
-        expected: { '00': 0.5, '10': 0.5 },
-        tolerance: 0.1,
-      },
-      hidden: false,
-      weight: 0.35,
-    },
-    {
-      id: 'simon-10',
-      label: 'Period s = "10"',
-      description: 'hidden_period="10": measure bitstrings orthogonal to 10',
-      params: { hidden_period: '10' },
-      validation: {
-        type: 'probability_match',
-        expected: { '00': 0.5, '01': 0.5 },
-        tolerance: 0.1,
-      },
-      hidden: false,
-      weight: 0.35,
-    },
-    {
       id: 'simon-11',
-      label: 'Period s = "11" (hidden)',
-      description: 'hidden_period="11": measure bitstrings orthogonal to 11',
+      label: 's = "11"',
+      description: 'Period 11 over 2 input qubits',
       params: { hidden_period: '11' },
-      validation: {
-        type: 'probability_match',
-        expected: { '00': 0.5, '11': 0.5 },
-        tolerance: 0.1,
-      },
+      validation: { type: 'state_fidelity' },
+      hidden: false,
+      weight: 0.25,
+    },
+    {
+      id: 'simon-101',
+      label: 's = "101"',
+      description: 'Period 101 over 3 input qubits',
+      params: { hidden_period: '101' },
+      validation: { type: 'state_fidelity' },
+      hidden: false,
+      weight: 0.25,
+    },
+    {
+      id: 'simon-110',
+      label: 's = "110" (hidden)',
+      description: 'Period 110 over 3 input qubits',
+      params: { hidden_period: '110' },
+      validation: { type: 'state_fidelity' },
       hidden: true,
-      weight: 0.3,
+      weight: 0.25,
+    },
+    {
+      id: 'simon-011',
+      label: 's = "011" (hidden)',
+      description: 'Period 011 over 3 input qubits',
+      params: { hidden_period: '011' },
+      validation: { type: 'state_fidelity' },
+      hidden: true,
+      weight: 0.25,
     },
   ],
 
   starterCode: {
     qiskit: `from qiskit import QuantumCircuit
 
-# hidden_period is provided (e.g., "01", "10", "11")
-n = len(hidden_period)
+# \`oracle\` computes a 2-to-1 function f with hidden period s: f(x) = f(x XOR s).
+# It acts on 2n qubits (n input + n output). You are NOT given s. One query
+# yields a random y with y . s = 0 (mod 2).
+n = oracle.num_qubits // 2
+qc = QuantumCircuit(2 * n, n)
 
-qc = QuantumCircuit(2 * n, n)  # n input + n output qubits
+# 1. Hadamard the input register
+for i in range(n):
+    qc.h(i)
+# 2. TODO: query the oracle once  ->  qc.append(oracle, range(2 * n))
 
-# Step 1: Hadamard on input qubits
+# 3. Hadamard the input register again
 for i in range(n):
     qc.h(i)
 
-# Step 2: TODO - Oracle for f(x) = f(x ^ s)
-# The oracle copies input to output: CNOT from input[i] to output[i]
-# Then XORs with s on a specific qubit when triggered
-
-# Step 3: Hadamard on input qubits
-for i in range(n):
-    qc.h(i)
-
-# Measure input qubits only
-qc.measure(list(range(n)), list(range(n)))
+qc.measure(range(n), range(n))
 `,
-    cirq: `import cirq
-
-# hidden_period is provided (e.g., "01", "10", "11")
-n = len(hidden_period)
-
-input_qubits = cirq.LineQubit.range(n)
-output_qubits = cirq.LineQubit.range(n, 2 * n)
-
-circuit = cirq.Circuit()
-
-# Step 1: Hadamard on input qubits
-circuit.append(cirq.H.on_each(*input_qubits))
-
-# Step 2: TODO - Oracle for f(x) = f(x ^ s)
-# Copy step: CNOT from input[i] to output[i]
-# Period step: find first index t where s[t]="1",
-#   then CNOT(input[t], output[j]) for every j where s[j]="1"
-
-# Step 3: Hadamard on input qubits
-circuit.append(cirq.H.on_each(*input_qubits))
-
-# Measure input qubits only
-circuit.append(cirq.measure(*input_qubits, key='result'))
+    cirq: `# This challenge is graded on the desktop Qiskit kernel.
+# Implement solve(oracle) with Qiskit — see the Qiskit starter.
 `,
-    'cuda-q': `import cudaq
-
-# hidden_period is provided (e.g., "01", "10", "11")
-n = len(hidden_period)
-
-@cudaq.kernel
-def simon():
-    qubits = cudaq.qvector(2 * n)
-
-    # Step 1: Hadamard on input qubits
-    for i in range(n):
-        h(qubits[i])
-
-    # Step 2: TODO - Oracle for f(x) = f(x ^ s)
-    # Copy: cx(qubits[i], qubits[n + i]) for each i
-    # Period: find first t where s[t]="1",
-    #   then cx(qubits[t], qubits[n + j]) for every j where s[j]="1"
-
-    # Step 3: Hadamard on input qubits
-    for i in range(n):
-        h(qubits[i])
-
-    # Measure input qubits only
-    for i in range(n):
-        mz(qubits[i])
+    'cuda-q': `# This challenge is graded on the desktop Qiskit kernel.
+# Implement solve(oracle) with Qiskit — see the Qiskit starter.
 `,
   },
 
   hints: [
-    'The simplest oracle: CNOT from each input qubit to the corresponding output qubit, then CNOT from the first input qubit where s has a \'1\' to all output qubits where s has a \'1\'',
-    'After measuring, all results b satisfy b\u00B7s = 0 mod 2',
-    "For s='01': the oracle just needs CNOT(0,2), CNOT(1,3), CNOT(1,2) \u2014 the extra CNOT makes f(x) = f(x\u229501)",
+    'n = oracle.num_qubits // 2 — half the qubits are the input register, half the output.',
+    'The circuit is a Hadamard sandwich around a single oracle query, measuring only the input register.',
+    'Every measured y is orthogonal to s (y . s = 0 mod 2) — the classical linear algebra to finish is outside the circuit.',
   ],
 
-  tags: ['simons', 'hidden-period', 'oracle', 'linear-algebra'],
-  estimatedMinutes: 35,
-  totalSubmissions: 156,
-  acceptanceRate: 0.29,
+  tags: ['simon', 'oracle', 'hidden-period', 'query-complexity'],
+  estimatedMinutes: 30,
+  totalSubmissions: 287,
+  acceptanceRate: 0.49,
+  // Simon's circuit is single-query — the exponential speedup. Query count is
+  // unambiguous (one Hadamard sandwich), so the ★ marks the optimal solution.
+  efficiency: { oracleQueries: 1 },
+  oracle: {
+    solveParams: [],
+    queryLabel: 'oracle',
+    builderCode: `from qiskit import QuantumCircuit
+
+def build_oracle(hidden_period, **_):
+    n = len(hidden_period)
+    sub = QuantumCircuit(2 * n, name="oracle")
+    for i in range(n):
+        sub.cx(i, n + i)
+    if '1' in hidden_period:
+        j = hidden_period.index('1')
+        for i, b in enumerate(hidden_period):
+            if b == '1':
+                sub.cx(j, n + i)
+    return sub.to_gate(label="oracle")
+`,
+  },
+  referenceCode: `def reference(hidden_period, **_):
+    from qiskit import QuantumCircuit
+    n = len(hidden_period)
+    qc = QuantumCircuit(2 * n, n)
+    for i in range(n):
+        qc.h(i)
+    qc.append(build_oracle(hidden_period), range(2 * n))
+    for i in range(n):
+        qc.h(i)
+    qc.measure(range(n), range(n))
+    return qc
+`,
 };
