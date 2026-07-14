@@ -5,6 +5,49 @@ All notable changes to Nuclei will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.9.0] - 2026-07-14
+
+A major upgrade to the practice challenges (the "quantum LeetCode"): solutions
+are now graded on the actual quantum state and scored on efficiency, and the
+algorithm problems can no longer be cheated by hardcoding the answer.
+
+### Added — Efficiency metrics & ★ tiers
+
+- Every accepted circuit submission now gets a **performance panel**: two-qubit
+  (entangling) gate count and circuit depth as the headline hardware-cost
+  metrics, plus total gates, qubits, and execution time.
+- Problems can define an optimal **par**; a solution is tiered Optimal /
+  Efficient / Accepted, and hitting every target earns a **★** shown in the
+  panel, the problem list, and submission history.
+
+### Added — State-fidelity grading
+
+- New `state_fidelity` grading compares your prepared quantum state to a hidden
+  reference (`|⟨reference|solution⟩|²`), so phase and entanglement matter — a
+  hardcoded product state can't fake an entangled or phase-specific target.
+- **Bell State** now requires the exact requested state (Φ⁺ vs Φ⁻ are
+  distinguished); **Uniform Superposition** likewise.
+
+### Added — GHZ and W state challenges
+
+- **GHZ State** (fidelity-graded, honest n−1 entangling-gate par) and **W State**
+  (fidelity-graded) — genuinely multi-qubit entanglement, ungameable.
+
+### Added — Oracle-injection (query model)
+
+- **Bernstein–Vazirani, Grover, and Simon** now hand you an opaque **oracle**
+  instead of the secret, so you must *query* it rather than read the answer;
+  the secret varies across hidden tests. Graded by state fidelity, scored on
+  **oracle queries** (BV/Simon single-query, Grover ⌊π/4·√N⌋).
+- A green **"State-verified"** badge marks challenges graded this way, so it's
+  clear which ★ can't be gamed.
+
+### Fixed
+
+- Per-test scores read as a true 0–100% (a passing case shows 100%, not its
+  weight); QKD problems show the correct value contract; a kernel-boot spinner
+  replaces the silent first-run hang.
+
 ## [0.8.1] - 2026-07-14
 
 A UX and accessibility patch: several dialogs, chips, and forms got the polish
