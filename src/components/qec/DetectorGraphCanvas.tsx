@@ -10,6 +10,9 @@ import {
 interface DetectorGraphCanvasProps {
   layout: DetectorGraphLayout;
   overlay: DecodeOverlay | null;
+  /** Interactive mode: called with the detector nearest a click, to toggle it
+   * in a locally-decoded syndrome. When set, the canvas shows a pointer. */
+  onDetectorClick?: (detector: number) => void;
 }
 
 interface HoverInfo {
@@ -36,7 +39,7 @@ function edgeKey(a: number, b: number): string {
  * and the decode overlay lights fired detectors + the matching. Hovering a
  * detector inspects it.
  */
-export function DetectorGraphCanvas({ layout, overlay }: DetectorGraphCanvasProps) {
+export function DetectorGraphCanvas({ layout, overlay, onDetectorClick }: DetectorGraphCanvasProps) {
   const colors = useThemeStore((s) => s.colors);
   const wrapRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -182,19 +185,20 @@ export function DetectorGraphCanvas({ layout, overlay }: DetectorGraphCanvasProp
     return () => ro.disconnect();
   }, [layout, overlay, colors, nodeIndex, maxP, hover]);
 
-  const onMove = (event: React.MouseEvent<HTMLCanvasElement>) => {
+  // Nearest detector to a client point, within an 11px hit radius (or null).
+  const nearestDetectorAt = (clientX: number, clientY: number): HoverInfo | null => {
     const wrap = wrapRef.current;
-    if (!wrap) return;
+    if (!wrap) return null;
     const rect = wrap.getBoundingClientRect();
-    const mx = event.clientX - rect.left;
-    const my = event.clientY - rect.top;
+    const mx = clientX - rect.left;
+    const my = clientY - rect.top;
     const cssW = rect.width;
     const cssH = rect.height;
     const X = (nx: number) => PAD + nx * (cssW - 2 * PAD);
     const Y = (ny: number) => PAD + ny * (cssH - 2 * PAD);
 
     let best: HoverInfo | null = null;
-    let bestDist = 11 * 11; // 11px hit radius, squared
+    let bestDist = 11 * 11;
     for (const n of layout.nodes) {
       const dx = X(n.x) - mx;
       const dy = Y(n.y) - my;
@@ -211,9 +215,20 @@ export function DetectorGraphCanvas({ layout, overlay }: DetectorGraphCanvasProp
         };
       }
     }
-    setHover(best);
+    return best;
   };
 
+  const onMove = (event: React.MouseEvent<HTMLCanvasElement>) => {
+    setHover(nearestDetectorAt(event.clientX, event.clientY));
+  };
+
+  const onClick = (event: React.MouseEvent<HTMLCanvasElement>) => {
+    if (!onDetectorClick) return;
+    const hit = nearestDetectorAt(event.clientX, event.clientY);
+    if (hit) onDetectorClick(hit.detector);
+  };
+
+  const interactive = !!onDetectorClick;
   return (
     <div
       ref={wrapRef}
@@ -223,7 +238,13 @@ export function DetectorGraphCanvas({ layout, overlay }: DetectorGraphCanvasProp
       <canvas
         ref={canvasRef}
         onMouseMove={onMove}
-        style={{ display: 'block', width: '100%', height: '100%', cursor: hover ? 'pointer' : 'default' }}
+        onClick={onClick}
+        style={{
+          display: 'block',
+          width: '100%',
+          height: '100%',
+          cursor: interactive ? 'pointer' : hover ? 'pointer' : 'default',
+        }}
       />
 
       <GraphLegend colors={colors} />

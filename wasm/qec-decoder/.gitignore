@@ -1,2 +1,5 @@
 /target
-/pkg
+# wasm-pack metadata not needed by the frontend import (and could confuse npm):
+/pkg/package.json
+/pkg/README.md
+/pkg/.gitignore
