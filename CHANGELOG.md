@@ -5,6 +5,33 @@ All notable changes to Nuclei will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.13.0] - 2026-07-15
+
+Editor-depth release: the editor gains real Python tooling and stops losing your
+place.
+
+### Added — Python lint + format
+
+- **Inline diagnostics** from [ruff](https://docs.astral.sh/ruff/): warnings and
+  errors squiggle in the editor as you type (a separate marker layer from kernel
+  parse errors), with the rule code on hover.
+- **Format Document** (`⇧⌥F` / command palette) reformats the buffer via ruff.
+
+### Changed — Editor feels elite
+
+- **Per-tab editor state.** Each open file now keeps its own undo history,
+  cursor, and scroll position — switching tabs no longer shares one undo stack
+  or loses your place.
+- **The editor stays put.** Opening the Transpiler Explorer or the debugger no
+  longer unmounts the editor — your undo history, cursor, and scroll survive the
+  round trip.
+
+### Added — Kernel protocol (additive)
+
+- `lint` → `lint_result` and `format` → `format_result` (ruff-backed,
+  Python-only; degrade to no-op when ruff is absent). See the
+  [protocol changelog](https://getnuclei.dev/docs/reference/protocol-changelog/).
+
 ## [0.12.0] - 2026-07-15
 
 Developer-tools release, part two: the Dirac agent becomes a developer copilot,
