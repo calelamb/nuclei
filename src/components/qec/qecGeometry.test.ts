@@ -6,6 +6,8 @@ import type { QecSnapshot, QecDecodeSampleResult } from '../../types/qec';
 import {
   latticeLayout,
   detectorGraphLayout,
+  detectorNodeIndex,
+  edgeHeatColor,
   decodeOverlay,
   measureQubits,
   activeQubitsAtTick,
@@ -162,5 +164,38 @@ describe('timeline classification', () => {
     for (const [tick, markers] of track) {
       expect(markers.every((m) => m.layer === tick)).toBe(true);
     }
+  });
+});
+
+describe('detectorNodeIndex', () => {
+  it('maps every detector to its position in O(1), including the boundary (-1)', () => {
+    const layout = detectorGraphLayout(surfQec);
+    const index = detectorNodeIndex(layout);
+    expect(index.size).toBe(layout.nodes.length + 1);
+    for (const node of layout.nodes) {
+      expect(index.get(node.detector)).toEqual({ x: node.x, y: node.y });
+    }
+    expect(index.get(-1)).toEqual(layout.boundary);
+  });
+});
+
+describe('edgeHeatColor', () => {
+  it('interpolates cool → teal → hot across [0,1]', () => {
+    expect(edgeHeatColor(0)).toEqual([78, 106, 130]);
+    expect(edgeHeatColor(0.5)).toEqual([0, 180, 216]);
+    expect(edgeHeatColor(1)).toEqual([244, 120, 60]);
+  });
+
+  it('clamps out-of-range t and stays within valid RGB', () => {
+    for (const t of [-1, 0, 0.25, 0.75, 1, 2]) {
+      const [r, g, b] = edgeHeatColor(t);
+      for (const c of [r, g, b]) {
+        expect(c).toBeGreaterThanOrEqual(0);
+        expect(c).toBeLessThanOrEqual(255);
+        expect(Number.isInteger(c)).toBe(true);
+      }
+    }
+    expect(edgeHeatColor(-1)).toEqual(edgeHeatColor(0));
+    expect(edgeHeatColor(2)).toEqual(edgeHeatColor(1));
   });
 });

@@ -143,6 +143,50 @@ export interface DetectorGraphLayout {
   hasCoordinates: boolean;
 }
 
+/** Position lookup for the detector-graph renderer. O(1) per edge endpoint
+ * instead of the old O(edges·nodes) linear `.find()`. Detector -1 (the virtual
+ * boundary) is included so edge drawing never special-cases it. */
+export function detectorNodeIndex(
+  layout: DetectorGraphLayout,
+): Map<number, { x: number; y: number }> {
+  const index = new Map<number, { x: number; y: number }>();
+  for (const node of layout.nodes) index.set(node.detector, { x: node.x, y: node.y });
+  index.set(-1, layout.boundary);
+  return index;
+}
+
+/**
+ * Perceptual cool→hot heat color for an edge's error probability, `t` in
+ * [0,1] (typically `p / maxP`). Low-probability edges read as faint slate,
+ * mid as the teal brand accent, high-probability "error hotspots" as warm
+ * amber-red — so where the code is most fragile is legible at a glance.
+ * Returns `[r, g, b]`.
+ */
+export function edgeHeatColor(t: number): [number, number, number] {
+  const clamped = Math.max(0, Math.min(1, t));
+  const stops: Array<[number, [number, number, number]]> = [
+    [0.0, [78, 106, 130]], // faint slate
+    [0.5, [0, 180, 216]], //  teal accent
+    [1.0, [244, 120, 60]], // warm hotspot
+  ];
+  let lo = stops[0];
+  let hi = stops[stops.length - 1];
+  for (let i = 0; i < stops.length - 1; i++) {
+    if (clamped >= stops[i][0] && clamped <= stops[i + 1][0]) {
+      lo = stops[i];
+      hi = stops[i + 1];
+      break;
+    }
+  }
+  const span = hi[0] - lo[0] || 1;
+  const f = (clamped - lo[0]) / span;
+  return [
+    Math.round(lo[1][0] + (hi[1][0] - lo[1][0]) * f),
+    Math.round(lo[1][1] + (hi[1][1] - lo[1][1]) * f),
+    Math.round(lo[1][2] + (hi[1][2] - lo[1][2]) * f),
+  ];
+}
+
 /** Deterministic circular fallback position for detector i of n. */
 function circlePosition(i: number, n: number): { x: number; y: number } {
   if (n <= 1) return { x: 0.5, y: 0.5 };

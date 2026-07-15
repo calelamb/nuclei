@@ -33,13 +33,13 @@ afterEach(() => cleanup());
 beforeEach(() => decodeSpy.mockClear());
 
 describe('DetectorGraphPanel', () => {
-  it('renders the graph SVG and a Sample-a-shot action when a DEM exists', () => {
+  it('renders the graph canvas and a Sample-a-shot action when a DEM exists', () => {
     setStim(repQec, repSnap);
     const { container, getByRole } = render(<DetectorGraphPanel />);
-    expect(container.querySelector('svg')).toBeTruthy();
-    // one line per edge (pairwise + boundary).
-    const edges = repQec.dem!.edge_count + repQec.dem!.boundary_edge_count;
-    expect(container.querySelectorAll('line').length).toBe(edges);
+    // The detector graph now draws on a canvas (was per-edge <line> SVG) so it
+    // scales to tens of thousands of edges without reconciling that many DOM
+    // nodes. The layout/edge math is covered in qecGeometry.test.ts.
+    expect(container.querySelector('canvas')).toBeTruthy();
     const sample = getByRole('button', { name: 'Sample a shot' });
     fireEvent.click(sample);
     expect(decodeSpy).toHaveBeenCalledWith('# stim');
