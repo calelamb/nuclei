@@ -1,0 +1,23 @@
+[package]
+name = "qec-decoder"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.77.2"
+description = "Interactive in-webview QEC syndrome decoder (WASM) for Nuclei's detector-graph overlay — SKETCH."
+license = "MIT"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+wasm-bindgen = { version = "0.2", optional = true }
+
+[features]
+default = []
+wasm = ["dep:wasm-bindgen"]
+
+[profile.release]
+opt-level = "s"
+lto = true
