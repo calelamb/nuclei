@@ -5,27 +5,13 @@ Guarded so a kernel test env without ruff still passes (lint degrades to no
 diagnostics; format is skipped).
 """
 
-import shutil
-import subprocess
-import sys
-
 import pytest
 
-from kernel.executor import Executor
+from kernel.executor import Executor, ruff_base_cmd
 
-
-def _ruff_available() -> bool:
-    if shutil.which("ruff"):
-        return True
-    try:
-        subprocess.run([sys.executable, "-m", "ruff", "--version"], capture_output=True, timeout=5)
-        return True
-    except Exception:
-        return False
-
-
-RUFF = _ruff_available()
-needs_ruff = pytest.mark.skipif(not RUFF, reason="ruff not installed in this env")
+# Use the executor's OWN resolver so the guard and the code under test agree on
+# whether ruff is available (ruff may be a PATH binary rather than a module).
+needs_ruff = pytest.mark.skipif(ruff_base_cmd() is None, reason="ruff not available in this env")
 
 
 @needs_ruff

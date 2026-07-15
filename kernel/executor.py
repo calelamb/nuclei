@@ -4,6 +4,7 @@ import importlib
 import io
 import json
 import re
+import shutil
 import subprocess
 import sys
 import traceback
@@ -22,6 +23,33 @@ MAX_DEBUG_GATES = 200
 
 # Editor lint/format (dev tools Phase 4): ruff runs fast, but bound it anyway.
 RUFF_TIMEOUT_SECONDS = 10
+
+_RUFF_CMD_RESOLVED = False
+_RUFF_CMD: list[str] | None = None
+
+
+def ruff_base_cmd() -> list[str] | None:
+    """The command prefix that runs ruff in this environment, or None if ruff
+    isn't available. Prefers ruff-as-a-module in the kernel's own interpreter
+    (the bundled managed venv installs it there), falling back to a `ruff`
+    binary on PATH (dev machines / CI runners). Resolved once and cached so
+    every lint doesn't pay a probe subprocess."""
+    global _RUFF_CMD_RESOLVED, _RUFF_CMD
+    if _RUFF_CMD_RESOLVED:
+        return _RUFF_CMD
+    _RUFF_CMD_RESOLVED = True
+    try:
+        probe = subprocess.run(
+            [sys.executable, "-m", "ruff", "--version"], capture_output=True, timeout=5
+        )
+        if probe.returncode == 0:
+            _RUFF_CMD = [sys.executable, "-m", "ruff"]
+            return _RUFF_CMD
+    except (OSError, subprocess.SubprocessError):
+        pass
+    path = shutil.which("ruff")
+    _RUFF_CMD = [path] if path else None
+    return _RUFF_CMD
 
 
 @dataclass(frozen=True)
@@ -569,10 +597,12 @@ class Executor:
         """
         if language == "qsharp":
             return [], None
+        base = ruff_base_cmd()
+        if base is None:
+            return [], None
         try:
             proc = subprocess.run(
-                [sys.executable, "-m", "ruff", "check", "--output-format", "json",
-                 "--stdin-filename", "buffer.py", "-"],
+                [*base, "check", "--output-format", "json", "--stdin-filename", "buffer.py", "-"],
                 input=code, capture_output=True, text=True, timeout=RUFF_TIMEOUT_SECONDS,
             )
         except (FileNotFoundError, OSError, subprocess.SubprocessError):
@@ -621,9 +651,12 @@ class Executor:
                 message="Formatting currently supports Python.",
                 framework="qsharp",
             )
+        base = ruff_base_cmd()
+        if base is None:
+            return None, KernelError(code="format_failed", message="The formatter (ruff) is not available.")
         try:
             proc = subprocess.run(
-                [sys.executable, "-m", "ruff", "format", "--stdin-filename", "buffer.py", "-"],
+                [*base, "format", "--stdin-filename", "buffer.py", "-"],
                 input=code, capture_output=True, text=True, timeout=RUFF_TIMEOUT_SECONDS,
             )
         except (FileNotFoundError, OSError, subprocess.SubprocessError) as exc:
