@@ -5,6 +5,38 @@ All notable changes to Nuclei will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.12.0] - 2026-07-15
+
+Developer-tools release, part two: the Dirac agent becomes a developer copilot,
+and step-through becomes a real Quantum Debugger.
+
+### Added — Quantum Debugger
+
+- **Step through a circuit and see the quantum state at each gate.** The
+  existing step-through cursor (Prev/Next/Play, Dirac's `step_to`) now drives
+  real state inspection: the **Bloch sphere** and **histogram** show the state
+  *at the cursor* — each qubit's Bloch vector and the probability distribution
+  after the highlighted gate. Qiskit and Cirq.
+- The whole per-gate trajectory is computed in one kernel call on entering step
+  mode, then cached, so scrubbing back and forth is instant.
+
+### Added — Dirac dev-copilot
+
+- A **developer persona** for the autonomous agent: Research-mode runs get a
+  terse expert-peer voice (Learn mode keeps the original). Every safety rule and
+  the verify-first discipline are retained.
+- A **`transpile_explore` agent tool** — Dirac can now inspect the transpiler's
+  pass-by-pass behavior (which passes added the routing SWAPs), not just the
+  headline metrics, so it can explain *why* a circuit grows for a device.
+
+### Added — Kernel protocol (additive)
+
+- `debug_trace` → `debug_trace_result`: the per-gate state trajectory (Qiskit /
+  Cirq, bounded to 12 qubits / 200 gates). See the
+  [protocol changelog](https://getnuclei.dev/docs/reference/protocol-changelog/).
+- `transpile_explore` agent worker action, mirroring the `transpile` action's
+  Qiskit-only rules.
+
 ## [0.11.0] - 2026-07-14
 
 The first developer-tools release: a Transpiler Explorer that shows exactly what
