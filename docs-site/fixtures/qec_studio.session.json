@@ -563,7 +563,8 @@
             "edges": [],
             "boundary_edges": []
           },
-          "sample_decode": null
+          "sample_decode": null,
+          "dem_text": "<any>"
         }
       }
     ]

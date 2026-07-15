@@ -61,14 +61,17 @@ describe('DetectorGraphPanel', () => {
     expect(getByText('observable is not deterministic')).toBeTruthy();
   });
 
-  it('shows a truncation banner with counts + Render anyway', () => {
+  it('shows a truncation banner with counts + a full-graph render action', () => {
     setStim(
       { ...repQec, dem: { ...repQec.dem!, truncated: true, edges: [], boundary_edges: [] } },
       repSnap,
     );
     const { getByText } = render(<DetectorGraphPanel />);
     expect(getByText(/Graph truncated/)).toBeTruthy();
-    expect(getByText('Render anyway')).toBeTruthy();
+    // Truncated graphs can now be rendered in full client-side (WASM parser on
+    // the kernel-forwarded DEM text); the button falls back to the kernel path
+    // when the wasm is unavailable.
+    expect(getByText('Render full graph')).toBeTruthy();
   });
 });
 
