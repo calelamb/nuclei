@@ -104,6 +104,7 @@ fn happy_path_patch_parse_simulate_compare_finish() {
 
     let result = run_agent(
         "Build a Bell state",
+        AgentPersona::Default,
         &model,
         &mut ctx,
         &mut journal,
@@ -185,6 +186,7 @@ fn repair_loop_feeds_failing_sim_evidence_back_to_the_model() {
 
     let result = run_agent(
         "Build a Bell state",
+        AgentPersona::Default,
         &model,
         &mut ctx,
         &mut journal,
@@ -258,6 +260,7 @@ fn budget_exhaustion_stops_at_max_iterations_failed() {
 
     let result = run_agent(
         "Do something never finished",
+        AgentPersona::Default,
         &model,
         &mut ctx,
         &mut journal,
@@ -313,6 +316,7 @@ fn cancellation_yields_cancelled_state() {
 
     let result = run_agent(
         "Build something",
+        AgentPersona::Default,
         &model,
         &mut ctx,
         &mut journal,
@@ -365,6 +369,7 @@ fn feeds_tool_result_evidence_back_into_the_next_model_call() {
 
     run_agent(
         "Inspect then finish",
+        AgentPersona::Default,
         &model,
         &mut ctx,
         &mut journal,
@@ -389,4 +394,37 @@ fn feeds_tool_result_evidence_back_into_the_next_model_call() {
     assert_eq!(tool_result["tool_use_id"], "t1");
     let inner: &Value = &tool_result["content"];
     assert!(inner.as_str().unwrap_or("").contains("active_path"));
+}
+
+#[test]
+fn default_and_developer_personas_share_rules_but_differ_in_voice() {
+    let default_prompt = build_system_prompt(AgentPersona::Default);
+    let dev_prompt = build_system_prompt(AgentPersona::Developer);
+
+    // Same operational rules in both (verify-first, hardware safety, the new
+    // transpile_explore capability).
+    for prompt in [&default_prompt, &dev_prompt] {
+        assert!(prompt.contains("Rules:"));
+        assert!(prompt.contains("run_simulation"));
+        assert!(prompt.contains("transpile_explore"));
+        assert!(prompt.contains("do not\n  retry submit_hardware_job"));
+    }
+
+    // Distinct voice: only the developer persona is a terse professional peer.
+    assert!(default_prompt.contains("autonomous quantum-programming agent"));
+    assert!(!default_prompt.contains("pair-programmer"));
+    assert!(dev_prompt.contains("pair-programmer"));
+    assert!(dev_prompt.contains("Be terse"));
+}
+
+#[test]
+fn persona_from_mode_maps_research_to_developer_and_falls_back_to_default() {
+    assert_eq!(AgentPersona::from_mode("research"), AgentPersona::Developer);
+    assert_eq!(
+        AgentPersona::from_mode("developer"),
+        AgentPersona::Developer
+    );
+    assert_eq!(AgentPersona::from_mode("learn"), AgentPersona::Default);
+    assert_eq!(AgentPersona::from_mode(""), AgentPersona::Default);
+    assert_eq!(AgentPersona::from_mode("nonsense"), AgentPersona::Default);
 }

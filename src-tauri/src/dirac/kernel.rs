@@ -99,6 +99,16 @@ pub enum TranspileOutcome {
     Err { message: String },
 }
 
+/// Deterministic transpile-explore outcome — the Transpiler Explorer's full
+/// pass-by-pass payload (before/after snapshots, metric deltas, per-pass added
+/// gates). The payload is forwarded opaquely to the model, so `Ok` carries the
+/// raw JSON `Value` rather than a typed struct. Qiskit-only.
+#[derive(Debug, Clone)]
+pub enum TranspileExploreOutcome {
+    Ok { payload: Value },
+    Err { message: String },
+}
+
 /// The execution port. Every method is infallible at the type level — failures
 /// are carried in the outcome enums so the loop can feed them back to the model
 /// as evidence and repair. `Send + Sync` so a `RealKernel` can be shared.
@@ -106,6 +116,9 @@ pub trait AgentKernel: Send + Sync {
     fn parse(&self, code: &str, framework: &str, language: &str) -> ParseOutcome;
     fn simulate(&self, code: &str, shots: u32, framework: &str, language: &str) -> SimOutcome;
     fn transpile(&self, code: &str, target: &TranspileTarget) -> TranspileOutcome;
+    /// Transpile and return the full Transpiler Explorer payload (pass-by-pass),
+    /// as opposed to `transpile`'s headline metrics. Qiskit-only.
+    fn transpile_explore(&self, code: &str, target: &TranspileTarget) -> TranspileExploreOutcome;
 }
 
 /// Monotonic request-id source so concurrent worker runs never collide.
@@ -249,6 +262,30 @@ impl AgentKernel for RealKernel {
             }
         }
     }
+
+    fn transpile_explore(&self, code: &str, target: &TranspileTarget) -> TranspileExploreOutcome {
+        // Same qiskit-only path as `transpile`, but the worker returns the
+        // richer explorer payload, which we forward opaquely to the model.
+        let mut request = self.base_request("transpile_explore", "qiskit", "python", code);
+        request.basis_gates = target.basis_gates.clone();
+        request.coupling_map = target.coupling_map.as_ref().map(|edges| {
+            edges
+                .iter()
+                .map(|(a, b)| vec![i64::from(*a), i64::from(*b)])
+                .collect()
+        });
+        request.optimization_level = target.optimization_level;
+        let response = self.run(&request);
+        if response.status == "ok" {
+            TranspileExploreOutcome::Ok {
+                payload: response.result,
+            }
+        } else {
+            TranspileExploreOutcome::Err {
+                message: error_message(&response.error, "transpile_explore"),
+            }
+        }
+    }
 }
 
 /// Scripted [`AgentKernel`] for tests. Parse/simulate branch on marker
@@ -262,6 +299,7 @@ pub struct MockKernel {
     /// Code substring that forces a simulate error.
     sim_error_marker: Option<String>,
     transpile: Option<TranspileMetrics>,
+    transpile_explore: Option<Value>,
 }
 
 impl MockKernel {
@@ -274,11 +312,17 @@ impl MockKernel {
             parse_error_marker: Some("SYNTAX_ERROR".to_string()),
             sim_error_marker: Some("RUNTIME_ERROR".to_string()),
             transpile: None,
+            transpile_explore: None,
         }
     }
 
     pub fn with_transpile(mut self, metrics: TranspileMetrics) -> Self {
         self.transpile = Some(metrics);
+        self
+    }
+
+    pub fn with_transpile_explore(mut self, payload: Value) -> Self {
+        self.transpile_explore = Some(payload);
         self
     }
 
@@ -329,6 +373,17 @@ impl AgentKernel for MockKernel {
             },
             None => TranspileOutcome::Err {
                 message: "transpile not exercised by this test kernel".to_string(),
+            },
+        }
+    }
+
+    fn transpile_explore(&self, _code: &str, _target: &TranspileTarget) -> TranspileExploreOutcome {
+        match &self.transpile_explore {
+            Some(payload) => TranspileExploreOutcome::Ok {
+                payload: payload.clone(),
+            },
+            None => TranspileExploreOutcome::Err {
+                message: "transpile_explore not exercised by this test kernel".to_string(),
             },
         }
     }

@@ -26,7 +26,7 @@ use tauri::{Emitter, State};
 use super::gateway::ModelGateway;
 use super::kernel::RealKernel;
 use super::kernel_submit::KernelSubmitPort;
-use super::orchestrator::GatewayModel;
+use super::orchestrator::{AgentPersona, GatewayModel};
 use super::policy::AutonomyPolicy;
 use super::runner::{drive_run, RunConfig, RunDeps, RunEvent, RunSeedFile};
 
@@ -91,6 +91,7 @@ fn new_run_id() -> String {
 /// gateway threading; the run thread builds its own gateway from the same
 /// keychain entry.
 #[tauri::command]
+#[allow(clippy::too_many_arguments)] // Tauri command surface; args map 1:1 to the frontend invoke.
 pub fn dirac_start_run(
     app: tauri::AppHandle,
     gateway: State<'_, ModelGateway>,
@@ -99,6 +100,9 @@ pub fn dirac_start_run(
     files: Vec<RunSeedFile>,
     active_path: String,
     model: String,
+    // Frontend workspace mode → agent persona. Optional/additive: older callers
+    // omit it and get the `Default` voice.
+    mode: Option<String>,
 ) -> Result<String, String> {
     let _ = &gateway; // see module docs: the run thread builds its own gateway.
 
@@ -140,6 +144,7 @@ pub fn dirac_start_run(
             active_path,
             model,
             run_id: run_id_for_thread.clone(),
+            persona: AgentPersona::from_mode(mode.as_deref().unwrap_or("")),
         };
         let deps = RunDeps {
             model: &model_port,

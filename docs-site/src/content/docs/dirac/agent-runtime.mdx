@@ -151,20 +151,25 @@ its own work.
 A run ends when: `finish` is called · the model returns no tool calls · 12 turns
 elapse · 120 s elapse · the cancel flag is set · or the model call errors.
 
-<Aside type="note" title="The system prompt is fixed">
-There is **one** hard-coded `SYSTEM_PROMPT` for every agent run — it is not
-persona- or mode-parameterized. The only per-run parameter is the model id.
-{/* orchestrator.rs:127-162 */} Live runs use `claude-sonnet-4-6` (the frontend
-passes `SONNET_MODEL`); the Rust default `claude-sonnet-4-5` is only the
-fallback when no model is supplied. {/* orchestrator.rs:79-106; src/config/dirac.ts:20 */}
+<Aside type="note" title="The system prompt varies on one axis: persona">
+The prompt is a shared **operational rules** block plus a **persona preamble**.
+Two personas exist: `Default` (the original verify-first voice) and `Developer`
+(a terse expert-peer voice) — the frontend maps the workspace mode, so a
+Research-mode run gets `Developer` and Learn mode keeps `Default`. The rules
+(tool usage, hardware safety, verify-first) are identical across personas; only
+the framing differs. The other per-run parameter is the model id.
+{/* orchestrator.rs: AgentPersona, build_system_prompt */} Live runs use
+`claude-sonnet-4-6` (the frontend passes `SONNET_MODEL`); the Rust default
+`claude-sonnet-4-5` is only the fallback when no model is supplied.
+{/* orchestrator.rs:79-106; src/config/dirac.ts:20 */}
 </Aside>
 
 ## The tool set
 
-The model is given **17 tools** (the count is asserted in a test). Read-only and
+The model is given **18 tools** (the count is asserted in a test). Read-only and
 teaching tools produce evidence with no side effect; the four mutating tools are
 the only ones that can touch a file, the kernel, or hardware — and each of those
-runs through the workspace or policy layer below. {/* tools.rs:31-200, 209 */}
+runs through the workspace or policy layer below. {/* tools.rs:31-218, 209 */}
 
 | Tool | Kind | What it does |
 |------|------|--------------|
@@ -180,6 +185,7 @@ runs through the workspace or policy layer below. {/* tools.rs:31-200, 209 */}
 | `check_algorithm_invariant` | read | Verify Bell/GHZ/uniform vs a known-good reference |
 | `plan_hardware_run` | read (shadow) | Recommend a backend, scored — never submits |
 | `preview_backend_transpilation` | read (worker `transpile`) | Post-transpile depth/2q metrics |
+| `transpile_explore` | read (worker `transpile_explore`) | Pass-by-pass transpile: before/after + which passes added the SWAPs |
 | `submit_hardware_job` | **write / policy-gated** | Submit to real hardware — off by default |
 | `poll_hardware_job` | read | Poll a submitted job's status |
 | `cancel_hardware_job` | **write** | Cancel a pending job |
@@ -190,9 +196,9 @@ Every tool schema pins `additionalProperties: false` with an explicit `required`
 list, and dispatch never panics — an unknown tool becomes ordinary failure
 evidence. {/* tools.rs:21; tool_exec.rs:187-236 */}
 
-The quantum tools funnel into just **three worker actions** — `parse`,
-`simulate`, `transpile` — the same disposable-worker path described below.
-{/* kernel.rs:106-108, 188-229 */}
+The quantum tools funnel into just **four worker actions** — `parse`,
+`simulate`, `transpile`, and `transpile_explore` — the same disposable-worker
+path described below. {/* kernel.rs:106-109 */}
 
 ## Workspace: whole-file patches, SHA-256, reversible
 

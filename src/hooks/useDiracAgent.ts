@@ -4,6 +4,7 @@ import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 import { usePlatform } from '../platform/PlatformProvider';
 import { useEditorStore } from '../stores/editorStore';
 import { useProjectStore } from '../stores/projectStore';
+import { useWorkspaceStore } from '../stores/workspaceStore';
 import { useAgentRunStore } from '../stores/agentRunStore';
 import type { AgentRunUi } from '../stores/agentRunStore';
 import { SONNET_MODEL } from '../config/dirac';
@@ -233,6 +234,9 @@ export function useDiracAgent(): UseDiracAgentResult {
           files,
           activePath,
           model: SONNET_MODEL,
+          // Research mode → the terse developer persona (Rust maps the string;
+          // anything else falls back to the default voice).
+          mode: useWorkspaceStore.getState().mode,
         });
 
         runIdRef.current = runId;

@@ -6,10 +6,10 @@
 use serde_json::{json, Value};
 
 use crate::dirac::analysis::{estimate_resources, plan_hardware_run, BackendInfo};
-use crate::dirac::kernel::{TranspileOutcome, TranspileTarget};
+use crate::dirac::kernel::{TranspileExploreOutcome, TranspileOutcome, TranspileTarget};
 
 use super::{
-    ev_fail, ev_ok, get_str, parse_active, resolve_framework, resolve_path, ToolContext,
+    ev_fail, ev_ok, get_f64, get_str, parse_active, resolve_framework, resolve_path, ToolContext,
     ToolEvidence,
 };
 
@@ -157,6 +157,84 @@ pub fn exec_preview_backend_transpilation(
                     "note": note,
                 }),
             )
+        }
+    }
+}
+
+// --- transpile_explore ------------------------------------------------------
+
+const EXPLORE_TOOL: &str = "transpile_explore";
+
+/// Clamp a model-supplied optimization level to qiskit's valid 0-3 range;
+/// `None` lets the worker apply its default (1).
+fn opt_level(input: &Value) -> Option<u8> {
+    get_f64(input, "optimization_level").map(|v| (v.round() as i64).clamp(0, 3) as u8)
+}
+
+/// The richer sibling of `preview_backend_transpilation`: returns the full
+/// Transpiler Explorer payload (before/after snapshots, metric deltas, and the
+/// passes that added routing SWAPs / basis-translation gates). Analysis only —
+/// never submits. Qiskit-only, and never panics.
+pub fn exec_transpile_explore(input: &Value, id: &str, ctx: &ToolContext) -> ToolEvidence {
+    let path = resolve_path(input, ctx);
+    let Some(file) = ctx.workspace.read_file(&path) else {
+        return ev_fail(
+            EXPLORE_TOOL,
+            id,
+            &format!("No file at path: {path}"),
+            json!({}),
+        );
+    };
+
+    let framework = resolve_framework(ctx, &path);
+    if framework != "qiskit" {
+        return ev_ok(
+            EXPLORE_TOOL,
+            id,
+            json!({ "available": false, "message": "Transpiler Explorer supports Qiskit circuits only." }),
+        );
+    }
+
+    // A named backend contributes its basis gates + coupling map (real device
+    // routing); with no backend the target is all-to-all (optimization only).
+    let requested = get_str(input, "backend");
+    let (mut target, target_label) = match &requested {
+        Some(name) => {
+            let backends = (ctx.get_backends)();
+            match pick_backend(&backends, Some(name)) {
+                Some(backend) => {
+                    let label = backend.name.clone();
+                    (target_from_backend(&backend), label)
+                }
+                None => {
+                    return ev_ok(
+                        EXPLORE_TOOL,
+                        id,
+                        json!({ "available": false, "message": format!("Backend not available: {name}") }),
+                    );
+                }
+            }
+        }
+        None => (TranspileTarget::default(), "simulator".to_string()),
+    };
+    target.optimization_level = opt_level(input);
+
+    match ctx.kernel.transpile_explore(&file.content, &target) {
+        TranspileExploreOutcome::Err { message } => ev_fail(
+            EXPLORE_TOOL,
+            id,
+            &message,
+            json!({ "path": path, "target": target_label }),
+        ),
+        TranspileExploreOutcome::Ok { mut payload } => {
+            // Forward the explorer payload verbatim, annotated with the file
+            // and target it describes.
+            if let Some(obj) = payload.as_object_mut() {
+                obj.insert("available".to_string(), json!(true));
+                obj.insert("path".to_string(), json!(path));
+                obj.insert("target".to_string(), json!(target_label));
+            }
+            ev_ok(EXPLORE_TOOL, id, payload)
         }
     }
 }

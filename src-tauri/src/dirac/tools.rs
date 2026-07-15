@@ -143,6 +143,20 @@ pub fn agent_tools() -> Vec<Value> {
             &[],
         ),
         tool(
+            "transpile_explore",
+            "Transpile the active circuit and return the transpiler's per-pass behavior for a target: \
+             before/after depth, two-qubit, and total gate counts, plus which passes added the routing \
+             SWAPs and basis-translation gates. Qiskit circuits only. Use this to EXPLAIN why a circuit's \
+             depth or two-qubit count grew for a device, beyond the headline numbers preview_backend_\
+             transpilation reports. Analysis only; it never submits a job.",
+            json!({
+                "path": { "type": "string", "description": "Workspace-relative file path; defaults to the active file." },
+                "backend": { "type": "string", "description": "Name of a connected backend to take basis gates and coupling map from. Omit for the all-to-all simulator target (optimization only, no routing)." },
+                "optimization_level": { "type": "number", "description": "Qiskit preset optimization level 0-3; defaults to 1." },
+            }),
+            &[],
+        ),
+        tool(
             "submit_hardware_job",
             "Submit the active circuit to a named hardware backend for execution. POLICY-GATED: a real, paid \
              QPU submission is only ever sent if a human has explicitly enabled autonomous hardware submission \
@@ -206,7 +220,7 @@ mod tests {
     #[test]
     fn every_tool_has_a_strict_object_schema() {
         let tools = agent_tools();
-        assert_eq!(tools.len(), 17);
+        assert_eq!(tools.len(), 18);
         for t in &tools {
             let schema = &t["input_schema"];
             assert_eq!(schema["type"], "object");
@@ -239,6 +253,7 @@ mod tests {
                 "check_algorithm_invariant",
                 "plan_hardware_run",
                 "preview_backend_transpilation",
+                "transpile_explore",
                 "submit_hardware_job",
                 "poll_hardware_job",
                 "cancel_hardware_job",

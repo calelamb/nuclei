@@ -34,6 +34,29 @@ pub enum RunState {
     Cancelled,
 }
 
+/// The voice the agent runs in. The operational rules (tool usage, safety,
+/// verify-first) are identical across personas — only the framing/altitude of
+/// the preamble differs. `Default` is the original tutor-adjacent voice;
+/// `Developer` is a terse expert-peer voice for Research-mode dev-copilot runs.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum AgentPersona {
+    #[default]
+    Default,
+    Developer,
+}
+
+impl AgentPersona {
+    /// Parse the frontend's `mode` string; anything unrecognized (or absent)
+    /// falls back to `Default`, matching the kernel's boundary-validation style.
+    pub fn from_mode(mode: &str) -> Self {
+        match mode {
+            "developer" | "research" => AgentPersona::Developer,
+            _ => AgentPersona::Default,
+        }
+    }
+}
+
 /// Hard limits on a run: the maximum number of model turns and the wall-clock
 /// budget. Defaults mirror the TS `DEFAULT_BUDGET` (12 iterations / 120s).
 #[derive(Debug, Clone, Copy)]
@@ -124,12 +147,24 @@ impl ModelPort for GatewayModel<'_> {
     }
 }
 
-const SYSTEM_PROMPT: &str = "You are Dirac, an autonomous quantum-programming agent embedded in the Nuclei IDE.
+/// The default (original) persona preamble — the tutor-adjacent voice.
+const DEFAULT_PREAMBLE: &str =
+    "You are Dirac, an autonomous quantum-programming agent embedded in the Nuclei IDE.
 
 Given a goal, use the provided tools to write, parse, and simulate a quantum program until you have
-VERIFIED it meets the goal — never assume or invent a result you haven't actually observed.
+VERIFIED it meets the goal — never assume or invent a result you haven't actually observed.";
 
-Rules:
+/// The developer persona preamble — a terse expert peer for Research-mode
+/// dev-copilot runs. Same verify-first discipline, professional altitude.
+const DEVELOPER_PREAMBLE: &str = "You are Dirac, a quantum-computing pair-programmer for a professional developer, embedded in the Nuclei IDE.
+
+Given a goal, use the provided tools to write, parse, and simulate a quantum program until you have
+VERIFIED it meets the goal. Be terse and precise: lead with the change or the answer, then a one-line why.
+Assume the user is an expert — don't explain quantum basics. Never claim a result you haven't actually
+observed via simulation.";
+
+/// The operational rules — identical across personas.
+const AGENT_RULES: &str = "Rules:
 - Use apply_patch to write or edit code. Every edit is reversible and journaled; use rollback_patch if an
   edit turns out to be wrong.
 - Use parse_quantum_program to check structure/syntax before simulating. You may also use
@@ -148,6 +183,10 @@ Rules:
 - You may call preview_backend_transpilation to see real post-transpile depth, gate-count, and two-qubit-
   count metrics for a target backend's basis gates and coupling map (Qiskit circuits only) before
   recommending or (if enabled) submitting a hardware run.
+- You may call transpile_explore to see the transpiler's per-pass behavior for a target (Qiskit circuits
+  only): before/after depth and gate counts plus which passes added the routing SWAPs and basis-translation
+  gates. Use this when you need to explain WHY a circuit's depth or two-qubit count grew for a device, not
+  just the final numbers that preview_backend_transpilation reports.
 - You may submit a job to real quantum hardware ONLY via submit_hardware_job. This tool is policy-gated by a
   human-controlled autonomy setting: real, paid QPU submissions are disabled by default, and a
   \"needs_approval\" or \"deny\" result means NOTHING was submitted. That is the expected, safe outcome — do not
@@ -160,6 +199,19 @@ Rules:
   with success: true without having actually run the simulation.
 - If a tool reports an error or a conflict, read it, adjust your approach, and try again — you have a
   limited number of turns.";
+
+fn persona_preamble(persona: AgentPersona) -> &'static str {
+    match persona {
+        AgentPersona::Default => DEFAULT_PREAMBLE,
+        AgentPersona::Developer => DEVELOPER_PREAMBLE,
+    }
+}
+
+/// Assemble the full system prompt for a persona: its preamble plus the shared
+/// operational rules.
+fn build_system_prompt(persona: AgentPersona) -> String {
+    format!("{}\n\n{}", persona_preamble(persona), AGENT_RULES)
+}
 
 static RUN_COUNTER: AtomicU64 = AtomicU64::new(0);
 
@@ -210,6 +262,7 @@ fn build_seed_message(goal: &str, ctx: &ToolContext) -> Value {
 #[allow(clippy::too_many_arguments)]
 pub fn run_agent(
     goal: &str,
+    persona: AgentPersona,
     model: &dyn ModelPort,
     ctx: &mut ToolContext,
     journal: &mut dyn Journal,
@@ -221,6 +274,7 @@ pub fn run_agent(
     let started = now();
     let ts = || now().saturating_duration_since(started).as_millis() as u64;
 
+    let system_prompt = build_system_prompt(persona);
     let tools = agent_tools();
     let mut messages: Vec<Value> = vec![build_seed_message(goal, ctx)];
 
@@ -262,7 +316,7 @@ pub fn run_agent(
 
         iterations += 1;
 
-        let reply = match model.complete(SYSTEM_PROMPT, &messages, &tools) {
+        let reply = match model.complete(&system_prompt, &messages, &tools) {
             Ok(reply) => reply,
             Err(message) => {
                 journal.append(JournalEntry::Error { ts: ts(), message });
