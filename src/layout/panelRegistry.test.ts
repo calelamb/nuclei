@@ -426,7 +426,7 @@ describe('left-rail registry', () => {
       'files', 'learning', 'challenges', 'launch', 'community', 'settings',
     ]);
     expect(leftPanelsForMode('research', { developerViews: false })).toEqual([
-      'files', 'experiments', 'hardware', 'estimator', 'launch', 'plugins', 'settings',
+      'files', 'experiments', 'hardware', 'estimator', 'transpiler', 'launch', 'plugins', 'settings',
     ]);
   });
 

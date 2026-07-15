@@ -280,7 +280,8 @@ export type LeftPanelId =
   | 'community'
   | 'settings'
   | 'experiments'
-  | 'estimator';
+  | 'estimator'
+  | 'transpiler';
 
 export interface LeftPanelDef {
   id: LeftPanelId;
@@ -305,6 +306,9 @@ export const LEFT_PANEL_REGISTRY: readonly LeftPanelDef[] = [
   // Resource Estimator (PRD 10 Phase F) — Research-only; sits between the
   // hardware and launch views (shared order 3, ordered ahead of launch here).
   { id: 'estimator', label: 'Resource Estimator', modes: ['research'], order: 3 },
+  // Transpiler Explorer (dev tools Phase 1) — Research-only developer tool,
+  // grouped with the estimator ahead of launch.
+  { id: 'transpiler', label: 'Transpiler', modes: ['research'], order: 3 },
   { id: 'launch', label: 'Launch', modes: ['learn', 'research'], order: 3 },
   { id: 'community', label: 'Community', modes: ['learn'], order: 4 },
   { id: 'plugins', label: 'Plugins', modes: ['research'], order: 4 },

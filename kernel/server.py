@@ -480,6 +480,68 @@ async def handle_message(websocket):
                 "success": error is None,
             }))
 
+        elif msg_type == "transpile":
+            # Transpiler Explorer (dev tools Phase 1): run a Qiskit preset
+            # PassManager for a target and stream back before/after snapshots,
+            # metric deltas, and pass-by-pass data. Additive — unknown to
+            # older clients, and Qiskit-only (the only introspectable compiler).
+            #
+            # Validate the target defensively at this boundary: a malformed
+            # basis_gates / coupling_map / optimization_level degrades to the
+            # unconstrained default rather than crashing the connection.
+            basis_gates = msg.get("basis_gates")
+            if not (isinstance(basis_gates, list) and all(isinstance(g, str) for g in basis_gates)):
+                basis_gates = None
+
+            coupling_map = msg.get("coupling_map")
+            if isinstance(coupling_map, list) and all(
+                isinstance(edge, (list, tuple))
+                and len(edge) == 2
+                and all(isinstance(q, int) for q in edge)
+                for edge in coupling_map
+            ):
+                coupling_map = [[int(a), int(b)] for a, b in coupling_map]
+            else:
+                coupling_map = None
+
+            optimization_level = msg.get("optimization_level", 1)
+            if not isinstance(optimization_level, int) or optimization_level not in (0, 1, 2, 3):
+                optimization_level = 1
+
+            # Transpilation can run many passes — offload so heartbeats flow.
+            payload, stdout, stderr, error = await asyncio.to_thread(
+                executor.transpile_explore,
+                code,
+                basis_gates=basis_gates,
+                coupling_map=coupling_map,
+                optimization_level=optimization_level,
+                language=language,
+            )
+
+            if stdout:
+                await websocket.send(json.dumps({
+                    "type": "output",
+                    "text": stdout,
+                }))
+
+            if stderr:
+                await websocket.send(json.dumps({
+                    "type": "stderr",
+                    "text": stderr,
+                }))
+
+            if error:
+                await websocket.send(json.dumps(error_payload(error, "transpile")))
+                await websocket.send(json.dumps({
+                    "type": "transpile_result",
+                    "data": None,
+                }))
+            else:
+                await websocket.send(json.dumps({
+                    "type": "transpile_result",
+                    "data": payload,
+                }))
+
         elif msg_type == "environment":
             # Cheap (importlib.metadata lookups only) — no need to offload
             # to a thread. Never raises: see _build_environment_payload.

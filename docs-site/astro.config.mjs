@@ -83,6 +83,12 @@ export default defineConfig({
           ],
         },
         {
+          label: 'Developer Tools',
+          items: [
+            'developer-tools/transpiler-explorer',
+          ],
+        },
+        {
           label: 'Kernel API',
           items: [
             'kernel-api/overview',

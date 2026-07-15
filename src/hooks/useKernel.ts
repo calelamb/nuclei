@@ -15,6 +15,8 @@ import { useQecStore } from '../stores/qecStore';
 import { useQecEstimateStore } from '../stores/qecEstimateStore';
 import { useMissingDependencyStore } from '../stores/missingDependencyStore';
 import { setQecDecodeSender, setQecSnapshotSender, setQecEstimateSender } from '../lib/qecDecodeSender';
+import { setTranspileSender } from '../lib/transpileSender';
+import { useTranspileStore } from '../stores/transpileStore';
 import { narrateParse, narrateResult } from '../services/narration';
 import { rewriteExecutionError } from '../services/errorRewrite';
 import { computeNextPollDelayMs, STALE_AFTER_MS } from '../lib/pollSchedule';
@@ -165,6 +167,12 @@ export function useKernel() {
       case 'qec_estimate_result':
         useQecEstimateStore.getState().setResult(msg.data);
         break;
+      case 'transpile_result':
+        // Dev tools Phase 1 — Transpiler Explorer. A null payload means an
+        // `error` with phase 'transpile' already arrived and set the store's
+        // error; don't overwrite it with an empty success.
+        if (msg.data) useTranspileStore.getState().setResult(msg.data);
+        break;
       case 'output':
         useSimulationStore.getState().addOutput(msg.text, 'stdout');
         useBottomPanelStore.getState().focusTerminal();
@@ -178,6 +186,13 @@ export function useKernel() {
         // terminal/editor error surfaces (PRD 10 Phase F).
         if (msg.phase === 'qec_estimate') {
           useQecEstimateStore.getState().setError(msg.message);
+          break;
+        }
+
+        // Transpiler Explorer failures belong to that panel, not the
+        // terminal/editor error surfaces (dev tools Phase 1).
+        if (msg.phase === 'transpile') {
+          useTranspileStore.getState().setError(msg.message);
           break;
         }
 
@@ -701,16 +716,39 @@ export function useKernel() {
     },
     [sendHardware],
   );
+  // Transpiler Explorer (dev tools Phase 1). Desktop-only (the web/pyodide
+  // build can't run the Qiskit transpiler); sendHardware no-ops there, and the
+  // panel is Qiskit-gated so it won't fire on web anyway.
+  const transpile = useCallback(
+    (code: string, target: { basisGates?: string[] | null; couplingMap?: Array<[number, number]> | null; optimizationLevel: 0 | 1 | 2 | 3 }) => {
+      const language = kernelLanguageFor(useEditorStore.getState().framework, useEditorStore.getState().filePath);
+      const ok = sendHardware({
+        type: 'transpile',
+        code,
+        language,
+        basis_gates: target.basisGates ?? undefined,
+        coupling_map: target.couplingMap ?? undefined,
+        optimization_level: target.optimizationLevel,
+      });
+      if (!ok) {
+        useTranspileStore.getState().setError("The kernel isn't connected. Start it and try again.");
+      }
+    },
+    [sendHardware],
+  );
+
   useEffect(() => {
     setQecDecodeSender(qecDecodeSample);
     setQecSnapshotSender(qecSnapshotReRequest);
     setQecEstimateSender(qecEstimate);
+    setTranspileSender(transpile);
     return () => {
       setQecDecodeSender(null);
       setQecSnapshotSender(null);
       setQecEstimateSender(null);
+      setTranspileSender(null);
     };
-  }, [qecDecodeSample, qecSnapshotReRequest, qecEstimate]);
+  }, [qecDecodeSample, qecSnapshotReRequest, qecEstimate, transpile]);
 
   // Polling backoff for active hardware jobs. A queued IBM job can sit in
   // the free-tier queue for an hour or more; fixed 5s polling would fire
