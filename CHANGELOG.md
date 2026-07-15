@@ -5,6 +5,40 @@ All notable changes to Nuclei will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.10.0] - 2026-07-14
+
+A QEC Studio release: the detector graph is faster, far more visual, and now
+interactive — plus the groundwork (and shipping WASM) for research-scale codes.
+
+### Added — Interactive decoder
+
+- An **Interactive** mode on the detector graph: click detectors to build a
+  syndrome and watch a decoder re-solve the matching **instantly, in-app**, with
+  no kernel round-trip — a live "what would the decoder do, and is it a logical
+  error?" tool. Runs a Rust decoder compiled to WebAssembly; complements the
+  accurate kernel "Sample a shot" path (PyMatching), it doesn't replace it.
+
+### Added — Render arbitrarily large detector graphs
+
+- Graphs too big for the render cap can now be drawn **in full, client-side**:
+  the kernel forwards the flattened DEM text (only when truncated), and a WASM
+  parser renders the whole thing with no edge cap. Falls back to the kernel path
+  if the accelerator isn't available.
+
+### Changed — Detector graph is a canvas now
+
+- The detector graph renders on a **canvas** instead of thousands of SVG lines —
+  it scales smoothly to tens of thousands of edges. Edges are **heat-colored and
+  weighted by error probability** (fragile "hotspots" glow), boundary edges are
+  dashed, observable-flipping edges carry an accent, and **hovering a detector**
+  inspects it. A legend explains the encoding.
+
+### Performance
+
+- Building the detector graph on the kernel is **~2.6× faster** on large codes
+  (parse Stim's DEM text instead of walking the model object-by-object) — the
+  live-edit path no longer stalls on a distance-11 surface code.
+
 ## [0.9.0] - 2026-07-14
 
 A major upgrade to the practice challenges (the "quantum LeetCode"): solutions
