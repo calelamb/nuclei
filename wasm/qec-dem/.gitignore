@@ -1,2 +1,4 @@
 /target
-/pkg
+/pkg/package.json
+/pkg/README.md
+/pkg/.gitignore

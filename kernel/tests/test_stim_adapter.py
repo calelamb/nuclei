@@ -175,6 +175,20 @@ def test_dem_truncation_sends_summary_only_and_flags_it():
     assert dem["boundary_edge_count"] == 24
 
 
+def test_truncated_payload_forwards_dem_text_for_client_render():
+    # When the graph exceeds the edge cap the kernel sends the flattened DEM
+    # text so the frontend can parse + render it client-side (WASM), with no
+    # kernel edge cap. Not sent when the graph fits.
+    truncated = build_qec_payload(SURFACE_D3, max_edges=10)
+    assert truncated["dem"]["truncated"] is True
+    assert "dem_text" in truncated
+    assert truncated["dem_text"].lstrip().startswith(("error(", "detector("))
+
+    full = build_qec_payload(SURFACE_D3)  # default cap comfortably fits d3
+    assert full["dem"]["truncated"] is False
+    assert "dem_text" not in full
+
+
 def test_dem_hyperedge_fallback_reports_honestly():
     # Three detectors fired by one error can't decompose into graphlike
     # components: decompose_errors=True raises, the fallback keeps the

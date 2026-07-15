@@ -166,17 +166,25 @@ def build_qec_payload(circuit, max_edges: int = MAX_DEM_EDGES) -> dict:
                 "stim could not build a detector error model for this circuit."
             )
 
+    dem_graph = extract_detector_graph(dem, max_edges=max_edges) if dem is not None else None
+
     payload = {
         "num_qubits": circuit.num_qubits,
         "num_detectors": circuit.num_detectors,
         "num_observables": circuit.num_observables,
         "num_ticks": circuit.num_ticks,
         "coords": _coordinate_lists(circuit),
-        "dem": extract_detector_graph(dem, max_edges=max_edges) if dem is not None else None,
+        "dem": dem_graph,
         # Filled by qec_decode_sample (PRD 10 Phase B) — placeholder so the
         # payload shape is stable from day one.
         "sample_decode": None,
     }
     if dem_error is not None:
         payload["dem_error"] = dem_error
+    # When the graph is truncated (too many edges to serialize), forward the
+    # flattened DEM *text* so the frontend can parse + render it client-side
+    # (the WASM parser) — no kernel-side edge cap. Only sent on truncation, so
+    # the common case pays nothing.
+    if dem is not None and dem_graph is not None and dem_graph.get("truncated"):
+        payload["dem_text"] = str(dem.flattened())
     return payload

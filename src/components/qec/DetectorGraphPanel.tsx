@@ -8,6 +8,7 @@ import { detectorGraphLayout, decodeOverlay, type DecodeOverlay } from './qecGeo
 import { DetectorGraphCanvas } from './DetectorGraphCanvas';
 import { buildDecodeInput, decodedToOverlay } from './qecDecoderInput';
 import { decodeSyndrome, isDecoderAvailable } from '../../lib/qecDecoderWasm';
+import { parseDemGraphWasm, type DemDetectorGraph } from '../../lib/qecDemWasm';
 import { requestQecDecodeSample, requestQecSnapshot } from '../../lib/qecDecodeSender';
 
 const DOCS = 'https://getnuclei.dev/docs/kernel-api/messages-qec/';
@@ -30,8 +31,42 @@ export function DetectorGraphPanel() {
   const decodePending = useQecStore((s) => s.decodePending);
   const circuitText = useQecStore((s) => s.circuitText);
 
-  const layout = useMemo(() => (snapshot ? detectorGraphLayout(snapshot) : null), [snapshot]);
+  // Client-side full render (WASM): when the kernel truncates the graph it
+  // forwards the DEM text; parsing it here renders the whole graph with no
+  // kernel edge cap. `clientDem` holds the parsed result once requested.
+  const [clientDem, setClientDem] = useState<DemDetectorGraph | null>(null);
+  const [clientRendering, setClientRendering] = useState(false);
+
+  // Drop the client render whenever a fresh snapshot arrives.
+  const [prevSnapshot, setPrevSnapshot] = useState(snapshot);
+  if (snapshot !== prevSnapshot) {
+    setPrevSnapshot(snapshot);
+    setClientDem(null);
+  }
+
+  const effectiveSnapshot = useMemo(() => {
+    if (!snapshot) return null;
+    if (!clientDem) return snapshot;
+    return { ...snapshot, dem: { nodes: snapshot.num_detectors, ...clientDem } };
+  }, [snapshot, clientDem]);
+
+  const layout = useMemo(
+    () => (effectiveSnapshot ? detectorGraphLayout(effectiveSnapshot) : null),
+    [effectiveSnapshot],
+  );
   const kernelOverlay = useMemo(() => (decodeSample ? decodeOverlay(decodeSample) : null), [decodeSample]);
+
+  const renderFullGraph = useCallback(async () => {
+    if (!snapshot?.dem_text) {
+      requestQecSnapshot(50_000);
+      return;
+    }
+    setClientRendering(true);
+    const parsed = await parseDemGraphWasm(snapshot.dem_text, 5_000_000);
+    setClientRendering(false);
+    if (parsed) setClientDem(parsed);
+    else requestQecSnapshot(50_000); // wasm unavailable → kernel path at the cap
+  }, [snapshot]);
 
   // Interactive in-webview decoding (WASM): toggle detectors and watch the
   // decoder re-solve instantly, with no kernel round-trip. Gated on the wasm
@@ -153,7 +188,7 @@ export function DetectorGraphPanel() {
   return (
     <div style={{ height: '100%', display: 'flex', flexDirection: 'column', background: colors.bg }}>
       {header}
-      {snapshot.dem.truncated && (
+      {snapshot.dem.truncated && !clientDem && (
         <div
           style={{
             display: 'flex', alignItems: 'center', gap: 10, padding: '6px 12px',
@@ -166,15 +201,29 @@ export function DetectorGraphPanel() {
             boundary exceed the render cap.
           </span>
           <button
-            onClick={() => requestQecSnapshot(50_000)}
+            onClick={() => void renderFullGraph()}
+            disabled={clientRendering}
+            title="Parse and render the whole graph in-app (WASM) — no kernel edge cap"
             style={{
               background: 'transparent', border: `1px solid ${colors.border}`, borderRadius: 4,
-              color: colors.text, cursor: 'pointer', fontSize: 11, padding: '3px 8px',
-              fontFamily: "'Geist Sans', sans-serif",
+              color: colors.text, cursor: clientRendering ? 'default' : 'pointer', fontSize: 11, padding: '3px 8px',
+              opacity: clientRendering ? 0.6 : 1, fontFamily: "'Geist Sans', sans-serif",
             }}
           >
-            Render anyway
+            {clientRendering ? 'Rendering…' : 'Render full graph'}
           </button>
+        </div>
+      )}
+      {clientDem && (
+        <div
+          style={{
+            display: 'flex', alignItems: 'center', gap: 6, padding: '5px 12px',
+            fontSize: 10, color: colors.accent, borderBottom: `1px solid ${colors.border}`,
+            fontFamily: "'Geist Sans', sans-serif",
+          }}
+        >
+          Full graph rendered in-app · {clientDem.edge_count} edges + {clientDem.boundary_edge_count} boundary
+          {clientDem.hyperedges_count > 0 ? ` · ${clientDem.hyperedges_count} hyperedge(s) not drawn` : ''}
         </div>
       )}
       {snapshot.dem.hyperedges_count > 0 && (

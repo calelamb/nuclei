@@ -30,10 +30,11 @@ let cached: DemWasmModule | null | undefined;
 async function loadWasm(): Promise<DemWasmModule | null> {
   if (cached !== undefined) return cached;
   try {
-    // Variable path + @vite-ignore so the bundler never tries to resolve the
-    // (usually absent) pkg at build time — it's a pure runtime import.
-    const path = '../../wasm/qec-dem/pkg/qec_dem.js';
-    const mod = (await import(/* @vite-ignore */ path)) as DemWasmModule;
+    // The pkg is built + committed under wasm/qec-dem/pkg, so vite bundles it
+    // as a code-split chunk + a hashed .wasm asset. If it ever fails to init in
+    // the webview, this catch degrades to null and the caller uses the kernel
+    // graph — nothing breaks.
+    const mod = (await import('../../wasm/qec-dem/pkg/qec_dem.js')) as unknown as DemWasmModule;
     if (typeof mod.default === 'function') await mod.default(); // wasm-pack init
     cached = mod;
   } catch {

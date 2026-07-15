@@ -52,6 +52,10 @@ export interface QecSnapshot {
    * `dem_error` for the reason. */
   dem: DetectorErrorModelGraph | null;
   dem_error?: string;
+  /** Present only when `dem.truncated` — the flattened DEM text, so the
+   * frontend can parse + render the full graph client-side (WASM) with no
+   * kernel-side edge cap. */
+  dem_text?: string;
   /** Reserved for qec_decode_sample (PRD 10 Phase B). */
   sample_decode: null;
 }
