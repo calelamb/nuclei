@@ -5,6 +5,40 @@ All notable changes to Nuclei will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.11.0] - 2026-07-14
+
+The first developer-tools release: a Transpiler Explorer that shows exactly what
+the compiler does to a circuit, plus editor-responsiveness fixes.
+
+### Added — Transpiler Explorer
+
+- **"godbolt.org for quantum"**: a Research-mode **Transpiler** view that
+  transpiles the editor's circuit for a target device and shows it **before vs.
+  after, pass by pass** — with the routing SWAPs and basis rewrites attributed
+  to the pass that added them. The passes that add entangling gates are
+  highlighted (the "why did my two-qubit count triple on hardware" answer).
+  Qiskit-only (the only framework with an introspectable compiler).
+- Controls (target device + optimization level 0–3) live in the sidebar; the
+  before/after visualization is a main-area view. Target basis gates and
+  coupling map come from any connected hardware backend, or the all-to-all
+  simulator default.
+
+### Added — Kernel protocol (additive)
+
+- New `transpile` message → `transpile_result`: runs a Qiskit preset
+  `PassManager` with a per-pass callback that diffs consecutive DAGs. Returns
+  before/after `CircuitSnapshot`s, depth/two-qubit/gate-count deltas, and
+  pass-by-pass data. Non-Qiskit circuits get a `transpile_unsupported_framework`
+  error. See the [protocol changelog](https://getnuclei.dev/docs/reference/protocol-changelog/).
+
+### Fixed — Editor responsiveness
+
+- Closing an unsaved file from the Open Files sidebar now raises the
+  unsaved-changes dialog instead of silently discarding the buffer.
+- Ghost completions are debounced and send only a window around the cursor
+  (not the whole file), and the inline-completion provider registers once.
+- The editor subtree re-renders only on the fields it uses, cutting churn.
+
 ## [0.10.0] - 2026-07-14
 
 A QEC Studio release: the detector graph is faster, far more visual, and now
