@@ -194,6 +194,90 @@ def test_dem_hyperedge_fallback_reports_honestly():
     assert payload["dem"]["edges"] == []
 
 
+def _extract_detector_graph_by_object_walk(dem, max_edges: int) -> dict:
+    """Reference implementation: the pre-optimization form that walks the live
+    DEM object target-by-target. Kept in the test only, to pin that the fast
+    text-parse `extract_detector_graph` stays byte-identical to it."""
+    from kernel.qec.dem import _xor_combine
+
+    edges: dict = {}
+    boundary: dict = {}
+    hyperedges = 0
+
+    def _add(store, key, p, obs):
+        if key in store:
+            old_p, old_obs = store[key]
+            store[key] = (_xor_combine(old_p, p), old_obs | obs)
+        else:
+            store[key] = (p, obs)
+
+    for inst in dem.flattened():
+        if inst.type != "error":
+            continue
+        p = float(inst.args_copy()[0])
+        components: list[list] = [[]]
+        for t in inst.targets_copy():
+            if t.is_separator():
+                components.append([])
+            else:
+                components[-1].append(t)
+        for component in components:
+            dets = sorted(t.val for t in component if t.is_relative_detector_id())
+            obs = frozenset(t.val for t in component if t.is_logical_observable_id())
+            if len(dets) == 2:
+                _add(edges, (dets[0], dets[1]), p, obs)
+            elif len(dets) == 1:
+                _add(boundary, dets[0], p, obs)
+            elif len(dets) > 2:
+                hyperedges += 1
+
+    total = len(edges) + len(boundary)
+    payload: dict = {
+        "nodes": dem.num_detectors,
+        "edge_count": len(edges),
+        "boundary_edge_count": len(boundary),
+        "hyperedges_count": hyperedges,
+        "truncated": total > max_edges,
+    }
+    if total > max_edges:
+        payload["edges"] = []
+        payload["boundary_edges"] = []
+    else:
+        payload["edges"] = [
+            {"d1": d1, "d2": d2, "obs": sorted(obs), "p": round(p, 12)}
+            for (d1, d2), (p, obs) in sorted(edges.items())
+        ]
+        payload["boundary_edges"] = [
+            {"d": d, "obs": sorted(obs), "p": round(p, 12)}
+            for d, (p, obs) in sorted(boundary.items())
+        ]
+    return payload
+
+
+@pytest.mark.parametrize(
+    "code,kw",
+    [
+        ("surface_code:rotated_memory_z", dict(distance=3, rounds=3)),
+        ("surface_code:rotated_memory_z", dict(distance=5, rounds=5)),
+        ("repetition_code:memory", dict(distance=9, rounds=9)),
+    ],
+)
+def test_dem_text_parse_matches_object_walk(code, kw):
+    from kernel.qec.dem import extract_detector_graph
+
+    circuit = stim.Circuit.generated(
+        code,
+        after_clifford_depolarization=0.01,
+        before_measure_flip_probability=0.01,
+        after_reset_flip_probability=0.01,
+        **kw,
+    )
+    dem = circuit.detector_error_model(decompose_errors=True)
+    fast = extract_detector_graph(dem, max_edges=200_000)
+    reference = _extract_detector_graph_by_object_walk(dem, max_edges=200_000)
+    assert fast == reference
+
+
 def test_coords_are_padded_aligned_arrays():
     payload = build_qec_payload(SURFACE_D3)
     coords = payload["coords"]
