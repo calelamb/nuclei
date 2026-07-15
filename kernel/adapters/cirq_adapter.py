@@ -1,6 +1,7 @@
 import re
 import numpy as np
 from kernel.adapters.base import FrameworkAdapter
+from kernel.adapters._math import step_state_payload
 from kernel.models.snapshot import CircuitSnapshot, SimulationResult, Gate
 
 try:
@@ -175,6 +176,46 @@ class CirqAdapter(FrameworkAdapter):
             shot_count=shots,
             seed_honored=seed_honored,
         )
+
+
+    def state_trace(self, circuit_obj) -> list[dict]:
+        """Per-gate state trajectory. Cirq has no incremental single-op API, so
+        each step re-simulates the growing prefix of unitary operations (bounded
+        by the executor's gate cap). Measurement ops emit a step with the state
+        unchanged, keeping step k aligned with snapshot.gates[k]. Cirq's sorted
+        qubit order is big-endian here, so the shared Bloch helper is told so.
+        """
+        if not CIRQ_AVAILABLE:
+            raise ImportError("cirq")
+
+        all_qubits = sorted(circuit_obj.all_qubits())
+        n = len(all_qubits)
+        sim = cirq.Simulator()
+
+        def zero_state() -> np.ndarray:
+            sv = np.zeros(2**n, dtype=complex)
+            sv[0] = 1.0
+            return sv
+
+        def step(gate_index: int, label: str, sv_data) -> dict:
+            return {"gate_index": gate_index, "label": label, **step_state_payload(sv_data, n, False)}
+
+        ops = [op for moment in circuit_obj.moments for op in moment.operations]
+        steps = [step(-1, "initial", zero_state())]
+        unitary_prefix: list = []
+        for k, op in enumerate(ops):
+            if not isinstance(op.gate, cirq.MeasurementGate):
+                unitary_prefix.append(op)
+            if unitary_prefix:
+                sv_data = sim.simulate(
+                    cirq.Circuit(unitary_prefix), qubit_order=all_qubits
+                ).final_state_vector
+            else:
+                sv_data = zero_state()
+            gate_name = type(op.gate).__name__ if op.gate is not None else "op"
+            label = f"{gate_name} " + ",".join(f"q{all_qubits.index(q)}" for q in op.qubits)
+            steps.append(step(k, label.strip(), sv_data))
+        return steps
 
 
 def _partial_trace_qubit(statevector, n_qubits: int, qubit: int):

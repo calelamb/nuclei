@@ -11,6 +11,12 @@ from kernel.models import CircuitSnapshot, KernelError, SimulationResult
 EXECUTION_TIMEOUT_SECONDS = 30
 _HAS_SIGNAL_ALARM = hasattr(__import__("signal"), "SIGALRM")
 
+# Quantum Debugger (dev tools Phase 3): frameworks with a statevector path, and
+# the caps that keep a per-step trace payload bounded.
+DEBUG_TRACE_FRAMEWORKS = {"qiskit", "cirq"}
+MAX_DEBUG_QUBITS = 12
+MAX_DEBUG_GATES = 200
+
 
 @dataclass(frozen=True)
 class AdapterSpec:
@@ -464,6 +470,81 @@ class Executor:
         result = dataclasses.replace(result, metrics=dict(self._metrics))
 
         return result, snapshot, stdout, stderr, None
+
+    def debug_trace(
+        self,
+        code: str,
+        *,
+        language: str | None = None,
+    ) -> tuple[dict | None, str, str, KernelError | None]:
+        """Per-gate state trajectory for the Quantum Debugger.
+
+        Same setup as `execute` (resolve spec, run code, find circuit), then
+        `adapter.state_trace` — the state after every gate, so the frontend
+        scrubber can show the Bloch sphere + probabilities at each step without
+        a kernel round-trip per step. Qiskit/Cirq only (statevector-simulable);
+        bounded by a qubit and gate cap so the trace payload stays small.
+        """
+        spec = self._resolve_spec(code, language)
+        if spec is None or spec.framework not in DEBUG_TRACE_FRAMEWORKS:
+            return None, "", "", KernelError(
+                code="debug_unsupported_framework",
+                message="The Quantum Debugger currently supports Qiskit and Cirq circuits.",
+                framework=spec.framework if spec else None,
+            )
+
+        adapter, adapter_error = self._load_adapter(spec)
+        if adapter_error:
+            return None, "", "", adapter_error
+
+        stdout, stderr, error = self._run_code(code)
+        if error:
+            error = self._normalize_runtime_error(spec, error)
+            error.framework = spec.framework
+            return None, stdout, stderr, error
+
+        try:
+            circuit = adapter.find_circuit(self._namespace)
+        except Exception as exc:
+            return None, stdout, stderr, self._capability_error(spec, exc, "adapter_error")
+
+        if circuit is None:
+            return None, stdout, stderr, KernelError(
+                code="no_circuit",
+                message="No quantum circuit found in code.",
+                framework=spec.framework,
+            )
+
+        try:
+            snapshot = adapter.extract_snapshot(circuit)
+        except Exception as exc:
+            return None, stdout, stderr, self._capability_error(spec, exc, "adapter_error")
+
+        # Bound the trace so the payload (and the per-prefix cost) stays small.
+        if snapshot.qubit_count > MAX_DEBUG_QUBITS:
+            return None, stdout, stderr, KernelError(
+                code="circuit_too_large",
+                message=f"The debugger supports up to {MAX_DEBUG_QUBITS} qubits (this circuit has {snapshot.qubit_count}).",
+                framework=spec.framework,
+            )
+        if len(snapshot.gates) > MAX_DEBUG_GATES:
+            return None, stdout, stderr, KernelError(
+                code="circuit_too_large",
+                message=f"The debugger supports up to {MAX_DEBUG_GATES} gates (this circuit has {len(snapshot.gates)}).",
+                framework=spec.framework,
+            )
+
+        try:
+            steps = adapter.state_trace(circuit)
+        except Exception as exc:
+            return None, stdout, stderr, self._capability_error(spec, exc, "simulation_error")
+
+        payload = {
+            "framework": spec.framework,
+            "qubit_count": snapshot.qubit_count,
+            "steps": steps,
+        }
+        return payload, stdout, stderr, None
 
     def qec_snapshot_payload(
         self,

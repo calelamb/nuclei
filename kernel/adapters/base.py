@@ -32,6 +32,19 @@ class FrameworkAdapter(ABC):
         """
         pass
 
+    def state_trace(self, circuit_obj) -> list[dict]:
+        """Per-gate quantum-state trajectory for the Quantum Debugger.
+
+        Returns one step per gate (plus an initial |0…0⟩ step at index -1), each
+        a dict `{gate_index, label, probabilities, bloch_coords}` — the state
+        AFTER applying that gate. Only frameworks with a statevector path
+        (Qiskit, Cirq) implement this; the default raises so the executor can
+        surface an honest "not supported" error rather than a broken trace.
+        """
+        raise NotImplementedError(
+            f"{type(self).__name__} does not support per-step state tracing"
+        )
+
     def parse_source(
         self, code: str
     ) -> tuple[CircuitSnapshot | None, str, str, KernelError | None]:

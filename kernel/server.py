@@ -542,6 +542,39 @@ async def handle_message(websocket):
                     "data": payload,
                 }))
 
+        elif msg_type == "debug_trace":
+            # Quantum Debugger (dev tools Phase 3): compute the per-gate state
+            # trajectory in one call so the frontend scrubber shows the state at
+            # each step instantly. Additive; Qiskit/Cirq only. Off-thread — a
+            # long trajectory must not block heartbeats.
+            payload, stdout, stderr, error = await asyncio.to_thread(
+                executor.debug_trace, code, language=language
+            )
+
+            if stdout:
+                await websocket.send(json.dumps({
+                    "type": "output",
+                    "text": stdout,
+                }))
+
+            if stderr:
+                await websocket.send(json.dumps({
+                    "type": "stderr",
+                    "text": stderr,
+                }))
+
+            if error:
+                await websocket.send(json.dumps(error_payload(error, "debug")))
+                await websocket.send(json.dumps({
+                    "type": "debug_trace_result",
+                    "data": None,
+                }))
+            else:
+                await websocket.send(json.dumps({
+                    "type": "debug_trace_result",
+                    "data": payload,
+                }))
+
         elif msg_type == "environment":
             # Cheap (importlib.metadata lookups only) — no need to offload
             # to a thread. Never raises: see _build_environment_payload.
