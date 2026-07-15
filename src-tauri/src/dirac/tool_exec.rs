@@ -220,6 +220,7 @@ pub fn execute_tool(
         "preview_backend_transpilation" => {
             preview::exec_preview_backend_transpilation(input, tool_call_id, ctx)
         }
+        "transpile_explore" => preview::exec_transpile_explore(input, tool_call_id, ctx),
         "submit_hardware_job" => hardware::exec_submit_hardware_job(input, tool_call_id, ctx),
         "poll_hardware_job" => hardware::exec_poll_hardware_job(input, tool_call_id, ctx),
         "cancel_hardware_job" => hardware::exec_cancel_hardware_job(input, tool_call_id, ctx),

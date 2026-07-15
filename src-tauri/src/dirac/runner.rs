@@ -20,7 +20,9 @@ use super::analysis::BackendInfo;
 use super::budget::BudgetLedger;
 use super::journal::{Journal, JournalEntry, MemJournal};
 use super::kernel::AgentKernel;
-use super::orchestrator::{run_agent, AgentBudget, AgentRunResult, ModelPort, RunState};
+use super::orchestrator::{
+    run_agent, AgentBudget, AgentPersona, AgentRunResult, ModelPort, RunState,
+};
 use super::policy::{AutonomyPolicy, SubmissionFacts};
 use super::submit::SubmitPort;
 use super::tool_exec::ToolContext;
@@ -48,6 +50,9 @@ pub struct RunConfig {
     pub active_path: String,
     pub model: String,
     pub run_id: String,
+    /// The voice the agent runs in (Research mode → `Developer`). Defaults to
+    /// `Default`, so existing callers/tests are unchanged.
+    pub persona: AgentPersona,
 }
 
 /// The injected, borrowed dependencies of a run. Tests pass mocks; the command
@@ -328,6 +333,7 @@ pub fn drive_run(
     let now = || Instant::now();
     let result = run_agent(
         &config.goal,
+        config.persona,
         deps.model,
         &mut ctx,
         &mut journal,

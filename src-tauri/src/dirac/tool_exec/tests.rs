@@ -339,3 +339,91 @@ fn poll_and_analyze_go_through_the_mock_submit_port() {
     assert_eq!(analyzed.facts["available"], Value::Bool(true));
     assert_eq!(analyzed.facts["comparison"]["matches"], Value::Bool(true));
 }
+
+#[test]
+fn transpile_explore_forwards_the_pass_payload() {
+    let payload = json!({
+        "metrics": {
+            "depth": { "before": 5, "after": 18 },
+            "two_qubit": { "before": 3, "after": 6 },
+            "gate_count": { "before": 4, "after": 39 },
+        },
+        "passes": [ { "name": "SabreLayout", "depth": 7, "added_gates": { "swap": 1 } } ],
+        "target": { "basis_gates": ["rz", "sx", "x", "cx"], "coupling_size": 3 },
+    });
+    let kernel = MockKernel::new(bell_snapshot(), bell_result()).with_transpile_explore(payload);
+    let policy = AutonomyPolicy::safe_default();
+    let mut ws = workspace();
+    let mut ledger = BudgetLedger::new(0.0);
+    let submit = UnavailableSubmitPort;
+    let backends: Vec<BackendInfo> = Vec::new();
+    let get_backends = || backends.clone();
+    let estimate_cost = |_: &SubmissionFacts| -> Option<f64> { None };
+
+    let mut ctx = ToolContext {
+        kernel: &kernel,
+        workspace: &mut ws,
+        policy: &policy,
+        ledger: &mut ledger,
+        submit_port: &submit,
+        get_backends: &get_backends,
+        estimate_cost: &estimate_cost,
+        last_snapshot: None,
+        last_result: None,
+        last_known_hash: HashMap::new(),
+    };
+
+    let evidence = execute_tool(
+        "t1",
+        "transpile_explore",
+        &json!({ "optimization_level": 2 }),
+        &mut ctx,
+    );
+
+    assert!(evidence.ok);
+    assert_eq!(evidence.facts["available"], Value::Bool(true));
+    // No backend requested → the all-to-all simulator target.
+    assert_eq!(evidence.facts["target"], "simulator");
+    // The explorer payload is forwarded verbatim (pass list + metric deltas).
+    assert!(evidence.facts["passes"].is_array());
+    assert_eq!(evidence.facts["metrics"]["two_qubit"]["after"], 6);
+    assert_eq!(evidence.facts["passes"][0]["added_gates"]["swap"], 1);
+}
+
+#[test]
+fn transpile_explore_reports_unavailable_for_non_qiskit() {
+    let kernel = MockKernel::new(bell_snapshot(), bell_result());
+    let policy = AutonomyPolicy::safe_default();
+    // A Cirq file — the tool must decline rather than send a doomed request.
+    let mut ws = MemWorkspace::new(
+        vec![WorkspaceFile {
+            path: FILE_PATH.to_string(),
+            framework: "cirq".to_string(),
+            content: "import cirq\n".to_string(),
+            dirty: false,
+        }],
+        None,
+    );
+    let mut ledger = BudgetLedger::new(0.0);
+    let submit = UnavailableSubmitPort;
+    let backends: Vec<BackendInfo> = Vec::new();
+    let get_backends = || backends.clone();
+    let estimate_cost = |_: &SubmissionFacts| -> Option<f64> { None };
+
+    let mut ctx = ToolContext {
+        kernel: &kernel,
+        workspace: &mut ws,
+        policy: &policy,
+        ledger: &mut ledger,
+        submit_port: &submit,
+        get_backends: &get_backends,
+        estimate_cost: &estimate_cost,
+        last_snapshot: None,
+        last_result: None,
+        last_known_hash: HashMap::new(),
+    };
+
+    let evidence = execute_tool("t2", "transpile_explore", &json!({}), &mut ctx);
+    assert!(evidence.ok);
+    assert_eq!(evidence.facts["available"], Value::Bool(false));
+}

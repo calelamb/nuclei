@@ -173,6 +173,16 @@ def execute_request(request, limits: WorkerLimits) -> bytes:
             request.shots,
             language=request.language,
         )
+    elif request.action == "transpile_explore":
+        # The Transpiler Explorer payload (before/after snapshots, metric
+        # deltas, pass-by-pass added gates) — the richer sibling of transpile.
+        result, stdout, stderr, error = executor.transpile_explore(
+            request.code,
+            basis_gates=request.basis_gates,
+            coupling_map=request.coupling_map,
+            optimization_level=request.optimization_level or 1,
+        )
+        snapshot = None
     else:  # transpile
         result, stdout, stderr, error = executor.transpile(
             request.code,

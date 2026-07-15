@@ -34,7 +34,7 @@ class ProtocolError(ValueError):
 @dataclass(frozen=True)
 class AgentRequest:
     request_id: str
-    action: Literal["parse", "simulate", "transpile"]
+    action: Literal["parse", "simulate", "transpile", "transpile_explore"]
     framework: Literal["qiskit", "cirq", "qsharp"]
     language: Literal["python", "qsharp"]
     code: str
@@ -120,7 +120,12 @@ def parse_request(raw: bytes) -> AgentRequest:
 
     if not isinstance(request_id, str) or _REQUEST_ID.fullmatch(request_id) is None:
         raise ProtocolError("invalid_request_id")
-    if not isinstance(action, str) or action not in {"parse", "simulate", "transpile"}:
+    if not isinstance(action, str) or action not in {
+        "parse",
+        "simulate",
+        "transpile",
+        "transpile_explore",
+    }:
         raise ProtocolError("invalid_action")
     if not isinstance(framework, str) or framework not in {"qiskit", "cirq", "qsharp"}:
         raise ProtocolError("framework_unavailable")
@@ -136,11 +141,12 @@ def parse_request(raw: bytes) -> AgentRequest:
         raise ProtocolError("code_too_large")
     if action == "parse" and "shots" in value:
         raise ProtocolError("parse_forbids_shots")
-    if action == "transpile" and "shots" in value:
+    is_transpile = action in {"transpile", "transpile_explore"}
+    if is_transpile and "shots" in value:
         raise ProtocolError("transpile_forbids_shots")
     if action == "simulate" and (type(shots) is not int or not 1 <= shots <= MAX_SHOTS):
         raise ProtocolError("invalid_shots")
-    if action == "transpile":
+    if is_transpile:
         if framework != "qiskit":
             raise ProtocolError("transpile_requires_qiskit")
         _validate_basis_gates(basis_gates)

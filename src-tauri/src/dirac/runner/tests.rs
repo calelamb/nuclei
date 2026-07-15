@@ -39,6 +39,7 @@ fn config(goal: &str, seed_content: &str) -> RunConfig {
         active_path: FILE_PATH.to_string(),
         model: "claude-sonnet-4-5".to_string(),
         run_id: "run_test_1".to_string(),
+        persona: AgentPersona::Default,
     }
 }
 
