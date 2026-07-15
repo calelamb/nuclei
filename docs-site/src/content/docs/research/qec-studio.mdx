@@ -1,6 +1,6 @@
 ---
 title: "QEC Studio"
-description: "A walkthrough of quantum error correction in Research mode: Stim circuits, the timeline / lattice / detector-graph visualizations, sampling a shot, running a campaign, and reading the threshold / Λ plot."
+description: "A walkthrough of quantum error correction in Research mode: Stim circuits, the timeline / lattice / detector-graph visualizations, decoding a shot (accurate or interactive), running a campaign, and reading the threshold / Λ plot."
 ---
 
 import { Aside } from '@astrojs/starlight/components';
@@ -41,15 +41,60 @@ swaps its Bloch sphere for three QEC panels:
 - **Code Lattice** — data and measure qubits laid out from the circuit's qubit
   coordinates (generated codes include them; hand-built circuits may not, and
   the panel says so).
-- **Detector Graph** — detector nodes, probability-weighted edges, and boundary
-  edges to a virtual node, built from the circuit's **detector error model**
-  (DEM). Press **Sample a shot** to overlay one Monte-Carlo shot: the fired
-  detectors light up and the decoder's matching is drawn on top, with an honest
-  "logical error this shot" / "corrected" verdict.
+- **Detector Graph** — the circuit's **detector error model** (DEM) drawn as a
+  graph: detector nodes placed by their coordinates, edges between the detectors
+  each error mechanism flips, and boundary edges to a virtual node. It's the
+  panel no other desktop tool has — and where you decode. It gets its own two
+  sections below.
 
-Large graphs are capped and flagged (`truncated`) with a **Render anyway**
-button — never silently trimmed. A circuit with no DEM shows the reason, not a
-blank box.
+## Reading the detector graph
+
+The detector graph renders on a canvas, so it stays smooth from a distance-3
+code up to the tens of thousands of edges of a large surface code. The drawing
+is information-dense on purpose:
+
+- **Edges are heat-coloured and weighted by error probability** — faint slate
+  for rare mechanisms, through teal, to a warm glow for the likeliest ones. A
+  code's fragile "hotspots" are visible at a glance instead of a uniform mesh.
+- **Boundary edges** (to the virtual boundary node) are dashed; **edges that
+  flip a logical observable** carry a bright accent, since they move logical
+  information you can't afford to mis-correct.
+- **Hover a detector** to inspect it — its index, how many edges touch it, and
+  whether it has fired. A legend in the corner spells out the encoding.
+
+Very large graphs are still capped for the initial payload, but nothing is lost:
+the banner reports the true edge counts and a **Render full graph** button parses
+the complete model *in the app* — a WebAssembly parser runs over the DEM text the
+kernel forwards — and draws it with no edge limit. A circuit with no valid DEM
+shows the reason, not a blank box.
+
+## Decode a shot — two ways
+
+The detector graph is where you watch a decoder work. There are two modes, for
+two different questions.
+
+### Sample a shot — accurate
+
+Press **Sample a shot** and the kernel runs one Monte-Carlo shot through the real
+decoder (**PyMatching**): the fired detectors light up, the decoder's matching is
+drawn on top, and you get an honest **"logical error this shot" / "corrected"**
+verdict. This is the same decoder a campaign uses — the numbers you'd trust.
+
+### Interactive — instant, in the app
+
+Toggle **Interactive** and the graph becomes a sandbox: **click detectors** to
+build any syndrome you like, and a decoder re-solves the matching **instantly**,
+in the app, with no kernel round-trip. The correction lights up as you click,
+with a live readout of whether it crosses a logical observable. It's for building
+intuition — *"what would the decoder do with this syndrome, and would it be a
+logical error?"* — not for publishable numbers.
+
+<Aside type="note">
+Interactive decoding runs a lightweight decoder compiled to WebAssembly so it can
+react in real time; accurate campaign decoding stays in the kernel (PyMatching /
+fusion-blossom). If the in-app decoder can't load, the toggle simply doesn't
+appear — **Sample a shot** always works.
+</Aside>
 
 ## Run a campaign
 
