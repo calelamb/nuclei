@@ -4,6 +4,7 @@ import { useQecStore } from '../../stores/qecStore';
 import { PanelHeader } from '../layout/PanelHeader';
 import { QecEmptyState } from './QecEmptyState';
 import { detectorGraphLayout, decodeOverlay } from './qecGeometry';
+import { DetectorGraphCanvas } from './DetectorGraphCanvas';
 import { requestQecDecodeSample, requestQecSnapshot } from '../../lib/qecDecodeSender';
 
 const DOCS = 'https://getnuclei.dev/docs/kernel-api/messages-qec/';
@@ -108,7 +109,7 @@ export function DetectorGraphPanel() {
         </div>
       )}
       <div style={{ flex: 1, minHeight: 0, position: 'relative' }}>
-        <DetectorGraphSvg layout={layout} overlay={overlay} />
+        <DetectorGraphCanvas layout={layout} overlay={overlay} />
       </div>
       {overlay && (
         <div
@@ -127,60 +128,3 @@ export function DetectorGraphPanel() {
   );
 }
 
-function DetectorGraphSvg({
-  layout,
-  overlay,
-}: {
-  layout: ReturnType<typeof detectorGraphLayout>;
-  overlay: ReturnType<typeof decodeOverlay> | null;
-}) {
-  const colors = useThemeStore((s) => s.colors);
-  const W = 100;
-  const H = 100;
-  const px = (v: number) => v * W;
-  const py = (v: number) => v * H;
-  const nodePos = (d: number) =>
-    d === -1 ? layout.boundary : (layout.nodes.find((n) => n.detector === d) ?? layout.boundary);
-
-  const maxP = Math.max(...layout.edges.map((e) => e.p), 1e-9);
-  const matchedKey = new Set(overlay?.matchedEdges.map((m) => `${Math.min(m.a, m.b)}:${Math.max(m.a, m.b)}`));
-
-  return (
-    <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="xMidYMid meet" style={{ width: '100%', height: '100%' }}>
-      {/* edges */}
-      {layout.edges.map((e, i) => {
-        const a = nodePos(e.a);
-        const b = nodePos(e.b);
-        const isMatched = matchedKey.has(`${Math.min(e.a, e.b)}:${Math.max(e.a, e.b)}`);
-        const weight = 0.3 + 1.4 * (e.p / maxP);
-        return (
-          <line
-            key={i}
-            x1={px(a.x)} y1={py(a.y)} x2={px(b.x)} y2={py(b.y)}
-            stroke={isMatched ? colors.dirac : colors.border}
-            strokeWidth={isMatched ? Math.max(weight, 1.2) : weight}
-            strokeOpacity={isMatched ? 1 : 0.55}
-          />
-        );
-      })}
-      {/* virtual boundary node */}
-      <rect
-        x={px(layout.boundary.x) - 3} y={py(layout.boundary.y) - 1.6} width={6} height={3.2}
-        rx={1} fill={colors.bgElevated} stroke={colors.textDim} strokeWidth={0.4}
-      />
-      {/* detector nodes */}
-      {layout.nodes.map((n) => {
-        const fired = overlay?.firedDetectors.has(n.detector) ?? false;
-        return (
-          <g key={n.detector}>
-            <circle
-              cx={px(n.x)} cy={py(n.y)} r={fired ? 2.6 : 1.8}
-              fill={fired ? colors.error : colors.accent}
-              stroke={colors.bg} strokeWidth={0.4}
-            />
-          </g>
-        );
-      })}
-    </svg>
-  );
-}
