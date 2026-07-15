@@ -141,7 +141,18 @@ export type KernelMessage =
   | { type: 'qec_decode_sample'; circuit_text: string; decoder: 'pymatching'; seed?: number }
   // Protocol v1.2 (PRD 10 Phase F) — Azure Quantum Resource Estimator over
   // Q# source or OpenQASM 3.
-  | { type: 'qec_estimate'; code: string; language: 'qsharp' | 'qasm3' | 'qiskit'; options?: QecEstimateOptions };
+  | { type: 'qec_estimate'; code: string; language: 'qsharp' | 'qasm3' | 'qiskit'; options?: QecEstimateOptions }
+  // Dev tools Phase 1 — Transpiler Explorer. Run a Qiskit preset PassManager
+  // for a target and get before/after snapshots + pass-by-pass data back.
+  // Additive; Qiskit-only (the only introspectable compiler).
+  | {
+      type: 'transpile';
+      code: string;
+      language?: KernelLanguage;
+      basis_gates?: string[];
+      coupling_map?: Array<[number, number]>;
+      optimization_level?: 0 | 1 | 2 | 3;
+    };
 
 interface HardwareJobDTO {
   id: string;
@@ -163,7 +174,7 @@ export type KernelResponse =
       message: string;
       traceback?: string;
       code?: string;
-      phase?: 'parse' | 'execute' | 'python' | 'qec_estimate' | 'qec_generate' | 'qec_snapshot' | 'qec_materialize' | 'qec_campaign' | 'qec_decode_sample';
+      phase?: 'parse' | 'execute' | 'python' | 'transpile' | 'qec_estimate' | 'qec_generate' | 'qec_snapshot' | 'qec_materialize' | 'qec_campaign' | 'qec_decode_sample';
       framework?: Framework;
       dependency?: string;
     }
@@ -192,4 +203,39 @@ export type KernelResponse =
   // Protocol v1.2 (PRD 10 Phase C) — reply to qec_materialize.
   | { type: 'qec_circuits'; circuits: Record<string, string> }
   | ({ type: 'qec_decode_sample' } & QecDecodeSampleResult)
-  | { type: 'qec_estimate_result'; data: QecEstimate };
+  | { type: 'qec_estimate_result'; data: QecEstimate }
+  // Dev tools Phase 1 — reply to `transpile`. `data` is null on error (an
+  // `error` with phase 'transpile' precedes it, house style).
+  | { type: 'transpile_result'; data: TranspileResult | null };
+
+/** A before→after pair of the same integer metric across transpilation. */
+export interface TranspileMetricDelta {
+  before: number;
+  after: number;
+}
+
+/** One compiler pass that changed the circuit's gate makeup. `added_gates`
+ * maps a gate name to its signed count delta vs. the previous pass (positive
+ * = the pass added it, e.g. routing SWAPs; negative = it removed/rewrote it). */
+export interface TranspilePass {
+  name: string;
+  depth: number;
+  added_gates: Record<string, number>;
+}
+
+/** `kernel/executor.py` `transpile_explore` payload — the Transpiler Explorer's
+ * full result: before/after snapshots, metric deltas, and pass-by-pass data. */
+export interface TranspileResult {
+  before: CircuitSnapshot;
+  after: CircuitSnapshot;
+  metrics: {
+    depth: TranspileMetricDelta;
+    two_qubit: TranspileMetricDelta;
+    gate_count: TranspileMetricDelta;
+  };
+  passes: TranspilePass[];
+  target: {
+    basis_gates: string[] | null;
+    coupling_size: number;
+  };
+}

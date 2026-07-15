@@ -244,6 +244,67 @@ Response (single message, `environment`):
 <Code code={environmentReq} lang="json" title="environment.request.json" />
 <Code code={environmentRes} lang="json" title="environment.responses.json" />
 
+## `transpile`
+
+**Protocol v1.2 era (app 0.11.0)** — additive. Runs the code, finds its
+circuit, and transpiles it for a target with a Qiskit **preset PassManager**,
+returning everything the [Transpiler Explorer](/docs/developer-tools/transpiler-explorer/)
+needs to show *what the compiler did*. **Qiskit-only** — it is the only
+supported framework with an introspectable compiler; any other framework
+answers with a `transpile_unsupported_framework` error (never a Python `exec`
+of foreign code). It does **not** simulate.
+
+| Field | Type | Required | Default |
+|-------|------|----------|---------|
+| `type` | `"transpile"` | yes | — |
+| `code` | string | no | `""` |
+| `language` | `"python"` \| `"qsharp"` \| `"stim"` | no | detected |
+| `basis_gates` | `string[]` | no | none (no basis constraint) |
+| `coupling_map` | `[[int, int], …]` | no | none (all-to-all) |
+| `optimization_level` | `0` \| `1` \| `2` \| `3` | no | `1` |
+
+Each optional target field is validated defensively at the socket boundary: a
+malformed `basis_gates` / `coupling_map` / `optimization_level` degrades to the
+unconstrained default rather than dropping the connection.
+
+Response sequence, in order: {/* server.py transpile handler; executor.transpile_explore */}
+
+| # | Message | When |
+|---|---------|------|
+| 1 | `output` | Only if the code produced stdout. |
+| 2 | `stderr` | Only if the code produced stderr. |
+| 3 | `error` | Only on failure, `phase: "transpile"` — sent before `transpile_result: null`. |
+| 4 | `transpile_result` | **Always.** `data` is the payload below, or `null` on error. |
+
+`transpile_result.data`:
+
+| Field | Type | Notes |
+|-------|------|-------|
+| `before` | `CircuitSnapshot` | The logical circuit, before transpilation. |
+| `after` | `CircuitSnapshot` | The transpiled circuit. |
+| `metrics` | object | `depth`, `two_qubit`, `gate_count`, each `{ "before": int, "after": int }`. `two_qubit`/`gate_count` exclude `measure`/`barrier`. |
+| `passes` | array | Every pass that **changed the gate makeup**, in pipeline order: `{ "name": string, "depth": int, "added_gates": {string: int} }`. `added_gates` is the signed count delta vs. the previous pass — positive is added (routing SWAPs, basis rewrites), negative removed/rewritten. Passes that changed nothing are omitted. |
+| `target` | object | `{ "basis_gates": string[] \| null, "coupling_size": int }` — the constraints that were applied. |
+
+```json title="transpile a Bell pair onto a linear device"
+{ "type": "transpile", "code": "from qiskit import QuantumCircuit\nqc = QuantumCircuit(4, 4)\nqc.h(0)\nfor i in range(3): qc.cx(0, i + 1)\nqc.measure(range(4), range(4))",
+  "basis_gates": ["rz", "sx", "x", "cx"], "coupling_map": [[0,1],[1,2],[2,3]], "optimization_level": 1 }
+```
+
+```json title="transpile_result (abridged)"
+{ "type": "transpile_result", "data": {
+    "metrics": { "depth": {"before": 5, "after": 18}, "two_qubit": {"before": 3, "after": 6}, "gate_count": {"before": 4, "after": 39} },
+    "passes": [ { "name": "SabreLayout", "depth": 7, "added_gates": {"swap": 1} },
+                { "name": "BasisTranslator", "depth": 12, "added_gates": {"sx": 1, "cx": 3, "rz": 2, "h": -1, "swap": -1} } ],
+    "target": { "basis_gates": ["rz","sx","x","cx"], "coupling_size": 3 } } }
+```
+
+<Aside type="note">
+`transpile` is distinct from the Dirac agent's internal `transpile` **action**,
+which returns metrics only. This message is the richer, first-class capability;
+the agent tool will reuse the same kernel path in a later phase.
+</Aside>
+
 ## Timeout semantics, honestly
 
 **Python frameworks** (Qiskit, Cirq, CUDA-Q): the executor defines a

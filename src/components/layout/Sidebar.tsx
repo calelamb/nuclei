@@ -27,6 +27,9 @@ const ExperimentsPanel = lazy(async () => ({
 const EstimatorPanel = lazy(async () => ({
   default: (await import('../qec/EstimatorPanel')).EstimatorPanel,
 }));
+const TranspilerControls = lazy(async () => ({
+  default: (await import('../transpiler/TranspilerControls')).TranspilerControls,
+}));
 
 interface SidebarProps {
   view: ActivityView;
@@ -123,6 +126,7 @@ const VIEW_TITLES: Record<ActivityView, string> = {
   settings: 'Settings',
   experiments: 'Experiments',
   estimator: 'Estimator',
+  transpiler: 'Transpiler',
 };
 
 type LearningTab = 'tracks' | 'videos';
@@ -253,6 +257,11 @@ export function Sidebar({ view, width, onWidthChange }: SidebarProps) {
         {view === 'estimator' && (
           <SidebarSuspense>
             <EstimatorPanel />
+          </SidebarSuspense>
+        )}
+        {view === 'transpiler' && (
+          <SidebarSuspense>
+            <TranspilerControls />
           </SidebarSuspense>
         )}
       </div>

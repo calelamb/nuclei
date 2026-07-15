@@ -59,6 +59,9 @@ const CompareView = lazy(async () => ({
 const QecAnalysisView = lazy(async () => ({
   default: (await import('../qec/QecAnalysisView')).QecAnalysisView,
 }));
+const TranspilerExplorer = lazy(async () => ({
+  default: (await import('../transpiler/TranspilerExplorer')).TranspilerExplorer,
+}));
 
 const DEFAULT_BOTTOM_HEIGHT = 200;
 const DEFAULT_SIDEBAR_WIDTH = 240;
@@ -575,6 +578,11 @@ export function PanelLayout() {
   const showExperimentsMain =
     workspaceMode === 'research' && activeView === 'experiments' && selectedExperimentFileName !== null;
 
+  // Transpiler Explorer (dev tools Phase 1) — Research mode swaps the main
+  // editor+viz area for the before/after transpile view whenever the
+  // Transpiler rail item is active (controls sit in the sidebar).
+  const showTranspilerMain = workspaceMode === 'research' && activeView === 'transpiler';
+
   // A selected QEC campaign experiment shows the analysis surface (threshold +
   // decoder workbench, PRD 10 Phase E) instead of the sweep runs table.
   const selectedExperiment = useExperimentStore((s) =>
@@ -779,6 +787,18 @@ export function PanelLayout() {
           }}>
             <Suspense fallback={null}>
               <LearnModeView />
+            </Suspense>
+          </div>
+        ) : showTranspilerMain ? (
+          /* Dev tools Phase 1 — Transpiler Explorer main view, swapped in for
+             the editor+viz area while the Transpiler rail item is active. */
+          <div style={{
+            flex: 1, minWidth: 0, overflow: 'hidden',
+            display: 'flex', flexDirection: 'column',
+            animation: 'nuclei-fade-in 200ms ease',
+          }}>
+            <Suspense fallback={null}>
+              <TranspilerExplorer />
             </Suspense>
           </div>
         ) : showExperimentsMain ? (

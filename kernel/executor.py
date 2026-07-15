@@ -569,35 +569,9 @@ class Executor:
         qiskit is imported lazily inside this method, matching the rest of
         the module's no-import-time-dependency pattern.
         """
-        spec = self._resolve_spec(code, language)
-        if spec is None or spec.framework != "qiskit":
-            return None, "", "", KernelError(
-                code="transpile_unsupported_framework",
-                message="Transpilation preview currently supports Qiskit circuits.",
-                framework=spec.framework if spec else None,
-            )
-
-        adapter, adapter_error = self._load_adapter(spec)
-        if adapter_error:
-            return None, "", "", adapter_error
-
-        stdout, stderr, error = self._run_code(code)
+        _adapter, circuit, stdout, stderr, error = self._prepare_transpile_circuit(code, language)
         if error:
-            error = self._normalize_runtime_error(spec, error)
-            error.framework = spec.framework
             return None, stdout, stderr, error
-
-        try:
-            circuit = adapter.find_circuit(self._namespace)
-        except Exception as exc:
-            return None, stdout, stderr, self._capability_error(spec, exc, "adapter_error")
-
-        if circuit is None:
-            return None, stdout, stderr, KernelError(
-                code="no_circuit",
-                message="No quantum circuit found in code.",
-                framework=spec.framework,
-            )
 
         try:
             from qiskit import transpile as qiskit_transpile
@@ -644,3 +618,150 @@ class Executor:
         }
 
         return metrics, stdout, stderr, None
+
+    def _prepare_transpile_circuit(self, code: str, language: str | None):
+        """Shared setup for transpile()/transpile_explore(): resolve the (Qiskit)
+        spec, run the code, and find the circuit.
+
+        Returns ``(adapter, circuit, stdout, stderr, error)``. On any failure
+        ``error`` is a KernelError and ``circuit`` is None.
+        """
+        spec = self._resolve_spec(code, language)
+        if spec is None or spec.framework != "qiskit":
+            return None, None, "", "", KernelError(
+                code="transpile_unsupported_framework",
+                message="Transpilation preview currently supports Qiskit circuits.",
+                framework=spec.framework if spec else None,
+            )
+
+        adapter, adapter_error = self._load_adapter(spec)
+        if adapter_error:
+            return None, None, "", "", adapter_error
+
+        stdout, stderr, error = self._run_code(code)
+        if error:
+            error = self._normalize_runtime_error(spec, error)
+            error.framework = spec.framework
+            return None, None, stdout, stderr, error
+
+        try:
+            circuit = adapter.find_circuit(self._namespace)
+        except Exception as exc:
+            return None, None, stdout, stderr, self._capability_error(spec, exc, "adapter_error")
+
+        if circuit is None:
+            return None, None, stdout, stderr, KernelError(
+                code="no_circuit",
+                message="No quantum circuit found in code.",
+                framework=spec.framework,
+            )
+
+        return adapter, circuit, stdout, stderr, None
+
+    def transpile_explore(
+        self,
+        code: str,
+        *,
+        basis_gates: list[str] | None = None,
+        coupling_map: list[list[int]] | None = None,
+        optimization_level: int = 1,
+        language: str | None = None,
+    ) -> tuple[dict | None, str, str, KernelError | None]:
+        """Transpile for a target and return the full 'explorer' payload:
+        before/after CircuitSnapshots, before/after metrics, and the passes
+        that changed the circuit (with the gates each added/removed).
+
+        Unlike ``transpile()`` (metrics-only, used by the Dirac agent), this
+        runs a preset PassManager with a per-pass callback so the frontend can
+        show *what the compiler did, pass by pass*. Qiskit-only.
+        """
+        adapter, circuit, stdout, stderr, error = self._prepare_transpile_circuit(code, language)
+        if error:
+            return None, stdout, stderr, error
+
+        try:
+            from qiskit.transpiler.preset_passmanagers import generate_preset_pass_manager
+            from qiskit.converters import dag_to_circuit
+        except ImportError as exc:
+            dependency = exc.name or "qiskit"
+            return None, stdout, stderr, KernelError(
+                code="missing_dependency",
+                message=_missing_dependency_message("qiskit", dependency),
+                framework="qiskit",
+                dependency=dependency,
+            )
+
+        before_snapshot = adapter.extract_snapshot(circuit)
+
+        # Capture (pass name, op counts, depth) after each pass so we can diff
+        # consecutive passes and attribute added gates (routing SWAPs, basis
+        # translation) to the pass responsible.
+        records: list[tuple[str, dict, int]] = []
+
+        def _callback(**kwargs) -> None:
+            pass_obj = kwargs.get("pass_")
+            dag = kwargs.get("dag")
+            name = type(pass_obj).__name__ if pass_obj is not None else "?"
+            try:
+                as_circuit = dag_to_circuit(dag)
+                records.append((name, dict(as_circuit.count_ops()), as_circuit.depth()))
+            except Exception:
+                pass
+
+        try:
+            pass_manager = generate_preset_pass_manager(
+                optimization_level=optimization_level,
+                basis_gates=basis_gates or None,
+                coupling_map=coupling_map or None,
+            )
+            transpiled = pass_manager.run(circuit, callback=_callback)
+        except Exception:
+            tb = traceback.format_exc()
+            return None, stdout, stderr, KernelError(
+                code="adapter_error",
+                message=_short_error_message(tb),
+                traceback=tb,
+                framework="qiskit",
+            )
+
+        after_snapshot = adapter.extract_snapshot(transpiled)
+
+        # Only report passes that actually changed the circuit's gate makeup.
+        passes: list[dict] = []
+        prev_ops: dict | None = None
+        for name, ops, depth in records:
+            if prev_ops is not None:
+                keys = set(ops) | set(prev_ops)
+                added = {k: ops.get(k, 0) - prev_ops.get(k, 0) for k in keys}
+                added = {k: v for k, v in added.items() if v != 0}
+                if added:
+                    passes.append({"name": name, "depth": depth, "added_gates": added})
+            prev_ops = ops
+
+        def _two_qubit(circ) -> int:
+            return sum(
+                1
+                for inst in circ.data
+                if len(inst.qubits) == 2 and inst.operation.name not in ("measure", "barrier")
+            )
+
+        def _op_count(circ) -> int:
+            return sum(
+                1 for inst in circ.data if inst.operation.name not in ("measure", "barrier")
+            )
+
+        payload = {
+            "before": before_snapshot.to_dict(),
+            "after": after_snapshot.to_dict(),
+            "metrics": {
+                "depth": {"before": circuit.depth(), "after": transpiled.depth()},
+                "two_qubit": {"before": _two_qubit(circuit), "after": _two_qubit(transpiled)},
+                "gate_count": {"before": _op_count(circuit), "after": _op_count(transpiled)},
+            },
+            "passes": passes,
+            "target": {
+                "basis_gates": list(basis_gates) if basis_gates else None,
+                "coupling_size": len(coupling_map) if coupling_map else 0,
+            },
+        }
+        return payload, stdout, stderr, None

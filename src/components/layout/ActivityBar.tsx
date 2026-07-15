@@ -1,4 +1,4 @@
-import { Files, Search, Cpu, GraduationCap, Blocks, Settings, Server, Users, Trophy, Rocket, FlaskConical, Calculator } from 'lucide-react';
+import { Files, Search, Cpu, GraduationCap, Blocks, Settings, Server, Users, Trophy, Rocket, FlaskConical, Calculator, Shuffle } from 'lucide-react';
 import { useThemeStore } from '../../stores/themeStore';
 import { bottomViewsForMode } from './panelRegistry';
 import type { WorkspaceMode } from '../../stores/workspaceStore';
@@ -15,7 +15,8 @@ export type ActivityView =
   | 'community'
   | 'settings'
   | 'experiments'
-  | 'estimator';
+  | 'estimator'
+  | 'transpiler';
 
 interface ActivityBarProps {
   active: ActivityView | null;
@@ -44,6 +45,7 @@ const ITEM_META: Record<ActivityView, { icon: typeof Files; label: string }> = {
   settings: { icon: Settings, label: 'Settings' },
   experiments: { icon: FlaskConical, label: 'Experiments' },
   estimator: { icon: Calculator, label: 'Resource Estimator' },
+  transpiler: { icon: Shuffle, label: 'Transpiler' },
 };
 
 function ActivityIcon({ item, isActive, onClick, shortcut }: {

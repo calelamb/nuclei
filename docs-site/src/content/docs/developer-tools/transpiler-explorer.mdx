@@ -1,0 +1,77 @@
+---
+title: "Transpiler Explorer"
+description: "godbolt.org for quantum: transpile the circuit in the editor for a target device and see, pass by pass, what the compiler did — before vs. after, with the routing SWAPs and basis rewrites attributed to the pass that added them."
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+The **Transpiler Explorer** is *godbolt.org for quantum*. It takes the circuit
+in your editor, transpiles it for a target device, and shows you **what the
+compiler did to it** — before vs. after, pass by pass, and *why* the gate count
+and depth grew. When your two-qubit count triples on real hardware, this is the
+view that tells you which pass did it and which physical constraint forced it.
+
+<Aside type="note">
+**Qiskit only.** Qiskit is the only supported framework with an introspectable
+compiler (a `PassManager` you can hook), so the pass-by-pass view is
+Qiskit-specific. For other frameworks the panel says so plainly rather than
+producing a misleading result.
+</Aside>
+
+## Using it
+
+Open **Transpiler** in the Research rail (or `⌘`-jump to it). It transpiles the
+**active editor buffer**. In the sidebar:
+
+1. **Target** — `Simulator (all-to-all)` (no basis constraint, no routing — the
+   pure optimization passes) or any connected hardware backend, which supplies
+   its real **basis gate set** and **coupling map**.
+2. **Optimization level** — `0`–`3`, Qiskit's preset levels (higher = more
+   aggressive optimization, more passes).
+3. **Transpile** — runs a preset pass manager for that target.
+
+The main area then shows the result.
+
+## What you see
+
+- **Before / After** — the logical circuit and the transpiled circuit, side by
+  side, each drawn as a real circuit diagram. Under each, a metric strip:
+  **depth**, **two-qubit gate count**, and **total gate count**. The *After*
+  strip also shows the signed **delta** for each. Growth here is expected — it's
+  the cost of meeting the device's constraints, shown in the accent colour, not
+  flagged as an error.
+- **Compiler passes** — every pass that *changed the circuit's gate makeup*, in
+  pipeline order. Each row shows the pass name, the gates it added or removed
+  (`+6 swap`, `+32 rz, −16 h`), and the net gate change. The passes that added
+  **entangling gates or routing SWAPs** are highlighted and tagged `routing` —
+  this is the "why did my circuit blow up" answer at a glance.
+- **Target** — the basis-gate set and the number of coupling-map edges that were
+  applied, plus (in the sidebar) the device topology as a connectivity map.
+
+## Why the numbers move
+
+Two forces inflate a transpiled circuit:
+
+- **Routing.** A device's qubits aren't all-to-all connected. A two-qubit gate
+  between non-adjacent qubits must be *routed* — Qiskit inserts **SWAP** gates
+  (each ≈ 3 CX) to move the logical qubits together. On a line topology this can
+  multiply the two-qubit count several-fold. The pass responsible (e.g.
+  `SabreSwap` / `SabreLayout`) is the one tagged `routing`.
+- **Basis translation.** Hardware runs a fixed **native gate set** (e.g.
+  `rz, sx, x, cx`). Every gate outside it is rewritten into that basis by
+  `BasisTranslator`, so one `H` becomes a short `rz`/`sx` sequence — inflating
+  the single-qubit gate count while `Optimize1qGates…` passes claw some of it
+  back.
+
+Switch the **target** between the simulator and a hardware backend, or change
+the **optimization level**, and re-transpile to watch these trade off.
+
+## Under the hood
+
+The panel is one thin front-end over a kernel capability: the
+[`transpile` message](/docs/kernel-api/messages-execution/#transpile). The
+kernel runs a Qiskit preset `PassManager` with a per-pass callback that captures
+each pass's `DAGCircuit`, then diffs consecutive passes to attribute added gates
+to the pass responsible. The before/after snapshots are the same
+[`CircuitSnapshot`](/docs/kernel-api/schemas/#circuitsnapshot) the rest of Nuclei
+uses. Nothing is simulated — this is a pure compilation preview.

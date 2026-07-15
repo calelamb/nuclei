@@ -30,12 +30,13 @@ describe('activityViewsForMode (registry-driven, Phase C)', () => {
     ]);
   });
 
-  it('Research mode, developer views OFF — files/experiments/hardware/estimator/launch/plugins + settings', () => {
+  it('Research mode, developer views OFF — files/experiments/hardware/estimator/transpiler/launch/plugins + settings', () => {
     expect(activityViewsForMode('research', { experimentalFeatures: false })).toEqual([
       'files',
       'experiments',
       'hardware',
       'estimator',
+      'transpiler',
       'launch',
       'plugins',
       'settings',
@@ -48,6 +49,7 @@ describe('activityViewsForMode (registry-driven, Phase C)', () => {
       'experiments',
       'hardware',
       'estimator',
+      'transpiler',
       'launch',
       'plugins',
       'search',
