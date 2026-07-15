@@ -116,7 +116,7 @@ export default defineConfig({
         },
         {
           label: 'Dirac AI',
-          items: ['dirac/architecture', 'dirac/extending'],
+          items: ['dirac/architecture', 'dirac/agent-runtime', 'dirac/extending'],
         },
         {
           label: 'Extending',
