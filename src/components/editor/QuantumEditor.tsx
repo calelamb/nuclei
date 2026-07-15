@@ -6,6 +6,8 @@ import { useEditorStore } from '../../stores/editorStore';
 import { useThemeStore } from '../../stores/themeStore';
 import { useSettingsStore } from '../../stores/settingsStore';
 import { useLintStore } from '../../stores/lintStore';
+import { useProjectStore } from '../../stores/projectStore';
+import { pathsRemoved } from './tabModels';
 import { getExecute } from '../../App';
 import { registerGhostCompletions, cancelCompletion } from './completions/ghostCompletions';
 import { registerPythonFormatting } from './pythonFormatting';
@@ -123,6 +125,26 @@ export function QuantumEditor() {
     editor.focus();
   };
 
+  // Dispose the Monaco model for a tab when it's closed (dev tools Phase 4 /
+  // P4.1), so per-tab models don't accumulate over a long session. Best-effort:
+  // if the URI scheme doesn't match, disposal simply no-ops. Never disposes the
+  // model currently attached to the editor.
+  useEffect(() => {
+    let prevPaths = new Set(useProjectStore.getState().tabs.map((t) => t.path));
+    const unsub = useProjectStore.subscribe((state) => {
+      const nextPaths = new Set(state.tabs.map((t) => t.path));
+      const monacoApi = monacoRef.current;
+      if (monacoApi) {
+        for (const p of pathsRemoved(prevPaths, nextPaths)) {
+          const model = monacoApi.editor.getModel(monacoApi.Uri.parse(p));
+          if (model && model !== editorRef.current?.getModel()) model.dispose();
+        }
+      }
+      prevPaths = nextPaths;
+    });
+    return unsub;
+  }, []);
+
   // Re-apply theme on mode change. Themes themselves are defined once in
   // beforeMount; this effect just switches between them.
   useEffect(() => {
@@ -234,6 +256,15 @@ export function QuantumEditor() {
         language={language}
         theme={themeName}
         value={code}
+        // Per-tab Monaco models (dev tools Phase 4 / P4.1): a distinct `path`
+        // per open file makes @monaco-editor/react keep a model per tab, so
+        // undo history is isolated per file and `saveViewState` restores each
+        // tab's cursor/scroll on switch. `keepCurrentModel` preserves models
+        // across the editor's (now rare) unmounts; closed tabs are disposed
+        // explicitly below.
+        path={filePath ?? undefined}
+        keepCurrentModel
+        saveViewState
         onChange={handleChange}
         onMount={handleMount}
         options={{
