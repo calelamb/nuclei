@@ -12,7 +12,8 @@
     "test": "vitest run",
     "lint": "eslint .",
     "preview": "vite preview",
-    "tauri": "tauri"
+    "tauri": "tauri",
+    "build:wasm": "bash wasm/qec-dem/build.sh"
   },
   "dependencies": {
     "@monaco-editor/react": "^4.7.0",
