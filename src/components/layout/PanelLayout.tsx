@@ -583,6 +583,11 @@ export function PanelLayout() {
   // Transpiler rail item is active (controls sit in the sidebar).
   const showTranspilerMain = workspaceMode === 'research' && activeView === 'transpiler';
 
+  // dev tools Phase 4 / P4.1 — when a Research takeover (transpiler/experiments)
+  // is active, the editor+viz area is HIDDEN, not unmounted, so Monaco keeps its
+  // per-tab models, undo, cursor, and scroll across the switch.
+  const editorHidden = showTranspilerMain || showExperimentsMain;
+
   // A selected QEC campaign experiment shows the analysis surface (threshold +
   // decoder workbench, PRD 10 Phase E) instead of the sweep runs table.
   const selectedExperiment = useExperimentStore((s) =>
@@ -789,47 +794,48 @@ export function PanelLayout() {
               <LearnModeView />
             </Suspense>
           </div>
-        ) : showTranspilerMain ? (
-          /* Dev tools Phase 1 — Transpiler Explorer main view, swapped in for
-             the editor+viz area while the Transpiler rail item is active. */
-          <div style={{
-            flex: 1, minWidth: 0, overflow: 'hidden',
-            display: 'flex', flexDirection: 'column',
-            animation: 'nuclei-fade-in 200ms ease',
-          }}>
-            <Suspense fallback={null}>
-              <TranspilerExplorer />
-            </Suspense>
-          </div>
-        ) : showExperimentsMain ? (
-          /* PRD 09 Phase D — Research mode's runs table / run detail,
-             swapped in for the ordinary editor+viz area while an experiment
-             is selected in the Experiments rail. PRD 11 Phase C adds the
-             experiment→run breadcrumb trail at the top. */
-          <div style={{
-            flex: 1, minWidth: 0, overflow: 'hidden',
-            display: 'flex', flexDirection: 'column',
-            animation: 'nuclei-fade-in 200ms ease',
-          }}>
-            <ExperimentBreadcrumbs />
-            <div style={{ flex: 1, minHeight: 0, overflow: 'hidden' }}>
-              <Suspense fallback={null}>
-                {selectedIsCampaign ? (
-                  <QecAnalysisView />
-                ) : compareOpen ? (
-                  <CompareView />
-                ) : selectedRunDir ? (
-                  <RunDetail />
-                ) : (
-                  <RunsTable />
-                )}
-              </Suspense>
-            </div>
-          </div>
         ) : (
           <>
-            {/* Editor + Viz area */}
-            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0 }}>
+            {/* Research takeovers (dev tools Phase 1 / PRD 09 Phase D) are now
+                OVERLAID rather than swapped for the editor, so the editor stays
+                mounted beneath them and never loses Monaco state (P4.1). */}
+            {showTranspilerMain && (
+              <div style={{
+                flex: 1, minWidth: 0, overflow: 'hidden',
+                display: 'flex', flexDirection: 'column',
+                animation: 'nuclei-fade-in 200ms ease',
+              }}>
+                <Suspense fallback={null}>
+                  <TranspilerExplorer />
+                </Suspense>
+              </div>
+            )}
+            {showExperimentsMain && (
+              <div style={{
+                flex: 1, minWidth: 0, overflow: 'hidden',
+                display: 'flex', flexDirection: 'column',
+                animation: 'nuclei-fade-in 200ms ease',
+              }}>
+                <ExperimentBreadcrumbs />
+                <div style={{ flex: 1, minHeight: 0, overflow: 'hidden' }}>
+                  <Suspense fallback={null}>
+                    {selectedIsCampaign ? (
+                      <QecAnalysisView />
+                    ) : compareOpen ? (
+                      <CompareView />
+                    ) : selectedRunDir ? (
+                      <RunDetail />
+                    ) : (
+                      <RunsTable />
+                    )}
+                  </Suspense>
+                </div>
+              </div>
+            )}
+
+            {/* Editor + Viz area — ALWAYS mounted; hidden (not unmounted) during
+                a Research takeover so Monaco keeps per-tab models/undo/cursor. */}
+            <div style={{ flex: 1, display: editorHidden ? 'none' : 'flex', flexDirection: 'column', minWidth: 0 }}>
               {/* Top: editor area + visualization */}
               <div ref={topSplitRef} style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
                 {/* Left: Editor with tabs + breadcrumbs + launch strip */}
@@ -896,8 +902,9 @@ export function PanelLayout() {
               )}
             </div>
 
-            {/* Dirac side panel (Code Mode only — Learn Mode has its own) */}
-            <DiracSidePanel />
+            {/* Dirac side panel (Code Mode only — hidden during a Research
+                takeover, matching the pre-P4.1 behavior). */}
+            {!editorHidden && <DiracSidePanel />}
           </>
         )}
       </div>
