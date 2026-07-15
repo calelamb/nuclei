@@ -6,7 +6,7 @@ import { useEditorStore } from '../../stores/editorStore';
 import { useThemeStore } from '../../stores/themeStore';
 import { useSettingsStore } from '../../stores/settingsStore';
 import { getExecute } from '../../App';
-import { registerGhostCompletions } from './completions/ghostCompletions';
+import { registerGhostCompletions, cancelCompletion } from './completions/ghostCompletions';
 import { InlineEditWidget } from './inlineEdit/InlineEditWidget';
 import { registerNucleiThemes } from './monacoThemes';
 import { registerQsharpLanguage } from './qsharpLanguage';
@@ -46,7 +46,8 @@ function setupMonaco(monacoApi: Monaco): void {
 }
 
 export function QuantumEditor() {
-  const { code, setCode } = useEditorStore();
+  const code = useEditorStore((s) => s.code);
+  const setCode = useEditorStore((s) => s.setCode);
   const filePath = useEditorStore((s) => s.filePath);
   const framework = useEditorStore((s) => s.framework);
   const errors = useEditorStore((s) => s.errors);
@@ -111,6 +112,9 @@ export function QuantumEditor() {
     });
 
     registerGhostCompletions(monacoApi);
+    // Cancel any in-flight ghost request when the editor loses focus, so a
+    // pending completion doesn't fire against a blurred editor.
+    editor.onDidBlurEditorText(() => cancelCompletion());
     editor.focus();
   };
 

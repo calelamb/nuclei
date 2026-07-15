@@ -3,9 +3,9 @@ import { useProjectStore } from '../../stores/projectStore';
 import { useEditorStore } from '../../stores/editorStore';
 import { useSimulationStore } from '../../stores/simulationStore';
 import { useThemeStore } from '../../stores/themeStore';
-import { useDialogStore } from '../../stores/dialogStore';
 import { X, FileCode, Play, Loader2, Rocket } from 'lucide-react';
 import { getExecute, getFileOps } from '../../App';
+import { requestCloseTab } from '../../lib/tabClose';
 import { FrameworkSelector } from './FrameworkSelector';
 import { useHardwareStore } from '../../stores/hardwareStore';
 
@@ -64,26 +64,7 @@ export function EditorTabs() {
     setRenameValue('');
   };
 
-  const requestClose = (path: string) => {
-    const tab = useProjectStore.getState().tabs.find((t) => t.path === path);
-    if (!tab) return;
-    if (!tab.isDirty) {
-      useProjectStore.getState().closeTab(path);
-      return;
-    }
-    useDialogStore.getState().requestClose({
-      fileName: basename(path),
-      onSave: async () => {
-        useProjectStore.getState().setActiveTab(path);
-        const ops = getFileOps();
-        if (ops) await ops.saveFile();
-        useProjectStore.getState().markTabSaved(path, tab.content);
-        useProjectStore.getState().closeTab(path);
-      },
-      onDontSave: () => useProjectStore.getState().closeTab(path),
-      onCancel: () => {},
-    });
-  };
+  const requestClose = requestCloseTab;
 
   const renderProjectTab = (path: string, isDirty: boolean) => {
     const isActive = path === activeTabPath;

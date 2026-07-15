@@ -74,23 +74,53 @@ export function buildCompletionSystemPrompt(framework: string, mode: WorkspaceMo
 }
 
 /**
- * True when the (left-trimmed) text before the cursor sits inside a comment
- * or string for the given Monaco language id. Q# uses \`//\` comments and
- * \`"\`/\`$"\` strings; Python uses \`#\` and quotes.
+ * True when the text before the cursor sits inside a comment or string for the
+ * given Monaco language id. A comment token *anywhere* before the cursor counts
+ * (so a mid-line `x = 1  # …` is caught, not just a whole-line comment); strings
+ * are matched at the start of the (trimmed) segment. Q# uses `//` comments and
+ * `"`/`$"` strings; Python uses `#` and quotes.
  */
 export function isInCommentOrString(beforeCursor: string, languageId: string): boolean {
   if (languageId === 'qsharp') {
     return (
-      beforeCursor.startsWith('//') ||
+      beforeCursor.includes('//') ||
       beforeCursor.startsWith('"') ||
       beforeCursor.startsWith('$"')
     );
   }
   return (
-    beforeCursor.startsWith('#') ||
+    beforeCursor.includes('#') ||
     beforeCursor.startsWith("'") ||
     beforeCursor.startsWith('"')
   );
+}
+
+/** How long to wait after the last keystroke before requesting a completion. */
+export const COMPLETION_DEBOUNCE_MS = 400;
+/** Payload window: chars kept before/after the cursor instead of the whole file. */
+export const COMPLETION_WINDOW_BEFORE = 2400;
+export const COMPLETION_WINDOW_AFTER = 600;
+
+/**
+ * A bounded window of source around the cursor. Sending the whole file on every
+ * keystroke was the worst cost/latency source; the model only needs local
+ * context. `truncated*` note when the window clipped the file.
+ */
+export function windowAroundCursor(
+  code: string,
+  cursorOffset: number,
+  before: number = COMPLETION_WINDOW_BEFORE,
+  after: number = COMPLETION_WINDOW_AFTER,
+): { beforeCursor: string; afterCursor: string; truncatedStart: boolean; truncatedEnd: boolean } {
+  const clamped = Math.max(0, Math.min(cursorOffset, code.length));
+  const start = Math.max(0, clamped - before);
+  const end = Math.min(code.length, clamped + after);
+  return {
+    beforeCursor: code.slice(start, clamped),
+    afterCursor: code.slice(clamped, end),
+    truncatedStart: start > 0,
+    truncatedEnd: end < code.length,
+  };
 }
 
 /** Monaco language ids that get ghost completions. */
@@ -98,9 +128,34 @@ const GHOST_LANGUAGE_IDS = ['python', 'qsharp'] as const;
 
 let abortController: AbortController | null = null;
 
+/**
+ * Resolve `true` after `ms`, or `false` if the Monaco cancellation token fires
+ * first — Monaco cancels the in-flight inline-completion request on the next
+ * keystroke, so this doubles as a trailing debounce: only the last keystroke's
+ * request survives the wait and actually fetches.
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function waitOrCancel(ms: number, token: any): Promise<boolean> {
+  return new Promise((resolve) => {
+    let settled = false;
+    const timer = setTimeout(() => {
+      if (!settled) {
+        settled = true;
+        resolve(true);
+      }
+    }, ms);
+    token?.onCancellationRequested?.(() => {
+      if (!settled) {
+        settled = true;
+        clearTimeout(timer);
+        resolve(false);
+      }
+    });
+  });
+}
+
 function buildCompletionContext(code: string, cursorOffset: number): string {
-  const beforeCursor = code.slice(0, cursorOffset);
-  const afterCursor = code.slice(cursorOffset);
+  const { beforeCursor, afterCursor } = windowAroundCursor(code, cursorOffset);
   const framework = useEditorStore.getState().framework;
   const snapshot = useCircuitStore.getState().snapshot;
   const terminalOutput = useSimulationStore.getState().terminalOutput;
@@ -157,8 +212,17 @@ async function fetchCompletion(code: string, cursorOffset: number): Promise<stri
   }
 }
 
+// Register the inline provider at most once per Monaco instance. QuantumEditor
+// calls this on every mount (and StrictMode/HMR double-invoke); without this
+// guard each remount stacked another global provider, multiplying API calls.
+const registeredMonacos = new WeakSet<object>();
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function registerGhostCompletions(monaco: any) {
+  if (monaco && typeof monaco === 'object' && registeredMonacos.has(monaco)) {
+    return { dispose() {} };
+  }
+  if (monaco && typeof monaco === 'object') registeredMonacos.add(monaco);
   const provider = {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     provideInlineCompletions: async (model: any, position: any, _context: any, token: any) => {
@@ -177,6 +241,12 @@ export function registerGhostCompletions(monaco: any) {
       const lineContent = model.getLineContent(position.lineNumber);
       const beforeCursor = lineContent.slice(0, position.column - 1).trimStart();
       if (isInCommentOrString(beforeCursor, languageId)) {
+        return { items: [] };
+      }
+
+      // Trailing debounce: wait out a typing pause; bail if Monaco cancels
+      // (i.e. the user kept typing) so we don't fire on every keystroke.
+      if (!(await waitOrCancel(COMPLETION_DEBOUNCE_MS, token))) {
         return { items: [] };
       }
 

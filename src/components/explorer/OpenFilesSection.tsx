@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 import { useProjectStore } from '../../stores/projectStore';
 import { useThemeStore } from '../../stores/themeStore';
+import { requestCloseTab } from '../../lib/tabClose';
 
 const EXTENSION_ICONS: Record<string, LucideIcon> = {
   py: FileCode,
@@ -42,7 +43,6 @@ export function OpenFilesSection() {
   const tabs = useProjectStore((s) => s.tabs);
   const activeTabPath = useProjectStore((s) => s.activeTabPath);
   const setActiveTab = useProjectStore((s) => s.setActiveTab);
-  const closeTab = useProjectStore((s) => s.closeTab);
   const colors = useThemeStore((s) => s.colors);
   const [collapsed, setCollapsed] = useState(false);
   const [hoveredPath, setHoveredPath] = useState<string | null>(null);
@@ -155,7 +155,7 @@ export function OpenFilesSection() {
                   aria-label={`Close ${name}`}
                   onClick={(e) => {
                     e.stopPropagation();
-                    closeTab(tab.path);
+                    requestCloseTab(tab.path);
                   }}
                   style={{
                     background: 'transparent',
