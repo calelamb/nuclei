@@ -305,6 +305,48 @@ which returns metrics only. This message is the richer, first-class capability;
 the agent tool will reuse the same kernel path in a later phase.
 </Aside>
 
+## `debug_trace`
+
+**App 0.12.0** — additive. Runs the code, finds its circuit, and returns the
+**per-gate state trajectory** for the [Quantum Debugger](/docs/developer-tools/quantum-debugger/):
+the quantum state after every gate, computed in one call so a client can scrub
+through steps with no round-trip each. **Qiskit and Cirq only** (the frameworks
+with a statevector path); others answer with a `debug_unsupported_framework`
+error. It does not sample measurements.
+
+| Field | Type | Required | Default |
+|-------|------|----------|---------|
+| `type` | `"debug_trace"` | yes | — |
+| `code` | string | no | `""` |
+| `language` | `"python"` \| `"qsharp"` \| `"stim"` | no | detected |
+
+Response sequence: `output`/`stderr` (if any), then a `debug_trace_result` whose
+`data` is the payload below (or `null` on error, preceded by an `error` with
+`phase: "debug"`).
+
+`debug_trace_result.data`:
+
+| Field | Type | Notes |
+|-------|------|-------|
+| `framework` | string | `"qiskit"` or `"cirq"`. |
+| `qubit_count` | int | Number of qubits. |
+| `steps` | array | `G+1` steps. `steps[0]` is the initial `\|0…0⟩` (`gate_index: -1`); `steps[k+1]` is the state **after** gate `k`, aligned with `CircuitSnapshot.gates[k]`. Each step: `{ "gate_index": int, "label": string, "probabilities": {string: float}, "bloch_coords": [{x,y,z}, …] }`. Non-unitary ops (measure/barrier/reset) appear as steps with the state unchanged. |
+
+Steps carry **probabilities + Bloch coords only** — not the full `2ⁿ`-amplitude
+vector at every step, which would blow up the payload. The trace is bounded to
+**12 qubits** and **200 gates**; past either, a `circuit_too_large` error names
+the limit (no silent truncation). The per-qubit Bloch coordinates use the same
+per-framework convention as [`SimulationResult.bloch_coords`](/docs/kernel-api/schemas/#simulationresult).
+
+```json title="debug_trace_result for a Bell pair (abridged)"
+{ "type": "debug_trace_result", "data": {
+    "framework": "qiskit", "qubit_count": 2,
+    "steps": [
+      { "gate_index": -1, "label": "initial", "probabilities": {"00": 1.0}, "bloch_coords": [{"x":0,"y":0,"z":1},{"x":0,"y":0,"z":1}] },
+      { "gate_index": 0, "label": "h q0", "probabilities": {"00": 0.5, "01": 0.5}, "bloch_coords": [{"x":1,"y":0,"z":0},{"x":0,"y":0,"z":1}] },
+      { "gate_index": 1, "label": "cx q0,q1", "probabilities": {"00": 0.5, "11": 0.5}, "bloch_coords": [{"x":0,"y":0,"z":0},{"x":0,"y":0,"z":0}] } ] } }
+```
+
 ## Timeout semantics, honestly
 
 **Python frameworks** (Qiskit, Cirq, CUDA-Q): the executor defines a

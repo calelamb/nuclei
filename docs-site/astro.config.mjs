@@ -86,6 +86,7 @@ export default defineConfig({
           label: 'Developer Tools',
           items: [
             'developer-tools/transpiler-explorer',
+            'developer-tools/quantum-debugger',
           ],
         },
         {

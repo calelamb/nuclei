@@ -152,7 +152,10 @@ export type KernelMessage =
       basis_gates?: string[];
       coupling_map?: Array<[number, number]>;
       optimization_level?: 0 | 1 | 2 | 3;
-    };
+    }
+  // Dev tools Phase 3 — Quantum Debugger. Request the per-gate state
+  // trajectory for the current circuit. Additive; Qiskit/Cirq only.
+  | { type: 'debug_trace'; code: string; language?: KernelLanguage };
 
 interface HardwareJobDTO {
   id: string;
@@ -174,7 +177,7 @@ export type KernelResponse =
       message: string;
       traceback?: string;
       code?: string;
-      phase?: 'parse' | 'execute' | 'python' | 'transpile' | 'qec_estimate' | 'qec_generate' | 'qec_snapshot' | 'qec_materialize' | 'qec_campaign' | 'qec_decode_sample';
+      phase?: 'parse' | 'execute' | 'python' | 'transpile' | 'debug' | 'qec_estimate' | 'qec_generate' | 'qec_snapshot' | 'qec_materialize' | 'qec_campaign' | 'qec_decode_sample';
       framework?: Framework;
       dependency?: string;
     }
@@ -206,7 +209,28 @@ export type KernelResponse =
   | { type: 'qec_estimate_result'; data: QecEstimate }
   // Dev tools Phase 1 — reply to `transpile`. `data` is null on error (an
   // `error` with phase 'transpile' precedes it, house style).
-  | { type: 'transpile_result'; data: TranspileResult | null };
+  | { type: 'transpile_result'; data: TranspileResult | null }
+  // Dev tools Phase 3 — reply to `debug_trace`. `data` null on error.
+  | { type: 'debug_trace_result'; data: DebugTrace | null };
+
+/** One step of the Quantum Debugger's trajectory: the state AFTER applying the
+ * gate at `gate_index` (`-1` = the initial |0…0⟩ state before any gate). Carries
+ * only what the reused panels need — probabilities + per-qubit Bloch coords. */
+export interface DebugStep {
+  gate_index: number;
+  label: string;
+  probabilities: Record<string, number>;
+  bloch_coords: BlochCoord[];
+}
+
+/** `kernel/executor.py` `debug_trace` payload — the full per-gate state
+ * trajectory. `steps[0]` is the initial state; `steps[k+1]` is the state after
+ * gate `k`, so it aligns with `CircuitSnapshot.gates[k]`. */
+export interface DebugTrace {
+  framework: Framework;
+  qubit_count: number;
+  steps: DebugStep[];
+}
 
 /** A before→after pair of the same integer metric across transpilation. */
 export interface TranspileMetricDelta {
