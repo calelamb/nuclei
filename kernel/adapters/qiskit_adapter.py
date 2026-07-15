@@ -1,6 +1,6 @@
 import re
 from kernel.adapters.base import FrameworkAdapter
-from kernel.adapters._math import assign_layer, partial_trace_qubit
+from kernel.adapters._math import assign_layer, partial_trace_qubit, step_state_payload
 from kernel.models.snapshot import CircuitSnapshot, SimulationResult, Gate
 
 
@@ -154,6 +154,39 @@ class QiskitAdapter(FrameworkAdapter):
             shot_count=shots,
             seed_honored=seed_honored,
         )
+
+
+    def state_trace(self, circuit_obj) -> list[dict]:
+        """Per-gate state trajectory via incremental Statevector evolution.
+
+        Starts in |0…0⟩ and evolves one instruction at a time (O(G·2ⁿ) total),
+        snapshotting probabilities + Bloch after each. Non-unitary ops
+        (measure/barrier/reset) leave the state unchanged but still emit a step,
+        so step k stays aligned with snapshot.gates[k]. Qiskit is little-endian,
+        so the shared Bloch helper is told so.
+        """
+        from qiskit.quantum_info import Statevector
+
+        n = circuit_obj.num_qubits
+        sv = Statevector.from_int(0, 2**n)
+
+        def step(gate_index: int, label: str) -> dict:
+            return {"gate_index": gate_index, "label": label, **step_state_payload(sv.data, n, True)}
+
+        steps = [step(-1, "initial")]
+        for k, instruction in enumerate(circuit_obj.data):
+            op = instruction.operation
+            qargs = [circuit_obj.qubits.index(q) for q in instruction.qubits]
+            if op.name not in ("measure", "barrier", "reset"):
+                try:
+                    sv = sv.evolve(op, qargs=qargs)
+                except Exception:
+                    # A non-unitary or unsupported op leaves the state as-is
+                    # rather than aborting the whole trace.
+                    pass
+            label = f"{op.name} " + ",".join(f"q{q}" for q in qargs)
+            steps.append(step(k, label.strip()))
+        return steps
 
 
 # Kept as a module-level alias so existing call sites and imports keep
