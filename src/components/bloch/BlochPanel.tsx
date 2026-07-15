@@ -1,5 +1,8 @@
 import { useMemo } from 'react';
 import { useSimulationStore } from '../../stores/simulationStore';
+import { useCircuitStore } from '../../stores/circuitStore';
+import { useDebugStore } from '../../stores/debugStore';
+import { activeDebugStep } from '../../lib/debugTrace';
 import { ClassicBlochSphere } from './ClassicBlochSphere';
 
 /**
@@ -13,14 +16,20 @@ import { ClassicBlochSphere } from './ClassicBlochSphere';
  */
 export function BlochPanel() {
   const result = useSimulationStore((s) => s.result);
+  // Quantum Debugger (Phase 3): while stepping, show the Bloch state AT the
+  // cursor from the cached trace; otherwise the final simulation result.
+  const stepMode = useCircuitStore((s) => s.stepMode);
+  const stepIndex = useCircuitStore((s) => s.stepIndex);
+  const trace = useDebugStore((s) => s.trace);
+  const step = stepMode ? activeDebugStep(trace, stepIndex) : null;
 
   const blochCoords = useMemo(
-    () => result?.bloch_coords ?? [],
-    [result],
+    () => step?.bloch_coords ?? result?.bloch_coords ?? [],
+    [step, result],
   );
   const qubitCount = blochCoords.length;
 
-  if (!result || qubitCount === 0) {
+  if (qubitCount === 0) {
     return <EmptyState />;
   }
 

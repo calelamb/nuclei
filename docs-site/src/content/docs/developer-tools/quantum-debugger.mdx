@@ -1,0 +1,66 @@
+---
+title: "Quantum Debugger"
+description: "Step through a circuit gate by gate and watch the quantum state evolve — Bloch vectors and probabilities at every step, the way a code debugger shows variables at each line. Qiskit and Cirq."
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+The **Quantum Debugger** lets you step through a circuit one gate at a time and
+*see the quantum state at each step* — the Bloch sphere and probability
+distribution after every gate, the way a code debugger shows your variables at
+each line. It turns "step-through" from a visual highlight into real state
+inspection.
+
+<Aside type="note">
+Qiskit and Cirq only — the two frameworks with a statevector path. Q#, CUDA-Q,
+and Stim don't expose per-gate statevectors, so the debugger declines rather
+than showing something misleading.
+</Aside>
+
+## Using it
+
+Enter step-through mode from the **command palette** ("Step Through Circuit"),
+by **right-clicking a gate** in the circuit diagram ("Step through from here"),
+or by asking Dirac to `step_to` a gate. The step controls appear under the
+circuit:
+
+- **◀ Prev / Next ▶** — move the cursor one gate at a time.
+- **▶ Play** — auto-advance through the circuit.
+- **✕ Exit** — leave step mode (the panels return to the last full run).
+
+As you move the cursor, the **Bloch sphere** and **histogram** update to show the
+state *at that step*: the sphere shows each qubit's Bloch vector after the
+highlighted gate, and the histogram shows the ideal probability distribution at
+that point. The step readout names the gate whose result you're looking at.
+
+## What "state at step k" means
+
+The debugger computes the state **after** applying gate `k` — starting from the
+initial `|0…0⟩` (before any gate) and advancing one gate at a time. Measurement
+and barrier operations show as steps with the state unchanged (the trajectory is
+the pre-measurement statevector), so the cursor stays aligned with the circuit
+diagram gate for gate.
+
+The whole trajectory is computed in a **single** kernel call the moment you enter
+step mode, then cached — so scrubbing back and forth with Prev/Next is instant,
+with no per-step round-trip. If you edit the code while stepping, the trajectory
+refreshes.
+
+## Limits
+
+To keep the trajectory small and fast, the debugger is bounded: up to **12
+qubits** and **200 gates**. Past either, it reports the limit plainly rather than
+computing an enormous trace. Per-step payloads carry probabilities and Bloch
+coordinates (not the full 2ⁿ amplitude vector at every step), which is what the
+Bloch and histogram panels need.
+
+## Under the hood
+
+The panel is a thin front-end over one kernel capability: the
+[`debug_trace` message](/docs/kernel-api/messages-execution/#debug_trace). Each
+adapter builds the trajectory natively — Qiskit by evolving a `Statevector` one
+instruction at a time, Cirq by re-simulating the growing prefix of operations —
+and both reuse the **same** per-qubit Bloch computation the full `simulate` path
+uses, honoring each framework's qubit-order convention. The frontend's existing
+step cursor then indexes into the cached result; nothing is recomputed while you
+scrub.

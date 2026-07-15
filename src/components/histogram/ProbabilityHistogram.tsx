@@ -1,7 +1,48 @@
 import { useState, useCallback, useRef } from 'react';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 import { useSimulationStore } from '../../stores/simulationStore';
-import { getHistogramData, type HistogramViewMode } from './histogramData';
+import { useCircuitStore } from '../../stores/circuitStore';
+import { useDebugStore } from '../../stores/debugStore';
+import { activeDebugStep } from '../../lib/debugTrace';
+import { getHistogramData, getProbabilityHistogramData, type HistogramViewMode } from './histogramData';
+
+type HistogramRow = { state: string; probability: number };
+
+/** The recharts bar chart, shared by the run view and the debugger step view. */
+function HistogramChart({ data, srDescription }: { data: HistogramRow[]; srDescription: string }) {
+  return (
+    <div style={{ flex: 1, minHeight: 0 }} role="region" aria-label="Probability histogram" aria-description={srDescription}>
+      <ResponsiveContainer width="100%" height="100%">
+        <BarChart data={data} margin={{ top: 5, right: 10, bottom: 5, left: 10 }}>
+          <XAxis
+            dataKey="state"
+            tick={{ fill: '#E0E0E0', fontSize: 11, fontFamily: "'Fira Code', monospace" }}
+            axisLine={{ stroke: '#1A2A42' }}
+            tickLine={{ stroke: '#1A2A42' }}
+          />
+          <YAxis
+            domain={[0, 1]}
+            tick={{ fill: '#3D5A80', fontSize: 11, fontFamily: "'Fira Code', monospace" }}
+            axisLine={{ stroke: '#1A2A42' }}
+            tickLine={{ stroke: '#1A2A42' }}
+            tickFormatter={(v: number) => v.toFixed(1)}
+          />
+          <Tooltip
+            contentStyle={{ background: '#0A1220', border: '1px solid #1A2A42', borderRadius: 6, fontSize: 12, fontFamily: "'Fira Code', monospace" }}
+            labelStyle={{ color: '#E0E0E0' }}
+            itemStyle={{ color: '#00B4D8' }}
+            formatter={(value) => [typeof value === 'number' ? value.toFixed(4) : String(value ?? ''), 'Probability']}
+          />
+          <Bar dataKey="probability" radius={[4, 4, 0, 0]}>
+            {data.map((_, index) => (
+              <Cell key={index} fill="#00B4D8" fillOpacity={0.8} />
+            ))}
+          </Bar>
+        </BarChart>
+      </ResponsiveContainer>
+    </div>
+  );
+}
 
 export function ProbabilityHistogram() {
   const result = useSimulationStore((s) => s.result);
@@ -10,12 +51,34 @@ export function ProbabilityHistogram() {
   const [viewMode, setViewMode] = useState<HistogramViewMode>('sampled');
   const chartRef = useRef<HTMLDivElement>(null);
 
+  // Quantum Debugger (Phase 3): while stepping, show the ideal probabilities AT
+  // the cursor from the cached trace (per-step payloads have no sampled counts).
+  const stepMode = useCircuitStore((s) => s.stepMode);
+  const stepIndex = useCircuitStore((s) => s.stepIndex);
+  const trace = useDebugStore((s) => s.trace);
+  const step = stepMode ? activeDebugStep(trace, stepIndex) : null;
+
   const handleShotsChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const val = parseInt(e.target.value, 10);
     if (!isNaN(val) && val >= 100 && val <= 100000) {
       setShots(val);
     }
   }, [setShots]);
+
+  if (step) {
+    const data = getProbabilityHistogramData(step.probabilities);
+    const srDescription = data.map((d) => `${d.state}: ${(d.probability * 100).toFixed(1)}% probability`).join(', ');
+    return (
+      <div style={{ height: '100%', display: 'flex', flexDirection: 'column', padding: '8px 12px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8, flexShrink: 0 }}>
+          <span style={{ color: '#00B4D8', fontSize: 11, fontWeight: 600, fontFamily: 'Inter, sans-serif' }}>
+            Ideal probabilities · state at {step.gate_index < 0 ? 'start' : `${step.label}`}
+          </span>
+        </div>
+        <HistogramChart data={data} srDescription={srDescription} />
+      </div>
+    );
+  }
 
   if (!result) {
     return (
@@ -58,7 +121,7 @@ export function ProbabilityHistogram() {
   const srDescription = data.map(d => `${d.state}: ${(d.probability * 100).toFixed(1)}% probability`).join(', ');
 
   return (
-    <div style={{ height: '100%', display: 'flex', flexDirection: 'column', padding: '8px 12px' }} role="region" aria-label="Probability histogram" aria-description={srDescription}>
+    <div style={{ height: '100%', display: 'flex', flexDirection: 'column', padding: '8px 12px' }}>
       {/* Controls bar */}
       <div style={{
         display: 'flex',
@@ -144,41 +207,8 @@ export function ProbabilityHistogram() {
       </div>
 
       {/* Chart */}
-      <div ref={chartRef} style={{ flex: 1, minHeight: 0 }}>
-        <ResponsiveContainer width="100%" height="100%">
-          <BarChart data={data} margin={{ top: 5, right: 10, bottom: 5, left: 10 }}>
-            <XAxis
-              dataKey="state"
-              tick={{ fill: '#E0E0E0', fontSize: 11, fontFamily: "'Fira Code', monospace" }}
-              axisLine={{ stroke: '#1A2A42' }}
-              tickLine={{ stroke: '#1A2A42' }}
-            />
-            <YAxis
-              domain={[0, 1]}
-              tick={{ fill: '#3D5A80', fontSize: 11, fontFamily: "'Fira Code', monospace" }}
-              axisLine={{ stroke: '#1A2A42' }}
-              tickLine={{ stroke: '#1A2A42' }}
-              tickFormatter={(v: number) => v.toFixed(1)}
-            />
-            <Tooltip
-              contentStyle={{
-                background: '#0A1220',
-                border: '1px solid #1A2A42',
-                borderRadius: 6,
-                fontSize: 12,
-                fontFamily: "'Fira Code', monospace",
-              }}
-              labelStyle={{ color: '#E0E0E0' }}
-              itemStyle={{ color: '#00B4D8' }}
-              formatter={(value) => [typeof value === 'number' ? value.toFixed(4) : String(value ?? ''), 'Probability']}
-            />
-            <Bar dataKey="probability" radius={[4, 4, 0, 0]}>
-              {data.map((_, index) => (
-                <Cell key={index} fill="#00B4D8" fillOpacity={0.8} />
-              ))}
-            </Bar>
-          </BarChart>
-        </ResponsiveContainer>
+      <div ref={chartRef} style={{ flex: 1, minHeight: 0, display: 'flex' }}>
+        <HistogramChart data={data} srDescription={srDescription} />
       </div>
     </div>
   );

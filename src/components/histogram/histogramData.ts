@@ -7,6 +7,15 @@ export function getExecutedShotCount(result: SimulationResult): number {
   return Object.values(result.measurements).reduce((sum, count) => sum + count, 0);
 }
 
+/** Histogram rows straight from a probability map — used by the Quantum
+ * Debugger, whose per-step payload carries probabilities but no sampled
+ * measurements (so only the ideal distribution is meaningful per step). */
+export function getProbabilityHistogramData(probabilities: Record<string, number>) {
+  return Object.entries(probabilities)
+    .map(([state, probability]) => ({ state: `|${state}⟩`, probability }))
+    .sort((a, b) => a.state.localeCompare(b.state));
+}
+
 export function getHistogramData(result: SimulationResult, viewMode: HistogramViewMode) {
   if (viewMode === 'ideal') {
     return Object.entries(result.probabilities)

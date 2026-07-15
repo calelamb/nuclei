@@ -1,5 +1,7 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { useCircuitStore } from '../../stores/circuitStore';
+import { useDebugStore } from '../../stores/debugStore';
+import { activeDebugStep } from '../../lib/debugTrace';
 import { useThemeStore } from '../../stores/themeStore';
 import { renderGate, WIRE_SPACING, LAYER_SPACING, LABEL_WIDTH, PADDING, GATE_SIZE } from './gates';
 import { getGateData } from '../../data/gates';
@@ -247,10 +249,32 @@ function StepControls() {
       <button onClick={stepNext} disabled={stepIndex >= totalGates - 1} style={{ ...btnStyle, opacity: stepIndex >= totalGates - 1 ? 0.4 : 1 }}>Next ▶</button>
       <button onClick={handlePlay} style={btnStyle}>{isPlaying ? '⏸ Pause' : '▶ Play'}</button>
       <button onClick={() => setStepMode(false)} style={{ ...btnStyle, color: colors.error }}>✕ Exit</button>
+      <DebugStateReadout stepIndex={stepIndex} />
       <span style={{ color: colors.textMuted, fontSize: 11, fontFamily: 'Inter, sans-serif', marginLeft: 'auto' }}>
         Step {stepIndex + 1} / {totalGates}
       </span>
     </div>
+  );
+}
+
+/** The Quantum Debugger's per-step state status shown in the step controls:
+ * the state being inspected, or the compute/error state of the trace fetch. */
+function DebugStateReadout({ stepIndex }: { stepIndex: number }) {
+  const colors = useThemeStore((s) => s.colors);
+  const pending = useDebugStore((s) => s.pending);
+  const error = useDebugStore((s) => s.error);
+  const trace = useDebugStore((s) => s.trace);
+
+  const base = { fontSize: 11, fontFamily: 'Inter, sans-serif', marginLeft: 10 } as const;
+  if (pending) return <span style={{ ...base, color: colors.textMuted }}>computing state…</span>;
+  if (error) return <span style={{ ...base, color: colors.textMuted }}>{error}</span>;
+
+  const step = activeDebugStep(trace, stepIndex);
+  if (!step) return null;
+  return (
+    <span style={{ ...base, color: colors.accent }}>
+      state after {step.gate_index < 0 ? 'start' : step.label}
+    </span>
   );
 }
 

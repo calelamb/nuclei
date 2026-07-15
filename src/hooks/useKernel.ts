@@ -17,6 +17,8 @@ import { useMissingDependencyStore } from '../stores/missingDependencyStore';
 import { setQecDecodeSender, setQecSnapshotSender, setQecEstimateSender } from '../lib/qecDecodeSender';
 import { setTranspileSender } from '../lib/transpileSender';
 import { useTranspileStore } from '../stores/transpileStore';
+import { setDebugTraceSender } from '../lib/debugTraceSender';
+import { useDebugStore } from '../stores/debugStore';
 import { narrateParse, narrateResult } from '../services/narration';
 import { rewriteExecutionError } from '../services/errorRewrite';
 import { computeNextPollDelayMs, STALE_AFTER_MS } from '../lib/pollSchedule';
@@ -173,6 +175,11 @@ export function useKernel() {
         // error; don't overwrite it with an empty success.
         if (msg.data) useTranspileStore.getState().setResult(msg.data);
         break;
+      case 'debug_trace_result':
+        // Dev tools Phase 3 — Quantum Debugger. Null means a phase-'debug'
+        // error already set the store's error.
+        if (msg.data) useDebugStore.getState().setTrace(msg.data);
+        break;
       case 'output':
         useSimulationStore.getState().addOutput(msg.text, 'stdout');
         useBottomPanelStore.getState().focusTerminal();
@@ -193,6 +200,12 @@ export function useKernel() {
         // terminal/editor error surfaces (dev tools Phase 1).
         if (msg.phase === 'transpile') {
           useTranspileStore.getState().setError(msg.message);
+          break;
+        }
+
+        // Quantum Debugger failures belong to the debugger panels (Phase 3).
+        if (msg.phase === 'debug') {
+          useDebugStore.getState().setError(msg.message);
           break;
         }
 
@@ -737,18 +750,75 @@ export function useKernel() {
     [sendHardware],
   );
 
+  // Quantum Debugger (dev tools Phase 3). Desktop-only (the web/pyodide build
+  // has no statevector debug path); sendHardware no-ops there.
+  const debugTrace = useCallback(
+    (code: string) => {
+      const language = kernelLanguageFor(useEditorStore.getState().framework, useEditorStore.getState().filePath);
+      if (!sendHardware({ type: 'debug_trace', code, language })) {
+        useDebugStore.getState().setError("The kernel isn't connected. Start it and try again.");
+      }
+    },
+    [sendHardware],
+  );
+
   useEffect(() => {
     setQecDecodeSender(qecDecodeSample);
     setQecSnapshotSender(qecSnapshotReRequest);
     setQecEstimateSender(qecEstimate);
     setTranspileSender(transpile);
+    setDebugTraceSender(debugTrace);
     return () => {
       setQecDecodeSender(null);
       setQecSnapshotSender(null);
       setQecEstimateSender(null);
       setTranspileSender(null);
+      setDebugTraceSender(null);
     };
-  }, [qecDecodeSample, qecSnapshotReRequest, qecEstimate, transpile]);
+  }, [qecDecodeSample, qecSnapshotReRequest, qecEstimate, transpile, debugTrace]);
+
+  // Fetch the per-gate state trajectory when the user enters step-through mode,
+  // and refresh it (debounced) if the code changes while stepping. The existing
+  // circuitStore cursor then scrubs through the cached trace client-side. On
+  // exit, drop the trace so the panels fall back to the final result.
+  useEffect(() => {
+    let debounce: ReturnType<typeof setTimeout> | null = null;
+    let prevStepMode = useCircuitStore.getState().stepMode;
+
+    const fetchTrace = () => {
+      const code = useEditorStore.getState().code;
+      if (!code.trim()) return;
+      useDebugStore.getState().setPending(true);
+      if (isWeb && pyodideRef.current) {
+        const language = kernelLanguageFor(useEditorStore.getState().framework, useEditorStore.getState().filePath);
+        pyodideRef.current.send({ type: 'debug_trace', code, language });
+      } else if (wsRef.current?.readyState === WebSocket.OPEN) {
+        const language = kernelLanguageFor(useEditorStore.getState().framework, useEditorStore.getState().filePath);
+        wsRef.current.send(JSON.stringify({ type: 'debug_trace', code, language }));
+      }
+    };
+
+    const unsubCircuit = useCircuitStore.subscribe((state) => {
+      if (state.stepMode && !prevStepMode) fetchTrace();
+      if (!state.stepMode && prevStepMode) useDebugStore.getState().clear();
+      prevStepMode = state.stepMode;
+    });
+
+    let prevCode = useEditorStore.getState().code;
+    const unsubEditor = useEditorStore.subscribe((state) => {
+      if (state.code === prevCode) return;
+      prevCode = state.code;
+      if (!useCircuitStore.getState().stepMode) return;
+      if (debounce) clearTimeout(debounce);
+      debounce = setTimeout(fetchTrace, useSettingsStore.getState().kernel.parseDebounceMs ?? DEFAULT_DEBOUNCE_MS);
+    });
+
+    return () => {
+      if (debounce) clearTimeout(debounce);
+      unsubCircuit();
+      unsubEditor();
+    };
+  }, [isWeb]);
 
   // Polling backoff for active hardware jobs. A queued IBM job can sit in
   // the free-tier queue for an hour or more; fixed 5s polling would fire
