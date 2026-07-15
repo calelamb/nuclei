@@ -111,6 +111,11 @@ Reading it honestly:
 - **Payload cap:** above 5,000 total edges the lists are emptied,
   `truncated: true`, and the counts remain — never a silently missing
   graph. Re-request with a higher cap to render anyway (below).
+- **`dem_text`** (present *only* when `truncated: true`): the flattened DEM
+  as text (`str(dem.flattened())`). The frontend parses it client-side (a
+  WASM parser) to render the full graph with no kernel-side edge cap — so
+  arbitrarily large detector graphs render without the kernel serializing a
+  huge edge list. Absent when the graph fits, so the common case pays nothing.
 - `coords` arrays are index-aligned (entry *i* = qubit/detector *i*),
   `null` where stim has no coordinates. `sample_decode` is reserved for
   the campaign protocol increment.

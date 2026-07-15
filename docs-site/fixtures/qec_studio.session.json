@@ -563,7 +563,8 @@
             "edges": [],
             "boundary_edges": []
           },
-          "sample_decode": null
+          "sample_decode": null,
+          "dem_text": "error(0.01) D0 D2\nerror(0.01) D1 D3\nerror(0.01) D2 D4\nerror(0.01) D3 D5\nerror(0.01) D4\nerror(0.01) D4 D5\nerror(0.01) D5 L0\ndetector(1, 0) D0\ndetector(3, 0) D1\ndetector(1, 1) D2\ndetector(3, 1) D3\ndetector(1, 2) D4\ndetector(3, 2) D5"
         }
       }
     ]
