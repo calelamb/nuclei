@@ -10,6 +10,15 @@ the app with the user's own Anthropic key** — wrapped in a tutor system
 prompt, a context-injection pipeline, and tool definitions. There is no
 Nuclei server in the loop.
 
+<Aside type="tip" title="Two runtimes">
+This page documents **chat-Dirac** — the tutor: client-side, TypeScript,
+BYOK calls to `api.anthropic.com`. There is a second, separate runtime —
+**agent-Dirac**, an autonomous closed-loop Rust harness that writes and
+verifies code on its own, with the API key held in the OS keychain and every
+side effect gated by policy, budget, and workspace layers. It has its own
+deep dive: [Dirac agent runtime & harness](/docs/dirac/agent-runtime/).
+</Aside>
+
 ## Key handling
 
 {/* src/stores/diracStore.ts:11-31; src/config/dirac.ts:13; SettingsPanel.tsx:157-179 */}

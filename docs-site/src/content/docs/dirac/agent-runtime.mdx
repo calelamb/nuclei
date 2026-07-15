@@ -1,0 +1,370 @@
+---
+title: "Dirac agent runtime & harness"
+description: "The autonomous closed-loop harness behind Dirac: a Rust orchestrator that drives the Claude API through a fixed tool set, runs quantum work in a disposable process-group-isolated Python worker, and gates every side effect through policy, budget, and workspace layers — with the API key living only in the OS keychain."
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+Dirac has **two** runtimes, and they are not the same system:
+
+- **Chat-Dirac** — the tutor. Client-side, TypeScript, BYOK calls straight to
+  `api.anthropic.com`. This is what [Dirac architecture](/docs/dirac/architecture/)
+  documents.
+- **Agent-Dirac** — the autonomous coder. A **trusted Rust harness** in
+  `src-tauri/src/dirac/` that runs a closed loop: it asks Claude for the next
+  tool call, executes it deterministically, feeds the evidence back, and repeats
+  until the goal is *verified by real simulation* — never asserted. Every side
+  effect (file edits, kernel runs, hardware submissions) passes through a policy,
+  budget, and workspace layer that the model cannot talk its way around.
+
+This page documents **agent-Dirac** in depth. It is the runtime you care about
+if you want to understand what the agent can and cannot do to your machine.
+
+<Aside type="note" title="Why Rust owns the loop">
+The quantum work stays in Python (Qiskit/Cirq/…), but the **supervision** —
+process isolation, wall-clock kills, the API key, the approval gate, the spend
+ceiling — lives in Rust. A model-generated request never runs in the same
+process as the key, the keychain, or the hardware SDKs. {/* mod.rs:1-13 */}
+</Aside>
+
+## Architecture at a glance
+
+The frontend starts a run through a Tauri command and then only *listens* — all
+authority is on the Rust side.
+
+```text
+  ┌──────────────────────────── WebView (TypeScript) ────────────────────────────┐
+  │  useDiracAgent.ts    goal + active file ──▶ invoke("dirac_start_run")         │
+  │        ▲  listens on  "dirac://run-event"  (RunEvent stream)                  │
+  └────────┼──────────────────────────────────────────────────────────────────────┘
+           │  Tauri IPC  (the API key never crosses this boundary)
+  ┌────────┴──────────────────── Rust harness  (src-tauri/src/dirac) ─────────────┐
+  │  commands.rs  ── spawns background thread ──▶  runner::drive_run               │
+  │                                                    │                           │
+  │                                    orchestrator::run_agent  ◀── the closed loop│
+  │                                                    │                           │
+  │     ┌───────────────┬──────────────┬──────────────┼──────────────┐            │
+  │     ▼               ▼              ▼               ▼              ▼            │
+  │  ModelGateway   AgentKernel     Workspace       Policy         Budget         │
+  │  (keychain,     (disposable     (SHA-256,       (autonomy      (zero-spend    │
+  │   HTTPS to      Python worker,  whole-file      gate, HW off   ceiling)       │
+  │   Anthropic)    process group)  patch/rollback) by default)                   │
+  │     │               │                                                          │
+  │     ▼               ▼                                                          │
+  │  api.anthropic  python -I agent_worker.py   ◀── parse | simulate | transpile  │
+  │  .com/v1/msgs   (new session, SIGKILL on 25s wall)                             │
+  └───────────────────────────────────────────────────────────────────────────────┘
+```
+
+The harness was built in stages, and the module docs still name them: **R1**
+execution supervisor, **R2** secure model gateway, **R3** policy/budget/workspace,
+**R4** the orchestrator + tools (the pure, mockable core), **R5** the Tauri
+command + run driver, **R7** the live kernel submit port. {/* mod.rs:1-13 */}
+
+## The run lifecycle
+
+`dirac_start_run(goal, files, active_path, model)` returns a **run id
+immediately** and does the work on a background thread, so the UI never blocks.
+{/* commands.rs:93-157 */}
+
+1. Resolve the worker path up front — a missing `agent_worker.py` fails now, not
+   mid-run. {/* commands.rs:107 */}
+2. Mint a run id: `run_{ms:x}_{n}` (time-seeded hex + a monotonic counter).
+   {/* commands.rs:77-84 */}
+3. Register a cancel flag in `DiracRuns` (a `HashMap<run_id, Arc<AtomicBool>>`).
+   {/* commands.rs:39-71 */}
+4. Spawn the thread, build real dependencies (`RealKernel`, a fresh
+   `ModelGateway`, `KernelSubmitPort`, `AutonomyPolicy::safe_default()`), and
+   call `drive_run`. {/* commands.rs:115-152 */}
+
+Progress streams back as `RunEvent`s on the `dirac://run-event` window channel —
+`Started, State, ModelText, ToolCall, ToolResult, Patch, Error, Finished`. The
+frontend registers the listener *before* invoking so no early event is lost.
+{/* runner.rs:73-117; useDiracAgent.ts:221-236 */}
+
+**Cancellation** is cooperative: `dirac_cancel_run` sets the run's `AtomicBool`,
+and the loop observes it at the top of its next iteration. {/* commands.rs:161-164; orchestrator.rs:242 */}
+
+Every run walks the same state machine — it begins in `Planning`, spends the
+tool loop in `Working`, and ends in exactly one terminal state:
+
+```text
+                     ┌─────────────┐
+                     │  Planning   │   seed message built
+                     └──────┬──────┘
+                            ▼
+                     ┌─────────────┐ ◀─────────────┐
+      model turn ───▶│   Working   │ ── tool ──────┘  (multi-turn feedback)
+                     └──┬───┬───┬──┘
+       finish / no-tool │   │   │ cancel flag
+                        ▼   │   ▼
+              ┌───────────┐ │ ┌───────────┐
+              │ Completed │ │ │ Cancelled │
+              └───────────┘ │ └───────────┘
+                            ▼
+                     ┌───────────┐
+                     │  Failed   │  budget exhausted / model error
+                     └───────────┘
+```
+{/* orchestrator.rs:27-35, 227-401 */}
+
+## The orchestrator loop
+
+This is the heart of the harness — a pure, injectable function (`run_agent`)
+with no Tauri surface, so the whole loop is unit-testable against a scripted
+model and a mock kernel. {/* orchestrator.rs:8-11, 211-401 */}
+
+```text
+  build seed message (goal + workspace file list + active file)
+        │
+        ▼
+  ┌───────────────────────── iterate (max 12, max 120s wall) ─────────────────────┐
+  │  1. cancel? ─yes─▶ Cancelled                                                   │
+  │  2. wall exceeded? ─yes─▶ break                                                │
+  │  3. model.complete(SYSTEM_PROMPT, messages, tools)  ── Err ─▶ journal, break   │
+  │  4. reply has no tool_use? ─yes─▶ finished (success iff a prior compare matched)│
+  │  5. append assistant { text, tool_use… }                                      │
+  │  6. for each tool_use:  execute_tool(...) ─▶ evidence                          │
+  │        · track compare_quantum_results.matches                                │
+  │        · detect finish(success, summary)                                      │
+  │        · journal ToolCall + ToolResult                                        │
+  │  7. append user { tool_result… }   ◀── the evidence fed back to the model      │
+  │  8. finish requested? ─yes─▶ Completed                                         │
+  └───────────────────────────────────────────────────────────────────────────────┘
+```
+{/* orchestrator.rs:224-364 */}
+
+The **multi-turn feedback** in steps 5–7 is what makes it an agent rather than a
+one-shot: the model's proposed `tool_use` and the deterministic `tool_result`
+are both appended to the running message list, so the next turn sees the real
+outcome — a parse error, a mismatched probability, a routing cost — and repairs
+its own work.
+
+**Bounds and stop conditions** {/* orchestrator.rs:39-52, 241-363 */}:
+
+| Bound | Value | Source |
+|-------|-------|--------|
+| Max model turns | **12** iterations | `AgentBudget::max_iterations` |
+| Wall-clock | **120 s** | `AgentBudget::max_wall` |
+| Per-turn token cap | **4096** `max_tokens` | `DEFAULT_MAX_TOKENS` |
+
+A run ends when: `finish` is called · the model returns no tool calls · 12 turns
+elapse · 120 s elapse · the cancel flag is set · or the model call errors.
+
+<Aside type="note" title="The system prompt is fixed">
+There is **one** hard-coded `SYSTEM_PROMPT` for every agent run — it is not
+persona- or mode-parameterized. The only per-run parameter is the model id.
+{/* orchestrator.rs:127-162 */} Live runs use `claude-sonnet-4-6` (the frontend
+passes `SONNET_MODEL`); the Rust default `claude-sonnet-4-5` is only the
+fallback when no model is supplied. {/* orchestrator.rs:79-106; src/config/dirac.ts:20 */}
+</Aside>
+
+## The tool set
+
+The model is given **17 tools** (the count is asserted in a test). Read-only and
+teaching tools produce evidence with no side effect; the four mutating tools are
+the only ones that can touch a file, the kernel, or hardware — and each of those
+runs through the workspace or policy layer below. {/* tools.rs:31-200, 209 */}
+
+| Tool | Kind | What it does |
+|------|------|--------------|
+| `inspect_project` | read | List files + active path |
+| `read_quantum_file` | read | Read one file's contents |
+| `apply_patch` | **write** | Replace a file's full contents (journaled, reversible) |
+| `rollback_patch` | **write** | Undo a prior patch by transaction id |
+| `parse_quantum_program` | read (worker `parse`) | Structure/syntax check |
+| `validate_quantum_program` | read | Semantic checks (qubit range, arity, collisions) |
+| `estimate_quantum_resources` | read | Qubit/gate/depth cost |
+| `run_simulation` | read (worker `simulate`) | Execute locally, get real probabilities |
+| `compare_quantum_results` | read | Check probabilities against a numeric target |
+| `check_algorithm_invariant` | read | Verify Bell/GHZ/uniform vs a known-good reference |
+| `plan_hardware_run` | read (shadow) | Recommend a backend, scored — never submits |
+| `preview_backend_transpilation` | read (worker `transpile`) | Post-transpile depth/2q metrics |
+| `submit_hardware_job` | **write / policy-gated** | Submit to real hardware — off by default |
+| `poll_hardware_job` | read | Poll a submitted job's status |
+| `cancel_hardware_job` | **write** | Cancel a pending job |
+| `analyze_hardware_result` | read | Read back measured probabilities |
+| `finish` | terminal | End the run with `success` + `summary` |
+
+Every tool schema pins `additionalProperties: false` with an explicit `required`
+list, and dispatch never panics — an unknown tool becomes ordinary failure
+evidence. {/* tools.rs:21; tool_exec.rs:187-236 */}
+
+The quantum tools funnel into just **three worker actions** — `parse`,
+`simulate`, `transpile` — the same disposable-worker path described below.
+{/* kernel.rs:106-108, 188-229 */}
+
+## Workspace: whole-file patches, SHA-256, reversible
+
+Edits are **whole-file replacements**, not diffs: `apply_patch` carries the
+complete new contents plus a rationale, and each application is stored as a
+`PatchTransaction` holding both the before and after content. {/* tools.rs:47-54; workspace.rs:60-69 */}
+
+Change detection uses **SHA-256** — deliberately not a security boundary, just
+"has this file changed since I last looked at it." The loop threads a per-path
+baseline hash; if the file changed under the agent since it last read it,
+`apply_patch` returns a **conflict** and mutates nothing, and the tool tells the
+model to re-read before patching. {/* workspace.rs:36-44; mem.rs:101-150; local.rs:95-106 */}
+
+```text
+  apply_patch(path, new_content, expected_before_hash)
+        │
+        ├─ hash(current) ≠ expected_before_hash ─▶ Conflict (no write) ──▶ "re-read first"
+        │
+        └─ match ─▶ write (dirty=true), store PatchTransaction ──▶ Applied
+
+  rollback_patch(txn_id)
+        └─ succeeds only while the file still matches what the patch left behind
+```
+{/* mem.rs:101-185 */}
+
+Rollback is equally strict: it refuses if the transaction is unknown, already
+rolled back, or the file no longer matches the content that patch produced — so
+a rollback can never clobber a *newer* edit. {/* mem.rs:152-185; workspace.rs:56-58 */}
+
+## The disposable Python worker
+
+Model-generated quantum code never runs in the kernel server or the Rust
+process. Each `parse`/`simulate`/`transpile` action spawns a **fresh, short-lived
+Python worker** and tears it down. {/* executor.rs:203-278; agent_worker.py */}
+
+- **Isolated interpreter**: `python -I agent_worker.py` — no site packages, no
+  `PYTHON*` env, no user config. {/* executor.rs:223-225 */}
+- **Its own process group**: `setsid()` on Unix / `CREATE_NEW_PROCESS_GROUP` on
+  Windows, so a runaway (or a fork bomb) can be killed as a *group*, not just the
+  parent. {/* executor.rs:56-102 */}
+- **Hard wall-timeout**: `DEFAULT_WALL = 25 s` per worker call. On expiry the
+  supervisor sends `SIGKILL` to the whole process group (`killpg` / `taskkill /T
+  /F`). {/* executor.rs:27, 84-102, 166-186 */}
+- **Framed over stdin/stdout**: one JSON request in, exactly one JSON response
+  out; output is capped at **1 MiB** and non-JSON/empty/oversize replies become
+  synthesized error codes (`worker_timeout`, `worker_bad_output`, …). {/* executor.rs:212-277; agent_worker.py:203-232 */}
+
+<Aside type="caution" title="This 25 s is not the run's 120 s">
+The **25 s** wall bounds a *single* worker call (one parse or one simulation).
+The **120 s** budget bounds the *whole run* across all its turns. They are
+different limits at different layers.
+</Aside>
+
+Inside the worker there is a second, cooperative line of defense (not the
+authoritative boundary — the process-group kill is): threads pinned to 1, an
+import blocker for `keyring`, the kernel server, and every hardware SDK
+(`qiskit_ibm_runtime`, `braket`, `azure.quantum`, …), and OS resource limits
+from `kernel/agent_limits.py` — `RLIMIT_CPU` 10 s, 64 open files, and an output
+cap. {/* agent_worker.py:23-74; agent_limits.py:7-21 */}
+
+## Policy: hardware is off by default
+
+The single most important safety property: **an agent cannot submit a paid
+hardware job unless a human turned autonomy on.** `AutonomyPolicy::safe_default()`
+ships with `autonomous_hardware_enabled: false`, `allow_qpu: false`, an empty
+provider allowlist, and `max_spend: 0.0`. {/* policy.rs:49-61; commands.rs:125 */}
+
+`evaluate_submission` is deterministic and reads only caller-built facts, never
+model text. For real hardware, the autonomy-disabled check comes **first and
+dominates** — before allowlists, shot ceilings, or cost: {/* policy.rs:103-139 */}
+
+```text
+  submit_hardware_job(backend, shots, …)
+        │
+        ▼
+  build SubmissionFacts (from the live backend list + parsed circuit — not the model)
+        │
+        ▼
+  evaluate_submission(facts, policy, remaining_budget)
+        │
+        ├─ simulator?            ─▶ Allow iff allow_simulator
+        ├─ autonomy disabled?    ─▶ NeedsApproval   ◀── the default; dominates all else
+        ├─ !allow_qpu / provider / shots / qubits / depth / cost fails ─▶ Deny
+        └─ all checks pass       ─▶ Allow
+                    │
+   ┌────────────────┴───────────── SAFETY GATE ─────────────────┐
+   │  decision ≠ Allow ─▶ return evidence {submitted:false} —   │
+   │  the submit port is NEVER reached.                         │
+   └────────────────────────────────────────────────────────────┘
+                    │ Allow only
+                    ▼
+          reserve budget ─▶ submit_port.submit(...)
+```
+{/* hardware.rs:37-200; policy.rs:112-225 */}
+
+A `NeedsApproval` / `Deny` result is an **ordinary, expected outcome** — the
+system prompt explicitly tells the model *not* to retry to force it through, but
+to report it and stop. The policy is "THE safety boundary"; the submit port is
+"the only channel that can reach real hardware." {/* orchestrator.rs:151-157; tool_exec.rs:63-70 */}
+
+## Budget: a zero-spend ceiling
+
+Because autonomous hardware is off, the spend ledger's ceiling is literally
+**zero** (`RUN_BUDGET_CEILING = 0.0`) — no autonomous submission can reserve any
+budget. This is defense in depth *behind* the policy gate: even if a submission
+somehow reached the ledger, a positive cost against a 0.0 ceiling fails to
+reserve. The `BudgetLedger` (reserve → commit/release, with idempotent
+submission records) is fully built for the day autonomy is enabled. {/* runner.rs:32, 305; budget.rs:51-171 */}
+
+## The secure model gateway
+
+The Anthropic API key lives **only in the OS keychain** (macOS Keychain / Windows
+Credential Manager / Linux Secret Service), under service `dev.getnuclei.dirac`,
+account `anthropic-api-key`. {/* gateway/store.rs:12-25 */}
+
+- The `dirac_set_api_key` / `dirac_has_api_key` / `dirac_clear_api_key` commands
+  are the frontend's *only* touchpoint — the key **never crosses the Tauri IPC
+  boundary** in either direction, and is never logged or placed in the model's
+  context. {/* mod.rs:124-144; gateway.rs:2-6 */}
+- Only `ModelGateway::complete` reads the key, only to set the `x-api-key` header
+  on a blocking HTTPS `POST` to `https://api.anthropic.com/v1/messages`
+  (`anthropic-version: 2023-06-01`, 120 s timeout). Error types are proven never
+  to carry the key, so they are safe to log or return across IPC. {/* gateway.rs:38-116; transport.rs:15-72 */}
+- The background run thread builds its **own** `ModelGateway` reading the same
+  keychain entry, since the gateway isn't shared into the thread. {/* commands.rs:9-17, 119 */}
+
+## The journal
+
+Every run produces an ordered `JournalEntry` list, each stamped with `ts`
+(milliseconds since run start): {/* journal.rs:16-42; orchestrator.rs:222 */}
+
+| Entry | Recorded when |
+|-------|---------------|
+| `StateChange { from, to }` | Every lifecycle transition |
+| `ModelText { text }` | The model emitted prose this turn |
+| `ToolCall { tool, input }` | One per proposed tool call |
+| `ToolResult { evidence }` | One per executed tool |
+| `Error { message }` | A model-call error ended the loop |
+
+At the driver level the journal is wrapped so every append **also** mirrors out
+as a `RunEvent` to the frontend, and a successful `apply_patch` additionally
+emits a `Patch` event carrying the before/after content for the UI's diff view.
+{/* runner.rs:218-263 */}
+
+## Data types & protocol
+
+The Rust↔worker wire format is versioned (`PROTOCOL_VERSION = 1`) and mirrors
+`kernel/agent_protocol.py`. An `AgentExecuteRequest` carries `action`
+(`parse`/`simulate`/`transpile`), `framework`, `language`, `code`, and
+transpile-only fields (`basis_gates`, `coupling_map`, `optimization_level`) that
+are omitted from the wire for non-transpile actions. The response keeps
+`snapshot`/`result`/`error` as opaque JSON and a `status` of `"ok"` or `"error"`
+— a worker failure is a structured error response, never a crash. {/* types.rs:11-75 */}
+
+## Defense in depth, summarized
+
+The agent's blast radius is bounded by concentric limits, each independent of the
+model's cooperation:
+
+```text
+  ┌─ Policy gate ── autonomy off by default; hardware submit ⇒ NeedsApproval ─┐
+  │ ┌─ Budget ── zero-spend ceiling; no reservation possible ───────────────┐ │
+  │ │ ┌─ Workspace ── SHA-256 conflict check; reversible whole-file patches ┐│ │
+  │ │ │ ┌─ Process group ── SIGKILL on 25 s wall; fork bombs reaped ──────┐ ││ │
+  │ │ │ │ ┌─ Worker rlimits ── CPU 10 s, fds, output cap; import blocker ┐│ ││ │
+  │ │ │ │ │   model-generated Python runs here — and only here           ││ ││ │
+  │ │ │ │ └──────────────────────────────────────────────────────────────┘│ ││ │
+  │ │ │ └──────────────────────────────────────────────────────────────────┘ ││ │
+  │ │ └────────────────────────────────────────────────────────────────────── ┘│ │
+  │ └────────────────────────────────────────────────────────────────────────── ┘ │
+  └────────────────────────────────────────────────────────────────────────────────┘
+```
+
+Adding a tool, worker action, or policy field is covered in
+[Extending Dirac](/docs/dirac/extending/).
