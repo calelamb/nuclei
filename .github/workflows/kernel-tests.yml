@@ -42,6 +42,8 @@ jobs:
           pip install "qdk>=1.29,<2" "numpy>=1.26,<3.0"
           # Simulation frameworks for the disposable agent worker + executor tests.
           pip install "qiskit>=1.2,<2" "qiskit-aer>=0.15,<1" "cirq-core>=1.4,<2"
+          # ruff powers the editor lint/format tests (dev tools Phase 4).
+          pip install "ruff>=0.6,<1.0"
           # QEC toolchain (PRD 10): the stim adapter + DEM tests run against
           # the real packages; sinter/pymatching appear in the `environment`
           # fixture and are exercised by the campaign engine (Phase B).

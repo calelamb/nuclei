@@ -5,8 +5,11 @@ import type * as monaco from 'monaco-editor';
 import { useEditorStore } from '../../stores/editorStore';
 import { useThemeStore } from '../../stores/themeStore';
 import { useSettingsStore } from '../../stores/settingsStore';
+import { useLintStore } from '../../stores/lintStore';
 import { getExecute } from '../../App';
 import { registerGhostCompletions, cancelCompletion } from './completions/ghostCompletions';
+import { registerPythonFormatting } from './pythonFormatting';
+import { ruffDiagnosticsToMarkers } from './ruffMarkers';
 import { InlineEditWidget } from './inlineEdit/InlineEditWidget';
 import { registerNucleiThemes } from './monacoThemes';
 import { registerQsharpLanguage } from './qsharpLanguage';
@@ -112,6 +115,8 @@ export function QuantumEditor() {
     });
 
     registerGhostCompletions(monacoApi);
+    // Python formatting via ruff (⇧⌥F / "Format Document"), Phase 4.
+    registerPythonFormatting(monacoApi);
     // Cancel any in-flight ghost request when the editor loses focus, so a
     // pending completion doesn't fire against a blurred editor.
     editor.onDidBlurEditorText(() => cancelCompletion());
@@ -155,6 +160,29 @@ export function QuantumEditor() {
       }));
     monacoApi.editor.setModelMarkers(model, 'nuclei', markers);
   }, [errors]);
+
+  // ruff diagnostics (dev tools Phase 4) — a separate marker owner from the
+  // kernel 'nuclei' errors, so warnings coexist with parse errors. Python only.
+  const lintDiagnostics = useLintStore((s) => s.diagnostics);
+  useEffect(() => {
+    const monacoApi = monacoRef.current;
+    const editor = editorRef.current;
+    if (!monacoApi || !editor) return;
+    const model = editor.getModel();
+    if (!model) return;
+
+    if (language !== 'python') {
+      monacoApi.editor.setModelMarkers(model, 'ruff', []);
+      return;
+    }
+
+    const lineCount = model.getLineCount();
+    const markers = ruffDiagnosticsToMarkers(lintDiagnostics, {
+      error: monacoApi.MarkerSeverity.Error,
+      warning: monacoApi.MarkerSeverity.Warning,
+    }).filter((m) => m.startLineNumber >= 1 && m.startLineNumber <= lineCount);
+    monacoApi.editor.setModelMarkers(model, 'ruff', markers);
+  }, [lintDiagnostics, language]);
 
   const handleChange = useCallback((value: string | undefined) => {
     if (value !== undefined) {

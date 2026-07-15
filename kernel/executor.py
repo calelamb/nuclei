@@ -2,7 +2,11 @@ import contextlib
 import dataclasses
 import importlib
 import io
+import json
 import re
+import shutil
+import subprocess
+import sys
 import traceback
 from dataclasses import dataclass
 
@@ -16,6 +20,36 @@ _HAS_SIGNAL_ALARM = hasattr(__import__("signal"), "SIGALRM")
 DEBUG_TRACE_FRAMEWORKS = {"qiskit", "cirq"}
 MAX_DEBUG_QUBITS = 12
 MAX_DEBUG_GATES = 200
+
+# Editor lint/format (dev tools Phase 4): ruff runs fast, but bound it anyway.
+RUFF_TIMEOUT_SECONDS = 10
+
+_RUFF_CMD_RESOLVED = False
+_RUFF_CMD: list[str] | None = None
+
+
+def ruff_base_cmd() -> list[str] | None:
+    """The command prefix that runs ruff in this environment, or None if ruff
+    isn't available. Prefers ruff-as-a-module in the kernel's own interpreter
+    (the bundled managed venv installs it there), falling back to a `ruff`
+    binary on PATH (dev machines / CI runners). Resolved once and cached so
+    every lint doesn't pay a probe subprocess."""
+    global _RUFF_CMD_RESOLVED, _RUFF_CMD
+    if _RUFF_CMD_RESOLVED:
+        return _RUFF_CMD
+    _RUFF_CMD_RESOLVED = True
+    try:
+        probe = subprocess.run(
+            [sys.executable, "-m", "ruff", "--version"], capture_output=True, timeout=5
+        )
+        if probe.returncode == 0:
+            _RUFF_CMD = [sys.executable, "-m", "ruff"]
+            return _RUFF_CMD
+    except (OSError, subprocess.SubprocessError):
+        pass
+    path = shutil.which("ruff")
+    _RUFF_CMD = [path] if path else None
+    return _RUFF_CMD
 
 
 @dataclass(frozen=True)
@@ -545,6 +579,94 @@ class Executor:
             "steps": steps,
         }
         return payload, stdout, stderr, None
+
+    def lint(
+        self,
+        code: str,
+        *,
+        language: str | None = None,
+    ) -> tuple[list[dict], KernelError | None]:
+        """Python diagnostics via ruff (dev tools Phase 4).
+
+        Runs `ruff check` over the buffer and returns a list of
+        `{line, column, end_line, end_column, severity, code, message}`
+        (1-based positions). Python-only — Q# has its own compiler diagnostics,
+        so `language == "qsharp"` returns no diagnostics. Ruff absent or
+        unrunnable degrades to an empty list (never blocks typing), never an
+        error.
+        """
+        if language == "qsharp":
+            return [], None
+        base = ruff_base_cmd()
+        if base is None:
+            return [], None
+        try:
+            proc = subprocess.run(
+                [*base, "check", "--output-format", "json", "--stdin-filename", "buffer.py", "-"],
+                input=code, capture_output=True, text=True, timeout=RUFF_TIMEOUT_SECONDS,
+            )
+        except (FileNotFoundError, OSError, subprocess.SubprocessError):
+            return [], None
+        # ruff exits 1 when it finds issues (0 = clean); anything else means it
+        # couldn't run — degrade silently rather than surfacing an error.
+        if proc.returncode not in (0, 1):
+            return [], None
+        try:
+            raw = json.loads(proc.stdout or "[]")
+        except json.JSONDecodeError:
+            return [], None
+
+        diagnostics = []
+        for d in raw:
+            loc = d.get("location") or {}
+            end = d.get("end_location") or {}
+            row = int(loc.get("row", 1))
+            col = int(loc.get("column", 1))
+            rule = d.get("code") or ""
+            diagnostics.append({
+                "line": row,
+                "column": col,
+                "end_line": int(end.get("row", row)),
+                "end_column": int(end.get("column", col)),
+                # ruff has no severity field; syntax errors (E9xx) are the only
+                # ones worth flagging as errors, everything else is a warning.
+                "severity": "error" if rule.startswith("E9") else "warning",
+                "code": rule,
+                "message": d.get("message", ""),
+            })
+        return diagnostics, None
+
+    def format_code(
+        self,
+        code: str,
+        *,
+        language: str | None = None,
+    ) -> tuple[str | None, KernelError | None]:
+        """Format Python via `ruff format` (dev tools Phase 4). Returns the
+        formatted text, or a KernelError (e.g. a syntax error ruff can't parse,
+        or ruff unavailable). Python-only."""
+        if language == "qsharp":
+            return None, KernelError(
+                code="format_unsupported",
+                message="Formatting currently supports Python.",
+                framework="qsharp",
+            )
+        base = ruff_base_cmd()
+        if base is None:
+            return None, KernelError(code="format_failed", message="The formatter (ruff) is not available.")
+        try:
+            proc = subprocess.run(
+                [*base, "format", "--stdin-filename", "buffer.py", "-"],
+                input=code, capture_output=True, text=True, timeout=RUFF_TIMEOUT_SECONDS,
+            )
+        except (FileNotFoundError, OSError, subprocess.SubprocessError) as exc:
+            return None, KernelError(code="format_failed", message=f"Could not run the formatter: {exc}")
+        if proc.returncode != 0:
+            return None, KernelError(
+                code="format_failed",
+                message=(proc.stderr.strip() or "ruff format failed").splitlines()[-1],
+            )
+        return proc.stdout, None
 
     def qec_snapshot_payload(
         self,

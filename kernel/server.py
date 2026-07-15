@@ -575,6 +575,37 @@ async def handle_message(websocket):
                     "data": payload,
                 }))
 
+        elif msg_type == "lint":
+            # Editor diagnostics via ruff (dev tools Phase 4). Additive;
+            # Python-only. Off-thread (subprocess) so typing stays responsive.
+            diagnostics, error = await asyncio.to_thread(
+                executor.lint, code, language=language
+            )
+            if error:
+                await websocket.send(json.dumps(error_payload(error, "lint")))
+            await websocket.send(json.dumps({
+                "type": "lint_result",
+                "diagnostics": diagnostics,
+            }))
+
+        elif msg_type == "format":
+            # Format the buffer via ruff (dev tools Phase 4). Additive;
+            # Python-only.
+            formatted, error = await asyncio.to_thread(
+                executor.format_code, code, language=language
+            )
+            if error:
+                await websocket.send(json.dumps(error_payload(error, "format")))
+                await websocket.send(json.dumps({
+                    "type": "format_result",
+                    "formatted": None,
+                }))
+            else:
+                await websocket.send(json.dumps({
+                    "type": "format_result",
+                    "formatted": formatted,
+                }))
+
         elif msg_type == "environment":
             # Cheap (importlib.metadata lookups only) — no need to offload
             # to a thread. Never raises: see _build_environment_payload.
