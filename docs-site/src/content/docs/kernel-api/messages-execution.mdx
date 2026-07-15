@@ -347,6 +347,34 @@ per-framework convention as [`SimulationResult.bloch_coords`](/docs/kernel-api/s
       { "gate_index": 1, "label": "cx q0,q1", "probabilities": {"00": 0.5, "11": 0.5}, "bloch_coords": [{"x":0,"y":0,"z":0},{"x":0,"y":0,"z":0}] } ] } }
 ```
 
+## `lint` and `format`
+
+**App 0.13.0** — additive editor support via [ruff](https://docs.astral.sh/ruff/).
+Both are **Python-only** (Q# has its own compiler diagnostics via the QDK
+language service) and both degrade gracefully when ruff isn't installed.
+
+**`lint`** → `lint_result` — diagnostics for the buffer:
+
+| Field | Type | Notes |
+|-------|------|-------|
+| `type` (req) | `"lint"` | — |
+| `code` (req) | string | — |
+| `diagnostics` (resp) | array | `{ line, column, end_line, end_column, severity, code, message }`, 1-based. `severity` is `"error"` only for syntax errors (E9xx), else `"warning"`. **Empty** when the code is clean, the buffer is Q#, or ruff is unavailable — never an error that blocks typing. |
+
+**`format`** → `format_result` — the formatted buffer:
+
+| Field | Type | Notes |
+|-------|------|-------|
+| `type` (req) | `"format"` | — |
+| `code` (req) | string | — |
+| `formatted` (resp) | string \| null | The `ruff format` output. `null` on failure (e.g. a syntax error ruff can't parse), preceded by an `error` with `phase: "format"`. |
+
+```json title="lint_result for an unused import"
+{ "type": "lint_result", "diagnostics": [
+  { "line": 1, "column": 8, "end_line": 1, "end_column": 10,
+    "severity": "warning", "code": "F401", "message": "`os` imported but unused" } ] }
+```
+
 ## Timeout semantics, honestly
 
 **Python frameworks** (Qiskit, Cirq, CUDA-Q): the executor defines a

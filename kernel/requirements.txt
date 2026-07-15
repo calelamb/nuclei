@@ -2,6 +2,11 @@
 websockets>=12.0,<14.0
 numpy>=1.26,<3.0
 
+# Python linting + formatting for the editor (dev tools Phase 4).
+# A single fast binary wheel; the kernel degrades to "no diagnostics"
+# rather than erroring when it's absent.
+ruff>=0.6,<1.0
+
 # Provider credential storage via OS keyring
 # (macOS Keychain, Windows Credential Manager, Linux Secret Service).
 # Falls back to in-memory if no backend is available.

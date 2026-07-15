@@ -155,7 +155,10 @@ export type KernelMessage =
     }
   // Dev tools Phase 3 — Quantum Debugger. Request the per-gate state
   // trajectory for the current circuit. Additive; Qiskit/Cirq only.
-  | { type: 'debug_trace'; code: string; language?: KernelLanguage };
+  | { type: 'debug_trace'; code: string; language?: KernelLanguage }
+  // Dev tools Phase 4 — editor diagnostics + formatting via ruff. Python only.
+  | { type: 'lint'; code: string; language?: KernelLanguage }
+  | { type: 'format'; code: string; language?: KernelLanguage };
 
 interface HardwareJobDTO {
   id: string;
@@ -177,7 +180,7 @@ export type KernelResponse =
       message: string;
       traceback?: string;
       code?: string;
-      phase?: 'parse' | 'execute' | 'python' | 'transpile' | 'debug' | 'qec_estimate' | 'qec_generate' | 'qec_snapshot' | 'qec_materialize' | 'qec_campaign' | 'qec_decode_sample';
+      phase?: 'parse' | 'execute' | 'python' | 'transpile' | 'debug' | 'lint' | 'format' | 'qec_estimate' | 'qec_generate' | 'qec_snapshot' | 'qec_materialize' | 'qec_campaign' | 'qec_decode_sample';
       framework?: Framework;
       dependency?: string;
     }
@@ -211,7 +214,22 @@ export type KernelResponse =
   // `error` with phase 'transpile' precedes it, house style).
   | { type: 'transpile_result'; data: TranspileResult | null }
   // Dev tools Phase 3 — reply to `debug_trace`. `data` null on error.
-  | { type: 'debug_trace_result'; data: DebugTrace | null };
+  | { type: 'debug_trace_result'; data: DebugTrace | null }
+  // Dev tools Phase 4 — ruff diagnostics + formatting.
+  | { type: 'lint_result'; diagnostics: RuffDiagnostic[] }
+  | { type: 'format_result'; formatted: string | null };
+
+/** One ruff diagnostic — 1-based positions, matching the kernel's `lint`
+ * payload. `severity` is `'error'` only for syntax errors (E9xx). */
+export interface RuffDiagnostic {
+  line: number;
+  column: number;
+  end_line: number;
+  end_column: number;
+  severity: 'error' | 'warning';
+  code: string;
+  message: string;
+}
 
 /** One step of the Quantum Debugger's trajectory: the state AFTER applying the
  * gate at `gate_index` (`-1` = the initial |0…0⟩ state before any gate). Carries

@@ -19,6 +19,8 @@ import { setTranspileSender } from '../lib/transpileSender';
 import { useTranspileStore } from '../stores/transpileStore';
 import { setDebugTraceSender } from '../lib/debugTraceSender';
 import { useDebugStore } from '../stores/debugStore';
+import { setLintSender, setFormatSender, resolveFormat } from '../lib/lintSender';
+import { useLintStore } from '../stores/lintStore';
 import { narrateParse, narrateResult } from '../services/narration';
 import { rewriteExecutionError } from '../services/errorRewrite';
 import { computeNextPollDelayMs, STALE_AFTER_MS } from '../lib/pollSchedule';
@@ -180,6 +182,15 @@ export function useKernel() {
         // error already set the store's error.
         if (msg.data) useDebugStore.getState().setTrace(msg.data);
         break;
+      case 'lint_result':
+        // Dev tools Phase 4 — ruff diagnostics for the active buffer.
+        useLintStore.getState().setDiagnostics(msg.diagnostics);
+        break;
+      case 'format_result':
+        // Dev tools Phase 4 — resolve the awaiting formatting provider (null
+        // when the format failed, which makes no edit).
+        resolveFormat(msg.formatted);
+        break;
       case 'output':
         useSimulationStore.getState().addOutput(msg.text, 'stdout');
         useBottomPanelStore.getState().focusTerminal();
@@ -206,6 +217,17 @@ export function useKernel() {
         // Quantum Debugger failures belong to the debugger panels (Phase 3).
         if (msg.phase === 'debug') {
           useDebugStore.getState().setError(msg.message);
+          break;
+        }
+
+        // Editor lint/format failures (Phase 4) are non-fatal and must not hit
+        // the terminal/editor error surfaces. A format error unblocks the
+        // awaiting provider (no edit); a lint error is simply ignored.
+        if (msg.phase === 'format') {
+          resolveFormat(null);
+          break;
+        }
+        if (msg.phase === 'lint') {
           break;
         }
 
@@ -561,6 +583,15 @@ export function useKernel() {
             pyodideRef.current.send({ type: 'parse', code: state.code, language });
           } else if (wsRef.current?.readyState === WebSocket.OPEN) {
             wsRef.current.send(JSON.stringify({ type: 'parse', code: state.code, language }));
+            // Editor diagnostics ride alongside parse (dev tools Phase 4).
+            // Desktop + Python only — ruff lives in the managed kernel env, and
+            // Q# has its own compiler diagnostics. Cleared here when it doesn't
+            // apply so stale ruff squiggles don't linger after a language swap.
+            if (language !== 'qsharp') {
+              wsRef.current.send(JSON.stringify({ type: 'lint', code: state.code, language }));
+            } else {
+              useLintStore.getState().clear();
+            }
           }
         }, useSettingsStore.getState().kernel.parseDebounceMs ?? DEFAULT_DEBOUNCE_MS);
       }
@@ -762,20 +793,44 @@ export function useKernel() {
     [sendHardware],
   );
 
+  // Editor lint + format (dev tools Phase 4). Desktop-only (ruff runs in the
+  // managed kernel env); sendHardware no-ops on web.
+  const lint = useCallback(
+    (code: string) => {
+      const language = kernelLanguageFor(useEditorStore.getState().framework, useEditorStore.getState().filePath);
+      sendHardware({ type: 'lint', code, language });
+    },
+    [sendHardware],
+  );
+  const format = useCallback(
+    (code: string) => {
+      const language = kernelLanguageFor(useEditorStore.getState().framework, useEditorStore.getState().filePath);
+      if (!sendHardware({ type: 'format', code, language })) {
+        // No kernel → unblock the awaiting provider so it makes no edit.
+        resolveFormat(null);
+      }
+    },
+    [sendHardware],
+  );
+
   useEffect(() => {
     setQecDecodeSender(qecDecodeSample);
     setQecSnapshotSender(qecSnapshotReRequest);
     setQecEstimateSender(qecEstimate);
     setTranspileSender(transpile);
     setDebugTraceSender(debugTrace);
+    setLintSender(lint);
+    setFormatSender(format);
     return () => {
       setQecDecodeSender(null);
       setQecSnapshotSender(null);
       setQecEstimateSender(null);
       setTranspileSender(null);
       setDebugTraceSender(null);
+      setLintSender(null);
+      setFormatSender(null);
     };
-  }, [qecDecodeSample, qecSnapshotReRequest, qecEstimate, transpile, debugTrace]);
+  }, [qecDecodeSample, qecSnapshotReRequest, qecEstimate, transpile, debugTrace, lint, format]);
 
   // Fetch the per-gate state trajectory when the user enters step-through mode,
   // and refresh it (debounced) if the code changes while stepping. The existing
