@@ -26,15 +26,49 @@ kernel and it's a `RemoteKernelSession` (full frameworks, real hardware) — sam
 interface, same models, no app changes. See the PRD for why native (not a
 WKWebView wrapper) and how the three product tiers sequence.
 
-## Building the package
+`NucleiApp/` — the SwiftUI app (Phase 1). A touch/Pencil circuit **composer**, a
+SceneKit **Bloch sphere**, a Swift Charts **histogram**, a **template gallery**,
+**Dirac** chat (BYOK), and **Settings** — all running on the native simulator, so
+it works offline. Mobile-first affordances (tap-to-place, haptics, long-press
+"explain", voice, share-as-Qiskit) are catalogued in
+[`docs/ios/MOBILE_UX.md`](../docs/ios/MOBILE_UX.md).
 
-```bash
-cd ios/NucleiKit
-swift test        # requires a Swift 6 toolchain (macOS / Xcode 16+)
+```
+NucleiApp/
+├── project.yml                 # XcodeGen spec (generates the .xcodeproj)
+└── Sources/
+    ├── App/                    # entry, theme, root tab shell
+    ├── Models/                 # @Observable stores (circuit, sim, settings, workspace)
+    ├── Features/
+    │   ├── Composer/           # grid, palette, gate glyphs, angle sheet
+    │   ├── Visualization/      # Bloch (SceneKit), histogram (Swift Charts), results
+    │   ├── Templates/          # one-tap starter circuits
+    │   ├── Dirac/              # BYOK client, chat, gate explainer
+    │   └── Learn/              # settings (lessons/challenges land next)
+    └── Support/                # Keychain, haptics, speech, circuit export
 ```
 
-The `NucleiApp` SwiftUI target is Phase 1 (see the build plan) and is not in this
-foundation drop.
+## Building
+
+```bash
+# The reusable core (no UI) — runs anywhere with a Swift toolchain:
+cd ios/NucleiKit && swift test
+
+# The app — generate the Xcode project, then open it:
+brew install xcodegen
+cd ios/NucleiApp && xcodegen generate && open NucleiApp.xcodeproj
+```
+
+Requires Xcode 16+ (iOS 17 SDK). The app uses Swift 5 language mode; `NucleiKit`
+is Swift 6-clean.
+
+### What's real vs. stubbed
+
+- **Real & offline:** composer → native statevector sim → Bloch/histogram/debugger,
+  templates, share-as-Qiskit, haptics, seeded reproducibility.
+- **Real, needs your Anthropic key:** Dirac chat + gate explainer (direct BYOK call).
+- **Next (Phase 1.5+):** bundled lessons/challenges content, drag-to-move gates,
+  Live Activities, and the remote-kernel path for full frameworks + hardware.
 
 ## Conventions (mirrored from the kernel)
 
