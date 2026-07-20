@@ -1,0 +1,50 @@
+{
+  "run_date": "2026-07-20",
+  "prior_snapshot_date": "2026-07-13",
+  "repo": "calelamb/nuclei",
+  "repo_signal": {
+    "stars": 3,
+    "forks": 0,
+    "open_issues": 2,
+    "watchers": "unavailable",
+    "note": "stars/forks/open_issues from mcp__github__search_repositories; watchers not exposed by that endpoint",
+    "wow_delta": { "stars": 0, "forks": 0, "open_issues": 2 }
+  },
+  "platform_totals": {
+    "macos": { "current": 61, "prior": 57, "delta": 4 },
+    "windows": { "current": 32, "prior": 32, "delta": 0 },
+    "linux": { "current": 45, "prior": 45, "delta": 0 },
+    "updater_manifests": { "current": 128, "prior": 108, "delta": 20 },
+    "grand_total": { "current": 266, "prior": 242, "delta": 24 }
+  },
+  "releases": [
+    { "tag": "v0.13.0", "published_at": "2026-07-15", "total_downloads": 2,  "macos": 0, "windows": 0, "linux": 0, "updater": 2,  "wow_delta": "new", "source": "live" },
+    { "tag": "v0.12.0", "published_at": "2026-07-15", "total_downloads": 1,  "macos": 0, "windows": 0, "linux": 0, "updater": 1,  "wow_delta": "new", "source": "live" },
+    { "tag": "v0.11.0", "published_at": "2026-07-15", "total_downloads": 1,  "macos": 0, "windows": 0, "linux": 0, "updater": 1,  "wow_delta": "new", "source": "live" },
+    { "tag": "v0.10.0", "published_at": "2026-07-15", "total_downloads": 4,  "macos": 1, "windows": 0, "linux": 0, "updater": 3,  "wow_delta": "new", "source": "live" },
+    { "tag": "v0.9.0",  "published_at": "2026-07-14", "total_downloads": 2,  "macos": 0, "windows": 0, "linux": 0, "updater": 2,  "wow_delta": "new", "source": "live" },
+    { "tag": "v0.8.1",  "published_at": "2026-07-14", "total_downloads": 4,  "macos": 1, "windows": 0, "linux": 0, "updater": 3,  "wow_delta": "new", "source": "live" },
+    { "tag": "v0.8.0",  "published_at": "2026-07-14", "total_downloads": 2,  "macos": 0, "windows": 0, "linux": 0, "updater": 2,  "wow_delta": "new", "source": "live" },
+    { "tag": "v0.7.0",  "published_at": "2026-07-14", "total_downloads": 5,  "macos": 1, "windows": 0, "linux": 0, "updater": 4,  "wow_delta": "new", "source": "live" },
+    { "tag": "v0.6.0",  "published_at": "2026-07-12", "total_downloads": 3,  "macos": 1, "windows": 0, "linux": 0, "updater": 2,  "wow_delta": 3,     "source": "live" },
+    { "tag": "v0.5.3",  "published_at": "2026-07-10", "total_downloads": 4,  "macos": 1, "windows": 0, "linux": 0, "updater": 3,  "wow_delta": 0,     "source": "live" },
+    { "tag": "v0.5.2",  "published_at": "2026-07-10", "total_downloads": 1,  "macos": 0, "windows": 0, "linux": 0, "updater": 1,  "wow_delta": 0,     "source": "live" },
+    { "tag": "v0.5.1",  "published_at": "2026-06-11", "total_downloads": 9,  "macos": 2, "windows": 0, "linux": 1, "updater": 6,  "wow_delta": 0,     "source": "live" },
+    { "tag": "v0.5.0",  "published_at": "2026-06-10", "total_downloads": 4,  "macos": 1, "windows": 0, "linux": 0, "updater": 3,  "wow_delta": 0,     "source": "live" },
+    { "tag": "v0.4.17", "published_at": "2026-05-03", "total_downloads": 19, "macos": 5, "windows": 2, "linux": 3, "updater": 9,  "wow_delta": 0,     "source": "live" },
+    { "tag": "v0.4.16", "published_at": "2026-04-20", "total_downloads": 10, "macos": 1, "windows": 1, "linux": 0, "updater": 8,  "wow_delta": 0,     "source": "carried_forward_from_2026-07-13" },
+    { "tag": "v0.4.15", "published_at": "2026-04-20", "total_downloads": 19, "macos": 3, "windows": 2, "linux": 3, "updater": 11, "wow_delta": 0,     "source": "carried_forward_from_2026-07-13" },
+    { "tag": "v0.4.14", "published_at": "2026-04-20", "total_downloads": 4,  "macos": 2, "windows": 0, "linux": 0, "updater": 2,  "wow_delta": 0,     "source": "carried_forward_from_2026-07-13" },
+    { "tag": "v0.4.13", "published_at": "2026-04-20", "total_downloads": 2,  "macos": 1, "windows": 0, "linux": 0, "updater": 1,  "wow_delta": 0,     "source": "carried_forward_from_2026-07-13" }
+  ],
+  "traffic": {
+    "available": false,
+    "reason": "GitHub MCP server does not expose /traffic/* endpoints; direct GitHub API blocked by environment proxy"
+  },
+  "vercel_analytics": {
+    "available": false,
+    "reason": "No VERCEL_TOKEN in environment",
+    "dashboard_url": "https://vercel.com/calelambs-projects/landing/analytics"
+  },
+  "asset_data_source": "mcp__github__get_release_by_tag (live) for v0.4.17 through v0.13.0 (14 releases); v0.4.16 through v0.4.13 carried forward from 2026-07-13 snapshot; pre-v0.4.13 baked into platform_totals via prior snapshot chain"
+}
