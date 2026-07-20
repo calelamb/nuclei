@@ -1,0 +1,43 @@
+# XcodeGen spec for the Nuclei iOS app.
+#   brew install xcodegen && cd ios/NucleiApp && xcodegen generate && open NucleiApp.xcodeproj
+#
+# We keep the project generated (not a committed .pbxproj) so the source tree is
+# the source of truth and merges stay clean.
+name: NucleiApp
+options:
+  bundleIdPrefix: dev.getnuclei
+  deploymentTarget:
+    iOS: "17.0"
+  createIntermediateGroups: true
+
+packages:
+  NucleiKit:
+    path: ../NucleiKit
+
+targets:
+  Nuclei:
+    type: application
+    platform: iOS
+    sources:
+      - path: Sources
+    dependencies:
+      - package: NucleiKit
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: dev.getnuclei.mobile
+        PRODUCT_NAME: Nuclei
+        MARKETING_VERSION: "0.1.0"
+        CURRENT_PROJECT_VERSION: "1"
+        # Swift 5 language mode (with a 6.x toolchain) for the app target so the
+        # SwiftUI layer isn't gated on strict-concurrency errors day one; NucleiKit
+        # is authored clean for Swift 6 and can be raised independently.
+        SWIFT_VERSION: "5.0"
+        TARGETED_DEVICE_FAMILY: "1,2"        # iPhone + iPad
+        GENERATE_INFOPLIST_FILE: YES
+        INFOPLIST_KEY_UILaunchScreen_Generation: YES
+        INFOPLIST_KEY_UISupportedInterfaceOrientations: "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight"
+        INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad: "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight"
+        # Voice-to-circuit ("Add a Hadamard on qubit 0") uses Speech + mic.
+        INFOPLIST_KEY_NSMicrophoneUsageDescription: "Nuclei uses the microphone so you can dictate circuits and questions to Dirac."
+        INFOPLIST_KEY_NSSpeechRecognitionUsageDescription: "Nuclei transcribes your speech to build circuits and talk to Dirac."
+        INFOPLIST_KEY_CFBundleDisplayName: Nuclei
