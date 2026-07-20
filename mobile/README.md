@@ -3,8 +3,8 @@
 Native Swift / SwiftUI companion & studio for [Nuclei](../README.md), the
 open-source quantum workspace. Planning and foundation live here.
 
-- **Spec:** [`docs/ios/PRD_13_NUCLEI_FOR_IOS.md`](../docs/ios/PRD_13_NUCLEI_FOR_IOS.md)
-- **Build plan:** [`docs/ios/PHASE_0_1_PLAN.md`](../docs/ios/PHASE_0_1_PLAN.md)
+- **Spec:** [`docs/mobile/PRD_13_NUCLEI_FOR_IOS.md`](../docs/mobile/PRD_13_NUCLEI_FOR_IOS.md)
+- **Build plan:** [`docs/mobile/PHASE_0_1_PLAN.md`](../docs/mobile/PHASE_0_1_PLAN.md)
 
 ## What's here so far
 
@@ -31,7 +31,7 @@ SceneKit **Bloch sphere**, a Swift Charts **histogram**, a **template gallery**,
 **Dirac** chat (BYOK), and **Settings** — all running on the native simulator, so
 it works offline. Mobile-first affordances (tap-to-place, haptics, long-press
 "explain", voice, share-as-Qiskit) are catalogued in
-[`docs/ios/MOBILE_UX.md`](../docs/ios/MOBILE_UX.md).
+[`docs/mobile/MOBILE_UX.md`](../docs/mobile/MOBILE_UX.md).
 
 ```
 NucleiApp/
@@ -52,11 +52,11 @@ NucleiApp/
 
 ```bash
 # The reusable core (no UI) — runs anywhere with a Swift toolchain:
-cd ios/NucleiKit && swift test
+cd mobile/NucleiKit && swift test
 
 # The app — generate the Xcode project, then open it:
 brew install xcodegen
-cd ios/NucleiApp && xcodegen generate && open NucleiApp.xcodeproj
+cd mobile/NucleiApp && xcodegen generate && open NucleiApp.xcodeproj
 ```
 
 Requires Xcode 16+ (iOS 17 SDK). The app uses Swift 5 language mode; `NucleiKit`

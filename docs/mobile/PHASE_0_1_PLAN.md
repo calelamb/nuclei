@@ -12,7 +12,7 @@ app. Everything here is offline-capable or needs only the user's Anthropic key.
 ## Repository layout (this PR seeds it)
 
 ```
-ios/
+mobile/
 ├── NucleiKit/                      # SwiftPM package — the reusable core (started here)
 │   ├── Package.swift
 │   ├── Sources/NucleiKit/
