@@ -11,6 +11,11 @@ import { QecStudySidebar } from './QecStudySidebar';
 interface MemoryStudyFs extends QecStudyFs {
   files: Map<string, string>;
   writeTextFile: ReturnType<typeof vi.fn<QecStudyFs['writeTextFile']>>;
+  watch: ReturnType<typeof vi.fn<QecStudyFs['watch']>>;
+}
+
+function studyYaml(id: string): string {
+  return `schema: 1\nid: ${id}\nname: ${id.toUpperCase()} Study\nquestion: What about ${id}?\npreset: analyze\nsources: []\n`;
 }
 
 function memoryStudyFs(initialFiles: Record<string, string> = {}): MemoryStudyFs {
@@ -132,5 +137,85 @@ describe('<QecStudySidebar />', () => {
 
     finishWrite?.();
     await waitFor(() => expect(useQecStudyUiStore.getState().activeStudyId).toBe('pending'));
+  });
+
+  it('starts watching Studies for the active project after reload', async () => {
+    const fs = memoryStudyFs({ '/active/studies/active.qec-study.yaml': studyYaml('active') });
+    useProjectStore.setState({ projectRoot: '/active' });
+
+    render(<QecStudySidebar fs={fs} />);
+
+    await waitFor(() => expect(fs.watch).toHaveBeenCalledWith(
+      '/active/studies', expect.any(Function), { recursive: true },
+    ));
+  });
+
+  it('keeps project B current when project A reload finishes late and never watches stale A', async () => {
+    let releaseProjectA: (() => void) | undefined;
+    const fs = memoryStudyFs({
+      '/a/studies/a.qec-study.yaml': studyYaml('a'),
+      '/b/studies/b.qec-study.yaml': studyYaml('b'),
+    });
+    const readDir = fs.readDir;
+    fs.readDir = vi.fn(async (path: string) => {
+      if (path === '/a/studies') await new Promise<void>((resolve) => { releaseProjectA = resolve; });
+      return readDir(path);
+    });
+    useProjectStore.setState({ projectRoot: '/a' });
+    render(<QecStudySidebar fs={fs} />);
+    await waitFor(() => expect(releaseProjectA).toBeTypeOf('function'));
+
+    useProjectStore.getState().setProjectRoot('/b');
+    await waitFor(() => expect(fs.watch).toHaveBeenCalledWith(
+      '/b/studies', expect.any(Function), { recursive: true },
+    ));
+    releaseProjectA?.();
+    await waitFor(() => expect(useQecStudyStore.getState().studies.map(({ study }) => study.id)).toEqual(['b']));
+
+    expect(fs.watch.mock.calls.map(([path]) => path)).toEqual(['/b/studies']);
+  });
+
+  it('stops the active watcher and clears Studies on unmount', async () => {
+    const unwatch = vi.fn();
+    const fs = memoryStudyFs({ '/active/studies/active.qec-study.yaml': studyYaml('active') });
+    fs.watch.mockResolvedValue(unwatch);
+    useProjectStore.setState({ projectRoot: '/active' });
+    const view = render(<QecStudySidebar fs={fs} />);
+    await waitFor(() => expect(fs.watch).toHaveBeenCalledOnce());
+
+    view.unmount();
+
+    expect(unwatch).toHaveBeenCalledOnce();
+    expect(useQecStudyStore.getState().studies).toEqual([]);
+  });
+
+  it('clears and invalidates a pending reload when the project root becomes null', async () => {
+    let releaseRead: (() => void) | undefined;
+    const fs = memoryStudyFs({ '/a/studies/a.qec-study.yaml': studyYaml('a') });
+    const readDir = fs.readDir;
+    fs.readDir = vi.fn(async (path: string) => {
+      await new Promise<void>((resolve) => { releaseRead = resolve; });
+      return readDir(path);
+    });
+    useProjectStore.setState({ projectRoot: '/a' });
+    render(<QecStudySidebar fs={fs} />);
+    await waitFor(() => expect(releaseRead).toBeTypeOf('function'));
+
+    useProjectStore.getState().setProjectRoot(null);
+    expect(useQecStudyStore.getState().studies).toEqual([]);
+    releaseRead?.();
+    await waitFor(() => expect(useQecStudyStore.getState().loading).toBe(false));
+
+    expect(useQecStudyStore.getState().studies).toEqual([]);
+    expect(fs.watch).not.toHaveBeenCalled();
+  });
+
+  it('renders watcher setup errors reported by the Study store', async () => {
+    const fs = memoryStudyFs({ '/active/studies/active.qec-study.yaml': studyYaml('active') });
+    fs.watch.mockRejectedValue(new Error('watch service unavailable'));
+    useProjectStore.setState({ projectRoot: '/active' });
+    const view = render(<QecStudySidebar fs={fs} />);
+
+    expect(await view.findByText('Could not watch the Studies folder: watch service unavailable')).toBeTruthy();
   });
 });

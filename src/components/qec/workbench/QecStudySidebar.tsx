@@ -112,20 +112,37 @@ function StudyForm({ busy, submitting, draft, error, onChange, onSubmit }: Study
   );
 }
 
+function useStudyLifecycle(projectRoot: string | null, fs: QecStudyFs): void {
+  const reload = useQecStudyStore((state) => state.reload);
+  const startWatching = useQecStudyStore((state) => state.startWatching);
+  const clearStudies = useQecStudyStore((state) => state.clear);
+  useEffect(() => {
+    let current = true;
+    const synchronize = async (): Promise<void> => {
+      clearStudies();
+      if (!projectRoot) return;
+      await reload(projectRoot, fs);
+      if (current) await startWatching(projectRoot, fs);
+    };
+    void synchronize();
+    return () => {
+      current = false;
+      clearStudies();
+    };
+  }, [clearStudies, fs, projectRoot, reload, startWatching]);
+}
+
 export function QecStudySidebar({ fs }: QecStudySidebarProps): ReactElement {
   const projectRoot = useProjectStore((state) => state.projectRoot);
   const studies = useQecStudyStore((state) => state.studies);
   const loading = useQecStudyStore((state) => state.loading);
-  const reload = useQecStudyStore((state) => state.reload);
   const create = useQecStudyStore((state) => state.create);
   const setActiveStudy = useQecStudyUiStore((state) => state.setActiveStudy);
   const colors = useThemeStore((state) => state.colors);
   const [draft, setDraft] = useState<StudyDraft>(EMPTY_DRAFT);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  useEffect(() => {
-    if (projectRoot) void reload(projectRoot, fs);
-  }, [fs, projectRoot, reload]);
+  useStudyLifecycle(projectRoot, fs);
   const submit = async (event: FormEvent): Promise<void> => {
     event.preventDefault();
     if (!projectRoot) return setError('Open a project before creating a Study.');
