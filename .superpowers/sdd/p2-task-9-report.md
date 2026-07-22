@@ -45,7 +45,7 @@ npx vitest run src/services/qecDataClient.test.ts src/stores/qecQueryStore.test.
   src/types/qecData.schema.test.ts
 
 Test Files  8 passed (8)
-Tests       114 passed (114)
+Tests       117 passed (117)
 ```
 
 ```text
@@ -82,7 +82,17 @@ The independent review found one critical stale-async ownership defect and six i
 - keeps source, adapter, hash, provenance, byte size, session, and session-kind context on each durable import job, with inspect/cancel controls after the wizard closes;
 - exposes adapter probe reasons and applies the backend's exact portable 1–256-character session-ID rules at both UI and client boundaries.
 
-The broader final command lists eight existing test files (the earlier report accidentally listed a nonexistent CSS test path). It passes 114 tests; the six-file owned-coverage command passes 92 tests.
+The broader final command lists eight existing test files (the earlier report accidentally listed a nonexistent CSS test path). It passes 117 tests; the six-file owned-coverage command passes 92 tests.
+
+## Final terminal-state and Unicode correction
+
+A final RED run produced six focused failures for terminal import semantics and frontend/backend session-length parity. The corrective implementation now:
+
+- renders cancelled imports as a neutral status and failed imports as an alert, with neither state exposing a progressbar nor an active spinner;
+- covers cancellation initiated from the wizard through the terminal cancelled rendering;
+- counts session IDs by Unicode code point with `Array.from`, matching Python's backend length check, and removes the UTF-16-based HTML `maxLength` constraint.
+
+The three-file corrective suite passes 43 tests. The broader eight-file Task 9 suite passes 117 tests.
 
 ## Self-review
 

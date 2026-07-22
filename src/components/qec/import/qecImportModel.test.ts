@@ -48,5 +48,7 @@ describe('qecImportModel', () => {
 
   it('accepts a bounded portable session id', () => {
     expect(sessionIdIssue('capture-2026-07-22')).toBeNull();
+    expect(sessionIdIssue('🧪'.repeat(256))).toBeNull();
+    expect(sessionIdIssue('🧪'.repeat(257))).toBe('session ID must be 256 characters or fewer');
   });
 });

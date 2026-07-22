@@ -2,6 +2,7 @@
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+import { useQecJobStore } from '../../../stores/qecJobStore';
 import type { QecImportClient } from './QecImportWizard';
 import { QecImportWizard } from './QecImportWizard';
 
@@ -33,7 +34,10 @@ function client(): QecImportClient {
   };
 }
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  useQecJobStore.getState().reset();
+});
 
 function goNext(): void {
   fireEvent.click(screen.getByRole('button', { name: 'Next stage' }));
@@ -48,6 +52,17 @@ async function reachMapping(): Promise<void> {
   fireEvent.change(screen.getByLabelText('Canonical field 1'), { target: { value: 'sequence' } });
   fireEvent.change(screen.getByLabelText('Source field 1'), { target: { value: 'shot_id' } });
   fireEvent.click(screen.getByLabelText('Mapping reviewed'));
+}
+
+async function reachImportStage(): Promise<void> {
+  await reachMapping();
+  goNext();
+  goNext();
+  fireEvent.click(screen.getByRole('button', { name: 'Validate mapping' }));
+  await screen.findByText('Validation passed');
+  goNext();
+  fireEvent.change(screen.getByLabelText('Session ID'), { target: { value: 'capture-session' } });
+  goNext();
 }
 
 describe('<QecImportWizard />', () => {
@@ -83,6 +98,7 @@ describe('<QecImportWizard />', () => {
     goNext();
     goNext();
     fireEvent.change(screen.getByLabelText('Session ID'), { target: { value: 'capture-session' } });
+    expect(screen.getByLabelText<HTMLInputElement>('Session ID').hasAttribute('maxlength')).toBe(false);
     goNext();
 
     expect(screen.getByRole<HTMLButtonElement>('button', { name: 'Import data' }).disabled).toBe(false);
@@ -227,5 +243,55 @@ describe('<QecImportWizard />', () => {
     goNext();
     expect(screen.getByText(/delimiter: comma/)).toBeTruthy();
     expect(screen.getByText(/Sinter columns detected/)).toBeTruthy();
+  });
+
+  it('cancels a running import from the wizard and renders a terminal status', async () => {
+    const fake = client();
+    let rejectImport: ((error: unknown) => void) | undefined;
+    vi.mocked(fake.startImport).mockImplementation((_input, onEvent) => {
+      onEvent?.({
+        type: 'job_started', requestId: 'import-cancel', jobId: 'import-cancel',
+        jobKind: 'import', sourcePolicy: 'copy',
+      });
+      return new Promise((_resolve, reject) => { rejectImport = reject; });
+    });
+    vi.mocked(fake.cancel).mockImplementation(async () => {
+      rejectImport?.(Object.assign(new Error('Import cancelled.'), { code: 'request_cancelled' }));
+      return true;
+    });
+    const view = render(<QecImportWizard source="captures/capture.parquet" client={fake} />);
+    await reachImportStage();
+    fireEvent.click(screen.getByRole('button', { name: 'Import data' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Cancel import import-cancel' }));
+
+    await waitFor(() => expect(fake.cancel).toHaveBeenCalledWith('import', 'import-cancel'));
+    expect((await screen.findByRole('status')).textContent).toMatch(/Import cancelled/);
+    expect(screen.queryByRole('progressbar')).toBeNull();
+    expect(view.container.querySelector('.lucide-loader-circle')).toBeNull();
+  });
+
+  it.each([
+    ['cancelled', 'Import cancelled', undefined],
+    ['failed', 'Import failed', 'Canonical write failed.'],
+  ] as const)('renders %s jobs as terminal rather than progress', async (status, label, error) => {
+    const fake = client();
+    const view = render(<QecImportWizard source="captures/capture.parquet" client={fake} />);
+    await reachImportStage();
+    useQecJobStore.setState({
+      jobs: {
+        terminal: {
+          id: 'terminal', kind: 'import', status, message: label, error,
+          source: 'captures/capture.parquet', adapterId: 'tabular', sessionId: 'capture-session',
+          sessionKind: 'hardware_import', sourceHash: 'a'.repeat(64),
+          provenanceId: 'provenance-1', sourceByteSize: 2048,
+        },
+      },
+    });
+
+    const terminal = await screen.findByText(label);
+    expect(terminal).toBeTruthy();
+    expect(screen.queryByRole('progressbar')).toBeNull();
+    expect(view.container.querySelector('.lucide-loader-circle')).toBeNull();
+    if (status === 'failed') expect(screen.getByRole('alert').textContent).toContain('Canonical write failed.');
   });
 });

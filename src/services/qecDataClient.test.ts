@@ -256,6 +256,20 @@ describe('QecDataClient', () => {
       sessionId: '../bad', sessionKind: 'hardware_import',
     })).toThrow();
     expect(socket.sent).toHaveLength(sentBefore);
+
+    const unicodeSessionId = '🧪'.repeat(256);
+    const accepted = client.startImport({
+      source: 'capture.csv', adapterId: 'tabular', mapping: { fields: {}, options: {} },
+      sessionId: unicodeSessionId, sessionKind: 'hardware_import',
+    });
+    const request = JSON.parse(socket.sent.at(-1) ?? '') as { requestId: string; sessionId: string };
+    expect(request.sessionId).toBe(unicodeSessionId);
+    socket.message({ type: 'error', requestId: request.requestId, code: 'test_complete', message: 'Test complete.' });
+    await expect(accepted).rejects.toMatchObject({ code: 'test_complete' });
+    expect(() => client.startImport({
+      source: 'capture.csv', adapterId: 'tabular', mapping: { fields: {}, options: {} },
+      sessionId: '🧪'.repeat(257), sessionKind: 'hardware_import',
+    })).toThrow();
   });
 
   it('rejects outbound frames larger than one MiB before socket transmission', async () => {

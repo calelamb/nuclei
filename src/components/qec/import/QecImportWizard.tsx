@@ -232,7 +232,7 @@ function DestinationStage(props: DestinationStageProps): ReactElement {
   const issue = sessionIdIssue(props.sessionId.trim());
   return (
     <div className="qec-import-destination">
-      <label>Session ID<input aria-label="Session ID" value={props.sessionId} aria-invalid={issue !== null} maxLength={256} onChange={(event) => props.onSessionId(event.target.value)} placeholder="capture-2026-07-22" />{issue && <small role="alert">{issue}</small>}</label>
+      <label>Session ID<input aria-label="Session ID" value={props.sessionId} aria-invalid={issue !== null} onChange={(event) => props.onSessionId(event.target.value)} placeholder="capture-2026-07-22" />{issue && <small role="alert">{issue}</small>}</label>
       <label>Session kind<select value={props.sessionKind} onChange={(event) => props.onSessionKind(event.target.value as DestinationStageProps['sessionKind'])}><option value="hardware_import">Hardware import</option><option value="simulation_campaign">Simulation campaign</option><option value="hardware_live">Hardware live</option><option value="replay">Replay</option></select></label>
       <div className="qec-import-policy"><Copy aria-hidden="true" size={15} /><strong>Destination: qec-data/sessions/{props.sessionId || '<session-id>'}</strong><span>The source is copied; the original file is never edited or referenced in place.</span></div>
     </div>
@@ -244,9 +244,12 @@ function ImportStage({ source, client }: { source: string; client: QecImportClie
   const job = Object.values(jobs).reverse().find((candidate) => candidate.source === source);
   const cancelJob = useQecJobStore((state) => state.cancelJob);
   const error = useQecJobStore((state) => state.launchError);
-  if (error) return <InlineError message={error} />;
-  if (!job) return <div className="qec-import-notice"><Database aria-hidden="true" size={20} /><div><strong>Ready for canonical import</strong><span>Import progress and completion remain in this tray if you change the active source.</span></div></div>;
+  if (!job) return error
+    ? <InlineError message={error} />
+    : <div className="qec-import-notice"><Database aria-hidden="true" size={20} /><div><strong>Ready for canonical import</strong><span>Import progress and completion remain in this tray if you change the active source.</span></div></div>;
   if (job.status === 'complete') return <div className="qec-import-success" role="status"><CheckCircle2 aria-hidden="true" size={19} /><div><strong>{job.recordsWritten ?? 0} records written</strong><span>{job.partitionsWritten ?? 0} canonical partitions · Original preserved</span></div></div>;
+  if (job.status === 'cancelled') return <div className="qec-import-notice qec-import-terminal" role="status"><Circle aria-hidden="true" size={19} /><div><strong>Import cancelled</strong><span>Canonical writing stopped; the original source remains preserved.</span></div></div>;
+  if (job.status === 'failed') return <div className="qec-import-error qec-import-terminal" role="alert"><AlertCircle aria-hidden="true" size={19} /><div><strong>Import failed</strong><span>{job.error ?? error ?? 'Canonical data was not completed.'}</span></div></div>;
   return <div className="qec-import-progress" role="progressbar" aria-label="QEC data import" aria-valuetext={job.message}><LoaderCircle aria-hidden="true" size={18} /><strong>{job.message}</strong><span className="qec-mono">{job.id}</span>{['running', 'starting'].includes(job.status) && <button type="button" aria-label={`Cancel import ${job.id}`} onClick={() => void cancelJob(client, job.id)}>Cancel</button>}</div>;
 }
 

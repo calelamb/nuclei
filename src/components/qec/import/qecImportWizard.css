@@ -49,6 +49,9 @@
 .qec-import-notice strong, .qec-import-notice span { display: block; }
 .qec-import-notice strong { font-size: 11px; }
 .qec-import-notice span { margin-top: 3px; color: var(--qec-text-muted); font-size: 10px; }
+.qec-import-terminal strong, .qec-import-terminal span { display: block; }
+.qec-import-terminal strong { font-size: 11px; }
+.qec-import-terminal span { margin-top: 3px; font-size: 10px; }
 
 .qec-import-adapters, .qec-import-options { min-width: 0; margin: 0; padding: 10px; }
 .qec-import-adapters legend, .qec-import-options legend { padding: 0 5px; color: var(--qec-text-muted); font-size: 9px; font-weight: 750; letter-spacing: 0.07em; text-transform: uppercase; }

@@ -37,11 +37,14 @@ export const projectRelativeSourceSchema = text.superRefine((value, context) => 
   if (forbidden) context.addIssue({ code: 'custom', message: 'Source must be a project-relative non-canonical path.' });
 });
 
-export const sessionIdSchema = z.string().min(1).max(256).refine((value) => value.trim().length > 0).superRefine((value, context) => {
-  const invalid = value === '.' || value === '..'
-    || [...value].some((character) => '<>:"/\\|?*'.includes(character) || character.charCodeAt(0) < 32);
-  if (invalid) context.addIssue({ code: 'custom', message: 'Session ID is invalid.' });
-});
+export const sessionIdSchema = z.string().min(1)
+  .refine((value) => Array.from(value).length <= 256, 'Session ID must be 256 characters or fewer.')
+  .refine((value) => value.trim().length > 0)
+  .superRefine((value, context) => {
+    const invalid = value === '.' || value === '..'
+      || [...value].some((character) => '<>:"/\\|?*'.includes(character) || character.charCodeAt(0) < 32);
+    if (invalid) context.addIssue({ code: 'custom', message: 'Session ID is invalid.' });
+  });
 
 export const importMappingSchema = z.strictObject({
   fields: z.record(z.string().min(1), z.string().min(1)),

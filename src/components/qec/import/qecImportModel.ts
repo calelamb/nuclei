@@ -26,7 +26,7 @@ export function formatBytes(bytes: number): string {
 
 export function sessionIdIssue(value: string): string | null {
   if (value.length === 0) return 'choose a destination session ID';
-  if (value.length > 256) return 'session ID must be 256 characters or fewer';
+  if (Array.from(value).length > 256) return 'session ID must be 256 characters or fewer';
   if (value === '.' || value === '..') return 'session ID cannot be . or ..';
   if ([...value].some((character) => '<>:"/\\|?*'.includes(character) || character.charCodeAt(0) < 32)) {
     return 'session ID contains a forbidden character';
