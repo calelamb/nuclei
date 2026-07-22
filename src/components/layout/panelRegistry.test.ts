@@ -30,10 +30,11 @@ describe('activityViewsForMode (registry-driven, Phase C)', () => {
     ]);
   });
 
-  it('Research mode, developer views OFF — files/experiments/hardware/estimator/transpiler/launch/plugins + settings', () => {
+  it('Research mode, developer views OFF — adds QEC with the Research tools', () => {
     expect(activityViewsForMode('research', { experimentalFeatures: false })).toEqual([
       'files',
       'experiments',
+      'qec',
       'hardware',
       'estimator',
       'transpiler',
@@ -43,10 +44,11 @@ describe('activityViewsForMode (registry-driven, Phase C)', () => {
     ]);
   });
 
-  it('Research mode, developer views ON — adds search + circuit', () => {
+  it('Research mode, developer views ON — keeps QEC and adds search + circuit', () => {
     expect(activityViewsForMode('research', { experimentalFeatures: true })).toEqual([
       'files',
       'experiments',
+      'qec',
       'hardware',
       'estimator',
       'transpiler',
