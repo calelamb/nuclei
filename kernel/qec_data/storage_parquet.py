@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import errno
 import os
 from dataclasses import dataclass
 from pathlib import Path
@@ -12,6 +11,7 @@ import pyarrow.parquet as pq
 
 from .hashing import semantic_digest, sha256_file
 from .models import PackedBits, QualifiedPackedBits, SCHEMA_VERSION, SyndromeBatch
+from .storage_durability import DurableMover
 
 
 RECORD_KIND = "syndromes"
@@ -24,11 +24,6 @@ PARQUET_OPTIONS: dict[str, object] = {
     "write_statistics": True,
     "store_schema": True,
     "write_page_checksum": True,
-}
-UNSUPPORTED_DIRECTORY_SYNC = {
-    errno.EBADF,
-    errno.EINVAL,
-    getattr(errno, "ENOTSUP", errno.EINVAL),
 }
 
 
@@ -44,28 +39,6 @@ class PendingPartition:
     schema_fingerprint: str
     is_final: bool = False
     journal_generation: int = -1
-
-
-def fsync_directory(path: Path) -> bool:
-    """Sync directory metadata when the host filesystem supports it."""
-
-    if os.name != "posix":
-        return False
-    try:
-        descriptor = os.open(path, os.O_RDONLY)
-    except OSError as error:
-        if error.errno in UNSUPPORTED_DIRECTORY_SYNC:
-            return False
-        raise
-    try:
-        os.fsync(descriptor)
-    except OSError as error:
-        if error.errno not in UNSUPPORTED_DIRECTORY_SYNC:
-            raise
-        return False
-    finally:
-        os.close(descriptor)
-    return True
 
 
 def _validate_padding(name: str, packed: PackedBits, count: int) -> None:
@@ -183,6 +156,7 @@ def write_pending(
     batch: SyndromeBatch,
     fingerprint: str,
     identity: str,
+    mover: DurableMover,
 ) -> None:
     if batch.record_count > MAX_PARTITION_ROWS:
         raise ValueError("canonical Parquet partitions cannot exceed 65,536 rows")
@@ -193,7 +167,7 @@ def write_pending(
             writer.write_batch(record_batch, row_group_size=65_536)
         output.flush()
         os.fsync(output.fileno())
-    fsync_directory(path.parent)
+    mover.sync_directory(path.parent)
     inspected = inspect_partition(path)
     if inspected.rows != batch.record_count:
         path.unlink(missing_ok=True)

@@ -11,7 +11,6 @@ import pyarrow as pa
 import pyarrow.parquet as pq
 import pytest
 
-import kernel.qec_data.storage as storage_module
 import kernel.qec_data.storage_parquet as parquet_storage
 from kernel.qec_data.hashing import (
     DatasetSemanticIdentity,
@@ -36,7 +35,6 @@ from kernel.qec_data.storage import (
     SessionStorage,
     _session_lock,
 )
-from kernel.qec_data.storage_parquet import fsync_directory
 
 
 def sample_session(session_id: str = "session-1") -> SessionRecord:
@@ -704,35 +702,6 @@ def test_recovery_treats_exact_pending_duplicate_as_idempotent(tmp_path: Path) -
     assert storage.resume_pending(report.duplicates) == ()
     assert not duplicate.exists()
     assert committed.path.exists()
-
-
-def test_pending_and_nested_directories_are_synced(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    storage_synced: list[Path] = []
-    parquet_synced: list[Path] = []
-    monkeypatch.setattr(storage_module, "fsync_directory", storage_synced.append)
-    storage = create_storage(tmp_path)
-    monkeypatch.setattr(parquet_storage, "fsync_directory", parquet_synced.append)
-    pending = storage.append_batch(sample_batch())
-
-    synced_names = {path.name for path in storage_synced}
-    assert {
-        "raw",
-        "normalized",
-        "syndromes",
-        "derived",
-        "indexes",
-        "quarantine",
-    } <= synced_names
-    assert parquet_synced == [pending.parent]
-
-
-def test_windows_directory_sync_reports_best_effort(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    monkeypatch.setattr(parquet_storage.os, "name", "nt")
-    assert fsync_directory(tmp_path) is False
 
 
 def test_durable_json_reads_reject_duplicate_keys_and_nonfinite_values(

@@ -2,14 +2,14 @@
 
 from __future__ import annotations
 
-import os
 import uuid
 from collections.abc import Mapping
 from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any
 
-from .storage_parquet import PendingPartition, fsync_directory, inspect_partition
+from .storage_durability import DurableMover
+from .storage_parquet import PendingPartition, inspect_partition
 from .storage_paths import safe_session_file, secure_directory, walk_storage_files
 
 
@@ -98,7 +98,7 @@ def _schema_identity(ref: PendingPartition) -> tuple[str, str]:
 
 
 def _inspect_pending(
-    session_root: Path, generation: int
+    session_root: Path, generation: int, mover: DurableMover
 ) -> tuple[list[PendingPartition], list[RecoveryIssue]]:
     valid: list[PendingPartition] = []
     invalid: list[RecoveryIssue] = []
@@ -109,7 +109,7 @@ def _inspect_pending(
             )
         except (ValueError, OSError) as error:
             path.unlink(missing_ok=True)
-            fsync_directory(path.parent)
+            mover.sync_directory(path.parent)
             invalid.append(RecoveryIssue(path, str(error)))
     return valid, invalid
 
@@ -175,16 +175,19 @@ def _classify_candidate_pairs(
                 duplicates.add(right_index)
 
 
-def _quarantine(session_root: Path, path: Path, reason: str) -> QuarantinedPartition:
-    directory = secure_directory(session_root, "quarantine")
+def _quarantine(
+    session_root: Path,
+    path: Path,
+    reason: str,
+    mover: DurableMover,
+) -> QuarantinedPartition:
+    secure_directory(session_root, "quarantine")
     relative = path.relative_to(session_root)
     source = safe_session_file(session_root, relative.as_posix())
     target = safe_session_file(
         session_root, f"quarantine/{uuid.uuid4().hex}-{path.name}"
     )
-    os.rename(source, target)
-    fsync_directory(path.parent)
-    fsync_directory(directory)
+    mover.move(source, target)
     return QuarantinedPartition(path, target, reason)
 
 
@@ -192,19 +195,30 @@ def scan_uncommitted(
     session_root: Path,
     generation: int,
     committed: tuple[PendingPartition, ...],
+    mover: DurableMover,
 ) -> RecoveryScan:
-    pending, invalid = _inspect_pending(session_root, generation)
+    pending, invalid = _inspect_pending(session_root, generation, mover)
     orphans, corrupt_orphans = _inspect_orphans(
         session_root, generation, frozenset(ref.path for ref in committed)
     )
     candidates = sorted(pending + orphans, key=lambda ref: str(ref.path))
     conflicts, duplicates = _conflict_indexes(candidates, committed)
     quarantined = [
-        _quarantine(session_root, candidates[index].path, "range or schema conflict")
+        _quarantine(
+            session_root,
+            candidates[index].path,
+            "range or schema conflict",
+            mover,
+        )
         for index in sorted(conflicts)
     ]
     quarantined.extend(
-        _quarantine(session_root, path, f"corrupt orphan final: {message}")
+        _quarantine(
+            session_root,
+            path,
+            f"corrupt orphan final: {message}",
+            mover,
+        )
         for path, message in corrupt_orphans
     )
     accepted = [

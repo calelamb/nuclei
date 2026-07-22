@@ -3,12 +3,9 @@
 from __future__ import annotations
 
 import json
-import os
 import re
 import shutil
-import threading
 import uuid
-import weakref
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, replace
 from pathlib import Path
@@ -16,17 +13,18 @@ from typing import Any
 
 from .hashing import (
     DatasetSemanticIdentity,
-    canonical_json_bytes,
     dataset_id,
     is_sha256,
     require_exact_keys,
 )
 from .model_codecs import loads_canonical_json, session_from_mapping, session_to_mapping
 from .models import SessionRecord, SyndromeBatch
+from .storage_durability import DurableMover
+from .storage_locking import session_lock as _session_lock
+from .storage_metadata import publish_json
 from .storage_parquet import (
     RECORD_KIND,
     PendingPartition,
-    fsync_directory,
     inspect_partition,
     packed_profile,
     schema_fingerprint,
@@ -103,39 +101,12 @@ class VerificationReport:
     fatal_error: str | None = None
 
 
-_LOCKS_GUARD = threading.Lock()
-_SESSION_LOCKS: weakref.WeakValueDictionary[str, threading.RLock] = (
-    weakref.WeakValueDictionary()
-)
-
-
-def _session_lock(path: str) -> threading.RLock:
-    with _LOCKS_GUARD:
-        lock = _SESSION_LOCKS.get(path)
-        if lock is None:
-            lock = threading.RLock()
-            _SESSION_LOCKS[path] = lock
-        return lock
-
-
 def _validate_identifier(value: str) -> str:
     if not isinstance(value, str) or not IDENTIFIER.fullmatch(value):
         raise ValueError("storage identifier is invalid")
     if value in {".", ".."} or "\\" in value:
         raise ValueError("storage identifier is invalid")
     return value
-
-
-def _write_durable(path: Path, content: bytes, *, exclusive: bool) -> None:
-    mode = "xb" if exclusive else "wb"
-    with path.open(mode) as output:
-        output.write(content)
-        output.flush()
-        os.fsync(output.fileno())
-
-
-def _write_json(path: Path, value: object, *, exclusive: bool) -> None:
-    _write_durable(path, canonical_json_bytes(value) + b"\n", exclusive=exclusive)
 
 
 def _partition_mapping(ref: PendingPartition) -> dict[str, object]:
@@ -274,11 +245,13 @@ class SessionStorage:
         session: SessionRecord,
         identity: DatasetSemanticIdentity,
         generation: int,
+        mover: DurableMover,
     ) -> None:
         self._session = session
         self._identity = identity
         self._session_root = root / session.session_id
         self._expected_generation = generation
+        self._mover = mover
         self._lock = _session_lock(str(self._session_root))
 
     @property
@@ -291,6 +264,8 @@ class SessionStorage:
         root: Path,
         session: SessionRecord,
         identity: DatasetSemanticIdentity,
+        *,
+        mover: DurableMover | None = None,
     ) -> SessionStorage:
         storage_root = require_storage_root(root)
         session_id = _validate_identifier(session.session_id)
@@ -302,22 +277,29 @@ class SessionStorage:
         ):
             raise ValueError("semantic identity adapter does not match the session")
         final = storage_root / session_id
+        durable_mover = mover or DurableMover()
         with _session_lock(f"root:{storage_root}"):
             if final.is_symlink():
                 raise ValueError("session target cannot be a symlink")
             if final.exists():
                 raise FileExistsError(f"session already exists: {session_id}")
             temporary = storage_root / f".{session_id}.{uuid.uuid4().hex}.pending"
-            cls._create_tree(storage_root, temporary, final, session, identity)
-        return cls(storage_root, session, identity, 0)
+            cls._create_tree(
+                temporary,
+                final,
+                session,
+                identity,
+                durable_mover,
+            )
+        return cls(storage_root, session, identity, 0, durable_mover)
 
     @staticmethod
     def _create_tree(
-        root: Path,
         temporary: Path,
         final: Path,
         session: SessionRecord,
         identity: DatasetSemanticIdentity,
+        mover: DurableMover,
     ) -> None:
         temporary.mkdir(mode=0o700)
         try:
@@ -331,28 +313,40 @@ class SessionStorage:
             syndromes = normalized / RECORD_KIND
             syndromes.mkdir()
             for directory in (*leaf_directories, normalized, syndromes):
-                fsync_directory(directory)
-            _write_json(
-                temporary / "manifest.json", session_to_mapping(session), exclusive=True
+                mover.sync_directory(directory)
+            publish_json(
+                temporary / "manifest.json",
+                session_to_mapping(session),
+                mover,
+                replace_existing=False,
             )
-            _write_json(
-                temporary / "identity.json", identity.to_mapping(), exclusive=True
+            publish_json(
+                temporary / "identity.json",
+                identity.to_mapping(),
+                mover,
+                replace_existing=False,
             )
-            _write_json(
+            publish_json(
                 temporary / "journal.json",
                 _empty_journal(session.session_id),
-                exclusive=True,
+                mover,
+                replace_existing=False,
             )
-            fsync_directory(temporary)
-            os.rename(temporary, final)
-            fsync_directory(root)
+            mover.sync_directory(temporary)
+            mover.move(temporary, final)
         except Exception:
             if temporary.exists() and not temporary.is_symlink():
                 shutil.rmtree(temporary)
             raise
 
     @classmethod
-    def open(cls, root: Path, session_id: str) -> SessionStorage:
+    def open(
+        cls,
+        root: Path,
+        session_id: str,
+        *,
+        mover: DurableMover | None = None,
+    ) -> SessionStorage:
         storage_root = require_storage_root(root)
         identifier = _validate_identifier(session_id)
         session_root = storage_root / identifier
@@ -373,7 +367,7 @@ class SessionStorage:
             session.adapter.version,
         ):
             raise ValueError("semantic identity adapter does not match the session")
-        storage = cls(storage_root, session, identity, 0)
+        storage = cls(storage_root, session, identity, 0, mover or DurableMover())
         journal = storage._load_journal()
         storage._expected_generation = journal["generation"]
         return storage
@@ -426,11 +420,11 @@ class SessionStorage:
                 f"normalized/{RECORD_KIND}/{segment_id}",
                 create=True,
             )
-            fsync_directory(directory)
-            fsync_directory(directory.parent)
+            self._mover.sync_directory(directory)
+            self._mover.sync_directory(directory.parent)
             name = f"part-{batch.sequence_start:020d}-{batch.sequence_end - 1:020d}.parquet.pending"
             pending = directory / name
-            write_pending(pending, batch, fingerprint, identity)
+            write_pending(pending, batch, fingerprint, identity, self._mover)
             return pending
 
     def _check_append(
@@ -586,7 +580,7 @@ class SessionStorage:
         renamed: list[PendingPartition] = []
         for ref in refs:
             final = self._final_path(ref)
-            os.rename(ref.path, final)
+            self._mover.move(ref.path, final)
             renamed.append(
                 PendingPartition(
                     final.relative_to(self._session_root),
@@ -600,7 +594,6 @@ class SessionStorage:
                     True,
                 )
             )
-        fsync_directory(refs[0].path.parent)
         return tuple(renamed)
 
     def _next_journal(
@@ -660,13 +653,13 @@ class SessionStorage:
 
     def _replace_journal(self, journal: Mapping[str, object]) -> None:
         assert_session_root(self._session_root)
-        temporary = safe_session_file(
-            self._session_root, f".journal.{uuid.uuid4().hex}.tmp"
-        )
         journal_path = safe_session_file(self._session_root, "journal.json")
-        _write_json(temporary, journal, exclusive=True)
-        os.replace(temporary, journal_path)
-        fsync_directory(self._session_root)
+        publish_json(
+            journal_path,
+            journal,
+            self._mover,
+            replace_existing=True,
+        )
 
     def recover(self) -> RecoveryReport:
         with self._lock:
@@ -679,6 +672,7 @@ class SessionStorage:
                 self._session_root,
                 journal["generation"],
                 committed_refs(self._session_root, journal),
+                self._mover,
             )
             invalid_temps = self._remove_journal_temps()
             fatal = (
@@ -706,6 +700,7 @@ class SessionStorage:
                 )
                 continue
             path.unlink(missing_ok=True)
+            self._mover.sync_directory(path.parent)
             issues.append(RecoveryIssue(path, "incomplete journal temp deleted"))
         return tuple(issues)
 
@@ -717,17 +712,15 @@ class SessionStorage:
                 path = self._require_recovery_ref(ref)
                 if ref in duplicates:
                     path.unlink()
-                    fsync_directory(path.parent)
+                    self._mover.sync_directory(path.parent)
                     continue
                 if ref.is_final:
                     pending = path.with_suffix(path.suffix + ".pending")
                     if pending.exists():
                         raise FileExistsError("pending recovery target already exists")
-                    os.rename(path, pending)
+                    self._mover.move(path, pending)
                     path = pending
                 resumed.append(path)
-            for directory in {path.parent for path in resumed}:
-                fsync_directory(directory)
         return tuple(resumed)
 
     def discard_pending(self, refs: Iterable[PendingPartition]) -> None:
@@ -737,7 +730,7 @@ class SessionStorage:
             for path in paths:
                 path.unlink(missing_ok=True)
             for directory in {path.parent for path in paths}:
-                fsync_directory(directory)
+                self._mover.sync_directory(directory)
 
     def _authorize_recovery(
         self, refs: Iterable[PendingPartition]
