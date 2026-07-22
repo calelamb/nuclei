@@ -170,6 +170,18 @@ const CATALOG: &[FrameworkInfo] = &[
         approximate_size_mb: 2,
         recommended: false,
     },
+    FrameworkInfo {
+        id: "qec-data",
+        label: "QEC Data Engine",
+        description: "Stream recorded QEC data into Arrow, query local Parquet with DuckDB, and validate canonical schemas.",
+        pip_name: "pyarrow>=18,<26 duckdb>=1.2,<2 jsonschema>=4.23,<5",
+        // A comma-separated import list is a valid Python import statement.
+        // Status is healthy only when the complete bundle is importable.
+        import_name: "pyarrow, duckdb, jsonschema",
+        group: "research",
+        approximate_size_mb: 200,
+        recommended: false,
+    },
 ];
 
 #[derive(Debug, Serialize)]
@@ -656,6 +668,13 @@ fn tail_lines(s: &str, n: usize) -> String {
 /// (`qiskit`), a submodule (`qiskit.qasm3`), a pip/import id (`qdk`), or a
 /// catalog id — to its installable catalog entry, so the UI can offer a
 /// one-click install for exactly what's missing instead of a dead end.
+fn import_modules(import_name: &str) -> impl Iterator<Item = &str> {
+    import_name
+        .split(',')
+        .map(str::trim)
+        .filter(|name| !name.is_empty())
+}
+
 fn resolve_framework(name: &str) -> Option<&'static FrameworkInfo> {
     let needle = name.trim().to_ascii_lowercase();
     if needle.is_empty() {
@@ -664,7 +683,7 @@ fn resolve_framework(name: &str) -> Option<&'static FrameworkInfo> {
     // Pass 1 — exact id / import name / label wins over a loose module match.
     if let Some(fw) = CATALOG.iter().find(|f| {
         f.id.eq_ignore_ascii_case(&needle)
-            || f.import_name.eq_ignore_ascii_case(&needle)
+            || import_modules(f.import_name).any(|name| name.eq_ignore_ascii_case(&needle))
             || f.label.eq_ignore_ascii_case(&needle)
     }) {
         return Some(fw);
@@ -672,11 +691,12 @@ fn resolve_framework(name: &str) -> Option<&'static FrameworkInfo> {
     // Pass 2 — top-level module of a dotted name: `qiskit.qasm3` -> `qiskit`.
     let top = needle.split(['.', '/']).next().unwrap_or(&needle);
     CATALOG.iter().find(|f| {
-        f.import_name
-            .split('.')
-            .next()
-            .map(|module| module.eq_ignore_ascii_case(top))
-            .unwrap_or(false)
+        import_modules(f.import_name).any(|name| {
+            name.split('.')
+                .next()
+                .map(|module| module.eq_ignore_ascii_case(top))
+                .unwrap_or(false)
+        })
     })
 }
 
@@ -1019,6 +1039,9 @@ mod tests {
             Some("ibm-runtime")
         );
         assert_eq!(resolve_framework("stim").map(|f| f.id), Some("stim"));
+        for module in ["pyarrow", "duckdb", "jsonschema"] {
+            assert_eq!(resolve_framework(module).map(|f| f.id), Some("qec-data"));
+        }
         assert!(resolve_framework("nonsense-pkg").is_none());
         assert!(resolve_framework("   ").is_none());
     }
@@ -1064,12 +1087,15 @@ mod tests {
     #[test]
     fn every_catalog_entry_resolves_by_its_own_import_name() {
         for fw in CATALOG {
-            let top = fw.import_name.split('.').next().unwrap_or(fw.import_name);
-            assert!(
-                resolve_framework(top).is_some(),
-                "catalog import {} did not resolve",
-                fw.import_name
-            );
+            for import_name in import_modules(fw.import_name) {
+                let top = import_name.split('.').next().unwrap_or(import_name);
+                assert_eq!(
+                    resolve_framework(top).map(|resolved| resolved.id),
+                    Some(fw.id),
+                    "catalog import {import_name} did not resolve to {}",
+                    fw.id
+                );
+            }
         }
     }
 }

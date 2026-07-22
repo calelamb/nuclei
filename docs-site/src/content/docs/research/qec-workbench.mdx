@@ -20,6 +20,13 @@ foundation release. Use [QEC Studio](/docs/research/qec-studio/) for today's
 connected Stim, sinter, decoding, and threshold-analysis workflows.
 </Aside>
 
+The optional **QEC Data Engine** is available as one item in the Research
+framework catalog. It installs `pyarrow>=18,<26`, `duckdb>=1.2,<2`, and
+`jsonschema>=4.23,<5` together; Nuclei reports the bundle as ready only
+when all three imports succeed. Installing it prepares the managed environment
+for the recorded syndrome, calibration, Parquet, and schema workflows arriving
+in the data-platform phase—it does not enable those later workflows by itself.
+
 ## Open the workbench
 
 <Steps>
