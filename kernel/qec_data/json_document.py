@@ -16,6 +16,7 @@ MAX_CANONICAL_JSON_DEPTH = 32
 MAX_CANONICAL_JSON_KEYS = 4_096
 MAX_CANONICAL_JSON_CONTAINER_ITEMS = 4_096
 JSON_SHORT_ESCAPES = frozenset({'"', "\\", "\b", "\t", "\n", "\f", "\r"})
+MIN_CANONICAL_OBJECT_BYTES_EXCLUDING_KEY = 4
 
 
 def _reject_constant(value: str) -> None:
@@ -44,13 +45,15 @@ def _json_character_bytes(character: str) -> int:
     return 4
 
 
-def _require_document_string_bound(value: str) -> None:
-    if len(value) > MAX_CANONICAL_JSON_BYTES - 2:
+def _require_document_string_bound(
+    value: str, *, maximum_bytes: int = MAX_CANONICAL_JSON_BYTES
+) -> None:
+    if len(value) > maximum_bytes - 2:
         raise ValueError("canonical JSON document exceeds 64 KiB")
     encoded_bytes = 2
     for character in unicodedata.normalize("NFC", value):
         encoded_bytes += _json_character_bytes(character)
-        if encoded_bytes > MAX_CANONICAL_JSON_BYTES:
+        if encoded_bytes > maximum_bytes:
             raise ValueError("canonical JSON document exceeds 64 KiB")
 
 
@@ -80,7 +83,13 @@ def _validate_value(value: object) -> None:
             _require_structure_bounds(keys=keys, items=items, depth=depth + 1)
             for key, item in current.items():
                 if isinstance(key, str):
-                    _require_document_string_bound(key)
+                    _require_document_string_bound(
+                        key,
+                        maximum_bytes=(
+                            MAX_CANONICAL_JSON_BYTES
+                            - MIN_CANONICAL_OBJECT_BYTES_EXCLUDING_KEY
+                        ),
+                    )
                 stack.append((item, depth + 1))
         elif isinstance(current, Sequence) and not isinstance(current, (str, bytes)):
             items += len(current)

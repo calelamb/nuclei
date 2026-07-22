@@ -326,6 +326,35 @@ def test_encoded_oversized_json_key_is_rejected_before_encoding(
         canonical_json_document({key: 0})
 
 
+@pytest.mark.parametrize(
+    ("valid_key", "oversized_key", "valid_document_bytes"),
+    (
+        ("x" * 65_530, "x" * 65_531, 65_536),
+        ("😀" * 16_382, "😀" * 16_383, 65_534),
+        ("\x00" * 10_921, "\x00" * 10_922, 65_532),
+    ),
+    ids=("ascii", "multibyte-utf8", "json-escaped-control"),
+)
+def test_json_key_budget_includes_minimal_object_overhead(
+    monkeypatch: pytest.MonkeyPatch,
+    valid_key: str,
+    oversized_key: str,
+    valid_document_bytes: int,
+) -> None:
+    document = canonical_json_document({valid_key: 0})
+    assert len(document.encode("utf-8")) == valid_document_bytes
+    monkeypatch.setattr(
+        json_document_module,
+        "canonical_json_bytes",
+        lambda candidate: (_ for _ in ()).throw(
+            AssertionError("canonical encoder must not run")
+        ),
+    )
+
+    with pytest.raises(ValueError, match="64 KiB"):
+        canonical_json_document({oversized_key: 0})
+
+
 def test_canonical_json_string_exact_byte_boundary_remains_valid() -> None:
     document = canonical_json_document("x" * (MAX_CANONICAL_JSON_BYTES - 2))
     assert len(document.encode("utf-8")) == MAX_CANONICAL_JSON_BYTES
