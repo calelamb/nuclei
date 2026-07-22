@@ -91,6 +91,29 @@ describe('researchSelectionStore', () => {
     });
   });
 
+  it('restores a refinement forward without mutating back-history arrays', () => {
+    const store = useResearchSelectionStore.getState();
+    store.selectPrimary(detector, 'panel');
+    store.refineScope(tick, 'panel');
+    const refined = useResearchSelectionStore.getState().present;
+
+    store.back();
+    const afterBack = useResearchSelectionStore.getState();
+    const pastBeforeForward = afterBack.past;
+    const futureBeforeForward = afterBack.future;
+    const pastSnapshot = [...pastBeforeForward];
+    const futureSnapshot = [...futureBeforeForward];
+
+    store.forward();
+
+    const afterForward = useResearchSelectionStore.getState();
+    expect(afterForward.present).toEqual(refined);
+    expect(afterForward.past).not.toBe(pastBeforeForward);
+    expect(afterForward.future).not.toBe(futureBeforeForward);
+    expect(afterBack.past).toEqual(pastSnapshot);
+    expect(afterBack.future).toEqual(futureSnapshot);
+  });
+
   it('normalizes valid inputs and rejects malformed refs and time windows', () => {
     const store = useResearchSelectionStore.getState();
     store.selectPrimary(
