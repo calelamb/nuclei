@@ -135,20 +135,21 @@ class DatasetSemanticIdentity:
             MAPPING_SEMANTIC_KEYS,
             str,
         )
-        typed_mapping = bool({key for key, _ in mapping} & TYPED_SEMANTIC_KEYS)
+        mapping_keys = {key for key, _ in mapping}
+        typed_only_mapping = mapping_keys <= TYPED_SEMANTIC_KEYS
         _validate_semantic_pairs(
             "bit_widths",
             _require_pair_tuple("bit_widths", self.bit_widths),
             PACKED_SEMANTIC_KEYS,
             int,
-            allow_empty=typed_mapping,
+            allow_empty=typed_only_mapping,
         )
         _validate_semantic_pairs(
             "units",
             _require_pair_tuple("units", self.units),
             UNIT_SEMANTIC_KEYS,
             str,
-            allow_empty=typed_mapping,
+            allow_empty=typed_only_mapping,
         )
         if not isinstance(self.time_domain, str):
             raise TypeError("time domain must be a string")

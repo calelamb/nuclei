@@ -74,6 +74,8 @@ def source_spans_to_bytes(spans: tuple[SourceSpan, ...]) -> bytes:
 def source_spans_from_value(value: object) -> tuple[SourceSpan, ...]:
     if not isinstance(value, list) or len(value) > MAX_SOURCE_SPANS:
         raise ValueError("source spans are invalid")
+    if len(canonical_json_bytes(value)) > MAX_SOURCE_SPANS_BYTES:
+        raise ValueError("source span metadata exceeds 64 KiB")
     spans = tuple(_span_from_value(item) for item in value)
     _validate_spans(spans)
     return spans

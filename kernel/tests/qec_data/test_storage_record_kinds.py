@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 from dataclasses import replace
 from pathlib import Path
 
@@ -22,6 +23,8 @@ from kernel.qec_data.models import (
 )
 from kernel.qec_data.queries import CancellationToken, QecQueryEngine, QueryNotSupported
 from kernel.qec_data.storage import SegmentKey, SessionStorage
+from kernel.qec_data.storage_durability import MOVEFILE_REPLACE_EXISTING, DurableMover
+from kernel.qec_data.storage_lineage import source_spans_from_value
 from kernel.qec_data.storage_parquet import inspect_partition
 from kernel.qec_data.tiles import QueryTile
 from kernel.tests.qec_data.test_queries import query_spec
@@ -127,6 +130,66 @@ def test_typed_chunks_round_trip_lineage_and_commit_atomically(tmp_path: Path) -
         "campaign_points",
         "calibrations",
     }
+
+
+@pytest.mark.parametrize(
+    ("failure_call", "orphan_count"),
+    ((2, 1), (4, 3)),
+    ids=("during-mixed-renames", "before-journal-publication"),
+)
+def test_mixed_commit_failure_preserves_old_visibility_and_kind_recovery(
+    tmp_path: Path, failure_call: int, orphan_count: int
+) -> None:
+    storage = create_storage(tmp_path)
+    for chunk in (
+        ImportChunk(sample_batch(segment_id="shared"), (_span("shots"),)),
+        ImportChunk(_campaign(), (_span("stats"),)),
+        ImportChunk(_calibration(), (_span("calibration"),)),
+    ):
+        storage.append_chunk(chunk)
+    faulting = _open_with_faulting_mover(tmp_path, failure_call)
+    keys = (
+        SegmentKey("syndromes", "shared"),
+        SegmentKey("campaign_points", "shared"),
+        SegmentKey("calibrations", "shared"),
+    )
+
+    with pytest.raises(OSError, match="injected publication failure"):
+        faulting.commit_segments(keys)
+
+    assert faulting.list_committed_partitions() == ()
+    assert QecCatalog(faulting).synchronize() == ()
+    report = faulting.recover()
+    assert len(report.orphaned_final) == orphan_count
+    recovered = report.orphaned_final + report.resumable
+    assert {ref.record_kind for ref in recovered} == {
+        "syndromes",
+        "campaign_points",
+        "calibrations",
+    }
+
+    faulting.resume_pending(report.orphaned_final)
+    faulting.commit_segments(keys)
+    assert {dataset.record_kind for dataset in QecCatalog(faulting).synchronize()} == {
+        "syndromes",
+        "campaign_points",
+        "calibrations",
+    }
+
+
+def _open_with_faulting_mover(root: Path, failure_call: int) -> SessionStorage:
+    calls = 0
+
+    def faulting_move(source: Path, target: Path, flags: int) -> None:
+        nonlocal calls
+        calls += 1
+        if calls == failure_call:
+            raise OSError("injected publication failure")
+        operation = os.replace if flags & MOVEFILE_REPLACE_EXISTING else os.rename
+        operation(source, target)
+
+    mover = DurableMover(platform="nt", windows_move=faulting_move)
+    return SessionStorage.open(root, "session-1", mover=mover)
 
 
 def test_overlap_is_scoped_by_record_kind(tmp_path: Path) -> None:
@@ -292,3 +355,85 @@ def test_typed_semantic_identities_allow_kind_appropriate_empty_fields(
     assert SessionStorage.open(tmp_path / "calibration", "session-1").session_root == (
         calibration.session_root
     )
+
+
+@pytest.mark.parametrize("empty_field", ("bit_widths", "units"))
+def test_hybrid_semantic_identity_requires_syndrome_fields(empty_field: str) -> None:
+    values = {
+        "bit_widths": (("detectors", 9),),
+        "units": (("timestamp", "ns"),),
+    }
+    values[empty_field] = ()
+
+    with pytest.raises(ValueError, match=empty_field):
+        DatasetSemanticIdentity(
+            source_sha256=("a" * 64,),
+            adapter_id="generic.binary",
+            adapter_version="1.0.0",
+            mapping=(("detectors", "detector_events"), ("shots", "num_shots")),
+            bit_widths=values["bit_widths"],
+            units=values["units"],
+            time_domain="timestamp",
+        )
+
+
+def test_valid_hybrid_identity_appends_and_catalogs_each_record_kind(
+    tmp_path: Path,
+) -> None:
+    identity = DatasetSemanticIdentity(
+        source_sha256=("a" * 64,),
+        adapter_id="generic.binary",
+        adapter_version="1.0.0",
+        mapping=(("detectors", "detector_events"), ("shots", "num_shots")),
+        bit_widths=(("detectors", 9),),
+        units=(("timestamp", "ns"),),
+        time_domain="timestamp",
+    )
+    storage = SessionStorage.create(tmp_path, sample_session(), identity)
+    storage.append_chunk(
+        ImportChunk(sample_batch(segment_id="shared"), (_span("shots"),))
+    )
+    storage.append_chunk(ImportChunk(_campaign(), (_span("stats"),)))
+    storage.commit_segments(
+        (
+            SegmentKey("syndromes", "shared"),
+            SegmentKey("campaign_points", "shared"),
+        )
+    )
+
+    assert {dataset.record_kind for dataset in QecCatalog(storage).synchronize()} == {
+        "syndromes",
+        "campaign_points",
+    }
+
+
+def test_source_span_value_rejects_one_megabyte_source_id() -> None:
+    value = [
+        {
+            "source_id": "x" * 1_000_000,
+            "byte_ranges": [{"start": 0, "end": 1}],
+            "row_range": None,
+            "precision": "exact",
+        }
+    ]
+
+    with pytest.raises(ValueError, match="64 KiB"):
+        source_spans_from_value(value)
+
+
+def test_source_span_value_rejects_oversized_nested_ranges() -> None:
+    offset = 9_000_000_000_000_000
+    value = [
+        {
+            "source_id": "s" * 15_000,
+            "byte_ranges": [
+                {"start": offset + index * 2, "end": offset + index * 2 + 1}
+                for index in range(1_024)
+            ],
+            "row_range": None,
+            "precision": "exact",
+        }
+    ]
+
+    with pytest.raises(ValueError, match="64 KiB"):
+        source_spans_from_value(value)
