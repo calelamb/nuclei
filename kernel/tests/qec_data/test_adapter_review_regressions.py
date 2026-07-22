@@ -8,7 +8,7 @@ from pathlib import Path
 import subprocess
 import sys
 import time
-from unittest.mock import Mock
+from unittest.mock import MagicMock, Mock
 
 import pytest
 
@@ -219,6 +219,25 @@ def test_detected_backend_must_attest_os_enforcement(
     assert report.failure_codes == ("isolation_unavailable",)
     assert report.failures[0].message == "detected backend is not OS-enforced"
     detected.context.assert_not_called()
+
+
+def test_falsey_explicit_backend_is_preserved(monkeypatch: pytest.MonkeyPatch) -> None:
+    injected = MagicMock(name="falsey_explicit_backend")
+    injected.__bool__.return_value = False
+    injected.name = "falsey_explicit_backend"
+    injected.context.return_value = None
+    detector = Mock(name="secure_backend_detector")
+    monkeypatch.setattr(isolation, "detect_secure_isolation_backend", detector)
+
+    backend, context, error = isolation.resolve_isolation_backend(
+        GoodAdapter, injected, os.name
+    )
+
+    assert backend is None
+    assert context is None
+    assert error == "backend falsey_explicit_backend cannot isolate this factory"
+    injected.context.assert_called_once_with(GoodAdapter)
+    detector.assert_not_called()
 
 
 def test_secure_detection_fails_closed_on_unsupported_platforms() -> None:

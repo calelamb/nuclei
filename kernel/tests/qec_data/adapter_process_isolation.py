@@ -50,7 +50,11 @@ def resolve_isolation_backend(
     IsolationBackend | None, multiprocessing.context.BaseContext | None, str | None
 ]:
     detected = injected is None
-    backend = injected or detect_secure_isolation_backend(platform_name)
+    backend = (
+        injected
+        if injected is not None
+        else detect_secure_isolation_backend(platform_name)
+    )
     if backend is None:
         return None, None, "no OS-enforced descendant-containment backend is available"
     if detected:
