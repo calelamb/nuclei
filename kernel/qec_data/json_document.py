@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import math
+import unicodedata
 from collections.abc import Mapping, Sequence
 
 from .hashing import canonical_json_bytes
@@ -14,6 +15,7 @@ MAX_CANONICAL_JSON_BYTES = 65_536
 MAX_CANONICAL_JSON_DEPTH = 32
 MAX_CANONICAL_JSON_KEYS = 4_096
 MAX_CANONICAL_JSON_CONTAINER_ITEMS = 4_096
+JSON_SHORT_ESCAPES = frozenset({'"', "\\", "\b", "\t", "\n", "\f", "\r"})
 
 
 def _reject_constant(value: str) -> None:
@@ -27,9 +29,29 @@ def _finite_float(value: str) -> float:
     return parsed
 
 
+def _json_character_bytes(character: str) -> int:
+    if character in JSON_SHORT_ESCAPES:
+        return 2
+    codepoint = ord(character)
+    if codepoint < 0x20:
+        return 6
+    if codepoint < 0x80:
+        return 1
+    if codepoint < 0x800:
+        return 2
+    if codepoint < 0x10000:
+        return 3
+    return 4
+
+
 def _require_document_string_bound(value: str) -> None:
     if len(value) > MAX_CANONICAL_JSON_BYTES - 2:
         raise ValueError("canonical JSON document exceeds 64 KiB")
+    encoded_bytes = 2
+    for character in unicodedata.normalize("NFC", value):
+        encoded_bytes += _json_character_bytes(character)
+        if encoded_bytes > MAX_CANONICAL_JSON_BYTES:
+            raise ValueError("canonical JSON document exceeds 64 KiB")
 
 
 def _require_structure_bounds(*, keys: int, items: int, depth: int) -> None:
