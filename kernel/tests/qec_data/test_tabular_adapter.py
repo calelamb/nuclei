@@ -233,6 +233,35 @@ def test_arrow_and_parquet_normalize_at_pyarrow_18_floor(
     assert chunks[0].source_spans[0].row_range.start == 0
 
 
+@pytest.mark.parametrize("container_kind", ["arrow-file", "arrow-stream", "parquet"])
+def test_arrow_and_parquet_reject_duplicate_schema_names_before_projection(
+    tmp_path: Path, container_kind: str
+) -> None:
+    pa = pytest.importorskip("pyarrow")
+    pq = pytest.importorskip("pyarrow.parquet")
+    source = tmp_path / (
+        "duplicate.parquet" if container_kind == "parquet" else "duplicate.arrow"
+    )
+    table = pa.Table.from_arrays(
+        [pa.array([0]), pa.array([99]), pa.array([b"\x00"])],
+        names=["seq", "seq", "syndrome"],
+    )
+    if container_kind == "parquet":
+        pq.write_table(table, source, write_page_checksum=True)
+    else:
+        with pa.OSFile(str(source), "wb") as sink:
+            writer_factory = (
+                pa.ipc.new_file if container_kind == "arrow-file" else pa.ipc.new_stream
+            )
+            with writer_factory(sink, table.schema) as writer:
+                writer.write_table(table)
+
+    with pytest.raises(
+        ValueError, match="duplicate Arrow schema field.*seq.*ambiguous"
+    ):
+        tuple(TabularAdapter().import_batches(source, _mapping(with_time=False)))
+
+
 def test_arrow_container_size_is_rejected_before_memory_mapping(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

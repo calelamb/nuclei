@@ -98,3 +98,31 @@ cleanup). After those fixes landed, the complete committed QEC suite passed:
 `339 passed, 2 skipped`. That command explicitly ignored the concurrent,
 untracked Task 8 `test_server.py`, which was still in its intentional RED phase
 and imported a not-yet-created Task 8 module. No tracked QEC test was excluded.
+
+## Duplicate Arrow schema follow-up
+
+A final independent rereview found that `names.index` selected the first field
+when an Arrow schema repeated a mapped name. A parameterized regression wrote
+conflicting `seq` values under duplicate `seq` fields to IPC file, IPC stream,
+and Parquet containers.
+
+### RED
+
+```text
+pytest -q \
+  kernel/tests/qec_data/test_tabular_adapter.py::test_arrow_and_parquet_reject_duplicate_schema_names_before_projection
+```
+
+Result: `3 failed`. All three formats silently accepted the ambiguous schema.
+
+### GREEN and verification
+
+The shared `_selected_fields` preflight now rejects repeated schema names
+before name-to-index projection and reports the duplicate names in an
+actionable ambiguity error. The same focused command passed: `3 passed`.
+
+- All Task 7 owned adapter tests: `52 passed`.
+- Scoped `tabular_sources.py` coverage: `86%`.
+- The broader adapter run reached `121 passed, 1 skipped` with one unrelated
+  process-group cleanup permission flake; that exact test passed immediately
+  on isolated rerun, accounting for all 122 passing adapter tests.

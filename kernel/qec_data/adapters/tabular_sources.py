@@ -231,6 +231,17 @@ def _selected_fields(
     names = tuple(schema.names)
     if len(names) > MAX_SCHEMA_FIELDS:
         raise ValueError("Arrow schema exceeds the field-count safety limit")
+    seen: set[str] = set()
+    duplicates: list[str] = []
+    for name in names:
+        if name in seen and name not in duplicates:
+            duplicates.append(name)
+        seen.add(name)
+    if duplicates:
+        joined = ", ".join(repr(name) for name in duplicates)
+        raise ValueError(
+            f"duplicate Arrow schema field names {joined} make projection ambiguous"
+        )
     selected = names if columns is None else tuple(dict.fromkeys(columns))
     missing = tuple(name for name in selected if name not in names)
     if missing:
