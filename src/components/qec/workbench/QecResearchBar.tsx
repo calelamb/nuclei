@@ -16,6 +16,11 @@ function StudyPicker(): ReactElement {
   const studies = useQecStudyStore((state) => state.studies);
   const activeStudyId = useQecStudyUiStore((state) => state.activeStudyId);
   const setActiveStudy = useQecStudyUiStore((state) => state.setActiveStudy);
+  const clearActiveStudy = useQecStudyUiStore((state) => state.clearActiveStudy);
+  const updateStudy = (studyId: string): void => {
+    if (studyId) setActiveStudy(studyId);
+    else clearActiveStudy();
+  };
   return (
     <label className="qec-study-picker" htmlFor="qec-active-study">
       <span>Study</span>
@@ -24,7 +29,7 @@ function StudyPicker(): ReactElement {
         aria-label="Active QEC Study"
         disabled={studies.length === 0}
         value={activeStudyId ?? ''}
-        onChange={(event) => setActiveStudy(event.target.value)}
+        onChange={(event) => updateStudy(event.target.value)}
       >
         <option value="">{studies.length === 0 ? 'No Studies available' : 'Select a Study'}</option>
         {studies.map(({ study }) => <option key={study.id} value={study.id}>{study.name}</option>)}

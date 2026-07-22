@@ -2,7 +2,7 @@
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useQecStudyStore } from '../../../services/qecStudyStore';
 import { useQecStudyUiStore } from '../../../stores/qecStudyUiStore';
 import { useQecWorkbenchStore } from '../../../stores/qecWorkbenchStore';
@@ -50,6 +50,11 @@ const SECOND_STUDY = {
   sources: [],
 };
 
+const STUDY_UI_ACTIONS = {
+  clearActiveStudy: useQecStudyUiStore.getState().clearActiveStudy,
+  setActiveStudy: useQecStudyUiStore.getState().setActiveStudy,
+};
+
 function setStudies(studies = [STUDY, SECOND_STUDY]): void {
   useQecStudyStore.setState({
     studies: studies.map((study) => ({
@@ -70,7 +75,7 @@ beforeEach(() => {
     value: new MemoryStorage(),
   });
   setStudies([STUDY]);
-  useQecStudyUiStore.setState({ activeStudyId: STUDY.id });
+  useQecStudyUiStore.setState({ activeStudyId: STUDY.id, ...STUDY_UI_ACTIONS });
   useQecWorkbenchStore.setState({
     preset: 'build',
     pinnedPanelIds: [],
@@ -134,6 +139,30 @@ describe('<QecWorkbench />', () => {
     expect(picker.value).toBe(SECOND_STUDY.id);
   });
 
+  it('clears Study selection through the explicit UI-store action', () => {
+    const clearActiveStudy = vi.fn(STUDY_UI_ACTIONS.clearActiveStudy);
+    useQecStudyUiStore.setState({ clearActiveStudy });
+    render(<QecWorkbench />);
+
+    fireEvent.change(
+      screen.getByRole<HTMLSelectElement>('combobox', { name: 'Active QEC Study' }),
+      { target: { value: '' } },
+    );
+
+    expect(clearActiveStudy).toHaveBeenCalledOnce();
+    expect(useQecStudyUiStore.getState().activeStudyId).toBeNull();
+  });
+
+  it('asks for a Study choice when Studies exist but the active id is stale', () => {
+    setStudies();
+    useQecStudyUiStore.setState({ activeStudyId: 'missing-study' });
+    render(<QecWorkbench />);
+
+    expect(screen.getByText('Choose a Study')).toBeTruthy();
+    expect(screen.getByText(/Use the Study control/)).toBeTruthy();
+    expect(screen.queryByText('No Studies found')).toBeNull();
+  });
+
   it('opens and closes the responsive inspector with Escape and returns focus', () => {
     render(<QecWorkbench />);
 
@@ -193,6 +222,7 @@ describe('<QecWorkbench />', () => {
     render(<QecWorkbench />);
     expect(screen.getByRole('status', { name: 'Loading QEC Studies' })).toBeTruthy();
     expect(screen.getByText('Validating Study manifests and referenced sources.')).toBeTruthy();
+    expect(within(screen.getByRole('navigation', { name: 'QEC sources and data' })).queryByText('Validated')).toBeNull();
   });
 
   it('renders malformed Study file names and actionable validation details', () => {
@@ -211,6 +241,7 @@ describe('<QecWorkbench />', () => {
     expect(screen.getByText('question: Required')).toBeTruthy();
     expect(screen.getByText(/path must stay inside the project/)).toBeTruthy();
     expect(screen.getByText(/Fix these fields and save/)).toBeTruthy();
+    expect(screen.getByText('2 validation issues')).toBeTruthy();
   });
 
   it('renders a safe empty state when no Studies exist', () => {

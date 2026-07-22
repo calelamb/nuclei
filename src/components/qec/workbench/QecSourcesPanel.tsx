@@ -30,6 +30,10 @@ function EmptyStudies(): ReactElement {
   return <div className="qec-zone-empty"><FolderTree aria-hidden="true" size={24} /><strong>No Studies found</strong><span>Create a Study manifest in the studies folder to organize QEC sources and evidence.</span></div>;
 }
 
+function ChooseStudy(): ReactElement {
+  return <div className="qec-zone-empty"><FlaskConical aria-hidden="true" size={24} /><strong>Choose a Study</strong><span>Use the Study control in the research bar to inspect its referenced sources.</span></div>;
+}
+
 function ValidationDetails({ errors }: { errors: readonly QecStudyValidationError[] }): ReactElement {
   return (
     <section className="qec-study-errors" role="alert" aria-label="Study validation issues">
@@ -101,10 +105,11 @@ function SourceInstruments({ preset }: { preset: QecWorkspacePreset }): ReactEle
   );
 }
 
-function SourcesContent({ study, preset, errors }: { study: QecStudy | null; preset: QecWorkspacePreset; errors: readonly QecStudyValidationError[] }): ReactElement {
-  if (!study && errors.length === 0) return <EmptyStudies />;
+function SourcesContent({ study, preset, errors, hasStudies }: { study: QecStudy | null; preset: QecWorkspacePreset; errors: readonly QecStudyValidationError[]; hasStudies: boolean }): ReactElement {
+  if (!study && !hasStudies && errors.length === 0) return <EmptyStudies />;
   return (
     <div className="qec-sources__scroll">
+      {!study && hasStudies && <ChooseStudy />}
       {study && <><StudyOverview study={study} /><ReferencedFiles sources={study.sources} /><SourceInstruments preset={preset} /></>}
       {errors.length > 0 && <ValidationDetails errors={errors} />}
     </div>
@@ -112,7 +117,12 @@ function SourcesContent({ study, preset, errors }: { study: QecStudy | null; pre
 }
 
 function SourcesFooter({ count, issueCount }: { count: number; issueCount: number }): ReactElement {
-  return <footer className="qec-sources__footer"><span>{count} referenced files</span><span className={issueCount > 0 ? 'qec-status qec-status--warning' : 'qec-status qec-status--ready'}>{issueCount > 0 ? `${issueCount} validation issues` : 'Validated'}</span></footer>;
+  const issueLabel = `${issueCount} validation ${issueCount === 1 ? 'issue' : 'issues'}`;
+  return <footer className="qec-sources__footer"><span>{count} referenced files</span><span className={issueCount > 0 ? 'qec-status qec-status--warning' : 'qec-status qec-status--ready'}>{issueCount > 0 ? issueLabel : 'Validated'}</span></footer>;
+}
+
+function validationIssueCount(errors: readonly QecStudyValidationError[]): number {
+  return errors.reduce((total, entry) => total + entry.errors.length, 0);
 }
 
 export function QecSourcesPanel(): ReactElement {
@@ -125,8 +135,8 @@ export function QecSourcesPanel(): ReactElement {
   return (
     <nav className="qec-sources" aria-label="QEC sources and data">
       <SourcesHeading />
-      {loading ? <LoadingStudies /> : <SourcesContent study={study} preset={preset} errors={errors} />}
-      <SourcesFooter count={study?.sources.length ?? 0} issueCount={errors.length} />
+      {loading ? <LoadingStudies /> : <SourcesContent study={study} preset={preset} errors={errors} hasStudies={studies.length > 0} />}
+      {!loading && <SourcesFooter count={study?.sources.length ?? 0} issueCount={validationIssueCount(errors)} />}
     </nav>
   );
 }
