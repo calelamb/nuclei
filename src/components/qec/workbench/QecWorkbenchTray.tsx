@@ -1,5 +1,5 @@
 import { ChevronDown, ChevronUp, CircleDot, ListChecks, Radio } from 'lucide-react';
-import { useState, type ReactElement } from 'react';
+import { type ReactElement } from 'react';
 import { QEC_PANEL_REGISTRY } from '../../../layout/qecPanelRegistry';
 import { useQecWorkbenchStore } from '../../../stores/qecWorkbenchStore';
 
@@ -35,10 +35,12 @@ function TrayContent(): ReactElement {
 }
 
 export function QecWorkbenchTray(): ReactElement {
-  const [expanded, setExpanded] = useState(true);
+  const collapsed = useQecWorkbenchStore((state) => state.trayCollapsed);
+  const toggleCollapsed = useQecWorkbenchStore((state) => state.toggleTrayCollapsed);
+  const expanded = !collapsed;
   return (
     <section className={`qec-tray qec-tray--${expanded ? 'expanded' : 'collapsed'}`} aria-label="QEC jobs and streams">
-      <TrayHeader expanded={expanded} onToggle={() => setExpanded((open) => !open)} />
+      <TrayHeader expanded={expanded} onToggle={toggleCollapsed} />
       {expanded && <TrayContent />}
     </section>
   );

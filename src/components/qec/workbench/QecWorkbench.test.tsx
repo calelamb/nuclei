@@ -1,9 +1,12 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useQecStudyStore } from '../../../services/qecStudyStore';
+import type { PlatformBridge } from '../../../platform/bridge';
+import { PlatformProvider } from '../../../platform/PlatformProvider';
+import { useProjectStore } from '../../../stores/projectStore';
 import { useQecStudyUiStore } from '../../../stores/qecStudyUiStore';
 import { useQecWorkbenchStore } from '../../../stores/qecWorkbenchStore';
 import {
@@ -26,6 +29,38 @@ class MemoryStorage implements Storage {
   key(index: number): string | null { return [...this.values.keys()][index] ?? null; }
   removeItem(key: string): void { this.values.delete(key); }
   setItem(key: string, value: string): void { this.values.set(key, value); }
+}
+
+function persistenceBridge(
+  getStoredValue: PlatformBridge['getStoredValue'],
+  setStoredValue: PlatformBridge['setStoredValue'] = vi.fn(async () => undefined),
+): PlatformBridge {
+  return {
+    startKernel: vi.fn(), stopKernel: vi.fn(), openFile: vi.fn(), readFile: vi.fn(),
+    saveFile: vi.fn(), saveFileAs: vi.fn(), renameFile: vi.fn(), setWindowTitle: vi.fn(),
+    getPlatform: () => 'desktop', openDirectory: vi.fn(), listDirectory: vi.fn(),
+    createFile: vi.fn(), createDirectory: vi.fn(), deleteFile: vi.fn(),
+    getStoredValue,
+    setStoredValue,
+  };
+}
+
+function persistedState(preset: 'build' | 'analyze' | 'observe') {
+  return {
+    schema: 1,
+    preset,
+    pinnedPanelIds: ['timeline'],
+    sourceWidth: 310,
+    inspectorWidth: 410,
+    trayHeight: 290,
+    trayCollapsed: true,
+    selection: {
+      primary: { kind: 'detector', id: 'D42' },
+      scope: [],
+      timeWindow: { start: 1, end: 5, domain: 'round' },
+      source: 'panel',
+    },
+  };
 }
 
 const STUDY = {
@@ -75,6 +110,7 @@ beforeEach(() => {
     value: new MemoryStorage(),
   });
   setStudies([STUDY]);
+  useProjectStore.setState({ projectRoot: null, tabs: [], activeTabPath: null });
   useQecStudyUiStore.setState({ activeStudyId: STUDY.id, ...STUDY_UI_ACTIONS });
   useQecWorkbenchStore.setState({
     preset: 'build',
@@ -82,6 +118,8 @@ beforeEach(() => {
     sourceWidth: 280,
     inspectorWidth: 360,
     trayHeight: 260,
+    trayCollapsed: false,
+    persistenceError: null,
   });
   useResearchSelectionStore.setState({
     past: [],
@@ -210,10 +248,85 @@ describe('<QecWorkbench />', () => {
     expect(within(tray).getByText('No active jobs')).toBeTruthy();
 
     fireEvent.click(toggle);
+    expect(useQecWorkbenchStore.getState().trayCollapsed).toBe(true);
     expect(
       within(tray).getByRole('button', { name: 'Expand jobs and streams' }).getAttribute('aria-expanded'),
     ).toBe('false');
     expect(within(tray).queryByText('No active jobs')).toBeNull();
+  });
+
+  it('hydrates scoped context and debounces an immutable platform-store snapshot', async () => {
+    useProjectStore.setState({ projectRoot: '/project' });
+    const writes: Array<{ key: string; value: unknown }> = [];
+    const bridge = persistenceBridge(
+      vi.fn(async () => persistedState('analyze')),
+      vi.fn(async (key, value) => { writes.push({ key, value }); }),
+    );
+
+    render(<PlatformProvider bridge={bridge}><QecWorkbench /></PlatformProvider>);
+
+    await waitFor(() => expect(useQecWorkbenchStore.getState().preset).toBe('analyze'));
+    expect(useResearchSelectionStore.getState().present).toMatchObject({
+      primary: { kind: 'detector', id: 'D42' },
+      source: 'restore',
+    });
+    expect(useQecWorkbenchStore.getState().trayCollapsed).toBe(true);
+
+    act(() => useQecWorkbenchStore.getState().setPreset('observe'));
+    await waitFor(() => expect(writes).toHaveLength(1));
+    expect(writes[0]).toMatchObject({
+      key: `qec-workbench:/project:${STUDY.id}`,
+      value: { schema: 1, preset: 'observe', trayCollapsed: true },
+    });
+  });
+
+  it('ignores a stale load when the active Study switches', async () => {
+    setStudies();
+    useProjectStore.setState({ projectRoot: '/project' });
+    let resolveFirst: ((value: unknown) => void) | null = null;
+    const first = new Promise<unknown>((resolve) => { resolveFirst = resolve; });
+    const bridge = persistenceBridge(vi.fn(async (key: string) =>
+      key.endsWith(STUDY.id) ? first : persistedState('observe')));
+    render(<PlatformProvider bridge={bridge}><QecWorkbench /></PlatformProvider>);
+
+    act(() => useQecStudyUiStore.getState().setActiveStudy(SECOND_STUDY.id));
+    await waitFor(() => expect(useQecWorkbenchStore.getState().preset).toBe('observe'));
+    await act(async () => { resolveFirst?.(persistedState('analyze')); await first; });
+
+    expect(useQecWorkbenchStore.getState().preset).toBe('observe');
+  });
+
+  it('reports platform read and write failures in the workbench shell', async () => {
+    useProjectStore.setState({ projectRoot: '/project' });
+    const readFailure = persistenceBridge(vi.fn(async () => { throw new Error('read failed'); }));
+    const firstRender = render(
+      <PlatformProvider bridge={readFailure}><QecWorkbench /></PlatformProvider>,
+    );
+    expect((await screen.findByRole('alert')).textContent).toMatch(/restore QEC workspace context/i);
+    firstRender.unmount();
+
+    const writeFailure = persistenceBridge(
+      vi.fn(async () => persistedState('build')),
+      vi.fn(async () => { throw new Error('write failed'); }),
+    );
+    render(<PlatformProvider bridge={writeFailure}><QecWorkbench /></PlatformProvider>);
+    await waitFor(() => expect(useQecWorkbenchStore.getState().persistenceError).toBeNull());
+    act(() => useQecWorkbenchStore.getState().setPreset('analyze'));
+    expect((await screen.findByRole('alert')).textContent).toMatch(/save QEC workspace context/i);
+  });
+
+  it('unsubscribes and cancels pending persistence when the shell unmounts', async () => {
+    useProjectStore.setState({ projectRoot: '/project' });
+    const setStoredValue = vi.fn(async () => undefined);
+    const bridge = persistenceBridge(vi.fn(async () => persistedState('build')), setStoredValue);
+    const view = render(<PlatformProvider bridge={bridge}><QecWorkbench /></PlatformProvider>);
+    await waitFor(() => expect(useQecWorkbenchStore.getState().trayCollapsed).toBe(true));
+
+    act(() => useQecWorkbenchStore.getState().setPreset('analyze'));
+    view.unmount();
+    await new Promise((resolve) => setTimeout(resolve, 350));
+
+    expect(setStoredValue).not.toHaveBeenCalled();
   });
 
   it('renders a distinct Study loading state', () => {

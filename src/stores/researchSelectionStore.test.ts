@@ -152,4 +152,28 @@ describe('researchSelectionStore', () => {
       future: [],
     });
   });
+
+  it('restores normalized context without retaining transient trail history', () => {
+    useResearchSelectionStore.getState().selectPrimary(detector, 'panel');
+    const selection = {
+      primary: { kind: 'campaign-point' as const, id: ' p=.004 ' },
+      scope: [{ kind: 'detector' as const, id: ' D42 ' }],
+      timeWindow: { start: 0, end: 4, domain: 'round' as const },
+      source: 'panel' as const,
+    };
+
+    useResearchSelectionStore.getState().restore(selection);
+
+    expect(useResearchSelectionStore.getState()).toMatchObject({
+      past: [],
+      future: [],
+      present: {
+        primary: { kind: 'campaign-point', id: 'p=.004' },
+        scope: [{ kind: 'detector', id: 'D42' }],
+        timeWindow: { start: 0, end: 4, domain: 'round' },
+        source: 'restore',
+      },
+    });
+    expect(useResearchSelectionStore.getState().present).not.toBe(selection);
+  });
 });

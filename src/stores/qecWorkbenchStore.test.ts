@@ -1,30 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 
-class MemoryStorage {
-  private readonly values = new Map<string, string>();
-
-  getItem(key: string): string | null {
-    return this.values.get(key) ?? null;
-  }
-
-  setItem(key: string, value: string): void {
-    this.values.set(key, value);
-  }
-
-  removeItem(key: string): void {
-    this.values.delete(key);
-  }
-
-  clear(): void {
-    this.values.clear();
-  }
-}
-
-(globalThis as unknown as { localStorage: MemoryStorage }).localStorage = new MemoryStorage();
-
 import {
-  loadQecWorkbenchState,
-  QEC_WORKBENCH_STORAGE_KEY,
   useQecWorkbenchStore,
 } from './qecWorkbenchStore';
 
@@ -34,11 +10,12 @@ const DEFAULTS = {
   sourceWidth: 280,
   inspectorWidth: 360,
   trayHeight: 260,
+  trayCollapsed: false,
+  persistenceError: null,
 };
 
 describe('qecWorkbenchStore', () => {
   beforeEach(() => {
-    localStorage.clear();
     useQecWorkbenchStore.setState(DEFAULTS);
   });
 
@@ -89,16 +66,42 @@ describe('qecWorkbenchStore', () => {
     expect(Object.isFrozen(pins)).toBe(true);
   });
 
-  it('falls back to build when persisted preset is invalid', () => {
-    localStorage.setItem(
-      QEC_WORKBENCH_STORAGE_KEY,
-      JSON.stringify({ preset: 'unsupported', sourceWidth: 320, pinnedPanelIds: ['editor'] }),
-    );
+  it('owns tray collapse state with immutable actions', () => {
+    const before = useQecWorkbenchStore.getState();
 
-    expect(loadQecWorkbenchState()).toMatchObject({
-      preset: 'build',
-      sourceWidth: 320,
-      pinnedPanelIds: ['editor'],
+    before.toggleTrayCollapsed();
+
+    expect(useQecWorkbenchStore.getState().trayCollapsed).toBe(true);
+    expect(useQecWorkbenchStore.getState()).not.toBe(before);
+  });
+
+  it('hydrates a copied persisted layout without replacing store actions', () => {
+    const pins = ['editor'] as const;
+    useQecWorkbenchStore.getState().hydrate({
+      preset: 'analyze',
+      pinnedPanelIds: pins,
+      sourceWidth: 310,
+      inspectorWidth: 400,
+      trayHeight: 280,
+      trayCollapsed: true,
     });
+
+    const state = useQecWorkbenchStore.getState();
+    expect(state).toMatchObject({
+      preset: 'analyze',
+      sourceWidth: 310,
+      pinnedPanelIds: ['editor'],
+      trayCollapsed: true,
+    });
+    expect(state.pinnedPanelIds).not.toBe(pins);
+    expect(state.setPreset).toBeTypeOf('function');
+  });
+
+  it('exposes and clears user-facing persistence failures', () => {
+    useQecWorkbenchStore.getState().setPersistenceError('Could not save QEC workspace context.');
+    expect(useQecWorkbenchStore.getState().persistenceError).toMatch(/Could not save/);
+
+    useQecWorkbenchStore.getState().setPersistenceError(null);
+    expect(useQecWorkbenchStore.getState().persistenceError).toBeNull();
   });
 });

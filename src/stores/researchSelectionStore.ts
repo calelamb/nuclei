@@ -10,14 +10,14 @@ const ENTITY_KINDS = [
   'alert', 'finding',
 ] as const satisfies readonly QecEntityKind[];
 
-const qecEntityRefSchema = z.object({
+export const qecEntityRefSchema = z.object({
   kind: z.enum(ENTITY_KINDS),
   id: z.string().trim().min(1),
   sessionId: z.string().trim().optional().transform((value) => value || undefined),
   datasetId: z.string().trim().optional().transform((value) => value || undefined),
 });
-const selectionSourceSchema = z.enum(['user', 'panel', 'alert', 'dirac', 'restore']);
-const timeWindowSchema = z.object({
+export const selectionSourceSchema = z.enum(['user', 'panel', 'alert', 'dirac', 'restore']);
+export const timeWindowSchema = z.object({
   start: z.number().finite(),
   end: z.number().finite(),
   domain: z.enum(['tick', 'round', 'ns']),
@@ -32,7 +32,7 @@ export const EMPTY_RESEARCH_SELECTION: ResearchSelection = {
   source: 'user',
 };
 
-interface ResearchSelectionState {
+export interface ResearchSelectionState {
   past: readonly ResearchSelection[];
   present: ResearchSelection;
   future: readonly ResearchSelection[];
@@ -42,6 +42,7 @@ interface ResearchSelectionState {
   back(): void;
   forward(): void;
   clear(): void;
+  restore(selection: ResearchSelection): void;
 }
 
 function normalizeRef(ref: QecEntityRef): QecEntityRef | null {
@@ -88,6 +89,21 @@ function commit(
   set({ past: nextHistory(state.past, state.present), present, future: [] });
 }
 
+function normalizeSelection(selection: ResearchSelection): ResearchSelection {
+  const primary = selection.primary ? normalizeRef(selection.primary) : null;
+  const scope = selection.scope.flatMap((entry) => {
+    const normalized = normalizeRef(entry);
+    return normalized ? [normalized] : [];
+  });
+  const timeWindow = normalizeWindow(selection.timeWindow);
+  return {
+    primary,
+    scope,
+    timeWindow: timeWindow === undefined ? null : timeWindow,
+    source: 'restore',
+  };
+}
+
 export const useResearchSelectionStore = create<ResearchSelectionState>((set, get) => ({
   past: [],
   present: EMPTY_RESEARCH_SELECTION,
@@ -127,4 +143,9 @@ export const useResearchSelectionStore = create<ResearchSelectionState>((set, ge
     set({ past: nextHistory(state.past, state.present), present: next, future: state.future.slice(1) });
   },
   clear: () => set({ past: [], present: EMPTY_RESEARCH_SELECTION, future: [] }),
+  restore: (selection) => set({
+    past: [],
+    present: normalizeSelection(selection),
+    future: [],
+  }),
 }));
