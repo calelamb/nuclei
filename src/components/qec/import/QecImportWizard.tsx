@@ -27,6 +27,7 @@ import type {
 } from '../../../types/qecDataProtocol';
 import {
   IMPORT_STAGES,
+  adapterUsesNativeMapping,
   buildMapping,
   completeRows,
   formatBytes,
@@ -133,6 +134,7 @@ function AdapterStage({ probe, selected, onSelect }: AdapterStageProps): ReactEl
 }
 
 interface MappingStageProps {
+  adapterId: string;
   rows: readonly MappingRow[];
   options: MappingOptions;
   reviewed: boolean;
@@ -145,25 +147,39 @@ interface MappingStageProps {
 
 function MappingStage(props: MappingStageProps): ReactElement {
   const count = completeRows(props.rows).length;
+  const native = adapterUsesNativeMapping(props.adapterId);
   return (
     <div className="qec-import-mapping">
-      <div className="qec-import-mapping__header"><strong>{count} mapped {count === 1 ? 'field' : 'fields'}</strong><button type="button" onClick={props.onAdd}><Plus aria-hidden="true" size={15} />Add field mapping</button></div>
-      <div className="qec-import-mapping__labels" aria-hidden="true"><span>Canonical field</span><span>Source field</span><span /></div>
-      {props.rows.map((row, index) => (
+      {native
+        ? <div className="qec-import-mapping__header"><strong>Adapter-native fields</strong></div>
+        : <><div className="qec-import-mapping__header"><strong>{count} mapped {count === 1 ? 'field' : 'fields'}</strong><button type="button" onClick={props.onAdd}><Plus aria-hidden="true" size={15} />Add field mapping</button></div><div className="qec-import-mapping__labels" aria-hidden="true"><span>Canonical field</span><span>Source field</span><span /></div></>}
+      {!native && props.rows.map((row, index) => (
         <div className="qec-import-mapping__row" key={row.id}>
           <label><span>Canonical field {index + 1}</span><input aria-label={`Canonical field ${index + 1}`} value={row.canonical} onChange={(event) => props.onChange(row.id, 'canonical', event.target.value)} /></label>
           <label><span>Source field {index + 1}</span><input aria-label={`Source field ${index + 1}`} value={row.source} onChange={(event) => props.onChange(row.id, 'source', event.target.value)} /></label>
           <button type="button" aria-label={`Remove mapping ${index + 1}`} onClick={() => props.onRemove(row.id)}><Trash2 aria-hidden="true" size={15} /></button>
         </div>
       ))}
-      <MappingOptionsForm options={props.options} onChange={props.onOptions} />
+      <MappingOptionsForm adapterId={props.adapterId} options={props.options} onChange={props.onOptions} />
       <label className="qec-import-review"><input aria-label="Mapping reviewed" type="checkbox" checked={props.reviewed} onChange={(event) => props.onReviewed(event.target.checked)} /><span><strong>Mapping reviewed</strong><small>Widths, units, field meaning, and record class are explicit where required.</small></span></label>
     </div>
   );
 }
 
-function MappingOptionsForm({ options, onChange }: { options: MappingOptions; onChange(value: MappingOptions): void }): ReactElement {
+function MappingOptionsForm({ adapterId, options, onChange }: { adapterId: string; options: MappingOptions; onChange(value: MappingOptions): void }): ReactElement {
   const set = (key: keyof MappingOptions, value: string): void => onChange({ ...options, [key]: value });
+  if (adapterId === 'sinter-csv') {
+    return <p className="qec-import-notice">Sinter defines campaign-point fields and units in its native statistics schema; no field mapping options are accepted.</p>;
+  }
+  if (adapterId === 'stim-results') {
+    return (
+      <fieldset className="qec-import-options">
+        <legend>Stim result widths (required without circuit/DEM context)</legend>
+        <label>Detector width<input type="number" min="1" value={options.detectorCount} onChange={(event) => set('detectorCount', event.target.value)} /></label>
+        <label>Observable width<input type="number" min="0" value={options.observableCount} onChange={(event) => set('observableCount', event.target.value)} /></label>
+      </fieldset>
+    );
+  }
   return (
     <fieldset className="qec-import-options">
       <legend>Scientific meaning (never inferred)</legend>
@@ -267,7 +283,9 @@ function nextAllowed(stage: number, probe: ImportProbeResult | null, adapterId: 
 function importUnavailable(probe: ImportProbeResult | null, adapterId: string, mappingReady: boolean, valid: boolean, sessionId: string): string | null {
   if (!probe) return 'probe must finish';
   if (!adapterId) return 'choose a supported adapter';
-  if (!mappingReady) return 'review at least one explicit field mapping';
+  if (!mappingReady) return adapterUsesNativeMapping(adapterId)
+    ? 'review the adapter-native scientific requirements'
+    : 'review at least one explicit field mapping';
   if (!valid) return 'mapping validation must pass';
   const sessionIssue = sessionIdIssue(sessionId.trim());
   if (sessionIssue) return sessionIssue;
@@ -349,7 +367,13 @@ function useMappingEditor(invalidate: () => void) {
   const [reviewed, setReviewed] = useState(false);
   const mapping = useMemo(() => buildMapping(rows, options), [options, rows]);
   const mappingReady = mappingIsReviewed(adapterId, rows, reviewed);
-  const chooseAdapter = (id: string): void => { setAdapterId(id); invalidate(); };
+  const chooseAdapter = (id: string): void => {
+    setAdapterId(id);
+    setRows(Object.freeze([]));
+    setOptions(EMPTY_OPTIONS);
+    setReviewed(false);
+    invalidate();
+  };
   const addRow = (): void => {
     setRows((current) => Object.freeze([...current, { id: nextRowId, canonical: '', source: '' }]));
     setNextRowId((current) => current + 1);
@@ -381,7 +405,7 @@ function StageContent(props: StageContentProps): ReactElement {
   const { stage, source, probe, editor, requests } = props;
   if (stage === 0) return <SourceStage source={source} probe={probe} />;
   if (stage === 1) return <AdapterStage probe={probe.value} selected={editor.adapterId} onSelect={editor.chooseAdapter} />;
-  if (stage === 2) return <MappingStage rows={editor.rows} options={editor.options} reviewed={editor.reviewed} onAdd={editor.addRow} onChange={editor.changeRow} onRemove={editor.removeRow} onOptions={editor.changeOptions} onReviewed={editor.changeReviewed} />;
+  if (stage === 2) return <MappingStage adapterId={editor.adapterId} rows={editor.rows} options={editor.options} reviewed={editor.reviewed} onAdd={editor.addRow} onChange={editor.changeRow} onRemove={editor.removeRow} onOptions={editor.changeOptions} onReviewed={editor.changeReviewed} />;
   if (stage === 3) return <PreviewStage validation={requests.validation.value} preview={requests.preview} onLoad={() => void requests.loadPreview(editor.adapterId, editor.mapping)} />;
   if (stage === 4) return <ValidationStage state={requests.validation} alertRef={requests.validationAlertRef} onValidate={() => void requests.validate(editor.adapterId, editor.mapping)} onReviewMapping={props.onReviewMapping} />;
   if (stage === 5) return <DestinationStage sessionId={props.sessionId} sessionKind={props.sessionKind} onSessionId={props.onSessionId} onSessionKind={props.onSessionKind} />;

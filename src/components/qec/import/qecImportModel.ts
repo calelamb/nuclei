@@ -49,12 +49,16 @@ export function completeRows(rows: readonly MappingRow[]): readonly MappingRow[]
 
 const NATIVE_MAPPING_ADAPTERS = new Set(['stim-results', 'sinter-csv']);
 
+export function adapterUsesNativeMapping(adapterId: string): boolean {
+  return NATIVE_MAPPING_ADAPTERS.has(adapterId);
+}
+
 export function mappingIsReviewed(
   adapterId: string,
   rows: readonly MappingRow[],
   reviewed: boolean,
 ): boolean {
-  return reviewed && (NATIVE_MAPPING_ADAPTERS.has(adapterId) || completeRows(rows).length > 0);
+  return reviewed && (adapterUsesNativeMapping(adapterId) || completeRows(rows).length > 0);
 }
 
 export function buildMapping(rows: readonly MappingRow[], options: MappingOptions): ImportMapping {

@@ -13,29 +13,30 @@ The implementation supports simulation-facing Stim and sinter sources as well as
 - Added strict, correlated `session_list` pagination to `QecDataClient`, including page-size checks, a 10,000-session safety bound, cursor validation, and Python-compatible Unicode code-point ordering.
 - Added an immutable, per-project Zustand session catalog with stale-request protection and user-facing load errors.
 - Added canonical session rows with kind, lifecycle status, provenance, and linked Research Selection state. The flat collection uses native list semantics and ordinary button keyboard behavior.
-- Added an E2E-only authenticated engine boundary that exercises the real client and seven-stage UI. It uses the real `.dets` fixture size/hash, real `syndromes` preview kind, rejects scientifically false mappings, persists only the fake engine's state, and proves reload restoration through `session_list`.
+- Added an E2E-only process harness that starts the real authenticated Python QEC Data Engine against a temporary copy of the fixture project. Only Tauri's `qec_data_start` invoke is substituted; the browser's native WebSocket performs real authentication, probe, validation, preview, import, and reload-time `session_list`.
 - Added deterministic Stim `.dets` and PyArrow 18 Parquet adapter fixtures. The browser Study advertises only files available through its string fixture bridge.
 - Added researcher documentation for formats, stages, status qualification, packed-bit order, provenance, source spans, copy-only policy, quarantine, crash recovery, and the canonical schema layout.
-- Added a spawned-process 10-million-record acceptance gate over the actual import consumer and Parquet storage/journal commit path.
+- Added a spawned-process 10-million-record acceptance gate that generates a real packed Stim `.b8` source, resolves `stim-results` v1 from `core_offline_registry`, and streams `adapter.import_batches` through the actual import consumer and Parquet storage/journal commit path.
+- Added a weekly/manual Ubuntu and Windows CI workflow for the slow memory gate. Windows records `PeakWorkingSetSize`; POSIX records normalized `ru_maxrss`.
 
 ## Acceptance evidence
 
 All JavaScript commands below used the bundled Node 24 runtime because the shell's Node 25/jsdom combination is not an authoritative project runtime.
 
-- Full frontend suite before final review hardening: 145 files, 1,201 tests passed.
-- Final focused frontend suite: 5 files, 88 tests passed.
+- Final full frontend suite under Node 24: 145 files, 1,207 tests passed.
+- Adapter-aware mapping RED/GREEN suite: 25 tests passed after the two new native-adapter assertions first failed against the generic tabular UI.
 - App production build: passed (`tsc -b && vite build`). Existing chunk/dynamic-import warnings only.
 - ESLint: passed with 0 errors; four pre-existing generated WASM declaration warnings.
 - Docs build: 43 pages built; all internal links valid. Existing Q# syntax-highlighting warnings only.
-- Kernel QEC server/storage coverage: 76 passed, 1 opt-in memory test skipped; existing dependency deprecation warnings only.
+- Final kernel Stim/server/storage coverage: 100 passed, 1 opt-in memory test skipped; existing dependency deprecation warnings only.
 - Memory acceptance command:
 
   ```bash
   NUCLEI_RUN_MEMORY_ACCEPTANCE=1 python3 -m pytest kernel/tests/qec_data/test_import_memory_acceptance.py -q -s
   ```
 
-  Result: 2 passed in 137.60 seconds. The isolated worker wrote and committed exactly 10,000,000 records across 153 partitions in 137.507839 seconds with peak RSS 189,923,328 bytes (181.13 MiB), below the 512 MiB ceiling. The measured acceptance timeout and wall-time ceiling are 180 seconds. The gate is opt-in so normal suites do not absorb a two-minute storage benchmark.
-- Playwright final integrated run: the new import/reload scenario passed, along with 7 workbench scenarios and 2 intentional viewport skips. One existing screenshot wait timed out while Matplotlib built its font cache; the exact screenshot test passed immediately on isolated rerun (1/1).
+  Corrective result: 4 passed in 168.53 seconds. The isolated worker parsed and committed exactly 10,000,000 real Stim records across 153 partitions in 168.435 seconds with peak RSS 264,241,152 bytes (about 252 MiB), below the 512 MiB ceiling. The subprocess timeout is 300 seconds and the asserted worker ceiling is 285 seconds for CI headroom. The gate remains opt-in for normal suites but is enforced by the dedicated scheduled/manual workflow.
+- Final Playwright real-engine import gate: 1 passed in 9.3 seconds (8.4-second flow). It used native browser WebSocket transport and proved a complete session manifest, journal generation 1, one committed two-row Parquet partition, no pending partition, process reap, and reload restoration from the live engine. The broader prior workbench run passed 7 scenarios with 2 intentional viewport skips; one existing screenshot wait timed out while Matplotlib built its font cache and passed immediately on isolated rerun.
 - `cargo fmt --check`: passed. Strict repository-wide Clippy remains blocked by the pre-existing `KernelState::new` `new_without_default` warning in `src-tauri/src/commands/kernel.rs`, outside this task's Rust-free scope.
 - `git diff --check`: passed.
 
@@ -48,7 +49,9 @@ Windows process containment and capability behavior is covered by Task 8. A nati
 
 ## Independent review
 
-The read-only subagent review found no critical issues. Before final verification this task corrected its scientific-truthfulness findings (native Stim mapping, fixture hash/size and preview kind), removed the unavailable browser Parquet reference, aligned Unicode ordering and bounded pagination, replaced incomplete ARIA tree semantics with a native list, and narrowed two documentation claims.
+The first read-only subagent review found no critical issues. Before final verification this task corrected its scientific-truthfulness findings (native Stim mapping, fixture hash/size and preview kind), removed the unavailable browser Parquet reference, aligned Unicode ordering and bounded pagination, replaced incomplete ARIA tree semantics with a native list, and narrowed two documentation claims.
+
+A subsequent acceptance review found that the original browser harness still simulated engine behavior and the first 10M test emitted already-bounded chunks. Both blockers are now removed: Playwright owns a real engine subprocess and disk-backed project copy, and the memory test traverses the registered Stim adapter from source bytes. Native Stim and sinter mapping controls were also narrowed to the options those adapters actually accept.
 
 The remaining review suggestion is a larger lifecycle enhancement: expose a persistent retry/reconnect control when the engine disconnects after a successful catalog load. Current import launch failures and catalog request failures are surfaced, and stale async catalog writes are rejected; reconnect orchestration should be handled as a dedicated engine lifecycle follow-up rather than hidden inside this acceptance task.
 

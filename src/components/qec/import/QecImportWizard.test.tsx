@@ -34,6 +34,19 @@ function client(): QecImportClient {
   };
 }
 
+function nativeClient(adapterId: 'stim-results' | 'sinter-csv'): QecImportClient {
+  const fake = client();
+  vi.mocked(fake.probe).mockResolvedValue({
+    type: 'import_probe_result', requestId: 'probe-native', sourcePolicy: 'copy', sourceByteSize: 2048,
+    results: [{
+      adapterId, adapterVersion: '1', supported: true,
+      sourceKind: adapterId === 'stim-results' ? 'stim-dets' : 'sinter-csv',
+      confidence: 1, sourceSha256: 'a'.repeat(64), details: {},
+    }],
+  });
+  return fake;
+}
+
 afterEach(() => {
   cleanup();
   useQecJobStore.getState().reset();
@@ -66,6 +79,33 @@ async function reachImportStage(): Promise<void> {
 }
 
 describe('<QecImportWizard />', () => {
+  it('shows only actual native Stim width requirements', async () => {
+    render(<QecImportWizard source="captures/capture.dets" client={nativeClient('stim-results')} />);
+    await screen.findByText('2.00 KiB');
+    goNext();
+    fireEvent.click(screen.getByRole('radio', { name: /Stim-results/ }));
+    goNext();
+
+    expect(screen.queryByRole('button', { name: 'Add field mapping' })).toBeNull();
+    expect(screen.getByLabelText('Detector width')).toBeTruthy();
+    expect(screen.getByLabelText('Observable width')).toBeTruthy();
+    expect(screen.queryByLabelText('Record class')).toBeNull();
+    expect(screen.queryByLabelText('Timestamp unit')).toBeNull();
+    expect(screen.queryByLabelText('Bit order')).toBeNull();
+  });
+
+  it('presents native sinter columns without invented mapping options', async () => {
+    render(<QecImportWizard source="campaign/stats.csv" client={nativeClient('sinter-csv')} />);
+    await screen.findByText('2.00 KiB');
+    goNext();
+    fireEvent.click(screen.getByRole('radio', { name: /Sinter-csv/ }));
+    goNext();
+
+    expect(screen.getByText(/sinter defines campaign-point fields/i)).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Add field mapping' })).toBeNull();
+    expect(screen.queryByRole('group', { name: /Scientific meaning/i })).toBeNull();
+  });
+
   it('keeps Import disabled with an adjacent reason until explicit mapping validates', async () => {
     const fake = client();
     render(<QecImportWizard source="captures/capture.parquet" client={fake} />);

@@ -34,8 +34,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   show kind, lifecycle status, and provenance in accessible Sources / Data rows,
   refresh after completion, and return from the engine after an app reload.
 - Deterministic Stim `.dets` browser fixture and a PyArrow 18 Parquet adapter fixture plus an
-  end-to-end light-workspace acceptance flow covering Source → Adapter → Mapping
-  → Preview → Validation → Destination → Import and reload persistence.
+  end-to-end light-workspace acceptance flow against a real authenticated
+  Python data-engine subprocess, covering Source → Adapter → Mapping → Preview
+  → Validation → Destination → Import, committed disk artifacts, and reload
+  persistence.
+- A scheduled/manual Ubuntu and Windows 10-million-record Stim memory gate over
+  the registered adapter and canonical Parquet storage path, with platform-native
+  peak-memory measurement and a 512 MiB ceiling.
 
 ## [0.13.0] - 2026-07-15
 

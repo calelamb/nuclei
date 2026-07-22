@@ -1,0 +1,43 @@
+name: QEC Import Memory Acceptance
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "17 7 * * 1"
+
+permissions:
+  contents: read
+
+jobs:
+  ten-million-record-import:
+    name: 10M real Stim import (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 8
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    env:
+      NUCLEI_RUN_MEMORY_ACCEPTANCE: "1"
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install acceptance dependencies
+        run: >-
+          python -m pip install
+          "pytest>=8,<9"
+          "pyarrow>=18,<26"
+          "duckdb>=1.2,<2"
+          "websockets>=12,<14"
+
+      - name: Import 10M Stim records through canonical storage
+        run: >-
+          python -m pytest
+          kernel/tests/qec_data/test_import_memory_acceptance.py
+          -q -s

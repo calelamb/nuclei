@@ -12,10 +12,12 @@ requires you to state its scientific meaning, validates a bounded preview, and
 only then creates canonical data.
 
 <Aside type="caution">
-Nuclei never guesses detector widths, observable widths, bit order, timestamp
-units, or whether a table contains per-shot syndromes, aggregate campaign
-statistics, or calibration records. A plausible but unstated interpretation is
-treated as invalid data.
+Nuclei never guesses scientific meaning that the selected format does not
+define. Tabular syndrome sources require explicit detector/observable widths,
+LSB0 bit order, timestamp units, and record class. Stim result formats define
+their record class and encoding but still need widths (or explicit circuit/DEM
+context). Native sinter statistics define their campaign-point columns and
+accept no invented field mapping. Missing required meaning is invalid data.
 </Aside>
 
 ## Before importing
@@ -55,9 +57,12 @@ choose the import action beside the referenced file.
    copy-only policy. The digest identifies the exact bytes that were probed.
 2. **Adapter** — choose one supported probe result. Confidence is format
    recognition, not evidence that the scientific mapping is correct.
-3. **Mapping** — map source fields to canonical fields and state all required
-   options. Check **Mapping reviewed** only after reviewing widths, units, bit
-   order, record class, and field meaning.
+3. **Mapping** — follow the selected adapter's contract. For tabular data, map
+   fields and state record class, widths, units, and bit order. For standalone
+   Stim results, state detector and observable widths; the format already
+   defines record class and encoding. Native sinter CSV needs no field mapping
+   or scientific options. Check **Mapping reviewed** after reviewing the
+   requirements shown by the wizard.
 4. **Preview** — continue to Validation first. After validation passes, return
    to Preview and load the bounded canonical batch summary. The UI states when
    the preview is truncated; a preview is never presented as the full dataset.
@@ -69,7 +74,7 @@ choose the import action beside the referenced file.
 7. **Import** — start the durable job. Progress, cancellation, failure, records
    written, and committed partition count remain visible in the tray. When the
    engine reports completion, Sources / Data refreshes its canonical session
-   tree. The same session is listed from the engine after an app reload.
+   list. The same session is listed from the engine after an app reload.
 </Steps>
 
 ## Map syndrome captures
@@ -86,10 +91,17 @@ positive width too. If timestamps are mapped, state their unit, for example
 `ns`; the importer does not infer a unit from a column name. Unused high bits in
 the final byte of every LSB0 row must be zero.
 
-Stim result imports use their file format's defined encoding but still require
-detector and observable widths unless an explicit circuit or DEM context
-provides them. The canonical result is the same packed LSB0 syndrome model used
-for hardware captures.
+Stim result imports use their file format's defined record class and encoding;
+the wizard therefore does not ask for source fields, record class, timestamp
+unit, or bit order. Standalone result files require detector and observable
+widths. Protocol clients can instead provide an explicit circuit or DEM context
+whose widths must agree. The canonical output uses the same packed LSB0
+syndrome model as hardware captures, but LSB0 is a normalization guarantee—not
+a user-selectable claim about native Stim encoding.
+
+Native sinter CSV uses its fixed aggregate schema and accepts neither field
+mappings nor the tabular scientific options. Its output is always
+`campaign_points`; it never becomes a per-shot syndrome stream.
 
 ## Map calibration data
 
