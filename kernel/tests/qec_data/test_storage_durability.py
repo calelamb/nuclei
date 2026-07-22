@@ -12,6 +12,7 @@ from kernel.qec_data.storage import SessionStorage
 from kernel.qec_data.storage_durability import (
     MOVEFILE_REPLACE_EXISTING,
     MOVEFILE_WRITE_THROUGH,
+    DurabilityError,
     DurableMover,
 )
 from kernel.tests.qec_data.test_storage import (
@@ -57,6 +58,34 @@ def test_posix_durable_move_syncs_every_affected_directory(tmp_path: Path) -> No
 
     assert target.read_bytes() == b"payload"
     assert synced == [source_parent, target_parent]
+
+
+@pytest.mark.parametrize("failed_sync", [0, 1])
+def test_posix_move_fails_closed_when_either_directory_cannot_sync(
+    tmp_path: Path, failed_sync: int
+) -> None:
+    source_parent = tmp_path / "source"
+    target_parent = tmp_path / "target"
+    source_parent.mkdir()
+    target_parent.mkdir()
+    source = source_parent / "partition.pending"
+    target = target_parent / "partition"
+    source.write_bytes(b"payload")
+    synced: list[Path] = []
+
+    def injected_sync(path: Path) -> bool:
+        synced.append(path)
+        return len(synced) - 1 != failed_sync
+
+    mover = DurableMover(platform="posix", directory_sync=injected_sync)
+    with pytest.raises(
+        DurabilityError,
+        match="visibility move completed.*durability is not guaranteed",
+    ):
+        mover.move(source, target)
+
+    assert target.read_bytes() == b"payload"
+    assert synced == [source_parent, target_parent][: failed_sync + 1]
 
 
 def test_windows_durable_move_uses_native_write_through_flags(tmp_path: Path) -> None:

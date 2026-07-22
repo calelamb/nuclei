@@ -21,6 +21,10 @@ DirectorySync = Callable[[Path], object]
 WindowsMove = Callable[[Path, Path, int], bool | None]
 
 
+class DurabilityError(OSError):
+    """A filesystem change occurred without a confirmed durability barrier."""
+
+
 def fsync_directory(path: Path) -> bool:
     """Sync POSIX directory metadata; reject use as a Windows durability claim."""
 
@@ -70,7 +74,11 @@ class DurableMover:
         """Sync directory metadata only on platforms with that primitive."""
 
         if self.platform == "posix":
-            self.directory_sync(path)
+            if self.directory_sync(path) is False:
+                raise DurabilityError(
+                    errno.EIO,
+                    f"directory durability is not guaranteed: {path}",
+                )
             return
         if self.platform == "nt":
             return
@@ -82,9 +90,16 @@ class DurableMover:
         if self.platform == "posix":
             operation = os.replace if replace_existing else os.rename
             operation(source, target)
-            self.sync_directory(source.parent)
-            if target.parent != source.parent:
-                self.sync_directory(target.parent)
+            try:
+                self.sync_directory(source.parent)
+                if target.parent != source.parent:
+                    self.sync_directory(target.parent)
+            except OSError as error:
+                raise DurabilityError(
+                    errno.EIO,
+                    "visibility move completed but durability is not guaranteed: "
+                    f"{source} -> {target}",
+                ) from error
             return
         if self.platform == "nt":
             flags = MOVEFILE_WRITE_THROUGH
