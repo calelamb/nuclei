@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useQecStudyStore } from '../../../services/qecStudyStore';
 import { PlatformProvider } from '../../../platform/PlatformProvider';
 import { useProjectStore } from '../../../stores/projectStore';
+import { useQecJobStore } from '../../../stores/qecJobStore';
 import { useQecStudyUiStore } from '../../../stores/qecStudyUiStore';
 import { useQecWorkbenchStore } from '../../../stores/qecWorkbenchStore';
 import {
@@ -82,6 +83,7 @@ beforeEach(() => {
     present: EMPTY_RESEARCH_SELECTION,
     future: [],
   });
+  useQecJobStore.getState().reset();
 });
 
 describe('<QecWorkbench />', () => {
@@ -226,6 +228,19 @@ describe('<QecWorkbench />', () => {
       within(tray).getByRole('button', { name: 'Expand jobs and streams' }).getAttribute('aria-expanded'),
     ).toBe('false');
     expect(within(tray).queryByText('No active jobs')).toBeNull();
+  });
+
+  it('launches a referenced source import into the durable tray lifecycle', () => {
+    useQecWorkbenchStore.setState({ trayCollapsed: true });
+    render(<QecWorkbench />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Import campaign-a' }));
+
+    expect(useQecJobStore.getState().importSource).toBe('experiments/memory.experiment.yaml');
+    expect(useQecWorkbenchStore.getState().trayCollapsed).toBe(false);
+    expect(screen.getByRole('region', { name: 'QEC jobs and streams' }).textContent).toMatch(
+      /Open a project to start the QEC Data Engine/,
+    );
   });
 
   it('hydrates scoped context and debounces an immutable platform-store snapshot', async () => {

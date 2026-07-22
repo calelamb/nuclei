@@ -1,0 +1,269 @@
+import { describe, expect, it, vi } from 'vitest';
+
+import { QEC_DATA_MAX_FRAME_BYTES } from '../types/qecDataProtocol';
+import {
+  QecDataClient,
+  QecDataClientError,
+  connectQecDataClient,
+  type QecWebSocket,
+} from './qecDataClient';
+
+type SocketListener = (event: Event | MessageEvent<string>) => void;
+
+class FakeSocket implements QecWebSocket {
+  readonly sent: string[] = [];
+  readonly listeners = new Map<string, SocketListener[]>();
+  closed = false;
+  sendError: Error | null = null;
+
+  addEventListener(type: string, listener: SocketListener): void {
+    this.listeners.set(type, [...(this.listeners.get(type) ?? []), listener]);
+  }
+
+  send(frame: string): void {
+    if (this.sendError) throw this.sendError;
+    this.sent.push(frame);
+  }
+
+  close(): void {
+    this.closed = true;
+  }
+
+  emit(type: string, event: Event | MessageEvent<string> = new Event(type)): void {
+    for (const listener of this.listeners.get(type) ?? []) listener(event);
+  }
+
+  message(value: unknown): void {
+    this.emit('message', new MessageEvent('message', { data: JSON.stringify(value) }));
+  }
+}
+
+function setup(): { client: QecDataClient; socket: FakeSocket } {
+  const socket = new FakeSocket();
+  let id = 0;
+  const client = new QecDataClient(
+    { url: 'ws://127.0.0.1:9743', token: 'secret-token' },
+    { socketFactory: () => socket, requestIdFactory: () => `request-${++id}` },
+  );
+  return { client, socket };
+}
+
+async function authenticate(client: QecDataClient, socket: FakeSocket): Promise<void> {
+  const connecting = client.connect();
+  socket.emit('open');
+  expect(JSON.parse(socket.sent[0])).toEqual({ type: 'authenticate', token: 'secret-token' });
+  socket.message({ type: 'authenticated' });
+  await connecting;
+}
+
+describe('QecDataClient', () => {
+  it('rejects every endpoint except the exact fixed loopback URL before opening a socket', () => {
+    const factory = vi.fn(() => new FakeSocket());
+
+    expect(() => new QecDataClient(
+      { url: 'ws://localhost:9743', token: 'secret-token' },
+      { socketFactory: factory },
+    )).toThrow(/127\.0\.0\.1/);
+    expect(factory).not.toHaveBeenCalled();
+  });
+
+  it('authenticates first and waits for authenticated before sending a request', async () => {
+    const { client, socket } = setup();
+    const connecting = client.connect();
+    socket.emit('open');
+
+    expect(socket.sent).toHaveLength(1);
+    expect(JSON.parse(socket.sent[0])).toEqual({ type: 'authenticate', token: 'secret-token' });
+    socket.message({ type: 'authenticated' });
+    await connecting;
+
+    const probe = client.probe('captures/run.csv');
+    expect(JSON.parse(socket.sent[1])).toEqual({
+      type: 'import_probe', requestId: 'request-1', source: 'captures/run.csv',
+    });
+    socket.message({
+      type: 'import_probe_result', requestId: 'request-1', sourcePolicy: 'copy',
+      sourceByteSize: 512, results: [{
+        adapterId: 'sinter-csv', adapterVersion: '1', supported: true,
+        sourceKind: 'sinter-csv', confidence: 1, sourceSha256: 'a'.repeat(64), details: {},
+      }],
+    });
+
+    await expect(probe).resolves.toMatchObject({ sourcePolicy: 'copy', sourceByteSize: 512 });
+  });
+
+  it('rejects project escapes before transmitting the source path', async () => {
+    const { client, socket } = setup();
+    await authenticate(client, socket);
+
+    await expect(client.probe('../outside.csv')).rejects.toMatchObject({ code: 'source_not_authorized' });
+    expect(socket.sent).toHaveLength(1);
+  });
+
+  it('validates unknown inbound frames and enforces one MiB before JSON parsing', async () => {
+    const { client, socket } = setup();
+    await authenticate(client, socket);
+    const probe = client.probe('capture.csv');
+    const oversized = `{"type":"error","message":"${'x'.repeat(QEC_DATA_MAX_FRAME_BYTES)}"}`;
+
+    socket.emit('message', new MessageEvent('message', { data: oversized }));
+
+    await expect(probe).rejects.toMatchObject({ code: 'frame_too_large' });
+    expect(socket.closed).toBe(true);
+  });
+
+  it.each([
+    ['non-text', 42],
+    ['invalid JSON', '{'],
+    ['schema-invalid JSON', JSON.stringify({ type: 'mystery' })],
+  ])('closes on %s inbound frames', async (_label, data) => {
+    const { client, socket } = setup();
+    await authenticate(client, socket);
+    const probe = client.probe('capture.csv');
+
+    socket.emit('message', new MessageEvent('message', { data }));
+
+    await expect(probe).rejects.toMatchObject({ code: 'invalid_response' });
+    expect(socket.closed).toBe(true);
+  });
+
+  it('rejects every pending operation when the engine disconnects', async () => {
+    const { client, socket } = setup();
+    await authenticate(client, socket);
+    const probe = client.probe('capture.csv');
+    const validation = client.validate('capture.csv', 'tabular', {
+      fields: { sequence: 'shot_id' }, options: { output_kind: 'syndromes' },
+    });
+
+    socket.emit('close');
+
+    await expect(probe).rejects.toMatchObject({ code: 'engine_disconnected' });
+    await expect(validation).rejects.toMatchObject({ code: 'engine_disconnected' });
+  });
+
+  it('handles requestless connection errors without assuming requestId exists', async () => {
+    const { client, socket } = setup();
+    await authenticate(client, socket);
+    const probe = client.probe('capture.csv');
+
+    socket.message({ type: 'error', code: 'internal_error', message: 'Engine failed.' });
+
+    await expect(probe).rejects.toEqual(expect.objectContaining({
+      code: 'internal_error', message: 'Engine failed.',
+    }));
+  });
+
+  it('rejects a correlated server error and an unexpected terminal frame', async () => {
+    const first = setup();
+    await authenticate(first.client, first.socket);
+    const rejected = first.client.probe('capture.csv');
+    first.socket.message({ type: 'error', requestId: 'request-1', code: 'probe_failed', message: 'Probe failed.' });
+    await expect(rejected).rejects.toMatchObject({ code: 'probe_failed' });
+
+    const second = setup();
+    await authenticate(second.client, second.socket);
+    const unexpected = second.client.probe('capture.csv');
+    second.socket.message({
+      type: 'import_validation_result', requestId: 'request-1', valid: true, issues: [],
+      sourceSha256: 'a'.repeat(64), provenanceId: 'p', sourceByteSize: 1, sourcePolicy: 'copy',
+    });
+    await expect(unexpected).rejects.toMatchObject({ code: 'invalid_response' });
+  });
+
+  it('rejects duplicate authentication and outbound send failures', async () => {
+    const duplicate = setup();
+    await authenticate(duplicate.client, duplicate.socket);
+    const pending = duplicate.client.probe('capture.csv');
+    duplicate.socket.message({ type: 'authenticated' });
+    await expect(pending).rejects.toMatchObject({ code: 'invalid_response' });
+
+    const failed = setup();
+    await authenticate(failed.client, failed.socket);
+    failed.socket.sendError = new Error('send failed');
+    await expect(failed.client.probe('capture.csv')).rejects.toMatchObject({ code: 'invalid_request' });
+  });
+
+  it('rejects socket loss while connecting and invalid preview bounds', async () => {
+    const { client, socket } = setup();
+    const connecting = client.connect();
+    socket.emit('error');
+    await expect(connecting).rejects.toMatchObject({ code: 'engine_disconnected' });
+
+    const connected = setup();
+    await authenticate(connected.client, connected.socket);
+    await expect(connected.client.preview('capture.csv', 'tabular', { fields: {}, options: {} }, 1001))
+      .rejects.toMatchObject({ code: 'invalid_request' });
+  });
+
+  it('streams progressive query frames and uses query-specific cancellation', async () => {
+    const { client, socket } = setup();
+    await authenticate(client, socket);
+    const events: string[] = [];
+    const query = client.query({
+      requestId: 'query-1', sessionId: 'session-1', datasetId: 'dataset-1', tile: 'heatmap',
+      selection: { primary: null, scope: [], timeWindow: null, source: 'user' },
+      resolution: { width: 200, height: 100 }, filters: {},
+    }, (event) => events.push(event.type));
+    socket.message({ type: 'job_started', requestId: 'query-1', jobId: 'query-1', jobKind: 'query' });
+    socket.message({ type: 'progress', requestId: 'query-1', fraction: 0.5, message: 'Scanning' });
+    socket.message({
+      type: 'tile', requestId: 'query-1', complete: true,
+      tile: { kind: 'heatmap', datasetId: 'dataset-1', sequence: 0, content: {}, byteLength: 84 },
+    });
+
+    await expect(query).resolves.toMatchObject({ kind: 'heatmap', sequence: 0 });
+    expect(events).toEqual(['progress', 'tile']);
+
+    const cancelling = client.cancel('query', 'query-2');
+    expect(JSON.parse(socket.sent.at(-1) ?? '')).toMatchObject({
+      type: 'query_cancel', queryRequestId: 'query-2',
+    });
+    const cancelRequest = JSON.parse(socket.sent.at(-1) ?? '') as { requestId: string };
+    socket.message({
+      type: 'query_cancelled', requestId: cancelRequest.requestId,
+      queryRequestId: 'query-2', success: true,
+    });
+    await expect(cancelling).resolves.toBe(true);
+  });
+
+  it('streams import lifecycle frames and uses import-specific cancellation', async () => {
+    const { client, socket } = setup();
+    await authenticate(client, socket);
+    const events: string[] = [];
+    const importing = client.startImport({
+      source: 'capture.csv', adapterId: 'sinter-csv', mapping: { fields: {}, options: {} },
+      sessionId: 'session-1', sessionKind: 'hardware_import',
+    }, (event) => events.push(event.type));
+    socket.message({ type: 'job_started', requestId: 'request-1', jobId: 'request-1', jobKind: 'import', sourcePolicy: 'copy' });
+    socket.message({ type: 'job_complete', requestId: 'request-1', jobId: 'request-1', recordsWritten: 3, partitionsWritten: 1, sourcePolicy: 'copy' });
+    await expect(importing).resolves.toMatchObject({ recordsWritten: 3 });
+    expect(events).toEqual(['job_started', 'job_complete']);
+
+    const cancelling = client.cancel('import', 'import-2');
+    const request = JSON.parse(socket.sent.at(-1) ?? '') as { requestId: string };
+    expect(JSON.parse(socket.sent.at(-1) ?? '')).toMatchObject({ type: 'job_cancel', jobId: 'import-2' });
+    socket.message({ type: 'job_cancelled', requestId: request.requestId, jobId: 'import-2', success: false });
+    await expect(cancelling).resolves.toBe(false);
+  });
+
+  it('exposes stable client errors without reflecting the authentication token', () => {
+    const error = new QecDataClientError('engine_disconnected', 'Engine disconnected.');
+    expect(error.code).toBe('engine_disconnected');
+    expect(error.message).not.toContain('secret-token');
+  });
+
+  it('starts through the Tauri endpoint launcher without retaining endpoint data in a store', async () => {
+    const socket = new FakeSocket();
+    const launcher = vi.fn(async () => ({ url: 'ws://127.0.0.1:9743', token: 'ephemeral' }));
+    const connecting = connectQecDataClient('/project', {
+      launch: launcher,
+      clientDependencies: { socketFactory: () => socket },
+    });
+    await Promise.resolve();
+    socket.emit('open');
+    socket.message({ type: 'authenticated' });
+
+    await expect(connecting).resolves.toBeInstanceOf(QecDataClient);
+    expect(launcher).toHaveBeenCalledWith('/project');
+  });
+});

@@ -1,9 +1,10 @@
-import { Database, FileCode2, FlaskConical, FolderTree, LoaderCircle, TriangleAlert } from 'lucide-react';
+import { Database, FileCode2, FlaskConical, FolderInput, FolderTree, LoaderCircle, TriangleAlert } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import type { ReactElement } from 'react';
 import { QEC_PANEL_REGISTRY } from '../../../layout/qecPanelRegistry';
 import { useQecStudyStore, type QecStudyValidationError } from '../../../services/qecStudyStore';
 import { useQecStudyUiStore } from '../../../stores/qecStudyUiStore';
+import { useQecJobStore } from '../../../stores/qecJobStore';
 import { useQecWorkbenchStore } from '../../../stores/qecWorkbenchStore';
 import { useResearchSelectionStore } from '../../../stores/researchSelectionStore';
 import type { QecStudy, QecStudySource, QecWorkspacePreset } from '../../../types/qecStudy';
@@ -71,12 +72,23 @@ function SourceFileRow({ source }: { source: QecStudySource }): ReactElement {
   const select = useResearchSelectionStore((state) => state.selectPrimary);
   const Icon = SOURCE_ICONS[source.kind];
   const current = selected?.kind === 'source' && selected.id === source.id;
+  const openImport = useQecJobStore((state) => state.openImport);
+  const setTrayCollapsed = useQecWorkbenchStore((state) => state.setTrayCollapsed);
+  const launchImport = (): void => {
+    openImport(source.path);
+    setTrayCollapsed(false);
+  };
   return (
-    <button type="button" className="qec-source-row" aria-current={current ? 'true' : undefined} onClick={() => select({ kind: 'source', id: source.id }, 'user')}>
-      <Icon aria-hidden="true" size={16} />
-      <span><strong>{source.id}</strong><small className="qec-mono">{source.path}</small></span>
-      <span className="qec-source-row__kind">{source.kind}</span>
-    </button>
+    <div className="qec-source-row-shell" aria-current={current ? 'true' : undefined}>
+      <button type="button" className="qec-source-row" onClick={() => select({ kind: 'source', id: source.id }, 'user')}>
+        <Icon aria-hidden="true" size={16} />
+        <span><strong>{source.id}</strong><small className="qec-mono">{source.path}</small></span>
+        <span className="qec-source-row__kind">{source.kind}</span>
+      </button>
+      <button type="button" className="qec-source-row__import" aria-label={`Import ${source.id}`} title="Import into canonical QEC data" onClick={launchImport}>
+        <FolderInput aria-hidden="true" size={16} />
+      </button>
+    </div>
   );
 }
 
