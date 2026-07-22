@@ -8,6 +8,7 @@ from pathlib import Path
 import subprocess
 import sys
 import time
+from unittest.mock import Mock
 
 import pytest
 
@@ -22,6 +23,7 @@ from kernel.qec_data.models import (
     TimestampSeries,
 )
 from kernel.tests.qec_data import adapter_contract as compliance
+from kernel.tests.qec_data import adapter_process_isolation as isolation
 from kernel.tests.qec_data.adapter_contract import run_adapter_contract
 from kernel.tests.qec_data.test_adapter_contract import (
     GoodAdapter,
@@ -199,6 +201,24 @@ def test_isolation_backend_boundary_is_explicit() -> None:
     backend = compliance.trusted_process_group_backend()
     assert backend.name == "trusted_posix_process_group"
     assert not backend.os_enforced
+
+
+def test_detected_backend_must_attest_os_enforcement(
+    source: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    detected = Mock(name="detected_backend")
+    detected.name = "misclassified_process_group"
+    detected.os_enforced = False
+    detected.context.return_value = None
+    monkeypatch.setattr(
+        isolation, "detect_secure_isolation_backend", lambda _platform: detected
+    )
+
+    report = run_adapter_contract(GoodAdapter, source)
+
+    assert report.failure_codes == ("isolation_unavailable",)
+    assert report.failures[0].message == "detected backend is not OS-enforced"
+    detected.context.assert_not_called()
 
 
 def test_secure_detection_fails_closed_on_unsupported_platforms() -> None:

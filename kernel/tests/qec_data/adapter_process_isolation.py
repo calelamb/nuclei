@@ -49,10 +49,21 @@ def resolve_isolation_backend(
 ) -> tuple[
     IsolationBackend | None, multiprocessing.context.BaseContext | None, str | None
 ]:
+    detected = injected is None
     backend = injected or detect_secure_isolation_backend(platform_name)
     if backend is None:
         return None, None, "no OS-enforced descendant-containment backend is available"
-    context = backend.context(adapter_factory)
+    if detected:
+        try:
+            os_enforced = backend.os_enforced
+        except BaseException:
+            return None, None, "detected backend is not OS-enforced"
+        if type(os_enforced) is not bool or os_enforced is not True:
+            return None, None, "detected backend is not OS-enforced"
+    try:
+        context = backend.context(adapter_factory)
+    except BaseException as error:
+        return None, None, f"backend context failed: {type(error).__name__}: {error}"
     if context is None:
         return None, None, f"backend {backend.name} cannot isolate this factory"
     return backend, context, None
