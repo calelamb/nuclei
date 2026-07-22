@@ -1,9 +1,10 @@
 import { Info, Pin, X } from 'lucide-react';
 import type { ReactElement } from 'react';
-import { QEC_PANEL_REGISTRY } from '../../../layout/qecPanelRegistry';
+import { resolveQecPanels } from '../../../layout/qecPanelRegistry';
 import { useQecWorkbenchStore } from '../../../stores/qecWorkbenchStore';
 import { qecEntityRefKey, useResearchSelectionStore } from '../../../stores/researchSelectionStore';
 import type { ResearchSelection } from '../../../types/qecSelection';
+import { QecPanelPinButton } from './QecPanelPinButton';
 
 export const QEC_RESEARCH_INSPECTOR_ID = 'qec-research-inspector';
 
@@ -51,12 +52,13 @@ function SelectionDetails({ selection }: { selection: ResearchSelection }): Reac
 
 function InspectorTools(): ReactElement {
   const preset = useQecWorkbenchStore((state) => state.preset);
-  const panels = QEC_PANEL_REGISTRY.filter((panel) => panel.zone === 'inspector' && panel.presets.includes(preset));
+  const pinnedPanelIds = useQecWorkbenchStore((state) => state.pinnedPanelIds);
+  const panels = resolveQecPanels(preset, 'inspector', pinnedPanelIds);
   return (
     <section className="qec-inspector__section" aria-labelledby="inspector-tools-heading">
       <h3 id="inspector-tools-heading">Available instruments</h3>
       <ul className="qec-inspector__tools">
-        {panels.map((panel) => <li key={panel.id}>{panel.title}</li>)}
+        {panels.map((panel) => <li key={panel.id}><span>{panel.title}</span><QecPanelPinButton panel={panel} /></li>)}
       </ul>
     </section>
   );

@@ -93,6 +93,17 @@ export function validateQecPanelRegistry(
 
 export const QEC_PANEL_REGISTRY = validateQecPanelRegistry(QEC_PANELS);
 
+export function resolveQecPanels(
+  preset: QecWorkspacePreset,
+  zone: QecWorkbenchZone,
+  pinnedPanelIds: readonly QecWorkbenchPanelId[],
+): readonly QecWorkbenchPanelDef[] {
+  const pinned = new Set(pinnedPanelIds);
+  return Object.freeze(QEC_PANEL_REGISTRY.filter((panel) => (
+    panel.zone === zone && (panel.presets.includes(preset) || pinned.has(panel.id))
+  )));
+}
+
 function panelsForPreset(preset: QecWorkspacePreset): readonly QecWorkbenchPanelDef[] {
   return QEC_PANEL_REGISTRY.filter((panel) => panel.presets.includes(preset));
 }

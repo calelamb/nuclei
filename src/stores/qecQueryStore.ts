@@ -6,6 +6,7 @@ import type { QueryFrame } from '../types/qecDataProtocol';
 export type QecQueryStatus = 'idle' | 'loading' | 'complete' | 'error' | 'cancelling' | 'cancelled';
 
 export interface QecQueryTileState {
+  projectRoot: string;
   requestId: string;
   epoch: number;
   status: QecQueryStatus;
@@ -21,10 +22,14 @@ export interface QecQueryClient {
 }
 
 interface QecQueryState {
+  projectRoot: string | null;
+  scopeEpoch: number;
   epochCounter: number;
   tiles: Readonly<Record<string, QecQueryTileState>>;
   run(client: QecQueryClient, query: QecQuerySpec): Promise<void>;
   cancel(client: QecQueryClient, key: string): Promise<void>;
+  activeRequestIds(): readonly string[];
+  setProjectScope(projectRoot: string | null): void;
   reset(): void;
 }
 
@@ -48,17 +53,19 @@ function withFrame(frames: readonly QecTilePayload[], frame: QecTilePayload): re
 function updateOwned(
   key: string,
   epoch: number,
+  projectRoot: string,
+  scopeEpoch: number,
   update: (current: QecQueryTileState) => QecQueryTileState,
 ): void {
   useQecQueryStore.setState((state) => {
     const current = state.tiles[key];
-    if (!current || current.epoch !== epoch) return state;
+    if (!current || current.epoch !== epoch || state.projectRoot !== projectRoot || state.scopeEpoch !== scopeEpoch) return state;
     return { tiles: Object.freeze({ ...state.tiles, [key]: update(current) }) };
   });
 }
 
-function applyFrame(key: string, epoch: number, event: QueryFrame): void {
-  updateOwned(key, epoch, (current) => {
+function applyFrame(key: string, epoch: number, projectRoot: string, scopeEpoch: number, event: QueryFrame): void {
+  updateOwned(key, epoch, projectRoot, scopeEpoch, (current) => {
     if (event.type === 'progress') {
       return { ...current, progress: event.fraction, message: event.message };
     }
@@ -73,13 +80,18 @@ function applyFrame(key: string, epoch: number, event: QueryFrame): void {
 
 async function runQuery(client: QecQueryClient, query: QecQuerySpec): Promise<void> {
   const key = qecQueryTileKey(query);
-  const previous = useQecQueryStore.getState().tiles[key];
-  const epoch = useQecQueryStore.getState().epochCounter + 1;
+  const current = useQecQueryStore.getState();
+  if (!current.projectRoot) return;
+  const projectRoot = current.projectRoot;
+  const scopeEpoch = current.scopeEpoch;
+  const previous = current.tiles[key];
+  const epoch = current.epochCounter + 1;
   useQecQueryStore.setState((state) => ({
     epochCounter: epoch,
     tiles: Object.freeze({
       ...state.tiles,
       [key]: {
+        projectRoot,
         requestId: query.requestId, epoch, status: 'loading', progress: 0,
         message: 'Starting query', frames: Object.freeze([]), error: null,
       },
@@ -89,10 +101,10 @@ async function runQuery(client: QecQueryClient, query: QecQuerySpec): Promise<vo
     void client.cancel('query', previous.requestId).catch(() => undefined);
   }
   try {
-    await client.query(query, (event) => applyFrame(key, epoch, event));
+    await client.query(query, (event) => applyFrame(key, epoch, projectRoot, scopeEpoch, event));
   } catch (error: unknown) {
-    updateOwned(key, epoch, (current) => ({
-      ...current,
+    updateOwned(key, epoch, projectRoot, scopeEpoch, (owned) => ({
+      ...owned,
       status: error instanceof Error && 'code' in error && error.code === 'request_cancelled'
         ? 'cancelled'
         : 'error',
@@ -102,8 +114,12 @@ async function runQuery(client: QecQueryClient, query: QecQuerySpec): Promise<vo
 }
 
 async function cancelQuery(client: QecQueryClient, key: string): Promise<void> {
-  const current = useQecQueryStore.getState().tiles[key];
+  const state = useQecQueryStore.getState();
+  const current = state.tiles[key];
   if (!current || !['loading', 'cancelling'].includes(current.status)) return;
+  if (!state.projectRoot || current.projectRoot !== state.projectRoot) return;
+  const projectRoot = state.projectRoot;
+  const scopeEpoch = state.scopeEpoch;
   useQecQueryStore.setState((state) => ({
     tiles: Object.freeze({
       ...state.tiles,
@@ -113,7 +129,7 @@ async function cancelQuery(client: QecQueryClient, key: string): Promise<void> {
   try {
     const cancelled = await client.cancel('query', current.requestId);
     if (!cancelled) {
-      updateOwned(key, current.epoch, (owned) => owned.status === 'cancelling'
+      updateOwned(key, current.epoch, projectRoot, scopeEpoch, (owned) => owned.status === 'cancelling'
         ? { ...owned, status: 'loading', message: 'Cancellation declined' }
         : owned);
       return;
@@ -128,16 +144,34 @@ async function cancelQuery(client: QecQueryClient, key: string): Promise<void> {
       };
     });
   } catch (error: unknown) {
-    updateOwned(key, current.epoch, (owned) => owned.status === 'cancelling'
+    updateOwned(key, current.epoch, projectRoot, scopeEpoch, (owned) => owned.status === 'cancelling'
       ? { ...owned, status: 'error', error: errorMessage(error) }
       : owned);
   }
 }
 
-export const useQecQueryStore = create<QecQueryState>(() => ({
+export const useQecQueryStore = create<QecQueryState>()(() => ({
+  projectRoot: null,
+  scopeEpoch: 0,
   epochCounter: 0,
   tiles: EMPTY_TILES,
   run: runQuery,
   cancel: cancelQuery,
-  reset: () => useQecQueryStore.setState((state) => ({ epochCounter: state.epochCounter + 1, tiles: EMPTY_TILES })),
+  activeRequestIds: (): readonly string[] => Object.freeze(Object.values(useQecQueryStore.getState().tiles)
+    .filter((tile) => ['loading', 'cancelling'].includes(tile.status))
+    .map((tile) => tile.requestId)),
+  setProjectScope: (projectRoot) => useQecQueryStore.setState((state) => state.projectRoot === projectRoot
+    ? state
+    : {
+      projectRoot,
+      scopeEpoch: state.scopeEpoch + 1,
+      epochCounter: state.epochCounter + 1,
+      tiles: EMPTY_TILES,
+    }),
+  reset: () => useQecQueryStore.setState((state) => ({
+    projectRoot: null,
+    scopeEpoch: state.scopeEpoch + 1,
+    epochCounter: state.epochCounter + 1,
+    tiles: EMPTY_TILES,
+  })),
 }));

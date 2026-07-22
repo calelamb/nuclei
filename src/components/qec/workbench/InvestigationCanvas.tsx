@@ -1,9 +1,10 @@
 import { Activity, ChartSpline, Clock3, Grid3x3, Link2, PanelRight, Share2 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import type { ReactElement, RefObject } from 'react';
-import { QEC_PANEL_REGISTRY, type QecWorkbenchPanelDef, type QecWorkbenchPanelId } from '../../../layout/qecPanelRegistry';
+import { resolveQecPanels, type QecWorkbenchPanelDef, type QecWorkbenchPanelId } from '../../../layout/qecPanelRegistry';
 import { useQecWorkbenchStore } from '../../../stores/qecWorkbenchStore';
 import { QEC_RESEARCH_INSPECTOR_ID } from './QecResearchInspector';
+import { QecPanelPinButton } from './QecPanelPinButton';
 
 const PANEL_ICONS: Partial<Readonly<Record<QecWorkbenchPanelId, LucideIcon>>> = {
   timeline: Clock3, lattice: Grid3x3, 'detector-graph': Share2,
@@ -54,6 +55,7 @@ function CanvasInstrument({ panel, primary }: { panel: QecWorkbenchPanelDef; pri
       <header>
         <span className="qec-instrument__icon"><Icon aria-hidden="true" size={16} /></span>
         <div><h2 id={`${panel.id}-instrument-heading`}>{panel.title}</h2><span className="qec-mono">Linked · awaiting session data</span></div>
+        <QecPanelPinButton panel={panel} />
       </header>
       <div className="qec-instrument__field" aria-hidden="true">
         <span className="qec-instrument__axis qec-instrument__axis--horizontal" />
@@ -67,7 +69,8 @@ function CanvasInstrument({ panel, primary }: { panel: QecWorkbenchPanelDef; pri
 
 export function InvestigationCanvas(props: InvestigationCanvasProps): ReactElement {
   const preset = useQecWorkbenchStore((state) => state.preset);
-  const panels = QEC_PANEL_REGISTRY.filter((panel) => panel.zone === 'canvas' && panel.presets.includes(preset));
+  const pinnedPanelIds = useQecWorkbenchStore((state) => state.pinnedPanelIds);
+  const panels = resolveQecPanels(preset, 'canvas', pinnedPanelIds);
   return (
     <main className="qec-investigation" aria-label="QEC investigation canvas">
       <CanvasHeader {...props} />

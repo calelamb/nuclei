@@ -9,9 +9,39 @@ const INPUT: QecImportJobInput = {
   sourceHash: null, provenanceId: null, sourceByteSize: null,
 };
 
-beforeEach(() => useQecJobStore.getState().reset());
+beforeEach(() => {
+  useQecJobStore.getState().reset();
+  useQecJobStore.getState().setProjectScope('/project');
+});
 
 describe('useQecJobStore', () => {
+  it('invalidates old-project sources, jobs, and late import callbacks', async () => {
+    let emit: ((event: ImportJobEvent) => void) | undefined;
+    let finish: ((event: Extract<ImportJobEvent, { type: 'job_complete' }>) => void) | undefined;
+    const client: QecJobClient = {
+      startImport: vi.fn((_input, onEvent) => {
+        emit = onEvent;
+        onEvent({ type: 'job_started', requestId: 'old', jobId: 'old', jobKind: 'import', sourcePolicy: 'copy' });
+        return new Promise((resolve) => { finish = resolve; });
+      }),
+      cancel: vi.fn(async () => true),
+    };
+    useQecJobStore.getState().openImport('/project', 'captures/run.csv');
+    const oldImport = useQecJobStore.getState().runImport(client, INPUT);
+
+    expect(useQecJobStore.getState().activeOperationIds()).toEqual(['old']);
+    const oldEpoch = useQecJobStore.getState().scopeEpoch;
+    useQecJobStore.getState().setProjectScope('/replacement');
+    emit?.({ type: 'job_complete', requestId: 'old', jobId: 'old', recordsWritten: 4, partitionsWritten: 1, sourcePolicy: 'copy' });
+    finish?.({ type: 'job_complete', requestId: 'old', jobId: 'old', recordsWritten: 4, partitionsWritten: 1, sourcePolicy: 'copy' });
+    await oldImport;
+
+    expect(useQecJobStore.getState()).toMatchObject({
+      projectRoot: '/replacement', importSource: null, activeJobId: null, jobs: {}, launching: false,
+    });
+    expect(useQecJobStore.getState().scopeEpoch).toBeGreaterThan(oldEpoch);
+  });
+
   it('keeps the selected import source durable across job events', async () => {
     let emit: ((event: ImportJobEvent) => void) | undefined;
     const client: QecJobClient = {
@@ -28,7 +58,7 @@ describe('useQecJobStore', () => {
       }),
       cancel: vi.fn(async () => true),
     };
-    useQecJobStore.getState().openImport('captures/run.csv');
+    useQecJobStore.getState().openImport('/project', 'captures/run.csv');
 
     await useQecJobStore.getState().runImport(client, INPUT);
     emit?.({
@@ -67,7 +97,7 @@ describe('useQecJobStore', () => {
       }),
       cancel: vi.fn(async () => { throw new Error('cancel failed'); }),
     };
-    useQecJobStore.getState().openImport('capture.csv');
+    useQecJobStore.getState().openImport('/project', 'capture.csv');
     await expect(useQecJobStore.getState().runImport(client, INPUT)).resolves.toBeNull();
     expect(useQecJobStore.getState()).toMatchObject({
       importSource: 'capture.csv', launchError: 'import failed',

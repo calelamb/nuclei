@@ -418,6 +418,45 @@ describe('QecDataClient', () => {
     await expect(cancelling).resolves.toBe(true);
   });
 
+  it.each([
+    ['dataset identity', { kind: 'heatmap', datasetId: 'dataset-other' }],
+    ['tile kind', { kind: 'histogram', datasetId: 'dataset-1' }],
+  ] as const)('rejects a query tile with mismatched %s', async (_label, mismatch) => {
+    const { client, socket } = setup();
+    await authenticate(client, socket);
+    const query = client.query({
+      requestId: 'query-semantic', sessionId: 'session-1', datasetId: 'dataset-1', tile: 'heatmap',
+      selection: { primary: null, scope: [], timeWindow: null, source: 'user' },
+      resolution: { width: 20, height: 10 }, filters: {},
+    }, vi.fn());
+    socket.message({ type: 'job_started', requestId: 'query-semantic', jobId: 'query-semantic', jobKind: 'query' });
+    socket.message({
+      type: 'tile', requestId: 'query-semantic', complete: true,
+      tile: { ...mismatch, sequence: 0, content: {}, byteLength: 84 },
+    });
+
+    await expect(query).rejects.toMatchObject({ code: 'invalid_response' });
+  });
+
+  it('publishes post-auth disconnects through an immutable subscription', async () => {
+    const { client, socket } = setup();
+    const activeListener = vi.fn();
+    const removedListener = vi.fn();
+    const unsubscribe = client.subscribeDisconnect(removedListener);
+    client.subscribeDisconnect(activeListener);
+    unsubscribe();
+    await authenticate(client, socket);
+
+    socket.emit('close');
+    socket.emit('close');
+
+    expect(activeListener).toHaveBeenCalledOnce();
+    expect(activeListener).toHaveBeenCalledWith(expect.objectContaining({
+      code: 'engine_disconnected', message: 'QEC Data Engine disconnected.',
+    }));
+    expect(removedListener).not.toHaveBeenCalled();
+  });
+
   it('streams import lifecycle frames and uses import-specific cancellation', async () => {
     const { client, socket } = setup();
     await authenticate(client, socket);

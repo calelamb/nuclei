@@ -12,9 +12,13 @@
   --qec-danger: #b91c1c; --qec-danger-field: #fef2f2; --qec-danger-border: #fecaca;
   --qec-success-field: #f0fdf4; --qec-success-border: #bbf7d0;
   color: var(--qec-text); background: var(--qec-canvas); display: grid;
-  grid-template-rows: auto minmax(0, 1fr) auto; width: 100%; height: 100%; min-width: 0;
+  grid-template-rows: auto minmax(0, 1fr) 9px auto; width: 100%; height: 100%; min-width: 0;
   min-height: 0; overflow: hidden; font-family: Inter, var(--font-sans); font-size: 13px;
   line-height: 1.45;
+}
+
+.qec-workbench--tray-collapsed {
+  grid-template-rows: auto minmax(0, 1fr) auto;
 }
 
 .qec-workbench,
@@ -191,12 +195,63 @@
 }
 
 .qec-workbench__body {
-  position: relative; display: grid; grid-template-columns: minmax(220px, var(--qec-source-width)) minmax(0, 1fr) minmax(280px, var(--qec-inspector-width)); min-width: 0;
+  position: relative; display: grid; grid-template-columns: minmax(220px, var(--qec-source-width)) 9px minmax(0, 1fr) 9px minmax(280px, var(--qec-inspector-width)); min-width: 0;
   min-height: 0; overflow: hidden;
 }
 
 .qec-workbench--inspector-closed .qec-workbench__body {
-  grid-template-columns: minmax(220px, var(--qec-source-width)) minmax(0, 1fr);
+  grid-template-columns: minmax(220px, var(--qec-source-width)) 9px minmax(0, 1fr);
+}
+
+.qec-resize-handle {
+  position: relative; z-index: 12; align-self: stretch; background: var(--qec-raised);
+  touch-action: none;
+}
+
+.qec-resize-handle::before,
+.qec-resize-handle::after {
+  position: absolute; content: '';
+}
+
+.qec-resize-handle--vertical {
+  cursor: col-resize;
+}
+
+.qec-resize-handle--vertical::before {
+  top: 0; right: -18px; bottom: 0; left: -18px;
+}
+
+.qec-resize-handle--vertical::after {
+  top: 0; bottom: 0; left: 4px; width: 1px; background: var(--qec-border);
+}
+
+.qec-resize-handle--horizontal {
+  cursor: row-resize;
+}
+
+.qec-resize-handle--horizontal::before {
+  top: -18px; right: 0; bottom: -18px; left: 0;
+}
+
+.qec-resize-handle--horizontal::after {
+  top: 4px; right: 0; left: 0; height: 1px; background: var(--qec-border);
+}
+
+.qec-resize-handle:hover,
+.qec-resize-handle:focus-visible {
+  background: var(--qec-selection);
+  outline: 2px solid var(--qec-analytical); outline-offset: -2px;
+}
+
+.qec-panel-pin {
+  display: inline-grid; width: 44px; height: 44px; flex: 0 0 auto; place-items: center;
+  margin-left: auto; padding: 0; border: 1px solid transparent; border-radius: 5px;
+  background: transparent; color: var(--qec-text-muted);
+}
+
+.qec-panel-pin:hover,
+.qec-panel-pin[aria-pressed='true'] {
+  border-color: var(--qec-selection-strong); background: var(--qec-selection); color: var(--qec-analytical-strong);
 }
 
 .qec-zone-heading {
@@ -330,7 +385,7 @@
 }
 
 .qec-source-instrument {
-  display: grid; min-height: 36px; grid-template-columns: 8px minmax(0, 1fr) auto; align-items: center;
+  display: grid; min-height: 44px; grid-template-columns: 8px minmax(0, 1fr) auto 44px; align-items: center;
   gap: 8px; padding: 0 8px; color: var(--qec-text-muted); font-size: 11px;
 }
 
@@ -479,6 +534,10 @@
   gap: 9px; padding: 8px 11px; border-bottom: 1px solid var(--qec-border); background: var(--qec-raised);
 }
 
+.qec-instrument > header > div {
+  min-width: 0; flex: 1;
+}
+
 .qec-instrument__icon {
   display: grid; width: 28px; height: 28px; flex: 0 0 auto;
   place-items: center; border: 1px solid var(--qec-selection-strong); border-radius: 4px; background: var(--qec-selection);
@@ -558,7 +617,8 @@
 }
 
 .qec-inspector__tools li {
-  padding: 5px 9px; color: var(--qec-text-muted); font-size: 11px;
+  display: flex; min-height: 44px; align-items: center; justify-content: space-between;
+  gap: 8px; padding: 0 0 0 9px; color: var(--qec-text-muted); font-size: 11px;
 }
 
 .qec-lineage-state {
@@ -682,7 +742,11 @@
 
 @media (max-width: 1179px) {
   .qec-workbench__body {
-    grid-template-columns: minmax(220px, var(--qec-source-width)) minmax(0, 1fr);
+    grid-template-columns: minmax(220px, var(--qec-source-width)) 9px minmax(0, 1fr);
+  }
+
+  .qec-workbench__body > .qec-resize-handle:nth-of-type(2) {
+    display: none;
   }
 
   .qec-inspector {
@@ -743,6 +807,15 @@
 
   .qec-workbench__body {
     grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(150px, 28%) minmax(0, 1fr);
+  }
+
+  .qec-workbench__body > .qec-resize-handle,
+  .qec-workbench > .qec-resize-handle {
+    display: none;
+  }
+
+  .qec-workbench {
+    grid-template-rows: auto minmax(0, 1fr) auto;
   }
 
   .qec-sources {

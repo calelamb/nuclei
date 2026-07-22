@@ -15,6 +15,7 @@ interface QecSessionCatalogState {
   error: string | null;
   requestVersion: number;
   load(client: QecSessionCatalogClient, projectRoot: string): Promise<void>;
+  setProjectScope(projectRoot: string | null): void;
   reset(): void;
 }
 
@@ -29,10 +30,10 @@ async function loadCatalog(
   projectRoot: string,
 ): Promise<void> {
   const current = useQecSessionCatalogStore.getState();
+  if (current.projectRoot !== projectRoot) return;
   const requestVersion = current.requestVersion + 1;
   useQecSessionCatalogStore.setState({
-    projectRoot,
-    sessions: current.projectRoot === projectRoot ? current.sessions : EMPTY_SESSIONS,
+    sessions: current.sessions,
     status: 'loading',
     error: null,
     requestVersion,
@@ -54,6 +55,15 @@ export const useQecSessionCatalogStore = create<QecSessionCatalogState>(() => ({
   error: null,
   requestVersion: 0,
   load: loadCatalog,
+  setProjectScope: (projectRoot) => useQecSessionCatalogStore.setState((state) => state.projectRoot === projectRoot
+    ? state
+    : {
+      projectRoot,
+      sessions: EMPTY_SESSIONS,
+      status: 'idle',
+      error: null,
+      requestVersion: state.requestVersion + 1,
+    }),
   reset: () => useQecSessionCatalogStore.setState((state) => ({
     projectRoot: null,
     sessions: EMPTY_SESSIONS,

@@ -45,6 +45,8 @@ interface PendingRequest {
   phase: 'terminal' | 'awaiting_start' | 'streaming';
   expected?: string;
   targetId?: string;
+  expectedDatasetId?: string;
+  expectedTileKind?: QecTilePayload['kind'];
   resolve(value: unknown): void;
   reject(error: QecDataClientError): void;
   onFrame?: (frame: QecDataInboundFrame) => void;
@@ -54,6 +56,8 @@ interface ConnectingState {
   resolve(): void;
   reject(error: QecDataClientError): void;
 }
+
+export type QecDataDisconnectListener = (error: QecDataClientError) => void;
 
 export class QecDataClientError extends Error {
   readonly code: string;
@@ -130,6 +134,7 @@ export class QecDataClient {
   #authenticated = false;
   #connecting: ConnectingState | null = null;
   #pending: ReadonlyMap<string, PendingRequest> = new Map();
+  #disconnectListeners: readonly QecDataDisconnectListener[] = Object.freeze([]);
 
   constructor(endpoint: unknown, dependencies: ClientDependencies = {}) {
     const parsed = qecDataEndpointSchema.safeParse(endpoint);
@@ -156,8 +161,18 @@ export class QecDataClient {
   }
 
   disconnect(): void {
-    this.#socket?.close();
-    this.#disconnect('QEC Data Engine disconnected.');
+    const socket = this.#socket;
+    this.#disconnect('QEC Data Engine disconnected.', false);
+    socket?.close();
+  }
+
+  subscribeDisconnect(listener: QecDataDisconnectListener): () => void {
+    this.#disconnectListeners = Object.freeze([...this.#disconnectListeners, listener]);
+    return () => {
+      this.#disconnectListeners = Object.freeze(
+        this.#disconnectListeners.filter((candidate) => candidate !== listener),
+      );
+    };
   }
 
   async probe(source: string): Promise<ImportProbeResult> {
@@ -229,6 +244,9 @@ export class QecDataClient {
       type: 'query_start', requestId: parsed.requestId, query: parsed,
     }, (frame) => {
       if (frame.type === 'progress' || frame.type === 'tile') onEvent(frame);
+    }, {
+      expectedDatasetId: parsed.datasetId,
+      expectedTileKind: parsed.tile,
     }) as Promise<QecTilePayload>;
   }
 
@@ -264,8 +282,10 @@ export class QecDataClient {
   #multiFrame(
     kind: 'import' | 'query', requestId: string, frame: Record<string, unknown>,
     onFrame?: (frame: QecDataInboundFrame) => void,
+    expectations: Pick<PendingRequest, 'expectedDatasetId' | 'expectedTileKind'> = {},
   ): Promise<unknown> {
     return this.#send(requestId, frame, {
+      ...expectations,
       kind, phase: 'awaiting_start', resolve: () => undefined, reject: () => undefined, onFrame,
     });
   }
@@ -385,6 +405,12 @@ export class QecDataClient {
       return;
     }
     if (pending.kind === 'query' && (frame.type === 'progress' || frame.type === 'tile')) {
+      if (frame.type === 'tile' && (
+        frame.tile.datasetId !== pending.expectedDatasetId
+        || frame.tile.kind !== pending.expectedTileKind
+      )) {
+        throw new QecDataClientError('invalid_response', 'QEC query tile does not match the requested dataset and kind.');
+      }
       pending.onFrame?.(frame);
       if (frame.type === 'tile' && frame.complete) this.#resolveRequest(requestId, frame.tile);
       return;
@@ -429,22 +455,36 @@ export class QecDataClient {
 
   #protocolFailure(code: string, message: string): void {
     const error = new QecDataClientError(code, message);
+    const wasAuthenticated = this.#authenticated;
     this.#rejectAll(error);
     this.#connecting?.reject(error);
     this.#connecting = null;
     this.#authenticated = false;
     this.#socket?.close();
     this.#socket = null;
+    if (wasAuthenticated) this.#notifyDisconnect(error);
   }
 
-  #disconnect(message: string): void {
+  #disconnect(message: string, notify = true): void {
     if (!this.#socket && !this.#connecting && !this.#authenticated && this.#pending.size === 0) return;
     const error = new QecDataClientError('engine_disconnected', message);
+    const wasAuthenticated = this.#authenticated;
     this.#rejectAll(error);
     this.#connecting?.reject(error);
     this.#connecting = null;
     this.#authenticated = false;
     this.#socket = null;
+    if (notify && wasAuthenticated) this.#notifyDisconnect(error);
+  }
+
+  #notifyDisconnect(error: QecDataClientError): void {
+    for (const listener of this.#disconnectListeners) {
+      try {
+        listener(error);
+      } catch (listenerError: unknown) {
+        console.error('QEC Data Engine disconnect listener failed.', listenerError);
+      }
+    }
   }
 }
 

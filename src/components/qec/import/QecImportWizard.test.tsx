@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { useQecJobStore } from '../../../stores/qecJobStore';
 import type { QecImportClient } from './QecImportWizard';
@@ -46,6 +46,11 @@ function nativeClient(adapterId: 'stim-results' | 'sinter-csv'): QecImportClient
   });
   return fake;
 }
+
+beforeEach(() => {
+  useQecJobStore.getState().reset();
+  useQecJobStore.getState().setProjectScope('/project');
+});
 
 afterEach(() => {
   cleanup();

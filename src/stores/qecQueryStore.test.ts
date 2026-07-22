@@ -33,9 +33,27 @@ function tile(requestId: string, sequence: number, value: string, complete = tru
   };
 }
 
-beforeEach(() => useQecQueryStore.getState().reset());
+beforeEach(() => {
+  useQecQueryStore.getState().reset();
+  useQecQueryStore.getState().setProjectScope('/project');
+});
 
 describe('useQecQueryStore', () => {
+  it('clears old-project queries and rejects their late frames by scope epoch', async () => {
+    const { client, calls } = deferredClient();
+    const pending = useQecQueryStore.getState().run(client, BASE_QUERY);
+    expect(useQecQueryStore.getState().activeRequestIds()).toEqual(['query-old']);
+    const oldScopeEpoch = useQecQueryStore.getState().scopeEpoch;
+
+    useQecQueryStore.getState().setProjectScope('/replacement');
+    calls[0].emit(tile('query-old', 0, 'stale'));
+    calls[0].resolve((tile('query-old', 0, 'stale') as Extract<QecQueryResult, { type: 'tile' }>).tile);
+    await pending;
+
+    expect(useQecQueryStore.getState()).toMatchObject({ projectRoot: '/replacement', tiles: {} });
+    expect(useQecQueryStore.getState().scopeEpoch).toBeGreaterThan(oldScopeEpoch);
+  });
+
   it('prevents stale progressive frames from overwriting a newer tile request', async () => {
     const { client, calls } = deferredClient();
     const oldRequest = useQecQueryStore.getState().run(client, BASE_QUERY);
@@ -129,6 +147,7 @@ describe('useQecQueryStore', () => {
     const old = useQecQueryStore.getState().run(client, BASE_QUERY);
     const oldEpoch = useQecQueryStore.getState().epochCounter;
     useQecQueryStore.getState().reset();
+    useQecQueryStore.getState().setProjectScope('/project');
     const fresh = useQecQueryStore.getState().run(client, { ...BASE_QUERY, requestId: 'query-fresh' });
 
     expect(useQecQueryStore.getState().epochCounter).toBeGreaterThan(oldEpoch);

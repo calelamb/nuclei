@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   QEC_PANEL_REGISTRY,
+  resolveQecPanels,
   resolveQecPreset,
   validateQecPanelRegistry,
   type QecWorkbenchPanelDef,
@@ -8,6 +9,15 @@ import {
 import type { QecWorkspacePreset } from '../types/qecStudy';
 
 describe('QEC panel registry', () => {
+  it('resolves the ordered union of preset panels and valid pins for one zone', () => {
+    expect(resolveQecPanels('build', 'canvas', ['campaign-center', 'timeline', 'editor'])).toEqual([
+      expect.objectContaining({ id: 'timeline' }),
+      expect.objectContaining({ id: 'lattice' }),
+      expect.objectContaining({ id: 'detector-graph' }),
+      expect.objectContaining({ id: 'campaign-center' }),
+    ]);
+  });
+
   it.each([
     ['build', 'editor'],
     ['analyze', 'campaign-center'],

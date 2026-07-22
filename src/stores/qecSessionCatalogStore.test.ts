@@ -24,8 +24,25 @@ function deferred<T>(): { promise: Promise<T>; resolve(value: T): void } {
 beforeEach(() => useQecSessionCatalogStore.getState().reset());
 
 describe('qecSessionCatalogStore', () => {
+  it('invalidates catalog ownership synchronously when project scope changes', async () => {
+    const pending = deferred<readonly QecSession[]>();
+    useQecSessionCatalogStore.getState().setProjectScope('/old-project');
+    const oldLoad = useQecSessionCatalogStore.getState().load(
+      { listSessions: vi.fn(() => pending.promise) }, '/old-project',
+    );
+
+    useQecSessionCatalogStore.getState().setProjectScope('/new-project');
+    pending.resolve([session('old-capture')]);
+    await oldLoad;
+
+    expect(useQecSessionCatalogStore.getState()).toMatchObject({
+      projectRoot: '/new-project', sessions: [], status: 'idle', error: null,
+    });
+  });
+
   it('loads an immutable engine-backed catalog for one project', async () => {
     const listSessions = vi.fn(async () => [session('capture-a')]);
+    useQecSessionCatalogStore.getState().setProjectScope('/project');
 
     await useQecSessionCatalogStore.getState().load({ listSessions }, '/project');
 
@@ -39,9 +56,11 @@ describe('qecSessionCatalogStore', () => {
 
   it('ignores a stale load after the project changes', async () => {
     const first = deferred<readonly QecSession[]>();
+    useQecSessionCatalogStore.getState().setProjectScope('/old-project');
     const oldLoad = useQecSessionCatalogStore.getState().load(
       { listSessions: vi.fn(() => first.promise) }, '/old-project',
     );
+    useQecSessionCatalogStore.getState().setProjectScope('/new-project');
     await useQecSessionCatalogStore.getState().load(
       { listSessions: vi.fn(async () => [session('new-capture')]) }, '/new-project',
     );
@@ -55,6 +74,7 @@ describe('qecSessionCatalogStore', () => {
   });
 
   it('surfaces engine errors without retaining another project catalog', async () => {
+    useQecSessionCatalogStore.getState().setProjectScope('/project');
     await useQecSessionCatalogStore.getState().load(
       { listSessions: vi.fn(async () => { throw new Error('engine unavailable'); }) }, '/project',
     );

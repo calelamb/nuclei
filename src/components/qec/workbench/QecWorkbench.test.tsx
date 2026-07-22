@@ -5,6 +5,7 @@ import { useQecStudyStore } from '../../../services/qecStudyStore';
 import { PlatformProvider } from '../../../platform/PlatformProvider';
 import { useProjectStore } from '../../../stores/projectStore';
 import { useQecJobStore } from '../../../stores/qecJobStore';
+import { useQecQueryStore } from '../../../stores/qecQueryStore';
 import { useQecSessionCatalogStore } from '../../../stores/qecSessionCatalogStore';
 import { useQecStudyUiStore } from '../../../stores/qecStudyUiStore';
 import { useQecWorkbenchStore } from '../../../stores/qecWorkbenchStore';
@@ -15,7 +16,7 @@ import {
 import { QecWorkbench } from './QecWorkbench';
 import { QecSourcesPanel } from './QecSourcesPanel';
 import { QecWorkbenchTray } from './QecWorkbenchTray';
-import type { QecImportClient } from '../../../services/qecDataClient';
+import { QecDataClientError, type QecImportClient } from '../../../services/qecDataClient';
 import type { QecSession } from '../../../types/qecData';
 import { deferred, flushAsync, flushPersistenceDebounce, MemoryStorage,
   persistedState, persistenceBridge } from './qecWorkbenchTestUtils';
@@ -96,11 +97,13 @@ beforeEach(() => {
     future: [],
   });
   useQecJobStore.getState().reset();
+  useQecQueryStore.getState().reset();
   useQecSessionCatalogStore.getState().reset();
 });
 
 describe('<QecWorkbench />', () => {
   it('renders engine-backed canonical sessions as an accessible selectable list', () => {
+    useProjectStore.setState({ projectRoot: '/project' });
     useQecSessionCatalogStore.setState({
       projectRoot: '/project', status: 'ready', error: null,
       sessions: [{
@@ -153,6 +156,46 @@ describe('<QecWorkbench />', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Analyze' }));
     expect(within(canvas).getByText('Campaign Center')).toBeTruthy();
+  });
+
+  it('keeps a pinned canvas instrument visible across preset changes and can unpin it', () => {
+    render(<QecWorkbench />);
+    fireEvent.click(screen.getByRole('button', { name: 'Analyze' }));
+    const pin = screen.getByRole('button', { name: 'Pin Campaign Center' });
+    expect(pin.getAttribute('aria-pressed')).toBe('false');
+    fireEvent.click(pin);
+    expect(useQecWorkbenchStore.getState().pinnedPanelIds).toEqual(['campaign-center']);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Build' }));
+    expect(screen.getByText('Campaign Center')).toBeTruthy();
+    const unpin = screen.getByRole('button', { name: 'Unpin Campaign Center' });
+    expect(unpin.getAttribute('aria-pressed')).toBe('true');
+    fireEvent.click(unpin);
+    expect(screen.queryByText('Campaign Center')).toBeNull();
+  });
+
+  it('persists keyboard resizing for sources, inspector, and tray', async () => {
+    vi.useFakeTimers();
+    useProjectStore.setState({ projectRoot: '/project' });
+    const writes: unknown[] = [];
+    const bridge = persistenceBridge(
+      vi.fn(async () => null),
+      vi.fn(async (_key, value) => { writes.push(value); }),
+    );
+    render(<PlatformProvider bridge={bridge}><QecWorkbench /></PlatformProvider>);
+    await flushAsync();
+
+    fireEvent.keyDown(screen.getByRole('separator', { name: 'Resize sources panel' }), { key: 'ArrowRight' });
+    fireEvent.keyDown(screen.getByRole('separator', { name: 'Resize research inspector' }), { key: 'ArrowLeft' });
+    fireEvent.keyDown(screen.getByRole('separator', { name: 'Resize jobs tray' }), { key: 'ArrowUp' });
+    expect(useQecWorkbenchStore.getState()).toMatchObject({
+      sourceWidth: 296, inspectorWidth: 376, trayHeight: 276,
+    });
+
+    await flushPersistenceDebounce();
+    expect(writes.at(-1)).toMatchObject({
+      sourceWidth: 296, inspectorWidth: 376, trayHeight: 276,
+    });
   });
 
   it('uses a native labeled Study control and preserves keyboard selection semantics', () => {
@@ -265,6 +308,7 @@ describe('<QecWorkbench />', () => {
   });
 
   it('launches a referenced source import into the durable tray lifecycle', () => {
+    useProjectStore.setState({ projectRoot: '/project' });
     useQecWorkbenchStore.setState({ trayCollapsed: true });
     render(<QecWorkbench />);
 
@@ -272,12 +316,11 @@ describe('<QecWorkbench />', () => {
 
     expect(useQecJobStore.getState().importSource).toBe('experiments/memory.experiment.yaml');
     expect(useQecWorkbenchStore.getState().trayCollapsed).toBe(false);
-    expect(screen.getByRole('region', { name: 'QEC jobs and streams' }).textContent).toMatch(
-      /Open a project to start the QEC Data Engine/,
-    );
+    expect(screen.getByRole('region', { name: 'QEC jobs and streams' }).textContent).toMatch(/Starting authenticated QEC Data Engine/);
   });
 
   it('returns focus to the originating source action when the import closes', async () => {
+    useProjectStore.setState({ projectRoot: '/project' });
     const client = importClient();
     render(<><QecSourcesPanel /><QecWorkbenchTray client={client} /></>);
     const origin = screen.getByRole('button', { name: 'Import campaign-a' });
@@ -287,6 +330,8 @@ describe('<QecWorkbench />', () => {
   });
 
   it('keeps closed import jobs inspectable and cancellable with source context', async () => {
+    useProjectStore.setState({ projectRoot: '/project' });
+    useQecJobStore.getState().setProjectScope('/project');
     const client = importClient();
     useQecJobStore.setState({
       jobs: {
@@ -294,7 +339,7 @@ describe('<QecWorkbench />', () => {
           id: 'running', kind: 'import', status: 'running', message: 'Import running',
           source: 'captures/run.csv', adapterId: 'tabular', sessionId: 'session-42',
           sessionKind: 'hardware_import', sourceHash: 'a'.repeat(64), provenanceId: 'prov-42',
-          sourceByteSize: 2048,
+          sourceByteSize: 2048, projectRoot: '/project',
         },
       },
     });
@@ -303,6 +348,81 @@ describe('<QecWorkbench />', () => {
     expect(screen.getByText('session-42')).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'Cancel import running' }));
     await waitFor(() => expect(client.cancel).toHaveBeenCalledWith('import', 'running'));
+  });
+
+  it('invalidates old project operations before a replacement client can act on them', async () => {
+    useProjectStore.setState({ projectRoot: '/old-project' });
+    const oldClient = importClient();
+    const replacementClient = importClient();
+    const view = render(<QecWorkbenchTray client={oldClient} />);
+    await waitFor(() => expect(useQecJobStore.getState().projectRoot).toBe('/old-project'));
+    act(() => {
+      useQecJobStore.setState({
+        importSource: 'captures/old.dets',
+        jobs: {
+          old: {
+            id: 'old', kind: 'import', status: 'running', message: 'Import running',
+            source: 'captures/old.dets', projectRoot: '/old-project',
+          },
+        },
+      });
+      useQecQueryStore.setState({
+        tiles: {
+          old: {
+            projectRoot: '/old-project', requestId: 'old-query', epoch: 1,
+            status: 'loading', progress: 0, message: 'Query running', frames: [], error: null,
+          },
+        },
+      });
+      useProjectStore.setState({ projectRoot: '/new-project' });
+    });
+    view.rerender(<QecWorkbenchTray client={replacementClient} />);
+
+    await waitFor(() => expect(useQecJobStore.getState()).toMatchObject({
+      projectRoot: '/new-project', importSource: null, jobs: {},
+    }));
+    expect(useQecQueryStore.getState()).toMatchObject({ projectRoot: '/new-project', tiles: {} });
+    await waitFor(() => {
+      expect(oldClient.cancel).toHaveBeenCalledWith('import', 'old');
+      expect(oldClient.cancel).toHaveBeenCalledWith('query', 'old-query');
+    });
+    expect(replacementClient.cancel).not.toHaveBeenCalled();
+    expect(screen.queryByRole('region', { name: 'Import captures/old.dets' })).toBeNull();
+  });
+
+  it('drops a dead engine client and retries exactly once per explicit action', async () => {
+    useProjectStore.setState({ projectRoot: '/project' });
+    let disconnectListener: ((error: QecDataClientError) => void) | undefined;
+    const connectedClient = {
+      ...importClient(),
+      disconnect: vi.fn(),
+      subscribeDisconnect: vi.fn((listener: (error: QecDataClientError) => void) => {
+        disconnectListener = listener;
+        return vi.fn();
+      }),
+    };
+    const replacementClient = {
+      ...importClient(),
+      disconnect: vi.fn(),
+      subscribeDisconnect: vi.fn(() => vi.fn()),
+    };
+    const connectClient = vi.fn()
+      .mockResolvedValueOnce(connectedClient)
+      .mockResolvedValueOnce(replacementClient);
+
+    render(<QecWorkbenchTray connectClient={connectClient} />);
+    await waitFor(() => expect(connectClient).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(connectedClient.subscribeDisconnect).toHaveBeenCalledOnce());
+    act(() => disconnectListener?.(new QecDataClientError('engine_disconnected', 'QEC Data Engine disconnected.')));
+
+    const alert = screen.getByRole('alert');
+    expect(alert.textContent).toMatch(/QEC Data Engine disconnected/);
+    expect(screen.queryByText('No active jobs')).toBeNull();
+    const retry = within(alert).getByRole('button', { name: 'Retry QEC Data Engine' });
+    fireEvent.click(retry);
+    await waitFor(() => expect(connectClient).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(replacementClient.subscribeDisconnect).toHaveBeenCalledOnce());
+    expect(connectClient).toHaveBeenNthCalledWith(2, '/project');
   });
 
   it('loads engine sessions for the project and refreshes after import completion', async () => {

@@ -1,15 +1,17 @@
 import { Database, FileCode2, FlaskConical, FolderInput, FolderTree, LoaderCircle, TriangleAlert } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import type { ReactElement } from 'react';
-import { QEC_PANEL_REGISTRY } from '../../../layout/qecPanelRegistry';
+import { resolveQecPanels } from '../../../layout/qecPanelRegistry';
 import { useQecStudyStore, type QecStudyValidationError } from '../../../services/qecStudyStore';
 import { useQecStudyUiStore } from '../../../stores/qecStudyUiStore';
+import { useProjectStore } from '../../../stores/projectStore';
 import { useQecJobStore } from '../../../stores/qecJobStore';
 import { useQecSessionCatalogStore } from '../../../stores/qecSessionCatalogStore';
 import { useQecWorkbenchStore } from '../../../stores/qecWorkbenchStore';
 import { useResearchSelectionStore } from '../../../stores/researchSelectionStore';
 import type { QecStudy, QecStudySource, QecWorkspacePreset } from '../../../types/qecStudy';
 import type { QecSession } from '../../../types/qecData';
+import { QecPanelPinButton } from './QecPanelPinButton';
 
 const SOURCE_ICONS: Readonly<Record<QecStudySource['kind'], LucideIcon>> = {
   stim: FileCode2, python: FileCode2, dem: Database,
@@ -75,10 +77,13 @@ function SourceFileRow({ source }: { source: QecStudySource }): ReactElement {
   const Icon = SOURCE_ICONS[source.kind];
   const current = selected?.kind === 'source' && selected.id === source.id;
   const openImport = useQecJobStore((state) => state.openImport);
+  const projectRoot = useProjectStore((state) => state.projectRoot);
+  const jobProjectRoot = useQecJobStore((state) => state.projectRoot);
   const setTrayCollapsed = useQecWorkbenchStore((state) => state.setTrayCollapsed);
   const importButtonId = `qec-import-${source.id.replaceAll(/[^a-zA-Z0-9_-]/g, '-')}`;
   const launchImport = (): void => {
-    openImport(source.path, importButtonId);
+    if (!projectRoot || jobProjectRoot !== projectRoot) return;
+    openImport(projectRoot, source.path, importButtonId);
     setTrayCollapsed(false);
   };
   return (
@@ -88,7 +93,7 @@ function SourceFileRow({ source }: { source: QecStudySource }): ReactElement {
         <span><strong>{source.id}</strong><small className="qec-mono">{source.path}</small></span>
         <span className="qec-source-row__kind">{source.kind}</span>
       </button>
-      <button id={importButtonId} type="button" className="qec-source-row__import" aria-label={`Import ${source.id}`} title="Import into canonical QEC data" onClick={launchImport}>
+      <button id={importButtonId} type="button" className="qec-source-row__import" aria-label={`Import ${source.id}`} title={projectRoot ? 'Import into canonical QEC data' : 'Open a project before importing QEC data'} disabled={!projectRoot || jobProjectRoot !== projectRoot} onClick={launchImport}>
         <FolderInput aria-hidden="true" size={16} />
       </button>
     </div>
@@ -134,6 +139,9 @@ function CanonicalSessions(): ReactElement | null {
   const sessions = useQecSessionCatalogStore((state) => state.sessions);
   const status = useQecSessionCatalogStore((state) => state.status);
   const error = useQecSessionCatalogStore((state) => state.error);
+  const catalogProjectRoot = useQecSessionCatalogStore((state) => state.projectRoot);
+  const projectRoot = useProjectStore((state) => state.projectRoot);
+  if (catalogProjectRoot !== projectRoot) return null;
   if (status === 'idle' && sessions.length === 0) return null;
   return (
     <section className="qec-source-group" aria-labelledby="canonical-sessions-heading">
@@ -149,7 +157,8 @@ function CanonicalSessions(): ReactElement | null {
 }
 
 function SourceInstruments({ preset }: { preset: QecWorkspacePreset }): ReactElement | null {
-  const panels = QEC_PANEL_REGISTRY.filter((panel) => panel.zone === 'sources' && panel.presets.includes(preset));
+  const pinnedPanelIds = useQecWorkbenchStore((state) => state.pinnedPanelIds);
+  const panels = resolveQecPanels(preset, 'sources', pinnedPanelIds);
   if (panels.length === 0) return null;
   return (
     <section className="qec-source-group" aria-labelledby="source-instruments-heading">
@@ -157,7 +166,7 @@ function SourceInstruments({ preset }: { preset: QecWorkspacePreset }): ReactEle
       {panels.map((panel) => (
         <div className="qec-source-instrument" key={panel.id}>
           <span className="qec-source-instrument__mark" aria-hidden="true" />
-          <span>{panel.title}</span><span className="qec-mono">ready</span>
+          <span>{panel.title}</span><span className="qec-mono">ready</span><QecPanelPinButton panel={panel} />
         </div>
       ))}
     </section>

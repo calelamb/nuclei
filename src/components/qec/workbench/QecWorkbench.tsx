@@ -4,12 +4,13 @@ import { startQecWorkbenchPersistenceSession } from '../../../services/qecWorkbe
 import { useProjectStore } from '../../../stores/projectStore';
 import { useQecStudyStore } from '../../../services/qecStudyStore';
 import { useQecStudyUiStore } from '../../../stores/qecStudyUiStore';
-import { useQecWorkbenchStore } from '../../../stores/qecWorkbenchStore';
+import { QEC_WORKBENCH_DIMENSIONS, useQecWorkbenchStore } from '../../../stores/qecWorkbenchStore';
 import { InvestigationCanvas } from './InvestigationCanvas';
 import { QecResearchBar } from './QecResearchBar';
 import { QecResearchInspector } from './QecResearchInspector';
 import { QecSourcesPanel } from './QecSourcesPanel';
 import { QecWorkbenchTray } from './QecWorkbenchTray';
+import { QecWorkbenchResizeHandle } from './QecWorkbenchResizeHandle';
 
 type WorkbenchStyle = CSSProperties & Record<
   '--qec-source-width' | '--qec-inspector-width' | '--qec-tray-height',
@@ -55,6 +56,10 @@ export function QecWorkbench(): ReactElement {
   const sourceWidth = useQecWorkbenchStore((state) => state.sourceWidth);
   const inspectorWidth = useQecWorkbenchStore((state) => state.inspectorWidth);
   const trayHeight = useQecWorkbenchStore((state) => state.trayHeight);
+  const trayCollapsed = useQecWorkbenchStore((state) => state.trayCollapsed);
+  const setSourceWidth = useQecWorkbenchStore((state) => state.setSourceWidth);
+  const setInspectorWidth = useQecWorkbenchStore((state) => state.setInspectorWidth);
+  const setTrayHeight = useQecWorkbenchStore((state) => state.setTrayHeight);
   const persistenceIssue = useQecWorkbenchStore((state) => state.persistenceIssue);
   const drawer = useInspectorDrawer();
   const style: WorkbenchStyle = {
@@ -63,7 +68,7 @@ export function QecWorkbench(): ReactElement {
     '--qec-tray-height': `${trayHeight}px`,
   };
   return (
-    <section className={`qec-workbench qec-workbench--${preset} qec-workbench--inspector-${drawer.open ? 'open' : 'closed'}`} aria-label="QEC Workbench" style={style}>
+    <section className={`qec-workbench qec-workbench--${preset} qec-workbench--inspector-${drawer.open ? 'open' : 'closed'} qec-workbench--tray-${trayCollapsed ? 'collapsed' : 'open'}`} aria-label="QEC Workbench" style={style}>
       <div className="qec-workbench__header">
         <QecResearchBar />
         {persistenceIssue && (
@@ -82,9 +87,36 @@ export function QecWorkbench(): ReactElement {
       </div>
       <div className="qec-workbench__body">
         <QecSourcesPanel />
+        <QecWorkbenchResizeHandle
+          label="Resize sources panel"
+          orientation="vertical"
+          value={sourceWidth}
+          min={QEC_WORKBENCH_DIMENSIONS.source.min}
+          max={QEC_WORKBENCH_DIMENSIONS.source.max}
+          direction={1}
+          onChange={setSourceWidth}
+        />
         <InvestigationCanvas inspectorOpen={drawer.open} onToggleInspector={drawer.toggle} toggleRef={drawer.triggerRef} />
+        {drawer.open && <QecWorkbenchResizeHandle
+          label="Resize research inspector"
+          orientation="vertical"
+          value={inspectorWidth}
+          min={QEC_WORKBENCH_DIMENSIONS.inspector.min}
+          max={QEC_WORKBENCH_DIMENSIONS.inspector.max}
+          direction={-1}
+          onChange={setInspectorWidth}
+        />}
         <QecResearchInspector open={drawer.open} onClose={drawer.close} />
       </div>
+      {!trayCollapsed && <QecWorkbenchResizeHandle
+        label="Resize jobs tray"
+        orientation="horizontal"
+        value={trayHeight}
+        min={QEC_WORKBENCH_DIMENSIONS.tray.min}
+        max={QEC_WORKBENCH_DIMENSIONS.tray.max}
+        direction={-1}
+        onChange={setTrayHeight}
+      />}
       <QecWorkbenchTray />
     </section>
   );
