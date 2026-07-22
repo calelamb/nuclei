@@ -98,6 +98,15 @@ function installQecDataInvokeFixture(): void {
   });
 }
 
+async function invokeQecDataFixture(command: string, args?: unknown): Promise<unknown> {
+  const fixtureWindow = window as typeof window & {
+    __NUCLEI_E2E_QEC_INVOKE__?: (command: string, args?: unknown) => Promise<unknown>;
+  };
+  const invoke = fixtureWindow.__NUCLEI_E2E_QEC_INVOKE__;
+  if (!invoke) throw new Error('QEC Data Engine fixture is unavailable.');
+  return await invoke(command, args);
+}
+
 function withQecImportFixture(project: FixtureProject, enabled: boolean): FixtureProject {
   if (!enabled) return project;
   return Object.freeze({
@@ -186,6 +195,8 @@ class FixtureSession {
   bridge(base: PlatformBridge): PlatformBridge {
     return {
       ...base,
+      startQecDataEngine: (projectRoot) => invokeQecDataFixture('qec_data_start', { projectRoot }),
+      stopQecDataEngine: async () => { await invokeQecDataFixture('qec_data_stop'); },
       getStoredValue: <T>(key: string) => this.getStoredValue<T>(key),
       setStoredValue: (key, value) => this.setStoredValue(key, value),
       readFile: (path) => this.readFile(path),

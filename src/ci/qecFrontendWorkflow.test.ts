@@ -11,6 +11,7 @@ describe('QEC frontend PR workflow', () => {
     const workflow = readFileSync(WORKFLOW_PATH, 'utf8');
 
     expect(workflow).toContain('pull_request:');
+    expect(workflow).toContain('push:');
     expect(workflow).toContain('node-version: 24');
     expect(workflow).toContain('python-version: \'3.12\'');
     expect(workflow).toContain('npm ci');
@@ -19,7 +20,7 @@ describe('QEC frontend PR workflow', () => {
     for (const dependency of ['pyarrow', 'duckdb', 'jsonschema', 'websockets', 'stim']) {
       expect(workflow).toContain(dependency);
     }
-    expect(workflow).toContain('npm run test:e2e -- --grep @qec');
+    expect(workflow).toContain('npm run test:e2e -- --grep @qec --workers=1');
     expect(workflow).not.toMatch(/10M|10_000_000|QEC_STRESS/i);
   });
 });

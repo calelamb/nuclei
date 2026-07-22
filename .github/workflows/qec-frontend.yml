@@ -2,6 +2,7 @@ name: QEC frontend
 
 on:
   pull_request:
+  push:
 
 permissions:
   contents: read
@@ -46,7 +47,7 @@ jobs:
           "websockets>=12,<14"
           "stim>=1.14,<2"
       - run: npx playwright install --with-deps chromium
-      - run: npm run test:e2e -- --grep @qec
+      - run: npm run test:e2e -- --grep @qec --workers=1
       - name: Upload QEC browser diagnostics
         if: failure()
         uses: actions/upload-artifact@v4

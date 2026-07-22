@@ -17,6 +17,7 @@ import { QecWorkbench } from './QecWorkbench';
 import { QecSourcesPanel } from './QecSourcesPanel';
 import { QecWorkbenchTray } from './QecWorkbenchTray';
 import { QecDataClientError, type QecImportClient } from '../../../services/qecDataClient';
+import type { PlatformBridge } from '../../../platform/bridge';
 import type { QecSession } from '../../../types/qecData';
 import { deferred, flushAsync, flushPersistenceDebounce, MemoryStorage,
   persistedState, persistenceBridge } from './qecWorkbenchTestUtils';
@@ -68,8 +69,49 @@ function importClient(): QecImportClient {
   };
 }
 
+class AutoAuthSocket {
+  readonly listeners = new Map<string, Array<(event: Event | MessageEvent<string>) => void>>();
+
+  constructor() {
+    queueMicrotask(() => this.emit('open', new Event('open')));
+  }
+
+  addEventListener(type: string, listener: (event: Event | MessageEvent<string>) => void): void {
+    this.listeners.set(type, [...(this.listeners.get(type) ?? []), listener]);
+  }
+
+  send(frame: string): void {
+    const message = JSON.parse(frame) as { type?: string };
+    if (message.type === 'authenticate') {
+      queueMicrotask(() => this.emit('message', new MessageEvent('message', {
+        data: JSON.stringify({ type: 'authenticated' }),
+      })));
+    }
+  }
+
+  close(): void {
+    this.emit('close', new Event('close'));
+  }
+
+  private emit(type: string, event: Event | MessageEvent<string>): void {
+    for (const listener of this.listeners.get(type) ?? []) listener(event);
+  }
+}
+
+function qecLifecycleBridge(overrides: Partial<PlatformBridge> = {}): PlatformBridge {
+  return {
+    ...persistenceBridge(vi.fn(async () => null)),
+    startQecDataEngine: vi.fn(async () => ({
+      url: 'ws://127.0.0.1:9743', token: 'test-token',
+    })),
+    stopQecDataEngine: vi.fn(async () => undefined),
+    ...overrides,
+  };
+}
+
 afterEach(() => {
   cleanup();
+  vi.unstubAllGlobals();
   vi.useRealTimers();
 });
 
@@ -310,7 +352,10 @@ describe('<QecWorkbench />', () => {
   it('launches a referenced source import into the durable tray lifecycle', () => {
     useProjectStore.setState({ projectRoot: '/project' });
     useQecWorkbenchStore.setState({ trayCollapsed: true });
-    render(<QecWorkbench />);
+    const bridge = qecLifecycleBridge({
+      startQecDataEngine: vi.fn(() => new Promise(() => undefined)),
+    });
+    render(<PlatformProvider bridge={bridge}><QecWorkbench /></PlatformProvider>);
 
     fireEvent.click(screen.getByRole('button', { name: 'Import campaign-a' }));
 
@@ -423,6 +468,66 @@ describe('<QecWorkbench />', () => {
     await waitFor(() => expect(connectClient).toHaveBeenCalledTimes(2));
     await waitFor(() => expect(replacementClient.subscribeDisconnect).toHaveBeenCalledOnce());
     expect(connectClient).toHaveBeenNthCalledWith(2, '/project');
+  });
+
+  it('retires the native engine before starting a replacement project without overlapping starts', async () => {
+    vi.stubGlobal('WebSocket', AutoAuthSocket);
+    useProjectStore.setState({ projectRoot: '/old-project' });
+    const stopGate = deferred<void>();
+    const lifecycle: string[] = [];
+    const startQecDataEngine = vi.fn(async (projectRoot: string) => {
+      lifecycle.push(`start:${projectRoot}`);
+      return { url: 'ws://127.0.0.1:9743', token: 'test-token' };
+    });
+    const stopQecDataEngine = vi.fn(async () => {
+      lifecycle.push('stop');
+      await stopGate.promise;
+    });
+    const bridge = qecLifecycleBridge({ startQecDataEngine, stopQecDataEngine });
+
+    render(<PlatformProvider bridge={bridge}><QecWorkbenchTray /></PlatformProvider>);
+    await waitFor(() => expect(startQecDataEngine).toHaveBeenCalledWith('/old-project'));
+    await waitFor(() => expect(screen.getByText('No active jobs')).toBeTruthy());
+
+    act(() => useProjectStore.setState({ projectRoot: '/new-project' }));
+    await waitFor(() => expect(stopQecDataEngine).toHaveBeenCalledTimes(1));
+    expect(startQecDataEngine).toHaveBeenCalledTimes(1);
+    expect(lifecycle).toEqual(['start:/old-project', 'stop']);
+
+    stopGate.resolve();
+    await waitFor(() => expect(startQecDataEngine).toHaveBeenCalledWith('/new-project'));
+    expect(lifecycle).toEqual(['start:/old-project', 'stop', 'start:/new-project']);
+  });
+
+  it('keeps initial and repeated retry failures visible while reconnects stay single-flight', async () => {
+    useProjectStore.setState({ projectRoot: '/project' });
+    const secondStart = deferred<unknown>();
+    const startQecDataEngine = vi.fn()
+      .mockRejectedValueOnce(new Error('Python dependency missing.'))
+      .mockImplementationOnce(() => secondStart.promise)
+      .mockRejectedValueOnce(new Error('Port remains unavailable.'));
+    const stopQecDataEngine = vi.fn(async () => undefined);
+    const bridge = qecLifecycleBridge({ startQecDataEngine, stopQecDataEngine });
+
+    render(<PlatformProvider bridge={bridge}><QecWorkbenchTray /></PlatformProvider>);
+    expect(screen.getByRole('status').textContent).toMatch(/Starting authenticated QEC Data Engine/);
+    const firstAlert = await screen.findByRole('alert');
+    expect(firstAlert.textContent).toMatch(/Python dependency missing/);
+
+    fireEvent.click(within(firstAlert).getByRole('button', { name: 'Retry QEC Data Engine' }));
+    await waitFor(() => expect(startQecDataEngine).toHaveBeenCalledTimes(2));
+    expect(screen.getByRole('status').textContent).toMatch(/Starting authenticated QEC Data Engine/);
+    expect(stopQecDataEngine).toHaveBeenCalledTimes(1);
+    expect(startQecDataEngine).toHaveBeenNthCalledWith(2, '/project');
+
+    secondStart.reject(new Error('Authentication failed.'));
+    const secondAlert = await screen.findByRole('alert');
+    expect(secondAlert.textContent).toMatch(/Authentication failed/);
+    fireEvent.click(within(secondAlert).getByRole('button', { name: 'Retry QEC Data Engine' }));
+    await waitFor(() => expect(startQecDataEngine).toHaveBeenCalledTimes(3));
+    const thirdAlert = await screen.findByRole('alert');
+    expect(thirdAlert.textContent).toMatch(/Port remains unavailable/);
+    expect(stopQecDataEngine).toHaveBeenCalledTimes(2);
   });
 
   it('loads engine sessions for the project and refreshes after import completion', async () => {

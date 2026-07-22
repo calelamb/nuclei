@@ -19,6 +19,11 @@ export interface PlatformBridge {
   startKernel(): Promise<string>;
   stopKernel(): Promise<string>;
 
+  // Canonical QEC data-engine management. The desktop implementation owns
+  // the native child process; callers must stop it before changing projects.
+  startQecDataEngine?(projectRoot: string): Promise<unknown>;
+  stopQecDataEngine?(): Promise<void>;
+
   // File operations
   openFile(): Promise<{ path: string; content: string } | null>;
   readFile(path: string): Promise<string | null>;

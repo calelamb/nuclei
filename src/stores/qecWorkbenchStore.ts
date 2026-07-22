@@ -5,7 +5,7 @@ import type { QecWorkspacePreset } from '../types/qecStudy';
 export const QEC_WORKBENCH_DIMENSIONS = Object.freeze({
   source: Object.freeze({ min: 220, max: 480 }),
   inspector: Object.freeze({ min: 280, max: 560 }),
-  tray: Object.freeze({ min: 160, max: 520 }),
+  tray: Object.freeze({ min: 180, max: 520 }),
 });
 
 export interface QecWorkbenchPersistedState {

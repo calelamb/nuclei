@@ -1,7 +1,8 @@
 import { ChevronDown, ChevronUp, CircleDot, ListChecks, LoaderCircle, Radio } from 'lucide-react';
-import { useCallback, useEffect, useState, type ReactElement } from 'react';
+import { useCallback, useEffect, useRef, useState, type ReactElement } from 'react';
 
 import { resolveQecPanels } from '../../../layout/qecPanelRegistry';
+import { usePlatform } from '../../../platform/PlatformProvider';
 import {
   connectQecDataClient,
   type QecImportClient,
@@ -97,6 +98,18 @@ function cancelProjectOperations(client: QecWorkbenchClient): Promise<void> {
   });
 }
 
+async function retireOwnedClient(
+  client: QecWorkbenchClient,
+  stopEngine: () => Promise<void>,
+): Promise<void> {
+  try {
+    await cancelProjectOperations(client);
+  } finally {
+    client.disconnect?.();
+    await stopEngine();
+  }
+}
+
 function useProjectScope(projectRoot: string | null): void {
   useEffect(() => {
     useQecJobStore.getState().setProjectScope(projectRoot);
@@ -116,11 +129,16 @@ function useImportEngine(
   enabled: boolean,
   provided: QecWorkbenchClient | undefined,
   connectClient: ConnectQecWorkbenchClient,
+  stopEngine: (() => Promise<void>) | null,
 ): EngineState {
   const projectRoot = useProjectStore((state) => state.projectRoot);
   const [attempt, setAttempt] = useState(0);
   const [state, setState] = useState<EngineState>({ client: null, loading: false, error: null, scope: null, retry: null, disconnected: false });
+  const retryInFlight = useRef(false);
+  const retirement = useRef<Promise<void>>(Promise.resolve());
   const retry = useCallback((): void => {
+    if (retryInFlight.current) return;
+    retryInFlight.current = true;
     setState((current) => ({ ...current, client: null, loading: true, error: null, disconnected: false }));
     setAttempt((value) => value + 1);
   }, []);
@@ -131,30 +149,40 @@ function useImportEngine(
     if (!enabled) return undefined;
     if (!projectRoot || __BUILD_TARGET__ === 'web') return undefined;
     let current = true;
-    let connected: QecWorkbenchClient | null = null;
     let unsubscribe: (() => void) | null = null;
-    void connectClient(projectRoot).then(
+    const connection = retirement.current.then(() => connectClient(projectRoot));
+    void connection.then(
       (client) => {
-        connected = client;
         if (current) {
+          retryInFlight.current = false;
           unsubscribe = client.subscribeDisconnect?.((error) => {
-            if (current) setState({ client: null, loading: false, error: error.message, scope: projectRoot, retry, disconnected: true });
+            if (current) {
+              retryInFlight.current = false;
+              setState({ client: null, loading: false, error: error.message, scope: projectRoot, retry, disconnected: true });
+            }
           }) ?? null;
           setState({ client, loading: false, error: null, scope: projectRoot, retry, disconnected: false });
-        } else client.disconnect?.();
+        }
       },
       (error: unknown) => {
-        if (current) setState({ client: null, loading: false, error: error instanceof Error ? error.message : 'QEC Data Engine could not start.', scope: projectRoot, retry, disconnected: false });
+        if (current) {
+          retryInFlight.current = false;
+          setState({ client: null, loading: false, error: error instanceof Error ? error.message : 'QEC Data Engine could not start.', scope: projectRoot, retry, disconnected: false });
+        }
       },
     );
     return () => {
       current = false;
       unsubscribe?.();
-      const retiringClient = connected;
-      if (!retiringClient) return;
-      void cancelProjectOperations(retiringClient).finally(() => retiringClient.disconnect?.());
+      if (!stopEngine) return;
+      const pendingRetirement = connection.then(
+        (client) => retireOwnedClient(client, stopEngine),
+        () => stopEngine(),
+      );
+      void pendingRetirement.catch(() => undefined);
+      retirement.current = pendingRetirement;
     };
-  }, [attempt, connectClient, enabled, projectRoot, provided, retry]);
+  }, [attempt, connectClient, enabled, projectRoot, provided, retry, stopEngine]);
   if (provided) return { client: provided, loading: false, error: null, scope: projectRoot, retry: null, disconnected: false };
   if (!enabled) return { client: null, loading: false, error: null, scope: projectRoot, retry: null, disconnected: false };
   if (!projectRoot) return { client: null, loading: false, error: 'Open a project to start the QEC Data Engine.', scope: null, retry: null, disconnected: false };
@@ -194,7 +222,8 @@ interface QecWorkbenchTrayProps {
   connectClient?: ConnectQecWorkbenchClient;
 }
 
-export function QecWorkbenchTray({ client: providedClient, connectClient = connectQecDataClient }: QecWorkbenchTrayProps = {}): ReactElement {
+export function QecWorkbenchTray({ client: providedClient, connectClient }: QecWorkbenchTrayProps = {}): ReactElement {
+  const platform = usePlatform();
   const collapsed = useQecWorkbenchStore((state) => state.trayCollapsed);
   const toggleCollapsed = useQecWorkbenchStore((state) => state.toggleTrayCollapsed);
   const source = useQecJobStore((state) => state.importSource);
@@ -202,8 +231,28 @@ export function QecWorkbenchTray({ client: providedClient, connectClient = conne
   const jobProjectRoot = useQecJobStore((state) => state.projectRoot);
   const projectRoot = useProjectStore((state) => state.projectRoot);
   const closeImport = useQecJobStore((state) => state.closeImport);
+  const connectOwnedClient = useCallback(
+    (root: string) => {
+      if (!platform.startQecDataEngine) {
+        return Promise.reject(new Error('QEC Data Engine is unavailable on this platform.'));
+      }
+      return connectQecDataClient(root, { launch: platform.startQecDataEngine });
+    },
+    [platform],
+  );
+  const stopOwnedEngine = useCallback(async (): Promise<void> => {
+    await platform.stopQecDataEngine?.();
+  }, [platform]);
   useProjectScope(projectRoot);
-  const engine = useImportEngine(true, providedClient, connectClient);
+  const ownsEngine = !providedClient && !connectClient
+    && Boolean(platform.startQecDataEngine && platform.stopQecDataEngine);
+  const engineEnabled = Boolean(providedClient || connectClient || ownsEngine);
+  const engine = useImportEngine(
+    engineEnabled,
+    providedClient,
+    connectClient ?? connectOwnedClient,
+    ownsEngine ? stopOwnedEngine : null,
+  );
   useProvidedClientCleanup(providedClient, projectRoot);
   useSessionCatalog(engine.client, projectRoot);
   const scopedSource = jobProjectRoot === projectRoot ? source : null;
@@ -216,7 +265,7 @@ export function QecWorkbenchTray({ client: providedClient, connectClient = conne
   return (
     <section className={`qec-tray qec-tray--${expanded ? 'expanded' : 'collapsed'}${scopedSource ? ' qec-tray--import' : ''}`} aria-label="QEC jobs and streams">
       <TrayHeader expanded={expanded} importing={scopedSource !== null} onToggle={toggleCollapsed} />
-      {!scopedSource && expanded && (engine.disconnected
+      {!scopedSource && expanded && (!engine.client && (engine.loading || engine.retry || engine.disconnected)
         ? <EngineNotice state={engine} />
         : <TrayContent client={engine.client} projectRoot={projectRoot} />)}
       {scopedSource && <div className="qec-tray__import-host" hidden={!expanded}>

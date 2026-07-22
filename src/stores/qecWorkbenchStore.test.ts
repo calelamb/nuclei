@@ -40,7 +40,7 @@ describe('qecWorkbenchStore', () => {
     expect(useQecWorkbenchStore.getState()).toMatchObject({
       sourceWidth: 220,
       inspectorWidth: 560,
-      trayHeight: 160,
+      trayHeight: 180,
     });
   });
 

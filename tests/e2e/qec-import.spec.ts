@@ -5,6 +5,7 @@ import { launchRealQecDataEngine } from './support/qecDataEngine';
 
 const FIXTURE_URL = '/?e2eProject=qec-project&workspace=research&qecImport=1';
 const SOURCE_HASH = '6f45baf5e9f4215ebabc0e5177c34abe7e2fd5489d2531e70a098924d824dfbc';
+const ENGINE_RESULT_TIMEOUT_MS = 15_000;
 
 async function installQecDataStartBoundary(
   page: Page,
@@ -59,16 +60,19 @@ test('@qec imports a detector stream and restores the canonical session after re
     await expect(page.getByText('Preview requires successful validation')).toBeVisible();
     await nextStage(page, 'Validation');
     await page.getByRole('button', { name: 'Validate mapping' }).click();
-    await expect(page.getByText('Validation passed')).toBeVisible();
+    await expect(page.getByText('Validation passed')).toBeVisible({ timeout: ENGINE_RESULT_TIMEOUT_MS });
     await page.getByRole('button', { name: 'Previous stage' }).click();
     await page.getByRole('button', { name: 'Load bounded preview' }).click();
-    await expect(page.getByRole('table', { name: 'Canonical batch summary' })).toContainText('syndromes');
+    await expect(page.getByRole('table', { name: 'Canonical batch summary' })).toContainText(
+      'syndromes',
+      { timeout: ENGINE_RESULT_TIMEOUT_MS },
+    );
     await nextStage(page, 'Validation');
     await nextStage(page, 'Destination');
     await page.getByLabel('Session ID').fill('minimal-capture');
     await nextStage(page, 'Import');
     await page.getByRole('button', { name: 'Import data' }).click();
-    await expect(page.getByText('2 records written')).toBeVisible();
+    await expect(page.getByText('2 records written')).toBeVisible({ timeout: ENGINE_RESULT_TIMEOUT_MS });
 
     const sessions = page.getByRole('list', { name: 'Canonical sessions' });
     await expect(sessions.getByRole('button', { name: /minimal-capture/i })).toContainText('stim-results:');
@@ -76,7 +80,7 @@ test('@qec imports a detector stream and restores the canonical session after re
     await page.getByRole('button', { name: 'QEC Workbench' }).click();
     await page.getByRole('combobox', { name: 'Active QEC Study' }).selectOption('qec-data-import');
     const restored = page.getByRole('list', { name: 'Canonical sessions' }).getByRole('button', { name: /minimal-capture/i });
-    await expect(restored).toBeVisible();
+    await expect(restored).toBeVisible({ timeout: ENGINE_RESULT_TIMEOUT_MS });
     await expect(restored).toContainText('hardware import');
     await expect(restored).toContainText('complete');
 

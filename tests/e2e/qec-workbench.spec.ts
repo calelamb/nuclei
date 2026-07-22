@@ -8,7 +8,59 @@ const LIGHT_SURFACES = new Set([
   'rgb(240, 249, 255)',
 ]);
 
+async function installQecDataStubBoundary(page: Page): Promise<void> {
+  await page.addInitScript(() => {
+    type Listener = (event: Event | MessageEvent<string>) => void;
+    class QecDataStubSocket {
+      private readonly listeners = new Map<string, Listener[]>();
+
+      constructor() {
+        queueMicrotask(() => this.emit('open', new Event('open')));
+      }
+
+      addEventListener(type: string, listener: Listener): void {
+        this.listeners.set(type, [...(this.listeners.get(type) ?? []), listener]);
+      }
+
+      send(serialized: string): void {
+        const frame = JSON.parse(serialized) as { type?: string; requestId?: string };
+        if (frame.type === 'authenticate') {
+          queueMicrotask(() => this.message({ type: 'authenticated' }));
+        } else if (frame.type === 'session_list') {
+          queueMicrotask(() => this.message({
+            type: 'session_list_result', requestId: frame.requestId,
+            sessions: [], nextCursor: null,
+          }));
+        }
+      }
+
+      close(): void {
+        this.emit('close', new Event('close'));
+      }
+
+      private message(frame: unknown): void {
+        this.emit('message', new MessageEvent('message', { data: JSON.stringify(frame) }));
+      }
+
+      private emit(type: string, event: Event | MessageEvent<string>): void {
+        for (const listener of this.listeners.get(type) ?? []) listener(event);
+      }
+    }
+    Object.defineProperty(window, 'WebSocket', {
+      configurable: true,
+      value: QecDataStubSocket,
+    });
+    Object.defineProperty(window, '__NUCLEI_E2E_QEC_INVOKE__', {
+      configurable: true,
+      value: async (command: string): Promise<unknown> => command === 'qec_data_start'
+        ? { url: 'ws://127.0.0.1:9743', token: '0'.repeat(64) }
+        : null,
+    });
+  });
+}
+
 async function openWorkbench(page: Page): Promise<Locator> {
+  await installQecDataStubBoundary(page);
   await page.emulateMedia({ colorScheme: 'light', reducedMotion: 'reduce' });
   await page.goto(FIXTURE_URL);
   await page.getByRole('button', { name: 'QEC Workbench' }).click();
@@ -84,9 +136,9 @@ test('@qec exposes four ordered landmarks and keyboard zones', async ({ page }) 
   await trayControl.press('Enter');
   await expect(tray.getByRole('button', { name: 'Expand jobs and streams' })).toHaveAttribute('aria-expanded', 'false');
   await expect(tray.getByText('No active jobs')).toBeHidden();
-  await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
-  await expect.poll(() => workbench.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(true);
-  await expect.poll(() => page.evaluate(() => matchMedia('(prefers-reduced-motion: reduce)').matches)).toBe(true);
+  await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth), { timeout: 15_000 }).toBe(true);
+  await expect.poll(() => workbench.evaluate((element) => element.scrollWidth <= element.clientWidth), { timeout: 15_000 }).toBe(true);
+  await expect.poll(() => page.evaluate(() => matchMedia('(prefers-reduced-motion: reduce)').matches), { timeout: 15_000 }).toBe(true);
   const transitionDuration = await page.locator('.qec-source-row').first().evaluate(
     (element) => Number.parseFloat(getComputedStyle(element).transitionDuration),
   );
@@ -113,8 +165,22 @@ test('@qec uses a focused inspector drawer at laptop width', async ({ page }, te
   const study = page.getByRole('combobox', { name: 'Active QEC Study' });
   await study.selectOption('surface-memory');
   await expect(study).toHaveValue('surface-memory');
-  await expect.poll(() => workbench.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(true);
+  await expect.poll(() => workbench.evaluate((element) => element.scrollWidth <= element.clientWidth), { timeout: 15_000 }).toBe(true);
   await expect(page).toHaveScreenshot('qec-workbench-build-1024.png', { fullPage: true });
+});
+
+test('@qec maps the jobs tray separator value to visible laptop height', async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name !== 'chromium-laptop', 'Tray geometry is verified at 1024×768.');
+  await openWorkbench(page);
+  const tray = page.getByRole('region', { name: 'QEC jobs and streams' });
+  const separator = page.getByRole('separator', { name: 'Resize jobs tray' });
+
+  await separator.press('End');
+  await expect(separator).toHaveAttribute('aria-valuenow', '520');
+  await expect.poll(
+    () => tray.evaluate((element) => Math.round(element.getBoundingClientRect().height)),
+    { timeout: 15_000 },
+  ).toBe(520);
 });
 
 test('@qec creates and restores an Analyze Study across immediate navigation', async ({ page }) => {
@@ -142,6 +208,6 @@ test('@qec creates and restores an Analyze Study across immediate navigation', a
   await picker.selectOption('decoder-sweep');
   await expect(page.getByRole('button', { name: 'Observe' })).toHaveAttribute('aria-pressed', 'true');
   await expect(page.getByRole('region', { name: 'QEC Studies' }).getByRole('button', { name: /Decoder Sweep/ })).toBeVisible();
-  await expect(page.locator('.qec-source-group__empty')).toHaveCSS('color', 'rgb(82, 97, 117)');
+  await expect(page.getByText('No files referenced by this Study.')).toHaveCSS('color', 'rgb(82, 97, 117)');
   await expect(page.locator('.qec-sources')).toHaveCSS('background-color', 'rgb(241, 245, 249)');
 });

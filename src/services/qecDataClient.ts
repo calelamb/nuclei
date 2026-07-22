@@ -1,5 +1,3 @@
-import { invoke } from '@tauri-apps/api/core';
-
 import {
   QEC_DATA_MAX_FRAME_BYTES,
   QEC_DATA_URL,
@@ -492,20 +490,16 @@ export type QecImportClient = Pick<QecDataClient, 'probe' | 'validate' | 'previe
 export type QecImportInput = ImportRequestInput;
 
 interface ConnectQecDataOptions {
-  launch?: (projectRoot: string) => Promise<unknown>;
+  launch: (projectRoot: string) => Promise<unknown>;
   clientDependencies?: ClientDependencies;
-}
-
-async function launchFromTauri(projectRoot: string): Promise<unknown> {
-  return await invoke<unknown>('qec_data_start', { projectRoot });
 }
 
 export async function connectQecDataClient(
   projectRoot: string,
-  options: ConnectQecDataOptions = {},
+  options: ConnectQecDataOptions,
 ): Promise<QecDataClient> {
   if (!projectRoot.trim()) throw new QecDataClientError('invalid_project_root', 'Open a project before starting the QEC Data Engine.');
-  const endpoint = await (options.launch ?? launchFromTauri)(projectRoot);
+  const endpoint = await options.launch(projectRoot);
   const client = new QecDataClient(endpoint, options.clientDependencies);
   await client.connect();
   return client;

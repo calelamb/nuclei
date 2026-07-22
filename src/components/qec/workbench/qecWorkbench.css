@@ -660,7 +660,7 @@
 }
 
 .qec-tray--expanded {
-  height: min(var(--qec-tray-height), 34vh);
+  height: var(--qec-tray-height);
 }
 
 .qec-tray--collapsed {
@@ -776,10 +776,6 @@
 
   .qec-research-trail {
     width: 100%; max-width: none;
-  }
-
-  .qec-tray--expanded {
-    height: min(var(--qec-tray-height), 38vh);
   }
 
   .qec-tray--collapsed {

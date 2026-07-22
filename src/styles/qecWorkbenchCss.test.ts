@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { QEC_LIGHT_TOKENS } from './qecTokens';
+import { QEC_WORKBENCH_DIMENSIONS } from '../stores/qecWorkbenchStore';
 
 const qecStyles = readFileSync(
   resolve(process.cwd(), 'src/components/qec/workbench/qecWorkbench.css'),
@@ -33,5 +34,11 @@ describe('QEC workbench CSS tokens', () => {
     expect(qecStyles).toMatch(
       /@media \(prefers-reduced-motion: reduce\)[\s\S]*?transition-duration: 0\.01ms !important;/,
     );
+  });
+
+  it('maps the persisted 180–520 px tray contract directly to rendered height', () => {
+    expect(QEC_WORKBENCH_DIMENSIONS.tray).toEqual({ min: 180, max: 520 });
+    expect(qecStyles).toMatch(/\.qec-tray--expanded\s*{[^}]*height: var\(--qec-tray-height\);/);
+    expect(qecStyles).not.toMatch(/\.qec-tray--expanded\s*{[^}]*height: min\(/);
   });
 });
