@@ -76,5 +76,6 @@ design-system/
 
 # Brainstorming scratch (visual companion output)
 .superpowers/
+.worktrees/
 nuclei-signing-backup/
 .venv-nuclei/
