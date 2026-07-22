@@ -202,6 +202,34 @@ def test_optional_fixed_width_columns_and_ranges_are_materialized(
     assert table.column("timestamp_ns").to_pylist() == [100, 101, 102]
 
 
+def test_storage_rejects_timestamp_outside_signed_int64_before_arrow_write(
+    tmp_path: Path,
+) -> None:
+    storage = create_storage(tmp_path)
+    batch = replace(
+        sample_batch(count=1),
+        source_timestamps=QualifiedTimestamps(
+            TimestampSeries((2**63,), "ns"), ValueStatus.MEASURED
+        ),
+    )
+
+    with pytest.raises(ValueError, match="signed 64-bit"):
+        storage.append_batch(batch)
+
+
+def test_storage_rejects_round_outside_uint32_before_arrow_write(
+    tmp_path: Path,
+) -> None:
+    storage = create_storage(tmp_path)
+    batch = replace(
+        sample_batch(count=1),
+        round_range=QualifiedRange(IndexRange(2**32, 2**32 + 1), ValueStatus.MEASURED),
+    )
+
+    with pytest.raises(ValueError, match="round values must fit unsigned 32-bit"):
+        storage.append_batch(batch)
+
+
 def test_pending_create_is_exclusive_and_schema_change_requires_new_segment(
     tmp_path: Path,
 ) -> None:

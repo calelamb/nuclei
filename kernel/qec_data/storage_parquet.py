@@ -32,6 +32,9 @@ from .storage_typed_parquet import inspect_typed_partition, write_typed_pending
 RECORD_KIND = SYNDROMES
 CanonicalPayload: TypeAlias = SyndromeBatch | CampaignPointBatch | CalibrationBatch
 MAX_PARTITION_ROWS = 65_536
+INT64_MIN = -(2**63)
+INT64_MAX = 2**63 - 1
+UINT32_EXCLUSIVE_END = 2**32
 PACKED_FIELDS = ("observables", "measurements", "erasures", "leakage", "heralds")
 PARQUET_OPTIONS: dict[str, object] = {
     "version": "2.6",
@@ -154,6 +157,8 @@ def _timestamp_array(batch: SyndromeBatch) -> pa.Array:
         raise ValueError("source timestamps must use integral ns values")
     if any(not float(value).is_integer() for value in series.values):
         raise ValueError("source timestamps must use integral ns values")
+    if any(not INT64_MIN <= value <= INT64_MAX for value in series.values):
+        raise ValueError("source timestamps must fit signed 64-bit storage")
     return pa.array((int(value) for value in series.values), type=pa.int64())
 
 
@@ -167,6 +172,8 @@ def _record_batch(batch: SyndromeBatch, schema: pa.Schema) -> pa.RecordBatch:
         rounds = batch.round_range.value
         if rounds.end - rounds.start != batch.record_count:
             raise ValueError("round range must equal record_count")
+        if rounds.start < 0 or rounds.end > UINT32_EXCLUSIVE_END:
+            raise ValueError("round values must fit unsigned 32-bit storage")
         arrays.append(pa.array(range(rounds.start, rounds.end), type=pa.uint32()))
     arrays.append(_packed_array(batch.detector_events, batch.record_count))
     for name in PACKED_FIELDS:

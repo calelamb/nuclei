@@ -35,6 +35,7 @@ from kernel.qec_data.server import (
 from kernel.qec_data.storage import SessionStorage
 from kernel.tests.qec_data.test_storage import (
     create_storage,
+    sample_batch,
     sample_identity,
     sample_session,
 )
@@ -662,6 +663,34 @@ def test_import_session_finalization_is_atomic_and_never_leaves_importing(
     finalized = session_from_mapping(manifest)
     assert finalized.status is terminal_status
     assert finalized.completed_at.value is not None
+
+
+def test_successful_finalization_publishes_committed_segments_in_manifest(
+    tmp_path: Path,
+) -> None:
+    importing = replace(
+        sample_session(),
+        status=SessionStatus.IMPORTING,
+        started_at=QualifiedText(sample_session().created_at, ValueStatus.MEASURED),
+    )
+    storage = SessionStorage.create(tmp_path, importing, sample_identity())
+    storage.append_batch(sample_batch())
+    storage.commit_segment("segment-0001")
+
+    finalize_session_manifest(storage.session_root, SessionStatus.COMPLETE)
+
+    manifest = session_from_mapping(
+        loads_canonical_json(
+            (storage.session_root / "manifest.json").read_text(encoding="utf-8")
+        )
+    )
+    journal = loads_canonical_json(
+        (storage.session_root / "journal.json").read_text(encoding="utf-8")
+    )
+    assert manifest.segments == ("segment-0001",)
+    assert set(manifest.segments) == {
+        str(segment["segment_id"]) for segment in journal["segments"]
+    }
 
 
 @pytest.mark.asyncio

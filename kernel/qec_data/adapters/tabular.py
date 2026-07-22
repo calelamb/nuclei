@@ -8,6 +8,7 @@ import math
 from collections.abc import Iterator
 from dataclasses import dataclass
 from datetime import date, datetime, time
+from decimal import Decimal, InvalidOperation
 from pathlib import Path
 
 from kernel.qec_data.adapters.base import (
@@ -99,6 +100,15 @@ REQUIRED_CALIBRATION_FIELDS = frozenset(
         "effective_start",
     }
 )
+TIMESTAMP_UNIT_TO_NS = {
+    "ns": Decimal(1),
+    "us": Decimal(1_000),
+    "ms": Decimal(1_000_000),
+    "s": Decimal(1_000_000_000),
+}
+INT64_MIN = -(2**63)
+INT64_MAX = 2**63 - 1
+UINT32_MAX = 2**32 - 1
 
 
 @dataclass(frozen=True, slots=True)
@@ -106,7 +116,7 @@ class _SyndromeRow:
     sequence: int
     detectors: bytes
     observables: bytes | None
-    timestamp: float | None
+    timestamp: int | None
     round_index: int | None
     source: _SourceRow
 
@@ -168,6 +178,15 @@ def _validate_mapping(mapping: ImportMapping) -> None:
             raise ValueError("bit_order must explicitly be lsb0")
         if "timestamp" in fields and not options.get("timestamp_unit"):
             raise ValueError("timestamp_unit is required when timestamp is mapped")
+        if "timestamp" in fields:
+            unit = options.get("timestamp_unit")
+            if unit not in TIMESTAMP_UNIT_TO_NS:
+                supported = ", ".join(TIMESTAMP_UNIT_TO_NS)
+                raise ValueError(
+                    f"timestamp_unit must be one of {supported}; values are stored as ns"
+                )
+        elif "timestamp_unit" in options:
+            raise ValueError("timestamp_unit requires a timestamp mapping")
         if "observable_count" in options and "observable_events" not in fields:
             raise ValueError("observable_count requires observable_events mapping")
         if "observable_events" in fields:
@@ -217,6 +236,37 @@ def _finite_number(value: object, name: str) -> float:
     return number
 
 
+def _timestamp_ns(value: object, unit: object) -> int:
+    if isinstance(value, bool) or not isinstance(value, (int, float, str, Decimal)):
+        raise ValueError("timestamp must be a number")
+    try:
+        source_value = Decimal(str(value).strip())
+    except InvalidOperation as error:
+        raise ValueError("timestamp must be a number") from error
+    if not source_value.is_finite():
+        raise ValueError("timestamp must be finite")
+    multiplier = TIMESTAMP_UNIT_TO_NS.get(str(unit))
+    if multiplier is None:
+        raise ValueError("timestamp_unit is unsupported")
+    if (
+        not Decimal(INT64_MIN) / multiplier
+        <= source_value
+        <= Decimal(INT64_MAX) / multiplier
+    ):
+        raise ValueError("timestamp nanoseconds must fit signed 64-bit storage")
+    nanoseconds = source_value * multiplier
+    if nanoseconds != nanoseconds.to_integral_value():
+        raise ValueError("timestamp must resolve to whole nanoseconds without rounding")
+    return int(nanoseconds)
+
+
+def _round_index(value: object) -> int:
+    normalized = _exact_int(value, "round")
+    if not 0 <= normalized <= UINT32_MAX:
+        raise ValueError(f"round must be between 0 and {UINT32_MAX}")
+    return normalized
+
+
 def _packed_bits(value: object, width: int, name: str) -> bytes:
     stride = (width + 7) // 8
     if type(value) is bytes:
@@ -256,14 +306,14 @@ def _mapped_syndrome(row: _SourceRow, mapping: ImportMapping) -> _SyndromeRow:
         ),
         observables=observables,
         timestamp=(
-            _finite_number(_column(row, fields, "timestamp"), "timestamp")
+            _timestamp_ns(
+                _column(row, fields, "timestamp"), options.get("timestamp_unit")
+            )
             if "timestamp" in fields
             else None
         ),
         round_index=(
-            _exact_int(_column(row, fields, "round"), "round")
-            if "round" in fields
-            else None
+            _round_index(_column(row, fields, "round")) if "round" in fields else None
         ),
         source=row,
     )
@@ -317,13 +367,13 @@ def _row_observables(
 
 
 def _row_timestamps(
-    rows: tuple[_SyndromeRow, ...], options: dict[str, object]
+    rows: tuple[_SyndromeRow, ...],
 ) -> QualifiedTimestamps:
     if rows[0].timestamp is None:
         return QualifiedTimestamps(None, ValueStatus.UNAVAILABLE)
     series = TimestampSeries(
-        tuple(float(row.timestamp) for row in rows),
-        _text_option(options, "timestamp_unit", ""),
+        tuple(int(row.timestamp) for row in rows),
+        "ns",
     )
     return QualifiedTimestamps(series, ValueStatus.MEASURED)
 
@@ -365,7 +415,7 @@ def _syndrome_payload(
             IndexRange(first_sequence, sequence_end), ValueStatus.MEASURED
         ),
         round_range=_row_rounds(rows),
-        source_timestamps=_row_timestamps(rows, options),
+        source_timestamps=_row_timestamps(rows),
         observables=_row_observables(rows, options),
         data_quality=(
             (DataQualityFlag.GAP_BEFORE,) if gap_before else (DataQualityFlag.COMPLETE,)

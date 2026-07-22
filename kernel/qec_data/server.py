@@ -56,6 +56,7 @@ from .queries import (
 from .storage import SessionStorage
 from .storage_durability import DurableMover
 from .storage_lineage import SegmentKey, payload_kind
+from .storage_journal import journal_segments, validate_journal
 from .storage_metadata import publish_json
 from .source_security import (
     close_project_directory,
@@ -671,7 +672,14 @@ def _semantic_identity(
     source_hash: str, adapter: Any, mapping: ImportMapping
 ) -> DatasetSemanticIdentity:
     options = dict(mapping.options)
-    fields = mapping.fields
+    field_aliases = {
+        "detector_events": "detectors",
+        "observable_events": "observables",
+    }
+    fields = tuple(
+        (field_aliases.get(name, name), source_name)
+        for name, source_name in mapping.fields
+    )
     if not fields:
         output = adapter.manifest.output_kinds[0]
         fields = (
@@ -748,10 +756,20 @@ def finalize_session_manifest(session_root: Path, status: SessionStatus) -> None
     current = session_from_mapping(
         loads_canonical_json(manifest_path.read_text(encoding="utf-8"))
     )
+    journal = validate_journal(
+        loads_canonical_json(
+            (session_root / "journal.json").read_text(encoding="utf-8")
+        ),
+        current.session_id,
+    )
+    committed_segments = tuple(
+        sorted({str(item["segment_id"]) for item in journal_segments(journal)})
+    )
     finalized = replace(
         current,
         status=status,
         completed_at=QualifiedText(utc_now(), ValueStatus.MEASURED),
+        segments=committed_segments,
     )
     publish_json(
         manifest_path,

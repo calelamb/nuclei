@@ -20,6 +20,7 @@ from kernel.qec_data.adapters.sinter_csv import SinterCsvAdapter
 from kernel.qec_data.adapters.stim_results import StimResultsAdapter
 from kernel.qec_data.adapters.tabular import TabularAdapter
 from kernel.qec_data.model_validation import DataQualityFlag, ValueStatus
+from kernel.qec_data.server import _semantic_identity
 from kernel.qec_data.models import (
     CalibrationBatch,
     CalibrationQuality,
@@ -52,13 +53,11 @@ def _mapping(*, with_time: bool = True) -> ImportMapping:
     )
 
 
-def test_tabular_csv_requires_explicit_mapping_and_preserves_time_unit(
+def test_tabular_csv_requires_explicit_mapping_and_normalizes_time_unit(
     tmp_path: Path,
 ) -> None:
     source = tmp_path / "hardware.csv"
-    source.write_text(
-        "seq,clock,syndrome\n7,100.5,101\n8,101.5,000\n", encoding="utf-8"
-    )
+    source.write_text("seq,clock,syndrome\n7,100,101\n8,101,000\n", encoding="utf-8")
     chunks = tuple(TabularAdapter().import_batches(source, _mapping()))
     assert all(isinstance(chunk, ImportChunk) for chunk in chunks)
     batches = tuple(chunk.payload for chunk in chunks)
@@ -77,6 +76,160 @@ def test_tabular_csv_requires_explicit_mapping_and_preserves_time_unit(
         ),
         precision=SourceSpanPrecision.EXACT,
     )
+
+
+def test_tabular_syndrome_identity_uses_canonical_storage_field_names() -> None:
+    mapping = ImportMapping(
+        fields=(
+            ("sequence", "shot_index"),
+            ("detector_events", "syndrome"),
+            ("observable_events", "logical"),
+            ("timestamp", "clock"),
+        ),
+        options=(
+            ("output_kind", "syndromes"),
+            ("detector_count", 3),
+            ("observable_count", 1),
+            ("bit_order", "lsb0"),
+            ("timestamp_unit", "us"),
+        ),
+    )
+
+    identity = _semantic_identity("a" * 64, TabularAdapter(), mapping)
+
+    assert dict(identity.mapping) == {
+        "sequence": "shot_index",
+        "detectors": "syndrome",
+        "observables": "logical",
+        "timestamp": "clock",
+    }
+    assert identity.units == (("timestamp", "us"),)
+    nanosecond_mapping = ImportMapping(
+        fields=mapping.fields,
+        options=tuple(
+            (name, "ns" if name == "timestamp_unit" else value)
+            for name, value in mapping.options
+        ),
+    )
+    assert _semantic_identity(
+        "a" * 64, TabularAdapter(), nanosecond_mapping
+    ) != identity
+
+
+def test_tabular_calibration_identity_includes_qualified_status_columns() -> None:
+    fields = (
+        ("calibration_id", "cal_id"),
+        ("scope_kind", "scope_kind"),
+        ("scope_id", "scope_id"),
+        ("parameter_name", "name"),
+        ("semantic_id", "semantic"),
+        ("value", "value"),
+        ("value_status", "value_status"),
+        ("unit", "unit"),
+        ("unit_status", "unit_status"),
+        ("uncertainty", "sigma"),
+        ("uncertainty_status", "sigma_status"),
+        ("quality", "quality"),
+        ("source_system", "system"),
+        ("effective_start", "effective"),
+    )
+    mapping = ImportMapping(
+        fields=fields,
+        options=(("output_kind", "calibration"),),
+    )
+
+    identity = _semantic_identity("a" * 64, TabularAdapter(), mapping)
+
+    identity_mapping = dict(identity.mapping)
+    assert identity_mapping["value_status"] == "value_status"
+    assert identity_mapping["unit_status"] == "unit_status"
+    assert identity_mapping["uncertainty_status"] == "sigma_status"
+
+
+def test_tabular_converts_supported_timestamp_units_losslessly_to_ns(
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "hardware.csv"
+    source.write_text("seq,clock,syndrome\n0,1.5,101\n", encoding="utf-8")
+    mapping = ImportMapping(
+        fields=(
+            ("sequence", "seq"),
+            ("detector_events", "syndrome"),
+            ("timestamp", "clock"),
+        ),
+        options=(
+            ("output_kind", "syndromes"),
+            ("detector_count", 3),
+            ("bit_order", "lsb0"),
+            ("timestamp_unit", "s"),
+        ),
+    )
+
+    report = TabularAdapter().validate(source, mapping)
+    chunk = next(TabularAdapter().import_batches(source, mapping))
+    timestamps = chunk.payload.source_timestamps.value
+
+    assert report.valid
+    assert timestamps is not None
+    assert timestamps.unit == "ns"
+    assert timestamps.values == (1_500_000_000,)
+
+
+@pytest.mark.parametrize(
+    ("clock", "unit", "message"),
+    (
+        ("100.5", "ns", "whole nanoseconds"),
+        ("1", "fortnight", "timestamp_unit"),
+        (str(2**63), "ns", "signed 64-bit"),
+    ),
+)
+def test_tabular_rejects_timestamps_that_cannot_be_stored_losslessly(
+    tmp_path: Path, clock: str, unit: str, message: str
+) -> None:
+    source = tmp_path / "hardware.csv"
+    source.write_text(f"seq,clock,syndrome\n0,{clock},101\n", encoding="utf-8")
+    mapping = ImportMapping(
+        fields=(
+            ("sequence", "seq"),
+            ("detector_events", "syndrome"),
+            ("timestamp", "clock"),
+        ),
+        options=(
+            ("output_kind", "syndromes"),
+            ("detector_count", 3),
+            ("bit_order", "lsb0"),
+            ("timestamp_unit", unit),
+        ),
+    )
+
+    report = TabularAdapter().validate(source, mapping)
+
+    assert not report.valid
+    assert message in report.issues[0].message
+    with pytest.raises(ValueError, match=message):
+        TabularAdapter().preview(source, mapping, 1)
+
+
+def test_tabular_rejects_rounds_outside_parquet_uint32_range(tmp_path: Path) -> None:
+    source = tmp_path / "hardware.csv"
+    source.write_text(f"seq,round,syndrome\n0,{2**32},101\n", encoding="utf-8")
+    mapping = ImportMapping(
+        fields=(
+            ("sequence", "seq"),
+            ("detector_events", "syndrome"),
+            ("round", "round"),
+        ),
+        options=(
+            ("output_kind", "syndromes"),
+            ("detector_count", 3),
+            ("bit_order", "lsb0"),
+        ),
+    )
+
+    report = TabularAdapter().validate(source, mapping)
+
+    assert not report.valid
+    assert "round must be between 0 and 4294967295" in report.issues[0].message
 
 
 def test_tabular_ndjson_and_gap_provenance(tmp_path: Path) -> None:
@@ -212,7 +365,7 @@ def test_arrow_and_parquet_normalize_at_pyarrow_18_floor(
         "hardware.parquet" if container_kind == "parquet" else "hardware.arrow"
     )
     table = pa.table(
-        {"seq": [7, 8], "clock": [100.5, 101.5], "syndrome": [b"\x05", b"\x00"]}
+        {"seq": [7, 8], "clock": [100.0, 101.0], "syndrome": [b"\x05", b"\x00"]}
     )
     if container_kind == "parquet":
         pq.write_table(table, source, write_page_checksum=True)
@@ -255,7 +408,9 @@ def test_arrow_and_parquet_decode_from_a_pathless_capability(
                 writer.write_table(table)
 
     capability = _PathlessCapability(source)
-    chunks = tuple(TabularAdapter().import_batches(capability, _mapping(with_time=False)))
+    chunks = tuple(
+        TabularAdapter().import_batches(capability, _mapping(with_time=False))
+    )
 
     assert chunks[0].payload.detector_events.data == b"\x05"
 
@@ -366,7 +521,7 @@ def test_parquet_row_group_metadata_bounds_materialization(
 def test_tabular_csv_multiline_record_uses_csv_record_ordinal(tmp_path: Path) -> None:
     source = tmp_path / "multiline.csv"
     source.write_text(
-        ' seq ,clock,syndrome,note\n7,100.5,101,"first\nsecond"\n',
+        ' seq ,clock,syndrome,note\n7,100,101,"first\nsecond"\n',
         encoding="utf-8",
     )
     chunk = next(TabularAdapter().import_batches(source, _mapping()))

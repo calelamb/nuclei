@@ -88,13 +88,15 @@ test('@qec imports a detector stream and restores the canonical session after re
     expect(manifest).toMatchObject({
       session_id: 'minimal-capture', kind: 'hardware_import', status: 'complete',
       adapter: { id: 'stim-results', version: '1' },
+      segments: ['segment-0001'],
     });
     const journal = JSON.parse(readFileSync(journalPath, 'utf8')) as {
       generation: number;
-      segments: Array<{ partitions: Array<{ path: string; rows: number }> }>;
+      segments: Array<{ segment_id: string; partitions: Array<{ path: string; rows: number }> }>;
     };
     expect(journal.generation).toBe(1);
     expect(journal.segments).toHaveLength(1);
+    expect(manifest.segments).toEqual(journal.segments.map((segment) => segment.segment_id));
     expect(journal.segments[0]?.partitions).toHaveLength(1);
     const partition = journal.segments[0]?.partitions[0];
     expect(partition?.rows).toBe(2);
