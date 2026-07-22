@@ -75,6 +75,23 @@ def test_lineage_arrays_are_bounded_by_schema() -> None:
         )
 
 
+def test_lineage_aggregate_limit_is_documented_for_executable_validators() -> None:
+    comment = _load("import-chunk.schema.json")["$comment"]
+    assert "2,048" in comment
+    assert "cannot express" in comment
+
+
+def test_source_id_length_is_bounded_by_schema() -> None:
+    span = {
+        "source_id": "x" * 4_097,
+        "row_range": None,
+        "byte_ranges": [{"start": 0, "end": 1}],
+        "precision": "exact",
+    }
+    with pytest.raises(ValidationError):
+        _validator("source-span.schema.json").validate(span)
+
+
 def test_campaign_json_documents_have_schema_length_caps() -> None:
     batch = _load("fixtures/minimal-campaign-point-batch.json")
     record = batch["records"][0]

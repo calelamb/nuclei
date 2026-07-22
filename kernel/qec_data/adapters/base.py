@@ -35,6 +35,7 @@ MAX_IMPORT_CHUNK_RECORDS = 65_536
 MAX_SOURCE_SPAN_ITEMS = 1_024
 MAX_TOTAL_SOURCE_RANGES = 2_048
 MAX_SOURCE_SPANS_BYTES = 65_536
+MAX_SOURCE_ID_CHARACTERS = 4_096
 CANONICAL_OUTPUT_KINDS = frozenset({"syndromes", "campaign_points", "calibrations"})
 
 
@@ -255,6 +256,10 @@ class SourceSpan:
 
     def __post_init__(self) -> None:
         _require_text("source span source id", self.source_id)
+        if len(self.source_id) > MAX_SOURCE_ID_CHARACTERS:
+            raise ValueError(
+                "source span source id may contain at most 4,096 characters"
+            )
         _require_tuple("source span byte ranges", self.byte_ranges)
         if not self.byte_ranges:
             raise ValueError("source span byte ranges must not be empty")
@@ -310,9 +315,11 @@ class ImportChunk:
             raise ValueError("import chunk may contain at most 1,024 source spans")
         if not all(type(span) is SourceSpan for span in self.source_spans):
             raise TypeError("import chunk source spans must contain SourceSpan")
-        total_ranges = sum(len(span.byte_ranges) for span in self.source_spans)
-        if total_ranges > MAX_TOTAL_SOURCE_RANGES:
-            raise ValueError("import chunk exceeds 2,048 total source ranges")
+        total_ranges = 0
+        for span in self.source_spans:
+            total_ranges += len(span.byte_ranges)
+            if total_ranges > MAX_TOTAL_SOURCE_RANGES:
+                raise ValueError("import chunk exceeds 2,048 total source ranges")
         if self.payload.record_count > MAX_IMPORT_CHUNK_RECORDS:
             raise ValueError("import chunks may contain at most 65,536 records")
         lineage = canonical_json_bytes(_source_spans_value(self.source_spans))

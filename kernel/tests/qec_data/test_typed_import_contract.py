@@ -1,7 +1,10 @@
+from collections.abc import Mapping, Sequence
 from dataclasses import replace
 
 import pytest
 
+import kernel.qec_data.adapters.base as adapter_base_module
+import kernel.qec_data.json_document as json_document_module
 from kernel.qec_data.adapters.base import (
     AdapterCapability,
     AdapterManifest,
@@ -194,6 +197,50 @@ def test_lineage_collections_are_bounded() -> None:
         ImportChunk(_campaign_batch(), too_many_ranges)
 
 
+def test_source_id_bound_is_checked_before_lineage_serialization(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        adapter_base_module,
+        "canonical_json_bytes",
+        lambda value: (_ for _ in ()).throw(
+            AssertionError("lineage encoder must not run")
+        ),
+    )
+    with pytest.raises(ValueError, match="source id"):
+        ImportChunk(
+            _campaign_batch(),
+            (
+                SourceSpan(
+                    "x" * (adapter_base_module.MAX_SOURCE_ID_CHARACTERS + 1),
+                    (IndexRange(0, 1),),
+                ),
+            ),
+        )
+
+
+def test_total_source_range_bound_short_circuits() -> None:
+    class ExplodingRanges:
+        def __len__(self) -> int:
+            raise AssertionError("range accumulation did not short-circuit")
+
+    full_ranges = tuple(
+        IndexRange(index * 2, index * 2 + 1)
+        for index in range(adapter_base_module.MAX_SOURCE_SPAN_ITEMS)
+    )
+    unreachable_span = SourceSpan("unreachable", (IndexRange(0, 1),))
+    object.__setattr__(unreachable_span, "byte_ranges", ExplodingRanges())
+    spans = (
+        SourceSpan("capture-1", full_ranges),
+        SourceSpan("capture-2", full_ranges),
+        SourceSpan("capture-3", (IndexRange(0, 1),)),
+        unreachable_span,
+    )
+
+    with pytest.raises(ValueError, match="total source ranges"):
+        ImportChunk(_campaign_batch(), spans)
+
+
 def test_import_chunk_composes_lineage_under_one_64_kib_budget() -> None:
     spans = tuple(
         SourceSpan(
@@ -222,6 +269,45 @@ def test_canonical_json_documents_enforce_resource_limits() -> None:
     too_many_items = [0] * (MAX_CANONICAL_JSON_CONTAINER_ITEMS + 1)
     with pytest.raises(ValueError, match="container items"):
         canonical_json_document(too_many_items)
+
+
+def test_oversized_json_string_is_rejected_before_encoding(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        json_document_module,
+        "canonical_json_bytes",
+        lambda value: (_ for _ in ()).throw(
+            AssertionError("canonical encoder must not run")
+        ),
+    )
+
+    with pytest.raises(ValueError, match="64 KiB"):
+        canonical_json_document("x" * (MAX_CANONICAL_JSON_BYTES - 1))
+
+
+def test_oversized_json_containers_are_rejected_before_traversal() -> None:
+    class OversizedSequence(Sequence[object]):
+        def __len__(self) -> int:
+            return MAX_CANONICAL_JSON_CONTAINER_ITEMS + 1
+
+        def __getitem__(self, index: int) -> object:
+            raise AssertionError("oversized sequence must not be traversed")
+
+    class OversizedMapping(Mapping[str, object]):
+        def __len__(self) -> int:
+            return MAX_CANONICAL_JSON_KEYS + 1
+
+        def __iter__(self):
+            raise AssertionError("oversized mapping must not be traversed")
+
+        def __getitem__(self, key: str) -> object:
+            raise AssertionError("oversized mapping must not be traversed")
+
+    with pytest.raises(ValueError, match="container items"):
+        canonical_json_document(OversizedSequence())
+    with pytest.raises(ValueError, match="keys"):
+        canonical_json_document(OversizedMapping())
 
 
 def test_import_chunk_round_trip_discriminates_payload_kind() -> None:

@@ -27,29 +27,43 @@ def _finite_float(value: str) -> float:
     return parsed
 
 
+def _require_document_string_bound(value: str) -> None:
+    if len(value) > MAX_CANONICAL_JSON_BYTES - 2:
+        raise ValueError("canonical JSON document exceeds 64 KiB")
+
+
+def _require_structure_bounds(*, keys: int, items: int, depth: int) -> None:
+    if depth > MAX_CANONICAL_JSON_DEPTH:
+        raise ValueError("canonical JSON exceeds maximum depth")
+    if keys > MAX_CANONICAL_JSON_KEYS:
+        raise ValueError("canonical JSON exceeds maximum keys")
+    if items > MAX_CANONICAL_JSON_CONTAINER_ITEMS:
+        raise ValueError("canonical JSON exceeds maximum container items")
+
+
 def _validate_value(value: object) -> None:
     stack: list[tuple[object, int]] = [(value, 0)]
     keys = 0
     items = 0
     while stack:
         current, depth = stack.pop()
+        if isinstance(current, str):
+            _require_document_string_bound(current)
+            continue
         if type(current) is int and abs(current) > MAX_SAFE_JSON_INTEGER:
             raise ValueError("canonical JSON integers must be JavaScript-safe")
         if isinstance(current, Mapping):
             keys += len(current)
             items += len(current)
-            stack.extend((item, depth + 1) for item in current.values())
+            _require_structure_bounds(keys=keys, items=items, depth=depth + 1)
+            for key, item in current.items():
+                if isinstance(key, str):
+                    _require_document_string_bound(key)
+                stack.append((item, depth + 1))
         elif isinstance(current, Sequence) and not isinstance(current, (str, bytes)):
             items += len(current)
+            _require_structure_bounds(keys=keys, items=items, depth=depth + 1)
             stack.extend((item, depth + 1) for item in current)
-        else:
-            continue
-        if depth + 1 > MAX_CANONICAL_JSON_DEPTH:
-            raise ValueError("canonical JSON exceeds maximum depth")
-        if keys > MAX_CANONICAL_JSON_KEYS:
-            raise ValueError("canonical JSON exceeds maximum keys")
-        if items > MAX_CANONICAL_JSON_CONTAINER_ITEMS:
-            raise ValueError("canonical JSON exceeds maximum container items")
 
 
 def _scan_document_structure(document: str) -> None:
