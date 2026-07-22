@@ -122,6 +122,11 @@ show an explicit “awaiting session data” state until their data connections
 arrive in later phases. Switching preset does not rewrite source files or fork
 research state.
 
+Each available instrument has a **Pin** control. Pinning keeps that instrument
+visible when you switch to a preset that would normally omit it; **Unpin**
+returns it to the preset arrangement. The button exposes its pressed state to
+assistive technology, and pins are saved for the current project and Study.
+
 ## Work in four stable zones
 
 Focus order follows the visible layout:
@@ -138,6 +143,14 @@ Focus order follows the visible layout:
    button or Escape and reopen it from the canvas.
 4. **Bottom Tray** — Jobs, Streams, Logs, and Comparisons. Collapse or expand it
    without losing the current workbench context.
+
+On desktop-width layouts, the separators between Sources and the canvas,
+between the canvas and Inspector, and above the bottom tray resize those zones.
+Drag a separator with the pointer, or focus it and use the arrow keys in
+16-pixel steps. <kbd>Home</kbd> and <kbd>End</kbd> move directly to that zone's
+minimum and maximum. The Inspector separator is hidden when the Inspector is
+closed, the tray separator is hidden when the tray is collapsed, and compact
+stacked layouts omit separators that no longer correspond to a split edge.
 
 ## Follow the Research Trail
 
@@ -163,8 +176,9 @@ After a project and Study are both selected, Nuclei stores workspace context
 locally under a separate key for that exact project-and-Study pair. It restores:
 
 - the active Build, Analyze, or Observe preset;
-- pinned panel IDs;
-- source, Inspector, and tray dimensions;
+- instrument pins created with **Pin**;
+- source, Inspector, and tray dimensions changed with the accessible
+  separators;
 - whether the bottom tray is collapsed; and
 - the current Research Selection, including a bounded time window when one is
   supplied by a compatible surface.

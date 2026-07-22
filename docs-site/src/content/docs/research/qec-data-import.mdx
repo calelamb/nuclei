@@ -95,8 +95,11 @@ Stim result imports use their file format's defined record class and encoding;
 the wizard therefore does not ask for source fields, record class, timestamp
 unit, or bit order. Standalone result files require detector and observable
 widths, using an explicit observable width of `0` when no observable bits are
-present. Protocol clients can instead provide an explicit circuit or DEM context
-whose widths must agree. The canonical output uses the same packed LSB0
+present. The authenticated QEC Data Engine does not accept `circuit_path` or
+`dem_path`: secondary context files are not yet protected by project capabilities,
+so engine validation, preview, and import require both widths explicitly. Standalone
+adapter consumers may provide one trusted circuit or DEM context whose widths must
+agree. The canonical output uses the same packed LSB0
 syndrome model as hardware captures, but LSB0 is a normalization guarantee—not
 a user-selectable claim about native Stim encoding.
 
@@ -138,6 +141,17 @@ precision. See [Canonical QEC data schema](/docs/reference/qec-data-schema/)
 for the storage and type contracts.
 
 ## Failure, quarantine, and recovery
+
+QEC engine state belongs to the open project. Switching projects immediately
+clears the previous project's selected source, jobs, queries, and canonical
+session catalog. Nuclei asks the retiring authenticated client to cancel its
+active work in the background, so a slow cancellation cannot delay the new
+project and a late frame cannot repopulate the replacement workspace.
+
+If an authenticated data-engine connection closes, the workbench removes the
+dead client and shows the disconnect reason. Choose **Retry QEC Data Engine**
+to make one new connection attempt. Nuclei does not silently loop or send an
+import action through a client created for another project.
 
 Validation errors write no canonical partition. During a running import,
 pending partitions are not query-visible until the journal commit succeeds.
