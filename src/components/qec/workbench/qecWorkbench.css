@@ -1,0 +1,16 @@
+.qec-workbench {
+  --qec-canvas: #ffffff;
+  --qec-raised: #f8fafc;
+  --qec-recessed: #f1f5f9;
+  --qec-border: #e2e8f0;
+  --qec-text: #1a1a2e;
+  --qec-text-muted: #64748b;
+  --qec-quantum: #0891b2;
+  --qec-interactive: #00b4d8;
+  --qec-analytical: #2563eb;
+  --qec-field: #f0f9ff;
+  --qec-selection: #e0f2fe;
+  --qec-selection-strong: #bae6fd;
+  color: var(--qec-text);
+  background: var(--qec-canvas);
+}
