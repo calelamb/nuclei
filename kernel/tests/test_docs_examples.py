@@ -26,7 +26,7 @@ from __future__ import annotations
 import importlib.util
 import re
 import sys
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from urllib.parse import unquote, urlsplit
 
 import pytest
@@ -41,37 +41,152 @@ EXAMPLES_DIR = REPO_ROOT / "docs-site" / "fixtures" / "examples"
 DOCS_DIR = REPO_ROOT / "docs-site" / "src" / "content" / "docs"
 RESEARCH_DOCS_DIR = DOCS_DIR / "research"
 QEC_WORKBENCH_DOC = RESEARCH_DOCS_DIR / "qec-workbench.mdx"
-MARKDOWN_LINK = re.compile(r"\[[^\]]*\]\((/docs/research/[^)\s]*)\)")
+RESEARCH_URL_PREFIX = "/docs/research/"
+DOC_SOURCE_SUFFIXES = frozenset({".md", ".mdx"})
+FENCE_OPEN = re.compile(r"^[ \t]{0,3}(`{3,}|~{3,})")
+INLINE_CODE = re.compile(r"(`+).*?\1", re.DOTALL)
+HTML_COMMENT = re.compile(r"<!--.*?-->|\{/\*.*?\*/\}", re.DOTALL)
+INLINE_LINK = re.compile(
+    r"(?<!!)\[[^\]\n]+\]\(\s*(?:<([^>\n]+)>|([^\s)\n]+))"
+    r"(?:\s+(?:\"[^\"\n]*\"|'[^'\n]*'|\([^\)\n]*\)))?\s*\)"
+)
+REFERENCE_DEFINITION = re.compile(
+    r"^[ \t]{0,3}\[([^\]\n]+)\]:[ \t]*(?:<([^>\n]+)>|([^\s]+))"
+    r"(?:[ \t]+(?:\"[^\"\n]*\"|'[^'\n]*'|\([^\)\n]*\)))?[ \t]*$",
+    re.MULTILINE,
+)
+REFERENCE_LINK = re.compile(r"(?<!!)\[([^\]\n]+)\]\[([^\]\n]*)\]")
+SHORTCUT_REFERENCE = re.compile(r"(?<!!)\[([^\]\n]+)\](?![\[(])")
+HREF_ATTRIBUTE = re.compile(
+    r"\bhref\s*=\s*(?:\"([^\"]+)\"|'([^']+)'|" r"\{\s*(?:\"([^\"]+)\"|'([^']+)')\s*\})"
+)
 
 
-def _research_doc_targets(href: str) -> tuple[Path, ...]:
+def _within(path: Path, root: Path) -> bool:
+    return path == root or path.is_relative_to(root)
+
+
+def _source_candidates(target: Path, root: Path) -> tuple[Path, ...]:
+    if target == root:
+        return (root / "index.mdx", root / "index.md")
+    if target.suffix.lower() in DOC_SOURCE_SUFFIXES:
+        return (target,)
+    return (
+        Path(f"{target}.mdx"),
+        Path(f"{target}.md"),
+        target / "index.mdx",
+        target / "index.md",
+    )
+
+
+def _research_doc_targets(
+    href: str, research_root: Path = RESEARCH_DOCS_DIR
+) -> tuple[Path, ...]:
     """Resolve candidate docs-site pages without allowing path escape."""
     parsed = urlsplit(href)
     decoded_path = unquote(parsed.path)
-    prefix = "/docs/research/"
-    assert decoded_path.startswith(prefix), f"Not a Research docs URL: {href}"
-    relative = decoded_path.removeprefix(prefix).rstrip("/")
-    parts = Path(relative).parts
-    assert relative and ".." not in parts and "\\" not in relative, (
-        f"Research docs link escapes its root: {href}"
+    assert decoded_path.startswith(
+        RESEARCH_URL_PREFIX
+    ), f"Not a Research docs URL: {href}"
+    relative = decoded_path.removeprefix(RESEARCH_URL_PREFIX).rstrip("/")
+    relative_path = PurePosixPath(relative)
+    assert (
+        not relative_path.is_absolute() and ".." not in relative_path.parts
+    ), f"Research docs link escapes its root: {href}"
+    assert "\\" not in relative, f"Research docs link escapes its root: {href}"
+    target = research_root.joinpath(*relative_path.parts)
+    resolved_root = research_root.resolve()
+    candidates = _source_candidates(target, research_root)
+    for candidate in candidates:
+        assert _within(
+            candidate.resolve(), resolved_root
+        ), f"Research docs link escapes its root: {href}"
+    return candidates
+
+
+def _strip_fenced_code(text: str) -> str:
+    kept: list[str] = []
+    fence: tuple[str, int] | None = None
+    for line in text.splitlines(keepends=True):
+        marker = line.lstrip(" \t").rstrip()
+        if fence and marker and set(marker) == {fence[0]} and len(marker) >= fence[1]:
+            fence = None
+            continue
+        opening = FENCE_OPEN.match(line) if fence is None else None
+        if opening:
+            token = opening.group(1)
+            fence = (token[0], len(token))
+        elif fence is None:
+            kept.append(line)
+    return "".join(kept)
+
+
+def _reference_label(label: str) -> str:
+    return " ".join(label.split()).casefold()
+
+
+def _reference_links(text: str) -> list[str]:
+    definitions = {
+        _reference_label(match.group(1)): match.group(2) or match.group(3)
+        for match in REFERENCE_DEFINITION.finditer(text)
+    }
+    body = REFERENCE_DEFINITION.sub("", text)
+    links: list[str] = []
+    for match in REFERENCE_LINK.finditer(body):
+        label = match.group(2) or match.group(1)
+        href = definitions.get(_reference_label(label))
+        if href:
+            links.append(href)
+    body = REFERENCE_LINK.sub("", body)
+    for match in SHORTCUT_REFERENCE.finditer(body):
+        href = definitions.get(_reference_label(match.group(1)))
+        if href:
+            links.append(href)
+    return links
+
+
+def _matched_hrefs(pattern: re.Pattern[str], text: str) -> list[str]:
+    return [
+        next(group for group in match.groups() if group is not None)
+        for match in pattern.finditer(text)
+    ]
+
+
+def _research_documents(research_root: Path) -> list[Path]:
+    resolved_root = research_root.resolve()
+    documents = sorted(
+        path
+        for path in research_root.rglob("*")
+        if path.is_file() and path.suffix.lower() in DOC_SOURCE_SUFFIXES
     )
-    target = RESEARCH_DOCS_DIR.joinpath(*parts)
-    assert target.is_relative_to(RESEARCH_DOCS_DIR)
-    if target.suffix:
-        return (target,)
-    return (target.with_suffix(".mdx"), target.with_suffix(".md"))
+    assert all(_within(path.resolve(), resolved_root) for path in documents)
+    return documents
+
+
+def _is_research_href(href: str) -> bool:
+    parsed = urlsplit(href)
+    return (
+        not parsed.scheme
+        and not parsed.netloc
+        and parsed.path.startswith(RESEARCH_URL_PREFIX)
+    )
 
 
 def _research_links(document: Path) -> list[str]:
-    """Extract only absolute internal Research-doc links from an MDX page."""
-    return MARKDOWN_LINK.findall(document.read_text(encoding="utf-8"))
+    """Extract supported internal links while ignoring code and comments."""
+    text = document.read_text(encoding="utf-8")
+    visible = HTML_COMMENT.sub("", INLINE_CODE.sub("", _strip_fenced_code(text)))
+    links = [
+        *_matched_hrefs(INLINE_LINK, visible),
+        *_reference_links(visible),
+        *_matched_hrefs(HREF_ATTRIBUTE, visible),
+    ]
+    return list(dict.fromkeys(href for href in links if _is_research_href(href)))
 
 
 def _load_example(module_name: str, filename: str):
     """Import a docs example file from the fixtures path."""
-    spec = importlib.util.spec_from_file_location(
-        module_name, EXAMPLES_DIR / filename
-    )
+    spec = importlib.util.spec_from_file_location(module_name, EXAMPLES_DIR / filename)
     assert spec is not None and spec.loader is not None
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
@@ -207,7 +322,7 @@ def test_qec_workbench_page_and_research_links_resolve() -> None:
     assert QEC_WORKBENCH_DOC.is_file(), "Missing Research docs page: qec-workbench.mdx"
 
     broken: list[str] = []
-    for document in sorted(RESEARCH_DOCS_DIR.glob("*.mdx")):
+    for document in _research_documents(RESEARCH_DOCS_DIR):
         for href in _research_links(document):
             targets = _research_doc_targets(href)
             if not any(target.is_file() for target in targets):
@@ -240,3 +355,90 @@ def test_research_doc_link_normalization(href: str) -> None:
 def test_research_doc_links_cannot_escape_research_root(href: str) -> None:
     with pytest.raises(AssertionError, match="escapes its root"):
         _research_doc_targets(href)
+
+
+def test_research_link_extraction_supports_mdx_and_reference_forms(
+    tmp_path: Path,
+) -> None:
+    document = tmp_path / "links.mdx"
+    document.write_text(
+        """
+[inline](/docs/research/inline/)
+[titled](/docs/research/titled/ "Inline title")
+[full reference][full]
+[collapsed reference][]
+[shortcut]
+
+[full]: /docs/research/full-reference/ "Reference title"
+[collapsed reference]: </docs/research/collapsed-reference/>
+[shortcut]: /docs/research/shortcut/
+
+<a href="/docs/research/html-anchor/">HTML anchor</a>
+<Card href={'/docs/research/mdx-anchor/?mode=build#result'} />
+
+`[inline code](/docs/research/not-a-link/)`
+```md
+[fenced](/docs/research/not-a-link-either/)
+```
+Plain text /docs/research/not-a-link-three/ is not a link.
+[external](https://example.com/docs/research/not-internal/)
+""",
+        encoding="utf-8",
+    )
+
+    assert set(_research_links(document)) == {
+        "/docs/research/inline/",
+        "/docs/research/titled/",
+        "/docs/research/full-reference/",
+        "/docs/research/collapsed-reference/",
+        "/docs/research/shortcut/",
+        "/docs/research/html-anchor/",
+        "/docs/research/mdx-anchor/?mode=build#result",
+    }
+
+
+def test_research_document_discovery_is_recursive(tmp_path: Path) -> None:
+    nested = tmp_path / "nested"
+    nested.mkdir()
+    top_mdx = tmp_path / "top.mdx"
+    nested_md = nested / "page.md"
+    ignored = nested / "notes.txt"
+    for path in (top_mdx, nested_md, ignored):
+        path.write_text("content", encoding="utf-8")
+
+    assert _research_documents(tmp_path) == [nested_md, top_mdx]
+
+
+def test_research_doc_targets_preserve_dotted_slugs_and_directory_indexes(
+    tmp_path: Path,
+) -> None:
+    dotted = tmp_path / "decoder.v2.mdx"
+    nested_index = tmp_path / "nested" / "index.md"
+    nested_index.parent.mkdir()
+    dotted.write_text("dotted", encoding="utf-8")
+    nested_index.write_text("index", encoding="utf-8")
+
+    assert dotted in _research_doc_targets("/docs/research/decoder.v2/", tmp_path)
+    assert nested_index in _research_doc_targets("/docs/research/nested/", tmp_path)
+    assert _research_doc_targets("/docs/research/decoder.v2.mdx", tmp_path) == (dotted,)
+
+
+def test_research_doc_targets_reject_symlink_escape(tmp_path: Path) -> None:
+    research_root = tmp_path / "research"
+    outside = tmp_path / "outside"
+    research_root.mkdir()
+    outside.mkdir()
+    (outside / "secret.mdx").write_text("secret", encoding="utf-8")
+    (research_root / "linked").symlink_to(outside, target_is_directory=True)
+
+    with pytest.raises(AssertionError, match="escapes its root"):
+        _research_doc_targets("/docs/research/linked/secret/", research_root)
+
+
+def test_qec_workbench_page_is_in_the_research_sidebar() -> None:
+    config = (REPO_ROOT / "docs-site" / "astro.config.mjs").read_text(encoding="utf-8")
+    qec_studio = config.index("'research/qec-studio'")
+    qec_workbench = config.index("'research/qec-workbench'")
+    campaigns = config.index("'research/campaigns'")
+
+    assert qec_studio < qec_workbench < campaigns

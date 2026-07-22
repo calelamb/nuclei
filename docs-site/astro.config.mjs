@@ -76,6 +76,7 @@ export default defineConfig({
             'research/navigating-the-workspace',
             'research/experiments',
             'research/qec-studio',
+            'research/qec-workbench',
             'research/campaigns',
             'research/noise-models',
             'research/resource-estimation',
