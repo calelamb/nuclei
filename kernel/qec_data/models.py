@@ -350,6 +350,10 @@ class SyndromeBatch:
     def __post_init__(self) -> None:
         _validate_syndrome_batch(self)
 
+    @property
+    def record_kind(self) -> str:
+        return "syndromes"
+
 
 @dataclass(frozen=True, slots=True)
 class DecodeInput:
@@ -702,3 +706,10 @@ class ProvenanceRecord:
 
     def __post_init__(self) -> None:
         _validate_provenance_record(self)
+
+
+from .typed_import_models import (  # noqa: E402, F401
+    CalibrationBatch,
+    CampaignPointBatch,
+    CampaignPointRecord,
+)

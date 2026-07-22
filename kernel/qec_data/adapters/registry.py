@@ -101,6 +101,7 @@ def _snapshot_manifest(adapter: object) -> AdapterManifest:
             version=manifest.version,
             capabilities=manifest.capabilities,
             source_kinds=manifest.source_kinds,
+            output_kinds=manifest.output_kinds,
         )
     except (AttributeError, TypeError, ValueError) as error:
         raise AdapterRegistrationError(

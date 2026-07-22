@@ -1,0 +1,26 @@
+{
+  "schema_version": "1.0.0",
+  "batch_id": "calibration-batch-1",
+  "session_id": "session-1",
+  "segment_id": "calibrations",
+  "sequence_start": 0,
+  "sequence_end": 1,
+  "record_count": 1,
+  "records": [{
+    "schema_version": "1.0.0",
+    "calibration_id": "calibration-1",
+    "session_id": "session-1",
+    "effective_interval": { "start": "2026-07-21T00:00:00Z", "end": null },
+    "scope": { "kind": "qubit", "id": "q0" },
+    "parameter": { "name": "readout assignment error", "semantic_id": "vendor.example/readout_assignment_error" },
+    "value": { "value": 0.012, "status": "measured" },
+    "unit": { "value": "1", "status": "measured" },
+    "uncertainty": { "value": null, "status": "unavailable" },
+    "quality": "accepted",
+    "source_system": "lab-calibration-db",
+    "calibration_run_id": "run-42",
+    "original_representation": { "mime_type": "application/json", "value": "{\"assignment_error\":0.012}" },
+    "provenance_id": "provenance-1"
+  }],
+  "provenance_id": "provenance-1"
+}

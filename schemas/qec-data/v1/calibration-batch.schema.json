@@ -1,0 +1,21 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://getnuclei.dev/schemas/qec-data/v1/calibration-batch.schema.json",
+  "title": "QEC calibration record batch",
+  "$comment": "Executable validators MUST enforce sequence arithmetic, records length, and agreement of session_id and provenance_id between every record and its batch.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "batch_id", "session_id", "segment_id", "sequence_start", "sequence_end", "record_count", "records", "provenance_id"],
+  "properties": {
+    "schema_version": { "const": "1.0.0" },
+    "batch_id": { "$ref": "#/$defs/nonEmpty" },
+    "session_id": { "$ref": "#/$defs/nonEmpty" },
+    "segment_id": { "$ref": "#/$defs/nonEmpty" },
+    "sequence_start": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
+    "sequence_end": { "type": "integer", "minimum": 1, "maximum": 9007199254740991 },
+    "record_count": { "type": "integer", "minimum": 1, "maximum": 65536 },
+    "records": { "type": "array", "minItems": 1, "maxItems": 65536, "items": { "$ref": "calibration-record.schema.json" } },
+    "provenance_id": { "$ref": "#/$defs/nonEmpty" }
+  },
+  "$defs": { "nonEmpty": { "type": "string", "minLength": 1 } }
+}

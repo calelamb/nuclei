@@ -28,9 +28,7 @@ from kernel.qec_data.adapters.base import (
     compute_source_sha256,
     fingerprint_source,
 )
-from kernel.qec_data.model_codecs import batch_from_mapping, batch_to_mapping
-from kernel.qec_data.model_validation import DataQualityFlag
-from kernel.qec_data.models import SyndromeBatch
+from kernel.tests.qec_data.adapter_typed_compliance import check_batches
 from kernel.tests.qec_data.adapter_process_isolation import (
     IsolationBackend,
     bounded_source_snapshot,
@@ -152,6 +150,7 @@ def _manifest(adapter: object, failures: _FailureCollector) -> AdapterManifest |
             manifest.version,
             manifest.capabilities,
             manifest.source_kinds,
+            manifest.output_kinds,
         )
     except BaseException as error:
         failures.add("manifest_invalid", f"{type(error).__name__}: {error}")
@@ -229,102 +228,13 @@ def _check_validation(
     return result.provenance_id
 
 
-def _canonical_batch(
-    value: object, failures: _FailureCollector
-) -> SyndromeBatch | None:
-    if type(value) is not SyndromeBatch:
-        failures.add("batch_type_invalid", "adapter yielded a non-canonical batch")
-        return None
-    try:
-        return batch_from_mapping(batch_to_mapping(value))
-    except BaseException as error:
-        failures.add("batch_canonical_invalid", f"{type(error).__name__}: {error}")
-        return None
-
-
-def _check_batch_sequence(
-    batch: SyndromeBatch,
-    previous: SyndromeBatch | None,
-    failures: _FailureCollector,
-) -> None:
-    if previous is None:
-        return
-    if batch.sequence_start < previous.sequence_start:
-        failures.add("batch_sequence_nonmonotonic", "batch sequence moved backwards")
-    if batch.sequence_start < previous.sequence_end:
-        failures.add("batch_sequence_overlap", "batch sequence ranges overlap")
-    has_gap = batch.sequence_start > previous.sequence_end
-    marks_gap = DataQualityFlag.GAP_BEFORE in batch.data_quality
-    if has_gap and not marks_gap:
-        failures.add("batch_sequence_gap", "batch sequence ranges contain a gap")
-    if not has_gap and marks_gap:
-        failures.add(
-            "batch_sequence_false_gap", "GAP_BEFORE requires a sequence discontinuity"
-        )
-
-
-def _packed_schema_profile(batch: SyndromeBatch) -> tuple[tuple[bool, int | None], ...]:
-    names = ("measurements", "observables", "erasures", "leakage", "heralds")
-    return tuple(
-        (packed.value is not None, packed.value.bit_width if packed.value else None)
-        for packed in (getattr(batch, name) for name in names)
-    )
-
-
-def _batch_schema_profile(batch: SyndromeBatch) -> tuple[object, ...]:
-    timestamps = batch.source_timestamps.value
-    return (
-        batch.detector_events.bit_width,
-        _packed_schema_profile(batch),
-        (timestamps is not None, timestamps.unit if timestamps else None),
-        batch.round_range.value is not None,
-    )
-
-
-def _check_batches(
-    values: tuple[object, ...],
-    provenance_id: str | None,
-    expected_provenance_id: str | None,
-    failures: _FailureCollector,
-) -> None:
-    previous: dict[tuple[str, str], SyndromeBatch] = {}
-    profiles: dict[tuple[str, str], tuple[object, ...]] = {}
-    for value in values:
-        if type(value) is SyndromeBatch and not getattr(value, "provenance_id", None):
-            failures.add("batch_provenance_absent", "batch omitted provenance identity")
-        batch = _canonical_batch(value, failures)
-        if batch is None:
-            continue
-        key = batch.session_id, batch.segment_id
-        _check_batch_sequence(batch, previous.get(key), failures)
-        previous[key] = batch
-        profile = _batch_schema_profile(batch)
-        expected_profile = profiles.setdefault(key, profile)
-        if profile != expected_profile:
-            failures.add(
-                "batch_schema_profile_changed", "schema changed within a segment"
-            )
-        if batch.detector_events.bit_width != expected_profile[0]:
-            failures.add(
-                "batch_width_changed", "detector width changed within a segment"
-            )
-        if provenance_id and batch.provenance_id != provenance_id:
-            failures.add(
-                "batch_provenance_mismatch", "batch provenance mismatched validation"
-            )
-        if expected_provenance_id and batch.provenance_id != expected_provenance_id:
-            failures.add(
-                "batch_mapping_provenance_mismatch",
-                "batch provenance mismatched the import mapping",
-            )
-
-
 def _check_preview(
     first: object,
     second: object,
     source_hash: str,
     provenance_id: str | None,
     expected_provenance_id: str | None,
+    output_kinds: tuple[str, ...],
     failures: _FailureCollector,
 ) -> None:
     if isinstance(first, UnsupportedCapabilityResult):
@@ -353,8 +263,12 @@ def _check_preview(
             "preview_mapping_provenance_mismatch",
             "preview provenance mismatched the import mapping",
         )
-    _check_batches(
-        tuple(first.batches), provenance_id, expected_provenance_id, failures
+    check_batches(
+        tuple(first.batches),
+        provenance_id,
+        expected_provenance_id,
+        output_kinds,
+        failures,
     )
 
 
@@ -396,6 +310,7 @@ def _check_import(
     source: Path,
     mapping: ImportMapping,
     provenance_id: str | None,
+    output_kinds: tuple[str, ...],
     failures: _FailureCollector,
     stages: _StageReporter,
 ) -> None:
@@ -410,7 +325,13 @@ def _check_import(
     after = _snapshot_or_failure(source, failures, "import_snapshot_raised")
     if before is not None and after is not None and before != after:
         failures.add("import_changed_source", "import changed the source")
-    _check_batches(batches, provenance_id, mapping.expected_provenance_id, failures)
+    check_batches(
+        batches,
+        provenance_id,
+        mapping.expected_provenance_id,
+        output_kinds,
+        failures,
+    )
 
 
 def _unsupported_for(value: object, capability: AdapterCapability) -> bool:
@@ -589,9 +510,18 @@ def _check_offline(
         source_hash,
         provenance_id,
         mapping.expected_provenance_id,
+        manifest.output_kinds,
         failures,
     )
-    _check_import(adapter, source, mapping, provenance_id, failures, stages)
+    _check_import(
+        adapter,
+        source,
+        mapping,
+        provenance_id,
+        manifest.output_kinds,
+        failures,
+        stages,
+    )
 
 
 def _run_contract(

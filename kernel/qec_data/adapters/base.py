@@ -17,14 +17,22 @@ from enum import StrEnum
 from pathlib import Path
 from typing import Protocol, TypeAlias, runtime_checkable
 
-from kernel.qec_data.models import SyndromeBatch
+from kernel.qec_data.models import (
+    CalibrationBatch,
+    CampaignPointBatch,
+    IndexRange,
+    SyndromeBatch,
+)
 
 
-CanonicalBatch: TypeAlias = SyndromeBatch
+CanonicalPayload: TypeAlias = SyndromeBatch | CampaignPointBatch | CalibrationBatch
 ScalarValue: TypeAlias = str | int | float | bool | None | tuple["ScalarValue", ...]
 SHA256_HEX_LENGTH = 64
 MAX_METADATA_DEPTH = 32
 MAX_SAFE_METADATA_INTEGER = (1 << 53) - 1
+MAX_IMPORT_CHUNK_RECORDS = 65_536
+MAX_SOURCE_SPAN_ITEMS = 1_024
+CANONICAL_OUTPUT_KINDS = frozenset({"syndromes", "campaign_points", "calibrations"})
 
 
 def _require_text(name: str, value: str) -> None:
@@ -223,12 +231,82 @@ class ValidationSeverity(StrEnum):
     INFO = "info"
 
 
+class SourceSpanPrecision(StrEnum):
+    EXACT = "exact"
+    CONTAINER = "container"
+
+
+@dataclass(frozen=True, slots=True)
+class SourceSpan:
+    """Half-open coordinates into an immutable provenance source.
+
+    ``source_id`` names a ``ProvenanceSource``. Logical rows are zero-based
+    physical CSV/JSON records (the header is record zero), not text lines.
+    Container precision permits conservative cross-chunk byte overlap.
+    """
+
+    source_id: str
+    byte_ranges: tuple[IndexRange, ...]
+    row_range: IndexRange | None = None
+    precision: SourceSpanPrecision = SourceSpanPrecision.EXACT
+
+    def __post_init__(self) -> None:
+        _require_text("source span source id", self.source_id)
+        _require_tuple("source span byte ranges", self.byte_ranges)
+        if not self.byte_ranges:
+            raise ValueError("source span byte ranges must not be empty")
+        if len(self.byte_ranges) > MAX_SOURCE_SPAN_ITEMS:
+            raise ValueError("source span may contain at most 1,024 byte ranges")
+        if not all(type(value) is IndexRange for value in self.byte_ranges):
+            raise TypeError("source span byte ranges must contain IndexRange")
+        for previous, current in zip(self.byte_ranges, self.byte_ranges[1:]):
+            if current.start < previous.end:
+                raise ValueError(
+                    "source span byte ranges must be ordered and non-overlapping"
+                )
+        if self.row_range is not None and type(self.row_range) is not IndexRange:
+            raise TypeError("source span row range must be IndexRange or None")
+        if type(self.precision) is not SourceSpanPrecision:
+            raise TypeError("source span precision must be SourceSpanPrecision")
+
+
+@dataclass(frozen=True, slots=True)
+class ImportChunk:
+    payload: CanonicalPayload
+    source_spans: tuple[SourceSpan, ...]
+
+    def __post_init__(self) -> None:
+        if type(self.payload) not in {
+            SyndromeBatch,
+            CampaignPointBatch,
+            CalibrationBatch,
+        }:
+            raise TypeError("import chunk payload is not canonical QEC data")
+        _require_tuple("import chunk source spans", self.source_spans)
+        if not self.source_spans:
+            raise ValueError("import chunk source spans must not be empty")
+        if len(self.source_spans) > MAX_SOURCE_SPAN_ITEMS:
+            raise ValueError("import chunk may contain at most 1,024 source spans")
+        if not all(type(span) is SourceSpan for span in self.source_spans):
+            raise TypeError("import chunk source spans must contain SourceSpan")
+        if self.payload.record_count > MAX_IMPORT_CHUNK_RECORDS:
+            raise ValueError("import chunks may contain at most 65,536 records")
+
+    @property
+    def record_count(self) -> int:
+        return self.payload.record_count
+
+
+CanonicalBatch: TypeAlias = SyndromeBatch | ImportChunk
+
+
 @dataclass(frozen=True, slots=True)
 class AdapterManifest:
     id: str
     version: str
     capabilities: frozenset[AdapterCapability]
     source_kinds: tuple[str, ...]
+    output_kinds: tuple[str, ...] = ("syndromes",)
 
     def __post_init__(self) -> None:
         _require_text("adapter id", self.id)
@@ -242,6 +320,11 @@ class AdapterManifest:
         _require_unique_text("adapter source kinds", self.source_kinds)
         if not self.source_kinds:
             raise ValueError("adapter source kinds must not be empty")
+        _require_unique_text("adapter output kinds", self.output_kinds)
+        if not self.output_kinds:
+            raise ValueError("adapter output kinds must not be empty")
+        if not set(self.output_kinds).issubset(CANONICAL_OUTPUT_KINDS):
+            raise ValueError("adapter output kinds contain an unsupported kind")
 
 
 @dataclass(frozen=True, slots=True)
@@ -331,7 +414,9 @@ class PreviewResult:
 
     def __post_init__(self) -> None:
         _require_tuple("preview batches", self.batches)
-        if not all(type(batch) is SyndromeBatch for batch in self.batches):
+        if not all(
+            type(batch) in {SyndromeBatch, ImportChunk} for batch in self.batches
+        ):
             raise TypeError("preview batches contain a non-canonical batch")
         if type(self.truncated) is not bool:
             raise TypeError("preview truncated must be a boolean")

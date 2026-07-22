@@ -1,0 +1,24 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://getnuclei.dev/schemas/qec-data/v1/source-span.schema.json",
+  "title": "QEC import source span",
+  "$comment": "All ranges are zero-based and half-open. Rows are physical CSV/JSON records, including header record zero, not text lines. Byte ranges MUST be ordered and non-overlapping. Container precision permits overlap between different chunks.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["source_id", "row_range", "byte_ranges", "precision"],
+  "properties": {
+    "source_id": { "type": "string", "minLength": 1 },
+    "row_range": { "anyOf": [{ "$ref": "#/$defs/range" }, { "type": "null" }] },
+    "byte_ranges": { "type": "array", "minItems": 1, "maxItems": 1024, "items": { "$ref": "#/$defs/range" } },
+    "precision": { "enum": ["exact", "container"] }
+  },
+  "$defs": {
+    "range": {
+      "type": "object", "additionalProperties": false, "required": ["start", "end"],
+      "properties": {
+        "start": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
+        "end": { "type": "integer", "minimum": 1, "maximum": 9007199254740991 }
+      }
+    }
+  }
+}
