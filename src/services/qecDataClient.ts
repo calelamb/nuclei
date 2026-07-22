@@ -19,8 +19,10 @@ import {
   type ImportValidationResult,
   type QecDataInboundFrame,
   type QueryFrame,
+  type SessionListResult,
   type ValidQecQuerySpec,
 } from '../types/qecDataProtocol';
+import type { QecSession } from '../types/qecData';
 import type { QecTilePayload } from '../types/qecData';
 
 type SocketListener = (event: Event | MessageEvent<string>) => void;
@@ -36,7 +38,8 @@ export interface ClientDependencies {
   requestIdFactory?: () => string;
 }
 
-type PendingKind = 'probe' | 'validate' | 'preview' | 'import' | 'query' | 'cancel';
+type PendingKind = 'probe' | 'validate' | 'preview' | 'import' | 'query' | 'cancel' | 'session-list';
+const MAX_SESSION_CATALOG_SIZE = 10_000;
 interface PendingRequest {
   kind: PendingKind;
   phase: 'terminal' | 'awaiting_start' | 'streaming';
@@ -86,6 +89,36 @@ function serializeOutbound(frame: Record<string, unknown>): string {
     throw new QecDataClientError('frame_too_large', 'QEC Data Engine frame exceeds 1 MiB.');
   }
   return serialized;
+}
+
+function compareUnicodeCodePoints(left: string, right: string): number {
+  const leftPoints = Array.from(left, (character) => character.codePointAt(0) ?? 0);
+  const rightPoints = Array.from(right, (character) => character.codePointAt(0) ?? 0);
+  const sharedLength = Math.min(leftPoints.length, rightPoints.length);
+  for (let index = 0; index < sharedLength; index += 1) {
+    const difference = leftPoints[index] - rightPoints[index];
+    if (difference !== 0) return difference;
+  }
+  return leftPoints.length - rightPoints.length;
+}
+
+function validatedSessionCursor(result: SessionListResult, cursor: string | null, pageLimit: number): string | null {
+  if (result.sessions.length > pageLimit) {
+    throw new QecDataClientError('invalid_response', 'QEC Data Engine returned an oversized session page.');
+  }
+  let previous = cursor ?? '';
+  for (const session of result.sessions) {
+    if (compareUnicodeCodePoints(session.session_id, previous) <= 0) {
+      throw new QecDataClientError('invalid_response', 'QEC Data Engine returned sessions out of order.');
+    }
+    previous = session.session_id;
+  }
+  if (result.nextCursor !== null && (
+    result.sessions.length === 0 || result.nextCursor !== result.sessions.at(-1)?.session_id
+  )) {
+    throw new QecDataClientError('invalid_response', 'QEC Data Engine session cursor does not match its page.');
+  }
+  return result.nextCursor;
 }
 
 export class QecDataClient {
@@ -147,6 +180,35 @@ export class QecDataClient {
     return await this.#oneShot('preview', 'import_preview_result', {
       type: 'import_preview', requestId: this.#requestIdFactory(), source: this.#source(source),
       adapterId, mapping: importMappingSchema.parse(mapping), limit,
+    });
+  }
+
+  async listSessions(limit = 100): Promise<readonly QecSession[]> {
+    if (!Number.isInteger(limit) || limit < 1 || limit > 100) {
+      throw new QecDataClientError('invalid_request', 'Session page limit must be between 1 and 100.');
+    }
+    const sessions: QecSession[] = [];
+    const seenCursors = new Set<string>();
+    let cursor: string | null = null;
+    for (;;) {
+      const result = await this.#sessionPage(cursor, limit);
+      const nextCursor = validatedSessionCursor(result, cursor, limit);
+      if (sessions.length + result.sessions.length > MAX_SESSION_CATALOG_SIZE) {
+        throw new QecDataClientError('invalid_response', 'QEC session catalog exceeds the 10,000-session safety limit.');
+      }
+      sessions.push(...result.sessions);
+      if (nextCursor === null) return Object.freeze(sessions);
+      if (nextCursor === cursor || seenCursors.has(nextCursor)) {
+        throw new QecDataClientError('invalid_response', 'QEC Data Engine session cursor did not advance.');
+      }
+      seenCursors.add(nextCursor);
+      cursor = nextCursor;
+    }
+  }
+
+  async #sessionPage(cursor: string | null, limit: number): Promise<SessionListResult> {
+    return await this.#oneShot('session-list', 'session_list_result', {
+      type: 'session_list', requestId: this.#requestIdFactory(), cursor, limit,
     });
   }
 

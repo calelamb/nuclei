@@ -1,4 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 
 import { QEC_DATA_MAX_FRAME_BYTES } from '../types/qecDataProtocol';
 import {
@@ -56,7 +58,95 @@ async function authenticate(client: QecDataClient, socket: FakeSocket): Promise<
   await connecting;
 }
 
+function session(sessionId: string): Record<string, unknown> {
+  const value = JSON.parse(
+    readFileSync(resolve('schemas/qec-data/v1/fixtures/minimal-session.json'), 'utf8'),
+  ) as Record<string, unknown>;
+  return { ...value, session_id: sessionId, provenance_id: `provenance-${sessionId}` };
+}
+
 describe('QecDataClient', () => {
+  it('loads every strictly correlated session page in stable engine order', async () => {
+    const { client, socket } = setup();
+    await authenticate(client, socket);
+
+    const listing = client.listSessions(2);
+    expect(JSON.parse(socket.sent[1])).toEqual({
+      type: 'session_list', requestId: 'request-1', cursor: null, limit: 2,
+    });
+    socket.message({
+      type: 'session_list_result', requestId: 'request-1',
+      sessions: [session('session-a'), session('session-b')], nextCursor: 'session-b',
+    });
+    await vi.waitFor(() => expect(socket.sent).toHaveLength(3));
+    expect(JSON.parse(socket.sent[2])).toEqual({
+      type: 'session_list', requestId: 'request-2', cursor: 'session-b', limit: 2,
+    });
+    socket.message({
+      type: 'session_list_result', requestId: 'request-2',
+      sessions: [session('session-c')], nextCursor: null,
+    });
+
+    await expect(listing).resolves.toEqual([
+      expect.objectContaining({ session_id: 'session-a' }),
+      expect.objectContaining({ session_id: 'session-b' }),
+      expect.objectContaining({ session_id: 'session-c' }),
+    ]);
+  });
+
+  it('rejects invalid session pagination bounds and a non-advancing cursor', async () => {
+    const { client, socket } = setup();
+    await authenticate(client, socket);
+    await expect(client.listSessions(0)).rejects.toMatchObject({ code: 'invalid_request' });
+    expect(socket.sent).toHaveLength(1);
+
+    const listing = client.listSessions(1);
+    socket.message({
+      type: 'session_list_result', requestId: 'request-1',
+      sessions: [session('session-a')], nextCursor: 'session-a',
+    });
+    await vi.waitFor(() => expect(socket.sent).toHaveLength(3));
+    socket.message({
+      type: 'session_list_result', requestId: 'request-2',
+      sessions: [session('session-a')], nextCursor: 'session-a',
+    });
+
+    await expect(listing).rejects.toMatchObject({ code: 'invalid_response' });
+  });
+
+  it('rejects a session page whose cursor does not name its final ordered session', async () => {
+    const { client, socket } = setup();
+    await authenticate(client, socket);
+    const listing = client.listSessions(10);
+
+    socket.message({
+      type: 'session_list_result', requestId: 'request-1',
+      sessions: [session('session-b'), session('session-a')], nextCursor: 'session-a',
+    });
+
+    await expect(listing).rejects.toMatchObject({ code: 'invalid_response' });
+    expect(socket.sent).toHaveLength(2);
+  });
+
+  it('matches Python code-point ordering and rejects oversized pages', async () => {
+    const unicode = setup();
+    await authenticate(unicode.client, unicode.socket);
+    const listing = unicode.client.listSessions(2);
+    unicode.socket.message({
+      type: 'session_list_result', requestId: 'request-1',
+      sessions: [session('\uE000'), session('😀')], nextCursor: null,
+    });
+    await expect(listing).resolves.toHaveLength(2);
+
+    const oversized = setup();
+    await authenticate(oversized.client, oversized.socket);
+    const invalid = oversized.client.listSessions(1);
+    oversized.socket.message({
+      type: 'session_list_result', requestId: 'request-1',
+      sessions: [session('session-a'), session('session-b')], nextCursor: null,
+    });
+    await expect(invalid).rejects.toMatchObject({ code: 'invalid_response' });
+  });
   it('rejects every endpoint except the exact fixed loopback URL before opening a socket', () => {
     const factory = vi.fn(() => new FakeSocket());
 

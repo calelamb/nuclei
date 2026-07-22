@@ -12,20 +12,21 @@ project. A Study answers “which material belongs to this research question?”
 it does not import, copy, or replace that material.
 
 <Aside type="note">
-The workbench foundation is available now. Canonical simulation or hardware
-sessions, syndrome and calibration import, live observation, the connected
-Campaign Center and Failure Microscope, Findings, and collaboration are later
-phases. **Run / Capture** and **Pin Finding** therefore remain disabled in this
-foundation release. Use [QEC Studio](/docs/research/qec-studio/) for today's
-connected Stim, sinter, decoding, and threshold-analysis workflows.
+Canonical simulation and hardware-import sessions are available through the
+[QEC data import workflow](/docs/research/qec-data-import/). Live observation,
+the connected Campaign Center and Failure Microscope, Findings, and
+collaboration are later phases. **Run / Capture** and **Pin Finding** therefore
+remain disabled. Use [QEC Studio](/docs/research/qec-studio/) for connected
+Stim, sinter, decoding, and threshold-analysis workflows.
 </Aside>
 
 The optional **QEC Data Engine** is available as one item in the Research
 framework catalog. It installs `pyarrow>=18,<26`, `duckdb>=1.2,<2`, and
 `jsonschema>=4.23,<5` together; Nuclei reports the bundle as ready only
 when all three imports succeed. Installing it prepares the managed environment
-for the recorded syndrome, calibration, Parquet, and schema workflows arriving
-in the data-platform phase—it does not enable those later workflows by itself.
+for recorded syndrome, calibration, Parquet, and canonical-schema workflows.
+Installing dependencies prepares the environment; imports still require an
+explicit mapping and validation in QEC Workbench.
 
 ## Open the workbench
 
@@ -81,8 +82,8 @@ sources:
 ```
 
 Supported existing-source kinds include `stim`, `python`, `dem`, `experiment`,
-and `noise`. Paths must stay inside the open project: absolute paths, drive or
-UNC paths, and `..` traversal are rejected. Invalid Study files remain visible
+`noise`, and `session`. Paths must stay inside the open project: absolute paths,
+drive or UNC paths, and `..` traversal are rejected. Invalid Study files remain visible
 as validation issues with the fields to fix; one malformed manifest does not
 hide the other valid Studies.
 
@@ -125,7 +126,8 @@ research state.
 
 Focus order follows the visible layout:
 
-1. **Sources / Data** — Study overview, referenced files, and validation state.
+1. **Sources / Data** — Study overview, referenced files, validation state, and
+   engine-backed canonical sessions with lifecycle and provenance context.
    Selecting a row sets the shared research selection.
 2. **Investigation Canvas** — the preset's registered scientific instruments.
    It also shows the linked-selection state and marks the planned split,
@@ -151,9 +153,9 @@ Use the Trail controls to:
 - clear the selection and its history.
 
 The selection contract already supports bounded entity and time-window
-references. Detector, tick, shot, session, calibration, and Finding drill-downs
-become connected UI workflows in later phases; the foundation does not claim
-those data workflows yet.
+references. Canonical session rows now enter that shared selection. Detector,
+tick, shot, calibration, and Finding drill-downs become connected UI workflows
+in later phases.
 
 ## What persists
 

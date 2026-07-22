@@ -83,6 +83,22 @@ describe('createE2eFixtureBridge', () => {
     await expect(isolated.getStoredValue('qec-workbench:test')).resolves.toBeNull();
   });
 
+  it('adds hardware import captures only for the dedicated browser fixture', async () => {
+    const bridge = createE2eFixtureBridge(
+      baseBridge(),
+      new URLSearchParams({ e2eProject: 'qec-project', workspace: 'research', qecImport: '1' }),
+    );
+    expect(bridge).not.toBeNull();
+    if (!bridge) return;
+    const root = 'tests/e2e/fixtures/qec-project';
+
+    await expect(bridge.listDirectory(`${root}/studies`)).resolves.toEqual(expect.arrayContaining([
+      expect.objectContaining({ name: 'data-import.qec-study.yaml', kind: 'file' }),
+      expect.objectContaining({ name: 'surface-memory.qec-study.yaml', kind: 'file' }),
+    ]));
+    await expect(bridge.readFile(`${root}/captures/minimal.dets`)).resolves.toContain('shot D0 D2 L0');
+  });
+
   it('does not inherit unknown storage keys from the ambient platform bridge', async () => {
     const base = baseBridge();
     base.getStoredValue = vi.fn(async () => ({ preset: 'ambient-observe' }));

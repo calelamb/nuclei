@@ -126,6 +126,7 @@ const sessionListResultSchema = z.strictObject({
   type: z.literal('session_list_result'), requestId,
   sessions: z.array(qecSessionSchema), nextCursor: text.nullable(),
 }).readonly();
+export type SessionListResult = DeepReadonly<z.infer<typeof sessionListResultSchema>>;
 
 export const qecDataInboundFrameSchema = z.discriminatedUnion('type', [
   z.strictObject({ type: z.literal('authenticated') }).readonly(),

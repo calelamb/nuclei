@@ -1,0 +1,202 @@
+---
+title: "Canonical QEC Data Schema"
+description: "Reference for Nuclei QEC session manifests, syndrome batches, calibration records, campaign points, provenance, source spans, and durable Parquet storage."
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+Nuclei's canonical QEC schema gives simulation campaigns and hardware captures
+one typed storage contract without pretending that they contain the same kind
+of evidence. The current schema version is **`1.0.0`**. JSON Schemas live in
+`schemas/qec-data/v1/`; Python frozen models and TypeScript/Zod mirrors apply
+the additional cross-field checks that JSON Schema cannot express.
+
+<Aside type="note">
+Canonical means “normalized under an explicit mapping,” not “more authoritative
+than the source.” Every stored value retains a truth status and provenance ID,
+and imported chunks retain source spans back to the preserved bytes.
+</Aside>
+
+## Project layout
+
+```text
+qec-data/
+├── sources/
+│   └── <session-id>/<copied-source>
+└── sessions/
+    └── <session-id>/
+        ├── manifest.json
+        ├── identity.json
+        ├── journal.json
+        ├── normalized/
+        │   ├── syndromes/<segment-id>/part-*.parquet
+        │   ├── campaign_points/<segment-id>/part-*.parquet
+        │   └── calibrations/<segment-id>/part-*.parquet
+        ├── raw/
+        ├── derived/
+        ├── indexes/
+        └── quarantine/
+```
+
+`manifest.json` describes lifecycle and scientific context. `identity.json`
+binds the session's semantic dataset identity. `journal.json` is the sole
+visibility boundary for committed Parquet partitions. A `.pending` file is not
+query-visible merely because it exists on disk.
+
+## Session manifest
+
+Every session records:
+
+| Field | Contract |
+| --- | --- |
+| `schema_version` | Exactly `1.0.0`. |
+| `session_id` | Nonempty, portable identifier that agrees with its directory. |
+| `kind` | `simulation_campaign`, `hardware_import`, `hardware_live`, or `replay`. |
+| `status` | `created`, `importing`, `recording`, `complete`, `partial`, or `failed`, with lifecycle timestamps that agree with the state. |
+| `adapter` | Stable adapter ID and version. |
+| `references` | Qualified circuit, detector-error-model, topology, and calibration references. |
+| `counts` | Qualified detector, observable, measurement, and logical-patch counts. |
+| `source_clock` / `timebase` | Clock identity, domain, unit, tick period, and descriptions without invented timing. |
+| `provenance_id` | Stable lineage identity shared by the session's batches. |
+| `segments` | Unique segment IDs used by normalized partitions. |
+
+Lifecycle is strict. A `created` session has absent start/completion times; an
+`importing` or `recording` session has started but not completed; `complete` and
+`partial` sessions have both; a failed session has an explicit completion time.
+
+## Qualified values and scientific truth
+
+Potentially missing or model-derived values use:
+
+```json
+{ "value": 12.5, "status": "measured" }
+```
+
+Statuses are `absent`, `unavailable`, `unknown`, `inferred`, `predicted`,
+`simulated`, and `measured`. The first three require `value: null`; the other
+four require a value. A simulator result should therefore be `simulated`, not
+`measured`, and an unavailable calibration should remain null rather than zero.
+
+## Syndrome batches
+
+A syndrome batch is per-record evidence. It includes session/segment/batch IDs,
+a half-open sequence range, record count, optional qualified shot and round
+ranges, optional source timestamps with an explicit unit, packed detector
+events, and optional measurements, observables, erasures, leakage, and heralds.
+Circuit/topology revisions and data-quality flags travel with the batch.
+
+Packed bits use canonical base64, **LSB0** bit order, and an explicit bit width.
+Rows occupy `ceil(bit_width / 8)` bytes. Unused high bits in each row's final
+byte must be zero, decoded row counts must equal `record_count`, and
+`sequence_end - sequence_start` must equal `record_count`. Sequence ends are
+exclusive.
+
+Data quality is one or more of `complete`, `partial`, `out_of_order`,
+`duplicate`, `gap_before`, `clock_unreliable`, and `vendor_flagged`. `complete`
+cannot be combined with another flag.
+
+## Campaign point batches are aggregates
+
+Campaign point batches store sinter-style aggregate records: `shots`, `errors`,
+`discards`, `seconds`, `decoder`, `strong_id`, canonical JSON metadata, and
+optional nonnegative custom counts. They do not contain the detector events for
+the sampled shots and cannot be used to reconstruct a syndrome stream.
+
+This distinction is intentional:
+
+| Question | Correct record kind |
+| --- | --- |
+| What detector pattern fired on shot 918? | `syndromes` |
+| What logical error rate did decoder X achieve over 1,000,000 shots? | `campaign_points` |
+| What readout assignment error applied to qubit 17? | `calibrations` |
+
+Record arrays and sequence arithmetic must agree, numeric counts are
+nonnegative safe integers, and JSON metadata is bounded and canonicalized.
+
+## Calibration batches and records
+
+A calibration batch groups typed records under one session, segment, sequence
+range, and provenance ID. Every contained record must agree with that session
+and provenance.
+
+Each calibration record contains:
+
+- a calibration ID and effective `[start, end]` interval (`end` may be null);
+- scope kind/ID for a device, patch, qubit, coupler, resonator, readout channel,
+  or custom target;
+- parameter display name plus stable semantic ID;
+- qualified value, unit, and uncertainty;
+- quality: `accepted`, `suspect`, `rejected`, or `unknown`;
+- source system and optional calibration-run ID; and
+- the original representation and an RFC 2046-style MIME type.
+
+Keeping the original textual representation prevents a normalized floating
+point value from erasing vendor syntax or precision. The effective interval's
+end cannot precede its start.
+
+## Import chunks and source spans
+
+Adapters emit typed import chunks whose `record_kind` is `syndromes`,
+`campaign_points`, or `calibrations`. The payload must match that kind. Each
+chunk includes at least one source span:
+
+```json
+{
+  "source_id": "sha256:<digest>",
+  "row_range": { "start": 1, "end": 65 },
+  "byte_ranges": [{ "start": 128, "end": 8192 }],
+  "precision": "exact"
+}
+```
+
+Ranges are zero-based and half-open. Text readers report physical records
+(including header record zero), not editor line numbers. CSV/JSON Lines can
+usually report exact byte ranges. Arrow/Parquet may use `container` precision,
+which honestly says that a row came from a validated container region without
+claiming byte-perfect row localization.
+
+## Provenance and semantic identity
+
+The provenance schema can record source URI/digest/copy policy, adapter
+identity, mapping decisions, unit conversions, revision references, runtime and
+dependency versions, parent datasets, transformations, filters, exclusions,
+recipes, annotations, and control-audit references. Source IDs and parent
+identifiers must be unique.
+
+Dataset IDs are semantic hashes over schema version, adapter, session kind,
+segment, provenance identity, record profile, and recipe parameters. File paths
+and creation timing do not substitute for semantic identity. Two partitions
+with overlapping sequence ranges are invalid even when their filenames differ.
+
+## Durable storage and recovery
+
+Writers create bounded `.parquet.pending` partitions, inspect their typed schema
+and padding, durably move them into place, then publish a new journal generation.
+Readers use committed journal references only. Partition metadata includes the
+record kind, schema fingerprint, dataset identity, sequence range, row count,
+hash, and source spans.
+
+Recovery follows fail-closed rules:
+
+- a valid uncommitted pending partition may be reported as resumable but is not
+  promoted automatically;
+- exact duplicates can be treated idempotently;
+- corrupt, overlapping, schema-conflicting, or unsafe orphan files move to
+  `quarantine/`;
+- missing or corrupt committed partitions are fatal; and
+- segment schema changes require a new segment rather than an in-place rewrite.
+
+The original copied source remains separate from normalized storage, so a
+canonical failure does not alter the evidence being recovered.
+
+## Validation authority
+
+The JSON Schemas are useful for interoperable documents, but executable
+validators are authoritative for invariants such as sequence arithmetic,
+decoded packed-bit row counts, timestamp lengths, lifecycle/timestamp agreement,
+calibration interval ordering, safe canonical JSON, nested aggregate limits,
+and exact session/provenance agreement. Producers should validate with both the
+published schema and Nuclei's executable model before writing a partition.
+
+See [Importing QEC Data](/docs/research/qec-data-import/) for the guided mapping,
+preview, validation, and copy-only workflow.

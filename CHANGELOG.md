@@ -16,8 +16,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   and back/forward Trail, responsive Inspector drawer, collapsible operations
   tray, and per-project/per-Study persistence with actionable retry states.
 - QEC Workbench navigation in the Research rail and command palette, plus
-  laptop and wide-screen light-theme Playwright coverage. Hardware data import,
-  live observation, and connected session instruments remain future phases.
+  laptop and wide-screen light-theme Playwright coverage. Live observation and
+  additional connected session instruments remain future phases.
+
+### Added — Canonical QEC data import
+
+- A desktop, seven-stage import workflow for Stim result files, native sinter
+  statistics CSV, and explicitly mapped CSV, JSON Lines, Arrow, Feather, and
+  Parquet syndrome or calibration captures. Mapping requires scientific record
+  class, detector/observable widths, timestamp units, and LSB0 bit order where
+  applicable; bounded preview and validation block ambiguous writes.
+- Copy-only project security, SHA-256 source identity, adapter/version lineage,
+  source-span tracking, crash-safe journaled Parquet partitions, quarantine and
+  recovery semantics, and canonical schema `1.0.0` across Python, TypeScript,
+  Zod, and JSON Schema contracts.
+- Engine-backed canonical session discovery in QEC Workbench. Imported sessions
+  show kind, lifecycle status, and provenance in accessible Sources / Data rows,
+  refresh after completion, and return from the engine after an app reload.
+- Deterministic Stim `.dets` browser fixture and a PyArrow 18 Parquet adapter fixture plus an
+  end-to-end light-workspace acceptance flow covering Source → Adapter → Mapping
+  → Preview → Validation → Destination → Import and reload persistence.
 
 ## [0.13.0] - 2026-07-15
 

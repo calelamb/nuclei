@@ -1,0 +1,15 @@
+schema: 1
+id: qec-data-import
+name: QEC Data Import
+question: Can the recorded detector stream be normalized without guessing its meaning?
+preset: analyze
+tags:
+  - data-import
+  - hardware
+sources:
+  - id: repetition-d3
+    kind: stim
+    path: circuits/repetition.stim
+  - id: minimal-dets
+    kind: session
+    path: captures/minimal.dets

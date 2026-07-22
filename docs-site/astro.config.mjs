@@ -77,6 +77,7 @@ export default defineConfig({
             'research/experiments',
             'research/qec-studio',
             'research/qec-workbench',
+            'research/qec-data-import',
             'research/campaigns',
             'research/noise-models',
             'research/resource-estimation',
@@ -134,6 +135,7 @@ export default defineConfig({
           items: [
             'reference/configuration',
             'reference/framework-catalog',
+            'reference/qec-data-schema',
             'reference/protocol-changelog',
           ],
         },

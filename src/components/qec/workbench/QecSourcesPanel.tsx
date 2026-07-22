@@ -5,9 +5,11 @@ import { QEC_PANEL_REGISTRY } from '../../../layout/qecPanelRegistry';
 import { useQecStudyStore, type QecStudyValidationError } from '../../../services/qecStudyStore';
 import { useQecStudyUiStore } from '../../../stores/qecStudyUiStore';
 import { useQecJobStore } from '../../../stores/qecJobStore';
+import { useQecSessionCatalogStore } from '../../../stores/qecSessionCatalogStore';
 import { useQecWorkbenchStore } from '../../../stores/qecWorkbenchStore';
 import { useResearchSelectionStore } from '../../../stores/researchSelectionStore';
 import type { QecStudy, QecStudySource, QecWorkspacePreset } from '../../../types/qecStudy';
+import type { QecSession } from '../../../types/qecData';
 
 const SOURCE_ICONS: Readonly<Record<QecStudySource['kind'], LucideIcon>> = {
   stim: FileCode2, python: FileCode2, dem: Database,
@@ -102,6 +104,50 @@ function ReferencedFiles({ sources }: { sources: readonly QecStudySource[] }): R
   );
 }
 
+function sessionKindLabel(kind: QecSession['kind']): string {
+  return kind.replaceAll('_', ' ');
+}
+
+function CanonicalSessionRow({ session }: { session: QecSession }): ReactElement {
+  const selected = useResearchSelectionStore((state) => state.present.primary);
+  const select = useResearchSelectionStore((state) => state.selectPrimary);
+  const current = selected?.kind === 'session' && selected.sessionId === session.session_id;
+  return (
+    <button
+      type="button"
+      aria-current={current ? 'true' : undefined}
+      className="qec-source-row qec-session-row"
+      onClick={() => select({ kind: 'session', id: session.session_id, sessionId: session.session_id }, 'user')}
+    >
+      <Database aria-hidden="true" size={16} />
+      <span>
+        <strong>{session.session_id}</strong>
+        <small>{sessionKindLabel(session.kind)} · {session.status}</small>
+        <small className="qec-mono">{session.provenance_id}</small>
+      </span>
+      <span className={`qec-session-row__status qec-session-row__status--${session.status}`}>{session.status}</span>
+    </button>
+  );
+}
+
+function CanonicalSessions(): ReactElement | null {
+  const sessions = useQecSessionCatalogStore((state) => state.sessions);
+  const status = useQecSessionCatalogStore((state) => state.status);
+  const error = useQecSessionCatalogStore((state) => state.error);
+  if (status === 'idle' && sessions.length === 0) return null;
+  return (
+    <section className="qec-source-group" aria-labelledby="canonical-sessions-heading">
+      <h3 id="canonical-sessions-heading">Canonical sessions</h3>
+      {status === 'loading' && sessions.length === 0 && <p className="qec-source-group__empty" role="status">Loading engine sessions…</p>}
+      {status === 'error' && <p className="qec-source-group__empty" role="alert">{error}</p>}
+      {status === 'ready' && sessions.length === 0 && <p className="qec-source-group__empty">No canonical sessions yet.</p>}
+      {sessions.length > 0 && <ul className="qec-session-tree" aria-label="Canonical sessions">
+        {sessions.map((session) => <li key={session.session_id}><CanonicalSessionRow session={session} /></li>)}
+      </ul>}
+    </section>
+  );
+}
+
 function SourceInstruments({ preset }: { preset: QecWorkspacePreset }): ReactElement | null {
   const panels = QEC_PANEL_REGISTRY.filter((panel) => panel.zone === 'sources' && panel.presets.includes(preset));
   if (panels.length === 0) return null;
@@ -123,7 +169,7 @@ function SourcesContent({ study, preset, errors, hasStudies }: { study: QecStudy
   return (
     <div className="qec-sources__scroll">
       {!study && hasStudies && <ChooseStudy />}
-      {study && <><StudyOverview study={study} /><ReferencedFiles sources={study.sources} /><SourceInstruments preset={preset} /></>}
+      {study && <><StudyOverview study={study} /><ReferencedFiles sources={study.sources} /><CanonicalSessions /><SourceInstruments preset={preset} /></>}
       {errors.length > 0 && <ValidationDetails errors={errors} />}
     </div>
   );

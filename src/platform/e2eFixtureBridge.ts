@@ -1,4 +1,6 @@
 import circuitSource from '../../tests/e2e/fixtures/qec-project/circuits/repetition.stim?raw';
+import detectorSamples from '../../tests/e2e/fixtures/qec-project/captures/minimal.dets?raw';
+import dataImportStudySource from '../../tests/e2e/fixtures/qec-project/studies/data-import.qec-study.yaml?raw';
 import studySource from '../../tests/e2e/fixtures/qec-project/studies/surface-memory.qec-study.yaml?raw';
 import { useResearchTourStore } from '../stores/researchTourStore';
 import type { DirEntry, PlatformBridge } from './bridge';
@@ -14,6 +16,7 @@ const FIXTURE_PROJECTS: Readonly<Record<string, FixtureProject>> = Object.freeze
   'qec-project': Object.freeze({
     files: Object.freeze({
       'circuits/repetition.stim': circuitSource,
+      'captures/minimal.dets': detectorSamples,
       'studies/surface-memory.qec-study.yaml': studySource,
     }),
   }),
@@ -80,6 +83,29 @@ function seedFixtureSession(root: string, workspace: string | null): void {
   useResearchTourStore.setState({ seen: true, active: false, step: 0 });
   if (workspace !== 'research') return;
   localStorage.setItem('nuclei:workspace_mode_by_project', JSON.stringify({ [root]: 'research' }));
+}
+
+function installQecDataInvokeFixture(): void {
+  const fixtureWindow = window as typeof window & {
+    __NUCLEI_E2E_QEC_INVOKE__?: (command: string, args?: unknown) => Promise<unknown>;
+    __TAURI_INTERNALS__?: { invoke(command: string, args?: unknown): Promise<unknown> };
+  };
+  const invoke = fixtureWindow.__NUCLEI_E2E_QEC_INVOKE__;
+  if (!invoke || fixtureWindow.__TAURI_INTERNALS__) return;
+  Object.defineProperty(fixtureWindow, '__TAURI_INTERNALS__', {
+    configurable: true,
+    value: Object.freeze({ invoke }),
+  });
+}
+
+function withQecImportFixture(project: FixtureProject, enabled: boolean): FixtureProject {
+  if (!enabled) return project;
+  return Object.freeze({
+    files: Object.freeze({
+      ...project.files,
+      'studies/data-import.qec-study.yaml': dataImportStudySource,
+    }),
+  });
 }
 
 function fixtureStoredValue<T>(key: string, root: string): T | null | undefined {
@@ -180,9 +206,11 @@ export function createE2eFixtureBridge(
 ): PlatformBridge | null {
   const projectId = query.get('e2eProject');
   if (!projectId || !PROJECT_ID_PATTERN.test(projectId)) return null;
-  const project = FIXTURE_PROJECTS[projectId];
-  if (!project) return null;
+  const fixtureProject = FIXTURE_PROJECTS[projectId];
+  if (!fixtureProject) return null;
+  const project = withQecImportFixture(fixtureProject, query.get('qecImport') === '1');
   const root = fixtureRoot(projectId);
+  installQecDataInvokeFixture();
   seedFixtureSession(root, query.get('workspace'));
   return new FixtureSession(root, project).bridge(base);
 }

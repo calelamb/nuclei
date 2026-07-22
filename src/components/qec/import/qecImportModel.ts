@@ -16,6 +16,7 @@ export interface MappingOptions {
   detectorCount: string;
   observableCount: string;
   timestampUnit: string;
+  bitOrder: string;
 }
 
 export function formatBytes(bytes: number): string {
@@ -46,6 +47,16 @@ export function completeRows(rows: readonly MappingRow[]): readonly MappingRow[]
   return Object.freeze(rows.filter((row) => row.canonical.trim() && row.source.trim()));
 }
 
+const NATIVE_MAPPING_ADAPTERS = new Set(['stim-results', 'sinter-csv']);
+
+export function mappingIsReviewed(
+  adapterId: string,
+  rows: readonly MappingRow[],
+  reviewed: boolean,
+): boolean {
+  return reviewed && (NATIVE_MAPPING_ADAPTERS.has(adapterId) || completeRows(rows).length > 0);
+}
+
 export function buildMapping(rows: readonly MappingRow[], options: MappingOptions): ImportMapping {
   const fields = Object.fromEntries(
     completeRows(rows).map((row) => [row.canonical.trim(), row.source.trim()]),
@@ -60,6 +71,7 @@ export function buildMapping(rows: readonly MappingRow[], options: MappingOption
   const explicitText = Object.fromEntries([
     ['output_kind', options.outputKind],
     ['timestamp_unit', options.timestampUnit],
+    ['bit_order', options.bitOrder],
   ].filter(([, value]) => value !== ''));
   return Object.freeze({ fields: Object.freeze(fields), options: Object.freeze({ ...explicitText, ...explicitNumbers }) });
 }

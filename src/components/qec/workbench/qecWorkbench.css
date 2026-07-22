@@ -312,6 +312,23 @@
   color: var(--qec-text-muted); font-family: var(--font-mono); font-size: 9px; text-transform: uppercase;
 }
 
+.qec-session-tree {
+  display: grid; gap: 2px; margin: 0; padding: 0; list-style: none;
+}
+
+.qec-session-row[aria-current='true'] {
+  border-color: var(--qec-selection-strong); background: var(--qec-selection); color: var(--qec-quantum-strong);
+}
+
+.qec-session-row__status {
+  padding: 3px 5px; border: 1px solid var(--qec-border); border-radius: 999px;
+  color: var(--qec-text-muted); font-family: var(--font-mono); font-size: 8px; text-transform: uppercase;
+}
+
+.qec-session-row__status--complete {
+  border-color: var(--qec-selection-strong); background: var(--qec-field); color: var(--qec-analytical-strong);
+}
+
 .qec-source-instrument {
   display: grid; min-height: 36px; grid-template-columns: 8px minmax(0, 1fr) auto; align-items: center;
   gap: 8px; padding: 0 8px; color: var(--qec-text-muted); font-size: 11px;

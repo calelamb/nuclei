@@ -9,6 +9,10 @@ import {
 } from '../../../services/qecDataClient';
 import { useProjectStore } from '../../../stores/projectStore';
 import { useQecJobStore } from '../../../stores/qecJobStore';
+import {
+  useQecSessionCatalogStore,
+  type QecSessionCatalogClient,
+} from '../../../stores/qecSessionCatalogStore';
 import { useQecWorkbenchStore } from '../../../stores/qecWorkbenchStore';
 import { QecImportWizard } from '../import/QecImportWizard';
 
@@ -58,14 +62,16 @@ function TrayContent({ client }: { client: QecImportClient | null }): ReactEleme
   );
 }
 
+type QecWorkbenchClient = QecImportClient & Partial<QecSessionCatalogClient>;
+
 interface EngineState {
-  client: QecImportClient | null;
+  client: QecWorkbenchClient | null;
   loading: boolean;
   error: string | null;
   scope: string | null;
 }
 
-function useImportEngine(enabled: boolean, provided?: QecImportClient): EngineState {
+function useImportEngine(enabled: boolean, provided?: QecWorkbenchClient): EngineState {
   const projectRoot = useProjectStore((state) => state.projectRoot);
   const [state, setState] = useState<EngineState>({ client: null, loading: false, error: null, scope: null });
   useEffect(() => {
@@ -100,17 +106,43 @@ function EngineNotice({ state }: { state: EngineState }): ReactElement {
   return <div className="qec-tray__engine" role="alert"><CircleDot aria-hidden="true" size={18} /><span>{state.error}</span></div>;
 }
 
-interface QecWorkbenchTrayProps { client?: QecImportClient; }
+function supportsSessionCatalog(client: QecWorkbenchClient): client is QecWorkbenchClient & QecSessionCatalogClient {
+  return typeof client.listSessions === 'function';
+}
+
+function completedSessionKey(jobs: ReturnType<typeof useQecJobStore.getState>['jobs']): string {
+  return Object.values(jobs)
+    .filter((job) => job.kind === 'import' && job.status === 'complete' && job.sessionId)
+    .map((job) => job.sessionId)
+    .sort()
+    .join('\n');
+}
+
+function useSessionCatalog(client: QecWorkbenchClient | null, projectRoot: string | null): void {
+  const jobs = useQecJobStore((state) => state.jobs);
+  const load = useQecSessionCatalogStore((state) => state.load);
+  const reset = useQecSessionCatalogStore((state) => state.reset);
+  const catalogProject = useQecSessionCatalogStore((state) => state.projectRoot);
+  const completionKey = completedSessionKey(jobs);
+  useEffect(() => {
+    if (!projectRoot || (catalogProject && catalogProject !== projectRoot)) reset();
+  }, [catalogProject, projectRoot, reset]);
+  useEffect(() => {
+    if (projectRoot && client && supportsSessionCatalog(client)) void load(client, projectRoot);
+  }, [client, completionKey, load, projectRoot]);
+}
+
+interface QecWorkbenchTrayProps { client?: QecWorkbenchClient; }
 
 export function QecWorkbenchTray({ client: providedClient }: QecWorkbenchTrayProps = {}): ReactElement {
   const collapsed = useQecWorkbenchStore((state) => state.trayCollapsed);
   const toggleCollapsed = useQecWorkbenchStore((state) => state.toggleTrayCollapsed);
   const source = useQecJobStore((state) => state.importSource);
   const returnFocusId = useQecJobStore((state) => state.importReturnFocusId);
-  const jobs = useQecJobStore((state) => state.jobs);
+  const projectRoot = useProjectStore((state) => state.projectRoot);
   const closeImport = useQecJobStore((state) => state.closeImport);
-  const liveJobs = Object.values(jobs).some((job) => ['starting', 'running', 'cancelling'].includes(job.status));
-  const engine = useImportEngine(source !== null || liveJobs, providedClient);
+  const engine = useImportEngine(true, providedClient);
+  useSessionCatalog(engine.client, projectRoot);
   const closeAndRestoreFocus = (): void => {
     const targetId = returnFocusId;
     closeImport();

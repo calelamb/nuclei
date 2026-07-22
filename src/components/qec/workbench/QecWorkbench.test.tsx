@@ -5,6 +5,7 @@ import { useQecStudyStore } from '../../../services/qecStudyStore';
 import { PlatformProvider } from '../../../platform/PlatformProvider';
 import { useProjectStore } from '../../../stores/projectStore';
 import { useQecJobStore } from '../../../stores/qecJobStore';
+import { useQecSessionCatalogStore } from '../../../stores/qecSessionCatalogStore';
 import { useQecStudyUiStore } from '../../../stores/qecStudyUiStore';
 import { useQecWorkbenchStore } from '../../../stores/qecWorkbenchStore';
 import {
@@ -15,6 +16,7 @@ import { QecWorkbench } from './QecWorkbench';
 import { QecSourcesPanel } from './QecSourcesPanel';
 import { QecWorkbenchTray } from './QecWorkbenchTray';
 import type { QecImportClient } from '../../../services/qecDataClient';
+import type { QecSession } from '../../../types/qecData';
 import { deferred, flushAsync, flushPersistenceDebounce, MemoryStorage,
   persistedState, persistenceBridge } from './qecWorkbenchTestUtils';
 
@@ -94,9 +96,31 @@ beforeEach(() => {
     future: [],
   });
   useQecJobStore.getState().reset();
+  useQecSessionCatalogStore.getState().reset();
 });
 
 describe('<QecWorkbench />', () => {
+  it('renders engine-backed canonical sessions as an accessible selectable list', () => {
+    useQecSessionCatalogStore.setState({
+      projectRoot: '/project', status: 'ready', error: null,
+      sessions: [{
+        session_id: 'minimal-capture', kind: 'hardware_import', status: 'complete',
+        provenance_id: 'provenance-minimal', adapter: { id: 'stim-results', version: '1' },
+      } as QecSession],
+    });
+
+    render(<QecSourcesPanel />);
+
+    const list = screen.getByRole('list', { name: 'Canonical sessions' });
+    const item = within(list).getByRole('button', { name: /minimal-capture/i });
+    expect(item.textContent).toMatch(/hardware import/i);
+    expect(item.textContent).toMatch(/complete/i);
+    expect(item.textContent).toMatch(/provenance-minimal/i);
+    fireEvent.click(item);
+    expect(useResearchSelectionStore.getState().present.primary).toEqual({
+      kind: 'session', id: 'minimal-capture', sessionId: 'minimal-capture',
+    });
+  });
   it('renders four named regions and moves between presets', () => {
     render(<QecWorkbench />);
 
@@ -279,6 +303,26 @@ describe('<QecWorkbench />', () => {
     expect(screen.getByText('session-42')).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'Cancel import running' }));
     await waitFor(() => expect(client.cancel).toHaveBeenCalledWith('import', 'running'));
+  });
+
+  it('loads engine sessions for the project and refreshes after import completion', async () => {
+    useProjectStore.setState({ projectRoot: '/project' });
+    const listSessions = vi.fn(async () => []);
+    const client = { ...importClient(), listSessions };
+
+    render(<QecWorkbenchTray client={client} />);
+    await waitFor(() => expect(listSessions).toHaveBeenCalledTimes(1));
+
+    act(() => useQecJobStore.setState({
+      jobs: {
+        complete: {
+          id: 'complete', kind: 'import', status: 'complete', message: 'Import complete',
+          sessionId: 'minimal-capture', source: 'captures/minimal.dets',
+        },
+      },
+    }));
+
+    await waitFor(() => expect(listSessions).toHaveBeenCalledTimes(2));
   });
 
   it('hydrates scoped context and debounces an immutable platform-store snapshot', async () => {

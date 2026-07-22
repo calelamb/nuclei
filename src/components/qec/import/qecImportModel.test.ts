@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { buildMapping, completeRows, formatBytes, sessionIdIssue, stageDescription, supportedAdapters } from './qecImportModel';
+import { buildMapping, completeRows, formatBytes, mappingIsReviewed, sessionIdIssue, stageDescription, supportedAdapters } from './qecImportModel';
 
 describe('qecImportModel', () => {
   it('formats bounded source sizes across units', () => {
@@ -28,11 +28,18 @@ describe('qecImportModel', () => {
     ];
     expect(completeRows(rows)).toHaveLength(1);
     expect(buildMapping(rows, {
-      outputKind: 'syndromes', detectorCount: '8', observableCount: '', timestampUnit: 'ns',
+      outputKind: 'syndromes', detectorCount: '8', observableCount: '', timestampUnit: 'ns', bitOrder: 'lsb0',
     })).toEqual({
       fields: { sequence: 'shot_id' },
-      options: { output_kind: 'syndromes', timestamp_unit: 'ns', detector_count: 8 },
+      options: { output_kind: 'syndromes', timestamp_unit: 'ns', bit_order: 'lsb0', detector_count: 8 },
     });
+  });
+
+  it('accepts reviewed native Stim mapping without invented source columns', () => {
+    expect(mappingIsReviewed('stim-results', [], true)).toBe(true);
+    expect(mappingIsReviewed('sinter-csv', [], true)).toBe(true);
+    expect(mappingIsReviewed('tabular', [], true)).toBe(false);
+    expect(mappingIsReviewed('stim-results', [], false)).toBe(false);
   });
 
   it('describes every fixed stage', () => {

@@ -30,6 +30,7 @@ import {
   buildMapping,
   completeRows,
   formatBytes,
+  mappingIsReviewed,
   sessionIdIssue,
   stageDescription,
   supportedAdapters,
@@ -46,7 +47,7 @@ interface QecImportWizardProps {
 }
 
 const EMPTY_OPTIONS: MappingOptions = {
-  outputKind: '', detectorCount: '', observableCount: '', timestampUnit: '',
+  outputKind: '', detectorCount: '', observableCount: '', timestampUnit: '', bitOrder: '',
 };
 
 interface AsyncState<T> {
@@ -170,6 +171,7 @@ function MappingOptionsForm({ options, onChange }: { options: MappingOptions; on
       <label>Detector width<input type="number" min="1" value={options.detectorCount} onChange={(event) => set('detectorCount', event.target.value)} /></label>
       <label>Observable width<input type="number" min="1" value={options.observableCount} onChange={(event) => set('observableCount', event.target.value)} /></label>
       <label>Timestamp unit<input value={options.timestampUnit} onChange={(event) => set('timestampUnit', event.target.value)} placeholder="e.g. ns" /></label>
+      <label>Bit order<select value={options.bitOrder} onChange={(event) => set('bitOrder', event.target.value)}><option value="">Choose explicitly</option><option value="lsb0">LSB0</option></select></label>
     </fieldset>
   );
 }
@@ -346,7 +348,7 @@ function useMappingEditor(invalidate: () => void) {
   const [options, setOptions] = useState(EMPTY_OPTIONS);
   const [reviewed, setReviewed] = useState(false);
   const mapping = useMemo(() => buildMapping(rows, options), [options, rows]);
-  const mappingReady = reviewed && completeRows(rows).length > 0;
+  const mappingReady = mappingIsReviewed(adapterId, rows, reviewed);
   const chooseAdapter = (id: string): void => { setAdapterId(id); invalidate(); };
   const addRow = (): void => {
     setRows((current) => Object.freeze([...current, { id: nextRowId, canonical: '', source: '' }]));
