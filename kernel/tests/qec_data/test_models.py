@@ -1,0 +1,210 @@
+import json
+from dataclasses import FrozenInstanceError, replace
+from pathlib import Path
+
+import pytest
+
+from kernel.qec_data.model_codecs import (
+    batch_from_mapping,
+    batch_to_mapping,
+    session_from_mapping,
+    session_to_mapping,
+)
+from kernel.qec_data.models import (
+    AdapterIdentity,
+    CalibrationRecord,
+    CalibrationScope,
+    DecodeRecord,
+    DecodeStatus,
+    PackedBits,
+    ProvenanceRecord,
+    ProvenanceSource,
+    QualifiedFloat,
+    QualifiedPackedBits,
+    QualifiedText,
+    SessionKind,
+    SessionRecord,
+    SessionStatus,
+    SyndromeBatch,
+    ValueStatus,
+)
+
+
+FIXTURES = Path(__file__).parents[3] / "schemas" / "qec-data" / "v1" / "fixtures"
+
+
+def load_fixture(name: str) -> dict[str, object]:
+    return json.loads((FIXTURES / name).read_text(encoding="utf-8"))
+
+
+def test_session_record_is_frozen_and_uses_immutable_segments() -> None:
+    session = SessionRecord.minimal(
+        "s1", SessionKind.HARDWARE_IMPORT, "generic.parquet", "1.0.0", "p1"
+    )
+    assert session.segments == ()
+    with pytest.raises(FrozenInstanceError):
+        session.status = SessionStatus.FAILED  # type: ignore[misc]
+
+
+def test_session_minimal_rejects_blank_boundary_identifiers() -> None:
+    with pytest.raises(ValueError, match="session_id"):
+        SessionRecord.minimal(
+            " ", SessionKind.HARDWARE_IMPORT, "generic.parquet", "1.0.0", "p1"
+        )
+
+
+def test_packed_bits_rejects_mutable_or_incorrectly_sized_buffers() -> None:
+    with pytest.raises(TypeError, match="bytes"):
+        PackedBits(bit_width=2, data=bytearray(b"\x00"))  # type: ignore[arg-type]
+    with pytest.raises(ValueError, match="size"):
+        PackedBits(bit_width=9, data=b"\x00")
+
+
+def test_syndrome_batch_validates_sequence_and_packed_detector_width() -> None:
+    batch = SyndromeBatch(
+        batch_id="batch-1",
+        session_id="session-1",
+        segment_id="segment-1",
+        sequence_start=10,
+        sequence_end=12,
+        record_count=2,
+        detector_events=PackedBits(bit_width=9, data=b"\x00\x00\x00\x00"),
+    )
+    assert batch.detector_events.data == bytes(4)
+    with pytest.raises(ValueError, match="sequence range"):
+        SyndromeBatch(
+            batch_id="bad",
+            session_id="session-1",
+            segment_id="segment-1",
+            sequence_start=10,
+            sequence_end=11,
+            record_count=2,
+            detector_events=PackedBits(bit_width=9, data=bytes(4)),
+        )
+
+
+def test_syndrome_batch_validates_optional_observable_width() -> None:
+    with pytest.raises(ValueError, match="observables"):
+        SyndromeBatch(
+            batch_id="bad",
+            session_id="session-1",
+            segment_id="segment-1",
+            sequence_start=0,
+            sequence_end=2,
+            record_count=2,
+            detector_events=PackedBits(bit_width=1, data=bytes(2)),
+            observables=QualifiedPackedBits(
+                value=PackedBits(bit_width=9, data=bytes(2)),
+                status=ValueStatus.MEASURED,
+            ),
+        )
+
+
+def test_qualified_values_reject_ambiguous_value_status_pairs() -> None:
+    with pytest.raises(ValueError, match="measured"):
+        QualifiedFloat(value=None, status=ValueStatus.MEASURED)
+    with pytest.raises(ValueError, match="absent"):
+        QualifiedText(value="Hz", status=ValueStatus.ABSENT)
+
+
+def test_decode_calibration_and_provenance_models_are_frozen() -> None:
+    decode = DecodeRecord.minimal(
+        decode_id="decode-1",
+        session_id="session-1",
+        batch_id="batch-1",
+        decoder=AdapterIdentity("pymatching", "2.3.1"),
+        configuration_sha256="a" * 64,
+        prediction=PackedBits(1, b"\x00"),
+        predicted_logical_flips=PackedBits(1, b"\x00"),
+        provenance_id="p1",
+    )
+    assert decode.status is DecodeStatus.COMPLETE
+    calibration = CalibrationRecord.minimal(
+        calibration_id="cal-1",
+        session_id="session-1",
+        scope=CalibrationScope(kind="qubit", id="q0"),
+        parameter_name="readout assignment error",
+        semantic_id="vendor.example/readout_assignment_error",
+        source_system="lab-db",
+        provenance_id="p1",
+    )
+    assert calibration.value.status is ValueStatus.UNKNOWN
+    provenance = ProvenanceRecord(
+        provenance_id="p1",
+        created_at="2026-07-21T00:00:00Z",
+        adapter=AdapterIdentity("generic", "1.0.0"),
+        sources=(ProvenanceSource("source-1", "capture.dets", "b" * 64, "reference"),),
+    )
+    with pytest.raises(FrozenInstanceError):
+        provenance.provenance_id = "p2"  # type: ignore[misc]
+
+
+def test_session_and_batch_fixtures_round_trip_without_shape_loss() -> None:
+    session_mapping = load_fixture("minimal-session.json")
+    batch_mapping = load_fixture("minimal-batch.json")
+    assert session_to_mapping(session_from_mapping(session_mapping)) == session_mapping
+    assert batch_to_mapping(batch_from_mapping(batch_mapping)) == batch_mapping
+
+
+@pytest.mark.parametrize(
+    "model_name", ["session", "batch", "decode", "calibration", "provenance"]
+)
+def test_every_record_rejects_an_incompatible_schema_version(model_name: str) -> None:
+    session = session_from_mapping(load_fixture("minimal-session.json"))
+    batch = batch_from_mapping(load_fixture("minimal-batch.json"))
+    decode = DecodeRecord.minimal(
+        decode_id="d1",
+        session_id="s1",
+        batch_id="b1",
+        decoder=AdapterIdentity("decoder", "1"),
+        configuration_sha256="a" * 64,
+        prediction=PackedBits(1, b"\x00"),
+        predicted_logical_flips=PackedBits(1, b"\x00"),
+        provenance_id="p1",
+    )
+    calibration = CalibrationRecord.minimal(
+        calibration_id="c1",
+        session_id="s1",
+        scope=CalibrationScope("device", "device-1"),
+        parameter_name="parameter",
+        semantic_id="vendor/parameter",
+        source_system="source",
+        provenance_id="p1",
+    )
+    provenance = ProvenanceRecord(
+        "p1",
+        "2026-07-21T00:00:00Z",
+        AdapterIdentity("adapter", "1"),
+        sources=(ProvenanceSource("source", "capture", "b" * 64, "reference"),),
+    )
+    records = {
+        "session": session,
+        "batch": batch,
+        "decode": decode,
+        "calibration": calibration,
+        "provenance": provenance,
+    }
+    with pytest.raises(ValueError, match="schema_version"):
+        replace(records[model_name], schema_version="2.0.0")
+
+
+def test_provenance_requires_at_least_one_original_source() -> None:
+    with pytest.raises(ValueError, match="source"):
+        ProvenanceRecord("p1", "2026-07-21T00:00:00Z", AdapterIdentity("adapter", "1"))
+
+
+def test_tuple_collections_reject_mutable_list_inputs() -> None:
+    session = SessionRecord.minimal(
+        "s1", SessionKind.HARDWARE_IMPORT, "adapter", "1", "p1"
+    )
+    with pytest.raises(TypeError, match="segments"):
+        replace(session, segments=["segment-1"])  # type: ignore[arg-type]
+    with pytest.raises(TypeError, match="sources"):
+        ProvenanceRecord(
+            "p1",
+            "2026-07-21T00:00:00Z",
+            AdapterIdentity("adapter", "1"),
+            sources=[  # type: ignore[arg-type]
+                ProvenanceSource("s1", "capture", "b" * 64, "reference")
+            ],
+        )
