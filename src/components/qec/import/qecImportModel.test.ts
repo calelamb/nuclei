@@ -2,6 +2,10 @@ import { describe, expect, it } from 'vitest';
 
 import { buildMapping, completeRows, formatBytes, mappingIsReviewed, sessionIdIssue, stageDescription, supportedAdapters } from './qecImportModel';
 
+const EMPTY_OPTIONS = {
+  outputKind: '', detectorCount: '', observableCount: '', timestampUnit: '', bitOrder: '',
+};
+
 describe('qecImportModel', () => {
   it('formats bounded source sizes across units', () => {
     expect(formatBytes(12)).toBe('12 B');
@@ -35,11 +39,15 @@ describe('qecImportModel', () => {
     });
   });
 
-  it('accepts reviewed native Stim mapping without invented source columns', () => {
-    expect(mappingIsReviewed('stim-results', [], true)).toBe(true);
-    expect(mappingIsReviewed('sinter-csv', [], true)).toBe(true);
-    expect(mappingIsReviewed('tabular', [], true)).toBe(false);
-    expect(mappingIsReviewed('stim-results', [], false)).toBe(false);
+  it('requires explicit native Stim widths while accepting observable zero', () => {
+    expect(mappingIsReviewed('stim-results', [], EMPTY_OPTIONS, true)).toBe(false);
+    expect(mappingIsReviewed('stim-results', [], { ...EMPTY_OPTIONS, detectorCount: '3' }, true)).toBe(false);
+    expect(mappingIsReviewed('stim-results', [], { ...EMPTY_OPTIONS, detectorCount: '3', observableCount: '0' }, true)).toBe(true);
+    expect(mappingIsReviewed('stim-results', [], { ...EMPTY_OPTIONS, detectorCount: '0', observableCount: '0' }, true)).toBe(false);
+    expect(mappingIsReviewed('stim-results', [], { ...EMPTY_OPTIONS, detectorCount: '3', observableCount: '-1' }, true)).toBe(false);
+    expect(mappingIsReviewed('stim-results', [], { ...EMPTY_OPTIONS, detectorCount: '3', observableCount: '1' }, false)).toBe(false);
+    expect(mappingIsReviewed('sinter-csv', [], EMPTY_OPTIONS, true)).toBe(true);
+    expect(mappingIsReviewed('tabular', [], EMPTY_OPTIONS, true)).toBe(false);
   });
 
   it('describes every fixed stage', () => {

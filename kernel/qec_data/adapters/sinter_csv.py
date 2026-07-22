@@ -47,6 +47,11 @@ REQUIRED_COLUMNS = (
 )
 OPTIONAL_COLUMNS = ("custom_counts",)
 KNOWN_COLUMNS = frozenset((*REQUIRED_COLUMNS, *OPTIONAL_COLUMNS))
+SINTER_OPTIONS = frozenset({"session_id", "segment_id"})
+
+
+class SinterMappingUnsupported(ValueError):
+    """The mapping includes configuration that native sinter CSV cannot use."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -189,6 +194,24 @@ def _text_option(options: dict[str, object], name: str, fallback: str) -> str:
     return value
 
 
+def _validated_options(mapping: ImportMapping) -> dict[str, object]:
+    if mapping.fields:
+        raise SinterMappingUnsupported(
+            "native sinter CSV does not accept field mappings"
+        )
+    options = _options(mapping)
+    unsupported_options = sorted(set(options) - SINTER_OPTIONS)
+    if unsupported_options:
+        names = ", ".join(unsupported_options)
+        raise SinterMappingUnsupported(
+            f"unsupported native sinter CSV mapping option(s): {names}"
+        )
+    for name in SINTER_OPTIONS:
+        if name in options:
+            _text_option(options, name, "")
+    return options
+
+
 def _identity(source_hash: str, mapping: ImportMapping) -> str:
     if mapping.expected_provenance_id is not None:
         return mapping.expected_provenance_id
@@ -227,6 +250,7 @@ def _chunk(
 
 
 def _chunks(source: Path, mapping: ImportMapping) -> Iterator[ImportChunk]:
+    _validated_options(mapping)
     source_hash = compute_source_sha256(source)
     sequence_start = 0
     group: list[_CsvRow] = []
@@ -273,7 +297,6 @@ class SinterCsvAdapter:
 
     def validate(self, source: Path, mapping: ImportMapping) -> ValidationReport:
         source_hash = compute_source_sha256(source)
-        provenance_id = _identity(source_hash, mapping)
         try:
             found = False
             for chunk in _chunks(source, mapping):
@@ -281,12 +304,18 @@ class SinterCsvAdapter:
             if not found:
                 raise ValueError("sinter CSV contains no campaign points")
         except (OSError, TypeError, ValueError) as error:
+            code = (
+                "sinter_mapping_unsupported"
+                if isinstance(error, SinterMappingUnsupported)
+                else "sinter_invalid_data"
+            )
             return ValidationReport(
                 False,
-                (ValidationIssue("sinter_invalid_data", str(error)),),
+                (ValidationIssue(code, str(error)),),
                 source_sha256=source_hash,
-                provenance_id=provenance_id,
+                provenance_id=None,
             )
+        provenance_id = _identity(source_hash, mapping)
         return ValidationReport(
             True, source_sha256=source_hash, provenance_id=provenance_id
         )
@@ -296,6 +325,7 @@ class SinterCsvAdapter:
     ) -> PreviewResult:
         if type(limit) is not int or limit < 0:
             raise ValueError("preview limit must be a nonnegative integer")
+        _validated_options(mapping)
         source_hash = compute_source_sha256(source)
         iterator = iter(_csv_rows(source))
         bounded_limit = min(limit, MAX_BATCH_RECORDS)

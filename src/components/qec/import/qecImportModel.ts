@@ -56,9 +56,21 @@ export function adapterUsesNativeMapping(adapterId: string): boolean {
 export function mappingIsReviewed(
   adapterId: string,
   rows: readonly MappingRow[],
+  options: MappingOptions,
   reviewed: boolean,
 ): boolean {
-  return reviewed && (adapterUsesNativeMapping(adapterId) || completeRows(rows).length > 0);
+  if (!reviewed) return false;
+  if (adapterId === 'stim-results') {
+    const detectors = Number(options.detectorCount);
+    const observables = Number(options.observableCount);
+    return options.detectorCount !== ''
+      && options.observableCount !== ''
+      && Number.isSafeInteger(detectors)
+      && detectors > 0
+      && Number.isSafeInteger(observables)
+      && observables >= 0;
+  }
+  return adapterId === 'sinter-csv' || completeRows(rows).length > 0;
 }
 
 export function buildMapping(rows: readonly MappingRow[], options: MappingOptions): ImportMapping {

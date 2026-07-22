@@ -4,6 +4,7 @@ from pathlib import Path
 
 import pytest
 
+import kernel.qec_data.adapters.stim_results as stim_results
 from kernel.qec_data.adapters.base import (
     ImportChunk,
     ImportMapping,
@@ -165,6 +166,77 @@ def test_stim_rejects_missing_width_and_malformed_bits(tmp_path: Path) -> None:
     assert malformed.issues[0].code == "stim_invalid_data"
 
 
+def test_stim_requires_explicit_observable_width_without_context(
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "shots.dets"
+    source.write_text("shot D0\n", encoding="ascii")
+    adapter = StimResultsAdapter()
+
+    missing = adapter.validate(
+        source,
+        ImportMapping(options=(("detector_count", 1),)),
+    )
+    explicit_zero = adapter.validate(
+        source,
+        ImportMapping(options=(("detector_count", 1), ("observable_count", 0))),
+    )
+
+    assert not missing.valid
+    assert missing.issues[0].code == "stim_width_required"
+    assert "observable_count is required" in missing.issues[0].message
+    assert explicit_zero.valid
+
+
+@pytest.mark.parametrize(
+    "mapping",
+    [
+        ImportMapping(fields=(("detectors", "bits"),)),
+        _mapping(bit_order="lsb0"),
+        _mapping(output_kind="syndromes"),
+    ],
+)
+def test_stim_rejects_unsupported_mapping_without_provenance(
+    tmp_path: Path, mapping: ImportMapping
+) -> None:
+    source = tmp_path / "shots.dets"
+    source.write_text("shot D0\n", encoding="ascii")
+    adapter = StimResultsAdapter()
+
+    report = adapter.validate(source, mapping)
+
+    assert not report.valid
+    assert report.issues[0].code == "stim_mapping_unsupported"
+    assert report.provenance_id is None
+    with pytest.raises(ValueError, match="does not accept|unsupported"):
+        adapter.preview(source, mapping, 1)
+    with pytest.raises(ValueError, match="does not accept|unsupported"):
+        tuple(adapter.import_batches(source, mapping))
+
+
+def test_stim_rejects_format_inapplicable_and_conflicting_options(
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "shots.dets"
+    source.write_text("shot D0\n", encoding="ascii")
+    adapter = StimResultsAdapter()
+
+    inapplicable = adapter.validate(source, _mapping(shot_count=1))
+    conflicting = adapter.validate(
+        source,
+        _mapping(circuit_path="circuit.stim", dem_path="model.dem"),
+    )
+
+    assert not inapplicable.valid
+    assert inapplicable.issues[0].code == "stim_mapping_unsupported"
+    assert "shot_count" in inapplicable.issues[0].message
+    assert inapplicable.provenance_id is None
+    assert not conflicting.valid
+    assert conflicting.issues[0].code == "stim_mapping_unsupported"
+    assert "circuit_path and dem_path" in conflicting.issues[0].message
+    assert conflicting.provenance_id is None
+
+
 def test_stim_preview_is_bounded_and_probe_is_read_only(
     stim_fixture_set: dict[str, Path],
 ) -> None:
@@ -260,6 +332,71 @@ def test_dets_measurement_targets_are_valid_but_actionably_unsupported(
     assert "D#/L# detector-sampler output" in report.issues[0].message
     with pytest.raises(StimMeasurementTargetsUnsupported):
         tuple(StimResultsAdapter().import_batches(source, _mapping(observable_count=1)))
+
+
+@pytest.mark.parametrize(
+    "record",
+    ["shot D3", "shot L1", "shot D3 L0"],
+)
+def test_dets_validates_detector_and_observable_namespaces_independently(
+    tmp_path: Path, record: str
+) -> None:
+    source = tmp_path / "out-of-range.dets"
+    source.write_text(f"{record}\n", encoding="ascii")
+
+    report = StimResultsAdapter().validate(
+        source,
+        _mapping(detector_count=3, observable_count=1),
+    )
+
+    assert not report.valid
+    assert report.issues[0].code == "stim_invalid_data"
+    assert "declared detector or observable width" in report.issues[0].message
+
+
+@pytest.mark.parametrize("extension", ["b8", "ptb64"])
+def test_packed_formats_do_not_expand_records_into_position_sets(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, extension: str
+) -> None:
+    source = tmp_path / f"packed.{extension}"
+    source.write_bytes(b"\xff" if extension == "b8" else b"\xff" * 64)
+
+    def reject_expansion(*_args: object, **_kwargs: object) -> None:
+        raise AssertionError("packed records must not expand into Python integer sets")
+
+    monkeypatch.setattr(stim_results, "_row_from_positions", reject_expansion)
+    chunks = tuple(
+        StimResultsAdapter().import_batches(
+            source,
+            _mapping(detector_count=8, observable_count=0),
+        )
+    )
+
+    assert sum(chunk.record_count for chunk in chunks) == (
+        1 if extension == "b8" else 64
+    )
+    assert all(
+        byte == 0xFF for chunk in chunks for byte in chunk.payload.detector_events.data
+    )
+
+
+def test_max_width_all_ones_b8_record_imports_without_position_expansion(
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "max-width.b8"
+    source.write_bytes(b"\xff" * stim_results.MAX_RECORD_BYTES)
+    mapping = _mapping(
+        detector_count=stim_results.MAX_RECORD_BYTES * 8,
+        observable_count=0,
+    )
+    adapter = StimResultsAdapter()
+
+    report = adapter.validate(source, mapping)
+    chunks = tuple(adapter.import_batches(source, mapping))
+
+    assert report.valid
+    assert len(chunks) == 1
+    assert chunks[0].payload.detector_events.data == source.read_bytes()
 
 
 def test_stim_rejects_unbounded_text_record(tmp_path: Path) -> None:

@@ -53,6 +53,17 @@ The first read-only subagent review found no critical issues. Before final verif
 
 A subsequent acceptance review found that the original browser harness still simulated engine behavior and the first 10M test emitted already-bounded chunks. Both blockers are now removed: Playwright owns a real engine subprocess and disk-backed project copy, and the memory test traverses the registered Stim adapter from source bytes. Native Stim and sinter mapping controls were also narrowed to the options those adapters actually accept.
 
+The final native-adapter review is also closed. Stim and sinter now reject every
+field or option they do not consume, and invalid mappings receive no provenance
+identity. Standalone Stim requires both widths, with explicit `0` preserving the
+scientific distinction between no observables and omitted metadata. Stim `.dets`
+keeps `D#` and `L#` namespaces separate through bounds validation, so `D3` can no
+longer alias `L0`. Packed `.b8` and `.ptb64` paths transpose/split packed bytes
+without expanding all set bits into Python integer sets; the adversarial 1 MiB
+all-ones `.b8` record passes validation and import. Adapter coverage is 86% (45
+tests), and the corrected 10-million-record gate committed 10,000,000 rows in
+153 partitions in 152.45 seconds at 267,370,496 bytes peak RSS.
+
 The remaining review suggestion is a larger lifecycle enhancement: expose a persistent retry/reconnect control when the engine disconnects after a successful catalog load. Current import launch failures and catalog request failures are surfaced, and stale async catalog writes are rejected; reconnect orchestration should be handled as a dedicated engine lifecycle follow-up rather than hidden inside this acceptance task.
 
 ## Scope integrity

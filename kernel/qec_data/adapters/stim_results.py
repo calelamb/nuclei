@@ -40,10 +40,24 @@ MAX_BATCH_RECORDS = 65_536
 MAX_RECORD_BYTES = 1_048_576
 MAX_CHUNK_BYTES = 16 * 1_048_576
 STIM_FORMATS = frozenset({"01", "b8", "r8", "ptb64", "hits", "dets"})
+STIM_BASE_OPTIONS = frozenset(
+    {
+        "detector_count",
+        "observable_count",
+        "circuit_path",
+        "dem_path",
+        "session_id",
+        "segment_id",
+    }
+)
 
 
 class StimMeasurementTargetsUnsupported(ValueError):
     """Valid dets M# targets cannot fit the syndrome-only data model."""
+
+
+class StimMappingUnsupported(ValueError):
+    """The mapping includes configuration that this native adapter cannot use."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -126,8 +140,29 @@ def _context_widths(options: dict[str, object]) -> _Widths | None:
     )
 
 
-def _resolve_widths(mapping: ImportMapping) -> _Widths:
+def _validated_options(mapping: ImportMapping, data_format: str) -> dict[str, object]:
+    if mapping.fields:
+        raise StimMappingUnsupported(
+            "native Stim result import does not accept field mappings"
+        )
+    allowed = STIM_BASE_OPTIONS | ({"shot_count"} if data_format == "hits" else set())
     options = _pairs(mapping.options)
+    unsupported_options = sorted(set(options) - allowed)
+    if unsupported_options:
+        names = ", ".join(unsupported_options)
+        raise StimMappingUnsupported(f"unsupported Stim mapping option(s): {names}")
+    if "circuit_path" in options and "dem_path" in options:
+        raise StimMappingUnsupported(
+            "circuit_path and dem_path are mutually exclusive Stim context options"
+        )
+    for name in ("session_id", "segment_id"):
+        if name in options:
+            _text_option(options, name, "")
+    return options
+
+
+def _resolve_widths(mapping: ImportMapping, data_format: str) -> _Widths:
+    options = _validated_options(mapping, data_format)
     context = _context_widths(options)
     detectors = _integer_option(options, "detector_count")
     observables = _integer_option(options, "observable_count")
@@ -139,7 +174,10 @@ def _resolve_widths(mapping: ImportMapping) -> _Widths:
         raise ValueError(
             "detector_count is required unless circuit_path or dem_path is provided"
         )
-    observables = 0 if observables is None else observables
+    if observables is None:
+        raise ValueError(
+            "observable_count is required unless circuit_path or dem_path is provided"
+        )
     if detectors < 1:
         raise ValueError("detector_count must be positive")
     if observables < 0:
@@ -196,6 +234,57 @@ def _row_from_positions(
     return _ShotRow(detectors, observables, row_index, byte_start, byte_end, precision)
 
 
+def _row_from_named_positions(
+    detector_positions: frozenset[int],
+    observable_positions: frozenset[int],
+    widths: _Widths,
+    row_index: int,
+    byte_start: int,
+    byte_end: int,
+) -> _ShotRow:
+    if any(
+        index < 0 or index >= widths.detectors for index in detector_positions
+    ) or any(
+        index < 0 or index >= widths.observables for index in observable_positions
+    ):
+        raise ValueError(
+            "Stim result contains a target outside the declared detector or observable width"
+        )
+    observables = (
+        _packed_positions(observable_positions, widths.observables)
+        if widths.observables
+        else None
+    )
+    return _ShotRow(
+        _packed_positions(detector_positions, widths.detectors),
+        observables,
+        row_index,
+        byte_start,
+        byte_end,
+    )
+
+
+def _row_from_packed(
+    raw: bytes,
+    widths: _Widths,
+    byte_start: int,
+    byte_end: int,
+) -> _ShotRow:
+    value = int.from_bytes(raw, "little")
+    if value.bit_length() > widths.total:
+        raise ValueError("b8 record has nonzero high padding bits")
+    detector_mask = (1 << widths.detectors) - 1
+    detector_bytes = (widths.detectors + 7) // 8
+    observable_bytes = (widths.observables + 7) // 8
+    detectors = (value & detector_mask).to_bytes(detector_bytes, "little")
+    observables = (
+        (value >> widths.detectors).to_bytes(observable_bytes, "little")
+        if widths.observables
+        else None
+    )
+    return _ShotRow(detectors, observables, None, byte_start, byte_end)
+
+
 def _hits_shot_count(mapping: ImportMapping, data_format: str) -> int | None:
     if data_format != "hits":
         return None
@@ -234,10 +323,21 @@ def _text_rows(
                         "hits contains nonblank data after declared shot_count"
                     )
                 continue
-            positions = _parse_text_positions(line, widths, data_format)
-            yield _row_from_positions(
-                positions, widths, row_index, byte_start, byte_end
-            )
+            if data_format == "dets":
+                detectors, observables = _parse_dets_positions(line)
+                yield _row_from_named_positions(
+                    detectors,
+                    observables,
+                    widths,
+                    row_index,
+                    byte_start,
+                    byte_end,
+                )
+            else:
+                positions = _parse_text_positions(line, widths, data_format)
+                yield _row_from_positions(
+                    positions, widths, row_index, byte_start, byte_end
+                )
             row_index += 1
         if shot_count is not None and row_index != shot_count:
             raise ValueError("hits ended before the declared shot_count")
@@ -261,11 +361,16 @@ def _parse_text_positions(
         if any(not term.isascii() or not term.isdecimal() for term in terms):
             raise ValueError("hits records must contain comma-separated integers")
         return frozenset(int(term) for term in terms)
+    raise ValueError(f"unsupported text Stim format: {data_format}")
+
+
+def _parse_dets_positions(line: str) -> tuple[frozenset[int], frozenset[int]]:
     if line == "shot":
-        return frozenset()
+        return frozenset(), frozenset()
     if not line.startswith("shot ") or "  " in line:
         raise ValueError("dets records must start with 'shot'")
-    positions: set[int] = set()
+    detectors: set[int] = set()
+    observables: set[int] = set()
     for term in line[5:].split(" "):
         if len(term) < 2 or term[0] not in "MDL" or not term[1:].isdecimal():
             raise ValueError("dets records require valid M#, D#, or L# targets")
@@ -276,28 +381,21 @@ def _parse_text_positions(
                 "detector-sampler output"
             )
         index = int(term[1:])
-        positions.add(index if term[0] == "D" else widths.detectors + index)
-    return frozenset(positions)
+        if term[0] == "D":
+            detectors.add(index)
+        else:
+            observables.add(index)
+    return frozenset(detectors), frozenset(observables)
 
 
 def _b8_rows(source: Path, widths: _Widths) -> Iterator[_ShotRow]:
     stride = (widths.total + 7) // 8
-    mask = (1 << widths.total) - 1
     with source.open("rb") as stream:
         while raw := stream.read(stride):
             byte_end = stream.tell()
             if len(raw) != stride:
                 raise ValueError("b8 data ended in the middle of a record")
-            unmasked = int.from_bytes(raw, "little")
-            if unmasked & ~mask:
-                raise ValueError("b8 record has nonzero high padding bits")
-            value = unmasked
-            positions = frozenset(
-                index for index in range(widths.total) if value & (1 << index)
-            )
-            yield _row_from_positions(
-                positions, widths, None, byte_end - stride, byte_end
-            )
+            yield _row_from_packed(raw, widths, byte_end - stride, byte_end)
 
 
 def _r8_rows(source: Path, widths: _Widths) -> Iterator[_ShotRow]:
@@ -325,6 +423,35 @@ def _r8_rows(source: Path, widths: _Widths) -> Iterator[_ShotRow]:
             raise ValueError("r8 data ended in the middle of a record")
 
 
+def _transpose_8x8(planes: bytes) -> bytes:
+    value = int.from_bytes(planes, "little")
+    swap = (value ^ (value >> 7)) & 0x00AA00AA00AA00AA
+    value = value ^ swap ^ (swap << 7)
+    swap = (value ^ (value >> 14)) & 0x0000CCCC0000CCCC
+    value = value ^ swap ^ (swap << 14)
+    swap = (value ^ (value >> 28)) & 0x00000000F0F0F0F0
+    return (value ^ swap ^ (swap << 28)).to_bytes(8, "little")
+
+
+def _transpose_ptb64_range(
+    raw: bytes, source_start: int, width: int
+) -> tuple[bytes, ...]:
+    rows = tuple(bytearray((width + 7) // 8) for _ in range(64))
+    for output_byte, bit_offset in enumerate(range(0, width, 8)):
+        plane_count = min(8, width - bit_offset)
+        for shot_group in range(8):
+            planes = bytes(
+                raw[(source_start + bit_offset + plane) * 8 + shot_group]
+                if plane < plane_count
+                else 0
+                for plane in range(8)
+            )
+            transposed = _transpose_8x8(planes)
+            for shot_offset, packed in enumerate(transposed):
+                rows[shot_group * 8 + shot_offset][output_byte] = packed
+    return tuple(bytes(row) for row in rows)
+
+
 def _ptb64_rows(source: Path, widths: _Widths) -> Iterator[_ShotRow]:
     block_size = widths.total * 8
     with source.open("rb") as stream:
@@ -333,15 +460,16 @@ def _ptb64_rows(source: Path, widths: _Widths) -> Iterator[_ShotRow]:
             if len(raw) != block_size:
                 raise ValueError("ptb64 data ended in the middle of a 64-shot block")
             byte_start = byte_end - block_size
-            for shot_index in range(64):
-                positions = frozenset(
-                    bit_index
-                    for bit_index in range(widths.total)
-                    if raw[bit_index * 8 + shot_index // 8] & (1 << (shot_index % 8))
-                )
-                yield _row_from_positions(
-                    positions,
-                    widths,
+            detector_rows = _transpose_ptb64_range(raw, 0, widths.detectors)
+            observable_rows = (
+                _transpose_ptb64_range(raw, widths.detectors, widths.observables)
+                if widths.observables
+                else None
+            )
+            for shot_index, detectors in enumerate(detector_rows):
+                yield _ShotRow(
+                    detectors,
+                    observable_rows[shot_index] if observable_rows else None,
                     None,
                     byte_start,
                     byte_end,
@@ -349,8 +477,12 @@ def _ptb64_rows(source: Path, widths: _Widths) -> Iterator[_ShotRow]:
                 )
 
 
-def _rows(source: Path, widths: _Widths, mapping: ImportMapping) -> Iterator[_ShotRow]:
-    data_format = _format(source)
+def _rows(
+    source: Path,
+    widths: _Widths,
+    mapping: ImportMapping,
+    data_format: str,
+) -> Iterator[_ShotRow]:
     if data_format in {"01", "hits", "dets"}:
         return _text_rows(
             source, widths, data_format, _hits_shot_count(mapping, data_format)
@@ -438,8 +570,10 @@ def _chunk(
 
 
 def _chunks(source: Path, mapping: ImportMapping) -> Iterator[ImportChunk]:
+    data_format = _format(source)
+    _validated_options(mapping, data_format)
     source_hash = compute_source_sha256(source)
-    widths = _resolve_widths(mapping)
+    widths = _resolve_widths(mapping, data_format)
     bytes_per_record = (widths.detectors + 7) // 8 + (
         (widths.observables + 7) // 8 if widths.observables else 0
     )
@@ -447,7 +581,7 @@ def _chunks(source: Path, mapping: ImportMapping) -> Iterator[ImportChunk]:
         1,
         min(MAX_BATCH_RECORDS, MAX_CHUNK_BYTES // max(1, bytes_per_record)),
     )
-    iterator = iter(_rows(source, widths, mapping))
+    iterator = iter(_rows(source, widths, mapping, data_format))
     sequence_start = 0
     while records := tuple(itertools.islice(iterator, batch_size)):
         yield _chunk(records, mapping, source_hash, sequence_start, widths)
@@ -478,7 +612,6 @@ class StimResultsAdapter:
 
     def validate(self, source: Path, mapping: ImportMapping) -> ValidationReport:
         source_hash = compute_source_sha256(source)
-        provenance_id = _identity(source_hash, mapping, self.manifest.id)
         try:
             found = False
             for chunk in _chunks(source, mapping):
@@ -488,9 +621,11 @@ class StimResultsAdapter:
         except (OSError, TypeError, ValueError) as error:
             if isinstance(error, StimMeasurementTargetsUnsupported):
                 code = "stim_measurement_targets_unsupported"
+            elif isinstance(error, StimMappingUnsupported):
+                code = "stim_mapping_unsupported"
             elif "shot_count is required" in str(error):
                 code = "stim_shot_count_required"
-            elif "detector_count is required" in str(error):
+            elif "_count is required" in str(error):
                 code = "stim_width_required"
             else:
                 code = "stim_invalid_data"
@@ -498,8 +633,9 @@ class StimResultsAdapter:
                 False,
                 (ValidationIssue(code, str(error)),),
                 source_sha256=source_hash,
-                provenance_id=provenance_id,
+                provenance_id=None,
             )
+        provenance_id = _identity(source_hash, mapping, self.manifest.id)
         return ValidationReport(
             True, source_sha256=source_hash, provenance_id=provenance_id
         )
@@ -509,9 +645,11 @@ class StimResultsAdapter:
     ) -> PreviewResult:
         if type(limit) is not int or limit < 0:
             raise ValueError("preview limit must be a nonnegative integer")
+        data_format = _format(source)
+        _validated_options(mapping, data_format)
         source_hash = compute_source_sha256(source)
         provenance_id = _identity(source_hash, mapping, self.manifest.id)
-        widths = _resolve_widths(mapping)
+        widths = _resolve_widths(mapping, data_format)
         bytes_per_record = (widths.detectors + 7) // 8 + (
             (widths.observables + 7) // 8 if widths.observables else 0
         )
@@ -520,7 +658,7 @@ class StimResultsAdapter:
             MAX_BATCH_RECORDS,
             max(1, MAX_CHUNK_BYTES // max(1, bytes_per_record)),
         )
-        iterator = iter(_rows(source, widths, mapping))
+        iterator = iter(_rows(source, widths, mapping, data_format))
         records = tuple(itertools.islice(iterator, bounded_limit))
         has_more = next(iterator, None) is not None
         batches = (_chunk(records, mapping, source_hash, 0, widths),) if records else ()

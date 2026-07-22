@@ -94,7 +94,8 @@ the final byte of every LSB0 row must be zero.
 Stim result imports use their file format's defined record class and encoding;
 the wizard therefore does not ask for source fields, record class, timestamp
 unit, or bit order. Standalone result files require detector and observable
-widths. Protocol clients can instead provide an explicit circuit or DEM context
+widths, using an explicit observable width of `0` when no observable bits are
+present. Protocol clients can instead provide an explicit circuit or DEM context
 whose widths must agree. The canonical output uses the same packed LSB0
 syndrome model as hardware captures, but LSB0 is a normalization guarantee—not
 a user-selectable claim about native Stim encoding.

@@ -366,7 +366,7 @@ function useMappingEditor(invalidate: () => void) {
   const [options, setOptions] = useState(EMPTY_OPTIONS);
   const [reviewed, setReviewed] = useState(false);
   const mapping = useMemo(() => buildMapping(rows, options), [options, rows]);
-  const mappingReady = mappingIsReviewed(adapterId, rows, reviewed);
+  const mappingReady = mappingIsReviewed(adapterId, rows, options, reviewed);
   const chooseAdapter = (id: string): void => {
     setAdapterId(id);
     setRows(Object.freeze([]));

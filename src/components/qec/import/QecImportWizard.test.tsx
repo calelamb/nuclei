@@ -92,6 +92,13 @@ describe('<QecImportWizard />', () => {
     expect(screen.queryByLabelText('Record class')).toBeNull();
     expect(screen.queryByLabelText('Timestamp unit')).toBeNull();
     expect(screen.queryByLabelText('Bit order')).toBeNull();
+
+    fireEvent.click(screen.getByLabelText('Mapping reviewed'));
+    expect(screen.getByRole<HTMLButtonElement>('button', { name: 'Next stage' }).disabled).toBe(true);
+    fireEvent.change(screen.getByLabelText('Detector width'), { target: { value: '3' } });
+    expect(screen.getByRole<HTMLButtonElement>('button', { name: 'Next stage' }).disabled).toBe(true);
+    fireEvent.change(screen.getByLabelText('Observable width'), { target: { value: '0' } });
+    expect(screen.getByRole<HTMLButtonElement>('button', { name: 'Next stage' }).disabled).toBe(false);
   });
 
   it('presents native sinter columns without invented mapping options', async () => {
@@ -104,6 +111,8 @@ describe('<QecImportWizard />', () => {
     expect(screen.getByText(/sinter defines campaign-point fields/i)).toBeTruthy();
     expect(screen.queryByRole('button', { name: 'Add field mapping' })).toBeNull();
     expect(screen.queryByRole('group', { name: /Scientific meaning/i })).toBeNull();
+    fireEvent.click(screen.getByLabelText('Mapping reviewed'));
+    expect(screen.getByRole<HTMLButtonElement>('button', { name: 'Next stage' }).disabled).toBe(false);
   });
 
   it('keeps Import disabled with an adjacent reason until explicit mapping validates', async () => {

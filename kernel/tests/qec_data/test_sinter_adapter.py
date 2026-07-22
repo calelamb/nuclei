@@ -3,6 +3,8 @@ from __future__ import annotations
 import asyncio
 from pathlib import Path
 
+import pytest
+
 from kernel.qec_data.adapters.base import (
     AdapterCapability,
     AdapterCommand,
@@ -72,6 +74,35 @@ def test_sinter_requires_exact_standard_header(tmp_path: Path) -> None:
     report = SinterCsvAdapter().validate(source, _mapping())
     assert not report.valid
     assert "required sinter columns" in report.issues[0].message
+
+
+@pytest.mark.parametrize(
+    "mapping",
+    [
+        ImportMapping(fields=(("shots", "shots"),)),
+        ImportMapping(options=(("output_kind", "campaign_points"),)),
+        ImportMapping(options=(("bit_order", "lsb0"),)),
+    ],
+)
+def test_sinter_rejects_unsupported_mapping_without_provenance(
+    tmp_path: Path, mapping: ImportMapping
+) -> None:
+    source = tmp_path / "stats.csv"
+    source.write_text(
+        HEADER + '100,3,0,1,pymatching,strong-a,"{""d"":3}",{}\n',
+        encoding="utf-8",
+    )
+    adapter = SinterCsvAdapter()
+
+    report = adapter.validate(source, mapping)
+
+    assert not report.valid
+    assert report.issues[0].code == "sinter_mapping_unsupported"
+    assert report.provenance_id is None
+    with pytest.raises(ValueError, match="does not accept|unsupported"):
+        adapter.preview(source, mapping, 1)
+    with pytest.raises(ValueError, match="does not accept|unsupported"):
+        tuple(adapter.import_batches(source, mapping))
 
 
 def test_sinter_multiline_csv_field_keeps_record_not_line_ordinal(
