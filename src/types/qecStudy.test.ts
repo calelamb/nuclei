@@ -41,6 +41,27 @@ sources:
     });
   });
 
+  it.each(['/outside.stim', String.raw`\\server\share\outside.stim`])(
+    'rejects POSIX and UNC absolute source paths: %s',
+    (path) => {
+      const result = parseQecStudyYaml(`schema: 1
+id: bad
+name: Bad
+question: Bad
+preset: analyze
+sources:
+  - id: source
+    kind: stim
+    path: ${JSON.stringify(path)}
+`);
+
+      expect(result).toEqual({
+        ok: false,
+        errors: expect.arrayContaining([expect.stringContaining('path')]),
+      });
+    },
+  );
+
   it.each(['C:\\outside.stim', 'nested\\..\\outside.stim'])(
     'rejects Windows absolute and traversal source paths: %s',
     (path) => {
@@ -79,5 +100,14 @@ sources:
     if (!parsed.ok) return;
 
     expect(parseQecStudyYaml(serializeQecStudy(parsed.study))).toEqual(parsed);
+  });
+
+  it('returns an actionable result for malformed YAML', () => {
+    const result = parseQecStudyYaml('schema: 1\nid: [unterminated');
+
+    expect(result).toEqual({
+      ok: false,
+      errors: [expect.stringContaining('YAML parse error:')],
+    });
   });
 });
