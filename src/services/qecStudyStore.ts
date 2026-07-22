@@ -35,6 +35,7 @@ interface DiscoveryResult {
 let latestOperation = 0;
 let watcherEpoch = 0;
 let unwatch: (() => void) | null = null;
+const pendingCreates = new Set<string>();
 
 function describeError(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
@@ -53,6 +54,18 @@ function discoveryFailure(message: string): DiscoveryResult {
     studies: [],
     validationErrors: [{ fileName: STUDIES_DIRECTORY, errors: [message] }],
   };
+}
+
+function reportLifecycleError(
+  set: (partial: Partial<QecStudyState> | ((state: QecStudyState) => Partial<QecStudyState>)) => void,
+  message: string,
+): void {
+  set((state) => ({
+    validationErrors: [
+      ...state.validationErrors,
+      { fileName: STUDIES_DIRECTORY, errors: [message] },
+    ],
+  }));
 }
 
 async function discoverStudies(projectRoot: string, fs: QecStudyFs): Promise<DiscoveryResult> {
@@ -119,7 +132,6 @@ export const useQecStudyStore = create<QecStudyState>((set, get) => ({
   },
 
   create: async (projectRoot, study, fs) => {
-    const operation = ++latestOperation;
     let content: string;
     try {
       content = serializeQecStudy(study);
@@ -130,35 +142,49 @@ export const useQecStudyStore = create<QecStudyState>((set, get) => ({
     const directory = studiesPath(projectRoot, fs);
     const fileName = studyFileName(study);
     const path = fs.join(directory, fileName);
+    if (pendingCreates.has(path)) {
+      throw new Error(`A Study named "${study.id}" already exists.`);
+    }
+    pendingCreates.add(path);
+    const operation = ++latestOperation;
     try {
       await fs.mkdir(directory, { recursive: true });
       if (await fs.exists(path)) {
         throw new Error(`A Study named "${study.id}" already exists.`);
       }
       await fs.writeTextFile(path, content);
+      if (operation !== latestOperation) return path;
+      set((state) => ({
+        studies: [...state.studies, { fileName, path, study }].sort((left, right) =>
+          left.fileName.localeCompare(right.fileName),
+        ),
+      }));
+      return path;
     } catch (error: unknown) {
       const message = describeError(error);
       if (message.startsWith('A Study named ')) throw new Error(message);
       throw new Error(`Could not create the Study "${study.name}": ${message}`);
+    } finally {
+      pendingCreates.delete(path);
     }
-
-    if (operation !== latestOperation) return path;
-    set((state) => ({
-      studies: [...state.studies, { fileName, path, study }].sort((left, right) =>
-        left.fileName.localeCompare(right.fileName),
-      ),
-    }));
-    return path;
   },
 
   startWatching: async (projectRoot, fs) => {
     get().stopWatching();
+    latestOperation += 1;
+    set({ loading: false });
     const epoch = ++watcherEpoch;
     const directory = studiesPath(projectRoot, fs);
     let directoryExists: boolean;
     try {
       directoryExists = await fs.exists(directory);
-    } catch {
+    } catch (error: unknown) {
+      if (epoch === watcherEpoch) {
+        reportLifecycleError(
+          set,
+          `Could not check the Studies folder for changes: ${describeError(error)}`,
+        );
+      }
       return;
     }
     if (!directoryExists || epoch !== watcherEpoch) return;
@@ -172,7 +198,10 @@ export const useQecStudyStore = create<QecStudyState>((set, get) => ({
         },
         { recursive: true },
       );
-    } catch {
+    } catch (error: unknown) {
+      if (epoch === watcherEpoch) {
+        reportLifecycleError(set, `Could not watch the Studies folder: ${describeError(error)}`);
+      }
       return;
     }
     if (epoch !== watcherEpoch) {

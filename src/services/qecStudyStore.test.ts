@@ -101,6 +101,53 @@ describe('qecStudyStore', () => {
     expect(fs.files.get('/p/studies/good.qec-study.yaml')).toBe(GOOD_STUDY);
   });
 
+  it('serializes concurrent creates for the same Study target', async () => {
+    const releaseWrites: Array<() => void> = [];
+    let notifySecondWrite: (() => void) | undefined;
+    const secondWriteStarted = new Promise<void>((resolve) => {
+      notifySecondWrite = resolve;
+    });
+    let writeCount = 0;
+    const fs = memoryStudyFs({});
+    const writeTextFile = vi.fn(async (path: string, content: string) => {
+      writeCount += 1;
+      if (writeCount === 2) notifySecondWrite?.();
+      await new Promise<void>((resolve) => {
+        releaseWrites.push(resolve);
+      });
+      fs.files.set(path, content);
+    });
+    fs.writeTextFile = writeTextFile;
+    const study = {
+      schema: 1 as const,
+      id: 'same',
+      name: 'One Study',
+      question: 'Can this race?',
+      preset: 'build' as const,
+      tags: [],
+      sources: [],
+    };
+
+    const first = useQecStudyStore.getState().create('/p', study, fs);
+    await vi.waitFor(() => expect(writeTextFile).toHaveBeenCalledOnce());
+    const second = useQecStudyStore.getState().create('/p', study, fs);
+    const secondRejection = expect(second).rejects.toThrow('A Study named "same" already exists.');
+    const secondOutcome = second.then(
+      () => 'resolved' as const,
+      () => 'rejected' as const,
+    );
+    const observed = await Promise.race([
+      secondOutcome,
+      secondWriteStarted.then(() => 'wrote' as const),
+    ]);
+
+    releaseWrites.forEach((release) => release());
+    await expect(first).resolves.toBe('/p/studies/same.qec-study.yaml');
+    await secondRejection;
+    expect(observed).toBe('rejected');
+    expect(writeTextFile).toHaveBeenCalledOnce();
+  });
+
   it('keeps a later project reload when an earlier project reload finishes last', async () => {
     let releaseFirstRead: (() => void) | undefined;
     const fs = memoryStudyFs({
@@ -155,6 +202,63 @@ describe('qecStudyStore', () => {
     await creating;
 
     expect(useQecStudyStore.getState().studies.map(({ study }) => study.id)).toEqual(['two']);
+  });
+
+  it('invalidates a pending reload when watching switches to another project', async () => {
+    let releaseRead: (() => void) | undefined;
+    const fs = memoryStudyFs({
+      '/one/studies/one.qec-study.yaml': GOOD_STUDY.replace('id: good', 'id: one'),
+      '/two/studies/two.qec-study.yaml': GOOD_STUDY.replace('id: good', 'id: two'),
+    });
+    const read = fs.readTextFile;
+    fs.readTextFile = async (path) => {
+      if (path.includes('/one/')) {
+        await new Promise<void>((resolve) => {
+          releaseRead = resolve;
+        });
+      }
+      return read(path);
+    };
+
+    const reloading = useQecStudyStore.getState().reload('/one', fs);
+    await vi.waitFor(() => expect(releaseRead).toBeTypeOf('function'));
+    await useQecStudyStore.getState().startWatching('/two', fs);
+    releaseRead?.();
+    await reloading;
+
+    expect(useQecStudyStore.getState().studies).toEqual([]);
+  });
+
+  it('surfaces an actionable error when the watcher folder check fails', async () => {
+    const fs = memoryStudyFs({});
+    fs.exists = async () => {
+      throw new Error('permission denied');
+    };
+
+    await useQecStudyStore.getState().startWatching('/p', fs);
+
+    expect(useQecStudyStore.getState().validationErrors).toEqual([
+      {
+        fileName: 'studies',
+        errors: ['Could not check the Studies folder for changes: permission denied'],
+      },
+    ]);
+  });
+
+  it('surfaces an actionable error when watcher registration fails', async () => {
+    const fs = memoryStudyFs({ '/p/studies/good.qec-study.yaml': GOOD_STUDY });
+    fs.watch = async () => {
+      throw new Error('watch service unavailable');
+    };
+
+    await useQecStudyStore.getState().startWatching('/p', fs);
+
+    expect(useQecStudyStore.getState().validationErrors).toEqual([
+      {
+        fileName: 'studies',
+        errors: ['Could not watch the Studies folder: watch service unavailable'],
+      },
+    ]);
   });
 
   it('replaces state immutably after a watcher reload and cleans up the prior watcher', async () => {
