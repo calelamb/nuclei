@@ -441,20 +441,32 @@ export function qecTileContentByteLength(content: unknown): number {
 }
 
 /**
- * Normative tile size: UTF-8 JSON bytes for the complete tile object with the
- * self-referential `byteLength` field omitted. Task 5 also caps the final result
- * envelope and Task 8 caps every complete WebSocket frame.
+ * Normative tile size: UTF-8 JSON bytes for the complete canonical tile object,
+ * including the `byteLength` field itself. The value is the small fixed point
+ * reached once writing the measured length no longer changes its digit width.
+ * Task 5 also caps the result envelope and Task 8 caps every WebSocket frame.
  */
 export function qecTilePayloadByteLength(payload: unknown): number {
   if (typeof payload !== 'object' || payload === null || Array.isArray(payload)) {
     throw new TypeError('tile payload must be an object');
   }
-  const normalized = Object.fromEntries(
-    Object.entries(payload).filter(([key]) => key !== 'byteLength'),
-  );
-  const serialized = JSON.stringify(normalized);
-  if (serialized === undefined) throw new TypeError('tile payload must be JSON serializable');
-  return new TextEncoder().encode(serialized).byteLength;
+  const candidate = payload as Record<string, unknown>;
+  let byteLength = 0;
+  for (let iteration = 0; iteration < 8; iteration += 1) {
+    const canonical = {
+      kind: candidate.kind,
+      datasetId: candidate.datasetId,
+      sequence: candidate.sequence,
+      content: candidate.content,
+      byteLength,
+    };
+    const serialized = JSON.stringify(canonical);
+    if (serialized === undefined) throw new TypeError('tile payload must be JSON serializable');
+    const measured = new TextEncoder().encode(serialized).byteLength;
+    if (measured === byteLength) return measured;
+    byteLength = measured;
+  }
+  throw new Error('tile payload byte length did not converge');
 }
 
 export const qecTilePayloadSchema = z.strictObject({

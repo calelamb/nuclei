@@ -454,6 +454,12 @@ def test_canonical_json_parser_rejects_non_finite_constants(constant: str) -> No
         loads_canonical_json(f'{{"value":{constant}}}')
 
 
+@pytest.mark.parametrize("number", ["1e309", "-1e309", "1e999", "-1e999"])
+def test_canonical_json_parser_rejects_overflowed_numbers(number: str) -> None:
+    with pytest.raises(ValueError, match="non-finite"):
+        loads_canonical_json(f'{{"value":{number}}}')
+
+
 def test_canonical_json_parser_rejects_duplicate_keys() -> None:
     with pytest.raises(ValueError, match="duplicate"):
         loads_canonical_json('{"value":1,"value":2}')

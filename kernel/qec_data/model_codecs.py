@@ -5,6 +5,7 @@ from __future__ import annotations
 import base64
 import binascii
 import json
+import math
 from typing import Any, Mapping
 
 from .models import (
@@ -107,6 +108,13 @@ def _reject_non_finite_constant(value: str) -> None:
     raise ValueError(f"non-finite JSON constant is forbidden: {value}")
 
 
+def _parse_finite_float(value: str) -> float:
+    parsed = float(value)
+    if not math.isfinite(parsed):
+        raise ValueError(f"non-finite JSON number is forbidden: {value}")
+    return parsed
+
+
 def _unique_object(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
     result: dict[str, Any] = {}
     for key, value in pairs:
@@ -123,6 +131,7 @@ def loads_canonical_json(document: str) -> Any:
     return json.loads(
         document,
         parse_constant=_reject_non_finite_constant,
+        parse_float=_parse_finite_float,
         object_pairs_hook=_unique_object,
     )
 

@@ -156,12 +156,18 @@ describe('canonical QEC data schemas', () => {
       sequence: 0,
       content: '',
     } as const;
-    const overhead = qecTilePayloadByteLength(baseTile);
-    const boundaryContent = 'x'.repeat(QEC_TILE_MAX_BYTES - overhead);
+    const emptyLength = qecTilePayloadByteLength(baseTile);
+    const initialContent = 'x'.repeat(QEC_TILE_MAX_BYTES - emptyLength);
+    const initial = { ...baseTile, content: initialContent };
+    const boundaryContent = initialContent.slice(
+      0,
+      initialContent.length - (qecTilePayloadByteLength(initial) - QEC_TILE_MAX_BYTES),
+    );
     const boundary = { ...baseTile, content: boundaryContent };
     const byteLength = qecTilePayloadByteLength(boundary);
     expect(byteLength).toBe(QEC_TILE_MAX_BYTES);
     const tile = { ...boundary, byteLength };
+    expect(new TextEncoder().encode(JSON.stringify(tile)).byteLength).toBe(QEC_TILE_MAX_BYTES);
     expect(qecTilePayloadSchema.parse(tile)).toEqual(tile);
     expect(() => qecTilePayloadSchema.parse({ ...tile, byteLength: byteLength - 1 })).toThrow();
     const unicodeOver = { ...boundary, content: `${boundaryContent.slice(1)}é` };
