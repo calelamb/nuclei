@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import json
 import os
+import shutil
+import threading
 from dataclasses import FrozenInstanceError, replace
 from pathlib import Path
 
@@ -9,7 +11,13 @@ import pyarrow as pa
 import pyarrow.parquet as pq
 import pytest
 
-from kernel.qec_data.hashing import canonical_json_bytes, dataset_id
+import kernel.qec_data.storage as storage_module
+import kernel.qec_data.storage_parquet as parquet_storage
+from kernel.qec_data.hashing import (
+    DatasetSemanticIdentity,
+    canonical_json_bytes,
+    dataset_id,
+)
 from kernel.qec_data.models import (
     IndexRange,
     PackedBits,
@@ -22,7 +30,13 @@ from kernel.qec_data.models import (
     TimestampSeries,
     ValueStatus,
 )
-from kernel.qec_data.storage import PartitionRef, SessionStorage
+from kernel.qec_data.storage import (
+    PartitionRef,
+    PendingPartition,
+    SessionStorage,
+    _session_lock,
+)
+from kernel.qec_data.storage_parquet import fsync_directory
 
 
 def sample_session(session_id: str = "session-1") -> SessionRecord:
@@ -33,6 +47,22 @@ def sample_session(session_id: str = "session-1") -> SessionRecord:
         "1.0.0",
         "provenance-1",
     )
+
+
+def sample_identity(source_sha256: str = "a" * 64) -> DatasetSemanticIdentity:
+    return DatasetSemanticIdentity(
+        source_sha256=(source_sha256,),
+        adapter_id="generic.binary",
+        adapter_version="1.0.0",
+        mapping=(("detectors", "detector_events"),),
+        bit_widths=(("detectors", 9),),
+        units=(("timestamp", "ns"),),
+        time_domain="timestamp",
+    )
+
+
+def create_storage(root: Path, session_id: str = "session-1") -> SessionStorage:
+    return SessionStorage.create(root, sample_session(session_id), sample_identity())
 
 
 def sample_batch(
@@ -67,7 +97,7 @@ def session_dir(root: Path) -> Path:
 
 
 def test_uncommitted_partition_is_not_visible(tmp_path: Path) -> None:
-    storage = SessionStorage.create(tmp_path, sample_session())
+    storage = create_storage(tmp_path)
     pending = storage.append_batch(sample_batch())
 
     assert pending.suffix == ".pending"
@@ -80,7 +110,7 @@ def test_uncommitted_partition_is_not_visible(tmp_path: Path) -> None:
 
 
 def test_create_is_atomic_and_exclusive(tmp_path: Path) -> None:
-    storage = SessionStorage.create(tmp_path, sample_session())
+    storage = create_storage(tmp_path)
 
     assert storage.session_root == session_dir(tmp_path)
     assert (
@@ -93,7 +123,7 @@ def test_create_is_atomic_and_exclusive(tmp_path: Path) -> None:
     )
     assert not tuple(tmp_path.glob(".session-1.*.pending"))
     with pytest.raises(FileExistsError):
-        SessionStorage.create(tmp_path, sample_session())
+        SessionStorage.create(tmp_path, sample_session(), sample_identity())
 
 
 @pytest.mark.parametrize("identifier", ["../escape", "/absolute", ".", "a/b", "a\\b"])
@@ -101,9 +131,9 @@ def test_session_and_segment_identifiers_cannot_escape_root(
     tmp_path: Path, identifier: str
 ) -> None:
     with pytest.raises(ValueError, match="identifier"):
-        SessionStorage.create(tmp_path, sample_session(identifier))
+        SessionStorage.create(tmp_path, sample_session(identifier), sample_identity())
 
-    storage = SessionStorage.create(tmp_path, sample_session("valid"))
+    storage = create_storage(tmp_path, "valid")
     with pytest.raises(ValueError, match="identifier"):
         storage.append_batch(sample_batch(session_id="valid", segment_id=identifier))
 
@@ -114,12 +144,12 @@ def test_create_rejects_symlink_session_target(tmp_path: Path) -> None:
     (tmp_path / "session-1").symlink_to(outside, target_is_directory=True)
 
     with pytest.raises(ValueError, match="symlink"):
-        SessionStorage.create(tmp_path, sample_session())
+        SessionStorage.create(tmp_path, sample_session(), sample_identity())
 
 
 def test_open_rejects_manifest_identity_substitution(tmp_path: Path) -> None:
-    first = SessionStorage.create(tmp_path, sample_session("session-1"))
-    second = SessionStorage.create(tmp_path, sample_session("session-2"))
+    first = create_storage(tmp_path, "session-1")
+    second = create_storage(tmp_path, "session-2")
     (first.session_root / "manifest.json").write_bytes(
         (second.session_root / "manifest.json").read_bytes()
     )
@@ -131,7 +161,7 @@ def test_open_rejects_manifest_identity_substitution(tmp_path: Path) -> None:
 def test_parquet_uses_fixed_binary_buffers_without_optional_zero_width_columns(
     tmp_path: Path,
 ) -> None:
-    storage = SessionStorage.create(tmp_path, sample_session())
+    storage = create_storage(tmp_path)
     pending = storage.append_batch(sample_batch())
     table = pq.read_table(pending)
 
@@ -143,7 +173,7 @@ def test_parquet_uses_fixed_binary_buffers_without_optional_zero_width_columns(
 
 
 def test_nonzero_padding_bits_are_rejected(tmp_path: Path) -> None:
-    storage = SessionStorage.create(tmp_path, sample_session())
+    storage = create_storage(tmp_path)
     invalid = object.__new__(PackedBits)
     object.__setattr__(invalid, "bit_width", 9)
     object.__setattr__(invalid, "data", b"\x00\x02")
@@ -157,7 +187,7 @@ def test_nonzero_padding_bits_are_rejected(tmp_path: Path) -> None:
 def test_optional_fixed_width_columns_and_ranges_are_materialized(
     tmp_path: Path,
 ) -> None:
-    storage = SessionStorage.create(tmp_path, sample_session())
+    storage = create_storage(tmp_path)
     batch = replace(
         sample_batch(),
         observables=QualifiedPackedBits(PackedBits(1, b"\0\1\0"), ValueStatus.MEASURED),
@@ -177,7 +207,7 @@ def test_optional_fixed_width_columns_and_ranges_are_materialized(
 def test_pending_create_is_exclusive_and_schema_change_requires_new_segment(
     tmp_path: Path,
 ) -> None:
-    storage = SessionStorage.create(tmp_path, sample_session())
+    storage = create_storage(tmp_path)
     storage.append_batch(sample_batch())
     with pytest.raises(FileExistsError):
         storage.append_batch(sample_batch())
@@ -191,7 +221,7 @@ def test_pending_create_is_exclusive_and_schema_change_requires_new_segment(
 
 
 def test_commit_verifies_footer_schema_hash_and_sequence_range(tmp_path: Path) -> None:
-    storage = SessionStorage.create(tmp_path, sample_session())
+    storage = create_storage(tmp_path)
     pending = storage.append_batch(sample_batch())
     pending.write_bytes(b"not parquet")
 
@@ -201,7 +231,7 @@ def test_commit_verifies_footer_schema_hash_and_sequence_range(tmp_path: Path) -
 
 
 def test_commit_rejects_wrong_parquet_record_kind(tmp_path: Path) -> None:
-    storage = SessionStorage.create(tmp_path, sample_session())
+    storage = create_storage(tmp_path)
     pending = storage.append_batch(sample_batch())
     table = pq.read_table(pending)
     metadata = dict(table.schema.metadata or {})
@@ -214,7 +244,7 @@ def test_commit_rejects_wrong_parquet_record_kind(tmp_path: Path) -> None:
 
 
 def test_append_rejects_batches_above_canonical_partition_limit(tmp_path: Path) -> None:
-    storage = SessionStorage.create(tmp_path, sample_session())
+    storage = create_storage(tmp_path)
     oversized = sample_batch(count=65_537, detector_width=1)
 
     with pytest.raises(ValueError, match="65,536"):
@@ -224,7 +254,7 @@ def test_append_rejects_batches_above_canonical_partition_limit(tmp_path: Path) 
 def test_commit_rejects_overlap_and_repeated_commit_is_idempotent(
     tmp_path: Path,
 ) -> None:
-    storage = SessionStorage.create(tmp_path, sample_session())
+    storage = create_storage(tmp_path)
     storage.append_batch(sample_batch(start=0))
     first = storage.commit_segment("segment-0001")
     assert storage.commit_segment("segment-0001") == first
@@ -234,7 +264,7 @@ def test_commit_rejects_overlap_and_repeated_commit_is_idempotent(
 
 
 def test_gap_is_preserved_and_reported(tmp_path: Path) -> None:
-    storage = SessionStorage.create(tmp_path, sample_session())
+    storage = create_storage(tmp_path)
     storage.append_batch(sample_batch(start=0))
     storage.commit_segment("segment-0001")
     storage.append_batch(sample_batch(start=5))
@@ -245,7 +275,7 @@ def test_gap_is_preserved_and_reported(tmp_path: Path) -> None:
 
 
 def test_journal_last_sequence_spans_all_segments(tmp_path: Path) -> None:
-    storage = SessionStorage.create(tmp_path, sample_session())
+    storage = create_storage(tmp_path)
     storage.append_batch(sample_batch(start=10, segment_id="segment-a"))
     storage.commit_segment("segment-a")
     storage.append_batch(sample_batch(start=0, segment_id="segment-z"))
@@ -258,7 +288,7 @@ def test_journal_last_sequence_spans_all_segments(tmp_path: Path) -> None:
 def test_journal_is_visibility_boundary_after_interrupted_commit(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    storage = SessionStorage.create(tmp_path, sample_session())
+    storage = create_storage(tmp_path)
     storage.append_batch(sample_batch())
     real_replace = os.replace
 
@@ -278,7 +308,7 @@ def test_journal_is_visibility_boundary_after_interrupted_commit(
 
 
 def test_recovery_never_promotes_and_resume_is_explicit(tmp_path: Path) -> None:
-    storage = SessionStorage.create(tmp_path, sample_session())
+    storage = create_storage(tmp_path)
     pending = storage.append_batch(sample_batch())
 
     report = storage.recover()
@@ -292,7 +322,7 @@ def test_recovery_never_promotes_and_resume_is_explicit(tmp_path: Path) -> None:
 
 
 def test_orphaned_final_requires_explicit_resume(tmp_path: Path) -> None:
-    storage = SessionStorage.create(tmp_path, sample_session())
+    storage = create_storage(tmp_path)
     pending = storage.append_batch(sample_batch())
     final = pending.with_suffix("")
     pending.rename(final)
@@ -308,7 +338,7 @@ def test_orphaned_final_requires_explicit_resume(tmp_path: Path) -> None:
 def test_recovery_deletes_corrupt_pending_but_valid_content_is_read_only(
     tmp_path: Path,
 ) -> None:
-    storage = SessionStorage.create(tmp_path, sample_session())
+    storage = create_storage(tmp_path)
     valid = storage.append_batch(sample_batch())
     corrupt = valid.with_name(
         "part-00000000000000000003-00000000000000000003.parquet.pending"
@@ -326,7 +356,7 @@ def test_recovery_deletes_corrupt_pending_but_valid_content_is_read_only(
 def test_recovery_fails_closed_for_missing_or_corrupt_committed_files(
     tmp_path: Path,
 ) -> None:
-    storage = SessionStorage.create(tmp_path, sample_session())
+    storage = create_storage(tmp_path)
     storage.append_batch(sample_batch())
     committed = storage.commit_segment("segment-0001")[0]
     committed.path.write_bytes(b"tampered")
@@ -344,7 +374,7 @@ def test_recovery_fails_closed_for_missing_or_corrupt_committed_files(
 
 
 def test_malformed_or_traversing_journal_fails_closed(tmp_path: Path) -> None:
-    storage = SessionStorage.create(tmp_path, sample_session())
+    storage = create_storage(tmp_path)
     journal = storage.session_root / "journal.json"
     journal.write_text("{", encoding="utf-8")
     report = storage.recover()
@@ -386,7 +416,7 @@ def test_malformed_or_traversing_journal_fails_closed(tmp_path: Path) -> None:
 def test_journal_rejects_duplicate_paths_overlaps_and_segment_ids(
     tmp_path: Path,
 ) -> None:
-    storage = SessionStorage.create(tmp_path, sample_session())
+    storage = create_storage(tmp_path)
     storage.append_batch(sample_batch())
     storage.commit_segment("segment-0001")
     journal_path = storage.session_root / "journal.json"
@@ -406,7 +436,7 @@ def test_journal_rejects_duplicate_paths_overlaps_and_segment_ids(
 
 
 def test_verify_compares_journal_segment_metadata_to_parquet(tmp_path: Path) -> None:
-    storage = SessionStorage.create(tmp_path, sample_session())
+    storage = create_storage(tmp_path)
     storage.append_batch(sample_batch())
     storage.commit_segment("segment-0001")
     journal_path = storage.session_root / "journal.json"
@@ -420,7 +450,7 @@ def test_verify_compares_journal_segment_metadata_to_parquet(tmp_path: Path) -> 
 
 
 def test_symlinked_committed_partition_is_rejected(tmp_path: Path) -> None:
-    storage = SessionStorage.create(tmp_path, sample_session())
+    storage = create_storage(tmp_path)
     storage.append_batch(sample_batch())
     partition = storage.commit_segment("segment-0001")[0]
     outside = tmp_path / "outside.parquet"
@@ -433,7 +463,7 @@ def test_symlinked_committed_partition_is_rejected(tmp_path: Path) -> None:
 
 
 def test_partition_and_report_records_are_immutable(tmp_path: Path) -> None:
-    storage = SessionStorage.create(tmp_path, sample_session())
+    storage = create_storage(tmp_path)
     storage.append_batch(sample_batch())
     partition = storage.commit_segment("segment-0001")[0]
     with pytest.raises(FrozenInstanceError):
@@ -469,3 +499,255 @@ def test_dataset_id_is_semantic_canonical_and_rejects_non_finite_numbers() -> No
             recipe_version="1",
             parameters={"rate": float("nan")},
         )
+
+
+def test_append_rejects_symlinked_internal_storage_directory(tmp_path: Path) -> None:
+    storage = create_storage(tmp_path)
+    syndromes = storage.session_root / "normalized" / "syndromes"
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    syndromes.rmdir()
+    syndromes.symlink_to(outside, target_is_directory=True)
+
+    with pytest.raises(ValueError, match="symlink"):
+        storage.append_batch(sample_batch())
+    assert tuple(outside.iterdir()) == ()
+
+
+def test_commit_verifies_detector_page_checksums(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setitem(parquet_storage.PARQUET_OPTIONS, "compression", "NONE")
+    storage = create_storage(tmp_path)
+    detector_data = bytes(range(1, 33))
+    pending = storage.append_batch(
+        sample_batch(
+            count=len(detector_data), detector_width=8, detector_data=detector_data
+        )
+    )
+    _flip_scientific_page_byte(pending, detector_data)
+
+    with pytest.raises(ValueError, match="checksum|Parquet"):
+        storage.commit_segment("segment-0001")
+
+
+def _flip_scientific_page_byte(path: Path, detector_data: bytes) -> None:
+    payload = bytearray(path.read_bytes())
+    offset = payload.find(detector_data)
+    assert offset >= 0
+    payload[offset + 7] ^= 0x01
+    path.write_bytes(payload)
+
+
+def test_verify_reads_detector_pages_with_checksum_verification(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setitem(parquet_storage.PARQUET_OPTIONS, "compression", "NONE")
+    storage = create_storage(tmp_path)
+    detector_data = bytes(range(1, 33))
+    storage.append_batch(
+        sample_batch(
+            count=len(detector_data), detector_width=8, detector_data=detector_data
+        )
+    )
+    committed = storage.commit_segment("segment-0001")[0]
+    _flip_scientific_page_byte(committed.path, detector_data)
+
+    report = storage.verify()
+    assert report.ok is False
+    assert len(report.corrupt_committed) == 1
+
+
+def test_recovery_capability_cannot_delete_or_resume_committed_data(
+    tmp_path: Path,
+) -> None:
+    storage = create_storage(tmp_path)
+    storage.append_batch(sample_batch())
+    committed = storage.commit_segment("segment-0001")[0]
+    schema = pq.read_schema(committed.path)
+    metadata = schema.metadata or {}
+    forged = PendingPartition(
+        path=committed.path,
+        sha256=committed.sha256,
+        rows=committed.rows,
+        sequence_start=committed.sequence_start,
+        sequence_end=committed.sequence_end,
+        segment_id="segment-0001",
+        dataset_id=metadata[b"qec.dataset_id"].decode(),
+        schema_fingerprint=metadata[b"qec.schema_fingerprint"].decode(),
+        is_final=True,
+        journal_generation=1,
+    )
+
+    with pytest.raises(ValueError, match="authorized"):
+        storage.discard_pending((forged,))
+    with pytest.raises(ValueError, match="authorized"):
+        storage.resume_pending((forged,))
+    assert committed.path.exists()
+
+
+def test_session_locks_are_never_evicted_for_a_live_identity(tmp_path: Path) -> None:
+    session_path = str((tmp_path / "session-1").resolve())
+    original = _session_lock(session_path)
+    for index in range(300):
+        _session_lock(str((tmp_path / f"other-{index}").resolve()))
+    assert _session_lock(session_path) is original
+
+
+def test_concurrent_lock_lookup_never_yields_two_live_locks(tmp_path: Path) -> None:
+    session_path = str((tmp_path / "session-1").resolve())
+    ready = threading.Barrier(16)
+    retained: list[object] = []
+
+    def look_up() -> None:
+        ready.wait()
+        retained.append(_session_lock(session_path))
+
+    threads = tuple(threading.Thread(target=look_up) for _ in range(16))
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join()
+    assert len({id(lock) for lock in retained}) == 1
+
+
+def test_create_requires_structured_semantic_provenance(tmp_path: Path) -> None:
+    with pytest.raises(TypeError):
+        SessionStorage.create(tmp_path, sample_session())  # type: ignore[call-arg]
+    with pytest.raises(ValueError, match="source"):
+        replace(sample_identity(), source_sha256=())
+    with pytest.raises(TypeError):
+        DatasetSemanticIdentity(label="run-7")  # type: ignore[call-arg]
+
+
+def test_semantic_identity_round_trips_strict_canonical_mapping() -> None:
+    identity = sample_identity()
+    assert DatasetSemanticIdentity.from_mapping(identity.to_mapping()) == identity
+    with pytest.raises(ValueError, match="canonical QEC field"):
+        replace(identity, mapping=(("label", "run-7"),))
+    with pytest.raises(ValueError, match="positive"):
+        replace(identity, bit_widths=(("detectors", 0),))
+    with pytest.raises(ValueError, match="time domain"):
+        replace(identity, time_domain="wall-clock")
+    invalid = identity.to_mapping()
+    invalid["extra"] = "forbidden"
+    with pytest.raises(ValueError, match="extra"):
+        DatasetSemanticIdentity.from_mapping(invalid)
+
+
+def test_dataset_identity_changes_with_canonical_source_hash(tmp_path: Path) -> None:
+    first_root = tmp_path / "first"
+    second_root = tmp_path / "second"
+    first = SessionStorage.create(
+        first_root, sample_session(), sample_identity("a" * 64)
+    )
+    second = SessionStorage.create(
+        second_root, sample_session(), sample_identity("b" * 64)
+    )
+    first_pending = first.append_batch(sample_batch())
+    second_pending = second.append_batch(sample_batch())
+
+    first_id = (pq.read_schema(first_pending).metadata or {})[b"qec.dataset_id"]
+    second_id = (pq.read_schema(second_pending).metadata or {})[b"qec.dataset_id"]
+    assert first_id != second_id
+
+
+def _copy_candidate(source: Path, target: Path) -> Path:
+    target.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copyfile(source, target)
+    return target
+
+
+def test_recovery_quarantines_overlap_and_schema_conflicts(tmp_path: Path) -> None:
+    storage = create_storage(tmp_path / "primary")
+    storage.append_batch(sample_batch())
+    storage.commit_segment("segment-0001")
+    donor = create_storage(tmp_path / "donor", "donor")
+    overlap = donor.append_batch(sample_batch(start=2, session_id="donor"))
+    schema_donor = create_storage(tmp_path / "schema-donor", "schema-donor")
+    conflict = schema_donor.append_batch(
+        sample_batch(start=5, detector_width=8, session_id="schema-donor")
+    )
+    segment = storage.session_root / "normalized" / "syndromes" / "segment-0001"
+    _copy_candidate(overlap, segment / overlap.name)
+    _copy_candidate(conflict, segment / conflict.name)
+
+    report = storage.recover()
+    assert len(report.quarantined) == 2
+    assert report.resumable == ()
+    assert all(item.quarantine_path.exists() for item in report.quarantined)
+
+
+def test_recovery_quarantines_corrupt_orphan_final(tmp_path: Path) -> None:
+    storage = create_storage(tmp_path)
+    segment = storage.session_root / "normalized" / "syndromes" / "segment-0001"
+    segment.mkdir()
+    corrupt = segment / "corrupt.parquet"
+    corrupt.write_bytes(b"not parquet")
+
+    report = storage.recover()
+    assert len(report.quarantined) == 1
+    assert report.quarantined[0].original_path == corrupt
+    assert not corrupt.exists()
+
+
+def test_recovery_treats_exact_pending_duplicate_as_idempotent(tmp_path: Path) -> None:
+    storage = create_storage(tmp_path)
+    storage.append_batch(sample_batch())
+    committed = storage.commit_segment("segment-0001")[0]
+    duplicate = committed.path.with_suffix(".parquet.pending")
+    shutil.copyfile(committed.path, duplicate)
+
+    report = storage.recover()
+    assert len(report.duplicates) == 1
+    assert report.resumable == ()
+    assert storage.resume_pending(report.duplicates) == ()
+    assert not duplicate.exists()
+    assert committed.path.exists()
+
+
+def test_pending_and_nested_directories_are_synced(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    storage_synced: list[Path] = []
+    parquet_synced: list[Path] = []
+    monkeypatch.setattr(storage_module, "fsync_directory", storage_synced.append)
+    storage = create_storage(tmp_path)
+    monkeypatch.setattr(parquet_storage, "fsync_directory", parquet_synced.append)
+    pending = storage.append_batch(sample_batch())
+
+    synced_names = {path.name for path in storage_synced}
+    assert {
+        "raw",
+        "normalized",
+        "syndromes",
+        "derived",
+        "indexes",
+        "quarantine",
+    } <= synced_names
+    assert parquet_synced == [pending.parent]
+
+
+def test_windows_directory_sync_reports_best_effort(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(parquet_storage.os, "name", "nt")
+    assert fsync_directory(tmp_path) is False
+
+
+def test_durable_json_reads_reject_duplicate_keys_and_nonfinite_values(
+    tmp_path: Path,
+) -> None:
+    storage = create_storage(tmp_path)
+    journal = storage.session_root / "journal.json"
+    original = journal.read_text()
+    journal.write_text(
+        original.replace('"generation":0', '"generation":0,"generation":0')
+    )
+    assert storage.recover().fatal_error is not None
+
+    journal.write_text(original.replace('"generation":0', '"generation":NaN'))
+    assert storage.recover().fatal_error is not None
+
+    journal.write_text(original.replace('"generation":0', '"generation":1e400'))
+    assert storage.recover().fatal_error is not None

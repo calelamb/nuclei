@@ -25,6 +25,11 @@ PARQUET_OPTIONS: dict[str, object] = {
     "store_schema": True,
     "write_page_checksum": True,
 }
+UNSUPPORTED_DIRECTORY_SYNC = {
+    errno.EBADF,
+    errno.EINVAL,
+    getattr(errno, "ENOTSUP", errno.EINVAL),
+}
 
 
 @dataclass(frozen=True, slots=True)
@@ -38,26 +43,29 @@ class PendingPartition:
     dataset_id: str
     schema_fingerprint: str
     is_final: bool = False
+    journal_generation: int = -1
 
 
-def fsync_directory(path: Path) -> None:
+def fsync_directory(path: Path) -> bool:
     """Sync directory metadata when the host filesystem supports it."""
 
     if os.name != "posix":
-        return
-    descriptor = os.open(path, os.O_RDONLY)
+        return False
+    try:
+        descriptor = os.open(path, os.O_RDONLY)
+    except OSError as error:
+        if error.errno in UNSUPPORTED_DIRECTORY_SYNC:
+            return False
+        raise
     try:
         os.fsync(descriptor)
     except OSError as error:
-        unsupported = {
-            errno.EBADF,
-            errno.EINVAL,
-            getattr(errno, "ENOTSUP", errno.EINVAL),
-        }
-        if error.errno not in unsupported:
+        if error.errno not in UNSUPPORTED_DIRECTORY_SYNC:
             raise
+        return False
     finally:
         os.close(descriptor)
+    return True
 
 
 def _validate_padding(name: str, packed: PackedBits, count: int) -> None:
@@ -185,6 +193,7 @@ def write_pending(
             writer.write_batch(record_batch, row_group_size=65_536)
         output.flush()
         os.fsync(output.fileno())
+    fsync_directory(path.parent)
     inspected = inspect_partition(path)
     if inspected.rows != batch.record_count:
         path.unlink(missing_ok=True)
@@ -251,6 +260,24 @@ def _validate_schema(schema: pa.Schema) -> None:
         raise ValueError("Parquet schema fingerprint is invalid")
 
 
+def _validate_scientific_columns(table: pa.Table) -> None:
+    table.validate(full=True)
+    if "round" in table.column_names:
+        rounds = table.column("round").to_pylist()
+        if rounds != list(range(rounds[0], rounds[0] + len(rounds))):
+            raise ValueError("Parquet round range is not contiguous")
+    for name in ("detectors",) + PACKED_FIELDS:
+        if name not in table.column_names:
+            continue
+        width = _packed_width(table.schema.field(name))
+        for chunk in table.column(name).chunks:
+            data_buffer = chunk.buffers()[1]
+            if data_buffer is None:
+                raise ValueError(f"Parquet field {name} has no scientific data")
+            packed = PackedBits(width, data_buffer.to_pybytes())
+            _validate_padding(name, packed, len(chunk))
+
+
 def inspect_partition(path: Path, *, is_final: bool = False) -> PendingPartition:
     if path.is_symlink() or not path.is_file():
         raise ValueError("Parquet partition is not a regular file")
@@ -264,9 +291,9 @@ def inspect_partition(path: Path, *, is_final: bool = False) -> PendingPartition
         end = int(_metadata_text(schema, b"qec.sequence_end"))
         if start < 0 or end - start != metadata.num_rows:
             raise ValueError("Parquet sequence range does not match its footer")
-        sequence = (
-            pq.read_table(path, columns=["sequence"]).column("sequence").to_pylist()
-        )
+        table = pq.read_table(path, page_checksum_verification=True)
+        _validate_scientific_columns(table)
+        sequence = table.column("sequence").to_pylist()
     except (OSError, pa.ArrowException, KeyError, ValueError) as error:
         if isinstance(error, ValueError) and str(error).startswith("Parquet"):
             raise
