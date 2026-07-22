@@ -1,4 +1,4 @@
-"""Immutable in-process registry for QEC data adapters."""
+"""Immutable, capability-stable registry for QEC data adapters."""
 
 from __future__ import annotations
 
@@ -18,51 +18,75 @@ REQUIRED_METHODS = (
 
 
 class AdapterRegistrationError(ValueError):
-    """An adapter cannot be represented safely in the registry."""
+    """An adapter cannot be represented or dispatched safely."""
+
+
+@dataclass(frozen=True, slots=True)
+class RegistrationRecord:
+    """Frozen registration identity independent of mutable adapter attributes."""
+
+    manifest: AdapterManifest
+    adapter: QecDataAdapter
+
+    @property
+    def key(self) -> tuple[str, str]:
+        return self.manifest.id, self.manifest.version
+
+    def resolve(self) -> QecDataAdapter:
+        live = _snapshot_manifest(self.adapter)
+        if live != self.manifest:
+            raise AdapterRegistrationError(
+                f"adapter manifest changed after registration: {self.key}"
+            )
+        _validate_methods(self.adapter)
+        return self.adapter
 
 
 @dataclass(frozen=True, slots=True)
 class AdapterRegistry:
-    adapters: tuple[QecDataAdapter, ...] = ()
+    registrations: tuple[RegistrationRecord, ...] = ()
 
     def __post_init__(self) -> None:
-        if not isinstance(self.adapters, tuple):
-            raise TypeError("registered adapters must be an immutable tuple")
-        for adapter in self.adapters:
-            _validate_adapter(adapter)
-        identities = tuple(_identity(adapter) for adapter in self.adapters)
-        if len(identities) != len(set(identities)):
+        if type(self.registrations) is not tuple:
+            raise TypeError("adapter registrations must be an immutable tuple")
+        if not all(type(item) is RegistrationRecord for item in self.registrations):
+            raise AdapterRegistrationError("adapter registration record is invalid")
+        keys = tuple(record.key for record in self.registrations)
+        if len(keys) != len(set(keys)):
             raise AdapterRegistrationError("adapter id/version is already registered")
 
+    @property
+    def adapters(self) -> tuple[QecDataAdapter, ...]:
+        return tuple(record.adapter for record in self.registrations)
+
     def register(self, adapter: QecDataAdapter) -> AdapterRegistry:
-        _validate_adapter(adapter)
-        identity = _identity(adapter)
-        if any(_identity(current) == identity for current in self.adapters):
+        manifest = _snapshot_manifest(adapter)
+        _validate_methods(adapter)
+        record = RegistrationRecord(manifest=manifest, adapter=adapter)
+        if any(current.key == record.key for current in self.registrations):
             raise AdapterRegistrationError(
-                f"adapter {identity[0]} version {identity[1]} is already registered"
+                f"adapter {record.key[0]} version {record.key[1]} is already registered"
             )
-        return AdapterRegistry(adapters=(*self.adapters, adapter))
+        return AdapterRegistry(registrations=(*self.registrations, record))
 
     def get(self, adapter_id: str, version: str | None = None) -> QecDataAdapter:
         matches = tuple(
-            adapter
-            for adapter in self.adapters
-            if adapter.manifest.id == adapter_id
-            and (version is None or adapter.manifest.version == version)
+            record
+            for record in self.registrations
+            if record.manifest.id == adapter_id
+            and (version is None or record.manifest.version == version)
         )
         if not matches:
             raise KeyError(f"adapter {adapter_id!r} is not registered")
         if len(matches) > 1:
             raise KeyError(f"adapter {adapter_id!r} requires an explicit version")
-        return matches[0]
+        return matches[0].resolve()
 
 
-def _identity(adapter: object) -> tuple[str, str]:
-    manifest = getattr(adapter, "manifest", None)
-    if not isinstance(manifest, AdapterManifest):
-        raise AdapterRegistrationError("adapter manifest is invalid")
+def _snapshot_manifest(adapter: object) -> AdapterManifest:
     try:
-        validated = AdapterManifest(
+        manifest = getattr(adapter, "manifest")
+        return AdapterManifest(
             id=manifest.id,
             version=manifest.version,
             capabilities=manifest.capabilities,
@@ -72,11 +96,9 @@ def _identity(adapter: object) -> tuple[str, str]:
         raise AdapterRegistrationError(
             f"adapter manifest is invalid: {error}"
         ) from error
-    return validated.id, validated.version
 
 
-def _validate_adapter(adapter: object) -> None:
-    _identity(adapter)
+def _validate_methods(adapter: object) -> None:
     missing = tuple(
         name for name in REQUIRED_METHODS if not callable(getattr(adapter, name, None))
     )

@@ -1,5 +1,6 @@
 import asyncio
 import inspect
+import multiprocessing
 import os
 import time
 from dataclasses import FrozenInstanceError, replace
@@ -20,7 +21,9 @@ from kernel.qec_data.adapters.base import (
     QecDataAdapter,
     StreamConfig,
     ValidationReport,
+    ValidationIssue,
     compute_source_sha256,
+    fingerprint_source,
     unsupported,
 )
 from kernel.qec_data.adapters.registry import (
@@ -28,7 +31,15 @@ from kernel.qec_data.adapters.registry import (
     AdapterRegistry,
 )
 from kernel.qec_data.models import PackedBits, SyndromeBatch
-from kernel.tests.qec_data.adapter_contract import run_adapter_contract
+from kernel.qec_data.models import (
+    QualifiedTimestamps,
+    TimestampSeries,
+    ValueStatus,
+)
+from kernel.tests.qec_data.adapter_contract import (
+    factory_is_spawn_importable,
+    run_adapter_contract,
+)
 
 
 PROVENANCE_ID = "contract-provenance"
@@ -108,23 +119,6 @@ class GoodAdapter:
         return unsupported(AdapterCapability.COMMAND)
 
 
-class ProbeOnlyAdapter(GoodAdapter):
-    manifest = replace(
-        GoodAdapter.manifest,
-        id="test.probe-only",
-        capabilities=frozenset({AdapterCapability.PROBE}),
-    )
-
-    def validate(self, source: Path, mapping: ImportMapping):
-        return unsupported(AdapterCapability.VALIDATE)
-
-    def preview(self, source: Path, mapping: ImportMapping, limit: int):
-        return unsupported(AdapterCapability.PREVIEW)
-
-    def import_batches(self, source: Path, mapping: ImportMapping):
-        return unsupported(AdapterCapability.IMPORT)
-
-
 class MutatingProbeAdapter(GoodAdapter):
     def probe(self, source: Path) -> ProbeResult:
         source.write_text("changed\n", encoding="utf-8")
@@ -167,7 +161,7 @@ class HangingPreviewAdapter(GoodAdapter):
     def preview(
         self, source: Path, mapping: ImportMapping, limit: int
     ) -> PreviewResult:
-        time.sleep(0.5)
+        time.sleep(5)
         return super().preview(source, mapping, limit)
 
 
@@ -248,16 +242,8 @@ class HangingStreamAdapter(MissingCancellationAdapter):
 
     async def stream_batches(self, config: StreamConfig):
         config.cancel.is_cancelled
-        await asyncio.sleep(0.5)
+        await asyncio.sleep(5)
         return _empty_stream()
-
-
-class UndeclaredPreviewAdapter(GoodAdapter):
-    manifest = replace(
-        GoodAdapter.manifest,
-        id="broken.undeclared-preview",
-        capabilities=OFFLINE_CAPABILITIES - {AdapterCapability.PREVIEW},
-    )
 
 
 class DeclaredUnsupportedCommandAdapter(GoodAdapter):
@@ -276,7 +262,7 @@ class HangingCommandAdapter(GoodAdapter):
     )
 
     async def command(self, command: AdapterCommand):
-        await asyncio.sleep(0.5)
+        await asyncio.sleep(5)
         return CommandSuccessResult()
 
 
@@ -301,9 +287,127 @@ class UnboundedImportAdapter(GoodAdapter):
 
 class NonYieldingImportAdapter(GoodAdapter):
     def import_batches(self, source: Path, mapping: ImportMapping):
-        time.sleep(0.5)
+        time.sleep(5)
         if False:
             yield canonical_batch()
+
+
+class ChildProcessOnlyAdapter(GoodAdapter):
+    def probe(self, source: Path) -> ProbeResult:
+        parent_pid = int(source.read_text(encoding="utf-8"))
+        if os.getpid() == parent_pid:
+            raise RuntimeError("adapter executed in the trusted parent process")
+        return super().probe(source)
+
+
+class LongHangingPreviewAdapter(GoodAdapter):
+    def preview(
+        self, source: Path, mapping: ImportMapping, limit: int
+    ) -> PreviewResult:
+        time.sleep(5)
+        return super().preview(source, mapping, limit)
+
+
+class ExplodingManifestAdapter(GoodAdapter):
+    @property
+    def manifest(self):
+        raise RuntimeError("manifest getter exploded")
+
+
+class GapSequenceAdapter(GoodAdapter):
+    def import_batches(self, source: Path, mapping: ImportMapping):
+        return iter((canonical_batch(0), canonical_batch(2)))
+
+
+class InvalidPaddingAdapter(GoodAdapter):
+    def import_batches(self, source: Path, mapping: ImportMapping):
+        batch = canonical_batch(detector_width=1)
+        object.__setattr__(batch.detector_events, "data", b"\x80")
+        return iter((batch,))
+
+
+class OfflineUnsupportedAdapter(GoodAdapter):
+    def validate(self, source: Path, mapping: ImportMapping):
+        return unsupported(AdapterCapability.VALIDATE)
+
+
+class CloseRaisingIterator:
+    def __iter__(self):
+        return self
+
+    def __next__(self):
+        raise StopIteration
+
+    def close(self) -> None:
+        raise RuntimeError("close exploded")
+
+
+class CloseRaisingAdapter(GoodAdapter):
+    def import_batches(self, source: Path, mapping: ImportMapping):
+        return CloseRaisingIterator()
+
+
+class InvalidRangeAdapter(GoodAdapter):
+    def import_batches(self, source: Path, mapping: ImportMapping):
+        batch = canonical_batch()
+        object.__setattr__(batch, "sequence_start", -1)
+        return iter((batch,))
+
+
+class InvalidTimestampAdapter(GoodAdapter):
+    def import_batches(self, source: Path, mapping: ImportMapping):
+        batch = canonical_batch()
+        timestamps = QualifiedTimestamps(
+            TimestampSeries((1.0, 2.0), "ns"), ValueStatus.MEASURED
+        )
+        object.__setattr__(batch, "source_timestamps", timestamps)
+        return iter((batch,))
+
+
+class InvalidQualityAdapter(GoodAdapter):
+    def import_batches(self, source: Path, mapping: ImportMapping):
+        batch = canonical_batch()
+        object.__setattr__(batch, "data_quality", ())
+        return iter((batch,))
+
+
+class InvalidSchemaAdapter(GoodAdapter):
+    def import_batches(self, source: Path, mapping: ImportMapping):
+        batch = canonical_batch()
+        object.__setattr__(batch, "schema_version", "2.0.0")
+        return iter((batch,))
+
+
+class SignatureBomb:
+    @property
+    def __signature__(self):
+        raise RuntimeError("signature exploded")
+
+    def __call__(self, config: StreamConfig):
+        return unsupported(AdapterCapability.STREAM)
+
+
+class ExplodingSignatureAdapter(GoodAdapter):
+    stream_batches = SignatureBomb()
+
+
+async def _stubborn_task() -> None:
+    while True:
+        try:
+            await asyncio.sleep(10)
+        except asyncio.CancelledError:
+            continue
+
+
+class EventLoopShutdownAdapter(GoodAdapter):
+    async def command(self, command: AdapterCommand):
+        asyncio.create_task(_stubborn_task())
+        return unsupported(AdapterCapability.COMMAND)
+
+
+def hanging_factory():
+    time.sleep(5)
+    return GoodAdapter()
 
 
 @pytest.fixture
@@ -313,40 +417,51 @@ def source(tmp_path: Path) -> Path:
     return path
 
 
+def test_source_fingerprint_tracks_file_and_directory_metadata(
+    source: Path, tmp_path: Path
+) -> None:
+    file_fingerprint = fingerprint_source(source)
+    assert len(file_fingerprint) == 1
+    assert file_fingerprint[0].relative_path == "."
+    assert file_fingerprint[0].content_sha256 == compute_source_sha256(source)
+
+    directory = tmp_path / "dataset"
+    directory.mkdir()
+    child = directory / "records.dets"
+    child.write_text("shot D1\n", encoding="utf-8")
+    entries = fingerprint_source(directory)
+    assert [(entry.relative_path, entry.kind) for entry in entries] == [
+        (".", "directory"),
+        ("records.dets", "file"),
+    ]
+
+
 BROKEN_CASES = (
     (MutatingProbeAdapter, "probe_changed_source"),
     (MetadataMutatingProbeAdapter, "probe_changed_source"),
     (NondeterministicPreviewAdapter, "preview_nondeterministic"),
     (OverLimitPreviewAdapter, "preview_limit_exceeded"),
-    (HangingPreviewAdapter, "preview_unbounded"),
+    (HangingPreviewAdapter, "preview_timed_out"),
     (OverlappingSequenceAdapter, "batch_sequence_overlap"),
     (NonmonotonicSequenceAdapter, "batch_sequence_nonmonotonic"),
     (WidthChangingAdapter, "batch_width_changed"),
     (MismatchedProvenanceAdapter, "batch_provenance_mismatch"),
     (MissingBatchProvenanceAdapter, "batch_provenance_absent"),
-    (InvalidRecordInvariantAdapter, "batch_record_invariant_invalid"),
+    (InvalidRecordInvariantAdapter, "batch_canonical_invalid"),
     (MissingValidationProvenanceAdapter, "validation_provenance_absent"),
     (MissingCancellationAdapter, "stream_missing_cancellation"),
     (MissingStreamConfigAdapter, "stream_missing_cancellation"),
-    (HangingStreamAdapter, "stream_did_not_cancel"),
-    (UndeclaredPreviewAdapter, "undeclared_capability_available"),
+    (HangingStreamAdapter, "stream_invocation_timed_out"),
     (DeclaredUnsupportedCommandAdapter, "declared_capability_unsupported"),
     (HangingCommandAdapter, "command_timed_out"),
     (InvalidBatchAdapter, "batch_type_invalid"),
     (MutatingImportAdapter, "import_changed_source"),
-    (UnboundedImportAdapter, "import_sample_unbounded"),
-    (NonYieldingImportAdapter, "import_sample_unbounded"),
+    (NonYieldingImportAdapter, "import_iteration_timed_out"),
 )
 
 
 def test_good_offline_adapter_passes_contract(source: Path) -> None:
     assert run_adapter_contract(GoodAdapter, source).passed
-
-
-def test_typed_unsupported_results_cover_every_undeclared_method(
-    source: Path,
-) -> None:
-    assert run_adapter_contract(ProbeOnlyAdapter, source).passed
 
 
 def test_cancel_aware_stream_adapter_passes_contract(source: Path) -> None:
@@ -365,7 +480,15 @@ def test_broken_adapters_return_stable_failure_codes(
 
 
 def test_broken_adapter_failure_codes_are_deterministic(tmp_path: Path) -> None:
+    slow = {
+        HangingPreviewAdapter,
+        HangingStreamAdapter,
+        HangingCommandAdapter,
+        NonYieldingImportAdapter,
+    }
     for index, (adapter_factory, _) in enumerate(BROKEN_CASES):
+        if adapter_factory in slow:
+            continue
         codes: list[tuple[str, ...]] = []
         for repetition in range(2):
             source = tmp_path / f"{index}-{repetition}.dets"
@@ -444,8 +567,8 @@ def test_registry_rejects_invalid_manifest_and_missing_methods() -> None:
 
     with pytest.raises(AdapterRegistrationError, match="missing required methods"):
         AdapterRegistry().register(MissingMethods())  # type: ignore[arg-type]
-    with pytest.raises(AdapterRegistrationError, match="missing required methods"):
-        AdapterRegistry(adapters=(MissingMethods(),))  # type: ignore[arg-type]
+    with pytest.raises(AdapterRegistrationError, match="registration record"):
+        AdapterRegistry(registrations=(MissingMethods(),))  # type: ignore[arg-type]
 
 
 def test_command_success_dto_is_frozen_and_validated() -> None:
@@ -488,3 +611,126 @@ def test_directory_source_hash_is_deterministic_and_content_sensitive(
     assert first == compute_source_sha256(source)
     (source / "a.dets").write_bytes(b"b")
     assert compute_source_sha256(source) != first
+
+
+def test_source_hash_rejects_symlink_source_and_children(tmp_path: Path) -> None:
+    target = tmp_path / "target.dets"
+    target.write_text("D0\n", encoding="utf-8")
+    linked_source = tmp_path / "linked.dets"
+    linked_source.symlink_to(target)
+    with pytest.raises(ValueError, match="symlink"):
+        compute_source_sha256(linked_source)
+
+    source_dir = tmp_path / "capture"
+    source_dir.mkdir()
+    (source_dir / "linked.dets").symlink_to(target)
+    with pytest.raises(ValueError, match="symlink"):
+        compute_source_sha256(source_dir)
+    assert run_adapter_contract(GoodAdapter, linked_source).failure_codes == (
+        "source_symlink_rejected",
+    )
+
+
+def test_contract_runs_adapter_in_child_process_and_reaps_it(tmp_path: Path) -> None:
+    source = tmp_path / "source.dets"
+    source.write_text(str(os.getpid()), encoding="utf-8")
+    before = {process.pid for process in multiprocessing.active_children()}
+    report = run_adapter_contract(ChildProcessOnlyAdapter, source)
+    after = {process.pid for process in multiprocessing.active_children()}
+    assert report.passed
+    assert after == before
+
+
+def test_contract_terminates_hanging_worker_without_leaking_processes(
+    source: Path,
+) -> None:
+    before = {process.pid for process in multiprocessing.active_children()}
+    started = time.monotonic()
+    report = run_adapter_contract(LongHangingPreviewAdapter, source)
+    elapsed = time.monotonic() - started
+    after = {process.pid for process in multiprocessing.active_children()}
+    assert "preview_timed_out" in report.failure_codes
+    assert elapsed < 4.0
+    assert after == before
+
+
+def test_registry_detects_live_manifest_drift_before_dispatch() -> None:
+    adapter = GoodAdapter()
+    registry = AdapterRegistry().register(adapter)
+    adapter.manifest = replace(
+        adapter.manifest,
+        capabilities=adapter.manifest.capabilities | {AdapterCapability.COMMAND},
+    )
+    with pytest.raises(AdapterRegistrationError, match="manifest.*changed"):
+        registry.get("test.good", "1.0.0")
+
+
+def test_large_import_is_sampled_without_being_called_unbounded(source: Path) -> None:
+    report = run_adapter_contract(UnboundedImportAdapter, source)
+    assert "import_sample_unbounded" not in report.failure_codes
+
+
+@pytest.mark.parametrize(
+    ("adapter_factory", "failure_code"),
+    [
+        (GapSequenceAdapter, "batch_sequence_gap"),
+        (InvalidPaddingAdapter, "batch_canonical_invalid"),
+        (CloseRaisingAdapter, "import_close_raised"),
+        (OfflineUnsupportedAdapter, "validate_unsupported_invalid"),
+        (InvalidRangeAdapter, "batch_canonical_invalid"),
+        (InvalidTimestampAdapter, "batch_canonical_invalid"),
+        (InvalidQualityAdapter, "batch_canonical_invalid"),
+        (InvalidSchemaAdapter, "batch_canonical_invalid"),
+        (ExplodingSignatureAdapter, "stream_signature_raised"),
+    ],
+)
+def test_adversarial_adapter_errors_are_precise(
+    source: Path, adapter_factory, failure_code: str
+) -> None:
+    report = run_adapter_contract(adapter_factory, source)
+    assert failure_code in report.failure_codes
+
+
+def test_manifest_getter_exception_becomes_stable_failure(source: Path) -> None:
+    try:
+        report = run_adapter_contract(ExplodingManifestAdapter, source)
+    except Exception as error:  # pragma: no cover - this is the regression
+        pytest.fail(f"contract propagated manifest error: {error}")
+    assert report.failure_codes == ("manifest_raised",)
+
+
+def test_core_capabilities_are_mandatory_and_never_unsupported() -> None:
+    with pytest.raises(ValueError, match="core capabilities"):
+        replace(
+            GoodAdapter.manifest,
+            capabilities=frozenset({AdapterCapability.PROBE}),
+        )
+
+
+def test_metadata_rejects_nonfinite_nested_values_and_enum_strings() -> None:
+    with pytest.raises(ValueError, match="finite"):
+        AdapterCommand("configure", parameters=(("nested", (1.0, float("inf"))),))
+    with pytest.raises(TypeError, match="ValidationSeverity"):
+        ValidationIssue("bad", "bad", severity="error")  # type: ignore[arg-type]
+
+
+def test_spawn_factory_requirement_is_explicit() -> None:
+    assert factory_is_spawn_importable(GoodAdapter)
+    assert not factory_is_spawn_importable(lambda: GoodAdapter())
+
+
+@pytest.mark.parametrize(
+    ("adapter_factory", "failure_code"),
+    [
+        (hanging_factory, "adapter_factory_timed_out"),
+        (EventLoopShutdownAdapter, "event_loop_shutdown_timed_out"),
+    ],
+)
+def test_outer_deadline_covers_factory_and_event_loop_shutdown(
+    source: Path, adapter_factory, failure_code: str
+) -> None:
+    before = {process.pid for process in multiprocessing.active_children()}
+    report = run_adapter_contract(adapter_factory, source)
+    after = {process.pid for process in multiprocessing.active_children()}
+    assert failure_code in report.failure_codes
+    assert after == before

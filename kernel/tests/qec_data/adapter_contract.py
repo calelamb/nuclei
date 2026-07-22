@@ -1,16 +1,15 @@
-"""Reusable compliance runner for core and third-party QEC data adapters."""
+"""Process-isolated compliance runner for QEC data adapters."""
 
 from __future__ import annotations
 
 import asyncio
-import hashlib
+import importlib
 import inspect
-import os
-import queue
-import threading
+import multiprocessing
+import pickle
+import time
 from collections.abc import AsyncIterator, Callable, Iterator
 from dataclasses import dataclass
-from itertools import islice
 from pathlib import Path
 from typing import Protocol
 
@@ -19,23 +18,26 @@ from kernel.qec_data.adapters.base import (
     AdapterCapability,
     AdapterCommand,
     AdapterManifest,
-    CanonicalBatch,
     CommandSuccessResult,
     ImportMapping,
     PreviewResult,
     ProbeResult,
+    SourceFingerprintEntry,
     StreamConfig,
     UnsupportedCapabilityResult,
     ValidationReport,
     compute_source_sha256,
+    fingerprint_source,
 )
+from kernel.qec_data.model_codecs import batch_from_mapping, batch_to_mapping
 from kernel.qec_data.models import SyndromeBatch
 
 
 PREVIEW_LIMIT = 3
 IMPORT_BATCH_LIMIT = 64
-ASYNC_TIMEOUT_SECONDS = 0.25
-SYNC_TIMEOUT_SECONDS = 0.25
+CONTRACT_TIMEOUT_SECONDS = 4.0
+SNAPSHOT_TIMEOUT_SECONDS = 1.0
+PROCESS_CLEANUP_SECONDS = 0.25
 
 
 class AdapterLike(Protocol):
@@ -75,28 +77,6 @@ class _ObservedCancelled:
         raise AdapterCancelled("contract cancellation")
 
 
-@dataclass(frozen=True, slots=True)
-class _SourceEntry:
-    relative_path: str
-    kind: str
-    mode: int
-    size: int
-    modified_ns: int
-    changed_ns: int
-    device: int
-    inode: int
-    owner: int
-    group: int
-    content_sha256: str
-
-
-@dataclass(frozen=True, slots=True)
-class _CallOutcome:
-    value: object | None = None
-    error: Exception | None = None
-    timed_out: bool = False
-
-
 class _FailureCollector:
     def __init__(self) -> None:
         self._failures: list[ContractFailure] = []
@@ -109,61 +89,24 @@ class _FailureCollector:
         return AdapterContractReport(tuple(self._failures))
 
 
-def _file_digest(path: Path) -> str:
-    digest = hashlib.sha256()
-    with path.open("rb") as source_file:
-        for chunk in iter(lambda: source_file.read(1024 * 1024), b""):
-            digest.update(chunk)
-    return digest.hexdigest()
+class _StageReporter:
+    def __init__(self, send: Callable[[tuple[str, object]], None]) -> None:
+        self._send = send
+        self.current = "startup"
+
+    def set(self, stage: str) -> None:
+        self.current = stage
+        self._send(("stage", stage))
 
 
-def _entry(root: Path, path: Path) -> _SourceEntry:
-    stat = path.lstat()
-    relative = "." if path == root else path.relative_to(root).as_posix()
-    if path.is_symlink():
-        kind, digest = "symlink", hashlib.sha256(os.readlink(path).encode()).hexdigest()
-    elif path.is_file():
-        kind, digest = "file", _file_digest(path)
-    else:
-        kind, digest = "directory", ""
-    return _SourceEntry(
-        relative_path=relative,
-        kind=kind,
-        mode=stat.st_mode,
-        size=stat.st_size,
-        modified_ns=stat.st_mtime_ns,
-        changed_ns=stat.st_ctime_ns,
-        device=stat.st_dev,
-        inode=stat.st_ino,
-        owner=getattr(stat, "st_uid", 0),
-        group=getattr(stat, "st_gid", 0),
-        content_sha256=digest,
-    )
-
-
-def _snapshot(source: Path) -> tuple[_SourceEntry, ...]:
-    if not source.exists() and not source.is_symlink():
-        return ()
-    if not source.is_dir() or source.is_symlink():
-        return (_entry(source, source),)
-    paths = (source, *sorted(source.rglob("*"), key=lambda path: path.as_posix()))
-    return tuple(_entry(source, path) for path in paths)
-
-
-def _bounded_call(call: Callable[[], object]) -> _CallOutcome:
-    outcomes: queue.Queue[_CallOutcome] = queue.Queue(maxsize=1)
-
-    def invoke() -> None:
-        try:
-            outcomes.put(_CallOutcome(value=call()))
-        except Exception as error:  # broken plugins are reported, not propagated
-            outcomes.put(_CallOutcome(error=error))
-
-    threading.Thread(target=invoke, daemon=True).start()
+def _snapshot_or_failure(
+    source: Path, failures: _FailureCollector, code: str
+) -> tuple[SourceFingerprintEntry, ...] | None:
     try:
-        return outcomes.get(timeout=SYNC_TIMEOUT_SECONDS)
-    except queue.Empty:
-        return _CallOutcome(timed_out=True)
+        return fingerprint_source(source)
+    except BaseException as error:
+        failures.add(code, f"{type(error).__name__}: {error}")
+        return None
 
 
 def _call_read_only(
@@ -171,70 +114,74 @@ def _call_read_only(
     source: Path,
     call: Callable[[], object],
     failures: _FailureCollector,
+    stages: _StageReporter,
 ) -> object | None:
-    before = _snapshot(source)
-    outcome = _bounded_call(call)
-    if outcome.timed_out:
-        code = (
-            "preview_unbounded" if operation == "preview" else f"{operation}_timed_out"
-        )
-        failures.add(code, f"{operation} did not finish within the compliance bound")
-    elif outcome.error is not None:
-        error = outcome.error
+    before = _snapshot_or_failure(source, failures, f"{operation}_snapshot_raised")
+    stages.set(operation)
+    try:
+        result = call()
+    except BaseException as error:
         failures.add(f"{operation}_raised", f"{type(error).__name__}: {error}")
-    after = _snapshot(source)
-    if after != before:
-        failures.add(
-            f"{operation}_changed_source",
-            f"{operation} changed source data or metadata",
+        result = None
+    after = _snapshot_or_failure(source, failures, f"{operation}_snapshot_raised")
+    if before is not None and after is not None and before != after:
+        failures.add(f"{operation}_changed_source", f"{operation} changed the source")
+    return result
+
+
+def _manifest(adapter: object, failures: _FailureCollector) -> AdapterManifest | None:
+    try:
+        manifest = getattr(adapter, "manifest")
+    except BaseException as error:
+        failures.add("manifest_raised", f"{type(error).__name__}: {error}")
+        return None
+    if type(manifest) is not AdapterManifest:
+        failures.add("manifest_invalid", "adapter manifest is absent or invalid")
+        return None
+    try:
+        return AdapterManifest(
+            manifest.id,
+            manifest.version,
+            manifest.capabilities,
+            manifest.source_kinds,
         )
-    return outcome.value
+    except BaseException as error:
+        failures.add("manifest_invalid", f"{type(error).__name__}: {error}")
+        return None
 
 
-def _is_unsupported(value: object, capability: AdapterCapability) -> bool:
-    return (
-        isinstance(value, UnsupportedCapabilityResult)
-        and value.capability is capability
-    )
-
-
-def _check_capability_result(
-    manifest: AdapterManifest,
-    capability: AdapterCapability,
-    value: object,
-    failures: _FailureCollector,
-) -> None:
-    declared = capability in manifest.capabilities
-    unsupported_result = _is_unsupported(value, capability)
-    if declared and unsupported_result:
+def _check_required_methods(adapter: object, failures: _FailureCollector) -> None:
+    missing: list[str] = []
+    for capability in AdapterCapability:
+        try:
+            available = callable(getattr(adapter, capability.value))
+        except BaseException:
+            available = False
+        if not available:
+            missing.append(capability.value)
+    if missing:
         failures.add(
-            "declared_capability_unsupported",
-            f"{capability.value} is declared but unsupported",
-        )
-    if not declared and not unsupported_result:
-        failures.add(
-            "undeclared_capability_available",
-            f"{capability.value} is available but undeclared",
+            "adapter_method_missing", f"required methods missing: {', '.join(missing)}"
         )
 
 
 def _check_probe(
-    manifest: AdapterManifest,
     result: object,
-    source_sha256: str,
+    manifest: AdapterManifest,
+    source_hash: str,
     failures: _FailureCollector,
 ) -> None:
-    _check_capability_result(manifest, AdapterCapability.PROBE, result, failures)
-    if AdapterCapability.PROBE not in manifest.capabilities or _is_unsupported(
-        result, AdapterCapability.PROBE
-    ):
+    if isinstance(result, UnsupportedCapabilityResult):
+        failures.add(
+            "probe_unsupported_invalid", "probe is a mandatory core capability"
+        )
         return
-    if not isinstance(result, ProbeResult):
+    if type(result) is not ProbeResult:
         failures.add("probe_result_invalid", "probe did not return ProbeResult")
         return
-    if result.source_sha256 != source_sha256:
+    if result.source_sha256 != source_hash:
         failures.add(
-            "probe_source_hash_mismatch", "probe omitted or changed the source hash"
+            "probe_source_hash_mismatch", "probe source hash is absent or mismatched"
         )
     if result.supported and result.source_kind not in manifest.source_kinds:
         failures.add(
@@ -243,25 +190,21 @@ def _check_probe(
 
 
 def _check_validation(
-    manifest: AdapterManifest,
-    result: object,
-    source_sha256: str,
-    failures: _FailureCollector,
+    result: object, source_hash: str, failures: _FailureCollector
 ) -> str | None:
-    _check_capability_result(manifest, AdapterCapability.VALIDATE, result, failures)
-    if AdapterCapability.VALIDATE not in manifest.capabilities or _is_unsupported(
-        result, AdapterCapability.VALIDATE
-    ):
+    if isinstance(result, UnsupportedCapabilityResult):
+        failures.add(
+            "validate_unsupported_invalid", "validate is a mandatory core capability"
+        )
         return None
-    if not isinstance(result, ValidationReport):
+    if type(result) is not ValidationReport:
         failures.add(
             "validation_result_invalid", "validate did not return ValidationReport"
         )
         return None
-    if result.source_sha256 != source_sha256:
+    if result.source_sha256 != source_hash:
         failures.add(
-            "validation_source_hash_mismatch",
-            "validation source hash is absent or mismatched",
+            "validation_source_hash_mismatch", "validation source hash mismatched"
         )
     if not result.provenance_id:
         failures.add(
@@ -270,343 +213,574 @@ def _check_validation(
     return result.provenance_id
 
 
-def _preview_record_count(result: PreviewResult) -> int:
-    return sum(batch.record_count for batch in result.batches)
+def _canonical_batch(
+    value: object, failures: _FailureCollector
+) -> SyndromeBatch | None:
+    if type(value) is not SyndromeBatch:
+        failures.add("batch_type_invalid", "adapter yielded a non-canonical batch")
+        return None
+    try:
+        return batch_from_mapping(batch_to_mapping(value))
+    except BaseException as error:
+        failures.add("batch_canonical_invalid", f"{type(error).__name__}: {error}")
+        return None
+
+
+def _check_batch_sequence(
+    batch: SyndromeBatch,
+    previous: SyndromeBatch | None,
+    failures: _FailureCollector,
+) -> None:
+    if previous is None:
+        return
+    if batch.sequence_start < previous.sequence_start:
+        failures.add("batch_sequence_nonmonotonic", "batch sequence moved backwards")
+    if batch.sequence_start < previous.sequence_end:
+        failures.add("batch_sequence_overlap", "batch sequence ranges overlap")
+    if batch.sequence_start > previous.sequence_end:
+        failures.add("batch_sequence_gap", "batch sequence ranges contain a gap")
+
+
+def _check_batches(
+    values: tuple[object, ...], provenance_id: str | None, failures: _FailureCollector
+) -> None:
+    previous: dict[tuple[str, str], SyndromeBatch] = {}
+    widths: dict[tuple[str, str], int] = {}
+    for value in values:
+        if type(value) is SyndromeBatch and not getattr(value, "provenance_id", None):
+            failures.add("batch_provenance_absent", "batch omitted provenance identity")
+        batch = _canonical_batch(value, failures)
+        if batch is None:
+            continue
+        key = batch.session_id, batch.segment_id
+        _check_batch_sequence(batch, previous.get(key), failures)
+        previous[key] = batch
+        expected_width = widths.setdefault(key, batch.detector_events.bit_width)
+        if batch.detector_events.bit_width != expected_width:
+            failures.add(
+                "batch_width_changed", "detector width changed within a segment"
+            )
+        if provenance_id and batch.provenance_id != provenance_id:
+            failures.add(
+                "batch_provenance_mismatch", "batch provenance mismatched validation"
+            )
 
 
 def _check_preview(
-    manifest: AdapterManifest,
     first: object,
     second: object,
-    source_sha256: str,
+    source_hash: str,
     provenance_id: str | None,
     failures: _FailureCollector,
 ) -> None:
-    _check_capability_result(manifest, AdapterCapability.PREVIEW, first, failures)
-    if AdapterCapability.PREVIEW not in manifest.capabilities or _is_unsupported(
-        first, AdapterCapability.PREVIEW
-    ):
+    if isinstance(first, UnsupportedCapabilityResult):
+        failures.add(
+            "preview_unsupported_invalid", "preview is a mandatory core capability"
+        )
         return
-    if not isinstance(first, PreviewResult) or not isinstance(second, PreviewResult):
+    if type(first) is not PreviewResult or type(second) is not PreviewResult:
         failures.add("preview_result_invalid", "preview did not return PreviewResult")
         return
     if first != second:
-        failures.add(
-            "preview_nondeterministic",
-            "identical preview calls returned different values",
-        )
-    if not all(isinstance(batch, SyndromeBatch) for batch in first.batches):
-        failures.add("preview_batch_invalid", "preview contains a non-canonical batch")
-        return
-    if (
-        _preview_record_count(first) > PREVIEW_LIMIT
-        or len(first.batches) > PREVIEW_LIMIT
-    ):
-        failures.add(
-            "preview_limit_exceeded", "preview returned more records than requested"
-        )
-    if first.source_sha256 != source_sha256:
-        failures.add(
-            "preview_source_hash_mismatch",
-            "preview source hash is absent or mismatched",
-        )
+        failures.add("preview_nondeterministic", "identical preview calls differed")
+    records = sum(batch.record_count for batch in first.batches)
+    if records > PREVIEW_LIMIT or len(first.batches) > PREVIEW_LIMIT:
+        failures.add("preview_limit_exceeded", "preview exceeded the requested limit")
+    if first.source_sha256 != source_hash:
+        failures.add("preview_source_hash_mismatch", "preview source hash mismatched")
     if not first.provenance_id:
         failures.add("preview_provenance_absent", "preview omitted provenance identity")
     elif provenance_id and first.provenance_id != provenance_id:
         failures.add(
-            "preview_provenance_mismatch", "preview and validation provenance differ"
+            "preview_provenance_mismatch", "preview provenance mismatched validation"
         )
+    _check_batches(tuple(first.batches), provenance_id, failures)
 
 
-def _bounded_batches(
-    value: object, failures: _FailureCollector
-) -> tuple[CanonicalBatch, ...]:
+def _consume_import(
+    value: object, failures: _FailureCollector, stages: _StageReporter
+) -> tuple[object, ...]:
+    if isinstance(value, UnsupportedCapabilityResult):
+        failures.add(
+            "import_unsupported_invalid", "import is a mandatory core capability"
+        )
+        return ()
     if not isinstance(value, Iterator):
         failures.add(
             "import_result_invalid", "import_batches did not return an iterator"
         )
         return ()
-    outcome = _bounded_call(lambda: _sample_and_close(value))
-    if outcome.timed_out:
-        failures.add(
-            "import_sample_unbounded", "import sample did not finish within the bound"
-        )
-        return ()
-    if outcome.error is not None:
-        error = outcome.error
-        failures.add("import_iteration_raised", f"{type(error).__name__}: {error}")
-        return ()
-    batches = outcome.value
-    if not isinstance(batches, tuple):
-        failures.add("import_result_invalid", "import sample did not produce a tuple")
-        return ()
-    if len(batches) > IMPORT_BATCH_LIMIT:
-        failures.add(
-            "import_sample_unbounded", "import sample exceeded the compliance bound"
-        )
-    return batches[:IMPORT_BATCH_LIMIT]
-
-
-def _consume_import_read_only(
-    source: Path, value: object, failures: _FailureCollector
-) -> tuple[CanonicalBatch, ...]:
-    before = _snapshot(source)
-    batches = _bounded_batches(value, failures)
-    after = _snapshot(source)
-    if after != before:
-        failures.add(
-            "import_changed_source",
-            "import iteration changed source data or metadata",
-        )
-    return batches
-
-
-def _sample_and_close(value: Iterator[object]) -> tuple[object, ...]:
+    batches: list[object] = []
+    stages.set("import_iteration")
     try:
-        return tuple(islice(value, IMPORT_BATCH_LIMIT + 1))
-    finally:
+        for _ in range(IMPORT_BATCH_LIMIT):
+            try:
+                batches.append(next(value))
+            except StopIteration:
+                break
+    except BaseException as error:
+        failures.add("import_iteration_raised", f"{type(error).__name__}: {error}")
+    stages.set("import_close")
+    try:
         close = getattr(value, "close", None)
         if callable(close):
             close()
-
-
-def _check_one_batch(
-    batch: object, failures: _FailureCollector
-) -> SyndromeBatch | None:
-    if not isinstance(batch, SyndromeBatch):
-        failures.add("batch_type_invalid", "import yielded a non-canonical batch")
-        return None
-    try:
-        expected = batch.detector_events.bytes_per_record * batch.record_count
-        valid_buffer = len(batch.detector_events.data) == expected
-        valid_sequence = batch.sequence_end - batch.sequence_start == batch.record_count
-    except (AttributeError, TypeError, ValueError) as error:
-        failures.add("batch_record_invariant_invalid", f"malformed batch: {error}")
-        return None
-    if not valid_buffer or not valid_sequence:
-        failures.add(
-            "batch_record_invariant_invalid", "batch width/count invariants failed"
-        )
-    return batch
-
-
-def _check_batch_order(
-    batches: tuple[SyndromeBatch, ...], failures: _FailureCollector
-) -> None:
-    previous: dict[tuple[str, str], SyndromeBatch] = {}
-    for batch in batches:
-        key = batch.session_id, batch.segment_id
-        prior = previous.get(key)
-        if prior and batch.sequence_start < prior.sequence_start:
-            failures.add(
-                "batch_sequence_nonmonotonic", "batch sequence starts moved backwards"
-            )
-        if prior and batch.sequence_start < prior.sequence_end:
-            failures.add("batch_sequence_overlap", "batch sequence ranges overlap")
-        previous[key] = batch
-
-
-def _check_batches(
-    values: tuple[CanonicalBatch, ...],
-    provenance_id: str | None,
-    failures: _FailureCollector,
-) -> None:
-    valid = tuple(
-        batch for value in values if (batch := _check_one_batch(value, failures))
-    )
-    _check_batch_order(valid, failures)
-    widths_by_segment: dict[tuple[str, str], set[int]] = {}
-    for batch in valid:
-        key = batch.session_id, batch.segment_id
-        widths_by_segment.setdefault(key, set()).add(batch.detector_events.bit_width)
-    if any(len(widths) > 1 for widths in widths_by_segment.values()):
-        failures.add(
-            "batch_width_changed", "detector width changed within an import segment"
-        )
-    for batch in valid:
-        if not batch.provenance_id:
-            failures.add("batch_provenance_absent", "batch omitted provenance identity")
-        elif provenance_id and batch.provenance_id != provenance_id:
-            failures.add(
-                "batch_provenance_mismatch", "batch and validation provenance differ"
-            )
-
-
-async def _resolve_stream(value: object) -> object:
-    return await value if inspect.isawaitable(value) else value
-
-
-async def _consume_stream(
-    value: object, failures: _FailureCollector
-) -> tuple[CanonicalBatch, ...]:
-    resolved: object | None = None
-    batches: list[CanonicalBatch] = []
-    try:
-        async with asyncio.timeout(ASYNC_TIMEOUT_SECONDS):
-            resolved = await _resolve_stream(value)
-            if isinstance(resolved, UnsupportedCapabilityResult):
-                return (resolved,)  # type: ignore[return-value]
-            if not isinstance(resolved, AsyncIterator):
-                failures.add(
-                    "stream_result_invalid",
-                    "stream_batches did not return an async iterator",
-                )
-                return ()
-            async for batch in resolved:
-                batches.append(batch)
-                if len(batches) > IMPORT_BATCH_LIMIT:
-                    break
-    except AdapterCancelled:
-        pass
-    except TimeoutError:
-        failures.add(
-            "stream_did_not_cancel", "cancelled stream did not finish promptly"
-        )
-    finally:
-        close = getattr(resolved, "aclose", None)
-        if callable(close):
-            try:
-                await asyncio.wait_for(close(), timeout=ASYNC_TIMEOUT_SECONDS)
-            except TimeoutError:
-                failures.add("stream_close_timed_out", "stream did not close promptly")
+    except BaseException as error:
+        failures.add("import_close_raised", f"{type(error).__name__}: {error}")
     return tuple(batches)
 
 
-def _check_stream(
-    adapter: object, manifest: AdapterManifest, failures: _FailureCollector
+def _check_import(
+    adapter: object,
+    source: Path,
+    mapping: ImportMapping,
+    provenance_id: str | None,
+    failures: _FailureCollector,
+    stages: _StageReporter,
 ) -> None:
-    cancel = _ObservedCancelled()
-    stream_method = getattr(adapter, "stream_batches", None)
-    if AdapterCapability.STREAM in manifest.capabilities and callable(stream_method):
-        if len(inspect.signature(stream_method).parameters) != 1:
-            failures.add(
-                "stream_missing_cancellation",
-                "stream cannot receive cancellation through StreamConfig",
-            )
+    before = _snapshot_or_failure(source, failures, "import_snapshot_raised")
+    stages.set("import_invocation")
     try:
-        call = stream_method(StreamConfig(manifest.source_kinds[0], cancel=cancel))
-        batches = asyncio.run(_consume_stream(call, failures))
-    except Exception as error:
-        if not isinstance(error, AdapterCancelled):
-            failures.add("stream_raised", f"{type(error).__name__}: {error}")
-        batches = ()
-    unsupported_result = (
-        batches[0]
-        if batches and isinstance(batches[0], UnsupportedCapabilityResult)
-        else None
-    )
-    _check_capability_result(
-        manifest, AdapterCapability.STREAM, unsupported_result, failures
-    )
-    if AdapterCapability.STREAM in manifest.capabilities and not cancel.observed:
+        value = adapter.import_batches(source, mapping)
+    except BaseException as error:
+        failures.add("import_raised", f"{type(error).__name__}: {error}")
+        value = None
+    batches = _consume_import(value, failures, stages)
+    after = _snapshot_or_failure(source, failures, "import_snapshot_raised")
+    if before is not None and after is not None and before != after:
+        failures.add("import_changed_source", "import changed the source")
+    _check_batches(batches, provenance_id, failures)
+
+
+def _unsupported_for(value: object, capability: AdapterCapability) -> bool:
+    return type(value) is UnsupportedCapabilityResult and value.capability is capability
+
+
+async def _resolve_async(value: object) -> object:
+    return await value if inspect.isawaitable(value) else value
+
+
+async def _consume_stream_iterator(
+    stream: AsyncIterator[object],
+    failures: _FailureCollector,
+    stages: _StageReporter,
+) -> tuple[object, ...]:
+    batches: list[object] = []
+    stages.set("stream_iteration")
+    try:
+        async for batch in stream:
+            batches.append(batch)
+            if len(batches) >= IMPORT_BATCH_LIMIT:
+                break
+    except AdapterCancelled:
+        pass
+    except BaseException as error:
+        failures.add("stream_iteration_raised", f"{type(error).__name__}: {error}")
+    stages.set("stream_close")
+    try:
+        close = getattr(stream, "aclose", None)
+        if callable(close):
+            await close()
+    except BaseException as error:
+        failures.add("stream_close_raised", f"{type(error).__name__}: {error}")
+    return tuple(batches)
+
+
+def _stream_method(adapter: object, failures: _FailureCollector) -> object | None:
+    try:
+        method = getattr(adapter, "stream_batches")
+        if len(inspect.signature(method).parameters) != 1:
+            failures.add(
+                "stream_missing_cancellation", "stream must accept StreamConfig"
+            )
+        return method
+    except BaseException as error:
+        failures.add("stream_signature_raised", f"{type(error).__name__}: {error}")
+        return None
+
+
+async def _check_stream(
+    adapter: object,
+    manifest: AdapterManifest,
+    failures: _FailureCollector,
+    stages: _StageReporter,
+) -> None:
+    stages.set("stream_signature")
+    method = _stream_method(adapter, failures)
+    if method is None:
+        return
+    cancel = _ObservedCancelled()
+    stages.set("stream_invocation")
+    try:
+        value = method(StreamConfig(manifest.source_kinds[0], cancel=cancel))
+        resolved = await _resolve_async(value)
+    except AdapterCancelled:
+        resolved = None
+    except BaseException as error:
+        failures.add("stream_raised", f"{type(error).__name__}: {error}")
+        return
+    declared = AdapterCapability.STREAM in manifest.capabilities
+    if isinstance(resolved, UnsupportedCapabilityResult):
+        if not _unsupported_for(resolved, AdapterCapability.STREAM):
+            failures.add(
+                "unsupported_capability_mismatch",
+                "stream unsupported result mismatched",
+            )
+        elif declared:
+            failures.add(
+                "declared_capability_unsupported", "declared stream is unsupported"
+            )
+        return
+    if not declared:
         failures.add(
-            "stream_missing_cancellation",
-            "stream did not observe its cancellation token",
+            "undeclared_capability_available", "stream is available but undeclared"
         )
-    if AdapterCapability.STREAM in manifest.capabilities and batches:
+    if resolved is None:
+        return
+    if not isinstance(resolved, AsyncIterator):
+        failures.add("stream_result_invalid", "stream did not return an async iterator")
+        return
+    batches = await _consume_stream_iterator(resolved, failures, stages)
+    if declared and not cancel.observed:
+        failures.add(
+            "stream_missing_cancellation", "stream ignored its cancellation token"
+        )
+    if declared and batches:
         failures.add("stream_ignored_cancellation", "stream yielded after cancellation")
 
 
-def _check_command(
-    adapter: object, manifest: AdapterManifest, failures: _FailureCollector
+async def _check_command(
+    adapter: object,
+    manifest: AdapterManifest,
+    failures: _FailureCollector,
+    stages: _StageReporter,
 ) -> None:
+    stages.set("command")
     try:
-        command = adapter.command(AdapterCommand("contract.health"))
-        result = asyncio.run(_await_command(command))
-    except TimeoutError:
-        failures.add("command_timed_out", "command did not finish promptly")
-        return
-    except Exception as error:
+        result = await _resolve_async(
+            adapter.command(AdapterCommand("contract.health"))
+        )
+    except BaseException as error:
         failures.add("command_raised", f"{type(error).__name__}: {error}")
         return
-    _check_capability_result(manifest, AdapterCapability.COMMAND, result, failures)
-    if AdapterCapability.COMMAND in manifest.capabilities and not isinstance(
-        result, (CommandSuccessResult, UnsupportedCapabilityResult)
-    ):
+    declared = AdapterCapability.COMMAND in manifest.capabilities
+    if isinstance(result, UnsupportedCapabilityResult):
+        if not _unsupported_for(result, AdapterCapability.COMMAND):
+            failures.add(
+                "unsupported_capability_mismatch",
+                "command unsupported result mismatched",
+            )
+        elif declared:
+            failures.add(
+                "declared_capability_unsupported", "declared command is unsupported"
+            )
+        return
+    if not declared:
+        failures.add(
+            "undeclared_capability_available", "command is available but undeclared"
+        )
+    if type(result) is not CommandSuccessResult:
         failures.add("command_result_invalid", "command did not return CommandResult")
 
 
-async def _await_command(value: object) -> object:
-    if not inspect.isawaitable(value):
-        return value
-    async with asyncio.timeout(ASYNC_TIMEOUT_SECONDS):
-        return await value
+async def _check_live(
+    adapter: object,
+    manifest: AdapterManifest,
+    failures: _FailureCollector,
+    stages: _StageReporter,
+) -> None:
+    await _check_stream(adapter, manifest, failures, stages)
+    await _check_command(adapter, manifest, failures, stages)
+    stages.set("event_loop_shutdown")
 
 
-def _manifest(adapter: object, failures: _FailureCollector) -> AdapterManifest | None:
-    manifest = getattr(adapter, "manifest", None)
-    if not isinstance(manifest, AdapterManifest):
-        failures.add("manifest_invalid", "adapter manifest is absent or invalid")
-        return None
-    missing = tuple(
-        capability.value
-        for capability in AdapterCapability
-        if not callable(getattr(adapter, capability.value, None))
+def _check_offline(
+    adapter: object,
+    manifest: AdapterManifest,
+    source: Path,
+    failures: _FailureCollector,
+    stages: _StageReporter,
+) -> None:
+    mapping = ImportMapping(expected_provenance_id="contract-provenance")
+    source_hash = compute_source_sha256(source)
+    probe = _call_read_only(
+        "probe", source, lambda: adapter.probe(source), failures, stages
     )
-    if missing:
-        failures.add(
-            "adapter_method_missing",
-            f"required methods are missing: {', '.join(missing)}",
+    _check_probe(probe, manifest, source_hash, failures)
+    validation = _call_read_only(
+        "validate", source, lambda: adapter.validate(source, mapping), failures, stages
+    )
+    provenance_id = _check_validation(validation, source_hash, failures)
+    previews = tuple(
+        _call_read_only(
+            "preview",
+            source,
+            lambda: adapter.preview(source, mapping, PREVIEW_LIMIT),
+            failures,
+            stages,
         )
-    return manifest
+        for _ in range(2)
+    )
+    _check_preview(*previews, source_hash, provenance_id, failures)
+    _check_import(adapter, source, mapping, provenance_id, failures, stages)
 
 
-def _instantiate(
-    adapter_factory: Callable[[], AdapterLike], failures: _FailureCollector
-) -> object | None:
+def _run_contract(
+    adapter_factory: Callable[[], AdapterLike], source: Path, stages: _StageReporter
+) -> AdapterContractReport:
+    failures = _FailureCollector()
+    stages.set("source_snapshot")
+    initial = _snapshot_or_failure(source, failures, "source_snapshot_raised")
+    if initial is None:
+        return failures.report()
+    stages.set("factory")
     try:
-        return adapter_factory()
-    except Exception as error:
+        adapter = adapter_factory()
+    except BaseException as error:
         failures.add("adapter_factory_raised", f"{type(error).__name__}: {error}")
-        return None
+        return failures.report()
+    stages.set("manifest")
+    manifest = _manifest(adapter, failures)
+    if manifest is None:
+        return failures.report()
+    _check_required_methods(adapter, failures)
+    _check_offline(adapter, manifest, source, failures, stages)
+    try:
+        asyncio.run(_check_live(adapter, manifest, failures, stages))
+    except BaseException as error:
+        failures.add("event_loop_raised", f"{type(error).__name__}: {error}")
+    stages.set("final_source_snapshot")
+    final = _snapshot_or_failure(source, failures, "final_source_snapshot_raised")
+    if final is not None and final != initial:
+        failures.add("source_changed", "adapter changed source data or metadata")
+    return failures.report()
+
+
+def _safe_send(connection: object, message: tuple[str, object]) -> None:
+    try:
+        connection.send(message)
+    except BaseException:
+        return
+
+
+def _child_main(connection: object, adapter_factory: object, source: Path) -> None:
+    stages = _StageReporter(lambda message: _safe_send(connection, message))
+    try:
+        report = _run_contract(adapter_factory, source, stages)
+    except BaseException as error:
+        report = AdapterContractReport(
+            (
+                ContractFailure(
+                    f"{stages.current}_raised", f"{type(error).__name__}: {error}"
+                ),
+            )
+        )
+    _safe_send(connection, ("report", report))
+    try:
+        connection.close()
+    except BaseException:
+        return
+
+
+def factory_is_spawn_importable(adapter_factory: object) -> bool:
+    """Return whether spawn can reconstruct a factory without executable payloads."""
+
+    module_name = getattr(adapter_factory, "__module__", None)
+    qualified_name = getattr(adapter_factory, "__qualname__", None)
+    if not module_name or not qualified_name or "<locals>" in qualified_name:
+        return False
+    try:
+        pickle.dumps(adapter_factory)
+        resolved: object = importlib.import_module(module_name)
+        for part in qualified_name.split("."):
+            resolved = getattr(resolved, part)
+        return resolved is adapter_factory
+    except BaseException:
+        return False
+
+
+def _process_context(
+    adapter_factory: object,
+) -> multiprocessing.context.BaseContext | None:
+    methods = multiprocessing.get_all_start_methods()
+    if "fork" in methods:
+        return multiprocessing.get_context("fork")
+    if "spawn" in methods and factory_is_spawn_importable(adapter_factory):
+        return multiprocessing.get_context("spawn")
+    return None
+
+
+def _stop_process(process: multiprocessing.Process) -> None:
+    if process.is_alive():
+        process.terminate()
+        process.join(PROCESS_CLEANUP_SECONDS)
+    if process.is_alive() and hasattr(process, "kill"):
+        process.kill()
+        process.join(PROCESS_CLEANUP_SECONDS)
+
+
+def _snapshot_child(connection: object, source: Path) -> None:
+    try:
+        _safe_send(connection, ("snapshot", fingerprint_source(source)))
+    except BaseException as error:
+        _safe_send(connection, ("error", (type(error).__name__, str(error))))
+    finally:
+        connection.close()
+
+
+def _bounded_snapshot(
+    context: multiprocessing.context.BaseContext, source: Path, deadline: float
+) -> tuple[tuple[object, ...] | None, tuple[str, str] | None]:
+    parent, child = context.Pipe(duplex=False)
+    process = context.Process(target=_snapshot_child, args=(child, source))
+    started = False
+    try:
+        process.start()
+        started = True
+        child.close()
+        remaining = max(0.0, deadline - time.monotonic())
+        message = parent.recv() if parent.poll(remaining) else ("timeout", None)
+    except BaseException as error:
+        message = ("error", (type(error).__name__, str(error)))
+    if started:
+        _stop_process(process)
+        if process.exitcode is not None:
+            process.close()
+    else:
+        child.close()
+    parent.close()
+    kind, value = message
+    if kind == "snapshot" and type(value) is tuple:
+        return value, None
+    if kind == "error" and type(value) is tuple:
+        return None, value
+    return None, ("TimeoutError", "source snapshot timed out")
+
+
+def _timeout_code(stage: str) -> str:
+    aliases = {
+        "factory": "adapter_factory_timed_out",
+        "import_invocation": "import_timed_out",
+    }
+    return aliases.get(stage, f"{stage}_timed_out")
+
+
+def _receive_report(
+    connection: object, process: multiprocessing.Process, deadline: float
+) -> tuple[AdapterContractReport | None, str]:
+    stage = "startup"
+    while time.monotonic() < deadline:
+        remaining = max(0.0, deadline - time.monotonic())
+        try:
+            if connection.poll(min(0.02, remaining)):
+                kind, value = connection.recv()
+                if kind == "stage" and type(value) is str:
+                    stage = value
+                elif kind == "report" and type(value) is AdapterContractReport:
+                    return value, stage
+        except (EOFError, OSError):
+            break
+        if not process.is_alive():
+            break
+    return None, stage
+
+
+def _merge_parent_failure(
+    report: AdapterContractReport, failure: ContractFailure | None
+) -> AdapterContractReport:
+    if failure is None or failure.code in report.failure_codes:
+        return report
+    return AdapterContractReport((*report.failures, failure))
+
+
+def _execute_worker(
+    context: multiprocessing.context.BaseContext,
+    adapter_factory: object,
+    source: Path,
+    deadline: float,
+) -> tuple[AdapterContractReport | None, str, bool, int | None]:
+    parent, child = context.Pipe(duplex=False)
+    process = context.Process(target=_child_main, args=(child, adapter_factory, source))
+    try:
+        process.start()
+    except BaseException as error:
+        parent.close()
+        child.close()
+        report = AdapterContractReport(
+            (
+                ContractFailure(
+                    "isolation_unavailable", f"{type(error).__name__}: {error}"
+                ),
+            )
+        )
+        return report, "startup", False, None
+    child.close()
+    report, stage = _receive_report(parent, process, deadline)
+    process.join(max(0.0, deadline - time.monotonic()))
+    timed_out = report is None and process.is_alive()
+    _stop_process(process)
+    exit_code = process.exitcode
+    if exit_code is not None:
+        process.close()
+    parent.close()
+    return report, stage, timed_out, exit_code
+
+
+def _source_change_failure(
+    initial: tuple[object, ...],
+    final: tuple[object, ...] | None,
+    error: tuple[str, str] | None,
+    stage: str,
+) -> ContractFailure | None:
+    if final is None:
+        return ContractFailure("final_source_snapshot_raised", repr(error))
+    if final != initial:
+        return ContractFailure(f"{stage}_changed_source", "worker changed the source")
+    return None
 
 
 def run_adapter_contract(
     adapter_factory: Callable[[], AdapterLike], source: Path
 ) -> AdapterContractReport:
-    """Run bounded, crash-isolated checks against one adapter instance."""
+    """Run one adapter in a terminable child with a single outer deadline."""
 
-    failures = _FailureCollector()
-    adapter = _instantiate(adapter_factory, failures)
-    if adapter is None:
-        return failures.report()
-    manifest = _manifest(adapter, failures)
-    if manifest is None or not manifest.source_kinds:
-        return failures.report()
-    mapping = ImportMapping(expected_provenance_id="contract-provenance")
-    try:
-        source_sha256 = compute_source_sha256(source)
-    except (OSError, ValueError) as error:
-        failures.add("source_invalid", f"{type(error).__name__}: {error}")
-        return failures.report()
-    probe = _call_read_only("probe", source, lambda: adapter.probe(source), failures)
-    _check_probe(manifest, probe, source_sha256, failures)
-    validation = _call_read_only(
-        "validate", source, lambda: adapter.validate(source, mapping), failures
+    outer_deadline = time.monotonic() + CONTRACT_TIMEOUT_SECONDS
+    snapshot_context = multiprocessing.get_context(
+        "fork" if "fork" in multiprocessing.get_all_start_methods() else "spawn"
     )
-    provenance_id = _check_validation(manifest, validation, source_sha256, failures)
-    first = _call_read_only(
-        "preview",
+    initial, initial_error = _bounded_snapshot(
+        snapshot_context,
         source,
-        lambda: adapter.preview(source, mapping, PREVIEW_LIMIT),
-        failures,
+        min(outer_deadline, time.monotonic() + SNAPSHOT_TIMEOUT_SECONDS),
     )
-    second = _call_read_only(
-        "preview",
-        source,
-        lambda: adapter.preview(source, mapping, PREVIEW_LIMIT),
-        failures,
+    if initial is None:
+        error_name, message = initial_error or ("SnapshotError", "unknown error")
+        code = "source_symlink_rejected" if "symlink" in message else "source_invalid"
+        return AdapterContractReport(
+            (ContractFailure(code, f"{error_name}: {message}"),)
+        )
+    context = _process_context(adapter_factory)
+    if context is None:
+        return AdapterContractReport(
+            (
+                ContractFailure(
+                    "isolation_unavailable", "factory is not importable under spawn"
+                ),
+            )
+        )
+    worker_deadline = outer_deadline - SNAPSHOT_TIMEOUT_SECONDS
+    report, stage, timed_out, exit_code = _execute_worker(
+        context, adapter_factory, source, worker_deadline
     )
-    _check_preview(manifest, first, second, source_sha256, provenance_id, failures)
-    imported = _call_read_only(
-        "import", source, lambda: adapter.import_batches(source, mapping), failures
-    )
-    _check_capability_result(manifest, AdapterCapability.IMPORT, imported, failures)
-    if AdapterCapability.IMPORT in manifest.capabilities and not _is_unsupported(
-        imported, AdapterCapability.IMPORT
-    ):
-        batches = _consume_import_read_only(source, imported, failures)
-        _check_batches(batches, provenance_id, failures)
-    _check_stream(adapter, manifest, failures)
-    _check_command(adapter, manifest, failures)
-    return failures.report()
+    if report is None:
+        code = _timeout_code(stage) if timed_out else "worker_exited"
+        report = AdapterContractReport(
+            (ContractFailure(code, f"worker stopped during {stage}"),)
+        )
+    final, final_error = _bounded_snapshot(snapshot_context, source, outer_deadline)
+    parent_failure = _source_change_failure(initial, final, final_error, stage)
+    if exit_code not in {0, None} and not timed_out and report.passed:
+        parent_failure = ContractFailure(
+            "worker_exited", f"worker exited with code {exit_code}"
+        )
+    return _merge_parent_failure(report, parent_failure)
