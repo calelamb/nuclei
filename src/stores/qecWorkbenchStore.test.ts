@@ -66,6 +66,29 @@ describe('qecWorkbenchStore', () => {
     });
   });
 
+  it('keeps split dimensions unchanged for invalid numeric input', () => {
+    const initial = useQecWorkbenchStore.getState();
+    useQecWorkbenchStore.getState().setSourceWidth(Number.NaN);
+    useQecWorkbenchStore.getState().setInspectorWidth(Number.POSITIVE_INFINITY);
+    useQecWorkbenchStore.getState().setTrayHeight(Number.NEGATIVE_INFINITY);
+
+    expect(useQecWorkbenchStore.getState()).toMatchObject({
+      sourceWidth: initial.sourceWidth,
+      inspectorWidth: initial.inspectorWidth,
+      trayHeight: initial.trayHeight,
+    });
+  });
+
+  it('returns a new frozen pin array when unpinning an absent panel', () => {
+    const initialPins = useQecWorkbenchStore.getState().pinnedPanelIds;
+    useQecWorkbenchStore.getState().unpinPanel('editor');
+    const pins = useQecWorkbenchStore.getState().pinnedPanelIds;
+
+    expect(pins).toEqual([]);
+    expect(pins).not.toBe(initialPins);
+    expect(Object.isFrozen(pins)).toBe(true);
+  });
+
   it('falls back to build when persisted preset is invalid', () => {
     localStorage.setItem(
       QEC_WORKBENCH_STORAGE_KEY,

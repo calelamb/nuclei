@@ -84,7 +84,11 @@ export function validateQecPanelRegistry(
     orders.add(panel.order);
   }
 
-  return Object.freeze([...panels].sort((left, right) => left.order - right.order));
+  return Object.freeze(
+    [...panels]
+      .sort((left, right) => left.order - right.order)
+      .map((panel) => Object.freeze({ ...panel, presets: Object.freeze([...panel.presets]) })),
+  );
 }
 
 export const QEC_PANEL_REGISTRY = validateQecPanelRegistry(QEC_PANELS);

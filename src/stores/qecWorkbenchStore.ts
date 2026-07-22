@@ -1,6 +1,6 @@
 import { create } from 'zustand';
-import type { QecWorkspacePreset } from '../types/qecStudy';
-import type { QecWorkbenchPanelId } from '../layout/qecPanelRegistry';
+import { qecWorkspacePresetSchema, type QecWorkspacePreset } from '../types/qecStudy';
+import { QEC_PANEL_REGISTRY, type QecWorkbenchPanelId } from '../layout/qecPanelRegistry';
 
 export const QEC_WORKBENCH_STORAGE_KEY = 'nuclei:qec_workbench';
 
@@ -13,20 +13,6 @@ const MIN_INSPECTOR_WIDTH = 280;
 const MAX_INSPECTOR_WIDTH = 560;
 const MIN_TRAY_HEIGHT = 160;
 const MAX_TRAY_HEIGHT = 520;
-
-const QEC_PRESETS: readonly QecWorkspacePreset[] = ['build', 'analyze', 'observe'];
-const QEC_PANEL_IDS: readonly QecWorkbenchPanelId[] = [
-  'editor',
-  'timeline',
-  'lattice',
-  'detector-graph',
-  'campaign-center',
-  'failure-microscope',
-  'stream-health',
-  'calibration-timeline',
-  'research-inspector',
-  'jobs',
-];
 
 export interface QecWorkbenchState {
   preset: QecWorkspacePreset;
@@ -48,11 +34,11 @@ export type QecWorkbenchPersistedState = Pick<
 >;
 
 function isPreset(value: unknown): value is QecWorkspacePreset {
-  return typeof value === 'string' && QEC_PRESETS.includes(value as QecWorkspacePreset);
+  return qecWorkspacePresetSchema.safeParse(value).success;
 }
 
 function isPanelId(value: unknown): value is QecWorkbenchPanelId {
-  return typeof value === 'string' && QEC_PANEL_IDS.includes(value as QecWorkbenchPanelId);
+  return typeof value === 'string' && QEC_PANEL_REGISTRY.some((panel) => panel.id === value);
 }
 
 function clamp(value: unknown, minimum: number, maximum: number, fallback: number): number {
