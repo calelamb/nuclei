@@ -20,6 +20,7 @@ from .adapters.base import ImportChunk, ImportMapping
 from .adapters.registry import AdapterRegistry, core_offline_registry
 from .catalog import QecCatalog
 from .hashing import DatasetSemanticIdentity
+from .import_mapping import engine_import_mapping
 from .import_operations import (
     batch_summary,
     probe_result,
@@ -293,7 +294,9 @@ class QecDataServer:
         snapshot = await asyncio.to_thread(self._snapshot_source, payload["source"])
         try:
             adapter = self._registry.get(str(payload["adapterId"]))
-            mapping = _import_mapping(payload["mapping"])
+            mapping = engine_import_mapping(
+                payload["mapping"], adapter_id=adapter.manifest.id
+            )
             validation = await asyncio.to_thread(
                 adapter.validate, snapshot.capability, mapping
             )
@@ -321,7 +324,9 @@ class QecDataServer:
         snapshot = await asyncio.to_thread(self._snapshot_source, payload["source"])
         try:
             adapter = self._registry.get(str(payload["adapterId"]))
-            mapping = _import_mapping(payload["mapping"])
+            mapping = engine_import_mapping(
+                payload["mapping"], adapter_id=adapter.manifest.id
+            )
             validation = await asyncio.to_thread(
                 adapter.validate, snapshot.capability, mapping
             )
@@ -460,7 +465,11 @@ class QecDataServer:
     def _prepare_import(self, payload: Mapping[str, Any]) -> tuple[Any, ...]:
         session_id = str(payload["sessionId"])
         adapter = self._registry.get(str(payload["adapterId"]))
-        mapping = _import_mapping(payload["mapping"], session_id=session_id)
+        mapping = engine_import_mapping(
+            payload["mapping"],
+            adapter_id=adapter.manifest.id,
+            session_id=session_id,
+        )
         sources_root = secure_canonical_directory(
             self._project_root,
             self._project_descriptor,
@@ -610,43 +619,6 @@ class QecDataServer:
             raw_source,
             uuid.uuid4().hex,
         )
-
-
-def _import_mapping(value: object, *, session_id: str | None = None) -> ImportMapping:
-    if type(value) is not dict:
-        raise ProtocolError("invalid_request", "Import mapping must be an object.")
-    allowed = frozenset({"fields", "options", "expectedProvenanceId"})
-    if not frozenset(value) <= allowed:
-        raise ProtocolError("invalid_request", "Import mapping fields are invalid.")
-    fields = value.get("fields", {})
-    options = value.get("options", {})
-    if type(fields) is not dict or type(options) is not dict:
-        raise ProtocolError(
-            "invalid_request", "Import mapping entries must be objects."
-        )
-    if not all(type(key) is str and type(item) is str for key, item in fields.items()):
-        raise ProtocolError("invalid_request", "Import field mapping is invalid.")
-    frozen_options = {key: _freeze_scalar(item) for key, item in options.items()}
-    if session_id is not None:
-        frozen_options = {
-            **frozen_options,
-            "session_id": session_id,
-            "segment_id": "segment-0001",
-        }
-    expected = value.get("expectedProvenanceId")
-    return ImportMapping(
-        fields=tuple(sorted(fields.items())),
-        options=tuple(sorted(frozen_options.items())),
-        expected_provenance_id=expected,
-    )
-
-
-def _freeze_scalar(value: object) -> Any:
-    if type(value) is list:
-        return tuple(_freeze_scalar(item) for item in value)
-    if value is None or type(value) in {str, bool, int, float}:
-        return value
-    raise ProtocolError("invalid_request", "Import option is not scalar JSON.")
 
 
 def _importing_session(

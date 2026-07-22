@@ -64,6 +64,14 @@ all-ones `.b8` record passes validation and import. Adapter coverage is 86% (45
 tests), and the corrected 10-million-record gate committed 10,000,000 rows in
 153 partitions in 152.45 seconds at 267,370,496 bytes peak RSS.
 
+The authenticated engine also rejects `circuit_path` and `dem_path` before any
+adapter method can inspect or open them. Secondary context files are not yet
+represented by retained project capabilities, so engine validate, preview, and
+start operations require explicit detector and observable widths. Standalone
+trusted adapter calls retain context support. A 12-case path/operation matrix,
+two missing-width cases, and one explicit-width success case cover this boundary;
+the final focused server/native-adapter run passed 93 tests.
+
 The remaining review suggestion is a larger lifecycle enhancement: expose a persistent retry/reconnect control when the engine disconnects after a successful catalog load. Current import launch failures and catalog request failures are surfaced, and stale async catalog writes are rejected; reconnect orchestration should be handled as a dedicated engine lifecycle follow-up rather than hidden inside this acceptance task.
 
 ## Scope integrity
