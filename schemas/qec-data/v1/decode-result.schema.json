@@ -1,0 +1,104 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://getnuclei.dev/schemas/qec-data/v1/decode-result.schema.json",
+  "title": "QEC canonical decode result",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "decode_id", "session_id", "input", "decoder", "status",
+    "prediction", "confidence", "correction", "predicted_logical_flips", "known_truth",
+    "pipeline_latency", "total_latency", "error", "provenance_id"
+  ],
+  "properties": {
+    "schema_version": { "const": "1.0.0" },
+    "decode_id": { "$ref": "#/$defs/nonEmpty" },
+    "session_id": { "$ref": "#/$defs/nonEmpty" },
+    "input": {
+      "type": "object", "additionalProperties": false,
+      "required": ["batch_id", "sequence_start", "sequence_end"],
+      "properties": {
+        "batch_id": { "$ref": "#/$defs/nonEmpty" },
+        "sequence_start": { "type": "integer", "minimum": 0 },
+        "sequence_end": { "type": "integer", "minimum": 1 }
+      }
+    },
+    "decoder": {
+      "type": "object", "additionalProperties": false,
+      "required": ["name", "version", "configuration_sha256"],
+      "properties": {
+        "name": { "$ref": "#/$defs/nonEmpty" },
+        "version": { "$ref": "#/$defs/nonEmpty" },
+        "configuration_sha256": { "$ref": "#/$defs/sha256" }
+      }
+    },
+    "status": { "enum": ["complete", "partial", "timeout", "error"] },
+    "prediction": { "$ref": "#/$defs/packedBits" },
+    "confidence": { "$ref": "#/$defs/qualifiedNumber" },
+    "correction": { "$ref": "#/$defs/qualifiedCorrection" },
+    "predicted_logical_flips": { "$ref": "#/$defs/packedBits" },
+    "known_truth": { "$ref": "#/$defs/qualifiedPackedBits" },
+    "pipeline_latency": { "$ref": "#/$defs/qualifiedQuantity" },
+    "total_latency": { "$ref": "#/$defs/qualifiedQuantity" },
+    "error": {
+      "anyOf": [
+        { "type": "null" },
+        {
+          "type": "object", "additionalProperties": false, "required": ["code", "message"],
+          "properties": { "code": { "$ref": "#/$defs/nonEmpty" }, "message": { "$ref": "#/$defs/nonEmpty" } }
+        }
+      ]
+    },
+    "provenance_id": { "$ref": "#/$defs/nonEmpty" }
+  },
+  "$defs": {
+    "nonEmpty": { "type": "string", "minLength": 1 },
+    "sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+    "valueStatus": { "enum": ["absent", "unavailable", "unknown", "inferred", "predicted", "simulated", "measured"] },
+    "packedBits": {
+      "type": "object", "additionalProperties": false, "required": ["encoding", "bit_width", "data"],
+      "properties": {
+        "encoding": { "const": "base64" }, "bit_width": { "type": "integer", "minimum": 1 },
+        "data": { "type": "string", "contentEncoding": "base64", "pattern": "^[A-Za-z0-9+/]*={0,2}$" }
+      }
+    },
+    "qualifiedNumber": {
+      "type": "object", "additionalProperties": false, "required": ["value", "status"],
+      "properties": { "value": { "type": ["number", "null"] }, "status": { "$ref": "#/$defs/valueStatus" } },
+      "allOf": [{ "$ref": "#/$defs/qualifiedScalarConsistency" }]
+    },
+    "qualifiedQuantity": {
+      "type": "object", "additionalProperties": false, "required": ["value", "unit", "status"],
+      "properties": { "value": { "type": ["number", "null"], "minimum": 0 }, "unit": { "type": ["string", "null"], "minLength": 1 }, "status": { "$ref": "#/$defs/valueStatus" } },
+      "if": { "properties": { "status": { "enum": ["absent", "unavailable", "unknown"] } } },
+      "then": { "properties": { "value": { "type": "null" }, "unit": { "type": "null" } } },
+      "else": { "properties": { "value": { "type": "number" }, "unit": { "$ref": "#/$defs/nonEmpty" } } }
+    },
+    "qualifiedPackedBits": {
+      "type": "object", "additionalProperties": false, "required": ["value", "status"],
+      "properties": { "value": { "anyOf": [{ "$ref": "#/$defs/packedBits" }, { "type": "null" }] }, "status": { "$ref": "#/$defs/valueStatus" } },
+      "allOf": [{ "$ref": "#/$defs/qualifiedObjectConsistency" }]
+    },
+    "correction": {
+      "type": "object", "additionalProperties": false, "minProperties": 1, "maxProperties": 1,
+      "properties": {
+        "edge_ids": { "type": "array", "items": { "$ref": "#/$defs/nonEmpty" }, "uniqueItems": true },
+        "compact_ref": { "$ref": "#/$defs/nonEmpty" }
+      }
+    },
+    "qualifiedCorrection": {
+      "type": "object", "additionalProperties": false, "required": ["value", "status"],
+      "properties": { "value": { "anyOf": [{ "$ref": "#/$defs/correction" }, { "type": "null" }] }, "status": { "$ref": "#/$defs/valueStatus" } },
+      "allOf": [{ "$ref": "#/$defs/qualifiedObjectConsistency" }]
+    },
+    "qualifiedScalarConsistency": {
+      "if": { "properties": { "status": { "enum": ["absent", "unavailable", "unknown"] } } },
+      "then": { "properties": { "value": { "type": "null" } } },
+      "else": { "properties": { "value": { "type": "number" } } }
+    },
+    "qualifiedObjectConsistency": {
+      "if": { "properties": { "status": { "enum": ["absent", "unavailable", "unknown"] } } },
+      "then": { "properties": { "value": { "type": "null" } } },
+      "else": { "properties": { "value": { "type": "object" } } }
+    }
+  }
+}

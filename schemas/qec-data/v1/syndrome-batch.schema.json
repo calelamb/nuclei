@@ -1,0 +1,86 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://getnuclei.dev/schemas/qec-data/v1/syndrome-batch.schema.json",
+  "title": "QEC canonical syndrome batch",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "batch_id", "session_id", "segment_id", "sequence_start",
+    "sequence_end", "record_count", "shot_range", "round_range", "source_timestamps",
+    "detector_events", "measurements", "observables", "erasures", "leakage", "heralds",
+    "circuit_revision", "topology_revision", "data_quality", "provenance_id"
+  ],
+  "properties": {
+    "schema_version": { "const": "1.0.0" },
+    "batch_id": { "$ref": "#/$defs/nonEmpty" },
+    "session_id": { "$ref": "#/$defs/nonEmpty" },
+    "segment_id": { "$ref": "#/$defs/nonEmpty" },
+    "sequence_start": { "type": "integer", "minimum": 0 },
+    "sequence_end": { "type": "integer", "minimum": 1 },
+    "record_count": { "type": "integer", "minimum": 1 },
+    "shot_range": { "$ref": "#/$defs/qualifiedRange" },
+    "round_range": { "$ref": "#/$defs/qualifiedRange" },
+    "source_timestamps": { "$ref": "#/$defs/qualifiedTimestamps" },
+    "detector_events": { "$ref": "#/$defs/packedBits" },
+    "measurements": { "$ref": "#/$defs/qualifiedPackedBits" },
+    "observables": { "$ref": "#/$defs/qualifiedPackedBits" },
+    "erasures": { "$ref": "#/$defs/qualifiedPackedBits" },
+    "leakage": { "$ref": "#/$defs/qualifiedPackedBits" },
+    "heralds": { "$ref": "#/$defs/qualifiedPackedBits" },
+    "circuit_revision": { "$ref": "#/$defs/qualifiedText" },
+    "topology_revision": { "$ref": "#/$defs/qualifiedText" },
+    "data_quality": {
+      "type": "array",
+      "items": { "enum": ["complete", "partial", "out_of_order", "duplicate", "gap_before", "clock_unreliable", "vendor_flagged"] },
+      "uniqueItems": true
+    },
+    "provenance_id": { "$ref": "#/$defs/nonEmpty" }
+  },
+  "$defs": {
+    "nonEmpty": { "type": "string", "minLength": 1 },
+    "valueStatus": { "enum": ["absent", "unavailable", "unknown", "inferred", "predicted", "simulated", "measured"] },
+    "packedBits": {
+      "type": "object", "additionalProperties": false, "required": ["encoding", "bit_width", "data"],
+      "properties": {
+        "encoding": { "const": "base64" },
+        "bit_width": { "type": "integer", "minimum": 1 },
+        "data": { "type": "string", "contentEncoding": "base64", "pattern": "^[A-Za-z0-9+/]*={0,2}$" }
+      }
+    },
+    "qualifiedPackedBits": {
+      "type": "object", "additionalProperties": false, "required": ["value", "status"],
+      "properties": { "value": { "anyOf": [{ "$ref": "#/$defs/packedBits" }, { "type": "null" }] }, "status": { "$ref": "#/$defs/valueStatus" } },
+      "allOf": [{ "$ref": "#/$defs/qualifiedObjectConsistency" }]
+    },
+    "range": {
+      "type": "object", "additionalProperties": false, "required": ["start", "end"],
+      "properties": { "start": { "type": "integer", "minimum": 0 }, "end": { "type": "integer", "minimum": 1 } }
+    },
+    "qualifiedRange": {
+      "type": "object", "additionalProperties": false, "required": ["value", "status"],
+      "properties": { "value": { "anyOf": [{ "$ref": "#/$defs/range" }, { "type": "null" }] }, "status": { "$ref": "#/$defs/valueStatus" } },
+      "allOf": [{ "$ref": "#/$defs/qualifiedObjectConsistency" }]
+    },
+    "timestamps": {
+      "type": "object", "additionalProperties": false, "required": ["values", "unit"],
+      "properties": { "values": { "type": "array", "items": { "type": "number" } }, "unit": { "$ref": "#/$defs/nonEmpty" } }
+    },
+    "qualifiedTimestamps": {
+      "type": "object", "additionalProperties": false, "required": ["value", "status"],
+      "properties": { "value": { "anyOf": [{ "$ref": "#/$defs/timestamps" }, { "type": "null" }] }, "status": { "$ref": "#/$defs/valueStatus" } },
+      "allOf": [{ "$ref": "#/$defs/qualifiedObjectConsistency" }]
+    },
+    "qualifiedText": {
+      "type": "object", "additionalProperties": false, "required": ["value", "status"],
+      "properties": { "value": { "type": ["string", "null"] }, "status": { "$ref": "#/$defs/valueStatus" } },
+      "if": { "properties": { "status": { "enum": ["absent", "unavailable", "unknown"] } } },
+      "then": { "properties": { "value": { "type": "null" } } },
+      "else": { "properties": { "value": { "type": "string", "minLength": 1 } } }
+    },
+    "qualifiedObjectConsistency": {
+      "if": { "properties": { "status": { "enum": ["absent", "unavailable", "unknown"] } } },
+      "then": { "properties": { "value": { "type": "null" } } },
+      "else": { "properties": { "value": { "type": "object" } } }
+    }
+  }
+}
