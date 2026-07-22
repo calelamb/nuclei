@@ -1,11 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import type { ImportJobEvent, ImportStartInput } from '../types/qecDataProtocol';
-import { useQecJobStore, type QecJobClient } from './qecJobStore';
+import type { ImportJobEvent } from '../types/qecDataProtocol';
+import { useQecJobStore, type QecImportJobInput, type QecJobClient } from './qecJobStore';
 
-const INPUT: ImportStartInput = {
+const INPUT: QecImportJobInput = {
   source: 'captures/run.csv', adapterId: 'sinter-csv', mapping: { fields: {}, options: {} },
   sessionId: 'session-1', sessionKind: 'hardware_import',
+  sourceHash: null, provenanceId: null, sourceByteSize: null,
 };
 
 beforeEach(() => useQecJobStore.getState().reset());
@@ -86,5 +87,62 @@ describe('useQecJobStore', () => {
     expect(useQecJobStore.getState().jobs.import).toMatchObject({ status: 'running', message: 'Could not cancel' });
     useQecJobStore.getState().closeImport();
     expect(useQecJobStore.getState().importSource).toBeNull();
+  });
+
+  it('does not overwrite terminal completion when cancellation resolves late', async () => {
+    let finishCancel: ((value: boolean) => void) | undefined;
+    const client: QecJobClient = {
+      startImport: vi.fn(),
+      cancel: vi.fn(() => new Promise<boolean>((resolve) => { finishCancel = resolve; })),
+    };
+    useQecJobStore.setState({
+      jobs: { import: { id: 'import', kind: 'import', status: 'running', message: 'Running', source: 'capture.csv', adapterId: 'tabular', sessionId: 's', sessionKind: 'hardware_import', sourceHash: null, provenanceId: null, sourceByteSize: null } },
+    });
+    const cancelling = useQecJobStore.getState().cancelJob(client, 'import');
+    useQecJobStore.setState((state) => ({ jobs: { ...state.jobs, import: { ...state.jobs.import, status: 'complete' } } }));
+    finishCancel?.(true);
+    await cancelling;
+    expect(useQecJobStore.getState().jobs.import.status).toBe('complete');
+  });
+
+  it('persists scientific source and destination context on durable jobs', async () => {
+    const client: QecJobClient = {
+      startImport: vi.fn(async (_input, onEvent) => {
+        onEvent({ type: 'job_started', requestId: 'context', jobId: 'context', jobKind: 'import', sourcePolicy: 'copy' });
+        return { type: 'job_complete', requestId: 'context', jobId: 'context', recordsWritten: 2, partitionsWritten: 1, sourcePolicy: 'copy' };
+      }),
+      cancel: vi.fn(),
+    };
+    await useQecJobStore.getState().runImport(client, {
+      ...INPUT, sourceHash: 'a'.repeat(64), provenanceId: 'prov-1', sourceByteSize: 2048,
+    });
+    expect(useQecJobStore.getState().jobs.context).toMatchObject({
+      source: 'captures/run.csv', adapterId: 'sinter-csv', sessionId: 'session-1',
+      sourceHash: 'a'.repeat(64), provenanceId: 'prov-1', sourceByteSize: 2048,
+    });
+  });
+
+  it('attributes an import failure to its own job when another source becomes active', async () => {
+    let rejectFirst: ((error: unknown) => void) | undefined;
+    let finishSecond: ((value: ImportJobEvent & { type: 'job_complete' }) => void) | undefined;
+    const firstClient: QecJobClient = {
+      startImport: vi.fn((_input, onEvent) => {
+        onEvent({ type: 'job_started', requestId: 'first', jobId: 'first', jobKind: 'import', sourcePolicy: 'copy' });
+        return new Promise((_, reject) => { rejectFirst = reject; });
+      }), cancel: vi.fn(),
+    };
+    const secondClient: QecJobClient = {
+      startImport: vi.fn((_input, onEvent) => {
+        onEvent({ type: 'job_started', requestId: 'second', jobId: 'second', jobKind: 'import', sourcePolicy: 'copy' });
+        return new Promise((resolve) => { finishSecond = resolve; });
+      }), cancel: vi.fn(),
+    };
+    const first = useQecJobStore.getState().runImport(firstClient, INPUT);
+    const second = useQecJobStore.getState().runImport(secondClient, { ...INPUT, source: 'captures/second.csv' });
+    rejectFirst?.(new Error('first failed'));
+    await first;
+    expect(useQecJobStore.getState().jobs).toMatchObject({ first: { status: 'failed' }, second: { status: 'running' } });
+    finishSecond?.({ type: 'job_complete', requestId: 'second', jobId: 'second', recordsWritten: 1, partitionsWritten: 1, sourcePolicy: 'copy' });
+    await second;
   });
 });

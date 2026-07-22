@@ -111,4 +111,32 @@ describe('useQecQueryStore', () => {
     calls[0].resolve((tile('query-old', 0, 'ignored') as Extract<QecQueryResult, { type: 'tile' }>).tile);
     await pending;
   });
+
+  it('keeps a query running when cancellation is declined', async () => {
+    const { client, calls } = deferredClient();
+    vi.mocked(client.cancel).mockResolvedValueOnce(false);
+    const pending = useQecQueryStore.getState().run(client, BASE_QUERY);
+    const key = qecQueryTileKey(BASE_QUERY);
+
+    await useQecQueryStore.getState().cancel(client, key);
+    expect(useQecQueryStore.getState().tiles[key]).toMatchObject({ status: 'loading' });
+    calls[0].resolve((tile('query-old', 0, 'done') as Extract<QecQueryResult, { type: 'tile' }>).tile);
+    await pending;
+  });
+
+  it('keeps epochs monotonic across reset so pre-reset callbacks cannot win an ABA race', async () => {
+    const { client, calls } = deferredClient();
+    const old = useQecQueryStore.getState().run(client, BASE_QUERY);
+    const oldEpoch = useQecQueryStore.getState().epochCounter;
+    useQecQueryStore.getState().reset();
+    const fresh = useQecQueryStore.getState().run(client, { ...BASE_QUERY, requestId: 'query-fresh' });
+
+    expect(useQecQueryStore.getState().epochCounter).toBeGreaterThan(oldEpoch);
+    calls[0].emit(tile('query-old', 0, 'stale'));
+    calls[0].resolve((tile('query-old', 0, 'stale') as Extract<QecQueryResult, { type: 'tile' }>).tile);
+    calls[1].emit(tile('query-fresh', 0, 'fresh'));
+    calls[1].resolve((tile('query-fresh', 0, 'fresh') as Extract<QecQueryResult, { type: 'tile' }>).tile);
+    await Promise.all([old, fresh]);
+    expect(useQecQueryStore.getState().tiles[qecQueryTileKey(BASE_QUERY)].frames[0].content).toEqual({ value: 'fresh' });
+  });
 });

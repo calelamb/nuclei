@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { buildMapping, completeRows, formatBytes, stageDescription, supportedAdapters } from './qecImportModel';
+import { buildMapping, completeRows, formatBytes, sessionIdIssue, stageDescription, supportedAdapters } from './qecImportModel';
 
 describe('qecImportModel', () => {
   it('formats bounded source sizes across units', () => {
@@ -39,5 +39,14 @@ describe('qecImportModel', () => {
     for (const stage of ['Source', 'Adapter', 'Mapping', 'Preview', 'Validation', 'Destination', 'Import'] as const) {
       expect(stageDescription(stage).length).toBeGreaterThan(20);
     }
+  });
+
+  it.each(['.', '..', 'bad/name', 'bad:name', `bad${String.fromCharCode(1)}name`, 'x'.repeat(257)])(
+    'rejects backend-invalid session id %j',
+    (value) => expect(sessionIdIssue(value)).not.toBeNull(),
+  );
+
+  it('accepts a bounded portable session id', () => {
+    expect(sessionIdIssue('capture-2026-07-22')).toBeNull();
   });
 });

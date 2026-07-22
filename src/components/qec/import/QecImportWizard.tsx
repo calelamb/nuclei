@@ -14,7 +14,7 @@ import {
   Trash2,
   X,
 } from 'lucide-react';
-import { useEffect, useMemo, useRef, useState, type ReactElement } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactElement } from 'react';
 
 import './qecImportWizard.css';
 
@@ -30,6 +30,7 @@ import {
   buildMapping,
   completeRows,
   formatBytes,
+  sessionIdIssue,
   stageDescription,
   supportedAdapters,
   type MappingOptions,
@@ -122,6 +123,7 @@ function AdapterStage({ probe, selected, onSelect }: AdapterStageProps): ReactEl
             <input aria-label={`${adapter.adapterId[0]?.toUpperCase()}${adapter.adapterId.slice(1)} adapter, ${Math.round(adapter.confidence * 100)}% confidence`} type="radio" name="qec-adapter" checked={selected === adapter.adapterId} onChange={() => onSelect(adapter.adapterId)} />
             <Database aria-hidden="true" size={17} />
             <span><strong className="qec-import-capitalize">{label}</strong><small className="qec-mono">v{adapter.adapterVersion} · {adapter.sourceKind}</small></span>
+            {Object.keys(adapter.details).length > 0 && <small className="qec-import-adapter-details">{Object.entries(adapter.details).map(([key, value]) => `${key}: ${String(value)}`).join(' · ')}</small>}
           </label>
         );
       })}
@@ -194,21 +196,24 @@ function PreviewStage({ validation, preview, onLoad }: PreviewStageProps): React
 
 interface ValidationStageProps {
   state: AsyncState<ImportValidationResult>;
-  alertRef: React.RefObject<HTMLDivElement | null>;
+  alertRef: React.RefObject<HTMLButtonElement | null>;
   onValidate(): void;
+  onReviewMapping(): void;
 }
 
-function ValidationStage({ state, alertRef, onValidate }: ValidationStageProps): ReactElement {
+function ValidationStage({ state, alertRef, onValidate, onReviewMapping }: ValidationStageProps): ReactElement {
   if (state.loading) return <LoadingState label="Validating mapping and source" />;
+  const firstError = state.value?.issues.find((issue) => issue.severity === 'error');
   return (
     <div className="qec-import-validation">
       <button type="button" className="qec-import-secondary" onClick={onValidate}>Validate mapping</button>
       {state.error && <InlineError message={state.error} />}
       {state.value?.valid && <div className="qec-import-success" role="status"><CheckCircle2 aria-hidden="true" size={18} /><div><strong>Validation passed</strong><span className="qec-mono">{state.value.provenanceId ?? 'Provenance pending'}</span></div></div>}
       {state.value && !state.value.valid && (
-        <div className="qec-import-quarantine" role="alert" tabIndex={-1} ref={alertRef}>
+        <div className="qec-import-quarantine" role="alert">
           <header><ShieldAlert aria-hidden="true" size={19} /><div><strong>Quarantine required</strong><span>Original bytes remain preserved. Correct the mapped fields, then validate again.</span></div></header>
           <ul>{state.value.issues.map((issue) => <li key={`${issue.code}:${issue.field ?? ''}`} data-severity={issue.severity}><strong>{issue.field ?? issue.code}</strong><span>{issue.message}</span></li>)}</ul>
+          <button type="button" ref={alertRef} aria-label={`Review ${firstError?.field ?? 'invalid'} mapping`} onClick={onReviewMapping}>Review mapping: {firstError?.message ?? 'Correct invalid fields.'}</button>
         </div>
       )}
       {state.value?.valid && state.value.issues.length > 0 && <ul className="qec-import-warnings" aria-label="Validation warnings">{state.value.issues.map((issue) => <li key={issue.code}><AlertCircle aria-hidden="true" size={15} />{issue.message}</li>)}</ul>}
@@ -224,23 +229,25 @@ interface DestinationStageProps {
 }
 
 function DestinationStage(props: DestinationStageProps): ReactElement {
+  const issue = sessionIdIssue(props.sessionId.trim());
   return (
     <div className="qec-import-destination">
-      <label>Session ID<input value={props.sessionId} onChange={(event) => props.onSessionId(event.target.value)} placeholder="capture-2026-07-22" /></label>
+      <label>Session ID<input aria-label="Session ID" value={props.sessionId} aria-invalid={issue !== null} maxLength={256} onChange={(event) => props.onSessionId(event.target.value)} placeholder="capture-2026-07-22" />{issue && <small role="alert">{issue}</small>}</label>
       <label>Session kind<select value={props.sessionKind} onChange={(event) => props.onSessionKind(event.target.value as DestinationStageProps['sessionKind'])}><option value="hardware_import">Hardware import</option><option value="simulation_campaign">Simulation campaign</option><option value="hardware_live">Hardware live</option><option value="replay">Replay</option></select></label>
       <div className="qec-import-policy"><Copy aria-hidden="true" size={15} /><strong>Destination: qec-data/sessions/{props.sessionId || '<session-id>'}</strong><span>The source is copied; the original file is never edited or referenced in place.</span></div>
     </div>
   );
 }
 
-function ImportStage(): ReactElement {
-  const activeJobId = useQecJobStore((state) => state.activeJobId);
-  const job = useQecJobStore((state) => activeJobId ? state.jobs[activeJobId] : undefined);
+function ImportStage({ source, client }: { source: string; client: QecImportClient }): ReactElement {
+  const jobs = useQecJobStore((state) => state.jobs);
+  const job = Object.values(jobs).reverse().find((candidate) => candidate.source === source);
+  const cancelJob = useQecJobStore((state) => state.cancelJob);
   const error = useQecJobStore((state) => state.launchError);
   if (error) return <InlineError message={error} />;
   if (!job) return <div className="qec-import-notice"><Database aria-hidden="true" size={20} /><div><strong>Ready for canonical import</strong><span>Import progress and completion remain in this tray if you change the active source.</span></div></div>;
   if (job.status === 'complete') return <div className="qec-import-success" role="status"><CheckCircle2 aria-hidden="true" size={19} /><div><strong>{job.recordsWritten ?? 0} records written</strong><span>{job.partitionsWritten ?? 0} canonical partitions · Original preserved</span></div></div>;
-  return <div className="qec-import-progress" role="progressbar" aria-label="QEC data import" aria-valuetext={job.message}><LoaderCircle aria-hidden="true" size={18} /><strong>{job.message}</strong><span className="qec-mono">{job.id}</span></div>;
+  return <div className="qec-import-progress" role="progressbar" aria-label="QEC data import" aria-valuetext={job.message}><LoaderCircle aria-hidden="true" size={18} /><strong>{job.message}</strong><span className="qec-mono">{job.id}</span>{['running', 'starting'].includes(job.status) && <button type="button" aria-label={`Cancel import ${job.id}`} onClick={() => void cancelJob(client, job.id)}>Cancel</button>}</div>;
 }
 
 function nextAllowed(stage: number, probe: ImportProbeResult | null, adapterId: string, mappingReady: boolean, valid: boolean, sessionId: string): boolean {
@@ -257,7 +264,8 @@ function importUnavailable(probe: ImportProbeResult | null, adapterId: string, m
   if (!adapterId) return 'choose a supported adapter';
   if (!mappingReady) return 'review at least one explicit field mapping';
   if (!valid) return 'mapping validation must pass';
-  if (!sessionId.trim()) return 'choose a destination session ID';
+  const sessionIssue = sessionIdIssue(sessionId.trim());
+  if (sessionIssue) return sessionIssue;
   return null;
 }
 
@@ -278,36 +286,51 @@ function useSourceProbe(client: QecImportClient, source: string): AsyncState<Imp
 }
 
 type ImportMapping = ReturnType<typeof buildMapping>;
+interface RequestOwnership { generation: number; key: string; }
+
+function nextOwnership(current: RequestOwnership, key: string): Readonly<RequestOwnership> {
+  return Object.freeze({ generation: current.generation + 1, key });
+}
 
 function useImportRequests(client: QecImportClient, source: string) {
   const [validation, setValidation] = useState<AsyncState<ImportValidationResult>>(EMPTY_ASYNC);
   const [preview, setPreview] = useState<AsyncState<ImportPreviewResult>>(EMPTY_ASYNC);
-  const validationAlertRef = useRef<HTMLDivElement>(null);
+  const validationAlertRef = useRef<HTMLButtonElement>(null);
+  const validationOwner = useRef<Readonly<RequestOwnership>>(Object.freeze({ generation: 0, key: '' }));
+  const previewOwner = useRef<Readonly<RequestOwnership>>(Object.freeze({ generation: 0, key: '' }));
 
   useEffect(() => {
     if (validation.value && !validation.value.valid) validationAlertRef.current?.focus();
   }, [validation.value]);
 
-  const invalidate = (): void => {
+  const invalidate = useCallback((): void => {
+    validationOwner.current = nextOwnership(validationOwner.current, '');
+    previewOwner.current = nextOwnership(previewOwner.current, '');
     setValidation(EMPTY_ASYNC);
     setPreview(EMPTY_ASYNC);
-  };
+  }, []);
   const validate = async (adapterId: string, mapping: ImportMapping): Promise<void> => {
+    const key = JSON.stringify([source, adapterId, mapping]);
+    const owner = nextOwnership(validationOwner.current, key);
+    validationOwner.current = owner;
     setValidation({ value: null, loading: true, error: null });
     try {
       const value = await client.validate(source, adapterId, mapping);
-      setValidation({ value, loading: false, error: null });
+      if (validationOwner.current === owner) setValidation({ value, loading: false, error: null });
     } catch (error: unknown) {
-      setValidation({ value: null, loading: false, error: failureMessage(error) });
+      if (validationOwner.current === owner) setValidation({ value: null, loading: false, error: failureMessage(error) });
     }
   };
   const loadPreview = async (adapterId: string, mapping: ImportMapping): Promise<void> => {
+    const key = JSON.stringify([source, adapterId, mapping]);
+    const owner = nextOwnership(previewOwner.current, key);
+    previewOwner.current = owner;
     setPreview({ value: null, loading: true, error: null });
     try {
       const value = await client.preview(source, adapterId, mapping, 100);
-      setPreview({ value, loading: false, error: null });
+      if (previewOwner.current === owner) setPreview({ value, loading: false, error: null });
     } catch (error: unknown) {
-      setPreview({ value: null, loading: false, error: failureMessage(error) });
+      if (previewOwner.current === owner) setPreview({ value: null, loading: false, error: failureMessage(error) });
     }
   };
   return { validation, preview, validationAlertRef, invalidate, validate, loadPreview };
@@ -341,11 +364,12 @@ function useMappingEditor(invalidate: () => void) {
 }
 
 interface StageContentProps {
-  stage: number; source: string; probe: AsyncState<ImportProbeResult>;
+  stage: number; source: string; client: QecImportClient; probe: AsyncState<ImportProbeResult>;
   editor: ReturnType<typeof useMappingEditor>;
   requests: ReturnType<typeof useImportRequests>;
   sessionId: string; sessionKind: DestinationStageProps['sessionKind'];
   onSessionId(value: string): void; onSessionKind(value: DestinationStageProps['sessionKind']): void;
+  onReviewMapping(): void;
 }
 
 function StageContent(props: StageContentProps): ReactElement {
@@ -354,9 +378,9 @@ function StageContent(props: StageContentProps): ReactElement {
   if (stage === 1) return <AdapterStage probe={probe.value} selected={editor.adapterId} onSelect={editor.chooseAdapter} />;
   if (stage === 2) return <MappingStage rows={editor.rows} options={editor.options} reviewed={editor.reviewed} onAdd={editor.addRow} onChange={editor.changeRow} onRemove={editor.removeRow} onOptions={editor.changeOptions} onReviewed={editor.changeReviewed} />;
   if (stage === 3) return <PreviewStage validation={requests.validation.value} preview={requests.preview} onLoad={() => void requests.loadPreview(editor.adapterId, editor.mapping)} />;
-  if (stage === 4) return <ValidationStage state={requests.validation} alertRef={requests.validationAlertRef} onValidate={() => void requests.validate(editor.adapterId, editor.mapping)} />;
+  if (stage === 4) return <ValidationStage state={requests.validation} alertRef={requests.validationAlertRef} onValidate={() => void requests.validate(editor.adapterId, editor.mapping)} onReviewMapping={props.onReviewMapping} />;
   if (stage === 5) return <DestinationStage sessionId={props.sessionId} sessionKind={props.sessionKind} onSessionId={props.onSessionId} onSessionKind={props.onSessionKind} />;
-  return <ImportStage />;
+  return <ImportStage source={source} client={props.client} />;
 }
 
 interface WizardFooterProps {
@@ -373,7 +397,7 @@ function WizardFooter(props: WizardFooterProps): ReactElement {
   );
 }
 
-export function QecImportWizard({ source, client, onClose }: QecImportWizardProps): ReactElement {
+function QecImportWizardSession({ source, client, onClose }: QecImportWizardProps): ReactElement {
   const [stage, setStage] = useState(0);
   const [sessionId, setSessionId] = useState('');
   const [sessionKind, setSessionKind] = useState<DestinationStageProps['sessionKind']>('hardware_import');
@@ -384,10 +408,18 @@ export function QecImportWizard({ source, client, onClose }: QecImportWizardProp
   const unavailable = importUnavailable(probe.value, editor.adapterId, editor.mappingReady, valid, sessionId);
   const runImport = useQecJobStore((state) => state.runImport);
   const launching = useQecJobStore((state) => state.launching);
+  const stageHeadingRef = useRef<HTMLHeadingElement>(null);
+  useEffect(() => { stageHeadingRef.current?.focus(); }, [stage]);
   const start = async (): Promise<void> => {
     if (unavailable) return;
     setStage(IMPORT_STAGES.length - 1);
-    await runImport(client, { source, adapterId: editor.adapterId, mapping: editor.mapping, sessionId: sessionId.trim(), sessionKind });
+    await runImport(client, {
+      source, adapterId: editor.adapterId, mapping: editor.mapping,
+      sessionId: sessionId.trim(), sessionKind,
+      sourceHash: requests.validation.value?.sourceSha256 ?? probe.value?.results.find((item) => item.adapterId === editor.adapterId)?.sourceSha256 ?? null,
+      provenanceId: requests.validation.value?.provenanceId ?? null,
+      sourceByteSize: probe.value?.sourceByteSize ?? null,
+    });
   };
 
   const activeStage = IMPORT_STAGES[stage];
@@ -397,13 +429,17 @@ export function QecImportWizard({ source, client, onClose }: QecImportWizardProp
       <div className="qec-import-wizard__body">
         <StepRail stage={stage} />
         <div className="qec-import-stage">
-          <header><span>Stage {stage + 1} of {IMPORT_STAGES.length}</span><h3>{activeStage}</h3><p>{stageDescription(activeStage)}</p></header>
+          <header><span>Stage {stage + 1} of {IMPORT_STAGES.length}</span><h3 tabIndex={-1} ref={stageHeadingRef}>{activeStage}</h3><p>{stageDescription(activeStage)}</p></header>
           <div className="qec-import-stage__content">
-            <StageContent stage={stage} source={source} probe={probe} editor={editor} requests={requests} sessionId={sessionId} sessionKind={sessionKind} onSessionId={setSessionId} onSessionKind={setSessionKind} />
+            <StageContent stage={stage} source={source} client={client} probe={probe} editor={editor} requests={requests} sessionId={sessionId} sessionKind={sessionKind} onSessionId={setSessionId} onSessionKind={setSessionKind} onReviewMapping={() => setStage(2)} />
           </div>
         </div>
       </div>
       <WizardFooter stage={stage} canAdvance={nextAllowed(stage, probe.value, editor.adapterId, editor.mappingReady, valid, sessionId)} unavailable={unavailable} launching={launching} onBack={() => setStage((current) => Math.max(0, current - 1))} onNext={() => setStage((current) => Math.min(IMPORT_STAGES.length - 1, current + 1))} onImport={() => void start()} />
     </section>
   );
+}
+
+export function QecImportWizard(props: QecImportWizardProps): ReactElement {
+  return <QecImportWizardSession key={props.source} {...props} />;
 }

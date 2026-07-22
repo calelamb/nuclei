@@ -12,6 +12,9 @@ import {
   useResearchSelectionStore,
 } from '../../../stores/researchSelectionStore';
 import { QecWorkbench } from './QecWorkbench';
+import { QecSourcesPanel } from './QecSourcesPanel';
+import { QecWorkbenchTray } from './QecWorkbenchTray';
+import type { QecImportClient } from '../../../services/qecDataClient';
 import { deferred, flushAsync, flushPersistenceDebounce, MemoryStorage,
   persistedState, persistenceBridge } from './qecWorkbenchTestUtils';
 
@@ -53,6 +56,13 @@ function setStudies(studies = [STUDY, SECOND_STUDY]): void {
     validationErrors: [],
     loading: false,
   });
+}
+
+function importClient(): QecImportClient {
+  return {
+    probe: vi.fn(async () => ({ type: 'import_probe_result', requestId: 'p', sourcePolicy: 'copy', sourceByteSize: 1, results: [] })),
+    validate: vi.fn(), preview: vi.fn(), startImport: vi.fn(), cancel: vi.fn(async () => true),
+  };
 }
 
 afterEach(() => {
@@ -241,6 +251,34 @@ describe('<QecWorkbench />', () => {
     expect(screen.getByRole('region', { name: 'QEC jobs and streams' }).textContent).toMatch(
       /Open a project to start the QEC Data Engine/,
     );
+  });
+
+  it('returns focus to the originating source action when the import closes', async () => {
+    const client = importClient();
+    render(<><QecSourcesPanel /><QecWorkbenchTray client={client} /></>);
+    const origin = screen.getByRole('button', { name: 'Import campaign-a' });
+    fireEvent.click(origin);
+    fireEvent.click(await screen.findByRole('button', { name: 'Close import wizard' }));
+    await waitFor(() => expect(document.activeElement).toBe(origin));
+  });
+
+  it('keeps closed import jobs inspectable and cancellable with source context', async () => {
+    const client = importClient();
+    useQecJobStore.setState({
+      jobs: {
+        running: {
+          id: 'running', kind: 'import', status: 'running', message: 'Import running',
+          source: 'captures/run.csv', adapterId: 'tabular', sessionId: 'session-42',
+          sessionKind: 'hardware_import', sourceHash: 'a'.repeat(64), provenanceId: 'prov-42',
+          sourceByteSize: 2048,
+        },
+      },
+    });
+    render(<QecWorkbenchTray client={client} />);
+    expect(screen.getByText('captures/run.csv')).toBeTruthy();
+    expect(screen.getByText('session-42')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel import running' }));
+    await waitFor(() => expect(client.cancel).toHaveBeenCalledWith('import', 'running'));
   });
 
   it('hydrates scoped context and debounces an immutable platform-store snapshot', async () => {

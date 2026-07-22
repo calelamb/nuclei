@@ -8,6 +8,7 @@ import {
   projectRelativeSourceSchema,
   qecDataEndpointSchema,
   qecDataInboundFrameSchema,
+  sessionIdSchema,
   type ImportJobComplete,
   type ImportJobEvent,
   type ImportMapping,
@@ -38,6 +39,9 @@ export interface ClientDependencies {
 type PendingKind = 'probe' | 'validate' | 'preview' | 'import' | 'query' | 'cancel';
 interface PendingRequest {
   kind: PendingKind;
+  phase: 'terminal' | 'awaiting_start' | 'streaming';
+  expected?: string;
+  targetId?: string;
   resolve(value: unknown): void;
   reject(error: QecDataClientError): void;
   onFrame?: (frame: QecDataInboundFrame) => void;
@@ -69,6 +73,19 @@ function defaultRequestId(): string {
 function asClientError(error: unknown): QecDataClientError {
   if (error instanceof QecDataClientError) return error;
   return new QecDataClientError('invalid_request', error instanceof Error ? error.message : 'QEC request is invalid.');
+}
+
+function serializeOutbound(frame: Record<string, unknown>): string {
+  let serialized: string;
+  try {
+    serialized = JSON.stringify(frame);
+  } catch (error: unknown) {
+    throw asClientError(error);
+  }
+  if (new TextEncoder().encode(serialized).byteLength > QEC_DATA_MAX_FRAME_BYTES) {
+    throw new QecDataClientError('frame_too_large', 'QEC Data Engine frame exceeds 1 MiB.');
+  }
+  return serialized;
 }
 
 export class QecDataClient {
@@ -135,9 +152,11 @@ export class QecDataClient {
 
   startImport(input: ImportStartInput, onEvent?: (event: ImportJobEvent) => void): Promise<ImportJobComplete> {
     const requestId = this.#requestIdFactory();
+    const parsedSessionId = sessionIdSchema.safeParse(input.sessionId);
+    if (!parsedSessionId.success) throw new QecDataClientError('invalid_request', 'Session ID is invalid.');
     return this.#multiFrame('import', requestId, {
       type: 'import_start', requestId, source: this.#source(input.source), adapterId: input.adapterId,
-      mapping: importMappingSchema.parse(input.mapping), sessionId: input.sessionId,
+      mapping: importMappingSchema.parse(input.mapping), sessionId: parsedSessionId.data,
       sessionKind: input.sessionKind,
     }, onEvent as ((frame: QecDataInboundFrame) => void) | undefined) as Promise<ImportJobComplete>;
   }
@@ -158,7 +177,7 @@ export class QecDataClient {
       : { type: 'job_cancel', requestId, jobId: targetId };
     const expected = kind === 'query' ? 'query_cancelled' : 'job_cancelled';
     const response = await this.#oneShot<Extract<QecDataInboundFrame, { type: 'query_cancelled' | 'job_cancelled' }>>(
-      'cancel', expected, frame,
+      'cancel', expected, frame, targetId,
     );
     if (response.success) this.#rejectRequest(targetId, new QecDataClientError('request_cancelled', 'QEC operation was cancelled.'));
     return response.success;
@@ -170,15 +189,13 @@ export class QecDataClient {
     return result.data;
   }
 
-  #oneShot<Result extends QecDataInboundFrame>(kind: PendingKind, expected: string, frame: Record<string, unknown>): Promise<Result> {
+  #oneShot<Result extends QecDataInboundFrame>(kind: PendingKind, expected: string, frame: Record<string, unknown>, targetId?: string): Promise<Result> {
     const requestId = String(frame.requestId);
     return this.#send<Result>(requestId, frame, {
       kind,
+      phase: 'terminal', expected, targetId,
       resolve: () => undefined,
       reject: () => undefined,
-      onFrame: (received) => {
-        if (received.type !== expected) throw new QecDataClientError('invalid_response', `Expected ${expected}.`);
-      },
     });
   }
 
@@ -186,12 +203,23 @@ export class QecDataClient {
     kind: 'import' | 'query', requestId: string, frame: Record<string, unknown>,
     onFrame?: (frame: QecDataInboundFrame) => void,
   ): Promise<unknown> {
-    return this.#send(requestId, frame, { kind, resolve: () => undefined, reject: () => undefined, onFrame });
+    return this.#send(requestId, frame, {
+      kind, phase: 'awaiting_start', resolve: () => undefined, reject: () => undefined, onFrame,
+    });
   }
 
   #send<Result>(requestId: string, frame: Record<string, unknown>, template: PendingRequest): Promise<Result> {
     if (!this.#authenticated || !this.#socket) {
       return Promise.reject(new QecDataClientError('engine_disconnected', 'QEC Data Engine is not connected.'));
+    }
+    if (this.#pending.has(requestId)) {
+      return Promise.reject(new QecDataClientError('duplicate_request', 'QEC request ID is already pending.'));
+    }
+    let serialized: string;
+    try {
+      serialized = serializeOutbound(frame);
+    } catch (error: unknown) {
+      return Promise.reject(asClientError(error));
     }
     return new Promise<Result>((resolve, reject) => {
       const pending: PendingRequest = {
@@ -201,7 +229,7 @@ export class QecDataClient {
       };
       this.#pending = new Map(this.#pending).set(requestId, pending);
       try {
-        this.#socket?.send(JSON.stringify(frame));
+        this.#socket?.send(serialized);
       } catch (error: unknown) {
         this.#rejectRequest(requestId, asClientError(error));
       }
@@ -210,7 +238,7 @@ export class QecDataClient {
 
   #sendAuthentication(): void {
     try {
-      this.#socket?.send(JSON.stringify({ type: 'authenticate', token: this.#token }));
+      this.#socket?.send(serializeOutbound({ type: 'authenticate', token: this.#token }));
     } catch {
       this.#disconnect('QEC Data Engine authentication failed.');
     }
@@ -266,14 +294,51 @@ export class QecDataClient {
     const pending = this.#pending.get(frame.requestId);
     if (!pending) return;
     try {
-      pending.onFrame?.(frame);
+      this.#acceptFrame(frame.requestId, pending, frame);
     } catch (error: unknown) {
       this.#rejectRequest(frame.requestId, asClientError(error));
+    }
+  }
+
+  #acceptFrame(requestId: string, pending: PendingRequest, frame: QecDataInboundFrame): void {
+    if (!['import', 'query'].includes(pending.kind)) {
+      if (frame.type !== pending.expected || !this.#matchesCancelTarget(pending, frame)) {
+        throw new QecDataClientError('invalid_response', `Expected ${pending.expected}.`);
+      }
+      pending.onFrame?.(frame);
+      this.#resolveRequest(requestId, frame);
       return;
     }
-    if (pending.kind === 'query' && frame.type === 'tile' && frame.complete) this.#resolveRequest(frame.requestId, frame.tile);
-    else if (pending.kind === 'import' && frame.type === 'job_complete') this.#resolveRequest(frame.requestId, frame);
-    else if (!['query', 'import'].includes(pending.kind)) this.#resolveRequest(frame.requestId, frame);
+    if (pending.phase === 'awaiting_start') {
+      if (frame.type !== 'job_started' || frame.jobKind !== pending.kind || frame.jobId !== requestId) {
+        throw new QecDataClientError('invalid_response', `Expected ${pending.kind} job_started.`);
+      }
+      this.#replacePending(requestId, { ...pending, phase: 'streaming' });
+      pending.onFrame?.(frame);
+      return;
+    }
+    if (pending.kind === 'import' && frame.type === 'job_complete' && frame.jobId === requestId) {
+      pending.onFrame?.(frame);
+      this.#resolveRequest(requestId, frame);
+      return;
+    }
+    if (pending.kind === 'query' && (frame.type === 'progress' || frame.type === 'tile')) {
+      pending.onFrame?.(frame);
+      if (frame.type === 'tile' && frame.complete) this.#resolveRequest(requestId, frame.tile);
+      return;
+    }
+    throw new QecDataClientError('invalid_response', `Unexpected ${frame.type} for ${pending.kind}.`);
+  }
+
+  #matchesCancelTarget(pending: PendingRequest, frame: QecDataInboundFrame): boolean {
+    if (pending.kind !== 'cancel') return true;
+    if (frame.type === 'job_cancelled') return frame.jobId === pending.targetId;
+    if (frame.type === 'query_cancelled') return frame.queryRequestId === pending.targetId;
+    return false;
+  }
+
+  #replacePending(requestId: string, pending: PendingRequest): void {
+    this.#pending = new Map(this.#pending).set(requestId, pending);
   }
 
   #resolveRequest(requestId: string, value: unknown): void {

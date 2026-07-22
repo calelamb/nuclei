@@ -58,6 +58,7 @@
 .qec-import-adapters strong, .qec-import-adapters small { display: block; }
 .qec-import-adapters strong { font-size: 11px; }
 .qec-import-adapters small { margin-top: 2px; color: var(--qec-text-muted); font-size: 9px; }
+.qec-import-adapter-details { grid-column: 3; font-family: var(--font-mono); }
 .qec-import-capitalize { text-transform: capitalize; }
 
 .qec-import-mapping { display: grid; gap: 7px; }
@@ -98,13 +99,21 @@
 .qec-import-quarantine li strong { color: var(--qec-danger); font: 10px var(--font-mono); }
 .qec-import-quarantine li[data-severity='warning'] strong { color: var(--qec-warning); }
 .qec-import-quarantine li span { margin-top: 2px; color: var(--qec-text-muted); font-size: 10px; }
+.qec-import-quarantine > button, .qec-import-progress > button, .qec-tray__jobs button { min-height: 44px; padding: 0 12px; border: 1px solid #93c5fd; border-radius: 5px; background: #ffffff; color: #1d4ed8; font-weight: 650; }
+.qec-import-quarantine > button { margin: 0 11px 11px; }
 .qec-import-warnings { display: grid; gap: 5px; }
 .qec-import-warnings li { display: flex; align-items: center; gap: 6px; color: var(--qec-warning); font-size: 10px; }
 
 .qec-import-destination { display: grid; grid-template-columns: minmax(180px, 1fr) minmax(180px, 1fr); gap: 10px; padding: 12px; }
 .qec-import-destination .qec-import-policy { grid-column: 1 / -1; margin: 0; }
-.qec-import-progress { display: grid; grid-template-columns: 24px auto minmax(0, 1fr); color: #075985; }
+.qec-import-progress { display: grid; grid-template-columns: 24px auto minmax(0, 1fr) auto; color: #075985; }
 .qec-import-progress .qec-mono { overflow: hidden; color: var(--qec-text-muted); font-size: 9px; text-align: right; text-overflow: ellipsis; }
+.qec-tray__jobs { display: grid; gap: 8px; margin: 10px 12px; }
+.qec-tray__jobs > li { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px 12px; padding: 10px; border: 1px solid #dbeafe; border-radius: 6px; background: #ffffff; }
+.qec-tray__jobs > li > div { display: flex; min-width: 0; justify-content: space-between; gap: 8px; }
+.qec-tray__jobs dl { display: grid; min-width: 0; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.qec-tray__jobs dt { color: var(--qec-text-muted); font-size: 9px; text-transform: uppercase; }
+.qec-tray__jobs dd { overflow-wrap: anywhere; color: var(--qec-text); font-size: 10px; }
 
 .qec-import-wizard__footer { display: flex; min-height: 64px; align-items: center; justify-content: space-between; gap: 12px; padding: 9px 14px; border-top: 1px solid #dbeafe; background: #ffffff; }
 .qec-import-nav, .qec-import-commit { display: flex; min-width: 0; align-items: center; gap: 7px; }
@@ -139,4 +148,5 @@
   .qec-import-commit { flex-wrap: wrap; }
   .qec-import-commit > span { flex: 1 1 190px; }
   .qec-import-commit > button { flex: 0 0 auto; }
+  .qec-tray__jobs > li, .qec-tray__jobs dl { grid-template-columns: minmax(0, 1fr); }
 }

@@ -31,8 +31,9 @@ function TrayHeader({ expanded, importing, onToggle }: TrayHeaderProps): ReactEl
   );
 }
 
-function TrayContent(): ReactElement {
+function TrayContent({ client }: { client: QecImportClient | null }): ReactElement {
   const jobsById = useQecJobStore((state) => state.jobs);
+  const cancelJob = useQecJobStore((state) => state.cancelJob);
   const jobs = Object.values(jobsById);
   const running = jobs.filter((job) => ['starting', 'running', 'cancelling'].includes(job.status)).length;
   const queued = jobs.filter((job) => job.status === 'starting').length;
@@ -46,6 +47,13 @@ function TrayContent(): ReactElement {
         <div><dt>Running</dt><dd className="qec-mono">{running}</dd></div>
         <div><dt>Streams</dt><dd className="qec-mono">0</dd></div>
       </dl>
+      {jobs.length > 0 && <ul className="qec-tray__jobs" aria-label="Durable QEC jobs">{jobs.map((job) => (
+        <li key={job.id}>
+          <div><strong>{job.kind} · {job.status}</strong><span className="qec-mono">{job.id}</span></div>
+          <dl><div><dt>Source</dt><dd className="qec-mono">{job.source ?? 'Not recorded'}</dd></div><div><dt>Adapter</dt><dd className="qec-mono">{job.adapterId ?? 'Not recorded'}</dd></div><div><dt>Session</dt><dd className="qec-mono">{job.sessionId ?? 'Not recorded'}</dd></div><div><dt>Size</dt><dd className="qec-mono">{job.sourceByteSize ?? 'Pending'}</dd></div><div><dt>Hash</dt><dd className="qec-mono">{job.sourceHash ?? 'Pending'}</dd></div><div><dt>Provenance</dt><dd className="qec-mono">{job.provenanceId ?? 'Pending'}</dd></div></dl>
+          {client && ['running', 'starting'].includes(job.status) && <button type="button" aria-label={`Cancel ${job.kind} ${job.id}`} onClick={() => void cancelJob(client, job.id)}>Cancel</button>}
+        </li>
+      ))}</ul>}
     </div>
   );
 }
@@ -57,10 +65,9 @@ interface EngineState {
   scope: string | null;
 }
 
-function useImportEngine(source: string | null, provided?: QecImportClient): EngineState {
+function useImportEngine(enabled: boolean, provided?: QecImportClient): EngineState {
   const projectRoot = useProjectStore((state) => state.projectRoot);
   const [state, setState] = useState<EngineState>({ client: null, loading: false, error: null, scope: null });
-  const enabled = source !== null;
   useEffect(() => {
     if (provided) {
       return undefined;
@@ -99,16 +106,24 @@ export function QecWorkbenchTray({ client: providedClient }: QecWorkbenchTrayPro
   const collapsed = useQecWorkbenchStore((state) => state.trayCollapsed);
   const toggleCollapsed = useQecWorkbenchStore((state) => state.toggleTrayCollapsed);
   const source = useQecJobStore((state) => state.importSource);
+  const returnFocusId = useQecJobStore((state) => state.importReturnFocusId);
+  const jobs = useQecJobStore((state) => state.jobs);
   const closeImport = useQecJobStore((state) => state.closeImport);
-  const engine = useImportEngine(source, providedClient);
+  const liveJobs = Object.values(jobs).some((job) => ['starting', 'running', 'cancelling'].includes(job.status));
+  const engine = useImportEngine(source !== null || liveJobs, providedClient);
+  const closeAndRestoreFocus = (): void => {
+    const targetId = returnFocusId;
+    closeImport();
+    if (targetId) queueMicrotask(() => document.getElementById(targetId)?.focus());
+  };
   const expanded = !collapsed;
   return (
     <section className={`qec-tray qec-tray--${expanded ? 'expanded' : 'collapsed'}${source ? ' qec-tray--import' : ''}`} aria-label="QEC jobs and streams">
       <TrayHeader expanded={expanded} importing={source !== null} onToggle={toggleCollapsed} />
-      {!source && expanded && <TrayContent />}
+      {!source && expanded && <TrayContent client={engine.client} />}
       {source && <div className="qec-tray__import-host" hidden={!expanded}>
         {engine.client
-          ? <QecImportWizard source={source} client={engine.client} onClose={closeImport} />
+          ? <QecImportWizard source={source} client={engine.client} onClose={closeAndRestoreFocus} />
           : <EngineNotice state={engine} />}
       </div>}
     </section>

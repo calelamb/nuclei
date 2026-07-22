@@ -42,11 +42,10 @@ npx vitest run src/services/qecDataClient.test.ts src/stores/qecQueryStore.test.
   src/components/qec/import/QecImportWizard.test.tsx \
   src/components/qec/workbench/QecWorkbench.test.tsx \
   src/components/qec/workbench/QecStudySidebar.test.tsx \
-  src/components/qec/workbench/qecWorkbenchCss.test.ts \
   src/types/qecData.schema.test.ts
 
 Test Files  8 passed (8)
-Tests       90 passed (90)
+Tests       114 passed (114)
 ```
 
 ```text
@@ -67,10 +66,23 @@ Owned-file coverage:
 
 | Metric | Coverage |
 |---|---:|
-| Statements | 89.82% (565/629) |
-| Branches | 81.56% (292/358) |
-| Functions | 87.27% (192/220) |
-| Lines | 92.57% (449/485) |
+| Statements | 90.81% (672/740) |
+| Branches | 81.49% (392/481) |
+| Functions | 88.66% (219/247) |
+| Lines | 93.19% (534/573) |
+
+## Independent review correction
+
+The independent review found one critical stale-async ownership defect and six important transport, cancellation, durability, and accessibility gaps. A corrective RED run produced 20 focused failures before production changes. The corrective implementation now:
+
+- uses monotonically increasing validation/preview generations plus immutable source/adapter/mapping ownership keys; invalidation and source replacement cannot re-enable Import with stale results;
+- preserves monotonic query epochs across reset, honors declined cancellation, and prevents late cancellation responses from overwriting terminal query/job state;
+- rejects duplicate request IDs, caps outbound UTF-8 frames at 1 MiB before transmission, and enforces operation-specific multi-frame state machines and terminal responses;
+- focuses each navigated stage heading and the first quarantine correction action, then restores focus to the originating Sources action when the wizard closes;
+- keeps source, adapter, hash, provenance, byte size, session, and session-kind context on each durable import job, with inspect/cancel controls after the wizard closes;
+- exposes adapter probe reasons and applies the backend's exact portable 1–256-character session-ID rules at both UI and client boundaries.
+
+The broader final command lists eight existing test files (the earlier report accidentally listed a nonexistent CSS test path). It passes 114 tests; the six-file owned-coverage command passes 92 tests.
 
 ## Self-review
 

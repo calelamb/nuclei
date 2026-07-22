@@ -24,6 +24,16 @@ export function formatBytes(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(2)} MiB`;
 }
 
+export function sessionIdIssue(value: string): string | null {
+  if (value.length === 0) return 'choose a destination session ID';
+  if (value.length > 256) return 'session ID must be 256 characters or fewer';
+  if (value === '.' || value === '..') return 'session ID cannot be . or ..';
+  if ([...value].some((character) => '<>:"/\\|?*'.includes(character) || character.charCodeAt(0) < 32)) {
+    return 'session ID contains a forbidden character';
+  }
+  return null;
+}
+
 export function supportedAdapters(probe: ImportProbeResult | null): ImportProbeResult['results'] {
   return Object.freeze(
     [...(probe?.results ?? [])]

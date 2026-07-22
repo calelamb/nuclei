@@ -104,19 +104,33 @@ async function runQuery(client: QecQueryClient, query: QecQuerySpec): Promise<vo
 async function cancelQuery(client: QecQueryClient, key: string): Promise<void> {
   const current = useQecQueryStore.getState().tiles[key];
   if (!current || !['loading', 'cancelling'].includes(current.status)) return;
-  const epoch = useQecQueryStore.getState().epochCounter + 1;
   useQecQueryStore.setState((state) => ({
-    epochCounter: epoch,
     tiles: Object.freeze({
       ...state.tiles,
-      [key]: { ...current, epoch, status: 'cancelling', message: 'Cancelling query' },
+      [key]: { ...current, status: 'cancelling', message: 'Cancelling query' },
     }),
   }));
   try {
-    await client.cancel('query', current.requestId);
-    updateOwned(key, epoch, (owned) => ({ ...owned, status: 'cancelled', message: 'Query cancelled' }));
+    const cancelled = await client.cancel('query', current.requestId);
+    if (!cancelled) {
+      updateOwned(key, current.epoch, (owned) => owned.status === 'cancelling'
+        ? { ...owned, status: 'loading', message: 'Cancellation declined' }
+        : owned);
+      return;
+    }
+    const epoch = useQecQueryStore.getState().epochCounter + 1;
+    useQecQueryStore.setState((state) => {
+      const owned = state.tiles[key];
+      if (!owned || owned.epoch !== current.epoch || owned.status !== 'cancelling') return state;
+      return {
+        epochCounter: epoch,
+        tiles: Object.freeze({ ...state.tiles, [key]: { ...owned, epoch, status: 'cancelled', message: 'Query cancelled' } }),
+      };
+    });
   } catch (error: unknown) {
-    updateOwned(key, epoch, (owned) => ({ ...owned, status: 'error', error: errorMessage(error) }));
+    updateOwned(key, current.epoch, (owned) => owned.status === 'cancelling'
+      ? { ...owned, status: 'error', error: errorMessage(error) }
+      : owned);
   }
 }
 
@@ -125,5 +139,5 @@ export const useQecQueryStore = create<QecQueryState>(() => ({
   tiles: EMPTY_TILES,
   run: runQuery,
   cancel: cancelQuery,
-  reset: () => useQecQueryStore.setState({ epochCounter: 0, tiles: EMPTY_TILES }),
+  reset: () => useQecQueryStore.setState((state) => ({ epochCounter: state.epochCounter + 1, tiles: EMPTY_TILES })),
 }));

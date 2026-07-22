@@ -183,6 +183,94 @@ describe('QecDataClient', () => {
     await expect(failed.client.probe('capture.csv')).rejects.toMatchObject({ code: 'invalid_request' });
   });
 
+  it('rejects duplicate pending request IDs before replacing the original owner', async () => {
+    const socket = new FakeSocket();
+    const client = new QecDataClient(
+      { url: 'ws://127.0.0.1:9743', token: 'secret-token' },
+      { socketFactory: () => socket, requestIdFactory: () => 'duplicate' },
+    );
+    await authenticate(client, socket);
+    const first = client.probe('first.csv');
+
+    await expect(client.probe('second.csv')).rejects.toMatchObject({ code: 'duplicate_request' });
+    socket.message({
+      type: 'import_probe_result', requestId: 'duplicate', sourcePolicy: 'copy',
+      sourceByteSize: 1, results: [],
+    });
+    await expect(first).resolves.toMatchObject({ requestId: 'duplicate' });
+  });
+
+  it('rejects cross-operation and out-of-order multi-frame responses', async () => {
+    const querySetup = setup();
+    await authenticate(querySetup.client, querySetup.socket);
+    const query = querySetup.client.query({
+      requestId: 'query-order', sessionId: 'session-1', datasetId: 'dataset-1', tile: 'heatmap',
+      selection: { primary: null, scope: [], timeWindow: null, source: 'user' },
+      resolution: { width: 10, height: 10 }, filters: {},
+    }, vi.fn());
+    querySetup.socket.message({ type: 'progress', requestId: 'query-order', fraction: 0.1, message: 'early' });
+    await expect(query).rejects.toMatchObject({ code: 'invalid_response' });
+
+    const importSetup = setup();
+    await authenticate(importSetup.client, importSetup.socket);
+    const importing = importSetup.client.startImport({
+      source: 'capture.csv', adapterId: 'tabular', mapping: { fields: {}, options: {} },
+      sessionId: 'session-1', sessionKind: 'hardware_import',
+    });
+    importSetup.socket.message({
+      type: 'job_complete', requestId: 'request-1', jobId: 'request-1',
+      recordsWritten: 1, partitionsWritten: 1, sourcePolicy: 'copy',
+    });
+    await expect(importing).rejects.toMatchObject({ code: 'invalid_response' });
+  });
+
+  it('rejects frames outside each operation state after job startup', async () => {
+    const importing = setup();
+    await authenticate(importing.client, importing.socket);
+    const importPromise = importing.client.startImport({
+      source: 'capture.csv', adapterId: 'tabular', mapping: { fields: {}, options: {} },
+      sessionId: 'session-1', sessionKind: 'hardware_import',
+    });
+    importing.socket.message({ type: 'job_started', requestId: 'request-1', jobId: 'request-1', jobKind: 'import', sourcePolicy: 'copy' });
+    importing.socket.message({ type: 'progress', requestId: 'request-1', fraction: 0.5, message: 'wrong stream' });
+    await expect(importPromise).rejects.toMatchObject({ code: 'invalid_response' });
+
+    const querying = setup();
+    await authenticate(querying.client, querying.socket);
+    const queryPromise = querying.client.query({
+      requestId: 'query-state', sessionId: 'session-1', datasetId: 'dataset-1', tile: 'heatmap',
+      selection: { primary: null, scope: [], timeWindow: null, source: 'user' },
+      resolution: { width: 10, height: 10 }, filters: {},
+    }, vi.fn());
+    querying.socket.message({ type: 'job_started', requestId: 'query-state', jobId: 'query-state', jobKind: 'query' });
+    querying.socket.message({ type: 'job_complete', requestId: 'query-state', jobId: 'query-state', recordsWritten: 1, partitionsWritten: 1, sourcePolicy: 'copy' });
+    await expect(queryPromise).rejects.toMatchObject({ code: 'invalid_response' });
+  });
+
+  it('enforces backend session ID rules before transmitting an import', async () => {
+    const { client, socket } = setup();
+    await authenticate(client, socket);
+    const sentBefore = socket.sent.length;
+    expect(() => client.startImport({
+      source: 'capture.csv', adapterId: 'tabular', mapping: { fields: {}, options: {} },
+      sessionId: '../bad', sessionKind: 'hardware_import',
+    })).toThrow();
+    expect(socket.sent).toHaveLength(sentBefore);
+  });
+
+  it('rejects outbound frames larger than one MiB before socket transmission', async () => {
+    const { client, socket } = setup();
+    await authenticate(client, socket);
+    const sentBefore = socket.sent.length;
+
+    await expect(client.startImport({
+      source: 'capture.csv', adapterId: 'tabular',
+      mapping: { fields: {}, options: { oversized: 'x'.repeat(QEC_DATA_MAX_FRAME_BYTES) } },
+      sessionId: 'session-1', sessionKind: 'hardware_import',
+    })).rejects.toMatchObject({ code: 'frame_too_large' });
+    expect(socket.sent).toHaveLength(sentBefore);
+  });
+
   it('rejects socket loss while connecting and invalid preview bounds', async () => {
     const { client, socket } = setup();
     const connecting = client.connect();

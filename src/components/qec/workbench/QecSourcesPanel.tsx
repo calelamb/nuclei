@@ -74,8 +74,9 @@ function SourceFileRow({ source }: { source: QecStudySource }): ReactElement {
   const current = selected?.kind === 'source' && selected.id === source.id;
   const openImport = useQecJobStore((state) => state.openImport);
   const setTrayCollapsed = useQecWorkbenchStore((state) => state.setTrayCollapsed);
+  const importButtonId = `qec-import-${source.id.replaceAll(/[^a-zA-Z0-9_-]/g, '-')}`;
   const launchImport = (): void => {
-    openImport(source.path);
+    openImport(source.path, importButtonId);
     setTrayCollapsed(false);
   };
   return (
@@ -85,7 +86,7 @@ function SourceFileRow({ source }: { source: QecStudySource }): ReactElement {
         <span><strong>{source.id}</strong><small className="qec-mono">{source.path}</small></span>
         <span className="qec-source-row__kind">{source.kind}</span>
       </button>
-      <button type="button" className="qec-source-row__import" aria-label={`Import ${source.id}`} title="Import into canonical QEC data" onClick={launchImport}>
+      <button id={importButtonId} type="button" className="qec-source-row__import" aria-label={`Import ${source.id}`} title="Import into canonical QEC data" onClick={launchImport}>
         <FolderInput aria-hidden="true" size={16} />
       </button>
     </div>

@@ -39,6 +39,17 @@ function goNext(): void {
   fireEvent.click(screen.getByRole('button', { name: 'Next stage' }));
 }
 
+async function reachMapping(): Promise<void> {
+  await screen.findByText('2.00 KiB');
+  goNext();
+  fireEvent.click(screen.getByRole('radio', { name: /Tabular/ }));
+  goNext();
+  fireEvent.click(screen.getByRole('button', { name: 'Add field mapping' }));
+  fireEvent.change(screen.getByLabelText('Canonical field 1'), { target: { value: 'sequence' } });
+  fireEvent.change(screen.getByLabelText('Source field 1'), { target: { value: 'shot_id' } });
+  fireEvent.click(screen.getByLabelText('Mapping reviewed'));
+}
+
 describe('<QecImportWizard />', () => {
   it('keeps Import disabled with an adjacent reason until explicit mapping validates', async () => {
     const fake = client();
@@ -121,5 +132,100 @@ describe('<QecImportWizard />', () => {
     expect(screen.getByText(/18 source rows remain preserved/)).toBeTruthy();
     expect(screen.getByRole<HTMLButtonElement>('button', { name: 'Import data' }).disabled).toBe(true);
     await waitFor(() => expect(document.activeElement?.textContent).toMatch(/Detector width/));
+  });
+
+  it('ignores stale validation completion after the mapping is invalidated', async () => {
+    const fake = client();
+    let finish: ((value: Awaited<ReturnType<QecImportClient['validate']>>) => void) | undefined;
+    vi.mocked(fake.validate).mockImplementation(() => new Promise((resolve) => { finish = resolve; }));
+    render(<QecImportWizard source="captures/capture.parquet" client={fake} />);
+    await reachMapping();
+    goNext();
+    goNext();
+    fireEvent.click(screen.getByRole('button', { name: 'Validate mapping' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Previous stage' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Previous stage' }));
+    fireEvent.change(screen.getByLabelText('Source field 1'), { target: { value: 'new_shot_id' } });
+    finish?.({
+      type: 'import_validation_result', requestId: 'late', valid: true, issues: [],
+      sourceSha256: 'a'.repeat(64), provenanceId: 'late', sourceByteSize: 2048, sourcePolicy: 'copy',
+    });
+    await waitFor(() => expect(fake.validate).toHaveBeenCalledOnce());
+    goNext();
+    expect(screen.getByText(/Preview requires successful validation/)).toBeTruthy();
+  });
+
+  it('ignores a stale preview after a different mapping is validated', async () => {
+    const fake = client();
+    let finishPreview: ((value: Awaited<ReturnType<QecImportClient['preview']>>) => void) | undefined;
+    vi.mocked(fake.preview).mockImplementation(() => new Promise((resolve) => { finishPreview = resolve; }));
+    render(<QecImportWizard source="captures/capture.parquet" client={fake} />);
+    await reachMapping();
+    goNext();
+    goNext();
+    fireEvent.click(screen.getByRole('button', { name: 'Validate mapping' }));
+    await screen.findByText('Validation passed');
+    fireEvent.click(screen.getByRole('button', { name: 'Previous stage' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Load bounded preview' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Previous stage' }));
+    fireEvent.change(screen.getByLabelText('Source field 1'), { target: { value: 'new_shot_id' } });
+    goNext();
+    goNext();
+    fireEvent.click(screen.getByRole('button', { name: 'Validate mapping' }));
+    await screen.findByText('Validation passed');
+    fireEvent.click(screen.getByRole('button', { name: 'Previous stage' }));
+    finishPreview?.({
+      type: 'import_preview_result', requestId: 'stale', truncated: true, totalRecords: 99,
+      sourceSha256: 'a'.repeat(64), provenanceId: 'old',
+      batches: [{ recordKind: 'syndromes', recordCount: 99, sequenceStart: 0, sequenceEnd: 99, segmentId: 'old' }],
+    });
+    await waitFor(() => expect(fake.preview).toHaveBeenCalledOnce());
+    expect(screen.getByRole('button', { name: 'Load bounded preview' })).toBeTruthy();
+    expect(screen.queryByText('99')).toBeNull();
+  });
+
+  it('resets the complete workflow when the source changes', async () => {
+    const fake = client();
+    const view = render(<QecImportWizard source="captures/first.parquet" client={fake} />);
+    await reachMapping();
+    goNext();
+    goNext();
+    fireEvent.click(screen.getByRole('button', { name: 'Validate mapping' }));
+    await screen.findByText('Validation passed');
+    view.rerender(<QecImportWizard source="captures/second.parquet" client={fake} />);
+    expect(await screen.findByRole('heading', { name: 'Source' })).toBeTruthy();
+    expect(screen.getByRole<HTMLButtonElement>('button', { name: 'Import data' }).disabled).toBe(true);
+  });
+
+  it('focuses stage headings and the first quarantine correction action', async () => {
+    const fake = client();
+    vi.mocked(fake.validate).mockResolvedValue({
+      type: 'import_validation_result', requestId: 'invalid', valid: false,
+      sourceSha256: 'a'.repeat(64), provenanceId: 'q', sourceByteSize: 2048, sourcePolicy: 'copy',
+      issues: [{ code: 'width', message: 'Detector width required.', severity: 'error', field: 'detector_count' }],
+    });
+    render(<QecImportWizard source="captures/capture.parquet" client={fake} />);
+    await reachMapping();
+    fireEvent.click(screen.getByRole('button', { name: 'Previous stage' }));
+    await waitFor(() => expect(document.activeElement).toBe(screen.getByRole('heading', { name: 'Adapter' })));
+    goNext();
+    goNext();
+    goNext();
+    fireEvent.click(screen.getByRole('button', { name: 'Validate mapping' }));
+    const correction = await screen.findByRole('button', { name: /Review detector_count mapping/ });
+    await waitFor(() => expect(document.activeElement).toBe(correction));
+  });
+
+  it('preserves probe adapter reasons for scientific review', async () => {
+    const fake = client();
+    vi.mocked(fake.probe).mockResolvedValue({
+      type: 'import_probe_result', requestId: 'probe-1', sourcePolicy: 'copy', sourceByteSize: 2048,
+      results: [{ adapterId: 'tabular', adapterVersion: '1', supported: true, sourceKind: 'parquet', confidence: 0.8, sourceSha256: 'a'.repeat(64), details: { delimiter: 'comma', reason: 'Sinter columns detected' } }],
+    });
+    render(<QecImportWizard source="captures/capture.parquet" client={fake} />);
+    await screen.findByText('2.00 KiB');
+    goNext();
+    expect(screen.getByText(/delimiter: comma/)).toBeTruthy();
+    expect(screen.getByText(/Sinter columns detected/)).toBeTruthy();
   });
 });
