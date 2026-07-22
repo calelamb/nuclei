@@ -53,6 +53,30 @@ describe('QEC workbench persistence', () => {
     expect(loaded.selection.source).toBe('panel');
   });
 
+  it('filters persisted mixed-session scope with the live selection invariant', () => {
+    const loaded = loadQecWorkbenchState({
+      ...VALID_STATE,
+      selection: {
+        ...VALID_STATE.selection,
+        scope: [
+          { kind: 'tick', id: '12', sessionId: 'session-a' },
+          { kind: 'tick', id: '13', sessionId: 'session-b' },
+          { kind: 'finding', id: 'f1', sessionId: 'session-b' },
+        ],
+      },
+    });
+    expect(loaded.selection.scope).toEqual([
+      { kind: 'tick', id: '12', sessionId: 'session-a' },
+      { kind: 'finding', id: 'f1', sessionId: 'session-b' },
+    ]);
+  });
+
+  it('uses the Study preset only when no valid stored schema exists', () => {
+    expect(loadQecWorkbenchState(null, 'observe').preset).toBe('observe');
+    expect(loadQecWorkbenchState({ ...VALID_STATE, preset: 'analyze' }, 'observe').preset)
+      .toBe('analyze');
+  });
+
   it('normalizes panel ids, split ranges, and invalid section values independently', () => {
     const loaded = loadQecWorkbenchState({
       ...VALID_STATE,

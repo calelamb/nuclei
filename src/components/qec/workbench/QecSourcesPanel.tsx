@@ -23,7 +23,7 @@ function SourcesHeading(): ReactElement {
 }
 
 function LoadingStudies(): ReactElement {
-  return <div className="qec-zone-empty" role="status" aria-label="Loading QEC Studies"><LoaderCircle aria-hidden="true" size={24} /><strong>Loading Studies…</strong><span>Validating Study manifests and referenced sources.</span></div>;
+  return <div className="qec-zone-empty" role="status" aria-label="Loading QEC Studies"><LoaderCircle aria-hidden="true" size={24} /><strong>Loading Studies…</strong><span>Parsing and validating Study manifests.</span></div>;
 }
 
 function EmptyStudies(): ReactElement {
@@ -116,9 +116,13 @@ function SourcesContent({ study, preset, errors, hasStudies }: { study: QecStudy
   );
 }
 
-function SourcesFooter({ count, issueCount }: { count: number; issueCount: number }): ReactElement {
+function SourcesFooter({ count, issueCount, active }: { count: number; issueCount: number; active: boolean }): ReactElement {
   const issueLabel = `${issueCount} validation ${issueCount === 1 ? 'issue' : 'issues'}`;
-  return <footer className="qec-sources__footer"><span>{count} referenced files</span><span className={issueCount > 0 ? 'qec-status qec-status--warning' : 'qec-status qec-status--ready'}>{issueCount > 0 ? issueLabel : 'Validated'}</span></footer>;
+  const status = issueCount > 0 ? issueLabel : active ? 'Manifest valid' : 'Not evaluated';
+  const statusClass = issueCount > 0 ? 'qec-status qec-status--warning' : active
+    ? 'qec-status qec-status--ready'
+    : 'qec-status qec-status--neutral';
+  return <footer className="qec-sources__footer"><span>{count} referenced files</span><span className={statusClass}>{status}</span></footer>;
 }
 
 function validationIssueCount(errors: readonly QecStudyValidationError[]): number {
@@ -136,7 +140,7 @@ export function QecSourcesPanel(): ReactElement {
     <nav className="qec-sources" aria-label="QEC sources and data">
       <SourcesHeading />
       {loading ? <LoadingStudies /> : <SourcesContent study={study} preset={preset} errors={errors} hasStudies={studies.length > 0} />}
-      {!loading && <SourcesFooter count={study?.sources.length ?? 0} issueCount={validationIssueCount(errors)} />}
+      {!loading && <SourcesFooter count={study?.sources.length ?? 0} issueCount={validationIssueCount(errors)} active={study !== null} />}
     </nav>
   );
 }

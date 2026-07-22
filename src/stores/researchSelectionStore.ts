@@ -45,7 +45,7 @@ export interface ResearchSelectionState {
   restore(selection: ResearchSelection): void;
 }
 
-function normalizeRef(ref: QecEntityRef): QecEntityRef | null {
+export function normalizeQecEntityRef(ref: QecEntityRef): QecEntityRef | null {
   const parsed = qecEntityRefSchema.safeParse(ref);
   return parsed.success ? parsed.data : null;
 }
@@ -62,19 +62,27 @@ function isSource(source: ResearchSelection['source']): boolean {
   return selectionSourceSchema.safeParse(source).success;
 }
 
-function sameRef(left: QecEntityRef, right: QecEntityRef): boolean {
-  return left.kind === right.kind &&
-    left.id === right.id &&
-    left.sessionId === right.sessionId &&
-    left.datasetId === right.datasetId;
+export function qecEntityRefKey(ref: QecEntityRef): string {
+  return JSON.stringify([ref.kind, ref.id, ref.sessionId ?? null, ref.datasetId ?? null]);
 }
 
-function mayRefine(primary: QecEntityRef | null, ref: QecEntityRef): boolean {
-  return !primary?.sessionId ||
-    !ref.sessionId ||
-    primary.sessionId === ref.sessionId ||
-    ref.kind === 'cohort' ||
-    ref.kind === 'finding';
+function selectionSession(selection: Pick<ResearchSelection, 'primary' | 'scope'>): string | undefined {
+  if (selection.primary?.sessionId) return selection.primary.sessionId;
+  return selection.scope.find((ref) =>
+    ref.kind !== 'cohort' && ref.kind !== 'finding' && ref.sessionId,
+  )?.sessionId;
+}
+
+export function mayRefineResearchSelection(
+  selection: Pick<ResearchSelection, 'primary' | 'scope'>,
+  ref: QecEntityRef,
+): boolean {
+  if (selection.primary && qecEntityRefKey(selection.primary) === qecEntityRefKey(ref)) {
+    return false;
+  }
+  const sessionId = selectionSession(selection);
+  return !sessionId || !ref.sessionId || sessionId === ref.sessionId ||
+    ref.kind === 'cohort' || ref.kind === 'finding';
 }
 
 function nextHistory(past: readonly ResearchSelection[], present: ResearchSelection): ResearchSelection[] {
@@ -89,18 +97,27 @@ function commit(
   set({ past: nextHistory(state.past, state.present), present, future: [] });
 }
 
-function normalizeSelection(selection: ResearchSelection): ResearchSelection {
-  const primary = selection.primary ? normalizeRef(selection.primary) : null;
-  const scope = selection.scope.flatMap((entry) => {
-    const normalized = normalizeRef(entry);
-    return normalized ? [normalized] : [];
-  });
+export function normalizeResearchSelection(
+  selection: ResearchSelection,
+  source: ResearchSelection['source'] = selection.source,
+): ResearchSelection {
+  const primary = selection.primary ? normalizeQecEntityRef(selection.primary) : null;
+  const scope = selection.scope.reduce<QecEntityRef[]>((normalizedScope, entry) => {
+    const normalized = normalizeQecEntityRef(entry);
+    if (!normalized || !mayRefineResearchSelection({ primary, scope: normalizedScope }, normalized)) {
+      return normalizedScope;
+    }
+    return normalizedScope.some((candidate) =>
+      qecEntityRefKey(candidate) === qecEntityRefKey(normalized))
+      ? normalizedScope
+      : [...normalizedScope, normalized];
+  }, []);
   const timeWindow = normalizeWindow(selection.timeWindow);
   return {
     primary,
     scope,
     timeWindow: timeWindow === undefined ? null : timeWindow,
-    source: 'restore',
+    source: isSource(source) ? source : 'user',
   };
 }
 
@@ -109,17 +126,17 @@ export const useResearchSelectionStore = create<ResearchSelectionState>((set, ge
   present: EMPTY_RESEARCH_SELECTION,
   future: [],
   selectPrimary: (ref, source) => {
-    const normalized = normalizeRef(ref);
+    const normalized = normalizeQecEntityRef(ref);
     if (!normalized || !isSource(source)) return;
     const state = get();
     commit(set, state, { primary: normalized, scope: [], timeWindow: null, source });
   },
   refineScope: (ref, source) => {
-    const normalized = normalizeRef(ref);
+    const normalized = normalizeQecEntityRef(ref);
     if (!normalized || !isSource(source)) return;
     const state = get();
-    if (!mayRefine(state.present.primary, normalized)) return;
-    const scope = state.present.scope.some((entry) => sameRef(entry, normalized))
+    if (!mayRefineResearchSelection(state.present, normalized)) return;
+    const scope = state.present.scope.some((entry) => qecEntityRefKey(entry) === qecEntityRefKey(normalized))
       ? state.present.scope
       : [...state.present.scope, normalized];
     commit(set, state, { ...state.present, scope, source });
@@ -145,7 +162,7 @@ export const useResearchSelectionStore = create<ResearchSelectionState>((set, ge
   clear: () => set({ past: [], present: EMPTY_RESEARCH_SELECTION, future: [] }),
   restore: (selection) => set({
     past: [],
-    present: normalizeSelection(selection),
+    present: normalizeResearchSelection(selection, 'restore'),
     future: [],
   }),
 }));

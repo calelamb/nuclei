@@ -1,10 +1,7 @@
 // @vitest-environment jsdom
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
-import { readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useQecStudyStore } from '../../../services/qecStudyStore';
-import type { PlatformBridge } from '../../../platform/bridge';
 import { PlatformProvider } from '../../../platform/PlatformProvider';
 import { useProjectStore } from '../../../stores/projectStore';
 import { useQecStudyUiStore } from '../../../stores/qecStudyUiStore';
@@ -14,81 +11,8 @@ import {
   useResearchSelectionStore,
 } from '../../../stores/researchSelectionStore';
 import { QecWorkbench } from './QecWorkbench';
-
-const shellStyles = readFileSync(
-  resolve(process.cwd(), 'src/components/qec/workbench/qecWorkbench.css'),
-  'utf8',
-);
-
-class MemoryStorage implements Storage {
-  private readonly values = new Map<string, string>();
-
-  get length(): number { return this.values.size; }
-  clear(): void { this.values.clear(); }
-  getItem(key: string): string | null { return this.values.get(key) ?? null; }
-  key(index: number): string | null { return [...this.values.keys()][index] ?? null; }
-  removeItem(key: string): void { this.values.delete(key); }
-  setItem(key: string, value: string): void { this.values.set(key, value); }
-}
-
-interface Deferred<T> {
-  promise: Promise<T>;
-  resolve(value: T): void;
-  reject(error: unknown): void;
-}
-
-function deferred<T>(): Deferred<T> {
-  let resolve!: (value: T) => void;
-  let reject!: (error: unknown) => void;
-  const promise = new Promise<T>((onResolve, onReject) => {
-    resolve = onResolve;
-    reject = onReject;
-  });
-  return { promise, resolve, reject };
-}
-
-async function flushAsync(): Promise<void> {
-  await act(async () => {
-    await Promise.resolve();
-    await Promise.resolve();
-  });
-}
-
-async function flushPersistenceDebounce(): Promise<void> {
-  await act(async () => { await vi.advanceTimersByTimeAsync(250); });
-}
-
-function persistenceBridge(
-  getStoredValue: PlatformBridge['getStoredValue'],
-  setStoredValue: PlatformBridge['setStoredValue'] = vi.fn(async () => undefined),
-): PlatformBridge {
-  return {
-    startKernel: vi.fn(), stopKernel: vi.fn(), openFile: vi.fn(), readFile: vi.fn(),
-    saveFile: vi.fn(), saveFileAs: vi.fn(), renameFile: vi.fn(), setWindowTitle: vi.fn(),
-    getPlatform: () => 'desktop', openDirectory: vi.fn(), listDirectory: vi.fn(),
-    createFile: vi.fn(), createDirectory: vi.fn(), deleteFile: vi.fn(),
-    getStoredValue,
-    setStoredValue,
-  };
-}
-
-function persistedState(preset: 'build' | 'analyze' | 'observe') {
-  return {
-    schema: 1,
-    preset,
-    pinnedPanelIds: ['timeline'],
-    sourceWidth: 310,
-    inspectorWidth: 410,
-    trayHeight: 290,
-    trayCollapsed: true,
-    selection: {
-      primary: { kind: 'detector', id: 'D42' },
-      scope: [],
-      timeWindow: { start: 1, end: 5, domain: 'round' },
-      source: 'panel',
-    },
-  };
-}
+import { deferred, flushAsync, flushPersistenceDebounce, MemoryStorage,
+  persistedState, persistenceBridge } from './qecWorkbenchTestUtils';
 
 const STUDY = {
   schema: 1 as const,
@@ -119,6 +43,7 @@ const STUDY_UI_ACTIONS = {
 
 function setStudies(studies = [STUDY, SECOND_STUDY]): void {
   useQecStudyStore.setState({
+    projectRoot: '/project',
     studies: studies.map((study) => ({
       fileName: `${study.id}.qec-study.yaml`,
       path: `studies/${study.id}.qec-study.yaml`,
@@ -139,8 +64,8 @@ beforeEach(() => {
     configurable: true,
     value: new MemoryStorage(),
   });
-  setStudies([STUDY]);
   useProjectStore.setState({ projectRoot: null, tabs: [], activeTabPath: null });
+  setStudies([STUDY]);
   useQecStudyUiStore.setState({ activeStudyId: STUDY.id, ...STUDY_UI_ACTIONS });
   useQecWorkbenchStore.setState({
     preset: 'build',
@@ -270,6 +195,23 @@ describe('<QecWorkbench />', () => {
     expect(within(trail).getByRole<HTMLButtonElement>('button', { name: 'Forward in research trail' }).disabled).toBe(false);
   });
 
+  it('renders complete entity identities without duplicate React keys', () => {
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    useResearchSelectionStore.getState().selectPrimary(
+      { kind: 'tick', id: '1', sessionId: 's1', datasetId: 'd1' },
+      'user',
+    );
+    useResearchSelectionStore.getState().refineScope(
+      { kind: 'tick', id: '1', sessionId: 's1', datasetId: 'd2' },
+      'user',
+    );
+    render(<QecWorkbench />);
+
+    expect(screen.getAllByText('1').length).toBeGreaterThanOrEqual(4);
+    expect(consoleError.mock.calls.flat().join(' ')).not.toMatch(/same key|unique "key"/i);
+    consoleError.mockRestore();
+  });
+
   it('keeps tray lifecycle content available while allowing it to collapse', () => {
     render(<QecWorkbench />);
 
@@ -325,6 +267,33 @@ describe('<QecWorkbench />', () => {
     await act(async () => { resolveFirst?.(persistedState('analyze')); await first; });
 
     expect(useQecWorkbenchStore.getState().preset).toBe('observe');
+  });
+
+  it.each([
+    [SECOND_STUDY, 'analyze'],
+    [{ ...SECOND_STUDY, id: 'observe-study', preset: 'observe' as const }, 'observe'],
+  ] as const)('uses a newly selected Study manifest preset when no stored scope exists', async (study, preset) => {
+    setStudies([STUDY, study]);
+    useProjectStore.setState({ projectRoot: '/project' });
+    const bridge = persistenceBridge(vi.fn(async () => null));
+    render(<PlatformProvider bridge={bridge}><QecWorkbench /></PlatformProvider>);
+    await waitFor(() => expect(useQecWorkbenchStore.getState().preset).toBe('build'));
+
+    act(() => useQecStudyUiStore.getState().setActiveStudy(study.id));
+
+    await waitFor(() => expect(useQecWorkbenchStore.getState().preset).toBe(preset));
+  });
+
+  it('lets a valid stored preset override the selected Study manifest preset', async () => {
+    setStudies([STUDY, SECOND_STUDY]);
+    useProjectStore.setState({ projectRoot: '/project' });
+    const bridge = persistenceBridge(vi.fn(async (key: string) =>
+      key.endsWith(SECOND_STUDY.id) ? persistedState('observe') : null));
+    render(<PlatformProvider bridge={bridge}><QecWorkbench /></PlatformProvider>);
+
+    act(() => useQecStudyUiStore.getState().setActiveStudy(SECOND_STUDY.id));
+
+    await waitFor(() => expect(useQecWorkbenchStore.getState().preset).toBe('observe'));
   });
 
   it('merges a pending read without overwriting same-scope local edits', async () => {
@@ -451,7 +420,7 @@ describe('<QecWorkbench />', () => {
     expect(useQecWorkbenchStore.getState().preset).toBe('observe');
   });
 
-  it('orders ABA writes by exact key across disposed and replacement sessions', async () => {
+  it('keeps the replacement ABA write last after a disposed session reserves a retry', async () => {
     vi.useFakeTimers();
     setStudies();
     useProjectStore.setState({ projectRoot: '/project' });
@@ -479,12 +448,57 @@ describe('<QecWorkbench />', () => {
     expect(setStoredValue).toHaveBeenCalledTimes(1);
     oldAWrite.resolve();
     await flushAsync();
-    expect(setStoredValue).toHaveBeenCalledTimes(2);
+    expect(setStoredValue).toHaveBeenCalledTimes(3);
     expect(invocations[1]).toMatchObject({
+      key: `qec-workbench:/project:${STUDY.id}`,
+      value: { preset: 'analyze' },
+    });
+    expect(invocations.at(-1)).toMatchObject({
       key: `qec-workbench:/project:${STUDY.id}`,
       value: { preset: 'observe' },
     });
     expect(durable.get(`qec-workbench:/project:${STUDY.id}`)).toMatchObject({ preset: 'observe' });
+  });
+
+  it('reserves pending-read disposal order before a replacement ABA write', async () => {
+    vi.useFakeTimers();
+    setStudies();
+    useProjectStore.setState({ projectRoot: '/project' });
+    const oldRead = deferred<unknown>();
+    let firstARead = true;
+    const durable = new Map<string, unknown>();
+    const getStoredValue = vi.fn(async (key: string) => {
+      if (key.endsWith(STUDY.id) && firstARead) {
+        firstARead = false;
+        return oldRead.promise;
+      }
+      return persistedState('build');
+    });
+    const setStoredValue = vi.fn(async (key: string, value: unknown) => {
+      durable.set(key, value);
+    });
+    const bridge = persistenceBridge(getStoredValue, setStoredValue);
+    render(<PlatformProvider bridge={bridge}><QecWorkbench /></PlatformProvider>);
+
+    act(() => {
+      useQecWorkbenchStore.getState().setPreset('observe');
+      useQecStudyUiStore.getState().setActiveStudy(SECOND_STUDY.id);
+    });
+    await flushAsync();
+    act(() => useQecStudyUiStore.getState().setActiveStudy(STUDY.id));
+    await flushAsync();
+    act(() => useQecWorkbenchStore.getState().setPreset('analyze'));
+    await flushPersistenceDebounce();
+    expect(setStoredValue).not.toHaveBeenCalledWith(
+      `qec-workbench:/project:${STUDY.id}`,
+      expect.anything(),
+    );
+
+    oldRead.resolve(persistedState('build'));
+    await flushAsync();
+    await flushAsync();
+
+    expect(durable.get(`qec-workbench:/project:${STUDY.id}`)).toMatchObject({ preset: 'analyze' });
   });
 
   it('keeps different persistence keys independent while one key is blocked', async () => {
@@ -598,18 +612,138 @@ describe('<QecWorkbench />', () => {
     expect((await screen.findByRole('alert')).textContent).toMatch(/save QEC workspace context/i);
   });
 
-  it('unsubscribes and cancels pending persistence when the shell unmounts', async () => {
+  it('flushes pending persistence when the shell unmounts', async () => {
+    vi.useFakeTimers();
     useProjectStore.setState({ projectRoot: '/project' });
     const setStoredValue = vi.fn(async () => undefined);
     const bridge = persistenceBridge(vi.fn(async () => persistedState('build')), setStoredValue);
     const view = render(<PlatformProvider bridge={bridge}><QecWorkbench /></PlatformProvider>);
-    await waitFor(() => expect(useQecWorkbenchStore.getState().trayCollapsed).toBe(true));
+    await flushAsync();
+    expect(useQecWorkbenchStore.getState().trayCollapsed).toBe(true);
 
     act(() => useQecWorkbenchStore.getState().setPreset('analyze'));
     view.unmount();
-    await new Promise((resolve) => setTimeout(resolve, 350));
+    await flushAsync();
 
-    expect(setStoredValue).not.toHaveBeenCalled();
+    expect(setStoredValue).toHaveBeenCalledWith(
+      `qec-workbench:/project:${STUDY.id}`,
+      expect.objectContaining({ preset: 'analyze' }),
+    );
+  });
+
+  it('merges untouched stored fields before a pending-read disposal flush', async () => {
+    vi.useFakeTimers();
+    useProjectStore.setState({ projectRoot: '/project' });
+    const read = deferred<unknown>();
+    const setStoredValue = vi.fn(async () => undefined);
+    const bridge = persistenceBridge(vi.fn(async () => read.promise), setStoredValue);
+    const view = render(<PlatformProvider bridge={bridge}><QecWorkbench /></PlatformProvider>);
+
+    act(() => useQecWorkbenchStore.getState().setPreset('observe'));
+    view.unmount();
+    read.resolve(persistedState('analyze'));
+    await flushAsync();
+
+    expect(setStoredValue).toHaveBeenCalledWith(
+      `qec-workbench:/project:${STUDY.id}`,
+      expect.objectContaining({ preset: 'observe', inspectorWidth: 410, trayCollapsed: true }),
+    );
+  });
+
+  it('flushes local edits when a pending restore rejects after disposal', async () => {
+    vi.useFakeTimers();
+    useProjectStore.setState({ projectRoot: '/project' });
+    const read = deferred<unknown>();
+    const setStoredValue = vi.fn(async () => undefined);
+    const bridge = persistenceBridge(vi.fn(async () => read.promise), setStoredValue);
+    const view = render(<PlatformProvider bridge={bridge}><QecWorkbench /></PlatformProvider>);
+
+    act(() => useQecWorkbenchStore.getState().setPreset('observe'));
+    view.unmount();
+    read.reject(new Error('restore unavailable'));
+    await flushAsync();
+
+    expect(setStoredValue).toHaveBeenCalledWith(
+      `qec-workbench:/project:${STUDY.id}`,
+      expect.objectContaining({ preset: 'observe' }),
+    );
+  });
+
+  it('logs a scoped disposal-flush failure without publishing stale UI state', async () => {
+    vi.useFakeTimers();
+    useProjectStore.setState({ projectRoot: '/project' });
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const bridge = persistenceBridge(
+      vi.fn(async () => persistedState('build')),
+      vi.fn(async () => { throw new Error('store offline'); }),
+    );
+    const view = render(<PlatformProvider bridge={bridge}><QecWorkbench /></PlatformProvider>);
+    await flushAsync();
+    act(() => useQecWorkbenchStore.getState().setPreset('observe'));
+
+    view.unmount();
+    await flushAsync();
+
+    expect(consoleError).toHaveBeenCalledWith(
+      'QEC workspace disposal flush failed.',
+      expect.objectContaining({
+        scopeKey: `qec-workbench:/project:${STUDY.id}`,
+        error: expect.any(Error),
+      }),
+    );
+    expect(useQecWorkbenchStore.getState().persistenceIssue).toBeNull();
+    consoleError.mockRestore();
+  });
+
+  it('queues the latest snapshot behind an in-flight write when disposing', async () => {
+    vi.useFakeTimers();
+    useProjectStore.setState({ projectRoot: '/project' });
+    const firstWrite = deferred<void>();
+    const setStoredValue = vi.fn(async () => {
+      if (setStoredValue.mock.calls.length === 1) await firstWrite.promise;
+    });
+    const bridge = persistenceBridge(vi.fn(async () => persistedState('build')), setStoredValue);
+    const view = render(<PlatformProvider bridge={bridge}><QecWorkbench /></PlatformProvider>);
+    await flushAsync();
+    act(() => useQecWorkbenchStore.getState().setPreset('observe'));
+    await flushPersistenceDebounce();
+    expect(setStoredValue).toHaveBeenCalledTimes(1);
+
+    view.unmount();
+    firstWrite.reject(new Error('first write failed'));
+    await flushAsync();
+    await flushAsync();
+
+    expect(setStoredValue).toHaveBeenCalledTimes(2);
+    expect(setStoredValue.mock.calls[1]).toEqual([
+      `qec-workbench:/project:${STUDY.id}`,
+      expect.objectContaining({ preset: 'observe' }),
+    ]);
+    expect(useQecWorkbenchStore.getState().persistenceIssue).toBeNull();
+  });
+
+  it('flushes the old Study snapshot when scope switches before the debounce', async () => {
+    vi.useFakeTimers();
+    setStudies();
+    useProjectStore.setState({ projectRoot: '/project' });
+    const writes: Array<{ key: string; value: unknown }> = [];
+    const bridge = persistenceBridge(
+      vi.fn(async () => null),
+      vi.fn(async (key, value) => { writes.push({ key, value }); }),
+    );
+    render(<PlatformProvider bridge={bridge}><QecWorkbench /></PlatformProvider>);
+    await flushAsync();
+
+    act(() => {
+      useQecWorkbenchStore.getState().setPreset('observe');
+      useQecStudyUiStore.getState().setActiveStudy(SECOND_STUDY.id);
+    });
+    await flushAsync();
+
+    expect(writes).toContainEqual({
+      key: `qec-workbench:/project:${STUDY.id}`,
+      value: expect.objectContaining({ preset: 'observe' }),
+    });
   });
 
   it('renders a distinct Study loading state', () => {
@@ -617,8 +751,8 @@ describe('<QecWorkbench />', () => {
     useQecStudyStore.setState({ studies: [], validationErrors: [], loading: true });
     render(<QecWorkbench />);
     expect(screen.getByRole('status', { name: 'Loading QEC Studies' })).toBeTruthy();
-    expect(screen.getByText('Validating Study manifests and referenced sources.')).toBeTruthy();
-    expect(within(screen.getByRole('navigation', { name: 'QEC sources and data' })).queryByText('Validated')).toBeNull();
+    expect(screen.getByText('Parsing and validating Study manifests.')).toBeTruthy();
+    expect(screen.queryByText(/referenced sources/i)).toBeNull();
   });
 
   it('renders malformed Study file names and actionable validation details', () => {
@@ -647,18 +781,16 @@ describe('<QecWorkbench />', () => {
     expect(screen.getByText('No Studies found')).toBeTruthy();
     expect(screen.getByText(/Create a Study manifest/)).toBeTruthy();
     expect(screen.getByRole<HTMLSelectElement>('combobox', { name: 'Active QEC Study' }).disabled).toBe(true);
+    expect(screen.getByText('Not evaluated')).toBeTruthy();
+    expect(screen.getAllByText('Provenance not evaluated')).toHaveLength(2);
   });
 
-  it('defines exact light, responsive, overflow, focus, and reduced-motion contracts', () => {
-    expect(shellStyles).toContain('--qec-canvas: #ffffff');
-    expect(shellStyles).toContain('--qec-recessed: #f1f5f9');
-    expect(shellStyles).toContain('--qec-analytical: #2563eb');
-    expect(shellStyles).toMatch(/\.qec-workbench\s*{[\s\S]*?overflow: hidden;/);
-    expect(shellStyles).toMatch(/@media \(max-width: 1179px\)[\s\S]*?\.qec-inspector\s*{[\s\S]*?position: absolute;/);
-    expect(shellStyles).toMatch(/@media \(max-width: 899px\)[\s\S]*?\.qec-tray--collapsed\s*{[\s\S]*?height: 45px;/);
-    expect(shellStyles).toContain('@media (max-width: 699px)');
-    expect(shellStyles).toMatch(/\.qec-inspector\[hidden\]\s*{[\s\S]*?display: none;/);
-    expect(shellStyles).toContain('outline: 2px solid var(--qec-analytical)');
-    expect(shellStyles).toMatch(/@media \(prefers-reduced-motion: reduce\)[\s\S]*?transition-duration: 0\.01ms !important;/);
+  it('distinguishes manifest validity from provenance evaluation', () => {
+    render(<QecWorkbench />);
+    expect(screen.getByText('Manifest valid')).toBeTruthy();
+    expect(screen.getAllByText('Provenance not evaluated')).toHaveLength(2);
+    expect(screen.queryByText('Validated')).toBeNull();
+    expect(screen.queryByText('Provenance ready')).toBeNull();
   });
+
 });

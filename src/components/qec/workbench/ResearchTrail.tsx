@@ -1,12 +1,12 @@
 import { ChevronLeft, ChevronRight, X } from 'lucide-react';
 import type { ReactElement } from 'react';
-import { useResearchSelectionStore } from '../../../stores/researchSelectionStore';
+import { qecEntityRefKey, useResearchSelectionStore } from '../../../stores/researchSelectionStore';
 import type { QecEntityRef, ResearchSelection } from '../../../types/qecSelection';
 
 interface TrailEntry { key: string; label: string; kind: string; }
 
 function toTrailEntry(ref: QecEntityRef): TrailEntry {
-  return { key: `${ref.kind}:${ref.id}`, label: ref.id, kind: ref.kind.replaceAll('-', ' ') };
+  return { key: qecEntityRefKey(ref), label: ref.id, kind: ref.kind.replaceAll('-', ' ') };
 }
 
 function buildTrailEntries(selection: ResearchSelection): readonly TrailEntry[] {

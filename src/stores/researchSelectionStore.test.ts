@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import type { QecEntityRef } from '../types/qecSelection';
 import {
   EMPTY_RESEARCH_SELECTION,
+  qecEntityRefKey,
   useResearchSelectionStore,
 } from './researchSelectionStore';
 
@@ -57,6 +58,16 @@ describe('researchSelectionStore', () => {
       source: 'alert',
       scope: [tick, { ...tick, datasetId: 'results-a' }],
     });
+  });
+
+  it('does not add the primary entity to live scope refinement', () => {
+    const store = useResearchSelectionStore.getState();
+    store.selectPrimary(detector, 'panel');
+    const before = useResearchSelectionStore.getState().present;
+
+    store.refineScope({ ...detector }, 'panel');
+
+    expect(useResearchSelectionStore.getState().present).toBe(before);
   });
 
   it('rejects a conflicting session scope except cohorts and findings', () => {
@@ -175,5 +186,42 @@ describe('researchSelectionStore', () => {
       },
     });
     expect(useResearchSelectionStore.getState().present).not.toBe(selection);
+  });
+
+  it('filters mixed-session restored scopes and deduplicates complete identities', () => {
+    useResearchSelectionStore.getState().restore({
+      primary: { kind: 'detector', id: 'D1', sessionId: 's1', datasetId: 'd1' },
+      scope: [
+        { kind: 'tick', id: '1', sessionId: 's1', datasetId: 'd1' },
+        { kind: 'tick', id: '1', sessionId: 's1', datasetId: 'd1' },
+        { kind: 'tick', id: '1', sessionId: 's1', datasetId: 'd2' },
+        { kind: 'tick', id: '2', sessionId: 's2' },
+        { kind: 'cohort', id: 'cross-session', sessionId: 's2' },
+      ],
+      timeWindow: null,
+      source: 'restore',
+    });
+
+    expect(useResearchSelectionStore.getState().present.scope).toEqual([
+      { kind: 'tick', id: '1', sessionId: 's1', datasetId: 'd1' },
+      { kind: 'tick', id: '1', sessionId: 's1', datasetId: 'd2' },
+      { kind: 'cohort', id: 'cross-session', sessionId: 's2' },
+    ]);
+  });
+
+  it('removes the primary entity from restored scope', () => {
+    useResearchSelectionStore.getState().restore({
+      primary: detector,
+      scope: [{ ...detector }, tick],
+      timeWindow: null,
+      source: 'restore',
+    });
+
+    expect(useResearchSelectionStore.getState().present.scope).toEqual([tick]);
+  });
+
+  it('uses the full entity identity for stable keys', () => {
+    expect(qecEntityRefKey({ kind: 'tick', id: '1', sessionId: 's1', datasetId: 'd1' }))
+      .not.toBe(qecEntityRefKey({ kind: 'tick', id: '1', sessionId: 's1', datasetId: 'd2' }));
   });
 });

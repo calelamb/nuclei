@@ -2,7 +2,7 @@ import { Info, Pin, X } from 'lucide-react';
 import type { ReactElement } from 'react';
 import { QEC_PANEL_REGISTRY } from '../../../layout/qecPanelRegistry';
 import { useQecWorkbenchStore } from '../../../stores/qecWorkbenchStore';
-import { useResearchSelectionStore } from '../../../stores/researchSelectionStore';
+import { qecEntityRefKey, useResearchSelectionStore } from '../../../stores/researchSelectionStore';
 import type { ResearchSelection } from '../../../types/qecSelection';
 
 export const QEC_RESEARCH_INSPECTOR_ID = 'qec-research-inspector';
@@ -37,7 +37,7 @@ function SelectionDetails({ selection }: { selection: ResearchSelection }): Reac
       <h3 id="selection-heading">Active selection</h3>
       <dl>
         {refs.map((ref) => (
-          <div key={`${ref.kind}:${ref.id}`}>
+          <div key={qecEntityRefKey(ref)}>
             <dt>{ref.kind.replaceAll('-', ' ')}</dt><dd className="qec-mono">{ref.id}</dd>
           </div>
         ))}
@@ -68,7 +68,7 @@ function LineageState(): ReactElement {
       <h3 id="lineage-heading">Lineage</h3>
       <div className="qec-lineage-state">
         <span className="qec-lineage-state__mark" aria-hidden="true" />
-        <div><strong>Source-backed</strong><span>No derived result is active.</span></div>
+        <div><strong>Provenance not evaluated</strong><span>No source lineage check has run.</span></div>
       </div>
     </section>
   );

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState, type CSSProperties, type Reac
 import { usePlatform } from '../../../platform/PlatformProvider';
 import { startQecWorkbenchPersistenceSession } from '../../../services/qecWorkbenchPersistenceSession';
 import { useProjectStore } from '../../../stores/projectStore';
+import { useQecStudyStore } from '../../../services/qecStudyStore';
 import { useQecStudyUiStore } from '../../../stores/qecStudyUiStore';
 import { useQecWorkbenchStore } from '../../../stores/qecWorkbenchStore';
 import { InvestigationCanvas } from './InvestigationCanvas';
@@ -19,10 +20,14 @@ function useQecWorkbenchPersistence(): void {
   const platform = usePlatform();
   const projectRoot = useProjectStore((state) => state.projectRoot);
   const studyId = useQecStudyUiStore((state) => state.activeStudyId);
+  const studyPreset = useQecStudyStore((state) =>
+    state.projectRoot === projectRoot
+      ? state.studies.find((entry) => entry.study.id === studyId)?.study.preset
+      : undefined);
   useEffect(() => {
-    if (!projectRoot || !studyId) return undefined;
-    return startQecWorkbenchPersistenceSession(platform, projectRoot, studyId);
-  }, [platform, projectRoot, studyId]);
+    if (!projectRoot || !studyId || !studyPreset) return undefined;
+    return startQecWorkbenchPersistenceSession(platform, projectRoot, studyId, studyPreset);
+  }, [platform, projectRoot, studyId, studyPreset]);
 }
 
 function useInspectorDrawer() {

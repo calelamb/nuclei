@@ -1,4 +1,5 @@
 import type { PlatformBridge } from '../platform/bridge';
+import type { QecWorkspacePreset } from '../types/qecStudy';
 import {
   QEC_WORKBENCH_DEFAULTS,
   type QecPersistenceIssue,
@@ -14,6 +15,7 @@ import {
 import {
   getQecWorkbenchStorageKey,
   loadQecWorkbenchState,
+  saveDeferredQecWorkbenchState,
   saveQecWorkbenchState,
   type PersistedQecWorkbenchState,
 } from './qecWorkbenchPersistence';
@@ -38,6 +40,7 @@ interface SessionState {
   internalHydration: boolean;
   dirtyKeys: readonly DirtyKey[];
   revision: number;
+  persistedRevision: number;
   issueCounter: number;
   timer: ReturnType<typeof setTimeout> | null;
   queued: WriteJob | null;
@@ -51,6 +54,7 @@ const INITIAL_SESSION_STATE: SessionState = {
   internalHydration: false,
   dirtyKeys: [],
   revision: 0,
+  persistedRevision: 0,
   issueCounter: 0,
   timer: null,
   queued: null,
@@ -116,20 +120,31 @@ function mergeLoadedState(
 
 class QecWorkbenchPersistenceSession {
   private state: SessionState = INITIAL_SESSION_STATE;
+  private latestSnapshot: PersistedQecWorkbenchState;
+  private pendingRead: Promise<PersistedQecWorkbenchState> | null = null;
   private readonly scopeKey: string;
   private readonly platform: PlatformBridge;
   private readonly projectRoot: string;
   private readonly studyId: string;
+  private readonly defaultPreset: QecWorkspacePreset;
 
   constructor(
     platform: PlatformBridge,
     projectRoot: string,
     studyId: string,
+    defaultPreset: QecWorkspacePreset,
   ) {
     this.platform = platform;
     this.projectRoot = projectRoot;
     this.studyId = studyId;
+    this.defaultPreset = defaultPreset;
     this.scopeKey = getQecWorkbenchStorageKey(projectRoot, studyId);
+    this.latestSnapshot = {
+      schema: 1,
+      ...QEC_WORKBENCH_DEFAULTS,
+      preset: defaultPreset,
+      selection: EMPTY_RESEARCH_SELECTION,
+    };
   }
 
   private update(partial: Partial<SessionState>): void {
@@ -144,9 +159,15 @@ class QecWorkbenchPersistenceSession {
       this.recordSelectionChange(current, previous);
     });
     this.update({ internalHydration: true, unsubscribers: [stopWorkbench, stopSelection] });
-    hydrateLayout({ schema: 1, ...QEC_WORKBENCH_DEFAULTS, selection: EMPTY_RESEARCH_SELECTION });
+    hydrateLayout({
+      schema: 1,
+      ...QEC_WORKBENCH_DEFAULTS,
+      preset: this.defaultPreset,
+      selection: EMPTY_RESEARCH_SELECTION,
+    });
     useResearchSelectionStore.getState().restore(EMPTY_RESEARCH_SELECTION);
     useQecWorkbenchStore.getState().setPersistenceIssue(null);
+    this.latestSnapshot = currentSnapshot();
     this.update({ internalHydration: false });
     void this.read(null);
     return () => this.dispose();
@@ -162,28 +183,33 @@ class QecWorkbenchPersistenceSession {
   private recordChanges(keys: readonly DirtyKey[]): void {
     if (this.state.disposed || this.state.internalHydration || keys.length === 0) return;
     const dirtyKeys = [...new Set([...this.state.dirtyKeys, ...keys])];
+    this.latestSnapshot = currentSnapshot();
     this.update({ dirtyKeys, revision: this.state.revision + 1 });
     if (this.state.hydrated) this.scheduleSave();
   }
 
   private hydrateLoaded(loaded: PersistedQecWorkbenchState): void {
     const dirtyKeys = this.state.dirtyKeys;
-    const merged = mergeLoadedState(loaded, currentSnapshot(), dirtyKeys);
+    const merged = mergeLoadedState(loaded, this.latestSnapshot, dirtyKeys);
     this.update({ internalHydration: true });
     hydrateLayout(merged);
     if (!dirtyKeys.includes('selection')) {
       useResearchSelectionStore.getState().restore(merged.selection);
     }
     this.update({ internalHydration: false, hydrated: true, dirtyKeys: [] });
+    this.latestSnapshot = merged;
     if (dirtyKeys.length > 0) this.scheduleSave();
   }
 
   private async read(issueToken: number | null): Promise<void> {
     if (issueToken !== null) this.updateIssue(issueToken, true);
     try {
-      const stored = await this.platform.getStoredValue<unknown>(this.scopeKey);
+      const pendingRead = this.platform.getStoredValue<unknown>(this.scopeKey).then((stored) =>
+        loadQecWorkbenchState(stored, this.defaultPreset));
+      this.pendingRead = pendingRead;
+      const loaded = await pendingRead;
       if (this.state.disposed) return;
-      this.hydrateLoaded(loadQecWorkbenchState(stored));
+      this.hydrateLoaded(loaded);
       if (issueToken !== null) this.clearIssue(issueToken, 'read');
     } catch {
       if (!this.state.disposed) this.publishReadIssue(issueToken);
@@ -202,7 +228,7 @@ class QecWorkbenchPersistenceSession {
   private enqueueLatest(issueToken: number | null): void {
     const queued: WriteJob = {
       revision: this.state.revision,
-      snapshot: currentSnapshot(),
+      snapshot: this.latestSnapshot,
       issueToken,
     };
     this.update({ queued });
@@ -219,6 +245,7 @@ class QecWorkbenchPersistenceSession {
   private async write(job: WriteJob): Promise<void> {
     try {
       await saveQecWorkbenchState(this.platform, this.projectRoot, this.studyId, job.snapshot);
+      this.update({ persistedRevision: Math.max(this.state.persistedRevision, job.revision) });
       if (!this.state.disposed && job.revision === this.state.revision) {
         this.clearIssue(job.issueToken, 'write');
       }
@@ -309,10 +336,45 @@ class QecWorkbenchPersistenceSession {
 
   private dispose(): void {
     const issue = this.currentIssue();
+    const state = this.state;
+    const shouldFlush = state.revision > state.persistedRevision;
+    const snapshot = this.latestSnapshot;
+    const dirtyKeys = [...state.dirtyKeys];
+    const pendingRead = this.pendingRead;
     this.update({ disposed: true });
     this.state.unsubscribers.forEach((unsubscribe) => unsubscribe());
     if (this.state.timer) clearTimeout(this.state.timer);
     if (issue) useQecWorkbenchStore.getState().setPersistenceIssue(null);
+    if (shouldFlush) void this.flushDisposedSnapshot(snapshot, dirtyKeys, pendingRead, state.hydrated);
+  }
+
+  private async flushDisposedSnapshot(
+    snapshot: PersistedQecWorkbenchState,
+    dirtyKeys: readonly DirtyKey[],
+    pendingRead: Promise<PersistedQecWorkbenchState> | null,
+    hydrated: boolean,
+  ): Promise<void> {
+    const finalSnapshot = !hydrated && pendingRead
+      ? pendingRead.then(
+        (loaded) => mergeLoadedState(loaded, snapshot, dirtyKeys),
+        () => snapshot,
+      )
+      : Promise.resolve(snapshot);
+    try {
+      await saveDeferredQecWorkbenchState(
+        this.platform,
+        this.projectRoot,
+        this.studyId,
+        finalSnapshot,
+      );
+    } catch (error: unknown) {
+      // A disposed scope must never publish stale UI state. Keep the failure
+      // diagnostic scoped so a future active session can retry independently.
+      console.error('QEC workspace disposal flush failed.', {
+        scopeKey: this.scopeKey,
+        error,
+      });
+    }
   }
 }
 
@@ -320,6 +382,12 @@ export function startQecWorkbenchPersistenceSession(
   platform: PlatformBridge,
   projectRoot: string,
   studyId: string,
+  defaultPreset: QecWorkspacePreset = QEC_WORKBENCH_DEFAULTS.preset,
 ): () => void {
-  return new QecWorkbenchPersistenceSession(platform, projectRoot, studyId).start();
+  return new QecWorkbenchPersistenceSession(
+    platform,
+    projectRoot,
+    studyId,
+    defaultPreset,
+  ).start();
 }

@@ -8,6 +8,7 @@ import {
 } from '../stores/qecWorkbenchStore';
 import {
   EMPTY_RESEARCH_SELECTION,
+  normalizeResearchSelection,
   qecEntityRefSchema,
   selectionSourceSchema,
   timeWindowSchema,
@@ -50,10 +51,11 @@ export function getQecWorkbenchPersistenceWriteQueueSizeForTests(): number {
   return writeQueues.size;
 }
 
-function defaults(): PersistedQecWorkbenchState {
+function defaults(preset = QEC_WORKBENCH_DEFAULTS.preset): PersistedQecWorkbenchState {
   return {
     schema: 1,
     ...QEC_WORKBENCH_DEFAULTS,
+    preset,
     pinnedPanelIds: Object.freeze([]),
     selection: { ...EMPTY_RESEARCH_SELECTION, scope: Object.freeze([]) },
   };
@@ -113,12 +115,12 @@ function parseSelection(value: unknown): ResearchSelection {
     ? null
     : timeWindowSchema.safeParse(candidate.timeWindow);
   const source = selectionSourceSchema.safeParse(candidate.source);
-  return {
+  return normalizeResearchSelection({
     primary: parseEntity(candidate.primary),
     scope: parseScope(candidate.scope),
     timeWindow: window === null ? null : window.success ? window.data : null,
     source: source.success ? source.data : 'user',
-  };
+  });
 }
 
 /** Build the exact per-project, per-Study platform storage key. */
@@ -127,14 +129,17 @@ export function getQecWorkbenchStorageKey(projectRoot: string, studyId: string):
 }
 
 /** Parse untrusted persisted state without allowing one invalid section to erase valid siblings. */
-export function loadQecWorkbenchState(serialized: unknown): PersistedQecWorkbenchState {
+export function loadQecWorkbenchState(
+  serialized: unknown,
+  defaultPreset = QEC_WORKBENCH_DEFAULTS.preset,
+): PersistedQecWorkbenchState {
   const parsedRoot = rootSchema.safeParse(parseExternal(serialized));
-  if (!parsedRoot.success) return defaults();
+  if (!parsedRoot.success) return defaults(defaultPreset);
   const value = parsedRoot.data;
   const preset = qecWorkspacePresetSchema.safeParse(value.preset);
   return {
     schema: 1,
-    preset: preset.success ? preset.data : QEC_WORKBENCH_DEFAULTS.preset,
+    preset: preset.success ? preset.data : defaultPreset,
     pinnedPanelIds: parsePanelIds(value.pinnedPanelIds),
     sourceWidth: parseDimension(value.sourceWidth, QEC_WORKBENCH_DIMENSIONS.source, QEC_WORKBENCH_DEFAULTS.sourceWidth),
     inspectorWidth: parseDimension(value.inspectorWidth, QEC_WORKBENCH_DIMENSIONS.inspector, QEC_WORKBENCH_DEFAULTS.inspectorWidth),
@@ -168,4 +173,18 @@ export async function saveQecWorkbenchState(
   const key = getQecWorkbenchStorageKey(projectRoot, studyId);
   const snapshot = persistenceSnapshot(state);
   await enqueueWrite(key, () => platform.setStoredValue(key, snapshot));
+}
+
+/** Reserve exact-key write order immediately while a disposal snapshot finishes hydrating. */
+export async function saveDeferredQecWorkbenchState(
+  platform: PlatformBridge,
+  projectRoot: string,
+  studyId: string,
+  state: Promise<PersistedQecWorkbenchState>,
+): Promise<void> {
+  const key = getQecWorkbenchStorageKey(projectRoot, studyId);
+  await enqueueWrite(key, async () => {
+    const snapshot = persistenceSnapshot(await state);
+    await platform.setStoredValue(key, snapshot);
+  });
 }
