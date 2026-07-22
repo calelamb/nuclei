@@ -133,14 +133,28 @@ def test_typed_chunks_round_trip_lineage_and_commit_atomically(tmp_path: Path) -
 
 
 @pytest.mark.parametrize(
-    ("failure_call", "orphan_count"),
-    ((2, 1), (4, 3)),
+    ("failure_call", "orphaned_kinds", "resumable_kinds"),
+    (
+        (2, ("syndromes",), ("campaign_points", "calibrations")),
+        (4, ("syndromes", "campaign_points", "calibrations"), ()),
+    ),
     ids=("during-mixed-renames", "before-journal-publication"),
 )
 def test_mixed_commit_failure_preserves_old_visibility_and_kind_recovery(
-    tmp_path: Path, failure_call: int, orphan_count: int
+    tmp_path: Path,
+    failure_call: int,
+    orphaned_kinds: tuple[str, ...],
+    resumable_kinds: tuple[str, ...],
 ) -> None:
     storage = create_storage(tmp_path)
+    storage.append_chunk(
+        ImportChunk(
+            sample_batch(start=10, count=1, segment_id="prior"),
+            (_span("prior"),),
+        )
+    )
+    storage.commit_segment("prior")
+    prior_snapshot = _visible_snapshot(storage)
     for chunk in (
         ImportChunk(sample_batch(segment_id="shared"), (_span("shots"),)),
         ImportChunk(_campaign(), (_span("stats"),)),
@@ -157,24 +171,34 @@ def test_mixed_commit_failure_preserves_old_visibility_and_kind_recovery(
     with pytest.raises(OSError, match="injected publication failure"):
         faulting.commit_segments(keys)
 
-    assert faulting.list_committed_partitions() == ()
-    assert QecCatalog(faulting).synchronize() == ()
+    assert _visible_snapshot(faulting) == prior_snapshot
     report = faulting.recover()
-    assert len(report.orphaned_final) == orphan_count
-    recovered = report.orphaned_final + report.resumable
-    assert {ref.record_kind for ref in recovered} == {
-        "syndromes",
-        "campaign_points",
-        "calibrations",
-    }
+    assert sorted(ref.record_kind for ref in report.orphaned_final) == sorted(
+        orphaned_kinds
+    )
+    assert sorted(ref.record_kind for ref in report.resumable) == sorted(
+        resumable_kinds
+    )
+    assert _visible_snapshot(faulting) == prior_snapshot
 
     faulting.resume_pending(report.orphaned_final)
     faulting.commit_segments(keys)
-    assert {dataset.record_kind for dataset in QecCatalog(faulting).synchronize()} == {
+    final_datasets = QecCatalog(faulting).synchronize()
+    assert {dataset.record_kind for dataset in final_datasets} == {
         "syndromes",
         "campaign_points",
         "calibrations",
     }
+    assert len(final_datasets) == 4
+
+
+def _visible_snapshot(storage: SessionStorage) -> tuple[object, ...]:
+    journal = json.loads((storage.session_root / "journal.json").read_text())
+    return (
+        journal,
+        storage.list_committed_partitions(),
+        QecCatalog(storage).synchronize(),
+    )
 
 
 def _open_with_faulting_mover(root: Path, failure_call: int) -> SessionStorage:
@@ -183,9 +207,9 @@ def _open_with_faulting_mover(root: Path, failure_call: int) -> SessionStorage:
     def faulting_move(source: Path, target: Path, flags: int) -> None:
         nonlocal calls
         calls += 1
+        operation = os.replace if flags & MOVEFILE_REPLACE_EXISTING else os.rename
         if calls == failure_call:
             raise OSError("injected publication failure")
-        operation = os.replace if flags & MOVEFILE_REPLACE_EXISTING else os.rename
         operation(source, target)
 
     mover = DurableMover(platform="nt", windows_move=faulting_move)
