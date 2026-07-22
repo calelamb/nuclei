@@ -315,6 +315,7 @@ class SyndromeBatch:
     sequence_end: int
     record_count: int
     detector_events: PackedBits
+    provenance_id: str
     shot_range: QualifiedRange = ABSENT_RANGE
     round_range: QualifiedRange = UNKNOWN_RANGE
     source_timestamps: QualifiedTimestamps = UNAVAILABLE_TIMESTAMPS
@@ -326,7 +327,6 @@ class SyndromeBatch:
     circuit_revision: QualifiedText = UNKNOWN_TEXT
     topology_revision: QualifiedText = UNKNOWN_TEXT
     data_quality: tuple[DataQualityFlag, ...] = (DataQualityFlag.COMPLETE,)
-    provenance_id: str = "unassigned"
     schema_version: str = SCHEMA_VERSION
 
     def __post_init__(self) -> None:
@@ -564,6 +564,29 @@ class ProvenanceSource:
             raise ValueError("source policy must be copy or reference")
 
 
+ScalarValue = str | int | float | bool | None
+
+
+@dataclass(frozen=True, slots=True)
+class ProvenanceOperation:
+    id: str
+    version: str
+    parameters: tuple[tuple[str, ScalarValue], ...]
+
+    def __post_init__(self) -> None:
+        _require_non_empty("operation id", self.id)
+        _require_non_empty("operation version", self.version)
+        _require_immutable_tuple("parameters", self.parameters)
+        keys = tuple(key for key, _ in self.parameters)
+        if any(not isinstance(key, str) or not key for key in keys):
+            raise ValueError("parameter keys must be non-empty strings")
+        if len(set(keys)) != len(keys):
+            raise ValueError("parameter keys must be unique")
+        scalar_types = (str, int, float, bool, type(None))
+        if any(not isinstance(value, scalar_types) for _, value in self.parameters):
+            raise TypeError("parameter values must be JSON scalars")
+
+
 @dataclass(frozen=True, slots=True)
 class ProvenanceRecord:
     provenance_id: str
@@ -577,10 +600,10 @@ class ProvenanceRecord:
     runtime_version: str = "unknown"
     dependencies: tuple[tuple[str, str], ...] = ()
     parent_dataset_ids: tuple[str, ...] = ()
-    transformations: tuple[tuple[str, str], ...] = ()
+    transformations: tuple[ProvenanceOperation, ...] = ()
     filters: tuple[tuple[str, str, str], ...] = ()
     exclusions: tuple[tuple[str, str, str], ...] = ()
-    recipes: tuple[tuple[str, str], ...] = ()
+    recipes: tuple[ProvenanceOperation, ...] = ()
     annotations: tuple[tuple[str, str], ...] = ()
     control_audit_refs: tuple[str, ...] = ()
     schema_version: str = SCHEMA_VERSION

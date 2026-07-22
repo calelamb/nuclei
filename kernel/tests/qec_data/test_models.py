@@ -18,6 +18,7 @@ from kernel.qec_data.models import (
     DecodeStatus,
     PackedBits,
     ProvenanceRecord,
+    ProvenanceOperation,
     ProvenanceSource,
     QualifiedFloat,
     QualifiedPackedBits,
@@ -69,6 +70,7 @@ def test_syndrome_batch_validates_sequence_and_packed_detector_width() -> None:
         sequence_end=12,
         record_count=2,
         detector_events=PackedBits(bit_width=9, data=b"\x00\x00\x00\x00"),
+        provenance_id="p1",
     )
     assert batch.detector_events.data == bytes(4)
     with pytest.raises(ValueError, match="sequence range"):
@@ -80,6 +82,7 @@ def test_syndrome_batch_validates_sequence_and_packed_detector_width() -> None:
             sequence_end=11,
             record_count=2,
             detector_events=PackedBits(bit_width=9, data=bytes(4)),
+            provenance_id="p1",
         )
 
 
@@ -93,6 +96,7 @@ def test_syndrome_batch_validates_optional_observable_width() -> None:
             sequence_end=2,
             record_count=2,
             detector_events=PackedBits(bit_width=1, data=bytes(2)),
+            provenance_id="p1",
             observables=QualifiedPackedBits(
                 value=PackedBits(bit_width=9, data=bytes(2)),
                 status=ValueStatus.MEASURED,
@@ -208,3 +212,25 @@ def test_tuple_collections_reject_mutable_list_inputs() -> None:
                 ProvenanceSource("s1", "capture", "b" * 64, "reference")
             ],
         )
+
+
+def test_syndrome_batch_never_invents_a_provenance_reference() -> None:
+    with pytest.raises(TypeError, match="provenance_id"):
+        SyndromeBatch(
+            batch_id="batch-1",
+            session_id="session-1",
+            segment_id="segment-1",
+            sequence_start=0,
+            sequence_end=1,
+            record_count=1,
+            detector_events=PackedBits(1, b"\x00"),
+        )  # type: ignore[call-arg]
+
+
+def test_provenance_operations_preserve_immutable_canonical_parameters() -> None:
+    operation = ProvenanceOperation(
+        "threshold-fit", "1.0.0", (("min_distance", 3), ("robust", True))
+    )
+    assert operation.parameters[0] == ("min_distance", 3)
+    with pytest.raises(TypeError, match="parameters"):
+        ProvenanceOperation("threshold-fit", "1.0.0", {"min_distance": 3})  # type: ignore[arg-type]
