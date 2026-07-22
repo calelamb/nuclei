@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import json
+import os
 import threading
 from dataclasses import replace
 from pathlib import Path
@@ -12,7 +13,9 @@ from websockets.exceptions import ConnectionClosedError
 from websockets.legacy.client import connect
 
 import kernel.qec_data.server as server_module
+import kernel.qec_data.source_security as source_security
 from kernel.qec_data.adapters.sinter_csv import SinterCsvAdapter
+from kernel.qec_data.model_codecs import loads_canonical_json
 from kernel.qec_data.protocol import (
     MAX_FRAME_BYTES,
     OutboundFrameTooLarge,
@@ -76,6 +79,8 @@ async def test_oversized_first_frame_is_rejected_as_authentication(
     await server.start()
     try:
         async with connect(server.url, max_size=None) as websocket:
+            protocols = server._server.websockets  # type: ignore[union-attr]
+            assert next(iter(protocols)).max_size == MAX_FRAME_BYTES
             await websocket.send("x" * (MAX_FRAME_BYTES + 1))
             with pytest.raises(ConnectionClosedError) as closed:
                 await websocket.recv()
@@ -239,6 +244,100 @@ def test_import_collision_never_deletes_the_existing_source(tmp_path: Path) -> N
 
 
 @pytest.mark.asyncio
+async def test_mutated_canonical_snapshot_can_never_complete(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    (tmp_path / "stats.csv").write_text(SINTER_SOURCE, encoding="utf-8")
+    server = QecDataServer(tmp_path, TOKEN, port=0)
+    original_run = server._run_import
+    original_batches = SinterCsvAdapter.import_batches
+    cached_batches = ()
+
+    async def mutate_then_run(connection, request_id, prepared):
+        nonlocal cached_batches
+        copied = prepared[2]
+        cached_batches = tuple(original_batches(prepared[1], copied, prepared[3]))
+        os.chmod(copied, 0o600)
+        copied.write_text(SINTER_SOURCE.replace("100,3", "200,9"), encoding="utf-8")
+        await original_run(connection, request_id, prepared)
+
+    monkeypatch.setattr(
+        SinterCsvAdapter,
+        "import_batches",
+        lambda _adapter, _source, _mapping: iter(cached_batches),
+    )
+    server._run_import = mutate_then_run  # type: ignore[method-assign]
+    await server.start()
+    try:
+        async with connect(server.url) as websocket:
+            await authenticate(websocket)
+            await websocket.send(json.dumps(_import_request("mutated-snapshot")))
+            events = [json.loads(await websocket.recv()) for _ in range(2)]
+        assert not any(event["type"] == "job_complete" for event in events)
+        manifest = loads_canonical_json(
+            (tmp_path / "qec-data/sessions/mutated-snapshot/manifest.json").read_text()
+        )
+        assert manifest["status"] == "failed"
+    finally:
+        await server.stop()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "operation", ["import_probe", "import_validate", "import_preview"]
+)
+async def test_adapter_operations_use_a_snapshot_across_ancestor_swaps(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, operation: str
+) -> None:
+    source_dir = tmp_path / "incoming"
+    source_dir.mkdir()
+    source = source_dir / "stats.csv"
+    source.write_text(SINTER_SOURCE, encoding="utf-8")
+    expected_hash = hashlib.sha256(source.read_bytes()).hexdigest()
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    (outside / "stats.csv").write_text(
+        SINTER_SOURCE.replace("100,3", "999,8"), encoding="utf-8"
+    )
+    original = getattr(SinterCsvAdapter, _adapter_method(operation))
+    swapped = False
+
+    def swap_then_read(adapter, snapshot, *args):
+        nonlocal swapped
+        if not swapped:
+            source_dir.rename(tmp_path / "incoming-original")
+            source_dir.symlink_to(outside, target_is_directory=True)
+            swapped = True
+        return original(adapter, snapshot, *args)
+
+    monkeypatch.setattr(SinterCsvAdapter, _adapter_method(operation), swap_then_read)
+    response = await _perform_import_operation(tmp_path, operation)
+    assert _response_source_hash(response, operation) == expected_hash
+
+
+def test_destination_swap_cannot_redirect_canonical_copy(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    (tmp_path / "stats.csv").write_text(SINTER_SOURCE, encoding="utf-8")
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    server = QecDataServer(tmp_path, TOKEN, port=0)
+    real_open = source_security._open_project_file
+
+    def swap_destination(project_root, parts):
+        descriptor = real_open(project_root, parts)
+        sources = tmp_path / "qec-data/sources"
+        sources.rename(tmp_path / "sources-original")
+        sources.symlink_to(outside, target_is_directory=True)
+        return descriptor
+
+    monkeypatch.setattr(source_security, "_open_project_file", swap_destination)
+    with pytest.raises(Exception):
+        server._prepare_import(_import_payload("destination-swap"))
+    assert not tuple(outside.rglob("*"))
+
+
+@pytest.mark.asyncio
 async def test_query_cancel_interrupts_the_active_query_engine(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -273,3 +372,60 @@ async def test_query_cancel_interrupts_the_active_query_engine(
     finally:
         release.set()
         await server.stop()
+
+
+def _import_payload(session_id: str) -> dict[str, object]:
+    return {
+        "source": "stats.csv",
+        "adapterId": "sinter-csv",
+        "mapping": {},
+        "sessionId": session_id,
+        "sessionKind": "simulation_campaign",
+    }
+
+
+def _import_request(session_id: str) -> dict[str, object]:
+    return {
+        "type": "import_start",
+        "requestId": session_id,
+        **_import_payload(session_id),
+    }
+
+
+def _adapter_method(operation: str) -> str:
+    return "probe" if operation == "import_probe" else "validate"
+
+
+async def _perform_import_operation(
+    tmp_path: Path, operation: str
+) -> dict[str, object]:
+    server = QecDataServer(tmp_path, TOKEN, port=0)
+    await server.start()
+    try:
+        async with connect(server.url) as websocket:
+            await authenticate(websocket)
+            request: dict[str, object] = {
+                "type": operation,
+                "requestId": operation,
+                "source": "incoming/stats.csv",
+            }
+            if operation != "import_probe":
+                request |= {
+                    "adapterId": "sinter-csv",
+                    "mapping": {},
+                }
+            if operation == "import_preview":
+                request["limit"] = 1
+            await websocket.send(json.dumps(request))
+            return json.loads(await websocket.recv())
+    finally:
+        await server.stop()
+
+
+def _response_source_hash(response: dict[str, object], operation: str) -> str:
+    if operation == "import_probe":
+        results = response["results"]
+        assert isinstance(results, list)
+        supported = next(item for item in results if item["adapterId"] == "sinter-csv")
+        return supported["sourceSha256"]
+    return response["sourceSha256"]

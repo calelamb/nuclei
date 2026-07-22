@@ -58,6 +58,31 @@ Important findings; all now have focused regressions and fixes:
 The Minor lifecycle concern was also fixed: dependency probing has a bounded
 timeout and kills/reaps its owned probe process on expiry.
 
+### Second review corrections
+
+A second adversarial review identified four remaining namespace and lifetime
+races. Each is now covered by a failing-before/fixed-after regression:
+
+- Canonical import copies keep anchored directory and file descriptors for the
+  job lifetime. The engine fingerprints the held descriptor and pathname before
+  import, after adapter consumption, and through segment commit. A mutation can
+  only produce a failed session; it cannot reach `COMPLETE`, even if an adapter
+  returns cached batches with the original provenance.
+- The WebSocket transport enforces the 1 MiB limit again. A bounded legacy
+  protocol maps only a first-message `PayloadTooBig` to close code `4401` without
+  reading the payload; post-authentication overflow remains the transport's
+  `1009`. The inbound queue remains bounded at 16 messages.
+- Probe, validation, and preview now run against anchored, descriptor-held
+  snapshots (made read-only where the platform supports it). Results are
+  released only after the held descriptor and visible pathname are reverified.
+  Canonical source/snapshot directories and destination files are created
+  through directory-relative operations, so ancestor swaps cannot redirect
+  writes.
+- Tauri packages the canonical path plus platform file identity into an
+  `AuthorizedProjectRoot`. The manager verifies that identity without
+  canonicalizing the renderer path again and fails with
+  `project_identity_changed` if the authorized namespace entry was replaced.
+
 ## TDD evidence
 
 Initial Python RED failed collection because `kernel.qec_data.jobs` did not
@@ -71,20 +96,20 @@ a token-free URL.
 ## Verification
 
 - Ruff format and lint: clean.
-- Focused Python server and review suites: 40 passed on the installed WebSocket
+- Focused Python server and review suites: 45 passed on the installed WebSocket
   runtime.
-- Compatibility: 39 passed with `websockets==12.0`; 39 passed with
+- Compatibility: 45 passed with `websockets==12.0`; 45 passed with
   `websockets==13.1`.
-- Owned Python coverage: 85.01% (jobs 98%, protocol 90%, server 82%, source
-  security 81%).
-- Complete QEC data suite: 381 passed, 2 skipped.
-- Rust 1.77.2 locked lifecycle suite: 11 passed.
-- Complete Rust suite: 164 unit tests and 11 lifecycle tests passed.
+- Owned Python coverage: 82.93% (import operations 95%, jobs 98%, protocol 90%,
+  server 85%, source security 70%).
+- Complete QEC data suite: 387 passed, 2 skipped.
+- Rust 1.77.2 locked lifecycle suite: 12 passed.
+- Complete Rust suite: 164 unit tests and 12 lifecycle tests passed.
 - Rust formatting: clean.
 - Targeted Rust 1.77.2 clippy: clean with unrelated pre-existing lint classes
   explicitly allowed.
-- All owned files are below 800 lines and all owned Python functions are below
-  50 lines.
+- All owned files are below 800 lines (`server.py`: 778) and all owned Python
+  functions are below 50 lines.
 
 `python -m black` and `python -m bandit` were unavailable in the environment.
 Repository-wide strict Clippy remains blocked by pre-existing out-of-scope

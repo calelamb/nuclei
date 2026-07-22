@@ -1,6 +1,7 @@
 use std::fs;
 use std::net::TcpListener;
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicU16, Ordering};
 use std::sync::{Arc, Barrier};
 use std::thread;
 use std::time::Duration;
@@ -37,6 +38,7 @@ while True:
 
 const SILENT_ENGINE: &str = "import time\ntime.sleep(5)\n";
 const EXITING_ENGINE: &str = "import sys\nsys.exit(7)\n";
+static NEXT_TEST_PORT: AtomicU16 = AtomicU16::new(31_000);
 
 fn python() -> PathBuf {
     std::env::var_os("PYTHON")
@@ -45,8 +47,12 @@ fn python() -> PathBuf {
 }
 
 fn free_port() -> u16 {
-    let listener = TcpListener::bind(("127.0.0.1", 0)).expect("bind test port");
-    listener.local_addr().expect("test address").port()
+    loop {
+        let port = NEXT_TEST_PORT.fetch_add(1, Ordering::Relaxed);
+        if TcpListener::bind(("127.0.0.1", port)).is_ok() {
+            return port;
+        }
+    }
 }
 
 fn write_module(root: &Path, name: &str, source: &str) {
@@ -149,15 +155,43 @@ fn running_engine_is_bound_to_its_canonical_project() {
 
 #[test]
 fn project_access_requires_the_window_scope_for_canonical_data() {
-    let allowed = Path::new("/allowed/project");
-    let outside = Path::new("/outside/project");
+    let allowed = TempDir::new().expect("allowed project");
+    let outside = TempDir::new().expect("outside project");
+    let allowed_path = fs::canonicalize(allowed.path()).expect("canonical allowed project");
 
-    assert!(authorize_project_access(allowed, |path| path.starts_with(allowed)).is_ok());
-    assert!(authorize_project_access(allowed, |path| path == allowed).is_err());
-    let error = authorize_project_access(outside, |path| path.starts_with(allowed))
+    assert!(
+        authorize_project_access(allowed.path(), |path| path.starts_with(&allowed_path)).is_ok()
+    );
+    assert!(authorize_project_access(allowed.path(), |path| path == allowed_path).is_err());
+    let error = authorize_project_access(outside.path(), |path| path.starts_with(&allowed_path))
         .expect_err("outside project must be rejected");
 
     assert_eq!(error.code, "project_not_authorized");
+}
+
+#[test]
+fn authorized_project_identity_cannot_change_before_manager_start() {
+    let module = TempDir::new().expect("module root");
+    let project = TempDir::new().expect("project root");
+    write_module(module.path(), "fake_engine", FAKE_ENGINE);
+    let authorized = authorize_project_access(project.path(), |_| true)
+        .expect("authorize original project identity");
+    let moved = project.path().with_extension("authorized-original");
+    fs::rename(project.path(), &moved).expect("move authorized directory");
+    fs::create_dir(project.path()).expect("replace authorized pathname");
+    let config =
+        QecDataLaunchConfig::new_authorized(python(), module.path(), authorized, free_port())
+            .with_module("fake_engine")
+            .with_dependencies(Vec::new());
+
+    let error = QecDataManager::new()
+        .start(config)
+        .expect_err("replaced project identity must fail closed");
+
+    assert_eq!(error.code, "project_identity_changed");
+    assert!(!project.path().join("starts").exists());
+    fs::remove_dir(project.path()).expect("remove replacement");
+    fs::rename(moved, project.path()).expect("restore tempdir for cleanup");
 }
 
 #[test]

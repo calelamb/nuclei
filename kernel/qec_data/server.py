@@ -21,6 +21,13 @@ from .adapters.base import ImportChunk, ImportMapping
 from .adapters.registry import AdapterRegistry, core_offline_registry
 from .catalog import QecCatalog
 from .hashing import DatasetSemanticIdentity
+from .import_operations import (
+    batch_summary,
+    probe_result,
+    require_copied_hash,
+    require_valid_preview,
+    validation_issue,
+)
 from .jobs import JobRegistry
 from .model_codecs import (
     loads_canonical_json,
@@ -53,8 +60,11 @@ from .storage_lineage import SegmentKey, payload_kind
 from .storage_metadata import publish_json
 from .source_security import (
     copy_authorized_source,
+    release_copied_source,
     remove_copied_source,
     resolve_authorized_source,
+    secure_canonical_directory,
+    verify_copied_source,
 )
 from .tiles import QueryRequiresRefinement
 
@@ -69,6 +79,24 @@ PROJECT_ENVIRONMENT_VARIABLE = "NUCLEI_QEC_DATA_PROJECT_ROOT"
 
 class PortInUseError(RuntimeError):
     """The fixed data-engine endpoint is already owned by another process."""
+
+
+class _BoundedServerProtocol(WebSocketServerProtocol):
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        super().__init__(*args, **kwargs)
+        self._received_messages = 0
+
+    async def read_message(self) -> Any:
+        try:
+            message = await super().read_message()
+        except PayloadTooBig:
+            if self._received_messages == 0:
+                self.fail_connection(4401, "authentication required")
+                raise asyncio.CancelledError
+            raise
+        if message is not None:
+            self._received_messages += 1
+        return message
 
 
 @dataclass(frozen=True, slots=True)
@@ -130,16 +158,18 @@ class QecDataServer:
     async def start(self) -> None:
         if self._server is not None:
             return
-        _secure_canonical_directory(self._project_root, ("qec-data",))
+        secure_canonical_directory(self._project_root, ("qec-data",))
         try:
             self._server = await serve(
                 self._handle_connection,
                 self._host,
                 self._port,
                 compression=None,
-                max_size=None,
+                max_size=MAX_FRAME_BYTES,
                 max_queue=16,
+                close_timeout=1.0,
                 server_header=None,
+                create_protocol=_BoundedServerProtocol,
             )
         except OSError as error:
             if error.errno in {errno.EADDRINUSE, 48, 98, 10048}:
@@ -165,9 +195,6 @@ class QecDataServer:
             return
         try:
             async for frame in websocket:
-                if _frame_size(frame) > MAX_FRAME_BYTES:
-                    await websocket.close(code=1009, reason="frame too large")
-                    break
                 await self._handle_frame(connection, frame)
         except (ConnectionClosed, PayloadTooBig):
             pass
@@ -181,7 +208,9 @@ class QecDataServer:
                 connection.websocket.recv(), timeout=self._authentication_timeout
             )
             parse_authentication(frame, self._token)
-        except (asyncio.TimeoutError, ConnectionClosed, PayloadTooBig, ProtocolError):
+        except ConnectionClosed:
+            return False
+        except (asyncio.TimeoutError, PayloadTooBig, ProtocolError):
             await connection.websocket.close(
                 code=4401, reason="authentication required"
             )
@@ -228,91 +257,87 @@ class QecDataServer:
     async def _import_probe(
         self, connection: _Connection, request: ClientRequest
     ) -> None:
-        source = self._authorized_source(request.payload["source"])
-        results: list[dict[str, object]] = []
-        for registration in self._registry.registrations:
-            adapter = self._registry.get(*registration.key)
-            result = await asyncio.to_thread(adapter.probe, source)
-            results.append(
+        snapshot = await asyncio.to_thread(
+            self._snapshot_source, request.payload["source"]
+        )
+        try:
+            results: list[dict[str, object]] = []
+            for registration in self._registry.registrations:
+                adapter = self._registry.get(*registration.key)
+                result = await asyncio.to_thread(adapter.probe, snapshot.path)
+                await asyncio.to_thread(verify_copied_source, snapshot)
+                results.append(probe_result(registration, result))
+            await connection.send(
                 {
-                    "adapterId": registration.manifest.id,
-                    "adapterVersion": registration.manifest.version,
-                    "supported": result.supported,
-                    "sourceKind": result.source_kind,
-                    "confidence": result.confidence,
-                    "sourceSha256": result.source_sha256,
-                    "details": dict(result.details),
+                    "type": "import_probe_result",
+                    "requestId": request.request_id,
+                    "results": results,
+                    "sourceByteSize": snapshot.byte_size,
+                    "sourcePolicy": "copy",
                 }
             )
-        await connection.send(
-            {
-                "type": "import_probe_result",
-                "requestId": request.request_id,
-                "results": results,
-                "sourceByteSize": source.stat().st_size,
-                "sourcePolicy": "copy",
-            }
-        )
+        finally:
+            remove_copied_source(snapshot)
 
     async def _import_validate(
         self, connection: _Connection, request: ClientRequest
     ) -> None:
         payload = request.payload
-        source = self._authorized_source(payload["source"])
-        adapter = self._registry.get(str(payload["adapterId"]))
-        mapping = _import_mapping(payload["mapping"])
-        validation = await asyncio.to_thread(adapter.validate, source, mapping)
-        issues = [
-            {
-                "code": issue.code,
-                "message": issue.message,
-                "severity": issue.severity.value,
-                "field": issue.field,
-            }
-            for issue in validation.issues
-        ]
-        await connection.send(
-            {
-                "type": "import_validation_result",
-                "requestId": request.request_id,
-                "valid": validation.valid,
-                "issues": issues,
-                "sourceSha256": validation.source_sha256,
-                "provenanceId": validation.provenance_id,
-                "sourceByteSize": source.stat().st_size,
-                "sourcePolicy": "copy",
-            }
-        )
+        snapshot = await asyncio.to_thread(self._snapshot_source, payload["source"])
+        try:
+            adapter = self._registry.get(str(payload["adapterId"]))
+            mapping = _import_mapping(payload["mapping"])
+            validation = await asyncio.to_thread(
+                adapter.validate, snapshot.path, mapping
+            )
+            await asyncio.to_thread(verify_copied_source, snapshot)
+            issues = [validation_issue(issue) for issue in validation.issues]
+            await connection.send(
+                {
+                    "type": "import_validation_result",
+                    "requestId": request.request_id,
+                    "valid": validation.valid,
+                    "issues": issues,
+                    "sourceSha256": validation.source_sha256,
+                    "provenanceId": validation.provenance_id,
+                    "sourceByteSize": snapshot.byte_size,
+                    "sourcePolicy": "copy",
+                }
+            )
+        finally:
+            remove_copied_source(snapshot)
 
     async def _import_preview(
         self, connection: _Connection, request: ClientRequest
     ) -> None:
         payload = request.payload
-        source = self._authorized_source(payload["source"])
-        adapter = self._registry.get(str(payload["adapterId"]))
-        mapping = _import_mapping(payload["mapping"])
-        validation = await asyncio.to_thread(adapter.validate, source, mapping)
-        if not validation.valid:
-            raise ProtocolError(
-                "import_validation_failed",
-                "Import mapping must validate before preview.",
-                request.request_id,
+        snapshot = await asyncio.to_thread(self._snapshot_source, payload["source"])
+        try:
+            adapter = self._registry.get(str(payload["adapterId"]))
+            mapping = _import_mapping(payload["mapping"])
+            validation = await asyncio.to_thread(
+                adapter.validate, snapshot.path, mapping
             )
-        result = await asyncio.to_thread(
-            adapter.preview, source, mapping, int(payload["limit"])
-        )
-        batches = [_batch_summary(batch) for batch in result.batches]
-        await connection.send(
-            {
-                "type": "import_preview_result",
-                "requestId": request.request_id,
-                "batches": batches,
-                "truncated": result.truncated,
-                "totalRecords": result.total_records,
-                "sourceSha256": result.source_sha256,
-                "provenanceId": result.provenance_id,
-            }
-        )
+            require_valid_preview(validation, request.request_id)
+            await asyncio.to_thread(verify_copied_source, snapshot)
+            result = await asyncio.to_thread(
+                adapter.preview, snapshot.path, mapping, int(payload["limit"])
+            )
+            await asyncio.to_thread(verify_copied_source, snapshot)
+            batches = [batch_summary(batch) for batch in result.batches]
+            await connection.send(
+                {
+                    "type": "import_preview_result",
+                    "requestId": request.request_id,
+                    "batches": batches,
+                    "truncated": result.truncated,
+                    "totalRecords": result.total_records,
+                    "sourceSha256": result.source_sha256,
+                    "provenanceId": result.provenance_id,
+                }
+            )
+        finally:
+            remove_copied_source(snapshot)
 
     async def _import_start(
         self, connection: _Connection, request: ClientRequest
@@ -322,7 +347,12 @@ class QecDataServer:
         async def run() -> None:
             await self._run_import(connection, request.request_id, prepared)
 
-        self._jobs.start(connection.owner, request.request_id, run)
+        try:
+            self._jobs.start(connection.owner, request.request_id, run)
+        except Exception:
+            finalize_session_manifest(prepared[0].session_root, SessionStatus.FAILED)
+            remove_copied_source(prepared[4])
+            raise
         await connection.send(
             {
                 "type": "job_started",
@@ -424,15 +454,17 @@ class QecDataServer:
         session_id = str(payload["sessionId"])
         adapter = self._registry.get(str(payload["adapterId"]))
         mapping = _import_mapping(payload["mapping"], session_id=session_id)
-        sources_root = _secure_canonical_directory(
+        sources_root = secure_canonical_directory(
             self._project_root, ("qec-data", "sources")
         )
         copied = copy_authorized_source(
             self._project_root, sources_root, payload["source"], session_id
         )
         try:
+            verify_copied_source(copied)
             validation = adapter.validate(copied.path, mapping)
-            _require_copied_hash(validation, copied.sha256)
+            verify_copied_source(copied)
+            require_copied_hash(validation, copied.sha256)
             provenance_id = validation.provenance_id or copied.sha256
             session = _importing_session(
                 session_id,
@@ -443,9 +475,9 @@ class QecDataServer:
             )
             identity = _semantic_identity(copied.sha256, adapter, mapping)
             storage = SessionStorage.create(self._sessions_root(), session, identity)
-            return storage, adapter, copied.path, mapping
+            return storage, adapter, copied.path, mapping, copied
         except Exception:
-            remove_copied_source(copied.path)
+            remove_copied_source(copied)
             raise
 
     async def _run_import(
@@ -454,14 +486,18 @@ class QecDataServer:
         request_id: str,
         prepared: tuple[Any, ...],
     ) -> None:
-        storage, adapter, source, mapping = prepared
+        storage, adapter, source, mapping, copied = prepared
+        remove_source = False
         try:
+            await asyncio.to_thread(verify_copied_source, copied)
             summary = await _consume_import(
                 storage, adapter.import_batches(source, mapping)
             )
+            await asyncio.to_thread(verify_copied_source, copied)
             partitions = await asyncio.to_thread(
                 storage.commit_segments, summary.segment_keys
             )
+            await asyncio.to_thread(verify_copied_source, copied)
             finalize_session_manifest(storage.session_root, SessionStatus.COMPLETE)
             await connection.send(
                 {
@@ -476,11 +512,16 @@ class QecDataServer:
         except asyncio.CancelledError:
             finalize_session_manifest(storage.session_root, SessionStatus.PARTIAL)
             raise
-        except Exception:
+        except Exception as error:
+            remove_source = (
+                isinstance(error, ProtocolError) and error.code == "source_changed"
+            )
             finalize_session_manifest(storage.session_root, SessionStatus.FAILED)
             await connection.send(
                 error_frame(request_id, "import_failed", "QEC data import failed.")
             )
+        finally:
+            release_copied_source(copied, remove=remove_source)
 
     async def _run_query(
         self,
@@ -536,7 +577,15 @@ class QecDataServer:
         return sessions, next_cursor
 
     def _sessions_root(self) -> Path:
-        return _secure_canonical_directory(self._project_root, ("qec-data", "sessions"))
+        return secure_canonical_directory(self._project_root, ("qec-data", "sessions"))
+
+    def _snapshot_source(self, raw_source: object):
+        snapshots = secure_canonical_directory(
+            self._project_root, ("qec-data", "snapshots")
+        )
+        return copy_authorized_source(
+            self._project_root, snapshots, raw_source, uuid.uuid4().hex
+        )
 
 
 def _import_mapping(value: object, *, session_id: str | None = None) -> ImportMapping:
@@ -574,49 +623,6 @@ def _freeze_scalar(value: object) -> Any:
     if value is None or type(value) in {str, bool, int, float}:
         return value
     raise ProtocolError("invalid_request", "Import option is not scalar JSON.")
-
-
-def _batch_summary(batch: Any) -> dict[str, object]:
-    payload = batch.payload if type(batch) is ImportChunk else batch
-    return {
-        "recordKind": payload.record_kind,
-        "recordCount": payload.record_count,
-        "sequenceStart": payload.sequence_start,
-        "sequenceEnd": payload.sequence_end,
-        "segmentId": payload.segment_id,
-    }
-
-
-def _require_copied_hash(validation: Any, copied_hash: str) -> None:
-    if not validation.valid or validation.source_sha256 is None:
-        raise ProtocolError("import_validation_failed", "Import source is invalid.")
-    if validation.source_sha256 != copied_hash:
-        raise ProtocolError(
-            "source_changed", "Import source changed while it was being copied."
-        )
-
-
-def _frame_size(frame: object) -> int:
-    if type(frame) is str:
-        return len(frame.encode("utf-8"))
-    if type(frame) is bytes:
-        return len(frame)
-    return MAX_FRAME_BYTES + 1
-
-
-def _secure_canonical_directory(root: Path, parts: tuple[str, ...]) -> Path:
-    cursor = root
-    for part in parts:
-        cursor = cursor / part
-        if cursor.is_symlink():
-            raise ValueError("canonical QEC data directory cannot be a symlink")
-        cursor.mkdir(exist_ok=True)
-        if not cursor.is_dir():
-            raise ValueError("canonical QEC data path must be a directory")
-    resolved = cursor.resolve(strict=True)
-    if root not in resolved.parents:
-        raise ValueError("canonical QEC data directory escapes the project")
-    return resolved
 
 
 def _importing_session(

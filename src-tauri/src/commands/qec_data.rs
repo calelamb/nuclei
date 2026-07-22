@@ -1,4 +1,5 @@
 use std::fmt;
+use std::fs;
 use std::io::{self, BufRead, BufReader};
 use std::net::{IpAddr, Ipv4Addr, SocketAddr, TcpListener};
 use std::path::{Path, PathBuf};
@@ -89,6 +90,33 @@ pub struct QecDataLaunchConfig {
     dependencies: Vec<String>,
     dependency_timeout: Duration,
     readiness_timeout: Duration,
+    authorized_project: Option<AuthorizedProjectRoot>,
+}
+
+#[derive(Clone, Debug)]
+pub struct AuthorizedProjectRoot {
+    path: PathBuf,
+    identity: ProjectFileIdentity,
+}
+
+#[cfg(unix)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+struct ProjectFileIdentity {
+    device: u64,
+    inode: u64,
+}
+
+#[cfg(windows)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+struct ProjectFileIdentity {
+    volume: Option<u32>,
+    index: Option<u64>,
+}
+
+#[cfg(not(any(unix, windows)))]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+struct ProjectFileIdentity {
+    length: u64,
 }
 
 impl QecDataLaunchConfig {
@@ -110,6 +138,20 @@ impl QecDataLaunchConfig {
                 .collect(),
             dependency_timeout: DEFAULT_DEPENDENCY_TIMEOUT,
             readiness_timeout: DEFAULT_READINESS_TIMEOUT,
+            authorized_project: None,
+        }
+    }
+
+    pub fn new_authorized(
+        python: impl Into<PathBuf>,
+        module_root: impl Into<PathBuf>,
+        project: AuthorizedProjectRoot,
+        port: u16,
+    ) -> Self {
+        let project_root = project.path.clone();
+        Self {
+            authorized_project: Some(project),
+            ..Self::new(python, module_root, project_root, port)
         }
     }
 
@@ -157,7 +199,10 @@ impl QecDataManager {
     }
 
     pub fn start(&self, config: QecDataLaunchConfig) -> Result<QecDataEndpoint, QecDataError> {
-        let project_root = canonical_directory(&config.project_root, "invalid_project_root")?;
+        let project_root = match &config.authorized_project {
+            Some(project) => verify_authorized_project(project)?,
+            None => canonical_directory(&config.project_root, "invalid_project_root")?,
+        };
         let mut state = self.lock_state()?;
         if let Some(endpoint) = running_endpoint(&mut state, &project_root)? {
             return Ok(endpoint);
@@ -582,7 +627,8 @@ fn failed_status(code: &str) -> QecDataStatus {
 pub fn authorize_project_access(
     project_root: &Path,
     is_allowed: impl Fn(&Path) -> bool,
-) -> Result<(), QecDataError> {
+) -> Result<AuthorizedProjectRoot, QecDataError> {
+    let project_root = canonical_directory(project_root, "invalid_project_root")?;
     let qec_data = project_root.join("qec-data");
     let authorized = [
         project_root.to_path_buf(),
@@ -593,12 +639,63 @@ pub fn authorize_project_access(
     .iter()
     .all(|path| is_allowed(path));
     if authorized {
-        Ok(())
+        let metadata = fs::metadata(&project_root).map_err(|_| {
+            QecDataError::new(
+                "invalid_project_root",
+                "Authorized project identity is unavailable.",
+            )
+        })?;
+        Ok(AuthorizedProjectRoot {
+            path: project_root,
+            identity: project_file_identity(&metadata),
+        })
     } else {
         Err(QecDataError::new(
             "project_not_authorized",
             "The selected project is not authorized for QEC Data Engine access.",
         ))
+    }
+}
+
+fn verify_authorized_project(project: &AuthorizedProjectRoot) -> Result<PathBuf, QecDataError> {
+    let metadata = fs::metadata(&project.path).map_err(|_| project_identity_changed())?;
+    if !metadata.is_dir() || project_file_identity(&metadata) != project.identity {
+        return Err(project_identity_changed());
+    }
+    Ok(project.path.clone())
+}
+
+fn project_identity_changed() -> QecDataError {
+    QecDataError::new(
+        "project_identity_changed",
+        "Authorized project identity changed before the QEC Data Engine started.",
+    )
+}
+
+#[cfg(unix)]
+fn project_file_identity(metadata: &fs::Metadata) -> ProjectFileIdentity {
+    use std::os::unix::fs::MetadataExt;
+
+    ProjectFileIdentity {
+        device: metadata.dev(),
+        inode: metadata.ino(),
+    }
+}
+
+#[cfg(windows)]
+fn project_file_identity(metadata: &fs::Metadata) -> ProjectFileIdentity {
+    use std::os::windows::fs::MetadataExt;
+
+    ProjectFileIdentity {
+        volume: metadata.volume_serial_number(),
+        index: metadata.file_index(),
+    }
+}
+
+#[cfg(not(any(unix, windows)))]
+fn project_file_identity(metadata: &fs::Metadata) -> ProjectFileIdentity {
+    ProjectFileIdentity {
+        length: metadata.len(),
     }
 }
 
@@ -615,7 +712,7 @@ pub fn generate_token() -> Result<String, QecDataError> {
 
 fn production_config(
     app_handle: &tauri::AppHandle,
-    project_root: PathBuf,
+    project: AuthorizedProjectRoot,
 ) -> Result<QecDataLaunchConfig, QecDataError> {
     let python = crate::commands::frameworks::ensure_kernel_runtime(app_handle)
         .map_err(|_| QecDataError::new("python_unavailable", "Managed Python is unavailable."))?;
@@ -634,10 +731,10 @@ fn production_config(
             )
         })?
     };
-    Ok(QecDataLaunchConfig::new(
+    Ok(QecDataLaunchConfig::new_authorized(
         python,
         module_root,
-        project_root,
+        project,
         QEC_DATA_PORT,
     ))
 }
@@ -649,10 +746,9 @@ pub fn qec_data_start(
     window: WebviewWindow,
     project_root: PathBuf,
 ) -> Result<QecDataEndpoint, QecDataError> {
-    let project_root = canonical_directory(&project_root, "invalid_project_root")?;
     let scope = window.fs_scope();
-    authorize_project_access(&project_root, |path| scope.is_allowed(path))?;
-    let config = production_config(&app_handle, project_root)?;
+    let project = authorize_project_access(&project_root, |path| scope.is_allowed(path))?;
+    let config = production_config(&app_handle, project)?;
     state.start(config)
 }
 
