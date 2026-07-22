@@ -24,8 +24,10 @@ which skips keyring persistence (manager.py: ``if persist and credentials``).
 from __future__ import annotations
 
 import importlib.util
+import re
 import sys
 from pathlib import Path
+from urllib.parse import unquote, urlsplit
 
 import pytest
 
@@ -36,6 +38,33 @@ from kernel.hardware.manager import HardwareManager
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 EXAMPLES_DIR = REPO_ROOT / "docs-site" / "fixtures" / "examples"
+DOCS_DIR = REPO_ROOT / "docs-site" / "src" / "content" / "docs"
+RESEARCH_DOCS_DIR = DOCS_DIR / "research"
+QEC_WORKBENCH_DOC = RESEARCH_DOCS_DIR / "qec-workbench.mdx"
+MARKDOWN_LINK = re.compile(r"\[[^\]]*\]\((/docs/research/[^)\s]*)\)")
+
+
+def _research_doc_targets(href: str) -> tuple[Path, ...]:
+    """Resolve candidate docs-site pages without allowing path escape."""
+    parsed = urlsplit(href)
+    decoded_path = unquote(parsed.path)
+    prefix = "/docs/research/"
+    assert decoded_path.startswith(prefix), f"Not a Research docs URL: {href}"
+    relative = decoded_path.removeprefix(prefix).rstrip("/")
+    parts = Path(relative).parts
+    assert relative and ".." not in parts and "\\" not in relative, (
+        f"Research docs link escapes its root: {href}"
+    )
+    target = RESEARCH_DOCS_DIR.joinpath(*parts)
+    assert target.is_relative_to(RESEARCH_DOCS_DIR)
+    if target.suffix:
+        return (target,)
+    return (target.with_suffix(".mdx"), target.with_suffix(".md"))
+
+
+def _research_links(document: Path) -> list[str]:
+    """Extract only absolute internal Research-doc links from an MDX page."""
+    return MARKDOWN_LINK.findall(document.read_text(encoding="utf-8"))
 
 
 def _load_example(module_name: str, filename: str):
@@ -169,3 +198,45 @@ def test_echo_provider_submit_requires_connection(echo_manager):
     # failures after connection are returned as failed JobHandles instead.
     with pytest.raises(RuntimeError):
         manager.submit_job("echo", "circuit-source", "echo_1", shots=8)
+
+
+# ─────────────────── research docs ───────────────────
+
+
+def test_qec_workbench_page_and_research_links_resolve() -> None:
+    assert QEC_WORKBENCH_DOC.is_file(), "Missing Research docs page: qec-workbench.mdx"
+
+    broken: list[str] = []
+    for document in sorted(RESEARCH_DOCS_DIR.glob("*.mdx")):
+        for href in _research_links(document):
+            targets = _research_doc_targets(href)
+            if not any(target.is_file() for target in targets):
+                expected = " or ".join(target.name for target in targets)
+                broken.append(f"{document.name}: {href} -> {expected}")
+
+    assert broken == [], "Broken Research docs links:\n" + "\n".join(broken)
+
+
+@pytest.mark.parametrize(
+    "href",
+    [
+        "/docs/research/qec-workbench/",
+        "/docs/research/qec-workbench/#what-persists",
+        "/docs/research/qec-workbench/?view=build#what-persists",
+    ],
+)
+def test_research_doc_link_normalization(href: str) -> None:
+    assert QEC_WORKBENCH_DOC in _research_doc_targets(href)
+
+
+@pytest.mark.parametrize(
+    "href",
+    [
+        "/docs/research/../reference/configuration/",
+        "/docs/research/%2e%2e/reference/configuration/",
+        "/docs/research/..%5Creference%5Cconfiguration/",
+    ],
+)
+def test_research_doc_links_cannot_escape_research_root(href: str) -> None:
+    with pytest.raises(AssertionError, match="escapes its root"):
+        _research_doc_targets(href)

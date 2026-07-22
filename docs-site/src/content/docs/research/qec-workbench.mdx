@@ -1,0 +1,169 @@
+---
+title: "QEC Workbench"
+description: "Organize an existing QEC project into Studies, move between Build, Analyze, and Observe, and keep one linked research context across the four-zone light workspace."
+---
+
+import { Aside, Steps } from '@astrojs/starlight/components';
+
+The **QEC Workbench** is the investigation workspace in Research mode. It adds
+a lightweight **Study** around the Stim circuits, detector error models, Python
+generators, experiment manifests, and noise models that already live in your
+project. A Study answers “which material belongs to this research question?”;
+it does not import, copy, or replace that material.
+
+<Aside type="note">
+The workbench foundation is available now. Canonical simulation or hardware
+sessions, syndrome and calibration import, live observation, the connected
+Campaign Center and Failure Microscope, Findings, and collaboration are later
+phases. **Run / Capture** and **Pin Finding** therefore remain disabled in this
+foundation release. Use [QEC Studio](/docs/research/qec-studio/) for today's
+connected Stim, sinter, decoding, and threshold-analysis workflows.
+</Aside>
+
+## Open the workbench
+
+<Steps>
+1. Open a Nuclei project and switch to **Research** mode.
+2. Choose **QEC Workbench** in the left rail. In the standard Research rail it
+   is the third top item, so <kbd>⌘3</kbd> (Ctrl+3 on Windows/Linux) opens it.
+3. Select an existing Study from the **Studies** list, or create one in the
+   sidebar.
+</Steps>
+
+The command palette also exposes **Go to QEC Workbench**. See
+[Navigating the workspace](/docs/research/navigating-the-workspace/) for the
+mode-aware shortcut rules.
+
+## Create a Study
+
+In the QEC Workbench sidebar, enter a name, a research question, and the preset
+to record in the manifest, then choose **Create Study**. Nuclei creates and
+selects:
+
+```text
+studies/<name-as-a-slug>.qec-study.yaml
+```
+
+Study manifests use schema version 1. They are ordinary YAML, so they can be
+reviewed and committed with the rest of the project. The creation form starts
+with an empty source list. Add project-relative references in the manifest to
+organize existing files:
+
+```yaml
+schema: 1
+id: surface-memory
+name: Surface Memory
+question: Does d=7 suppress logical errors at p=0.004?
+preset: analyze
+tags:
+  - surface-code
+  - memory
+sources:
+  - id: memory-circuit
+    kind: stim
+    path: qec/surface-memory.stim
+  - id: generator
+    kind: python
+    path: qec/surface-memory.py
+  - id: campaign
+    kind: experiment
+    path: experiments/surface-memory.experiment.yaml
+  - id: circuit-noise
+    kind: noise
+    path: noise/circuit-level.noise.yaml
+```
+
+Supported existing-source kinds include `stim`, `python`, `dem`, `experiment`,
+and `noise`. Paths must stay inside the open project: absolute paths, drive or
+UNC paths, and `..` traversal are rejected. Invalid Study files remain visible
+as validation issues with the fields to fix; one malformed manifest does not
+hide the other valid Studies.
+
+<Aside type="caution">
+The referenced `.stim`, `.dem`, `.py`, `*.experiment.yaml`, and
+`*.noise.yaml` files remain the source of truth. Editing a Study changes only
+the organization around those files. It does not duplicate their content or
+change the existing [experiment](/docs/research/experiments/) and
+[campaign](/docs/research/campaigns/) formats.
+</Aside>
+
+## Choose a working preset
+
+The research bar keeps three presets over the same Study and selection. Use the
+**Build**, **Analyze**, and **Observe** buttons; keyboard users can focus a
+button and press Enter or Space.
+
+The manifest's `preset` field records the Study preference. The research-bar
+choice is the active local arrangement and is restored from that Study's local
+workspace context when one has been saved.
+
+| Preset | Foundation arrangement |
+| --- | --- |
+| **Build** | Registered Editor entry plus Timeline, Code Lattice, and Detector Graph instruments. |
+| **Analyze** | Timeline, Code Lattice, Detector Graph, and Campaign Center on the canvas, with Failure Microscope available in the Inspector. |
+| **Observe** | Stream Health and Calibration Timeline instrument positions for the later hardware-observatory phase. No live connection or hardware command is created by switching to this preset. |
+
+The instruments inside this new shell are registered foundation surfaces and
+show an explicit “awaiting session data” state until their data connections
+arrive in later phases. Switching preset does not rewrite source files or fork
+research state.
+
+## Work in four stable zones
+
+Focus order follows the visible layout:
+
+1. **Sources / Data** — Study overview, referenced files, and validation state.
+   Selecting a row sets the shared research selection.
+2. **Investigation Canvas** — the preset's registered scientific instruments.
+   It also shows the linked-selection state and marks the planned split,
+   compare, time/round, and checkpoint controls; those controls are not wired
+   in this foundation phase.
+3. **Inspector** — active IDs, the available inspector instruments, and source
+   lineage. On laptop-width windows it becomes a drawer; close it with its
+   button or Escape and reopen it from the canvas.
+4. **Bottom Tray** — Jobs, Streams, Logs, and Comparisons. Collapse or expand it
+   without losing the current workbench context.
+
+## Follow the Research Trail
+
+The workbench uses one immutable **Research Selection**. In the foundation UI,
+select a Study overview or referenced source in **Sources / Data**. The same ID
+appears in the research bar's **Trail** and in the Inspector instead of each
+surface maintaining a disconnected selection.
+
+Use the Trail controls to:
+
+- move backward and forward through selection history;
+- inspect the current stable source or Study ID; and
+- clear the selection and its history.
+
+The selection contract already supports bounded entity and time-window
+references. Detector, tick, shot, session, calibration, and Finding drill-downs
+become connected UI workflows in later phases; the foundation does not claim
+those data workflows yet.
+
+## What persists
+
+After a project and Study are both selected, Nuclei stores workspace context
+locally under a separate key for that exact project-and-Study pair. It restores:
+
+- the active Build, Analyze, or Observe preset;
+- pinned panel IDs;
+- source, Inspector, and tray dimensions;
+- whether the bottom tray is collapsed; and
+- the current Research Selection, including a bounded time window when one is
+  supplied by a compatible surface.
+
+Selection back/forward history and the Inspector drawer's open state are
+transient. Workspace preferences do not enter the Study YAML, and switching to
+another Study loads that Study's own local context. A failed restore or save is
+shown in the workbench with an explicit **Retry restore** or **Retry save**
+action.
+
+## Visual target
+
+The QEC Workbench intentionally uses Nuclei's light research language: white
+analytical surfaces, pale-blue fields and selections, cool-gray boundaries,
+and restrained cyan/blue accents. This phase has a light-only QEC acceptance
+target. It does not add a dark-blue or neon QEC palette, and dark-mode parity is
+not part of the current workbench contract.

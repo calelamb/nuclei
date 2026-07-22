@@ -5,6 +5,20 @@ All notable changes to Nuclei will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added — Unified QEC Workbench foundation
+
+- A light, four-zone Research workspace organized around versioned,
+  git-friendly QEC Study manifests that reference existing Stim, DEM, Python,
+  experiment, and noise files without copying or replacing them.
+- Build, Analyze, and Observe workspace presets, a linked Research Selection
+  and back/forward Trail, responsive Inspector drawer, collapsible operations
+  tray, and per-project/per-Study persistence with actionable retry states.
+- QEC Workbench navigation in the Research rail and command palette, plus
+  laptop and wide-screen light-theme Playwright coverage. Hardware data import,
+  live observation, and connected session instruments remain future phases.
+
 ## [0.13.0] - 2026-07-15
 
 Editor-depth release: the editor gains real Python tooling and stops losing your
