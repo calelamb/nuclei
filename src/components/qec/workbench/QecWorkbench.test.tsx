@@ -451,6 +451,69 @@ describe('<QecWorkbench />', () => {
     expect(useQecWorkbenchStore.getState().preset).toBe('observe');
   });
 
+  it('orders ABA writes by exact key across disposed and replacement sessions', async () => {
+    vi.useFakeTimers();
+    setStudies();
+    useProjectStore.setState({ projectRoot: '/project' });
+    const oldAWrite = deferred<void>();
+    const invocations: Array<{ key: string; value: unknown }> = [];
+    const durable = new Map<string, unknown>();
+    const setStoredValue = vi.fn(async (key: string, value: unknown) => {
+      invocations.push({ key, value });
+      if (invocations.length === 1) await oldAWrite.promise;
+      durable.set(key, value);
+    });
+    const bridge = persistenceBridge(vi.fn(async () => persistedState('build')), setStoredValue);
+    render(<PlatformProvider bridge={bridge}><QecWorkbench /></PlatformProvider>);
+    await flushAsync();
+
+    act(() => useQecWorkbenchStore.getState().setPreset('analyze'));
+    await flushPersistenceDebounce();
+    act(() => useQecStudyUiStore.getState().setActiveStudy(SECOND_STUDY.id));
+    await flushAsync();
+    act(() => useQecStudyUiStore.getState().setActiveStudy(STUDY.id));
+    await flushAsync();
+    act(() => useQecWorkbenchStore.getState().setPreset('observe'));
+    await flushPersistenceDebounce();
+
+    expect(setStoredValue).toHaveBeenCalledTimes(1);
+    oldAWrite.resolve();
+    await flushAsync();
+    expect(setStoredValue).toHaveBeenCalledTimes(2);
+    expect(invocations[1]).toMatchObject({
+      key: `qec-workbench:/project:${STUDY.id}`,
+      value: { preset: 'observe' },
+    });
+    expect(durable.get(`qec-workbench:/project:${STUDY.id}`)).toMatchObject({ preset: 'observe' });
+  });
+
+  it('keeps different persistence keys independent while one key is blocked', async () => {
+    vi.useFakeTimers();
+    setStudies();
+    useProjectStore.setState({ projectRoot: '/project' });
+    const oldAWrite = deferred<void>();
+    const invocations: Array<{ key: string; value: unknown }> = [];
+    const setStoredValue = vi.fn(async (key: string, value: unknown) => {
+      invocations.push({ key, value });
+      if (key.endsWith(STUDY.id)) await oldAWrite.promise;
+    });
+    const bridge = persistenceBridge(vi.fn(async () => persistedState('build')), setStoredValue);
+    render(<PlatformProvider bridge={bridge}><QecWorkbench /></PlatformProvider>);
+    await flushAsync();
+
+    act(() => useQecWorkbenchStore.getState().setPreset('analyze'));
+    await flushPersistenceDebounce();
+    act(() => useQecStudyUiStore.getState().setActiveStudy(SECOND_STUDY.id));
+    await flushAsync();
+    act(() => useQecWorkbenchStore.getState().setPreset('observe'));
+    await flushPersistenceDebounce();
+
+    expect(setStoredValue).toHaveBeenCalledTimes(2);
+    expect(invocations[1].key).toBe(`qec-workbench:/project:${SECOND_STUDY.id}`);
+    oldAWrite.resolve();
+    await flushAsync();
+  });
+
   it('removes the disposed scope retry action when the active Study is cleared', async () => {
     vi.useFakeTimers();
     useProjectStore.setState({ projectRoot: '/project' });

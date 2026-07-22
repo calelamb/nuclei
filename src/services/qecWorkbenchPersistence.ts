@@ -26,6 +26,30 @@ const panelIdSchema = z.string().refine(
   (value) => QEC_PANEL_REGISTRY.some((panel) => panel.id === value),
 );
 
+interface WriteQueueEntry {
+  tail: Promise<void>;
+}
+
+const writeQueues = new Map<string, WriteQueueEntry>();
+
+function enqueueWrite(key: string, write: () => Promise<void>): Promise<void> {
+  const previous = writeQueues.get(key)?.tail ?? Promise.resolve();
+  const result = previous.then(write);
+  const entry: WriteQueueEntry = {
+    tail: result.then(() => undefined, () => undefined),
+  };
+  writeQueues.set(key, entry);
+  void entry.tail.then(() => {
+    if (writeQueues.get(key) === entry) writeQueues.delete(key);
+  });
+  return result;
+}
+
+/** Test seam confirming idle exact-key queues do not remain retained. */
+export function getQecWorkbenchPersistenceWriteQueueSizeForTests(): number {
+  return writeQueues.size;
+}
+
 function defaults(): PersistedQecWorkbenchState {
   return {
     schema: 1,
@@ -141,8 +165,7 @@ export async function saveQecWorkbenchState(
   studyId: string,
   state: PersistedQecWorkbenchState,
 ): Promise<void> {
-  await platform.setStoredValue(
-    getQecWorkbenchStorageKey(projectRoot, studyId),
-    persistenceSnapshot(state),
-  );
+  const key = getQecWorkbenchStorageKey(projectRoot, studyId);
+  const snapshot = persistenceSnapshot(state);
+  await enqueueWrite(key, () => platform.setStoredValue(key, snapshot));
 }

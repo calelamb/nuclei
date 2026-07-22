@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { PlatformBridge } from '../platform/bridge';
 import {
+  getQecWorkbenchPersistenceWriteQueueSizeForTests,
   getQecWorkbenchStorageKey,
   loadQecWorkbenchState,
   saveQecWorkbenchState,
@@ -111,5 +112,19 @@ describe('QEC workbench persistence', () => {
     await expect(
       saveQecWorkbenchState(bridge, '/project', 'study', VALID_STATE),
     ).rejects.toThrow('store unavailable');
+  });
+
+  it('releases per-key write coordinator entries after success and failure', async () => {
+    const bridge = storageBridge();
+    await saveQecWorkbenchState(bridge, '/project', 'success', VALID_STATE);
+    await Promise.resolve();
+    expect(getQecWorkbenchPersistenceWriteQueueSizeForTests()).toBe(0);
+
+    vi.mocked(bridge.setStoredValue).mockRejectedValueOnce(new Error('store unavailable'));
+    await expect(
+      saveQecWorkbenchState(bridge, '/project', 'failure', VALID_STATE),
+    ).rejects.toThrow('store unavailable');
+    await Promise.resolve();
+    expect(getQecWorkbenchPersistenceWriteQueueSizeForTests()).toBe(0);
   });
 });
