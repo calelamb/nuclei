@@ -8,8 +8,9 @@ import os
 import pickle
 import signal
 import time
-from collections.abc import Callable
+from dataclasses import dataclass
 from pathlib import Path
+from typing import Protocol
 
 from kernel.qec_data.adapters.base import SourceFingerprintEntry, fingerprint_source
 
@@ -17,10 +18,44 @@ from kernel.qec_data.adapters.base import SourceFingerprintEntry, fingerprint_so
 PROCESS_CLEANUP_SECONDS = 0.25
 
 
-def process_tree_isolation_strategy(platform_name: str) -> str | None:
-    """Return the descendant-containment strategy available on a platform."""
+class IsolationBackend(Protocol):
+    """Capability boundary for an adapter descendant-containment backend."""
 
-    return "posix_process_group" if platform_name == "posix" else None
+    name: str
+    os_enforced: bool
+
+    def context(
+        self, adapter_factory: object
+    ) -> multiprocessing.context.BaseContext | None: ...
+
+    def prepare_worker(self) -> tuple[object | None, str | None]: ...
+
+    def cleanup_worker(
+        self, process: multiprocessing.Process, token: object | None
+    ) -> str | None: ...
+
+
+def detect_secure_isolation_backend(platform_name: str) -> IsolationBackend | None:
+    """Detect a genuinely OS-enforced descendant container, if implemented."""
+
+    del platform_name
+    return None
+
+
+def resolve_isolation_backend(
+    adapter_factory: object,
+    injected: IsolationBackend | None,
+    platform_name: str,
+) -> tuple[
+    IsolationBackend | None, multiprocessing.context.BaseContext | None, str | None
+]:
+    backend = injected or detect_secure_isolation_backend(platform_name)
+    if backend is None:
+        return None, None, "no OS-enforced descendant-containment backend is available"
+    context = backend.context(adapter_factory)
+    if context is None:
+        return None, None, f"backend {backend.name} cannot isolate this factory"
+    return backend, context, None
 
 
 def factory_is_spawn_importable(adapter_factory: object) -> bool:
@@ -40,11 +75,9 @@ def factory_is_spawn_importable(adapter_factory: object) -> bool:
         return False
 
 
-def process_context(
-    adapter_factory: object, platform_name: str
+def _portable_context(
+    adapter_factory: object,
 ) -> multiprocessing.context.BaseContext | None:
-    if process_tree_isolation_strategy(platform_name) is None:
-        return None
     methods = multiprocessing.get_all_start_methods()
     if "fork" in methods:
         return multiprocessing.get_context("fork")
@@ -53,10 +86,8 @@ def process_context(
     return None
 
 
-def establish_process_group(
-    send: Callable[[tuple[str, object]], None],
-) -> str | None:
-    """Create a new POSIX session before any untrusted adapter code runs."""
+def _establish_process_group() -> tuple[int | None, str | None]:
+    """Create a best-effort group suitable only for trusted test adapters."""
 
     try:
         os.setsid()
@@ -64,9 +95,8 @@ def establish_process_group(
         if group_id != os.getpid():
             raise OSError("isolated process group id did not match worker pid")
     except BaseException as error:
-        return f"{type(error).__name__}: {error}"
-    send(("isolation_ready", group_id))
-    return None
+        return None, f"{type(error).__name__}: {error}"
+    return group_id, None
 
 
 def _stop_process(process: multiprocessing.Process) -> None:
@@ -92,10 +122,10 @@ def _signal_process_group(group_id: int | None, signal_number: int) -> str | Non
     return None
 
 
-def stop_process_tree(
+def _stop_process_group(
     process: multiprocessing.Process, group_id: int | None
 ) -> str | None:
-    """Terminate and reap the verified worker group, including descendants."""
+    """Terminate one trusted process group without claiming tree containment."""
 
     if group_id is not None and group_id != process.pid:
         _stop_process(process)
@@ -109,6 +139,66 @@ def stop_process_tree(
         error for error in (terminate_error, kill_error) if error is not None
     )
     return "; ".join(errors) if errors else None
+
+
+@dataclass(frozen=True, slots=True)
+class TrustedPosixProcessGroupBackend:
+    """Best-effort POSIX group backend for non-adversarial contract tests only."""
+
+    name: str = "trusted_posix_process_group"
+    os_enforced: bool = False
+
+    def context(
+        self, adapter_factory: object
+    ) -> multiprocessing.context.BaseContext | None:
+        if os.name != "posix":
+            return None
+        return _portable_context(adapter_factory)
+
+    def prepare_worker(self) -> tuple[object | None, str | None]:
+        return _establish_process_group()
+
+    def cleanup_worker(
+        self, process: multiprocessing.Process, token: object | None
+    ) -> str | None:
+        if type(token) is not int:
+            _stop_process(process)
+            return "trusted process-group token was invalid"
+        return _stop_process_group(process, token)
+
+
+def trusted_process_group_backend() -> IsolationBackend:
+    """Build the explicit best-effort backend used by trusted adapter tests."""
+
+    return TrustedPosixProcessGroupBackend()
+
+
+def receive_worker_report(
+    connection: object,
+    process: multiprocessing.Process,
+    deadline: float,
+    report_type: type[object],
+) -> tuple[object | None, str, object | None]:
+    """Receive stage/isolation messages until a typed report or deadline."""
+
+    stage = "startup"
+    isolation_token: object | None = None
+    while time.monotonic() < deadline:
+        remaining = max(0.0, deadline - time.monotonic())
+        try:
+            if connection.poll(min(0.02, remaining)):
+                kind, value = connection.recv()
+                if kind == "stage" and type(value) is str:
+                    stage = value
+                elif kind == "isolation_ready":
+                    isolation_token = value
+                elif kind == "report" and type(value) is report_type:
+                    return value, stage, isolation_token
+        except (EOFError, OSError):
+            break
+        if not process.is_alive():
+            break
+    return None, stage, isolation_token
 
 
 def _snapshot_child(connection: object, source: Path) -> None:

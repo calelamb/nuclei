@@ -30,6 +30,7 @@ from kernel.tests.qec_data.test_adapter_contract import (
 
 
 OTHER_PROVENANCE = "unexpected-provenance"
+TRUSTED_TEST_ISOLATION = compliance.trusted_process_group_backend()
 
 
 @pytest.fixture
@@ -37,6 +38,12 @@ def source(tmp_path: Path) -> Path:
     path = tmp_path / "source.dets"
     path.write_text("shot D0\n", encoding="utf-8")
     return path
+
+
+def run_trusted_contract(adapter_factory, source: Path):
+    return run_adapter_contract(
+        adapter_factory, source, isolation_backend=TRUSTED_TEST_ISOLATION
+    )
 
 
 class DelayedDescendantAdapter(GoodAdapter):
@@ -51,6 +58,20 @@ class DelayedDescendantAdapter(GoodAdapter):
         child = subprocess.Popen([sys.executable, "-c", script, str(source)])
         with marker.open("a", encoding="utf-8") as marker_file:
             marker_file.write(f"{child.pid}\n")
+        return super().preview(source, mapping, limit)
+
+
+class DetachedDescendantAdapter(GoodAdapter):
+    def preview(
+        self, source: Path, mapping: ImportMapping, limit: int
+    ) -> PreviewResult:
+        script = (
+            "import pathlib, sys, time; time.sleep(0.6); "
+            "pathlib.Path(sys.argv[1]).write_text('detached-escape\\n')"
+        )
+        subprocess.Popen(
+            [sys.executable, "-c", script, str(source)], start_new_session=True
+        )
         return super().preview(source, mapping, limit)
 
 
@@ -81,6 +102,14 @@ class ExplicitGapAdapter(GoodAdapter):
             canonical_batch(2), data_quality=(DataQualityFlag.GAP_BEFORE,)
         )
         return iter((canonical_batch(0), after_gap))
+
+
+class FalseGapAdapter(GoodAdapter):
+    def import_batches(self, source: Path, mapping: ImportMapping):
+        contiguous = replace(
+            canonical_batch(1), data_quality=(DataQualityFlag.GAP_BEFORE,)
+        )
+        return iter((canonical_batch(0), contiguous))
 
 
 def _measured_bits(width: int = 1) -> QualifiedPackedBits:
@@ -146,7 +175,7 @@ class RoundProfileChangingAdapter(GoodAdapter):
 @pytest.mark.skipif(os.name != "posix", reason="POSIX process-group integration")
 def test_successful_worker_kills_delayed_descendants(source: Path) -> None:
     original = source.read_bytes()
-    report = run_adapter_contract(DelayedDescendantAdapter, source)
+    report = run_trusted_contract(DelayedDescendantAdapter, source)
     descendant_ids = tuple(
         int(value) for value in source.with_suffix(".descendants").read_text().split()
     )
@@ -156,9 +185,25 @@ def test_successful_worker_kills_delayed_descendants(source: Path) -> None:
     assert source.read_bytes() == original
 
 
-def test_process_tree_isolation_strategy_is_platform_explicit() -> None:
-    assert compliance.process_tree_isolation_strategy("posix") == "posix_process_group"
-    assert compliance.process_tree_isolation_strategy("nt") is None
+@pytest.mark.skipif(os.name != "posix", reason="detached descendant regression")
+def test_secure_default_never_runs_without_enforced_containment(source: Path) -> None:
+    original = source.read_bytes()
+    report = run_adapter_contract(DetachedDescendantAdapter, source)
+    time.sleep(0.9)
+    assert report.failure_codes == ("isolation_unavailable",)
+    assert source.read_bytes() == original
+
+
+def test_isolation_backend_boundary_is_explicit() -> None:
+    assert compliance.detect_secure_isolation_backend(os.name) is None
+    backend = compliance.trusted_process_group_backend()
+    assert backend.name == "trusted_posix_process_group"
+    assert not backend.os_enforced
+
+
+def test_secure_detection_fails_closed_on_unsupported_platforms() -> None:
+    assert compliance.detect_secure_isolation_backend("posix") is None
+    assert compliance.detect_secure_isolation_backend("nt") is None
 
 
 @pytest.mark.skipif(os.name != "nt", reason="Windows isolation integration")
@@ -178,11 +223,16 @@ def test_windows_fails_closed_without_tree_isolation(source: Path) -> None:
 def test_expected_mapping_provenance_is_enforced(
     source: Path, factory, code: str
 ) -> None:
-    assert code in run_adapter_contract(factory, source).failure_codes
+    assert code in run_trusted_contract(factory, source).failure_codes
 
 
 def test_explicit_gap_quality_allows_sequence_discontinuity(source: Path) -> None:
-    assert run_adapter_contract(ExplicitGapAdapter, source).passed
+    assert run_trusted_contract(ExplicitGapAdapter, source).passed
+
+
+def test_gap_quality_is_rejected_without_a_discontinuity(source: Path) -> None:
+    report = run_trusted_contract(FalseGapAdapter, source)
+    assert "batch_sequence_false_gap" in report.failure_codes
 
 
 @pytest.mark.parametrize(
@@ -195,5 +245,5 @@ def test_explicit_gap_quality_allows_sequence_discontinuity(source: Path) -> Non
     ],
 )
 def test_same_segment_schema_profile_cannot_change(source: Path, factory) -> None:
-    report = run_adapter_contract(factory, source)
+    report = run_trusted_contract(factory, source)
     assert "batch_schema_profile_changed" in report.failure_codes

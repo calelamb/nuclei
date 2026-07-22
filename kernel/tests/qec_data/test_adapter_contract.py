@@ -38,7 +38,8 @@ from kernel.qec_data.models import (
 )
 from kernel.tests.qec_data.adapter_contract import (
     factory_is_spawn_importable,
-    run_adapter_contract,
+    run_adapter_contract as _run_adapter_contract,
+    trusted_process_group_backend,
 )
 
 
@@ -51,6 +52,13 @@ OFFLINE_CAPABILITIES = frozenset(
         AdapterCapability.IMPORT,
     }
 )
+TRUSTED_TEST_ISOLATION = trusted_process_group_backend()
+
+
+def run_adapter_contract(adapter_factory, source: Path):
+    return _run_adapter_contract(
+        adapter_factory, source, isolation_backend=TRUSTED_TEST_ISOLATION
+    )
 
 
 def canonical_batch(

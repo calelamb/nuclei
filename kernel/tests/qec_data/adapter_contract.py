@@ -32,12 +32,13 @@ from kernel.qec_data.model_codecs import batch_from_mapping, batch_to_mapping
 from kernel.qec_data.model_validation import DataQualityFlag
 from kernel.qec_data.models import SyndromeBatch
 from kernel.tests.qec_data.adapter_process_isolation import (
+    IsolationBackend,
     bounded_source_snapshot,
-    establish_process_group,
+    detect_secure_isolation_backend as detect_secure_isolation_backend,
     factory_is_spawn_importable as factory_is_spawn_importable,
-    process_context,
-    process_tree_isolation_strategy,
-    stop_process_tree,
+    receive_worker_report,
+    resolve_isolation_backend,
+    trusted_process_group_backend as trusted_process_group_backend,
 )
 
 
@@ -252,11 +253,14 @@ def _check_batch_sequence(
         failures.add("batch_sequence_nonmonotonic", "batch sequence moved backwards")
     if batch.sequence_start < previous.sequence_end:
         failures.add("batch_sequence_overlap", "batch sequence ranges overlap")
-    if (
-        batch.sequence_start > previous.sequence_end
-        and DataQualityFlag.GAP_BEFORE not in batch.data_quality
-    ):
+    has_gap = batch.sequence_start > previous.sequence_end
+    marks_gap = DataQualityFlag.GAP_BEFORE in batch.data_quality
+    if has_gap and not marks_gap:
         failures.add("batch_sequence_gap", "batch sequence ranges contain a gap")
+    if not has_gap and marks_gap:
+        failures.add(
+            "batch_sequence_false_gap", "GAP_BEFORE requires a sequence discontinuity"
+        )
 
 
 def _packed_schema_profile(batch: SyndromeBatch) -> tuple[tuple[bool, int | None], ...]:
@@ -628,10 +632,13 @@ def _safe_send(connection: object, message: tuple[str, object]) -> None:
         return
 
 
-def _child_main(connection: object, adapter_factory: object, source: Path) -> None:
-    isolation_error = establish_process_group(
-        lambda message: _safe_send(connection, message)
-    )
+def _child_main(
+    connection: object,
+    adapter_factory: object,
+    source: Path,
+    isolation_backend: IsolationBackend,
+) -> None:
+    isolation_token, isolation_error = isolation_backend.prepare_worker()
     if isolation_error is not None:
         report = AdapterContractReport(
             (ContractFailure("isolation_unavailable", isolation_error),)
@@ -639,6 +646,7 @@ def _child_main(connection: object, adapter_factory: object, source: Path) -> No
         _safe_send(connection, ("report", report))
         connection.close()
         return
+    _safe_send(connection, ("isolation_ready", isolation_token))
     stages = _StageReporter(lambda message: _safe_send(connection, message))
     try:
         report = _run_contract(adapter_factory, source, stages)
@@ -665,29 +673,6 @@ def _timeout_code(stage: str) -> str:
     return aliases.get(stage, f"{stage}_timed_out")
 
 
-def _receive_report(
-    connection: object, process: multiprocessing.Process, deadline: float
-) -> tuple[AdapterContractReport | None, str, int | None]:
-    stage = "startup"
-    group_id: int | None = None
-    while time.monotonic() < deadline:
-        remaining = max(0.0, deadline - time.monotonic())
-        try:
-            if connection.poll(min(0.02, remaining)):
-                kind, value = connection.recv()
-                if kind == "stage" and type(value) is str:
-                    stage = value
-                elif kind == "isolation_ready" and type(value) is int:
-                    group_id = value
-                elif kind == "report" and type(value) is AdapterContractReport:
-                    return value, stage, group_id
-        except (EOFError, OSError):
-            break
-        if not process.is_alive():
-            break
-    return None, stage, group_id
-
-
 def _merge_parent_failure(
     report: AdapterContractReport, failure: ContractFailure | None
 ) -> AdapterContractReport:
@@ -701,9 +686,13 @@ def _execute_worker(
     adapter_factory: object,
     source: Path,
     deadline: float,
+    isolation_backend: IsolationBackend,
 ) -> tuple[AdapterContractReport | None, str, bool, ContractFailure | None]:
     parent, child = context.Pipe(duplex=False)
-    process = context.Process(target=_child_main, args=(child, adapter_factory, source))
+    process = context.Process(
+        target=_child_main,
+        args=(child, adapter_factory, source, isolation_backend),
+    )
     try:
         process.start()
     except BaseException as error:
@@ -718,10 +707,13 @@ def _execute_worker(
         )
         return report, "startup", False, None
     child.close()
-    report, stage, group_id = _receive_report(parent, process, deadline)
+    received, stage, isolation_token = receive_worker_report(
+        parent, process, deadline, AdapterContractReport
+    )
+    report = received if type(received) is AdapterContractReport else None
     process.join(max(0.0, deadline - time.monotonic()))
     timed_out = report is None and process.is_alive()
-    cleanup_error = stop_process_tree(process, group_id)
+    cleanup_error = isolation_backend.cleanup_worker(process, isolation_token)
     cleanup_failure = (
         ContractFailure("isolation_cleanup_failed", cleanup_error)
         if cleanup_error is not None
@@ -747,9 +739,11 @@ def _source_change_failure(
 
 
 def run_adapter_contract(
-    adapter_factory: Callable[[], AdapterLike], source: Path
+    adapter_factory: Callable[[], AdapterLike],
+    source: Path,
+    isolation_backend: IsolationBackend | None = None,
 ) -> AdapterContractReport:
-    """Run one adapter in a terminable child with a single outer deadline."""
+    """Run under an injected backend or fail closed without secure containment."""
 
     outer_deadline = time.monotonic() + CONTRACT_TIMEOUT_SECONDS
     snapshot_context = multiprocessing.get_context(
@@ -766,20 +760,21 @@ def run_adapter_contract(
         return AdapterContractReport(
             (ContractFailure(code, f"{error_name}: {message}"),)
         )
-    isolation_strategy = process_tree_isolation_strategy(os.name)
-    context = process_context(adapter_factory, os.name)
-    if context is None:
-        message = (
-            "process-tree containment is unavailable"
-            if isolation_strategy is None
-            else "factory is not importable under spawn"
-        )
+    backend, context, isolation_error = resolve_isolation_backend(
+        adapter_factory, isolation_backend, os.name
+    )
+    if backend is None or context is None:
         return AdapterContractReport(
-            (ContractFailure("isolation_unavailable", message),)
+            (
+                ContractFailure(
+                    "isolation_unavailable",
+                    isolation_error or "isolation backend resolution failed",
+                ),
+            )
         )
     worker_deadline = outer_deadline - SNAPSHOT_TIMEOUT_SECONDS
     report, stage, timed_out, cleanup_failure = _execute_worker(
-        context, adapter_factory, source, worker_deadline
+        context, adapter_factory, source, worker_deadline, backend
     )
     if report is None:
         code = _timeout_code(stage) if timed_out else "worker_exited"
