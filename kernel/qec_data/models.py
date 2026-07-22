@@ -112,6 +112,8 @@ class QualifiedPackedBits:
 
     def __post_init__(self) -> None:
         _validate_qualified("qualified packed bits", self.value, self.status)
+        if self.value is not None and type(self.value) is not PackedBits:
+            raise TypeError("qualified packed bits value must be PackedBits")
 
 
 @dataclass(frozen=True, slots=True)
@@ -133,6 +135,8 @@ class QualifiedRange:
 
     def __post_init__(self) -> None:
         _validate_qualified("qualified range", self.value, self.status)
+        if self.value is not None and type(self.value) is not IndexRange:
+            raise TypeError("qualified range value must be IndexRange")
 
 
 @dataclass(frozen=True, slots=True)
@@ -154,6 +158,8 @@ class QualifiedTimestamps:
 
     def __post_init__(self) -> None:
         _validate_qualified("source timestamps", self.value, self.status)
+        if self.value is not None and type(self.value) is not TimestampSeries:
+            raise TypeError("source timestamps value must be TimestampSeries")
 
 
 UNKNOWN_TEXT = QualifiedText(None, ValueStatus.UNKNOWN)
@@ -174,6 +180,11 @@ class SessionReferences:
     topology: QualifiedText = UNKNOWN_TEXT
     calibration: QualifiedText = UNAVAILABLE_TEXT
 
+    def __post_init__(self) -> None:
+        for name in ("circuit", "detector_error_model", "topology", "calibration"):
+            if type(getattr(self, name)) is not QualifiedText:
+                raise TypeError(f"{name} must be QualifiedText")
+
 
 @dataclass(frozen=True, slots=True)
 class SessionCounts:
@@ -182,11 +193,22 @@ class SessionCounts:
     measurements: QualifiedCount = UNKNOWN_COUNT
     logical_patches: QualifiedCount = UNKNOWN_COUNT
 
+    def __post_init__(self) -> None:
+        for name in ("detectors", "observables", "measurements", "logical_patches"):
+            if type(getattr(self, name)) is not QualifiedCount:
+                raise TypeError(f"{name} must be QualifiedCount")
+
 
 @dataclass(frozen=True, slots=True)
 class SourceClock:
     identity: QualifiedText = UNAVAILABLE_TEXT
     description: str = ""
+
+    def __post_init__(self) -> None:
+        if type(self.identity) is not QualifiedText:
+            raise TypeError("identity must be QualifiedText")
+        if type(self.description) is not str:
+            raise TypeError("description must be a string")
 
 
 @dataclass(frozen=True, slots=True)
@@ -197,11 +219,14 @@ class Timebase:
     description: str = ""
 
     def __post_init__(self) -> None:
-        if (
-            type(self.unit) is not QualifiedText
-            or type(self.tick_period) is not QualifiedFloat
-        ):
-            raise TypeError("timebase qualified fields have invalid types")
+        if type(self.domain) is not str:
+            raise TypeError("domain must be a string")
+        if type(self.unit) is not QualifiedText:
+            raise TypeError("unit must be QualifiedText")
+        if type(self.tick_period) is not QualifiedFloat:
+            raise TypeError("tick_period must be QualifiedFloat")
+        if type(self.description) is not str:
+            raise TypeError("description must be a string")
         if self.domain not in {"tick", "round", "timestamp", "custom"}:
             raise ValueError("timebase domain is invalid")
 

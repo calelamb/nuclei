@@ -299,3 +299,41 @@ def test_provenance_rejects_non_sha256_source_hashes() -> None:
     }
     with pytest.raises(ValidationError):
         validator("provenance").validate(provenance)
+
+
+def test_session_count_is_bounded_by_json_safe_integer() -> None:
+    session = load_json("fixtures/minimal-session.json")
+    counts = {
+        **session["counts"],
+        "detectors": {"value": 9_007_199_254_740_992, "status": "measured"},
+    }
+    with pytest.raises(ValidationError):
+        validator("session").validate({**session, "counts": counts})
+
+
+def test_calibration_interval_order_has_normative_executable_rule() -> None:
+    schema = load_json("calibration-record.schema.json")
+    assert "end >= start" in schema["$comment"]
+    assert "Executable validators MUST" in schema["$comment"]
+
+
+@pytest.mark.parametrize(
+    ("path", "replacement"),
+    [
+        ("mapping_decisions", [{"field": "field", "decision": "", "reason": "why"}]),
+        ("revision_references", [{"kind": "kind", "id": ""}]),
+        ("annotations", [{"kind": "kind", "id": ""}]),
+        (
+            "environment",
+            {
+                "runtime": "python",
+                "runtime_version": "3.12",
+                "dependencies": {"package": ""},
+            },
+        ),
+    ],
+)
+def test_provenance_nested_strings_match_python_strictness(path, replacement) -> None:
+    provenance = load_json("fixtures/minimal-provenance.json")
+    with pytest.raises(ValidationError):
+        validator("provenance").validate({**provenance, path: replacement})

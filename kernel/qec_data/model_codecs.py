@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import base64
 import binascii
+import json
 from typing import Any, Mapping
 
 from .models import (
@@ -100,6 +101,30 @@ DECODE_KEYS = frozenset(
         "provenance_id",
     }
 )
+
+
+def _reject_non_finite_constant(value: str) -> None:
+    raise ValueError(f"non-finite JSON constant is forbidden: {value}")
+
+
+def _unique_object(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
+    result: dict[str, Any] = {}
+    for key, value in pairs:
+        if key in result:
+            raise ValueError(f"duplicate JSON object key is forbidden: {key}")
+        result[key] = value
+    return result
+
+
+def loads_canonical_json(document: str) -> Any:
+    """Parse canonical boundary JSON without JavaScript-incompatible constants."""
+    if not isinstance(document, str):
+        raise TypeError("canonical JSON document must be a string")
+    return json.loads(
+        document,
+        parse_constant=_reject_non_finite_constant,
+        object_pairs_hook=_unique_object,
+    )
 
 
 def _strict_object(

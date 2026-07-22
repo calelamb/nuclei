@@ -5,6 +5,14 @@ import type { ResearchSelection } from './qecSelection';
 export const QEC_DATA_SCHEMA_VERSION = '1.0.0' as const;
 export const QEC_TILE_MAX_BYTES = 1024 * 1024;
 
+export type DeepReadonly<T> = T extends (...args: never[]) => unknown
+  ? T
+  : T extends readonly (infer Item)[]
+    ? readonly DeepReadonly<Item>[]
+    : T extends object
+      ? { readonly [Key in keyof T]: DeepReadonly<T[Key]> }
+      : T;
+
 const nonEmptyString = z.string().min(1);
 const sha256 = z.string().regex(/^[a-f0-9]{64}$/);
 const canonicalBase64 = z.string().regex(
@@ -113,7 +121,7 @@ export const qecSessionSchema = qecSessionObjectSchema.superRefine((session, con
     (session.status === 'failed' && !completed);
   if (invalid) context.addIssue({ code: 'custom', path: ['status'], message: 'session lifecycle and timestamps disagree' });
 });
-export type QecSession = Readonly<z.infer<typeof qecSessionSchema>>;
+export type QecSession = DeepReadonly<z.infer<typeof qecSessionSchema>>;
 
 function decodeCanonicalBase64(data: string): Uint8Array | null {
   try {
@@ -224,7 +232,7 @@ export const syndromeBatchSchema = z.strictObject({
     context.addIssue({ code: 'custom', path: ['source_timestamps', 'value', 'values'], message: 'timestamps must equal record_count' });
   }
 });
-export type QecSyndromeBatch = Readonly<z.infer<typeof syndromeBatchSchema>>;
+export type QecSyndromeBatch = DeepReadonly<z.infer<typeof syndromeBatchSchema>>;
 
 const decoderSchema = z.strictObject({
   name: nonEmptyString,
@@ -285,7 +293,7 @@ export const decodeResultSchema = z.strictObject({
   validateRows(decode.predicted_logical_flips, 'predicted_logical_flips');
   if (decode.known_truth.value) validateRows(decode.known_truth.value, 'known_truth');
 });
-export type QecDecodeResult = Readonly<z.infer<typeof decodeResultSchema>>;
+export type QecDecodeResult = DeepReadonly<z.infer<typeof decodeResultSchema>>;
 
 export const calibrationRecordSchema = z.strictObject({
   schema_version: z.literal(QEC_DATA_SCHEMA_VERSION),
@@ -315,7 +323,7 @@ export const calibrationRecordSchema = z.strictObject({
     if (end < start) context.addIssue({ code: 'custom', path: ['effective_interval', 'end'], message: 'end cannot precede start' });
   }
 });
-export type QecCalibrationRecord = Readonly<z.infer<typeof calibrationRecordSchema>>;
+export type QecCalibrationRecord = DeepReadonly<z.infer<typeof calibrationRecordSchema>>;
 
 const scalarParameterSchema = z.union([z.string(), z.number().finite(), z.boolean(), z.null()]);
 const decisionSchema = z.strictObject({
@@ -363,7 +371,7 @@ export const provenanceRecordSchema = z.strictObject({
   annotations: z.array(referenceSchema),
   control_audit_refs: z.array(nonEmptyString).refine((values) => new Set(values).size === values.length),
 });
-export type QecProvenanceRecord = Readonly<z.infer<typeof provenanceRecordSchema>>;
+export type QecProvenanceRecord = DeepReadonly<z.infer<typeof provenanceRecordSchema>>;
 
 export const qecSessionSummarySchema = qecSessionObjectSchema.pick({
   session_id: true,
@@ -375,7 +383,7 @@ export const qecSessionSummarySchema = qecSessionObjectSchema.pick({
   counts: true,
   provenance_id: true,
 });
-export type QecSessionSummary = z.infer<typeof qecSessionSummarySchema>;
+export type QecSessionSummary = DeepReadonly<z.infer<typeof qecSessionSummarySchema>>;
 
 export const qecTileKindSchema = z.enum([
   'time-series',
@@ -423,12 +431,29 @@ export const qecQuerySpecSchema = z.strictObject({
   }).readonly(),
   filters: z.record(z.string(), queryFilterValueSchema).readonly(),
 }).readonly();
-export type QecQuerySpec = Readonly<z.infer<typeof qecQuerySpecSchema>>;
+export type QecQuerySpec = DeepReadonly<z.infer<typeof qecQuerySpecSchema>>;
 
-/** UTF-8 JSON bytes for tile content only; Task 5 also caps the complete wire frame. */
+/** UTF-8 JSON bytes for content alone; retained for callers displaying content size. */
 export function qecTileContentByteLength(content: unknown): number {
   const serialized = JSON.stringify(content);
   if (serialized === undefined) throw new TypeError('tile content must be JSON serializable');
+  return new TextEncoder().encode(serialized).byteLength;
+}
+
+/**
+ * Normative tile size: UTF-8 JSON bytes for the complete tile object with the
+ * self-referential `byteLength` field omitted. Task 5 also caps the final result
+ * envelope and Task 8 caps every complete WebSocket frame.
+ */
+export function qecTilePayloadByteLength(payload: unknown): number {
+  if (typeof payload !== 'object' || payload === null || Array.isArray(payload)) {
+    throw new TypeError('tile payload must be an object');
+  }
+  const normalized = Object.fromEntries(
+    Object.entries(payload).filter(([key]) => key !== 'byteLength'),
+  );
+  const serialized = JSON.stringify(normalized);
+  if (serialized === undefined) throw new TypeError('tile payload must be JSON serializable');
   return new TextEncoder().encode(serialized).byteLength;
 }
 
@@ -439,12 +464,12 @@ export const qecTilePayloadSchema = z.strictObject({
   content: z.json(),
   byteLength: z.number().int().nonnegative().max(QEC_TILE_MAX_BYTES),
 }).superRefine((tile, context) => {
-  const actual = qecTileContentByteLength(tile.content);
+  const actual = qecTilePayloadByteLength(tile);
   if (tile.byteLength !== actual) {
-    context.addIssue({ code: 'custom', path: ['byteLength'], message: 'byteLength must equal UTF-8 JSON content bytes' });
+    context.addIssue({ code: 'custom', path: ['byteLength'], message: 'byteLength must equal normalized UTF-8 tile payload bytes' });
   }
 }).readonly();
-export type QecTilePayload = Readonly<z.infer<typeof qecTilePayloadSchema>>;
+export type QecTilePayload = DeepReadonly<z.infer<typeof qecTilePayloadSchema>>;
 
 export const qecQueryResultSchema = z.discriminatedUnion('type', [
   z.strictObject({
@@ -466,4 +491,4 @@ export const qecQueryResultSchema = z.discriminatedUnion('type', [
     message: nonEmptyString,
   }),
 ]);
-export type QecQueryResult = Readonly<z.infer<typeof qecQueryResultSchema>>;
+export type QecQueryResult = DeepReadonly<z.infer<typeof qecQueryResultSchema>>;

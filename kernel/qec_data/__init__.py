@@ -5,6 +5,7 @@ from .model_codecs import (
     batch_to_mapping,
     decode_from_mapping,
     decode_to_mapping,
+    loads_canonical_json,
     session_from_mapping,
     session_to_mapping,
 )
@@ -60,6 +61,7 @@ __all__ = [
     "batch_to_mapping",
     "decode_from_mapping",
     "decode_to_mapping",
+    "loads_canonical_json",
     "session_from_mapping",
     "session_to_mapping",
 ]

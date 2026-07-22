@@ -9,6 +9,7 @@ from kernel.qec_data.model_codecs import (
     batch_to_mapping,
     decode_from_mapping,
     decode_to_mapping,
+    loads_canonical_json,
     session_from_mapping,
     session_to_mapping,
 )
@@ -29,11 +30,20 @@ from kernel.qec_data.models import (
     ProvenanceSource,
     QualifiedFloat,
     QualifiedPackedBits,
+    QualifiedRange,
     QualifiedText,
+    QualifiedTimestamps,
+    SessionCounts,
     SessionKind,
     SessionRecord,
+    SessionReferences,
     SessionStatus,
+    SourceClock,
     SyndromeBatch,
+    Timebase,
+    UNKNOWN_BITS,
+    UNKNOWN_COUNT,
+    UNKNOWN_TEXT,
     SourcePolicy,
     ValueStatus,
 )
@@ -345,3 +355,123 @@ def test_calibration_and_provenance_nested_boundaries_are_strict() -> None:
         replace(provenance, parent_dataset_ids=("dataset-1", "dataset-1"))
     with pytest.raises(TypeError, match="sources"):
         replace(provenance, sources=("not-a-source",))  # type: ignore[arg-type]
+
+
+@pytest.mark.parametrize(
+    ("constructor", "value"),
+    [
+        (QualifiedPackedBits, QualifiedText(None, ValueStatus.ABSENT)),
+        (QualifiedRange, QualifiedText(None, ValueStatus.ABSENT)),
+        (QualifiedTimestamps, QualifiedText(None, ValueStatus.ABSENT)),
+    ],
+)
+def test_qualified_records_reject_wrong_nested_types(constructor, value) -> None:
+    with pytest.raises(TypeError):
+        constructor(value, ValueStatus.MEASURED)
+
+
+@pytest.mark.parametrize(
+    ("constructor", "field"),
+    [
+        (lambda: SessionReferences(circuit=UNKNOWN_COUNT), "circuit"),
+        (
+            lambda: SessionReferences(detector_error_model=UNKNOWN_COUNT),
+            "detector_error_model",
+        ),
+        (lambda: SessionReferences(topology=UNKNOWN_COUNT), "topology"),
+        (lambda: SessionReferences(calibration=UNKNOWN_COUNT), "calibration"),
+        (lambda: SessionCounts(detectors=UNKNOWN_TEXT), "detectors"),
+        (lambda: SessionCounts(observables=UNKNOWN_TEXT), "observables"),
+        (lambda: SessionCounts(measurements=UNKNOWN_TEXT), "measurements"),
+        (lambda: SessionCounts(logical_patches=UNKNOWN_TEXT), "logical_patches"),
+        (lambda: SourceClock(identity=UNKNOWN_COUNT), "identity"),
+        (lambda: SourceClock(description=1), "description"),
+        (lambda: Timebase(domain=1), "domain"),
+        (lambda: Timebase(unit=UNKNOWN_COUNT), "unit"),
+        (lambda: Timebase(tick_period=UNKNOWN_COUNT), "tick_period"),
+        (lambda: Timebase(description=1), "description"),
+    ],
+)
+def test_session_nested_records_reject_every_wrong_field_type(
+    constructor, field
+) -> None:
+    with pytest.raises(TypeError, match=field):
+        constructor()
+
+
+@pytest.mark.parametrize(
+    ("field", "wrong_value"),
+    [
+        ("detector_events", UNKNOWN_TEXT),
+        ("shot_range", UNKNOWN_TEXT),
+        ("round_range", UNKNOWN_TEXT),
+        ("source_timestamps", UNKNOWN_TEXT),
+        ("measurements", UNKNOWN_TEXT),
+        ("observables", UNKNOWN_TEXT),
+        ("erasures", UNKNOWN_TEXT),
+        ("leakage", UNKNOWN_TEXT),
+        ("heralds", UNKNOWN_TEXT),
+        ("circuit_revision", UNKNOWN_BITS),
+        ("topology_revision", UNKNOWN_BITS),
+    ],
+)
+def test_syndrome_rejects_field_specific_type_substitution(field, wrong_value) -> None:
+    batch = batch_from_mapping(load_fixture("minimal-batch.json"))
+    with pytest.raises(TypeError, match=field):
+        replace(batch, **{field: wrong_value})
+
+
+@pytest.mark.parametrize(
+    ("field", "value", "message"),
+    [
+        ("mapping_decisions", (("field", "", "reason"),), "mapping_decisions"),
+        ("revision_references", (("kind", ""),), "revision_references"),
+        ("annotations", (("kind", ""),), "annotations"),
+        ("dependencies", (("package", ""),), "dependencies"),
+        (
+            "dependencies",
+            (("package", "1.0"), ("package", "2.0")),
+            "dependencies",
+        ),
+    ],
+)
+def test_provenance_validates_every_tuple_position(field, value, message) -> None:
+    provenance = ProvenanceRecord(
+        "p1",
+        "2026-07-21T00:00:00Z",
+        AdapterIdentity("adapter", "1"),
+        sources=(
+            ProvenanceSource("source", "capture", "b" * 64, SourcePolicy.REFERENCE),
+        ),
+    )
+    with pytest.raises(ValueError, match=message):
+        replace(provenance, **{field: value})
+
+
+@pytest.mark.parametrize("constant", ["NaN", "Infinity", "-Infinity"])
+def test_canonical_json_parser_rejects_non_finite_constants(constant: str) -> None:
+    with pytest.raises(ValueError, match="non-finite"):
+        loads_canonical_json(f'{{"value":{constant}}}')
+
+
+def test_canonical_json_parser_rejects_duplicate_keys() -> None:
+    with pytest.raises(ValueError, match="duplicate"):
+        loads_canonical_json('{"value":1,"value":2}')
+
+
+def test_calibration_interval_is_ordered() -> None:
+    calibration = CalibrationRecord.minimal(
+        calibration_id="cal-1",
+        session_id="s1",
+        scope=CalibrationScope(CalibrationScopeKind.DEVICE, "d1"),
+        parameter_name="parameter",
+        semantic_id="vendor/parameter",
+        source_system="source",
+        provenance_id="p1",
+    )
+    with pytest.raises(ValueError, match="precede"):
+        replace(
+            calibration,
+            effective_start="2026-07-22T00:00:00Z",
+            effective_end="2026-07-21T00:00:00Z",
+        )

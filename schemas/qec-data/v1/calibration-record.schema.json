@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://getnuclei.dev/schemas/qec-data/v1/calibration-record.schema.json",
   "title": "QEC canonical calibration record",
-  "$comment": "Executable validators MUST require an RFC 2046-style type/subtype MIME value for original_representation.mime_type.",
+  "$comment": "Executable validators MUST require an RFC 2046-style type/subtype MIME value and enforce effective_interval.end >= start when end is non-null.",
   "type": "object",
   "additionalProperties": false,
   "required": [

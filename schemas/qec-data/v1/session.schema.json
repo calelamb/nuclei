@@ -116,7 +116,7 @@
     },
     "qualifiedCount": {
       "type": "object", "additionalProperties": false, "required": ["value", "status"],
-      "properties": { "value": { "type": ["integer", "null"], "minimum": 0 }, "status": { "$ref": "#/$defs/valueStatus" } },
+      "properties": { "value": { "type": ["integer", "null"], "minimum": 0, "maximum": 9007199254740991 }, "status": { "$ref": "#/$defs/valueStatus" } },
       "allOf": [{ "$ref": "#/$defs/qualifiedNumberConsistency" }]
     },
     "qualifiedNumber": {

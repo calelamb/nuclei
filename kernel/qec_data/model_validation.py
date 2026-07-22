@@ -168,21 +168,21 @@ def _validate_syndrome_types(batch: Any) -> None:
 
     if type(batch.detector_events) is not PackedBits:
         raise TypeError("detector_events must be PackedBits")
-    qualified = (
-        batch.shot_range,
-        batch.round_range,
-        batch.source_timestamps,
-        batch.measurements,
-        batch.observables,
-        batch.erasures,
-        batch.leakage,
-        batch.heralds,
-        batch.circuit_revision,
-        batch.topology_revision,
-    )
-    allowed = (QualifiedRange, QualifiedTimestamps, QualifiedPackedBits, QualifiedText)
-    if any(type(value) not in allowed for value in qualified):
-        raise TypeError("syndrome qualified fields have invalid types")
+    expected_types = {
+        "shot_range": QualifiedRange,
+        "round_range": QualifiedRange,
+        "source_timestamps": QualifiedTimestamps,
+        "measurements": QualifiedPackedBits,
+        "observables": QualifiedPackedBits,
+        "erasures": QualifiedPackedBits,
+        "leakage": QualifiedPackedBits,
+        "heralds": QualifiedPackedBits,
+        "circuit_revision": QualifiedText,
+        "topology_revision": QualifiedText,
+    }
+    for name, expected in expected_types.items():
+        if type(getattr(batch, name)) is not expected:
+            raise TypeError(f"{name} must be {expected.__name__}")
     require_immutable_tuple("data_quality", batch.data_quality)
     if any(type(flag) is not DataQualityFlag for flag in batch.data_quality):
         raise TypeError("data_quality values must be DataQualityFlag")
@@ -224,14 +224,25 @@ def validate_syndrome_batch(batch: Any) -> None:
 
 
 def _validate_string_tuples(
-    name: str, values: tuple[tuple[str, ...], ...], width: int
+    name: str,
+    values: tuple[tuple[str, ...], ...],
+    width: int,
+    required_positions: tuple[int, ...],
 ) -> None:
     for value in values:
         if type(value) is not tuple or len(value) != width:
             raise TypeError(f"{name} entries have invalid tuple shapes")
-        if any(not isinstance(item, str) for item in value):
+        if any(type(item) is not str for item in value):
             raise TypeError(f"{name} entries must contain strings")
-        require_non_empty(f"{name} identifier", value[0])
+        for position in required_positions:
+            require_non_empty(name, value[position])
+
+
+def _validate_dependencies(dependencies: tuple[tuple[str, str], ...]) -> None:
+    _validate_string_tuples("dependencies", dependencies, 2, (0, 1))
+    keys = tuple(key for key, _ in dependencies)
+    if len(set(keys)) != len(keys):
+        raise ValueError("dependencies keys must be unique")
 
 
 def _require_unique(name: str, values: tuple[str, ...]) -> None:
@@ -278,9 +289,10 @@ def validate_provenance_record(record: Any) -> None:
     require_non_empty("runtime_version", record.runtime_version)
     _require_unique("source_ids", tuple(source.source_id for source in record.sources))
     for name in ("mapping_decisions", "filters", "exclusions"):
-        _validate_string_tuples(name, getattr(record, name), 3)
-    for name in ("revision_references", "annotations", "dependencies"):
-        _validate_string_tuples(name, getattr(record, name), 2)
+        _validate_string_tuples(name, getattr(record, name), 3, (0, 1))
+    for name in ("revision_references", "annotations"):
+        _validate_string_tuples(name, getattr(record, name), 2, (0, 1))
+    _validate_dependencies(record.dependencies)
     for conversion in record.unit_conversions:
         if type(conversion) is not tuple or len(conversion) != 5:
             raise TypeError("unit_conversions entries have invalid tuple shapes")
