@@ -35,6 +35,8 @@ pub fn run() {
             commands::frameworks::environment_report,
             commands::frameworks::venv_repair,
             commands::git_info::git_project_info,
+            commands::qec_study::qec_create_study_manifest,
+            commands::qec_study::qec_read_study_manifests,
             dirac::dirac_execute,
             dirac::dirac_set_api_key,
             dirac::dirac_has_api_key,

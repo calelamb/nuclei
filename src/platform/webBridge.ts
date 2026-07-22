@@ -138,6 +138,9 @@ export const webBridge: PlatformBridge = {
   async createFile() {
     return null;
   },
+  async createFileExclusive() {
+    return null;
+  },
   async createDirectory() {
     return null;
   },

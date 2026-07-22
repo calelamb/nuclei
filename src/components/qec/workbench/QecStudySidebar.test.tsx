@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, waitFor } from '@testing-library/react';
-import type { QecStudyFs } from '../../../services/qecStudyFs';
+import { QecStudyFileExistsError, type QecStudyFs } from '../../../services/qecStudyFs';
 import { useQecStudyStore } from '../../../services/qecStudyStore';
 import { useQecStudyUiStore } from '../../../stores/qecStudyUiStore';
 import { useProjectStore } from '../../../stores/projectStore';
@@ -10,7 +10,7 @@ import { QecStudySidebar } from './QecStudySidebar';
 
 interface MemoryStudyFs extends QecStudyFs {
   files: Map<string, string>;
-  writeTextFile: ReturnType<typeof vi.fn<QecStudyFs['writeTextFile']>>;
+  createTextFileExclusive: ReturnType<typeof vi.fn<QecStudyFs['createTextFileExclusive']>>;
   watch: ReturnType<typeof vi.fn<QecStudyFs['watch']>>;
 }
 
@@ -24,6 +24,8 @@ function memoryStudyFs(initialFiles: Record<string, string> = {}): MemoryStudyFs
   return {
     files,
     join,
+    resolvePath: vi.fn(async (...parts: string[]) => join(...parts)),
+    isSymlink: vi.fn(async () => false),
     exists: vi.fn(async (path: string) =>
       files.has(path) || [...files.keys()].some((file) => file.startsWith(`${path}/`))),
     mkdir: vi.fn(async () => undefined),
@@ -36,9 +38,15 @@ function memoryStudyFs(initialFiles: Record<string, string> = {}): MemoryStudyFs
       const prefix = `${path}/`;
       return [...files.keys()]
         .filter((file) => file.startsWith(prefix))
-        .map((file) => ({ name: file.slice(prefix.length), isDirectory: false }));
+        .map((file) => ({ name: file.slice(prefix.length), isDirectory: false, isSymlink: false }));
     }),
-    writeTextFile: vi.fn(async (path: string, content: string) => {
+    createTextFileExclusive: vi.fn(async (
+      projectRoot: string,
+      fileName: string,
+      content: string,
+    ) => {
+      const path = join(projectRoot, 'studies', fileName);
+      if (files.has(path)) throw new QecStudyFileExistsError(path);
       files.set(path, content);
     }),
     watch: vi.fn(async () => () => undefined),
@@ -46,7 +54,7 @@ function memoryStudyFs(initialFiles: Record<string, string> = {}): MemoryStudyFs
 }
 
 function resetStores(): void {
-  useQecStudyStore.getState().stopWatching();
+  useQecStudyStore.getState().clear();
   useQecStudyStore.setState({ studies: [], validationErrors: [], loading: false });
   useQecStudyUiStore.setState({ activeStudyId: null });
   useProjectStore.setState({ projectRoot: null, tabs: [], activeTabPath: null });
@@ -101,7 +109,7 @@ describe('<QecStudySidebar />', () => {
     fireEvent.click(view.getByRole('button', { name: 'Create Study' }));
 
     expect(view.getByRole('alert').textContent).toContain('Enter a Study name');
-    expect(fs.writeTextFile).not.toHaveBeenCalled();
+    expect(fs.createTextFileExclusive).not.toHaveBeenCalled();
   });
 
   it('does not overwrite and shows an actionable create error', async () => {
@@ -122,9 +130,11 @@ describe('<QecStudySidebar />', () => {
   it('disables the form while creation is pending', async () => {
     let finishWrite: (() => void) | undefined;
     const fs = memoryStudyFs();
-    fs.writeTextFile.mockImplementation(async () => new Promise<void>((resolve) => {
-      finishWrite = resolve;
-    }));
+    fs.createTextFileExclusive.mockImplementation(async (projectRoot, fileName, content) => {
+      const path = fs.join(projectRoot, 'studies', fileName);
+      await new Promise<void>((resolve) => { finishWrite = resolve; });
+      fs.files.set(path, content);
+    });
     useProjectStore.setState({ projectRoot: '/project' });
     const view = render(<QecStudySidebar fs={fs} />);
     await waitFor(() => expect(useQecStudyStore.getState().loading).toBe(false));
@@ -146,7 +156,7 @@ describe('<QecStudySidebar />', () => {
     render(<QecStudySidebar fs={fs} />);
 
     await waitFor(() => expect(fs.watch).toHaveBeenCalledWith(
-      '/active/studies', expect.any(Function), { recursive: true },
+      '/active', expect.any(Function), { recursive: true },
     ));
   });
 
@@ -167,15 +177,32 @@ describe('<QecStudySidebar />', () => {
 
     useProjectStore.getState().setProjectRoot('/b');
     await waitFor(() => expect(fs.watch).toHaveBeenCalledWith(
-      '/b/studies', expect.any(Function), { recursive: true },
+      '/b', expect.any(Function), { recursive: true },
     ));
     releaseProjectA?.();
     await waitFor(() => expect(useQecStudyStore.getState().studies.map(({ study }) => study.id)).toEqual(['b']));
 
-    expect(fs.watch.mock.calls.map(([path]) => path)).toEqual(['/b/studies']);
+    expect(fs.watch.mock.calls.map(([path]) => path)).toEqual(['/b']);
   });
 
-  it('stops the active watcher and clears Studies on unmount', async () => {
+  it('clears the previous project Study scope synchronously on project switch', async () => {
+    const fs = memoryStudyFs({
+      '/a/studies/a.qec-study.yaml': studyYaml('a'),
+      '/b/studies/b.qec-study.yaml': studyYaml('b'),
+    });
+    useProjectStore.setState({ projectRoot: '/a' });
+    render(<QecStudySidebar fs={fs} />);
+    await waitFor(() => expect(useQecStudyStore.getState().studies).toHaveLength(1));
+    useQecStudyUiStore.getState().setActiveStudy('a');
+
+    useProjectStore.getState().setProjectRoot('/b');
+
+    expect(useQecStudyStore.getState().studies).toEqual([]);
+    expect(useQecStudyUiStore.getState().activeStudyId).toBeNull();
+    await waitFor(() => expect(useQecStudyStore.getState().studies.map(({ study }) => study.id)).toEqual(['b']));
+  });
+
+  it('stops the active watcher while retaining Studies across workspace navigation', async () => {
     const unwatch = vi.fn();
     const fs = memoryStudyFs({ '/active/studies/active.qec-study.yaml': studyYaml('active') });
     fs.watch.mockResolvedValue(unwatch);
@@ -186,7 +213,7 @@ describe('<QecStudySidebar />', () => {
     view.unmount();
 
     expect(unwatch).toHaveBeenCalledOnce();
-    expect(useQecStudyStore.getState().studies).toEqual([]);
+    expect(useQecStudyStore.getState().studies.map(({ study }) => study.id)).toEqual(['active']);
   });
 
   it('clears and invalidates a pending reload when the project root becomes null', async () => {

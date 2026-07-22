@@ -1,6 +1,12 @@
 import { create } from 'zustand';
+import { useProjectStore } from '../stores/projectStore';
 import { parseQecStudyYaml, serializeQecStudy, type QecStudy } from '../types/qecStudy';
-import type { QecStudyDirEntry, QecStudyFs } from './qecStudyFs';
+import {
+  QecStudyFileExistsError,
+  type QecStudyDirEntry,
+  type QecStudyFs,
+  type QecStudyManifestFile,
+} from './qecStudyFs';
 
 const STUDIES_DIRECTORY = 'studies';
 const STUDY_SUFFIX = /\.qec-study\.ya?ml$/i;
@@ -17,6 +23,7 @@ export interface QecStudyValidationError {
 }
 
 export interface QecStudyState {
+  projectRoot: string | null;
   studies: readonly DiscoveredQecStudy[];
   validationErrors: readonly QecStudyValidationError[];
   loading: boolean;
@@ -35,6 +42,7 @@ interface DiscoveryResult {
 let latestOperation = 0;
 let watcherEpoch = 0;
 let unwatch: (() => void) | null = null;
+let activeProjectRoot: string | null = null;
 const pendingCreates = new Set<string>();
 
 function describeError(error: unknown): string {
@@ -43,6 +51,46 @@ function describeError(error: unknown): string {
 
 function studiesPath(projectRoot: string, fs: QecStudyFs): string {
   return fs.join(projectRoot, STUDIES_DIRECTORY);
+}
+
+function canonicalPath(path: string): string {
+  const normalized = path.replaceAll('\\', '/').replace(/\/+$/, '');
+  return /^[a-z]:/i.test(normalized) ? normalized.toLowerCase() : normalized;
+}
+
+function includesStudiesChange(
+  projectRoot: string,
+  paths: readonly string[],
+  fs: QecStudyFs,
+): boolean {
+  const directory = canonicalPath(studiesPath(projectRoot, fs));
+  return paths.some((path) => {
+    const candidate = canonicalPath(path);
+    return candidate === directory || candidate.startsWith(`${directory}/`);
+  });
+}
+
+async function assertProjectPath(
+  projectRoot: string,
+  candidate: string,
+  fs: QecStudyFs,
+): Promise<void> {
+  const root = canonicalPath(await fs.resolvePath(projectRoot));
+  const resolved = canonicalPath(await fs.resolvePath(candidate));
+  if (resolved !== root && !resolved.startsWith(`${root}/`)) {
+    throw new Error(`The Study path resolves outside the project: ${candidate}`);
+  }
+}
+
+async function assertSafeStudiesDirectory(
+  projectRoot: string,
+  directory: string,
+  fs: QecStudyFs,
+): Promise<void> {
+  await assertProjectPath(projectRoot, directory, fs);
+  if (await fs.isSymlink(directory)) {
+    throw new Error('The Studies folder cannot be a symbolic link.');
+  }
 }
 
 function studyFileName(study: QecStudy): string {
@@ -68,8 +116,102 @@ function reportLifecycleError(
   }));
 }
 
+interface DiscoveredEntryResult {
+  study: DiscoveredQecStudy | null;
+  validationError: QecStudyValidationError | null;
+}
+
+function entryError(fileName: string, message: string): DiscoveredEntryResult {
+  return { study: null, validationError: { fileName, errors: [message] } };
+}
+
+async function discoverStudyEntry(
+  projectRoot: string,
+  directory: string,
+  entry: QecStudyDirEntry,
+  fs: QecStudyFs,
+): Promise<DiscoveredEntryResult | null> {
+  if (entry.isDirectory || !STUDY_SUFFIX.test(entry.name)) return null;
+  const path = fs.join(directory, entry.name);
+  try {
+    await assertProjectPath(projectRoot, path, fs);
+    if (entry.isSymlink || await fs.isSymlink(path)) {
+      return entryError(entry.name, 'Study manifests cannot be symbolic links.');
+    }
+  } catch (error: unknown) {
+    return entryError(entry.name, describeError(error));
+  }
+  let text: string;
+  try {
+    text = await fs.readTextFile(path);
+  } catch (error: unknown) {
+    return entryError(entry.name, `Could not read this Study: ${describeError(error)}`);
+  }
+  const parsed = parseQecStudyYaml(text);
+  return parsed.ok
+    ? { study: { fileName: entry.name, path, study: parsed.study }, validationError: null }
+    : { study: null, validationError: { fileName: entry.name, errors: [...parsed.errors] } };
+}
+
+function quarantineDuplicateStudyIds(result: DiscoveryResult): DiscoveryResult {
+  const duplicated = result.studies.filter((entry, index, studies) =>
+    studies.some((candidate, candidateIndex) =>
+      candidateIndex !== index && candidate.study.id === entry.study.id));
+  const duplicateFiles = duplicated.map((entry) => entry.fileName);
+  const duplicateErrors = duplicated.map((entry) => ({
+    fileName: entry.fileName,
+    errors: [`The duplicate Study id "${entry.study.id}" is also declared by another manifest.`],
+  }));
+  return {
+    studies: result.studies
+      .filter((entry) => !duplicateFiles.includes(entry.fileName))
+      .sort((left, right) => left.fileName.localeCompare(right.fileName)),
+    validationErrors: [...result.validationErrors, ...duplicateErrors]
+      .sort((left, right) => left.fileName.localeCompare(right.fileName)),
+  };
+}
+
+function parseSecureManifests(
+  projectRoot: string,
+  files: readonly QecStudyManifestFile[],
+  fs: QecStudyFs,
+): DiscoveryResult {
+  const discovered = files.map((file): DiscoveredEntryResult => {
+    if (file.error) return entryError(file.fileName, file.error);
+    if (file.content === null) return entryError(file.fileName, 'Could not read this Study.');
+    const parsed = parseQecStudyYaml(file.content);
+    return parsed.ok
+      ? {
+        study: {
+          fileName: file.fileName,
+          path: fs.join(projectRoot, STUDIES_DIRECTORY, file.fileName),
+          study: parsed.study,
+        },
+        validationError: null,
+      }
+      : { study: null, validationError: { fileName: file.fileName, errors: [...parsed.errors] } };
+  });
+  return quarantineDuplicateStudyIds({
+    studies: discovered.flatMap((entry) => entry.study ? [entry.study] : []),
+    validationErrors: discovered.flatMap((entry) =>
+      entry.validationError ? [entry.validationError] : []),
+  });
+}
+
 async function discoverStudies(projectRoot: string, fs: QecStudyFs): Promise<DiscoveryResult> {
+  if (fs.readStudyManifests) {
+    try {
+      return parseSecureManifests(projectRoot, await fs.readStudyManifests(projectRoot), fs);
+    } catch (error: unknown) {
+      return discoveryFailure(describeError(error));
+    }
+  }
   const directory = studiesPath(projectRoot, fs);
+  try {
+    await assertSafeStudiesDirectory(projectRoot, directory, fs);
+  } catch (error: unknown) {
+    return discoveryFailure(describeError(error));
+  }
   let exists: boolean;
   try {
     exists = await fs.exists(directory);
@@ -84,30 +226,15 @@ async function discoverStudies(projectRoot: string, fs: QecStudyFs): Promise<Dis
   } catch (error: unknown) {
     return discoveryFailure(`Could not read the Studies folder: ${describeError(error)}`);
   }
-
-  const result: DiscoveryResult = { studies: [], validationErrors: [] };
-  for (const entry of entries) {
-    if (entry.isDirectory || !STUDY_SUFFIX.test(entry.name)) continue;
-    const path = fs.join(directory, entry.name);
-    let text: string;
-    try {
-      text = await fs.readTextFile(path);
-    } catch (error: unknown) {
-      result.validationErrors.push({
-        fileName: entry.name,
-        errors: [`Could not read this Study: ${describeError(error)}`],
-      });
-      continue;
-    }
-
-    const parsed = parseQecStudyYaml(text);
-    if (parsed.ok) result.studies.push({ fileName: entry.name, path, study: parsed.study });
-    else result.validationErrors.push({ fileName: entry.name, errors: [...parsed.errors] });
-  }
-
-  result.studies.sort((left, right) => left.fileName.localeCompare(right.fileName));
-  result.validationErrors.sort((left, right) => left.fileName.localeCompare(right.fileName));
-  return result;
+  const discovered = (await Promise.all(entries.map((entry) =>
+    discoverStudyEntry(projectRoot, directory, entry, fs)))).filter(
+    (entry): entry is DiscoveredEntryResult => entry !== null,
+  );
+  return quarantineDuplicateStudyIds({
+    studies: discovered.flatMap((entry) => entry.study ? [entry.study] : []),
+    validationErrors: discovered.flatMap((entry) =>
+      entry.validationError ? [entry.validationError] : []),
+  });
 }
 
 function stopStudyWatcher(): void {
@@ -119,13 +246,15 @@ function stopStudyWatcher(): void {
 }
 
 export const useQecStudyStore = create<QecStudyState>((set, get) => ({
+  projectRoot: null,
   studies: [],
   validationErrors: [],
   loading: false,
 
   reload: async (projectRoot, fs) => {
+    activeProjectRoot = projectRoot;
     const operation = ++latestOperation;
-    set({ loading: true });
+    set({ loading: true, projectRoot });
     const result = await discoverStudies(projectRoot, fs);
     if (operation !== latestOperation) return;
     set({ loading: false, studies: [...result.studies], validationErrors: [...result.validationErrors] });
@@ -146,21 +275,22 @@ export const useQecStudyStore = create<QecStudyState>((set, get) => ({
       throw new Error(`A Study named "${study.id}" already exists.`);
     }
     pendingCreates.add(path);
-    const operation = ++latestOperation;
+    if (activeProjectRoot === null) activeProjectRoot = projectRoot;
+    if (get().projectRoot === null) set({ projectRoot });
     try {
-      await fs.mkdir(directory, { recursive: true });
-      if (await fs.exists(path)) {
-        throw new Error(`A Study named "${study.id}" already exists.`);
+      if (!fs.readStudyManifests) {
+        await assertProjectPath(projectRoot, path, fs);
+        await assertSafeStudiesDirectory(projectRoot, directory, fs);
+        await fs.mkdir(directory, { recursive: true });
+        await assertSafeStudiesDirectory(projectRoot, directory, fs);
       }
-      await fs.writeTextFile(path, content);
-      if (operation !== latestOperation) return path;
-      set((state) => ({
-        studies: [...state.studies, { fileName, path, study }].sort((left, right) =>
-          left.fileName.localeCompare(right.fileName),
-        ),
-      }));
+      await fs.createTextFileExclusive(projectRoot, fileName, content);
+      if (activeProjectRoot === projectRoot) await get().reload(projectRoot, fs);
       return path;
     } catch (error: unknown) {
+      if (error instanceof QecStudyFileExistsError) {
+        throw new Error(`A Study named "${study.id}" already exists.`);
+      }
       const message = describeError(error);
       if (message.startsWith('A Study named ')) throw new Error(message);
       throw new Error(`Could not create the Study "${study.name}": ${message}`);
@@ -171,30 +301,18 @@ export const useQecStudyStore = create<QecStudyState>((set, get) => ({
 
   startWatching: async (projectRoot, fs) => {
     get().stopWatching();
+    activeProjectRoot = projectRoot;
     latestOperation += 1;
-    set({ loading: false });
+    set({ loading: false, projectRoot });
     const epoch = ++watcherEpoch;
-    const directory = studiesPath(projectRoot, fs);
-    let directoryExists: boolean;
-    try {
-      directoryExists = await fs.exists(directory);
-    } catch (error: unknown) {
-      if (epoch === watcherEpoch) {
-        reportLifecycleError(
-          set,
-          `Could not check the Studies folder for changes: ${describeError(error)}`,
-        );
-      }
-      return;
-    }
-    if (!directoryExists || epoch !== watcherEpoch) return;
-
     let nextUnwatch: (() => void) | null = null;
     try {
       nextUnwatch = await fs.watch(
-        directory,
-        () => {
-          if (epoch === watcherEpoch) void get().reload(projectRoot, fs);
+        projectRoot,
+        (paths) => {
+          if (epoch !== watcherEpoch) return;
+          if (!includesStudiesChange(projectRoot, paths, fs)) return;
+          void get().reload(projectRoot, fs);
         },
         { recursive: true },
       );
@@ -215,10 +333,19 @@ export const useQecStudyStore = create<QecStudyState>((set, get) => ({
 
   clear: () => {
     get().stopWatching();
+    activeProjectRoot = null;
     latestOperation += 1;
-    set({ loading: false, studies: [], validationErrors: [] });
+    set({ projectRoot: null, loading: false, studies: [], validationErrors: [] });
   },
 }));
+
+useProjectStore.subscribe((current, previous) => {
+  if (current.projectRoot === previous.projectRoot) return;
+  const studyRoot = useQecStudyStore.getState().projectRoot;
+  if (studyRoot !== null && studyRoot !== current.projectRoot) {
+    useQecStudyStore.getState().clear();
+  }
+});
 
 /** Convenience API for non-React callers. */
 export function reloadStudies(projectRoot: string, fs: QecStudyFs): Promise<void> {

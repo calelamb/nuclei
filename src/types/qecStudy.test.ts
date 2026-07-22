@@ -102,6 +102,38 @@ sources:
     expect(parseQecStudyYaml(serializeQecStudy(parsed.study))).toEqual(parsed);
   });
 
+  it('normalizes source ids and rejects duplicates after normalization', () => {
+    const normalized = parseQecStudyYaml(`schema: 1
+id: source-ids
+name: Source ids
+question: Are source ids stable?
+preset: build
+sources:
+  - id: " circuit "
+    kind: stim
+    path: circuits/a.stim
+`);
+    expect(normalized).toMatchObject({ ok: true, study: { sources: [{ id: 'circuit' }] } });
+
+    const duplicate = parseQecStudyYaml(`schema: 1
+id: source-ids
+name: Source ids
+question: Are source ids unique?
+preset: build
+sources:
+  - id: " circuit "
+    kind: stim
+    path: circuits/a.stim
+  - id: ｃircuit
+    kind: stim
+    path: circuits/b.stim
+`);
+    expect(duplicate).toEqual({
+      ok: false,
+      errors: expect.arrayContaining([expect.stringContaining('source ids must be unique')]),
+    });
+  });
+
   it('returns an actionable result for malformed YAML', () => {
     const result = parseQecStudyYaml('schema: 1\nid: [unterminated');
 

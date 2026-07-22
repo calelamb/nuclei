@@ -43,6 +43,10 @@ keyring = { version = "3", features = ["apple-native", "windows-native", "sync-s
 # real digest is used instead of a hand-rolled one.
 sha2 = "0.10"
 hex = "0.4"
+# Capability-scoped project filesystem access for atomic, symlink-safe QEC
+# Study manifest creation on macOS, Linux, and Windows.
+cap-std = "3.4.5"
+cap-fs-ext = "3.4.5"
 # Stage R7 hardware-submission transport: a blocking WebSocket client to the
 # local Python kernel (ws://localhost:9742). `default-features = false` +
 # `handshake` keeps the client synchronous and pulls NO TLS/OpenSSL — the

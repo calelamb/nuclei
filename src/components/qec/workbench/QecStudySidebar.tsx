@@ -105,7 +105,7 @@ function StudyForm({ busy, submitting, draft, error, onChange, onSubmit }: Study
         <option value="build">Build</option><option value="analyze">Analyze</option><option value="observe">Observe</option>
       </select>
       {error && <div role="alert" style={{ color: colors.error, fontSize: 10, lineHeight: 1.4 }}><AlertTriangle size={11} /> {error}</div>}
-      <button type="submit" disabled={busy} style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 5, border: 0, borderRadius: 4, padding: '7px 8px', background: colors.accent, color: colors.bg, fontSize: 11, fontWeight: 600, cursor: busy ? 'wait' : 'pointer' }}>
+      <button type="submit" className="qec-study-create-button" disabled={busy} style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 5, border: 0, borderRadius: 4, padding: '7px 8px', background: colors.accent, color: colors.bg, fontSize: 11, fontWeight: 600, cursor: busy ? 'wait' : 'pointer' }}>
         <Plus size={12} />{submitting ? 'Creating Study…' : 'Create Study'}
       </button>
     </form>
@@ -115,21 +115,24 @@ function StudyForm({ busy, submitting, draft, error, onChange, onSubmit }: Study
 function useStudyLifecycle(projectRoot: string | null, fs: QecStudyFs): void {
   const reload = useQecStudyStore((state) => state.reload);
   const startWatching = useQecStudyStore((state) => state.startWatching);
+  const stopWatching = useQecStudyStore((state) => state.stopWatching);
   const clearStudies = useQecStudyStore((state) => state.clear);
   useEffect(() => {
     let current = true;
     const synchronize = async (): Promise<void> => {
-      clearStudies();
-      if (!projectRoot) return;
+      if (!projectRoot) {
+        clearStudies();
+        return;
+      }
       await reload(projectRoot, fs);
       if (current) await startWatching(projectRoot, fs);
     };
     void synchronize();
     return () => {
       current = false;
-      clearStudies();
+      stopWatching();
     };
-  }, [clearStudies, fs, projectRoot, reload, startWatching]);
+  }, [clearStudies, fs, projectRoot, reload, startWatching, stopWatching]);
 }
 
 export function QecStudySidebar({ fs }: QecStudySidebarProps): ReactElement {

@@ -17,7 +17,7 @@ const projectPath = z
   );
 
 const qecStudySourceSchema = z.strictObject({
-  id: z.string().min(1),
+  id: z.string().trim().min(1).transform((value) => value.normalize('NFKC')),
   kind: z.enum(['stim', 'python', 'dem', 'experiment', 'noise', 'session']),
   path: projectPath,
 });
@@ -32,6 +32,18 @@ export const qecStudySchema = z.strictObject({
   preset: qecWorkspacePresetSchema,
   tags: z.array(z.string()).default([]),
   sources: z.array(qecStudySourceSchema),
+}).superRefine((study, context) => {
+  const seen = new Set<string>();
+  study.sources.forEach((source, index) => {
+    if (seen.has(source.id)) {
+      context.addIssue({
+        code: 'custom',
+        path: ['sources', index, 'id'],
+        message: 'source ids must be unique after trimming',
+      });
+    }
+    seen.add(source.id);
+  });
 });
 
 export type QecStudy = z.infer<typeof qecStudySchema>;
