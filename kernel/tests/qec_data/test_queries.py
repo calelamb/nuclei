@@ -12,6 +12,13 @@ import pytest
 
 import kernel.qec_data.queries as queries_module
 from kernel.qec_data.catalog import QecCatalog
+from kernel.qec_data.models import (
+    IndexRange,
+    QualifiedRange,
+    QualifiedTimestamps,
+    TimestampSeries,
+    ValueStatus,
+)
 from kernel.qec_data.storage import SessionStorage
 from kernel.qec_data.queries import (
     MAX_TABLE_ROWS,
@@ -173,6 +180,80 @@ def test_table_keyset_pages_have_no_gaps_or_duplicates(tmp_path: Path) -> None:
 
 
 @pytest.mark.parametrize(
+    ("timestamps", "rounds", "expected_keys"),
+    [
+        (False, False, {"sequence", "detectors_b64"}),
+        (True, False, {"sequence", "timestamp_ns", "detectors_b64"}),
+        (False, True, {"sequence", "round", "detectors_b64"}),
+        (
+            True,
+            True,
+            {"sequence", "timestamp_ns", "round", "detectors_b64"},
+        ),
+    ],
+)
+def test_table_pages_serialize_all_four_static_schema_profiles(
+    tmp_path: Path,
+    timestamps: bool,
+    rounds: bool,
+    expected_keys: set[str],
+) -> None:
+    storage = create_storage(tmp_path)
+    batch = sample_batch()
+    if timestamps:
+        batch = replace(
+            batch,
+            source_timestamps=QualifiedTimestamps(
+                TimestampSeries((10.0, 11.0, 12.0), "ns"), ValueStatus.MEASURED
+            ),
+        )
+    if rounds:
+        batch = replace(
+            batch,
+            round_range=QualifiedRange(IndexRange(30, 33), ValueStatus.MEASURED),
+        )
+    storage.append_batch(batch)
+    storage.commit_segment("segment-0001")
+    dataset_id = QecCatalog(storage).synchronize()[0].dataset_id
+    engine = QecQueryEngine(QecCatalog(storage))
+
+    first = tile_event(
+        list(
+            engine.execute(
+                query_spec(dataset_id, filters={"start": 0, "end": 2, "limit": 1}),
+                CancellationToken(),
+            )
+        )
+    ).tile.content
+    second = tile_event(
+        list(
+            engine.execute(
+                query_spec(
+                    dataset_id,
+                    request_id="request-2",
+                    filters={
+                        "start": 0,
+                        "end": 2,
+                        "limit": 1,
+                        "cursor": first["nextCursor"],
+                    },
+                ),
+                CancellationToken(),
+            )
+        )
+    ).tile.content
+
+    assert set(first["rows"][0]) == expected_keys
+    assert set(second["rows"][0]) == expected_keys
+    if timestamps:
+        assert first["rows"][0]["timestamp_ns"] == "10"
+        assert second["rows"][0]["timestamp_ns"] == "11"
+    if rounds:
+        assert first["rows"][0]["round"] == "30"
+        assert second["rows"][0]["round"] == "31"
+
+
+@pytest.mark.parametrize(
     "mutation",
     [
         {"tile": "table-page; DROP TABLE datasets"},
@@ -254,6 +335,67 @@ def test_supported_syndrome_tiles_are_bounded(
     if tile == "heatmap":
         total = sum(int(cell["activeCount"]) for cell in event.tile.content["cells"])
         assert total == 6
+
+
+def test_histogram_reports_actual_sparse_bin_edges_and_global_range(
+    tmp_path: Path,
+) -> None:
+    catalog, dataset_id = catalog_with_rows(tmp_path)
+    content = tile_event(
+        list(
+            QecQueryEngine(catalog).execute(
+                query_spec(
+                    dataset_id,
+                    tile="histogram",
+                    filters={
+                        "start": 0,
+                        "end": 4,
+                        "metric": "detector-weight",
+                        "bins": 4,
+                    },
+                ),
+                CancellationToken(),
+            )
+        )
+    ).tile.content
+
+    assert content["range"] == {"minimum": 0.0, "maximum": 2.0, "constant": False}
+    assert [item["bin"] for item in content["bins"]] == [0, 2, 3]
+    assert [(item["lowerBound"], item["upperBound"]) for item in content["bins"]] == [
+        (0.0, 0.5),
+        (1.0, 1.5),
+        (1.5, 2.0),
+    ]
+
+
+def test_histogram_marks_constant_range_explicitly(tmp_path: Path) -> None:
+    storage = create_storage(tmp_path)
+    storage.append_batch(sample_batch(detector_data=bytes(6)))
+    storage.commit_segment("segment-0001")
+    catalog = QecCatalog(storage)
+    dataset_id = catalog.synchronize()[0].dataset_id
+    content = tile_event(
+        list(
+            QecQueryEngine(catalog).execute(
+                query_spec(
+                    dataset_id,
+                    tile="histogram",
+                    filters={
+                        "start": 0,
+                        "end": 2,
+                        "metric": "detector-weight",
+                        "bins": 4,
+                    },
+                ),
+                CancellationToken(),
+            )
+        )
+    ).tile.content
+
+    assert content["range"] == {"minimum": 0.0, "maximum": 0.0, "constant": True}
+    assert content["bins"] == [
+        {"bin": 0, "lowerBound": 0.0, "upperBound": 0.0, "sampleCount": "3"}
+    ]
 
 
 def test_graph_overlay_is_typed_unsupported_for_syndrome_dataset(
@@ -480,6 +622,29 @@ def test_complete_event_cap_counts_utf8_base64_and_rejects_nonfinite() -> None:
         make_query_tile(
             "request-1", "dataset-1", "time-series", {"points": [float("nan")]}
         )
+
+
+def test_python_query_tile_fixture_preserves_exact_server_bytes() -> None:
+    fixture_path = (
+        Path(__file__).parents[3]
+        / "schemas/qec-data/v1/fixtures/python-query-tile.json"
+    )
+    fixture = json.loads(fixture_path.read_text(encoding="utf-8"))
+    event = make_query_tile(
+        "request-λ",
+        "dataset-1",
+        "time-series",
+        {"points": [{"small": 1e-7, "whole": 1.0, "label": "μ"}]},
+    )
+
+    assert event.to_wire() == fixture["event"]
+    assert serialize_query_event(event).decode("utf-8") == fixture["serializedFrame"]
+    assert len(serialize_query_event(event)) == fixture["frameByteLength"]
+    assert event.tile.byte_length == fixture["serverMeasuredTileBytes"]
+    assert fixture["boundary"] == {
+        "accepted": MAX_QUERY_EVENT_BYTES,
+        "rejected": MAX_QUERY_EVENT_BYTES + 1,
+    }
 
 
 def test_query_event_dtos_reject_spoofing_and_serialize_progress() -> None:

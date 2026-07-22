@@ -11,12 +11,20 @@ import pytest
 from kernel.qec_data.catalog import CatalogIntegrityError, CatalogNotFound, QecCatalog
 from kernel.qec_data.models import (
     IndexRange,
+    PackedBits,
+    QualifiedPackedBits,
     QualifiedRange,
     QualifiedTimestamps,
     TimestampSeries,
     ValueStatus,
 )
-from kernel.tests.qec_data.test_storage import create_storage, sample_batch
+from kernel.qec_data.storage import SessionStorage
+from kernel.tests.qec_data.test_storage import (
+    create_storage,
+    sample_batch,
+    sample_identity,
+    sample_session,
+)
 
 
 def committed_storage(root: Path):
@@ -153,3 +161,58 @@ def test_catalog_rejects_symlinked_index_and_temp_boundaries(tmp_path: Path) -> 
     (indexes / "duckdb-tmp").symlink_to(temp_target, target_is_directory=True)
     with pytest.raises(ValueError, match="symlink"):
         catalog.synchronize()
+
+
+@pytest.mark.parametrize("name", ["journal.json", "manifest.json", "identity.json"])
+def test_catalog_rejects_post_open_symlink_boundary_swap(
+    tmp_path: Path, name: str
+) -> None:
+    storage = committed_storage(tmp_path / "session")
+    catalog = QecCatalog(storage)
+    boundary = storage.session_root / name
+    external = tmp_path / f"external-{name}"
+    external.write_bytes(boundary.read_bytes())
+    boundary.unlink()
+    boundary.symlink_to(external)
+
+    with pytest.raises(CatalogIntegrityError, match="boundary"):
+        catalog.synchronize()
+
+
+def test_catalog_rejects_parquet_bit_width_metadata_identity_mismatch(
+    tmp_path: Path,
+) -> None:
+    identity = replace(sample_identity(), bit_widths=(("detectors", 7),))
+    storage = SessionStorage.create(tmp_path, sample_session(), identity)
+    storage.append_batch(sample_batch(detector_width=8))
+    storage.commit_segment("segment-0001")
+
+    with pytest.raises(CatalogIntegrityError, match="snapshot"):
+        QecCatalog(storage).synchronize()
+
+
+@pytest.mark.parametrize("field", ["observables", "measurements"])
+@pytest.mark.parametrize("physical_field", [False, True])
+def test_catalog_rejects_optional_bit_field_presence_identity_mismatch(
+    tmp_path: Path, field: str, physical_field: bool
+) -> None:
+    bit_widths = (("detectors", 8),)
+    batch = sample_batch()
+    if physical_field:
+        batch = replace(
+            batch,
+            **{
+                field: QualifiedPackedBits(
+                    PackedBits(1, bytes(batch.record_count)), ValueStatus.MEASURED
+                )
+            },
+        )
+    else:
+        bit_widths += ((field, 1),)
+    identity = replace(sample_identity(), bit_widths=bit_widths)
+    storage = SessionStorage.create(tmp_path, sample_session(), identity)
+    storage.append_batch(batch)
+    storage.commit_segment("segment-0001")
+
+    with pytest.raises(CatalogIntegrityError, match="snapshot"):
+        QecCatalog(storage).synchronize()

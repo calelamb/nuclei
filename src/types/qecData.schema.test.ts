@@ -7,7 +7,7 @@ import {
   decodeResultSchema,
   provenanceRecordSchema,
   QEC_TILE_MAX_BYTES,
-  qecTilePayloadByteLength,
+  qecQueryResultSchema,
   qecTilePayloadSchema,
   qecQuerySpecSchema,
   qecSessionSchema,
@@ -149,32 +149,35 @@ describe('canonical QEC data schemas', () => {
     expect(() => qecQuerySpecSchema.parse({ ...query, filters: { unsafe: [] } })).toThrow();
   });
 
-  it('measures the full tile payload convention at exact UTF-8 boundaries', () => {
-    const baseTile = {
-      kind: 'table-page',
-      datasetId: 'dataset-1',
-      sequence: 0,
-      content: '',
-    } as const;
-    const emptyLength = qecTilePayloadByteLength(baseTile);
-    const initialContent = 'x'.repeat(QEC_TILE_MAX_BYTES - emptyLength);
-    const initial = { ...baseTile, content: initialContent };
-    const boundaryContent = initialContent.slice(
-      0,
-      initialContent.length - (qecTilePayloadByteLength(initial) - QEC_TILE_MAX_BYTES),
+  it('consumes Python canonical query frames without recomputing parsed-object bytes', () => {
+    const shared = fixture('python-query-tile') as {
+      event: { type: 'tile'; tile: { byteLength: number; content: unknown } };
+      serializedFrame: string;
+      frameByteLength: number;
+      serverMeasuredTileBytes: number;
+      boundary: { accepted: number; rejected: number };
+    };
+    const parsed = qecQueryResultSchema.parse(shared.event);
+
+    expect(parsed.type).toBe('tile');
+    expect(shared.event.tile.content).toEqual({
+      points: [{ label: 'μ', small: 1e-7, whole: 1 }],
+    });
+    expect(shared.event.tile.byteLength).toBe(shared.serverMeasuredTileBytes);
+    expect(new TextEncoder().encode(shared.serializedFrame).byteLength).toBe(
+      shared.frameByteLength,
     );
-    const boundary = { ...baseTile, content: boundaryContent };
-    const byteLength = qecTilePayloadByteLength(boundary);
-    expect(byteLength).toBe(QEC_TILE_MAX_BYTES);
-    const tile = { ...boundary, byteLength };
-    expect(new TextEncoder().encode(JSON.stringify(tile)).byteLength).toBe(QEC_TILE_MAX_BYTES);
-    expect(qecTilePayloadSchema.parse(tile)).toEqual(tile);
-    expect(() => qecTilePayloadSchema.parse({ ...tile, byteLength: byteLength - 1 })).toThrow();
-    const unicodeOver = { ...boundary, content: `${boundaryContent.slice(1)}é` };
-    expect(qecTilePayloadByteLength(unicodeOver)).toBe(QEC_TILE_MAX_BYTES + 1);
+    expect(shared.boundary).toEqual({
+      accepted: QEC_TILE_MAX_BYTES,
+      rejected: QEC_TILE_MAX_BYTES + 1,
+    });
     expect(() => qecTilePayloadSchema.parse({
-      ...unicodeOver,
-      byteLength: qecTilePayloadByteLength(unicodeOver),
+      ...shared.event.tile,
+      byteLength: shared.event.tile.byteLength - 1,
+    })).not.toThrow();
+    expect(() => qecTilePayloadSchema.parse({
+      ...shared.event.tile,
+      byteLength: shared.boundary.rejected,
     })).toThrow();
   });
 });

@@ -10,6 +10,7 @@ from types import MappingProxyType
 from typing import Any
 
 import duckdb
+import pyarrow as pa
 import pyarrow.parquet as pq
 
 from .hashing import DatasetSemanticIdentity, canonical_json_bytes, is_sha256
@@ -116,6 +117,14 @@ class _Snapshot:
     partition_rows: tuple[tuple[object, ...], ...]
 
 
+@dataclass(frozen=True, slots=True)
+class _SyndromeSchema:
+    profile: str
+    detector_count: int
+    observable_count: int | None
+    measurement_count: int | None
+
+
 class QecCatalog:
     """A rebuildable cache whose source of truth remains SessionStorage."""
 
@@ -177,9 +186,8 @@ class QecCatalog:
 
     def _read_boundary(self, name: str) -> Mapping[str, Any]:
         try:
-            value = loads_canonical_json(
-                (self._storage.session_root / name).read_text(encoding="utf-8")
-            )
+            path = safe_session_file(self._storage.session_root, name)
+            value = loads_canonical_json(path.read_text(encoding="utf-8"))
         except (OSError, ValueError) as error:
             raise CatalogIntegrityError(
                 f"catalog {name} boundary is invalid"
@@ -265,19 +273,53 @@ def _uint(value: object, name: str) -> int:
     return value
 
 
-def _schema_profile(path: Path) -> str:
-    names = frozenset(pq.read_schema(path).names)
+def _packed_width(schema: pa.Schema, name: str) -> int:
+    field = schema.field(name)
+    if field.nullable or not pa.types.is_fixed_size_binary(field.type):
+        raise ValueError(f"Parquet field {name} must use fixed-size binary")
+    metadata = field.metadata or {}
+    if metadata.get(b"qec.bit_order") != b"lsb0":
+        raise ValueError(f"Parquet field {name} has invalid bit order")
+    try:
+        width = int(metadata[b"qec.bit_count"])
+    except (KeyError, ValueError) as error:
+        raise ValueError(f"Parquet field {name} has invalid bit width") from error
+    if width < 1 or (width + 7) // 8 != field.type.byte_width:
+        raise ValueError(f"Parquet field {name} has invalid bit width")
+    return width
+
+
+def _schema_contract(path: Path, identity: DatasetSemanticIdentity) -> _SyndromeSchema:
+    try:
+        schema = pq.read_schema(path)
+    except (OSError, pa.ArrowException) as error:
+        raise ValueError("committed Parquet schema is invalid") from error
+    names = frozenset(schema.names)
     required = frozenset({"sequence", "detectors"})
     if not required <= names:
         raise ValueError("syndrome schema is missing required fields")
+    expected = dict(identity.bit_widths)
+    actual = {
+        name: _packed_width(schema, name)
+        for name in ("detectors", "observables", "measurements")
+        if name in names
+    }
+    if actual != expected:
+        raise ValueError("Parquet packed fields do not match semantic identity")
     timestamp = "timestamp_ns" in names
     rounds = "round" in names
-    return {
+    profile = {
         (False, False): "base",
         (True, False): "timestamp",
         (False, True): "round",
         (True, True): "timestamp-round",
     }[(timestamp, rounds)]
+    return _SyndromeSchema(
+        profile,
+        actual["detectors"],
+        actual.get("observables"),
+        actual.get("measurements"),
+    )
 
 
 def _snapshot_from_segments(
@@ -327,7 +369,10 @@ def _segment_dataset(
     paths, rows = _partition_rows(
         session_root, str(dataset_id), str(segment_id), raw_partitions
     )
-    widths = dict(identity.bit_widths)
+    schemas = tuple(_schema_contract(path, identity) for path in paths)
+    if any(schema != schemas[0] for schema in schemas[1:]):
+        raise ValueError("catalog partitions have inconsistent schema profiles")
+    schema = schemas[0]
     starts = tuple(_uint(item[4], "sequence start") for item in rows)
     ends = tuple(_uint(item[5], "sequence end") for item in rows)
     dataset = CatalogDataset(
@@ -337,11 +382,11 @@ def _segment_dataset(
         str(record_kind),
         str(fingerprint),
         generation,
-        _schema_profile(paths[0]),
+        schema.profile,
         canonical_json_bytes(identity.to_mapping()).decode("utf-8"),
-        widths.get("detectors"),
-        widths.get("observables"),
-        widths.get("measurements"),
+        schema.detector_count,
+        schema.observable_count,
+        schema.measurement_count,
         min(starts),
         max(ends),
         paths,

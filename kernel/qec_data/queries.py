@@ -17,6 +17,7 @@ import pyarrow as pa
 from .catalog import CatalogDataset, CatalogError, QecCatalog
 from .hashing import canonical_json_bytes, semantic_digest
 from .model_codecs import loads_canonical_json
+from .query_table_templates import TABLE_TEMPLATES
 from .tiles import (
     QueryEvent,
     QueryProgress,
@@ -35,20 +36,6 @@ MAX_BINS, MAX_SCAN_ROWS, MAX_EXPANDED_CELLS = 4_096, 50_000_000, 50_000_000
 UINT64_MAX = 2**64 - 1
 SCHEMA_PROFILES = frozenset({"base", "timestamp", "round", "timestamp-round"})
 
-TABLE_FIRST = """
-SELECT sequence, detectors
-FROM read_parquet(?, union_by_name = false)
-WHERE sequence >= ? AND sequence <= ?
-ORDER BY sequence ASC
-LIMIT ?
-"""
-TABLE_AFTER = """
-SELECT sequence, detectors
-FROM read_parquet(?, union_by_name = false)
-WHERE sequence >= ? AND sequence <= ? AND sequence > ?
-ORDER BY sequence ASC
-LIMIT ?
-"""
 TIME_SERIES_DETECTOR_WEIGHT = """
 WITH filtered AS (
   SELECT sequence, bit_count(CAST(detectors AS BIT))::DOUBLE AS value
@@ -108,12 +95,7 @@ ORDER BY y, x
 
 QUERY_TEMPLATES: Mapping[tuple[str, str, str, bool], str] = MappingProxyType(
     {
-        **{
-            (tile, "rows", profile, after): TABLE_AFTER if after else TABLE_FIRST
-            for tile in ("table-page", "shot-window")
-            for profile in SCHEMA_PROFILES
-            for after in (False, True)
-        },
+        **TABLE_TEMPLATES,
         **{
             (
                 "time-series",
@@ -506,7 +488,10 @@ def _build_event(plan: QueryPlan, batches: tuple[pa.RecordBatch, ...]) -> QueryT
     if plan.spec.tile == "time-series":
         content = {"metric": plan.metric, "points": _series_points(batches)}
     elif plan.spec.tile == "histogram":
-        content = {"metric": plan.metric, "bins": _histogram_bins(batches)}
+        content = {
+            "metric": plan.metric,
+            **_histogram_content(batches, plan.result_row_cap),
+        }
     else:
         content = {
             "metric": plan.metric,
@@ -527,16 +512,25 @@ def _rows(batches: tuple[pa.RecordBatch, ...]) -> tuple[dict[str, object], ...]:
     for batch in batches:
         sequences = batch.column("sequence")
         detectors = batch.column("detectors")
+        timestamps = (
+            batch.column("timestamp_ns")
+            if "timestamp_ns" in batch.schema.names
+            else None
+        )
+        rounds = batch.column("round") if "round" in batch.schema.names else None
         for index in range(batch.num_rows):
             value = detectors[index].as_py()
             if type(value) is not bytes:
                 raise QueryExecutionError("detector payload is not binary")
-            rows.append(
-                {
-                    "sequence": str(sequences[index].as_py()),
-                    "detectors_b64": encode_binary(value),
-                }
-            )
+            row: dict[str, object] = {
+                "sequence": str(sequences[index].as_py()),
+                "detectors_b64": encode_binary(value),
+            }
+            if timestamps is not None:
+                row["timestamp_ns"] = str(timestamps[index].as_py())
+            if rounds is not None:
+                row["round"] = str(rounds[index].as_py())
+            rows.append(row)
     return tuple(rows)
 
 
@@ -587,16 +581,33 @@ def _series_points(batches: tuple[pa.RecordBatch, ...]) -> list[dict[str, object
     ]
 
 
-def _histogram_bins(batches: tuple[pa.RecordBatch, ...]) -> list[dict[str, object]]:
-    return [
-        {
-            "bin": int(row["bin"]),
-            "lowerBound": _finite(row["lower_bound"]),
-            "upperBound": _finite(row["upper_bound"]),
-            "sampleCount": str(row["sample_count"]),
-        }
-        for row in _py_rows(batches)
-    ]
+def _histogram_content(
+    batches: tuple[pa.RecordBatch, ...], bin_count: int
+) -> dict[str, object]:
+    rows = tuple(_py_rows(batches))
+    if not rows:
+        return {"bins": [], "range": None}
+    minimum = _finite(rows[0]["lower_bound"])
+    maximum = _finite(rows[0]["upper_bound"])
+    constant = minimum == maximum
+    width = 0.0 if constant else (maximum - minimum) / bin_count
+    bins = []
+    for row in rows:
+        index = int(row["bin"])
+        lower = minimum if constant else minimum + index * width
+        upper = maximum if constant or index == bin_count - 1 else lower + width
+        bins.append(
+            {
+                "bin": index,
+                "lowerBound": lower,
+                "upperBound": upper,
+                "sampleCount": str(row["sample_count"]),
+            }
+        )
+    return {
+        "bins": bins,
+        "range": {"minimum": minimum, "maximum": maximum, "constant": constant},
+    }
 
 
 def _heatmap_cells(batches: tuple[pa.RecordBatch, ...]) -> list[dict[str, object]]:
