@@ -10,7 +10,10 @@ from kernel.qec_data.adapters.base import (
     SourceSpan,
     SourceSpanPrecision,
 )
-from kernel.qec_data.adapters.stim_results import StimResultsAdapter
+from kernel.qec_data.adapters.stim_results import (
+    StimMeasurementTargetsUnsupported,
+    StimResultsAdapter,
+)
 from kernel.qec_data.model_validation import ValueStatus
 from kernel.qec_data.models import IndexRange, SyndromeBatch
 from kernel.tests.qec_data.adapter_contract import (
@@ -93,8 +96,14 @@ def stim_fixture_set(tmp_path: Path) -> dict[str, Path]:
     return paths
 
 
-def _decode_rows(path: Path) -> tuple[tuple[int, ...], ...]:
-    chunks = tuple(StimResultsAdapter().import_batches(path, _mapping()))
+def _decode_rows(
+    path: Path, mapping: ImportMapping | None = None
+) -> tuple[tuple[int, ...], ...]:
+    if mapping is None:
+        mapping = (
+            _mapping(shot_count=len(ROWS)) if path.suffix == ".hits" else _mapping()
+        )
+    chunks = tuple(StimResultsAdapter().import_batches(path, mapping))
     decoded: list[tuple[int, ...]] = []
     for chunk in chunks:
         assert isinstance(chunk, ImportChunk)
@@ -178,10 +187,11 @@ def test_stim_rejects_nonzero_b8_padding(tmp_path: Path) -> None:
     assert "padding" in report.issues[0].message
 
 
+@pytest.mark.parametrize("limit", [1, 3])
 def test_ptb64_partial_preview_uses_container_lineage(
-    stim_fixture_set: dict[str, Path],
+    stim_fixture_set: dict[str, Path], limit: int
 ) -> None:
-    preview = StimResultsAdapter().preview(stim_fixture_set["ptb64"], _mapping(), 3)
+    preview = StimResultsAdapter().preview(stim_fixture_set["ptb64"], _mapping(), limit)
     assert preview.batches[0].source_spans[0].precision is SourceSpanPrecision.CONTAINER
     assert preview.batches[0].source_spans[0].row_range is None
 
@@ -200,22 +210,64 @@ def test_stim_text_formats_require_lf_terminated_records(
 ) -> None:
     source = tmp_path / f"unterminated.{extension}"
     source.write_bytes(contents)
-    assert not StimResultsAdapter().validate(source, _mapping()).valid
+    mapping = _mapping(shot_count=1) if extension == "hits" else _mapping()
+    assert not StimResultsAdapter().validate(source, mapping).valid
 
 
-def test_sparse_duplicate_and_order_semantics_match_stim_1_14(tmp_path: Path) -> None:
+def test_sparse_duplicate_and_order_semantics_are_idempotent_sets(
+    tmp_path: Path,
+) -> None:
     hits = tmp_path / "duplicates.hits"
     hits.write_text("2,0,0\n", encoding="ascii")
     dets = tmp_path / "duplicates.dets"
     dets.write_text("shot D2 D0 D0\n", encoding="ascii")
-    assert _decode_rows(hits) == ((2,),)
+    assert _decode_rows(hits, _mapping(shot_count=1)) == ((0, 2),)
     assert _decode_rows(dets) == ((0, 2),)
+
+
+def test_hits_requires_shot_count_to_disambiguate_blank_trailing_lines(
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "ambiguous.hits"
+    source.write_bytes(b"0\n\n\n")
+    adapter = StimResultsAdapter()
+
+    missing = adapter.validate(source, _mapping())
+    assert not missing.valid
+    assert missing.issues[0].code == "stim_shot_count_required"
+
+    assert _decode_rows(source, _mapping(shot_count=2)) == ((0,), ())
+    assert _decode_rows(source, _mapping(shot_count=1)) == ((0,),)
+
+
+def test_hits_rejects_nonblank_data_after_declared_shot_count(tmp_path: Path) -> None:
+    source = tmp_path / "extra.hits"
+    source.write_bytes(b"0\n\n1\n")
+    report = StimResultsAdapter().validate(source, _mapping(shot_count=2))
+    assert not report.valid
+    assert "after declared shot_count" in report.issues[0].message
+
+
+def test_dets_measurement_targets_are_valid_but_actionably_unsupported(
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "measurements.dets"
+    source.write_text("shot M0 D1 L0\n", encoding="ascii")
+    report = StimResultsAdapter().validate(source, _mapping(observable_count=1))
+    assert not report.valid
+    assert report.issues[0].code == "stim_measurement_targets_unsupported"
+    assert "valid Stim dets syntax" in report.issues[0].message
+    assert "D#/L# detector-sampler output" in report.issues[0].message
+    with pytest.raises(StimMeasurementTargetsUnsupported):
+        tuple(StimResultsAdapter().import_batches(source, _mapping(observable_count=1)))
 
 
 def test_stim_rejects_unbounded_text_record(tmp_path: Path) -> None:
     source = tmp_path / "huge.hits"
     source.write_bytes(b"0," * 524_289 + b"0\n")
-    assert not StimResultsAdapter().validate(source, _mapping()).valid
+    report = StimResultsAdapter().validate(source, _mapping(shot_count=1))
+    assert not report.valid
+    assert "1 MiB" in report.issues[0].message
 
 
 class ContractStimResultsAdapter(StimResultsAdapter):

@@ -42,6 +42,10 @@ MAX_CHUNK_BYTES = 16 * 1_048_576
 STIM_FORMATS = frozenset({"01", "b8", "r8", "ptb64", "hits", "dets"})
 
 
+class StimMeasurementTargetsUnsupported(ValueError):
+    """Valid dets M# targets cannot fit the syndrome-only data model."""
+
+
 @dataclass(frozen=True, slots=True)
 class _Widths:
     detectors: int
@@ -59,6 +63,7 @@ class _ShotRow:
     row_index: int | None
     byte_start: int
     byte_end: int
+    precision: SourceSpanPrecision = SourceSpanPrecision.EXACT
 
 
 def _pairs(value: tuple[tuple[str, object], ...]) -> dict[str, object]:
@@ -183,14 +188,33 @@ def _row_from_positions(
     row_index: int | None,
     byte_start: int,
     byte_end: int,
+    precision: SourceSpanPrecision = SourceSpanPrecision.EXACT,
 ) -> _ShotRow:
     if any(index < 0 or index >= widths.total for index in positions):
         raise ValueError("Stim result contains a bit outside the declared widths")
     detectors, observables = _split_positions(positions, widths)
-    return _ShotRow(detectors, observables, row_index, byte_start, byte_end)
+    return _ShotRow(detectors, observables, row_index, byte_start, byte_end, precision)
 
 
-def _text_rows(source: Path, widths: _Widths, data_format: str) -> Iterator[_ShotRow]:
+def _hits_shot_count(mapping: ImportMapping, data_format: str) -> int | None:
+    if data_format != "hits":
+        return None
+    value = _integer_option(_pairs(mapping.options), "shot_count")
+    if value is None:
+        raise ValueError(
+            "shot_count is required for hits because blank trailing lines are ambiguous"
+        )
+    if value < 0:
+        raise ValueError("shot_count must be nonnegative")
+    return value
+
+
+def _text_rows(
+    source: Path,
+    widths: _Widths,
+    data_format: str,
+    shot_count: int | None,
+) -> Iterator[_ShotRow]:
     with source.open("rb") as stream:
         row_index = 0
         while raw_line := stream.readline(MAX_RECORD_BYTES + 1):
@@ -204,11 +228,19 @@ def _text_rows(source: Path, widths: _Widths, data_format: str) -> Iterator[_Sho
                 line = raw_line[:-1].decode("ascii")
             except UnicodeDecodeError as error:
                 raise ValueError(f"{data_format} data must be ASCII") from error
+            if shot_count is not None and row_index >= shot_count:
+                if line:
+                    raise ValueError(
+                        "hits contains nonblank data after declared shot_count"
+                    )
+                continue
             positions = _parse_text_positions(line, widths, data_format)
             yield _row_from_positions(
                 positions, widths, row_index, byte_start, byte_end
             )
             row_index += 1
+        if shot_count is not None and row_index != shot_count:
+            raise ValueError("hits ended before the declared shot_count")
 
 
 def _parse_text_positions(
@@ -228,19 +260,21 @@ def _parse_text_positions(
         terms = line.split(",")
         if any(not term.isascii() or not term.isdecimal() for term in terms):
             raise ValueError("hits records must contain comma-separated integers")
-        toggled: frozenset[int] = frozenset()
-        for term in terms:
-            index = int(term)
-            toggled = toggled ^ frozenset({index})
-        return toggled
+        return frozenset(int(term) for term in terms)
     if line == "shot":
         return frozenset()
     if not line.startswith("shot ") or "  " in line:
         raise ValueError("dets records must start with 'shot'")
     positions: set[int] = set()
     for term in line[5:].split(" "):
-        if len(term) < 2 or term[0] not in "DL" or not term[1:].isdecimal():
-            raise ValueError("dets records may contain only D# and L# targets")
+        if len(term) < 2 or term[0] not in "MDL" or not term[1:].isdecimal():
+            raise ValueError("dets records require valid M#, D#, or L# targets")
+        if term[0] == "M":
+            raise StimMeasurementTargetsUnsupported(
+                "M# is valid Stim dets syntax but raw measurements cannot be "
+                "represented as syndrome detector events; use D#/L# "
+                "detector-sampler output"
+            )
         index = int(term[1:])
         positions.add(index if term[0] == "D" else widths.detectors + index)
     return frozenset(positions)
@@ -305,13 +339,22 @@ def _ptb64_rows(source: Path, widths: _Widths) -> Iterator[_ShotRow]:
                     for bit_index in range(widths.total)
                     if raw[bit_index * 8 + shot_index // 8] & (1 << (shot_index % 8))
                 )
-                yield _row_from_positions(positions, widths, None, byte_start, byte_end)
+                yield _row_from_positions(
+                    positions,
+                    widths,
+                    None,
+                    byte_start,
+                    byte_end,
+                    SourceSpanPrecision.CONTAINER,
+                )
 
 
-def _rows(source: Path, widths: _Widths) -> Iterator[_ShotRow]:
+def _rows(source: Path, widths: _Widths, mapping: ImportMapping) -> Iterator[_ShotRow]:
     data_format = _format(source)
     if data_format in {"01", "hits", "dets"}:
-        return _text_rows(source, widths, data_format)
+        return _text_rows(
+            source, widths, data_format, _hits_shot_count(mapping, data_format)
+        )
     if data_format == "b8":
         return _b8_rows(source, widths)
     if data_format == "r8":
@@ -375,17 +418,11 @@ def _source_span(rows: tuple[_ShotRow, ...], source_hash: str) -> SourceSpan:
         if row_indices[0] is not None
         else None
     )
-    overlapping = any(
-        current.byte_start < previous.byte_end
-        for previous, current in zip(rows, rows[1:])
-    )
     return SourceSpan(
         source_id=f"sha256:{source_hash}",
         byte_ranges=(IndexRange(rows[0].byte_start, rows[-1].byte_end),),
         row_range=row_range,
-        precision=(
-            SourceSpanPrecision.CONTAINER if overlapping else SourceSpanPrecision.EXACT
-        ),
+        precision=rows[0].precision,
     )
 
 
@@ -410,7 +447,7 @@ def _chunks(source: Path, mapping: ImportMapping) -> Iterator[ImportChunk]:
         1,
         min(MAX_BATCH_RECORDS, MAX_CHUNK_BYTES // max(1, bytes_per_record)),
     )
-    iterator = iter(_rows(source, widths))
+    iterator = iter(_rows(source, widths, mapping))
     sequence_start = 0
     while records := tuple(itertools.islice(iterator, batch_size)):
         yield _chunk(records, mapping, source_hash, sequence_start, widths)
@@ -449,11 +486,14 @@ class StimResultsAdapter:
             if not found:
                 raise ValueError("Stim result file contains no records")
         except (OSError, TypeError, ValueError) as error:
-            code = (
-                "stim_width_required"
-                if "detector_count is required" in str(error)
-                else "stim_invalid_data"
-            )
+            if isinstance(error, StimMeasurementTargetsUnsupported):
+                code = "stim_measurement_targets_unsupported"
+            elif "shot_count is required" in str(error):
+                code = "stim_shot_count_required"
+            elif "detector_count is required" in str(error):
+                code = "stim_width_required"
+            else:
+                code = "stim_invalid_data"
             return ValidationReport(
                 False,
                 (ValidationIssue(code, str(error)),),
@@ -480,7 +520,7 @@ class StimResultsAdapter:
             MAX_BATCH_RECORDS,
             max(1, MAX_CHUNK_BYTES // max(1, bytes_per_record)),
         )
-        iterator = iter(_rows(source, widths))
+        iterator = iter(_rows(source, widths, mapping))
         records = tuple(itertools.islice(iterator, bounded_limit))
         has_more = next(iterator, None) is not None
         batches = (_chunk(records, mapping, source_hash, 0, widths),) if records else ()

@@ -6,6 +6,8 @@ from pathlib import Path
 
 import pytest
 
+import kernel.qec_data.adapters.tabular_sources as tabular_sources
+
 from kernel.qec_data.adapters.base import (
     ImportChunk,
     ImportMapping,
@@ -124,6 +126,24 @@ def test_tabular_never_guesses_units_or_bit_width(tmp_path: Path) -> None:
     assert report.issues[0].code == "tabular_unit_required"
 
 
+def test_observable_count_requires_an_observable_events_mapping(tmp_path: Path) -> None:
+    source = tmp_path / "hardware.csv"
+    source.write_text("seq,syndrome\n0,101\n", encoding="utf-8")
+    mapping = ImportMapping(
+        fields=(("sequence", "seq"), ("detector_events", "syndrome")),
+        options=(
+            ("output_kind", "syndromes"),
+            ("detector_count", 3),
+            ("observable_count", 1),
+            ("bit_order", "lsb0"),
+        ),
+    )
+    report = TabularAdapter().validate(source, mapping)
+    assert not report.valid
+    assert report.issues[0].code == "tabular_mapping_invalid"
+    assert "observable_count requires observable_events" in report.issues[0].message
+
+
 def test_tabular_rejects_nonmonotonic_sequence_and_invalid_bits(tmp_path: Path) -> None:
     source = tmp_path / "bad.csv"
     source.write_text("seq,clock,syndrome\n2,1,101\n1,2,10x\n", encoding="utf-8")
@@ -213,6 +233,54 @@ def test_arrow_and_parquet_normalize_at_pyarrow_18_floor(
     assert chunks[0].source_spans[0].row_range.start == 0
 
 
+def test_arrow_container_size_is_rejected_before_memory_mapping(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    pa = pytest.importorskip("pyarrow")
+    source = tmp_path / "hardware.arrow"
+    table = pa.table({"seq": [0], "syndrome": [b"\x00"]})
+    with pa.OSFile(str(source), "wb") as sink:
+        with pa.ipc.new_file(sink, table.schema) as writer:
+            writer.write_table(table)
+    monkeypatch.setattr(
+        tabular_sources, "MAX_IPC_CONTAINER_BYTES", source.stat().st_size - 1
+    )
+
+    def fail_memory_map(*args: object, **kwargs: object) -> object:
+        raise AssertionError("oversized IPC input reached memory mapping")
+
+    monkeypatch.setattr(pa, "memory_map", fail_memory_map)
+    with pytest.raises(ValueError, match="IPC source exceeds"):
+        tuple(TabularAdapter().import_batches(source, _mapping(with_time=False)))
+
+
+def test_arrow_record_batch_count_is_bounded_from_footer_before_decode(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    pa = pytest.importorskip("pyarrow")
+    source = tmp_path / "many-batches.arrow"
+    table = pa.table({"seq": [0, 1], "syndrome": [b"\x00", b"\x00"]})
+    with pa.OSFile(str(source), "wb") as sink:
+        with pa.ipc.new_file(sink, table.schema) as writer:
+            writer.write_table(table, max_chunksize=1)
+    monkeypatch.setattr(tabular_sources, "MAX_IPC_RECORD_BATCHES", 1)
+    with pytest.raises(ValueError, match="record batch count"):
+        tuple(TabularAdapter().import_batches(source, _mapping(with_time=False)))
+
+
+def test_parquet_row_group_metadata_bounds_materialization(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    pa = pytest.importorskip("pyarrow")
+    pq = pytest.importorskip("pyarrow.parquet")
+    source = tmp_path / "large-row-group.parquet"
+    table = pa.table({"seq": [0], "syndrome": [b"\x00" * 1024]})
+    pq.write_table(table, source, write_page_checksum=True)
+    monkeypatch.setattr(tabular_sources, "MAX_DECODE_BATCH_BYTES", 32)
+    with pytest.raises(ValueError, match="Parquet row group.*metadata"):
+        tuple(TabularAdapter().import_batches(source, _mapping(with_time=False)))
+
+
 def test_tabular_csv_multiline_record_uses_csv_record_ordinal(tmp_path: Path) -> None:
     source = tmp_path / "multiline.csv"
     source.write_text(
@@ -298,6 +366,7 @@ def test_parquet_timestamp_calibration_has_tagged_original_representation(
             "sigma_status": ["unavailable"],
             "quality": ["accepted"],
             "system": ["lab-db"],
+            "operator": ["alice"],
             "effective": pa.array(
                 [datetime(2026, 7, 21, 12, tzinfo=timezone.utc)],
                 type=pa.timestamp("s", tz="UTC"),
@@ -330,6 +399,7 @@ def test_parquet_timestamp_calibration_has_tagged_original_representation(
     assert record.effective_start == "2026-07-21T12:00:00+00:00"
     assert record.original_mime_type == "application/json"
     assert '"$type":"datetime"' in record.original_representation
+    assert '"operator":"alice"' in record.original_representation
 
 
 class ContractTabularAdapter(TabularAdapter):

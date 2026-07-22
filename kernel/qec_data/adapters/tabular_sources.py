@@ -19,6 +19,12 @@ from kernel.qec_data.models import IndexRange
 MAX_BATCH_RECORDS = 65_536
 MAX_RECORD_BYTES = 1_048_576
 MAX_CHUNK_BYTES = 16 * 1_048_576
+MAX_DECODE_BATCH_BYTES = 256 * 1_048_576
+MAX_IPC_CONTAINER_BYTES = 256 * 1_048_576
+MAX_PARQUET_CONTAINER_BYTES = 64 * 1_073_741_824
+MAX_IPC_RECORD_BATCHES = 1_000_000
+MAX_PARQUET_ROW_GROUPS = 1_000_000
+MAX_SCHEMA_FIELDS = 4_096
 TABULAR_SUFFIXES = {
     ".csv": "tabular-csv",
     ".jsonl": "tabular-jsonl",
@@ -169,6 +175,8 @@ def _json_safe(value: object) -> object:
 
 
 def _bounded_slices(batch: object) -> Iterator[object]:
+    if batch.nbytes > MAX_DECODE_BATCH_BYTES:
+        raise ValueError("decoded Arrow batch exceeds the 256 MiB safety limit")
     if batch.nbytes <= MAX_CHUNK_BYTES:
         yield batch
         return
@@ -202,7 +210,159 @@ def _converted_arrow_rows(
                 row_index += 1
 
 
-def _arrow_rows(source: Path, source_kind: str) -> Iterator[TabularSourceRow]:
+def _container_size(source: Path, source_kind: str) -> int:
+    size = source.stat().st_size
+    if size < 1:
+        raise ValueError("Arrow or Parquet source is empty")
+    limit = (
+        MAX_PARQUET_CONTAINER_BYTES
+        if source_kind == "tabular-parquet"
+        else MAX_IPC_CONTAINER_BYTES
+    )
+    if size > limit:
+        label = "Parquet" if source_kind == "tabular-parquet" else "IPC"
+        raise ValueError(f"{label} source exceeds the encoded container safety limit")
+    return size
+
+
+def _selected_fields(
+    schema: object, columns: tuple[str, ...] | None
+) -> tuple[tuple[str, ...], tuple[int, ...]]:
+    names = tuple(schema.names)
+    if len(names) > MAX_SCHEMA_FIELDS:
+        raise ValueError("Arrow schema exceeds the field-count safety limit")
+    selected = names if columns is None else tuple(dict.fromkeys(columns))
+    missing = tuple(name for name in selected if name not in names)
+    if missing:
+        raise ValueError(f"mapped Arrow columns are missing: {', '.join(missing)}")
+    return selected, tuple(names.index(name) for name in selected)
+
+
+def _close(value: object) -> None:
+    close = getattr(value, "close", None)
+    if callable(close):
+        close()
+
+
+def _validate_parquet_metadata(parquet: object, selected: tuple[str, ...]) -> None:
+    # PyArrow 18 exposes column-chunk and row-group sizes, but not page sizes.
+    # This is therefore the strongest supported check before page decode.
+    metadata = parquet.metadata
+    if metadata.num_row_groups > MAX_PARQUET_ROW_GROUPS:
+        raise ValueError("Parquet row-group count exceeds the safety limit")
+    selected_names = frozenset(selected)
+    for group_index in range(metadata.num_row_groups):
+        row_group = metadata.row_group(group_index)
+        declared_bytes = 0
+        for column_index in range(row_group.num_columns):
+            column = row_group.column(column_index)
+            if column.path_in_schema.split(".", 1)[0] not in selected_names:
+                continue
+            column_bytes = int(column.total_uncompressed_size)
+            declared_bytes += column_bytes
+            if column_bytes > MAX_DECODE_BATCH_BYTES:
+                raise ValueError(
+                    f"Parquet row group {group_index} metadata declares an "
+                    "oversized selected column chunk"
+                )
+        if declared_bytes > MAX_DECODE_BATCH_BYTES:
+            raise ValueError(
+                f"Parquet row group {group_index} metadata declares too many "
+                "uncompressed selected-column bytes"
+            )
+
+
+def _parquet_rows(
+    source: Path,
+    columns: tuple[str, ...] | None,
+    container: tuple[IndexRange, ...],
+    pq: object,
+) -> Iterator[TabularSourceRow]:
+    parquet = pq.ParquetFile(source, page_checksum_verification=True)
+    try:
+        selected, _ = _selected_fields(parquet.schema_arrow, columns)
+        _validate_parquet_metadata(parquet, selected)
+        batches = parquet.iter_batches(
+            batch_size=MAX_BATCH_RECORDS, columns=list(selected)
+        )
+        yield from _converted_arrow_rows(batches, container)
+    finally:
+        _close(parquet)
+
+
+def _ipc_options(pa: object, schema: object, columns: tuple[str, ...] | None):
+    _, indices = _selected_fields(schema, columns)
+    return pa.ipc.IpcReadOptions(included_fields=list(indices))
+
+
+def _preflight_ipc_stream(mapped: object, pa: object) -> None:
+    mapped.seek(0)
+    messages = pa.ipc.MessageReader.open_stream(mapped)
+    record_batches = 0
+    for message in messages:
+        metadata_bytes = len(message.metadata) if message.metadata is not None else 0
+        body_bytes = len(message.body) if message.body is not None else 0
+        if metadata_bytes + body_bytes > MAX_DECODE_BATCH_BYTES:
+            raise ValueError("IPC stream message exceeds the encoded safety limit")
+        if message.type == "record batch":
+            record_batches += 1
+            if record_batches > MAX_IPC_RECORD_BATCHES:
+                raise ValueError(
+                    "IPC stream record batch count exceeds the safety limit"
+                )
+
+
+def _ipc_file_rows(
+    mapped: object,
+    reader: object,
+    columns: tuple[str, ...] | None,
+    container: tuple[IndexRange, ...],
+    pa: object,
+) -> Iterator[TabularSourceRow]:
+    # The v18 file reader exposes footer batch counts but no per-batch body size.
+    # The encoded file is capped before mmap; nbytes is capped after get_batch.
+    try:
+        if reader.num_record_batches > MAX_IPC_RECORD_BATCHES:
+            raise ValueError("IPC file record batch count exceeds the safety limit")
+        options = _ipc_options(pa, reader.schema, columns)
+    finally:
+        _close(reader)
+    mapped.seek(0)
+    projected = pa.ipc.open_file(mapped, options=options)
+    try:
+        batches = (
+            projected.get_batch(index) for index in range(projected.num_record_batches)
+        )
+        yield from _converted_arrow_rows(batches, container)
+    finally:
+        _close(projected)
+
+
+def _ipc_stream_rows(
+    mapped: object,
+    columns: tuple[str, ...] | None,
+    container: tuple[IndexRange, ...],
+    pa: object,
+) -> Iterator[TabularSourceRow]:
+    _preflight_ipc_stream(mapped, pa)
+    mapped.seek(0)
+    schema_reader = pa.ipc.open_stream(mapped)
+    try:
+        options = _ipc_options(pa, schema_reader.schema, columns)
+    finally:
+        _close(schema_reader)
+    mapped.seek(0)
+    projected = pa.ipc.open_stream(mapped, options=options)
+    try:
+        yield from _converted_arrow_rows(iter(projected), container)
+    finally:
+        _close(projected)
+
+
+def _arrow_rows(
+    source: Path, source_kind: str, columns: tuple[str, ...] | None
+) -> Iterator[TabularSourceRow]:
+    size = _container_size(source, source_kind)
     try:
         import pyarrow as pa
         import pyarrow.parquet as pq
@@ -210,35 +370,17 @@ def _arrow_rows(source: Path, source_kind: str) -> Iterator[TabularSourceRow]:
         raise ValueError(
             "PyArrow is required to import Arrow or Parquet data"
         ) from error
-    size = source.stat().st_size
-    if size < 1:
-        raise ValueError("Arrow or Parquet source is empty")
     container = (IndexRange(0, size),)
     if source_kind == "tabular-parquet":
-        parquet = pq.ParquetFile(source, page_checksum_verification=True)
-        try:
-            batches = parquet.iter_batches(batch_size=MAX_BATCH_RECORDS)
-            yield from _converted_arrow_rows(batches, container)
-        finally:
-            close = getattr(parquet, "close", None)
-            if callable(close):
-                close()
+        yield from _parquet_rows(source, columns, container, pq)
         return
     with pa.memory_map(str(source), "r") as mapped:
         try:
             reader = pa.ipc.open_file(mapped)
-            batches = (
-                reader.get_batch(index) for index in range(reader.num_record_batches)
-            )
         except pa.ArrowInvalid:
-            reader = pa.ipc.open_stream(mapped)
-            batches = iter(reader)
-        try:
-            yield from _converted_arrow_rows(batches, container)
-        finally:
-            close = getattr(reader, "close", None)
-            if callable(close):
-                close()
+            yield from _ipc_stream_rows(mapped, columns, container, pa)
+        else:
+            yield from _ipc_file_rows(mapped, reader, columns, container, pa)
 
 
 def source_kind(source: Path) -> str:
@@ -250,10 +392,12 @@ def source_kind(source: Path) -> str:
         ) from error
 
 
-def source_rows(source: Path) -> Iterator[TabularSourceRow]:
+def source_rows(
+    source: Path, columns: tuple[str, ...] | None = None
+) -> Iterator[TabularSourceRow]:
     kind = source_kind(source)
     if kind == "tabular-csv":
         return _csv_rows(source)
     if kind == "tabular-jsonl":
         return _jsonl_rows(source)
-    return _arrow_rows(source, kind)
+    return _arrow_rows(source, kind, columns)

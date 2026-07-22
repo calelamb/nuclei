@@ -168,6 +168,8 @@ def _validate_mapping(mapping: ImportMapping) -> None:
             raise ValueError("bit_order must explicitly be lsb0")
         if "timestamp" in fields and not options.get("timestamp_unit"):
             raise ValueError("timestamp_unit is required when timestamp is mapped")
+        if "observable_count" in options and "observable_events" not in fields:
+            raise ValueError("observable_count requires observable_events mapping")
         if "observable_events" in fields:
             if _integer_option(options, "observable_count") < 1:
                 raise ValueError("observable_count must be positive")
@@ -282,6 +284,15 @@ def _source_span(rows: tuple[_SourceRow, ...], source_hash: str) -> SourceSpan:
     )
 
 
+def _mapped_source_rows(source: Path, mapping: ImportMapping) -> Iterator[_SourceRow]:
+    columns = (
+        None
+        if _output_kind(mapping) == "calibration"
+        else tuple(_fields(mapping).values())
+    )
+    return _source_rows(source, columns)
+
+
 def _identity(source_hash: str, mapping: ImportMapping) -> str:
     if mapping.expected_provenance_id is not None:
         return mapping.expected_provenance_id
@@ -384,7 +395,7 @@ def _syndrome_chunks(
     group: list[_SyndromeRow] = []
     previous_sequence: int | None = None
     gap_before = False
-    for source_row in _source_rows(source):
+    for source_row in _mapped_source_rows(source, mapping):
         row = _mapped_syndrome(source_row, mapping)
         if previous_sequence is not None and row.sequence <= previous_sequence:
             raise ValueError("sequence must be strictly monotonic")
@@ -502,7 +513,7 @@ def _calibration_chunk(
 def _calibration_chunks(
     source: Path, mapping: ImportMapping, source_hash: str
 ) -> Iterator[ImportChunk]:
-    iterator = iter(_source_rows(source))
+    iterator = iter(_mapped_source_rows(source, mapping))
     sequence_start = 0
     group: list[_SourceRow] = []
     group_bytes = 0
@@ -563,6 +574,8 @@ class TabularAdapter:
                 code = "tabular_mapping_required"
             elif "timestamp_unit" in message:
                 code = "tabular_unit_required"
+            elif "observable_count requires" in message:
+                code = "tabular_mapping_invalid"
             else:
                 code = "tabular_invalid_data"
             return ValidationReport(
@@ -582,7 +595,7 @@ class TabularAdapter:
             raise ValueError("preview limit must be a nonnegative integer")
         _validate_mapping(mapping)
         source_hash = compute_source_sha256(source)
-        rows = iter(_source_rows(source))
+        rows = iter(_mapped_source_rows(source, mapping))
         bounded_limit = min(
             limit, MAX_BATCH_RECORDS, MAX_CHUNK_BYTES // MAX_RECORD_BYTES
         )
