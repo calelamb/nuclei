@@ -8,6 +8,9 @@ import threading
 from dataclasses import replace
 from pathlib import Path
 
+if os.name != "nt":
+    import fcntl
+
 import pytest
 from websockets.exceptions import ConnectionClosedError
 from websockets.legacy.client import connect
@@ -373,6 +376,30 @@ def test_child_identity_rejects_a_replaced_project_namespace(tmp_path: Path) -> 
     finally:
         tmp_path.rmdir()
         moved.rename(tmp_path)
+
+
+def test_adapter_capability_exposes_only_a_read_only_descriptor(tmp_path: Path) -> None:
+    (tmp_path / "stats.csv").write_text(SINTER_SOURCE, encoding="utf-8")
+    server = QecDataServer(tmp_path, TOKEN, port=0)
+    snapshot = server._snapshot_source("stats.csv")
+    try:
+        descriptor = snapshot.capability.fileno()
+        if os.name != "nt":
+            flags = fcntl.fcntl(descriptor, fcntl.F_GETFL)
+            assert flags & os.O_ACCMODE == os.O_RDONLY
+        with pytest.raises(OSError):
+            os.write(descriptor, b"tamper")
+    finally:
+        source_security.remove_copied_source(snapshot)
+
+
+@pytest.mark.skipif(os.name != "nt", reason="Windows handle semantics")
+def test_windows_project_capability_blocks_namespace_rename(tmp_path: Path) -> None:
+    server = QecDataServer(tmp_path, TOKEN, port=0)
+    moved = tmp_path.with_name(f"{tmp_path.name}-moved")
+    with pytest.raises(OSError):
+        tmp_path.rename(moved)
+    del server
 
 
 @pytest.mark.asyncio

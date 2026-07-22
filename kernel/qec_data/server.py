@@ -58,6 +58,7 @@ from .storage_durability import DurableMover
 from .storage_lineage import SegmentKey, payload_kind
 from .storage_metadata import publish_json
 from .source_security import (
+    close_project_directory,
     copy_authorized_source,
     open_project_directory,
     release_copied_source,
@@ -140,7 +141,9 @@ class QecDataServer:
         )
         self._project_root = root
         self._project_descriptor = project_descriptor
-        self._project_finalizer = weakref.finalize(self, os.close, project_descriptor)
+        self._project_finalizer = weakref.finalize(
+            self, close_project_directory, project_descriptor
+        )
         self._token = token
         self._host = host
         self._port = port

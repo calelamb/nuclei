@@ -86,21 +86,25 @@ races. Each is now covered by a failing-before/fixed-after regression:
 ### Final review corrections
 
 - Every adapter operation now receives a path-compatible, read-only capability
-  backed by an anonymous held descriptor, never the mutable canonical pathname.
+  backed by a genuinely `O_RDONLY` descriptor, never the mutable canonical
+  pathname. Unix populates a mode-0700 private temporary file, closes its writer,
+  reopens it read-only with `O_NOFOLLOW`, and unlinks it. Windows duplicates the
+  private writer handle with read-only access and marks it for handle-relative
+  deletion. Tests verify the access mode and that `os.write` fails.
   The final source verification and manifest finalization execute as one
   synchronous operation. A regression temporarily replaces and restores the
   visible copy while a cached/lying adapter reads; the completed dataset still
   contains only the bytes held by the immutable capability.
 - Canonical destination traversal begins at the retained project-root
-  descriptor and opens every component with `dir_fd` and `O_NOFOLLOW`. Platforms
-  without equivalent directory capabilities fail closed rather than falling
-  back to pathname writes.
-- Tauri passes the authorized Unix device/inode to the child. Python opens the
-  project directory and verifies that exact identity at actual process startup,
-  while retaining the descriptor for later source and destination traversal. A
-  during-spawn namespace replacement returns `project_identity_changed`.
-  Non-Unix platforms currently fail closed until equivalent retained-handle
-  traversal is implemented.
+  capability. Unix opens every component with `dir_fd` and `O_NOFOLLOW`.
+  Windows uses `CreateFileW` handles with `FILE_FLAG_OPEN_REPARSE_POINT`, rejects
+  reparse points, and omits delete sharing while every component is in use.
+- Tauri retains the authorized project capability for the complete child
+  lifetime. It passes Unix device/inode or Windows volume/file-index identity to
+  the child. Python independently opens and verifies that identity at actual
+  startup and retains its own root lock. A during-spawn namespace replacement
+  returns `project_identity_changed` on Unix; Windows-only tests assert that the
+  retained handles prevent namespace rename.
 
 ## TDD evidence
 
@@ -111,24 +115,31 @@ source byte-size disclosure, preview validation refusal, and import completion
 counters were missing before their implementation. A Rust RED compile test also
 demonstrated that status previously exposed a token-bearing endpoint rather than
 a token-free URL.
+The final descriptor RED failed because `CapabilitySource` exposed no verifiable
+read-only descriptor; the fixed regression now checks both `F_GETFL` and a
+failed direct write while retaining the lying-adapter ABA scenario.
 
 ## Verification
 
 - Ruff format and lint: clean.
-- Focused Python server and review suites: 46 passed on the installed WebSocket
-  runtime.
+- Focused Python server and review suites: 47 passed, 1 Windows-only skipped on
+  the installed WebSocket runtime.
 - Compatibility: 45 passed with `websockets==12.0`; 45 passed with
   `websockets==13.1`.
 - Owned Python coverage: 85% (import operations 95%, jobs 98%, protocol 90%,
   server 89%, source security 76%).
-- Complete QEC data suite: 388 passed, 2 skipped.
+- Complete QEC data suite: 389 passed, 3 skipped.
 - Rust lifecycle suite: 13 passed.
 - Complete Rust suite: 164 unit tests passed; the 13 lifecycle tests also pass
   serially (parallel lifecycle execution has a pre-existing fixed-port race).
 - Rust formatting: clean.
 - Targeted Rust 1.77.2 clippy: clean with unrelated pre-existing lint classes
   explicitly allowed.
-- All owned files are below 800 lines (`server.py`: 771) and all owned Python
+- Windows evidence: the Win32 helper passes Ruff and `py_compile`; Python and
+  Rust include Windows-targeted retained-handle tests. This macOS host has only
+  `aarch64-apple-darwin` and `wasm32-unknown-unknown` installed, so a Windows
+  target compile/runtime test was not available locally.
+- All owned files are below 800 lines (`server.py`: 776) and all owned Python
   functions are below 50 lines.
 
 `python -m black` and `python -m bandit` were unavailable in the environment.

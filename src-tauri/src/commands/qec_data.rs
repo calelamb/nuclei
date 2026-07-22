@@ -158,7 +158,7 @@ enum EngineState {
     Running {
         child: Child,
         endpoint: QecDataEndpoint,
-        project_root: PathBuf,
+        project: AuthorizedProjectRoot,
     },
     Failed(QecDataError),
 }
@@ -193,7 +193,7 @@ impl QecDataManager {
                 *state = EngineState::Running {
                     child,
                     endpoint: endpoint.clone(),
-                    project_root,
+                    project,
                 };
                 Ok(endpoint)
             }
@@ -257,13 +257,13 @@ fn running_endpoint(
     let EngineState::Running {
         child,
         endpoint,
-        project_root,
+        project,
     } = state
     else {
         return Ok(None);
     };
     match child.try_wait() {
-        Ok(None) if project_root == requested_project => Ok(Some(endpoint.clone())),
+        Ok(None) if project.path() == requested_project => Ok(Some(endpoint.clone())),
         Ok(None) => Err(QecDataError::new(
             "project_mismatch",
             "QEC Data Engine is already running for another project.",

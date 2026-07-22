@@ -15,6 +15,8 @@ from .protocol import ProtocolError
 
 PROJECT_DEVICE_ENVIRONMENT_VARIABLE = "NUCLEI_QEC_DATA_PROJECT_DEVICE"
 PROJECT_INODE_ENVIRONMENT_VARIABLE = "NUCLEI_QEC_DATA_PROJECT_INODE"
+PROJECT_VOLUME_ENVIRONMENT_VARIABLE = "NUCLEI_QEC_DATA_PROJECT_VOLUME"
+PROJECT_FILE_INDEX_ENVIRONMENT_VARIABLE = "NUCLEI_QEC_DATA_PROJECT_FILE_INDEX"
 
 
 class CapabilitySource:
@@ -22,9 +24,12 @@ class CapabilitySource:
 
     is_capability_source = True
 
-    def __init__(self, descriptor: int, display_name: str) -> None:
+    def __init__(
+        self, descriptor: int, display_name: str, cleanup_path: Path | None = None
+    ) -> None:
         self.__descriptor = descriptor
         self.__name = display_name
+        self.__cleanup_path = cleanup_path
 
     @property
     def name(self) -> str:
@@ -63,7 +68,15 @@ class CapabilitySource:
         return self.__fspath__()
 
     def close(self) -> None:
-        os.close(self.__descriptor)
+        if os.name == "nt":
+            from .source_security_windows import close_capability_file
+
+            close_capability_file(self.__descriptor, self.__cleanup_path)
+        else:
+            os.close(self.__descriptor)
+
+    def fileno(self) -> int:
+        return self.__descriptor
 
 
 @dataclass(frozen=True, slots=True)
@@ -72,18 +85,22 @@ class CopiedSource:
     sha256: str
     byte_size: int
     descriptor: int
-    directory_descriptor: int | None
-    root_descriptor: int | None
+    directory_descriptor: object | None
+    root_descriptor: object | None
     directory_name: str
     file_name: str
     capability: CapabilitySource
 
 
 def secure_canonical_directory(
-    root: Path, project_descriptor: int, parts: tuple[str, ...]
+    root: Path, project_descriptor: object, parts: tuple[str, ...]
 ) -> Path:
+    if os.name == "nt":
+        from .source_security_windows import secure_directory
+
+        return secure_directory(project_descriptor, parts)
     _require_directory_capabilities()
-    directory = os.dup(project_descriptor)
+    directory = os.dup(_unix_descriptor(project_descriptor))
     try:
         for part in parts:
             try:
@@ -131,7 +148,7 @@ def resolve_authorized_source(project_root: Path, raw_source: object) -> Path:
 
 def copy_authorized_source(
     project_root: Path,
-    project_descriptor: int,
+    project_descriptor: object,
     sources_root: Path,
     raw_source: object,
     session_id: str,
@@ -142,17 +159,16 @@ def copy_authorized_source(
     try:
         source_descriptor = _open_project_file(project_descriptor, parts)
     except Exception:
-        if root_descriptor is not None:
-            os.close(root_descriptor)
+        _close_directory_capability(root_descriptor)
         raise
-    directory_descriptor: int | None = None
+    directory_descriptor: object | None = None
     destination_descriptor: int | None = None
     try:
         directory_descriptor, destination_descriptor = _create_destination(
             sources_root, root_descriptor, session_id, parts[-1]
         )
         digest, byte_size = _copy_descriptors(source_descriptor, destination_descriptor)
-        if hasattr(os, "fchmod"):
+        if os.name != "nt" and hasattr(os, "fchmod"):
             os.fchmod(destination_descriptor, 0o400)
         capability = _anonymous_capability(destination_descriptor, parts[-1])
         return _copied_source(
@@ -183,11 +199,11 @@ def copy_authorized_source(
 
 def _copy_locations(
     project_root: Path,
-    project_descriptor: int,
+    project_descriptor: object,
     sources_root: Path,
     raw_source: object,
     session_id: str,
-) -> tuple[tuple[str, ...], Path, Path, int]:
+) -> tuple[tuple[str, ...], Path, Path, object]:
     validate_session_id(session_id)
     parts = source_parts(raw_source)
     destination_root = sources_root / session_id
@@ -202,8 +218,8 @@ def _copied_source(
     digest: str,
     byte_size: int,
     descriptor: int,
-    directory_descriptor: int,
-    root_descriptor: int,
+    directory_descriptor: object,
+    root_descriptor: object,
     directory_name: str,
     file_name: str,
     capability: CapabilitySource,
@@ -230,9 +246,8 @@ def verify_copied_source(source: CopiedSource) -> None:
         raise ProtocolError("source_changed", "Held import source changed.")
     if _descriptor_hash(source.descriptor) != source.sha256:
         raise ProtocolError("source_changed", "Copied import source changed.")
-    flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0)
     try:
-        current = os.open(source.path, flags)
+        current = _open_visible_source(source.path)
     except OSError as error:
         raise ProtocolError("source_changed", "Copied import source moved.") from error
     try:
@@ -245,6 +260,9 @@ def verify_copied_source(source: CopiedSource) -> None:
 
 
 def release_copied_source(source: CopiedSource, *, remove: bool) -> None:
+    if os.name == "nt":
+        _release_windows_source(source, remove=remove)
+        return
     if remove:
         _unlink_copied_source(source)
     os.close(source.descriptor)
@@ -269,9 +287,18 @@ def validate_session_id(session_id: str) -> None:
 
 def open_project_directory(
     project_root: Path, expected_identity: tuple[int, int] | None = None
-) -> tuple[Path, int]:
+) -> tuple[Path, object]:
     """Open and retain the project namespace before resolving its display path."""
 
+    if os.name == "nt":
+        from .source_security_windows import open_project_directory as windows_open
+
+        try:
+            return windows_open(project_root, expected_identity)
+        except PermissionError as error:
+            raise ProtocolError(
+                "project_identity_changed", "Project identity changed."
+            ) from error
     _require_directory_capabilities()
     try:
         descriptor = os.open(project_root, _directory_flags())
@@ -293,20 +320,28 @@ def open_project_directory(
 
 def project_identity_from_environment() -> tuple[int, int]:
     try:
-        device = os.environ[PROJECT_DEVICE_ENVIRONMENT_VARIABLE]
-        inode = os.environ[PROJECT_INODE_ENVIRONMENT_VARIABLE]
-        if not device.isdecimal() or not inode.isdecimal():
+        names = (
+            (PROJECT_VOLUME_ENVIRONMENT_VARIABLE, PROJECT_FILE_INDEX_ENVIRONMENT_VARIABLE)
+            if os.name == "nt"
+            else (PROJECT_DEVICE_ENVIRONMENT_VARIABLE, PROJECT_INODE_ENVIRONMENT_VARIABLE)
+        )
+        first, second = (os.environ[name] for name in names)
+        if not first.isdecimal() or not second.isdecimal():
             raise ValueError
-        return int(device), int(inode)
+        return int(first), int(second)
     except (KeyError, ValueError) as error:
         raise ProtocolError(
             "project_identity_unavailable", "Project identity is unavailable."
         ) from error
 
 
-def _open_project_file(project_descriptor: int, parts: tuple[str, ...]) -> int:
+def _open_project_file(project_descriptor: object, parts: tuple[str, ...]) -> int:
+    if os.name == "nt":
+        from .source_security_windows import open_project_file
+
+        return open_project_file(project_descriptor, parts)
     _require_directory_capabilities()
-    return _open_relative_file(project_descriptor, parts)
+    return _open_relative_file(_unix_descriptor(project_descriptor), parts)
 
 
 def _open_relative_file(project_descriptor: int, parts: tuple[str, ...]) -> int:
@@ -382,23 +417,53 @@ def _capability_hash(source: CapabilitySource) -> str:
         return hashlib.file_digest(source_file, "sha256").hexdigest()
 
 
+def _open_visible_source(path: Path) -> int:
+    if os.name == "nt":
+        from .source_security_windows import open_visible_file
+
+        return open_visible_file(path)
+    flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0)
+    return os.open(path, flags)
+
+
 def _anonymous_capability(descriptor: int, display_name: str) -> CapabilitySource:
-    anonymous = tempfile.TemporaryFile(mode="w+b")
+    if os.name == "nt":
+        from .source_security_windows import create_read_only_copy
+
+        reader, cleanup_path = create_read_only_copy(descriptor)
+        return CapabilitySource(reader, display_name, cleanup_path)
+    private_root = Path(tempfile.mkdtemp(prefix="nuclei-qec-source-"))
+    writer, temporary_name = tempfile.mkstemp(dir=private_root)
     try:
         source_offset = os.lseek(descriptor, 0, os.SEEK_CUR)
         os.lseek(descriptor, 0, os.SEEK_SET)
         try:
             while chunk := os.read(descriptor, 1024 * 1024):
-                anonymous.write(chunk)
+                _write_all(writer, chunk)
         finally:
             os.lseek(descriptor, source_offset, os.SEEK_SET)
-        anonymous.flush()
-        os.fsync(anonymous.fileno())
+        os.fsync(writer)
+        written = os.fstat(writer)
         if hasattr(os, "fchmod"):
-            os.fchmod(anonymous.fileno(), 0o400)
-        return CapabilitySource(os.dup(anonymous.fileno()), display_name)
+            os.fchmod(writer, 0o400)
+        os.close(writer)
+        writer = -1
+        reader = os.open(
+            temporary_name, os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0)
+        )
+        if not _same_file(written, os.fstat(reader)):
+            os.close(reader)
+            raise ProtocolError("source_changed", "Private source copy changed.")
+        os.unlink(temporary_name)
+        return CapabilitySource(reader, display_name)
     finally:
-        anonymous.close()
+        if writer >= 0:
+            os.close(writer)
+        try:
+            os.unlink(temporary_name)
+        except FileNotFoundError:
+            pass
+        private_root.rmdir()
 
 
 def _write_all(descriptor: int, value: bytes) -> None:
@@ -411,10 +476,14 @@ def _write_all(descriptor: int, value: bytes) -> None:
 
 
 def _open_destination_root(
-    project_descriptor: int, parts: tuple[str, ...]
-) -> int:
+    project_descriptor: object, parts: tuple[str, ...]
+) -> object:
+    if os.name == "nt":
+        from .source_security_windows import open_destination_root
+
+        return open_destination_root(project_descriptor, parts)
     _require_directory_capabilities()
-    directory = os.dup(project_descriptor)
+    directory = os.dup(_unix_descriptor(project_descriptor))
     try:
         for part in parts:
             child = os.open(part, _directory_flags(), dir_fd=directory)
@@ -428,19 +497,24 @@ def _open_destination_root(
 
 def _create_destination(
     sources_root: Path,
-    root_descriptor: int,
+    root_descriptor: object,
     session_id: str,
     file_name: str,
-) -> tuple[int, int]:
+) -> tuple[object, int]:
+    if os.name == "nt":
+        from .source_security_windows import create_destination
+
+        return create_destination(root_descriptor, session_id, file_name)
+    unix_root = _unix_descriptor(root_descriptor)
     flags = os.O_RDWR | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0)
     del sources_root
-    os.mkdir(session_id, mode=0o700, dir_fd=root_descriptor)
-    directory_descriptor = os.open(session_id, _directory_flags(), dir_fd=root_descriptor)
+    os.mkdir(session_id, mode=0o700, dir_fd=unix_root)
+    directory_descriptor = os.open(session_id, _directory_flags(), dir_fd=unix_root)
     try:
         destination = os.open(file_name, flags, 0o600, dir_fd=directory_descriptor)
     except Exception:
         os.close(directory_descriptor)
-        os.rmdir(session_id, dir_fd=root_descriptor)
+        os.rmdir(session_id, dir_fd=unix_root)
         raise
     return directory_descriptor, destination
 
@@ -449,11 +523,16 @@ def _cleanup_failed_destination(
     destination: Path,
     destination_root: Path,
     descriptor: int | None,
-    directory_descriptor: int | None,
-    root_descriptor: int | None,
+    directory_descriptor: object | None,
+    root_descriptor: object | None,
     directory_name: str,
     file_name: str,
 ) -> None:
+    if os.name == "nt":
+        _cleanup_failed_windows_destination(
+            descriptor, directory_descriptor, root_descriptor
+        )
+        return
     if descriptor is not None:
         os.close(descriptor)
     if directory_descriptor is not None and root_descriptor is not None:
@@ -522,3 +601,74 @@ def _require_directory_capabilities() -> None:
             "capability_unavailable",
             "Secure project directory capabilities are unavailable.",
         )
+
+
+def _unix_descriptor(descriptor: object) -> int:
+    if type(descriptor) is not int:
+        raise ProtocolError("capability_unavailable", "Directory capability is invalid.")
+    return descriptor
+
+
+def _close_directory_capability(capability: object | None) -> None:
+    if capability is None:
+        return
+    if os.name == "nt":
+        capability.close()
+    else:
+        os.close(_unix_descriptor(capability))
+
+
+def close_project_directory(capability: object) -> None:
+    _close_directory_capability(capability)
+
+
+def _release_windows_source(source: CopiedSource, *, remove: bool) -> None:
+    from .source_security_windows import mark_delete, mark_directory_delete
+
+    failure: OSError | None = None
+    try:
+        if remove:
+            mark_delete(source.descriptor)
+    except OSError as error:
+        failure = error
+    finally:
+        os.close(source.descriptor)
+    try:
+        if remove and source.directory_descriptor is not None:
+            mark_directory_delete(source.directory_descriptor)
+    except OSError as error:
+        failure = failure or error
+    finally:
+        _close_directory_capability(source.directory_descriptor)
+        _close_directory_capability(source.root_descriptor)
+        source.capability.close()
+    if failure is not None:
+        raise failure
+
+
+def _cleanup_failed_windows_destination(
+    descriptor: int | None,
+    directory: object | None,
+    root: object | None,
+) -> None:
+    from .source_security_windows import mark_delete, mark_directory_delete
+
+    failure: OSError | None = None
+    try:
+        if descriptor is not None:
+            mark_delete(descriptor)
+    except OSError as error:
+        failure = error
+    finally:
+        if descriptor is not None:
+            os.close(descriptor)
+    try:
+        if directory is not None:
+            mark_directory_delete(directory)
+    except OSError as error:
+        failure = failure or error
+    finally:
+        _close_directory_capability(directory)
+        _close_directory_capability(root)
+    if failure is not None:
+        raise failure
