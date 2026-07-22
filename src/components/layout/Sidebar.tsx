@@ -5,6 +5,7 @@ import { OpenFilesSection } from '../explorer/OpenFilesSection';
 import { LaunchPortal } from '../hardware/LaunchPortal';
 import { SettingsPanel } from '../settings/SettingsPanel';
 import type { ActivityView } from './ActivityBar';
+import { createTauriQecStudyFs } from '../../services/qecStudyFs';
 
 const LearningPathSidebar = lazy(async () => ({
   default: (await import('../learning/LearningPathSidebar')).LearningPathSidebar,
@@ -30,6 +31,11 @@ const EstimatorPanel = lazy(async () => ({
 const TranspilerControls = lazy(async () => ({
   default: (await import('../transpiler/TranspilerControls')).TranspilerControls,
 }));
+const QecStudySidebar = lazy(async () => ({
+  default: (await import('../qec/workbench/QecStudySidebar')).QecStudySidebar,
+}));
+
+const qecStudyFs = createTauriQecStudyFs();
 
 interface SidebarProps {
   view: ActivityView;
@@ -125,6 +131,7 @@ const VIEW_TITLES: Record<ActivityView, string> = {
   community: 'Community',
   settings: 'Settings',
   experiments: 'Experiments',
+  qec: 'QEC Workbench',
   estimator: 'Estimator',
   transpiler: 'Transpiler',
 };
@@ -252,6 +259,11 @@ export function Sidebar({ view, width, onWidthChange }: SidebarProps) {
         {view === 'experiments' && (
           <SidebarSuspense>
             <ExperimentsPanel />
+          </SidebarSuspense>
+        )}
+        {view === 'qec' && (
+          <SidebarSuspense>
+            <QecStudySidebar fs={qecStudyFs} />
           </SidebarSuspense>
         )}
         {view === 'estimator' && (

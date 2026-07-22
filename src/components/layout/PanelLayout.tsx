@@ -62,6 +62,9 @@ const QecAnalysisView = lazy(async () => ({
 const TranspilerExplorer = lazy(async () => ({
   default: (await import('../transpiler/TranspilerExplorer')).TranspilerExplorer,
 }));
+const QecWorkbench = lazy(async () => ({
+  default: (await import('../qec/workbench/QecWorkbench')).QecWorkbench,
+}));
 
 const DEFAULT_BOTTOM_HEIGHT = 200;
 const DEFAULT_SIDEBAR_WIDTH = 240;
@@ -582,11 +585,12 @@ export function PanelLayout() {
   // editor+viz area for the before/after transpile view whenever the
   // Transpiler rail item is active (controls sit in the sidebar).
   const showTranspilerMain = workspaceMode === 'research' && activeView === 'transpiler';
+  const showQecWorkbench = workspaceMode === 'research' && activeView === 'qec';
 
   // dev tools Phase 4 / P4.1 — when a Research takeover (transpiler/experiments)
   // is active, the editor+viz area is HIDDEN, not unmounted, so Monaco keeps its
   // per-tab models, undo, cursor, and scroll across the switch.
-  const editorHidden = showTranspilerMain || showExperimentsMain;
+  const editorHidden = showTranspilerMain || showExperimentsMain || showQecWorkbench;
 
   // A selected QEC campaign experiment shows the analysis surface (threshold +
   // decoder workbench, PRD 10 Phase E) instead of the sweep runs table.
@@ -799,6 +803,17 @@ export function PanelLayout() {
             {/* Research takeovers (dev tools Phase 1 / PRD 09 Phase D) are now
                 OVERLAID rather than swapped for the editor, so the editor stays
                 mounted beneath them and never loses Monaco state (P4.1). */}
+            {showQecWorkbench && (
+              <div style={{
+                flex: 1, minWidth: 0, overflow: 'hidden',
+                display: 'flex', flexDirection: 'column',
+                animation: 'nuclei-fade-in 200ms ease',
+              }}>
+                <Suspense fallback={null}>
+                  <QecWorkbench />
+                </Suspense>
+              </div>
+            )}
             {showTranspilerMain && (
               <div style={{
                 flex: 1, minWidth: 0, overflow: 'hidden',

@@ -1,0 +1,136 @@
+// @vitest-environment jsdom
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { cleanup, fireEvent, render, waitFor } from '@testing-library/react';
+import type { QecStudyFs } from '../../../services/qecStudyFs';
+import { useQecStudyStore } from '../../../services/qecStudyStore';
+import { useQecStudyUiStore } from '../../../stores/qecStudyUiStore';
+import { useProjectStore } from '../../../stores/projectStore';
+import { parseQecStudyYaml } from '../../../types/qecStudy';
+import { QecStudySidebar } from './QecStudySidebar';
+
+interface MemoryStudyFs extends QecStudyFs {
+  files: Map<string, string>;
+  writeTextFile: ReturnType<typeof vi.fn<QecStudyFs['writeTextFile']>>;
+}
+
+function memoryStudyFs(initialFiles: Record<string, string> = {}): MemoryStudyFs {
+  const files = new Map(Object.entries(initialFiles));
+  const join = (...parts: string[]) => parts.filter(Boolean).join('/').replace(/\/{2,}/g, '/');
+  return {
+    files,
+    join,
+    exists: vi.fn(async (path: string) =>
+      files.has(path) || [...files.keys()].some((file) => file.startsWith(`${path}/`))),
+    mkdir: vi.fn(async () => undefined),
+    readTextFile: vi.fn(async (path: string) => {
+      const content = files.get(path);
+      if (content === undefined) throw new Error(`ENOENT: ${path}`);
+      return content;
+    }),
+    readDir: vi.fn(async (path: string) => {
+      const prefix = `${path}/`;
+      return [...files.keys()]
+        .filter((file) => file.startsWith(prefix))
+        .map((file) => ({ name: file.slice(prefix.length), isDirectory: false }));
+    }),
+    writeTextFile: vi.fn(async (path: string, content: string) => {
+      files.set(path, content);
+    }),
+    watch: vi.fn(async () => () => undefined),
+  };
+}
+
+function resetStores(): void {
+  useQecStudyStore.getState().stopWatching();
+  useQecStudyStore.setState({ studies: [], validationErrors: [], loading: false });
+  useQecStudyUiStore.setState({ activeStudyId: null });
+  useProjectStore.setState({ projectRoot: null, tabs: [], activeTabPath: null });
+}
+
+describe('<QecStudySidebar />', () => {
+  afterEach(() => {
+    cleanup();
+    resetStores();
+  });
+
+  it('reloads the project Studies and exposes validation details', async () => {
+    const fs = memoryStudyFs({
+      '/project/studies/surface.qec-study.yaml': 'schema: 1\nid: surface\nname: Surface memory\nquestion: How low?\npreset: analyze\nsources: []\n',
+      '/project/studies/broken.qec-study.yaml': 'schema: nope',
+    });
+    useProjectStore.setState({ projectRoot: '/project' });
+
+    const view = render(<QecStudySidebar fs={fs} />);
+
+    expect(await view.findByRole('button', { name: /Surface memory/ })).toBeTruthy();
+    expect(view.getByText('broken.qec-study.yaml')).toBeTruthy();
+    expect(view.getByText(/schema:/)).toBeTruthy();
+  });
+
+  it('creates a validated minimal Study and selects it', async () => {
+    const fs = memoryStudyFs();
+    useProjectStore.setState({ projectRoot: '/project' });
+    const view = render(<QecStudySidebar fs={fs} />);
+    await waitFor(() => expect(useQecStudyStore.getState().loading).toBe(false));
+
+    fireEvent.change(view.getByLabelText('Study name'), { target: { value: 'Surface Memory' } });
+    fireEvent.change(view.getByLabelText('Research question'), { target: { value: 'Does d=7 suppress errors?' } });
+    fireEvent.change(view.getByLabelText('Workspace preset'), { target: { value: 'observe' } });
+    fireEvent.click(view.getByRole('button', { name: 'Create Study' }));
+
+    await waitFor(() => expect(useQecStudyUiStore.getState().activeStudyId).toBe('surface-memory'));
+    const written = fs.files.get('/project/studies/surface-memory.qec-study.yaml');
+    expect(written).toBeDefined();
+    expect(parseQecStudyYaml(written ?? '')).toMatchObject({
+      ok: true,
+      study: { id: 'surface-memory', name: 'Surface Memory', preset: 'observe', sources: [] },
+    });
+  });
+
+  it('validates form input before touching the filesystem', async () => {
+    const fs = memoryStudyFs();
+    useProjectStore.setState({ projectRoot: '/project' });
+    const view = render(<QecStudySidebar fs={fs} />);
+    await waitFor(() => expect(useQecStudyStore.getState().loading).toBe(false));
+
+    fireEvent.click(view.getByRole('button', { name: 'Create Study' }));
+
+    expect(view.getByRole('alert').textContent).toContain('Enter a Study name');
+    expect(fs.writeTextFile).not.toHaveBeenCalled();
+  });
+
+  it('does not overwrite and shows an actionable create error', async () => {
+    const original = 'schema: 1\nid: existing\nname: Existing\nquestion: Original?\npreset: build\nsources: []\n';
+    const fs = memoryStudyFs({ '/project/studies/existing.qec-study.yaml': original });
+    useProjectStore.setState({ projectRoot: '/project' });
+    const view = render(<QecStudySidebar fs={fs} />);
+    await view.findByRole('button', { name: /Existing/ });
+
+    fireEvent.change(view.getByLabelText('Study name'), { target: { value: 'Existing' } });
+    fireEvent.change(view.getByLabelText('Research question'), { target: { value: 'Replace it?' } });
+    fireEvent.click(view.getByRole('button', { name: 'Create Study' }));
+
+    expect(await view.findByText('A Study named "existing" already exists.')).toBeTruthy();
+    expect(fs.files.get('/project/studies/existing.qec-study.yaml')).toBe(original);
+  });
+
+  it('disables the form while creation is pending', async () => {
+    let finishWrite: (() => void) | undefined;
+    const fs = memoryStudyFs();
+    fs.writeTextFile.mockImplementation(async () => new Promise<void>((resolve) => {
+      finishWrite = resolve;
+    }));
+    useProjectStore.setState({ projectRoot: '/project' });
+    const view = render(<QecStudySidebar fs={fs} />);
+    await waitFor(() => expect(useQecStudyStore.getState().loading).toBe(false));
+    fireEvent.change(view.getByLabelText('Study name'), { target: { value: 'Pending' } });
+    fireEvent.change(view.getByLabelText('Research question'), { target: { value: 'Still writing?' } });
+
+    fireEvent.click(view.getByRole('button', { name: 'Create Study' }));
+    await waitFor(() => expect(view.getByRole('button', { name: 'Creating Study…' }).hasAttribute('disabled')).toBe(true));
+    expect(view.getByLabelText('Study name').hasAttribute('disabled')).toBe(true);
+
+    finishWrite?.();
+    await waitFor(() => expect(useQecStudyUiStore.getState().activeStudyId).toBe('pending'));
+  });
+});

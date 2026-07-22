@@ -421,12 +421,17 @@ describe('registry shape', () => {
 // ── Left-rail registry (PRD 11 Phase C) ──
 
 describe('left-rail registry', () => {
+  it('offers QEC Workbench only in Research mode', () => {
+    expect(leftPanelsForMode('research', { developerViews: false })).toContain('qec');
+    expect(leftPanelsForMode('learn', { developerViews: false })).not.toContain('qec');
+  });
+
   it('gives each mode its intended rail with developer views off', () => {
     expect(leftPanelsForMode('learn', { developerViews: false })).toEqual([
       'files', 'learning', 'challenges', 'launch', 'community', 'settings',
     ]);
     expect(leftPanelsForMode('research', { developerViews: false })).toEqual([
-      'files', 'experiments', 'hardware', 'estimator', 'transpiler', 'launch', 'plugins', 'settings',
+      'files', 'experiments', 'qec', 'hardware', 'estimator', 'transpiler', 'launch', 'plugins', 'settings',
     ]);
   });
 

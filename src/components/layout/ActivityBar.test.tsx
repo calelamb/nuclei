@@ -32,7 +32,7 @@ describe('<ActivityBar>', () => {
     // Plugins graduated into the Research rail (Phase C); the Resource
     // Estimator (PRD 10 Phase F) and Transpiler (dev tools Phase 1) sit
     // between Hardware and Launch.
-    expect(labels).toEqual(['Explorer', 'Experiments', 'Hardware', 'Resource Estimator', 'Transpiler', 'Launch', 'Plugins', 'Settings']);
+    expect(labels).toEqual(['Explorer', 'Experiments', 'QEC Workbench', 'Hardware', 'Resource Estimator', 'Transpiler', 'Launch', 'Plugins', 'Settings']);
     expect(labels).not.toContain('Learning');
     expect(labels).not.toContain('Challenges');
     expect(labels).not.toContain('Community');

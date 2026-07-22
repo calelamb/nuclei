@@ -280,6 +280,7 @@ export type LeftPanelId =
   | 'community'
   | 'settings'
   | 'experiments'
+  | 'qec'
   | 'estimator'
   | 'transpiler';
 
@@ -301,6 +302,7 @@ export const LEFT_PANEL_REGISTRY: readonly LeftPanelDef[] = [
   { id: 'files', label: 'Explorer', modes: ['learn', 'research'], order: 0 },
   { id: 'learning', label: 'Learning', modes: ['learn'], order: 1 },
   { id: 'experiments', label: 'Experiments', modes: ['research'], order: 1 },
+  { id: 'qec', label: 'QEC Workbench', modes: ['research'], order: 2 },
   { id: 'challenges', label: 'Challenges', modes: ['learn'], order: 2 },
   { id: 'hardware', label: 'Hardware', modes: ['research'], order: 2 },
   // Resource Estimator (PRD 10 Phase F) — Research-only; sits between the
