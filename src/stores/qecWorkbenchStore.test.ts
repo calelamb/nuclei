@@ -12,6 +12,7 @@ const DEFAULTS = {
   trayHeight: 260,
   trayCollapsed: false,
   persistenceError: null,
+  persistenceIssue: null,
 };
 
 describe('qecWorkbenchStore', () => {
@@ -103,5 +104,28 @@ describe('qecWorkbenchStore', () => {
 
     useQecWorkbenchStore.getState().setPersistenceError(null);
     expect(useQecWorkbenchStore.getState().persistenceError).toBeNull();
+  });
+
+  it('publishes retryable persistence issues without mutating prior status', () => {
+    const issue = {
+      scopeKey: 'qec-workbench:/project:study',
+      token: 1,
+      operation: 'write' as const,
+      message: 'Could not save.',
+      instruction: 'Retry save.',
+      retrying: false,
+      retry: () => undefined,
+    };
+    useQecWorkbenchStore.getState().setPersistenceIssue(issue);
+    const published = useQecWorkbenchStore.getState().persistenceIssue;
+
+    useQecWorkbenchStore.getState().setPersistenceIssue({ ...issue, retrying: true });
+
+    expect(published).toBe(issue);
+    expect(published?.retrying).toBe(false);
+    expect(useQecWorkbenchStore.getState()).toMatchObject({
+      persistenceError: 'Could not save.',
+      persistenceIssue: { retrying: true },
+    });
   });
 });

@@ -26,8 +26,21 @@ export const QEC_WORKBENCH_DEFAULTS: QecWorkbenchPersistedState = Object.freeze(
   trayCollapsed: false,
 });
 
+export type QecPersistenceOperation = 'read' | 'write';
+
+export interface QecPersistenceIssue {
+  scopeKey: string;
+  token: number;
+  operation: QecPersistenceOperation;
+  message: string;
+  instruction: string;
+  retrying: boolean;
+  retry(): void;
+}
+
 export interface QecWorkbenchState extends QecWorkbenchPersistedState {
   persistenceError: string | null;
+  persistenceIssue: QecPersistenceIssue | null;
   setPreset(preset: QecWorkspacePreset): void;
   pinPanel(panelId: QecWorkbenchPanelId): void;
   unpinPanel(panelId: QecWorkbenchPanelId): void;
@@ -38,6 +51,7 @@ export interface QecWorkbenchState extends QecWorkbenchPersistedState {
   toggleTrayCollapsed(): void;
   hydrate(state: QecWorkbenchPersistedState): void;
   setPersistenceError(error: string | null): void;
+  setPersistenceIssue(issue: QecPersistenceIssue | null): void;
 }
 
 function clamp(value: number, range: { readonly min: number; readonly max: number }, fallback: number): number {
@@ -48,6 +62,7 @@ function clamp(value: number, range: { readonly min: number; readonly max: numbe
 export const useQecWorkbenchStore = create<QecWorkbenchState>((set) => ({
   ...QEC_WORKBENCH_DEFAULTS,
   persistenceError: null,
+  persistenceIssue: null,
   setPreset: (preset) => set({ preset }),
   pinPanel: (panelId) => set((state) => ({
     pinnedPanelIds: Object.freeze(state.pinnedPanelIds.includes(panelId)
@@ -70,4 +85,8 @@ export const useQecWorkbenchStore = create<QecWorkbenchState>((set) => ({
   toggleTrayCollapsed: () => set((state) => ({ trayCollapsed: !state.trayCollapsed })),
   hydrate: (state) => set({ ...state, pinnedPanelIds: Object.freeze([...state.pinnedPanelIds]) }),
   setPersistenceError: (persistenceError) => set({ persistenceError }),
+  setPersistenceIssue: (persistenceIssue) => set({
+    persistenceIssue,
+    persistenceError: persistenceIssue?.message ?? null,
+  }),
 }));

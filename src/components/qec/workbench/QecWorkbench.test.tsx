@@ -31,6 +31,33 @@ class MemoryStorage implements Storage {
   setItem(key: string, value: string): void { this.values.set(key, value); }
 }
 
+interface Deferred<T> {
+  promise: Promise<T>;
+  resolve(value: T): void;
+  reject(error: unknown): void;
+}
+
+function deferred<T>(): Deferred<T> {
+  let resolve!: (value: T) => void;
+  let reject!: (error: unknown) => void;
+  const promise = new Promise<T>((onResolve, onReject) => {
+    resolve = onResolve;
+    reject = onReject;
+  });
+  return { promise, resolve, reject };
+}
+
+async function flushAsync(): Promise<void> {
+  await act(async () => {
+    await Promise.resolve();
+    await Promise.resolve();
+  });
+}
+
+async function flushPersistenceDebounce(): Promise<void> {
+  await act(async () => { await vi.advanceTimersByTimeAsync(250); });
+}
+
 function persistenceBridge(
   getStoredValue: PlatformBridge['getStoredValue'],
   setStoredValue: PlatformBridge['setStoredValue'] = vi.fn(async () => undefined),
@@ -102,7 +129,10 @@ function setStudies(studies = [STUDY, SECOND_STUDY]): void {
   });
 }
 
-afterEach(() => cleanup());
+afterEach(() => {
+  cleanup();
+  vi.useRealTimers();
+});
 
 beforeEach(() => {
   Object.defineProperty(globalThis, 'localStorage', {
@@ -120,6 +150,7 @@ beforeEach(() => {
     trayHeight: 260,
     trayCollapsed: false,
     persistenceError: null,
+    persistenceIssue: null,
   });
   useResearchSelectionStore.setState({
     past: [],
@@ -294,6 +325,195 @@ describe('<QecWorkbench />', () => {
     await act(async () => { resolveFirst?.(persistedState('analyze')); await first; });
 
     expect(useQecWorkbenchStore.getState().preset).toBe('observe');
+  });
+
+  it('merges a pending read without overwriting same-scope local edits', async () => {
+    vi.useFakeTimers();
+    useProjectStore.setState({ projectRoot: '/project' });
+    const read = deferred<unknown>();
+    const writes: unknown[] = [];
+    const bridge = persistenceBridge(
+      vi.fn(async () => read.promise),
+      vi.fn(async (_key, value) => { writes.push(value); }),
+    );
+    render(<PlatformProvider bridge={bridge}><QecWorkbench /></PlatformProvider>);
+
+    act(() => {
+      useQecWorkbenchStore.getState().setPreset('observe');
+      useResearchSelectionStore.getState().selectPrimary(
+        { kind: 'finding', id: 'local-finding' },
+        'user',
+      );
+    });
+    read.resolve(persistedState('analyze'));
+    await flushAsync();
+
+    expect(useQecWorkbenchStore.getState()).toMatchObject({
+      preset: 'observe',
+      inspectorWidth: 410,
+    });
+    expect(useResearchSelectionStore.getState().present.primary).toMatchObject({
+      kind: 'finding', id: 'local-finding',
+    });
+    await flushPersistenceDebounce();
+    expect(writes).toHaveLength(1);
+    expect(writes[0]).toMatchObject({
+      preset: 'observe',
+      selection: { primary: { kind: 'finding', id: 'local-finding' } },
+    });
+  });
+
+  it('serializes in-flight saves and coalesces two later changes to the newest snapshot', async () => {
+    vi.useFakeTimers();
+    useProjectStore.setState({ projectRoot: '/project' });
+    const firstWrite = deferred<void>();
+    const secondWrite = deferred<void>();
+    const values: unknown[] = [];
+    const setStoredValue = vi.fn(async (_key: string, value: unknown) => {
+      values.push(value);
+      return values.length === 1 ? firstWrite.promise : secondWrite.promise;
+    });
+    const bridge = persistenceBridge(vi.fn(async () => persistedState('build')), setStoredValue);
+    render(<PlatformProvider bridge={bridge}><QecWorkbench /></PlatformProvider>);
+    await flushAsync();
+
+    act(() => useQecWorkbenchStore.getState().setPreset('analyze'));
+    await flushPersistenceDebounce();
+    act(() => {
+      useQecWorkbenchStore.getState().setPreset('observe');
+      useQecWorkbenchStore.getState().setTrayCollapsed(false);
+    });
+    await flushPersistenceDebounce();
+    expect(setStoredValue).toHaveBeenCalledTimes(1);
+
+    firstWrite.resolve();
+    await flushAsync();
+    expect(setStoredValue).toHaveBeenCalledTimes(2);
+    expect(values[1]).toMatchObject({ preset: 'observe', trayCollapsed: false });
+    secondWrite.resolve();
+    await flushAsync();
+  });
+
+  it('keeps a newer write failure status when an older retry completes late', async () => {
+    vi.useFakeTimers();
+    useProjectStore.setState({ projectRoot: '/project' });
+    const firstWrite = deferred<void>();
+    const retryWrite = deferred<void>();
+    const newestWrite = deferred<void>();
+    const attempts = [firstWrite, retryWrite, newestWrite];
+    const setStoredValue = vi.fn(async () => attempts[setStoredValue.mock.calls.length - 1].promise);
+    const bridge = persistenceBridge(vi.fn(async () => persistedState('build')), setStoredValue);
+    render(<PlatformProvider bridge={bridge}><QecWorkbench /></PlatformProvider>);
+    await flushAsync();
+
+    act(() => useQecWorkbenchStore.getState().setPreset('analyze'));
+    await flushPersistenceDebounce();
+    firstWrite.reject(new Error('first failure'));
+    await flushAsync();
+    const retry = screen.getByRole<HTMLButtonElement>('button', { name: 'Retry save' });
+    fireEvent.click(retry, { detail: 0 });
+    expect(retry.disabled).toBe(true);
+
+    act(() => useQecWorkbenchStore.getState().setPreset('observe'));
+    await flushPersistenceDebounce();
+    retryWrite.resolve();
+    await flushAsync();
+    expect(screen.getByRole('alert').textContent).toMatch(/save QEC workspace context/i);
+    expect(screen.getByRole<HTMLButtonElement>('button', { name: 'Retry save' }).disabled).toBe(true);
+
+    newestWrite.reject(new Error('newest failure'));
+    await flushAsync();
+    expect(screen.getByRole<HTMLButtonElement>('button', { name: 'Retry save' }).disabled).toBe(false);
+  });
+
+  it('ignores a late in-flight save failure after switching persistence scope', async () => {
+    vi.useFakeTimers();
+    setStudies();
+    useProjectStore.setState({ projectRoot: '/project' });
+    const oldWrite = deferred<void>();
+    const setStoredValue = vi.fn(async () => oldWrite.promise);
+    const bridge = persistenceBridge(vi.fn(async (key: string) =>
+      key.endsWith(SECOND_STUDY.id) ? persistedState('observe') : persistedState('build')),
+    setStoredValue);
+    render(<PlatformProvider bridge={bridge}><QecWorkbench /></PlatformProvider>);
+    await flushAsync();
+
+    act(() => useQecWorkbenchStore.getState().setPreset('analyze'));
+    await flushPersistenceDebounce();
+    expect(setStoredValue).toHaveBeenCalledTimes(1);
+    act(() => useQecStudyUiStore.getState().setActiveStudy(SECOND_STUDY.id));
+    await flushAsync();
+    expect(useQecWorkbenchStore.getState().preset).toBe('observe');
+
+    oldWrite.reject(new Error('late old-scope failure'));
+    await flushAsync();
+    expect(screen.queryByRole('alert')).toBeNull();
+    expect(useQecWorkbenchStore.getState().preset).toBe('observe');
+  });
+
+  it('removes the disposed scope retry action when the active Study is cleared', async () => {
+    vi.useFakeTimers();
+    useProjectStore.setState({ projectRoot: '/project' });
+    const bridge = persistenceBridge(vi.fn(async () => { throw new Error('read failed'); }));
+    render(<PlatformProvider bridge={bridge}><QecWorkbench /></PlatformProvider>);
+    await flushAsync();
+    expect(screen.getByRole('button', { name: 'Retry restore' })).toBeTruthy();
+
+    act(() => useQecStudyUiStore.getState().clearActiveStudy());
+
+    expect(screen.queryByRole('alert')).toBeNull();
+  });
+
+  it('retries a failed restore from an accessible keyboard-operated action', async () => {
+    vi.useFakeTimers();
+    useProjectStore.setState({ projectRoot: '/project' });
+    const retryRead = deferred<unknown>();
+    const getStoredValue = vi.fn()
+      .mockRejectedValueOnce(new Error('read failed'))
+      .mockImplementationOnce(async () => retryRead.promise);
+    const bridge = persistenceBridge(getStoredValue);
+    render(<PlatformProvider bridge={bridge}><QecWorkbench /></PlatformProvider>);
+    await flushAsync();
+
+    const alert = screen.getByRole('alert');
+    expect(alert.textContent).toMatch(/Retry restore to recover/i);
+    const retry = within(alert).getByRole<HTMLButtonElement>('button', { name: 'Retry restore' });
+    retry.focus();
+    fireEvent.click(retry, { detail: 0 });
+    expect(document.activeElement).toBe(retry);
+    expect(retry.disabled).toBe(true);
+
+    retryRead.resolve(persistedState('analyze'));
+    await flushAsync();
+    expect(screen.queryByRole('alert')).toBeNull();
+    expect(useQecWorkbenchStore.getState().preset).toBe('analyze');
+  });
+
+  it('retries a failed save and clears its matching status after success', async () => {
+    vi.useFakeTimers();
+    useProjectStore.setState({ projectRoot: '/project' });
+    const retryWrite = deferred<void>();
+    const setStoredValue = vi.fn()
+      .mockRejectedValueOnce(new Error('write failed'))
+      .mockImplementationOnce(async () => retryWrite.promise);
+    const bridge = persistenceBridge(vi.fn(async () => persistedState('build')), setStoredValue);
+    render(<PlatformProvider bridge={bridge}><QecWorkbench /></PlatformProvider>);
+    await flushAsync();
+    act(() => useQecWorkbenchStore.getState().setPreset('analyze'));
+    await flushPersistenceDebounce();
+    await flushAsync();
+
+    const alert = screen.getByRole('alert');
+    expect(alert.textContent).toMatch(/Retry save to preserve/i);
+    const retry = within(alert).getByRole<HTMLButtonElement>('button', { name: 'Retry save' });
+    retry.focus();
+    fireEvent.click(retry, { detail: 0 });
+    expect(document.activeElement).toBe(retry);
+    expect(retry.disabled).toBe(true);
+
+    retryWrite.resolve();
+    await flushAsync();
+    expect(screen.queryByRole('alert')).toBeNull();
   });
 
   it('reports platform read and write failures in the workbench shell', async () => {
