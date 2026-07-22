@@ -17,6 +17,7 @@ from enum import StrEnum
 from pathlib import Path
 from typing import Protocol, TypeAlias, runtime_checkable
 
+from kernel.qec_data.hashing import canonical_json_bytes
 from kernel.qec_data.models import (
     CalibrationBatch,
     CampaignPointBatch,
@@ -32,6 +33,8 @@ MAX_METADATA_DEPTH = 32
 MAX_SAFE_METADATA_INTEGER = (1 << 53) - 1
 MAX_IMPORT_CHUNK_RECORDS = 65_536
 MAX_SOURCE_SPAN_ITEMS = 1_024
+MAX_TOTAL_SOURCE_RANGES = 2_048
+MAX_SOURCE_SPANS_BYTES = 65_536
 CANONICAL_OUTPUT_KINDS = frozenset({"syndromes", "campaign_points", "calibrations"})
 
 
@@ -270,6 +273,24 @@ class SourceSpan:
             raise TypeError("source span precision must be SourceSpanPrecision")
 
 
+def _source_spans_value(spans: tuple[SourceSpan, ...]) -> list[dict[str, object]]:
+    return [
+        {
+            "source_id": span.source_id,
+            "byte_ranges": [
+                {"start": item.start, "end": item.end} for item in span.byte_ranges
+            ],
+            "row_range": (
+                None
+                if span.row_range is None
+                else {"start": span.row_range.start, "end": span.row_range.end}
+            ),
+            "precision": span.precision.value,
+        }
+        for span in spans
+    ]
+
+
 @dataclass(frozen=True, slots=True)
 class ImportChunk:
     payload: CanonicalPayload
@@ -289,8 +310,14 @@ class ImportChunk:
             raise ValueError("import chunk may contain at most 1,024 source spans")
         if not all(type(span) is SourceSpan for span in self.source_spans):
             raise TypeError("import chunk source spans must contain SourceSpan")
+        total_ranges = sum(len(span.byte_ranges) for span in self.source_spans)
+        if total_ranges > MAX_TOTAL_SOURCE_RANGES:
+            raise ValueError("import chunk exceeds 2,048 total source ranges")
         if self.payload.record_count > MAX_IMPORT_CHUNK_RECORDS:
             raise ValueError("import chunks may contain at most 65,536 records")
+        lineage = canonical_json_bytes(_source_spans_value(self.source_spans))
+        if len(lineage) > MAX_SOURCE_SPANS_BYTES:
+            raise ValueError("import chunk source lineage exceeds 64 KiB")
 
     @property
     def record_count(self) -> int:

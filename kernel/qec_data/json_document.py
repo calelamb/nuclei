@@ -10,6 +10,10 @@ from .hashing import canonical_json_bytes
 
 
 MAX_SAFE_JSON_INTEGER = 9_007_199_254_740_991
+MAX_CANONICAL_JSON_BYTES = 65_536
+MAX_CANONICAL_JSON_DEPTH = 32
+MAX_CANONICAL_JSON_KEYS = 4_096
+MAX_CANONICAL_JSON_CONTAINER_ITEMS = 4_096
 
 
 def _reject_constant(value: str) -> None:
@@ -23,46 +27,126 @@ def _finite_float(value: str) -> float:
     return parsed
 
 
-def _unique_object(pairs: list[tuple[str, object]]) -> dict[str, object]:
-    result: dict[str, object] = {}
-    for key, value in pairs:
-        if key in result:
-            raise ValueError(f"duplicate JSON object key is forbidden: {key}")
-        result[key] = value
-    return result
+def _validate_value(value: object) -> None:
+    stack: list[tuple[object, int]] = [(value, 0)]
+    keys = 0
+    items = 0
+    while stack:
+        current, depth = stack.pop()
+        if type(current) is int and abs(current) > MAX_SAFE_JSON_INTEGER:
+            raise ValueError("canonical JSON integers must be JavaScript-safe")
+        if isinstance(current, Mapping):
+            keys += len(current)
+            items += len(current)
+            stack.extend((item, depth + 1) for item in current.values())
+        elif isinstance(current, Sequence) and not isinstance(current, (str, bytes)):
+            items += len(current)
+            stack.extend((item, depth + 1) for item in current)
+        else:
+            continue
+        if depth + 1 > MAX_CANONICAL_JSON_DEPTH:
+            raise ValueError("canonical JSON exceeds maximum depth")
+        if keys > MAX_CANONICAL_JSON_KEYS:
+            raise ValueError("canonical JSON exceeds maximum keys")
+        if items > MAX_CANONICAL_JSON_CONTAINER_ITEMS:
+            raise ValueError("canonical JSON exceeds maximum container items")
 
 
-def _require_safe_integers(value: object) -> None:
-    if type(value) is int and abs(value) > MAX_SAFE_JSON_INTEGER:
-        raise ValueError("canonical JSON integers must be JavaScript-safe")
-    if isinstance(value, Mapping):
-        for item in value.values():
-            _require_safe_integers(item)
-    elif isinstance(value, Sequence) and not isinstance(value, (str, bytes)):
-        for item in value:
-            _require_safe_integers(item)
+def _scan_document_structure(document: str) -> None:
+    depth = 0
+    commas = 0
+    colons = 0
+    nonempty_containers = 0
+    containers: list[bool] = []
+    in_string = False
+    escaped = False
+    for character in document:
+        if in_string:
+            if escaped:
+                escaped = False
+            elif character == "\\":
+                escaped = True
+            elif character == '"':
+                in_string = False
+            continue
+        if character == '"':
+            in_string = True
+            if containers:
+                containers[-1] = True
+        elif character in "[{":
+            if containers:
+                containers[-1] = True
+            containers.append(False)
+            depth += 1
+            if depth > MAX_CANONICAL_JSON_DEPTH:
+                raise ValueError("canonical JSON exceeds maximum depth")
+        elif character in "]}":
+            if containers and containers.pop():
+                nonempty_containers += 1
+            depth -= 1
+        elif character == ",":
+            commas += 1
+            if commas + nonempty_containers >= MAX_CANONICAL_JSON_CONTAINER_ITEMS:
+                raise ValueError("canonical JSON exceeds maximum container items")
+        elif character == ":":
+            colons += 1
+            if colons > MAX_CANONICAL_JSON_KEYS:
+                raise ValueError("canonical JSON exceeds maximum keys")
+        elif not character.isspace() and containers:
+            containers[-1] = True
+    if commas + nonempty_containers > MAX_CANONICAL_JSON_CONTAINER_ITEMS:
+        raise ValueError("canonical JSON exceeds maximum container items")
+
+
+def _preflight_document(document: str) -> None:
+    if len(document) > MAX_CANONICAL_JSON_BYTES:
+        raise ValueError("canonical JSON document exceeds 64 KiB")
+    if len(document.encode("utf-8")) > MAX_CANONICAL_JSON_BYTES:
+        raise ValueError("canonical JSON document exceeds 64 KiB")
+    _scan_document_structure(document)
+
+
+def _object_hook():
+    key_count = 0
+
+    def unique_object(pairs: list[tuple[str, object]]) -> dict[str, object]:
+        nonlocal key_count
+        key_count += len(pairs)
+        if key_count > MAX_CANONICAL_JSON_KEYS:
+            raise ValueError("canonical JSON exceeds maximum keys")
+        result: dict[str, object] = {}
+        for key, value in pairs:
+            if key in result:
+                raise ValueError(f"duplicate JSON object key is forbidden: {key}")
+            result[key] = value
+        return result
+
+    return unique_object
 
 
 def canonical_json_document(value: object) -> str:
     """Return one stable JSON string after enforcing cross-runtime safe values."""
 
-    _require_safe_integers(value)
-    return canonical_json_bytes(value).decode("utf-8")
+    _validate_value(value)
+    document = canonical_json_bytes(value).decode("utf-8")
+    _preflight_document(document)
+    return document
 
 
 def parse_canonical_json_document(name: str, document: str) -> object:
     if type(document) is not str:
         raise TypeError(f"{name} must be a canonical JSON string")
+    _preflight_document(document)
     try:
         value = json.loads(
             document,
             parse_constant=_reject_constant,
             parse_float=_finite_float,
-            object_pairs_hook=_unique_object,
+            object_pairs_hook=_object_hook(),
         )
     except json.JSONDecodeError as error:
         raise ValueError(f"{name} must contain valid JSON") from error
-    _require_safe_integers(value)
+    _validate_value(value)
     if canonical_json_document(value) != document:
         raise ValueError(f"{name} must use the canonical JSON representation")
     return value

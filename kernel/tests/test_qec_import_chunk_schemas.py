@@ -73,3 +73,15 @@ def test_lineage_arrays_are_bounded_by_schema() -> None:
         _validator("import-chunk.schema.json").validate(
             {**chunk, "source_spans": [chunk["source_spans"][0]] * 1_025}
         )
+
+
+def test_campaign_json_documents_have_schema_length_caps() -> None:
+    batch = _load("fixtures/minimal-campaign-point-batch.json")
+    record = batch["records"][0]
+    for field in ("json_metadata", "custom_counts"):
+        invalid = {
+            **batch,
+            "records": [{**record, field: "x" * 65_537}],
+        }
+        with pytest.raises(ValidationError):
+            _validator("campaign-point-batch.schema.json").validate(invalid)
