@@ -1,11 +1,12 @@
-import { lazy, Suspense, useState, useRef, useCallback } from 'react';
+import { lazy, Suspense, useState, useRef, useCallback, useMemo } from 'react';
 import { useThemeStore } from '../../stores/themeStore';
 import { FileExplorer } from '../explorer/FileExplorer';
 import { OpenFilesSection } from '../explorer/OpenFilesSection';
 import { LaunchPortal } from '../hardware/LaunchPortal';
 import { SettingsPanel } from '../settings/SettingsPanel';
 import type { ActivityView } from './ActivityBar';
-import { createTauriQecStudyFs } from '../../services/qecStudyFs';
+import { createPlatformQecStudyFs, createTauriQecStudyFs } from '../../services/qecStudyFs';
+import { usePlatform } from '../../platform/PlatformProvider';
 
 const LearningPathSidebar = lazy(async () => ({
   default: (await import('../learning/LearningPathSidebar')).LearningPathSidebar,
@@ -34,8 +35,6 @@ const TranspilerControls = lazy(async () => ({
 const QecStudySidebar = lazy(async () => ({
   default: (await import('../qec/workbench/QecStudySidebar')).QecStudySidebar,
 }));
-
-const qecStudyFs = createTauriQecStudyFs();
 
 interface SidebarProps {
   view: ActivityView;
@@ -190,6 +189,13 @@ function LearningSidebarTabs() {
 
 export function Sidebar({ view, width, onWidthChange }: SidebarProps) {
   const colors = useThemeStore((s) => s.colors);
+  const platform = usePlatform();
+  const qecStudyFs = useMemo(
+    () => platform.getPlatform() === 'web'
+      ? createPlatformQecStudyFs(platform)
+      : createTauriQecStudyFs(),
+    [platform],
+  );
   const isDragging = useRef(false);
 
   const handleResizeStart = useCallback((e: React.MouseEvent) => {

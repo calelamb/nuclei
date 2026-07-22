@@ -14,7 +14,15 @@ async function loadBridge(): Promise<PlatformBridge> {
     defaultBridge = tauriBridge;
   } else {
     const { webBridge } = await import('./webBridge');
-    defaultBridge = webBridge;
+    if (import.meta.env.DEV && typeof window !== 'undefined') {
+      const { createE2eFixtureBridge } = await import('./e2eFixtureBridge');
+      defaultBridge = createE2eFixtureBridge(
+        webBridge,
+        new URLSearchParams(window.location.search),
+      ) ?? webBridge;
+    } else {
+      defaultBridge = webBridge;
+    }
   }
   return defaultBridge;
 }

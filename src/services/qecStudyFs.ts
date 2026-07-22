@@ -6,6 +6,7 @@ import {
   watch,
   writeTextFile,
 } from '@tauri-apps/plugin-fs';
+import type { PlatformBridge } from '../platform/bridge';
 
 export interface QecStudyDirEntry {
   name: string;
@@ -56,6 +57,47 @@ export function createTauriQecStudyFs(): QecStudyFs {
       options?: { recursive?: boolean },
     ): Promise<() => void> {
       return watch(path, () => onEvent(), { recursive: options?.recursive ?? true });
+    },
+  };
+}
+
+function unavailable(operation: string, path: string): Error {
+  return new Error(`${operation} is unavailable for the web project path "${path}".`);
+}
+
+/** Bind read-only web project discovery to the existing platform boundary. */
+export function createPlatformQecStudyFs(platform: PlatformBridge): QecStudyFs {
+  return {
+    async readTextFile(path: string): Promise<string> {
+      const content = await platform.readFile(path);
+      if (content === null) throw unavailable('Reading', path);
+      return content;
+    },
+    async writeTextFile(path: string, content: string): Promise<void> {
+      const created = await platform.createFile(path, content);
+      if (created === null) throw unavailable('Writing', path);
+    },
+    async readDir(path: string): Promise<QecStudyDirEntry[]> {
+      const entries = await platform.listDirectory(path);
+      if (entries === null) throw unavailable('Listing', path);
+      return entries.map((entry) => ({ name: entry.name, isDirectory: entry.kind === 'directory' }));
+    },
+    async mkdir(path: string, options?: { recursive?: boolean }): Promise<void> {
+      const existing = await platform.listDirectory(path);
+      if (existing !== null) return;
+      const created = await platform.createDirectory(path, options?.recursive);
+      if (created === null) throw unavailable('Creating a directory at', path);
+    },
+    async exists(path: string): Promise<boolean> {
+      const [content, entries] = await Promise.all([
+        platform.readFile(path),
+        platform.listDirectory(path),
+      ]);
+      return content !== null || entries !== null;
+    },
+    join: joinPath,
+    async watch(): Promise<() => void> {
+      return () => undefined;
     },
   };
 }

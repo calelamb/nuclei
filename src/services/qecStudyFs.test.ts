@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
+import type { PlatformBridge } from '../platform/bridge';
 
 const tauriFs = vi.hoisted(() => ({
   exists: vi.fn(),
@@ -11,7 +12,17 @@ const tauriFs = vi.hoisted(() => ({
 
 vi.mock('@tauri-apps/plugin-fs', () => tauriFs);
 
-import { createTauriQecStudyFs } from './qecStudyFs';
+import { createPlatformQecStudyFs, createTauriQecStudyFs } from './qecStudyFs';
+
+function platformBridge(overrides: Partial<PlatformBridge> = {}): PlatformBridge {
+  return {
+    startKernel: vi.fn(), stopKernel: vi.fn(), openFile: vi.fn(), readFile: vi.fn(async () => null),
+    saveFile: vi.fn(), saveFileAs: vi.fn(), renameFile: vi.fn(), getStoredValue: vi.fn(),
+    setStoredValue: vi.fn(), setWindowTitle: vi.fn(), getPlatform: () => 'web',
+    openDirectory: vi.fn(), listDirectory: vi.fn(async () => null), createFile: vi.fn(async () => null),
+    createDirectory: vi.fn(async () => null), deleteFile: vi.fn(), ...overrides,
+  };
+}
 
 describe('createTauriQecStudyFs', () => {
   it('adapts Tauri filesystem operations behind the QEC Study port', async () => {
@@ -39,5 +50,30 @@ describe('createTauriQecStudyFs', () => {
     expect(tauriFs.mkdir).toHaveBeenCalledWith('/project/studies', { recursive: true });
     expect(tauriFs.watch).toHaveBeenCalledWith('/project', expect.any(Function), { recursive: false });
     expect(onEvent).toHaveBeenCalledOnce();
+  });
+});
+
+describe('createPlatformQecStudyFs', () => {
+  it('adapts the read-only web project bridge for fixture discovery', async () => {
+    const unwatch = vi.fn();
+    const bridge = platformBridge({
+      readFile: vi.fn(async (path) => path.endsWith('.yaml') ? 'schema: 1' : null),
+      listDirectory: vi.fn(async (path) => path.endsWith('studies') ? [{ name: 'study.yaml', path: `${path}/study.yaml`, kind: 'file' }] : null),
+    });
+    const fs = createPlatformQecStudyFs(bridge);
+
+    await expect(fs.exists('/project/studies')).resolves.toBe(true);
+    await expect(fs.readDir('/project/studies')).resolves.toEqual([{ name: 'study.yaml', isDirectory: false }]);
+    await expect(fs.readTextFile('/project/studies/study.yaml')).resolves.toBe('schema: 1');
+    await expect(fs.watch('/project/studies', unwatch)).resolves.toEqual(expect.any(Function));
+  });
+
+  it('rejects unavailable writes with an actionable error', async () => {
+    const fs = createPlatformQecStudyFs(platformBridge());
+
+    await expect(fs.writeTextFile('/project/studies/new.yaml', 'content')).rejects.toThrow('Writing is unavailable');
+    await expect(fs.mkdir('/project/studies', { recursive: true })).rejects.toThrow('Creating a directory at is unavailable');
+    await expect(fs.readTextFile('/missing.yaml')).rejects.toThrow('Reading is unavailable');
+    await expect(fs.readDir('/missing')).rejects.toThrow('Listing is unavailable');
   });
 });
