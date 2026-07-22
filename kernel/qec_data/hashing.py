@@ -28,7 +28,44 @@ PACKED_SEMANTIC_KEYS = frozenset(
 MAPPING_SEMANTIC_KEYS = PACKED_SEMANTIC_KEYS | frozenset(
     {"sequence", "timestamp", "round"}
 )
-UNIT_SEMANTIC_KEYS = frozenset({"timestamp", "round", "time"})
+CAMPAIGN_SEMANTIC_KEYS = frozenset(
+    {
+        "shots",
+        "errors",
+        "discards",
+        "seconds",
+        "decoder",
+        "strong_id",
+        "json_metadata",
+        "custom_counts",
+    }
+)
+CALIBRATION_SEMANTIC_KEYS = frozenset(
+    {
+        "calibration_id",
+        "session_id",
+        "scope_kind",
+        "scope_id",
+        "parameter_name",
+        "semantic_id",
+        "value",
+        "unit",
+        "uncertainty",
+        "quality",
+        "source_system",
+        "provenance_id",
+        "effective_start",
+        "effective_end",
+        "calibration_run_id",
+        "original_mime_type",
+        "original_representation",
+    }
+)
+TYPED_SEMANTIC_KEYS = CAMPAIGN_SEMANTIC_KEYS | CALIBRATION_SEMANTIC_KEYS
+MAPPING_SEMANTIC_KEYS |= TYPED_SEMANTIC_KEYS
+UNIT_SEMANTIC_KEYS = frozenset(
+    {"timestamp", "round", "time", "seconds", "value", "uncertainty"}
+)
 
 
 def _require_pair_tuple(name: str, value: object) -> tuple[tuple[str, object], ...]:
@@ -47,8 +84,10 @@ def _validate_semantic_pairs(
     pairs: tuple[tuple[str, object], ...],
     allowed_keys: frozenset[str],
     value_type: type,
+    *,
+    allow_empty: bool = False,
 ) -> None:
-    if not pairs:
+    if not pairs and not allow_empty:
         raise ValueError(f"{name} must not be empty")
     for key, value in pairs:
         if key not in allowed_keys:
@@ -89,20 +128,27 @@ class DatasetSemanticIdentity:
             raise TypeError("adapter identity must use strings")
         if not self.adapter_id.strip() or not self.adapter_version.strip():
             raise ValueError("adapter identity must not be blank")
+        mapping = _require_pair_tuple("mapping", self.mapping)
         _validate_semantic_pairs(
             "mapping",
-            _require_pair_tuple("mapping", self.mapping),
+            mapping,
             MAPPING_SEMANTIC_KEYS,
             str,
         )
+        typed_mapping = bool({key for key, _ in mapping} & TYPED_SEMANTIC_KEYS)
         _validate_semantic_pairs(
             "bit_widths",
             _require_pair_tuple("bit_widths", self.bit_widths),
             PACKED_SEMANTIC_KEYS,
             int,
+            allow_empty=typed_mapping,
         )
         _validate_semantic_pairs(
-            "units", _require_pair_tuple("units", self.units), UNIT_SEMANTIC_KEYS, str
+            "units",
+            _require_pair_tuple("units", self.units),
+            UNIT_SEMANTIC_KEYS,
+            str,
+            allow_empty=typed_mapping,
         )
         if not isinstance(self.time_domain, str):
             raise TypeError("time domain must be a string")

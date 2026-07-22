@@ -1,20 +1,36 @@
-"""Arrow conversion and verification internals for QEC session storage."""
+"""Arrow conversion and verification internals for typed QEC session storage."""
 
 from __future__ import annotations
 
 import os
 from dataclasses import dataclass
 from pathlib import Path
+from typing import TypeAlias
 
 import pyarrow as pa
 import pyarrow.parquet as pq
 
 from .hashing import semantic_digest, sha256_file
-from .models import PackedBits, QualifiedPackedBits, SCHEMA_VERSION, SyndromeBatch
+from .adapters.base import SourceSpan
+from .models import (
+    CalibrationBatch,
+    CampaignPointBatch,
+    PackedBits,
+    QualifiedPackedBits,
+    SCHEMA_VERSION,
+    SyndromeBatch,
+)
 from .storage_durability import DurableMover
+from .storage_lineage import (
+    SYNDROMES,
+    source_spans_from_bytes,
+    source_spans_to_bytes,
+)
+from .storage_typed_parquet import inspect_typed_partition, write_typed_pending
 
 
-RECORD_KIND = "syndromes"
+RECORD_KIND = SYNDROMES
+CanonicalPayload: TypeAlias = SyndromeBatch | CampaignPointBatch | CalibrationBatch
 MAX_PARTITION_ROWS = 65_536
 PACKED_FIELDS = ("observables", "measurements", "erasures", "leakage", "heralds")
 PARQUET_OPTIONS: dict[str, object] = {
@@ -39,6 +55,8 @@ class PendingPartition:
     schema_fingerprint: str
     is_final: bool = False
     journal_generation: int = -1
+    record_kind: str = RECORD_KIND
+    source_spans: tuple[SourceSpan, ...] = ()
 
 
 def _validate_padding(name: str, packed: PackedBits, count: int) -> None:
@@ -92,7 +110,12 @@ def _packed_field(name: str, width: int) -> pa.Field:
     )
 
 
-def _schema(batch: SyndromeBatch, fingerprint: str, identity: str) -> pa.Schema:
+def _schema(
+    batch: SyndromeBatch,
+    fingerprint: str,
+    identity: str,
+    source_spans: tuple[SourceSpan, ...],
+) -> pa.Schema:
     fields = [pa.field("sequence", pa.uint64(), nullable=False)]
     if batch.source_timestamps.value is not None:
         fields.append(pa.field("timestamp_ns", pa.int64(), nullable=False))
@@ -112,6 +135,8 @@ def _schema(batch: SyndromeBatch, fingerprint: str, identity: str) -> pa.Schema:
         b"qec.sequence_start": str(batch.sequence_start).encode(),
         b"qec.sequence_end": str(batch.sequence_end).encode(),
     }
+    if source_spans:
+        metadata[b"qec.source_spans"] = source_spans_to_bytes(source_spans)
     return pa.schema(fields, metadata=metadata)
 
 
@@ -153,14 +178,29 @@ def _record_batch(batch: SyndromeBatch, schema: pa.Schema) -> pa.RecordBatch:
 
 def write_pending(
     path: Path,
-    batch: SyndromeBatch,
+    batch: CanonicalPayload,
     fingerprint: str,
     identity: str,
     mover: DurableMover,
+    source_spans: tuple[SourceSpan, ...] = (),
 ) -> None:
     if batch.record_count > MAX_PARTITION_ROWS:
         raise ValueError("canonical Parquet partitions cannot exceed 65,536 rows")
-    schema = _schema(batch, fingerprint, identity)
+    if type(batch) is not SyndromeBatch:
+        write_typed_pending(
+            path,
+            batch,
+            fingerprint,
+            identity,
+            source_spans_to_bytes(source_spans),
+            mover,
+        )
+        inspected = inspect_partition(path)
+        if inspected.rows != batch.record_count:
+            path.unlink(missing_ok=True)
+            raise ValueError("Parquet row count does not match batch")
+        return
+    schema = _schema(batch, fingerprint, identity, source_spans)
     record_batch = _record_batch(batch, schema)
     with path.open("xb") as output:
         with pq.ParquetWriter(output, schema, **PARQUET_OPTIONS) as writer:
@@ -256,32 +296,76 @@ def inspect_partition(path: Path, *, is_final: bool = False) -> PendingPartition
     if path.is_symlink() or not path.is_file():
         raise ValueError("Parquet partition is not a regular file")
     try:
-        metadata = pq.read_metadata(path)
+        parquet_metadata = pq.read_metadata(path)
         schema = pq.read_schema(path)
-        if metadata.num_rows < 1 or metadata.num_rows > MAX_PARTITION_ROWS:
+        if (
+            parquet_metadata.num_rows < 1
+            or parquet_metadata.num_rows > MAX_PARTITION_ROWS
+        ):
             raise ValueError("Parquet partition row count is outside canonical bounds")
-        _validate_schema(schema)
-        start = int(_metadata_text(schema, b"qec.sequence_start"))
-        end = int(_metadata_text(schema, b"qec.sequence_end"))
-        if start < 0 or end - start != metadata.num_rows:
-            raise ValueError("Parquet sequence range does not match its footer")
-        table = pq.read_table(path, page_checksum_verification=True)
-        _validate_scientific_columns(table)
-        sequence = table.column("sequence").to_pylist()
+        record_kind = _metadata_text(schema, b"qec.record_kind")
+        if record_kind != RECORD_KIND:
+            return _typed_partition_ref(path, schema, is_final)
+        return _syndrome_partition_ref(path, schema, parquet_metadata, is_final)
     except (OSError, pa.ArrowException, KeyError, ValueError) as error:
         if isinstance(error, ValueError) and str(error).startswith("Parquet"):
             raise
         raise ValueError("Parquet footer or schema is invalid") from error
-    if sequence != list(range(start, end)):
-        raise ValueError("Parquet sequence range does not match its footer")
+
+
+def _typed_partition_ref(
+    path: Path, schema: pa.Schema, is_final: bool
+) -> PendingPartition:
+    typed = inspect_typed_partition(path, schema)
+    spans = typed["source_spans"]
+    if not isinstance(spans, bytes):
+        raise ValueError("Parquet source lineage is invalid")
     return PendingPartition(
         path=path,
         sha256=sha256_file(path),
-        rows=metadata.num_rows,
+        rows=int(typed["rows"]),
+        sequence_start=int(typed["sequence_start"]),
+        sequence_end=int(typed["sequence_end"]),
+        segment_id=str(typed["segment_id"]),
+        dataset_id=str(typed["dataset_id"]),
+        schema_fingerprint=str(typed["schema_fingerprint"]),
+        is_final=is_final,
+        record_kind=str(typed["record_kind"]),
+        source_spans=source_spans_from_bytes(spans),
+    )
+
+
+def _syndrome_partition_ref(
+    path: Path,
+    schema: pa.Schema,
+    parquet_metadata: pq.FileMetaData,
+    is_final: bool,
+) -> PendingPartition:
+    _validate_schema(schema)
+    start = int(_metadata_text(schema, b"qec.sequence_start"))
+    end = int(_metadata_text(schema, b"qec.sequence_end"))
+    if start < 0 or end - start != parquet_metadata.num_rows:
+        raise ValueError("Parquet sequence range does not match its footer")
+    table = pq.read_table(path, page_checksum_verification=True)
+    _validate_scientific_columns(table)
+    if table.column("sequence").to_pylist() != list(range(start, end)):
+        raise ValueError("Parquet sequence range does not match its footer")
+    schema_metadata = schema.metadata or {}
+    spans = (
+        source_spans_from_bytes(schema_metadata[b"qec.source_spans"])
+        if b"qec.source_spans" in schema_metadata
+        else ()
+    )
+    return PendingPartition(
+        path=path,
+        sha256=sha256_file(path),
+        rows=parquet_metadata.num_rows,
         sequence_start=start,
         sequence_end=end,
         segment_id=_metadata_text(schema, b"qec.segment_id"),
         dataset_id=_metadata_text(schema, b"qec.dataset_id"),
         schema_fingerprint=_metadata_text(schema, b"qec.schema_fingerprint"),
         is_final=is_final,
+        record_kind=RECORD_KIND,
+        source_spans=spans,
     )

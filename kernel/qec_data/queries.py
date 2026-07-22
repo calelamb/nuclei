@@ -17,7 +17,8 @@ import pyarrow as pa
 from .catalog import CatalogDataset, CatalogError, QecCatalog
 from .hashing import canonical_json_bytes, semantic_digest
 from .model_codecs import loads_canonical_json
-from .query_table_templates import TABLE_TEMPLATES
+from .query_templates import QUERY_TEMPLATES, SCHEMA_PROFILES
+from .query_typed_rows import serialize_typed_rows
 from .tiles import (
     QueryEvent,
     QueryProgress,
@@ -34,88 +35,6 @@ MAX_TABLE_ROWS, MAX_CURSOR_BYTES = 10_000, 1_024
 MAX_WIDTH, MAX_HEIGHT, MAX_CELLS = 4_096, 1_024, 65_536
 MAX_BINS, MAX_SCAN_ROWS, MAX_EXPANDED_CELLS = 4_096, 50_000_000, 50_000_000
 UINT64_MAX = 2**64 - 1
-SCHEMA_PROFILES = frozenset({"base", "timestamp", "round", "timestamp-round"})
-
-TIME_SERIES_DETECTOR_WEIGHT = """
-WITH filtered AS (
-  SELECT sequence, bit_count(CAST(detectors AS BIT))::DOUBLE AS value
-  FROM read_parquet(?, union_by_name = false)
-  WHERE sequence >= ? AND sequence <= ?
-), binned AS (
-  SELECT LEAST(? - 1, FLOOR((sequence - ?)::DOUBLE * ? / ?)::INTEGER) AS bin,
-         value
-  FROM filtered
-)
-SELECT bin, min(value) AS minimum, max(value) AS maximum,
-       avg(value) AS mean, count(*)::UBIGINT AS sample_count
-FROM binned
-GROUP BY bin
-ORDER BY bin
-"""
-HISTOGRAM_DETECTOR_WEIGHT = """
-WITH filtered AS (
-  SELECT bit_count(CAST(detectors AS BIT))::DOUBLE AS value
-  FROM read_parquet(?, union_by_name = false)
-  WHERE sequence >= ? AND sequence <= ?
-), bounds AS (
-  SELECT min(value) AS minimum, max(value) AS maximum FROM filtered
-), binned AS (
-  SELECT CASE WHEN maximum = minimum THEN 0 ELSE
-    LEAST(? - 1, FLOOR((value - minimum) * ? / (maximum - minimum))::INTEGER)
-  END AS bin, value, minimum, maximum
-  FROM filtered CROSS JOIN bounds
-)
-SELECT bin, min(minimum) AS lower_bound, max(maximum) AS upper_bound,
-       count(*)::UBIGINT AS sample_count
-FROM binned
-GROUP BY bin
-ORDER BY bin
-"""
-HEATMAP_DETECTOR_EVENTS = """
-WITH filtered AS (
-  SELECT sequence, detectors
-  FROM read_parquet(?, union_by_name = false)
-  WHERE sequence >= ? AND sequence <= ?
-), expanded AS (
-  SELECT
-    LEAST(? - 1, FLOOR((detector_index::DOUBLE * ?) / ?)::INTEGER) AS x,
-    LEAST(? - 1, FLOOR(((sequence - ?)::DOUBLE * ?) / ?)::INTEGER) AS y,
-    get_bit(
-      CAST(detectors AS BIT),
-      CAST(CAST(FLOOR(detector_index / 8) AS BIGINT) * 8
-           + 7 - detector_index % 8 AS INTEGER)
-    ) AS value
-  FROM filtered CROSS JOIN range(0, ?) AS detector_axis(detector_index)
-)
-SELECT x, y, sum(value)::UBIGINT AS active_count, count(*)::UBIGINT AS sample_count
-FROM expanded
-GROUP BY x, y
-ORDER BY y, x
-"""
-
-QUERY_TEMPLATES: Mapping[tuple[str, str, str, bool], str] = MappingProxyType(
-    {
-        **TABLE_TEMPLATES,
-        **{
-            (
-                "time-series",
-                "detector-weight",
-                profile,
-                False,
-            ): TIME_SERIES_DETECTOR_WEIGHT
-            for profile in SCHEMA_PROFILES
-        },
-        **{
-            ("histogram", "detector-weight", profile, False): HISTOGRAM_DETECTOR_WEIGHT
-            for profile in SCHEMA_PROFILES
-        },
-        **{
-            ("heatmap", "detector-events", profile, False): HEATMAP_DETECTOR_EVENTS
-            for profile in SCHEMA_PROFILES
-        },
-    }
-)
-
 FILTER_FIELDS: Mapping[str, frozenset[str]] = MappingProxyType(
     {
         "table-page": frozenset({"start", "end", "limit", "cursor"}),
@@ -350,7 +269,7 @@ def _open_query_connection(config: QueryConnectionConfig) -> duckdb.DuckDBPyConn
 
 
 def _build_plan(spec: QuerySpec, dataset: CatalogDataset) -> QueryPlan:
-    if dataset.record_kind != "syndromes":
+    if dataset.record_kind != "syndromes" and spec.tile != "table-page":
         raise QueryNotSupported("tile is not supported for this dataset kind")
     if spec.tile == "graph-overlay":
         raise QueryNotSupported("graph-overlay is not supported for syndromes")
@@ -508,6 +427,12 @@ def _build_event(plan: QueryPlan, batches: tuple[pa.RecordBatch, ...]) -> QueryT
 
 
 def _rows(batches: tuple[pa.RecordBatch, ...]) -> tuple[dict[str, object], ...]:
+    try:
+        typed = serialize_typed_rows(batches, _finite)
+    except (KeyError, TypeError, ValueError) as error:
+        raise QueryExecutionError("typed query row is invalid") from error
+    if typed is not None:
+        return typed
     rows: list[dict[str, object]] = []
     for batch in batches:
         sequences = batch.column("sequence")

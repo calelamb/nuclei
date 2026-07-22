@@ -11,6 +11,7 @@ from typing import Any
 from .storage_durability import DurableMover
 from .storage_parquet import PendingPartition, inspect_partition
 from .storage_paths import safe_session_file, secure_directory, walk_storage_files
+from .storage_lineage import source_spans_from_value
 
 
 @dataclass(frozen=True, slots=True)
@@ -51,6 +52,8 @@ def committed_refs(
             segment["schema_fingerprint"],
             True,
             generation,
+            segment["record_kind"],
+            source_spans_from_value(item.get("source_spans", [])),
         )
         for segment in journal["segments"]
         for item in segment["partitions"]
@@ -80,21 +83,24 @@ def verify_committed(
 
 def _overlap(left: PendingPartition, right: PendingPartition) -> bool:
     return (
-        left.sequence_start < right.sequence_end
+        left.record_kind == right.record_kind
+        and left.sequence_start < right.sequence_end
         and right.sequence_start < left.sequence_end
     )
 
 
 def _exact_duplicate(left: PendingPartition, right: PendingPartition) -> bool:
     return (
-        left.sequence_start == right.sequence_start
+        left.record_kind == right.record_kind
+        and left.segment_id == right.segment_id
+        and left.sequence_start == right.sequence_start
         and left.sequence_end == right.sequence_end
         and left.sha256 == right.sha256
     )
 
 
-def _schema_identity(ref: PendingPartition) -> tuple[str, str]:
-    return ref.schema_fingerprint, ref.dataset_id
+def _schema_identity(ref: PendingPartition) -> tuple[str, str, str]:
+    return ref.record_kind, ref.schema_fingerprint, ref.dataset_id
 
 
 def _inspect_pending(
@@ -137,12 +143,16 @@ def _conflict_indexes(
 ) -> tuple[set[int], set[int]]:
     conflicts: set[int] = set()
     duplicates: set[int] = set()
-    schemas = {ref.segment_id: _schema_identity(ref) for ref in committed}
+    schemas = {
+        (ref.record_kind, ref.segment_id): _schema_identity(ref) for ref in committed
+    }
     for index, candidate in enumerate(candidates):
         if (
-            candidate.segment_id in schemas
-            and _schema_identity(candidate) != schemas[candidate.segment_id]
-        ):
+            candidate.record_kind,
+            candidate.segment_id,
+        ) in schemas and _schema_identity(candidate) != schemas[
+            (candidate.record_kind, candidate.segment_id)
+        ]:
             conflicts.add(index)
         for existing in committed:
             if _exact_duplicate(candidate, existing):
@@ -161,9 +171,11 @@ def _classify_candidate_pairs(
             right = candidates[right_index]
             if not _exact_duplicate(left, right) and _overlap(left, right):
                 conflicts.update((left_index, right_index))
-            elif left.segment_id == right.segment_id and _schema_identity(
-                left
-            ) != _schema_identity(right):
+            elif (
+                left.record_kind == right.record_kind
+                and left.segment_id == right.segment_id
+                and _schema_identity(left) != _schema_identity(right)
+            ):
                 conflicts.update((left_index, right_index))
     for left_index, left in enumerate(candidates):
         for right_index in range(left_index + 1, len(candidates)):

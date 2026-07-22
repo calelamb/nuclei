@@ -1,9 +1,8 @@
-"""Crash-safe Parquet storage for canonical QEC syndrome sessions."""
+"""Crash-safe Parquet storage for canonical typed QEC sessions."""
 
 from __future__ import annotations
 
 import json
-import re
 import shutil
 import uuid
 from collections.abc import Iterable, Mapping
@@ -11,14 +10,13 @@ from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any
 
+from .adapters.base import ImportChunk, SourceSpan
 from .hashing import (
     DatasetSemanticIdentity,
     dataset_id,
-    is_sha256,
-    require_exact_keys,
 )
 from .model_codecs import loads_canonical_json, session_from_mapping, session_to_mapping
-from .models import SessionRecord, SyndromeBatch
+from .models import CalibrationBatch, CampaignPointBatch, SessionRecord, SyndromeBatch
 from .storage_durability import DurableMover
 from .storage_locking import session_lock as _session_lock
 from .storage_metadata import publish_json
@@ -31,12 +29,26 @@ from .storage_parquet import (
     validate_batch_padding,
     write_pending,
 )
+from .storage_lineage import (
+    SegmentKey,
+    payload_kind,
+    source_spans_from_value,
+)
+from .storage_journal import (
+    JOURNAL_SCHEMA,
+    empty_journal as _empty_journal,
+    journal_segments as _journal_segments,
+    ranges_overlap as _ranges_overlap,
+    segment_mapping as _segment_mapping,
+    validate_identifier as _validate_identifier,
+    validate_journal as _validate_journal,
+)
+from .storage_typed_parquet import typed_profile, typed_schema_fingerprint
 from .storage_paths import (
     assert_session_root,
     require_storage_root,
     safe_session_file,
     secure_directory,
-    validate_relative_path,
     walk_storage_files,
 )
 from .storage_recovery import (
@@ -48,23 +60,6 @@ from .storage_recovery import (
 )
 
 
-JOURNAL_SCHEMA = "qec-storage-journal/1"
-IDENTIFIER = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,127}\Z")
-JOURNAL_KEYS = frozenset(
-    {
-        "journal_schema",
-        "session_id",
-        "generation",
-        "last_committed_sequence",
-        "segments",
-    }
-)
-SEGMENT_KEYS = frozenset(
-    {"segment_id", "dataset_id", "record_kind", "schema_fingerprint", "partitions"}
-)
-PARTITION_KEYS = frozenset({"path", "sha256", "rows", "sequence_start", "sequence_end"})
-
-
 @dataclass(frozen=True, slots=True)
 class PartitionRef:
     path: Path
@@ -72,12 +67,16 @@ class PartitionRef:
     rows: int
     sequence_start: int
     sequence_end: int
+    record_kind: str = RECORD_KIND
+    segment_id: str = ""
+    source_spans: tuple[SourceSpan, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
 class SequenceGap:
     start: int
     end: int
+    record_kind: str = RECORD_KIND
 
 
 @dataclass(frozen=True, slots=True)
@@ -99,141 +98,6 @@ class VerificationReport:
     missing_committed: tuple[RecoveryIssue, ...] = ()
     corrupt_committed: tuple[RecoveryIssue, ...] = ()
     fatal_error: str | None = None
-
-
-def _validate_identifier(value: str) -> str:
-    if not isinstance(value, str) or not IDENTIFIER.fullmatch(value):
-        raise ValueError("storage identifier is invalid")
-    if value in {".", ".."} or "\\" in value:
-        raise ValueError("storage identifier is invalid")
-    return value
-
-
-def _partition_mapping(ref: PendingPartition) -> dict[str, object]:
-    return {
-        "path": ref.path.as_posix(),
-        "sha256": ref.sha256,
-        "rows": ref.rows,
-        "sequence_start": ref.sequence_start,
-        "sequence_end": ref.sequence_end,
-    }
-
-
-def _segment_mapping(refs: tuple[PendingPartition, ...]) -> dict[str, object]:
-    first = refs[0]
-    return {
-        "segment_id": first.segment_id,
-        "dataset_id": first.dataset_id,
-        "record_kind": RECORD_KIND,
-        "schema_fingerprint": first.schema_fingerprint,
-        "partitions": [_partition_mapping(ref) for ref in refs],
-    }
-
-
-def _empty_journal(session_id: str) -> dict[str, object]:
-    return {
-        "journal_schema": JOURNAL_SCHEMA,
-        "session_id": session_id,
-        "generation": 0,
-        "last_committed_sequence": None,
-        "segments": [],
-    }
-
-
-def _journal_segments(journal: Mapping[str, object]) -> list[dict[str, Any]]:
-    segments = journal.get("segments")
-    if not isinstance(segments, list) or not all(
-        isinstance(item, dict) for item in segments
-    ):
-        raise ValueError("journal segments are invalid")
-    return segments
-
-
-def _validate_digest(value: object, name: str) -> str:
-    if not is_sha256(value):
-        raise ValueError(f"journal {name} is invalid")
-    return str(value)
-
-
-def _validate_journal(journal: object, session_id: str) -> dict[str, Any]:
-    if not isinstance(journal, dict):
-        raise ValueError("journal must be an object")
-    require_exact_keys(journal, JOURNAL_KEYS, "journal")
-    if (
-        journal.get("journal_schema") != JOURNAL_SCHEMA
-        or journal.get("session_id") != session_id
-    ):
-        raise ValueError("journal identity is invalid")
-    generation = journal.get("generation")
-    if (
-        not isinstance(generation, int)
-        or isinstance(generation, bool)
-        or generation < 0
-    ):
-        raise ValueError("journal generation is invalid")
-    segments = _journal_segments(journal)
-    for segment in segments:
-        require_exact_keys(segment, SEGMENT_KEYS, "journal segment")
-        _validate_identifier(segment.get("segment_id"))
-        _validate_digest(segment.get("dataset_id"), "dataset ID")
-        _validate_digest(segment.get("schema_fingerprint"), "schema fingerprint")
-        if segment.get("record_kind") != RECORD_KIND:
-            raise ValueError("journal record kind is invalid")
-        partitions = segment.get("partitions")
-        if not isinstance(partitions, list):
-            raise ValueError("journal partitions are invalid")
-        for partition in partitions:
-            _validate_partition_mapping(partition)
-    _validate_journal_uniqueness(segments, journal.get("last_committed_sequence"))
-    return journal
-
-
-def _validate_journal_uniqueness(
-    segments: list[dict[str, Any]], last_sequence: object
-) -> None:
-    segment_ids = [segment["segment_id"] for segment in segments]
-    paths = [item["path"] for segment in segments for item in segment["partitions"]]
-    ranges = [
-        (item["sequence_start"], item["sequence_end"])
-        for segment in segments
-        for item in segment["partitions"]
-    ]
-    if len(segment_ids) != len(set(segment_ids)):
-        raise ValueError("journal has duplicate segment IDs")
-    if len(paths) != len(set(paths)):
-        raise ValueError("journal has duplicate partition paths")
-    ordered = sorted(ranges)
-    if any(right[0] < left[1] for left, right in zip(ordered, ordered[1:])):
-        raise ValueError("journal partition ranges overlap")
-    expected_last = max((end for _, end in ranges), default=None)
-    expected_last = None if expected_last is None else expected_last - 1
-    if last_sequence != expected_last:
-        raise ValueError("journal last committed sequence is inconsistent")
-
-
-def _validate_partition_mapping(value: object) -> None:
-    if not isinstance(value, dict):
-        raise ValueError("journal partition is invalid")
-    require_exact_keys(value, PARTITION_KEYS, "journal partition")
-    validate_relative_path(value.get("path"))
-    _validate_digest(value.get("sha256"), "partition hash")
-    numbers = tuple(
-        value.get(name) for name in ("rows", "sequence_start", "sequence_end")
-    )
-    if any(not isinstance(item, int) or isinstance(item, bool) for item in numbers):
-        raise ValueError("journal partition range is invalid")
-    rows, start, end = numbers
-    if rows < 1 or start < 0 or end - start != rows:
-        raise ValueError("journal partition range is invalid")
-
-
-def _ranges_overlap(
-    left: PendingPartition | PartitionRef, right: PendingPartition | PartitionRef
-) -> bool:
-    return (
-        left.sequence_start < right.sequence_end
-        and right.sequence_start < left.sequence_end
-    )
 
 
 class SessionStorage:
@@ -310,9 +174,13 @@ class SessionStorage:
                 directory.mkdir()
             normalized = temporary / "normalized"
             normalized.mkdir()
-            syndromes = normalized / RECORD_KIND
-            syndromes.mkdir()
-            for directory in (*leaf_directories, normalized, syndromes):
+            kind_directories = tuple(
+                normalized / kind
+                for kind in ("syndromes", "campaign_points", "calibrations")
+            )
+            for directory in kind_directories:
+                directory.mkdir()
+            for directory in (*leaf_directories, normalized, *kind_directories):
                 mover.sync_directory(directory)
             publish_json(
                 temporary / "manifest.json",
@@ -386,7 +254,9 @@ class SessionStorage:
         return journal
 
     def _semantic_dataset_id(
-        self, batch: SyndromeBatch, profile: Mapping[str, object]
+        self,
+        batch: SyndromeBatch | CampaignPointBatch | CalibrationBatch,
+        profile: Mapping[str, object],
     ) -> str:
         parameters = {
             "segment_id": batch.segment_id,
@@ -397,42 +267,82 @@ class SessionStorage:
         return dataset_id(
             schema_version=batch.schema_version,
             parent_dataset_ids=(),
-            recipe_id="canonical-syndrome-import",
+            recipe_id={
+                "syndromes": "canonical-syndrome-import",
+                "campaign_points": "canonical-campaign-points-import",
+                "calibrations": "canonical-calibration-import",
+            }[payload_kind(batch)],
             recipe_version="1",
             parameters=parameters,
         )
 
     def append_batch(self, batch: SyndromeBatch) -> Path:
+        if type(batch) is not SyndromeBatch:
+            raise TypeError("append_batch accepts SyndromeBatch only")
+        return self._append_payload(batch, ())
+
+    def append_chunk(self, chunk: ImportChunk) -> Path:
+        if type(chunk) is not ImportChunk:
+            raise TypeError("chunk must be ImportChunk")
+        return self._append_payload(chunk.payload, chunk.source_spans)
+
+    def _append_payload(
+        self,
+        batch: SyndromeBatch | CampaignPointBatch | CalibrationBatch,
+        source_spans: tuple[SourceSpan, ...],
+    ) -> Path:
         if batch.session_id != self._session.session_id:
             raise ValueError("batch session does not match storage session")
         if batch.provenance_id != self._session.provenance_id:
             raise ValueError("batch provenance does not match storage session")
         segment_id = _validate_identifier(batch.segment_id)
-        validate_batch_padding(batch)
-        profile = packed_profile(batch)
-        fingerprint = schema_fingerprint(profile)
+        kind = payload_kind(batch)
+        if type(batch) is SyndromeBatch:
+            validate_batch_padding(batch)
+            profile: Mapping[str, object] = packed_profile(batch)
+            fingerprint = schema_fingerprint(dict(profile))
+        else:
+            profile = {"record_kind": kind, "profile": typed_profile(kind)}
+            fingerprint = typed_schema_fingerprint(kind)
         identity = self._semantic_dataset_id(batch, profile)
         with self._lock:
             journal = self._load_journal()
-            self._check_append(journal, batch, fingerprint)
+            self._check_append(journal, batch, fingerprint, kind)
             directory = secure_directory(
                 self._session_root,
-                f"normalized/{RECORD_KIND}/{segment_id}",
+                f"normalized/{kind}/{segment_id}",
                 create=True,
             )
             self._mover.sync_directory(directory)
             self._mover.sync_directory(directory.parent)
             name = f"part-{batch.sequence_start:020d}-{batch.sequence_end - 1:020d}.parquet.pending"
             pending = directory / name
-            write_pending(pending, batch, fingerprint, identity, self._mover)
+            write_pending(
+                pending,
+                batch,
+                fingerprint,
+                identity,
+                self._mover,
+                source_spans,
+            )
             return pending
 
     def _check_append(
-        self, journal: Mapping[str, object], batch: SyndromeBatch, fingerprint: str
+        self,
+        journal: Mapping[str, object],
+        batch: SyndromeBatch | CampaignPointBatch | CalibrationBatch,
+        fingerprint: str,
+        record_kind: str,
     ) -> None:
         committed = self._journal_refs(journal)
         candidate = PartitionRef(
-            Path(), "", batch.record_count, batch.sequence_start, batch.sequence_end
+            Path(),
+            "",
+            batch.record_count,
+            batch.sequence_start,
+            batch.sequence_end,
+            record_kind,
+            batch.segment_id,
         )
         if any(_ranges_overlap(candidate, ref) for ref in committed):
             raise ValueError("batch sequence range overlaps committed data")
@@ -440,21 +350,11 @@ class SessionStorage:
             item
             for item in _journal_segments(journal)
             if item["segment_id"] == batch.segment_id
+            and item["record_kind"] == record_kind
         ]
         if segments and segments[0]["schema_fingerprint"] != fingerprint:
             raise ValueError("schema transition requires a new segment")
-        parent = secure_directory(self._session_root, f"normalized/{RECORD_KIND}")
-        segment_path = parent / batch.segment_id
-        paths = ()
-        if segment_path.is_symlink():
-            raise ValueError("storage directory is a symlink")
-        if segment_path.exists():
-            paths = walk_storage_files(
-                self._session_root,
-                f"normalized/{RECORD_KIND}/{batch.segment_id}",
-                ".pending",
-            )
-        for path in paths:
+        for path in self._pending_paths(record_kind, batch.segment_id):
             existing = inspect_partition(path)
             if existing.schema_fingerprint != fingerprint:
                 raise ValueError("schema transition requires a new segment")
@@ -468,6 +368,21 @@ class SessionStorage:
                     )
                 raise ValueError("batch sequence range overlaps pending data")
 
+    def _pending_paths(self, record_kind: str, segment_id: str) -> tuple[Path, ...]:
+        parent = secure_directory(
+            self._session_root, f"normalized/{record_kind}", create=True
+        )
+        segment_path = parent / segment_id
+        if segment_path.is_symlink():
+            raise ValueError("storage directory is a symlink")
+        if not segment_path.exists():
+            return ()
+        return walk_storage_files(
+            self._session_root,
+            f"normalized/{record_kind}/{segment_id}",
+            ".pending",
+        )
+
     def _journal_refs(self, journal: Mapping[str, object]) -> tuple[PartitionRef, ...]:
         refs: list[PartitionRef] = []
         for segment in _journal_segments(journal):
@@ -479,54 +394,89 @@ class SessionStorage:
                         item["rows"],
                         item["sequence_start"],
                         item["sequence_end"],
+                        segment["record_kind"],
+                        segment["segment_id"],
+                        source_spans_from_value(item.get("source_spans", [])),
                     )
                 )
         return tuple(
-            sorted(refs, key=lambda ref: (ref.sequence_start, ref.sequence_end))
+            sorted(
+                refs,
+                key=lambda ref: (
+                    ref.record_kind,
+                    ref.sequence_start,
+                    ref.sequence_end,
+                ),
+            )
         )
 
     def list_committed_partitions(self) -> tuple[PartitionRef, ...]:
         with self._lock:
             return self._journal_refs(self._load_journal())
 
-    def commit_segment(self, segment_id: str) -> tuple[PartitionRef, ...]:
-        identifier = _validate_identifier(segment_id)
+    def commit_segment(
+        self, segment_id: str, *, record_kind: str = RECORD_KIND
+    ) -> tuple[PartitionRef, ...]:
+        key = SegmentKey(record_kind, _validate_identifier(segment_id))
+        self.commit_segments((key,))
+        with self._lock:
+            return self._segment_refs(self._load_journal(), key)
+
+    def commit_segments(self, keys: Iterable[SegmentKey]) -> tuple[PartitionRef, ...]:
+        requested = tuple(keys)
+        if not requested or any(type(key) is not SegmentKey for key in requested):
+            raise ValueError("commit segment keys must be a nonempty SegmentKey tuple")
+        if len(requested) != len(set(requested)):
+            raise ValueError("commit segment keys must be unique")
         with self._lock:
             journal = self._load_journal()
             if journal["generation"] != self._expected_generation:
                 raise RuntimeError("journal generation changed; reopen the session")
-            existing = self._segment_refs(journal, identifier)
-            parent = secure_directory(self._session_root, f"normalized/{RECORD_KIND}")
-            segment_path = parent / identifier
-            if segment_path.is_symlink():
-                raise ValueError("storage directory is a symlink")
-            paths = (
-                walk_storage_files(
-                    self._session_root,
-                    f"normalized/{RECORD_KIND}/{identifier}",
-                    ".pending",
+            groups = tuple((key, self._pending_for_key(key)) for key in requested)
+            changed = tuple((key, refs) for key, refs in groups if refs)
+            if not changed:
+                return tuple(
+                    ref for key in requested for ref in self._segment_refs(journal, key)
                 )
-                if segment_path.exists()
-                else ()
-            )
-            pending = tuple(inspect_partition(path) for path in paths)
-            if not pending:
-                return existing
-            self._validate_commit(journal, identifier, pending)
-            final_refs = self._rename_pending(pending)
-            next_journal = self._next_journal(journal, identifier, final_refs)
+            validating: tuple[PendingPartition, ...] = ()
+            for key, refs in changed:
+                self._validate_commit(journal, key, refs, validating)
+                validating += refs
+            renamed = tuple((key, self._rename_pending(refs)) for key, refs in changed)
+            next_journal = self._next_journal(journal, renamed)
             self._replace_journal(next_journal)
             self._expected_generation = next_journal["generation"]
-            return self._segment_refs(next_journal, identifier)
+            return tuple(
+                ref
+                for key in requested
+                for ref in self._segment_refs(next_journal, key)
+            )
+
+    def _pending_for_key(self, key: SegmentKey) -> tuple[PendingPartition, ...]:
+        parent = secure_directory(
+            self._session_root, f"normalized/{key.record_kind}", create=True
+        )
+        segment_path = parent / key.segment_id
+        if segment_path.is_symlink():
+            raise ValueError("storage directory is a symlink")
+        if not segment_path.exists():
+            return ()
+        paths = walk_storage_files(
+            self._session_root,
+            f"normalized/{key.record_kind}/{key.segment_id}",
+            ".pending",
+        )
+        return tuple(inspect_partition(path) for path in paths)
 
     def _segment_refs(
-        self, journal: Mapping[str, object], segment_id: str
+        self, journal: Mapping[str, object], key: SegmentKey
     ) -> tuple[PartitionRef, ...]:
         all_refs = self._journal_refs(journal)
         paths = {
             item["path"]
             for segment in _journal_segments(journal)
-            if segment["segment_id"] == segment_id
+            if segment["segment_id"] == key.segment_id
+            and segment["record_kind"] == key.record_kind
             for item in segment["partitions"]
         }
         return tuple(
@@ -538,16 +488,21 @@ class SessionStorage:
     def _validate_commit(
         self,
         journal: Mapping[str, object],
-        segment_id: str,
+        key: SegmentKey,
         refs: tuple[PendingPartition, ...],
+        additional: tuple[PendingPartition, ...] = (),
     ) -> None:
-        if any(ref.segment_id != segment_id for ref in refs):
+        if any(
+            (ref.record_kind, ref.segment_id) != (key.record_kind, key.segment_id)
+            for ref in refs
+        ):
             raise ValueError("pending partition segment metadata is inconsistent")
         schemas = {(ref.schema_fingerprint, ref.dataset_id) for ref in refs}
         existing_segments = [
             item
             for item in _journal_segments(journal)
-            if item["segment_id"] == segment_id
+            if item["segment_id"] == key.segment_id
+            and item["record_kind"] == key.record_kind
         ]
         if existing_segments:
             expected = (
@@ -559,7 +514,10 @@ class SessionStorage:
             raise ValueError("schema transition requires a new segment")
         committed = self._journal_refs(journal)
         for index, ref in enumerate(refs):
-            if any(_ranges_overlap(ref, item) for item in committed + refs[:index]):
+            if any(
+                _ranges_overlap(ref, item)
+                for item in committed + additional + refs[:index]
+            ):
                 raise ValueError(
                     "pending partition sequence range overlaps existing data"
                 )
@@ -592,6 +550,8 @@ class SessionStorage:
                     ref.dataset_id,
                     ref.schema_fingerprint,
                     True,
+                    record_kind=ref.record_kind,
+                    source_spans=ref.source_spans,
                 )
             )
         return tuple(renamed)
@@ -599,24 +559,19 @@ class SessionStorage:
     def _next_journal(
         self,
         journal: Mapping[str, object],
-        segment_id: str,
-        refs: tuple[PendingPartition, ...],
+        groups: tuple[tuple[SegmentKey, tuple[PendingPartition, ...]], ...],
     ) -> dict[str, object]:
+        keys = frozenset(key for key, _ in groups)
         other = [
             item
             for item in _journal_segments(journal)
-            if item["segment_id"] != segment_id
+            if SegmentKey(item["record_kind"], item["segment_id"]) not in keys
         ]
-        current = [
-            item
-            for item in _journal_segments(journal)
-            if item["segment_id"] == segment_id
-        ]
-        prior_refs = self._relative_pending_refs(current)
-        segment = _segment_mapping(
-            tuple(sorted(prior_refs + refs, key=lambda item: item.sequence_start))
+        changed = [self._updated_segment(journal, key, refs) for key, refs in groups]
+        segments = sorted(
+            other + changed,
+            key=lambda item: (item["record_kind"], item["segment_id"]),
         )
-        segments = sorted(other + [segment], key=lambda item: item["segment_id"])
         ends = [
             item["sequence_end"]
             for journal_segment in segments
@@ -629,6 +584,23 @@ class SessionStorage:
             "last_committed_sequence": max(ends) - 1,
             "segments": segments,
         }
+
+    def _updated_segment(
+        self,
+        journal: Mapping[str, object],
+        key: SegmentKey,
+        refs: tuple[PendingPartition, ...],
+    ) -> dict[str, object]:
+        current = [
+            item
+            for item in _journal_segments(journal)
+            if item["segment_id"] == key.segment_id
+            and item["record_kind"] == key.record_kind
+        ]
+        prior = self._relative_pending_refs(current)
+        return _segment_mapping(
+            tuple(sorted(prior + refs, key=lambda item: item.sequence_start))
+        )
 
     def _relative_pending_refs(
         self, segments: list[dict[str, Any]]
@@ -647,6 +619,10 @@ class SessionStorage:
                         segment["dataset_id"],
                         segment["schema_fingerprint"],
                         True,
+                        record_kind=segment["record_kind"],
+                        source_spans=source_spans_from_value(
+                            item.get("source_spans", [])
+                        ),
                     )
                 )
         return tuple(refs)
@@ -780,9 +756,16 @@ class SessionStorage:
 
 def _sequence_gaps(refs: tuple[PartitionRef, ...]) -> tuple[SequenceGap, ...]:
     gaps: list[SequenceGap] = []
-    cursor: int | None = None
-    for ref in refs:
-        if cursor is not None and ref.sequence_start > cursor:
-            gaps.append(SequenceGap(cursor, ref.sequence_start))
-        cursor = ref.sequence_end if cursor is None else max(cursor, ref.sequence_end)
+    for kind in sorted({ref.record_kind for ref in refs}):
+        cursor: int | None = None
+        typed = sorted(
+            (ref for ref in refs if ref.record_kind == kind),
+            key=lambda ref: ref.sequence_start,
+        )
+        for ref in typed:
+            if cursor is not None and ref.sequence_start > cursor:
+                gaps.append(SequenceGap(cursor, ref.sequence_start, kind))
+            cursor = (
+                ref.sequence_end if cursor is None else max(cursor, ref.sequence_end)
+            )
     return tuple(gaps)

@@ -17,6 +17,9 @@ from .hashing import DatasetSemanticIdentity, canonical_json_bytes, is_sha256
 from .model_codecs import loads_canonical_json, session_from_mapping
 from .models import SCHEMA_VERSION
 from .storage import SessionStorage
+from .storage_lineage import SYNDROMES
+from .storage_parquet import inspect_partition
+from .storage_typed_parquet import typed_profile
 from .storage_paths import safe_session_file, secure_directory
 
 
@@ -120,7 +123,7 @@ class _Snapshot:
 @dataclass(frozen=True, slots=True)
 class _SyndromeSchema:
     profile: str
-    detector_count: int
+    detector_count: int | None
     observable_count: int | None
     measurement_count: int | None
 
@@ -289,7 +292,14 @@ def _packed_width(schema: pa.Schema, name: str) -> int:
     return width
 
 
-def _schema_contract(path: Path, identity: DatasetSemanticIdentity) -> _SyndromeSchema:
+def _schema_contract(
+    path: Path, identity: DatasetSemanticIdentity, record_kind: str
+) -> _SyndromeSchema:
+    if record_kind != SYNDROMES:
+        inspected = inspect_partition(path, is_final=True)
+        if inspected.record_kind != record_kind:
+            raise ValueError("Parquet record kind differs from journal")
+        return _SyndromeSchema(typed_profile(record_kind), None, None, None)
     try:
         schema = pq.read_schema(path)
     except (OSError, pa.ArrowException) as error:
@@ -369,7 +379,9 @@ def _segment_dataset(
     paths, rows = _partition_rows(
         session_root, str(dataset_id), str(segment_id), raw_partitions
     )
-    schemas = tuple(_schema_contract(path, identity) for path in paths)
+    schemas = tuple(
+        _schema_contract(path, identity, str(record_kind)) for path in paths
+    )
     if any(schema != schemas[0] for schema in schemas[1:]):
         raise ValueError("catalog partitions have inconsistent schema profiles")
     schema = schemas[0]
