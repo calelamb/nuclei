@@ -43,6 +43,8 @@ keyring = { version = "3", features = ["apple-native", "windows-native", "sync-s
 # real digest is used instead of a hand-rolled one.
 sha2 = "0.10"
 hex = "0.4"
+# Per-process 256-bit QEC Data Engine authentication tokens from the OS RNG.
+getrandom = "0.2"
 # Capability-scoped project filesystem access for atomic, symlink-safe QEC
 # Study manifest creation on macOS, Linux, and Windows.
 cap-std = "3.4.5"

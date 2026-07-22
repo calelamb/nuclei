@@ -1,0 +1,786 @@
+"""Authenticated localhost WebSocket server for canonical QEC data."""
+
+from __future__ import annotations
+
+import argparse
+import asyncio
+import errno
+import heapq
+import os
+import shutil
+import stat
+import sys
+import uuid
+from collections.abc import Iterator, Mapping
+from dataclasses import dataclass, replace
+from pathlib import Path, PurePosixPath
+from typing import Any
+
+from websockets.exceptions import ConnectionClosed, PayloadTooBig
+from websockets.legacy.server import WebSocketServer, WebSocketServerProtocol, serve
+
+from .adapters.base import ImportChunk, ImportMapping
+from .adapters.registry import AdapterRegistry, core_offline_registry
+from .catalog import QecCatalog
+from .hashing import DatasetSemanticIdentity
+from .jobs import JobRegistry
+from .model_codecs import (
+    loads_canonical_json,
+    session_from_mapping,
+    session_to_mapping,
+)
+from .model_validation import SessionKind, SessionStatus, utc_now
+from .models import QualifiedText, ValueStatus
+from .protocol import (
+    MAX_FRAME_BYTES,
+    ClientRequest,
+    MessageType,
+    OutboundFrameTooLarge,
+    ProtocolError,
+    encode_frame,
+    error_frame,
+    parse_authentication,
+    parse_request,
+    query_requires_refinement_frame,
+)
+from .queries import (
+    CancellationToken,
+    QecQueryEngine,
+    QueryCancelled,
+    QueryError,
+)
+from .storage import SessionStorage
+from .storage_durability import DurableMover
+from .storage_lineage import SegmentKey, payload_kind
+from .storage_metadata import publish_json
+from .tiles import QueryRequiresRefinement
+
+
+HOST = "127.0.0.1"
+PORT = 9743
+AUTHENTICATION_TIMEOUT_SECONDS = 2.0
+MAX_JOBS_PER_CONNECTION = 8
+TOKEN_ENVIRONMENT_VARIABLE = "NUCLEI_QEC_DATA_TOKEN"
+PROJECT_ENVIRONMENT_VARIABLE = "NUCLEI_QEC_DATA_PROJECT_ROOT"
+
+
+class PortInUseError(RuntimeError):
+    """The fixed data-engine endpoint is already owned by another process."""
+
+
+@dataclass(frozen=True, slots=True)
+class _ImportWriteSummary:
+    segment_keys: tuple[SegmentKey, ...]
+    records_written: int
+
+
+class _Connection:
+    def __init__(self, websocket: WebSocketServerProtocol) -> None:
+        self.owner = uuid.uuid4().hex
+        self.websocket = websocket
+        self.send_lock = asyncio.Lock()
+
+    async def send(self, value: Mapping[str, object] | str) -> None:
+        frame = value if type(value) is str else encode_frame(value)
+        async with self.send_lock:
+            await self.websocket.send(frame)
+
+
+class QecDataServer:
+    def __init__(
+        self,
+        project_root: Path,
+        token: str,
+        *,
+        host: str = HOST,
+        port: int = PORT,
+        authentication_timeout: float = AUTHENTICATION_TIMEOUT_SECONDS,
+        registry: AdapterRegistry | None = None,
+    ) -> None:
+        root = Path(project_root).resolve(strict=True)
+        if not root.is_dir():
+            raise ValueError("project root must be a directory")
+        if type(token) is not str or not token or len(token) > 1_024:
+            raise ValueError("authentication token is invalid")
+        if host != HOST:
+            raise ValueError("QEC Data Engine must bind to 127.0.0.1")
+        if type(port) is not int or not 0 <= port <= 65_535:
+            raise ValueError("server port is invalid")
+        if authentication_timeout <= 0:
+            raise ValueError("authentication timeout must be positive")
+        self._project_root = root
+        self._token = token
+        self._host = host
+        self._port = port
+        self._authentication_timeout = authentication_timeout
+        self._registry = registry or core_offline_registry()
+        self._jobs = JobRegistry(max_jobs_per_owner=MAX_JOBS_PER_CONNECTION)
+        self._server: WebSocketServer | None = None
+
+    @property
+    def url(self) -> str:
+        if self._server is None or not self._server.sockets:
+            raise RuntimeError("QEC Data Engine is not running")
+        port = self._server.sockets[0].getsockname()[1]
+        return f"ws://{self._host}:{port}"
+
+    async def start(self) -> None:
+        if self._server is not None:
+            return
+        _secure_canonical_directory(self._project_root, ("qec-data",))
+        try:
+            self._server = await serve(
+                self._handle_connection,
+                self._host,
+                self._port,
+                compression=None,
+                max_size=MAX_FRAME_BYTES,
+                max_queue=16,
+                server_header=None,
+            )
+        except OSError as error:
+            if error.errno in {errno.EADDRINUSE, 48, 98, 10048}:
+                raise PortInUseError("port_in_use") from error
+            raise
+
+    async def stop(self) -> None:
+        server, self._server = self._server, None
+        if server is not None:
+            server.close()
+            await server.wait_closed()
+
+    async def serve_forever(self) -> None:
+        if self._server is None:
+            raise RuntimeError("QEC Data Engine is not running")
+        await self._server.serve_forever()
+
+    async def _handle_connection(
+        self, websocket: WebSocketServerProtocol, _path: str | None = None
+    ) -> None:
+        connection = _Connection(websocket)
+        if not await self._authenticate(connection):
+            return
+        try:
+            async for frame in websocket:
+                await self._handle_frame(connection, frame)
+        except (ConnectionClosed, PayloadTooBig):
+            pass
+        finally:
+            self._jobs.cancel_owner(connection.owner)
+            await self._jobs.wait_owner(connection.owner)
+
+    async def _authenticate(self, connection: _Connection) -> bool:
+        try:
+            frame = await asyncio.wait_for(
+                connection.websocket.recv(), timeout=self._authentication_timeout
+            )
+            parse_authentication(frame, self._token)
+        except (asyncio.TimeoutError, ConnectionClosed, PayloadTooBig, ProtocolError):
+            await connection.websocket.close(
+                code=4401, reason="authentication required"
+            )
+            return False
+        await connection.send({"type": "authenticated"})
+        return True
+
+    async def _handle_frame(self, connection: _Connection, frame: object) -> None:
+        try:
+            request = parse_request(frame)
+            await self._dispatch(connection, request)
+        except ProtocolError as error:
+            await connection.send(
+                error_frame(error.request_id, error.code, error.message)
+            )
+        except OutboundFrameTooLarge:
+            await connection.send(
+                error_frame(None, "response_too_large", "Response exceeds 1 MiB.")
+            )
+        except Exception:
+            await connection.send(
+                error_frame(None, "internal_error", "QEC Data Engine request failed.")
+            )
+
+    async def _dispatch(self, connection: _Connection, request: ClientRequest) -> None:
+        handlers = {
+            MessageType.IMPORT_PROBE: self._import_probe,
+            MessageType.IMPORT_VALIDATE: self._import_validate,
+            MessageType.IMPORT_PREVIEW: self._import_preview,
+            MessageType.IMPORT_START: self._import_start,
+            MessageType.JOB_CANCEL: self._job_cancel,
+            MessageType.QUERY_START: self._query_start,
+            MessageType.QUERY_CANCEL: self._query_cancel,
+            MessageType.SESSION_LIST: self._session_list,
+        }
+        await handlers[request.message_type](connection, request)
+
+    async def _import_probe(
+        self, connection: _Connection, request: ClientRequest
+    ) -> None:
+        source = self._authorized_source(request.payload["source"])
+        results: list[dict[str, object]] = []
+        for registration in self._registry.registrations:
+            adapter = self._registry.get(*registration.key)
+            result = await asyncio.to_thread(adapter.probe, source)
+            results.append(
+                {
+                    "adapterId": registration.manifest.id,
+                    "adapterVersion": registration.manifest.version,
+                    "supported": result.supported,
+                    "sourceKind": result.source_kind,
+                    "confidence": result.confidence,
+                    "sourceSha256": result.source_sha256,
+                    "details": dict(result.details),
+                }
+            )
+        await connection.send(
+            {
+                "type": "import_probe_result",
+                "requestId": request.request_id,
+                "results": results,
+                "sourceByteSize": source.stat().st_size,
+                "sourcePolicy": "copy",
+            }
+        )
+
+    async def _import_validate(
+        self, connection: _Connection, request: ClientRequest
+    ) -> None:
+        payload = request.payload
+        source = self._authorized_source(payload["source"])
+        adapter = self._registry.get(str(payload["adapterId"]))
+        mapping = _import_mapping(payload["mapping"])
+        validation = await asyncio.to_thread(adapter.validate, source, mapping)
+        issues = [
+            {
+                "code": issue.code,
+                "message": issue.message,
+                "severity": issue.severity.value,
+                "field": issue.field,
+            }
+            for issue in validation.issues
+        ]
+        await connection.send(
+            {
+                "type": "import_validation_result",
+                "requestId": request.request_id,
+                "valid": validation.valid,
+                "issues": issues,
+                "sourceSha256": validation.source_sha256,
+                "provenanceId": validation.provenance_id,
+                "sourceByteSize": source.stat().st_size,
+                "sourcePolicy": "copy",
+            }
+        )
+
+    async def _import_preview(
+        self, connection: _Connection, request: ClientRequest
+    ) -> None:
+        payload = request.payload
+        source = self._authorized_source(payload["source"])
+        adapter = self._registry.get(str(payload["adapterId"]))
+        mapping = _import_mapping(payload["mapping"])
+        validation = await asyncio.to_thread(adapter.validate, source, mapping)
+        if not validation.valid:
+            raise ProtocolError(
+                "import_validation_failed",
+                "Import mapping must validate before preview.",
+                request.request_id,
+            )
+        result = await asyncio.to_thread(
+            adapter.preview, source, mapping, int(payload["limit"])
+        )
+        batches = [_batch_summary(batch) for batch in result.batches]
+        await connection.send(
+            {
+                "type": "import_preview_result",
+                "requestId": request.request_id,
+                "batches": batches,
+                "truncated": result.truncated,
+                "totalRecords": result.total_records,
+                "sourceSha256": result.source_sha256,
+                "provenanceId": result.provenance_id,
+            }
+        )
+
+    async def _import_start(
+        self, connection: _Connection, request: ClientRequest
+    ) -> None:
+        prepared = await asyncio.to_thread(self._prepare_import, request.payload)
+
+        async def run() -> None:
+            await self._run_import(connection, request.request_id, prepared)
+
+        self._jobs.start(connection.owner, request.request_id, run)
+        await connection.send(
+            {
+                "type": "job_started",
+                "requestId": request.request_id,
+                "jobId": request.request_id,
+                "jobKind": "import",
+                "sourcePolicy": "copy",
+            }
+        )
+
+    async def _job_cancel(
+        self, connection: _Connection, request: ClientRequest
+    ) -> None:
+        job_id = str(request.payload["jobId"])
+        cancelled = self._jobs.cancel(connection.owner, job_id)
+        await connection.send(
+            {
+                "type": "job_cancelled",
+                "requestId": request.request_id,
+                "jobId": job_id,
+                "success": cancelled,
+            }
+        )
+
+    async def _query_start(
+        self, connection: _Connection, request: ClientRequest
+    ) -> None:
+        query = request.payload["query"]
+        if type(query) is not dict or query.get("requestId") != request.request_id:
+            raise ProtocolError(
+                "invalid_request", "Query request IDs must match.", request.request_id
+            )
+        token = CancellationToken()
+
+        async def run() -> None:
+            await self._run_query(connection, request.request_id, query, token)
+
+        self._jobs.start(
+            connection.owner,
+            request.request_id,
+            run,
+            cancel_callback=token.cancel,
+        )
+        await connection.send(
+            {
+                "type": "job_started",
+                "requestId": request.request_id,
+                "jobId": request.request_id,
+                "jobKind": "query",
+            }
+        )
+
+    async def _query_cancel(
+        self, connection: _Connection, request: ClientRequest
+    ) -> None:
+        query_id = str(request.payload["queryRequestId"])
+        cancelled = self._jobs.cancel(connection.owner, query_id)
+        await connection.send(
+            {
+                "type": "query_cancelled",
+                "requestId": request.request_id,
+                "queryRequestId": query_id,
+                "success": cancelled,
+            }
+        )
+
+    async def _session_list(
+        self, connection: _Connection, request: ClientRequest
+    ) -> None:
+        payload = request.payload
+        sessions, next_cursor = await asyncio.to_thread(
+            self._session_page, payload["cursor"], int(payload["limit"])
+        )
+        await connection.send(
+            {
+                "type": "session_list_result",
+                "requestId": request.request_id,
+                "sessions": sessions,
+                "nextCursor": next_cursor,
+            }
+        )
+
+    def _authorized_source(self, raw_source: object) -> Path:
+        if type(raw_source) is not str or "\\" in raw_source:
+            raise ProtocolError(
+                "source_not_authorized", "Source path is not authorized."
+            )
+        relative = PurePosixPath(raw_source)
+        if relative.is_absolute() or any(
+            part in {"", ".", ".."} for part in relative.parts
+        ):
+            raise ProtocolError(
+                "source_not_authorized", "Source path is not authorized."
+            )
+        if relative.parts[0] == "qec-data":
+            raise ProtocolError(
+                "source_not_authorized", "Canonical data cannot be an import source."
+            )
+        candidate = self._project_root.joinpath(*relative.parts)
+        _reject_path_symlinks(self._project_root, candidate)
+        resolved = candidate.resolve(strict=True)
+        if self._project_root not in resolved.parents or not resolved.is_file():
+            raise ProtocolError(
+                "source_not_authorized", "Source path is not authorized."
+            )
+        return resolved
+
+    def _prepare_import(self, payload: Mapping[str, Any]) -> tuple[Any, ...]:
+        source = self._authorized_source(payload["source"])
+        session_id = str(payload["sessionId"])
+        adapter = self._registry.get(str(payload["adapterId"]))
+        mapping = _import_mapping(payload["mapping"], session_id=session_id)
+        validation = adapter.validate(source, mapping)
+        if not validation.valid or validation.source_sha256 is None:
+            raise ProtocolError("import_validation_failed", "Import source is invalid.")
+        copied = _copy_source(self._project_root, source, session_id)
+        provenance_id = validation.provenance_id or validation.source_sha256
+        session = _importing_session(
+            session_id,
+            SessionKind(str(payload["sessionKind"])),
+            adapter.manifest.id,
+            adapter.manifest.version,
+            provenance_id,
+        )
+        identity = _semantic_identity(validation.source_sha256, adapter, mapping)
+        storage = SessionStorage.create(self._sessions_root(), session, identity)
+        return storage, adapter, copied, mapping
+
+    async def _run_import(
+        self,
+        connection: _Connection,
+        request_id: str,
+        prepared: tuple[Any, ...],
+    ) -> None:
+        storage, adapter, source, mapping = prepared
+        try:
+            summary = await _consume_import(
+                storage, adapter.import_batches(source, mapping)
+            )
+            partitions = await asyncio.to_thread(
+                storage.commit_segments, summary.segment_keys
+            )
+            finalize_session_manifest(storage.session_root, SessionStatus.COMPLETE)
+            await connection.send(
+                {
+                    "type": "job_complete",
+                    "requestId": request_id,
+                    "jobId": request_id,
+                    "recordsWritten": summary.records_written,
+                    "partitionsWritten": len(partitions),
+                    "sourcePolicy": "copy",
+                }
+            )
+        except asyncio.CancelledError:
+            finalize_session_manifest(storage.session_root, SessionStatus.PARTIAL)
+            raise
+        except Exception:
+            finalize_session_manifest(storage.session_root, SessionStatus.FAILED)
+            await connection.send(
+                error_frame(request_id, "import_failed", "QEC data import failed.")
+            )
+
+    async def _run_query(
+        self,
+        connection: _Connection,
+        request_id: str,
+        query: Mapping[str, object],
+        token: CancellationToken,
+    ) -> None:
+        try:
+            session_id = str(query.get("sessionId", ""))
+            storage = SessionStorage.open(self._sessions_root(), session_id)
+            catalog = QecCatalog(storage)
+            await asyncio.to_thread(catalog.synchronize)
+            events = await asyncio.to_thread(
+                lambda: tuple(QecQueryEngine(catalog).execute(query, token))
+            )
+            for event in events:
+                await connection.send(event.to_wire())
+        except (QueryRequiresRefinement, OutboundFrameTooLarge):
+            await connection.send(query_requires_refinement_frame(request_id))
+        except QueryCancelled:
+            await connection.send(
+                error_frame(request_id, "query_cancelled", "Query was cancelled.")
+            )
+        except QueryError:
+            await connection.send(
+                error_frame(request_id, "query_failed", "QEC query failed.")
+            )
+        except Exception:
+            await connection.send(
+                error_frame(request_id, "query_failed", "QEC query failed.")
+            )
+
+    def _session_page(
+        self, cursor: object, limit: int
+    ) -> tuple[list[dict[str, object]], str | None]:
+        root = self._sessions_root()
+        root.mkdir(parents=True, exist_ok=True)
+        after = "" if cursor is None else str(cursor)
+        names = heapq.nsmallest(
+            limit + 1,
+            (
+                entry.name
+                for entry in os.scandir(root)
+                if entry.name > after and entry.is_dir(follow_symlinks=False)
+            ),
+        )
+        selected = names[:limit]
+        sessions = [
+            session_to_mapping(SessionStorage.open(root, name)._session)
+            for name in selected
+        ]
+        next_cursor = selected[-1] if len(names) > limit else None
+        return sessions, next_cursor
+
+    def _sessions_root(self) -> Path:
+        return _secure_canonical_directory(self._project_root, ("qec-data", "sessions"))
+
+
+def _reject_path_symlinks(root: Path, candidate: Path) -> None:
+    cursor = root
+    for part in candidate.relative_to(root).parts:
+        cursor = cursor / part
+        try:
+            mode = cursor.lstat().st_mode
+        except OSError as error:
+            raise ProtocolError(
+                "source_not_authorized", "Source path is unavailable."
+            ) from error
+        if stat.S_ISLNK(mode):
+            raise ProtocolError(
+                "source_not_authorized", "Source path contains a symlink."
+            )
+
+
+def _import_mapping(value: object, *, session_id: str | None = None) -> ImportMapping:
+    if type(value) is not dict:
+        raise ProtocolError("invalid_request", "Import mapping must be an object.")
+    allowed = frozenset({"fields", "options", "expectedProvenanceId"})
+    if not frozenset(value) <= allowed:
+        raise ProtocolError("invalid_request", "Import mapping fields are invalid.")
+    fields = value.get("fields", {})
+    options = value.get("options", {})
+    if type(fields) is not dict or type(options) is not dict:
+        raise ProtocolError(
+            "invalid_request", "Import mapping entries must be objects."
+        )
+    if not all(type(key) is str and type(item) is str for key, item in fields.items()):
+        raise ProtocolError("invalid_request", "Import field mapping is invalid.")
+    frozen_options = {key: _freeze_scalar(item) for key, item in options.items()}
+    if session_id is not None:
+        frozen_options = {
+            **frozen_options,
+            "session_id": session_id,
+            "segment_id": "segment-0001",
+        }
+    expected = value.get("expectedProvenanceId")
+    return ImportMapping(
+        fields=tuple(sorted(fields.items())),
+        options=tuple(sorted(frozen_options.items())),
+        expected_provenance_id=expected,
+    )
+
+
+def _freeze_scalar(value: object) -> Any:
+    if type(value) is list:
+        return tuple(_freeze_scalar(item) for item in value)
+    if value is None or type(value) in {str, bool, int, float}:
+        return value
+    raise ProtocolError("invalid_request", "Import option is not scalar JSON.")
+
+
+def _batch_summary(batch: Any) -> dict[str, object]:
+    payload = batch.payload if type(batch) is ImportChunk else batch
+    return {
+        "recordKind": payload.record_kind,
+        "recordCount": payload.record_count,
+        "sequenceStart": payload.sequence_start,
+        "sequenceEnd": payload.sequence_end,
+        "segmentId": payload.segment_id,
+    }
+
+
+def _copy_source(project_root: Path, source: Path, session_id: str) -> Path:
+    if PurePosixPath(session_id).name != session_id or session_id in {".", ".."}:
+        raise ProtocolError("invalid_request", "Session ID is invalid.")
+    sources_root = _secure_canonical_directory(project_root, ("qec-data", "sources"))
+    destination_root = sources_root / session_id
+    destination_root.mkdir(exist_ok=False)
+    destination = destination_root / source.name
+    flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0)
+    descriptor = os.open(source, flags)
+    try:
+        if not stat.S_ISREG(os.fstat(descriptor).st_mode):
+            raise ProtocolError(
+                "source_not_authorized", "Source must be a regular file."
+            )
+        with os.fdopen(descriptor, "rb", closefd=False) as input_stream:
+            with destination.open("xb") as output_stream:
+                shutil.copyfileobj(input_stream, output_stream, length=1024 * 1024)
+    finally:
+        os.close(descriptor)
+    return destination.resolve(strict=True)
+
+
+def _secure_canonical_directory(root: Path, parts: tuple[str, ...]) -> Path:
+    cursor = root
+    for part in parts:
+        cursor = cursor / part
+        if cursor.is_symlink():
+            raise ValueError("canonical QEC data directory cannot be a symlink")
+        cursor.mkdir(exist_ok=True)
+        if not cursor.is_dir():
+            raise ValueError("canonical QEC data path must be a directory")
+    resolved = cursor.resolve(strict=True)
+    if root not in resolved.parents:
+        raise ValueError("canonical QEC data directory escapes the project")
+    return resolved
+
+
+def _importing_session(
+    session_id: str,
+    kind: SessionKind,
+    adapter_id: str,
+    adapter_version: str,
+    provenance_id: str,
+):
+    from .models import SessionRecord
+
+    created = SessionRecord.minimal(
+        session_id, kind, adapter_id, adapter_version, provenance_id
+    )
+    return replace(
+        created,
+        status=SessionStatus.IMPORTING,
+        started_at=QualifiedText(utc_now(), ValueStatus.MEASURED),
+    )
+
+
+def _semantic_identity(
+    source_hash: str, adapter: Any, mapping: ImportMapping
+) -> DatasetSemanticIdentity:
+    options = dict(mapping.options)
+    fields = mapping.fields
+    if not fields:
+        output = adapter.manifest.output_kinds[0]
+        fields = (
+            (("shots", "shots"),)
+            if output == "campaign_points"
+            else (("detectors", "detector_events"),)
+        )
+    bit_widths = tuple(
+        (name, int(options[key]))
+        for name, key in (
+            ("detectors", "detector_count"),
+            ("observables", "observable_count"),
+        )
+        if type(options.get(key)) is int and int(options[key]) > 0
+    )
+    if not bit_widths and any(name == "detectors" for name, _ in fields):
+        raise ProtocolError(
+            "invalid_request", "Detector width is required for import identity."
+        )
+    units = (
+        (("timestamp", str(options["timestamp_unit"])),)
+        if options.get("timestamp_unit")
+        else ()
+    )
+    if not units and bit_widths:
+        units = (("round", "index"),)
+    return DatasetSemanticIdentity(
+        source_sha256=(source_hash,),
+        adapter_id=adapter.manifest.id,
+        adapter_version=adapter.manifest.version,
+        mapping=fields,
+        bit_widths=bit_widths,
+        units=units,
+        time_domain="timestamp" if options.get("timestamp_unit") else "custom",
+    )
+
+
+async def _consume_import(
+    storage: SessionStorage, batches: Iterator[ImportChunk]
+) -> _ImportWriteSummary:
+    keys: set[SegmentKey] = set()
+    records_written = 0
+    iterator = iter(batches)
+    while True:
+        chunk = await asyncio.to_thread(_next_chunk, iterator)
+        if chunk is None:
+            break
+        await asyncio.to_thread(storage.append_chunk, chunk)
+        keys.add(SegmentKey(payload_kind(chunk.payload), chunk.payload.segment_id))
+        records_written += chunk.record_count
+    if not keys:
+        raise ValueError("import produced no canonical records")
+    segment_keys = tuple(
+        sorted(keys, key=lambda item: (item.record_kind, item.segment_id))
+    )
+    return _ImportWriteSummary(segment_keys, records_written)
+
+
+def _next_chunk(iterator: Iterator[ImportChunk]) -> ImportChunk | None:
+    try:
+        return next(iterator)
+    except StopIteration:
+        return None
+
+
+def finalize_session_manifest(session_root: Path, status: SessionStatus) -> None:
+    if status not in {
+        SessionStatus.COMPLETE,
+        SessionStatus.PARTIAL,
+        SessionStatus.FAILED,
+    }:
+        raise ValueError("session finalization requires a terminal status")
+    manifest_path = session_root / "manifest.json"
+    current = session_from_mapping(
+        loads_canonical_json(manifest_path.read_text(encoding="utf-8"))
+    )
+    finalized = replace(
+        current,
+        status=status,
+        completed_at=QualifiedText(utc_now(), ValueStatus.MEASURED),
+    )
+    publish_json(
+        manifest_path,
+        session_to_mapping(finalized),
+        DurableMover(),
+        replace_existing=True,
+    )
+
+
+def _arguments(argv: list[str] | None) -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description="Nuclei QEC Data Engine")
+    parser.add_argument("--port", type=int, default=PORT)
+    arguments = parser.parse_args(argv)
+    if arguments.port != PORT:
+        parser.error(f"QEC Data Engine port must be {PORT}")
+    return arguments
+
+
+async def _main_async(port: int) -> int:
+    token = os.environ.get(TOKEN_ENVIRONMENT_VARIABLE)
+    project = os.environ.get(PROJECT_ENVIRONMENT_VARIABLE)
+    if not token or not project:
+        print("NUCLEI_QEC_DATA_ERROR missing_environment", flush=True)
+        return 2
+    try:
+        server = QecDataServer(Path(project), token, port=port)
+        await server.start()
+    except PortInUseError:
+        print("NUCLEI_QEC_DATA_ERROR port_in_use", flush=True)
+        return 2
+    except Exception:
+        print("NUCLEI_QEC_DATA_ERROR startup_failed", flush=True)
+        return 2
+    print(f"NUCLEI_QEC_DATA_READY {HOST}:{port}", flush=True)
+    await server.serve_forever()
+    return 0
+
+
+def main(argv: list[str] | None = None) -> int:
+    arguments = _arguments(argv)
+    try:
+        return asyncio.run(_main_async(arguments.port))
+    except KeyboardInterrupt:
+        return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

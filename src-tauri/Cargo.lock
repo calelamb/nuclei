@@ -2075,6 +2075,7 @@ version = "0.13.0"
 dependencies = [
  "cap-fs-ext",
  "cap-std",
+ "getrandom 0.2.17",
  "hex",
  "keyring",
  "libc",
