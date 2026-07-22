@@ -3,10 +3,9 @@
 from __future__ import annotations
 
 import asyncio
-import importlib
 import inspect
 import multiprocessing
-import pickle
+import os
 import time
 from collections.abc import AsyncIterator, Callable, Iterator
 from dataclasses import dataclass
@@ -30,14 +29,22 @@ from kernel.qec_data.adapters.base import (
     fingerprint_source,
 )
 from kernel.qec_data.model_codecs import batch_from_mapping, batch_to_mapping
+from kernel.qec_data.model_validation import DataQualityFlag
 from kernel.qec_data.models import SyndromeBatch
+from kernel.tests.qec_data.adapter_process_isolation import (
+    bounded_source_snapshot,
+    establish_process_group,
+    factory_is_spawn_importable as factory_is_spawn_importable,
+    process_context,
+    process_tree_isolation_strategy,
+    stop_process_tree,
+)
 
 
 PREVIEW_LIMIT = 3
 IMPORT_BATCH_LIMIT = 64
 CONTRACT_TIMEOUT_SECONDS = 4.0
 SNAPSHOT_TIMEOUT_SECONDS = 1.0
-PROCESS_CLEANUP_SECONDS = 0.25
 
 
 class AdapterLike(Protocol):
@@ -190,7 +197,10 @@ def _check_probe(
 
 
 def _check_validation(
-    result: object, source_hash: str, failures: _FailureCollector
+    result: object,
+    source_hash: str,
+    expected_provenance_id: str | None,
+    failures: _FailureCollector,
 ) -> str | None:
     if isinstance(result, UnsupportedCapabilityResult):
         failures.add(
@@ -209,6 +219,11 @@ def _check_validation(
     if not result.provenance_id:
         failures.add(
             "validation_provenance_absent", "validation omitted provenance identity"
+        )
+    if expected_provenance_id and result.provenance_id != expected_provenance_id:
+        failures.add(
+            "validation_mapping_provenance_mismatch",
+            "validation provenance mismatched the import mapping",
         )
     return result.provenance_id
 
@@ -237,15 +252,39 @@ def _check_batch_sequence(
         failures.add("batch_sequence_nonmonotonic", "batch sequence moved backwards")
     if batch.sequence_start < previous.sequence_end:
         failures.add("batch_sequence_overlap", "batch sequence ranges overlap")
-    if batch.sequence_start > previous.sequence_end:
+    if (
+        batch.sequence_start > previous.sequence_end
+        and DataQualityFlag.GAP_BEFORE not in batch.data_quality
+    ):
         failures.add("batch_sequence_gap", "batch sequence ranges contain a gap")
 
 
+def _packed_schema_profile(batch: SyndromeBatch) -> tuple[tuple[bool, int | None], ...]:
+    names = ("measurements", "observables", "erasures", "leakage", "heralds")
+    return tuple(
+        (packed.value is not None, packed.value.bit_width if packed.value else None)
+        for packed in (getattr(batch, name) for name in names)
+    )
+
+
+def _batch_schema_profile(batch: SyndromeBatch) -> tuple[object, ...]:
+    timestamps = batch.source_timestamps.value
+    return (
+        batch.detector_events.bit_width,
+        _packed_schema_profile(batch),
+        (timestamps is not None, timestamps.unit if timestamps else None),
+        batch.round_range.value is not None,
+    )
+
+
 def _check_batches(
-    values: tuple[object, ...], provenance_id: str | None, failures: _FailureCollector
+    values: tuple[object, ...],
+    provenance_id: str | None,
+    expected_provenance_id: str | None,
+    failures: _FailureCollector,
 ) -> None:
     previous: dict[tuple[str, str], SyndromeBatch] = {}
-    widths: dict[tuple[str, str], int] = {}
+    profiles: dict[tuple[str, str], tuple[object, ...]] = {}
     for value in values:
         if type(value) is SyndromeBatch and not getattr(value, "provenance_id", None):
             failures.add("batch_provenance_absent", "batch omitted provenance identity")
@@ -255,14 +294,24 @@ def _check_batches(
         key = batch.session_id, batch.segment_id
         _check_batch_sequence(batch, previous.get(key), failures)
         previous[key] = batch
-        expected_width = widths.setdefault(key, batch.detector_events.bit_width)
-        if batch.detector_events.bit_width != expected_width:
+        profile = _batch_schema_profile(batch)
+        expected_profile = profiles.setdefault(key, profile)
+        if profile != expected_profile:
+            failures.add(
+                "batch_schema_profile_changed", "schema changed within a segment"
+            )
+        if batch.detector_events.bit_width != expected_profile[0]:
             failures.add(
                 "batch_width_changed", "detector width changed within a segment"
             )
         if provenance_id and batch.provenance_id != provenance_id:
             failures.add(
                 "batch_provenance_mismatch", "batch provenance mismatched validation"
+            )
+        if expected_provenance_id and batch.provenance_id != expected_provenance_id:
+            failures.add(
+                "batch_mapping_provenance_mismatch",
+                "batch provenance mismatched the import mapping",
             )
 
 
@@ -271,6 +320,7 @@ def _check_preview(
     second: object,
     source_hash: str,
     provenance_id: str | None,
+    expected_provenance_id: str | None,
     failures: _FailureCollector,
 ) -> None:
     if isinstance(first, UnsupportedCapabilityResult):
@@ -294,7 +344,14 @@ def _check_preview(
         failures.add(
             "preview_provenance_mismatch", "preview provenance mismatched validation"
         )
-    _check_batches(tuple(first.batches), provenance_id, failures)
+    if expected_provenance_id and first.provenance_id != expected_provenance_id:
+        failures.add(
+            "preview_mapping_provenance_mismatch",
+            "preview provenance mismatched the import mapping",
+        )
+    _check_batches(
+        tuple(first.batches), provenance_id, expected_provenance_id, failures
+    )
 
 
 def _consume_import(
@@ -349,7 +406,7 @@ def _check_import(
     after = _snapshot_or_failure(source, failures, "import_snapshot_raised")
     if before is not None and after is not None and before != after:
         failures.add("import_changed_source", "import changed the source")
-    _check_batches(batches, provenance_id, failures)
+    _check_batches(batches, provenance_id, mapping.expected_provenance_id, failures)
 
 
 def _unsupported_for(value: object, capability: AdapterCapability) -> bool:
@@ -510,7 +567,9 @@ def _check_offline(
     validation = _call_read_only(
         "validate", source, lambda: adapter.validate(source, mapping), failures, stages
     )
-    provenance_id = _check_validation(validation, source_hash, failures)
+    provenance_id = _check_validation(
+        validation, source_hash, mapping.expected_provenance_id, failures
+    )
     previews = tuple(
         _call_read_only(
             "preview",
@@ -521,7 +580,13 @@ def _check_offline(
         )
         for _ in range(2)
     )
-    _check_preview(*previews, source_hash, provenance_id, failures)
+    _check_preview(
+        *previews,
+        source_hash,
+        provenance_id,
+        mapping.expected_provenance_id,
+        failures,
+    )
     _check_import(adapter, source, mapping, provenance_id, failures, stages)
 
 
@@ -564,6 +629,16 @@ def _safe_send(connection: object, message: tuple[str, object]) -> None:
 
 
 def _child_main(connection: object, adapter_factory: object, source: Path) -> None:
+    isolation_error = establish_process_group(
+        lambda message: _safe_send(connection, message)
+    )
+    if isolation_error is not None:
+        report = AdapterContractReport(
+            (ContractFailure("isolation_unavailable", isolation_error),)
+        )
+        _safe_send(connection, ("report", report))
+        connection.close()
+        return
     stages = _StageReporter(lambda message: _safe_send(connection, message))
     try:
         report = _run_contract(adapter_factory, source, stages)
@@ -582,81 +657,6 @@ def _child_main(connection: object, adapter_factory: object, source: Path) -> No
         return
 
 
-def factory_is_spawn_importable(adapter_factory: object) -> bool:
-    """Return whether spawn can reconstruct a factory without executable payloads."""
-
-    module_name = getattr(adapter_factory, "__module__", None)
-    qualified_name = getattr(adapter_factory, "__qualname__", None)
-    if not module_name or not qualified_name or "<locals>" in qualified_name:
-        return False
-    try:
-        pickle.dumps(adapter_factory)
-        resolved: object = importlib.import_module(module_name)
-        for part in qualified_name.split("."):
-            resolved = getattr(resolved, part)
-        return resolved is adapter_factory
-    except BaseException:
-        return False
-
-
-def _process_context(
-    adapter_factory: object,
-) -> multiprocessing.context.BaseContext | None:
-    methods = multiprocessing.get_all_start_methods()
-    if "fork" in methods:
-        return multiprocessing.get_context("fork")
-    if "spawn" in methods and factory_is_spawn_importable(adapter_factory):
-        return multiprocessing.get_context("spawn")
-    return None
-
-
-def _stop_process(process: multiprocessing.Process) -> None:
-    if process.is_alive():
-        process.terminate()
-        process.join(PROCESS_CLEANUP_SECONDS)
-    if process.is_alive() and hasattr(process, "kill"):
-        process.kill()
-        process.join(PROCESS_CLEANUP_SECONDS)
-
-
-def _snapshot_child(connection: object, source: Path) -> None:
-    try:
-        _safe_send(connection, ("snapshot", fingerprint_source(source)))
-    except BaseException as error:
-        _safe_send(connection, ("error", (type(error).__name__, str(error))))
-    finally:
-        connection.close()
-
-
-def _bounded_snapshot(
-    context: multiprocessing.context.BaseContext, source: Path, deadline: float
-) -> tuple[tuple[object, ...] | None, tuple[str, str] | None]:
-    parent, child = context.Pipe(duplex=False)
-    process = context.Process(target=_snapshot_child, args=(child, source))
-    started = False
-    try:
-        process.start()
-        started = True
-        child.close()
-        remaining = max(0.0, deadline - time.monotonic())
-        message = parent.recv() if parent.poll(remaining) else ("timeout", None)
-    except BaseException as error:
-        message = ("error", (type(error).__name__, str(error)))
-    if started:
-        _stop_process(process)
-        if process.exitcode is not None:
-            process.close()
-    else:
-        child.close()
-    parent.close()
-    kind, value = message
-    if kind == "snapshot" and type(value) is tuple:
-        return value, None
-    if kind == "error" and type(value) is tuple:
-        return None, value
-    return None, ("TimeoutError", "source snapshot timed out")
-
-
 def _timeout_code(stage: str) -> str:
     aliases = {
         "factory": "adapter_factory_timed_out",
@@ -667,8 +667,9 @@ def _timeout_code(stage: str) -> str:
 
 def _receive_report(
     connection: object, process: multiprocessing.Process, deadline: float
-) -> tuple[AdapterContractReport | None, str]:
+) -> tuple[AdapterContractReport | None, str, int | None]:
     stage = "startup"
+    group_id: int | None = None
     while time.monotonic() < deadline:
         remaining = max(0.0, deadline - time.monotonic())
         try:
@@ -676,13 +677,15 @@ def _receive_report(
                 kind, value = connection.recv()
                 if kind == "stage" and type(value) is str:
                     stage = value
+                elif kind == "isolation_ready" and type(value) is int:
+                    group_id = value
                 elif kind == "report" and type(value) is AdapterContractReport:
-                    return value, stage
+                    return value, stage, group_id
         except (EOFError, OSError):
             break
         if not process.is_alive():
             break
-    return None, stage
+    return None, stage, group_id
 
 
 def _merge_parent_failure(
@@ -698,7 +701,7 @@ def _execute_worker(
     adapter_factory: object,
     source: Path,
     deadline: float,
-) -> tuple[AdapterContractReport | None, str, bool, int | None]:
+) -> tuple[AdapterContractReport | None, str, bool, ContractFailure | None]:
     parent, child = context.Pipe(duplex=False)
     process = context.Process(target=_child_main, args=(child, adapter_factory, source))
     try:
@@ -715,15 +718,19 @@ def _execute_worker(
         )
         return report, "startup", False, None
     child.close()
-    report, stage = _receive_report(parent, process, deadline)
+    report, stage, group_id = _receive_report(parent, process, deadline)
     process.join(max(0.0, deadline - time.monotonic()))
     timed_out = report is None and process.is_alive()
-    _stop_process(process)
-    exit_code = process.exitcode
-    if exit_code is not None:
+    cleanup_error = stop_process_tree(process, group_id)
+    cleanup_failure = (
+        ContractFailure("isolation_cleanup_failed", cleanup_error)
+        if cleanup_error is not None
+        else None
+    )
+    if process.exitcode is not None:
         process.close()
     parent.close()
-    return report, stage, timed_out, exit_code
+    return report, stage, timed_out, cleanup_failure
 
 
 def _source_change_failure(
@@ -748,7 +755,7 @@ def run_adapter_contract(
     snapshot_context = multiprocessing.get_context(
         "fork" if "fork" in multiprocessing.get_all_start_methods() else "spawn"
     )
-    initial, initial_error = _bounded_snapshot(
+    initial, initial_error = bounded_source_snapshot(
         snapshot_context,
         source,
         min(outer_deadline, time.monotonic() + SNAPSHOT_TIMEOUT_SECONDS),
@@ -759,17 +766,19 @@ def run_adapter_contract(
         return AdapterContractReport(
             (ContractFailure(code, f"{error_name}: {message}"),)
         )
-    context = _process_context(adapter_factory)
+    isolation_strategy = process_tree_isolation_strategy(os.name)
+    context = process_context(adapter_factory, os.name)
     if context is None:
+        message = (
+            "process-tree containment is unavailable"
+            if isolation_strategy is None
+            else "factory is not importable under spawn"
+        )
         return AdapterContractReport(
-            (
-                ContractFailure(
-                    "isolation_unavailable", "factory is not importable under spawn"
-                ),
-            )
+            (ContractFailure("isolation_unavailable", message),)
         )
     worker_deadline = outer_deadline - SNAPSHOT_TIMEOUT_SECONDS
-    report, stage, timed_out, exit_code = _execute_worker(
+    report, stage, timed_out, cleanup_failure = _execute_worker(
         context, adapter_factory, source, worker_deadline
     )
     if report is None:
@@ -777,10 +786,9 @@ def run_adapter_contract(
         report = AdapterContractReport(
             (ContractFailure(code, f"worker stopped during {stage}"),)
         )
-    final, final_error = _bounded_snapshot(snapshot_context, source, outer_deadline)
+    report = _merge_parent_failure(report, cleanup_failure)
+    final, final_error = bounded_source_snapshot(
+        snapshot_context, source, outer_deadline
+    )
     parent_failure = _source_change_failure(initial, final, final_error, stage)
-    if exit_code not in {0, None} and not timed_out and report.passed:
-        parent_failure = ContractFailure(
-            "worker_exited", f"worker exited with code {exit_code}"
-        )
     return _merge_parent_failure(report, parent_failure)

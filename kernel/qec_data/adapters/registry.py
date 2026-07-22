@@ -23,18 +23,27 @@ class AdapterRegistrationError(ValueError):
 
 @dataclass(frozen=True, slots=True)
 class RegistrationRecord:
-    """Frozen registration identity independent of mutable adapter attributes."""
+    """Public immutable registration metadata without an adapter escape hatch."""
 
     manifest: AdapterManifest
-    adapter: QecDataAdapter
 
     @property
     def key(self) -> tuple[str, str]:
         return self.manifest.id, self.manifest.version
 
+
+@dataclass(frozen=True, slots=True)
+class _RegistrationEntry:
+    record: RegistrationRecord
+    adapter: QecDataAdapter
+
+    @property
+    def key(self) -> tuple[str, str]:
+        return self.record.key
+
     def resolve(self) -> QecDataAdapter:
         live = _snapshot_manifest(self.adapter)
-        if live != self.manifest:
+        if live != self.record.manifest:
             raise AdapterRegistrationError(
                 f"adapter manifest changed after registration: {self.key}"
             )
@@ -44,37 +53,38 @@ class RegistrationRecord:
 
 @dataclass(frozen=True, slots=True)
 class AdapterRegistry:
-    registrations: tuple[RegistrationRecord, ...] = ()
+    _entries: tuple[_RegistrationEntry, ...] = ()
 
     def __post_init__(self) -> None:
-        if type(self.registrations) is not tuple:
-            raise TypeError("adapter registrations must be an immutable tuple")
-        if not all(type(item) is RegistrationRecord for item in self.registrations):
+        if type(self._entries) is not tuple:
+            raise TypeError("adapter entries must be an immutable tuple")
+        if not all(type(item) is _RegistrationEntry for item in self._entries):
             raise AdapterRegistrationError("adapter registration record is invalid")
-        keys = tuple(record.key for record in self.registrations)
+        keys = tuple(entry.key for entry in self._entries)
         if len(keys) != len(set(keys)):
             raise AdapterRegistrationError("adapter id/version is already registered")
 
     @property
-    def adapters(self) -> tuple[QecDataAdapter, ...]:
-        return tuple(record.adapter for record in self.registrations)
+    def registrations(self) -> tuple[RegistrationRecord, ...]:
+        return tuple(entry.record for entry in self._entries)
 
     def register(self, adapter: QecDataAdapter) -> AdapterRegistry:
         manifest = _snapshot_manifest(adapter)
         _validate_methods(adapter)
-        record = RegistrationRecord(manifest=manifest, adapter=adapter)
-        if any(current.key == record.key for current in self.registrations):
+        record = RegistrationRecord(manifest=manifest)
+        if any(current.key == record.key for current in self._entries):
             raise AdapterRegistrationError(
                 f"adapter {record.key[0]} version {record.key[1]} is already registered"
             )
-        return AdapterRegistry(registrations=(*self.registrations, record))
+        entry = _RegistrationEntry(record=record, adapter=adapter)
+        return AdapterRegistry(_entries=(*self._entries, entry))
 
     def get(self, adapter_id: str, version: str | None = None) -> QecDataAdapter:
         matches = tuple(
-            record
-            for record in self.registrations
-            if record.manifest.id == adapter_id
-            and (version is None or record.manifest.version == version)
+            entry
+            for entry in self._entries
+            if entry.record.manifest.id == adapter_id
+            and (version is None or entry.record.manifest.version == version)
         )
         if not matches:
             raise KeyError(f"adapter {adapter_id!r} is not registered")

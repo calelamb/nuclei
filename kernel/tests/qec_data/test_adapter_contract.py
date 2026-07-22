@@ -531,7 +531,10 @@ def test_manifest_and_mapping_validate_immutable_boundary_values() -> None:
 def test_registry_is_immutable_and_rejects_duplicate_identity() -> None:
     empty = AdapterRegistry()
     first = empty.register(GoodAdapter())
-    assert empty.adapters == ()
+    assert empty.registrations == ()
+    assert not hasattr(first, "adapters")
+    assert first.registrations[0].manifest == GoodAdapter.manifest
+    assert not hasattr(first.registrations[0], "adapter")
     assert first.get("test.good", "1.0.0").manifest.id == "test.good"
     with pytest.raises(AdapterRegistrationError, match="already registered"):
         first.register(GoodAdapter())
@@ -567,8 +570,6 @@ def test_registry_rejects_invalid_manifest_and_missing_methods() -> None:
 
     with pytest.raises(AdapterRegistrationError, match="missing required methods"):
         AdapterRegistry().register(MissingMethods())  # type: ignore[arg-type]
-    with pytest.raises(AdapterRegistrationError, match="registration record"):
-        AdapterRegistry(registrations=(MissingMethods(),))  # type: ignore[arg-type]
 
 
 def test_command_success_dto_is_frozen_and_validated() -> None:
