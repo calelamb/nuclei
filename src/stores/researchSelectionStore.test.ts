@@ -105,6 +105,17 @@ describe('researchSelectionStore', () => {
     expect(useResearchSelectionStore.getState()).toBe(before);
   });
 
+  it('rejects an invalid selection source at the store boundary', () => {
+    const before = useResearchSelectionStore.getState();
+
+    useResearchSelectionStore.getState().selectPrimary(
+      detector,
+      'external-widget' as 'panel',
+    );
+
+    expect(useResearchSelectionStore.getState()).toBe(before);
+  });
+
   it('clears the complete history and selection', () => {
     const store = useResearchSelectionStore.getState();
     store.selectPrimary(detector, 'panel');

@@ -1,19 +1,29 @@
 import { create } from 'zustand';
+import { z } from 'zod';
 import type { QecEntityKind, QecEntityRef, ResearchSelection } from '../types/qecSelection';
 
 const MAX_HISTORY_ENTRIES = 100;
-const ENTITY_KINDS: ReadonlySet<QecEntityKind> = new Set([
+const ENTITY_KINDS = [
   'study', 'source', 'session', 'dataset', 'circuit-revision', 'tick', 'qubit',
   'stabilizer', 'detector', 'edge', 'logical-observable', 'campaign-point',
   'decoder', 'shot', 'round', 'time-window', 'calibration-record', 'cohort',
   'alert', 'finding',
-]);
-const SELECTION_SOURCES: ReadonlySet<ResearchSelection['source']> = new Set([
-  'user', 'panel', 'alert', 'dirac', 'restore',
-]);
-const TIME_DOMAINS: ReadonlySet<NonNullable<ResearchSelection['timeWindow']>['domain']> = new Set([
-  'tick', 'round', 'ns',
-]);
+] as const satisfies readonly QecEntityKind[];
+
+const qecEntityRefSchema = z.object({
+  kind: z.enum(ENTITY_KINDS),
+  id: z.string().trim().min(1),
+  sessionId: z.string().trim().optional().transform((value) => value || undefined),
+  datasetId: z.string().trim().optional().transform((value) => value || undefined),
+});
+const selectionSourceSchema = z.enum(['user', 'panel', 'alert', 'dirac', 'restore']);
+const timeWindowSchema = z.object({
+  start: z.number().finite(),
+  end: z.number().finite(),
+  domain: z.enum(['tick', 'round', 'ns']),
+}).refine((window) => window.start <= window.end, {
+  message: 'The time window start must not exceed its end.',
+});
 
 export const EMPTY_RESEARCH_SELECTION: ResearchSelection = {
   primary: null,
@@ -35,59 +45,20 @@ interface ResearchSelectionState {
 }
 
 function normalizeRef(ref: QecEntityRef): QecEntityRef | null {
-  const candidate = ref as Partial<QecEntityRef>;
-  if (
-    !candidate ||
-    typeof candidate.kind !== 'string' ||
-    !ENTITY_KINDS.has(candidate.kind as QecEntityKind) ||
-    typeof candidate.id !== 'string'
-  ) {
-    return null;
-  }
-
-  const id = candidate.id.trim();
-  if (!id) return null;
-
-  const sessionId = normalizeOptionalId(candidate.sessionId);
-  const datasetId = normalizeOptionalId(candidate.datasetId);
-  if (candidate.sessionId !== undefined && sessionId === null) return null;
-  if (candidate.datasetId !== undefined && datasetId === null) return null;
-
-  return {
-    kind: candidate.kind as QecEntityKind,
-    id,
-    ...(sessionId ? { sessionId } : {}),
-    ...(datasetId ? { datasetId } : {}),
-  };
-}
-
-function normalizeOptionalId(value: unknown): string | null | undefined {
-  if (value === undefined) return undefined;
-  if (typeof value !== 'string') return null;
-  const normalized = value.trim();
-  return normalized || undefined;
+  const parsed = qecEntityRefSchema.safeParse(ref);
+  return parsed.success ? parsed.data : null;
 }
 
 function normalizeWindow(
   window: ResearchSelection['timeWindow'],
 ): ResearchSelection['timeWindow'] | undefined {
   if (window === null) return null;
-  const candidate = window as NonNullable<ResearchSelection['timeWindow']>;
-  if (
-    !candidate ||
-    !Number.isFinite(candidate.start) ||
-    !Number.isFinite(candidate.end) ||
-    candidate.start > candidate.end ||
-    !TIME_DOMAINS.has(candidate.domain)
-  ) {
-    return undefined;
-  }
-
-  return { start: candidate.start, end: candidate.end, domain: candidate.domain };
+  const parsed = timeWindowSchema.safeParse(window);
+  return parsed.success ? parsed.data : undefined;
 }
 
 function isSource(source: ResearchSelection['source']): boolean {
-  return SELECTION_SOURCES.has(source);
+  return selectionSourceSchema.safeParse(source).success;
 }
 
 function sameRef(left: QecEntityRef, right: QecEntityRef): boolean {
