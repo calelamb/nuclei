@@ -79,6 +79,11 @@ UNC paths, and `..` traversal are rejected. Invalid Study files remain visible
 as validation issues with the fields to fix; one malformed manifest does not
 hide the other valid Studies.
 
+This foundation validates manifest schema, project-relative path syntax, and
+stable source IDs. **Manifest valid** does not mean that every referenced file
+has been opened or that provenance has been evaluated. The workbench reports
+those states separately and shows **Not evaluated** when no Study is active.
+
 <Aside type="caution">
 The referenced `.stim`, `.dem`, `.py`, `*.experiment.yaml`, and
 `*.noise.yaml` files remain the source of truth. Editing a Study changes only
@@ -93,9 +98,10 @@ The research bar keeps three presets over the same Study and selection. Use the
 **Build**, **Analyze**, and **Observe** buttons; keyboard users can focus a
 button and press Enter or Space.
 
-The manifest's `preset` field records the Study preference. The research-bar
-choice is the active local arrangement and is restored from that Study's local
-workspace context when one has been saved.
+The manifest's `preset` field is the initial arrangement for a newly selected
+Study. A valid arrangement previously saved under that exact project-and-Study
+scope overrides the manifest default. Changing the research-bar choice updates
+only that local context; it does not rewrite the manifest.
 
 | Preset | Foundation arrangement |
 | --- | --- |

@@ -116,3 +116,32 @@ test('@qec uses a focused inspector drawer at laptop width', async ({ page }, te
   await expect.poll(() => workbench.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(true);
   await expect(page).toHaveScreenshot('qec-workbench-build-1024.png', { fullPage: true });
 });
+
+test('@qec creates and restores an Analyze Study across immediate navigation', async ({ page }) => {
+  await openWorkbench(page);
+  const createStudy = page.getByRole('region', { name: 'Create Study' });
+  await createStudy.getByLabel('Study name').fill('Decoder Sweep');
+  await createStudy.getByLabel('Research question').fill('Which decoder is stable?');
+  await createStudy.getByRole('combobox', { name: 'Workspace preset' }).selectOption('analyze');
+  const create = createStudy.getByRole('button', { name: 'Create Study' });
+  await expect(create).toHaveCSS('background-color', 'rgb(14, 116, 144)');
+  await expect(create).toHaveCSS('color', 'rgb(255, 255, 255)');
+  await create.click();
+
+  const picker = page.getByRole('combobox', { name: 'Active QEC Study' });
+  await expect(picker).toHaveValue('decoder-sweep');
+  await expect(page.getByRole('button', { name: 'Analyze' })).toHaveAttribute('aria-pressed', 'true');
+  await page.getByRole('button', { name: 'Observe' }).click();
+
+  await page.getByRole('button', { name: 'Explorer' }).click();
+  await page.getByRole('button', { name: 'QEC Workbench' }).click();
+
+  await expect(picker).toHaveValue('decoder-sweep');
+  await picker.selectOption('surface-memory');
+  await expect(page.getByRole('button', { name: 'Build' })).toHaveAttribute('aria-pressed', 'true');
+  await picker.selectOption('decoder-sweep');
+  await expect(page.getByRole('button', { name: 'Observe' })).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.getByRole('region', { name: 'QEC Studies' }).getByRole('button', { name: /Decoder Sweep/ })).toBeVisible();
+  await expect(page.locator('.qec-source-group__empty')).toHaveCSS('color', 'rgb(82, 97, 117)');
+  await expect(page.locator('.qec-sources')).toHaveCSS('background-color', 'rgb(241, 245, 249)');
+});

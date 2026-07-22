@@ -67,7 +67,7 @@ function ResearchContext(): ReactElement {
       <p className="qec-research-bar__metadata">
         <span className="qec-mono">Revision —</span>
         <span className="qec-mono">Data —</span>
-        <span className="qec-status qec-status--ready">Provenance ready</span>
+        <span className="qec-status qec-status--neutral">Provenance not evaluated</span>
       </p>
       <ResearchTrail />
     </div>

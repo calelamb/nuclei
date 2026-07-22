@@ -49,4 +49,51 @@ describe('createE2eFixtureBridge', () => {
     ]);
     expect(localStorage.getItem('nuclei:workspace_mode_by_project')).toContain('research');
   });
+
+  it('confines exclusive mutable files, directories, and storage to one bridge instance', async () => {
+    const bridge = createE2eFixtureBridge(
+      baseBridge(),
+      new URLSearchParams({ e2eProject: 'qec-project', workspace: 'research' }),
+    );
+    expect(bridge).not.toBeNull();
+    if (!bridge) return;
+    const root = 'tests/e2e/fixtures/qec-project';
+    const path = `${root}/studies/new.qec-study.yaml`;
+
+    await expect(bridge.createFileExclusive?.(path, 'schema: 1')).resolves.toBe('created');
+    await expect(bridge.createFileExclusive?.(path, 'replacement')).resolves.toBe('exists');
+    await expect(bridge.readFile(path)).resolves.toBe('schema: 1');
+    await expect(bridge.createDirectory(`${root}/results`, false)).resolves.toEqual({ path: `${root}/results` });
+    await expect(bridge.listDirectory(root)).resolves.toEqual(expect.arrayContaining([
+      expect.objectContaining({ name: 'results', kind: 'directory' }),
+    ]));
+
+    await bridge.setStoredValue('qec-workbench:test', { preset: 'observe' });
+    await expect(bridge.getStoredValue('qec-workbench:test')).resolves.toEqual({ preset: 'observe' });
+    await expect(bridge.createFileExclusive?.(`${root}/../outside.yaml`, 'bad')).resolves.toBeNull();
+    await expect(bridge.createDirectory('/tmp/outside', true)).resolves.toBeNull();
+
+    const isolated = createE2eFixtureBridge(
+      baseBridge(),
+      new URLSearchParams({ e2eProject: 'qec-project', workspace: 'research' }),
+    );
+    expect(isolated).not.toBeNull();
+    if (!isolated) return;
+    await expect(isolated.readFile(path)).resolves.toBeNull();
+    await expect(isolated.getStoredValue('qec-workbench:test')).resolves.toBeNull();
+  });
+
+  it('does not inherit unknown storage keys from the ambient platform bridge', async () => {
+    const base = baseBridge();
+    base.getStoredValue = vi.fn(async () => ({ preset: 'ambient-observe' }));
+    const bridge = createE2eFixtureBridge(
+      base,
+      new URLSearchParams({ e2eProject: 'qec-project', workspace: 'research' }),
+    );
+
+    expect(bridge).not.toBeNull();
+    if (!bridge) return;
+    await expect(bridge.getStoredValue('qec-workbench:unknown')).resolves.toBeNull();
+    expect(base.getStoredValue).not.toHaveBeenCalled();
+  });
 });

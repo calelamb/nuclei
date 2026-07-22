@@ -1,6 +1,11 @@
+:root {
+  --qec-action: #0e7490;
+  --qec-action-foreground: #ffffff;
+}
+
 .qec-workbench {
   --qec-canvas: #ffffff; --qec-raised: #f8fafc; --qec-recessed: #f1f5f9; --qec-border: #e2e8f0;
-  --qec-text: #1a1a2e; --qec-text-muted: #64748b; --qec-quantum: #0891b2; --qec-interactive: #00b4d8;
+  --qec-text: #1a1a2e; --qec-text-muted: #526175; --qec-quantum: #0891b2; --qec-interactive: #00b4d8;
   --qec-analytical: #2563eb; --qec-field: #f0f9ff; --qec-selection: #e0f2fe; --qec-selection-strong: #bae6fd;
   --qec-quantum-strong: #164e63; --qec-analytical-strong: #075985; --qec-success: #15803d; --qec-warning: #a16207;
   --qec-warning-field: #fffbeb; --qec-warning-border: #fcd34d; --qec-warning-divider: #fde68a; --qec-warning-text: #854d0e;
@@ -134,6 +139,14 @@
 
 .qec-status--warning {
   color: var(--qec-warning);
+}
+
+.qec-status--neutral {
+  color: var(--qec-text-muted);
+}
+
+.qec-study-create-button:not(:disabled) {
+  background: var(--qec-action) !important; color: var(--qec-action-foreground) !important;
 }
 
 .qec-research-trail {
