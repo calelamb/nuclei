@@ -242,7 +242,7 @@ def _validate_request_values(
         if message_type is MessageType.IMPORT_PREVIEW:
             _bounded_int(value["limit"], "limit", 0, MAX_PREVIEW_RECORDS)
         if message_type is MessageType.IMPORT_START:
-            _bounded_text(value["sessionId"], "sessionId", 256)
+            _bounded_session_id(value["sessionId"])
             _bounded_text(value["sessionKind"], "sessionKind", 64)
         if message_type is MessageType.JOB_CANCEL:
             _bounded_text(value["jobId"], "jobId", 256)
@@ -265,6 +265,17 @@ def _bounded_int(value: object, name: str, minimum: int, maximum: int) -> int:
     if type(value) is not int or not minimum <= value <= maximum:
         raise ProtocolError("invalid_request", f"{name} is invalid.")
     return value
+
+
+def _bounded_session_id(value: object) -> str:
+    session_id = _bounded_text(value, "sessionId", 256)
+    windows_forbidden = frozenset('<>:"/\\|?*')
+    if session_id in {".", ".."} or any(
+        character in windows_forbidden or ord(character) < 32
+        for character in session_id
+    ):
+        raise ProtocolError("invalid_request", "sessionId is invalid.")
+    return session_id
 
 
 def encode_frame(value: Mapping[str, object]) -> str:

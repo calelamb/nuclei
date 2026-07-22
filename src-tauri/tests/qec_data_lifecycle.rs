@@ -6,7 +6,7 @@ use std::thread;
 use std::time::Duration;
 
 use app_lib::commands::qec_data::{
-    generate_token, QecDataLaunchConfig, QecDataLifecycle, QecDataManager,
+    authorize_project_access, generate_token, QecDataLaunchConfig, QecDataLifecycle, QecDataManager,
 };
 use tempfile::TempDir;
 
@@ -127,6 +127,40 @@ fn concurrent_starts_share_one_owned_child() {
 }
 
 #[test]
+fn running_engine_is_bound_to_its_canonical_project() {
+    let first = TempDir::new().expect("first project");
+    let second = TempDir::new().expect("second project");
+    write_module(first.path(), "fake_engine", FAKE_ENGINE);
+    write_module(second.path(), "fake_engine", FAKE_ENGINE);
+    let manager = QecDataManager::new();
+    let endpoint = manager
+        .start(fake_config(&first, "fake_engine", free_port()))
+        .expect("first project starts");
+
+    let error = manager
+        .start(fake_config(&second, "fake_engine", free_port()))
+        .expect_err("second project must not receive the first endpoint");
+
+    assert_eq!(error.code, "project_mismatch");
+    assert!(!error.message.contains(&endpoint.token));
+    assert!(!second.path().join("starts").exists());
+    manager.stop().expect("stop first project");
+}
+
+#[test]
+fn project_access_requires_the_window_scope_for_canonical_data() {
+    let allowed = Path::new("/allowed/project");
+    let outside = Path::new("/outside/project");
+
+    assert!(authorize_project_access(allowed, |path| path.starts_with(allowed)).is_ok());
+    assert!(authorize_project_access(allowed, |path| path == allowed).is_err());
+    let error = authorize_project_access(outside, |path| path.starts_with(allowed))
+        .expect_err("outside project must be rejected");
+
+    assert_eq!(error.code, "project_not_authorized");
+}
+
+#[test]
 fn missing_dependencies_return_stable_metadata_without_spawning() {
     let temp = TempDir::new().expect("temp project");
     write_module(temp.path(), "fake_engine", FAKE_ENGINE);
@@ -143,6 +177,30 @@ fn missing_dependencies_return_stable_metadata_without_spawning() {
     );
     assert!(!temp.path().join("starts").exists());
     assert_eq!(manager.status().lifecycle, QecDataLifecycle::Failed);
+}
+
+#[cfg(unix)]
+#[test]
+fn dependency_probe_has_a_bounded_timeout() {
+    use std::os::unix::fs::PermissionsExt;
+
+    let temp = TempDir::new().expect("temp project");
+    let sleeper = temp.path().join("sleeping-python");
+    fs::write(&sleeper, "#!/bin/sh\nexec sleep 5\n").expect("write sleeper");
+    let mut permissions = fs::metadata(&sleeper)
+        .expect("sleeper metadata")
+        .permissions();
+    permissions.set_mode(0o700);
+    fs::set_permissions(&sleeper, permissions).expect("make sleeper executable");
+    let config = QecDataLaunchConfig::new(&sleeper, temp.path(), temp.path(), free_port())
+        .with_dependencies(vec!["websockets".to_string()])
+        .with_dependency_timeout(Duration::from_millis(50));
+
+    let error = QecDataManager::new()
+        .start(config)
+        .expect_err("dependency probe must time out");
+
+    assert_eq!(error.code, "dependency_timeout");
 }
 
 #[test]

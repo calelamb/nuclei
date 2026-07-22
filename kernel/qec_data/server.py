@@ -7,13 +7,11 @@ import asyncio
 import errno
 import heapq
 import os
-import shutil
-import stat
 import sys
 import uuid
 from collections.abc import Iterator, Mapping
 from dataclasses import dataclass, replace
-from pathlib import Path, PurePosixPath
+from pathlib import Path
 from typing import Any
 
 from websockets.exceptions import ConnectionClosed, PayloadTooBig
@@ -53,6 +51,11 @@ from .storage import SessionStorage
 from .storage_durability import DurableMover
 from .storage_lineage import SegmentKey, payload_kind
 from .storage_metadata import publish_json
+from .source_security import (
+    copy_authorized_source,
+    remove_copied_source,
+    resolve_authorized_source,
+)
 from .tiles import QueryRequiresRefinement
 
 
@@ -134,7 +137,7 @@ class QecDataServer:
                 self._host,
                 self._port,
                 compression=None,
-                max_size=MAX_FRAME_BYTES,
+                max_size=None,
                 max_queue=16,
                 server_header=None,
             )
@@ -162,6 +165,9 @@ class QecDataServer:
             return
         try:
             async for frame in websocket:
+                if _frame_size(frame) > MAX_FRAME_BYTES:
+                    await websocket.close(code=1009, reason="frame too large")
+                    break
                 await self._handle_frame(connection, frame)
         except (ConnectionClosed, PayloadTooBig):
             pass
@@ -184,20 +190,26 @@ class QecDataServer:
         return True
 
     async def _handle_frame(self, connection: _Connection, frame: object) -> None:
+        request_id: str | None = None
         try:
             request = parse_request(frame)
+            request_id = request.request_id
             await self._dispatch(connection, request)
-        except ProtocolError as error:
-            await connection.send(
-                error_frame(error.request_id, error.code, error.message)
-            )
         except OutboundFrameTooLarge:
             await connection.send(
-                error_frame(None, "response_too_large", "Response exceeds 1 MiB.")
+                error_frame(request_id, "response_too_large", "Response exceeds 1 MiB.")
+            )
+        except ProtocolError as error:
+            await connection.send(
+                error_frame(error.request_id or request_id, error.code, error.message)
             )
         except Exception:
             await connection.send(
-                error_frame(None, "internal_error", "QEC Data Engine request failed.")
+                error_frame(
+                    request_id,
+                    "internal_error",
+                    "QEC Data Engine request failed.",
+                )
             )
 
     async def _dispatch(self, connection: _Connection, request: ClientRequest) -> None:
@@ -344,15 +356,27 @@ class QecDataServer:
                 "invalid_request", "Query request IDs must match.", request.request_id
             )
         token = CancellationToken()
+        session_id = str(query.get("sessionId", ""))
+        storage = await asyncio.to_thread(
+            SessionStorage.open, self._sessions_root(), session_id
+        )
+        catalog = QecCatalog(storage)
+        engine = QecQueryEngine(catalog)
 
         async def run() -> None:
-            await self._run_query(connection, request.request_id, query, token)
+            await self._run_query(
+                connection, request.request_id, query, token, catalog, engine
+            )
+
+        def cancel() -> None:
+            token.cancel()
+            engine.cancel(request.request_id)
 
         self._jobs.start(
             connection.owner,
             request.request_id,
             run,
-            cancel_callback=token.cancel,
+            cancel_callback=cancel,
         )
         await connection.send(
             {
@@ -394,50 +418,35 @@ class QecDataServer:
         )
 
     def _authorized_source(self, raw_source: object) -> Path:
-        if type(raw_source) is not str or "\\" in raw_source:
-            raise ProtocolError(
-                "source_not_authorized", "Source path is not authorized."
-            )
-        relative = PurePosixPath(raw_source)
-        if relative.is_absolute() or any(
-            part in {"", ".", ".."} for part in relative.parts
-        ):
-            raise ProtocolError(
-                "source_not_authorized", "Source path is not authorized."
-            )
-        if relative.parts[0] == "qec-data":
-            raise ProtocolError(
-                "source_not_authorized", "Canonical data cannot be an import source."
-            )
-        candidate = self._project_root.joinpath(*relative.parts)
-        _reject_path_symlinks(self._project_root, candidate)
-        resolved = candidate.resolve(strict=True)
-        if self._project_root not in resolved.parents or not resolved.is_file():
-            raise ProtocolError(
-                "source_not_authorized", "Source path is not authorized."
-            )
-        return resolved
+        return resolve_authorized_source(self._project_root, raw_source)
 
     def _prepare_import(self, payload: Mapping[str, Any]) -> tuple[Any, ...]:
-        source = self._authorized_source(payload["source"])
         session_id = str(payload["sessionId"])
         adapter = self._registry.get(str(payload["adapterId"]))
         mapping = _import_mapping(payload["mapping"], session_id=session_id)
-        validation = adapter.validate(source, mapping)
-        if not validation.valid or validation.source_sha256 is None:
-            raise ProtocolError("import_validation_failed", "Import source is invalid.")
-        copied = _copy_source(self._project_root, source, session_id)
-        provenance_id = validation.provenance_id or validation.source_sha256
-        session = _importing_session(
-            session_id,
-            SessionKind(str(payload["sessionKind"])),
-            adapter.manifest.id,
-            adapter.manifest.version,
-            provenance_id,
+        sources_root = _secure_canonical_directory(
+            self._project_root, ("qec-data", "sources")
         )
-        identity = _semantic_identity(validation.source_sha256, adapter, mapping)
-        storage = SessionStorage.create(self._sessions_root(), session, identity)
-        return storage, adapter, copied, mapping
+        copied = copy_authorized_source(
+            self._project_root, sources_root, payload["source"], session_id
+        )
+        try:
+            validation = adapter.validate(copied.path, mapping)
+            _require_copied_hash(validation, copied.sha256)
+            provenance_id = validation.provenance_id or copied.sha256
+            session = _importing_session(
+                session_id,
+                SessionKind(str(payload["sessionKind"])),
+                adapter.manifest.id,
+                adapter.manifest.version,
+                provenance_id,
+            )
+            identity = _semantic_identity(copied.sha256, adapter, mapping)
+            storage = SessionStorage.create(self._sessions_root(), session, identity)
+            return storage, adapter, copied.path, mapping
+        except Exception:
+            remove_copied_source(copied.path)
+            raise
 
     async def _run_import(
         self,
@@ -479,14 +488,13 @@ class QecDataServer:
         request_id: str,
         query: Mapping[str, object],
         token: CancellationToken,
+        catalog: QecCatalog,
+        engine: QecQueryEngine,
     ) -> None:
         try:
-            session_id = str(query.get("sessionId", ""))
-            storage = SessionStorage.open(self._sessions_root(), session_id)
-            catalog = QecCatalog(storage)
             await asyncio.to_thread(catalog.synchronize)
             events = await asyncio.to_thread(
-                lambda: tuple(QecQueryEngine(catalog).execute(query, token))
+                lambda: tuple(engine.execute(query, token))
             )
             for event in events:
                 await connection.send(event.to_wire())
@@ -529,22 +537,6 @@ class QecDataServer:
 
     def _sessions_root(self) -> Path:
         return _secure_canonical_directory(self._project_root, ("qec-data", "sessions"))
-
-
-def _reject_path_symlinks(root: Path, candidate: Path) -> None:
-    cursor = root
-    for part in candidate.relative_to(root).parts:
-        cursor = cursor / part
-        try:
-            mode = cursor.lstat().st_mode
-        except OSError as error:
-            raise ProtocolError(
-                "source_not_authorized", "Source path is unavailable."
-            ) from error
-        if stat.S_ISLNK(mode):
-            raise ProtocolError(
-                "source_not_authorized", "Source path contains a symlink."
-            )
 
 
 def _import_mapping(value: object, *, session_id: str | None = None) -> ImportMapping:
@@ -595,26 +587,21 @@ def _batch_summary(batch: Any) -> dict[str, object]:
     }
 
 
-def _copy_source(project_root: Path, source: Path, session_id: str) -> Path:
-    if PurePosixPath(session_id).name != session_id or session_id in {".", ".."}:
-        raise ProtocolError("invalid_request", "Session ID is invalid.")
-    sources_root = _secure_canonical_directory(project_root, ("qec-data", "sources"))
-    destination_root = sources_root / session_id
-    destination_root.mkdir(exist_ok=False)
-    destination = destination_root / source.name
-    flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0)
-    descriptor = os.open(source, flags)
-    try:
-        if not stat.S_ISREG(os.fstat(descriptor).st_mode):
-            raise ProtocolError(
-                "source_not_authorized", "Source must be a regular file."
-            )
-        with os.fdopen(descriptor, "rb", closefd=False) as input_stream:
-            with destination.open("xb") as output_stream:
-                shutil.copyfileobj(input_stream, output_stream, length=1024 * 1024)
-    finally:
-        os.close(descriptor)
-    return destination.resolve(strict=True)
+def _require_copied_hash(validation: Any, copied_hash: str) -> None:
+    if not validation.valid or validation.source_sha256 is None:
+        raise ProtocolError("import_validation_failed", "Import source is invalid.")
+    if validation.source_sha256 != copied_hash:
+        raise ProtocolError(
+            "source_changed", "Import source changed while it was being copied."
+        )
+
+
+def _frame_size(frame: object) -> int:
+    if type(frame) is str:
+        return len(frame.encode("utf-8"))
+    if type(frame) is bytes:
+        return len(frame)
+    return MAX_FRAME_BYTES + 1
 
 
 def _secure_canonical_directory(root: Path, parts: tuple[str, ...]) -> Path:

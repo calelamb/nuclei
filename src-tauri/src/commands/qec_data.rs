@@ -5,10 +5,11 @@ use std::path::{Path, PathBuf};
 use std::process::{Child, ChildStdout, Command, Stdio};
 use std::sync::{mpsc, Mutex};
 use std::thread;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use serde::Serialize;
-use tauri::{Manager, State};
+use tauri::{Manager, State, WebviewWindow};
+use tauri_plugin_fs::FsExt;
 
 pub const QEC_DATA_PORT: u16 = 9743;
 const QEC_DATA_HOST: &str = "127.0.0.1";
@@ -19,6 +20,7 @@ const READINESS_PREFIX: &str = "NUCLEI_QEC_DATA_READY ";
 const ERROR_PREFIX: &str = "NUCLEI_QEC_DATA_ERROR ";
 const MAX_CHILD_LINE_BYTES: usize = 8 * 1024;
 const DEFAULT_READINESS_TIMEOUT: Duration = Duration::from_secs(8);
+const DEFAULT_DEPENDENCY_TIMEOUT: Duration = Duration::from_secs(5);
 const REQUIRED_DEPENDENCIES: &[&str] = &["websockets", "pyarrow", "duckdb", "jsonschema"];
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize)]
@@ -85,6 +87,7 @@ pub struct QecDataLaunchConfig {
     port: u16,
     module: String,
     dependencies: Vec<String>,
+    dependency_timeout: Duration,
     readiness_timeout: Duration,
 }
 
@@ -105,6 +108,7 @@ impl QecDataLaunchConfig {
                 .iter()
                 .map(|dependency| (*dependency).to_string())
                 .collect(),
+            dependency_timeout: DEFAULT_DEPENDENCY_TIMEOUT,
             readiness_timeout: DEFAULT_READINESS_TIMEOUT,
         }
     }
@@ -123,6 +127,11 @@ impl QecDataLaunchConfig {
         self.readiness_timeout = timeout;
         self
     }
+
+    pub fn with_dependency_timeout(mut self, timeout: Duration) -> Self {
+        self.dependency_timeout = timeout;
+        self
+    }
 }
 
 enum EngineState {
@@ -131,6 +140,7 @@ enum EngineState {
     Running {
         child: Child,
         endpoint: QecDataEndpoint,
+        project_root: PathBuf,
     },
     Failed(QecDataError),
 }
@@ -147,16 +157,18 @@ impl QecDataManager {
     }
 
     pub fn start(&self, config: QecDataLaunchConfig) -> Result<QecDataEndpoint, QecDataError> {
+        let project_root = canonical_directory(&config.project_root, "invalid_project_root")?;
         let mut state = self.lock_state()?;
-        if let Some(endpoint) = running_endpoint(&mut state)? {
+        if let Some(endpoint) = running_endpoint(&mut state, &project_root)? {
             return Ok(endpoint);
         }
         *state = EngineState::Starting;
-        match start_owned_child(config) {
+        match start_owned_child(config, project_root.clone()) {
             Ok((child, endpoint)) => {
                 *state = EngineState::Running {
                     child,
                     endpoint: endpoint.clone(),
+                    project_root,
                 };
                 Ok(endpoint)
             }
@@ -213,12 +225,24 @@ impl Drop for QecDataManager {
     }
 }
 
-fn running_endpoint(state: &mut EngineState) -> Result<Option<QecDataEndpoint>, QecDataError> {
-    let EngineState::Running { child, endpoint } = state else {
+fn running_endpoint(
+    state: &mut EngineState,
+    requested_project: &Path,
+) -> Result<Option<QecDataEndpoint>, QecDataError> {
+    let EngineState::Running {
+        child,
+        endpoint,
+        project_root,
+    } = state
+    else {
         return Ok(None);
     };
     match child.try_wait() {
-        Ok(None) => Ok(Some(endpoint.clone())),
+        Ok(None) if project_root == requested_project => Ok(Some(endpoint.clone())),
+        Ok(None) => Err(QecDataError::new(
+            "project_mismatch",
+            "QEC Data Engine is already running for another project.",
+        )),
         Ok(Some(_)) => Ok(None),
         Err(_) => Err(QecDataError::new(
             "child_status_failed",
@@ -229,12 +253,16 @@ fn running_endpoint(state: &mut EngineState) -> Result<Option<QecDataEndpoint>, 
 
 fn start_owned_child(
     config: QecDataLaunchConfig,
+    project_root: PathBuf,
 ) -> Result<(Child, QecDataEndpoint), QecDataError> {
     validate_config(&config)?;
-    let project_root = canonical_directory(&config.project_root, "invalid_project_root")?;
     let module_root = canonical_directory(&config.module_root, "invalid_module_root")?;
+    ensure_dependencies(
+        &config.python,
+        &config.dependencies,
+        config.dependency_timeout,
+    )?;
     ensure_port_available(config.port)?;
-    ensure_dependencies(&config.python, &config.dependencies)?;
     let token = generate_token()?;
     let endpoint = QecDataEndpoint {
         url: format!("ws://{QEC_DATA_HOST}:{}", config.port),
@@ -254,7 +282,11 @@ fn validate_config(config: &QecDataLaunchConfig) -> Result<(), QecDataError> {
             .module
             .bytes()
             .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'_' | b'.'));
-    if !valid_module || config.port == 0 || config.readiness_timeout.is_zero() {
+    if !valid_module
+        || config.port == 0
+        || config.readiness_timeout.is_zero()
+        || config.dependency_timeout.is_zero()
+    {
         return Err(QecDataError::new(
             "invalid_launch_config",
             "QEC Data Engine launch configuration is invalid.",
@@ -294,25 +326,56 @@ fn ensure_port_available(port: u16) -> Result<(), QecDataError> {
         .map_err(|_| QecDataError::new("port_in_use", "QEC Data Engine port is in use."))
 }
 
-fn ensure_dependencies(python: &Path, dependencies: &[String]) -> Result<(), QecDataError> {
+fn ensure_dependencies(
+    python: &Path,
+    dependencies: &[String],
+    timeout: Duration,
+) -> Result<(), QecDataError> {
     if dependencies.is_empty() {
         return Ok(());
     }
     let probe = "import importlib.util,sys; missing=[name for name in sys.argv[1:] if importlib.util.find_spec(name) is None]; print('\\n'.join(missing)); sys.exit(bool(missing))";
-    let output = Command::new(python)
+    let mut child = Command::new(python)
         .arg("-c")
         .arg(probe)
         .args(dependencies)
         .stdout(Stdio::piped())
         .stderr(Stdio::null())
-        .output()
+        .spawn()
         .map_err(|_| {
             QecDataError::new(
                 "python_unavailable",
                 "Python could not start the QEC Data Engine dependency probe.",
             )
         })?;
-    if output.status.success() {
+    let deadline = Instant::now() + timeout;
+    let status = loop {
+        match child.try_wait() {
+            Ok(Some(status)) => break status,
+            Ok(None) if Instant::now() < deadline => thread::sleep(Duration::from_millis(10)),
+            Ok(None) => {
+                terminate_child(&mut child);
+                return Err(QecDataError::new(
+                    "dependency_timeout",
+                    "QEC Data Engine dependency probe timed out.",
+                ));
+            }
+            Err(_) => {
+                terminate_child(&mut child);
+                return Err(QecDataError::new(
+                    "dependency_probe_failed",
+                    "Could not inspect the QEC Data Engine dependency probe.",
+                ));
+            }
+        }
+    };
+    let output = child.wait_with_output().map_err(|_| {
+        QecDataError::new(
+            "dependency_probe_failed",
+            "Could not collect the QEC Data Engine dependency probe.",
+        )
+    })?;
+    if status.success() {
         return Ok(());
     }
     let missing = String::from_utf8_lossy(&output.stdout)
@@ -516,6 +579,29 @@ fn failed_status(code: &str) -> QecDataStatus {
     }
 }
 
+pub fn authorize_project_access(
+    project_root: &Path,
+    is_allowed: impl Fn(&Path) -> bool,
+) -> Result<(), QecDataError> {
+    let qec_data = project_root.join("qec-data");
+    let authorized = [
+        project_root.to_path_buf(),
+        qec_data.clone(),
+        qec_data.join("sessions"),
+        qec_data.join("sources"),
+    ]
+    .iter()
+    .all(|path| is_allowed(path));
+    if authorized {
+        Ok(())
+    } else {
+        Err(QecDataError::new(
+            "project_not_authorized",
+            "The selected project is not authorized for QEC Data Engine access.",
+        ))
+    }
+}
+
 pub fn generate_token() -> Result<String, QecDataError> {
     let mut bytes = [0_u8; 32];
     getrandom::getrandom(&mut bytes).map_err(|_| {
@@ -560,8 +646,12 @@ fn production_config(
 pub fn qec_data_start(
     state: State<'_, QecDataManager>,
     app_handle: tauri::AppHandle,
+    window: WebviewWindow,
     project_root: PathBuf,
 ) -> Result<QecDataEndpoint, QecDataError> {
+    let project_root = canonical_directory(&project_root, "invalid_project_root")?;
+    let scope = window.fs_scope();
+    authorize_project_access(&project_root, |path| scope.is_allowed(path))?;
     let config = production_config(&app_handle, project_root)?;
     state.start(config)
 }
