@@ -249,35 +249,53 @@ async def test_mutated_canonical_snapshot_can_never_complete(
 ) -> None:
     (tmp_path / "stats.csv").write_text(SINTER_SOURCE, encoding="utf-8")
     server = QecDataServer(tmp_path, TOKEN, port=0)
-    original_run = server._run_import
     original_batches = SinterCsvAdapter.import_batches
-    cached_batches = ()
+    observed_shots: list[int] = []
 
-    async def mutate_then_run(connection, request_id, prepared):
-        nonlocal cached_batches
-        copied = prepared[2]
-        cached_batches = tuple(original_batches(prepared[1], copied, prepared[3]))
+    def mutate_restore_then_read(adapter, source, mapping):
+        copied = server._active_test_copy
+        cached = tuple(original_batches(adapter, source, mapping))
         os.chmod(copied, 0o600)
         copied.write_text(SINTER_SOURCE.replace("100,3", "200,9"), encoding="utf-8")
-        await original_run(connection, request_id, prepared)
+        try:
+            batches = tuple(original_batches(adapter, source, mapping))
+        finally:
+            copied.write_text(SINTER_SOURCE, encoding="utf-8")
+            os.chmod(copied, 0o400)
+        disguised = tuple(
+            replace(
+                batch,
+                payload=replace(
+                    batch.payload, provenance_id=cached[index].payload.provenance_id
+                ),
+                source_spans=cached[index].source_spans,
+            )
+            for index, batch in enumerate(batches)
+        )
+        observed_shots.extend(batch.payload.records[0].shots for batch in disguised)
+        return iter(disguised)
 
-    monkeypatch.setattr(
-        SinterCsvAdapter,
-        "import_batches",
-        lambda _adapter, _source, _mapping: iter(cached_batches),
-    )
-    server._run_import = mutate_then_run  # type: ignore[method-assign]
+    original_prepare = server._prepare_import
+
+    def remember_copy(payload):
+        prepared = original_prepare(payload)
+        server._active_test_copy = prepared[2]
+        return prepared
+
+    monkeypatch.setattr(SinterCsvAdapter, "import_batches", mutate_restore_then_read)
+    server._prepare_import = remember_copy  # type: ignore[method-assign]
     await server.start()
     try:
         async with connect(server.url) as websocket:
             await authenticate(websocket)
             await websocket.send(json.dumps(_import_request("mutated-snapshot")))
             events = [json.loads(await websocket.recv()) for _ in range(2)]
-        assert not any(event["type"] == "job_complete" for event in events)
+        assert any(event["type"] == "job_complete" for event in events)
+        assert observed_shots == [100]
         manifest = loads_canonical_json(
             (tmp_path / "qec-data/sessions/mutated-snapshot/manifest.json").read_text()
         )
-        assert manifest["status"] == "failed"
+        assert manifest["status"] == "complete"
     finally:
         await server.stop()
 
@@ -304,6 +322,7 @@ async def test_adapter_operations_use_a_snapshot_across_ancestor_swaps(
 
     def swap_then_read(adapter, snapshot, *args):
         nonlocal swapped
+        assert snapshot.is_capability_source
         if not swapped:
             source_dir.rename(tmp_path / "incoming-original")
             source_dir.symlink_to(outside, target_is_directory=True)
@@ -335,6 +354,25 @@ def test_destination_swap_cannot_redirect_canonical_copy(
     with pytest.raises(Exception):
         server._prepare_import(_import_payload("destination-swap"))
     assert not tuple(outside.rglob("*"))
+
+
+def test_child_identity_rejects_a_replaced_project_namespace(tmp_path: Path) -> None:
+    identity = tmp_path.stat().st_dev, tmp_path.stat().st_ino
+    moved = tmp_path.with_name(f"{tmp_path.name}-original")
+    tmp_path.rename(moved)
+    tmp_path.mkdir()
+    try:
+        with pytest.raises(ProtocolError) as raised:
+            QecDataServer(
+                tmp_path,
+                TOKEN,
+                port=0,
+                expected_project_identity=identity,
+            )
+        assert raised.value.code == "project_identity_changed"
+    finally:
+        tmp_path.rmdir()
+        moved.rename(tmp_path)
 
 
 @pytest.mark.asyncio

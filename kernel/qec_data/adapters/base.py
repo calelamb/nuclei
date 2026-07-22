@@ -137,6 +137,11 @@ def _source_paths(source: Path) -> tuple[Path, ...]:
 
 
 def _sha256_regular_file(path: Path) -> str:
+    if getattr(path, "is_capability_source", False):
+        with path.open("rb") as source_file:
+            if not stat.S_ISREG(os.fstat(source_file.fileno()).st_mode):
+                raise ValueError(f"adapter source is not a regular file: {path}")
+            return hashlib.file_digest(source_file, "sha256").hexdigest()
     flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0)
     try:
         descriptor = os.open(path, flags)

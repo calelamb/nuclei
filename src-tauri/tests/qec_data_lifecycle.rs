@@ -38,6 +38,26 @@ while True:
 
 const SILENT_ENGINE: &str = "import time\ntime.sleep(5)\n";
 const EXITING_ENGINE: &str = "import sys\nsys.exit(7)\n";
+const IDENTITY_ENGINE: &str = r#"
+import os
+import sys
+import time
+
+root = os.environ['NUCLEI_QEC_DATA_PROJECT_ROOT']
+with open(root + '.spawned', 'w', encoding='utf-8') as stream:
+    stream.write('spawned')
+time.sleep(0.25)
+status = os.stat(root)
+expected = (
+    int(os.environ['NUCLEI_QEC_DATA_PROJECT_DEVICE']),
+    int(os.environ['NUCLEI_QEC_DATA_PROJECT_INODE']),
+)
+if (status.st_dev, status.st_ino) != expected:
+    print('NUCLEI_QEC_DATA_ERROR project_identity_changed', flush=True)
+    sys.exit(2)
+print('NUCLEI_QEC_DATA_ERROR unexpected_identity_match', flush=True)
+sys.exit(3)
+"#;
 static NEXT_TEST_PORT: AtomicU16 = AtomicU16::new(31_000);
 
 fn python() -> PathBuf {
@@ -192,6 +212,43 @@ fn authorized_project_identity_cannot_change_before_manager_start() {
     assert!(!project.path().join("starts").exists());
     fs::remove_dir(project.path()).expect("remove replacement");
     fs::rename(moved, project.path()).expect("restore tempdir for cleanup");
+}
+
+#[cfg(unix)]
+#[test]
+fn child_rejects_project_namespace_swap_during_spawn() {
+    let module = TempDir::new().expect("module root");
+    let project = TempDir::new().expect("project root");
+    write_module(module.path(), "identity_engine", IDENTITY_ENGINE);
+    let project_path = project.path().to_path_buf();
+    let marker = project_path.with_extension("spawned");
+    let config = QecDataLaunchConfig::new(python(), module.path(), &project_path, free_port())
+        .with_module("identity_engine")
+        .with_dependencies(Vec::new());
+    let handle = thread::spawn(move || QecDataManager::new().start(config));
+    for _ in 0..500 {
+        if marker.exists() {
+            break;
+        }
+        thread::sleep(Duration::from_millis(10));
+    }
+    assert!(
+        marker.exists(),
+        "child must reach its startup identity check"
+    );
+    let moved = project_path.with_extension("spawn-original");
+    fs::rename(&project_path, &moved).expect("move authorized namespace");
+    fs::create_dir(&project_path).expect("create replacement namespace");
+
+    let error = handle
+        .join()
+        .expect("join manager start")
+        .expect_err("child must reject replacement namespace");
+
+    assert_eq!(error.code, "project_identity_changed");
+    fs::remove_dir(&project_path).expect("remove replacement");
+    fs::rename(moved, &project_path).expect("restore tempdir");
+    fs::remove_file(marker).expect("remove startup marker");
 }
 
 #[test]

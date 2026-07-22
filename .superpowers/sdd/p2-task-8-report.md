@@ -83,6 +83,25 @@ races. Each is now covered by a failing-before/fixed-after regression:
   canonicalizing the renderer path again and fails with
   `project_identity_changed` if the authorized namespace entry was replaced.
 
+### Final review corrections
+
+- Every adapter operation now receives a path-compatible, read-only capability
+  backed by an anonymous held descriptor, never the mutable canonical pathname.
+  The final source verification and manifest finalization execute as one
+  synchronous operation. A regression temporarily replaces and restores the
+  visible copy while a cached/lying adapter reads; the completed dataset still
+  contains only the bytes held by the immutable capability.
+- Canonical destination traversal begins at the retained project-root
+  descriptor and opens every component with `dir_fd` and `O_NOFOLLOW`. Platforms
+  without equivalent directory capabilities fail closed rather than falling
+  back to pathname writes.
+- Tauri passes the authorized Unix device/inode to the child. Python opens the
+  project directory and verifies that exact identity at actual process startup,
+  while retaining the descriptor for later source and destination traversal. A
+  during-spawn namespace replacement returns `project_identity_changed`.
+  Non-Unix platforms currently fail closed until equivalent retained-handle
+  traversal is implemented.
+
 ## TDD evidence
 
 Initial Python RED failed collection because `kernel.qec_data.jobs` did not
@@ -96,19 +115,20 @@ a token-free URL.
 ## Verification
 
 - Ruff format and lint: clean.
-- Focused Python server and review suites: 45 passed on the installed WebSocket
+- Focused Python server and review suites: 46 passed on the installed WebSocket
   runtime.
 - Compatibility: 45 passed with `websockets==12.0`; 45 passed with
   `websockets==13.1`.
-- Owned Python coverage: 82.93% (import operations 95%, jobs 98%, protocol 90%,
-  server 85%, source security 70%).
-- Complete QEC data suite: 387 passed, 2 skipped.
-- Rust 1.77.2 locked lifecycle suite: 12 passed.
-- Complete Rust suite: 164 unit tests and 12 lifecycle tests passed.
+- Owned Python coverage: 85% (import operations 95%, jobs 98%, protocol 90%,
+  server 89%, source security 76%).
+- Complete QEC data suite: 388 passed, 2 skipped.
+- Rust lifecycle suite: 13 passed.
+- Complete Rust suite: 164 unit tests passed; the 13 lifecycle tests also pass
+  serially (parallel lifecycle execution has a pre-existing fixed-port race).
 - Rust formatting: clean.
 - Targeted Rust 1.77.2 clippy: clean with unrelated pre-existing lint classes
   explicitly allowed.
-- All owned files are below 800 lines (`server.py`: 778) and all owned Python
+- All owned files are below 800 lines (`server.py`: 771) and all owned Python
   functions are below 50 lines.
 
 `python -m black` and `python -m bandit` were unavailable in the environment.

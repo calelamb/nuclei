@@ -2,13 +2,12 @@
 
 from __future__ import annotations
 
-import argparse
 import asyncio
 import errno
 import heapq
 import os
-import sys
 import uuid
+import weakref
 from collections.abc import Iterator, Mapping
 from dataclasses import dataclass, replace
 from pathlib import Path
@@ -60,6 +59,7 @@ from .storage_lineage import SegmentKey, payload_kind
 from .storage_metadata import publish_json
 from .source_security import (
     copy_authorized_source,
+    open_project_directory,
     release_copied_source,
     remove_copied_source,
     resolve_authorized_source,
@@ -73,8 +73,6 @@ HOST = "127.0.0.1"
 PORT = 9743
 AUTHENTICATION_TIMEOUT_SECONDS = 2.0
 MAX_JOBS_PER_CONNECTION = 8
-TOKEN_ENVIRONMENT_VARIABLE = "NUCLEI_QEC_DATA_TOKEN"
-PROJECT_ENVIRONMENT_VARIABLE = "NUCLEI_QEC_DATA_PROJECT_ROOT"
 
 
 class PortInUseError(RuntimeError):
@@ -127,10 +125,8 @@ class QecDataServer:
         port: int = PORT,
         authentication_timeout: float = AUTHENTICATION_TIMEOUT_SECONDS,
         registry: AdapterRegistry | None = None,
+        expected_project_identity: tuple[int, int] | None = None,
     ) -> None:
-        root = Path(project_root).resolve(strict=True)
-        if not root.is_dir():
-            raise ValueError("project root must be a directory")
         if type(token) is not str or not token or len(token) > 1_024:
             raise ValueError("authentication token is invalid")
         if host != HOST:
@@ -139,7 +135,12 @@ class QecDataServer:
             raise ValueError("server port is invalid")
         if authentication_timeout <= 0:
             raise ValueError("authentication timeout must be positive")
+        root, project_descriptor = open_project_directory(
+            project_root, expected_project_identity
+        )
         self._project_root = root
+        self._project_descriptor = project_descriptor
+        self._project_finalizer = weakref.finalize(self, os.close, project_descriptor)
         self._token = token
         self._host = host
         self._port = port
@@ -158,7 +159,9 @@ class QecDataServer:
     async def start(self) -> None:
         if self._server is not None:
             return
-        secure_canonical_directory(self._project_root, ("qec-data",))
+        secure_canonical_directory(
+            self._project_root, self._project_descriptor, ("qec-data",)
+        )
         try:
             self._server = await serve(
                 self._handle_connection,
@@ -264,7 +267,7 @@ class QecDataServer:
             results: list[dict[str, object]] = []
             for registration in self._registry.registrations:
                 adapter = self._registry.get(*registration.key)
-                result = await asyncio.to_thread(adapter.probe, snapshot.path)
+                result = await asyncio.to_thread(adapter.probe, snapshot.capability)
                 await asyncio.to_thread(verify_copied_source, snapshot)
                 results.append(probe_result(registration, result))
             await connection.send(
@@ -288,7 +291,7 @@ class QecDataServer:
             adapter = self._registry.get(str(payload["adapterId"]))
             mapping = _import_mapping(payload["mapping"])
             validation = await asyncio.to_thread(
-                adapter.validate, snapshot.path, mapping
+                adapter.validate, snapshot.capability, mapping
             )
             await asyncio.to_thread(verify_copied_source, snapshot)
             issues = [validation_issue(issue) for issue in validation.issues]
@@ -316,12 +319,12 @@ class QecDataServer:
             adapter = self._registry.get(str(payload["adapterId"]))
             mapping = _import_mapping(payload["mapping"])
             validation = await asyncio.to_thread(
-                adapter.validate, snapshot.path, mapping
+                adapter.validate, snapshot.capability, mapping
             )
             require_valid_preview(validation, request.request_id)
             await asyncio.to_thread(verify_copied_source, snapshot)
             result = await asyncio.to_thread(
-                adapter.preview, snapshot.path, mapping, int(payload["limit"])
+                adapter.preview, snapshot.capability, mapping, int(payload["limit"])
             )
             await asyncio.to_thread(verify_copied_source, snapshot)
             batches = [batch_summary(batch) for batch in result.batches]
@@ -455,14 +458,20 @@ class QecDataServer:
         adapter = self._registry.get(str(payload["adapterId"]))
         mapping = _import_mapping(payload["mapping"], session_id=session_id)
         sources_root = secure_canonical_directory(
-            self._project_root, ("qec-data", "sources")
+            self._project_root,
+            self._project_descriptor,
+            ("qec-data", "sources"),
         )
         copied = copy_authorized_source(
-            self._project_root, sources_root, payload["source"], session_id
+            self._project_root,
+            self._project_descriptor,
+            sources_root,
+            payload["source"],
+            session_id,
         )
         try:
             verify_copied_source(copied)
-            validation = adapter.validate(copied.path, mapping)
+            validation = adapter.validate(copied.capability, mapping)
             verify_copied_source(copied)
             require_copied_hash(validation, copied.sha256)
             provenance_id = validation.provenance_id or copied.sha256
@@ -491,14 +500,15 @@ class QecDataServer:
         try:
             await asyncio.to_thread(verify_copied_source, copied)
             summary = await _consume_import(
-                storage, adapter.import_batches(source, mapping)
+                storage, adapter.import_batches(copied.capability, mapping)
             )
             await asyncio.to_thread(verify_copied_source, copied)
             partitions = await asyncio.to_thread(
                 storage.commit_segments, summary.segment_keys
             )
-            await asyncio.to_thread(verify_copied_source, copied)
-            finalize_session_manifest(storage.session_root, SessionStatus.COMPLETE)
+            await asyncio.to_thread(
+                _finalize_verified_import, storage.session_root, copied
+            )
             await connection.send(
                 {
                     "type": "job_complete",
@@ -577,14 +587,24 @@ class QecDataServer:
         return sessions, next_cursor
 
     def _sessions_root(self) -> Path:
-        return secure_canonical_directory(self._project_root, ("qec-data", "sessions"))
+        return secure_canonical_directory(
+            self._project_root,
+            self._project_descriptor,
+            ("qec-data", "sessions"),
+        )
 
     def _snapshot_source(self, raw_source: object):
         snapshots = secure_canonical_directory(
-            self._project_root, ("qec-data", "snapshots")
+            self._project_root,
+            self._project_descriptor,
+            ("qec-data", "snapshots"),
         )
         return copy_authorized_source(
-            self._project_root, snapshots, raw_source, uuid.uuid4().hex
+            self._project_root,
+            self._project_descriptor,
+            snapshots,
+            raw_source,
+            uuid.uuid4().hex,
         )
 
 
@@ -738,42 +758,16 @@ def finalize_session_manifest(session_root: Path, status: SessionStatus) -> None
     )
 
 
-def _arguments(argv: list[str] | None) -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Nuclei QEC Data Engine")
-    parser.add_argument("--port", type=int, default=PORT)
-    arguments = parser.parse_args(argv)
-    if arguments.port != PORT:
-        parser.error(f"QEC Data Engine port must be {PORT}")
-    return arguments
-
-
-async def _main_async(port: int) -> int:
-    token = os.environ.get(TOKEN_ENVIRONMENT_VARIABLE)
-    project = os.environ.get(PROJECT_ENVIRONMENT_VARIABLE)
-    if not token or not project:
-        print("NUCLEI_QEC_DATA_ERROR missing_environment", flush=True)
-        return 2
-    try:
-        server = QecDataServer(Path(project), token, port=port)
-        await server.start()
-    except PortInUseError:
-        print("NUCLEI_QEC_DATA_ERROR port_in_use", flush=True)
-        return 2
-    except Exception:
-        print("NUCLEI_QEC_DATA_ERROR startup_failed", flush=True)
-        return 2
-    print(f"NUCLEI_QEC_DATA_READY {HOST}:{port}", flush=True)
-    await server.serve_forever()
-    return 0
+def _finalize_verified_import(session_root: Path, copied: Any) -> None:
+    verify_copied_source(copied)
+    finalize_session_manifest(session_root, SessionStatus.COMPLETE)
 
 
 def main(argv: list[str] | None = None) -> int:
-    arguments = _arguments(argv)
-    try:
-        return asyncio.run(_main_async(arguments.port))
-    except KeyboardInterrupt:
-        return 0
+    from .server_entrypoint import main as run
+
+    return run(argv)
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    raise SystemExit(main())
