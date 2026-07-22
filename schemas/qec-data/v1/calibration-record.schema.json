@@ -2,6 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://getnuclei.dev/schemas/qec-data/v1/calibration-record.schema.json",
   "title": "QEC canonical calibration record",
+  "$comment": "Executable validators MUST require an RFC 2046-style type/subtype MIME value for original_representation.mime_type.",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -39,7 +40,13 @@
     "calibration_run_id": { "type": ["string", "null"], "minLength": 1 },
     "original_representation": {
       "type": "object", "additionalProperties": false, "required": ["mime_type", "value"],
-      "properties": { "mime_type": { "$ref": "#/$defs/nonEmpty" }, "value": { "type": "string" } }
+      "properties": {
+        "mime_type": {
+          "type": "string",
+          "pattern": "^[^\\s/]+/[^\\s/]+$"
+        },
+        "value": { "type": "string" }
+      }
     },
     "provenance_id": { "$ref": "#/$defs/nonEmpty" }
   },

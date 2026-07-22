@@ -1,12 +1,24 @@
 import json
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 
 import pytest
-from jsonschema import Draft202012Validator, ValidationError
+from jsonschema import Draft202012Validator, FormatChecker, ValidationError
+
+from kernel.qec_data.model_codecs import batch_from_mapping
 
 
 SCHEMA_ROOT = Path(__file__).parents[2] / "schemas" / "qec-data" / "v1"
+FORMAT_CHECKER = FormatChecker()
+
+
+@FORMAT_CHECKER.checks("date-time", raises=ValueError)
+def is_rfc3339(value: object) -> bool:
+    if not isinstance(value, str) or "T" not in value:
+        return False
+    datetime.fromisoformat(value.replace("Z", "+00:00"))
+    return value.endswith("Z") or value[-6:-5] in {"+", "-"}
 
 
 def load_json(relative_path: str) -> Any:
@@ -16,7 +28,7 @@ def load_json(relative_path: str) -> Any:
 def validator(name: str) -> Draft202012Validator:
     schema = load_json(f"{name}.schema.json")
     Draft202012Validator.check_schema(schema)
-    return Draft202012Validator(schema)
+    return Draft202012Validator(schema, format_checker=FORMAT_CHECKER)
 
 
 @pytest.mark.parametrize(
@@ -38,7 +50,13 @@ def test_canonical_schema_is_valid_draft_2020_12(name: str) -> None:
 
 @pytest.mark.parametrize(
     ("schema_name", "fixture_name"),
-    [("session", "minimal-session"), ("syndrome-batch", "minimal-batch")],
+    [
+        ("session", "minimal-session"),
+        ("syndrome-batch", "minimal-batch"),
+        ("decode-result", "minimal-decode-result"),
+        ("calibration-record", "minimal-calibration-record"),
+        ("provenance", "minimal-provenance"),
+    ],
 )
 def test_shared_fixture_matches_schema(schema_name: str, fixture_name: str) -> None:
     validator(schema_name).validate(load_json(f"fixtures/{fixture_name}.json"))
@@ -75,6 +93,79 @@ def test_batch_rejects_negative_or_inconsistent_sequence_ranges() -> None:
         validator("syndrome-batch").validate({**batch, "sequence_end": 0})
 
 
+def test_executable_batch_validation_enforces_exclusive_sequence_arithmetic() -> None:
+    batch = load_json("fixtures/minimal-batch.json")
+    schema = load_json("syndrome-batch.schema.json")
+    assert "exclusive" in schema["properties"]["sequence_end"]["description"]
+    assert "sequence_end - sequence_start == record_count" in schema["$comment"]
+    for sequence_start, sequence_end, record_count in [(5, 2, 7), (0, 9, 1)]:
+        invalid = {
+            **batch,
+            "sequence_start": sequence_start,
+            "sequence_end": sequence_end,
+            "record_count": record_count,
+        }
+        with pytest.raises((TypeError, ValueError)):
+            batch_from_mapping(invalid)
+
+
+def test_schema_formats_are_checked() -> None:
+    session = load_json("fixtures/minimal-session.json")
+    with pytest.raises(ValidationError):
+        validator("session").validate({**session, "created_at": "not-a-date"})
+
+
+def test_shared_packed_bit_vectors_are_normative() -> None:
+    batch = load_json("fixtures/minimal-batch.json")
+    vectors = load_json("fixtures/packed-bits-vectors.json")
+    for vector in vectors["valid"]:
+        candidate = {
+            **batch,
+            "record_count": vector["record_count"],
+            "sequence_end": vector["record_count"],
+            "detector_events": vector["packed"],
+            "shot_range": {
+                "value": {"start": 0, "end": vector["record_count"]},
+                "status": "measured",
+            },
+            "observables": {"value": None, "status": "absent"},
+        }
+        validator("syndrome-batch").validate(candidate)
+        batch_from_mapping(candidate)
+    for vector in vectors["invalid"]:
+        candidate = {**batch, "detector_events": vector["packed"]}
+        with pytest.raises((ValidationError, TypeError, ValueError)):
+            validator("syndrome-batch").validate(candidate)
+            batch_from_mapping(candidate)
+
+
+def test_data_quality_is_nonempty_and_complete_is_exclusive() -> None:
+    batch = load_json("fixtures/minimal-batch.json")
+    for flags in ([], ["complete", "partial"], ["complete", "gap_before"]):
+        with pytest.raises(ValidationError):
+            validator("syndrome-batch").validate({**batch, "data_quality": flags})
+
+
+def test_session_and_decode_lifecycle_matrices_are_enforced() -> None:
+    session = load_json("fixtures/minimal-session.json")
+    invalid_complete = {**session, "status": "complete"}
+    with pytest.raises(ValidationError):
+        validator("session").validate(invalid_complete)
+    decode = load_json("fixtures/minimal-decode-result.json")
+    with pytest.raises(ValidationError):
+        validator("decode-result").validate(
+            {**decode, "status": "error", "error": None}
+        )
+    with pytest.raises(ValidationError):
+        validator("decode-result").validate(
+            {
+                **decode,
+                "status": "complete",
+                "error": {"code": "unexpected", "message": "must be null"},
+            }
+        )
+
+
 def test_batch_requires_status_for_optional_scientific_fields() -> None:
     batch = load_json("fixtures/minimal-batch.json")
     ambiguous_observables = {
@@ -98,11 +189,17 @@ def test_decode_calibration_and_provenance_examples_are_valid() -> None:
                 "configuration_sha256": "a" * 64,
             },
             "status": "complete",
-            "prediction": {"encoding": "base64", "bit_width": 1, "data": "AA=="},
+            "prediction": {
+                "encoding": "base64",
+                "bit_order": "lsb0",
+                "bit_width": 1,
+                "data": "AA==",
+            },
             "confidence": {"value": None, "status": "unavailable"},
             "correction": {"value": None, "status": "unavailable"},
             "predicted_logical_flips": {
                 "encoding": "base64",
+                "bit_order": "lsb0",
                 "bit_width": 1,
                 "data": "AA==",
             },

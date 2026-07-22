@@ -7,7 +7,10 @@ export const QEC_TILE_MAX_BYTES = 1024 * 1024;
 
 const nonEmptyString = z.string().min(1);
 const sha256 = z.string().regex(/^[a-f0-9]{64}$/);
-const base64 = z.string().regex(/^[A-Za-z0-9+/]*={0,2}$/);
+const canonicalBase64 = z.string().regex(
+  /^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/,
+);
+const safeInteger = z.number().int().min(0).max(Number.MAX_SAFE_INTEGER);
 
 export const qecValueStatusSchema = z.enum([
   'absent',
@@ -57,11 +60,11 @@ export const adapterIdentitySchema = z.strictObject({
 });
 
 const qualifiedTextSchema = qualifiedSchema(nonEmptyString);
-const qualifiedNumberSchema = qualifiedSchema(z.number());
-const qualifiedCountSchema = qualifiedSchema(z.number().int().nonnegative());
+const qualifiedNumberSchema = qualifiedSchema(z.number().finite());
+const qualifiedCountSchema = qualifiedSchema(safeInteger);
 const qualifiedTimestampSchema = qualifiedSchema(z.iso.datetime({ offset: true }));
 
-export const qecSessionSchema = z.strictObject({
+const qecSessionObjectSchema = z.strictObject({
   schema_version: z.literal(QEC_DATA_SCHEMA_VERSION),
   session_id: nonEmptyString,
   kind: z.enum(['simulation_campaign', 'hardware_import', 'hardware_live', 'replay']),
@@ -95,23 +98,74 @@ export const qecSessionSchema = z.strictObject({
   provenance_id: nonEmptyString,
   segments: z.array(nonEmptyString).refine((values) => new Set(values).size === values.length),
 });
-export type QecSession = z.infer<typeof qecSessionSchema>;
+
+export const qecSessionSchema = qecSessionObjectSchema.superRefine((session, context) => {
+  const started = session.started_at.value !== null;
+  const completed = session.completed_at.value !== null;
+  const invalid =
+    (session.status === 'created' && (
+      started || completed || session.started_at.status !== 'absent' || session.completed_at.status !== 'absent'
+    )) ||
+    (['importing', 'recording'].includes(session.status) && (
+      !started || completed || session.completed_at.status !== 'absent'
+    )) ||
+    (['complete', 'partial'].includes(session.status) && (!started || !completed)) ||
+    (session.status === 'failed' && !completed);
+  if (invalid) context.addIssue({ code: 'custom', path: ['status'], message: 'session lifecycle and timestamps disagree' });
+});
+export type QecSession = Readonly<z.infer<typeof qecSessionSchema>>;
+
+function decodeCanonicalBase64(data: string): Uint8Array | null {
+  try {
+    const decoded = atob(data);
+    if (btoa(decoded) !== data) return null;
+    return Uint8Array.from(decoded, (character) => character.charCodeAt(0));
+  } catch {
+    return null;
+  }
+}
+
+function validatePackedBits(
+  packed: { bit_width: number; data: string },
+  context: z.RefinementCtx,
+): void {
+  const bytes = decodeCanonicalBase64(packed.data);
+  if (!bytes) {
+    context.addIssue({ code: 'custom', path: ['data'], message: 'data must be canonical base64' });
+    return;
+  }
+  const bytesPerRecord = Math.ceil(packed.bit_width / 8);
+  if (bytes.length === 0 || bytes.length % bytesPerRecord !== 0) {
+    context.addIssue({ code: 'custom', path: ['data'], message: 'decoded data must contain complete rows' });
+    return;
+  }
+  const remainder = packed.bit_width % 8;
+  if (remainder === 0) return;
+  const highMask = 0xff ^ ((1 << remainder) - 1);
+  for (let index = bytesPerRecord - 1; index < bytes.length; index += bytesPerRecord) {
+    if ((bytes[index] & highMask) !== 0) {
+      context.addIssue({ code: 'custom', path: ['data'], message: 'unused LSB0 high padding bits must be zero' });
+      return;
+    }
+  }
+}
 
 export const packedBitsSchema = z.strictObject({
   encoding: z.literal('base64'),
-  bit_width: z.number().int().positive(),
-  data: base64,
-});
+  bit_order: z.literal('lsb0'),
+  bit_width: safeInteger.min(1),
+  data: canonicalBase64,
+}).superRefine(validatePackedBits);
 
 const indexRangeSchema = z.strictObject({
-  start: z.number().int().nonnegative(),
-  end: z.number().int().positive(),
+  start: safeInteger,
+  end: safeInteger.min(1),
 }).refine(({ start, end }) => end > start, 'range must be non-empty');
 
 const qualifiedRangeSchema = qualifiedSchema(indexRangeSchema);
 const qualifiedPackedBitsSchema = qualifiedSchema(packedBitsSchema);
 const timestampSeriesSchema = z.strictObject({
-  values: z.array(z.number()),
+  values: z.array(z.number().finite()),
   unit: nonEmptyString,
 });
 const qualifiedTimestampsSchema = qualifiedSchema(timestampSeriesSchema);
@@ -121,9 +175,9 @@ export const syndromeBatchSchema = z.strictObject({
   batch_id: nonEmptyString,
   session_id: nonEmptyString,
   segment_id: nonEmptyString,
-  sequence_start: z.number().int().nonnegative(),
-  sequence_end: z.number().int().positive(),
-  record_count: z.number().int().positive(),
+  sequence_start: safeInteger,
+  sequence_end: safeInteger.min(1),
+  record_count: safeInteger.min(1),
   shot_range: qualifiedRangeSchema,
   round_range: qualifiedRangeSchema,
   source_timestamps: qualifiedTimestampsSchema,
@@ -143,7 +197,8 @@ export const syndromeBatchSchema = z.strictObject({
     'gap_before',
     'clock_unreliable',
     'vendor_flagged',
-  ])).refine((values) => new Set(values).size === values.length),
+  ])).min(1).refine((values) => new Set(values).size === values.length)
+    .refine((values) => !values.includes('complete') || values.length === 1),
   provenance_id: nonEmptyString,
 }).superRefine((batch, context) => {
   if (batch.sequence_end - batch.sequence_start !== batch.record_count) {
@@ -153,8 +208,23 @@ export const syndromeBatchSchema = z.strictObject({
       message: 'sequence range must equal record_count',
     });
   }
+  const validateRows = (packed: z.infer<typeof packedBitsSchema>, path: string): void => {
+    const bytes = decodeCanonicalBase64(packed.data);
+    const rowCount = bytes ? bytes.length / Math.ceil(packed.bit_width / 8) : -1;
+    if (rowCount !== batch.record_count) {
+      context.addIssue({ code: 'custom', path: [path, 'data'], message: 'decoded rows must equal record_count' });
+    }
+  };
+  validateRows(batch.detector_events, 'detector_events');
+  for (const path of ['measurements', 'observables', 'erasures', 'leakage', 'heralds'] as const) {
+    const packed = batch[path].value;
+    if (packed) validateRows(packed, path);
+  }
+  if (batch.source_timestamps.value && batch.source_timestamps.value.values.length !== batch.record_count) {
+    context.addIssue({ code: 'custom', path: ['source_timestamps', 'value', 'values'], message: 'timestamps must equal record_count' });
+  }
 });
-export type QecSyndromeBatch = z.infer<typeof syndromeBatchSchema>;
+export type QecSyndromeBatch = Readonly<z.infer<typeof syndromeBatchSchema>>;
 
 const decoderSchema = z.strictObject({
   name: nonEmptyString,
@@ -163,13 +233,14 @@ const decoderSchema = z.strictObject({
 });
 const correctionSchema = z.union([
   z.strictObject({
-    edge_ids: z.array(nonEmptyString).refine((values) => new Set(values).size === values.length),
+    kind: z.literal('edge_ids'),
+    edge_ids: z.array(nonEmptyString).min(1).refine((values) => new Set(values).size === values.length),
   }),
-  z.strictObject({ compact_ref: nonEmptyString }),
+  z.strictObject({ kind: z.literal('compact_ref'), compact_ref: nonEmptyString }),
 ]);
 const qualifiedCorrectionSchema = qualifiedSchema(correctionSchema);
 const qualifiedQuantitySchema = z.strictObject({
-  value: z.number().nonnegative().nullable(),
+  value: z.number().finite().nonnegative().nullable(),
   unit: nonEmptyString.nullable(),
   status: qecValueStatusSchema,
 }).superRefine(({ value, unit, status }, context) => {
@@ -185,8 +256,8 @@ export const decodeResultSchema = z.strictObject({
   session_id: nonEmptyString,
   input: z.strictObject({
     batch_id: nonEmptyString,
-    sequence_start: z.number().int().nonnegative(),
-    sequence_end: z.number().int().positive(),
+    sequence_start: safeInteger,
+    sequence_end: safeInteger.min(1),
   }).refine(({ sequence_start, sequence_end }) => sequence_end > sequence_start),
   decoder: decoderSchema,
   status: z.enum(['complete', 'partial', 'timeout', 'error']),
@@ -199,8 +270,22 @@ export const decodeResultSchema = z.strictObject({
   total_latency: qualifiedQuantitySchema,
   error: z.strictObject({ code: nonEmptyString, message: nonEmptyString }).nullable(),
   provenance_id: nonEmptyString,
+}).superRefine((decode, context) => {
+  const failed = decode.status === 'error' || decode.status === 'timeout';
+  if (failed !== (decode.error !== null)) {
+    context.addIssue({ code: 'custom', path: ['error'], message: 'error must exist exactly for error or timeout status' });
+  }
+  const recordCount = decode.input.sequence_end - decode.input.sequence_start;
+  const validateRows = (packed: z.infer<typeof packedBitsSchema>, path: string): void => {
+    const bytes = decodeCanonicalBase64(packed.data);
+    const rows = bytes ? bytes.length / Math.ceil(packed.bit_width / 8) : -1;
+    if (rows !== recordCount) context.addIssue({ code: 'custom', path: [path, 'data'], message: 'decoded rows must match input range' });
+  };
+  validateRows(decode.prediction, 'prediction');
+  validateRows(decode.predicted_logical_flips, 'predicted_logical_flips');
+  if (decode.known_truth.value) validateRows(decode.known_truth.value, 'known_truth');
 });
-export type QecDecodeResult = z.infer<typeof decodeResultSchema>;
+export type QecDecodeResult = Readonly<z.infer<typeof decodeResultSchema>>;
 
 export const calibrationRecordSchema = z.strictObject({
   schema_version: z.literal(QEC_DATA_SCHEMA_VERSION),
@@ -221,12 +306,18 @@ export const calibrationRecordSchema = z.strictObject({
   quality: z.enum(['accepted', 'suspect', 'rejected', 'unknown']),
   source_system: nonEmptyString,
   calibration_run_id: nonEmptyString.nullable(),
-  original_representation: z.strictObject({ mime_type: nonEmptyString, value: z.string() }),
+  original_representation: z.strictObject({ mime_type: z.string().regex(/^[^\s/]+\/[^\s/]+$/), value: z.string() }),
   provenance_id: nonEmptyString,
+}).superRefine((record, context) => {
+  if (record.effective_interval.end !== null) {
+    const start = Date.parse(record.effective_interval.start);
+    const end = Date.parse(record.effective_interval.end);
+    if (end < start) context.addIssue({ code: 'custom', path: ['effective_interval', 'end'], message: 'end cannot precede start' });
+  }
 });
-export type QecCalibrationRecord = z.infer<typeof calibrationRecordSchema>;
+export type QecCalibrationRecord = Readonly<z.infer<typeof calibrationRecordSchema>>;
 
-const scalarParameterSchema = z.union([z.string(), z.number(), z.boolean(), z.null()]);
+const scalarParameterSchema = z.union([z.string(), z.number().finite(), z.boolean(), z.null()]);
 const decisionSchema = z.strictObject({
   field: nonEmptyString,
   decision: nonEmptyString,
@@ -248,15 +339,15 @@ export const provenanceRecordSchema = z.strictObject({
     uri: nonEmptyString,
     sha256,
     policy: z.enum(['copy', 'reference']),
-  })).min(1),
+  })).min(1).refine((sources) => new Set(sources.map((source) => source.source_id)).size === sources.length),
   adapter: adapterIdentitySchema,
   mapping_decisions: z.array(decisionSchema),
   unit_conversions: z.array(z.strictObject({
     field: nonEmptyString,
     source_unit: nonEmptyString,
     canonical_unit: nonEmptyString,
-    factor: z.number(),
-    offset: z.number(),
+    factor: z.number().finite(),
+    offset: z.number().finite(),
   })),
   revision_references: z.array(referenceSchema),
   environment: z.strictObject({
@@ -272,9 +363,9 @@ export const provenanceRecordSchema = z.strictObject({
   annotations: z.array(referenceSchema),
   control_audit_refs: z.array(nonEmptyString).refine((values) => new Set(values).size === values.length),
 });
-export type QecProvenanceRecord = z.infer<typeof provenanceRecordSchema>;
+export type QecProvenanceRecord = Readonly<z.infer<typeof provenanceRecordSchema>>;
 
-export const qecSessionSummarySchema = qecSessionSchema.pick({
+export const qecSessionSummarySchema = qecSessionObjectSchema.pick({
   session_id: true,
   kind: true,
   status: true,
@@ -329,19 +420,31 @@ export const qecQuerySpecSchema = z.strictObject({
   resolution: z.strictObject({
     width: z.number().int().min(1).max(8192),
     height: z.number().int().min(1).max(8192),
-  }),
-  filters: z.record(z.string(), queryFilterValueSchema),
-});
-export type QecQuerySpec = z.infer<typeof qecQuerySpecSchema>;
+  }).readonly(),
+  filters: z.record(z.string(), queryFilterValueSchema).readonly(),
+}).readonly();
+export type QecQuerySpec = Readonly<z.infer<typeof qecQuerySpecSchema>>;
+
+/** UTF-8 JSON bytes for tile content only; Task 5 also caps the complete wire frame. */
+export function qecTileContentByteLength(content: unknown): number {
+  const serialized = JSON.stringify(content);
+  if (serialized === undefined) throw new TypeError('tile content must be JSON serializable');
+  return new TextEncoder().encode(serialized).byteLength;
+}
 
 export const qecTilePayloadSchema = z.strictObject({
   kind: qecTileKindSchema,
   datasetId: nonEmptyString,
-  sequence: z.number().int().nonnegative(),
+  sequence: safeInteger,
   content: z.json(),
   byteLength: z.number().int().nonnegative().max(QEC_TILE_MAX_BYTES),
-});
-export type QecTilePayload = z.infer<typeof qecTilePayloadSchema>;
+}).superRefine((tile, context) => {
+  const actual = qecTileContentByteLength(tile.content);
+  if (tile.byteLength !== actual) {
+    context.addIssue({ code: 'custom', path: ['byteLength'], message: 'byteLength must equal UTF-8 JSON content bytes' });
+  }
+}).readonly();
+export type QecTilePayload = Readonly<z.infer<typeof qecTilePayloadSchema>>;
 
 export const qecQueryResultSchema = z.discriminatedUnion('type', [
   z.strictObject({
@@ -363,4 +466,4 @@ export const qecQueryResultSchema = z.discriminatedUnion('type', [
     message: nonEmptyString,
   }),
 ]);
-export type QecQueryResult = z.infer<typeof qecQueryResultSchema>;
+export type QecQueryResult = Readonly<z.infer<typeof qecQueryResultSchema>>;

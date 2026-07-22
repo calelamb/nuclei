@@ -8,15 +8,24 @@ from typing import Any, Mapping
 
 from .models import (
     AdapterIdentity,
+    CorrectionKind,
+    CorrectionValue,
     DataQualityFlag,
+    DecodeError,
+    DecodeInput,
+    DecoderIdentity,
+    DecodeRecord,
+    DecodeStatus,
     IndexRange,
     PackedBits,
     QualifiedCount,
+    QualifiedCorrection,
     QualifiedFloat,
     QualifiedPackedBits,
     QualifiedRange,
     QualifiedText,
     QualifiedTimestamps,
+    QualifiedQuantity,
     SessionCounts,
     SessionKind,
     SessionRecord,
@@ -69,6 +78,25 @@ BATCH_KEYS = frozenset(
         "circuit_revision",
         "topology_revision",
         "data_quality",
+        "provenance_id",
+    }
+)
+DECODE_KEYS = frozenset(
+    {
+        "schema_version",
+        "decode_id",
+        "session_id",
+        "input",
+        "decoder",
+        "status",
+        "prediction",
+        "confidence",
+        "correction",
+        "predicted_logical_flips",
+        "known_truth",
+        "pipeline_latency",
+        "total_latency",
+        "error",
         "provenance_id",
     }
 )
@@ -137,20 +165,25 @@ def _qualified_value_to(
 
 
 def _packed_from(value: object, name: str) -> PackedBits:
-    item = _strict_object(value, name, frozenset({"encoding", "bit_width", "data"}))
+    item = _strict_object(
+        value, name, frozenset({"encoding", "bit_order", "bit_width", "data"})
+    )
     encoded = _string(item["data"], f"{name}.data")
-    if item["encoding"] != "base64":
-        raise ValueError(f"{name} must use base64 encoding")
+    if item["encoding"] != "base64" or item["bit_order"] != "lsb0":
+        raise ValueError(f"{name} must use canonical base64 LSB0 encoding")
     try:
         data = base64.b64decode(encoded, validate=True)
     except (binascii.Error, ValueError) as error:
         raise ValueError(f"{name}.data is not valid base64") from error
+    if base64.b64encode(data).decode("ascii") != encoded:
+        raise ValueError(f"{name}.data is not canonical base64")
     return PackedBits(_integer(item["bit_width"], f"{name}.bit_width"), data)
 
 
 def _packed_to(value: PackedBits) -> dict[str, object]:
     return {
         "encoding": "base64",
+        "bit_order": "lsb0",
         "bit_width": value.bit_width,
         "data": base64.b64encode(value.data).decode("ascii"),
     }
@@ -377,4 +410,140 @@ def batch_to_mapping(batch: SyndromeBatch) -> dict[str, object]:
         ),
         "data_quality": [flag.value for flag in batch.data_quality],
         "provenance_id": batch.provenance_id,
+    }
+
+
+def _correction_from(value: object) -> QualifiedCorrection:
+    item = _strict_object(value, "correction", frozenset({"value", "status"}))
+    status = ValueStatus(item["status"])
+    if item["value"] is None:
+        return QualifiedCorrection(None, status)
+    raw = item["value"]
+    if not isinstance(raw, Mapping):
+        raise TypeError("correction.value must be an object")
+    if raw.get("kind") == CorrectionKind.EDGE_IDS.value:
+        edge_item = _strict_object(
+            raw, "correction.value", frozenset({"kind", "edge_ids"})
+        )
+        edge_ids = edge_item["edge_ids"]
+        if not isinstance(edge_ids, list) or not all(
+            isinstance(edge, str) for edge in edge_ids
+        ):
+            raise TypeError("correction edge_ids must be a string list")
+        correction = CorrectionValue.edges(tuple(edge_ids))
+    else:
+        ref_item = _strict_object(
+            raw, "correction.value", frozenset({"kind", "compact_ref"})
+        )
+        if ref_item["kind"] != CorrectionKind.COMPACT_REF.value:
+            raise ValueError("correction kind is invalid")
+        correction = CorrectionValue.compact(
+            _string(ref_item["compact_ref"], "compact_ref")
+        )
+    return QualifiedCorrection(correction, status)
+
+
+def _correction_to(value: QualifiedCorrection) -> dict[str, object]:
+    if value.value is None:
+        return _qualified_to(None, value.status)
+    correction = value.value
+    raw: dict[str, object]
+    if correction.kind is CorrectionKind.EDGE_IDS:
+        raw = {"kind": "edge_ids", "edge_ids": list(correction.edge_ids)}
+    else:
+        raw = {"kind": "compact_ref", "compact_ref": correction.compact_ref}
+    return _qualified_to(raw, value.status)
+
+
+def _quantity_from(value: object, name: str) -> QualifiedQuantity:
+    item = _strict_object(value, name, frozenset({"value", "unit", "status"}))
+    raw_value = item["value"]
+    number = None if raw_value is None else _number(raw_value, f"{name}.value")
+    unit = None if item["unit"] is None else _string(item["unit"], f"{name}.unit")
+    return QualifiedQuantity(number, unit, ValueStatus(item["status"]))
+
+
+def _quantity_to(value: QualifiedQuantity) -> dict[str, object]:
+    return {"value": value.value, "unit": value.unit, "status": value.status.value}
+
+
+def decode_from_mapping(value: Mapping[str, object]) -> DecodeRecord:
+    item = _strict_object(value, "decode result", DECODE_KEYS)
+    input_item = _strict_object(
+        item["input"],
+        "input",
+        frozenset({"batch_id", "sequence_start", "sequence_end"}),
+    )
+    decoder = _strict_object(
+        item["decoder"],
+        "decoder",
+        frozenset({"name", "version", "configuration_sha256"}),
+    )
+    error_item = item["error"]
+    error = None
+    if error_item is not None:
+        parsed = _strict_object(error_item, "error", frozenset({"code", "message"}))
+        error = DecodeError(
+            _string(parsed["code"], "error.code"),
+            _string(parsed["message"], "error.message"),
+        )
+    return DecodeRecord(
+        decode_id=_string(item["decode_id"], "decode_id"),
+        session_id=_string(item["session_id"], "session_id"),
+        input=DecodeInput(
+            _string(input_item["batch_id"], "batch_id"),
+            _integer(input_item["sequence_start"], "sequence_start"),
+            _integer(input_item["sequence_end"], "sequence_end"),
+        ),
+        decoder=DecoderIdentity(
+            _string(decoder["name"], "decoder.name"),
+            _string(decoder["version"], "decoder.version"),
+            _string(decoder["configuration_sha256"], "configuration_sha256"),
+        ),
+        status=DecodeStatus(item["status"]),
+        prediction=_packed_from(item["prediction"], "prediction"),
+        confidence=_qualified_float_from(item["confidence"], "confidence"),
+        correction=_correction_from(item["correction"]),
+        predicted_logical_flips=_packed_from(
+            item["predicted_logical_flips"], "predicted_logical_flips"
+        ),
+        known_truth=_qualified_bits_from(item["known_truth"], "known_truth"),
+        pipeline_latency=_quantity_from(item["pipeline_latency"], "pipeline_latency"),
+        total_latency=_quantity_from(item["total_latency"], "total_latency"),
+        error=error,
+        provenance_id=_string(item["provenance_id"], "provenance_id"),
+        schema_version=_string(item["schema_version"], "schema_version"),
+    )
+
+
+def decode_to_mapping(decode: DecodeRecord) -> dict[str, object]:
+    error = (
+        None
+        if decode.error is None
+        else {"code": decode.error.code, "message": decode.error.message}
+    )
+    return {
+        "schema_version": decode.schema_version,
+        "decode_id": decode.decode_id,
+        "session_id": decode.session_id,
+        "input": {
+            "batch_id": decode.input.batch_id,
+            "sequence_start": decode.input.sequence_start,
+            "sequence_end": decode.input.sequence_end,
+        },
+        "decoder": {
+            "name": decode.decoder.name,
+            "version": decode.decoder.version,
+            "configuration_sha256": decode.decoder.configuration_sha256,
+        },
+        "status": decode.status.value,
+        "prediction": _packed_to(decode.prediction),
+        "confidence": _qualified_to(decode.confidence.value, decode.confidence.status),
+        "correction": _correction_to(decode.correction),
+        "predicted_logical_flips": _packed_to(decode.predicted_logical_flips),
+        "known_truth": _qualified_bits_to(decode.known_truth),
+        "pipeline_latency": _quantity_to(decode.pipeline_latency),
+        "total_latency": _quantity_to(decode.total_latency),
+        "error": error,
+        "provenance_id": decode.provenance_id,
     }

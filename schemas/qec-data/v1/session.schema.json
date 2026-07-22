@@ -63,6 +63,34 @@
     "provenance_id": { "$ref": "#/$defs/nonEmpty" },
     "segments": { "type": "array", "items": { "$ref": "#/$defs/nonEmpty" }, "uniqueItems": true }
   },
+  "allOf": [
+    {
+      "if": { "properties": { "status": { "const": "created" } }, "required": ["status"] },
+      "then": {
+        "properties": {
+          "started_at": { "properties": { "status": { "const": "absent" }, "value": { "type": "null" } } },
+          "completed_at": { "properties": { "status": { "const": "absent" }, "value": { "type": "null" } } }
+        }
+      }
+    },
+    {
+      "if": { "properties": { "status": { "enum": ["importing", "recording"] } }, "required": ["status"] },
+      "then": {
+        "properties": {
+          "started_at": { "properties": { "value": { "type": "string" } } },
+          "completed_at": { "properties": { "status": { "const": "absent" }, "value": { "type": "null" } } }
+        }
+      }
+    },
+    {
+      "if": { "properties": { "status": { "enum": ["complete", "partial"] } }, "required": ["status"] },
+      "then": { "properties": { "started_at": { "properties": { "value": { "type": "string" } } }, "completed_at": { "properties": { "value": { "type": "string" } } } } }
+    },
+    {
+      "if": { "properties": { "status": { "const": "failed" } }, "required": ["status"] },
+      "then": { "properties": { "completed_at": { "properties": { "value": { "type": "string" } } } } }
+    }
+  ],
   "$defs": {
     "nonEmpty": { "type": "string", "minLength": 1 },
     "timestamp": { "type": "string", "format": "date-time" },

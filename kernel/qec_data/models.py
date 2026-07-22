@@ -1,103 +1,40 @@
 """Immutable domain records for QEC data schema version 1.0.0.
 
-Session and syndrome records have explicit lossless codecs because they cross the
-durable import boundary. Decode, calibration, and provenance records deliberately
-remain domain objects: their schema representations contain tagged alternatives
-and nested audit operations that storage adapters must map explicitly. A generic
-``asdict`` serializer would silently conflate absent and unavailable values.
+Session, syndrome, and decode records have explicit lossless codecs because they
+cross durable import and decode boundaries. Calibration and provenance remain
+domain objects whose nested audit structures require explicit adapter mapping. A
+generic ``asdict`` serializer would silently conflate absent and unavailable values.
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
-from enum import StrEnum
+from datetime import datetime
 
-
-SCHEMA_VERSION = "1.0.0"
-SHA256_LENGTH = 64
-
-
-def _utc_now() -> str:
-    return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
-
-
-class ValueStatus(StrEnum):
-    ABSENT = "absent"
-    UNAVAILABLE = "unavailable"
-    UNKNOWN = "unknown"
-    INFERRED = "inferred"
-    PREDICTED = "predicted"
-    SIMULATED = "simulated"
-    MEASURED = "measured"
-
-
-class SessionKind(StrEnum):
-    SIMULATION_CAMPAIGN = "simulation_campaign"
-    HARDWARE_IMPORT = "hardware_import"
-    HARDWARE_LIVE = "hardware_live"
-    REPLAY = "replay"
-
-
-class SessionStatus(StrEnum):
-    CREATED = "created"
-    IMPORTING = "importing"
-    RECORDING = "recording"
-    COMPLETE = "complete"
-    PARTIAL = "partial"
-    FAILED = "failed"
-
-
-class DecodeStatus(StrEnum):
-    COMPLETE = "complete"
-    PARTIAL = "partial"
-    TIMEOUT = "timeout"
-    ERROR = "error"
-
-
-class DataQualityFlag(StrEnum):
-    COMPLETE = "complete"
-    PARTIAL = "partial"
-    OUT_OF_ORDER = "out_of_order"
-    DUPLICATE = "duplicate"
-    GAP_BEFORE = "gap_before"
-    CLOCK_UNRELIABLE = "clock_unreliable"
-    VENDOR_FLAGGED = "vendor_flagged"
-
-
-NULL_STATUSES = frozenset(
-    {ValueStatus.ABSENT, ValueStatus.UNAVAILABLE, ValueStatus.UNKNOWN}
+from .model_validation import (
+    MIME_PATTERN,
+    SCHEMA_VERSION,
+    CalibrationQuality,
+    CalibrationScopeKind,
+    CorrectionKind,
+    DataQualityFlag,
+    DecodeStatus,
+    SessionKind,
+    SessionStatus,
+    SourcePolicy,
+    ValueStatus,
+    require_enum as _require_enum,
+    require_exact_int as _require_exact_int,
+    require_finite as _require_finite,
+    require_immutable_tuple as _require_immutable_tuple,
+    require_non_empty as _require_non_empty,
+    require_rfc3339 as _require_rfc3339,
+    utc_now as _utc_now,
+    validate_qualified as _validate_qualified,
+    validate_provenance_record as _validate_provenance_record,
+    validate_sha256 as _validate_sha256,
+    validate_syndrome_batch as _validate_syndrome_batch,
 )
-
-
-def _require_non_empty(name: str, value: str) -> None:
-    if not isinstance(value, str) or not value.strip():
-        raise ValueError(f"{name} must be a non-empty string")
-
-
-def _validate_qualified(name: str, value: object | None, status: ValueStatus) -> None:
-    if status in NULL_STATUSES and value is not None:
-        raise ValueError(f"{name} must be null when status is {status.value}")
-    if status not in NULL_STATUSES and value is None:
-        raise ValueError(f"{name} must have a value when status is {status.value}")
-
-
-def _validate_sha256(name: str, value: str) -> None:
-    if len(value) != SHA256_LENGTH or any(
-        char not in "0123456789abcdef" for char in value
-    ):
-        raise ValueError(f"{name} must be a lowercase SHA-256 hex digest")
-
-
-def _contains_mutable(value: object) -> bool:
-    if isinstance(value, (list, dict, set, bytearray)):
-        return True
-    return isinstance(value, tuple) and any(_contains_mutable(item) for item in value)
-
-
-def _require_immutable_tuple(name: str, value: object) -> None:
-    if not isinstance(value, tuple) or _contains_mutable(value):
-        raise TypeError(f"{name} must be an immutable tuple")
 
 
 @dataclass(frozen=True, slots=True)
@@ -117,6 +54,8 @@ class QualifiedFloat:
 
     def __post_init__(self) -> None:
         _validate_qualified("qualified number", self.value, self.status)
+        if self.value is not None:
+            _require_finite("qualified number", self.value)
 
 
 @dataclass(frozen=True, slots=True)
@@ -137,8 +76,8 @@ class QualifiedCount:
 
     def __post_init__(self) -> None:
         _validate_qualified("qualified count", self.value, self.status)
-        if self.value is not None and self.value < 0:
-            raise ValueError("qualified count cannot be negative")
+        if self.value is not None:
+            _require_exact_int("qualified count", self.value)
 
 
 @dataclass(frozen=True, slots=True)
@@ -147,12 +86,19 @@ class PackedBits:
     data: bytes
 
     def __post_init__(self) -> None:
-        if self.bit_width < 1:
-            raise ValueError("bit_width must be positive")
+        _require_exact_int("bit_width", self.bit_width, minimum=1)
         if type(self.data) is not bytes:
             raise TypeError("packed data must be immutable bytes")
         if len(self.data) < self.bytes_per_record:
             raise ValueError("packed data size is smaller than one record")
+        if len(self.data) % self.bytes_per_record:
+            raise ValueError("packed data size must contain complete rows")
+        remainder = self.bit_width % 8
+        if remainder:
+            high_mask = 0xFF ^ ((1 << remainder) - 1)
+            final_bytes = self.data[self.bytes_per_record - 1 :: self.bytes_per_record]
+            if any(byte & high_mask for byte in final_bytes):
+                raise ValueError("packed LSB0 rows must have zero high padding bits")
 
     @property
     def bytes_per_record(self) -> int:
@@ -174,7 +120,9 @@ class IndexRange:
     end: int
 
     def __post_init__(self) -> None:
-        if self.start < 0 or self.end <= self.start:
+        _require_exact_int("range start", self.start)
+        _require_exact_int("range end", self.end, minimum=1)
+        if self.end <= self.start:
             raise ValueError("range must be non-negative and non-empty")
 
 
@@ -194,6 +142,8 @@ class TimestampSeries:
 
     def __post_init__(self) -> None:
         _require_immutable_tuple("timestamp values", self.values)
+        for value in self.values:
+            _require_finite("timestamp", value)
         _require_non_empty("timestamp unit", self.unit)
 
 
@@ -247,8 +197,37 @@ class Timebase:
     description: str = ""
 
     def __post_init__(self) -> None:
+        if (
+            type(self.unit) is not QualifiedText
+            or type(self.tick_period) is not QualifiedFloat
+        ):
+            raise TypeError("timebase qualified fields have invalid types")
         if self.domain not in {"tick", "round", "timestamp", "custom"}:
             raise ValueError("timebase domain is invalid")
+
+
+def _validate_session_lifecycle(session: SessionRecord) -> None:
+    started = session.started_at.value is not None
+    completed = session.completed_at.value is not None
+    if session.status is SessionStatus.CREATED and (
+        started
+        or completed
+        or session.started_at.status is not ValueStatus.ABSENT
+        or session.completed_at.status is not ValueStatus.ABSENT
+    ):
+        raise ValueError("created session timestamps must be absent")
+    if session.status in {SessionStatus.IMPORTING, SessionStatus.RECORDING}:
+        if (
+            not started
+            or completed
+            or session.completed_at.status is not ValueStatus.ABSENT
+        ):
+            raise ValueError(f"{session.status.value} session requires only started_at")
+    if session.status in {SessionStatus.COMPLETE, SessionStatus.PARTIAL}:
+        if not started or not completed:
+            raise ValueError(f"{session.status.value} session requires both timestamps")
+    if session.status is SessionStatus.FAILED and not completed:
+        raise ValueError("failed session requires completed_at")
 
 
 @dataclass(frozen=True, slots=True)
@@ -269,9 +248,30 @@ class SessionRecord:
     schema_version: str = SCHEMA_VERSION
 
     def __post_init__(self) -> None:
+        _require_enum("session kind", self.kind, SessionKind)
+        _require_enum("session status", self.status, SessionStatus)
+        if type(self.adapter) is not AdapterIdentity:
+            raise TypeError("adapter must be AdapterIdentity")
+        if (
+            type(self.started_at) is not QualifiedText
+            or type(self.completed_at) is not QualifiedText
+        ):
+            raise TypeError("session timestamps must be qualified text")
+        nested = (
+            (self.references, SessionReferences),
+            (self.counts, SessionCounts),
+            (self.source_clock, SourceClock),
+            (self.timebase, Timebase),
+        )
+        if any(type(value) is not expected for value, expected in nested):
+            raise TypeError("session nested records have invalid types")
         _require_non_empty("session_id", self.session_id)
         _require_non_empty("provenance_id", self.provenance_id)
-        _require_non_empty("created_at", self.created_at)
+        _require_rfc3339("created_at", self.created_at)
+        if self.started_at.value is not None:
+            _require_rfc3339("started_at", self.started_at.value)
+        if self.completed_at.value is not None:
+            _require_rfc3339("completed_at", self.completed_at.value)
         _require_immutable_tuple("segments", self.segments)
         if self.schema_version != SCHEMA_VERSION:
             raise ValueError(f"schema_version must be {SCHEMA_VERSION}")
@@ -279,6 +279,7 @@ class SessionRecord:
             raise ValueError("segments must be unique")
         for segment in self.segments:
             _require_non_empty("segment", segment)
+        _validate_session_lifecycle(self)
 
     @classmethod
     def minimal(
@@ -296,14 +297,6 @@ class SessionRecord:
             adapter=AdapterIdentity(adapter_id, adapter_version),
             provenance_id=provenance_id,
         )
-
-
-def _validate_batch_buffer(name: str, packed: QualifiedPackedBits, count: int) -> None:
-    if (
-        packed.value is not None
-        and len(packed.value.data) != packed.value.bytes_per_record * count
-    ):
-        raise ValueError(f"{name} packed data size does not match record_count")
 
 
 @dataclass(frozen=True, slots=True)
@@ -330,37 +323,7 @@ class SyndromeBatch:
     schema_version: str = SCHEMA_VERSION
 
     def __post_init__(self) -> None:
-        for name, value in (
-            ("batch_id", self.batch_id),
-            ("session_id", self.session_id),
-            ("segment_id", self.segment_id),
-            ("provenance_id", self.provenance_id),
-        ):
-            _require_non_empty(name, value)
-        _require_immutable_tuple("data_quality", self.data_quality)
-        if self.record_count < 1:
-            raise ValueError("record_count must be positive")
-        if (
-            self.sequence_start < 0
-            or self.sequence_end - self.sequence_start != self.record_count
-        ):
-            raise ValueError("sequence range must equal record_count")
-        expected_size = self.detector_events.bytes_per_record * self.record_count
-        if len(self.detector_events.data) != expected_size:
-            raise ValueError(
-                "detector_events packed data size does not match record_count"
-            )
-        for name in ("measurements", "observables", "erasures", "leakage", "heralds"):
-            _validate_batch_buffer(name, getattr(self, name), self.record_count)
-        if (
-            self.source_timestamps.value is not None
-            and len(self.source_timestamps.value.values) != self.record_count
-        ):
-            raise ValueError("source timestamps must match record_count")
-        if len(set(self.data_quality)) != len(self.data_quality):
-            raise ValueError("data_quality flags must be unique")
-        if self.schema_version != SCHEMA_VERSION:
-            raise ValueError(f"schema_version must be {SCHEMA_VERSION}")
+        _validate_syndrome_batch(self)
 
 
 @dataclass(frozen=True, slots=True)
@@ -371,7 +334,9 @@ class DecodeInput:
 
     def __post_init__(self) -> None:
         _require_non_empty("batch_id", self.batch_id)
-        if self.sequence_start < 0 or self.sequence_end <= self.sequence_start:
+        _require_exact_int("decode sequence_start", self.sequence_start)
+        _require_exact_int("decode sequence_end", self.sequence_end, minimum=1)
+        if self.sequence_end <= self.sequence_start:
             raise ValueError("decode sequence range must be non-empty")
 
 
@@ -398,12 +363,67 @@ class QualifiedQuantity:
         if self.value is None and self.unit is not None:
             raise ValueError("quantity unit must be null when value is null")
         if self.value is not None:
+            _require_finite("quantity", self.value)
             if self.value < 0:
                 raise ValueError("quantity cannot be negative")
             _require_non_empty("quantity unit", self.unit or "")
 
 
 UNAVAILABLE_QUANTITY = QualifiedQuantity(None, None, ValueStatus.UNAVAILABLE)
+
+
+@dataclass(frozen=True, slots=True)
+class CorrectionValue:
+    kind: CorrectionKind
+    edge_ids: tuple[str, ...] = ()
+    compact_ref: str | None = None
+
+    def __post_init__(self) -> None:
+        _require_enum("correction kind", self.kind, CorrectionKind)
+        _require_immutable_tuple("correction edge_ids", self.edge_ids)
+        if self.kind is CorrectionKind.EDGE_IDS:
+            if not self.edge_ids or self.compact_ref is not None:
+                raise ValueError("edge_ids correction requires only nonempty edge_ids")
+            if len(set(self.edge_ids)) != len(self.edge_ids):
+                raise ValueError("correction edge_ids must be unique")
+            for edge_id in self.edge_ids:
+                _require_non_empty("correction edge_id", edge_id)
+        elif self.edge_ids or self.compact_ref is None:
+            raise ValueError("compact_ref correction requires only compact_ref")
+        if self.compact_ref is not None:
+            _require_non_empty("correction compact_ref", self.compact_ref)
+
+    @classmethod
+    def edges(cls, edge_ids: tuple[str, ...]) -> CorrectionValue:
+        return cls(CorrectionKind.EDGE_IDS, edge_ids=edge_ids)
+
+    @classmethod
+    def compact(cls, compact_ref: str) -> CorrectionValue:
+        return cls(CorrectionKind.COMPACT_REF, compact_ref=compact_ref)
+
+
+@dataclass(frozen=True, slots=True)
+class QualifiedCorrection:
+    value: CorrectionValue | None
+    status: ValueStatus
+
+    def __post_init__(self) -> None:
+        _validate_qualified("qualified correction", self.value, self.status)
+        if self.value is not None and type(self.value) is not CorrectionValue:
+            raise TypeError("qualified correction value must be CorrectionValue")
+
+
+@dataclass(frozen=True, slots=True)
+class DecodeError:
+    code: str
+    message: str
+
+    def __post_init__(self) -> None:
+        _require_non_empty("decode error code", self.code)
+        _require_non_empty("decode error message", self.message)
+
+
+UNAVAILABLE_CORRECTION = QualifiedCorrection(None, ValueStatus.UNAVAILABLE)
 
 
 @dataclass(frozen=True, slots=True)
@@ -417,28 +437,60 @@ class DecodeRecord:
     predicted_logical_flips: PackedBits
     provenance_id: str
     confidence: QualifiedFloat = UNAVAILABLE_FLOAT
-    correction_edge_ids: tuple[str, ...] | None = None
-    correction_ref: QualifiedText = UNAVAILABLE_TEXT
+    correction: QualifiedCorrection = UNAVAILABLE_CORRECTION
     known_truth: QualifiedPackedBits = UNKNOWN_BITS
     pipeline_latency: QualifiedQuantity = UNAVAILABLE_QUANTITY
     total_latency: QualifiedQuantity = UNAVAILABLE_QUANTITY
-    error_code: str | None = None
-    error_message: str | None = None
+    error: DecodeError | None = None
     schema_version: str = SCHEMA_VERSION
 
     def __post_init__(self) -> None:
+        _require_enum("decode status", self.status, DecodeStatus)
+        if (
+            type(self.input) is not DecodeInput
+            or type(self.decoder) is not DecoderIdentity
+        ):
+            raise TypeError("decode input and decoder have invalid types")
+        if (
+            type(self.prediction) is not PackedBits
+            or type(self.predicted_logical_flips) is not PackedBits
+        ):
+            raise TypeError("decode predictions must be PackedBits")
+        if (
+            type(self.confidence) is not QualifiedFloat
+            or type(self.known_truth) is not QualifiedPackedBits
+        ):
+            raise TypeError("decode qualified fields have invalid types")
+        if (
+            type(self.pipeline_latency) is not QualifiedQuantity
+            or type(self.total_latency) is not QualifiedQuantity
+        ):
+            raise TypeError("decode latencies must be QualifiedQuantity")
+        if self.error is not None and type(self.error) is not DecodeError:
+            raise TypeError("error must be DecodeError")
         _require_non_empty("decode_id", self.decode_id)
         _require_non_empty("session_id", self.session_id)
         _require_non_empty("provenance_id", self.provenance_id)
-        if self.correction_edge_ids is not None:
-            _require_immutable_tuple("correction_edge_ids", self.correction_edge_ids)
-        if (self.error_code is None) != (self.error_message is None):
-            raise ValueError("decode error code and message must be provided together")
-        if (
-            self.status in {DecodeStatus.ERROR, DecodeStatus.TIMEOUT}
-            and self.error_code is None
+        if type(self.correction) is not QualifiedCorrection:
+            raise TypeError("correction must be QualifiedCorrection")
+        failed = self.status in {DecodeStatus.ERROR, DecodeStatus.TIMEOUT}
+        if failed != (self.error is not None):
+            raise ValueError(
+                "decode error must be present exactly for error or timeout status"
+            )
+        record_count = self.input.sequence_end - self.input.sequence_start
+        for name, packed in (
+            ("prediction", self.prediction),
+            ("predicted_logical_flips", self.predicted_logical_flips),
         ):
-            raise ValueError("failed decode status requires an error")
+            if len(packed.data) != packed.bytes_per_record * record_count:
+                raise ValueError(f"{name} rows must match decode sequence range")
+        if self.known_truth.value is not None:
+            if (
+                len(self.known_truth.value.data)
+                != self.known_truth.value.bytes_per_record * record_count
+            ):
+                raise ValueError("known_truth rows must match decode sequence range")
         if self.schema_version != SCHEMA_VERSION:
             raise ValueError(f"schema_version must be {SCHEMA_VERSION}")
 
@@ -469,21 +521,11 @@ class DecodeRecord:
 
 @dataclass(frozen=True, slots=True)
 class CalibrationScope:
-    kind: str
+    kind: CalibrationScopeKind
     id: str
 
     def __post_init__(self) -> None:
-        valid = {
-            "device",
-            "patch",
-            "qubit",
-            "coupler",
-            "resonator",
-            "readout_channel",
-            "custom",
-        }
-        if self.kind not in valid:
-            raise ValueError("calibration scope kind is invalid")
+        _require_enum("calibration scope kind", self.kind, CalibrationScopeKind)
         _require_non_empty("calibration scope id", self.id)
 
 
@@ -497,7 +539,7 @@ class CalibrationRecord:
     value: QualifiedFloat
     unit: QualifiedText
     uncertainty: QualifiedFloat
-    quality: str
+    quality: CalibrationQuality
     source_system: str
     provenance_id: str
     effective_start: str = field(default_factory=_utc_now)
@@ -508,6 +550,17 @@ class CalibrationRecord:
     schema_version: str = SCHEMA_VERSION
 
     def __post_init__(self) -> None:
+        if type(self.scope) is not CalibrationScope:
+            raise TypeError("scope must be CalibrationScope")
+        if any(
+            type(item) is not expected
+            for item, expected in (
+                (self.value, QualifiedFloat),
+                (self.unit, QualifiedText),
+                (self.uncertainty, QualifiedFloat),
+            )
+        ):
+            raise TypeError("calibration qualified fields have invalid types")
         for name, value in (
             ("calibration_id", self.calibration_id),
             ("session_id", self.session_id),
@@ -517,8 +570,20 @@ class CalibrationRecord:
             ("provenance_id", self.provenance_id),
         ):
             _require_non_empty(name, value)
-        if self.quality not in {"accepted", "suspect", "rejected", "unknown"}:
-            raise ValueError("calibration quality is invalid")
+        _require_enum("calibration quality", self.quality, CalibrationQuality)
+        _require_rfc3339("effective_start", self.effective_start)
+        if self.effective_end is not None:
+            _require_rfc3339("effective_end", self.effective_end)
+            start = datetime.fromisoformat(self.effective_start.replace("Z", "+00:00"))
+            end = datetime.fromisoformat(self.effective_end.replace("Z", "+00:00"))
+            if end < start:
+                raise ValueError("effective_end cannot precede effective_start")
+        if self.calibration_run_id is not None:
+            _require_non_empty("calibration_run_id", self.calibration_run_id)
+        if not isinstance(self.original_representation, str):
+            raise TypeError("original_representation must be a string")
+        if not MIME_PATTERN.fullmatch(self.original_mime_type):
+            raise ValueError("original_mime_type must be a MIME type")
         if self.schema_version != SCHEMA_VERSION:
             raise ValueError(f"schema_version must be {SCHEMA_VERSION}")
 
@@ -543,7 +608,7 @@ class CalibrationRecord:
             value=QualifiedFloat(None, ValueStatus.UNKNOWN),
             unit=UNKNOWN_TEXT,
             uncertainty=QualifiedFloat(None, ValueStatus.UNAVAILABLE),
-            quality="unknown",
+            quality=CalibrationQuality.UNKNOWN,
             source_system=source_system,
             provenance_id=provenance_id,
         )
@@ -554,14 +619,13 @@ class ProvenanceSource:
     source_id: str
     uri: str
     sha256: str
-    policy: str
+    policy: SourcePolicy
 
     def __post_init__(self) -> None:
         _require_non_empty("source_id", self.source_id)
         _require_non_empty("source uri", self.uri)
         _validate_sha256("source", self.sha256)
-        if self.policy not in {"copy", "reference"}:
-            raise ValueError("source policy must be copy or reference")
+        _require_enum("source policy", self.policy, SourcePolicy)
 
 
 ScalarValue = str | int | float | bool | None
@@ -585,6 +649,9 @@ class ProvenanceOperation:
         scalar_types = (str, int, float, bool, type(None))
         if any(not isinstance(value, scalar_types) for _, value in self.parameters):
             raise TypeError("parameter values must be JSON scalars")
+        for _, value in self.parameters:
+            if isinstance(value, float):
+                _require_finite("parameter value", value)
 
 
 @dataclass(frozen=True, slots=True)
@@ -609,26 +676,4 @@ class ProvenanceRecord:
     schema_version: str = SCHEMA_VERSION
 
     def __post_init__(self) -> None:
-        _require_non_empty("provenance_id", self.provenance_id)
-        _require_non_empty("created_at", self.created_at)
-        _require_non_empty("runtime", self.runtime)
-        _require_non_empty("runtime_version", self.runtime_version)
-        for name in (
-            "sources",
-            "mapping_decisions",
-            "unit_conversions",
-            "revision_references",
-            "dependencies",
-            "parent_dataset_ids",
-            "transformations",
-            "filters",
-            "exclusions",
-            "recipes",
-            "annotations",
-            "control_audit_refs",
-        ):
-            _require_immutable_tuple(name, getattr(self, name))
-        if self.schema_version != SCHEMA_VERSION:
-            raise ValueError(f"schema_version must be {SCHEMA_VERSION}")
-        if not self.sources:
-            raise ValueError("provenance requires at least one original source")
+        _validate_provenance_record(self)

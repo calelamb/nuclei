@@ -7,6 +7,8 @@ import pytest
 from kernel.qec_data.model_codecs import (
     batch_from_mapping,
     batch_to_mapping,
+    decode_from_mapping,
+    decode_to_mapping,
     session_from_mapping,
     session_to_mapping,
 )
@@ -14,8 +16,13 @@ from kernel.qec_data.models import (
     AdapterIdentity,
     CalibrationRecord,
     CalibrationScope,
+    CalibrationScopeKind,
     DecodeRecord,
     DecodeStatus,
+    QualifiedCorrection,
+    CorrectionValue,
+    DataQualityFlag,
+    DecodeError,
     PackedBits,
     ProvenanceRecord,
     ProvenanceOperation,
@@ -27,6 +34,7 @@ from kernel.qec_data.models import (
     SessionRecord,
     SessionStatus,
     SyndromeBatch,
+    SourcePolicy,
     ValueStatus,
 )
 
@@ -126,7 +134,7 @@ def test_decode_calibration_and_provenance_models_are_frozen() -> None:
     calibration = CalibrationRecord.minimal(
         calibration_id="cal-1",
         session_id="session-1",
-        scope=CalibrationScope(kind="qubit", id="q0"),
+        scope=CalibrationScope(kind=CalibrationScopeKind.QUBIT, id="q0"),
         parameter_name="readout assignment error",
         semantic_id="vendor.example/readout_assignment_error",
         source_system="lab-db",
@@ -137,7 +145,11 @@ def test_decode_calibration_and_provenance_models_are_frozen() -> None:
         provenance_id="p1",
         created_at="2026-07-21T00:00:00Z",
         adapter=AdapterIdentity("generic", "1.0.0"),
-        sources=(ProvenanceSource("source-1", "capture.dets", "b" * 64, "reference"),),
+        sources=(
+            ProvenanceSource(
+                "source-1", "capture.dets", "b" * 64, SourcePolicy.REFERENCE
+            ),
+        ),
     )
     with pytest.raises(FrozenInstanceError):
         provenance.provenance_id = "p2"  # type: ignore[misc]
@@ -169,7 +181,7 @@ def test_every_record_rejects_an_incompatible_schema_version(model_name: str) ->
     calibration = CalibrationRecord.minimal(
         calibration_id="c1",
         session_id="s1",
-        scope=CalibrationScope("device", "device-1"),
+        scope=CalibrationScope(CalibrationScopeKind.DEVICE, "device-1"),
         parameter_name="parameter",
         semantic_id="vendor/parameter",
         source_system="source",
@@ -179,7 +191,9 @@ def test_every_record_rejects_an_incompatible_schema_version(model_name: str) ->
         "p1",
         "2026-07-21T00:00:00Z",
         AdapterIdentity("adapter", "1"),
-        sources=(ProvenanceSource("source", "capture", "b" * 64, "reference"),),
+        sources=(
+            ProvenanceSource("source", "capture", "b" * 64, SourcePolicy.REFERENCE),
+        ),
     )
     records = {
         "session": session,
@@ -209,7 +223,7 @@ def test_tuple_collections_reject_mutable_list_inputs() -> None:
             "2026-07-21T00:00:00Z",
             AdapterIdentity("adapter", "1"),
             sources=[  # type: ignore[arg-type]
-                ProvenanceSource("s1", "capture", "b" * 64, "reference")
+                ProvenanceSource("s1", "capture", "b" * 64, SourcePolicy.REFERENCE)
             ],
         )
 
@@ -234,3 +248,100 @@ def test_provenance_operations_preserve_immutable_canonical_parameters() -> None
     assert operation.parameters[0] == ("min_distance", 3)
     with pytest.raises(TypeError, match="parameters"):
         ProvenanceOperation("threshold-fit", "1.0.0", {"min_distance": 3})  # type: ignore[arg-type]
+
+
+def test_packed_bits_enforce_lsb0_zero_padding_and_safe_types() -> None:
+    with pytest.raises(TypeError, match="bit_width"):
+        PackedBits(True, b"\x00")  # type: ignore[arg-type]
+    with pytest.raises(ValueError, match="padding"):
+        PackedBits(9, b"\x00\x02")
+    with pytest.raises(ValueError, match="finite"):
+        QualifiedFloat(float("nan"), ValueStatus.MEASURED)
+
+
+def test_python_models_reject_string_enums_and_non_rfc3339_timestamps() -> None:
+    with pytest.raises(TypeError, match="kind"):
+        SessionRecord.minimal("s1", "hardware_import", "adapter", "1", "p1")  # type: ignore[arg-type]
+    session = SessionRecord.minimal(
+        "s1", SessionKind.HARDWARE_IMPORT, "adapter", "1", "p1"
+    )
+    with pytest.raises(ValueError, match="RFC 3339"):
+        replace(session, created_at="not-a-date")
+    with pytest.raises(TypeError, match="status"):
+        QualifiedText(None, "unknown")  # type: ignore[arg-type]
+
+
+def test_batch_quality_and_timestamp_invariants() -> None:
+    batch = batch_from_mapping(load_fixture("minimal-batch.json"))
+    with pytest.raises(ValueError, match="data_quality"):
+        replace(batch, data_quality=())
+    with pytest.raises(ValueError, match="complete"):
+        replace(batch, data_quality=(batch.data_quality[0], DataQualityFlag.PARTIAL))
+    invalid = load_fixture("minimal-batch.json")
+    invalid["source_timestamps"] = {
+        "value": {"values": [1.0, 2.0], "unit": "ns"},
+        "status": "measured",
+    }
+    with pytest.raises(ValueError, match="record_count"):
+        batch_from_mapping(invalid)
+
+
+def test_session_lifecycle_matrix() -> None:
+    session = session_from_mapping(load_fixture("minimal-session.json"))
+    with pytest.raises(ValueError, match="complete"):
+        replace(session, status=SessionStatus.COMPLETE)
+
+
+def test_decode_fixture_round_trips_with_tagged_correction() -> None:
+    mapping = load_fixture("minimal-decode-result.json")
+    decode = decode_from_mapping(mapping)
+    assert decode_to_mapping(decode) == mapping
+    correction = QualifiedCorrection(
+        CorrectionValue.edges(("edge-1", "edge-2")), ValueStatus.PREDICTED
+    )
+    assert correction.value is not None
+    with pytest.raises(ValueError, match="unique"):
+        CorrectionValue.edges(("edge-1", "edge-1"))
+
+
+def test_decode_status_error_and_exclusive_range_invariants() -> None:
+    decode = decode_from_mapping(load_fixture("minimal-decode-result.json"))
+    with pytest.raises(ValueError, match="error"):
+        replace(decode, status=DecodeStatus.ERROR, error=None)
+    with pytest.raises(ValueError, match="error"):
+        replace(
+            decode,
+            status=DecodeStatus.COMPLETE,
+            error=DecodeError("unexpected", "success cannot carry errors"),
+        )
+    with pytest.raises(ValueError, match="sequence"):
+        replace(decode, input=replace(decode.input, sequence_start=2, sequence_end=2))
+
+
+def test_calibration_and_provenance_nested_boundaries_are_strict() -> None:
+    calibration = CalibrationRecord.minimal(
+        calibration_id="cal-1",
+        session_id="s1",
+        scope=CalibrationScope(CalibrationScopeKind.DEVICE, "d1"),
+        parameter_name="parameter",
+        semantic_id="vendor/parameter",
+        source_system="source",
+        provenance_id="p1",
+    )
+    with pytest.raises(ValueError, match="MIME"):
+        replace(calibration, original_mime_type="blank")
+    with pytest.raises(ValueError, match="calibration_run_id"):
+        replace(calibration, calibration_run_id=" ")
+    provenance = ProvenanceRecord(
+        "p1",
+        "2026-07-21T00:00:00Z",
+        AdapterIdentity("adapter", "1"),
+        sources=(
+            ProvenanceSource("source", "capture", "b" * 64, SourcePolicy.REFERENCE),
+        ),
+        parent_dataset_ids=("dataset-1",),
+    )
+    with pytest.raises(ValueError, match="parent_dataset_ids"):
+        replace(provenance, parent_dataset_ids=("dataset-1", "dataset-1"))
+    with pytest.raises(TypeError, match="sources"):
+        replace(provenance, sources=("not-a-source",))  # type: ignore[arg-type]

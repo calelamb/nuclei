@@ -2,6 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://getnuclei.dev/schemas/qec-data/v1/decode-result.schema.json",
   "title": "QEC canonical decode result",
+  "$comment": "input.sequence_end is exclusive. Executable validators MUST enforce sequence_end > sequence_start and packed row counts equal sequence_end - sequence_start. Packed rows are strict canonical Base64, LSB0 within each byte, and unused high bits in each row's final byte MUST be zero.",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -18,8 +19,8 @@
       "required": ["batch_id", "sequence_start", "sequence_end"],
       "properties": {
         "batch_id": { "$ref": "#/$defs/nonEmpty" },
-        "sequence_start": { "type": "integer", "minimum": 0 },
-        "sequence_end": { "type": "integer", "minimum": 1 }
+        "sequence_start": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
+        "sequence_end": { "type": "integer", "minimum": 1, "maximum": 9007199254740991, "description": "Exclusive sequence bound." }
       }
     },
     "decoder": {
@@ -50,15 +51,25 @@
     },
     "provenance_id": { "$ref": "#/$defs/nonEmpty" }
   },
+  "allOf": [
+    {
+      "if": { "properties": { "status": { "enum": ["complete", "partial"] } }, "required": ["status"] },
+      "then": { "properties": { "error": { "type": "null" } } }
+    },
+    {
+      "if": { "properties": { "status": { "enum": ["timeout", "error"] } }, "required": ["status"] },
+      "then": { "properties": { "error": { "type": "object" } } }
+    }
+  ],
   "$defs": {
     "nonEmpty": { "type": "string", "minLength": 1 },
     "sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
     "valueStatus": { "enum": ["absent", "unavailable", "unknown", "inferred", "predicted", "simulated", "measured"] },
     "packedBits": {
-      "type": "object", "additionalProperties": false, "required": ["encoding", "bit_width", "data"],
+      "type": "object", "additionalProperties": false, "required": ["encoding", "bit_order", "bit_width", "data"],
       "properties": {
-        "encoding": { "const": "base64" }, "bit_width": { "type": "integer", "minimum": 1 },
-        "data": { "type": "string", "contentEncoding": "base64", "pattern": "^[A-Za-z0-9+/]*={0,2}$" }
+        "encoding": { "const": "base64" }, "bit_order": { "const": "lsb0" }, "bit_width": { "type": "integer", "minimum": 1, "maximum": 9007199254740991 },
+        "data": { "type": "string", "minLength": 4, "contentEncoding": "base64", "pattern": "^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$" }
       }
     },
     "qualifiedNumber": {
@@ -79,11 +90,10 @@
       "allOf": [{ "$ref": "#/$defs/qualifiedObjectConsistency" }]
     },
     "correction": {
-      "type": "object", "additionalProperties": false, "minProperties": 1, "maxProperties": 1,
-      "properties": {
-        "edge_ids": { "type": "array", "items": { "$ref": "#/$defs/nonEmpty" }, "uniqueItems": true },
-        "compact_ref": { "$ref": "#/$defs/nonEmpty" }
-      }
+      "oneOf": [
+        { "type": "object", "additionalProperties": false, "required": ["kind", "edge_ids"], "properties": { "kind": { "const": "edge_ids" }, "edge_ids": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/nonEmpty" }, "uniqueItems": true } } },
+        { "type": "object", "additionalProperties": false, "required": ["kind", "compact_ref"], "properties": { "kind": { "const": "compact_ref" }, "compact_ref": { "$ref": "#/$defs/nonEmpty" } } }
+      ]
     },
     "qualifiedCorrection": {
       "type": "object", "additionalProperties": false, "required": ["value", "status"],

@@ -2,6 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://getnuclei.dev/schemas/qec-data/v1/syndrome-batch.schema.json",
   "title": "QEC canonical syndrome batch",
+  "$comment": "sequence_end is exclusive and executable validators MUST enforce sequence_end - sequence_start == record_count. Packed rows are LSB0 within each byte and unused high bits in each row's final byte MUST be zero.",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -15,9 +16,9 @@
     "batch_id": { "$ref": "#/$defs/nonEmpty" },
     "session_id": { "$ref": "#/$defs/nonEmpty" },
     "segment_id": { "$ref": "#/$defs/nonEmpty" },
-    "sequence_start": { "type": "integer", "minimum": 0 },
-    "sequence_end": { "type": "integer", "minimum": 1 },
-    "record_count": { "type": "integer", "minimum": 1 },
+    "sequence_start": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
+    "sequence_end": { "type": "integer", "minimum": 1, "maximum": 9007199254740991, "description": "exclusive sequence bound." },
+    "record_count": { "type": "integer", "minimum": 1, "maximum": 9007199254740991 },
     "shot_range": { "$ref": "#/$defs/qualifiedRange" },
     "round_range": { "$ref": "#/$defs/qualifiedRange" },
     "source_timestamps": { "$ref": "#/$defs/qualifiedTimestamps" },
@@ -31,8 +32,10 @@
     "topology_revision": { "$ref": "#/$defs/qualifiedText" },
     "data_quality": {
       "type": "array",
+      "minItems": 1,
       "items": { "enum": ["complete", "partial", "out_of_order", "duplicate", "gap_before", "clock_unreliable", "vendor_flagged"] },
-      "uniqueItems": true
+      "uniqueItems": true,
+      "allOf": [{ "if": { "contains": { "const": "complete" } }, "then": { "maxItems": 1 } }]
     },
     "provenance_id": { "$ref": "#/$defs/nonEmpty" }
   },
@@ -40,11 +43,12 @@
     "nonEmpty": { "type": "string", "minLength": 1 },
     "valueStatus": { "enum": ["absent", "unavailable", "unknown", "inferred", "predicted", "simulated", "measured"] },
     "packedBits": {
-      "type": "object", "additionalProperties": false, "required": ["encoding", "bit_width", "data"],
+      "type": "object", "additionalProperties": false, "required": ["encoding", "bit_order", "bit_width", "data"],
       "properties": {
         "encoding": { "const": "base64" },
-        "bit_width": { "type": "integer", "minimum": 1 },
-        "data": { "type": "string", "contentEncoding": "base64", "pattern": "^[A-Za-z0-9+/]*={0,2}$" }
+        "bit_order": { "const": "lsb0" },
+        "bit_width": { "type": "integer", "minimum": 1, "maximum": 9007199254740991 },
+        "data": { "type": "string", "minLength": 4, "contentEncoding": "base64", "pattern": "^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$" }
       }
     },
     "qualifiedPackedBits": {
@@ -54,7 +58,7 @@
     },
     "range": {
       "type": "object", "additionalProperties": false, "required": ["start", "end"],
-      "properties": { "start": { "type": "integer", "minimum": 0 }, "end": { "type": "integer", "minimum": 1 } }
+      "properties": { "start": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 }, "end": { "type": "integer", "minimum": 1, "maximum": 9007199254740991, "description": "Exclusive range bound." } }
     },
     "qualifiedRange": {
       "type": "object", "additionalProperties": false, "required": ["value", "status"],
