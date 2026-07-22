@@ -1,5 +1,5 @@
-import { ChevronDown, Play } from 'lucide-react';
-import { useState, type ReactElement } from 'react';
+import { Play } from 'lucide-react';
+import type { ReactElement } from 'react';
 import { useQecStudyStore } from '../../../services/qecStudyStore';
 import { useQecStudyUiStore } from '../../../stores/qecStudyUiStore';
 import { useQecWorkbenchStore } from '../../../stores/qecWorkbenchStore';
@@ -12,88 +12,72 @@ function presetLabel(preset: QecWorkspacePreset): string {
   return `${preset.charAt(0).toUpperCase()}${preset.slice(1)}`;
 }
 
-export function QecResearchBar(): ReactElement {
-  const [studyMenuOpen, setStudyMenuOpen] = useState(false);
+function StudyPicker(): ReactElement {
   const studies = useQecStudyStore((state) => state.studies);
   const activeStudyId = useQecStudyUiStore((state) => state.activeStudyId);
   const setActiveStudy = useQecStudyUiStore((state) => state.setActiveStudy);
+  return (
+    <label className="qec-study-picker" htmlFor="qec-active-study">
+      <span>Study</span>
+      <select
+        id="qec-active-study"
+        aria-label="Active QEC Study"
+        disabled={studies.length === 0}
+        value={activeStudyId ?? ''}
+        onChange={(event) => setActiveStudy(event.target.value)}
+      >
+        <option value="">{studies.length === 0 ? 'No Studies available' : 'Select a Study'}</option>
+        {studies.map(({ study }) => <option key={study.id} value={study.id}>{study.name}</option>)}
+      </select>
+    </label>
+  );
+}
+
+function PresetSwitcher(): ReactElement {
   const preset = useQecWorkbenchStore((state) => state.preset);
   const setPreset = useQecWorkbenchStore((state) => state.setPreset);
-  const activeStudy = studies.find(({ study }) => study.id === activeStudyId)?.study ?? null;
+  return (
+    <div className="qec-preset-switcher" role="group" aria-label="Workspace preset">
+      {PRESETS.map((option) => (
+        <button key={option} type="button" aria-pressed={preset === option} onClick={() => setPreset(option)}>
+          {presetLabel(option)}
+        </button>
+      ))}
+    </div>
+  );
+}
 
-  const chooseStudy = (studyId: string): void => {
-    setActiveStudy(studyId);
-    setStudyMenuOpen(false);
-  };
+function DeferredRunAction(): ReactElement {
+  return (
+    <button type="button" className="qec-primary-action" aria-label="Run or capture (not connected)" title="Run and capture controls connect in a later workbench task" disabled>
+      <Play aria-hidden="true" size={15} fill="currentColor" />
+      Run / Capture
+    </button>
+  );
+}
 
+function ResearchContext(): ReactElement {
+  return (
+    <div className="qec-research-bar__context">
+      <p className="qec-research-bar__metadata">
+        <span className="qec-mono">Revision —</span>
+        <span className="qec-mono">Data —</span>
+        <span className="qec-status qec-status--ready">Provenance ready</span>
+      </p>
+      <ResearchTrail />
+    </div>
+  );
+}
+
+export function QecResearchBar(): ReactElement {
   return (
     <header className="qec-research-bar">
       <div className="qec-research-bar__primary">
-        <div className="qec-study-picker">
-          <button
-            type="button"
-            className="qec-study-picker__trigger"
-            aria-expanded={studyMenuOpen}
-            aria-haspopup="listbox"
-            onClick={() => setStudyMenuOpen((open) => !open)}
-          >
-            <span>Study: {activeStudy?.name ?? 'None selected'}</span>
-            <ChevronDown aria-hidden="true" size={15} strokeWidth={1.8} />
-          </button>
-          {studyMenuOpen && (
-            <ul className="qec-study-picker__menu" role="listbox" aria-label="Available QEC Studies">
-              {studies.length > 0 ? studies.map(({ study }) => (
-                <li key={study.id}>
-                  <button
-                    type="button"
-                    role="option"
-                    aria-selected={study.id === activeStudyId}
-                    onClick={() => chooseStudy(study.id)}
-                  >
-                    <span>{study.name}</span>
-                    <span className="qec-mono">{study.preset}</span>
-                  </button>
-                </li>
-              )) : (
-                <li className="qec-study-picker__empty">No Studies in this project</li>
-              )}
-            </ul>
-          )}
-        </div>
-
-        <div className="qec-preset-switcher" role="group" aria-label="Workspace preset">
-          {PRESETS.map((option) => (
-            <button
-              key={option}
-              type="button"
-              aria-pressed={preset === option}
-              onClick={() => setPreset(option)}
-            >
-              {presetLabel(option)}
-            </button>
-          ))}
-        </div>
-
-        <button
-          type="button"
-          className="qec-primary-action"
-          aria-label="Run or capture (not connected)"
-          title="Run and capture controls connect in a later workbench task"
-          disabled
-        >
-          <Play aria-hidden="true" size={15} fill="currentColor" />
-          Run / Capture
-        </button>
+        <StudyPicker />
+        <PresetSwitcher />
+        <DeferredRunAction />
       </div>
-
-      <div className="qec-research-bar__context">
-        <p className="qec-research-bar__metadata">
-          <span className="qec-mono">Revision —</span>
-          <span className="qec-mono">Data —</span>
-          <span className="qec-status qec-status--ready">Provenance ready</span>
-        </p>
-        <ResearchTrail />
-      </div>
+      <ResearchContext />
     </header>
   );
 }
