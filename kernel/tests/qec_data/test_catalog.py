@@ -196,7 +196,7 @@ def test_catalog_rejects_parquet_bit_width_metadata_identity_mismatch(
 def test_catalog_rejects_optional_bit_field_presence_identity_mismatch(
     tmp_path: Path, field: str, physical_field: bool
 ) -> None:
-    bit_widths = (("detectors", 8),)
+    bit_widths = (("detectors", 9),)
     batch = sample_batch()
     if physical_field:
         batch = replace(
