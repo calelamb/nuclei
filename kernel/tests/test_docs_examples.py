@@ -24,11 +24,8 @@ which skips keyring persistence (manager.py: ``if persist and credentials``).
 from __future__ import annotations
 
 import importlib.util
-import re
-import string
 import sys
-from pathlib import Path, PurePosixPath
-from urllib.parse import unquote, urlsplit
+from pathlib import Path
 
 import pytest
 
@@ -36,362 +33,17 @@ import kernel.executor as executor_module
 from kernel.executor import Executor
 from kernel.hardware.job_store import JobStore
 from kernel.hardware.manager import HardwareManager
+from .docs_link_checker import (
+    research_doc_targets as _research_doc_targets,
+    research_documents as _research_documents,
+    research_links as _research_links,
+)
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 EXAMPLES_DIR = REPO_ROOT / "docs-site" / "fixtures" / "examples"
 DOCS_DIR = REPO_ROOT / "docs-site" / "src" / "content" / "docs"
 RESEARCH_DOCS_DIR = DOCS_DIR / "research"
 QEC_WORKBENCH_DOC = RESEARCH_DOCS_DIR / "qec-workbench.mdx"
-RESEARCH_URL_PREFIX = "/docs/research/"
-DOC_SOURCE_SUFFIXES = frozenset({".md", ".mdx"})
-FENCE_OPEN = re.compile(r"^[ \t]{0,3}(`{3,}|~{3,})")
-INLINE_CODE = re.compile(r"(`+).*?\1", re.DOTALL)
-HTML_COMMENT = re.compile(r"<!--.*?-->|\{/\*.*?\*/\}", re.DOTALL)
-MARKDOWN_ESCAPABLE = frozenset(string.punctuation)
-HREF_ATTRIBUTE = re.compile(
-    r"(?<![A-Za-z0-9_:-])href\s*=\s*(?:\"([^\"]+)\"|'([^']+)'|"
-    r"\{\s*(?:\"([^\"]+)\"|'([^']+)')\s*\})"
-)
-
-
-def _within(path: Path, root: Path) -> bool:
-    return path == root or path.is_relative_to(root)
-
-
-def _source_candidates(target: Path, root: Path) -> tuple[Path, ...]:
-    if target == root:
-        return (root / "index.mdx", root / "index.md")
-    if target.suffix.lower() in DOC_SOURCE_SUFFIXES:
-        return (target,)
-    return (
-        Path(f"{target}.mdx"),
-        Path(f"{target}.md"),
-        target / "index.mdx",
-        target / "index.md",
-    )
-
-
-def _research_doc_targets(
-    href: str, research_root: Path = RESEARCH_DOCS_DIR
-) -> tuple[Path, ...]:
-    """Resolve candidate docs-site pages without allowing path escape."""
-    parsed = urlsplit(href)
-    decoded_path = unquote(parsed.path)
-    assert decoded_path.startswith(
-        RESEARCH_URL_PREFIX
-    ), f"Not a Research docs URL: {href}"
-    relative = decoded_path.removeprefix(RESEARCH_URL_PREFIX).rstrip("/")
-    relative_path = PurePosixPath(relative)
-    assert (
-        not relative_path.is_absolute() and ".." not in relative_path.parts
-    ), f"Research docs link escapes its root: {href}"
-    assert "\\" not in relative, f"Research docs link escapes its root: {href}"
-    target = research_root.joinpath(*relative_path.parts)
-    resolved_root = research_root.resolve()
-    candidates = _source_candidates(target, research_root)
-    for candidate in candidates:
-        assert _within(
-            candidate.resolve(), resolved_root
-        ), f"Research docs link escapes its root: {href}"
-    return candidates
-
-
-def _strip_fenced_code(text: str) -> str:
-    kept: list[str] = []
-    fence: tuple[str, int] | None = None
-    for line in text.splitlines(keepends=True):
-        marker = line.lstrip(" \t").rstrip()
-        if fence and marker and set(marker) == {fence[0]} and len(marker) >= fence[1]:
-            fence = None
-            continue
-        opening = FENCE_OPEN.match(line) if fence is None else None
-        if opening:
-            token = opening.group(1)
-            fence = (token[0], len(token))
-        elif fence is None:
-            kept.append(line)
-    return "".join(kept)
-
-
-def _reference_label(label: str) -> str:
-    return " ".join(_markdown_unescape(label).split()).casefold()
-
-
-def _is_escaped(text: str, index: int) -> bool:
-    slash_count = 0
-    cursor = index - 1
-    while cursor >= 0 and text[cursor] == "\\":
-        slash_count += 1
-        cursor -= 1
-    return slash_count % 2 == 1
-
-
-def _markdown_unescape(value: str) -> str:
-    output: list[str] = []
-    cursor = 0
-    while cursor < len(value):
-        if (
-            value[cursor] == "\\"
-            and cursor + 1 < len(value)
-            and value[cursor + 1] in MARKDOWN_ESCAPABLE
-        ):
-            cursor += 1
-        output.append(value[cursor])
-        cursor += 1
-    return "".join(output)
-
-
-def _parse_bracket(text: str, start: int) -> tuple[str, int] | None:
-    if start >= len(text) or text[start] != "[" or _is_escaped(text, start):
-        return None
-    depth = 1
-    cursor = start + 1
-    while cursor < len(text):
-        char = text[cursor]
-        if char == "\\" and cursor + 1 < len(text):
-            cursor += 2
-            continue
-        if char == "[":
-            depth += 1
-        elif char == "]":
-            depth -= 1
-            if depth == 0:
-                return text[start + 1 : cursor], cursor + 1
-        cursor += 1
-    return None
-
-
-def _skip_whitespace(text: str, start: int) -> int:
-    cursor = start
-    while cursor < len(text) and text[cursor].isspace():
-        cursor += 1
-    return cursor
-
-
-def _parse_destination(text: str, start: int) -> tuple[str, int] | None:
-    if start >= len(text):
-        return None
-    if text[start] == "<":
-        cursor = start + 1
-        while cursor < len(text):
-            if text[cursor] == ">" and not _is_escaped(text, cursor):
-                return _markdown_unescape(text[start + 1 : cursor]), cursor + 1
-            if text[cursor] in "\n<":
-                return None
-            cursor += 1
-        return None
-    return _parse_bare_destination(text, start)
-
-
-def _parse_bare_destination(text: str, start: int) -> tuple[str, int] | None:
-    depth = 0
-    cursor = start
-    while cursor < len(text):
-        char = text[cursor]
-        escaped = (
-            char == "\\"
-            and cursor + 1 < len(text)
-            and text[cursor + 1] in MARKDOWN_ESCAPABLE
-        )
-        if escaped:
-            cursor += 2
-            continue
-        if char == "(":
-            depth += 1
-        elif char == ")":
-            if depth == 0:
-                break
-            depth -= 1
-        elif char.isspace():
-            break
-        cursor += 1
-    if cursor == start or depth != 0:
-        return None
-    return _markdown_unescape(text[start:cursor]), cursor
-
-
-def _parse_title(text: str, start: int) -> int | None:
-    if start >= len(text) or text[start] not in "\"'(":
-        return None
-    closer = ")" if text[start] == "(" else text[start]
-    cursor = start + 1
-    while cursor < len(text):
-        if text[cursor] == closer and not _is_escaped(text, cursor):
-            return cursor + 1
-        if text[cursor] == "\n":
-            return None
-        cursor += 1
-    return None
-
-
-def _parse_inline_target(text: str, start: int) -> tuple[str, int] | None:
-    if start >= len(text) or text[start] != "(":
-        return None
-    destination_start = _skip_whitespace(text, start + 1)
-    parsed = _parse_destination(text, destination_start)
-    if not parsed:
-        return None
-    destination, cursor = parsed
-    had_space = cursor < len(text) and text[cursor].isspace()
-    cursor = _skip_whitespace(text, cursor)
-    if cursor < len(text) and text[cursor] == ")":
-        return destination, cursor + 1
-    if not had_space:
-        return None
-    title_end = _parse_title(text, cursor)
-    if title_end is None:
-        return None
-    cursor = _skip_whitespace(text, title_end)
-    if cursor >= len(text) or text[cursor] != ")":
-        return None
-    return destination, cursor + 1
-
-
-def _parse_definition(line: str) -> tuple[str, str] | None:
-    content = line.rstrip("\r\n")
-    indent = len(content) - len(content.lstrip(" "))
-    if indent > 3:
-        return None
-    content = content[indent:]
-    label = _parse_bracket(content, 0)
-    if not label or label[1] >= len(content) or content[label[1]] != ":":
-        return None
-    destination_start = _skip_whitespace(content, label[1] + 1)
-    destination = _parse_destination(content, destination_start)
-    if not destination:
-        return None
-    href, cursor = destination
-    cursor = _skip_whitespace(content, cursor)
-    if cursor < len(content):
-        title_end = _parse_title(content, cursor)
-        if title_end is None:
-            return None
-        cursor = _skip_whitespace(content, title_end)
-    if cursor != len(content):
-        return None
-    return _reference_label(label[0]), href
-
-
-def _extract_definitions(text: str) -> tuple[dict[str, str], str]:
-    definitions: dict[str, str] = {}
-    body: list[str] = []
-    for line in text.splitlines(keepends=True):
-        definition = _parse_definition(line)
-        if definition:
-            definitions.setdefault(*definition)
-        else:
-            body.append(line)
-    return definitions, "".join(body)
-
-
-def _is_image_label(text: str, start: int) -> bool:
-    return start > 0 and text[start - 1] == "!" and not _is_escaped(text, start - 1)
-
-
-def _skip_image(text: str, label_end: int) -> int:
-    if label_end < len(text) and text[label_end] == "(":
-        target = _parse_inline_target(text, label_end)
-        return target[1] if target else label_end + 1
-    if label_end < len(text) and text[label_end] == "[":
-        reference = _parse_bracket(text, label_end)
-        return reference[1] if reference else label_end + 1
-    return label_end
-
-
-def _markdown_links(text: str) -> list[str]:
-    definitions, body = _extract_definitions(text)
-    links: list[str] = []
-    cursor = 0
-    while cursor < len(body):
-        label = _parse_bracket(body, cursor) if body[cursor] == "[" else None
-        if not label:
-            cursor += 1
-            continue
-        label_text, label_end = label
-        if _is_image_label(body, cursor):
-            cursor = _skip_image(body, label_end)
-            continue
-        href, cursor = _link_after_label(body, label_text, label_end, definitions)
-        if href:
-            links.append(href)
-    return links
-
-
-def _link_after_label(
-    text: str,
-    label: str,
-    label_end: int,
-    definitions: dict[str, str],
-) -> tuple[str | None, int]:
-    if label_end < len(text) and text[label_end] == "(":
-        target = _parse_inline_target(text, label_end)
-        return (target[0], target[1]) if target else (None, label_end)
-    if label_end < len(text) and text[label_end] == "[":
-        reference = _parse_bracket(text, label_end)
-        if not reference:
-            return None, label_end
-        key = _reference_label(reference[0] or label)
-        return definitions.get(key), reference[1]
-    return definitions.get(_reference_label(label)), label_end
-
-
-def _tag_hrefs(text: str) -> list[str]:
-    links: list[str] = []
-    cursor = 0
-    while cursor < len(text):
-        start = text.find("<", cursor)
-        if start < 0:
-            break
-        end = _tag_end(text, start + 1)
-        if end is None:
-            break
-        for match in HREF_ATTRIBUTE.finditer(text[start : end + 1]):
-            links.append(next(group for group in match.groups() if group is not None))
-        cursor = end + 1
-    return links
-
-
-def _tag_end(text: str, start: int) -> int | None:
-    quote: str | None = None
-    cursor = start
-    while cursor < len(text):
-        char = text[cursor]
-        if quote and char == quote and not _is_escaped(text, cursor):
-            quote = None
-        elif not quote and char in "\"'":
-            quote = char
-        elif not quote and char == ">":
-            return cursor
-        cursor += 1
-    return None
-
-
-def _research_documents(research_root: Path) -> list[Path]:
-    resolved_root = research_root.resolve()
-    documents = sorted(
-        path
-        for path in research_root.rglob("*")
-        if path.is_file() and path.suffix.lower() in DOC_SOURCE_SUFFIXES
-    )
-    assert all(_within(path.resolve(), resolved_root) for path in documents)
-    return documents
-
-
-def _is_research_href(href: str) -> bool:
-    parsed = urlsplit(href)
-    return (
-        not parsed.scheme
-        and not parsed.netloc
-        and parsed.path.startswith(RESEARCH_URL_PREFIX)
-    )
-
-
-def _research_links(document: Path) -> list[str]:
-    """Extract supported internal links while ignoring code and comments."""
-    text = document.read_text(encoding="utf-8")
-    visible = HTML_COMMENT.sub("", INLINE_CODE.sub("", _strip_fenced_code(text)))
-    links = [*_markdown_links(visible), *_tag_hrefs(visible)]
-    return list(dict.fromkeys(href for href in links if _is_research_href(href)))
 
 
 def _load_example(module_name: str, filename: str):
@@ -644,6 +296,30 @@ def test_research_link_extraction_handles_balancing_images_and_exact_href(
         "/docs/research/guide_(escaped)/",
         "/docs/research/escaped-reference/",
         "/docs/research/exact-href/",
+    }
+
+
+def test_mdx_tag_extraction_respects_attribute_boundaries_and_jsx(
+    tmp_path: Path,
+) -> None:
+    document = tmp_path / "mdx-tags.mdx"
+    document.write_text(
+        """
+<Card title='example href="/docs/research/not-a-link/"' />
+<Card condition={a > b} href="/docs/research/real-link/" />
+<Card
+  config={{ nested: { text: 'href="/docs/research/not-a-nested-link/"', test: a > b } }}
+  href={'/docs/research/nested-real-link/'}
+/>
+<Card href={dynamicTarget} spread {...props} disabled />
+<Card broken={{ nested: 'unterminated' } href="/docs/research/not-malformed/"
+""",
+        encoding="utf-8",
+    )
+
+    assert set(_research_links(document)) == {
+        "/docs/research/real-link/",
+        "/docs/research/nested-real-link/",
     }
 
 
