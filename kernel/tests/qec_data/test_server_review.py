@@ -17,6 +17,7 @@ from websockets.legacy.client import connect
 
 import kernel.qec_data.server as server_module
 import kernel.qec_data.source_security as source_security
+import kernel.qec_data.source_security_windows as windows_security
 from kernel.qec_data.adapters.sinter_csv import SinterCsvAdapter
 from kernel.qec_data.model_codecs import loads_canonical_json
 from kernel.qec_data.protocol import (
@@ -400,6 +401,42 @@ def test_windows_project_capability_blocks_namespace_rename(tmp_path: Path) -> N
     with pytest.raises(OSError):
         tmp_path.rename(moved)
     del server
+
+
+@pytest.mark.parametrize("failure", ["copy", "duplicate"])
+def test_windows_private_copy_failure_deletes_named_temporary(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, failure: str
+) -> None:
+    monkeypatch.setattr(windows_security.tempfile, "gettempdir", lambda: str(tmp_path))
+
+    def create_file(path: Path, *, writable: bool, create: bool) -> int:
+        del writable, create
+        path.write_bytes(b"private")
+        return 41
+
+    def copy_descriptor(_source: int, _destination: int) -> None:
+        if failure == "copy":
+            raise OSError("copy failed")
+
+    def duplicate_descriptor(_descriptor: int) -> int:
+        raise OSError("duplicate failed")
+
+    def close_and_delete(_descriptor: int, path: Path | None) -> None:
+        assert path is not None
+        path.unlink()
+
+    monkeypatch.setattr(windows_security, "_open_file_descriptor", create_file)
+    monkeypatch.setattr(windows_security.os, "close", lambda _descriptor: None)
+    monkeypatch.setattr(windows_security, "_copy_descriptor", copy_descriptor)
+    monkeypatch.setattr(
+        windows_security, "_duplicate_read_descriptor", duplicate_descriptor
+    )
+    monkeypatch.setattr(windows_security, "close_capability_file", close_and_delete)
+
+    with pytest.raises(OSError, match=failure):
+        windows_security.create_read_only_copy(7)
+
+    assert not tuple(tmp_path.iterdir())
 
 
 @pytest.mark.asyncio

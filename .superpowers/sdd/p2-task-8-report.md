@@ -106,6 +106,19 @@ races. Each is now covered by a failing-before/fixed-after regression:
   returns `project_identity_changed` on Unix; Windows-only tests assert that the
   retained handles prevent namespace rename.
 
+### Windows compatibility rereview
+
+- Rust Windows identity no longer calls the post-1.77 `MetadataExt` identity
+  methods. A stable `AsRawHandle` plus `GetFileInformationByHandle` FFI reads
+  volume serial and file index from the retained handle itself.
+- Arrow IPC file/stream and Parquet decoders recognize capability sources and
+  pass a seekable `pa.PythonFile(source.open("rb"))` to PyArrow. Encoded-size,
+  schema, batch-count, row-group, and decoded-size checks remain in place, and
+  no mutable or synthetic pathname is exposed.
+- Every Windows private-copy failure after named-file creation now marks the
+  writer for deletion (with a pathname cleanup fallback) before propagating the
+  copy or handle-duplication error.
+
 ## TDD evidence
 
 Initial Python RED failed collection because `kernel.qec_data.jobs` did not
@@ -118,17 +131,20 @@ a token-free URL.
 The final descriptor RED failed because `CapabilitySource` exposed no verifiable
 read-only descriptor; the fixed regression now checks both `F_GETFL` and a
 failed direct write while retaining the lying-adapter ABA scenario.
+Pathless Arrow/Parquet RED tests failed on PyArrow pathname conversion, and
+copy/duplicate-failure RED tests left a named temporary behind; both paths are
+covered by fixed-after regressions.
 
 ## Verification
 
 - Ruff format and lint: clean.
-- Focused Python server and review suites: 47 passed, 1 Windows-only skipped on
+- Focused Python server and review suites: 49 passed, 1 Windows-only skipped on
   the installed WebSocket runtime.
 - Compatibility: 45 passed with `websockets==12.0`; 45 passed with
   `websockets==13.1`.
 - Owned Python coverage: 85% (import operations 95%, jobs 98%, protocol 90%,
   server 89%, source security 76%).
-- Complete QEC data suite: 389 passed, 3 skipped.
+- Complete QEC data suite: 394 passed, 3 skipped.
 - Rust lifecycle suite: 13 passed.
 - Complete Rust suite: 164 unit tests passed; the 13 lifecycle tests also pass
   serially (parallel lifecycle execution has a pre-existing fixed-port race).
@@ -136,9 +152,12 @@ failed direct write while retaining the lying-adapter ABA scenario.
 - Targeted Rust 1.77.2 clippy: clean with unrelated pre-existing lint classes
   explicitly allowed.
 - Windows evidence: the Win32 helper passes Ruff and `py_compile`; Python and
-  Rust include Windows-targeted retained-handle tests. This macOS host has only
-  `aarch64-apple-darwin` and `wasm32-unknown-unknown` installed, so a Windows
-  target compile/runtime test was not available locally.
+  Rust include Windows-targeted retained-handle tests. The Windows MSVC target
+  was installed for Rust 1.77.2. Full Cargo check stops before project code
+  because locked `zip 4.6.1` requires Rust 1.82; a harness including the actual
+  `qec_data_project.rs` compiled successfully with `rustc +1.77.2 --target
+  x86_64-pc-windows-msvc`. Current-stable Cargo progressed further but stopped
+  in `ring` because this macOS host has no Windows SDK C headers.
 - All owned files are below 800 lines (`server.py`: 776) and all owned Python
   functions are below 50 lines.
 

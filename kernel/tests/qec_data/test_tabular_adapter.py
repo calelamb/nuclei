@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import BinaryIO
 
 import pytest
 
@@ -231,6 +232,58 @@ def test_arrow_and_parquet_normalize_at_pyarrow_18_floor(
         for chunk in chunks
     )
     assert chunks[0].source_spans[0].row_range.start == 0
+
+
+@pytest.mark.parametrize("container_kind", ["arrow-file", "arrow-stream", "parquet"])
+def test_arrow_and_parquet_decode_from_a_pathless_capability(
+    tmp_path: Path, container_kind: str
+) -> None:
+    pa = pytest.importorskip("pyarrow")
+    pq = pytest.importorskip("pyarrow.parquet")
+    source = tmp_path / (
+        "capability.parquet" if container_kind == "parquet" else "capability.arrow"
+    )
+    table = pa.table({"seq": [7], "syndrome": [b"\x05"]})
+    if container_kind == "parquet":
+        pq.write_table(table, source, write_page_checksum=True)
+    else:
+        with pa.OSFile(str(source), "wb") as sink:
+            factory = (
+                pa.ipc.new_file if container_kind == "arrow-file" else pa.ipc.new_stream
+            )
+            with factory(sink, table.schema) as writer:
+                writer.write_table(table)
+
+    capability = _PathlessCapability(source)
+    chunks = tuple(TabularAdapter().import_batches(capability, _mapping(with_time=False)))
+
+    assert chunks[0].payload.detector_events.data == b"\x05"
+
+
+class _PathlessCapability:
+    is_capability_source = True
+
+    def __init__(self, source: Path) -> None:
+        self._source = source
+        self.suffix = source.suffix
+
+    def open(self, mode: str = "rb") -> BinaryIO:
+        return self._source.open(mode)
+
+    def stat(self) -> object:
+        return self._source.stat()
+
+    def lstat(self) -> object:
+        return self._source.lstat()
+
+    def is_file(self) -> bool:
+        return True
+
+    def is_dir(self) -> bool:
+        return False
+
+    def __fspath__(self) -> str:
+        raise AssertionError("capability must not be converted to a pathname")
 
 
 @pytest.mark.parametrize("container_kind", ["arrow-file", "arrow-stream", "parquet"])

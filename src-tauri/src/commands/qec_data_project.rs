@@ -52,15 +52,7 @@ impl AuthorizedProjectRoot {
     }
 
     pub fn verify(&self) -> Result<PathBuf, QecDataError> {
-        let path_metadata = fs::metadata(&self.path).map_err(|_| identity_changed())?;
-        let lock_metadata = locked_metadata(&self.lock, &self.path)?;
-        if !valid_project_metadata(&path_metadata)
-            || !valid_project_metadata(&lock_metadata)
-            || project_identity(&path_metadata)? != self.identity
-            || project_identity(&lock_metadata)? != self.identity
-        {
-            return Err(identity_changed());
-        }
+        verify_project_identity(&self.path, &self.lock, self.identity)?;
         Ok(self.path.clone())
     }
 
@@ -102,7 +94,7 @@ pub fn authorized_project(project_root: PathBuf) -> Result<AuthorizedProjectRoot
     }
     Ok(AuthorizedProjectRoot {
         path: project_root,
-        identity: project_identity(&metadata)?,
+        identity: locked_identity(&lock, &metadata)?,
         lock,
     })
 }
@@ -134,16 +126,6 @@ fn project_identity(metadata: &fs::Metadata) -> Result<ProjectFileIdentity, QecD
         device: metadata.dev(),
         inode: metadata.ino(),
     })
-}
-
-#[cfg(windows)]
-fn project_identity(metadata: &fs::Metadata) -> Result<ProjectFileIdentity, QecDataError> {
-    use std::os::windows::fs::MetadataExt;
-    let volume = metadata
-        .volume_serial_number()
-        .ok_or_else(invalid_project)?;
-    let file_index = metadata.file_index().ok_or_else(invalid_project)?;
-    Ok(ProjectFileIdentity { volume, file_index })
 }
 
 #[cfg(not(any(unix, windows)))]
@@ -187,6 +169,114 @@ fn locked_metadata(
     _path: &Path,
 ) -> Result<fs::Metadata, QecDataError> {
     lock.file.metadata().map_err(|_| identity_changed())
+}
+
+#[cfg(unix)]
+fn locked_identity(
+    _lock: &ProjectDirectoryLock,
+    metadata: &fs::Metadata,
+) -> Result<ProjectFileIdentity, QecDataError> {
+    project_identity(metadata)
+}
+
+#[cfg(windows)]
+fn locked_identity(
+    lock: &ProjectDirectoryLock,
+    _metadata: &fs::Metadata,
+) -> Result<ProjectFileIdentity, QecDataError> {
+    windows_handle_identity(&lock.file)
+}
+
+#[cfg(not(any(unix, windows)))]
+fn locked_identity(
+    _lock: &ProjectDirectoryLock,
+    _metadata: &fs::Metadata,
+) -> Result<ProjectFileIdentity, QecDataError> {
+    Err(invalid_project())
+}
+
+#[cfg(unix)]
+fn verify_project_identity(
+    path: &Path,
+    _lock: &ProjectDirectoryLock,
+    identity: ProjectFileIdentity,
+) -> Result<(), QecDataError> {
+    let metadata = fs::metadata(path).map_err(|_| identity_changed())?;
+    if !valid_project_metadata(&metadata) || project_identity(&metadata)? != identity {
+        return Err(identity_changed());
+    }
+    Ok(())
+}
+
+#[cfg(windows)]
+fn verify_project_identity(
+    path: &Path,
+    lock: &ProjectDirectoryLock,
+    identity: ProjectFileIdentity,
+) -> Result<(), QecDataError> {
+    let current = project_lock(path).map_err(|_| identity_changed())?;
+    let current_metadata = locked_metadata(&current, path)?;
+    let retained_metadata = locked_metadata(lock, path)?;
+    let valid = valid_project_metadata(&current_metadata)
+        && valid_project_metadata(&retained_metadata)
+        && windows_handle_identity(&current.file)? == identity
+        && windows_handle_identity(&lock.file)? == identity;
+    if !valid {
+        return Err(identity_changed());
+    }
+    Ok(())
+}
+
+#[cfg(not(any(unix, windows)))]
+fn verify_project_identity(
+    _path: &Path,
+    _lock: &ProjectDirectoryLock,
+    _identity: ProjectFileIdentity,
+) -> Result<(), QecDataError> {
+    Err(identity_changed())
+}
+
+#[cfg(windows)]
+#[repr(C)]
+struct ByHandleFileInformation {
+    file_attributes: u32,
+    creation_time_low: u32,
+    creation_time_high: u32,
+    access_time_low: u32,
+    access_time_high: u32,
+    write_time_low: u32,
+    write_time_high: u32,
+    volume_serial_number: u32,
+    file_size_high: u32,
+    file_size_low: u32,
+    number_of_links: u32,
+    file_index_high: u32,
+    file_index_low: u32,
+}
+
+#[cfg(windows)]
+fn windows_handle_identity(file: &fs::File) -> Result<ProjectFileIdentity, QecDataError> {
+    use std::mem::MaybeUninit;
+    use std::os::windows::io::AsRawHandle;
+
+    extern "system" {
+        fn GetFileInformationByHandle(
+            file: *mut std::ffi::c_void,
+            information: *mut ByHandleFileInformation,
+        ) -> i32;
+    }
+    let mut information = MaybeUninit::<ByHandleFileInformation>::uninit();
+    let success =
+        unsafe { GetFileInformationByHandle(file.as_raw_handle(), information.as_mut_ptr()) };
+    if success == 0 {
+        return Err(identity_changed());
+    }
+    let information = unsafe { information.assume_init() };
+    Ok(ProjectFileIdentity {
+        volume: information.volume_serial_number,
+        file_index: (u64::from(information.file_index_high) << 32)
+            | u64::from(information.file_index_low),
+    })
 }
 
 #[cfg(not(windows))]

@@ -287,9 +287,11 @@ def _parquet_rows(
     source: Path,
     columns: tuple[str, ...] | None,
     container: tuple[IndexRange, ...],
+    pa: object,
     pq: object,
 ) -> Iterator[TabularSourceRow]:
-    parquet = pq.ParquetFile(source, page_checksum_verification=True)
+    arrow_source = _arrow_source(source, pa)
+    parquet = pq.ParquetFile(arrow_source, page_checksum_verification=True)
     try:
         selected, _ = _selected_fields(parquet.schema_arrow, columns)
         _validate_parquet_metadata(parquet, selected)
@@ -299,6 +301,13 @@ def _parquet_rows(
         yield from _converted_arrow_rows(batches, container)
     finally:
         _close(parquet)
+        _close(arrow_source)
+
+
+def _arrow_source(source: Path, pa: object) -> object:
+    if getattr(source, "is_capability_source", False):
+        return pa.PythonFile(source.open("rb"), mode="r")
+    return pa.memory_map(str(source), "r")
 
 
 def _ipc_options(pa: object, schema: object, columns: tuple[str, ...] | None):
@@ -383,9 +392,9 @@ def _arrow_rows(
         ) from error
     container = (IndexRange(0, size),)
     if source_kind == "tabular-parquet":
-        yield from _parquet_rows(source, columns, container, pq)
+        yield from _parquet_rows(source, columns, container, pa, pq)
         return
-    with pa.memory_map(str(source), "r") as mapped:
+    with _arrow_source(source, pa) as mapped:
         try:
             reader = pa.ipc.open_file(mapped)
         except pa.ArrowInvalid:

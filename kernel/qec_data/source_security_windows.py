@@ -139,7 +139,10 @@ def create_read_only_copy(descriptor: int) -> tuple[int, Path]:
     try:
         _copy_descriptor(descriptor, writer)
         reader = _duplicate_read_descriptor(writer)
-    finally:
+    except Exception:
+        close_capability_file(writer, path)
+        raise
+    else:
         os.close(writer)
     return reader, path
 
