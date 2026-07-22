@@ -1,0 +1,377 @@
+from __future__ import annotations
+
+import json
+from datetime import datetime, timezone
+from pathlib import Path
+
+import pytest
+
+from kernel.qec_data.adapters.base import (
+    ImportChunk,
+    ImportMapping,
+    SourceSpan,
+    SourceSpanPrecision,
+)
+from kernel.qec_data.adapters.registry import core_offline_registry
+from kernel.qec_data.adapters.sinter_csv import SinterCsvAdapter
+from kernel.qec_data.adapters.stim_results import StimResultsAdapter
+from kernel.qec_data.adapters.tabular import TabularAdapter
+from kernel.qec_data.model_validation import DataQualityFlag, ValueStatus
+from kernel.qec_data.models import (
+    CalibrationBatch,
+    CalibrationQuality,
+    CalibrationScopeKind,
+    IndexRange,
+    SyndromeBatch,
+)
+from kernel.tests.qec_data.adapter_contract import (
+    run_adapter_contract,
+    trusted_process_group_backend,
+)
+
+
+def _mapping(*, with_time: bool = True) -> ImportMapping:
+    fields = (("sequence", "seq"), ("detector_events", "syndrome"))
+    options: tuple[tuple[str, object], ...] = (
+        ("output_kind", "syndromes"),
+        ("detector_count", 3),
+        ("bit_order", "lsb0"),
+        ("session_id", "hardware-run"),
+        ("segment_id", "segment-a"),
+    )
+    if with_time:
+        fields += (("timestamp", "clock"),)
+        options += (("timestamp_unit", "ns"),)
+    return ImportMapping(
+        fields=fields,
+        options=options,
+        expected_provenance_id="tabular-provenance",
+    )
+
+
+def test_tabular_csv_requires_explicit_mapping_and_preserves_time_unit(
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "hardware.csv"
+    source.write_text(
+        "seq,clock,syndrome\n7,100.5,101\n8,101.5,000\n", encoding="utf-8"
+    )
+    chunks = tuple(TabularAdapter().import_batches(source, _mapping()))
+    assert all(isinstance(chunk, ImportChunk) for chunk in chunks)
+    batches = tuple(chunk.payload for chunk in chunks)
+    assert all(isinstance(batch, SyndromeBatch) for batch in batches)
+    assert batches[0].sequence_start == 7
+    assert batches[0].detector_events.data == b"\x05\x00"
+    assert batches[0].source_timestamps.status is ValueStatus.MEASURED
+    assert batches[0].source_timestamps.value is not None
+    assert batches[0].source_timestamps.value.unit == "ns"
+    span = chunks[0].source_spans[0]
+    assert span == SourceSpan(
+        source_id=span.source_id,
+        row_range=IndexRange(1, 3),
+        byte_ranges=(
+            IndexRange(len("seq,clock,syndrome\n"), len(source.read_bytes())),
+        ),
+        precision=SourceSpanPrecision.EXACT,
+    )
+
+
+def test_tabular_ndjson_and_gap_provenance(tmp_path: Path) -> None:
+    source = tmp_path / "hardware.ndjson"
+    source.write_text(
+        "\n".join(
+            json.dumps(row)
+            for row in (
+                {"seq": 1, "clock": 1.0, "syndrome": "001"},
+                {"seq": 3, "clock": 2.0, "syndrome": "100"},
+            )
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    chunks = tuple(TabularAdapter().import_batches(source, _mapping()))
+    batches = tuple(chunk.payload for chunk in chunks)
+    assert len(batches) == 2
+    assert batches[1].data_quality == (DataQualityFlag.GAP_BEFORE,)
+    assert (
+        chunks[1].source_spans[0].byte_ranges[0].start
+        > chunks[0].source_spans[0].byte_ranges[0].start
+    )
+
+
+def test_tabular_never_guesses_units_or_bit_width(tmp_path: Path) -> None:
+    source = tmp_path / "hardware.csv"
+    source.write_text("seq,clock,syndrome\n0,1,101\n", encoding="utf-8")
+    no_mapping = TabularAdapter().validate(source, ImportMapping())
+    assert not no_mapping.valid
+    assert no_mapping.issues[0].code == "tabular_mapping_required"
+
+    fields = (
+        ("sequence", "seq"),
+        ("detector_events", "syndrome"),
+        ("timestamp", "clock"),
+    )
+    missing_unit = ImportMapping(
+        fields=fields,
+        options=(
+            ("output_kind", "syndromes"),
+            ("detector_count", 3),
+            ("bit_order", "lsb0"),
+        ),
+    )
+    report = TabularAdapter().validate(source, missing_unit)
+    assert not report.valid
+    assert report.issues[0].code == "tabular_unit_required"
+
+
+def test_tabular_rejects_nonmonotonic_sequence_and_invalid_bits(tmp_path: Path) -> None:
+    source = tmp_path / "bad.csv"
+    source.write_text("seq,clock,syndrome\n2,1,101\n1,2,10x\n", encoding="utf-8")
+    report = TabularAdapter().validate(source, _mapping())
+    assert not report.valid
+    assert report.issues[0].code == "tabular_invalid_data"
+
+
+def test_tabular_calibration_mapping_emits_typed_calibration_records(
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "calibration.csv"
+    source.write_text(
+        "cal_id,scope_kind,scope_id,name,semantic,value,value_status,unit,unit_status,sigma,sigma_status,quality,system,effective\n"
+        "cal-1,qubit,q0,T1,t1,81.2,measured,us,measured,,unavailable,accepted,lab-db,2026-07-21T12:00:00Z\n",
+        encoding="utf-8",
+    )
+    fields = (
+        ("calibration_id", "cal_id"),
+        ("scope_kind", "scope_kind"),
+        ("scope_id", "scope_id"),
+        ("parameter_name", "name"),
+        ("semantic_id", "semantic"),
+        ("value", "value"),
+        ("value_status", "value_status"),
+        ("unit", "unit"),
+        ("unit_status", "unit_status"),
+        ("uncertainty", "sigma"),
+        ("uncertainty_status", "sigma_status"),
+        ("quality", "quality"),
+        ("source_system", "system"),
+        ("effective_start", "effective"),
+    )
+    mapping = ImportMapping(
+        fields=fields,
+        options=(
+            ("output_kind", "calibration"),
+            ("session_id", "hardware-run"),
+        ),
+        expected_provenance_id="calibration-provenance",
+    )
+    chunks = tuple(TabularAdapter().import_batches(source, mapping))
+    assert len(chunks) == 1
+    assert isinstance(chunks[0].payload, CalibrationBatch)
+    record = chunks[0].payload.records[0]
+    assert record.scope.kind is CalibrationScopeKind.QUBIT
+    assert record.scope.id == "q0"
+    assert record.value.value == 81.2
+    assert record.unit.value == "us"
+    assert record.uncertainty.status is ValueStatus.UNAVAILABLE
+    assert record.uncertainty.value is None
+    assert record.quality is CalibrationQuality.ACCEPTED
+    assert record.original_mime_type == "text/csv"
+    assert record.original_representation.startswith("cal-1,qubit,q0")
+    assert chunks[0].source_spans[0].row_range == IndexRange(1, 2)
+
+
+@pytest.mark.parametrize("container_kind", ["arrow-file", "arrow-stream", "parquet"])
+def test_arrow_and_parquet_normalize_at_pyarrow_18_floor(
+    tmp_path: Path, container_kind: str
+) -> None:
+    pa = pytest.importorskip("pyarrow")
+    pq = pytest.importorskip("pyarrow.parquet")
+    source = tmp_path / (
+        "hardware.parquet" if container_kind == "parquet" else "hardware.arrow"
+    )
+    table = pa.table(
+        {"seq": [7, 8], "clock": [100.5, 101.5], "syndrome": [b"\x05", b"\x00"]}
+    )
+    if container_kind == "parquet":
+        pq.write_table(table, source, write_page_checksum=True)
+    else:
+        with pa.OSFile(str(source), "wb") as sink:
+            writer_factory = (
+                pa.ipc.new_file if container_kind == "arrow-file" else pa.ipc.new_stream
+            )
+            with writer_factory(sink, table.schema) as writer:
+                writer.write_table(table)
+    chunks = tuple(TabularAdapter().import_batches(source, _mapping()))
+    assert (
+        b"".join(chunk.payload.detector_events.data for chunk in chunks) == b"\x05\x00"
+    )
+    assert all(
+        chunk.source_spans[0].precision is SourceSpanPrecision.CONTAINER
+        for chunk in chunks
+    )
+    assert chunks[0].source_spans[0].row_range.start == 0
+
+
+def test_tabular_csv_multiline_record_uses_csv_record_ordinal(tmp_path: Path) -> None:
+    source = tmp_path / "multiline.csv"
+    source.write_text(
+        ' seq ,clock,syndrome,note\n7,100.5,101,"first\nsecond"\n',
+        encoding="utf-8",
+    )
+    chunk = next(TabularAdapter().import_batches(source, _mapping()))
+    assert chunk.source_spans[0].row_range == IndexRange(1, 2)
+    assert chunk.source_spans[0].byte_ranges[0].end == len(source.read_bytes())
+
+
+def test_tabular_rejects_duplicate_json_keys_and_ambiguous_mapping(
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "duplicate.ndjson"
+    source.write_text(
+        '{"seq":0,"seq":1,"clock":1,"syndrome":"101"}\n',
+        encoding="utf-8",
+    )
+    assert not TabularAdapter().validate(source, _mapping()).valid
+
+    csv_source = tmp_path / "mapping.csv"
+    csv_source.write_text("seq,clock,syndrome\n0,1,101\n", encoding="utf-8")
+    ambiguous = ImportMapping(
+        fields=(("sequence", "seq"), ("detector_events", "seq")),
+        options=(
+            ("output_kind", "syndromes"),
+            ("detector_count", 3),
+            ("bit_order", "lsb0"),
+            ("invented_option", True),
+        ),
+    )
+    report = TabularAdapter().validate(csv_source, ambiguous)
+    assert not report.valid
+    assert "unique" in report.issues[0].message
+
+    unsupported = ImportMapping(
+        fields=(("sequence", "seq"), ("detector_events", "syndrome")),
+        options=(
+            ("output_kind", "syndromes"),
+            ("detector_count", 3),
+            ("bit_order", "lsb0"),
+            ("invented_option", True),
+        ),
+    )
+    report = TabularAdapter().validate(csv_source, unsupported)
+    assert not report.valid
+    assert "unsupported option" in report.issues[0].message
+
+
+def test_tabular_preview_is_explicitly_bounded(tmp_path: Path) -> None:
+    source = tmp_path / "many.ndjson"
+    source.write_text(
+        "".join(
+            json.dumps({"seq": index, "clock": index, "syndrome": "000"}) + "\n"
+            for index in range(32)
+        ),
+        encoding="utf-8",
+    )
+    preview = TabularAdapter().preview(source, _mapping(), 10_000)
+    assert sum(chunk.record_count for chunk in preview.batches) <= 16
+    assert preview.truncated
+
+
+def test_parquet_timestamp_calibration_has_tagged_original_representation(
+    tmp_path: Path,
+) -> None:
+    pa = pytest.importorskip("pyarrow")
+    pq = pytest.importorskip("pyarrow.parquet")
+    source = tmp_path / "calibration.parquet"
+    table = pa.table(
+        {
+            "cal_id": ["cal-1"],
+            "scope_kind": ["qubit"],
+            "scope_id": ["q0"],
+            "name": ["T1"],
+            "semantic": ["t1"],
+            "value": [81.2],
+            "value_status": ["measured"],
+            "unit": ["us"],
+            "unit_status": ["measured"],
+            "sigma": pa.array([None], type=pa.float64()),
+            "sigma_status": ["unavailable"],
+            "quality": ["accepted"],
+            "system": ["lab-db"],
+            "effective": pa.array(
+                [datetime(2026, 7, 21, 12, tzinfo=timezone.utc)],
+                type=pa.timestamp("s", tz="UTC"),
+            ),
+        }
+    )
+    pq.write_table(table, source, write_page_checksum=True)
+    fields = (
+        ("calibration_id", "cal_id"),
+        ("scope_kind", "scope_kind"),
+        ("scope_id", "scope_id"),
+        ("parameter_name", "name"),
+        ("semantic_id", "semantic"),
+        ("value", "value"),
+        ("value_status", "value_status"),
+        ("unit", "unit"),
+        ("unit_status", "unit_status"),
+        ("uncertainty", "sigma"),
+        ("uncertainty_status", "sigma_status"),
+        ("quality", "quality"),
+        ("source_system", "system"),
+        ("effective_start", "effective"),
+    )
+    mapping = ImportMapping(
+        fields=fields,
+        options=(("output_kind", "calibration"), ("session_id", "hardware-run")),
+        expected_provenance_id="calibration-provenance",
+    )
+    record = next(TabularAdapter().import_batches(source, mapping)).payload.records[0]
+    assert record.effective_start == "2026-07-21T12:00:00+00:00"
+    assert record.original_mime_type == "application/json"
+    assert '"$type":"datetime"' in record.original_representation
+
+
+class ContractTabularAdapter(TabularAdapter):
+    @staticmethod
+    def _contract_mapping(mapping: ImportMapping) -> ImportMapping:
+        configured = _mapping()
+        return ImportMapping(
+            fields=configured.fields,
+            options=configured.options,
+            expected_provenance_id=mapping.expected_provenance_id,
+        )
+
+    def validate(self, source: Path, mapping: ImportMapping):
+        return super().validate(source, self._contract_mapping(mapping))
+
+    def preview(self, source: Path, mapping: ImportMapping, limit: int):
+        return super().preview(source, self._contract_mapping(mapping), limit)
+
+    def import_batches(self, source: Path, mapping: ImportMapping):
+        return super().import_batches(source, self._contract_mapping(mapping))
+
+
+def test_tabular_adapter_passes_typed_contract(tmp_path: Path) -> None:
+    source = tmp_path / "hardware.csv"
+    source.write_text("seq,clock,syndrome\n0,1,101\n1,2,000\n", encoding="utf-8")
+    report = run_adapter_contract(
+        ContractTabularAdapter,
+        source,
+        isolation_backend=trusted_process_group_backend(),
+    )
+    assert report.passed, report.failures
+
+
+def test_core_offline_registry_is_fresh_complete_and_resolvable() -> None:
+    first = core_offline_registry()
+    second = core_offline_registry()
+    assert first is not second
+    assert tuple(record.key for record in first.registrations) == (
+        ("stim-results", "1"),
+        ("sinter-csv", "1"),
+        ("tabular", "1"),
+    )
+    assert isinstance(first.get("stim-results", "1"), StimResultsAdapter)
+    assert isinstance(first.get("sinter-csv", "1"), SinterCsvAdapter)
+    assert isinstance(first.get("tabular", "1"), TabularAdapter)

@@ -117,3 +117,16 @@ def _validate_methods(adapter: object) -> None:
         raise AdapterRegistrationError(
             f"adapter is missing required methods: {', '.join(missing)}"
         )
+
+
+def core_offline_registry() -> AdapterRegistry:
+    """Return a new immutable registry containing the first-party file adapters."""
+
+    from .sinter_csv import SinterCsvAdapter
+    from .stim_results import StimResultsAdapter
+    from .tabular import TabularAdapter
+
+    registry = AdapterRegistry()
+    for adapter in (StimResultsAdapter(), SinterCsvAdapter(), TabularAdapter()):
+        registry = registry.register(adapter)
+    return registry

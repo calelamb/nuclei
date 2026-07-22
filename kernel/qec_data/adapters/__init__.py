@@ -30,7 +30,12 @@ from .base import (
     fingerprint_source,
     unsupported,
 )
-from .registry import AdapterRegistrationError, AdapterRegistry, RegistrationRecord
+from .registry import (
+    AdapterRegistrationError,
+    AdapterRegistry,
+    RegistrationRecord,
+    core_offline_registry,
+)
 
 __all__ = [
     "AdapterCancelled",
@@ -62,6 +67,7 @@ __all__ = [
     "ValidationReport",
     "ValidationSeverity",
     "compute_source_sha256",
+    "core_offline_registry",
     "fingerprint_source",
     "unsupported",
 ]
