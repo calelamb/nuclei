@@ -81,12 +81,25 @@ interface EngineState {
   disconnected: boolean;
 }
 
-function cancelProjectOperations(client: QecWorkbenchClient): Promise<void> {
-  const importIds = useQecJobStore.getState().activeOperationIds();
-  const queryIds = useQecQueryStore.getState().activeRequestIds();
+interface ProjectOperationIds {
+  readonly importIds: readonly string[];
+  readonly queryIds: readonly string[];
+}
+
+function captureProjectOperations(): ProjectOperationIds {
+  return Object.freeze({
+    importIds: useQecJobStore.getState().activeOperationIds(),
+    queryIds: useQecQueryStore.getState().activeRequestIds(),
+  });
+}
+
+function cancelProjectOperations(
+  client: QecWorkbenchClient,
+  operationIds: ProjectOperationIds,
+): Promise<void> {
   const cancellations = [
-    ...importIds.map((id) => client.cancel('import', id)),
-    ...queryIds.map((id) => client.cancel('query', id)),
+    ...operationIds.importIds.map((id) => client.cancel('import', id)),
+    ...operationIds.queryIds.map((id) => client.cancel('query', id)),
   ];
   if (cancellations.length === 0) return Promise.resolve();
   return new Promise((resolve) => {
@@ -101,9 +114,10 @@ function cancelProjectOperations(client: QecWorkbenchClient): Promise<void> {
 async function retireOwnedClient(
   client: QecWorkbenchClient,
   stopEngine: () => Promise<void>,
+  operationIds: ProjectOperationIds,
 ): Promise<void> {
   try {
-    await cancelProjectOperations(client);
+    await cancelProjectOperations(client, operationIds);
   } finally {
     client.disconnect?.();
     await stopEngine();
@@ -121,7 +135,7 @@ function useProjectScope(projectRoot: string | null): void {
 function useProvidedClientCleanup(client: QecWorkbenchClient | undefined, projectRoot: string | null): void {
   useEffect(() => {
     if (!client || !projectRoot) return undefined;
-    return () => { void cancelProjectOperations(client); };
+    return () => { void cancelProjectOperations(client, captureProjectOperations()); };
   }, [client, projectRoot]);
 }
 
@@ -175,8 +189,9 @@ function useImportEngine(
       current = false;
       unsubscribe?.();
       if (!stopEngine) return;
+      const operationIds = captureProjectOperations();
       const pendingRetirement = connection.then(
-        (client) => retireOwnedClient(client, stopEngine),
+        (client) => retireOwnedClient(client, stopEngine, operationIds),
         () => stopEngine(),
       );
       void pendingRetirement.catch(() => undefined);

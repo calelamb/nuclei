@@ -40,12 +40,12 @@ class FakeSocket implements QecWebSocket {
   }
 }
 
-function setup(): { client: QecDataClient; socket: FakeSocket } {
+function setup(dependencies: { authenticationTimeoutMs?: number } = {}): { client: QecDataClient; socket: FakeSocket } {
   const socket = new FakeSocket();
   let id = 0;
   const client = new QecDataClient(
     { url: 'ws://127.0.0.1:9743', token: 'secret-token' },
-    { socketFactory: () => socket, requestIdFactory: () => `request-${++id}` },
+    { socketFactory: () => socket, requestIdFactory: () => `request-${++id}`, ...dependencies },
   );
   return { client, socket };
 }
@@ -180,6 +180,36 @@ describe('QecDataClient', () => {
     });
 
     await expect(probe).resolves.toMatchObject({ sourcePolicy: 'copy', sourceByteSize: 512 });
+  });
+
+  it('bounds a silent authentication handshake and closes the socket', async () => {
+    vi.useFakeTimers();
+    const { client, socket } = setup({ authenticationTimeoutMs: 25 });
+    const connecting = client.connect();
+    const rejection = connecting.catch((error: unknown) => error);
+    socket.emit('open');
+
+    await vi.advanceTimersByTimeAsync(24);
+    expect(socket.closed).toBe(false);
+    await vi.advanceTimersByTimeAsync(1);
+
+    await expect(rejection).resolves.toMatchObject({
+      code: 'authentication_timeout',
+      message: 'QEC Data Engine authentication timed out.',
+    });
+    expect(socket.closed).toBe(true);
+    vi.useRealTimers();
+  });
+
+  it('clears the authentication deadline after a successful handshake', async () => {
+    vi.useFakeTimers();
+    const { client, socket } = setup({ authenticationTimeoutMs: 25 });
+
+    await authenticate(client, socket);
+    await vi.advanceTimersByTimeAsync(25);
+
+    expect(socket.closed).toBe(false);
+    vi.useRealTimers();
   });
 
   it('rejects project escapes before transmitting the source path', async () => {

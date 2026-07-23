@@ -16,7 +16,11 @@ import {
 import { QecWorkbench } from './QecWorkbench';
 import { QecSourcesPanel } from './QecSourcesPanel';
 import { QecWorkbenchTray } from './QecWorkbenchTray';
-import { QecDataClientError, type QecImportClient } from '../../../services/qecDataClient';
+import {
+  QEC_DATA_AUTHENTICATION_TIMEOUT_MS,
+  QecDataClientError,
+  type QecImportClient,
+} from '../../../services/qecDataClient';
 import type { PlatformBridge } from '../../../platform/bridge';
 import type { QecSession } from '../../../types/qecData';
 import { deferred, flushAsync, flushPersistenceDebounce, MemoryStorage,
@@ -92,6 +96,81 @@ class AutoAuthSocket {
   close(): void {
     this.emit('close', new Event('close'));
   }
+
+  private emit(type: string, event: Event | MessageEvent<string>): void {
+    for (const listener of this.listeners.get(type) ?? []) listener(event);
+  }
+}
+
+class LifecycleSocket {
+  static readonly events: string[] = [];
+  static nextId = 0;
+
+  readonly id = LifecycleSocket.nextId++;
+  readonly listeners = new Map<string, Array<(event: Event | MessageEvent<string>) => void>>();
+
+  constructor() {
+    queueMicrotask(() => this.emit('open', new Event('open')));
+  }
+
+  static reset(): void {
+    LifecycleSocket.events.splice(0);
+    LifecycleSocket.nextId = 0;
+  }
+
+  addEventListener(type: string, listener: (event: Event | MessageEvent<string>) => void): void {
+    this.listeners.set(type, [...(this.listeners.get(type) ?? []), listener]);
+  }
+
+  send(frame: string): void {
+    const message = JSON.parse(frame) as {
+      type: string;
+      requestId?: string;
+      jobId?: string;
+      queryRequestId?: string;
+    };
+    LifecycleSocket.events.push(`socket:${this.id}:${message.type}`);
+    if (message.type === 'authenticate') {
+      queueMicrotask(() => this.message({ type: 'authenticated' }));
+    } else if (message.type === 'job_cancel') {
+      queueMicrotask(() => this.message({
+        type: 'job_cancelled', requestId: message.requestId,
+        jobId: message.jobId, success: true,
+      }));
+    } else if (message.type === 'query_cancel') {
+      queueMicrotask(() => this.message({
+        type: 'query_cancelled', requestId: message.requestId,
+        queryRequestId: message.queryRequestId, success: true,
+      }));
+    }
+  }
+
+  close(): void {
+    LifecycleSocket.events.push(`socket:${this.id}:close`);
+  }
+
+  private message(value: unknown): void {
+    this.emit('message', new MessageEvent('message', { data: JSON.stringify(value) }));
+  }
+
+  private emit(type: string, event: Event | MessageEvent<string>): void {
+    for (const listener of this.listeners.get(type) ?? []) listener(event);
+  }
+}
+
+class NeverAuthSocket {
+  readonly listeners = new Map<string, Array<(event: Event | MessageEvent<string>) => void>>();
+
+  constructor() {
+    queueMicrotask(() => this.emit('open', new Event('open')));
+  }
+
+  addEventListener(type: string, listener: (event: Event | MessageEvent<string>) => void): void {
+    this.listeners.set(type, [...(this.listeners.get(type) ?? []), listener]);
+  }
+
+  send(): void {}
+  close(): void {}
 
   private emit(type: string, event: Event | MessageEvent<string>): void {
     for (const listener of this.listeners.get(type) ?? []) listener(event);
@@ -497,6 +576,83 @@ describe('<QecWorkbench />', () => {
     stopGate.resolve();
     await waitFor(() => expect(startQecDataEngine).toHaveBeenCalledWith('/new-project'));
     expect(lifecycle).toEqual(['start:/old-project', 'stop', 'start:/new-project']);
+  });
+
+  it('captures old project cancellation ids before scope reset and retires them in order', async () => {
+    LifecycleSocket.reset();
+    vi.stubGlobal('WebSocket', LifecycleSocket);
+    useProjectStore.setState({ projectRoot: '/old-project' });
+    const lifecycle = LifecycleSocket.events;
+    const bridge = qecLifecycleBridge({
+      startQecDataEngine: vi.fn(async (root: string) => {
+        lifecycle.push(`native:start:${root}`);
+        return { url: 'ws://127.0.0.1:9743', token: 'test-token' };
+      }),
+      stopQecDataEngine: vi.fn(async () => { lifecycle.push('native:stop'); }),
+    });
+
+    render(<PlatformProvider bridge={bridge}><QecWorkbenchTray /></PlatformProvider>);
+    await waitFor(() => expect(lifecycle).toContain('socket:0:authenticate'));
+    act(() => {
+      useQecJobStore.setState({
+        jobs: {
+          'old-import': {
+            id: 'old-import', kind: 'import', status: 'running', message: 'Running',
+            projectRoot: '/old-project',
+          },
+        },
+      });
+      useQecQueryStore.setState({
+        tiles: {
+          old: {
+            projectRoot: '/old-project', requestId: 'old-query', epoch: 1,
+            status: 'loading', progress: 0, message: 'Running', frames: [], error: null,
+          },
+        },
+      });
+      useProjectStore.setState({ projectRoot: '/new-project' });
+    });
+
+    await waitFor(() => expect(lifecycle).toContain('native:start:/new-project'));
+    const importCancel = lifecycle.indexOf('socket:0:job_cancel');
+    const queryCancel = lifecycle.indexOf('socket:0:query_cancel');
+    const disconnect = lifecycle.indexOf('socket:0:close');
+    const stop = lifecycle.indexOf('native:stop');
+    const replacement = lifecycle.indexOf('native:start:/new-project');
+    expect(importCancel).toBeGreaterThan(-1);
+    expect(queryCancel).toBeGreaterThan(-1);
+    expect(Math.max(importCancel, queryCancel)).toBeLessThan(disconnect);
+    expect(disconnect).toBeLessThan(stop);
+    expect(stop).toBeLessThan(replacement);
+  });
+
+  it('stops a silent authenticating engine before starting the replacement project', async () => {
+    vi.useFakeTimers();
+    vi.stubGlobal('WebSocket', NeverAuthSocket);
+    useProjectStore.setState({ projectRoot: '/old-project' });
+    const lifecycle: string[] = [];
+    const bridge = qecLifecycleBridge({
+      startQecDataEngine: vi.fn(async (root: string) => {
+        lifecycle.push(`start:${root}`);
+        return { url: 'ws://127.0.0.1:9743', token: 'test-token' };
+      }),
+      stopQecDataEngine: vi.fn(async () => { lifecycle.push('stop'); }),
+    });
+
+    render(<PlatformProvider bridge={bridge}><QecWorkbenchTray /></PlatformProvider>);
+    await flushAsync();
+    expect(lifecycle).toEqual(['start:/old-project']);
+    act(() => useProjectStore.setState({ projectRoot: '/new-project' }));
+    await flushAsync();
+    expect(lifecycle).toEqual(['start:/old-project']);
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(QEC_DATA_AUTHENTICATION_TIMEOUT_MS);
+    });
+    await flushAsync();
+
+    expect(lifecycle).toEqual(['start:/old-project', 'stop', 'start:/new-project']);
+    vi.useRealTimers();
   });
 
   it('keeps initial and repeated retry failures visible while reconnects stay single-flight', async () => {

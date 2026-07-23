@@ -34,10 +34,12 @@ export interface QecWebSocket {
 export interface ClientDependencies {
   socketFactory?: (url: string) => QecWebSocket;
   requestIdFactory?: () => string;
+  authenticationTimeoutMs?: number;
 }
 
 type PendingKind = 'probe' | 'validate' | 'preview' | 'import' | 'query' | 'cancel' | 'session-list';
 const MAX_SESSION_CATALOG_SIZE = 10_000;
+export const QEC_DATA_AUTHENTICATION_TIMEOUT_MS = 8_000;
 interface PendingRequest {
   kind: PendingKind;
   phase: 'terminal' | 'awaiting_start' | 'streaming';
@@ -128,9 +130,11 @@ export class QecDataClient {
   readonly #token: string;
   readonly #socketFactory: (url: string) => QecWebSocket;
   readonly #requestIdFactory: () => string;
+  readonly #authenticationTimeoutMs: number;
   #socket: QecWebSocket | null = null;
   #authenticated = false;
   #connecting: ConnectingState | null = null;
+  #authenticationTimer: ReturnType<typeof setTimeout> | null = null;
   #pending: ReadonlyMap<string, PendingRequest> = new Map();
   #disconnectListeners: readonly QecDataDisconnectListener[] = Object.freeze([]);
 
@@ -142,6 +146,10 @@ export class QecDataClient {
     this.#token = parsed.data.token;
     this.#socketFactory = dependencies.socketFactory ?? defaultSocketFactory;
     this.#requestIdFactory = dependencies.requestIdFactory ?? defaultRequestId;
+    this.#authenticationTimeoutMs = dependencies.authenticationTimeoutMs ?? QEC_DATA_AUTHENTICATION_TIMEOUT_MS;
+    if (!Number.isFinite(this.#authenticationTimeoutMs) || this.#authenticationTimeoutMs <= 0) {
+      throw new QecDataClientError('invalid_timeout', 'QEC Data Engine authentication timeout must be positive.');
+    }
   }
 
   connect(): Promise<void> {
@@ -153,9 +161,13 @@ export class QecDataClient {
     socket.addEventListener('message', (event) => this.#receive(event));
     socket.addEventListener('error', () => this.#disconnect('QEC Data Engine connection failed.'));
     socket.addEventListener('close', () => this.#disconnect('QEC Data Engine disconnected.'));
-    return new Promise<void>((resolve, reject) => {
+    const connecting = new Promise<void>((resolve, reject) => {
       this.#connecting = { resolve, reject };
     });
+    this.#authenticationTimer = globalThis.setTimeout(() => {
+      this.#protocolFailure('authentication_timeout', 'QEC Data Engine authentication timed out.');
+    }, this.#authenticationTimeoutMs);
+    return connecting;
   }
 
   disconnect(): void {
@@ -355,6 +367,7 @@ export class QecDataClient {
         this.#protocolFailure('authentication_failed', 'QEC Data Engine did not authenticate.');
         return;
       }
+      this.#clearAuthenticationTimer();
       this.#authenticated = true;
       const connecting = this.#connecting;
       this.#connecting = null;
@@ -454,6 +467,7 @@ export class QecDataClient {
   #protocolFailure(code: string, message: string): void {
     const error = new QecDataClientError(code, message);
     const wasAuthenticated = this.#authenticated;
+    this.#clearAuthenticationTimer();
     this.#rejectAll(error);
     this.#connecting?.reject(error);
     this.#connecting = null;
@@ -467,12 +481,19 @@ export class QecDataClient {
     if (!this.#socket && !this.#connecting && !this.#authenticated && this.#pending.size === 0) return;
     const error = new QecDataClientError('engine_disconnected', message);
     const wasAuthenticated = this.#authenticated;
+    this.#clearAuthenticationTimer();
     this.#rejectAll(error);
     this.#connecting?.reject(error);
     this.#connecting = null;
     this.#authenticated = false;
     this.#socket = null;
     if (notify && wasAuthenticated) this.#notifyDisconnect(error);
+  }
+
+  #clearAuthenticationTimer(): void {
+    if (this.#authenticationTimer === null) return;
+    globalThis.clearTimeout(this.#authenticationTimer);
+    this.#authenticationTimer = null;
   }
 
   #notifyDisconnect(error: QecDataClientError): void {
