@@ -2,7 +2,7 @@ use std::fs;
 use std::net::TcpListener;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU16, Ordering};
-use std::sync::{Arc, Barrier};
+use std::sync::{Arc, Barrier, Mutex, MutexGuard};
 use std::thread;
 use std::time::Duration;
 
@@ -59,6 +59,11 @@ print('NUCLEI_QEC_DATA_ERROR unexpected_identity_match', flush=True)
 sys.exit(3)
 "#;
 static NEXT_TEST_PORT: AtomicU16 = AtomicU16::new(31_000);
+static LIFECYCLE_TEST_LOCK: Mutex<()> = Mutex::new(());
+
+fn lifecycle_test_guard() -> MutexGuard<'static, ()> {
+    LIFECYCLE_TEST_LOCK.lock().expect("QEC lifecycle test lock")
+}
 
 fn python() -> PathBuf {
     std::env::var_os("PYTHON")
@@ -97,6 +102,7 @@ fn qec_data_token_is_256_bit_lowercase_hex() {
 
 #[test]
 fn qec_data_token_is_environment_only_and_status_tracks_running() {
+    let _guard = lifecycle_test_guard();
     let temp = TempDir::new().expect("temp project");
     write_module(temp.path(), "fake_engine", FAKE_ENGINE);
     let port = free_port();
@@ -123,6 +129,7 @@ fn qec_data_token_is_environment_only_and_status_tracks_running() {
 
 #[test]
 fn concurrent_starts_share_one_owned_child() {
+    let _guard = lifecycle_test_guard();
     let temp = TempDir::new().expect("temp project");
     write_module(temp.path(), "fake_engine", FAKE_ENGINE);
     let config = fake_config(&temp, "fake_engine", free_port());
@@ -154,6 +161,7 @@ fn concurrent_starts_share_one_owned_child() {
 
 #[test]
 fn running_engine_is_bound_to_its_canonical_project() {
+    let _guard = lifecycle_test_guard();
     let first = TempDir::new().expect("first project");
     let second = TempDir::new().expect("second project");
     write_module(first.path(), "fake_engine", FAKE_ENGINE);
@@ -191,6 +199,7 @@ fn project_access_requires_the_window_scope_for_canonical_data() {
 
 #[test]
 fn authorized_project_identity_cannot_change_before_manager_start() {
+    let _guard = lifecycle_test_guard();
     let module = TempDir::new().expect("module root");
     let project = TempDir::new().expect("project root");
     write_module(module.path(), "fake_engine", FAKE_ENGINE);
@@ -217,6 +226,7 @@ fn authorized_project_identity_cannot_change_before_manager_start() {
 #[cfg(unix)]
 #[test]
 fn child_rejects_project_namespace_swap_during_spawn() {
+    let _guard = lifecycle_test_guard();
     let module = TempDir::new().expect("module root");
     let project = TempDir::new().expect("project root");
     write_module(module.path(), "identity_engine", IDENTITY_ENGINE);
@@ -253,6 +263,7 @@ fn child_rejects_project_namespace_swap_during_spawn() {
 
 #[test]
 fn missing_dependencies_return_stable_metadata_without_spawning() {
+    let _guard = lifecycle_test_guard();
     let temp = TempDir::new().expect("temp project");
     write_module(temp.path(), "fake_engine", FAKE_ENGINE);
     let config = fake_config(&temp, "fake_engine", free_port())
@@ -273,6 +284,7 @@ fn missing_dependencies_return_stable_metadata_without_spawning() {
 #[cfg(unix)]
 #[test]
 fn dependency_probe_has_a_bounded_timeout() {
+    let _guard = lifecycle_test_guard();
     use std::os::unix::fs::PermissionsExt;
 
     let temp = TempDir::new().expect("temp project");
@@ -296,6 +308,7 @@ fn dependency_probe_has_a_bounded_timeout() {
 
 #[test]
 fn port_squatter_is_reported_and_never_killed() {
+    let _guard = lifecycle_test_guard();
     let temp = TempDir::new().expect("temp project");
     write_module(temp.path(), "fake_engine", FAKE_ENGINE);
     let listener = TcpListener::bind(("127.0.0.1", 0)).expect("bind squatter");
@@ -316,6 +329,7 @@ fn port_squatter_is_reported_and_never_killed() {
 
 #[test]
 fn readiness_timeout_and_early_exit_reap_only_the_started_child() {
+    let _guard = lifecycle_test_guard();
     let temp = TempDir::new().expect("temp project");
     write_module(temp.path(), "silent_engine", SILENT_ENGINE);
     write_module(temp.path(), "exiting_engine", EXITING_ENGINE);
@@ -338,6 +352,7 @@ fn readiness_timeout_and_early_exit_reap_only_the_started_child() {
 
 #[test]
 fn stop_restart_rotates_token_and_drop_releases_owned_port() {
+    let _guard = lifecycle_test_guard();
     let temp = TempDir::new().expect("temp project");
     write_module(temp.path(), "fake_engine", FAKE_ENGINE);
     let port = free_port();
@@ -359,6 +374,7 @@ fn stop_restart_rotates_token_and_drop_releases_owned_port() {
 
 #[test]
 fn project_root_must_exist_and_be_a_directory() {
+    let _guard = lifecycle_test_guard();
     let temp = TempDir::new().expect("temp project");
     write_module(temp.path(), "fake_engine", FAKE_ENGINE);
     let missing = temp.path().join("missing");

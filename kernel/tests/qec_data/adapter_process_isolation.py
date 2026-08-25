@@ -146,7 +146,8 @@ def _stop_process_group(
         _stop_process(process)
         return "worker process group identity mismatched"
     terminate_error = _signal_process_group(group_id, signal.SIGTERM)
-    process.join(PROCESS_CLEANUP_SECONDS / 2)
+    if group_id is not None and terminate_error is None:
+        time.sleep(PROCESS_CLEANUP_SECONDS / 2)
     kill_error = _signal_process_group(group_id, signal.SIGKILL)
     process.join(PROCESS_CLEANUP_SECONDS / 2)
     _stop_process(process)

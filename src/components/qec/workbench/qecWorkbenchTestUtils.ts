@@ -1,6 +1,85 @@
 import { act } from '@testing-library/react';
 import { vi } from 'vitest';
 import type { PlatformBridge } from '../../../platform/bridge';
+import { useQecStudyStore } from '../../../services/qecStudyStore';
+import { useProjectStore } from '../../../stores/projectStore';
+import { useQecJobStore } from '../../../stores/qecJobStore';
+import { useQecQueryStore } from '../../../stores/qecQueryStore';
+import { useQecSessionCatalogStore } from '../../../stores/qecSessionCatalogStore';
+import { useQecStudyUiStore } from '../../../stores/qecStudyUiStore';
+import { useQecWorkbenchStore } from '../../../stores/qecWorkbenchStore';
+import {
+  EMPTY_RESEARCH_SELECTION,
+  useResearchSelectionStore,
+} from '../../../stores/researchSelectionStore';
+
+export const STUDY = {
+  schema: 1 as const,
+  id: 'surface-memory',
+  name: 'Surface Memory',
+  question: 'Which decoder reduces logical error?',
+  preset: 'build' as const,
+  tags: ['memory'],
+  sources: [
+    { id: 'circuit-d7', kind: 'stim' as const, path: 'circuits/surface-d7.stim' },
+    { id: 'campaign-a', kind: 'experiment' as const, path: 'experiments/memory.experiment.yaml' },
+  ],
+};
+
+export const SECOND_STUDY = {
+  ...STUDY,
+  id: 'decoder-study',
+  name: 'Decoder Study',
+  question: 'Which decoder has the best tail latency?',
+  preset: 'analyze' as const,
+  sources: [],
+};
+
+export const STUDY_UI_ACTIONS = {
+  clearActiveStudy: useQecStudyUiStore.getState().clearActiveStudy,
+  setActiveStudy: useQecStudyUiStore.getState().setActiveStudy,
+};
+
+export function setStudies(studies = [STUDY, SECOND_STUDY]): void {
+  useQecStudyStore.setState({
+    projectRoot: '/project',
+    studies: studies.map((study) => ({
+      fileName: `${study.id}.qec-study.yaml`,
+      path: `studies/${study.id}.qec-study.yaml`,
+      study,
+    })),
+    validationErrors: [],
+    loading: false,
+  });
+}
+
+export function resetQecWorkbenchTestState(): void {
+  Object.defineProperty(globalThis, 'localStorage', {
+    configurable: true,
+    value: new MemoryStorage(),
+  });
+  useProjectStore.setState({ projectRoot: null, tabs: [], activeTabPath: null });
+  setStudies([STUDY]);
+  useQecStudyUiStore.setState({ activeStudyId: STUDY.id, ...STUDY_UI_ACTIONS });
+  useQecWorkbenchStore.setState({
+    preset: 'build',
+    pinnedPanelIds: [],
+    sourceWidth: 280,
+    inspectorWidth: 360,
+    trayHeight: 260,
+    trayCollapsed: false,
+    persistenceError: null,
+    persistenceIssue: null,
+  });
+  useResearchSelectionStore.setState({
+    past: [],
+    present: EMPTY_RESEARCH_SELECTION,
+    future: [],
+  });
+  useQecJobStore.getState().reset();
+  useQecQueryStore.getState().reset();
+  useQecSessionCatalogStore.getState().reset();
+}
 
 export class MemoryStorage implements Storage {
   private values: Readonly<Record<string, string>> = {};
