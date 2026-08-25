@@ -1,0 +1,17 @@
+{
+  "schema_version": "1.0.0",
+  "decode_id": "decode-1",
+  "session_id": "session-1",
+  "input": { "batch_id": "batch-1", "sequence_start": 0, "sequence_end": 1 },
+  "decoder": { "name": "pymatching", "version": "2.3.1", "configuration_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" },
+  "status": "complete",
+  "prediction": { "encoding": "base64", "bit_order": "lsb0", "bit_width": 1, "data": "AA==" },
+  "confidence": { "value": null, "status": "unavailable" },
+  "correction": { "value": null, "status": "unavailable" },
+  "predicted_logical_flips": { "encoding": "base64", "bit_order": "lsb0", "bit_width": 1, "data": "AA==" },
+  "known_truth": { "value": null, "status": "unknown" },
+  "pipeline_latency": { "value": null, "unit": null, "status": "unavailable" },
+  "total_latency": { "value": null, "unit": null, "status": "unavailable" },
+  "error": null,
+  "provenance_id": "provenance-1"
+}

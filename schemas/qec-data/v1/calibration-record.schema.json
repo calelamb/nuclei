@@ -1,0 +1,75 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://getnuclei.dev/schemas/qec-data/v1/calibration-record.schema.json",
+  "title": "QEC canonical calibration record",
+  "$comment": "Executable validators MUST require an RFC 2046-style type/subtype MIME value and enforce effective_interval.end >= start when end is non-null.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "calibration_id", "session_id", "effective_interval", "scope",
+    "parameter", "value", "unit", "uncertainty", "quality", "source_system",
+    "calibration_run_id", "original_representation", "provenance_id"
+  ],
+  "properties": {
+    "schema_version": { "const": "1.0.0" },
+    "calibration_id": { "$ref": "#/$defs/nonEmpty" },
+    "session_id": { "$ref": "#/$defs/nonEmpty" },
+    "effective_interval": {
+      "type": "object", "additionalProperties": false, "required": ["start", "end"],
+      "properties": {
+        "start": { "$ref": "#/$defs/timestamp" },
+        "end": { "anyOf": [{ "$ref": "#/$defs/timestamp" }, { "type": "null" }] }
+      }
+    },
+    "scope": {
+      "type": "object", "additionalProperties": false, "required": ["kind", "id"],
+      "properties": {
+        "kind": { "enum": ["device", "patch", "qubit", "coupler", "resonator", "readout_channel", "custom"] },
+        "id": { "$ref": "#/$defs/nonEmpty" }
+      }
+    },
+    "parameter": {
+      "type": "object", "additionalProperties": false, "required": ["name", "semantic_id"],
+      "properties": { "name": { "$ref": "#/$defs/nonEmpty" }, "semantic_id": { "$ref": "#/$defs/nonEmpty" } }
+    },
+    "value": { "$ref": "#/$defs/qualifiedNumber" },
+    "unit": { "$ref": "#/$defs/qualifiedText" },
+    "uncertainty": { "$ref": "#/$defs/qualifiedNumber" },
+    "quality": { "enum": ["accepted", "suspect", "rejected", "unknown"] },
+    "source_system": { "$ref": "#/$defs/nonEmpty" },
+    "calibration_run_id": { "type": ["string", "null"], "minLength": 1 },
+    "original_representation": {
+      "type": "object", "additionalProperties": false, "required": ["mime_type", "value"],
+      "properties": {
+        "mime_type": {
+          "type": "string",
+          "pattern": "^[^\\s/]+/[^\\s/]+$"
+        },
+        "value": { "type": "string" }
+      }
+    },
+    "provenance_id": { "$ref": "#/$defs/nonEmpty" }
+  },
+  "$defs": {
+    "nonEmpty": { "type": "string", "minLength": 1 },
+    "timestamp": { "type": "string", "format": "date-time" },
+    "valueStatus": { "enum": ["absent", "unavailable", "unknown", "inferred", "predicted", "simulated", "measured"] },
+    "qualifiedNumber": {
+      "type": "object", "additionalProperties": false, "required": ["value", "status"],
+      "properties": { "value": { "type": ["number", "null"] }, "status": { "$ref": "#/$defs/valueStatus" } },
+      "allOf": [{ "$ref": "#/$defs/qualifiedScalarConsistency" }]
+    },
+    "qualifiedText": {
+      "type": "object", "additionalProperties": false, "required": ["value", "status"],
+      "properties": { "value": { "type": ["string", "null"] }, "status": { "$ref": "#/$defs/valueStatus" } },
+      "if": { "properties": { "status": { "enum": ["absent", "unavailable", "unknown"] } } },
+      "then": { "properties": { "value": { "type": "null" } } },
+      "else": { "properties": { "value": { "type": "string", "minLength": 1 } } }
+    },
+    "qualifiedScalarConsistency": {
+      "if": { "properties": { "status": { "enum": ["absent", "unavailable", "unknown"] } } },
+      "then": { "properties": { "value": { "type": "null" } } },
+      "else": { "properties": { "value": { "type": "number" } } }
+    }
+  }
+}

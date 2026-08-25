@@ -33,6 +33,9 @@ dist-vercel
 # Rust
 target/
 Cargo.lock
+# Nuclei's Tauri shell is an application; commit its lockfile so the declared
+# Rust 1.77.2 MSRV remains reproducible instead of drifting with transitive crates.
+!src-tauri/Cargo.lock
 
 # Python
 __pycache__/
@@ -73,8 +76,11 @@ design-system/
 
 # Test caches
 .pytest_cache/
+coverage/
+test-results/
 
 # Brainstorming scratch (visual companion output)
 .superpowers/
+.worktrees/
 nuclei-signing-backup/
 .venv-nuclei/

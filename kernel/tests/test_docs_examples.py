@@ -33,16 +33,22 @@ import kernel.executor as executor_module
 from kernel.executor import Executor
 from kernel.hardware.job_store import JobStore
 from kernel.hardware.manager import HardwareManager
+from .docs_link_checker import (
+    research_doc_targets as _research_doc_targets,
+    research_documents as _research_documents,
+    research_links as _research_links,
+)
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 EXAMPLES_DIR = REPO_ROOT / "docs-site" / "fixtures" / "examples"
+DOCS_DIR = REPO_ROOT / "docs-site" / "src" / "content" / "docs"
+RESEARCH_DOCS_DIR = DOCS_DIR / "research"
+QEC_WORKBENCH_DOC = RESEARCH_DOCS_DIR / "qec-workbench.mdx"
 
 
 def _load_example(module_name: str, filename: str):
     """Import a docs example file from the fixtures path."""
-    spec = importlib.util.spec_from_file_location(
-        module_name, EXAMPLES_DIR / filename
-    )
+    spec = importlib.util.spec_from_file_location(module_name, EXAMPLES_DIR / filename)
     assert spec is not None and spec.loader is not None
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
@@ -169,3 +175,196 @@ def test_echo_provider_submit_requires_connection(echo_manager):
     # failures after connection are returned as failed JobHandles instead.
     with pytest.raises(RuntimeError):
         manager.submit_job("echo", "circuit-source", "echo_1", shots=8)
+
+
+# ─────────────────── research docs ───────────────────
+
+
+def test_qec_workbench_page_and_research_links_resolve() -> None:
+    assert QEC_WORKBENCH_DOC.is_file(), "Missing Research docs page: qec-workbench.mdx"
+
+    broken: list[str] = []
+    for document in _research_documents(RESEARCH_DOCS_DIR):
+        for href in _research_links(document):
+            targets = _research_doc_targets(href)
+            if not any(target.is_file() for target in targets):
+                expected = " or ".join(target.name for target in targets)
+                broken.append(f"{document.name}: {href} -> {expected}")
+
+    assert broken == [], "Broken Research docs links:\n" + "\n".join(broken)
+
+
+@pytest.mark.parametrize(
+    "href",
+    [
+        "/docs/research/qec-workbench/",
+        "/docs/research/qec-workbench/#what-persists",
+        "/docs/research/qec-workbench/?view=build#what-persists",
+    ],
+)
+def test_research_doc_link_normalization(href: str) -> None:
+    assert QEC_WORKBENCH_DOC in _research_doc_targets(href)
+
+
+@pytest.mark.parametrize(
+    "href",
+    [
+        "/docs/research/../reference/configuration/",
+        "/docs/research/%2e%2e/reference/configuration/",
+        "/docs/research/..%5Creference%5Cconfiguration/",
+    ],
+)
+def test_research_doc_links_cannot_escape_research_root(href: str) -> None:
+    with pytest.raises(AssertionError, match="escapes its root"):
+        _research_doc_targets(href)
+
+
+def test_research_link_extraction_supports_mdx_and_reference_forms(
+    tmp_path: Path,
+) -> None:
+    document = tmp_path / "links.mdx"
+    document.write_text(
+        """
+[inline](/docs/research/inline/)
+[titled](/docs/research/titled/ "Inline title")
+[full reference][full]
+[collapsed reference][]
+[shortcut]
+
+[full]: /docs/research/full-reference/ "Reference title"
+[collapsed reference]: </docs/research/collapsed-reference/>
+[shortcut]: /docs/research/shortcut/
+
+<a href="/docs/research/html-anchor/">HTML anchor</a>
+<Card href={'/docs/research/mdx-anchor/?mode=build#result'} />
+
+`[inline code](/docs/research/not-a-link/)`
+```md
+[fenced](/docs/research/not-a-link-either/)
+```
+Plain text /docs/research/not-a-link-three/ is not a link.
+[external](https://example.com/docs/research/not-internal/)
+""",
+        encoding="utf-8",
+    )
+
+    assert set(_research_links(document)) == {
+        "/docs/research/inline/",
+        "/docs/research/titled/",
+        "/docs/research/full-reference/",
+        "/docs/research/collapsed-reference/",
+        "/docs/research/shortcut/",
+        "/docs/research/html-anchor/",
+        "/docs/research/mdx-anchor/?mode=build#result",
+    }
+
+
+def test_research_link_extraction_handles_balancing_images_and_exact_href(
+    tmp_path: Path,
+) -> None:
+    document = tmp_path / "adversarial-links.mdx"
+    document.write_text(
+        r"""
+[a [nested] label](/docs/research/nested-label/)
+[guide](/docs/research/guide_(advanced)/)
+[escaped \[label\]](/docs/research/escaped-label/)
+[escaped destination](/docs/research/guide_\(escaped\)/)
+[escaped reference][escaped \[key\]]
+[escaped \[key\]]: /docs/research/escaped-reference/
+
+![alt][image]
+![collapsed image][]
+![shortcut image]
+![nested [alt]](/docs/research/not-an-inline-link/)
+[image]: /docs/research/not-a-reference-link/
+[collapsed image]: /docs/research/not-a-collapsed-image-link/
+[shortcut image]: /docs/research/not-a-shortcut-image-link/
+
+<Card
+  data-href="/docs/research/not-a-data-link/"
+  aria-href="/docs/research/not-an-aria-link/"
+  href="/docs/research/exact-href/"
+/>
+""",
+        encoding="utf-8",
+    )
+
+    assert set(_research_links(document)) == {
+        "/docs/research/nested-label/",
+        "/docs/research/guide_(advanced)/",
+        "/docs/research/escaped-label/",
+        "/docs/research/guide_(escaped)/",
+        "/docs/research/escaped-reference/",
+        "/docs/research/exact-href/",
+    }
+
+
+def test_mdx_tag_extraction_respects_attribute_boundaries_and_jsx(
+    tmp_path: Path,
+) -> None:
+    document = tmp_path / "mdx-tags.mdx"
+    document.write_text(
+        """
+<Card title='example href="/docs/research/not-a-link/"' />
+<Card condition={a > b} href="/docs/research/real-link/" />
+<Card
+  config={{ nested: { text: 'href="/docs/research/not-a-nested-link/"', test: a > b } }}
+  href={'/docs/research/nested-real-link/'}
+/>
+<Card href={dynamicTarget} spread {...props} disabled />
+<Card broken={{ nested: 'unterminated' } href="/docs/research/not-malformed/"
+""",
+        encoding="utf-8",
+    )
+
+    assert set(_research_links(document)) == {
+        "/docs/research/real-link/",
+        "/docs/research/nested-real-link/",
+    }
+
+
+def test_research_document_discovery_is_recursive(tmp_path: Path) -> None:
+    nested = tmp_path / "nested"
+    nested.mkdir()
+    top_mdx = tmp_path / "top.mdx"
+    nested_md = nested / "page.md"
+    ignored = nested / "notes.txt"
+    for path in (top_mdx, nested_md, ignored):
+        path.write_text("content", encoding="utf-8")
+
+    assert _research_documents(tmp_path) == [nested_md, top_mdx]
+
+
+def test_research_doc_targets_preserve_dotted_slugs_and_directory_indexes(
+    tmp_path: Path,
+) -> None:
+    dotted = tmp_path / "decoder.v2.mdx"
+    nested_index = tmp_path / "nested" / "index.md"
+    nested_index.parent.mkdir()
+    dotted.write_text("dotted", encoding="utf-8")
+    nested_index.write_text("index", encoding="utf-8")
+
+    assert dotted in _research_doc_targets("/docs/research/decoder.v2/", tmp_path)
+    assert nested_index in _research_doc_targets("/docs/research/nested/", tmp_path)
+    assert _research_doc_targets("/docs/research/decoder.v2.mdx", tmp_path) == (dotted,)
+
+
+def test_research_doc_targets_reject_symlink_escape(tmp_path: Path) -> None:
+    research_root = tmp_path / "research"
+    outside = tmp_path / "outside"
+    research_root.mkdir()
+    outside.mkdir()
+    (outside / "secret.mdx").write_text("secret", encoding="utf-8")
+    (research_root / "linked").symlink_to(outside, target_is_directory=True)
+
+    with pytest.raises(AssertionError, match="escapes its root"):
+        _research_doc_targets("/docs/research/linked/secret/", research_root)
+
+
+def test_qec_workbench_page_is_in_the_research_sidebar() -> None:
+    config = (REPO_ROOT / "docs-site" / "astro.config.mjs").read_text(encoding="utf-8")
+    qec_studio = config.index("'research/qec-studio'")
+    qec_workbench = config.index("'research/qec-workbench'")
+    campaigns = config.index("'research/campaigns'")
+
+    assert qec_studio < qec_workbench < campaigns

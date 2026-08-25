@@ -35,6 +35,12 @@ impl KernelState {
     }
 }
 
+impl Default for KernelState {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl Drop for KernelState {
     fn drop(&mut self) {
         self.stop();

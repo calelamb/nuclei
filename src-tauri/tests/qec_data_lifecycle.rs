@@ -1,0 +1,389 @@
+use std::fs;
+use std::net::TcpListener;
+use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicU16, Ordering};
+use std::sync::{Arc, Barrier, Mutex, MutexGuard};
+use std::thread;
+use std::time::Duration;
+
+use app_lib::commands::qec_data::{
+    authorize_project_access, generate_token, QecDataLaunchConfig, QecDataLifecycle, QecDataManager,
+};
+use tempfile::TempDir;
+
+const FAKE_ENGINE: &str = r#"
+import json
+import os
+import socket
+import sys
+import time
+
+root = os.environ['NUCLEI_QEC_DATA_PROJECT_ROOT']
+token = os.environ['NUCLEI_QEC_DATA_TOKEN']
+port = int(sys.argv[sys.argv.index('--port') + 1])
+with open(os.path.join(root, 'starts'), 'a', encoding='utf-8') as stream:
+    stream.write('started\n')
+with open(os.path.join(root, 'token'), 'w', encoding='utf-8') as stream:
+    stream.write(token)
+with open(os.path.join(root, 'argv'), 'w', encoding='utf-8') as stream:
+    json.dump(sys.argv, stream)
+listener = socket.socket()
+listener.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+listener.bind(('127.0.0.1', port))
+listener.listen()
+print(f'NUCLEI_QEC_DATA_READY 127.0.0.1:{port}', flush=True)
+while True:
+    time.sleep(0.1)
+"#;
+
+const SILENT_ENGINE: &str = "import time\ntime.sleep(5)\n";
+const EXITING_ENGINE: &str = "import sys\nsys.exit(7)\n";
+const IDENTITY_ENGINE: &str = r#"
+import os
+import sys
+import time
+
+root = os.environ['NUCLEI_QEC_DATA_PROJECT_ROOT']
+with open(root + '.spawned', 'w', encoding='utf-8') as stream:
+    stream.write('spawned')
+time.sleep(0.25)
+status = os.stat(root)
+expected = (
+    int(os.environ['NUCLEI_QEC_DATA_PROJECT_DEVICE']),
+    int(os.environ['NUCLEI_QEC_DATA_PROJECT_INODE']),
+)
+if (status.st_dev, status.st_ino) != expected:
+    print('NUCLEI_QEC_DATA_ERROR project_identity_changed', flush=True)
+    sys.exit(2)
+print('NUCLEI_QEC_DATA_ERROR unexpected_identity_match', flush=True)
+sys.exit(3)
+"#;
+static NEXT_TEST_PORT: AtomicU16 = AtomicU16::new(31_000);
+static LIFECYCLE_TEST_LOCK: Mutex<()> = Mutex::new(());
+
+fn lifecycle_test_guard() -> MutexGuard<'static, ()> {
+    LIFECYCLE_TEST_LOCK.lock().expect("QEC lifecycle test lock")
+}
+
+fn python() -> PathBuf {
+    std::env::var_os("PYTHON")
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from("python3"))
+}
+
+fn free_port() -> u16 {
+    loop {
+        let port = NEXT_TEST_PORT.fetch_add(1, Ordering::Relaxed);
+        if TcpListener::bind(("127.0.0.1", port)).is_ok() {
+            return port;
+        }
+    }
+}
+
+fn write_module(root: &Path, name: &str, source: &str) {
+    fs::write(root.join(format!("{name}.py")), source).expect("write fake module");
+}
+
+fn fake_config(temp: &TempDir, module: &str, port: u16) -> QecDataLaunchConfig {
+    QecDataLaunchConfig::new(python(), temp.path(), temp.path(), port)
+        .with_module(module)
+        .with_dependencies(Vec::new())
+        .with_readiness_timeout(Duration::from_secs(2))
+}
+
+#[test]
+fn qec_data_token_is_256_bit_lowercase_hex() {
+    let token = generate_token().expect("OS random token");
+    assert_eq!(token.len(), 64);
+    assert!(token.bytes().all(|byte| byte.is_ascii_hexdigit()));
+    assert_eq!(token, token.to_ascii_lowercase());
+    assert_ne!(token, generate_token().expect("second token"));
+}
+
+#[test]
+fn qec_data_token_is_environment_only_and_status_tracks_running() {
+    let _guard = lifecycle_test_guard();
+    let temp = TempDir::new().expect("temp project");
+    write_module(temp.path(), "fake_engine", FAKE_ENGINE);
+    let port = free_port();
+    let manager = QecDataManager::new();
+
+    let endpoint = manager
+        .start(fake_config(&temp, "fake_engine", port))
+        .expect("start fake engine");
+    let argv = fs::read_to_string(temp.path().join("argv")).expect("recorded argv");
+    let child_token = fs::read_to_string(temp.path().join("token")).expect("recorded token");
+
+    assert_eq!(endpoint.url, format!("ws://127.0.0.1:{port}"));
+    assert_eq!(child_token, endpoint.token);
+    assert!(!argv.contains(&endpoint.token));
+    let status = manager.status();
+    assert_eq!(status.lifecycle, QecDataLifecycle::Running);
+    assert_eq!(status.url, Some(endpoint.url.clone()));
+    assert!(!serde_json::to_string(&status)
+        .expect("serialize status")
+        .contains(&endpoint.token));
+    manager.stop().expect("stop fake engine");
+    assert_eq!(manager.status().lifecycle, QecDataLifecycle::Stopped);
+}
+
+#[test]
+fn concurrent_starts_share_one_owned_child() {
+    let _guard = lifecycle_test_guard();
+    let temp = TempDir::new().expect("temp project");
+    write_module(temp.path(), "fake_engine", FAKE_ENGINE);
+    let config = fake_config(&temp, "fake_engine", free_port());
+    let manager = Arc::new(QecDataManager::new());
+    let barrier = Arc::new(Barrier::new(3));
+    let handles: Vec<_> = (0..2)
+        .map(|_| {
+            let shared = Arc::clone(&manager);
+            let gate = Arc::clone(&barrier);
+            let launch = config.clone();
+            thread::spawn(move || {
+                gate.wait();
+                shared.start(launch)
+            })
+        })
+        .collect();
+
+    barrier.wait();
+    let endpoints: Vec<_> = handles
+        .into_iter()
+        .map(|handle| handle.join().expect("start thread").expect("start result"))
+        .collect();
+    let starts = fs::read_to_string(temp.path().join("starts")).expect("start count");
+
+    assert_eq!(endpoints[0], endpoints[1]);
+    assert_eq!(starts.lines().count(), 1);
+    manager.stop().expect("stop fake engine");
+}
+
+#[test]
+fn running_engine_is_bound_to_its_canonical_project() {
+    let _guard = lifecycle_test_guard();
+    let first = TempDir::new().expect("first project");
+    let second = TempDir::new().expect("second project");
+    write_module(first.path(), "fake_engine", FAKE_ENGINE);
+    write_module(second.path(), "fake_engine", FAKE_ENGINE);
+    let manager = QecDataManager::new();
+    let endpoint = manager
+        .start(fake_config(&first, "fake_engine", free_port()))
+        .expect("first project starts");
+
+    let error = manager
+        .start(fake_config(&second, "fake_engine", free_port()))
+        .expect_err("second project must not receive the first endpoint");
+
+    assert_eq!(error.code, "project_mismatch");
+    assert!(!error.message.contains(&endpoint.token));
+    assert!(!second.path().join("starts").exists());
+    manager.stop().expect("stop first project");
+}
+
+#[test]
+fn project_access_requires_the_window_scope_for_canonical_data() {
+    let allowed = TempDir::new().expect("allowed project");
+    let outside = TempDir::new().expect("outside project");
+    let allowed_path = fs::canonicalize(allowed.path()).expect("canonical allowed project");
+
+    assert!(
+        authorize_project_access(allowed.path(), |path| path.starts_with(&allowed_path)).is_ok()
+    );
+    assert!(authorize_project_access(allowed.path(), |path| path == allowed_path).is_err());
+    let error = authorize_project_access(outside.path(), |path| path.starts_with(&allowed_path))
+        .expect_err("outside project must be rejected");
+
+    assert_eq!(error.code, "project_not_authorized");
+}
+
+#[test]
+fn authorized_project_identity_cannot_change_before_manager_start() {
+    let _guard = lifecycle_test_guard();
+    let module = TempDir::new().expect("module root");
+    let project = TempDir::new().expect("project root");
+    write_module(module.path(), "fake_engine", FAKE_ENGINE);
+    let authorized = authorize_project_access(project.path(), |_| true)
+        .expect("authorize original project identity");
+    let moved = project.path().with_extension("authorized-original");
+    fs::rename(project.path(), &moved).expect("move authorized directory");
+    fs::create_dir(project.path()).expect("replace authorized pathname");
+    let config =
+        QecDataLaunchConfig::new_authorized(python(), module.path(), authorized, free_port())
+            .with_module("fake_engine")
+            .with_dependencies(Vec::new());
+
+    let error = QecDataManager::new()
+        .start(config)
+        .expect_err("replaced project identity must fail closed");
+
+    assert_eq!(error.code, "project_identity_changed");
+    assert!(!project.path().join("starts").exists());
+    fs::remove_dir(project.path()).expect("remove replacement");
+    fs::rename(moved, project.path()).expect("restore tempdir for cleanup");
+}
+
+#[cfg(unix)]
+#[test]
+fn child_rejects_project_namespace_swap_during_spawn() {
+    let _guard = lifecycle_test_guard();
+    let module = TempDir::new().expect("module root");
+    let project = TempDir::new().expect("project root");
+    write_module(module.path(), "identity_engine", IDENTITY_ENGINE);
+    let project_path = project.path().to_path_buf();
+    let marker = project_path.with_extension("spawned");
+    let config = QecDataLaunchConfig::new(python(), module.path(), &project_path, free_port())
+        .with_module("identity_engine")
+        .with_dependencies(Vec::new());
+    let handle = thread::spawn(move || QecDataManager::new().start(config));
+    for _ in 0..500 {
+        if marker.exists() {
+            break;
+        }
+        thread::sleep(Duration::from_millis(10));
+    }
+    assert!(
+        marker.exists(),
+        "child must reach its startup identity check"
+    );
+    let moved = project_path.with_extension("spawn-original");
+    fs::rename(&project_path, &moved).expect("move authorized namespace");
+    fs::create_dir(&project_path).expect("create replacement namespace");
+
+    let error = handle
+        .join()
+        .expect("join manager start")
+        .expect_err("child must reject replacement namespace");
+
+    assert_eq!(error.code, "project_identity_changed");
+    fs::remove_dir(&project_path).expect("remove replacement");
+    fs::rename(moved, &project_path).expect("restore tempdir");
+    fs::remove_file(marker).expect("remove startup marker");
+}
+
+#[test]
+fn missing_dependencies_return_stable_metadata_without_spawning() {
+    let _guard = lifecycle_test_guard();
+    let temp = TempDir::new().expect("temp project");
+    write_module(temp.path(), "fake_engine", FAKE_ENGINE);
+    let config = fake_config(&temp, "fake_engine", free_port())
+        .with_dependencies(vec!["nuclei_dependency_that_does_not_exist".to_string()]);
+    let manager = QecDataManager::new();
+
+    let error = manager.start(config).expect_err("dependency must fail");
+
+    assert_eq!(error.code, "missing_dependency");
+    assert_eq!(
+        error.missing_dependencies,
+        vec!["nuclei_dependency_that_does_not_exist"]
+    );
+    assert!(!temp.path().join("starts").exists());
+    assert_eq!(manager.status().lifecycle, QecDataLifecycle::Failed);
+}
+
+#[cfg(unix)]
+#[test]
+fn dependency_probe_has_a_bounded_timeout() {
+    let _guard = lifecycle_test_guard();
+    use std::os::unix::fs::PermissionsExt;
+
+    let temp = TempDir::new().expect("temp project");
+    let sleeper = temp.path().join("sleeping-python");
+    fs::write(&sleeper, "#!/bin/sh\nexec sleep 5\n").expect("write sleeper");
+    let mut permissions = fs::metadata(&sleeper)
+        .expect("sleeper metadata")
+        .permissions();
+    permissions.set_mode(0o700);
+    fs::set_permissions(&sleeper, permissions).expect("make sleeper executable");
+    let config = QecDataLaunchConfig::new(&sleeper, temp.path(), temp.path(), free_port())
+        .with_dependencies(vec!["websockets".to_string()])
+        .with_dependency_timeout(Duration::from_millis(50));
+
+    let error = QecDataManager::new()
+        .start(config)
+        .expect_err("dependency probe must time out");
+
+    assert_eq!(error.code, "dependency_timeout");
+}
+
+#[test]
+fn port_squatter_is_reported_and_never_killed() {
+    let _guard = lifecycle_test_guard();
+    let temp = TempDir::new().expect("temp project");
+    write_module(temp.path(), "fake_engine", FAKE_ENGINE);
+    let listener = TcpListener::bind(("127.0.0.1", 0)).expect("bind squatter");
+    let port = listener.local_addr().expect("squatter address").port();
+    let manager = QecDataManager::new();
+
+    let error = manager
+        .start(fake_config(&temp, "fake_engine", port))
+        .expect_err("occupied port must fail");
+
+    assert_eq!(error.code, "port_in_use");
+    assert_eq!(
+        listener.local_addr().expect("squatter remains").port(),
+        port
+    );
+    assert!(!temp.path().join("starts").exists());
+}
+
+#[test]
+fn readiness_timeout_and_early_exit_reap_only_the_started_child() {
+    let _guard = lifecycle_test_guard();
+    let temp = TempDir::new().expect("temp project");
+    write_module(temp.path(), "silent_engine", SILENT_ENGINE);
+    write_module(temp.path(), "exiting_engine", EXITING_ENGINE);
+    let manager = QecDataManager::new();
+
+    let timeout = manager
+        .start(
+            fake_config(&temp, "silent_engine", free_port())
+                .with_readiness_timeout(Duration::from_millis(100)),
+        )
+        .expect_err("silent child must time out");
+    assert_eq!(timeout.code, "readiness_timeout");
+
+    let exit = manager
+        .start(fake_config(&temp, "exiting_engine", free_port()))
+        .expect_err("early child exit must fail");
+    assert_eq!(exit.code, "startup_failed");
+    assert_eq!(manager.status().lifecycle, QecDataLifecycle::Failed);
+}
+
+#[test]
+fn stop_restart_rotates_token_and_drop_releases_owned_port() {
+    let _guard = lifecycle_test_guard();
+    let temp = TempDir::new().expect("temp project");
+    write_module(temp.path(), "fake_engine", FAKE_ENGINE);
+    let port = free_port();
+    let config = fake_config(&temp, "fake_engine", port);
+
+    let first_token = {
+        let manager = QecDataManager::new();
+        let first = manager.start(config.clone()).expect("first start");
+        manager.stop().expect("first stop");
+        let second = manager.start(config).expect("restart");
+        assert_ne!(first.token, second.token);
+        second.token
+    };
+
+    assert_eq!(first_token.len(), 64);
+    let rebound = TcpListener::bind(("127.0.0.1", port)).expect("drop released port");
+    assert_eq!(rebound.local_addr().expect("rebound address").port(), port);
+}
+
+#[test]
+fn project_root_must_exist_and_be_a_directory() {
+    let _guard = lifecycle_test_guard();
+    let temp = TempDir::new().expect("temp project");
+    write_module(temp.path(), "fake_engine", FAKE_ENGINE);
+    let missing = temp.path().join("missing");
+    let config = QecDataLaunchConfig::new(python(), temp.path(), &missing, free_port())
+        .with_module("fake_engine")
+        .with_dependencies(Vec::new());
+
+    let error = QecDataManager::new()
+        .start(config)
+        .expect_err("missing project root must fail");
+    assert_eq!(error.code, "invalid_project_root");
+}

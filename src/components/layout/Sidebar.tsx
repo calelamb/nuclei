@@ -1,10 +1,12 @@
-import { lazy, Suspense, useState, useRef, useCallback } from 'react';
+import { lazy, Suspense, useState, useRef, useCallback, useMemo } from 'react';
 import { useThemeStore } from '../../stores/themeStore';
 import { FileExplorer } from '../explorer/FileExplorer';
 import { OpenFilesSection } from '../explorer/OpenFilesSection';
 import { LaunchPortal } from '../hardware/LaunchPortal';
 import { SettingsPanel } from '../settings/SettingsPanel';
 import type { ActivityView } from './ActivityBar';
+import { createPlatformQecStudyFs, createTauriQecStudyFs } from '../../services/qecStudyFs';
+import { usePlatform } from '../../platform/PlatformProvider';
 
 const LearningPathSidebar = lazy(async () => ({
   default: (await import('../learning/LearningPathSidebar')).LearningPathSidebar,
@@ -29,6 +31,9 @@ const EstimatorPanel = lazy(async () => ({
 }));
 const TranspilerControls = lazy(async () => ({
   default: (await import('../transpiler/TranspilerControls')).TranspilerControls,
+}));
+const QecStudySidebar = lazy(async () => ({
+  default: (await import('../qec/workbench/QecStudySidebar')).QecStudySidebar,
 }));
 
 interface SidebarProps {
@@ -125,6 +130,7 @@ const VIEW_TITLES: Record<ActivityView, string> = {
   community: 'Community',
   settings: 'Settings',
   experiments: 'Experiments',
+  qec: 'QEC Workbench',
   estimator: 'Estimator',
   transpiler: 'Transpiler',
 };
@@ -183,6 +189,13 @@ function LearningSidebarTabs() {
 
 export function Sidebar({ view, width, onWidthChange }: SidebarProps) {
   const colors = useThemeStore((s) => s.colors);
+  const platform = usePlatform();
+  const qecStudyFs = useMemo(
+    () => platform.getPlatform() === 'web'
+      ? createPlatformQecStudyFs(platform)
+      : createTauriQecStudyFs(),
+    [platform],
+  );
   const isDragging = useRef(false);
 
   const handleResizeStart = useCallback((e: React.MouseEvent) => {
@@ -252,6 +265,11 @@ export function Sidebar({ view, width, onWidthChange }: SidebarProps) {
         {view === 'experiments' && (
           <SidebarSuspense>
             <ExperimentsPanel />
+          </SidebarSuspense>
+        )}
+        {view === 'qec' && (
+          <SidebarSuspense>
+            <QecStudySidebar fs={qecStudyFs} />
           </SidebarSuspense>
         )}
         {view === 'estimator' && (

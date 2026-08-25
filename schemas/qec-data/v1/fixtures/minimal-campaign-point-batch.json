@@ -1,0 +1,20 @@
+{
+  "schema_version": "1.0.0",
+  "batch_id": "campaign-batch-1",
+  "session_id": "session-1",
+  "segment_id": "aggregate",
+  "sequence_start": 0,
+  "sequence_end": 1,
+  "record_count": 1,
+  "records": [{
+    "shots": 100,
+    "errors": 3,
+    "discards": 2,
+    "seconds": 1.25,
+    "decoder": "pymatching",
+    "strong_id": "strong-1",
+    "json_metadata": "{\"d\":3,\"p\":0.001}",
+    "custom_counts": "{\"timeouts\":1}"
+  }],
+  "provenance_id": "provenance-1"
+}

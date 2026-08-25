@@ -23,6 +23,14 @@ export const tauriBridge: PlatformBridge = {
     return await invoke<string>('stop_kernel');
   },
 
+  async startQecDataEngine(projectRoot: string) {
+    return await invoke<unknown>('qec_data_start', { projectRoot });
+  },
+
+  async stopQecDataEngine() {
+    await invoke<void>('qec_data_stop');
+  },
+
   async openFile() {
     // Multiple filter groups so macOS renders a dropdown at the bottom
     // of the open panel. The default group covers the common code
@@ -115,7 +123,7 @@ export const tauriBridge: PlatformBridge = {
 
   async openDirectory() {
     try {
-      const selected = await open({ directory: true, multiple: false });
+      const selected = await open({ directory: true, multiple: false, recursive: true });
       if (typeof selected !== 'string') return null;
       return { path: selected };
     } catch {
@@ -154,6 +162,18 @@ export const tauriBridge: PlatformBridge = {
       return { path };
     } catch {
       return null;
+    }
+  },
+
+  async createFileExclusive(path: string, content: string) {
+    try {
+      await writeTextFile(path, content, { createNew: true });
+      return 'created';
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : String(error);
+      return /already(?:\s|_|-)?exists|\beexist\b|os error 17|error code 183/i.test(message)
+        ? 'exists'
+        : null;
     }
   },
 

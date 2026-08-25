@@ -19,6 +19,11 @@ export interface PlatformBridge {
   startKernel(): Promise<string>;
   stopKernel(): Promise<string>;
 
+  // Canonical QEC data-engine management. The desktop implementation owns
+  // the native child process; callers must stop it before changing projects.
+  startQecDataEngine?(projectRoot: string): Promise<unknown>;
+  stopQecDataEngine?(): Promise<void>;
+
   // File operations
   openFile(): Promise<{ path: string; content: string } | null>;
   readFile(path: string): Promise<string | null>;
@@ -45,6 +50,8 @@ export interface PlatformBridge {
   openDirectory(): Promise<{ path: string } | null>;
   listDirectory(path: string): Promise<DirEntry[] | null>;
   createFile(path: string, content: string): Promise<{ path: string } | null>;
+  /** Optional atomic create used by confined project adapters. Never overwrites. */
+  createFileExclusive?(path: string, content: string): Promise<'created' | 'exists' | null>;
   createDirectory(path: string, recursive?: boolean): Promise<{ path: string } | null>;
   deleteFile(path: string): Promise<boolean>;
 }

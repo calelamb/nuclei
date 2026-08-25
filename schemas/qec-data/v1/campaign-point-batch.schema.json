@@ -1,0 +1,41 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://getnuclei.dev/schemas/qec-data/v1/campaign-point-batch.schema.json",
+  "title": "QEC aggregate campaign point batch",
+  "$comment": "Executable validators MUST enforce sequence_end - sequence_start == record_count, records length == record_count, and canonical safe JSON in metadata fields. Each JSON document is limited to 65536 UTF-8 bytes, depth 32, 4096 keys, and 4096 total container items. custom_counts MUST decode to an object of nonnegative safe integers.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "batch_id", "session_id", "segment_id", "sequence_start", "sequence_end", "record_count", "records", "provenance_id"],
+  "properties": {
+    "schema_version": { "const": "1.0.0" },
+    "batch_id": { "$ref": "#/$defs/nonEmpty" },
+    "session_id": { "$ref": "#/$defs/nonEmpty" },
+    "segment_id": { "$ref": "#/$defs/nonEmpty" },
+    "sequence_start": { "$ref": "#/$defs/safeInteger" },
+    "sequence_end": { "type": "integer", "minimum": 1, "maximum": 9007199254740991 },
+    "record_count": { "type": "integer", "minimum": 1, "maximum": 65536 },
+    "records": {
+      "type": "array", "minItems": 1, "maxItems": 65536,
+      "items": { "$ref": "#/$defs/campaignPoint" }
+    },
+    "provenance_id": { "$ref": "#/$defs/nonEmpty" }
+  },
+  "$defs": {
+    "nonEmpty": { "type": "string", "minLength": 1 },
+    "safeInteger": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
+    "campaignPoint": {
+      "type": "object", "additionalProperties": false,
+      "required": ["shots", "errors", "discards", "seconds", "decoder", "strong_id", "json_metadata", "custom_counts"],
+      "properties": {
+        "shots": { "$ref": "#/$defs/safeInteger" },
+        "errors": { "$ref": "#/$defs/safeInteger" },
+        "discards": { "$ref": "#/$defs/safeInteger" },
+        "seconds": { "type": "number", "minimum": 0 },
+        "decoder": { "$ref": "#/$defs/nonEmpty" },
+        "strong_id": { "$ref": "#/$defs/nonEmpty" },
+        "json_metadata": { "type": "string", "minLength": 1, "maxLength": 65536, "contentMediaType": "application/json" },
+        "custom_counts": { "type": "string", "minLength": 2, "maxLength": 65536, "contentMediaType": "application/json" }
+      }
+    }
+  }
+}

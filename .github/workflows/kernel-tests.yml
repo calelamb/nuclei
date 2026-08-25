@@ -48,6 +48,9 @@ jobs:
           # the real packages; sinter/pymatching appear in the `environment`
           # fixture and are exercised by the campaign engine (Phase B).
           pip install "stim>=1.14,<2" "sinter>=1.14,<2" "pymatching>=2.1,<3"
+          # QEC data engine: collection imports these modules directly, so the
+          # full kernel suite must install them even though app use is optional.
+          pip install "pyarrow>=18,<26" "duckdb>=1.2,<2" "jsonschema>=4.23,<5"
 
       - name: Run kernel tests
         run: pytest kernel/tests/ -v

@@ -1,0 +1,133 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://getnuclei.dev/schemas/qec-data/v1/session.schema.json",
+  "title": "QEC canonical session",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "session_id", "kind", "status", "created_at",
+    "started_at", "completed_at", "adapter", "references", "counts",
+    "source_clock", "timebase", "provenance_id", "segments"
+  ],
+  "properties": {
+    "schema_version": { "const": "1.0.0" },
+    "session_id": { "$ref": "#/$defs/nonEmpty" },
+    "kind": { "enum": ["simulation_campaign", "hardware_import", "hardware_live", "replay"] },
+    "status": { "enum": ["created", "importing", "recording", "complete", "partial", "failed"] },
+    "created_at": { "$ref": "#/$defs/timestamp" },
+    "started_at": { "$ref": "#/$defs/qualifiedTimestamp" },
+    "completed_at": { "$ref": "#/$defs/qualifiedTimestamp" },
+    "adapter": { "$ref": "#/$defs/adapter" },
+    "references": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["circuit", "detector_error_model", "topology", "calibration"],
+      "properties": {
+        "circuit": { "$ref": "#/$defs/qualifiedText" },
+        "detector_error_model": { "$ref": "#/$defs/qualifiedText" },
+        "topology": { "$ref": "#/$defs/qualifiedText" },
+        "calibration": { "$ref": "#/$defs/qualifiedText" }
+      }
+    },
+    "counts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["detectors", "observables", "measurements", "logical_patches"],
+      "properties": {
+        "detectors": { "$ref": "#/$defs/qualifiedCount" },
+        "observables": { "$ref": "#/$defs/qualifiedCount" },
+        "measurements": { "$ref": "#/$defs/qualifiedCount" },
+        "logical_patches": { "$ref": "#/$defs/qualifiedCount" }
+      }
+    },
+    "source_clock": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["identity", "description"],
+      "properties": {
+        "identity": { "$ref": "#/$defs/qualifiedText" },
+        "description": { "type": "string" }
+      }
+    },
+    "timebase": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["domain", "unit", "tick_period", "description"],
+      "properties": {
+        "domain": { "enum": ["tick", "round", "timestamp", "custom"] },
+        "unit": { "$ref": "#/$defs/qualifiedText" },
+        "tick_period": { "$ref": "#/$defs/qualifiedNumber" },
+        "description": { "type": "string" }
+      }
+    },
+    "provenance_id": { "$ref": "#/$defs/nonEmpty" },
+    "segments": { "type": "array", "items": { "$ref": "#/$defs/nonEmpty" }, "uniqueItems": true }
+  },
+  "allOf": [
+    {
+      "if": { "properties": { "status": { "const": "created" } }, "required": ["status"] },
+      "then": {
+        "properties": {
+          "started_at": { "properties": { "status": { "const": "absent" }, "value": { "type": "null" } } },
+          "completed_at": { "properties": { "status": { "const": "absent" }, "value": { "type": "null" } } }
+        }
+      }
+    },
+    {
+      "if": { "properties": { "status": { "enum": ["importing", "recording"] } }, "required": ["status"] },
+      "then": {
+        "properties": {
+          "started_at": { "properties": { "value": { "type": "string" } } },
+          "completed_at": { "properties": { "status": { "const": "absent" }, "value": { "type": "null" } } }
+        }
+      }
+    },
+    {
+      "if": { "properties": { "status": { "enum": ["complete", "partial"] } }, "required": ["status"] },
+      "then": { "properties": { "started_at": { "properties": { "value": { "type": "string" } } }, "completed_at": { "properties": { "value": { "type": "string" } } } } }
+    },
+    {
+      "if": { "properties": { "status": { "const": "failed" } }, "required": ["status"] },
+      "then": { "properties": { "completed_at": { "properties": { "value": { "type": "string" } } } } }
+    }
+  ],
+  "$defs": {
+    "nonEmpty": { "type": "string", "minLength": 1 },
+    "timestamp": { "type": "string", "format": "date-time" },
+    "valueStatus": { "enum": ["absent", "unavailable", "unknown", "inferred", "predicted", "simulated", "measured"] },
+    "adapter": {
+      "type": "object", "additionalProperties": false, "required": ["id", "version"],
+      "properties": { "id": { "$ref": "#/$defs/nonEmpty" }, "version": { "$ref": "#/$defs/nonEmpty" } }
+    },
+    "qualifiedText": {
+      "type": "object", "additionalProperties": false, "required": ["value", "status"],
+      "properties": { "value": { "type": ["string", "null"] }, "status": { "$ref": "#/$defs/valueStatus" } },
+      "allOf": [{ "$ref": "#/$defs/qualifiedTextConsistency" }]
+    },
+    "qualifiedTimestamp": {
+      "type": "object", "additionalProperties": false, "required": ["value", "status"],
+      "properties": { "value": { "anyOf": [{ "$ref": "#/$defs/timestamp" }, { "type": "null" }] }, "status": { "$ref": "#/$defs/valueStatus" } },
+      "allOf": [{ "$ref": "#/$defs/qualifiedTextConsistency" }]
+    },
+    "qualifiedTextConsistency": {
+      "if": { "properties": { "status": { "enum": ["absent", "unavailable", "unknown"] } } },
+      "then": { "properties": { "value": { "type": "null" } } },
+      "else": { "properties": { "value": { "type": "string", "minLength": 1 } } }
+    },
+    "qualifiedCount": {
+      "type": "object", "additionalProperties": false, "required": ["value", "status"],
+      "properties": { "value": { "type": ["integer", "null"], "minimum": 0, "maximum": 9007199254740991 }, "status": { "$ref": "#/$defs/valueStatus" } },
+      "allOf": [{ "$ref": "#/$defs/qualifiedNumberConsistency" }]
+    },
+    "qualifiedNumber": {
+      "type": "object", "additionalProperties": false, "required": ["value", "status"],
+      "properties": { "value": { "type": ["number", "null"] }, "status": { "$ref": "#/$defs/valueStatus" } },
+      "allOf": [{ "$ref": "#/$defs/qualifiedNumberConsistency" }]
+    },
+    "qualifiedNumberConsistency": {
+      "if": { "properties": { "status": { "enum": ["absent", "unavailable", "unknown"] } } },
+      "then": { "properties": { "value": { "type": "null" } } },
+      "else": { "properties": { "value": { "type": "number" } } }
+    }
+  }
+}

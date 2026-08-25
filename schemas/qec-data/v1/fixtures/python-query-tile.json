@@ -1,0 +1,29 @@
+{
+  "event": {
+    "type": "tile",
+    "requestId": "request-λ",
+    "tile": {
+      "kind": "time-series",
+      "datasetId": "dataset-1",
+      "sequence": 0,
+      "content": {
+        "points": [
+          {
+            "label": "μ",
+            "small": 1e-7,
+            "whole": 1
+          }
+        ]
+      },
+      "byteLength": 138
+    },
+    "complete": true
+  },
+  "serializedFrame": "{\"complete\":true,\"requestId\":\"request-λ\",\"tile\":{\"byteLength\":138,\"content\":{\"points\":[{\"label\":\"μ\",\"small\":1e-07,\"whole\":1}]},\"datasetId\":\"dataset-1\",\"kind\":\"time-series\",\"sequence\":0},\"type\":\"tile\"}",
+  "frameByteLength": 202,
+  "serverMeasuredTileBytes": 138,
+  "boundary": {
+    "accepted": 1048576,
+    "rejected": 1048577
+  }
+}

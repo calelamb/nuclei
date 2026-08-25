@@ -1,0 +1,22 @@
+{
+  "schema_version": "1.0.0",
+  "batch_id": "batch-1",
+  "session_id": "session-1",
+  "segment_id": "segment-1",
+  "sequence_start": 0,
+  "sequence_end": 1,
+  "record_count": 1,
+  "shot_range": { "value": { "start": 0, "end": 1 }, "status": "measured" },
+  "round_range": { "value": null, "status": "unknown" },
+  "source_timestamps": { "value": null, "status": "unavailable" },
+  "detector_events": { "encoding": "base64", "bit_order": "lsb0", "bit_width": 2, "data": "AA==" },
+  "measurements": { "value": null, "status": "absent" },
+  "observables": { "value": { "encoding": "base64", "bit_order": "lsb0", "bit_width": 1, "data": "AA==" }, "status": "measured" },
+  "erasures": { "value": null, "status": "absent" },
+  "leakage": { "value": null, "status": "absent" },
+  "heralds": { "value": null, "status": "absent" },
+  "circuit_revision": { "value": null, "status": "unknown" },
+  "topology_revision": { "value": null, "status": "unknown" },
+  "data_quality": ["complete"],
+  "provenance_id": "provenance-1"
+}

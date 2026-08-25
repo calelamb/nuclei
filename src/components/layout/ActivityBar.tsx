@@ -1,4 +1,4 @@
-import { Files, Search, Cpu, GraduationCap, Blocks, Settings, Server, Users, Trophy, Rocket, FlaskConical, Calculator, Shuffle } from 'lucide-react';
+import { Files, Search, Cpu, GraduationCap, Blocks, Settings, Server, Users, Trophy, Rocket, FlaskConical, Calculator, Shuffle, Atom } from 'lucide-react';
 import { useThemeStore } from '../../stores/themeStore';
 import { bottomViewsForMode } from './panelRegistry';
 import type { WorkspaceMode } from '../../stores/workspaceStore';
@@ -15,6 +15,7 @@ export type ActivityView =
   | 'community'
   | 'settings'
   | 'experiments'
+  | 'qec'
   | 'estimator'
   | 'transpiler';
 
@@ -44,6 +45,7 @@ const ITEM_META: Record<ActivityView, { icon: typeof Files; label: string }> = {
   community: { icon: Users, label: 'Community' },
   settings: { icon: Settings, label: 'Settings' },
   experiments: { icon: FlaskConical, label: 'Experiments' },
+  qec: { icon: Atom, label: 'QEC Workbench' },
   estimator: { icon: Calculator, label: 'Resource Estimator' },
   transpiler: { icon: Shuffle, label: 'Transpiler' },
 };

@@ -1,0 +1,57 @@
+name: QEC frontend
+
+on:
+  pull_request:
+  push:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: qec-frontend-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  frontend-unit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm test
+
+  qec-e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+      - run: npm ci
+      - name: Install the QEC data-engine dependencies
+        run: >-
+          python -m pip install
+          "pyarrow>=18,<26"
+          "duckdb>=1.2,<2"
+          "jsonschema>=4.23,<5"
+          "websockets>=12,<14"
+          "stim>=1.14,<2"
+      - run: npx playwright install --with-deps chromium
+      - run: npm run test:e2e -- --grep @qec --workers=1
+      - name: Upload QEC browser diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: qec-playwright-report
+          path: test-results/
+          if-no-files-found: ignore

@@ -79,6 +79,15 @@
       ]
     },
     {
+      "identifier": "fs:allow-lstat",
+      "allow": [
+        { "path": "$DOCUMENT/**" },
+        { "path": "$DOWNLOAD/**" },
+        { "path": "$DESKTOP/**" },
+        { "path": "$HOME/**" }
+      ]
+    },
+    {
       "identifier": "fs:allow-watch",
       "allow": [
         { "path": "$DOCUMENT/**" },

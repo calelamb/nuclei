@@ -34,6 +34,12 @@ export const webBridge: PlatformBridge = {
     return 'Web kernel stopped';
   },
 
+  async startQecDataEngine() {
+    throw new Error('Canonical QEC import requires the desktop app.');
+  },
+
+  async stopQecDataEngine() {},
+
   async openFile() {
     // Use File System Access API if available, else fallback to <input>
     if ('showOpenFilePicker' in window) {
@@ -136,6 +142,9 @@ export const webBridge: PlatformBridge = {
     return null;
   },
   async createFile() {
+    return null;
+  },
+  async createFileExclusive() {
     return null;
   },
   async createDirectory() {

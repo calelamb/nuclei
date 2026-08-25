@@ -1,0 +1,13 @@
+{
+  "valid": [
+    { "name": "one-bit-one-row", "record_count": 1, "packed": { "encoding": "base64", "bit_order": "lsb0", "bit_width": 1, "data": "AQ==" } },
+    { "name": "nine-bits-two-rows", "record_count": 2, "packed": { "encoding": "base64", "bit_order": "lsb0", "bit_width": 9, "data": "/wEAAA==" } }
+  ],
+  "invalid": [
+    { "name": "missing-padding", "packed": { "encoding": "base64", "bit_order": "lsb0", "bit_width": 1, "data": "AA" } },
+    { "name": "noncanonical-pad-bits", "packed": { "encoding": "base64", "bit_order": "lsb0", "bit_width": 1, "data": "AB==" } },
+    { "name": "wrong-decoded-length", "packed": { "encoding": "base64", "bit_order": "lsb0", "bit_width": 9, "data": "AA==" } },
+    { "name": "nonzero-high-padding", "packed": { "encoding": "base64", "bit_order": "lsb0", "bit_width": 9, "data": "AAI=" } },
+    { "name": "wrong-bit-order", "packed": { "encoding": "base64", "bit_order": "msb0", "bit_width": 1, "data": "AA==" } }
+  ]
+}

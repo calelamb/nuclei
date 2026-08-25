@@ -1,0 +1,12 @@
+schema: 1
+id: surface-memory
+name: Surface Memory
+question: Does the repetition circuit preserve logical memory?
+preset: build
+tags:
+  - memory
+  - acceptance
+sources:
+  - id: repetition-d3
+    kind: stim
+    path: circuits/repetition.stim

@@ -21,7 +21,7 @@ parity test enforces this.
 What you'll find:
 
 - **Go to `<view>`** — open any rail view (Explorer, Experiments, Hardware,
-  Resource Estimator, …). The first nine top-rail views also carry their
+  QEC Workbench, Resource Estimator, …). The first nine top-rail views also carry their
   <kbd>⌘1</kbd>…<kbd>⌘9</kbd> binding.
 - **Switch workspace mode (Learn/Research)** — <kbd>⌘⇧M</kbd>. Routes through
   the in-flight-work guard: a running sweep or campaign asks before switching;
@@ -67,10 +67,16 @@ rail icon to see its number in the tooltip.
 The rail's contents are mode-specific and computed once from the panel
 registry — there are no per-view feature-flag conditionals scattered through
 the UI. Learn mode shows Learning, Challenges, and Community; Research mode
-shows Experiments, Hardware, the Resource Estimator, the
+shows Experiments, the [QEC Workbench](/docs/research/qec-workbench/), Hardware,
+the Resource Estimator, the
 [Transpiler Explorer](/docs/developer-tools/transpiler-explorer/), and Plugins.
 Files, Launch, and Settings appear in both. Search and Circuit are
 developer-view tools, gated behind Settings → Advanced.
+
+In the standard Research rail, Explorer is <kbd>⌘1</kbd>, Experiments is
+<kbd>⌘2</kbd>, and QEC Workbench is <kbd>⌘3</kbd>. The registry order remains
+the source of truth; the rail tooltip and command palette show the active
+mapping.
 
 Selecting a rail view while a full-view surface (Learn Mode, Challenge Mode) is
 open leaves that surface first, so a keyboard jump always lands somewhere

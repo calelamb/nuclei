@@ -1,0 +1,178 @@
+---
+title: "Importing QEC Data"
+description: "Import Stim detector samples, sinter campaign statistics, hardware syndrome captures, and calibration tables into project-local canonical QEC sessions."
+---
+
+import { Aside, Steps } from '@astrojs/starlight/components';
+
+The **QEC Data import** workflow turns simulation output and recorded hardware
+captures into the same typed, queryable session layout. It is deliberately a
+review workflow, not a file-conversion shortcut: Nuclei probes the source,
+requires you to state its scientific meaning, validates a bounded preview, and
+only then creates canonical data.
+
+<Aside type="caution">
+Nuclei never guesses scientific meaning that the selected format does not
+define. Tabular syndrome sources require explicit detector/observable widths,
+LSB0 bit order, timestamp units, and record class. Stim result formats define
+their record class and encoding but still need widths (or explicit circuit/DEM
+context). Native sinter statistics define their campaign-point columns and
+accept no invented field mapping. Missing required meaning is invalid data.
+</Aside>
+
+## Before importing
+
+The canonical data engine is desktop-only. Install **QEC Data Engine** from the
+Research framework catalog; the catalog verifies the `pyarrow`, `duckdb`, and
+`jsonschema` dependencies as one optional bundle. The web build can inspect
+project files but does not start the local authenticated data engine or write
+canonical sessions.
+
+The source must already be inside the open project and referenced by the active
+Study. Paths are project-relative POSIX paths such as
+`captures/run-042.parquet`. Absolute paths, backslashes, empty segments, `.` or
+`..`, symlinks, and anything under `qec-data/` are rejected. Canonical output
+cannot be fed back into the importer as a source.
+
+## Supported inputs
+
+| Input | Adapter | Canonical truth |
+| --- | --- | --- |
+| Stim `.01`, `.b8`, `.r8`, `.ptb64`, `.hits`, `.dets` result files | `stim-results` | Per-shot detector events and optional logical observable events. Widths must be explicit or supplied by an explicit Stim circuit/DEM context. A `.dets` file containing `M#` raw-measurement targets is rejected because the syndrome-only adapter cannot represent them truthfully. |
+| Native sinter statistics CSV | `sinter-csv` | Aggregate campaign points: shots, errors, discards, elapsed seconds, decoder, strong ID, JSON metadata, and optional custom counts. These rows are **not** individual shots or syndrome streams. |
+| CSV, JSON Lines (`.jsonl`/`.ndjson`), Arrow IPC (`.arrow`/`.feather`), and Parquet | `tabular` | Either per-record syndrome data or calibration records, chosen explicitly in Mapping. |
+
+CSV and JSON Lines sources are UTF-8. Tabular headers/objects must use unique,
+nonempty fields. Arrow and Parquet inputs are read in bounded batches; Parquet
+page checksums are verified when present. The importer applies size, schema,
+record, row-group, and nesting limits before materializing values.
+
+## Run the seven-stage import
+
+Add the source to a Study manifest, select that Study in **QEC Workbench**, and
+choose the import action beside the referenced file.
+
+<Steps>
+1. **Source** — verify the project-relative path, byte size, SHA-256 digest, and
+   copy-only policy. The digest identifies the exact bytes that were probed.
+2. **Adapter** — choose one supported probe result. Confidence is format
+   recognition, not evidence that the scientific mapping is correct.
+3. **Mapping** — follow the selected adapter's contract. For tabular data, map
+   fields and state record class, widths, units, and bit order. For standalone
+   Stim results, state detector and observable widths; the format already
+   defines record class and encoding. Native sinter CSV needs no field mapping
+   or scientific options. Check **Mapping reviewed** after reviewing the
+   requirements shown by the wizard.
+4. **Preview** — continue to Validation first. After validation passes, return
+   to Preview and load the bounded canonical batch summary. The UI states when
+   the preview is truncated; a preview is never presented as the full dataset.
+5. **Validation** — validate source bytes and mapping together. Errors enter a
+   visible quarantine-required state and block Import. Warnings remain visible
+   without being represented by color alone.
+6. **Destination** — choose a portable session ID and the truthful session kind:
+   `hardware_import`, `simulation_campaign`, `hardware_live`, or `replay`.
+7. **Import** — start the durable job. Progress, cancellation, failure, records
+   written, and committed partition count remain visible in the tray. When the
+   engine reports completion, Sources / Data refreshes its canonical session
+   list. The same session is listed from the engine after an app reload.
+</Steps>
+
+## Map syndrome captures
+
+For tabular syndrome input, map at least:
+
+- `sequence` to an exact integer source field; and
+- `detector_events` to a packed-byte value or a fixed-width `0`/`1` string.
+
+Optional canonical fields are `observable_events`, `timestamp`, and `round`.
+Set **Record class** to **Syndrome events**, provide a positive detector width,
+and choose **LSB0** explicitly. If observable events are mapped, provide their
+positive width too. If timestamps are mapped, state their unit, for example
+`ns`; the importer does not infer a unit from a column name. Unused high bits in
+the final byte of every LSB0 row must be zero.
+
+Stim result imports use their file format's defined record class and encoding;
+the wizard therefore does not ask for source fields, record class, timestamp
+unit, or bit order. Standalone result files require detector and observable
+widths, using an explicit observable width of `0` when no observable bits are
+present. The authenticated QEC Data Engine does not accept `circuit_path` or
+`dem_path`: secondary context files are not yet protected by project capabilities,
+so engine validation, preview, and import require both widths explicitly. Standalone
+adapter consumers may provide one trusted circuit or DEM context whose widths must
+agree. The canonical output uses the same packed LSB0
+syndrome model as hardware captures, but LSB0 is a normalization guarantee—not
+a user-selectable claim about native Stim encoding.
+
+Native sinter CSV uses its fixed aggregate schema and accepts neither field
+mappings nor the tabular scientific options. Its output is always
+`campaign_points`; it never becomes a per-shot syndrome stream.
+
+## Map calibration data
+
+Choose **Calibration records** and map the required identity and semantics:
+
+- calibration ID;
+- scope kind and scope ID;
+- parameter name and stable semantic ID;
+- value, unit, and uncertainty;
+- a separate truth status for value, unit, and uncertainty;
+- quality, source system, and effective start time.
+
+Effective end, calibration run ID, original representation, and original MIME
+type are optional mappings. Scope kinds include device, patch, qubit, coupler,
+resonator, readout channel, and custom. Value statuses distinguish `measured`,
+`inferred`, `predicted`, and `simulated` values from `absent`, `unavailable`, or
+`unknown`; the latter statuses require a null value. This prevents “missing”
+from silently becoming zero.
+
+## Copy policy, lineage, and reproducibility
+
+Import is always **copy-only**. The original project file is never edited or
+retained by the canonical session as an in-place reference. At import start, the engine creates a read-only snapshot at
+`qec-data/sources/<session-id>/<source-file>`, hashes it while copying, and
+continues through a held file capability. It rechecks the snapshot around
+validation so a moved or changed file fails closed.
+
+The source digest, adapter ID/version, explicit mapping, session kind, and
+canonical schema profile contribute to provenance and semantic dataset
+identity. Imported chunks also carry source spans. Text formats can identify
+exact row/byte ranges; container formats may honestly report container-level
+precision. See [Canonical QEC data schema](/docs/reference/qec-data-schema/)
+for the storage and type contracts.
+
+## Failure, quarantine, and recovery
+
+QEC engine state belongs to the open project. Switching projects immediately
+clears the previous project's selected source, jobs, queries, and canonical
+session catalog. Nuclei asks the retiring authenticated client to cancel its
+active work in the background, so a slow cancellation cannot delay the new
+project and a late frame cannot repopulate the replacement workspace.
+
+If an authenticated data-engine connection closes, the workbench removes the
+dead client and shows the disconnect reason. Choose **Retry QEC Data Engine**
+to make one new connection attempt. Nuclei does not silently loop or send an
+import action through a client created for another project.
+
+Validation errors write no canonical partition. During a running import,
+pending partitions are not query-visible until the journal commit succeeds.
+Recovery verifies hashes, row counts, schema fingerprints, sequence ranges,
+and journal references. Corrupt, overlapping, or schema-conflicting orphan
+partitions are moved into the session's `quarantine/` area; committed corruption
+fails closed. Recovery does not silently promote an uncommitted file. Valid
+pending work is reported as resumable and requires an explicit resume path.
+
+Cancelling stops further writes and leaves the original source untouched. A
+partial or failed session remains an explicit lifecycle state rather than being
+presented as complete. Re-import under a new session ID after correcting the
+source or mapping; session directories are exclusive and are not overwritten.
+
+## Security boundary
+
+The Tauri shell grants the engine access only to the selected project and its
+canonical subdirectories. The process listens on the fixed loopback endpoint
+`ws://127.0.0.1:9743`, requires the launch token before accepting requests,
+uses strict JSON frames, and caps protocol frames at 1 MiB. Source traversal,
+symlinks, canonical-source recursion, malformed containers, unsafe identifiers,
+and malformed, duplicate, or out-of-order active protocol frames are rejected with user-facing error
+codes. No import action opens a network listener beyond loopback or sends QEC
+data to a cloud service.

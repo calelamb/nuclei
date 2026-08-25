@@ -5,6 +5,43 @@ All notable changes to Nuclei will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added — Unified QEC Workbench foundation
+
+- A light, four-zone Research workspace organized around versioned,
+  git-friendly QEC Study manifests that reference existing Stim, DEM, Python,
+  experiment, and noise files without copying or replacing them.
+- Build, Analyze, and Observe workspace presets, a linked Research Selection
+  and back/forward Trail, responsive Inspector drawer, collapsible operations
+  tray, and per-project/per-Study persistence with actionable retry states.
+- QEC Workbench navigation in the Research rail and command palette, plus
+  laptop and wide-screen light-theme Playwright coverage. Live observation and
+  additional connected session instruments remain future phases.
+
+### Added — Canonical QEC data import
+
+- A desktop, seven-stage import workflow for Stim result files, native sinter
+  statistics CSV, and explicitly mapped CSV, JSON Lines, Arrow, Feather, and
+  Parquet syndrome or calibration captures. Mapping requires scientific record
+  class, detector/observable widths, timestamp units, and LSB0 bit order where
+  applicable; bounded preview and validation block ambiguous writes.
+- Copy-only project security, SHA-256 source identity, adapter/version lineage,
+  source-span tracking, crash-safe journaled Parquet partitions, quarantine and
+  recovery semantics, and canonical schema `1.0.0` across Python, TypeScript,
+  Zod, and JSON Schema contracts.
+- Engine-backed canonical session discovery in QEC Workbench. Imported sessions
+  show kind, lifecycle status, and provenance in accessible Sources / Data rows,
+  refresh after completion, and return from the engine after an app reload.
+- Deterministic Stim `.dets` browser fixture and a PyArrow 18 Parquet adapter fixture plus an
+  end-to-end light-workspace acceptance flow against a real authenticated
+  Python data-engine subprocess, covering Source → Adapter → Mapping → Preview
+  → Validation → Destination → Import, committed disk artifacts, and reload
+  persistence.
+- A scheduled/manual Ubuntu and Windows 10-million-record Stim memory gate over
+  the registered adapter and canonical Parquet storage path, with platform-native
+  peak-memory measurement and a 512 MiB ceiling.
+
 ## [0.13.0] - 2026-07-15
 
 Editor-depth release: the editor gains real Python tooling and stops losing your
