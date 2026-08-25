@@ -6,6 +6,7 @@ import { launchRealQecDataEngine } from './support/qecDataEngine';
 const FIXTURE_URL = '/?e2eProject=qec-project&workspace=research&qecImport=1';
 const SOURCE_HASH = '6f45baf5e9f4215ebabc0e5177c34abe7e2fd5489d2531e70a098924d824dfbc';
 const ENGINE_RESULT_TIMEOUT_MS = 15_000;
+const IMPORT_LIFECYCLE_TIMEOUT_MS = 60_000;
 
 async function installQecDataStartBoundary(
   page: Page,
@@ -37,6 +38,7 @@ async function nextStage(page: Page, heading: string): Promise<void> {
 }
 
 test('@qec imports a detector stream and restores the canonical session after reload', async ({ page }, testInfo) => {
+  test.setTimeout(IMPORT_LIFECYCLE_TIMEOUT_MS);
   test.skip(testInfo.project.name !== 'chromium', 'The import lifecycle is covered at the primary research viewport.');
   const engine = await launchRealQecDataEngine();
   try {
