@@ -5,6 +5,7 @@ import * as monaco from 'monaco-editor'
 import editorWorker from 'monaco-editor/esm/vs/editor/editor.worker?worker'
 import './styles/tokens.css'
 import './components/qec/workbench/qecWorkbench.css'
+import './components/qec/workbench/qecWorkbenchResponsive.css'
 import './index.css'
 import App from './App.tsx'
 
