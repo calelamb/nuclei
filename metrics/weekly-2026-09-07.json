@@ -1,0 +1,62 @@
+{
+  "run_date": "2026-09-07",
+  "prior_snapshot_date": "2026-08-24",
+  "methodology_note": "sig files (.sig) excluded from all counts. v0.13.0 through v0.7.0 live-fetched via MCP get_release_by_tag. v0.6.0 and older carried from 2026-08-24 snapshot (6 weeks of prior data show zero new downloads on those releases).",
+  "repo_signal": {
+    "stars": 3,
+    "forks": 0,
+    "watchers": 3,
+    "open_issues": 2,
+    "note": "carried from 2026-08-24; no repo metadata endpoint accessible via MCP without push-scoped auth"
+  },
+  "platform_totals": {
+    "macos": {"current": 62, "prior": 61, "delta": 1},
+    "windows": {"current": 32, "prior": 32, "delta": 0},
+    "linux": {"current": 45, "prior": 45, "delta": 0},
+    "updater_manifests": {"current": 121, "prior": 119, "delta": 2, "note": "latest.json only; .sig excluded"},
+    "installer_total": {"current": 139, "prior": 138, "delta": 1},
+    "grand_total": {"current": 260, "prior": 257, "delta": 3}
+  },
+  "releases": [
+    {"tag": "v0.13.0", "published": "2026-07-15", "macos": 1, "windows": 0, "linux": 0, "updater": 4, "total_downloads": 5, "prior_total": 2, "delta": 3, "source": "live_api_2026-09-07"},
+    {"tag": "v0.12.0", "published": "2026-07-15", "macos": 0, "windows": 0, "linux": 0, "updater": 1, "total_downloads": 1, "prior_total": 1, "delta": 0, "source": "live_api_2026-09-07"},
+    {"tag": "v0.11.0", "published": "2026-07-15", "macos": 0, "windows": 0, "linux": 0, "updater": 1, "total_downloads": 1, "prior_total": 1, "delta": 0, "source": "live_api_2026-09-07"},
+    {"tag": "v0.10.0", "published": "2026-07-15", "macos": 1, "windows": 0, "linux": 0, "updater": 3, "total_downloads": 4, "prior_total": 4, "delta": 0, "source": "live_api_2026-09-07"},
+    {"tag": "v0.9.0",  "published": "2026-07-14", "macos": 0, "windows": 0, "linux": 0, "updater": 2, "total_downloads": 2, "prior_total": 2, "delta": 0, "source": "live_api_2026-09-07"},
+    {"tag": "v0.8.1",  "published": "2026-07-14", "macos": 1, "windows": 0, "linux": 0, "updater": 3, "total_downloads": 4, "prior_total": 4, "delta": 0, "source": "live_api_2026-09-07"},
+    {"tag": "v0.8.0",  "published": "2026-07-14", "macos": 0, "windows": 0, "linux": 0, "updater": 2, "total_downloads": 2, "prior_total": 2, "delta": 0, "source": "live_api_2026-09-07"},
+    {"tag": "v0.7.0",  "published": "2026-07-14", "macos": 1, "windows": 0, "linux": 0, "updater": 4, "total_downloads": 5, "prior_total": 5, "delta": 0, "source": "live_api_2026-09-07"},
+    {"tag": "v0.6.0",  "published": "2026-07-12", "macos": 1, "windows": 0, "linux": 0, "updater": 2, "total_downloads": 3, "source": "carried_from_2026-08-24"},
+    {"tag": "v0.5.3",  "published": "2026-07-10", "macos": 1, "windows": 0, "linux": 0, "updater": 3, "total_downloads": 4, "source": "carried_from_2026-08-24"},
+    {"tag": "v0.5.2",  "published": "2026-07-10", "macos": 0, "windows": 0, "linux": 0, "updater": 1, "total_downloads": 1, "source": "carried_from_2026-08-24"},
+    {"tag": "v0.5.1",  "published": "2026-06-11", "macos": 2, "windows": 0, "linux": 1, "updater": 4, "total_downloads": 7, "source": "carried_from_2026-08-24"},
+    {"tag": "v0.5.0",  "published": "2026-06-10", "macos": 1, "windows": 0, "linux": 0, "updater": 3, "total_downloads": 4, "source": "carried_from_2026-08-24"},
+    {"tag": "v0.4.17", "published": "2026-05-03", "macos": 5, "windows": 2, "linux": 3, "updater": 3, "total_downloads": 13, "source": "carried_from_2026-08-24"},
+    {"tag": "v0.4.16", "published": "2026-04-20", "macos": 1, "windows": 1, "linux": 0, "updater": 8, "total_downloads": 10, "source": "carried_from_2026-08-24"},
+    {"tag": "v0.4.15", "macos": 3, "windows": 2, "linux": 3, "updater": 11, "total_downloads": 19, "source": "carried_from_2026-08-10"},
+    {"tag": "v0.4.14", "macos": 2, "windows": 0, "linux": 0, "updater": 2, "total_downloads": 4, "source": "carried_from_2026-08-10"},
+    {"tag": "v0.4.13", "macos": 1, "windows": 0, "linux": 0, "updater": 1, "total_downloads": 2, "source": "carried_from_2026-08-10"}
+  ],
+  "v0417_adoption": {
+    "baseline_date": "2026-05-02",
+    "published_date": "2026-05-03",
+    "macos": 5,
+    "windows": 2,
+    "linux": 3,
+    "updater": 3,
+    "installer_total": 10,
+    "grand_total": 13,
+    "share_of_all_installer_downloads_pct": 7.2,
+    "weeks_since_publish": 18,
+    "note": "carried from 2026-08-24; no new downloads detected"
+  },
+  "traffic": {
+    "available": false,
+    "reason": "GitHub MCP server does not expose /traffic/* endpoints; direct GitHub API via curl returns 403 (proxy-gated)"
+  },
+  "vercel_analytics": {
+    "available": false,
+    "reason": "No VERCEL_TOKEN in environment",
+    "dashboard_url": "https://vercel.com/calelambs-projects/landing/analytics"
+  }
+}
