@@ -1,0 +1,42 @@
+{
+  "date": "2026-09-21",
+  "repo_signal": {
+    "stars": 3,
+    "forks": 0,
+    "watchers": 3,
+    "open_issues": 2,
+    "source": "github_search_api_2026-09-21"
+  },
+  "platform_totals": {
+    "macos":            { "current": 62,  "prior": 62,  "delta": 0 },
+    "windows":          { "current": 32,  "prior": 32,  "delta": 0 },
+    "linux":            { "current": 45,  "prior": 45,  "delta": 0 },
+    "updater_manifests":{ "current": 129, "prior": 129, "delta": 0, "note": "latest.json only; .sig excluded" },
+    "installer_total":  { "current": 139, "prior": 139, "delta": 0 },
+    "grand_total":      { "current": 268, "prior": 268, "delta": 0 }
+  },
+  "per_release": {
+    "v0.13.0": { "macos": 2, "windows": 0, "linux": 0, "installer": 2, "updater": 5,  "total": 7  },
+    "v0.12.0": { "macos": 0, "windows": 0, "linux": 0, "installer": 0, "updater": 1,  "total": 1  },
+    "v0.11.0": { "macos": 0, "windows": 0, "linux": 0, "installer": 0, "updater": 1,  "total": 1  },
+    "v0.10.0": { "macos": 1, "windows": 0, "linux": 0, "installer": 1, "updater": 3,  "total": 4  },
+    "v0.9.0":  { "macos": 0, "windows": 0, "linux": 0, "installer": 0, "updater": 2,  "total": 2  },
+    "v0.8.1":  { "macos": 1, "windows": 0, "linux": 0, "installer": 1, "updater": 3,  "total": 4  },
+    "v0.8.0":  { "macos": 0, "windows": 0, "linux": 0, "installer": 0, "updater": 2,  "total": 2  },
+    "v0.7.0":  { "macos": 1, "windows": 0, "linux": 0, "installer": 1, "updater": 4,  "total": 5  },
+    "v0.6.0":  { "macos": 1, "windows": 0, "linux": 0, "installer": 1, "updater": 2,  "total": 3  },
+    "v0.5.3":  { "macos": 1, "windows": 0, "linux": 0, "installer": 1, "updater": 3,  "total": 4  },
+    "v0.5.2":  { "macos": 0, "windows": 0, "linux": 0, "installer": 0, "updater": 1,  "total": 1  },
+    "v0.5.1":  { "macos": 2, "windows": 0, "linux": 1, "installer": 3, "updater": 4,  "total": 7  },
+    "v0.5.0":  { "macos": 1, "windows": 0, "linux": 0, "installer": 1, "updater": 3,  "total": 4  },
+    "v0.4.17": { "macos": 5, "windows": 2, "linux": 3, "installer": 10, "updater": 3, "total": 13 },
+    "v0.4.16": { "macos": 1, "windows": 1, "linux": 0, "installer": 2,  "updater": 8, "total": 10 },
+    "v0.1.2":  { "macos": 1, "windows": 0, "linux": 0, "installer": 1,  "updater": 0, "total": 1  },
+    "v0.1.0":  { "macos": 2, "windows": 2, "linux": 0, "installer": 4,  "updater": 0, "total": 4  }
+  },
+  "traffic": {
+    "source": "unavailable",
+    "reason": "GitHub traffic API returns 403 (requires PAT with repo scope); no VERCEL_TOKEN set"
+  },
+  "notes": "WoW delta = 0 on all platforms. First snapshot to include per-release breakdown; prior snapshot (2026-09-14) stored platform totals only."
+}
