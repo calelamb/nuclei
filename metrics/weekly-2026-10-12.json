@@ -1,0 +1,358 @@
+{
+  "date": "2026-10-12",
+  "run_timestamp": "2026-10-12T15:19:00Z",
+  "repo_signal": {
+    "stars": 3,
+    "forks": 0,
+    "watchers": 3,
+    "open_issues": 2,
+    "subscribers": 2
+  },
+  "platform_totals": {
+    "macos": {
+      "current": 72
+    },
+    "windows": {
+      "current": 42,
+      "note": "exe+msi only; .exe.sig/.msi.sig classified as updater \u2014 methodology corrected this run, not comparable to prior windows count"
+    },
+    "linux": {
+      "current": 68
+    },
+    "updater_manifests": {
+      "current": 134,
+      "note": "latest.json + all .sig files"
+    },
+    "installer_total": {
+      "current": 182,
+      "note": "macOS+Windows+Linux"
+    },
+    "grand_total": {
+      "current": 316
+    }
+  },
+  "per_release": {
+    "v0.13.0": {
+      "published": "2026-07-15",
+      "macos": 3,
+      "windows": 0,
+      "linux": 1,
+      "updater": 8,
+      "installer": 4,
+      "total": 12
+    },
+    "v0.12.0": {
+      "published": "2026-07-15",
+      "macos": 0,
+      "windows": 0,
+      "linux": 0,
+      "updater": 1,
+      "installer": 0,
+      "total": 1
+    },
+    "v0.11.0": {
+      "published": "2026-07-15",
+      "macos": 0,
+      "windows": 0,
+      "linux": 0,
+      "updater": 1,
+      "installer": 0,
+      "total": 1
+    },
+    "v0.10.0": {
+      "published": "2026-07-15",
+      "macos": 1,
+      "windows": 0,
+      "linux": 0,
+      "updater": 3,
+      "installer": 1,
+      "total": 4
+    },
+    "v0.9.0": {
+      "published": "2026-07-14",
+      "macos": 0,
+      "windows": 0,
+      "linux": 0,
+      "updater": 2,
+      "installer": 0,
+      "total": 2
+    },
+    "v0.8.1": {
+      "published": "2026-07-14",
+      "macos": 1,
+      "windows": 0,
+      "linux": 0,
+      "updater": 3,
+      "installer": 1,
+      "total": 4
+    },
+    "v0.8.0": {
+      "published": "2026-07-14",
+      "macos": 0,
+      "windows": 0,
+      "linux": 0,
+      "updater": 2,
+      "installer": 0,
+      "total": 2
+    },
+    "v0.7.0": {
+      "published": "2026-07-14",
+      "macos": 1,
+      "windows": 0,
+      "linux": 0,
+      "updater": 4,
+      "installer": 1,
+      "total": 5
+    },
+    "v0.6.0": {
+      "published": "2026-07-12",
+      "macos": 1,
+      "windows": 0,
+      "linux": 0,
+      "updater": 2,
+      "installer": 1,
+      "total": 3
+    },
+    "v0.5.3": {
+      "published": "2026-07-10",
+      "macos": 1,
+      "windows": 0,
+      "linux": 0,
+      "updater": 3,
+      "installer": 1,
+      "total": 4
+    },
+    "v0.5.2": {
+      "published": "2026-07-10",
+      "macos": 0,
+      "windows": 0,
+      "linux": 0,
+      "updater": 1,
+      "installer": 0,
+      "total": 1
+    },
+    "v0.5.1": {
+      "published": "2026-06-11",
+      "macos": 2,
+      "windows": 0,
+      "linux": 1,
+      "updater": 6,
+      "installer": 3,
+      "total": 9
+    },
+    "v0.5.0": {
+      "published": "2026-06-10",
+      "macos": 1,
+      "windows": 0,
+      "linux": 0,
+      "updater": 3,
+      "installer": 1,
+      "total": 4
+    },
+    "v0.4.17": {
+      "published": "2026-05-03",
+      "macos": 5,
+      "windows": 2,
+      "linux": 3,
+      "updater": 9,
+      "installer": 10,
+      "total": 19
+    },
+    "v0.4.16": {
+      "published": "2026-04-20",
+      "macos": 1,
+      "windows": 1,
+      "linux": 0,
+      "updater": 8,
+      "installer": 2,
+      "total": 10
+    },
+    "v0.4.15": {
+      "published": "2026-04-20",
+      "macos": 3,
+      "windows": 2,
+      "linux": 3,
+      "updater": 11,
+      "installer": 8,
+      "total": 19
+    },
+    "v0.4.14": {
+      "published": "2026-04-20",
+      "macos": 2,
+      "windows": 0,
+      "linux": 0,
+      "updater": 2,
+      "installer": 2,
+      "total": 4
+    },
+    "v0.4.13": {
+      "published": "2026-04-20",
+      "macos": 1,
+      "windows": 0,
+      "linux": 0,
+      "updater": 1,
+      "installer": 1,
+      "total": 2
+    },
+    "v0.4.12": {
+      "published": "2026-04-19",
+      "macos": 1,
+      "windows": 0,
+      "linux": 0,
+      "updater": 2,
+      "installer": 1,
+      "total": 3
+    },
+    "v0.4.11": {
+      "published": "2026-04-19",
+      "macos": 10,
+      "windows": 6,
+      "linux": 16,
+      "updater": 10,
+      "installer": 32,
+      "total": 42
+    },
+    "v0.4.10": {
+      "published": "2026-04-19",
+      "macos": 1,
+      "windows": 0,
+      "linux": 0,
+      "updater": 2,
+      "installer": 1,
+      "total": 3
+    },
+    "v0.4.9": {
+      "published": "2026-04-19",
+      "macos": 1,
+      "windows": 1,
+      "linux": 0,
+      "updater": 4,
+      "installer": 2,
+      "total": 6
+    },
+    "v0.4.7": {
+      "published": "2026-04-19",
+      "macos": 7,
+      "windows": 7,
+      "linux": 14,
+      "updater": 13,
+      "installer": 28,
+      "total": 41
+    },
+    "v0.4.4": {
+      "published": "2026-04-19",
+      "macos": 3,
+      "windows": 2,
+      "linux": 3,
+      "updater": 9,
+      "installer": 8,
+      "total": 17
+    },
+    "v0.4.3": {
+      "published": "2026-04-19",
+      "macos": 2,
+      "windows": 2,
+      "linux": 3,
+      "updater": 7,
+      "installer": 7,
+      "total": 14
+    },
+    "v0.4.2": {
+      "published": "2026-04-19",
+      "macos": 6,
+      "windows": 7,
+      "linux": 0,
+      "updater": 4,
+      "installer": 13,
+      "total": 17
+    },
+    "v0.4.1": {
+      "published": "2026-04-19",
+      "macos": 4,
+      "windows": 2,
+      "linux": 3,
+      "updater": 10,
+      "installer": 9,
+      "total": 19
+    },
+    "v0.4.0": {
+      "published": "2026-04-19",
+      "macos": 0,
+      "windows": 0,
+      "linux": 0,
+      "updater": 0,
+      "installer": 0,
+      "total": 0
+    },
+    "v0.1.5": {
+      "published": "2026-04-18",
+      "macos": 0,
+      "windows": 0,
+      "linux": 0,
+      "updater": 3,
+      "installer": 0,
+      "total": 3
+    },
+    "v0.1.4": {
+      "published": "2026-04-13",
+      "macos": 3,
+      "windows": 2,
+      "linux": 5,
+      "updater": 0,
+      "installer": 10,
+      "total": 10
+    },
+    "v0.1.3": {
+      "published": "2026-04-10",
+      "macos": 8,
+      "windows": 6,
+      "linux": 16,
+      "updater": 0,
+      "installer": 30,
+      "total": 30
+    },
+    "v0.1.2": {
+      "published": "2026-04-10",
+      "macos": 1,
+      "windows": 0,
+      "linux": 0,
+      "updater": 0,
+      "installer": 1,
+      "total": 1
+    },
+    "v0.1.0": {
+      "published": "2026-04-09",
+      "macos": 2,
+      "windows": 2,
+      "linux": 0,
+      "updater": 0,
+      "installer": 4,
+      "total": 4
+    }
+  },
+  "traffic": {
+    "source": "unavailable",
+    "reason": "GitHub traffic API 403 \u2014 GitHub App integration lacks push-access scope required for traffic endpoints"
+  },
+  "vercel": {
+    "source": "unavailable",
+    "reason": "VERCEL_TOKEN not set in environment",
+    "dashboard_url": "https://vercel.com/calelambs-projects/landing/analytics"
+  },
+  "wow_deltas_vs_2026-10-05": {
+    "grand_total_delta": 2,
+    "releases_with_changes": {
+      "v0.1.3": {
+        "prior": 29,
+        "current": 30,
+        "delta": 1
+      },
+      "v0.4.7": {
+        "prior": 40,
+        "current": 41,
+        "delta": 1
+      }
+    },
+    "platform_wow_note": "Per-platform WoW not reliable: Windows/Updater classification methodology changed this run (.exe.sig/.msi.sig moved to Updater). Grand total delta of +2 is reliable."
+  }
+}
