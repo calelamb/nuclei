@@ -1,28 +1,33 @@
-import { useMemo, useRef } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { Download } from 'lucide-react';
 import { useThemeStore } from '../../stores/themeStore';
 import { useQecCampaignStore } from '../../stores/qecCampaignStore';
 import { PanelHeader } from '../layout/PanelHeader';
 import { QecEmptyState } from './QecEmptyState';
+import { statsPointsToCsv, type ThresholdSeries } from '../../types/qecStats';
 import {
-  thresholdSeries,
-  lambdaFit,
-  projectedDistanceForTarget,
-  statsPointsToCsv,
-  type ThresholdSeries,
-} from '../../types/qecStats';
+  DEFAULT_MAX_LIKELIHOOD_FACTOR,
+  MIN_LAMBDA_DISTANCES,
+  lambdaEstimates,
+  likelihoodSeries,
+  qecFigureMetadata,
+  roundsFromMetadata,
+  type LambdaGroupEstimate,
+  type RateUnits,
+} from '../../lib/qecFit';
 import { downloadCsv, downloadSvg } from '../../services/experimentExport';
 
 const DOCS = 'https://getnuclei.dev/docs/research/qec-studio/';
-const TARGET_LER = 1e-6;
 const PLOT = { x0: 46, y0: 12, x1: 288, y1: 150 }; // inner plot rect
 
 /**
- * PRD 10 Phase E — the threshold / Λ panel. Logical error rate per shot vs
- * the noise parameter on log-log axes, one series per (label × distance),
- * colored by decoder, with Wilson CI whiskers. Reports the fitted Λ (error-
- * suppression factor between successive distances) per decoder and a projected
- * code distance to reach a target logical error rate. Exports SVG + CSV.
+ * Logical error vs physical error. Logical error rate (per shot, or per round
+ * when the campaign records rounds) against the noise parameter on log-log
+ * axes, one series per (label × distance), colored by decoder. Whiskers are
+ * sinter's likelihood-ratio interval. Λ is estimated by log-linear regression
+ * of LER vs distance at each p (>= 3 distances) and shown with its interval.
+ * No threshold p_th is estimated, so none is claimed. Exports SVG + CSV; the
+ * SVG embeds a <metadata> block naming the estimators, CI method and units.
  */
 export function ThresholdPanel() {
   const colors = useThemeStore((s) => s.colors);
@@ -30,14 +35,19 @@ export function ThresholdPanel() {
   const rows = useMemo(() => Object.values(rowsByStrongId), [rowsByStrongId]);
   const svgRef = useRef<SVGSVGElement>(null);
 
-  const series = useMemo(() => thresholdSeries(rows), [rows]);
-  const fits = useMemo(() => lambdaFit(rows), [rows]);
+  const [requestedUnits, setRequestedUnits] = useState<RateUnits>('per_shot');
+  const roundsKnown = useMemo(() => rows.some((r) => roundsFromMetadata(r.json_metadata) !== null), [rows]);
+  const units: RateUnits = roundsKnown ? requestedUnits : 'per_shot';
+  const { series, excluded } = useMemo(() => likelihoodSeries(rows, { units }), [rows, units]);
+  const lambdas = useMemo(() => lambdaEstimates(rows, { units }), [rows, units]);
+  const meta = useMemo(() => qecFigureMetadata(units), [units]);
+  const hasDiscards = useMemo(() => rows.some((r) => r.discards > 0), [rows]);
 
   const domain = useMemo(() => computeLogDomain(series), [series]);
 
   const header = (
     <PanelHeader
-      title="Threshold / Λ"
+      title="Logical error vs physical error"
       helpHref={DOCS}
       actions={
         series.length > 0 ? (
@@ -78,7 +88,18 @@ export function ThresholdPanel() {
     <div style={{ height: '100%', display: 'flex', flexDirection: 'column', background: colors.bg }}>
       {header}
       <div style={{ flex: 1, minHeight: 0, overflow: 'auto' }}>
-        <svg ref={svgRef} viewBox="0 0 300 168" style={{ width: '100%', height: 'auto', display: 'block' }}>
+        {roundsKnown && <UnitsToggle units={units} onChange={setRequestedUnits} colors={colors} />}
+        <svg
+          ref={svgRef}
+          viewBox="0 0 300 180"
+          role="img"
+          aria-labelledby="qec-fig-title qec-fig-desc"
+          xmlns="http://www.w3.org/2000/svg"
+          style={{ width: '100%', height: 'auto', display: 'block' }}
+        >
+          <title id="qec-fig-title">{meta.title}</title>
+          <desc id="qec-fig-desc">{`${meta.units} versus physical error p, log-log. ${meta.ci_method}.`}</desc>
+          <metadata id="qec-fig-metadata">{JSON.stringify(meta)}</metadata>
           {/* axes */}
           <line x1={PLOT.x0} y1={PLOT.y0} x2={PLOT.x0} y2={PLOT.y1} stroke={colors.border} strokeWidth={0.6} />
           <line x1={PLOT.x0} y1={PLOT.y1} x2={PLOT.x1} y2={PLOT.y1} stroke={colors.border} strokeWidth={0.6} />
@@ -96,7 +117,16 @@ export function ThresholdPanel() {
               1e{t}
             </text>
           ))}
-          <text x={(PLOT.x0 + PLOT.x1) / 2} y={166} fontSize={7} fill={colors.textDim} textAnchor="middle">physical error p</text>
+          <text x={(PLOT.x0 + PLOT.x1) / 2} y={165} fontSize={7} fill={colors.textDim} textAnchor="middle">physical error p</text>
+          <text
+            x={8} y={(PLOT.y0 + PLOT.y1) / 2} fontSize={7} fill={colors.textDim} textAnchor="middle"
+            transform={`rotate(-90 8 ${(PLOT.y0 + PLOT.y1) / 2})`}
+          >
+            {meta.units}
+          </text>
+          <text x={(PLOT.x0 + PLOT.x1) / 2} y={175} fontSize={5.5} fill={colors.textDim} textAnchor="middle">
+            {`CI: sinter likelihood ratio (factor ${DEFAULT_MAX_LIKELIHOOD_FACTOR}), not Wilson`}
+          </text>
           {/* series */}
           {series.map((s) => {
             const color = decoderColor(s.decoder);
@@ -128,30 +158,82 @@ export function ThresholdPanel() {
             ))}
             <span style={{ fontSize: 9, color: colors.textDim }}>solid = odd distance · dashed = even</span>
           </div>
-          {fits.map((f) => {
-            const anySeries = series.find((s) => s.decoder === f.decoder && s.distance !== null);
-            const base = anySeries?.points[0];
-            const projected =
-              f.lambda !== null && anySeries?.distance != null && base
-                ? projectedDistanceForTarget(anySeries.distance, base.rate.p, f.lambda, TARGET_LER)
-                : null;
-            return (
-              <div key={f.decoder} style={{ fontSize: 11, color: colors.text, marginBottom: 2 }}>
-                <strong style={{ color: decoderColor(f.decoder) }}>{f.decoder}</strong>: Λ ={' '}
-                {f.lambda !== null ? f.lambda.toFixed(2) : '—'}
-                {projected !== null && (
-                  <span style={{ color: colors.textDim }}> · ~d{projected} for {TARGET_LER.toExponential(0)} LER</span>
-                )}
-              </div>
-            );
-          })}
+          <LambdaReadout
+            decoders={decoders} estimates={lambdas} decoderColor={decoderColor}
+            units={units} colors={colors}
+          />
+          <div style={{ fontSize: 9, color: colors.textDim, marginTop: 6, lineHeight: 1.4 }}>
+            {`Whiskers: sinter likelihood-ratio interval (max likelihood factor ${DEFAULT_MAX_LIKELIHOOD_FACTOR}), `}
+            {hasDiscards ? 'on shots − discards. ' : 'on shots. '}
+            {excluded > 0 && `${excluded} row(s) without known rounds are hidden in per-round view. `}
+            No threshold p_th is estimated.
+          </div>
         </div>
       </div>
     </div>
   );
 }
 
-function ExportButton({ label, onClick, colors }: { label: string; onClick: () => void; colors: ReturnType<typeof useThemeStore.getState>['colors'] }) {
+type Colors = ReturnType<typeof useThemeStore.getState>['colors'];
+
+function UnitsToggle({ units, onChange, colors }: { units: RateUnits; onChange: (u: RateUnits) => void; colors: Colors }) {
+  const opts: Array<[RateUnits, string]> = [['per_shot', 'Per shot'], ['per_round', 'Per round']];
+  return (
+    <div role="group" aria-label="Logical error units" style={{ display: 'flex', gap: 4, padding: '6px 12px 0' }}>
+      {opts.map(([u, text]) => (
+        <button
+          key={u}
+          type="button"
+          aria-pressed={units === u}
+          onClick={() => onChange(u)}
+          style={{
+            background: units === u ? colors.accent : 'transparent',
+            color: units === u ? colors.bg : colors.textMuted,
+            border: `1px solid ${colors.border}`, borderRadius: 4, cursor: 'pointer',
+            fontSize: 11, padding: '3px 8px', fontFamily: "'Geist Sans', sans-serif",
+          }}
+        >
+          {text}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+const fmt = (x: number) => (x >= 100 ? x.toFixed(0) : x.toPrecision(3));
+
+function LambdaReadout(props: {
+  decoders: string[]; estimates: LambdaGroupEstimate[]; decoderColor: (d: string) => string;
+  units: RateUnits; colors: Colors;
+}) {
+  const { decoders, estimates, decoderColor, units, colors } = props;
+  return (
+    <div aria-label="Error suppression factor Λ">
+      {decoders.map((d) => {
+        const mine = estimates.filter((e) => e.decoder === d);
+        return (
+          <div key={d} style={{ fontSize: 11, color: colors.text, marginBottom: 4 }}>
+            <strong style={{ color: decoderColor(d) }}>{d}</strong>
+            {mine.length === 0 ? (
+              <span style={{ color: colors.textDim }}>{`: Λ not estimated, needs ≥ ${MIN_LAMBDA_DISTANCES} distances at the same p`}</span>
+            ) : (
+              mine.map((e) => (
+                <div key={`${e.label}${e.noise}`} style={{ paddingLeft: 8 }}>
+                  {`Λ = ${fmt(e.estimate.lambda.best)} (${fmt(e.estimate.lambda.low)} to ${fmt(e.estimate.lambda.high)})`}
+                  <span style={{ color: colors.textDim }}>
+                    {` at p=${e.noise}, d ${e.estimate.distances.join(',')}, per Δd=${e.estimate.step}, ${units === 'per_round' ? 'per round' : 'per shot'}`}
+                  </span>
+                </div>
+              ))
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function ExportButton({ label, onClick, colors }: { label: string; onClick: () => void; colors: Colors }) {
   return (
     <button
       onClick={onClick}

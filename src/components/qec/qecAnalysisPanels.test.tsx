@@ -2,6 +2,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { render, cleanup, fireEvent } from '@testing-library/react';
 import campaignCsv from './__fixtures__/campaign_stats.csv?raw';
+import syntheticCsv from '../../lib/__fixtures__/synthetic_rounds.csv?raw';
 import { ThresholdPanel } from './ThresholdPanel';
 import { DecoderWorkbench } from './DecoderWorkbench';
 import { useQecCampaignStore } from '../../stores/qecCampaignStore';
@@ -48,15 +49,42 @@ describe('DecoderWorkbench', () => {
 });
 
 describe('ThresholdPanel', () => {
-  it('renders a log-log chart with a series polyline per group and a Λ readout', () => {
+  it('renders a log-log chart with units, CI method, and no threshold claim', () => {
     loadCampaign();
-    const { container, getAllByText } = render(<ThresholdPanel />);
+    const { container, getAllByText, getByText, queryByText } = render(<ThresholdPanel />);
     expect(container.querySelector('svg')).toBeTruthy();
     // One polyline per (label×distance×decoder) series = 4.
     expect(container.querySelectorAll('polyline').length).toBe(4);
-    // Λ readouts for both decoders (pymatching appears in legend + Λ line).
     expect(getAllByText(/pymatching/).length).toBeGreaterThanOrEqual(1);
-    expect(getAllByText(/Λ =/).length).toBe(2);
+    expect(getByText('logical error per shot')).toBeTruthy();
+    expect(getByText(/sinter likelihood ratio/)).toBeTruthy();
+    expect(queryByText(/Threshold/)).toBeNull();
+    // Fixture has only 2 distances: Λ is withheld, not faked.
+    expect(getAllByText(/Λ not estimated/).length).toBe(2);
+    expect(queryByText(/Λ =/)).toBeNull();
+  });
+
+  it('embeds estimator/CI/unit metadata in the SVG', () => {
+    loadCampaign();
+    const { container } = render(<ThresholdPanel />);
+    const meta = JSON.parse(container.querySelector('svg metadata')!.textContent!);
+    expect(meta.units).toBe('logical error per shot');
+    expect(meta.ci_method).toMatch(/fit_binomial/);
+    expect(meta.lambda_estimator).toMatch(/ln\(LER\)/);
+    expect(meta.rate_estimator).toMatch(/discards/);
+  });
+
+  it('with >= 3 distances and rounds: shows Λ with an interval and a working units toggle', () => {
+    const rows = parseSinterCsv(syntheticCsv);
+    const map: Record<string, (typeof rows)[number]> = {};
+    for (const r of rows) map[r.strong_id] = r;
+    useQecCampaignStore.setState({ rowsByStrongId: map, statsCsv: syntheticCsv, running: false });
+    const { getAllByText, getByText, getByRole } = render(<ThresholdPanel />);
+    expect(getAllByText(/Λ = .* to /).length).toBeGreaterThan(0);
+    expect(getByText('logical error per shot')).toBeTruthy();
+    fireEvent.click(getByRole('button', { name: 'Per round' }));
+    expect(getByText('logical error per round')).toBeTruthy();
+    expect(getByRole('button', { name: 'Per round' }).getAttribute('aria-pressed')).toBe('true');
   });
 
   it('exports SVG and CSV', () => {

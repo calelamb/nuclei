@@ -181,6 +181,10 @@ export interface LambdaFit {
 }
 
 /**
+ * @deprecated Use `lambdaEstimates` from `src/lib/qecFit.ts` (log-linear
+ * regression with uncertainty, >= 3 distances, no dropping of ratios <= 1).
+ * Kept only for `services/qecContext.ts`.
+ *
  * Fit Λ, the error-suppression factor: at each noise point, the ratio of the
  * logical error rate between successive distances (smaller / larger). Λ > 1
  * means adding distance suppresses errors (below threshold). Reports the
