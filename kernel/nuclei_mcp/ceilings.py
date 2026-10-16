@@ -27,6 +27,9 @@ class Ceilings(BaseModel):
     max_workers: int = Field(4, ge=1)
     max_rows: int = Field(20_000, ge=1, description="rows returned by load_stats")
 
+    max_csv_bytes: int = Field(50_000_000, ge=1, description="size of each stats CSV read by load_stats")
+    max_total_csv_bytes: int = Field(200_000_000, ge=1, description="summed size of all stats CSVs in one load_stats call")
+
     def require(self, name: str, value: float) -> None:
         limit = getattr(self, name)
         if value > limit:

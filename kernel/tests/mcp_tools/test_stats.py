@@ -210,3 +210,34 @@ def test_load_stats_row_cap(ctx, fixture_csv):
     small = ctx.__class__(journal=ctx.journal, ceilings=ctx.ceilings.model_copy(update={"max_rows": 2}))
     with pytest.raises(ToolInputError, match="max_rows"):
         load_stats(small, [str(fixture_csv)])
+
+
+def test_load_stats_refuses_oversized_file_before_reading(ctx, tmp_path, monkeypatch):
+    from nuclei_mcp.ceilings import Ceilings
+    from nuclei_mcp.context import Context
+
+    big = tmp_path / "big.csv"
+    big.write_text("x" * 2048, encoding="utf-8")
+    small_ctx = Context(journal=ctx.journal, ceilings=Ceilings(max_csv_bytes=1024))
+
+    def boom(*a, **k):
+        raise AssertionError("must not read or parse oversized file")
+
+    monkeypatch.setattr(sinter, "read_stats_from_csv_files", boom)
+    with pytest.raises(ToolInputError, match="max_csv_bytes"):
+        load_stats(small_ctx, [str(big)])
+
+
+def test_load_stats_refuses_oversized_total(ctx, tmp_path, monkeypatch):
+    from nuclei_mcp.ceilings import Ceilings
+    from nuclei_mcp.context import Context
+
+    files = []
+    for i in range(3):
+        f = tmp_path / f"f{i}.csv"
+        f.write_text("x" * 600, encoding="utf-8")
+        files.append(str(f))
+    small_ctx = Context(journal=ctx.journal, ceilings=Ceilings(max_csv_bytes=1024, max_total_csv_bytes=1500))
+    monkeypatch.setattr(sinter, "read_stats_from_csv_files", lambda *a, **k: (_ for _ in ()).throw(AssertionError("read")))
+    with pytest.raises(ToolInputError, match="max_total_csv_bytes"):
+        load_stats(small_ctx, files)

@@ -27,6 +27,12 @@ def load_stats(ctx: Context, paths: list[str]) -> dict[str, Any]:
     for original, path in zip(paths, resolved):
         if not path.is_file():
             raise ToolInputError(f"stats file not found: {original}")
+    total = 0
+    for original, path in zip(paths, resolved):
+        size = path.stat().st_size
+        ctx.ceilings.require("max_csv_bytes", size)
+        total += size
+        ctx.ceilings.require("max_total_csv_bytes", total)
     try:
         stats = sinter.read_stats_from_csv_files(*resolved)
     except Exception as exc:  # sinter raises assorted ValueError/KeyError on bad CSV
