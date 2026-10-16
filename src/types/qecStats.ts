@@ -1,4 +1,5 @@
 import type { QecCampaignStatsRow } from './qec';
+import { parseSinterCsvDetailed, splitCsvLine } from './sinterCsv';
 
 /**
  * PRD 10 Phase E — QEC campaign analysis.
@@ -13,67 +14,16 @@ import type { QecCampaignStatsRow } from './qec';
 
 // ─────────────────────────── sinter CSV ───────────────────────────
 
-const SINTER_HEADER_COLS = [
-  'shots', 'errors', 'discards', 'seconds', 'decoder', 'strong_id', 'json_metadata', 'custom_counts',
-];
-
-/** Split one CSV line honoring quoted fields with doubled-quote escaping —
- * sinter embeds JSON (full of commas + quotes) in the json_metadata field. */
-export function splitCsvLine(line: string): string[] {
-  const out: string[] = [];
-  let field = '';
-  let inQuotes = false;
-  for (let i = 0; i < line.length; i += 1) {
-    const ch = line[i];
-    if (inQuotes) {
-      if (ch === '"') {
-        if (line[i + 1] === '"') { field += '"'; i += 1; } // escaped quote
-        else inQuotes = false;
-      } else field += ch;
-    } else if (ch === '"') inQuotes = true;
-    else if (ch === ',') { out.push(field); field = ''; }
-    else field += ch;
-  }
-  out.push(field);
-  return out;
-}
+export { splitCsvLine };
 
 /**
- * Parse sinter's native stats.csv into rows. Tolerant of the leading
- * whitespace sinter pads its numeric columns with. Rows that don't parse are
- * skipped (never throws) — a partial/corrupt CSV still yields what it can.
+ * Parse sinter's native stats.csv into rows, aggregating duplicate strong_id
+ * rows exactly like `sinter.read_stats_from_csv_files`. Never throws: rows
+ * that don't parse are skipped. Use `parseSinterCsvDetailed` (sinterCsv.ts)
+ * when the problems need to be shown to the user.
  */
 export function parseSinterCsv(text: string): QecCampaignStatsRow[] {
-  const lines = text.split(/\r?\n/).filter((l) => l.trim().length > 0);
-  if (lines.length === 0) return [];
-  const header = splitCsvLine(lines[0]).map((c) => c.trim());
-  // Only accept a genuine sinter header; otherwise bail (empty).
-  const looksLikeHeader = SINTER_HEADER_COLS.every((c) => header.includes(c));
-  const dataLines = looksLikeHeader ? lines.slice(1) : [];
-  const idx = (name: string) => header.indexOf(name);
-
-  const rows: QecCampaignStatsRow[] = [];
-  for (const line of dataLines) {
-    const cells = splitCsvLine(line);
-    try {
-      const meta = cells[idx('json_metadata')]?.trim();
-      const customRaw = cells[idx('custom_counts')]?.trim();
-      const row: QecCampaignStatsRow = {
-        shots: Number(cells[idx('shots')]?.trim()),
-        errors: Number(cells[idx('errors')]?.trim()),
-        discards: Number(cells[idx('discards')]?.trim()),
-        seconds: Number(cells[idx('seconds')]?.trim()),
-        decoder: cells[idx('decoder')]?.trim() ?? '',
-        strong_id: cells[idx('strong_id')]?.trim() ?? '',
-        json_metadata: meta ? JSON.parse(meta) : {},
-        custom_counts: customRaw ? JSON.parse(customRaw) : {},
-      };
-      if (Number.isFinite(row.shots) && Number.isFinite(row.errors)) rows.push(row);
-    } catch {
-      /* skip malformed row */
-    }
-  }
-  return rows;
+  return parseSinterCsvDetailed(text).rows;
 }
 
 // ─────────────────────────── Logical error rate ───────────────────────────

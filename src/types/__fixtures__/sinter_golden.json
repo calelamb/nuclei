@@ -1,0 +1,144 @@
+{
+ "sinter_version": "1.16.0",
+ "cases": [
+  {
+   "name": "resume_duplicates_with_custom_counts",
+   "csv": "     shots,    errors,  discards, seconds,decoder,strong_id,json_metadata,custom_counts\n      1000,        12,         3,   0.125,pymatching,e50c0c4465d05c50c6383b8790b2206537c067aa9330c99eb6e7928c8731ee4f,\"{\"\"basis\"\":\"\"X\"\",\"\"d\"\":3,\"\"p\"\":0.001,\"\"r\"\":3}\",\"{\"\"dets\"\":40,\"\"obs_mispredicts\"\":2}\"\n      1000,         4,         0,   0.250,pymatching,d565c173a7f0db855fa875636b86254593b9a09a1841c65c933037e03306b5bb,\"{\"\"basis\"\":\"\"X\"\",\"\"d\"\":5,\"\"p\"\":0.001,\"\"r\"\":5}\",\n      3000,        30,         5,   0.375,pymatching,e50c0c4465d05c50c6383b8790b2206537c067aa9330c99eb6e7928c8731ee4f,\"{\"\"basis\"\":\"\"X\"\",\"\"d\"\":3,\"\"p\"\":0.001,\"\"r\"\":3}\",\"{\"\"obs_mispredicts\"\":5,\"\"other\"\":1}\"\n       500,        40,         0,   0.062,pymatching,bbed6210cd25087e9bd06767715df5feab7fb3abfeeead4f7040777d8a2d9b88,\"{\"\"basis\"\":\"\"X\"\",\"\"d\"\":5,\"\"p\"\":0.002,\"\"r\"\":5}\",\n      6000,        61,         0,   0.500,pymatching,e50c0c4465d05c50c6383b8790b2206537c067aa9330c99eb6e7928c8731ee4f,\"{\"\"basis\"\":\"\"X\"\",\"\"d\"\":3,\"\"p\"\":0.001,\"\"r\"\":3}\",\"{\"\"dets\"\":80}\"\n      9000,        20,         1,   0.750,pymatching,d565c173a7f0db855fa875636b86254593b9a09a1841c65c933037e03306b5bb,\"{\"\"basis\"\":\"\"X\"\",\"\"d\"\":5,\"\"p\"\":0.001,\"\"r\"\":5}\",\n",
+   "expected": [
+    {
+     "strong_id": "e50c0c4465d05c50c6383b8790b2206537c067aa9330c99eb6e7928c8731ee4f",
+     "decoder": "pymatching",
+     "json_metadata": {
+      "basis": "X",
+      "d": 3,
+      "p": 0.001,
+      "r": 3
+     },
+     "shots": 10000,
+     "errors": 103,
+     "discards": 8,
+     "seconds": 1.0,
+     "custom_counts": {
+      "dets": 120,
+      "obs_mispredicts": 7,
+      "other": 1
+     }
+    },
+    {
+     "strong_id": "d565c173a7f0db855fa875636b86254593b9a09a1841c65c933037e03306b5bb",
+     "decoder": "pymatching",
+     "json_metadata": {
+      "basis": "X",
+      "d": 5,
+      "p": 0.001,
+      "r": 5
+     },
+     "shots": 10000,
+     "errors": 24,
+     "discards": 1,
+     "seconds": 1.0,
+     "custom_counts": {}
+    },
+    {
+     "strong_id": "bbed6210cd25087e9bd06767715df5feab7fb3abfeeead4f7040777d8a2d9b88",
+     "decoder": "pymatching",
+     "json_metadata": {
+      "basis": "X",
+      "d": 5,
+      "p": 0.002,
+      "r": 5
+     },
+     "shots": 500,
+     "errors": 40,
+     "discards": 0,
+     "seconds": 0.062,
+     "custom_counts": {}
+    }
+   ]
+  },
+  {
+   "name": "no_duplicates",
+   "csv": "     shots,    errors,  discards, seconds,decoder,strong_id,json_metadata,custom_counts\n      1000,        12,         3,   0.125,pymatching,e50c0c4465d05c50c6383b8790b2206537c067aa9330c99eb6e7928c8731ee4f,\"{\"\"basis\"\":\"\"X\"\",\"\"d\"\":3,\"\"p\"\":0.001,\"\"r\"\":3}\",\"{\"\"dets\"\":40,\"\"obs_mispredicts\"\":2}\"\n      1000,         4,         0,   0.250,pymatching,d565c173a7f0db855fa875636b86254593b9a09a1841c65c933037e03306b5bb,\"{\"\"basis\"\":\"\"X\"\",\"\"d\"\":5,\"\"p\"\":0.001,\"\"r\"\":5}\",\n       500,        40,         0,   0.062,pymatching,bbed6210cd25087e9bd06767715df5feab7fb3abfeeead4f7040777d8a2d9b88,\"{\"\"basis\"\":\"\"X\"\",\"\"d\"\":5,\"\"p\"\":0.002,\"\"r\"\":5}\",\n",
+   "expected": [
+    {
+     "strong_id": "e50c0c4465d05c50c6383b8790b2206537c067aa9330c99eb6e7928c8731ee4f",
+     "decoder": "pymatching",
+     "json_metadata": {
+      "basis": "X",
+      "d": 3,
+      "p": 0.001,
+      "r": 3
+     },
+     "shots": 1000,
+     "errors": 12,
+     "discards": 3,
+     "seconds": 0.125,
+     "custom_counts": {
+      "dets": 40,
+      "obs_mispredicts": 2
+     }
+    },
+    {
+     "strong_id": "d565c173a7f0db855fa875636b86254593b9a09a1841c65c933037e03306b5bb",
+     "decoder": "pymatching",
+     "json_metadata": {
+      "basis": "X",
+      "d": 5,
+      "p": 0.001,
+      "r": 5
+     },
+     "shots": 1000,
+     "errors": 4,
+     "discards": 0,
+     "seconds": 0.25,
+     "custom_counts": {}
+    },
+    {
+     "strong_id": "bbed6210cd25087e9bd06767715df5feab7fb3abfeeead4f7040777d8a2d9b88",
+     "decoder": "pymatching",
+     "json_metadata": {
+      "basis": "X",
+      "d": 5,
+      "p": 0.002,
+      "r": 5
+     },
+     "shots": 500,
+     "errors": 40,
+     "discards": 0,
+     "seconds": 0.062,
+     "custom_counts": {}
+    }
+   ]
+  },
+  {
+   "name": "no_custom_counts_column_padded",
+   "csv": "     shots,    errors,  discards, seconds,decoder,strong_id,json_metadata\n     1000,        42,         0,   0.125,pymatching,9c31908e2b,\"{\"\"d\"\":9}\"\n     3000,        24,         0,   0.125,pymatching,9c31908e2b,\"{\"\"d\"\":9}\"\n     1000,       250,         0,   0.125,pymatching,deadbeef08,\"{\"\"d\"\":7}\"\n",
+   "expected": [
+    {
+     "strong_id": "9c31908e2b",
+     "decoder": "pymatching",
+     "json_metadata": {
+      "d": 9
+     },
+     "shots": 4000,
+     "errors": 66,
+     "discards": 0,
+     "seconds": 0.25,
+     "custom_counts": {}
+    },
+    {
+     "strong_id": "deadbeef08",
+     "decoder": "pymatching",
+     "json_metadata": {
+      "d": 7
+     },
+     "shots": 1000,
+     "errors": 250,
+     "discards": 0,
+     "seconds": 0.125,
+     "custom_counts": {}
+    }
+   ]
+  }
+ ]
+}

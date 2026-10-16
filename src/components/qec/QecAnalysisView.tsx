@@ -7,6 +7,8 @@ import { useExperimentUiStore } from '../../stores/experimentUiStore';
 import { useQecCampaignRun } from '../../hooks/useQecCampaignRun';
 import { ThresholdPanel } from './ThresholdPanel';
 import { DecoderWorkbench } from './DecoderWorkbench';
+import { CsvMappingPreview } from './CsvMappingPreview';
+import { QecCsvOpenButton, useCsvDrop } from './QecCsvDropZone';
 
 /**
  * PRD 10 Phase E — the campaign analysis surface, shown in the experiments
@@ -25,11 +27,20 @@ export function QecAnalysisView() {
     s.experiments.find((e) => e.fileName === selectedFileName),
   );
   const { run, cancel } = useQecCampaignRun();
+  const csvSource = useQecCampaignStore((s) => s.csvImport?.sourceName ?? null);
+  const csvError = useQecCampaignStore((s) => s.csvError);
+  const { over, handlers } = useCsvDrop();
 
   const canRun = Boolean(experiment && projectRoot && experiment.spec.type === 'qec_campaign');
 
   return (
-    <div style={{ height: '100%', display: 'flex', flexDirection: 'column', background: colors.bg }}>
+    <div
+      {...handlers}
+      style={{
+        height: '100%', display: 'flex', flexDirection: 'column', background: colors.bg,
+        outline: over ? `2px dashed ${colors.accent}` : 'none', outlineOffset: -2,
+      }}
+    >
       <div
         style={{
           display: 'flex', alignItems: 'center', gap: 10, padding: '8px 12px',
@@ -37,9 +48,10 @@ export function QecAnalysisView() {
         }}
       >
         <span style={{ fontSize: 13, fontWeight: 600, color: colors.text }}>
-          {experiment?.spec.name ?? 'Campaign'}
+          {csvSource ?? experiment?.spec.name ?? 'Campaign'}
         </span>
         <div style={{ flex: 1 }} />
+        <QecCsvOpenButton />
         {running ? (
           <button
             onClick={cancel}
@@ -66,6 +78,12 @@ export function QecAnalysisView() {
           </button>
         )}
       </div>
+      {csvError && csvSource && (
+        <div role="alert" style={{ padding: '6px 12px', fontSize: 11.5, color: colors.error, borderBottom: `1px solid ${colors.border}` }}>
+          {csvError}
+        </div>
+      )}
+      <CsvMappingPreview />
       {(running || resumable) && (
         <div
           aria-live="polite"

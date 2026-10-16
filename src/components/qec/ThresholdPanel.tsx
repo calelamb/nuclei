@@ -4,6 +4,7 @@ import { useThemeStore } from '../../stores/themeStore';
 import { useQecCampaignStore } from '../../stores/qecCampaignStore';
 import { PanelHeader } from '../layout/PanelHeader';
 import { QecEmptyState } from './QecEmptyState';
+import { QecCsvDropZone } from './QecCsvDropZone';
 import {
   thresholdSeries,
   lambdaFit,
@@ -58,7 +59,9 @@ export function ThresholdPanel() {
           title="No campaign results yet"
           body="Run a QEC campaign over a noise sweep to see logical error rate vs physical error, per distance."
           docsHref={DOCS}
-        />
+        >
+          <QecCsvDropZone />
+        </QecEmptyState>
       </div>
     );
   }
