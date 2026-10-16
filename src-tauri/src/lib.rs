@@ -29,6 +29,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             commands::kernel::start_kernel,
             commands::kernel::stop_kernel,
+            commands::kernel::kernel_auth_token,
             commands::qec_data::qec_data_start,
             commands::qec_data::qec_data_stop,
             commands::qec_data::qec_data_status,
