@@ -24,17 +24,37 @@ qc.measure([0, 1], [0, 1])
 """
 
 
+def _runtime_info() -> dict:
+    """Live runtime-file contents ({} if absent, unreadable or stale)."""
+    runtime_dir = os.environ.get("NUCLEI_RUNTIME_DIR") or os.path.join(
+        os.path.expanduser("~"), ".nuclei", "runtime"
+    )
+    try:
+        with open(os.path.join(runtime_dir, "kernel.json")) as handle:
+            info = json.load(handle)
+        os.kill(int(info["pid"]), 0)  # raises if that kernel is gone
+        return info
+    except (OSError, ValueError, KeyError, TypeError):
+        return {}
+
+
+def default_url() -> str:
+    """The kernel the runtime file describes (its token matches that port)."""
+    return _runtime_info().get("url") or "ws://localhost:9742"
+
+
 def load_token() -> str:
     """Token for this kernel launch: $NUCLEI_KERNEL_TOKEN, else the user-only
     runtime file the kernel writes at startup (like a Jupyter runtime file)."""
     token = os.environ.get("NUCLEI_KERNEL_TOKEN")
     if token:
         return token
-    runtime_dir = os.environ.get("NUCLEI_RUNTIME_DIR") or os.path.join(
-        os.path.expanduser("~"), ".nuclei", "runtime"
-    )
-    with open(os.path.join(runtime_dir, "kernel.json")) as handle:
-        return json.load(handle)["token"]
+    info = _runtime_info()
+    if "token" not in info:
+        raise RuntimeError(
+            "no token: set NUCLEI_KERNEL_TOKEN or start a kernel (runtime file missing or stale)"
+        )
+    return info["token"]
 
 
 async def authenticate(ws) -> None:
@@ -85,5 +105,5 @@ async def main(url: str) -> int:
 
 
 if __name__ == "__main__":
-    url = sys.argv[1] if len(sys.argv) > 1 else "ws://localhost:9742"
+    url = sys.argv[1] if len(sys.argv) > 1 else default_url()
     sys.exit(asyncio.run(main(url)))

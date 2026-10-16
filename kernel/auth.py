@@ -22,8 +22,10 @@ import atexit
 import hmac
 import json
 import os
+import signal
 import sys
 import tempfile
+import threading
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Awaitable, Callable, Mapping
@@ -274,7 +276,33 @@ def write_runtime_file(
         Path(temp_name).unlink(missing_ok=True)
         raise
     atexit.register(_remove_runtime_file, path, os.getpid())
+    _install_cleanup_signal_handlers(path, os.getpid())
     return path
+
+
+def _install_cleanup_signal_handlers(path: Path, pid: int) -> None:
+    """Remove the runtime file on SIGTERM/SIGINT (atexit does not run for
+    SIGTERM), then defer to whatever handler was installed before."""
+    if threading.current_thread() is not threading.main_thread():
+        return
+    for name in ("SIGTERM", "SIGINT"):
+        signum = getattr(signal, name, None)
+        if signum is None:
+            continue
+        previous = signal.getsignal(signum)
+
+        def handler(received, frame, _previous=previous, _signum=signum):
+            _remove_runtime_file(path, pid)
+            if callable(_previous):
+                _previous(received, frame)
+                return
+            signal.signal(_signum, signal.SIG_DFL)
+            os.kill(os.getpid(), _signum)
+
+        try:
+            signal.signal(signum, handler)
+        except (ValueError, OSError):
+            continue
 
 
 def _remove_runtime_file(path: Path, pid: int) -> None:
@@ -285,6 +313,30 @@ def _remove_runtime_file(path: Path, pid: int) -> None:
         pass
 
 
+class StaleRuntimeFileError(RuntimeError):
+    """The runtime file names a kernel process that is no longer running."""
+
+
+def _pid_alive(pid: object) -> bool:
+    if not isinstance(pid, int) or isinstance(pid, bool) or pid <= 0:
+        return False
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        return True
+    except OSError:
+        return False
+    return True
+
+
 def read_runtime_file(runtime_dir: Path | None = None) -> dict:
     directory = Path(runtime_dir) if runtime_dir is not None else default_runtime_dir()
-    return json.loads((directory / RUNTIME_FILE_NAME).read_text())
+    info = json.loads((directory / RUNTIME_FILE_NAME).read_text())
+    if not _pid_alive(info.get("pid")):
+        raise StaleRuntimeFileError(
+            f"runtime file names pid {info.get('pid')!r}, which is not running; "
+            "start a kernel or supply the token another way"
+        )
+    return info

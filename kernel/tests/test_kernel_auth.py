@@ -7,6 +7,7 @@ import os
 import socket
 import stat
 import sys
+from pathlib import Path
 
 import pytest
 import websockets
@@ -434,3 +435,47 @@ def test_unwritable_runtime_dir_is_reported_not_fatal(tmp_path, capsys):
     blocker.write_text("x")
     assert server._publish_runtime_file(_config(), 9742, runtime_dir=blocker / "sub") is None
     assert "runtime file" in capsys.readouterr().err
+
+
+# ── runtime file lifecycle (signals, stale pid) ──────────────────────────
+
+
+def test_runtime_file_removed_on_sigterm(tmp_path):
+    import signal
+    import subprocess
+    import textwrap
+    import time
+
+    script = textwrap.dedent(
+        f"""
+        import sys, time
+        sys.path.insert(0, {str(Path(auth.__file__).parent.parent)!r})
+        from kernel import auth
+        cfg = auth.build_config(token={TOKEN!r}, insecure=False, dev=False)
+        auth.write_runtime_file(cfg, 9742, runtime_dir={str(tmp_path)!r})
+        print("ready", flush=True)
+        time.sleep(60)
+        """
+    )
+    proc = subprocess.Popen([sys.executable, "-c", script], stdout=subprocess.PIPE, text=True)
+    try:
+        assert proc.stdout.readline().strip() == "ready"
+        assert (tmp_path / auth.RUNTIME_FILE_NAME).exists()
+        proc.send_signal(signal.SIGTERM)
+        proc.wait(timeout=10)
+    finally:
+        if proc.poll() is None:
+            proc.kill()
+    assert not (tmp_path / auth.RUNTIME_FILE_NAME).exists()
+
+
+def test_read_runtime_file_rejects_dead_pid(tmp_path):
+    import subprocess
+
+    dead = subprocess.Popen([sys.executable, "-c", "pass"])
+    dead.wait()
+    (tmp_path / auth.RUNTIME_FILE_NAME).write_text(json.dumps(
+        {"url": "ws://localhost:9743", "port": 9743, "pid": dead.pid, "token": TOKEN}
+    ))
+    with pytest.raises(auth.StaleRuntimeFileError):
+        auth.read_runtime_file(runtime_dir=tmp_path)
