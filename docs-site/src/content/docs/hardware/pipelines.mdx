@@ -43,7 +43,7 @@ current protocol.
 <Code code={sweepDriver} lang="python" title="sweep_driver.py" />
 
 ```bash
-cd kernel && python server.py          # terminal 1
+cd kernel && NUCLEI_KERNEL_TOKEN="$(python -c 'import secrets; print(secrets.token_urlsafe(32))')" python server.py   # terminal 1
 python sweep_driver.py                 # terminal 2 — 9 points, 256 shots
 python sweep_driver.py ws://localhost:9742 1024 17
 ```

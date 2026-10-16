@@ -262,6 +262,55 @@ def test_real_handler_not_reached_without_token():
     assert good_received[1]["message"].startswith("Unknown message type")
 
 
+def _real_server_port(ws_server) -> int:
+    return next(s for s in ws_server.sockets if s.family == socket.AF_INET).getsockname()[1]
+
+
+@pytest.mark.parametrize("origin", ["https://evil.example", "null"])
+def test_foreign_origin_gets_http_403_before_handshake_completes(origin):
+    async def scenario():
+        ws_server = await server._try_serve(0, _config())
+        port = _real_server_port(ws_server)
+        try:
+            with pytest.raises(websockets.InvalidStatus) as info:
+                async with websockets.connect(
+                    f"ws://127.0.0.1:{port}", origin=origin
+                ):
+                    pass
+            return info.value.response.status_code
+        finally:
+            ws_server.close()
+    assert _run(scenario()) == 403
+
+
+def test_foreign_host_gets_http_403_before_handshake_completes():
+    async def scenario():
+        ws_server = await server._try_serve(0, _config())
+        port = _real_server_port(ws_server)
+        try:
+            with pytest.raises(websockets.InvalidStatus) as info:
+                async with websockets.connect(
+                    f"ws://attacker.example:{port}", host="127.0.0.1", port=port
+                ):
+                    pass
+            return info.value.response.status_code
+        finally:
+            ws_server.close()
+    assert _run(scenario()) == 403
+
+
+def test_real_server_accepts_originless_authenticated_client():
+    async def scenario():
+        ws_server = await server._try_serve(0, _config())
+        port = _real_server_port(ws_server)
+        try:
+            return await _attempt(port, [_auth_frame()])
+        finally:
+            ws_server.close()
+    received, _ = _run(scenario())
+    assert received[0]["type"] == "authenticated"
+
+
 # ── configuration (fail closed) ──────────────────────────────────────────
 
 
@@ -347,3 +396,41 @@ def test_read_runtime_token_roundtrip(tmp_path):
     auth.write_runtime_file(_config(), 9742, runtime_dir=tmp_path)
     info = auth.read_runtime_file(runtime_dir=tmp_path)
     assert info["token"] == TOKEN
+
+
+def test_config_from_env_removes_token_from_process_environment(monkeypatch):
+    monkeypatch.setenv(auth.TOKEN_ENV, TOKEN)
+    config = auth.config_from_env()
+    assert config.token == TOKEN
+    assert auth.TOKEN_ENV not in os.environ
+
+
+def test_config_from_env_leaves_explicit_mapping_untouched():
+    env = {auth.TOKEN_ENV: TOKEN}
+    auth.config_from_env(env)
+    assert env == {auth.TOKEN_ENV: TOKEN}
+
+
+def test_scrubbed_environment_drops_kernel_secrets():
+    env = {auth.TOKEN_ENV: TOKEN, "PATH": "/bin", auth.INSECURE_ENV: "1"}
+    assert auth.scrubbed_environment(env) == {"PATH": "/bin"}
+
+
+def test_agent_worker_does_not_inherit_token(monkeypatch):
+    captured = {}
+
+    async def fake_exec(*args, **kwargs):
+        captured.update(kwargs)
+        raise OSError("stop here")
+
+    monkeypatch.setenv(auth.TOKEN_ENV, TOKEN)
+    monkeypatch.setattr(asyncio, "create_subprocess_exec", fake_exec)
+    _run(server.run_agent_worker({"request_id": "r"}))
+    assert auth.TOKEN_ENV not in captured["env"]
+
+
+def test_unwritable_runtime_dir_is_reported_not_fatal(tmp_path, capsys):
+    blocker = tmp_path / "file"
+    blocker.write_text("x")
+    assert server._publish_runtime_file(_config(), 9742, runtime_dir=blocker / "sub") is None
+    assert "runtime file" in capsys.readouterr().err

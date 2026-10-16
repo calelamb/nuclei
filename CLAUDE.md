@@ -469,7 +469,7 @@ npm run tauri dev          # Start dev server with hot reload
 npm run tauri build        # Build .dmg for distribution
 
 # Kernel (standalone testing)
-cd kernel && python server.py   # Start kernel WebSocket server
+cd kernel && NUCLEI_KERNEL_TOKEN="$(python -c 'import secrets; print(secrets.token_urlsafe(32))')" python server.py   # Start kernel (token required; or NUCLEI_KERNEL_INSECURE_DEV=1 for throwaway local use)
 
 # Test
 npm test                   # Frontend tests

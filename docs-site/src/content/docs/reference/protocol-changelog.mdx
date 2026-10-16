@@ -3,8 +3,9 @@ title: "Protocol changelog"
 description: "Versioned history of changes to the kernel WebSocket protocol."
 ---
 
-The kernel WebSocket protocol is at **v1** — the version shipped since the
-protocol stabilized, documented in the [Kernel API](/docs/kernel-api/overview/)
+The kernel WebSocket protocol is at **v2** (unreleased; v1 clients must add the
+authenticate handshake). v1 shipped since the protocol stabilized; the protocol is
+documented in the [Kernel API](/docs/kernel-api/overview/)
 section.
 
 ## Evolution policy
@@ -24,6 +25,7 @@ section.
 
 | App version | Protocol change |
 |-------------|-----------------|
+| Unreleased | **Protocol v2, breaking**: every connection must authenticate. The first frame must be `{"type": "authenticate", "token": "<token>"}` (answered by `{"type": "authenticated"}`); otherwise the kernel closes the connection (4401 authentication failed/required, 4403 forbidden `Origin`/`Host`; foreign `Origin`/`Host` handshakes are refused with HTTP 403). The kernel refuses to start without `NUCLEI_KERNEL_TOKEN` unless `NUCLEI_KERNEL_INSECURE_DEV=1`. Migration for external clients: read the token from `~/.nuclei/runtime/kernel.json` (or `$NUCLEI_KERNEL_TOKEN`) and send the authenticate frame first. See [Authentication](/docs/kernel-api/overview/#authentication). |
 | 0.14.0 | **Protocol v1.3** (PRD 14, all additive): the Quantum AI Lab. Trainability Lab: `trainability_inspect` → `trainability_inspected`, `trainability_lint` → `trainability_lint_result`, `trainability_start` → `trainability_started` / `trainability_progress` / `trainability_partial` / `trainability_result` (with a `provenance` block for the Trainability Certificate) and `trainability_cancel` → `trainability_cancelled`. Discovery Engine: `discovery_evaluators` → `discovery_evaluators_result`, `discovery_evaluate` → `discovery_evaluate_accepted` then `discovery_evaluation`, `discovery_cancel` → `discovery_cancelled`, `discovery_mutate` → `discovery_mutations`. Red Queen: `discovery_audit` → `discovery_audit_accepted` then `discovery_audit_result`, `discovery_audit_cancel` → `discovery_audit_cancelled`. Conjecture Engine: `discovery_conjecture_schema` → `discovery_conjecture_schema_result`, `discovery_conjecture_test` → `discovery_conjecture_started` / `_progress` / `_evidence` / `_result`, `discovery_conjecture_cancel` → `discovery_conjecture_cancelled`. Errors use `phase: "trainability"` or `phase: "discovery"` and may carry `job_id`, `run_id`, `candidate_id`, `path` or `column`. Clients that never send these messages see no change. See [Quantum AI Lab messages](/docs/kernel-api/messages-lab/). |
 | 0.13.0 | **Additive**: new messages `lint` → `lint_result` (ruff diagnostics for the buffer) and `format` → `format_result` (ruff-formatted text). Python-only; both degrade to empty/no-op when ruff is absent, never blocking. See [execution messages](/docs/kernel-api/messages-execution/#lint-and-format). |
 | 0.12.0 | **Additive**: new message `debug_trace` → `debug_trace_result` — the Quantum Debugger's per-gate state trajectory. Returns one step per gate (plus an initial `|0…0⟩`), each with the probabilities and per-qubit Bloch coordinates of the state after that gate. Qiskit and Cirq only (statevector path); bounded to 12 qubits / 200 gates, with `circuit_too_large` / `debug_unsupported_framework` errors past the limits. See [execution messages](/docs/kernel-api/messages-execution/#debug_trace). |

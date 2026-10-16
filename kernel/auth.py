@@ -74,6 +74,9 @@ def config_from_env(env: Mapping[str, str] | None = None) -> KernelAuthConfig:
     """Read the auth setup from the environment, failing closed."""
     env = os.environ if env is None else env
     token = env.get(TOKEN_ENV) or None
+    if env is os.environ:
+        # Child processes (agent worker, user code) must not inherit the secret.
+        os.environ.pop(TOKEN_ENV, None)
     insecure_flag = env.get(INSECURE_ENV, "")
     if insecure_flag not in ("", "0", "1"):
         raise AuthConfigError(f"{INSECURE_ENV} must be exactly 1 to enable insecure mode")
@@ -102,6 +105,12 @@ def config_from_env(env: Mapping[str, str] | None = None) -> KernelAuthConfig:
 
 
 # ── handshake checks ─────────────────────────────────────────────────────
+
+
+def scrubbed_environment(env: Mapping[str, str] | None = None) -> dict[str, str]:
+    """Copy of ``env`` without kernel auth variables, for child processes."""
+    source = os.environ if env is None else env
+    return {k: v for k, v in source.items() if k not in (TOKEN_ENV, INSECURE_ENV)}
 
 
 def _request_headers(websocket: Any) -> Mapping[str, str]:
@@ -155,6 +164,33 @@ def token_matches(config: KernelAuthConfig, frame: object) -> bool:
     return hmac.compare_digest(supplied.encode(), config.token.encode())
 
 
+def handshake_violation(
+    config: KernelAuthConfig, headers: Mapping[str, str], port: int | None
+) -> str | None:
+    """Reason the Host/Origin headers are unacceptable, or None if fine."""
+    hosts = _header_values(headers, "Host")
+    if len(hosts) != 1 or not host_allowed(hosts[0], port):
+        return "forbidden host"
+    origins = _header_values(headers, "Origin")
+    if len(origins) > 1 or not origin_allowed(config, origins[0] if origins else None):
+        return "forbidden origin"
+    return None
+
+
+def make_process_request(config: KernelAuthConfig):
+    """websockets ``process_request`` hook: HTTP 403 before the upgrade."""
+
+    def process_request(connection: Any, request: Any):
+        address = getattr(connection, "local_address", None)
+        port = int(address[1]) if address and len(address) >= 2 else None
+        reason = handshake_violation(config, request.headers, port)
+        if reason is None:
+            return None
+        return connection.respond(403, f"{reason}\n")
+
+    return process_request
+
+
 Handler = Callable[[Any], Awaitable[None]]
 
 
@@ -173,14 +209,13 @@ def secure_handler(
     """Wrap ``inner`` so it only ever sees authenticated, allowed connections."""
 
     async def handler(websocket: Any) -> None:
-        headers = _request_headers(websocket)
-        hosts = _header_values(headers, "Host")
-        if len(hosts) != 1 or not host_allowed(hosts[0], _local_port(websocket)):
-            await _reject(websocket, CLOSE_FORBIDDEN, "forbidden host")
-            return
-        origins = _header_values(headers, "Origin")
-        if len(origins) > 1 or not origin_allowed(config, origins[0] if origins else None):
-            await _reject(websocket, CLOSE_FORBIDDEN, "forbidden origin")
+        # Second line of defence: process_request already rejects these with
+        # HTTP 403 on the real server.
+        reason = handshake_violation(
+            config, _request_headers(websocket), _local_port(websocket)
+        )
+        if reason is not None:
+            await _reject(websocket, CLOSE_FORBIDDEN, reason)
             return
         if not config.insecure:
             try:

@@ -18,9 +18,13 @@ scripted `hardware_submit` loops built on the same pattern, see
 Start a kernel first:
 
 ```bash
-cd kernel && python server.py
+cd kernel && NUCLEI_KERNEL_TOKEN="$(python -c 'import secrets; print(secrets.token_urlsafe(32))')" python server.py
 # Nuclei kernel ready on ws://localhost:9742
 ```
+
+The kernel requires a token (see [Authentication](/docs/kernel-api/overview/#authentication)). It
+writes the token to `~/.nuclei/runtime/kernel.json`, and the example clients
+read it from there (or from `$NUCLEI_KERNEL_TOKEN`).
 
 <Tabs>
 <TabItem label="Python">
@@ -69,10 +73,16 @@ from `docs-site/fixtures/` — every documented request is sitting there as
 ready-to-send JSON:
 
 ```bash
-# jq -c compacts the pretty-printed fixture to one line (websocat sends one
-# frame per input line); --no-close keeps the connection open after stdin
-# EOF so the response frames have time to arrive.
-jq -c . docs-site/fixtures/run_python_hello.request.json | websocat --no-close ws://localhost:9742
+# The first frame must be the authenticate message, read here from the
+# kernel's user-only runtime file. jq -c compacts the pretty-printed fixture
+# to one line (websocat sends one frame per input line); --no-close keeps the
+# connection open after stdin EOF so the response frames have time to arrive.
+{
+  jq -c '{type: "authenticate", token: .token}' ~/.nuclei/runtime/kernel.json
+  jq -c . docs-site/fixtures/run_python_hello.request.json
+} | websocat --no-close ws://localhost:9742
 ```
 
-Each response frame prints on its own line; exit with Ctrl-C.
+The first response frame is `{"type": "authenticated"}`. Each response frame
+prints on its own line; exit with Ctrl-C. Without the authenticate frame the
+kernel closes the connection with code 4401.
