@@ -19,14 +19,22 @@
  *     so extra squared error = Sxx (m - m*)^2 and the interval is
  *     m* ± sqrt(maxExtra / Sxx). sinter finds the same interval numerically
  *     (scipy leastsq + bisection to atol 1e-5 on the cost), so its low/high
- *     differ from ours, by up to ~2e-3 relative on the golden fixtures (its
- *     inner least-squares is approximate; ours satisfies cost = base + extra
- *     exactly). `best` agrees to 1e-9.
+ *     differ from ours by ~1e-6 relative on the scalar golden cases (tested
+ *     at 1e-5) and by 2.5e-3 to 5e-3 on the worst fixture Λ fit (tested at 5e-3),
+ *     where sinter's inner least-squares is approximate; ours satisfies
+ *     cost = base + extra exactly. `best` agrees to 1e-9.
  *  2. The Λ default for `maxExtraSquaredError` is ours (sinter leaves it to
- *     the caller); see `defaultMaxExtraSquaredError`.
+ *     the caller); see `defaultMaxExtraSquaredError`. It is an ~1σ interval
+ *     (stated on the figure), unlike the 1000x-likelihood whiskers (~3.7σ).
+ *  3. Rows are pooled into a curve or a Λ fit only within one experiment
+ *     (see qecExperiments.ts); sinter leaves grouping to the caller.
  */
 import type { QecCampaignStatsRow } from '../types/qec';
 import type { ThresholdSeries } from '../types/qecStats';
+import { assignExperiments } from './qecExperiments';
+import { roundsFromMetadata } from './qecRounds';
+
+export { roundsFromMetadata };
 
 export interface Fit {
   low: number;
@@ -152,15 +160,20 @@ export function fitToPieceRate(fit: Fit, opts: { pieces: number; values?: number
 
 export type RateUnits = 'per_shot' | 'per_round';
 
-/** Number of QEC rounds per shot from sinter metadata (`r` or `rounds`), or null. */
-export function roundsFromMetadata(meta: unknown): number | null {
-  if (typeof meta !== 'object' || meta === null) return null;
-  const m = meta as Record<string, unknown>;
-  for (const k of ['r', 'rounds']) {
-    const v = m[k];
-    if (typeof v === 'number' && Number.isFinite(v) && v > 0) return v;
-  }
-  return null;
+/**
+ * Why a row cannot be turned into a rate, or null if it can. `invalid` rows
+ * are malformed (non-finite or negative counts, discards > shots, errors
+ * above kept shots); `no_kept` rows have zero kept shots (no information).
+ */
+export function rowProblem(
+  row: Pick<QecCampaignStatsRow, 'shots' | 'errors' | 'discards'>,
+): 'invalid' | 'no_kept' | null {
+  const discards = row.discards || 0;
+  const { shots, errors } = row;
+  if (![shots, errors, discards].every(Number.isFinite) || shots < 0 || errors < 0 || discards < 0) return 'invalid';
+  const kept = shots - discards;
+  if (kept < 0 || errors > kept) return 'invalid';
+  return kept === 0 ? 'no_kept' : null;
 }
 
 export interface RowRateOptions {
@@ -250,6 +263,8 @@ export interface LambdaEstimate {
   step: number;
   distances: number[];
   nPoints: number;
+  /** Distances whose points had zero logical errors (ln 0) and were left out. */
+  droppedZeroError: number[];
 }
 
 export const MIN_LAMBDA_DISTANCES = 3;
@@ -258,11 +273,16 @@ export const DEFAULT_LAMBDA_STEP = 2;
 /**
  * Default extra-squared-error budget for the Λ interval: the larger of the
  * regression's residual mean square (misfit of the log-linear model) and the
- * mean delta-method variance of ln(count) = 1/errors (sampling noise, which
- * dominates when 3 points happen to fall on a line). Roughly a 1σ interval.
+ * sampling variance of the OLS slope times Sxx. ln(count) has delta-method
+ * variance 1/errors_i, which differs a lot between distances (the largest d
+ * has the fewest errors), so the slope variance is the heteroscedastic
+ * Σ(xi−x̄)² σi² / Sxx² rather than a mean-variance shortcut, which would be too
+ * narrow. The resulting interval is roughly ±1σ (about 68%).
  */
 export function defaultMaxExtraSquaredError(points: readonly LambdaPoint[]): (f: { rss: number; n: number }) => number {
-  const sampling = points.reduce((s, p) => s + 1 / p.errors, 0) / points.length;
+  const mx = points.reduce((s, p) => s + p.distance, 0) / points.length;
+  const sxx = points.reduce((s, p) => s + (p.distance - mx) ** 2, 0);
+  const sampling = points.reduce((s, p) => s + (p.distance - mx) ** 2 / p.errors, 0) / sxx;
   return ({ rss, n }) => Math.max(rss / (n - 2), sampling);
 }
 
@@ -292,67 +312,91 @@ export function estimateLambda(
     step,
     distances,
     nPoints: usable.length,
+    droppedZeroError: [...new Set(points.filter((p) => !(p.errors > 0 && p.rate > 0)).map((p) => p.distance))]
+      .filter((d) => !distances.includes(d))
+      .sort((a, b) => a - b),
   };
 }
 
 export interface LambdaGroupEstimate {
   decoder: string;
+  /** Experiment name: metadata label plus rounds scheme, e.g. "synth r=3d". */
   label: string;
+  /** Unique experiment identity (see qecExperiments.ts). */
+  experiment: string;
   noise: number;
   units: RateUnits;
   estimate: LambdaEstimate;
 }
 
-/** Λ at each (decoder, label, p) that has >= 3 distances. */
+const finiteNum = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v);
+
+/** Λ at each (experiment, p) that has >= 3 distances. Malformed rows are skipped. */
 export function lambdaEstimates(
   rows: readonly QecCampaignStatsRow[],
   opts: { units?: RateUnits; step?: number } = {},
 ): LambdaGroupEstimate[] {
-  const groups = new Map<string, { decoder: string; label: string; noise: number; units: RateUnits; pts: LambdaPoint[] }>();
+  const experiments = assignExperiments(rows);
+  const groups = new Map<string, Omit<LambdaGroupEstimate, 'estimate'> & { pts: LambdaPoint[] }>();
   for (const row of rows) {
     const meta = (row.json_metadata ?? {}) as Record<string, unknown>;
-    const d = meta.d;
-    const p = meta.p;
-    if (typeof d !== 'number' || typeof p !== 'number' || !Number.isFinite(d) || !Number.isFinite(p)) continue;
-    const label = typeof meta.label === 'string' ? meta.label : '';
+    if (!finiteNum(meta.d) || !finiteNum(meta.p) || rowProblem(row) === 'invalid') continue;
     const { fit, units } = rowRate(row, { units: opts.units, maxLikelihoodFactor: 1 });
     // Never mix units: a per-round request skips rows whose rounds are unknown.
     if (units !== (opts.units ?? 'per_shot')) continue;
-    const key = `${row.decoder}\u0000${label}\u0000${p}\u0000${units}`;
-    const g = groups.get(key) ?? { decoder: row.decoder, label, noise: p, units, pts: [] };
-    groups.set(key, { ...g, pts: [...g.pts, { distance: d, errors: row.errors, rate: fit.best }] });
+    const ex = experiments.get(row)!;
+    const key = `${ex.key}\u0000${meta.p}\u0000${units}`;
+    const g = groups.get(key) ?? { decoder: row.decoder, label: ex.name, experiment: ex.key, noise: meta.p, units, pts: [] };
+    groups.set(key, { ...g, pts: [...g.pts, { distance: meta.d, errors: row.errors, rate: fit.best }] });
   }
   const out: LambdaGroupEstimate[] = [];
-  for (const g of groups.values()) {
-    const estimate = estimateLambda(g.pts, { step: opts.step });
-    if (estimate) out.push({ decoder: g.decoder, label: g.label, noise: g.noise, units: g.units, estimate });
+  for (const { pts, ...g } of groups.values()) {
+    const estimate = estimateLambda(pts, { step: opts.step });
+    if (estimate) out.push({ ...g, estimate });
   }
   return out.sort((a, b) => a.decoder.localeCompare(b.decoder) || a.label.localeCompare(b.label) || a.noise - b.noise);
 }
 
 // ───────────────────────── plot series + figure metadata ─────────────────────────
 
+export interface LikelihoodSeriesResult {
+  series: ThresholdSeries[];
+  /** Rows hidden because per-round was requested and their rounds are unknown. */
+  excluded: number;
+  /** Malformed rows (e.g. errors > kept shots), skipped. */
+  invalid: number;
+  /** Rows whose shots were all discarded, skipped (no information). */
+  noKept: number;
+}
+
 /**
- * Threshold-plot series (one per label x distance x decoder) with sinter
+ * Plot series (one per experiment x distance x decoder) with sinter
  * likelihood-ratio intervals. In `per_round` mode, rows without known rounds
  * are excluded (never silently mixed into a per-shot curve); their count is
- * returned so the UI can say so.
+ * returned so the UI can say so. Malformed and fully-discarded rows are
+ * skipped and counted separately.
  */
 export function likelihoodSeries(
   rows: readonly QecCampaignStatsRow[],
   opts: { units?: RateUnits; maxLikelihoodFactor?: number } = {},
-): { series: ThresholdSeries[]; excluded: number } {
+): LikelihoodSeriesResult {
   const want = opts.units ?? 'per_shot';
+  const experiments = assignExperiments(rows);
   const groups = new Map<string, ThresholdSeries>();
   let excluded = 0;
+  let invalid = 0;
+  let noKept = 0;
   for (const row of rows) {
     const meta = (row.json_metadata ?? {}) as Record<string, unknown>;
     const noise = meta.p;
-    if (typeof noise !== 'number' || !Number.isFinite(noise)) continue;
+    if (!finiteNum(noise)) continue;
+    const problem = rowProblem(row);
+    if (problem === 'invalid') { invalid += 1; continue; }
+    if (problem === 'no_kept') { noKept += 1; continue; }
     const { fit, units } = rowRate(row, { units: want, maxLikelihoodFactor: opts.maxLikelihoodFactor });
     if (units !== want) { excluded += 1; continue; }
-    const distance = typeof meta.d === 'number' && Number.isFinite(meta.d) ? meta.d : null;
-    const label = typeof meta.label === 'string' ? meta.label : row.strong_id.slice(0, 8);
+    const distance = finiteNum(meta.d) ? meta.d : null;
+    const label = experiments.get(row)!.name;
     const key = `${label}·d${distance ?? '?'}·${row.decoder}`;
     const prev = groups.get(key) ?? { key, label, distance, decoder: row.decoder, points: [] };
     groups.set(key, { ...prev, points: [...prev.points, { noise, rate: { p: fit.best, lo: fit.low, hi: fit.high } }] });
@@ -360,20 +404,40 @@ export function likelihoodSeries(
   const series = [...groups.values()]
     .map((s) => ({ ...s, points: [...s.points].sort((a, b) => a.noise - b.noise) }))
     .sort((a, b) => a.key.localeCompare(b.key));
-  return { series, excluded };
+  return { series, excluded, invalid, noKept };
 }
 
+/** z-equivalent of a likelihood factor F: ln F = z^2 / 2. */
+export const likelihoodFactorSigma = (factor: number) => Math.sqrt(2 * Math.log(factor));
+
+/** One-line description of the whisker convention, shared by figure and metadata. */
+export function whiskerConvention(factor = DEFAULT_MAX_LIKELIHOOD_FACTOR): string {
+  return `likelihood ratio, factor ${factor} (about ${likelihoodFactorSigma(factor).toFixed(1)}σ)`;
+}
+
+export const LAMBDA_CI_CONVENTION = 'about ±1σ (68%), heteroscedastic OLS slope variance';
+
 /** Machine-readable provenance embedded in exported figures. */
-export function qecFigureMetadata(units: RateUnits, maxLikelihoodFactor = DEFAULT_MAX_LIKELIHOOD_FACTOR) {
+export function qecFigureMetadata(
+  units: RateUnits,
+  maxLikelihoodFactor = DEFAULT_MAX_LIKELIHOOD_FACTOR,
+  lambdas: readonly LambdaGroupEstimate[] = [],
+) {
   return {
     title: 'Logical error vs physical error',
     units: units === 'per_round' ? 'logical error per round' : 'logical error per shot',
     rate_estimator: 'errors / (shots - discards); per-round via sinter shot_error_rate_to_piece_error_rate',
-    ci_method: `sinter likelihood-ratio interval (fit_binomial, max_likelihood_factor=${maxLikelihoodFactor})`,
+    ci_method: `sinter likelihood-ratio interval (fit_binomial, max_likelihood_factor=${maxLikelihoodFactor}, about ${likelihoodFactorSigma(maxLikelihoodFactor).toFixed(1)}σ)`,
     lambda_estimator:
-      `OLS slope of ln(LER) vs code distance at fixed p (>= ${MIN_LAMBDA_DISTANCES} distances); ` +
+      `OLS slope of ln(LER) vs code distance at fixed p (>= ${MIN_LAMBDA_DISTANCES} distances) within one experiment; ` +
       `lambda = exp(-${DEFAULT_LAMBDA_STEP} * slope) per distance step of ${DEFAULT_LAMBDA_STEP}; ` +
       'interval from fit_line_slope-style extra squared error',
+    lambda_ci: `Λ interval is ${LAMBDA_CI_CONVENTION}`,
+    lambda_estimates: lambdas.map((e) => ({
+      decoder: e.decoder, experiment: e.label, p: e.noise, units: e.units,
+      lambda: e.estimate.lambda.best, low: e.estimate.lambda.low, high: e.estimate.lambda.high,
+      distances: e.estimate.distances, dropped_zero_error_distances: e.estimate.droppedZeroError,
+    })),
     implementation: 'nuclei src/lib/qecFit.ts (TypeScript port of sinter)',
   };
 }

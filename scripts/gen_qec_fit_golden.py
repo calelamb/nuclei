@@ -62,45 +62,95 @@ def row_cases(stats):
     return out
 
 
-def lambda_cases(stats):
-    groups = {}
+SWEEP_KEYS = {"d", "p", "r", "rounds"}
+
+
+def rounds_of(s):
+    for k in ("r", "rounds"):
+        v = s.json_metadata.get(k)
+        if isinstance(v, (int, float)) and v > 0:
+            return v
+    return None
+
+
+def experiments(stats):
+    """Group rows into experiments: same decoder + metadata except d, p, r, plus
+    a rounds scheme (ratio r/d if it explains the rounds, else fixed r).
+    Mirrors src/lib/qecExperiments.ts so Λ is never fit across experiments."""
+    bases = {}
     for s in stats:
-        key = (s.decoder, s.json_metadata.get("label"), s.json_metadata["p"], s.json_metadata.get("r_per_d"))
-        groups.setdefault(key[:3], []).append(s)
+        rest = {k: v for k, v in s.json_metadata.items() if k not in SWEEP_KEYS}
+        bases.setdefault((s.decoder, json.dumps(rest, sort_keys=True)), []).append(s)
+    out = {}
+    for bk, group in bases.items():
+        ratios = {rounds_of(s) / s.json_metadata["d"] for s in group if rounds_of(s) and s.json_metadata.get("d")}
+        fixed = {rounds_of(s) for s in group if rounds_of(s)}
+        use_ratio = bool(ratios) and len(ratios) <= len(fixed)
+        for s in group:
+            r = rounds_of(s)
+            tag = "" if r is None else (f"ratio={r / s.json_metadata['d']:g}" if use_ratio else f"fixed={r:g}")
+            out.setdefault((bk, tag), []).append(s)
+    return out
+
+
+def slope_variance_extra(xs, ys_err_counts, rss, n):
+    """Extra squared error for the Λ interval, computed independently of the
+    TS closed form via the sandwich (X'X)^-1 X' S X (X'X)^-1 with S=diag(1/errors),
+    then extra = max(rss/(n-2), var_slope * Sxx)."""
+    X = np.column_stack([np.ones(n), xs])
+    bread = np.linalg.inv(X.T @ X)
+    cov = bread @ X.T @ np.diag(1.0 / np.asarray(ys_err_counts, float)) @ X @ bread
+    sxx = float(np.sum((xs - xs.mean()) ** 2))
+    return max(rss / (n - 2), float(cov[1, 1]) * sxx), sxx
+
+
+def lambda_cases(stats):
     out = []
-    for (dec, label, p), ss in sorted(groups.items(), key=lambda kv: (kv[0][0], str(kv[0][1]), kv[0][2])):
-        for per_round in (False, True):
-            pts = []
-            for s in ss:
-                fit = sinter.fit_binomial(num_shots=s.shots - s.discards, num_hits=s.errors, max_likelihood_factor=1)
-                rate = fit.best
-                if per_round and s.json_metadata.get("r"):
-                    rate = sinter.shot_error_rate_to_piece_error_rate(rate, pieces=s.json_metadata["r"])
-                if s.errors > 0:
-                    pts.append((s.json_metadata["d"], s.errors, rate))
-            case = {"decoder": dec, "label": label, "p": p, "perRound": per_round,
-                    "ids": sorted(s.strong_id for s in ss), "n": len(pts)}
-            if len({x for x, _, _ in pts}) >= 3:
-                xs = np.array([x for x, _, _ in pts], float)
-                ys = np.log([r for _, _, r in pts])
-                lr = linregress(xs, ys)
-                n = len(xs)
-                rss = float(np.sum((ys - (lr.intercept + lr.slope * xs)) ** 2))
-                var_log = float(np.mean([1.0 / e for _, e, _ in pts]))
-                extra = max(rss / (n - 2), var_log)
-                sxx = float(np.sum((xs - xs.mean()) ** 2))
-                half = math.sqrt(extra / sxx)
-                sfit = sinter.fit_line_slope(xs=xs, ys=ys, max_extra_squared_error=extra)
-                case.update({
-                    "slope": float(lr.slope), "intercept": float(lr.intercept), "stderr": float(lr.stderr),
-                    "rss": rss, "extra": extra, "sxx": sxx,
-                    "slopeAnalytic": {"low": float(lr.slope) - half, "best": float(lr.slope), "high": float(lr.slope) + half},
-                    "slopeSinter": {"low": sfit.low, "best": sfit.best, "high": sfit.high},
-                    "lambda": {"best": math.exp(-LAMBDA_STEP * lr.slope),
-                               "low": math.exp(-LAMBDA_STEP * (lr.slope + half)),
-                               "high": math.exp(-LAMBDA_STEP * (lr.slope - half))},
-                })
-            out.append(case)
+    for (bk, tag), ss in sorted(experiments(stats).items(), key=lambda kv: (kv[0][0][0], kv[0][0][1], kv[0][1])):
+        by_p = {}
+        for s in ss:
+            by_p.setdefault(s.json_metadata["p"], []).append(s)
+        for p, group in sorted(by_p.items()):
+            out.extend(lambda_group(bk, tag, p, group))
+    return out
+
+
+def lambda_group(bk, tag, p, ss):
+    dec, meta_json = bk
+    label = json.loads(meta_json).get("label")
+    out = []
+    for per_round in (False, True):
+        if per_round and any(rounds_of(s) is None for s in ss):
+            continue
+        pts = []
+        for s in ss:
+            fit = sinter.fit_binomial(num_shots=s.shots - s.discards, num_hits=s.errors, max_likelihood_factor=1)
+            rate = fit.best
+            if per_round:
+                rate = sinter.shot_error_rate_to_piece_error_rate(rate, pieces=rounds_of(s))
+            if s.errors > 0:
+                pts.append((s.json_metadata["d"], s.errors, rate))
+        case = {"decoder": dec, "label": label, "scheme": tag, "p": p, "perRound": per_round,
+                "ids": sorted(s.strong_id for s in ss), "n": len(pts)}
+        if len({x for x, _, _ in pts}) >= 3:
+            xs = np.array([x for x, _, _ in pts], float)
+            ys = np.log([r for _, _, r in pts])
+            lr = linregress(xs, ys)
+            n = len(xs)
+            rss = float(np.sum((ys - (lr.intercept + lr.slope * xs)) ** 2))
+            extra, sxx = slope_variance_extra(xs, [e for _, e, _ in pts], rss, n)
+            half = math.sqrt(extra / sxx)
+            sfit = sinter.fit_line_slope(xs=xs, ys=ys, max_extra_squared_error=extra)
+            lam = lambda m: math.exp(-LAMBDA_STEP * m)
+            case.update({
+                "slope": float(lr.slope), "intercept": float(lr.intercept), "stderr": float(lr.stderr),
+                "rss": rss, "extra": extra, "sxx": sxx,
+                "slopeAnalytic": {"low": float(lr.slope) - half, "best": float(lr.slope), "high": float(lr.slope) + half},
+                "slopeSinter": {"low": sfit.low, "best": sfit.best, "high": sfit.high},
+                "lambda": {"best": lam(lr.slope), "low": lam(lr.slope + half), "high": lam(lr.slope - half)},
+                "lambdaSinter": {"best": lam(sfit.best), "low": lam(sfit.high), "high": lam(sfit.low)},
+            })
+        out.append(case)
     return out
 
 

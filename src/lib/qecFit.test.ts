@@ -9,6 +9,17 @@ import {
 } from './qecFit';
 
 const REL = 1e-9;
+/** Measured gap to sinter's numeric fit_line_slope on the fixture Λ fits (see qecFit.ts header). */
+const SINTER_FIT_REL = 5e-3;
+
+/** Display name qecFit gives an experiment, from the generator's rounds scheme. */
+function experimentName(label: string | null, scheme: string): string {
+  const base = label ?? 'unlabeled';
+  const [kind, v] = scheme.split('=');
+  if (kind === 'ratio') return Number(v) === 1 ? `${base} r=d` : `${base} r=${v}d`;
+  if (kind === 'fixed') return `${base} r=${v}`;
+  return base;
+}
 function near(actual: number, expected: number, rel = REL) {
   const tol = rel * Math.max(Math.abs(expected), 1e-300);
   expect(Math.abs(actual - expected)).toBeLessThanOrEqual(tol);
@@ -27,11 +38,10 @@ describe('golden: scalar sinter functions', () => {
   it.each(golden.lineSlopes)('fit_line_slope extra=$extra', (c) => {
     const f = fitLineSlope({ xs: c.xs, ys: c.ys, maxExtraSquaredError: c.extra });
     near(f.slope.best, c.best);
-    // Deliberate difference: sinter bisects a numerically-solved (scipy leastsq
-    // on a scalar cost) constrained fit, accurate only to ~1e-3 relative; ours is
-    // the closed form. Exactness of ours is asserted in the Λ block below.
-    near(f.slope.low, c.low, 5e-3);
-    near(f.slope.high, c.high, 5e-3);
+    // Deliberate difference: sinter bisects a numerically-solved constrained
+    // fit; ours is the closed form. They agree to ~1e-6 on these cases.
+    near(f.slope.low, c.low, 1e-5);
+    near(f.slope.high, c.high, 1e-5);
   });
 });
 
@@ -92,15 +102,20 @@ describe('golden: Λ regression', () => {
     for (const c of withFit as Array<(typeof cases)[number] & Record<string, number | string | boolean>>) {
       it(`${name}: p=${c.p} ${c.perRound ? 'per-round' : 'per-shot'}`, () => {
         const units = c.perRound ? 'per_round' : 'per_shot';
-        const g = lambdaEstimates(rows, { units }).find((x) => x.noise === c.p && x.decoder === c.decoder)!;
+        const name = experimentName(c.label as string | null, c.scheme);
+        const g = lambdaEstimates(rows, { units }).find((x) => x.noise === c.p && x.decoder === c.decoder && x.label === name)!;
         expect(g).toBeTruthy();
+        expect(g.estimate.nPoints).toBe(c.n);
         near(g.estimate.slope.best, c.slope);
         // stderr comes from rss, which cancels catastrophically on near-perfect fits.
         expect(Math.abs(g.estimate.stderr - c.stderr)).toBeLessThanOrEqual(1e-9);
         nearFit(g.estimate.slope, c.slopeAnalytic);
         nearFit(g.estimate.lambda, c.lambda);
-        near(g.estimate.slope.low, c.slopeSinter.low, 5e-3); // sinter is the approximate one (see qecFit.ts note)
-        near(g.estimate.slope.high, c.slopeSinter.high, 5e-3);
+        // slopeAnalytic's budget comes from an independent numpy sandwich-variance
+        // computation; sinter's fit_line_slope is the independent interval solver.
+        near(g.estimate.slope.low, c.slopeSinter.low, SINTER_FIT_REL);
+        near(g.estimate.slope.high, c.slopeSinter.high, SINTER_FIT_REL);
+        nearFit(g.estimate.lambda, c.lambdaSinter, SINTER_FIT_REL);
       });
     }
   }

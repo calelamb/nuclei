@@ -87,6 +87,39 @@ describe('ThresholdPanel', () => {
     expect(getByRole('button', { name: 'Per round' }).getAttribute('aria-pressed')).toBe('true');
   });
 
+  it('synthetic data: separate non-zigzag curves, Λ per experiment from 3 points, Λ in the SVG', () => {
+    const rows = parseSinterCsv(syntheticCsv);
+    const map: Record<string, (typeof rows)[number]> = {};
+    for (const r of rows) map[r.strong_id] = r;
+    useQecCampaignStore.setState({ rowsByStrongId: map, statsCsv: syntheticCsv, running: false });
+    const { container } = render(<ThresholdPanel />);
+    const lines = [...container.querySelectorAll('polyline')];
+    // 2 experiments (r=d, r=3d) x 3 distances, each a 3-point curve with one y per p.
+    expect(lines).toHaveLength(6);
+    for (const l of lines) {
+      const xs = l.getAttribute('points')!.split(' ').map((pt) => Number(pt.split(',')[0]));
+      expect(xs).toHaveLength(3);
+      expect(xs).toEqual([...xs].sort((a, b) => a - b));
+      expect(new Set(xs).size).toBe(3);
+    }
+    const meta = JSON.parse(container.querySelector('svg metadata')!.textContent!);
+    expect(meta.lambda_estimates).toHaveLength(6);
+    expect(meta.lambda_estimates.map((e: { experiment: string }) => e.experiment)).toContain('synth r=3d');
+    expect(container.querySelectorAll('svg text').length).toBeGreaterThan(6);
+    expect(container.querySelector('svg[role="img"]')!.textContent).toMatch(/Λ = .* synth r=d|synth r=d.*Λ = /);
+    expect(container.textContent).toMatch(/synth r=3d: Λ = /);
+  });
+
+  it('does not crash on malformed rows and says they were skipped', () => {
+    const rows = parseSinterCsv(syntheticCsv);
+    const map: Record<string, (typeof rows)[number]> = {};
+    for (const r of rows) map[r.strong_id] = r;
+    map.bad = { ...rows[0], strong_id: 'bad', errors: rows[0].shots * 2 };
+    useQecCampaignStore.setState({ rowsByStrongId: map, statsCsv: '', running: false });
+    const { container } = render(<ThresholdPanel />);
+    expect(container.textContent).toMatch(/1 malformed row/);
+  });
+
   it('exports SVG and CSV', () => {
     loadCampaign();
     const { getByRole } = render(<ThresholdPanel />);
@@ -94,6 +127,10 @@ describe('ThresholdPanel', () => {
     fireEvent.click(getByRole('button', { name: 'Export CSV' }));
     expect(downloadSvg).toHaveBeenCalledTimes(1);
     expect(downloadCsv).toHaveBeenCalledTimes(1);
+    expect(downloadSvg.mock.calls[0][1]).toBe('logical-error-vs-p.svg');
+    const [csv, name] = downloadCsv.mock.calls[0];
+    expect(name).toBe('logical-error-vs-p.csv');
+    expect(csv.split('\n')[0]).toMatch(/rate_low.*units,ci_method,max_likelihood_factor/);
   });
 
   it('shows an empty state with no campaign results', () => {

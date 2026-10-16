@@ -4,17 +4,20 @@ import { useThemeStore } from '../../stores/themeStore';
 import { useQecCampaignStore } from '../../stores/qecCampaignStore';
 import { PanelHeader } from '../layout/PanelHeader';
 import { QecEmptyState } from './QecEmptyState';
-import { statsPointsToCsv, type ThresholdSeries } from '../../types/qecStats';
+import type { ThresholdSeries } from '../../types/qecStats';
 import {
   DEFAULT_MAX_LIKELIHOOD_FACTOR,
+  LAMBDA_CI_CONVENTION,
   MIN_LAMBDA_DISTANCES,
   lambdaEstimates,
   likelihoodSeries,
   qecFigureMetadata,
   roundsFromMetadata,
+  whiskerConvention,
   type LambdaGroupEstimate,
   type RateUnits,
 } from '../../lib/qecFit';
+import { qecRatesToCsv } from '../../lib/qecExport';
 import { downloadCsv, downloadSvg } from '../../services/experimentExport';
 
 const DOCS = 'https://getnuclei.dev/docs/research/qec-studio/';
@@ -38,9 +41,10 @@ export function ThresholdPanel() {
   const [requestedUnits, setRequestedUnits] = useState<RateUnits>('per_shot');
   const roundsKnown = useMemo(() => rows.some((r) => roundsFromMetadata(r.json_metadata) !== null), [rows]);
   const units: RateUnits = roundsKnown ? requestedUnits : 'per_shot';
-  const { series, excluded } = useMemo(() => likelihoodSeries(rows, { units }), [rows, units]);
+  const { series, excluded, invalid, noKept } = useMemo(() => likelihoodSeries(rows, { units }), [rows, units]);
   const lambdas = useMemo(() => lambdaEstimates(rows, { units }), [rows, units]);
-  const meta = useMemo(() => qecFigureMetadata(units), [units]);
+  const meta = useMemo(() => qecFigureMetadata(units, DEFAULT_MAX_LIKELIHOOD_FACTOR, lambdas), [units, lambdas]);
+  const lambdaLines = useMemo(() => lambdas.map(lambdaLine), [lambdas]);
   const hasDiscards = useMemo(() => rows.some((r) => r.discards > 0), [rows]);
 
   const domain = useMemo(() => computeLogDomain(series), [series]);
@@ -52,8 +56,8 @@ export function ThresholdPanel() {
       actions={
         series.length > 0 ? (
           <div style={{ display: 'flex', gap: 6 }}>
-            <ExportButton label="SVG" onClick={() => svgRef.current && downloadSvg(svgRef.current, 'threshold.svg')} colors={colors} />
-            <ExportButton label="CSV" onClick={() => downloadCsv(statsPointsToCsv(rows), 'threshold.csv')} colors={colors} />
+            <ExportButton label="SVG" onClick={() => svgRef.current && downloadSvg(svgRef.current, 'logical-error-vs-p.svg')} colors={colors} />
+            <ExportButton label="CSV" onClick={() => downloadCsv(qecRatesToCsv(rows, { units }), 'logical-error-vs-p.csv')} colors={colors} />
           </div>
         ) : undefined
       }
@@ -91,7 +95,7 @@ export function ThresholdPanel() {
         {roundsKnown && <UnitsToggle units={units} onChange={setRequestedUnits} colors={colors} />}
         <svg
           ref={svgRef}
-          viewBox="0 0 300 180"
+          viewBox={`0 0 300 ${180 + lambdaLines.length * 8 + (lambdaLines.length > 0 ? 4 : 0)}`}
           role="img"
           aria-labelledby="qec-fig-title qec-fig-desc"
           xmlns="http://www.w3.org/2000/svg"
@@ -125,8 +129,18 @@ export function ThresholdPanel() {
             {meta.units}
           </text>
           <text x={(PLOT.x0 + PLOT.x1) / 2} y={175} fontSize={5.5} fill={colors.textDim} textAnchor="middle">
-            {`CI: sinter likelihood ratio (factor ${DEFAULT_MAX_LIKELIHOOD_FACTOR}), not Wilson`}
+            {`Whiskers: sinter ${whiskerConvention()}, not Wilson`}
           </text>
+          {lambdaLines.map((line, i) => (
+            <text key={line} x={PLOT.x0} y={186 + i * 8} fontSize={5.5} fill={colors.text} fontFamily="'Fira Code', monospace">
+              {line}
+            </text>
+          ))}
+          {lambdaLines.length > 0 && (
+            <text x={(PLOT.x0 + PLOT.x1) / 2} y={181} fontSize={5.5} fill={colors.textDim} textAnchor="middle">
+              {`Λ interval: ${LAMBDA_CI_CONVENTION}`}
+            </text>
+          )}
           {/* series */}
           {series.map((s) => {
             const color = decoderColor(s.decoder);
@@ -163,9 +177,11 @@ export function ThresholdPanel() {
             units={units} colors={colors}
           />
           <div style={{ fontSize: 9, color: colors.textDim, marginTop: 6, lineHeight: 1.4 }}>
-            {`Whiskers: sinter likelihood-ratio interval (max likelihood factor ${DEFAULT_MAX_LIKELIHOOD_FACTOR}), `}
+            {`Whiskers: ${whiskerConvention()}, `}
             {hasDiscards ? 'on shots − discards. ' : 'on shots. '}
             {excluded > 0 && `${excluded} row(s) without known rounds are hidden in per-round view. `}
+            {invalid > 0 && `${invalid} malformed row(s) (errors exceed kept shots) skipped. `}
+            {noKept > 0 && `${noKept} row(s) with every shot discarded skipped. `}
             No threshold p_th is estimated.
           </div>
         </div>
@@ -200,6 +216,14 @@ function UnitsToggle({ units, onChange, colors }: { units: RateUnits; onChange: 
   );
 }
 
+function lambdaLine(e: LambdaGroupEstimate): string {
+  const dropped = e.estimate.droppedZeroError.length > 0 ? `; 0 errors at d ${e.estimate.droppedZeroError.join(',')} omitted` : '';
+  return (
+    `${e.decoder} ${e.label} p=${e.noise}: Λ = ${fmt(e.estimate.lambda.best)} ` +
+    `(${fmt(e.estimate.lambda.low)} to ${fmt(e.estimate.lambda.high)}, ≈1σ), d ${e.estimate.distances.join(',')}${dropped}`
+  );
+}
+
 const fmt = (x: number) => (x >= 100 ? x.toFixed(0) : x.toPrecision(3));
 
 function LambdaReadout(props: {
@@ -218,10 +242,13 @@ function LambdaReadout(props: {
               <span style={{ color: colors.textDim }}>{`: Λ not estimated, needs ≥ ${MIN_LAMBDA_DISTANCES} distances at the same p`}</span>
             ) : (
               mine.map((e) => (
-                <div key={`${e.label}${e.noise}`} style={{ paddingLeft: 8 }}>
-                  {`Λ = ${fmt(e.estimate.lambda.best)} (${fmt(e.estimate.lambda.low)} to ${fmt(e.estimate.lambda.high)})`}
+                <div key={`${e.experiment}\u0000${e.noise}`} style={{ paddingLeft: 8 }}>
+                  <span style={{ color: colors.textMuted }}>{`${e.label}: `}</span>
+                  {`Λ = ${fmt(e.estimate.lambda.best)} (${fmt(e.estimate.lambda.low)} to ${fmt(e.estimate.lambda.high)}, ≈1σ)`}
                   <span style={{ color: colors.textDim }}>
                     {` at p=${e.noise}, d ${e.estimate.distances.join(',')}, per Δd=${e.estimate.step}, ${units === 'per_round' ? 'per round' : 'per shot'}`}
+                    {e.estimate.droppedZeroError.length > 0 &&
+                      `; d ${e.estimate.droppedZeroError.join(',')} had 0 errors and is not in the fit (suppression is at least as strong)`}
                   </span>
                 </div>
               ))

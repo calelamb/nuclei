@@ -3,7 +3,8 @@ import { campaignTaskCount } from '../types/experiment';
 import type { QecSnapshot, QecCampaignStatsRow } from '../types/qec';
 import type { CircuitSnapshot } from '../types/quantum';
 import type { NoiseModelDef } from '../types/noiseModel';
-import { toStatsPoint, lambdaFit } from '../types/qecStats';
+import { toStatsPoint } from '../types/qecStats';
+import { lambdaEstimates, rowProblem, rowRate } from '../lib/qecFit';
 
 /**
  * PRD 10 Phase D8 — Dirac's QEC campaign context.
@@ -81,29 +82,36 @@ export function buildQecContext(input: QecContextInput): string {
   // Campaign stats — a capped, sorted slice.
   if (rows.length > 0) {
     const points = rows
-      .map((r) => toStatsPoint(r))
+      .map((r) => ({ pt: toStatsPoint(r), row: r }))
       .sort(
         (a, b) =>
-          (a.distance ?? 0) - (b.distance ?? 0) ||
-          (a.noise ?? 0) - (b.noise ?? 0) ||
-          a.decoder.localeCompare(b.decoder),
+          (a.pt.distance ?? 0) - (b.pt.distance ?? 0) ||
+          (a.pt.noise ?? 0) - (b.pt.noise ?? 0) ||
+          a.pt.decoder.localeCompare(b.pt.decoder),
       );
     const shown = points.slice(0, QEC_CONTEXT_ROW_CAP);
     const header = `### Campaign results (${shown.length} of ${points.length} rows)`;
-    const lines = shown.map((p) => {
+    const lines = shown.map(({ pt: p, row }) => {
       const d = p.distance ?? '·';
       const noise = p.noise !== null ? p.noise.toPrecision(3) : '·';
-      const ler = p.rate.p.toExponential(2);
-      return `- ${p.label} d=${d} p=${noise} ${p.decoder}: LER ${ler} (${p.errors}/${p.shots})`;
+      if (rowProblem(row) !== null) return `- ${p.label} d=${d} p=${noise} ${p.decoder}: LER unavailable (invalid or fully discarded row)`;
+      const { fit, kept } = rowRate(row);
+      return `- ${p.label} d=${d} p=${noise} ${p.decoder}: LER ${fit.best.toExponential(2)} (${row.errors}/${kept})`;
     });
-    parts.push([header, ...lines].join('\n'));
+    parts.push([header, '(LER = errors / (shots - discards), per shot)', ...lines].join('\n'));
 
-    // Λ per decoder (error suppression between successive distances).
-    const fits = lambdaFit(rows).filter((f) => f.lambda !== null);
-    if (fits.length > 0) {
-      const lam = fits.map((f) => `${f.decoder} Λ=${f.lambda!.toFixed(2)}`).join(', ');
-      parts.push(`### Error suppression\n- ${lam} (>1 means adding distance suppresses errors)`);
-    }
+    // Λ by log-linear regression of LER vs distance (same estimator as the panel).
+    const fits = lambdaEstimates(rows);
+    const lam =
+      fits.length > 0
+        ? fits
+            .map((f) => {
+              const l = f.estimate.lambda;
+              return `${f.decoder} ${f.label} p=${f.noise}: Λ=${l.best.toFixed(2)} (${l.low.toFixed(2)} to ${l.high.toFixed(2)}, ~1σ; d ${f.estimate.distances.join(',')})`;
+            })
+            .join('\n- ')
+        : 'Λ not estimated (needs >= 3 distances with logical errors at the same p within one experiment)';
+    parts.push(`### Error suppression\n- ${lam}\n- Λ > 1 means adding distance suppresses errors; Λ <= 1 is above threshold, not missing data`);
   }
 
   return parts.join('\n\n');
