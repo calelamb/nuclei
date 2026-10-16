@@ -17,6 +17,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 os.environ.setdefault("QDK_PYTHON_TELEMETRY", "none")
 
 import websockets
+from kernel import auth
 from kernel.executor import ADAPTER_SPECS, Executor
 from kernel.hardware.manager import HardwareManager
 from kernel.models import KernelError
@@ -1045,9 +1046,9 @@ async def handle_message(websocket):
             }))
 
 
-async def _try_serve(port: int):
+async def _try_serve(port: int, auth_config: auth.KernelAuthConfig):
     return await websockets.serve(
-        handle_message,
+        auth.secure_handler(handle_message, auth_config),
         "localhost",
         port,
         max_size=MAX_MESSAGE_SIZE,
@@ -1057,14 +1058,29 @@ async def _try_serve(port: int):
 
 
 async def main():
+    # Fail closed: raises AuthConfigError unless a token (or the explicit
+    # insecure-dev flag) is configured.
+    try:
+        auth_config = auth.config_from_env()
+    except auth.AuthConfigError as e:
+        print(f"Nuclei kernel refused to start: {e}", file=sys.stderr, flush=True)
+        raise SystemExit(2) from e
+
+    # The desktop app hardcodes the canonical port; when it owns the launch it
+    # must not silently fall back to a neighbouring port.
+    strict_port = os.environ.get(auth.STRICT_PORT_ENV) == "1"
+    attempts = 1 if strict_port else PORT_FALLBACK_RANGE
+
     last_error: Exception | None = None
-    for offset in range(PORT_FALLBACK_RANGE):
+    for offset in range(attempts):
         port = DEFAULT_PORT + offset
         try:
-            server = await _try_serve(port)
+            server = await _try_serve(port, auth_config)
         except OSError as e:
             last_error = e
             continue
+
+        auth.write_runtime_file(auth_config, port)
 
         # Print chosen port on its own line so the Rust side can parse it if needed.
         print(f"Nuclei kernel ready on ws://localhost:{port}", flush=True)
