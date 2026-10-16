@@ -96,10 +96,25 @@ describe('ThresholdPanel', () => {
     useQecCampaignStore.setState({ rowsByStrongId: map, statsCsv: syntheticCsv, running: false });
     const { getAllByText, getByText, getByRole } = render(<ThresholdPanel />);
     expect(getAllByText(/Λ = .* to /).length).toBeGreaterThan(0);
-    expect(getByText('logical error per shot')).toBeTruthy();
-    fireEvent.click(getByRole('button', { name: 'Per round' }));
+    // Rounds are known, so the default is the per-cycle definition of Λ.
     expect(getByText('logical error per round')).toBeTruthy();
     expect(getByRole('button', { name: 'Per round' }).getAttribute('aria-pressed')).toBe('true');
+    fireEvent.click(getByRole('button', { name: 'Per shot' }));
+    expect(getByText('logical error per shot')).toBeTruthy();
+  });
+
+  it('exported Λ text states its units and warns when per-shot rounds vary with d', () => {
+    const rows = parseSinterCsv(syntheticCsv);
+    const map: Record<string, (typeof rows)[number]> = {};
+    for (const r of rows) map[r.strong_id] = r;
+    useQecCampaignStore.setState({ rowsByStrongId: map, statsCsv: syntheticCsv, running: false });
+    const { container, getByRole } = render(<ThresholdPanel />);
+    const svgText = () => container.querySelector('svg[role="img"]')!.textContent!;
+    expect(svgText()).toMatch(/Λ = [^,]*,[^Λ]*per round/);
+    expect(svgText()).not.toMatch(/rounds vary with d/);
+    fireEvent.click(getByRole('button', { name: 'Per shot' }));
+    expect(svgText()).toMatch(/Λ = [^,]*,[^Λ]*per shot/);
+    expect(svgText()).toMatch(/rounds vary with d/);
   });
 
   it('synthetic data: separate non-zigzag curves, Λ per experiment from 3 points, Λ in the SVG', () => {

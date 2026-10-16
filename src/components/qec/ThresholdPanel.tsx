@@ -40,7 +40,7 @@ export function ThresholdPanel() {
   const rows = useMemo(() => Object.values(rowsByStrongId), [rowsByStrongId]);
   const svgRef = useRef<SVGSVGElement>(null);
 
-  const [requestedUnits, setRequestedUnits] = useState<RateUnits>('per_shot');
+  const [requestedUnits, setRequestedUnits] = useState<RateUnits>('per_round');
   const roundsKnown = useMemo(() => rows.some((r) => roundsFromMetadata(r.json_metadata) !== null), [rows]);
   const units: RateUnits = roundsKnown ? requestedUnits : 'per_shot';
   const { series, excluded, invalid, noKept } = useMemo(() => likelihoodSeries(rows, { units }), [rows, units]);
@@ -238,10 +238,15 @@ function UnitsToggle({ units, onChange, colors }: { units: RateUnits; onChange: 
 }
 
 function lambdaLine(e: LambdaGroupEstimate): string {
+  const unitText = e.units === 'per_round' ? 'per round' : 'per shot';
+  const warn = [
+    e.collidingDistances.length > 0 ? `; distinct tasks collide at d ${e.collidingDistances.join(',')}, fitted as replicates` : '',
+    e.units === 'per_shot' && e.roundsVaryWithD ? '; rounds vary with d, confounding this per-shot Λ' : '',
+  ].join('');
   const dropped = e.estimate.droppedZeroError.length > 0 ? `; 0 errors at d ${e.estimate.droppedZeroError.join(',')} omitted` : '';
   return (
     `${e.decoder} ${e.label} p=${e.noise}: Λ = ${fmt(e.estimate.lambda.best)} ` +
-    `(${fmt(e.estimate.lambda.low)} to ${fmt(e.estimate.lambda.high)}, ≈1σ), d ${e.estimate.distances.join(',')}${dropped}`
+    `(${fmt(e.estimate.lambda.low)} to ${fmt(e.estimate.lambda.high)}, ≈1σ), d ${e.estimate.distances.join(',')}, ${unitText}${dropped}${warn}`
   );
 }
 

@@ -327,6 +327,10 @@ export interface LambdaGroupEstimate {
   noise: number;
   units: RateUnits;
   estimate: LambdaEstimate;
+  /** Distances where distinct tasks (strong_ids) share this cell and were fitted as replicates. */
+  collidingDistances: number[];
+  /** True when rounds differ between the fitted distances (confounds a per-shot Λ). */
+  roundsVaryWithD: boolean;
 }
 
 const finiteNum = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v);
@@ -337,7 +341,10 @@ export function lambdaEstimates(
   opts: { units?: RateUnits; step?: number } = {},
 ): LambdaGroupEstimate[] {
   const experiments = assignExperiments(rows);
-  const groups = new Map<string, Omit<LambdaGroupEstimate, 'estimate'> & { pts: LambdaPoint[] }>();
+  type Pending = Omit<LambdaGroupEstimate, 'estimate' | 'collidingDistances' | 'roundsVaryWithD'> & {
+    pts: LambdaPoint[]; ids: Map<number, Set<string>>; rounds: Set<number>;
+  };
+  const groups = new Map<string, Pending>();
   for (const row of rows) {
     const meta = (row.json_metadata ?? {}) as Record<string, unknown>;
     if (!finiteNum(meta.d) || !finiteNum(meta.p) || rowProblem(row) === 'invalid') continue;
@@ -346,13 +353,24 @@ export function lambdaEstimates(
     if (units !== (opts.units ?? 'per_shot')) continue;
     const ex = experiments.get(row)!;
     const key = `${ex.key}\u0000${meta.p}\u0000${units}`;
-    const g = groups.get(key) ?? { decoder: row.decoder, label: ex.name, experiment: ex.key, noise: meta.p, units, pts: [] };
-    groups.set(key, { ...g, pts: [...g.pts, { distance: meta.d, errors: row.errors, rate: fit.best }] });
+    const g = groups.get(key) ?? {
+      decoder: row.decoder, label: ex.name, experiment: ex.key, noise: meta.p, units, pts: [],
+      ids: new Map<number, Set<string>>(), rounds: new Set<number>(),
+    };
+    const rounds = roundsFromMetadata(row.json_metadata);
+    groups.set(key, {
+      ...g,
+      pts: [...g.pts, { distance: meta.d, errors: row.errors, rate: fit.best }],
+      ids: new Map(g.ids).set(meta.d, new Set(g.ids.get(meta.d) ?? []).add(row.strong_id)),
+      rounds: rounds === null ? g.rounds : new Set(g.rounds).add(rounds),
+    });
   }
   const out: LambdaGroupEstimate[] = [];
-  for (const { pts, ...g } of groups.values()) {
+  for (const { pts, ids, rounds, ...g } of groups.values()) {
     const estimate = estimateLambda(pts, { step: opts.step });
-    if (estimate) out.push({ ...g, estimate });
+    if (!estimate) continue;
+    const collidingDistances = [...ids].filter(([, set]) => set.size > 1).map(([d]) => d).sort((a, b) => a - b);
+    out.push({ ...g, estimate, collidingDistances, roundsVaryWithD: rounds.size > 1 });
   }
   return out.sort((a, b) => a.decoder.localeCompare(b.decoder) || a.label.localeCompare(b.label) || a.noise - b.noise);
 }

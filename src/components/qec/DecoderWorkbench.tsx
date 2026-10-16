@@ -29,11 +29,11 @@ export function DecoderWorkbench() {
       return /[",\n]/.test(t) ? `"${t.replace(/"/g, '""')}"` : t;
     };
     const csv =
-      'decoder,experiment,distance,noise,shots,discards,kept_shots,errors,logical_error_rate,ci_lo,ci_hi,ci_method,seconds_per_shot\n' +
+      'decoder,experiment,distance,noise,shots,discards,kept_shots,errors,logical_error_rate,ci_lo,ci_hi,ci_method,seconds_per_shot,strong_id,task_collision\n' +
       wb
         .map((w) => [
           w.decoder, w.experiment, w.distance, w.noise, w.shots, w.discards, w.kept, w.errors,
-          w.rate.p, w.rate.lo, w.rate.hi, `likelihood_ratio_factor_${cmp.maxLikelihoodFactor}`, w.secondsPerShot,
+          w.rate.p, w.rate.lo, w.rate.hi, `likelihood_ratio_factor_${cmp.maxLikelihoodFactor}`, w.secondsPerShot, w.strongId, w.collides ? 'yes' : 'no',
         ].map(cell).join(','))
         .join('\n') +
       '\n';
@@ -102,9 +102,15 @@ export function DecoderWorkbench() {
           </thead>
           <tbody>
             {wb.map((w) => (
-              <tr key={`${w.experiment}|${w.decoder}|${w.distance}|${w.noise}`}>
+              <tr key={`${w.experiment}|${w.decoder}|${w.distance}|${w.noise}|${w.strongId}`}>
                 <td style={{ ...td, color: colors.dirac, fontWeight: 600 }}>{w.decoder}</td>
-                <td style={td}>{w.experiment}</td>
+                <td style={td}>
+                  {w.experiment}
+                  {w.collides && (
+                    <span title={`Another task has the same experiment, d and p (strong_id ${w.strongId}); shown separately, not pooled.`}
+                      style={{ color: colors.warning, marginLeft: 6 }}>task {w.strongId.slice(0, 6)}</span>
+                  )}
+                </td>
                 <td style={td}>{w.distance ?? '—'}</td>
                 <td style={td}>{w.noise ?? '—'}</td>
                 <td style={td}>
@@ -128,7 +134,7 @@ export function DecoderWorkbench() {
           borderTop: `1px solid ${colors.border}`, fontFamily: "'Geist Sans', sans-serif",
         }}
       >
-        {`Rate = errors / (shots − discards), sinter likelihood-ratio interval (factor ${cmp.maxLikelihoodFactor}, about 3.7σ). One row per experiment, d and p; nothing pooled.`}
+        {`Rate = errors / (shots − discards), sinter likelihood-ratio interval (factor ${cmp.maxLikelihoodFactor}, about 3.7σ). One row per task (experiment, d, p); tasks sharing metadata are listed separately, never pooled.`}
         {cmp.skipped > 0 && ` ${cmp.skipped} malformed or fully-discarded row(s) skipped.`}
       </div>
     </div>

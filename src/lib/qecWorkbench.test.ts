@@ -49,4 +49,16 @@ describe('decoderComparison (workbench rows)', () => {
     expect(rows[0].rate.hi).toBeGreaterThan(rows[0].rate.p);
     expect(rows[0].secondsPerShot).toBeCloseTo(0.002, 9);
   });
+
+  it('keeps tasks with identical metadata but different strong_ids apart and flags them', () => {
+    const plain = mk({ shots: 100000, errors: 441, strong_id: 'plain', meta: { d: 7, p: 0.004, label: 'x' } });
+    const ps = mk({ shots: 100000, discards: 58290, errors: 170, strong_id: 'ps', meta: { d: 7, p: 0.004, label: 'x' } });
+    const solo = mk({ shots: 1000, errors: 5, strong_id: 'solo', meta: { d: 5, p: 0.004, label: 'x' } });
+    const { rows } = decoderComparison([plain, ps, solo]);
+    expect(rows).toHaveLength(3);
+    const d7 = rows.filter((r) => r.distance === 7);
+    expect(d7.map((r) => r.errors).sort((a, b) => a - b)).toEqual([170, 441]);
+    expect(d7.every((r) => r.collides && r.strongId !== '')).toBe(true);
+    expect(rows.find((r) => r.distance === 5)!.collides).toBe(false);
+  });
 });

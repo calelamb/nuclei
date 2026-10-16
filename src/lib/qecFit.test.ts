@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import golden from './__fixtures__/qec_fit_golden.json';
 import syntheticCsv from './__fixtures__/synthetic_rounds.csv?raw';
 import campaignCsv from '../components/qec/__fixtures__/campaign_stats.csv?raw';
+import type { QecCampaignStatsRow } from '../types/qec';
 import { parseSinterCsv } from '../types/qecStats';
 import {
   fitBinomial, shotErrorRateToPieceErrorRate, fitLineSlope, rowRate, lambdaEstimates,
@@ -181,5 +182,21 @@ describe('likelihoodSeries and metadata', () => {
     expect(m.units).toBe('logical error per round');
     expect(m.ci_method).toMatch(/likelihood-ratio/);
     expect(m.lambda_estimator).toMatch(/3 distances/);
+  });
+});
+
+describe('Λ with colliding tasks', () => {
+  const row = (d: number, errors: number, strong_id: string): QecCampaignStatsRow => ({
+    shots: 100000, errors, discards: 0, seconds: 1, decoder: 'pymatching', strong_id,
+    json_metadata: { d, p: 0.004, r: d, label: 'x' }, custom_counts: {},
+  });
+  it('flags distances where distinct strong_ids share one cell', () => {
+    const rows = [row(3, 900, 'a'), row(5, 400, 'b'), row(7, 200, 'c'), row(7, 600, 'c2')];
+    const [g] = lambdaEstimates(rows, { units: 'per_shot' });
+    expect(g.collidingDistances).toEqual([7]);
+  });
+  it('reports no collisions for clean data', () => {
+    const [g] = lambdaEstimates([row(3, 900, 'a'), row(5, 400, 'b'), row(7, 200, 'c')], { units: 'per_shot' });
+    expect(g.collidingDistances).toEqual([]);
   });
 });
