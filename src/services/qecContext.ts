@@ -4,7 +4,8 @@ import type { QecSnapshot, QecCampaignStatsRow } from '../types/qec';
 import type { CircuitSnapshot } from '../types/quantum';
 import type { NoiseModelDef } from '../types/noiseModel';
 import { toStatsPoint } from '../types/qecStats';
-import { lambdaEstimates, rowProblem, rowRate } from '../lib/qecFit';
+import { lambdaEstimates, rowProblem, rowRate, type RateUnits } from '../lib/qecFit';
+import { roundsFromMetadata } from '../lib/qecRounds';
 import { lambdaSummary } from '../lib/qecLambdaText';
 
 /**
@@ -101,15 +102,23 @@ export function buildQecContext(input: QecContextInput): string {
     });
     parts.push([header, '(LER = errors / (shots - discards), per shot)', ...lines].join('\n'));
 
-    // Λ by log-linear regression of LER vs distance (same estimator as the panel).
-    const fits = lambdaEstimates(rows);
+    // Λ by log-linear regression of LER vs distance — same estimator and the same
+    // default units as the panel (per round whenever rounds are known).
+    const units: RateUnits = rows.some((r) => roundsFromMetadata(r.json_metadata) !== null) ? 'per_round' : 'per_shot';
+    const unitText = units === 'per_round' ? 'per round' : 'per shot';
+    const fits = lambdaEstimates(rows, { units });
     const lam =
       fits.length > 0
         ? fits
             .map((f) => {
               const { text, warnings } = lambdaSummary(f.estimate);
-              const warn = warnings.length > 0 ? ` WARNING: ${warnings.join('; ')}` : '';
-              return `${f.decoder} ${f.label} p=${f.noise}: ${text}; d ${f.estimate.distances.join(',')}${warn}`;
+              const caveats = [
+                ...warnings,
+                ...(f.collidingDistances.length > 0 ? [`distinct tasks collide at d ${f.collidingDistances.join(',')}, fitted as replicates`] : []),
+                ...(units === 'per_shot' && f.roundsVaryWithD ? ['rounds vary with d, confounding this per-shot Λ'] : []),
+              ];
+              const warn = caveats.length > 0 ? ` WARNING: ${caveats.join('; ')}` : '';
+              return `${f.decoder} ${f.label} p=${f.noise}: ${text} (${unitText}); d ${f.estimate.distances.join(',')}${warn}`;
             })
             .join('\n- ')
         : 'Λ not estimated (needs >= 3 distances with logical errors at the same p within one experiment)';

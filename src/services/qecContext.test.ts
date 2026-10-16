@@ -35,6 +35,16 @@ const SNAPSHOT = {
 describe('buildQecContext', () => {
   const noiseModel = BUILT_IN_NOISE_MODELS.find((m) => m.name === 'uniform_depolarizing')!;
 
+  it('states Λ units and, with known rounds, uses per-round Λ like the panel default', () => {
+    const withRounds = (r: QecCampaignStatsRow, rounds: number): QecCampaignStatsRow =>
+      ({ ...r, json_metadata: { ...(r.json_metadata as object), rounds } }) as QecCampaignStatsRow;
+    const base = { campaignName: SPEC.name, spec: SPEC, noiseModel, snapshot: SNAPSHOT, circuit: null, running: false };
+    const perRound = buildQecContext({ ...base, rows: [withRounds(row(3, 0.001, 100), 3), withRounds(row(5, 0.001, 10), 5), withRounds(row(7, 0.001, 1), 7)] });
+    expect(perRound).toMatch(/Error suppression[\s\S]*per round/);
+    const perShot = buildQecContext({ ...base, rows: [row(3, 0.001, 100), row(5, 0.001, 10), row(7, 0.001, 1)] });
+    expect(perShot).toMatch(/Error suppression[\s\S]*per shot/);
+  });
+
   it('summarizes the campaign, noise model, DEM, and rows', () => {
     const text = buildQecContext({
       campaignName: SPEC.name,
