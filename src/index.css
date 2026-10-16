@@ -189,3 +189,13 @@ button, [role="button"] {
 .nuclei-secondary { font-size: var(--font-size-code); font-family: var(--font-sans); line-height: 1.5; }
 .nuclei-caption { font-size: var(--font-size-caption); font-family: var(--font-sans); line-height: 1.4; }
 .nuclei-code { font-size: var(--font-size-code); font-family: var(--font-mono); line-height: 1.5; }
+
+/* Click-to-source highlight (Circuit Explain → editor). */
+.nuclei-reveal-line {
+  background: rgba(245, 158, 11, 0.22);
+}
+.monaco-editor .margin .nuclei-reveal-line {
+  background: rgba(245, 158, 11, 0.85);
+  width: 3px !important;
+  margin-left: 3px;
+}

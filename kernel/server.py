@@ -710,6 +710,11 @@ async def handle_message(websocket):
                     "circuits": circuits,
                 }))
 
+        elif msg_type == "qec_explain":
+            from kernel.qec.explain_handler import handle_qec_explain
+
+            await handle_qec_explain(websocket, msg)
+
         elif msg_type == "qec_estimate":
             # Protocol v1.2 (PRD 10 Phase F): Azure Quantum Resource Estimator
             # over Q# source or OpenQASM 3. Off-thread (estimation can take
