@@ -5,6 +5,8 @@ import math
 import pytest
 import sinter
 
+import nuclei_mcp.estimates as est
+
 from nuclei_mcp.errors import ToolInputError
 from nuclei_mcp.estimates import estimate_lambda
 from nuclei_mcp.tools_stats import fit, load_stats
@@ -262,3 +264,35 @@ def test_fit_refuses_lambda_across_different_decoder_and_noise_model(ctx):
 def test_fit_still_allows_mixed_rounds_across_distances(ctx):
     out = _fit(ctx, rows=_lambda_rows(2.0), group_by=["p"], rounds_key="rounds")
     assert out["groups"][0]["lambda"]["status"] == "estimated"
+
+
+def _pts(rates, errors=50):
+    return [{"x": d, "errors": errors, "per_round": {"best": r}} for d, r in zip((3, 5, 7, 9), rates)]
+
+
+def test_lambda_warns_when_not_suppressing():
+    out = est.estimate_lambda(_pts([0.010, 0.011, 0.0105, 0.0112]))
+    assert out["status"] == "estimated"
+    assert any("do not decrease" in w or "no suppression" in w for w in out["warnings"])
+
+
+def test_lambda_warns_when_interval_includes_one():
+    out = est.estimate_lambda(_pts([0.010, 0.0085, 0.0110, 0.0070]))
+    assert out["ci95"]["low"] <= 1.0 <= out["ci95"]["high"]
+    assert any("includes 1" in w for w in out["warnings"])
+
+
+def test_lambda_warns_on_poor_fit():
+    out = est.estimate_lambda(_pts([0.010, 0.002, 0.009, 0.001]))
+    assert out["r_squared"] < 0.5
+    assert any("r_squared" in w for w in out["warnings"])
+
+
+def test_lambda_warns_on_saturated_rates():
+    out = est.estimate_lambda(_pts([0.5, 0.49, 0.5, 0.48]))
+    assert any("saturated" in w for w in out["warnings"])
+
+
+def test_lambda_clean_fit_has_no_warnings():
+    out = est.estimate_lambda(_pts([0.1, 0.027, 0.0058, 0.0016]))
+    assert out["warnings"] == []

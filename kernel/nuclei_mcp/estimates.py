@@ -25,6 +25,8 @@ from .errors import ToolInputError
 DEFAULT_LIKELIHOOD_FACTOR = 1000.0
 MIN_DISTANCES_FOR_LAMBDA = 3
 LAMBDA_CONFIDENCE = 0.95
+LAMBDA_MIN_R_SQUARED = 0.5
+SATURATED_RATE = 0.4
 
 CI_METHOD = "sinter.fit_binomial likelihood-ratio interval (max_likelihood_factor={factor:g})"
 ESTIMATOR = "errors / (shots - discards), discard-aware"
@@ -77,6 +79,28 @@ def _lambda_from_slope(slope: float) -> float:
     return value
 
 
+def _lambda_quality_warnings(
+    lam: float, ci: Mapping[str, float], r_squared: float, rates: Sequence[float]
+) -> list[str]:
+    """Flag fits whose headline number would otherwise read as a clean result."""
+    out = []
+    if max(rates) >= SATURATED_RATE:
+        out.append(
+            "saturated: per-round rates are near 0.5 (pure noise); Lambda and its interval carry no information."
+        )
+    if lam <= 1.0:
+        out.append(
+            "Lambda <= 1: logical errors do not decrease with distance (no suppression, above threshold)."
+        )
+    elif ci["low"] <= 1.0:
+        out.append("The 95% interval includes 1: suppression with distance is not established.")
+    if r_squared < LAMBDA_MIN_R_SQUARED:
+        out.append(
+            f"r_squared {r_squared:.2f} is below {LAMBDA_MIN_R_SQUARED}: ln(rate) is poorly described by a line in distance."
+        )
+    return out
+
+
 def estimate_lambda(points: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
     """Lambda from points ``{x, per_round: {best}, errors}``; honest refusals."""
     usable = []
@@ -114,6 +138,8 @@ def estimate_lambda(points: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
             "Points were excluded; if they are the largest distances (where errors are rarest) the fit "
             "describes a different, higher-error regime than the full distance range."
         )
+    rates = [math.exp(y) for _, y in usable]
+    warnings.extend(_lambda_quality_warnings(lam, ci, float(reg.rvalue) ** 2, rates))
     return {
         "status": "estimated",
         "lambda": lam,
