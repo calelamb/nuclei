@@ -37,6 +37,7 @@ import { useProjectStore } from '../../stores/projectStore';
 import { useExperimentUiStore } from '../../stores/experimentUiStore';
 import { useExperimentStore } from '../../services/experimentStore';
 import { activityViewsForMode } from './panelRegistry';
+import { isWebBuild } from '../../platform/buildTarget';
 import { ChevronDown, ChevronUp, Trash2, Copy, Clock } from 'lucide-react';
 import { useBottomPanelStore } from '../../stores/bottomPanelStore';
 import type { TerminalLine } from '../../stores/simulationStore';
@@ -810,7 +811,9 @@ export function PanelLayout() {
                 animation: 'nuclei-fade-in 200ms ease',
               }}>
                 <Suspense fallback={null}>
-                  <QecWorkbench />
+                  {/* Web build: the Workbench needs the desktop data engine, so the
+                      QEC rail item opens the CSV-driven analysis view instead. */}
+                  {isWebBuild() ? <QecAnalysisView /> : <QecWorkbench />}
                 </Suspense>
               </div>
             )}

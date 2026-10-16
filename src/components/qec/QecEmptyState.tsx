@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react';
 import { useThemeStore } from '../../stores/themeStore';
 
 export interface QecEmptyStateAction {
@@ -13,11 +14,14 @@ export function QecEmptyState({
   body,
   action,
   docsHref,
+  children,
 }: {
   title: string;
   body: string;
   action?: QecEmptyStateAction;
   docsHref?: string;
+  /** Extra content under the actions (e.g. a file drop zone). */
+  children?: ReactNode;
 }) {
   const colors = useThemeStore((s) => s.colors);
   return (
@@ -57,6 +61,7 @@ export function QecEmptyState({
           )}
         </div>
       )}
+      {children}
     </div>
   );
 }

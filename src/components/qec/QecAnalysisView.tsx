@@ -1,4 +1,4 @@
-import { Play, Square } from 'lucide-react';
+import { Download, Play, Square } from 'lucide-react';
 import { useThemeStore } from '../../stores/themeStore';
 import { useQecCampaignStore } from '../../stores/qecCampaignStore';
 import { useProjectStore } from '../../stores/projectStore';
@@ -7,6 +7,11 @@ import { useExperimentUiStore } from '../../stores/experimentUiStore';
 import { useQecCampaignRun } from '../../hooks/useQecCampaignRun';
 import { ThresholdPanel } from './ThresholdPanel';
 import { DecoderWorkbench } from './DecoderWorkbench';
+import { isWebBuild } from '../../platform/buildTarget';
+import { CsvMappingPreview } from './CsvMappingPreview';
+import { QecCsvOpenButton } from './QecCsvDropZone';
+import { useCsvDrop } from './useCsvDrop';
+import { downloadCsv } from '../../services/experimentExport';
 
 /**
  * PRD 10 Phase E — the campaign analysis surface, shown in the experiments
@@ -25,11 +30,22 @@ export function QecAnalysisView() {
     s.experiments.find((e) => e.fileName === selectedFileName),
   );
   const { run, cancel } = useQecCampaignRun();
+  const csvSource = useQecCampaignStore((s) => s.csvImport?.sourceName ?? null);
+  const csvError = useQecCampaignStore((s) => s.csvError);
+  const statsCsv = useQecCampaignStore((s) => s.statsCsv);
+  const { over, handlers } = useCsvDrop();
 
+  const webOnly = isWebBuild(); // no kernel to run campaigns in the browser
   const canRun = Boolean(experiment && projectRoot && experiment.spec.type === 'qec_campaign');
 
   return (
-    <div style={{ height: '100%', display: 'flex', flexDirection: 'column', background: colors.bg }}>
+    <div
+      {...handlers}
+      style={{
+        height: '100%', display: 'flex', flexDirection: 'column', background: colors.bg,
+        outline: over ? `2px dashed ${colors.accent}` : 'none', outlineOffset: -2,
+      }}
+    >
       <div
         style={{
           display: 'flex', alignItems: 'center', gap: 10, padding: '8px 12px',
@@ -37,10 +53,25 @@ export function QecAnalysisView() {
         }}
       >
         <span style={{ fontSize: 13, fontWeight: 600, color: colors.text }}>
-          {experiment?.spec.name ?? 'Campaign'}
+          {csvSource ?? experiment?.spec.name ?? 'Campaign'}
         </span>
         <div style={{ flex: 1 }} />
-        {running ? (
+        <QecCsvOpenButton />
+        {statsCsv ? (
+          <button
+            type="button"
+            title="sinter-native stats.csv: shots, errors, discards, seconds, decoder, strong_id, json_metadata, custom_counts"
+            onClick={() => downloadCsv(statsCsv, 'stats.csv')}
+            style={{
+              display: 'flex', alignItems: 'center', gap: 5, background: 'transparent',
+              border: `1px solid ${colors.border}`, borderRadius: 5, color: colors.textMuted,
+              cursor: 'pointer', fontSize: 12, padding: '5px 10px', fontFamily: "'Geist Sans', sans-serif",
+            }}
+          >
+            <Download size={12} aria-hidden="true" /> Export stats.csv
+          </button>
+        ) : null}
+        {webOnly ? null : running ? (
           <button
             onClick={cancel}
             style={{
@@ -66,6 +97,12 @@ export function QecAnalysisView() {
           </button>
         )}
       </div>
+      {csvError && (
+        <div role="alert" style={{ padding: '6px 12px', fontSize: 11.5, color: colors.error, borderBottom: `1px solid ${colors.border}` }}>
+          {csvError}
+        </div>
+      )}
+      <CsvMappingPreview />
       {(running || resumable) && (
         <div
           aria-live="polite"

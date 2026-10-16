@@ -8,6 +8,7 @@ import './components/qec/workbench/qecWorkbench.css'
 import './components/qec/workbench/qecWorkbenchResponsive.css'
 import './index.css'
 import App from './App.tsx'
+import { installFileDropGuard } from './platform/fileDropGuard'
 
 // Configure Monaco web workers for Vite — without this, Monaco's default
 // worker creation fails silently in Tauri's WKWebView.
@@ -18,6 +19,8 @@ self.MonacoEnvironment = {
 }
 
 loader.config({ monaco })
+
+installFileDropGuard()
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
