@@ -11,19 +11,38 @@ interface QecExplainState {
   forText: string | null;
   pending: boolean;
   error: string | null;
-  begin(forText: string): void;
-  setResult(result: QecExplainData): void;
-  setError(error: string): void;
+  /** Id of the in-flight request; replies bound to any other id are stale. */
+  requestId: string | null;
+  begin(forText: string, requestId?: string): void;
+  /** A reply carrying a request id that is not the current one is ignored. */
+  setResult(result: QecExplainData, requestId?: string | null): void;
+  setError(error: string, requestId?: string | null): void;
+  /** Connection lost / send failed: flag the pending request as failed. No-op when idle. */
+  failPending(error: string): void;
   reset(): void;
 }
 
-export const useQecExplainStore = create<QecExplainState>((set) => ({
+const isStale = (current: string | null, incoming: string | null | undefined): boolean =>
+  incoming != null && current !== incoming;
+
+export const useQecExplainStore = create<QecExplainState>((set, get) => ({
   result: null,
   forText: null,
   pending: false,
   error: null,
-  begin: (forText) => set({ forText, pending: true, error: null, result: null }),
-  setResult: (result) => set({ result, pending: false, error: null }),
-  setError: (error) => set({ error, pending: false, result: null }),
-  reset: () => set({ result: null, forText: null, pending: false, error: null }),
+  requestId: null,
+  begin: (forText, requestId) =>
+    set({ forText, pending: true, error: null, result: null, requestId: requestId ?? null }),
+  setResult: (result, requestId) => {
+    if (isStale(get().requestId, requestId)) return;
+    set({ result, pending: false, error: null });
+  },
+  setError: (error, requestId) => {
+    if (isStale(get().requestId, requestId)) return;
+    set({ error, pending: false, result: null });
+  },
+  failPending: (error) => {
+    if (get().pending) set({ error, pending: false, result: null });
+  },
+  reset: () => set({ result: null, forText: null, pending: false, error: null, requestId: null }),
 }));

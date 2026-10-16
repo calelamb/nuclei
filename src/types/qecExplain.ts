@@ -26,6 +26,9 @@ export const nondeterministicSchema = z.looseObject({
   sensitivity: z.string().nullish(),
   diagram_svg: z.string().nullish(),
   stim_message: z.string().nullish(),
+  targets: z.array(z.string()).default([]),
+  /** Line declaring each named detector/observable ("D0" / "L0"): usually the real cause. */
+  declaration_lines: z.record(z.string(), z.number().int().positive()).default({}),
 });
 
 export const faultSchema = z.looseObject({
@@ -38,6 +41,7 @@ export const faultSchema = z.looseObject({
   pauli: z.string().nullish(),
   line: lineRef,
   line_text: z.string().nullish(),
+  iteration: z.number().int().nonnegative().nullish(),
   detectors: z.array(z.string()).default([]),
   observables: z.array(z.string()).default([]),
 });

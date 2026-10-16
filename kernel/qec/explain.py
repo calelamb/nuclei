@@ -20,6 +20,7 @@ from typing import Any
 
 import stim
 
+from kernel.qec.explain_declarations import declaration_lines
 from kernel.qec.explain_parse import StimAnalysisError, first_failing_line, parse_stim_error
 from kernel.qec.explain_source_map import (
     SourceNode,
@@ -33,6 +34,11 @@ GRAPHLIKE_CAVEAT = (
     "Weight counts physical faults of the circuit's graphlike error mechanisms "
     "(each flips at most two detectors). It is an upper bound on the true "
     "circuit-level distance, not a proof of the distance."
+)
+FALLBACK_CAVEAT = (
+    "Weight comes from a bounded heuristic search that is not restricted to "
+    "graphlike errors. A smaller undetected logical error may exist, so it is an "
+    "upper bound on the true circuit-level distance, not a proof of the distance."
 )
 NONDETERMINISM_HEDGE = (
     "This is a static property of the circuit text, independent of noise or "
@@ -101,9 +107,26 @@ def _diagram_svg(circuit: stim.Circuit, info: StimAnalysisError) -> str | None:
         return None
 
 
-def _nondeterministic_sentence(info: StimAnalysisError, line: int | None) -> str:
-    noun = "detector" if info.kind == "detector" else "observable"
-    names = ", ".join(info.targets) or f"a {noun}"
+def _subject(info: StimAnalysisError) -> str:
+    """"Detector D0", "Detectors D0, D1 and observable L0" - named from the listed targets."""
+    groups = (
+        ("detector", info.detector_indices, "D"),
+        ("observable", info.observable_indices, "L"),
+    )
+    parts = [
+        f"{noun}{'s' if len(idx) != 1 else ''} {', '.join(f'{p}{i}' for i in idx)}"
+        for noun, idx, p in groups
+        if idx
+    ]
+    if not parts:
+        parts = [f"a {info.kind}"]
+    text = " and ".join(parts)
+    return text[0].upper() + text[1:]
+
+
+def _nondeterministic_sentence(info: StimAnalysisError, line: int | None, declared: dict[str, int]) -> str:
+    names = ", ".join(info.targets) or f"a {info.kind}"
+    plural = len(info.targets) > 1
     qubits = ", ".join(str(q) for q in info.qubits)
     qubit_phrase = f" on qubit{'s' if len(info.qubits) != 1 else ''} {qubits}" if qubits else ""
     op = info.operation or "operation"
@@ -114,10 +137,12 @@ def _nondeterministic_sentence(info: StimAnalysisError, line: int | None) -> str
         where.append(f"after {info.tick} TICK{'s' if info.tick != 1 else ''}")
     where_text = f" ({', '.join(where)})" if where else ""
     sens = f" The Pauli it is sensitive to there is {info.sensitivity}." if info.sensitivity else ""
+    decl = ", ".join(f"{t} at line {n}" for t, n in declared.items())
+    decl_text = f" Declared: {decl}." if decl else ""
     return (
-        f"{noun.capitalize()} {names} is non-deterministic: the {op}{qubit_phrase}"
+        f"{_subject(info)} {'are' if plural else 'is'} non-deterministic: the {op}{qubit_phrase}"
         f"{where_text} anti-commutes with what {names} tracks, so its parity is random "
-        f"even without noise.{sens} {NONDETERMINISM_HEDGE}"
+        f"even without noise.{sens}{decl_text} {NONDETERMINISM_HEDGE}"
     )
 
 
@@ -140,7 +165,7 @@ def explain_nondeterministic(circuit_text: str) -> dict[str, Any]:
     if circuit is None:
         return failure or {"status": "parse_error", "sentence": "Could not parse the circuit."}
     try:
-        circuit.detector_error_model()
+        circuit.detector_error_model(approximate_disjoint_errors=True)
     except ValueError as exc:
         return _describe_failure(circuit_text, circuit, str(exc))
     return {
@@ -154,7 +179,8 @@ def explain_nondeterministic(circuit_text: str) -> dict[str, Any]:
 
 def _describe_failure(source: str, circuit: stim.Circuit, message: str) -> dict[str, Any]:
     info = parse_stim_error(message)
-    if info.tick is None and circuit.num_ticks == 0:
+    at_start = "start of the circuit" in (info.operation or "")
+    if info.tick is None and (circuit.num_ticks == 0 or at_start):
         info = replace(info, tick=0)
     source_map = verified_source_map(source, circuit)
     line, lines = _locate(source_map, info.instruction_path, _target_index(info))
@@ -167,12 +193,14 @@ def _describe_failure(source: str, circuit: stim.Circuit, message: str) -> dict[
         "tick": info.tick,
     }
     if info.kind in ("detector", "observable"):
+        declared = declaration_lines(circuit, source_map, info.targets)
         return {
             **base,
             "status": "nondeterministic",
             "detector_indices": list(info.detector_indices),
             "observable_indices": list(info.observable_indices),
             "targets": list(info.targets),
+            "declaration_lines": declared,
             "operation": {
                 "description": info.operation,
                 "qubits": list(info.qubits),
@@ -180,7 +208,7 @@ def _describe_failure(source: str, circuit: stim.Circuit, message: str) -> dict[
             },
             "sensitivity": info.sensitivity,
             "diagram_svg": _diagram_svg(circuit, info),
-            "sentence": _nondeterministic_sentence(info, line),
+            "sentence": _nondeterministic_sentence(info, line, declared),
         }
     if info.kind == "invalid_reference":
         return {
@@ -289,7 +317,7 @@ def min_weight_logical_error(circuit_text: str) -> dict[str, Any]:
     if circuit is None:
         return failure or {"status": "parse_error", "sentence": "Could not parse the circuit."}
     try:
-        circuit.detector_error_model()
+        circuit.detector_error_model(approximate_disjoint_errors=True)
     except ValueError as exc:
         return _describe_failure(circuit_text, circuit, str(exc))
     counts = {"num_detectors": circuit.num_detectors, "num_observables": circuit.num_observables}
@@ -300,19 +328,20 @@ def min_weight_logical_error(circuit_text: str) -> dict[str, Any]:
     faults = [_describe_fault(e, circuit_text, source_map, i) for i, e in enumerate(found)]
     weight = len(faults)
     exact = method == "shortest_graphlike_error"
+    caveat = GRAPHLIKE_CAVEAT if exact else FALLBACK_CAVEAT
     sentence = (
         f"The smallest undetected logical error found has weight {weight}: {weight} "
         f"physical fault{'s' if weight != 1 else ''} that together flip a logical "
         "observable without firing any detector. "
         + ("" if exact else "Found by a bounded heuristic search, so a smaller one may exist. ")
-        + GRAPHLIKE_CAVEAT
+        + caveat
     )
     return {
         "status": "ok",
         "method": method,
         "weight": weight,
         "weight_is_upper_bound": True,
-        "caveat": GRAPHLIKE_CAVEAT,
+        "caveat": caveat,
         **counts,
         "faults": faults,
         "sentence": sentence,

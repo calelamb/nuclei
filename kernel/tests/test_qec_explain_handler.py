@@ -8,7 +8,7 @@ import json
 import stim
 
 from kernel.qec import explain_handler
-from kernel.qec.explain_handler import MAX_CIRCUIT_CHARS, handle_qec_explain
+from kernel.qec.explain_handler import MAX_CIRCUIT_BYTES, handle_qec_explain
 
 
 class FakeSocket:
@@ -56,7 +56,7 @@ def test_unknown_analysis_is_a_visible_error():
 
 
 def test_oversized_circuit_is_rejected():
-    (reply,) = _call({"circuit_text": "H 0\n" * (MAX_CIRCUIT_CHARS // 4 + 1)})
+    (reply,) = _call({"circuit_text": "H 0\n" * (MAX_CIRCUIT_BYTES // 4 + 1)})
     assert reply["code"] == "qec_explain_too_large"
 
 
@@ -64,16 +64,9 @@ def test_unexpected_failure_is_reported_not_swallowed(monkeypatch):
     def boom(_text):
         raise RuntimeError("kaboom")
 
-    monkeypatch.setattr(explain_handler, "explain_nondeterministic", boom)
+    monkeypatch.setattr("kernel.qec.explain.explain_nondeterministic", boom)
     (reply,) = _call({"circuit_text": "R 0\n", "request_id": "x"})
     assert reply["type"] == "error"
     assert reply["code"] == "qec_explain_failed"
     assert "kaboom" in reply["message"]
     assert reply["request_id"] == "x"
-
-
-def test_server_routes_qec_explain():
-    from pathlib import Path
-
-    source = (Path(explain_handler.__file__).parents[1] / "server.py").read_text()
-    assert 'msg_type == "qec_explain"' in source

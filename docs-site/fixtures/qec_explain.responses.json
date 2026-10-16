@@ -1,0 +1,39 @@
+[
+  {
+    "type": "qec_explain_result",
+    "data": {
+      "nondeterministic": {
+        "kind": "detector",
+        "stim_message": "<any>",
+        "line": 1,
+        "lines": [
+          1
+        ],
+        "line_text": "R 0",
+        "tick": 0,
+        "status": "nondeterministic",
+        "detector_indices": [
+          0
+        ],
+        "observable_indices": [],
+        "targets": [
+          "D0"
+        ],
+        "declaration_lines": {
+          "D0": 4
+        },
+        "operation": {
+          "description": "Z-basis reset (R)",
+          "qubits": [
+            0
+          ],
+          "instruction": "R 0"
+        },
+        "sensitivity": "X0",
+        "diagram_svg": "<any>",
+        "sentence": "Detector D0 is non-deterministic: the Z-basis reset (R) on qubit 0 (line 1, after 0 TICKs) anti-commutes with what D0 tracks, so its parity is random even without noise. The Pauli it is sensitive to there is X0. Declared: D0 at line 4. This is a static property of the circuit text, independent of noise or sampled data. Common sources are a shifted or missing DETECTOR rec target, a wrong rec offset, or a measurement/reset in the wrong basis."
+      }
+    },
+    "request_id": "explain-1"
+  }
+]

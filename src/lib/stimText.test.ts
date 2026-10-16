@@ -13,4 +13,13 @@ describe('isStimCircuitText', () => {
   it('rejects empty text', () => {
     expect(isStimCircuitText('  \n', 'x.stim')).toBe(false);
   });
+
+  it('only accepts .stim or extension-less buffers (allow-list)', () => {
+    expect(isStimCircuitText('H 0\n', 'circuit')).toBe(true);
+    expect(isStimCircuitText('H 0\n', 'a/b/CIRCUIT.STIM')).toBe(true);
+    expect(isStimCircuitText('H 0\n', 'a.b/circuit')).toBe(true);
+    for (const f of ['x.qasm', 'x.qs', 'x.py', 'x.txt', 'x.json', 'x.dem']) {
+      expect(isStimCircuitText('H 0\nM 0\n', f)).toBe(false);
+    }
+  });
 });

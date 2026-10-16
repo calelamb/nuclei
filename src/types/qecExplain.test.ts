@@ -40,4 +40,16 @@ describe('parseQecExplainData', () => {
   it('rejects a zero or negative line number', () => {
     expect(parseQecExplainData({ nondeterministic: { status: 'ok', sentence: 's', line: 0 } }).ok).toBe(false);
   });
+
+  it('parses declaration_lines and fault iteration', () => {
+    const r = parseQecExplainData({
+      nondeterministic: { status: 'nondeterministic', sentence: 's', targets: ['D1'], declaration_lines: { D1: 9 } },
+      min_weight: { status: 'ok', sentence: 's', faults: [{ index: 0, located: true, iteration: 3 }] },
+    });
+    expect(r.ok).toBe(true);
+    if (r.ok) {
+      expect(r.data.nondeterministic?.declaration_lines).toEqual({ D1: 9 });
+      expect(r.data.min_weight?.faults[0].iteration).toBe(3);
+    }
+  });
 });

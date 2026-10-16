@@ -185,6 +185,8 @@ export type KernelResponse =
       phase?: 'parse' | 'execute' | 'python' | 'transpile' | 'debug' | 'lint' | 'format' | 'qec_estimate' | 'qec_generate' | 'qec_snapshot' | 'qec_materialize' | 'qec_campaign' | 'qec_decode_sample' | 'qec_explain';
       framework?: Framework;
       dependency?: string;
+      /** Echoed from the request when the kernel handler supports it (qec_explain). */
+      request_id?: string;
     }
   | { type: 'output'; text: string }
   | { type: 'stderr'; text: string }

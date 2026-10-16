@@ -14,7 +14,7 @@ from dataclasses import dataclass
 import stim
 
 _KIND_RE = re.compile(r"The circuit contains non-deterministic (detectors|observables)")
-_OP_RE = re.compile(r"analyzing an? (.+?) on:[ \t]*\n((?:[ \t]+\S.*\n)+)")
+_OP_RE = re.compile(r"analyzing (?:an? )?(.+?) on:[ \t]*\n((?:[ \t]+\S.*\n)+)")
 _ANTICOMMUTE_RE = re.compile(
     r"anti-commuted with these detectors/observables:[ \t]*\n((?:[ \t]+\S.*\n)+)"
 )
@@ -67,7 +67,6 @@ def _indices(targets: tuple[str, ...], prefix: str) -> tuple[int, ...]:
 
 def parse_stim_error(message: str) -> StimAnalysisError:
     message = message.rstrip() + "\n"
-    kind = _classify(message)
     op = _OP_RE.search(message)
     anti = _ANTICOMMUTE_RE.search(message)
     sens = _SENS_RE.search(message)
@@ -75,10 +74,11 @@ def parse_stim_error(message: str) -> StimAnalysisError:
     frames = _INSTR_RE.findall(message)
     d_tick = _DIAGRAM_TICK_RE.search(message)
     d_filter = _DIAGRAM_FILTER_RE.search(message)
+    targets = _first_tokens(anti.group(1)) if anti else ()
     return StimAnalysisError(
         raw_message=message,
-        kind=kind,
-        targets=_first_tokens(anti.group(1)) if anti else (),
+        kind=_refine_kind(_classify(message), targets),
+        targets=targets,
         operation=op.group(1).strip() if op else None,
         qubits=tuple(int(q) for q in _QUBIT_RE.findall(_COORDS_RE.sub("", op.group(2)))) if op else (),
         sensitivity="*".join(_first_tokens(sens.group(2))) if sens else None,
@@ -88,6 +88,14 @@ def parse_stim_error(message: str) -> StimAnalysisError:
         diagram_tick=(int(d_tick.group(1)), int(d_tick.group(2))) if d_tick else None,
         diagram_filter=_parse_filter(d_filter.group(1)) if d_filter else (),
     )
+
+
+def _refine_kind(kind: str, targets: tuple[str, ...]) -> str:
+    """Stim's header says "observables" whenever any observable is involved, even
+    alongside detectors; the listed targets are the authority."""
+    if kind not in ("detector", "observable") or not targets:
+        return kind
+    return "detector" if _indices(targets, "D") else "observable"
 
 
 def _first_tokens(block: str) -> tuple[str, ...]:
@@ -112,10 +120,11 @@ def first_failing_line(source: str) -> int | None:
     """Best-effort 1-based line of the first line Stim cannot parse alone."""
     for number, raw in enumerate(source.splitlines(), start=1):
         text = raw.split("#", 1)[0].strip()
-        if not text or text.startswith("REPEAT") or text.startswith("}"):
+        if not text or text.startswith("}"):
             continue
         try:
-            stim.Circuit(text)
+            # A REPEAT header is only valid with a closing brace; check it alone.
+            stim.Circuit(text + "\n}" if text.startswith("REPEAT") else text)
         except ValueError:
             return number
     return None

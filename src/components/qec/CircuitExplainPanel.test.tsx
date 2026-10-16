@@ -111,4 +111,27 @@ describe('CircuitExplainPanel', () => {
     expect(getByText(/says nothing about sampled data/)).toBeTruthy();
     expect(queryByRole('button', { name: /fix/i })).toBeNull();
   });
+
+  it('links the declaring line of each named detector, separately from the collapse line', () => {
+    seed({ nondeterministic: { ...NONDET, targets: ['D0'], declaration_lines: { D0: 4 } } });
+    const { getByRole } = render(<CircuitExplainPanel />);
+    fireEvent.click(getByRole('button', { name: 'Jump to D0 declaration at line 4' }));
+    expect(useEditorRevealStore.getState().request?.line).toBe(4);
+  });
+
+  it('shows the REPEAT iteration a fault falls in', () => {
+    const faults = [{ ...MINW.faults[0], iteration: 2 }, MINW.faults[1]];
+    seed({ min_weight: { ...MINW, faults } });
+    const { getByText } = render(<CircuitExplainPanel />);
+    expect(getByText('iter 2')).toBeTruthy();
+  });
+
+  it('shows the lost-connection error while pending, instead of spinning forever', () => {
+    useEditorStore.setState({ code: CODE, filePath: 'c.stim' });
+    useQecExplainStore.getState().begin(CODE, 'r1');
+    useQecExplainStore.getState().failPending('Kernel connection lost.');
+    const { getByRole } = render(<CircuitExplainPanel />);
+    expect(getByRole('alert').textContent).toMatch(/connection lost/);
+    expect((getByRole('button', { name: 'Explain circuit' }) as HTMLButtonElement).disabled).toBe(false);
+  });
 });

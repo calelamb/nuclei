@@ -7,10 +7,16 @@ export function JumpButton({
   line,
   disabled,
   onJump,
+  label,
+  text,
 }: {
   line: number | null | undefined;
   disabled: boolean;
   onJump: (line: number) => void;
+  /** Accessible name; defaults to "Jump to line N". */
+  label?: string;
+  /** Visible text; defaults to "line N". */
+  text?: string;
 }) {
   const colors = useThemeStore((s) => s.colors);
   if (line == null) return <span style={{ color: colors.textDim, fontSize: 10 }}>line unknown</span>;
@@ -20,14 +26,14 @@ export function JumpButton({
       disabled={disabled}
       onClick={() => onJump(line)}
       title={disabled ? 'The editor changed since this analysis; re-run it to jump to source' : `Jump to line ${line}`}
-      aria-label={`Jump to line ${line}`}
+      aria-label={label ?? `Jump to line ${line}`}
       style={{
         background: 'transparent', border: `1px solid ${colors.border}`, borderRadius: 4,
         color: disabled ? colors.textDim : colors.accent, cursor: disabled ? 'default' : 'pointer',
         fontSize: 10.5, padding: '1px 6px', fontFamily: MONO,
       }}
     >
-      line {line}
+      {text ?? `line ${line}`}
     </button>
   );
 }
@@ -53,6 +59,21 @@ export function NondeterministicSection({
         <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', fontSize: 11 }}>
           <JumpButton line={data.line} disabled={stale} onJump={onJump} />
           {data.line_text && <code style={{ fontFamily: MONO, color: colors.text }}>{data.line_text}</code>}
+        </div>
+      )}
+      {bad && Object.keys(data.declaration_lines ?? {}).length > 0 && (
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', fontSize: 11, color: colors.textMuted }}>
+          <span>Declared at</span>
+          {Object.entries(data.declaration_lines ?? {}).map(([target, line]) => (
+            <JumpButton
+              key={target}
+              line={line}
+              disabled={stale}
+              onJump={onJump}
+              label={`Jump to ${target} declaration at line ${line}`}
+              text={`${target} · line ${line}`}
+            />
+          ))}
         </div>
       )}
       {data.diagram_svg && (
@@ -81,6 +102,7 @@ function FaultRow({ fault, stale, onJump }: { fault: QecFault; stale: boolean; o
     <tr>
       <td style={cell}>{fault.index + 1}</td>
       <td style={cell}>{fault.tick ?? '—'}</td>
+      <td style={cell}>{fault.iteration != null ? `iter ${fault.iteration}` : '—'}</td>
       <td style={cell}>{fault.qubits.length ? fault.qubits.join(', ') : '—'}</td>
       <td style={cell}>{fault.pauli ?? '—'}</td>
       <td style={cell} title={fault.instruction ?? undefined}>{fault.gate ?? 'not located'}</td>
@@ -125,6 +147,7 @@ export function MinWeightSection({
               <tr>
                 <th style={head}>#</th>
                 <th style={head}>tick</th>
+                <th style={head}>REPEAT</th>
                 <th style={head}>qubits</th>
                 <th style={head}>flip</th>
                 <th style={head}>gate</th>

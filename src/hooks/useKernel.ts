@@ -14,7 +14,7 @@ import { useHardwareStore } from '../stores/hardwareStore';
 import { useQecStore } from '../stores/qecStore';
 import { useQecEstimateStore } from '../stores/qecEstimateStore';
 import { useQecExplainStore } from '../stores/qecExplainStore';
-import { applyQecExplainResult, applyQecExplainError } from '../lib/qecExplainMessages';
+import { applyQecExplainResult, applyQecExplainError, explainSizeError } from '../lib/qecExplainMessages';
 import { setQecExplainSender, type QecExplainAnalysis } from '../lib/qecExplainSender';
 import { useMissingDependencyStore } from '../stores/missingDependencyStore';
 import { setQecDecodeSender, setQecSnapshotSender, setQecEstimateSender } from '../lib/qecDecodeSender';
@@ -82,6 +82,7 @@ export function useKernel() {
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const mountedRef = useRef(true);
   const retryCountRef = useRef(0);
+  const explainSeqRef = useRef(0);
   // Per-provider "connecting" watchdogs: a hardware_connect that's sent but
   // never answered (provider auth hangs) would leave the UI stuck on
   // "Connecting…" forever. Each connect arms a timer here; the
@@ -175,7 +176,7 @@ export function useKernel() {
         useQecEstimateStore.getState().setResult(msg.data);
         break;
       case 'qec_explain_result':
-        applyQecExplainResult(msg.data);
+        applyQecExplainResult(msg.data, msg.request_id);
         break;
       case 'transpile_result':
         // Dev tools Phase 1 — Transpiler Explorer. A null payload means an
@@ -216,7 +217,7 @@ export function useKernel() {
         // Circuit Explain failures render inside that panel (visible, with the
         // kernel's message), not in the terminal/editor surfaces.
         if (msg.phase === 'qec_explain') {
-          applyQecExplainError(msg.message);
+          applyQecExplainError(msg.message, msg.request_id);
           break;
         }
 
@@ -493,6 +494,10 @@ export function useKernel() {
 
     ws.onclose = () => {
       wsRef.current = null;
+      // A pending explain will never get its reply; say so instead of spinning.
+      useQecExplainStore.getState().failPending(
+        'The kernel connection was lost before the analysis finished. Reconnect and run it again.',
+      );
       useEditorStore.getState().setKernelConnected(false);
       if (!mountedRef.current) return;
 
@@ -764,9 +769,15 @@ export function useKernel() {
   const qecExplain = useCallback(
     (circuitText: string, analysis: QecExplainAnalysis) => {
       const store = useQecExplainStore.getState();
-      store.begin(circuitText);
+      const requestId = `explain-${++explainSeqRef.current}`;
+      store.begin(circuitText, requestId);
+      const tooLarge = explainSizeError(circuitText);
+      if (tooLarge) {
+        store.setError(tooLarge, requestId);
+        return;
+      }
       // No socket → no reply will ever arrive; say so instead of spinning.
-      if (!sendHardware({ type: 'qec_explain', circuit_text: circuitText, analysis })) {
+      if (!sendHardware({ type: 'qec_explain', circuit_text: circuitText, analysis, request_id: requestId })) {
         store.setError("The kernel isn't connected, so this circuit can't be explained. Start it and try again.");
       }
     },

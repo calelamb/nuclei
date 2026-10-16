@@ -20,9 +20,9 @@ import asyncio
 import json
 from typing import Any
 
-from kernel.qec.explain import explain_nondeterministic, min_weight_logical_error
-
-MAX_CIRCUIT_CHARS = 2_000_000
+# The WebSocket server closes the connection above 1 MiB (server.MAX_MESSAGE_SIZE),
+# so a bigger circuit could never arrive. Keep a margin for the JSON envelope.
+MAX_CIRCUIT_BYTES = 1_000_000
 ANALYSES = ("both", "nondeterministic", "min_weight")
 PHASE = "qec_explain"
 
@@ -35,6 +35,11 @@ def _error(message: str, code: str, request_id: Any, **extra: Any) -> str:
 
 
 def _run(circuit_text: str, analysis: str) -> dict[str, Any]:
+    # Imported here, not at module top: stim is an optional dependency, and an
+    # ImportError must reach handle_qec_explain's visible-error path instead of
+    # escaping the server's routing branch and killing the connection.
+    from kernel.qec.explain import explain_nondeterministic, min_weight_logical_error
+
     data: dict[str, Any] = {}
     if analysis in ("both", "nondeterministic"):
         data["nondeterministic"] = explain_nondeterministic(circuit_text)
@@ -52,9 +57,9 @@ async def handle_qec_explain(websocket: Any, msg: dict[str, Any]) -> None:
             "qec_explain needs the Stim circuit text to analyse; none was provided.",
             "qec_explain_invalid", request_id))
         return
-    if len(circuit_text) > MAX_CIRCUIT_CHARS:
+    if len(circuit_text.encode("utf-8")) > MAX_CIRCUIT_BYTES:
         await websocket.send(_error(
-            f"This circuit is larger than {MAX_CIRCUIT_CHARS:,} characters, too large to explain.",
+            f"This circuit is larger than {MAX_CIRCUIT_BYTES:,} bytes, too large to explain.",
             "qec_explain_too_large", request_id))
         return
     if analysis not in ANALYSES:
