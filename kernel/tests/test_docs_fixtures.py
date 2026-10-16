@@ -452,3 +452,19 @@ def test_example_client_finds_token_in_runtime_file(tmp_path, monkeypatch):
     monkeypatch.delenv("NUCLEI_KERNEL_TOKEN", raising=False)
     monkeypatch.setenv("NUCLEI_RUNTIME_DIR", str(tmp_path))
     assert client.load_token() == CLIENT_TOKEN
+    assert client.default_url() == "ws://localhost:9742"
+
+
+def test_example_client_default_url_follows_runtime_file(tmp_path, monkeypatch):
+    """The default URL must match the kernel whose token is in the file."""
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location(
+        "docs_example_client2", FIXTURES_DIR / "clients" / "example_client.py"
+    )
+    client = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(client)
+    config = auth.build_config(token=CLIENT_TOKEN, insecure=False, dev=False)
+    auth.write_runtime_file(config, 9743, runtime_dir=tmp_path)
+    monkeypatch.setenv("NUCLEI_RUNTIME_DIR", str(tmp_path))
+    assert client.default_url() == "ws://localhost:9743"
