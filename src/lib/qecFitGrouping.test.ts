@@ -121,7 +121,7 @@ describe('provenance metadata names both interval conventions', () => {
   it('states the confidence level of the whiskers and of Λ', () => {
     const m = qecFigureMetadata('per_shot');
     expect(m.ci_method).toMatch(/3\.7/);
-    expect(m.lambda_ci).toMatch(/1σ|68%/);
+    expect(m.lambda_ci).toMatch(/95%/);
   });
 });
 

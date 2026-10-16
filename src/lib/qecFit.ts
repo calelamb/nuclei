@@ -33,6 +33,7 @@ import type { QecCampaignStatsRow } from '../types/qec';
 import type { ThresholdSeries } from '../types/qecStats';
 import { assignExperiments } from './qecExperiments';
 import { roundsFromMetadata } from './qecRounds';
+import { lambdaQuality, tCritical95 } from './qecLambdaStats';
 
 export { roundsFromMetadata };
 
@@ -265,6 +266,14 @@ export interface LambdaEstimate {
   nPoints: number;
   /** Distances whose points had zero logical errors (ln 0) and were left out. */
   droppedZeroError: number[];
+  /** 95% Student-t interval (unweighted OLS), the convention shared with the MCP `fit` tool. */
+  ci95: { low: number; high: number };
+  rSquared: number;
+  /** Residual degrees of freedom, nPoints - 2. */
+  dof: number;
+  warnings: string[];
+  /** False when the interval is degenerate or the rates are saturated (do not print it). */
+  intervalMeaningful: boolean;
 }
 
 export const MIN_LAMBDA_DISTANCES = 3;
@@ -305,7 +314,16 @@ export function estimateLambda(
     maxExtraSquaredError: opts.maxExtraSquaredError ?? defaultMaxExtraSquaredError(usable),
   });
   const toLambda = (m: number) => Math.exp(-step * m);
+  const dof = usable.length - 2;
+  const half = tCritical95(dof) * fit.stderr;
+  const ci95 = { low: toLambda(fit.slope.best + half), high: toLambda(fit.slope.best - half) };
+  const ys = usable.map((p) => Math.log(p.rate));
+  const myy = ys.reduce((a, b) => a + b, 0) / ys.length;
+  const tss = ys.reduce((a, y) => a + (y - myy) ** 2, 0);
+  const rSquared = tss === 0 ? 0 : Math.max(0, 1 - fit.rss / tss);
+  const quality = lambdaQuality({ lambda: toLambda(fit.slope.best), ci95, rSquared, rates: usable.map((p) => p.rate) });
   return {
+    ci95, rSquared, dof, warnings: quality.warnings, intervalMeaningful: quality.intervalMeaningful,
     lambda: { low: toLambda(fit.slope.high), best: toLambda(fit.slope.best), high: toLambda(fit.slope.low) },
     slope: fit.slope,
     stderr: fit.stderr,
@@ -434,10 +452,10 @@ export function whiskerConvention(factor = DEFAULT_MAX_LIKELIHOOD_FACTOR): strin
 }
 
 export const LAMBDA_CI_CONVENTION =
-  'about ±1σ (nominal 68%), heteroscedastic OLS slope variance; coverage is optimistic with few distances (n-2 degrees of freedom, 1 at three distances)';
+  '95% Student-t interval on the slope of unweighted OLS of ln(rate) vs distance (n-2 degrees of freedom); same convention as the MCP fit tool';
 
 /** Short form for the figure footer. */
-export const LAMBDA_CI_SHORT = 'about ±1σ (nominal 68%; n−2 d.o.f., optimistic for few distances)';
+export const LAMBDA_CI_SHORT = '95% Student-t, unweighted OLS (n−2 d.o.f.)';
 
 /** Machine-readable provenance embedded in exported figures. */
 /** FNV-1a 64-bit of the sorted strong_ids: order-independent identity of the data behind a figure. */
@@ -472,11 +490,13 @@ export function qecFigureMetadata(
     lambda_estimator:
       `OLS slope of ln(LER) vs code distance at fixed p (>= ${MIN_LAMBDA_DISTANCES} distances) within one experiment; ` +
       `lambda = exp(-${DEFAULT_LAMBDA_STEP} * slope) per distance step of ${DEFAULT_LAMBDA_STEP}; ` +
-      'interval from fit_line_slope-style extra squared error',
+      'interval is 95% Student-t on the OLS slope',
     lambda_ci: `Λ interval is ${LAMBDA_CI_CONVENTION}`,
     lambda_estimates: lambdas.map((e) => ({
       decoder: e.decoder, experiment: e.label, p: e.noise, units: e.units,
-      lambda: e.estimate.lambda.best, low: e.estimate.lambda.low, high: e.estimate.lambda.high,
+      lambda: e.estimate.lambda.best, low: e.estimate.ci95.low, high: e.estimate.ci95.high, ci_level: 0.95,
+      r_squared: e.estimate.rSquared, dof: e.estimate.dof, warnings: e.estimate.warnings,
+      sinter_style_1sigma: { low: e.estimate.lambda.low, high: e.estimate.lambda.high },
       distances: e.estimate.distances, dropped_zero_error_distances: e.estimate.droppedZeroError,
     })),
     source: source ? figureSource(source) : null,

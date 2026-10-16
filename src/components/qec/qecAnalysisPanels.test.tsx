@@ -163,6 +163,24 @@ describe('ThresholdPanel', () => {
     expect(csv.split('\n')[0]).toMatch(/rate_low.*units,ci_method,max_likelihood_factor/);
   });
 
+  it('exports a self-contained SVG: legend, background, fixed size, no viewport scaling', () => {
+    loadCampaign();
+    const { getByRole } = render(<ThresholdPanel />);
+    fireEvent.click(getByRole('button', { name: 'Export SVG' }));
+    const exported = downloadSvg.mock.calls[0][0] as SVGSVGElement;
+    expect(exported.getAttribute('width')).toMatch(/^\d+$/);
+    expect(exported.getAttribute('height')).toMatch(/^\d+$/);
+    expect(exported.getAttribute('style') ?? '').not.toMatch(/100%/);
+    const legend = exported.querySelector('[data-testid="qec-svg-legend"]')!;
+    expect(legend).toBeTruthy();
+    expect(legend.textContent).toContain('pymatching');
+    expect(legend.textContent).toContain('fusion_blossom');
+    expect(legend.textContent).toMatch(/solid = odd distance/);
+    const bg = exported.querySelector('rect[data-export-bg]')!;
+    expect(bg).toBeTruthy();
+    expect(bg.getAttribute('fill')).toBeTruthy();
+  });
+
   it('shows an empty state with no campaign results', () => {
     const { getByText } = render(<ThresholdPanel />);
     expect(getByText('No campaign results yet')).toBeTruthy();

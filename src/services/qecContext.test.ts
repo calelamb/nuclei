@@ -52,7 +52,8 @@ describe('buildQecContext', () => {
     expect(text).toContain('40 pairwise edges + 8 boundary edges');
     expect(text).toContain('Campaign results (3 of 3 rows)');
     // Λ present because distances 3/5/7 suppress errors at fixed p.
-    expect(text).toContain('Λ=');
+    expect(text).toContain('Λ = ');
+    expect(text).toContain('interval not meaningful'); // exact 3-point fit has zero residual: no interval printed
   });
 
   it('caps injected rows and says how many were dropped', () => {

@@ -19,10 +19,13 @@ import {
   type LambdaGroupEstimate,
   type RateUnits,
 } from '../../lib/qecFit';
+import { exportableSvg } from '../../lib/qecSvgExport';
+import { lambdaSummary } from '../../lib/qecLambdaText';
 import { qecRatesToCsv } from '../../lib/qecExport';
 import { downloadCsv, downloadSvg } from '../../services/experimentExport';
 
 const DOCS = 'https://getnuclei.dev/docs/research/qec-studio/';
+const LEGEND_HEIGHT = 22;
 const PLOT = { x0: 46, y0: 12, x1: 288, y1: 150 }; // inner plot rect
 
 /**
@@ -75,7 +78,7 @@ export function ThresholdPanel() {
       actions={
         series.length > 0 ? (
           <div style={{ display: 'flex', gap: 6 }}>
-            <ExportButton label="SVG" onClick={() => svgRef.current && downloadSvg(svgRef.current, 'logical-error-vs-p.svg')} colors={colors} />
+            <ExportButton label="SVG" onClick={() => svgRef.current && downloadSvg(exportableSvg(svgRef.current), 'logical-error-vs-p.svg')} colors={colors} />
             <ExportButton label="CSV" onClick={() => downloadCsv(qecRatesToCsv(rows, { units, originals }), 'logical-error-vs-p.csv')} colors={colors} />
           </div>
         ) : undefined
@@ -102,6 +105,8 @@ export function ThresholdPanel() {
   const decoderColor = (d: string) =>
     [colors.dirac, colors.accent, colors.success, colors.warning][decoders.indexOf(d) % 4];
 
+  const legendY = 180 + lambdaLines.length * 8 + (lambdaLines.length > 0 ? 4 : 0);
+
   const sx = (noise: number) =>
     PLOT.x0 + ((Math.log10(noise) - domain.xMin) / (domain.xMax - domain.xMin)) * (PLOT.x1 - PLOT.x0);
   const sy = (ler: number) => {
@@ -116,7 +121,7 @@ export function ThresholdPanel() {
         {roundsKnown && <UnitsToggle units={units} onChange={setRequestedUnits} colors={colors} />}
         <svg
           ref={svgRef}
-          viewBox={`0 0 300 ${180 + lambdaLines.length * 8 + (lambdaLines.length > 0 ? 4 : 0)}`}
+          viewBox={`0 0 300 ${legendY + LEGEND_HEIGHT}`}
           role="img"
           aria-labelledby="qec-fig-title qec-fig-desc"
           xmlns="http://www.w3.org/2000/svg"
@@ -125,6 +130,7 @@ export function ThresholdPanel() {
           <title id="qec-fig-title">{meta.title}</title>
           <desc id="qec-fig-desc">{`${meta.units} versus physical error p, log-log. ${meta.ci_method}.`}</desc>
           <metadata id="qec-fig-metadata">{JSON.stringify(meta)}</metadata>
+          <rect data-export-bg x={0} y={0} width={300} height={legendY + LEGEND_HEIGHT} fill={colors.bg} />
           {/* axes */}
           <line x1={PLOT.x0} y1={PLOT.y0} x2={PLOT.x0} y2={PLOT.y1} stroke={colors.border} strokeWidth={0.6} />
           <line x1={PLOT.x0} y1={PLOT.y1} x2={PLOT.x1} y2={PLOT.y1} stroke={colors.border} strokeWidth={0.6} />
@@ -162,6 +168,17 @@ export function ThresholdPanel() {
               {`Λ interval: ${LAMBDA_CI_SHORT}`}
             </text>
           )}
+          <g data-testid="qec-svg-legend" fontFamily="'Geist Sans', sans-serif" fontSize={6}>
+            {decoders.map((d, i) => (
+              <g key={d} transform={`translate(${PLOT.x0 + i * 70} ${legendY + 6})`}>
+                <line x1={0} y1={-2} x2={10} y2={-2} stroke={decoderColor(d)} strokeWidth={1.2} />
+                <text x={13} y={0} fill={colors.text}>{d}</text>
+              </g>
+            ))}
+            <text x={PLOT.x0} y={legendY + 16} fill={colors.textDim} fontSize={5.5}>
+              solid = odd distance · dashed = even distance
+            </text>
+          </g>
           {/* series */}
           {series.map((s) => {
             const color = decoderColor(s.decoder);
@@ -239,18 +256,16 @@ function UnitsToggle({ units, onChange, colors }: { units: RateUnits; onChange: 
 
 function lambdaLine(e: LambdaGroupEstimate): string {
   const unitText = e.units === 'per_round' ? 'per round' : 'per shot';
+  const lambdaWarnings = e.estimate.warnings.length > 0 ? `; WARNING: ${e.estimate.warnings.join('; ')}` : '';
   const warn = [
     e.collidingDistances.length > 0 ? `; distinct tasks collide at d ${e.collidingDistances.join(',')}, fitted as replicates` : '',
     e.units === 'per_shot' && e.roundsVaryWithD ? '; rounds vary with d, confounding this per-shot Λ' : '',
   ].join('');
   const dropped = e.estimate.droppedZeroError.length > 0 ? `; 0 errors at d ${e.estimate.droppedZeroError.join(',')} omitted` : '';
   return (
-    `${e.decoder} ${e.label} p=${e.noise}: Λ = ${fmt(e.estimate.lambda.best)} ` +
-    `(${fmt(e.estimate.lambda.low)} to ${fmt(e.estimate.lambda.high)}, ≈1σ), d ${e.estimate.distances.join(',')}, ${unitText}${dropped}${warn}`
+    `${e.decoder} ${e.label} p=${e.noise}: ${lambdaSummary(e.estimate).text}, d ${e.estimate.distances.join(',')}, ${unitText}${dropped}${warn}${lambdaWarnings}`
   );
 }
-
-const fmt = (x: number) => (x >= 100 ? x.toFixed(0) : x.toPrecision(3));
 
 function LambdaReadout(props: {
   decoders: string[]; estimates: LambdaGroupEstimate[]; decoderColor: (d: string) => string;
@@ -270,12 +285,15 @@ function LambdaReadout(props: {
               mine.map((e) => (
                 <div key={`${e.experiment}\u0000${e.noise}`} style={{ paddingLeft: 8 }}>
                   <span style={{ color: colors.textMuted }}>{`${e.label}: `}</span>
-                  {`Λ = ${fmt(e.estimate.lambda.best)} (${fmt(e.estimate.lambda.low)} to ${fmt(e.estimate.lambda.high)}, ≈1σ)`}
+                  {lambdaSummary(e.estimate).text}
                   <span style={{ color: colors.textDim }}>
                     {` at p=${e.noise}, d ${e.estimate.distances.join(',')}, per Δd=${e.estimate.step}, ${units === 'per_round' ? 'per round' : 'per shot'}`}
                     {e.estimate.droppedZeroError.length > 0 &&
                       `; d ${e.estimate.droppedZeroError.join(',')} had 0 errors and is not in the fit (suppression is at least as strong)`}
                   </span>
+                  {e.estimate.warnings.map((w) => (
+                    <div key={w} role="note" style={{ color: colors.warning, fontSize: 10 }}>{`Warning: ${w}`}</div>
+                  ))}
                 </div>
               ))
             )}

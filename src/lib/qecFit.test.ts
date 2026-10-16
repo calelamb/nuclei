@@ -154,6 +154,45 @@ describe('Λ behavior', () => {
   });
 });
 
+describe('Λ 95% interval and quality warnings (matches MCP convention)', () => {
+  const mk = (rates: number[], errors = 50) =>
+    rates.map((rate, i) => ({ distance: 3 + 2 * i, errors, rate }));
+  it('matches the MCP fit on the reported repro (t-based, unweighted, 2 dof)', () => {
+    const e = estimateLambda(mk([0.1, 0.027, 0.0058, 0.0016]))!;
+    // scipy: slope t(0.975, 2)=4.302656 on OLS of ln(rate) vs d
+    near(e.dof, 2, 0);
+    expect(e.ci95.low).toBeLessThan(e.lambda.best);
+    expect(e.ci95.high).toBeGreaterThan(e.lambda.best);
+    expect(e.ci95.high - e.ci95.low).toBeGreaterThan(e.lambda.high - e.lambda.low);
+    expect(e.rSquared).toBeGreaterThan(0.99);
+    expect(e.warnings).toEqual([]);
+  });
+  it('uses the exact Student-t critical value', () => {
+    const rates = [0.010, 0.0085, 0.0110, 0.0070];
+    const pts = mk(rates);
+    const xs = pts.map((p) => p.distance); const ys = rates.map(Math.log);
+    const f = fitLineSlope({ xs, ys, maxExtraSquaredError: 0 });
+    const e = estimateLambda(pts)!;
+    near(e.ci95.low, Math.exp(-2 * (f.slope.best + 4.302652729911275 * f.stderr)), 1e-9);
+  });
+  it('warns when Λ <= 1', () => {
+    expect(estimateLambda(mk([0.010, 0.011, 0.0105, 0.0112]))!.warnings.join(' ')).toMatch(/do not decrease/);
+  });
+  it('warns when the interval includes 1', () => {
+    expect(estimateLambda(mk([0.010, 0.0085, 0.0110, 0.0070]))!.warnings.join(' ')).toMatch(/includes 1/);
+  });
+  it('warns on a poor fit (low r²)', () => {
+    const e = estimateLambda(mk([0.010, 0.002, 0.009, 0.001]))!;
+    expect(e.rSquared).toBeLessThan(0.5);
+    expect(e.warnings.join(' ')).toMatch(/r²/);
+  });
+  it('flags saturated rates and marks the interval as not meaningful', () => {
+    const e = estimateLambda(mk([0.5, 0.49, 0.5, 0.48]))!;
+    expect(e.warnings.join(' ')).toMatch(/saturated/);
+    expect(e.intervalMeaningful).toBe(false);
+  });
+});
+
 describe('input validation', () => {
   it('rejects bad arguments', () => {
     expect(() => fitBinomial({ numShots: 10, numHits: 11, maxLikelihoodFactor: 2 })).toThrow(RangeError);
@@ -182,6 +221,7 @@ describe('likelihoodSeries and metadata', () => {
     expect(m.units).toBe('logical error per round');
     expect(m.ci_method).toMatch(/likelihood-ratio/);
     expect(m.lambda_estimator).toMatch(/3 distances/);
+    expect(m.lambda_ci).toMatch(/95%/);
   });
 });
 

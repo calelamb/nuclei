@@ -5,6 +5,7 @@ import type { CircuitSnapshot } from '../types/quantum';
 import type { NoiseModelDef } from '../types/noiseModel';
 import { toStatsPoint } from '../types/qecStats';
 import { lambdaEstimates, rowProblem, rowRate } from '../lib/qecFit';
+import { lambdaSummary } from '../lib/qecLambdaText';
 
 /**
  * PRD 10 Phase D8 — Dirac's QEC campaign context.
@@ -106,8 +107,9 @@ export function buildQecContext(input: QecContextInput): string {
       fits.length > 0
         ? fits
             .map((f) => {
-              const l = f.estimate.lambda;
-              return `${f.decoder} ${f.label} p=${f.noise}: Λ=${l.best.toFixed(2)} (${l.low.toFixed(2)} to ${l.high.toFixed(2)}, ~1σ; d ${f.estimate.distances.join(',')})`;
+              const { text, warnings } = lambdaSummary(f.estimate);
+              const warn = warnings.length > 0 ? ` WARNING: ${warnings.join('; ')}` : '';
+              return `${f.decoder} ${f.label} p=${f.noise}: ${text}; d ${f.estimate.distances.join(',')}${warn}`;
             })
             .join('\n- ')
         : 'Λ not estimated (needs >= 3 distances with logical errors at the same p within one experiment)';
