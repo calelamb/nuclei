@@ -266,3 +266,26 @@ the replayed fixture above pins the shape rather than the values):
   "actual_observable_flips": [0]
 }
 ```
+
+## `qec_explain`
+
+Static analysis of a Stim circuit's text, answering "why does this circuit
+fail?" without sampling anything. Request:
+`{ "type": "qec_explain", "circuit_text": "...", "analysis": "both" | "nondeterministic" | "min_weight", "request_id": "..." }`.
+Reply: `qec_explain_result` with `data.nondeterministic` and/or `data.min_weight`;
+failures arrive as an `error` with `phase: "qec_explain"`.
+
+- `nondeterministic.status` is `ok`, `nondeterministic`, `invalid_circuit` or
+  `parse_error`. For `nondeterministic` it carries the detector/observable
+  indices, the anticommuting operation (description, qubits), the tick, the
+  `.stim` source `line`, a plain-language `sentence`, and Stim's own
+  `detslice-with-ops-svg` diagram as `diagram_svg`.
+- `min_weight.weight` is the length of the shortest graphlike undetected
+  logical error (`shortest_graphlike_error`, falling back to a bounded
+  `search_for_undetectable_logical_errors`). It is an upper bound on the
+  circuit-level distance, not a proof. Each entry of `faults` has `tick`,
+  `qubits`, `gate`, `instruction` and `line`.
+
+Lines are 1-based and are `null` whenever the instruction-to-line mapping
+cannot be verified against the parsed circuit. The analysis never edits the
+circuit and makes no claim about sampled data.

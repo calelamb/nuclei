@@ -17,6 +17,7 @@ import { registerNucleiThemes } from './monacoThemes';
 import { registerQsharpLanguage } from './qsharpLanguage';
 import { registerStimLanguage } from './stimLanguage';
 import { ensureQsharpLanguageService } from './qsharpLanguageService';
+import { useRevealLine } from './useRevealLine';
 import type { Framework } from '../../types/quantum';
 
 type StandaloneEditor = monaco.editor.IStandaloneCodeEditor;
@@ -64,6 +65,8 @@ export function QuantumEditor() {
   const [showInlineEdit, setShowInlineEdit] = useState(false);
   const [editorInstance, setEditorInstance] = useState<StandaloneEditor | null>(null);
   const [monacoInstance, setMonacoInstance] = useState<Monaco | null>(null);
+  // Click-to-source from the Circuit Explain panel (and any future caller).
+  useRevealLine(editorInstance, monacoInstance);
 
   const themeName = mode === 'dark' ? 'nuclei-dark' : 'nuclei-light';
   const language = languageForPath(filePath, framework);

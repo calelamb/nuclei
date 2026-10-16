@@ -4,6 +4,7 @@ import { useThemeStore } from '../../stores/themeStore';
 import { useQecStore } from '../../stores/qecStore';
 import { PanelHeader } from '../layout/PanelHeader';
 import { QecEmptyState } from './QecEmptyState';
+import { CircuitExplainPanel } from './CircuitExplainPanel';
 import { detectorGraphLayout, decodeOverlay, type DecodeOverlay } from './qecGeometry';
 import { DetectorGraphCanvas } from './DetectorGraphCanvas';
 import { buildDecodeInput, decodedToOverlay } from './qecDecoderInput';
@@ -12,6 +13,9 @@ import { parseDemGraphWasm, type DemDetectorGraph } from '../../lib/qecDemWasm';
 import { requestQecDecodeSample, requestQecSnapshot } from '../../lib/qecDecodeSender';
 
 const DOCS = 'https://getnuclei.dev/docs/kernel-api/messages-qec/';
+
+/** The in-app interactive decoder is the WASM greedy matcher, not PyMatching. */
+export const INTERACTIVE_DECODER_LABEL = 'preview: greedy matcher, not PyMatching';
 
 /**
  * PRD 10 Phase D — the detector graph. The panel that doesn't exist anywhere
@@ -132,6 +136,18 @@ export function DetectorGraphPanel() {
         snapshot?.dem ? (
           <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
             {decoderReady && (
+              <span
+                data-testid="interactive-decoder-label"
+                title="Interactive decoding runs a fast greedy matcher in the app. Use Sample a shot (PyMatching) or a campaign for accurate decoding."
+                style={{
+                  fontSize: 10, color: colors.warning, border: `1px solid ${colors.warning}`,
+                  borderRadius: 3, padding: '1px 5px', fontFamily: "'Geist Sans', sans-serif",
+                }}
+              >
+                {INTERACTIVE_DECODER_LABEL}
+              </span>
+            )}
+            {decoderReady && (
               <button
                 onClick={() => setInteractive((v) => !v)}
                 title="Toggle detectors and decode live in-app, no kernel round-trip"
@@ -169,7 +185,15 @@ export function DetectorGraphPanel() {
     />
   );
 
-  if (!snapshot) return <div style={{ height: '100%', background: colors.bg }}>{header}</div>;
+  if (!snapshot) {
+    return (
+      <div style={{ height: '100%', display: 'flex', flexDirection: 'column', background: colors.bg }}>
+        {header}
+        <div style={{ flex: 1 }} />
+        <CircuitExplainPanel />
+      </div>
+    );
+  }
 
   // No detector error model at all (e.g. a non-deterministic observable).
   if (!snapshot.dem || !layout) {
@@ -181,6 +205,7 @@ export function DetectorGraphPanel() {
           body={snapshot.dem_error ?? 'stim could not build a detector error model for this circuit.'}
           docsHref={DOCS}
         />
+        <CircuitExplainPanel />
       </div>
     );
   }
@@ -289,7 +314,7 @@ export function DetectorGraphPanel() {
           {overlay.logicalError ? 'logical error this shot' : 'corrected — no logical error'}
         </div>
       ) : null}
+      <CircuitExplainPanel />
     </div>
   );
 }
-

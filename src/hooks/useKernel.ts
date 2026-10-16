@@ -13,6 +13,9 @@ import { useDiracStore } from '../stores/diracStore';
 import { useHardwareStore } from '../stores/hardwareStore';
 import { useQecStore } from '../stores/qecStore';
 import { useQecEstimateStore } from '../stores/qecEstimateStore';
+import { useQecExplainStore } from '../stores/qecExplainStore';
+import { applyQecExplainResult, applyQecExplainError } from '../lib/qecExplainMessages';
+import { setQecExplainSender, type QecExplainAnalysis } from '../lib/qecExplainSender';
 import { useMissingDependencyStore } from '../stores/missingDependencyStore';
 import { setQecDecodeSender, setQecSnapshotSender, setQecEstimateSender } from '../lib/qecDecodeSender';
 import { setTranspileSender } from '../lib/transpileSender';
@@ -171,6 +174,9 @@ export function useKernel() {
       case 'qec_estimate_result':
         useQecEstimateStore.getState().setResult(msg.data);
         break;
+      case 'qec_explain_result':
+        applyQecExplainResult(msg.data);
+        break;
       case 'transpile_result':
         // Dev tools Phase 1 — Transpiler Explorer. A null payload means an
         // `error` with phase 'transpile' already arrived and set the store's
@@ -204,6 +210,13 @@ export function useKernel() {
         // terminal/editor error surfaces (PRD 10 Phase F).
         if (msg.phase === 'qec_estimate') {
           useQecEstimateStore.getState().setError(msg.message);
+          break;
+        }
+
+        // Circuit Explain failures render inside that panel (visible, with the
+        // kernel's message), not in the terminal/editor surfaces.
+        if (msg.phase === 'qec_explain') {
+          applyQecExplainError(msg.message);
           break;
         }
 
@@ -748,6 +761,17 @@ export function useKernel() {
     },
     [sendHardware],
   );
+  const qecExplain = useCallback(
+    (circuitText: string, analysis: QecExplainAnalysis) => {
+      const store = useQecExplainStore.getState();
+      store.begin(circuitText);
+      // No socket → no reply will ever arrive; say so instead of spinning.
+      if (!sendHardware({ type: 'qec_explain', circuit_text: circuitText, analysis })) {
+        store.setError("The kernel isn't connected, so this circuit can't be explained. Start it and try again.");
+      }
+    },
+    [sendHardware],
+  );
   const qecEstimate = useCallback(
     (code: string, language: 'qsharp' | 'qasm3' | 'qiskit', options?: Record<string, unknown>) => {
       const store = useQecEstimateStore.getState();
@@ -817,6 +841,7 @@ export function useKernel() {
     setQecDecodeSender(qecDecodeSample);
     setQecSnapshotSender(qecSnapshotReRequest);
     setQecEstimateSender(qecEstimate);
+    setQecExplainSender(qecExplain);
     setTranspileSender(transpile);
     setDebugTraceSender(debugTrace);
     setLintSender(lint);
@@ -825,12 +850,13 @@ export function useKernel() {
       setQecDecodeSender(null);
       setQecSnapshotSender(null);
       setQecEstimateSender(null);
+      setQecExplainSender(null);
       setTranspileSender(null);
       setDebugTraceSender(null);
       setLintSender(null);
       setFormatSender(null);
     };
-  }, [qecDecodeSample, qecSnapshotReRequest, qecEstimate, transpile, debugTrace, lint, format]);
+  }, [qecDecodeSample, qecSnapshotReRequest, qecEstimate, qecExplain, transpile, debugTrace, lint, format]);
 
   // Fetch the per-gate state trajectory when the user enters step-through mode,
   // and refresh it (debounced) if the code changes while stepping. The existing

@@ -139,6 +139,8 @@ export type KernelMessage =
   // nuclei_circuits(noise) and collect its labeled circuits.
   | { type: 'qec_materialize'; code: string; noise?: Record<string, number> }
   | { type: 'qec_decode_sample'; circuit_text: string; decoder: 'pymatching'; seed?: number }
+  // Circuit Explain: static analysis of the circuit text (non-determinism + min-weight logical error).
+  | { type: 'qec_explain'; circuit_text: string; analysis?: 'both' | 'nondeterministic' | 'min_weight'; request_id?: string }
   // Protocol v1.2 (PRD 10 Phase F) — Azure Quantum Resource Estimator over
   // Q# source or OpenQASM 3.
   | { type: 'qec_estimate'; code: string; language: 'qsharp' | 'qasm3' | 'qiskit'; options?: QecEstimateOptions }
@@ -180,7 +182,7 @@ export type KernelResponse =
       message: string;
       traceback?: string;
       code?: string;
-      phase?: 'parse' | 'execute' | 'python' | 'transpile' | 'debug' | 'lint' | 'format' | 'qec_estimate' | 'qec_generate' | 'qec_snapshot' | 'qec_materialize' | 'qec_campaign' | 'qec_decode_sample';
+      phase?: 'parse' | 'execute' | 'python' | 'transpile' | 'debug' | 'lint' | 'format' | 'qec_estimate' | 'qec_generate' | 'qec_snapshot' | 'qec_materialize' | 'qec_campaign' | 'qec_decode_sample' | 'qec_explain';
       framework?: Framework;
       dependency?: string;
     }
@@ -210,6 +212,8 @@ export type KernelResponse =
   | { type: 'qec_circuits'; circuits: Record<string, string> }
   | ({ type: 'qec_decode_sample' } & QecDecodeSampleResult)
   | { type: 'qec_estimate_result'; data: QecEstimate }
+  // Raw payload; validated with zod (parseQecExplainData) before it reaches the store.
+  | { type: 'qec_explain_result'; data: unknown; request_id?: string }
   // Dev tools Phase 1 — reply to `transpile`. `data` is null on error (an
   // `error` with phase 'transpile' precedes it, house style).
   | { type: 'transpile_result'; data: TranspileResult | null }
