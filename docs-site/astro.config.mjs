@@ -89,6 +89,7 @@ export default defineConfig({
           items: [
             'developer-tools/transpiler-explorer',
             'developer-tools/quantum-debugger',
+            'developer-tools/mcp-agent',
           ],
         },
         {

@@ -1,0 +1,133 @@
+---
+title: "Use Nuclei from your AI agent (MCP)"
+description: "Run QEC research from Claude Code, Cursor or any MCP client through typed tools. Every number carries a run_id and manifest and is written to an immutable research journal."
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+`nuclei_mcp` is a stdio [Model Context Protocol](https://modelcontextprotocol.io)
+server that lets your own agent do QEC research with Nuclei's statistics. It is
+independent of the desktop app and the WebSocket kernel: it only needs Python,
+`stim`, `sinter`, `pymatching`, `scipy` and the official `mcp` SDK.
+
+The design goal is that **an agent cannot hand you an untraceable number**. Every
+numeric result has a `run_id`, a manifest (stim / sinter / decoder versions,
+circuit SHA-256, every parameter, the estimator, the confidence-interval method,
+units) and a record in an append-only journal. Ask the agent to cite `run_id`s
+and you can check any claim with `journal_get`.
+
+## Install and configure
+
+From a Nuclei checkout, install into the research virtualenv (the `mcp` and `scipy` pins live
+in `kernel/requirements.txt`):
+
+```bash
+pip install "mcp==2.3.0" stim sinter pymatching scipy numpy
+```
+
+Claude Code (`.mcp.json` in your project, or `claude mcp add-json`):
+
+```json
+{
+  "mcpServers": {
+    "nuclei": {
+      "command": "/path/to/venv/bin/python",
+      "args": ["-m", "nuclei_mcp", "--journal", "/path/to/my-research/journal"],
+      "env": { "PYTHONPATH": "/path/to/nuclei/kernel" }
+    }
+  }
+}
+```
+
+Cursor and other clients take the same `command` / `args` / `env` triple. Without
+`--journal` the journal lives in `~/.nuclei/mcp-journal` (or `$NUCLEI_MCP_JOURNAL`).
+
+## Tools
+
+| Tool | What it does |
+| --- | --- |
+| `inspect_circuit` | Qubit, measurement, detector and observable counts and the graphlike distance of a stim circuit (`stim_text` or `path`). |
+| `load_stats` | Reads sinter CSV files with `sinter.read_stats_from_csv_files` semantics. |
+| `fit` | Per-shot and per-round logical error rates with intervals, grouped by metadata keys; Λ when it is defensible. |
+| `run_campaign` | A bounded `sinter.collect`, writing a sinter CSV and manifest into the journal. |
+| `compare` | Point-by-point comparison of two journaled runs. |
+| `journal_list`, `journal_get` | Browse and fetch journal records, including the arguments needed to re-run a call. |
+
+### Nothing is defaulted
+
+`run_campaign` requires the noise model, the rounds, the decoders and every limit
+(`max_shots`, `max_errors`, `max_seconds`, `max_tasks`). A missing field is a
+validation error, not a quiet default. For generated circuits the noise model is
+a name plus per-channel multipliers of the swept physical error rate, for example
+`{"name": "uniform", "channels": {"after_clifford_depolarization": 1.0}}`.
+
+### Hard caps
+
+Requests above the server's ceilings are **refused**, never clamped. Defaults:
+10M shots and 100k errors per task, 600 s, 200 tasks, 100M total shots, distance
+25, 200 rounds, 4 workers. Raise them as the researcher with
+`--ceiling-max-shots N` (any of the ceiling names) or
+`NUCLEI_MCP_CEILING_MAX_SHOTS=N`. A campaign that reaches `max_seconds` stops
+early and its journal record is flagged `partial: true`. `max_seconds` is checked
+whenever sinter reports progress, which can be minutes apart for a slow task, so
+treat it as a soft deadline rather than a hard wall-clock bound. A campaign
+**cancelled by the client** is signalled to stop at the next progress report, but
+**no journal record is written** for it.
+
+### What the statistics mean
+
+- A rate is `errors / (shots − discards)`. If a run discards shots, the rate is
+  conditional on that post-selection and the output says so.
+- Intervals come from `sinter.fit_binomial` and are **likelihood-ratio regions**
+  (`max_likelihood_factor`, default 1000, recorded in the manifest). They are not
+  a named confidence level.
+- Per-round rates use `sinter.shot_error_rate_to_piece_error_rate`.
+- Λ is the least-squares slope of ln(per-round rate) against distance, reported as
+  the suppression factor per +2 distance with a 95% Student-t interval. It is only
+  computed when you pass `x_is_distance: true` (declaring that `x` is the code
+  distance), give a `rounds_key`, and have **three or more distinct distances that
+  have observed errors**; otherwise the tool says why it did not. Points with zero
+  observed errors are excluded, and if those are the largest distances the fit
+  describes a higher-error regime than the full range (the output warns).
+- `fit` and `compare` **refuse to pool rows from different experiments**: rows that
+  fall on the same point but differ in other metadata (physical error rate,
+  decoder, circuit hash...) are an error that names the differing keys. Rows that
+  differ only by `strong_id` are merged with a note. `compare` also refuses to
+  compare per-shot rates across different `rounds` unless `rounds` is in `match_on`. With exactly three
+  points the interval is very wide, on purpose.
+- `compare` answers `not_distinguishable` whenever the intervals overlap. Only
+  separated intervals produce `a_lower_error_rate` / `b_lower_error_rate`. Overlap
+  does not show two runs are equal, and no multiple-comparison correction is applied.
+
+## The research journal
+
+Each record in `runs/<run_id>.json` holds the inputs, outputs, manifest, parent
+`run_id`s and the exact arguments to re-run the call (pass `rerun.tool` and `rerun.arguments` back
+to the tool unchanged; this is tested for every tool). Records are write-once:
+files are created exclusively and read-only, the journal exposes no update or
+delete operation, and a SHA-256 over each record is checked on every read, so an
+edit made outside Nuclei is reported as an integrity failure. `run_campaign` also
+stores its CSV and every circuit under `artifacts/`. Circuit hashes are
+SHA-256 of the canonical `str(stim.Circuit)` everywhere, so the hash from
+`inspect_circuit` matches the one in a campaign manifest. `journal_list` reports
+`integrity: "failed"` for an unreadable or modified record instead of failing.
+
+## Limitations
+
+<Aside type="caution" title="Read before trusting a headline number">
+- **Campaigns are not seed-reproducible.** `sinter.collect` has no seed, so a
+  re-run is statistically consistent with the original, not identical. Manifests
+  say `deterministically_reproducible: false`.
+- **The journal is tamper-evident, not tamper-proof.** Someone with write access
+  to the directory can delete records or rewrite a record and its checksum.
+- **Declared metadata is not verified for existing circuits.** With `stim_paths`,
+  the rounds and noise-model name you pass are recorded but not checked against the file.
+- **Graphlike distance only.** `inspect_circuit` reports `null` with a reason for
+  circuits with non-deterministic detectors; it does not yet explain why.
+- **Λ is an unweighted fit** that ignores per-point statistical error, so treat it
+  as a screening number and check the points behind it.
+- **Optional decoders.** `fusion_blossom` and the MWPF-based decoders need their
+  own Python packages; the tool refuses up front if they are missing.
+- Tools run with the permissions of the server process: `path` arguments can read
+  any file that process can read.
+</Aside>
