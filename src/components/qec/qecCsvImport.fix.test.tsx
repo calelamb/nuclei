@@ -45,10 +45,12 @@ describe('unmapped metadata keys no longer merge series silently', () => {
 
   it('warns visibly when the user removes the group-by and tasks collide', () => {
     useQecCampaignStore.getState().loadFromCsv(BASIS_CSV, 'b.csv');
-    const { getByLabelText, getByRole } = render(<CsvMappingPreview />);
+    const { getByLabelText, getAllByRole } = render(<CsvMappingPreview />);
     fireEvent.click(getByLabelText('Group series by basis'));
     expect(useQecCampaignStore.getState().csvImport?.mapping.groupBy).toEqual([]);
-    expect(getByRole('alert').textContent).toMatch(/2 plotted points are shared by more than one task/);
+    const alerts = getAllByRole('alert').map((a) => a.textContent).join(' | ');
+    expect(alerts).toMatch(/2 plotted points are shared by more than one task/);
+    expect(alerts).toMatch(/"basis".*splits the tasks into blocks/);
   });
 });
 
@@ -87,10 +89,11 @@ describe('sinter-native export', () => {
 });
 
 describe('postselection and guess caveats', () => {
-  it('warns that plotted rates ignore discards when any row has discards', () => {
+  it('does not claim rates ignore discards (the figure uses shots - discards)', () => {
     useQecCampaignStore.getState().loadFromCsv(goldenCsv, 'g.csv');
-    const { getByText } = render(<CsvMappingPreview />);
-    expect(getByText(/errors\/shots, not errors\/\(shots - discards\)/)).toBeTruthy();
+    const { queryByText } = render(<CsvMappingPreview />);
+    expect(queryByText(/errors\/shots, not/)).toBeNull();
+    expect(queryByText(/read lower here/)).toBeNull();
   });
 
   it('flags a fallback p guess as low confidence', () => {

@@ -30,16 +30,31 @@ beforeEach(() => {
 });
 
 describe('DecoderWorkbench', () => {
-  it('shows one row per decoder with LER, shots, errors, time/shot and exports CSV', () => {
+  it('shows one row per (decoder, d, p) with kept-shot LER, never pooled, and exports CSV', () => {
     loadCampaign();
-    const { getByText, getAllByText, getByRole } = render(<DecoderWorkbench />);
-    expect(getByText('pymatching')).toBeTruthy();
-    expect(getByText('fusion_blossom')).toBeTruthy();
-    // 80,000 pooled shots per decoder (both decoders → two cells).
-    expect(getAllByText('80,000').length).toBe(2);
+    const { getAllByText, getByText, getByRole, container } = render(<DecoderWorkbench />);
+    expect(getAllByText('pymatching').length).toBeGreaterThan(1);
+    expect(getAllByText('fusion_blossom').length).toBeGreaterThan(1);
+    // 2 decoders x 2 distances x 2 noise = 8 points, none pooled.
+    expect(container.querySelectorAll('tbody tr').length).toBe(8);
+    expect(getByText(/likelihood-ratio/)).toBeTruthy();
     fireEvent.click(getByRole('button', { name: 'Export CSV' }));
     expect(downloadCsv).toHaveBeenCalledTimes(1);
-    expect(downloadCsv.mock.calls[0][0]).toContain('decoder,logical_error_rate');
+    const csv = downloadCsv.mock.calls[0][0] as string;
+    expect(csv).toContain('decoder,experiment,distance,noise,shots,discards,kept_shots,errors,logical_error_rate');
+    expect(csv.trim().split('\n')).toHaveLength(9);
+  });
+
+  it('rates are errors / (shots - discards): 10 errors in 1000 shots with 900 discarded is 10%', () => {
+    useQecCampaignStore.setState({
+      rowsByStrongId: {
+        a: { shots: 1000, errors: 10, discards: 900, seconds: 1, decoder: 'pymatching', strong_id: 'a',
+          json_metadata: { d: 3, p: 0.01 }, custom_counts: {} },
+      },
+    });
+    const { container, getByText } = render(<DecoderWorkbench />);
+    expect(container.querySelector('tbody')!.textContent).toContain('10.0%');
+    expect(getByText('900')).toBeTruthy();
   });
 
   it('shows an empty state with no campaign results', () => {

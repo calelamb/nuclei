@@ -415,13 +415,36 @@ export function whiskerConvention(factor = DEFAULT_MAX_LIKELIHOOD_FACTOR): strin
   return `likelihood ratio, factor ${factor} (about ${likelihoodFactorSigma(factor).toFixed(1)}σ)`;
 }
 
-export const LAMBDA_CI_CONVENTION = 'about ±1σ (68%), heteroscedastic OLS slope variance';
+export const LAMBDA_CI_CONVENTION =
+  'about ±1σ (nominal 68%), heteroscedastic OLS slope variance; coverage is optimistic with few distances (n-2 degrees of freedom, 1 at three distances)';
+
+/** Short form for the figure footer. */
+export const LAMBDA_CI_SHORT = 'about ±1σ (nominal 68%; n−2 d.o.f., optimistic for few distances)';
 
 /** Machine-readable provenance embedded in exported figures. */
+/** FNV-1a 64-bit of the sorted strong_ids: order-independent identity of the data behind a figure. */
+export function strongIdDigest(strongIds: readonly string[]): string {
+  const mask = (1n << 64n) - 1n;
+  let h = 0xcbf29ce484222325n;
+  for (const ch of [...strongIds].sort().join('\n')) {
+    h = ((h ^ BigInt(ch.codePointAt(0)!)) * 0x100000001b3n) & mask;
+  }
+  return h.toString(16).padStart(16, '0');
+}
+
+const MAX_LISTED_STRONG_IDS = 200;
+
+export interface FigureSource {
+  /** Name of the file the rows came from, or null for a live campaign. */
+  file: string | null;
+  rows: readonly QecCampaignStatsRow[];
+}
+
 export function qecFigureMetadata(
   units: RateUnits,
   maxLikelihoodFactor = DEFAULT_MAX_LIKELIHOOD_FACTOR,
   lambdas: readonly LambdaGroupEstimate[] = [],
+  source?: FigureSource,
 ) {
   return {
     title: 'Logical error vs physical error',
@@ -438,6 +461,17 @@ export function qecFigureMetadata(
       lambda: e.estimate.lambda.best, low: e.estimate.lambda.low, high: e.estimate.lambda.high,
       distances: e.estimate.distances, dropped_zero_error_distances: e.estimate.droppedZeroError,
     })),
+    source: source ? figureSource(source) : null,
     implementation: 'nuclei src/lib/qecFit.ts (TypeScript port of sinter)',
+  };
+}
+
+function figureSource({ file, rows }: FigureSource) {
+  const ids = rows.map((r) => r.strong_id);
+  return {
+    file,
+    tasks: ids.length,
+    strong_id_digest: strongIdDigest(ids),
+    strong_ids: ids.length <= MAX_LISTED_STRONG_IDS ? [...ids].sort() : null,
   };
 }

@@ -9,7 +9,7 @@ import { isWebBuild } from '../../platform/buildTarget';
 import type { ThresholdSeries } from '../../types/qecStats';
 import {
   DEFAULT_MAX_LIKELIHOOD_FACTOR,
-  LAMBDA_CI_CONVENTION,
+  LAMBDA_CI_SHORT,
   MIN_LAMBDA_DISTANCES,
   lambdaEstimates,
   likelihoodSeries,
@@ -45,13 +45,19 @@ export function ThresholdPanel() {
   const units: RateUnits = roundsKnown ? requestedUnits : 'per_shot';
   const { series, excluded, invalid, noKept } = useMemo(() => likelihoodSeries(rows, { units }), [rows, units]);
   const lambdas = useMemo(() => lambdaEstimates(rows, { units }), [rows, units]);
-  const meta = useMemo(() => qecFigureMetadata(units, DEFAULT_MAX_LIKELIHOOD_FACTOR, lambdas), [units, lambdas]);
+  const csvImport = useQecCampaignStore((s) => s.csvImport);
+  const campaignName = useQecCampaignStore((s) => s.campaignName);
+  const meta = useMemo(
+    () => qecFigureMetadata(units, DEFAULT_MAX_LIKELIHOOD_FACTOR, lambdas, {
+      file: csvImport?.sourceName ?? campaignName, rows,
+    }),
+    [units, lambdas, rows, csvImport, campaignName],
+  );
   const lambdaLines = useMemo(() => lambdas.map(lambdaLine), [lambdas]);
   const hasDiscards = useMemo(() => rows.some((r) => r.discards > 0), [rows]);
 
   const domain = useMemo(() => computeLogDomain(series), [series]);
 
-  const csvImport = useQecCampaignStore((s) => s.csvImport);
   const originals = useMemo(
     () => (csvImport ? new Map(csvImport.rows.map((r) => [r.strong_id, r])) : undefined),
     [csvImport],
@@ -153,7 +159,7 @@ export function ThresholdPanel() {
           ))}
           {lambdaLines.length > 0 && (
             <text x={(PLOT.x0 + PLOT.x1) / 2} y={181} fontSize={5.5} fill={colors.textDim} textAnchor="middle">
-              {`Λ interval: ${LAMBDA_CI_CONVENTION}`}
+              {`Λ interval: ${LAMBDA_CI_SHORT}`}
             </text>
           )}
           {/* series */}

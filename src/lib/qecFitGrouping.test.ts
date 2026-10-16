@@ -161,3 +161,42 @@ describe('qecRatesToCsv matches the figure', () => {
     expect(out.every((r) => r.rate === '')).toBe(true);
   });
 });
+
+describe('rounds scheme names when r=d and fixed r share a decoder and label', () => {
+  const sweep = (rounds: (d: number) => number, errs: number[]) =>
+    [3, 5, 7].map((d, i) => mk({ d, p: 0.01, label: 'x', r: rounds(d) }, errs[i]));
+  it('r=d family and fixed r=15 family are two experiments with honest names', () => {
+    const rows = [...sweep((d) => d, [900, 300, 100]), ...sweep(() => 15, [500, 200, 90])];
+    const got = lambdaEstimates(rows);
+    expect(got).toHaveLength(2);
+    expect(got.map((g) => g.label).sort()).toEqual(['x r=15', 'x r=d']);
+    const { series } = likelihoodSeries(rows);
+    expect(new Set(series.map((s) => s.label))).toEqual(new Set(['x r=15', 'x r=d']));
+  });
+});
+
+describe('qecRatesToCsv decoder column and figure source metadata', () => {
+  it('exports the original decoder, not the group-by-decorated one', () => {
+    const decorated = mk({ d: 3, p: 0.01, label: 'x' }, 10, { decoder: 'pymatching [basis=X]' });
+    const original = { ...decorated, decoder: 'pymatching' };
+    const csv = qecRatesToCsv([decorated], { originals: new Map([[decorated.strong_id, original]]) });
+    const [h, line] = csv.trim().split('\n');
+    expect(line.split(',')[h.split(',').indexOf('decoder')]).toBe('pymatching');
+    expect(h.split(',')).toContain('series');
+    expect(csv).toContain('pymatching [basis=X]');
+  });
+  it('figure metadata ties the figure to its data', () => {
+    const rows = [mk({ d: 3, p: 0.01 }, 10), mk({ d: 5, p: 0.01 }, 5)];
+    const m = qecFigureMetadata('per_shot', undefined, [], { file: 'run1.csv', rows });
+    expect(m.source.file).toBe('run1.csv');
+    expect(m.source.tasks).toBe(2);
+    expect(m.source.strong_ids).toHaveLength(2);
+    expect(m.source.strong_id_digest).toMatch(/^[0-9a-f]{16}$/);
+    const again = qecFigureMetadata('per_shot', undefined, [], { file: 'run1.csv', rows: [...rows].reverse() });
+    expect(again.source.strong_id_digest).toBe(m.source.strong_id_digest);
+    expect(qecFigureMetadata('per_shot').source).toBeNull();
+  });
+  it('states the Λ interval degrees-of-freedom caveat', () => {
+    expect(qecFigureMetadata('per_shot').lambda_ci).toMatch(/degrees of freedom/);
+  });
+});

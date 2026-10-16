@@ -2,7 +2,9 @@
  * CSV export of logical error rates exactly as the figure shows them: the
  * same sinter likelihood-ratio interval, on shots - discards, in the chosen
  * units, with the provenance (units, CI method, factor) on every row so a
- * file taken out of the app stays self-describing.
+ * file taken out of the app stays self-describing. `decoder` is the decoder
+ * as written in the source file; `series` is the (group-by decorated) name the
+ * figure used, so a re-import sees the original decoder.
  */
 import type { QecCampaignStatsRow } from '../types/qec';
 import { assignExperiments } from './qecExperiments';
@@ -11,7 +13,7 @@ import {
 } from './qecFit';
 
 export const QEC_RATES_CSV_COLUMNS = [
-  'experiment', 'distance', 'noise', 'decoder', 'rounds', 'shots', 'discards', 'kept_shots', 'errors',
+  'experiment', 'distance', 'noise', 'decoder', 'series', 'rounds', 'shots', 'discards', 'kept_shots', 'errors',
   'rate', 'rate_low', 'rate_high', 'units', 'ci_method', 'max_likelihood_factor', 'note',
   'strong_id', 'json_metadata', 'custom_counts',
 ] as const;
@@ -49,7 +51,7 @@ export function qecRatesToCsv(rows: readonly QecCampaignStatsRow[], opts: QecRat
     const source = opts.originals?.get(row.strong_id) ?? row;
     const provenance = [row.strong_id, jsonCell(source.json_metadata), jsonCell(source.custom_counts ?? {})];
     const common = [
-      experiments.get(row)?.name, metaNum(row.json_metadata, 'd'), metaNum(row.json_metadata, 'p'), row.decoder,
+      experiments.get(row)?.name, metaNum(row.json_metadata, 'd'), metaNum(row.json_metadata, 'p'), source.decoder, row.decoder,
       roundsFromMetadata(row.json_metadata), row.shots, discards, row.shots - discards, row.errors,
     ];
     if (problem) {

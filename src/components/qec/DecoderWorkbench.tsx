@@ -4,28 +4,37 @@ import { useThemeStore } from '../../stores/themeStore';
 import { useQecCampaignStore } from '../../stores/qecCampaignStore';
 import { PanelHeader } from '../layout/PanelHeader';
 import { QecEmptyState } from './QecEmptyState';
-import { decoderWorkbench } from '../../types/qecStats';
+import { decoderComparison } from '../../lib/qecWorkbench';
 import { downloadCsv } from '../../services/experimentExport';
 
 const DOCS = 'https://getnuclei.dev/docs/research/qec-studio/';
 
 /**
- * PRD 10 Phase E — the decoder workbench. Same campaign, same circuits: an
- * honest side-by-side of each decoder's pooled logical error rate (± Wilson
- * CI), shots and errors collected, and decode time per shot (from sinter's
- * timing). Exports the table as CSV.
+ * PRD 10 Phase E — the decoder workbench. Same campaign, same circuits: a
+ * side-by-side of each decoder at every (experiment, d, p) point, never pooled
+ * across p, d or experiments. Rates are errors / (shots - discards) with the
+ * same sinter likelihood-ratio interval as the figure; decode time per shot
+ * comes from sinter's timing. Exports the table as CSV.
  */
 export function DecoderWorkbench() {
   const colors = useThemeStore((s) => s.colors);
   const rowsByStrongId = useQecCampaignStore((s) => s.rowsByStrongId);
   const rows = useMemo(() => Object.values(rowsByStrongId), [rowsByStrongId]);
-  const wb = useMemo(() => decoderWorkbench(rows), [rows]);
+  const cmp = useMemo(() => decoderComparison(rows), [rows]);
+  const wb = cmp.rows;
 
   const exportCsv = () => {
+    const cell = (v: string | number | null) => {
+      const t = v === null ? '' : String(v);
+      return /[",\n]/.test(t) ? `"${t.replace(/"/g, '""')}"` : t;
+    };
     const csv =
-      'decoder,logical_error_rate,ci_lo,ci_hi,shots,errors,seconds_per_shot\n' +
+      'decoder,experiment,distance,noise,shots,discards,kept_shots,errors,logical_error_rate,ci_lo,ci_hi,ci_method,seconds_per_shot\n' +
       wb
-        .map((w) => [w.decoder, w.rate.p, w.rate.lo, w.rate.hi, w.shots, w.errors, w.secondsPerShot].join(','))
+        .map((w) => [
+          w.decoder, w.experiment, w.distance, w.noise, w.shots, w.discards, w.kept, w.errors,
+          w.rate.p, w.rate.lo, w.rate.hi, `likelihood_ratio_factor_${cmp.maxLikelihoodFactor}`, w.secondsPerShot,
+        ].map(cell).join(','))
         .join('\n') +
       '\n';
     downloadCsv(csv, 'decoder-workbench.csv');
@@ -81,23 +90,31 @@ export function DecoderWorkbench() {
           <thead>
             <tr>
               <th style={th}>Decoder</th>
-              <th style={th}>Logical error rate</th>
-              <th style={th}>Shots</th>
+              <th style={th}>Experiment</th>
+              <th style={th}>d</th>
+              <th style={th}>p</th>
+              <th style={th}>Logical error rate (per shot)</th>
+              <th style={th}>Kept shots</th>
+              <th style={th}>Discards</th>
               <th style={th}>Errors</th>
               <th style={th}>s / shot</th>
             </tr>
           </thead>
           <tbody>
             {wb.map((w) => (
-              <tr key={w.decoder}>
+              <tr key={`${w.experiment}|${w.decoder}|${w.distance}|${w.noise}`}>
                 <td style={{ ...td, color: colors.dirac, fontWeight: 600 }}>{w.decoder}</td>
+                <td style={td}>{w.experiment}</td>
+                <td style={td}>{w.distance ?? '—'}</td>
+                <td style={td}>{w.noise ?? '—'}</td>
                 <td style={td}>
                   {pct(w.rate.p)}{' '}
                   <span style={{ color: colors.textDim, fontSize: 10 }}>
                     [{pct(w.rate.lo)}, {pct(w.rate.hi)}]
                   </span>
                 </td>
-                <td style={td}>{w.shots.toLocaleString()}</td>
+                <td style={td}>{w.kept.toLocaleString()}</td>
+                <td style={td}>{w.discards.toLocaleString()}</td>
                 <td style={td}>{w.errors.toLocaleString()}</td>
                 <td style={td}>{w.secondsPerShot.toPrecision(3)}</td>
               </tr>
@@ -111,7 +128,8 @@ export function DecoderWorkbench() {
           borderTop: `1px solid ${colors.border}`, fontFamily: "'Geist Sans', sans-serif",
         }}
       >
-        Wilson 95% CIs · same circuits, same shots budget
+        {`Rate = errors / (shots − discards), sinter likelihood-ratio interval (factor ${cmp.maxLikelihoodFactor}, about 3.7σ). One row per experiment, d and p; nothing pooled.`}
+        {cmp.skipped > 0 && ` ${cmp.skipped} malformed or fully-discarded row(s) skipped.`}
       </div>
     </div>
   );

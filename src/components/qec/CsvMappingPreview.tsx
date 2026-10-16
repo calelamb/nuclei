@@ -2,7 +2,7 @@ import { useMemo } from 'react';
 import { useThemeStore } from '../../stores/themeStore';
 import { useQecCampaignStore } from '../../stores/qecCampaignStore';
 import {
-  applyMapping, DECODER_COLUMN, findCollisions, isFallbackPGuess, metadataKeys,
+  applyMapping, DECODER_COLUMN, findCollisions, findPartitionKeys, isFallbackPGuess, metadataKeys,
 } from '../../types/sinterMapping';
 import { toStatsPoint } from '../../types/qecStats';
 
@@ -34,7 +34,7 @@ export function CsvMappingPreview() {
     () => (csv ? findCollisions(applyMapping(csv.rows, csv.mapping)) : []),
     [csv],
   );
-  const hasDiscards = useMemo(() => (csv ? csv.rows.some((r) => r.discards > 0) : false), [csv]);
+  const partitions = useMemo(() => (csv ? findPartitionKeys(csv.rows, csv.mapping) : []), [csv]);
   const plotted = useQecCampaignStore((s) => s.rowsByStrongId);
   const plottable = useMemo(
     () => Object.values(plotted).filter((r) => toStatsPoint(r).noise !== null).length,
@@ -109,19 +109,21 @@ export function CsvMappingPreview() {
       {collisions.length > 0 && (
         <div role="alert" style={note}>
           {`${collisions.length} plotted ${collisions.length === 1 ? 'point is' : 'points are'} shared by more than one task `
-            + '(same series, d, decoder and p), so curves repeat x values and Λ keeps only one task per point. '
-            + 'Tick a key above (e.g. basis, noise model) to split them.'}
+            + '(same series, d, decoder and p), so curves repeat x values and Λ treats the colliding tasks '
+            + 'as replicates of one point. Tick a key above (e.g. basis, noise model) to split them.'}
+        </div>
+      )}
+      {partitions.length > 0 && (
+        <div role="alert" style={note}>
+          {`${partitions.map((k) => `"${k.key}" (${k.distinct} values)`).join(', ')} `
+            + `${partitions.length === 1 ? 'splits' : 'split'} the tasks into blocks but ${partitions.length === 1 ? 'is' : 'are'} not used `
+            + 'to separate series. If the blocks are different experiments (code, noise model), their curves and Λ '
+            + 'fits are being pooled. Tick the key above to keep them apart.'}
         </div>
       )}
       {isFallbackPGuess(csv.mapping) && (
         <div style={note}>
           {`p was guessed: "${csv.mapping.p}" is not a conventional name for the noise parameter. Confirm the x-axis.`}
-        </div>
-      )}
-      {hasDiscards && (
-        <div style={note}>
-          Some tasks have discards. Plotted rates are errors/shots, not errors/(shots - discards) as sinter plot uses,
-          so postselected data will read lower here than in sinter.
         </div>
       )}
       {csv.issues.length > 0 && (

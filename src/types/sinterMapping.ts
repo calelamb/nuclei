@@ -90,6 +90,46 @@ function excess(rows: readonly QecCampaignStatsRow[], mapping: SinterMapping): n
   return findCollisions(applyMapping(rows, mapping)).reduce((n, c) => n + c.count - 1, 0);
 }
 
+export interface PartitionKey {
+  key: string;
+  /** Distinct values of the key across tasks. */
+  distinct: number;
+}
+
+const valueOf = (row: QecCampaignStatsRow, key: string): string => JSON.stringify(meta(row)[key] ?? null);
+
+/** True when `key` and `axis` determine each other (one value of one per
+ * value of the other), e.g. a qubit count that is a function of d. */
+function isBijective(rows: readonly QecCampaignStatsRow[], key: string, axis: string): boolean {
+  const forward = new Map<string, Set<string>>();
+  const backward = new Map<string, Set<string>>();
+  for (const row of rows) {
+    const k = valueOf(row, key);
+    const a = valueOf(row, axis);
+    forward.set(k, (forward.get(k) ?? new Set<string>()).add(a));
+    backward.set(a, (backward.get(a) ?? new Set<string>()).add(k));
+  }
+  return [...forward.values()].every((s) => s.size === 1) && [...backward.values()].every((s) => s.size === 1);
+}
+
+/**
+ * Unmapped, non-grouped metadata keys that split the tasks into blocks (2 to
+ * n-1 distinct values, unlike a per-task seed that has n) without merely
+ * restating d, p or rounds. Such a key can separate experiments whose grids
+ * do not overlap, so no (d, p) collision ever reveals it; left alone, the
+ * blocks would be joined into one curve and one Λ fit. The guess groups by
+ * these keys; anything still returned here must be shown to the user.
+ */
+export function findPartitionKeys(rows: readonly QecCampaignStatsRow[], mapping: SinterMapping): PartitionKey[] {
+  const taken = new Set<string | null>([mapping.p, mapping.d, mapping.rounds, mapping.decoder, 'label', ...mapping.groupBy]);
+  const axes = [mapping.d, mapping.p, mapping.rounds].filter((a): a is string => a !== null);
+  return metadataKeys(rows)
+    .filter((k) => !taken.has(k.key))
+    .filter((k) => k.distinct >= 2 && k.distinct < rows.length)
+    .filter((k) => !axes.some((a) => isBijective(rows, k.key, a)))
+    .map((k) => ({ key: k.key, distinct: k.distinct }));
+}
+
 /** Greedily add unmapped varying keys to groupBy until no two tasks share a
  * plotted point (or no key helps). Fewer-valued keys win ties. */
 function autoGroupBy(
@@ -113,6 +153,15 @@ function autoGroupBy(
   return groupBy;
 }
 
+/** Collision-removing keys first, then any remaining block-partitioning keys. */
+function guessGroupBy(
+  rows: readonly QecCampaignStatsRow[], base: SinterMapping, keys: readonly MetadataKeyInfo[],
+): string[] {
+  const collision = autoGroupBy(rows, base, keys);
+  const partition = findPartitionKeys(rows, { ...base, groupBy: collision }).map((k) => k.key);
+  return [...collision, ...partition];
+}
+
 /** Best-guess mapping from conventional key names; never throws. */
 export function guessMapping(rows: readonly QecCampaignStatsRow[]): SinterMapping {
   const keys = metadataKeys(rows);
@@ -125,7 +174,7 @@ export function guessMapping(rows: readonly QecCampaignStatsRow[]): SinterMappin
   const base: SinterMapping = {
     p, d, rounds, decoder: pick(keys, DECODER_NAMES, false) ?? DECODER_COLUMN, groupBy: [],
   };
-  return { ...base, groupBy: autoGroupBy(rows, base, keys) };
+  return { ...base, groupBy: guessGroupBy(rows, base, keys) };
 }
 
 const DEFAULT_LABEL = 'stats';
@@ -181,7 +230,7 @@ export interface Collision {
 
 /** Cells of the plot (series × d × decoder × p) that more than one task maps
  * to. Run on applyMapping output. Any hit means a curve has repeated x values
- * and Λ would silently keep only one of the tasks. */
+ * and Λ would treat the colliding tasks as replicates of one point. */
 export function findCollisions(mapped: readonly QecCampaignStatsRow[]): Collision[] {
   const cells = new Map<string, Collision>();
   for (const row of mapped) {

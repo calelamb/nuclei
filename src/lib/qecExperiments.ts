@@ -65,16 +65,26 @@ function ratioTag(k: number): string {
   return Number.isInteger(k) ? `r=${k}d` : `r=${Number(k.toPrecision(3))}d`;
 }
 
-/** Rounds-scheme tag for every row of one base group. */
+/**
+ * Rounds-scheme tag for every row of one base group. A ratio r/d names a
+ * scheme (`r=d`, `r=3d`) only when rows at two or more distances share it;
+ * otherwise the ratio is a coincidence of one fixed r (a fixed r=15 family
+ * has ratios 5, 3, 2.14 at d=3, 5, 7) and the row is tagged `r=<n>`. With a
+ * single distance there is nothing to compare, so the ratio form is kept when
+ * it does not multiply the schemes.
+ */
 function roundsTags(group: readonly QecCampaignStatsRow[]): string[] {
   const info = group.map((row) => ({ r: roundsFromMetadata(row.json_metadata), d: distanceOf(row) }));
-  const ratios = new Set(info.filter((i) => i.r !== null && i.d !== null).map((i) => i.r! / i.d!));
-  const fixed = new Set(info.filter((i) => i.r !== null).map((i) => i.r!));
-  const useRatio = ratios.size > 0 && ratios.size <= fixed.size;
+  const known = info.filter((i): i is { r: number; d: number } => i.r !== null && i.d !== null);
+  const distancesPerRatio = new Map<number, Set<number>>();
+  for (const i of known) distancesPerRatio.set(i.r / i.d, (distancesPerRatio.get(i.r / i.d) ?? new Set<number>()).add(i.d));
+  const manyDistances = new Set(known.map((i) => i.d)).size >= 2;
+  const singleDistanceRatio = !manyDistances && distancesPerRatio.size <= new Set(known.map((i) => i.r)).size;
   return info.map((i) => {
     if (i.r === null) return '';
-    if (useRatio && i.d !== null) return ratioTag(i.r / i.d);
-    return `r=${i.r}`;
+    if (i.d === null) return `r=${i.r}`;
+    const scheme = manyDistances ? (distancesPerRatio.get(i.r / i.d)?.size ?? 0) >= 2 : singleDistanceRatio;
+    return scheme ? ratioTag(i.r / i.d) : `r=${i.r}`;
   });
 }
 

@@ -135,12 +135,9 @@ export interface LambdaFit {
 }
 
 /**
- * @deprecated Use `lambdaEstimates` from `src/lib/qecFit.ts` (log-linear
- * regression with uncertainty, >= 3 distances, no dropping of ratios <= 1).
- * Kept only for `services/qecContext.ts`.
- *
- * @deprecated Two-point ratio without an interval; use `lambdaEstimates` in
- * src/lib/qecFit.ts.
+ * @deprecated Two-point ratio without an interval that drops ratios <= 1; use
+ * `lambdaEstimates` in src/lib/qecFit.ts (log-linear regression with
+ * uncertainty, >= 3 distances). Kept only for the legacy unit tests.
  *
  * Fit Λ, the error-suppression factor: at each noise point, the ratio of the
  * logical error rate between successive distances (smaller / larger). Λ > 1
@@ -204,39 +201,6 @@ export function projectedDistanceForTarget(
   if (baseRate <= target) return baseDistance;
   const steps = Math.ceil(Math.log(baseRate / target) / Math.log(lambda));
   return baseDistance + step * steps;
-}
-
-// ─────────────────────────── Decoder workbench ───────────────────────────
-
-export interface DecoderWorkbenchRow {
-  decoder: string;
-  shots: number;
-  errors: number;
-  rate: Rate;
-  /** Wall-seconds per shot (sinter's timing), the decode-speed comparison. */
-  secondsPerShot: number;
-}
-
-/** Aggregate a campaign's rows per decoder for the honest side-by-side
- * comparison: pooled LER±CI, total shots/errors, and decode time per shot. */
-export function decoderWorkbench(rows: QecCampaignStatsRow[], z = 1.96): DecoderWorkbenchRow[] {
-  const agg = new Map<string, { shots: number; errors: number; seconds: number }>();
-  for (const row of rows) {
-    const a = agg.get(row.decoder) ?? { shots: 0, errors: 0, seconds: 0 };
-    a.shots += row.shots;
-    a.errors += row.errors;
-    a.seconds += row.seconds;
-    agg.set(row.decoder, a);
-  }
-  return [...agg.entries()]
-    .map(([decoder, a]) => ({
-      decoder,
-      shots: a.shots,
-      errors: a.errors,
-      rate: wilsonInterval(a.errors, a.shots, z),
-      secondsPerShot: a.shots > 0 ? a.seconds / a.shots : 0,
-    }))
-    .sort((x, y) => x.decoder.localeCompare(y.decoder));
 }
 
 // ─────────────────────────── Export ───────────────────────────

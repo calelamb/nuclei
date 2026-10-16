@@ -56,9 +56,18 @@ Message-by-message detail lives in the
 - **Port.** The kernel binds `localhost` and prints exactly one ready line
   to stdout: `Nuclei kernel ready on ws://localhost:<port>`. Standalone
   embedders should parse that line — the kernel scans 9742–9761 if the
-  default port is taken. The desktop app instead *pins* 9742: the shell
-  kills any process squatting on the port before spawning, because the
-  frontend's WebSocket URL and the CSP both hardcode it.
+  default port is taken. The desktop app instead *pins* 9742, because the
+  frontend's WebSocket URL and the CSP both hardcode it. Before spawning,
+  the shell reaps only a leftover kernel that Nuclei itself recorded; if
+  anything else holds the port it refuses to start rather than kill an
+  unrelated process.
+- **Authentication.** Every connection must pass a loopback `Host` check, an
+  `Origin` allowlist and a first frame `{"type": "authenticate", "token": ...}`
+  carrying a per-launch token (constant-time compare, never in the URL).
+  The desktop shell generates the token and hands it to the frontend; a
+  kernel started without a token refuses to run unless
+  `NUCLEI_KERNEL_INSECURE_DEV=1` is set. Unauthenticated or forbidden
+  connections are closed with 4401 / 4403.
   {/* server.py:496-513; kernel.rs:14, 49-75, 96; tauri.conf.json:25 */}
 - **Connection.** JSON text frames, 1 MiB inbound cap, WebSocket ping every
   30 s with a 20 s pong timeout. {/* server.py:16-18, 485-492 */}
