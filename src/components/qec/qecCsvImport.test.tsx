@@ -6,6 +6,7 @@ import golden from '../../types/__fixtures__/sinter_golden.json';
 import { ThresholdPanel } from './ThresholdPanel';
 import { CsvMappingPreview } from './CsvMappingPreview';
 import { QecAnalysisView } from './QecAnalysisView';
+import { thresholdSeries } from '../../types/qecStats';
 import { useQecCampaignStore } from '../../stores/qecCampaignStore';
 
 const webBuild = vi.hoisted(() => ({ value: false }));
@@ -35,7 +36,7 @@ describe('CSV drop on the empty threshold panel', () => {
   });
 
   it('shows a visible error for a non-sinter file and keeps the zone', async () => {
-    const { getByTestId, findByRole } = render(<ThresholdPanel />);
+    const { getByTestId, findByRole } = render(<QecAnalysisView />);
     await act(async () => { dropFiles(getByTestId('csv-drop-zone'), [csvFile('a,b\n1,2')]); });
     expect((await findByRole('alert')).textContent).toMatch(/missing column/);
   });
@@ -73,8 +74,10 @@ describe('CsvMappingPreview', () => {
     // Make "distance" the x-axis: each (distance) becomes a single point per series
     fireEvent.change(getByLabelText('Map p'), { target: { value: 'other' } });
     expect(useQecCampaignStore.getState().csvImport?.mapping.p).toBe('other');
-    const xLabels = Array.from(container.querySelectorAll('text')).map((t) => t.textContent);
-    expect(xLabels).toContain('1e0'); // axis moved to the new key's range (7-8)
+    const { rowsByStrongId } = useQecCampaignStore.getState();
+    const noises = thresholdSeries(Object.values(rowsByStrongId)).flatMap((s) => s.points.map((p) => p.noise));
+    expect([...new Set(noises)].sort()).toEqual([7, 8]); // x values now come from "other"
+    expect(container.querySelectorAll('polyline').length).toBe(2);
   });
 
   it('clearing p leaves nothing plottable (empty state returns)', () => {

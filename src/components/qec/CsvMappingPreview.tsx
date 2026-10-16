@@ -1,11 +1,13 @@
 import { useMemo } from 'react';
 import { useThemeStore } from '../../stores/themeStore';
 import { useQecCampaignStore } from '../../stores/qecCampaignStore';
-import { applyMapping, DECODER_COLUMN, metadataKeys, type SinterMapping } from '../../types/sinterMapping';
+import {
+  applyMapping, DECODER_COLUMN, findCollisions, isFallbackPGuess, metadataKeys,
+} from '../../types/sinterMapping';
 import { toStatsPoint } from '../../types/qecStats';
 
 const PREVIEW_ROWS = 10;
-type Field = keyof SinterMapping;
+type Field = 'p' | 'd' | 'rounds' | 'decoder';
 
 const FIELDS: Array<{ field: Field; label: string }> = [
   { field: 'p', label: 'x-axis: physical error p' },
@@ -28,6 +30,11 @@ export function CsvMappingPreview() {
     () => (csv ? applyMapping(csv.rows.slice(0, PREVIEW_ROWS), csv.mapping) : []),
     [csv],
   );
+  const collisions = useMemo(
+    () => (csv ? findCollisions(applyMapping(csv.rows, csv.mapping)) : []),
+    [csv],
+  );
+  const hasDiscards = useMemo(() => (csv ? csv.rows.some((r) => r.discards > 0) : false), [csv]);
   const plotted = useQecCampaignStore((s) => s.rowsByStrongId);
   const plottable = useMemo(
     () => Object.values(plotted).filter((r) => toStatsPoint(r).noise !== null).length,
@@ -56,6 +63,14 @@ export function CsvMappingPreview() {
     </label>
   );
 
+  const mappedKeys = new Set<string | null>([csv.mapping.p, csv.mapping.d, csv.mapping.rounds, csv.mapping.decoder]);
+  const groupable = keys.filter((k) => !mappedKeys.has(k.key) && k.key !== 'label');
+  const toggleGroup = (key: string, on: boolean) => {
+    const rest = csv.mapping.groupBy.filter((k) => k !== key);
+    setMapping({ ...csv.mapping, groupBy: on ? [...rest, key] : rest });
+  };
+  const note = { margin: '0 0 6px', fontSize: 11, color: colors.warning } as const;
+
   const th = { textAlign: 'left' as const, padding: '2px 8px', color: colors.textDim, fontWeight: 500 };
   const td = { padding: '2px 8px', color: colors.text, fontFamily: "'Fira Code', monospace" };
   return (
@@ -75,6 +90,40 @@ export function CsvMappingPreview() {
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, marginBottom: 6 }}>
         {FIELDS.map((f) => select(f.field, f.label))}
       </div>
+      {groupable.length > 0 && (
+        <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 10, marginBottom: 6, fontSize: 11, color: colors.textDim }}>
+          <span>Series split by:</span>
+          {groupable.map((k) => (
+            <label key={k.key} style={{ display: 'flex', alignItems: 'center', gap: 3, color: colors.textMuted }}>
+              <input
+                type="checkbox"
+                aria-label={`Group series by ${k.key}`}
+                checked={csv.mapping.groupBy.includes(k.key)}
+                onChange={(e) => toggleGroup(k.key, e.target.checked)}
+              />
+              {k.key}
+            </label>
+          ))}
+        </div>
+      )}
+      {collisions.length > 0 && (
+        <div role="alert" style={note}>
+          {`${collisions.length} plotted ${collisions.length === 1 ? 'point is' : 'points are'} shared by more than one task `
+            + '(same series, d, decoder and p), so curves repeat x values and Λ keeps only one task per point. '
+            + 'Tick a key above (e.g. basis, noise model) to split them.'}
+        </div>
+      )}
+      {isFallbackPGuess(csv.mapping) && (
+        <div style={note}>
+          {`p was guessed: "${csv.mapping.p}" is not a conventional name for the noise parameter. Confirm the x-axis.`}
+        </div>
+      )}
+      {hasDiscards && (
+        <div style={note}>
+          Some tasks have discards. Plotted rates are errors/shots, not errors/(shots - discards) as sinter plot uses,
+          so postselected data will read lower here than in sinter.
+        </div>
+      )}
       {csv.issues.length > 0 && (
         <ul role="alert" style={{ margin: '0 0 6px', paddingLeft: 16, fontSize: 11, color: colors.warning }}>
           {csv.issues.map((i) => (

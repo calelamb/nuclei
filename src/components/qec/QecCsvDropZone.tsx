@@ -1,15 +1,13 @@
 import { useRef } from 'react';
 import { Upload } from 'lucide-react';
 import { useThemeStore } from '../../stores/themeStore';
-import { useQecCampaignStore } from '../../stores/qecCampaignStore';
 import { firstFile, loadCsvFile } from '../../services/qecCsvFile';
 import { useCsvDrop } from './useCsvDrop';
 
 /** Drop target + file picker for a sinter stats CSV. Parsing happens locally;
- * nothing is uploaded. */
+ * nothing is uploaded. Load errors are shown by QecAnalysisView's banner. */
 export function QecCsvDropZone() {
   const colors = useThemeStore((s) => s.colors);
-  const csvError = useQecCampaignStore((s) => s.csvError);
   const inputRef = useRef<HTMLInputElement>(null);
   const { over, handlers } = useCsvDrop();
   return (
@@ -49,11 +47,6 @@ export function QecCsvDropZone() {
         }}
       />
       <div style={{ fontSize: 10.5, color: colors.textDim }}>Read in this app only — nothing is uploaded.</div>
-      {csvError && (
-        <div role="alert" style={{ fontSize: 11, color: colors.error, textAlign: 'left', maxWidth: 300 }}>
-          {csvError}
-        </div>
-      )}
     </div>
   );
 }

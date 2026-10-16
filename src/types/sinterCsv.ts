@@ -152,10 +152,10 @@ function jsonEqual(a: unknown, b: unknown): boolean {
 function addCounts(a: Record<string, number>, b: Record<string, number>): Record<string, number> {
   const out: Record<string, number> = Object.create(null) as Record<string, number>;
   for (const k of new Set([...Object.keys(a), ...Object.keys(b)])) {
-    const total = (a[k] ?? 0) + (b[k] ?? 0);
-    if (total > 0) out[k] = total;
+    const total = (Object.hasOwn(a, k) ? a[k] : 0) + (Object.hasOwn(b, k) ? b[k] : 0);
+    if (total > 0) Object.defineProperty(out, k, { value: total, enumerable: true, writable: true, configurable: true });
   }
-  return { ...out };
+  return Object.fromEntries(Object.entries(out));
 }
 
 function fold(prev: QecCampaignStatsRow, next: QecCampaignStatsRow): QecCampaignStatsRow {

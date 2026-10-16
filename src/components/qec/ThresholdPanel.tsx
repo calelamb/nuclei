@@ -5,6 +5,7 @@ import { useQecCampaignStore } from '../../stores/qecCampaignStore';
 import { PanelHeader } from '../layout/PanelHeader';
 import { QecEmptyState } from './QecEmptyState';
 import { QecCsvDropZone } from './QecCsvDropZone';
+import { isWebBuild } from '../../platform/buildTarget';
 import {
   thresholdSeries,
   lambdaFit,
@@ -36,6 +37,13 @@ export function ThresholdPanel() {
 
   const domain = useMemo(() => computeLogDomain(series), [series]);
 
+  const csvImport = useQecCampaignStore((s) => s.csvImport);
+  const emptyBody = csvImport
+    ? 'Nothing to plot yet: choose a numeric column for p in the mapping above.'
+    : isWebBuild()
+      ? 'Drop a sinter stats CSV to see logical error rate vs physical error, per distance.'
+      : 'Run a QEC campaign over a noise sweep, or drop a sinter stats CSV, to see logical error rate vs physical error, per distance.';
+
   const header = (
     <PanelHeader
       title="Threshold / Λ"
@@ -56,8 +64,8 @@ export function ThresholdPanel() {
       <div style={{ height: '100%', display: 'flex', flexDirection: 'column', background: colors.bg }}>
         {header}
         <QecEmptyState
-          title="No campaign results yet"
-          body="Run a QEC campaign over a noise sweep to see logical error rate vs physical error, per distance."
+          title={csvImport ? 'No plottable points' : 'No campaign results yet'}
+          body={emptyBody}
           docsHref={DOCS}
         >
           <QecCsvDropZone />

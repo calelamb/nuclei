@@ -78,8 +78,28 @@ padded = ["     shots,    errors,  discards, seconds,decoder,strong_id,json_meta
           '     1000,       250,         0,   0.125,pymatching,deadbeef08,"{""d"":7}"']
 cases["no_custom_counts_column_padded"] = "\n".join(padded) + "\n"
 
+# Counter rules: totals <= 0 are dropped on merge; Object.prototype-named keys
+# are ordinary keys.
+tc = task(3, 0.003)
+cases["counter_rules_nonpositive_and_proto_keys"] = to_csv([
+    stat(tc, 100, 1, 0, 0.5, {"a": 3, "b": 2, "constructor": 5, "toString": 2, "z": 4}),
+    stat(tc, 100, 2, 0, 0.5, {"a": -3, "b": -1, "constructor": 1, "z": -9}),
+])
+
+# sinter raises when one strong_id carries different metadata.
+conflict = to_csv([stat(task(3, 0.001), 10, 1)]).splitlines()
+conflict.append(conflict[1].replace('"{""basis""', '"{""zzz"":1,""basis""'))
+conflict_csv = "\n".join(conflict) + "\n"
+try:
+    sinter.read_stats_from_csv_files(io.StringIO(conflict_csv))
+    raise SystemExit("expected sinter to raise on conflicting metadata")
+except ValueError as e:
+    conflict_error = str(e)
+
 OUT.write_text(json.dumps({
     "sinter_version": sinter.__version__,
     "cases": [{"name": k, "csv": v, "expected": expected(v)} for k, v in cases.items()],
+    "raises": [{"name": "conflicting_metadata_same_strong_id", "csv": conflict_csv,
+                "sinter_error": conflict_error}],
 }, indent=1) + "\n")
 print("wrote", OUT)

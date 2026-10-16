@@ -30,6 +30,22 @@ describe('parseSinterCsvDetailed parity with sinter.read_stats_from_csv_files', 
     });
   }
 
+  for (const c of golden.raises) {
+    it(`flags what sinter ${golden.sinter_version} raises on: ${c.name}`, () => {
+      expect(c.sinter_error).toMatch(/same strong id/);
+      const r = parseSinterCsvDetailed(c.csv);
+      expect(r.fatal).toBeNull();
+      expect(r.rows).toHaveLength(1);
+      expect(r.issues).toHaveLength(1);
+      expect(r.issues[0].message).toMatch(/strong_id/);
+    });
+  }
+
+  it('golden Counter case pins non-positive drops and prototype-named keys', () => {
+    const c = golden.cases.find((x) => x.name === 'counter_rules_nonpositive_and_proto_keys')!;
+    expect(c.expected[0].custom_counts).toEqual({ b: 1, constructor: 6, toString: 2 });
+  });
+
   it('golden resume case really contains duplicates (guards the fixture)', () => {
     const c = golden.cases.find((x) => x.name === 'resume_duplicates_with_custom_counts')!;
     const dataLines = c.csv.trim().split('\n').length - 1;

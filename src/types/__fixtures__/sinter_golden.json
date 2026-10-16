@@ -139,6 +139,38 @@
      "custom_counts": {}
     }
    ]
+  },
+  {
+   "name": "counter_rules_nonpositive_and_proto_keys",
+   "csv": "     shots,    errors,  discards, seconds,decoder,strong_id,json_metadata,custom_counts\n       100,         1,         0,   0.500,pymatching,d8a069080790f53cb2c96d945a0ef64149e9454f0f34f02873133d936098eae9,\"{\"\"basis\"\":\"\"X\"\",\"\"d\"\":3,\"\"p\"\":0.003,\"\"r\"\":3}\",\"{\"\"a\"\":3,\"\"b\"\":2,\"\"constructor\"\":5,\"\"toString\"\":2,\"\"z\"\":4}\"\n       100,         2,         0,   0.500,pymatching,d8a069080790f53cb2c96d945a0ef64149e9454f0f34f02873133d936098eae9,\"{\"\"basis\"\":\"\"X\"\",\"\"d\"\":3,\"\"p\"\":0.003,\"\"r\"\":3}\",\"{\"\"a\"\":-3,\"\"b\"\":-1,\"\"constructor\"\":1,\"\"z\"\":-9}\"\n",
+   "expected": [
+    {
+     "strong_id": "d8a069080790f53cb2c96d945a0ef64149e9454f0f34f02873133d936098eae9",
+     "decoder": "pymatching",
+     "json_metadata": {
+      "basis": "X",
+      "d": 3,
+      "p": 0.003,
+      "r": 3
+     },
+     "shots": 200,
+     "errors": 3,
+     "discards": 0,
+     "seconds": 1.0,
+     "custom_counts": {
+      "b": 1,
+      "constructor": 6,
+      "toString": 2
+     }
+    }
+   ]
+  }
+ ],
+ "raises": [
+  {
+   "name": "conflicting_metadata_same_strong_id",
+   "csv": "     shots,    errors,  discards, seconds,decoder,strong_id,json_metadata,custom_counts\n        10,         1,         0,   0.500,pymatching,e50c0c4465d05c50c6383b8790b2206537c067aa9330c99eb6e7928c8731ee4f,\"{\"\"basis\"\":\"\"X\"\",\"\"d\"\":3,\"\"p\"\":0.001,\"\"r\"\":3}\",\n        10,         1,         0,   0.500,pymatching,e50c0c4465d05c50c6383b8790b2206537c067aa9330c99eb6e7928c8731ee4f,\"{\"\"zzz\"\":1,\"\"basis\"\":\"\"X\"\",\"\"d\"\":3,\"\"p\"\":0.001,\"\"r\"\":3}\",\n",
+   "sinter_error": "A stat had the same strong id as another, but their other identifying information (json_metadata, decoder) differed.\nThe strong id is supposed to be a cryptographic hash that uniquely identifies what was sampled, so this is an error.\n\nThis failure can occur when post-processing data (e.g. combining X basis stats and Z basis stats into synthetic both-basis stats).\nTo fix it, ensure any post-processing sets the strong id of the synthetic data in some cryptographically secure way.\n\nIn some cases this can be caused by attempting to add a value that has gone through JSON serialization+parsing to one\nthat hasn't, which causes things like tuples transforming into lists.\n\nThe two stats:\n1. sinter.TaskStats(strong_id='e50c0c4465d05c50c6383b8790b2206537c067aa9330c99eb6e7928c8731ee4f', decoder='pymatching', json_metadata={'basis': 'X', 'd': 3, 'p': 0.001, 'r': 3}, shots=10, errors=1, seconds=0.5)\n2. sinter.TaskStats(strong_id='e50c0c4465d05c50c6383b8790b2206537c067aa9330c99eb6e7928c8731ee4f', decoder='pymatching', json_metadata={'zzz': 1, 'basis': 'X', 'd': 3, 'p': 0.001, 'r': 3}, shots=10, errors=1, seconds=0.5)"
   }
  ]
 }

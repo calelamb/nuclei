@@ -13,6 +13,7 @@ export function useCsvDrop() {
       onDrop: (e: DragEvent) => {
         if (!isFileDrag(e)) return;
         e.preventDefault();
+        e.stopPropagation(); // nested drop targets must not load the file twice
         setOver(false);
         const file = firstFile(e.dataTransfer.files);
         if (file) void loadCsvFile(file);
