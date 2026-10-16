@@ -94,17 +94,42 @@ def _refuse_mixed_points(groups: dict[str, Any], group_by: list[str], x: str, ro
                 )
 
 
-def _refuse_mixed_lambda_groups(groups: dict[str, Any], group_by: list[str], x: str, rounds_key: str | None) -> None:
-    """Lambda compares points across x, so every point in a group must be the same experiment."""
+# Keys that change the physics of an experiment: varying any of them across
+# distances makes Lambda meaningless even when each distance has one value.
+PHYSICS_KEYS = frozenset({"decoder", "p", "noise", "noise_model", "basis", "b", "code", "code_family"})
+
+
+def _derived_from_distance(points: list[dict[str, Any]], key: str) -> bool:
+    """True when ``key`` is constant within each point and one-to-one with x (e.g. label "surface d=3")."""
+    value_by_x: dict[Any, str] = {}
+    for point in points:
+        values = {canonical_json({"v": (r.get("json_metadata") or {}).get(key)}) for r in point["rows"]}
+        if len(values) != 1:
+            return False
+        value_by_x[point["x"]] = values.pop()
+    return len(set(value_by_x.values())) == len(value_by_x)
+
+
+def _refuse_mixed_lambda_groups(groups: dict[str, Any], group_by: list[str], x: str, rounds_key: str | None) -> list[str]:
+    """Lambda compares points across x, so every point in a group must be the same experiment.
+
+    Non-physics keys that are one-to-one with the distance (labels, qubit
+    counts) are tolerated and returned so the manifest can name them.
+    """
     pinned = [*group_by, x, *([rounds_key] if rounds_key else [])]
+    tolerated: set[str] = set()
     for group in groups.values():
-        rows = [r for point in group["points"].values() for r in point["rows"]]
-        mixed = mixed_metadata_keys(rows, pinned)
-        if mixed:
+        points = list(group["points"].values())
+        mixed = mixed_metadata_keys([r for point in points for r in point["rows"]], pinned)
+        derived = {k for k in mixed if k not in PHYSICS_KEYS and _derived_from_distance(points, k)}
+        offending = {k: v for k, v in mixed.items() if k not in derived}
+        if offending:
             raise ToolInputError(
-                f"refusing to estimate Lambda across points of group={group['group']}: they differ on {mixed}. "
+                f"refusing to estimate Lambda across points of group={group['group']}: they differ on {offending}. "
                 "Lambda needs one experiment varying only the distance; add those keys to group_by (or filter the rows)."
             )
+        tolerated |= derived
+    return sorted(tolerated)
 
 
 def _fit_group(group: dict[str, Any], factor: float) -> dict[str, Any]:
@@ -133,13 +158,15 @@ def fit(
     source, parents, provenance = _source_rows(ctx, run_id, rows)
     aggregated = _aggregate(source, group_by, x, rounds_key)
     _refuse_mixed_points(aggregated, group_by, x, rounds_key)
-    if x_is_distance and rounds_key:
-        _refuse_mixed_lambda_groups(aggregated, group_by, x, rounds_key)
+    derived_keys = _refuse_mixed_lambda_groups(aggregated, group_by, x, rounds_key) if x_is_distance and rounds_key else []
     groups = [_fit_group(g, max_likelihood_factor) for g in aggregated.values()]
     notes = [
         "Rates are over kept shots (shots - discards); a rate with discards is conditional on post-selection.",
         "The interval is a likelihood-ratio region, not a named confidence level.",
     ]
+    if derived_keys:
+        notes.append(f"Metadata {derived_keys} varies across distances but is one-to-one with {x!r} "
+                     "(treated as derived from the distance, e.g. a label); Lambda was estimated anyway.")
     if any(len({r["strong_id"] for r in pt["rows"]}) > 1 for g in aggregated.values() for pt in g["points"].values()):
         notes.append("Some points merge rows with different strong_ids (same metadata, different circuit/decoder hash); verify they are the same experiment.")
     for g in groups:

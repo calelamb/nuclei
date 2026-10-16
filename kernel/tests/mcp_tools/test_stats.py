@@ -296,3 +296,29 @@ def test_lambda_warns_on_saturated_rates():
 def test_lambda_clean_fit_has_no_warnings():
     out = est.estimate_lambda(_pts([0.1, 0.027, 0.0058, 0.0016]))
     assert out["warnings"] == []
+
+
+def _with_meta(rows, **per_row):
+    return [{**r, "json_metadata": {**r["json_metadata"], **{k: v[i] for k, v in per_row.items()}}}
+            for i, r in enumerate(rows)]
+
+
+def test_fit_estimates_lambda_when_a_label_is_derived_from_distance(ctx):
+    # Nuclei's own campaign runner labels generated tasks "<code> d=<d>".
+    rows = _with_meta(_lambda_rows(2.0), label=["surface d=3", "surface d=5", "surface d=7"])
+    out = _fit(ctx, rows=rows, group_by=["p"], rounds_key="rounds")
+    lam = out["groups"][0]["lambda"]
+    assert lam["status"] == "estimated" and lam["lambda"] == pytest.approx(2.0, rel=1e-3)
+    assert any("label" in n and "one-to-one" in n for n in out["manifest"]["notes"])
+
+
+def test_fit_still_refuses_physics_keys_even_when_one_to_one_with_distance(ctx):
+    rows = _with_meta(_lambda_rows(2.0), p=[0.001, 0.002, 0.003])
+    with pytest.raises(ToolInputError, match=r"differ on.*'p'"):
+        _fit(ctx, rows=rows, group_by=[], rounds_key="rounds")
+
+
+def test_fit_refuses_a_non_physics_key_that_is_not_one_to_one_with_distance(ctx):
+    rows = _with_meta(_lambda_rows(2.0), code=["surface", "color", "surface"])
+    with pytest.raises(ToolInputError, match=r"differ on.*'code'"):
+        _fit(ctx, rows=rows, group_by=[], rounds_key="rounds")
