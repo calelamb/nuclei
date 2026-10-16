@@ -94,6 +94,19 @@ def _refuse_mixed_points(groups: dict[str, Any], group_by: list[str], x: str, ro
                 )
 
 
+def _refuse_mixed_lambda_groups(groups: dict[str, Any], group_by: list[str], x: str, rounds_key: str | None) -> None:
+    """Lambda compares points across x, so every point in a group must be the same experiment."""
+    pinned = [*group_by, x, *([rounds_key] if rounds_key else [])]
+    for group in groups.values():
+        rows = [r for point in group["points"].values() for r in point["rows"]]
+        mixed = mixed_metadata_keys(rows, pinned)
+        if mixed:
+            raise ToolInputError(
+                f"refusing to estimate Lambda across points of group={group['group']}: they differ on {mixed}. "
+                "Lambda needs one experiment varying only the distance; add those keys to group_by (or filter the rows)."
+            )
+
+
 def _fit_group(group: dict[str, Any], factor: float) -> dict[str, Any]:
     points = []
     for point in sorted(group["points"].values(), key=lambda p: (str(type(p["x"])), p["x"])):
@@ -120,6 +133,8 @@ def fit(
     source, parents, provenance = _source_rows(ctx, run_id, rows)
     aggregated = _aggregate(source, group_by, x, rounds_key)
     _refuse_mixed_points(aggregated, group_by, x, rounds_key)
+    if x_is_distance and rounds_key:
+        _refuse_mixed_lambda_groups(aggregated, group_by, x, rounds_key)
     groups = [_fit_group(g, max_likelihood_factor) for g in aggregated.values()]
     notes = [
         "Rates are over kept shots (shots - discards); a rate with discards is conditional on post-selection.",

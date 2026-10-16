@@ -241,3 +241,24 @@ def test_load_stats_refuses_oversized_total(ctx, tmp_path, monkeypatch):
     monkeypatch.setattr(sinter, "read_stats_from_csv_files", lambda *a, **k: (_ for _ in ()).throw(AssertionError("read")))
     with pytest.raises(ToolInputError, match="max_total_csv_bytes"):
         load_stats(small_ctx, files)
+
+
+def test_fit_refuses_to_estimate_lambda_across_different_p(ctx):
+    rows = _lambda_rows(2.0)
+    rows[1] = {**rows[1], "json_metadata": {**rows[1]["json_metadata"], "p": 0.006}}
+    with pytest.raises(ToolInputError, match=r"differ on.*'p'"):
+        _fit(ctx, rows=rows, group_by=[], rounds_key="rounds")
+
+
+def test_fit_refuses_lambda_across_different_decoder_and_noise_model(ctx):
+    rows = _lambda_rows(2.0)
+    last = rows[2]
+    rows[2] = {**last, "decoder": "fusion_blossom",
+               "json_metadata": {**last["json_metadata"], "decoder": "fusion_blossom", "noise_model": "SI1000"}}
+    with pytest.raises(ToolInputError, match=r"differ on.*(decoder|noise_model)"):
+        _fit(ctx, rows=rows, group_by=[], rounds_key="rounds")
+
+
+def test_fit_still_allows_mixed_rounds_across_distances(ctx):
+    out = _fit(ctx, rows=_lambda_rows(2.0), group_by=["p"], rounds_key="rounds")
+    assert out["groups"][0]["lambda"]["status"] == "estimated"

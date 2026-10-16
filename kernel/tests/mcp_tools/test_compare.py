@@ -101,3 +101,24 @@ def test_compare_reports_what_else_differs_between_sides(ctx):
     r = _run(ctx, [make_row(3, 0.01, 100000, 100, decoder="pymatching"), make_row(3, 0.01, 100000, 1000, decoder="fusion_blossom")])
     out = compare(ctx, run_a=r, run_b=r, match_on=["d", "p"], where_a={"decoder": "pymatching"}, where_b={"decoder": "fusion_blossom"})
     assert out["comparisons"][0]["differs_on"] == {"decoder": ["pymatching", "fusion_blossom"]}
+
+
+@pytest.mark.parametrize("key", ["r", "rounds", "num_rounds"])
+def test_compare_refuses_different_rounds_under_any_alias(ctx, key):
+    def row(rounds, errors):
+        r = make_row(3, 0.01, 100000, errors)
+        meta = {k: v for k, v in r["json_metadata"].items() if k != "rounds"}
+        return {**r, "json_metadata": {**meta, key: rounds}}
+
+    a = _run(ctx, [row(3, 100)])
+    b = _run(ctx, [row(15, 1000)])
+    with pytest.raises(ToolInputError, match="not comparable"):
+        compare(ctx, run_a=a, run_b=b, match_on=["d", "p"])
+
+
+def test_compare_never_gives_lower_verdict_when_sides_differ_elsewhere(ctx):
+    a = _run(ctx, [{**make_row(3, 0.01, 100000, 100), "json_metadata": {"d": 3, "p": 0.01, "noise_model": "A"}}])
+    b = _run(ctx, [{**make_row(3, 0.01, 100000, 1000), "json_metadata": {"d": 3, "p": 0.01, "noise_model": "B"}}])
+    out = compare(ctx, run_a=a, run_b=b, match_on=["d", "p"])
+    assert out["comparisons"][0]["verdict"] == "not_comparable"
+    assert out["comparisons"][0]["differs_on"] == {"noise_model": ["A", "B"]}

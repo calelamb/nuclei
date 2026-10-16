@@ -50,19 +50,20 @@ def _index(rows: list[dict], match_on: list[str], label: str) -> dict[str, dict[
     return out
 
 
-def _meta_value(rows: list[dict], key: str) -> Any:
-    return (rows[0].get("json_metadata") or {}).get(key)
+ROUNDS_ALIASES = ("rounds", "r", "num_rounds")
 
 
 def _require_equal_rounds(slot_a: dict[str, Any], slot_b: dict[str, Any], match_on: list[str]) -> None:
-    if "rounds" in match_on:
-        return
-    ra, rb = _meta_value(slot_a["rows"], "rounds"), _meta_value(slot_b["rows"], "rounds")
-    if ra is not None and rb is not None and ra != rb:
-        raise ToolInputError(
-            f"point {slot_a['key']} has rounds={ra} in run A but rounds={rb} in run B; per-shot rates over "
-            "different numbers of rounds are not comparable. Add 'rounds' to match_on."
-        )
+    meta_a = slot_a["rows"][0].get("json_metadata") or {}
+    meta_b = slot_b["rows"][0].get("json_metadata") or {}
+    for key in ROUNDS_ALIASES:
+        if key in match_on or key not in meta_a or key not in meta_b:
+            continue
+        if meta_a[key] != meta_b[key]:
+            raise ToolInputError(
+                f"point {slot_a['key']} has {key}={meta_a[key]} in run A but {key}={meta_b[key]} in run B; per-shot rates over "
+                f"different numbers of rounds are not comparable. Add '{key}' to match_on."
+            )
 
 
 def _differs_on(rows_a: list[dict], rows_b: list[dict], match_on: list[str]) -> dict[str, list[Any]]:
@@ -70,7 +71,9 @@ def _differs_on(rows_a: list[dict], rows_b: list[dict], match_on: list[str]) -> 
     return mixed_metadata_keys([rows_a[0], rows_b[0]], match_on)
 
 
-def _verdict(a: dict[str, Any], b: dict[str, Any]) -> str:
+def _verdict(a: dict[str, Any], b: dict[str, Any], differs_on: dict[str, list[Any]]) -> str:
+    if set(differs_on) - {"decoder"}:  # decoder-vs-decoder is the intended comparison
+        return "not_comparable"
     if a["per_shot"] is None or b["per_shot"] is None:
         return "no_estimate"
     if intervals_overlap(a["per_shot"], b["per_shot"]):
@@ -95,13 +98,14 @@ def compare(
             for side, idx in (("a", idx_a), ("b", idx_b))
         }
         _require_equal_rounds(idx_a[key], idx_b[key], match_on)
+        differs_on = _differs_on(idx_a[key]["rows"], idx_b[key]["rows"], match_on)
         comparisons.append({"key": idx_a[key]["key"], "a": ests["a"], "b": ests["b"],
-                            "differs_on": _differs_on(idx_a[key]["rows"], idx_b[key]["rows"], match_on),
-                            "verdict": _verdict(ests["a"], ests["b"])})
+                            "differs_on": differs_on, "verdict": _verdict(ests["a"], ests["b"], differs_on)})
     if not comparisons:
         raise ToolInputError("no matching points between the two runs for the given match_on keys")
     notes = [
         "'not_distinguishable' means the intervals overlap at this precision; it does NOT show the two are equal.",
+        "'not_comparable' means the two sides differ on metadata other than the decoder outside match_on (see differs_on) so no ordering is claimed.",
         "A lower-error-rate verdict requires non-overlapping intervals. No correction for multiple comparisons "
         f"is applied across the {len(comparisons)} point(s).",
         "Per-shot rates are only comparable at equal rounds: include your rounds key in match_on.",
