@@ -7,7 +7,7 @@ import { ThresholdPanel } from './ThresholdPanel';
 import { CsvMappingPreview } from './CsvMappingPreview';
 import { QecAnalysisView } from './QecAnalysisView';
 import { useQecCampaignStore } from '../../stores/qecCampaignStore';
-import { thresholdSeries } from '../../types/qecStats';
+import { likelihoodSeries } from '../../lib/qecFit';
 import { parseSinterCsvDetailed } from '../../types/sinterCsv';
 import * as exporter from '../../services/experimentExport';
 
@@ -38,7 +38,7 @@ describe('unmapped metadata keys no longer merge series silently', () => {
   it('auto-groups basis X/Z into separate series with no collision warning', () => {
     useQecCampaignStore.getState().loadFromCsv(BASIS_CSV, 'b.csv');
     const { queryByText } = render(<CsvMappingPreview />);
-    expect(thresholdSeries(Object.values(useQecCampaignStore.getState().rowsByStrongId))).toHaveLength(4);
+    expect(likelihoodSeries(Object.values(useQecCampaignStore.getState().rowsByStrongId)).series).toHaveLength(4);
     expect(queryByText(/share one plotted point/)).toBeNull();
     expect(useQecCampaignStore.getState().csvImport?.mapping.groupBy).toEqual(['basis']);
   });

@@ -13,6 +13,7 @@ import {
 export const QEC_RATES_CSV_COLUMNS = [
   'experiment', 'distance', 'noise', 'decoder', 'rounds', 'shots', 'discards', 'kept_shots', 'errors',
   'rate', 'rate_low', 'rate_high', 'units', 'ci_method', 'max_likelihood_factor', 'note',
+  'strong_id', 'json_metadata', 'custom_counts',
 ] as const;
 
 function csvCell(v: string | number | null | undefined): string {
@@ -28,25 +29,35 @@ const metaNum = (meta: unknown, key: string): number | '' => {
 
 const NOTES = { invalid: 'invalid: errors exceed kept shots', no_kept: 'no kept shots' } as const;
 
-export function qecRatesToCsv(
-  rows: readonly QecCampaignStatsRow[],
-  opts: { units?: RateUnits; maxLikelihoodFactor?: number } = {},
-): string {
+export interface QecRatesCsvOptions {
+  units?: RateUnits;
+  maxLikelihoodFactor?: number;
+  /** Rows as they were in the source file, by strong_id. When a CSV mapping
+   * re-expressed the plotted rows, provenance columns come from these so the
+   * exported json_metadata is exactly what the file said. */
+  originals?: ReadonlyMap<string, QecCampaignStatsRow>;
+}
+
+const jsonCell = (v: unknown): string => JSON.stringify(v ?? null);
+
+export function qecRatesToCsv(rows: readonly QecCampaignStatsRow[], opts: QecRatesCsvOptions = {}): string {
   const factor = opts.maxLikelihoodFactor ?? DEFAULT_MAX_LIKELIHOOD_FACTOR;
   const experiments = assignExperiments(rows);
   const lines = rows.map((row) => {
     const discards = row.discards || 0;
     const problem = rowProblem(row);
+    const source = opts.originals?.get(row.strong_id) ?? row;
+    const provenance = [row.strong_id, jsonCell(source.json_metadata), jsonCell(source.custom_counts ?? {})];
     const common = [
       experiments.get(row)?.name, metaNum(row.json_metadata, 'd'), metaNum(row.json_metadata, 'p'), row.decoder,
       roundsFromMetadata(row.json_metadata), row.shots, discards, row.shots - discards, row.errors,
     ];
     if (problem) {
-      return [...common, '', '', '', '', '', '', NOTES[problem]].map(csvCell).join(',');
+      return [...common, '', '', '', '', '', '', NOTES[problem], ...provenance].map(csvCell).join(',');
     }
     const { fit, units } = rowRate(row, { units: opts.units, maxLikelihoodFactor: factor });
     const note = opts.units === 'per_round' && units === 'per_shot' ? 'rounds unknown: per-shot rate' : '';
-    return [...common, fit.best, fit.low, fit.high, units, 'likelihood_ratio', factor, note].map(csvCell).join(',');
+    return [...common, fit.best, fit.low, fit.high, units, 'likelihood_ratio', factor, note, ...provenance].map(csvCell).join(',');
   });
   return [QEC_RATES_CSV_COLUMNS.join(','), ...lines].join('\n') + '\n';
 }

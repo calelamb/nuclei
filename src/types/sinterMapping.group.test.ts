@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import type { QecCampaignStatsRow } from './qec';
 import { applyMapping, findCollisions, guessMapping, isFallbackPGuess, DECODER_COLUMN } from './sinterMapping';
-import { thresholdSeries, lambdaFit } from './qecStats';
+import { likelihoodSeries, lambdaEstimates } from '../lib/qecFit';
 
 function row(meta: Record<string, unknown>, shots: number, errors: number, discards = 0): QecCampaignStatsRow {
   return {
@@ -9,12 +9,14 @@ function row(meta: Record<string, unknown>, shots: number, errors: number, disca
     shots, errors, discards, seconds: 1, custom_counts: {},
   };
 }
-// basis X: LER 0.01 -> 0.001 (Lambda 10); basis Z: 0.005 -> 0.0045 (Lambda ~1.11)
+// basis X: LER 0.01 -> 0.001 -> 0.0001 (Lambda 10); basis Z: ~0.005 -> 0.004 (Lambda ~1.1)
 const ROWS = [
   row({ d: 3, p: 0.001, basis: 'X' }, 10000, 100),
   row({ d: 5, p: 0.001, basis: 'X' }, 10000, 10),
   row({ d: 3, p: 0.001, basis: 'Z' }, 10000, 50),
   row({ d: 5, p: 0.001, basis: 'Z' }, 10000, 45),
+  row({ d: 7, p: 0.001, basis: 'X' }, 10000, 1),
+  row({ d: 7, p: 0.001, basis: 'Z' }, 10000, 40),
 ];
 
 describe('series grouping on unmapped metadata keys', () => {
@@ -26,16 +28,19 @@ describe('series grouping on unmapped metadata keys', () => {
 
   it('keeps bases in separate series and gives each its own Lambda', () => {
     const mapped = applyMapping(ROWS, guessMapping(ROWS));
-    expect(thresholdSeries(mapped)).toHaveLength(4);
-    const lambdas = lambdaFit(mapped).map((f) => f.lambda ?? 0).sort((a, b) => a - b);
-    expect(lambdas[0]).toBeCloseTo(50 / 45, 6);
+    expect(likelihoodSeries(mapped).series).toHaveLength(6);
+    const fits = lambdaEstimates(mapped);
+    expect(fits).toHaveLength(2);
+    const lambdas = fits.map((f) => f.estimate.lambda.best).sort((a, b) => a - b);
+    expect(lambdas[0]).toBeGreaterThan(1.05);
+    expect(lambdas[0]).toBeLessThan(1.2);
     expect(lambdas[1]).toBeCloseTo(10, 6);
   });
 
   it('reports a collision when the user clears the group-by', () => {
     const m = { ...guessMapping(ROWS), groupBy: [] };
     const hits = findCollisions(applyMapping(ROWS, m));
-    expect(hits.length).toBe(2);
+    expect(hits.length).toBe(3);
     expect(hits[0].count).toBe(2);
   });
 

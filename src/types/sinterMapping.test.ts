@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import type { QecCampaignStatsRow } from './qec';
-import { thresholdSeries } from './qecStats';
+import { likelihoodSeries } from '../lib/qecFit';
 import {
   metadataKeys,
   guessMapping,
@@ -49,15 +49,15 @@ describe('guessMapping', () => {
 describe('applyMapping', () => {
   it('normalizes mapped keys so the threshold series sees p and d', () => {
     const mapped = applyMapping(rows, { p: 'noise', d: 'distance', rounds: null, decoder: DECODER_COLUMN, groupBy: [] });
-    const series = thresholdSeries(mapped);
+    const series = likelihoodSeries(mapped).series;
     expect(series.map((s) => s.distance).sort()).toEqual([3, 5]);
     expect(series.find((s) => s.distance === 5)?.points.map((p) => p.noise)).toEqual([0.001, 0.002]);
   });
 
   it('re-plots when the x-axis key changes', () => {
     const two = [row('a', { p: 0.01, q: 0.5, d: 3 }), row('b', { p: 0.02, q: 0.6, d: 3 })];
-    const onP = thresholdSeries(applyMapping(two, { p: 'p', d: 'd', rounds: null, decoder: DECODER_COLUMN, groupBy: [] }));
-    const onQ = thresholdSeries(applyMapping(two, { p: 'q', d: 'd', rounds: null, decoder: DECODER_COLUMN, groupBy: [] }));
+    const onP = likelihoodSeries(applyMapping(two, { p: 'p', d: 'd', rounds: null, decoder: DECODER_COLUMN, groupBy: [] })).series;
+    const onQ = likelihoodSeries(applyMapping(two, { p: 'q', d: 'd', rounds: null, decoder: DECODER_COLUMN, groupBy: [] })).series;
     expect(onP[0].points.map((x) => x.noise)).toEqual([0.01, 0.02]);
     expect(onQ[0].points.map((x) => x.noise)).toEqual([0.5, 0.6]);
   });
@@ -72,14 +72,14 @@ describe('applyMapping', () => {
 
   it('drops p when unmapped or non-numeric so the row is not plotted', () => {
     const none = applyMapping(rows, { p: null, d: 'distance', rounds: null, decoder: DECODER_COLUMN, groupBy: [] });
-    expect(thresholdSeries(none)).toEqual([]);
+    expect(likelihoodSeries(none).series).toEqual([]);
     const text = applyMapping(rows, { p: 'basis', d: 'distance', rounds: null, decoder: DECODER_COLUMN, groupBy: [] });
-    expect(thresholdSeries(text)).toEqual([]);
+    expect(likelihoodSeries(text).series).toEqual([]);
   });
 
   it('accepts numeric strings for p and d', () => {
     const r = [row('a', { p: '0.01', d: '3' })];
-    const s = thresholdSeries(applyMapping(r, { p: 'p', d: 'd', rounds: null, decoder: DECODER_COLUMN, groupBy: [] }));
+    const s = likelihoodSeries(applyMapping(r, { p: 'p', d: 'd', rounds: null, decoder: DECODER_COLUMN, groupBy: [] })).series;
     expect(s[0].distance).toBe(3);
     expect(s[0].points[0].noise).toBe(0.01);
   });
@@ -91,7 +91,7 @@ describe('applyMapping', () => {
   });
 
   it('gives unlabeled rows one shared label (not one series per strong_id)', () => {
-    const out = thresholdSeries(applyMapping(rows, { p: 'noise', d: 'distance', rounds: null, decoder: DECODER_COLUMN, groupBy: [] }));
+    const out = likelihoodSeries(applyMapping(rows, { p: 'noise', d: 'distance', rounds: null, decoder: DECODER_COLUMN, groupBy: [] })).series;
     expect(new Set(out.map((s) => s.label)).size).toBe(1);
   });
 
@@ -99,7 +99,7 @@ describe('applyMapping', () => {
     const r = [
       row('a', { p: 0.01, d: 5, r: 5 }), row('b', { p: 0.01, d: 5, r: 10 }),
     ];
-    const out = thresholdSeries(applyMapping(r, { p: 'p', d: 'd', rounds: 'r', decoder: DECODER_COLUMN, groupBy: [] }));
+    const out = likelihoodSeries(applyMapping(r, { p: 'p', d: 'd', rounds: 'r', decoder: DECODER_COLUMN, groupBy: [] })).series;
     expect(out).toHaveLength(2);
   });
 });

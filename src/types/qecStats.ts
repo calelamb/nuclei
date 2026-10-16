@@ -102,7 +102,11 @@ export interface ThresholdSeries {
 }
 
 /** Group stats into log-log threshold series: one per (label × distance ×
- * decoder), each a noise-sorted list of LER±CI points. */
+ * decoder), each a noise-sorted list of LER±CI points.
+ *
+ * @deprecated Legacy Wilson/label grouping that can pool distinct experiments.
+ * The figure uses `likelihoodSeries` in src/lib/qecFit.ts (experiment-aware,
+ * discard-aware). Kept only for the legacy unit tests. */
 export function thresholdSeries(rows: QecCampaignStatsRow[], z = 1.96): ThresholdSeries[] {
   const groups = new Map<string, ThresholdSeries>();
   for (const row of rows) {
@@ -134,6 +138,9 @@ export interface LambdaFit {
  * @deprecated Use `lambdaEstimates` from `src/lib/qecFit.ts` (log-linear
  * regression with uncertainty, >= 3 distances, no dropping of ratios <= 1).
  * Kept only for `services/qecContext.ts`.
+ *
+ * @deprecated Two-point ratio without an interval; use `lambdaEstimates` in
+ * src/lib/qecFit.ts.
  *
  * Fit Λ, the error-suppression factor: at each noise point, the ratio of the
  * logical error rate between successive distances (smaller / larger). Λ > 1

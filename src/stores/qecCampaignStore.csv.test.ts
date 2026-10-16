@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import golden from '../types/__fixtures__/sinter_golden.json';
 import { useQecCampaignStore } from './qecCampaignStore';
 import { DECODER_COLUMN } from '../types/sinterMapping';
-import { thresholdSeries } from '../types/qecStats';
+import { likelihoodSeries } from '../lib/qecFit';
 
 const dup = golden.cases[0];
 const get = () => useQecCampaignStore.getState();
@@ -20,7 +20,7 @@ describe('qecCampaignStore.loadFromCsv', () => {
     expect(s.csvImport?.mapping).toMatchObject({ p: 'p', d: 'd', rounds: 'r', decoder: DECODER_COLUMN });
     expect(s.campaignName).toBe('stats.csv');
     expect(s.running).toBe(false);
-    expect(thresholdSeries(Object.values(s.rowsByStrongId)).length).toBeGreaterThan(0);
+    expect(likelihoodSeries(Object.values(s.rowsByStrongId)).series.length).toBeGreaterThan(0);
   });
 
   it('keeps discards and custom_counts in the exported statsCsv', () => {
@@ -38,7 +38,7 @@ describe('qecCampaignStore.loadFromCsv', () => {
     get().loadFromCsv(dup.csv, 'stats.csv');
     const before = get().rowsByStrongId;
     get().setCsvMapping({ ...get().csvImport!.mapping, p: null });
-    expect(thresholdSeries(Object.values(get().rowsByStrongId))).toEqual([]);
+    expect(likelihoodSeries(Object.values(get().rowsByStrongId)).series).toEqual([]);
     expect(get().rowsByStrongId).not.toBe(before);
     // raw aggregated rows are untouched by remapping
     expect(get().csvImport!.rows[0].json_metadata).toHaveProperty('p');

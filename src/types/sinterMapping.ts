@@ -7,6 +7,11 @@ import type { QecCampaignStatsRow } from './qec';
  * rows under the canonical keys (p, d, label, ...) that qecStats reads.
  */
 
+/** Reserved json_metadata key set by applyMapping on every mapped row. Its
+ * presence means "identity comes from the user's mapping, not from guessing
+ * at other metadata keys" (see qecExperiments.ts). */
+export const MAPPED_KEY = '__nuclei_mapping';
+
 /** Sentinel for "use the CSV's decoder column". */
 export const DECODER_COLUMN = '__decoder_column__';
 
@@ -19,7 +24,7 @@ export interface SinterMapping {
   decoder: string;
   /** Extra metadata keys that split tasks into separate series (and separate
    * Λ fits), e.g. basis / noise model. Folded into the decoder string so that
-   * both the series key and lambdaFit keep the groups apart. */
+   * both the series key and the Λ fit keep the groups apart. */
   groupBy: string[];
 }
 
@@ -125,22 +130,6 @@ export function guessMapping(rows: readonly QecCampaignStatsRow[]): SinterMappin
 
 const DEFAULT_LABEL = 'stats';
 
-/** True when some distance has more than one distinct rounds value. */
-function roundsVaryAtFixedDistance(rows: readonly QecCampaignStatsRow[], m: SinterMapping): boolean {
-  if (!m.rounds) return false;
-  const seen = new Map<string, Set<number>>();
-  for (const row of rows) {
-    const md = meta(row);
-    const r = asNumber(md[m.rounds]);
-    if (r === null) continue;
-    const dKey = m.d ? String(asNumber(md[m.d])) : '';
-    const set = seen.get(dKey) ?? new Set<number>();
-    set.add(r);
-    seen.set(dKey, set);
-  }
-  return [...seen.values()].some((s) => s.size > 1);
-}
-
 function withoutKey(md: Record<string, unknown>, key: string): Record<string, unknown> {
   return Object.fromEntries(Object.entries(md).filter(([k]) => k !== key));
 }
@@ -156,7 +145,6 @@ function groupSuffix(md: Record<string, unknown>, groupBy: readonly string[], de
  * rows and leaves the input untouched. Rows whose p is missing/non-numeric
  * lose `p` and are simply not plotted. */
 export function applyMapping(rows: readonly QecCampaignStatsRow[], mapping: SinterMapping): QecCampaignStatsRow[] {
-  const splitByRounds = roundsVaryAtFixedDistance(rows, mapping);
   return rows.map((row) => {
     const md = meta(row);
     let next: Record<string, unknown> = { ...md };
@@ -165,9 +153,12 @@ export function applyMapping(rows: readonly QecCampaignStatsRow[], mapping: Sint
     const r = mapping.rounds ? asNumber(md[mapping.rounds]) : null;
     next = p !== null ? { ...next, p } : withoutKey(next, 'p');
     next = d !== null ? { ...next, d } : withoutKey(next, 'd');
-    if (r !== null) next = { ...next, rounds: r };
     const baseLabel = typeof md.label === 'string' ? md.label : DEFAULT_LABEL;
-    next = { ...next, label: splitByRounds && r !== null ? `${baseLabel} r=${r}` : baseLabel };
+    next = r !== null ? { ...next, rounds: r } : withoutKey(next, 'rounds');
+    // The mapping is the single definition of experiment identity: the group-by
+    // keys live in `decoder`, rounds in `rounds`. qecExperiments reads this
+    // marker and pools only by (decoder, label, rounds scheme).
+    next = { ...next, label: baseLabel, [MAPPED_KEY]: { groupBy: [...mapping.groupBy] } };
     const decoderValue = mapping.decoder === DECODER_COLUMN ? row.decoder : md[mapping.decoder];
     const baseDecoder = typeof decoderValue === 'string' ? decoderValue : row.decoder;
     return {
@@ -183,6 +174,7 @@ export interface Collision {
   d: number | null;
   decoder: string;
   p: number;
+  rounds: number | null;
   /** Tasks (distinct strong_ids) landing on this one plotted point. */
   count: number;
 }
@@ -198,9 +190,10 @@ export function findCollisions(mapped: readonly QecCampaignStatsRow[]): Collisio
     if (p === null) continue;
     const label = typeof md.label === 'string' ? md.label : DEFAULT_LABEL;
     const d = asNumber(md.d);
-    const key = JSON.stringify([label, d, row.decoder, p]);
+    const rounds = asNumber(md.rounds);
+    const key = JSON.stringify([label, d, row.decoder, p, rounds]);
     const hit = cells.get(key);
-    cells.set(key, hit ? { ...hit, count: hit.count + 1 } : { label, d, decoder: row.decoder, p, count: 1 });
+    cells.set(key, hit ? { ...hit, count: hit.count + 1 } : { label, d, decoder: row.decoder, p, rounds, count: 1 });
   }
   return [...cells.values()].filter((c) => c.count > 1);
 }

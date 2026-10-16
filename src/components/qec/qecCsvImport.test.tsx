@@ -6,7 +6,7 @@ import golden from '../../types/__fixtures__/sinter_golden.json';
 import { ThresholdPanel } from './ThresholdPanel';
 import { CsvMappingPreview } from './CsvMappingPreview';
 import { QecAnalysisView } from './QecAnalysisView';
-import { thresholdSeries } from '../../types/qecStats';
+import { likelihoodSeries } from '../../lib/qecFit';
 import { useQecCampaignStore } from '../../stores/qecCampaignStore';
 
 const webBuild = vi.hoisted(() => ({ value: false }));
@@ -75,7 +75,7 @@ describe('CsvMappingPreview', () => {
     fireEvent.change(getByLabelText('Map p'), { target: { value: 'other' } });
     expect(useQecCampaignStore.getState().csvImport?.mapping.p).toBe('other');
     const { rowsByStrongId } = useQecCampaignStore.getState();
-    const noises = thresholdSeries(Object.values(rowsByStrongId)).flatMap((s) => s.points.map((p) => p.noise));
+    const noises = likelihoodSeries(Object.values(rowsByStrongId)).series.flatMap((s) => s.points.map((p) => p.noise));
     expect([...new Set(noises)].sort()).toEqual([7, 8]); // x values now come from "other"
     expect(container.querySelectorAll('polyline').length).toBe(2);
   });

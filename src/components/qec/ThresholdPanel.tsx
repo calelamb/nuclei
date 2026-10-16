@@ -52,6 +52,10 @@ export function ThresholdPanel() {
   const domain = useMemo(() => computeLogDomain(series), [series]);
 
   const csvImport = useQecCampaignStore((s) => s.csvImport);
+  const originals = useMemo(
+    () => (csvImport ? new Map(csvImport.rows.map((r) => [r.strong_id, r])) : undefined),
+    [csvImport],
+  );
   const emptyBody = csvImport
     ? 'Nothing to plot yet: choose a numeric column for p in the mapping above.'
     : isWebBuild()
@@ -66,7 +70,7 @@ export function ThresholdPanel() {
         series.length > 0 ? (
           <div style={{ display: 'flex', gap: 6 }}>
             <ExportButton label="SVG" onClick={() => svgRef.current && downloadSvg(svgRef.current, 'logical-error-vs-p.svg')} colors={colors} />
-            <ExportButton label="CSV" onClick={() => downloadCsv(qecRatesToCsv(rows, { units }), 'logical-error-vs-p.csv')} colors={colors} />
+            <ExportButton label="CSV" onClick={() => downloadCsv(qecRatesToCsv(rows, { units, originals }), 'logical-error-vs-p.csv')} colors={colors} />
           </div>
         ) : undefined
       }

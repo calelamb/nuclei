@@ -1,6 +1,10 @@
 /**
  * Experiment identity for sinter stats rows.
  *
+ * Rows from a CSV import carry the user's mapping (group-by keys folded into
+ * `decoder`, canonical `rounds`), and that mapping alone defines identity.
+ * Unmapped rows (live campaigns) fall back to the heuristic below.
+ *
  * Rows may only be pooled into one curve or one Λ fit when they belong to the
  * same experiment: same decoder and same json_metadata in every field except
  * the sweep axes (`d`, `p`) and the round count. Rounds are handled
@@ -11,6 +15,7 @@
  * over two different experiments and zigzag the plotted curves.
  */
 import type { QecCampaignStatsRow } from '../types/qec';
+import { MAPPED_KEY } from '../types/sinterMapping';
 import { roundsFromMetadata } from './qecRounds';
 
 export interface ExperimentInfo {
@@ -40,6 +45,12 @@ function metaOf(row: QecCampaignStatsRow): Record<string, unknown> {
 }
 
 function baseKey(row: QecCampaignStatsRow): string {
+  const md = metaOf(row);
+  if (MAPPED_KEY in md) {
+    // The user's mapping defines identity: its group-by keys are already in
+    // `decoder`, so only the label may further distinguish experiments.
+    return `${row.decoder}\u0000${stable({ label: md.label ?? null })}`;
+  }
   const rest = Object.fromEntries(Object.entries(metaOf(row)).filter(([k]) => !SWEEP_KEYS.has(k)));
   return `${row.decoder}\u0000${stable(rest)}`;
 }
