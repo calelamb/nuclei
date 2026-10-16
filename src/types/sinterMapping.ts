@@ -101,8 +101,7 @@ function roundsVaryAtFixedDistance(rows: readonly QecCampaignStatsRow[], m: Sint
 }
 
 function withoutKey(md: Record<string, unknown>, key: string): Record<string, unknown> {
-  const { [key]: _omit, ...rest } = md;
-  return rest;
+  return Object.fromEntries(Object.entries(md).filter(([k]) => k !== key));
 }
 
 /** Re-express rows under the canonical keys the plot reads. Pure: returns new

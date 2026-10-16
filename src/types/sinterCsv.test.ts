@@ -106,7 +106,7 @@ describe('parseSinterCsvDetailed validation', () => {
   });
 
   it('handles CRLF, a BOM, and quoted fields containing newlines', () => {
-    const csv = `﻿${HEADER}\r\n10,1,0,0.1,m,a,"{""d"":3,\n""note"":""x""}",\r\n10,2,0,0.1,m,b,"{""d"":5}",\r\n`;
+    const csv = `\uFEFF${HEADER}\r\n10,1,0,0.1,m,a,"{""d"":3,\n""note"":""x""}",\r\n10,2,0,0.1,m,b,"{""d"":5}",\r\n`;
     const r = parseSinterCsvDetailed(csv);
     expect(r.issues).toEqual([]);
     expect((r.rows[0].json_metadata as Record<string, unknown>).note).toBe('x');

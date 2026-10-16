@@ -8,6 +8,8 @@ import { CsvMappingPreview } from './CsvMappingPreview';
 import { QecAnalysisView } from './QecAnalysisView';
 import { useQecCampaignStore } from '../../stores/qecCampaignStore';
 
+const webBuild = vi.hoisted(() => ({ value: false }));
+vi.mock('../../platform/buildTarget', () => ({ isWebBuild: () => webBuild.value }));
 vi.mock('../../services/experimentExport', () => ({ downloadCsv: vi.fn(), downloadSvg: vi.fn() }));
 
 const csv = golden.cases[0].csv;
@@ -19,7 +21,7 @@ function csvFile(text: string, name = 'stats.csv'): File {
 const dropFiles = (el: Element, files: File[]) =>
   fireEvent.drop(el, { dataTransfer: { files, types: ['Files'] } });
 
-beforeEach(() => useQecCampaignStore.getState().reset());
+beforeEach(() => { webBuild.value = false; useQecCampaignStore.getState().reset(); });
 afterEach(() => cleanup());
 
 describe('CSV drop on the empty threshold panel', () => {
@@ -101,5 +103,15 @@ describe('QecAnalysisView', () => {
     await act(async () => { dropFiles(container.firstChild as Element, [csvFile(csv, 'campaign.csv')]); });
     expect(await findByLabelText('Map p')).toBeTruthy();
     expect(container.textContent).toContain('campaign.csv');
+  });
+
+  it('desktop shows Run campaign; the web build hides it (no kernel in the browser)', () => {
+    const desktop = render(<QecAnalysisView />);
+    expect(desktop.queryByText(/Run campaign/)).toBeTruthy();
+    cleanup();
+    webBuild.value = true;
+    const web = render(<QecAnalysisView />);
+    expect(web.queryByText(/Run campaign/)).toBeNull();
+    expect(web.getByLabelText('Choose sinter stats CSV')).toBeTruthy();
   });
 });

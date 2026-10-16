@@ -1,28 +1,9 @@
-import { useRef, useState, type DragEvent } from 'react';
+import { useRef } from 'react';
 import { Upload } from 'lucide-react';
 import { useThemeStore } from '../../stores/themeStore';
 import { useQecCampaignStore } from '../../stores/qecCampaignStore';
 import { firstFile, loadCsvFile } from '../../services/qecCsvFile';
-
-/** Drop handlers reusable on any container (the whole analysis view). */
-export function useCsvDrop() {
-  const [over, setOver] = useState(false);
-  const isFileDrag = (e: DragEvent): boolean => Array.from(e.dataTransfer?.types ?? []).includes('Files');
-  return {
-    over,
-    handlers: {
-      onDragOver: (e: DragEvent) => { if (isFileDrag(e)) { e.preventDefault(); setOver(true); } },
-      onDragLeave: () => setOver(false),
-      onDrop: (e: DragEvent) => {
-        if (!isFileDrag(e)) return;
-        e.preventDefault();
-        setOver(false);
-        const file = firstFile(e.dataTransfer.files);
-        if (file) void loadCsvFile(file);
-      },
-    },
-  };
-}
+import { useCsvDrop } from './useCsvDrop';
 
 /** Drop target + file picker for a sinter stats CSV. Parsing happens locally;
  * nothing is uploaded. */

@@ -186,7 +186,7 @@ export function parseSinterCsvDetailed(text: string): SinterCsvParse {
   if (text.length > MAX_CSV_BYTES) {
     return failed(`File is too large (${(text.length / 1048576).toFixed(1)} MB; limit ${MAX_CSV_BYTES / 1048576} MB).`);
   }
-  const records = tokenizeCsv(text.replace(/^﻿/, ''));
+  const records = tokenizeCsv(text.replace(/^\uFEFF/, ''));
   if (records.length === 0) return failed('The file is empty.');
   const { col, fatal } = headerProblem(records[0].fields.map((c) => c.trim()));
   if (fatal) return failed(fatal);

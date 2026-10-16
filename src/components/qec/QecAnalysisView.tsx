@@ -7,8 +7,10 @@ import { useExperimentUiStore } from '../../stores/experimentUiStore';
 import { useQecCampaignRun } from '../../hooks/useQecCampaignRun';
 import { ThresholdPanel } from './ThresholdPanel';
 import { DecoderWorkbench } from './DecoderWorkbench';
+import { isWebBuild } from '../../platform/buildTarget';
 import { CsvMappingPreview } from './CsvMappingPreview';
-import { QecCsvOpenButton, useCsvDrop } from './QecCsvDropZone';
+import { QecCsvOpenButton } from './QecCsvDropZone';
+import { useCsvDrop } from './useCsvDrop';
 
 /**
  * PRD 10 Phase E — the campaign analysis surface, shown in the experiments
@@ -31,6 +33,7 @@ export function QecAnalysisView() {
   const csvError = useQecCampaignStore((s) => s.csvError);
   const { over, handlers } = useCsvDrop();
 
+  const webOnly = isWebBuild(); // no kernel to run campaigns in the browser
   const canRun = Boolean(experiment && projectRoot && experiment.spec.type === 'qec_campaign');
 
   return (
@@ -52,7 +55,7 @@ export function QecAnalysisView() {
         </span>
         <div style={{ flex: 1 }} />
         <QecCsvOpenButton />
-        {running ? (
+        {webOnly ? null : running ? (
           <button
             onClick={cancel}
             style={{
