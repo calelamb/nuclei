@@ -92,7 +92,7 @@ def _path_tasks(req: CampaignRequest, src: PathsSource) -> list[sinter.Task]:
         text = read_circuit_text(stim_text=None, path=raw)
         circuit = parse_circuit(text)
         for dec in req.decoders:
-            meta = {"path": raw, "circuit_sha256": sha256_text(text), "rounds": src.rounds,
+            meta = {"path": raw, "circuit_sha256": sha256_text(str(circuit)), "rounds": src.rounds,
                     "noise_model": src.noise_model.name, "decoder": dec}
             tasks.append(sinter.Task(circuit=circuit, decoder=dec, json_metadata=meta))
     return tasks

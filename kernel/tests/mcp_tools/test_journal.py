@@ -88,3 +88,16 @@ def test_artifacts_are_write_once(tmp_path):
         j.write_artifact("a.csv", "different")
     with pytest.raises(ToolInputError):
         j.write_artifact("../escape", "x")
+
+
+def test_list_reports_a_corrupt_record_per_record_instead_of_failing(tmp_path):
+    from nuclei_mcp.journal import Journal
+    j = Journal(tmp_path / "j")
+    good = j.append(tool="t", inputs={}, outputs={}, manifest={}, parent_run_ids=[])
+    bad = j.append(tool="t", inputs={}, outputs={"x": 1}, manifest={}, parent_run_ids=[])
+    path = j.root / "runs" / f"{bad['run_id']}.json"
+    path.chmod(0o644)
+    path.write_text(path.read_text().replace('"x": 1', '"x": 2'))
+    by_id = {s["run_id"]: s for s in j.list()}
+    assert by_id[good["run_id"]]["integrity"] == "ok"
+    assert by_id[bad["run_id"]]["integrity"] == "failed" and "integrity check" in by_id[bad["run_id"]]["error"]

@@ -18,7 +18,7 @@ and you can check any claim with `journal_get`.
 
 ## Install and configure
 
-From a Nuclei checkout, install into the research virtualenv (the `mcp` pin lives
+From a Nuclei checkout, install into the research virtualenv (the `mcp` and `scipy` pins live
 in `kernel/requirements.txt`):
 
 ```bash
@@ -67,9 +67,12 @@ Requests above the server's ceilings are **refused**, never clamped. Defaults:
 10M shots and 100k errors per task, 600 s, 200 tasks, 100M total shots, distance
 25, 200 rounds, 4 workers. Raise them as the researcher with
 `--ceiling-max-shots N` (any of the ceiling names) or
-`NUCLEI_MCP_CEILING_MAX_SHOTS=N`. A campaign that reaches `max_seconds` or is
-cancelled by the client stops early, and its journal record is flagged
-`partial: true`.
+`NUCLEI_MCP_CEILING_MAX_SHOTS=N`. A campaign that reaches `max_seconds` stops
+early and its journal record is flagged `partial: true`. `max_seconds` is checked
+whenever sinter reports progress, which can be minutes apart for a slow task, so
+treat it as a soft deadline rather than a hard wall-clock bound. A campaign
+**cancelled by the client** is signalled to stop at the next progress report, but
+**no journal record is written** for it.
 
 ### What the statistics mean
 
@@ -81,8 +84,16 @@ cancelled by the client stops early, and its journal record is flagged
 - Per-round rates use `sinter.shot_error_rate_to_piece_error_rate`.
 - Λ is the least-squares slope of ln(per-round rate) against distance, reported as
   the suppression factor per +2 distance with a 95% Student-t interval. It is only
-  computed with **three or more distinct distances that have observed errors**
-  and a `rounds_key`; otherwise the tool says why it did not. With exactly three
+  computed when you pass `x_is_distance: true` (declaring that `x` is the code
+  distance), give a `rounds_key`, and have **three or more distinct distances that
+  have observed errors**; otherwise the tool says why it did not. Points with zero
+  observed errors are excluded, and if those are the largest distances the fit
+  describes a higher-error regime than the full range (the output warns).
+- `fit` and `compare` **refuse to pool rows from different experiments**: rows that
+  fall on the same point but differ in other metadata (physical error rate,
+  decoder, circuit hash...) are an error that names the differing keys. Rows that
+  differ only by `strong_id` are merged with a note. `compare` also refuses to
+  compare per-shot rates across different `rounds` unless `rounds` is in `match_on`. With exactly three
   points the interval is very wide, on purpose.
 - `compare` answers `not_distinguishable` whenever the intervals overlap. Only
   separated intervals produce `a_lower_error_rate` / `b_lower_error_rate`. Overlap
@@ -91,11 +102,15 @@ cancelled by the client stops early, and its journal record is flagged
 ## The research journal
 
 Each record in `runs/<run_id>.json` holds the inputs, outputs, manifest, parent
-`run_id`s and the exact arguments to re-run the call. Records are write-once:
+`run_id`s and the exact arguments to re-run the call (pass `rerun.tool` and `rerun.arguments` back
+to the tool unchanged; this is tested for every tool). Records are write-once:
 files are created exclusively and read-only, the journal exposes no update or
 delete operation, and a SHA-256 over each record is checked on every read, so an
 edit made outside Nuclei is reported as an integrity failure. `run_campaign` also
-stores its CSV and every circuit (by hash) under `artifacts/`.
+stores its CSV and every circuit under `artifacts/`. Circuit hashes are
+SHA-256 of the canonical `str(stim.Circuit)` everywhere, so the hash from
+`inspect_circuit` matches the one in a campaign manifest. `journal_list` reports
+`integrity: "failed"` for an unreadable or modified record instead of failing.
 
 ## Limitations
 

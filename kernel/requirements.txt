@@ -49,6 +49,7 @@ cirq-core>=1.4,<2.0
 
 # Optional: nuclei-mcp — stdio MCP server for AI agents (kernel/nuclei_mcp,
 # run with `python -m nuclei_mcp` from kernel/). Independent of the desktop app
-# and the WebSocket kernel. Needs the QEC toolchain above plus scipy.
-# mcp==2.3.0
-# scipy>=1.11,<2
+# and the WebSocket kernel. Needs the QEC toolchain above plus scipy. Pinned
+# (not optional) so CI and a plain `pip install -r` run its test suite.
+mcp==2.3.0
+scipy>=1.11,<2

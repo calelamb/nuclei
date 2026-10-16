@@ -54,3 +54,27 @@ def test_path_input(tmp_path):
     p = tmp_path / "c.stim"
     p.write_text(SURFACE)
     assert read_circuit_text(stim_text=None, path=str(p)) == SURFACE
+
+
+def test_circuit_hash_is_canonical_and_matches_campaign_tasks(tmp_path):
+    import stim
+    from nuclei_mcp.campaign_models import CampaignRequest
+    from nuclei_mcp.campaign_tasks import build_tasks
+    from nuclei_mcp.ceilings import Ceilings
+    from nuclei_mcp.tools_inspect import inspect_circuit
+
+    circuit = stim.Circuit.generated("repetition_code:memory", distance=3, rounds=3, after_clifford_depolarization=0.05)
+    path = tmp_path / "c.stim"
+    path.write_text("# a comment that changes the raw text\n" + str(circuit))
+    req = CampaignRequest.model_validate({
+        "source": {"kind": "stim_paths", "paths": [str(path)], "rounds": 3, "noise_model": {"name": "n"}},
+        "decoders": ["pymatching"], "max_shots": 10, "max_errors": 1, "max_seconds": 5, "max_tasks": 1})
+    task_hash = build_tasks(req, Ceilings())[0].json_metadata["circuit_sha256"]
+    assert inspect_circuit(path.read_text())["circuit_sha256"] == task_hash
+
+
+def test_huge_circuit_skips_the_synchronous_distance_search(monkeypatch):
+    import nuclei_mcp.tools_inspect as ti
+    monkeypatch.setattr(ti, "MAX_DISTANCE_DETECTORS", 0)
+    out = ti.inspect_circuit("R 0 1\nM 0 1\nDETECTOR rec[-1] rec[-2]\nOBSERVABLE_INCLUDE(0) rec[-1]")
+    assert out["graphlike_distance"] is None and "skipped" in out["graphlike_distance_unavailable_reason"]

@@ -13,7 +13,7 @@ from .conftest import make_row
 
 
 def _fit(ctx, **kw):
-    base = dict(run_id=None, rows=None, group_by=["decoder", "p"], x="d", rounds_key=None)
+    base = dict(run_id=None, rows=None, group_by=["decoder", "p"], x="d", rounds_key=None, x_is_distance=True)
     return fit(ctx, **{**base, **kw})
 
 
@@ -106,10 +106,63 @@ def test_lambda_noisy_points_have_wider_ci_than_exact(ctx):
     assert math.isfinite(noisy["lambda"])
 
 
-def test_same_point_rows_are_summed(ctx):
+def test_same_experiment_rows_are_summed_and_flagged_when_strong_ids_differ(ctx):
     rows = [make_row(3, 0.01, 1000, 10), {**make_row(3, 0.01, 1000, 30), "strong_id": "other"}]
-    point = _fit(ctx, rows=rows)["groups"][0]["points"][0]
+    out = _fit(ctx, rows=rows)
+    point = out["groups"][0]["points"][0]
     assert (point["shots"], point["errors"], point["n_rows"]) == (2000, 40, 2)
+    assert any("strong_ids" in n for n in out["manifest"]["notes"])
+
+
+def test_rows_from_different_experiments_are_not_pooled(ctx):
+    # group_by=['decoder'], x='d': rows at p=0.001 and p=0.01 are different experiments
+    rows = [make_row(d, p, 10**6, 100 * d) for d in (3, 5, 7) for p in (0.001, 0.01)]
+    with pytest.raises(ToolInputError, match=r"refusing to pool.*'p'"):
+        _fit(ctx, rows=rows, group_by=["decoder"], rounds_key="rounds")
+    # different decoders summed into one point when grouping by p
+    mixed = [make_row(3, 0.01, 1000, 10), make_row(3, 0.01, 1000, 12, decoder="fusion_blossom")]
+    with pytest.raises(ToolInputError, match="refusing to pool.*decoder"):
+        _fit(ctx, rows=mixed, group_by=["p"])
+    ok = _fit(ctx, rows=rows, group_by=["decoder", "p"], rounds_key="rounds")
+    assert len(ok["groups"]) == 2
+
+
+def test_lambda_needs_x_declared_as_distance(ctx):
+    rows = [make_row(5, p, 10**6, 1000 * int(p)) for p in (1, 2, 3)]
+    out = _fit(ctx, rows=rows, group_by=["d"], x="p", rounds_key="rounds", x_is_distance=False)
+    assert out["groups"][0]["lambda"]["status"] == "not_estimated"
+    assert "x_is_distance" in out["groups"][0]["lambda"]["reason"]
+
+
+def test_lambda_non_distance_x_values_refused_even_if_declared(ctx):
+    rows = [make_row(5, p, 10**6, 500) for p in (0.001, 0.002, 0.004)]
+    out = _fit(ctx, rows=rows, group_by=["d"], x="p", rounds_key="rounds")
+    lam = out["groups"][0]["lambda"]
+    assert lam["status"] == "not_estimated" and "code distance" in lam["reason"]
+
+
+def test_lambda_from_slope_overflows_loudly():
+    from nuclei_mcp.estimates import _lambda_from_slope
+    with pytest.raises(OverflowError):
+        _lambda_from_slope(-1000.0)
+
+
+def test_lambda_overflow_in_ci_is_reported_not_raised(monkeypatch):
+    import nuclei_mcp.estimates as est
+
+    def boom(_slope):
+        raise OverflowError
+
+    monkeypatch.setattr(est, "_lambda_from_slope", boom)
+    pts = [{"x": d, "errors": 5, "per_round": {"best": 0.1 / d}} for d in (3, 5, 7)]
+    out = est.estimate_lambda(pts)
+    assert out["status"] == "not_estimated" and "representable" in out["reason"]
+
+
+def test_lambda_warns_when_points_excluded(ctx):
+    rows = _lambda_rows(2.0, distances=(3, 5, 7, 9))[:3] + [make_row(9, 0.001, 1000, 0)]
+    lam = _fit(ctx, rows=rows, group_by=["p"], rounds_key="rounds")["groups"][0]["lambda"]
+    assert lam["status"] == "estimated" and any("regime" in w for w in lam["warnings"])
 
 
 @pytest.mark.parametrize(

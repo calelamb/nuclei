@@ -22,6 +22,7 @@ class Context:
         outputs: Mapping[str, Any],
         manifest: Mapping[str, Any],
         parents: list[str] | None = None,
+        rerun: Mapping[str, Any] | None = None,
     ) -> dict[str, Any]:
         """Journal a result and return it as the tool response.
 
@@ -34,6 +35,7 @@ class Context:
             outputs=outputs,
             manifest=manifest,
             parent_run_ids=parents or [],
+            rerun=rerun,
         )
         return {
             "run_id": record["run_id"],

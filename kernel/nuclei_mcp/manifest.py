@@ -8,7 +8,7 @@ from typing import Any, Mapping
 
 from . import __version__
 
-_TRACKED_PACKAGES = ("stim", "sinter", "pymatching", "fusion-blossom", "numpy", "scipy", "mcp")
+_TRACKED_PACKAGES = ("stim", "sinter", "pymatching", "fusion-blossom", "mwpf", "numpy", "scipy", "mcp")
 
 # Units are part of the contract: a bare rate without units is how numbers
 # get misread.

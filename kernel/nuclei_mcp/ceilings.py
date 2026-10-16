@@ -48,4 +48,5 @@ class Ceilings(BaseModel):
 
     def with_overrides(self, overrides: Mapping[str, float | None]) -> "Ceilings":
         applied = {k: v for k, v in overrides.items() if v is not None}
-        return self.model_copy(update=applied)
+        # Re-validate: model_copy(update=...) would skip the ge/gt constraints.
+        return Ceilings.model_validate({**self.model_dump(), **applied})

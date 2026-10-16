@@ -55,14 +55,14 @@ def build_server(journal_dir: Path | None = None, ceilings: Ceilings | None = No
 
     @server.tool(description=(
         "Per-shot and per-round logical error rates with likelihood-ratio intervals, grouped by metadata keys. "
-        "Lambda is estimated only with >=3 distinct distances and rounds_key. Give exactly one of run_id or rows."))
+        "Rows that differ on metadata outside group_by/x are refused, not pooled. Lambda is estimated only when x_is_distance=true, rounds_key is given and there are >=3 distinct distances. Give exactly one of run_id or rows."))
     def fit(
         group_by: list[str], x: str, run_id: str | None = None, rows: list[StatRow] | None = None,
-        rounds_key: str | None = None, max_likelihood_factor: float = DEFAULT_LIKELIHOOD_FACTOR,
+        rounds_key: str | None = None, x_is_distance: bool = False, max_likelihood_factor: float = DEFAULT_LIKELIHOOD_FACTOR,
     ) -> dict[str, Any]:
         dumped = [r.model_dump() for r in rows] if rows is not None else None
         return _fit(ctx, run_id=run_id, rows=dumped, group_by=group_by, x=x, rounds_key=rounds_key,
-                    max_likelihood_factor=max_likelihood_factor)
+                    x_is_distance=x_is_distance, max_likelihood_factor=max_likelihood_factor)
 
     @server.tool(description=(
         "Run a bounded sinter campaign. noise_model, rounds, decoders and every max_* are REQUIRED; requests above "

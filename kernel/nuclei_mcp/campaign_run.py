@@ -12,7 +12,7 @@ import sinter
 from .campaign_models import CampaignRequest
 from .campaign_tasks import build_tasks, task_circuit_texts
 from .context import Context
-from .estimates import ESTIMATOR, ci_method_label, DEFAULT_LIKELIHOOD_FACTOR
+from .estimates import ESTIMATOR
 from .manifest import UNITS, build_manifest
 from .rows import stats_to_rows
 from .journal import sha256_text
@@ -68,7 +68,9 @@ async def run_campaign(ctx: Context, req: CampaignRequest) -> dict[str, Any]:
     try:
         stats, reason = await asyncio.to_thread(_collect, req, tasks, cancel)
     except asyncio.CancelledError:
-        cancel.set()  # worker thread aborts at its next progress callback
+        # Best effort: the worker thread aborts at its next sinter progress
+        # callback. No journal record is written for a cancelled campaign.
+        cancel.set()
         raise
     rows = stats_to_rows(stats)
     csv = sinter.CSV_HEADER + "\n" + "".join(s.to_csv_line() + "\n" for s in stats)
@@ -89,7 +91,7 @@ async def run_campaign(ctx: Context, req: CampaignRequest) -> dict[str, Any]:
         tool="run_campaign",
         parameters=inputs,
         estimator=ESTIMATOR,
-        ci_method=ci_method_label(DEFAULT_LIKELIHOOD_FACTOR) + " when passed to fit",
+        ci_method="none",  # raw counts only; fit records its own method
         circuit_sha256=list(circuits),
         units={k: UNITS[k] for k in ("shots", "errors", "discards", "seconds")},
         reproducible=False,
@@ -98,4 +100,7 @@ async def run_campaign(ctx: Context, req: CampaignRequest) -> dict[str, Any]:
             "Counts are raw; run fit for rates and intervals.",
         ] + (["PARTIAL: collection stopped early (" + reason + "); counts are valid but incomplete."] if reason != "completed" else []),
     )
-    return ctx.record(tool="run_campaign", inputs=inputs, outputs=outputs, manifest=manifest)
+    return ctx.record(
+        tool="run_campaign", inputs=inputs, outputs=outputs, manifest=manifest,
+        rerun={"tool": "run_campaign", "arguments": {"request": inputs}},
+    )

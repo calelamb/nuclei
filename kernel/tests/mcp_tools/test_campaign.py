@@ -166,3 +166,18 @@ def test_cancellation_aborts_collection(ctx):
             await task
 
     asyncio.run(asyncio.wait_for(go(), timeout=60))
+
+
+def test_campaign_manifest_claims_no_ci_method_and_rerun_wraps_request(ctx):
+    out = run(ctx, request())
+    assert out["manifest"]["ci_method"] == "none"
+    rerun = ctx.journal.get(out["run_id"])["rerun"]
+    assert rerun["tool"] == "run_campaign" and set(rerun["arguments"]) == {"request"}
+
+
+def test_ceilings_overrides_are_validated():
+    from pydantic import ValidationError
+    for bad in ({"max_shots": 0}, {"max_shots": -5}, {"max_seconds": 0}):
+        with pytest.raises(ValidationError):
+            Ceilings().with_overrides(bad)
+    assert Ceilings().with_overrides({"max_shots": 5, "max_rounds": None}).max_shots == 5

@@ -53,8 +53,11 @@ async def test_research_workflow_is_fully_traceable(server, fixture_csv):
         camp = (await client.call_tool("run_campaign", {"request": CAMPAIGN})).structured_content
         assert camp["terminated_by"] == "completed" and len(camp["rows"]) == 3
         rates = (await client.call_tool(
-            "fit", {"run_id": camp["run_id"], "group_by": ["p"], "x": "d", "rounds_key": "rounds"})).structured_content
-        assert rates["groups"][0]["lambda"]["status"] in {"estimated", "not_estimated"}
+            "fit", {"run_id": camp["run_id"], "group_by": ["p"], "x": "d", "rounds_key": "rounds", "x_is_distance": True})
+        ).structured_content
+        lam = rates["groups"][0]["lambda"]
+        assert lam["status"] == "estimated" and lam["n_points"] == 3
+        assert 1.0 < lam["lambda"] < 1e3 and lam["ci95"]["low"] <= lam["lambda"] <= lam["ci95"]["high"]
 
         cmp_ = (await client.call_tool(
             "compare", {"run_a": camp["run_id"], "run_b": camp["run_id"], "match_on": ["d", "p"]})).structured_content
@@ -66,6 +69,25 @@ async def test_research_workflow_is_fully_traceable(server, fixture_csv):
         full = (await client.call_tool("journal_get", {"run_id": rates["run_id"]})).structured_content
         assert full["parent_run_ids"] == [camp["run_id"]] and full["rerun"]["tool"] == "fit"
         assert full["record_sha256"]
+
+
+async def test_every_journaled_rerun_replays_through_the_client(server, fixture_csv):
+    text = "R 0 1\nX_ERROR(0.1) 0 1\nM 0 1\nDETECTOR rec[-1] rec[-2]\nOBSERVABLE_INCLUDE(0) rec[-1]"
+    async with Client(server) as client:
+        call = lambda name, args: client.call_tool(name, args)  # noqa: E731
+        loaded = (await call("load_stats", {"paths": [str(fixture_csv)]})).structured_content
+        await call("inspect_circuit", {"stim_text": text})
+        await call("fit", {"run_id": loaded["run_id"], "group_by": ["decoder", "p"], "x": "d", "rounds_key": "d"})
+        await call("fit", {"rows": loaded["rows"], "group_by": ["decoder", "p"], "x": "d"})
+        camp = (await call("run_campaign", {"request": CAMPAIGN})).structured_content
+        await call("compare", {"run_a": camp["run_id"], "run_b": camp["run_id"], "match_on": ["d", "p"]})
+        records = [(await call("journal_get", {"run_id": r["run_id"]})).structured_content
+                   for r in (await call("journal_list", {})).structured_content["records"]]
+        assert {r["tool"] for r in records} == {"inspect_circuit", "load_stats", "fit", "run_campaign", "compare"}
+        for record in records:
+            rerun = record["rerun"]
+            replay = await call(rerun["tool"], rerun["arguments"])
+            assert not replay.is_error, (rerun["tool"], replay.content[0].text)
 
 
 async def test_inspect_circuit_over_the_wire(server):

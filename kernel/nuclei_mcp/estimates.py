@@ -69,6 +69,14 @@ def _not_estimated(reason: str) -> dict[str, Any]:
     return {"status": "not_estimated", "reason": reason}
 
 
+def _lambda_from_slope(slope: float) -> float:
+    """eps ~ Lambda^(-d/2)  =>  Lambda = exp(-2 * slope); raises OverflowError."""
+    value = math.exp(-2.0 * slope)
+    if not math.isfinite(value):
+        raise OverflowError
+    return value
+
+
 def estimate_lambda(points: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
     """Lambda from points ``{x, per_round: {best}, errors}``; honest refusals."""
     usable = []
@@ -76,8 +84,8 @@ def estimate_lambda(points: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
     for point in points:
         x = point["x"]
         rate = (point.get("per_round") or {}).get("best")
-        if not isinstance(x, (int, float)) or isinstance(x, bool):
-            return _not_estimated(f"x value {x!r} is not numeric; Lambda needs numeric code distances")
+        if isinstance(x, bool) or not isinstance(x, int) or x < 2:
+            return _not_estimated(f"x value {x!r} is not an integer code distance >= 2; Lambda needs code distances")
         if rate is None or point["errors"] == 0:
             excluded.append({"x": x, "reason": "no kept shots" if rate is None else "zero logical errors observed (ln rate undefined)"})
         else:
@@ -94,15 +102,27 @@ def estimate_lambda(points: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
     reg = scipy_stats.linregress(xs, ys)
     slope, stderr = float(reg.slope), float(reg.stderr)
     tcrit = float(scipy_stats.t.ppf(0.5 + LAMBDA_CONFIDENCE / 2, len(xs) - 2))
-    value = lambda s: math.exp(-2.0 * s)  # noqa: E731 - eps ~ Lambda^(-d/2)
+    try:
+        lam = _lambda_from_slope(slope)
+        ci = {"low": _lambda_from_slope(slope + tcrit * stderr), "high": _lambda_from_slope(slope - tcrit * stderr)}
+    except OverflowError:
+        return {**_not_estimated("fitted slope is outside the representable range for Lambda; the data do not follow an exponential in distance"),
+                "excluded_points": excluded}
+    warnings = []
+    if excluded:
+        warnings.append(
+            "Points were excluded; if they are the largest distances (where errors are rarest) the fit "
+            "describes a different, higher-error regime than the full distance range."
+        )
     return {
         "status": "estimated",
-        "lambda": value(slope),
-        "ci95": {"low": value(slope + tcrit * stderr), "high": value(slope - tcrit * stderr)},
+        "lambda": lam,
+        "ci95": ci,
         "method": "OLS of ln(per-round rate) vs distance; Student-t interval on slope; unweighted",
         "n_points": len(xs),
         "degrees_of_freedom": len(xs) - 2,
         "r_squared": float(reg.rvalue) ** 2,
         "distances": distances,
         "excluded_points": excluded,
+        "warnings": warnings,
     }

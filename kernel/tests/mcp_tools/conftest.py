@@ -9,14 +9,27 @@ from pathlib import Path
 
 import pytest
 
+# The nuclei_mcp suite needs the optional `mcp` SDK and scipy (pinned in
+# kernel/requirements.txt and installed by CI). Without them, skip this package
+# at collection instead of aborting the whole kernel session on an ImportError.
+try:
+    import mcp  # noqa: F401
+    import scipy  # noqa: F401
+except ImportError:  # pragma: no cover - exercised only in minimal environments
+    collect_ignore_glob = ["test_*.py"]
+    _DEPS_PRESENT = False
+else:
+    _DEPS_PRESENT = True
+
 KERNEL_DIR = Path(__file__).resolve().parents[2]
 REPO_ROOT = KERNEL_DIR.parent
 if str(KERNEL_DIR) not in sys.path:
     sys.path.insert(0, str(KERNEL_DIR))
 
-from nuclei_mcp.ceilings import Ceilings  # noqa: E402
-from nuclei_mcp.context import Context  # noqa: E402
-from nuclei_mcp.journal import Journal  # noqa: E402
+if _DEPS_PRESENT:
+    from nuclei_mcp.ceilings import Ceilings  # noqa: E402
+    from nuclei_mcp.context import Context  # noqa: E402
+    from nuclei_mcp.journal import Journal  # noqa: E402
 
 FIXTURE_CSV = REPO_ROOT / "src" / "components" / "qec" / "__fixtures__" / "campaign_stats.csv"
 

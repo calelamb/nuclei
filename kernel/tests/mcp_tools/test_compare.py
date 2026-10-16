@@ -78,3 +78,26 @@ def test_compare_rejects_runs_without_rows(ctx):
     empty = ctx.journal.append(tool="inspect_circuit", inputs={}, outputs={}, manifest={}, parent_run_ids=[])["run_id"]
     with pytest.raises(ToolInputError, match="no stats rows"):
         compare(ctx, run_a=empty, run_b=empty, match_on=["d"])
+
+
+def test_compare_refuses_to_pool_different_experiments(ctx):
+    # match_on=['d'] would pool p=0.001 and p=0.01 into one point.
+    a = _run(ctx, [make_row(3, 0.001, 100000, 10), make_row(3, 0.01, 100000, 5000)])
+    with pytest.raises(ToolInputError, match=r"refusing to pool.*'p'"):
+        compare(ctx, run_a=a, run_b=a, match_on=["d"])
+    assert compare(ctx, run_a=a, run_b=a, match_on=["d", "p"])["comparisons"]
+
+
+def test_compare_refuses_different_rounds_unless_matched(ctx):
+    a = _run(ctx, [make_row(3, 0.01, 100000, 100, rounds=3)])
+    b = _run(ctx, [make_row(3, 0.01, 100000, 1000, rounds=30)])
+    with pytest.raises(ToolInputError, match="not comparable"):
+        compare(ctx, run_a=a, run_b=b, match_on=["d", "p"])
+    with pytest.raises(ToolInputError, match="no matching points"):
+        compare(ctx, run_a=a, run_b=b, match_on=["d", "p", "rounds"])
+
+
+def test_compare_reports_what_else_differs_between_sides(ctx):
+    r = _run(ctx, [make_row(3, 0.01, 100000, 100, decoder="pymatching"), make_row(3, 0.01, 100000, 1000, decoder="fusion_blossom")])
+    out = compare(ctx, run_a=r, run_b=r, match_on=["d", "p"], where_a={"decoder": "pymatching"}, where_b={"decoder": "fusion_blossom"})
+    assert out["comparisons"][0]["differs_on"] == {"decoder": ["pymatching", "fusion_blossom"]}

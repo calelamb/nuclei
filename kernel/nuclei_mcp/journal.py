@@ -137,7 +137,13 @@ class Journal:
         """Newest-first summaries (id, tool, time, parents), never full outputs."""
         summaries = []
         for path in sorted(self._runs.glob("run-*.json"), reverse=True):
-            record = self.get(path.stem)
+            try:
+                record = self.get(path.stem)
+            except JournalError as exc:
+                # One bad record must not hide the rest; report it per record.
+                summaries.append({"run_id": path.stem, "tool": None, "created_at": "", "parent_run_ids": [],
+                                  "integrity": "failed", "error": str(exc)})
+                continue
             if tool is not None and record["tool"] != tool:
                 continue
             summaries.append(
@@ -146,6 +152,7 @@ class Journal:
                     "tool": record["tool"],
                     "created_at": record["created_at"],
                     "parent_run_ids": record["parent_run_ids"],
+                    "integrity": "ok",
                 }
             )
         return sorted(summaries, key=lambda s: (s["created_at"], s["run_id"]), reverse=True)[:limit]

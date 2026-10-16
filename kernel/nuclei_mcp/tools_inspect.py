@@ -47,7 +47,16 @@ def explain_nondeterministic_detectors(circuit: stim.Circuit) -> dict[str, Any] 
     return None
 
 
+MAX_DISTANCE_DETECTORS = 20_000
+
+
 def _graphlike_distance(circuit: stim.Circuit) -> tuple[int | None, str | None]:
+    # shortest_graphlike_error is synchronous and unbounded: skip huge circuits.
+    if circuit.num_detectors > MAX_DISTANCE_DETECTORS:
+        return None, (
+            f"skipped: {circuit.num_detectors} detectors exceeds the {MAX_DISTANCE_DETECTORS} "
+            "limit for the synchronous distance search"
+        )
     try:
         return len(circuit.shortest_graphlike_error()), None
     except ValueError as exc:
@@ -59,7 +68,7 @@ def inspect_circuit(text: str) -> dict[str, Any]:
     circuit = parse_circuit(text)
     distance, reason = _graphlike_distance(circuit)
     result: dict[str, Any] = {
-        "circuit_sha256": sha256_text(text),
+        "circuit_sha256": sha256_text(str(circuit)),  # same canonical hash as run_campaign manifests
         "num_qubits": circuit.num_qubits,
         "num_measurements": circuit.num_measurements,
         "num_detectors": circuit.num_detectors,
