@@ -22,7 +22,7 @@ function row(d: number, p: number, errors: number, shots = 100000): QecCampaignS
     shots,
     errors,
     seconds: 1,
-    json_metadata: { label: `d=${d}`, d, p, decoder: 'pymatching' },
+    json_metadata: { label: 'surface', d, p, decoder: 'pymatching' },
   } as QecCampaignStatsRow;
 }
 
