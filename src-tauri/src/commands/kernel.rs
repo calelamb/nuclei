@@ -227,6 +227,17 @@ pub fn stop_kernel(state: State<'_, KernelState>) -> Result<String, String> {
 /// Only the Tauri webview can invoke this; it is never placed in a URL.
 #[tauri::command]
 pub fn kernel_auth_token(state: State<'_, KernelState>) -> Result<String, String> {
+    // Only hand the token out while the kernel we spawned is alive. If it
+    // exited (e.g. strict-port bind failure because a foreign process holds
+    // the port) the token is withheld, so it can never be sent to a listener
+    // Nuclei did not start.
+    let alive = match state.process.lock().map_err(|e| e.to_string())?.as_mut() {
+        Some(child) => matches!(child.try_wait(), Ok(None)),
+        None => false,
+    };
+    if !alive {
+        return Err("Kernel is not running".to_string());
+    }
     state
         .token
         .lock()

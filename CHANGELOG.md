@@ -19,6 +19,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Nuclei no longer force-kills whatever process is listening on the kernel
   port; it only stops a kernel it recorded itself and reports a conflict
   otherwise.
+- The kernel no longer passes its token to child processes, rejects foreign
+  `Origin`/`Host` handshakes with HTTP 403, and QEC campaigns, experiment runs
+  and challenge execution now use the same authenticated connection path.
+- Kernel protocol bumped to v2 (breaking for external clients: send the
+  `authenticate` frame first); see the protocol changelog.
 
 ### Added — Unified QEC Workbench foundation
 

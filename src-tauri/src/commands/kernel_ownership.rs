@@ -7,16 +7,19 @@
 
 use std::fs;
 use std::io;
-use std::net::{Ipv4Addr, SocketAddr, TcpStream};
+use std::net::{Ipv4Addr, Ipv6Addr, SocketAddr, TcpStream};
 use std::path::{Path, PathBuf};
 use std::process::Command;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use serde::{Deserialize, Serialize};
 
 const OWNER_FILE_NAME: &str = "kernel-owner.json";
 const RUNTIME_DIR_ENV: &str = "NUCLEI_RUNTIME_DIR";
 const PORT_PROBE_TIMEOUT: Duration = Duration::from_millis(300);
+/// How long to wait for a killed kernel to exit and release its port.
+const REAP_DEADLINE: Duration = Duration::from_secs(3);
+const REAP_POLL_INTERVAL: Duration = Duration::from_millis(50);
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub struct OwnerRecord {
@@ -124,21 +127,67 @@ pub fn terminate_process(pid: u32) {
         .status();
 }
 
+/// The kernel binds `localhost`, which can resolve to IPv4, IPv6 or both, and
+/// the frontend dials `ws://localhost`; probe every loopback family.
 pub fn port_in_use(port: u16) -> bool {
-    let address = SocketAddr::from((Ipv4Addr::LOCALHOST, port));
-    TcpStream::connect_timeout(&address, PORT_PROBE_TIMEOUT).is_ok()
+    let addresses = [
+        SocketAddr::from((Ipv4Addr::LOCALHOST, port)),
+        SocketAddr::from((Ipv6Addr::LOCALHOST, port)),
+    ];
+    addresses
+        .iter()
+        .any(|address| TcpStream::connect_timeout(address, PORT_PROBE_TIMEOUT).is_ok())
+}
+
+/// Poll `done` until it returns true or `deadline` elapses. Returns whether
+/// the condition was met.
+pub fn wait_until(deadline: Duration, interval: Duration, mut done: impl FnMut() -> bool) -> bool {
+    let start = Instant::now();
+    loop {
+        if done() {
+            return true;
+        }
+        if start.elapsed() >= deadline {
+            return false;
+        }
+        std::thread::sleep(interval);
+    }
+}
+
+/// Reap a stale recorded kernel and wait until it is really gone (pid exited
+/// or the port is free), so the caller's port probe does not race the dying
+/// process. Collaborators are injected so the sequencing is testable.
+fn reap_with(
+    dir: &Path,
+    port: u16,
+    own_pid: u32,
+    command_line_of: impl Fn(u32) -> Option<String>,
+    terminate: impl FnOnce(u32),
+    port_busy: impl Fn(u16) -> bool,
+    deadline: Duration,
+) {
+    let record = read_owner_record(dir);
+    if let Some(pid) = stale_kernel_to_kill(record.as_ref(), port, own_pid, &command_line_of) {
+        terminate(pid);
+        wait_until(deadline, REAP_POLL_INTERVAL, || {
+            command_line_of(pid).is_none() || !port_busy(port)
+        });
+    }
+    remove_owner_record(dir);
 }
 
 /// Reap a leftover kernel recorded by a previous Nuclei run, if still ours.
 pub fn reap_recorded_kernel(dir: Option<&Path>, port: u16) {
     let Some(dir) = dir else { return };
-    let record = read_owner_record(dir);
-    if let Some(pid) =
-        stale_kernel_to_kill(record.as_ref(), port, std::process::id(), process_command_line)
-    {
-        terminate_process(pid);
-    }
-    remove_owner_record(dir);
+    reap_with(
+        dir,
+        port,
+        std::process::id(),
+        process_command_line,
+        terminate_process,
+        port_in_use,
+        REAP_DEADLINE,
+    );
 }
 
 #[cfg(test)]
@@ -216,6 +265,89 @@ mod tests {
         let file_mode = fs::metadata(owner_path(&sub)).unwrap().permissions().mode() & 0o777;
         let dir_mode = fs::metadata(&sub).unwrap().permissions().mode() & 0o777;
         assert_eq!((file_mode, dir_mode), (0o600, 0o700));
+    }
+
+    #[test]
+    fn wait_until_returns_true_once_condition_met_and_false_on_deadline() {
+        let mut calls = 0;
+        let met = wait_until(Duration::from_secs(1), Duration::from_millis(1), || {
+            calls += 1;
+            calls >= 3
+        });
+        assert!(met && calls == 3);
+        assert!(!wait_until(Duration::from_millis(20), Duration::from_millis(5), || false));
+    }
+
+    #[test]
+    fn reap_waits_for_the_killed_kernel_to_exit_before_returning() {
+        use std::cell::Cell;
+        let dir = tempfile::tempdir().unwrap();
+        write_owner_record(dir.path(), &record(4242, 9742)).unwrap();
+        let killed = Cell::new(false);
+        let polls_after_kill = Cell::new(0u32);
+        reap_with(
+            dir.path(),
+            9742,
+            1,
+            |_| {
+                if !killed.get() {
+                    return Some(KERNEL_CMD.to_string());
+                }
+                polls_after_kill.set(polls_after_kill.get() + 1);
+                // Still dying for the first few polls, then gone.
+                (polls_after_kill.get() < 4).then(|| KERNEL_CMD.to_string())
+            },
+            |pid| {
+                assert_eq!(pid, 4242);
+                killed.set(true);
+            },
+            |_| true,
+            Duration::from_secs(2),
+        );
+        assert!(polls_after_kill.get() >= 4, "returned before the pid exited");
+        assert_eq!(read_owner_record(dir.path()), None);
+    }
+
+    #[test]
+    fn reap_returns_once_the_port_is_free_even_if_pid_lingers() {
+        let dir = tempfile::tempdir().unwrap();
+        write_owner_record(dir.path(), &record(4242, 9742)).unwrap();
+        let started = Instant::now();
+        reap_with(
+            dir.path(),
+            9742,
+            1,
+            |_| Some(KERNEL_CMD.to_string()),
+            |_| {},
+            |_| false,
+            Duration::from_secs(5),
+        );
+        assert!(started.elapsed() < Duration::from_secs(1));
+    }
+
+    #[test]
+    fn reap_never_terminates_a_foreign_process() {
+        let dir = tempfile::tempdir().unwrap();
+        write_owner_record(dir.path(), &record(4242, 9742)).unwrap();
+        reap_with(
+            dir.path(),
+            9742,
+            1,
+            |_| Some("/usr/bin/node server.js".to_string()),
+            |_| panic!("must not terminate a non-Nuclei process"),
+            |_| true,
+            Duration::from_millis(10),
+        );
+    }
+
+    #[test]
+    fn port_in_use_sees_an_ipv6_only_listener() {
+        let Ok(listener) = std::net::TcpListener::bind((Ipv6Addr::LOCALHOST, 0)) else {
+            return; // host without IPv6 loopback
+        };
+        let port = listener.local_addr().unwrap().port();
+        assert!(port_in_use(port));
+        drop(listener);
     }
 
     #[test]

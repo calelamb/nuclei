@@ -1,4 +1,5 @@
 import { KERNEL_WS_URL } from '../config/kernel';
+import { openAuthenticatedKernelSocket, type KernelTokenProvider } from './kernelSocket';
 import type { KernelMessage, KernelResponse } from '../types/quantum';
 
 export type PlatformKind = 'desktop' | 'web';
@@ -11,6 +12,7 @@ export interface KernelSession {
 export async function createKernelSession(
   platform: PlatformKind,
   onMessage: (message: KernelResponse) => void,
+  getToken?: KernelTokenProvider,
 ): Promise<KernelSession> {
   if (platform === 'web') {
     const { PyodideKernel } = await import('../platform/pyodideKernel');
@@ -27,8 +29,11 @@ export async function createKernelSession(
     };
   }
 
+  // Every desktop socket goes through the shared authenticated path so the
+  // per-launch token is the first frame the kernel sees.
+  const ws = await openAuthenticatedKernelSocket(KERNEL_WS_URL, getToken);
+
   return new Promise((resolve, reject) => {
-    const ws = new WebSocket(KERNEL_WS_URL);
 
     ws.addEventListener('open', () => {
       ws.addEventListener('message', (event) => {

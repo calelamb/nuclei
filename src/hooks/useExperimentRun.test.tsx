@@ -63,6 +63,7 @@ const desktopBridge: PlatformBridge = {
   async createFile() { return null; },
   async createDirectory() { return null; },
   async deleteFile() { return false; },
+  async getKernelAuthToken() { return 'launch-token'; },
 };
 
 function wrapper({ children }: { children: ReactNode }) {
@@ -127,6 +128,8 @@ describe('useExperimentRun', () => {
     });
 
     expect(createKernelSessionMock).toHaveBeenCalledTimes(1);
+    const getToken = createKernelSessionMock.mock.calls[0][2] as () => Promise<string | null>;
+    await expect(getToken()).resolves.toBe('launch-token');
     expect(closeMock).toHaveBeenCalledTimes(1);
 
     const state = useExperimentRunStore.getState();
