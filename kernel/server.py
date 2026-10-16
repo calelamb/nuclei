@@ -17,6 +17,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 os.environ.setdefault("QDK_PYTHON_TELEMETRY", "none")
 
 import websockets
+from kernel import auth
 from kernel.executor import ADAPTER_SPECS, Executor
 from kernel.hardware.manager import HardwareManager
 from kernel.models import KernelError
@@ -55,6 +56,8 @@ async def run_agent_worker(request: dict) -> dict:
             # children it spawned (fork-bomb containment, since the worker no
             # longer sets RLIMIT_NPROC — see kernel/agent_limits.py).
             start_new_session=True,
+            # Never hand the kernel token to model-generated code.
+            env=auth.scrubbed_environment(),
         )
     except OSError as exc:
         return _agent_error(request_id, "worker_spawn_failed", str(exc))
@@ -1045,26 +1048,59 @@ async def handle_message(websocket):
             }))
 
 
-async def _try_serve(port: int):
+async def _try_serve(port: int, auth_config: auth.KernelAuthConfig):
     return await websockets.serve(
-        handle_message,
+        auth.secure_handler(handle_message, auth_config),
         "localhost",
         port,
+        process_request=auth.make_process_request(auth_config),
         max_size=MAX_MESSAGE_SIZE,
         ping_interval=PING_INTERVAL,
         ping_timeout=PING_TIMEOUT,
     )
 
 
+def _publish_runtime_file(
+    auth_config: auth.KernelAuthConfig, port: int, runtime_dir=None
+):
+    """Write the runtime file for local scripts; a failure only costs them
+    discovery, so log it clearly and keep serving the desktop app."""
+    try:
+        return auth.write_runtime_file(auth_config, port, runtime_dir)
+    except OSError as e:
+        print(
+            f"Nuclei kernel could not write its runtime file ({e}); local "
+            "scripts will need the token supplied another way.",
+            file=sys.stderr,
+            flush=True,
+        )
+        return None
+
+
 async def main():
+    # Fail closed: raises AuthConfigError unless a token (or the explicit
+    # insecure-dev flag) is configured.
+    try:
+        auth_config = auth.config_from_env()
+    except auth.AuthConfigError as e:
+        print(f"Nuclei kernel refused to start: {e}", file=sys.stderr, flush=True)
+        raise SystemExit(2) from e
+
+    # The desktop app hardcodes the canonical port; when it owns the launch it
+    # must not silently fall back to a neighbouring port.
+    strict_port = os.environ.get(auth.STRICT_PORT_ENV) == "1"
+    attempts = 1 if strict_port else PORT_FALLBACK_RANGE
+
     last_error: Exception | None = None
-    for offset in range(PORT_FALLBACK_RANGE):
+    for offset in range(attempts):
         port = DEFAULT_PORT + offset
         try:
-            server = await _try_serve(port)
+            server = await _try_serve(port, auth_config)
         except OSError as e:
             last_error = e
             continue
+
+        _publish_runtime_file(auth_config, port)
 
         # Print chosen port on its own line so the Rust side can parse it if needed.
         print(f"Nuclei kernel ready on ws://localhost:{port}", flush=True)

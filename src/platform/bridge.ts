@@ -18,6 +18,8 @@ export interface PlatformBridge {
   // Kernel management
   startKernel(): Promise<string>;
   stopKernel(): Promise<string>;
+  /** Per-launch kernel WebSocket token (desktop only; web has no socket kernel). */
+  getKernelAuthToken?(): Promise<string | null>;
 
   // Canonical QEC data-engine management. The desktop implementation owns
   // the native child process; callers must stop it before changing projects.

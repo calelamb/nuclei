@@ -4,6 +4,9 @@
 // Requires the `ws` package: npm install ws
 // (This file is documentation — it mirrors example_client.py, which is the
 // variant exercised by the kernel test suite.)
+import { readFileSync } from 'node:fs';
+import { homedir } from 'node:os';
+import { join } from 'node:path';
 import WebSocket from 'ws';
 
 const BELL = `from qiskit import QuantumCircuit
@@ -13,6 +16,14 @@ qc.h(0)
 qc.cx(0, 1)
 qc.measure([0, 1], [0, 1])
 `;
+
+// The kernel requires a per-launch token: $NUCLEI_KERNEL_TOKEN, or the
+// user-only runtime file the kernel writes at startup.
+function loadToken(): string {
+  if (process.env.NUCLEI_KERNEL_TOKEN) return process.env.NUCLEI_KERNEL_TOKEN;
+  const dir = process.env.NUCLEI_RUNTIME_DIR ?? join(homedir(), '.nuclei', 'runtime');
+  return JSON.parse(readFileSync(join(dir, 'kernel.json'), 'utf8')).token as string;
+}
 
 const url = process.argv[2] ?? 'ws://localhost:9742';
 const ws = new WebSocket(url);
@@ -42,6 +53,8 @@ async function drainUntil(terminalType: string): Promise<KernelMessage> {
 }
 
 ws.on('open', async () => {
+  ws.send(JSON.stringify({ type: 'authenticate', token: loadToken() }));
+  await drainUntil('authenticated');
   ws.send(JSON.stringify({ type: 'parse', code: BELL, language: 'python' }));
   const snapshot = await drainUntil('snapshot');
   const data = snapshot.data as { gates: unknown[]; depth: number } | null;

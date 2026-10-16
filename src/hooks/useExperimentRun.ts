@@ -37,12 +37,13 @@ import type { KernelResponse } from '../types/quantum';
  * connection — `runExperiment` and `fetchEnvironment` both subscribe to it. */
 async function openRunnerSession(
   platformKind: Parameters<typeof createKernelSession>[0],
+  getToken?: Parameters<typeof createKernelSession>[2],
 ): Promise<{ session: RunnerKernelSession; close(): void }> {
   const handlers = new Set<(message: KernelResponse) => void>();
   const dispatch = (message: KernelResponse) => {
     for (const handler of [...handlers]) handler(message);
   };
-  const kernelSession = await createKernelSession(platformKind, dispatch);
+  const kernelSession = await createKernelSession(platformKind, dispatch, getToken);
 
   return {
     session: {
@@ -70,7 +71,10 @@ export function useExperimentRun() {
       let runnerSession: RunnerKernelSession;
       let closeSession: () => void;
       try {
-        const opened = await openRunnerSession(platform.getPlatform());
+        const opened = await openRunnerSession(
+          platform.getPlatform(),
+          platform.getKernelAuthToken?.bind(platform),
+        );
         runnerSession = opened.session;
         closeSession = opened.close;
       } catch (e) {

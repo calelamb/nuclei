@@ -5,6 +5,7 @@ import { useLearnStore } from '../../stores/learnStore';
 import { useDiracPanelStore } from '../../stores/diracPanelStore';
 import { usePlatform } from '../../platform/PlatformProvider';
 import { KERNEL_WS_URL } from '../../config/kernel';
+import { openAuthenticatedKernelSocket } from '../../services/kernelSocket';
 import type { Framework, SimulationResult, KernelResponse } from '../../types/quantum';
 import { Play, Lightbulb, CheckCircle, XCircle, HelpCircle, Terminal } from 'lucide-react';
 import { hasExpectedDistribution, isQuantumCode, validateExerciseResult } from './exerciseValidation';
@@ -124,9 +125,19 @@ export function ExerciseBlock({
       return;
     }
     let ws: WebSocket | null = null;
+    let cancelled = false;
     let retries = 0;
     function connect() {
-      ws = new WebSocket(KERNEL_WS_URL);
+      void openAuthenticatedKernelSocket(
+        KERNEL_WS_URL,
+        platform.getKernelAuthToken?.bind(platform),
+      ).then((socket) => {
+        if (cancelled) { socket.close(); return; }
+        ws = socket;
+        attach(socket);
+      });
+    }
+    function attach(ws: WebSocket) {
       ws.onopen = () => { wsRef.current = ws; retries = 0; };
       ws.onmessage = (ev) => {
         try { handleMessage(JSON.parse(ev.data)); } catch { /* noop */ }
@@ -138,8 +149,8 @@ export function ExerciseBlock({
       ws.onerror = () => ws?.close();
     }
     connect();
-    return () => { ws?.close(); };
-  }, [handleMessage, isWeb]);
+    return () => { cancelled = true; ws?.close(); };
+  }, [handleMessage, isWeb, platform]);
 
   // Inactivity timer for "Need help?" prompt
   const resetInactivity = useCallback(() => {

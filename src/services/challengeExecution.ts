@@ -13,6 +13,7 @@ import type {
 } from '../types/quantum';
 import { validateTestCase, validateValueTestCase } from './challengeValidation';
 import { createKernelSession, type KernelSession, type PlatformKind } from './kernelSession';
+import type { KernelTokenProvider } from './kernelSocket';
 
 const TEST_TIMEOUT_MS = 35_000;
 const VALUE_RESULT_MARKER = '__NUCLEI_CHALLENGE_VALUE__=';
@@ -520,6 +521,7 @@ export async function runTestCases(
   onResult: (result: TestCaseResult, index: number) => void,
   onError: (error: string) => void,
   onArtifact?: (snapshot: CircuitSnapshot | null, result: SimulationResult | null, index: number) => void,
+  getToken?: KernelTokenProvider,
 ): Promise<TestCaseResult[]> {
   const isValueContract = challenge.contract_kind === 'returns_value';
 
@@ -537,7 +539,7 @@ export async function runTestCases(
   try {
     session = await createKernelSession(platform, (message) => {
       driver?.handleMessage(message);
-    });
+    }, getToken);
     driver = createExecutionDriver(session);
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : 'Kernel connection failed';
@@ -600,6 +602,7 @@ export async function inspectChallengeCase(
   framework: Framework,
   platform: PlatformKind,
   shots: number,
+  getToken?: KernelTokenProvider,
 ): Promise<{
   snapshot: CircuitSnapshot | null;
   result: SimulationResult | null;
@@ -628,7 +631,7 @@ export async function inspectChallengeCase(
   try {
     session = await createKernelSession(platform, (message) => {
       driver?.handleMessage(message);
-    });
+    }, getToken);
     driver = createExecutionDriver(session);
 
     const wrappedCode = buildTestCode(userCode, challenge, testCase.params, framework);

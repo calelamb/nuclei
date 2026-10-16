@@ -44,7 +44,7 @@ All verified against `package.json` scripts:
 | `npm run lint` | repo root | ESLint |
 | `python3 -m pytest kernel/tests` | repo root | Kernel test suite — including the protocol fixtures the [Kernel API docs](/docs/kernel-api/overview/) replay |
 | `cargo test` | `src-tauri/` | Compiles and runs the Rust suite — currently no unit tests exist, so this is a build check |
-| `cd kernel && python server.py` | — | Run the kernel standalone (see [Kernel API](/docs/kernel-api/overview/#running-the-kernel-standalone)) |
+| `cd kernel && NUCLEI_KERNEL_TOKEN=<token> python server.py` | — | Run the kernel standalone (see [Kernel API](/docs/kernel-api/overview/#running-the-kernel-standalone)) |
 | `npm install && npm run build` | `docs-site/` | Build this docs site (Astro/Starlight, Node 22.12+) |
 
 ## Repo layout (trimmed)
