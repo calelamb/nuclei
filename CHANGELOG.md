@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Security hardening
+
+- The kernel WebSocket now requires a per-launch secret token, an allowed
+  `Origin`, and a loopback `Host` before any request is handled; connections
+  that fail are closed. The desktop app supplies the token automatically, and
+  local scripts read it from a user-only runtime file (see the Kernel API
+  overview in the docs).
+- The kernel refuses to start without a token unless
+  `NUCLEI_KERNEL_INSECURE_DEV=1` is set explicitly.
+- Nuclei no longer force-kills whatever process is listening on the kernel
+  port; it only stops a kernel it recorded itself and reports a conflict
+  otherwise.
+
 ### Added — Unified QEC Workbench foundation
 
 - A light, four-zone Research workspace organized around versioned,

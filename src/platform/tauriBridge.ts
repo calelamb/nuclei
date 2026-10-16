@@ -23,6 +23,10 @@ export const tauriBridge: PlatformBridge = {
     return await invoke<string>('stop_kernel');
   },
 
+  async getKernelAuthToken() {
+    return await invoke<string>('kernel_auth_token');
+  },
+
   async startQecDataEngine(projectRoot: string) {
     return await invoke<unknown>('qec_data_start', { projectRoot });
   },

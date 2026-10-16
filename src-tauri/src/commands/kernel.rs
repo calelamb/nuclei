@@ -4,23 +4,30 @@ use std::sync::Mutex;
 use std::thread;
 use tauri::{Manager, State};
 
+use super::kernel_ownership as ownership;
+
 // Canonical kernel port. The frontend connects here by hardcoded URL
-// (see src/config/kernel.ts), so we must make sure our freshly-spawned
-// kernel actually owns it. If a zombie from a prior release is squatting
-// on the port, the new kernel would silently fall back to 9743+ — and
-// the frontend would unknowingly talk to the zombie, which would reply
-// with "Unknown message type" errors for any handlers added after that
-// stale kernel was built.
+// (see src/config/kernel.ts), so our freshly-spawned kernel must own it.
+// A leftover kernel that Nuclei itself recorded is reaped; anything else
+// holding the port is left alone and reported as an error, so the
+// per-launch auth token is never handed to a process we did not start.
 const KERNEL_PORT: u16 = 9742;
+
+const TOKEN_ENV: &str = "NUCLEI_KERNEL_TOKEN";
+const STRICT_PORT_ENV: &str = "NUCLEI_KERNEL_STRICT_PORT";
+const DEV_ENV: &str = "NUCLEI_KERNEL_DEV";
+const INSECURE_ENV: &str = "NUCLEI_KERNEL_INSECURE_DEV";
 
 pub struct KernelState {
     process: Mutex<Option<Child>>,
+    token: Mutex<Option<String>>,
 }
 
 impl KernelState {
     pub fn new() -> Self {
         Self {
             process: Mutex::new(None),
+            token: Mutex::new(None),
         }
     }
 
@@ -31,6 +38,12 @@ impl KernelState {
                 let _ = child.wait();
             }
             *guard = None;
+        }
+        if let Ok(mut token) = self.token.lock() {
+            *token = None;
+        }
+        if let Some(dir) = ownership::runtime_dir() {
+            ownership::remove_owner_record(&dir);
         }
     }
 }
@@ -44,39 +57,6 @@ impl Default for KernelState {
 impl Drop for KernelState {
     fn drop(&mut self) {
         self.stop();
-    }
-}
-
-/// Kill whatever process is currently listening on the kernel's port.
-/// Best-effort: if the port is already free, or the OS tooling isn't
-/// available, this is a no-op. Run this before spawning the new kernel
-/// so stale zombies from prior releases can't hijack the frontend's
-/// hardcoded WebSocket URL.
-fn kill_port_squatters(port: u16) {
-    #[cfg(not(target_os = "windows"))]
-    {
-        // `lsof -ti :PORT` prints only PIDs (one per line) for any
-        // process listening on the given TCP port. `kill -9` is
-        // heavy-handed but appropriate here — a previous-version kernel
-        // process has no signal handler we care about preserving, and
-        // we need the port back immediately.
-        let cmd = format!(
-            "lsof -ti :{} 2>/dev/null | xargs kill -9 2>/dev/null || true",
-            port
-        );
-        let _ = Command::new("sh").arg("-c").arg(&cmd).status();
-    }
-    #[cfg(target_os = "windows")]
-    {
-        // netstat -ano: PID is in the last column. The inner for-loop
-        // shells out taskkill /F /PID <pid> for each match. `findstr
-        // LISTENING` filters TIME_WAIT etc. so we only kill the actual
-        // holder of the port.
-        let cmd = format!(
-            "for /f \"tokens=5\" %a in ('netstat -ano ^| findstr :{} ^| findstr LISTENING') do taskkill /F /PID %a",
-            port
-        );
-        let _ = Command::new("cmd").args(["/C", &cmd]).status();
     }
 }
 
@@ -94,12 +74,18 @@ pub fn start_kernel(
         let _ = child.wait();
     }
 
-    // Also kill any OUT-of-process zombie that's still holding the port.
-    // This is the big one: without it, a pre-v0.4.14 kernel left running
-    // from a prior install will sit on port 9742 forever and the new
-    // frontend will talk to it. The new kernel, binding to 9743, never
-    // sees any requests.
-    kill_port_squatters(KERNEL_PORT);
+    // Reap a kernel that a previous Nuclei run recorded and left behind
+    // (verified by pid + command line). Never kill an arbitrary listener.
+    let runtime_dir = ownership::runtime_dir();
+    ownership::reap_recorded_kernel(runtime_dir.as_deref(), KERNEL_PORT);
+    if ownership::port_in_use(KERNEL_PORT) {
+        return Err(format!(
+            "Port {KERNEL_PORT} is already in use by another application. \
+             Quit it (or an older Nuclei kernel) and restart Nuclei."
+        ));
+    }
+
+    let token = super::qec_data::generate_token().map_err(|e| e.message)?;
 
     // Resolve the kernel script path. Two cases:
     //
@@ -177,6 +163,10 @@ pub fn start_kernel(
     let mut child = Command::new(&python_path)
         .arg(kernel_script.to_str().unwrap())
         .current_dir(&kernel_cwd)
+        .env(TOKEN_ENV, &token)
+        .env(STRICT_PORT_ENV, "1")
+        .env_remove(INSECURE_ENV)
+        .envs(cfg!(debug_assertions).then_some((DEV_ENV, "1")))
         .stdout(std::process::Stdio::piped())
         .stderr(std::process::Stdio::piped())
         .spawn()
@@ -211,7 +201,14 @@ pub fn start_kernel(
     }
 
     let pid = child.id();
+    if let Some(dir) = runtime_dir.as_deref() {
+        let record = ownership::OwnerRecord { pid, port: KERNEL_PORT };
+        if let Err(e) = ownership::write_owner_record(dir, &record) {
+            log::warn!("Could not record kernel ownership: {e}");
+        }
+    }
     *guard = Some(child);
+    *state.token.lock().map_err(|e| e.to_string())? = Some(token);
 
     Ok(format!(
         "Kernel started with PID {} (cwd: {})",
@@ -224,4 +221,16 @@ pub fn start_kernel(
 pub fn stop_kernel(state: State<'_, KernelState>) -> Result<String, String> {
     state.stop();
     Ok("Kernel stopped".to_string())
+}
+
+/// Per-launch token the frontend presents in its first WebSocket frame.
+/// Only the Tauri webview can invoke this; it is never placed in a URL.
+#[tauri::command]
+pub fn kernel_auth_token(state: State<'_, KernelState>) -> Result<String, String> {
+    state
+        .token
+        .lock()
+        .map_err(|e| e.to_string())?
+        .clone()
+        .ok_or_else(|| "Kernel has not been started".to_string())
 }
