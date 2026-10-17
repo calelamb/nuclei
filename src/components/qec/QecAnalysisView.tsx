@@ -1,12 +1,9 @@
 import { useState } from 'react';
-import { Download, Play, Square } from 'lucide-react';
 import { useThemeStore } from '../../stores/themeStore';
 import { useQecCampaignStore } from '../../stores/qecCampaignStore';
-import { useProjectStore } from '../../stores/projectStore';
 import { useExperimentStore } from '../../services/experimentStore';
 import { useExperimentUiStore } from '../../stores/experimentUiStore';
-import { useQecCampaignRun } from '../../hooks/useQecCampaignRun';
-import { Button } from '../ui/Button';
+import { QecCampaignActions } from './QecCampaignActions';
 import { SegmentedControl } from '../ui/SegmentedControl';
 import { useElementSize } from '../../hooks/useElementSize';
 import { isShortAnalysis } from '../../lib/qecAnalysisLayout';
@@ -14,13 +11,12 @@ import { ThresholdPanel } from './ThresholdPanel';
 import { DecoderWorkbench } from './DecoderWorkbench';
 import { isWebBuild } from '../../platform/buildTarget';
 import { CsvMappingPreview } from './CsvMappingPreview';
-import { QecCsvDropZone, QecCsvOpenButton } from './QecCsvDropZone';
+import { QecCsvDropZone } from './QecCsvDropZone';
 import { QecEmptyState } from './QecEmptyState';
 import { QEC_PLOT_CSV_DOCS } from '../../config/docsLinks';
 import { useCsvDrop } from './useCsvDrop';
-import { downloadCsv } from '../../services/experimentExport';
 
-import { ICON_SIZE, ICON_STROKE, TYPOGRAPHY } from '../../styles/tokens';
+import { TYPOGRAPHY } from '../../styles/tokens';
 const PLOT_MIN_HEIGHT = 300;
 const TABLE_MIN_HEIGHT = 170;
 type AnalysisTab = 'plot' | 'lambda' | 'decoders';
@@ -37,21 +33,18 @@ const ANALYSIS_TABS = [
  * plot over the decoder workbench; a slim progress strip on top reflects the
  * live campaign (or a resumable prior run).
  */
-export function QecAnalysisView({ embedded = false }: { embedded?: boolean } = {}) {
+export function QecAnalysisView({ embedded = false, actionsInHeader = false }: { embedded?: boolean; actionsInHeader?: boolean } = {}) {
   const colors = useThemeStore((s) => s.colors);
   const running = useQecCampaignStore((s) => s.running);
   const progress = useQecCampaignStore((s) => s.progress);
   const resumable = useQecCampaignStore((s) => s.resumable);
-  const projectRoot = useProjectStore((s) => s.projectRoot);
   const selectedFileName = useExperimentUiStore((s) => s.selectedExperimentFileName);
   const experiment = useExperimentStore((s) =>
     s.experiments.find((e) => e.fileName === selectedFileName),
   );
-  const { run, cancel } = useQecCampaignRun();
   const csvSource = useQecCampaignStore((s) => s.csvImport?.sourceName ?? null);
   const csvError = useQecCampaignStore((s) => s.csvError);
   const csvLoading = useQecCampaignStore((s) => s.csvLoading);
-  const statsCsv = useQecCampaignStore((s) => s.statsCsv);
   const { over, handlers } = useCsvDrop();
   const hasData = useQecCampaignStore((s) => Object.keys(s.rowsByStrongId).length > 0);
 
@@ -64,9 +57,6 @@ export function QecAnalysisView({ embedded = false }: { embedded?: boolean } = {
   );
 
   const webOnly = isWebBuild(); // no kernel to run campaigns in the browser
-  const canRun = Boolean(experiment && projectRoot && experiment.spec.type === 'qec_campaign');
-  // Inside the workbench a Run button with nothing to run would be dead weight.
-  const showRun = !webOnly && (!embedded || canRun || running);
   // A loaded file is named by the mapping summary below; inside the workbench the card heading already says
   // "Campaign Center", so a generic fallback would repeat it.
   const title = csvSource ? null : experiment?.spec.name ?? (embedded ? null : 'Campaign');
@@ -79,6 +69,7 @@ export function QecAnalysisView({ embedded = false }: { embedded?: boolean } = {
         outline: over ? `2px dashed ${colors.accent}` : 'none', outlineOffset: -2,
       }}
     >
+      {!actionsInHeader && (
       <div
         style={{
           display: 'flex', alignItems: 'center', gap: 10, padding: '8px 12px',
@@ -91,33 +82,9 @@ export function QecAnalysisView({ embedded = false }: { embedded?: boolean } = {
           </span>
         )}
         <div style={{ flex: 1 }} />
-        <QecCsvOpenButton />
-        {statsCsv ? (
-          <Button
-            size="sm"
-            title="sinter-native stats.csv: shots, errors, discards, seconds, decoder, strong_id, json_metadata, custom_counts"
-            onClick={() => downloadCsv(statsCsv, 'stats.csv')}
-            icon={<Download size={ICON_SIZE.xs} strokeWidth={ICON_STROKE} aria-hidden="true" />}
-          >
-            Export stats.csv
-          </Button>
-        ) : null}
-        {!showRun ? null : running ? (
-          <Button size="sm" variant="danger" onClick={cancel} icon={<Square size={ICON_SIZE.xs} strokeWidth={ICON_STROKE} />}>
-            Cancel
-          </Button>
-        ) : (
-          <Button
-            variant="primary"
-            size="sm"
-            onClick={() => { if (experiment && projectRoot) void run(experiment, projectRoot); }}
-            disabled={!canRun}
-            icon={<Play size={ICON_SIZE.xs} strokeWidth={ICON_STROKE} />}
-          >
-            Run campaign
-          </Button>
-        )}
+        <QecCampaignActions embedded={embedded} />
       </div>
+      )}
       {csvLoading && (
         <div role="status" aria-live="polite" style={{ padding: '6px 12px', fontSize: 12, color: colors.textMuted, borderBottom: `1px solid ${colors.border}`, fontFamily: TYPOGRAPHY.fontSans }}>
           {`Reading ${csvLoading}…`}

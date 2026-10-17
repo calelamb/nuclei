@@ -16,7 +16,7 @@ const DOCS = 'https://getnuclei.dev/docs/research/qec-studio/';
  * Hidden gracefully (a designed empty state) when the circuit carries no
  * qubit coordinates.
  */
-export function CodeLatticePanel() {
+export function CodeLatticePanel({ embedded = false }: { embedded?: boolean } = {}) {
   const colors = useThemeStore((s) => s.colors);
   const qec = useQecStore((s) => s.snapshot);
   const snapshot = useCircuitStore((s) => s.snapshot);
@@ -28,7 +28,7 @@ export function CodeLatticePanel() {
     [snapshot, tick],
   );
 
-  const header = <PanelHeader title="Code Lattice" helpHref={DOCS} />;
+  const header = embedded ? null : <PanelHeader title="Code Lattice" helpHref={DOCS} />;
 
   if (!qec) return <div style={{ height: '100%', background: colors.bg }}>{header}</div>;
 

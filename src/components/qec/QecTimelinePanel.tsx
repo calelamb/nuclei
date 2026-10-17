@@ -27,7 +27,7 @@ const GATE_H = 18;
  * labelled with their Stim mnemonics, noise is an amber dot with the kind and
  * probability on hover, and qubits with no operations are not drawn.
  */
-export function QecTimelinePanel() {
+export function QecTimelinePanel({ embedded = false }: { embedded?: boolean } = {}) {
   const colors = useThemeStore((s) => s.colors);
   const snapshot = useCircuitStore((s) => s.snapshot);
   const qec = useQecStore((s) => s.snapshot);
@@ -36,7 +36,8 @@ export function QecTimelinePanel() {
   const gates = useMemo(() => classifyTimelineGates(snapshot?.gates ?? []), [snapshot]);
   const track = useMemo(() => detectorTrackByTick(snapshot?.gates ?? []), [snapshot]);
 
-  const header = <PanelHeader title="Timeline" context={qec ? `${qec.num_ticks} ticks` : undefined} helpHref={DOCS} />;
+  // Embedded in a workbench instrument card: the card header already carries the title, context and help.
+  const header = embedded ? null : <PanelHeader title="Timeline" context={qec ? `${qec.num_ticks} ticks` : undefined} helpHref={DOCS} />;
 
   if (!snapshot || gates.length === 0) {
     return (

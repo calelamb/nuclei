@@ -24,15 +24,15 @@ describe('shared units (qec-12, qec-21)', () => {
     const plot = render(<ThresholdPanel />);
     const table = render(<DecoderWorkbench />);
     expect(table.container.textContent).toMatch(/Logical error rate \(per round\)/);
-    fireEvent.click(plot.getByRole('button', { name: 'Per shot' }));
+    fireEvent.click(plot.getByRole('radio', { name: 'Per shot' }));
     expect(table.container.textContent).toMatch(/Logical error rate \(per shot\)/);
   });
 
   it('keeps the choice after leaving and coming back', () => {
     const first = render(<ThresholdPanel />);
-    fireEvent.click(first.getByRole('button', { name: 'Per shot' }));
+    fireEvent.click(first.getByRole('radio', { name: 'Per shot' }));
     first.unmount();
     const again = render(<ThresholdPanel />);
-    expect(again.getByRole('button', { name: 'Per shot' }).getAttribute('aria-pressed')).toBe('true');
+    expect(again.getByRole('radio', { name: 'Per shot' }).getAttribute('aria-checked')).toBe('true');
   });
 });

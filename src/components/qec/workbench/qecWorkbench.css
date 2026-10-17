@@ -301,7 +301,7 @@
 }
 
 .qec-source-row-shell {
-  position: relative; display: grid; min-width: 0; grid-template-columns: minmax(0, 1fr) 44px;
+  position: relative; display: grid; min-width: 0; grid-template-columns: minmax(0, 1fr) auto;
   margin: 2px 0; overflow: hidden; border: 1px solid transparent; border-radius: 5px;
   transition: background-color 160ms ease, border-color 160ms ease;
 }
@@ -323,9 +323,11 @@
   border-color: transparent; background: transparent;
 }
 
-.qec-source-row__import.nuclei-icon-btn {
-  align-self: center; margin: 0 var(--space-1);
+.qec-source-row__actions {
+  display: flex; align-items: center; gap: 0; padding-right: var(--space-1);
 }
+
+.qec-source-group__error { color: var(--qec-danger); }
 
 .qec-source-row:hover {
   border-color: var(--qec-border); background: var(--qec-raised);
@@ -352,9 +354,7 @@
   margin-top: 2px; color: var(--qec-text-muted); font-size: 11px;
 }
 
-.qec-source-row__kind {
-  color: var(--qec-text-muted); font-family: var(--font-mono); font-size: 11px; text-transform: uppercase;
-}
+.qec-source-row__kind { text-transform: uppercase; }
 
 .qec-session-tree {
   display: grid; gap: 2px; margin: 0; padding: 0; list-style: none;

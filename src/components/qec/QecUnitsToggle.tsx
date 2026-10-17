@@ -1,23 +1,12 @@
 import type { RateUnits } from '../../lib/qecFit';
-import { Button } from '../ui';
+import { SegmentedControl } from '../ui/SegmentedControl';
 
-const OPTIONS: ReadonlyArray<readonly [RateUnits, string]> = [['per_shot', 'Per shot'], ['per_round', 'Per round']];
+const OPTIONS: ReadonlyArray<{ value: RateUnits; label: string }> = [
+  { value: 'per_shot', label: 'Per shot' },
+  { value: 'per_round', label: 'Per round' },
+];
 
 /** Per shot / per round switch shared by the plot, Λ readout and decoder table. */
 export function QecUnitsToggle({ units, onChange }: { units: RateUnits; onChange: (u: RateUnits) => void }) {
-  return (
-    <div role="group" aria-label="Logical error units" style={{ display: 'flex', gap: 2 }}>
-      {OPTIONS.map(([u, text]) => (
-        <Button
-          key={u}
-          size="sm"
-          variant={units === u ? 'primary' : 'secondary'}
-          aria-pressed={units === u}
-          onClick={() => onChange(u)}
-        >
-          {text}
-        </Button>
-      ))}
-    </div>
-  );
+  return <SegmentedControl aria-label="Logical error units" value={units} options={OPTIONS} onChange={onChange} />;
 }

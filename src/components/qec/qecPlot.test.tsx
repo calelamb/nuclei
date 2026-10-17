@@ -112,7 +112,7 @@ describe('Λ readout caveats', () => {
     const { container, getByRole } = render(<ThresholdPanel />);
     const readout = () => container.querySelector('[aria-label="Error suppression factor Λ"]')!.textContent!;
     expect(readout()).not.toMatch(/rounds vary with d/);
-    fireEvent.click(getByRole('button', { name: 'Per shot' }));
+    fireEvent.click(getByRole('radio', { name: 'Per shot' }));
     expect(readout()).toMatch(/rounds vary with d, confounding this per-shot Λ/);
   });
 

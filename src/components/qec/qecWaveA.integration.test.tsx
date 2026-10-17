@@ -47,7 +47,7 @@ describe('Wave A: dropped sinter CSV -> mapping -> corrected statistics -> match
     expect(container.textContent).toMatch(/95% CI/);
 
     // per-round toggle exists because rounds are mapped
-    fireEvent.click(getByRole('button', { name: 'Per round' }));
+    fireEvent.click(getByRole('radio', { name: 'Per round' }));
     expect(meta().units).toBe('logical error per round');
 
     fireEvent.click(getByRole('button', { name: 'Export plot data (CSV)' }));
@@ -68,7 +68,7 @@ describe('Wave A: dropped sinter CSV -> mapping -> corrected statistics -> match
     const store = useQecCampaignStore.getState();
     store.setCsvMapping({ ...store.csvImport!.mapping, rounds: null });
     const { queryByRole } = render(<ThresholdPanel />);
-    expect(queryByRole('button', { name: 'Per round' })).toBeNull();
+    expect(queryByRole('radio', { name: 'Per round' })).toBeNull();
   });
 
   it('parse keeps custom_counts and discards in the loaded rows', () => {

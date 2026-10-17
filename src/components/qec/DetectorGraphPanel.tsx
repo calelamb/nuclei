@@ -32,7 +32,7 @@ export const INTERACTIVE_DECODER_LABEL = 'preview: greedy matcher, not PyMatchin
  *  - `dem.truncated` → summary counts + "Render anyway" (re-request at a
  *    higher cap). Never a silently-missing graph.
  */
-export function DetectorGraphPanel() {
+export function DetectorGraphPanel({ embedded = false }: { embedded?: boolean } = {}) {
   const colors = useThemeStore((s) => s.colors);
   const snapshot = useQecStore((s) => s.snapshot);
   const decodeSample = useQecStore((s) => s.decodeSample);
@@ -131,7 +131,7 @@ export function DetectorGraphPanel() {
 
   const overlay = interactive ? interactiveOverlay : kernelOverlay;
 
-  const header = (
+  const header = embedded ? null : (
     <PanelHeader
       title="Detector Graph"
       context={snapshot ? `${snapshot.num_detectors} detectors` : undefined}
