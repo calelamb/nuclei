@@ -22,6 +22,11 @@ class FakeSocket {
 
   close() {}
 
+  closeFromServer(code: number) {
+    this.readyState = 3;
+    (this.listeners.get('close') ?? []).forEach((l) => l({ code }));
+  }
+
   open() {
     this.readyState = 1;
     (this.listeners.get('open') ?? []).forEach((l) => l({}));
@@ -52,6 +57,7 @@ describe('createKernelSession (desktop)', () => {
     await vi.waitFor(() => expect(FakeSocket.instances).toHaveLength(1));
     const ws = FakeSocket.instances[0];
     ws.open();
+    ws.receive({ type: 'authenticated' });
     const session = await pending;
     session.send({ type: 'qec_campaign_list' } as never);
     expect(ws.sent).toEqual([
@@ -66,9 +72,31 @@ describe('createKernelSession (desktop)', () => {
     await vi.waitFor(() => expect(FakeSocket.instances).toHaveLength(1));
     const ws = FakeSocket.instances[0];
     ws.open();
-    await pending;
     ws.receive({ type: 'authenticated' });
+    await pending;
     ws.receive({ type: 'snapshot' });
     expect(seen).toEqual([{ type: 'snapshot' }]);
+  });
+
+  it('does not resolve before the authenticated ack', async () => {
+    let settled = false;
+    const pending = createKernelSession('desktop', () => {}, async () => 'tok').then((s) => { settled = true; return s; });
+    await vi.waitFor(() => expect(FakeSocket.instances).toHaveLength(1));
+    FakeSocket.instances[0].open();
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(settled).toBe(false);
+    FakeSocket.instances[0].receive({ type: 'authenticated' });
+    await pending;
+    expect(settled).toBe(true);
+  });
+
+  it('rejects with the clear auth error when the kernel closes with 4401', async () => {
+    const pending = createKernelSession('desktop', () => {}, async () => 'wrong');
+    await vi.waitFor(() => expect(FakeSocket.instances).toHaveLength(1));
+    const ws = FakeSocket.instances[0];
+    ws.open();
+    ws.closeFromServer(4401);
+    await expect(pending).rejects.toThrow('Kernel rejected the session token — restart Nuclei');
   });
 });

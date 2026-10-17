@@ -1,5 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { openAuthenticatedKernelSocket } from './kernelSocket';
+import {
+  KERNEL_AUTH_REJECTED_MESSAGE,
+  KernelAuthRejectedError,
+  openAuthenticatedKernelSocket,
+  openKernelConnection,
+} from './kernelSocket';
 
 class FakeSocket {
   static instances: FakeSocket[] = [];
@@ -29,6 +34,16 @@ class FakeSocket {
     (this.listeners.get('open') ?? []).forEach((l) => l({}));
     this.onopen?.();
   }
+
+  /** Server-initiated close: addEventListener listeners, then onclose. */
+  closeFromServer(code: number) {
+    this.readyState = 3;
+    const event = { code };
+    (this.listeners.get('close') ?? []).forEach((l) => l(event));
+    this.onclose?.(event);
+  }
+
+  onclose: ((event: { code: number }) => void) | null = null;
 
   receive(data: unknown) {
     const event = {
@@ -94,5 +109,72 @@ describe('openAuthenticatedKernelSocket', () => {
     const ws = (await openAuthenticatedKernelSocket('ws://localhost:9742')) as unknown as FakeSocket;
     ws.open();
     expect(ws.sent).toEqual([]);
+  });
+});
+
+describe('openKernelConnection (authentication ack)', () => {
+  beforeEach(() => {
+    FakeSocket.instances = [];
+    vi.stubGlobal('WebSocket', FakeSocket);
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.unstubAllGlobals();
+  });
+
+  it('does not resolve `authenticated` on open, only on the kernel ack', async () => {
+    const { ws, authenticated } = await openKernelConnection('ws://localhost:9742', async () => 'tok');
+    const fake = ws as unknown as FakeSocket;
+    let done = false;
+    void authenticated.then(() => { done = true; });
+    fake.open();
+    await Promise.resolve();
+    expect(done).toBe(false);
+    fake.receive({ type: 'authenticated' });
+    await authenticated;
+    expect(done).toBe(true);
+  });
+
+  it('resolves on open when no token is sent (web or insecure dev)', async () => {
+    const { ws, authenticated } = await openKernelConnection('ws://localhost:9742', async () => null);
+    (ws as unknown as FakeSocket).open();
+    await expect(authenticated).resolves.toBeUndefined();
+  });
+
+  it('rejects with KernelAuthRejectedError when the kernel closes with 4401', async () => {
+    const { ws, authenticated } = await openKernelConnection('ws://localhost:9742', async () => 'bad');
+    const fake = ws as unknown as FakeSocket;
+    fake.open();
+    fake.closeFromServer(4401);
+    const error = await authenticated.catch((e: unknown) => e);
+    expect(error).toBeInstanceOf(KernelAuthRejectedError);
+    expect((error as Error).message).toBe(KERNEL_AUTH_REJECTED_MESSAGE);
+    expect(KERNEL_AUTH_REJECTED_MESSAGE).toBe('Kernel rejected the session token — restart Nuclei');
+  });
+
+  it('rejects with a plain error when the socket closes before the ack for another reason', async () => {
+    const { ws, authenticated } = await openKernelConnection('ws://localhost:9742', async () => 't');
+    const fake = ws as unknown as FakeSocket;
+    fake.open();
+    fake.closeFromServer(1006);
+    const error = await authenticated.catch((e: unknown) => e);
+    expect(error).toBeInstanceOf(Error);
+    expect(error).not.toBeInstanceOf(KernelAuthRejectedError);
+  });
+
+  it('rejects when the kernel never acknowledges within the timeout', async () => {
+    vi.useFakeTimers();
+    const { ws, authenticated } = await openKernelConnection('ws://localhost:9742', async () => 't', 500);
+    (ws as unknown as FakeSocket).open();
+    const outcome = authenticated.catch((e: unknown) => e);
+    await vi.advanceTimersByTimeAsync(501);
+    expect(((await outcome) as Error).message).toMatch(/did not acknowledge/i);
+  });
+
+  it('openAuthenticatedKernelSocket callers never see an unhandled rejection on a 4401 close', async () => {
+    const ws = (await openAuthenticatedKernelSocket('ws://localhost:9742', async () => 'bad')) as unknown as FakeSocket;
+    ws.open();
+    ws.closeFromServer(4401);
+    await Promise.resolve();
   });
 });
