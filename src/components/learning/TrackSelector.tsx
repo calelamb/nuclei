@@ -3,6 +3,11 @@ import { useLearnStore } from '../../stores/learnStore';
 import { TRACKS } from '../../data/lessons/tracks';
 import type { Track } from '../../data/lessons/types';
 import { TrackVideoShelf } from './TrackVideoShelf';
+import { ConceptMap } from './ConceptMap';
+import { Glossary } from './Glossary';
+import { CapstonesPanel } from './CapstonesPanel';
+import { LEARN_SECTION_LABELS, useLearnSectionStore, type LearnSection } from './learnSectionStore';
+import { Tabs, type TabOption } from '../ui';
 import './trackSelector.css';
 
 interface TrackCardProps {
@@ -50,10 +55,50 @@ function TrackCard({ track, completedLessons, started, onOpen }: TrackCardProps)
   );
 }
 
-export function TrackSelector() {
+const SECTION_ORDER: readonly LearnSection[] = ['tracks', 'concepts', 'capstones', 'glossary', 'videos'];
+const SECTION_OPTIONS: ReadonlyArray<TabOption<LearnSection>> = SECTION_ORDER.map((value) => ({
+  value,
+  label: LEARN_SECTION_LABELS[value],
+}));
+
+function TrackList() {
   const setCurrentLesson = useLearnStore((s) => s.setCurrentLesson);
   const completedLessons = useLearnStore((s) => s.completedLessons);
   const lessonProgress = useLearnStore((s) => s.lessonProgress);
+
+  return (
+    <div className="tracks__list">
+      {TRACKS.map((track) => (
+        <TrackCard
+          key={track.id}
+          track={track}
+          completedLessons={completedLessons}
+          started={track.lessons.some((l) => lessonProgress[l.id])}
+          onOpen={setCurrentLesson}
+        />
+      ))}
+    </div>
+  );
+}
+
+function SectionBody({ section }: { section: LearnSection }) {
+  switch (section) {
+    case 'tracks':
+      return <TrackList />;
+    case 'concepts':
+      return <div className="tracks__concepts"><ConceptMap /></div>;
+    case 'capstones':
+      return <div className="tracks__capstones"><CapstonesPanel /></div>;
+    case 'glossary':
+      return <div className="tracks__glossary"><Glossary /></div>;
+    case 'videos':
+      return <TrackVideoShelf />;
+  }
+}
+
+export function TrackSelector() {
+  const section = useLearnSectionStore((s) => s.section);
+  const setSection = useLearnSectionStore((s) => s.setSection);
 
   return (
     <div className="tracks">
@@ -66,19 +111,10 @@ export function TrackSelector() {
           </div>
         </header>
 
-        <div className="tracks__list">
-          {TRACKS.map((track) => (
-            <TrackCard
-              key={track.id}
-              track={track}
-              completedLessons={completedLessons}
-              started={track.lessons.some((l) => lessonProgress[l.id])}
-              onOpen={setCurrentLesson}
-            />
-          ))}
+        <Tabs className="tracks__tabs" aria-label="Learn sections" value={section} options={SECTION_OPTIONS} onChange={setSection} />
+        <div className="tracks__section" role="tabpanel" aria-label={LEARN_SECTION_LABELS[section]}>
+          <SectionBody section={section} />
         </div>
-
-        <TrackVideoShelf />
       </div>
     </div>
   );

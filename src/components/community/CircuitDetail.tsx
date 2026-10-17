@@ -5,6 +5,7 @@ import { useThemeStore } from '../../stores/themeStore';
 import type { GalleryCircuit } from '../../data/community/mockGallery';
 
 import { TYPOGRAPHY } from '../../styles/tokens';
+import { SUCCESS_TEXT } from '../../lib/semanticText';
 interface CircuitDetailProps {
   circuit: GalleryCircuit;
   onClose: () => void;
@@ -204,7 +205,7 @@ export function CircuitDetail({ circuit, onClose, onOpenInEditor }: CircuitDetai
                 borderRadius: 6,
                 border: `1px solid ${colors.border}`,
                 background: 'transparent',
-                color: copied ? colors.success : colors.textMuted,
+                color: copied ? SUCCESS_TEXT : colors.textMuted,
                 fontSize: 12,
                 fontWeight: 600,
                 fontFamily: TYPOGRAPHY.fontSans,

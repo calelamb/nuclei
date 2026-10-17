@@ -1,22 +1,22 @@
 import { useState } from 'react';
-import { ChevronRight, ChevronDown, CheckCircle2, Circle, Dot } from 'lucide-react';
+import { ChevronRight, ChevronDown, CheckCircle2, Circle, CircleDot, Maximize2, BookOpen, Network, Trophy, Library } from 'lucide-react';
 import { useLearnStore } from '../../stores/learnStore';
-import { useCapstoneStore } from '../../stores/capstoneStore';
 import { TRACKS } from '../../data/lessons/tracks';
-import { CAPSTONE_PROJECTS } from '../../data/capstoneProjects';
 import { ConceptMap } from './ConceptMap';
 import { Glossary } from './Glossary';
-import { CapstoneCard } from './CapstoneCard';
-import { CapstoneProjectView } from './CapstoneProject';
+import { CapstonesPanel } from './CapstonesPanel';
+import { Button, Tabs, type TabOption } from '../ui';
+import { useLearnSectionStore } from './learnSectionStore';
 import './learnSidebar.css';
 
 type TabKey = 'tracks' | 'concepts' | 'capstones' | 'glossary';
 
-const TABS: { key: TabKey; label: string }[] = [
-  { key: 'tracks', label: 'Tracks' },
-  { key: 'concepts', label: 'Concepts' },
-  { key: 'capstones', label: 'Capstones' },
-  { key: 'glossary', label: 'Glossary' },
+/** Icon tabs below 280px: the label stays in the DOM for assistive tech and the tooltip. */
+const TAB_OPTIONS: ReadonlyArray<TabOption<TabKey>> = [
+  { value: 'tracks', label: <span className="lpath__tab-inner" title="Tracks"><BookOpen size={14} aria-hidden="true" /><span className="lpath__tab-label">Tracks</span></span> },
+  { value: 'concepts', label: <span className="lpath__tab-inner" title="Concepts"><Network size={14} aria-hidden="true" /><span className="lpath__tab-label">Concepts</span></span> },
+  { value: 'capstones', label: <span className="lpath__tab-inner" title="Capstones"><Trophy size={14} aria-hidden="true" /><span className="lpath__tab-label">Capstones</span></span> },
+  { value: 'glossary', label: <span className="lpath__tab-inner" title="Glossary"><Library size={14} aria-hidden="true" /><span className="lpath__tab-label">Glossary</span></span> },
 ];
 
 /**
@@ -79,7 +79,7 @@ function TracksTab() {
                   {isDone ? (
                     <CheckCircle2 size={14} className="lpath__icon lpath__icon--done" />
                   ) : isCurrent ? (
-                    <Dot size={14} className="lpath__icon lpath__icon--current" />
+                    <CircleDot size={14} className="lpath__icon lpath__icon--current" />
                   ) : (
                     <Circle size={12} className="lpath__icon lpath__icon--todo" />
                   )}
@@ -95,58 +95,36 @@ function TracksTab() {
   );
 }
 
-function CapstonesTab() {
-  const { activeProject, completedMilestones, startProject } = useCapstoneStore();
-
-  if (activeProject) {
-    return <CapstoneProjectView />;
-  }
-
-  return (
-    <div className="lpath__caps">
-      {CAPSTONE_PROJECTS.map((project) => {
-        const completed = completedMilestones[project.id] ?? [];
-        return (
-          <CapstoneCard
-            key={project.id}
-            project={project}
-            completedCount={completed.length}
-            onStart={() => startProject(project)}
-          />
-        );
-      })}
-    </div>
-  );
-}
-
 export function LearningPathSidebar() {
   const [activeTab, setActiveTab] = useState<TabKey>('tracks');
+  const setSection = useLearnSectionStore((s) => s.setSection);
+  const clearCurrentLesson = useLearnStore((s) => s.clearCurrentLesson);
+  const enterLearnMode = useLearnStore((s) => s.enterLearnMode);
+
+  const openFullView = () => {
+    setSection(activeTab);
+    clearCurrentLesson();
+    enterLearnMode();
+  };
 
   return (
     <div className="lpath">
-      <div className="lpath__tabs" role="tablist" aria-label="Learn sections">
-        {TABS.map((tab) => (
-          <button
-            key={tab.key}
-            type="button"
-            role="tab"
-            id={`lpath-tab-${tab.key}`}
-            aria-selected={activeTab === tab.key}
-            aria-controls="lpath-panel"
-            className="lpath__tab"
-            onClick={() => setActiveTab(tab.key)}
-          >
-            {tab.label}
-          </button>
-        ))}
-      </div>
+      <Tabs className="lpath__tabs" aria-label="Learn sections" value={activeTab} options={TAB_OPTIONS} onChange={setActiveTab} />
 
-      <div className="lpath__panel" id="lpath-panel" role="tabpanel" aria-labelledby={`lpath-tab-${activeTab}`}>
+      <div className="lpath__panel" role="tabpanel" aria-label={`${activeTab} panel`}>
         {activeTab === 'tracks' && <TracksTab />}
         {activeTab === 'concepts' && <ConceptMap />}
-        {activeTab === 'capstones' && <CapstonesTab />}
+        {activeTab === 'capstones' && <CapstonesPanel />}
         {activeTab === 'glossary' && <Glossary />}
       </div>
+
+      {activeTab === 'concepts' && (
+        <div className="lpath__foot">
+          <Button size="sm" variant="secondary" icon={<Maximize2 size={12} aria-hidden="true" />} onClick={openFullView}>
+            Open full map
+          </Button>
+        </div>
+      )}
     </div>
   );
 }

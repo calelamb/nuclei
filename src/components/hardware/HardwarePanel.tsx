@@ -14,6 +14,7 @@ import { CredentialSetup } from './CredentialSetup';
 import type { HardwareProviderType, BackendInfo } from '../../types/hardware';
 
 import { TYPOGRAPHY } from '../../styles/tokens';
+import { SUCCESS_TEXT } from '../../lib/semanticText';
 /* ── Section (local copy matching SettingsPanel pattern) ── */
 
 function Section({
@@ -263,7 +264,7 @@ export function HardwarePanel() {
               )}
 
               {p.connected && (
-                <span style={{ fontSize: 11, color: colors.success, ...font }}>
+                <span style={{ fontSize: 11, color: SUCCESS_TEXT, ...font }}>
                   Connected
                 </span>
               )}

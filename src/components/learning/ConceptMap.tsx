@@ -235,7 +235,7 @@ export function ConceptMap() {
                 <span style={{
                   fontSize: 11,
                   fontFamily: TYPOGRAPHY.fontSans,
-                  color: colors.accent,
+                  color: colors.accentText,
                 }}>
                   {selectedNode.node.exerciseIds.length} exercise{selectedNode.node.exerciseIds.length > 1 ? 's' : ''} available
                 </span>

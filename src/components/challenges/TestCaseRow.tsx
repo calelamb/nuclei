@@ -5,6 +5,7 @@ import type { TestCase, TestCaseResult } from '../../types/challenge';
 
 import './challenges.css';
 import { TYPOGRAPHY } from '../../styles/tokens';
+import { SUCCESS_TEXT } from '../../lib/semanticText';
 interface TestCaseRowProps {
   testCase: TestCase;
   result?: TestCaseResult;
@@ -130,13 +131,16 @@ export function TestCaseRow({ testCase, result, isRunning, index }: TestCaseRowP
 
         {/* Score */}
         {result && (
-          <span style={{
-            color: result.passed ? colors.success : colors.error,
-            fontSize: 11,
-            fontWeight: 600,
-            fontFamily: TYPOGRAPHY.fontMono,
-          }}>
-            {(result.score * 100).toFixed(0)}%
+          <span
+            title="Score for this test: how closely the output matched what was expected"
+            style={{
+              color: result.passed ? SUCCESS_TEXT : colors.error,
+              fontSize: 11,
+              fontWeight: 600,
+              fontFamily: TYPOGRAPHY.fontMono,
+            }}
+          >
+            {(result.score * 100).toFixed(0)}% match
           </span>
         )}
 
@@ -190,7 +194,7 @@ export function TestCaseRow({ testCase, result, isRunning, index }: TestCaseRowP
               }}>
                 {verdictLabel && (
                   <div style={{
-                    color: result.passed ? colors.success : colors.error,
+                    color: result.passed ? SUCCESS_TEXT : colors.error,
                     fontSize: 11,
                     fontWeight: 700,
                     fontFamily: TYPOGRAPHY.fontSans,

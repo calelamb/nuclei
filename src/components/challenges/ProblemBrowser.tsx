@@ -8,20 +8,15 @@ import {
 } from '../../stores/challengeModeStore';
 import { QUANTUM_CHALLENGES } from '../../data/challenges';
 import { ProblemFilters } from './ProblemFilters';
+import { Badge } from '../ui';
+import { DIFFICULTY_TONE } from './difficultyTone';
 import type {
   ChallengeCategory,
-  ChallengeDifficulty,
   ProblemProgress,
   ProblemStatus,
   QuantumChallenge,
 } from '../../types/challenge';
 import './challenges.css';
-
-const DIFFICULTY_COLORS: Record<ChallengeDifficulty, string> = {
-  easy: 'var(--color-success)',
-  medium: 'var(--color-warning)',
-  hard: 'var(--color-danger)',
-};
 
 const CATEGORY_LABELS: Record<ChallengeCategory, string> = {
   'state-preparation': 'State Prep',
@@ -67,9 +62,11 @@ function PracticeTabButton({ active, tab, count, onClick }: {
 
 function StatusCell({ status, optimal }: { status: ProblemStatus; optimal?: boolean }) {
   return (
-    <div className="prow__status" data-status={status}>
+    <div className="prow__status" data-status={status} title={STATUS_LABELS[status]}>
       {status === 'solved' ? <CheckCircle2 size={14} aria-hidden="true" /> : <Circle size={14} aria-hidden="true" fill={status === 'attempted' ? 'currentColor' : 'none'} stroke={status === 'attempted' ? 'none' : 'currentColor'} />}
-      <span>{STATUS_LABELS[status]}</span>
+      {status === 'not_started'
+        ? <span className="prow__sr">{STATUS_LABELS[status]}</span>
+        : <span>{STATUS_LABELS[status]}</span>}
       {status === 'solved' && optimal && <Star size={12} fill="currentColor" strokeWidth={0} aria-label="Solved optimally" />}
     </div>
   );
@@ -96,8 +93,8 @@ function ProblemRow({ challenge, progress, onClick }: {
         <div className="prow__tags">{challenge.tags.slice(0, 3).join(' \u2022 ')}</div>
       </div>
 
-      <span className="prow__level" style={{ ['--level-color' as string]: DIFFICULTY_COLORS[challenge.difficulty] }}>
-        {challenge.difficulty}
+      <span className="prow__level">
+        <Badge tone={DIFFICULTY_TONE[challenge.difficulty]} style={{ textTransform: 'capitalize' }}>{challenge.difficulty}</Badge>
       </span>
 
       <span className="prow__cat">{CATEGORY_LABELS[challenge.category]}</span>

@@ -1,11 +1,19 @@
 import { useMemo } from 'react';
-import { CheckCircle2, Circle, Dot, PanelLeftClose, PanelLeft } from 'lucide-react';
+import { CheckCircle2, Circle, CircleDot, PanelLeftClose, PanelLeft, Network, Trophy, Library, PlayCircle } from 'lucide-react';
 import { useLearnStore } from '../../stores/learnStore';
 import { getTrack } from '../../data/lessons/tracks';
 import type { ContentBlock } from '../../data/lessons/types';
 import { IconButton } from '../ui';
 import { blockMeta, blockOutlineLabel } from './lessonOutline';
+import { LEARN_SECTION_LABELS, useLearnSectionStore, type LearnSection } from './learnSectionStore';
 import './lessonNav.css';
+
+const SECTION_LINKS: ReadonlyArray<{ section: LearnSection; icon: typeof Network }> = [
+  { section: 'concepts', icon: Network },
+  { section: 'capstones', icon: Trophy },
+  { section: 'glossary', icon: Library },
+  { section: 'videos', icon: PlayCircle },
+];
 
 function scrollToBlock(index: number) {
   document.getElementById(`block-${index}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -31,6 +39,8 @@ export function LessonNavSidebar({
   const currentBlockIndex = useLearnStore((s) => s.currentBlockIndex);
   const completedLessons = useLearnStore((s) => s.completedLessons);
   const setCurrentLesson = useLearnStore((s) => s.setCurrentLesson);
+  const clearCurrentLesson = useLearnStore((s) => s.clearCurrentLesson);
+  const setSection = useLearnSectionStore((s) => s.setSection);
 
   const track = currentTrackId ? getTrack(currentTrackId) : undefined;
   const lessons = useMemo(() => track?.lessons ?? [], [track]);
@@ -88,7 +98,7 @@ export function LessonNavSidebar({
                 {isDone ? (
                   <CheckCircle2 size={16} className="lnav__icon lnav__icon--done" />
                 ) : isCurrent ? (
-                  <Dot size={16} className="lnav__icon lnav__icon--current" />
+                  <CircleDot size={14} className="lnav__icon lnav__icon--current" />
                 ) : (
                   <Circle size={14} className="lnav__icon lnav__icon--todo" />
                 )}
@@ -119,6 +129,20 @@ export function LessonNavSidebar({
             </div>
           );
         })}
+      </div>
+
+      <div className="lnav__foot" role="group" aria-label="More ways to learn">
+        {SECTION_LINKS.map(({ section, icon: Icon }) => (
+          <button
+            key={section}
+            type="button"
+            className="lnav__foot-link"
+            onClick={() => { setSection(section); clearCurrentLesson(); }}
+          >
+            <Icon size={12} aria-hidden="true" />
+            {LEARN_SECTION_LABELS[section]}
+          </button>
+        ))}
       </div>
     </nav>
   );

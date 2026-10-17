@@ -1,15 +1,15 @@
-import { useThemeStore } from '../../stores/themeStore';
+import { Badge, type BadgeTone } from '../ui';
 import { formatRunLabel, isNumericColumn, getRunValue, type RunColumn } from './runsTableColumns';
 import type { RunRecord, RunStatus } from '../../types/experiment';
 import { activateOnKey } from '../../lib/a11y';
 
 export const ROW_HEIGHT = 30;
 
-const STATUS_COLOR_KEY: Record<RunStatus, 'success' | 'error' | 'warning' | 'textDim'> = {
+const STATUS_TONE: Record<RunStatus, BadgeTone> = {
   complete: 'success',
-  failed: 'error',
+  failed: 'danger',
   running: 'warning',
-  stale: 'textDim',
+  stale: 'neutral',
 };
 
 function formatCell(value: number | string | boolean | null, column: RunColumn, decimals: number): string {
@@ -45,8 +45,7 @@ export function RunsTableRow({
   onSelect,
   onToggleCompare,
 }: RunsTableRowProps) {
-  const colors = useThemeStore((s) => s.colors);
-  const statusKey = STATUS_COLOR_KEY[run.manifest.status];
+  const statusTone = STATUS_TONE[run.manifest.status];
 
   return (
     <div
@@ -84,12 +83,9 @@ export function RunsTableRow({
             role="cell"
             className="nuclei-runs-row__cell"
             data-numeric={isNumeric}
-            style={isStatus ? { color: colors[statusKey], fontWeight: 600 } : undefined}
           >
             {isStatus ? (
-              <span className="nuclei-runs-row__status" style={{ background: `color-mix(in srgb, ${colors[statusKey]} 12%, transparent)` }}>
-                {formatCell(value, column, 0)}
-              </span>
+              <Badge tone={statusTone}>{formatCell(value, column, 0)}</Badge>
             ) : formatCell(value, column, decimalsByColumn.get(column.key) ?? 0)}
           </div>
         );

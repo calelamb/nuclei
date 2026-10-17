@@ -5,6 +5,7 @@ import type { Submission, SubmissionStatus } from '../../types/challenge';
 
 import './challenges.css';
 import { TYPOGRAPHY } from '../../styles/tokens';
+import { SUCCESS_TEXT } from '../../lib/semanticText';
 interface SubmissionHistoryProps {
   submissions: Submission[];
 }
@@ -15,8 +16,8 @@ function SubmissionRow({ submission, index }: { submission: Submission; index: n
 
   const STATUS_META: Record<SubmissionStatus, { label: string; color: string }> = {
     pending: { label: 'Pending', color: colors.textDim },
-    running: { label: 'Running', color: colors.accent },
-    accepted: { label: 'Accepted', color: colors.success },
+    running: { label: 'Running', color: colors.accentText },
+    accepted: { label: 'Accepted', color: SUCCESS_TEXT },
     wrong_answer: { label: 'Wrong Answer', color: colors.error },
     runtime_error: { label: 'Runtime Error', color: colors.error },
     compile_error: { label: 'Compile Error', color: colors.warning },
@@ -100,7 +101,7 @@ function SubmissionRow({ submission, index }: { submission: Submission; index: n
           padding: '1px 6px',
           borderRadius: 3,
           background: `${colors.accent}12`,
-          color: colors.accent,
+          color: colors.accentText,
           fontSize: 11,
           fontFamily: TYPOGRAPHY.fontSans,
         }}>
@@ -154,7 +155,7 @@ function SubmissionRow({ submission, index }: { submission: Submission; index: n
                 Test {i + 1}
               </span>
               <span style={{
-                color: tcr.passed ? colors.success : colors.error,
+                color: tcr.passed ? SUCCESS_TEXT : colors.error,
                 fontSize: 11,
                 fontWeight: 600,
                 fontFamily: TYPOGRAPHY.fontMono,
@@ -193,7 +194,7 @@ function SubmissionRow({ submission, index }: { submission: Submission; index: n
                   display: 'inline-flex',
                   alignItems: 'center',
                   gap: 3,
-                  color: colors.success,
+                  color: SUCCESS_TEXT,
                   fontWeight: 700,
                   fontFamily: TYPOGRAPHY.fontSans,
                 }}>

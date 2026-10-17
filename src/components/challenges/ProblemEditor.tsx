@@ -69,7 +69,7 @@ export function ProblemEditor({ challenge }: ProblemEditorProps) {
             display: 'flex',
             alignItems: 'center',
             gap: 8,
-            color: colors.accent,
+            color: colors.accentText,
             fontSize: 12,
             fontFamily: TYPOGRAPHY.fontMono,
           }}>
@@ -90,7 +90,7 @@ export function ProblemEditor({ challenge }: ProblemEditorProps) {
             padding: '3px 8px',
             borderRadius: 999,
             background: `${colors.accent}18`,
-            color: colors.accent,
+            color: colors.accentText,
             boxShadow: shadow.sm,
           }}>
             {isValueContract ? 'PYTHON VALUE' : (challenge.default_framework?.toUpperCase() ?? 'QISKIT')}

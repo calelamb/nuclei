@@ -39,7 +39,7 @@ export function ManifestDiffTable({ diff, runs }: { diff: DiffResult; runs: read
               <Tr key={field.key}>
                 <Td muted style={{ fontWeight: 600 }}>{field.key}</Td>
                 {field.values.map((value, i) => (
-                  <Td key={runs[i]?.dir ?? i} style={{ color: colors.accent }}>{formatValue(value)}</Td>
+                  <Td key={runs[i]?.dir ?? i} style={{ color: colors.accentText }}>{formatValue(value)}</Td>
                 ))}
               </Tr>
             ))}

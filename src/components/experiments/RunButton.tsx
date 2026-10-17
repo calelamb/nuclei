@@ -53,7 +53,7 @@ export function RunButton({ experiment, projectRoot, pointCount, variant = 'soli
     const { progress } = active;
     return (
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 11, fontFamily: TYPOGRAPHY.fontSans }}>
-        <span style={{ color: colors.accent, fontVariantNumeric: 'tabular-nums' }}>
+        <span style={{ color: colors.accentText, fontVariantNumeric: 'tabular-nums' }}>
           {progress.completed}/{progress.total}
           {progress.failures > 0 ? ` (${progress.failures} failed)` : ''}
         </span>

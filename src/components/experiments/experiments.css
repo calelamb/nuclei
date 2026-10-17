@@ -25,7 +25,7 @@
   color: var(--color-text-primary); font-family: var(--font-sans); font-size: var(--font-size-chrome-label); font-weight: var(--font-weight-semibold);
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
-.nuclei-experiment-row[aria-current='true'] .nuclei-experiment-row__name { color: var(--color-accent-quantum); }
+.nuclei-experiment-row[aria-current='true'] .nuclei-experiment-row__name { color: var(--color-accent-quantum-text); }
 
 /* Runs table (virtualised grid; keeps ARIA table roles). Same type scale as the Table primitive. */
 .nuclei-runs-header {
@@ -41,7 +41,7 @@
 .nuclei-runs-header__cell[data-numeric='true'] { justify-content: flex-end; }
 .nuclei-runs-header__sort { cursor: pointer; transition: color var(--duration-fast) var(--ease-standard); }
 .nuclei-runs-header__sort:hover { color: var(--color-text-primary); }
-.nuclei-runs-header__sort[data-sorted='true'] { color: var(--color-accent-quantum); }
+.nuclei-runs-header__sort[data-sorted='true'] { color: var(--color-accent-quantum-text); }
 .nuclei-runs-header__label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 .nuclei-runs-row {
