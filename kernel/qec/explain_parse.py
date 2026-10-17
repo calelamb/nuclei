@@ -21,6 +21,7 @@ _ANTICOMMUTE_RE = re.compile(
 _SENS_RE = re.compile(
     r"backward-propagating error sensitivity for (\S+) was:[ \t]*\n((?:[ \t]+[XYZ]\d+.*\n)+)"
 )
+_BASIS_OP_RE = re.compile(r"^(?:an? )?([XYZ])-basis (.+)$")
 _TICK_RE = re.compile(r"during TICK layer #(\d+) of (\d+)")
 _INSTR_RE = re.compile(r"at (?:block's )?instruction #(\d+) \[which is (.+?)\]\s*$", re.MULTILINE)
 _DIAGRAM_TICK_RE = re.compile(r"tick=range\((\d+),\s*(\d+)\)")
@@ -46,6 +47,8 @@ class StimAnalysisError:
     instruction_texts: tuple[str, ...]
     diagram_tick: tuple[int, int] | None
     diagram_filter: tuple[str, ...]
+    #: ``(target, "X1*Z2")`` for every detector/observable Stim printed a sensitivity for.
+    sensitivities: tuple[tuple[str, str], ...] = ()
 
     @property
     def detector_indices(self) -> tuple[int, ...]:
@@ -69,7 +72,9 @@ def parse_stim_error(message: str) -> StimAnalysisError:
     message = message.rstrip() + "\n"
     op = _OP_RE.search(message)
     anti = _ANTICOMMUTE_RE.search(message)
-    sens = _SENS_RE.search(message)
+    all_sens = tuple(
+        (m.group(1), "*".join(_first_tokens(m.group(2)))) for m in _SENS_RE.finditer(message)
+    )
     layer = _TICK_RE.search(message)
     frames = _INSTR_RE.findall(message)
     d_tick = _DIAGRAM_TICK_RE.search(message)
@@ -81,12 +86,13 @@ def parse_stim_error(message: str) -> StimAnalysisError:
         targets=targets,
         operation=op.group(1).strip() if op else None,
         qubits=tuple(int(q) for q in _QUBIT_RE.findall(_COORDS_RE.sub("", op.group(2)))) if op else (),
-        sensitivity="*".join(_first_tokens(sens.group(2))) if sens else None,
+        sensitivity=all_sens[0][1] if all_sens else None,
         tick=int(layer.group(1)) - 1 if layer else None,
         instruction_path=tuple(int(n) - 1 for n, _ in frames),
         instruction_texts=tuple(text for _, text in frames),
         diagram_tick=(int(d_tick.group(1)), int(d_tick.group(2))) if d_tick else None,
         diagram_filter=_parse_filter(d_filter.group(1)) if d_filter else (),
+        sensitivities=all_sens,
     )
 
 
@@ -128,3 +134,9 @@ def first_failing_line(source: str) -> int | None:
         except ValueError:
             return number
     return None
+
+
+def split_basis_operation(description: str | None) -> tuple[str, str] | None:
+    """``"X-basis reset (RX)"`` -> ``("X", "reset (RX)")``; None for other operations."""
+    match = _BASIS_OP_RE.match((description or "").strip())
+    return (match.group(1), match.group(2)) if match else None
