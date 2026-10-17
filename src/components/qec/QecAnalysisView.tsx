@@ -48,6 +48,8 @@ export function QecAnalysisView({ embedded = false }: { embedded?: boolean } = {
   const canRun = Boolean(experiment && projectRoot && experiment.spec.type === 'qec_campaign');
   // Inside the workbench a Run button with nothing to run would be dead weight.
   const showRun = !webOnly && (!embedded || canRun || running);
+  // Inside the workbench the card heading already says "Campaign Center"; a generic fallback would repeat it.
+  const title = csvSource ?? experiment?.spec.name ?? (embedded ? null : 'Campaign');
 
   return (
     <div
@@ -63,9 +65,11 @@ export function QecAnalysisView({ embedded = false }: { embedded?: boolean } = {
           borderBottom: `1px solid ${colors.border}`, fontFamily: TYPOGRAPHY.fontSans,
         }}
       >
-        <span style={{ fontSize: 13, fontWeight: 600, color: colors.text, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-          {csvSource ?? experiment?.spec.name ?? 'Campaign'}
-        </span>
+        {title && (
+          <span style={{ fontSize: 13, fontWeight: 600, color: colors.text, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            {title}
+          </span>
+        )}
         <div style={{ flex: 1 }} />
         <QecCsvOpenButton />
         {statsCsv ? (

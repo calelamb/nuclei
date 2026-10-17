@@ -101,15 +101,16 @@ export function CsvMappingPreview() {
 
   const th = { textAlign: 'left' as const, padding: '2px 8px', color: colors.textMuted, fontWeight: 500 };
   const td = { padding: '2px 8px', color: colors.text, fontFamily: TYPOGRAPHY.fontMono };
+  const countsNameMerge = (mapping.mergeKeys ?? []).length > 0 && plottable < csv.rows.length;
   const counts = [
     `${plural(csv.totalDataRows, 'row')} → ${plural(csv.rows.length, 'task')}`,
     ...(merged > 0 ? [`${plural(merged, 'duplicate strong_id', 'duplicate strong_ids')} summed, as sinter does`] : []),
     ...(csv.rejectedRows > 0 ? [`${csv.rejectedRows.toLocaleString()} rejected (see below)`] : []),
-    `${plottable.toLocaleString()} plottable`,
+    `${plottable.toLocaleString()} plottable${countsNameMerge ? ` after summing ${mapping.mergeKeys?.join(', ')} replicates` : ''}`,
   ];
   const mapped = FIELDS.map((f) => `${f.short}: ${fieldSummary(mapping, f.field)}`).join(' · ');
   const seriesBy = mapping.groupBy.length > 0 ? ` · series by ${mapping.groupBy.join(', ')}` : '';
-  const replicates = (mapping.mergeKeys ?? []).length > 0 ? ` · ${mapping.mergeKeys?.join(', ')} summed` : '';
+  const replicates = (mapping.mergeKeys ?? []).length > 0 && !countsNameMerge ? ` · ${mapping.mergeKeys?.join(', ')} summed` : '';
 
   return (
     <section

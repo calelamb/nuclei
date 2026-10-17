@@ -48,6 +48,16 @@ describe('CsvMappingPreview (qec-03, 09, 15, 19, 20)', () => {
     expect(r.queryByRole('button', { name: /Split by/ })).toBeNull();
   });
 
+  it('says how many points remain after summing seeds, instead of a bare task count (qec-quality)', () => {
+    const rows = [3, 5].flatMap((d) => [0.001, 0.002].flatMap((p) => [0, 1, 2].map((k) =>
+      line(`${d}-${p}-${k}`, { d, p, r: d, seed: k }))));
+    useQecCampaignStore.getState().loadFromCsv([HEADER, ...rows].join('\n'), 's.csv');
+    const store = useQecCampaignStore.getState();
+    store.setCsvMapping({ ...store.csvImport!.mapping, groupBy: [], mergeKeys: ['seed'] });
+    const r = render(<CsvMappingPreview />);
+    expect(r.container.textContent).toMatch(/12 rows → 12 tasks · 4 plottable after summing seed replicates/);
+  });
+
   it('stops saying p was guessed once the person picks the column', () => {
     const rows = [0.1, 0.2, 0.3].map((s, i) => line(`s${i}`, { d: 3 + 2 * i, strength: s, other: i }));
     useQecCampaignStore.getState().loadFromCsv([HEADER, ...rows].join('\n'), 'g.csv');

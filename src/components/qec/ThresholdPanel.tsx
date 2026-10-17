@@ -95,7 +95,7 @@ export function ThresholdPanel() {
 
   const header = (
     <PanelHeader
-      title="Logical error vs physical error"
+      title="Logical error vs p"
       helpHref={DOCS}
       actions={
         model ? (
