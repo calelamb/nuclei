@@ -72,9 +72,13 @@ export function CommandPalette({ commands, onClose }: CommandPaletteProps) {
       setSelectedIdx((i) => Math.max(i - 1, 0));
     } else if (e.key === 'Enter') {
       e.preventDefault();
+      // Don't let this Enter reach document-level listeners (e.g. the Research
+      // tour would otherwise treat it as "Next" the moment it starts).
+      e.stopPropagation();
       if (filtered[selectedIdx]) {
-        filtered[selectedIdx].action();
+        const { action } = filtered[selectedIdx];
         onClose();
+        requestAnimationFrame(action);
       }
     }
   };
@@ -241,7 +245,9 @@ export function buildCommands(actions: CommandActions, context: CommandContext):
 
   // Workspace + orientation.
   commands.push({ id: 'workspace-mode', label: 'Switch workspace mode (Learn/Research)', category: 'Go', shortcut: '⌘⇧M', action: actions.switchWorkspaceMode });
-  commands.push({ id: 'research-tour', label: 'Replay the Research mode tour', category: 'Go', action: actions.startResearchTour });
+  if (context.mode === 'research') {
+    commands.push({ id: 'research-tour', label: 'Replay the Research mode tour', category: 'Go', action: actions.startResearchTour });
+  }
 
   // Go to <view> — every rail view this mode offers, in registry order.
   const views = leftPanelsForMode(context.mode, { developerViews: context.developerViews });

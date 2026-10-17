@@ -2,44 +2,25 @@ import { useEffect, useRef, useState, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { useThemeStore } from '../../stores/themeStore';
 import { useResearchTourStore, RESEARCH_TOUR_STEP_COUNT } from '../../stores/researchTourStore';
+import { useWorkspaceStore } from '../../stores/workspaceStore';
+import { useProjectStore } from '../../stores/projectStore';
+import { isWebBuild } from '../../platform/buildTarget';
+import { researchTourSteps } from './researchTourSteps';
+
+const CARD_WIDTH = 300;
+const EDGE = 8;
+const FOCUSABLE = 'button:not([disabled]), [href], input, select, textarea, [tabindex]:not([tabindex="-1"])';
 
 /**
  * PRD 11 Phase B — the first-run Research coach-mark tour.
  *
  * Three steps, pointing at the Explorer rail item, the Experiments rail item,
- * and the status-bar mode chip (each carries a `data-tour-target`). Non-modal:
- * the dim backdrop dismisses on click but does not trap the app. Fully
- * keyboard-driven: →/Enter next, ← back, Esc skip; focus lands on the primary
- * button each step and the step text is announced via `aria-live`.
+ * and the status-bar mode chip (each carries a `data-tour-target`). The target
+ * stays lit (the dim comes from the spotlight's own shadow); clicking outside it
+ * skips. Keyboard: →/Enter next (Enter only when no button has focus, so Back
+ * and Skip keep their meaning), ← back, Esc skip, Tab is trapped in the card;
+ * the step text is announced via `aria-live`.
  */
-
-interface TourStep {
-  target: string;
-  title: string;
-  body: string;
-  placement: 'right' | 'above';
-}
-
-const STEPS: TourStep[] = [
-  {
-    target: 'activity-files',
-    title: 'Explorer',
-    body: 'Your project files live here. Open a folder to bring your code into the workspace.',
-    placement: 'right',
-  },
-  {
-    target: 'activity-experiments',
-    title: 'Experiments',
-    body: 'Declare parameter sweeps and QEC campaigns, run them, and compare results — all as files in your project.',
-    placement: 'right',
-  },
-  {
-    target: 'mode-chip',
-    title: "You're in Research mode",
-    body: 'This chip always shows your mode and switches it. Switching never stops a running job — it only changes what you see.',
-    placement: 'above',
-  },
-];
 
 interface Rect {
   top: number;
@@ -58,7 +39,11 @@ export function ResearchTour() {
   const [rect, setRect] = useState<Rect | null>(null);
   const primaryRef = useRef<HTMLButtonElement>(null);
 
-  const current = STEPS[step] ?? STEPS[0];
+  const mode = useWorkspaceStore((s) => s.mode);
+  const hasProject = useProjectStore((s) => s.projectRoot !== null);
+  const cardRef = useRef<HTMLDivElement>(null);
+  const steps = researchTourSteps({ web: isWebBuild(), hasProject, mode });
+  const current = steps[step] ?? steps[0];
 
   const measure = useCallback(() => {
     const el = document.querySelector<HTMLElement>(`[data-tour-target="${current.target}"]`);
@@ -85,9 +70,23 @@ export function ResearchTour() {
   useEffect(() => {
     if (!active) return;
     primaryRef.current?.focus();
+    const trapTab = (e: KeyboardEvent) => {
+      const items = Array.from(cardRef.current?.querySelectorAll<HTMLElement>(FOCUSABLE) ?? []);
+      if (items.length === 0) return;
+      const first = items[0];
+      const last = items[items.length - 1];
+      const inside = cardRef.current?.contains(document.activeElement) ?? false;
+      if (!inside || (e.shiftKey && document.activeElement === first) || (!e.shiftKey && document.activeElement === last)) {
+        e.preventDefault();
+        (e.shiftKey && inside ? last : first).focus();
+      }
+    };
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') { e.preventDefault(); dismiss(); }
-      else if (e.key === 'ArrowRight' || e.key === 'Enter') { e.preventDefault(); next(); }
+      if (e.repeat) return;
+      if (e.key === 'Tab') { trapTab(e); return; }
+      if (e.key === 'Escape') { e.preventDefault(); dismiss(); return; }
+      const onButton = (e.target as HTMLElement | null)?.closest?.('button') != null;
+      if (e.key === 'ArrowRight' || (e.key === 'Enter' && !onButton)) { e.preventDefault(); next(); }
       else if (e.key === 'ArrowLeft') { e.preventDefault(); prev(); }
     };
     document.addEventListener('keydown', onKey);
@@ -98,15 +97,15 @@ export function ResearchTour() {
 
   const isLast = step >= RESEARCH_TOUR_STEP_COUNT - 1;
 
-  // Tooltip placement relative to the spotlighted target.
-  const tooltipStyle: React.CSSProperties = { position: 'fixed', width: 300, maxWidth: '80vw' };
+  // Tooltip placement relative to the spotlighted target, kept inside the window.
+  const tooltipStyle: React.CSSProperties = { position: 'fixed', width: CARD_WIDTH, maxWidth: '80vw' };
   if (rect) {
     if (current.placement === 'above') {
-      tooltipStyle.left = Math.max(8, rect.left);
-      tooltipStyle.bottom = window.innerHeight - rect.top + 10;
+      tooltipStyle.left = Math.min(Math.max(EDGE, rect.left), window.innerWidth - CARD_WIDTH - EDGE);
+      tooltipStyle.bottom = window.innerHeight - rect.top + 14;
     } else {
-      tooltipStyle.left = rect.left + rect.width + 12;
-      tooltipStyle.top = rect.top;
+      tooltipStyle.left = Math.min(rect.left + rect.width + 14, window.innerWidth - CARD_WIDTH - EDGE);
+      tooltipStyle.top = Math.max(EDGE, Math.min(rect.top, window.innerHeight - 260));
     }
   } else {
     // Target not found (e.g. rail item hidden) — centre the card.
@@ -115,12 +114,18 @@ export function ResearchTour() {
     tooltipStyle.transform = 'translate(-50%, -50%)';
   }
 
+  // Click-catcher that leaves a hole over the target so it stays interactive/lit.
+  const hole = rect
+    ? `polygon(evenodd, 0 0, 100% 0, 100% 100%, 0 100%, 0 0, ${rect.left - 4}px ${rect.top - 4}px, ${rect.left - 4}px ${rect.top + rect.height + 4}px, ${rect.left + rect.width + 4}px ${rect.top + rect.height + 4}px, ${rect.left + rect.width + 4}px ${rect.top - 4}px, ${rect.left - 4}px ${rect.top - 4}px)`
+    : undefined;
+
   const overlay = (
     <div style={{ position: 'fixed', inset: 0, zIndex: 1200 }}>
-      {/* Dim backdrop — click to skip. Non-modal: does not trap focus. */}
+      {/* Click-catcher outside the target (click to skip). The dim is the spotlight's
+          shadow below, so the target itself is never darkened. */}
       <div
         onClick={dismiss}
-        style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.5)' }}
+        style={{ position: 'absolute', inset: 0, clipPath: hole, background: rect ? 'transparent' : 'rgba(0,0,0,0.5)' }}
       />
       {/* Spotlight ring around the target. */}
       {rect && (
@@ -140,6 +145,7 @@ export function ResearchTour() {
       )}
       {/* Tooltip card. */}
       <div
+        ref={cardRef}
         role="dialog"
         aria-modal="false"
         aria-labelledby="research-tour-title"
@@ -153,6 +159,18 @@ export function ResearchTour() {
           fontFamily: "'Geist Sans', sans-serif",
         }}
       >
+        {rect && (
+          <span
+            aria-hidden="true"
+            style={{
+              position: 'absolute', width: 10, height: 10, background: colors.bgPanel,
+              transform: 'rotate(45deg)',
+              ...(current.placement === 'above'
+                ? { bottom: -6, left: 18, borderRight: `1px solid ${colors.border}`, borderBottom: `1px solid ${colors.border}` }
+                : { left: -6, top: Math.max(12, rect.top + rect.height / 2 - (typeof tooltipStyle.top === 'number' ? tooltipStyle.top : 0) - 5), borderLeft: `1px solid ${colors.border}`, borderBottom: `1px solid ${colors.border}` }),
+            }}
+          />
+        )}
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
           <span
             style={{ fontSize: 10, fontWeight: 700, letterSpacing: 0.5, color: colors.dirac, textTransform: 'uppercase' }}
