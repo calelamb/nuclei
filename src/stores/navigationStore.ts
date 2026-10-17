@@ -38,6 +38,13 @@ interface NavigationState {
   setActiveView: (view: NavView | null) => void;
   /** Click-through toggle: selecting the already-open view collapses it. */
   toggleView: (view: NavView) => void;
+  /** The view the sidebar was showing before it auto-collapsed for a narrow window. */
+  autoCollapsedView: NavView | null;
+  /** Last viewport band seen by `applyNarrow` (null before the first call). */
+  lastNarrow: boolean | null;
+  /** Collapse the sidebar when narrow and restore it on grow. `canCollapse` is false
+   * while a full-width takeover view is showing (collapsing it would drop the view). */
+  applyNarrow: (narrow: boolean, canCollapse: boolean) => void;
   /** Open the Settings view (the Dirac panel's gear; formerly `openSettings`
    * via `settingsSignal`). PanelLayout's mode-exit effect handles leaving any
    * Learn/Challenge full-view surface. */
@@ -46,18 +53,33 @@ interface NavigationState {
 
 export const useNavigationStore = create<NavigationState>((set) => ({
   activeView: 'files',
+  autoCollapsedView: null,
+  lastNarrow: null,
+  // Any explicit selection cancels a pending automatic restore.
   setActiveView: (view) => {
     if (view !== null) leaveFullViewSurfaces();
-    set({ activeView: view });
+    set({ activeView: view, autoCollapsedView: null });
   },
   toggleView: (view) =>
     set((s) => {
       const next = s.activeView === view ? null : view;
       if (next !== null) leaveFullViewSurfaces();
-      return { activeView: next };
+      return { activeView: next, autoCollapsedView: null };
+    }),
+  applyNarrow: (narrow, canCollapse) =>
+    set((s) => {
+      if (s.lastNarrow === narrow) return s;
+      if (narrow) {
+        return canCollapse && s.activeView !== null
+          ? { lastNarrow: narrow, activeView: null, autoCollapsedView: s.activeView }
+          : { lastNarrow: narrow };
+      }
+      return s.autoCollapsedView !== null && s.activeView === null
+        ? { lastNarrow: narrow, activeView: s.autoCollapsedView, autoCollapsedView: null }
+        : { lastNarrow: narrow, autoCollapsedView: null };
     }),
   openSettings: () => {
     leaveFullViewSurfaces();
-    set({ activeView: 'settings' });
+    set({ activeView: 'settings', autoCollapsedView: null });
   },
 }));

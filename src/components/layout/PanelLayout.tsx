@@ -7,6 +7,11 @@ import { KernelBanner } from '../editor/KernelBanner';
 import { Breadcrumbs, ExperimentBreadcrumbs } from '../editor/Breadcrumbs';
 import { ProbabilityHistogram } from '../histogram/ProbabilityHistogram';
 import { VizZone } from '../qec/VizZone';
+import { useQecStore } from '../../stores/qecStore';
+import { useShellLayout } from '../../hooks/useShellLayout';
+import { useElementSize } from '../../hooks/useElementSize';
+import { vizColumnHasContent } from '../../layout/vizPanels';
+import { EDITOR_MIN_WIDTH, VIZ_MIN_WIDTH } from '../../layout/breakpoints';
 import { DiracSidePanel } from '../dirac/DiracSidePanel';
 import { ActivityBar } from './ActivityBar';
 import type { ActivityView } from './ActivityBar';
@@ -572,7 +577,13 @@ export function PanelLayout() {
 
   const showBottomPanel = visible.terminal || visible.histogramFull;
   const showSidebar = !isLearnMode && !isChallengeMode && activeView !== null;
-  const topSplitRef = useRef<HTMLDivElement>(null);
+  const topSplitRef = useRef<HTMLDivElement | null>(null);
+  const [measureTopSplit, topSplitSize] = useElementSize<HTMLDivElement>();
+  const setTopSplitRef = useCallback((el: HTMLDivElement | null) => {
+    topSplitRef.current = el;
+    measureTopSplit(el);
+  }, [measureTopSplit]);
+  const qecSnapshot = useQecStore((s) => s.snapshot);
 
   // PRD 09 Phase D — Research mode swaps the main content area for the
   // runs table (or run detail, once a row is picked) whenever the
@@ -606,6 +617,23 @@ export function PanelLayout() {
   // mode hides learning/challenges/community and adds the Experiments
   // placeholder.
   const visibleActivityViews = activityViewsForMode(workspaceMode, { experimentalFeatures });
+
+  // The right rail only takes space when it has something to show AND the
+  // editor can keep a usable width beside it. Otherwise the editor gets the
+  // whole row (the rail is empty before the first parse in the Clean preset,
+  // and a 200px empty column used to crush the editor at <= 1100px).
+  const chipShown = visible.histogramChip && !chipDismissed;
+  const latticeHasCoords = Boolean(qecSnapshot?.coords.qubits.some((c) => c !== null));
+  const vizHasContent = vizColumnHasContent(visible, { latticeHasCoords }, chipShown);
+  const vizFits = topSplitSize.width === 0 || topSplitSize.width >= EDITOR_MIN_WIDTH + VIZ_MIN_WIDTH;
+  const showViz = vizHasContent && vizFits;
+
+  useShellLayout({
+    platform,
+    mode: workspaceMode,
+    validViews: visibleActivityViews,
+    canCollapseSidebar: !editorHidden,
+  });
 
   useEffect(() => {
     // Fresh run should re-show a previously-dismissed histogram chip.
@@ -856,9 +884,14 @@ export function PanelLayout() {
                 a Research takeover so Monaco keeps per-tab models/undo/cursor. */}
             <div style={{ flex: 1, display: editorHidden ? 'none' : 'flex', flexDirection: 'column', minWidth: 0 }}>
               {/* Top: editor area + visualization */}
-              <div ref={topSplitRef} style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
+              <div ref={setTopSplitRef} style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
                 {/* Left: Editor with tabs + breadcrumbs + launch strip */}
-                <div style={{ width: `${editorPaneWidth}%`, display: 'flex', flexDirection: 'column', minWidth: 0 }}>
+                <div style={{
+                  width: showViz ? `${editorPaneWidth}%` : '100%',
+                  minWidth: showViz ? EDITOR_MIN_WIDTH : 0,
+                  display: 'flex', flexDirection: 'column',
+                  transition: isDraggingH ? 'none' : 'width var(--duration-normal) var(--ease-standard)',
+                }}>
                   <EditorTabs />
                   <KernelBanner />
                   <Breadcrumbs />
@@ -872,34 +905,36 @@ export function PanelLayout() {
                   </div>
                 </div>
 
-                {/* Resize handle between editor and viz */}
-                <ResizeHandle
-                  direction="horizontal"
-                  isDragging={isDraggingH}
-                  onMouseDown={() => setIsDraggingH(true)}
-                  onDoubleClick={() => setEditorPaneWidth(DEFAULT_EDITOR_PANE_WIDTH)}
-                />
+                {showViz && (
+                  <>
+                    {/* Resize handle between editor and viz */}
+                    <ResizeHandle
+                      direction="horizontal"
+                      isDragging={isDraggingH}
+                      onMouseDown={() => setIsDraggingH(true)}
+                      onDoubleClick={() => setEditorPaneWidth(DEFAULT_EDITOR_PANE_WIDTH)}
+                    />
 
-                {/* Right rail (viz zone). Registry-driven (PRD 10 Phase D):
-                    the Bloch sphere for circuit-model frameworks, the QEC
-                    panels for stim — the swap is the registry's affinity cap,
-                    with no framework conditional here. ≤2 panels stack (the
-                    non-stim Bloch case is byte-identical to before); >2 tab. */}
-                <div style={{ width: `${100 - editorPaneWidth}%`, minWidth: 200, display: 'flex', flexDirection: 'column' }}>
-                  <VizZone
-                    visible={visible}
-                    chip={
-                      <PanelReveal when={visible.histogramChip && !chipDismissed} from="bottom">
-                        <div style={{ padding: '6px 10px 10px', flexShrink: 0 }}>
-                          <HardwareAwareHistogramChip
-                            simProbabilities={result?.probabilities ?? null}
-                            onDismiss={dismissChip}
-                          />
-                        </div>
-                      </PanelReveal>
-                    }
-                  />
-                </div>
+                    {/* Right rail (viz zone). Registry-driven (PRD 10 Phase D):
+                        the circuit diagram + Bloch sphere for circuit-model
+                        frameworks, the QEC panels for stim. */}
+                    <div style={{ flex: 1, minWidth: VIZ_MIN_WIDTH, display: 'flex', flexDirection: 'column' }}>
+                      <VizZone
+                        visible={visible}
+                        chip={
+                          <PanelReveal when={chipShown} from="bottom">
+                            <div style={{ padding: '6px 10px 10px', flexShrink: 0 }}>
+                              <HardwareAwareHistogramChip
+                                simProbabilities={result?.probabilities ?? null}
+                                onDismiss={dismissChip}
+                              />
+                            </div>
+                          </PanelReveal>
+                        }
+                      />
+                    </div>
+                  </>
+                )}
               </div>
 
               {/* Bottom panel */}

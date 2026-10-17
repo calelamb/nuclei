@@ -3,7 +3,9 @@ import { useCircuitStore } from '../../stores/circuitStore';
 import { useDebugStore } from '../../stores/debugStore';
 import { activeDebugStep } from '../../lib/debugTrace';
 import { useThemeStore } from '../../stores/themeStore';
-import { renderGate, WIRE_SPACING, LAYER_SPACING, LABEL_WIDTH, PADDING, GATE_SIZE } from './gates';
+import { renderGate, gateY, WIRE_SPACING, LAYER_SPACING, LABEL_WIDTH, PADDING, GATE_SIZE } from './gates';
+import { formatAngle } from './formatAngle';
+import { CircuitEmptyState } from './CircuitEmptyState';
 import { getGateData } from '../../data/gates';
 import { useCircuitExport } from '../../hooks/useCircuitExport';
 import type { Gate } from '../../types/quantum';
@@ -140,7 +142,7 @@ function ExportMenu() {
   ];
 
   return (
-    <div ref={menuRef} style={{ position: 'absolute', top: 6, right: 6, zIndex: 100 }}>
+    <div ref={menuRef} style={{ position: 'relative', zIndex: 100 }}>
       <button
         onClick={() => setOpen(!open)}
         style={{
@@ -161,13 +163,12 @@ function ExportMenu() {
             <button
               key={item.label}
               onClick={item.action}
+              className="nuclei-menu-item"
               style={{
                 display: 'block', width: '100%', padding: '6px 12px',
                 background: 'transparent', color: colors.text, border: 'none',
                 cursor: 'pointer', fontSize: 12, fontFamily: TYPOGRAPHY.fontSans, textAlign: 'left',
               }}
-              onMouseEnter={(e) => (e.target as HTMLElement).style.background = colors.border}
-              onMouseLeave={(e) => (e.target as HTMLElement).style.background = 'transparent'}
             >
               {item.label}
             </button>
@@ -325,91 +326,75 @@ export function CircuitRenderer() {
   };
 
   if (!snapshot || snapshot.gates.length === 0) {
-    return (
-      <div className="circuit-renderer-container" style={{
-        height: '100%',
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
-        flexDirection: 'column', gap: 12,
-      }}>
-        {error ? (
-          <span style={{ color: colors.error, fontSize: 13, fontFamily: TYPOGRAPHY.fontSans }}>{error}</span>
-        ) : (
-          <>
-            {/* Ghost circuit outline */}
-            <svg width={160} height={60} viewBox="0 0 160 60" style={{ opacity: 0.15 }}>
-              <line x1={20} y1={15} x2={140} y2={15} stroke={colors.wire} strokeWidth={1.5} strokeDasharray="4,4" />
-              <line x1={20} y1={45} x2={140} y2={45} stroke={colors.wire} strokeWidth={1.5} strokeDasharray="4,4" />
-              <text x={8} y={15} dominantBaseline="central" fill={colors.textMuted} fontSize={10} fontFamily={TYPOGRAPHY.fontMono}>|0⟩</text>
-              <text x={8} y={45} dominantBaseline="central" fill={colors.textMuted} fontSize={10} fontFamily={TYPOGRAPHY.fontMono}>|1⟩</text>
-              <rect x={45} y={3} width={24} height={24} rx={4} fill="none" stroke={colors.accent} strokeWidth={1} strokeDasharray="3,3" />
-              <text x={57} y={15} textAnchor="middle" dominantBaseline="central" fill={colors.accent} fontSize={10} fontFamily={TYPOGRAPHY.fontMono}>H</text>
-              <rect x={95} y={33} width={24} height={24} rx={4} fill="none" stroke={colors.gateMeasure} strokeWidth={1} strokeDasharray="3,3" />
-              <text x={107} y={45} textAnchor="middle" dominantBaseline="central" fill={colors.gateMeasure} fontSize={9} fontFamily={TYPOGRAPHY.fontMono}>M</text>
-            </svg>
-            <span style={{ color: colors.textDim, fontSize: 12, fontFamily: TYPOGRAPHY.fontSans }}>
-              Write quantum code to see your circuit
-            </span>
-          </>
-        )}
-      </div>
-    );
+    return <CircuitEmptyState error={error} />;
   }
 
   const { qubit_count, depth, gates, classical_bit_count } = snapshot;
-  const svgWidth = LABEL_WIDTH + depth * LAYER_SPACING + PADDING * 2;
   const hasClassical = classical_bit_count > 0;
-  const classicalWireY = PADDING + qubit_count * WIRE_SPACING + (hasClassical ? 15 : 0);
-  const svgHeight = classicalWireY + (hasClassical ? 20 : 0) + PADDING;
+  const layerCount = Math.max(depth, ...gates.map((g) => g.layer + 1));
+  const svgWidth = LABEL_WIDTH + layerCount * LAYER_SPACING + PADDING;
+  const lastQubitY = PADDING + (qubit_count - 1) * WIRE_SPACING;
+  const classicalWireY = lastQubitY + WIRE_SPACING * 0.9;
+  const svgHeight = (hasClassical ? classicalWireY : lastQubitY) + PADDING + 8;
+  const wireStart = LABEL_WIDTH - 8;
+  const wireEnd = svgWidth - PADDING / 2;
 
   const highlightSet = new Set(highlights.map((h) => h.gateIndex));
 
-  const ariaDescription = snapshot ? describeCircuit(snapshot) : 'Empty circuit';
+  const ariaDescription = describeCircuit(snapshot);
 
   return (
-    <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }} role="region" aria-label="Circuit diagram">
+    <div style={{ flex: '1 1 auto', minHeight: 0, display: 'flex', flexDirection: 'column' }} role="region" aria-label="Circuit diagram">
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, padding: '8px 10px 0 12px', flexShrink: 0 }}>
+        <span style={{ display: 'flex', alignItems: 'baseline', gap: 8, minWidth: 0 }}>
+          <span style={{ fontSize: 11, fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase', color: colors.textDim, fontFamily: TYPOGRAPHY.fontSans }}>
+            Circuit
+          </span>
+          <span style={{ fontSize: 11, color: colors.textDim, fontFamily: TYPOGRAPHY.fontSans, whiteSpace: 'nowrap' }}>
+            {qubit_count} {qubit_count === 1 ? 'qubit' : 'qubits'} · depth {depth}
+          </span>
+        </span>
+        <ExportMenu />
+      </div>
       <div
         ref={containerRef}
-        className="circuit-renderer-container"
-        style={{ flex: 1, minHeight: 0, overflow: 'auto', position: 'relative' }}
+        style={{ flex: 1, minHeight: 0, overflow: 'auto', position: 'relative', padding: '4px 0 6px' }}
         aria-description={ariaDescription}
       >
-        <ExportMenu />
         <svg
-          width="100%"
-          height="100%"
+          width={svgWidth}
+          height={svgHeight}
           viewBox={`0 0 ${svgWidth} ${svgHeight}`}
-          preserveAspectRatio="xMidYMid meet"
-          style={{ minWidth: svgWidth, minHeight: svgHeight }}
+          style={{ display: 'block', margin: '0 auto', minWidth: svgWidth }}
+          role="img"
+          aria-label={ariaDescription}
         >
           {/* Qubit wires */}
           {Array.from({ length: qubit_count }, (_, i) => {
-            const y = PADDING + i * WIRE_SPACING;
+            const y = gateY(i);
             return (
               <g key={`wire-${i}`}>
-                <line
-                  x1={LABEL_WIDTH - 10} y1={y}
-                  x2={svgWidth - PADDING} y2={y}
-                  stroke={colors.wire} strokeWidth={1.5}
-                  strokeOpacity={0.7}
-                />
+                <line x1={wireStart} y1={y} x2={wireEnd} y2={y} stroke={colors.wire} strokeWidth={1.25} />
                 <text
-                  x={LABEL_WIDTH - 20} y={y}
+                  x={LABEL_WIDTH - 18} y={y}
                   textAnchor="end" dominantBaseline="central"
-                  fill={colors.text} fontSize={13}
+                  fill={colors.textMuted} fontSize={12}
                   fontFamily={TYPOGRAPHY.fontMono}
                 >
-                  |{i}⟩
+                  q{i}
                 </text>
               </g>
             );
           })}
 
-          {/* Classical wire */}
+          {/* Classical register: a double wire, the OpenQASM / Quirk convention. */}
           {hasClassical && (
             <g>
-              <line x1={LABEL_WIDTH - 10} y1={classicalWireY - 2} x2={svgWidth - PADDING} y2={classicalWireY - 2} stroke={colors.wire} strokeWidth={1} strokeDasharray="4,3" />
-              <line x1={LABEL_WIDTH - 10} y1={classicalWireY + 2} x2={svgWidth - PADDING} y2={classicalWireY + 2} stroke={colors.wire} strokeWidth={1} strokeDasharray="4,3" />
-              <text x={LABEL_WIDTH - 20} y={classicalWireY} textAnchor="end" dominantBaseline="central" fill={colors.textDim} fontSize={11} fontFamily={TYPOGRAPHY.fontMono}>c</text>
+              <line x1={wireStart} y1={classicalWireY - 1.5} x2={wireEnd} y2={classicalWireY - 1.5} stroke={colors.wire} strokeWidth={1} />
+              <line x1={wireStart} y1={classicalWireY + 1.5} x2={wireEnd} y2={classicalWireY + 1.5} stroke={colors.wire} strokeWidth={1} />
+              <text x={LABEL_WIDTH - 18} y={classicalWireY} textAnchor="end" dominantBaseline="central" fill={colors.textDim} fontSize={12} fontFamily={TYPOGRAPHY.fontMono}>
+                c{classical_bit_count > 1 ? `/${classical_bit_count}` : ''}
+              </text>
             </g>
           )}
 
@@ -432,7 +417,7 @@ export function CircuitRenderer() {
                 {isHighlighted && !isGrayedOut && (
                   <circle
                     cx={x}
-                    cy={PADDING + (gate.targets[0] ?? 0) * WIRE_SPACING}
+                    cy={gateY(gate.targets[0] ?? 0)}
                     r={GATE_SIZE / 2 + 6}
                     fill="none"
                     stroke={colors.accent}
@@ -443,7 +428,7 @@ export function CircuitRenderer() {
                     }}
                   />
                 )}
-                {renderGate(gate, x, (g, mx, my) => handleHover(g, mx, my, idx), handleLeave)}
+                {renderGate(gate, x, (g, mx, my) => handleHover(g, mx, my, idx), handleLeave, hasClassical ? classicalWireY : undefined)}
               </g>
             );
           })}
@@ -462,7 +447,7 @@ export function CircuitRenderer() {
             <div style={{ color: colors.accent, fontWeight: 600, fontSize: 13, fontFamily: TYPOGRAPHY.fontMono }}>{tooltip.gate.type}</div>
             <div style={{ color: colors.text, fontSize: 12, fontFamily: TYPOGRAPHY.fontSans, marginTop: 4 }}>Targets: q{tooltip.gate.targets.join(', q')}</div>
             {tooltip.gate.controls.length > 0 && <div style={{ color: colors.text, fontSize: 12, fontFamily: TYPOGRAPHY.fontSans }}>Controls: q{tooltip.gate.controls.join(', q')}</div>}
-            {tooltip.gate.params.length > 0 && <div style={{ color: colors.number, fontSize: 12, fontFamily: TYPOGRAPHY.fontMono }}>Params: {tooltip.gate.params.map(p => p.toFixed(4)).join(', ')}</div>}
+            {tooltip.gate.params.length > 0 && <div style={{ color: colors.number, fontSize: 12, fontFamily: TYPOGRAPHY.fontMono }}>Params: {tooltip.gate.params.map(formatAngle).join(', ')}</div>}
             <div style={{ color: colors.textMuted, fontSize: 11, fontFamily: TYPOGRAPHY.fontSans, marginTop: 2 }}>Layer {tooltip.gate.layer} • Right-click to explore</div>
           </div>
         )}
@@ -479,21 +464,19 @@ export function CircuitRenderer() {
           }}>
             <button
               onClick={() => { setExplorerGateIndex(contextMenu.gateIndex); setContextMenu(null); }}
+              className="nuclei-menu-item"
               style={{ display: 'block', width: '100%', padding: '8px 12px', background: 'transparent', color: colors.text, border: 'none', cursor: 'pointer', fontSize: 12, fontFamily: TYPOGRAPHY.fontSans, textAlign: 'left' }}
-              onMouseEnter={(e) => (e.target as HTMLElement).style.background = colors.border}
-              onMouseLeave={(e) => (e.target as HTMLElement).style.background = 'transparent'}
             >
               Explore {contextMenu.gateName} gate
             </button>
             <button
+              className="nuclei-menu-item"
               onClick={() => {
                 useCircuitStore.getState().setStepMode(true);
                 useCircuitStore.getState().setStepIndex(contextMenu.gateIndex);
                 setContextMenu(null);
               }}
               style={{ display: 'block', width: '100%', padding: '8px 12px', background: 'transparent', color: colors.text, border: 'none', cursor: 'pointer', fontSize: 12, fontFamily: TYPOGRAPHY.fontSans, textAlign: 'left' }}
-              onMouseEnter={(e) => (e.target as HTMLElement).style.background = colors.border}
-              onMouseLeave={(e) => (e.target as HTMLElement).style.background = 'transparent'}
             >
               Step through from here
             </button>

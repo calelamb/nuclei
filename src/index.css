@@ -171,10 +171,9 @@ code, pre, kbd, samp, .nuclei-code, .nuclei-ket {
   transition: filter var(--duration-fast) var(--ease-standard),
               transform var(--duration-fast) var(--ease-standard);
 }
+.nuclei-gate { transform-box: fill-box; transform-origin: center; }
 .nuclei-gate:hover {
-  filter: drop-shadow(0 0 8px rgba(0, 180, 216, 0.4));
-  transform: scale(1.05);
-  transform-origin: center;
+  filter: drop-shadow(0 0 6px color-mix(in srgb, var(--color-accent-quantum) 45%, transparent));
 }
 
 /* ── Circuit dot grid background ── */
