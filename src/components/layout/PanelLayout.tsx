@@ -136,7 +136,9 @@ export function PanelLayout() {
   const showBottomPanel = visible.terminal || visible.histogramFull;
   const features = useUiFeatures();
   // Beginner mode hides the Explorer; every other rail view still opens its sidebar.
-  const showSidebar = !isLearnMode && !isChallengeMode && activeView !== null
+  // Learn and Challenge own the whole area, except that Settings may open beside them.
+  const fullViewOwnsArea = (isLearnMode || isChallengeMode) && activeView !== 'settings';
+  const showSidebar = !fullViewOwnsArea && activeView !== null
     && (features.explorerSidebar || activeView !== 'files');
   const topSplitRef = useRef<HTMLDivElement | null>(null);
   const [measureTopSplit, topSplitSize] = useElementSize<HTMLDivElement>();
@@ -366,7 +368,7 @@ export function PanelLayout() {
       <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
         {/* Activity Bar */}
         <ActivityBar
-          active={isChallengeMode ? 'challenges' : isLearnMode ? 'learning' : activeView}
+          active={activeView === 'settings' ? 'settings' : isChallengeMode ? 'challenges' : isLearnMode ? 'learning' : activeView}
           onSelect={handleActivitySelect}
           visibleViews={visibleActivityViews}
           workspaceMode={workspaceMode}

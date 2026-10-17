@@ -56,7 +56,7 @@ interface NavigationState {
   /** Section the Settings panel should expand, scroll to and focus on its next render. */
   settingsTarget: SettingsTarget | null;
   clearSettingsTarget: () => void;
-  /** Open the Settings view, optionally at a section. The only caller today is the
+  /** Open the Settings view, optionally at a section. Never closes a lesson or challenge. The only caller today is the
    * Dirac panel (its gear / "Open Settings" CTA, which passes a click event, not a
    * section), so the default lands on the Dirac AI section where the API key lives. */
   openSettings: (section?: unknown) => void;
@@ -99,7 +99,10 @@ export const useNavigationStore = create<NavigationState>((set, get) => ({
   settingsTarget: null,
   clearSettingsTarget: () => set({ settingsTarget: null }),
   openSettings: (section) => {
-    leaveFullViewSurfaces();
+    // Settings opens in the sidebar BESIDE a Learn/Challenge surface (PanelLayout shows it there),
+    // so a student reaching for the API key keeps their lesson on screen.
+    const keepsFullView = useLearnStore.getState().isLearnMode || useChallengeModeStore.getState().isChallengeMode;
+    if (!keepsFullView) leaveFullViewSurfaces();
     const id = typeof section === 'string' && SETTINGS_SECTIONS.includes(section)
       ? (section as SettingsSectionId)
       : DEFAULT_SETTINGS_SECTION;
