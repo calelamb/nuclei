@@ -152,3 +152,49 @@
 }
 .nuclei-segmented__option:hover { color: var(--color-text-primary); }
 .nuclei-segmented__option[aria-checked='true'] { background: var(--color-surface-raised); color: var(--color-text-primary); box-shadow: 0 0 0 1px var(--color-border-strong); }
+
+/* ── Checkbox: native input stays the control (focus, Space, forms); the box is drawn beside it ── */
+.nuclei-checkbox { position: relative; display: inline-flex; align-items: center; gap: var(--space-2); cursor: pointer; font-size: var(--font-size-chrome-label); color: var(--color-text-primary); }
+.nuclei-checkbox > input { position: absolute; width: 16px; height: 16px; margin: 0; opacity: 0; cursor: inherit; }
+.nuclei-checkbox__box {
+  display: inline-grid; place-items: center; flex: 0 0 auto; width: 16px; height: 16px;
+  border: 1px solid var(--color-text-tertiary); border-radius: var(--radius-xs);
+  background: var(--color-surface-base); color: transparent;
+  transition: background-color var(--duration-fast) var(--ease-standard), border-color var(--duration-fast) var(--ease-standard);
+}
+.nuclei-checkbox:hover > input:not(:disabled) + .nuclei-checkbox__box { border-color: var(--color-text-secondary); }
+.nuclei-checkbox > input:checked + .nuclei-checkbox__box,
+.nuclei-checkbox > input:indeterminate + .nuclei-checkbox__box { background: var(--color-accent-quantum); border-color: var(--color-accent-quantum); color: var(--color-surface-sunken); }
+:root[data-theme='light'] .nuclei-checkbox > input:checked + .nuclei-checkbox__box,
+:root[data-theme='light'] .nuclei-checkbox > input:indeterminate + .nuclei-checkbox__box { color: #fff; }
+.nuclei-checkbox > input:focus-visible + .nuclei-checkbox__box { outline: var(--focus-ring-width, 2px) solid var(--focus-ring-color); outline-offset: 2px; }
+.nuclei-checkbox--disabled { cursor: not-allowed; opacity: 0.5; }
+
+/* ── Tabs ── */
+.nuclei-tabs { display: flex; align-items: stretch; gap: var(--space-1); border-bottom: 1px solid var(--color-border-subtle); overflow-x: auto; scrollbar-width: none; }
+.nuclei-tabs::-webkit-scrollbar { display: none; }
+.nuclei-tabs__tab {
+  position: relative; flex: 0 0 auto; height: var(--control-height-md); padding: 0 var(--space-2);
+  border: none; background: transparent; cursor: pointer; white-space: nowrap;
+  font-family: var(--font-sans); font-size: var(--font-size-chrome-label); font-weight: var(--font-weight-medium); color: var(--color-text-tertiary);
+  transition: color var(--duration-fast) var(--ease-standard);
+}
+.nuclei-tabs__tab:hover:not(:disabled) { color: var(--color-text-secondary); }
+.nuclei-tabs__tab[aria-selected='true'] { color: var(--color-text-primary); }
+.nuclei-tabs__tab[aria-selected='true']::after { content: ''; position: absolute; left: var(--space-2); right: var(--space-2); bottom: -1px; height: 2px; border-radius: 1px; background: var(--color-accent-quantum); }
+.nuclei-tabs__tab:disabled { cursor: not-allowed; opacity: 0.5; }
+
+/* ── Badge ── */
+.nuclei-badge {
+  display: inline-flex; align-items: center; gap: var(--space-1); height: 18px; padding: 0 var(--space-2);
+  border: 1px solid var(--badge-color, var(--color-border-strong)); border-radius: var(--radius-pill);
+  background: color-mix(in srgb, var(--badge-color, var(--color-text-tertiary)) 12%, transparent);
+  color: var(--badge-text, var(--color-text-secondary));
+  font-family: var(--font-sans); font-size: var(--font-size-caption); font-weight: var(--font-weight-medium); line-height: 1; white-space: nowrap;
+}
+.nuclei-badge--accent { --badge-color: var(--color-accent-quantum); --badge-text: var(--color-accent-quantum-text); }
+.nuclei-badge--success { --badge-color: var(--color-success); --badge-text: color-mix(in srgb, var(--color-success) 55%, var(--color-text-primary)); }
+.nuclei-badge--warning { --badge-color: var(--color-warning); --badge-text: var(--color-warning); }
+.nuclei-badge--danger { --badge-color: var(--color-danger); --badge-text: color-mix(in srgb, var(--color-danger) 55%, var(--color-text-primary)); }
+.nuclei-badge--research { --badge-color: var(--color-mode-research); --badge-text: var(--color-mode-research); }
+.nuclei-badge--dirac { --badge-color: var(--color-accent-dirac); --badge-text: var(--color-accent-dirac-text); }

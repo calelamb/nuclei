@@ -14,7 +14,7 @@ function ratio(a: string, b: string): number {
 }
 
 const SURFACES: (keyof ColorTokens)[] = ['surfaceBase', 'surfaceRaised', 'surfaceOverlay', 'surfaceSunken'];
-const BODY_TEXT: (keyof ColorTokens)[] = ['textPrimary', 'textSecondary', 'textTertiary', 'accentDiracText', 'modeResearch', 'warning'];
+const BODY_TEXT: (keyof ColorTokens)[] = ['textPrimary', 'textSecondary', 'textTertiary', 'accentQuantumText', 'accentDiracText', 'modeResearch', 'warning'];
 
 describe.each([['dark', DARK_COLORS], ['light', LIGHT_COLORS]] as const)('%s palette contrast', (_n, c) => {
   for (const text of BODY_TEXT) {

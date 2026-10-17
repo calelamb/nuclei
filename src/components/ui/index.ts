@@ -6,3 +6,6 @@ export { Switch, type SwitchProps } from './Switch';
 export { ChoiceCard, type ChoiceCardProps } from './ChoiceCard';
 export { SegmentedControl, type SegmentedControlProps, type SegmentedOption } from './SegmentedControl';
 export { Tooltip, type TooltipProps } from './Tooltip';
+export { Checkbox, type CheckboxProps } from './Checkbox';
+export { Tabs, type TabsProps, type TabOption } from './Tabs';
+export { Badge, type BadgeProps, type BadgeTone } from './Badge';

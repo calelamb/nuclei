@@ -24,6 +24,8 @@ export interface ColorTokens {
   // Accents
   accentQuantum: string;
   accentQuantumSoft: string;
+  /** Teal for small text/links: AA on every surface in both themes (accentQuantum fails on white). */
+  accentQuantumText: string;
   accentDirac: string;
   /** Dirac purple tuned for use as TEXT (AA on every surface); accentDirac is for fills. */
   accentDiracText: string;
@@ -116,6 +118,7 @@ export const DARK_COLORS: ColorTokens = {
   borderStrong: '#1A2A42',
   accentQuantum: '#00B4D8',
   accentQuantumSoft: '#48CAE4',
+  accentQuantumText: '#00B4D8',
   accentDirac: '#7B2D8E',
   accentDiracText: '#C084FC',
   modeResearch: '#60A5FA',
@@ -154,6 +157,7 @@ export const LIGHT_COLORS: ColorTokens = {
   borderStrong: '#E2E8F0',
   accentQuantum: '#0891B2',
   accentQuantumSoft: '#00B4D8',
+  accentQuantumText: '#0E7490',
   accentDirac: '#6B21A8',
   accentDiracText: '#6B21A8',
   modeResearch: '#1D4ED8',
