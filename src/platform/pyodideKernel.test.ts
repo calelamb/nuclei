@@ -167,6 +167,24 @@ describe('PyodideKernel — worker-backed runtime', () => {
     expect(captured).toEqual([]);
   });
 
+  it('batches live stdout into a few output messages and keeps every line', async () => {
+    const captured: CapturedMessage[] = [];
+    const runtime = new PyodideRuntimeClient(() => new FakeWorker((req, reply) => {
+      if (req.type === 'init') { reply({ id: req.id, type: 'result', value: 'ready' }); return; }
+      reply({ id: req.id, type: 'started' });
+      for (let i = 0; i < 1000; i++) reply({ id: req.id, type: 'stdout', text: `line ${i}` });
+      reply({ id: req.id, type: 'result', value: JSON.stringify({ result: null, snapshot: null, output: '', error: null }) });
+    }));
+    const kernel = new PyodideKernel((m) => captured.push(m), runtime);
+    await kernel.init();
+    await kernel.send({ type: 'execute', code: 'x', shots: 10 });
+    const outputs = captured.filter((m) => m.type === 'output');
+    expect(outputs.length).toBeLessThanOrEqual(3);
+    const text = outputs.map((m) => String(m.text)).join('');
+    expect(text.split('\n').filter(Boolean)).toHaveLength(1000);
+    expect(text.startsWith('line 0\n')).toBe(true);
+  });
+
   it('forwards the lazy Cirq install notice for execute but not for parse', async () => {
     const { kernel, captured } = makeKernel({
       notice: 'Installing Cirq',

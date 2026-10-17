@@ -3,7 +3,7 @@ import type { SimulationResult } from '../types/quantum';
 
 // Cap terminal buffer to avoid unbounded memory growth and re-render cost
 // when a user's code prints in a tight loop. Older lines are trimmed FIFO.
-const MAX_TERMINAL_LINES = 500;
+const MAX_TERMINAL_LINES = 2000;
 
 // Strip ANSI color escapes (Qiskit/Cirq can emit these in tracebacks).
 // eslint-disable-next-line no-control-regex -- the ANSI escape we're matching IS a control char
