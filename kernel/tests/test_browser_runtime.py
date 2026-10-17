@@ -219,3 +219,37 @@ def test_measure_all_and_register_keys():
     out = run_browser("nuclei_execute", code, 10)
     assert out["error"] is None, out["error"]
     assert out["result"]["measurements"] == {"10": 10}
+
+
+def test_cirq_circuit_without_measurements_does_not_crash():
+    pytest.importorskip("cirq")
+    code = textwrap.dedent(
+        """
+        import cirq
+        qs = cirq.LineQubit.range(3)
+        circuit = cirq.Circuit(cirq.rx(0.7)(qs[0]), cirq.ry(1.2)(qs[1]), cirq.H(qs[2]))
+        """
+    )
+    out = run_browser("nuclei_execute", code, 100)
+    assert out["error"] is None, out["error"]
+    result = out["result"]
+    assert result["measurements"] == {}
+    assert len(result["state_vector"]) == 8
+    assert len(result["bloch_coords"]) == 3
+    assert sum(result["probabilities"].values()) == pytest.approx(1.0)
+    assert out["snapshot"]["framework"] == "cirq"
+
+
+def test_cirq_bell_still_samples_and_reports_cirq_snapshot():
+    pytest.importorskip("cirq")
+    code = textwrap.dedent(
+        """
+        import cirq
+        q0, q1 = cirq.LineQubit.range(2)
+        circuit = cirq.Circuit([cirq.H(q0), cirq.CNOT(q0, q1), cirq.measure(q0, q1, key='result')])
+        """
+    )
+    out = run_browser("nuclei_execute", code, 200, 3)
+    assert out["error"] is None, out["error"]
+    assert set(out["result"]["measurements"]) <= {"00", "11"}
+    assert [g["type"] for g in out["snapshot"]["gates"]] == ["H", "CNOT", "Measure"]
