@@ -1,12 +1,12 @@
 import { useMemo, type MouseEvent } from 'react';
 import type { ThemeColors } from '../../stores/themeStore';
-import type { PlotModel } from '../../lib/qecPlotModel';
+import { whiskerLow, type PlotModel } from '../../lib/qecPlotModel';
 import type { SeriesPoint } from '../../lib/qecPlotPoints';
 import { nearestPoint } from '../../lib/qecPlotPoints';
 import { makeLogScale } from '../../lib/qecPlotTicks';
 import {
   FIGURE_PAD, FONT, LEGEND_SWATCH_GAP, LEGEND_SWATCH_WIDTH, NOTE_LINE_HEIGHT, TICK_LENGTH,
-  layoutFigure, type FigureLayout,
+  fitAxisTitle, layoutFigure, type FigureLayout,
 } from '../../lib/qecPlotLayout';
 import type { LegendGroup } from '../../lib/qecPlotStyle';
 import { Marker, UpperLimitMarker } from './QecPlotMarks';
@@ -151,7 +151,7 @@ function Axes({ model, layout, scales, colors }: AxesProps) {
         x={FIGURE_PAD + FONT.axisTitle * 0.8} y={plot.y + plot.h / 2} fontSize={FONT.axisTitle} fill={colors.text} textAnchor="middle"
         transform={`rotate(-90 ${FIGURE_PAD + FONT.axisTitle * 0.8} ${plot.y + plot.h / 2})`}
       >
-        {model.yTitle}
+        {fitAxisTitle(model.yTitle, model.yTitleShort, plot.h)}
       </text>
     </g>
   );
@@ -164,12 +164,17 @@ function SeriesLayer({ model, scales, colors }: { model: PlotModel; scales: Scal
       {model.parts.map((s) => {
         const st = model.style.get(s.source.key);
         if (!st) return null;
-        const bar = (p: SeriesPoint, key: string) => (
-          <path
-            key={key} stroke={st.color} strokeWidth={1.2} strokeOpacity={0.85} fill="none"
-            d={`M${sx(p.noise)} ${sy(p.rate.hi)}V${sy(p.rate.lo)}M${sx(p.noise) - CAP} ${sy(p.rate.hi)}h${2 * CAP}M${sx(p.noise) - CAP} ${sy(p.rate.lo)}h${2 * CAP}`}
-          />
-        );
+        const bar = (p: SeriesPoint, key: string) => {
+          const low = whiskerLow(p.rate.lo, model.yAxis);
+          const x = sx(p.noise);
+          const cap = (y: number) => `M${x - CAP} ${y}h${2 * CAP}`;
+          return (
+            <path
+              key={key} stroke={st.color} strokeWidth={1.2} strokeOpacity={0.85} fill="none"
+              d={`M${x} ${sy(p.rate.hi)}V${sy(low.value)}${cap(sy(p.rate.hi))}${low.open ? '' : cap(sy(low.value))}`}
+            />
+          );
+        };
         return (
           <g key={s.source.key} data-series={s.source.key}>
             {s.normal.map((p, i) => bar(p, `b${i}`))}

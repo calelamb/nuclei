@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { toSuperscript, formatPow10, formatSci, formatMultiplierTick } from './qecPlotFormat';
+import { toSuperscript, formatPow10, formatSci, formatMultiplierTick, formatRatePrecise } from './qecPlotFormat';
 
 describe('toSuperscript', () => {
   it('maps digits and a true minus sign', () => {
@@ -36,5 +36,15 @@ describe('formatSci', () => {
     expect(formatSci(0)).toBe('0');
     expect(formatSci(Number.NaN)).toBe('—');
     expect(formatSci(Number.POSITIVE_INFINITY)).toBe('—');
+  });
+});
+
+describe('formatRatePrecise', () => {
+  it('keeps three significant figures and trailing zeros', () => {
+    expect(formatRatePrecise(1.03e-4)).toBe('1.03×10⁻⁴');
+    expect(formatRatePrecise(1e-4)).toBe('1.00×10⁻⁴');
+    expect(formatRatePrecise(0.0123)).toBe('0.0123');
+    expect(formatRatePrecise(0)).toBe('0');
+    expect(formatRatePrecise(Number.NaN)).toBe('—');
   });
 });

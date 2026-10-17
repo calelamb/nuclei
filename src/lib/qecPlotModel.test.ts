@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import type { ThresholdSeries } from '../types/qecStats';
-import { buildPlotModel } from './qecPlotModel';
+import { buildPlotModel, whiskerLow, MAX_WHISKER_DECADES } from './qecPlotModel';
 
 const series = (points: ThresholdSeries['points'], d = 3): ThresholdSeries => ({
   key: `x·d${d}·mwpm`, label: 'x', distance: d, decoder: 'mwpm', points,
@@ -32,5 +32,33 @@ describe('buildPlotModel', () => {
   it('titles the y axis by units', () => {
     expect(buildPlotModel([series([P(0.001, 0.01)])], 'dark', '#999', 'per_round')!.yTitle).toBe('logical error per round');
     expect(buildPlotModel([series([P(0.001, 0.01)])], 'dark', '#999', 'per_shot')!.yTitle).toBe('logical error per shot');
+  });
+});
+
+describe('lower whiskers', () => {
+  it('includes the interval lower bound in the y domain', () => {
+    const m = buildPlotModel([series([P(0.001, 1e-3, 4e-4, 2e-3), P(0.01, 1e-2)])], 'dark', '#999', 'per_shot')!;
+    expect(m.yAxis.lo).toBeLessThanOrEqual(Math.log10(4e-4));
+    const low = whiskerLow(4e-4, m.yAxis);
+    expect(low).toEqual({ value: 4e-4, open: false });
+  });
+
+  it('floors extreme lower bounds and flags the whisker open', () => {
+    const m = buildPlotModel([series([P(0.001, 1e-3, 1e-9, 2e-3), P(0.01, 1e-2)])], 'dark', '#999', 'per_shot')!;
+    expect(m.yAxis.lo).toBeGreaterThan(Math.log10(1e-3) - MAX_WHISKER_DECADES - 0.5);
+    const low = whiskerLow(1e-9, m.yAxis);
+    expect(low.open).toBe(true);
+    expect(low.value).toBeCloseTo(10 ** m.yAxis.lo, 12);
+  });
+
+  it('treats a zero lower bound as open at the axis bottom', () => {
+    const m = buildPlotModel([series([P(0.001, 1e-3, 0, 2e-3)])], 'dark', '#999', 'per_shot')!;
+    expect(whiskerLow(0, m.yAxis).open).toBe(true);
+  });
+
+  it('keeps few-error lower whiskers inside the plot', () => {
+    const m = buildPlotModel([series([P(0.001, 2e-4, 6e-5, 5e-4), P(0.01, 1e-2)])], 'dark', '#999', 'per_shot')!;
+    const low = whiskerLow(6e-5, m.yAxis);
+    expect(Math.log10(low.value)).toBeGreaterThanOrEqual(m.yAxis.lo);
   });
 });

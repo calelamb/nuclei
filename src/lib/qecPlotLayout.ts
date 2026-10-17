@@ -17,6 +17,11 @@ export function textWidth(text: string, fontSize: number): number {
   return em * fontSize;
 }
 
+/** The full title when it fits along the axis, else the short one. */
+export function fitAxisTitle(full: string, short: string, available: number): string {
+  return textWidth(full, FONT.axisTitle) <= available ? full : short;
+}
+
 export interface Margins { left: number; right: number; top: number; bottom: number }
 
 /** Margins in pixels sized from the actual tick labels so nothing is clipped. */

@@ -8,6 +8,7 @@ import { QecCsvDropZone } from './QecCsvDropZone';
 import { isWebBuild } from '../../platform/buildTarget';
 import { QecLambdaReadout } from './QecLambdaReadout';
 import { QecPlotView } from './QecPlotView';
+import { ScrollFade } from './ScrollFade';
 import { useElementSize } from '../../hooks/useElementSize';
 import { buildPlotModel } from '../../lib/qecPlotModel';
 import { plotBox, READOUT_WIDTH } from '../../lib/qecPlotLayout';
@@ -117,8 +118,8 @@ export function ThresholdPanel() {
 
   const decoders = [...new Set(series.map((s) => s.decoder))].sort();
   const box = plotBox(area);
-  const readout = (
-    <div style={{ fontFamily: "'Geist Sans', sans-serif", ...(box.layout === 'row' ? { width: READOUT_WIDTH, flex: 'none', overflowY: 'auto', maxHeight: box.plotH } : { padding: '0 12px' }) }}>
+  const readoutBody = (
+    <>
       <QecLambdaReadout decoders={decoders} estimates={lambdas} units={units} colors={colors} />
       <div style={{ fontSize: 10, color: colors.textMuted, marginTop: 6, lineHeight: 1.45 }}>
         {`Whiskers: sinter ${whiskerConvention()}, `}
@@ -128,7 +129,15 @@ export function ThresholdPanel() {
         {noKept > 0 && `${noKept} row(s) with every shot discarded skipped. `}
         No threshold p_th is estimated.
       </div>
-    </div>
+    </>
+  );
+  const readoutFont = "'Geist Sans', sans-serif";
+  const readout = box.layout === 'row' ? (
+    <ScrollFade style={{ fontFamily: readoutFont, width: READOUT_WIDTH, flex: 'none', maxHeight: box.plotH }}>
+      {readoutBody}
+    </ScrollFade>
+  ) : (
+    <div style={{ fontFamily: readoutFont, padding: '0 12px' }}>{readoutBody}</div>
   );
 
   return (

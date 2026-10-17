@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
-  FONT, textWidth, computeMargins, layoutLegend, wrapLines, plotBox, layoutFigure,
+  FONT, textWidth, computeMargins, layoutLegend, wrapLines, plotBox, layoutFigure, fitAxisTitle,
 } from './qecPlotLayout';
 import type { LegendGroup } from './qecPlotStyle';
 
@@ -129,5 +129,12 @@ describe('layoutFigure', () => {
     const l = layoutFigure({ ...base, width: 100, height: 100 });
     expect(l.plot.w).toBeGreaterThan(0);
     expect(l.plot.h).toBeGreaterThan(0);
+  });
+});
+
+describe('fitAxisTitle', () => {
+  it('uses the full title when it fits and the short one otherwise', () => {
+    expect(fitAxisTitle('logical error per round', 'LER / round', 400)).toBe('logical error per round');
+    expect(fitAxisTitle('logical error per round', 'LER / round', 120)).toBe('LER / round');
   });
 });

@@ -59,3 +59,31 @@ describe('buildPlotStyle', () => {
     expect(legend[0].entries.map((e) => e.label)).toEqual(['d = 5', 'd = ?']);
   });
 });
+
+function hue(hex: string): number {
+  const [r, g, b] = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16) / 255);
+  const max = Math.max(r, g, b);
+  const d = max - Math.min(r, g, b);
+  if (d === 0) return 0;
+  const h = max === r ? ((g - b) / d) % 6 : max === g ? (b - r) / d + 2 : (r - g) / d + 4;
+  return (h * 60 + 360) % 360;
+}
+
+describe('distinguishability', () => {
+  it.each(['dark', 'light'] as const)('first four %s colours differ by at least 40 degrees of hue', (mode) => {
+    const hs = DISTANCE_PALETTE[mode].slice(0, 4).map(hue);
+    for (let i = 0; i < hs.length; i++) {
+      for (let j = i + 1; j < hs.length; j++) {
+        const diff = Math.abs(hs[i] - hs[j]);
+        expect(Math.min(diff, 360 - diff)).toBeGreaterThanOrEqual(40);
+      }
+    }
+  });
+
+  it('gives up to eight decoders each a different marker shape', () => {
+    const decoders = Array.from({ length: 8 }, (_, i) => `dec${i}`);
+    const { byKey } = buildPlotStyle(grid(decoders), 'dark', '#999');
+    const shapes = new Set([...byKey.values()].map((s) => s.shape));
+    expect(shapes.size).toBe(8);
+  });
+});

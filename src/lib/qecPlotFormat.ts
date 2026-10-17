@@ -30,3 +30,13 @@ export function formatSci(x: number): string {
   const trimmed = mant.endsWith('.0') ? mant.slice(0, -2) : mant;
   return `${trimmed}×${formatPow10(Number(exp))}`;
 }
+
+/** Tooltip rate: three significant figures, trailing zeros kept so it matches the interval's precision. */
+export function formatRatePrecise(x: number): string {
+  if (!Number.isFinite(x)) return '—';
+  if (x === 0) return '0';
+  const abs = Math.abs(x);
+  if (abs >= 0.01 && abs < 1000) return String(Number(x.toPrecision(3)));
+  const [mant, exp] = x.toExponential(2).split('e');
+  return `${mant}×${formatPow10(Number(exp))}`;
+}

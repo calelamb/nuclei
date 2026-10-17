@@ -29,6 +29,23 @@ export function Marker({ shape, cx, cy, color, r = MARKER_RADIUS }: MarkerProps)
         />
       );
     }
+    case 'triangle': {
+      const w = r * 1.25;
+      return <polygon points={`${f(cx)},${f(cy - r * 1.2)} ${f(cx + w)},${f(cy + r)} ${f(cx - w)},${f(cy + r)}`} fill={color} />;
+    }
+    case 'plus': {
+      const d = r * 1.2;
+      return (
+        <path
+          d={`M${f(cx - d)} ${f(cy)}L${f(cx + d)} ${f(cy)}M${f(cx)} ${f(cy - d)}L${f(cx)} ${f(cy + d)}`}
+          stroke={color} strokeWidth={1.8} strokeLinecap="round" fill="none"
+        />
+      );
+    }
+    case 'hollow-circle':
+      return <circle cx={f(cx)} cy={f(cy)} r={f(r)} fill="none" stroke={color} strokeWidth={1.5} />;
+    case 'hollow-square':
+      return <rect x={f(cx - r)} y={f(cy - r)} width={f(2 * r)} height={f(2 * r)} fill="none" stroke={color} strokeWidth={1.5} />;
     default:
       return <circle cx={f(cx)} cy={f(cy)} r={f(r)} fill={color} />;
   }

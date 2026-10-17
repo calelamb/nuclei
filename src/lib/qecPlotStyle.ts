@@ -1,7 +1,9 @@
 import type { ThresholdSeries } from '../types/qecStats';
 import type { ThemeMode } from '../styles/tokens';
 
-export type MarkerShape = 'circle' | 'square' | 'diamond' | 'cross';
+export type MarkerShape =
+  | 'circle' | 'square' | 'diamond' | 'cross'
+  | 'triangle' | 'plus' | 'hollow-circle' | 'hollow-square';
 
 export interface SeriesStyle {
   color: string;
@@ -29,10 +31,12 @@ export interface LegendGroup {
 /** Teal and purple lead (the product's accent hues); the rest are well separated in hue and lightness. */
 export const DISTANCE_PALETTE: Readonly<Record<ThemeMode, readonly string[]>> = {
   dark: ['#48CAE4', '#C084FC', '#FBBF24', '#FB7185', '#4ADE80', '#7DA2FF', '#FB923C', '#CBD5E1'],
-  light: ['#0891B2', '#6B21A8', '#B45309', '#DC2626', '#15803D', '#2563EB', '#C2410C', '#475569'],
+  light: ['#0891B2', '#6B21A8', '#CA8A04', '#DC2626', '#15803D', '#2563EB', '#C2410C', '#475569'],
 };
 
-const SHAPES: readonly MarkerShape[] = ['circle', 'square', 'diamond', 'cross'];
+export const SHAPES: readonly MarkerShape[] = [
+  'circle', 'square', 'diamond', 'cross', 'triangle', 'plus', 'hollow-circle', 'hollow-square',
+];
 const DASHES: ReadonlyArray<string | undefined> = [undefined, '7 3', '2 3', '8 3 2 3'];
 
 function channel(hex: string, i: number): number {

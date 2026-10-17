@@ -1,6 +1,6 @@
 import type { Rate, ThresholdSeries } from '../types/qecStats';
 import type { RateUnits } from './qecFit';
-import { formatSci } from './qecPlotFormat';
+import { formatRatePrecise, formatSci } from './qecPlotFormat';
 
 export type SeriesPoint = ThresholdSeries['points'][number];
 export type PointKind = 'normal' | 'upper' | 'skip-noise' | 'skip-rate';
@@ -90,8 +90,8 @@ export function tooltipLines(
   const zero = p.rate.p === 0;
   const lines = [
     `d = ${s.distance ?? '?'} · p = ${formatNoise(p.noise)} · ${s.decoder}`,
-    zero ? `rate ${unitText}: 0 observed (upper bound ${formatSci(rate.hi)})` : `rate ${unitText}: ${formatSci(rate.p)}`,
-    `interval: ${formatSci(rate.lo)} to ${formatSci(rate.hi)}`,
+    zero ? `rate ${unitText}: 0 observed (upper bound ${formatSci(rate.hi)})` : `rate ${unitText}: ${formatRatePrecise(rate.p)}`,
+    `interval: ${formatRatePrecise(rate.lo)} to ${formatRatePrecise(rate.hi)}`,
   ];
   if (p.errors !== undefined && p.kept !== undefined) {
     lines.push(`${intl(p.errors)} ${p.errors === 1 ? 'error' : 'errors'} in ${intl(p.kept)} kept shots${zero ? ' (0 errors: upper bound)' : ''}`);

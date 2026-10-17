@@ -74,9 +74,9 @@ describe('tooltipLines', () => {
     expect(text).toContain('p = 0.002');
     expect(text).toContain('pymatching');
     expect(text).toContain('per round');
-    expect(text).toContain('3.2×10⁻³');
-    expect(text).toContain('2.1×10⁻³');
-    expect(text).toContain('4.9×10⁻³');
+    expect(text).toContain('3.20×10⁻³');
+    expect(text).toContain('2.10×10⁻³');
+    expect(text).toContain('4.90×10⁻³');
     expect(text).toContain('5 errors');
     expect(text).toContain('1,000 kept shots');
   });
