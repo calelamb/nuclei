@@ -1,4 +1,4 @@
-import { Badge, type BadgeTone } from '../ui';
+import { Badge, SegmentedControl, type BadgeTone } from '../ui';
 import { useThemeStore } from '../../stores/themeStore';
 import { useChallengeStore } from '../../stores/challengeStore';
 import { useEditorStore } from '../../stores/editorStore';
@@ -65,29 +65,16 @@ export function ChallengeBoard() {
     <div style={{ display: 'flex', flexDirection: 'column', gap: 12, height: '100%' }}>
       {/* Challenge selector pills */}
       {challenges.length > 1 && (
-        <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', flexShrink: 0 }}>
-          {challenges.map((ch) => {
-            const active = displayed.id === ch.id;
-            return (
-              <button
-                key={ch.id}
-                onClick={() => setActiveChallenge(ch)}
-                style={{
-                  padding: '3px 8px',
-                  borderRadius: 4,
-                  border: `1px solid ${active ? colors.accent : colors.border}`,
-                  background: active ? `${colors.accent}18` : 'transparent',
-                  color: active ? colors.accentText : colors.textMuted,
-                  fontSize: 11,
-                  fontFamily: TYPOGRAPHY.fontSans,
-                  cursor: 'pointer',
-                  fontWeight: active ? 600 : 400,
-                }}
-              >
-                W{ch.weekNumber}
-              </button>
-            );
-          })}
+        <div style={{ flexShrink: 0 }}>
+          <SegmentedControl
+            aria-label="Challenge week"
+            value={displayed.id}
+            options={challenges.map((ch) => ({ value: ch.id, label: `W${ch.weekNumber}` }))}
+            onChange={(id) => {
+              const next = challenges.find((ch) => ch.id === id);
+              if (next) setActiveChallenge(next);
+            }}
+          />
         </div>
       )}
 

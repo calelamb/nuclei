@@ -1,5 +1,5 @@
 import { Select } from '../ui';
-import { useRef, type CSSProperties } from 'react';
+import { useRef } from 'react';
 import { Search } from 'lucide-react';
 import { useThemeStore } from '../../stores/themeStore';
 import { useCommunityStore } from '../../stores/communityStore';
@@ -69,17 +69,6 @@ export function CircuitGallery() {
       break;
   }
 
-  const pillBase: CSSProperties = {
-    padding: '4px 10px',
-    borderRadius: 12,
-    border: 'none',
-    cursor: 'pointer',
-    fontSize: 11,
-    fontWeight: 500,
-    fontFamily: TYPOGRAPHY.fontSans,
-    transition: 'background 0.15s, color 0.15s',
-  };
-
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', gap: 10 }}>
       {/* Search */}
@@ -115,19 +104,17 @@ export function CircuitGallery() {
         />
       </div>
 
-      {/* Category pills */}
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, flexShrink: 0 }}>
+      {/* Category filters */}
+      <div role="group" aria-label="Filter by category" style={{ display: 'flex', flexWrap: 'wrap', gap: 4, flexShrink: 0 }}>
         {CATEGORIES.map((cat) => {
           const active = selectedCategory === cat.value;
           return (
             <button
               key={cat.label}
+              type="button"
+              className="nuclei-chip"
+              aria-pressed={active}
               onClick={() => setCategory(cat.value)}
-              style={{
-                ...pillBase,
-                background: active ? colors.accent : colors.bg,
-                color: active ? colors.onAccent : colors.textMuted,
-              }}
             >
               {cat.label}
             </button>
