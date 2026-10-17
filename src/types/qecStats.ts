@@ -98,7 +98,7 @@ export interface ThresholdSeries {
   distance: number | null;
   decoder: string;
   /** Points sorted by ascending noise parameter. */
-  points: Array<{ noise: number; rate: Rate }>;
+  points: Array<{ noise: number; rate: Rate; errors?: number; kept?: number }>;
 }
 
 /** Group stats into log-log threshold series: one per (label × distance ×

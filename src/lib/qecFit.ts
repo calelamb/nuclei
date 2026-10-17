@@ -429,13 +429,13 @@ export function likelihoodSeries(
     const problem = rowProblem(row);
     if (problem === 'invalid') { invalid += 1; continue; }
     if (problem === 'no_kept') { noKept += 1; continue; }
-    const { fit, units } = rowRate(row, { units: want, maxLikelihoodFactor: opts.maxLikelihoodFactor });
+    const { fit, units, kept } = rowRate(row, { units: want, maxLikelihoodFactor: opts.maxLikelihoodFactor });
     if (units !== want) { excluded += 1; continue; }
     const distance = finiteNum(meta.d) ? meta.d : null;
     const label = experiments.get(row)!.name;
     const key = `${label}·d${distance ?? '?'}·${row.decoder}`;
     const prev = groups.get(key) ?? { key, label, distance, decoder: row.decoder, points: [] };
-    groups.set(key, { ...prev, points: [...prev.points, { noise, rate: { p: fit.best, lo: fit.low, hi: fit.high } }] });
+    groups.set(key, { ...prev, points: [...prev.points, { noise, rate: { p: fit.best, lo: fit.low, hi: fit.high }, errors: row.errors, kept }] });
   }
   const series = [...groups.values()]
     .map((s) => ({ ...s, points: [...s.points].sort((a, b) => a.noise - b.noise) }))

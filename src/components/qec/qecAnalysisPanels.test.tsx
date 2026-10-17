@@ -108,8 +108,11 @@ describe('ThresholdPanel', () => {
     const map: Record<string, (typeof rows)[number]> = {};
     for (const r of rows) map[r.strong_id] = r;
     useQecCampaignStore.setState({ rowsByStrongId: map, statsCsv: syntheticCsv, running: false });
-    const { container, getByRole } = render(<ThresholdPanel />);
-    const svgText = () => container.querySelector('svg[role="img"]')!.textContent!;
+    const { getByRole } = render(<ThresholdPanel />);
+    const svgText = () => {
+      fireEvent.click(getByRole('button', { name: 'Export SVG' }));
+      return (downloadSvg.mock.calls.at(-1)![0] as SVGSVGElement).textContent!;
+    };
     expect(svgText()).toMatch(/Λ = [^,]*,[^Λ]*per round/);
     expect(svgText()).not.toMatch(/rounds vary with d/);
     fireEvent.click(getByRole('button', { name: 'Per shot' }));
@@ -122,7 +125,7 @@ describe('ThresholdPanel', () => {
     const map: Record<string, (typeof rows)[number]> = {};
     for (const r of rows) map[r.strong_id] = r;
     useQecCampaignStore.setState({ rowsByStrongId: map, statsCsv: syntheticCsv, running: false });
-    const { container } = render(<ThresholdPanel />);
+    const { container, getByRole } = render(<ThresholdPanel />);
     const lines = [...container.querySelectorAll('polyline')];
     // 2 experiments (r=d, r=3d) x 3 distances, each a 3-point curve with one y per p.
     expect(lines).toHaveLength(6);
@@ -136,7 +139,8 @@ describe('ThresholdPanel', () => {
     expect(meta.lambda_estimates).toHaveLength(6);
     expect(meta.lambda_estimates.map((e: { experiment: string }) => e.experiment)).toContain('synth r=3d');
     expect(container.querySelectorAll('svg text').length).toBeGreaterThan(6);
-    expect(container.querySelector('svg[role="img"]')!.textContent).toMatch(/Λ = .* synth r=d|synth r=d.*Λ = /);
+    fireEvent.click(getByRole('button', { name: 'Export SVG' }));
+    expect((downloadSvg.mock.calls.at(-1)![0] as SVGSVGElement).textContent).toMatch(/Λ = .* synth r=d|synth r=d.*Λ = /);
     expect(container.textContent).toMatch(/synth r=3d: Λ = /);
   });
 
@@ -175,7 +179,7 @@ describe('ThresholdPanel', () => {
     expect(legend).toBeTruthy();
     expect(legend.textContent).toContain('pymatching');
     expect(legend.textContent).toContain('fusion_blossom');
-    expect(legend.textContent).toMatch(/solid = odd distance/);
+    expect(legend.textContent).toMatch(/Distance.*d = 3.*d = 5/);
     const bg = exported.querySelector('rect[data-export-bg]')!;
     expect(bg).toBeTruthy();
     expect(bg.getAttribute('fill')).toBeTruthy();

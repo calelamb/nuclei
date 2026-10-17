@@ -6,7 +6,7 @@ import type { NoiseModelDef } from '../types/noiseModel';
 import { toStatsPoint } from '../types/qecStats';
 import { lambdaEstimates, rowProblem, rowRate, type RateUnits } from '../lib/qecFit';
 import { roundsFromMetadata } from '../lib/qecRounds';
-import { lambdaSummary } from '../lib/qecLambdaText';
+import { lambdaSummary, lambdaCaveats } from '../lib/qecLambdaText';
 
 /**
  * PRD 10 Phase D8 — Dirac's QEC campaign context.
@@ -112,11 +112,7 @@ export function buildQecContext(input: QecContextInput): string {
         ? fits
             .map((f) => {
               const { text, warnings } = lambdaSummary(f.estimate);
-              const caveats = [
-                ...warnings,
-                ...(f.collidingDistances.length > 0 ? [`distinct tasks collide at d ${f.collidingDistances.join(',')}, fitted as replicates`] : []),
-                ...(units === 'per_shot' && f.roundsVaryWithD ? ['rounds vary with d, confounding this per-shot Λ'] : []),
-              ];
+              const caveats = [...warnings, ...lambdaCaveats(f)];
               const warn = caveats.length > 0 ? ` WARNING: ${caveats.join('; ')}` : '';
               return `${f.decoder} ${f.label} p=${f.noise}: ${text} (${unitText}); d ${f.estimate.distances.join(',')}${warn}`;
             })
