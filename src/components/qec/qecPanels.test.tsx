@@ -101,10 +101,14 @@ describe('QecTimelinePanel', () => {
     expect(container.querySelector('svg')).toBeTruthy();
     // The bottom detector track label is present.
     expect(getByText('det')).toBeTruthy();
-    // Dashed hazard rects exist for noise ops.
-    const dashed = Array.from(container.querySelectorAll('rect')).filter(
-      (r) => r.getAttribute('stroke-dasharray'),
-    );
-    expect(dashed.length).toBeGreaterThan(0);
+    // Noise ops are amber dots (not squeezed text boxes).
+    expect(container.querySelectorAll('svg circle').length).toBeGreaterThan(0);
+    // Gate labels are Stim mnemonics at a readable size, never truncated names.
+    const sizes = Array.from(container.querySelectorAll('svg text')).map((t) => Number(t.getAttribute('font-size')));
+    expect(Math.min(...sizes)).toBeGreaterThanOrEqual(10);
+    const labels = Array.from(container.querySelectorAll('svg text')).map((t) => t.textContent);
+    expect(labels).toContain('CX');
+    expect(labels).not.toContain('Res');
+    expect(labels).not.toContain('Mea');
   });
 });

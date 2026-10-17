@@ -13,8 +13,10 @@ import { decodeSyndrome, isDecoderAvailable } from '../../lib/qecDecoderWasm';
 import { parseDemGraphWasm, type DemDetectorGraph } from '../../lib/qecDemWasm';
 import { requestQecDecodeSample, requestQecSnapshot } from '../../lib/qecDecodeSender';
 
-import { TYPOGRAPHY } from '../../styles/tokens';
+import { ICON_SIZE, ICON_STROKE, TYPOGRAPHY } from '../../styles/tokens';
 const DOCS = 'https://getnuclei.dev/docs/kernel-api/messages-qec/';
+/** The graph never collapses below this; the panel scrolls instead. */
+const GRAPH_MIN_HEIGHT = 220;
 
 /** The in-app interactive decoder is the WASM greedy matcher, not PyMatching. */
 export const INTERACTIVE_DECODER_LABEL = 'preview: greedy matcher, not PyMatching';
@@ -134,54 +136,42 @@ export function DetectorGraphPanel() {
       title="Detector Graph"
       context={snapshot ? `${snapshot.num_detectors} detectors` : undefined}
       helpHref={DOCS}
-      actions={
-        snapshot?.dem ? (
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-            {decoderReady && (
-              <span
-                data-testid="interactive-decoder-label"
-                title="Interactive decoding runs a fast greedy matcher in the app. Use Sample a shot (PyMatching) or a campaign for accurate decoding."
-                style={{
-                  fontSize: 11, color: colors.warning, border: `1px solid ${colors.warning}`,
-                  borderRadius: 3, padding: '1px 5px', fontFamily: TYPOGRAPHY.fontSans,
-                }}
-              >
-                {INTERACTIVE_DECODER_LABEL}
-              </span>
-            )}
-            {decoderReady && (
-              <button
-                onClick={() => setInteractive((v) => !v)}
-                title="Toggle detectors and decode live in-app, no kernel round-trip"
-                style={{
-                  display: 'flex', alignItems: 'center', gap: 4,
-                  background: interactive ? colors.accent : 'transparent',
-                  color: interactive ? '#fff' : colors.text,
-                  border: `1px solid ${interactive ? colors.accent : colors.border}`,
-                  borderRadius: 4, cursor: 'pointer', fontSize: 11, padding: '4px 9px',
-                  fontFamily: TYPOGRAPHY.fontSans,
-                }}
-              >
-                <MousePointerClick size={12} />
-                Interactive
-              </button>
-            )}
-            {circuitText && !interactive && (
-              <Button
-                variant="primary"
-                size="sm"
-                onClick={() => requestQecDecodeSample(circuitText)}
-                disabled={decodePending}
-                title="Sample one shot and decode it"
-              >
-                {decodePending ? 'Sampling…' : 'Sample a shot'}
-              </Button>
-            )}
-          </div>
-        ) : undefined
-      }
     />
   );
+
+  // Controls sit in their own wrapping row so a narrow rail never squeezes the title.
+  const toolbar = snapshot?.dem ? (
+    <div
+      style={{
+        display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 6, padding: '6px 12px',
+        borderBottom: `1px solid ${colors.border}`,
+      }}
+    >
+      {decoderReady && (
+        <Button
+          size="sm"
+          aria-pressed={interactive}
+          variant={interactive ? 'primary' : 'secondary'}
+          onClick={() => setInteractive((v) => !v)}
+          title="Toggle detectors and decode live in-app, no kernel round-trip"
+          icon={<MousePointerClick size={ICON_SIZE.xs} strokeWidth={ICON_STROKE} />}
+        >
+          Interactive
+        </Button>
+      )}
+      {circuitText && !interactive && (
+        <Button
+          variant="primary"
+          size="sm"
+          onClick={() => requestQecDecodeSample(circuitText)}
+          disabled={decodePending}
+          title="Sample one shot and decode it"
+        >
+          {decodePending ? 'Sampling…' : 'Sample a shot'}
+        </Button>
+      )}
+    </div>
+  ) : null;
 
   if (!snapshot) {
     return (
@@ -209,8 +199,9 @@ export function DetectorGraphPanel() {
   }
 
   return (
-    <div style={{ height: '100%', display: 'flex', flexDirection: 'column', background: colors.bg }}>
+    <div style={{ height: '100%', display: 'flex', flexDirection: 'column', background: colors.bg, overflowY: 'auto' }}>
       {header}
+      {toolbar}
       {snapshot.dem.truncated && !clientDem && (
         <div
           style={{
@@ -259,7 +250,7 @@ export function DetectorGraphPanel() {
           Pairwise projection shown · {snapshot.dem.hyperedges_count} hyperedge(s) not drawn
         </div>
       )}
-      <div style={{ flex: 1, minHeight: 0, position: 'relative' }}>
+      <div style={{ flex: 1, minHeight: GRAPH_MIN_HEIGHT, position: 'relative' }}>
         <DetectorGraphCanvas
           layout={layout}
           overlay={overlay}
@@ -276,7 +267,18 @@ export function DetectorGraphPanel() {
           }}
         >
           <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, color: colors.textMuted }}>
-            <MousePointerClick size={12} /> Click detectors to toggle the syndrome
+            <MousePointerClick size={ICON_SIZE.xs} /> Click detectors to toggle the syndrome
+          </span>
+          <span
+            data-testid="interactive-decoder-label"
+            title={INTERACTIVE_DECODER_LABEL}
+            aria-label={INTERACTIVE_DECODER_LABEL}
+            style={{
+              fontSize: 11, color: colors.warning, border: `1px solid ${colors.warning}`,
+              borderRadius: 3, padding: '0 5px', whiteSpace: 'nowrap',
+            }}
+          >
+            Greedy preview
           </span>
           {syndrome.size > 0 ? (
             <span style={{ color: interactiveOverlay?.logicalError ? colors.error : colors.success }}>

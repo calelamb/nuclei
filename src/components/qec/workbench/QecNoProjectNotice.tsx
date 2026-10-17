@@ -22,7 +22,7 @@ export function QecNoProjectNotice() {
             <FileSpreadsheet size={12} />LOADED CSV
           </div>
           <div style={{ color: colors.text, fontSize: 12, fontWeight: 600, wordBreak: 'break-all' }}>{csv.sourceName}</div>
-          <div style={dim}>{csv.totalDataRows.toLocaleString()} rows · {csv.rows.length.toLocaleString()} tasks</div>
+          <div style={dim}>{csv.totalDataRows.toLocaleString()} {csv.totalDataRows === 1 ? 'row' : 'rows'} · {csv.rows.length.toLocaleString()} {csv.rows.length === 1 ? 'task' : 'tasks'}</div>
           <div style={dim}>{describeMapping(csv.mapping)}</div>
         </section>
       ) : (

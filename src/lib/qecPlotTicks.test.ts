@@ -20,12 +20,19 @@ describe('logAxis', () => {
     expect(Number.isFinite(axis.hi)).toBe(true);
   });
 
-  it('enforces a minimum span and labels 2 and 5 when fewer than three decades are in view', () => {
+  it('fits a narrow sweep tightly instead of forcing a whole decade (qec-14)', () => {
+    const axis = logAxis([0.0005, 0.0014])!;
+    const span = axis.hi - axis.lo;
+    expect(span).toBeLessThan(0.6);
+    expect(axis.lo).toBeLessThan(Math.log10(0.0005));
+    expect(axis.hi).toBeGreaterThan(Math.log10(0.0014));
+  });
+
+  it('keeps a floor on the span for a single value and labels every 2-9 multiple under a decade', () => {
     const axis = logAxis([0.008, 0.0125])!;
-    expect(axis.hi - axis.lo).toBeGreaterThanOrEqual(1);
+    expect(axis.hi - axis.lo).toBeGreaterThanOrEqual(0.3);
     const labels = axis.labeled.map((t) => t.label);
-    expect(labels).toContain('2×10⁻²');
-    expect(labels).toContain('5×10⁻³');
+    expect(labels).toEqual(expect.arrayContaining(['8×10⁻³', '9×10⁻³', '10⁻²']));
   });
 
   it('labels 2 and 5 multiples for a two-decade view so intermediate points can be read', () => {

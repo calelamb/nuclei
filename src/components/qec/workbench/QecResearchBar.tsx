@@ -1,5 +1,4 @@
 import { Select } from '../../ui/Select';
-import { Play } from 'lucide-react';
 import type { ReactElement } from 'react';
 import { useQecStudyStore } from '../../../services/qecStudyStore';
 import { useQecStudyUiStore } from '../../../stores/qecStudyUiStore';
@@ -55,21 +54,12 @@ function PresetSwitcher(): ReactElement {
   );
 }
 
-function DeferredRunAction(): ReactElement {
-  return (
-    <button type="button" className="qec-primary-action" aria-label="Run or capture (not connected)" title="Run and capture controls connect in a later workbench task" disabled>
-      <Play aria-hidden="true" size={16} fill="currentColor" />
-      Run / Capture
-    </button>
-  );
-}
-
 function ResearchContext(): ReactElement {
   return (
     <div className="qec-research-bar__context">
       <p className="qec-research-bar__metadata">
-        <span className="qec-mono">Revision —</span>
-        <span className="qec-mono">Data —</span>
+        <span>Revision —</span>
+        <span>Data —</span>
         <span className="qec-status qec-status--neutral">Provenance not evaluated</span>
       </p>
       <ResearchTrail />
@@ -83,7 +73,6 @@ export function QecResearchBar(): ReactElement {
       <div className="qec-research-bar__primary">
         <StudyPicker />
         <PresetSwitcher />
-        <DeferredRunAction />
       </div>
       <ResearchContext />
     </header>

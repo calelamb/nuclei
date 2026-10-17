@@ -34,6 +34,7 @@ import type { ThresholdSeries } from '../types/qecStats';
 import { assignExperiments } from './qecExperiments';
 import { roundsFromMetadata } from './qecRounds';
 import { lambdaQuality, tCritical95 } from './qecLambdaStats';
+import { lambdaCaveats } from './qecLambdaText';
 
 export { roundsFromMetadata };
 
@@ -496,6 +497,7 @@ export function qecFigureMetadata(
       decoder: e.decoder, experiment: e.label, p: e.noise, units: e.units,
       lambda: e.estimate.lambda.best, low: e.estimate.ci95.low, high: e.estimate.ci95.high, ci_level: 0.95,
       r_squared: e.estimate.rSquared, dof: e.estimate.dof, warnings: e.estimate.warnings,
+      caveats: lambdaCaveats(e),
       sinter_style_1sigma: { low: e.estimate.lambda.low, high: e.estimate.lambda.high },
       distances: e.estimate.distances, dropped_zero_error_distances: e.estimate.droppedZeroError,
     })),

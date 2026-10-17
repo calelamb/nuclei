@@ -49,7 +49,16 @@ assume. After loading, the **CSV column mapping** strip shows what it will plot:
 - **rounds**: the number of syndrome rounds, used for per-round rates.
 - **decoder**: the `decoder` column, or a metadata key.
 - **Series split by**: extra metadata keys (for example basis or noise model)
-  that separate tasks into their own series and their own Λ fits.
+  that separate tasks into their own series and their own Λ fits. Only keys
+  with at least two values are offered; keys that are the same in every row are
+  shown as read-only chips.
+- **Replicates**: seed-like keys (`s`, `seed`, `shard`, …) that pile several
+  tasks onto one point are summed into one task, as sinter pools replicates.
+  When tasks collide for another reason, the warning offers **Merge as
+  replicates** or **Split by** that key.
+
+After a file loads, the mapping collapses to one line (file, counts, what is
+mapped); **Edit mapping** opens the controls and the preview.
 
 Conventional key names (`p`, `d`, `r`/`rounds`, and so on) are pre-selected, but
 the selection is always shown and editable. If the choice for `p` is not a
@@ -64,7 +73,7 @@ count.
 
 ## Per shot or per round
 
-The toggle above the plot switches the y-axis units. Per round is the default whenever rounds are known; otherwise the plot falls back to per shot.
+The toggle above the plot switches the y-axis units, and the Decoder Workbench table follows it. Your choice is kept while you move between views. Per round is the default whenever rounds are known; otherwise the plot falls back to per shot.
 
 - **Per shot** is the raw rate: `errors / (shots - discards)`.
 - **Per round** converts each point with the equivalent of
@@ -99,7 +108,7 @@ uses. The fit is unweighted, so it ignores how many errors each point has.
 Series and experiments are never pooled: rows with different decoders, metadata
 or rounds schemes get separate fits.
 
-Warnings appear next to the Λ value. The `saturated`, `Λ ≤ 1`, `95% interval includes 1` and `r² < 0.5` warnings are also written into the SVG metadata; the collide and rounds-vary notes are shown in the app only, and the CSV export does not carry Λ:
+Λ is shown as a table per decoder: `p`, Λ, 95% interval and r². A warning triangle on a row lists its caveats on hover. Rows whose interval is not meaningful (saturated or above threshold) fold into one line under the table. The warnings are also written into the SVG metadata, and the SVG `<desc>` carries one line per Λ; the CSV export does not carry Λ:
 
 | Warning | What it means |
 | --- | --- |
@@ -113,15 +122,15 @@ Nuclei does not estimate or claim a threshold `p_th`.
 
 ## Exports
 
-- **SVG** carries its own data (colors are inlined; fonts are referenced by name, so a machine without
+- **SVG** is print-ready: a white page with dark text and the light-theme palette, whatever theme the app is in, and one short caption line (whisker convention and the Λ method). It carries its own data (colors are inlined; fonts are referenced by name, so a machine without
   Fira Code and Geist Sans falls back to its defaults) and embeds a `<metadata>` block with the units, rate estimator,
   interval method and factor, the Λ estimates with their warnings, and the source:
   file name, task count and a digest of the sorted `strong_id`s.
 - **CSV** (the plot's export) has one row per task with the rate, interval ends,
   units, `ci_method`, `max_likelihood_factor`, and the original `strong_id`,
   `json_metadata` and `custom_counts` as they were in your file (not the
-  re-mapped copies). It has no `seconds` column, so it can be audited but not
-  re-imported.
+  re-mapped copies). It has no `seconds` column; opening it again in Nuclei
+  re-imports it with `seconds` set to 0.
 - **Export stats.csv** writes the sinter-format file (`shots`, `errors`,
   `discards`, `seconds`, `decoder`, `strong_id`, `json_metadata`,
   `custom_counts`). That file can be dropped back onto the plot or fed to

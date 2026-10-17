@@ -20,6 +20,9 @@ export const MAX_CSV_ROWS = 200_000;
 const MAX_REPORTED_ISSUES = 25;
 /** Columns sinter requires; custom_counts is optional (older files). */
 const REQUIRED_COLUMNS = ['shots', 'errors', 'discards', 'seconds', 'decoder', 'strong_id', 'json_metadata'];
+/** Columns that identify Nuclei's own plot CSV export. It carries every sinter
+ * column except `seconds`, which re-imports as 0 (timing was not exported). */
+const NUCLEI_EXPORT_COLUMNS = ['experiment', 'distance', 'noise', 'kept_shots'];
 
 export interface CsvRowIssue {
   /** 1-based physical line the record starts on. */
@@ -34,6 +37,8 @@ export interface SinterCsvParse {
   fatal: string | null;
   /** Data records seen (before aggregation), for "N rows -> M tasks" display. */
   totalDataRows: number;
+  /** Data records that were rejected (invalid, or conflicting strong_id). */
+  rejectedRows: number;
 }
 
 interface CsvRecord { fields: string[]; line: number }
@@ -126,7 +131,7 @@ function rawRow(cells: string[], col: Map<string, number>): unknown {
     shots: parseInteger(cell('shots'), 'shots'),
     errors: parseInteger(cell('errors'), 'errors'),
     discards: parseInteger(cell('discards'), 'discards'),
-    seconds: parseSeconds(cell('seconds')),
+    seconds: col.has('seconds') ? parseSeconds(cell('seconds')) : 0,
     decoder: cell('decoder').trim(),
     strong_id: cell('strong_id').trim(),
     json_metadata: meta === '' ? {} : parseJson(meta, 'json_metadata'),
@@ -158,7 +163,8 @@ function addCounts(a: Record<string, number>, b: Record<string, number>): Record
   return Object.fromEntries(Object.entries(out));
 }
 
-function fold(prev: QecCampaignStatsRow, next: QecCampaignStatsRow): QecCampaignStatsRow {
+/** Sum two rows of the same task, as sinter does for a shared strong_id. */
+export function foldStatsRows(prev: QecCampaignStatsRow, next: QecCampaignStatsRow): QecCampaignStatsRow {
   return {
     ...prev,
     shots: prev.shots + next.shots,
@@ -172,14 +178,15 @@ function fold(prev: QecCampaignStatsRow, next: QecCampaignStatsRow): QecCampaign
 function headerProblem(header: string[]): { col: Map<string, number>; fatal: string | null } {
   const col = new Map<string, number>();
   header.forEach((name, i) => { if (!col.has(name)) col.set(name, i); });
-  const missing = REQUIRED_COLUMNS.filter((c) => !col.has(c));
+  const isNucleiExport = NUCLEI_EXPORT_COLUMNS.every((c) => col.has(c));
+  const missing = REQUIRED_COLUMNS.filter((c) => !col.has(c) && !(isNucleiExport && c === 'seconds'));
   const fatal = missing.length
     ? `Not a sinter stats CSV: missing column${missing.length > 1 ? 's' : ''} ${missing.join(', ')}. Found: ${header.slice(0, 12).join(', ') || '(none)'}.`
     : null;
   return { col, fatal };
 }
 
-const failed = (fatal: string): SinterCsvParse => ({ rows: [], issues: [], fatal, totalDataRows: 0 });
+const failed = (fatal: string): SinterCsvParse => ({ rows: [], issues: [], fatal, totalDataRows: 0, rejectedRows: 0 });
 
 /** Parse + aggregate a sinter stats CSV. Never throws. */
 export function parseSinterCsvDetailed(text: string): SinterCsvParse {
@@ -191,6 +198,7 @@ export function parseSinterCsvDetailed(text: string): SinterCsvParse {
   const { col, fatal } = headerProblem(records[0].fields.map((c) => c.trim()));
   if (fatal) return failed(fatal);
   const dataRecords = records.slice(1);
+  if (dataRecords.length === 0) return failed('The file has a header but no data rows.');
   if (dataRecords.length > MAX_CSV_ROWS) {
     return failed(`Too many rows (${dataRecords.length}; limit ${MAX_CSV_ROWS}).`);
   }
@@ -198,7 +206,9 @@ export function parseSinterCsvDetailed(text: string): SinterCsvParse {
   const byId = new Map<string, QecCampaignStatsRow>();
   const issues: CsvRowIssue[] = [];
   let suppressed = 0;
+  let rejected = 0;
   const report = (line: number, message: string): void => {
+    rejected += 1;
     if (issues.length < MAX_REPORTED_ISSUES) issues.push({ line, message });
     else suppressed += 1;
   };
@@ -217,13 +227,14 @@ export function parseSinterCsvDetailed(text: string): SinterCsvParse {
       if (!prev) byId.set(row.strong_id, row);
       else if (prev.decoder !== row.decoder || !jsonEqual(prev.json_metadata, row.json_metadata)) {
         report(rec.line, `same strong_id "${row.strong_id.slice(0, 12)}" as an earlier row but different decoder/json_metadata; row ignored`);
-      } else byId.set(row.strong_id, fold(prev, row));
+      } else byId.set(row.strong_id, foldStatsRows(prev, row));
     } catch (err) {
       report(rec.line, err instanceof Error ? err.message : 'unreadable row');
     }
   }
-  if (suppressed > 0) report(0, `…and ${suppressed} more problem rows not shown`);
-  return { rows: [...byId.values()], issues, fatal: null, totalDataRows: dataRecords.length };
+  const rejectedRows = rejected;
+  if (suppressed > 0) issues.push({ line: 0, message: `…and ${suppressed} more problem rows not shown` });
+  return { rows: [...byId.values()], issues, fatal: null, totalDataRows: dataRecords.length, rejectedRows };
 }
 
 function csvField(value: string): string {

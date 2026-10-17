@@ -3,7 +3,8 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { render, cleanup, fireEvent } from '@testing-library/react';
 import { QecAnalysisView } from './QecAnalysisView';
 import { useQecCampaignStore } from '../../stores/qecCampaignStore';
-import { likelihoodSeries } from '../../lib/qecFit';
+import { likelihoodSeries, rowRate } from '../../lib/qecFit';
+import { formatRateInterval } from '../../lib/qecPlotFormat';
 import { qecRatesToCsv } from '../../lib/qecExport';
 
 const downloadCsv = vi.fn();
@@ -35,10 +36,13 @@ describe('QecAnalysisView with a dropped CSV (every panel in one view)', () => {
     expect(text).not.toMatch(/errors\/shots, not/);
     expect(text).not.toMatch(/read lower here than in sinter/);
     expect(text).toMatch(/shots − discards/);
-    // workbench row for d=3: 1000 errors / 10000 kept shots = 10%
+    // workbench row for d=3: 1000 errors / 10000 kept shots, in the plot's units (per round, r = 3)
+    const { fit } = rowRate({ shots: 100000, errors: 1000, discards: 90000, json_metadata: { d: 3, p: 0.01, r: 3 } }, { units: 'per_round' });
+    const expected = formatRateInterval(fit.best, fit.low, fit.high);
     const rows = container.querySelectorAll('tbody tr');
-    expect([...rows].some((r) => r.textContent!.includes('10.0%'))).toBe(true);
-    expect(getAllByRole('button', { name: 'Export CSV' }).length).toBeGreaterThanOrEqual(1);
+    expect([...rows].some((r) => r.textContent!.includes(expected))).toBe(true);
+    expect(text).toMatch(/Logical error rate \(per round\)/);
+    expect(getAllByRole('button', { name: 'Export decoder table (CSV)' }).length).toBeGreaterThanOrEqual(1);
   });
 
   it('exported rates equal the plotted values', () => {
@@ -58,13 +62,14 @@ describe('QecAnalysisView with a dropped CSV (every panel in one view)', () => {
     expect(useQecCampaignStore.getState().csvImport!.mapping.groupBy).toEqual(['code']);
     const { container, queryByText } = render(<QecAnalysisView />);
     expect(queryByText(/splits? the tasks into blocks/)).toBeNull();
-    const lambdas = container.textContent!.match(/Λ = /g) ?? [];
-    expect(lambdas.length).toBeGreaterThanOrEqual(2);
+    const tables = container.querySelectorAll('[aria-label="Error suppression factor Λ"] table');
+    expect(tables.length).toBeGreaterThanOrEqual(2);
   });
 
   it('unticking the partition key shows a visible alert instead of silently pooling', () => {
     useQecCampaignStore.getState().loadFromCsv(disjointCsv, 'j.csv');
     const { getByLabelText, getByRole } = render(<QecAnalysisView />);
+    fireEvent.click(getByRole('button', { name: /Edit mapping/ }));
     fireEvent.click(getByLabelText('Group series by code'));
     expect(getByRole('alert').textContent).toMatch(/code.*splits the tasks into blocks/s);
   });

@@ -40,3 +40,39 @@ export function formatRatePrecise(x: number): string {
   const [mant, exp] = x.toExponential(2).split('e');
   return `${mant}×${formatPow10(Number(exp))}`;
 }
+
+/**
+ * Physical error rate p for text: three significant figures, never a raw
+ * float ("0.00035999999999999997" -> "3.6×10⁻⁴"). Values of 0.1 and above stay
+ * plain ("0.15"); everything smaller is m×10ⁿ so a column of p lines up.
+ */
+export function formatNoise(p: number): string {
+  if (!Number.isFinite(p)) return '—';
+  if (p === 0) return '0';
+  const abs = Math.abs(p);
+  if (abs >= 0.1 && abs < 1000) return String(Number(p.toPrecision(3)));
+  const [mant, exp] = p.toExponential(2).split('e');
+  return `${String(Number(mant))}×${formatPow10(Number(exp))}`;
+}
+
+const sig3 = (x: number): string => String(Number(x.toPrecision(3)));
+
+/**
+ * A rate with its interval on one shared power of ten:
+ * "9.55×10⁻³ [8.76, 10.4]×10⁻³". Rates of 0.1 and above stay plain, and a zero
+ * best estimate keeps only the interval's upper bound.
+ */
+export function formatRateInterval(best: number, lo: number, hi: number): string {
+  if (![best, lo, hi].every(Number.isFinite)) return '—';
+  if (best >= 0.1) return `${sig3(best)} [${sig3(lo)}, ${sig3(hi)}]`;
+  if (best === 0) return hi > 0 ? `0 [0, ${formatNoise(hi)}]` : '0';
+  const exp = Math.floor(Math.log10(best));
+  const m = (x: number): string => sig3(x / 10 ** exp);
+  const power = formatPow10(exp);
+  return `${m(best)}×${power} [${m(lo)}, ${m(hi)}]×${power}`;
+}
+
+/** One number convention for Λ on every surface: 3 significant figures, none after 100. */
+export function formatLambda(x: number): string {
+  return x >= 100 ? x.toFixed(0) : x.toPrecision(3);
+}

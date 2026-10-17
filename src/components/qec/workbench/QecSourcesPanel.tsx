@@ -166,7 +166,7 @@ function SourceInstruments({ preset }: { preset: QecWorkspacePreset }): ReactEle
       {panels.map((panel) => (
         <div className="qec-source-instrument" key={panel.id}>
           <span className="qec-source-instrument__mark" aria-hidden="true" />
-          <span>{panel.title}</span><span className="qec-mono">ready</span><QecPanelPinButton panel={panel} />
+          <span>{panel.title}</span><span className="qec-source-instrument__state">ready</span><QecPanelPinButton panel={panel} />
         </div>
       ))}
     </section>
@@ -190,7 +190,7 @@ function SourcesFooter({ count, issueCount, active }: { count: number; issueCoun
   const statusClass = issueCount > 0 ? 'qec-status qec-status--warning' : active
     ? 'qec-status qec-status--ready'
     : 'qec-status qec-status--neutral';
-  return <footer className="qec-sources__footer"><span>{count} referenced files</span><span className={statusClass}>{status}</span></footer>;
+  return <footer className="qec-sources__footer"><span>{count} referenced {count === 1 ? 'file' : 'files'}</span><span className={statusClass}>{status}</span></footer>;
 }
 
 function validationIssueCount(errors: readonly QecStudyValidationError[]): number {

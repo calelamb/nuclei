@@ -15,8 +15,8 @@ export interface LogAxis {
   minors: number[];
 }
 
-const DEFAULT_PAD = 0.1;
-const MIN_SPAN = 1;
+const DEFAULT_PAD = 0.05;
+const MIN_SPAN = 0.3;
 const MAX_LABELED_DECADES = 8;
 const EPS = 1e-9;
 const range = (a: number, b: number) => Array.from({ length: b - a + 1 }, (_, i) => a + i);
@@ -40,7 +40,7 @@ function thin<T>(items: T[], max: number): T[] {
 }
 
 /**
- * Log-axis domain and ticks for a set of positive values; with fewer than three decades in view the 2 and 5 multiples are labelled too. Non-positive and
+ * Log-axis domain and ticks for a set of positive values; with fewer than three decades in view the 2 and 5 multiples are labelled too, and under one decade every 2-9 multiple is. Non-positive and
  * non-finite values are ignored (they cannot be placed on a log axis).
  */
 export function logAxis(values: readonly number[], opts: { pad?: number } = {}): LogAxis | null {
@@ -50,6 +50,7 @@ export function logAxis(values: readonly number[], opts: { pad?: number } = {}):
   const decades = range(Math.ceil(lo - EPS), Math.floor(hi + EPS));
   const inside = (v: number) => Math.log10(v) >= lo - EPS && Math.log10(v) <= hi + EPS;
   const sparse = decades.length < 3;
+  const narrow = hi - lo < 1;
   const majorTicks: LogTick[] = thin(decades, MAX_LABELED_DECADES).map((e) => ({
     value: 10 ** e, label: formatPow10(e), major: true,
   }));
@@ -59,7 +60,7 @@ export function logAxis(values: readonly number[], opts: { pad?: number } = {}):
     for (let m = 2; m <= 9; m++) {
       const value = m * 10 ** e;
       if (!inside(value)) continue;
-      if (sparse && (m === 2 || m === 5)) extra.push({ value, label: formatMultiplierTick(m, e), major: false });
+      if (narrow || (sparse && (m === 2 || m === 5))) extra.push({ value, label: formatMultiplierTick(m, e), major: false });
       else minors.push(value);
     }
   }

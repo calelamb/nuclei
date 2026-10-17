@@ -45,7 +45,8 @@ describe('unmapped metadata keys no longer merge series silently', () => {
 
   it('warns visibly when the user removes the group-by and tasks collide', () => {
     useQecCampaignStore.getState().loadFromCsv(BASIS_CSV, 'b.csv');
-    const { getByLabelText, getAllByRole } = render(<CsvMappingPreview />);
+    const { getByLabelText, getAllByRole, getByRole } = render(<CsvMappingPreview />);
+    fireEvent.click(getByRole('button', { name: /Edit mapping/ }));
     fireEvent.click(getByLabelText('Group series by basis'));
     expect(useQecCampaignStore.getState().csvImport?.mapping.groupBy).toEqual([]);
     const alerts = getAllByRole('alert').map((a) => a.textContent).join(' | ');
@@ -116,6 +117,6 @@ describe('empty-state copy', () => {
     const csv = [HEADER, '100,1,0,1,m,a,"{""d"":3}",'].join('\n');
     useQecCampaignStore.getState().loadFromCsv(csv, 'n.csv');
     const { container } = render(<ThresholdPanel />);
-    expect(container.textContent).toMatch(/Nothing to plot yet.*choose a numeric column for p/);
+    expect(container.textContent).toMatch(/Nothing to plot yet.*physical error rate p/);
   });
 });

@@ -52,19 +52,44 @@ export function ancillaQubits(gates: Gate[]): Set<number> {
   return out;
 }
 
-/** Infer each ancilla qubit's stabilizer basis from its reset-measure gate
- * (MRX ⇒ X; MR/MRZ ⇒ Z; mixed ⇒ 'unknown'). */
-function inferBases(gates: Gate[]): Map<number, StabilizerBasis> {
-  const seen = new Map<number, StabilizerBasis>();
+const CNOT_TYPES = new Set(['CNOT', 'CX']);
+
+/** How each ancilla is used in CNOTs: as the control (X-type check) and/or the target (Z-type check). */
+function cnotRoles(gates: Gate[], ancillas: ReadonlySet<number>): Map<number, { control: boolean; target: boolean }> {
+  const roles = new Map<number, { control: boolean; target: boolean }>();
+  const note = (q: number, role: 'control' | 'target'): void => {
+    if (!ancillas.has(q)) return;
+    roles.set(q, { control: false, target: false, ...roles.get(q), [role]: true });
+  };
   for (const g of gates) {
-    if (!ANCILLA_TYPES.has(g.type)) continue;
-    const basis: StabilizerBasis = X_ANCILLA_TYPES.has(g.type) ? 'X' : 'Z';
-    for (const q of g.targets) {
-      const prev = seen.get(q);
-      seen.set(q, prev === undefined || prev === basis ? basis : 'unknown');
-    }
+    if (!CNOT_TYPES.has(g.type)) continue;
+    for (const c of g.controls ?? []) note(c, 'control');
+    for (const t of g.targets) note(t, 'target');
   }
-  return seen;
+  return roles;
+}
+
+/**
+ * Infer each ancilla qubit's stabilizer basis. An explicit MRX says X. Stim's
+ * generated codes use plain MR with H around X-type ancillas, so the CNOT role
+ * decides: an ancilla that only ever controls CNOTs measures an X stabilizer,
+ * one that only ever is a target measures Z, mixed use is 'unknown'. With no
+ * CNOT evidence a reset-measure defaults to Z.
+ */
+function inferBases(gates: Gate[]): Map<number, StabilizerBasis> {
+  const ancillas = ancillaQubits(gates);
+  const roles = cnotRoles(gates, ancillas);
+  const out = new Map<number, StabilizerBasis>();
+  for (const q of ancillas) {
+    const role = roles.get(q);
+    if (!role) { out.set(q, 'Z'); continue; }
+    out.set(q, role.control && role.target ? 'unknown' : role.control ? 'X' : 'Z');
+  }
+  for (const g of gates) {
+    if (!X_ANCILLA_TYPES.has(g.type)) continue;
+    for (const q of g.targets) out.set(q, 'X');
+  }
+  return out;
 }
 
 export interface LatticeLayout {
@@ -287,6 +312,26 @@ export function classifyTimelineGates(gates: Gate[]): TimelineGate[] {
       isObservable: g.type === 'OBSERVABLE',
     };
   });
+}
+
+const STIM_MNEMONICS: Readonly<Record<string, string>> = {
+  CNOT: 'CX', Measure: 'M', Reset: 'R', Hadamard: 'H', MEASURE: 'M', RESET: 'R',
+};
+
+/** The Stim mnemonic for a snapshot gate type (CNOT -> CX, Measure -> M, Reset -> R); unknown types stay as written, capped at 4 characters. */
+export function timelineLabel(type: string): string {
+  return STIM_MNEMONICS[type] ?? (type.length > 4 ? type.slice(0, 4) : type);
+}
+
+/** Qubits that carry at least one gate (noise included, detector/observable records excluded), ascending. */
+export function activeTimelineQubits(gates: Gate[]): number[] {
+  const used = new Set<number>();
+  for (const g of gates) {
+    if (g.type === 'DETECTOR' || g.type === 'OBSERVABLE') continue;
+    for (const q of g.targets) used.add(q);
+    for (const c of g.controls ?? []) used.add(c);
+  }
+  return [...used].sort((a, b) => a - b);
 }
 
 /** The DETECTOR/OBSERVABLE markers grouped by tick, for the bottom track. */

@@ -1,7 +1,8 @@
 import { create } from 'zustand';
 import type { QecCampaignStatsRow } from '../types/qec';
 import { parseSinterCsvDetailed, serializeSinterCsv, type CsvRowIssue } from '../types/sinterCsv';
-import { applyMapping, guessMapping, type SinterMapping } from '../types/sinterMapping';
+import type { RateUnits } from '../lib/qecFit';
+import { applyMapping, guessMapping, noNumericKeysProblem, type SinterMapping } from '../types/sinterMapping';
 
 /**
  * PRD 10 Phase E — live QEC campaign state for the analysis surfaces.
@@ -32,6 +33,8 @@ export interface CsvImport {
   issues: CsvRowIssue[];
   /** Data records in the file before duplicate strong_ids were folded. */
   totalDataRows: number;
+  /** Data records dropped as invalid (not merged). */
+  rejectedRows: number;
 }
 
 export interface CsvLoadResult {
@@ -55,12 +58,20 @@ interface QecCampaignState {
   csvImport: CsvImport | null;
   /** Last CSV load failure (shown in the UI); cleared by the next success. */
   csvError: string | null;
+  /** Units the person asked for; shared by the plot, Λ readout and decoder
+   * table, and kept while they navigate away. Falls back to per-shot where
+   * rounds are unknown (see useQecUnits). */
+  requestedUnits: RateUnits;
+  /** Name of the CSV being read/parsed right now, for "Reading…" feedback. */
+  csvLoading: string | null;
 
   /** Parse untrusted sinter CSV text, aggregate duplicate strong_ids, guess a
    * mapping, and plot it. On a whole-file failure existing data is kept. */
   loadFromCsv(text: string, sourceName: string): CsvLoadResult;
   setCsvMapping(mapping: SinterMapping): void;
   clearCsvError(): void;
+  setRequestedUnits(units: RateUnits): void;
+  setCsvLoading(name: string | null): void;
 
   startCampaign(name: string, tasksTotal: number): void;
   /** Merge changed-row events (keyed by strong_id) + progress counters. */
@@ -85,6 +96,8 @@ export const useQecCampaignStore = create<QecCampaignState>((set) => ({
   resumable: null,
   csvImport: null,
   csvError: null,
+  requestedUnits: 'per_round',
+  csvLoading: null,
 
   loadFromCsv: (text, sourceName) => {
     if (useQecCampaignStore.getState().running) {
@@ -97,10 +110,16 @@ export const useQecCampaignStore = create<QecCampaignState>((set) => ({
       set({ csvError: parsed.fatal });
       return { ok: false, fatal: parsed.fatal, issues: [] };
     }
+    const noKeys = noNumericKeysProblem(parsed.rows);
+    if (noKeys !== null) {
+      set({ csvError: noKeys });
+      return { ok: false, fatal: noKeys, issues: parsed.issues };
+    }
     const mapping = guessMapping(parsed.rows);
     set({
       csvImport: {
-        sourceName, rows: parsed.rows, mapping, issues: parsed.issues, totalDataRows: parsed.totalDataRows,
+        sourceName, rows: parsed.rows, mapping, issues: parsed.issues,
+        totalDataRows: parsed.totalDataRows, rejectedRows: parsed.rejectedRows,
       },
       csvError: null,
       statsCsv: serializeSinterCsv(parsed.rows),
@@ -123,6 +142,10 @@ export const useQecCampaignStore = create<QecCampaignState>((set) => ({
     ),
 
   clearCsvError: () => set({ csvError: null }),
+
+  setRequestedUnits: (requestedUnits) => set({ requestedUnits }),
+
+  setCsvLoading: (csvLoading) => set({ csvLoading }),
 
   startCampaign: (campaignName, tasksTotal) =>
     set({
@@ -157,7 +180,7 @@ export const useQecCampaignStore = create<QecCampaignState>((set) => ({
   reset: () =>
     set({
       statsCsv: null, rowsByStrongId: {}, running: false, progress: null, campaignName: null,
-      resumable: null, csvImport: null, csvError: null,
+      resumable: null, csvImport: null, csvError: null, requestedUnits: 'per_round', csvLoading: null,
     }),
 }));
 

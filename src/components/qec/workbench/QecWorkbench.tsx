@@ -11,6 +11,7 @@ import { QecResearchInspector } from './QecResearchInspector';
 import { QecSourcesPanel } from './QecSourcesPanel';
 import { QecWorkbenchTray } from './QecWorkbenchTray';
 import { QecWorkbenchResizeHandle } from './QecWorkbenchResizeHandle';
+import { useQecTrayIdle } from './useQecTrayIdle';
 
 type WorkbenchStyle = CSSProperties & Record<
   '--qec-source-width' | '--qec-inspector-width' | '--qec-tray-height',
@@ -31,22 +32,25 @@ function useQecWorkbenchPersistence(): void {
   }, [platform, projectRoot, studyId, studyPreset]);
 }
 
+/** Below this width the inspector is an overlay drawer, so it starts closed. */
+const DRAWER_QUERY = '(max-width: 1179px)';
+
+function startsOpen(): boolean {
+  try {
+    return !(typeof window.matchMedia === 'function' && window.matchMedia(DRAWER_QUERY).matches);
+  } catch {
+    return true;
+  }
+}
+
 function useInspectorDrawer() {
-  const [open, setOpen] = useState(true);
+  const [open, setOpen] = useState(startsOpen);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const close = useCallback(() => {
     setOpen(false);
     triggerRef.current?.focus();
   }, []);
   const toggle = useCallback(() => open ? close() : setOpen(true), [close, open]);
-  useEffect(() => {
-    if (!open) return undefined;
-    const onKeyDown = (event: KeyboardEvent): void => {
-      if (event.key === 'Escape') close();
-    };
-    window.addEventListener('keydown', onKeyDown);
-    return () => window.removeEventListener('keydown', onKeyDown);
-  }, [close, open]);
   return { close, open, toggle, triggerRef };
 }
 
@@ -62,13 +66,14 @@ export function QecWorkbench(): ReactElement {
   const setTrayHeight = useQecWorkbenchStore((state) => state.setTrayHeight);
   const persistenceIssue = useQecWorkbenchStore((state) => state.persistenceIssue);
   const drawer = useInspectorDrawer();
+  const trayIdle = useQecTrayIdle() && !trayCollapsed;
   const style: WorkbenchStyle = {
     '--qec-source-width': `${sourceWidth}px`,
     '--qec-inspector-width': `${inspectorWidth}px`,
     '--qec-tray-height': `${trayHeight}px`,
   };
   return (
-    <section className={`qec-workbench qec-workbench--${preset} qec-workbench--inspector-${drawer.open ? 'open' : 'closed'} qec-workbench--tray-${trayCollapsed ? 'collapsed' : 'open'}`} aria-label="QEC Workbench" style={style}>
+    <section className={`qec-workbench qec-workbench--${preset} qec-workbench--inspector-${drawer.open ? 'open' : 'closed'} qec-workbench--tray-${trayCollapsed ? 'collapsed' : 'open'}${trayIdle ? ' qec-workbench--tray-idle' : ''}`} aria-label="QEC Workbench" style={style}>
       <div className="qec-workbench__header">
         <QecResearchBar />
         {persistenceIssue && (
@@ -108,7 +113,7 @@ export function QecWorkbench(): ReactElement {
         />}
         <QecResearchInspector open={drawer.open} onClose={drawer.close} />
       </div>
-      {!trayCollapsed && <QecWorkbenchResizeHandle
+      {!trayCollapsed && !trayIdle && <QecWorkbenchResizeHandle
         label="Resize jobs tray"
         orientation="horizontal"
         value={trayHeight}

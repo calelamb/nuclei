@@ -1,6 +1,5 @@
 import type { LambdaEstimate, LambdaGroupEstimate } from './qecFit';
-
-const fmt = (x: number) => (x >= 100 ? x.toFixed(0) : x.toPrecision(3));
+import { formatLambda as fmt } from './qecPlotFormat';
 
 /** One text convention for Λ on every surface (panel, SVG, AI context). */
 export function lambdaSummary(e: LambdaEstimate): { text: string; warnings: string[] } {

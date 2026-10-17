@@ -1,6 +1,6 @@
 import type { Rate, ThresholdSeries } from '../types/qecStats';
 import type { RateUnits } from './qecFit';
-import { formatRatePrecise, formatSci } from './qecPlotFormat';
+import { formatNoise, formatRatePrecise, formatSci } from './qecPlotFormat';
 
 export type SeriesPoint = ThresholdSeries['points'][number];
 export type PointKind = 'normal' | 'upper' | 'skip-noise' | 'skip-rate';
@@ -79,7 +79,6 @@ export function nearestPoint<T extends HitTarget>(targets: readonly T[], px: num
   return best;
 }
 
-const formatNoise = (x: number) => (x >= 0.001 ? String(Number(x.toPrecision(4))) : formatSci(x));
 const intl = (n: number) => n.toLocaleString('en-US');
 
 export function tooltipLines(

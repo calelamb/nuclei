@@ -146,7 +146,9 @@ function TabbedPanels({ panels, rememberedTab, onSelect }: {
         aria-label="Visualization panels"
         style={{
           display: 'flex', alignItems: 'stretch', height: 28, flexShrink: 0,
-          borderBottom: `1px solid ${colors.border}`, background: colors.bg, overflow: 'hidden',
+          borderBottom: `1px solid ${colors.border}`, background: colors.bg,
+          // A narrow rail scrolls the tabs sideways instead of clipping the last one.
+          overflowX: 'auto', overflowY: 'hidden', scrollbarWidth: 'none',
         }}
       >
         {panels.map((p) => {
@@ -167,7 +169,7 @@ function TabbedPanels({ panels, rememberedTab, onSelect }: {
                 borderBottom: isActive ? `2px solid ${colors.accent}` : '2px solid transparent',
                 cursor: 'pointer',
                 fontSize: 11, fontFamily: TYPOGRAPHY.fontSans, fontWeight: 500,
-                whiteSpace: 'nowrap',
+                whiteSpace: 'nowrap', flex: '0 0 auto',
               }}
             >
               <Icon size={12} />

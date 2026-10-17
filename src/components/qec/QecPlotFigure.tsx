@@ -1,4 +1,5 @@
-import { useMemo, type MouseEvent } from 'react';
+import { useMemo, useState, type KeyboardEvent, type MouseEvent } from 'react';
+import { nextTargetIndex } from '../../lib/qecPlotKeyboard';
 import type { ThemeColors } from '../../stores/themeStore';
 import { whiskerLow, type PlotModel } from '../../lib/qecPlotModel';
 import type { SeriesPoint } from '../../lib/qecPlotPoints';
@@ -10,6 +11,9 @@ import {
 } from '../../lib/qecPlotLayout';
 import type { LegendGroup } from '../../lib/qecPlotStyle';
 import { Marker, UpperLimitMarker } from './QecPlotMarks';
+
+/** The few theme colours the figure paints with; the export swaps in a fixed print set. */
+export type FigureColors = Pick<ThemeColors, 'bg' | 'text' | 'textMuted' | 'textDim'>;
 
 export const FIGURE_FONT = "'Geist Sans', 'Helvetica Neue', Arial, sans-serif";
 const HIT_RADIUS = 12;
@@ -26,7 +30,7 @@ export interface HoverTarget {
 
 export interface QecPlotFigureProps {
   model: PlotModel;
-  colors: ThemeColors;
+  colors: FigureColors;
   width: number;
   /** Total height (live panel). Exactly one of height / plotHeight is used; plotHeight wins. */
   height?: number;
@@ -65,6 +69,24 @@ export function QecPlotFigure(props: QecPlotFigureProps) {
   const { plot } = layout;
   const clipId = `${idPrefix}-clip`;
 
+  const [focusIdx, setFocusIdx] = useState<number | null>(null);
+  const [focused, setFocused] = useState(false);
+  const toHover = (h: Hit): HoverTarget => ({ seriesKey: h.seriesKey, point: h.point, upper: h.upper, x: h.x, y: h.y });
+  const onKey = (e: KeyboardEvent<SVGRectElement>) => {
+    if (!onHover) return;
+    if (e.key === 'Escape') { onHover(null); return; }
+    const next = nextTargetIndex(targets, focusIdx, e.key);
+    if (next === null || !e.key.startsWith('Arrow') && e.key !== 'Home' && e.key !== 'End') return;
+    e.preventDefault();
+    setFocusIdx(next);
+    onHover(toHover(targets[next]));
+  };
+  const onFocus = () => {
+    setFocused(true);
+    const first = nextTargetIndex(targets, focusIdx, 'ArrowRight');
+    if (first !== null && onHover) { setFocusIdx(first); onHover(toHover(targets[first])); }
+  };
+
   const onMove = (e: MouseEvent<SVGRectElement>) => {
     if (!onHover) return;
     const box = e.currentTarget.getBoundingClientRect();
@@ -99,6 +121,10 @@ export function QecPlotFigure(props: QecPlotFigureProps) {
       {onHover && (
         <rect
           x={plot.x} y={plot.y} width={plot.w} height={plot.h} fill="transparent"
+          tabIndex={0} role="group"
+          aria-label="Plot points. Use the arrow keys to move between points, Escape to clear."
+          stroke={focused ? colors.textMuted : 'none'} strokeDasharray="4 3" strokeWidth={1}
+          onKeyDown={onKey} onFocus={onFocus} onBlur={() => { setFocused(false); onHover(null); }}
           onMouseMove={onMove} onMouseLeave={() => onHover(null)} style={{ cursor: 'crosshair' }}
         />
       )}
@@ -118,7 +144,7 @@ function hitTargets(model: PlotModel, { sx, sy }: Scales): Hit[] {
   })));
 }
 
-interface AxesProps { model: PlotModel; layout: FigureLayout; scales: Scales; colors: ThemeColors }
+interface AxesProps { model: PlotModel; layout: FigureLayout; scales: Scales; colors: FigureColors }
 
 function Axes({ model, layout, scales, colors }: AxesProps) {
   const { plot } = layout;
@@ -157,7 +183,7 @@ function Axes({ model, layout, scales, colors }: AxesProps) {
   );
 }
 
-function SeriesLayer({ model, scales, colors }: { model: PlotModel; scales: Scales; colors: ThemeColors }) {
+function SeriesLayer({ model, scales, colors }: { model: PlotModel; scales: Scales; colors: FigureColors }) {
   const { sx, sy } = scales;
   return (
     <g>
@@ -195,7 +221,7 @@ function SeriesLayer({ model, scales, colors }: { model: PlotModel; scales: Scal
   );
 }
 
-function Legend({ groups, layout, colors }: { groups: LegendGroup[]; layout: FigureLayout; colors: ThemeColors }) {
+function Legend({ groups, layout, colors }: { groups: LegendGroup[]; layout: FigureLayout; colors: FigureColors }) {
   if (layout.legend.items.length === 0) return null;
   return (
     <g data-testid="qec-svg-legend" transform={`translate(${FIGURE_PAD} ${layout.legendY})`} fontSize={FONT.legend}>

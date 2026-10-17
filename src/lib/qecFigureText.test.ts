@@ -11,7 +11,7 @@ const group = (over: Partial<LambdaGroupEstimate> = {}): LambdaGroupEstimate => 
 describe('lambdaLine', () => {
   it('states decoder, experiment, p, interval, distances and units', () => {
     const line = lambdaLine(group());
-    expect(line).toMatch(/^mwpm exp p=0.001: Λ = .* to .*, d 3,5,7, per round$/);
+    expect(line).toMatch(/^mwpm exp p=1×10⁻³: Λ = .* to .*, d 3,5,7, per round$/);
   });
   it('includes colliding-distance and rounds-vary caveats', () => {
     const line = lambdaLine(group({ units: 'per_shot', collidingDistances: [5], roundsVaryWithD: true }));
@@ -25,7 +25,8 @@ describe('figureFooterLines', () => {
     expect(figureFooterLines([])).toHaveLength(1);
     expect(figureFooterLines([])[0]).toMatch(/Whiskers: sinter likelihood ratio/);
     const withLambda = figureFooterLines([group()]);
-    expect(withLambda).toHaveLength(3);
-    expect(withLambda[1]).toMatch(/^Λ interval:/);
+    expect(withLambda).toHaveLength(1);
+    expect(withLambda[0]).toMatch(/Λ interval: 95% Student-t/);
+    expect(figureFooterLines([group()], { includeLambdaLines: true })).toHaveLength(2);
   });
 });

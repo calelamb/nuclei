@@ -104,7 +104,7 @@ describe('Λ readout caveats', () => {
     ]);
     const { container } = render(<ThresholdPanel />);
     expect(container.querySelector('[aria-label="Error suppression factor Λ"]')!.textContent)
-      .toMatch(/Warning: distinct tasks collide at d 7, fitted as replicates/);
+      .toMatch(/distinct tasks collide at d 7, fitted as replicates/);
   });
 
   it('warns when rounds vary with distance in the per-shot view only', () => {
@@ -113,7 +113,7 @@ describe('Λ readout caveats', () => {
     const readout = () => container.querySelector('[aria-label="Error suppression factor Λ"]')!.textContent!;
     expect(readout()).not.toMatch(/rounds vary with d/);
     fireEvent.click(getByRole('button', { name: 'Per shot' }));
-    expect(readout()).toMatch(/Warning: rounds vary with d, confounding this per-shot Λ/);
+    expect(readout()).toMatch(/rounds vary with d, confounding this per-shot Λ/);
   });
 
   it('still shows the fit-quality warnings', () => {
@@ -145,9 +145,24 @@ describe('point tooltip', () => {
   });
 });
 
+describe('keyboard access to points (qec-18)', () => {
+  it('focuses the plot, shows a point, and arrow keys move to the next', () => {
+    load(grid(['mwpm']));
+    const { getByRole, queryByRole } = render(<ThresholdPanel />);
+    const plot = getByRole('group', { name: /Plot points/ });
+    expect(plot.getAttribute('tabindex')).toBe('0');
+    fireEvent.focus(plot);
+    const first = getByRole('tooltip').textContent;
+    fireEvent.keyDown(plot, { key: 'ArrowRight' });
+    expect(getByRole('tooltip').textContent).not.toBe(first);
+    fireEvent.keyDown(plot, { key: 'Escape' });
+    expect(queryByRole('tooltip')).toBeNull();
+  });
+});
+
 describe('exported figure', () => {
   const exportOf = (c: ReturnType<typeof render>) => {
-    fireEvent.click(c.getByRole('button', { name: 'Export SVG' }));
+    fireEvent.click(c.getByRole('button', { name: 'Export plot as SVG' }));
     return downloadSvg.mock.calls.at(-1)![0] as SVGSVGElement;
   };
 
@@ -170,6 +185,6 @@ describe('exported figure', () => {
     const svg = exportOf(render(<ThresholdPanel />));
     expect(svg.textContent).toContain('1 point not drawn: p = 0 on a log axis');
     expect(svg.textContent).toMatch(/Whiskers: sinter likelihood ratio/);
-    expect(svg.textContent).toMatch(/Λ = /);
+    expect(svg.querySelector('desc')!.textContent).toMatch(/Λ = /);
   });
 });

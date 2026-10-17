@@ -38,14 +38,14 @@ describe('DecoderWorkbench', () => {
     // 2 decoders x 2 distances x 2 noise = 8 points, none pooled.
     expect(container.querySelectorAll('tbody tr').length).toBe(8);
     expect(getByText(/likelihood-ratio/)).toBeTruthy();
-    fireEvent.click(getByRole('button', { name: 'Export CSV' }));
+    fireEvent.click(getByRole('button', { name: 'Export decoder table (CSV)' }));
     expect(downloadCsv).toHaveBeenCalledTimes(1);
     const csv = downloadCsv.mock.calls[0][0] as string;
     expect(csv).toContain('decoder,experiment,distance,noise,shots,discards,kept_shots,errors,logical_error_rate');
     expect(csv.trim().split('\n')).toHaveLength(9);
   });
 
-  it('rates are errors / (shots - discards): 10 errors in 1000 shots with 900 discarded is 10%', () => {
+  it('rates are errors / (shots - discards): 10 errors in 1000 shots with 900 discarded is 0.1', () => {
     useQecCampaignStore.setState({
       rowsByStrongId: {
         a: { shots: 1000, errors: 10, discards: 900, seconds: 1, decoder: 'pymatching', strong_id: 'a',
@@ -53,7 +53,7 @@ describe('DecoderWorkbench', () => {
       },
     });
     const { container, getByText } = render(<DecoderWorkbench />);
-    expect(container.querySelector('tbody')!.textContent).toContain('10.0%');
+    expect(container.querySelector('tbody')!.textContent).toContain('0.1 [0.0242, 0.246]');
     expect(getByText('900')).toBeTruthy();
   });
 
@@ -94,8 +94,9 @@ describe('ThresholdPanel', () => {
     const map: Record<string, (typeof rows)[number]> = {};
     for (const r of rows) map[r.strong_id] = r;
     useQecCampaignStore.setState({ rowsByStrongId: map, statsCsv: syntheticCsv, running: false });
-    const { getAllByText, getByText, getByRole } = render(<ThresholdPanel />);
-    expect(getAllByText(/Λ = .* to /).length).toBeGreaterThan(0);
+    const { getAllByText, getByText, getByRole, container } = render(<ThresholdPanel />);
+    expect(getAllByText('95% CI').length).toBeGreaterThan(0);
+    expect(container.querySelector('[aria-label="Error suppression factor Λ"]')!.textContent).toMatch(/\d\.\d+–\d/);
     // Rounds are known, so the default is the per-cycle definition of Λ.
     expect(getByText('logical error per round')).toBeTruthy();
     expect(getByRole('button', { name: 'Per round' }).getAttribute('aria-pressed')).toBe('true');
@@ -110,8 +111,8 @@ describe('ThresholdPanel', () => {
     useQecCampaignStore.setState({ rowsByStrongId: map, statsCsv: syntheticCsv, running: false });
     const { getByRole } = render(<ThresholdPanel />);
     const svgText = () => {
-      fireEvent.click(getByRole('button', { name: 'Export SVG' }));
-      return (downloadSvg.mock.calls.at(-1)![0] as SVGSVGElement).textContent!;
+      fireEvent.click(getByRole('button', { name: 'Export plot as SVG' }));
+      return (downloadSvg.mock.calls.at(-1)![0] as SVGSVGElement).querySelector('desc')!.textContent!;
     };
     expect(svgText()).toMatch(/Λ = [^,]*,[^Λ]*per round/);
     expect(svgText()).not.toMatch(/rounds vary with d/);
@@ -139,9 +140,9 @@ describe('ThresholdPanel', () => {
     expect(meta.lambda_estimates).toHaveLength(6);
     expect(meta.lambda_estimates.map((e: { experiment: string }) => e.experiment)).toContain('synth r=3d');
     expect(container.querySelectorAll('svg text').length).toBeGreaterThan(6);
-    fireEvent.click(getByRole('button', { name: 'Export SVG' }));
-    expect((downloadSvg.mock.calls.at(-1)![0] as SVGSVGElement).textContent).toMatch(/Λ = .* synth r=d|synth r=d.*Λ = /);
-    expect(container.textContent).toMatch(/synth r=3d: Λ = /);
+    fireEvent.click(getByRole('button', { name: 'Export plot as SVG' }));
+    expect((downloadSvg.mock.calls.at(-1)![0] as SVGSVGElement).querySelector('desc')!.textContent).toMatch(/Λ = .* synth r=d|synth r=d.*Λ = /);
+    expect(container.textContent).toMatch(/synth rounds = 3d/);
   });
 
   it('does not crash on malformed rows and says they were skipped', () => {
@@ -157,8 +158,8 @@ describe('ThresholdPanel', () => {
   it('exports SVG and CSV', () => {
     loadCampaign();
     const { getByRole } = render(<ThresholdPanel />);
-    fireEvent.click(getByRole('button', { name: 'Export SVG' }));
-    fireEvent.click(getByRole('button', { name: 'Export CSV' }));
+    fireEvent.click(getByRole('button', { name: 'Export plot as SVG' }));
+    fireEvent.click(getByRole('button', { name: 'Export plot data (CSV)' }));
     expect(downloadSvg).toHaveBeenCalledTimes(1);
     expect(downloadCsv).toHaveBeenCalledTimes(1);
     expect(downloadSvg.mock.calls[0][1]).toBe('logical-error-vs-p.svg');
@@ -170,7 +171,7 @@ describe('ThresholdPanel', () => {
   it('exports a self-contained SVG: legend, background, fixed size, no viewport scaling', () => {
     loadCampaign();
     const { getByRole } = render(<ThresholdPanel />);
-    fireEvent.click(getByRole('button', { name: 'Export SVG' }));
+    fireEvent.click(getByRole('button', { name: 'Export plot as SVG' }));
     const exported = downloadSvg.mock.calls[0][0] as SVGSVGElement;
     expect(exported.getAttribute('width')).toMatch(/^\d+$/);
     expect(exported.getAttribute('height')).toMatch(/^\d+$/);

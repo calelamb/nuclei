@@ -55,6 +55,15 @@ describe('layoutLegend', () => {
       expect(first.y).toBe(h.y);
     }
   });
+  it('moves a whole group to the next row rather than orphaning its last entry (qec-09)', () => {
+    const decoders = { kind: 'decoder' as const, title: 'Decoder', entries: ['fusion_blossom', 'pymatching'].map((label) => ({ id: label, label, color: '#000', shape: 'circle' as const })) };
+    const distances = group(4);
+    const one = layoutLegend([distances], 2000);
+    const width = one.maxItemRight + 150;
+    const l = layoutLegend([distances, decoders], width);
+    const ys = l.items.filter((i) => i.group === 1).map((i) => i.y);
+    expect(new Set(ys).size).toBe(1);
+  });
   it('is empty for no groups', () => {
     expect(layoutLegend([], 500)).toMatchObject({ items: [], rows: 0, height: 0 });
   });

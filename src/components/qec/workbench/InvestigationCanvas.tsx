@@ -1,15 +1,34 @@
-import { Activity, ChartSpline, Clock3, Grid3x3, Link2, PanelRight, Share2 } from 'lucide-react';
+import { Activity, ChartSpline, Clock3, Grid3x3, Link2, PanelRightClose, PanelRightOpen, Share2 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
-import type { ReactElement, RefObject } from 'react';
+import type { CSSProperties, ReactElement, ReactNode, RefObject } from 'react';
 import { resolveQecPanels, type QecWorkbenchPanelDef, type QecWorkbenchPanelId } from '../../../layout/qecPanelRegistry';
+import { useQecStore } from '../../../stores/qecStore';
 import { useQecWorkbenchStore } from '../../../stores/qecWorkbenchStore';
+import { ICON_SIZE, ICON_STROKE } from '../../../styles/tokens';
+import { IconButton } from '../../ui';
+import { CodeLatticePanel } from '../CodeLatticePanel';
+import { DetectorGraphPanel } from '../DetectorGraphPanel';
+import { QecAnalysisView } from '../QecAnalysisView';
+import { QecTimelinePanel } from '../QecTimelinePanel';
 import { QEC_RESEARCH_INSPECTOR_ID } from './QecResearchInspector';
 import { QecPanelPinButton } from './QecPanelPinButton';
+import { orderCanvasPanels } from './orderCanvasPanels';
 
 const PANEL_ICONS: Partial<Readonly<Record<QecWorkbenchPanelId, LucideIcon>>> = {
   timeline: Clock3, lattice: Grid3x3, 'detector-graph': Share2,
   'campaign-center': ChartSpline, 'stream-health': Activity, 'calibration-timeline': Clock3,
 };
+
+/** What an instrument needs before it can show anything, in plain words. */
+const EMPTY_COPY: Partial<Readonly<Record<QecWorkbenchPanelId, { title: string; body: string }>>> = {
+  timeline: { title: 'No circuit open', body: 'Open a .stim circuit from the Sources list to see its operations over time.' },
+  lattice: { title: 'No circuit open', body: 'Open a .stim circuit with qubit coordinates to see the code lattice.' },
+  'detector-graph': { title: 'No circuit open', body: 'Open a .stim circuit to see its detector graph and sample decoded shots.' },
+  'stream-health': { title: 'No live stream', body: 'Stream health appears here once a live source is connected.' },
+  'calibration-timeline': { title: 'No calibration data', body: 'Calibration history appears here once a source with calibration records is imported.' },
+};
+
+const DEFAULT_EMPTY = { title: 'Nothing to show yet', body: 'Open a compatible source to populate this instrument.' };
 
 interface InvestigationCanvasProps {
   inspectorOpen: boolean;
@@ -19,6 +38,7 @@ interface InvestigationCanvasProps {
 
 function CanvasHeader({ inspectorOpen, onToggleInspector, toggleRef }: InvestigationCanvasProps): ReactElement {
   const preset = useQecWorkbenchStore((state) => state.preset);
+  const label = `${inspectorOpen ? 'Hide' : 'Show'} research inspector`;
   return (
     <header className="qec-investigation__header">
       <div>
@@ -27,42 +47,72 @@ function CanvasHeader({ inspectorOpen, onToggleInspector, toggleRef }: Investiga
       </div>
       <div className="qec-investigation__actions">
         <div className="qec-instrument-state" aria-label="Instrument state">
-          <Link2 aria-hidden="true" size={14} /><span>Selections linked</span>
+          <Link2 aria-hidden="true" size={ICON_SIZE.sm} /><span>Selections linked</span>
         </div>
-        <button
+        <IconButton
           ref={toggleRef}
-          type="button"
-          className="qec-inspector-toggle"
+          variant="secondary"
+          aria-label={label}
+          title={label}
           aria-controls={QEC_RESEARCH_INSPECTOR_ID}
           aria-expanded={inspectorOpen}
           onClick={onToggleInspector}
         >
-          <PanelRight aria-hidden="true" size={16} />
-          {inspectorOpen ? 'Hide' : 'Show'} research inspector
-        </button>
+          {inspectorOpen
+            ? <PanelRightClose aria-hidden="true" size={ICON_SIZE.md} strokeWidth={ICON_STROKE} />
+            : <PanelRightOpen aria-hidden="true" size={ICON_SIZE.md} strokeWidth={ICON_STROKE} />}
+        </IconButton>
       </div>
     </header>
   );
 }
 
-function CanvasInstrument({ panel, primary }: { panel: QecWorkbenchPanelDef; primary: boolean }): ReactElement {
+/** A neutral dotted field with a sentence: no axes or traces that could pass for data. */
+function EmptyInstrument({ panelId }: { panelId: QecWorkbenchPanelId }): ReactElement {
+  const copy = EMPTY_COPY[panelId] ?? DEFAULT_EMPTY;
+  const Icon = PANEL_ICONS[panelId] ?? Activity;
+  return (
+    <div className="qec-instrument__empty">
+      <Icon aria-hidden="true" size={ICON_SIZE.lg} strokeWidth={ICON_STROKE} />
+      <strong>{copy.title}</strong>
+      <span>{copy.body}</span>
+    </div>
+  );
+}
+
+function CircuitInstrument({ panelId }: { panelId: QecWorkbenchPanelId }): ReactElement {
+  const hasCircuit = useQecStore((state) => state.snapshot !== null);
+  if (!hasCircuit) return <EmptyInstrument panelId={panelId} />;
+  if (panelId === 'timeline') return <QecTimelinePanel />;
+  if (panelId === 'lattice') return <CodeLatticePanel />;
+  return <DetectorGraphPanel />;
+}
+
+function instrumentBody(panelId: QecWorkbenchPanelId): ReactNode {
+  switch (panelId) {
+    case 'campaign-center': return <QecAnalysisView embedded />;
+    case 'timeline':
+    case 'lattice':
+    case 'detector-graph': return <CircuitInstrument panelId={panelId} />;
+    default: return <EmptyInstrument panelId={panelId} />;
+  }
+}
+
+function CanvasInstrument({ panel, primary, rowSpan }: { panel: QecWorkbenchPanelDef; primary: boolean; rowSpan: number }): ReactElement {
   const Icon = PANEL_ICONS[panel.id] ?? Activity;
+  const style: CSSProperties | undefined = primary ? { gridRow: `span ${rowSpan}` } : undefined;
   return (
     <section
       className={`qec-instrument qec-instrument--${primary ? 'primary' : 'secondary'}`}
       aria-labelledby={`${panel.id}-instrument-heading`}
+      style={style}
     >
       <header>
-        <span className="qec-instrument__icon"><Icon aria-hidden="true" size={16} /></span>
-        <div><h2 id={`${panel.id}-instrument-heading`}>{panel.title}</h2><span className="qec-mono" title="Linked · awaiting session data">Linked · awaiting session data</span></div>
+        <span className="qec-instrument__icon"><Icon aria-hidden="true" size={ICON_SIZE.md} /></span>
+        <div><h2 id={`${panel.id}-instrument-heading`}>{panel.title}</h2></div>
         <QecPanelPinButton panel={panel} />
       </header>
-      <div className="qec-instrument__field" aria-hidden="true">
-        <span className="qec-instrument__axis qec-instrument__axis--horizontal" />
-        <span className="qec-instrument__axis qec-instrument__axis--vertical" />
-        <span className="qec-instrument__trace" />
-      </div>
-      <p>Open or run a compatible source to populate this registered instrument.</p>
+      <div className="qec-instrument__body">{instrumentBody(panel.id)}</div>
     </section>
   );
 }
@@ -70,15 +120,13 @@ function CanvasInstrument({ panel, primary }: { panel: QecWorkbenchPanelDef; pri
 export function InvestigationCanvas(props: InvestigationCanvasProps): ReactElement {
   const preset = useQecWorkbenchStore((state) => state.preset);
   const pinnedPanelIds = useQecWorkbenchStore((state) => state.pinnedPanelIds);
-  const panels = resolveQecPanels(preset, 'canvas', pinnedPanelIds);
+  const panels = orderCanvasPanels(preset, resolveQecPanels(preset, 'canvas', pinnedPanelIds));
+  const rows = Math.max(1, panels.length - 1);
   return (
     <main className="qec-investigation" aria-label="QEC investigation canvas">
       <CanvasHeader {...props} />
-      <div className="qec-instrument-strip" aria-label="Canvas instruments">
-        <span>Split view</span><span>Compare</span><span>Time / round</span><span>Checkpoint</span>
-      </div>
-      <div className="qec-investigation__panels">
-        {panels.map((panel, index) => <CanvasInstrument key={panel.id} panel={panel} primary={index === 0} />)}
+      <div className="qec-investigation__panels" style={{ gridTemplateRows: `repeat(${rows}, minmax(150px, 1fr))` }}>
+        {panels.map((panel, index) => <CanvasInstrument key={panel.id} panel={panel} primary={index === 0} rowSpan={rows} />)}
       </div>
     </main>
   );

@@ -1,6 +1,8 @@
+import { TriangleAlert } from 'lucide-react';
 import { MIN_LAMBDA_DISTANCES, type LambdaGroupEstimate, type RateUnits } from '../../lib/qecFit';
-import { lambdaCaveats, lambdaSummary } from '../../lib/qecLambdaText';
+import { buildLambdaTable, type LambdaRowView } from '../../lib/qecLambdaTable';
 import type { ThemeColors } from '../../stores/themeStore';
+import { ICON_STROKE, TYPOGRAPHY } from '../../styles/tokens';
 
 interface Props {
   decoders: string[];
@@ -9,45 +11,89 @@ interface Props {
   colors: ThemeColors;
 }
 
+const CELL = { padding: '3px 6px', fontVariantNumeric: 'tabular-nums' as const };
+
 /**
- * Λ per decoder and experiment, with the same caveats Dirac and the exported
- * figure carry: fit-quality warnings, tasks that collide at a distance, and
- * rounds that vary with distance.
+ * Λ per decoder as a table: p, Λ, 95% interval, r². Rows whose interval is not
+ * meaningful (saturated, above threshold) fold into one summary line, each
+ * distinct caveat is stated once, and per-row detail sits in the warning icon's
+ * tooltip. Same numbers and caveats as the exported figure and Dirac.
  */
 export function QecLambdaReadout({ decoders, estimates, units, colors }: Props) {
+  const table = buildLambdaTable(estimates, units);
+  const withoutFit = decoders.filter((d) => !table.groups.some((g) => g.decoder === d));
   return (
-    <div aria-label="Error suppression factor Λ">
-      {decoders.map((d) => {
-        const mine = estimates.filter((e) => e.decoder === d);
-        return (
-          <div key={d} style={{ fontSize: 11, color: colors.text, marginBottom: 6 }}>
-            <strong>{d}</strong>
-            {mine.length === 0 ? (
-              <span style={{ color: colors.textMuted }}>{`: Λ not estimated, needs ≥ ${MIN_LAMBDA_DISTANCES} distances at the same p`}</span>
-            ) : (
-              mine.map((e) => <LambdaRow key={`${e.experiment}\u0000${e.noise}`} e={e} units={units} colors={colors} />)
-            )}
-          </div>
-        );
-      })}
-    </div>
+    <section aria-label="Error suppression factor Λ" style={{ fontFamily: TYPOGRAPHY.fontSans, fontSize: 12, color: colors.text }}>
+      <h3 style={{ margin: 0, fontSize: 11, fontWeight: 600, letterSpacing: 0.4, textTransform: 'uppercase', color: colors.textMuted }}>
+        Error suppression Λ
+      </h3>
+      {table.subtitle && <div style={{ fontSize: 11, color: colors.textMuted, margin: '2px 0 6px' }}>{table.subtitle}</div>}
+      {table.groups.map((g) => (
+        <table key={g.decoder} style={{ width: '100%', borderCollapse: 'collapse', marginBottom: 8 }}>
+          <caption style={{ captionSide: 'top', textAlign: 'left', fontWeight: 600, padding: '4px 6px' }}>{g.decoder}</caption>
+          <thead>
+            <tr style={{ color: colors.textMuted, fontSize: 11 }}>
+              <th scope="col" style={{ ...CELL, textAlign: 'left', fontWeight: 500 }}>p</th>
+              <th scope="col" style={{ ...CELL, textAlign: 'right', fontWeight: 500 }}>Λ</th>
+              <th scope="col" style={{ ...CELL, textAlign: 'right', fontWeight: 500 }}>95% CI</th>
+              <th scope="col" style={{ ...CELL, textAlign: 'right', fontWeight: 500 }}>r²</th>
+              <th scope="col" aria-label="Warnings" style={{ ...CELL, width: 18 }} />
+            </tr>
+          </thead>
+          <tbody>
+            {g.rows.map((r) => <LambdaRow key={`${r.experiment}|${r.noise}`} row={r} colors={colors} />)}
+          </tbody>
+          {g.collapsed && (
+            <tbody>
+              <tr>
+                <td colSpan={5} style={{ padding: '2px 0 0' }}>
+                  <details style={{ color: colors.textMuted, fontSize: 11 }}>
+                    <summary style={{ cursor: 'pointer', padding: '2px 6px' }}>{g.collapsed.summary}</summary>
+                    <table style={{ width: '100%', borderCollapse: 'collapse', opacity: 0.85 }}>
+                      <tbody>
+                        {g.collapsed.rows.map((r) => <LambdaRow key={`${r.experiment}|${r.noise}`} row={r} colors={colors} />)}
+                      </tbody>
+                    </table>
+                  </details>
+                </td>
+              </tr>
+            </tbody>
+          )}
+        </table>
+      ))}
+      {withoutFit.map((d) => (
+        <div key={d} style={{ fontSize: 11, color: colors.textMuted, marginBottom: 6 }}>
+          <strong style={{ color: colors.text }}>{d}</strong>
+          {`: Λ not estimated, needs ≥ ${MIN_LAMBDA_DISTANCES} distances at the same p`}
+        </div>
+      ))}
+      {table.notes.length > 0 && (
+        <ul style={{ margin: '0 0 6px', padding: 0, listStyle: 'none', fontSize: 11, color: colors.warning }}>
+          {table.notes.map((n) => <li key={n} role="note">{n}</li>)}
+        </ul>
+      )}
+    </section>
   );
 }
 
-function LambdaRow({ e, units, colors }: { e: LambdaGroupEstimate; units: RateUnits; colors: ThemeColors }) {
-  const warnings = [...e.estimate.warnings, ...lambdaCaveats(e)];
+function LambdaRow({ row, colors }: { row: LambdaRowView; colors: ThemeColors }) {
+  const flagText = row.flags.join('\n');
   return (
-    <div style={{ paddingLeft: 8 }}>
-      <span style={{ color: colors.textMuted }}>{`${e.label}: `}</span>
-      {lambdaSummary(e.estimate).text}
-      <span style={{ color: colors.textMuted }}>
-        {` at p=${e.noise}, d ${e.estimate.distances.join(',')}, per Δd=${e.estimate.step}, ${units === 'per_round' ? 'per round' : 'per shot'}`}
-        {e.estimate.droppedZeroError.length > 0 &&
-          `; d ${e.estimate.droppedZeroError.join(',')} had 0 errors and is not in the fit (suppression is at least as strong)`}
-      </span>
-      {warnings.map((w) => (
-        <div key={w} role="note" style={{ color: colors.warning, fontSize: 11 }}>{`Warning: ${w}`}</div>
-      ))}
-    </div>
+    <tr style={{ borderTop: `1px solid ${colors.border}`, color: row.meaningful ? colors.text : colors.textMuted }}>
+      <td style={{ ...CELL, textAlign: 'left' }}>
+        {row.p}
+        {row.experiment && <div style={{ fontSize: 11, color: colors.textMuted }}>{row.experiment}</div>}
+      </td>
+      <td style={{ ...CELL, textAlign: 'right', fontWeight: row.meaningful ? 600 : 400 }}>{row.lambda}</td>
+      <td style={{ ...CELL, textAlign: 'right' }}>{row.ci ?? '—'}</td>
+      <td style={{ ...CELL, textAlign: 'right' }}>{row.rSquared}</td>
+      <td style={{ ...CELL, width: 18 }}>
+        {row.flags.length > 0 && (
+          <span role="img" aria-label={`Warnings: ${row.flags.join('; ')}`} title={flagText} style={{ color: colors.warning, display: 'inline-flex' }}>
+            <TriangleAlert size={12} strokeWidth={ICON_STROKE} aria-hidden="true" />
+          </span>
+        )}
+      </td>
+    </tr>
   );
 }
