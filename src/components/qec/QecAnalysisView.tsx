@@ -102,7 +102,7 @@ export function QecAnalysisView({ embedded = false, actionsInHeader = false }: {
           style={{
             display: 'flex', alignItems: 'center', gap: 8, padding: '6px 12px',
             borderBottom: `1px solid ${colors.border}`, fontSize: 11,
-            color: running ? colors.accent : colors.warning, fontFamily: TYPOGRAPHY.fontSans,
+            color: running ? colors.accentText : colors.warning, fontFamily: TYPOGRAPHY.fontSans,
           }}
         >
           {running && progress ? (
