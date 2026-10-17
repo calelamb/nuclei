@@ -1,7 +1,8 @@
 import { useThemeStore } from '../../stores/themeStore';
 import { useDiracPanelStore } from '../../stores/diracPanelStore';
-
-import { TYPOGRAPHY } from '../../styles/tokens';
+import { Button } from '../ui';
+import '../dirac/dirac.css';
+import './lessonBlocks.css';
 interface ConceptCardProps {
   title: string;
   visual: 'bloch' | 'circuit' | 'histogram' | 'custom-svg';
@@ -29,7 +30,7 @@ function VisualPlaceholder({ type }: { type: ConceptCardProps['visual'] }) {
         <rect x="16" y="4" width="16" height="16" rx="3" fill={colors.accent} opacity="0.8">
           <animate attributeName="opacity" values="0;0.8" dur="0.5s" fill="freeze" />
         </rect>
-        <text x="24" y="15" textAnchor="middle" fill="#fff" fontSize="10" fontWeight="600">H</text>
+        <text x="24" y="15" textAnchor="middle" style={{ fill: 'var(--color-surface-sunken)' }} fontSize="10" fontWeight="600">H</text>
         <circle cx="48" cy="12" r="3" fill={colors.accent} />
         <line x1="48" y1="15" x2="48" y2="28" stroke={colors.accent} strokeWidth="1.5" />
         <circle cx="48" cy="28" r="6" stroke={colors.accent} strokeWidth="1.5" fill="none" />
@@ -66,82 +67,20 @@ function VisualPlaceholder({ type }: { type: ConceptCardProps['visual'] }) {
     ),
   };
 
-  return (
-    <div style={{
-      height: 100,
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'center',
-      background: `linear-gradient(135deg, ${colors.bgPanel}, ${colors.bgElevated})`,
-      borderRadius: '12px 12px 0 0',
-    }}>
-      {icons[type]}
-    </div>
-  );
+  return <div className="concept__visual" aria-hidden="true">{icons[type]}</div>;
 }
 
 export function ConceptCard({ title, visual, explanation }: ConceptCardProps) {
-  const colors = useThemeStore((s) => s.colors);
-  const shadow = useThemeStore((s) => s.shadow);
   const ask = useDiracPanelStore((s) => s.ask);
-
   const askDirac = () => ask(`Can you explain "${title}" in more detail?`);
 
   return (
-    <div style={{
-      maxWidth: 480,
-      margin: '16px auto',
-      borderRadius: 12,
-      overflow: 'hidden',
-      background: colors.bgElevated,
-      border: `1px solid ${colors.border}`,
-      boxShadow: shadow.md,
-    }}>
+    <div className="concept">
       <VisualPlaceholder type={visual} />
-      <div style={{ padding: '16px 20px' }}>
-        <div style={{
-          color: colors.accent,
-          fontSize: 16,
-          fontWeight: 600,
-          marginBottom: 8,
-          fontFamily: TYPOGRAPHY.fontSans,
-        }}>
-          {title}
-        </div>
-        <div style={{
-          color: colors.textMuted,
-          fontSize: 14,
-          lineHeight: 1.6,
-          fontFamily: TYPOGRAPHY.fontSans,
-        }}>
-          {explanation}
-        </div>
-        <button
-          onClick={askDirac}
-          style={{
-            marginTop: 12,
-            padding: '6px 14px',
-            background: `${colors.dirac}18`,
-            border: `1px solid ${colors.dirac}40`,
-            borderRadius: 6,
-            color: colors.diracText,
-            fontSize: 12,
-            fontWeight: 500,
-            fontFamily: TYPOGRAPHY.fontSans,
-            cursor: 'pointer',
-            transition: 'all 150ms ease',
-          }}
-          onMouseEnter={(e) => {
-            e.currentTarget.style.background = `${colors.dirac}28`;
-            e.currentTarget.style.borderColor = colors.dirac;
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.background = `${colors.dirac}18`;
-            e.currentTarget.style.borderColor = `${colors.dirac}40`;
-          }}
-        >
-          Ask Dirac
-        </button>
+      <div className="concept__body">
+        <div className="concept__title">{title}</div>
+        <div className="concept__text">{explanation}</div>
+        <Button size="sm" className="concept__ask dirac-btn-dirac" onClick={askDirac}>Ask Dirac</Button>
       </div>
     </div>
   );

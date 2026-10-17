@@ -1,6 +1,5 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { LessonCodeEditor } from './LessonCodeEditor';
-import { useThemeStore } from '../../stores/themeStore';
 import { useLearnStore } from '../../stores/learnStore';
 import { useDiracPanelStore } from '../../stores/diracPanelStore';
 import { usePlatform } from '../../platform/PlatformProvider';
@@ -10,8 +9,11 @@ import type { Framework, SimulationResult, KernelResponse } from '../../types/qu
 import { Play, Lightbulb, CheckCircle, XCircle, HelpCircle, Terminal } from 'lucide-react';
 import { hasExpectedDistribution, isQuantumCode, validateExerciseResult } from './exerciseValidation';
 import { UnsupportedNotice } from './UnsupportedNotice';
+import { ProbabilityBars } from './ProbabilityBars';
+import { Button } from '../ui';
+import '../dirac/dirac.css';
+import './demo.css';
 
-import { TYPOGRAPHY } from '../../styles/tokens';
 interface ExerciseBlockProps {
   id: string;
   title: string;
@@ -29,8 +31,6 @@ export function ExerciseBlock({
   id, title, description, starterCode,
   expectedProbabilities, expectedMeasurements, tolerancePercent, hints, successMessage,
 }: ExerciseBlockProps) {
-  const colors = useThemeStore((s) => s.colors);
-  const shadow = useThemeStore((s) => s.shadow);
   const lessonId = useLearnStore((s) => s.currentLessonId);
   const passExercise = useLearnStore((s) => s.passExercise);
   const addHintUsed = useLearnStore((s) => s.addHintUsed);
@@ -217,268 +217,82 @@ export function ExerciseBlock({
     }
   };
 
-  const probEntries = result
-    ? Object.entries(result.probabilities)
-        .filter(([, p]) => p > 0.001)
-        .sort(([, a], [, b]) => b - a)
-    : [];
+  const hasProbabilities = Boolean(result && Object.values(result.probabilities).some((p) => p > 0.001));
+  const state = isPassed ? 'passed' : feedback?.success === false ? 'failed' : 'open';
 
   return (
-    <div style={{
-      margin: '16px 0',
-      borderRadius: 12,
-      overflow: 'hidden',
-      background: colors.bgElevated,
-      border: `1px solid ${isPassed ? colors.success : feedback?.success === false ? colors.error : colors.border}`,
-      boxShadow: shadow.sm,
-      transition: 'border-color 300ms ease',
-    }}>
-      {/* Header */}
-      <div style={{
-        padding: '12px 16px',
-        borderBottom: `1px solid ${colors.border}`,
-        display: 'flex',
-        alignItems: 'center',
-        gap: 8,
-      }}>
-        <div style={{
-          width: 6, height: 6, borderRadius: '50%',
-          background: isPassed ? colors.success : colors.warning,
-        }} />
-        <span style={{
-          color: colors.textMuted,
-          fontSize: 12,
-          fontWeight: 500,
-          fontFamily: TYPOGRAPHY.fontSans,
-          textTransform: 'uppercase',
-          letterSpacing: 0.5,
-        }}>
-          Exercise
-        </span>
-        {isPassed && <CheckCircle size={14} color={colors.success} />}
+    <div className="exercise" data-state={state}>
+      <div className="demo__head">
+        <span className="exercise__dot" aria-hidden="true" />
+        <span className="demo__kicker">Exercise</span>
+        {isPassed && <CheckCircle className="exercise__passed" size={14} aria-label="Passed" />}
       </div>
 
-      {/* Title + description */}
-      <div style={{ padding: '12px 16px', borderBottom: `1px solid ${colors.border}` }}>
-        <div style={{
-          color: colors.text,
-          fontSize: 16,
-          fontWeight: 600,
-          fontFamily: TYPOGRAPHY.fontSans,
-          marginBottom: 6,
-        }}>
-          {title}
-        </div>
-        <div style={{
-          color: colors.textMuted,
-          fontSize: 14,
-          fontFamily: TYPOGRAPHY.fontSans,
-          lineHeight: 1.5,
-        }}>
-          {description}
-        </div>
+      <div className="exercise__brief">
+        <div className="exercise__title">{title}</div>
+        <div className="exercise__text">{description}</div>
       </div>
 
-      {/* Mini Editor */}
-      <div style={{ borderBottom: `1px solid ${colors.border}` }}>
+      <div className="demo__editor">
         <LessonCodeEditor value={localCode} onChange={handleCodeChange} />
       </div>
 
-      {/* Buttons */}
-      <div style={{
-        padding: '8px 16px',
-        display: 'flex',
-        gap: 8,
-        alignItems: 'center',
-        borderBottom: `1px solid ${colors.border}`,
-      }}>
-        <button onClick={handleRun} disabled={isRunning} style={{
-          display: 'flex', alignItems: 'center', gap: 6,
-          padding: '6px 14px',
-          background: isRunning ? colors.bgPanel : colors.accent,
-          color: '#fff', border: 'none', borderRadius: 6,
-          fontSize: 12, fontWeight: 600, fontFamily: TYPOGRAPHY.fontSans,
-          cursor: isRunning ? 'default' : 'pointer',
-        }}>
-          <Play size={12} fill="currentColor" />
+      <div className="demo__actions demo__actions--divided">
+        <Button variant="primary" onClick={handleRun} loading={isRunning} icon={<Play size={12} fill="currentColor" aria-hidden="true" />}>
           {isRunning ? 'Running...' : 'Run'}
-        </button>
+        </Button>
         {result && hasExpectations && (
-          <button onClick={() => checkSolution(result)} style={{
-            display: 'flex', alignItems: 'center', gap: 6,
-            padding: '6px 14px',
-            background: colors.success,
-            color: '#fff', border: 'none', borderRadius: 6,
-            fontSize: 12, fontWeight: 600, fontFamily: TYPOGRAPHY.fontSans,
-            cursor: 'pointer',
-          }}>
-            <CheckCircle size={12} />
-            Check Solution
-          </button>
+          <Button onClick={() => checkSolution(result)} icon={<CheckCircle size={12} aria-hidden="true" />}>Check Solution</Button>
         )}
         {feedback?.success && !hasExpectations && (
-          <span style={{
-            color: colors.success, fontSize: 11, fontFamily: TYPOGRAPHY.fontSans,
-            display: 'flex', alignItems: 'center', gap: 4,
-          }}>
-            <CheckCircle size={12} />
-            Code ran successfully — explore the output above
-          </span>
+          <span className="exercise__ok"><CheckCircle size={12} aria-hidden="true" /> Code ran successfully. Explore the output above.</span>
         )}
-        <div style={{ flex: 1 }} />
+        <span className="demo__spacer" />
         {hintsRevealed < hints.length && (
-          <button onClick={revealHint} style={{
-            display: 'flex', alignItems: 'center', gap: 6,
-            padding: '6px 14px',
-            background: 'transparent', color: colors.warning,
-            border: `1px solid ${colors.warning}40`, borderRadius: 6,
-            fontSize: 12, fontFamily: TYPOGRAPHY.fontSans,
-            cursor: 'pointer',
-          }}>
-            <Lightbulb size={12} />
+          <Button onClick={revealHint} icon={<Lightbulb size={12} aria-hidden="true" />}>
             Show Hint ({hintsRevealed}/{hints.length})
-          </button>
+          </Button>
         )}
       </div>
 
-      {unsupported && (
-        <div style={{ padding: '10px 16px' }}>
-          <UnsupportedNotice message={unsupported} />
-        </div>
-      )}
+      {unsupported && <div className="demo__notice"><UnsupportedNotice message={unsupported} /></div>}
 
-      {/* Error */}
-      {error && (
-        <div style={{
-          padding: '8px 16px',
-          background: `${colors.error}10`,
-          color: colors.error,
-          fontSize: 12,
-          fontFamily: TYPOGRAPHY.fontMono,
-          borderBottom: `1px solid ${colors.border}`,
-        }}>
-          {error}
-        </div>
-      )}
+      {error && <div className="demo__error" role="alert">{error}</div>}
 
-      {/* Hints */}
       {hintsRevealed > 0 && (
-        <div style={{
-          padding: '10px 16px',
-          borderBottom: `1px solid ${colors.border}`,
-          display: 'flex',
-          flexDirection: 'column',
-          gap: 6,
-        }}>
+        <div className="exercise__hints">
           {hints.slice(0, hintsRevealed).map((hint, i) => (
-            <div key={i} style={{
-              display: 'flex', gap: 8, alignItems: 'flex-start',
-              color: colors.warning, fontSize: 13,
-              fontFamily: TYPOGRAPHY.fontSans,
-            }}>
-              <Lightbulb size={14} style={{ marginTop: 2, flexShrink: 0 }} />
-              <span style={{ color: colors.textMuted }}>{hint}</span>
+            <div key={i} className="exercise__hint">
+              <Lightbulb size={14} aria-hidden="true" />
+              <span>{hint}</span>
             </div>
           ))}
         </div>
       )}
 
-      {/* Terminal output */}
       {output.length > 0 && (
-        <div style={{
-          padding: '8px 16px',
-          borderBottom: `1px solid ${colors.border}`,
-          background: colors.bg,
-          maxHeight: 120, overflowY: 'auto',
-        }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginBottom: 4 }}>
-            <Terminal size={12} color={colors.textDim} />
-            <span style={{ color: colors.textDim, fontSize: 11, fontFamily: TYPOGRAPHY.fontSans, textTransform: 'uppercase', letterSpacing: 0.5 }}>Output</span>
-          </div>
-          <div style={{ fontFamily: TYPOGRAPHY.fontMono, fontSize: 12, color: colors.text, lineHeight: 1.5, whiteSpace: 'pre-wrap' }}>
-            {output.map((line, i) => <div key={i}>{line}</div>)}
-          </div>
+        <div className="exercise__output">
+          <div className="exercise__output-label"><Terminal size={12} aria-hidden="true" /> Output</div>
+          <div className="exercise__output-lines">{output.map((line, i) => <div key={i}>{line}</div>)}</div>
         </div>
       )}
 
-      {/* Compact probability bars */}
-      {probEntries.length > 0 && (
-        <div style={{ padding: '8px 16px', borderBottom: `1px solid ${colors.border}` }}>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
-            {probEntries.map(([state, prob]) => (
-              <div key={state} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <span style={{ width: 48, textAlign: 'right', fontFamily: TYPOGRAPHY.fontMono, fontSize: 12, color: colors.text, fontWeight: 500 }}>
-                  |{state}{'\u27E9'}
-                </span>
-                <div style={{ flex: 1, height: 16, borderRadius: 3, background: colors.bgPanel, overflow: 'hidden' }}>
-                  <div style={{
-                    width: `${prob * 100}%`, height: '100%',
-                    background: `linear-gradient(90deg, ${colors.accent}cc, ${colors.accent}88)`,
-                    borderRadius: 3, transition: 'width 400ms ease-out',
-                    minWidth: prob > 0 ? 2 : 0,
-                  }} />
-                </div>
-                <span style={{ width: 42, textAlign: 'right', fontFamily: TYPOGRAPHY.fontMono, fontSize: 11, color: colors.textMuted }}>
-                  {(prob * 100).toFixed(1)}%
-                </span>
-              </div>
-            ))}
-          </div>
-        </div>
+      {result && hasProbabilities && (
+        <div className="exercise__results"><ProbabilityBars probabilities={result.probabilities} /></div>
       )}
 
-      {/* Feedback */}
       {feedback && (
-        <div style={{
-          padding: '12px 16px',
-          background: feedback.success ? `${colors.success}10` : `${colors.error}10`,
-          borderBottom: `1px solid ${colors.border}`,
-          display: 'flex',
-          alignItems: 'flex-start',
-          gap: 10,
-        }}>
-          {feedback.success
-            ? <CheckCircle size={16} color={colors.success} style={{ flexShrink: 0, marginTop: 1 }} />
-            : <XCircle size={16} color={colors.error} style={{ flexShrink: 0, marginTop: 1 }} />
-          }
-          <span style={{
-            color: feedback.success ? colors.success : colors.error,
-            fontSize: 14,
-            fontFamily: TYPOGRAPHY.fontSans,
-            lineHeight: 1.5,
-          }}>
-            {feedback.message}
-          </span>
+        <div className={feedback.success ? 'exercise__feedback exercise__feedback--ok' : 'exercise__feedback exercise__feedback--fail'} role="status">
+          {feedback.success ? <CheckCircle size={16} aria-hidden="true" /> : <XCircle size={16} aria-hidden="true" />}
+          <span>{feedback.message}</span>
         </div>
       )}
 
-      {/* Dirac help prompt */}
       {showDiracPrompt && !isPassed && (
-        <div style={{
-          padding: '10px 16px',
-          display: 'flex',
-          alignItems: 'center',
-          gap: 8,
-        }}>
-          <HelpCircle size={14} color={colors.diracText} />
-          <span style={{
-            color: colors.textMuted, fontSize: 13,
-            fontFamily: TYPOGRAPHY.fontSans,
-          }}>
-            Need help?
-          </span>
-          <button onClick={openDirac} style={{
-            background: `${colors.dirac}18`,
-            border: `1px solid ${colors.dirac}40`,
-            borderRadius: 4,
-            color: colors.diracText,
-            fontSize: 12,
-            padding: '3px 10px',
-            cursor: 'pointer',
-            fontFamily: TYPOGRAPHY.fontSans,
-          }}>
-            Ask Dirac
-          </button>
+        <div className="exercise__help">
+          <HelpCircle size={14} aria-hidden="true" />
+          <span>Need help?</span>
+          <Button size="sm" className="dirac-btn-dirac" onClick={openDirac}>Ask Dirac</Button>
         </div>
       )}
     </div>

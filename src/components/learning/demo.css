@@ -1,0 +1,53 @@
+/* Interactive demo card (lessons). Tokens only; hover and focus live in CSS. */
+.demo { margin: var(--space-4) 0; overflow: hidden; border: 1px solid var(--color-border-strong); border-radius: var(--radius-round); background: var(--color-surface-raised); box-shadow: var(--shadow-sm); font-family: var(--font-sans); }
+.demo__head { display: flex; align-items: center; gap: var(--space-2); padding: var(--space-3) var(--space-4); border-bottom: 1px solid var(--color-border-strong); }
+.demo__dot { width: 6px; height: 6px; flex-shrink: 0; border-radius: 50%; background: var(--color-accent-quantum); }
+.demo__kicker { font-size: var(--font-size-chrome-label); font-weight: var(--font-weight-medium); letter-spacing: 0.5px; text-transform: uppercase; color: var(--color-text-secondary); white-space: nowrap; }
+.demo__desc { min-width: 0; font-size: var(--font-size-chrome-label); color: var(--color-text-secondary); }
+.demo__editor { border-bottom: 1px solid var(--color-border-strong); }
+.demo__actions { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); padding: var(--space-2) var(--space-4); }
+.demo__actions--divided { border-bottom: 1px solid var(--color-border-strong); }
+.demo__spacer { flex: 1; }
+.demo__sep { width: 1px; height: 16px; margin: 0 var(--space-1); background: var(--color-border-strong); }
+.demo__summary { display: flex; align-items: center; gap: var(--space-2); padding: var(--space-2) var(--space-4); font: var(--font-size-caption) var(--font-mono); color: var(--color-text-secondary); }
+.demo__summary--divided { border-bottom: 1px solid var(--color-border-strong); }
+.demo__summary-label { text-transform: uppercase; letter-spacing: 0.5px; }
+.demo__gates { display: flex; flex-wrap: wrap; gap: var(--space-1); }
+.demo__gate { padding: 1px var(--space-1); border-radius: var(--radius-xs); background: color-mix(in srgb, var(--color-accent-quantum) 12%, transparent); color: var(--color-text-primary); font-weight: var(--font-weight-medium); }
+.demo__notice { padding: var(--space-3) var(--space-4); border-bottom: 1px solid var(--color-border-strong); }
+.demo__error { padding: var(--space-2) var(--space-4); border-bottom: 1px solid var(--color-border-strong); background: color-mix(in srgb, var(--color-danger) 10%, transparent); color: var(--color-danger); font: var(--font-size-chrome-label) var(--font-mono); line-height: 1.5; white-space: pre-wrap; }
+.demo__output { max-height: 160px; overflow-y: auto; padding: var(--space-3) var(--space-4); background: var(--color-surface-sunken); font: var(--font-size-chrome-label) var(--font-mono); line-height: 1.6; color: var(--color-text-primary); white-space: pre-wrap; }
+.demo__results { padding: var(--space-3) var(--space-4); }
+.demo__prompt { margin: 0; padding: var(--space-3) var(--space-4) var(--space-4); border-top: 1px solid var(--color-border-strong); font-size: var(--font-size-code); font-style: italic; line-height: 1.5; color: var(--color-text-secondary); }
+
+.prob-bars { display: flex; flex-direction: column; gap: var(--space-1); }
+.prob-bars__row { display: flex; align-items: center; gap: var(--space-2); }
+.prob-bars__state { width: 48px; text-align: right; font: var(--font-weight-medium) var(--font-size-chrome-label) var(--font-mono); color: var(--color-text-primary); }
+.prob-bars__track { flex: 1; height: 18px; overflow: hidden; border-radius: var(--radius-xs); background: var(--color-surface-sunken); }
+.prob-bars__fill { height: 100%; min-width: 2px; border-radius: var(--radius-xs); background: var(--color-accent-quantum); opacity: 0.8; transition: width 400ms var(--ease-standard); }
+.prob-bars__pct { width: 42px; text-align: right; font: var(--font-size-caption) var(--font-mono); color: var(--color-text-secondary); }
+
+/* Exercise card shares the demo chrome; these are the parts only it has. */
+.exercise { margin: var(--space-4) 0; overflow: hidden; border: 1px solid var(--color-border-strong); border-radius: var(--radius-round); background: var(--color-surface-raised); box-shadow: var(--shadow-sm); font-family: var(--font-sans); transition: border-color var(--duration-slow) var(--ease-standard); }
+.exercise[data-state='passed'] { border-color: var(--color-success); }
+.exercise[data-state='failed'] { border-color: var(--color-danger); }
+.exercise__dot { width: 6px; height: 6px; border-radius: 50%; background: var(--color-warning); }
+.exercise[data-state='passed'] .exercise__dot { background: var(--color-success); }
+.exercise__passed { color: var(--color-success); }
+.exercise__brief { padding: var(--space-3) var(--space-4); border-bottom: 1px solid var(--color-border-strong); }
+.exercise__title { margin-bottom: var(--space-1); font-size: var(--font-size-heading); font-weight: var(--font-weight-semibold); color: var(--color-text-primary); }
+.exercise__text { font-size: var(--font-size-body); line-height: 1.5; color: var(--color-text-secondary); }
+.exercise__ok { display: inline-flex; align-items: center; gap: var(--space-1); font-size: var(--font-size-caption); color: var(--color-success); }
+.exercise__hints { display: flex; flex-direction: column; gap: var(--space-2); padding: var(--space-3) var(--space-4); border-bottom: 1px solid var(--color-border-strong); }
+.exercise__hint { display: flex; align-items: flex-start; gap: var(--space-2); font-size: var(--font-size-code); color: var(--color-text-secondary); }
+.exercise__hint svg { flex-shrink: 0; margin-top: 2px; color: var(--color-warning); }
+.exercise__output { max-height: 120px; overflow-y: auto; padding: var(--space-2) var(--space-4); border-bottom: 1px solid var(--color-border-strong); background: var(--color-surface-sunken); }
+.exercise__output-label { display: flex; align-items: center; gap: var(--space-1); margin-bottom: var(--space-1); font-size: var(--font-size-caption); letter-spacing: 0.5px; text-transform: uppercase; color: var(--color-text-secondary); }
+.exercise__output-lines { font: var(--font-size-chrome-label) var(--font-mono); line-height: 1.5; color: var(--color-text-primary); white-space: pre-wrap; }
+.exercise__results { padding: var(--space-2) var(--space-4); border-bottom: 1px solid var(--color-border-strong); }
+.exercise__feedback { display: flex; align-items: flex-start; gap: var(--space-3); padding: var(--space-3) var(--space-4); border-bottom: 1px solid var(--color-border-strong); font-size: var(--font-size-body); line-height: 1.5; }
+.exercise__feedback svg { flex-shrink: 0; margin-top: 1px; }
+.exercise__feedback--ok { background: color-mix(in srgb, var(--color-success) 8%, transparent); color: var(--color-success); }
+.exercise__feedback--fail { background: color-mix(in srgb, var(--color-danger) 8%, transparent); color: var(--color-danger); }
+.exercise__help { display: flex; align-items: center; gap: var(--space-2); padding: var(--space-3) var(--space-4); font-size: var(--font-size-code); color: var(--color-text-secondary); }
+.exercise__help svg { color: var(--color-accent-dirac-text); }

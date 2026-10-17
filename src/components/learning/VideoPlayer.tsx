@@ -1,8 +1,7 @@
-import { useState } from 'react';
-import { useThemeStore } from '../../stores/themeStore';
+import { Play } from 'lucide-react';
 import { openExternal, buildYouTubeWatchUrl } from '../../lib/openExternal';
+import './lessonBlocks.css';
 
-import { TYPOGRAPHY } from '../../styles/tokens';
 type VideoSource = '3blue1brown' | 'ibm-technology' | 'nvidia' | 'qiskit' | 'other';
 
 interface VideoChapter {
@@ -20,12 +19,12 @@ interface VideoPlayerProps {
   chapters?: VideoChapter[];
 }
 
-const SOURCE_BADGES: Record<VideoSource, { label: string; color: string }> = {
-  '3blue1brown': { label: '3B1B', color: '#3b82f6' },
-  'ibm-technology': { label: 'IBM', color: '#2563eb' },
-  'nvidia': { label: 'NVIDIA', color: '#22c55e' },
-  'qiskit': { label: 'Qiskit', color: '#8b5cf6' },
-  'other': { label: 'Video', color: '#6b7280' },
+const SOURCE_LABEL: Record<VideoSource, string> = {
+  '3blue1brown': '3B1B',
+  'ibm-technology': 'IBM',
+  nvidia: 'NVIDIA',
+  qiskit: 'Qiskit',
+  other: 'Video',
 };
 
 function formatChapterTime(seconds: number): string {
@@ -34,58 +33,30 @@ function formatChapterTime(seconds: number): string {
   return `${m}:${s.toString().padStart(2, '0')}`;
 }
 
-export function VideoPlayer({ youtubeId, title, creator, startTime, source, chapters }: VideoPlayerProps) {
-  const colors = useThemeStore((s) => s.colors);
-  const shadow = useThemeStore((s) => s.shadow);
-  const [hovered, setHovered] = useState(false);
+function VideoMeta({ title, creator, source, children }: { title: string; creator: string; source?: VideoSource; children?: React.ReactNode }) {
+  return (
+    <div className="video__meta">
+      <div className="video__title-row">
+        <div className="video__title">{title}</div>
+        {source && <span className="video__source">{SOURCE_LABEL[source]}</span>}
+      </div>
+      <div className="video__creator">{creator}</div>
+      {children}
+    </div>
+  );
+}
 
+export function VideoPlayer({ youtubeId, title, creator, startTime, source, chapters }: VideoPlayerProps) {
   if (youtubeId === 'placeholder') {
     return (
-      <div style={{
-        maxWidth: 720,
-        margin: '16px auto',
-        borderRadius: 12,
-        overflow: 'hidden',
-        background: colors.bgElevated,
-        border: `1px solid ${colors.border}`,
-        boxShadow: shadow.md,
-      }}>
-        <div style={{
-          width: '100%',
-          paddingBottom: '56.25%',
-          position: 'relative',
-          background: `linear-gradient(135deg, ${colors.bgPanel}, ${colors.bgElevated})`,
-        }}>
-          <div style={{
-            position: 'absolute',
-            inset: 0,
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            justifyContent: 'center',
-            gap: 12,
-          }}>
-            <div style={{
-              width: 64, height: 64,
-              borderRadius: '50%',
-              background: `${colors.accent}20`,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-            }}>
-              <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke={colors.accent} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <polygon points="5 3 19 12 5 21 5 3" />
-              </svg>
-            </div>
-            <span style={{ color: colors.textMuted, fontSize: 14, fontFamily: TYPOGRAPHY.fontSans }}>
-              Video coming soon
-            </span>
+      <div className="video">
+        <div className="video__poster video__poster--soon">
+          <div className="video__veil video__veil--bare">
+            <span className="video__disc video__disc--soon"><Play size={20} aria-hidden="true" /></span>
+            <span className="video__soon">Video coming soon</span>
           </div>
         </div>
-        <div style={{ padding: '10px 16px' }}>
-          <div style={{ color: colors.text, fontSize: 14, fontWeight: 500, fontFamily: TYPOGRAPHY.fontSans }}>{title}</div>
-          <div style={{ color: colors.textDim, fontSize: 12, fontFamily: TYPOGRAPHY.fontSans, marginTop: 2 }}>{creator}</div>
-        </div>
+        <VideoMeta title={title} creator={creator} />
       </div>
     );
   }
@@ -95,163 +66,27 @@ export function VideoPlayer({ youtubeId, title, creator, startTime, source, chap
   };
 
   return (
-    <div style={{
-      maxWidth: 720,
-      margin: '16px auto',
-      borderRadius: 12,
-      overflow: 'hidden',
-      background: colors.bgPanel,
-      border: `1px solid ${colors.border}`,
-      boxShadow: shadow.md,
-    }}>
-      <button
-        type="button"
-        onClick={() => handlePlay()}
-        onMouseEnter={() => setHovered(true)}
-        onMouseLeave={() => setHovered(false)}
-        style={{
-          display: 'block',
-          width: '100%',
-          padding: 0,
-          border: 'none',
-          background: '#000',
-          cursor: 'pointer',
-          position: 'relative',
-        }}
-        aria-label={`Play "${title}" on YouTube`}
-      >
-        <div style={{
-          width: '100%',
-          paddingBottom: '56.25%',
-          position: 'relative',
-        }}>
-          <img
-            src={`https://img.youtube.com/vi/${youtubeId}/hqdefault.jpg`}
-            alt=""
-            style={{
-              position: 'absolute',
-              top: 0, left: 0,
-              width: '100%',
-              height: '100%',
-              objectFit: 'cover',
-              display: 'block',
-            }}
-            loading="lazy"
-          />
-          <div style={{
-            position: 'absolute',
-            inset: 0,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            background: hovered ? 'rgba(0,0,0,0.35)' : 'rgba(0,0,0,0.15)',
-            transition: 'background 180ms ease',
-          }}>
-            <div style={{
-              width: 64, height: 64,
-              borderRadius: '50%',
-              background: 'rgba(0,0,0,0.7)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              transform: hovered ? 'scale(1.08)' : 'scale(1)',
-              transition: 'transform 180ms ease',
-              boxShadow: '0 4px 16px rgba(0,0,0,0.4)',
-            }}>
-              <svg width="26" height="26" viewBox="0 0 24 24" fill="#fff">
-                <polygon points="6 4 20 12 6 20 6 4" />
-              </svg>
-            </div>
-          </div>
-          <div style={{
-            position: 'absolute',
-            top: 8, right: 8,
-            background: 'rgba(0,0,0,0.75)',
-            color: '#fff',
-            fontSize: 11,
-            fontFamily: TYPOGRAPHY.fontSans,
-            fontWeight: 500,
-            padding: '3px 8px',
-            borderRadius: 4,
-            letterSpacing: 0.3,
-          }}>
-            Opens in browser
-          </div>
-        </div>
+    <div className="video">
+      <button type="button" className="video__poster" onClick={() => handlePlay()} aria-label={`Play "${title}" on YouTube`}>
+        <img className="video__img" src={`https://img.youtube.com/vi/${youtubeId}/hqdefault.jpg`} alt="" loading="lazy" />
+        <span className="video__veil">
+          <span className="video__disc"><Play size={20} fill="currentColor" aria-hidden="true" /></span>
+        </span>
+        <span className="video__badge">Opens in browser</span>
       </button>
-      <div style={{ padding: '10px 16px' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <div style={{ color: colors.text, fontSize: 14, fontWeight: 500, fontFamily: TYPOGRAPHY.fontSans }}>{title}</div>
-          {source && (
-            <span style={{
-              fontSize: 11,
-              fontFamily: TYPOGRAPHY.fontSans,
-              fontWeight: 600,
-              color: SOURCE_BADGES[source].color,
-              background: `${SOURCE_BADGES[source].color}18`,
-              padding: '2px 6px',
-              borderRadius: 3,
-              flexShrink: 0,
-            }}>
-              {SOURCE_BADGES[source].label}
-            </span>
-          )}
-        </div>
-        <div style={{ color: colors.textDim, fontSize: 12, fontFamily: TYPOGRAPHY.fontSans, marginTop: 2 }}>{creator}</div>
-
+      <VideoMeta title={title} creator={creator} source={source}>
         {chapters && chapters.length > 0 && (
-          <div style={{ marginTop: 8, display: 'flex', flexDirection: 'column', gap: 2 }}>
-            <div style={{
-              color: colors.textMuted,
-              fontSize: 11,
-              fontWeight: 600,
-              fontFamily: TYPOGRAPHY.fontSans,
-              textTransform: 'uppercase',
-              letterSpacing: 0.5,
-              marginBottom: 2,
-            }}>
-              Chapters
-            </div>
+          <div className="video__chapters">
+            <div className="video__chapters-label">Chapters</div>
             {chapters.map((chapter, i) => (
-              <button
-                key={i}
-                onClick={() => handlePlay(chapter.time)}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 8,
-                  padding: '3px 6px',
-                  background: 'transparent',
-                  border: 'none',
-                  borderRadius: 3,
-                  cursor: 'pointer',
-                  textAlign: 'left',
-                  width: '100%',
-                }}
-                onMouseEnter={(e) => { e.currentTarget.style.background = colors.bgElevated; }}
-                onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
-              >
-                <span style={{
-                  color: colors.accent,
-                  fontSize: 11,
-                  fontFamily: TYPOGRAPHY.fontMono,
-                  fontWeight: 500,
-                  minWidth: 32,
-                }}>
-                  {formatChapterTime(chapter.time)}
-                </span>
-                <span style={{
-                  color: colors.text,
-                  fontSize: 11,
-                  fontFamily: TYPOGRAPHY.fontSans,
-                }}>
-                  {chapter.label}
-                </span>
+              <button key={i} type="button" className="video__chapter" onClick={() => handlePlay(chapter.time)}>
+                <span className="video__chapter-time">{formatChapterTime(chapter.time)}</span>
+                <span className="video__chapter-label">{chapter.label}</span>
               </button>
             ))}
           </div>
         )}
-      </div>
+      </VideoMeta>
     </div>
   );
 }

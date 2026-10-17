@@ -1,6 +1,5 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { LessonCodeEditor } from './LessonCodeEditor';
-import { useThemeStore, type ThemeColors } from '../../stores/themeStore';
 import { useLearnStore } from '../../stores/learnStore';
 import { useEditorStore } from '../../stores/editorStore';
 import { usePlatform } from '../../platform/PlatformProvider';
@@ -8,10 +7,13 @@ import { KERNEL_WS_URL } from '../../config/kernel';
 import { openAuthenticatedKernelSocket } from '../../services/kernelSocket';
 import type { Framework, CircuitSnapshot, SimulationResult, KernelResponse } from '../../types/quantum';
 import { Play, RotateCcw, ExternalLink, Terminal, BarChart3 } from 'lucide-react';
+import { Button, SegmentedControl, type SegmentedOption } from '../ui';
 import { isQuantumCode } from './exerciseValidation';
 import { UnsupportedNotice } from './UnsupportedNotice';
+import { ProbabilityBars } from './ProbabilityBars';
+import './demo.css';
 
-import { TYPOGRAPHY } from '../../styles/tokens';
+type ResultView = 'output' | 'probabilities';
 interface InteractiveDemoProps {
   code: string;
   framework: Framework;
@@ -19,58 +21,7 @@ interface InteractiveDemoProps {
   explorationPrompt?: string;
 }
 
-/* ── Compact probability display ── */
-function ProbabilityBars({ probabilities, accent, colors }: {
-  probabilities: Record<string, number>;
-  accent: string;
-  colors: ThemeColors;
-}) {
-  const entries = Object.entries(probabilities)
-    .filter(([, p]) => p > 0.001)
-    .sort(([, a], [, b]) => b - a);
-
-  if (entries.length === 0) return null;
-
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-      {entries.map(([state, prob]) => (
-        <div key={state} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <span style={{
-            width: 48, textAlign: 'right',
-            fontFamily: TYPOGRAPHY.fontMono, fontSize: 12,
-            color: colors.text, fontWeight: 500,
-          }}>
-            |{state}{'\u27E9'}
-          </span>
-          <div style={{
-            flex: 1, height: 18, borderRadius: 4,
-            background: colors.bgPanel, overflow: 'hidden',
-            position: 'relative',
-          }}>
-            <div style={{
-              width: `${prob * 100}%`, height: '100%',
-              background: `linear-gradient(90deg, ${accent}cc, ${accent}88)`,
-              borderRadius: 4,
-              transition: 'width 400ms ease-out',
-              minWidth: prob > 0 ? 2 : 0,
-            }} />
-          </div>
-          <span style={{
-            width: 42, textAlign: 'right',
-            fontFamily: TYPOGRAPHY.fontMono, fontSize: 11,
-            color: colors.textMuted,
-          }}>
-            {(prob * 100).toFixed(1)}%
-          </span>
-        </div>
-      ))}
-    </div>
-  );
-}
-
 export function InteractiveDemo({ code: initialCode, framework, description, explorationPrompt }: InteractiveDemoProps) {
-  const colors = useThemeStore((s) => s.colors);
-  const shadow = useThemeStore((s) => s.shadow);
   const exitLearnMode = useLearnStore((s) => s.exitLearnMode);
   const setEditorCode = useEditorStore((s) => s.setCode);
   const setEditorFramework = useEditorStore((s) => s.setFramework);
@@ -243,197 +194,77 @@ export function InteractiveDemo({ code: initialCode, framework, description, exp
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const hasResults = result && Object.keys(result.probabilities).length > 0;
+  const hasResults = Boolean(result && Object.keys(result.probabilities).length > 0);
   const hasOutput = output.length > 0;
+  const hasCircuit = Boolean(snapshot && snapshot.gates.length > 0);
+  const hasBelow = hasResults || hasOutput || Boolean(error) || hasCircuit;
+  const viewOptions: ReadonlyArray<SegmentedOption<ResultView>> = [
+    ...(hasOutput ? [{ value: 'output' as const, label: 'Output', icon: <Terminal size={12} aria-hidden="true" /> }] : []),
+    ...(hasResults ? [{ value: 'probabilities' as const, label: 'Probabilities', icon: <BarChart3 size={12} aria-hidden="true" /> }] : []),
+  ];
 
   return (
-    <div style={{
-      margin: '16px 0',
-      borderRadius: 12,
-      overflow: 'hidden',
-      background: colors.bgElevated,
-      border: `1px solid ${colors.border}`,
-      boxShadow: shadow.sm,
-    }}>
-      {/* Header */}
-      <div style={{
-        padding: '10px 16px',
-        borderBottom: `1px solid ${colors.border}`,
-        display: 'flex', alignItems: 'center', gap: 8,
-      }}>
-        <div style={{ width: 6, height: 6, borderRadius: '50%', background: colors.accent }} />
-        <span style={{
-          color: colors.textMuted, fontSize: 12, fontWeight: 500,
-          fontFamily: TYPOGRAPHY.fontSans,
-          textTransform: 'uppercase', letterSpacing: 0.5,
-        }}>
-          Interactive Demo
-        </span>
-        <span style={{ color: colors.textDim, fontSize: 12, fontFamily: TYPOGRAPHY.fontSans, marginLeft: 4 }}>
-          {description}
-        </span>
+    <div className="demo">
+      <div className="demo__head">
+        <span className="demo__dot" aria-hidden="true" />
+        <span className="demo__kicker">Interactive Demo</span>
+        <span className="demo__desc">{description}</span>
       </div>
 
-      {/* Editor */}
-      <div style={{ borderBottom: `1px solid ${colors.border}` }}>
+      <div className="demo__editor">
         <LessonCodeEditor value={localCode} onChange={handleCodeChange} />
       </div>
 
-      {/* Action bar */}
-      <div style={{
-        padding: '8px 16px',
-        display: 'flex', alignItems: 'center', gap: 8,
-        borderBottom: (hasResults || hasOutput || error || (snapshot && snapshot.gates.length > 0)) ? `1px solid ${colors.border}` : 'none',
-      }}>
-        <button onClick={handleRun} disabled={isRunning} style={{
-          display: 'flex', alignItems: 'center', gap: 6,
-          padding: '6px 14px',
-          background: isRunning ? colors.bgPanel : colors.accent,
-          color: '#fff', border: 'none', borderRadius: 6,
-          fontSize: 12, fontWeight: 600, fontFamily: TYPOGRAPHY.fontSans,
-          cursor: isRunning ? 'default' : 'pointer',
-          boxShadow: isRunning ? 'none' : shadow.sm,
-        }}>
-          <Play size={12} fill="currentColor" />
+      <div className={hasBelow ? 'demo__actions demo__actions--divided' : 'demo__actions'}>
+        <Button variant="primary" onClick={handleRun} loading={isRunning} icon={<Play size={12} fill="currentColor" aria-hidden="true" />}>
           {isRunning ? 'Running...' : 'Run'}
-        </button>
-        <button onClick={handleReset} style={{
-          display: 'flex', alignItems: 'center', gap: 6,
-          padding: '6px 14px', background: 'transparent',
-          color: colors.textMuted, border: `1px solid ${colors.border}`,
-          borderRadius: 6, fontSize: 12, fontFamily: TYPOGRAPHY.fontSans, cursor: 'pointer',
-        }}>
-          <RotateCcw size={12} /> Reset
-        </button>
+        </Button>
+        <Button onClick={handleReset} icon={<RotateCcw size={12} aria-hidden="true" />}>Reset</Button>
 
-        {/* Result toggle tabs */}
-        {(hasResults || hasOutput) && (
+        {viewOptions.length > 1 && (
           <>
-            <div style={{ width: 1, height: 16, background: colors.border, marginLeft: 4 }} />
-            {hasOutput && (
-              <button onClick={() => setShowOutput(true)} style={{
-                display: 'flex', alignItems: 'center', gap: 4,
-                padding: '4px 10px', borderRadius: 4, border: 'none',
-                background: showOutput ? `${colors.accent}18` : 'transparent',
-                color: showOutput ? colors.accent : colors.textDim,
-                fontSize: 11, fontFamily: TYPOGRAPHY.fontSans, cursor: 'pointer',
-              }}>
-                <Terminal size={12} /> Output
-              </button>
-            )}
-            {hasResults && (
-              <button onClick={() => setShowOutput(false)} style={{
-                display: 'flex', alignItems: 'center', gap: 4,
-                padding: '4px 10px', borderRadius: 4, border: 'none',
-                background: !showOutput ? `${colors.accent}18` : 'transparent',
-                color: !showOutput ? colors.accent : colors.textDim,
-                fontSize: 11, fontFamily: TYPOGRAPHY.fontSans, cursor: 'pointer',
-              }}>
-                <BarChart3 size={12} /> Probabilities
-              </button>
-            )}
+            <span className="demo__sep" aria-hidden="true" />
+            <SegmentedControl
+              aria-label="Result view"
+              value={showOutput ? 'output' : 'probabilities'}
+              options={viewOptions}
+              onChange={(next) => setShowOutput(next === 'output')}
+            />
           </>
         )}
 
-        <div style={{ flex: 1 }} />
-        <button onClick={handleOpenInEditor} style={{
-          display: 'flex', alignItems: 'center', gap: 6,
-          padding: '6px 14px', background: 'transparent',
-          color: colors.textMuted, border: `1px solid ${colors.border}`,
-          borderRadius: 6, fontSize: 12, fontFamily: TYPOGRAPHY.fontSans, cursor: 'pointer',
-        }}>
-          <ExternalLink size={12} /> Open in Editor
-        </button>
+        <span className="demo__spacer" />
+        <Button onClick={handleOpenInEditor} icon={<ExternalLink size={12} aria-hidden="true" />}>Open in Editor</Button>
       </div>
 
-      {/* Circuit summary */}
-      {snapshot && snapshot.gates.length > 0 && (
-        <div style={{
-          padding: '6px 16px',
-          borderBottom: (hasResults || hasOutput || error) ? `1px solid ${colors.border}` : 'none',
-          fontSize: 11, fontFamily: TYPOGRAPHY.fontMono, color: colors.textMuted,
-          display: 'flex', alignItems: 'center', gap: 8,
-        }}>
-          <span style={{ color: colors.textDim, fontSize: 11, textTransform: 'uppercase', letterSpacing: 0.5 }}>
-            {snapshot.qubit_count}q depth-{snapshot.depth}
-          </span>
-          <span style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
-            {snapshot.gates.map((g, i) => (
-              <span key={i} style={{
-                padding: '1px 5px', borderRadius: 3,
-                background: `${colors.accent}12`, color: colors.accent,
-                fontSize: 11, fontWeight: 500,
-              }}>
-                {g.type}
-              </span>
-            ))}
+      {snapshot && hasCircuit && (
+        <div className={hasResults || hasOutput || error ? 'demo__summary demo__summary--divided' : 'demo__summary'}>
+          <span className="demo__summary-label">{snapshot.qubit_count}q depth-{snapshot.depth}</span>
+          <span className="demo__gates">
+            {snapshot.gates.map((g, i) => <span key={i} className="demo__gate">{g.type}</span>)}
           </span>
         </div>
       )}
 
       {unsupported && (
-        <div style={{ padding: '10px 16px', borderBottom: `1px solid ${colors.border}` }}>
-          <UnsupportedNotice message={unsupported} />
+        <div className="demo__notice"><UnsupportedNotice message={unsupported} /></div>
+      )}
+
+      {error && <div className="demo__error" role="alert">{error}</div>}
+
+      {hasOutput && (showOutput || !hasResults) && (
+        <div className="demo__output" aria-label="Output">
+          {output.map((line, i) => <div key={i}>{line}</div>)}
         </div>
       )}
 
-      {/* Error */}
-      {error && (
-        <div style={{
-          padding: '8px 16px',
-          background: `${colors.error}10`,
-          color: colors.error,
-          fontSize: 12,
-          fontFamily: TYPOGRAPHY.fontMono,
-          borderBottom: `1px solid ${colors.border}`,
-          whiteSpace: 'pre-wrap',
-          lineHeight: 1.5,
-        }}>
-          {error}
+      {result && hasResults && !(showOutput && hasOutput) && (
+        <div className="demo__results">
+          <ProbabilityBars probabilities={result.probabilities} />
         </div>
       )}
 
-      {/* Terminal output */}
-      {hasOutput && showOutput && (
-        <div style={{
-          padding: '10px 16px',
-          background: colors.bg,
-          maxHeight: 160,
-          overflowY: 'auto',
-        }}>
-          <div style={{
-            fontFamily: TYPOGRAPHY.fontMono,
-            fontSize: 12, color: colors.text,
-            lineHeight: 1.6, whiteSpace: 'pre-wrap',
-          }}>
-            {output.map((line, i) => (
-              <div key={i}>{line}</div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* Probability bars */}
-      {hasResults && !showOutput && (
-        <div style={{ padding: '10px 16px' }}>
-          <ProbabilityBars probabilities={result.probabilities} accent={colors.accent} colors={colors} />
-        </div>
-      )}
-
-      {/* Exploration prompt */}
-      {explorationPrompt && (
-        <div style={{
-          padding: '10px 16px 14px',
-          borderTop: `1px solid ${colors.border}`,
-        }}>
-          <p style={{
-            color: colors.textMuted, fontSize: 13, fontStyle: 'italic',
-            fontFamily: TYPOGRAPHY.fontSans, lineHeight: 1.5, margin: 0,
-          }}>
-            {explorationPrompt}
-          </p>
-        </div>
-      )}
+      {explorationPrompt && <p className="demo__prompt">{explorationPrompt}</p>}
     </div>
   );
 }
