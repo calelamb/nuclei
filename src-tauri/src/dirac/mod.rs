@@ -41,7 +41,7 @@ use tauri::{Manager, State};
 /// response. Worker failures are returned as an `AgentExecuteResponse` with
 /// `status: "error"`, never as a Tauri `Err`; the `Result` is reserved for
 /// path-resolution failures that mean the worker could not even be located.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn dirac_execute(
     app_handle: tauri::AppHandle,
     request: AgentExecuteRequest,
@@ -125,20 +125,20 @@ pub(super) fn resolve_python(app_handle: &tauri::AppHandle) -> PathBuf {
 /// to the frontend, logged, or placed in the model's context — this command
 /// is write-only from the frontend's point of view. Errors are stringified
 /// via `GatewayError`'s `Display`, which never includes the key.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn dirac_set_api_key(gateway: State<'_, ModelGateway>, key: String) -> Result<(), String> {
     gateway.set_api_key(&key).map_err(|e| e.to_string())
 }
 
 /// Whether an Anthropic API key is currently stored. Used by the frontend to
 /// decide whether to show the "connect Dirac" flow.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn dirac_has_api_key(gateway: State<'_, ModelGateway>) -> bool {
     gateway.has_api_key()
 }
 
 /// Remove the stored Anthropic API key.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn dirac_clear_api_key(gateway: State<'_, ModelGateway>) -> Result<(), String> {
     gateway.clear_api_key().map_err(|e| e.to_string())
 }
