@@ -529,7 +529,7 @@ function FrameworkRow({
               style={{
                 fontSize: 11,
                 fontWeight: 600,
-                color: colors.accentLight,
+                color: colors.accentText,
                 background: `${colors.accent}18`,
                 padding: '2px 6px',
                 borderRadius: 4,

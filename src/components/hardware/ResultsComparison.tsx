@@ -59,7 +59,7 @@ export function ResultsComparison({
             flex: 1,
             fontSize: 11,
             fontWeight: 600,
-            color: colors.accentLight,
+            color: colors.accentText,
             textAlign: 'right',
             ...font,
           }}

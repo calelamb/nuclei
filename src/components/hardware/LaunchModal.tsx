@@ -685,7 +685,7 @@ export function LaunchModal() {
                       rel="noreferrer"
                       style={{
                         fontSize: 11,
-                        color: colors.accentLight,
+                        color: colors.accentText,
                         textDecoration: 'none',
                         fontFamily: TYPOGRAPHY.fontSans,
                       }}

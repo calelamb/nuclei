@@ -191,8 +191,8 @@ export function LaunchPortal() {
         >
           <Upload size={16} style={{ color: dragActive ? colors.accentText : colors.textMuted }} />
           <div style={{ fontSize: 11, color: colors.text, textAlign: 'center', lineHeight: 1.5 }}>
-            Drop a <code style={{ fontFamily: TYPOGRAPHY.fontMono, color: colors.accentLight }}>.py</code>{' '}
-            or <code style={{ fontFamily: TYPOGRAPHY.fontMono, color: colors.accentLight }}>.qs</code>{' '}
+            Drop a <code style={{ fontFamily: TYPOGRAPHY.fontMono, color: colors.accentText }}>.py</code>{' '}
+            or <code style={{ fontFamily: TYPOGRAPHY.fontMono, color: colors.accentText }}>.qs</code>{' '}
             or click to browse
           </div>
           {activeFileName && (
