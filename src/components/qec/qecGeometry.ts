@@ -187,8 +187,48 @@ export interface DetectorGraphLayout {
   aspect: number;
 }
 
-/** Fraction of the largest spatial span that the whole round axis is sheared across. */
+/** Fraction of the largest spatial span that the whole round axis is sheared across (fallback for big graphs). */
 const ROUND_SHEAR = 0.35;
+/** Shear directions (degrees below the x axis) and lengths (fractions of the spatial span) tried when separating rounds. */
+const SHEAR_ANGLES = [-12, -20, -28, -36, -45, 12, 20, 28];
+const SHEAR_LENGTHS = [0.3, 0.4, 0.5, 0.6];
+/** Above this many detectors the pairwise search is skipped in favour of the fixed diagonal. */
+const SHEAR_SEARCH_LIMIT = 300;
+
+type Vec = Readonly<{ x: number; y: number }>;
+
+/** Smallest distance between two detectors once each round's offset is applied. */
+function minSeparation(coords: ReadonlyArray<readonly [number, number, number]>, minT: number, perRound: Vec): number {
+  const placed = coords.map((c) => ({ x: c[0] + (c[2] - minT) * perRound.x, y: c[1] + (c[2] - minT) * perRound.y }));
+  let best = Infinity;
+  for (let i = 0; i < placed.length; i += 1) {
+    for (let j = i + 1; j < placed.length; j += 1) {
+      best = Math.min(best, Math.hypot(placed[i].x - placed[j].x, placed[i].y - placed[j].y));
+    }
+  }
+  return best;
+}
+
+/**
+ * Per-round offset that keeps detectors of different rounds visibly apart. A fixed
+ * diagonal can land exactly on a lattice diagonal (surface code), stacking rounds
+ * on top of each other, so small graphs pick the offset that maximises the closest pair.
+ */
+function chooseRoundOffset(coords: ReadonlyArray<readonly [number, number, number]>, minT: number, spanT: number, spatial: number): Vec {
+  const fallback = { x: (ROUND_SHEAR * spatial) / spanT, y: -(ROUND_SHEAR * spatial) / spanT };
+  if (coords.length > SHEAR_SEARCH_LIMIT) return fallback;
+  let best = fallback;
+  let bestScore = -1;
+  for (const angle of SHEAR_ANGLES) {
+    for (const length of SHEAR_LENGTHS) {
+      const radians = (angle * Math.PI) / 180;
+      const candidate = { x: (Math.cos(radians) * length * spatial) / spanT, y: (Math.sin(radians) * length * spatial) / spanT };
+      const score = minSeparation(coords, minT, candidate) / spatial;
+      if (score > bestScore + 1e-9) { best = candidate; bestScore = score; }
+    }
+  }
+  return best;
+}
 /** Gap (in spatial-span units) between the graph and the virtual boundary strip. */
 const BOUNDARY_GAP = 0.12;
 
@@ -301,15 +341,15 @@ function shearedNodes(coords: Array<[number, number, number]>): PlacedNodes {
   const minT = Math.min(...ts);
   const spanT = Math.max(...ts) - minT;
   const spatial = Math.max(Math.max(...xs) - minX, Math.max(...ys) - minY, 1);
-  const shear = spanT > 0 ? (ROUND_SHEAR * spatial) / spanT : 0;
+  const offset = spanT > 0 ? chooseRoundOffset(coords, minT, spanT, spatial) : { x: 0, y: 0 };
 
   const world = coords.map((c, detector) => ({
     detector,
     t: c[2],
     sx: c[0],
     sy: c[1],
-    x: c[0] - minX + (c[2] - minT) * shear,
-    y: c[1] - minY - (c[2] - minT) * shear,
+    x: c[0] - minX + (c[2] - minT) * offset.x,
+    y: c[1] - minY + (c[2] - minT) * offset.y,
   }));
   const yOffset = Math.max(0, ...world.map((w) => -w.y));
   const shifted = world.map((w) => ({ ...w, y: w.y + yOffset }));

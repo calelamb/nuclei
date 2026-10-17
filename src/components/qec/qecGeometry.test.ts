@@ -246,6 +246,19 @@ describe('detectorGraphLayout rounds and scale', () => {
     expect(seen.size).toBe(layout.nodes.length);
   });
 
+  it('keeps detectors of different rounds clearly apart, not merely at distinct coordinates', () => {
+    const layout = detectorGraphLayout(surfQec);
+    const scale = Math.max(layout.aspect, 1);
+    let closest = Infinity;
+    for (const a of layout.nodes) {
+      for (const b of layout.nodes) {
+        if (a.detector >= b.detector) continue;
+        closest = Math.min(closest, Math.hypot((a.x - b.x) * layout.aspect, a.y - b.y) / scale);
+      }
+    }
+    expect(closest).toBeGreaterThan(0.08);
+  });
+
   it('marks edges between the same site in different rounds as time-like', () => {
     const layout = detectorGraphLayout(surfQec);
     const timelike = layout.edges.filter((e) => e.timelike);
