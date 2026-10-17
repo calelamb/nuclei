@@ -1,4 +1,4 @@
-import { ChevronDown, ChevronUp, CircleDot, ListChecks, LoaderCircle, Radio, RefreshCw } from 'lucide-react';
+import { ChevronDown, ChevronUp, CircleAlert, CircleDot, ListChecks, LoaderCircle, Radio, RefreshCw } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState, type ReactElement } from 'react';
 
 import { resolveQecPanels } from '../../../layout/qecPanelRegistry';
@@ -18,12 +18,13 @@ import {
 import { useQecWorkbenchStore } from '../../../stores/qecWorkbenchStore';
 import { QecImportWizard } from '../import/QecImportWizard';
 import { useQecTrayIdle } from './useQecTrayIdle';
+import { describeEngineFailure } from './qecEngineMessage';
 import { Button, IconButton } from '../../ui';
 import { ICON_SIZE, ICON_STROKE } from '../../../styles/tokens';
 
-interface TrayHeaderProps { expanded: boolean; importing: boolean; onToggle(): void; }
+interface TrayHeaderProps { expanded: boolean; importing: boolean; idle: boolean; onToggle(): void; }
 
-function TrayHeader({ expanded, importing, onToggle }: TrayHeaderProps): ReactElement {
+function TrayHeader({ expanded, importing, idle, onToggle }: TrayHeaderProps): ReactElement {
   const preset = useQecWorkbenchStore((state) => state.preset);
   const pinnedPanelIds = useQecWorkbenchStore((state) => state.pinnedPanelIds);
   const panels = resolveQecPanels(preset, 'tray', pinnedPanelIds);
@@ -34,6 +35,7 @@ function TrayHeader({ expanded, importing, onToggle }: TrayHeaderProps): ReactEl
         {!importing && panels.map((panel) => <span className="qec-tray__active-instrument" key={panel.id}><ListChecks aria-hidden="true" size={16} />{panel.title}</span>)}
         <span><Radio aria-hidden="true" size={14} /> Streams</span><span>Logs</span><span>Comparisons</span>
       </div>
+      {idle && expanded && <span className="qec-tray__idle-note"><CircleDot aria-hidden="true" size={ICON_SIZE.xs} />No active jobs</span>}
       <IconButton className="qec-tray__toggle" aria-expanded={expanded} aria-label={`${expanded ? 'Collapse' : 'Expand'} jobs and streams`} onClick={onToggle}>
         {expanded ? <ChevronDown aria-hidden="true" size={ICON_SIZE.md} strokeWidth={ICON_STROKE} /> : <ChevronUp aria-hidden="true" size={ICON_SIZE.md} strokeWidth={ICON_STROKE} />}
       </IconButton>
@@ -41,17 +43,17 @@ function TrayHeader({ expanded, importing, onToggle }: TrayHeaderProps): ReactEl
   );
 }
 
-function TrayContent({ client, projectRoot }: { client: QecImportClient | null; projectRoot: string | null }): ReactElement {
+function TrayContent({ client, projectRoot }: { client: QecImportClient | null; projectRoot: string | null }): ReactElement | null {
   const jobsById = useQecJobStore((state) => state.jobs);
   const cancelJob = useQecJobStore((state) => state.cancelJob);
   const jobs = Object.values(jobsById).filter((job) => job.projectRoot === projectRoot);
   const running = jobs.filter((job) => ['starting', 'running', 'cancelling'].includes(job.status)).length;
   const queued = jobs.filter((job) => job.status === 'starting').length;
+  // Nothing to report: the header's "No active jobs" is the whole tray.
+  if (jobs.length === 0) return null;
   return (
     <div className="qec-tray__content">
-      {jobs.length === 0
-        ? <div className="qec-tray__empty"><CircleDot aria-hidden="true" size={16} /><div><strong>No active jobs</strong><span>Campaign, import, and stream lifecycle will remain visible here.</span></div></div>
-        : <div className="qec-tray__empty"><ListChecks aria-hidden="true" size={16} /><div><strong>{jobs.length} durable {jobs.length === 1 ? 'job' : 'jobs'}</strong><span>Completion and cancellation state remain available in this tray.</span></div></div>}
+      <div className="qec-tray__empty"><ListChecks aria-hidden="true" size={16} /><div><strong>{jobs.length} durable {jobs.length === 1 ? 'job' : 'jobs'}</strong><span>Completion and cancellation state remain available in this tray.</span></div></div>
       <dl className="qec-tray__summary">
         <div><dt>Queued</dt><dd className="qec-mono">{queued}</dd></div>
         <div><dt>Running</dt><dd className="qec-mono">{running}</dd></div>
@@ -210,7 +212,18 @@ function useImportEngine(
 
 function EngineNotice({ state }: { state: EngineState }): ReactElement {
   if (state.loading) return <div className="qec-tray__engine" role="status"><LoaderCircle className="nuclei-spin" aria-hidden="true" size={ICON_SIZE.lg} /><span>Starting authenticated QEC Data Engine…</span></div>;
-  return <div className="qec-tray__engine" role="alert"><CircleDot aria-hidden="true" size={ICON_SIZE.lg} /><span>{state.error}</span>{state.retry && <Button size="sm" icon={<RefreshCw aria-hidden="true" size={ICON_SIZE.sm} strokeWidth={ICON_STROKE} />} onClick={state.retry}>Retry QEC Data Engine</Button>}</div>;
+  const copy = describeEngineFailure(state.error, state.disconnected);
+  return (
+    <div className="qec-tray__engine qec-tray__engine--error" role="alert">
+      <CircleAlert aria-hidden="true" size={ICON_SIZE.lg} />
+      <div className="qec-tray__engine-text">
+        <strong>{copy.headline}</strong>
+        <span>Sessions are unavailable until it is running.</span>
+        {copy.detail && <details><summary>Technical details</summary><code>{copy.detail}</code></details>}
+      </div>
+      {state.retry && <Button size="sm" aria-label="Retry QEC Data Engine" icon={<RefreshCw aria-hidden="true" size={ICON_SIZE.sm} strokeWidth={ICON_STROKE} />} onClick={state.retry}>Retry</Button>}
+    </div>
+  );
 }
 
 function supportsSessionCatalog(client: QecWorkbenchClient): client is QecWorkbenchClient & QecSessionCatalogClient {
@@ -273,6 +286,10 @@ export function QecWorkbenchTray({ client: providedClient, connectClient }: QecW
   );
   useProvidedClientCleanup(providedClient, projectRoot);
   useSessionCatalog(engine.client, projectRoot);
+  const engineOffline = !engine.client && !engine.loading && engine.error !== null;
+  useEffect(() => {
+    if (engineOffline && projectRoot) useQecSessionCatalogStore.getState().markUnavailable(projectRoot);
+  }, [engineOffline, projectRoot]);
   const scopedSource = jobProjectRoot === projectRoot ? source : null;
   const closeAndRestoreFocus = (): void => {
     const targetId = returnFocusId;
@@ -281,10 +298,11 @@ export function QecWorkbenchTray({ client: providedClient, connectClient }: QecW
   };
   const expanded = !collapsed;
   const idle = useQecTrayIdle();
+  const engineNotice = !engine.client && (engine.loading || engine.retry || engine.disconnected);
   return (
     <section className={`qec-tray qec-tray--${expanded ? 'expanded' : 'collapsed'}${scopedSource ? ' qec-tray--import' : ''}${expanded && idle ? ' qec-tray--idle' : ''}`} aria-label="QEC jobs and streams">
-      <TrayHeader expanded={expanded} importing={scopedSource !== null} onToggle={toggleCollapsed} />
-      {!scopedSource && expanded && (!engine.client && (engine.loading || engine.retry || engine.disconnected)
+      <TrayHeader expanded={expanded} importing={scopedSource !== null} idle={idle && !engineNotice} onToggle={toggleCollapsed} />
+      {!scopedSource && expanded && (engineNotice
         ? <EngineNotice state={engine} />
         : <TrayContent client={engine.client} projectRoot={projectRoot} />)}
       {scopedSource && <div className="qec-tray__import-host" hidden={!expanded}>
