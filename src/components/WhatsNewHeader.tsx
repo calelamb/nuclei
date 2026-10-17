@@ -3,7 +3,8 @@ import type { ThemeColors } from '../stores/themeStore';
 
 import { TYPOGRAPHY } from '../styles/tokens';
 interface WhatsNewHeaderProps {
-  currentVersion: string;
+  /** The pill text: a released version (v0.14.0) or an upcoming one (Coming in 0.14). */
+  versionLabel: string;
   accent: string;
   textDim: ThemeColors['textDim'];
   reduced: boolean;
@@ -13,7 +14,7 @@ interface WhatsNewHeaderProps {
  * The "release moment" header band: a rotating-ring atom chip (the one
  * quantum motif) plus the uppercase eyebrow and monospace version pill.
  */
-export function WhatsNewHeader({ currentVersion, accent, textDim, reduced }: WhatsNewHeaderProps) {
+export function WhatsNewHeader({ versionLabel, accent, textDim, reduced }: WhatsNewHeaderProps) {
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 18 }}>
       <div style={{ position: 'relative', width: 40, height: 40, flexShrink: 0 }}>
@@ -75,7 +76,7 @@ export function WhatsNewHeader({ currentVersion, accent, textDim, reduced }: Wha
             border: `1px solid ${accent}55`,
           }}
         >
-          {`v${currentVersion}`}
+          {versionLabel}
         </span>
       </div>
     </div>
