@@ -189,8 +189,7 @@ export function PanelLayout() {
     setPreset('full');
     setBottomCollapsed(false);
     setBottomTab('histogram');
-    platform.setStoredValue('layout_preset', 'full').catch(() => { /* non-critical persistence */ });
-  }, [setPreset, setBottomCollapsed, setBottomTab, platform]);
+  }, [setPreset, setBottomCollapsed, setBottomTab]);
   const chipShown = visible.histogramChip && !chipDismissed;
   const latticeHasCoords = Boolean(qecSnapshot?.coords.qubits.some((c) => c !== null));
   const vizHasContent = vizColumnHasContent(visible, { latticeHasCoords }, chipShown);
