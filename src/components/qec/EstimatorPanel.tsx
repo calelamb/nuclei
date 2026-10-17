@@ -316,7 +316,6 @@ function selectStyle(colors: Colors): CSSProperties {
     padding: '6px 8px',
     fontSize: 12,
     fontFamily: TYPOGRAPHY.fontSans,
-    outline: 'none',
   };
 }
 

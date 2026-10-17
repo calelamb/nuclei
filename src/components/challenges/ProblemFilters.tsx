@@ -114,7 +114,6 @@ export function ProblemFilters() {
           style={{
             flex: 1,
             border: 'none',
-            outline: 'none',
             background: 'transparent',
             color: colors.text,
             fontSize: 13,

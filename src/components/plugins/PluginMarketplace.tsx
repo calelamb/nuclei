@@ -176,7 +176,6 @@ export function PluginMarketplace() {
               border: `1px solid ${colors.border}`,
               borderRadius: 4,
               color: colors.text,
-              outline: 'none',
             }}
             onFocus={(e) => {
               e.currentTarget.style.borderColor = colors.accent;

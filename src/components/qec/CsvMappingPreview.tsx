@@ -7,6 +7,7 @@ import {
 import { toStatsPoint } from '../../types/qecStats';
 
 import { TYPOGRAPHY } from '../../styles/tokens';
+import { Select } from '../ui';
 const PREVIEW_ROWS = 10;
 type Field = 'p' | 'd' | 'rounds' | 'decoder';
 
@@ -44,23 +45,21 @@ export function CsvMappingPreview() {
   if (!csv) return null;
 
   const select = (field: Field, label: string) => (
-    <label key={field} style={{ display: 'flex', flexDirection: 'column', gap: 2, fontSize: 10.5, color: colors.textDim }}>
+    <label key={field} style={{ display: 'flex', flexDirection: 'column', gap: 2, fontSize: 11, color: colors.textDim }}>
       {label}
-      <select
+      <Select
+        size="sm"
         aria-label={`Map ${field}`}
         value={csv.mapping[field] ?? ''}
         onChange={(e) => setMapping({ ...csv.mapping, [field]: e.target.value === '' ? null : e.target.value })}
-        style={{
-          background: colors.bg, color: colors.text, border: `1px solid ${colors.border}`,
-          borderRadius: 4, fontSize: 11.5, padding: '3px 4px', minWidth: 120,
-        }}
+        style={{ minWidth: 140 }}
       >
         {field !== 'decoder' && <option value="">— none —</option>}
         {field === 'decoder' && <option value={DECODER_COLUMN}>decoder column</option>}
         {keys
           .filter((k) => field === 'decoder' || k.numeric)
           .map((k) => <option key={k.key} value={k.key}>{k.key}</option>)}
-      </select>
+      </Select>
     </label>
   );
 
@@ -82,7 +81,7 @@ export function CsvMappingPreview() {
         maxHeight: 220, overflow: 'auto',
       }}
     >
-      <div style={{ fontSize: 11.5, color: colors.textMuted, marginBottom: 6 }}>
+      <div style={{ fontSize: 12, color: colors.textMuted, marginBottom: 6 }}>
         <strong style={{ color: colors.text }}>{csv.sourceName}</strong>
         {' · '}{csv.totalDataRows} rows → {csv.rows.length} tasks
         {csv.totalDataRows > csv.rows.length ? ' (duplicate strong_ids summed, as sinter does)' : ''}
@@ -98,6 +97,7 @@ export function CsvMappingPreview() {
             <label key={k.key} style={{ display: 'flex', alignItems: 'center', gap: 3, color: colors.textMuted }}>
               <input
                 type="checkbox"
+                style={{ accentColor: colors.accent }}
                 aria-label={`Group series by ${k.key}`}
                 checked={csv.mapping.groupBy.includes(k.key)}
                 onChange={(e) => toggleGroup(k.key, e.target.checked)}
@@ -134,7 +134,7 @@ export function CsvMappingPreview() {
           ))}
         </ul>
       )}
-      <table style={{ borderCollapse: 'collapse', fontSize: 10.5 }}>
+      <table style={{ borderCollapse: 'collapse', fontSize: 11 }}>
         <thead>
           <tr>
             {['strong_id', 'shots', 'errors', 'discards', 'p', 'd', 'rounds', 'decoder'].map((h) => (

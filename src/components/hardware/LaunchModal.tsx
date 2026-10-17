@@ -674,7 +674,6 @@ export function LaunchModal() {
                         padding: '6px 10px',
                         fontSize: 12,
                         fontFamily: TYPOGRAPHY.fontMono,
-                        outline: 'none',
                       }}
                     />
                     <button
@@ -904,7 +903,6 @@ export function LaunchModal() {
                       padding: '8px 12px',
                       fontSize: 13,
                       fontFamily: TYPOGRAPHY.fontSans,
-                      outline: 'none',
                       width: 140,
                     }}
                   />

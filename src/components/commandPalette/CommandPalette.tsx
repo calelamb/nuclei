@@ -128,9 +128,10 @@ export function CommandPalette({ commands, onClose }: CommandPaletteProps) {
             onChange={(e) => setQuery(e.target.value)}
             onKeyDown={handleKeyDown}
             placeholder="Type a command..."
+            className="nuclei-bare-input"
             style={{
               width: '100%', background: 'transparent',
-              border: 'none', outline: 'none',
+              border: 'none',
               color: colors.text, fontSize: 15,
               fontFamily: TYPOGRAPHY.fontSans,
             }}

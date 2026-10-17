@@ -166,7 +166,7 @@ export function ClassroomPanel() {
                   flex: 1, padding: '4px 8px', fontSize: 13, fontWeight: 600,
                   fontFamily: font, background: colors.bg,
                   border: `1px solid ${colors.accent}`,
-                  borderRadius: 4, color: colors.text, outline: 'none',
+                  borderRadius: 4, color: colors.text,
                 }}
               />
               <button
@@ -275,7 +275,7 @@ export function ClassroomPanel() {
                 style={{
                   flex: 1, padding: '5px 8px', fontSize: 11, fontFamily: font,
                   background: colors.bg, border: `1px solid ${colors.border}`,
-                  borderRadius: 4, color: colors.text, outline: 'none',
+                  borderRadius: 4, color: colors.text,
                 }}
                 onFocus={(e) => { e.currentTarget.style.borderColor = colors.accent; }}
                 onBlur={(e) => { e.currentTarget.style.borderColor = colors.border; }}

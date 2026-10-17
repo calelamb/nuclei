@@ -46,7 +46,6 @@ export function BackendSelector({ backends, selected, onSelect }: BackendSelecto
           fontSize: 11,
           fontFamily: TYPOGRAPHY.fontSans,
           cursor: 'pointer',
-          outline: 'none',
           gap: 6,
         }}
       >

@@ -122,7 +122,6 @@ export function OpenFilesSection() {
                   fontWeight: isActive ? 500 : 400,
                   fontSize: 12,
                   fontFamily: TYPOGRAPHY.fontSans,
-                  outline: 'none',
                 }}
               >
                 {iconFor(name, isActive ? colors.accent : colors.textDim)}

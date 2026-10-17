@@ -245,7 +245,6 @@ function TerminalToolbar({
           color: colors.text,
           fontSize: 10,
           fontFamily: TYPOGRAPHY.fontSans,
-          outline: 'none',
         }}
       />
 

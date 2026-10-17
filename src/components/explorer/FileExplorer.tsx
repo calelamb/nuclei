@@ -352,7 +352,6 @@ export function FileExplorer() {
               fontSize: 12,
               padding: '2px 6px',
               borderRadius: 4,
-              outline: 'none',
               fontFamily: TYPOGRAPHY.fontSans,
             }}
           />
@@ -800,7 +799,6 @@ export function FileExplorer() {
               fontSize: 12,
               padding: '4px 8px',
               borderRadius: 4,
-              outline: 'none',
               fontFamily: TYPOGRAPHY.fontSans,
             }}
           />

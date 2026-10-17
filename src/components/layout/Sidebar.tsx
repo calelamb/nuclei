@@ -54,7 +54,7 @@ function SearchPanel() {
           width: '100%', padding: '6px 10px',
           fontSize: 12, fontFamily: TYPOGRAPHY.fontSans,
           background: colors.bg, border: `1px solid ${colors.border}`,
-          borderRadius: 4, color: colors.text, outline: 'none',
+          borderRadius: 4, color: colors.text,
         }}
         onFocus={(e) => { e.currentTarget.style.borderColor = colors.accent; }}
         onBlur={(e) => { e.currentTarget.style.borderColor = colors.border; }}

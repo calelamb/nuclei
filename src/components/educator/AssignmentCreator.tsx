@@ -52,7 +52,6 @@ export function AssignmentCreator({ onClose, onSave }: AssignmentCreatorProps) {
     border: `1px solid ${colors.border}`,
     borderRadius: 4,
     color: colors.text,
-    outline: 'none',
     boxSizing: 'border-box' as const,
   };
 

@@ -278,7 +278,6 @@ export function CredentialSetup({ provider, onClose }: CredentialSetupProps) {
                   border: `1px solid ${colors.border}`,
                   borderRadius: 4,
                   color: colors.text,
-                  outline: 'none',
                   boxSizing: 'border-box',
                   ...font,
                 }}

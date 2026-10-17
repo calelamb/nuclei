@@ -179,12 +179,12 @@ export function InlineEditWidget({ editor, monaco, onClose }: InlineEditProps) {
           onChange={(e) => { setInstruction(e.target.value); setHistoryIdx(-1); }}
           onKeyDown={handleKeyDown}
           placeholder="Describe the change..."
+            className="nuclei-bare-input"
           disabled={loading}
           style={{
             flex: 1,
             background: 'transparent',
             border: 'none',
-            outline: 'none',
             color: colors.text,
             fontSize: 13,
             fontFamily: TYPOGRAPHY.fontSans,

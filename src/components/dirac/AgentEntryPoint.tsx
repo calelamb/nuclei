@@ -67,7 +67,6 @@ export function AgentEntryPoint() {
             border: `1px solid ${colors.border}`,
             borderRadius: 6,
             color: colors.text,
-            outline: 'none',
           }}
         />
         <button

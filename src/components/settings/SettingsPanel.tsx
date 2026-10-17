@@ -1,4 +1,4 @@
-import { useState, type CSSProperties, type ReactNode } from 'react';
+import { createContext, useContext, useState, type CSSProperties, type ReactNode } from 'react';
 import { ChevronDown, ChevronRight, RotateCcw, Sun, Moon, Eye, EyeOff, ExternalLink } from 'lucide-react';
 import { useThemeStore } from '../../stores/themeStore';
 import { useUIModeStore, type UIMode } from '../../stores/uiModeStore';
@@ -7,35 +7,18 @@ import { useSimulationStore } from '../../stores/simulationStore';
 import { useDiracStore } from '../../stores/diracStore';
 import { useFrameworksStore } from '../../stores/frameworksStore';
 import { EnvironmentPanel } from './EnvironmentPanel';
+import { Select, Switch, TextInput } from '../ui';
 
 import { TYPOGRAPHY } from '../../styles/tokens';
-/* ── Toggle Switch ──────────────────────────────────────── */
+/* ── Shared Controls ────────────────────────────────────── */
+
+/** The enclosing SettingRow's label, used as the accessible name of its control. */
+const RowLabelContext = createContext<string | undefined>(undefined);
 
 function Toggle({ value, onChange }: { value: boolean; onChange: (v: boolean) => void }) {
-  const colors = useThemeStore((s) => s.colors);
-  return (
-    <button
-      onClick={() => onChange(!value)}
-      style={{
-        width: 32, height: 18, borderRadius: 9, padding: 2,
-        border: 'none', cursor: 'pointer',
-        background: value ? colors.accent : colors.borderStrong,
-        display: 'flex', alignItems: 'center',
-        justifyContent: value ? 'flex-end' : 'flex-start',
-        transition: 'background 0.2s, justify-content 0.2s',
-        flexShrink: 0,
-      }}
-    >
-      <div style={{
-        width: 14, height: 14, borderRadius: '50%',
-        background: value ? '#fff' : colors.textDim,
-        transition: 'background 0.2s',
-      }} />
-    </button>
-  );
+  const label = useContext(RowLabelContext);
+  return <Switch checked={value} onCheckedChange={onChange} aria-label={label} />;
 }
-
-/* ── Shared Controls ────────────────────────────────────── */
 
 function SettingRow({ label, hint, children }: { label: string; hint?: string; children: ReactNode }) {
   const colors = useThemeStore((s) => s.colors);
@@ -49,33 +32,24 @@ function SettingRow({ label, hint, children }: { label: string; hint?: string; c
           {label}
         </span>
         {hint && (
-          <span style={{ fontSize: 10, color: colors.textDim, fontFamily: TYPOGRAPHY.fontSans, lineHeight: 1.4 }}>
+          <span style={{ fontSize: 11, color: colors.textDim, fontFamily: TYPOGRAPHY.fontSans, lineHeight: 1.4 }}>
             {hint}
           </span>
         )}
       </div>
-      {children}
+      <RowLabelContext.Provider value={label}>{children}</RowLabelContext.Provider>
     </div>
   );
 }
 
-function Select<T extends string>({ value, options, onChange }: {
+function SettingSelect<T extends string>({ value, options, onChange }: {
   value: T; options: { value: T; label: string }[]; onChange: (v: T) => void;
 }) {
-  const colors = useThemeStore((s) => s.colors);
+  const label = useContext(RowLabelContext);
   return (
-    <select
-      value={value}
-      onChange={(e) => onChange(e.target.value as T)}
-      style={{
-        background: colors.bgElevated, color: colors.text,
-        border: `1px solid ${colors.border}`, borderRadius: 4,
-        padding: '3px 6px', fontSize: 11, cursor: 'pointer',
-        fontFamily: TYPOGRAPHY.fontSans, outline: 'none',
-      }}
-    >
+    <Select size="sm" aria-label={label} value={value} onChange={(e) => onChange(e.target.value as T)}>
       {options.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
-    </select>
+    </Select>
   );
 }
 
@@ -92,11 +66,11 @@ function NumberStepper({ value, min, max, step, onChange }: {
   };
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-      <button style={btnStyle} onClick={() => onChange(Math.max(min, value - step))}>-</button>
+      <button type="button" aria-label="Decrease" style={btnStyle} onClick={() => onChange(Math.max(min, value - step))}>{'\u2212'}</button>
       <span style={{ fontSize: 11, color: colors.text, minWidth: 28, textAlign: 'center', fontFamily: TYPOGRAPHY.fontSans }}>
         {value}
       </span>
-      <button style={btnStyle} onClick={() => onChange(Math.min(max, value + step))}>+</button>
+      <button type="button" aria-label="Increase" style={btnStyle} onClick={() => onChange(Math.min(max, value + step))}>+</button>
     </div>
   );
 }
@@ -106,18 +80,15 @@ function CurrencyInput({ value, onChange }: { value: number; onChange: (v: numbe
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
       <span style={{ fontSize: 11, color: colors.textDim, fontFamily: TYPOGRAPHY.fontSans }}>$</span>
-      <input
+      <TextInput
         type="number"
+        size="sm"
         min={0}
         step={1}
         value={value}
+        aria-label="Maximum spend in dollars"
         onChange={(e) => onChange(Math.max(0, Number(e.target.value) || 0))}
-        style={{
-          width: 56, background: colors.bgElevated, color: colors.text,
-          border: `1px solid ${colors.border}`, borderRadius: 4,
-          padding: '3px 6px', fontSize: 11, fontFamily: TYPOGRAPHY.fontSans,
-          outline: 'none',
-        }}
+        style={{ width: 64 }}
       />
     </div>
   );
@@ -135,7 +106,7 @@ function Slider({ value, min, max, step, onChange, displayValue }: {
         onChange={(e) => onChange(Number(e.target.value))}
         style={{ width: 80, accentColor: colors.accent, cursor: 'pointer' }}
       />
-      <span style={{ fontSize: 10, color: colors.textDim, minWidth: 32, textAlign: 'right', fontFamily: TYPOGRAPHY.fontSans }}>
+      <span style={{ fontSize: 11, color: colors.textDim, minWidth: 32, textAlign: 'right', fontFamily: TYPOGRAPHY.fontSans }}>
         {displayValue ?? value}
       </span>
     </div>
@@ -225,7 +196,7 @@ function ApiKeyInput() {
           background: colors.bgElevated,
           border: `1px solid ${error ? colors.error : colors.border}`,
           borderRadius: 4, overflow: 'hidden',
-        }}>
+        }} className="nuclei-field-group">
           <input
             type={visible ? 'text' : 'password'}
             value={keyValue}
@@ -234,7 +205,7 @@ function ApiKeyInput() {
             style={{
               flex: 1, padding: '5px 8px', fontSize: 11,
               fontFamily: TYPOGRAPHY.fontMono,
-              background: 'transparent', border: 'none', outline: 'none',
+              background: 'transparent', border: 'none',
               color: colors.text,
             }}
           />
@@ -282,7 +253,7 @@ function ApiKeyInput() {
         Get an API key <ExternalLink size={9} />
       </a>
       <span style={{
-        fontSize: 10, color: colors.textDim, lineHeight: 1.4,
+        fontSize: 11, color: colors.textDim, lineHeight: 1.4,
         fontFamily: TYPOGRAPHY.fontSans,
       }}>
         Your key is stored locally and never leaves your machine.
@@ -340,7 +311,7 @@ export function SettingsPanel() {
             </div>
           </SettingRow>
           <SettingRow label="UI Mode">
-            <Select<UIMode>
+            <SettingSelect<UIMode>
               value={uiMode}
               options={[
                 { value: 'beginner', label: 'Beginner' },
@@ -359,7 +330,7 @@ export function SettingsPanel() {
               onChange={(v) => updateEditor({ fontSize: v })} />
           </SettingRow>
           <SettingRow label="Tab Size">
-            <Select value={String(editor.tabSize) as '2' | '4'}
+            <SettingSelect value={String(editor.tabSize) as '2' | '4'}
               options={[{ value: '2', label: '2' }, { value: '4', label: '4' }]}
               onChange={(v) => updateEditor({ tabSize: Number(v) })} />
           </SettingRow>
@@ -409,7 +380,7 @@ export function SettingsPanel() {
           </SettingRow>
           <SettingRow label="Preferred Model"
             hint="Chat only. Auto picks per message; actions that use tools always run Sonnet.">
-            <Select value={dirac.preferredModel}
+            <SettingSelect value={dirac.preferredModel}
               options={[
                 { value: 'auto', label: 'Auto' },
                 { value: 'haiku', label: 'Haiku' },
@@ -419,7 +390,7 @@ export function SettingsPanel() {
           </SettingRow>
           <SettingRow label="Context Depth"
             hint="IDE state sent with chat. Minimal: code, circuit, errors. Standard: + results, exercise, hardware. Full: extra detail.">
-            <Select value={dirac.contextDepth}
+            <SettingSelect value={dirac.contextDepth}
               options={[
                 { value: 'minimal', label: 'Minimal' },
                 { value: 'standard', label: 'Standard' },
@@ -462,7 +433,7 @@ export function SettingsPanel() {
         {/* ── Kernel ── */}
         <Section title="Kernel">
           <SettingRow label="Default Framework">
-            <Select value={kernel.defaultFramework}
+            <SettingSelect value={kernel.defaultFramework}
               options={[
                 { value: 'qiskit', label: 'Qiskit' },
                 { value: 'cirq', label: 'Cirq' },
@@ -501,7 +472,7 @@ export function SettingsPanel() {
               onChange={(v) => updateGeneral({ autoSave: v })} />
           </SettingRow>
           <SettingRow label="Language">
-            <Select value={general.language}
+            <SettingSelect value={general.language}
               options={[
                 { value: 'en', label: 'English' },
                 { value: 'es', label: 'Español' },

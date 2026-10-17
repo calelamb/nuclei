@@ -146,7 +146,6 @@ export function ComposeModal({ open, onClose }: ComposeModalProps) {
             color: colors.text,
             fontSize: 14,
             fontFamily: TYPOGRAPHY.fontSans,
-            outline: 'none',
           }}
         />
         <div

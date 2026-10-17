@@ -245,7 +245,6 @@ export function WhatsNewModal({
               display: 'flex',
               alignItems: 'center',
               borderRadius: 6,
-              outline: 'none',
               boxShadow: dismissFocus ? `0 0 0 2px ${colors.accent}66` : 'none',
               transition: `background ${DURATION.fast}ms ${EASING.enter}, color ${DURATION.fast}ms ${EASING.enter}, box-shadow ${DURATION.fast}ms ${EASING.enter}`,
             }}
@@ -372,7 +371,6 @@ export function WhatsNewModal({
                       ? shadow.md
                       : shadow.sm,
                   transform: gotItHover ? 'translateY(-1px)' : 'translateY(0)',
-                  outline: 'none',
                   transition: `background ${DURATION.fast}ms ${EASING.enter}, box-shadow ${DURATION.fast}ms ${EASING.enter}, transform ${DURATION.fast}ms ${EASING.enter}`,
                 }}
               >

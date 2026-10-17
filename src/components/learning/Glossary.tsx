@@ -36,13 +36,13 @@ export function Glossary() {
             type="text"
             placeholder="Search terms..."
             aria-label="Search glossary terms"
+            className="nuclei-bare-input"
             value={searchQuery}
             onChange={(e) => setSearch(e.target.value)}
             style={{
               flex: 1,
               background: 'transparent',
               border: 'none',
-              outline: 'none',
               color: colors.text,
               fontSize: 12,
               fontFamily: TYPOGRAPHY.fontSans,

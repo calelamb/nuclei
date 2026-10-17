@@ -47,7 +47,6 @@ export function ResearchPaperReader() {
           color: colors.text,
           fontSize: 12,
           fontFamily: TYPOGRAPHY.fontSans,
-          outline: 'none',
           boxSizing: 'border-box',
         }}
       />
@@ -74,7 +73,6 @@ export function ResearchPaperReader() {
           color: colors.text,
           fontSize: 12,
           fontFamily: TYPOGRAPHY.fontSans,
-          outline: 'none',
           resize: 'vertical',
           lineHeight: 1.5,
           boxSizing: 'border-box',

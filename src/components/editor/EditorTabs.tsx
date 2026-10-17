@@ -213,7 +213,6 @@ export function EditorTabs() {
             fontSize: 12,
             fontFamily: TYPOGRAPHY.fontSans,
             padding: '2px 6px',
-            outline: 'none',
             minWidth: 120,
           }}
         />

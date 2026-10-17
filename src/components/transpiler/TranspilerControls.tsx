@@ -155,7 +155,7 @@ function selectStyle(colors: ThemeColors): CSSProperties {
   return {
     background: colors.bg, color: colors.text,
     border: `1px solid ${colors.border}`, borderRadius: 5,
-    padding: '6px 8px', fontSize: 12, fontFamily: TYPOGRAPHY.fontSans, outline: 'none',
+    padding: '6px 8px', fontSize: 12, fontFamily: TYPOGRAPHY.fontSans,
   };
 }
 

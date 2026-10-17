@@ -124,3 +124,10 @@
 }
 .nuclei-choice-card__title { color: var(--color-text-primary); font-size: var(--font-size-heading); font-weight: var(--font-weight-semibold); }
 .nuclei-choice-card__desc { margin-top: var(--space-1); color: var(--color-text-secondary); font-size: var(--font-size-code); line-height: 1.5; }
+
+/* ── Field group: a bordered wrapper around a bare input + adornments. The wrapper shows the focus ring. ── */
+.nuclei-field-group:focus-within { border-color: var(--focus-ring-color) !important; }
+.nuclei-field-group > input:focus-visible { outline: none; }
+
+/* Borderless inputs embedded in a bar (palette, inline edit, search): swap the outline for an underline ring. */
+.nuclei-bare-input:focus-visible { outline: none; box-shadow: 0 2px 0 0 var(--focus-ring-color); }

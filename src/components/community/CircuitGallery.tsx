@@ -109,7 +109,6 @@ export function CircuitGallery() {
             color: colors.text,
             fontSize: 12,
             fontFamily: TYPOGRAPHY.fontSans,
-            outline: 'none',
             boxSizing: 'border-box',
           }}
           onFocus={(e) => {
@@ -158,7 +157,6 @@ export function CircuitGallery() {
             fontSize: 11,
             cursor: 'pointer',
             fontFamily: TYPOGRAPHY.fontSans,
-            outline: 'none',
           }}
         >
           {SORTS.map((s) => (

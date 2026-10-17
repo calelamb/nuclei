@@ -70,7 +70,6 @@ export function UserProfile() {
                 fontSize: 14,
                 fontWeight: 700,
                 fontFamily: TYPOGRAPHY.fontSans,
-                outline: 'none',
               }}
             />
             <button

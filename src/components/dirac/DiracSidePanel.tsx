@@ -662,7 +662,7 @@ export function DiracSidePanel() {
               background: colors.bgPanel,
               border: `1px solid ${colors.border}`,
               borderRadius: 6, color: colors.text,
-              outline: 'none', resize: 'none',
+ resize: 'none',
               minHeight: 36, maxHeight: 120, lineHeight: 1.4,
               transition: 'border-color 150ms ease, box-shadow 150ms ease',
             }}
