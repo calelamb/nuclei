@@ -83,6 +83,16 @@ describe('DiracSidePanel', () => {
     expect(screen.getByText('Summarize the last sweep')).toBeTruthy();
   });
 
+  it('shows an experiment context chip only in Research (research-23)', () => {
+    resetStores('sk-ant-test');
+    const { unmount } = render(<DiracSidePanel />);
+    expect(screen.queryByText('experiment')).toBeNull();
+    unmount();
+    useWorkspaceStore.setState({ mode: 'research' });
+    render(<DiracSidePanel />);
+    expect(screen.getByText('experiment')).toBeTruthy();
+  });
+
   it('navigates the slash menu with the keyboard and never sends a bare slash (learn-22)', () => {
     resetStores('sk-ant-test');
     const fetchMock = stubFetch();

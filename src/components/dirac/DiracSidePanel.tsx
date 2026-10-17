@@ -8,6 +8,8 @@ import { useDiracPanelStore } from '../../stores/diracPanelStore';
 import { useEditorStore } from '../../stores/editorStore';
 import { useCircuitStore } from '../../stores/circuitStore';
 import { useSimulationStore } from '../../stores/simulationStore';
+import { useWorkspaceStore } from '../../stores/workspaceStore';
+import { useExperimentUiStore } from '../../stores/experimentUiStore';
 import { EASING, DURATION, prefersReducedMotion } from '../../lib/animations';
 import { AgentEntryPoint } from './AgentEntryPoint';
 import { DiracNoKey } from './DiracNoKey';
@@ -66,11 +68,15 @@ function ContextIndicator() {
   const code = useEditorStore((s) => s.code);
   const snapshot = useCircuitStore((s) => s.snapshot);
   const result = useSimulationStore((s) => s.result);
+  const workspaceMode = useWorkspaceStore((s) => s.mode);
+  const hasExperiment = useExperimentUiStore((s) => s.selectedExperimentFileName !== null);
 
   const items = [
     { label: 'code', active: code.trim().length > 0 },
     { label: 'circuit', active: !!snapshot && snapshot.gates.length > 0 },
     { label: 'results', active: !!result },
+    // Research only: Dirac also sees the experiment (and run) open in the Experiments panel.
+    ...(workspaceMode === 'research' ? [{ label: 'experiment', active: hasExperiment }] : []),
   ];
 
   return (
