@@ -48,4 +48,35 @@ export default defineConfig([
       ],
     },
   },
+  {
+    // Chrome lanes own their colours: hex literals are banned in favour of theme tokens
+    // (useThemeStore colors / var(--color-*)). Restates the font rules because a later
+    // no-restricted-syntax block replaces, not extends, the earlier one.
+    files: [
+      'src/components/{explorer,settings,hardware,layout,editor,educator,commandPalette,onboarding,ui,community,transpiler}/**/*.{ts,tsx}',
+      'src/components/qec/VizZone.tsx',
+    ],
+    ignores: ['**/*.test.{ts,tsx}', 'src/components/editor/monacoThemes.ts'],
+    rules: {
+      'no-restricted-syntax': [
+        'error',
+        {
+          selector: "Property[key.name='fontFamily'] > Literal[value=/(Geist|JetBrains|Fira|Inter|monospace|sans-serif|system-ui)/]",
+          message: 'Use TYPOGRAPHY.fontSans / TYPOGRAPHY.fontMono from src/styles/tokens instead of a literal font stack.',
+        },
+        {
+          selector: "JSXAttribute[name.name='fontFamily'] > Literal",
+          message: 'Use fontFamily={TYPOGRAPHY.fontSans} / fontMono instead of a literal font stack.',
+        },
+        {
+          selector: 'Literal[value=/^#[0-9a-fA-F]{3,8}$/]',
+          message: 'No hex colours in chrome components: use theme tokens (colors.* from useThemeStore, or var(--color-*)).',
+        },
+        {
+          selector: 'TemplateElement[value.raw=/#[0-9a-fA-F]{6}/]',
+          message: 'No hex colours in chrome components: use theme tokens (colors.* from useThemeStore, or var(--color-*)).',
+        },
+      ],
+    },
+  },
 ])
