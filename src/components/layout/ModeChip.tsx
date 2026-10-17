@@ -1,3 +1,4 @@
+import { modeChipTint } from './modeChipTint';
 import { useState, useRef, useLayoutEffect, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { GraduationCap, FlaskConical, Check } from 'lucide-react';
@@ -172,7 +173,7 @@ export function ModeChip() {
           gap: 5,
           height: 20,
           padding: '0 8px',
-          background: `${accent}1f`,
+          background: modeChipTint(accent),
           border: `1px solid ${accent}`,
           borderRadius: 4,
           cursor: 'pointer',

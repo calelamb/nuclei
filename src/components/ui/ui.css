@@ -25,7 +25,7 @@
 .nuclei-btn.nuclei-btn--primary { background: var(--color-accent-quantum); border-color: var(--color-accent-quantum); color: var(--color-on-accent); }
 .nuclei-btn.nuclei-btn--primary:hover:not(:disabled) { background: var(--color-accent-quantum-soft); border-color: var(--color-accent-quantum-soft); }
 /* Light: the AA teal (5.36:1 with white) so the button reads as the same teal identity in both themes. */
-:root[data-theme='light'] .nuclei-btn.nuclei-btn--primary { color: #fff; background: var(--color-accent-quantum-text); border-color: var(--color-accent-quantum-text); }
+:root[data-theme='light'] .nuclei-btn.nuclei-btn--primary:not(:disabled) { color: #fff; background: var(--color-accent-quantum-text); border-color: var(--color-accent-quantum-text); }
 :root[data-theme='light'] .nuclei-btn.nuclei-btn--primary:hover:not(:disabled) { background: color-mix(in srgb, var(--color-accent-quantum-text) 80%, #000); border-color: color-mix(in srgb, var(--color-accent-quantum-text) 80%, #000); }
 .nuclei-btn.nuclei-btn--primary:active:not(:disabled) { filter: brightness(0.92); }
 .nuclei-btn.nuclei-btn--primary:disabled { background: var(--color-surface-overlay); border-color: var(--color-border-strong); color: var(--color-text-disabled); opacity: 1; }
