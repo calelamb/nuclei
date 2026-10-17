@@ -7,6 +7,7 @@ import type { PlatformBridge } from '../../platform/bridge';
 import { useCircuitStore } from '../../stores/circuitStore';
 import { useSimulationStore } from '../../stores/simulationStore';
 import { useWorkspaceStore } from '../../stores/workspaceStore';
+import { useEditorStore } from '../../stores/editorStore';
 import { useExperimentRunStore } from '../../stores/experimentRunStore';
 
 const bridge: PlatformBridge = {
@@ -105,5 +106,14 @@ describe('<StatusBar> (extracted from PanelLayout, Phase A)', () => {
     // controls off-screen), so assert on each piece.
     expect(getByText('theta-sweep')).toBeTruthy();
     expect(getByText(/: 3\/8/)).toBeTruthy();
+  });
+});
+
+describe('StatusBar kernel failure', () => {
+  it('shows the auth-rejected message inline, not only in the tooltip', () => {
+    useEditorStore.getState().setKernelStatus('failed', 'Kernel rejected the session token — restart Nuclei');
+    const { getByText } = renderStatusBar();
+    expect(getByText(/Kernel rejected the session token — restart Nuclei/)).toBeTruthy();
+    useEditorStore.getState().setKernelStatus('ready');
   });
 });

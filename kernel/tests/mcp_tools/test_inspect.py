@@ -86,7 +86,7 @@ def test_invalid_circuit_error_never_echoes_file_content(tmp_path):
     p.write_text(secret)
     text = read_circuit_text(stim_text=None, path=str(p))
     with pytest.raises(ToolInputError) as info:
-        inspect_circuit(text)
+        inspect_circuit(text, source_path=str(p))
     assert "SUPERSECRETTOKEN1234" not in str(info.value)
     assert "not a valid stim circuit" in str(info.value)
 
@@ -128,3 +128,21 @@ def test_oversized_file_is_refused_with_path(tmp_path, monkeypatch):
     p.write_text("H 0\nH 0\n")
     with pytest.raises(ToolInputError, match="exceeds"):
         ti.read_circuit_text(stim_text=None, path=str(p))
+
+
+def test_path_parse_error_names_path_and_line_but_no_content(tmp_path):
+    p = tmp_path / "notes.stim"
+    p.write_text("H 0\nSUPERSECRETTOKEN1234 0\n")
+    text = read_circuit_text(stim_text=None, path=str(p))
+    with pytest.raises(ToolInputError) as info:
+        inspect_circuit(text, source_path=str(p))
+    message = str(info.value)
+    assert str(p) in message and "line 2" in message
+    assert "SUPERSECRETTOKEN1234" not in message
+
+
+def test_inline_parse_error_reports_line_and_stim_reason():
+    with pytest.raises(ToolInputError) as info:
+        inspect_circuit("H 0\nNOT_A_GATE 0")
+    assert "line 2" in str(info.value)
+    assert "NOT_A_GATE" in str(info.value)

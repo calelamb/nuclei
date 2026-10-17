@@ -67,13 +67,35 @@ def read_circuit_text(*, stim_text: str | None, path: str | None) -> str:
     return text
 
 
-def parse_circuit(text: str) -> stim.Circuit:
-    # Stim's message quotes the offending input; never relay it (the text may be
-    # a non-circuit file the caller pointed us at).
+def _first_failing_line(text: str) -> int | None:
+    """1-based line of the first line Stim cannot parse on its own (best effort)."""
+    for number, raw in enumerate(text.splitlines(), start=1):
+        line = raw.split("#", 1)[0].strip()
+        if not line or line.startswith("}"):
+            continue
+        try:
+            stim.Circuit(line + "\n}" if line.startswith("REPEAT") else line)
+        except ValueError:
+            return number
+    return None
+
+
+def parse_circuit(text: str, *, source_path: str | None = None) -> stim.Circuit:
+    """Parse stim text. Errors give a location; file content is never relayed.
+
+    Stim's message quotes the offending input, so for a path (a file the caller
+    pointed us at, possibly not a circuit at all) only the path and line number
+    are reported. For inline text the caller's own first Stim reason is relayed.
+    """
     try:
         return stim.Circuit(text)
     except ValueError as exc:
-        raise ToolInputError("not a valid stim circuit (Stim could not parse the text)") from exc
+        line = _first_failing_line(text)
+        where = f" (line {line})" if line is not None else ""
+        if source_path is not None:
+            raise ToolInputError(f"not a valid stim circuit: {source_path}{where}") from exc
+        reason = str(exc).strip().splitlines()[0] if str(exc).strip() else "Stim could not parse the text"
+        raise ToolInputError(f"not a valid stim circuit{where}: {reason}") from exc
 
 
 def explain_nondeterministic_detectors(circuit: stim.Circuit) -> dict[str, Any] | None:
@@ -102,8 +124,8 @@ def _graphlike_distance(circuit: stim.Circuit) -> tuple[int | None, str | None]:
         return None, first
 
 
-def inspect_circuit(text: str) -> dict[str, Any]:
-    circuit = parse_circuit(text)
+def inspect_circuit(text: str, *, source_path: str | None = None) -> dict[str, Any]:
+    circuit = parse_circuit(text, source_path=source_path)
     distance, reason = _graphlike_distance(circuit)
     result: dict[str, Any] = {
         "circuit_sha256": sha256_text(str(circuit)),  # same canonical hash as run_campaign manifests

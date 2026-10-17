@@ -191,6 +191,14 @@ export function StatusBar() {
           stroke="none"
         />
         Kernel{kernelStatus === 'failed' ? ' — failed' : kernelStatus === 'connecting' && !connected ? '...' : ''}
+        {kernelStatus === 'failed' && kernelError && (
+          <span
+            role="alert"
+            style={{ color: colors.error, marginLeft: 4, maxWidth: 360, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+          >
+            {kernelError}
+          </span>
+        )}
       </span>
       <span style={{ color: isRunning ? colors.accent : colors.textDim, fontSize: 10,
         ...(isRunning ? { animation: 'nuclei-heartbeat 1.5s ease infinite' } : {}) }}>

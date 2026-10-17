@@ -38,6 +38,10 @@ export function JumpButton({
   );
 }
 
+function article(basis: string): string {
+  return basis.toUpperCase() === 'X' ? 'an' : 'a';
+}
+
 function CauseNote({
   cause,
   stale,
@@ -50,20 +54,21 @@ function CauseNote({
   const colors = useThemeStore((s) => s.colors);
   const isReset = cause.kind === 'preparation_basis_mismatch';
   const prep = cause.preparation_line;
+  const noun = isReset ? 'preparation' : 'measurement';
   return (
     <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', fontSize: 11, color: colors.textMuted }}>
       <span>
         {isReset
-          ? `Likely cause: not the reset, but a ${cause.basis}-basis preparation the detector does not match.`
-          : `Likely cause: the detector is not fixed in the ${cause.basis} basis.`}
+          ? `Likely cause: not the reset, but ${article(cause.basis)} ${cause.basis}-basis preparation the detector does not match.`
+          : `Likely cause: the ${cause.basis}-basis measurement collapses the qubit, so what the detector compares later is random.`}
       </span>
       {prep != null && (
         <JumpButton
           line={prep}
           disabled={stale}
           onJump={onJump}
-          label={`Jump to preparation at line ${prep}`}
-          text={`preparation · line ${prep}`}
+          label={`Jump to ${noun} at line ${prep}`}
+          text={`${noun} · line ${prep}`}
         />
       )}
     </div>

@@ -6,6 +6,7 @@ import stat
 import subprocess
 import sys
 import textwrap
+import time
 from pathlib import Path
 
 import pytest
@@ -104,6 +105,25 @@ def test_exiting_latest_kernel_repoints_pointer_at_a_live_older_kernel(tmp_path)
         auth.remove_runtime_files(tmp_path, 9743, os.getpid())
         pointer = json.loads((tmp_path / "kernel.json").read_text())
         assert (pointer["port"], pointer["token"]) == (9742, TOKEN_A)
+    finally:
+        other.kill()
+        other.wait()
+
+
+def test_repoint_ignores_owner_record_and_malformed_per_port_files(tmp_path):
+    other = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(30)"])
+    try:
+        good = {"url": "ws://localhost:9742", "port": 9742, "pid": other.pid, "token": TOKEN_A}
+        (tmp_path / "kernel-9742.json").write_text(json.dumps(good))
+        time.sleep(0.02)
+        (tmp_path / "kernel-owner.json").write_text(json.dumps({"pid": other.pid, "port": 9742}))
+        (tmp_path / "kernel-9800.json").write_text(json.dumps({"pid": other.pid, "port": 9801}))
+        (tmp_path / "kernel-9900.json").write_text(json.dumps({"pid": other.pid, "port": 9900}))
+        auth.write_runtime_file(_cfg(TOKEN_B), 9743, runtime_dir=tmp_path)
+        auth.remove_runtime_files(tmp_path, 9743, os.getpid())
+        pointer = json.loads((tmp_path / "kernel.json").read_text())
+        assert (pointer["port"], pointer["token"]) == (9742, TOKEN_A)
+        assert auth.read_runtime_file(tmp_path)["token"] == TOKEN_A
     finally:
         other.kill()
         other.wait()

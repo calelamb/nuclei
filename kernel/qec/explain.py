@@ -109,8 +109,25 @@ def _diagram_svg(circuit: stim.Circuit, info: StimAnalysisError) -> str | None:
         return None
 
 
+SUMMARY_TARGETS = 3
+
+
+def _target_names(info: StimAnalysisError, omitted: int = 0) -> str:
+    """"D0, D1" or, past three targets, "D0, D1, D2 and 17 more"."""
+    total = len(info.targets) + omitted
+    if total <= SUMMARY_TARGETS:
+        return ", ".join(info.targets) or f"a {info.kind}"
+    shown = ", ".join(info.targets[:SUMMARY_TARGETS])
+    return f"{shown} and {total - SUMMARY_TARGETS} more"
+
+
 def _subject(info: StimAnalysisError, omitted: int = 0) -> str:
-    """"Detector D0", "Detectors D0, D1 and 3 more" - named from the listed targets."""
+    """"Detector D0", "Detectors D0, D1, D2 and 17 more" - named from the listed targets."""
+    total = len(info.targets) + omitted
+    if total > SUMMARY_TARGETS:
+        kinds = {t[:1] for t in info.targets}
+        noun = {"D": "detector", "L": "observable"}.get(next(iter(kinds)) if len(kinds) == 1 else "", "target")
+        return f"{noun.capitalize()}s {_target_names(info, omitted)}"
     groups = (
         ("detector", info.detector_indices, "D"),
         ("observable", info.observable_indices, "L"),
@@ -120,15 +137,13 @@ def _subject(info: StimAnalysisError, omitted: int = 0) -> str:
         for noun, idx, p in groups
         if idx
     ]
-    if not parts:
-        parts = [f"a {info.kind}"]
-    text = " and ".join(parts)
-    if omitted:
-        text += f", and {omitted} more"
+    text = " and ".join(parts) if parts else f"a {info.kind}"
     return text[0].upper() + text[1:]
 
 
 def _sensitivity_text(info: StimAnalysisError) -> str:
+    if len(info.sensitivities) > SUMMARY_TARGETS:
+        return " Each target's Pauli is listed below."
     if len(info.sensitivities) > 1:
         each = "; ".join(f"{t}: {p}" for t, p in info.sensitivities)
         return f" The Pauli each is sensitive to there is {each}."
@@ -151,7 +166,7 @@ def _nondeterministic_sentence(
     omitted: int = 0,
     cause: dict[str, Any] | None = None,
 ) -> str:
-    names = ", ".join(info.targets) or f"a {info.kind}"
+    names = _target_names(info, omitted)
     plural = len(info.targets) + omitted > 1
     qubits = ", ".join(str(q) for q in info.qubits)
     qubit_phrase = f" on qubit{'s' if len(info.qubits) != 1 else ''} {qubits}" if qubits else ""
@@ -168,8 +183,10 @@ def _nondeterministic_sentence(
             f"not fixed by the {what} in that basis, so it is random even without noise.{sens} "
             f"{guidance} {NONDETERMINISM_HEDGE}"
         )
-    decl = ", ".join(f"{t} at line {n}" for t, n in declared.items())
-    decl_text = f" Declared: {decl}." if decl else ""
+    shown = list(declared.items())[:SUMMARY_TARGETS]
+    decl = ", ".join(f"{t} at line {n}" for t, n in shown)
+    more = len(declared) - len(shown)
+    decl_text = f" Declared: {decl}{f', and {more} more' if more > 0 else ''}." if decl else ""
     return (
         f"{subject} {verb} non-deterministic: the {op}{qubit_phrase}"
         f"{_where_text(info, line)} anti-commutes with what {names} tracks, so its parity is random "

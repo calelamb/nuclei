@@ -40,7 +40,7 @@ def build_server(journal_dir: Path | None = None, ceilings: Ceilings | None = No
     @server.tool(description="Structural facts about a stim circuit (qubits, detectors, observables, graphlike distance). Give exactly one of stim_text or path.")
     def inspect_circuit(stim_text: str | None = None, path: str | None = None) -> dict[str, Any]:
         text = read_circuit_text(stim_text=stim_text, path=path)
-        result = _inspect(text)
+        result = _inspect(text, source_path=path)
         manifest = build_manifest(
             tool="inspect_circuit", parameters={"source": "path" if path else "stim_text", "path": path},
             circuit_sha256=[result["circuit_sha256"]],

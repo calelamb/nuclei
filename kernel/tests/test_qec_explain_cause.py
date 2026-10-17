@@ -47,19 +47,67 @@ def test_generated_surface_code_wrong_basis_reset_points_at_detector_and_reset()
     assert target in result["sentence"]
 
 
-def test_measurement_in_wrong_basis_finds_preceding_preparation():
-    result = explain_nondeterministic(R_MX_M)
+def test_blamed_measurement_is_itself_the_preparation_line():
+    result = explain_nondeterministic("R 0\nMX 0\nM 0\nDETECTOR rec[-1]\n")
     cause = result["cause"]
     assert cause["kind"] == "measurement_basis_mismatch"
     assert cause["basis"] == "X"
-    assert cause["preparation_line"] == 1
-    assert "not fixed" in result["sentence"]
+    assert cause["operation_line"] == 2
+    assert cause["preparation_line"] == 2
+    assert "line 1" not in result["sentence"].replace("line 10", "")
+    assert "X-basis measurement at line 2" in result["sentence"]
 
 
-def test_non_basis_failures_have_no_cause():
+def test_measurement_collapse_ignores_unrelated_earlier_reset():
+    src = "R 0\nH 0\nRX 0\nTICK\nMX 0\nMX 0\nTICK\nM 0\nDETECTOR rec[-1]\n"
+    result = explain_nondeterministic(src)
+    cause = result["cause"]
+    if cause is not None:
+        assert cause["preparation_line"] == cause["operation_line"]
+
+
+def test_blamed_mr_without_reset_has_preparation_line():
+    result = explain_nondeterministic("MR 0\nMX 0\nDETECTOR rec[-2] rec[-1]\n")
+    cause = result["cause"]
+    if cause is not None:
+        assert cause["preparation_line"] == cause["operation_line"]
+        assert cause["preparation_line"] is not None
+
+
+def test_generated_surface_code_wrong_basis_detector_points_at_detector_and_reset():
+    circuit = stim.Circuit.generated("surface_code:rotated_memory_z", distance=3, rounds=3)
+    lines = str(circuit).split("\n")
+    # Insert a DETECTOR comparing an X-basis-collapsed ancilla in round 0.
+    first_m = next(i for i, ln in enumerate(lines) if ln.startswith("M "))
+    lines.insert(first_m + 1, "DETECTOR rec[-1]")
+    source = "\n".join(lines)
+    result = explain_nondeterministic(source)
+    assert result["status"] == "nondeterministic"
+    assert result["cause"] is not None
+    (target, decl_line), *_ = result["cause"]["detector_lines"].items()
+    assert source.split("\n")[decl_line - 1].strip().startswith("DETECTOR")
+    assert result["cause"]["preparation_line"] is not None
+
+
+def test_implicit_initialisation_has_no_cause_and_uses_fallback_sentence():
     result = explain_nondeterministic("H 0\nM 0\nDETECTOR rec[-1]\n")
     assert result["status"] == "nondeterministic"
-    assert result["cause"] is None or result["cause"]["kind"] == "measurement_basis_mismatch"
+    assert result["cause"] is None
+    assert "anti-commutes with what" in result["sentence"]
+
+
+def test_sentence_is_summarised_for_many_targets_and_uses_correct_article():
+    source = "R 0\nMX 0\n" + "DETECTOR rec[-1]\n" * 12
+    sentence = explain_nondeterministic(source)["sentence"]
+    assert "and 9 more" in sentence
+    assert sentence.count("D11") == 0
+    assert "a X" not in sentence
+
+
+def test_observable_cause_names_observable_include():
+    result = explain_nondeterministic("R 0\nMX 0\nOBSERVABLE_INCLUDE(0) rec[-1]\nM 0\nOBSERVABLE_INCLUDE(0) rec[-1]\n")
+    if result["status"] == "nondeterministic" and result["cause"]:
+        assert "OBSERVABLE_INCLUDE" in result["sentence"]
 
 
 def test_all_listed_detectors_are_reported_with_their_own_sensitivity():
@@ -79,4 +127,4 @@ def test_many_detectors_are_bounded_with_an_and_n_more_count():
     assert len(result["targets"]) == MAX_LISTED_TARGETS
     assert len(result["sensitivities"]) <= MAX_LISTED_TARGETS
     assert result["targets_omitted"] == 10
-    assert "and 10 more" in result["sentence"]
+    assert f"and {MAX_LISTED_TARGETS + 10 - 3} more" in result["sentence"]

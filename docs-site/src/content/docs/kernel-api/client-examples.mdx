@@ -79,7 +79,7 @@ ready-to-send JSON:
 # to one line (websocat sends one frame per input line); --no-close keeps the
 # connection open after stdin EOF so the response frames have time to arrive.
 {
-  jq -c '{type: "authenticate", token: .token}' ~/.nuclei/runtime/kernel.json
+  jq -c '{type: "authenticate", token: .token}' ~/.nuclei/runtime/kernel-9742.json
   jq -c . docs-site/fixtures/run_python_hello.request.json
 } | websocat --no-close ws://localhost:9742
 ```

@@ -13,23 +13,9 @@ from typing import Any
 
 from kernel.qec.explain_parse import StimAnalysisError, split_basis_operation
 
-PREPARATION_GATES = frozenset({"R", "RX", "RY", "RZ", "MR", "MRX", "MRY", "MRZ"})
+MAX_GUIDANCE_DECLARATIONS = 3
 PREPARATION_KIND = "preparation_basis_mismatch"
 MEASUREMENT_KIND = "measurement_basis_mismatch"
-
-
-def _previous_preparation_line(source: str, line: int | None, qubit: int | None) -> int | None:
-    """Nearest earlier line that resets ``qubit`` (textual scan; best effort)."""
-    if line is None or qubit is None:
-        return None
-    rows = source.splitlines()
-    for number in range(min(line, len(rows)) - 1, 0, -1):
-        tokens = rows[number - 1].split("#", 1)[0].split()
-        if not tokens or tokens[0].split("(", 1)[0].upper() not in PREPARATION_GATES:
-            continue
-        if str(qubit) in tokens[1:]:
-            return number
-    return None
 
 
 def classify_cause(
@@ -44,8 +30,10 @@ def classify_cause(
         preparation_line = line
         kind = PREPARATION_KIND
     elif "measurement" in rest:
-        qubit = info.qubits[0] if info.qubits else None
-        preparation_line = _previous_preparation_line(source, line, qubit)
+        # The blamed measurement collapses the qubit into its own basis, so it
+        # *is* the effective preparation for whatever the detector compares later;
+        # an earlier reset is screened off by it.
+        preparation_line = line
         kind = MEASUREMENT_KIND
     else:
         return None
@@ -58,18 +46,53 @@ def classify_cause(
     }
 
 
+def _article(basis: str) -> str:
+    return "an" if basis.upper() in {"X"} else "a"
+
+
+def declaration_keyword(targets: list[str]) -> str:
+    """The instruction that declares these targets."""
+    if targets and all(t.startswith("L") for t in targets):
+        return "OBSERVABLE_INCLUDE"
+    if targets and all(t.startswith("D") for t in targets):
+        return "DETECTOR"
+    return "DETECTOR/OBSERVABLE_INCLUDE"
+
+
+def _declaration_phrase(detector_lines: dict[str, int]) -> str:
+    items = list(detector_lines.items())
+    shown = ", ".join(f"{t} at line {n}" for t, n in items[:MAX_GUIDANCE_DECLARATIONS])
+    extra = len(items) - MAX_GUIDANCE_DECLARATIONS
+    keyword = declaration_keyword([t for t, _ in items])
+    if extra > 0:
+        return f"the {keyword} declarations ({shown}, and {extra} more; see the list below)"
+    return f"the {keyword} declaration{'s' if len(items) > 1 else ''} ({shown})"
+
+
 def cause_guidance(cause: dict[str, Any]) -> str:
-    """The pointing sentence: which DETECTOR line and which preparation line to check."""
-    detectors = ", ".join(f"{t} at line {n}" for t, n in cause["detector_lines"].items())
-    prep = cause["preparation_line"]
+    """The pointing sentence: which declaration line and which preparation line to check."""
+    basis = cause["basis"]
+    line = cause["preparation_line"]
+    keyword = declaration_keyword(list(cause["detector_lines"])) if cause["detector_lines"] else "DETECTOR"
     parts = []
-    if detectors:
-        parts.append(f"the DETECTOR declaration ({detectors})")
-    if prep is not None:
-        parts.append(f"the preparation at line {prep}")
+    if cause["detector_lines"]:
+        parts.append(_declaration_phrase(cause["detector_lines"]))
+    if cause["kind"] == MEASUREMENT_KIND:
+        if line is not None:
+            parts.append(f"the {basis}-basis measurement at line {line}")
+            tail = (
+                f"the {basis}-basis measurement at line {line} leaves the qubit in {_article(basis)} "
+                f"{basis} eigenstate, so the later measurements the detector compares are random"
+            )
+        else:
+            tail = "the measurement leaves the qubit in a different basis from the later ones compared"
+    else:
+        if line is not None:
+            parts.append(f"the preparation at line {line}")
+        tail = "the qubit is prepared in the wrong basis"
     if not parts:
         return ""
     return (
-        f"Check {' and '.join(parts)}: either the DETECTOR compares measurements that are "
-        f"not fixed in the {cause['basis']} basis, or the qubit is prepared in the wrong basis."
+        f"Check {' and '.join(parts)}: either the {keyword} compares measurements that are "
+        f"not fixed in the {basis} basis, or {tail}."
     )

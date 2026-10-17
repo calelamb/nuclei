@@ -157,6 +157,26 @@ describe('CircuitExplainPanel', () => {
     expect(useEditorRevealStore.getState().request?.line).toBe(1);
   });
 
+  it('uses "an X-basis" and names the blamed measurement as the preparation', () => {
+    seed({
+      nondeterministic: {
+        ...NONDET, line: 2,
+        cause: { kind: 'preparation_basis_mismatch', basis: 'X', operation_line: 2, preparation_line: 2, detector_lines: { D0: 4 } },
+      },
+    });
+    const first = render(<CircuitExplainPanel />);
+    expect(first.getByText(/an X-basis preparation/)).toBeTruthy();
+    cleanup();
+    seed({
+      nondeterministic: {
+        ...NONDET, line: 2,
+        cause: { kind: 'measurement_basis_mismatch', basis: 'X', operation_line: 2, preparation_line: 2, detector_lines: { D0: 4 } },
+      },
+    });
+    const second = render(<CircuitExplainPanel />);
+    expect(second.getByRole('button', { name: 'Jump to measurement at line 2' })).toBeTruthy();
+  });
+
   it('shows the REPEAT iteration a fault falls in', () => {
     const faults = [{ ...MINW.faults[0], iteration: 2 }, MINW.faults[1]];
     seed({ min_weight: { ...MINW, faults } });

@@ -21,6 +21,7 @@ import { useQecStore } from '../stores/qecStore';
 import { useQecEstimateStore } from '../stores/qecEstimateStore';
 import { useQecExplainStore } from '../stores/qecExplainStore';
 import { applyQecExplainResult, applyQecExplainError, explainSizeError } from '../lib/qecExplainMessages';
+import { sendPostAuthMessages } from './kernelPostAuth';
 import { setQecExplainSender, type QecExplainAnalysis } from '../lib/qecExplainSender';
 import { useMissingDependencyStore } from '../stores/missingDependencyStore';
 import { setQecDecodeSender, setQecSnapshotSender, setQecEstimateSender } from '../lib/qecDecodeSender';
@@ -462,47 +463,7 @@ export function useKernel() {
         useEditorStore.getState().setKernelConnected(true);
         useEditorStore.getState().setKernelReady(true);
         useEditorStore.getState().setKernelStatus('ready');
-        const code = useEditorStore.getState().code;
-        if (code.trim()) {
-          const language = kernelLanguageFor(useEditorStore.getState().framework, useEditorStore.getState().filePath);
-          ws.send(JSON.stringify({ type: 'parse', code, language }));
-        }
-
-        // One-time migration: earlier builds wrote provider credentials to
-        // localStorage as plaintext. On first connect after the keyring move,
-        // hand any stashed tokens to the kernel and wipe localStorage so the
-        // secrets never sit in the browser again. Safe to re-run — if there
-        // are no legacy keys, the whole block no-ops.
-        try {
-          const LEGACY_PREFIX = 'nuclei-hardware-';
-          for (let i = 0; i < localStorage.length; i++) {
-            const key = localStorage.key(i);
-            if (!key || !key.startsWith(LEGACY_PREFIX)) continue;
-            const provider = key.slice(LEGACY_PREFIX.length);
-            const raw = localStorage.getItem(key);
-            if (!raw) continue;
-            try {
-              const creds = JSON.parse(raw);
-              if (creds && typeof creds === 'object') {
-                ws.send(JSON.stringify({
-                  type: 'hardware_set_credentials',
-                  provider,
-                  credentials: creds,
-                }));
-              }
-            } catch { /* malformed legacy entry — drop it */ }
-            localStorage.removeItem(key);
-          }
-        } catch { /* localStorage may be unavailable in some embedded webviews */ }
-
-        // Ask the kernel which providers it already has connections to from
-        // its keyring-backed auto-reconnect, so the UI shows them as connected
-        // without the user having to re-enter tokens.
-        ws.send(JSON.stringify({ type: 'hardware_connected_providers' }));
-        // Rehydrate JobTracker from the kernel's persistent registry so the
-        // user sees their past jobs (marked 'stale' when not recoverable)
-        // instead of an empty list on reload.
-        ws.send(JSON.stringify({ type: 'hardware_list_jobs' }));
+        sendPostAuthMessages(ws);
       };
 
       authenticated.then(onAuthenticated, (error: unknown) => {

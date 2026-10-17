@@ -22,6 +22,7 @@ import atexit
 import hmac
 import json
 import os
+import re
 import signal
 import sys
 import tempfile
@@ -349,14 +350,32 @@ def remove_runtime_files(directory: Path, port: int, pid: int) -> None:
         _repoint_to_live_kernel(directory)
 
 
+PER_PORT_FILE_PATTERN = re.compile(r"^kernel-(\d{1,5})\.json$")
+
+
+def _valid_per_port_record(name: str, text: str) -> bool:
+    """A usable kernel record: right filename, matching port, token + url, live pid."""
+    match = PER_PORT_FILE_PATTERN.match(name)
+    if match is None:
+        return False
+    info = json.loads(text)
+    return (
+        isinstance(info, dict)
+        and info.get("port") == int(match.group(1))
+        and isinstance(info.get("token"), str)
+        and isinstance(info.get("url"), str)
+        and _pid_alive(info.get("pid"))
+    )
+
+
 def _repoint_to_live_kernel(directory: Path) -> None:
     live: list[tuple[float, str]] = []
     for candidate in directory.glob("kernel-*.json"):
         try:
             text = candidate.read_text()
-            if _pid_alive(json.loads(text).get("pid")):
+            if _valid_per_port_record(candidate.name, text):
                 live.append((candidate.stat().st_mtime, text))
-        except (OSError, ValueError, AttributeError):
+        except (OSError, ValueError):
             continue
     if live:
         try:
