@@ -4,6 +4,7 @@ import { useEditorStore } from '../../stores/editorStore';
 import { EASING, DURATION, getDuration, prefersReducedMotion } from '../../lib/animations';
 
 import { TYPOGRAPHY } from '../../styles/tokens';
+import { Button } from '../ui';
 interface PlaygroundState {
   step: number;
   qubitState: 'zero' | 'one' | 'superposition' | 'measured';
@@ -204,7 +205,7 @@ export function QuantumPlayground({ onComplete, onBridgeToIDE }: PlaygroundProps
   return (
     <div style={{
       position: 'fixed', inset: 0, zIndex: 4000,
-      background: `linear-gradient(135deg, ${colors.bg} 0%, #080E18 100%)`,
+      background: `linear-gradient(135deg, ${colors.bg} 0%, ${colors.bgPanel} 100%)`,
       display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
       padding: 32,
       opacity: pg.bridging ? 0 : 1,
@@ -223,18 +224,14 @@ export function QuantumPlayground({ onComplete, onBridgeToIDE }: PlaygroundProps
       </div>
 
       {/* Skip button */}
-      <button
+      <Button
+        variant="ghost"
         onClick={onComplete}
-        style={{
-          position: 'absolute', top: 32, right: 32,
-          background: 'none', border: 'none',
-          color: colors.textMuted, cursor: 'pointer',
-          fontSize: 13, fontFamily: TYPOGRAPHY.fontSans,
-        }}
+        style={{ position: 'absolute', top: 24, right: 24 }}
         aria-label="Skip onboarding"
       >
         Skip
-      </button>
+      </Button>
 
       {/* Main content */}
       <div style={{ maxWidth: 560, width: '100%', textAlign: 'center' }}>
@@ -267,7 +264,7 @@ export function QuantumPlayground({ onComplete, onBridgeToIDE }: PlaygroundProps
           marginBottom: 24,
           animation: prefersReducedMotion() ? 'none' : `nuclei-slide-up ${DURATION.slow}ms ${EASING.enter}`,
         }}>
-          <span style={{ color: colors.dirac, fontSize: 12, fontWeight: 600, fontFamily: TYPOGRAPHY.fontSans, display: 'block', marginBottom: 6 }}>
+          <span style={{ color: colors.diracText, fontSize: 12, fontWeight: 600, fontFamily: TYPOGRAPHY.fontSans, display: 'block', marginBottom: 6 }}>
             Dirac
           </span>
           <p style={{

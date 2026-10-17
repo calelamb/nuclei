@@ -1,0 +1,126 @@
+/*
+ * UI primitives (Button, IconButton, Select, TextInput/TextArea, Switch).
+ * Everything resolves from tokens.css so both themes work; hover/active/focus
+ * are CSS states, never inline-style mutation. Selectors use two classes so they
+ * beat contextual resets such as `.qec-workbench button { color: inherit }`.
+ */
+
+.nuclei-spin { animation: nuclei-spin 900ms linear infinite; }
+
+/* ── Button ── */
+.nuclei-btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: var(--space-1);
+  flex: 0 0 auto; white-space: nowrap; cursor: pointer;
+  border: 1px solid transparent; border-radius: var(--radius-soft);
+  font-family: var(--font-sans); font-weight: var(--font-weight-medium); line-height: 1;
+  transition: background-color var(--duration-fast) var(--ease-standard),
+              border-color var(--duration-fast) var(--ease-standard),
+              color var(--duration-fast) var(--ease-standard),
+              box-shadow var(--duration-fast) var(--ease-standard);
+}
+.nuclei-btn.nuclei-btn--sm { height: var(--control-height-sm); padding: 0 var(--space-2); font-size: var(--font-size-caption); }
+.nuclei-btn.nuclei-btn--md { height: var(--control-height-md); padding: 0 var(--space-3); font-size: var(--font-size-chrome-label); }
+.nuclei-btn.nuclei-btn--lg { height: var(--control-height-lg); padding: 0 var(--space-4); font-size: var(--font-size-code); }
+
+.nuclei-btn.nuclei-btn--primary { background: var(--color-accent-quantum); border-color: var(--color-accent-quantum); color: var(--color-surface-sunken); }
+.nuclei-btn.nuclei-btn--primary:hover:not(:disabled) { background: var(--color-accent-quantum-soft); border-color: var(--color-accent-quantum-soft); }
+:root[data-theme='light'] .nuclei-btn.nuclei-btn--primary { color: #fff; background: var(--color-text-primary); border-color: var(--color-text-primary); }
+:root[data-theme='light'] .nuclei-btn.nuclei-btn--primary:hover:not(:disabled) { background: var(--color-accent-quantum); border-color: var(--color-accent-quantum); }
+
+.nuclei-btn.nuclei-btn--secondary { background: var(--color-surface-raised); border-color: var(--color-border-strong); color: var(--color-text-primary); }
+.nuclei-btn.nuclei-btn--secondary:hover:not(:disabled) { background: var(--color-surface-overlay); }
+
+.nuclei-btn.nuclei-btn--ghost { background: transparent; color: var(--color-text-secondary); }
+.nuclei-btn.nuclei-btn--ghost:hover:not(:disabled) { background: var(--color-surface-overlay); color: var(--color-text-primary); }
+
+.nuclei-btn.nuclei-btn--danger { background: transparent; border-color: var(--color-danger); color: var(--color-danger); }
+.nuclei-btn.nuclei-btn--danger:hover:not(:disabled) { background: var(--color-danger); color: #fff; }
+
+.nuclei-btn:active:not(:disabled) { transform: translateY(0.5px); }
+.nuclei-btn:disabled, .nuclei-icon-btn:disabled { cursor: not-allowed; opacity: 0.5; }
+.nuclei-btn[aria-busy='true'] { cursor: progress; opacity: 0.8; }
+
+/* ── IconButton ── */
+.nuclei-icon-btn {
+  display: inline-grid; place-items: center; flex: 0 0 auto; padding: 0; cursor: pointer;
+  border: 1px solid transparent; border-radius: var(--radius-soft);
+  background: transparent; color: var(--color-text-secondary);
+  transition: background-color var(--duration-fast) var(--ease-standard),
+              color var(--duration-fast) var(--ease-standard),
+              border-color var(--duration-fast) var(--ease-standard);
+}
+.nuclei-icon-btn.nuclei-icon-btn--sm { width: var(--control-height-sm); height: var(--control-height-sm); }
+.nuclei-icon-btn.nuclei-icon-btn--md { width: var(--control-height-md); height: var(--control-height-md); }
+.nuclei-icon-btn.nuclei-icon-btn--secondary { background: var(--color-surface-raised); border-color: var(--color-border-strong); }
+.nuclei-icon-btn:hover:not(:disabled) { background: var(--color-surface-overlay); color: var(--color-text-primary); }
+
+/* ── Select ── */
+.nuclei-select { position: relative; display: inline-flex; align-items: center; min-width: 0; }
+.nuclei-select > select {
+  appearance: none; -webkit-appearance: none; width: 100%; min-width: 0;
+  padding: 0 calc(var(--space-2) + var(--icon-sm) + var(--space-1)) 0 var(--space-2);
+  border: 1px solid var(--color-border-strong); border-radius: var(--radius-soft);
+  background: var(--color-surface-raised); color: var(--color-text-primary);
+  font-family: var(--font-sans); font-size: var(--font-size-chrome-label); cursor: pointer;
+  transition: border-color var(--duration-fast) var(--ease-standard), background-color var(--duration-fast) var(--ease-standard);
+}
+.nuclei-select.nuclei-select--sm > select { height: var(--control-height-sm); }
+.nuclei-select.nuclei-select--md > select { height: var(--control-height-md); }
+.nuclei-select.nuclei-select--lg > select { height: var(--control-height-lg); }
+.nuclei-select > select:hover:not(:disabled) { border-color: var(--color-text-tertiary); }
+.nuclei-select > select:disabled { cursor: not-allowed; opacity: 0.5; }
+.nuclei-select > select[aria-invalid='true'] { border-color: var(--color-danger); }
+.nuclei-select__chevron { position: absolute; right: var(--space-2); pointer-events: none; color: var(--color-text-tertiary); }
+
+/* ── TextInput / TextArea ── */
+.nuclei-input, .nuclei-textarea {
+  width: 100%; min-width: 0; padding: 0 var(--space-2);
+  border: 1px solid var(--color-border-strong); border-radius: var(--radius-soft);
+  background: var(--color-surface-base); color: var(--color-text-primary);
+  font-family: var(--font-sans); font-size: var(--font-size-chrome-label);
+  transition: border-color var(--duration-fast) var(--ease-standard);
+}
+.nuclei-input.nuclei-input--sm { height: var(--control-height-sm); }
+.nuclei-input.nuclei-input--md { height: var(--control-height-md); }
+.nuclei-input.nuclei-input--lg { height: var(--control-height-lg); }
+.nuclei-textarea { padding: var(--space-2); line-height: var(--line-height-code); resize: vertical; }
+.nuclei-input.nuclei-input--mono, .nuclei-textarea.nuclei-input--mono { font-family: var(--font-mono); }
+.nuclei-input::placeholder, .nuclei-textarea::placeholder { color: var(--color-text-tertiary); }
+.nuclei-input:hover:not(:disabled), .nuclei-textarea:hover:not(:disabled) { border-color: var(--color-text-tertiary); }
+.nuclei-input:focus-visible, .nuclei-textarea:focus-visible { border-color: var(--focus-ring-color); outline-offset: 0; }
+.nuclei-input:disabled, .nuclei-textarea:disabled { cursor: not-allowed; opacity: 0.5; }
+.nuclei-input[aria-invalid='true'], .nuclei-textarea[aria-invalid='true'] { border-color: var(--color-danger); }
+
+/* ── Switch ── */
+.nuclei-switch {
+  position: relative; flex: 0 0 auto; width: 32px; height: 18px; padding: 0; cursor: pointer;
+  border: 1px solid var(--color-border-strong); border-radius: var(--radius-pill);
+  background: var(--color-surface-overlay);
+  transition: background-color var(--duration-fast) var(--ease-standard), border-color var(--duration-fast) var(--ease-standard);
+}
+.nuclei-switch__thumb {
+  position: absolute; top: 1px; left: 1px; width: 14px; height: 14px; border-radius: 50%;
+  background: var(--color-text-secondary);
+  transition: transform var(--duration-fast) var(--ease-standard), background-color var(--duration-fast) var(--ease-standard);
+}
+.nuclei-switch[aria-checked='true'] { background: var(--color-accent-quantum); border-color: var(--color-accent-quantum); }
+.nuclei-switch[aria-checked='true'] .nuclei-switch__thumb { transform: translateX(14px); background: #fff; }
+.nuclei-switch:disabled { cursor: not-allowed; opacity: 0.5; }
+
+/* ── ChoiceCard ── */
+.nuclei-choice-card {
+  display: flex; flex-direction: column; align-items: flex-start; width: 100%; padding: var(--space-4) var(--space-5);
+  cursor: pointer; text-align: left; font-family: var(--font-sans);
+  border-style: solid; border-width: 1px 1px 1px 3px;
+  border-color: var(--color-border-subtle) var(--color-border-subtle) var(--color-border-subtle) var(--choice-accent);
+  border-radius: 0 var(--radius-round) var(--radius-round) 0;
+  background: var(--color-surface-sunken);
+  transition: background-color var(--duration-normal) var(--ease-standard),
+              border-color var(--duration-normal) var(--ease-standard);
+}
+.nuclei-choice-card:hover {
+  background: var(--color-surface-raised);
+  border-top-color: var(--choice-accent); border-right-color: var(--choice-accent); border-bottom-color: var(--choice-accent);
+}
+.nuclei-choice-card__title { color: var(--color-text-primary); font-size: var(--font-size-heading); font-weight: var(--font-weight-semibold); }
+.nuclei-choice-card__desc { margin-top: var(--space-1); color: var(--color-text-secondary); font-size: var(--font-size-code); line-height: 1.5; }
