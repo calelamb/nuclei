@@ -80,7 +80,7 @@ their Python upgrades. {/* src-tauri/src/commands/frameworks.rs:1-8, 143-149 */}
 | Location | `<appDataDir>/venv` — concrete per-OS paths in [configuration](/docs/reference/configuration/#file-locations) |
 | Interpreter probe order | `python3.13` → `python3.12` → `python3.11` → `python3.10` → `python3` → `python`; first hit with minor ≥ 10 wins, so a version-specific binary beats a generic symlink {/* frameworks.rs:204-227 */} |
 | Minimum Python | 3.10 (`MIN_PYTHON_MINOR`) — older interpreters fail at kernel import on PEP 604 unions {/* frameworks.rs:167-171 */} |
-| Core deps | `websockets`, `numpy`, `keyring` — force-installed on every launch if missing {/* frameworks.rs:289-293 */} |
+| Core deps | `websockets` (13.0+), `numpy`, `keyring` — force-installed on every launch if missing {/* frameworks.rs:289-293 */} |
 | Frameworks | Installed on demand from the [framework catalog](/docs/reference/framework-catalog/) via the setup wizard |
 
 **Auto-rebuild:** if an existing venv was built from Python < 3.10 (a real

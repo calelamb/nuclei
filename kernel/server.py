@@ -16,7 +16,11 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 # embedders that use the adapter without this server.)
 os.environ.setdefault("QDK_PYTHON_TELEMETRY", "none")
 
-import websockets
+# The explicit asyncio implementation (websockets >= 13.0). Bare
+# ``websockets.serve`` is the *legacy* server before 14.0, whose
+# ``process_request(path, headers)`` hook has a different signature: on the
+# pinned 13.x the auth hook crashed every handshake with HTTP 500.
+from websockets.asyncio.server import serve as ws_serve
 from kernel import auth
 from kernel.executor import ADAPTER_SPECS, Executor
 from kernel.hardware.manager import HardwareManager
@@ -1054,7 +1058,7 @@ async def handle_message(websocket):
 
 
 async def _try_serve(port: int, auth_config: auth.KernelAuthConfig):
-    return await websockets.serve(
+    return await ws_serve(
         auth.secure_handler(handle_message, auth_config),
         "localhost",
         port,

@@ -34,7 +34,7 @@ jobs:
           "pytest>=8,<9"
           "pyarrow>=18,<26"
           "duckdb>=1.2,<2"
-          "websockets>=12,<14"
+          "websockets>=13,<17"
 
       - name: Import 10M Stim records through canonical storage
         run: >-
