@@ -16,6 +16,7 @@ import {
   ChevronRight,
   ChevronDown,
   Sigma,
+  X,
   type LucideIcon,
 } from 'lucide-react';
 import { useProjectStore } from '../../stores/projectStore';
@@ -30,6 +31,7 @@ import {
   defaultCircuitFileName,
 } from '../../data/starterTemplates';
 import { MEMORY_PREFIX, isMemoryPath } from '../../hooks/useFileOps';
+import { flattenVisible, resolveTreeKey } from './treeNavigation';
 
 const EXTENSION_ICONS: Record<string, LucideIcon> = {
   py: FileCode,
@@ -89,6 +91,8 @@ export function FileExplorer() {
   const [menuOpen, setMenuOpen] = useState(false);
   const [circuitSubmenu, setCircuitSubmenu] = useState(false);
   const menuContainerRef = useRef<HTMLDivElement>(null);
+  const treeRef = useRef<HTMLDivElement>(null);
+  const [focusedPath, setFocusedPath] = useState<string | null>(null);
 
   const loadRoot = useCallback(
     async (rootPath: string) => {
@@ -105,6 +109,30 @@ export function FileExplorer() {
       setExpanded({});
     },
     [platform],
+  );
+
+  /**
+   * Re-read the root listing but keep every expanded folder open (refetching
+   * only those), so refresh / create / rename never collapse the user's tree.
+   */
+  const reloadTree = useCallback(
+    async (rootPath: string) => {
+      setError(null);
+      const entries = await platform.listDirectory(rootPath);
+      if (!entries) {
+        setError('Could not read folder.');
+        return;
+      }
+      const openPaths = Object.keys(expanded).filter((p) => expanded[p]);
+      const refreshed = await Promise.all(
+        openPaths.map(async (p) => [p, await platform.listDirectory(p)] as const),
+      );
+      const stillOpen = refreshed.filter((r): r is readonly [string, DirEntry[]] => r[1] !== null);
+      setRootEntries(entries);
+      setChildEntries(Object.fromEntries(stillOpen));
+      setExpanded(Object.fromEntries(stillOpen.map(([p]) => [p, true])));
+    },
+    [platform, expanded],
   );
 
   const inMemory = isMemoryPath(projectRoot);
@@ -154,8 +182,8 @@ export function FileExplorer() {
   }, [platform, setProjectRoot, openTab]);
 
   const handleRefresh = useCallback(() => {
-    if (projectRoot) loadRoot(projectRoot);
-  }, [projectRoot, loadRoot]);
+    if (projectRoot) void reloadTree(projectRoot);
+  }, [projectRoot, reloadTree]);
 
   const handleOpenFile = useCallback(
     async (path: string) => {
@@ -236,7 +264,7 @@ export function FileExplorer() {
       const res = await platform.createDirectory(path, false);
       cancelCreate();
       if (!res) { setError(`Couldn't create folder ${raw}.`); return; }
-      await loadRoot(projectRoot);
+      await reloadTree(projectRoot);
       return;
     }
 
@@ -246,7 +274,7 @@ export function FileExplorer() {
       if (!dir) { setError(`Couldn't create package ${raw}.`); cancelCreate(); return; }
       await platform.createFile(`${path}/__init__.py`, '');
       cancelCreate();
-      await loadRoot(projectRoot);
+      await reloadTree(projectRoot);
       return;
     }
 
@@ -258,9 +286,10 @@ export function FileExplorer() {
     cancelCreate();
     if (!res) { setError(`Couldn't create ${name} (already exists?).`); return; }
     if (pending.kind === 'circuit') setEditorFramework(pending.framework);
-    await loadRoot(projectRoot);
+    await reloadTree(projectRoot);
     openTab({ path: res.path, content });
-  }, [draft, pending, projectRoot, platform, loadRoot, openTab, setEditorFramework]);
+    setFocusedPath(res.path);
+  }, [draft, pending, projectRoot, platform, reloadTree, openTab, setEditorFramework]);
 
   const commitRename = useCallback(
     async (oldPath: string) => {
@@ -270,10 +299,10 @@ export function FileExplorer() {
       const res = await platform.renameFile(oldPath, d);
       if (res) {
         useProjectStore.getState().renameTab(oldPath, res.path);
-        if (projectRoot) loadRoot(projectRoot);
+        if (projectRoot) void reloadTree(projectRoot);
       }
     },
-    [renameDraft, platform, projectRoot, loadRoot],
+    [renameDraft, platform, projectRoot, reloadTree],
   );
 
   const rowStyle = (isActive: boolean, depth: number): React.CSSProperties => ({
@@ -301,6 +330,10 @@ export function FileExplorer() {
           <div
             role="treeitem"
             aria-expanded={isExpanded}
+            aria-level={depth + 1}
+            data-tree-path={entry.path}
+            tabIndex={rovingTabIndex(entry.path)}
+            onFocus={() => setFocusedPath(entry.path)}
             onClick={() => toggleExpand(entry.path)}
             style={rowStyle(false, depth)}
             onMouseEnter={(e) => {
@@ -362,6 +395,11 @@ export function FileExplorer() {
       <div
         key={entry.path}
         role="treeitem"
+        aria-level={depth + 1}
+        aria-selected={isActive}
+        data-tree-path={entry.path}
+        tabIndex={rovingTabIndex(entry.path)}
+        onFocus={() => setFocusedPath(entry.path)}
         onClick={() => handleOpenFile(entry.path)}
         onDoubleClick={() => {
           setRenameDraft(entry.name);
@@ -408,6 +446,47 @@ export function FileExplorer() {
         kind: 'file' as const,
       }));
   }, [tabs, projectRoot]);
+
+  const treeEntries: readonly DirEntry[] = inMemory ? memoryTabEntries : rootEntries ?? [];
+  const visibleItems = flattenVisible(treeEntries, childEntries, expanded);
+  const tabStopPath = visibleItems.some((i) => i.path === focusedPath)
+    ? focusedPath
+    : visibleItems.find((i) => i.path === activeTabPath)?.path ?? visibleItems[0]?.path ?? null;
+  const rovingTabIndex = (path: string): 0 | -1 => (path === tabStopPath ? 0 : -1);
+
+  const focusRow = (path: string) => {
+    setFocusedPath(path);
+    requestAnimationFrame(() => {
+      const rows = treeRef.current?.querySelectorAll<HTMLElement>('[data-tree-path]') ?? [];
+      Array.from(rows).find((r) => r.dataset.treePath === path)?.focus();
+    });
+  };
+
+  const handleTreeKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
+    const target = (e.target as HTMLElement).closest<HTMLElement>('[data-tree-path]');
+    if (!target || e.target !== target) return;
+    const path = target.dataset.treePath as string;
+    const action = resolveTreeKey(visibleItems, path, e.key);
+    if (action.type === 'none') return;
+    e.preventDefault();
+    const item = visibleItems.find((i) => i.path === path);
+    switch (action.type) {
+      case 'focus': focusRow(action.path); break;
+      case 'expand': void toggleExpand(action.path); break;
+      case 'collapse': setExpanded((cur) => ({ ...cur, [action.path]: false })); break;
+      case 'activate':
+        if (item?.kind === 'directory') void toggleExpand(action.path);
+        else void handleOpenFile(action.path);
+        break;
+      case 'rename': {
+        const name = basename(action.path);
+        setRenameDraft(name);
+        setRenameTarget(action.path);
+        break;
+      }
+    }
+  };
+
 
   /**
    * Quick-create from the empty state. Spins up an in-memory project
@@ -595,6 +674,7 @@ export function FileExplorer() {
         <div ref={menuContainerRef} style={{ position: 'relative' }}>
           <button
             title="New…"
+            aria-label="New file, circuit or folder"
             onClick={() => {
               setMenuOpen((o) => !o);
               setCircuitSubmenu(false);
@@ -721,6 +801,7 @@ export function FileExplorer() {
         </div>
         <button
           title="Refresh"
+          aria-label="Refresh file list"
           onClick={handleRefresh}
           style={{
             background: 'transparent',
@@ -744,6 +825,7 @@ export function FileExplorer() {
         </button>
         <button
           title="Close folder"
+          aria-label="Close folder"
           onClick={() => {
             setProjectRoot(null);
             platform.setStoredValue('project_root', null).catch(() => {});
@@ -754,8 +836,8 @@ export function FileExplorer() {
             color: colors.textDim,
             cursor: 'pointer',
             padding: 4,
-            fontSize: 11,
-            fontFamily: "'Geist Sans', sans-serif",
+            display: 'flex',
+            borderRadius: 4,
           }}
           onMouseEnter={(e) => {
             e.currentTarget.style.color = colors.text;
@@ -764,7 +846,7 @@ export function FileExplorer() {
             e.currentTarget.style.color = colors.textDim;
           }}
         >
-          ×
+          <X size={13} />
         </button>
       </div>
 
@@ -831,6 +913,12 @@ export function FileExplorer() {
             {error}
           </div>
         )}
+        <div
+          ref={treeRef}
+          role="tree"
+          aria-label="Project files"
+          onKeyDown={handleTreeKeyDown}
+        >
         {!loading && !error && inMemory && (
           <>
             <div
@@ -873,6 +961,7 @@ export function FileExplorer() {
             Folder is empty. Click + to add a file, package, or circuit.
           </div>
         )}
+        </div>
       </div>
     </div>
   );
