@@ -52,6 +52,15 @@ function useInspectorDrawer() {
     triggerRef.current?.focus();
   }, []);
   const toggle = useCallback(() => open ? close() : setOpen(true), [close, open]);
+  // Resizing into the drawer band must not leave an overlay parked over the canvas.
+  useEffect(() => {
+    if (typeof window.matchMedia !== 'function') return undefined;
+    const query = window.matchMedia(DRAWER_QUERY);
+    if (typeof query.addEventListener !== 'function') return undefined;
+    const onChange = (event: MediaQueryListEvent): void => { if (event.matches) setOpen(false); };
+    query.addEventListener('change', onChange);
+    return () => query.removeEventListener('change', onChange);
+  }, []);
   return { close, open, toggle, triggerRef };
 }
 

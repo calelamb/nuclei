@@ -95,13 +95,14 @@ interface StudyFormProps {
   error: string | null;
   onChange: (draft: StudyDraft) => void;
   onSubmit: (event: FormEvent) => void;
+  onCancel: () => void;
 }
 
-function StudyForm({ busy, submitting, draft, error, onChange, onSubmit }: StudyFormProps): ReactElement {
+function StudyForm({ busy, submitting, draft, error, onChange, onSubmit, onCancel }: StudyFormProps): ReactElement {
   const colors = useThemeStore((state) => state.colors);
   return (
     <form onSubmit={onSubmit} style={{ display: 'grid', gap: 7 }}>
-      <TextInput aria-label="Study name" placeholder="Study name" value={draft.name} disabled={busy} onChange={(event) => onChange({ ...draft, name: event.target.value })} />
+      <TextInput autoFocus aria-label="Study name" placeholder="Study name" value={draft.name} disabled={busy} onChange={(event) => onChange({ ...draft, name: event.target.value })} />
       <TextArea aria-label="Research question" placeholder="Research question" value={draft.question} disabled={busy} onChange={(event) => onChange({ ...draft, question: event.target.value })} rows={3} />
       <Select aria-label="Workspace preset" value={draft.preset} disabled={busy} onChange={(event) => onChange({ ...draft, preset: event.target.value as QecWorkspacePreset })}>
         <option value="build">Build</option><option value="analyze">Analyze</option><option value="observe">Observe</option>
@@ -110,6 +111,7 @@ function StudyForm({ busy, submitting, draft, error, onChange, onSubmit }: Study
       <Button type="submit" variant="primary" className="qec-study-create-button" disabled={busy} loading={submitting} icon={submitting ? undefined : <Plus size={12} />}>
         {submitting ? 'Creating Study…' : 'Create Study'}
       </Button>
+      <Button type="button" variant="ghost" size="sm" disabled={submitting} onClick={onCancel}>Cancel</Button>
     </form>
   );
 }
@@ -146,6 +148,7 @@ export function QecStudySidebar({ fs }: QecStudySidebarProps): ReactElement {
   const colors = useThemeStore((state) => state.colors);
   const [draft, setDraft] = useState<StudyDraft>(EMPTY_DRAFT);
   const [submitting, setSubmitting] = useState(false);
+  const [creating, setCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
   useStudyLifecycle(projectRoot, fs);
   const submit = async (event: FormEvent): Promise<void> => {
@@ -159,6 +162,7 @@ export function QecStudySidebar({ fs }: QecStudySidebarProps): ReactElement {
       await create(projectRoot, validated.study, fs);
       setActiveStudy(validated.study.id);
       setDraft(EMPTY_DRAFT);
+      setCreating(false);
     } catch (cause: unknown) {
       setError(cause instanceof Error ? cause.message : 'Could not create the Study. Try again.');
     } finally {
@@ -168,9 +172,13 @@ export function QecStudySidebar({ fs }: QecStudySidebarProps): ReactElement {
   if (!projectRoot) return <QecNoProjectNotice />;
   return (
     <div style={{ display: 'grid', gap: 12, padding: 10, fontFamily: TYPOGRAPHY.fontSans }}>
-      <section aria-label="QEC Studies"><div style={{ display: 'flex', gap: 5, alignItems: 'center', color: colors.textMuted, fontSize: 11, fontWeight: 600, marginBottom: 6 }}><BookOpen size={12} />STUDIES</div><StudyList studies={studies} busy={loading || submitting} /></section>
+      <section aria-label="QEC Studies"><div style={{ display: 'flex', gap: 5, alignItems: 'center', color: colors.textMuted, fontSize: 12, fontWeight: 500, marginBottom: 6 }}><BookOpen size={12} />Studies</div><StudyList studies={studies} busy={loading || submitting} /></section>
       <ValidationCards colors={colors} />
-      <section aria-label="Create Study"><div style={{ color: colors.textMuted, fontSize: 11, fontWeight: 600, marginBottom: 6 }}>NEW STUDY</div><StudyForm busy={loading || submitting} submitting={submitting} draft={draft} error={error} onChange={setDraft} onSubmit={(event) => void submit(event)} /></section>
+      <section aria-label="Create Study">
+        {creating
+          ? <StudyForm busy={loading || submitting} submitting={submitting} draft={draft} error={error} onChange={setDraft} onSubmit={(event) => void submit(event)} onCancel={() => { setCreating(false); setError(null); }} />
+          : <Button size="sm" icon={<Plus size={12} />} onClick={() => setCreating(true)}>New Study</Button>}
+      </section>
     </div>
   );
 }

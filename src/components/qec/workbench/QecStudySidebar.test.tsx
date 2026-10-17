@@ -80,12 +80,31 @@ describe('<QecStudySidebar />', () => {
     expect(view.getByText(/schema:/)).toBeTruthy();
   });
 
+  it('keeps the creation form closed until asked for, and closes it again after creating (qec-r-23)', async () => {
+    const fs = memoryStudyFs();
+    useProjectStore.setState({ projectRoot: '/project' });
+    const view = render(<QecStudySidebar fs={fs} />);
+    await waitFor(() => expect(useQecStudyStore.getState().loading).toBe(false));
+    expect(view.queryByLabelText('Study name')).toBeNull();
+
+    fireEvent.click(view.getByRole('button', { name: 'New Study' }));
+    fireEvent.click(view.getByRole('button', { name: 'Cancel' }));
+    expect(view.queryByLabelText('Study name')).toBeNull();
+
+    fireEvent.click(view.getByRole('button', { name: 'New Study' }));
+    fireEvent.change(view.getByLabelText('Study name'), { target: { value: 'Quick' } });
+    fireEvent.change(view.getByLabelText('Research question'), { target: { value: 'Fast?' } });
+    fireEvent.click(view.getByRole('button', { name: 'Create Study' }));
+    await waitFor(() => expect(view.queryByLabelText('Study name')).toBeNull());
+  });
+
   it('creates a validated minimal Study and selects it', async () => {
     const fs = memoryStudyFs();
     useProjectStore.setState({ projectRoot: '/project' });
     const view = render(<QecStudySidebar fs={fs} />);
     await waitFor(() => expect(useQecStudyStore.getState().loading).toBe(false));
 
+    fireEvent.click(view.getByRole('button', { name: 'New Study' }));
     fireEvent.change(view.getByLabelText('Study name'), { target: { value: 'Surface Memory' } });
     fireEvent.change(view.getByLabelText('Research question'), { target: { value: 'Does d=7 suppress errors?' } });
     fireEvent.change(view.getByLabelText('Workspace preset'), { target: { value: 'observe' } });
@@ -106,6 +125,7 @@ describe('<QecStudySidebar />', () => {
     const view = render(<QecStudySidebar fs={fs} />);
     await waitFor(() => expect(useQecStudyStore.getState().loading).toBe(false));
 
+    fireEvent.click(view.getByRole('button', { name: 'New Study' }));
     fireEvent.click(view.getByRole('button', { name: 'Create Study' }));
 
     expect(view.getByRole('alert').textContent).toContain('Enter a Study name');
@@ -119,6 +139,7 @@ describe('<QecStudySidebar />', () => {
     const view = render(<QecStudySidebar fs={fs} />);
     await view.findByRole('button', { name: /Existing/ });
 
+    fireEvent.click(view.getByRole('button', { name: 'New Study' }));
     fireEvent.change(view.getByLabelText('Study name'), { target: { value: 'Existing' } });
     fireEvent.change(view.getByLabelText('Research question'), { target: { value: 'Replace it?' } });
     fireEvent.click(view.getByRole('button', { name: 'Create Study' }));
@@ -138,6 +159,7 @@ describe('<QecStudySidebar />', () => {
     useProjectStore.setState({ projectRoot: '/project' });
     const view = render(<QecStudySidebar fs={fs} />);
     await waitFor(() => expect(useQecStudyStore.getState().loading).toBe(false));
+    fireEvent.click(view.getByRole('button', { name: 'New Study' }));
     fireEvent.change(view.getByLabelText('Study name'), { target: { value: 'Pending' } });
     fireEvent.change(view.getByLabelText('Research question'), { target: { value: 'Still writing?' } });
 
