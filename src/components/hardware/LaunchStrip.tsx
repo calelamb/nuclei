@@ -105,6 +105,7 @@ export function LaunchStrip() {
 
   return (
     <div
+      className="nuclei-strip-chip"
       onClick={() => openLaunch()}
       onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openLaunch(); } }}
       role="button"
@@ -116,8 +117,8 @@ export function LaunchStrip() {
         gap: 10,
         padding: '6px 12px',
         margin: '6px 10px 0',
-        background: `${statusColor}10`,
-        border: `1px solid ${statusColor}30`,
+        ...({ '--strip': statusColor } as Record<string, string>),
+        border: '1px solid color-mix(in srgb, var(--strip) 19%, transparent)',
         borderRadius: 10,
         color: colors.text,
         cursor: 'pointer',
@@ -125,12 +126,6 @@ export function LaunchStrip() {
         fontSize: 11,
         textAlign: 'left',
         width: 'calc(100% - 20px)',
-      }}
-      onMouseEnter={(e) => {
-        e.currentTarget.style.background = `${statusColor}18`;
-      }}
-      onMouseLeave={(e) => {
-        e.currentTarget.style.background = `${statusColor}10`;
       }}
     >
       <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: statusColor }}>
@@ -155,7 +150,7 @@ export function LaunchStrip() {
           {isTerminal ? relativeAge(latestJob.submittedAt) : fmtElapsed(latestJob.submittedAt)}
         </div>
       </div>
-      <button
+      <button className="nuclei-hover-danger"
         onClick={onCancelClick}
         aria-label={cancellable ? 'Cancel job' : 'Dismiss job'}
         title={cancellable ? 'Cancel this job' : 'Dismiss'}
@@ -172,14 +167,6 @@ export function LaunchStrip() {
           fontSize: 11,
           fontWeight: 500,
           fontFamily: TYPOGRAPHY.fontSans,
-        }}
-        onMouseEnter={(e) => {
-          e.currentTarget.style.color = colors.error;
-          e.currentTarget.style.borderColor = `${colors.error}60`;
-        }}
-        onMouseLeave={(e) => {
-          e.currentTarget.style.color = colors.textDim;
-          e.currentTarget.style.borderColor = colors.border;
         }}
       >
         <X size={12} />

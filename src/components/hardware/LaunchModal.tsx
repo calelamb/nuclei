@@ -1,3 +1,4 @@
+import { Button } from '../ui';
 import { useState, useEffect, useMemo } from 'react';
 import { Rocket, ChevronLeft, X, Clock, Cpu, DollarSign, KeyRound, FileCode } from 'lucide-react';
 import { useHardwareStore } from '../../stores/hardwareStore';
@@ -414,7 +415,7 @@ export function LaunchModal() {
               : 'Launch your circuit'}
           </span>
           <div style={{ flex: 1 }} />
-          <button
+          <button className="nuclei-hover-bg nuclei-hover-text"
             onClick={closeLaunch}
             aria-label="Close"
             style={{
@@ -426,14 +427,6 @@ export function LaunchModal() {
               display: 'flex',
               alignItems: 'center',
               borderRadius: 6,
-            }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.background = colors.bgElevated;
-              e.currentTarget.style.color = colors.text;
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.background = 'transparent';
-              e.currentTarget.style.color = colors.textDim;
             }}
           >
             <X size={16} />
@@ -468,7 +461,7 @@ export function LaunchModal() {
                   const qsharpBlocked = qsharpBlocks(p.name);
                   const disabled = p.comingSoon || qsharpBlocked;
                   return (
-                    <button
+                    <button className="nuclei-hover-lift"
                       key={p.name}
                       onClick={() => handlePickProvider(p)}
                       disabled={disabled}
@@ -488,16 +481,6 @@ export function LaunchModal() {
                         minHeight: 180,
                         transition: 'transform 150ms ease, border-color 120ms ease, background 120ms ease',
                         opacity: disabled ? 0.55 : 1,
-                      }}
-                      onMouseEnter={(e) => {
-                        if (!disabled) {
-                          e.currentTarget.style.borderColor = colors.accent;
-                          e.currentTarget.style.transform = 'translateY(-2px)';
-                        }
-                      }}
-                      onMouseLeave={(e) => {
-                        e.currentTarget.style.borderColor = colors.border;
-                        e.currentTarget.style.transform = 'translateY(0)';
                       }}
                     >
                       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
@@ -676,7 +659,8 @@ export function LaunchModal() {
                         fontFamily: TYPOGRAPHY.fontMono,
                       }}
                     />
-                    <button
+                    <Button
+                      variant="primary"
                       onClick={() => {
                         if (keyDraft.trim() && selectedProvider) {
                           const hw = getHardware();
@@ -685,20 +669,9 @@ export function LaunchModal() {
                         }
                       }}
                       disabled={!keyDraft.trim() || connectingProvider === selectedProvider}
-                      style={{
-                        background: keyDraft.trim() ? colors.accent : colors.bgElevated,
-                        color: keyDraft.trim() ? '#0a0f1a' : colors.textDim,
-                        border: 'none',
-                        borderRadius: 6,
-                        padding: '6px 12px',
-                        fontSize: 12,
-                        fontWeight: 600,
-                        fontFamily: TYPOGRAPHY.fontSans,
-                        cursor: keyDraft.trim() ? 'pointer' : 'default',
-                      }}
                     >
                       {connectingProvider === selectedProvider ? 'Connecting…' : 'Connect'}
-                    </button>
+                    </Button>
                   </div>
                   {selectedProvider && connectionErrors[selectedProvider] && (
                     <div style={{ fontSize: 11, color: colors.error, fontFamily: TYPOGRAPHY.fontSans }}>
@@ -747,18 +720,10 @@ export function LaunchModal() {
                     return (
                       <button
                         key={sub}
+                        type="button"
+                        className="nuclei-chip"
+                        aria-pressed={isActive}
                         onClick={() => selectSubProvider(sub === 'All' ? null : sub)}
-                        style={{
-                          padding: '3px 10px',
-                          background: isActive ? colors.accent : 'transparent',
-                          color: isActive ? '#0a0f1a' : colors.textMuted,
-                          border: `1px solid ${isActive ? colors.accent : colors.border}`,
-                          borderRadius: 999,
-                          fontSize: 11,
-                          fontWeight: 500,
-                          fontFamily: TYPOGRAPHY.fontSans,
-                          cursor: 'pointer',
-                        }}
                       >
                         {sub}
                       </button>
@@ -942,7 +907,10 @@ export function LaunchModal() {
                 >
                   Cancel
                 </button>
-                <button
+                <Button
+                  variant="primary"
+                  size="lg"
+                  icon={<Rocket size={14} />}
                   onClick={handleSubmit}
                   disabled={(() => {
                     if (!selectedBackend) return true;
@@ -954,30 +922,9 @@ export function LaunchModal() {
                     const providerState = providers.find((p) => p.name === selectedProvider);
                     return !providerState?.connected;
                   })()}
-                  style={{
-                    background:
-                      !selectedBackend || code.trim().length === 0
-                        ? colors.bgElevated
-                        : colors.accent,
-                    color:
-                      !selectedBackend || code.trim().length === 0
-                        ? colors.textDim
-                        : '#0a0f1a',
-                    border: 'none',
-                    borderRadius: 10,
-                    padding: '10px 18px',
-                    cursor: !selectedBackend || code.trim().length === 0 ? 'default' : 'pointer',
-                    fontSize: 13,
-                    fontWeight: 600,
-                    fontFamily: TYPOGRAPHY.fontSans,
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 8,
-                    boxShadow: shadow.sm,
-                  }}
                 >
-                  <Rocket size={14} /> Launch
-                </button>
+                  Launch
+                </Button>
               </div>
             </div>
           )}

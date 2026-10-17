@@ -1,3 +1,4 @@
+import { Button } from '../ui';
 import { useState, useCallback, useRef } from 'react';
 import { Rocket, Upload, FileCode, CheckCircle2, XCircle, Loader2, Clock, X } from 'lucide-react';
 import { useHardwareStore } from '../../stores/hardwareStore';
@@ -253,7 +254,7 @@ export function LaunchPortal() {
             const qsharpBlocked = qsharpBlocks(p.name);
             const isDisabled = p.disabled || qsharpBlocked;
             return (
-            <button
+            <button className="nuclei-hover-lift"
               key={p.name}
               onClick={() => handlePickProvider(p)}
               disabled={isDisabled}
@@ -272,15 +273,6 @@ export function LaunchPortal() {
                 gap: 6,
                 opacity: isDisabled ? 0.5 : 1,
                 transition: 'border-color 120ms ease, background 120ms ease, transform 120ms ease',
-              }}
-              onMouseEnter={(e) => {
-                if (isDisabled) return;
-                e.currentTarget.style.borderColor = colors.accent;
-                e.currentTarget.style.transform = 'translateY(-1px)';
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.borderColor = colors.border;
-                e.currentTarget.style.transform = 'translateY(0)';
               }}
             >
               <div
@@ -316,29 +308,10 @@ export function LaunchPortal() {
           })}
         </div>
 
-        <button
-          onClick={openLaunchBlank}
-          style={{
-            marginTop: 10,
-            width: '100%',
-            padding: '8px 10px',
-            background: colors.accent,
-            color: '#0a0f1a',
-            border: 'none',
-            borderRadius: 8,
-            cursor: 'pointer',
-            fontSize: 12,
-            fontWeight: 600,
-            fontFamily: TYPOGRAPHY.fontSans,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            gap: 6,
-          }}
-        >
-          <Rocket size={14} /> Open full launcher
+        <Button variant="primary" style={{ marginTop: 10, width: '100%' }} onClick={openLaunchBlank} icon={<Rocket size={14} />}>
+          Open full launcher
           <span style={{ fontSize: 11, opacity: 0.7, marginLeft: 4 }}>⌘⇧R</span>
-        </button>
+        </Button>
       </div>
 
       {/* Active jobs */}
@@ -398,7 +371,7 @@ export function LaunchPortal() {
                   </div>
                 </div>
                 <ProviderLogo provider={j.provider as HardwareProviderType} size={14} color={colors.textDim} />
-                <button
+                <button className="nuclei-hover-danger"
                   onClick={(e) => {
                     e.stopPropagation();
                     const hw = getHardware();
@@ -418,14 +391,6 @@ export function LaunchPortal() {
                     gap: 2,
                     fontSize: 11,
                     fontFamily: TYPOGRAPHY.fontSans,
-                  }}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.color = colors.error;
-                    e.currentTarget.style.borderColor = `${colors.error}60`;
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.color = colors.textDim;
-                    e.currentTarget.style.borderColor = colors.border;
                   }}
                 >
                   <X size={12} />
@@ -459,7 +424,7 @@ export function LaunchPortal() {
             >
               Recent results
             </div>
-            <button
+            <button className="nuclei-hover-text"
               onClick={() => { if (window.confirm('Clear all hardware jobs from the list?')) useHardwareStore.getState().clearJobs(); }}
               style={{
                 background: 'transparent',
@@ -470,8 +435,6 @@ export function LaunchPortal() {
                 fontSize: 11,
                 fontFamily: TYPOGRAPHY.fontSans,
               }}
-              onMouseEnter={(e) => { e.currentTarget.style.color = colors.text; }}
-              onMouseLeave={(e) => { e.currentTarget.style.color = colors.textDim; }}
             >
               Clear all
             </button>

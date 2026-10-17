@@ -204,8 +204,8 @@
 
 /* ── Hover utilities: replace onMouseEnter/Leave style mutation ── */
 .nuclei-hover-bg { transition: background-color var(--duration-fast) var(--ease-standard), color var(--duration-fast) var(--ease-standard); }
-.nuclei-hover-bg:hover:not(:disabled):not([data-active='true']) { background: var(--color-surface-overlay); }
-.nuclei-hover-text:hover:not(:disabled) { color: var(--color-text-primary); }
+.nuclei-hover-bg:hover:not(:disabled):not([data-active='true']) { background: var(--color-surface-overlay) !important; }
+.nuclei-hover-text:hover:not(:disabled) { color: var(--color-text-primary) !important; }
 
 /* Tree / list rows (explorer, open files): active row keeps its own tint */
 .nuclei-row { cursor: pointer; transition: background-color var(--duration-fast) var(--ease-standard); }
@@ -255,3 +255,25 @@
 .nuclei-btn[aria-expanded='true']:not(.nuclei-btn--primary) { background: var(--color-surface-overlay); }
 .nuclei-btn.nuclei-framework-btn { color: var(--color-accent-quantum-text); }
 .nuclei-icon-btn.nuclei-tab-close { width: 18px; height: 18px; border-radius: var(--radius-xs); }
+
+/* ── Hover utilities (replace onMouseEnter/Leave style mutation). !important beats the inline base styles these elements still carry. ── */
+[class*='nuclei-hover-'] { transition: color var(--duration-fast) var(--ease-standard), background-color var(--duration-fast) var(--ease-standard), border-color var(--duration-fast) var(--ease-standard), transform var(--duration-fast) var(--ease-standard), opacity var(--duration-fast) var(--ease-standard); }
+.nuclei-hover-danger:hover:not(:disabled) { color: var(--color-danger) !important; border-color: color-mix(in srgb, var(--color-danger) 40%, transparent) !important; }
+.nuclei-hover-accent:hover:not(:disabled) { color: var(--color-accent-quantum-text) !important; border-color: var(--color-accent-quantum) !important; }
+.nuclei-hover-tint:hover:not(:disabled):not([aria-selected='true']) { background: color-mix(in srgb, var(--color-accent-quantum) 10%, transparent) !important; }
+.nuclei-hover-lift:hover:not(:disabled) { border-color: var(--color-accent-quantum) !important; transform: translateY(-1px); }
+.nuclei-hover-dim:hover:not(:disabled) { opacity: 0.85; }
+
+/* Status-tinted strip: --strip carries the status colour */
+.nuclei-strip-chip { background: color-mix(in srgb, var(--strip) 6%, transparent); transition: background-color var(--duration-fast) var(--ease-standard); }
+.nuclei-strip-chip:hover { background: color-mix(in srgb, var(--strip) 10%, transparent); }
+
+/* ── Chip: toggleable pill filter (aria-pressed) ── */
+.nuclei-chip {
+  display: inline-flex; align-items: center; gap: var(--space-1); height: 22px; padding: 0 var(--space-3);
+  border: 1px solid var(--color-border-strong); border-radius: var(--radius-pill); background: transparent; cursor: pointer;
+  color: var(--color-text-secondary); font-family: var(--font-sans); font-size: var(--font-size-caption); font-weight: var(--font-weight-medium);
+  transition: background-color var(--duration-fast) var(--ease-standard), border-color var(--duration-fast) var(--ease-standard), color var(--duration-fast) var(--ease-standard);
+}
+.nuclei-chip:hover { border-color: var(--color-text-tertiary); color: var(--color-text-primary); }
+.nuclei-chip[aria-pressed='true'] { background: color-mix(in srgb, var(--color-accent-quantum) 14%, transparent); border-color: var(--color-accent-quantum); color: var(--color-accent-quantum-text); }

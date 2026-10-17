@@ -251,14 +251,12 @@ export function ClassroomPanel() {
                     {st.exercisesCompleted.length} exercises &middot; {formatDate(st.lastActive)}
                   </div>
                 </div>
-                <button
+                <button className="nuclei-hover-danger"
                   onClick={() => removeStudent(st.id)}
                   style={{
                     background: 'transparent', border: 'none', cursor: 'pointer',
                     color: colors.textDim, padding: 4, display: 'flex', borderRadius: 3,
                   }}
-                  onMouseEnter={(e) => { e.currentTarget.style.color = colors.error; }}
-                  onMouseLeave={(e) => { e.currentTarget.style.color = colors.textDim; }}
                 >
                   <Trash2 size={12} />
                 </button>
@@ -326,21 +324,19 @@ export function ClassroomPanel() {
                     {a.dueDate && <> &middot; Due {formatDate(a.dueDate)}</>}
                   </div>
                 </div>
-                <button
+                <button className="nuclei-hover-danger"
                   onClick={() => removeAssignment(a.id)}
                   style={{
                     background: 'transparent', border: 'none', cursor: 'pointer',
                     color: colors.textDim, padding: 4, display: 'flex', borderRadius: 3,
                   }}
-                  onMouseEnter={(e) => { e.currentTarget.style.color = colors.error; }}
-                  onMouseLeave={(e) => { e.currentTarget.style.color = colors.textDim; }}
                 >
                   <Trash2 size={12} />
                 </button>
               </div>
             ))}
 
-            <button
+            <button className="nuclei-hover-accent"
               onClick={() => setShowCreator(true)}
               style={{
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -350,14 +346,6 @@ export function ClassroomPanel() {
                 background: 'transparent',
                 color: colors.textMuted, fontSize: 11, fontFamily: font,
                 cursor: 'pointer',
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.borderColor = colors.accent;
-                e.currentTarget.style.color = colors.accent;
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.borderColor = colors.border;
-                e.currentTarget.style.color = colors.textMuted;
               }}
             >
               <Plus size={12} />
@@ -374,21 +362,13 @@ export function ClassroomPanel() {
 
       {/* Footer: disable educator mode */}
       <div style={{ padding: 12, borderTop: `1px solid ${colors.border}`, flexShrink: 0 }}>
-        <button
+        <button className="nuclei-hover-danger"
           onClick={() => setEducatorMode(false)}
           style={{
             width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center',
             gap: 6, padding: '6px 0', border: `1px solid ${colors.border}`,
             borderRadius: 4, background: 'transparent', color: colors.textMuted,
             fontSize: 11, cursor: 'pointer', fontFamily: font,
-          }}
-          onMouseEnter={(e) => {
-            e.currentTarget.style.borderColor = colors.error;
-            e.currentTarget.style.color = colors.error;
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.borderColor = colors.border;
-            e.currentTarget.style.color = colors.textMuted;
           }}
         >
           Disable Educator Mode

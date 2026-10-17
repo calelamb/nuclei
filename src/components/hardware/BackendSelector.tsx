@@ -101,7 +101,7 @@ export function BackendSelector({ backends, selected, onSelect }: BackendSelecto
                     : colors.error;
 
               return (
-                <button
+                <button className="nuclei-hover-tint"
                   key={b.name}
                   onClick={() => {
                     onSelect(b.name);
@@ -121,12 +121,6 @@ export function BackendSelector({ backends, selected, onSelect }: BackendSelecto
                     cursor: 'pointer',
                     textAlign: 'left',
                     borderBottom: `1px solid ${colors.border}`,
-                  }}
-                  onMouseEnter={(e) => {
-                    if (!isSelected) e.currentTarget.style.background = `${colors.accent}08`;
-                  }}
-                  onMouseLeave={(e) => {
-                    if (!isSelected) e.currentTarget.style.background = 'transparent';
                   }}
                 >
                   <div style={{ display: 'flex', alignItems: 'center', gap: 6, width: '100%' }}>

@@ -1,3 +1,4 @@
+import { Button } from '../ui';
 import { useState } from 'react';
 import { X } from 'lucide-react';
 import { useThemeStore } from '../../stores/themeStore';
@@ -341,23 +342,7 @@ export function CredentialSetup({ provider, onClose }: CredentialSetupProps) {
           >
             Cancel
           </button>
-          <button
-            onClick={handleSave}
-            disabled={!allFilled}
-            style={{
-              padding: '6px 14px',
-              fontSize: 11,
-              fontWeight: 600,
-              borderRadius: 4,
-              border: 'none',
-              background: allFilled ? colors.accent : colors.borderStrong,
-              color: allFilled ? '#fff' : colors.textDim,
-              cursor: allFilled ? 'pointer' : 'not-allowed',
-              ...font,
-            }}
-          >
-            Save
-          </button>
+          <Button variant="primary" size="sm" onClick={handleSave} disabled={!allFilled}>Save</Button>
         </div>
       </div>
     </div>
