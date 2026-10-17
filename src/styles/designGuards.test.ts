@@ -42,4 +42,12 @@ describe('design guards', () => {
   it('has no hard-coded onboarding gradient end colour', () => {
     expect(offenders((f) => /#080E18/i.test(f.text))).toEqual([]);
   });
+
+  it('does not paint accent buttons with panel-coloured text (fails AA in light theme); use <Button variant="primary">', () => {
+    expect(offenders((f) => /background:\s*colors\.accent,\s*color:\s*colors\.bgPanel/.test(f.text))).toEqual([]);
+  });
+
+  it('keeps JSX icon sizes on the 12/14/16/20 scale', () => {
+    expect(offenders((f) => /<[A-Za-z.]*(Icon|Icon\w*)\s[^>]*size=\{(9|10|11|13|15|17|18)\}/.test(f.text) || /<(Icon|MIcon|stat\.icon)\s[^>]*size=\{(9|10|11|13|15)\}/.test(f.text))).toEqual([]);
+  });
 });

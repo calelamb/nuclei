@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { MousePointerClick } from 'lucide-react';
 import { useThemeStore } from '../../stores/themeStore';
 import { useQecStore } from '../../stores/qecStore';
+import { Button } from '../ui/Button';
 import { PanelHeader } from '../layout/PanelHeader';
 import { QecEmptyState } from './QecEmptyState';
 import { CircuitExplainPanel } from './CircuitExplainPanel';
@@ -166,19 +167,15 @@ export function DetectorGraphPanel() {
               </button>
             )}
             {circuitText && !interactive && (
-              <button
+              <Button
+                variant="primary"
+                size="sm"
                 onClick={() => requestQecDecodeSample(circuitText)}
                 disabled={decodePending}
                 title="Sample one shot and decode it"
-                style={{
-                  display: 'flex', alignItems: 'center', gap: 4,
-                  background: colors.accent, color: colors.bgPanel, border: 'none', borderRadius: 4,
-                  cursor: decodePending ? 'default' : 'pointer', fontSize: 11, padding: '4px 9px',
-                  opacity: decodePending ? 0.6 : 1, fontFamily: TYPOGRAPHY.fontSans,
-                }}
               >
                 {decodePending ? 'Sampling…' : 'Sample a shot'}
-              </button>
+              </Button>
             )}
           </div>
         ) : undefined

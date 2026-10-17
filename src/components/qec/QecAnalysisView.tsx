@@ -5,6 +5,7 @@ import { useProjectStore } from '../../stores/projectStore';
 import { useExperimentStore } from '../../services/experimentStore';
 import { useExperimentUiStore } from '../../stores/experimentUiStore';
 import { useQecCampaignRun } from '../../hooks/useQecCampaignRun';
+import { Button } from '../ui/Button';
 import { ThresholdPanel } from './ThresholdPanel';
 import { DecoderWorkbench } from './DecoderWorkbench';
 import { isWebBuild } from '../../platform/buildTarget';
@@ -84,18 +85,15 @@ export function QecAnalysisView() {
             <Square size={12} /> Cancel
           </button>
         ) : (
-          <button
+          <Button
+            variant="primary"
+            size="sm"
             onClick={() => { if (experiment && projectRoot) void run(experiment, projectRoot); }}
             disabled={!canRun}
-            style={{
-              display: 'flex', alignItems: 'center', gap: 5, background: colors.accent, color: colors.bgPanel,
-              border: 'none', borderRadius: 5, cursor: canRun ? 'pointer' : 'default',
-              opacity: canRun ? 1 : 0.5, fontSize: 12, fontWeight: 600, padding: '5px 12px',
-              fontFamily: TYPOGRAPHY.fontSans,
-            }}
+            icon={<Play size={12} />}
           >
-            <Play size={12} /> Run campaign
-          </button>
+            Run campaign
+          </Button>
         )}
       </div>
       {csvError && (

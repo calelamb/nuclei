@@ -104,16 +104,8 @@
   text-transform: uppercase;
 }
 
-.qec-study-picker select {
-  width: 100%; min-height: 44px; padding: 0 34px 0 11px; border: 1px solid var(--qec-border);
-  border-radius: 6px; background: var(--qec-raised); color: var(--qec-text); font-family: var(--font-sans);
-  font-size: 12px; font-weight: 600; letter-spacing: normal; text-transform: none;
-  transition: background-color 160ms ease, border-color 160ms ease;
-}
-
-.qec-study-picker select:not(:disabled):hover {
-  border-color: var(--qec-selection-strong); background: var(--qec-field);
-}
+.qec-study-select { width: 100%; }
+.qec-study-select > select { font-weight: 600; letter-spacing: normal; text-transform: none; }
 
 .qec-preset-switcher {
   display: flex; flex: 0 0 auto; overflow: hidden; border: 1px solid var(--qec-border);
@@ -168,10 +160,6 @@
 
 .qec-status--neutral {
   color: var(--qec-text-muted);
-}
-
-.qec-study-create-button:not(:disabled) {
-  background: var(--qec-action) !important; border-color: var(--qec-action) !important; color: var(--qec-action-foreground) !important;
 }
 
 .qec-research-trail {
@@ -566,8 +554,10 @@
   font-size: 12px; font-weight: 700;
 }
 
+.qec-instrument header > div { min-width: 0; }
 .qec-instrument header .qec-mono {
   display: block; margin-top: 1px; color: var(--qec-text-muted); font-size: 11px;
+  font-family: var(--font-sans); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 
 .qec-instrument__field {

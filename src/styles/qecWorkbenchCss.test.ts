@@ -15,11 +15,9 @@ const responsiveStyles = readFileSync(
 const mainSource = readFileSync(resolve(process.cwd(), 'src/main.tsx'), 'utf8');
 
 describe('QEC workbench CSS tokens', () => {
-  it('uses the shared action custom property for the Study create action', () => {
+  it('keeps the action custom property and lets the shared primary Button style the Study create action', () => {
     expect(qecStyles).toContain(`--qec-action: ${QEC_LIGHT_TOKENS.action.toLowerCase()}`);
-    expect(qecStyles).toMatch(
-      /\.qec-study-create-button:not\(:disabled\)\s*{[^}]*background: var\(--qec-action\)/,
-    );
+    expect(qecStyles).not.toContain('.qec-study-create-button');
   });
 
   it('defines exact light, responsive, overflow, focus, and reduced-motion contracts', () => {
