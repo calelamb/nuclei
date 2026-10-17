@@ -53,7 +53,6 @@ export interface MenuProps {
 }
 
 const isItem = (e: MenuEntry): e is MenuItemEntry => 'label' in e;
-const isHeading = (e: MenuEntry): e is MenuHeadingEntry => 'heading' in e;
 
 interface Row { entry: MenuItemEntry; depth: number }
 
