@@ -8,11 +8,11 @@ interface ProbabilityBarsProps {
 
 const DEFAULT_FLOOR = 0.001;
 
-/** Compact outcome bars for the lesson demo, most likely first. */
+/** Compact outcome bars for the lesson demo, in basis-state order so repeated sampled runs stay comparable. */
 export function ProbabilityBars({ probabilities, floor = DEFAULT_FLOOR }: ProbabilityBarsProps) {
   const entries = Object.entries(probabilities)
     .filter(([, p]) => p > floor)
-    .sort(([, a], [, b]) => b - a);
+    .sort(([a], [b]) => a.localeCompare(b));
 
   if (entries.length === 0) return null;
 
