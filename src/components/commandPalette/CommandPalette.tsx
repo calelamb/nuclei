@@ -60,7 +60,6 @@ export function CommandPalette({ commands, onClose }: CommandPaletteProps) {
     [groups, commands, query],
   );
 
-  // eslint-disable-next-line react-hooks/set-state-in-effect -- resets index on query change
   useEffect(() => { setSelectedIdx(0); }, [query]);
 
   const activeId = filtered[selectedIdx] ? `${listId}-${filtered[selectedIdx].id}` : undefined;
