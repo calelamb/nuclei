@@ -1,4 +1,5 @@
 import { X, Maximize2 } from 'lucide-react';
+import './histogram.css';
 import { useThemeStore } from '../../stores/themeStore';
 
 import { TYPOGRAPHY } from '../../styles/tokens';
@@ -50,9 +51,10 @@ export function HistogramChip({
       merged[s] = { cls: prev.cls, hw: p, max: Math.max(prev.max, p) };
     }
   }
-  const entries = Object.entries(merged)
-    .sort((a, b) => b[1].max - a[1].max || a[0].localeCompare(b[0]))
-    .slice(0, MAX_BARS);
+  const ranked = Object.entries(merged)
+    .sort((a, b) => b[1].max - a[1].max || a[0].localeCompare(b[0]));
+  const entries = ranked.slice(0, MAX_BARS);
+  const hiddenCount = ranked.length - entries.length;
 
   if (entries.length === 0) return null;
 
@@ -151,7 +153,21 @@ export function HistogramChip({
           </div>
         ))}
       </div>
-      <div style={{ display: 'flex', gap: 4, flexShrink: 0 }}>
+      <div style={{ display: 'flex', gap: 4, flexShrink: 0, alignItems: 'center' }}>
+        {hiddenCount > 0 && (onExpand ? (
+          <button
+            type="button"
+            aria-label={`Show ${hiddenCount} more outcomes`}
+            onClick={onExpand}
+            className="histogram-chip__more"
+          >
+            +{hiddenCount} more
+          </button>
+        ) : (
+          <span className="histogram-chip__more histogram-chip__more--static" title={`${hiddenCount} more outcomes. Open the full histogram to see them.`}>
+            +{hiddenCount} more
+          </span>
+        ))}
         {onExpand && (
           <button
             aria-label="Expand histogram"

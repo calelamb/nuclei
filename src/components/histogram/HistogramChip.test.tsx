@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, it, expect, afterEach } from 'vitest';
-import { render, cleanup } from '@testing-library/react';
+import { render, cleanup, fireEvent } from '@testing-library/react';
 import { HistogramChip } from './HistogramChip';
 
 afterEach(() => cleanup());
@@ -42,5 +42,31 @@ describe('<HistogramChip>', () => {
       <HistogramChip probabilities={{ '00': 0.999999, '11': 0.0000001 }} />,
     );
     expect(queryByText(/\|11⟩/)).toBeNull();
+  });
+
+  it('says how many outcomes are not shown and lets you open them all', () => {
+    const probs: Record<string, number> = {};
+    for (let i = 0; i < 64; i += 1) probs[i.toString(2).padStart(6, '0')] = 1 / 64;
+    let expanded = 0;
+    const { getByRole, getAllByTestId } = render(
+      <HistogramChip probabilities={probs} onExpand={() => { expanded += 1; }} />,
+    );
+    expect(getAllByTestId('histogram-chip-bar')).toHaveLength(3);
+    const more = getByRole('button', { name: /61 more outcomes/i });
+    expect(more.textContent).toBe('+61 more');
+    fireEvent.click(more);
+    expect(expanded).toBe(1);
+  });
+
+  it('still reports hidden outcomes when the chip cannot expand', () => {
+    const probs: Record<string, number> = {};
+    for (let i = 0; i < 10; i += 1) probs[i.toString(2).padStart(4, '0')] = 0.1;
+    const { getByText } = render(<HistogramChip probabilities={probs} />);
+    expect(getByText('+7 more')).toBeTruthy();
+  });
+
+  it('shows no "more" affordance when everything fits', () => {
+    const { queryByText } = render(<HistogramChip probabilities={{ '00': 0.5, '11': 0.5 }} onExpand={() => {}} />);
+    expect(queryByText(/more/)).toBeNull();
   });
 });
