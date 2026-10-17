@@ -10,7 +10,7 @@ type DifficultyFilter = 'all' | CuratedVideo['difficulty'];
 
 const CREATOR_TABS: { key: CreatorFilter; label: string }[] = [
   { key: 'all', label: 'All' },
-  { key: '3blue1brown', label: '3Blue1Brown' },
+  { key: '3blue1brown', label: '3B1B' },
   { key: 'ibm-technology', label: 'IBM' },
   { key: 'nvidia', label: 'NVIDIA' },
   { key: 'qiskit', label: 'Qiskit' },
@@ -75,6 +75,7 @@ export function VideoLibrary() {
             type="button"
             role="tab"
             aria-selected={creatorFilter === tab.key}
+            aria-label={tab.key === '3blue1brown' ? '3Blue1Brown' : undefined}
             className="vlib__tab"
             onClick={() => setCreatorFilter(tab.key)}
           >

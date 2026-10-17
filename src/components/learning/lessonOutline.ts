@@ -22,6 +22,14 @@ function stripInlineMarkdown(text: string): string {
   return text.replace(/[*_`]/g, '').replace(/\[([^\]]+)\]\([^)]*\)/g, '$1').trim();
 }
 
+const MAX_PHRASE = 40;
+
+/** First sentence of a description, cut to a short outline-friendly phrase. */
+function shortPhrase(text: string): string {
+  const first = stripInlineMarkdown(text).split(/(?<=[.!?])\s/)[0]?.replace(/[.!?]+$/, '').trim() ?? '';
+  return first.length > MAX_PHRASE ? `${first.slice(0, MAX_PHRASE - 1).trimEnd()}…` : first;
+}
+
 export function blockMeta(block: ContentBlock): BlockMeta {
   return BLOCK_META[block.type] ?? BLOCK_META.text;
 }
@@ -37,6 +45,10 @@ export function blockOutlineLabel(block: ContentBlock): string {
     case 'concept-card':
     case 'exercise':
       return block.title.trim() || BLOCK_META[block.type].label;
+    case 'demo':
+      return shortPhrase(block.description) || BLOCK_META.demo.label;
+    case 'interactive-bloch':
+      return block.challenge ? 'Bloch sphere challenge' : 'Try the Bloch sphere';
     default:
       return blockMeta(block).label;
   }

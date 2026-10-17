@@ -26,6 +26,14 @@ describe('blockOutlineLabel', () => {
 
   it('labels demos and quizzes by kind', () => {
     expect(blockOutlineLabel({ type: 'quiz', questions: [] })).toBe('Quiz');
-    expect(blockOutlineLabel({ type: 'demo', code: '', framework: 'qiskit', description: 'd' })).toBe('Demo');
+    expect(blockOutlineLabel({ type: 'demo', code: '', framework: 'qiskit', description: '' })).toBe('Demo');
+  });
+
+  it('names a demo after its description, and distinguishes the Bloch block from a concept card', () => {
+    expect(blockOutlineLabel({ type: 'demo', code: '', framework: 'qiskit', description: 'Build a Bell pair. Then measure it twice.' })).toBe('Build a Bell pair');
+    const long = 'A very long description that goes on and on without a sentence break to keep going';
+    expect(blockOutlineLabel({ type: 'demo', code: '', framework: 'qiskit', description: long }).length).toBeLessThanOrEqual(41);
+    expect(blockOutlineLabel({ type: 'interactive-bloch' })).toBe('Try the Bloch sphere');
+    expect(blockOutlineLabel({ type: 'interactive-bloch', challenge: { targetTheta: 0, targetPhi: 0, description: 'x' } })).toBe('Bloch sphere challenge');
   });
 });
