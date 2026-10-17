@@ -53,10 +53,11 @@
 .exercise__help svg { color: var(--color-accent-dirac-text); }
 
 /* Lesson mini-editor: visible focus + keyboard hint (Tab leaves the editor by default). */
-.lesson-editor { position: relative; }
+.lesson-editor__frame { position: relative; }
 /* An overlay ring: Monaco's own layers would paint over a plain outline. */
-.lesson-editor:focus-within::after { content: ''; position: absolute; inset: 0; z-index: 5; pointer-events: none; border: var(--focus-ring-width) solid var(--focus-ring-color); }
-.lesson-editor__hint { z-index: 6; position: absolute; right: var(--space-2); bottom: var(--space-1); padding: 2px var(--space-2); border-radius: var(--radius-xs); background: var(--color-surface-overlay); color: var(--color-text-secondary); font: var(--font-size-caption) var(--font-sans); pointer-events: none; }
+.lesson-editor__frame:focus-within::after { content: ''; position: absolute; inset: 0; z-index: 5; pointer-events: none; border: var(--focus-ring-width) solid var(--focus-ring-color); }
+.lesson-editor__hint { min-height: 20px; box-sizing: border-box; padding: 2px var(--space-3); text-align: right; background: var(--color-surface-sunken); color: var(--color-text-secondary); font: var(--font-size-caption) var(--font-sans); }
+.lesson-editor__hint[data-visible='false'] { visibility: hidden; }
 
 .outcomes { display: flex; flex-direction: column; gap: var(--space-2); }
 .outcomes__head { display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); }

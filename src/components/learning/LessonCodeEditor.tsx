@@ -60,7 +60,8 @@ export function LessonCodeEditor({ value, onChange }: Props) {
   }, []);
 
   return (
-    <div className="lesson-editor" style={{ height }}>
+    <div className="lesson-editor">
+      <div className="lesson-editor__frame" style={{ height }}>
       <Editor
         height="100%"
         language="python"
@@ -86,7 +87,11 @@ export function LessonCodeEditor({ value, onChange }: Props) {
           fontFamily: TYPOGRAPHY.fontMono,
         }}
       />
-      {focused && <div className="lesson-editor__hint" role="note">{tabFocusHint(tabMovesFocus)}</div>}
+      </div>
+      {/* Below the code, not over it: it never hides the end of a short snippet. */}
+      {focused
+        ? <div className="lesson-editor__hint" role="note">{tabFocusHint(tabMovesFocus)}</div>
+        : <div className="lesson-editor__hint" aria-hidden="true" data-visible="false" />}
     </div>
   );
 }
