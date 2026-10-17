@@ -10,6 +10,7 @@ import { Button } from '../ui';
 import { getExecute } from '../../App';
 import { visibleVizPanelIds } from '../../layout/vizPanels';
 import { shortcutLabel } from '../../config/keybindings';
+import { BlochRail } from '../layout/BlochRail';
 import { BlochPanel } from '../bloch/BlochPanel';
 import { QecTimelinePanel } from './QecTimelinePanel';
 import { CodeLatticePanel } from './CodeLatticePanel';
@@ -39,7 +40,7 @@ interface VizPanelDef {
 
 const MAIN_VIZ_PANELS: VizPanelDef[] = [
   { id: 'circuit', title: 'Circuit', icon: Workflow, render: () => <CircuitRenderer /> },
-  { id: 'bloch', title: 'Bloch Sphere', icon: Orbit, render: () => <BlochPanel /> },
+  { id: 'bloch', title: 'Bloch Sphere', icon: Orbit, render: () => <BlochRail><BlochPanel /></BlochRail> },
   { id: 'qecTimeline', title: 'Timeline', icon: LayoutGrid, render: () => <QecTimelinePanel /> },
   { id: 'qecLattice', title: 'Code Lattice', icon: Grid3x3, render: () => <CodeLatticePanel /> },
   { id: 'qecDetectorGraph', title: 'Detector Graph', icon: Share2, render: () => <DetectorGraphPanel /> },
@@ -85,7 +86,7 @@ export function VizZone({
 
       {statePanels.length > 0 && statePanels.length <= 2 && statePanels.map((p) => (
         <PanelReveal key={p.id} when from="right" style={FILL_STYLE}>
-          <div style={{ flex: 1, overflow: 'hidden', position: 'relative', minHeight: 240 }}>
+          <div style={{ flex: 1, overflow: 'hidden', position: 'relative', minHeight: 240, display: 'flex', flexDirection: 'column' }}>
             {p.render()}
           </div>
         </PanelReveal>
@@ -175,7 +176,7 @@ function TabbedPanels({ panels, rememberedTab, onSelect }: {
           );
         })}
       </div>
-      <div style={{ flex: 1, minHeight: 240, overflow: 'hidden', position: 'relative' }}>
+      <div style={{ flex: 1, minHeight: 240, overflow: 'hidden', position: 'relative', display: 'flex', flexDirection: 'column' }}>
         {active.render()}
       </div>
     </>
