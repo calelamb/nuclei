@@ -7,6 +7,7 @@ import { activeDebugStep } from '../../lib/debugTrace';
 import { getHistogramData, getProbabilityHistogramData, type HistogramViewMode } from './histogramData';
 import { formatPercentTick, probabilityAxis, topOutcomes, MAX_VISIBLE_OUTCOMES, type HistogramRow } from './histogramScale';
 
+import { useScrollbarInset } from '../../hooks/useScrollbarInset';
 import { TYPOGRAPHY } from '../../styles/tokens';
 import { useThemeStore } from '../../stores/themeStore';
 import { Button, SegmentedControl, TextInput, type SegmentedOption } from '../ui';
@@ -64,6 +65,7 @@ function HistogramChart({ data, srDescription, scroll = false }: ChartProps) {
   const xAxisHeight = crowded ? 54 : 26;
   const margin = { top: 5, right: CHART_MARGIN_RIGHT, bottom: crowded ? 8 : 0, left: 0 };
   const axisStroke = { stroke: colors.borderStrong };
+  const [barsRef, scrollbarInset] = useScrollbarInset<HTMLDivElement>();
 
   const yAxis = (visible: boolean) => (
     <YAxis
@@ -118,8 +120,8 @@ function HistogramChart({ data, srDescription, scroll = false }: ChartProps) {
 
   return (
     <div className="histogram-scroll" role="region" aria-label="Probability histogram" aria-description={srDescription}>
-      <PinnedYAxis ticks={axis.ticks} max={axis.max} top={margin.top} bottom={xAxisHeight + margin.bottom} />
-      <div className="histogram-scroll__bars" tabIndex={0} aria-label="Scrollable outcome bars">
+      <PinnedYAxis ticks={axis.ticks} max={axis.max} top={margin.top} bottom={xAxisHeight + margin.bottom + scrollbarInset} />
+      <div ref={barsRef} className="histogram-scroll__bars" tabIndex={0} aria-label="Scrollable outcome bars">
         <div style={{ height: '100%', minWidth: data.length * SCROLL_BAR_SLOT_PX + CHART_MARGIN_RIGHT }}>{bars}</div>
       </div>
     </div>
