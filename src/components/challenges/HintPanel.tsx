@@ -1,123 +1,36 @@
 import { useState } from 'react';
-import { useThemeStore } from '../../stores/themeStore';
 import { Lightbulb } from 'lucide-react';
+import { Button } from '../ui';
+import './challenges.css';
 
-import { TYPOGRAPHY } from '../../styles/tokens';
 interface HintPanelProps {
   hints: string[];
 }
 
 export function HintPanel({ hints }: HintPanelProps) {
-  const colors = useThemeStore((s) => s.colors);
   const [revealedCount, setRevealedCount] = useState(0);
 
   if (hints.length === 0) {
-    return (
-      <span style={{
-        color: colors.textDim,
-        fontSize: 12,
-        fontStyle: 'italic',
-        fontFamily: TYPOGRAPHY.fontSans,
-      }}>
-        No hints available for this challenge.
-      </span>
-    );
+    return <span className="hints__empty">No hints available for this challenge.</span>;
   }
 
   const canRevealMore = revealedCount < hints.length;
 
   return (
-    <div style={{
-      display: 'flex',
-      flexDirection: 'column',
-      gap: 8,
-    }}>
-      {/* Revealed hints */}
+    <div className="hints">
       {hints.slice(0, revealedCount).map((hint, i) => (
-        <div
-          key={i}
-          style={{
-            display: 'flex',
-            gap: 10,
-            padding: '10px 12px',
-            borderRadius: 6,
-            background: `${colors.warning}08`,
-            border: `1px solid ${colors.warning}20`,
-          }}
-        >
-          <div style={{
-            width: 22,
-            height: 22,
-            borderRadius: '50%',
-            background: `${colors.warning}18`,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            flexShrink: 0,
-          }}>
-            <span style={{
-              color: colors.warning,
-              fontSize: 11,
-              fontWeight: 700,
-              fontFamily: TYPOGRAPHY.fontMono,
-            }}>
-              {i + 1}
-            </span>
-          </div>
-          <span style={{
-            color: colors.textMuted,
-            fontSize: 13,
-            fontFamily: TYPOGRAPHY.fontSans,
-            lineHeight: 1.5,
-          }}>
-            {hint}
-          </span>
+        <div key={i} className="hints__item">
+          <span className="hints__num">{i + 1}</span>
+          <span className="hints__text">{hint}</span>
         </div>
       ))}
 
-      {/* Reveal button */}
-      {canRevealMore && (
-        <button
-          onClick={() => setRevealedCount((c) => c + 1)}
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: 6,
-            padding: '6px 14px',
-            borderRadius: 6,
-            border: `1px solid ${colors.warning}40`,
-            background: 'transparent',
-            color: colors.warning,
-            fontSize: 12,
-            fontWeight: 500,
-            fontFamily: TYPOGRAPHY.fontSans,
-            cursor: 'pointer',
-            alignSelf: 'flex-start',
-            transition: 'all 150ms ease',
-          }}
-          onMouseEnter={(e) => {
-            e.currentTarget.style.background = `${colors.warning}12`;
-            e.currentTarget.style.borderColor = colors.warning;
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.background = 'transparent';
-            e.currentTarget.style.borderColor = `${colors.warning}40`;
-          }}
-        >
-          <Lightbulb size={12} />
+      {canRevealMore ? (
+        <Button className="hints__more" icon={<Lightbulb size={12} aria-hidden="true" />} onClick={() => setRevealedCount((c) => c + 1)}>
           Reveal Hint ({hints.length - revealedCount} remaining)
-        </button>
-      )}
-
-      {!canRevealMore && (
-        <span style={{
-          color: colors.textDim,
-          fontSize: 11,
-          fontStyle: 'italic',
-          fontFamily: TYPOGRAPHY.fontSans,
-        }}>
-          All hints revealed.
-        </span>
+        </Button>
+      ) : (
+        <span className="hints__empty">All hints revealed.</span>
       )}
     </div>
   );
