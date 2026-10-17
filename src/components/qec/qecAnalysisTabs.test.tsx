@@ -49,6 +49,12 @@ describe('short windows show one analysis section at a time (qec-09)', () => {
     expect(getByRole('table', { name: 'Decoder comparison' })).toBeTruthy();
   });
 
+  it('does not repeat the Λ title inside the readout when the tab header already carries it', () => {
+    const { getByRole, getByLabelText } = render(<QecAnalysisView embedded />);
+    fireEvent.click(getByRole('radio', { name: 'Λ' }));
+    expect(getByLabelText('Error suppression factor Λ').querySelector('h3')).toBeNull();
+  });
+
   it('keeps the tabs on a tall but narrow pane instead of a nested scroll (qec-r-10)', () => {
     size.current = { width: 600, height: 900 };
     const { getByRole } = render(<QecAnalysisView embedded />);

@@ -11,6 +11,8 @@ interface Props {
   estimates: LambdaGroupEstimate[];
   units: RateUnits;
   colors: ThemeColors;
+  /** The panel header already carries this title (the Λ tab), so the readout does not repeat it. */
+  hideTitle?: boolean;
 }
 
 /**
@@ -19,14 +21,16 @@ interface Props {
  * distinct caveat is stated once, and per-row detail sits in the warning icon's
  * tooltip. Same numbers and caveats as the exported figure and Dirac.
  */
-export function QecLambdaReadout({ decoders, estimates, units, colors }: Props) {
+export function QecLambdaReadout({ decoders, estimates, units, colors, hideTitle = false }: Props) {
   const table = buildLambdaTable(estimates, units);
   const withoutFit = decoders.filter((d) => !table.groups.some((g) => g.decoder === d));
   return (
     <section aria-label="Error suppression factor Λ" style={{ fontFamily: TYPOGRAPHY.fontSans, fontSize: 12, color: colors.text }}>
-      <h3 style={{ margin: 0, fontSize: 12, fontWeight: 600, color: colors.textMuted }}>
-        Error suppression Λ
-      </h3>
+      {!hideTitle && (
+        <h3 style={{ margin: 0, fontSize: 12, fontWeight: 600, color: colors.textMuted }}>
+          Error suppression Λ
+        </h3>
+      )}
       {table.subtitle && <div style={{ fontSize: 11, color: colors.textMuted, margin: '2px 0 6px' }}>{table.subtitle}</div>}
       {table.groups.map((g) => (
         <div key={g.decoder} style={{ marginBottom: 8 }}>

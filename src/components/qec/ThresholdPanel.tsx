@@ -25,13 +25,14 @@ import {
 import { PRINT_COLORS, renderFigureSvg } from '../../lib/qecSvgExport';
 import { qecRatesToCsv } from '../../lib/qecExport';
 import { downloadCsv, downloadSvg } from '../../services/experimentExport';
+import './qecAnalysis.css';
 import { QEC_PLOT_CSV_DOCS } from '../../config/docsLinks';
 
 import { TYPOGRAPHY } from '../../styles/tokens';
 const DOCS = 'https://getnuclei.dev/docs/research/qec-studio/';
 const PLOT_ONLY_PAD = 24;
 /** Below this panel width the title would be squeezed out, so the units toggle moves below the header and both labelled exports stay. */
-const COMPACT_HEADER_WIDTH = 480;
+const COMPACT_HEADER_WIDTH = 620;
 
 function ExportButton({ label, title, ariaLabel, onClick }: {
   label: string; title: string; ariaLabel: string; onClick: () => void;
@@ -155,7 +156,7 @@ export function ThresholdPanel({ part = 'all', tabs }: { part?: ThresholdPart; t
     : fullBox;
   const readoutBody = (
     <>
-      <QecLambdaReadout decoders={decoders} estimates={lambdas} units={units} colors={colors} />
+      <QecLambdaReadout decoders={decoders} estimates={lambdas} units={units} colors={colors} hideTitle={part === 'lambda'} />
       <div style={{ fontSize: 11, color: colors.textMuted, marginTop: 6, lineHeight: 1.45 }}>
         {`Whiskers: sinter ${whiskerConvention()}, `}
         {hasDiscards ? 'on shots − discards. ' : 'on shots. '}
