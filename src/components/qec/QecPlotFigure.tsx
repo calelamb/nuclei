@@ -125,7 +125,7 @@ export function QecPlotFigure(props: QecPlotFigureProps) {
           aria-label="Plot points. Use the arrow keys to move between points, Escape to clear."
           stroke={focused ? colors.textMuted : 'none'} strokeDasharray="4 3" strokeWidth={1}
           onKeyDown={onKey} onFocus={onFocus} onBlur={() => { setFocused(false); onHover(null); }}
-          onMouseMove={onMove} onMouseLeave={() => onHover(null)} style={{ cursor: 'crosshair', outline: 'none' }}
+          onMouseMove={onMove} onMouseLeave={() => onHover(null)} style={{ cursor: 'crosshair' }}
         />
       )}
     </svg>

@@ -71,7 +71,7 @@ describe('tooltipLines', () => {
     const lines = tooltipLines(series([]), pt(0.002, 0.0032, 0.0021, 0.0049), 'per_round');
     const text = lines.join('\n');
     expect(text).toContain('d = 3');
-    expect(text).toContain('p = 0.002');
+    expect(text).toContain('p = 2×10⁻³');
     expect(text).toContain('pymatching');
     expect(text).toContain('per round');
     expect(text).toContain('3.20×10⁻³');
