@@ -73,6 +73,12 @@ describe('SettingsPanel', () => {
     await waitFor(() => expect(document.activeElement).toBe(screen.getByLabelText('Anthropic API key')));
   });
 
+  it('focuses the key field when Settings mounts already holding the target (interaction-16, fresh open)', async () => {
+    useNavigationStore.getState().openSettings();
+    render(<SettingsPanel />);
+    await waitFor(() => expect(document.activeElement).toBe(screen.getByLabelText('Anthropic API key')));
+  });
+
   it('collapsed sections are not tabbable', () => {
     render(<SettingsPanel />);
     const diracBody = document.getElementById(screen.getByRole('button', { name: /Dirac AI/i }).getAttribute('aria-controls') as string);

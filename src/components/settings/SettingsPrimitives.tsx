@@ -48,11 +48,13 @@ export function Section({ id, title, defaultOpen = false, children }: {
     if (!id || target?.section !== id) return;
     // eslint-disable-next-line react-hooks/set-state-in-effect -- reacting to an external navigation request
     setOpen(true);
-    const frame = requestAnimationFrame(() => {
+    // No cancel-on-cleanup: SettingsPanel clears the target right after this
+    // effect, which re-runs it and would cancel the frame before it fires. The
+    // optional chains make the callback a no-op if the section unmounted.
+    requestAnimationFrame(() => {
       rootRef.current?.scrollIntoView({ block: 'nearest' });
       rootRef.current?.querySelector<HTMLElement>('[data-settings-autofocus]')?.focus();
     });
-    return () => cancelAnimationFrame(frame);
   }, [id, target?.nonce, target?.section]);
 
   return (
