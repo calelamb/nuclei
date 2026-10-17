@@ -109,38 +109,6 @@ button:focus:not(:focus-visible) {
   }
 }
 
-/* ── Dirac markdown styling ── */
-.dirac-markdown p { margin: 0 0 8px 0; }
-.dirac-markdown p:last-child { margin-bottom: 0; }
-.dirac-markdown code {
-  background: var(--color-surface-overlay);
-  padding: 2px 6px;
-  border-radius: var(--radius-soft);
-  font-family: var(--font-mono);
-  font-size: var(--font-size-code);
-  color: var(--color-accent-quantum-text);
-}
-.dirac-markdown pre {
-  background: var(--color-surface-base);
-  border: 1px solid var(--color-border-strong);
-  border-radius: var(--radius-round);
-  padding: 10px;
-  margin: 8px 0;
-  overflow-x: auto;
-  position: relative;
-}
-.dirac-markdown pre code {
-  background: none;
-  padding: 0;
-  color: var(--color-text-primary);
-}
-.dirac-markdown ul, .dirac-markdown ol { padding-left: 20px; margin: 6px 0; }
-.dirac-markdown strong { color: var(--color-accent-quantum-soft); }
-.dirac-markdown h1, .dirac-markdown h2, .dirac-markdown h3 {
-  color: var(--color-accent-quantum-text);
-  margin: 8px 0 4px 0;
-}
-
 /* ── Interactive element defaults ── */
 button, [role="button"] {
   transition: background-color var(--duration-fast) var(--ease-standard),

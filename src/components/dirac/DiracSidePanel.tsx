@@ -1,5 +1,4 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
-import Markdown from 'react-markdown';
 import { useDiracStore } from '../../stores/diracStore';
 import type { ToolCall } from '../../stores/diracStore';
 import { useDirac } from '../../hooks/useDirac';
@@ -14,6 +13,7 @@ import { EASING, DURATION, prefersReducedMotion } from '../../lib/animations';
 import { useUiFeatures } from '../../hooks/useUiFeatures';
 import { AgentEntryPoint } from './AgentEntryPoint';
 import { DiracNoKey } from './DiracNoKey';
+import { DiracMarkdown } from './DiracMarkdown';
 import { DiracEmptyState } from './DiracEmptyState';
 import { DiracErrorCard } from './DiracErrorCard';
 import { SlashCommandMenu } from './SlashCommandMenu';
@@ -55,7 +55,7 @@ function AmbientFeed() {
             opacity: 0.9,
           }}
         >
-          <span style={{ color: colors.accentLight, marginRight: 6 }}>·</span>
+          <span style={{ color: colors.accentText, marginRight: 6 }}>·</span>
           {msg.text}
         </div>
       ))}
@@ -96,7 +96,7 @@ function ContextIndicator() {
             borderRadius: 4,
             fontSize: 11, fontWeight: 500,
             background: item.active ? `${colors.accent}18` : colors.bgPanel,
-            color: item.active ? colors.accent : colors.textDim,
+            color: item.active ? colors.accentText : colors.textDim,
             border: `1px solid ${item.active ? `${colors.accent}30` : 'transparent'}`,
             transition: 'all 150ms ease',
           }}
@@ -250,7 +250,13 @@ export function DiracSidePanel() {
   }, [messages]);
 
   useEffect(() => {
-    if (focusSignal > 0) setTimeout(() => inputRef.current?.focus(), 50);
+    if (focusSignal === 0) return undefined;
+    // With no key the composer does not exist: the API key field is the input to focus.
+    const timer = setTimeout(() => {
+      const target = inputRef.current ?? document.querySelector<HTMLElement>('section[aria-label="Connect Dirac"] input');
+      target?.focus();
+    }, 50);
+    return () => clearTimeout(timer);
   }, [focusSignal]);
 
   const handleScroll = useCallback(() => {
@@ -410,7 +416,7 @@ export function DiracSidePanel() {
       }}>
         {messages.length === 0 && <DiracEmptyState onPick={submit} />}
 
-        {messages.map((msg, i) => (
+        {messages.map((msg) => (
           <div key={msg.id} style={{
             animation: prefersReducedMotion() ? 'none' : `nuclei-slide-up ${DURATION.normal}ms ${EASING.enter}`,
           }}>
@@ -437,9 +443,7 @@ export function DiracSidePanel() {
                 {msg.thinking && <ThinkingBlock thinking={msg.thinking} />}
                 {msg.error && <DiracErrorCard error={msg.error} />}
                 {msg.content && (
-                  <div className="dirac-markdown">
-                    <Markdown>{msg.content || (isLoading && i === messages.length - 1 ? '...' : '')}</Markdown>
-                  </div>
+                  <DiracMarkdown content={msg.content} />
                 )}
                 {msg.toolCalls?.map((tc) => (
                   <ToolCallCard key={tc.id} toolCall={tc} onAction={handleToolAction} />

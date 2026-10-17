@@ -115,3 +115,36 @@
 
 /* No-key state: the connect card sits near the top, under the header, instead of floating mid-panel. */
 .dirac-connect { flex: 1; min-height: 0; overflow: auto; display: flex; align-items: flex-start; justify-content: center; padding-top: var(--space-6); }
+
+/* ── Chat message markdown ── */
+.dirac-markdown p { margin: 0 0 var(--space-2); }
+.dirac-markdown p:last-child { margin-bottom: 0; }
+.dirac-markdown code {
+  padding: 1px var(--space-1); border-radius: var(--radius-xs); background: var(--color-surface-overlay);
+  font-family: var(--font-mono); font-size: var(--font-size-chrome-label); color: var(--color-accent-quantum-text);
+}
+.dirac-markdown ul, .dirac-markdown ol { padding-left: var(--space-5); margin: var(--space-1) 0 var(--space-2); }
+.dirac-markdown strong { color: var(--color-text-primary); font-weight: var(--font-weight-semibold); }
+/* Chat headings stay in the reading size: a reply is not a document. */
+.dirac-markdown h1, .dirac-markdown h2, .dirac-markdown h3, .dirac-markdown h4 {
+  margin: var(--space-3) 0 var(--space-1); font-size: var(--font-size-body); font-weight: var(--font-weight-semibold);
+  line-height: var(--line-height-code); color: var(--color-text-primary);
+}
+.dirac-markdown blockquote {
+  margin: var(--space-2) 0; padding: var(--space-1) var(--space-3);
+  border-left: 2px solid var(--color-border-strong); color: var(--color-text-secondary);
+}
+.dirac-markdown blockquote p { margin: 0; }
+.dirac-code { position: relative; margin: var(--space-2) 0; }
+.dirac-code pre {
+  margin: 0; padding: var(--space-3); padding-right: calc(var(--control-height-sm) + var(--space-3)); overflow-x: auto;
+  background: var(--color-surface-base); border: 1px solid var(--color-border-strong); border-radius: var(--radius-round);
+}
+.dirac-code pre code { padding: 0; background: none; color: var(--color-text-primary); font-size: var(--font-size-chrome-label); line-height: var(--line-height-code); }
+.dirac-code__copy.nuclei-icon-btn { position: absolute; top: var(--space-1); right: var(--space-1); color: var(--color-text-tertiary); }
+.dirac-code__status { position: absolute; right: var(--space-2); bottom: var(--space-1); font-size: var(--font-size-caption); color: var(--color-text-secondary); }
+.dirac-code__status:empty { display: none; }
+.dirac-code .tok--keyword { color: var(--color-accent-quantum-text); }
+.dirac-code .tok--string { color: var(--color-syntax-string); }
+.dirac-code .tok--number { color: var(--color-syntax-number); }
+.dirac-code .tok--comment { color: var(--color-text-tertiary); font-style: italic; }
