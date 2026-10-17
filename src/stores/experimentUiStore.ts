@@ -26,6 +26,10 @@ export interface RunsViewState {
   sortKey: string | null;
   sortDirection: 'asc' | 'desc';
   scrollTop: number;
+  /** Sweep-plot pickers; `null` = use the smart default (for group, `''` = None). */
+  sweepX: string | null;
+  sweepY: string | null;
+  sweepGroup: string | null;
 }
 
 export const DEFAULT_RUNS_VIEW: RunsViewState = {
@@ -34,6 +38,9 @@ export const DEFAULT_RUNS_VIEW: RunsViewState = {
   sortKey: null,
   sortDirection: 'asc',
   scrollTop: 0,
+  sweepX: null,
+  sweepY: null,
+  sweepGroup: null,
 };
 
 interface ExperimentUiState {

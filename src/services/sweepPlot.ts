@@ -98,3 +98,66 @@ export function buildSweepSeries(
     points: byGroup.get(key)!.slice().sort(byX),
   }));
 }
+
+/** True when two points share an x — a line through them would zig-zag. */
+export function hasRepeatedX(points: readonly SweepPoint[]): boolean {
+  const seen = new Set<number>();
+  for (const p of points) {
+    if (seen.has(p.x)) return true;
+    seen.add(p.x);
+  }
+  return false;
+}
+
+export interface FailedMarker {
+  x: number;
+  dir: string;
+}
+
+/**
+ * Failed runs keyed by group value (`''` when ungrouped), so the plot can
+ * mark them rather than silently bridging the gap with a straight line.
+ */
+export function findFailedMarkers(
+  runs: readonly RunRecord[],
+  xParam: string,
+  groupParam?: string,
+): Map<string, FailedMarker[]> {
+  const markers = new Map<string, FailedMarker[]>();
+  for (const run of runs) {
+    if (run.manifest.status !== 'failed') continue;
+    const x = numericParam(run, xParam);
+    if (x === null) continue;
+    let key = '';
+    if (groupParam) {
+      const g = numericParam(run, groupParam);
+      if (g === null) continue;
+      key = String(g);
+    }
+    markers.set(key, [...(markers.get(key) ?? []), { x, dir: run.dir }]);
+  }
+  return markers;
+}
+
+/** Split an x-sorted line into segments wherever a failed x falls between points. */
+export function splitAtFailures(
+  points: readonly SweepPoint[],
+  failedXs: readonly number[],
+): SweepPoint[][] {
+  if (points.length === 0) return [];
+  const segments: SweepPoint[][] = [[points[0]]];
+  for (let i = 1; i < points.length; i += 1) {
+    const [a, b] = [points[i - 1].x, points[i].x];
+    const broken = failedXs.some((fx) => fx > a && fx < b);
+    if (broken) segments.push([points[i]]);
+    else segments[segments.length - 1] = [...segments[segments.length - 1], points[i]];
+  }
+  return segments;
+}
+
+const DERIVED_METRIC = /^(counts_|top_state)/;
+
+/** Default Y metric: the first user-defined metric, falling back to derived count stats. */
+export function pickDefaultMetric(metricNames: readonly string[]): string {
+  return metricNames.find((m) => !DERIVED_METRIC.test(m)) ?? metricNames[0] ?? '';
+}
