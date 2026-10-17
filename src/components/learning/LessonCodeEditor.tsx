@@ -1,10 +1,11 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useState } from 'react';
 import Editor, { type OnMount } from '@monaco-editor/react';
 import { useThemeStore } from '../../stores/themeStore';
 import { registerNucleiThemes } from '../editor/monacoThemes';
 import { TYPOGRAPHY } from '../../styles/tokens';
 import { isMacPlatform } from '../../config/keybindings';
 import { tabFocusHint } from '../../lib/tabFocusHint';
+import { lessonTabFocus } from './lessonTabFocus';
 import { countLines, lessonEditorHeight, LESSON_EDITOR_MAX_HEIGHT } from './lessonEditorLayout';
 
 interface Props {
@@ -24,24 +25,35 @@ interface Props {
 export function LessonCodeEditor({ value, onChange }: Props) {
   const mode = useThemeStore((s) => s.mode);
   const [height, setHeight] = useState(() => lessonEditorHeight(countLines(value)));
-
-  const [tabMovesFocus, setTabMovesFocus] = useState(true);
+  const [tabMovesFocus, setTabMovesFocus] = useState(() => lessonTabFocus.get());
   const [focused, setFocused] = useState(false);
-  const editorRef = useRef<Parameters<OnMount>[0] | null>(null);
-
-  useEffect(() => {
-    editorRef.current?.updateOptions({ tabFocusMode: tabMovesFocus });
-  }, [tabMovesFocus]);
 
   const handleMount: OnMount = useCallback((editor, monaco) => {
-    editorRef.current = editor;
-    editor.updateOptions({ tabFocusMode: true });
-    const toggleKey = isMacPlatform()
-      ? monaco.KeyMod.WinCtrl | monaco.KeyCode.KeyM
-      : monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyM;
-    editor.addCommand(toggleKey, () => setTabMovesFocus((prev) => !prev));
-    editor.onDidFocusEditorText(() => setFocused(true));
-    editor.onDidBlurEditorText(() => setFocused(false));
+    // The flag is shared by every editor, so this editor takes it while it has
+    // focus (Tab leaves; the learner can opt in to indenting) and puts back
+    // whatever was there when focus moves on.
+    let previous: boolean | null = null;
+    editor.onDidFocusEditorText(() => {
+      previous = lessonTabFocus.get();
+      lessonTabFocus.set(true);
+      setFocused(true);
+    });
+    editor.onDidBlurEditorText(() => {
+      if (previous !== null) lessonTabFocus.set(previous);
+      previous = null;
+      setFocused(false);
+    });
+    const subscription = lessonTabFocus.subscribe(setTabMovesFocus);
+    editor.onDidDispose(() => subscription.dispose());
+    // Monaco's own toggle is Ctrl+Shift+M on macOS; Ctrl+M is what the hint says.
+    if (isMacPlatform()) {
+      editor.addAction({
+        id: 'nuclei.lesson.toggleTabFocus',
+        label: 'Toggle Tab Key Moves Focus (Ctrl+M)',
+        keybindings: [monaco.KeyMod.WinCtrl | monaco.KeyCode.KeyM],
+        run: (ed) => { ed.trigger('nuclei', 'editor.action.toggleTabFocusMode', null); },
+      });
+    }
     const sync = () => setHeight(Math.min(LESSON_EDITOR_MAX_HEIGHT, Math.max(lessonEditorHeight(1), editor.getContentHeight())));
     sync();
     editor.onDidContentSizeChange(sync);

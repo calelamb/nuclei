@@ -1,48 +1,63 @@
 // @vitest-environment jsdom
-import { describe, it, expect, afterEach, vi } from 'vitest';
+import { describe, it, expect, afterEach, beforeEach, vi } from 'vitest';
+import React from 'react';
 import { render, cleanup, act, screen } from '@testing-library/react';
 
+const flag = vi.hoisted(() => {
+  let value = false;
+  const listeners = new Set<(next: boolean) => void>();
+  return {
+    get: () => value,
+    set: (next: boolean) => { value = next; listeners.forEach((l) => l(next)); },
+    subscribe: (l: (next: boolean) => void) => { listeners.add(l); return { dispose: () => { listeners.delete(l); } }; },
+    reset: () => { value = false; listeners.clear(); },
+  };
+});
+
+vi.mock('./lessonTabFocus', () => ({ lessonTabFocus: flag }));
+
 interface FakeEditor {
-  updateOptions: ReturnType<typeof vi.fn>;
-  addCommand: ReturnType<typeof vi.fn>;
+  addAction: ReturnType<typeof vi.fn>;
   onDidFocusEditorText: (cb: () => void) => void;
   onDidBlurEditorText: (cb: () => void) => void;
   onDidContentSizeChange: (cb: () => void) => void;
+  onDidDispose: (cb: () => void) => void;
   getContentHeight: () => number;
 }
 
-const harness = vi.hoisted(() => ({
-  editor: null as unknown as FakeEditor,
-  focus: () => {},
-  blur: () => {},
-  toggle: () => {},
-}));
+const harness = vi.hoisted(() => ({ focus: () => {}, blur: () => {} }));
 
-vi.mock('@monaco-editor/react', () => ({
-  default: ({ onMount }: { onMount: (e: FakeEditor, m: unknown) => void }) => {
+function FakeMonaco({ onMount }: { onMount: (e: FakeEditor, m: unknown) => void }) {
+  // Like the real component, mount the editor once, not on every re-render.
+  React.useEffect(() => {
     const editor: FakeEditor = {
-      updateOptions: vi.fn(),
-      addCommand: vi.fn((_key: number, cb: () => void) => { harness.toggle = cb; }),
+      addAction: vi.fn(),
       onDidFocusEditorText: (cb) => { harness.focus = cb; },
       onDidBlurEditorText: (cb) => { harness.blur = cb; },
       onDidContentSizeChange: () => {},
+      onDidDispose: () => {},
       getContentHeight: () => 100,
     };
-    harness.editor = editor;
     onMount(editor, { KeyMod: { WinCtrl: 1, CtrlCmd: 2 }, KeyCode: { KeyM: 4 } });
-    return null;
-  },
-}));
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  return null;
+}
+vi.mock('@monaco-editor/react', () => ({ default: FakeMonaco }));
 vi.mock('../editor/monacoThemes', () => ({ registerNucleiThemes: () => {} }));
 
 import { LessonCodeEditor } from './LessonCodeEditor';
 
+beforeEach(() => flag.reset());
 afterEach(cleanup);
 
 describe('LessonCodeEditor keyboard model (LR-03)', () => {
-  it('starts with Tab moving focus so keyboard users are not trapped', () => {
+  it('makes Tab move focus while the editor is focused, then restores the previous mode', () => {
     render(<LessonCodeEditor value="x = 1" onChange={() => {}} />);
-    expect(harness.editor.updateOptions).toHaveBeenCalledWith({ tabFocusMode: true });
+    expect(flag.get()).toBe(false);
+    act(() => harness.focus());
+    expect(flag.get()).toBe(true);
+    act(() => harness.blur());
+    expect(flag.get()).toBe(false);
   });
 
   it('shows the Tab hint only while the editor has focus', () => {
@@ -54,11 +69,10 @@ describe('LessonCodeEditor keyboard model (LR-03)', () => {
     expect(screen.queryByRole('note')).toBeNull();
   });
 
-  it('toggles to Tab-indents with the registered shortcut', () => {
+  it('follows the real flag when the learner toggles it to indent', () => {
     render(<LessonCodeEditor value="x = 1" onChange={() => {}} />);
     act(() => harness.focus());
-    act(() => harness.toggle());
-    expect(harness.editor.updateOptions).toHaveBeenLastCalledWith({ tabFocusMode: false });
+    act(() => flag.set(false));
     expect(screen.getByRole('note').textContent).toMatch(/Tab indents/);
   });
 });
