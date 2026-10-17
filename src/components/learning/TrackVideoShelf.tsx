@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Play } from 'lucide-react';
+import { VideoThumb } from './VideoThumb';
 import { CURATED_VIDEOS, type CuratedVideo } from '../../data/videos/curatedLibrary';
 import { openExternal, buildYouTubeWatchUrl } from '../../lib/openExternal';
 import { SegmentedControl, type SegmentedOption } from '../ui';
@@ -9,7 +10,7 @@ type CreatorFilter = 'all' | CuratedVideo['creator'];
 
 const CREATOR_LABEL: Record<CuratedVideo['creator'], string> = {
   '3blue1brown': '3Blue1Brown',
-  'ibm-technology': 'IBM Technology',
+  'ibm-technology': 'IBM',
   nvidia: 'NVIDIA',
   qiskit: 'Qiskit',
   other: 'Other',
@@ -27,7 +28,7 @@ function VideoCard({ video }: { video: CuratedVideo }) {
   return (
     <button type="button" className="video-card" onClick={() => void openExternal(buildYouTubeWatchUrl(video.youtubeId))}>
       <div className="video-card__thumb">
-        <img className="video-card__img" src={`https://img.youtube.com/vi/${video.youtubeId}/hqdefault.jpg`} alt="" loading="lazy" />
+        <VideoThumb youtubeId={video.youtubeId} quality="hqdefault" className="video-card__img" />
         <div className="video-card__play">
           <span className="video-card__play-disc"><Play size={20} fill="currentColor" aria-hidden="true" /></span>
         </div>
