@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react';
-import { Pencil, FlaskConical } from 'lucide-react';
+import { Pencil, FlaskConical, Waves } from 'lucide-react';
+import { isWebBuild } from '../../platform/buildTarget';
+import { useNavigationStore } from '../../stores/navigationStore';
 import { useThemeStore } from '../../stores/themeStore';
 import { useProjectStore } from '../../stores/projectStore';
 import { useExperimentStore, type DiscoveredExperiment } from '../../services/experimentStore';
@@ -10,6 +12,7 @@ import { NewExperimentForm } from './NewExperimentForm';
 import { NewQecExperimentMenu } from './NewQecExperimentMenu';
 import { NoiseModelLibrary } from './NoiseModelLibrary';
 import { RunButton } from './RunButton';
+import { RunFeedback } from './RunFeedback';
 
 /**
  * PRD 09 Phase D (D1) — Research-mode left-rail Experiments panel. Replaces
@@ -43,16 +46,52 @@ function gridSizeLabel(experiment: DiscoveredExperiment): string {
   }
 }
 
+function WebExperimentsEmptyState() {
+  const colors = useThemeStore((s) => s.colors);
+  const setActiveView = useNavigationStore((s) => s.setActiveView);
+  const linkBtn: React.CSSProperties = {
+    display: 'block', width: '100%', padding: '7px 10px', borderRadius: 4, fontSize: 12, fontWeight: 600,
+    fontFamily: "'Geist Sans', sans-serif", cursor: 'pointer', textAlign: 'center', textDecoration: 'none',
+    boxSizing: 'border-box',
+  };
+  return (
+    <div style={{ padding: 16, display: 'flex', flexDirection: 'column', gap: 10, fontFamily: "'Geist Sans', sans-serif" }}>
+      <FlaskConical size={20} style={{ color: colors.textDim, opacity: 0.6 }} />
+      <div style={{ color: colors.text, fontSize: 13, fontWeight: 600 }}>Experiments live in the desktop app</div>
+      <div style={{ color: colors.textDim, fontSize: 12, lineHeight: 1.55 }}>
+        Experiments are parameter sweeps saved as files in a project folder, so they need the desktop app.
+        In the browser you can still analyse QEC data and edit and simulate circuits.
+      </div>
+      <button
+        onClick={() => setActiveView('qec')}
+        style={{ ...linkBtn, background: colors.accent, color: '#0a1220', border: 'none' }}
+      >
+        Open QEC Workbench
+      </button>
+      <a
+        href="https://getnuclei.dev"
+        target="_blank"
+        rel="noreferrer"
+        style={{ ...linkBtn, background: 'transparent', color: colors.accent, border: `1px solid ${colors.border}` }}
+      >
+        Download Nuclei
+      </a>
+    </div>
+  );
+}
+
 function ExperimentRow({
   experiment,
   projectRoot,
   lastRun,
+  selected,
   onSelect,
   onEdit,
 }: {
   experiment: DiscoveredExperiment;
   projectRoot: string;
   lastRun: string;
+  selected: boolean;
   onSelect(): void;
   onEdit(): void;
 }) {
@@ -61,21 +100,31 @@ function ExperimentRow({
 
   return (
     <div
+      data-testid={`experiment-row-${experiment.fileName}`}
+      aria-current={selected ? 'true' : undefined}
       onClick={onSelect}
-      role="button"
-      tabIndex={0}
-      onKeyDown={(e) => { if (e.key === 'Enter') onSelect(); }}
       style={{
         padding: '8px 10px', borderBottom: `1px solid ${colors.border}`,
         cursor: 'pointer', display: 'flex', flexDirection: 'column', gap: 4,
+        background: selected ? `${colors.accent}14` : 'transparent',
+        boxShadow: selected ? `inset 2px 0 0 ${colors.accent}` : 'none',
       }}
-      onMouseEnter={(e) => { e.currentTarget.style.background = colors.bgElevated; }}
-      onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
+      onMouseEnter={(e) => { if (!selected) e.currentTarget.style.background = colors.bgElevated; }}
+      onMouseLeave={(e) => { e.currentTarget.style.background = selected ? `${colors.accent}14` : 'transparent'; }}
     >
       <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-        <span style={{ color: colors.text, fontSize: 12, fontWeight: 600, fontFamily: "'Geist Sans', sans-serif", flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+        <button
+          onClick={(e) => { e.stopPropagation(); onSelect(); }}
+          title={`Open ${spec.name}`}
+          style={{
+            background: 'transparent', border: 'none', padding: 0, textAlign: 'left', cursor: 'pointer',
+            color: selected ? colors.accent : colors.text, fontSize: 12, fontWeight: 600,
+            fontFamily: "'Geist Sans', sans-serif", flex: 1, minWidth: 0,
+            overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+          }}
+        >
           {spec.name}
-        </span>
+        </button>
         <button
           onClick={(e) => { e.stopPropagation(); onEdit(); }}
           title="Edit experiment"
@@ -97,7 +146,7 @@ function ExperimentRow({
       </div>
       {spec.type !== 'qec_campaign' && (
         <div onClick={(e) => e.stopPropagation()}>
-          <RunButton experiment={experiment} projectRoot={projectRoot} pointCount={Number(gridSizeLabel(experiment)) || 0} />
+          <RunButton experiment={experiment} projectRoot={projectRoot} pointCount={Number(gridSizeLabel(experiment)) || 0} variant="ghost" />
         </div>
       )}
     </div>
@@ -115,6 +164,7 @@ export function ExperimentsPanel() {
   const startWatching = useExperimentStore((s) => s.startWatching);
   const stopWatching = useExperimentStore((s) => s.stopWatching);
   const selectExperiment = useExperimentUiStore((s) => s.selectExperiment);
+  const selectedFileName = useExperimentUiStore((s) => s.selectedExperimentFileName);
 
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState<DiscoveredExperiment | undefined>(undefined);
@@ -139,6 +189,8 @@ export function ExperimentsPanel() {
     }
   }, [projectRoot, experiments, scanRuns]);
 
+  if (isWebBuild()) return <WebExperimentsEmptyState />;
+
   if (!projectRoot) {
     return (
       <div style={{ padding: 16, color: colors.textDim, fontSize: 12, fontFamily: "'Geist Sans', sans-serif", textAlign: 'center' }}>
@@ -150,29 +202,32 @@ export function ExperimentsPanel() {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
-      <div style={{ padding: '8px 10px', display: 'flex', gap: 6, justifyContent: 'flex-end', borderBottom: `1px solid ${colors.border}` }}>
+      <div style={{ padding: '8px 10px', display: 'flex', gap: 6, alignItems: 'center', borderBottom: `1px solid ${colors.border}` }}>
         <button
-          onClick={() => setNoiseLibOpen(true)}
+          onClick={() => { setEditing(undefined); setFormOpen(true); }}
           style={{
-            padding: '4px 10px', background: 'transparent', border: `1px solid ${colors.border}`,
-            borderRadius: 4, color: colors.textMuted, cursor: 'pointer', fontSize: 11, fontWeight: 600,
-            fontFamily: "'Geist Sans', sans-serif",
-          }}
-        >
-          Noise models
-        </button>
-        <NewQecExperimentMenu projectRoot={projectRoot} />
-        <button
-          onClick={() => { setEditing(undefined); setFormOpen((v) => !v); }}
-          style={{
-            padding: '4px 10px', background: 'transparent', border: `1px solid ${colors.accent}`,
+            flex: 1, minWidth: 0, padding: '5px 10px', background: 'transparent', border: `1px solid ${colors.accent}`,
             borderRadius: 4, color: colors.accent, cursor: 'pointer', fontSize: 11, fontWeight: 600,
-            fontFamily: "'Geist Sans', sans-serif",
+            fontFamily: "'Geist Sans', sans-serif", whiteSpace: 'nowrap',
           }}
         >
           + New experiment
         </button>
+        <NewQecExperimentMenu projectRoot={projectRoot} />
+        <button
+          onClick={() => setNoiseLibOpen(true)}
+          title="Noise models"
+          aria-label="Noise models"
+          style={{
+            display: 'flex', alignItems: 'center', justifyContent: 'center', width: 28, height: 28, flexShrink: 0,
+            background: 'transparent', border: `1px solid ${colors.border}`, borderRadius: 4,
+            color: colors.textMuted, cursor: 'pointer',
+          }}
+        >
+          <Waves size={13} />
+        </button>
       </div>
+      <RunFeedback compact />
 
       <div style={{ flex: 1, minHeight: 0, overflow: 'auto' }}>
         {experiments.length === 0 && validationErrors.length === 0 && (
@@ -187,6 +242,7 @@ export function ExperimentsPanel() {
             experiment={experiment}
             projectRoot={projectRoot}
             lastRun={formatLastRun(experiment, runsByExperiment)}
+            selected={selectedFileName === experiment.fileName}
             onSelect={() => selectExperiment(experiment.fileName)}
             onEdit={() => { setEditing(experiment); setFormOpen(true); }}
           />
@@ -213,6 +269,7 @@ export function ExperimentsPanel() {
 
       {formOpen && (
         <NewExperimentForm
+          key={editing?.fileName ?? 'new'}
           projectRoot={projectRoot}
           existing={editing}
           onClose={() => { setFormOpen(false); setEditing(undefined); }}

@@ -8,6 +8,17 @@ import { useExperimentUiStore } from '../../stores/experimentUiStore';
 import { useExperimentRunStore } from '../../stores/experimentRunStore';
 import type { ExperimentSpec } from '../../types/experiment';
 
+const SECOND_SPEC: ExperimentSpec = {
+  schema: 1,
+  name: 'depth-grid',
+  entry: 'bell.py',
+  language: 'python',
+  backend: { provider: 'simulator', target: 'statevector' },
+  shots: 2048,
+  seed: 7,
+  sweep: { depth: { values: [1, 2] } },
+};
+
 const FIXTURE_SPEC: ExperimentSpec = {
   schema: 1,
   name: 'theta-sweep',
@@ -28,6 +39,7 @@ function installFixtureStore() {
     loading: false,
     experiments: [
       { fileName: 'theta-sweep.experiment.yaml', path: '/proj/experiments/theta-sweep.experiment.yaml', spec: FIXTURE_SPEC },
+      { fileName: 'depth-grid.experiment.yaml', path: '/proj/experiments/depth-grid.experiment.yaml', spec: SECOND_SPEC },
     ],
     validationErrors: [
       { fileName: 'broken.experiment.yaml', path: '/proj/experiments/broken.experiment.yaml', errors: ['shots: Invalid input: expected number, received string'] },
@@ -60,10 +72,10 @@ describe('ExperimentsPanel', () => {
   });
 
   it('renders discovered experiments with name, entry, backend, and grid size', () => {
-    const { getByText } = render(<ExperimentsPanel />);
+    const { getByText, getAllByText } = render(<ExperimentsPanel />);
     expect(getByText('theta-sweep')).toBeTruthy();
     expect(getByText(/run\.py/)).toBeTruthy();
-    expect(getByText(/simulator\/statevector/)).toBeTruthy();
+    expect(getAllByText(/simulator\/statevector/).length).toBeGreaterThan(0);
     expect(getByText(/3 points/)).toBeTruthy();
   });
 
@@ -86,5 +98,42 @@ describe('ExperimentsPanel', () => {
     const state = useExperimentStore.getState();
     expect(state.reload).toHaveBeenCalledWith('/proj', expect.anything());
     expect(state.startWatching).toHaveBeenCalledWith('/proj', expect.anything());
+  });
+
+  it('editing experiment B after A loads B into the form (research-01)', () => {
+    const { getByLabelText, container } = render(<ExperimentsPanel />);
+    fireEvent.click(getByLabelText('Edit theta-sweep'));
+    expect((container.querySelector('#exp-name') as HTMLInputElement).value).toBe('theta-sweep');
+    fireEvent.click(getByLabelText('Edit depth-grid'));
+    expect((container.querySelector('#exp-name') as HTMLInputElement).value).toBe('depth-grid');
+    expect((container.querySelector('#exp-entry') as HTMLInputElement).value).toBe('bell.py');
+    expect((container.querySelector('#exp-shots') as HTMLInputElement).value).toBe('2048');
+  });
+
+  it('"+ New experiment" while editing switches to a blank form instead of closing (research-17)', () => {
+    const { getByLabelText, getByText, container } = render(<ExperimentsPanel />);
+    fireEvent.click(getByLabelText('Edit theta-sweep'));
+    fireEvent.click(getByText('+ New experiment'));
+    const name = container.querySelector('#exp-name') as HTMLInputElement;
+    expect(name).toBeTruthy();
+    expect(name.value).toBe('');
+  });
+
+  it('marks the open experiment as selected (research-24)', () => {
+    useExperimentUiStore.setState({ selectedExperimentFileName: 'depth-grid.experiment.yaml' });
+    const { getByTestId } = render(<ExperimentsPanel />);
+    expect(getByTestId('experiment-row-depth-grid.experiment.yaml').getAttribute('aria-current')).toBe('true');
+    expect(getByTestId('experiment-row-theta-sweep.experiment.yaml').getAttribute('aria-current')).toBeNull();
+  });
+
+  it('keeps the noise-model entry reachable by accessible name (research-06)', () => {
+    const { getByLabelText } = render(<ExperimentsPanel />);
+    expect(getByLabelText('Noise models')).toBeTruthy();
+  });
+
+  it('surfaces a failed sweep start instead of staying silent (research-02)', () => {
+    useExperimentRunStore.setState({ active: null, lastSummary: null, lastError: 'Failed to connect to kernel' });
+    const { getByRole } = render(<ExperimentsPanel />);
+    expect(getByRole('status').textContent).toContain('Failed to connect to kernel');
   });
 });

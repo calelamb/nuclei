@@ -43,14 +43,18 @@ export function NewQecExperimentMenu({ projectRoot }: { projectRoot: string }) {
     <div style={{ position: 'relative' }}>
       <button
         onClick={() => setOpen((v) => !v)}
+        title="New QEC experiment"
+        aria-label="New QEC experiment"
+        aria-haspopup="menu"
+        aria-expanded={open}
         style={{
-          display: 'flex', alignItems: 'center', gap: 5,
-          padding: '4px 10px', background: 'transparent', border: `1px solid ${colors.dirac}`,
+          display: 'flex', alignItems: 'center', gap: 5, whiteSpace: 'nowrap', height: 28,
+          padding: '0 9px', background: 'transparent', border: `1px solid ${colors.dirac}`,
           borderRadius: 4, color: colors.dirac, cursor: 'pointer', fontSize: 11, fontWeight: 600,
           fontFamily: "'Geist Sans', sans-serif",
         }}
       >
-        <Atom size={12} /> New QEC experiment
+        <Atom size={12} /> QEC
       </button>
 
       {open && (
