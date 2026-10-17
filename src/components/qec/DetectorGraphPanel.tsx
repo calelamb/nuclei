@@ -228,7 +228,7 @@ export function DetectorGraphPanel({ embedded = false }: { embedded?: boolean } 
         <div
           style={{
             display: 'flex', alignItems: 'center', gap: 6, padding: '5px 12px',
-            fontSize: 11, color: colors.accent, borderBottom: `1px solid ${colors.border}`,
+            fontSize: 11, color: colors.accentText, borderBottom: `1px solid ${colors.border}`,
             fontFamily: TYPOGRAPHY.fontSans,
           }}
         >

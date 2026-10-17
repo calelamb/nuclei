@@ -24,7 +24,7 @@ export function QecLambdaReadout({ decoders, estimates, units, colors }: Props) 
   const withoutFit = decoders.filter((d) => !table.groups.some((g) => g.decoder === d));
   return (
     <section aria-label="Error suppression factor Λ" style={{ fontFamily: TYPOGRAPHY.fontSans, fontSize: 12, color: colors.text }}>
-      <h3 style={{ margin: 0, fontSize: 11, fontWeight: 600, letterSpacing: 0.4, textTransform: 'uppercase', color: colors.textMuted }}>
+      <h3 style={{ margin: 0, fontSize: 12, fontWeight: 600, color: colors.textMuted }}>
         Error suppression Λ
       </h3>
       {table.subtitle && <div style={{ fontSize: 11, color: colors.textMuted, margin: '2px 0 6px' }}>{table.subtitle}</div>}
