@@ -36,4 +36,17 @@ describe('shortcuts sheet', () => {
     render(<KeyboardShortcuts onClose={() => {}} />);
     expect(screen.getByRole('dialog').getAttribute('aria-modal')).toBe('true');
   });
+
+  it('on the web build omits the chords Chrome reserves (⌘N, ⌘⇧T) and keeps the rest', () => {
+    const rows = shortcutGroups(true, true).flatMap((g) => g.shortcuts.map((s) => s.description));
+    expect(rows).not.toContain('New file');
+    expect(rows).not.toContain('Toggle theme');
+    expect(rows).toContain('Command palette');
+  });
+
+  it('desktop still lists them', () => {
+    const rows = shortcutGroups(true, false).flatMap((g) => g.shortcuts.map((s) => s.description));
+    expect(rows).toContain('New file');
+    expect(rows).toContain('Toggle theme');
+  });
 });
