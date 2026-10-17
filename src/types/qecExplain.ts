@@ -13,6 +13,16 @@ const operationSchema = z.looseObject({
   instruction: z.string().nullish(),
 });
 
+const causeSchema = z.looseObject({
+  kind: z.enum(['preparation_basis_mismatch', 'measurement_basis_mismatch']),
+  basis: z.string(),
+  operation_line: lineRef,
+  preparation_line: lineRef,
+  detector_lines: z.record(z.string(), z.number().int().positive()).default({}),
+});
+
+const sensitivitySchema = z.looseObject({ target: z.string(), pauli: z.string() });
+
 export const nondeterministicSchema = z.looseObject({
   status: z.enum(['ok', 'nondeterministic', 'invalid_circuit', 'parse_error']),
   sentence: z.string(),
@@ -27,6 +37,12 @@ export const nondeterministicSchema = z.looseObject({
   diagram_svg: z.string().nullish(),
   stim_message: z.string().nullish(),
   targets: z.array(z.string()).default([]),
+  /** Total flagged detectors/observables; `targets` is bounded by the kernel. */
+  target_count: z.number().int().nonnegative().nullish(),
+  targets_omitted: z.number().int().nonnegative().default(0),
+  sensitivities: z.array(sensitivitySchema).default([]),
+  /** Set when Stim blamed a reset/measurement but the real cause is a basis mismatch. */
+  cause: causeSchema.nullish(),
   /** Line declaring each named detector/observable ("D0" / "L0"): usually the real cause. */
   declaration_lines: z.record(z.string(), z.number().int().positive()).default({}),
 });
