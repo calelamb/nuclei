@@ -377,6 +377,11 @@ export function SettingsPanel() {
             <Toggle value={dirac.autoExplainErrors}
               onChange={(v) => updateDirac({ autoExplainErrors: v })} />
           </SettingRow>
+          <SettingRow label="Ambient Narration"
+            hint="Dirac comments on your circuit after you pause typing. Each comment is a paid Claude call, so it is off by default and limited to one every 10 seconds.">
+            <Toggle value={dirac.ambientNarration}
+              onChange={(v) => updateDirac({ ambientNarration: v })} />
+          </SettingRow>
           <SettingRow label="Extended Thinking"
             hint="Auto-escalate hard chat questions to deep reasoning. /think always works.">
             <Toggle value={dirac.extendedThinking}
