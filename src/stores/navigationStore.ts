@@ -32,6 +32,11 @@ function leaveFullViewSurfaces(): void {
  */
 export type NavView = LeftPanelId;
 
+export type SettingsSectionId = 'appearance' | 'workspace' | 'editor' | 'dirac' | 'help';
+export interface SettingsTarget { section: SettingsSectionId; nonce: number }
+const SETTINGS_SECTIONS: readonly string[] = ['appearance', 'workspace', 'editor', 'dirac', 'help'];
+const DEFAULT_SETTINGS_SECTION: SettingsSectionId = 'dirac';
+
 interface NavigationState {
   activeView: NavView | null;
   /** Set (or clear, with null) the open rail view. */
@@ -45,10 +50,13 @@ interface NavigationState {
   /** Collapse the sidebar when narrow and restore it on grow. `canCollapse` is false
    * while a full-width takeover view is showing (collapsing it would drop the view). */
   applyNarrow: (narrow: boolean, canCollapse: boolean) => void;
-  /** Open the Settings view (the Dirac panel's gear; formerly `openSettings`
-   * via `settingsSignal`). PanelLayout's mode-exit effect handles leaving any
-   * Learn/Challenge full-view surface. */
-  openSettings: () => void;
+  /** Section the Settings panel should expand, scroll to and focus on its next render. */
+  settingsTarget: SettingsTarget | null;
+  clearSettingsTarget: () => void;
+  /** Open the Settings view, optionally at a section. The only caller today is the
+   * Dirac panel (its gear / "Open Settings" CTA, which passes a click event, not a
+   * section), so the default lands on the Dirac AI section where the API key lives. */
+  openSettings: (section?: unknown) => void;
 }
 
 export const useNavigationStore = create<NavigationState>((set) => ({
@@ -78,8 +86,17 @@ export const useNavigationStore = create<NavigationState>((set) => ({
         ? { lastNarrow: narrow, activeView: s.autoCollapsedView, autoCollapsedView: null }
         : { lastNarrow: narrow, autoCollapsedView: null };
     }),
-  openSettings: () => {
+  settingsTarget: null,
+  clearSettingsTarget: () => set({ settingsTarget: null }),
+  openSettings: (section) => {
     leaveFullViewSurfaces();
-    set({ activeView: 'settings', autoCollapsedView: null });
+    const id = typeof section === 'string' && SETTINGS_SECTIONS.includes(section)
+      ? (section as SettingsSectionId)
+      : DEFAULT_SETTINGS_SECTION;
+    set((s) => ({
+      activeView: 'settings',
+      autoCollapsedView: null,
+      settingsTarget: { section: id, nonce: (s.settingsTarget?.nonce ?? 0) + 1 },
+    }));
   },
 }));

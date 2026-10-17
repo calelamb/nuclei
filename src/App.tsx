@@ -21,6 +21,7 @@ import { useKeychainKeyMigration } from './hooks/useKeychainKeyMigration';
 import { useProjectStore } from './stores/projectStore';
 import { useThemeStore, isThemePreference } from './stores/themeStore';
 import { useEditorStore } from './stores/editorStore';
+import { useHelpOverlayStore } from './stores/helpOverlayStore';
 import { useWhatsNewStore } from './stores/whatsNewStore';
 import { useUIModeStore } from './stores/uiModeStore';
 import { findBindingId } from './config/keybindings';
@@ -79,7 +80,11 @@ function AppInner() {
   useModeIdentity();
   const platform = usePlatform();
   const [showOnboarding, setShowOnboarding] = useState(false);
-  const [showShortcuts, setShowShortcuts] = useState(false);
+  const showShortcuts = useHelpOverlayStore((s) => s.shortcutsOpen);
+  const setShowShortcuts = useCallback((v: boolean | ((cur: boolean) => boolean)) => {
+    const store = useHelpOverlayStore.getState();
+    store.setShortcutsOpen(typeof v === 'function' ? v(store.shortcutsOpen) : v);
+  }, []);
   const [showCommandPalette, setShowCommandPalette] = useState(false);
   const [composeOpen, setComposeOpen] = useState(false);
   const [isReturningUser, setIsReturningUser] = useState(false);
@@ -402,7 +407,7 @@ function AppInner() {
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [fileOps, themeToggle, cycleMode, toggleDirac, focusDirac]);
+  }, [fileOps, themeToggle, cycleMode, toggleDirac, focusDirac, setShowShortcuts]);
 
   return (
     <>

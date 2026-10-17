@@ -4,3 +4,4 @@ export { Select, type SelectProps } from './Select';
 export { TextInput, TextArea, type TextInputProps, type TextAreaProps } from './TextInput';
 export { Switch, type SwitchProps } from './Switch';
 export { ChoiceCard, type ChoiceCardProps } from './ChoiceCard';
+export { SegmentedControl, type SegmentedControlProps, type SegmentedOption } from './SegmentedControl';
