@@ -169,9 +169,12 @@ function snapshot(mode: ThemeMode, overlay: Partial<ThemeColors> | null) {
   };
 }
 
+/** Until the user picks a theme the app follows the OS, so a light-mode machine never opens dark. */
+export const DEFAULT_THEME_PREFERENCE: ThemePreference = 'system';
+
 export const useThemeStore = create<ThemeState>((set, get) => ({
-  ...snapshot('dark', null),
-  preference: 'dark',
+  ...snapshot(resolveThemePreference(DEFAULT_THEME_PREFERENCE), null),
+  preference: DEFAULT_THEME_PREFERENCE,
   pluginOverlay: null,
   setMode: (mode) => set({ ...snapshot(mode, get().pluginOverlay), preference: mode }),
   setPreference: (preference) =>
