@@ -253,3 +253,34 @@ def test_cirq_bell_still_samples_and_reports_cirq_snapshot():
     assert out["error"] is None, out["error"]
     assert set(out["result"]["measurements"]) <= {"00", "11"}
     assert [g["type"] for g in out["snapshot"]["gates"]] == ["H", "CNOT", "Measure"]
+
+
+def test_mid_circuit_measurement_state_excludes_final_readout():
+    # h, measure, h, measure: the Measurement lesson's demo. The shown state is
+    # the one before the final readout, i.e. 50/50, never a collapsed basis state.
+    code = (
+        "from qiskit import QuantumCircuit\n"
+        "qc = QuantumCircuit(1, 1)\nqc.h(0)\nqc.measure(0, 0)\nqc.h(0)\nqc.measure(0, 0)\n"
+    )
+    for seed in (1, 2, 3, 4, 5):
+        out = run_browser("nuclei_execute", code, 1000, seed)
+        assert out["error"] is None
+        probs = out["result"]["probabilities"]
+        assert probs["0"] == pytest.approx(0.5, abs=1e-9)
+        assert probs["1"] == pytest.approx(0.5, abs=1e-9)
+        counts = out["result"]["measurements"]
+        assert abs(counts.get("0", 0) - 500) < 100
+
+
+def test_mid_circuit_measurement_matches_desktop_probabilities():
+    pytest.importorskip("qiskit")
+    pytest.importorskip("qiskit_aer")
+    from kernel.executor import Executor
+
+    code = (
+        "from qiskit import QuantumCircuit\n"
+        "qc = QuantumCircuit(1, 1)\nqc.h(0)\nqc.measure(0, 0)\nqc.h(0)\nqc.measure(0, 0)\n"
+    )
+    expected, *_ = Executor().execute(code, 1000, language="python", seed=3)
+    ours = run_browser("nuclei_execute", code, 1000, 3)
+    assert ours["result"]["probabilities"] == pytest.approx(expected.to_dict()["probabilities"], abs=1e-9)

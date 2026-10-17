@@ -192,11 +192,40 @@ def is_unitary_with_final_measurements(circuit):
     return not _needs_trajectories(list(flatten(circuit)))
 
 
+def _drop_final_measurements(ops):
+    """Remove each qubit's trailing measurements, like remove_final_measurements().
+
+    A measurement stays when anything later acts on its qubit or reads the
+    classical bit it wrote (c_if), so only genuinely final readout is dropped.
+    """
+    busy_qubits, needed_clbits = set(), set()
+    kept = []
+    for op, qs, cs, cond in reversed(ops):
+        if op.name == "barrier":
+            kept.append((op, qs, cs, cond))
+            continue
+        final = op.name == "measure" and qs[0] not in busy_qubits and cs[0] not in needed_clbits
+        if final:
+            continue
+        busy_qubits.update(qs)
+        if cond is not None:
+            needed_clbits.update(cond[0])
+        kept.append((op, qs, cs, cond))
+    kept.reverse()
+    return kept
+
+
 def trajectory_state(circuit, seed=None):
-    """Final state of a single collapsed run (for circuits with mid-circuit measurement)."""
+    """State before the final readout of a single collapsed run.
+
+    Mid-circuit measurements and resets collapse the state (as on the desktop
+    simulator); trailing measurements are not applied, so a circuit such as
+    h, measure, h, measure shows the post-second-h state, not a basis state.
+    """
     n = circuit.num_qubits
     check_size(n)
-    state, _cl = _run_trajectory(list(flatten(circuit)), n, np.random.default_rng(seed))
+    ops = _drop_final_measurements(list(flatten(circuit)))
+    state, _cl = _run_trajectory(ops, n, np.random.default_rng(seed))
     return state
 
 
