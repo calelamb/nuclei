@@ -44,4 +44,14 @@ describe('blochGridLayout', () => {
     const l = blochGridLayout({ count: 2, width: 480, height: 300 });
     expect(l.cellWidth).toBeGreaterThanOrEqual(MIN_SPHERE_PX);
   });
+
+  it('keeps 5 qubits on one screen in the narrow 1100px slot by shrinking the spheres', () => {
+    const l = blochGridLayout({ count: 5, width: 316, height: 244 });
+    expect(l.pageCount).toBe(1);
+    expect(l.pageSize).toBe(5);
+  });
+
+  it('still pages once the count passes a page', () => {
+    expect(blochGridLayout({ count: 12, width: 316, height: 244 }).pageCount).toBeGreaterThan(1);
+  });
 });
