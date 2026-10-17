@@ -101,7 +101,7 @@ export function ComposeModal({ open, onClose }: ComposeModalProps) {
             display: 'flex',
             alignItems: 'center',
             gap: 8,
-            color: colors.dirac,
+            color: colors.diracText,
             fontSize: 11,
             fontWeight: 600,
             textTransform: 'uppercase',

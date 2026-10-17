@@ -449,7 +449,7 @@ function SplashScreen() {
       <div style={{
         color: 'var(--color-accent-quantum)',
         fontSize: 36,
-        fontWeight: 800,
+        fontWeight: 700,
         fontFamily: 'var(--font-sans)',
         letterSpacing: -1,
         animation: 'nuclei-fade-in var(--duration-slow) var(--ease-emphasized-out)',

@@ -88,7 +88,7 @@ export function DiffPreview() {
         >
           <span
             style={{
-              color: colors.dirac,
+              color: colors.diracText,
               fontSize: 11,
               fontWeight: 600,
               textTransform: 'uppercase',

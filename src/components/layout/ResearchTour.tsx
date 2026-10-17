@@ -133,7 +133,7 @@ export function ResearchTour() {
             width: rect.width + 8,
             height: rect.height + 8,
             borderRadius: 8,
-            border: `2px solid ${colors.dirac}`,
+            border: `2px solid ${colors.modeResearch}`,
             boxShadow: '0 0 0 9999px rgba(0,0,0,0.5)',
             pointerEvents: 'none',
           }}
@@ -156,7 +156,7 @@ export function ResearchTour() {
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
           <span
-            style={{ fontSize: 10, fontWeight: 700, letterSpacing: 0.5, color: colors.dirac, textTransform: 'uppercase' }}
+            style={{ fontSize: 10, fontWeight: 700, letterSpacing: 0.5, color: colors.modeResearch, textTransform: 'uppercase' }}
           >
             Research tour
           </span>
@@ -201,7 +201,7 @@ export function ResearchTour() {
             ref={primaryRef}
             onClick={next}
             style={{
-              padding: '5px 14px', background: colors.dirac, color: '#fff',
+              padding: '5px 14px', background: colors.modeResearch, color: '#fff',
               border: 'none', borderRadius: 6, fontSize: 11, fontWeight: 600, cursor: 'pointer',
               fontFamily: TYPOGRAPHY.fontSans,
             }}

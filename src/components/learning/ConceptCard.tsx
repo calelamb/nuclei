@@ -131,7 +131,7 @@ export function ConceptCard({ title, visual, explanation }: ConceptCardProps) {
             background: `${colors.dirac}18`,
             border: `1px solid ${colors.dirac}40`,
             borderRadius: 6,
-            color: colors.dirac,
+            color: colors.diracText,
             fontSize: 12,
             fontWeight: 500,
             fontFamily: TYPOGRAPHY.fontSans,

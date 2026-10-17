@@ -33,7 +33,7 @@ export function ModeChip() {
   const buttonRef = useRef<HTMLButtonElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
 
-  const accent = mode === 'research' ? colors.dirac : colors.accent;
+  const accent = mode === 'research' ? colors.modeResearch : colors.accent;
   const meta = MODE_META[mode];
   const Icon = meta.icon;
 
@@ -95,7 +95,7 @@ export function ModeChip() {
         const mMeta = MODE_META[m];
         const MIcon = mMeta.icon;
         const isCurrent = m === mode;
-        const mAccent = m === 'research' ? colors.dirac : colors.accent;
+        const mAccent = m === 'research' ? colors.modeResearch : colors.accent;
         return (
           <button
             key={m}

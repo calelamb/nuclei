@@ -114,7 +114,7 @@ export function DecoderWorkbench() {
           <tbody>
             {wb.map((w) => (
               <tr key={`${w.experiment}|${w.decoder}|${w.distance}|${w.noise}|${w.strongId}`}>
-                <td style={{ ...td, color: colors.dirac, fontWeight: 600 }}>{w.decoder}</td>
+                <td style={{ ...td, color: colors.text, fontWeight: 500 }}>{w.decoder}</td>
                 {showExperiment && <td style={td}>{w.context}{collisionTag(w)}</td>}
                 <td style={td}>{w.distance ?? '—'}{!showExperiment && collisionTag(w)}</td>
                 <td style={td}>{w.noise ?? '—'}</td>

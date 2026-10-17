@@ -88,7 +88,7 @@ export function QecAnalysisView() {
             onClick={() => { if (experiment && projectRoot) void run(experiment, projectRoot); }}
             disabled={!canRun}
             style={{
-              display: 'flex', alignItems: 'center', gap: 5, background: colors.dirac, color: '#fff',
+              display: 'flex', alignItems: 'center', gap: 5, background: colors.accent, color: colors.bgPanel,
               border: 'none', borderRadius: 5, cursor: canRun ? 'pointer' : 'default',
               opacity: canRun ? 1 : 0.5, fontSize: 12, fontWeight: 600, padding: '5px 12px',
               fontFamily: TYPOGRAPHY.fontSans,

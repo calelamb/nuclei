@@ -172,7 +172,7 @@ export function DetectorGraphPanel() {
                 title="Sample one shot and decode it"
                 style={{
                   display: 'flex', alignItems: 'center', gap: 4,
-                  background: colors.dirac, color: '#fff', border: 'none', borderRadius: 4,
+                  background: colors.accent, color: colors.bgPanel, border: 'none', borderRadius: 4,
                   cursor: decodePending ? 'default' : 'pointer', fontSize: 11, padding: '4px 9px',
                   opacity: decodePending ? 0.6 : 1, fontFamily: TYPOGRAPHY.fontSans,
                 }}

@@ -107,10 +107,10 @@ export function QecTimelinePanel() {
               <g key={`det-${tick}`}>
                 {detCount > 0 && (
                   <rect x={tx(tick) - 6} y={y} width={12} height={8} rx={1.5}
-                    fill={`${colors.dirac}44`} stroke={colors.dirac} strokeWidth={0.5} />
+                    fill={`${colors.overlayMatching}44`} stroke={colors.overlayMatching} strokeWidth={0.5} />
                 )}
                 {detCount > 0 && (
-                  <text x={tx(tick)} y={y + 6} fontSize={6.5} fill={colors.dirac} textAnchor="middle">{detCount}</text>
+                  <text x={tx(tick)} y={y + 6} fontSize={6.5} fill={colors.overlayMatching} textAnchor="middle">{detCount}</text>
                 )}
                 {hasObs && <circle cx={tx(tick)} cy={y + 14} r={2} fill={colors.success} />}
               </g>

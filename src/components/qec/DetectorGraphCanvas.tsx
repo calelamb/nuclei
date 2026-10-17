@@ -97,7 +97,7 @@ export function DetectorGraphCanvas({ layout, overlay, onDetectorClick }: Detect
         const y2 = Y(b.y);
 
         if (isMatched) {
-          ctx.strokeStyle = colors.dirac;
+          ctx.strokeStyle = colors.overlayMatching;
           ctx.lineWidth = 2.6;
           ctx.globalAlpha = 1;
           ctx.setLineDash([]);
@@ -327,7 +327,7 @@ function GraphLegend({ colors }: { colors: ThemeColors }) {
       <div style={row}>
         <span style={{ width: 8, height: 8, borderRadius: '50%', background: colors.error }} />
         fired
-        <span style={{ width: 14, height: 0, borderTop: `2px solid ${colors.dirac}`, marginLeft: 6 }} />
+        <span style={{ width: 14, height: 0, borderTop: `2px solid ${colors.overlayMatching}`, marginLeft: 6 }} />
         matched
       </div>
     </div>

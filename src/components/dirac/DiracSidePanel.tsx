@@ -156,7 +156,7 @@ function ThinkingBlock({ thinking }: { thinking: string }) {
         style={{
           display: 'flex', alignItems: 'center', gap: 6, width: '100%',
           padding: '4px 8px', background: colors.bgPanel, border: 'none',
-          cursor: 'pointer', color: colors.dirac, fontSize: 11,
+          cursor: 'pointer', color: colors.diracText, fontSize: 11,
           fontFamily: TYPOGRAPHY.fontSans, fontStyle: 'italic',
         }}
       >
@@ -330,7 +330,7 @@ function ApiKeyBanner() {
         display: 'flex', alignItems: 'center', justifyContent: 'center',
         margin: '0 auto 10px',
       }}>
-        <Settings size={18} color={colors.dirac} />
+        <Settings size={18} color={colors.diracText} />
       </div>
       <div style={{
         fontSize: 13, fontWeight: 600, color: colors.text,
@@ -478,7 +478,7 @@ export function DiracSidePanel() {
         onKeyDown={(e) => { if (e.key === 'Enter') toggle(); }}
       >
         <span style={{
-          color: colors.dirac, fontSize: 11, fontWeight: 600,
+          color: colors.diracText, fontSize: 11, fontWeight: 600,
           fontFamily: TYPOGRAPHY.fontSans, letterSpacing: 1,
         }}>DIRAC</span>
       </div>
@@ -509,7 +509,7 @@ export function DiracSidePanel() {
         background: `linear-gradient(180deg, ${colors.dirac}0A 0%, transparent 100%)`,
       }}>
         <span style={{
-          color: colors.dirac, fontSize: 13, fontWeight: 700,
+          color: colors.diracText, fontSize: 13, fontWeight: 700,
           fontFamily: TYPOGRAPHY.fontSans,
         }}>Dirac</span>
         <div style={{ flex: 1 }} />

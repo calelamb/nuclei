@@ -33,10 +33,10 @@ export function useModeIdentity(): void {
 
   // --mode-accent
   useEffect(() => {
-    const accent = mode === 'research' ? colors.dirac : colors.accent;
+    const accent = mode === 'research' ? colors.modeResearch : colors.accent;
     document.documentElement.style.setProperty('--mode-accent', accent);
     document.documentElement.dataset.workspaceMode = mode;
-  }, [mode, colors.dirac, colors.accent]);
+  }, [mode, colors.modeResearch, colors.accent]);
 
   // Window title
   useEffect(() => {

@@ -205,7 +205,7 @@ export function ChallengeBoard() {
               borderRadius: 6,
               border: `1px solid ${colors.dirac}40`,
               background: `${colors.dirac}12`,
-              color: colors.dirac,
+              color: colors.diracText,
               fontSize: 11,
               fontWeight: 600,
               fontFamily: TYPOGRAPHY.fontSans,

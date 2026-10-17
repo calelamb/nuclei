@@ -46,7 +46,7 @@ export function CodeLatticePanel() {
   }
 
   const maxTick = Math.max(0, (qec.num_ticks || 1) - 1);
-  const basisColor = (b: string) => (b === 'X' ? colors.accent : b === 'Z' ? colors.dirac : colors.textDim);
+  const basisColor = (b: string) => (b === 'X' ? colors.basisX : b === 'Z' ? colors.basisZ : colors.textDim);
 
   return (
     <div style={{ height: '100%', display: 'flex', flexDirection: 'column', background: colors.bg }}>
@@ -94,8 +94,8 @@ export function CodeLatticePanel() {
         />
         <span style={{ display: 'flex', gap: 8 }}>
           <span style={{ color: colors.textDim }}>● data</span>
-          <span style={{ color: colors.accent }}>■ X</span>
-          <span style={{ color: colors.dirac }}>■ Z</span>
+          <span style={{ color: colors.basisX }}>■ X</span>
+          <span style={{ color: colors.basisZ }}>■ Z</span>
         </span>
       </div>
     </div>

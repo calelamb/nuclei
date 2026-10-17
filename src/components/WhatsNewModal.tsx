@@ -266,7 +266,7 @@ export function WhatsNewModal({
               style={{
                 margin: 0,
                 fontSize: 24,
-                fontWeight: 650,
+                fontWeight: 600,
                 letterSpacing: '-0.02em',
                 lineHeight: 1.25,
                 color: colors.text,

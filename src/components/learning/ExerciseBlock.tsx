@@ -459,7 +459,7 @@ export function ExerciseBlock({
           alignItems: 'center',
           gap: 8,
         }}>
-          <HelpCircle size={14} color={colors.dirac} />
+          <HelpCircle size={14} color={colors.diracText} />
           <span style={{
             color: colors.textMuted, fontSize: 13,
             fontFamily: TYPOGRAPHY.fontSans,
@@ -470,7 +470,7 @@ export function ExerciseBlock({
             background: `${colors.dirac}18`,
             border: `1px solid ${colors.dirac}40`,
             borderRadius: 4,
-            color: colors.dirac,
+            color: colors.diracText,
             fontSize: 12,
             padding: '3px 10px',
             cursor: 'pointer',
