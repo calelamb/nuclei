@@ -88,6 +88,13 @@ async function boot(): Promise<void> {
   // Warm the import caches so the first parse does not pay for them.
   py.runPython('import qiskit, qiskit_aer, qiskit.quantum_info, qiskit.circuit.library');
   const kernel = py.pyimport('kernel_runtime');
+  // Live output: each complete line the program prints is posted as it is
+  // written (a synchronous post, so it reaches the page while Python is still
+  // running), tagged with the call that printed it so it never reaches other
+  // listeners. The page coalesces these into batches.
+  kernel.set_output_sink((line: string) => {
+    if (activeCallId !== null) post({ id: activeCallId, type: 'stdout', text: line });
+  });
   runtime = {
     nuclei_parse: (...a) => kernel.nuclei_parse(...a) as string,
     nuclei_execute: (...a) => kernel.nuclei_execute(...a) as string,
@@ -114,6 +121,9 @@ function ensureCirq(): Promise<void> {
 
 const CIRQ_MENTION = /\b(?:import|from)\s+cirq\b/;
 
+/** The call whose Python is running right now; live output is tagged with it. */
+let activeCallId: number | null = null;
+
 async function runCall(id: number, fn: RuntimeFunction, args: unknown[]): Promise<string> {
   if (!runtime) throw new Error('Python is not ready');
   if (typeof args[0] === 'string' && CIRQ_MENTION.test(args[0])) {
@@ -128,7 +138,12 @@ async function runCall(id: number, fn: RuntimeFunction, args: unknown[]): Promis
   // From here the user's Python is running: the client's timeout starts now,
   // so waiting behind another call or installing Cirq never counts against it.
   post({ id, type: 'started' });
-  return runtime[fn](...args);
+  activeCallId = id;
+  try {
+    return runtime[fn](...args);
+  } finally {
+    activeCallId = null;
+  }
 }
 
 async function handle(request: WorkerRequest): Promise<void> {

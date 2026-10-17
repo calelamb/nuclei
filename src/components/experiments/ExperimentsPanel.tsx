@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Pencil, FlaskConical, Waves } from 'lucide-react';
+import { Pencil, FlaskConical, Plus, Waves } from 'lucide-react';
 import { isWebBuild } from '../../platform/buildTarget';
 import { useNavigationStore } from '../../stores/navigationStore';
 import { useThemeStore } from '../../stores/themeStore';
@@ -8,6 +8,7 @@ import { useExperimentStore, type DiscoveredExperiment } from '../../services/ex
 import { useExperimentUiStore } from '../../stores/experimentUiStore';
 import { createTauriExperimentFs } from '../../services/experimentFs';
 import { campaignTaskCount, expandGrid } from '../../types/experiment';
+import { describeLastRun } from './runDetailFormat';
 import { NewExperimentForm } from './NewExperimentForm';
 import { NewQecExperimentMenu } from './NewQecExperimentMenu';
 import { NoiseModelLibrary } from './NoiseModelLibrary';
@@ -25,13 +26,12 @@ import './experiments.css';
  * `NewExperimentForm` for creating (or editing) an experiment.
  */
 
-function formatLastRun(experiment: DiscoveredExperiment, runsByExperiment: Record<string, { manifest: { started_at: string } }[]>): string {
-  const runs = runsByExperiment[experiment.fileName];
-  if (!runs || runs.length === 0) return 'never run';
+/** The experiment list never collapses below this, however tall the open form is. */
+const LIST_MIN_HEIGHT = 120;
+
+function formatLastRun(experiment: DiscoveredExperiment, runsByExperiment: Record<string, { manifest: { started_at: string } }[]>): ReturnType<typeof describeLastRun> {
   // Runs are stored newest-first by directory name.
-  const latest = runs[0].manifest.started_at;
-  const date = new Date(latest);
-  return Number.isNaN(date.getTime()) ? latest : date.toLocaleString();
+  return describeLastRun(runsByExperiment[experiment.fileName]?.[0]?.manifest.started_at);
 }
 
 function gridSizeLabel(experiment: DiscoveredExperiment): string {
@@ -86,7 +86,7 @@ function ExperimentRow({
 }: {
   experiment: DiscoveredExperiment;
   projectRoot: string;
-  lastRun: string;
+  lastRun: { label: string; title: string; summary: string };
   selected: boolean;
   onSelect(): void;
   onEdit(): void;
@@ -124,10 +124,14 @@ function ExperimentRow({
           ? `${'generate' in spec.source ? spec.source.generate.code : spec.source.entry} · ${spec.noise.model} · ${spec.decoders.join('+')}`
           : `${spec.entry} · ${spec.backend.provider}/${spec.backend.target}`}
       </div>
-      <div style={{ color: colors.textDim, fontSize: 11, fontFamily: TYPOGRAPHY.fontSans }}>
+      <div
+        className="nuclei-experiment-row__meta"
+        title={lastRun.title}
+        style={{ color: colors.textDim, fontSize: 11, fontFamily: TYPOGRAPHY.fontSans }}
+      >
         {spec.type === 'qec_campaign'
-          ? `campaign · ${gridSizeLabel(experiment)} task${gridSizeLabel(experiment) === '1' ? '' : 's'} · last run: ${lastRun}`
-          : `${gridSizeLabel(experiment)} point${gridSizeLabel(experiment) === '1' ? '' : 's'} · last run: ${lastRun}`}
+          ? `campaign · ${gridSizeLabel(experiment)} task${gridSizeLabel(experiment) === '1' ? '' : 's'} · ${lastRun.summary}`
+          : `${gridSizeLabel(experiment)} point${gridSizeLabel(experiment) === '1' ? '' : 's'} · ${lastRun.summary}`}
       </div>
       {spec.type !== 'qec_campaign' && (
         <div onClick={(e) => e.stopPropagation()}>
@@ -198,8 +202,13 @@ export function ExperimentsPanel() {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
       <div style={{ padding: '8px 10px', display: 'flex', gap: 6, alignItems: 'center', borderBottom: `1px solid ${colors.border}` }}>
-        <Button variant="secondary" onClick={() => openForm(undefined)} style={{ flex: 1, minWidth: 0 }}>
-          + New experiment
+        <Button
+          variant="secondary"
+          onClick={() => openForm(undefined)}
+          style={{ flex: 1, minWidth: 0 }}
+          icon={<Plus size={ICON_SIZE.xs} strokeWidth={ICON_STROKE} aria-hidden="true" />}
+        >
+          New experiment
         </Button>
         <NewQecExperimentMenu projectRoot={projectRoot} />
         <IconButton variant="secondary" aria-label="Noise models" title="Noise models" onClick={() => setNoiseLibOpen(true)}>
@@ -208,7 +217,7 @@ export function ExperimentsPanel() {
       </div>
       <RunFeedback compact />
 
-      <div style={{ flex: 1, minHeight: 0, overflow: 'auto' }}>
+      <div style={{ flex: 1, minHeight: LIST_MIN_HEIGHT, overflow: 'auto' }}>
         {experiments.length === 0 && validationErrors.length === 0 && (
           <div style={{ padding: 16, color: colors.textDim, fontSize: 12, fontFamily: TYPOGRAPHY.fontSans }}>
             No experiments yet. Create one to declare a parameter sweep.
@@ -247,6 +256,7 @@ export function ExperimentsPanel() {
       </div>
 
       {formOpen && (
+        <div className="nuclei-experiment-form-region">
         <NewExperimentForm
           key={editing?.fileName ?? 'new'}
           projectRoot={projectRoot}
@@ -254,6 +264,7 @@ export function ExperimentsPanel() {
           dirtyRef={formDirtyRef}
           onClose={() => { formDirtyRef.current = false; setFormOpen(false); setEditing(undefined); }}
         />
+        </div>
       )}
 
       {noiseLibOpen && (

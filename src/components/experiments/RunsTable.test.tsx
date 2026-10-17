@@ -206,6 +206,14 @@ describe('RunsTable', () => {
     expect(getByRole('status').textContent).toContain("Couldn't reach the Python kernel");
   });
 
+  it('points the kernel error at the toolbar and offers Retry (LR-19)', () => {
+    useExperimentRunStore.setState({ lastError: 'Failed to connect to kernel' });
+    const { getByRole } = render(<RunsTable />);
+    expect(getByRole('status').textContent).toContain('toolbar');
+    expect(getByRole('status').textContent).not.toContain('status bar');
+    expect(getByRole('button', { name: 'Retry' })).toBeTruthy();
+  });
+
   it('formats a numeric column with consistent decimals (research-18)', () => {
     useExperimentStore.setState({
       runsByExperiment: { [FILE_NAME]: [
@@ -244,5 +252,63 @@ describe('RunsTable', () => {
     expect(scroller().scrollTop).toBe(500);
     act(() => { useExperimentUiStore.setState({ selectedExperimentFileName: other }); });
     expect(scroller().scrollTop).toBe(1200);
+  });
+
+  describe('keyboard model (LR-10)', () => {
+    it('exposes aria-sort on every sortable column header', () => {
+      const { container, getByText } = render(<RunsTable />);
+      const headerFor = (label: string) => getByText(label).closest('[role="columnheader"]') as HTMLElement;
+      expect(headerFor('theta').getAttribute('aria-sort')).toBe('none');
+      fireEvent.click(getByText('theta'));
+      expect(headerFor('theta').getAttribute('aria-sort')).toBe('ascending');
+      fireEvent.click(getByText('theta'));
+      expect(headerFor('theta').getAttribute('aria-sort')).toBe('descending');
+      expect(container.querySelectorAll('[role="columnheader"][aria-sort="none"]').length).toBeGreaterThan(1);
+    });
+
+    it('makes exactly one row (and one checkbox) a tab stop', () => {
+      const { container } = render(<RunsTable />);
+      const stops = Array.from(container.querySelectorAll<HTMLElement>('[data-run-dir], [data-run-dir] input')).filter((el) => el.tabIndex === 0);
+      expect(stops).toHaveLength(2);
+      expect(bodyRows(container)[0].tabIndex).toBe(0);
+    });
+
+    it('moves the roving stop with the arrow keys and focuses the row', () => {
+      const { container } = render(<RunsTable />);
+      const rows = bodyRows(container);
+      rows[0].focus();
+      fireEvent.keyDown(rows[0], { key: 'ArrowDown' });
+      expect(document.activeElement).toBe(bodyRows(container)[1]);
+      expect(bodyRows(container)[1].tabIndex).toBe(0);
+      expect(bodyRows(container)[0].tabIndex).toBe(-1);
+      fireEvent.keyDown(bodyRows(container)[1], { key: 'End' });
+      expect(document.activeElement).toBe(bodyRows(container)[2]);
+      fireEvent.keyDown(bodyRows(container)[2], { key: 'Home' });
+      expect(document.activeElement).toBe(bodyRows(container)[0]);
+    });
+
+    it('opens a row with Enter and toggles comparison with Space', () => {
+      const { container } = render(<RunsTable />);
+      const row = bodyRows(container)[0];
+      row.focus();
+      fireEvent.keyDown(row, { key: ' ' });
+      expect(useExperimentUiStore.getState().compareSelection).toEqual(['20260712-000001-aaaa']);
+      fireEvent.keyDown(row, { key: 'Enter' });
+      expect(useExperimentUiStore.getState().selectedRunDir).toBe('20260712-000001-aaaa');
+    });
+
+    it('returns focus to the row that opened run detail (LR-10)', () => {
+      const first = render(<RunsTable />);
+      fireEvent.click(bodyRows(first.container)[1]);
+      first.unmount();
+      const { container } = render(<RunsTable />);
+      expect(document.activeElement).toBe(bodyRows(container)[1]);
+    });
+
+    it('shows how many points are ready when there are no runs yet', () => {
+      useExperimentStore.setState({ runsByExperiment: { [FILE_NAME]: [] } });
+      const { getByText } = render(<RunsTable />);
+      expect(getByText(/point(s)? ready/)).toBeTruthy();
+    });
   });
 });

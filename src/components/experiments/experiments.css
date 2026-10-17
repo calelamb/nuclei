@@ -25,24 +25,38 @@
   color: var(--color-text-primary); font-family: var(--font-sans); font-size: var(--font-size-chrome-label); font-weight: var(--font-weight-semibold);
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
-.nuclei-experiment-row[aria-current='true'] .nuclei-experiment-row__name { color: var(--color-accent-quantum); }
+.nuclei-experiment-row[aria-current='true'] .nuclei-experiment-row__name { color: var(--color-accent-quantum-text); }
 
 /* Runs table (virtualised grid; keeps ARIA table roles). Same type scale as the Table primitive. */
 .nuclei-runs-header {
-  display: grid; box-sizing: border-box; position: sticky; top: 0; z-index: 2;
+  display: grid; box-sizing: border-box; position: sticky; top: 0; z-index: 3;
   background: var(--color-surface-sunken); border-bottom: 1px solid var(--color-border-strong);
 }
 .nuclei-runs-header__cell {
   display: flex; align-items: center; gap: var(--space-1); min-width: 0; padding: 0 var(--space-2);
-  background: transparent; border: none; text-align: left; justify-content: flex-start;
+  background: transparent; text-align: left; justify-content: flex-start;
   color: var(--color-text-secondary); font-family: var(--font-sans); font-size: var(--font-size-caption);
-  font-weight: var(--font-weight-semibold); text-transform: uppercase; letter-spacing: 0.04em;
+  font-weight: var(--font-weight-semibold); text-transform: none; letter-spacing: 0;
 }
-.nuclei-runs-header__cell[data-numeric='true'] { justify-content: flex-end; }
-.nuclei-runs-header__sort { cursor: pointer; transition: color var(--duration-fast) var(--ease-standard); }
+.nuclei-runs-header__cell[data-numeric='true'] { justify-content: flex-end; text-align: right; }
+.nuclei-runs-header__sort {
+  display: inline-flex; align-items: center; gap: var(--space-1); min-width: 0; max-width: 100%; padding: 0; border: none; background: transparent; cursor: pointer;
+  color: inherit; font: inherit; text-transform: inherit; letter-spacing: inherit; text-align: inherit;
+  transition: color var(--duration-fast) var(--ease-standard);
+}
 .nuclei-runs-header__sort:hover { color: var(--color-text-primary); }
-.nuclei-runs-header__sort[data-sorted='true'] { color: var(--color-accent-quantum); }
-.nuclei-runs-header__label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.nuclei-runs-header__sort[data-sorted='true'] { color: var(--color-accent-quantum-text); }
+/* Metric names wrap to two lines instead of clipping to "COUNTS_ENTR...". */
+.nuclei-runs-header__label {
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; line-height: 1.25;
+  overflow-wrap: anywhere; text-transform: none; letter-spacing: 0;
+}
+
+/* Identity columns (checkbox + run) stay visible while metrics scroll sideways. */
+.nuclei-runs-header__sticky, .nuclei-runs-row__check, .nuclei-runs-row__run { position: sticky; z-index: 1; background: var(--color-surface-base); }
+.nuclei-runs-header__sticky { background: var(--color-surface-sunken); z-index: 4; }
+.nuclei-runs-header__sticky--check, .nuclei-runs-row__check { left: 0; }
+.nuclei-runs-header__sticky--run, .nuclei-runs-row__run { left: 32px; box-shadow: 1px 0 0 var(--color-border-subtle); }
 
 .nuclei-runs-row {
   position: absolute; left: 0; right: 0; display: grid; align-items: center; cursor: pointer;
@@ -53,6 +67,12 @@
 .nuclei-runs-row:hover, .nuclei-runs-row[data-checked='true'] {
   background: color-mix(in srgb, var(--color-accent-quantum) 8%, var(--color-surface-raised));
 }
+.nuclei-runs-row:hover > .nuclei-runs-row__check, .nuclei-runs-row:hover > .nuclei-runs-row__run,
+.nuclei-runs-row[data-checked='true'] > .nuclei-runs-row__check, .nuclei-runs-row[data-checked='true'] > .nuclei-runs-row__run {
+  background: color-mix(in srgb, var(--color-accent-quantum) 8%, var(--color-surface-raised));
+}
+/* Inset ring: the row sits flush against the sticky header and the scroller edge, so an outset ring is clipped. */
+.nuclei-runs-row:focus-visible { outline: var(--focus-ring-width) solid var(--focus-ring-color); outline-offset: -2px; z-index: 2; }
 .nuclei-runs-row input[type='checkbox'] { accent-color: var(--color-accent-quantum); }
 .nuclei-runs-row__check { display: flex; align-items: center; justify-content: center; padding: 0 var(--space-2); }
 .nuclei-runs-row__run { padding: 0 var(--space-2); color: var(--color-text-tertiary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -61,10 +81,6 @@
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: left;
 }
 .nuclei-runs-row__cell[data-numeric='true'] { text-align: right; }
-.nuclei-runs-row__status {
-  display: inline-block; padding: 1px var(--space-2); border-radius: var(--radius-pill);
-  font-family: var(--font-sans); font-size: var(--font-size-caption); line-height: 16px;
-}
 
 /* stdout / stderr switch in run detail */
 .nuclei-output-tab {
@@ -85,3 +101,24 @@
 }
 .nuclei-noise-row[data-active='true'] { background: var(--color-surface-overlay); }
 .nuclei-noise-row[data-compare='true'] { border-left-color: var(--color-accent-quantum); }
+
+/* Compare: equal run columns that wrap instead of widening the page. */
+.nuclei-table.nuclei-compare-diff { table-layout: fixed; min-width: 0; width: 100%; }
+.nuclei-table.nuclei-compare-diff th, .nuclei-table.nuclei-compare-diff td { white-space: normal; overflow-wrap: anywhere; vertical-align: top; }
+.nuclei-compare-long { margin-top: var(--space-3); }
+.nuclei-compare-long__key { margin-bottom: var(--space-1); color: var(--color-text-secondary); font: var(--font-weight-semibold) var(--font-size-caption) var(--font-sans); text-transform: uppercase; letter-spacing: 0.04em; }
+.nuclei-compare-long__item { margin-bottom: var(--space-2); }
+.nuclei-compare-long__run { margin-bottom: 2px; color: var(--color-text-tertiary); font: var(--font-size-caption) var(--font-mono); }
+.nuclei-compare-long__value {
+  margin: 0; padding: var(--space-2); max-height: 144px; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere;
+  border: 1px solid var(--color-border-strong); border-radius: var(--radius-xs); background: var(--color-surface-sunken);
+  color: var(--color-text-primary); font: var(--font-size-chrome-label) var(--font-mono);
+}
+.nuclei-compare-long__value[data-tone='error'] { border-color: var(--color-danger); color: var(--color-text-primary); background: color-mix(in srgb, var(--color-danger) 8%, var(--color-surface-sunken)); }
+
+.nuclei-experiment-row__meta { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* The form scrolls on its own so the experiment list keeps its height at small window sizes. */
+.nuclei-experiment-form-region { flex: 0 1 auto; min-height: 0; max-height: calc(100% - 160px); display: flex; flex-direction: column; }
+.nuclei-experiment-form-region > form { min-height: 0; overflow-y: auto; }
+.nuclei-experiment-form__footer { position: sticky; bottom: 0; margin: 0 -12px; padding: var(--space-3) 12px; background: var(--color-surface-base); border-top: 1px solid var(--color-border-subtle); display: flex; flex-direction: column; gap: var(--space-2); }

@@ -20,7 +20,7 @@ Classical computers use **bits** — 0 or 1. Quantum computers use **qubits**, w
       },
       {
         type: 'video',
-        youtubeId: 'T2DXrs0OpHU',
+        youtubeId: 'g_IaVepNDT4',
         title: 'How Does a Quantum Computer Work?',
         creator: 'Veritasium',
         startTime: 0,
@@ -101,9 +101,9 @@ A **gate** is an operation that changes a qubit's state. The most important gate
       },
       {
         type: 'video',
-        youtubeId: 'kMm4white1o',
-        title: 'What is Superposition?',
-        creator: 'IBM Qiskit',
+        youtubeId: 'kmCZMLfo_ak',
+        title: 'Quantum Explained: Superposition',
+        creator: 'SandboxAQ',
       },
       {
         type: 'concept-card',
@@ -245,9 +245,9 @@ The H gate is useful, but it only gives you 50/50. What if you want 70/30? Or 90
       },
       {
         type: 'video',
-        youtubeId: 'wta0o3fLOnk',
-        title: 'X, Y, Z, H Gates Explained',
-        creator: 'Quantum Computing (DSC TIET)',
+        youtubeId: 'aCOsqL-jIOo',
+        title: 'The Most Important Gates in Quantum Computing',
+        creator: 'IBM Technology',
       },
       {
         type: 'interactive-bloch',
@@ -415,9 +415,9 @@ One qubit has 2 possible outcomes: |0⟩ and |1⟩. Two qubits have 4: |00⟩, |
       },
       {
         type: 'video',
-        youtubeId: 'tsbCSkvHhMo',
-        title: 'Multi-qubit States',
-        creator: 'IBM Qiskit',
+        youtubeId: 'DfZZS8Spe7U',
+        title: 'Multiple Systems (Understanding Quantum Information, Lesson 2)',
+        creator: 'Qiskit',
       },
       {
         type: 'concept-card',
@@ -580,8 +580,8 @@ Einstein was so disturbed by this that he called it "spooky action at a distance
       },
       {
         type: 'video',
-        youtubeId: 'ZuvK-od7jHA',
-        title: 'Quantum Entanglement Explained',
+        youtubeId: 'ZuvK-od647c',
+        title: 'Quantum Entanglement & Spooky Action at a Distance',
         creator: 'Veritasium',
       },
       {
@@ -654,9 +654,9 @@ When qubit states have the right phases, they can **interfere** — constructive
       },
       {
         type: 'video',
-        youtubeId: '7B1llCosOgE',
-        title: 'Quantum Interference',
-        creator: 'IBM Qiskit',
+        youtubeId: 'tt8gVXDsh7Q',
+        title: 'Interference in Quantum Mechanics',
+        creator: 'Looking Glass Universe',
       },
       {
         type: 'concept-card',
@@ -743,9 +743,9 @@ It answers a question in **ONE query** that would take a classical computer up t
       },
       {
         type: 'video',
-        youtubeId: 'F_Riqjdh2oM',
-        title: 'Deutsch-Jozsa Algorithm',
-        creator: 'IBM Qiskit',
+        youtubeId: 'QcK0GK7DUh8',
+        title: 'Quantum vs Classical: Deutsch and Deutsch-Jozsa Algorithms',
+        creator: 'Qiskit',
       },
       {
         type: 'concept-card',

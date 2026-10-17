@@ -1,4 +1,5 @@
 import { MarkdownWithTables } from '../markdown/MarkdownWithTables';
+import { stripLeadingTitle } from './descriptionTitle';
 import { useThemeStore } from '../../stores/themeStore';
 import { MaxCutGraphViz } from './MaxCutGraphViz';
 import type { QuantumChallenge, ChallengeExample } from '../../types/challenge';
@@ -137,7 +138,7 @@ export function ProblemDescription({ challenge }: ProblemDescriptionProps) {
           Solver Contract
         </div>
         <div style={{
-          color: colors.accent,
+          color: colors.accentText,
           fontSize: 13,
           fontFamily: TYPOGRAPHY.fontMono,
           marginBottom: 8,
@@ -180,7 +181,7 @@ export function ProblemDescription({ challenge }: ProblemDescriptionProps) {
         lineHeight: 1.7,
       }}>
         <MarkdownWithTables
-        markdown={challenge.description}
+        markdown={stripLeadingTitle(challenge.description, challenge.title)}
           components={{
             h1: ({ children }) => (
               <h1 style={{ fontSize: 20, fontWeight: 700, color: colors.text, margin: '0 0 12px' }}>
@@ -227,7 +228,7 @@ export function ProblemDescription({ challenge }: ProblemDescriptionProps) {
                   background: colors.bgElevated,
                   fontSize: 12,
                   fontFamily: TYPOGRAPHY.fontMono,
-                  color: colors.accent,
+                  color: colors.accentText,
                 }}>
                   {children}
                 </code>

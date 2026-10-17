@@ -447,9 +447,9 @@ State destroyed at Alice's end, reconstructed at Bob's. No FTL — classical bit
       },
       {
         type: 'video',
-        youtubeId: 'dQw4w9WgXcQ',
-        title: 'Quantum Teleportation Explained',
-        creator: 'Quantum Computing Lecture Series',
+        youtubeId: 'jxqnzltpDdE',
+        title: 'How Quantum Teleportation Really Works',
+        creator: 'Qiskit',
       },
       {
         type: 'demo',

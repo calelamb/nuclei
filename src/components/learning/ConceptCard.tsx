@@ -76,9 +76,11 @@ export function ConceptCard({ title, visual, explanation }: ConceptCardProps) {
 
   return (
     <div className="concept">
-      <VisualPlaceholder type={visual} />
       <div className="concept__body">
-        <div className="concept__title">{title}</div>
+        <div className="concept__head">
+          <VisualPlaceholder type={visual} />
+          <div className="concept__title">{title}</div>
+        </div>
         <div className="concept__text">{explanation}</div>
         <Button size="sm" className="concept__ask dirac-btn-dirac" onClick={askDirac}>Ask Dirac</Button>
       </div>

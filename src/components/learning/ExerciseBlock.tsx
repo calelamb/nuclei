@@ -7,9 +7,9 @@ import { KERNEL_WS_URL } from '../../config/kernel';
 import { openAuthenticatedKernelSocket } from '../../services/kernelSocket';
 import type { Framework, SimulationResult, KernelResponse } from '../../types/quantum';
 import { Play, Lightbulb, CheckCircle, XCircle, HelpCircle, Terminal } from 'lucide-react';
-import { hasExpectedDistribution, isQuantumCode, validateExerciseResult } from './exerciseValidation';
+import { hasExpectedDistribution, isQuantumCode, shouldAutoGrade, validateExerciseResult } from './exerciseValidation';
 import { UnsupportedNotice } from './UnsupportedNotice';
-import { ProbabilityBars } from './ProbabilityBars';
+import { OutcomeResults } from './OutcomeResults';
 import { Button } from '../ui';
 import '../dirac/dirac.css';
 import './demo.css';
@@ -55,6 +55,7 @@ export function ExerciseBlock({
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const pyodideRef = useRef<any>(null);
   const inactivityRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const codeRef = useRef(starterCode);
   const hasExpectations = hasExpectedDistribution(expectedProbabilities)
     || hasExpectedDistribution(expectedMeasurements);
 
@@ -97,7 +98,8 @@ export function ExerciseBlock({
       setError(null);
       if (msg.data) {
         if (hasExpectations) {
-          checkSolution(msg.data);
+          // An untouched starter is shown, not graded; Check Solution grades it.
+          if (shouldAutoGrade(codeRef.current, starterCode)) checkSolution(msg.data);
         } else {
           completeExercise(successMessage);
         }
@@ -126,7 +128,7 @@ export function ExerciseBlock({
       setError(msg.message);
       setIsRunning(false);
     }
-  }, [checkSolution, completeExercise, hasExpectations, successMessage]);
+  }, [checkSolution, completeExercise, hasExpectations, starterCode, successMessage]);
 
   useEffect(() => {
     if (isWeb) {
@@ -182,6 +184,7 @@ export function ExerciseBlock({
   }, [resetInactivity]);
 
   const handleCodeChange = (value: string | undefined) => {
+    codeRef.current = value ?? '';
     setLocalCode(value ?? '');
     setUnsupported(null);
     resetInactivity();
@@ -278,7 +281,7 @@ export function ExerciseBlock({
       )}
 
       {result && hasProbabilities && (
-        <div className="exercise__results"><ProbabilityBars probabilities={result.probabilities} /></div>
+        <div className="exercise__results"><OutcomeResults result={result} /></div>
       )}
 
       {feedback && (

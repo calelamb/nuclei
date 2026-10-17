@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { useFocusTrap } from '../../hooks/useFocusTrap';
 import { useThemeStore } from '../../stores/themeStore';
 import { TYPOGRAPHY } from '../../styles/tokens';
 import { Button, TextInput } from '../ui';
@@ -34,9 +35,20 @@ export function HardwareSweepGuard({
   const [typed, setTyped] = useState('');
   const canConfirm = !requiresTyping || typed === experimentName;
   const totalShots = pointCount * shots;
+  const dialogRef = useRef<HTMLDivElement>(null);
+  const cancelRef = useRef<HTMLButtonElement>(null);
+  const confirmInputRef = useRef<HTMLInputElement>(null);
+
+  // Trap Tab and restore focus to the Run button on close; the safe action
+  // (Cancel) gets focus, or the name field when typing is required.
+  useFocusTrap(dialogRef, { autoFocus: false });
+  useEffect(() => {
+    (requiresTyping ? confirmInputRef.current : cancelRef.current)?.focus();
+  }, [requiresTyping]);
 
   return (
     <div
+      ref={dialogRef}
       role="alertdialog"
       aria-modal="true"
       aria-label="Confirm hardware sweep"
@@ -46,6 +58,7 @@ export function HardwareSweepGuard({
         background: 'rgba(0,0,0,0.5)',
       }}
       onClick={onCancel}
+      onKeyDown={(e) => { if (e.key === 'Escape') { e.stopPropagation(); onCancel(); } }}
     >
       <div
         style={{
@@ -69,7 +82,7 @@ export function HardwareSweepGuard({
               Type the experiment name (<code>{experimentName}</code>) to confirm:
             </label>
             <TextInput
-              autoFocus
+              ref={confirmInputRef}
               mono
               value={typed}
               onChange={(e) => setTyped(e.target.value)}
@@ -78,7 +91,7 @@ export function HardwareSweepGuard({
           </div>
         )}
         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
-          <Button variant="ghost" onClick={onCancel}>Cancel</Button>
+          <Button ref={cancelRef} variant="ghost" onClick={onCancel}>Cancel</Button>
           <Button variant="primary" onClick={onConfirm} disabled={!canConfirm}>Submit to hardware</Button>
         </div>
       </div>

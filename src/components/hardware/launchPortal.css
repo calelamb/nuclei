@@ -1,0 +1,4 @@
+/* Destination grid: one column in the 240px rail, two once the sidebar is wide enough. */
+.launch-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: var(--space-2); }
+/* Provider names such as CUDA-Q never break at the hyphen. */
+.launch-grid__name { word-break: keep-all; overflow-wrap: normal; }

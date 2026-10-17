@@ -22,9 +22,11 @@ interface RunButtonProps {
   pointCount: number;
   /** `ghost` = quiet icon button for list rows; `solid` = primary CTA (runs header). */
   variant?: 'solid' | 'ghost';
+  /** Button text; defaults to "Run". */
+  label?: string;
 }
 
-export function RunButton({ experiment, projectRoot, pointCount, variant = 'solid' }: RunButtonProps) {
+export function RunButton({ experiment, projectRoot, pointCount, variant = 'solid', label = 'Run' }: RunButtonProps) {
   const colors = useThemeStore((s) => s.colors);
   const { run } = useExperimentRun();
   const active = useExperimentRunStore((s) => s.active);
@@ -53,7 +55,7 @@ export function RunButton({ experiment, projectRoot, pointCount, variant = 'soli
     const { progress } = active;
     return (
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 11, fontFamily: TYPOGRAPHY.fontSans }}>
-        <span style={{ color: colors.accent, fontVariantNumeric: 'tabular-nums' }}>
+        <span style={{ color: colors.accentText, fontVariantNumeric: 'tabular-nums' }}>
           {progress.completed}/{progress.total}
           {progress.failures > 0 ? ` (${progress.failures} failed)` : ''}
         </span>
@@ -72,7 +74,7 @@ export function RunButton({ experiment, projectRoot, pointCount, variant = 'soli
         title={anyActive ? 'A sweep is already running' : 'Run this experiment'}
         icon={variant === 'ghost' ? <Play size={ICON_SIZE.xs} strokeWidth={ICON_STROKE} /> : undefined}
       >
-        Run
+        {label}
       </Button>
       {showGuard && (
         <HardwareSweepGuard

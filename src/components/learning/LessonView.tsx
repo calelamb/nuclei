@@ -10,15 +10,10 @@ import { ConceptCard } from './ConceptCard';
 import { InteractiveBlochSphere } from './InteractiveBlochSphere';
 import type { Lesson, ContentBlock } from '../../data/lessons/types';
 import { ArrowLeft, ChevronLeft, ChevronRight, CheckCircle } from 'lucide-react';
-import { Button, IconButton } from '../ui';
+import { Badge, Button, IconButton } from '../ui';
+import { LESSON_LEVEL_TONE } from './levelTone';
 import './lessonView.css';
 
-const LEVEL_COLOR: Record<Lesson['difficulty'], string> = {
-  'absolute-beginner': 'var(--color-info)',
-  beginner: 'var(--color-success)',
-  intermediate: 'var(--color-warning)',
-  advanced: 'var(--color-danger)',
-};
 function ContentBlockRenderer({ block }: { block: ContentBlock }) {
   switch (block.type) {
     case 'text':
@@ -138,9 +133,9 @@ export function LessonView({ lesson, trackId }: LessonViewProps) {
       <div ref={scrollRef} className="lesson__scroll">
         <header className="lesson__header">
           <div className="lesson__meta">
-            <span className="lesson__level" style={{ ['--level-color' as string]: LEVEL_COLOR[lesson.difficulty] }}>
+            <Badge tone={LESSON_LEVEL_TONE[lesson.difficulty]} style={{ textTransform: 'capitalize' }}>
               {lesson.difficulty.replace('-', ' ')}
-            </span>
+            </Badge>
             <span>~{lesson.estimatedMinutes} min</span>
           </div>
           <h1 className="lesson__title">{lesson.title}</h1>

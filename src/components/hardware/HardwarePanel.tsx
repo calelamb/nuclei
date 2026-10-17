@@ -1,4 +1,4 @@
-import { Button } from '../ui';
+import { Badge, Button, Select } from '../ui';
 import { useState, useCallback } from 'react';
 import { ChevronDown, ChevronRight, Play, Trash2 } from 'lucide-react';
 import { useThemeStore } from '../../stores/themeStore';
@@ -6,7 +6,6 @@ import { useHardwareStore } from '../../stores/hardwareStore';
 import { hasActiveJobForBackend } from '../../lib/hardwareJobs';
 import { useEditorStore } from '../../stores/editorStore';
 import { useSimulationStore } from '../../stores/simulationStore';
-import { BackendSelector } from './BackendSelector';
 import { JobTracker } from './JobTracker';
 import { ConnectivityMap } from './ConnectivityMap';
 import { ResultsComparison } from './ResultsComparison';
@@ -14,6 +13,7 @@ import { CredentialSetup } from './CredentialSetup';
 import type { HardwareProviderType, BackendInfo } from '../../types/hardware';
 
 import { TYPOGRAPHY } from '../../styles/tokens';
+import { SUCCESS_TEXT } from '../../lib/semanticText';
 /* ── Section (local copy matching SettingsPanel pattern) ── */
 
 function Section({
@@ -245,25 +245,13 @@ export function HardwarePanel() {
               )}
 
               {!p.connected && p.name !== 'simulator' && !STUB_PROVIDERS.has(p.name) && (
-                <button className="nuclei-hover-tint"
-                  onClick={() => setShowCredentialSetup(p.name)}
-                  style={{
-                    fontSize: 11,
-                    color: colors.accentText,
-                    background: 'transparent',
-                    border: `1px solid ${colors.accent}40`,
-                    borderRadius: 3,
-                    padding: '2px 8px',
-                    cursor: 'pointer',
-                    ...font,
-                  }}
-                >
+                <Button size="sm" variant="secondary" onClick={() => setShowCredentialSetup(p.name)}>
                   Configure
-                </button>
+                </Button>
               )}
 
               {p.connected && (
-                <span style={{ fontSize: 11, color: colors.success, ...font }}>
+                <span style={{ fontSize: 11, color: SUCCESS_TEXT, ...font }}>
                   Connected
                 </span>
               )}
@@ -274,11 +262,18 @@ export function HardwarePanel() {
         {/* ── Backend Selection ── */}
         {anyConnected && (
           <Section title="Backend" defaultOpen>
-            <BackendSelector
-              backends={availableBackends}
-              selected={selectedBackend}
-              onSelect={selectBackend}
-            />
+            <Select
+              aria-label="Backend"
+              value={selectedBackend ?? ''}
+              onChange={(e) => selectBackend(e.target.value)}
+            >
+              <option value="" disabled>Select backend…</option>
+              {availableBackends.map((b) => (
+                <option key={b.name} value={b.name}>
+                  {`${b.name} · ${PROVIDER_LABELS[b.provider]} · ${b.qubitCount}q${b.status === 'online' ? '' : ' (offline)'}`}
+                </option>
+              ))}
+            </Select>
 
             {/* Selected backend detail card */}
             {selectedBackendInfo && (
@@ -301,26 +296,9 @@ export function HardwarePanel() {
                   <span style={{ fontSize: 12, fontWeight: 600, color: colors.text, ...font }}>
                     {selectedBackendInfo.name}
                   </span>
-                  <span
-                    style={{
-                      fontSize: 11,
-                      fontWeight: 600,
-                      textTransform: 'uppercase',
-                      padding: '1px 5px',
-                      borderRadius: 3,
-                      background:
-                        selectedBackendInfo.status === 'online'
-                          ? `${colors.success}20`
-                          : `${colors.error}20`,
-                      color:
-                        selectedBackendInfo.status === 'online'
-                          ? colors.success
-                          : colors.error,
-                      ...font,
-                    }}
-                  >
+                  <Badge tone={selectedBackendInfo.status === 'online' ? 'success' : 'danger'} style={{ textTransform: 'uppercase' }}>
                     {selectedBackendInfo.status}
-                  </span>
+                  </Badge>
                 </div>
 
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px 12px' }}>
@@ -373,19 +351,9 @@ export function HardwarePanel() {
                   </div>
                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: 3 }}>
                     {selectedBackendInfo.gateSet.map((gate) => (
-                      <span
-                        key={gate}
-                        style={{
-                          fontSize: 11,
-                          padding: '1px 6px',
-                          borderRadius: 3,
-                          background: `${colors.accent}15`,
-                          color: colors.accentText,
-                          fontFamily: TYPOGRAPHY.fontMono,
-                        }}
-                      >
+                      <Badge key={gate} tone="accent" style={{ fontFamily: TYPOGRAPHY.fontMono }}>
                         {gate}
-                      </span>
+                      </Badge>
                     ))}
                   </div>
                 </div>

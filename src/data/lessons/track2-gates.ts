@@ -322,8 +322,8 @@ Real quantum hardware can only perform a few gates natively (e.g., Rx, Ry, Rz, a
       },
       {
         type: 'video',
-        youtubeId: 'tsbCSkvHhMo',
-        title: 'Quantum Circuit Decomposition',
+        youtubeId: '30U2DTfIrOU',
+        title: 'Quantum Circuits (Understanding Quantum Information, Lesson 3)',
         creator: 'Qiskit',
       },
       {
@@ -663,8 +663,8 @@ This is the engine behind **quantum phase estimation**, **Deutsch-Jozsa**, and *
       },
       {
         type: 'video',
-        youtubeId: 'ZN0lhYU1f5Q',
-        title: 'Phase Kickback — The Key to Quantum Algorithms',
+        youtubeId: '455pmYaZXKw',
+        title: 'Phase Kickback with Qiskit',
         creator: 'Qiskit',
       },
       {
@@ -817,8 +817,8 @@ So far, most gates you've used are fixed: H always does the same thing, X always
       },
       {
         type: 'video',
-        youtubeId: 'ZN0lhYU1f5Q',
-        title: 'Parameterized Quantum Circuits',
+        youtubeId: 'adeYx7bwYrA',
+        title: 'How Do I Use Parameterized Circuits in Qiskit?',
         creator: 'Qiskit',
       },
       {
@@ -991,8 +991,8 @@ On real quantum hardware, every gate introduces a small error. Two-qubit gates (
       },
       {
         type: 'video',
-        youtubeId: 'tsbCSkvHhMo',
-        title: 'Quantum Circuit Optimization Techniques',
+        youtubeId: 'MvX5OUK-tbE',
+        title: "Transforming Circuits with Qiskit's Transpiler",
         creator: 'Qiskit',
       },
       {
@@ -1166,9 +1166,9 @@ The **T gate**. Adding T to the Clifford set breaks classical simulability and e
       },
       {
         type: 'video',
-        youtubeId: 'F_Riqjdh2oM',
-        title: 'Clifford Gates and the Gottesman-Knill Theorem',
-        creator: 'Qiskit',
+        youtubeId: '8-4Yqp9XOos',
+        title: 'The Solovay-Kitaev and Gottesman-Knill Theorems',
+        creator: 'Ryan LaRose',
       },
       {
         type: 'concept-card',

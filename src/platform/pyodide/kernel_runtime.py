@@ -47,15 +47,65 @@ def _format_error(exc):
     return "\n".join(lines)
 
 
-def _run_user_code(code, metrics=None):
-    """Exec `code` in a fresh namespace. Returns (namespace, stdout, error_text|None)."""
+_output_sink = None
+
+
+def set_output_sink(sink):
+    """Register `sink(line)` (the worker's live-output hook); None turns streaming off."""
+    global _output_sink
+    _output_sink = sink
+
+
+class _LiveBuffer(io.StringIO):
+    """Collects stdout and hands each complete line to `sink` as it is written.
+
+    `sink` is optional. If it ever raises, streaming stops for this run and the
+    caller falls back to returning the whole text, so nothing printed is lost.
+    """
+
+    def __init__(self, sink=None):
+        super().__init__()
+        self._sink = sink
+        self._pending = ""
+        self.streamed = sink is not None
+
+    def _emit(self, line):
+        if self._sink is None:
+            return
+        try:
+            self._sink(line)
+        except Exception:
+            self._sink = None
+            self.streamed = False
+
+    def write(self, text):
+        written = super().write(text)
+        if self._sink is not None:
+            *lines, self._pending = (self._pending + text).split("\n")
+            for line in lines:
+                self._emit(line)
+        return written
+
+    def finish(self):
+        """Flush a trailing line that never got its newline."""
+        if self._pending:
+            self._emit(self._pending)
+            self._pending = ""
+
+
+def _run_user_code(code, metrics=None, stream=False):
+    """Exec `code` in a fresh namespace. Returns (namespace, stdout, error_text|None).
+
+    With `stream=True` and a registered sink, output is delivered line by line
+    while the program runs and the returned stdout is "" (it was already shown).
+    """
     metrics = metrics if metrics is not None else {}
 
     def record_metric(name, value):
         metrics[str(name)] = float(value)
 
     namespace = {"__builtins__": __builtins__, "__name__": "__main__", "record_metric": record_metric}
-    buffer = io.StringIO()
+    buffer = _LiveBuffer(_output_sink if stream else None)
     old_out, old_err = sys.stdout, sys.stderr
     sys.stdout = sys.stderr = buffer
     error = None
@@ -65,7 +115,8 @@ def _run_user_code(code, metrics=None):
         error = _format_error(exc)
     finally:
         sys.stdout, sys.stderr = old_out, old_err
-    return namespace, buffer.getvalue(), error
+    buffer.finish()
+    return namespace, ("" if buffer.streamed else buffer.getvalue()), error
 
 
 # --------------------------------------------------------------------------
@@ -258,7 +309,7 @@ def nuclei_parse(code):
 def nuclei_execute(code, shots, seed=None):
     metrics = {}
     start = time.time()
-    namespace, output, error = _run_user_code(code, metrics)
+    namespace, output, error = _run_user_code(code, metrics, stream=True)
     if error is not None:
         return json.dumps({"result": None, "snapshot": None, "output": output, "error": error})
     framework, circuit = _find_circuit(namespace)
@@ -274,5 +325,5 @@ def nuclei_execute(code, shots, seed=None):
 
 
 def nuclei_run_python(code):
-    _namespace, output, error = _run_user_code(code)
+    _namespace, output, error = _run_user_code(code, stream=True)
     return json.dumps({"output": output, "error": error})

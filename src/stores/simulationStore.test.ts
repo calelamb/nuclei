@@ -51,16 +51,16 @@ describe('simulationStore.addOutput', () => {
     expect(useSimulationStore.getState().terminalOutput[0].type).toBe('info');
   });
 
-  it('caps the buffer at 500 lines across many appends', () => {
+  it('caps the buffer at 2000 lines across many appends', () => {
     // Add 600 lines one at a time, then 10 in a batch.
-    for (let i = 0; i < 600; i++) {
+    for (let i = 0; i < 2100; i++) {
       useSimulationStore.getState().addOutput(`line-${i}`, 'stdout');
     }
     const batch = Array.from({ length: 10 }, (_, i) => `batch-${i}`).join('\n');
     useSimulationStore.getState().addOutput(batch, 'stdout');
 
     const lines = useSimulationStore.getState().terminalOutput;
-    expect(lines).toHaveLength(500);
+    expect(lines).toHaveLength(2000);
     // Oldest should be dropped, newest kept.
     expect(lines[lines.length - 1].text).toBe('batch-9');
   });

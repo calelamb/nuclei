@@ -2,6 +2,9 @@ import { useState } from 'react';
 import { CURATED_VIDEOS } from '../../data/videos/curatedLibrary';
 import type { CuratedVideo } from '../../data/videos/curatedLibrary';
 import { Play } from 'lucide-react';
+import { Badge } from '../ui';
+import { VIDEO_LEVEL_TONE } from './levelTone';
+import { VideoThumb } from './VideoThumb';
 import { openExternal, buildYouTubeWatchUrl } from '../../lib/openExternal';
 import './learnSidebar.css';
 
@@ -36,7 +39,7 @@ function VideoRow({ video, onPlay }: { video: CuratedVideo; onPlay: (video: Cura
   return (
     <button type="button" className="vrow" onClick={() => onPlay(video)}>
       <div className="vrow__thumb">
-        <img className="vrow__img" src={`https://img.youtube.com/vi/${video.youtubeId}/mqdefault.jpg`} alt="" loading="lazy" width={120} height={68} />
+        <VideoThumb youtubeId={video.youtubeId} quality="mqdefault" className="vrow__img" width={120} height={68} />
         <span className="vrow__play"><Play size={20} fill="currentColor" aria-hidden="true" /></span>
         <span className="vrow__duration">{video.duration}</span>
       </div>
@@ -44,7 +47,7 @@ function VideoRow({ video, onPlay }: { video: CuratedVideo; onPlay: (video: Cura
         <div className="vrow__title">{video.title}</div>
         <div className="vrow__tags">
           <span className="vrow__creator">{CREATOR_LABELS[video.creator]}</span>
-          <span className={`vrow__level vrow__level--${video.difficulty}`}>{video.difficulty}</span>
+          <Badge tone={VIDEO_LEVEL_TONE[video.difficulty]} style={{ textTransform: 'capitalize' }}>{video.difficulty}</Badge>
         </div>
         <div className="vrow__desc">{video.description}</div>
       </div>

@@ -35,7 +35,7 @@ export function TextBlock({ markdown }: TextBlockProps) {
             <p style={{ margin: '0 0 12px', color: colors.text }}>{children}</p>
           ),
           strong: ({ children }) => (
-            <strong style={{ color: colors.accent, fontWeight: 600 }}>{children}</strong>
+            <strong style={{ color: colors.accentText, fontWeight: 600 }}>{children}</strong>
           ),
           code: ({ children, className }) => {
             const isBlock = className?.includes('language-');
@@ -64,7 +64,7 @@ export function TextBlock({ markdown }: TextBlockProps) {
                 borderRadius: 4,
                 fontFamily: TYPOGRAPHY.fontMono,
                 fontSize: '0.9em',
-                color: colors.accent,
+                color: colors.accentText,
               }}>
                 {children}
               </code>

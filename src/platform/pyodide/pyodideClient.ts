@@ -44,11 +44,15 @@ interface Pending {
   timer: ReturnType<typeof setTimeout> | null;
   /** Budget for the Python itself; the timer starts when the worker reports `started`. */
   timeoutMs: number | undefined;
+  /** Receives each line of live program output for this call. */
+  onOutput?: (line: string) => void;
 }
 
 export interface CallOptions {
   /** Terminate and restart the worker if the call takes longer than this. */
   timeoutMs?: number;
+  /** Called with each line the program prints while it runs (this call only). */
+  onOutput?: (line: string) => void;
 }
 
 type ProgressListener = (progress: BootProgress | null) => void;
@@ -132,7 +136,7 @@ export class PyodideRuntimeClient {
 
   async call(fn: RuntimeFunction, args: unknown[], options: CallOptions = {}): Promise<string> {
     await this.ensureStarted();
-    return this.request({ type: 'call', fn, args }, options.timeoutMs);
+    return this.request({ type: 'call', fn, args }, options.timeoutMs, options.onOutput);
   }
 
   /** Kill the worker; the next call boots a new one. In-flight calls fail as timeouts. */
@@ -148,11 +152,12 @@ export class PyodideRuntimeClient {
   private request(
     body: { type: 'init' } | { type: 'call'; fn: RuntimeFunction; args: unknown[] },
     timeoutMs?: number,
+    onOutput?: (line: string) => void,
   ): Promise<string> {
     const worker = this.ensureWorker();
     const id = this.nextId++;
     return new Promise<string>((resolve, reject) => {
-      this.pending.set(id, { resolve, reject, timer: null, timeoutMs });
+      this.pending.set(id, { resolve, reject, timer: null, timeoutMs, onOutput });
       worker.postMessage({ ...body, id } as WorkerRequest);
     });
   }
@@ -179,6 +184,10 @@ export class PyodideRuntimeClient {
     }
     const entry = this.pending.get(message.id);
     if (!entry) return;
+    if (message.type === 'stdout') {
+      entry.onOutput?.(message.text);
+      return;
+    }
     if (message.type === 'started') {
       this.armTimeout(message.id, entry);
       return;

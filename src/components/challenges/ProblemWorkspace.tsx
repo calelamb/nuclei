@@ -7,14 +7,9 @@ import { ProblemEditor } from './ProblemEditor';
 import { TestRunner } from './TestRunner';
 import { HintPanel } from './HintPanel';
 import { SubmissionHistory } from './SubmissionHistory';
-import type { ChallengeDifficulty } from '../../types/challenge';
+import { Badge } from '../ui';
+import { DIFFICULTY_TONE } from './difficultyTone';
 import './challenges.css';
-
-const DIFFICULTY_COLORS: Record<ChallengeDifficulty, string> = {
-  easy: 'var(--color-success)',
-  medium: 'var(--color-warning)',
-  hard: 'var(--color-danger)',
-};
 
 type WorkspaceTab = 'description' | 'submissions' | 'hints';
 
@@ -75,24 +70,21 @@ export function ProblemWorkspace() {
   const visibleTests = activeProblem.visible_tests ?? activeProblem.testCases.filter((test) => !test.hidden);
   const hiddenTests = activeProblem.hidden_tests ?? activeProblem.testCases.filter((test) => test.hidden);
   const isValueContract = activeProblem.contract_kind === 'returns_value';
-  const chipColor = (color: string) => ({ ['--chip-color' as string]: color });
-
   return (
     <div className="pwork">
       <div className="pwork__head">
         <div className="pwork__head-main">
           <div className="pwork__chips">
-            <span className="chip" style={chipColor(DIFFICULTY_COLORS[activeProblem.difficulty])}>{activeProblem.difficulty}</span>
+            <Badge tone={DIFFICULTY_TONE[activeProblem.difficulty]} style={{ textTransform: 'capitalize' }}>{activeProblem.difficulty}</Badge>
             <span className="pwork__category">{activeProblem.category.replace('-', ' ')}</span>
             {isStateVerified(activeProblem) && (
-              <span
-                className="chip"
-                style={chipColor('var(--color-success)')}
+              <Badge
+                tone="success"
+                icon={<ShieldCheck size={12} aria-hidden="true" />}
                 title="Graded on the actual quantum state (fidelity / oracle), so it can't be passed by hardcoding the answer."
               >
-                <ShieldCheck size={12} aria-hidden="true" />
                 State-verified
-              </span>
+              </Badge>
             )}
           </div>
           <div className="pwork__title">{activeProblem.title}</div>
@@ -101,8 +93,8 @@ export function ProblemWorkspace() {
         <div className="pwork__meta">
           {isValueContract && (
             <>
-              <span className="chip" style={chipColor('var(--color-accent-quantum)')}>Python value contract</span>
-              <span className="chip" style={chipColor('var(--color-success)')}>Browser + Desktop</span>
+              <Badge tone="accent">Python value contract</Badge>
+              <Badge tone="success">Browser + Desktop</Badge>
             </>
           )}
           <span>{visibleTests.length} visible / {hiddenTests.length} hidden</span>

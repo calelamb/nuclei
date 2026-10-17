@@ -123,7 +123,7 @@ export function ChallengeInspector() {
                 fontSize: 12,
                 fontFamily: TYPOGRAPHY.fontSans,
               }}>
-                <strong style={{ color: colors.accent }}>{gate.type}</strong>
+                <strong style={{ color: colors.accentText }}>{gate.type}</strong>
                 <span>Targets: {gate.targets.join(', ') || '—'}</span>
                 <span>Controls: {gate.controls.join(', ') || '—'}</span>
                 <span>Layer {gate.layer}</span>

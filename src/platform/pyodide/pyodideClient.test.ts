@@ -146,6 +146,24 @@ describe('PyodideRuntimeClient', () => {
     expect(notices).toEqual(['Installing Cirq']);
   });
 
+  it('routes live stdout only to the call that printed it, never to notice listeners', async () => {
+    const { client } = makeClient((req, reply) => {
+      if (req.type === 'init') reply({ id: req.id, type: 'result', value: 'ready' });
+      else {
+        reply({ id: req.id, type: 'started' });
+        reply({ id: req.id, type: 'stdout', text: 'hello' });
+        reply({ id: req.id + 99, type: 'stdout', text: 'someone else' });
+        reply({ id: req.id, type: 'result', value: '{}' });
+      }
+    });
+    const notices: string[] = [];
+    const lines: string[] = [];
+    client.onNotice((t) => notices.push(t));
+    await client.call('nuclei_execute', ['print("hello")', 10], { onOutput: (l) => lines.push(l) });
+    expect(lines).toEqual(['hello']);
+    expect(notices).toEqual([]);
+  });
+
   it('turns a worker script error into a load failure', async () => {
     const { client, workers } = makeClient(() => { /* never answers */ });
     const boot = client.ensureStarted();

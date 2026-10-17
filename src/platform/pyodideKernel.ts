@@ -13,6 +13,7 @@ import {
   PyodideRuntimeError,
   type PyodideRuntimeClient,
 } from './pyodide/pyodideClient';
+import { OutputBatcher } from './pyodide/outputBatcher';
 import type { RuntimeFunction } from './pyodide/workerProtocol';
 
 type KernelMessage = { type: string; [key: string]: unknown };
@@ -120,10 +121,13 @@ export class PyodideKernel {
     const unsubscribe = forwardNotices
       ? this.runtime.onNotice((text) => this.onMessage({ type: 'output', text: `${text}\n` }))
       : () => {};
+    const output = new OutputBatcher((text) => this.onMessage({ type: 'output', text }));
     try {
-      return JSON.parse(await this.runtime.call(fn, args, { timeoutMs })) as RuntimeReply;
+      const raw = await this.runtime.call(fn, args, { timeoutMs, onOutput: output.push });
+      return JSON.parse(raw) as RuntimeReply;
     } finally {
       unsubscribe();
+      output.flush();
     }
   }
 

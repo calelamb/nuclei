@@ -11,7 +11,7 @@
 .demo__sep { width: 1px; height: 16px; margin: 0 var(--space-1); background: var(--color-border-strong); }
 .demo__summary { display: flex; align-items: center; gap: var(--space-2); padding: var(--space-2) var(--space-4); font: var(--font-size-caption) var(--font-mono); color: var(--color-text-secondary); }
 .demo__summary--divided { border-bottom: 1px solid var(--color-border-strong); }
-.demo__summary-label { text-transform: uppercase; letter-spacing: 0.5px; }
+.demo__summary-label { letter-spacing: 0.2px; }
 .demo__gates { display: flex; flex-wrap: wrap; gap: var(--space-1); }
 .demo__gate { padding: 1px var(--space-1); border-radius: var(--radius-xs); background: color-mix(in srgb, var(--color-accent-quantum) 12%, transparent); color: var(--color-text-primary); font-weight: var(--font-weight-medium); }
 .demo__notice { padding: var(--space-3) var(--space-4); border-bottom: 1px solid var(--color-border-strong); }
@@ -37,7 +37,7 @@
 .exercise__brief { padding: var(--space-3) var(--space-4); border-bottom: 1px solid var(--color-border-strong); }
 .exercise__title { margin-bottom: var(--space-1); font-size: var(--font-size-heading); font-weight: var(--font-weight-semibold); color: var(--color-text-primary); }
 .exercise__text { font-size: var(--font-size-body); line-height: 1.5; color: var(--color-text-secondary); }
-.exercise__ok { display: inline-flex; align-items: center; gap: var(--space-1); font-size: var(--font-size-caption); color: var(--color-success); }
+.exercise__ok { display: inline-flex; align-items: center; gap: var(--space-1); font-size: var(--font-size-caption); color: var(--color-success-text, color-mix(in srgb, var(--color-success) 55%, var(--color-text-primary))); }
 .exercise__hints { display: flex; flex-direction: column; gap: var(--space-2); padding: var(--space-3) var(--space-4); border-bottom: 1px solid var(--color-border-strong); }
 .exercise__hint { display: flex; align-items: flex-start; gap: var(--space-2); font-size: var(--font-size-code); color: var(--color-text-secondary); }
 .exercise__hint svg { flex-shrink: 0; margin-top: 2px; color: var(--color-warning); }
@@ -47,7 +47,18 @@
 .exercise__results { padding: var(--space-2) var(--space-4); border-bottom: 1px solid var(--color-border-strong); }
 .exercise__feedback { display: flex; align-items: flex-start; gap: var(--space-3); padding: var(--space-3) var(--space-4); border-bottom: 1px solid var(--color-border-strong); font-size: var(--font-size-body); line-height: 1.5; }
 .exercise__feedback svg { flex-shrink: 0; margin-top: 1px; }
-.exercise__feedback--ok { background: color-mix(in srgb, var(--color-success) 8%, transparent); color: var(--color-success); }
+.exercise__feedback--ok { background: color-mix(in srgb, var(--color-success) 8%, transparent); color: var(--color-success-text, color-mix(in srgb, var(--color-success) 55%, var(--color-text-primary))); }
 .exercise__feedback--fail { background: color-mix(in srgb, var(--color-danger) 8%, transparent); color: var(--color-danger); }
 .exercise__help { display: flex; align-items: center; gap: var(--space-2); padding: var(--space-3) var(--space-4); font-size: var(--font-size-code); color: var(--color-text-secondary); }
 .exercise__help svg { color: var(--color-accent-dirac-text); }
+
+/* Lesson mini-editor: visible focus + keyboard hint (Tab leaves the editor by default). */
+.lesson-editor__frame { position: relative; }
+/* An overlay ring: Monaco's own layers would paint over a plain outline. */
+.lesson-editor__frame:focus-within::after { content: ''; position: absolute; inset: 0; z-index: 5; pointer-events: none; border: var(--focus-ring-width) solid var(--focus-ring-color); }
+.lesson-editor__hint { min-height: 20px; box-sizing: border-box; padding: 2px var(--space-3); text-align: right; background: var(--color-surface-sunken); color: var(--color-text-secondary); font: var(--font-size-caption) var(--font-sans); }
+.lesson-editor__hint[data-visible='false'] { visibility: hidden; }
+
+.outcomes { display: flex; flex-direction: column; gap: var(--space-2); }
+.outcomes__head { display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); }
+.outcomes__meta { font: var(--font-size-caption) var(--font-mono); color: var(--color-text-secondary); }

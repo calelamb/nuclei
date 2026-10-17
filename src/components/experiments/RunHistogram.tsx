@@ -68,7 +68,7 @@ export function RunHistogram({ measurements }: { measurements: Record<string, nu
               fontFamily: TYPOGRAPHY.fontMono,
             }}
             labelStyle={{ color: colors.text }}
-            itemStyle={{ color: colors.accent }}
+            itemStyle={{ color: colors.accentText }}
             formatter={(value) => [typeof value === 'number' ? value.toFixed(4) : String(value ?? ''), 'Probability']}
           />
           <Bar dataKey="probability" radius={[4, 4, 0, 0]}>

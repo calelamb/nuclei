@@ -284,3 +284,52 @@ def test_mid_circuit_measurement_matches_desktop_probabilities():
     expected, *_ = Executor().execute(code, 1000, language="python", seed=3)
     ours = run_browser("nuclei_execute", code, 1000, 3)
     assert ours["result"]["probabilities"] == pytest.approx(expected.to_dict()["probabilities"], abs=1e-9)
+
+
+_STREAM_DRIVER = textwrap.dedent(
+    """
+    import json, sys
+    sys.path[:0] = [{shim!r}, {runtime!r}]
+    import kernel_runtime as rt
+    lines = []
+    rt.set_output_sink(lines.append)
+    out = json.loads(rt.nuclei_run_python(sys.stdin.read()))
+    sys.stdout.write("\\n@@RESULT@@" + json.dumps({{"lines": lines, "out": out}}))
+    """
+)
+
+
+def run_streaming(code):
+    driver = _STREAM_DRIVER.format(shim=str(SHIM_DIR), runtime=str(PYODIDE_DIR))
+    proc = subprocess.run(
+        [sys.executable, "-I", "-c", driver], input=code,
+        capture_output=True, text=True, timeout=120,
+    )
+    assert proc.returncode == 0, proc.stderr
+    return json.loads(proc.stdout.split("@@RESULT@@", 1)[1])
+
+
+def test_output_streams_line_by_line_without_duplicating_the_final_reply():
+    got = run_streaming('print("step 0")\nprint("step 1")\nprint("tail", end="")\n')
+    assert got["lines"] == ["step 0", "step 1", "tail"]
+    assert got["out"]["output"] == ""
+    assert got["out"]["error"] is None
+
+
+def test_lines_printed_before_an_error_are_streamed_and_the_error_is_reported():
+    got = run_streaming('print("before")\nraise ValueError("boom")\n')
+    assert got["lines"][0] == "before"
+    assert "ValueError: boom" in got["out"]["error"]
+
+
+def test_a_failing_sink_falls_back_to_returning_the_whole_output():
+    driver = _STREAM_DRIVER.format(shim=str(SHIM_DIR), runtime=str(PYODIDE_DIR)).replace(
+        "rt.set_output_sink(lines.append)", "rt.set_output_sink(lambda line: 1 / 0)"
+    )
+    proc = subprocess.run(
+        [sys.executable, "-I", "-c", driver], input='print("kept")\n',
+        capture_output=True, text=True, timeout=120,
+    )
+    assert proc.returncode == 0, proc.stderr
+    got = json.loads(proc.stdout.split("@@RESULT@@", 1)[1])
+    assert got["out"]["output"] == "kept\n"

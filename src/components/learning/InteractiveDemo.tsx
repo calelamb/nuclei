@@ -10,7 +10,8 @@ import { Play, RotateCcw, ExternalLink, Terminal, BarChart3 } from 'lucide-react
 import { Button, SegmentedControl, type SegmentedOption } from '../ui';
 import { isQuantumCode } from './exerciseValidation';
 import { UnsupportedNotice } from './UnsupportedNotice';
-import { ProbabilityBars } from './ProbabilityBars';
+import { OutcomeResults } from './OutcomeResults';
+import { formatCircuitMeta } from './outcomeDistribution';
 import './demo.css';
 
 type ResultView = 'output' | 'probabilities';
@@ -239,7 +240,7 @@ export function InteractiveDemo({ code: initialCode, framework, description, exp
 
       {snapshot && hasCircuit && (
         <div className={hasResults || hasOutput || error ? 'demo__summary demo__summary--divided' : 'demo__summary'}>
-          <span className="demo__summary-label">{snapshot.qubit_count}q depth-{snapshot.depth}</span>
+          <span className="demo__summary-label">{formatCircuitMeta(snapshot.qubit_count, snapshot.depth)}</span>
           <span className="demo__gates">
             {snapshot.gates.map((g, i) => <span key={i} className="demo__gate">{g.type}</span>)}
           </span>
@@ -260,7 +261,7 @@ export function InteractiveDemo({ code: initialCode, framework, description, exp
 
       {result && hasResults && !(showOutput && hasOutput) && (
         <div className="demo__results">
-          <ProbabilityBars probabilities={result.probabilities} />
+          <OutcomeResults result={result} />
         </div>
       )}
 

@@ -35,3 +35,12 @@
 .lnav__outline-item:hover { color: var(--color-text-primary); }
 .lnav__outline-item[aria-current='true'] { color: var(--color-text-primary); font-weight: var(--font-weight-semibold); }
 .lnav__outline-item[aria-current='true'] .lnav__icon { color: var(--color-accent-quantum); }
+
+.lnav__foot { flex-shrink: 0; display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-1); padding: var(--space-2) var(--space-3); border-top: 1px solid var(--color-border-strong); }
+.lnav__foot-link {
+  display: inline-flex; align-items: center; gap: var(--space-1); height: var(--control-height-md); padding: 0 var(--space-2);
+  border: none; border-radius: var(--radius-soft); background: transparent; cursor: pointer;
+  font: var(--font-weight-medium) var(--font-size-chrome-label) var(--font-sans); color: var(--color-text-secondary);
+  transition: background-color var(--duration-fast) var(--ease-standard), color var(--duration-fast) var(--ease-standard);
+}
+.lnav__foot-link:hover { background: var(--color-surface-overlay); color: var(--color-text-primary); }

@@ -103,7 +103,7 @@ export function MaxCutGraphViz({ visualization, bestBitstring }: MaxCutGraphVizP
         </span>
         {cutValue !== null && (
           <span style={{
-            color: colors.accent,
+            color: colors.accentText,
             fontSize: 11,
             fontWeight: 600,
             fontFamily: TYPOGRAPHY.fontMono,

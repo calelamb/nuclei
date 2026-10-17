@@ -3,11 +3,13 @@ import { describe, it, expect, afterEach, beforeEach, vi } from 'vitest';
 import { render, cleanup, screen, fireEvent, within } from '@testing-library/react';
 import { TrackSelector } from './TrackSelector';
 import { useLearnStore } from '../../stores/learnStore';
+import { useLearnSectionStore } from './learnSectionStore';
 import { TRACKS } from '../../data/lessons/tracks';
 import { CURATED_VIDEOS } from '../../data/videos/curatedLibrary';
 
 beforeEach(() => {
   localStorage.clear();
+  useLearnSectionStore.setState({ section: 'tracks' });
   useLearnStore.setState({ completedLessons: [], lessonProgress: {}, currentTrackId: null, currentLessonId: null });
 });
 afterEach(cleanup);
@@ -32,7 +34,20 @@ describe('TrackSelector', () => {
     expect(setCurrentLesson).toHaveBeenCalledWith(track.id, track.lessons[1].id);
   });
 
+  it('gives Concepts, Capstones, Glossary and Videos a mouse entry point (LR-05)', () => {
+    render(<TrackSelector />);
+    const tabs = screen.getAllByRole('tab').map((t) => t.textContent);
+    expect(tabs).toEqual(['Tracks', 'Concepts', 'Capstones', 'Glossary', 'Videos']);
+    fireEvent.click(screen.getByRole('tab', { name: 'Glossary' }));
+    expect(screen.getByLabelText('Search glossary terms')).toBeTruthy();
+    fireEvent.click(screen.getByRole('tab', { name: 'Capstones' }));
+    expect(screen.getByRole('tabpanel', { name: 'Capstones' })).toBeTruthy();
+    fireEvent.click(screen.getByRole('tab', { name: 'Videos' }));
+    expect(screen.getByRole('region', { name: 'Video Library' })).toBeTruthy();
+  });
+
   it('filters the video shelf by creator with a keyboard-operable radio group', () => {
+    useLearnSectionStore.setState({ section: 'videos' });
     render(<TrackSelector />);
     const shelf = screen.getByRole('region', { name: 'Video Library' });
     const all = within(shelf).getAllByRole('button').length;

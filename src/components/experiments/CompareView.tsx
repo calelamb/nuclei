@@ -16,6 +16,7 @@ import { CompareMetricsTable } from './CompareMetricsTable';
 import type { RunRecord } from '../../types/experiment';
 import { TYPOGRAPHY, ICON_SIZE, ICON_STROKE } from '../../styles/tokens';
 import { Button } from '../ui';
+import { formatRunLabel } from './runsTableColumns';
 
 async function loadMeasurements(resultPath: string, fs: ReturnType<typeof createTauriExperimentFs>): Promise<Record<string, number>> {
   try {
@@ -27,6 +28,12 @@ async function loadMeasurements(resultPath: string, fs: ReturnType<typeof create
     // whole comparison — it just contributes an empty (all-zero) series.
     return {};
   }
+}
+
+/** Legend entry: the shared run label, flagged when the run produced nothing to plot. */
+function seriesLabel(run: RunRecord): string {
+  const label = formatRunLabel(run.dir, run.manifest.started_at);
+  return run.manifest.status === 'failed' ? `${label} (failed, no measurements)` : label;
 }
 
 function placeholderStyle(colors: ReturnType<typeof useThemeStore.getState>['colors']) {
@@ -102,7 +109,7 @@ export function CompareView() {
   }
 
   const series: MultiSeriesHistogramSeries[] = runs.map((run, i) => ({
-    label: run.dir,
+    label: seriesLabel(run),
     measurements: measurementsByDir[run.dir] ?? {},
     color: seriesColor(colors, i),
   }));
@@ -164,7 +171,7 @@ export function CompareView() {
           <SectionHeader title="Metrics" colors={colors}>
             <Button size="sm" onClick={handleExportMetricsCsv} icon={<Download size={ICON_SIZE.xs} strokeWidth={ICON_STROKE} />}>CSV</Button>
           </SectionHeader>
-          <CompareMetricsTable runs={runs} />
+          <CompareMetricsTable runs={runs} precisionRuns={allRuns} />
         </section>
       </div>
     </div>

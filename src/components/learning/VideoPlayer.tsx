@@ -1,4 +1,5 @@
 import { Play } from 'lucide-react';
+import { VideoThumb } from './VideoThumb';
 import { openExternal, buildYouTubeWatchUrl } from '../../lib/openExternal';
 import './lessonBlocks.css';
 
@@ -68,7 +69,7 @@ export function VideoPlayer({ youtubeId, title, creator, startTime, source, chap
   return (
     <div className="video">
       <button type="button" className="video__poster" onClick={() => handlePlay()} aria-label={`Play "${title}" on YouTube`}>
-        <img className="video__img" src={`https://img.youtube.com/vi/${youtubeId}/hqdefault.jpg`} alt="" loading="lazy" />
+        <VideoThumb youtubeId={youtubeId} quality="hqdefault" className="video__img" />
         <span className="video__veil">
           <span className="video__disc"><Play size={20} fill="currentColor" aria-hidden="true" /></span>
         </span>

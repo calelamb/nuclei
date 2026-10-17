@@ -3,6 +3,7 @@ import { useThemeStore } from '../../stores/themeStore';
 import type { EfficiencyMetricReport, EfficiencyReport, EfficiencyTier } from '../../types/challenge';
 
 import { TYPOGRAPHY } from '../../styles/tokens';
+import { SUCCESS_TEXT } from '../../lib/semanticText';
 interface PerformancePanelProps {
   report: EfficiencyReport;
 }
@@ -143,7 +144,7 @@ export function PerformancePanel({ report }: PerformancePanelProps) {
             padding: '2px 8px',
             borderRadius: 999,
             background: `${colors.success}20`,
-            color: colors.success,
+            color: SUCCESS_TEXT,
             fontSize: 11,
             fontWeight: 700,
             fontFamily: TYPOGRAPHY.fontSans,
