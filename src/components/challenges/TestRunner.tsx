@@ -1,6 +1,5 @@
 import { useCallback, useMemo, useState } from 'react';
 import { Check, Loader, Play, SearchCode, X } from 'lucide-react';
-import { useThemeStore } from '../../stores/themeStore';
 import { useChallengeModeStore } from '../../stores/challengeModeStore';
 import {
   inspectChallengeCase,
@@ -26,8 +25,9 @@ import type {
   TestCaseResult,
 } from '../../types/challenge';
 import type { CircuitSnapshot } from '../../types/quantum';
+import { Button, Select } from '../ui';
+import './challenges.css';
 
-import { TYPOGRAPHY } from '../../styles/tokens';
 interface TestRunnerProps {
   challenge: QuantumChallenge;
 }
@@ -60,8 +60,6 @@ function deriveSubmissionStatus(results: TestCaseResult[]): SubmissionStatus {
 }
 
 export function TestRunner({ challenge }: TestRunnerProps) {
-  const colors = useThemeStore((s) => s.colors);
-  const shadow = useThemeStore((s) => s.shadow);
   const platform = usePlatform();
   const activeFramework = useChallengeModeStore((s) => s.activeFramework);
   const progress = useChallengeModeStore((s) => s.progress);
@@ -273,276 +271,106 @@ export function TestRunner({ challenge }: TestRunnerProps) {
   const desktopOnly = unsupportedMessage !== null;
 
   const verdictColor = overallVerdict === 'accepted'
-    ? colors.success
-    : overallVerdict === 'wrong_answer'
-      ? colors.error
-      : overallVerdict === 'compile_error'
-        ? colors.warning
-        : overallVerdict === 'time_limit_exceeded'
-          ? colors.warning
-          : colors.error;
+    ? 'var(--color-success)'
+    : overallVerdict === 'compile_error' || overallVerdict === 'time_limit_exceeded'
+      ? 'var(--color-warning)'
+      : 'var(--color-danger)';
+
+  const renderRow = (testCase: TestCase, index: number) => {
+    const result = desktopOnly ? undefined : currentTestResults.find((entry) => entry.testCaseId === testCase.id);
+    return (
+      <TestCaseRow
+        key={testCase.id}
+        testCase={testCase}
+        result={result}
+        isRunning={isRunning && runningTestIndex === index}
+        index={index}
+      />
+    );
+  };
+
+  const tabs: ReadonlyArray<{ key: 'tests' | 'inspection'; label: string }> = [
+    { key: 'tests', label: 'Test Results' },
+    { key: 'inspection', label: isValueContract ? 'Return Output' : 'Quantum Output' },
+  ];
 
   return (
-    <div style={{
-      height: '100%',
-      display: 'flex',
-      flexDirection: 'column',
-      overflow: 'hidden',
-      background: colors.bg,
-    }}>
-      <div style={{
-        padding: '8px 16px',
-        display: 'flex',
-        alignItems: 'center',
-        gap: 8,
-        borderBottom: `1px solid ${colors.border}`,
-        background: colors.bgPanel,
-        flexWrap: 'wrap',
-      }}>
-        <button
-          onClick={() => handleRun(false)}
-          disabled={isRunning}
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: 6,
-            padding: '6px 16px',
-            borderRadius: 6,
-            border: `1px solid ${colors.accent}`,
-            background: `${colors.accent}18`,
-            color: colors.accent,
-            fontSize: 12,
-            fontWeight: 600,
-            fontFamily: TYPOGRAPHY.fontSans,
-            cursor: isRunning ? 'not-allowed' : 'pointer',
-            opacity: isRunning ? 0.5 : 1,
-          }}
-        >
-          <Play size={12} />
+    <div className="trun">
+      <div className="trun__bar">
+        <Button size="lg" icon={<Play size={12} aria-hidden="true" />} disabled={isRunning} onClick={() => handleRun(false)}>
           Run Visible Tests
-        </button>
-
-        <button
-          onClick={() => handleRun(true)}
-          disabled={isRunning}
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: 6,
-            padding: '6px 16px',
-            borderRadius: 6,
-            border: 'none',
-            background: colors.accent,
-            color: '#fff',
-            fontSize: 12,
-            fontWeight: 600,
-            fontFamily: TYPOGRAPHY.fontSans,
-            cursor: isRunning ? 'not-allowed' : 'pointer',
-            opacity: isRunning ? 0.5 : 1,
-            boxShadow: shadow.sm,
-          }}
-        >
-          <Check size={12} />
+        </Button>
+        <Button size="lg" variant="primary" icon={<Check size={12} aria-hidden="true" />} disabled={isRunning} onClick={() => handleRun(true)}>
           Submit
-        </button>
+        </Button>
 
-        <div style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: 8,
-          marginLeft: 8,
-          paddingLeft: 8,
-          borderLeft: `1px solid ${colors.border}`,
-        }}>
-          <select
+        <div className="trun__inspect">
+          <Select
+            size="lg"
+            aria-label="Test case to inspect"
             value={inspectionCaseId ?? ''}
             onChange={(event) => setInspectionCaseId(event.target.value)}
-            style={{
-              background: colors.bgElevated,
-              border: `1px solid ${colors.border}`,
-              borderRadius: 6,
-              padding: '6px 10px',
-              color: colors.text,
-              fontSize: 11,
-              fontFamily: TYPOGRAPHY.fontSans,
-            }}
           >
             {visibleTests.map((testCase: TestCase) => (
-              <option key={testCase.id} value={testCase.id}>
-                {testCase.label}
-              </option>
+              <option key={testCase.id} value={testCase.id}>{testCase.label}</option>
             ))}
-          </select>
-
-          <button
-            onClick={handleInspect}
-            disabled={isRunning || !inspectionCaseId}
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: 6,
-              padding: '6px 14px',
-              borderRadius: 6,
-              border: `1px solid ${colors.border}`,
-              background: 'transparent',
-              color: colors.text,
-              fontSize: 12,
-              fontWeight: 600,
-              fontFamily: TYPOGRAPHY.fontSans,
-              cursor: isRunning ? 'not-allowed' : 'pointer',
-              opacity: isRunning ? 0.5 : 1,
-            }}
-          >
-            <SearchCode size={12} />
+          </Select>
+          <Button size="lg" icon={<SearchCode size={12} aria-hidden="true" />} disabled={isRunning || !inspectionCaseId} onClick={handleInspect}>
             {isValueContract ? 'Inspect Return Value' : 'Inspect Quantum Output'}
-          </button>
+          </Button>
         </div>
 
         {overallVerdict && !isRunning && !desktopOnly && (
-          <div style={{
-            marginLeft: 'auto',
-            display: 'flex',
-            alignItems: 'center',
-            gap: 10,
-          }}>
-            <div style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: 6,
-              padding: '4px 10px',
-              borderRadius: 999,
-              background: `${verdictColor}18`,
-              color: verdictColor,
-              fontSize: 12,
-              fontWeight: 700,
-              fontFamily: TYPOGRAPHY.fontSans,
-            }}>
-              {overallVerdict === 'accepted' ? <Check size={12} /> : <X size={12} />}
+          <div className="trun__verdict" role="status">
+            <span className="trun__badge" style={{ ['--verdict-color' as string]: verdictColor }}>
+              {overallVerdict === 'accepted' ? <Check size={12} aria-hidden="true" /> : <X size={12} aria-hidden="true" />}
               {formatVerdict(overallVerdict)}
-            </div>
-            {totalScore !== null && (
-              <span style={{
-                color: colors.textMuted,
-                fontSize: 11,
-                fontFamily: TYPOGRAPHY.fontSans,
-              }}>
-                Score: {totalScore}%
-              </span>
-            )}
+            </span>
+            {totalScore !== null && <span className="trun__score">Score: {totalScore}%</span>}
           </div>
         )}
       </div>
 
-      <div style={{
-        display: 'flex',
-        alignItems: 'center',
-        gap: 4,
-        padding: '0 12px',
-        borderBottom: `1px solid ${colors.border}`,
-        background: colors.bgPanel,
-        flexShrink: 0,
-      }}>
-        <button
-          onClick={() => setActiveBottomTab('tests')}
-          style={{
-            padding: '6px 8px',
-            background: 'transparent',
-            border: 'none',
-            borderBottom: activeBottomTab === 'tests' ? `2px solid ${colors.accent}` : '2px solid transparent',
-            color: activeBottomTab === 'tests' ? colors.text : colors.textMuted,
-            fontSize: 11,
-            fontWeight: 600,
-            fontFamily: TYPOGRAPHY.fontSans,
-            cursor: 'pointer',
-          }}
-        >
-          Test Results
-        </button>
-        <button
-          onClick={() => setActiveBottomTab('inspection')}
-          style={{
-            padding: '6px 8px',
-            background: 'transparent',
-            border: 'none',
-            borderBottom: activeBottomTab === 'inspection' ? `2px solid ${colors.accent}` : '2px solid transparent',
-            color: activeBottomTab === 'inspection' ? colors.text : colors.textMuted,
-            fontSize: 11,
-            fontWeight: 600,
-            fontFamily: TYPOGRAPHY.fontSans,
-            cursor: 'pointer',
-          }}
-        >
-          {isValueContract ? 'Return Output' : 'Quantum Output'}
-        </button>
+      <div className="trun__tabs" role="tablist" aria-label="Result view">
+        {tabs.map((tab) => (
+          <button
+            key={tab.key}
+            type="button"
+            role="tab"
+            aria-selected={activeBottomTab === tab.key}
+            className="trun__tab"
+            onClick={() => setActiveBottomTab(tab.key)}
+          >
+            {tab.label}
+          </button>
+        ))}
       </div>
 
-      <div style={{ flex: 1, minHeight: 0, overflow: 'hidden' }}>
+      <div className="trun__body">
         {activeBottomTab === 'inspection' ? (
           <ChallengeInspector />
         ) : (
-          <div style={{ height: '100%', overflowY: 'auto', padding: '4px 0' }}>
+          <div className="trun__results">
             {unsupportedMessage && !isRunning && (
-              <div style={{ padding: '8px 12px' }}>
+              <div className="trun__notice">
                 <UnsupportedNotice message={unsupportedMessage.replace(/^Not supported in the browser: /, '')} />
               </div>
             )}
 
-            {perfReport && overallVerdict === 'accepted' && !isRunning && (
-              <PerformancePanel report={perfReport} />
-            )}
+            {perfReport && overallVerdict === 'accepted' && !isRunning && <PerformancePanel report={perfReport} />}
 
-            {visibleTests.map((testCase, index) => {
-              const result = desktopOnly ? undefined : currentTestResults.find((entry) => entry.testCaseId === testCase.id);
-              const running = isRunning && runningTestIndex === index;
-              return (
-                <TestCaseRow
-                  key={testCase.id}
-                  testCase={testCase}
-                  result={result}
-                  isRunning={running}
-                  index={index}
-                />
-              );
-            })}
-
-            {hiddenTests.map((testCase, index) => {
-              const result = desktopOnly ? undefined : currentTestResults.find((entry) => entry.testCaseId === testCase.id);
-              const absoluteIndex = visibleTests.length + index;
-              const running = isRunning && runningTestIndex === absoluteIndex;
-              return (
-                <TestCaseRow
-                  key={testCase.id}
-                  testCase={testCase}
-                  result={result}
-                  isRunning={running}
-                  index={absoluteIndex}
-                />
-              );
-            })}
+            {visibleTests.map((testCase, index) => renderRow(testCase, index))}
+            {hiddenTests.map((testCase, index) => renderRow(testCase, visibleTests.length + index))}
 
             {isRunning && currentTestResults.length === 0 && (
-              <div style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: 8,
-                padding: '18px 16px',
-                color: colors.textMuted,
-                fontSize: 12,
-                fontFamily: TYPOGRAPHY.fontSans,
-              }}>
-                <Loader size={14} color={colors.accent} style={{ animation: 'spin 1s linear infinite' }} />
-                <style>{`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
-                Preparing the kernel and running tests… the first run downloads the in-browser Python kernel and can take a few seconds.
+              <div className="trun__note">
+                <Loader className="nuclei-spin" size={14} aria-hidden="true" />
+                Preparing the kernel and running tests. The first run downloads the in-browser Python kernel and can take a few seconds.
               </div>
             )}
 
             {!isRunning && !inspection && currentTestResults.length === 0 && (
-              <div style={{
-                padding: '18px 16px',
-                color: colors.textDim,
-                fontSize: 12,
-                fontFamily: TYPOGRAPHY.fontSans,
-              }}>
+              <div className="trun__note">
                 Run the visible tests to validate your solver, then submit once the visible cases are passing.
               </div>
             )}
