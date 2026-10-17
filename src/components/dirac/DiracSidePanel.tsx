@@ -11,6 +11,7 @@ import { useSimulationStore } from '../../stores/simulationStore';
 import { useWorkspaceStore } from '../../stores/workspaceStore';
 import { useExperimentUiStore } from '../../stores/experimentUiStore';
 import { EASING, DURATION, prefersReducedMotion } from '../../lib/animations';
+import { useUiFeatures } from '../../hooks/useUiFeatures';
 import { AgentEntryPoint } from './AgentEntryPoint';
 import { DiracNoKey } from './DiracNoKey';
 import { DiracEmptyState } from './DiracEmptyState';
@@ -117,15 +118,7 @@ function ThinkingBlock({ thinking }: { thinking: string }) {
       margin: '6px 0', border: `1px solid ${colors.border}`,
       borderRadius: 4, borderLeft: `3px solid ${colors.dirac}`, overflow: 'hidden',
     }}>
-      <button
-        onClick={() => setExpanded(!expanded)}
-        style={{
-          display: 'flex', alignItems: 'center', gap: 6, width: '100%',
-          padding: '4px 8px', background: colors.bgPanel, border: 'none',
-          cursor: 'pointer', color: colors.diracText, fontSize: 11,
-          fontFamily: TYPOGRAPHY.fontSans, fontStyle: 'italic',
-        }}
-      >
+      <button type="button" className="dirac-think__toggle" aria-expanded={expanded} onClick={() => setExpanded(!expanded)}>
         {expanded ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
         Dirac's reasoning
       </button>
@@ -176,16 +169,8 @@ function ToolCallCard({ toolCall, onAction }: { toolCall: ToolCall; onAction: (i
         }}>{code}</pre>
         {isPending && (
           <div style={{ display: 'flex', gap: 8, padding: '6px 10px', background: colors.bgPanel }}>
-            <button onClick={() => onAction(toolCall.id, true)} style={{
-              padding: '4px 12px', background: colors.success, color: '#fff',
-              border: 'none', borderRadius: 4, cursor: 'pointer',
-              fontSize: 12, fontFamily: TYPOGRAPHY.fontSans, transition: 'all 150ms ease',
-            }}>Apply to Editor</button>
-            <button onClick={() => onAction(toolCall.id, false)} style={{
-              padding: '4px 12px', background: colors.border, color: colors.text,
-              border: 'none', borderRadius: 4, cursor: 'pointer',
-              fontSize: 12, fontFamily: TYPOGRAPHY.fontSans, transition: 'all 150ms ease',
-            }}>Dismiss</button>
+            <Button size="sm" variant="primary" onClick={() => onAction(toolCall.id, true)}>Apply to Editor</Button>
+            <Button size="sm" variant="secondary" onClick={() => onAction(toolCall.id, false)}>Dismiss</Button>
           </div>
         )}
       </div>
@@ -202,11 +187,7 @@ function ToolCallCard({ toolCall, onAction }: { toolCall: ToolCall; onAction: (i
         <span style={{ color: colors.accent, fontSize: 12, fontWeight: 600, fontFamily: TYPOGRAPHY.fontMono }}>run_simulation</span>
         <span style={{ color: colors.textMuted, fontSize: 11, flex: 1, fontFamily: TYPOGRAPHY.fontSans }}>{toolCall.input.shots ? `${toolCall.input.shots} shots` : 'Default shots'}</span>
         {isPending && (
-          <button onClick={() => onAction(toolCall.id, true)} style={{
-            padding: '3px 10px', background: colors.accent, color: '#fff',
-            border: 'none', borderRadius: 4, cursor: 'pointer',
-            fontSize: 11, fontFamily: TYPOGRAPHY.fontSans,
-          }}>Run</button>
+          <Button size="sm" variant="primary" onClick={() => onAction(toolCall.id, true)}>Run</Button>
         )}
         <span style={{ color: statusColor, fontSize: 11, fontFamily: TYPOGRAPHY.fontSans }}>{statusText}</span>
       </div>
@@ -253,6 +234,7 @@ export function DiracSidePanel() {
   const keyEntryOpen = useDiracPanelStore((s) => s.keyEntryOpen);
   const clearHistory = useDiracStore((s) => s.clearHistory);
   const hasApiKey = Boolean(apiKey && apiKey.trim() !== '');
+  const { agentEntry } = useUiFeatures();
 
   const [input, setInput] = useState('');
   const [slashActive, setSlashActive] = useState(0);
@@ -362,27 +344,15 @@ export function DiracSidePanel() {
 
   if (!isOpen) {
     return (
-      <div
+      <button
+        type="button"
+        className="dirac-rail"
         onClick={toggle}
-        style={{
-          width: 28, height: '100%',
-          backgroundColor: colors.bgPanel,
-          borderLeft: `1px solid ${colors.border}`,
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-          cursor: 'pointer', flexShrink: 0, writingMode: 'vertical-rl',
-          transition: 'all 150ms ease',
-        }}
-        onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = colors.bgElevated; }}
-        onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = colors.bgPanel; }}
         title="Open Dirac (⌘+D)"
-        role="button" aria-label="Open Dirac panel" tabIndex={0}
-        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggle(); } }}
+        aria-label="Open Dirac panel"
       >
-        <span style={{
-          color: colors.diracText, fontSize: 11, fontWeight: 600,
-          fontFamily: TYPOGRAPHY.fontSans, letterSpacing: 1,
-        }}>DIRAC</span>
-      </div>
+        <span className="dirac-rail__label">DIRAC</span>
+      </button>
     );
   }
 
@@ -422,7 +392,7 @@ export function DiracSidePanel() {
         </IconButton>
       </div>
 
-      {hasApiKey && <AgentEntryPoint />}
+      {hasApiKey && agentEntry && <AgentEntryPoint />}
 
       {!hasApiKey || keyEntryOpen ? (
         /* No (or rejected) API key: connect inline instead of showing chat */

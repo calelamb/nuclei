@@ -5,6 +5,8 @@ import { DiracSidePanel } from './DiracSidePanel';
 import { useDiracStore } from '../../stores/diracStore';
 import { useDiracPanelStore } from '../../stores/diracPanelStore';
 import { useWorkspaceStore } from '../../stores/workspaceStore';
+import { useUIModeStore } from '../../stores/uiModeStore';
+import { useNavigationStore } from '../../stores/navigationStore';
 
 function resetStores(apiKey: string | null) {
   useDiracStore.setState({ messages: [], isLoading: false, apiKey, conversationMeta: null });
@@ -136,11 +138,13 @@ describe('DiracSidePanel', () => {
     expect(screen.queryByRole('listbox')).toBeNull();
   });
 
-  it('the collapsed rail opens with Space as well as Enter (learn-22)', () => {
+  it('the collapsed rail is a native button, so Space and Enter open it (learn-22)', () => {
     resetStores('sk-ant-test');
     useDiracPanelStore.setState({ isOpen: false });
     render(<DiracSidePanel />);
-    fireEvent.keyDown(screen.getByRole('button', { name: 'Open Dirac panel' }), { key: ' ' });
+    const rail = screen.getByRole('button', { name: 'Open Dirac panel' });
+    expect(rail.tagName).toBe('BUTTON');
+    fireEvent.click(rail);
     expect(useDiracPanelStore.getState().isOpen).toBe(true);
   });
 
@@ -161,5 +165,37 @@ describe('DiracSidePanel', () => {
     fireEvent.click(screen.getByRole('button', { name: /Update key/ }));
     expect(useDiracPanelStore.getState().keyEntryOpen).toBe(true);
     expect(screen.getByLabelText('Anthropic API key')).toBeTruthy();
+  });
+
+  it('shows the agent entry only where the UI mode has the agentEntry feature', () => {
+    resetStores('sk-ant-test');
+    const agentEntry = (c: HTMLElement) => c.querySelector('[aria-label="Agent goal"], .dirac-agent-note');
+    useUIModeStore.setState({ mode: 'beginner' });
+    const beginner = render(<DiracSidePanel />);
+    expect(agentEntry(beginner.container)).toBeNull();
+    beginner.unmount();
+    useUIModeStore.setState({ mode: 'advanced' });
+    const advanced = render(<DiracSidePanel />);
+    expect(agentEntry(advanced.container)).not.toBeNull();
+    advanced.unmount();
+    useUIModeStore.setState({ mode: 'intermediate' });
+  });
+
+  it('opens the Dirac settings section from the no-key footer link', () => {
+    resetStores(null);
+    const openSettings = vi.fn();
+    useNavigationStore.setState({ openSettings });
+    render(<DiracSidePanel />);
+    fireEvent.click(screen.getByRole('button', { name: /More Dirac settings/i }));
+    expect(openSettings).toHaveBeenCalledWith('dirac');
+  });
+
+  it('advertises ambient narration, which is off by default', () => {
+    resetStores('sk-ant-test');
+    const openSettings = vi.fn();
+    useNavigationStore.setState({ openSettings });
+    render(<DiracSidePanel />);
+    fireEvent.click(screen.getByRole('button', { name: /ambient narration/i }));
+    expect(openSettings).toHaveBeenCalledWith('dirac');
   });
 });
