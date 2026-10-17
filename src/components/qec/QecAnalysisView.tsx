@@ -130,7 +130,7 @@ export function QecAnalysisView() {
         </div>
       )}
       <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
-        <div style={{ flex: 1.3, minHeight: 0, borderBottom: `1px solid ${colors.border}` }}>
+        <div style={{ flex: 2, minHeight: 0, borderBottom: `1px solid ${colors.border}` }}>
           <ThresholdPanel />
         </div>
         <div style={{ flex: 1, minHeight: 0 }}>
