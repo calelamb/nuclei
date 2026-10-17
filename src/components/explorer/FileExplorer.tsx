@@ -152,8 +152,17 @@ export function FileExplorer() {
       setMenuOpen(false);
       setCircuitSubmenu(false);
     };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return;
+      setMenuOpen(false);
+      setCircuitSubmenu(false);
+    };
     document.addEventListener('mousedown', h);
-    return () => document.removeEventListener('mousedown', h);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('mousedown', h);
+      document.removeEventListener('keydown', onKey);
+    };
   }, [menuOpen]);
 
   const handleOpenFolder = useCallback(async () => {
@@ -637,25 +646,25 @@ export function FileExplorer() {
             >
               <button
                 className="nuclei-menu-item nuclei-menu-item--tint"
- style={menuItemStyle}
+                style={menuItemStyle}
                 onClick={() => startCreate({ kind: 'file', initial: 'untitled.py' })}
               >
                 <FilePlus size={14} style={{ color: colors.textDim }} /> New File
                 <span style={{ marginLeft: 'auto', fontSize: 11, color: colors.textDim }}>.py</span>
               </button>
 
-              <div
-                style={{ position: 'relative' }}
-                onMouseEnter={() => setCircuitSubmenu(true)}
-                onMouseLeave={() => setCircuitSubmenu(false)}
-              >
+              <div style={{ position: 'relative' }}>
                 <button
                   className="nuclei-menu-item nuclei-menu-item--tint"
- style={menuItemStyle}
+                style={menuItemStyle}
+                  aria-haspopup="menu"
+                  aria-expanded={circuitSubmenu}
                   onClick={() => setCircuitSubmenu((s) => !s)}
                 >
                   <AtomIcon size={14} style={{ color: colors.accentLight }} /> New Circuit
-                  <ChevronRight size={12} style={{ marginLeft: 'auto', color: colors.textDim }} />
+                  {circuitSubmenu
+                    ? <ChevronDown size={12} style={{ marginLeft: 'auto', color: colors.textDim }} />
+                    : <ChevronRight size={12} style={{ marginLeft: 'auto', color: colors.textDim }} />}
                 </button>
                 {circuitSubmenu && (
                   <div
@@ -666,7 +675,7 @@ export function FileExplorer() {
                       <button
                         key={f}
                         className="nuclei-menu-item nuclei-menu-item--tint"
- style={menuItemStyle}
+                style={menuItemStyle}
                         onClick={() => startCreate({
                           kind: 'circuit',
                           framework: f,
@@ -685,14 +694,14 @@ export function FileExplorer() {
 
               <button
                 className="nuclei-menu-item nuclei-menu-item--tint"
- style={menuItemStyle}
+                style={menuItemStyle}
                 onClick={() => startCreate({ kind: 'package', initial: 'new_package' })}
               >
                 <Package size={14} style={{ color: colors.textDim }} /> New Python Package
               </button>
               <button
                 className="nuclei-menu-item nuclei-menu-item--tint"
- style={menuItemStyle}
+                style={menuItemStyle}
                 onClick={() => startCreate({ kind: 'folder', initial: 'new_folder' })}
               >
                 <FolderPlus size={14} style={{ color: colors.textDim }} /> New Folder
