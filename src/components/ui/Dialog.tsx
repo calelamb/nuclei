@@ -6,6 +6,10 @@ import { cx } from './cx';
 export interface DialogProps {
   /** Visible title; it names the dialog (aria-labelledby). */
   title: ReactNode;
+  /** Element before the title (e.g. a Back button). */
+  leading?: ReactNode;
+  /** Element after the title, right-aligned (e.g. a close IconButton). */
+  trailing?: ReactNode;
   /** Optional one-line explanation under the title (aria-describedby). */
   description?: ReactNode;
   onClose: () => void;
@@ -21,6 +25,8 @@ export interface DialogProps {
   /** CSS selector inside the dialog to focus on open (default: first focusable). */
   initialFocus?: string;
   className?: string;
+  /** Edge-to-edge body (diff panes, long forms): the panel drops its padding; header and footer keep theirs. */
+  flush?: boolean;
   /** Stacking order; the default sits above panels and below tooltips. */
   zIndex?: number;
 }
@@ -32,14 +38,14 @@ export interface DialogProps {
  * Portaled to <body> so an inert app shell can never swallow it.
  */
 export function Dialog({
-  title, description, onClose, children, footer, width = 440, align = 'center',
-  dismissible = true, initialFocus, className, zIndex = 4600,
+  title, description, leading, trailing, onClose, children, footer, width = 440, align = 'center',
+  dismissible = true, initialFocus, className, flush = false, zIndex = 4600,
 }: DialogProps) {
   const panelRef = useRef<HTMLDivElement>(null);
   const titleId = useId();
   const descId = useId();
   const onCloseRef = useRef(onClose);
-  onCloseRef.current = onClose;
+  useEffect(() => { onCloseRef.current = onClose; });
 
   useFocusTrap(panelRef, { restoreFocus: true, autoFocus: true });
 
@@ -76,10 +82,14 @@ export function Dialog({
         aria-labelledby={titleId}
         aria-describedby={description ? descId : undefined}
         tabIndex={-1}
-        className={cx('nuclei-dialog', className)}
+        className={cx('nuclei-dialog', flush && 'nuclei-dialog--flush', className)}
         style={{ width: Math.min(width, Math.floor(window.innerWidth * 0.92)) }}
       >
-        <h2 id={titleId} className="nuclei-dialog__title">{title}</h2>
+        <div className="nuclei-dialog__header">
+          {leading}
+          <h2 id={titleId} className="nuclei-dialog__title">{title}</h2>
+          {trailing}
+        </div>
         {description && <p id={descId} className="nuclei-dialog__desc">{description}</p>}
         {children && <div className="nuclei-dialog__body">{children}</div>}
         {footer && <div className="nuclei-dialog__footer">{footer}</div>}

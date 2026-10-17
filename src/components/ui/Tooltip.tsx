@@ -47,7 +47,6 @@ export function Tooltip({ label, shortcut, placement = 'above', children }: Tool
   // the trigger under the cursor makes the browser fire a fresh mouseenter.
   const suppressed = useRef(false);
   const tipRef = useRef<HTMLDivElement>(null);
-  const [shiftX, setShiftX] = useState(0);
 
   const clearTimers = useCallback(() => {
     if (openTimer.current) clearTimeout(openTimer.current);
@@ -73,21 +72,19 @@ export function Tooltip({ label, shortcut, placement = 'above', children }: Tool
     });
   }, [placement]);
 
-  // Clamp the rendered tooltip into the viewport: its real width is only known after layout.
+  // Clamp the rendered tooltip into the viewport: its real width is only known after layout,
+  // so measure at the natural position and nudge the DOM node (no extra render).
   useLayoutEffect(() => {
-    if (!open || !pos) { setShiftX(0); return; }
     const tip = tipRef.current;
-    if (!tip) return;
+    if (!open || !pos || !tip) return;
+    tip.style.left = `${pos.left}px`;
     const r = tip.getBoundingClientRect();
     if (r.width === 0) return;
-    const current = shiftX;
-    const naturalLeft = r.left - current;
-    const naturalRight = r.right - current;
-    let next = 0;
-    if (naturalRight > window.innerWidth - EDGE) next = window.innerWidth - EDGE - naturalRight;
-    if (naturalLeft + next < EDGE) next = EDGE - naturalLeft;
-    if (next !== current) setShiftX(next);
-  }, [open, pos, shiftX]);
+    let dx = 0;
+    if (r.right > window.innerWidth - EDGE) dx = window.innerWidth - EDGE - r.right;
+    if (r.left + dx < EDGE) dx = EDGE - r.left;
+    if (dx !== 0) tip.style.left = `${pos.left + dx}px`;
+  }, [open, pos]);
 
   const show = () => {
     if (suppressed.current) return;
@@ -134,7 +131,7 @@ export function Tooltip({ label, shortcut, placement = 'above', children }: Tool
           role="tooltip"
           style={{
             position: 'fixed',
-            left: pos.left + shiftX,
+            left: pos.left,
             top: pos.top,
             transform: TRANSFORMS[pos.placement],
             zIndex: 6000,
