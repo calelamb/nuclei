@@ -85,6 +85,7 @@ export function TranspilerControls() {
       <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
         <span style={{ fontSize: 11, color: colors.textDim }}>Optimization level</span>
         <SegmentedControl
+          block
           aria-label="Optimization level"
           value={String(optimizationLevel)}
           options={OPT_LEVELS.map((lvl) => ({ value: String(lvl), label: String(lvl) }))}

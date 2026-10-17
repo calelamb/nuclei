@@ -277,3 +277,5 @@
 }
 .nuclei-chip:hover { border-color: var(--color-text-tertiary); color: var(--color-text-primary); }
 .nuclei-chip[aria-pressed='true'] { background: color-mix(in srgb, var(--color-accent-quantum) 14%, transparent); border-color: var(--color-accent-quantum); color: var(--color-accent-quantum-text); }
+.nuclei-segmented.nuclei-segmented--block { display: flex; }
+.nuclei-segmented--block .nuclei-segmented__option { flex: 1; justify-content: center; }

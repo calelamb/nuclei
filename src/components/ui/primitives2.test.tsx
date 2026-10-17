@@ -96,3 +96,11 @@ describe('Tabs overflow cue', () => {
     expect(screen.getByRole('tablist').getAttribute('data-overflow')).toBe('none');
   });
 });
+
+describe('SegmentedControl block', () => {
+  it('stretches to the container when block is set', async () => {
+    const { SegmentedControl } = await import('./SegmentedControl');
+    render(<SegmentedControl block aria-label="Level" value="a" onChange={() => undefined} options={[{ value: 'a', label: 'A' }, { value: 'b', label: 'B' }]} />);
+    expect(screen.getByRole('radiogroup').className).toContain('nuclei-segmented--block');
+  });
+});
