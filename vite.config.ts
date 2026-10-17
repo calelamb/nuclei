@@ -2,8 +2,9 @@ import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
+import { isWebBuildTarget } from './src/build/resolveBuildTarget'
 
-const isWeb = process.env.BUILD_TARGET === 'web';
+const isWeb = isWebBuildTarget(process.env, process.argv);
 const pkgPath = fileURLToPath(new URL('./package.json', import.meta.url));
 const pkgVersion = JSON.parse(readFileSync(pkgPath, 'utf8')).version as string;
 // Web IDE is deployed at getnuclei.dev/try alongside the landing page,
