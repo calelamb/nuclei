@@ -1,29 +1,25 @@
 import { describe, expect, it } from 'vitest';
+import { DARK_COLORS, LIGHT_COLORS } from '../styles/tokens';
+import { useThemeStore } from '../stores/themeStore';
 import { seriesColor } from './seriesPalette';
-import { DARK_COLORS } from '../styles/tokens';
-
-const colors = {
-  bg: '', bgPanel: '', bgEditor: '', bgElevated: '', border: '', borderStrong: '',
-  text: '', textMuted: '', textDim: '', accent: DARK_COLORS.accentQuantum,
-  accentLight: DARK_COLORS.accentQuantumSoft, dirac: DARK_COLORS.accentDirac,
-  success: DARK_COLORS.success, warning: DARK_COLORS.warning, error: DARK_COLORS.danger,
-  info: DARK_COLORS.info, comment: '', string: '', number: '',
-  gateSingle: '', gateMulti: '', gateMeasure: '', wire: '',
-};
 
 describe('seriesColor', () => {
-  it('cycles through the palette by index', () => {
-    const c0 = seriesColor(colors, 0);
-    const c1 = seriesColor(colors, 1);
-    expect(c0).not.toBe(c1);
-    expect(seriesColor(colors, 0)).toBe(c0);
+  it.each([
+    ['dark', 'dark' as const],
+    ['light', 'light' as const],
+  ])('never uses the Dirac purple (%s theme), which is reserved for the assistant', (_name, mode) => {
+    useThemeStore.getState().setMode(mode);
+    const { colors } = useThemeStore.getState();
+    const palette = Array.from({ length: 7 }, (_, i) => seriesColor(colors, i));
+    expect(palette).not.toContain(colors.dirac);
+    expect(palette).not.toContain(colors.diracText);
+    expect(new Set(palette).size).toBe(palette.length);
+    expect((mode === 'dark' ? DARK_COLORS : LIGHT_COLORS).accentDirac).not.toBe(palette[1]);
   });
 
-  it('wraps around for an index beyond the palette length', () => {
-    expect(seriesColor(colors, 7)).toBe(seriesColor(colors, 0));
-  });
-
-  it('handles a negative index without throwing', () => {
-    expect(() => seriesColor(colors, -1)).not.toThrow();
+  it('is stable and wraps around', () => {
+    const { colors } = useThemeStore.getState();
+    expect(seriesColor(colors, 0)).toBe(seriesColor(colors, 7));
+    expect(seriesColor(colors, -1)).toBe(seriesColor(colors, 6));
   });
 });
