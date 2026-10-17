@@ -22,10 +22,13 @@
 .nuclei-btn.nuclei-btn--md { height: var(--control-height-md); padding: 0 var(--space-3); font-size: var(--font-size-chrome-label); }
 .nuclei-btn.nuclei-btn--lg { height: var(--control-height-lg); padding: 0 var(--space-4); font-size: var(--font-size-code); }
 
-.nuclei-btn.nuclei-btn--primary { background: var(--color-accent-quantum); border-color: var(--color-accent-quantum); color: var(--color-surface-sunken); }
+.nuclei-btn.nuclei-btn--primary { background: var(--color-accent-quantum); border-color: var(--color-accent-quantum); color: var(--color-on-accent); }
 .nuclei-btn.nuclei-btn--primary:hover:not(:disabled) { background: var(--color-accent-quantum-soft); border-color: var(--color-accent-quantum-soft); }
-:root[data-theme='light'] .nuclei-btn.nuclei-btn--primary { color: #fff; background: var(--color-text-primary); border-color: var(--color-text-primary); }
-:root[data-theme='light'] .nuclei-btn.nuclei-btn--primary:hover:not(:disabled) { background: var(--color-accent-quantum); border-color: var(--color-accent-quantum); }
+/* Light: the AA teal (5.36:1 with white) so the button reads as the same teal identity in both themes. */
+:root[data-theme='light'] .nuclei-btn.nuclei-btn--primary { color: #fff; background: var(--color-accent-quantum-text); border-color: var(--color-accent-quantum-text); }
+:root[data-theme='light'] .nuclei-btn.nuclei-btn--primary:hover:not(:disabled) { background: color-mix(in srgb, var(--color-accent-quantum-text) 80%, #000); border-color: color-mix(in srgb, var(--color-accent-quantum-text) 80%, #000); }
+.nuclei-btn.nuclei-btn--primary:active:not(:disabled) { filter: brightness(0.92); }
+.nuclei-btn.nuclei-btn--primary:disabled { background: var(--color-surface-overlay); border-color: var(--color-border-strong); color: var(--color-text-disabled); opacity: 1; }
 
 .nuclei-btn.nuclei-btn--secondary { background: var(--color-surface-raised); border-color: var(--color-border-strong); color: var(--color-text-primary); }
 .nuclei-btn.nuclei-btn--secondary:hover:not(:disabled) { background: var(--color-surface-overlay); }
@@ -111,17 +114,15 @@
 .nuclei-choice-card {
   display: flex; flex-direction: column; align-items: flex-start; width: 100%; padding: var(--space-4) var(--space-5);
   cursor: pointer; text-align: left; font-family: var(--font-sans);
-  border-style: solid; border-width: 1px 1px 1px 3px;
-  border-color: var(--color-border-subtle) var(--color-border-subtle) var(--color-border-subtle) var(--choice-accent);
-  border-radius: 0 var(--radius-round) var(--radius-round) 0;
+  border: 1px solid var(--color-border-subtle); border-radius: var(--radius-round);
+  /* The accent stripe is an inset shadow so it follows the rounded corners instead of a square border edge. */
+  box-shadow: inset 3px 0 0 var(--choice-accent);
   background: var(--color-surface-sunken);
   transition: background-color var(--duration-normal) var(--ease-standard),
               border-color var(--duration-normal) var(--ease-standard);
 }
-.nuclei-choice-card:hover {
-  background: var(--color-surface-raised);
-  border-top-color: var(--choice-accent); border-right-color: var(--choice-accent); border-bottom-color: var(--choice-accent);
-}
+.nuclei-choice-card:hover { background: var(--color-surface-raised); border-color: var(--choice-accent); }
+.nuclei-choice-card:focus-visible { outline-offset: 0; }
 .nuclei-choice-card__title { color: var(--color-text-primary); font-size: var(--font-size-heading); font-weight: var(--font-weight-semibold); }
 .nuclei-choice-card__desc { margin-top: var(--space-1); color: var(--color-text-secondary); font-size: var(--font-size-code); line-height: 1.5; }
 

@@ -80,4 +80,58 @@ describe('Tooltip', () => {
     act(() => { vi.advanceTimersByTime(TOOLTIP_OPEN_DELAY_MS + 10); });
     expect(screen.getByRole('tooltip').style.transform).toBe('translate(0, -50%)');
   });
+
+  it('does not re-open after a click until the pointer has left and re-entered', () => {
+    setup();
+    const btn = screen.getByText('mode');
+    fireEvent.mouseEnter(btn);
+    act(() => { vi.advanceTimersByTime(TOOLTIP_OPEN_DELAY_MS + 10); });
+    fireEvent.mouseDown(btn);
+    // The click re-renders the trigger under the cursor; the browser fires a fresh mouseenter.
+    fireEvent.mouseEnter(btn);
+    act(() => { vi.advanceTimersByTime(TOOLTIP_OPEN_DELAY_MS + 10); });
+    expect(screen.queryByRole('tooltip')).toBeNull();
+    fireEvent.mouseLeave(btn);
+    fireEvent.mouseEnter(btn);
+    act(() => { vi.advanceTimersByTime(TOOLTIP_OPEN_DELAY_MS + 10); });
+    expect(screen.getByRole('tooltip')).toBeTruthy();
+  });
+
+  describe('viewport clamping', () => {
+    const realRect = Element.prototype.getBoundingClientRect;
+    afterEach(() => { Element.prototype.getBoundingClientRect = realRect; });
+
+    function mockRects(trigger: Partial<DOMRect>, tipWidth: number) {
+      Element.prototype.getBoundingClientRect = function mocked(this: Element) {
+        if (this.getAttribute('role') === 'tooltip') {
+          const left = parseFloat((this as HTMLElement).style.left) - tipWidth / 2;
+          return { left, right: left + tipWidth, width: tipWidth, top: 0, bottom: 20, height: 20, x: left, y: 0, toJSON: () => ({}) } as DOMRect;
+        }
+        if (this.tagName === 'BUTTON') {
+          return { top: 400, bottom: 420, height: 20, x: 0, y: 400, toJSON: () => ({}), ...trigger } as DOMRect;
+        }
+        return realRect.call(this);
+      };
+    }
+
+    it('keeps a wide tooltip inside the right edge of the viewport', () => {
+      window.innerWidth = 1000;
+      mockRects({ left: 960, right: 1000, width: 40 }, 220);
+      setup();
+      fireEvent.mouseEnter(screen.getByText('mode'));
+      act(() => { vi.advanceTimersByTime(TOOLTIP_OPEN_DELAY_MS + 10); });
+      const left = parseFloat(screen.getByRole('tooltip').style.left);
+      expect(left + 110).toBeLessThanOrEqual(1000 - 8);
+    });
+
+    it('keeps a wide tooltip inside the left edge of the viewport', () => {
+      window.innerWidth = 1000;
+      mockRects({ left: 0, right: 40, width: 40 }, 220);
+      setup();
+      fireEvent.mouseEnter(screen.getByText('mode'));
+      act(() => { vi.advanceTimersByTime(TOOLTIP_OPEN_DELAY_MS + 10); });
+      const left = parseFloat(screen.getByRole('tooltip').style.left);
+      expect(left - 110).toBeGreaterThanOrEqual(8);
+    });
+  });
 });
