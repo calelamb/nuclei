@@ -44,13 +44,13 @@ describe('Wave A: dropped sinter CSV -> mapping -> corrected statistics -> match
     const meta = () => JSON.parse(container.querySelector('svg metadata')!.textContent!);
     expect(meta().lambda_estimates).toHaveLength(2);
     expect(meta().lambda_estimates.every((e: { distances: number[] }) => e.distances.length === 3)).toBe(true);
-    expect(container.textContent).toMatch(/Λ = /);
+    expect(container.textContent).toMatch(/95% CI/);
 
     // per-round toggle exists because rounds are mapped
     fireEvent.click(getByRole('button', { name: 'Per round' }));
     expect(meta().units).toBe('logical error per round');
 
-    fireEvent.click(getByRole('button', { name: 'Export CSV' }));
+    fireEvent.click(getByRole('button', { name: 'Export plot data (CSV)' }));
     const csv = downloadCsv.mock.calls[0][0] as string;
     const [header, ...lines] = csv.trim().split('\n');
     expect(header).toMatch(/discards.*strong_id,json_metadata,custom_counts$/);

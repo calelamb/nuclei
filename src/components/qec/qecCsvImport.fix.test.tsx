@@ -116,6 +116,6 @@ describe('empty-state copy', () => {
     const csv = [HEADER, '100,1,0,1,m,a,"{""d"":3}",'].join('\n');
     useQecCampaignStore.getState().loadFromCsv(csv, 'n.csv');
     const { container } = render(<ThresholdPanel />);
-    expect(container.textContent).toMatch(/Nothing to plot yet.*choose a numeric column for p/);
+    expect(container.textContent).toMatch(/Nothing to plot yet.*physical error rate p/);
   });
 });

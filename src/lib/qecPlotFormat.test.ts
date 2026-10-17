@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { toSuperscript, formatPow10, formatSci, formatMultiplierTick, formatRatePrecise, formatNoise } from './qecPlotFormat';
+import { toSuperscript, formatPow10, formatSci, formatMultiplierTick, formatRatePrecise, formatNoise, formatRateInterval } from './qecPlotFormat';
 
 describe('toSuperscript', () => {
   it('maps digits and a true minus sign', () => {
@@ -61,5 +61,15 @@ describe('formatNoise (qec-13)', () => {
     expect(formatNoise(0.5)).toBe('0.5');
     expect(formatNoise(0)).toBe('0');
     expect(formatNoise(Number.NaN)).toBe('—');
+  });
+});
+
+describe('formatRateInterval (qec-12)', () => {
+  it('shares one exponent between rate and interval', () => {
+    expect(formatRateInterval(0.00955, 0.00876, 0.0104)).toBe('9.55×10⁻³ [8.76, 10.4]×10⁻³');
+  });
+  it('handles zero errors and saturated rates', () => {
+    expect(formatRateInterval(0, 0, 0.0000102)).toBe('0 [0, 1.02×10⁻⁵]');
+    expect(formatRateInterval(0.388, 0.3, 0.588)).toBe('0.388 [0.3, 0.588]');
   });
 });

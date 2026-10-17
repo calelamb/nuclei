@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import type { QecCampaignStatsRow } from '../types/qec';
 import { parseSinterCsvDetailed, serializeSinterCsv, type CsvRowIssue } from '../types/sinterCsv';
+import type { RateUnits } from '../lib/qecFit';
 import { applyMapping, guessMapping, noNumericKeysProblem, type SinterMapping } from '../types/sinterMapping';
 
 /**
@@ -57,12 +58,17 @@ interface QecCampaignState {
   csvImport: CsvImport | null;
   /** Last CSV load failure (shown in the UI); cleared by the next success. */
   csvError: string | null;
+  /** Units the person asked for; shared by the plot, Λ readout and decoder
+   * table, and kept while they navigate away. Falls back to per-shot where
+   * rounds are unknown (see useQecUnits). */
+  requestedUnits: RateUnits;
 
   /** Parse untrusted sinter CSV text, aggregate duplicate strong_ids, guess a
    * mapping, and plot it. On a whole-file failure existing data is kept. */
   loadFromCsv(text: string, sourceName: string): CsvLoadResult;
   setCsvMapping(mapping: SinterMapping): void;
   clearCsvError(): void;
+  setRequestedUnits(units: RateUnits): void;
 
   startCampaign(name: string, tasksTotal: number): void;
   /** Merge changed-row events (keyed by strong_id) + progress counters. */
@@ -87,6 +93,7 @@ export const useQecCampaignStore = create<QecCampaignState>((set) => ({
   resumable: null,
   csvImport: null,
   csvError: null,
+  requestedUnits: 'per_round',
 
   loadFromCsv: (text, sourceName) => {
     if (useQecCampaignStore.getState().running) {
@@ -132,6 +139,8 @@ export const useQecCampaignStore = create<QecCampaignState>((set) => ({
 
   clearCsvError: () => set({ csvError: null }),
 
+  setRequestedUnits: (requestedUnits) => set({ requestedUnits }),
+
   startCampaign: (campaignName, tasksTotal) =>
     set({
       csvImport: null,
@@ -165,7 +174,7 @@ export const useQecCampaignStore = create<QecCampaignState>((set) => ({
   reset: () =>
     set({
       statsCsv: null, rowsByStrongId: {}, running: false, progress: null, campaignName: null,
-      resumable: null, csvImport: null, csvError: null,
+      resumable: null, csvImport: null, csvError: null, requestedUnits: 'per_round',
     }),
 }));
 

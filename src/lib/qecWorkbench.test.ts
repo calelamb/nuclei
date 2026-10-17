@@ -138,3 +138,18 @@ describe('decoderComparison context follows the active mapping', () => {
     expect(r.context).toBe('');
   });
 });
+
+describe('decoderComparison units (qec-12)', () => {
+  const r = { shots: 100000, errors: 1000, discards: 0, seconds: 1, decoder: 'pm', strong_id: 'a', custom_counts: {}, json_metadata: { d: 5, p: 0.001, r: 5 } };
+  it('reports per-shot by default and per-round on request', () => {
+    const shot = decoderComparison([r]).rows[0];
+    const round = decoderComparison([r], { units: 'per_round' }).rows[0];
+    expect(shot.units).toBe('per_shot');
+    expect(round.units).toBe('per_round');
+    expect(round.rate.p).toBeLessThan(shot.rate.p);
+  });
+  it('falls back to per-shot when rounds are unknown', () => {
+    const noRounds = { ...r, json_metadata: { d: 5, p: 0.001 } };
+    expect(decoderComparison([noRounds], { units: 'per_round' }).rows[0].units).toBe('per_shot');
+  });
+});

@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useDeferredValue, useMemo } from 'react';
 import { Download } from 'lucide-react';
 import { useThemeStore } from '../../stores/themeStore';
 import { useQecCampaignStore } from '../../stores/qecCampaignStore';
@@ -7,22 +7,24 @@ import { QecEmptyState } from './QecEmptyState';
 import { QecCsvDropZone } from './QecCsvDropZone';
 import { isWebBuild } from '../../platform/buildTarget';
 import { QecLambdaReadout } from './QecLambdaReadout';
+import { QecUnitsToggle } from './QecUnitsToggle';
+import { useQecUnits } from '../../hooks/useQecUnits';
+import { Button } from '../ui';
+import { ICON_SIZE, ICON_STROKE } from '../../styles/tokens';
 import { QecPlotView } from './QecPlotView';
 import { ScrollFade } from './ScrollFade';
 import { useElementSize } from '../../hooks/useElementSize';
 import { buildPlotModel } from '../../lib/qecPlotModel';
 import { plotBox, READOUT_WIDTH } from '../../lib/qecPlotLayout';
-import { figureFooterLines } from '../../lib/qecFigureText';
+import { figureFooterLines, lambdaLine } from '../../lib/qecFigureText';
 import {
   DEFAULT_MAX_LIKELIHOOD_FACTOR,
   lambdaEstimates,
   likelihoodSeries,
   qecFigureMetadata,
-  roundsFromMetadata,
   whiskerConvention,
-  type RateUnits,
 } from '../../lib/qecFit';
-import { renderFigureSvg } from '../../lib/qecSvgExport';
+import { PRINT_COLORS, renderFigureSvg } from '../../lib/qecSvgExport';
 import { qecRatesToCsv } from '../../lib/qecExport';
 import { downloadCsv, downloadSvg } from '../../services/experimentExport';
 import { QEC_PLOT_CSV_DOCS } from '../../config/docsLinks';
@@ -44,12 +46,14 @@ export function ThresholdPanel() {
   const colors = useThemeStore((s) => s.colors);
   const mode = useThemeStore((s) => s.mode);
   const rowsByStrongId = useQecCampaignStore((s) => s.rowsByStrongId);
-  const rows = useMemo(() => Object.values(rowsByStrongId), [rowsByStrongId]);
+  const liveRows = useMemo(() => Object.values(rowsByStrongId), [rowsByStrongId]);
+  // A mapping change on a big file recomputes every series and fit: keep the
+  // controls responsive and show the new plot when it is ready.
+  const rows = useDeferredValue(liveRows);
+  const updating = rows !== liveRows;
   const [areaRef, area] = useElementSize<HTMLDivElement>();
 
-  const [requestedUnits, setRequestedUnits] = useState<RateUnits>('per_round');
-  const roundsKnown = useMemo(() => rows.some((r) => roundsFromMetadata(r.json_metadata) !== null), [rows]);
-  const units: RateUnits = roundsKnown ? requestedUnits : 'per_shot';
+  const { units, roundsKnown, setRequested } = useQecUnits();
   const { series, excluded, invalid, noKept } = useMemo(() => likelihoodSeries(rows, { units }), [rows, units]);
   const lambdas = useMemo(() => lambdaEstimates(rows, { units }), [rows, units]);
   const csvImport = useQecCampaignStore((s) => s.csvImport);
@@ -64,21 +68,27 @@ export function ThresholdPanel() {
   const hasDiscards = useMemo(() => rows.some((r) => r.discards > 0), [rows]);
   const model = useMemo(() => buildPlotModel(series, mode, colors.textMuted, units), [series, mode, colors.textMuted, units]);
 
+  // Rows folded together as replicates have no single source row to quote, so
+  // the CSV export only quotes the file's own metadata for unmerged data.
   const originals = useMemo(
-    () => (csvImport ? new Map(csvImport.rows.map((r) => [r.strong_id, r])) : undefined),
-    [csvImport],
+    () => (csvImport && rows.length === csvImport.rows.length ? new Map(csvImport.rows.map((r) => [r.strong_id, r])) : undefined),
+    [csvImport, rows.length],
   );
   const emptyBody = csvImport
-    ? 'Nothing to plot yet: choose a numeric column for p in the mapping above.'
+    ? 'Nothing to plot yet: choose the column that holds the physical error rate p under Edit mapping.'
     : isWebBuild()
       ? 'Drop a sinter stats CSV to see logical error rate vs physical error, per distance.'
       : 'Run a QEC campaign over a noise sweep, or drop a sinter stats CSV, to see logical error rate vs physical error, per distance.';
 
   const exportSvg = () => {
     if (!model) return;
+    // Paper style: white page, dark text, light-palette series colours,
+    // whatever the app theme. Λ detail lives in <metadata>, not on the figure.
+    const printModel = buildPlotModel(series, 'light', PRINT_COLORS.textMuted, units);
+    if (!printModel) return;
     const svg = renderFigureSvg({
-      model, colors, metadata, title: meta.title, footerLines: figureFooterLines(lambdas),
-      description: `${meta.units} versus physical error p, log-log. ${meta.ci_method}.`,
+      model: printModel, metadata, title: meta.title, footerLines: figureFooterLines(lambdas),
+      description: [`${meta.units} versus physical error p, log-log. ${meta.ci_method}.`, ...lambdas.map(lambdaLine)].join('\n'),
     });
     downloadSvg(svg, 'logical-error-vs-p.svg');
   };
@@ -90,9 +100,20 @@ export function ThresholdPanel() {
       actions={
         model ? (
           <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-            {roundsKnown && <UnitsToggle units={units} onChange={setRequestedUnits} colors={colors} />}
-            <ExportButton label="SVG" onClick={exportSvg} colors={colors} />
-            <ExportButton label="CSV" onClick={() => downloadCsv(qecRatesToCsv(rows, { units, originals }), 'logical-error-vs-p.csv')} colors={colors} />
+            {roundsKnown && <QecUnitsToggle units={units} onChange={setRequested} />}
+            <Button
+              size="sm" onClick={exportSvg} title="Export the plot as a print-ready SVG (white background)"
+              aria-label="Export plot as SVG" icon={<Download size={ICON_SIZE.xs} strokeWidth={ICON_STROKE} />}
+            >
+              SVG
+            </Button>
+            <Button
+              size="sm" onClick={() => downloadCsv(qecRatesToCsv(rows, { units, originals }), 'logical-error-vs-p.csv')}
+              title="Export the plotted rates as CSV" aria-label="Export plot data (CSV)"
+              icon={<Download size={ICON_SIZE.xs} strokeWidth={ICON_STROKE} />}
+            >
+              CSV
+            </Button>
           </div>
         ) : undefined
       }
@@ -111,7 +132,7 @@ export function ThresholdPanel() {
             : emptyBody}
           docsHref={QEC_PLOT_CSV_DOCS}
         >
-          <QecCsvDropZone />
+          {!csvImport && <QecCsvDropZone />}
         </QecEmptyState>
       </div>
     );
@@ -144,7 +165,19 @@ export function ThresholdPanel() {
   return (
     <div style={{ height: '100%', display: 'flex', flexDirection: 'column', background: colors.bg }}>
       {header}
-      <div ref={areaRef} style={{ flex: 1, minHeight: 0, overflow: 'auto' }}>
+      <div ref={areaRef} style={{ flex: 1, minHeight: 0, overflow: 'auto', position: 'relative' }}>
+        {updating && (
+          <div
+            role="status"
+            style={{
+              position: 'absolute', top: 6, right: 12, zIndex: 3, padding: '3px 8px', borderRadius: 4, fontSize: 11,
+              background: colors.bgElevated, color: colors.textMuted, border: `1px solid ${colors.border}`,
+              animation: 'nuclei-fade-in 120ms ease 150ms backwards', fontFamily: TYPOGRAPHY.fontSans,
+            }}
+          >
+            Updating plot…
+          </div>
+        )}
         <div style={{ display: 'flex', flexDirection: box.layout === 'row' ? 'row' : 'column', gap: 12, alignItems: 'flex-start', padding: box.layout === 'row' ? '4px 12px 8px 0' : '4px 0 10px' }}>
           <QecPlotView
             model={model} colors={colors} width={box.plotW} height={box.plotH}
@@ -155,48 +188,5 @@ export function ThresholdPanel() {
         </div>
       </div>
     </div>
-  );
-}
-
-type Colors = ReturnType<typeof useThemeStore.getState>['colors'];
-
-function UnitsToggle({ units, onChange, colors }: { units: RateUnits; onChange: (u: RateUnits) => void; colors: Colors }) {
-  const opts: Array<[RateUnits, string]> = [['per_shot', 'Per shot'], ['per_round', 'Per round']];
-  return (
-    <div role="group" aria-label="Logical error units" style={{ display: 'flex', gap: 4, marginRight: 6 }}>
-      {opts.map(([u, text]) => (
-        <button
-          key={u}
-          type="button"
-          aria-pressed={units === u}
-          onClick={() => onChange(u)}
-          style={{
-            background: units === u ? colors.accent : 'transparent',
-            color: units === u ? colors.bg : colors.textMuted,
-            border: `1px solid ${colors.border}`, borderRadius: 4, cursor: 'pointer',
-            fontSize: 11, padding: '3px 8px', whiteSpace: 'nowrap', fontFamily: TYPOGRAPHY.fontSans,
-          }}
-        >
-          {text}
-        </button>
-      ))}
-    </div>
-  );
-}
-
-function ExportButton({ label, onClick, colors }: { label: string; onClick: () => void; colors: Colors }) {
-  return (
-    <button
-      onClick={onClick}
-      title={`Export ${label}`}
-      aria-label={`Export ${label}`}
-      style={{
-        display: 'flex', alignItems: 'center', gap: 4, background: 'transparent',
-        border: `1px solid ${colors.border}`, borderRadius: 4, color: colors.textMuted,
-        cursor: 'pointer', fontSize: 11, padding: '4px 8px', fontFamily: TYPOGRAPHY.fontSans,
-      }}
-    >
-      <Download size={12} /> {label}
-    </button>
   );
 }

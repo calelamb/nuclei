@@ -7,7 +7,7 @@
 import type { QecCampaignStatsRow } from '../types/qec';
 import { MAPPED_KEY } from '../types/sinterMapping';
 import { assignExperiments } from './qecExperiments';
-import { DEFAULT_MAX_LIKELIHOOD_FACTOR, rowProblem, rowRate } from './qecFit';
+import { DEFAULT_MAX_LIKELIHOOD_FACTOR, rowProblem, rowRate, type RateUnits } from './qecFit';
 
 export interface DecoderComparisonRow {
   experiment: string;
@@ -26,6 +26,8 @@ export interface DecoderComparisonRow {
   /** True when another task shares this row's (experiment, decoder, d, p) cell. */
   collides: boolean;
   rate: { p: number; lo: number; hi: number };
+  /** Units of `rate` actually used (per-round falls back to per-shot when rounds are unknown). */
+  units: RateUnits;
   /** CPU core-seconds per shot (sinter timing, all shots including discards). */
   secondsPerShot: number;
 }
@@ -100,7 +102,7 @@ const num = (v: unknown): number | null => (typeof v === 'number' && Number.isFi
 
 export function decoderComparison(
   rows: readonly QecCampaignStatsRow[],
-  opts: { maxLikelihoodFactor?: number } = {},
+  opts: { maxLikelihoodFactor?: number; units?: RateUnits } = {},
 ): DecoderComparison {
   const factor = opts.maxLikelihoodFactor ?? DEFAULT_MAX_LIKELIHOOD_FACTOR;
   const experiments = assignExperiments(rows);
@@ -124,7 +126,10 @@ export function decoderComparison(
   }
   const out = [...cells.entries()].map(([key, c]): DecoderComparisonRow => {
     const md = (c.row.json_metadata ?? {}) as Record<string, unknown>;
-    const { fit, kept } = rowRate({ ...c.row, shots: c.shots, discards: c.discards, errors: c.errors }, { maxLikelihoodFactor: factor });
+    const { fit, kept, units } = rowRate(
+      { ...c.row, shots: c.shots, discards: c.discards, errors: c.errors },
+      { maxLikelihoodFactor: factor, units: opts.units },
+    );
     return {
       experiment: experiments.get(c.row)!.name,
       context: experimentContext(md, experiments.get(c.row)!.roundsTag, experiments.get(c.row)!.name, derived),
@@ -132,7 +137,7 @@ export function decoderComparison(
       shots: c.shots, discards: c.discards, kept, errors: c.errors,
       strongId: c.row.strong_id,
       collides: (siblings.get((JSON.parse(key) as unknown[]).slice(0, 4).join('\u0000')) ?? 0) > 1,
-      rate: { p: fit.best, lo: fit.low, hi: fit.high },
+      rate: { p: fit.best, lo: fit.low, hi: fit.high }, units,
       secondsPerShot: c.shots > 0 ? c.seconds / c.shots : 0,
     };
   });

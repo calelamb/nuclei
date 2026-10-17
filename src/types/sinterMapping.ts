@@ -217,13 +217,13 @@ export function guessMapping(rows: readonly QecCampaignStatsRow[]): SinterMappin
   if (p === null) {
     p = keys.find((k) => k.numeric && k.distinct > 1 && k.key !== d && k.key !== rounds)?.key ?? null;
   }
-  const mergeKeys = keys
+  const plain: SinterMapping = { p, d, rounds, decoder: pick(keys, DECODER_NAMES, false) ?? DECODER_COLUMN, groupBy: [] };
+  // Replicate keys are merged only where they actually pile tasks onto one
+  // point; a seed that never collides is left alone.
+  const mergeKeys = excess(rows, plain) === 0 ? [] : keys
     .filter((k) => k.distinct > 1 && k.key !== p && k.key !== d && k.key !== rounds && REPLICATE_NAMES.includes(k.key.toLowerCase()))
     .map((k) => k.key);
-  const base: SinterMapping = {
-    p, d, rounds, decoder: pick(keys, DECODER_NAMES, false) ?? DECODER_COLUMN, groupBy: [],
-    ...(mergeKeys.length > 0 ? { mergeKeys } : {}),
-  };
+  const base: SinterMapping = { ...plain, ...(mergeKeys.length > 0 ? { mergeKeys } : {}) };
   return { ...base, groupBy: guessGroupBy(rows, base, keys) };
 }
 

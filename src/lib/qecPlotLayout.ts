@@ -71,9 +71,14 @@ export function layoutLegend(groups: readonly LegendGroup[], maxWidth: number): 
   };
   groups.forEach((g, gi) => {
     const headerW = textWidth(g.title, FONT.legend);
+    const entryW = (label: string) => SWATCH_W + SWATCH_GAP + textWidth(label, FONT.legend);
     // Keep a group title on the same row as its first entry.
-    const firstW = g.entries[0] ? ITEM_GAP + SWATCH_W + SWATCH_GAP + textWidth(g.entries[0].label, FONT.legend) : 0;
-    if (x > 0 && x + headerW + firstW > maxWidth) { row += 1; x = 0; }
+    const firstW = g.entries[0] ? ITEM_GAP + entryW(g.entries[0].label) : 0;
+    // A group that fits on one row goes whole to a fresh row instead of
+    // leaving its last entry alone on the next line.
+    const wholeW = headerW + g.entries.reduce((n, e) => n + ITEM_GAP + entryW(e.label), 0);
+    const fitsWhole = wholeW <= maxWidth;
+    if (x > 0 && (fitsWhole ? x + wholeW > maxWidth : x + headerW + firstW > maxWidth)) { row += 1; x = 0; }
     place('header', gi, -1, g.title, headerW);
     g.entries.forEach((e, ei) => place('entry', gi, ei, e.label, SWATCH_W + SWATCH_GAP + textWidth(e.label, FONT.legend)));
   });
