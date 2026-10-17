@@ -83,7 +83,7 @@ export function CircuitGallery() {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', gap: 10 }}>
       {/* Search */}
-      <div style={{ position: 'relative', flexShrink: 0 }}>
+      <div className="nuclei-focus-accent" style={{ position: 'relative', flexShrink: 0 }}>
         <Search
           size={14}
           style={{
@@ -111,12 +111,6 @@ export function CircuitGallery() {
             fontSize: 12,
             fontFamily: TYPOGRAPHY.fontSans,
             boxSizing: 'border-box',
-          }}
-          onFocus={(e) => {
-            e.currentTarget.style.borderColor = colors.accent;
-          }}
-          onBlur={(e) => {
-            e.currentTarget.style.borderColor = colors.border;
           }}
         />
       </div>

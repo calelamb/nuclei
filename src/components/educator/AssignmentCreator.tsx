@@ -92,7 +92,7 @@ export function AssignmentCreator({ onClose, onSave }: AssignmentCreatorProps) {
         {/* Body */}
         <div style={{ flex: 1, overflowY: 'auto', padding: 16, display: 'flex', flexDirection: 'column', gap: 12 }}>
           {/* Title */}
-          <div>
+          <div className="nuclei-focus-accent">
             <label style={{ fontSize: 11, fontWeight: 600, color: colors.textMuted, textTransform: 'uppercase', letterSpacing: 0.5 }}>
               Title
             </label>
@@ -101,13 +101,11 @@ export function AssignmentCreator({ onClose, onSave }: AssignmentCreatorProps) {
               onChange={(e) => setTitle(e.target.value)}
               placeholder="Assignment title..."
               style={{ ...inputStyle, marginTop: 4 }}
-              onFocus={(e) => { e.currentTarget.style.borderColor = colors.accent; }}
-              onBlur={(e) => { e.currentTarget.style.borderColor = colors.border; }}
             />
           </div>
 
           {/* Description */}
-          <div>
+          <div className="nuclei-focus-accent">
             <label style={{ fontSize: 11, fontWeight: 600, color: colors.textMuted, textTransform: 'uppercase', letterSpacing: 0.5 }}>
               Description
             </label>
@@ -117,8 +115,6 @@ export function AssignmentCreator({ onClose, onSave }: AssignmentCreatorProps) {
               placeholder="Describe the assignment..."
               rows={3}
               style={{ ...inputStyle, marginTop: 4, resize: 'vertical' }}
-              onFocus={(e) => { e.currentTarget.style.borderColor = colors.accent; }}
-              onBlur={(e) => { e.currentTarget.style.borderColor = colors.border; }}
             />
           </div>
 

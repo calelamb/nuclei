@@ -25,7 +25,7 @@ export function CircuitCard({ circuit, isLiked, isBookmarked, onLike, onBookmark
   const colors = useThemeStore((s) => s.colors);
 
   return (
-    <div
+    <div className="nuclei-hover-border"
       role="button"
       tabIndex={0}
       onClick={onClick}
@@ -41,12 +41,6 @@ export function CircuitCard({ circuit, isLiked, isBookmarked, onLike, onBookmark
         gap: 8,
         transition: 'border-color 0.15s',
         position: 'relative',
-      }}
-      onMouseEnter={(e) => {
-        e.currentTarget.style.borderColor = colors.borderStrong;
-      }}
-      onMouseLeave={(e) => {
-        e.currentTarget.style.borderColor = colors.border;
       }}
     >
       {/* Category tag */}

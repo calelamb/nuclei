@@ -247,7 +247,7 @@ export function CredentialSetup({ provider, onClose }: CredentialSetupProps) {
           </p>
 
           {config.fields.map((field) => (
-            <div key={field.key} style={{ marginBottom: 12 }}>
+            <div className="nuclei-focus-accent" key={field.key} style={{ marginBottom: 12 }}>
               <label
                 htmlFor={`credential-${provider}-${field.key}`}
                 style={{
@@ -281,12 +281,6 @@ export function CredentialSetup({ provider, onClose }: CredentialSetupProps) {
                   color: colors.text,
                   boxSizing: 'border-box',
                   ...font,
-                }}
-                onFocus={(e) => {
-                  e.currentTarget.style.borderColor = colors.accent;
-                }}
-                onBlur={(e) => {
-                  e.currentTarget.style.borderColor = colors.border;
                 }}
               />
             </div>

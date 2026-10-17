@@ -237,7 +237,7 @@ export function ClassroomPanel() {
             ))}
 
             {/* Add student row */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 8 }}>
+            <div className="nuclei-focus-accent" style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 8 }}>
               <input
                 value={newStudentName}
                 onChange={(e) => setNewStudentName(e.target.value)}
@@ -248,8 +248,6 @@ export function ClassroomPanel() {
                   background: colors.bg, border: `1px solid ${colors.border}`,
                   borderRadius: 4, color: colors.text,
                 }}
-                onFocus={(e) => { e.currentTarget.style.borderColor = colors.accent; }}
-                onBlur={(e) => { e.currentTarget.style.borderColor = colors.border; }}
               />
               <Button size="sm" variant="primary" onClick={handleAddStudent} icon={<Plus size={12} />}>Add</Button>
             </div>
