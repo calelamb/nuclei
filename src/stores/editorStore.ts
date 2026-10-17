@@ -22,6 +22,11 @@ export interface KernelProgress {
   step: number;
   total: number;
   label: string;
+  /**
+   * 'stages' are real boot phases (web); 'attempts' are desktop connect retries,
+   * which are not user-meaningful stages and must not read as "n of m".
+   */
+  kind?: 'stages' | 'attempts';
   /** 0..1 overall completion. */
   fraction: number;
 }

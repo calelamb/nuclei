@@ -107,7 +107,8 @@ describe('useKernel desktop start', () => {
     await waitFor(() => expect(FakeSocket.instances).toHaveLength(1));
 
     FakeSocket.instances[0].closeFromServer(1006);
-    expect(useEditorStore.getState().kernelProgress?.label).toMatch(/Connecting to the kernel \(1\/15\)/);
+    // The first refused connects are normal while Python starts: no counter yet.
+    expect(useEditorStore.getState().kernelProgress).toMatchObject({ kind: 'attempts', label: 'Starting kernel' });
 
     for (let i = 0; i < 16; i++) {
       await vi.advanceTimersByTimeAsync(2_100);

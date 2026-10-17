@@ -118,3 +118,30 @@ describe('FrameworkSelector — Q#', () => {
     expect(state.filePath).toBeNull();
   });
 });
+
+describe('FrameworkSelector — compact label', () => {
+  const webBridge: PlatformBridge = { ...desktopBridge, getPlatform() { return 'web'; } };
+  afterEach(cleanup);
+
+  it('shortens the browser-subset label in compact mode and keeps it in the tooltip', () => {
+    useEditorStore.setState({ framework: 'qiskit' });
+    render(
+      <PlatformProvider bridge={webBridge}>
+        <FrameworkSelector compact />
+      </PlatformProvider>,
+    );
+    const trigger = screen.getByRole('button', { name: /qiskit/i });
+    expect(trigger.textContent).toBe('Qiskit');
+    expect(trigger.getAttribute('title')).toBe('Framework: Qiskit (browser subset)');
+  });
+
+  it('shows the full label when there is room', () => {
+    useEditorStore.setState({ framework: 'qiskit' });
+    render(
+      <PlatformProvider bridge={webBridge}>
+        <FrameworkSelector />
+      </PlatformProvider>,
+    );
+    expect(screen.getByTitle('Framework').textContent).toBe('Qiskit (browser subset)');
+  });
+});

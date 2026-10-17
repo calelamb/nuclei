@@ -20,6 +20,16 @@ describe('getRunButtonState', () => {
     expect(state.title).toBe('Loading NumPy (step 2 of 3)');
   });
 
+  it('does not show connect attempts as n/m on desktop', () => {
+    const state = getRunButtonState({
+      ...base,
+      kernelStatus: 'connecting',
+      kernelProgress: { step: 2, total: 15, kind: 'attempts', label: 'Starting kernel', fraction: 0.13 },
+    });
+    expect(state).toMatchObject({ kind: 'loading', label: 'Starting kernel…', disabled: true });
+    expect(state.label).not.toMatch(/\d/);
+  });
+
   it('falls back to a plain label before the first stage is reported', () => {
     expect(getRunButtonState({ ...base, kernelStatus: 'connecting' }).label).toBe('Starting…');
   });

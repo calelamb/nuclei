@@ -109,6 +109,7 @@ export function EditorTabs() {
           color: isActive ? colors.text : colors.textDim,
           cursor: 'pointer',
           maxWidth: 220,
+          minWidth: 0,
           transition: 'background 120ms ease',
         }}
       >
@@ -185,6 +186,7 @@ export function EditorTabs() {
         color: colors.text,
         cursor: 'default',
         maxWidth: 260,
+        minWidth: 0,
       }}
     >
       <FileCode size={13} style={{ color: colors.accent, flexShrink: 0 }} />
@@ -267,12 +269,12 @@ export function EditorTabs() {
         gap: 8,
       }}
     >
-      <div style={{ display: 'flex', alignItems: 'stretch', overflow: 'auto', minWidth: 64 }}>
+      <div style={{ display: 'flex', alignItems: 'stretch', overflow: 'hidden', minWidth: 48, flexShrink: 2 }}>
         {usingLegacy ? renderLegacyTab() : tabs.map((t) => renderProjectTab(t.path, t.isDirty))}
       </div>
 
-      <div style={{ display: 'flex', alignItems: 'center', flexShrink: 0 }}>
-        <FrameworkSelector />
+      <div style={{ display: 'flex', alignItems: 'center', flexShrink: 1, minWidth: 0 }}>
+        <FrameworkSelector compact={compact} />
       </div>
 
       <div style={{ flex: 1 }} />
@@ -284,7 +286,8 @@ export function EditorTabs() {
           aria-label="Launch on hardware"
           style={{
             height: 28,
-            padding: '0 12px',
+            padding: compact ? '0 8px' : '0 12px',
+            flexShrink: 0,
             display: 'flex',
             alignItems: 'center',
             gap: 6,
@@ -308,7 +311,7 @@ export function EditorTabs() {
           }}
         >
           <Rocket size={12} />
-          <span>Launch</span>
+          {!compact && <span>Launch</span>}
           {!compact && <span style={{ fontSize: 10, opacity: 0.7, marginLeft: 2 }}>⌘⇧R</span>}
         </button>
         <button

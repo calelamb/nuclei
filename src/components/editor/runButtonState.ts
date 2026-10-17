@@ -37,6 +37,10 @@ export function getRunButtonState(input: RunButtonInput): RunButtonState {
   // The toolbar is narrow, so the button carries the step count and the full
   // stage text lives in the tooltip and the status bar chip.
   const progress = input.kernelProgress;
+  if (progress?.kind === 'attempts') {
+    // Desktop connect retries are not stages; keep the count out of the label.
+    return { kind: 'loading', label: 'Starting kernel…', title: progress.label, disabled: true };
+  }
   return {
     kind: 'loading',
     label: progress ? `Loading ${progress.step}/${progress.total}` : 'Starting…',

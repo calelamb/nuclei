@@ -28,7 +28,7 @@ function isUntouchedStarter(code: string): boolean {
   );
 }
 
-export function FrameworkSelector() {
+export function FrameworkSelector({ compact = false }: { compact?: boolean } = {}) {
   const [open, setOpen] = useState(false);
   const [menuPos, setMenuPos] = useState<{ top: number; left: number } | null>(null);
   const framework = useEditorStore((s) => s.framework);
@@ -88,7 +88,8 @@ export function FrameworkSelector() {
   // subset; CUDA-Q/Q# need the desktop app's native kernel. Those options stay
   // visible (so students know they exist) but are disabled with a tooltip.
   const isDisabled = (f: Framework) => isWeb && f !== 'cirq' && f !== 'qiskit';
-  const labelFor = (f: Framework) => (isWeb && f === 'qiskit' ? 'Qiskit (browser subset)' : displayName(f));
+  const fullLabelFor = (f: Framework) => (isWeb && f === 'qiskit' ? 'Qiskit (browser subset)' : displayName(f));
+  const labelFor = (f: Framework) => (compact ? displayName(f) : fullLabelFor(f));
 
   const applyTemplate = (f: Framework) => {
     if (isDirty) {
@@ -293,8 +294,10 @@ export function FrameworkSelector() {
         onClick={() => setOpen((o) => !o)}
         aria-haspopup="menu"
         aria-expanded={open}
-        title="Framework"
+        title={compact ? `Framework: ${fullLabelFor(framework)}` : 'Framework'}
         style={{
+          minWidth: 0,
+          maxWidth: '100%',
           background: open ? colors.bgElevated : 'transparent',
           border: `1px solid ${open ? colors.borderStrong : colors.border}`,
           borderRadius: 5,
@@ -321,10 +324,11 @@ export function FrameworkSelector() {
           }
         }}
       >
-        <span style={{ whiteSpace: 'nowrap' }}>{labelFor(framework)}</span>
+        <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{labelFor(framework)}</span>
         <ChevronDown
           size={12}
           style={{
+            flexShrink: 0,
             opacity: 0.7,
             transform: open ? 'rotate(180deg)' : 'rotate(0deg)',
             transition: 'transform 150ms cubic-bezier(0.16, 1, 0.3, 1)',

@@ -47,6 +47,8 @@ export const HARDWARE_CONNECT_TIMEOUT_MS = 45_000;
 const DEFAULT_DEBOUNCE_MS = 300;
 const RETRY_DELAY_MS = 2000;
 const MAX_RETRIES = 15;
+/** A normal desktop launch needs a few refused connects; only report attempts past these. */
+const QUIET_CONNECT_ATTEMPTS = 3;
 
 export function getErrorContext(msg: Extract<KernelResponse, { type: 'error' }>) {
   const detail = msg.traceback ?? msg.message;
@@ -504,7 +506,10 @@ export function useKernel() {
           useEditorStore.getState().setKernelProgress({
             step: attempt,
             total: MAX_RETRIES,
-            label: `Connecting to the kernel (${attempt}/${MAX_RETRIES})`,
+            kind: 'attempts',
+            label: attempt <= QUIET_CONNECT_ATTEMPTS
+              ? 'Starting kernel'
+              : `Still starting the kernel (attempt ${attempt}/${MAX_RETRIES})`,
             fraction: attempt / MAX_RETRIES,
           });
           setTimeout(connect, RETRY_DELAY_MS);
@@ -598,7 +603,7 @@ export function useKernel() {
     useEditorStore.getState().setKernelConnected(false);
     useEditorStore.getState().setKernelReady(false);
     useEditorStore.getState().setKernelStatus('connecting');
-    useEditorStore.getState().setKernelProgress({ step: 0, total: MAX_RETRIES, label: 'Starting the kernel', fraction: 0 });
+    useEditorStore.getState().setKernelProgress({ step: 0, total: MAX_RETRIES, kind: 'attempts', label: 'Starting kernel', fraction: 0 });
     try {
       await platform.startKernel();
     } catch (e) {
