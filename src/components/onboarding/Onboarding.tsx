@@ -6,6 +6,7 @@ import { EASING, DURATION, prefersReducedMotion } from '../../lib/animations';
 import { TYPOGRAPHY } from '../../styles/tokens';
 import { Button, ChoiceCard } from '../ui';
 import { useFocusTrap } from '../../hooks/useFocusTrap';
+import { isWebBuild } from '../../platform/buildTarget';
 
 type OnboardingPath = 'welcome' | 'beginner' | 'intermediate' | 'experienced' | 'research';
 
@@ -18,6 +19,13 @@ interface OnboardingProps {
   daysSinceLastSession?: number;
 }
 
+
+/** What the Research card promises must be true in the build the person is using. */
+export function researchCardDescription(web: boolean): string {
+  return web
+    ? 'Analyse QEC data in your browser: drop a sinter CSV, fit Λ, compare decoders. Experiments and projects need the desktop app.'
+    : 'A multi-file workspace for experiments, parameter sweeps, and reproducible runs, with Dirac as a terse collaborator.';
+}
 
 interface DialogFrameProps {
   label: string;
@@ -97,7 +105,7 @@ function ModeSelectScreen({ onSelectLearn, onSelectResearch }: {
     {
       id: 'research',
       title: 'Research workspace',
-      description: 'A multi-file workspace for experiments, parameter sweeps, and reproducible runs, with Dirac as a terse collaborator.',
+      description: researchCardDescription(isWebBuild()),
       accent: colors.modeResearch,
       onSelect: onSelectResearch,
     },
@@ -145,9 +153,10 @@ function WelcomeScreen({ onSelect, onBack }: { onSelect: (path: OnboardingPath) 
   const colors = useThemeStore((s) => s.colors);
 
   const paths: Array<{ id: OnboardingPath; title: string; description: string; accent: string }> = [
+    // One stripe colour for all three levels: they are told apart by their copy, not by hue.
     { id: 'beginner', title: "I'm brand new", description: 'Never done quantum computing? Start with an interactive playground — no code required.', accent: colors.accent },
-    { id: 'intermediate', title: 'I know some quantum', description: 'Familiar with qubits and gates? Jump into the IDE with a quick intro to Dirac, your AI tutor.', accent: colors.dirac },
-    { id: 'experienced', title: "I'm experienced", description: 'Ready to code? Go straight to the editor with all features enabled.', accent: colors.success },
+    { id: 'intermediate', title: 'I know some quantum', description: 'Familiar with qubits and gates? Pick a track and start learning, with the full IDE one click away.', accent: colors.accent },
+    { id: 'experienced', title: "I'm experienced", description: 'Ready to code? Go straight to the editor with all features enabled.', accent: colors.accent },
   ];
 
   return (

@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { describe, it, expect, afterEach, beforeAll, vi } from 'vitest';
 import { render, screen, fireEvent, cleanup } from '@testing-library/react';
-import { Onboarding } from './Onboarding';
+import { Onboarding, researchCardDescription } from './Onboarding';
 
 beforeAll(() => {
   window.matchMedia = ((query: string) => ({
@@ -86,5 +86,28 @@ describe('returning-user screen', () => {
   it('says "Open IDE" when there is no file to return to', () => {
     render(<Onboarding onComplete={vi.fn()} isReturningUser daysSinceLastSession={9} />);
     expect(screen.getByRole('button', { name: 'Open IDE' })).toBeTruthy();
+  });
+});
+
+describe('Learn level cards', () => {
+  it('all three share one stripe colour and none promises a Dirac intro that does not exist', () => {
+    render(<Onboarding onComplete={vi.fn()} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Learn quantum computing' }));
+    const cards = ['brand new', 'some quantum', 'experienced'].map((n) => screen.getByRole('button', { name: new RegExp(n) }));
+    const accents = cards.map((c) => c.style.getPropertyValue('--choice-accent'));
+    expect(new Set(accents).size).toBe(1);
+    expect(document.body.textContent).not.toMatch(/intro to Dirac/);
+  });
+});
+
+describe('Research card copy', () => {
+  it('only promises browser-capable work on the web build', () => {
+    const web = researchCardDescription(true);
+    expect(web).toMatch(/sinter CSV/);
+    expect(web).toMatch(/desktop app/);
+    expect(web).not.toMatch(/parameter sweeps/);
+  });
+  it('keeps the multi-file experiments promise on desktop', () => {
+    expect(researchCardDescription(false)).toMatch(/parameter sweeps/);
   });
 });
