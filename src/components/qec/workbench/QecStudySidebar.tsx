@@ -64,7 +64,7 @@ function StudyList({ studies, busy }: { studies: readonly DiscoveredQecStudy[]; 
   return (
     <div style={{ display: 'grid', gap: 5 }}>
       {studies.map(({ study }) => (
-        <button key={study.id} type="button" disabled={busy} aria-pressed={activeStudyId === study.id} onClick={() => setActiveStudy(study.id)} style={{ padding: '7px 8px', borderRadius: 4, border: `1px solid ${activeStudyId === study.id ? colors.accent : colors.border}`, background: activeStudyId === study.id ? `${colors.accent}18` : colors.bgElevated, color: colors.text, textAlign: 'left', cursor: busy ? 'wait' : 'pointer' }}>
+        <button key={study.id} type="button" disabled={busy} aria-pressed={activeStudyId === study.id} onClick={() => setActiveStudy(study.id)} style={{ padding: '7px 8px', borderRadius: 'var(--radius-xs)', border: `1px solid ${activeStudyId === study.id ? colors.accent : colors.border}`, background: activeStudyId === study.id ? `${colors.accent}18` : colors.bgElevated, color: colors.text, textAlign: 'left', cursor: busy ? 'wait' : 'pointer' }}>
           <strong style={{ display: 'block', fontSize: 11 }}>{study.name}</strong>
           <span style={{ display: 'block', color: colors.textDim, fontSize: 11, marginTop: 2 }}>{study.question}</span>
         </button>
@@ -79,7 +79,7 @@ function ValidationCards({ colors }: { colors: ThemeColors }): ReactElement | nu
   return (
     <section aria-label="Study validation errors" style={{ display: 'grid', gap: 6 }}>
       {validationErrors.map(({ fileName, errors }) => (
-        <article key={fileName} style={{ border: `1px solid ${colors.warning}60`, borderRadius: 4, padding: 8, background: `${colors.warning}0d` }}>
+        <article key={fileName} style={{ border: `1px solid ${colors.warning}60`, borderRadius: 'var(--radius-xs)', padding: 8, background: `${colors.warning}0d` }}>
           <strong style={{ color: colors.warning, fontSize: 11 }}>{fileName}</strong>
           {errors.map((error) => <p key={error} style={{ color: colors.textMuted, fontSize: 11, lineHeight: 1.4, margin: '4px 0 0' }}>{error}</p>)}
         </article>

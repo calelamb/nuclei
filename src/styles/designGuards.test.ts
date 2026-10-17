@@ -48,4 +48,14 @@ describe('design guards', () => {
   it('keeps JSX icon sizes on the 12/14/16/20 scale', () => {
     expect(offenders((f) => /<[A-Za-z.]*(Icon|Icon\w*)\s[^>]*size=\{(9|10|11|13|15|17|18)\}/.test(f.text) || /<(Icon|MIcon|stat\.icon)\s[^>]*size=\{(9|10|11|13|15)\}/.test(f.text))).toEqual([]);
   });
+
+  it('keeps the research trees (experiments, qec) on the 11px minimum type size and CSS hover states', () => {
+    const research = (f: { rel: string }) => /^components\/(experiments|qec)\//.test(f.rel);
+    expect(offenders((f) => research(f) && /fontSize:\s*(?:[1-9]|10)(?:\.5)?\b(?!\s*[%a-z])/.test(f.text) && !/<svg/.test(f.text))).toEqual([]);
+    expect(offenders((f) => research(f) && /currentTarget\.style\./.test(f.text))).toEqual([]);
+  });
+
+  it('has no purple (Dirac) colours in the research trees', () => {
+    expect(offenders((f) => /^components\/(experiments|qec)\//.test(f.rel) && /colors\.dirac\b/.test(f.text))).toEqual([]);
+  });
 });

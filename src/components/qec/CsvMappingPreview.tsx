@@ -196,7 +196,7 @@ export function CsvMappingPreview() {
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 8, fontSize: 11, color: colors.textMuted }}>
               <span>Same in every row:</span>
               {constantChips.map((k) => (
-                <span key={k.key} style={{ padding: '1px 6px', borderRadius: 4, border: `1px solid ${colors.border}`, fontFamily: TYPOGRAPHY.fontMono }}>
+                <span key={k.key} style={{ padding: '1px 6px', borderRadius: 'var(--radius-xs)', border: `1px solid ${colors.border}`, fontFamily: TYPOGRAPHY.fontMono }}>
                   {`${k.key} = ${typeof k.sample === 'string' ? k.sample : JSON.stringify(k.sample)}`}
                 </span>
               ))}

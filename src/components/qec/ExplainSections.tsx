@@ -134,7 +134,7 @@ export function NondeterministicSection({
       {bad && data.cause && <CauseNote cause={data.cause} stale={stale} onJump={onJump} />}
       {bad && <SensitivityList data={data} />}
       {data.diagram_svg && (
-        <div style={{ background: '#ffffff', borderRadius: 4, padding: 4, overflow: 'auto', maxHeight: 260 }}>
+        <div style={{ background: '#ffffff', borderRadius: 'var(--radius-xs)', padding: 4, overflow: 'auto', maxHeight: 260 }}>
           <img
             alt="Stim detector slice diagram showing the offending detector and operations"
             src={svgDataUrl(data.diagram_svg)}

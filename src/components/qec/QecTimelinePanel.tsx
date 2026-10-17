@@ -130,7 +130,7 @@ export function QecTimelinePanel() {
           <div
             style={{
               position: 'fixed', left: hover.x + 12, top: hover.y + 12, zIndex: 2000,
-              background: colors.bgElevated, border: `1px solid ${colors.border}`, borderRadius: 6,
+              background: colors.bgElevated, border: `1px solid ${colors.border}`, borderRadius: 'var(--radius-soft)',
               padding: '5px 8px', fontSize: 11, color: colors.text, pointerEvents: 'none',
               fontFamily: TYPOGRAPHY.fontSans, boxShadow: '0 4px 16px rgba(0,0,0,0.3)',
             }}

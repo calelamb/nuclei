@@ -186,7 +186,7 @@ export function ThresholdPanel({ part = 'all' }: { part?: ThresholdPart } = {}) 
           <div
             role="status"
             style={{
-              position: 'absolute', top: 6, right: 12, zIndex: 3, padding: '3px 8px', borderRadius: 4, fontSize: 11,
+              position: 'absolute', top: 6, right: 12, zIndex: 3, padding: '3px 8px', borderRadius: 'var(--radius-xs)', fontSize: 11,
               background: colors.bgElevated, color: colors.textMuted, border: `1px solid ${colors.border}`,
               animation: 'nuclei-fade-in 120ms ease 150ms backwards', fontFamily: TYPOGRAPHY.fontSans,
             }}
