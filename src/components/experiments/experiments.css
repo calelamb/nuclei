@@ -50,7 +50,10 @@
   font-family: var(--font-mono); font-size: var(--font-size-chrome-label);
   transition: background-color var(--duration-fast) var(--ease-standard);
 }
-.nuclei-runs-row:hover, .nuclei-runs-row[data-checked='true'] { background: var(--color-surface-raised); }
+.nuclei-runs-row:hover, .nuclei-runs-row[data-checked='true'] {
+  background: color-mix(in srgb, var(--color-accent-quantum) 8%, var(--color-surface-raised));
+}
+.nuclei-runs-row input[type='checkbox'] { accent-color: var(--color-accent-quantum); }
 .nuclei-runs-row__check { display: flex; align-items: center; justify-content: center; padding: 0 var(--space-2); }
 .nuclei-runs-row__run { padding: 0 var(--space-2); color: var(--color-text-tertiary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .nuclei-runs-row__cell {

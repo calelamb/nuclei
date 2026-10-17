@@ -141,3 +141,12 @@
   .qec-import-commit > button { flex: 0 0 auto; }
   .qec-tray__jobs > li, .qec-tray__jobs dl { grid-template-columns: minmax(0, 1fr); }
 }
+
+.qec-import-caption {
+  font-size: var(--font-size-chrome-label); font-weight: 600; text-transform: uppercase; letter-spacing: 0.4px;
+  color: var(--color-text-secondary); margin: var(--space-2) 0 var(--space-1);
+}
+.qec-import-card input[type='checkbox'], .qec-import-card input[type='radio'] {
+  accent-color: var(--color-accent-quantum);
+}
+.qec-import-remove:hover { color: var(--color-error); }

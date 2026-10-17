@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { Atom } from 'lucide-react';
 import { useThemeStore } from '../../stores/themeStore';
 import { QEC_TEMPLATES, type QecTemplate } from '../../services/qecTemplates';
@@ -12,9 +12,22 @@ import './experiments.css';
  * it, and scaffolds real editable files (stim-generating Python + campaign
  * YAML). Lives beside "+ New experiment" in the Experiments rail.
  */
+const MENU_WIDTH = 300;
+const VIEWPORT_MARGIN = 8;
+
+/** Fixed-position anchor under the trigger, kept inside the viewport (the rail clips absolutely-positioned menus). */
+function menuAnchor(trigger: HTMLElement | null): { top: number; left: number } {
+  const rect = trigger?.getBoundingClientRect();
+  if (!rect) return { top: 0, left: VIEWPORT_MARGIN };
+  const maxLeft = Math.max(VIEWPORT_MARGIN, window.innerWidth - MENU_WIDTH - VIEWPORT_MARGIN);
+  return { top: rect.bottom + 4, left: Math.min(maxLeft, Math.max(VIEWPORT_MARGIN, rect.left)) };
+}
+
 export function NewQecExperimentMenu({ projectRoot }: { projectRoot: string }) {
   const colors = useThemeStore((s) => s.colors);
   const [open, setOpen] = useState(false);
+  const [anchor, setAnchor] = useState({ top: 0, left: VIEWPORT_MARGIN });
+  const triggerRef = useRef<HTMLDivElement | null>(null);
   const [chosen, setChosen] = useState<QecTemplate | null>(null);
   const [name, setName] = useState('');
   const [busy, setBusy] = useState(false);
@@ -43,10 +56,10 @@ export function NewQecExperimentMenu({ projectRoot }: { projectRoot: string }) {
   };
 
   return (
-    <div style={{ position: 'relative' }}>
+    <div ref={triggerRef} style={{ position: 'relative' }}>
       <Button
         size="md"
-        onClick={() => setOpen((v) => !v)}
+        onClick={() => { setAnchor(menuAnchor(triggerRef.current)); setOpen((v) => !v); }}
         title="New QEC experiment"
         aria-label="New QEC experiment"
         aria-haspopup="menu"
@@ -60,8 +73,8 @@ export function NewQecExperimentMenu({ projectRoot }: { projectRoot: string }) {
         <div
           role="menu"
           style={{
-            position: 'absolute', top: '100%', right: 0, marginTop: 4, zIndex: 20,
-            width: 300, background: colors.bg, border: `1px solid ${colors.borderStrong}`,
+            position: 'fixed', top: anchor.top, left: anchor.left, zIndex: 20,
+            width: MENU_WIDTH, background: colors.bg, border: `1px solid ${colors.borderStrong}`,
             borderRadius: 'var(--radius-soft)', boxShadow: 'var(--shadow-md)', padding: 8,
             fontFamily: TYPOGRAPHY.fontSans,
           }}

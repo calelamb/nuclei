@@ -161,7 +161,7 @@ function MappingStage(props: MappingStageProps): ReactElement {
         <div className="qec-import-mapping__row" key={row.id}>
           <label><span>Canonical field {index + 1}</span><TextInput mono aria-label={`Canonical field ${index + 1}`} value={row.canonical} onChange={(event) => props.onChange(row.id, 'canonical', event.target.value)} /></label>
           <label><span>Source field {index + 1}</span><TextInput mono aria-label={`Source field ${index + 1}`} value={row.source} onChange={(event) => props.onChange(row.id, 'source', event.target.value)} /></label>
-          <IconButton aria-label={`Remove mapping ${index + 1}`} onClick={() => props.onRemove(row.id)}><Trash2 aria-hidden="true" size={ICON_SIZE.md} strokeWidth={ICON_STROKE} /></IconButton>
+          <IconButton className="qec-import-remove" aria-label={`Remove mapping ${index + 1}`} onClick={() => props.onRemove(row.id)}><Trash2 aria-hidden="true" size={ICON_SIZE.md} strokeWidth={ICON_STROKE} /></IconButton>
         </div>
       ))}
       <MappingOptionsForm adapterId={props.adapterId} options={props.options} onChange={props.onOptions} />
@@ -211,6 +211,7 @@ function PreviewStage({ validation, preview, onLoad }: PreviewStageProps): React
   return (
     <div className="qec-import-preview">
       <dl className="qec-import-facts"><FieldValue label="Preview records" value={String(records)} /><FieldValue label="Expected rows" value={preview.value.totalRecords === null ? 'Not reported' : String(preview.value.totalRecords)} /><FieldValue label="Provenance" value={preview.value.provenanceId ?? 'Not reported'} /><FieldValue label="Truncation" value={preview.value.truncated ? 'Preview truncated' : 'Complete bounded preview'} /></dl>
+      <div className="qec-import-caption">Canonical batch summary</div>
       <Table label="Canonical batch summary" dense><Thead><Tr><Th>Record kind</Th><Th numeric>Records</Th><Th numeric>Sequence</Th></Tr></Thead><Tbody>{preview.value.batches.map((batch) => <Tr key={batch.segmentId}><Td text>{batch.recordKind}</Td><Td numeric>{batch.recordCount}</Td><Td numeric>{batch.sequenceStart}–{batch.sequenceEnd}</Td></Tr>)}</Tbody></Table>
     </div>
   );
