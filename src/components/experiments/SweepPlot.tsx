@@ -153,7 +153,7 @@ export function SweepPlot() {
         </div>
       )}
 
-      <SweepPlotChart series={series} xLabel={effectiveX} yLabel={effectiveY} failed={failed} onSelectRun={selectRun} svgRef={svgRef} />
+      <SweepPlotChart series={series} xLabel={effectiveX} yLabel={effectiveY} groupLabel={effectiveGroup} failed={failed} onSelectRun={selectRun} svgRef={svgRef} />
     </div>
   );
 }

@@ -14,6 +14,8 @@ interface SweepPlotChartProps {
   series: SweepSeries[];
   xLabel: string;
   yLabel: string;
+  /** Name of the grouping parameter, for tooltips. */
+  groupLabel?: string;
   /** Failed runs per group key (`''` when ungrouped), drawn as hollow markers. */
   failed?: ReadonlyMap<string, FailedMarker[]>;
   /** Clicking a plotted point opens that run. */
@@ -42,7 +44,7 @@ function formatNumber(n: number): string {
  * a nearest-point hover tooltip and click-through to the run. d3 is used only
  * for scales / path strings; the DOM is plain React SVG.
  */
-export function SweepPlotChart({ series, xLabel, yLabel, failed, onSelectRun, svgRef }: SweepPlotChartProps) {
+export function SweepPlotChart({ series, xLabel, yLabel, groupLabel, failed, onSelectRun, svgRef }: SweepPlotChartProps) {
   const colors = useThemeStore((s) => s.colors);
   const wrapRef = useRef<HTMLDivElement | null>(null);
   const [width, setWidth] = useState(DEFAULT_WIDTH);
@@ -193,7 +195,7 @@ export function SweepPlotChart({ series, xLabel, yLabel, failed, onSelectRun, sv
         >
           <div>{xLabel} = {formatNumber(hovered.point.x)}</div>
           <div>{yLabel} = {formatNumber(hovered.point.y)}</div>
-          {hoveredSeries.group !== null && <div style={{ color: colors.textDim }}>group {hoveredSeries.group}</div>}
+          {hoveredSeries.group !== null && <div style={{ color: colors.textDim }}>{groupLabel ? `${groupLabel} = ` : 'group '}{hoveredSeries.group}</div>}
           <div style={{ color: colors.textDim }}>{hovered.point.dir.split('-').slice(-1)[0]} - click to open</div>
         </div>
       )}
