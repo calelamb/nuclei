@@ -103,7 +103,7 @@ export function EstimatorPanel() {
       }}
     >
       <span style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, fontWeight: 600, color: colors.text }}>
-        <Cpu size={13} /> Resource Estimator
+        <Cpu size={14} /> Resource Estimator
       </span>
       <div style={{ flex: 1 }} />
       {result && (
@@ -113,11 +113,11 @@ export function EstimatorPanel() {
           title="Export the full estimator document as JSON"
           style={iconBtn(colors)}
         >
-          <Download size={13} /> JSON
+          <Download size={14} /> JSON
         </button>
       )}
       <a href={DOCS} target="_blank" rel="noreferrer" title="Resource estimation docs" style={{ ...iconBtn(colors), padding: '3px 5px' }}>
-        <HelpCircle size={13} />
+        <HelpCircle size={14} />
       </a>
     </div>
   );
@@ -238,7 +238,7 @@ export function EstimatorPanel() {
               style={detailToggle(colors, showDetail)}
             >
               <ChevronRight
-                size={13}
+                size={14}
                 style={{ transform: showDetail ? 'rotate(90deg)' : 'none', transition: 'transform 120ms' }}
               />
               Full estimator output

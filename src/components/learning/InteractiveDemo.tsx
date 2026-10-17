@@ -321,7 +321,7 @@ export function InteractiveDemo({ code: initialCode, framework, description, exp
                 color: showOutput ? colors.accent : colors.textDim,
                 fontSize: 11, fontFamily: TYPOGRAPHY.fontSans, cursor: 'pointer',
               }}>
-                <Terminal size={11} /> Output
+                <Terminal size={12} /> Output
               </button>
             )}
             {hasResults && (
@@ -332,7 +332,7 @@ export function InteractiveDemo({ code: initialCode, framework, description, exp
                 color: !showOutput ? colors.accent : colors.textDim,
                 fontSize: 11, fontFamily: TYPOGRAPHY.fontSans, cursor: 'pointer',
               }}>
-                <BarChart3 size={11} /> Probabilities
+                <BarChart3 size={12} /> Probabilities
               </button>
             )}
           </>

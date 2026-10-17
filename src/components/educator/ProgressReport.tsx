@@ -116,7 +116,7 @@ export function ProgressReport({ students, assignments }: ProgressReportProps) {
             e.currentTarget.style.color = colors.textMuted;
           }}
         >
-          <Download size={11} />
+          <Download size={12} />
           Export CSV
         </button>
       </div>

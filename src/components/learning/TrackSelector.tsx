@@ -119,8 +119,8 @@ export function TrackSelector() {
                 fontFamily: TYPOGRAPHY.fontSans,
               }}>
                 {completed === lessonCount && lessonCount > 0
-                  ? <CheckCircle size={22} />
-                  : !hasLessons ? <Lock size={18} />
+                  ? <CheckCircle size={20} />
+                  : !hasLessons ? <Lock size={16} />
                   : track.id.split('-')[1]
                 }
               </div>
@@ -295,7 +295,7 @@ export function TrackSelector() {
                       background: 'rgba(0,0,0,0.7)', display: 'flex',
                       alignItems: 'center', justifyContent: 'center',
                     }}>
-                      <Play size={22} color="#fff" fill="#fff" />
+                      <Play size={20} color="#fff" fill="#fff" />
                     </div>
                   </div>
                   {/* Duration badge */}

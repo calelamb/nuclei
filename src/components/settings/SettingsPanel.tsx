@@ -250,7 +250,7 @@ function ApiKeyInput() {
           fontFamily: TYPOGRAPHY.fontSans,
         }}
       >
-        Get an API key <ExternalLink size={9} />
+        Get an API key <ExternalLink size={12} />
       </a>
       <span style={{
         fontSize: 11, color: colors.textDim, lineHeight: 1.4,
@@ -304,7 +304,7 @@ export function SettingsPanel() {
                     fontFamily: TYPOGRAPHY.fontSans,
                   }}
                 >
-                  {m === 'dark' ? <Moon size={11} /> : <Sun size={11} />}
+                  {m === 'dark' ? <Moon size={12} /> : <Sun size={12} />}
                   {m[0].toUpperCase() + m.slice(1)}
                 </button>
               ))}

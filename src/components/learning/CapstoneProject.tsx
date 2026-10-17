@@ -105,7 +105,7 @@ export function CapstoneProjectView() {
                     alignItems: 'center',
                     gap: 4,
                   }}>
-                    {isCurrent ? <ChevronDown size={10} /> : <ChevronRight size={10} />}
+                    {isCurrent ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
                     {milestone.title}
                   </div>
 
@@ -134,7 +134,7 @@ export function CapstoneProjectView() {
                             fontFamily: TYPOGRAPHY.fontSans,
                           }}
                         >
-                          <Play size={10} />
+                          <Play size={12} />
                           Load Starter Code
                         </button>
                         <button
@@ -170,7 +170,7 @@ export function CapstoneProjectView() {
                                 marginBottom: 4,
                               }}
                             >
-                              <Lightbulb size={11} color={colors.warning} style={{ flexShrink: 0, marginTop: 2 }} />
+                              <Lightbulb size={12} color={colors.warning} style={{ flexShrink: 0, marginTop: 2 }} />
                               <span style={{ color: colors.textMuted, fontSize: 11, fontFamily: TYPOGRAPHY.fontSans, lineHeight: 1.4 }}>
                                 {hint}
                               </span>
@@ -192,7 +192,7 @@ export function CapstoneProjectView() {
                                 padding: '2px 0',
                               }}
                             >
-                              <Lightbulb size={10} />
+                              <Lightbulb size={12} />
                               Show Hint ({revealedHints + 1}/{milestone.hints.length})
                             </button>
                           )}

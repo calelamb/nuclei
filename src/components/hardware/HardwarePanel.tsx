@@ -474,7 +474,7 @@ export function HardwarePanel() {
                 e.currentTarget.style.color = colors.textDim;
               }}
             >
-              <Trash2 size={10} />
+              <Trash2 size={12} />
               Clear Jobs
             </button>
           )}

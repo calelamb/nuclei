@@ -103,7 +103,7 @@ export function LessonNavSidebar({
             </div>
           </div>
           <button onClick={onToggleCollapsed} title="Hide lesson navigation" aria-label="Hide lesson navigation" style={iconBtn(colors)}>
-            <PanelLeftClose size={15} />
+            <PanelLeftClose size={16} />
           </button>
         </div>
         {/* Track progress */}
@@ -137,11 +137,11 @@ export function LessonNavSidebar({
                 onMouseLeave={(e) => { if (!isCurrent) e.currentTarget.style.background = 'transparent'; }}
               >
                 {isDone ? (
-                  <CheckCircle2 size={15} style={{ color: colors.success, flexShrink: 0 }} />
+                  <CheckCircle2 size={16} style={{ color: colors.success, flexShrink: 0 }} />
                 ) : isCurrent ? (
-                  <Dot size={15} style={{ color: colors.accent, flexShrink: 0 }} />
+                  <Dot size={16} style={{ color: colors.accent, flexShrink: 0 }} />
                 ) : (
-                  <Circle size={13} style={{ color: colors.textDim, flexShrink: 0 }} />
+                  <Circle size={14} style={{ color: colors.textDim, flexShrink: 0 }} />
                 )}
                 <span style={{ flex: 1, fontSize: 13, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                   {i + 1}. {lesson.title}

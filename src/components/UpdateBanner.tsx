@@ -160,7 +160,7 @@ export function UpdateBanner() {
             onClick={() => { void handleInstall(); }}
             style={buttonStyle(colors, shadow.sm)}
           >
-            <Download size={13} />
+            <Download size={14} />
             Install update
           </button>
         );
@@ -170,7 +170,7 @@ export function UpdateBanner() {
             onClick={() => { void handleRestart(); }}
             style={buttonStyle(colors, shadow.sm)}
           >
-            <RefreshCw size={13} />
+            <RefreshCw size={14} />
             Restart now
           </button>
         );

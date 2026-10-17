@@ -79,7 +79,7 @@ function SubmissionRow({ submission, index }: { submission: Submission; index: n
           fontWeight: 600,
           fontFamily: TYPOGRAPHY.fontSans,
         }}>
-          {isAccepted ? <Check size={10} /> : <X size={10} />}
+          {isAccepted ? <Check size={12} /> : <X size={12} />}
           {statusMeta.label}
         </div>
 
@@ -116,7 +116,7 @@ function SubmissionRow({ submission, index }: { submission: Submission; index: n
           fontSize: 11,
           fontFamily: TYPOGRAPHY.fontSans,
         }}>
-          <Clock size={10} />
+          <Clock size={12} />
           {timeStr}
         </div>
       </button>
@@ -140,8 +140,8 @@ function SubmissionRow({ submission, index }: { submission: Submission; index: n
               }}
             >
               {tcr.passed
-                ? <Check size={10} color={colors.success} />
-                : <X size={10} color={colors.error} />
+                ? <Check size={12} color={colors.success} />
+                : <X size={12} color={colors.error} />
               }
               <span style={{
                 color: colors.textMuted,
@@ -195,7 +195,7 @@ function SubmissionRow({ submission, index }: { submission: Submission; index: n
                   fontWeight: 700,
                   fontFamily: TYPOGRAPHY.fontSans,
                 }}>
-                  <Star size={10} fill={colors.success} strokeWidth={0} />
+                  <Star size={12} fill={colors.success} strokeWidth={0} />
                   Optimal
                 </span>
               )}

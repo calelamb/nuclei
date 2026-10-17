@@ -37,7 +37,7 @@ function CanvasHeader({ inspectorOpen, onToggleInspector, toggleRef }: Investiga
           aria-expanded={inspectorOpen}
           onClick={onToggleInspector}
         >
-          <PanelRight aria-hidden="true" size={15} />
+          <PanelRight aria-hidden="true" size={16} />
           {inspectorOpen ? 'Hide' : 'Show'} research inspector
         </button>
       </div>

@@ -160,7 +160,7 @@ function ThinkingBlock({ thinking }: { thinking: string }) {
           fontFamily: TYPOGRAPHY.fontSans, fontStyle: 'italic',
         }}
       >
-        {expanded ? <ChevronDown size={10} /> : <ChevronRight size={10} />}
+        {expanded ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
         Dirac's reasoning
       </button>
       {expanded && (
@@ -330,7 +330,7 @@ function ApiKeyBanner() {
         display: 'flex', alignItems: 'center', justifyContent: 'center',
         margin: '0 auto 10px',
       }}>
-        <Settings size={18} color={colors.diracText} />
+        <Settings size={16} color={colors.diracText} />
       </div>
       <div style={{
         fontSize: 13, fontWeight: 600, color: colors.text,

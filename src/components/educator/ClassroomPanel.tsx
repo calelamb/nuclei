@@ -293,7 +293,7 @@ export function ClassroomPanel() {
                   flexShrink: 0,
                 }}
               >
-                <Plus size={11} />
+                <Plus size={12} />
                 Add
               </button>
             </div>

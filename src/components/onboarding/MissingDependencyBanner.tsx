@@ -146,12 +146,12 @@ export function MissingDependencyBanner() {
               >
                 {phase === 'installing' ? (
                   <>
-                    <Loader2 size={13} style={{ animation: 'nuclei-spin 800ms linear infinite' }} />
+                    <Loader2 size={14} style={{ animation: 'nuclei-spin 800ms linear infinite' }} />
                     Installing {name}…
                   </>
                 ) : (
                   <>
-                    <Download size={13} />
+                    <Download size={14} />
                     {phase === 'error' ? 'Retry install' : `Install ${name}`}
                   </>
                 )}
@@ -178,7 +178,7 @@ export function MissingDependencyBanner() {
           aria-label="Dismiss"
           style={{ background: 'transparent', border: 'none', color: colors.textDim, cursor: 'pointer', padding: 2, flexShrink: 0 }}
         >
-          <X size={15} />
+          <X size={16} />
         </button>
       </div>
     </div>

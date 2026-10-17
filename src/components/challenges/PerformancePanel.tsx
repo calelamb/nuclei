@@ -82,7 +82,7 @@ function PrimaryMetricRow({ metric }: { metric: EfficiencyMetricReport }) {
             fontWeight: 700,
             fontFamily: TYPOGRAPHY.fontSans,
           }}>
-            {metric.tier === 'optimal' && <Star size={10} fill={color} strokeWidth={0} />}
+            {metric.tier === 'optimal' && <Star size={12} fill={color} strokeWidth={0} />}
             {TIER_LABEL[metric.tier]}
           </span>
         </>
@@ -123,7 +123,7 @@ export function PerformancePanel({ report }: PerformancePanelProps) {
         padding: '9px 12px',
         borderBottom: `1px solid ${colors.border}`,
       }}>
-        <Zap size={13} color={accent} fill={accent} />
+        <Zap size={14} color={accent} fill={accent} />
         <span style={{
           color: colors.text,
           fontSize: 12,
@@ -148,7 +148,7 @@ export function PerformancePanel({ report }: PerformancePanelProps) {
             fontWeight: 700,
             fontFamily: TYPOGRAPHY.fontSans,
           }}>
-            <Star size={11} fill={colors.success} strokeWidth={0} />
+            <Star size={12} fill={colors.success} strokeWidth={0} />
             Optimal solution
           </span>
         )}

@@ -512,7 +512,7 @@ export function TestRunner({ challenge }: TestRunnerProps) {
                 fontSize: 12,
                 fontFamily: TYPOGRAPHY.fontSans,
               }}>
-                <Loader size={13} color={colors.accent} style={{ animation: 'spin 1s linear infinite' }} />
+                <Loader size={14} color={colors.accent} style={{ animation: 'spin 1s linear infinite' }} />
                 <style>{`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
                 Preparing the kernel and running tests… the first run downloads the in-browser Python kernel and can take a few seconds.
               </div>

@@ -151,7 +151,7 @@ export function LaunchStrip() {
             }}
           />
           {label}
-          <Clock size={10} style={{ marginLeft: 4 }} />
+          <Clock size={12} style={{ marginLeft: 4 }} />
           {isTerminal ? relativeAge(latestJob.submittedAt) : fmtElapsed(latestJob.submittedAt)}
         </div>
       </div>
@@ -182,7 +182,7 @@ export function LaunchStrip() {
           e.currentTarget.style.borderColor = colors.border;
         }}
       >
-        <X size={10} />
+        <X size={12} />
         {cancellable ? 'Cancel' : 'Dismiss'}
       </button>
     </div>

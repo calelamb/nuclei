@@ -645,7 +645,7 @@ export function LaunchModal() {
                       fontFamily: TYPOGRAPHY.fontSans,
                     }}
                   >
-                    <KeyRound size={11} />
+                    <KeyRound size={12} />
                     {INLINE_KEY_FIELD[selectedProvider]?.label}
                   </label>
                   <div style={{ display: 'flex', gap: 6 }}>
@@ -735,7 +735,7 @@ export function LaunchModal() {
                     letterSpacing: 0.5,
                   }}
                 >
-                  <KeyRound size={10} /> Token saved — ready to launch
+                  <KeyRound size={12} /> Token saved — ready to launch
                 </div>
               )}
 
@@ -914,7 +914,7 @@ export function LaunchModal() {
                     'Pick a backend to continue.'
                   ) : (
                     <>
-                      <DollarSign size={11} style={{ verticalAlign: -2, marginRight: 2 }} />
+                      <DollarSign size={12} style={{ verticalAlign: -2, marginRight: 2 }} />
                       {selectedProviderMeta?.pricing === 'Paid'
                         ? 'Uses IonQ credits. See dashboard for pricing.'
                         : selectedProviderMeta?.pricing === 'Credits'

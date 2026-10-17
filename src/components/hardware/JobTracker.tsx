@@ -68,9 +68,9 @@ function JobRow({
       >
         {canExpand ? (
           expanded ? (
-            <ChevronDown size={10} color={colors.textDim} />
+            <ChevronDown size={12} color={colors.textDim} />
           ) : (
-            <ChevronRight size={10} color={colors.textDim} />
+            <ChevronRight size={12} color={colors.textDim} />
           )
         ) : (
           <div style={{ width: 10 }} />

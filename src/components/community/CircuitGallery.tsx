@@ -84,7 +84,7 @@ export function CircuitGallery() {
       {/* Search */}
       <div style={{ position: 'relative', flexShrink: 0 }}>
         <Search
-          size={13}
+          size={14}
           style={{
             position: 'absolute',
             left: 8,

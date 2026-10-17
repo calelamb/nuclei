@@ -207,10 +207,10 @@ function TerminalToolbar({
       aria-label="Terminal toolbar"
     >
       <ToolbarButton onClick={onClear} title="Clear terminal">
-        <Trash2 size={11} />
+        <Trash2 size={12} />
       </ToolbarButton>
       <ToolbarButton onClick={onCopy} title={copied ? 'Copied!' : 'Copy all output'}>
-        <Copy size={11} />
+        <Copy size={12} />
         {copied && <span style={{ fontSize: 11 }}>copied</span>}
       </ToolbarButton>
       <ToolbarButton
@@ -218,7 +218,7 @@ function TerminalToolbar({
         title="Toggle timestamps"
         active={showTimestamps}
       >
-        <Clock size={11} />
+        <Clock size={12} />
       </ToolbarButton>
       <ToolbarButton
         onClick={toggleAutoScroll}

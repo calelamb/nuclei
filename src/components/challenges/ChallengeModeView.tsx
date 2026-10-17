@@ -91,7 +91,7 @@ export function ChallengeModeView() {
 
         <div style={{ width: 1, height: 16, background: colors.border }} />
 
-        <Trophy size={15} color={colors.accent} />
+        <Trophy size={16} color={colors.accent} />
         <span style={{
           color: colors.text,
           fontSize: 13,

@@ -55,7 +55,7 @@ function PresetSwitcher(): ReactElement {
 function DeferredRunAction(): ReactElement {
   return (
     <button type="button" className="qec-primary-action" aria-label="Run or capture (not connected)" title="Run and capture controls connect in a later workbench task" disabled>
-      <Play aria-hidden="true" size={15} fill="currentColor" />
+      <Play aria-hidden="true" size={16} fill="currentColor" />
       Run / Capture
     </button>
   );

@@ -279,7 +279,7 @@ export function DetectorGraphPanel() {
           }}
         >
           <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, color: colors.textMuted }}>
-            <MousePointerClick size={11} /> Click detectors to toggle the syndrome
+            <MousePointerClick size={12} /> Click detectors to toggle the syndrome
           </span>
           {syndrome.size > 0 ? (
             <span style={{ color: interactiveOverlay?.logicalError ? colors.error : colors.success }}>

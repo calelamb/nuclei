@@ -79,7 +79,7 @@ export function OpenFilesSection() {
           fontFamily: TYPOGRAPHY.fontSans,
         }}
       >
-        {collapsed ? <ChevronRight size={11} /> : <ChevronDown size={11} />}
+        {collapsed ? <ChevronRight size={12} /> : <ChevronDown size={12} />}
         <span>Open Files</span>
         <span style={{ color: colors.textDim, fontWeight: 500 }}>({tabs.length})</span>
       </button>
@@ -173,7 +173,7 @@ export function OpenFilesSection() {
                     pointerEvents: isHovered ? 'auto' : 'none',
                   }}
                 >
-                  <X size={11} />
+                  <X size={12} />
                 </button>
               </div>
             );

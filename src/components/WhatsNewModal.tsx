@@ -249,7 +249,7 @@ export function WhatsNewModal({
               transition: `background ${DURATION.fast}ms ${EASING.enter}, color ${DURATION.fast}ms ${EASING.enter}, box-shadow ${DURATION.fast}ms ${EASING.enter}`,
             }}
           >
-            <X size={15} />
+            <X size={16} />
           </button>
 
           <div style={{ overflowY: 'auto', padding: '28px 28px 22px' }}>
@@ -346,7 +346,7 @@ export function WhatsNewModal({
                 }}
               >
                 Full changelog
-                <ArrowUpRight size={13} />
+                <ArrowUpRight size={14} />
               </a>
               <button
                 ref={primaryButtonRef}

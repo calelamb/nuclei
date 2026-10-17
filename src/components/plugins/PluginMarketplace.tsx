@@ -376,7 +376,7 @@ function PluginRow({
       <div style={{ display: 'flex', gap: 6, marginTop: 2, flexWrap: 'wrap' }}>
         <ActionButton
           label={plugin.enabled ? 'Disable' : 'Enable'}
-          icon={<Package size={11} />}
+          icon={<Package size={12} />}
           disabled={busy}
           onClick={() =>
             run(async () => {
@@ -387,13 +387,13 @@ function PluginRow({
         />
         <ActionButton
           label="Reload"
-          icon={<RefreshCw size={11} />}
+          icon={<RefreshCw size={12} />}
           disabled={busy || !plugin.source}
           onClick={() => run(async () => void (await reloadPlugin(name)))}
         />
         <ActionButton
           label="Uninstall"
-          icon={<Trash2 size={11} />}
+          icon={<Trash2 size={12} />}
           tone="danger"
           disabled={busy}
           onClick={() => { if (window.confirm(`Uninstall "${name}"? It will be removed from Nuclei.`)) run(() => uninstallPlugin(name)); }}

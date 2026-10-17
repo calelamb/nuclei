@@ -40,7 +40,7 @@ export function TranspilerExplorer() {
         </span>
         <div style={{ flex: 1 }} />
         <a href={DOCS} target="_blank" rel="noreferrer" title="Transpiler Explorer docs" style={iconBtn(colors)}>
-          <HelpCircle size={13} />
+          <HelpCircle size={14} />
         </a>
       </div>
 

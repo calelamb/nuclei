@@ -68,7 +68,7 @@ function StepRail({ stage }: { stage: number }): ReactElement {
     <ol className="qec-import-steps" aria-label="Import stages">
       {IMPORT_STAGES.map((label, index) => (
         <li key={label} aria-current={index === stage ? 'step' : undefined} data-complete={index < stage || undefined}>
-          <span aria-hidden="true">{index < stage ? <Check size={13} /> : <Circle size={11} />}</span>
+          <span aria-hidden="true">{index < stage ? <Check size={14} /> : <Circle size={12} />}</span>
           <span>{label}</span>
         </li>
       ))}
@@ -86,24 +86,24 @@ function SourceStage({ source, probe }: { source: string; probe: AsyncState<Impo
   if (probe.error) return <InlineError message={probe.error} />;
   return (
     <div className="qec-import-card">
-      <header><FileCheck2 aria-hidden="true" size={19} /><div><strong>Project source</strong><span>No absolute or canonical data paths are accepted.</span></div></header>
+      <header><FileCheck2 aria-hidden="true" size={20} /><div><strong>Project source</strong><span>No absolute or canonical data paths are accepted.</span></div></header>
       <dl className="qec-import-facts">
         <FieldValue label="Source" value={source} />
         <FieldValue label="Source size" value={probe.value ? formatBytes(probe.value.sourceByteSize) : 'Not reported'} />
         <FieldValue label="SHA-256" value={firstHash ?? 'Not reported'} />
         <FieldValue label="Source spans" value="Recorded by adapter during import" />
       </dl>
-      <p className="qec-import-policy"><Copy aria-hidden="true" size={15} /><strong>Copy-only import</strong><span>Original preserved; canonical data receives a project-local source copy.</span></p>
+      <p className="qec-import-policy"><Copy aria-hidden="true" size={16} /><strong>Copy-only import</strong><span>Original preserved; canonical data receives a project-local source copy.</span></p>
     </div>
   );
 }
 
 function LoadingState({ label }: { label: string }): ReactElement {
-  return <div className="qec-import-loading" role="status"><LoaderCircle aria-hidden="true" size={22} /><span>{label}</span></div>;
+  return <div className="qec-import-loading" role="status"><LoaderCircle aria-hidden="true" size={20} /><span>{label}</span></div>;
 }
 
 function InlineError({ message }: { message: string }): ReactElement {
-  return <div className="qec-import-error" role="alert"><AlertCircle aria-hidden="true" size={18} /><span>{message}</span></div>;
+  return <div className="qec-import-error" role="alert"><AlertCircle aria-hidden="true" size={16} /><span>{message}</span></div>;
 }
 
 interface AdapterStageProps {
@@ -123,7 +123,7 @@ function AdapterStage({ probe, selected, onSelect }: AdapterStageProps): ReactEl
         return (
           <label key={`${adapter.adapterId}:${adapter.adapterVersion}`}>
             <input aria-label={`${adapter.adapterId[0]?.toUpperCase()}${adapter.adapterId.slice(1)} adapter, ${Math.round(adapter.confidence * 100)}% confidence`} type="radio" name="qec-adapter" checked={selected === adapter.adapterId} onChange={() => onSelect(adapter.adapterId)} />
-            <Database aria-hidden="true" size={17} />
+            <Database aria-hidden="true" size={16} />
             <span><strong className="qec-import-capitalize">{label}</strong><small className="qec-mono">v{adapter.adapterVersion} · {adapter.sourceKind}</small></span>
             {Object.keys(adapter.details).length > 0 && <small className="qec-import-adapter-details">{Object.entries(adapter.details).map(([key, value]) => `${key}: ${String(value)}`).join(' · ')}</small>}
           </label>
@@ -152,12 +152,12 @@ function MappingStage(props: MappingStageProps): ReactElement {
     <div className="qec-import-mapping">
       {native
         ? <div className="qec-import-mapping__header"><strong>Adapter-native fields</strong></div>
-        : <><div className="qec-import-mapping__header"><strong>{count} mapped {count === 1 ? 'field' : 'fields'}</strong><button type="button" onClick={props.onAdd}><Plus aria-hidden="true" size={15} />Add field mapping</button></div><div className="qec-import-mapping__labels" aria-hidden="true"><span>Canonical field</span><span>Source field</span><span /></div></>}
+        : <><div className="qec-import-mapping__header"><strong>{count} mapped {count === 1 ? 'field' : 'fields'}</strong><button type="button" onClick={props.onAdd}><Plus aria-hidden="true" size={16} />Add field mapping</button></div><div className="qec-import-mapping__labels" aria-hidden="true"><span>Canonical field</span><span>Source field</span><span /></div></>}
       {!native && props.rows.map((row, index) => (
         <div className="qec-import-mapping__row" key={row.id}>
           <label><span>Canonical field {index + 1}</span><input aria-label={`Canonical field ${index + 1}`} value={row.canonical} onChange={(event) => props.onChange(row.id, 'canonical', event.target.value)} /></label>
           <label><span>Source field {index + 1}</span><input aria-label={`Source field ${index + 1}`} value={row.source} onChange={(event) => props.onChange(row.id, 'source', event.target.value)} /></label>
-          <button type="button" aria-label={`Remove mapping ${index + 1}`} onClick={() => props.onRemove(row.id)}><Trash2 aria-hidden="true" size={15} /></button>
+          <button type="button" aria-label={`Remove mapping ${index + 1}`} onClick={() => props.onRemove(row.id)}><Trash2 aria-hidden="true" size={16} /></button>
         </div>
       ))}
       <MappingOptionsForm adapterId={props.adapterId} options={props.options} onChange={props.onOptions} />
@@ -226,15 +226,15 @@ function ValidationStage({ state, alertRef, onValidate, onReviewMapping }: Valid
     <div className="qec-import-validation">
       <button type="button" className="qec-import-secondary" onClick={onValidate}>Validate mapping</button>
       {state.error && <InlineError message={state.error} />}
-      {state.value?.valid && <div className="qec-import-success" role="status"><CheckCircle2 aria-hidden="true" size={18} /><div><strong>Validation passed</strong><span className="qec-mono">{state.value.provenanceId ?? 'Provenance pending'}</span></div></div>}
+      {state.value?.valid && <div className="qec-import-success" role="status"><CheckCircle2 aria-hidden="true" size={16} /><div><strong>Validation passed</strong><span className="qec-mono">{state.value.provenanceId ?? 'Provenance pending'}</span></div></div>}
       {state.value && !state.value.valid && (
         <div className="qec-import-quarantine" role="alert">
-          <header><ShieldAlert aria-hidden="true" size={19} /><div><strong>Quarantine required</strong><span>Original bytes remain preserved. Correct the mapped fields, then validate again.</span></div></header>
+          <header><ShieldAlert aria-hidden="true" size={20} /><div><strong>Quarantine required</strong><span>Original bytes remain preserved. Correct the mapped fields, then validate again.</span></div></header>
           <ul>{state.value.issues.map((issue) => <li key={`${issue.code}:${issue.field ?? ''}`} data-severity={issue.severity}><strong>{issue.field ?? issue.code}</strong><span>{issue.message}</span></li>)}</ul>
           <button type="button" ref={alertRef} aria-label={`Review ${firstError?.field ?? 'invalid'} mapping`} onClick={onReviewMapping}>Review mapping: {firstError?.message ?? 'Correct invalid fields.'}</button>
         </div>
       )}
-      {state.value?.valid && state.value.issues.length > 0 && <ul className="qec-import-warnings" aria-label="Validation warnings">{state.value.issues.map((issue) => <li key={issue.code}><AlertCircle aria-hidden="true" size={15} />{issue.message}</li>)}</ul>}
+      {state.value?.valid && state.value.issues.length > 0 && <ul className="qec-import-warnings" aria-label="Validation warnings">{state.value.issues.map((issue) => <li key={issue.code}><AlertCircle aria-hidden="true" size={16} />{issue.message}</li>)}</ul>}
     </div>
   );
 }
@@ -252,7 +252,7 @@ function DestinationStage(props: DestinationStageProps): ReactElement {
     <div className="qec-import-destination">
       <label>Session ID<input aria-label="Session ID" value={props.sessionId} aria-invalid={issue !== null} onChange={(event) => props.onSessionId(event.target.value)} placeholder="capture-2026-07-22" />{issue && <small role="alert">{issue}</small>}</label>
       <label>Session kind<select value={props.sessionKind} onChange={(event) => props.onSessionKind(event.target.value as DestinationStageProps['sessionKind'])}><option value="hardware_import">Hardware import</option><option value="simulation_campaign">Simulation campaign</option><option value="hardware_live">Hardware live</option><option value="replay">Replay</option></select></label>
-      <div className="qec-import-policy"><Copy aria-hidden="true" size={15} /><strong>Destination: qec-data/sessions/{props.sessionId || '<session-id>'}</strong><span>The source is copied; the original file is never edited or referenced in place.</span></div>
+      <div className="qec-import-policy"><Copy aria-hidden="true" size={16} /><strong>Destination: qec-data/sessions/{props.sessionId || '<session-id>'}</strong><span>The source is copied; the original file is never edited or referenced in place.</span></div>
     </div>
   );
 }
@@ -265,10 +265,10 @@ function ImportStage({ source, client }: { source: string; client: QecImportClie
   if (!job) return error
     ? <InlineError message={error} />
     : <div className="qec-import-notice"><Database aria-hidden="true" size={20} /><div><strong>Ready for canonical import</strong><span>Import progress and completion remain in this tray if you change the active source.</span></div></div>;
-  if (job.status === 'complete') return <div className="qec-import-success" role="status"><CheckCircle2 aria-hidden="true" size={19} /><div><strong>{job.recordsWritten ?? 0} records written</strong><span>{job.partitionsWritten ?? 0} canonical partitions · Original preserved</span></div></div>;
-  if (job.status === 'cancelled') return <div className="qec-import-notice qec-import-terminal" role="status"><Circle aria-hidden="true" size={19} /><div><strong>Import cancelled</strong><span>Canonical writing stopped; the original source remains preserved.</span></div></div>;
-  if (job.status === 'failed') return <div className="qec-import-error qec-import-terminal" role="alert"><AlertCircle aria-hidden="true" size={19} /><div><strong>Import failed</strong><span>{job.error ?? error ?? 'Canonical data was not completed.'}</span></div></div>;
-  return <div className="qec-import-progress" role="progressbar" aria-label="QEC data import" aria-valuetext={job.message}><LoaderCircle aria-hidden="true" size={18} /><strong>{job.message}</strong><span className="qec-mono">{job.id}</span>{['running', 'starting'].includes(job.status) && <button type="button" aria-label={`Cancel import ${job.id}`} onClick={() => void cancelJob(client, job.id)}>Cancel</button>}</div>;
+  if (job.status === 'complete') return <div className="qec-import-success" role="status"><CheckCircle2 aria-hidden="true" size={20} /><div><strong>{job.recordsWritten ?? 0} records written</strong><span>{job.partitionsWritten ?? 0} canonical partitions · Original preserved</span></div></div>;
+  if (job.status === 'cancelled') return <div className="qec-import-notice qec-import-terminal" role="status"><Circle aria-hidden="true" size={20} /><div><strong>Import cancelled</strong><span>Canonical writing stopped; the original source remains preserved.</span></div></div>;
+  if (job.status === 'failed') return <div className="qec-import-error qec-import-terminal" role="alert"><AlertCircle aria-hidden="true" size={20} /><div><strong>Import failed</strong><span>{job.error ?? error ?? 'Canonical data was not completed.'}</span></div></div>;
+  return <div className="qec-import-progress" role="progressbar" aria-label="QEC data import" aria-valuetext={job.message}><LoaderCircle aria-hidden="true" size={16} /><strong>{job.message}</strong><span className="qec-mono">{job.id}</span>{['running', 'starting'].includes(job.status) && <button type="button" aria-label={`Cancel import ${job.id}`} onClick={() => void cancelJob(client, job.id)}>Cancel</button>}</div>;
 }
 
 function nextAllowed(stage: number, probe: ImportProbeResult | null, adapterId: string, mappingReady: boolean, valid: boolean, sessionId: string): boolean {
@@ -420,7 +420,7 @@ interface WizardFooterProps {
 function WizardFooter(props: WizardFooterProps): ReactElement {
   return (
     <footer className="qec-import-wizard__footer">
-      <div className="qec-import-nav"><button type="button" aria-label="Previous stage" disabled={props.stage === 0} onClick={props.onBack}><ArrowLeft aria-hidden="true" size={15} />Back</button><button type="button" aria-label="Next stage" disabled={!props.canAdvance} onClick={props.onNext}>Next<ArrowRight aria-hidden="true" size={15} /></button></div>
+      <div className="qec-import-nav"><button type="button" aria-label="Previous stage" disabled={props.stage === 0} onClick={props.onBack}><ArrowLeft aria-hidden="true" size={16} />Back</button><button type="button" aria-label="Next stage" disabled={!props.canAdvance} onClick={props.onNext}>Next<ArrowRight aria-hidden="true" size={16} /></button></div>
       <div className="qec-import-commit">{props.unavailable && <span role="status"><AlertCircle aria-hidden="true" size={14} />Import unavailable: {props.unavailable}</span>}<button type="button" disabled={props.unavailable !== null || props.launching} aria-busy={props.launching} onClick={props.onImport}>{props.launching ? <LoaderCircle aria-hidden="true" size={16} /> : <CheckCircle2 aria-hidden="true" size={16} />}Import data</button></div>
     </footer>
   );
@@ -454,7 +454,7 @@ function QecImportWizardSession({ source, client, onClose }: QecImportWizardProp
   const activeStage = IMPORT_STAGES[stage];
   return (
     <section className="qec-import-wizard" aria-label={`Import ${source}`}>
-      <header className="qec-import-wizard__header"><div><span>Canonical QEC data</span><h2>Import source</h2><p className="qec-mono">{source}</p></div>{onClose && <button type="button" aria-label="Close import wizard" onClick={onClose}><X aria-hidden="true" size={17} /></button>}</header>
+      <header className="qec-import-wizard__header"><div><span>Canonical QEC data</span><h2>Import source</h2><p className="qec-mono">{source}</p></div>{onClose && <button type="button" aria-label="Close import wizard" onClick={onClose}><X aria-hidden="true" size={16} /></button>}</header>
       <div className="qec-import-wizard__body">
         <StepRail stage={stage} />
         <div className="qec-import-stage">

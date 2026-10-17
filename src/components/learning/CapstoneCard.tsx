@@ -63,7 +63,7 @@ export function CapstoneCard({ project, completedCount, onStart }: CapstoneCardP
       {/* Meta */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, color: colors.textDim, fontSize: 11, fontFamily: TYPOGRAPHY.fontSans }}>
         <span style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
-          <Clock size={10} />
+          <Clock size={12} />
           {project.estimatedWeeks} week{project.estimatedWeeks > 1 ? 's' : ''}
         </span>
         <span>

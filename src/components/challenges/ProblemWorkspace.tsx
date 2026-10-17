@@ -148,7 +148,7 @@ export function ProblemWorkspace() {
                   fontFamily: TYPOGRAPHY.fontSans,
                 }}
               >
-                <ShieldCheck size={11} />
+                <ShieldCheck size={12} />
                 State-verified
               </span>
             )}

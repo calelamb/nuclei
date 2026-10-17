@@ -48,7 +48,7 @@ function StatusIcon({ result, isRunning }: { result?: TestCaseResult; isRunning:
         alignItems: 'center',
         justifyContent: 'center',
       }}>
-        <Check size={11} color={colors.success} strokeWidth={3} />
+        <Check size={12} color={colors.success} strokeWidth={3} />
       </div>
     );
   }
@@ -63,7 +63,7 @@ function StatusIcon({ result, isRunning }: { result?: TestCaseResult; isRunning:
       alignItems: 'center',
       justifyContent: 'center',
     }}>
-      <X size={11} color={colors.error} strokeWidth={3} />
+      <X size={12} color={colors.error} strokeWidth={3} />
     </div>
   );
 }

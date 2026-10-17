@@ -154,7 +154,7 @@ export function EnvironmentPanel() {
   if (loading) {
     return (
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: colors.textDim, fontSize: 12 }}>
-        <Loader2 size={13} style={{ animation: 'nuclei-spin 800ms linear infinite' }} />
+        <Loader2 size={14} style={{ animation: 'nuclei-spin 800ms linear infinite' }} />
         Checking your environment…
       </div>
     );
@@ -167,16 +167,16 @@ export function EnvironmentPanel() {
       {/* Health header */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
         {report?.healthy ? (
-          <Check size={15} style={{ color: colors.success }} />
+          <Check size={16} style={{ color: colors.success }} />
         ) : (
-          <AlertTriangle size={15} style={{ color: colors.warning }} />
+          <AlertTriangle size={16} style={{ color: colors.warning }} />
         )}
         <span style={{ fontSize: 13, fontWeight: 600, color: colors.text }}>
           {report?.healthy ? 'Environment ready' : 'Setup needed'}
         </span>
         <div style={{ flex: 1 }} />
         <IconBtn title="Refresh" onClick={() => void refresh()} colors={colors} busy={busy !== null}>
-          <RefreshCw size={13} />
+          <RefreshCw size={14} />
         </IconBtn>
       </div>
 
@@ -202,7 +202,7 @@ export function EnvironmentPanel() {
                   busy={busy === 'python'}
                   onClick={() => void runOp('python', installPython)}
                 >
-                  <Download size={13} />
+                  <Download size={14} />
                   Install with {PM_LABEL[python.package_manager] ?? python.package_manager}
                 </PrimaryBtn>
               ) : null}
@@ -251,7 +251,7 @@ export function EnvironmentPanel() {
                       <span style={{ fontSize: 13, fontWeight: 500, color: colors.text }}>{fw.label}</span>
                       {installed && (
                         <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3, fontSize: 11, color: colors.success }}>
-                          <Check size={11} /> installed
+                          <Check size={12} /> installed
                         </span>
                       )}
                     </div>
@@ -317,7 +317,7 @@ export function EnvironmentPanel() {
         <div>
           <SectionLabel colors={colors}>
             <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
-              <Terminal size={11} /> Progress
+              <Terminal size={12} /> Progress
             </span>
           </SectionLabel>
           <pre
@@ -382,7 +382,7 @@ function PrimaryBtn({ colors, busy, onClick, children }: { colors: C; busy?: boo
       type="button" onClick={onClick} disabled={busy}
       style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '7px 13px', borderRadius: 6, background: colors.accent, color: '#0a0f1a', border: 'none', fontSize: 12, fontWeight: 600, fontFamily: TYPOGRAPHY.fontSans, cursor: busy ? 'default' : 'pointer', opacity: busy ? 0.7 : 1 }}
     >
-      {busy ? <Loader2 size={13} style={{ animation: 'nuclei-spin 800ms linear infinite' }} /> : null}
+      {busy ? <Loader2 size={14} style={{ animation: 'nuclei-spin 800ms linear infinite' }} /> : null}
       {children}
     </button>
   );

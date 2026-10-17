@@ -137,7 +137,7 @@ export function CircuitCard({ circuit, isLiked, isBookmarked, onLike, onBookmark
             transition: 'color 0.15s',
           }}
         >
-          <Heart size={13} fill={isLiked ? colors.accent : 'none'} />
+          <Heart size={14} fill={isLiked ? colors.accent : 'none'} />
           {circuit.likes + (isLiked ? 1 : 0)}
         </button>
 
@@ -158,7 +158,7 @@ export function CircuitCard({ circuit, isLiked, isBookmarked, onLike, onBookmark
             transition: 'color 0.15s',
           }}
         >
-          <Bookmark size={13} fill={isBookmarked ? colors.warning : 'none'} />
+          <Bookmark size={14} fill={isBookmarked ? colors.warning : 'none'} />
         </button>
       </div>
     </div>

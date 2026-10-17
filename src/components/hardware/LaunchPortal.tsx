@@ -188,7 +188,7 @@ export function LaunchPortal() {
             fontFamily: TYPOGRAPHY.fontSans,
           }}
         >
-          <Upload size={18} style={{ color: dragActive ? colors.accent : colors.textMuted }} />
+          <Upload size={16} style={{ color: dragActive ? colors.accent : colors.textMuted }} />
           <div style={{ fontSize: 11, color: colors.text, textAlign: 'center', lineHeight: 1.5 }}>
             Drop a <code style={{ fontFamily: TYPOGRAPHY.fontMono, color: colors.accentLight }}>.py</code>{' '}
             or <code style={{ fontFamily: TYPOGRAPHY.fontMono, color: colors.accentLight }}>.qs</code>{' '}
@@ -210,7 +210,7 @@ export function LaunchPortal() {
                 minWidth: 0,
               }}
             >
-              <FileCode size={11} style={{ color: colors.success, flexShrink: 0 }} />
+              <FileCode size={12} style={{ color: colors.success, flexShrink: 0 }} />
               <span
                 style={{
                   overflow: 'hidden',
@@ -336,7 +336,7 @@ export function LaunchPortal() {
             gap: 6,
           }}
         >
-          <Rocket size={13} /> Open full launcher
+          <Rocket size={14} /> Open full launcher
           <span style={{ fontSize: 11, opacity: 0.7, marginLeft: 4 }}>⌘⇧R</span>
         </button>
       </div>
@@ -428,7 +428,7 @@ export function LaunchPortal() {
                     e.currentTarget.style.borderColor = colors.border;
                   }}
                 >
-                  <X size={10} />
+                  <X size={12} />
                 </button>
               </div>
             ))}
@@ -519,7 +519,7 @@ export function LaunchPortal() {
                         gap: 4,
                       }}
                     >
-                      <Clock size={9} />
+                      <Clock size={12} />
                       {fmtElapsed(j.submittedAt)}
                     </div>
                   </div>

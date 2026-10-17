@@ -210,7 +210,7 @@ export function DiffPreview() {
               gap: 6,
             }}
           >
-            <X size={13} /> Reject <span style={{ color: colors.textDim, fontSize: 11 }}>Esc</span>
+            <X size={14} /> Reject <span style={{ color: colors.textDim, fontSize: 11 }}>Esc</span>
           </button>
           <button
             onClick={accept}
@@ -228,7 +228,7 @@ export function DiffPreview() {
               gap: 6,
             }}
           >
-            <Check size={13} /> Apply <span style={{ opacity: 0.7, fontSize: 11 }}>↵</span>
+            <Check size={14} /> Apply <span style={{ opacity: 0.7, fontSize: 11 }}>↵</span>
           </button>
         </div>
       </div>

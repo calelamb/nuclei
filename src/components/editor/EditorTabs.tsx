@@ -99,7 +99,7 @@ export function EditorTabs() {
         }}
       >
         <FileCode
-          size={13}
+          size={14}
           style={{ color: isActive ? colors.accent : colors.textDim, flexShrink: 0 }}
         />
         {isDirty && (
@@ -173,7 +173,7 @@ export function EditorTabs() {
         maxWidth: 260,
       }}
     >
-      <FileCode size={13} style={{ color: colors.accent, flexShrink: 0 }} />
+      <FileCode size={14} style={{ color: colors.accent, flexShrink: 0 }} />
       {legacyIsDirty && !renaming && (
         <span
           title="Unsaved changes"
@@ -332,7 +332,7 @@ export function EditorTabs() {
           }}
         >
           {isRunning ? (
-            <Loader2 size={13} style={{ animation: 'nuclei-spin 800ms linear infinite' }} />
+            <Loader2 size={14} style={{ animation: 'nuclei-spin 800ms linear infinite' }} />
           ) : (
             <Play size={12} fill="currentColor" />
           )}

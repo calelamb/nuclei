@@ -326,7 +326,7 @@ export function ExerciseBlock({
             color: colors.success, fontSize: 11, fontFamily: TYPOGRAPHY.fontSans,
             display: 'flex', alignItems: 'center', gap: 4,
           }}>
-            <CheckCircle size={11} />
+            <CheckCircle size={12} />
             Code ran successfully — explore the output above
           </span>
         )}
@@ -391,7 +391,7 @@ export function ExerciseBlock({
           maxHeight: 120, overflowY: 'auto',
         }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginBottom: 4 }}>
-            <Terminal size={10} color={colors.textDim} />
+            <Terminal size={12} color={colors.textDim} />
             <span style={{ color: colors.textDim, fontSize: 11, fontFamily: TYPOGRAPHY.fontSans, textTransform: 'uppercase', letterSpacing: 0.5 }}>Output</span>
           </div>
           <div style={{ fontFamily: TYPOGRAPHY.fontMono, fontSize: 12, color: colors.text, lineHeight: 1.5, whiteSpace: 'pre-wrap' }}>
@@ -437,8 +437,8 @@ export function ExerciseBlock({
           gap: 10,
         }}>
           {feedback.success
-            ? <CheckCircle size={18} color={colors.success} style={{ flexShrink: 0, marginTop: 1 }} />
-            : <XCircle size={18} color={colors.error} style={{ flexShrink: 0, marginTop: 1 }} />
+            ? <CheckCircle size={16} color={colors.success} style={{ flexShrink: 0, marginTop: 1 }} />
+            : <XCircle size={16} color={colors.error} style={{ flexShrink: 0, marginTop: 1 }} />
           }
           <span style={{
             color: feedback.success ? colors.success : colors.error,

@@ -124,7 +124,7 @@ export function CircuitDetail({ circuit, onClose, onOpenInEditor }: CircuitDetai
               flexShrink: 0,
             }}
           >
-            <X size={18} />
+            <X size={16} />
           </button>
         </div>
 
@@ -208,7 +208,7 @@ export function CircuitDetail({ circuit, onClose, onOpenInEditor }: CircuitDetai
                 cursor: 'pointer',
               }}
             >
-              <Play size={13} />
+              <Play size={14} />
               Open in Editor
             </button>
             <button
@@ -230,7 +230,7 @@ export function CircuitDetail({ circuit, onClose, onOpenInEditor }: CircuitDetai
                 transition: 'color 0.15s',
               }}
             >
-              <Copy size={13} />
+              <Copy size={14} />
               {copied ? 'Copied!' : 'Copy Code'}
             </button>
           </div>

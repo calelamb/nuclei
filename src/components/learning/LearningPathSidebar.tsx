@@ -73,7 +73,7 @@ function TracksTab() {
                 color: colors.textMuted, fontFamily: TYPOGRAPHY.fontSans,
               }}
             >
-              {isOpen ? <ChevronDown size={13} style={{ flexShrink: 0 }} /> : <ChevronRight size={13} style={{ flexShrink: 0 }} />}
+              {isOpen ? <ChevronDown size={14} style={{ flexShrink: 0 }} /> : <ChevronRight size={14} style={{ flexShrink: 0 }} />}
               <span style={{ flex: 1, fontSize: 13, fontWeight: 600, color: colors.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                 {track.title}
               </span>
@@ -100,11 +100,11 @@ function TracksTab() {
                   onMouseLeave={(e) => { if (!isCurrent) e.currentTarget.style.background = 'transparent'; }}
                 >
                   {isDone ? (
-                    <CheckCircle2 size={13} style={{ color: colors.success, flexShrink: 0 }} />
+                    <CheckCircle2 size={14} style={{ color: colors.success, flexShrink: 0 }} />
                   ) : isCurrent ? (
                     <Dot size={14} style={{ color: colors.accent, flexShrink: 0 }} />
                   ) : (
-                    <Circle size={11} style={{ color: colors.textDim, flexShrink: 0 }} />
+                    <Circle size={12} style={{ color: colors.textDim, flexShrink: 0 }} />
                   )}
                   <span style={{ flex: 1, fontSize: 12, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                     {i + 1}. {lesson.title}

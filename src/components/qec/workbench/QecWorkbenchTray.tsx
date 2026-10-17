@@ -29,12 +29,12 @@ function TrayHeader({ expanded, importing, onToggle }: TrayHeaderProps): ReactEl
   return (
     <header className="qec-tray__header">
       <div className="qec-tray__tabs" aria-label="Operational instruments">
-        {importing && <span className="qec-tray__active-instrument"><ListChecks aria-hidden="true" size={15} />Import</span>}
-        {!importing && panels.map((panel) => <span className="qec-tray__active-instrument" key={panel.id}><ListChecks aria-hidden="true" size={15} />{panel.title}</span>)}
+        {importing && <span className="qec-tray__active-instrument"><ListChecks aria-hidden="true" size={16} />Import</span>}
+        {!importing && panels.map((panel) => <span className="qec-tray__active-instrument" key={panel.id}><ListChecks aria-hidden="true" size={16} />{panel.title}</span>)}
         <span><Radio aria-hidden="true" size={14} /> Streams</span><span>Logs</span><span>Comparisons</span>
       </div>
       <button type="button" className="qec-tray__toggle" aria-expanded={expanded} aria-label={`${expanded ? 'Collapse' : 'Expand'} jobs and streams`} onClick={onToggle}>
-        {expanded ? <ChevronDown aria-hidden="true" size={17} /> : <ChevronUp aria-hidden="true" size={17} />}
+        {expanded ? <ChevronDown aria-hidden="true" size={16} /> : <ChevronUp aria-hidden="true" size={16} />}
       </button>
     </header>
   );
@@ -49,8 +49,8 @@ function TrayContent({ client, projectRoot }: { client: QecImportClient | null; 
   return (
     <div className="qec-tray__content">
       {jobs.length === 0
-        ? <div className="qec-tray__empty"><CircleDot aria-hidden="true" size={18} /><div><strong>No active jobs</strong><span>Campaign, import, and stream lifecycle will remain visible here.</span></div></div>
-        : <div className="qec-tray__empty"><ListChecks aria-hidden="true" size={18} /><div><strong>{jobs.length} durable {jobs.length === 1 ? 'job' : 'jobs'}</strong><span>Completion and cancellation state remain available in this tray.</span></div></div>}
+        ? <div className="qec-tray__empty"><CircleDot aria-hidden="true" size={16} /><div><strong>No active jobs</strong><span>Campaign, import, and stream lifecycle will remain visible here.</span></div></div>
+        : <div className="qec-tray__empty"><ListChecks aria-hidden="true" size={16} /><div><strong>{jobs.length} durable {jobs.length === 1 ? 'job' : 'jobs'}</strong><span>Completion and cancellation state remain available in this tray.</span></div></div>}
       <dl className="qec-tray__summary">
         <div><dt>Queued</dt><dd className="qec-mono">{queued}</dd></div>
         <div><dt>Running</dt><dd className="qec-mono">{running}</dd></div>

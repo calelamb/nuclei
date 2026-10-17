@@ -42,7 +42,7 @@ const EXTENSION_ICONS: Record<string, LucideIcon> = {
 };
 
 function iconFor(name: string, isDir: boolean, color: string) {
-  if (isDir) return <Folder size={13} style={{ color, marginRight: 6, flexShrink: 0 }} />;
+  if (isDir) return <Folder size={14} style={{ color, marginRight: 6, flexShrink: 0 }} />;
   const ext = name.split('.').pop()?.toLowerCase() ?? '';
   const Icon = EXTENSION_ICONS[ext] ?? FileIconLucide;
   return <Icon size={13} style={{ color, marginRight: 6, flexShrink: 0 }} />;
@@ -511,7 +511,7 @@ export function FileExplorer() {
           existing folder.
         </p>
         <button onClick={handleNewProject} style={primaryBtn}>
-          <Plus size={13} /> New Project…
+          <Plus size={14} /> New Project…
         </button>
         <div
           style={{
@@ -526,20 +526,20 @@ export function FileExplorer() {
         </div>
         <div style={{ display: 'flex', gap: 6 }}>
           <button onClick={() => quickCreateCircuit('qiskit')} style={quickChipBtn}>
-            <AtomIcon size={11} /> Qiskit
+            <AtomIcon size={12} /> Qiskit
           </button>
           <button onClick={() => quickCreateCircuit('cirq')} style={quickChipBtn}>
-            <AtomIcon size={11} /> Cirq
+            <AtomIcon size={12} /> Cirq
           </button>
           <button onClick={() => quickCreateCircuit('cuda-q')} style={quickChipBtn}>
-            <AtomIcon size={11} /> CUDA-Q
+            <AtomIcon size={12} /> CUDA-Q
           </button>
           <button onClick={() => quickCreateCircuit('qsharp')} style={quickChipBtn}>
-            <AtomIcon size={11} /> Q#
+            <AtomIcon size={12} /> Q#
           </button>
         </div>
         <button onClick={handleOpenFolder} style={secondaryBtn}>
-          <FolderOpen size={13} /> Open Folder…
+          <FolderOpen size={14} /> Open Folder…
         </button>
         {error && (
           <div style={{ color: colors.error, fontSize: 11 }}>{error}</div>
@@ -646,7 +646,7 @@ export function FileExplorer() {
                 onMouseEnter={(e) => { e.currentTarget.style.background = `${colors.accent}12`; }}
                 onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
               >
-                <FilePlus size={13} style={{ color: colors.textDim }} /> New File
+                <FilePlus size={14} style={{ color: colors.textDim }} /> New File
                 <span style={{ marginLeft: 'auto', fontSize: 11, color: colors.textDim }}>.py</span>
               </button>
 
@@ -659,7 +659,7 @@ export function FileExplorer() {
                   style={menuItemStyle}
                   onClick={() => setCircuitSubmenu((s) => !s)}
                 >
-                  <AtomIcon size={13} style={{ color: colors.accentLight }} /> New Circuit
+                  <AtomIcon size={14} style={{ color: colors.accentLight }} /> New Circuit
                   <ChevronRight size={12} style={{ marginLeft: 'auto', color: colors.textDim }} />
                 </button>
                 {circuitSubmenu && (
@@ -690,7 +690,7 @@ export function FileExplorer() {
                         onMouseEnter={(e) => { e.currentTarget.style.background = `${colors.accent}12`; }}
                         onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
                       >
-                        <AtomIcon size={13} style={{ color: colors.accentLight }} />
+                        <AtomIcon size={14} style={{ color: colors.accentLight }} />
                         {displayFrameworkName(f)}
                       </button>
                     ))}
@@ -706,7 +706,7 @@ export function FileExplorer() {
                 onMouseEnter={(e) => { e.currentTarget.style.background = `${colors.accent}12`; }}
                 onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
               >
-                <Package size={13} style={{ color: colors.textDim }} /> New Python Package
+                <Package size={14} style={{ color: colors.textDim }} /> New Python Package
               </button>
               <button
                 style={menuItemStyle}
@@ -714,7 +714,7 @@ export function FileExplorer() {
                 onMouseEnter={(e) => { e.currentTarget.style.background = `${colors.accent}12`; }}
                 onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
               >
-                <FolderPlus size={13} style={{ color: colors.textDim }} /> New Folder
+                <FolderPlus size={14} style={{ color: colors.textDim }} /> New Folder
               </button>
             </div>
           )}

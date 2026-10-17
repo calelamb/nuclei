@@ -234,7 +234,7 @@ export function UserProfile() {
             e.currentTarget.style.background = `${colors.accent}15`;
           }}
         >
-          <Upload size={13} />
+          <Upload size={14} />
           Share Current Circuit
         </button>
       </div>

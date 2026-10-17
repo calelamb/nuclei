@@ -121,7 +121,7 @@ export function ModeChip() {
           >
             <MIcon size={13} color={mAccent} strokeWidth={2} />
             <span style={{ flex: 1 }}>{m === 'research' ? 'Research workspace' : 'Learn quantum computing'}</span>
-            {isCurrent && <Check size={13} color={mAccent} />}
+            {isCurrent && <Check size={14} color={mAccent} />}
           </button>
         );
       })}
