@@ -185,10 +185,14 @@ export function InvestigationCanvas(props: InvestigationCanvasProps): ReactEleme
   const pinnedPanelIds = useQecWorkbenchStore((state) => state.pinnedPanelIds);
   const panels = orderCanvasPanels(preset, resolveQecPanels(preset, 'canvas', pinnedPanelIds));
   const rows = Math.max(1, panels.length - 1);
+  // With no circuit every instrument is a short card: let rows size to their content instead of stretching.
+  const hasCircuit = useQecStore((state) => state.snapshot !== null);
+  const compact = !hasCircuit && panels.every((panel) => CIRCUIT_PANELS.has(panel.id));
+  const rowSize = compact ? 'max-content' : 'minmax(150px, 1fr)';
   return (
     <main className="qec-investigation" aria-label="QEC investigation canvas">
       <CanvasHeader {...props} />
-      <div className="qec-investigation__panels" style={{ gridTemplateRows: `repeat(${rows}, minmax(150px, 1fr))` }}>
+      <div className="qec-investigation__panels" style={{ gridTemplateRows: `repeat(${rows}, ${rowSize})`, gridAutoRows: rowSize, alignContent: compact ? 'start' : undefined }}>
         {panels.map((panel, index) => <CanvasInstrument key={panel.id} panel={panel} primary={index === 0} rowSpan={rows} />)}
       </div>
     </main>

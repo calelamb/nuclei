@@ -500,6 +500,7 @@
 
 /* No circuit yet: a short card, not a 640px dotted field. */
 .qec-instrument[data-empty='true'] { align-self: start; min-height: 0; }
+.qec-instrument[data-empty='true'] .qec-instrument__body { flex: none; overflow: visible; }
 .qec-instrument[data-empty='true'] .qec-instrument__empty { min-height: 140px; flex: none; }
 
 .qec-instrument header > div { min-width: 0; }
