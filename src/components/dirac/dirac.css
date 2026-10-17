@@ -29,8 +29,9 @@
   color: var(--color-accent-quantum); text-decoration: none;
 }
 .dirac-link:hover { text-decoration: underline; }
-.dirac-btn-dirac.nuclei-btn { background: var(--color-accent-dirac); border-color: var(--color-accent-dirac); color: #fff; }
-.dirac-btn-dirac.nuclei-btn:hover:not(:disabled) { filter: brightness(1.12); background: var(--color-accent-dirac); border-color: var(--color-accent-dirac); }
+.dirac-btn-dirac.nuclei-btn.nuclei-btn--primary,
+.dirac-btn-dirac.nuclei-btn.nuclei-btn--secondary { background: var(--color-accent-dirac); border-color: var(--color-accent-dirac); color: #fff; }
+.dirac-btn-dirac.nuclei-btn.nuclei-btn:hover:not(:disabled) { filter: brightness(1.12); background: var(--color-accent-dirac); border-color: var(--color-accent-dirac); }
 
 /* Empty chat state */
 .dirac-empty { margin-top: var(--space-8); text-align: center; font-family: var(--font-sans); display: flex; flex-direction: column; align-items: center; gap: var(--space-1); }
@@ -76,8 +77,9 @@
 
 /* Composer */
 .dirac-input.nuclei-textarea { flex: 1; min-height: 36px; max-height: 120px; resize: none; line-height: 1.4; font-family: var(--font-sans); font-size: var(--font-size-code); }
-.dirac-send.nuclei-icon-btn { width: 32px; height: 32px; background: var(--color-accent-dirac); border-color: var(--color-accent-dirac); color: #fff; }
-.dirac-send.nuclei-icon-btn:hover:not(:disabled) { background: var(--color-accent-dirac); filter: brightness(1.15); color: #fff; }
+.dirac-send.nuclei-icon-btn.nuclei-icon-btn--md,
+.dirac-send.nuclei-icon-btn.nuclei-icon-btn--secondary { width: 32px; height: 32px; background: var(--color-accent-dirac); border-color: var(--color-accent-dirac); color: #fff; }
+.dirac-send.nuclei-icon-btn.nuclei-icon-btn:hover:not(:disabled) { background: var(--color-accent-dirac); filter: brightness(1.15); color: #fff; }
 
 /* Agent mode unavailable on web */
 .dirac-agent-note { padding: var(--space-2) var(--space-3); border-bottom: 1px solid var(--color-border-strong); flex-shrink: 0; }
@@ -86,3 +88,5 @@
   border: 1px solid var(--color-border-strong); background: var(--color-surface-raised);
   font: var(--font-size-caption) var(--font-sans); color: var(--color-text-secondary);
 }
+
+.dirac-slash-hint { font-size: var(--font-size-caption); color: var(--color-text-tertiary); padding: 0 var(--space-1) var(--space-1); }

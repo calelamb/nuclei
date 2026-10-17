@@ -111,6 +111,22 @@ describe('DiracSidePanel', () => {
     expect(useDiracStore.getState().messages).toHaveLength(0);
   });
 
+  it('sends complete slash commands and hints at unknown ones (review learn-22)', () => {
+    resetStores('sk-ant-test');
+    const fetchMock = stubFetch();
+    render(<DiracSidePanel />);
+    const box = screen.getByLabelText('Message Dirac') as HTMLTextAreaElement;
+    fireEvent.change(box, { target: { value: '/zzz' } });
+    fireEvent.keyDown(box, { key: 'Escape' });
+    fireEvent.keyDown(box, { key: 'Enter' });
+    expect(screen.getByRole('status').textContent).toMatch(/Unknown command/);
+    expect(fetchMock).not.toHaveBeenCalled();
+    fireEvent.change(box, { target: { value: '/explain' } });
+    fireEvent.keyDown(box, { key: 'Enter' });
+    expect(box.value).toBe('');
+    expect(useDiracStore.getState().messages.length).toBeGreaterThan(0);
+  });
+
   it('escape closes the slash menu without leaving the field', () => {
     resetStores('sk-ant-test');
     render(<DiracSidePanel />);

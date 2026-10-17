@@ -17,7 +17,12 @@ export function filterSlashCommands(query: string): SlashCommand[] {
   return SLASH_COMMANDS.filter((c) => c.command.startsWith(q));
 }
 
-/** A lone "/" or "/word": an unfinished command that must never be sent as a chat message. */
+/**
+ * Input that must never be sent as a chat message: a lone "/" or a "/word"
+ * that is not one of the known commands. Complete commands are sendable.
+ */
 export function isUnfinishedSlashInput(text: string): boolean {
-  return /^\/\w*$/.test(text.trim());
+  const t = text.trim();
+  if (!/^\/\w*$/.test(t)) return false;
+  return !SLASH_COMMANDS.some((c) => c.command === t.toLowerCase());
 }

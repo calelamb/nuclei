@@ -16,7 +16,7 @@ import { DiracNoKey } from './DiracNoKey';
 import { DiracEmptyState } from './DiracEmptyState';
 import { DiracErrorCard } from './DiracErrorCard';
 import { SlashCommandMenu } from './SlashCommandMenu';
-import { filterSlashCommands, isUnfinishedSlashInput, type SlashCommand } from '../../lib/diracCommands';
+import { SLASH_COMMANDS, filterSlashCommands, isUnfinishedSlashInput, type SlashCommand } from '../../lib/diracCommands';
 import { formatMessageTime } from '../../lib/formatMessageTime';
 import { ChevronRight, ChevronDown, Plus, ArrowUp } from 'lucide-react';
 import { Button, IconButton, TextArea } from '../ui';
@@ -277,6 +277,7 @@ export function DiracSidePanel() {
     userScrolledUp.current = scrollHeight - scrollTop - clientHeight > 50;
   }, []);
 
+  const [slashHint, setSlashHint] = useState<string | null>(null);
   const slashCommands = input.startsWith('/') && !input.includes(' ') ? filterSlashCommands(input) : [];
   const showSlashMenu = slashCommands.length > 0 && !slashDismissed;
 
@@ -284,6 +285,7 @@ export function DiracSidePanel() {
     setInput(value);
     setSlashActive(0);
     setSlashDismissed(false);
+    setSlashHint(null);
   };
 
   const handleSlashSelect = (cmd: SlashCommand) => {
@@ -294,11 +296,17 @@ export function DiracSidePanel() {
 
   const dispatch = useCallback((raw: string): boolean => {
     const text = raw.trim();
-    if (!text || isLoading || isUnfinishedSlashInput(text)) return false;
+    if (!text || isLoading) return false;
+    if (isUnfinishedSlashInput(text)) {
+      setSlashHint(text === '/' ? 'Pick a command from the list, or type a question.' : `Unknown command ${text}. Try /explain, /fix or /exercise.`);
+      return false;
+    }
+    if (text.toLowerCase() === '/clear') { clearHistory(); return true; }
+    setSlashHint(null);
     userScrolledUp.current = false;
     void sendMessage(text);
     return true;
-  }, [isLoading, sendMessage]);
+  }, [isLoading, sendMessage, clearHistory]);
 
   const submit = (raw: string) => {
     if (dispatch(raw)) setInput('');
@@ -310,6 +318,8 @@ export function DiracSidePanel() {
     if (showSlashMenu) {
       if (e.key === 'ArrowDown') { e.preventDefault(); setSlashActive((i) => (i + 1) % slashCommands.length); return; }
       if (e.key === 'ArrowUp') { e.preventDefault(); setSlashActive((i) => (i - 1 + slashCommands.length) % slashCommands.length); return; }
+      const exact = SLASH_COMMANDS.some((c) => c.command === input.trim().toLowerCase());
+      if (e.key === 'Enter' && exact) { e.preventDefault(); handleSend(); return; }
       if (e.key === 'Enter' || e.key === 'Tab') {
         e.preventDefault();
         handleSlashSelect(slashCommands[Math.min(slashActive, slashCommands.length - 1)]);
@@ -501,6 +511,7 @@ export function DiracSidePanel() {
             onHover={setSlashActive}
           />
         )}
+        {slashHint && <div role="status" className="dirac-slash-hint">{slashHint}</div>}
         <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end' }}>
           <TextArea
             ref={inputRef}
