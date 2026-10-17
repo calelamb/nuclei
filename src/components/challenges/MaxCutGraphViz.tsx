@@ -223,7 +223,7 @@ export function MaxCutGraphViz({ visualization, bestBitstring }: MaxCutGraphVizP
               width: 10,
               height: 10,
               borderRadius: '50%',
-              background: colors.dirac,
+              background: colors.info,
             }} />
             <span style={{
               color: colors.textDim,
