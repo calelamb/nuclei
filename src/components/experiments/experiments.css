@@ -36,7 +36,7 @@
   display: flex; align-items: center; gap: var(--space-1); min-width: 0; padding: 0 var(--space-2);
   background: transparent; text-align: left; justify-content: flex-start;
   color: var(--color-text-secondary); font-family: var(--font-sans); font-size: var(--font-size-caption);
-  font-weight: var(--font-weight-semibold); text-transform: uppercase; letter-spacing: 0.04em;
+  font-weight: var(--font-weight-semibold); text-transform: none; letter-spacing: 0;
 }
 .nuclei-runs-header__cell[data-numeric='true'] { justify-content: flex-end; text-align: right; }
 .nuclei-runs-header__sort {

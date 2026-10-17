@@ -341,7 +341,7 @@ function RunsTableBody() {
                   ? (
                     <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                       <span>{pointCount} point{pointCount === 1 ? '' : 's'} ready</span>
-                      <RunButton experiment={experiment} projectRoot={projectRoot} pointCount={pointCount} label={hasSweep ? 'Run sweep' : 'Run'} />
+                      <RunButton experiment={experiment} projectRoot={projectRoot} pointCount={pointCount} variant="ghost" label={hasSweep ? 'Run sweep' : 'Run'} />
                     </div>
                   )
                   : 'No runs match this filter.'}

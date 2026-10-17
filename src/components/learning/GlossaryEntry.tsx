@@ -18,8 +18,6 @@ const CATEGORY_COLORS: Record<string, string> = {
   hardware: 'var(--color-text-tertiary)',
 };
 
-const PREVIEW_CHARS = 100;
-
 function TagRow({ label, items }: { label: string; items: readonly string[] }) {
   if (items.length === 0) return null;
   return (
@@ -32,9 +30,6 @@ function TagRow({ label, items }: { label: string; items: readonly string[] }) {
 
 export function GlossaryEntry({ term, isSelected, onClick }: GlossaryEntryProps) {
   const catColor = CATEGORY_COLORS[term.category] ?? 'var(--color-text-tertiary)';
-  const displayDef = isSelected || term.plainEnglish.length <= PREVIEW_CHARS
-    ? term.plainEnglish
-    : `${term.plainEnglish.slice(0, PREVIEW_CHARS)}...`;
 
   return (
     <div className="gloss-entry" role="button" tabIndex={0} aria-expanded={isSelected} onClick={onClick} onKeyDown={activateOnKey(onClick)}>
@@ -42,7 +37,7 @@ export function GlossaryEntry({ term, isSelected, onClick }: GlossaryEntryProps)
         <span className="gloss-entry__term">{term.term}</span>
         <span className="gloss-entry__cat" style={{ ['--cat-color' as string]: catColor }}>{term.category.replace('-', ' ')}</span>
       </div>
-      <div className={isSelected ? 'gloss-entry__def gloss-entry__def--open' : 'gloss-entry__def'}>{displayDef}</div>
+      <div className={isSelected ? 'gloss-entry__def gloss-entry__def--open' : 'gloss-entry__def'}>{term.plainEnglish}</div>
 
       {isSelected && (
         <>

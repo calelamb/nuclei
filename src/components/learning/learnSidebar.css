@@ -62,6 +62,7 @@
 .gloss-entry__term { font-size: var(--font-size-code); font-weight: var(--font-weight-semibold); color: var(--color-text-primary); }
 .gloss-entry__cat { padding: 1px var(--space-1); border-radius: var(--radius-xs); background: color-mix(in srgb, var(--cat-color) 14%, transparent); color: var(--cat-color); font-size: var(--font-size-caption); font-weight: var(--font-weight-semibold); text-transform: capitalize; }
 .gloss-entry__def { font-size: var(--font-size-chrome-label); line-height: 1.5; color: var(--color-text-secondary); }
+.gloss-entry__def:not(.gloss-entry__def--open) { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; line-clamp: 3; overflow: hidden; }
 .gloss-entry__def--open { margin-bottom: var(--space-2); }
 .gloss-entry__math { margin-bottom: var(--space-2); padding: var(--space-1) var(--space-2); border-radius: var(--radius-xs); background: var(--color-surface-sunken); font: var(--font-size-chrome-label) var(--font-mono); line-height: 1.5; color: var(--color-text-secondary); }
 .gloss-entry__code { margin: 0 0 var(--space-2); padding: var(--space-1) var(--space-2); overflow-x: auto; border-radius: var(--radius-xs); background: var(--color-surface-sunken); font: var(--font-size-caption) var(--font-mono); line-height: 1.5; color: var(--color-text-primary); white-space: pre-wrap; }
@@ -131,3 +132,5 @@
 .csum__bar { display: flex; height: 4px; border-radius: 2px; overflow: hidden; background: var(--color-surface-sunken); }
 .csum__fill { background: var(--color-success); }
 .csum__fill--progress { background: var(--color-accent-quantum); }
+
+.cap-card__meta .nuclei-badge--accent, .vrow__tags .nuclei-badge--accent { --badge-text: color-mix(in srgb, var(--color-accent-quantum) 72%, var(--color-text-primary)); }

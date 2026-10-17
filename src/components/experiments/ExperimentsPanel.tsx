@@ -29,7 +29,7 @@ import './experiments.css';
 /** The experiment list never collapses below this, however tall the open form is. */
 const LIST_MIN_HEIGHT = 120;
 
-function formatLastRun(experiment: DiscoveredExperiment, runsByExperiment: Record<string, { manifest: { started_at: string } }[]>): { label: string; title: string } {
+function formatLastRun(experiment: DiscoveredExperiment, runsByExperiment: Record<string, { manifest: { started_at: string } }[]>): ReturnType<typeof describeLastRun> {
   // Runs are stored newest-first by directory name.
   return describeLastRun(runsByExperiment[experiment.fileName]?.[0]?.manifest.started_at);
 }
@@ -86,7 +86,7 @@ function ExperimentRow({
 }: {
   experiment: DiscoveredExperiment;
   projectRoot: string;
-  lastRun: { label: string; title: string };
+  lastRun: { label: string; title: string; summary: string };
   selected: boolean;
   onSelect(): void;
   onEdit(): void;

@@ -65,7 +65,7 @@
 .pbrowse__empty { height: 100%; display: flex; align-items: center; justify-content: center; font-size: var(--font-size-body); color: var(--color-text-secondary); }
 .pbrowse__table { min-width: 900px; }
 
-.prow-grid { display: grid; grid-template-columns: 150px minmax(260px, 2fr) 110px 130px 130px; gap: var(--space-4); align-items: center; padding: 0 var(--space-5); }
+.prow-grid { display: grid; grid-template-columns: 112px minmax(260px, 2fr) 110px 130px 130px; gap: var(--space-4); align-items: center; padding: 0 var(--space-5); }
 .pbrowse__cols { position: sticky; top: 0; z-index: 1; padding-top: var(--space-3); padding-bottom: var(--space-3); border-bottom: 1px solid var(--color-border-strong); background: var(--color-surface-raised); font-size: var(--font-size-caption); font-weight: var(--font-weight-semibold); letter-spacing: 0.4px; text-transform: uppercase; color: var(--color-text-secondary); }
 .prow { width: 100%; padding-top: 14px; padding-bottom: 14px; text-align: left; cursor: pointer; border: none; border-bottom: 1px solid var(--color-border-strong); background: transparent; color: var(--color-text-primary); font-family: inherit; transition: background-color var(--duration-fast) var(--ease-standard); }
 .prow:hover { background: var(--color-surface-overlay); }
