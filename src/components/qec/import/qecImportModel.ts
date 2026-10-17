@@ -104,3 +104,21 @@ export function stageDescription(stage: ImportStage): string {
   };
   return descriptions[stage];
 }
+
+const ADAPTER_NAMES: Readonly<Record<string, string>> = Object.freeze({
+  'sinter-csv': 'sinter CSV',
+  'stim-results': 'Stim results',
+});
+
+/** Human display name for an adapter id ("sinter-csv" -> "sinter CSV"). */
+export function adapterDisplayName(adapterId: string): string {
+  const known = ADAPTER_NAMES[adapterId];
+  if (known) return known;
+  const spaced = adapterId.replaceAll('-', ' ');
+  return `${spaced.charAt(0).toUpperCase()}${spaced.slice(1)}`;
+}
+
+/** "1 canonical partition" / "46 records". */
+export function countLabel(count: number, noun: string): string {
+  return `${count.toLocaleString()} ${noun}${count === 1 ? '' : 's'}`;
+}

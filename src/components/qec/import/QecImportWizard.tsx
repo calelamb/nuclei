@@ -16,7 +16,7 @@ import {
 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactElement } from 'react';
 
-import { Button, IconButton, Select, TextInput } from '../../ui';
+import { Button, Checkbox, IconButton, Select, TextInput } from '../../ui';
 import { Table, Thead, Tbody, Tr, Th, Td } from '../../ui/Table';
 import { ICON_SIZE, ICON_STROKE } from '../../../styles/tokens';
 
@@ -24,6 +24,7 @@ import './qecImportWizard.css';
 
 import type { QecImportClient as ClientContract } from '../../../services/qecDataClient';
 import { useQecJobStore } from '../../../stores/qecJobStore';
+import { useResearchSelectionStore } from '../../../stores/researchSelectionStore';
 import type {
   ImportPreviewResult,
   ImportProbeResult,
@@ -31,9 +32,11 @@ import type {
 } from '../../../types/qecDataProtocol';
 import {
   IMPORT_STAGES,
+  adapterDisplayName,
   adapterUsesNativeMapping,
   buildMapping,
   completeRows,
+  countLabel,
   formatBytes,
   mappingIsReviewed,
   sessionIdIssue,
@@ -67,15 +70,18 @@ function failureMessage(error: unknown): string {
   return error instanceof Error ? error.message : 'QEC Data Engine request failed.';
 }
 
-function StepRail({ stage }: { stage: number }): ReactElement {
+function StepRail({ stage, finished }: { stage: number; finished: boolean }): ReactElement {
   return (
     <ol className="qec-import-steps" aria-label="Import stages">
-      {IMPORT_STAGES.map((label, index) => (
-        <li key={label} aria-current={index === stage ? 'step' : undefined} data-complete={index < stage || undefined}>
-          <span aria-hidden="true">{index < stage ? <Check size={ICON_SIZE.sm} /> : <Circle size={ICON_SIZE.xs} />}</span>
+      {IMPORT_STAGES.map((label, index) => {
+        const done = index < stage || finished;
+        return (
+        <li key={label} aria-current={index === stage && !finished ? 'step' : undefined} data-complete={done || undefined}>
+          <span aria-hidden="true">{done ? <Check size={ICON_SIZE.sm} /> : <Circle size={ICON_SIZE.xs} />}</span>
           <span>{label}</span>
         </li>
-      ))}
+        );
+      })}
     </ol>
   );
 }
@@ -123,12 +129,15 @@ function AdapterStage({ probe, selected, onSelect }: AdapterStageProps): ReactEl
     <fieldset className="qec-import-adapters">
       <legend>Compatible adapters</legend>
       {adapters.map((adapter) => {
-        const label = `${adapter.adapterId.replaceAll('-', ' ')} · ${Math.round(adapter.confidence * 100)}% confidence`;
+        const name = adapterDisplayName(adapter.adapterId);
+        const confidence = Math.round(adapter.confidence * 100);
+        const checked = selected === adapter.adapterId;
         return (
-          <label key={`${adapter.adapterId}:${adapter.adapterVersion}`}>
-            <input aria-label={`${adapter.adapterId[0]?.toUpperCase()}${adapter.adapterId.slice(1)} adapter, ${Math.round(adapter.confidence * 100)}% confidence`} type="radio" name="qec-adapter" checked={selected === adapter.adapterId} onChange={() => onSelect(adapter.adapterId)} />
-            <Database aria-hidden="true" size={16} />
-            <span><strong className="qec-import-capitalize">{label}</strong><small className="qec-mono">v{adapter.adapterVersion} · {adapter.sourceKind}</small></span>
+          <label key={`${adapter.adapterId}:${adapter.adapterVersion}`} className="qec-import-adapter" data-checked={checked || undefined}>
+            <input aria-label={`${adapter.adapterId[0]?.toUpperCase()}${adapter.adapterId.slice(1)} adapter, ${confidence}% confidence`} type="radio" name="qec-adapter" checked={checked} onChange={() => onSelect(adapter.adapterId)} />
+            <span className="qec-import-adapter__mark" aria-hidden="true">{checked && <Check size={ICON_SIZE.xs} strokeWidth={3} />}</span>
+            <Database aria-hidden="true" size={ICON_SIZE.md} />
+            <span><strong>{name} · {confidence}% confidence</strong><small className="qec-mono">v{adapter.adapterVersion} · {adapter.sourceKind}</small></span>
             {Object.keys(adapter.details).length > 0 && <small className="qec-import-adapter-details">{Object.entries(adapter.details).map(([key, value]) => `${key}: ${String(value)}`).join(' · ')}</small>}
           </label>
         );
@@ -165,7 +174,10 @@ function MappingStage(props: MappingStageProps): ReactElement {
         </div>
       ))}
       <MappingOptionsForm adapterId={props.adapterId} options={props.options} onChange={props.onOptions} />
-      <label className="qec-import-review"><input aria-label="Mapping reviewed" type="checkbox" checked={props.reviewed} onChange={(event) => props.onReviewed(event.target.checked)} /><span><strong>Mapping reviewed</strong><small>Widths, units, field meaning, and record class are explicit where required.</small></span></label>
+      <div className="qec-import-review">
+        <Checkbox aria-label="Mapping reviewed" checked={props.reviewed} onCheckedChange={props.onReviewed} />
+        <span><strong>Mapping reviewed</strong><small>Widths, units, field meaning, and record class are explicit where required.</small></span>
+      </div>
     </div>
   );
 }
@@ -229,14 +241,14 @@ function ValidationStage({ state, alertRef, onValidate, onReviewMapping }: Valid
   const firstError = state.value?.issues.find((issue) => issue.severity === 'error');
   return (
     <div className="qec-import-validation">
-      <Button onClick={onValidate} style={{ justifySelf: 'start' }}>Validate mapping</Button>
+      <Button onClick={onValidate} style={{ justifySelf: 'start' }}>{state.value?.valid ? 'Re-validate' : 'Validate mapping'}</Button>
       {state.error && <InlineError message={state.error} />}
       {state.value?.valid && <div className="qec-import-success" role="status"><CheckCircle2 aria-hidden="true" size={16} /><div><strong>Validation passed</strong><span className="qec-mono">{state.value.provenanceId ?? 'Provenance pending'}</span></div></div>}
       {state.value && !state.value.valid && (
         <div className="qec-import-quarantine" role="alert">
-          <header><ShieldAlert aria-hidden="true" size={20} /><div><strong>Quarantine required</strong><span>Original bytes remain preserved. Correct the mapped fields, then validate again.</span></div></header>
+          <header><ShieldAlert aria-hidden="true" size={20} /><div><strong>Fix before importing</strong><span>Original bytes remain preserved. Correct the mapped fields, then validate again.</span></div></header>
           <ul>{state.value.issues.map((issue) => <li key={`${issue.code}:${issue.field ?? ''}`} data-severity={issue.severity}><strong>{issue.field ?? issue.code}</strong><span>{issue.message}</span></li>)}</ul>
-          <Button ref={alertRef} aria-label={`Review ${firstError?.field ?? 'invalid'} mapping`} onClick={onReviewMapping} className="qec-import-quarantine__action">Review mapping: {firstError?.message ?? 'Correct invalid fields.'}</Button>
+          <Button ref={alertRef} aria-label={`Review ${firstError?.field ?? 'invalid'} mapping`} onClick={onReviewMapping} className="qec-import-quarantine__action">Review mapping</Button>
         </div>
       )}
       {state.value?.valid && state.value.issues.length > 0 && <ul className="qec-import-warnings" aria-label="Validation warnings">{state.value.issues.map((issue) => <li key={issue.code}><AlertCircle aria-hidden="true" size={16} />{issue.message}</li>)}</ul>}
@@ -270,7 +282,7 @@ function ImportStage({ source, client }: { source: string; client: QecImportClie
   if (!job) return error
     ? <InlineError message={error} />
     : <div className="qec-import-notice"><Database aria-hidden="true" size={20} /><div><strong>Ready for canonical import</strong><span>Import progress and completion remain in this tray if you change the active source.</span></div></div>;
-  if (job.status === 'complete') return <div className="qec-import-success" role="status"><CheckCircle2 aria-hidden="true" size={20} /><div><strong>{job.recordsWritten ?? 0} records written</strong><span>{job.partitionsWritten ?? 0} canonical partitions · Original preserved</span></div></div>;
+  if (job.status === 'complete') return <div className="qec-import-success" role="status"><CheckCircle2 aria-hidden="true" size={20} /><div><strong>{countLabel(job.recordsWritten ?? 0, 'record')} written</strong><span>{countLabel(job.partitionsWritten ?? 0, 'canonical partition')} · Original preserved</span></div></div>;
   if (job.status === 'cancelled') return <div className="qec-import-notice qec-import-terminal" role="status"><Circle aria-hidden="true" size={20} /><div><strong>Import cancelled</strong><span>Canonical writing stopped; the original source remains preserved.</span></div></div>;
   if (job.status === 'failed') return <div className="qec-import-error qec-import-terminal" role="alert"><AlertCircle aria-hidden="true" size={20} /><div><strong>Import failed</strong><span>{job.error ?? error ?? 'Canonical data was not completed.'}</span></div></div>;
   return <div className="qec-import-progress" role="progressbar" aria-label="QEC data import" aria-valuetext={job.message}><LoaderCircle aria-hidden="true" size={16} /><strong>{job.message}</strong><span className="qec-mono">{job.id}</span>{['running', 'starting'].includes(job.status) && <Button size="sm" aria-label={`Cancel import ${job.id}`} onClick={() => void cancelJob(client, job.id)}>Cancel</Button>}</div>;
@@ -419,16 +431,53 @@ function StageContent(props: StageContentProps): ReactElement {
 
 interface WizardFooterProps {
   stage: number; canAdvance: boolean; unavailable: string | null; launching: boolean;
-  onBack(): void; onNext(): void; onImport(): void;
+  finished: boolean; sessionId: string | null;
+  onBack(): void; onNext(): void; onImport(): void; onClose?(): void;
+}
+
+const LAST_STAGE = IMPORT_STAGES.length - 1;
+
+function FinishedFooter({ sessionId, onClose }: { sessionId: string | null; onClose?(): void }): ReactElement {
+  const selectPrimary = useResearchSelectionStore((state) => state.selectPrimary);
+  const showSession = (): void => {
+    if (sessionId) selectPrimary({ kind: 'session', id: sessionId, sessionId }, 'user');
+    onClose?.();
+  };
+  return (
+    <footer className="qec-import-wizard__footer qec-import-wizard__footer--finished">
+      <div className="qec-import-commit">
+        {onClose && <Button onClick={onClose}>Close</Button>}
+        <Button variant="primary" disabled={!sessionId} onClick={showSession}>Show session</Button>
+      </div>
+    </footer>
+  );
 }
 
 function WizardFooter(props: WizardFooterProps): ReactElement {
+  if (props.finished) return <FinishedFooter sessionId={props.sessionId} onClose={props.onClose} />;
+  // The reason belongs where the person can act on it: the Import stage, not on stage 1 before anything was chosen.
+  const reason = props.stage === LAST_STAGE ? props.unavailable : null;
   return (
     <footer className="qec-import-wizard__footer">
       <div className="qec-import-nav"><Button aria-label="Previous stage" disabled={props.stage === 0} onClick={props.onBack} icon={<ArrowLeft aria-hidden="true" size={ICON_SIZE.sm} strokeWidth={ICON_STROKE} />}>Back</Button><Button aria-label="Next stage" disabled={!props.canAdvance} onClick={props.onNext}>Next<ArrowRight aria-hidden="true" size={ICON_SIZE.sm} strokeWidth={ICON_STROKE} /></Button></div>
-      <div className="qec-import-commit">{props.unavailable && <span role="status"><AlertCircle aria-hidden="true" size={14} />Import unavailable: {props.unavailable}</span>}<Button variant="primary" disabled={props.unavailable !== null} loading={props.launching} onClick={props.onImport} icon={props.launching ? undefined : <CheckCircle2 aria-hidden="true" size={ICON_SIZE.sm} strokeWidth={ICON_STROKE} />}>Import data</Button></div>
+      <div className="qec-import-commit">{reason && <span role="status"><AlertCircle aria-hidden="true" size={14} />Import unavailable: {reason}</span>}<Button variant="primary" disabled={props.unavailable !== null} title={props.unavailable ? `Import unavailable: ${props.unavailable}` : undefined} loading={props.launching} onClick={props.onImport} icon={props.launching ? undefined : <CheckCircle2 aria-hidden="true" size={ICON_SIZE.sm} strokeWidth={ICON_STROKE} />}>Import data</Button></div>
     </footer>
   );
+}
+
+/** The newest import job for this source, if any. */
+function useImportJob(source: string) {
+  const jobs = useQecJobStore((state) => state.jobs);
+  return Object.values(jobs).reverse().find((candidate) => candidate.source === source) ?? null;
+}
+
+/** Preselect the best supported adapter once the probe lands, so Next is never a dead end on stage 2. */
+function useDefaultAdapter(probe: ImportProbeResult | null, adapterId: string, choose: (id: string) => void): void {
+  useEffect(() => {
+    if (adapterId !== '') return;
+    const first = supportedAdapters(probe)[0];
+    if (first) choose(first.adapterId);
+  }, [probe, adapterId, choose]);
 }
 
 function QecImportWizardSession({ source, client, onClose }: QecImportWizardProps): ReactElement {
@@ -438,6 +487,9 @@ function QecImportWizardSession({ source, client, onClose }: QecImportWizardProp
   const probe = useSourceProbe(client, source);
   const requests = useImportRequests(client, source);
   const editor = useMappingEditor(requests.invalidate);
+  useDefaultAdapter(probe.value, editor.adapterId, editor.chooseAdapter);
+  const job = useImportJob(source);
+  const finished = job?.status === 'complete';
   const valid = requests.validation.value?.valid === true;
   const unavailable = importUnavailable(probe.value, editor.adapterId, editor.mappingReady, valid, sessionId);
   const runImport = useQecJobStore((state) => state.runImport);
@@ -461,7 +513,7 @@ function QecImportWizardSession({ source, client, onClose }: QecImportWizardProp
     <section className="qec-import-wizard" aria-label={`Import ${source}`}>
       <header className="qec-import-wizard__header"><div><span>Canonical QEC data</span><h2>Import source</h2><p className="qec-mono">{source}</p></div>{onClose && <IconButton variant="secondary" aria-label="Close import wizard" onClick={onClose}><X aria-hidden="true" size={ICON_SIZE.md} strokeWidth={ICON_STROKE} /></IconButton>}</header>
       <div className="qec-import-wizard__body">
-        <StepRail stage={stage} />
+        <StepRail stage={stage} finished={finished} />
         <div className="qec-import-stage">
           <header><span>Stage {stage + 1} of {IMPORT_STAGES.length}</span><h3 tabIndex={-1} ref={stageHeadingRef}>{activeStage}</h3><p>{stageDescription(activeStage)}</p></header>
           <div className="qec-import-stage__content">
@@ -469,7 +521,7 @@ function QecImportWizardSession({ source, client, onClose }: QecImportWizardProp
           </div>
         </div>
       </div>
-      <WizardFooter stage={stage} canAdvance={nextAllowed(stage, probe.value, editor.adapterId, editor.mappingReady, valid, sessionId)} unavailable={unavailable} launching={launching} onBack={() => setStage((current) => Math.max(0, current - 1))} onNext={() => setStage((current) => Math.min(IMPORT_STAGES.length - 1, current + 1))} onImport={() => void start()} />
+      <WizardFooter stage={stage} canAdvance={nextAllowed(stage, probe.value, editor.adapterId, editor.mappingReady, valid, sessionId)} unavailable={unavailable} launching={launching} finished={finished} sessionId={job?.sessionId ?? (sessionId.trim() || null)} onClose={onClose} onBack={() => setStage((current) => Math.max(0, current - 1))} onNext={() => setStage((current) => Math.min(IMPORT_STAGES.length - 1, current + 1))} onImport={() => void start()} />
     </section>
   );
 }

@@ -17,6 +17,7 @@ import {
 } from '../../../stores/qecSessionCatalogStore';
 import { useQecWorkbenchStore } from '../../../stores/qecWorkbenchStore';
 import { QecImportWizard } from '../import/QecImportWizard';
+import { QecImportSheet } from '../import/QecImportSheet';
 import { useQecTrayIdle } from './useQecTrayIdle';
 import { describeEngineFailure } from './qecEngineMessage';
 import { Button, IconButton } from '../../ui';
@@ -307,7 +308,7 @@ export function QecWorkbenchTray({ client: providedClient, connectClient }: QecW
         : <TrayContent client={engine.client} projectRoot={projectRoot} />)}
       {scopedSource && <div className="qec-tray__import-host" hidden={!expanded}>
         {engine.client
-          ? <QecImportWizard source={scopedSource} client={engine.client} onClose={closeAndRestoreFocus} />
+          ? <QecImportSheet onDismiss={closeAndRestoreFocus}><QecImportWizard source={scopedSource} client={engine.client} onClose={closeAndRestoreFocus} /></QecImportSheet>
           : <EngineNotice state={engine} />}
       </div>}
     </section>

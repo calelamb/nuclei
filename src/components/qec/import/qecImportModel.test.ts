@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { buildMapping, completeRows, formatBytes, mappingIsReviewed, sessionIdIssue, stageDescription, supportedAdapters } from './qecImportModel';
+import { adapterDisplayName, countLabel, buildMapping, completeRows, formatBytes, mappingIsReviewed, sessionIdIssue, stageDescription, supportedAdapters } from './qecImportModel';
 
 const EMPTY_OPTIONS = {
   outputKind: '', detectorCount: '', observableCount: '', timestampUnit: '', bitOrder: '',
@@ -65,5 +65,20 @@ describe('qecImportModel', () => {
     expect(sessionIdIssue('capture-2026-07-22')).toBeNull();
     expect(sessionIdIssue('🧪'.repeat(256))).toBeNull();
     expect(sessionIdIssue('🧪'.repeat(257))).toBe('session ID must be 256 characters or fewer');
+  });
+});
+
+describe('wizard copy helpers (qec-r-19)', () => {
+  it('names adapters the way people write them', () => {
+    expect(adapterDisplayName('sinter-csv')).toBe('sinter CSV');
+    expect(adapterDisplayName('stim-results')).toBe('Stim results');
+    expect(adapterDisplayName('tabular')).toBe('Tabular');
+    expect(adapterDisplayName('some-new-thing')).toBe('Some new thing');
+  });
+
+  it('pluralises counts', () => {
+    expect(countLabel(1, 'canonical partition')).toBe('1 canonical partition');
+    expect(countLabel(46, 'record')).toBe('46 records');
+    expect(countLabel(0, 'partition')).toBe('0 partitions');
   });
 });
