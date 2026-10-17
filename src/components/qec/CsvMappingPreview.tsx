@@ -7,7 +7,7 @@ import {
   metadataKeys, splitMetadataKeys, type SinterMapping,
 } from '../../types/sinterMapping';
 import { toStatsPoint } from '../../types/qecStats';
-import { formatNoise } from '../../lib/qecPlotFormat';
+import { formatNoise, formatCount } from '../../lib/qecPlotFormat';
 import { ICON_SIZE, ICON_STROKE, TYPOGRAPHY } from '../../styles/tokens';
 import { Button, Select } from '../ui';
 import { Table, Thead, Tbody, Tr, Th, Td } from '../ui/Table';
@@ -216,9 +216,9 @@ export function CsvMappingPreview() {
                 return (
                   <Tr key={r.strong_id}>
                     <Td style={{ maxWidth: 180, overflow: 'hidden', textOverflow: 'ellipsis' }} title={r.strong_id}>{r.strong_id}</Td>
-                    <Td numeric>{r.shots}</Td>
-                    <Td numeric>{r.errors}</Td>
-                    <Td numeric>{r.discards}</Td>
+                    <Td numeric>{formatCount(r.shots)}</Td>
+                    <Td numeric>{formatCount(r.errors)}</Td>
+                    <Td numeric>{formatCount(r.discards)}</Td>
                     <Td numeric>{typeof m.p === 'number' ? formatNoise(m.p) : '—'}</Td>
                     <Td numeric>{String(m.d ?? '—')}</Td>
                     <Td numeric>{String(m.rounds ?? '—')}</Td>

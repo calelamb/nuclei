@@ -74,11 +74,18 @@ describe('tooltipLines', () => {
     expect(text).toContain('p = 2×10⁻³');
     expect(text).toContain('pymatching');
     expect(text).toContain('per round');
+    expect(text).toContain('rate per round: 3.20×10⁻³');
     expect(text).toContain('3.20×10⁻³');
     expect(text).toContain('2.10×10⁻³');
     expect(text).toContain('4.90×10⁻³');
     expect(text).toContain('5 errors');
     expect(text).toContain('1,000 kept shots');
+  });
+  it('flags per-round points whose per-shot rate is saturated, but not per-shot ones', () => {
+    const sat = { noise: 0.01, rate: { p: 0.763, lo: 0.7, hi: 0.8 }, errors: 480, kept: 1000 };
+    expect(tooltipLines(series([]), sat, 'per_round').join('\n')).toMatch(/Saturated/);
+    expect(tooltipLines(series([]), sat, 'per_shot').join('\n')).not.toMatch(/Saturated/);
+    expect(tooltipLines(series([]), pt(0.002, 0.0032), 'per_round').join('\n')).not.toMatch(/Saturated/);
   });
   it('marks zero-error points as upper bounds', () => {
     const lines = tooltipLines(series([]), pt(0.002, 0, 0, 0.004), 'per_shot');

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { toSuperscript, formatPow10, formatSci, formatMultiplierTick, formatRatePrecise, formatNoise, formatRateInterval } from './qecPlotFormat';
+import { toSuperscript, formatPow10, formatSci, formatMultiplierTick, formatRatePrecise, formatNoise, formatRateInterval, formatCount, roundForExport } from './qecPlotFormat';
 
 describe('toSuperscript', () => {
   it('maps digits and a true minus sign', () => {
@@ -43,8 +43,8 @@ describe('formatRatePrecise', () => {
   it('keeps three significant figures and trailing zeros', () => {
     expect(formatRatePrecise(1.03e-4)).toBe('1.03×10⁻⁴');
     expect(formatRatePrecise(1e-4)).toBe('1.00×10⁻⁴');
-    expect(formatRatePrecise(0.0123)).toBe('0.0123');
-    expect(formatRatePrecise(0.012)).toBe('0.0120');
+    expect(formatRatePrecise(0.0123)).toBe('1.23×10⁻²');
+    expect(formatRatePrecise(0.012)).toBe('1.20×10⁻²');
     expect(formatRatePrecise(0.5)).toBe('0.500');
     expect(formatRatePrecise(0)).toBe('0');
     expect(formatRatePrecise(Number.NaN)).toBe('—');
@@ -78,5 +78,22 @@ describe('formatRateInterval (qec-12)', () => {
     expect(formatRateInterval(0.0032, 0.00305, 0.0034)).toBe('3.20×10⁻³ [3.05, 3.40]×10⁻³');
     expect(formatRateInterval(0.00319, 0.00302, 0.00337)).toBe('3.19×10⁻³ [3.02, 3.37]×10⁻³');
     expect(formatRateInterval(0.0025, 0.0024, 0.0026)).toBe('2.50×10⁻³ [2.40, 2.60]×10⁻³');
+  });
+});
+
+describe('one rate convention across surfaces (qec-r-11)', () => {
+  it('writes the tooltip rate the way the table writes the same rate', () => {
+    expect(formatRatePrecise(0.0551)).toBe('5.51×10⁻²');
+    expect(formatRateInterval(0.0551, 0.05, 0.06)).toMatch(/^5\.51×10⁻²/);
+    expect(formatRatePrecise(0.763)).toBe('0.763');
+  });
+  it('groups integer counts in the mapping preview', () => {
+    expect(formatCount(500000)).toBe('500,000');
+    expect(formatCount(7)).toBe('7');
+  });
+  it('rounds binary noise out of exported floats', () => {
+    expect(roundForExport(0.010375899999999999)).toBe(0.0103759);
+    expect(roundForExport(0.5)).toBe(0.5);
+    expect(roundForExport(0)).toBe(0);
   });
 });
