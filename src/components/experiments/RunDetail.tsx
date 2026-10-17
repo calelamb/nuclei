@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { ArrowLeft, FolderOpen } from 'lucide-react';
+import { ArrowLeft, Copy, FolderOpen } from 'lucide-react';
 import { useThemeStore } from '../../stores/themeStore';
 import { useProjectStore } from '../../stores/projectStore';
 import { useExperimentStore } from '../../services/experimentStore';
@@ -7,6 +7,7 @@ import { useExperimentUiStore } from '../../stores/experimentUiStore';
 import { runsDirForExperiment } from '../../services/experimentRunner';
 import { createTauriExperimentFs } from '../../services/experimentFs';
 import { openRunFolder } from '../../lib/openRunFolder';
+import { formatSignificant, formatStartedAt, toChips } from './runDetailFormat';
 import { RunHistogram } from './RunHistogram';
 import { RunCircuitDiagram } from './RunCircuitDiagram';
 import { PanelHeader } from '../layout/PanelHeader';
@@ -63,40 +64,91 @@ async function loadArtifacts(runDir: string): Promise<RunArtifacts> {
   return { result, snapshot, stdout: stdout ?? '', stderr: stderr ?? '' };
 }
 
-function ManifestRow({ label, value }: { label: string; value: string }) {
+type RowValue =
+  | { kind: 'text'; text: string }
+  | { kind: 'chips'; chips: string[] }
+  | { kind: 'copy'; text: string }
+  | { kind: 'error'; text: string };
+
+interface ManifestRowData {
+  label: string;
+  value: RowValue;
+}
+
+const text = (t: string): RowValue => ({ kind: 'text', text: t });
+
+function copyToClipboard(value: string): void {
+  navigator.clipboard?.writeText(value).catch(() => {
+    // Clipboard can be denied (permissions / insecure context); the value stays selectable.
+  });
+}
+
+function ManifestRow({ row }: { row: ManifestRowData }) {
   const colors = useThemeStore((s) => s.colors);
+  const { value } = row;
+  const mono = { color: colors.text, fontSize: 11, fontFamily: "'Fira Code', monospace" };
   return (
-    <div style={{ display: 'flex', gap: 10, padding: '3px 0' }}>
+    <div style={{ display: 'flex', gap: 10, padding: '3px 0', alignItems: 'baseline' }}>
       <dt style={{ width: 130, flexShrink: 0, color: colors.textDim, fontSize: 11, fontFamily: "'Geist Sans', sans-serif" }}>
-        {label}
+        {row.label}
       </dt>
-      <dd style={{ margin: 0, color: colors.text, fontSize: 11, fontFamily: "'Fira Code', monospace", wordBreak: 'break-word' }}>
-        {value}
+      <dd style={{ margin: 0, minWidth: 0, flex: 1 }}>
+        {value.kind === 'text' && <span style={{ ...mono, wordBreak: 'break-word' }}>{value.text}</span>}
+        {value.kind === 'chips' && (
+          <span style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+            {value.chips.map((chip) => (
+              <span key={chip} style={{ ...mono, padding: '1px 6px', borderRadius: 4, background: colors.bgPanel, border: `1px solid ${colors.border}` }}>
+                {chip}
+              </span>
+            ))}
+          </span>
+        )}
+        {value.kind === 'copy' && (
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
+            <span style={{ ...mono, wordBreak: 'break-all' }}>{value.text}</span>
+            <button
+              onClick={() => copyToClipboard(value.text)}
+              aria-label={`Copy ${row.label}`}
+              title={`Copy ${row.label}`}
+              style={{ background: 'transparent', border: 'none', color: colors.textDim, cursor: 'pointer', display: 'flex', padding: 2, flexShrink: 0 }}
+            >
+              <Copy size={11} />
+            </button>
+          </span>
+        )}
+        {value.kind === 'error' && (
+          <pre style={{
+            ...mono, margin: 0, padding: 8, whiteSpace: 'pre-wrap', wordBreak: 'break-word',
+            color: colors.error, background: `${colors.error}14`, border: `1px solid ${colors.error}55`, borderRadius: 4,
+          }}>
+            {value.text}
+          </pre>
+        )}
       </dd>
     </div>
   );
 }
 
-function manifestRows(run: RunRecord): Array<{ label: string; value: string }> {
+function manifestRows(run: RunRecord): ManifestRowData[] {
   const m = run.manifest;
-  const rows = [
-    { label: 'Status', value: m.status },
-    { label: 'Point index', value: String(m.point_index) },
-    { label: 'Params', value: JSON.stringify(m.params) },
-    { label: 'Seed', value: `${m.seed} (honored: ${m.seed_honored ? 'yes' : 'no'})` },
-    { label: 'Backend', value: `${m.backend.provider}/${m.backend.target}` },
-    { label: 'Shots', value: String(m.shots) },
-    { label: 'Language', value: m.language },
-    { label: 'Entry', value: m.entry },
-    { label: 'Code SHA-256', value: m.code_sha256 },
-    { label: 'Git', value: m.git ? `${m.git.commit}${m.git.dirty ? ' (dirty)' : ''}` : 'not a repo' },
-    { label: 'Versions', value: JSON.stringify(m.versions) },
-    { label: 'Started at', value: m.started_at },
-    { label: 'Duration', value: `${m.duration_ms.toLocaleString()} ms` },
-    { label: 'Error', value: m.error ?? '—' },
+  const rows: ManifestRowData[] = [
+    { label: 'Status', value: text(m.status) },
+    { label: 'Point index', value: text(String(m.point_index)) },
+    { label: 'Params', value: { kind: 'chips', chips: toChips(m.params) } },
+    { label: 'Seed', value: text(`${m.seed} (honored: ${m.seed_honored ? 'yes' : 'no'})`) },
+    { label: 'Backend', value: text(`${m.backend.provider}/${m.backend.target}`) },
+    { label: 'Shots', value: text(String(m.shots)) },
+    { label: 'Language', value: text(m.language) },
+    { label: 'Entry', value: text(m.entry) },
+    { label: 'Code SHA-256', value: { kind: 'copy', text: m.code_sha256 } },
+    { label: 'Git', value: m.git ? { kind: 'copy', text: `${m.git.commit}${m.git.dirty ? ' (dirty)' : ''}` } : text('not a repo') },
+    { label: 'Versions', value: { kind: 'chips', chips: toChips(m.versions) } },
+    { label: 'Started at', value: text(formatStartedAt(m.started_at)) },
+    { label: 'Duration', value: text(`${m.duration_ms.toLocaleString()} ms`) },
+    { label: 'Error', value: m.error ? { kind: 'error', text: m.error } : text('—') },
   ];
   if (Object.keys(run.metrics).length > 0) {
-    rows.push({ label: 'Metrics', value: JSON.stringify(run.metrics) });
+    rows.push({ label: 'Metrics', value: { kind: 'chips', chips: toChips(run.metrics, formatSignificant) } });
   }
   return rows;
 }
@@ -116,7 +168,7 @@ export function RunDetail() {
     : null;
 
   const [artifacts, setArtifacts] = useState<RunArtifacts>(EMPTY_ARTIFACTS);
-  const [tab, setTab] = useState<OutputTab>('stdout');
+  const [tab, setTab] = useState<OutputTab>(run?.manifest.status === 'failed' ? 'stderr' : 'stdout');
 
   useEffect(() => {
     // When there's no selection, the component renders the "select a run"
@@ -148,6 +200,8 @@ export function RunDetail() {
   const runsDir = runsDirForExperiment(fs.join, projectRoot, experiment.fileName);
   const runDirPath = fs.join(runsDir, run.dir);
   const output = tab === 'stdout' ? artifacts.stdout : artifacts.stderr;
+  // A failed run usually produced no measurements or circuit; hide the empty sections.
+  const showOutputs = run.manifest.status !== 'failed' || artifacts.result !== null || artifacts.snapshot !== null;
 
   return (
     <div style={{ height: '100%', overflow: 'auto', background: colors.bg }}>
@@ -193,11 +247,13 @@ export function RunDetail() {
           </div>
           <dl style={{ margin: 0 }}>
             {manifestRows(run).map((row) => (
-              <ManifestRow key={row.label} label={row.label} value={row.value} />
+              <ManifestRow key={row.label} row={row} />
             ))}
           </dl>
         </section>
 
+        {showOutputs && (
+          <>
         <section>
           <div style={{ color: colors.textDim, fontSize: 10, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 8 }}>
             Measurements
@@ -211,6 +267,9 @@ export function RunDetail() {
           </div>
           <RunCircuitDiagram snapshot={artifacts.snapshot} />
         </section>
+
+          </>
+        )}
 
         <section>
           <div style={{ display: 'flex', gap: 4, marginBottom: 8 }}>
