@@ -1,5 +1,5 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
-import Editor from '@monaco-editor/react';
+import { LessonCodeEditor } from './LessonCodeEditor';
 import { useThemeStore } from '../../stores/themeStore';
 import { useLearnStore } from '../../stores/learnStore';
 import { useDiracPanelStore } from '../../stores/diracPanelStore';
@@ -280,29 +280,8 @@ export function ExerciseBlock({
       </div>
 
       {/* Mini Editor */}
-      <div style={{ height: 220, borderBottom: `1px solid ${colors.border}` }}>
-        <Editor
-          height="100%"
-          language="python"
-          value={localCode}
-          onChange={handleCodeChange}
-          theme={useThemeStore.getState().mode === 'dark' ? 'vs-dark' : 'vs-light'}
-          options={{
-            minimap: { enabled: false },
-            scrollBeyondLastLine: false,
-            fontSize: 13,
-            lineNumbers: 'on',
-            glyphMargin: false,
-            folding: false,
-            lineDecorationsWidth: 0,
-            lineNumbersMinChars: 3,
-            renderLineHighlight: 'none',
-            overviewRulerLanes: 0,
-            scrollbar: { vertical: 'hidden', horizontal: 'auto' },
-            padding: { top: 8, bottom: 8 },
-            fontFamily: TYPOGRAPHY.fontMono,
-          }}
-        />
+      <div style={{ borderBottom: `1px solid ${colors.border}` }}>
+        <LessonCodeEditor value={localCode} onChange={handleCodeChange} />
       </div>
 
       {/* Buttons */}
