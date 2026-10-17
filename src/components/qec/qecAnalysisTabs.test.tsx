@@ -23,6 +23,12 @@ describe('isShortAnalysis', () => {
     expect(isShortAnalysis(SHORT_ANALYSIS_HEIGHT - 1)).toBe(true);
     expect(isShortAnalysis(SHORT_ANALYSIS_HEIGHT)).toBe(false);
   });
+
+  it('is also tabbed when the plot cannot sit beside the readout (stack layout, q-08)', () => {
+    expect(isShortAnalysis(900, 779)).toBe(true);
+    expect(isShortAnalysis(900, 780)).toBe(false);
+    expect(isShortAnalysis(900, 0)).toBe(false);
+  });
 });
 
 describe('short windows show one analysis section at a time (qec-09)', () => {
@@ -43,8 +49,14 @@ describe('short windows show one analysis section at a time (qec-09)', () => {
     expect(getByRole('table', { name: 'Decoder comparison' })).toBeTruthy();
   });
 
-  it('shows everything at once when the window is tall', () => {
-    size.current = { width: 700, height: 900 };
+  it('keeps the tabs on a tall but narrow pane instead of a nested scroll (qec-r-10)', () => {
+    size.current = { width: 600, height: 900 };
+    const { getByRole } = render(<QecAnalysisView embedded />);
+    expect(getByRole('radiogroup', { name: 'Analysis section' })).toBeTruthy();
+  });
+
+  it('shows everything at once when the window is tall and wide', () => {
+    size.current = { width: 900, height: 900 };
     const { queryByRole, getByRole, getByLabelText } = render(<QecAnalysisView embedded />);
     expect(queryByRole('radiogroup', { name: 'Analysis section' })).toBeNull();
     expect(getByRole('group', { name: /Plot points/ })).toBeTruthy();

@@ -57,7 +57,11 @@ export function QecAnalysisView({ embedded = false }: { embedded?: boolean } = {
 
   const [scrollRef, scrollSize] = useElementSize<HTMLDivElement>();
   const [tab, setTab] = useState<AnalysisTab>('plot');
-  const tabbed = isShortAnalysis(scrollSize.height);
+  const tabbed = isShortAnalysis(scrollSize.height, scrollSize.width);
+
+  const tabSwitch = (
+    <SegmentedControl aria-label="Analysis section" value={tab} options={ANALYSIS_TABS} onChange={setTab} />
+  );
 
   const webOnly = isWebBuild(); // no kernel to run campaigns in the browser
   const canRun = Boolean(experiment && projectRoot && experiment.spec.type === 'qec_campaign');
@@ -172,11 +176,8 @@ export function QecAnalysisView({ embedded = false }: { embedded?: boolean } = {
           <CsvMappingPreview />
           {tabbed ? (
             <>
-              <div style={{ padding: '6px 12px', flex: 'none' }}>
-                <SegmentedControl aria-label="Analysis section" value={tab} options={ANALYSIS_TABS} onChange={setTab} />
-              </div>
               <div style={{ flex: '1 0 auto', minHeight: PLOT_MIN_HEIGHT }}>
-                {tab === 'decoders' ? <DecoderWorkbench /> : <ThresholdPanel part={tab} />}
+                {tab === 'decoders' ? <DecoderWorkbench tabs={tabSwitch} /> : <ThresholdPanel part={tab} tabs={tabSwitch} />}
               </div>
             </>
           ) : (

@@ -1,0 +1,17 @@
+/*
+ * Analysis-view tables. The shared Table primitive sizes to its content
+ * (min-width: max-content); the Λ readout lives in a fixed-width column, so it
+ * opts into fixed layout and wraps its summary line instead of clipping r² and
+ * the warning flag. Numbers sit in the sans face with tabular numerals so the
+ * superscript exponents stay legible.
+ */
+.nuclei-table.qec-lambda-table { min-width: 0; table-layout: fixed; }
+.qec-lambda-table td.nuclei-table__text { white-space: normal; }
+.qec-lambda-table th:nth-child(1), .qec-lambda-table td:nth-child(1) { width: 66px; }
+.qec-lambda-table th:nth-child(2), .qec-lambda-table td:nth-child(2) { width: 46px; }
+.qec-lambda-table th:nth-child(4), .qec-lambda-table td:nth-child(4) { width: 42px; }
+.qec-lambda-table th:nth-child(5), .qec-lambda-table td:nth-child(5) { width: 24px; padding-left: 0; }
+.qec-lambda-table td, .decoder-table td { font-family: var(--font-sans); font-variant-numeric: tabular-nums; }
+.qec-lambda-table caption { text-transform: none; }
+.qec-lambda-table details > summary { line-height: 1.4; }
+.qec-lambda-table details[open] > summary { margin-bottom: var(--space-1); }
