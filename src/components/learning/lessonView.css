@@ -13,7 +13,6 @@
 .lesson__scroll { flex: 1; min-height: 0; overflow-y: auto; padding: var(--space-6) var(--space-8) 64px; }
 .lesson__header { max-width: 760px; margin-inline: auto; margin-bottom: var(--space-6); }
 .lesson__meta { display: flex; align-items: center; gap: var(--space-2); margin-bottom: var(--space-2); font-size: var(--font-size-caption); color: var(--color-text-secondary); }
-.lesson__level { padding: 2px var(--space-2); border-radius: var(--radius-xs); font-weight: var(--font-weight-semibold); text-transform: capitalize; background: color-mix(in srgb, var(--level-color) 14%, transparent); color: var(--level-color); }
 .lesson__title { margin: 0; font-size: var(--font-size-display); font-weight: var(--font-weight-bold); line-height: 1.2; color: var(--color-text-primary); }
 .lesson__lede { margin: var(--space-2) 0 0; font-size: var(--font-size-body); line-height: 1.5; color: var(--color-text-secondary); }
 .lesson__block { max-width: 760px; margin-inline: auto; margin-bottom: var(--space-2); scroll-margin-top: var(--space-4); }

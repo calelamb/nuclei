@@ -2,6 +2,8 @@ import { useState } from 'react';
 import { CURATED_VIDEOS } from '../../data/videos/curatedLibrary';
 import type { CuratedVideo } from '../../data/videos/curatedLibrary';
 import { Play } from 'lucide-react';
+import { Badge } from '../ui';
+import { VIDEO_LEVEL_TONE } from './levelTone';
 import { VideoThumb } from './VideoThumb';
 import { openExternal, buildYouTubeWatchUrl } from '../../lib/openExternal';
 import './learnSidebar.css';
@@ -45,7 +47,7 @@ function VideoRow({ video, onPlay }: { video: CuratedVideo; onPlay: (video: Cura
         <div className="vrow__title">{video.title}</div>
         <div className="vrow__tags">
           <span className="vrow__creator">{CREATOR_LABELS[video.creator]}</span>
-          <span className={`vrow__level vrow__level--${video.difficulty}`}>{video.difficulty}</span>
+          <Badge tone={VIDEO_LEVEL_TONE[video.difficulty]} style={{ textTransform: 'capitalize' }}>{video.difficulty}</Badge>
         </div>
         <div className="vrow__desc">{video.description}</div>
       </div>

@@ -3,7 +3,8 @@ import { Play } from 'lucide-react';
 import { VideoThumb } from './VideoThumb';
 import { CURATED_VIDEOS, type CuratedVideo } from '../../data/videos/curatedLibrary';
 import { openExternal, buildYouTubeWatchUrl } from '../../lib/openExternal';
-import { SegmentedControl, type SegmentedOption } from '../ui';
+import { Badge, SegmentedControl, type SegmentedOption } from '../ui';
+import { VIDEO_LEVEL_TONE } from './levelTone';
 import './trackSelector.css';
 
 type CreatorFilter = 'all' | CuratedVideo['creator'];
@@ -37,8 +38,8 @@ function VideoCard({ video }: { video: CuratedVideo }) {
       <div className="video-card__info">
         <div className="video-card__name">{video.title}</div>
         <div className="video-card__tags">
-          <span className="video-card__tag">{CREATOR_LABEL[video.creator]}</span>
-          <span className={`video-card__tag video-card__tag--${video.difficulty}`}>{video.difficulty}</span>
+          <Badge>{CREATOR_LABEL[video.creator]}</Badge>
+          <Badge tone={VIDEO_LEVEL_TONE[video.difficulty]} style={{ textTransform: 'capitalize' }}>{video.difficulty}</Badge>
         </div>
         <div className="video-card__desc">{video.description}</div>
       </div>

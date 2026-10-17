@@ -25,6 +25,8 @@ const CATEGORY_LABELS: Record<string, string> = {
 };
 
 const NODE_R = 18;
+/** Below this the labels stop being legible; the map scrolls sideways instead of shrinking further. */
+const MIN_MAP_WIDTH = 560;
 
 interface NodePosition {
   id: string;
@@ -103,7 +105,13 @@ export function ConceptMap() {
 
       {/* SVG container with horizontal scroll */}
       <div style={{ flex: 1, minHeight: 0, overflowX: 'auto', overflowY: 'auto' }}>
-        <svg width={svgWidth} height={svgHeight} style={{ display: 'block' }}>
+        <svg
+          viewBox={`0 0 ${svgWidth} ${svgHeight}`}
+          width="100%"
+          role="group"
+          aria-label="Concept map"
+          style={{ display: 'block', minWidth: MIN_MAP_WIDTH, maxWidth: svgWidth, height: 'auto' }}
+        >
           {/* Category labels */}
           {Object.entries(CATEGORY_X).map(([cat, x]) => (
             <text
@@ -112,7 +120,7 @@ export function ConceptMap() {
               y={20}
               textAnchor="middle"
               fill={colors.textDim}
-              fontSize={9}
+              fontSize={11}
               fontFamily={TYPOGRAPHY.fontSans}
               fontWeight={600}
               style={{ textTransform: 'uppercase', letterSpacing: '0.5px' }}
@@ -182,7 +190,7 @@ export function ConceptMap() {
                   y={pos.y + NODE_R + 12}
                   textAnchor="middle"
                   fill={colors.textMuted}
-                  fontSize={8}
+                  fontSize={11}
                   fontFamily={TYPOGRAPHY.fontSans}
                 >
                   {pos.node.label}

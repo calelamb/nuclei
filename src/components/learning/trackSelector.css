@@ -61,13 +61,9 @@
 .video-card:hover .video-card__play, .video-card:focus-visible .video-card__play { opacity: 1; }
 .video-card__play-disc { display: grid; place-items: center; width: 48px; height: 48px; border-radius: 50%; background: rgba(0, 0, 0, 0.7); color: #fff; }
 .video-card__duration { position: absolute; right: var(--space-2); bottom: var(--space-2); padding: 2px var(--space-2); border-radius: var(--radius-xs); background: rgba(0, 0, 0, 0.8); color: #fff; font: var(--font-size-caption) var(--font-mono); }
+.video-card__tags { display: flex; align-items: center; flex-wrap: wrap; gap: var(--space-2); }
 .video-card__info { padding: var(--space-3); }
 .video-card__name { margin-bottom: var(--space-2); font-size: var(--font-size-code); font-weight: var(--font-weight-medium); line-height: 1.3; color: var(--color-text-primary); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
-.video-card__tags { display: flex; align-items: center; gap: var(--space-2); }
-.video-card__tag { padding: 1px var(--space-2); border-radius: var(--radius-xs); background: var(--color-surface-overlay); color: var(--color-text-secondary); font-size: var(--font-size-caption); font-weight: var(--font-weight-medium); text-transform: capitalize; }
-.video-card__tag--beginner { color: var(--color-success-text, color-mix(in srgb, var(--color-success) 55%, var(--color-text-primary))); }
-.video-card__tag--intermediate { color: var(--color-warning); }
-.video-card__tag--advanced { color: var(--color-danger); }
 .video-card__desc { margin-top: var(--space-2); font-size: var(--font-size-caption); line-height: 1.4; color: var(--color-text-secondary); }
 
 .tracks__tabs { margin-bottom: var(--space-6); }
