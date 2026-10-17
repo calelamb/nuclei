@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import os
+import stat
 from pathlib import Path
 from typing import Any
 
@@ -13,29 +15,87 @@ from .journal import sha256_text
 MAX_CIRCUIT_BYTES = 20_000_000
 
 
+def _read_regular_file(path: str) -> str:
+    """Read a UTF-8 circuit file; refuses symlinks and non-regular files.
+
+    Errors name the path but never include file content.
+    """
+    file = Path(path).expanduser()
+    try:
+        info = os.lstat(file)
+    except FileNotFoundError as exc:
+        raise ToolInputError(f"circuit file not found: {path}") from exc
+    except OSError as exc:
+        raise ToolInputError(f"cannot access circuit file {path}: {exc.strerror or 'OS error'}") from exc
+    if stat.S_ISLNK(info.st_mode):
+        raise ToolInputError(f"refusing to follow a symlink: {path}")
+    if not stat.S_ISREG(info.st_mode):
+        raise ToolInputError(f"circuit path is not a regular file: {path}")
+    if info.st_size > MAX_CIRCUIT_BYTES:
+        raise ToolInputError(f"circuit file exceeds {MAX_CIRCUIT_BYTES} bytes: {path}")
+    return _read_bytes_nofollow(file, path, info)
+
+
+def _read_bytes_nofollow(file: Path, path: str, expected: os.stat_result) -> str:
+    flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_NONBLOCK", 0)
+    try:
+        fd = os.open(file, flags)
+    except OSError as exc:
+        raise ToolInputError(f"cannot read circuit file {path}: {exc.strerror or 'OS error'}") from exc
+    try:
+        opened = os.fstat(fd)
+        if not stat.S_ISREG(opened.st_mode) or (opened.st_ino, opened.st_dev) != (expected.st_ino, expected.st_dev):
+            raise ToolInputError(f"circuit path changed while opening: {path}")
+        with os.fdopen(fd, "rb", closefd=False) as handle:
+            data = handle.read(MAX_CIRCUIT_BYTES + 1)
+    finally:
+        os.close(fd)
+    if len(data) > MAX_CIRCUIT_BYTES:
+        raise ToolInputError(f"circuit file exceeds {MAX_CIRCUIT_BYTES} bytes: {path}")
+    try:
+        return data.decode("utf-8")
+    except UnicodeDecodeError as exc:
+        raise ToolInputError(f"circuit file is not UTF-8 text: {path}") from exc
+
+
 def read_circuit_text(*, stim_text: str | None, path: str | None) -> str:
     if (stim_text is None) == (path is None):
         raise ToolInputError("provide exactly one of stim_text or path")
-    if stim_text is not None:
-        text = stim_text
-    else:
-        file = Path(path).expanduser()  # type: ignore[arg-type]
-        if not file.is_file():
-            raise ToolInputError(f"circuit file not found: {path}")
-        if file.stat().st_size > MAX_CIRCUIT_BYTES:
-            raise ToolInputError(f"circuit file exceeds {MAX_CIRCUIT_BYTES} bytes")
-        text = file.read_text(encoding="utf-8")
+    text = stim_text if stim_text is not None else _read_regular_file(path)  # type: ignore[arg-type]
     if not text.strip():
         raise ToolInputError("circuit is empty")
     return text
 
 
-def parse_circuit(text: str) -> stim.Circuit:
+def _first_failing_line(text: str) -> int | None:
+    """1-based line of the first line Stim cannot parse on its own (best effort)."""
+    for number, raw in enumerate(text.splitlines(), start=1):
+        line = raw.split("#", 1)[0].strip()
+        if not line or line.startswith("}"):
+            continue
+        try:
+            stim.Circuit(line + "\n}" if line.startswith("REPEAT") else line)
+        except ValueError:
+            return number
+    return None
+
+
+def parse_circuit(text: str, *, source_path: str | None = None) -> stim.Circuit:
+    """Parse stim text. Errors give a location; file content is never relayed.
+
+    Stim's message quotes the offending input, so for a path (a file the caller
+    pointed us at, possibly not a circuit at all) only the path and line number
+    are reported. For inline text the caller's own first Stim reason is relayed.
+    """
     try:
         return stim.Circuit(text)
     except ValueError as exc:
-        first = str(exc).strip().splitlines()[0] if str(exc).strip() else "invalid circuit"
-        raise ToolInputError(f"not a valid stim circuit: {first}") from exc
+        line = _first_failing_line(text)
+        where = f" (line {line})" if line is not None else ""
+        if source_path is not None:
+            raise ToolInputError(f"not a valid stim circuit: {source_path}{where}") from exc
+        reason = str(exc).strip().splitlines()[0] if str(exc).strip() else "Stim could not parse the text"
+        raise ToolInputError(f"not a valid stim circuit{where}: {reason}") from exc
 
 
 def explain_nondeterministic_detectors(circuit: stim.Circuit) -> dict[str, Any] | None:
@@ -64,8 +124,8 @@ def _graphlike_distance(circuit: stim.Circuit) -> tuple[int | None, str | None]:
         return None, first
 
 
-def inspect_circuit(text: str) -> dict[str, Any]:
-    circuit = parse_circuit(text)
+def inspect_circuit(text: str, *, source_path: str | None = None) -> dict[str, Any]:
+    circuit = parse_circuit(text, source_path=source_path)
     distance, reason = _graphlike_distance(circuit)
     result: dict[str, Any] = {
         "circuit_sha256": sha256_text(str(circuit)),  # same canonical hash as run_campaign manifests

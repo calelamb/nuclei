@@ -119,6 +119,64 @@ describe('CircuitExplainPanel', () => {
     expect(useEditorRevealStore.getState().request?.line).toBe(4);
   });
 
+  it('lists every detector with its own Pauli and an "and N more" count', () => {
+    seed({
+      nondeterministic: {
+        ...NONDET,
+        targets: ['D0', 'D2'],
+        target_count: 22,
+        targets_omitted: 20,
+        declaration_lines: { D0: 3, D2: 4 },
+        sensitivities: [{ target: 'D0', pauli: 'Z0' }, { target: 'D2', pauli: 'Y0' }],
+      },
+    });
+    const { getByText, getByRole } = render(<CircuitExplainPanel />);
+    expect(getByText('D0')).toBeTruthy();
+    expect(getByText('Z0')).toBeTruthy();
+    expect(getByText('D2')).toBeTruthy();
+    expect(getByText('Y0')).toBeTruthy();
+    expect(getByText(/and 20 more/)).toBeTruthy();
+    expect(getByRole('button', { name: 'Jump to D2 declaration at line 4' })).toBeTruthy();
+  });
+
+  it('points at the preparation line when the cause is a basis mismatch', () => {
+    seed({
+      nondeterministic: {
+        ...NONDET,
+        line: 2,
+        declaration_lines: { D0: 4 },
+        cause: {
+          kind: 'preparation_basis_mismatch', basis: 'Z', operation_line: 2,
+          preparation_line: 1, detector_lines: { D0: 4 },
+        },
+      },
+    });
+    const { getByRole, getByText } = render(<CircuitExplainPanel />);
+    expect(getByText(/not the reset/i)).toBeTruthy();
+    fireEvent.click(getByRole('button', { name: 'Jump to preparation at line 1' }));
+    expect(useEditorRevealStore.getState().request?.line).toBe(1);
+  });
+
+  it('uses "an X-basis" and names the blamed measurement as the preparation', () => {
+    seed({
+      nondeterministic: {
+        ...NONDET, line: 2,
+        cause: { kind: 'preparation_basis_mismatch', basis: 'X', operation_line: 2, preparation_line: 2, detector_lines: { D0: 4 } },
+      },
+    });
+    const first = render(<CircuitExplainPanel />);
+    expect(first.getByText(/an X-basis preparation/)).toBeTruthy();
+    cleanup();
+    seed({
+      nondeterministic: {
+        ...NONDET, line: 2,
+        cause: { kind: 'measurement_basis_mismatch', basis: 'X', operation_line: 2, preparation_line: 2, detector_lines: { D0: 4 } },
+      },
+    });
+    const second = render(<CircuitExplainPanel />);
+    expect(second.getByRole('button', { name: 'Jump to measurement at line 2' })).toBeTruthy();
+  });
+
   it('shows the REPEAT iteration a fault falls in', () => {
     const faults = [{ ...MINW.faults[0], iteration: 2 }, MINW.faults[1]];
     seed({ min_weight: { ...MINW, faults } });

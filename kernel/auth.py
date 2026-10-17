@@ -22,6 +22,7 @@ import atexit
 import hmac
 import json
 import os
+import re
 import signal
 import sys
 import tempfile
@@ -244,14 +245,44 @@ def default_runtime_dir() -> Path:
     return Path.home() / ".nuclei" / "runtime"
 
 
+def per_port_file_name(port: int) -> str:
+    return f"kernel-{_checked_port(port)}.json"
+
+
+def _checked_port(port: object) -> int:
+    if isinstance(port, bool) or not isinstance(port, int) or not 1 <= port <= 65_535:
+        raise ValueError(f"port must be an integer in 1-65535, got {port!r}")
+    return port
+
+
+def _write_private_atomic(directory: Path, name: str, payload: str) -> Path:
+    """Write ``payload`` to ``directory/name`` as 0600 via temp file + rename."""
+    path = directory / name
+    fd, temp_name = tempfile.mkstemp(dir=directory, prefix=".kernel-")
+    try:
+        with os.fdopen(fd, "w") as handle:
+            handle.write(payload)
+        if os.name == "posix":
+            os.chmod(temp_name, 0o600)
+        os.replace(temp_name, path)
+    except BaseException:
+        Path(temp_name).unlink(missing_ok=True)
+        raise
+    return path
+
+
 def write_runtime_file(
     config: KernelAuthConfig, port: int, runtime_dir: Path | None = None
 ) -> Path | None:
-    """Publish connection details (including the token) to a user-only file.
+    """Publish connection details (including the token) to user-only files.
 
-    Mirrors Jupyter's runtime files: local scripts read it to authenticate.
-    Returns None in insecure mode, where there is no token to publish.
+    Mirrors Jupyter's runtime files: local scripts read them to authenticate.
+    Writes ``kernel-<port>.json`` (this kernel's own file, safe with several
+    kernels running) and ``kernel.json`` (the "most recent kernel" pointer,
+    last writer wins). Returns the pointer path, or None in insecure mode,
+    where there is no token to publish.
     """
+    port = _checked_port(port)
     if config.token is None:
         return None
     directory = Path(runtime_dir) if runtime_dir is not None else default_runtime_dir()
@@ -264,23 +295,14 @@ def write_runtime_file(
         "pid": os.getpid(),
         "token": config.token,
     })
-    path = directory / RUNTIME_FILE_NAME
-    fd, temp_name = tempfile.mkstemp(dir=directory, prefix=".kernel-")
-    try:
-        with os.fdopen(fd, "w") as handle:
-            handle.write(payload)
-        if os.name == "posix":
-            os.chmod(temp_name, 0o600)
-        os.replace(temp_name, path)
-    except BaseException:
-        Path(temp_name).unlink(missing_ok=True)
-        raise
-    atexit.register(_remove_runtime_file, path, os.getpid())
-    _install_cleanup_signal_handlers(path, os.getpid())
+    _write_private_atomic(directory, per_port_file_name(port), payload)
+    path = _write_private_atomic(directory, RUNTIME_FILE_NAME, payload)
+    atexit.register(remove_runtime_files, directory, port, os.getpid())
+    _install_cleanup_signal_handlers(directory, port, os.getpid())
     return path
 
 
-def _install_cleanup_signal_handlers(path: Path, pid: int) -> None:
+def _install_cleanup_signal_handlers(directory: Path, port: int, pid: int) -> None:
     """Remove the runtime file on SIGTERM/SIGINT (atexit does not run for
     SIGTERM), then defer to whatever handler was installed before."""
     if threading.current_thread() is not threading.main_thread():
@@ -292,7 +314,7 @@ def _install_cleanup_signal_handlers(path: Path, pid: int) -> None:
         previous = signal.getsignal(signum)
 
         def handler(received, frame, _previous=previous, _signum=signum):
-            _remove_runtime_file(path, pid)
+            remove_runtime_files(directory, port, pid)
             if callable(_previous):
                 _previous(received, frame)
                 return
@@ -305,12 +327,61 @@ def _install_cleanup_signal_handlers(path: Path, pid: int) -> None:
             continue
 
 
-def _remove_runtime_file(path: Path, pid: int) -> None:
+def _remove_if_owned(path: Path, pid: int) -> bool:
+    """Delete ``path`` only when it records ``pid``; True if it was removed."""
     try:
         if json.loads(path.read_text()).get("pid") == pid:
             path.unlink()
-    except (OSError, ValueError):
+            return True
+    except (OSError, ValueError, AttributeError):
         pass
+    return False
+
+
+def remove_runtime_files(directory: Path, port: int, pid: int) -> None:
+    """Clean shutdown: drop this kernel's files, never another kernel's.
+
+    If the "latest kernel" pointer was ours, hand it to the newest kernel that
+    is still running so port-less readers keep working.
+    """
+    directory = Path(directory)
+    _remove_if_owned(directory / per_port_file_name(port), pid)
+    if _remove_if_owned(directory / RUNTIME_FILE_NAME, pid):
+        _repoint_to_live_kernel(directory)
+
+
+PER_PORT_FILE_PATTERN = re.compile(r"^kernel-(\d{1,5})\.json$")
+
+
+def _valid_per_port_record(name: str, text: str) -> bool:
+    """A usable kernel record: right filename, matching port, token + url, live pid."""
+    match = PER_PORT_FILE_PATTERN.match(name)
+    if match is None:
+        return False
+    info = json.loads(text)
+    return (
+        isinstance(info, dict)
+        and info.get("port") == int(match.group(1))
+        and isinstance(info.get("token"), str)
+        and isinstance(info.get("url"), str)
+        and _pid_alive(info.get("pid"))
+    )
+
+
+def _repoint_to_live_kernel(directory: Path) -> None:
+    live: list[tuple[float, str]] = []
+    for candidate in directory.glob("kernel-*.json"):
+        try:
+            text = candidate.read_text()
+            if _valid_per_port_record(candidate.name, text):
+                live.append((candidate.stat().st_mtime, text))
+        except (OSError, ValueError):
+            continue
+    if live:
+        try:
+            _write_private_atomic(directory, RUNTIME_FILE_NAME, max(live)[1])
+        except OSError:
+            pass
 
 
 class StaleRuntimeFileError(RuntimeError):
@@ -331,12 +402,38 @@ def _pid_alive(pid: object) -> bool:
     return True
 
 
-def read_runtime_file(runtime_dir: Path | None = None) -> dict:
+def read_runtime_file(runtime_dir: Path | None = None, port: int | None = None) -> dict:
+    """Connection details of a running kernel.
+
+    With ``port``, the kernel on that port (its per-port file, or the legacy
+    pointer when that names the same port); never another kernel's token.
+    Without it, the most recently started kernel.
+    """
     directory = Path(runtime_dir) if runtime_dir is not None else default_runtime_dir()
-    info = json.loads((directory / RUNTIME_FILE_NAME).read_text())
+    if port is None:
+        info = json.loads((directory / RUNTIME_FILE_NAME).read_text())
+    else:
+        info = _read_for_port(directory, _checked_port(port))
     if not _pid_alive(info.get("pid")):
         raise StaleRuntimeFileError(
             f"runtime file names pid {info.get('pid')!r}, which is not running; "
             "start a kernel or supply the token another way"
         )
+    return info
+
+
+def _read_for_port(directory: Path, port: int) -> dict:
+    try:
+        info = json.loads((directory / per_port_file_name(port)).read_text())
+    except FileNotFoundError:
+        # Kernels from before per-port files only wrote the pointer.
+        try:
+            info = json.loads((directory / RUNTIME_FILE_NAME).read_text())
+        except FileNotFoundError:
+            info = None
+        if not isinstance(info, dict) or info.get("port") != port:
+            raise FileNotFoundError(f"no runtime file for a kernel on port {port} in {directory}") from None
+        return info
+    if not isinstance(info, dict) or info.get("port") != port:
+        raise ValueError(f"runtime file for port {port} describes a different port")
     return info

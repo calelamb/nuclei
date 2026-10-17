@@ -38,6 +38,63 @@ export function JumpButton({
   );
 }
 
+function article(basis: string): string {
+  return basis.toUpperCase() === 'X' ? 'an' : 'a';
+}
+
+function CauseNote({
+  cause,
+  stale,
+  onJump,
+}: {
+  cause: NonNullable<QecNondeterministic['cause']>;
+  stale: boolean;
+  onJump: (line: number) => void;
+}) {
+  const colors = useThemeStore((s) => s.colors);
+  const isReset = cause.kind === 'preparation_basis_mismatch';
+  const prep = cause.preparation_line;
+  const noun = isReset ? 'preparation' : 'measurement';
+  return (
+    <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', fontSize: 11, color: colors.textMuted }}>
+      <span>
+        {isReset
+          ? `Likely cause: not the reset, but ${article(cause.basis)} ${cause.basis}-basis preparation the detector does not match.`
+          : `Likely cause: the ${cause.basis}-basis measurement collapses the qubit, so what the detector compares later is random.`}
+      </span>
+      {prep != null && (
+        <JumpButton
+          line={prep}
+          disabled={stale}
+          onJump={onJump}
+          label={`Jump to ${noun} at line ${prep}`}
+          text={`${noun} · line ${prep}`}
+        />
+      )}
+    </div>
+  );
+}
+
+function SensitivityList({ data }: { data: QecNondeterministic }) {
+  const colors = useThemeStore((s) => s.colors);
+  const omitted = data.targets_omitted ?? 0;
+  const sensitivities = data.sensitivities ?? [];
+  if (sensitivities.length === 0 && omitted === 0) return null;
+  return (
+    <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap', fontSize: 11, color: colors.textMuted }}>
+      <span>Sensitive to</span>
+      {sensitivities.map((s) => (
+        <span key={s.target} style={{ fontFamily: MONO }}>
+          <span>{s.target}</span>
+          {': '}
+          <code style={{ color: colors.text }}>{s.pauli}</code>
+        </span>
+      ))}
+      {omitted > 0 && <span>{`and ${omitted} more`}</span>}
+    </div>
+  );
+}
+
 export function NondeterministicSection({
   data,
   stale,
@@ -76,6 +133,8 @@ export function NondeterministicSection({
           ))}
         </div>
       )}
+      {bad && data.cause && <CauseNote cause={data.cause} stale={stale} onJump={onJump} />}
+      {bad && <SensitivityList data={data} />}
       {data.diagram_svg && (
         <div style={{ background: '#ffffff', borderRadius: 4, padding: 4, overflow: 'auto', maxHeight: 260 }}>
           <img

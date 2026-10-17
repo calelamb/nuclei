@@ -181,3 +181,12 @@ def test_ceilings_overrides_are_validated():
         with pytest.raises(ValidationError):
             Ceilings().with_overrides(bad)
     assert Ceilings().with_overrides({"max_shots": 5, "max_rounds": None}).max_shots == 5
+
+
+def test_stim_paths_parse_error_names_the_failing_path(ctx, tmp_path):
+    bad = tmp_path / "bad.stim"
+    bad.write_text("PRIVATEWORD 0\n")
+    with pytest.raises(ToolInputError) as info:
+        run(ctx, request(source={"kind": "stim_paths", "paths": [str(bad)], "rounds": 3, "noise_model": {"name": "n"}}))
+    assert str(bad) in str(info.value)
+    assert "PRIVATEWORD" not in str(info.value)

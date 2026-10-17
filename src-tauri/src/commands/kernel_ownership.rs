@@ -71,6 +71,34 @@ pub fn remove_owner_record(dir: &Path) {
     let _ = fs::remove_file(owner_path(dir));
 }
 
+const RUNTIME_POINTER_NAME: &str = "kernel.json";
+
+/// Name of one kernel's own runtime file (`kernel-<port>.json`), as written by
+/// `kernel/auth.py`. `kernel.json` is only the "most recent kernel" pointer.
+pub fn per_port_runtime_name(port: u16) -> String {
+    format!("kernel-{port}.json")
+}
+
+fn runtime_file_pid(path: &Path) -> Option<u64> {
+    let text = fs::read_to_string(path).ok()?;
+    serde_json::from_str::<serde_json::Value>(&text)
+        .ok()?
+        .get("pid")?
+        .as_u64()
+}
+
+/// Remove the runtime files a killed kernel left behind (SIGKILL skips the
+/// kernel's own cleanup). Only files that record `pid` are removed, so a
+/// newer kernel that took over `kernel.json` keeps its files.
+pub fn remove_kernel_runtime_files(dir: &Path, port: u16, pid: u32) {
+    for name in [per_port_runtime_name(port), RUNTIME_POINTER_NAME.to_string()] {
+        let path = dir.join(name);
+        if runtime_file_pid(&path) == Some(u64::from(pid)) {
+            let _ = fs::remove_file(path);
+        }
+    }
+}
+
 /// True when a command line looks like `<python> .../kernel/server.py`.
 pub fn is_nuclei_kernel_command(command_line: &str) -> bool {
     let normalized = command_line.replace('\\', "/");
@@ -372,5 +400,51 @@ mod tests {
         // No record: nothing to do, and no panic even though the port may be busy.
         reap_recorded_kernel(Some(dir.path()), 9742);
         assert_eq!(read_owner_record(dir.path()), None);
+    }
+
+    fn write_runtime(dir: &Path, name: &str, pid: u32, port: u16) {
+        let body = format!(r#"{{"url":"ws://localhost:{port}","port":{port},"pid":{pid},"token":"t"}}"#);
+        fs::write(dir.join(name), body).unwrap();
+    }
+
+    #[test]
+    fn removes_both_runtime_files_of_the_killed_kernel() {
+        let dir = tempfile::tempdir().unwrap();
+        write_runtime(dir.path(), "kernel-9742.json", 4242, 9742);
+        write_runtime(dir.path(), "kernel.json", 4242, 9742);
+        remove_kernel_runtime_files(dir.path(), 9742, 4242);
+        assert!(!dir.path().join("kernel-9742.json").exists());
+        assert!(!dir.path().join("kernel.json").exists());
+    }
+
+    #[test]
+    fn keeps_the_pointer_when_another_kernel_took_it_over() {
+        let dir = tempfile::tempdir().unwrap();
+        write_runtime(dir.path(), "kernel-9742.json", 4242, 9742);
+        write_runtime(dir.path(), "kernel.json", 5555, 9743);
+        remove_kernel_runtime_files(dir.path(), 9742, 4242);
+        assert!(!dir.path().join("kernel-9742.json").exists());
+        assert!(dir.path().join("kernel.json").exists());
+    }
+
+    #[test]
+    fn never_removes_runtime_files_recording_a_different_pid() {
+        let dir = tempfile::tempdir().unwrap();
+        write_runtime(dir.path(), "kernel-9742.json", 5555, 9742);
+        remove_kernel_runtime_files(dir.path(), 9742, 4242);
+        assert!(dir.path().join("kernel-9742.json").exists());
+    }
+
+    #[test]
+    fn tolerates_missing_or_garbled_runtime_files() {
+        let dir = tempfile::tempdir().unwrap();
+        fs::write(dir.path().join("kernel.json"), "not json").unwrap();
+        remove_kernel_runtime_files(dir.path(), 9742, 4242);
+        assert!(dir.path().join("kernel.json").exists());
+    }
+
+    #[test]
+    fn per_port_name_matches_the_python_writer() {
+        assert_eq!(per_port_runtime_name(9742), "kernel-9742.json");
     }
 }

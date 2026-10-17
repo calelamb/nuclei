@@ -8,7 +8,12 @@ import { useSettingsStore } from '../stores/settingsStore';
 import { kernelLanguageFor } from '../types/quantum';
 import type { KernelLanguage, KernelResponse } from '../types/quantum';
 import { KERNEL_WS_URL } from '../config/kernel';
-import { openAuthenticatedKernelSocket } from '../services/kernelSocket';
+import {
+  CLOSE_UNAUTHENTICATED,
+  KERNEL_AUTH_REJECTED_MESSAGE,
+  KernelAuthRejectedError,
+  openKernelConnection,
+} from '../services/kernelSocket';
 import type { PyodideKernel } from '../platform/pyodideKernel';
 import { useDiracStore } from '../stores/diracStore';
 import { useHardwareStore } from '../stores/hardwareStore';
@@ -16,6 +21,7 @@ import { useQecStore } from '../stores/qecStore';
 import { useQecEstimateStore } from '../stores/qecEstimateStore';
 import { useQecExplainStore } from '../stores/qecExplainStore';
 import { applyQecExplainResult, applyQecExplainError, explainSizeError } from '../lib/qecExplainMessages';
+import { sendPostAuthMessages } from './kernelPostAuth';
 import { setQecExplainSender, type QecExplainAnalysis } from '../lib/qecExplainSender';
 import { useMissingDependencyStore } from '../stores/missingDependencyStore';
 import { setQecDecodeSender, setQecSnapshotSender, setQecEstimateSender } from '../lib/qecDecodeSender';
@@ -428,6 +434,16 @@ export function useKernel() {
   // WebSocket connection for desktop. We connect optimistically; if the
   // kernel hasn't opened its port yet, `onerror` fires fast and we retry on
   // a short cadence until the probe budget is exhausted.
+  const failAuthRejected = useCallback(() => {
+    if (!mountedRef.current) return;
+    // Both the close event and the auth promise report this; say it once.
+    if (useEditorStore.getState().kernelError === KERNEL_AUTH_REJECTED_MESSAGE) return;
+    useEditorStore.getState().setKernelConnected(false);
+    useEditorStore.getState().setKernelReady(false);
+    useEditorStore.getState().setKernelStatus('failed', KERNEL_AUTH_REJECTED_MESSAGE);
+    useSimulationStore.getState().addOutput(`Error: ${KERNEL_AUTH_REJECTED_MESSAGE}`, 'stderr');
+  }, []);
+
   const connect = useCallback(() => {
     if (!mountedRef.current || isWeb) return;
     if (wsRef.current?.readyState === WebSocket.OPEN) return;
@@ -435,56 +451,25 @@ export function useKernel() {
     useEditorStore.getState().setKernelStatus('connecting');
 
     const getToken = platform.getKernelAuthToken?.bind(platform);
-    void openAuthenticatedKernelSocket(KERNEL_URL, getToken).then((ws) => {
+    void openKernelConnection(KERNEL_URL, getToken).then(({ ws, authenticated }) => {
       if (!mountedRef.current) { ws.close(); return; }
-      ws.onopen = () => {
-        wsRef.current = ws;
+      ws.onopen = () => { wsRef.current = ws; };
+
+      // "Connected" means the kernel accepted our token, not merely that the
+      // socket opened: a rejected session must never look ready.
+      const onAuthenticated = () => {
+        if (!mountedRef.current) { ws.close(); return; }
         retryCountRef.current = 0;
         useEditorStore.getState().setKernelConnected(true);
         useEditorStore.getState().setKernelReady(true);
         useEditorStore.getState().setKernelStatus('ready');
-        const code = useEditorStore.getState().code;
-        if (code.trim()) {
-          const language = kernelLanguageFor(useEditorStore.getState().framework, useEditorStore.getState().filePath);
-          ws.send(JSON.stringify({ type: 'parse', code, language }));
-        }
-
-        // One-time migration: earlier builds wrote provider credentials to
-        // localStorage as plaintext. On first connect after the keyring move,
-        // hand any stashed tokens to the kernel and wipe localStorage so the
-        // secrets never sit in the browser again. Safe to re-run — if there
-        // are no legacy keys, the whole block no-ops.
-        try {
-          const LEGACY_PREFIX = 'nuclei-hardware-';
-          for (let i = 0; i < localStorage.length; i++) {
-            const key = localStorage.key(i);
-            if (!key || !key.startsWith(LEGACY_PREFIX)) continue;
-            const provider = key.slice(LEGACY_PREFIX.length);
-            const raw = localStorage.getItem(key);
-            if (!raw) continue;
-            try {
-              const creds = JSON.parse(raw);
-              if (creds && typeof creds === 'object') {
-                ws.send(JSON.stringify({
-                  type: 'hardware_set_credentials',
-                  provider,
-                  credentials: creds,
-                }));
-              }
-            } catch { /* malformed legacy entry — drop it */ }
-            localStorage.removeItem(key);
-          }
-        } catch { /* localStorage may be unavailable in some embedded webviews */ }
-
-        // Ask the kernel which providers it already has connections to from
-        // its keyring-backed auto-reconnect, so the UI shows them as connected
-        // without the user having to re-enter tokens.
-        ws.send(JSON.stringify({ type: 'hardware_connected_providers' }));
-        // Rehydrate JobTracker from the kernel's persistent registry so the
-        // user sees their past jobs (marked 'stale' when not recoverable)
-        // instead of an empty list on reload.
-        ws.send(JSON.stringify({ type: 'hardware_list_jobs' }));
+        sendPostAuthMessages(ws);
       };
+
+      authenticated.then(onAuthenticated, (error: unknown) => {
+        if (error instanceof KernelAuthRejectedError) failAuthRejected();
+        else if (mountedRef.current && ws.readyState === WebSocket.OPEN) ws.close();
+      });
 
       ws.onmessage = (event) => {
         try {
@@ -494,7 +479,7 @@ export function useKernel() {
         }
       };
 
-      ws.onclose = () => {
+      ws.onclose = (event) => {
         wsRef.current = null;
         // A pending explain will never get its reply; say so instead of spinning.
         useQecExplainStore.getState().failPending(
@@ -502,6 +487,8 @@ export function useKernel() {
         );
         useEditorStore.getState().setKernelConnected(false);
         if (!mountedRef.current) return;
+        // A rejected token will be rejected again: report it, don't loop.
+        if (event.code === CLOSE_UNAUTHENTICATED) { failAuthRejected(); return; }
 
         if (retryCountRef.current < MAX_RETRIES) {
           retryCountRef.current++;
@@ -516,7 +503,7 @@ export function useKernel() {
 
       ws.onerror = () => { ws.close(); };
     });
-  }, [handleMessage, isWeb, platform]);
+  }, [failAuthRejected, handleMessage, isWeb, platform]);
 
 
   // Initialize Pyodide kernel for web

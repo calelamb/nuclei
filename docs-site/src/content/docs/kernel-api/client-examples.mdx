@@ -23,8 +23,9 @@ cd kernel && NUCLEI_KERNEL_TOKEN="$(python -c 'import secrets; print(secrets.tok
 ```
 
 The kernel requires a token (see [Authentication](/docs/kernel-api/overview/#authentication)). It
-writes the token to `~/.nuclei/runtime/kernel.json`, and the example clients
-read it from there (or from `$NUCLEI_KERNEL_TOKEN`).
+writes the token to `~/.nuclei/runtime/kernel-<port>.json` (and to `kernel.json`,
+which points at the newest kernel), and the example clients read the file for
+the port they connect to (or `$NUCLEI_KERNEL_TOKEN`).
 
 <Tabs>
 <TabItem label="Python">
@@ -78,7 +79,7 @@ ready-to-send JSON:
 # to one line (websocat sends one frame per input line); --no-close keeps the
 # connection open after stdin EOF so the response frames have time to arrive.
 {
-  jq -c '{type: "authenticate", token: .token}' ~/.nuclei/runtime/kernel.json
+  jq -c '{type: "authenticate", token: .token}' ~/.nuclei/runtime/kernel-9742.json
   jq -c . docs-site/fixtures/run_python_hello.request.json
 } | websocat --no-close ws://localhost:9742
 ```

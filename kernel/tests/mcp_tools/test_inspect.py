@@ -78,3 +78,71 @@ def test_huge_circuit_skips_the_synchronous_distance_search(monkeypatch):
     monkeypatch.setattr(ti, "MAX_DISTANCE_DETECTORS", 0)
     out = ti.inspect_circuit("R 0 1\nM 0 1\nDETECTOR rec[-1] rec[-2]\nOBSERVABLE_INCLUDE(0) rec[-1]")
     assert out["graphlike_distance"] is None and "skipped" in out["graphlike_distance_unavailable_reason"]
+
+
+def test_invalid_circuit_error_never_echoes_file_content(tmp_path):
+    secret = "SUPERSECRETTOKEN1234 and more"
+    p = tmp_path / "notes.txt"
+    p.write_text(secret)
+    text = read_circuit_text(stim_text=None, path=str(p))
+    with pytest.raises(ToolInputError) as info:
+        inspect_circuit(text, source_path=str(p))
+    assert "SUPERSECRETTOKEN1234" not in str(info.value)
+    assert "not a valid stim circuit" in str(info.value)
+
+
+def test_non_utf8_file_error_has_no_bytes_and_keeps_path(tmp_path):
+    p = tmp_path / "bin.stim"
+    p.write_bytes(b"\xff\xfeSECRET\x80")
+    with pytest.raises(ToolInputError) as info:
+        read_circuit_text(stim_text=None, path=str(p))
+    assert str(p) in str(info.value)
+    assert "SECRET" not in str(info.value)
+
+
+def test_symlink_is_refused_even_when_target_is_a_circuit(tmp_path):
+    real = tmp_path / "real.stim"
+    real.write_text(SURFACE)
+    link = tmp_path / "link.stim"
+    link.symlink_to(real)
+    with pytest.raises(ToolInputError, match="symlink") as info:
+        read_circuit_text(stim_text=None, path=str(link))
+    assert str(link) in str(info.value)
+
+
+def test_directory_and_fifo_are_refused_as_non_regular(tmp_path):
+    import os
+    with pytest.raises(ToolInputError, match="regular file") as info:
+        read_circuit_text(stim_text=None, path=str(tmp_path))
+    assert str(tmp_path) in str(info.value)
+    fifo = tmp_path / "pipe.stim"
+    os.mkfifo(fifo)
+    with pytest.raises(ToolInputError, match="regular file"):
+        read_circuit_text(stim_text=None, path=str(fifo))
+
+
+def test_oversized_file_is_refused_with_path(tmp_path, monkeypatch):
+    import nuclei_mcp.tools_inspect as ti
+    monkeypatch.setattr(ti, "MAX_CIRCUIT_BYTES", 4)
+    p = tmp_path / "big.stim"
+    p.write_text("H 0\nH 0\n")
+    with pytest.raises(ToolInputError, match="exceeds"):
+        ti.read_circuit_text(stim_text=None, path=str(p))
+
+
+def test_path_parse_error_names_path_and_line_but_no_content(tmp_path):
+    p = tmp_path / "notes.stim"
+    p.write_text("H 0\nSUPERSECRETTOKEN1234 0\n")
+    text = read_circuit_text(stim_text=None, path=str(p))
+    with pytest.raises(ToolInputError) as info:
+        inspect_circuit(text, source_path=str(p))
+    message = str(info.value)
+    assert str(p) in message and "line 2" in message
+    assert "SUPERSECRETTOKEN1234" not in message
+
+
+def test_inline_parse_error_reports_line_and_stim_reason():
+    with pytest.raises(ToolInputError) as info:
+        inspect_circuit("H 0\nNOT_A_GATE 0")
+    assert "line 2" in str(info.value)
+    assert "NOT_A_GATE" in str(info.value)

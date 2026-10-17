@@ -20,6 +20,7 @@ from typing import Any
 
 import stim
 
+from kernel.qec.explain_cause import PREPARATION_KIND, cause_guidance, classify_cause
 from kernel.qec.explain_declarations import declaration_lines
 from kernel.qec.explain_parse import StimAnalysisError, first_failing_line, parse_stim_error
 from kernel.qec.explain_source_map import (
@@ -29,6 +30,7 @@ from kernel.qec.explain_source_map import (
     verified_source_map,
 )
 
+MAX_LISTED_TARGETS = 20
 SEARCH_FALLBACK_LIMITS = ((4, 4), (6, 6))
 GRAPHLIKE_CAVEAT = (
     "Weight counts physical faults of the circuit's graphlike error mechanisms "
@@ -107,8 +109,25 @@ def _diagram_svg(circuit: stim.Circuit, info: StimAnalysisError) -> str | None:
         return None
 
 
-def _subject(info: StimAnalysisError) -> str:
-    """"Detector D0", "Detectors D0, D1 and observable L0" - named from the listed targets."""
+SUMMARY_TARGETS = 3
+
+
+def _target_names(info: StimAnalysisError, omitted: int = 0) -> str:
+    """"D0, D1" or, past three targets, "D0, D1, D2 and 17 more"."""
+    total = len(info.targets) + omitted
+    if total <= SUMMARY_TARGETS:
+        return ", ".join(info.targets) or f"a {info.kind}"
+    shown = ", ".join(info.targets[:SUMMARY_TARGETS])
+    return f"{shown} and {total - SUMMARY_TARGETS} more"
+
+
+def _subject(info: StimAnalysisError, omitted: int = 0) -> str:
+    """"Detector D0", "Detectors D0, D1, D2 and 17 more" - named from the listed targets."""
+    total = len(info.targets) + omitted
+    if total > SUMMARY_TARGETS:
+        kinds = {t[:1] for t in info.targets}
+        noun = {"D": "detector", "L": "observable"}.get(next(iter(kinds)) if len(kinds) == 1 else "", "target")
+        return f"{noun.capitalize()}s {_target_names(info, omitted)}"
     groups = (
         ("detector", info.detector_indices, "D"),
         ("observable", info.observable_indices, "L"),
@@ -118,30 +137,59 @@ def _subject(info: StimAnalysisError) -> str:
         for noun, idx, p in groups
         if idx
     ]
-    if not parts:
-        parts = [f"a {info.kind}"]
-    text = " and ".join(parts)
+    text = " and ".join(parts) if parts else f"a {info.kind}"
     return text[0].upper() + text[1:]
 
 
-def _nondeterministic_sentence(info: StimAnalysisError, line: int | None, declared: dict[str, int]) -> str:
-    names = ", ".join(info.targets) or f"a {info.kind}"
-    plural = len(info.targets) > 1
-    qubits = ", ".join(str(q) for q in info.qubits)
-    qubit_phrase = f" on qubit{'s' if len(info.qubits) != 1 else ''} {qubits}" if qubits else ""
-    op = info.operation or "operation"
+def _sensitivity_text(info: StimAnalysisError) -> str:
+    if len(info.sensitivities) > SUMMARY_TARGETS:
+        return " Each target's Pauli is listed below."
+    if len(info.sensitivities) > 1:
+        each = "; ".join(f"{t}: {p}" for t, p in info.sensitivities)
+        return f" The Pauli each is sensitive to there is {each}."
+    return f" The Pauli it is sensitive to there is {info.sensitivity}." if info.sensitivity else ""
+
+
+def _where_text(info: StimAnalysisError, line: int | None) -> str:
     where = []
     if line is not None:
         where.append(f"line {line}")
     if info.tick is not None:
         where.append(f"after {info.tick} TICK{'s' if info.tick != 1 else ''}")
-    where_text = f" ({', '.join(where)})" if where else ""
-    sens = f" The Pauli it is sensitive to there is {info.sensitivity}." if info.sensitivity else ""
-    decl = ", ".join(f"{t} at line {n}" for t, n in declared.items())
-    decl_text = f" Declared: {decl}." if decl else ""
+    return f" ({', '.join(where)})" if where else ""
+
+
+def _nondeterministic_sentence(
+    info: StimAnalysisError,
+    line: int | None,
+    declared: dict[str, int],
+    omitted: int = 0,
+    cause: dict[str, Any] | None = None,
+) -> str:
+    names = _target_names(info, omitted)
+    plural = len(info.targets) + omitted > 1
+    qubits = ", ".join(str(q) for q in info.qubits)
+    qubit_phrase = f" on qubit{'s' if len(info.qubits) != 1 else ''} {qubits}" if qubits else ""
+    op = info.operation or "operation"
+    verb = "are" if plural else "is"
+    sens = _sensitivity_text(info)
+    subject = _subject(info, omitted)
+    if cause is not None:
+        guidance = cause_guidance(cause)
+        what = "preparation" if cause["kind"] == PREPARATION_KIND else "operations before the measurement"
+        return (
+            f"{subject} {verb} non-deterministic, but the {op}{qubit_phrase}"
+            f"{_where_text(info, line)} is only where Stim noticed it: the parity of {names} is "
+            f"not fixed by the {what} in that basis, so it is random even without noise.{sens} "
+            f"{guidance} {NONDETERMINISM_HEDGE}"
+        )
+    shown = list(declared.items())[:SUMMARY_TARGETS]
+    decl = ", ".join(f"{t} at line {n}" for t, n in shown)
+    more = len(declared) - len(shown)
+    decl_text = f" Declared: {decl}{f', and {more} more' if more > 0 else ''}." if decl else ""
     return (
-        f"{_subject(info)} {'are' if plural else 'is'} non-deterministic: the {op}{qubit_phrase}"
-        f"{where_text} anti-commutes with what {names} tracks, so its parity is random "
+        f"{subject} {verb} non-deterministic: the {op}{qubit_phrase}"
+        f"{_where_text(info, line)} anti-commutes with what {names} tracks, so its parity is random "
         f"even without noise.{sens}{decl_text} {NONDETERMINISM_HEDGE}"
     )
 
@@ -193,23 +241,7 @@ def _describe_failure(source: str, circuit: stim.Circuit, message: str) -> dict[
         "tick": info.tick,
     }
     if info.kind in ("detector", "observable"):
-        declared = declaration_lines(circuit, source_map, info.targets)
-        return {
-            **base,
-            "status": "nondeterministic",
-            "detector_indices": list(info.detector_indices),
-            "observable_indices": list(info.observable_indices),
-            "targets": list(info.targets),
-            "declaration_lines": declared,
-            "operation": {
-                "description": info.operation,
-                "qubits": list(info.qubits),
-                "instruction": info.instruction_texts[-1] if info.instruction_texts else None,
-            },
-            "sensitivity": info.sensitivity,
-            "diagram_svg": _diagram_svg(circuit, info),
-            "sentence": _nondeterministic_sentence(info, line, declared),
-        }
+        return _nondeterministic_payload(base, info, source, circuit, source_map, line)
     if info.kind == "invalid_reference":
         return {
             **base,
@@ -217,6 +249,46 @@ def _describe_failure(source: str, circuit: stim.Circuit, message: str) -> dict[
             "sentence": _invalid_reference_sentence(info, line),
         }
     return {**base, "status": "invalid_circuit", "sentence": f"Stim rejected this circuit: {message.strip()}"}
+
+
+def _nondeterministic_payload(
+    base: dict[str, Any],
+    info: StimAnalysisError,
+    source: str,
+    circuit: stim.Circuit,
+    source_map: tuple[SourceNode, ...] | None,
+    line: int | None,
+) -> dict[str, Any]:
+    """Payload for a non-deterministic detector/observable; target lists are bounded."""
+    total = len(info.targets)
+    listed = replace(
+        info,
+        targets=info.targets[:MAX_LISTED_TARGETS],
+        sensitivities=info.sensitivities[:MAX_LISTED_TARGETS],
+    )
+    omitted = total - len(listed.targets)
+    declared = declaration_lines(circuit, source_map, listed.targets)
+    cause = classify_cause(listed, source, line, declared)
+    return {
+        **base,
+        "status": "nondeterministic",
+        "detector_indices": list(listed.detector_indices),
+        "observable_indices": list(listed.observable_indices),
+        "targets": list(listed.targets),
+        "target_count": total,
+        "targets_omitted": omitted,
+        "declaration_lines": declared,
+        "cause": cause,
+        "sensitivities": [{"target": t, "pauli": p} for t, p in listed.sensitivities],
+        "operation": {
+            "description": info.operation,
+            "qubits": list(info.qubits),
+            "instruction": info.instruction_texts[-1] if info.instruction_texts else None,
+        },
+        "sensitivity": info.sensitivity,
+        "diagram_svg": _diagram_svg(circuit, info),
+        "sentence": _nondeterministic_sentence(listed, line, declared, omitted, cause),
+    }
 
 
 def _fault_qubits(location: Any) -> list[int]:
