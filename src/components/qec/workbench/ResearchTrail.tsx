@@ -2,6 +2,8 @@ import { ChevronLeft, ChevronRight, X } from 'lucide-react';
 import type { ReactElement } from 'react';
 import { qecEntityRefKey, useResearchSelectionStore } from '../../../stores/researchSelectionStore';
 import type { QecEntityRef, ResearchSelection } from '../../../types/qecSelection';
+import { IconButton } from '../../ui';
+import { ICON_SIZE, ICON_STROKE } from '../../../styles/tokens';
 
 interface TrailEntry { key: string; label: string; kind: string; }
 
@@ -33,8 +35,8 @@ interface TrailButtonsProps { canBack: boolean; canForward: boolean; onBack(): v
 function TrailButtons({ canBack, canForward, onBack, onForward }: TrailButtonsProps): ReactElement {
   return (
     <>
-      <button type="button" aria-label="Back in research trail" title="Back" disabled={!canBack} onClick={onBack}><ChevronLeft aria-hidden="true" size={16} /></button>
-      <button type="button" aria-label="Forward in research trail" title="Forward" disabled={!canForward} onClick={onForward}><ChevronRight aria-hidden="true" size={16} /></button>
+      <IconButton size="sm" aria-label="Back in research trail" title="Back" disabled={!canBack} onClick={onBack}><ChevronLeft aria-hidden="true" size={ICON_SIZE.md} strokeWidth={ICON_STROKE} /></IconButton>
+      <IconButton size="sm" aria-label="Forward in research trail" title="Forward" disabled={!canForward} onClick={onForward}><ChevronRight aria-hidden="true" size={ICON_SIZE.md} strokeWidth={ICON_STROKE} /></IconButton>
     </>
   );
 }
@@ -47,7 +49,7 @@ export function ResearchTrail(): ReactElement {
       <span className="qec-research-trail__label">Trail</span>
       <TrailButtons canBack={state.past.length > 0} canForward={state.future.length > 0} onBack={state.back} onForward={state.forward} />
       <TrailList entries={entries} />
-      <button type="button" aria-label="Clear research trail" title="Clear trail" disabled={entries.length === 0} onClick={state.clear}><X aria-hidden="true" size={14} /></button>
+      <IconButton size="sm" aria-label="Clear research trail" title="Clear trail" disabled={entries.length === 0} onClick={state.clear}><X aria-hidden="true" size={ICON_SIZE.sm} strokeWidth={ICON_STROKE} /></IconButton>
     </nav>
   );
 }

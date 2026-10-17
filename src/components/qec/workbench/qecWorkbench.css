@@ -167,16 +167,6 @@
   letter-spacing: 0.08em; text-transform: uppercase;
 }
 
-.qec-research-trail > button {
-  display: inline-grid; width: 28px; height: 28px; flex: 0 0 auto;
-  place-items: center; padding: 0; border: 1px solid transparent; border-radius: 4px;
-  background: transparent; color: var(--qec-text-muted); transition: color 160ms ease, background-color 160ms ease;
-}
-
-.qec-research-trail > button:not(:disabled):hover {
-  color: var(--qec-analytical); background: var(--qec-selection);
-}
-
 .qec-research-trail ol {
   display: flex; min-width: 0; flex: 1; align-items: center;
   gap: 5px; overflow: hidden;
@@ -333,14 +323,8 @@
   border-color: transparent; background: transparent;
 }
 
-.qec-source-row__import {
-  display: grid; min-width: 44px; min-height: 44px; place-items: center; align-self: stretch;
-  padding: 0; border: 0; border-left: 1px solid var(--qec-border); background: transparent;
-  color: var(--qec-text-muted); transition: color 160ms ease, background-color 160ms ease;
-}
-
-.qec-source-row__import:hover {
-  color: var(--qec-analytical); background: var(--qec-field);
+.qec-source-row__import.nuclei-icon-btn {
+  align-self: center; margin: 0 var(--space-1);
 }
 
 .qec-source-row:hover {
@@ -617,11 +601,6 @@
   justify-content: flex-end; padding: 6px 10px; border-top: 1px solid var(--qec-border);
 }
 
-.qec-inspector__footer button {
-  display: inline-flex; min-height: 34px; align-items: center; gap: 6px;
-  padding: 0 10px; border: 1px solid var(--qec-border); border-radius: 5px; background: var(--qec-raised);
-}
-
 .qec-tray {
   display: flex; min-width: 0; flex-direction: column; overflow: hidden;
   border-top: 1px solid var(--qec-border); background: var(--qec-recessed);
@@ -668,14 +647,8 @@
   box-shadow: inset 0 -2px 0 var(--qec-analytical); background: var(--qec-canvas); color: var(--qec-text); font-weight: 600;
 }
 
-.qec-tray__toggle {
-  display: grid; width: 44px; min-width: 44px; place-items: center;
-  padding: 0; border: 0; border-left: 1px solid var(--qec-border); background: transparent;
-  color: var(--qec-text-muted); transition: color 160ms ease, background-color 160ms ease;
-}
-
-.qec-tray__toggle:hover {
-  background: var(--qec-selection); color: var(--qec-analytical);
+.qec-tray__toggle.nuclei-icon-btn {
+  align-self: center; margin: 0 var(--space-2);
 }
 
 .qec-tray__content {

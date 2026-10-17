@@ -12,6 +12,7 @@ import { QecSourcesPanel } from './QecSourcesPanel';
 import { QecWorkbenchTray } from './QecWorkbenchTray';
 import { QecWorkbenchResizeHandle } from './QecWorkbenchResizeHandle';
 import { useQecTrayIdle } from './useQecTrayIdle';
+import { Button } from '../../ui';
 
 type WorkbenchStyle = CSSProperties & Record<
   '--qec-source-width' | '--qec-inspector-width' | '--qec-tray-height',
@@ -79,14 +80,9 @@ export function QecWorkbench(): ReactElement {
         {persistenceIssue && (
           <div className="qec-persistence-error" role="alert">
             <span>{persistenceIssue.message} {persistenceIssue.instruction}</span>
-            <button
-              type="button"
-              disabled={persistenceIssue.retrying}
-              aria-busy={persistenceIssue.retrying}
-              onClick={persistenceIssue.retry}
-            >
+            <Button size="sm" loading={persistenceIssue.retrying} onClick={persistenceIssue.retry}>
               {persistenceIssue.operation === 'read' ? 'Retry restore' : 'Retry save'}
-            </button>
+            </Button>
           </div>
         )}
       </div>

@@ -6,7 +6,7 @@ import { qecEntityRefKey, useResearchSelectionStore } from '../../../stores/rese
 import type { ResearchSelection } from '../../../types/qecSelection';
 import { QecPanelPinButton } from './QecPanelPinButton';
 import { ICON_SIZE, ICON_STROKE } from '../../../styles/tokens';
-import { IconButton } from '../../ui';
+import { Button, IconButton } from '../../ui';
 
 export const QEC_RESEARCH_INSPECTOR_ID = 'qec-research-inspector';
 
@@ -106,9 +106,9 @@ export function QecResearchInspector({ open, onClose }: QecResearchInspectorProp
         <SelectionDetails selection={selection} /><InspectorTools /><LineageState />
       </div>
       <footer className="qec-inspector__footer">
-        <button type="button" disabled title="Select evidence before pinning a Finding">
-          <Pin aria-hidden="true" size={16} />Pin Finding
-        </button>
+        <Button disabled title="Select evidence before pinning a Finding" icon={<Pin aria-hidden="true" size={ICON_SIZE.md} strokeWidth={ICON_STROKE} />}>
+          Pin Finding
+        </Button>
       </footer>
     </aside>
   );
