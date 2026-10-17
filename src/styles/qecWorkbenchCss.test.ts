@@ -35,7 +35,7 @@ describe('QEC workbench CSS tokens', () => {
     );
     expect(responsiveStyles).toContain('@media (max-width: 699px)');
     expect(qecStyles).toMatch(/\.qec-inspector\[hidden\]\s*{[\s\S]*?display: none;/);
-    expect(qecStyles).toContain('outline: 2px solid var(--qec-analytical)');
+    expect(qecStyles).toContain('outline: var(--focus-ring-width) solid var(--focus-ring-color)');
     expect(responsiveStyles).toMatch(
       /@media \(prefers-reduced-motion: reduce\)[\s\S]*?transition-duration: 0\.01ms !important;/,
     );

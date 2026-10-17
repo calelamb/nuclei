@@ -1,4 +1,4 @@
-import { ChevronDown, ChevronUp, CircleDot, ListChecks, LoaderCircle, Radio } from 'lucide-react';
+import { ChevronDown, ChevronUp, CircleDot, ListChecks, LoaderCircle, Radio, RefreshCw } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState, type ReactElement } from 'react';
 
 import { resolveQecPanels } from '../../../layout/qecPanelRegistry';
@@ -17,6 +17,8 @@ import {
 } from '../../../stores/qecSessionCatalogStore';
 import { useQecWorkbenchStore } from '../../../stores/qecWorkbenchStore';
 import { QecImportWizard } from '../import/QecImportWizard';
+import { Button } from '../../ui';
+import { ICON_SIZE, ICON_STROKE } from '../../../styles/tokens';
 
 interface TrayHeaderProps { expanded: boolean; importing: boolean; onToggle(): void; }
 
@@ -206,8 +208,8 @@ function useImportEngine(
 }
 
 function EngineNotice({ state }: { state: EngineState }): ReactElement {
-  if (state.loading) return <div className="qec-tray__engine" role="status"><LoaderCircle aria-hidden="true" size={18} /><span>Starting authenticated QEC Data Engine…</span></div>;
-  return <div className="qec-tray__engine" role="alert"><CircleDot aria-hidden="true" size={18} /><span>{state.error}</span>{state.retry && <button type="button" onClick={state.retry}>Retry QEC Data Engine</button>}</div>;
+  if (state.loading) return <div className="qec-tray__engine" role="status"><LoaderCircle className="nuclei-spin" aria-hidden="true" size={ICON_SIZE.lg} /><span>Starting authenticated QEC Data Engine…</span></div>;
+  return <div className="qec-tray__engine" role="alert"><CircleDot aria-hidden="true" size={ICON_SIZE.lg} /><span>{state.error}</span>{state.retry && <Button size="sm" icon={<RefreshCw aria-hidden="true" size={ICON_SIZE.sm} strokeWidth={ICON_STROKE} />} onClick={state.retry}>Retry QEC Data Engine</Button>}</div>;
 }
 
 function supportsSessionCatalog(client: QecWorkbenchClient): client is QecWorkbenchClient & QecSessionCatalogClient {

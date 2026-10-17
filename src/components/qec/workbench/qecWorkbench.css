@@ -11,10 +11,28 @@
   --qec-warning-field: #fffbeb; --qec-warning-border: #fcd34d; --qec-warning-divider: #fde68a; --qec-warning-text: #854d0e;
   --qec-danger: #b91c1c; --qec-danger-field: #fef2f2; --qec-danger-border: #fecaca;
   --qec-success-field: #f0fdf4; --qec-success-border: #bbf7d0;
+  --qec-wash: #f7fafe; --qec-line: #dbeafe; --qec-line-strong: #bfdbfe; --qec-line-hover: #93c5fd; --qec-tint: #eff6ff;
+  --qec-analytical-text: #1d4ed8; --qec-info-edge: #0284c7; --qec-on-strong: #ffffff;
   color: var(--qec-text); background: var(--qec-canvas); display: grid;
   grid-template-rows: auto minmax(0, 1fr) 9px auto; width: 100%; height: 100%; min-width: 0;
   min-height: 0; overflow: hidden; font-family: var(--font-sans); font-size: 13px;
   line-height: 1.45;
+}
+
+/* Dark theme: same --qec-* contract, resolved from the app's global tokens so the
+   workbench follows the theme toggle instead of staying a white slab. */
+:root[data-theme='dark'] .qec-workbench {
+  --qec-canvas: var(--color-surface-base); --qec-raised: var(--color-surface-raised);
+  --qec-recessed: var(--color-surface-sunken); --qec-border: var(--color-border-strong);
+  --qec-text: var(--color-text-primary); --qec-text-muted: var(--color-text-secondary);
+  --qec-quantum: var(--color-accent-quantum-soft); --qec-interactive: var(--color-accent-quantum);
+  --qec-analytical: #60a5fa; --qec-field: #0f2233; --qec-selection: #0e2f44; --qec-selection-strong: #14425f;
+  --qec-quantum-strong: #7dd3e8; --qec-analytical-strong: #93c5fd; --qec-success: #34d399; --qec-warning: #fbbf24;
+  --qec-warning-field: #2a2210; --qec-warning-border: #6b5311; --qec-warning-divider: #4a3a10; --qec-warning-text: #fcd34d;
+  --qec-danger: #f87171; --qec-danger-field: #2a1417; --qec-danger-border: #6e2a2f;
+  --qec-success-field: #0f2a1e; --qec-success-border: #1e5c3f;
+  --qec-wash: #0a101a; --qec-line: #1e2d45; --qec-line-strong: #2a3f5e; --qec-line-hover: #3b5a85; --qec-tint: #112036;
+  --qec-analytical-text: #93c5fd; --qec-info-edge: #38bdf8; --qec-on-strong: #ffffff;
 }
 
 .qec-workbench--tray-collapsed {
@@ -59,7 +77,7 @@
 .qec-workbench input:focus-visible,
 .qec-workbench [tabindex]:focus-visible,
 .qec-workbench [role='option']:focus-visible {
-  outline: 2px solid var(--qec-analytical); outline-offset: 2px;
+  outline: var(--focus-ring-width) solid var(--focus-ring-color); outline-offset: var(--focus-ring-offset);
 }
 
 .qec-mono {
@@ -153,7 +171,7 @@
 }
 
 .qec-study-create-button:not(:disabled) {
-  background: var(--qec-action) !important; color: var(--qec-action-foreground) !important;
+  background: var(--qec-action) !important; border-color: var(--qec-action) !important; color: var(--qec-action-foreground) !important;
 }
 
 .qec-research-trail {
@@ -240,7 +258,7 @@
 .qec-resize-handle:hover,
 .qec-resize-handle:focus-visible {
   background: var(--qec-selection);
-  outline: 2px solid var(--qec-analytical); outline-offset: -2px;
+  outline: var(--focus-ring-width) solid var(--focus-ring-color); outline-offset: -2px;
 }
 
 .qec-panel-pin {
@@ -356,7 +374,7 @@
 }
 
 .qec-source-row strong {
-  font-size: 12px; font-weight: 650;
+  font-size: 12px; font-weight: 600;
 }
 
 .qec-source-row small {
@@ -479,7 +497,7 @@
 .qec-inspector__close {
   display: inline-flex; min-height: 44px; align-items: center; justify-content: center;
   gap: 6px; padding: 0 10px; border: 1px solid var(--qec-border); border-radius: 5px;
-  background: var(--qec-raised); color: var(--qec-text-muted); font-size: 10px; font-weight: 650;
+  background: var(--qec-raised); color: var(--qec-text-muted); font-size: 10px; font-weight: 600;
   transition: color 160ms ease, background-color 160ms ease;
 }
 
@@ -684,7 +702,7 @@
 }
 
 .qec-tray__tabs .qec-tray__active-instrument {
-  box-shadow: inset 0 -2px 0 var(--qec-analytical); background: var(--qec-canvas); color: var(--qec-text); font-weight: 650;
+  box-shadow: inset 0 -2px 0 var(--qec-analytical); background: var(--qec-canvas); color: var(--qec-text); font-weight: 600;
 }
 
 .qec-tray__toggle {
@@ -738,3 +756,10 @@
 .qec-tray__summary dd {
   margin-top: 3px; font-size: 14px; font-weight: 600;
 }
+
+/* Engine status notice (starting / unavailable / disconnected) */
+.qec-tray__engine {
+  display: flex; flex-wrap: wrap; min-height: 150px; align-items: center; justify-content: center;
+  gap: 8px 10px; padding: 24px; background: var(--qec-wash); color: var(--qec-text-muted); font-size: 12px;
+}
+.qec-tray__engine > span { min-width: 0; overflow-wrap: anywhere; }
