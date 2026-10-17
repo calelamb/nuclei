@@ -129,7 +129,7 @@ button:focus:not(:focus-visible) {
   border-radius: var(--radius-soft);
   font-family: var(--font-mono);
   font-size: var(--font-size-code);
-  color: var(--color-accent-quantum);
+  color: var(--color-accent-quantum-text);
 }
 .dirac-markdown pre {
   background: var(--color-surface-base);
@@ -148,7 +148,7 @@ button:focus:not(:focus-visible) {
 .dirac-markdown ul, .dirac-markdown ol { padding-left: 20px; margin: 6px 0; }
 .dirac-markdown strong { color: var(--color-accent-quantum-soft); }
 .dirac-markdown h1, .dirac-markdown h2, .dirac-markdown h3 {
-  color: var(--color-accent-quantum);
+  color: var(--color-accent-quantum-text);
   margin: 8px 0 4px 0;
 }
 
