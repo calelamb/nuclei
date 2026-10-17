@@ -161,7 +161,7 @@ export const LIGHT_COLORS: ColorTokens = {
   accentQuantum: '#0891B2',
   accentQuantumSoft: '#00B4D8',
   accentQuantumText: '#0E7490',
-  onAccent: '#FFFFFF',
+  onAccent: '#080D16',
   accentDirac: '#6B21A8',
   accentDiracText: '#6B21A8',
   modeResearch: '#1D4ED8',

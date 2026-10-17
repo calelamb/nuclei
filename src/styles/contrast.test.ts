@@ -30,8 +30,8 @@ describe.each([['dark', DARK_COLORS], ['light', LIGHT_COLORS]] as const)('%s pal
     expect(r('textSecondary')).toBeGreaterThan(r('textTertiary'));
     expect(r('textTertiary')).toBeGreaterThan(r('textDisabled'));
   });
-  it('onAccent text on the accent fill is legible (>= 3:1, large-text AA)', () => {
-    expect(ratio(c.onAccent, c.accentQuantum)).toBeGreaterThanOrEqual(3);
+  it('onAccent text on the accent fill meets AA 4.5:1 for small button text', () => {
+    expect(ratio(c.onAccent, c.accentQuantum)).toBeGreaterThanOrEqual(4.5);
   });
   it('white text on the Dirac fill meets AA', () => {
     expect(ratio('#FFFFFF', c.accentDirac)).toBeGreaterThanOrEqual(4.5);
