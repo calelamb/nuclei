@@ -19,10 +19,11 @@ import {
   X,
   type LucideIcon,
 } from 'lucide-react';
-import { Button, IconButton } from '../ui';
+import { Button, IconButton, Menu, type MenuEntry } from '../ui';
 import { useProjectStore } from '../../stores/projectStore';
 import { useEditorStore } from '../../stores/editorStore';
 import { useThemeStore } from '../../stores/themeStore';
+import { useWorkspaceStore } from '../../stores/workspaceStore';
 import { usePlatform } from '../../platform/PlatformProvider';
 import type { DirEntry } from '../../platform/bridge';
 import type { Framework } from '../../types/quantum';
@@ -88,11 +89,9 @@ export function FileExplorer() {
   const [error, setError] = useState<string | null>(null);
   const [renameTarget, setRenameTarget] = useState<string | null>(null);
   const [renameDraft, setRenameDraft] = useState('');
+  const workspaceMode = useWorkspaceStore((s) => s.mode);
   const [pending, setPending] = useState<CreateKind | null>(null);
   const [draft, setDraft] = useState('');
-  const [menuOpen, setMenuOpen] = useState(false);
-  const [circuitSubmenu, setCircuitSubmenu] = useState(false);
-  const menuContainerRef = useRef<HTMLDivElement>(null);
   const treeRef = useRef<HTMLDivElement>(null);
   const [focusedPath, setFocusedPath] = useState<string | null>(null);
 
@@ -144,26 +143,6 @@ export function FileExplorer() {
       else setRootEntries(null);
     });
   }, [projectRoot, loadRoot]);
-
-  useEffect(() => {
-    if (!menuOpen) return;
-    const h = (e: MouseEvent) => {
-      if (menuContainerRef.current?.contains(e.target as Node)) return;
-      setMenuOpen(false);
-      setCircuitSubmenu(false);
-    };
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key !== 'Escape') return;
-      setMenuOpen(false);
-      setCircuitSubmenu(false);
-    };
-    document.addEventListener('mousedown', h);
-    document.addEventListener('keydown', onKey);
-    return () => {
-      document.removeEventListener('mousedown', h);
-      document.removeEventListener('keydown', onKey);
-    };
-  }, [menuOpen]);
 
   const handleOpenFolder = useCallback(async () => {
     const picked = await platform.openDirectory();
@@ -228,8 +207,6 @@ export function FileExplorer() {
   const startCreate = (c: CreateKind) => {
     setPending(c);
     setDraft(c.initial);
-    setMenuOpen(false);
-    setCircuitSubmenu(false);
   };
 
   const cancelCreate = () => {
@@ -522,7 +499,7 @@ export function FileExplorer() {
         <a href="https://getnuclei.dev" style={{ color: colors.accentText }}>
           getnuclei.dev
         </a>{' '}
-        to open a whole lecture folder. You can still edit and simulate circuits here.
+        to open a whole {workspaceMode === 'research' ? 'project' : 'lecture'} folder. You can still edit and simulate circuits here.
       </div>
     );
   }
@@ -569,20 +546,24 @@ export function FileExplorer() {
     );
   }
 
-  const menuItemStyle: React.CSSProperties = {
-    display: 'flex',
-    alignItems: 'center',
-    gap: 8,
-    width: '100%',
-    padding: '6px 12px',
-    background: 'transparent',
-    color: colors.text,
-    border: 'none',
-    cursor: 'pointer',
-    fontSize: 12,
-    fontFamily: TYPOGRAPHY.fontSans,
-    textAlign: 'left',
-  };
+  const newMenuEntries: MenuEntry[] = [
+    {
+      id: 'file', label: 'New File', icon: <FilePlus size={14} />, hint: '.py',
+      onSelect: () => startCreate({ kind: 'file', initial: 'untitled.py' }),
+    },
+    {
+      id: 'circuit', label: 'New Circuit', icon: <AtomIcon size={14} />,
+      items: (['qiskit', 'cirq', 'cuda-q', 'qsharp'] as Framework[]).map((f) => ({
+        id: `circuit-${f}`,
+        label: displayFrameworkName(f),
+        icon: <AtomIcon size={14} />,
+        onSelect: () => startCreate({ kind: 'circuit', framework: f, initial: defaultCircuitFileName(f) }),
+      })),
+    },
+    { id: 'sep', separator: true },
+    { id: 'package', label: 'New Python Package', icon: <Package size={14} />, onSelect: () => startCreate({ kind: 'package', initial: 'new_package' }) },
+    { id: 'folder', label: 'New Folder', icon: <FolderPlus size={14} />, onSelect: () => startCreate({ kind: 'folder', initial: 'new_folder' }) },
+  ];
 
   return (
     <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
@@ -613,102 +594,16 @@ export function FileExplorer() {
         >
           {rootName}
         </span>
-        <div ref={menuContainerRef}>
-          <IconButton
-            size="sm"
-            aria-label="New file, circuit or folder"
-            tooltip={{ label: 'New…' }}
-            onClick={() => {
-              setMenuOpen((o) => !o);
-              setCircuitSubmenu(false);
-            }}
-            aria-haspopup="menu"
-            aria-expanded={menuOpen}
-          >
-            <Plus size={14} />
-          </IconButton>
-          {menuOpen && (
-            <div
-              role="menu"
-              style={{
-                position: 'absolute',
-                left: 8,
-                right: 8,
-                top: 'calc(100% + 4px)',
-                background: colors.bgPanel,
-                border: `1px solid ${colors.borderStrong}`,
-                borderRadius: 'var(--radius-round)',
-                zIndex: 100,
-                overflow: 'visible',
-                boxShadow: '0 8px 24px rgba(0,0,0,0.25)',
-                padding: '4px 0',
-              }}
-            >
-              <button
-                className="nuclei-menu-item nuclei-menu-item--tint"
-                style={menuItemStyle}
-                onClick={() => startCreate({ kind: 'file', initial: 'untitled.py' })}
-              >
-                <FilePlus size={14} style={{ color: colors.textDim }} /> New File
-                <span style={{ marginLeft: 'auto', fontSize: 11, color: colors.textDim }}>.py</span>
-              </button>
-
-              <div style={{ position: 'relative' }}>
-                <button
-                  className="nuclei-menu-item nuclei-menu-item--tint"
-                style={menuItemStyle}
-                  aria-haspopup="menu"
-                  aria-expanded={circuitSubmenu}
-                  onClick={() => setCircuitSubmenu((s) => !s)}
-                >
-                  <AtomIcon size={14} style={{ color: colors.accentLight }} /> New Circuit
-                  {circuitSubmenu
-                    ? <ChevronDown size={12} style={{ marginLeft: 'auto', color: colors.textDim }} />
-                    : <ChevronRight size={12} style={{ marginLeft: 'auto', color: colors.textDim }} />}
-                </button>
-                {circuitSubmenu && (
-                  <div
-                    role="menu"
-                    style={{ paddingLeft: 12 }}
-                  >
-                    {(['qiskit', 'cirq', 'cuda-q', 'qsharp'] as Framework[]).map((f) => (
-                      <button
-                        key={f}
-                        className="nuclei-menu-item nuclei-menu-item--tint"
-                style={menuItemStyle}
-                        onClick={() => startCreate({
-                          kind: 'circuit',
-                          framework: f,
-                          initial: defaultCircuitFileName(f),
-                        })}
-                      >
-                        <AtomIcon size={14} style={{ color: colors.accentLight }} />
-                        {displayFrameworkName(f)}
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
-
-              <div style={{ borderTop: `1px solid ${colors.border}`, margin: '4px 0' }} />
-
-              <button
-                className="nuclei-menu-item nuclei-menu-item--tint"
-                style={menuItemStyle}
-                onClick={() => startCreate({ kind: 'package', initial: 'new_package' })}
-              >
-                <Package size={14} style={{ color: colors.textDim }} /> New Python Package
-              </button>
-              <button
-                className="nuclei-menu-item nuclei-menu-item--tint"
-                style={menuItemStyle}
-                onClick={() => startCreate({ kind: 'folder', initial: 'new_folder' })}
-              >
-                <FolderPlus size={14} style={{ color: colors.textDim }} /> New Folder
-              </button>
-            </div>
+        <Menu
+          label="New file, circuit or folder"
+          entries={newMenuEntries}
+          minWidth={220}
+          trigger={(p) => (
+            <IconButton {...p} size="sm" aria-label="New file, circuit or folder" tooltip={{ label: 'New…' }}>
+              <Plus size={14} />
+            </IconButton>
           )}
-        </div>
+        />
         <IconButton size="sm" aria-label="Refresh file list" tooltip={{ label: 'Refresh' }} onClick={handleRefresh}>
           <RefreshCw size={12} />
         </IconButton>

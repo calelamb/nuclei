@@ -24,21 +24,41 @@ afterEach(cleanup);
 describe('FileExplorer New menu', () => {
   it('opens the circuit list only on click, not on hover', () => {
     setup();
-    const circuit = screen.getByRole('button', { name: /New Circuit/ });
+    const circuit = screen.getByRole('menuitem', { name: /New Circuit/ });
     fireEvent.mouseEnter(circuit.parentElement as HTMLElement);
     fireEvent.mouseOver(circuit);
-    expect(screen.queryByRole('button', { name: 'Cirq' })).toBeNull();
+    expect(screen.queryByRole('menuitem', { name: 'Cirq' })).toBeNull();
     fireEvent.click(circuit);
     expect(circuit.getAttribute('aria-expanded')).toBe('true');
-    expect(screen.getByRole('button', { name: /Cirq/ })).toBeTruthy();
+    expect(screen.getByRole('menuitem', { name: /Cirq/ })).toBeTruthy();
     fireEvent.click(circuit);
-    expect(screen.queryByRole('button', { name: /Cirq/ })).toBeNull();
+    expect(screen.queryByRole('menuitem', { name: /Cirq/ })).toBeNull();
   });
 
   it('closes on Escape', () => {
     setup();
     expect(screen.getByRole('menu')).toBeTruthy();
-    fireEvent.keyDown(document, { key: 'Escape' });
+    fireEvent.keyDown(screen.getByRole('menu'), { key: 'Escape' });
     expect(screen.queryByRole('menu')).toBeNull();
+  });
+
+  it('is operable from the keyboard: focus lands on the first item and arrows rove', () => {
+    setup();
+    const items = screen.getAllByRole('menuitem');
+    expect(items.length).toBeGreaterThanOrEqual(4);
+    expect(document.activeElement).toBe(items[0]);
+    fireEvent.keyDown(screen.getByRole('menu'), { key: 'ArrowDown' });
+    expect(document.activeElement).toBe(items[1]);
+  });
+
+  it('expands New Circuit with ArrowRight and picks a framework by keyboard', () => {
+    setup();
+    const menu = screen.getByRole('menu');
+    fireEvent.keyDown(menu, { key: 'ArrowDown' });
+    fireEvent.keyDown(menu, { key: 'ArrowRight' });
+    expect(document.activeElement?.textContent).toMatch(/Qiskit/);
+    fireEvent.click(document.activeElement as HTMLElement);
+    expect(screen.queryByRole('menu')).toBeNull();
+    expect((screen.getByPlaceholderText(/\.py$/) as HTMLInputElement).value).toMatch(/\.py$/);
   });
 });
