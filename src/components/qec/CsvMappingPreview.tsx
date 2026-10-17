@@ -7,6 +7,7 @@ import {
   metadataKeys, splitMetadataKeys, type SinterMapping,
 } from '../../types/sinterMapping';
 import { toStatsPoint } from '../../types/qecStats';
+import { isNotProbability } from '../../lib/qecProbability';
 import { formatNoise, formatCount } from '../../lib/qecPlotFormat';
 import { ICON_SIZE, ICON_STROKE, TYPOGRAPHY } from '../../styles/tokens';
 import { Button, Select } from '../ui';
@@ -44,6 +45,10 @@ export function CsvMappingPreview() {
   const [open, setOpen] = useState(false);
   const keys = useMemo(() => (csv ? metadataKeys(csv.rows) : []), [csv]);
   const partitions = useMemo(() => (csv ? findPartitionKeys(csv.rows, csv.mapping) : []), [csv]);
+  const notProbability = useMemo(
+    () => new Set(csv ? keys.filter((k) => k.numeric && isNotProbability(csv.rows, k.key)).map((k) => k.key) : []),
+    [csv, keys],
+  );
   const plotted = useQecCampaignStore((s) => s.rowsByStrongId);
   // The store already holds the mapped rows; re-mapping a 100k-row file here would repeat that work.
   const collisions = useMemo(() => (csv ? findCollisions(Object.values(plotted)) : []), [csv, plotted]);
@@ -57,7 +62,8 @@ export function CsvMappingPreview() {
   const { mapping } = csv;
   const note = { margin: '0 0 6px', fontSize: 12, color: colors.warning, lineHeight: 1.45 } as const;
   const merged = Math.max(0, csv.totalDataRows - csv.rejectedRows - csv.rows.length);
-  const needsAttention = collisions.length > 0 || partitions.length > 0 || isFallbackPGuess(mapping) || mapping.p === null;
+  const needsAttention = collisions.length > 0 || partitions.length > 0 || isFallbackPGuess(mapping) || mapping.p === null
+    || (mapping.p !== null && notProbability.has(mapping.p));
 
   const update = (next: SinterMapping) => setMapping(next);
   const mergeAsReplicates = (key: string) => update({
@@ -92,7 +98,11 @@ export function CsvMappingPreview() {
         >
           {field !== 'decoder' && <option value="">— none —</option>}
           {field === 'decoder' && <option value={DECODER_COLUMN}>decoder column</option>}
-          {options.map((k) => <option key={k.key} value={k.key}>{k.key}</option>)}
+          {options.map((k) => (
+            <option key={k.key} value={k.key}>
+              {field === 'p' && notProbability.has(k.key) ? `${k.key} (not a probability)` : k.key}
+            </option>
+          ))}
         </Select>
       </label>
     );
@@ -155,6 +165,11 @@ export function CsvMappingPreview() {
         {isFallbackPGuess(mapping) && (
           <div style={note}>
             {`p was guessed: "${mapping.p}" is not a conventional name for the noise parameter. Confirm the x-axis under Edit mapping.`}
+          </div>
+        )}
+        {mapping.p !== null && notProbability.has(mapping.p) && (
+          <div role="alert" style={note}>
+            {`"${mapping.p}" has values outside 0 to 1, so it is not a physical error probability. The x-axis and any threshold read from it would be meaningless; pick the probability column under Edit mapping.`}
           </div>
         )}
         {csv.issues.length > 0 && (
