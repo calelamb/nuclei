@@ -100,11 +100,7 @@ export function ActivityBar({ active, onSelect, visibleViews, workspaceMode }: A
         display: 'flex', flexDirection: 'column',
         flexShrink: 0,
         borderRight: `1px solid ${colors.border}`,
-        // Mode signature (PRD 11 Phase B): a 2px accent stripe driven by the
-        // --mode-accent variable useModeIdentity sets from the workspace mode
-        // (teal in Learn, violet in Research). Falls back to transparent so a
-        // context without the variable is unchanged.
-        borderTop: '2px solid var(--mode-accent, transparent)',
+        // The mode identity lives in the status-bar chip; a 2px stripe over only the 48px rail read as a stray line.
       }}
       role="toolbar"
       aria-label="Activity bar"

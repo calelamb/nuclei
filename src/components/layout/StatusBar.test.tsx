@@ -9,6 +9,8 @@ import { useSimulationStore } from '../../stores/simulationStore';
 import { useWorkspaceStore } from '../../stores/workspaceStore';
 import { useEditorStore } from '../../stores/editorStore';
 import { useExperimentRunStore } from '../../stores/experimentRunStore';
+import { useLearnStore } from '../../stores/learnStore';
+import { useNavigationStore } from '../../stores/navigationStore';
 
 const bridge: PlatformBridge = {
   async startKernel() { return 'ok'; },
@@ -105,6 +107,40 @@ describe('<StatusBar> (extracted from PanelLayout, Phase A)', () => {
     // controls off-screen), so assert on each piece.
     expect(getByText('theta-sweep')).toBeTruthy();
     expect(getByText(/: 3\/8/)).toBeTruthy();
+  });
+});
+
+describe('StatusBar in takeover views (S-19)', () => {
+  beforeEach(() => {
+    useCircuitStore.setState({ snapshot: null });
+    useWorkspaceStore.setState({ mode: 'learn' });
+    useLearnStore.setState({ isLearnMode: false });
+    useNavigationStore.setState({ activeView: 'files' });
+  });
+  afterEach(() => {
+    useLearnStore.setState({ isLearnMode: false });
+    useNavigationStore.setState({ activeView: 'files' });
+  });
+
+  it('hides Qubits/Depth and the layout preset while a lesson owns the main area', () => {
+    useLearnStore.setState({ isLearnMode: true });
+    const { queryByText, queryByRole } = renderStatusBar();
+    expect(queryByText(/Qubits:/)).toBeNull();
+    expect(queryByText(/Depth:/)).toBeNull();
+    expect(queryByRole('combobox', { name: 'Layout preset' })).toBeNull();
+  });
+
+  it('hides them in the QEC Workbench too', () => {
+    useWorkspaceStore.setState({ mode: 'research' });
+    useNavigationStore.setState({ activeView: 'qec' });
+    const { queryByText } = renderStatusBar();
+    expect(queryByText(/Qubits:/)).toBeNull();
+  });
+
+  it('labels the preset select so a bare "Clean" is never ambiguous', () => {
+    const { getByRole } = renderStatusBar();
+    const select = getByRole('combobox', { name: 'Layout preset' }) as HTMLSelectElement;
+    expect(select.selectedOptions[0].textContent).toBe('Layout: Clean');
   });
 });
 

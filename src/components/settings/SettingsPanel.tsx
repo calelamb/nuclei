@@ -13,6 +13,7 @@ import { Button, IconButton, SegmentedControl, Select, Switch, TextInput } from 
 import { WorkspaceSection, HelpSection } from './SettingsWorkspaceHelp';
 import { Section, SettingRow, RowLabelContext } from './SettingsPrimitives';
 import { validateApiKey } from '../../lib/apiKey';
+import { API_KEY_PRIVACY_NOTE } from '../../config/apiKeyCopy';
 
 import { TYPOGRAPHY } from '../../styles/tokens';
 /* ── Shared Controls ────────────────────────────────────── */
@@ -72,10 +73,13 @@ function Slider({ value, min, max, step, onChange, displayValue }: {
   onChange: (v: number) => void; displayValue?: string;
 }) {
   const colors = useThemeStore((s) => s.colors);
+  const label = useContext(RowLabelContext);
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
       <input
         type="range" min={min} max={max} step={step} value={value}
+        aria-label={label}
+        aria-valuetext={displayValue}
         onChange={(e) => onChange(Number(e.target.value))}
         style={{ width: 80, accentColor: colors.accent, cursor: 'pointer' }}
       />
@@ -148,7 +152,7 @@ function ApiKeyInput() {
             {visible ? <EyeOff size={12} /> : <Eye size={12} />}
           </IconButton>
         </div>
-        <Button variant="primary" size="sm" onClick={handleSave}>
+        <Button size="lg" className="nuclei-btn--dirac" onClick={handleSave}>
           {saved ? 'Saved' : 'Save'}
         </Button>
       </div>
@@ -173,7 +177,7 @@ function ApiKeyInput() {
         fontSize: 11, color: colors.textDim, lineHeight: 1.4,
         fontFamily: TYPOGRAPHY.fontSans,
       }}>
-        Your key is stored locally and never leaves your machine.
+        {API_KEY_PRIVACY_NOTE}
       </span>
     </div>
   );

@@ -3,12 +3,17 @@ import { useCircuitStore } from '../../stores/circuitStore';
 import { useDebugStore } from '../../stores/debugStore';
 import { activeDebugStep } from '../../lib/debugTrace';
 import { useThemeStore } from '../../stores/themeStore';
+import { useEditorStore } from '../../stores/editorStore';
+import { useSimulationStore } from '../../stores/simulationStore';
+import { useDisplaySnapshot } from '../../layout/useDisplaySnapshot';
 import { renderGate, gateY, GATE_SIZE, LABEL_WIDTH } from './gates';
 import { computeCircuitGeometry, columnX } from './geometry';
 import { formatAngle } from './formatAngle';
 import { CircuitEmptyState } from './CircuitEmptyState';
-import { getGateData } from '../../data/gates';
-import { useCircuitExport } from '../../hooks/useCircuitExport';
+import { ExportMenu } from './ExportMenu';
+import { fitCircuitWidth } from './fitCircuit';
+import { useElementSize } from '../../hooks/useElementSize';
+import { GateExplorerPopup } from './GateExplorerPopup';
 import type { Gate } from '../../types/quantum';
 
 import { TYPOGRAPHY } from '../../styles/tokens';
@@ -24,179 +29,6 @@ interface ContextMenu {
   gateName: string;
   x: number;
   y: number;
-}
-
-function GateExplorerPopup({ gateIndex, onClose }: { gateIndex: number; onClose: () => void }) {
-  const snapshot = useCircuitStore((s) => s.snapshot);
-  const colors = useThemeStore((s) => s.colors);
-  const gate = snapshot?.gates[gateIndex];
-  if (!gate) return null;
-
-  const data = getGateData(gate.type);
-  if (!data) {
-    onClose();
-    return null;
-  }
-
-  return (
-    <div style={{
-      position: 'fixed',
-      top: 0, left: 0, right: 0, bottom: 0,
-      zIndex: 2000,
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'center',
-      background: 'rgba(0,0,0,0.4)',
-    }} onClick={onClose}>
-      <div style={{
-        background: colors.bg,
-        border: `1px solid ${colors.border}`,
-        borderRadius: 8,
-        padding: 20,
-        maxWidth: 420,
-        width: '90%',
-        maxHeight: '80vh',
-        overflow: 'auto',
-      }} onClick={(e) => e.stopPropagation()}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-          <span style={{ color: colors.accent, fontWeight: 700, fontSize: 16, fontFamily: TYPOGRAPHY.fontMono }}>
-            {data.symbol}
-          </span>
-          <button onClick={onClose} style={{ background: 'none', border: 'none', color: colors.textMuted, cursor: 'pointer', fontSize: 16 }}>✕</button>
-        </div>
-        <div style={{ color: colors.text, fontSize: 16, fontWeight: 600, fontFamily: TYPOGRAPHY.fontSans, marginBottom: 8 }}>
-          {data.name}
-        </div>
-        <div style={{ color: colors.text, fontSize: 13, fontFamily: TYPOGRAPHY.fontSans, lineHeight: 1.6, marginBottom: 12 }}>
-          {data.description}
-        </div>
-
-        <div style={{ marginBottom: 10 }}>
-          <div style={{ color: colors.textMuted, fontSize: 11, fontFamily: TYPOGRAPHY.fontSans, marginBottom: 4 }}>MATRIX</div>
-          <code style={{ color: colors.accent, fontSize: 12, fontFamily: TYPOGRAPHY.fontMono, background: colors.bgPanel, padding: '4px 8px', borderRadius: 4, display: 'block' }}>
-            {data.matrix}
-          </code>
-        </div>
-
-        {data.blochRotation && (
-          <div style={{ marginBottom: 10 }}>
-            <div style={{ color: colors.textMuted, fontSize: 11, fontFamily: TYPOGRAPHY.fontSans, marginBottom: 4 }}>BLOCH SPHERE EFFECT</div>
-            <div style={{ color: colors.text, fontSize: 12, fontFamily: TYPOGRAPHY.fontSans }}>
-              Rotation around <strong style={{ color: colors.accentLight }}>{data.blochRotation.axis}</strong> axis by <strong style={{ color: colors.accentLight }}>{data.blochRotation.angle}</strong>
-            </div>
-          </div>
-        )}
-
-        <div style={{ marginBottom: 10 }}>
-          <div style={{ color: colors.textMuted, fontSize: 11, fontFamily: TYPOGRAPHY.fontSans, marginBottom: 4 }}>FRAMEWORK SYNTAX</div>
-          {Object.entries(data.frameworkSyntax).map(([fw, syntax]) => (
-            <div key={fw} style={{ display: 'flex', gap: 8, marginBottom: 2 }}>
-              <span style={{ color: colors.textMuted, fontSize: 11, fontFamily: TYPOGRAPHY.fontSans, width: 60 }}>{fw}</span>
-              <code style={{ color: colors.string, fontSize: 12, fontFamily: TYPOGRAPHY.fontMono }}>{syntax}</code>
-            </div>
-          ))}
-        </div>
-
-        {data.relatedGates.length > 0 && (
-          <div>
-            <div style={{ color: colors.textMuted, fontSize: 11, fontFamily: TYPOGRAPHY.fontSans, marginBottom: 4 }}>RELATED GATES</div>
-            <div style={{ display: 'flex', gap: 6 }}>
-              {data.relatedGates.map((g) => (
-                <span key={g} style={{ color: colors.accent, fontSize: 12, fontFamily: TYPOGRAPHY.fontMono, background: colors.bgPanel, padding: '2px 6px', borderRadius: 3 }}>
-                  {g}
-                </span>
-              ))}
-            </div>
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
-
-function ExportMenu() {
-  const [open, setOpen] = useState(false);
-  const [notice, setNotice] = useState<string | null>(null);
-  const colors = useThemeStore((s) => s.colors);
-  const snapshot = useCircuitStore((s) => s.snapshot);
-  const { exportQasmFile, exportSvg, exportPng, copyCodeToClipboard, copyQasmToClipboard, copyShareUrl, exportJsonSnapshot } = useCircuitExport();
-  const menuRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (!open) return;
-    const handler = (e: MouseEvent) => {
-      if (menuRef.current && !menuRef.current.contains(e.target as Node)) setOpen(false);
-    };
-    document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
-  }, [open]);
-
-  if (!snapshot || snapshot.gates.length === 0) return null;
-
-  const finishImageExport = async (pending: Promise<boolean>) => {
-    setOpen(false);
-    try {
-      setNotice((await pending) ? null : 'The diagram is not on screen, so there is nothing to export.');
-    } catch (err) {
-      setNotice(`Export failed: ${err instanceof Error ? err.message : 'unknown error'}`);
-    }
-  };
-
-  const items = [
-    { label: 'Copy code', action: () => { copyCodeToClipboard(); setOpen(false); } },
-    { label: 'Copy QASM', action: () => { copyQasmToClipboard(); setOpen(false); } },
-    { label: 'Copy share URL', action: () => { copyShareUrl(); setOpen(false); } },
-    { label: 'Export QASM file', action: () => { exportQasmFile(); setOpen(false); } },
-    { label: 'Export SVG', action: () => { void finishImageExport(exportSvg()); } },
-    { label: 'Export PNG (2x)', action: () => { void finishImageExport(exportPng(2)); } },
-    { label: 'Export JSON', action: () => { exportJsonSnapshot(); setOpen(false); } },
-  ];
-
-  return (
-    <div ref={menuRef} style={{ position: 'relative', zIndex: 100 }}>
-      <button
-        onClick={() => { setNotice(null); setOpen(!open); }}
-        style={{
-          padding: '3px 8px', background: colors.bgPanel, color: colors.textMuted,
-          border: `1px solid ${colors.border}`, borderRadius: 3, cursor: 'pointer',
-          fontSize: 11, fontFamily: TYPOGRAPHY.fontSans,
-        }}
-      >
-        Export ▾
-      </button>
-      {notice && (
-        <div role="status" style={{
-          position: 'absolute', top: '100%', right: 0, marginTop: 4, width: 200, padding: '6px 10px',
-          background: colors.bgPanel, border: `1px solid ${colors.border}`, borderRadius: 4,
-          color: colors.textMuted, fontSize: 11, fontFamily: TYPOGRAPHY.fontSans, lineHeight: 1.4,
-        }}>
-          {notice}
-        </div>
-      )}
-      {open && (
-        <div style={{
-          position: 'absolute', top: '100%', right: 0, marginTop: 2,
-          background: colors.bgPanel, border: `1px solid ${colors.border}`,
-          borderRadius: 4, overflow: 'hidden', minWidth: 150,
-        }}>
-          {items.map((item) => (
-            <button
-              key={item.label}
-              onClick={item.action}
-              className="nuclei-menu-item"
-              style={{
-                display: 'block', width: '100%', padding: '6px 12px',
-                background: 'transparent', color: colors.text, border: 'none',
-                cursor: 'pointer', fontSize: 12, fontFamily: TYPOGRAPHY.fontSans, textAlign: 'left',
-              }}
-            >
-              {item.label}
-            </button>
-          ))}
-        </div>
-      )}
-    </div>
-  );
 }
 
 function StepControls() {
@@ -294,7 +126,7 @@ function DebugStateReadout({ stepIndex }: { stepIndex: number }) {
   const step = activeDebugStep(trace, stepIndex);
   if (!step) return null;
   return (
-    <span style={{ ...base, color: colors.accent }}>
+    <span style={{ ...base, color: colors.accentText }}>
       state after {step.gate_index < 0 ? 'start' : step.label}
     </span>
   );
@@ -314,8 +146,10 @@ function describeCircuit(snapshot: import('../../types/quantum').CircuitSnapshot
 }
 
 export function CircuitRenderer() {
-  const snapshot = useCircuitStore((s) => s.snapshot);
+  const { snapshot, stale } = useDisplaySnapshot();
   const error = useCircuitStore((s) => s.error);
+  const errorLine = useEditorStore((s) => s.errors[0]?.line ?? null);
+  const isRunning = useSimulationStore((s) => s.isRunning);
   const highlights = useCircuitStore((s) => s.highlights);
   const stepMode = useCircuitStore((s) => s.stepMode);
   const stepIndex = useCircuitStore((s) => s.stepIndex);
@@ -323,7 +157,7 @@ export function CircuitRenderer() {
   const setExplorerGateIndex = useCircuitStore((s) => s.setExplorerGateIndex);
   const colors = useThemeStore((s) => s.colors);
 
-  const containerRef = useRef<HTMLDivElement>(null);
+  const [measureContainer, containerSize] = useElementSize<HTMLDivElement>();
   const [tooltip, setTooltip] = useState<Tooltip | null>(null);
   const [contextMenu, setContextMenu] = useState<ContextMenu | null>(null);
 
@@ -356,9 +190,11 @@ export function CircuitRenderer() {
   const highlightSet = new Set(highlights.map((h) => h.gateIndex));
 
   const ariaDescription = describeCircuit(snapshot);
+  const fit = fitCircuitWidth(svgWidth, containerSize.width);
 
   return (
-    <div style={{ flex: '1 1 auto', minHeight: 0, display: 'flex', flexDirection: 'column' }} role="region" aria-label="Circuit diagram">
+    // The diagram never takes more than ~40% of the screen height: the Bloch spheres below need room to stay readable, and a tall circuit scrolls inside its own box.
+    <div style={{ flex: '1 1 auto', minHeight: 0, maxHeight: '40vh', display: 'flex', flexDirection: 'column' }} role="region" aria-label="Circuit diagram">
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, padding: '8px 10px 0 12px', flexShrink: 0 }}>
         <span style={{ display: 'flex', alignItems: 'baseline', gap: 8, minWidth: 0 }}>
           <span style={{ fontSize: 11, fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase', color: colors.textDim, fontFamily: TYPOGRAPHY.fontSans }}>
@@ -367,20 +203,28 @@ export function CircuitRenderer() {
           <span style={{ fontSize: 11, color: colors.textDim, fontFamily: TYPOGRAPHY.fontSans, whiteSpace: 'nowrap' }}>
             {qubit_count} {qubit_count === 1 ? 'qubit' : 'qubits'} · depth {depth}
           </span>
+          {stale && (
+            <span role="status" style={{ fontSize: 11, color: colors.warning, fontFamily: TYPOGRAPHY.fontSans, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+              Out of date: {errorLine !== null ? `error on line ${errorLine}` : 'the code has an error'}
+            </span>
+          )}
         </span>
-        <ExportMenu />
+        <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          {isRunning && <span role="status" style={{ fontSize: 11, color: colors.textMuted, fontFamily: TYPOGRAPHY.fontSans }}>Running…</span>}
+          <ExportMenu />
+        </span>
       </div>
       <div
-        ref={containerRef}
+        ref={measureContainer}
         className="circuit-renderer-container"
-        style={{ flex: 1, minHeight: 0, overflow: 'auto', position: 'relative', padding: '4px 0 6px' }}
+        style={{ flex: 1, minHeight: 0, overflow: 'auto', position: 'relative', padding: '4px 0 6px', opacity: stale ? 0.45 : 1, transition: 'opacity var(--duration-fast) var(--ease-standard)' }}
         aria-description={ariaDescription}
       >
         <svg
-          width={svgWidth}
-          height={svgHeight}
+          width={svgWidth * fit.scale}
+          height={svgHeight * fit.scale}
           viewBox={`0 0 ${svgWidth} ${svgHeight}`}
-          style={{ display: 'block', margin: '0 auto', minWidth: svgWidth }}
+          style={{ display: 'block', margin: '0 auto', minWidth: svgWidth * fit.scale }}
           role="img"
           aria-label={ariaDescription}
         >
@@ -459,7 +303,7 @@ export function CircuitRenderer() {
             borderRadius: 6, padding: '8px 12px',
             zIndex: 1000, pointerEvents: 'none', maxWidth: 250,
           }}>
-            <div style={{ color: colors.accent, fontWeight: 600, fontSize: 13, fontFamily: TYPOGRAPHY.fontMono }}>{tooltip.gate.type}</div>
+            <div style={{ color: colors.accentText, fontWeight: 600, fontSize: 13, fontFamily: TYPOGRAPHY.fontMono }}>{tooltip.gate.type}</div>
             <div style={{ color: colors.text, fontSize: 12, fontFamily: TYPOGRAPHY.fontSans, marginTop: 4 }}>Targets: q{tooltip.gate.targets.join(', q')}</div>
             {tooltip.gate.controls.length > 0 && <div style={{ color: colors.text, fontSize: 12, fontFamily: TYPOGRAPHY.fontSans }}>Controls: q{tooltip.gate.controls.join(', q')}</div>}
             {tooltip.gate.params.length > 0 && <div style={{ color: colors.number, fontSize: 12, fontFamily: TYPOGRAPHY.fontMono }}>Params: {tooltip.gate.params.map(formatAngle).join(', ')}</div>}

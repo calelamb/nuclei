@@ -82,6 +82,9 @@ export function useKernel() {
 
   /** Surface a start/connect failure once: status chip, banner state, and the Terminal. */
   const failKernel = useCallback((message: string) => {
+    // Several sockets can report the same give-up; the Terminal hears it once per failure.
+    const current = useEditorStore.getState();
+    if (current.kernelStatus === 'failed' && current.kernelError === message) return;
     useEditorStore.getState().setKernelConnected(false);
     useEditorStore.getState().setKernelReady(false);
     useEditorStore.getState().setKernelStatus('failed', message);

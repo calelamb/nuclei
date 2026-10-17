@@ -41,7 +41,7 @@ interface ShellLayoutOptions {
 
 /**
  * Shell chrome behaviour in one place:
- *  - responsive: Dirac folds to its rail tab below ~1280px and the sidebar
+ *  - responsive: Dirac folds to its rail tab below ~1400px and the sidebar
  *    below ~1000px, both restored when the window grows again;
  *  - persistence: sidebar view, Dirac open/width and the bottom panel survive a
  *    reload, per workspace mode.

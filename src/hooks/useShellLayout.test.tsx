@@ -67,7 +67,7 @@ describe('useShellLayout persistence', () => {
 });
 
 describe('useShellLayout responsive collapse', () => {
-  it('folds Dirac below 1280 and the sidebar below 1000, restoring both when the window grows', async () => {
+  it('folds Dirac below 1400 and the sidebar below 1000, restoring both when the window grows', async () => {
     const platform = fakePlatform();
     setWidth(900);
     renderHook(() => useShellLayout({ platform: platform as never, mode: 'research', validViews: VIEWS, canCollapseSidebar: true }));
@@ -78,9 +78,9 @@ describe('useShellLayout responsive collapse', () => {
     expect(useNavigationStore.getState().activeView).toBe('files');
   });
 
-  it('keeps Dirac open at 1280 and above', async () => {
+  it('keeps Dirac open at 1400 and above', async () => {
     const platform = fakePlatform();
-    setWidth(1280);
+    setWidth(1400);
     renderHook(() => useShellLayout({ platform: platform as never, mode: 'research', validViews: VIEWS, canCollapseSidebar: true }));
     await waitFor(() => expect(platform.getStoredValue).toHaveBeenCalled());
     expect(useDiracPanelStore.getState().isOpen).toBe(true);

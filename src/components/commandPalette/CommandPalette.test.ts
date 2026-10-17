@@ -13,7 +13,7 @@ function makeActions(overrides: Partial<CommandActions> = {}): CommandActions {
     run: noop, openFile: noop, saveFile: noop, newFile: noop, toggleTheme: noop,
     toggleDirac: noop, focusDirac: noop, openWhatsNew: noop, cycleMode: noop, toggleShortcuts: noop, switchWorkspaceMode: noop,
     startResearchTour: noop, navigate: noop, togglePanel: noop, runExperiment: noop,
-    openRunFolder: noop, ...overrides,
+    openRunFolder: noop, setLayoutPreset: noop, ...overrides,
   };
 }
 
@@ -127,6 +127,34 @@ describe('palette commands (shell-07, shell-13, shell-19)', () => {
 });
 
 import { panelToggleLabel } from './panelLabels';
+
+describe('layout and mode-scoped commands (S-18)', () => {
+  it('lists the Stim-only QEC panel toggles only in Research', () => {
+    const qec = ['toggle-panel-qecTimeline', 'toggle-panel-qecLattice', 'toggle-panel-qecDetectorGraph'];
+    const learn = new Set(buildCommands(makeActions(), makeContext({ mode: 'learn' })).map((c) => c.id));
+    const research = new Set(buildCommands(makeActions(), makeContext({ mode: 'research' })).map((c) => c.id));
+    for (const id of qec) {
+      expect(learn.has(id)).toBe(false);
+      expect(research.has(id)).toBe(true);
+    }
+  });
+
+  it('adds Layout: Clean / Balanced / Full commands findable by "layout" or "preset"', () => {
+    const setLayoutPreset = vi.fn();
+    const commands = buildCommands(makeActions({ setLayoutPreset }), makeContext());
+    for (const [id, label, preset] of [
+      ['layout-clean', 'Layout: Clean', 'clean'],
+      ['layout-balanced', 'Layout: Balanced', 'balanced'],
+      ['layout-full', 'Layout: Full', 'full'],
+    ] as const) {
+      const cmd = commands.find((c) => c.id === id);
+      expect(cmd?.label).toBe(label);
+      expect(cmd?.keywords).toEqual(expect.arrayContaining(['layout', 'preset']));
+      cmd?.action();
+      expect(setLayoutPreset).toHaveBeenLastCalledWith(preset);
+    }
+  });
+});
 
 describe('panelToggleLabel', () => {
   it('does not repeat the word panel', () => {

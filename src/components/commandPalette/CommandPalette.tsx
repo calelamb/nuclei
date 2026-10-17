@@ -1,5 +1,8 @@
 import { panelToggleLabel } from './panelLabels';
 import { useState, useRef, useEffect, useMemo, useId } from 'react';
+import { Search } from 'lucide-react';
+import { useFocusTrap } from '../../hooks/useFocusTrap';
+import { groupByCategory } from './groupCommands';
 import { useThemeStore } from '../../stores/themeStore';
 import { EASING, DURATION, getDuration, prefersReducedMotion } from '../../lib/animations';
 import {
@@ -11,6 +14,7 @@ import {
   type LeftPanelId,
 } from '../../layout/panelRegistry';
 import type { WorkspaceMode } from '../../stores/workspaceStore';
+import type { LayoutPreset } from '../../stores/layoutStore';
 import { rankCommands } from './rankCommands';
 import { shortcutLabel, isMacPlatform } from '../../config/keybindings';
 
@@ -37,31 +41,36 @@ export function CommandPalette({ commands, onClose }: CommandPaletteProps) {
   const [query, setQuery] = useState('');
   const [selectedIdx, setSelectedIdx] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
-  const listRef = useRef<HTMLDivElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
   const colors = useThemeStore((s) => s.colors);
   const shadow = useThemeStore((s) => s.shadow);
 
   const listId = useId();
 
-  // Focus the input on open, and hand focus back to whatever had it (the
-  // editor, a button) when the palette closes — otherwise it falls to <body>.
-  useEffect(() => {
-    const opener = document.activeElement instanceof HTMLElement ? document.activeElement : null;
-    inputRef.current?.focus();
-    return () => {
-      if (opener && document.contains(opener)) opener.focus();
-    };
-  }, []);
+  // Focus stays on the input (the combobox); the trap keeps Tab inside and hands focus back to
+  // whatever had it (the editor, a button) when the palette closes.
+  useFocusTrap(panelRef, { autoFocus: false, restoreFocus: true });
+  useEffect(() => { inputRef.current?.focus(); }, []);
 
-  const filtered = useMemo(() => rankCommands(commands, query), [query, commands]);
+  const searching = query.trim() !== '';
+  // Unfiltered: grouped under one header per category. Searching: a flat list ranked by relevance.
+  const groups = useMemo(() => (searching ? null : groupByCategory(commands)), [searching, commands]);
+  const filtered = useMemo(
+    () => (groups ? groups.flatMap((g) => g.commands) : rankCommands(commands, query)),
+    [groups, commands, query],
+  );
 
-  // eslint-disable-next-line react-hooks/set-state-in-effect -- resets index on query change
   useEffect(() => { setSelectedIdx(0); }, [query]);
 
+  const activeId = filtered[selectedIdx] ? `${listId}-${filtered[selectedIdx].id}` : undefined;
   useEffect(() => {
-    const el = listRef.current?.children[selectedIdx] as HTMLElement;
-    el?.scrollIntoView({ block: 'nearest' });
-  }, [selectedIdx]);
+    if (activeId) document.getElementById(activeId)?.scrollIntoView({ block: 'nearest' });
+  }, [activeId]);
+
+  const run = (cmd: Command) => {
+    onClose();
+    requestAnimationFrame(cmd.action);
+  };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Escape') {
@@ -77,44 +86,67 @@ export function CommandPalette({ commands, onClose }: CommandPaletteProps) {
       // Don't let this Enter reach document-level listeners (e.g. the Research
       // tour would otherwise treat it as "Next" the moment it starts).
       e.stopPropagation();
-      if (filtered[selectedIdx]) {
-        const { action } = filtered[selectedIdx];
-        onClose();
-        requestAnimationFrame(action);
-      }
+      if (filtered[selectedIdx]) run(filtered[selectedIdx]);
     }
   };
 
-  const categoryColors: Record<string, string> = {
-    File: colors.textMuted,
-    Edit: colors.textMuted,
-    View: colors.textMuted,
-    Run: colors.accentText,
-    Dirac: colors.diracText,
-    Circuit: colors.textMuted,
-    Learn: colors.textMuted,
-    Settings: colors.textMuted,
-    Help: colors.textMuted,
-    Navigate: colors.textMuted,
-    Experiment: colors.modeResearch,
-  };
+  const renderRow = (cmd: Command, i: number, showCategory: boolean) => (
+    <button
+      key={cmd.id}
+      id={`${listId}-${cmd.id}`}
+      tabIndex={-1}
+      onMouseMove={() => { if (i !== selectedIdx) setSelectedIdx(i); }}
+      onClick={() => run(cmd)}
+      style={{
+        display: 'flex', alignItems: 'center',
+        width: '100%', height: ROW_HEIGHT, padding: '0 16px',
+        background: i === selectedIdx ? 'var(--color-surface-overlay)' : 'transparent',
+        border: 'none', cursor: 'pointer',
+        color: colors.text, fontSize: 13,
+        fontFamily: TYPOGRAPHY.fontSans,
+        textAlign: 'left', gap: 10,
+        transition: `background ${getDuration(DURATION.instant)}ms`,
+      }}
+      role="option"
+      aria-selected={i === selectedIdx}
+    >
+      <span style={{ flex: 1 }}>{cmd.label}</span>
+      {showCategory && (
+        <span style={{ fontSize: 11, color: colors.textDim, fontFamily: TYPOGRAPHY.fontSans }}>{cmd.category}</span>
+      )}
+      {cmd.shortcut && (
+        <kbd style={{
+          fontSize: 11, fontFamily: TYPOGRAPHY.fontMono,
+          color: colors.textMuted, background: colors.bgPanel,
+          padding: '1px 6px', borderRadius: 4,
+          border: `1px solid ${colors.border}`,
+        }}>
+          {cmd.shortcut}
+        </kbd>
+      )}
+    </button>
+  );
+
+  let rowIndex = 0;
 
   return (
     <div
       style={{
         position: 'fixed', inset: 0, zIndex: 5000,
-        background: 'rgba(0,0,0,0.5)',
-        backdropFilter: 'blur(12px)',
+        background: colors.scrim,
+        backdropFilter: 'blur(4px)',
         display: 'flex', alignItems: 'flex-start', justifyContent: 'center',
         paddingTop: '15vh',
         animation: prefersReducedMotion() ? 'none' : `nuclei-fade-in ${DURATION.fast}ms`,
       }}
       onClick={onClose}
-      role="dialog"
-      aria-label="Command palette"
-      aria-modal="true"
     >
       <div
+        ref={panelRef}
+        role="dialog"
+        aria-label="Command palette"
+        aria-modal="true"
+        tabIndex={-1}
         style={{
           background: colors.bg,
           border: `1px solid ${colors.border}`,
@@ -126,77 +158,58 @@ export function CommandPalette({ commands, onClose }: CommandPaletteProps) {
         }}
         onClick={(e) => e.stopPropagation()}
       >
-        {/* Search input */}
-        <div style={{ padding: '12px 16px', borderBottom: `1px solid ${colors.border}` }}>
-          <input
-            ref={inputRef}
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            onKeyDown={handleKeyDown}
-            placeholder="Type a command..."
-            className="nuclei-bare-input"
+        {/* Search field */}
+        <div style={{ padding: 12, borderBottom: `1px solid ${colors.border}` }}>
+          <div
+            className="nuclei-field-group"
             style={{
-              width: '100%', background: 'transparent',
-              border: 'none',
-              color: colors.text, fontSize: 14,
-              fontFamily: TYPOGRAPHY.fontSans,
+              display: 'flex', alignItems: 'center', gap: 8, height: 36, padding: '0 12px',
+              background: colors.bgElevated, border: `1px solid ${colors.borderStrong}`, borderRadius: 8,
             }}
-            aria-label="Search commands"
-            role="combobox"
-            aria-expanded="true"
-            aria-controls={listId}
-            aria-autocomplete="list"
-            aria-activedescendant={filtered[selectedIdx] ? `${listId}-${filtered[selectedIdx].id}` : undefined}
-          />
+          >
+            <Search data-search-icon="" size={14} strokeWidth={1.75} color={colors.textDim} aria-hidden="true" style={{ flexShrink: 0 }} />
+            <input
+              ref={inputRef}
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              onKeyDown={handleKeyDown}
+              placeholder="Type a command..."
+              style={{
+                flex: 1, minWidth: 0, background: 'transparent',
+                border: 'none',
+                color: colors.text, fontSize: 14,
+                fontFamily: TYPOGRAPHY.fontSans,
+              }}
+              aria-label="Search commands"
+              role="combobox"
+              aria-expanded="true"
+              aria-controls={listId}
+              aria-autocomplete="list"
+              aria-activedescendant={activeId}
+            />
+          </div>
         </div>
 
         {/* Results */}
-        <div ref={listRef} id={listId} style={{ maxHeight: ROW_HEIGHT * VISIBLE_ROWS + 8, overflow: 'auto', padding: '4px 0' }} role="listbox">
+        <div id={listId} style={{ maxHeight: ROW_HEIGHT * VISIBLE_ROWS + 8, overflow: 'auto', padding: '4px 0' }} role="listbox" aria-label="Commands">
           {filtered.length === 0 ? (
             <div style={{ padding: 16, color: colors.textMuted, fontSize: 13, fontFamily: TYPOGRAPHY.fontSans, textAlign: 'center' }}>
               No matching commands
             </div>
-          ) : (
-            filtered.map((cmd, i) => (
-              <button
-                key={cmd.id}
-                id={`${listId}-${cmd.id}`}
-                tabIndex={-1}
-                onMouseMove={() => { if (i !== selectedIdx) setSelectedIdx(i); }}
-                onClick={() => { onClose(); requestAnimationFrame(cmd.action); }}
-                style={{
-                  display: 'flex', alignItems: 'center',
-                  width: '100%', height: ROW_HEIGHT, padding: '0 16px',
-                  background: i === selectedIdx ? 'var(--color-surface-overlay)' : 'transparent',
-                  border: 'none', cursor: 'pointer',
-                  color: colors.text, fontSize: 13,
-                  fontFamily: TYPOGRAPHY.fontSans,
-                  textAlign: 'left', gap: 10,
-                  transition: `background ${getDuration(DURATION.instant)}ms`,
-                }}
-                role="option"
-                aria-selected={i === selectedIdx}
-              >
-                <span style={{
-                  fontSize: 11, fontWeight: 600,
-                  color: categoryColors[cmd.category] ?? colors.textMuted,
-                  minWidth: 48, fontFamily: TYPOGRAPHY.fontSans,
-                }}>
-                  {cmd.category}
-                </span>
-                <span style={{ flex: 1 }}>{cmd.label}</span>
-                {cmd.shortcut && (
-                  <kbd style={{
-                    fontSize: 11, fontFamily: TYPOGRAPHY.fontMono,
-                    color: colors.textMuted, background: colors.bgPanel,
-                    padding: '1px 6px', borderRadius: 3,
-                    border: `1px solid ${colors.border}`,
-                  }}>
-                    {cmd.shortcut}
-                  </kbd>
-                )}
-              </button>
+          ) : groups ? (
+            groups.map((group) => (
+              <div key={group.category} role="group" aria-label={group.category}>
+                <div
+                  role="presentation"
+                  style={{ padding: '8px 16px 4px', fontSize: 11, fontWeight: 600, color: colors.textDim, fontFamily: TYPOGRAPHY.fontSans }}
+                >
+                  {group.category}
+                </div>
+                {group.commands.map((cmd) => renderRow(cmd, rowIndex++, false))}
+              </div>
             ))
+          ) : (
+            filtered.map((cmd, i) => renderRow(cmd, i, true))
           )}
         </div>
       </div>
@@ -240,12 +253,14 @@ export interface CommandActions {
   startResearchTour: () => void;
   /** Open a rail view (navigationStore.setActiveView). */
   navigate: (view: LeftPanelId) => void;
-  /** Flip a viz/bottom panel's visibility (layoutStore.togglePanel). */
+  /** Flip a viz/bottom panel against its resolved visibility (togglePanelResolved). */
   togglePanel: (id: PanelId) => void;
   /** Start a discovered experiment by its yaml file name. */
   runExperiment: (fileName: string) => void;
   /** Reveal the selected run's folder in the OS file manager. */
   openRunFolder: () => void;
+  /** Switch the layout preset (layoutStore.setPreset). */
+  setLayoutPreset: (preset: LayoutPreset) => void;
 }
 
 /**
@@ -293,6 +308,17 @@ export function buildCommands(actions: CommandActions, context: CommandContext):
       category: 'View',
       keywords: ['show', 'hide'],
       action: () => actions.togglePanel(panel.id),
+    });
+  }
+
+  // Layout presets: one command each, findable by "layout" or "preset".
+  for (const [preset, label] of [['clean', 'Clean'], ['balanced', 'Balanced'], ['full', 'Full']] as const) {
+    commands.push({
+      id: `layout-${preset}`,
+      label: `Layout: ${label}`,
+      category: 'View',
+      keywords: ['layout', 'preset', 'panels', preset],
+      action: () => actions.setLayoutPreset(preset),
     });
   }
 

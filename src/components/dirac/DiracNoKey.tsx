@@ -5,6 +5,7 @@ import { useDiracPanelStore } from '../../stores/diracPanelStore';
 import { useNavigationStore } from '../../stores/navigationStore';
 import { useWorkspaceStore } from '../../stores/workspaceStore';
 import { validateApiKey } from '../../lib/apiKey';
+import { API_KEY_PRIVACY_NOTE } from '../../config/apiKeyCopy';
 import { Button, IconButton, TextInput } from '../ui';
 import { DiracAtomIcon } from './DiracAtomIcon';
 import './dirac.css';
@@ -85,7 +86,7 @@ export function DiracNoKey({ replacing = false }: Props) {
         <Button type="submit" size="lg" className="dirac-btn-dirac">Save</Button>
       </form>
       {error && <p className="dirac-onboard__error" role="alert">{error}</p>}
-      <p className="dirac-onboard__fine">Stored only on this device. It is sent to Anthropic and nowhere else.</p>
+      <p className="dirac-onboard__fine">{API_KEY_PRIVACY_NOTE}</p>
       <div className="dirac-onboard__links">
         <a className="dirac-link" href="https://console.anthropic.com/" target="_blank" rel="noopener noreferrer">
           Get an API key

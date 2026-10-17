@@ -1,4 +1,5 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
+import { advance, initialState, tally, arrowAngle, type Outcome, type PairResult, type QubitKind } from './playgroundModel';
 import { useThemeStore } from '../../stores/themeStore';
 import { useEditorStore } from '../../stores/editorStore';
 import { EASING, DURATION, getDuration, prefersReducedMotion } from '../../lib/animations';
@@ -6,15 +7,6 @@ import { EASING, DURATION, getDuration, prefersReducedMotion } from '../../lib/a
 import { TYPOGRAPHY } from '../../styles/tokens';
 import { Button } from '../ui';
 import { useFocusTrap } from '../../hooks/useFocusTrap';
-interface PlaygroundState {
-  step: number;
-  qubitState: 'zero' | 'one' | 'superposition' | 'measured';
-  measurements: number[];
-  secondQubit: boolean;
-  entangled: boolean;
-  bridging: boolean; // transition animation state
-}
-
 const BELL_STATE_CODE = `from qiskit import QuantumCircuit
 
 # Bell State — the circuit you just built!
@@ -57,32 +49,31 @@ const STEPS = [
   },
   {
     title: "You're Ready",
-    dirac: "You just built a quantum circuit! You understand qubits, superposition, measurement, and entanglement — the four pillars of quantum computing. Let's see what this looks like in code.",
+    dirac: "You just built a quantum circuit! You understand qubits, superposition, measurement, and entanglement — the four pillars of quantum computing. Lesson 1 turns it into real code.",
     action: 'bridge' as const,
-    buttonLabel: 'Open the IDE',
+    buttonLabel: 'Start lesson 1',
   },
 ];
 
-function QubitViz({ state, label, size = 120 }: { state: PlaygroundState['qubitState']; label?: string; size?: number }) {
+function QubitViz({ kind, outcome, label, size = 120 }: { kind: QubitKind; outcome: Outcome | null; label?: string; size?: number }) {
   const colors = useThemeStore((s) => s.colors);
   const r = size / 2 - 4;
-  // 'measured' state collapses to |0> or |1> — use a deterministic direction
-  const angle = state === 'zero' ? -90 : state === 'one' ? 90 : state === 'superposition' ? 0 : -90;
-  const rad = (angle * Math.PI) / 180;
+  const rad = (arrowAngle(kind, outcome) * Math.PI) / 180;
   const arrowX = Math.cos(rad) * r * 0.8;
   const arrowY = Math.sin(rad) * r * 0.8;
-  const arrowColor = state === 'superposition' ? colors.accent : state === 'measured' ? colors.success : colors.accent;
+  const arrowColor = colors.accent;
+  const description = kind === 'measured' ? `measured ${outcome === 1 ? '|1⟩' : '|0⟩'}` : kind;
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
-      <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} role="img" aria-label={`Qubit in ${state} state`}>
+      <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} role="img" aria-label={`Qubit ${description}`}>
         <circle
           cx={size / 2} cy={size / 2} r={r}
           fill="none" stroke={colors.border} strokeWidth={1.5}
           opacity={0.4}
         />
-        <text x={size / 2} y={12} textAnchor="middle" fill={colors.textMuted} fontSize={10} fontFamily={TYPOGRAPHY.fontSans}>|0⟩</text>
-        <text x={size / 2} y={size - 4} textAnchor="middle" fill={colors.textMuted} fontSize={10} fontFamily={TYPOGRAPHY.fontSans}>|1⟩</text>
+        <text x={size / 2} y={12} textAnchor="middle" fill={colors.textMuted} fontSize={11} fontFamily={TYPOGRAPHY.fontSans}>|0⟩</text>
+        <text x={size / 2} y={size - 4} textAnchor="middle" fill={colors.textMuted} fontSize={11} fontFamily={TYPOGRAPHY.fontSans}>|1⟩</text>
         <line
           x1={size / 2} y1={size / 2}
           x2={size / 2 + arrowX} y2={size / 2 + arrowY}
@@ -106,37 +97,43 @@ function QubitViz({ state, label, size = 120 }: { state: PlaygroundState['qubitS
   );
 }
 
-function MiniHistogram({ measurements }: { measurements: number[] }) {
+const BAR_MAX_PX = 60;
+
+function Bar({ label, count, total, color }: { label: string; count: number; total: number; color: string }) {
   const colors = useThemeStore((s) => s.colors);
-  const total = measurements.length;
-  if (total === 0) return null;
-
-  const zeros = measurements.filter((m) => m === 0).length;
-  const ones = total - zeros;
-  const maxH = 60;
-  const h0 = total > 0 ? (zeros / total) * maxH : 0;
-  const h1 = total > 0 ? (ones / total) * maxH : 0;
-
   return (
-    <div style={{ display: 'flex', alignItems: 'flex-end', gap: 12, height: maxH + 30 }} role="img" aria-label={`Measurement results: |0⟩ ${zeros} times, |1⟩ ${ones} times out of ${total}`}>
-      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
-        <div style={{
-          width: 36, height: h0, background: colors.accent,
-          borderRadius: '4px 4px 0 0',
-          transition: `height ${getDuration(DURATION.normal)}ms ${EASING.enter}`,
-        }} />
-        <span style={{ color: colors.text, fontSize: 11, fontFamily: TYPOGRAPHY.fontSans }}>|0⟩</span>
-        <span style={{ color: colors.textMuted, fontSize: 11 }}>{zeros}</span>
-      </div>
-      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
-        <div style={{
-          width: 36, height: h1, background: colors.dirac,
-          borderRadius: '4px 4px 0 0',
-          transition: `height ${getDuration(DURATION.normal)}ms ${EASING.enter}`,
-        }} />
-        <span style={{ color: colors.text, fontSize: 11, fontFamily: TYPOGRAPHY.fontSans }}>|1⟩</span>
-        <span style={{ color: colors.textMuted, fontSize: 11 }}>{ones}</span>
-      </div>
+    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
+      <div style={{
+        width: 36, height: total > 0 ? (count / total) * BAR_MAX_PX : 0, background: color,
+        borderRadius: '4px 4px 0 0',
+        transition: `height ${getDuration(DURATION.normal)}ms ${EASING.enter}`,
+      }} />
+      <span style={{ color: colors.text, fontSize: 11, fontFamily: TYPOGRAPHY.fontSans }}>{label}</span>
+      <span style={{ color: colors.textMuted, fontSize: 11 }}>{count}</span>
+    </div>
+  );
+}
+
+function MiniHistogram({ shots }: { shots: readonly Outcome[] }) {
+  const colors = useThemeStore((s) => s.colors);
+  const { zeros, ones, total } = tally(shots);
+  if (total === 0) return null;
+  return (
+    <div style={{ display: 'flex', alignItems: 'flex-end', gap: 12, height: BAR_MAX_PX + 30 }} role="img" aria-label={`Measurement results: |0⟩ ${zeros} times, |1⟩ ${ones} times out of ${total}`}>
+      <Bar label="|0⟩" count={zeros} total={total} color={colors.accent} />
+      <Bar label="|1⟩" count={ones} total={total} color={colors.basisZ} />
+    </div>
+  );
+}
+
+/** Joint outcomes of the entangled pair: only |00⟩ and |11⟩ ever appear. */
+function PairHistogram({ pair }: { pair: PairResult }) {
+  const colors = useThemeStore((s) => s.colors);
+  const total = pair.counts['00'] + pair.counts['11'];
+  return (
+    <div style={{ display: 'flex', alignItems: 'flex-end', gap: 12, height: BAR_MAX_PX + 30 }} role="img" aria-label={`Joint results: |00⟩ ${pair.counts['00']} times, |11⟩ ${pair.counts['11']} times out of ${total}; |01⟩ and |10⟩ never appear`}>
+      <Bar label="|00⟩" count={pair.counts['00']} total={total} color={colors.accent} />
+      <Bar label="|11⟩" count={pair.counts['11']} total={total} color={colors.basisZ} />
     </div>
   );
 }
@@ -149,54 +146,31 @@ interface PlaygroundProps {
 export function QuantumPlayground({ onComplete, onBridgeToIDE }: PlaygroundProps) {
   const colors = useThemeStore((s) => s.colors);
   const dialogRef = useRef<HTMLDivElement>(null);
-  useFocusTrap(dialogRef, { restoreFocus: false });
+  useFocusTrap(dialogRef, { restoreFocus: false, autoFocus: false });
   const setCode = useEditorStore((s) => s.setCode);
   const setFramework = useEditorStore((s) => s.setFramework);
-  const [pg, setPg] = useState<PlaygroundState>({
-    step: 0,
-    qubitState: 'zero',
-    measurements: [],
-    secondQubit: false,
-    entangled: false,
-    bridging: false,
-  });
+  const [pg, setPg] = useState(initialState);
+  const actionRef = useRef<HTMLButtonElement>(null);
 
   const currentStep = STEPS[pg.step];
 
   const handleAction = useCallback(() => {
-    const action = currentStep?.action;
-    if (action === 'apply_h') {
-      setPg((s) => ({ ...s, qubitState: 'superposition', step: s.step + 1 }));
-    } else if (action === 'measure') {
-      const result = Math.random() > 0.5 ? 1 : 0;
-      setPg((s) => ({
-        ...s,
-        qubitState: 'measured',
-        measurements: [...s.measurements, result],
-        step: s.step + 1,
-      }));
-    } else if (action === 'measure_many') {
-      const newMeasurements = Array.from({ length: 10 }, () => Math.random() > 0.5 ? 1 : 0);
-      setPg((s) => ({
-        ...s,
-        measurements: [...s.measurements, ...newMeasurements],
-        step: s.step + 1,
-      }));
-    } else if (action === 'entangle') {
-      setPg((s) => ({ ...s, secondQubit: true, entangled: true, step: s.step + 1 }));
-    } else if (action === 'bridge') {
+    const action = currentStep?.action ?? null;
+    if (action === 'bridge') {
       // Load the Bell state code into the editor before transitioning
       setCode(BELL_STATE_CODE);
       // A generated starter is not the student's own work: closing the tab
       // right after the playground must not prompt about "unsaved changes".
       useEditorStore.getState().setIsDirty(false);
       setFramework('qiskit');
-      // Trigger bridge animation
-      setPg((s) => ({ ...s, bridging: true }));
-    } else {
-      setPg((s) => ({ ...s, step: s.step + 1 }));
     }
+    setPg((s) => advance(s, action, Math.random));
   }, [currentStep, setCode, setFramework]);
+
+  // The primary action, not Skip, takes focus on every step so Enter always moves forward.
+  useEffect(() => {
+    actionRef.current?.focus();
+  }, [pg.step]);
 
   // When bridging animation completes, transition to IDE
   useEffect(() => {
@@ -255,9 +229,9 @@ export function QuantumPlayground({ onComplete, onBridgeToIDE }: PlaygroundProps
           display: 'flex', alignItems: 'center', justifyContent: 'center',
           gap: 32, margin: '24px 0',
         }}>
-          <QubitViz state={pg.qubitState} label={pg.secondQubit ? 'Qubit 0' : undefined} />
-          {pg.secondQubit && <QubitViz state={pg.entangled ? pg.qubitState : 'zero'} label="Qubit 1" />}
-          {pg.measurements.length > 0 && <MiniHistogram measurements={pg.measurements} />}
+          <QubitViz kind={pg.qubit} outcome={pg.lastOutcome} label={pg.pair ? 'Qubit 0' : undefined} />
+          {pg.pair && <QubitViz kind="measured" outcome={pg.pair.last} label="Qubit 1" />}
+          {pg.pair ? <PairHistogram pair={pg.pair} /> : <MiniHistogram shots={pg.shots} />}
         </div>
 
         {/* Dirac speech */}
@@ -283,27 +257,15 @@ export function QuantumPlayground({ onComplete, onBridgeToIDE }: PlaygroundProps
         </div>
 
         {/* Action button */}
-        <button
+        <Button
+          ref={actionRef}
+          variant="primary"
+          size="lg"
           onClick={handleAction}
-          style={{
-            padding: '12px 32px',
-            background: currentStep?.action === 'bridge' ? `linear-gradient(135deg, ${colors.accent}, ${colors.dirac})` : colors.accent,
-            color: colors.onAccent,
-            border: 'none',
-            borderRadius: 8,
-            cursor: 'pointer',
-            fontSize: 16,
-            fontWeight: 600,
-            fontFamily: TYPOGRAPHY.fontSans,
-            transition: `transform ${getDuration(DURATION.normal)}ms ${EASING.enter}, box-shadow ${getDuration(DURATION.normal)}ms`,
-          }}
-          onMouseDown={(e) => { (e.target as HTMLElement).style.transform = 'scale(0.97)'; }}
-          onMouseUp={(e) => { (e.target as HTMLElement).style.transform = 'scale(1)'; }}
-          onMouseLeave={(e) => { (e.target as HTMLElement).style.transform = 'scale(1)'; }}
-          aria-label={currentStep?.buttonLabel ?? 'Continue'}
+          style={{ padding: '0 32px' }}
         >
           {currentStep?.buttonLabel ?? 'Continue'}
-        </button>
+        </Button>
       </div>
     </div>
   );

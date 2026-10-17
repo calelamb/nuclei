@@ -1,4 +1,4 @@
-import { Button } from '../ui';
+import { Button, Dialog, IconButton } from '../ui';
 import { useState, useEffect, useMemo } from 'react';
 import { Rocket, ChevronLeft, X, Clock, Cpu, DollarSign, KeyRound, FileCode } from 'lucide-react';
 import { useHardwareStore } from '../../stores/hardwareStore';
@@ -196,7 +196,6 @@ export function LaunchModal() {
   const code = useEditorStore((s) => s.code);
   const framework = useEditorStore((s) => s.framework);
   const colors = useThemeStore((s) => s.colors);
-  const shadow = useThemeStore((s) => s.shadow);
 
   const stagedSubmission = useHardwareStore((s) => s.stagedSubmission);
   const selectedSubProvider = useHardwareStore((s) => s.selectedSubProvider);
@@ -337,102 +336,25 @@ export function LaunchModal() {
         : colors.accentLight;
 
   return (
-    <>
-      <div
-        role="presentation"
-        onClick={closeLaunch}
-        style={{
-          position: 'fixed',
-          inset: 0,
-          background: 'rgba(0,0,0,0.55)',
-          backdropFilter: 'blur(4px)',
-          zIndex: 9998,
-        }}
-      />
-      <div
-        role="dialog"
-        aria-label="Launch to quantum hardware"
-        style={{
-          position: 'fixed',
-          top: '8vh',
-          left: '50%',
-          transform: 'translateX(-50%)',
-          width: 'min(1040px, 94vw)',
-          maxHeight: '84vh',
-          background: colors.bgPanel,
-          border: `1px solid ${colors.borderStrong}`,
-          borderRadius: 16,
-          boxShadow: shadow.lg,
-          padding: 0,
-          zIndex: 9999,
-          display: 'flex',
-          flexDirection: 'column',
-          overflow: 'hidden',
-          fontFamily: TYPOGRAPHY.fontSans,
-        }}
-      >
-        {/* Header */}
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: 10,
-            padding: '14px 20px',
-            borderBottom: `1px solid ${colors.border}`,
-          }}
-        >
-          {selectedProvider && (
-            <button
-              onClick={handleBack}
-              aria-label="Back"
-              style={{
-                background: 'transparent',
-                border: `1px solid ${colors.border}`,
-                color: colors.textMuted,
-                borderRadius: 8,
-                padding: '4px 8px',
-                display: 'flex',
-                alignItems: 'center',
-                gap: 4,
-                cursor: 'pointer',
-                fontSize: 11,
-                fontFamily: TYPOGRAPHY.fontSans,
-              }}
-            >
-              <ChevronLeft size={12} /> Back
-            </button>
-          )}
-          <Rocket size={16} style={{ color: colors.accentText }} />
-          <span
-            style={{
-              fontSize: 14,
-              fontWeight: 600,
-              color: colors.text,
-            }}
-          >
-            {selectedProvider
-              ? `Launch to ${selectedProviderMeta?.label ?? ''}`
-              : 'Launch your circuit'}
-          </span>
-          <div style={{ flex: 1 }} />
-          <button className="nuclei-hover-bg nuclei-hover-text"
-            onClick={closeLaunch}
-            aria-label="Close"
-            style={{
-              background: 'transparent',
-              border: 'none',
-              color: colors.textDim,
-              cursor: 'pointer',
-              padding: 4,
-              display: 'flex',
-              alignItems: 'center',
-              borderRadius: 6,
-            }}
-          >
-            <X size={16} />
-          </button>
-        </div>
-
+    <Dialog
+      title={(
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+          <Rocket size={16} style={{ color: colors.accentText }} aria-hidden="true" />
+          {selectedProvider ? `Launch to ${selectedProviderMeta?.label ?? ''}` : 'Launch your circuit'}
+        </span>
+      )}
+      width={1040}
+      flush
+      onClose={closeLaunch}
+      leading={selectedProvider ? (
+        <Button size="sm" onClick={handleBack} aria-label="Back" icon={<ChevronLeft size={12} />}>Back</Button>
+      ) : undefined}
+      trailing={(
+        <IconButton size="sm" aria-label="Close" onClick={closeLaunch}>
+          <X size={16} />
+        </IconButton>
+      )}
+    >
         <div style={{ overflow: 'auto', flex: 1 }}>
           {!selectedProvider ? (
             <div style={{ padding: 20 }}>
@@ -593,7 +515,7 @@ export function LaunchModal() {
                     fontFamily: TYPOGRAPHY.fontSans,
                   }}
                 >
-                  <FileCode size={12} style={{ color: colors.success }} />
+                  <FileCode size={12} style={{ color: colors.successText }} />
                   <span style={{ color: colors.textDim }}>Submitting:</span>
                   <span style={{ fontWeight: 600 }}>{stagedSubmission.fileName}</span>
                 </div>
@@ -702,7 +624,7 @@ export function LaunchModal() {
                     alignItems: 'center',
                     gap: 6,
                     fontSize: 11,
-                    color: colors.success,
+                    color: colors.successText,
                     fontFamily: TYPOGRAPHY.fontSans,
                     textTransform: 'uppercase',
                     letterSpacing: 0.5,
@@ -929,7 +851,6 @@ export function LaunchModal() {
             </div>
           )}
         </div>
-      </div>
-    </>
+    </Dialog>
   );
 }

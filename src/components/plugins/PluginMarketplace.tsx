@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useShallow } from 'zustand/react/shallow';
-import { Package, Trash2, RefreshCw, FolderOpen, Plus, Palette } from 'lucide-react';
+import { Package, Trash2, RefreshCw, FolderOpen, Plus, Palette, Check } from 'lucide-react';
 import { useThemeStore } from '../../stores/themeStore';
 import {
   usePluginStore,
@@ -20,7 +20,8 @@ import { PluginPanelHost } from './PluginPanelHost';
 import { PluginErrorCard } from './PluginErrorCard';
 import type { InstalledPlugin } from '../../plugins/types';
 
-import { TYPOGRAPHY } from '../../styles/tokens';
+import { TYPOGRAPHY, ICON_SIZE, ICON_STROKE } from '../../styles/tokens';
+import { Button, EmptyState, Tabs, TextInput } from '../ui';
 type Tab = 'installed' | 'panels';
 
 const FONT = TYPOGRAPHY.fontSans;
@@ -40,40 +41,17 @@ function ActionButton({
   disabled?: boolean;
   tone?: 'default' | 'accent' | 'danger';
 }) {
-  const colors = useThemeStore((s) => s.colors);
-  const color =
-    tone === 'accent' ? colors.accent : tone === 'danger' ? colors.error : colors.textMuted;
+  const variant = tone === 'accent' ? 'primary' : tone === 'danger' ? 'danger' : 'secondary';
   return (
-    <button
-      onClick={onClick}
-      disabled={disabled}
-      style={{
-        display: 'flex',
-        alignItems: 'center',
-        gap: 4,
-        fontSize: 11,
-        fontWeight: 500,
-        fontFamily: FONT,
-        color,
-        background: 'transparent',
-        border: `1px solid ${color}40`,
-        borderRadius: 4,
-        padding: '3px 8px',
-        cursor: disabled ? 'default' : 'pointer',
-        opacity: disabled ? 0.5 : 1,
-        flexShrink: 0,
-      }}
-    >
-      {icon}
+    <Button size="sm" variant={variant} onClick={onClick} disabled={disabled} icon={icon}>
       {label}
-    </button>
+    </Button>
   );
 }
 
 /* ── Root ────────────────────────────────────────────────── */
 
 export function PluginMarketplace() {
-  const colors = useThemeStore((s) => s.colors);
   const plugins = usePluginStore((s) => s.plugins);
 
   const [tab, setTab] = useState<Tab>('installed');
@@ -157,32 +135,16 @@ export function PluginMarketplace() {
       {/* Inline create form */}
       {creating && (
         <div style={{ display: 'flex', gap: 6, padding: '0 12px 8px', flexShrink: 0 }}>
-          <input
+          <TextInput
             value={newName}
             autoFocus
+            size="sm"
             onChange={(e) => setNewName(e.target.value)}
             onKeyDown={(e) => {
               if (e.key === 'Enter' && !busy) handleCreate();
             }}
             placeholder="plugin name"
             aria-label="New plugin name"
-            style={{
-              flex: 1,
-              minWidth: 0,
-              padding: '5px 8px',
-              fontSize: 12,
-              fontFamily: FONT,
-              background: colors.bg,
-              border: `1px solid ${colors.border}`,
-              borderRadius: 4,
-              color: colors.text,
-            }}
-            onFocus={(e) => {
-              e.currentTarget.style.borderColor = colors.accent;
-            }}
-            onBlur={(e) => {
-              e.currentTarget.style.borderColor = colors.border;
-            }}
           />
           <ActionButton
             label="Choose folder…"
@@ -197,31 +159,15 @@ export function PluginMarketplace() {
       {error && <PluginErrorCard title="Plugin error" message={error} />}
 
       {/* Tab bar */}
-      <div style={{ display: 'flex', borderBottom: `1px solid ${colors.border}`, flexShrink: 0 }}>
-        {(['installed', 'panels'] as const).map((t) => (
-          <button
-            key={t}
-            onClick={() => setTab(t)}
-            style={{
-              flex: 1,
-              padding: '8px 0',
-              fontSize: 11,
-              fontWeight: 600,
-              fontFamily: FONT,
-              textTransform: 'uppercase',
-              letterSpacing: 0.5,
-              border: 'none',
-              borderBottom: `2px solid ${tab === t ? colors.accent : 'transparent'}`,
-              background: 'transparent',
-              color: tab === t ? colors.accent : colors.textMuted,
-              cursor: 'pointer',
-              transition: 'color 0.15s, border-color 0.15s',
-            }}
-          >
-            {t === 'installed' ? `Installed (${plugins.length})` : 'Panels'}
-          </button>
-        ))}
-      </div>
+      <Tabs
+        aria-label="Plugin views"
+        value={tab}
+        onChange={setTab}
+        options={[
+          { value: 'installed', label: `Installed (${plugins.length})` },
+          { value: 'panels', label: 'Panels' },
+        ]}
+      />
 
       {/* Content */}
       <div style={{ flex: 1, minHeight: 0, overflowY: 'auto' }}>
@@ -242,30 +188,11 @@ function InstalledTab({
   busy: boolean;
   run: (fn: () => Promise<void>) => Promise<void>;
 }) {
-  const colors = useThemeStore((s) => s.colors);
-
   if (plugins.length === 0) {
     return (
-      <div
-        style={{
-          display: 'flex',
-          flexDirection: 'column',
-          alignItems: 'center',
-          justifyContent: 'center',
-          padding: 32,
-          gap: 12,
-          textAlign: 'center',
-        }}
-      >
-        <Package size={32} color={colors.textDim} strokeWidth={1} />
-        <span style={{ fontSize: 12, color: colors.textDim, fontFamily: FONT }}>
-          No plugins installed
-        </span>
-        <span style={{ fontSize: 11, color: colors.textDim, fontFamily: FONT }}>
-          Load one from a folder or create your own. Plugins are local, user-authored code — there
-          is no remote marketplace.
-        </span>
-      </div>
+      <EmptyState icon={<Package size={ICON_SIZE.lg} strokeWidth={ICON_STROKE} />} title="No plugins installed">
+        Load one from a folder or create your own. Plugins are local, user-authored code. There is no remote marketplace.
+      </EmptyState>
     );
   }
 
@@ -349,7 +276,7 @@ function PluginRow({
             style={{
               fontSize: 11,
               fontFamily: TYPOGRAPHY.fontMono,
-              color: colors.accentLight,
+              color: colors.accentText,
               background: `${colors.accent}12`,
               padding: '1px 5px',
               borderRadius: 3,
@@ -406,7 +333,7 @@ function PluginRow({
 function StatusPill({ status }: { status: InstalledPlugin['status'] }) {
   const colors = useThemeStore((s) => s.colors);
   const tone =
-    status === 'active' ? colors.success : status === 'error' ? colors.error : colors.textDim;
+    status === 'active' ? colors.successText : status === 'error' ? colors.error : colors.textDim;
   return (
     <span
       style={{
@@ -518,24 +445,17 @@ function PanelsTab() {
                   <span style={{ fontSize: 12, color: colors.text, fontFamily: FONT, flex: 1 }}>
                     {theme.name}
                   </span>
-                  <button
+                  <Button
+                    size="sm"
+                    icon={active ? <Check size={12} aria-hidden="true" /> : undefined}
+                    style={active ? { color: colors.successText } : undefined}
                     onClick={() => {
                       applyPluginTheme(theme.colors);
                       setAppliedTheme(`${theme.pluginName}:${theme.name}`);
                     }}
-                    style={{
-                      fontSize: 11,
-                      fontFamily: FONT,
-                      color: active ? colors.success : colors.accent,
-                      background: 'transparent',
-                      border: `1px solid ${(active ? colors.success : colors.accent)}40`,
-                      borderRadius: 4,
-                      padding: '2px 8px',
-                      cursor: 'pointer',
-                    }}
                   >
                     {active ? 'Applied' : 'Apply'}
-                  </button>
+                  </Button>
                 </div>
               );
             })}

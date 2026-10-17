@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { ArrowUpRight, X } from 'lucide-react';
 import { useThemeStore } from '../stores/themeStore';
-import { WHATS_NEW, type WhatsNewEntry } from '../data/whatsNew';
+import { WHATS_NEW, highlightsFor, type WhatsNewEntry } from '../data/whatsNew';
+import { useWorkspaceStore } from '../stores/workspaceStore';
 import { DURATION, EASING, prefersReducedMotion } from '../lib/animations';
 import { openExternal } from '../lib/openExternal';
 import { useWhatsNewStore } from '../stores/whatsNewStore';
@@ -49,6 +50,17 @@ export function compareVersions(a: string, b: string): number {
   return 0;
 }
 
+/**
+ * What the version pill says. Notes written for a release the running build has not
+ * reached yet are labelled as upcoming, never as the version the person is on.
+ */
+// eslint-disable-next-line react-refresh/only-export-components
+export function versionBadge(entryVersion: string, currentVersion: string): string {
+  if (compareVersions(entryVersion, currentVersion) <= 0) return `v${entryVersion}`;
+  const [major, minor] = entryVersion.split('.');
+  return `Coming in ${major}.${minor ?? '0'}`;
+}
+
 interface WhatsNewModalProps {
   /** Injectable for tests. Defaults to the same Tauri check UpdateBanner uses. */
   isDesktop?: boolean;
@@ -73,7 +85,7 @@ export function WhatsNewModal({
 }: WhatsNewModalProps = {}) {
   const colors = useThemeStore((s) => s.colors);
   const shadow = useThemeStore((s) => s.shadow);
-  const mode = useThemeStore((s) => s.mode);
+  const workspaceMode = useWorkspaceStore((s) => s.mode);
   const [visible, setVisible] = useState(false);
   const [entered, setEntered] = useState(false);
   const [leaving, setLeaving] = useState(false);
@@ -176,7 +188,8 @@ export function WhatsNewModal({
 
   const reduced = prefersReducedMotion();
   const shown = entered && !leaving;
-  const scrim = mode === 'dark' ? 'rgba(3, 8, 20, 0.68)' : 'rgba(15, 23, 42, 0.4)';
+  const scrim = colors.scrim;
+  const highlights = highlightsFor(entry, { platform: isDesktop ? 'desktop' : 'web', mode: workspaceMode });
 
   return (
     <>
@@ -188,8 +201,8 @@ export function WhatsNewModal({
           inset: 0,
           zIndex: 3000,
           background: scrim,
-          backdropFilter: 'blur(3px)',
-          WebkitBackdropFilter: 'blur(3px)',
+          backdropFilter: 'blur(4px)',
+          WebkitBackdropFilter: 'blur(4px)',
           opacity: shown ? 1 : 0,
           transition: reduced ? 'none' : `opacity ${DURATION.normal}ms ${EASING.enter}`,
         }}
@@ -259,7 +272,7 @@ export function WhatsNewModal({
 
           <div style={{ overflowY: 'auto', padding: '28px 28px 22px' }}>
             <WhatsNewHeader
-              currentVersion={entry.version}
+              versionLabel={versionBadge(entry.version, currentVersion)}
               accent={colors.accent}
               textDim={colors.textDim}
               reduced={reduced}
@@ -302,12 +315,12 @@ export function WhatsNewModal({
                 gap: 14,
               }}
             >
-              {entry.highlights.map((highlight, i) => (
+              {highlights.map((highlight, i) => (
                 <WhatsNewHighlightRow
                   key={highlight.title}
                   highlight={highlight}
                   index={i}
-                  accent={colors.accent}
+                  accent={colors.accentText}
                   text={colors.text}
                   textMuted={colors.textMuted}
                 />

@@ -1,15 +1,11 @@
-import { Button } from '../ui';
-import { useState, useRef, useEffect, useLayoutEffect } from 'react';
-import { createPortal } from 'react-dom';
 import { ChevronDown } from 'lucide-react';
+import { Button, Menu, type MenuEntry } from '../ui';
 import { useEditorStore } from '../../stores/editorStore';
-import { useThemeStore } from '../../stores/themeStore';
 import { usePlatform } from '../../platform/PlatformProvider';
 import { kernelLanguageFor } from '../../types/quantum';
 import type { Framework } from '../../types/quantum';
 import { STARTER_TEMPLATES, displayFrameworkName } from '../../data/starterTemplates';
 
-import { TYPOGRAPHY } from '../../styles/tokens';
 const FRAMEWORKS: Framework[] = ['qiskit', 'cirq', 'cuda-q', 'qsharp'];
 
 const displayName = displayFrameworkName;
@@ -31,8 +27,6 @@ function isUntouchedStarter(code: string): boolean {
 }
 
 export function FrameworkSelector({ compact = false }: { compact?: boolean } = {}) {
-  const [open, setOpen] = useState(false);
-  const [menuPos, setMenuPos] = useState<{ top: number; left: number } | null>(null);
   const framework = useEditorStore((s) => s.framework);
   const setFramework = useEditorStore((s) => s.setFramework);
   const setCode = useEditorStore((s) => s.setCode);
@@ -40,51 +34,8 @@ export function FrameworkSelector({ compact = false }: { compact?: boolean } = {
   const code = useEditorStore((s) => s.code);
   const isDirty = useEditorStore((s) => s.isDirty);
   const filePath = useEditorStore((s) => s.filePath);
-  const colors = useThemeStore((s) => s.colors);
-  const shadow = useThemeStore((s) => s.shadow);
   const platform = usePlatform();
   const isWeb = platform.getPlatform() === 'web';
-  const buttonRef = useRef<HTMLButtonElement>(null);
-  const menuRef = useRef<HTMLDivElement>(null);
-
-  // The dropdown is portaled to document.body so ancestors with
-  // `overflow: hidden` (e.g. the tab bar) can't clip it. The menu's
-  // position is computed from the button's bounding rect.
-  useLayoutEffect(() => {
-    if (!open) return;
-    const update = () => {
-      const btn = buttonRef.current;
-      if (!btn) return;
-      const r = btn.getBoundingClientRect();
-      setMenuPos({ top: r.bottom + 6, left: r.left });
-    };
-    update();
-    window.addEventListener('resize', update);
-    window.addEventListener('scroll', update, true);
-    return () => {
-      window.removeEventListener('resize', update);
-      window.removeEventListener('scroll', update, true);
-    };
-  }, [open]);
-
-  useEffect(() => {
-    if (!open) return;
-    const h = (e: MouseEvent) => {
-      const target = e.target as Node;
-      if (buttonRef.current?.contains(target)) return;
-      if (menuRef.current?.contains(target)) return;
-      setOpen(false);
-    };
-    const esc = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setOpen(false);
-    };
-    document.addEventListener('mousedown', h);
-    document.addEventListener('keydown', esc);
-    return () => {
-      document.removeEventListener('mousedown', h);
-      document.removeEventListener('keydown', esc);
-    };
-  }, [open]);
 
   // In the browser IDE Cirq runs natively and Qiskit through a pure-Python
   // subset; CUDA-Q/Q# need the desktop app's native kernel. Those options stay
@@ -102,7 +53,6 @@ export function FrameworkSelector({ compact = false }: { compact?: boolean } = {
     }
     setCode(STARTER_TEMPLATES[f]);
     setFramework(f);
-    setOpen(false);
   };
 
   /**
@@ -122,14 +72,12 @@ export function FrameworkSelector({ compact = false }: { compact?: boolean } = {
    */
   const handleFrameworkPick = (f: Framework) => {
     if (f === framework) {
-      setOpen(false);
       return;
     }
     const canAutoSwap = !filePath && (!isDirty || isUntouchedStarter(code));
     if (canAutoSwap) {
       setCode(STARTER_TEMPLATES[f]);
       setFramework(f);
-      setOpen(false);
       return;
     }
     if (kernelLanguageFor(f) !== kernelLanguageFor(framework)) {
@@ -140,163 +88,58 @@ export function FrameworkSelector({ compact = false }: { compact?: boolean } = {
       setCode(STARTER_TEMPLATES[f]);
       setFramework(f);
       setFilePath(null);
-      setOpen(false);
       return;
     }
     setFramework(f);
-    setOpen(false);
   };
 
-  const menu = open && menuPos ? (
-    <div
-      ref={menuRef}
-      role="menu"
-      style={{
-        position: 'fixed',
-        top: menuPos.top,
-        left: menuPos.left,
-        background: colors.bgElevated,
-        border: `1px solid ${colors.borderStrong}`,
-        borderRadius: 6,
-        overflow: 'hidden',
-        zIndex: 1000,
-        minWidth: 200,
-        boxShadow: shadow.md,
-      }}
-    >
-      <div style={{ padding: '4px 0' }}>
-        <div
-          style={{
-            padding: '6px 12px 4px',
-            fontSize: 11,
-            fontWeight: 600,
-            color: colors.textDim,
-            fontFamily: TYPOGRAPHY.fontSans,
-            textTransform: 'uppercase',
-            letterSpacing: 0.5,
-          }}
-        >
-          Framework
-        </div>
-        {FRAMEWORKS.map((f) => {
-          const disabled = isDisabled(f);
-          const isActive = f === framework;
-          return (
-            <button
-              key={f}
-              disabled={disabled}
-              className="nuclei-menu-item nuclei-menu-item--tint"
-              onClick={() => {
-                if (disabled) return;
-                handleFrameworkPick(f);
-              }}
-              title={disabled ? 'Desktop app only — download from getnuclei.dev' : undefined}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: 8,
-                width: '100%',
-                padding: '6px 12px',
-                background: isActive ? `${colors.accent}12` : 'transparent',
-                color: disabled ? colors.textDim : isActive ? colors.accentText : colors.text,
-                border: 'none',
-                cursor: disabled ? 'not-allowed' : 'pointer',
-                fontSize: 12,
-                fontFamily: TYPOGRAPHY.fontSans,
-                textAlign: 'left',
-                opacity: disabled ? 0.55 : 1,
-              }}
-            >
-              {isActive && <span style={{ color: colors.accentText, fontSize: 11 }}>●</span>}
-              <span style={{ marginLeft: isActive ? 0 : 18, flex: 1 }}>{labelFor(f)}</span>
-              {disabled && (
-                <span
-                  style={{
-                    fontSize: 11,
-                    color: colors.textDim,
-                    fontWeight: 500,
-                    textTransform: 'uppercase',
-                    letterSpacing: 0.4,
-                  }}
-                >
-                  Desktop
-                </span>
-              )}
-            </button>
-          );
-        })}
-      </div>
-      <div style={{ borderTop: `1px solid ${colors.border}`, padding: '4px 0' }}>
-        <div
-          style={{
-            padding: '6px 12px 4px',
-            fontSize: 11,
-            fontWeight: 600,
-            color: colors.textDim,
-            fontFamily: TYPOGRAPHY.fontSans,
-            textTransform: 'uppercase',
-            letterSpacing: 0.5,
-          }}
-        >
-          New from template
-        </div>
-        {FRAMEWORKS.map((f) => {
-          const disabled = isDisabled(f);
-          return (
-            <button
-              key={`tpl-${f}`}
-              disabled={disabled}
-              className="nuclei-menu-item nuclei-menu-item--tint"
-              onClick={() => {
-                if (disabled) return;
-                applyTemplate(f);
-              }}
-              title={disabled ? 'Desktop app only — download from getnuclei.dev' : undefined}
-              style={{
-                display: 'block',
-                width: '100%',
-                padding: '6px 12px',
-                background: 'transparent',
-                color: disabled ? colors.textDim : colors.textMuted,
-                border: 'none',
-                cursor: disabled ? 'not-allowed' : 'pointer',
-                fontSize: 12,
-                fontFamily: TYPOGRAPHY.fontSans,
-                textAlign: 'left',
-                opacity: disabled ? 0.55 : 1,
-              }}
-            >
-              New {displayName(f)} file
-            </button>
-          );
-        })}
-      </div>
-    </div>
-  ) : null;
+  const DESKTOP_ONLY = 'Desktop app only — download from getnuclei.dev';
+  const entries: MenuEntry[] = [
+    { id: 'h-framework', heading: 'Framework' },
+    ...FRAMEWORKS.map((f): MenuEntry => ({
+      id: `fw-${f}`,
+      label: labelFor(f),
+      checked: f === framework,
+      disabled: isDisabled(f),
+      title: isDisabled(f) ? DESKTOP_ONLY : undefined,
+      hint: isDisabled(f) ? 'Desktop' : undefined,
+      onSelect: () => handleFrameworkPick(f),
+    })),
+    { id: 'sep', separator: true },
+    { id: 'h-template', heading: 'New from template' },
+    ...FRAMEWORKS.map((f): MenuEntry => ({
+      id: `tpl-${f}`,
+      label: `New ${displayName(f)} file`,
+      disabled: isDisabled(f),
+      title: isDisabled(f) ? DESKTOP_ONLY : undefined,
+      onSelect: () => applyTemplate(f),
+    })),
+  ];
 
   return (
-    <>
-      <Button
-        ref={buttonRef}
-        className="nuclei-framework-btn"
-        onClick={() => setOpen((o) => !o)}
-        aria-haspopup="menu"
-        aria-expanded={open}
-        title={compact ? `Framework: ${fullLabelFor(framework)}` : 'Framework'}
-        style={{ minWidth: 0, maxWidth: '100%' }}
-      >
-        <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{labelFor(framework)}</span>
-        <ChevronDown
-          size={12}
-          style={{
-            flexShrink: 0,
-            opacity: 0.7,
-            transform: open ? 'rotate(180deg)' : 'rotate(0deg)',
-            transition: 'transform 150ms cubic-bezier(0.16, 1, 0.3, 1)',
-          }}
-        />
-      </Button>
-      {menu && createPortal(menu, document.body)}
-    </>
+    <Menu
+      label="Framework"
+      entries={entries}
+      minWidth={200}
+      trigger={({ 'aria-expanded': expanded, ...p }) => (
+        <Button
+          {...p}
+          aria-expanded={expanded}
+          className="nuclei-framework-btn"
+          title={compact ? `Framework: ${fullLabelFor(framework)}` : 'Framework'}
+          style={{ minWidth: 0, maxWidth: '100%' }}
+        >
+          <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{labelFor(framework)}</span>
+          <ChevronDown
+            size={12}
+            style={{
+              flexShrink: 0, opacity: 0.7,
+              transform: expanded ? 'rotate(180deg)' : 'rotate(0deg)',
+              transition: 'transform 150ms cubic-bezier(0.16, 1, 0.3, 1)',
+            }}
+          />
+        </Button>
+      )}
+    />
   );
 }

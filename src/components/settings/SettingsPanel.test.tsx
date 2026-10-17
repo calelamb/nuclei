@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { describe, it, expect, afterEach, beforeAll, beforeEach, vi } from 'vitest';
 import { render, screen, fireEvent, cleanup, waitFor, within } from '@testing-library/react';
+import { API_KEY_PRIVACY_NOTE } from '../../config/apiKeyCopy';
 import { SettingsPanel } from './SettingsPanel';
 import { useThemeStore } from '../../stores/themeStore';
 import { useNavigationStore } from '../../stores/navigationStore';
@@ -92,5 +93,17 @@ describe('SettingsPanel', () => {
     fireEvent.keyDown(group, { key: 'ArrowRight' });
     expect(useThemeStore.getState().preference).toBe('light'); // dark -> light
     spy.mockRestore();
+  });
+
+  it('names the Parse Debounce slider after its row (unnamed range inputs fail screen readers)', () => {
+    render(<SettingsPanel />);
+    const slider = screen.getByRole('slider', { name: /Parse debounce/i });
+    expect(slider.getAttribute('aria-valuetext')).toMatch(/ms/);
+  });
+
+  it('states the key privacy note once, identically to the Dirac connect card', () => {
+    render(<SettingsPanel />);
+    expect(screen.getByText(API_KEY_PRIVACY_NOTE)).toBeTruthy();
+    expect(document.body.textContent).not.toMatch(/never leaves your machine/);
   });
 });

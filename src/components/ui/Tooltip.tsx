@@ -1,4 +1,4 @@
-import { cloneElement, useCallback, useEffect, useId, useRef, useState, type ReactElement } from 'react';
+import { cloneElement, useCallback, useEffect, useId, useLayoutEffect, useRef, useState, type ReactElement } from 'react';
 import { createPortal } from 'react-dom';
 import { useThemeStore } from '../../stores/themeStore';
 import { TYPOGRAPHY } from '../../styles/tokens';
@@ -43,6 +43,10 @@ export function Tooltip({ label, shortcut, placement = 'above', children }: Tool
   // A click focuses the control right after mousedown; that focus is not keyboard focus
   // and must not re-arm the tooltip the click just dismissed.
   const pointerFocus = useRef(false);
+  // After a click the tooltip stays shut until the pointer leaves: a click that re-renders
+  // the trigger under the cursor makes the browser fire a fresh mouseenter.
+  const suppressed = useRef(false);
+  const tipRef = useRef<HTMLDivElement>(null);
 
   const clearTimers = useCallback(() => {
     if (openTimer.current) clearTimeout(openTimer.current);
@@ -68,7 +72,22 @@ export function Tooltip({ label, shortcut, placement = 'above', children }: Tool
     });
   }, [placement]);
 
+  // Clamp the rendered tooltip into the viewport: its real width is only known after layout,
+  // so measure at the natural position and nudge the DOM node (no extra render).
+  useLayoutEffect(() => {
+    const tip = tipRef.current;
+    if (!open || !pos || !tip) return;
+    tip.style.left = `${pos.left}px`;
+    const r = tip.getBoundingClientRect();
+    if (r.width === 0) return;
+    let dx = 0;
+    if (r.right > window.innerWidth - EDGE) dx = window.innerWidth - EDGE - r.right;
+    if (r.left + dx < EDGE) dx = EDGE - r.left;
+    if (dx !== 0) tip.style.left = `${pos.left + dx}px`;
+  }, [open, pos]);
+
   const show = () => {
+    if (suppressed.current) return;
     if (closeTimer.current) { clearTimeout(closeTimer.current); closeTimer.current = null; }
     if (open || openTimer.current) return;
     openTimer.current = setTimeout(() => {
@@ -93,10 +112,11 @@ export function Tooltip({ label, shortcut, placement = 'above', children }: Tool
       ref={wrapRef}
       style={{ display: 'contents' }}
       onMouseEnter={show}
-      onMouseLeave={() => hide()}
+      onMouseLeave={() => { suppressed.current = false; hide(); }}
       onFocus={() => { if (!pointerFocus.current) show(); }}
       onBlur={() => hide(true)}
       onMouseDown={() => {
+        suppressed.current = true;
         hide(true);
         pointerFocus.current = true;
         setTimeout(() => { pointerFocus.current = false; }, 0);
@@ -107,6 +127,7 @@ export function Tooltip({ label, shortcut, placement = 'above', children }: Tool
       {open && pos && createPortal(
         <div
           id={id}
+          ref={tipRef}
           role="tooltip"
           style={{
             position: 'fixed',

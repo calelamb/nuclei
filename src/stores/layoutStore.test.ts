@@ -65,4 +65,24 @@ describe('useLayoutStore', () => {
       expect(useLayoutStore.getState().overrides).toEqual({ terminal: false, circuit: true });
     });
   });
+
+  describe('togglePanel (visibility-aware)', () => {
+    it('shows a currently hidden panel on the first toggle', () => {
+      useLayoutStore.getState().togglePanel('terminal', false);
+      expect(useLayoutStore.getState().overrides).toEqual({ terminal: true });
+    });
+
+    it('hides a currently visible panel on the first toggle', () => {
+      useLayoutStore.getState().togglePanel('bloch', true);
+      expect(useLayoutStore.getState().overrides).toEqual({ bloch: false });
+    });
+
+    it('alternates when the caller reports the resolved visibility each time', () => {
+      const { togglePanel } = useLayoutStore.getState();
+      togglePanel('terminal', false);
+      togglePanel('terminal', true);
+      togglePanel('terminal', false);
+      expect(useLayoutStore.getState().overrides).toEqual({ terminal: true });
+    });
+  });
 });

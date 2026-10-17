@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, it, expect, afterEach, beforeEach, vi } from 'vitest';
-import { render, cleanup, fireEvent, screen, act } from '@testing-library/react';
+import { render, cleanup, fireEvent, screen, act, waitFor } from '@testing-library/react';
 import { DiracSidePanel } from './DiracSidePanel';
 import { useDiracStore } from '../../stores/diracStore';
 import { useDiracPanelStore } from '../../stores/diracPanelStore';
@@ -180,6 +180,13 @@ describe('DiracSidePanel', () => {
     expect(agentEntry(advanced.container)).not.toBeNull();
     advanced.unmount();
     useUIModeStore.setState({ mode: 'intermediate' });
+  });
+
+  it('focuses the API key field when asked to focus Dirac with no key (⌘L)', async () => {
+    resetStores(null);
+    render(<DiracSidePanel />);
+    act(() => { useDiracPanelStore.getState().focusInput(); });
+    await waitFor(() => expect(document.activeElement).toBe(screen.getByLabelText('Anthropic API key')));
   });
 
   it('opens the Dirac settings section from the no-key footer link', () => {

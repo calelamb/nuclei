@@ -98,7 +98,7 @@ function HistogramChart({ data, srDescription, scroll = false }: ChartProps) {
           cursor={{ fill: colors.bgElevated }}
           contentStyle={{ background: colors.bgElevated, border: `1px solid ${colors.borderStrong}`, borderRadius: 6, fontSize: 12, fontFamily: TYPOGRAPHY.fontMono }}
           labelStyle={{ color: colors.text }}
-          itemStyle={{ color: colors.accent }}
+          itemStyle={{ color: colors.accentText }}
           formatter={(value) => [typeof value === 'number' ? `${(value * 100).toFixed(2)}%` : String(value ?? ''), 'Probability']}
         />
         <Bar dataKey="probability" radius={[4, 4, 0, 0]} isAnimationActive={false}>
@@ -179,7 +179,7 @@ export function ProbabilityHistogram() {
     return (
       <div style={{ height: '100%', display: 'flex', flexDirection: 'column', padding: '8px 12px' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8, flexShrink: 0 }}>
-          <span style={{ color: colors.accent, fontSize: 11, fontWeight: 600, fontFamily: TYPOGRAPHY.fontSans }}>
+          <span style={{ color: colors.accentText, fontSize: 11, fontWeight: 600, fontFamily: TYPOGRAPHY.fontSans }}>
             Ideal probabilities · state at {step.gate_index < 0 ? 'start' : `${step.label}`}
           </span>
           <OutcomeCap shown={data.length} hiddenCount={stepView.hiddenCount} hiddenProbability={stepView.hiddenProbability} evenlySpread={stepView.evenlySpread} showAll={showAll} onToggle={() => setShowAll((v) => !v)} />

@@ -128,7 +128,7 @@ export function ExperimentBreadcrumbs() {
   const segmentStyle = (isLast: boolean, clickable: boolean): React.CSSProperties => ({
     fontSize: 11,
     fontFamily: TYPOGRAPHY.fontSans,
-    color: isLast ? colors.textMuted : colors.accent,
+    color: isLast ? colors.textMuted : colors.accentText,
     whiteSpace: 'nowrap',
     background: 'transparent',
     border: 'none',

@@ -5,6 +5,8 @@
  * (or omit one that does).
  */
 
+import { isWebBuild } from '../platform/buildTarget';
+
 export type KeybindingGroup = 'Essential' | 'Editor' | 'Navigation' | 'View';
 
 export interface Keybinding {
@@ -18,6 +20,8 @@ export interface Keybinding {
   group: KeybindingGroup;
   /** `editor` bindings are owned by Monaco; they are listed but not dispatched by App. */
   owner: 'app' | 'editor';
+  /** Chrome keeps this chord for itself (new window, reopen tab): a web page never receives it. */
+  browserReserved?: boolean;
 }
 
 export const KEYBINDINGS: readonly Keybinding[] = [
@@ -33,13 +37,13 @@ export const KEYBINDINGS: readonly Keybinding[] = [
   { id: 'find', key: 'f', label: 'Find', group: 'Editor', owner: 'editor' },
 
   { id: 'open', key: 'o', label: 'Open file', group: 'Navigation', owner: 'app' },
-  { id: 'new', key: 'n', label: 'New file', group: 'Navigation', owner: 'app' },
+  { id: 'new', key: 'n', label: 'New file', group: 'Navigation', owner: 'app', browserReserved: true },
   { id: 'save-as', key: 's', shift: true, label: 'Save as', group: 'Navigation', owner: 'app' },
   { id: 'goto-rail-view', key: '1-9', display: '1–9', label: 'Jump to sidebar view', group: 'Navigation', owner: 'app' },
   { id: 'toggle-bottom-panel', key: '`', label: 'Toggle terminal panel', group: 'Navigation', owner: 'app' },
   { id: 'switch-workspace', key: 'm', shift: true, label: 'Switch Learn / Research', group: 'Navigation', owner: 'app' },
 
-  { id: 'toggle-theme', key: 't', shift: true, label: 'Toggle theme', group: 'View', owner: 'app' },
+  { id: 'toggle-theme', key: 't', shift: true, label: 'Toggle theme', group: 'View', owner: 'app', browserReserved: true },
   { id: 'cycle-ui-mode', key: 'l', shift: true, label: 'Cycle UI mode (Learn)', group: 'View', owner: 'app' },
   { id: 'launch', key: 'r', shift: true, label: 'Launch on hardware', group: 'View', owner: 'app' },
 ];
@@ -85,9 +89,15 @@ export function formatKeys(binding: Keybinding, mac: boolean = isMacPlatform()):
   return `Ctrl+${binding.shift ? 'Shift+' : ''}${key}`;
 }
 
-export function shortcutLabel(id: string, mac: boolean = isMacPlatform()): string | undefined {
+/** Whether this chord can actually reach the app in the running build (a browser tab never gets the reserved ones). */
+export function isBindingAvailable(binding: Keybinding, web: boolean = isWebBuild()): boolean {
+  return !(web && binding.browserReserved);
+}
+
+/** The key hint for a binding, or undefined when the chord is unbound or unreachable (never advertise a dead key). */
+export function shortcutLabel(id: string, mac: boolean = isMacPlatform(), web: boolean = isWebBuild()): string | undefined {
   const binding = KEYBINDINGS.find((b) => b.id === id);
-  return binding ? formatKeys(binding, mac) : undefined;
+  return binding && isBindingAvailable(binding, web) ? formatKeys(binding, mac) : undefined;
 }
 
 /** For tooltips: "Run simulation (⌘↵)". */

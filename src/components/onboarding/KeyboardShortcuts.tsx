@@ -5,7 +5,8 @@ import { useThemeStore } from '../../stores/themeStore';
 import { EASING, DURATION, prefersReducedMotion } from '../../lib/animations';
 import { useEscapeToClose } from '../../hooks/useEscapeToClose';
 import { useFocusTrap } from '../../hooks/useFocusTrap';
-import { KEYBINDINGS, formatKeys, isMacPlatform, shortcutLabel, type KeybindingGroup } from '../../config/keybindings';
+import { KEYBINDINGS, formatKeys, isBindingAvailable, isMacPlatform, shortcutLabel, type KeybindingGroup } from '../../config/keybindings';
+import { isWebBuild } from '../../platform/buildTarget';
 
 import { TYPOGRAPHY } from '../../styles/tokens';
 interface KeyboardShortcutsProps {
@@ -24,9 +25,9 @@ const GROUP_ORDER: KeybindingGroup[] = ['Essential', 'Editor', 'Navigation', 'Vi
 
 /** Generated from the one keybinding registry, so the sheet matches reality. */
 // eslint-disable-next-line react-refresh/only-export-components
-export function shortcutGroups(mac: boolean = isMacPlatform()): Array<{ title: string; shortcuts: ShortcutRow[] }> {
+export function shortcutGroups(mac: boolean = isMacPlatform(), web: boolean = isWebBuild()): Array<{ title: string; shortcuts: ShortcutRow[] }> {
   return GROUP_ORDER.map((title) => {
-    const rows: ShortcutRow[] = KEYBINDINGS.filter((b) => b.group === title).map((b) => ({
+    const rows: ShortcutRow[] = KEYBINDINGS.filter((b) => b.group === title && isBindingAvailable(b, web)).map((b) => ({
       keys: formatKeys(b, mac),
       description: b.label,
     }));
@@ -37,16 +38,18 @@ export function shortcutGroups(mac: boolean = isMacPlatform()): Array<{ title: s
 
 export function KeyboardShortcuts({ onClose }: KeyboardShortcutsProps) {
   const colors = useThemeStore((s) => s.colors);
+  const shadow = useThemeStore((s) => s.shadow);
   useEscapeToClose(onClose);
   const dialogRef = useRef<HTMLDivElement>(null);
   useFocusTrap(dialogRef);
   const groups = useMemo(() => shortcutGroups(), []);
+  const web = isWebBuild();
 
   return (
     <div
       style={{
         position: 'fixed', inset: 0, zIndex: 4500,
-        background: 'rgba(0,0,0,0.5)',
+        background: colors.scrim,
         backdropFilter: 'blur(4px)',
         display: 'flex', alignItems: 'center', justifyContent: 'center',
         animation: prefersReducedMotion() ? 'none' : `nuclei-fade-in ${DURATION.fast}ms`,
@@ -67,7 +70,7 @@ export function KeyboardShortcuts({ onClose }: KeyboardShortcutsProps) {
           maxWidth: 520, width: '90%',
           maxHeight: '80vh',
           overflow: 'auto',
-          boxShadow: '0 16px 48px rgba(0,0,0,0.4)',
+          boxShadow: shadow.lg,
           animation: prefersReducedMotion() ? 'none' : `nuclei-slide-up ${DURATION.normal}ms ${EASING.spring}`,
         }}
         onClick={(e) => e.stopPropagation()}
@@ -126,6 +129,7 @@ export function KeyboardShortcuts({ onClose }: KeyboardShortcutsProps) {
           textAlign: 'center', marginTop: 8,
         }}>
           Press {shortcutLabel('palette')} to open the command palette for all commands
+          {web && ' (including New file and Toggle theme, whose keys your browser keeps for itself)'}
         </div>
       </div>
     </div>

@@ -63,9 +63,13 @@ export interface ThemeColors {
   basisZ: string;
   overlayMatching: string;
   success: string;
+  /** Green for small text/glyphs (AA on every surface); `success` is for fills and dots. */
+  successText: string;
   warning: string;
   error: string;
   info: string;
+  /** Modal backdrop colour. */
+  scrim: string;
   comment: string;
   string: string;
   number: string;
@@ -98,9 +102,11 @@ function legacyFromTokens(c: ColorTokens): ThemeColors {
     basisZ: c.basisZ,
     overlayMatching: c.overlayMatching,
     success: c.success,
+    successText: c.successText,
     warning: c.warning,
     error: c.danger,
     info: c.info,
+    scrim: c.scrim,
     comment: c.syntaxComment,
     string: c.syntaxString,
     number: c.syntaxNumber,
@@ -163,9 +169,12 @@ function snapshot(mode: ThemeMode, overlay: Partial<ThemeColors> | null) {
   };
 }
 
+/** Until the user picks a theme the app follows the OS, so a light-mode machine never opens dark. */
+export const DEFAULT_THEME_PREFERENCE: ThemePreference = 'system';
+
 export const useThemeStore = create<ThemeState>((set, get) => ({
-  ...snapshot('dark', null),
-  preference: 'dark',
+  ...snapshot(resolveThemePreference(DEFAULT_THEME_PREFERENCE), null),
+  preference: DEFAULT_THEME_PREFERENCE,
   pluginOverlay: null,
   setMode: (mode) => set({ ...snapshot(mode, get().pluginOverlay), preference: mode }),
   setPreference: (preference) =>

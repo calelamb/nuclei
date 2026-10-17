@@ -1,6 +1,6 @@
 import { Circle, Sun, Moon, X, Command } from 'lucide-react';
 import { usePlatform } from '../../platform/PlatformProvider';
-import { useCircuitStore } from '../../stores/circuitStore';
+import { useDisplaySnapshot } from '../../layout/useDisplaySnapshot';
 import { useSimulationStore } from '../../stores/simulationStore';
 import { useEditorStore } from '../../stores/editorStore';
 import { useThemeStore } from '../../stores/themeStore';
@@ -20,6 +20,7 @@ import { useHelpOverlayStore } from '../../stores/helpOverlayStore';
 import { useUiFeatures } from '../../hooks/useUiFeatures';
 import { getKernelStatusModel, type KernelTone } from './kernelStatusModel';
 import { retryKernel } from '../../lib/kernelControl';
+import { useMainAreaTakeover } from '../../layout/takeover';
 
 /**
  * PRD 11 Phase A — the status bar, extracted VERBATIM from `PanelLayout.tsx`.
@@ -54,7 +55,7 @@ function LayoutPresetSwitcher() {
         aria-label="Layout preset"
       >
         {options.map((o) => (
-          <option key={o} value={o}>{o[0].toUpperCase() + o.slice(1)}</option>
+          <option key={o} value={o}>{`Layout: ${o[0].toUpperCase() + o.slice(1)}`}</option>
         ))}
       </Select>
     </Tooltip>
@@ -75,7 +76,7 @@ function KernelDot({ color, pulse }: { color: string; pulse: boolean }) {
 
 /* ── Status Bar ── */
 export function StatusBar() {
-  const snapshot = useCircuitStore((s) => s.snapshot);
+  const { snapshot } = useDisplaySnapshot();
   const isRunning = useSimulationStore((s) => s.isRunning);
   const result = useSimulationStore((s) => s.result);
   const lastRunFailed = useSimulationStore((s) => s.lastRunFailed);
@@ -99,6 +100,7 @@ export function StatusBar() {
   const campaignName = useQecCampaignStore((s) => s.campaignName);
   const campaignResumable = useQecCampaignStore((s) => s.resumable);
   const platform = usePlatform();
+  const takeover = useMainAreaTakeover();
   const exercise = useExerciseStore((s) => s.activeExercise);
   const endExercise = useExerciseStore((s) => s.endExercise);
   const kernelModel = getKernelStatusModel({
@@ -149,14 +151,18 @@ export function StatusBar() {
       {/* Mode chip — far-left mode identity + switcher (PRD 11 Phase B). */}
       <ModeChip />
 
-      {/* Left side */}
-      <span style={{ color: colors.textMuted }}>
-        Qubits: {snapshot ? snapshot.qubit_count : '—'}
-      </span>
-      <span style={{ color: colors.textMuted }}>
-        Depth: {snapshot ? snapshot.depth : '—'}
-      </span>
-      {features.layoutPresets && <LayoutPresetSwitcher />}
+      {/* Left side: editor stats and the layout preset only mean something while the editor is on screen. */}
+      {!takeover && (
+        <>
+          <span style={{ color: colors.textMuted }}>
+            Qubits: {snapshot ? snapshot.qubit_count : '—'}
+          </span>
+          <span style={{ color: colors.textMuted }}>
+            Depth: {snapshot ? snapshot.depth : '—'}
+          </span>
+          {features.layoutPresets && <LayoutPresetSwitcher />}
+        </>
+      )}
 
       {exercise && (
         <span style={{ display: 'flex', alignItems: 'center', gap: 3, color: colors.diracText, fontSize: 11, minWidth: 0 }}>

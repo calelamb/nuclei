@@ -52,4 +52,34 @@ describe('ResearchTour', () => {
     const dialog = document.querySelector('[role="dialog"]') as HTMLElement;
     expect(dialog.contains(document.activeElement)).toBe(true);
   });
+
+  it('returns focus to the control that had it when Escape skips the tour (no drop to <body>)', () => {
+    useResearchTourStore.setState({ active: false, step: 0 });
+    const opener = document.createElement('button');
+    opener.textContent = 'opener';
+    document.body.appendChild(opener);
+    opener.focus();
+    render(<ResearchTour />);
+    act(() => { useResearchTourStore.setState({ active: true }); });
+    expect(document.activeElement).not.toBe(opener);
+    fireEvent.keyDown(document, { key: 'Escape' });
+    expect(document.activeElement).toBe(opener);
+    opener.remove();
+  });
+
+  it('falls back to the editor when the opener is gone', () => {
+    useResearchTourStore.setState({ active: false, step: 0 });
+    const editor = document.createElement('textarea');
+    editor.setAttribute('aria-label', 'Editor content');
+    document.body.appendChild(editor);
+    const opener = document.createElement('button');
+    document.body.appendChild(opener);
+    opener.focus();
+    render(<ResearchTour />);
+    act(() => { useResearchTourStore.setState({ active: true }); });
+    opener.remove();
+    fireEvent.keyDown(document, { key: 'Escape' });
+    expect(document.activeElement).toBe(editor);
+    editor.remove();
+  });
 });

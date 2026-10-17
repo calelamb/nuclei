@@ -54,4 +54,15 @@ describe('blochGridLayout', () => {
   it('still pages once the count passes a page', () => {
     expect(blochGridLayout({ count: 12, width: 316, height: 244 }).pageCount).toBeGreaterThan(1);
   });
+
+  it('shows at least four compact spheres per page for 18 qubits in a narrow rail', () => {
+    const l = blochGridLayout({ count: 18, width: 294, height: 300 });
+    expect(l.pageSize).toBeGreaterThanOrEqual(4);
+    expect(l.cellWidth).toBeGreaterThanOrEqual(72);
+  });
+
+  it('keeps full-size spheres for a paged set when the rail is roomy', () => {
+    const l = blochGridLayout({ count: 18, width: 640, height: 900 });
+    expect(l.cellWidth).toBeGreaterThanOrEqual(112);
+  });
 });

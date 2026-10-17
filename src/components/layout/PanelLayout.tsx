@@ -29,7 +29,7 @@ import { ResearchTour } from './ResearchTour';
 import { useModeSwitchStore } from '../../stores/modeSwitchStore';
 import { useResearchTourStore } from '../../stores/researchTourStore';
 import { DEFAULT_EDITOR_PANE_WIDTH, computeEditorPaneWidth } from './layoutMath';
-import { useCircuitStore } from '../../stores/circuitStore';
+import { useDisplaySnapshot } from '../../layout/useDisplaySnapshot';
 import { useSimulationStore } from '../../stores/simulationStore';
 import { useThemeStore } from '../../stores/themeStore';
 import { useUIModeStore } from '../../stores/uiModeStore';
@@ -95,7 +95,8 @@ export function PanelLayout() {
   const workspaceMode = useWorkspaceStore((s) => s.mode);
   const result = useSimulationStore((s) => s.result);
   const terminalOutput = useSimulationStore((s) => s.terminalOutput);
-  const snapshot = useCircuitStore((s) => s.snapshot);
+  const lastRunFailed = useSimulationStore((s) => s.lastRunFailed);
+  const { snapshot } = useDisplaySnapshot();
   const platform = usePlatform();
   const isLearnMode = useLearnStore((s) => s.isLearnMode);
   const enterLearnMode = useLearnStore((s) => s.enterLearnMode);
@@ -125,7 +126,7 @@ export function PanelLayout() {
       snapshot,
       result,
       hasTerminalOutput: terminalOutput.length > 0,
-      errorActive: false,
+      errorActive: lastRunFailed,
       mode: workspaceMode,
       framework: snapshot?.framework ?? null,
     },
@@ -135,7 +136,9 @@ export function PanelLayout() {
   const showBottomPanel = visible.terminal || visible.histogramFull;
   const features = useUiFeatures();
   // Beginner mode hides the Explorer; every other rail view still opens its sidebar.
-  const showSidebar = !isLearnMode && !isChallengeMode && activeView !== null
+  // Learn and Challenge own the whole area, except that Settings may open beside them.
+  const fullViewOwnsArea = (isLearnMode || isChallengeMode) && activeView !== 'settings';
+  const showSidebar = !fullViewOwnsArea && activeView !== null
     && (features.explorerSidebar || activeView !== 'files');
   const topSplitRef = useRef<HTMLDivElement | null>(null);
   const [measureTopSplit, topSplitSize] = useElementSize<HTMLDivElement>();
@@ -355,7 +358,8 @@ export function PanelLayout() {
         width: '100vw', height: '100vh',
         display: 'flex', flexDirection: 'column',
         backgroundColor: colors.bg,
-        overflow: 'hidden',
+        // clip, not hidden: `hidden` leaves the shell scrollable, so scrollIntoView could shift the whole app up.
+        overflow: 'clip',
         userSelect: isDraggingH || isDraggingV ? 'none' : 'auto',
       }}
       onMouseMove={handleMouseMove}
@@ -365,7 +369,7 @@ export function PanelLayout() {
       <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
         {/* Activity Bar */}
         <ActivityBar
-          active={isChallengeMode ? 'challenges' : isLearnMode ? 'learning' : activeView}
+          active={activeView === 'settings' ? 'settings' : isChallengeMode ? 'challenges' : isLearnMode ? 'learning' : activeView}
           onSelect={handleActivitySelect}
           visibleViews={visibleActivityViews}
           workspaceMode={workspaceMode}
@@ -553,24 +557,10 @@ export function PanelLayout() {
 }
 
 /** Visually-hidden aria-live region announcing workspace-mode changes. */
-function ModeAnnouncer() {
+export function ModeAnnouncer() {
   const announcement = useModeSwitchStore((s) => s.announcement);
   return (
-    <div
-      aria-live="polite"
-      aria-atomic="true"
-      style={{
-        position: 'absolute',
-        width: 1,
-        height: 1,
-        padding: 0,
-        margin: -1,
-        overflow: 'hidden',
-        clip: 'rect(0 0 0 0)',
-        whiteSpace: 'nowrap',
-        border: 0,
-      }}
-    >
+    <div aria-live="polite" aria-atomic="true" className="nuclei-sr-only">
       {announcement}
     </div>
   );

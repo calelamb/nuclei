@@ -39,8 +39,27 @@ describe('themeStore', () => {
       vi.unstubAllGlobals();
     });
 
-    it('defaults to an explicit dark preference', () => {
-      expect(useThemeStore.getState().preference).toBe('dark');
+    it('defaults to following the system, not a pinned dark', async () => {
+      vi.resetModules();
+      vi.stubGlobal('window', { matchMedia: () => ({ matches: false }) });
+      const fresh = await import('./themeStore');
+      expect(fresh.useThemeStore.getState().preference).toBe('system');
+      expect(fresh.useThemeStore.getState().mode).toBe('light');
+    });
+
+    it('opens dark when the OS prefers dark or cannot say', async () => {
+      vi.resetModules();
+      vi.stubGlobal('window', { matchMedia: () => ({ matches: true }) });
+      expect((await import('./themeStore')).useThemeStore.getState().mode).toBe('dark');
+      vi.resetModules();
+      vi.unstubAllGlobals();
+      expect((await import('./themeStore')).useThemeStore.getState().mode).toBe('dark');
+    });
+
+    it('an explicit stored choice still wins over the OS', () => {
+      vi.stubGlobal('window', { matchMedia: () => ({ matches: false }) });
+      useThemeStore.getState().setPreference('dark');
+      expect(useThemeStore.getState().mode).toBe('dark');
     });
 
     it('System resolves to light when the OS prefers light', () => {

@@ -1,0 +1,79 @@
+// @vitest-environment jsdom
+import { useState } from 'react';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { Dialog } from './Dialog';
+
+afterEach(cleanup);
+
+function Harness({ onClose = vi.fn() }: { onClose?: () => void }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <>
+      <button onClick={() => setOpen(true)}>Open dialog</button>
+      {open && (
+        <Dialog title="Save changes?" onClose={() => { onClose(); setOpen(false); }} footer={<button>Save</button>}>
+          <input aria-label="Name" />
+        </Dialog>
+      )}
+    </>
+  );
+}
+
+describe('Dialog', () => {
+  it('is a labelled modal dialog named by its visible title', () => {
+    render(<Dialog title="Launch on hardware" onClose={() => {}}><p>Body</p></Dialog>);
+    const dialog = screen.getByRole('dialog', { name: 'Launch on hardware' });
+    expect(dialog.getAttribute('aria-modal')).toBe('true');
+  });
+
+  it('moves focus inside on open and restores it to the opener on close', () => {
+    render(<Harness />);
+    const opener = screen.getByText('Open dialog');
+    opener.focus();
+    fireEvent.click(opener);
+    expect(screen.getByRole('dialog').contains(document.activeElement)).toBe(true);
+    fireEvent.keyDown(document, { key: 'Escape' });
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(document.activeElement).toBe(opener);
+  });
+
+  it('traps Tab inside the dialog', () => {
+    render(<Harness />);
+    fireEvent.click(screen.getByText('Open dialog'));
+    const save = screen.getByText('Save');
+    save.focus();
+    fireEvent.keyDown(save, { key: 'Tab' });
+    expect(screen.getByRole('dialog').contains(document.activeElement)).toBe(true);
+  });
+
+  it('closes on Escape and on a scrim click, but not on a click inside', () => {
+    const onClose = vi.fn();
+    render(<Dialog title="T" onClose={onClose}><p>Body</p></Dialog>);
+    fireEvent.mouseDown(screen.getByText('Body'));
+    fireEvent.click(screen.getByText('Body'));
+    expect(onClose).not.toHaveBeenCalled();
+    fireEvent.keyDown(document, { key: 'Escape' });
+    expect(onClose).toHaveBeenCalledTimes(1);
+    fireEvent.mouseDown(screen.getByTestId('dialog-scrim'));
+    expect(onClose).toHaveBeenCalledTimes(2);
+  });
+
+  it('can disable dismissal for blocking flows', () => {
+    const onClose = vi.fn();
+    render(<Dialog title="T" onClose={onClose} dismissible={false}><p>Body</p></Dialog>);
+    fireEvent.keyDown(document, { key: 'Escape' });
+    fireEvent.mouseDown(screen.getByTestId('dialog-scrim'));
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it('paints the scrim with the scrim token', () => {
+    render(<Dialog title="T" onClose={() => {}}>x</Dialog>);
+    expect(screen.getByTestId('dialog-scrim').className).toContain('nuclei-dialog-scrim');
+  });
+
+  it('honours an initial focus target', () => {
+    render(<Dialog title="T" onClose={() => {}} initialFocus="[data-primary]"><button>Cancel</button><button data-primary>Save</button></Dialog>);
+    expect(document.activeElement?.textContent).toBe('Save');
+  });
+});

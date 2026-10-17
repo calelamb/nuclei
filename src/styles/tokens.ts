@@ -38,9 +38,13 @@ export interface ColorTokens {
   overlayMatching: string;
   // Semantics
   success: string;
+  /** Green for small text/glyphs: AA on every surface in both themes (success is for fills and dots). */
+  successText: string;
   warning: string;
   danger: string;
   info: string;
+  /** Modal backdrop colour (dialogs, palette, shortcuts sheet). */
+  scrim: string;
   // Kernel status
   kernelIdle: string;
   kernelConnecting: string;
@@ -129,9 +133,11 @@ export const DARK_COLORS: ColorTokens = {
   basisZ: '#FBBF24',
   overlayMatching: '#FB923C',
   success: '#10B981',
+  successText: '#10B981',
   warning: '#F59E0B',
   danger: '#EF4444',
   info: '#3B82F6',
+  scrim: 'rgba(0, 0, 0, 0.5)',
   kernelIdle: '#64748B',
   kernelConnecting: '#F59E0B',
   kernelReady: '#10B981',
@@ -169,9 +175,11 @@ export const LIGHT_COLORS: ColorTokens = {
   basisZ: '#B45309',
   overlayMatching: '#C2410C',
   success: '#059669',
+  successText: '#047857',
   warning: '#A8580A',
   danger: '#DC2626',
   info: '#2563EB',
+  scrim: 'rgba(15, 23, 42, 0.28)',
   kernelIdle: '#94A3B8',
   kernelConnecting: '#D97706',
   kernelReady: '#059669',
@@ -179,7 +187,7 @@ export const LIGHT_COLORS: ColorTokens = {
   syntaxComment: '#6A737D',
   syntaxString: '#22863A',
   syntaxNumber: '#B76E00',
-  syntaxKeyword: '#0891B2',
+  syntaxKeyword: '#0E7490',
   syntaxType: '#005F73',
   gateSingle: '#0891B2',
   gateMulti: '#3B6EA5',

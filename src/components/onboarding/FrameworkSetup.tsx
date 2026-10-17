@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
-import { X, Check, AlertCircle, Loader2, Download, Sparkles } from 'lucide-react';
+import { Check, AlertCircle, Loader2, Download } from 'lucide-react';
+import { Button, Dialog } from '../ui';
 import { useThemeStore } from '../../stores/themeStore';
-import { useEscapeToClose } from '../../hooks/useEscapeToClose';
 import {
   useFrameworksStore,
   type FrameworkInfo,
@@ -32,10 +32,6 @@ interface FrameworkSetupProps {
  */
 export function FrameworkSetup({ open, onClose, firstRun = false }: FrameworkSetupProps) {
   const colors = useThemeStore((s) => s.colors);
-  const shadow = useThemeStore((s) => s.shadow);
-  // Escape closes the dialog — but not during a forced first-run setup, where
-  // the backdrop click is likewise disabled.
-  useEscapeToClose(onClose, open && !firstRun);
   const status = useFrameworksStore((s) => s.status);
   const loading = useFrameworksStore((s) => s.loading);
   const installing = useFrameworksStore((s) => s.installing);
@@ -137,77 +133,38 @@ export function FrameworkSetup({ open, onClose, firstRun = false }: FrameworkSet
   if (!open) return null;
 
   const hasPython = !!status?.system_python_path;
+  const installDisabled = !hasPython || installing || selected.size === 0;
 
   return (
-    <div
-      role="presentation"
-      onClick={firstRun ? undefined : onClose}
-      style={{
-        position: 'fixed',
-        inset: 0,
-        background: 'rgba(0,0,0,0.45)',
-        zIndex: 9998,
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-      }}
-    >
-      <div
-        role="dialog"
-        aria-label="Framework setup"
-        onClick={(e) => e.stopPropagation()}
-        style={{
-          width: 'min(640px, 92vw)',
-          maxHeight: '86vh',
-          background: colors.bgPanel,
-          border: `1px solid ${colors.borderStrong}`,
-          borderRadius: 12,
-          boxShadow: shadow.lg,
-          display: 'flex',
-          flexDirection: 'column',
-          fontFamily: TYPOGRAPHY.fontSans,
-        }}
-      >
-        {/* Header */}
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: 10,
-            padding: '14px 18px',
-            borderBottom: `1px solid ${colors.border}`,
-          }}
-        >
-          <Sparkles size={16} style={{ color: colors.accentText }} />
-          <div style={{ flex: 1 }}>
-            <div style={{ fontSize: 14, fontWeight: 600, color: colors.text }}>
-              {firstRun ? 'Welcome — set up your quantum frameworks' : 'Quantum frameworks'}
-            </div>
-            <div style={{ fontSize: 11, color: colors.textDim, marginTop: 2 }}>
-              Pick the libraries you want. Nuclei installs them into a
-              private Python environment — no system pollution.
-            </div>
+    <Dialog
+      title={firstRun ? 'Welcome — set up your quantum frameworks' : 'Quantum frameworks'}
+      description="Pick the libraries you want. Nuclei installs them into a private Python environment — no system pollution."
+      width={640}
+      flush
+      // A forced first-run setup cannot be dismissed with Escape or a scrim click.
+      dismissible={!firstRun}
+      onClose={onClose}
+      footer={(
+        <>
+          <div style={{ flex: 1, fontSize: 11, color: colors.textDim, alignSelf: 'center' }}>
+            {selected.size > 0 ? <>{selected.size} selected · ~{totalMb} MB download</> : 'Pick the frameworks you want installed.'}
           </div>
-          {!firstRun && (
-            <button
-              onClick={onClose}
-              aria-label="Close"
-              style={{
-                background: 'transparent',
-                border: 'none',
-                color: colors.textDim,
-                cursor: 'pointer',
-                padding: 4,
-                display: 'flex',
-              }}
-            >
-              <X size={16} />
-            </button>
-          )}
-        </div>
-
+          {firstRun && <Button onClick={onClose} disabled={installing}>Skip for now</Button>}
+          <Button
+            variant="primary"
+            onClick={runInstall}
+            disabled={installDisabled}
+            loading={installing}
+            icon={installing ? undefined : <Download size={12} />}
+          >
+            {installing ? 'Installing…' : `Install ${selected.size > 0 ? `(${selected.size})` : ''}`.trim()}
+          </Button>
+        </>
+      )}
+    >
+      <div>
         {/* Body */}
-        <div style={{ flex: 1, minHeight: 0, overflow: 'auto', padding: '14px 18px' }}>
+        <div style={{ padding: '14px 20px' }}>
           {loading && (
             <div style={{ color: colors.textDim, fontSize: 12, padding: '20px 0' }}>
               Detecting Python + installed frameworks…
@@ -341,7 +298,7 @@ export function FrameworkSetup({ open, onClose, firstRun = false }: FrameworkSet
             >
               {lastFailures.length === 0 ? (
                 <>
-                  <Check size={12} style={{ color: colors.success, marginRight: 6 }} />
+                  <Check size={12} style={{ color: colors.successText, marginRight: 6 }} />
                   All selected frameworks installed. Restart the kernel to pick them up.
                 </>
               ) : (
@@ -378,58 +335,8 @@ export function FrameworkSetup({ open, onClose, firstRun = false }: FrameworkSet
           )}
         </div>
 
-        {/* Footer */}
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: 10,
-            padding: '12px 18px',
-            borderTop: `1px solid ${colors.border}`,
-          }}
-        >
-          <div style={{ flex: 1, fontSize: 11, color: colors.textDim }}>
-            {selected.size > 0 ? (
-              <>
-                {selected.size} selected · ~{totalMb} MB download
-              </>
-            ) : (
-              'Pick the frameworks you want installed.'
-            )}
-          </div>
-          {firstRun && (
-            <button
-              onClick={onClose}
-              style={btnSecondary(colors)}
-              disabled={installing}
-            >
-              Skip for now
-            </button>
-          )}
-          <button
-            onClick={runInstall}
-            disabled={!hasPython || installing || selected.size === 0}
-            style={{
-              ...btnPrimary(colors),
-              opacity: !hasPython || installing || selected.size === 0 ? 0.5 : 1,
-              cursor: !hasPython || installing || selected.size === 0 ? 'not-allowed' : 'pointer',
-            }}
-          >
-            {installing ? (
-              <>
-                <Loader2 size={12} style={{ animation: 'nuclei-spin 800ms linear infinite' }} />
-                Installing…
-              </>
-            ) : (
-              <>
-                <Download size={12} />
-                Install {selected.size > 0 ? `(${selected.size})` : ''}
-              </>
-            )}
-          </button>
-        </div>
       </div>
-    </div>
+    </Dialog>
   );
 }
 
@@ -550,38 +457,4 @@ function FrameworkRow({
       </div>
     </label>
   );
-}
-
-function btnPrimary(colors: ReturnType<typeof useThemeStore.getState>['colors']): React.CSSProperties {
-  return {
-    display: 'inline-flex',
-    alignItems: 'center',
-    gap: 6,
-    padding: '7px 14px',
-    background: colors.accent,
-    color: colors.onAccent,
-    border: 'none',
-    borderRadius: 6,
-    fontSize: 12,
-    fontWeight: 600,
-    fontFamily: TYPOGRAPHY.fontSans,
-    cursor: 'pointer',
-  };
-}
-
-function btnSecondary(colors: ReturnType<typeof useThemeStore.getState>['colors']): React.CSSProperties {
-  return {
-    display: 'inline-flex',
-    alignItems: 'center',
-    gap: 6,
-    padding: '7px 14px',
-    background: 'transparent',
-    color: colors.text,
-    border: `1px solid ${colors.border}`,
-    borderRadius: 6,
-    fontSize: 12,
-    fontWeight: 500,
-    fontFamily: TYPOGRAPHY.fontSans,
-    cursor: 'pointer',
-  };
 }

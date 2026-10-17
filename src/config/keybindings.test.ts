@@ -56,4 +56,11 @@ describe('keybinding registry', () => {
     expect(shortcutLabel('palette', true)).toBe('⌘⇧P');
     expect(shortcutLabel('nope', true)).toBeUndefined();
   });
+
+  it('never advertises a browser-reserved chord on the web build', () => {
+    expect(shortcutLabel('new', true, true)).toBeUndefined();
+    expect(shortcutLabel('toggle-theme', true, true)).toBeUndefined();
+    expect(shortcutLabel('toggle-theme', true, false)).toBe('⌘⇧T');
+    expect(shortcutLabel('palette', true, true)).toBe('⌘⇧P');
+  });
 });
