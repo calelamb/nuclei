@@ -198,3 +198,27 @@ describe('parseConversation', () => {
     expect(restored?.messages[1].toolCalls?.[0].status).toBe('accepted');
   });
 });
+
+describe('legacy lesson greetings', () => {
+  const greeting = (id: string) => ({
+    id, role: 'assistant', timestamp: '2026-07-01T10:00:00Z',
+    content: "Welcome to **Measurement — Observing Changes Everything**! Take a look at the lesson. I'm here to help — ask me anything as you work through this lesson.",
+  });
+
+  it('drops canned greetings restored from disk', () => {
+    const out = parseConversation({
+      version: CONVERSATION_SCHEMA_VERSION,
+      messages: [greeting('a'), greeting('b'), { id: 'u', role: 'user', content: 'hi', timestamp: '2026-07-01T10:01:00Z' }],
+    });
+    expect(out?.messages.map((m) => m.id)).toEqual(['u']);
+  });
+
+  it('collapses consecutive identical assistant messages but keeps real replies', () => {
+    const reply = (id: string, content: string) => ({ id, role: 'assistant', content, timestamp: '2026-07-01T10:00:00Z' });
+    const out = parseConversation({
+      version: CONVERSATION_SCHEMA_VERSION,
+      messages: [reply('1', 'Sure.'), reply('2', 'Sure.'), reply('3', 'Different.')],
+    });
+    expect(out?.messages.map((m) => m.id)).toEqual(['1', '3']);
+  });
+});
