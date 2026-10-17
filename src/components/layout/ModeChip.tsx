@@ -33,6 +33,10 @@ export function ModeChip() {
   const menuRef = useRef<HTMLDivElement>(null);
 
   const accent = mode === 'research' ? colors.dirac : colors.accent;
+  // The Dirac purple is too dark to read as 11px text on the dark status bar
+  // (2.4:1). Tint the label toward the theme's text colour so it clears 4.5:1
+  // in both themes; the border and fill keep the pure accent.
+  const labelColor = `color-mix(in srgb, ${accent} 45%, ${colors.text})`;
   const meta = MODE_META[mode];
   const Icon = meta.icon;
 
@@ -141,14 +145,14 @@ export function ModeChip() {
           display: 'flex',
           alignItems: 'center',
           gap: 5,
-          height: 16,
-          padding: '0 7px',
+          height: 20,
+          padding: '0 8px',
           background: `${accent}1f`,
           border: `1px solid ${accent}`,
           borderRadius: 4,
           cursor: 'pointer',
-          color: accent,
-          fontSize: 10,
+          color: labelColor,
+          fontSize: 11,
           fontWeight: 700,
           letterSpacing: 0.5,
           fontFamily: "'Geist Sans', sans-serif",

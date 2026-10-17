@@ -12,6 +12,8 @@ import { useQecCampaignStore } from '../../stores/qecCampaignStore';
 import { useExerciseStore } from '../../stores/exerciseStore';
 import { useLayoutStore, type LayoutPreset } from '../../stores/layoutStore';
 import { ModeChip } from './ModeChip';
+import { getKernelStatusModel, type KernelTone } from './kernelStatusModel';
+import { retryKernel } from '../../lib/kernelControl';
 
 /**
  * PRD 11 Phase A — the status bar, extracted VERBATIM from `PanelLayout.tsx`.
@@ -45,11 +47,12 @@ function LayoutPresetSwitcher() {
       title="Layout preset"
       style={{
         background: 'transparent',
-        color: colors.textDim,
+        color: colors.textMuted,
         border: `1px solid ${colors.border}`,
         borderRadius: 6,
-        padding: '1px 6px',
-        fontSize: 10,
+        height: 20,
+        padding: '0 6px',
+        fontSize: 11,
         fontFamily: "'Geist Sans', sans-serif",
         cursor: 'pointer',
       }}
@@ -61,14 +64,27 @@ function LayoutPresetSwitcher() {
   );
 }
 
+function KernelDot({ color, pulse }: { color: string; pulse: boolean }) {
+  return (
+    <Circle
+      size={6}
+      fill={color}
+      stroke="none"
+      style={pulse ? { animation: 'nuclei-heartbeat 1.5s ease infinite' } : undefined}
+      aria-hidden="true"
+    />
+  );
+}
+
 /* ── Status Bar ── */
 export function StatusBar() {
   const snapshot = useCircuitStore((s) => s.snapshot);
   const isRunning = useSimulationStore((s) => s.isRunning);
   const result = useSimulationStore((s) => s.result);
-  const connected = useEditorStore((s) => s.kernelConnected);
+  const kernelReady = useEditorStore((s) => s.kernelReady);
   const kernelStatus = useEditorStore((s) => s.kernelStatus);
   const kernelError = useEditorStore((s) => s.kernelError);
+  const kernelProgress = useEditorStore((s) => s.kernelProgress);
   const colors = useThemeStore((s) => s.colors);
   const uiMode = useUIModeStore((s) => s.mode);
   const cycleMode = useUIModeStore((s) => s.cycleMode);
@@ -83,9 +99,22 @@ export function StatusBar() {
   const platform = usePlatform();
   const exercise = useExerciseStore((s) => s.activeExercise);
   const endExercise = useExerciseStore((s) => s.endExercise);
-  const modeColors = { beginner: colors.success, intermediate: colors.warning, advanced: colors.error };
-
-  const statusText = isRunning ? 'Running...' : result ? `Done (${result.execution_time_ms}ms)` : 'Ready';
+  const kernelModel = getKernelStatusModel({
+    kernelStatus,
+    kernelReady,
+    kernelError,
+    kernelProgress,
+    isRunning,
+    executionTimeMs: result ? result.execution_time_ms : null,
+    isWeb: platform.getPlatform() === 'web',
+  });
+  const toneColor: Record<KernelTone, string> = {
+    idle: colors.textMuted,
+    busy: colors.warning,
+    running: colors.accent,
+    ok: colors.success,
+    error: colors.error,
+  };
 
   // User-supplied names (experiment / campaign / exercise) must not push the
   // right-side kernel/theme controls off-screen — cap each and ellipsize.
@@ -98,12 +127,17 @@ export function StatusBar() {
     verticalAlign: 'bottom',
   };
 
+  const chipStyle: React.CSSProperties = {
+    display: 'flex', alignItems: 'center', gap: 6, height: 20, padding: '0 6px',
+    fontSize: 11, fontFamily: "'Geist Sans', sans-serif", whiteSpace: 'nowrap',
+  };
+
   const handleCycleMode = useCallback(async () => { cycleMode(); try { await platform.setStoredValue('ui_mode', useUIModeStore.getState().mode); } catch { /* non-critical persistence */ } }, [cycleMode, platform]);
   const handleThemeToggle = useCallback(async () => { themeToggle(); try { await platform.setStoredValue('theme', themeMode === 'dark' ? 'light' : 'dark'); } catch { /* non-critical persistence */ } }, [themeToggle, themeMode, platform]);
 
   return (
     <div style={{
-      height: 22, backgroundColor: colors.bgPanel,
+      height: 24, backgroundColor: colors.bgPanel,
       display: 'flex', alignItems: 'center',
       padding: '0 8px', gap: 8,
       fontSize: 11, fontFamily: "'Geist Sans', sans-serif",
@@ -114,21 +148,21 @@ export function StatusBar() {
       <ModeChip />
 
       {/* Left side */}
-      <span style={{ color: colors.textDim, fontSize: 10 }}>
+      <span style={{ color: colors.textMuted }}>
         Qubits: {snapshot ? snapshot.qubit_count : '—'}
       </span>
-      <span style={{ color: colors.textDim, fontSize: 10 }}>
+      <span style={{ color: colors.textMuted }}>
         Depth: {snapshot ? snapshot.depth : '—'}
       </span>
       <LayoutPresetSwitcher />
 
       {exercise && (
-        <span style={{ display: 'flex', alignItems: 'center', gap: 3, color: colors.dirac, fontSize: 10, minWidth: 0 }}>
+        <span style={{ display: 'flex', alignItems: 'center', gap: 3, color: colors.dirac, fontSize: 11, minWidth: 0 }}>
           <span style={truncName}>{exercise.title}</span>
-          <button onClick={endExercise} style={{ background: 'none', border: 'none', color: colors.textDim, cursor: 'pointer', padding: 0, display: 'flex' }}
+          <button onClick={endExercise} aria-label="End exercise" title="End exercise" style={{ background: 'none', border: 'none', color: colors.textMuted, cursor: 'pointer', padding: 0, width: 20, height: 20, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
             onMouseEnter={(e) => { e.currentTarget.style.color = colors.error; }}
-            onMouseLeave={(e) => { e.currentTarget.style.color = colors.textDim; }}>
-            <X size={9} />
+            onMouseLeave={(e) => { e.currentTarget.style.color = colors.textMuted; }}>
+            <X size={11} />
           </button>
         </span>
       )}
@@ -137,7 +171,7 @@ export function StatusBar() {
       {workspaceMode === 'research' && activeRun && (
         <span
           title={`${activeRun.experimentName}: ${activeRun.progress.completed}/${activeRun.progress.total} runs`}
-          style={{ display: 'flex', alignItems: 'center', gap: 4, color: colors.accent, fontSize: 10, minWidth: 0 }}
+          style={{ display: 'flex', alignItems: 'center', gap: 4, color: colors.accent, fontSize: 11, minWidth: 0 }}
         >
           <Circle size={5} fill={colors.accent} stroke="none" style={{ animation: 'nuclei-heartbeat 1.5s ease infinite', flexShrink: 0 }} />
           <span style={truncName}>{activeRun.experimentName}</span>
@@ -151,7 +185,7 @@ export function StatusBar() {
       {workspaceMode === 'research' && campaignRunning && campaignProgress && (
         <span
           title={`${campaignName ?? 'Campaign'}: ${campaignProgress.tasksComplete}/${campaignProgress.tasksTotal} tasks, ${campaignProgress.sampledShots.toLocaleString()} shots`}
-          style={{ display: 'flex', alignItems: 'center', gap: 4, color: colors.dirac, fontSize: 10, minWidth: 0 }}
+          style={{ display: 'flex', alignItems: 'center', gap: 4, color: colors.dirac, fontSize: 11, minWidth: 0 }}
         >
           <Circle size={5} fill={colors.dirac} stroke="none" style={{ animation: 'nuclei-heartbeat 1.5s ease infinite', flexShrink: 0 }} />
           <span style={truncName}>{campaignName ?? 'campaign'}</span>
@@ -161,7 +195,7 @@ export function StatusBar() {
       {workspaceMode === 'research' && !campaignRunning && campaignResumable && (
         <span
           title={`${campaignResumable.name} was interrupted — resumable`}
-          style={{ display: 'flex', alignItems: 'center', gap: 4, color: colors.warning, fontSize: 10, minWidth: 0 }}
+          style={{ display: 'flex', alignItems: 'center', gap: 4, color: colors.warning, fontSize: 11, minWidth: 0 }}
         >
           <Circle size={5} fill={colors.warning} stroke="none" style={{ flexShrink: 0 }} />
           <span style={truncName}>{campaignResumable.name}</span>
@@ -171,57 +205,49 @@ export function StatusBar() {
 
       <div style={{ flex: 1 }} />
 
-      {/* Right side */}
-      <span
-        style={{ display: 'flex', alignItems: 'center', gap: 3, color: colors.textDim, fontSize: 10 }}
-        title={kernelError ?? (
-          kernelStatus === 'connecting' ? 'Kernel connecting...'
-          : kernelStatus === 'failed' ? 'Kernel not responding'
-          : connected ? 'Kernel connected' : 'Kernel disconnected'
-        )}
-      >
-        <Circle
-          size={5}
-          fill={
-            kernelStatus === 'failed' ? colors.error
-            : connected ? colors.success
-            : kernelStatus === 'connecting' ? colors.warning
-            : colors.error
-          }
-          stroke="none"
-        />
-        Kernel{kernelStatus === 'failed' ? ' — failed' : kernelStatus === 'connecting' && !connected ? '...' : ''}
-        {kernelStatus === 'failed' && kernelError && (
-          <span
-            role="alert"
-            style={{ color: colors.error, marginLeft: 4, maxWidth: 360, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
-          >
-            {kernelError}
-          </span>
-        )}
-      </span>
-      <span style={{ color: isRunning ? colors.accent : colors.textDim, fontSize: 10,
-        ...(isRunning ? { animation: 'nuclei-heartbeat 1.5s ease infinite' } : {}) }}>
-        {statusText}
-      </span>
-      {/* The workspace-mode toggle moved to the far-left ModeChip (Phase B);
-          the redundant right-side text toggle was removed. */}
-      <button onClick={handleCycleMode} title="Cycle UI mode (⌘+Shift+L)" style={{
-        padding: '0 6px', height: 16, background: 'transparent', border: 'none', borderRadius: 3,
-        color: modeColors[uiMode], cursor: 'pointer', fontSize: 10, fontFamily: "'Geist Sans', sans-serif",
-        fontWeight: 500, textTransform: 'capitalize',
-      }}
-        onMouseEnter={(e) => { e.currentTarget.style.background = colors.bgElevated; }}
-        onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}>
-        {uiMode}
-      </button>
-      <button onClick={handleThemeToggle} title={`${themeMode === 'dark' ? 'Light' : 'Dark'} theme`} style={{
-        background: 'transparent', border: 'none', color: colors.textDim, cursor: 'pointer',
-        padding: 0, display: 'flex', alignItems: 'center',
-      }}
-        onMouseEnter={(e) => { e.currentTarget.style.color = colors.text; }}
-        onMouseLeave={(e) => { e.currentTarget.style.color = colors.textDim; }}>
-        {themeMode === 'dark' ? <Sun size={11} /> : <Moon size={11} />}
+      {/* Right side. One truthful item for kernel + run state (driven by the
+          kernel first); a failed kernel makes it the Retry action. */}
+      {kernelModel.tone === 'error' ? (
+        <button
+          type="button"
+          onClick={retryKernel}
+          title={kernelModel.detail}
+          aria-label={`${kernelModel.label}. Click to retry`}
+          style={{ ...chipStyle, color: toneColor.error, cursor: 'pointer', background: 'transparent', border: 'none' }}
+        >
+          <KernelDot color={toneColor.error} pulse={false} />
+          {kernelModel.label}
+        </button>
+      ) : (
+        <span style={{ ...chipStyle, color: kernelModel.tone === 'idle' ? colors.textMuted : colors.text }} title={kernelModel.detail} aria-live="polite">
+          <KernelDot color={toneColor[kernelModel.tone]} pulse={kernelModel.tone === 'busy' || kernelModel.tone === 'running'} />
+          {kernelModel.label}
+        </span>
+      )}
+      {/* The workspace-mode toggle moved to the far-left ModeChip (Phase B).
+          UI mode only exists in Learn: Research ignores uiModeStore entirely. */}
+      {workspaceMode === 'learn' && (
+        <button onClick={handleCycleMode} title="Cycle UI mode (⌘+Shift+L)" aria-label={`UI mode: ${uiMode}. Click to change`} style={{
+          padding: '0 8px', height: 20, background: 'transparent', border: 'none', borderRadius: 4,
+          color: colors.textMuted, cursor: 'pointer', fontSize: 11, fontFamily: "'Geist Sans', sans-serif",
+          fontWeight: 500, textTransform: 'capitalize',
+        }}
+          onMouseEnter={(e) => { e.currentTarget.style.background = colors.bgElevated; e.currentTarget.style.color = colors.text; }}
+          onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = colors.textMuted; }}>
+          {uiMode}
+        </button>
+      )}
+      <button
+        onClick={handleThemeToggle}
+        title={`Switch to ${themeMode === 'dark' ? 'light' : 'dark'} theme`}
+        aria-label={`Switch to ${themeMode === 'dark' ? 'light' : 'dark'} theme`}
+        style={{
+          background: 'transparent', border: 'none', borderRadius: 4, color: colors.textMuted, cursor: 'pointer',
+          width: 22, height: 22, padding: 0, display: 'flex', alignItems: 'center', justifyContent: 'center',
+        }}
+        onMouseEnter={(e) => { e.currentTarget.style.color = colors.text; e.currentTarget.style.background = colors.bgElevated; }}
+        onMouseLeave={(e) => { e.currentTarget.style.color = colors.textMuted; e.currentTarget.style.background = 'transparent'; }}>
+        {themeMode === 'dark' ? <Sun size={13} /> : <Moon size={13} />}
       </button>
     </div>
   );

@@ -43,6 +43,13 @@ describe('buildCommands', () => {
     expect(runExperiment).toHaveBeenCalledWith('theta.experiment.yaml');
   });
 
+  it('offers "Cycle UI Mode" in Learn only (Research ignores UI mode)', () => {
+    const learn = buildCommands(makeActions(), makeContext({ mode: 'learn' }));
+    const research = buildCommands(makeActions(), makeContext({ mode: 'research' }));
+    expect(learn.some((c) => c.id === 'mode')).toBe(true);
+    expect(research.some((c) => c.id === 'mode')).toBe(false);
+  });
+
   it('offers "Open run folder" only when a run is selected', () => {
     expect(buildCommands(makeActions(), makeContext({ hasSelectedRun: false })).find((c) => c.id === 'open-run-folder')).toBeUndefined();
     expect(buildCommands(makeActions(), makeContext({ hasSelectedRun: true })).find((c) => c.id === 'open-run-folder')).toBeDefined();

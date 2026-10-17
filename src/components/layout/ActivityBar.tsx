@@ -75,14 +75,14 @@ function ActivityIcon({ item, isActive, onClick, shortcut }: {
         border: 'none',
         borderLeft: isActive ? `2px solid ${colors.accent}` : '2px solid transparent',
         cursor: 'pointer',
-        color: isActive ? colors.text : colors.textDim,
+        color: isActive ? colors.text : colors.textMuted,
         position: 'relative',
       }}
       onMouseEnter={(e) => {
-        if (!isActive) e.currentTarget.style.color = colors.textMuted;
+        if (!isActive) e.currentTarget.style.color = colors.text;
       }}
       onMouseLeave={(e) => {
-        if (!isActive) e.currentTarget.style.color = colors.textDim;
+        if (!isActive) e.currentTarget.style.color = colors.textMuted;
       }}
     >
       <Icon size={20} strokeWidth={isActive ? 2 : 1.5} />

@@ -3,11 +3,13 @@ import { useProjectStore } from '../../stores/projectStore';
 import { useEditorStore } from '../../stores/editorStore';
 import { useSimulationStore } from '../../stores/simulationStore';
 import { useThemeStore } from '../../stores/themeStore';
-import { X, FileCode, Play, Loader2, Rocket } from 'lucide-react';
+import { X, FileCode, Play, Loader2, Rocket, RotateCw } from 'lucide-react';
 import { getExecute, getFileOps } from '../../App';
 import { requestCloseTab } from '../../lib/tabClose';
 import { FrameworkSelector } from './FrameworkSelector';
 import { useHardwareStore } from '../../stores/hardwareStore';
+import { retryKernel } from '../../lib/kernelControl';
+import { getRunButtonState } from './runButtonState';
 
 const basename = (p: string) => p.split('/').pop() ?? p;
 
@@ -18,6 +20,9 @@ export function EditorTabs() {
   const legacyFilePath = useEditorStore((s) => s.filePath);
   const legacyIsDirty = useEditorStore((s) => s.isDirty);
   const kernelReady = useEditorStore((s) => s.kernelReady);
+  const kernelStatus = useEditorStore((s) => s.kernelStatus);
+  const kernelError = useEditorStore((s) => s.kernelError);
+  const kernelProgress = useEditorStore((s) => s.kernelProgress);
   const isRunning = useSimulationStore((s) => s.isRunning);
   const colors = useThemeStore((s) => s.colors);
   const shadow = useThemeStore((s) => s.shadow);
@@ -35,17 +40,19 @@ export function EditorTabs() {
     }
   }, [renaming]);
 
-  const canRun = kernelReady && !isRunning;
+  const runState = getRunButtonState({ kernelReady, kernelStatus, kernelProgress, kernelError, isRunning });
+  const canRun = runState.kind === 'ready';
   const handleRun = () => {
+    if (runState.kind === 'failed') {
+      retryKernel();
+      return;
+    }
     const e = getExecute();
     if (e) e();
   };
-  const runLabel = isRunning ? 'Running…' : !kernelReady ? 'Loading kernel…' : 'Run';
-  const runTitle = isRunning
-    ? 'Simulation running'
-    : !kernelReady
-      ? 'Waiting for Python kernel'
-      : 'Run simulation (⌘+Enter)';
+  const runLabel = runState.label;
+  const runTitle = runState.title;
+  const runFailed = runState.kind === 'failed';
 
   const commitLegacyRename = async () => {
     const next = renameValue.trim();
@@ -297,7 +304,7 @@ export function EditorTabs() {
         </button>
         <button
           onClick={handleRun}
-          disabled={!canRun}
+          disabled={runState.disabled}
           title={runTitle}
           aria-label={runTitle}
           style={{
@@ -307,10 +314,10 @@ export function EditorTabs() {
             alignItems: 'center',
             gap: 7,
             background: canRun ? colors.accent : colors.bgElevated,
-            color: canRun ? '#0a0f1a' : colors.textDim,
-            border: canRun ? 'none' : `1px solid ${colors.border}`,
+            color: canRun ? '#0a0f1a' : runFailed ? colors.error : colors.textMuted,
+            border: canRun ? 'none' : `1px solid ${runFailed ? colors.error : colors.border}`,
             borderRadius: 6,
-            cursor: canRun ? 'pointer' : 'default',
+            cursor: runState.disabled ? 'default' : 'pointer',
             fontSize: 13,
             fontFamily: "'Geist Sans', sans-serif",
             fontWeight: 600,
@@ -331,8 +338,10 @@ export function EditorTabs() {
             }
           }}
         >
-          {isRunning ? (
+          {isRunning || runState.kind === 'loading' ? (
             <Loader2 size={13} style={{ animation: 'nuclei-spin 800ms linear infinite' }} />
+          ) : runFailed ? (
+            <RotateCw size={12} />
           ) : (
             <Play size={12} fill="currentColor" />
           )}
