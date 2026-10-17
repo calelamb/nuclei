@@ -1,5 +1,5 @@
 import { useState, type CSSProperties } from 'react';
-import { Cpu, Download, Loader2, ChevronRight, HelpCircle } from 'lucide-react';
+import { Cpu, Download, ChevronRight, HelpCircle } from 'lucide-react';
 import { useThemeStore, type ThemeColors } from '../../stores/themeStore';
 import { useEditorStore } from '../../stores/editorStore';
 import { useQecEstimateStore } from '../../stores/qecEstimateStore';
@@ -14,7 +14,8 @@ import {
 } from '../../types/qec';
 import type { Framework } from '../../types/quantum';
 
-import { TYPOGRAPHY } from '../../styles/tokens';
+import { TYPOGRAPHY, ICON_SIZE, ICON_STROKE } from '../../styles/tokens';
+import { Button, Select, TextInput } from '../ui';
 const DOCS = 'https://getnuclei.dev/docs/research/resource-estimation/';
 
 // Frameworks the Azure Quantum Resource Estimator can cost. Q# is estimated
@@ -103,21 +104,21 @@ export function EstimatorPanel() {
       }}
     >
       <span style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, fontWeight: 600, color: colors.text }}>
-        <Cpu size={14} /> Resource Estimator
+        <Cpu size={ICON_SIZE.sm} strokeWidth={ICON_STROKE} /> Resource Estimator
       </span>
       <div style={{ flex: 1 }} />
       {result && (
-        <button
-          type="button"
+        <Button
+          size="sm"
           onClick={() => downloadJson(result.full, 'resource-estimate.json')}
           title="Export the full estimator document as JSON"
-          style={iconBtn(colors)}
+          icon={<Download size={ICON_SIZE.sm} strokeWidth={ICON_STROKE} />}
         >
-          <Download size={14} /> JSON
-        </button>
+          JSON
+        </Button>
       )}
-      <a href={DOCS} target="_blank" rel="noreferrer" title="Resource estimation docs" style={{ ...iconBtn(colors), padding: '3px 5px' }}>
-        <HelpCircle size={14} />
+      <a href={DOCS} target="_blank" rel="noreferrer" title="Resource estimation docs" aria-label="Resource estimation docs" className="nuclei-icon-btn nuclei-icon-btn--sm">
+        <HelpCircle size={ICON_SIZE.sm} strokeWidth={ICON_STROKE} />
       </a>
     </div>
   );
@@ -151,33 +152,32 @@ export function EstimatorPanel() {
         {/* Assumption controls: qubit model, QEC scheme, error budget. */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
           <Field label="Qubit parameters" colors={colors}>
-            <select
+            <Select
               value={options.qubit_params ?? 'qubit_gate_ns_e3'}
               onChange={(e) => setOptions({ qubit_params: e.target.value as QecQubitPreset })}
-              style={selectStyle(colors)}
             >
               {QEC_QUBIT_PRESETS.map((p) => (
                 <option key={p} value={p}>
                   {PRESET_LABELS[p]}
                 </option>
               ))}
-            </select>
+            </Select>
           </Field>
           <Field label="QEC scheme" colors={colors}>
-            <select
+            <Select
               value={options.qec_scheme ?? 'surface_code'}
               onChange={(e) => setOptions({ qec_scheme: e.target.value as QecEstimateScheme })}
-              style={selectStyle(colors)}
             >
               {QEC_ESTIMATE_SCHEMES.map((s) => (
                 <option key={s} value={s}>
                   {SCHEME_LABELS[s]}
                 </option>
               ))}
-            </select>
+            </Select>
           </Field>
           <Field label="Error budget" colors={colors}>
-            <input
+            <TextInput
+              mono
               type="number"
               min={1e-6}
               max={0.5}
@@ -187,20 +187,19 @@ export function EstimatorPanel() {
                 const v = Number(e.target.value);
                 if (Number.isFinite(v) && v > 0 && v < 1) setOptions({ error_budget: v });
               }}
-              style={selectStyle(colors)}
             />
           </Field>
         </div>
 
-        <button
-          type="button"
+        <Button
+          variant="primary"
+          size="lg"
           onClick={run}
-          disabled={pending}
-          style={runBtn(colors, pending)}
+          loading={pending}
+          icon={pending ? undefined : <Cpu size={ICON_SIZE.sm} strokeWidth={ICON_STROKE} />}
         >
-          {pending ? <Loader2 size={14} style={{ animation: 'nuclei-spin 800ms linear infinite' }} /> : <Cpu size={14} />}
           {pending ? 'Estimating…' : result ? 'Re-estimate' : 'Run estimate'}
-        </button>
+        </Button>
 
         {error && (
           <div style={errorBox(colors)}>{error}</div>
@@ -232,17 +231,16 @@ export function EstimatorPanel() {
             </div>
 
             {/* Collapsible full estimator document. */}
-            <button
-              type="button"
+            <Button
+              variant="ghost"
+              size="sm"
+              aria-expanded={showDetail}
               onClick={() => setShowDetail((v) => !v)}
-              style={detailToggle(colors, showDetail)}
+              style={{ alignSelf: 'flex-start' }}
+              icon={<ChevronRight size={ICON_SIZE.sm} strokeWidth={ICON_STROKE} style={{ transform: showDetail ? 'rotate(90deg)' : 'none', transition: 'transform 120ms' }} />}
             >
-              <ChevronRight
-                size={14}
-                style={{ transform: showDetail ? 'rotate(90deg)' : 'none', transition: 'transform 120ms' }}
-              />
               Full estimator output
-            </button>
+            </Button>
             {showDetail && (
               <pre style={detailPre(colors)}>{JSON.stringify(result.full, null, 2)}</pre>
             )}
@@ -281,7 +279,7 @@ function Stat({
     <div
       style={{
         border: `1px solid ${colors.border}`,
-        borderRadius: 6,
+        borderRadius: 'var(--radius-soft)',
         padding: '10px 12px',
         display: 'flex',
         flexDirection: 'column',
@@ -307,56 +305,10 @@ function Stat({
   );
 }
 
-function selectStyle(colors: Colors): CSSProperties {
-  return {
-    background: colors.bg,
-    color: colors.text,
-    border: `1px solid ${colors.border}`,
-    borderRadius: 5,
-    padding: '6px 8px',
-    fontSize: 12,
-    fontFamily: TYPOGRAPHY.fontSans,
-  };
-}
-
-function runBtn(colors: Colors, pending: boolean): CSSProperties {
-  return {
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 7,
-    padding: '9px 14px',
-    borderRadius: 6,
-    border: `1px solid ${colors.accent}`,
-    background: pending ? colors.bg : colors.accent,
-    color: pending ? colors.textMuted : colors.bg,
-    fontSize: 13,
-    fontWeight: 600,
-    cursor: pending ? 'default' : 'pointer',
-    opacity: pending ? 0.8 : 1,
-    transition: 'opacity 120ms, background 120ms',
-  };
-}
-
-function iconBtn(colors: Colors): CSSProperties {
-  return {
-    display: 'flex',
-    alignItems: 'center',
-    gap: 4,
-    padding: '3px 7px',
-    borderRadius: 5,
-    border: `1px solid ${colors.border}`,
-    background: 'transparent',
-    color: colors.textMuted,
-    fontSize: 11,
-    cursor: 'pointer',
-  };
-}
-
 function errorBox(colors: Colors): CSSProperties {
   return {
     border: `1px solid ${colors.error}`,
-    borderRadius: 6,
+    borderRadius: 'var(--radius-soft)',
     padding: '9px 11px',
     fontSize: 12,
     color: colors.error,
@@ -365,26 +317,11 @@ function errorBox(colors: Colors): CSSProperties {
   };
 }
 
-function detailToggle(colors: Colors, open: boolean): CSSProperties {
-  return {
-    display: 'flex',
-    alignItems: 'center',
-    gap: 5,
-    padding: '5px 0',
-    background: 'transparent',
-    border: 'none',
-    color: open ? colors.text : colors.textMuted,
-    fontSize: 12,
-    fontWeight: 500,
-    cursor: 'pointer',
-  };
-}
-
 function detailPre(colors: Colors): CSSProperties {
   return {
     margin: 0,
     padding: 10,
-    borderRadius: 6,
+    borderRadius: 'var(--radius-soft)',
     border: `1px solid ${colors.border}`,
     background: colors.bg,
     color: colors.textMuted,

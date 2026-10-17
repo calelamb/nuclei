@@ -1,5 +1,4 @@
 import { useDeferredValue, useMemo } from 'react';
-import { Download } from 'lucide-react';
 import { useThemeStore } from '../../stores/themeStore';
 import { useQecCampaignStore } from '../../stores/qecCampaignStore';
 import { PanelHeader } from '../layout/PanelHeader';
@@ -10,12 +9,11 @@ import { QecLambdaReadout } from './QecLambdaReadout';
 import { QecUnitsToggle } from './QecUnitsToggle';
 import { useQecUnits } from '../../hooks/useQecUnits';
 import { Button } from '../ui';
-import { ICON_SIZE, ICON_STROKE } from '../../styles/tokens';
 import { QecPlotView } from './QecPlotView';
 import { ScrollFade } from './ScrollFade';
 import { useElementSize } from '../../hooks/useElementSize';
 import { buildPlotModel } from '../../lib/qecPlotModel';
-import { plotBox, READOUT_WIDTH } from '../../lib/qecPlotLayout';
+import { MIN_PLOT_W, plotBox, READOUT_WIDTH } from '../../lib/qecPlotLayout';
 import { figureFooterLines, lambdaLine } from '../../lib/qecFigureText';
 import {
   DEFAULT_MAX_LIKELIHOOD_FACTOR,
@@ -31,6 +29,15 @@ import { QEC_PLOT_CSV_DOCS } from '../../config/docsLinks';
 
 import { TYPOGRAPHY } from '../../styles/tokens';
 const DOCS = 'https://getnuclei.dev/docs/research/qec-studio/';
+const PLOT_ONLY_PAD = 24;
+/** Below this panel width the title would be squeezed out, so the units toggle moves below the header and both labelled exports stay. */
+const COMPACT_HEADER_WIDTH = 480;
+
+function ExportButton({ label, title, ariaLabel, onClick }: {
+  label: string; title: string; ariaLabel: string; onClick: () => void;
+}) {
+  return <Button size="sm" onClick={onClick} title={title} aria-label={ariaLabel}>{label}</Button>;
+}
 
 /**
  * Logical error vs physical error. Logical error rate (per shot, or per round
@@ -42,7 +49,10 @@ const DOCS = 'https://getnuclei.dev/docs/research/qec-studio/';
  * Exports SVG + CSV; the SVG embeds a <metadata> block naming the estimators,
  * CI method and units.
  */
-export function ThresholdPanel() {
+/** Which half of the figure to show: both side by side, only the plot, or only the Λ readout. */
+export type ThresholdPart = 'all' | 'plot' | 'lambda';
+
+export function ThresholdPanel({ part = 'all' }: { part?: ThresholdPart } = {}) {
   const colors = useThemeStore((s) => s.colors);
   const mode = useThemeStore((s) => s.mode);
   const rowsByStrongId = useQecCampaignStore((s) => s.rowsByStrongId);
@@ -93,27 +103,23 @@ export function ThresholdPanel() {
     downloadSvg(svg, 'logical-error-vs-p.svg');
   };
 
+  const compact = area.width > 0 && area.width < COMPACT_HEADER_WIDTH;
   const header = (
     <PanelHeader
-      title="Logical error vs physical error"
+      title="Logical error vs p"
       helpHref={DOCS}
       actions={
         model ? (
           <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-            {roundsKnown && <QecUnitsToggle units={units} onChange={setRequested} />}
-            <Button
-              size="sm" onClick={exportSvg} title="Export the plot as a print-ready SVG (white background)"
-              aria-label="Export plot as SVG" icon={<Download size={ICON_SIZE.xs} strokeWidth={ICON_STROKE} />}
-            >
-              SVG
-            </Button>
-            <Button
-              size="sm" onClick={() => downloadCsv(qecRatesToCsv(rows, { units, originals }), 'logical-error-vs-p.csv')}
-              title="Export the plotted rates as CSV" aria-label="Export plot data (CSV)"
-              icon={<Download size={ICON_SIZE.xs} strokeWidth={ICON_STROKE} />}
-            >
-              CSV
-            </Button>
+            {roundsKnown && !compact && <QecUnitsToggle units={units} onChange={setRequested} />}
+            <ExportButton
+              label="SVG" onClick={exportSvg}
+              title="Export the plot as a print-ready SVG (white background)" ariaLabel="Export plot as SVG"
+            />
+            <ExportButton
+              label="CSV" onClick={() => downloadCsv(qecRatesToCsv(rows, { units, originals }), 'logical-error-vs-p.csv')}
+              title="Export the plotted rates as CSV" ariaLabel="Export plot data (CSV)"
+            />
           </div>
         ) : undefined
       }
@@ -139,7 +145,11 @@ export function ThresholdPanel() {
   }
 
   const decoders = [...new Set(series.map((s) => s.decoder))].sort();
-  const box = plotBox(area);
+  const fullBox = plotBox(area);
+  // Plot alone: the readout's column is not reserved, so the plot takes the full width.
+  const box = part === 'plot' && fullBox.layout === 'row'
+    ? { layout: 'stack' as const, plotW: Math.max(MIN_PLOT_W, area.width - PLOT_ONLY_PAD), plotH: fullBox.plotH }
+    : fullBox;
   const readoutBody = (
     <>
       <QecLambdaReadout decoders={decoders} estimates={lambdas} units={units} colors={colors} />
@@ -154,7 +164,7 @@ export function ThresholdPanel() {
     </>
   );
   const readoutFont = TYPOGRAPHY.fontSans;
-  const readout = box.layout === 'row' ? (
+  const readout = part === 'plot' ? null : box.layout === 'row' && part === 'all' ? (
     <ScrollFade style={{ fontFamily: readoutFont, width: READOUT_WIDTH, flex: 'none', maxHeight: box.plotH }}>
       {readoutBody}
     </ScrollFade>
@@ -170,7 +180,7 @@ export function ThresholdPanel() {
           <div
             role="status"
             style={{
-              position: 'absolute', top: 6, right: 12, zIndex: 3, padding: '3px 8px', borderRadius: 4, fontSize: 11,
+              position: 'absolute', top: 6, right: 12, zIndex: 3, padding: '3px 8px', borderRadius: 'var(--radius-xs)', fontSize: 11,
               background: colors.bgElevated, color: colors.textMuted, border: `1px solid ${colors.border}`,
               animation: 'nuclei-fade-in 120ms ease 150ms backwards', fontFamily: TYPOGRAPHY.fontSans,
             }}
@@ -178,12 +188,17 @@ export function ThresholdPanel() {
             Updating plot…
           </div>
         )}
+        {roundsKnown && compact && (
+          <div style={{ padding: '6px 12px 8px' }}><QecUnitsToggle units={units} onChange={setRequested} /></div>
+        )}
         <div style={{ display: 'flex', flexDirection: box.layout === 'row' ? 'row' : 'column', gap: 12, alignItems: 'flex-start', padding: box.layout === 'row' ? '4px 12px 8px 0' : '4px 0 10px' }}>
-          <QecPlotView
-            model={model} colors={colors} width={box.plotW} height={box.plotH}
-            metadata={metadata} title={meta.title}
-            description={`${meta.units} versus physical error p, log-log. ${meta.ci_method}.`}
-          />
+          {part !== 'lambda' && (
+            <QecPlotView
+              model={model} colors={colors} width={box.plotW} height={box.plotH}
+              metadata={metadata} title={meta.title}
+              description={`${meta.units} versus physical error p, log-log. ${meta.ci_method}.`}
+            />
+          )}
           {readout}
         </div>
       </div>

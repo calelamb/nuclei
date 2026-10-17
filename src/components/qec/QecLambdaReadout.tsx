@@ -2,7 +2,8 @@ import { TriangleAlert } from 'lucide-react';
 import { MIN_LAMBDA_DISTANCES, type LambdaGroupEstimate, type RateUnits } from '../../lib/qecFit';
 import { buildLambdaTable, type LambdaRowView } from '../../lib/qecLambdaTable';
 import type { ThemeColors } from '../../stores/themeStore';
-import { ICON_STROKE, TYPOGRAPHY } from '../../styles/tokens';
+import { ICON_SIZE, ICON_STROKE, TYPOGRAPHY } from '../../styles/tokens';
+import { Table, Thead, Tbody, Tr, Th, Td } from '../ui/Table';
 
 interface Props {
   decoders: string[];
@@ -10,8 +11,6 @@ interface Props {
   units: RateUnits;
   colors: ThemeColors;
 }
-
-const CELL = { padding: '3px 6px', fontVariantNumeric: 'tabular-nums' as const };
 
 /**
  * Λ per decoder as a table: p, Λ, 95% interval, r². Rows whose interval is not
@@ -29,37 +28,39 @@ export function QecLambdaReadout({ decoders, estimates, units, colors }: Props) 
       </h3>
       {table.subtitle && <div style={{ fontSize: 11, color: colors.textMuted, margin: '2px 0 6px' }}>{table.subtitle}</div>}
       {table.groups.map((g) => (
-        <table key={g.decoder} style={{ width: '100%', borderCollapse: 'collapse', marginBottom: 8 }}>
-          <caption style={{ captionSide: 'top', textAlign: 'left', fontWeight: 600, padding: '4px 6px' }}>{g.decoder}</caption>
-          <thead>
-            <tr style={{ color: colors.textMuted, fontSize: 11 }}>
-              <th scope="col" style={{ ...CELL, textAlign: 'left', fontWeight: 500 }}>p</th>
-              <th scope="col" style={{ ...CELL, textAlign: 'right', fontWeight: 500 }}>Λ</th>
-              <th scope="col" style={{ ...CELL, textAlign: 'right', fontWeight: 500 }}>95% CI</th>
-              <th scope="col" style={{ ...CELL, textAlign: 'right', fontWeight: 500 }}>r²</th>
-              <th scope="col" aria-label="Warnings" style={{ ...CELL, width: 18 }} />
-            </tr>
-          </thead>
-          <tbody>
-            {g.rows.map((r) => <LambdaRow key={`${r.experiment}|${r.noise}`} row={r} colors={colors} />)}
-          </tbody>
-          {g.collapsed && (
-            <tbody>
-              <tr>
-                <td colSpan={5} style={{ padding: '2px 0 0' }}>
-                  <details style={{ color: colors.textMuted, fontSize: 11 }}>
-                    <summary style={{ cursor: 'pointer', padding: '2px 6px' }}>{g.collapsed.summary}</summary>
-                    <table style={{ width: '100%', borderCollapse: 'collapse', opacity: 0.85 }}>
-                      <tbody>
-                        {g.collapsed.rows.map((r) => <LambdaRow key={`${r.experiment}|${r.noise}`} row={r} colors={colors} />)}
-                      </tbody>
-                    </table>
-                  </details>
-                </td>
-              </tr>
-            </tbody>
-          )}
-        </table>
+        <div key={g.decoder} style={{ marginBottom: 8 }}>
+          <Table label={`Λ for ${g.decoder}`} dense>
+            <caption style={{ captionSide: 'top', textAlign: 'left', fontWeight: 600, padding: '4px 8px', color: colors.text }}>{g.decoder}</caption>
+            <Thead>
+              <Tr>
+                <Th plain>p</Th>
+                <Th numeric plain>Λ</Th>
+                <Th numeric plain>95% CI</Th>
+                <Th numeric plain>r²</Th>
+                <Th aria-label="Warnings" />
+              </Tr>
+            </Thead>
+            <Tbody>
+              {g.rows.map((r) => <LambdaRow key={`${r.experiment}|${r.noise}`} row={r} colors={colors} />)}
+            </Tbody>
+            {g.collapsed && (
+              <Tbody>
+                <Tr>
+                  <Td colSpan={5} text>
+                    <details style={{ color: colors.textMuted, fontSize: 11 }}>
+                      <summary style={{ cursor: 'pointer' }}>{g.collapsed.summary}</summary>
+                      <Table label={`Λ for ${g.decoder}, rows not meaningful`} dense>
+                        <Tbody>
+                          {g.collapsed.rows.map((r) => <LambdaRow key={`${r.experiment}|${r.noise}`} row={r} colors={colors} />)}
+                        </Tbody>
+                      </Table>
+                    </details>
+                  </Td>
+                </Tr>
+              </Tbody>
+            )}
+          </Table>
+        </div>
       ))}
       {withoutFit.map((d) => (
         <div key={d} style={{ fontSize: 11, color: colors.textMuted, marginBottom: 6 }}>
@@ -78,22 +79,23 @@ export function QecLambdaReadout({ decoders, estimates, units, colors }: Props) 
 
 function LambdaRow({ row, colors }: { row: LambdaRowView; colors: ThemeColors }) {
   const flagText = row.flags.join('\n');
+  const tone = row.meaningful ? colors.text : colors.textMuted;
   return (
-    <tr style={{ borderTop: `1px solid ${colors.border}`, color: row.meaningful ? colors.text : colors.textMuted }}>
-      <td style={{ ...CELL, textAlign: 'left' }}>
+    <Tr>
+      <Td style={{ color: tone }}>
         {row.p}
-        {row.experiment && <div style={{ fontSize: 11, color: colors.textMuted }}>{row.experiment}</div>}
-      </td>
-      <td style={{ ...CELL, textAlign: 'right', fontWeight: row.meaningful ? 600 : 400 }}>{row.lambda}</td>
-      <td style={{ ...CELL, textAlign: 'right' }}>{row.ci ?? '—'}</td>
-      <td style={{ ...CELL, textAlign: 'right' }}>{row.rSquared}</td>
-      <td style={{ ...CELL, width: 18 }}>
+        {row.experiment && <div style={{ fontSize: 11, color: colors.textMuted, fontFamily: TYPOGRAPHY.fontSans }}>{row.experiment}</div>}
+      </Td>
+      <Td numeric style={{ color: tone, fontWeight: row.meaningful ? 600 : 400 }}>{row.lambda}</Td>
+      <Td numeric style={{ color: tone }}>{row.ci ?? '—'}</Td>
+      <Td numeric style={{ color: tone }}>{row.rSquared}</Td>
+      <Td style={{ width: 18 }}>
         {row.flags.length > 0 && (
           <span role="img" aria-label={`Warnings: ${row.flags.join('; ')}`} title={flagText} style={{ color: colors.warning, display: 'inline-flex' }}>
-            <TriangleAlert size={12} strokeWidth={ICON_STROKE} aria-hidden="true" />
+            <TriangleAlert size={ICON_SIZE.xs} strokeWidth={ICON_STROKE} aria-hidden="true" />
           </span>
         )}
-      </td>
-    </tr>
+      </Td>
+    </Tr>
   );
 }

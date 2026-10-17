@@ -3,8 +3,6 @@ import { join, relative } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 const SRC = join(process.cwd(), 'src');
-// Trees owned by other in-flight lanes; remove an entry once it migrates.
-const PENDING_MIGRATION = ['components/experiments/'];
 
 function walk(dir: string): string[] {
   return readdirSync(dir, { withFileTypes: true }).flatMap((e) => {
@@ -15,8 +13,8 @@ function walk(dir: string): string[] {
 }
 
 const files = walk(SRC)
-  .map((p) => ({ rel: relative(SRC, p).replace(/\\/g, '/'), text: readFileSync(p, 'utf8') }))
-  .filter((f) => !PENDING_MIGRATION.some((m) => f.rel.startsWith(m)));
+  .map((p) => ({ rel: relative(SRC, p).replace(/\\/g, '/'), text: readFileSync(p, 'utf8') }));
+
 
 function offenders(test: (f: { rel: string; text: string }) => boolean): string[] {
   return files.filter(test).map((f) => f.rel);
@@ -49,5 +47,15 @@ describe('design guards', () => {
 
   it('keeps JSX icon sizes on the 12/14/16/20 scale', () => {
     expect(offenders((f) => /<[A-Za-z.]*(Icon|Icon\w*)\s[^>]*size=\{(9|10|11|13|15|17|18)\}/.test(f.text) || /<(Icon|MIcon|stat\.icon)\s[^>]*size=\{(9|10|11|13|15)\}/.test(f.text))).toEqual([]);
+  });
+
+  it('keeps the research trees (experiments, qec) on the 11px minimum type size and CSS hover states', () => {
+    const research = (f: { rel: string }) => /^components\/(experiments|qec)\//.test(f.rel);
+    expect(offenders((f) => research(f) && /fontSize:\s*(?:[1-9]|10)(?:\.5)?\b(?!\s*[%a-z])/.test(f.text) && !/<svg/.test(f.text))).toEqual([]);
+    expect(offenders((f) => research(f) && /currentTarget\.style\./.test(f.text))).toEqual([]);
+  });
+
+  it('has no purple (Dirac) colours in the research trees', () => {
+    expect(offenders((f) => /^components\/(experiments|qec)\//.test(f.rel) && /colors\.dirac\b/.test(f.text))).toEqual([]);
   });
 });

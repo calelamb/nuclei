@@ -14,6 +14,14 @@
   }
 }
 
+@media (max-width: 999px) {
+  /* The analysis canvas needs the width more than the file list does. */
+  .qec-workbench__body,
+  .qec-workbench--inspector-closed .qec-workbench__body {
+    grid-template-columns: minmax(208px, min(var(--qec-source-width), 30%)) 9px minmax(0, 1fr);
+  }
+}
+
 @media (max-width: 899px) {
   .qec-research-bar__primary,
   .qec-research-bar__context {

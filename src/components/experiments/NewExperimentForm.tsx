@@ -28,6 +28,8 @@ import {
   type ExperimentSpec,
 } from '../../types/experiment';
 import type { BackendInfo } from '../../types/hardware';
+import { TYPOGRAPHY, ICON_SIZE, ICON_STROKE } from '../../styles/tokens';
+import { Button, IconButton, Select, TextArea, TextInput } from '../ui';
 
 const SIMULATOR_BACKEND: BackendInfo = {
   name: 'statevector',
@@ -240,57 +242,45 @@ export function NewExperimentForm({ projectRoot, existing, dirtyRef: sharedDirty
 
   const labelStyle: React.CSSProperties = {
     display: 'block', color: colors.textMuted, fontSize: 11,
-    fontFamily: "'Geist Sans', sans-serif", marginBottom: 4,
+    fontFamily: TYPOGRAPHY.fontSans, marginBottom: 4,
   };
-  const inputStyle: React.CSSProperties = {
-    width: '100%', padding: '6px 8px', fontSize: 12,
-    fontFamily: "'Fira Code', monospace", background: colors.bgPanel,
-    border: `1px solid ${colors.border}`, borderRadius: 4, color: colors.text, outline: 'none',
-    minWidth: 0, boxSizing: 'border-box',
-  };
-
   return (
     <form
       onSubmit={(e) => { void handleSubmit(e); }}
       style={{
         padding: 12, borderTop: `1px solid ${colors.border}`,
         display: 'flex', flexDirection: 'column', gap: 10,
-        fontFamily: "'Geist Sans', sans-serif",
+        fontFamily: TYPOGRAPHY.fontSans,
       }}
     >
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
         <span style={{ color: colors.text, fontSize: 12, fontWeight: 600 }}>
           {existing ? `Edit ${existing.spec.name}` : 'New experiment'}
         </span>
-        <button
-          type="button" onClick={handleClose}
-          style={{ background: 'transparent', border: 'none', color: colors.textDim, cursor: 'pointer', fontSize: 11 }}
-        >
-          Close
-        </button>
+        <Button type="button" variant="ghost" size="sm" onClick={handleClose}>Close</Button>
       </div>
 
       <div>
         <label style={labelStyle} htmlFor="exp-name">Name</label>
-        <input
-          id="exp-name" value={name}
+        <TextInput
+          id="exp-name" mono value={name}
           onChange={(e) => { markDirty('name'); setName(e.target.value); }}
-          placeholder="e.g. theta-sweep" style={inputStyle}
+          placeholder="e.g. theta-sweep"
         />
       </div>
 
       <div>
         <label style={labelStyle} htmlFor="exp-entry">Entry file</label>
-        <input
-          id="exp-entry" list="exp-entry-files" value={entry}
+        <TextInput
+          id="exp-entry" mono list="exp-entry-files" value={entry}
           onChange={(e) => { markDirty('entry'); setEntry(e.target.value); }}
-          placeholder="e.g. vqe_h2.py" style={inputStyle}
+          placeholder="e.g. vqe_h2.py"
         />
         <datalist id="exp-entry-files">
           {entryFiles.map((f) => <option key={f} value={f} />)}
         </datalist>
         {entry.trim() && !entryKnown && (
-          <div style={{ color: colors.warning, fontSize: 10, marginTop: 3 }}>
+          <div style={{ color: colors.warning, fontSize: 11, marginTop: 4 }}>
             Not found among scanned project files — will be validated against the project root.
           </div>
         )}
@@ -304,16 +294,16 @@ export function NewExperimentForm({ projectRoot, existing, dirtyRef: sharedDirty
       <div style={{ display: 'flex', gap: 10 }}>
         <div style={{ flex: 1 }}>
           <label style={labelStyle} htmlFor="exp-shots">Shots</label>
-          <input
-            id="exp-shots" type="number" min={1} value={shots}
-            onChange={(e) => { markDirty('shots'); setShots(e.target.value); }} style={inputStyle}
+          <TextInput
+            id="exp-shots" mono type="number" min={1} value={shots}
+            onChange={(e) => { markDirty('shots'); setShots(e.target.value); }}
           />
         </div>
         <div style={{ flex: 1 }}>
           <label style={labelStyle} htmlFor="exp-seed">Seed</label>
-          <input
-            id="exp-seed" type="number" value={seed}
-            onChange={(e) => { markDirty('seed'); setSeed(e.target.value); }} style={inputStyle}
+          <TextInput
+            id="exp-seed" mono type="number" value={seed}
+            onChange={(e) => { markDirty('seed'); setSeed(e.target.value); }}
           />
         </div>
       </div>
@@ -321,58 +311,44 @@ export function NewExperimentForm({ projectRoot, existing, dirtyRef: sharedDirty
       <div>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
           <span style={labelStyle}>Sweep parameters</span>
-          <button
-            type="button" onClick={handleAddRow}
-            style={{
-              display: 'flex', alignItems: 'center', gap: 3, background: 'transparent',
-              border: `1px solid ${colors.border}`, borderRadius: 4, color: colors.accent,
-              cursor: 'pointer', fontSize: 10, padding: '2px 6px',
-            }}
-          >
-            <Plus size={11} /> Add
-          </button>
+          <Button type="button" size="sm" onClick={handleAddRow} icon={<Plus size={ICON_SIZE.xs} strokeWidth={ICON_STROKE} />}>Add</Button>
         </div>
         {sweepRows.map((row) => (
           <div
             key={row.id} data-sweep-row
             style={{
               display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 8, padding: 8,
-              border: `1px solid ${colors.border}`, borderRadius: 6, background: colors.bgPanel,
+              border: `1px solid ${colors.border}`, borderRadius: 'var(--radius-soft)', background: colors.bgPanel,
             }}
           >
-            <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-              <input
-                value={row.name} placeholder="theta" aria-label="Parameter name"
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+              <TextInput
+                mono value={row.name} placeholder="theta" aria-label="Parameter name"
                 onChange={(e) => updateRow(row.id, { name: e.target.value })}
-                style={{ ...inputStyle, flex: 1, background: colors.bg }}
+                style={{ flex: 1 }}
               />
-              <select
+              <Select
                 value={row.mode} aria-label="Sweep mode"
                 onChange={(e) => updateRow(row.id, { mode: e.target.value as 'range' | 'values' })}
-                style={{ ...inputStyle, width: 84, flexShrink: 0, background: colors.bg }}
+                style={{ width: 96, flexShrink: 0 }}
               >
                 <option value="range">range</option>
                 <option value="values">values</option>
-              </select>
-              <button
-                type="button" onClick={() => handleRemoveRow(row.id)}
-                aria-label={`Remove sweep parameter ${row.name || row.id}`}
-                style={{ background: 'transparent', border: 'none', color: colors.error, cursor: 'pointer', display: 'flex', flexShrink: 0 }}
-              >
-                <Trash2 size={13} />
-              </button>
+              </Select>
+              <IconButton aria-label={`Remove sweep parameter ${row.name || row.id}`} onClick={() => handleRemoveRow(row.id)}>
+                <Trash2 size={ICON_SIZE.sm} strokeWidth={ICON_STROKE} />
+              </IconButton>
             </div>
             {row.mode === 'range' ? (
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 6 }}>
-                <input value={row.rangeStart} onChange={(e) => updateRow(row.id, { rangeStart: e.target.value })} placeholder="start" aria-label="Range start" style={{ ...inputStyle, background: colors.bg }} />
-                <input value={row.rangeStop} onChange={(e) => updateRow(row.id, { rangeStop: e.target.value })} placeholder="stop" aria-label="Range stop" style={{ ...inputStyle, background: colors.bg }} />
-                <input value={row.rangeStep} onChange={(e) => updateRow(row.id, { rangeStep: e.target.value })} placeholder="step" aria-label="Range step" style={{ ...inputStyle, background: colors.bg }} />
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 8 }}>
+                <TextInput mono value={row.rangeStart} onChange={(e) => updateRow(row.id, { rangeStart: e.target.value })} placeholder="start" aria-label="Range start" />
+                <TextInput mono value={row.rangeStop} onChange={(e) => updateRow(row.id, { rangeStop: e.target.value })} placeholder="stop" aria-label="Range stop" />
+                <TextInput mono value={row.rangeStep} onChange={(e) => updateRow(row.id, { rangeStep: e.target.value })} placeholder="step" aria-label="Range step" />
               </div>
             ) : (
-              <input
-                value={row.valuesText} placeholder="0, 1, 2" aria-label="Values (comma separated)"
+              <TextInput
+                mono value={row.valuesText} placeholder="0, 1, 2" aria-label="Values (comma separated)"
                 onChange={(e) => updateRow(row.id, { valuesText: e.target.value })}
-                style={{ ...inputStyle, background: colors.bg }}
               />
             )}
           </div>
@@ -381,10 +357,9 @@ export function NewExperimentForm({ projectRoot, existing, dirtyRef: sharedDirty
 
       <div>
         <label style={labelStyle} htmlFor="exp-notes">Notes (optional)</label>
-        <textarea
+        <TextArea
           id="exp-notes" value={notes} rows={2}
           onChange={(e) => { markDirty('notes'); setNotes(e.target.value); }}
-          style={{ ...inputStyle, fontFamily: "'Geist Sans', sans-serif", resize: 'vertical' }}
         />
       </div>
 
@@ -404,16 +379,9 @@ export function NewExperimentForm({ projectRoot, existing, dirtyRef: sharedDirty
         <div style={{ color: colors.error, fontSize: 11 }}>{submitError}</div>
       )}
 
-      <button
-        type="submit" disabled={!canSubmit} title={disabledReason}
-        style={{
-          padding: '7px 12px', background: canSubmit ? colors.accent : colors.border,
-          color: canSubmit ? '#0a1220' : colors.textDim, border: 'none', borderRadius: 4,
-          cursor: canSubmit ? 'pointer' : 'not-allowed', fontSize: 12, fontWeight: 600,
-        }}
-      >
+      <Button type="submit" variant="primary" size="lg" disabled={!canSubmit} title={disabledReason}>
         {submitting ? 'Saving…' : existing ? 'Save changes' : 'Create experiment'}
-      </button>
+      </Button>
     </form>
   );
 }

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { logAxis, makeLogScale } from './qecPlotTicks';
+import { logAxis, makeLogScale, visibleLabels } from './qecPlotTicks';
 
 describe('logAxis', () => {
   it('returns null when nothing is positive and finite', () => {
@@ -54,6 +54,40 @@ describe('logAxis', () => {
   it('thins decade labels on very wide ranges', () => {
     const axis = logAxis([1e-14, 1])!;
     expect(axis.labeled.filter((t) => t.major).length).toBeLessThanOrEqual(8);
+  });
+});
+
+describe('partial decades at the ends of a wide axis', () => {
+  it('labels 2x and 5x in the closing partial decade so the last stretch can be read', () => {
+    const labels = logAxis([1e-5, 5e-2])!.labeled.map((t) => t.label);
+    expect(labels).toEqual(expect.arrayContaining(['10⁻⁵', '10⁻²', '2×10⁻²', '5×10⁻²']));
+  });
+
+  it('does not add partial-decade labels beyond the data range', () => {
+    const labels = logAxis([1e-6, 1e-2])!.labeled.map((t) => t.label);
+    expect(labels).not.toContain('2×10⁻²');
+  });
+});
+
+describe('visibleLabels', () => {
+  const tick = (value: number, major = false) => ({ value, major, label: String(value) });
+  const px = (v: number) => v * 100;
+
+  it('keeps every label when they fit', () => {
+    const ticks = [tick(1), tick(2), tick(3)];
+    expect(visibleLabels(ticks, px, () => 40, 8)).toEqual(ticks);
+  });
+
+  it('drops the lower-priority neighbour of an overlapping pair and keeps major decades', () => {
+    const ticks = [tick(1, true), tick(1.2), tick(2, true)];
+    const kept = visibleLabels(ticks, px, () => 60, 8).map((t) => t.value);
+    expect(kept).toEqual([1, 2]);
+  });
+
+  it('returns ticks in axis order', () => {
+    const ticks = [tick(1, true), tick(3), tick(5), tick(7, true)];
+    const kept = visibleLabels(ticks, px, () => 150, 8).map((t) => t.value);
+    expect([...kept].sort((a, b) => a - b)).toEqual(kept);
   });
 });
 

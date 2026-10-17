@@ -12,6 +12,8 @@ import { useResearchSelectionStore } from '../../../stores/researchSelectionStor
 import type { QecStudy, QecStudySource, QecWorkspacePreset } from '../../../types/qecStudy';
 import type { QecSession } from '../../../types/qecData';
 import { QecPanelPinButton } from './QecPanelPinButton';
+import { IconButton } from '../../ui';
+import { ICON_SIZE, ICON_STROKE } from '../../../styles/tokens';
 
 const SOURCE_ICONS: Readonly<Record<QecStudySource['kind'], LucideIcon>> = {
   stim: FileCode2, python: FileCode2, dem: Database,
@@ -93,9 +95,9 @@ function SourceFileRow({ source }: { source: QecStudySource }): ReactElement {
         <span><strong>{source.id}</strong><small className="qec-mono">{source.path}</small></span>
         <span className="qec-source-row__kind">{source.kind}</span>
       </button>
-      <button id={importButtonId} type="button" className="qec-source-row__import" aria-label={`Import ${source.id}`} title={projectRoot ? 'Import into canonical QEC data' : 'Open a project before importing QEC data'} disabled={!projectRoot || jobProjectRoot !== projectRoot} onClick={launchImport}>
-        <FolderInput aria-hidden="true" size={16} />
-      </button>
+      <IconButton id={importButtonId} className="qec-source-row__import" aria-label={`Import ${source.id}`} title={projectRoot ? 'Import into canonical QEC data' : 'Open a project before importing QEC data'} disabled={!projectRoot || jobProjectRoot !== projectRoot} onClick={launchImport}>
+        <FolderInput aria-hidden="true" size={ICON_SIZE.md} strokeWidth={ICON_STROKE} />
+      </IconButton>
     </div>
   );
 }

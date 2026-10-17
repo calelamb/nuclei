@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import type { QecCampaignStatsRow } from '../types/qec';
-import { parseSinterCsvDetailed, serializeSinterCsv, type CsvRowIssue } from '../types/sinterCsv';
+import { parseSinterCsvDetailed, serializeSinterCsv, type CsvRowIssue, type SinterCsvParse } from '../types/sinterCsv';
+import type { PreparedImport } from '../services/qecCsvPrepare';
 import type { RateUnits } from '../lib/qecFit';
 import { applyMapping, guessMapping, noNumericKeysProblem, type SinterMapping } from '../types/sinterMapping';
 
@@ -68,6 +69,9 @@ interface QecCampaignState {
   /** Parse untrusted sinter CSV text, aggregate duplicate strong_ids, guess a
    * mapping, and plot it. On a whole-file failure existing data is kept. */
   loadFromCsv(text: string, sourceName: string): CsvLoadResult;
+  /** Same as loadFromCsv for text that was already parsed (e.g. in a worker); `prepared` carries the mapping and
+   * derived data when a worker already computed them. */
+  loadParsed(parsed: SinterCsvParse, sourceName: string, prepared?: PreparedImport | null): CsvLoadResult;
   setCsvMapping(mapping: SinterMapping): void;
   clearCsvError(): void;
   setRequestedUnits(units: RateUnits): void;
@@ -81,13 +85,19 @@ interface QecCampaignState {
   reset(): void;
 }
 
-function indexMapped(rows: QecCampaignStatsRow[], mapping: SinterMapping): Record<string, QecCampaignStatsRow> {
+const EMPTY_PARSE: SinterCsvParse = { rows: [], issues: [], fatal: null, totalDataRows: 0, rejectedRows: 0 };
+
+function indexRows(rows: readonly QecCampaignStatsRow[]): Record<string, QecCampaignStatsRow> {
   // fromEntries defines own properties, so a hostile strong_id like
   // "__proto__" stays plain data instead of rewriting the prototype.
-  return Object.fromEntries(applyMapping(rows, mapping).map((r) => [r.strong_id, r]));
+  return Object.fromEntries(rows.map((r) => [r.strong_id, r]));
 }
 
-export const useQecCampaignStore = create<QecCampaignState>((set) => ({
+function indexMapped(rows: QecCampaignStatsRow[], mapping: SinterMapping): Record<string, QecCampaignStatsRow> {
+  return indexRows(applyMapping(rows, mapping));
+}
+
+export const useQecCampaignStore = create<QecCampaignState>((set, get) => ({
   statsCsv: null,
   rowsByStrongId: {},
   running: false,
@@ -99,31 +109,35 @@ export const useQecCampaignStore = create<QecCampaignState>((set) => ({
   requestedUnits: 'per_round',
   csvLoading: null,
 
-  loadFromCsv: (text, sourceName) => {
-    if (useQecCampaignStore.getState().running) {
+  loadFromCsv: (text, sourceName) =>
+    // Do not tokenize a file that cannot be loaded right now.
+    get().loadParsed(get().running ? EMPTY_PARSE : parseSinterCsvDetailed(text), sourceName),
+
+  loadParsed: (parsed, sourceName, prepared) => {
+    if (get().running) {
       const fatal = 'A campaign is running; wait for it to finish or cancel it before loading a CSV.';
       set({ csvError: fatal });
       return { ok: false, fatal, issues: [] };
     }
-    const parsed = parseSinterCsvDetailed(text);
     if (parsed.fatal !== null) {
       set({ csvError: parsed.fatal });
       return { ok: false, fatal: parsed.fatal, issues: [] };
     }
-    const noKeys = noNumericKeysProblem(parsed.rows);
+    // A prepared import was only built for a plottable file, so the check already passed.
+    const noKeys = prepared ? null : noNumericKeysProblem(parsed.rows);
     if (noKeys !== null) {
       set({ csvError: noKeys });
       return { ok: false, fatal: noKeys, issues: parsed.issues };
     }
-    const mapping = guessMapping(parsed.rows);
+    const mapping = prepared?.mapping ?? guessMapping(parsed.rows);
     set({
       csvImport: {
         sourceName, rows: parsed.rows, mapping, issues: parsed.issues,
         totalDataRows: parsed.totalDataRows, rejectedRows: parsed.rejectedRows,
       },
       csvError: null,
-      statsCsv: serializeSinterCsv(parsed.rows),
-      rowsByStrongId: indexMapped(parsed.rows, mapping),
+      statsCsv: prepared?.statsCsv ?? serializeSinterCsv(parsed.rows),
+      rowsByStrongId: prepared ? indexRows(prepared.mapped) : indexMapped(parsed.rows, mapping),
       running: false,
       progress: null,
       campaignName: sourceName,

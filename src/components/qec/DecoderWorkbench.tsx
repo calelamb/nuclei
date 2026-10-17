@@ -12,6 +12,7 @@ import { downloadCsv } from '../../services/experimentExport';
 
 import { TYPOGRAPHY, ICON_SIZE, ICON_STROKE } from '../../styles/tokens';
 import { Button } from '../ui';
+import { Table, Thead, Tbody, Tr, Th, Td } from '../ui/Table';
 const DOCS = 'https://getnuclei.dev/docs/research/qec-studio/';
 
 /**
@@ -75,17 +76,6 @@ export function DecoderWorkbench() {
     );
   }
 
-  const th: React.CSSProperties = {
-    textAlign: 'left', padding: '6px 10px', color: colors.textMuted, fontSize: 11,
-    fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.4, borderBottom: `1px solid ${colors.borderStrong}`,
-    position: 'sticky', top: 0, background: colors.bg, zIndex: 1, whiteSpace: 'nowrap',
-  };
-  const thNum: React.CSSProperties = { ...th, textAlign: 'right' };
-  const td: React.CSSProperties = {
-    padding: '6px 10px', fontSize: 12, color: colors.text, borderBottom: `1px solid ${colors.border}`,
-    fontFamily: TYPOGRAPHY.fontMono, fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap',
-  };
-  const tdNum: React.CSSProperties = { ...td, textAlign: 'right' };
   const collisionTag = (w: (typeof wb)[number]) =>
     w.collides ? (
       <span title={`Another task has the same experiment, d and p (strong_id ${w.strongId}); shown separately, not pooled.`}
@@ -95,39 +85,37 @@ export function DecoderWorkbench() {
   return (
     <div style={{ height: '100%', display: 'flex', flexDirection: 'column', background: colors.bg }}>
       {header}
-      <div style={{ flex: 1, minHeight: 0, overflow: 'auto' }}>
-        <table style={{ width: '100%', minWidth: 'max-content', borderCollapse: 'collapse', fontFamily: TYPOGRAPHY.fontSans }}>
-          <thead>
-            <tr>
-              <th style={th}>Decoder</th>
-              {showExperiment && <th style={th}>Experiment</th>}
-              <th style={thNum}>d</th>
-              <th style={thNum}>p</th>
-              <th style={thNum}>Logical error rate ({unitText})</th>
-              <th style={thNum}>Kept shots</th>
-              <th style={thNum}>Discards</th>
-              <th style={thNum}>Errors</th>
-              <th style={thNum} title="CPU core-seconds per shot (sampling + decoding), from sinter's seconds column">Time / shot</th>
-            </tr>
-          </thead>
-          <tbody>
+      <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
+        <Table label="Decoder comparison" className="decoder-table">
+          <Thead>
+            <Tr>
+              <Th>Decoder</Th>
+              {showExperiment && <Th>Experiment</Th>}
+              <Th numeric plain>d</Th>
+              <Th numeric plain>p</Th>
+              <Th numeric>Logical error rate ({unitText})</Th>
+              <Th numeric>Kept shots</Th>
+              <Th numeric>Discards</Th>
+              <Th numeric>Errors</Th>
+              <Th numeric title="CPU core-seconds per shot (sampling + decoding), from sinter's seconds column">Time / shot</Th>
+            </Tr>
+          </Thead>
+          <Tbody>
             {wb.map((w) => (
-              <tr key={`${w.experiment}|${w.decoder}|${w.distance}|${w.noise}|${w.strongId}`}>
-                <td style={{ ...td, color: colors.text, fontWeight: 500 }}>{w.decoder}</td>
-                {showExperiment && <td style={td}>{w.context}{collisionTag(w)}</td>}
-                <td style={tdNum}>{w.distance ?? '—'}{!showExperiment && collisionTag(w)}</td>
-                <td style={tdNum}>{w.noise === null ? '—' : formatNoise(w.noise)}</td>
-                <td style={tdNum}>
-                  {formatRateInterval(w.rate.p, w.rate.lo, w.rate.hi)}
-                </td>
-                <td style={tdNum}>{w.kept.toLocaleString()}</td>
-                <td style={tdNum}>{w.discards.toLocaleString()}</td>
-                <td style={tdNum}>{w.errors.toLocaleString()}</td>
-                <td style={tdNum}>{formatSecondsPerShot(w.secondsPerShot)}</td>
-              </tr>
+              <Tr key={`${w.experiment}|${w.decoder}|${w.distance}|${w.noise}|${w.strongId}`}>
+                <Td text style={{ fontWeight: 500 }}>{w.decoder}</Td>
+                {showExperiment && <Td text>{w.context}{collisionTag(w)}</Td>}
+                <Td numeric>{w.distance ?? '—'}{!showExperiment && collisionTag(w)}</Td>
+                <Td numeric>{w.noise === null ? '—' : formatNoise(w.noise)}</Td>
+                <Td numeric>{formatRateInterval(w.rate.p, w.rate.lo, w.rate.hi)}</Td>
+                <Td numeric>{w.kept.toLocaleString()}</Td>
+                <Td numeric>{w.discards.toLocaleString()}</Td>
+                <Td numeric>{w.errors.toLocaleString()}</Td>
+                <Td numeric>{formatSecondsPerShot(w.secondsPerShot)}</Td>
+              </Tr>
             ))}
-          </tbody>
-        </table>
+          </Tbody>
+        </Table>
       </div>
       <div
         style={{

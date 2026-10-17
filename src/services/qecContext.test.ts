@@ -45,6 +45,16 @@ describe('buildQecContext', () => {
     expect(perShot).toMatch(/Error suppression[\s\S]*per shot/);
   });
 
+  it('never hands Dirac a raw float for p', () => {
+    const p = 0.00035999999999999997;
+    const text = buildQecContext({
+      campaignName: SPEC.name, spec: SPEC, noiseModel, snapshot: SNAPSHOT, circuit: null, running: false,
+      rows: [row(3, p, 100), row(5, p, 10), row(7, p, 1)],
+    });
+    expect(text).not.toMatch(/0\.0003599/);
+    expect(text).toContain('p=3.6×10⁻⁴');
+  });
+
   it('summarizes the campaign, noise model, DEM, and rows', () => {
     const text = buildQecContext({
       campaignName: SPEC.name,

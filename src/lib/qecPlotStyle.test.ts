@@ -46,6 +46,22 @@ describe('buildPlotStyle', () => {
     expect(legend.map((g) => g.kind)).toContain('experiment');
   });
 
+  it('gives each decoder its own dash when one experiment leaves the dash channel free, in plot and legend', () => {
+    const { byKey, legend } = buildPlotStyle(grid(['mwpm', 'uf']), 'dark', '#999');
+    expect(byKey.get('exp·d3·mwpm')!.dash).not.toBe(byKey.get('exp·d3·uf')!.dash);
+    const entries = legend.find((g) => g.kind === 'decoder')!.entries;
+    expect(entries.find((e) => e.id === 'mwpm')!.dash).toBe(byKey.get('exp·d3·mwpm')!.dash);
+    expect(entries.find((e) => e.id === 'uf')!.dash).toBe(byKey.get('exp·d3·uf')!.dash);
+  });
+
+  it('keeps dash for experiments when several are plotted (decoders then rely on marker shape)', () => {
+    const series = [...grid(['mwpm', 'uf'], 'a'), ...grid(['mwpm', 'uf'], 'b')];
+    const { byKey, legend } = buildPlotStyle(series, 'dark', '#999');
+    expect(byKey.get('a·d3·mwpm')!.dash).toBe(byKey.get('a·d3·uf')!.dash);
+    expect(byKey.get('a·d3·mwpm')!.dash).not.toBe(byKey.get('b·d3·mwpm')!.dash);
+    expect(legend.find((g) => g.kind === 'decoder')!.entries.every((e) => e.dash === undefined)).toBe(true);
+  });
+
   it('lists every distance and decoder in the legend, and omits groups with one member', () => {
     const multi = buildPlotStyle(grid(['mwpm', 'uf']), 'dark', '#999').legend;
     expect(multi.find((g) => g.kind === 'distance')!.entries.map((e) => e.label)).toEqual(['d = 3', 'd = 5', 'd = 7', 'd = 9']);

@@ -13,12 +13,15 @@ import { RunsTableRow, ROW_HEIGHT } from './RunsTableRow';
 import { RunButton } from './RunButton';
 import { RunFeedback } from './RunFeedback';
 import { SweepPlot } from './SweepPlot';
+import { TYPOGRAPHY, ICON_SIZE, ICON_STROKE } from '../../styles/tokens';
+import { Button, Select, SegmentedControl } from '../ui';
+import './experiments.css';
 
 const OVERSCAN = 6;
 const STATUS_OPTIONS: Array<RunStatus | 'all'> = ['all', 'complete', 'failed', 'running', 'stale'];
 const CHECKBOX_COLUMN_WIDTH = 32;
 const RUN_COLUMN_WIDTH = 190;
-const MIN_DATA_COLUMN_WIDTH = 96;
+const MIN_DATA_COLUMN_WIDTH = 116;
 const HEADER_HEIGHT = 28;
 
 /**
@@ -161,7 +164,7 @@ function RunsTableBody() {
 
   if (!experiment || !projectRoot) {
     return (
-      <div style={{ padding: 24, color: colors.textDim, fontSize: 12, fontFamily: "'Geist Sans', sans-serif" }}>
+      <div style={{ padding: 24, color: colors.textDim, fontSize: 12, fontFamily: TYPOGRAPHY.fontSans }}>
         Select an experiment to see its runs.
       </div>
     );
@@ -176,82 +179,58 @@ function RunsTableBody() {
       {/* Header bar */}
       <div style={{
         display: 'flex', alignItems: 'center', gap: 12,
-        padding: '10px 14px', borderBottom: `1px solid ${colors.border}`, flexShrink: 0, flexWrap: 'wrap',
+        padding: '8px 16px', borderBottom: `1px solid ${colors.border}`, flexShrink: 0, flexWrap: 'wrap',
       }}>
-        <span style={{ color: colors.text, fontSize: 13, fontWeight: 600, fontFamily: "'Geist Sans', sans-serif" }}>
+        <span style={{ color: colors.text, fontSize: 13, fontWeight: 600, fontFamily: TYPOGRAPHY.fontSans }}>
           {experiment.spec.name}
         </span>
-        <span style={{ color: colors.textDim, fontSize: 11, fontFamily: "'Fira Code', monospace" }}>
+        <span style={{ color: colors.textDim, fontSize: 11, fontFamily: TYPOGRAPHY.fontMono }}>
           {rows.length} run{rows.length === 1 ? '' : 's'}
         </span>
 
         {hasSweep && (
-          <div style={{ display: 'flex', borderRadius: 4, overflow: 'hidden', border: `1px solid ${colors.border}` }}>
-            {(['runs', 'sweep'] as const).map((tab) => (
-              <button
-                key={tab}
-                onClick={() => setMainTab(tab)}
-                style={{
-                  padding: '3px 10px', fontSize: 11, fontWeight: 600, border: 'none', cursor: 'pointer',
-                  background: mainTab === tab ? colors.accent : 'transparent',
-                  color: mainTab === tab ? '#0a1220' : colors.textDim,
-                  fontFamily: "'Geist Sans', sans-serif",
-                }}
-              >
-                {tab === 'runs' ? 'Runs' : 'Sweep plot'}
-              </button>
-            ))}
-          </div>
+          <SegmentedControl
+            aria-label="Runs view"
+            value={mainTab}
+            onChange={setMainTab}
+            options={[{ value: 'runs', label: 'Runs' }, { value: 'sweep', label: 'Sweep plot' }]}
+          />
         )}
 
         {mainTab === 'runs' && (
-          <select
+          <Select
+            size="sm"
             value={statusFilter}
             onChange={(e) => patchRunsView(fileKey, { statusFilter: e.target.value })}
             aria-label="Filter by status"
-            style={{
-              background: colors.bgPanel, color: colors.text,
-              border: `1px solid ${colors.border}`, borderRadius: 4, padding: '3px 8px',
-              fontSize: 11, fontFamily: "'Geist Sans', sans-serif",
-            }}
           >
             {STATUS_OPTIONS.map((s) => (
               <option key={s} value={s}>{s === 'all' ? 'All statuses' : s}</option>
             ))}
-          </select>
+          </Select>
         )}
 
         <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 8 }}>
           {mainTab === 'runs' && (
             <>
-              <button
+              <Button
+                size="sm"
                 onClick={handleExportCsv}
                 disabled={rows.length === 0}
                 title="Export the runs table as CSV"
-                style={{
-                  display: 'flex', alignItems: 'center', gap: 4,
-                  padding: '4px 10px', background: 'transparent', border: `1px solid ${colors.border}`,
-                  borderRadius: 4, color: colors.textMuted, cursor: rows.length === 0 ? 'not-allowed' : 'pointer',
-                  fontSize: 11, fontFamily: "'Geist Sans', sans-serif",
-                }}
+                icon={<Download size={ICON_SIZE.xs} strokeWidth={ICON_STROKE} />}
               >
-                <Download size={12} /> Export CSV
-              </button>
-              <button
+                Export CSV
+              </Button>
+              <Button
+                size="sm"
+                variant={compareSelection.length >= 2 ? 'primary' : 'secondary'}
                 onClick={() => { rememberScroll(); openCompare(); }}
                 disabled={compareSelection.length < 2}
                 title={compareSelection.length < 2 ? 'Check 2 or more runs to compare' : 'Compare the checked runs'}
-                style={{
-                  padding: '4px 10px',
-                  background: compareSelection.length >= 2 ? colors.accent : colors.border,
-                  color: compareSelection.length >= 2 ? '#0a1220' : colors.textDim,
-                  border: 'none', borderRadius: 4,
-                  cursor: compareSelection.length >= 2 ? 'pointer' : 'not-allowed',
-                  fontSize: 11, fontWeight: 600, fontFamily: "'Geist Sans', sans-serif",
-                }}
               >
                 Compare{compareSelection.length > 0 ? ` (${compareSelection.length})` : ''}
-              </button>
+              </Button>
             </>
           )}
           <RunButton experiment={experiment} projectRoot={projectRoot} pointCount={pointCount} />
@@ -278,37 +257,32 @@ function RunsTableBody() {
             <div
               role="row"
               data-testid="runs-header"
-              style={{
-                display: 'grid', gridTemplateColumns, height: HEADER_HEIGHT, boxSizing: 'border-box',
-                position: 'sticky', top: 0, zIndex: 2,
-                borderBottom: `1px solid ${colors.border}`, background: colors.bgPanel,
-              }}
+              className="nuclei-runs-header"
+              style={{ gridTemplateColumns, height: HEADER_HEIGHT, position: 'sticky', top: 0 }}
             >
               <div role="columnheader" aria-label="Select for comparison" />
-              <div role="columnheader" style={{ ...HEADER_CELL, color: colors.textDim, display: 'flex', alignItems: 'center' }}>
-                Run
-              </div>
+              <div role="columnheader" className="nuclei-runs-header__cell">Run</div>
               {columns.map((column) => (
                 <button
                   key={column.key}
+                  type="button"
                   role="columnheader"
                   title={column.label}
+                  className="nuclei-runs-header__cell nuclei-runs-header__sort"
+                  data-numeric={isNumericColumn(column)}
+                  data-sorted={sortKey === column.key}
                   onClick={() => toggleSort(column.key)}
-                  style={{
-                    ...HEADER_CELL, display: 'flex', alignItems: 'center', gap: 4, minWidth: 0,
-                    justifyContent: isNumericColumn(column) ? 'flex-end' : 'flex-start',
-                    background: 'transparent', border: 'none', cursor: 'pointer',
-                    color: sortKey === column.key ? colors.accent : colors.textDim,
-                  }}
                 >
-                  <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{column.label}</span>
-                  {sortKey === column.key && (sortDirection === 'asc' ? <ChevronUp size={10} style={{ flexShrink: 0 }} /> : <ChevronDown size={10} style={{ flexShrink: 0 }} />)}
+                  <span className="nuclei-runs-header__label">{column.label}</span>
+                  {sortKey === column.key && (sortDirection === 'asc'
+                    ? <ChevronUp size={ICON_SIZE.xs} strokeWidth={ICON_STROKE} style={{ flexShrink: 0 }} />
+                    : <ChevronDown size={ICON_SIZE.xs} strokeWidth={ICON_STROKE} style={{ flexShrink: 0 }} />)}
                 </button>
               ))}
             </div>
 
             {rows.length === 0 ? (
-              <div style={{ padding: 24, color: colors.textDim, fontSize: 12, fontFamily: "'Geist Sans', sans-serif" }}>
+              <div style={{ padding: 24, color: colors.textDim, fontSize: 12, fontFamily: TYPOGRAPHY.fontSans }}>
                 {allRuns.length === 0 ? 'No runs yet. Hit Run to start a sweep.' : 'No runs match this filter.'}
               </div>
             ) : (
@@ -334,9 +308,3 @@ function RunsTableBody() {
     </div>
   );
 }
-
-const HEADER_CELL: React.CSSProperties = {
-  padding: '0 8px', fontSize: 10, fontWeight: 600, textTransform: 'uppercase',
-  fontFamily: "'Geist Sans', sans-serif", textAlign: 'right',
-  overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-};

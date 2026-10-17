@@ -2,6 +2,8 @@ import { useThemeStore } from '../../stores/themeStore';
 import type { QecFault, QecMinWeight, QecNondeterministic } from '../../types/qecExplain';
 
 import { MONO, svgDataUrl } from './explainFormat';
+import { Button } from '../ui';
+import { Table, Thead, Tbody, Tr, Th, Td } from '../ui/Table';
 
 export function JumpButton({
   line,
@@ -21,20 +23,16 @@ export function JumpButton({
   const colors = useThemeStore((s) => s.colors);
   if (line == null) return <span style={{ color: colors.textDim, fontSize: 11 }}>line unknown</span>;
   return (
-    <button
-      type="button"
+    <Button
+      size="sm"
       disabled={disabled}
       onClick={() => onJump(line)}
       title={disabled ? 'The editor changed since this analysis; re-run it to jump to source' : `Jump to line ${line}`}
       aria-label={label ?? `Jump to line ${line}`}
-      style={{
-        background: 'transparent', border: `1px solid ${colors.border}`, borderRadius: 4,
-        color: disabled ? colors.textDim : colors.accent, cursor: disabled ? 'default' : 'pointer',
-        fontSize: 11, padding: '1px 6px', fontFamily: MONO,
-      }}
+      style={{ fontFamily: MONO, height: 20, padding: '0 var(--space-2)' }}
     >
       {text ?? `line ${line}`}
-    </button>
+    </Button>
   );
 }
 
@@ -136,7 +134,7 @@ export function NondeterministicSection({
       {bad && data.cause && <CauseNote cause={data.cause} stale={stale} onJump={onJump} />}
       {bad && <SensitivityList data={data} />}
       {data.diagram_svg && (
-        <div style={{ background: '#ffffff', borderRadius: 4, padding: 4, overflow: 'auto', maxHeight: 260 }}>
+        <div style={{ background: '#ffffff', borderRadius: 'var(--radius-xs)', padding: 4, overflow: 'auto', maxHeight: 260 }}>
           <img
             alt="Stim detector slice diagram showing the offending detector and operations"
             src={svgDataUrl(data.diagram_svg)}
@@ -155,20 +153,18 @@ export function NondeterministicSection({
 }
 
 function FaultRow({ fault, stale, onJump }: { fault: QecFault; stale: boolean; onJump: (line: number) => void }) {
-  const colors = useThemeStore((s) => s.colors);
-  const cell = { padding: '3px 6px', borderBottom: `1px solid ${colors.border}`, fontFamily: MONO };
   return (
-    <tr>
-      <td style={cell}>{fault.index + 1}</td>
-      <td style={cell}>{fault.tick ?? '—'}</td>
-      <td style={cell}>{fault.iteration != null ? `iter ${fault.iteration}` : '—'}</td>
-      <td style={cell}>{fault.qubits.length ? fault.qubits.join(', ') : '—'}</td>
-      <td style={cell}>{fault.pauli ?? '—'}</td>
-      <td style={cell} title={fault.instruction ?? undefined}>{fault.gate ?? 'not located'}</td>
-      <td style={cell}>
+    <Tr>
+      <Td numeric>{fault.index + 1}</Td>
+      <Td numeric>{fault.tick ?? '—'}</Td>
+      <Td>{fault.iteration != null ? `iter ${fault.iteration}` : '—'}</Td>
+      <Td>{fault.qubits.length ? fault.qubits.join(', ') : '—'}</Td>
+      <Td>{fault.pauli ?? '—'}</Td>
+      <Td title={fault.instruction ?? undefined}>{fault.gate ?? 'not located'}</Td>
+      <Td text>
         {fault.located ? <JumpButton line={fault.line} disabled={stale} onJump={onJump} /> : '—'}
-      </td>
-    </tr>
+      </Td>
+    </Tr>
   );
 }
 
@@ -183,7 +179,6 @@ export function MinWeightSection({
 }) {
   const colors = useThemeStore((s) => s.colors);
   const found = data.status === 'ok' && data.weight != null;
-  const head = { textAlign: 'left' as const, padding: '3px 6px', color: colors.textDim, fontWeight: 500 };
   return (
     <section aria-label="Minimum-weight logical error" style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
       <div style={{ fontSize: 11, fontWeight: 600, color: colors.textMuted }}>Minimum-weight logical error</div>
@@ -200,26 +195,24 @@ export function MinWeightSection({
         {data.sentence}
       </p>
       {found && data.faults.length > 0 && (
-        <div style={{ overflowX: 'auto' }}>
-          <table style={{ borderCollapse: 'collapse', fontSize: 11, width: '100%', color: colors.text }}>
-            <thead>
-              <tr>
-                <th style={head}>#</th>
-                <th style={head}>tick</th>
-                <th style={head}>REPEAT</th>
-                <th style={head}>qubits</th>
-                <th style={head}>flip</th>
-                <th style={head}>gate</th>
-                <th style={head}>source</th>
-              </tr>
-            </thead>
-            <tbody>
-              {data.faults.map((f) => (
-                <FaultRow key={f.index} fault={f} stale={stale} onJump={onJump} />
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <Table label="Minimum-weight fault chain" dense>
+          <Thead>
+            <Tr>
+              <Th numeric>#</Th>
+              <Th numeric>tick</Th>
+              <Th>REPEAT</Th>
+              <Th>qubits</Th>
+              <Th>flip</Th>
+              <Th>gate</Th>
+              <Th>source</Th>
+            </Tr>
+          </Thead>
+          <Tbody>
+            {data.faults.map((f) => (
+              <FaultRow key={f.index} fault={f} stale={stale} onJump={onJump} />
+            ))}
+          </Tbody>
+        </Table>
       )}
     </section>
   );

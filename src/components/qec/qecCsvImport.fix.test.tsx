@@ -66,7 +66,7 @@ describe('CSV errors are always visible', () => {
 
 describe('one drop loads once', () => {
   it('drop on the empty-state zone parses the file a single time', async () => {
-    const spy = vi.spyOn(useQecCampaignStore.getState(), 'loadFromCsv');
+    const spy = vi.spyOn(useQecCampaignStore.getState(), 'loadParsed');
     const { getByTestId } = render(<QecAnalysisView />);
     await act(async () => { dropFiles(getByTestId('csv-drop-zone'), [csvFile(goldenCsv)]); });
     await waitFor(() => expect(useQecCampaignStore.getState().csvImport).not.toBeNull());

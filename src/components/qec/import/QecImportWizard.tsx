@@ -16,6 +16,10 @@ import {
 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactElement } from 'react';
 
+import { Button, IconButton, Select, TextInput } from '../../ui';
+import { Table, Thead, Tbody, Tr, Th, Td } from '../../ui/Table';
+import { ICON_SIZE, ICON_STROKE } from '../../../styles/tokens';
+
 import './qecImportWizard.css';
 
 import type { QecImportClient as ClientContract } from '../../../services/qecDataClient';
@@ -68,7 +72,7 @@ function StepRail({ stage }: { stage: number }): ReactElement {
     <ol className="qec-import-steps" aria-label="Import stages">
       {IMPORT_STAGES.map((label, index) => (
         <li key={label} aria-current={index === stage ? 'step' : undefined} data-complete={index < stage || undefined}>
-          <span aria-hidden="true">{index < stage ? <Check size={14} /> : <Circle size={12} />}</span>
+          <span aria-hidden="true">{index < stage ? <Check size={ICON_SIZE.sm} /> : <Circle size={ICON_SIZE.xs} />}</span>
           <span>{label}</span>
         </li>
       ))}
@@ -152,12 +156,12 @@ function MappingStage(props: MappingStageProps): ReactElement {
     <div className="qec-import-mapping">
       {native
         ? <div className="qec-import-mapping__header"><strong>Adapter-native fields</strong></div>
-        : <><div className="qec-import-mapping__header"><strong>{count} mapped {count === 1 ? 'field' : 'fields'}</strong><button type="button" onClick={props.onAdd}><Plus aria-hidden="true" size={16} />Add field mapping</button></div><div className="qec-import-mapping__labels" aria-hidden="true"><span>Canonical field</span><span>Source field</span><span /></div></>}
+        : <><div className="qec-import-mapping__header"><strong>{count} mapped {count === 1 ? 'field' : 'fields'}</strong><Button size="sm" onClick={props.onAdd} icon={<Plus aria-hidden="true" size={ICON_SIZE.sm} strokeWidth={ICON_STROKE} />}>Add field mapping</Button></div><div className="qec-import-mapping__labels" aria-hidden="true"><span>Canonical field</span><span>Source field</span><span /></div></>}
       {!native && props.rows.map((row, index) => (
         <div className="qec-import-mapping__row" key={row.id}>
-          <label><span>Canonical field {index + 1}</span><input aria-label={`Canonical field ${index + 1}`} value={row.canonical} onChange={(event) => props.onChange(row.id, 'canonical', event.target.value)} /></label>
-          <label><span>Source field {index + 1}</span><input aria-label={`Source field ${index + 1}`} value={row.source} onChange={(event) => props.onChange(row.id, 'source', event.target.value)} /></label>
-          <button type="button" aria-label={`Remove mapping ${index + 1}`} onClick={() => props.onRemove(row.id)}><Trash2 aria-hidden="true" size={16} /></button>
+          <label><span>Canonical field {index + 1}</span><TextInput mono aria-label={`Canonical field ${index + 1}`} value={row.canonical} onChange={(event) => props.onChange(row.id, 'canonical', event.target.value)} /></label>
+          <label><span>Source field {index + 1}</span><TextInput mono aria-label={`Source field ${index + 1}`} value={row.source} onChange={(event) => props.onChange(row.id, 'source', event.target.value)} /></label>
+          <IconButton className="qec-import-remove" aria-label={`Remove mapping ${index + 1}`} onClick={() => props.onRemove(row.id)}><Trash2 aria-hidden="true" size={ICON_SIZE.md} strokeWidth={ICON_STROKE} /></IconButton>
         </div>
       ))}
       <MappingOptionsForm adapterId={props.adapterId} options={props.options} onChange={props.onOptions} />
@@ -175,19 +179,19 @@ function MappingOptionsForm({ adapterId, options, onChange }: { adapterId: strin
     return (
       <fieldset className="qec-import-options">
         <legend>Stim result widths (required without circuit/DEM context)</legend>
-        <label>Detector width<input type="number" min="1" value={options.detectorCount} onChange={(event) => set('detectorCount', event.target.value)} /></label>
-        <label>Observable width<input type="number" min="0" value={options.observableCount} onChange={(event) => set('observableCount', event.target.value)} /></label>
+        <label>Detector width<TextInput mono type="number" min="1" value={options.detectorCount} onChange={(event) => set('detectorCount', event.target.value)} /></label>
+        <label>Observable width<TextInput mono type="number" min="0" value={options.observableCount} onChange={(event) => set('observableCount', event.target.value)} /></label>
       </fieldset>
     );
   }
   return (
     <fieldset className="qec-import-options">
       <legend>Scientific meaning (never inferred)</legend>
-      <label>Record class<select value={options.outputKind} onChange={(event) => set('outputKind', event.target.value)}><option value="">Adapter-native / validate</option><option value="syndromes">Syndrome events</option><option value="campaign_points">Sinter campaign aggregates</option><option value="calibration">Calibration records</option></select></label>
-      <label>Detector width<input type="number" min="1" value={options.detectorCount} onChange={(event) => set('detectorCount', event.target.value)} /></label>
-      <label>Observable width<input type="number" min="1" value={options.observableCount} onChange={(event) => set('observableCount', event.target.value)} /></label>
-      <label>Timestamp unit<input value={options.timestampUnit} onChange={(event) => set('timestampUnit', event.target.value)} placeholder="e.g. ns" /></label>
-      <label>Bit order<select value={options.bitOrder} onChange={(event) => set('bitOrder', event.target.value)}><option value="">Choose explicitly</option><option value="lsb0">LSB0</option></select></label>
+      <label>Record class<Select value={options.outputKind} onChange={(event) => set('outputKind', event.target.value)}><option value="">Adapter-native / validate</option><option value="syndromes">Syndrome events</option><option value="campaign_points">Sinter campaign aggregates</option><option value="calibration">Calibration records</option></Select></label>
+      <label>Detector width<TextInput mono type="number" min="1" value={options.detectorCount} onChange={(event) => set('detectorCount', event.target.value)} /></label>
+      <label>Observable width<TextInput mono type="number" min="1" value={options.observableCount} onChange={(event) => set('observableCount', event.target.value)} /></label>
+      <label>Timestamp unit<TextInput mono value={options.timestampUnit} onChange={(event) => set('timestampUnit', event.target.value)} placeholder="e.g. ns" /></label>
+      <label>Bit order<Select value={options.bitOrder} onChange={(event) => set('bitOrder', event.target.value)}><option value="">Choose explicitly</option><option value="lsb0">LSB0</option></Select></label>
     </fieldset>
   );
 }
@@ -202,12 +206,13 @@ function PreviewStage({ validation, preview, onLoad }: PreviewStageProps): React
   if (!validation?.valid) return <div className="qec-import-notice"><ShieldAlert aria-hidden="true" size={20} /><div><strong>Preview requires successful validation</strong><span>Continue to Validation. This prevents ambiguous widths, units, or status from reaching a canonical preview.</span></div></div>;
   if (preview.loading) return <LoadingState label="Loading bounded preview" />;
   if (preview.error) return <InlineError message={preview.error} />;
-  if (!preview.value) return <button type="button" className="qec-import-secondary" onClick={onLoad}>Load bounded preview</button>;
+  if (!preview.value) return <Button onClick={onLoad} style={{ justifySelf: 'start' }}>Load bounded preview</Button>;
   const records = preview.value.batches.reduce((total, batch) => total + batch.recordCount, 0);
   return (
     <div className="qec-import-preview">
       <dl className="qec-import-facts"><FieldValue label="Preview records" value={String(records)} /><FieldValue label="Expected rows" value={preview.value.totalRecords === null ? 'Not reported' : String(preview.value.totalRecords)} /><FieldValue label="Provenance" value={preview.value.provenanceId ?? 'Not reported'} /><FieldValue label="Truncation" value={preview.value.truncated ? 'Preview truncated' : 'Complete bounded preview'} /></dl>
-      <table><caption>Canonical batch summary</caption><thead><tr><th>Record kind</th><th>Records</th><th>Sequence</th></tr></thead><tbody>{preview.value.batches.map((batch) => <tr key={batch.segmentId}><td>{batch.recordKind}</td><td>{batch.recordCount}</td><td className="qec-mono">{batch.sequenceStart}–{batch.sequenceEnd}</td></tr>)}</tbody></table>
+      <div className="qec-import-caption">Canonical batch summary</div>
+      <Table label="Canonical batch summary" dense><Thead><Tr><Th>Record kind</Th><Th numeric>Records</Th><Th numeric>Sequence</Th></Tr></Thead><Tbody>{preview.value.batches.map((batch) => <Tr key={batch.segmentId}><Td text>{batch.recordKind}</Td><Td numeric>{batch.recordCount}</Td><Td numeric>{batch.sequenceStart}–{batch.sequenceEnd}</Td></Tr>)}</Tbody></Table>
     </div>
   );
 }
@@ -224,14 +229,14 @@ function ValidationStage({ state, alertRef, onValidate, onReviewMapping }: Valid
   const firstError = state.value?.issues.find((issue) => issue.severity === 'error');
   return (
     <div className="qec-import-validation">
-      <button type="button" className="qec-import-secondary" onClick={onValidate}>Validate mapping</button>
+      <Button onClick={onValidate} style={{ justifySelf: 'start' }}>Validate mapping</Button>
       {state.error && <InlineError message={state.error} />}
       {state.value?.valid && <div className="qec-import-success" role="status"><CheckCircle2 aria-hidden="true" size={16} /><div><strong>Validation passed</strong><span className="qec-mono">{state.value.provenanceId ?? 'Provenance pending'}</span></div></div>}
       {state.value && !state.value.valid && (
         <div className="qec-import-quarantine" role="alert">
           <header><ShieldAlert aria-hidden="true" size={20} /><div><strong>Quarantine required</strong><span>Original bytes remain preserved. Correct the mapped fields, then validate again.</span></div></header>
           <ul>{state.value.issues.map((issue) => <li key={`${issue.code}:${issue.field ?? ''}`} data-severity={issue.severity}><strong>{issue.field ?? issue.code}</strong><span>{issue.message}</span></li>)}</ul>
-          <button type="button" ref={alertRef} aria-label={`Review ${firstError?.field ?? 'invalid'} mapping`} onClick={onReviewMapping}>Review mapping: {firstError?.message ?? 'Correct invalid fields.'}</button>
+          <Button ref={alertRef} aria-label={`Review ${firstError?.field ?? 'invalid'} mapping`} onClick={onReviewMapping} className="qec-import-quarantine__action">Review mapping: {firstError?.message ?? 'Correct invalid fields.'}</Button>
         </div>
       )}
       {state.value?.valid && state.value.issues.length > 0 && <ul className="qec-import-warnings" aria-label="Validation warnings">{state.value.issues.map((issue) => <li key={issue.code}><AlertCircle aria-hidden="true" size={16} />{issue.message}</li>)}</ul>}
@@ -250,8 +255,8 @@ function DestinationStage(props: DestinationStageProps): ReactElement {
   const issue = sessionIdIssue(props.sessionId.trim());
   return (
     <div className="qec-import-destination">
-      <label>Session ID<input aria-label="Session ID" value={props.sessionId} aria-invalid={issue !== null} onChange={(event) => props.onSessionId(event.target.value)} placeholder="capture-2026-07-22" />{issue && <small role="alert">{issue}</small>}</label>
-      <label>Session kind<select value={props.sessionKind} onChange={(event) => props.onSessionKind(event.target.value as DestinationStageProps['sessionKind'])}><option value="hardware_import">Hardware import</option><option value="simulation_campaign">Simulation campaign</option><option value="hardware_live">Hardware live</option><option value="replay">Replay</option></select></label>
+      <label>Session ID<TextInput mono aria-label="Session ID" value={props.sessionId} aria-invalid={issue !== null} onChange={(event) => props.onSessionId(event.target.value)} placeholder="capture-2026-07-22" invalid={issue !== null} />{issue && <small role="alert">{issue}</small>}</label>
+      <label>Session kind<Select value={props.sessionKind} onChange={(event) => props.onSessionKind(event.target.value as DestinationStageProps['sessionKind'])}><option value="hardware_import">Hardware import</option><option value="simulation_campaign">Simulation campaign</option><option value="hardware_live">Hardware live</option><option value="replay">Replay</option></Select></label>
       <div className="qec-import-policy"><Copy aria-hidden="true" size={16} /><strong>Destination: qec-data/sessions/{props.sessionId || '<session-id>'}</strong><span>The source is copied; the original file is never edited or referenced in place.</span></div>
     </div>
   );
@@ -268,7 +273,7 @@ function ImportStage({ source, client }: { source: string; client: QecImportClie
   if (job.status === 'complete') return <div className="qec-import-success" role="status"><CheckCircle2 aria-hidden="true" size={20} /><div><strong>{job.recordsWritten ?? 0} records written</strong><span>{job.partitionsWritten ?? 0} canonical partitions · Original preserved</span></div></div>;
   if (job.status === 'cancelled') return <div className="qec-import-notice qec-import-terminal" role="status"><Circle aria-hidden="true" size={20} /><div><strong>Import cancelled</strong><span>Canonical writing stopped; the original source remains preserved.</span></div></div>;
   if (job.status === 'failed') return <div className="qec-import-error qec-import-terminal" role="alert"><AlertCircle aria-hidden="true" size={20} /><div><strong>Import failed</strong><span>{job.error ?? error ?? 'Canonical data was not completed.'}</span></div></div>;
-  return <div className="qec-import-progress" role="progressbar" aria-label="QEC data import" aria-valuetext={job.message}><LoaderCircle aria-hidden="true" size={16} /><strong>{job.message}</strong><span className="qec-mono">{job.id}</span>{['running', 'starting'].includes(job.status) && <button type="button" aria-label={`Cancel import ${job.id}`} onClick={() => void cancelJob(client, job.id)}>Cancel</button>}</div>;
+  return <div className="qec-import-progress" role="progressbar" aria-label="QEC data import" aria-valuetext={job.message}><LoaderCircle aria-hidden="true" size={16} /><strong>{job.message}</strong><span className="qec-mono">{job.id}</span>{['running', 'starting'].includes(job.status) && <Button size="sm" aria-label={`Cancel import ${job.id}`} onClick={() => void cancelJob(client, job.id)}>Cancel</Button>}</div>;
 }
 
 function nextAllowed(stage: number, probe: ImportProbeResult | null, adapterId: string, mappingReady: boolean, valid: boolean, sessionId: string): boolean {
@@ -420,8 +425,8 @@ interface WizardFooterProps {
 function WizardFooter(props: WizardFooterProps): ReactElement {
   return (
     <footer className="qec-import-wizard__footer">
-      <div className="qec-import-nav"><button type="button" aria-label="Previous stage" disabled={props.stage === 0} onClick={props.onBack}><ArrowLeft aria-hidden="true" size={16} />Back</button><button type="button" aria-label="Next stage" disabled={!props.canAdvance} onClick={props.onNext}>Next<ArrowRight aria-hidden="true" size={16} /></button></div>
-      <div className="qec-import-commit">{props.unavailable && <span role="status"><AlertCircle aria-hidden="true" size={14} />Import unavailable: {props.unavailable}</span>}<button type="button" disabled={props.unavailable !== null || props.launching} aria-busy={props.launching} onClick={props.onImport}>{props.launching ? <LoaderCircle aria-hidden="true" size={16} /> : <CheckCircle2 aria-hidden="true" size={16} />}Import data</button></div>
+      <div className="qec-import-nav"><Button aria-label="Previous stage" disabled={props.stage === 0} onClick={props.onBack} icon={<ArrowLeft aria-hidden="true" size={ICON_SIZE.sm} strokeWidth={ICON_STROKE} />}>Back</Button><Button aria-label="Next stage" disabled={!props.canAdvance} onClick={props.onNext}>Next<ArrowRight aria-hidden="true" size={ICON_SIZE.sm} strokeWidth={ICON_STROKE} /></Button></div>
+      <div className="qec-import-commit">{props.unavailable && <span role="status"><AlertCircle aria-hidden="true" size={14} />Import unavailable: {props.unavailable}</span>}<Button variant="primary" disabled={props.unavailable !== null} loading={props.launching} onClick={props.onImport} icon={props.launching ? undefined : <CheckCircle2 aria-hidden="true" size={ICON_SIZE.sm} strokeWidth={ICON_STROKE} />}>Import data</Button></div>
     </footer>
   );
 }
@@ -454,7 +459,7 @@ function QecImportWizardSession({ source, client, onClose }: QecImportWizardProp
   const activeStage = IMPORT_STAGES[stage];
   return (
     <section className="qec-import-wizard" aria-label={`Import ${source}`}>
-      <header className="qec-import-wizard__header"><div><span>Canonical QEC data</span><h2>Import source</h2><p className="qec-mono">{source}</p></div>{onClose && <button type="button" aria-label="Close import wizard" onClick={onClose}><X aria-hidden="true" size={16} /></button>}</header>
+      <header className="qec-import-wizard__header"><div><span>Canonical QEC data</span><h2>Import source</h2><p className="qec-mono">{source}</p></div>{onClose && <IconButton variant="secondary" aria-label="Close import wizard" onClick={onClose}><X aria-hidden="true" size={ICON_SIZE.md} strokeWidth={ICON_STROKE} /></IconButton>}</header>
       <div className="qec-import-wizard__body">
         <StepRail stage={stage} />
         <div className="qec-import-stage">

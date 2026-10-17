@@ -18,7 +18,7 @@ import {
 import { useQecWorkbenchStore } from '../../../stores/qecWorkbenchStore';
 import { QecImportWizard } from '../import/QecImportWizard';
 import { useQecTrayIdle } from './useQecTrayIdle';
-import { Button } from '../../ui';
+import { Button, IconButton } from '../../ui';
 import { ICON_SIZE, ICON_STROKE } from '../../../styles/tokens';
 
 interface TrayHeaderProps { expanded: boolean; importing: boolean; onToggle(): void; }
@@ -34,9 +34,9 @@ function TrayHeader({ expanded, importing, onToggle }: TrayHeaderProps): ReactEl
         {!importing && panels.map((panel) => <span className="qec-tray__active-instrument" key={panel.id}><ListChecks aria-hidden="true" size={16} />{panel.title}</span>)}
         <span><Radio aria-hidden="true" size={14} /> Streams</span><span>Logs</span><span>Comparisons</span>
       </div>
-      <button type="button" className="qec-tray__toggle" aria-expanded={expanded} aria-label={`${expanded ? 'Collapse' : 'Expand'} jobs and streams`} onClick={onToggle}>
-        {expanded ? <ChevronDown aria-hidden="true" size={16} /> : <ChevronUp aria-hidden="true" size={16} />}
-      </button>
+      <IconButton className="qec-tray__toggle" aria-expanded={expanded} aria-label={`${expanded ? 'Collapse' : 'Expand'} jobs and streams`} onClick={onToggle}>
+        {expanded ? <ChevronDown aria-hidden="true" size={ICON_SIZE.md} strokeWidth={ICON_STROKE} /> : <ChevronUp aria-hidden="true" size={ICON_SIZE.md} strokeWidth={ICON_STROKE} />}
+      </IconButton>
     </header>
   );
 }
@@ -61,7 +61,7 @@ function TrayContent({ client, projectRoot }: { client: QecImportClient | null; 
         <li key={job.id}>
           <div><strong>{job.kind} · {job.status}</strong><span className="qec-mono">{job.id}</span></div>
           <dl><div><dt>Source</dt><dd className="qec-mono">{job.source ?? 'Not recorded'}</dd></div><div><dt>Adapter</dt><dd className="qec-mono">{job.adapterId ?? 'Not recorded'}</dd></div><div><dt>Session</dt><dd className="qec-mono">{job.sessionId ?? 'Not recorded'}</dd></div><div><dt>Size</dt><dd className="qec-mono">{job.sourceByteSize ?? 'Pending'}</dd></div><div><dt>Hash</dt><dd className="qec-mono">{job.sourceHash ?? 'Pending'}</dd></div><div><dt>Provenance</dt><dd className="qec-mono">{job.provenanceId ?? 'Pending'}</dd></div></dl>
-          {client && ['running', 'starting'].includes(job.status) && <button type="button" aria-label={`Cancel ${job.kind} ${job.id}`} onClick={() => void cancelJob(client, job.id)}>Cancel</button>}
+          {client && ['running', 'starting'].includes(job.status) && <Button size="sm" aria-label={`Cancel ${job.kind} ${job.id}`} onClick={() => void cancelJob(client, job.id)}>Cancel</Button>}
         </li>
       ))}</ul>}
     </div>

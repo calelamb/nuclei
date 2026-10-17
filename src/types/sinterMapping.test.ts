@@ -103,3 +103,11 @@ describe('applyMapping', () => {
     expect(out).toHaveLength(2);
   });
 });
+
+describe('guessMapping with p = 0 rows that lack a key (qec-02 regression)', () => {
+  it('does not tick a key as a series split just because the p = 0 rows omit it', () => {
+    const withQ = [3, 5, 7].flatMap((d) => [0.001, 0.002].map((p) => row(`${d}-${p}`, { d, r: d, p, q: d * 5 + 2 })));
+    const noQ = [3, 5, 7].map((d) => row(`${d}-zero`, { d, r: d, p: 0 }));
+    expect(guessMapping([...withQ, ...noQ]).groupBy).toEqual([]);
+  });
+});

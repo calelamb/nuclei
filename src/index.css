@@ -15,17 +15,6 @@
   font-weight: 100 900; font-style: normal; font-display: swap;
 }
 
-/*
- * Compatibility alias: src/components/experiments/** still names 'Fira Code', a
- * font that was never shipped (it rendered as Courier). Point it at the bundled
- * mono until that tree migrates to TYPOGRAPHY.fontMono, then delete this block.
- */
-@font-face {
-  font-family: 'Fira Code';
-  src: url('./assets/fonts/GeistMono-Variable.woff2') format('woff2');
-  font-weight: 100 900; font-style: normal; font-display: swap;
-}
-
 * {
   margin: 0;
   padding: 0;

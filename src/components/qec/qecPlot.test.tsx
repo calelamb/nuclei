@@ -138,7 +138,7 @@ describe('point tooltip', () => {
     expect(text).toMatch(/d = 3/);
     expect(text).toMatch(/mwpm/);
     expect(text).toMatch(/rate per round/);
-    expect(text).toMatch(/interval: .* to /);
+    expect(text).toMatch(/sinter likelihood-ratio interval: .* to /);
     expect(text).toMatch(/errors in 100,000 kept shots/);
     fireEvent.mouseLeave(overlay);
     expect(queryByRole('tooltip')).toBeNull();
@@ -157,6 +157,17 @@ describe('keyboard access to points (qec-18)', () => {
     expect(getByRole('tooltip').textContent).not.toBe(first);
     fireEvent.keyDown(plot, { key: 'Escape' });
     expect(queryByRole('tooltip')).toBeNull();
+  });
+
+  it('leaves the focus ring to the shared :focus-visible token, with no private dashed stroke', () => {
+    load(grid(['mwpm']));
+    const { getByRole } = render(<ThresholdPanel />);
+    const plot = getByRole('group', { name: /Plot points/ });
+    fireEvent.focus(plot);
+    expect(plot.getAttribute('stroke-dasharray')).toBeNull();
+    expect(plot.getAttribute('stroke')).toBeNull();
+    expect(plot.style.stroke).toBe('');
+    expect(plot.style.outline).toBe('');
   });
 });
 

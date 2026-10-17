@@ -44,6 +44,8 @@ describe('formatRatePrecise', () => {
     expect(formatRatePrecise(1.03e-4)).toBe('1.03×10⁻⁴');
     expect(formatRatePrecise(1e-4)).toBe('1.00×10⁻⁴');
     expect(formatRatePrecise(0.0123)).toBe('0.0123');
+    expect(formatRatePrecise(0.012)).toBe('0.0120');
+    expect(formatRatePrecise(0.5)).toBe('0.500');
     expect(formatRatePrecise(0)).toBe('0');
     expect(formatRatePrecise(Number.NaN)).toBe('—');
   });
@@ -70,6 +72,11 @@ describe('formatRateInterval (qec-12)', () => {
   });
   it('handles zero errors and saturated rates', () => {
     expect(formatRateInterval(0, 0, 0.0000102)).toBe('0 [0, 1.02×10⁻⁵]');
-    expect(formatRateInterval(0.388, 0.3, 0.588)).toBe('0.388 [0.3, 0.588]');
+    expect(formatRateInterval(0.388, 0.3, 0.588)).toBe('0.388 [0.300, 0.588]');
+  });
+  it('keeps three significant figures in every cell so neighbouring rows align', () => {
+    expect(formatRateInterval(0.0032, 0.00305, 0.0034)).toBe('3.20×10⁻³ [3.05, 3.40]×10⁻³');
+    expect(formatRateInterval(0.00319, 0.00302, 0.00337)).toBe('3.19×10⁻³ [3.02, 3.37]×10⁻³');
+    expect(formatRateInterval(0.0025, 0.0024, 0.0026)).toBe('2.50×10⁻³ [2.40, 2.60]×10⁻³');
   });
 });

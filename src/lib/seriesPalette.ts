@@ -4,15 +4,16 @@ import type { ThemeColors } from '../stores/themeStore';
  * PRD 09 Phase E — a small categorical palette for N-series charts (the
  * Compare view's multi-series histogram, the sweep plot's per-group lines),
  * built entirely from existing theme tokens rather than introducing
- * hardcoded hex colors that would fight the light/dark theme.
+ * hardcoded hex colors that would fight the light/dark theme. Purple is
+ * reserved for Dirac, so it is never a series colour.
  */
 const PALETTE_KEYS: Array<keyof ThemeColors> = [
   'accent',
-  'dirac',
   'warning',
   'success',
   'info',
   'error',
+  'overlayMatching',
   'accentLight',
 ];
 

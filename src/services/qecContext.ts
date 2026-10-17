@@ -7,6 +7,7 @@ import { toStatsPoint } from '../types/qecStats';
 import { lambdaEstimates, rowProblem, rowRate, type RateUnits } from '../lib/qecFit';
 import { roundsFromMetadata } from '../lib/qecRounds';
 import { lambdaSummary, lambdaCaveats } from '../lib/qecLambdaText';
+import { formatNoise } from '../lib/qecPlotFormat';
 
 /**
  * PRD 10 Phase D8 — Dirac's QEC campaign context.
@@ -95,7 +96,7 @@ export function buildQecContext(input: QecContextInput): string {
     const header = `### Campaign results (${shown.length} of ${points.length} rows)`;
     const lines = shown.map(({ pt: p, row }) => {
       const d = p.distance ?? '·';
-      const noise = p.noise !== null ? p.noise.toPrecision(3) : '·';
+      const noise = p.noise !== null ? formatNoise(p.noise) : '·';
       if (rowProblem(row) !== null) return `- ${p.label} d=${d} p=${noise} ${p.decoder}: LER unavailable (invalid or fully discarded row)`;
       const { fit, kept } = rowRate(row);
       return `- ${p.label} d=${d} p=${noise} ${p.decoder}: LER ${fit.best.toExponential(2)} (${row.errors}/${kept})`;
@@ -114,7 +115,7 @@ export function buildQecContext(input: QecContextInput): string {
               const { text, warnings } = lambdaSummary(f.estimate);
               const caveats = [...warnings, ...lambdaCaveats(f)];
               const warn = caveats.length > 0 ? ` WARNING: ${caveats.join('; ')}` : '';
-              return `${f.decoder} ${f.label} p=${f.noise}: ${text} (${unitText}); d ${f.estimate.distances.join(',')}${warn}`;
+              return `${f.decoder} ${f.label} p=${formatNoise(f.noise)}: ${text} (${unitText}); d ${f.estimate.distances.join(',')}${warn}`;
             })
             .join('\n- ')
         : 'Λ not estimated (needs >= 3 distances with logical errors at the same p within one experiment)';

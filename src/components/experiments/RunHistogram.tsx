@@ -2,6 +2,7 @@ import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 
 import { useThemeStore } from '../../stores/themeStore';
 import { formatProbabilityTick, getHistogramData, PROBABILITY_TICKS } from '../histogram/histogramData';
 import type { SimulationResult } from '../../types/quantum';
+import { TYPOGRAPHY } from '../../styles/tokens';
 
 /**
  * PRD 09 Phase D (D3) — histogram of a historical run's `measurements`.
@@ -21,7 +22,7 @@ export function RunHistogram({ measurements }: { measurements: Record<string, nu
 
   if (shotCount === 0) {
     return (
-      <div style={{ padding: 16, color: colors.textDim, fontSize: 12, fontFamily: "'Geist Sans', sans-serif" }}>
+      <div style={{ padding: 16, color: colors.textDim, fontSize: 12, fontFamily: TYPOGRAPHY.fontSans }}>
         No measurements recorded for this run.
       </div>
     );
@@ -46,13 +47,13 @@ export function RunHistogram({ measurements }: { measurements: Record<string, nu
         <BarChart data={data} margin={{ top: 5, right: 10, bottom: 5, left: 10 }}>
           <XAxis
             dataKey="state"
-            tick={{ fill: colors.text, fontSize: 11, fontFamily: "'Fira Code', monospace" }}
+            tick={{ fill: colors.text, fontSize: 11, fontFamily: TYPOGRAPHY.fontMono }}
             axisLine={{ stroke: colors.border }}
             tickLine={{ stroke: colors.border }}
           />
           <YAxis
             domain={[0, 1]}
-            tick={{ fill: colors.textDim, fontSize: 11, fontFamily: "'Fira Code', monospace" }}
+            tick={{ fill: colors.textDim, fontSize: 11, fontFamily: TYPOGRAPHY.fontMono }}
             axisLine={{ stroke: colors.border }}
             tickLine={{ stroke: colors.border }}
             ticks={[...PROBABILITY_TICKS]}
@@ -62,9 +63,9 @@ export function RunHistogram({ measurements }: { measurements: Record<string, nu
             contentStyle={{
               background: colors.bgPanel,
               border: `1px solid ${colors.border}`,
-              borderRadius: 6,
+              borderRadius: 'var(--radius-soft)',
               fontSize: 12,
-              fontFamily: "'Fira Code', monospace",
+              fontFamily: TYPOGRAPHY.fontMono,
             }}
             labelStyle={{ color: colors.text }}
             itemStyle={{ color: colors.accent }}

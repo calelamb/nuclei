@@ -10,6 +10,7 @@ import { toStatsPoint } from '../../types/qecStats';
 import { formatNoise } from '../../lib/qecPlotFormat';
 import { ICON_SIZE, ICON_STROKE, TYPOGRAPHY } from '../../styles/tokens';
 import { Button, Select } from '../ui';
+import { Table, Thead, Tbody, Tr, Th, Td } from '../ui/Table';
 
 const PREVIEW_ROWS = 10;
 type Field = 'p' | 'd' | 'rounds' | 'decoder';
@@ -42,13 +43,11 @@ export function CsvMappingPreview() {
   const setMapping = useQecCampaignStore((s) => s.setCsvMapping);
   const [open, setOpen] = useState(false);
   const keys = useMemo(() => (csv ? metadataKeys(csv.rows) : []), [csv]);
-  const collisions = useMemo(
-    () => (csv ? findCollisions(applyMapping(csv.rows, csv.mapping)) : []),
-    [csv],
-  );
-  const collisionKey = useMemo(() => (csv && collisions.length > 0 ? bestCollisionKey(csv.rows, csv.mapping) : null), [csv, collisions]);
   const partitions = useMemo(() => (csv ? findPartitionKeys(csv.rows, csv.mapping) : []), [csv]);
   const plotted = useQecCampaignStore((s) => s.rowsByStrongId);
+  // The store already holds the mapped rows; re-mapping a 100k-row file here would repeat that work.
+  const collisions = useMemo(() => (csv ? findCollisions(Object.values(plotted)) : []), [csv, plotted]);
+  const collisionKey = useMemo(() => (csv && collisions.length > 0 ? bestCollisionKey(csv.rows, csv.mapping) : null), [csv, collisions]);
   const plottable = useMemo(
     () => Object.values(plotted).filter((r) => toStatsPoint(r).noise !== null).length,
     [plotted],
@@ -99,24 +98,23 @@ export function CsvMappingPreview() {
     );
   };
 
-  const th = { textAlign: 'left' as const, padding: '2px 8px', color: colors.textMuted, fontWeight: 500 };
-  const td = { padding: '2px 8px', color: colors.text, fontFamily: TYPOGRAPHY.fontMono };
+  const countsNameMerge = (mapping.mergeKeys ?? []).length > 0 && plottable < csv.rows.length;
   const counts = [
     `${plural(csv.totalDataRows, 'row')} → ${plural(csv.rows.length, 'task')}`,
     ...(merged > 0 ? [`${plural(merged, 'duplicate strong_id', 'duplicate strong_ids')} summed, as sinter does`] : []),
     ...(csv.rejectedRows > 0 ? [`${csv.rejectedRows.toLocaleString()} rejected (see below)`] : []),
-    `${plottable.toLocaleString()} plottable`,
+    `${plottable.toLocaleString()} plottable${countsNameMerge ? ` after summing ${mapping.mergeKeys?.join(', ')} replicates` : ''}`,
   ];
   const mapped = FIELDS.map((f) => `${f.short}: ${fieldSummary(mapping, f.field)}`).join(' · ');
   const seriesBy = mapping.groupBy.length > 0 ? ` · series by ${mapping.groupBy.join(', ')}` : '';
-  const replicates = (mapping.mergeKeys ?? []).length > 0 ? ` · ${mapping.mergeKeys?.join(', ')} summed` : '';
+  const replicates = (mapping.mergeKeys ?? []).length > 0 && !countsNameMerge ? ` · ${mapping.mergeKeys?.join(', ')} summed` : '';
 
   return (
     <section
       aria-label="CSV column mapping"
       style={{
         padding: '6px 12px', borderBottom: `1px solid ${colors.border}`, fontFamily: TYPOGRAPHY.fontSans,
-        maxHeight: open ? 'min(46vh, 380px)' : undefined, overflow: open ? 'auto' : undefined, flex: 'none',
+        flex: 'none',
       }}
     >
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, color: colors.textMuted, minWidth: 0 }}>
@@ -198,38 +196,38 @@ export function CsvMappingPreview() {
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 8, fontSize: 11, color: colors.textMuted }}>
               <span>Same in every row:</span>
               {constantChips.map((k) => (
-                <span key={k.key} style={{ padding: '1px 6px', borderRadius: 4, border: `1px solid ${colors.border}`, fontFamily: TYPOGRAPHY.fontMono }}>
+                <span key={k.key} style={{ padding: '1px 6px', borderRadius: 'var(--radius-xs)', border: `1px solid ${colors.border}`, fontFamily: TYPOGRAPHY.fontMono }}>
                   {`${k.key} = ${typeof k.sample === 'string' ? k.sample : JSON.stringify(k.sample)}`}
                 </span>
               ))}
             </div>
           )}
-          <table style={{ borderCollapse: 'collapse', fontSize: 11 }}>
-            <thead>
-              <tr>
+          <Table label="Mapped rows preview" dense>
+            <Thead>
+              <Tr>
                 {['strong_id', 'shots', 'errors', 'discards', 'p', 'd', 'rounds', 'decoder'].map((h) => (
-                  <th key={h} style={th}>{h}</th>
+                  <Th key={h} plain numeric={['shots', 'errors', 'discards', 'p', 'd', 'rounds'].includes(h)}>{h}</Th>
                 ))}
-              </tr>
-            </thead>
-            <tbody>
+              </Tr>
+            </Thead>
+            <Tbody>
               {applyMapping(csv.rows.slice(0, PREVIEW_ROWS), mapping).map((r) => {
                 const m = r.json_metadata as Record<string, unknown>;
                 return (
-                  <tr key={r.strong_id}>
-                    <td style={{ ...td, maxWidth: 180, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={r.strong_id}>{r.strong_id}</td>
-                    <td style={td}>{r.shots}</td>
-                    <td style={td}>{r.errors}</td>
-                    <td style={td}>{r.discards}</td>
-                    <td style={td}>{typeof m.p === 'number' ? formatNoise(m.p) : '—'}</td>
-                    <td style={td}>{String(m.d ?? '—')}</td>
-                    <td style={td}>{String(m.rounds ?? '—')}</td>
-                    <td style={td}>{r.decoder}</td>
-                  </tr>
+                  <Tr key={r.strong_id}>
+                    <Td style={{ maxWidth: 180, overflow: 'hidden', textOverflow: 'ellipsis' }} title={r.strong_id}>{r.strong_id}</Td>
+                    <Td numeric>{r.shots}</Td>
+                    <Td numeric>{r.errors}</Td>
+                    <Td numeric>{r.discards}</Td>
+                    <Td numeric>{typeof m.p === 'number' ? formatNoise(m.p) : '—'}</Td>
+                    <Td numeric>{String(m.d ?? '—')}</Td>
+                    <Td numeric>{String(m.rounds ?? '—')}</Td>
+                    <Td>{r.decoder}</Td>
+                  </Tr>
                 );
               })}
-            </tbody>
-          </table>
+            </Tbody>
+          </Table>
         </div>
       )}
     </section>

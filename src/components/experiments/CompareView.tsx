@@ -14,6 +14,8 @@ import { MultiSeriesHistogram, type MultiSeriesHistogramSeries } from '../histog
 import { ManifestDiffTable } from './ManifestDiffTable';
 import { CompareMetricsTable } from './CompareMetricsTable';
 import type { RunRecord } from '../../types/experiment';
+import { TYPOGRAPHY, ICON_SIZE, ICON_STROKE } from '../../styles/tokens';
+import { Button } from '../ui';
 
 async function loadMeasurements(resultPath: string, fs: ReturnType<typeof createTauriExperimentFs>): Promise<Record<string, number>> {
   try {
@@ -28,7 +30,7 @@ async function loadMeasurements(resultPath: string, fs: ReturnType<typeof create
 }
 
 function placeholderStyle(colors: ReturnType<typeof useThemeStore.getState>['colors']) {
-  return { padding: 24, color: colors.textDim, fontSize: 12, fontFamily: "'Geist Sans', sans-serif" } as const;
+  return { padding: 24, color: colors.textDim, fontSize: 12, fontFamily: TYPOGRAPHY.fontSans } as const;
 }
 
 /**
@@ -92,9 +94,9 @@ export function CompareView() {
     return (
       <div style={placeholderStyle(colors)}>
         <div style={{ marginBottom: 10 }}>Select at least 2 runs in the runs table to compare.</div>
-        <button onClick={closeCompare} style={backButtonStyle(colors)}>
-          <ArrowLeft size={13} /> Back to runs
-        </button>
+        <Button variant="ghost" onClick={closeCompare} icon={<ArrowLeft size={ICON_SIZE.sm} strokeWidth={ICON_STROKE} />}>
+          Back to runs
+        </Button>
       </div>
     );
   }
@@ -123,29 +125,30 @@ export function CompareView() {
     <div style={{ height: '100%', overflow: 'auto', background: colors.bg }}>
       <div style={{
         display: 'flex', alignItems: 'center', gap: 10,
-        padding: '10px 14px', borderBottom: `1px solid ${colors.border}`,
+        padding: '8px 16px', borderBottom: `1px solid ${colors.border}`,
       }}>
-        <button onClick={closeCompare} style={backButtonStyle(colors)}>
-          <ArrowLeft size={13} /> Back to runs
-        </button>
-        <span style={{ color: colors.text, fontSize: 13, fontWeight: 600, fontFamily: "'Geist Sans', sans-serif" }}>
+        <Button variant="ghost" onClick={closeCompare} icon={<ArrowLeft size={ICON_SIZE.sm} strokeWidth={ICON_STROKE} />}>
+          Back to runs
+        </Button>
+        <span style={{ color: colors.text, fontSize: 13, fontWeight: 600, fontFamily: TYPOGRAPHY.fontSans }}>
           Compare {runs.length} runs — {experiment.spec.name}
         </span>
-        <button
+        <Button
+          variant="ghost"
+          size="sm"
           onClick={clearCompareSelection}
           title="Clear the comparison selection"
-          style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 4, background: 'transparent', border: 'none', color: colors.textDim, cursor: 'pointer', fontSize: 11, fontFamily: "'Geist Sans', sans-serif" }}
+          icon={<X size={ICON_SIZE.xs} strokeWidth={ICON_STROKE} />}
+          style={{ marginLeft: 'auto' }}
         >
-          <X size={13} /> Clear selection
-        </button>
+          Clear selection
+        </Button>
       </div>
 
-      <div style={{ padding: 14, display: 'flex', flexDirection: 'column', gap: 22 }}>
+      <div style={{ padding: 16, display: 'flex', flexDirection: 'column', gap: 22 }}>
         <section>
           <SectionHeader title="Measurements" colors={colors}>
-            <button onClick={handleExportHistogramSvg} style={exportButtonStyle(colors)}>
-              <Download size={12} /> SVG
-            </button>
+            <Button size="sm" onClick={handleExportHistogramSvg} icon={<Download size={ICON_SIZE.xs} strokeWidth={ICON_STROKE} />}>SVG</Button>
           </SectionHeader>
           <div ref={chartWrapperRef}>
             <MultiSeriesHistogram series={series} />
@@ -159,9 +162,7 @@ export function CompareView() {
 
         <section>
           <SectionHeader title="Metrics" colors={colors}>
-            <button onClick={handleExportMetricsCsv} style={exportButtonStyle(colors)}>
-              <Download size={12} /> CSV
-            </button>
+            <Button size="sm" onClick={handleExportMetricsCsv} icon={<Download size={ICON_SIZE.xs} strokeWidth={ICON_STROKE} />}>CSV</Button>
           </SectionHeader>
           <CompareMetricsTable runs={runs} />
         </section>
@@ -181,27 +182,10 @@ function SectionHeader({
 }) {
   return (
     <div style={{ display: 'flex', alignItems: 'center', marginBottom: 8 }}>
-      <div style={{ color: colors.textDim, fontSize: 10, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.5 }}>
+      <div style={{ color: colors.textMuted, fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.5 }}>
         {title}
       </div>
       <div style={{ marginLeft: 'auto' }}>{children}</div>
     </div>
   );
-}
-
-function backButtonStyle(colors: ReturnType<typeof useThemeStore.getState>['colors']) {
-  return {
-    display: 'flex', alignItems: 'center', gap: 4, background: 'transparent',
-    border: 'none', color: colors.textMuted, cursor: 'pointer' as const, fontSize: 12,
-    fontFamily: "'Geist Sans', sans-serif", padding: 0,
-  };
-}
-
-function exportButtonStyle(colors: ReturnType<typeof useThemeStore.getState>['colors']) {
-  return {
-    display: 'flex', alignItems: 'center', gap: 4,
-    padding: '3px 8px', background: 'transparent', border: `1px solid ${colors.border}`,
-    borderRadius: 4, color: colors.textMuted, cursor: 'pointer' as const,
-    fontSize: 10, fontFamily: "'Geist Sans', sans-serif",
-  };
 }

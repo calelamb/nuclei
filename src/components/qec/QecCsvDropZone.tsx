@@ -17,7 +17,7 @@ export function QecCsvDropZone() {
       data-testid="csv-drop-zone"
       {...handlers}
       style={{
-        marginTop: 8, padding: '14px 18px', borderRadius: 8, maxWidth: 340,
+        marginTop: 8, padding: '14px 18px', borderRadius: 'var(--radius-round)', maxWidth: 340,
         border: `1.5px dashed ${over ? colors.accent : colors.border}`,
         background: over ? `${colors.accent}14` : 'transparent',
         display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6,

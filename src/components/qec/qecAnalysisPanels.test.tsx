@@ -53,7 +53,7 @@ describe('DecoderWorkbench', () => {
       },
     });
     const { container, getByText } = render(<DecoderWorkbench />);
-    expect(container.querySelector('tbody')!.textContent).toContain('0.1 [0.0242, 0.246]');
+    expect(container.querySelector('tbody')!.textContent).toContain('0.100 [0.0242, 0.246]');
     expect(getByText('900')).toBeTruthy();
   });
 
