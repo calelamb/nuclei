@@ -69,6 +69,17 @@ export function ResearchTour() {
     };
   }, [active, measure]);
 
+  // Whatever had focus before the tour (the status-bar chip, the editor) gets it back when the
+  // tour ends by Escape, Skip or Done; when that element is gone, the editor does.
+  useEffect(() => {
+    if (!active) return undefined;
+    const opener = document.activeElement instanceof HTMLElement && document.activeElement !== document.body ? document.activeElement : null;
+    return () => {
+      if (opener && document.contains(opener)) opener.focus();
+      else document.querySelector<HTMLElement>('.monaco-editor textarea, [aria-label="Editor content"]')?.focus();
+    };
+  }, [active]);
+
   useEffect(() => {
     if (!active) return;
     primaryRef.current?.focus();
