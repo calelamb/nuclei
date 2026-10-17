@@ -286,6 +286,17 @@ failures arrive as an `error` with `phase: "qec_explain"`.
   own `detslice-with-ops-svg` diagram as `diagram_svg`. Circuits using
   `ELSE_CORRELATED_ERROR` are analysed with `approximate_disjoint_errors`
   (determinism does not depend on probabilities).
+- When Stim blames a reset or measurement but the real cause is a basis
+  mismatch (for example an X-type detector in round 0 of a Z-basis memory
+  experiment, or `MX` after `R`), `nondeterministic.cause` is
+  `{ "kind": "preparation_basis_mismatch" | "measurement_basis_mismatch",
+  "basis": "Z", "operation_line", "preparation_line", "detector_lines" }` and
+  the `sentence` points at the DETECTOR declaration and the preparation line
+  instead of calling the reset the error. Otherwise `cause` is `null`.
+- Every flagged detector/observable is listed, bounded at 20: `targets`,
+  `sensitivities` (`[{ "target": "D0", "pauli": "Z0" }]`), `target_count` (the
+  total) and `targets_omitted` (how many were left out; the `sentence` says
+  "and N more"). `sensitivity` remains the first detector's Pauli.
 - `min_weight.weight` is the length of the shortest graphlike undetected
   logical error (`shortest_graphlike_error`, falling back to a bounded
   `search_for_undetectable_logical_errors`). It is an upper bound on the

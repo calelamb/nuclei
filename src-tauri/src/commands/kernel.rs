@@ -32,8 +32,10 @@ impl KernelState {
     }
 
     pub fn stop(&self) {
+        let mut killed_pid = None;
         if let Ok(mut guard) = self.process.lock() {
             if let Some(ref mut child) = *guard {
+                killed_pid = Some(child.id());
                 let _ = child.kill();
                 let _ = child.wait();
             }
@@ -44,6 +46,10 @@ impl KernelState {
         }
         if let Some(dir) = ownership::runtime_dir() {
             ownership::remove_owner_record(&dir);
+            // SIGKILL skips the kernel's own cleanup; drop its runtime files.
+            if let Some(pid) = killed_pid {
+                ownership::remove_kernel_runtime_files(&dir, KERNEL_PORT, pid);
+            }
         }
     }
 }

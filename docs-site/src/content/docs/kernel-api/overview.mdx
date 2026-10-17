@@ -48,9 +48,16 @@ before any request is handled.
 
 1. The kernel reads a secret token from `NUCLEI_KERNEL_TOKEN` (the desktop app
    generates a fresh one per launch). With no token it refuses to start.
-2. It writes the token and port to a user-only (`0600`) runtime file,
-   `~/.nuclei/runtime/kernel.json` (override the directory with
-   `NUCLEI_RUNTIME_DIR`), so local scripts can read it.
+2. It writes the token and port to user-only (`0600`, directory `0700`) runtime
+   files in `~/.nuclei/runtime/` (override the directory with
+   `NUCLEI_RUNTIME_DIR`), so local scripts can read them. Each kernel writes
+   its own `kernel-<port>.json` (for example `kernel-9742.json`), and also
+   `kernel.json`, a pointer to the most recently started kernel (last writer
+   wins). With several kernels running, read `kernel-<port>.json` for the port
+   you are connecting to; `kernel.json` is only right when you want "the newest
+   kernel". Both files hold `{"url", "port", "pid", "token"}`, are written
+   atomically, and are removed on clean shutdown (SIGTERM/SIGINT). Check that
+   `pid` is still alive before trusting a file left behind by a crash.
 3. The first frame on a connection must be
    `{"type": "authenticate", "token": "<token>"}`. The kernel answers
    `{"type": "authenticated"}`; a wrong or missing token closes the
@@ -61,6 +68,20 @@ before any request is handled.
 
 For throwaway local experiments only, `NUCLEI_KERNEL_INSECURE_DEV=1` disables
 authentication and prints a warning.
+
+### Threat boundary
+
+The token protects the kernel from web pages and from other users on the
+machine. It does **not** protect it from other processes running as the same
+operating-system user: the runtime files are readable by that user (that is how
+local scripts authenticate), so any process running as you can read the token
+and run code through the kernel, and could equally run that code directly. This
+is the stated threat boundary, documented rather than defended: do not treat the
+token as a sandbox against software you already run as yourself.
+
+When a client is rejected (WebSocket close code `4401`), the token it presented
+did not match the kernel it reached. The Nuclei app shows "Kernel rejected the
+session token — restart Nuclei" instead of retrying.
 
 ## Running the kernel standalone
 
