@@ -51,3 +51,8 @@
 .exercise__feedback--fail { background: color-mix(in srgb, var(--color-danger) 8%, transparent); color: var(--color-danger); }
 .exercise__help { display: flex; align-items: center; gap: var(--space-2); padding: var(--space-3) var(--space-4); font-size: var(--font-size-code); color: var(--color-text-secondary); }
 .exercise__help svg { color: var(--color-accent-dirac-text); }
+
+/* Lesson mini-editor: visible focus + keyboard hint (Tab leaves the editor by default). */
+.lesson-editor { position: relative; }
+.lesson-editor:focus-within { outline: var(--focus-ring-width) solid var(--focus-ring-color); outline-offset: -2px; }
+.lesson-editor__hint { position: absolute; right: var(--space-2); bottom: var(--space-1); padding: 2px var(--space-2); border-radius: var(--radius-xs); background: var(--color-surface-overlay); color: var(--color-text-secondary); font: var(--font-size-caption) var(--font-sans); pointer-events: none; }
