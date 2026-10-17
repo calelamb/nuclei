@@ -1,4 +1,4 @@
-import { Button, IconButton } from '../ui';
+import { Button, Checkbox, IconButton } from '../ui';
 import { useState } from 'react';
 import { X } from 'lucide-react';
 import { useThemeStore } from '../../stores/themeStore';
@@ -153,32 +153,31 @@ export function AssignmentCreator({ onClose, onSave }: AssignmentCreatorProps) {
                     {topic}
                   </div>
                   {exercises.map((ex) => (
-                    <label
+                    <div
                       key={ex.id}
                       style={{
                         display: 'flex', alignItems: 'center', gap: 8,
-                        padding: '5px 10px',
-                        cursor: 'pointer',
+                        padding: '4px 8px',
                         borderBottom: `1px solid ${colors.border}`,
                         fontSize: 11,
                         color: colors.text,
                       }}
                     >
-                      <input
-                        type="checkbox"
-                        checked={selectedIds.has(ex.id)}
-                        onChange={() => toggleExercise(ex.id)}
-                        style={{ accentColor: colors.accent, cursor: 'pointer' }}
-                      />
-                      <span style={{ flex: 1 }}>{ex.title}</span>
+                      <div style={{ flex: 1, display: 'flex' }}>
+                        <Checkbox
+                          checked={selectedIds.has(ex.id)}
+                          onCheckedChange={() => toggleExercise(ex.id)}
+                          label={ex.title}
+                        />
+                      </div>
                       <span style={{
                         fontSize: 11, color: colors.textDim,
-                        padding: '1px 5px', borderRadius: 3,
+                        padding: '2px 4px', borderRadius: 4,
                         background: colors.bgElevated,
                       }}>
                         {ex.difficulty}
                       </span>
-                    </label>
+                    </div>
                   ))}
                 </div>
               ))}

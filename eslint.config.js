@@ -5,6 +5,19 @@ import reactRefresh from 'eslint-plugin-react-refresh'
 import tseslint from 'typescript-eslint'
 import { defineConfig, globalIgnores } from 'eslint/config'
 
+// Shared selectors: a later no-restricted-syntax block replaces (not extends) an earlier one,
+// so every block spreads these instead of restating them.
+const fontRules = [
+  {
+    selector: "Property[key.name='fontFamily'] > Literal[value=/(Geist|JetBrains|Fira|Inter|monospace|sans-serif|system-ui)/]",
+    message: 'Use TYPOGRAPHY.fontSans / TYPOGRAPHY.fontMono from src/styles/tokens instead of a literal font stack.',
+  },
+  {
+    selector: "JSXAttribute[name.name='fontFamily'] > Literal",
+    message: 'Use fontFamily={TYPOGRAPHY.fontSans} / fontMono instead of a literal font stack.',
+  },
+]
+
 export default defineConfig([
   globalIgnores([
     'coverage',
@@ -37,14 +50,7 @@ export default defineConfig([
     rules: {
       'no-restricted-syntax': [
         'error',
-        {
-          selector: "Property[key.name='fontFamily'] > Literal[value=/(Geist|JetBrains|Fira|Inter|monospace|sans-serif|system-ui)/]",
-          message: 'Use TYPOGRAPHY.fontSans / TYPOGRAPHY.fontMono from src/styles/tokens instead of a literal font stack.',
-        },
-        {
-          selector: "JSXAttribute[name.name='fontFamily'] > Literal",
-          message: 'Use fontFamily={TYPOGRAPHY.fontSans} / fontMono instead of a literal font stack.',
-        },
+        ...fontRules,
       ],
     },
   },
@@ -60,14 +66,7 @@ export default defineConfig([
     rules: {
       'no-restricted-syntax': [
         'error',
-        {
-          selector: "Property[key.name='fontFamily'] > Literal[value=/(Geist|JetBrains|Fira|Inter|monospace|sans-serif|system-ui)/]",
-          message: 'Use TYPOGRAPHY.fontSans / TYPOGRAPHY.fontMono from src/styles/tokens instead of a literal font stack.',
-        },
-        {
-          selector: "JSXAttribute[name.name='fontFamily'] > Literal",
-          message: 'Use fontFamily={TYPOGRAPHY.fontSans} / fontMono instead of a literal font stack.',
-        },
+        ...fontRules,
         {
           selector: 'Literal[value=/^#[0-9a-fA-F]{3,8}$/]',
           message: 'No hex colours in chrome components: use theme tokens (colors.* from useThemeStore, or var(--color-*)).',
