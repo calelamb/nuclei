@@ -19,9 +19,13 @@ import { useFileOps } from './hooks/useFileOps';
 import { useActiveTabSync } from './hooks/useActiveTabSync';
 import { useKeychainKeyMigration } from './hooks/useKeychainKeyMigration';
 import { useProjectStore } from './stores/projectStore';
-import { useThemeStore } from './stores/themeStore';
+import { useThemeStore, isThemePreference } from './stores/themeStore';
 import { useEditorStore } from './stores/editorStore';
+import { useWhatsNewStore } from './stores/whatsNewStore';
 import { useUIModeStore } from './stores/uiModeStore';
+import { findBindingId } from './config/keybindings';
+import { usePersistedPrefs } from './hooks/usePersistedPrefs';
+import { applyOnboardingPath, type OnboardingChoice } from './components/onboarding/applyOnboardingPath';
 import { useWorkspaceStore } from './stores/workspaceStore';
 import { useModeSwitchStore } from './stores/modeSwitchStore';
 import { useResearchTourStore } from './stores/researchTourStore';
@@ -64,6 +68,9 @@ let hardwareRef: HardwareActions | null = null;
 // eslint-disable-next-line react-refresh/only-export-components
 export function getHardware() { return hardwareRef; }
 
+/** The "welcome back" screen only interrupts a launch after a real gap. */
+const RETURNING_SCREEN_MIN_DAYS = 7;
+
 function AppInner() {
   const { execute, hardwareConnect, hardwareSubmit, hardwareCancel, hardwareDismiss } = useKernel();
   const fileOps = useFileOps();
@@ -78,12 +85,24 @@ function AppInner() {
   const [isReturningUser, setIsReturningUser] = useState(false);
   const [lastOpenedFile, setLastOpenedFile] = useState<string | undefined>();
   const [daysSinceLastSession, setDaysSinceLastSession] = useState<number | undefined>();
+  const [prefsReady, setPrefsReady] = useState(false);
   const themeToggle = useThemeStore((s) => s.toggle);
   const themeMode = useThemeStore((s) => s.mode);
+  const themePreference = useThemeStore((s) => s.preference);
+  usePersistedPrefs(platform, prefsReady);
 
   useEffect(() => {
     document.documentElement.dataset.theme = themeMode;
   }, [themeMode]);
+
+  // "System" theme follows the OS live.
+  useEffect(() => {
+    if (themePreference !== 'system' || typeof window.matchMedia !== 'function') return undefined;
+    const mq = window.matchMedia('(prefers-color-scheme: dark)');
+    const onChange = (e: MediaQueryListEvent) => useThemeStore.getState().syncSystem(e.matches);
+    mq.addEventListener('change', onChange);
+    return () => mq.removeEventListener('change', onChange);
+  }, [themePreference]);
 
   const isDirty = useEditorStore((s) => s.isDirty);
   const filePath = useEditorStore((s) => s.filePath);
@@ -178,11 +197,13 @@ function AppInner() {
         }
       };
 
-      const mode = await safeGet<'dark' | 'light'>('theme');
-      if (mode) useThemeStore.getState().setMode(mode);
+      const storedTheme = await safeGet<string>('theme');
+      if (isThemePreference(storedTheme)) useThemeStore.getState().setPreference(storedTheme);
 
       const uiMode = await safeGet<'beginner' | 'intermediate' | 'advanced'>('ui_mode');
       if (uiMode) useUIModeStore.getState().setMode(uiMode);
+      // Saved preferences are now in the stores; from here on, changes persist.
+      setPrefsReady(true);
 
       const lastFramework = await safeGet<Framework>('last_framework');
       if (lastFramework) setFramework(lastFramework);
@@ -199,7 +220,7 @@ function AppInner() {
             setIsReturningUser(true);
             setDaysSinceLastSession(days);
             if (lastFile) setLastOpenedFile(lastFile);
-            if (days > 1) setShowOnboarding(true);
+            if (days >= RETURNING_SCREEN_MIN_DAYS) setShowOnboarding(true);
           }
         }
 
@@ -211,11 +232,14 @@ function AppInner() {
               setCode(restoredContent);
               setFilePath(lastFile);
             } else {
-              // Drop the stale path so we don't retry next session.
+              // Drop the stale path so we don't retry next session, and don't
+              // offer to "continue" into a file that is gone.
+              setLastOpenedFile(undefined);
               await platform.setStoredValue('last_opened_file', null).catch(() => {});
             }
           } catch (err) {
             if (import.meta.env.DEV) console.warn('[Nuclei] file restore failed:', err);
+            setLastOpenedFile(undefined);
             await platform.setStoredValue('last_opened_file', null).catch(() => {});
           }
         }
@@ -273,17 +297,14 @@ function AppInner() {
     platform.setStoredValue('last_opened_file', filePath).catch(() => {});
   }, [filePath, platform]);
 
-  const completeOnboarding = useCallback(async (path?: string) => {
+  const completeOnboarding = useCallback(async (path?: OnboardingChoice) => {
     setShowOnboarding(false);
+    // Apply to the stores first (persisted by usePersistedPrefs) so a failing
+    // storage write can never leave the user in the wrong workspace.
+    applyOnboardingPath(path);
     try {
       await platform.setStoredValue('onboarding_complete', true);
-      if (path) {
-        await platform.setStoredValue('onboarding_path', path);
-        if (path === 'beginner') useUIModeStore.getState().setMode('beginner');
-        else if (path === 'intermediate') useUIModeStore.getState().setMode('intermediate');
-        else if (path === 'experienced') useUIModeStore.getState().setMode('advanced');
-        else if (path === 'research') useWorkspaceStore.getState().setMode('research');
-      }
+      if (path) await platform.setStoredValue('onboarding_path', path);
     } catch {
       // Non-critical: onboarding state persistence failure is safe to ignore
     }
@@ -294,19 +315,16 @@ function AppInner() {
     openFile: () => fileOps.openFile(),
     saveFile: () => fileOps.saveFile(),
     newFile: () => fileOps.newFile(),
-    toggleTheme: () => {
-      themeToggle();
-      platform.setStoredValue('theme', useThemeStore.getState().mode).catch(() => {});
-    },
+    toggleTheme: themeToggle,
     toggleDirac,
+    focusDirac,
     cycleMode: () => {
       // Research ignores uiModeStore entirely, so cycling it there is a no-op.
       if (useWorkspaceStore.getState().mode !== 'learn') return;
       cycleMode();
-      // Non-critical: UI mode persistence failure does not affect current session
-      platform.setStoredValue('ui_mode', useUIModeStore.getState().mode).catch(() => {});
     },
     toggleShortcuts: () => setShowShortcuts((s) => !s),
+    openWhatsNew: () => useWhatsNewStore.getState().openWhatsNew(),
     // Route through the in-flight-work guard (PRD 11 Phase B): a running
     // sweep/campaign prompts a confirm before the switch; jobs never cancel.
     switchWorkspaceMode: () => useModeSwitchStore.getState().requestToggle(),
@@ -329,92 +347,70 @@ function AppInner() {
     hasSelectedRun: selectedRunDir !== null,
   });
 
-  // Global keyboard shortcuts
+  // Global keyboard shortcuts. Dispatch is by id from the single keybinding
+  // registry (src/config/keybindings.ts), which is casing-insensitive: Chromium
+  // reports e.key as 'P' under Shift, so comparing against 'p' silently failed.
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
-      const mod = e.metaKey || e.ctrlKey;
-      if (!mod) return;
-
-      if (e.key === 'o') {
-        e.preventDefault();
-        fileOps.openFile();
-      } else if (e.key === 's' && e.shiftKey) {
-        e.preventDefault();
-        fileOps.saveFileAs();
-      } else if (e.key === 's') {
-        e.preventDefault();
-        fileOps.saveFile();
-      } else if (e.key === 'n') {
-        e.preventDefault();
-        fileOps.newFile();
-      } else if (e.key === '/' && !e.shiftKey) {
-        e.preventDefault();
-        setShowShortcuts((s) => !s);
-      } else if (e.key === 'p' && e.shiftKey) {
-        e.preventDefault();
-        setShowCommandPalette((s) => !s);
-      } else if (e.key === 'l' && e.shiftKey) {
-        e.preventDefault();
-        if (useWorkspaceStore.getState().mode !== 'learn') return;
-        cycleMode();
-        // Non-critical: UI mode persistence failure does not affect current session
-        platform.setStoredValue('ui_mode', useUIModeStore.getState().mode).catch(() => {});
-      } else if (e.key === 't' && e.shiftKey) {
-        e.preventDefault();
-        themeToggle();
-        platform.setStoredValue('theme', useThemeStore.getState().mode).catch(() => {});
-      } else if (e.key === 'd' && !e.shiftKey) {
-        e.preventDefault();
-        toggleDirac();
-      } else if (e.key === 'l' && !e.shiftKey) {
-        e.preventDefault();
-        focusDirac();
-      } else if (e.key === 'i' && !e.shiftKey) {
-        e.preventDefault();
-        setComposeOpen((s) => !s);
-      } else if (e.key === 'r' && e.shiftKey) {
-        e.preventDefault();
-        // ⌘⇧R: open the Launch modal (submit to hardware). Separate from the
-        // plain ⌘↵ Run which stays on the classical simulator.
-        useHardwareStore.getState().openLaunch();
-      } else if ((e.key === 'm' || e.key === 'M') && e.shiftKey) {
-        e.preventDefault();
-        // ⌘⇧M: switch workspace mode (Learn/Research), through the same
-        // in-flight-work guard the palette uses (PRD 11 Phase D).
-        useModeSwitchStore.getState().requestToggle();
-      } else if (!e.shiftKey && /^[1-9]$/.test(e.key)) {
-        e.preventDefault();
-        // ⌘1..9: jump to the Nth top-rail view for the current mode. Read the
-        // mode + developer flag fresh so the mapping tracks the live rail.
-        const mode = useWorkspaceStore.getState().mode;
-        const dev = useSettingsStore.getState().general.experimentalFeatures;
-        const bottom = new Set(bottomLeftPanelsForMode(mode));
-        const topViews = leftPanelsForMode(mode, { developerViews: dev }).filter(
-          (v: LeftPanelId) => !bottom.has(v),
-        );
-        const view = topViews[Number(e.key) - 1];
-        if (view) useNavigationStore.getState().setActiveView(view);
-      } else if (e.key === '`') {
-        e.preventDefault();
-        // ⌘`: toggle the bottom panel; opening it always focuses the terminal
-        // tab so print-debug output is immediately visible.
-        const store = useBottomPanelStore.getState();
-        if (store.collapsed) {
-          store.focusTerminal();
-        } else if (store.activeTab !== 'terminal') {
-          store.setActiveTab('terminal');
-        } else {
-          store.setCollapsed(true);
+      const id = findBindingId(e);
+      if (!id) return;
+      e.preventDefault();
+      switch (id) {
+        case 'open': fileOps.openFile(); break;
+        case 'save-as': fileOps.saveFileAs(); break;
+        case 'save': fileOps.saveFile(); break;
+        case 'new': fileOps.newFile(); break;
+        case 'shortcuts': setShowShortcuts((s) => !s); break;
+        case 'palette': setShowCommandPalette((s) => !s); break;
+        case 'cycle-ui-mode':
+          // Research ignores uiModeStore entirely. Persistence is handled by usePersistedPrefs.
+          if (useWorkspaceStore.getState().mode === 'learn') cycleMode();
+          break;
+        case 'toggle-theme': themeToggle(); break;
+        case 'toggle-dirac': toggleDirac(); break;
+        case 'focus-dirac': focusDirac(); break;
+        case 'compose': setComposeOpen((s) => !s); break;
+        // Open the Launch modal (submit to hardware). Separate from the plain
+        // Run shortcut, which stays on the classical simulator.
+        case 'launch': useHardwareStore.getState().openLaunch(); break;
+        // Switch workspace mode, through the same in-flight-work guard the palette uses.
+        case 'switch-workspace': useModeSwitchStore.getState().requestToggle(); break;
+        case 'goto-rail-view': {
+          // Jump to the Nth top-rail view for the current mode. Read the mode +
+          // developer flag fresh so the mapping tracks the live rail.
+          const mode = useWorkspaceStore.getState().mode;
+          const dev = useSettingsStore.getState().general.experimentalFeatures;
+          const bottom = new Set(bottomLeftPanelsForMode(mode));
+          const topViews = leftPanelsForMode(mode, { developerViews: dev }).filter(
+            (v: LeftPanelId) => !bottom.has(v),
+          );
+          const view = topViews[Number(e.key) - 1];
+          if (view) useNavigationStore.getState().setActiveView(view);
+          break;
         }
+        case 'toggle-bottom-panel': {
+          // Opening the bottom panel always focuses the terminal tab so
+          // print-debug output is immediately visible.
+          const store = useBottomPanelStore.getState();
+          if (store.collapsed) store.focusTerminal();
+          else if (store.activeTab !== 'terminal') store.setActiveTab('terminal');
+          else store.setCollapsed(true);
+          break;
+        }
+        default: break;
       }
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [fileOps, themeToggle, cycleMode, platform, toggleDirac, focusDirac]);
+  }, [fileOps, themeToggle, cycleMode, toggleDirac, focusDirac]);
 
   return (
     <>
-      <PanelLayout />
+      {/* The first-launch chooser is a real modal: the app behind it is inert,
+          so Tab and typing can never reach the hidden editor. */}
+      <div style={{ display: 'contents' }} inert={showOnboarding}>
+        <PanelLayout />
+      </div>
       <UpdateBanner />
       <MissingDependencyBanner />
       <WhatsNewModal />

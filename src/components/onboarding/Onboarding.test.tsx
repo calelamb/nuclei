@@ -1,0 +1,90 @@
+// @vitest-environment jsdom
+import { describe, it, expect, afterEach, beforeAll, vi } from 'vitest';
+import { render, screen, fireEvent, cleanup } from '@testing-library/react';
+import { Onboarding } from './Onboarding';
+
+beforeAll(() => {
+  window.matchMedia = ((query: string) => ({
+    matches: false, media: query, onchange: null,
+    addEventListener: () => {}, removeEventListener: () => {},
+    addListener: () => {}, removeListener: () => {}, dispatchEvent: () => false,
+  })) as unknown as typeof window.matchMedia;
+});
+
+afterEach(cleanup);
+
+describe('Onboarding as a modal dialog', () => {
+  it('exposes the chooser as an aria-modal dialog with an accessible name', () => {
+    render(<Onboarding onComplete={vi.fn()} />);
+    const dialog = screen.getByRole('dialog');
+    expect(dialog.getAttribute('aria-modal')).toBe('true');
+    expect(dialog.getAttribute('aria-label') ?? dialog.getAttribute('aria-labelledby')).toBeTruthy();
+  });
+
+  it('moves focus to the first choice on mount', () => {
+    render(<Onboarding onComplete={vi.fn()} />);
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Learn quantum computing' }));
+  });
+
+  it('keeps Tab inside the dialog', () => {
+    render(<Onboarding onComplete={vi.fn()} />);
+    const research = screen.getByRole('button', { name: 'Research workspace' });
+    research.focus();
+    fireEvent.keyDown(research, { key: 'Tab' });
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Learn quantum computing' }));
+  });
+
+  it('moves between cards with the arrow keys', () => {
+    render(<Onboarding onComplete={vi.fn()} />);
+    const learn = screen.getByRole('button', { name: 'Learn quantum computing' });
+    fireEvent.keyDown(learn, { key: 'ArrowDown' });
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Research workspace' }));
+    fireEvent.keyDown(document.activeElement as Element, { key: 'ArrowUp' });
+    expect(document.activeElement).toBe(learn);
+  });
+
+  it('can be completed with the keyboard alone', () => {
+    const onComplete = vi.fn();
+    render(<Onboarding onComplete={onComplete} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Research workspace' }));
+    expect(onComplete).toHaveBeenCalledWith('research');
+  });
+
+  it('Escape steps back from the Learn level picker to the chooser', () => {
+    render(<Onboarding onComplete={vi.fn()} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Learn quantum computing' }));
+    expect(screen.getByRole('button', { name: "I'm experienced" })).toBeTruthy();
+    fireEvent.keyDown(document.activeElement as Element, { key: 'Escape' });
+    expect(screen.getByRole('button', { name: 'Research workspace' })).toBeTruthy();
+  });
+
+  it('Escape on the very first chooser does nothing (a choice is required)', () => {
+    const onComplete = vi.fn();
+    render(<Onboarding onComplete={onComplete} />);
+    fireEvent.keyDown(document.activeElement as Element, { key: 'Escape' });
+    expect(onComplete).not.toHaveBeenCalled();
+    expect(screen.getByRole('dialog')).toBeTruthy();
+  });
+});
+
+describe('returning-user screen', () => {
+  it('Continue completes WITHOUT choosing a path, so the stored UI mode is kept', () => {
+    const onComplete = vi.fn();
+    render(<Onboarding onComplete={onComplete} isReturningUser lastOpenedFile="/a.py" daysSinceLastSession={9} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Continue where I left off' }));
+    expect(onComplete).toHaveBeenCalledTimes(1);
+    expect(onComplete.mock.calls[0][0]).toBeUndefined();
+  });
+
+  it('Escape continues, because the returning screen is dismissible', () => {
+    const onComplete = vi.fn();
+    render(<Onboarding onComplete={onComplete} isReturningUser lastOpenedFile="/a.py" daysSinceLastSession={9} />);
+    fireEvent.keyDown(document.activeElement as Element, { key: 'Escape' });
+    expect(onComplete).toHaveBeenCalledWith(undefined);
+  });
+
+  it('says "Open IDE" when there is no file to return to', () => {
+    render(<Onboarding onComplete={vi.fn()} isReturningUser daysSinceLastSession={9} />);
+    expect(screen.getByRole('button', { name: 'Open IDE' })).toBeTruthy();
+  });
+});

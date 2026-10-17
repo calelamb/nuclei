@@ -1,10 +1,11 @@
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import { useThemeStore } from '../../stores/themeStore';
 import { useEditorStore } from '../../stores/editorStore';
 import { EASING, DURATION, getDuration, prefersReducedMotion } from '../../lib/animations';
 
 import { TYPOGRAPHY } from '../../styles/tokens';
 import { Button } from '../ui';
+import { useFocusTrap } from '../../hooks/useFocusTrap';
 interface PlaygroundState {
   step: number;
   qubitState: 'zero' | 'one' | 'superposition' | 'measured';
@@ -147,6 +148,8 @@ interface PlaygroundProps {
 
 export function QuantumPlayground({ onComplete, onBridgeToIDE }: PlaygroundProps) {
   const colors = useThemeStore((s) => s.colors);
+  const dialogRef = useRef<HTMLDivElement>(null);
+  useFocusTrap(dialogRef, { restoreFocus: false });
   const setCode = useEditorStore((s) => s.setCode);
   const setFramework = useEditorStore((s) => s.setFramework);
   const [pg, setPg] = useState<PlaygroundState>({
@@ -206,7 +209,7 @@ export function QuantumPlayground({ onComplete, onBridgeToIDE }: PlaygroundProps
   }, [pg.bridging, onBridgeToIDE]);
 
   return (
-    <div style={{
+    <div ref={dialogRef} role="dialog" aria-modal="true" aria-label="Quantum playground" tabIndex={-1} style={{
       position: 'fixed', inset: 0, zIndex: 4000,
       background: `linear-gradient(135deg, ${colors.bg} 0%, ${colors.bgPanel} 100%)`,
       display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
