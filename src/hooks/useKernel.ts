@@ -8,7 +8,12 @@ import { useSettingsStore } from '../stores/settingsStore';
 import { kernelLanguageFor } from '../types/quantum';
 import type { KernelLanguage, KernelResponse } from '../types/quantum';
 import { KERNEL_WS_URL } from '../config/kernel';
-import { openAuthenticatedKernelSocket } from '../services/kernelSocket';
+import {
+  CLOSE_UNAUTHENTICATED,
+  KERNEL_AUTH_REJECTED_MESSAGE,
+  KernelAuthRejectedError,
+  openKernelConnection,
+} from '../services/kernelSocket';
 import type { PyodideKernel } from '../platform/pyodideKernel';
 import { useDiracStore } from '../stores/diracStore';
 import { useHardwareStore } from '../stores/hardwareStore';
@@ -414,6 +419,16 @@ export function useKernel() {
   // WebSocket connection for desktop. We connect optimistically; if the
   // kernel hasn't opened its port yet, `onerror` fires fast and we retry on
   // a short cadence until the probe budget is exhausted.
+  const failAuthRejected = useCallback(() => {
+    if (!mountedRef.current) return;
+    // Both the close event and the auth promise report this; say it once.
+    if (useEditorStore.getState().kernelError === KERNEL_AUTH_REJECTED_MESSAGE) return;
+    useEditorStore.getState().setKernelConnected(false);
+    useEditorStore.getState().setKernelReady(false);
+    useEditorStore.getState().setKernelStatus('failed', KERNEL_AUTH_REJECTED_MESSAGE);
+    useSimulationStore.getState().addOutput(`Error: ${KERNEL_AUTH_REJECTED_MESSAGE}`, 'stderr');
+  }, []);
+
   const connect = useCallback(() => {
     if (!mountedRef.current || isWeb) return;
     if (wsRef.current?.readyState === WebSocket.OPEN) return;
@@ -421,10 +436,14 @@ export function useKernel() {
     useEditorStore.getState().setKernelStatus('connecting');
 
     const getToken = platform.getKernelAuthToken?.bind(platform);
-    void openAuthenticatedKernelSocket(KERNEL_URL, getToken).then((ws) => {
+    void openKernelConnection(KERNEL_URL, getToken).then(({ ws, authenticated }) => {
       if (!mountedRef.current) { ws.close(); return; }
-      ws.onopen = () => {
-        wsRef.current = ws;
+      ws.onopen = () => { wsRef.current = ws; };
+
+      // "Connected" means the kernel accepted our token, not merely that the
+      // socket opened: a rejected session must never look ready.
+      const onAuthenticated = () => {
+        if (!mountedRef.current) { ws.close(); return; }
         retryCountRef.current = 0;
         useEditorStore.getState().setKernelConnected(true);
         useEditorStore.getState().setKernelReady(true);
@@ -472,6 +491,11 @@ export function useKernel() {
         ws.send(JSON.stringify({ type: 'hardware_list_jobs' }));
       };
 
+      authenticated.then(onAuthenticated, (error: unknown) => {
+        if (error instanceof KernelAuthRejectedError) failAuthRejected();
+        else if (mountedRef.current && ws.readyState === WebSocket.OPEN) ws.close();
+      });
+
       ws.onmessage = (event) => {
         try {
           handleMessage(JSON.parse(event.data));
@@ -480,10 +504,12 @@ export function useKernel() {
         }
       };
 
-      ws.onclose = () => {
+      ws.onclose = (event) => {
         wsRef.current = null;
         useEditorStore.getState().setKernelConnected(false);
         if (!mountedRef.current) return;
+        // A rejected token will be rejected again: report it, don't loop.
+        if (event.code === CLOSE_UNAUTHENTICATED) { failAuthRejected(); return; }
 
         if (retryCountRef.current < MAX_RETRIES) {
           retryCountRef.current++;
@@ -498,7 +524,7 @@ export function useKernel() {
 
       ws.onerror = () => { ws.close(); };
     });
-  }, [handleMessage, isWeb, platform]);
+  }, [failAuthRejected, handleMessage, isWeb, platform]);
 
 
   // Initialize Pyodide kernel for web

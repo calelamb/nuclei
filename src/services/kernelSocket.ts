@@ -21,19 +21,83 @@ async function resolveToken(getToken?: KernelTokenProvider): Promise<string | nu
   }
 }
 
-export async function openAuthenticatedKernelSocket(
+/** WebSocket close code the kernel uses for a missing or wrong token. */
+export const CLOSE_UNAUTHENTICATED = 4401;
+export const KERNEL_AUTH_REJECTED_MESSAGE = 'Kernel rejected the session token — restart Nuclei';
+export const KERNEL_AUTH_ACK_TIMEOUT_MS = 12_000;
+
+export class KernelAuthRejectedError extends Error {
+  constructor() {
+    super(KERNEL_AUTH_REJECTED_MESSAGE);
+    this.name = 'KernelAuthRejectedError';
+  }
+}
+
+export interface KernelConnection {
+  ws: WebSocket;
+  /**
+   * Settles once the kernel has accepted the session: resolves on the
+   * `authenticated` ack (or on open when no token is sent), rejects with
+   * `KernelAuthRejectedError` on a 4401 close and with a plain `Error` on any
+   * other close or a missing ack. Callers must not treat the kernel as
+   * connected before it resolves.
+   */
+  authenticated: Promise<void>;
+}
+
+function trackAuthentication(ws: WebSocket, sendsToken: boolean, ackTimeoutMs: number): Promise<void> {
+  return new Promise<void>((resolve, reject) => {
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    const settle = (finish: () => void) => {
+      if (timer) clearTimeout(timer);
+      timer = null;
+      finish();
+    };
+    ws.addEventListener('open', () => {
+      if (!sendsToken) {
+        settle(resolve);
+        return;
+      }
+      timer = setTimeout(
+        () => settle(() => reject(new Error('Kernel did not acknowledge the session token'))),
+        ackTimeoutMs,
+      );
+    });
+    ws.addEventListener('message', (event) => {
+      try {
+        const parsed = JSON.parse((event as MessageEvent<string>).data) as { type?: string };
+        if (sendsToken && parsed.type === 'authenticated') settle(resolve);
+      } catch {
+        // Not JSON: not the ack.
+      }
+    });
+    ws.addEventListener('close', (event) => {
+      const code = (event as CloseEvent).code;
+      settle(() => reject(
+        code === CLOSE_UNAUTHENTICATED
+          ? new KernelAuthRejectedError()
+          : new Error('Kernel connection closed before authentication completed'),
+      ));
+    });
+  });
+}
+
+export async function openKernelConnection(
   url: string,
   getToken?: KernelTokenProvider,
-): Promise<WebSocket> {
+  ackTimeoutMs: number = KERNEL_AUTH_ACK_TIMEOUT_MS,
+): Promise<KernelConnection> {
   const token = await resolveToken(getToken);
   const ws = new WebSocket(url);
+  const authenticated = trackAuthentication(ws, token !== null, ackTimeoutMs);
 
   ws.addEventListener('open', () => {
     if (token) ws.send(JSON.stringify({ type: 'authenticate', token }));
   });
 
   // Swallow the kernel's acknowledgement so existing message handlers never
-  // see it. Registered first, so stopImmediatePropagation also shields onmessage.
+  // see it. Registered after the ack tracker (which has already seen it), and
+  // before any caller handler, so stopImmediatePropagation shields onmessage.
   ws.addEventListener('message', (event) => {
     try {
       const parsed = JSON.parse((event as MessageEvent<string>).data) as { type?: string };
@@ -43,5 +107,15 @@ export async function openAuthenticatedKernelSocket(
     }
   });
 
+  return { ws, authenticated };
+}
+
+/** Socket-only variant for callers that do not track the handshake outcome. */
+export async function openAuthenticatedKernelSocket(
+  url: string,
+  getToken?: KernelTokenProvider,
+): Promise<WebSocket> {
+  const { ws, authenticated } = await openKernelConnection(url, getToken);
+  authenticated.catch(() => undefined);
   return ws;
 }
