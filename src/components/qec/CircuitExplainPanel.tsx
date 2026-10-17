@@ -8,6 +8,8 @@ import { requestQecExplain } from '../../lib/qecExplainSender';
 import { isStimCircuitText } from '../../lib/stimText';
 import { NondeterministicSection, MinWeightSection } from './ExplainSections';
 import { FONT } from './explainFormat';
+import { Button } from '../ui';
+import { ICON_SIZE } from '../../styles/tokens';
 
 const STATIC_NOTE =
   'Static analysis of the circuit text as written. It says nothing about sampled data, and Nuclei never edits your circuit.';
@@ -56,21 +58,19 @@ export function CircuitExplainPanel() {
             fontSize: 12, fontWeight: 600, color: colors.text, cursor: 'pointer', fontFamily: FONT, textAlign: 'left',
           }}
         >
-          {open ? <ChevronDown size={12} aria-hidden="true" /> : <ChevronRight size={12} aria-hidden="true" />}
+          {open ? <ChevronDown size={ICON_SIZE.xs} aria-hidden="true" /> : <ChevronRight size={ICON_SIZE.xs} aria-hidden="true" />}
           Why does this circuit fail?
         </button>
-        <button
-          type="button"
+        <Button
+          variant="primary"
+          size="sm"
           onClick={run}
-          disabled={!analysable || pending}
-          style={{
-            marginLeft: 'auto', background: colors.accent, color: colors.bg, border: 'none', borderRadius: 4,
-            fontSize: 11, padding: '4px 9px', cursor: !analysable || pending ? 'default' : 'pointer',
-            opacity: !analysable || pending ? 0.6 : 1, fontFamily: FONT,
-          }}
+          disabled={!analysable}
+          loading={pending}
+          style={{ marginLeft: 'auto' }}
         >
           {pending ? 'Analysing…' : result ? 'Re-run' : 'Explain circuit'}
-        </button>
+        </Button>
       </div>
       <div id="qec-explain-body" hidden={!open} style={{ padding: '0 12px 10px', display: open ? 'flex' : 'none', flexDirection: 'column', gap: 10 }}>
         {!analysable && (

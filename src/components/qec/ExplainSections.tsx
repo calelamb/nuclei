@@ -2,6 +2,7 @@ import { useThemeStore } from '../../stores/themeStore';
 import type { QecFault, QecMinWeight, QecNondeterministic } from '../../types/qecExplain';
 
 import { MONO, svgDataUrl } from './explainFormat';
+import { Button } from '../ui';
 
 export function JumpButton({
   line,
@@ -21,20 +22,16 @@ export function JumpButton({
   const colors = useThemeStore((s) => s.colors);
   if (line == null) return <span style={{ color: colors.textDim, fontSize: 11 }}>line unknown</span>;
   return (
-    <button
-      type="button"
+    <Button
+      size="sm"
       disabled={disabled}
       onClick={() => onJump(line)}
       title={disabled ? 'The editor changed since this analysis; re-run it to jump to source' : `Jump to line ${line}`}
       aria-label={label ?? `Jump to line ${line}`}
-      style={{
-        background: 'transparent', border: `1px solid ${colors.border}`, borderRadius: 4,
-        color: disabled ? colors.textDim : colors.accent, cursor: disabled ? 'default' : 'pointer',
-        fontSize: 11, padding: '1px 6px', fontFamily: MONO,
-      }}
+      style={{ fontFamily: MONO, height: 20, padding: '0 var(--space-2)' }}
     >
       {text ?? `line ${line}`}
-    </button>
+    </Button>
   );
 }
 

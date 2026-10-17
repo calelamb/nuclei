@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react';
 import { useThemeStore } from '../../stores/themeStore';
 
+import { Button } from '../ui';
 import { TYPOGRAPHY } from '../../styles/tokens';
 export interface QecEmptyStateAction {
   label: string;
@@ -38,17 +39,7 @@ export function QecEmptyState({
       {(action || docsHref) && (
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 4 }}>
           {action && (
-            <button
-              type="button"
-              onClick={action.onClick}
-              style={{
-                padding: '5px 12px', borderRadius: 5, border: `1px solid ${colors.accent}`,
-                background: colors.accent, color: colors.bg, fontSize: 12, fontWeight: 600,
-                cursor: 'pointer', fontFamily: TYPOGRAPHY.fontSans,
-              }}
-            >
-              {action.label}
-            </button>
+            <Button variant="primary" onClick={action.onClick}>{action.label}</Button>
           )}
           {docsHref && (
             <a

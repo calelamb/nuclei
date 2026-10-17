@@ -214,18 +214,14 @@ export function DetectorGraphPanel() {
             Graph truncated — {snapshot.dem.edge_count} edges + {snapshot.dem.boundary_edge_count}{' '}
             boundary exceed the render cap.
           </span>
-          <button
+          <Button
+            size="sm"
             onClick={() => void renderFullGraph()}
-            disabled={clientRendering}
+            loading={clientRendering}
             title="Parse and render the whole graph in-app (WASM) — no kernel edge cap"
-            style={{
-              background: 'transparent', border: `1px solid ${colors.border}`, borderRadius: 4,
-              color: colors.text, cursor: clientRendering ? 'default' : 'pointer', fontSize: 11, padding: '3px 8px',
-              opacity: clientRendering ? 0.6 : 1, fontFamily: TYPOGRAPHY.fontSans,
-            }}
           >
             {clientRendering ? 'Rendering…' : 'Render full graph'}
-          </button>
+          </Button>
         </div>
       )}
       {clientDem && (
@@ -275,7 +271,7 @@ export function DetectorGraphPanel() {
             aria-label={INTERACTIVE_DECODER_LABEL}
             style={{
               fontSize: 11, color: colors.warning, border: `1px solid ${colors.warning}`,
-              borderRadius: 3, padding: '0 5px', whiteSpace: 'nowrap',
+              borderRadius: 'var(--radius-xs)', padding: '0 var(--space-1)', whiteSpace: 'nowrap',
             }}
           >
             Greedy preview
@@ -289,16 +285,7 @@ export function DetectorGraphPanel() {
             <span style={{ color: colors.textDim }}>· syndrome empty</span>
           )}
           {syndrome.size > 0 && (
-            <button
-              onClick={() => setSyndrome(new Set())}
-              style={{
-                marginLeft: 'auto', background: 'transparent', border: `1px solid ${colors.border}`,
-                borderRadius: 4, color: colors.textMuted, cursor: 'pointer', fontSize: 11, padding: '2px 7px',
-                fontFamily: TYPOGRAPHY.fontSans,
-              }}
-            >
-              Clear
-            </button>
+            <Button size="sm" onClick={() => setSyndrome(new Set())} style={{ marginLeft: 'auto' }}>Clear</Button>
           )}
         </div>
       ) : overlay ? (
