@@ -8,7 +8,7 @@ export const simonsAlgorithm: QuantumChallenge = {
   description: `## Simon's Algorithm
 
 **Simon's algorithm** finds the hidden period \`s\` of a 2-to-1 function
-\`f(x) = f(x \\u2295 s)\` with an **exponential** quantum speedup — the first
+\`f(x) = f(x ⊕ s)\` with an **exponential** quantum speedup — the first
 problem to prove one over classical query complexity.
 
 ### The Problem
@@ -17,9 +17,9 @@ You are handed an opaque **oracle** on \`2n\` qubits (\`n\` input + \`n\` output
 that computes such an \`f\`. **You are not given \`s\`.** A single run of Simon's
 circuit yields a random bit-string \`y\` satisfying
 
-\`y \\u00B7 s = 0  (mod 2)\`.
+\`y · s = 0  (mod 2)\`.
 
-Collecting \`n\\u22121\` independent \`y\`'s and solving the linear system recovers
+Collecting \`n−1\` independent \`y\`'s and solving the linear system recovers
 \`s\` — but that post-processing is classical. Your job is the **quantum circuit**,
 which needs just **one oracle query**.
 
@@ -33,7 +33,7 @@ which needs just **one oracle query**.
 ### Your Task
 
 Implement \`solve(oracle)\`. Read \`n = oracle.num_qubits // 2\`, build Simon's
-circuit, and return it. The \\u2605 rewards the single-query solution.`,
+circuit, and return it. The ★ rewards the single-query solution.`,
 
   constraints: [
     'You receive an opaque `oracle` gate on 2n qubits — the period is never given',

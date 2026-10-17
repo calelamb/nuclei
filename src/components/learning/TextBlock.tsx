@@ -1,4 +1,4 @@
-import ReactMarkdown from 'react-markdown';
+import { MarkdownWithTables } from '../markdown/MarkdownWithTables';
 import { useThemeStore } from '../../stores/themeStore';
 
 import { TYPOGRAPHY } from '../../styles/tokens';
@@ -19,7 +19,8 @@ export function TextBlock({ markdown }: TextBlockProps) {
         lineHeight: 1.7,
       }}
     >
-      <ReactMarkdown
+      <MarkdownWithTables
+        markdown={markdown}
         components={{
           h1: ({ children }) => (
             <h1 style={{ fontSize: 28, fontWeight: 700, color: colors.text, margin: '24px 0 12px', lineHeight: 1.3 }}>{children}</h1>
@@ -93,9 +94,7 @@ export function TextBlock({ markdown }: TextBlockProps) {
             <li style={{ margin: '4px 0' }}>{children}</li>
           ),
         }}
-      >
-        {markdown}
-      </ReactMarkdown>
+      />
     </div>
   );
 }

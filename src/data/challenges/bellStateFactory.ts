@@ -16,10 +16,10 @@ key distribution.
 
 | Index | Name | State |
 |-------|------|-------|
-| 0 | \`|\\u03A6\\u207A\\u27E9\` | \`(|00\\u27E9 + |11\\u27E9) / \\u221A2\` |
-| 1 | \`|\\u03A6\\u207B\\u27E9\` | \`(|00\\u27E9 - |11\\u27E9) / \\u221A2\` |
-| 2 | \`|\\u03A8\\u207A\\u27E9\` | \`(|01\\u27E9 + |10\\u27E9) / \\u221A2\` |
-| 3 | \`|\\u03A8\\u207B\\u27E9\` | \`(|01\\u27E9 - |10\\u27E9) / \\u221A2\` |
+| 0 | \`|Φ⁺⟩\` | \`(|00⟩ + |11⟩) / √2\` |
+| 1 | \`|Φ⁻⟩\` | \`(|00⟩ - |11⟩) / √2\` |
+| 2 | \`|Ψ⁺⟩\` | \`(|01⟩ + |10⟩) / √2\` |
+| 3 | \`|Ψ⁻⟩\` | \`(|01⟩ - |10⟩) / √2\` |
 
 ### Your Task
 
@@ -27,9 +27,9 @@ Given a \`bell_index\` (0 through 3), construct the corresponding Bell state on 
 two-qubit circuit. After measurement, the probability distribution must match the
 expected outcome for that state.
 
-> **Note:** \`|\\u03A6\\u207A\\u27E9\` and \`|\\u03A6\\u207B\\u27E9\` produce the same measurement
+> **Note:** \`|Φ⁺⟩\` and \`|Φ⁻⟩\` produce the same measurement
 > probabilities (\`{00: 0.5, 11: 0.5}\`) but differ in relative phase. The same is
-> true for the \`|\\u03A8\\u27E9\` pair. This challenge validates measurement distributions only.`,
+> true for the \`|Ψ⟩\` pair. This challenge validates measurement distributions only.`,
 
   constraints: [
     'Use exactly 2 qubits and 2 classical bits',

@@ -206,7 +206,7 @@ function ProblemRow({
       style={{
         width: '100%',
         display: 'grid',
-        gridTemplateColumns: '150px minmax(260px, 2fr) 110px 130px 110px 130px',
+        gridTemplateColumns: '150px minmax(260px, 2fr) 110px 130px 130px',
         gap: 16,
         alignItems: 'center',
         padding: '14px 20px',
@@ -289,14 +289,6 @@ function ProblemRow({
         fontFamily: TYPOGRAPHY.fontSans,
       }}>
         {CATEGORY_LABELS[challenge.category]}
-      </span>
-
-      <span style={{
-        color: colors.textMuted,
-        fontSize: 12,
-        fontFamily: TYPOGRAPHY.fontSans,
-      }}>
-        {Math.round(challenge.acceptanceRate * 100)}%
       </span>
 
       <div style={{
@@ -455,7 +447,7 @@ export function ProblemBrowser() {
           <div style={{ minWidth: 900 }}>
             <div style={{
               display: 'grid',
-              gridTemplateColumns: '150px minmax(260px, 2fr) 110px 130px 110px 130px',
+              gridTemplateColumns: '150px minmax(260px, 2fr) 110px 130px 130px',
               gap: 16,
               padding: '10px 20px',
               borderBottom: `1px solid ${colors.border}`,
@@ -474,7 +466,6 @@ export function ProblemBrowser() {
               <span>Title</span>
               <span>Difficulty</span>
               <span>Category</span>
-              <span>Acceptance</span>
               <span>Solved / Best</span>
             </div>
 

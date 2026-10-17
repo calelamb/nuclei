@@ -10,7 +10,7 @@ export const ghzState: QuantumChallenge = {
 The **Greenberger–Horne–Zeilinger** state is the \`n\`-qubit generalization of a Bell
 state — every qubit maximally entangled with every other:
 
-\`|GHZ_n\\u27E9 = (|0\\u2026 0\\u27E9 + |1\\u2026 1\\u27E9) / \\u221A2\`
+\`|GHZ_n⟩ = (|0… 0⟩ + |1… 1⟩) / √2\`
 
 Measuring any one qubit instantly determines all the others. GHZ states are the
 workhorses of multi-party entanglement: quantum secret sharing, anonymous
@@ -18,7 +18,7 @@ broadcasting, and the sharpest tests of quantum non-locality all rely on them.
 
 ### Your Task
 
-Given \`n_qubits\`, prepare \`|GHZ_n\\u27E9\`. Only two outcomes should ever appear —
+Given \`n_qubits\`, prepare \`|GHZ_n⟩\`. Only two outcomes should ever appear —
 all-zeros and all-ones — each with probability 1/2.
 
 > **Graded by state fidelity.** A product state can reproduce a 50/50 histogram
@@ -26,8 +26,8 @@ all-zeros and all-ones — each with probability 1/2.
 
 ### Efficiency
 
-Connecting \`n\` qubits into one entangled block needs at least \`n\\u22121\`
-two-qubit gates — that's a provable lower bound. The \\u2605 rewards hitting it.`,
+Connecting \`n\` qubits into one entangled block needs at least \`n−1\`
+two-qubit gates — that's a provable lower bound. The ★ rewards hitting it.`,
 
   constraints: [
     'Use exactly n_qubits qubits and n_qubits classical bits',

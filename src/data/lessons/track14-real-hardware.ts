@@ -530,7 +530,7 @@ shots = 4096
 result = sim.run(qc, shots=shots).result()
 counts = result.get_counts()
 
-print("=== Noisy Bell State Analysis ===\n")
+print("=== Noisy Bell State Analysis ===\\n")
 
 # Raw counts
 print("Raw counts:")
@@ -539,7 +539,7 @@ for state in ['00', '01', '10', '11']:
     print(f"  |{state}⟩: {c:>4} ({100*c/shots:.1f}%)")
 
 # Confidence intervals
-print("\n95% Confidence intervals:")
+print("\\n95% Confidence intervals:")
 for state in ['00', '01', '10', '11']:
     c = counts.get(state, 0)
     p = c / shots
@@ -553,7 +553,7 @@ signal = counts.get('00', 0) + counts.get('11', 0)
 noise_counts = counts.get('01', 0) + counts.get('10', 0)
 snr = signal / max(noise_counts, 1)
 
-print(f"\n=== Signal Analysis ===")
+print(f"\\n=== Signal Analysis ===")
 print(f"Signal (|00⟩ + |11⟩): {signal}/{shots} = {100*signal/shots:.1f}%")
 print(f"Noise  (|01⟩ + |10⟩): {noise_counts}/{shots} = {100*noise_counts/shots:.1f}%")
 print(f"Signal-to-noise ratio: {snr:.1f}")
@@ -563,9 +563,9 @@ print(f"Bell state fidelity estimate: {signal/shots:.3f}")
 threshold = 0.85
 fidelity = signal / shots
 if fidelity > threshold:
-    print(f"\n✓ Result PASSES fidelity threshold ({threshold})")
+    print(f"\\n✓ Result PASSES fidelity threshold ({threshold})")
 else:
-    print(f"\n✗ Result FAILS fidelity threshold ({threshold})")`,
+    print(f"\\n✗ Result FAILS fidelity threshold ({threshold})")`,
         framework: 'qiskit',
         description:
           'Analyze a noisy Bell state with confidence intervals and signal-to-noise ratio. Learn to distinguish signal from noise in hardware-like output.',
@@ -748,16 +748,16 @@ def analyze_circuit(name, qc, backend):
 
     print(f"=== {name} ===")
     print(f"Qubits: {qc.num_qubits}")
-    print(f"\nBefore transpilation:")
+    print(f"\\nBefore transpilation:")
     print(f"  Depth: {pre_depth}")
     print(f"  Gates: {pre_total} ({dict(pre_ops)})")
-    print(f"\nAfter transpilation (opt level 3):")
+    print(f"\\nAfter transpilation (opt level 3):")
     print(f"  Depth: {post_depth} ({post_depth/max(pre_depth,1):.1f}x)")
     print(f"  Total gates: {post_total}")
     print(f"  1Q gates: {single_q}")
     print(f"  CX gates: {cx_count}")
     print(f"  SWAP gates: {swap_count} (= {swap_count * 3} extra CX)")
-    print(f"\nEstimated circuit fidelity:")
+    print(f"\\nEstimated circuit fidelity:")
     # Rough estimate: F ≈ (1-e1q)^n1q × (1-e2q)^n2q
     e1q, e2q = 0.001, 0.01  # typical error rates
     fidelity = (1 - e1q)**single_q * (1 - e2q)**(cx_count + swap_count*3)
@@ -775,7 +775,7 @@ bell.cx(0, 1)
 bell.measure([0, 1], [0, 1])
 d1, g1, f1 = analyze_circuit("Bell State (2Q)", bell, backend)
 
-print("\n" + "="*50 + "\n")
+print("\\n" + "="*50 + "\\n")
 
 # --- Circuit 2: 4-qubit GHZ ---
 ghz4 = QuantumCircuit(4, 4)
@@ -785,7 +785,7 @@ for i in range(3):
 ghz4.measure(range(4), range(4))
 d2, g2, f2 = analyze_circuit("GHZ State (4Q)", ghz4, backend)
 
-print("\n" + "="*50 + "\n")
+print("\\n" + "="*50 + "\\n")
 
 # --- Circuit 3: QFT on 4 qubits ---
 from qiskit.circuit.library import QFT
@@ -794,8 +794,8 @@ qft4.compose(QFT(4), inplace=True)
 qft4.measure(range(4), range(4))
 d3, g3, f3 = analyze_circuit("QFT (4Q)", qft4, backend)
 
-print("\n" + "="*50)
-print("\n=== Summary ===")
+print("\\n" + "="*50)
+print("\\n=== Summary ===")
 print(f"{'Circuit':<20} {'Depth':>6} {'Gates':>6} {'Fidelity':>10}")
 print(f"{'Bell':<20} {d1:>6} {g1:>6} {f1:>10.4f}")
 print(f"{'GHZ-4':<20} {d2:>6} {g2:>6} {f2:>10.4f}")
