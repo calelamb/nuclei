@@ -114,3 +114,5 @@
 .row-btn:hover { background: var(--color-surface-overlay) !important; }
 .row-btn[data-static='true']:hover { background: transparent !important; }
 .prow__sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+/* Warning badge text over its own tint is 4.2:1 in light; darken it inside the screens this lane owns. */
+.prow__level .nuclei-badge--warning, .pwork__chips .nuclei-badge--warning { --badge-text: color-mix(in srgb, var(--color-warning) 72%, var(--color-text-primary)); }

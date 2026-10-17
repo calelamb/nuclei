@@ -120,3 +120,5 @@
 .vrow__tags { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); font-size: var(--font-size-caption); }
 .vrow__creator { padding: 1px var(--space-1); border-radius: var(--radius-xs); background: var(--color-surface-overlay); color: var(--color-text-secondary); font-weight: var(--font-weight-semibold); }
 .vrow__desc { font-size: var(--font-size-caption); line-height: 1.3; color: var(--color-text-secondary); }
+/* Warning badge text over its own tint is 4.2:1 in light; darken it inside the screens this lane owns. */
+.vrow__tags .nuclei-badge--warning, .cap-card__meta .nuclei-badge--warning { --badge-text: color-mix(in srgb, var(--color-warning) 72%, var(--color-text-primary)); }

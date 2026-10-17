@@ -19,3 +19,5 @@
 .lesson__next { display: flex; align-items: center; justify-content: space-between; gap: var(--space-4); max-width: 760px; margin-inline: auto; margin-top: var(--space-8); padding: var(--space-5); border: 1px solid var(--color-border-strong); border-radius: var(--radius-round); background: var(--color-surface-raised); box-shadow: var(--shadow-sm); }
 .lesson__next-kicker { margin-bottom: var(--space-1); font-size: var(--font-size-chrome-label); color: var(--color-text-secondary); }
 .lesson__next-title { font-size: var(--font-size-body); font-weight: var(--font-weight-medium); color: var(--color-text-primary); }
+/* Warning badge text over its own tint is 4.2:1 in light; darken it inside the screens this lane owns. */
+.lesson__meta .nuclei-badge--warning { --badge-text: color-mix(in srgb, var(--color-warning) 72%, var(--color-text-primary)); }

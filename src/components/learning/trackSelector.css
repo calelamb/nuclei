@@ -20,7 +20,7 @@
 .track-card:disabled { cursor: default; opacity: 0.5; }
 .track-card__num {
   display: grid; place-items: center; width: 48px; height: 48px; flex-shrink: 0; border-radius: var(--radius-round);
-  background: color-mix(in srgb, var(--color-accent-quantum) 14%, transparent); color: var(--color-accent-quantum-text);
+  background: color-mix(in srgb, var(--color-accent-quantum) 14%, transparent); color: color-mix(in srgb, var(--color-accent-quantum-text) 78%, var(--color-text-primary));
   font-size: var(--font-size-heading); font-weight: var(--font-weight-bold);
 }
 .track-card:disabled .track-card__num { background: var(--color-surface-overlay); color: var(--color-text-tertiary); }
@@ -70,3 +70,5 @@
 .tracks__concepts, .tracks__capstones, .tracks__glossary { height: calc(100vh - 280px); min-height: 360px; }
 .tracks__capstones .lpath__caps { max-width: 640px; }
 .tracks__section > .shelf { margin-top: 0; }
+/* Warning badge text over its own tint is 4.2:1 in light; darken it inside the screens this lane owns. */
+.video-card__tags .nuclei-badge--warning { --badge-text: color-mix(in srgb, var(--color-warning) 72%, var(--color-text-primary)); }
