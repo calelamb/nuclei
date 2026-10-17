@@ -66,7 +66,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   },
   setFramework: (framework) =>
     set(
-      framework === 'qsharp'
+      framework === 'qsharp' || framework === 'stim'
         ? { framework }
         : { framework, lastPythonFramework: framework },
     ),

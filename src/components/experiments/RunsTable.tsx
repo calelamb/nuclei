@@ -1,22 +1,25 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { ChevronDown, ChevronUp, Download } from 'lucide-react';
 import { useThemeStore } from '../../stores/themeStore';
 import { useProjectStore } from '../../stores/projectStore';
 import { useExperimentStore } from '../../services/experimentStore';
-import { useExperimentUiStore } from '../../stores/experimentUiStore';
+import { DEFAULT_RUNS_VIEW, useExperimentUiStore, type RunsMainTab } from '../../stores/experimentUiStore';
 import { expandGrid } from '../../types/experiment';
 import type { RunStatus } from '../../types/experiment';
 import { createTauriExperimentFs } from '../../services/experimentFs';
 import { toCsv, downloadCsv } from '../../services/experimentExport';
-import { deriveColumns, filterByStatus, getRunValue, sortRuns, type SortDirection } from './runsTableColumns';
+import { columnDecimals, isNumericColumn, deriveColumns, filterByStatus, getRunValue, sortRuns } from './runsTableColumns';
 import { RunsTableRow, ROW_HEIGHT } from './RunsTableRow';
 import { RunButton } from './RunButton';
+import { RunFeedback } from './RunFeedback';
 import { SweepPlot } from './SweepPlot';
 
 const OVERSCAN = 6;
 const STATUS_OPTIONS: Array<RunStatus | 'all'> = ['all', 'complete', 'failed', 'running', 'stale'];
-const CHECKBOX_COLUMN_WIDTH = '32px';
-type MainTab = 'runs' | 'sweep';
+const CHECKBOX_COLUMN_WIDTH = 32;
+const RUN_COLUMN_WIDTH = 190;
+const MIN_DATA_COLUMN_WIDTH = 96;
+const HEADER_HEIGHT = 28;
 
 /**
  * PRD 09 Phase D (D2/D4) — the runs table: main content area when an
@@ -32,6 +35,13 @@ type MainTab = 'runs' | 'sweep';
  * shot" lives one click away from the table it's derived from).
  */
 export function RunsTable() {
+  const selectedFileName = useExperimentUiStore((s) => s.selectedExperimentFileName);
+  // Keyed per experiment so scroll offset and virtualization state never leak
+  // from one experiment's table into the next.
+  return <RunsTableBody key={selectedFileName ?? ''} />;
+}
+
+function RunsTableBody() {
   const colors = useThemeStore((s) => s.colors);
   const projectRoot = useProjectStore((s) => s.projectRoot);
   const selectedFileName = useExperimentUiStore((s) => s.selectedExperimentFileName);
@@ -49,13 +59,21 @@ export function RunsTable() {
     [runsByExperiment, selectedFileName],
   );
 
-  const [mainTab, setMainTab] = useState<MainTab>('runs');
-  const [statusFilter, setStatusFilter] = useState<RunStatus | 'all'>('all');
-  const [sortKey, setSortKey] = useState<string | null>(null);
-  const [sortDirection, setSortDirection] = useState<SortDirection>('asc');
+  const fileKey = selectedFileName ?? '';
+  const storedView = useExperimentUiStore((st) => st.runsViewByExperiment[fileKey]);
+  const patchRunsView = useExperimentUiStore((st) => st.patchRunsView);
+  const view = storedView ?? DEFAULT_RUNS_VIEW;
+  const { mainTab, sortKey, sortDirection } = view;
+  const statusFilter = view.statusFilter as RunStatus | 'all';
+
   const [scrollTop, setScrollTop] = useState(0);
   const [viewportHeight, setViewportHeight] = useState(400);
-  const scrollRef = useRef<HTMLDivElement>(null);
+  const scrollRef = useRef<HTMLDivElement | null>(null);
+  const latestScrollTop = useRef(view.scrollTop);
+  // Offset captured the instant the user leaves for run detail / compare; the
+  // scroller can report a spurious 0 while the next view is mounting.
+  const leavingScrollTop = useRef<number | null>(null);
+  const observerRef = useRef<ResizeObserver | null>(null);
 
   useEffect(() => {
     if (!experiment || !projectRoot) return;
@@ -65,18 +83,36 @@ export function RunsTable() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [experiment?.fileName, projectRoot]);
 
-  useEffect(() => {
-    const el = scrollRef.current;
+  // Callback ref so the observer attaches whenever the scroller mounts (it can
+  // mount after runs arrive, or after switching back from the Sweep tab).
+  const attachScroller = useCallback((el: HTMLDivElement | null) => {
+    observerRef.current?.disconnect();
+    observerRef.current = null;
+    scrollRef.current = el;
     if (!el) return;
     setViewportHeight(el.clientHeight);
-    // Guard for environments without ResizeObserver (older webviews, jsdom
-    // under test) — the virtualized window just falls back to a fixed
-    // initial height instead of tracking live resizes.
+    // Guard for environments without ResizeObserver (older webviews, jsdom).
     if (typeof ResizeObserver === 'undefined') return;
     const observer = new ResizeObserver(() => setViewportHeight(el.clientHeight));
     observer.observe(el);
-    return () => observer.disconnect();
+    observerRef.current = observer;
   }, []);
+
+  // Restore the saved scroll offset when the table (re)mounts, and save it on leave.
+  const hasRows = allRuns.length > 0;
+  useLayoutEffect(() => {
+    const el = scrollRef.current;
+    if (!el || !hasRows) return;
+    el.scrollTop = latestScrollTop.current;
+    setScrollTop(el.scrollTop);
+  }, [fileKey, hasRows, mainTab]);
+
+  useEffect(() => {
+    latestScrollTop.current = useExperimentUiStore.getState().runsViewByExperiment[fileKey]?.scrollTop ?? 0;
+    return () => {
+      if (fileKey) patchRunsView(fileKey, { scrollTop: leavingScrollTop.current ?? latestScrollTop.current });
+    };
+  }, [fileKey, patchRunsView]);
 
   const columns = useMemo(() => deriveColumns(allRuns), [allRuns]);
 
@@ -88,25 +124,29 @@ export function RunsTable() {
   );
 
   const totalHeight = rows.length * ROW_HEIGHT;
-  const startIndex = Math.max(0, Math.floor(scrollTop / ROW_HEIGHT) - OVERSCAN);
+  const bodyScroll = Math.max(0, scrollTop - HEADER_HEIGHT);
+  const startIndex = Math.max(0, Math.floor(bodyScroll / ROW_HEIGHT) - OVERSCAN);
   const endIndex = Math.min(
     rows.length,
-    Math.ceil((scrollTop + viewportHeight) / ROW_HEIGHT) + OVERSCAN,
+    Math.ceil((bodyScroll + viewportHeight) / ROW_HEIGHT) + OVERSCAN,
   );
   const visibleRows = rows.slice(startIndex, endIndex);
+  const decimalsByColumn = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const column of columns) map.set(column.key, columnDecimals(allRuns, column));
+    return map;
+  }, [columns, allRuns]);
 
-  const gridTemplateColumns = `${CHECKBOX_COLUMN_WIDTH} 140px repeat(${columns.length}, minmax(90px, 1fr))`;
+  const gridTemplateColumns = `${CHECKBOX_COLUMN_WIDTH}px ${RUN_COLUMN_WIDTH}px repeat(${columns.length}, minmax(${MIN_DATA_COLUMN_WIDTH}px, 1fr))`;
+  const contentMinWidth = CHECKBOX_COLUMN_WIDTH + RUN_COLUMN_WIDTH + columns.length * MIN_DATA_COLUMN_WIDTH;
 
   const toggleSort = (key: string) => {
-    if (sortKey !== key) {
-      setSortKey(key);
-      setSortDirection('asc');
-    } else if (sortDirection === 'asc') {
-      setSortDirection('desc');
-    } else {
-      setSortKey(null);
-    }
+    if (sortKey !== key) patchRunsView(fileKey, { sortKey: key, sortDirection: 'asc' });
+    else if (sortDirection === 'asc') patchRunsView(fileKey, { sortDirection: 'desc' });
+    else patchRunsView(fileKey, { sortKey: null });
   };
+  const rememberScroll = () => { leavingScrollTop.current = scrollRef.current?.scrollTop ?? latestScrollTop.current; };
+  const setMainTab = (tab: RunsMainTab) => patchRunsView(fileKey, { mainTab: tab });
 
   const handleExportCsv = () => {
     if (!experiment) return;
@@ -167,7 +207,7 @@ export function RunsTable() {
         {mainTab === 'runs' && (
           <select
             value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value as RunStatus | 'all')}
+            onChange={(e) => patchRunsView(fileKey, { statusFilter: e.target.value })}
             aria-label="Filter by status"
             style={{
               background: colors.bgPanel, color: colors.text,
@@ -198,7 +238,7 @@ export function RunsTable() {
                 <Download size={12} /> Export CSV
               </button>
               <button
-                onClick={openCompare}
+                onClick={() => { rememberScroll(); openCompare(); }}
                 disabled={compareSelection.length < 2}
                 title={compareSelection.length < 2 ? 'Check 2 or more runs to compare' : 'Compare the checked runs'}
                 style={{
@@ -218,74 +258,85 @@ export function RunsTable() {
         </div>
       </div>
 
+      <RunFeedback />
+
       {mainTab === 'sweep' ? (
         <div style={{ flex: 1, minHeight: 0, overflow: 'auto' }}>
           <SweepPlot />
         </div>
       ) : (
-        <>
-          {/* Column headers */}
-          <div
-            role="row"
-            style={{
-              display: 'grid', gridTemplateColumns,
-              borderBottom: `1px solid ${colors.border}`,
-              background: colors.bgPanel, flexShrink: 0,
-            }}
-          >
-            <div role="columnheader" aria-label="Select for comparison" style={{ padding: '6px 8px' }} />
-            <div role="columnheader" style={{ padding: '6px 8px', color: colors.textDim, fontSize: 10, fontWeight: 600, textTransform: 'uppercase', fontFamily: "'Geist Sans', sans-serif" }}>
-              Run
-            </div>
-            {columns.map((column) => (
-              <button
-                key={column.key}
-                role="columnheader"
-                onClick={() => toggleSort(column.key)}
-                style={{
-                  display: 'flex', alignItems: 'center', gap: 4,
-                  padding: '6px 8px', background: 'transparent', border: 'none',
-                  color: sortKey === column.key ? colors.accent : colors.textDim,
-                  fontSize: 10, fontWeight: 600, textTransform: 'uppercase',
-                  fontFamily: "'Geist Sans', sans-serif", cursor: 'pointer', textAlign: 'left',
-                }}
-              >
-                {column.label}
-                {sortKey === column.key && (sortDirection === 'asc' ? <ChevronUp size={10} /> : <ChevronDown size={10} />)}
-              </button>
-            ))}
-          </div>
-
-          {/* Virtualized body */}
-          {rows.length === 0 ? (
-            <div style={{ padding: 24, color: colors.textDim, fontSize: 12, fontFamily: "'Geist Sans', sans-serif" }}>
-              No runs yet. Hit Run to start a sweep.
-            </div>
-          ) : (
+        <div
+          ref={attachScroller}
+          style={{ flex: 1, minHeight: 0, overflow: 'auto', position: 'relative' }}
+          onScroll={(e) => {
+            latestScrollTop.current = e.currentTarget.scrollTop;
+            setScrollTop(e.currentTarget.scrollTop);
+          }}
+          role="rowgroup"
+        >
+          <div style={{ minWidth: contentMinWidth }}>
             <div
-              ref={scrollRef}
-              style={{ flex: 1, minHeight: 0, overflow: 'auto', position: 'relative' }}
-              onScroll={(e) => setScrollTop(e.currentTarget.scrollTop)}
-              role="rowgroup"
+              role="row"
+              data-testid="runs-header"
+              style={{
+                display: 'grid', gridTemplateColumns, height: HEADER_HEIGHT, boxSizing: 'border-box',
+                position: 'sticky', top: 0, zIndex: 2,
+                borderBottom: `1px solid ${colors.border}`, background: colors.bgPanel,
+              }}
             >
+              <div role="columnheader" aria-label="Select for comparison" />
+              <div role="columnheader" style={{ ...HEADER_CELL, color: colors.textDim, display: 'flex', alignItems: 'center' }}>
+                Run
+              </div>
+              {columns.map((column) => (
+                <button
+                  key={column.key}
+                  role="columnheader"
+                  title={column.label}
+                  onClick={() => toggleSort(column.key)}
+                  style={{
+                    ...HEADER_CELL, display: 'flex', alignItems: 'center', gap: 4, minWidth: 0,
+                    justifyContent: isNumericColumn(column) ? 'flex-end' : 'flex-start',
+                    background: 'transparent', border: 'none', cursor: 'pointer',
+                    color: sortKey === column.key ? colors.accent : colors.textDim,
+                  }}
+                >
+                  <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{column.label}</span>
+                  {sortKey === column.key && (sortDirection === 'asc' ? <ChevronUp size={10} style={{ flexShrink: 0 }} /> : <ChevronDown size={10} style={{ flexShrink: 0 }} />)}
+                </button>
+              ))}
+            </div>
+
+            {rows.length === 0 ? (
+              <div style={{ padding: 24, color: colors.textDim, fontSize: 12, fontFamily: "'Geist Sans', sans-serif" }}>
+                {allRuns.length === 0 ? 'No runs yet. Hit Run to start a sweep.' : 'No runs match this filter.'}
+              </div>
+            ) : (
               <div style={{ height: totalHeight, position: 'relative' }}>
                 {visibleRows.map((run, i) => (
                   <RunsTableRow
                     key={run.dir}
                     run={run}
                     columns={columns}
+                    decimalsByColumn={decimalsByColumn}
                     gridTemplateColumns={gridTemplateColumns}
                     top={(startIndex + i) * ROW_HEIGHT}
                     compareSelected={compareSelection.includes(run.dir)}
-                    onSelect={selectRun}
+                    onSelect={(dir) => { rememberScroll(); selectRun(dir); }}
                     onToggleCompare={toggleCompareSelection}
                   />
                 ))}
               </div>
-            </div>
-          )}
-        </>
+            )}
+          </div>
+        </div>
       )}
     </div>
   );
 }
+
+const HEADER_CELL: React.CSSProperties = {
+  padding: '0 8px', fontSize: 10, fontWeight: 600, textTransform: 'uppercase',
+  fontFamily: "'Geist Sans', sans-serif", textAlign: 'right',
+  overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+};

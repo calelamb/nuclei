@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildSweepSeries } from './sweepPlot';
+import { buildSweepSeries, findFailedMarkers, hasRepeatedX, pickDefaultMetric, splitAtFailures } from './sweepPlot';
 import type { RunManifest, RunRecord } from '../types/experiment';
 
 function manifest(overrides: Partial<RunManifest>): RunManifest {
@@ -131,5 +131,49 @@ describe('buildSweepSeries', () => {
 
   it('empty runs list yields an empty (1-D) series', () => {
     expect(buildSweepSeries([], 'theta', 'energy')).toEqual([{ group: null, points: [] }]);
+  });
+});
+
+describe('hasRepeatedX', () => {
+  it('detects points that share an x (an ungrouped 2-param sweep)', () => {
+    expect(hasRepeatedX([{ x: 1, y: 0, dir: 'a' }, { x: 1, y: 2, dir: 'b' }])).toBe(true);
+    expect(hasRepeatedX([{ x: 1, y: 0, dir: 'a' }, { x: 2, y: 2, dir: 'b' }])).toBe(false);
+  });
+});
+
+describe('findFailedMarkers', () => {
+  it('collects failed runs per group so the plot can show them instead of bridging silently', () => {
+    const runs = [
+      record('ok', { theta: 1, depth: 3 }, { energy: -1 }),
+      record('bad', { theta: 3, depth: 3 }, {}, 'failed'),
+      record('bad2', { theta: 3, depth: 1 }, {}, 'failed'),
+    ];
+    const markers = findFailedMarkers(runs, 'theta', 'depth');
+    expect(markers.get('3')).toEqual([{ x: 3, dir: 'bad' }]);
+    expect(markers.get('1')).toEqual([{ x: 3, dir: 'bad2' }]);
+  });
+
+  it('uses the empty-string group when ungrouped', () => {
+    const markers = findFailedMarkers([record('bad', { theta: 3 }, {}, 'failed')], 'theta');
+    expect(markers.get('')).toEqual([{ x: 3, dir: 'bad' }]);
+  });
+});
+
+describe('splitAtFailures', () => {
+  const pts = [1, 2, 4, 5].map((x) => ({ x, y: x, dir: `r${x}` }));
+  it('breaks the line where a failed x sits between two points', () => {
+    const segments = splitAtFailures(pts, [3]);
+    expect(segments.map((s) => s.map((p) => p.x))).toEqual([[1, 2], [4, 5]]);
+  });
+  it('keeps one segment without failures', () => {
+    expect(splitAtFailures(pts, [])).toHaveLength(1);
+  });
+});
+
+describe('pickDefaultMetric', () => {
+  it('prefers a user metric over derived count statistics', () => {
+    expect(pickDefaultMetric(['counts_entropy', 'energy', 'top_state_proba'])).toBe('energy');
+    expect(pickDefaultMetric(['counts_entropy'])).toBe('counts_entropy');
+    expect(pickDefaultMetric([])).toBe('');
   });
 });

@@ -103,9 +103,9 @@ describe('NewExperimentForm', () => {
 
     const nameInput = document.querySelector('input[placeholder="theta"]') as HTMLInputElement;
     fireEvent.change(nameInput, { target: { value: 'theta' } });
-    const valuesSelect = nameInput.parentElement!.querySelector('select') as HTMLSelectElement;
+    const valuesSelect = nameInput.closest('[data-sweep-row]')!.querySelector('select') as HTMLSelectElement;
     fireEvent.change(valuesSelect, { target: { value: 'values' } });
-    const valuesInput = nameInput.parentElement!.querySelector('input[placeholder="0, 1, 2"]') as HTMLInputElement;
+    const valuesInput = nameInput.closest('[data-sweep-row]')!.querySelector('input[placeholder="0, 1, 2"]') as HTMLInputElement;
     fireEvent.change(valuesInput, { target: { value: '0, 1, 2' } });
 
     fireEvent.click(getByText('Create experiment'));
@@ -128,7 +128,7 @@ describe('NewExperimentForm', () => {
     const nameInput = document.querySelector('input[placeholder="theta"]') as HTMLInputElement;
     fireEvent.change(nameInput, { target: { value: 'theta' } });
     const [startInput, stopInput] = Array.from(
-      nameInput.parentElement!.querySelectorAll('input[placeholder="start"], input[placeholder="stop"]'),
+      nameInput.closest('[data-sweep-row]')!.querySelectorAll('input[placeholder="start"], input[placeholder="stop"]'),
     ) as HTMLInputElement[];
     fireEvent.change(startInput, { target: { value: '0' } });
     fireEvent.change(stopInput, { target: { value: '1000' } }); // step defaults to 0.1 -> >500 points
@@ -156,5 +156,51 @@ describe('NewExperimentForm', () => {
       useExperimentStore.setState({ experiments: [{ ...EXISTING, spec: { ...EXISTING.spec, shots: 9999 } }] });
     });
     expect((getByLabelText('Shots') as HTMLInputElement).value).toBe('256');
+  });
+
+  it('does not show validation errors before the user has touched anything (research-22)', () => {
+    const { queryByText, container } = render(
+      <NewExperimentForm projectRoot="/proj" onClose={vi.fn()} />,
+    );
+    expect(container.querySelector('ul')).toBeNull();
+    expect(queryByText(/Too small/)).toBeNull();
+    expect(container.textContent).toContain('1 point (no sweep)');
+  });
+
+  it('shows human copy for a missing entry file once the field was touched (research-22)', () => {
+    const { getByLabelText, getByText, queryByText } = render(
+      <NewExperimentForm projectRoot="/proj" onClose={vi.fn()} />,
+    );
+    fireEvent.change(getByLabelText('Name'), { target: { value: 'x' } });
+    expect(queryByText(/Choose the file to run/)).toBeNull();
+    fireEvent.change(getByLabelText('Entry file'), { target: { value: 'a' } });
+    fireEvent.change(getByLabelText('Entry file'), { target: { value: '' } });
+    expect(getByText(/Choose the file to run/)).toBeTruthy();
+    expect(queryByText(/Too small/)).toBeNull();
+  });
+
+  it('titles the edit form with the experiment name (research-01)', () => {
+    const { getByText } = render(
+      <NewExperimentForm projectRoot="/proj" existing={EXISTING} onClose={vi.fn()} />,
+    );
+    expect(getByText('Edit theta-sweep')).toBeTruthy();
+  });
+
+  it('asks before discarding unsaved edits on Close (research-01)', () => {
+    const onClose = vi.fn();
+    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(false);
+    const { getByLabelText, getByText } = render(
+      <NewExperimentForm projectRoot="/proj" existing={EXISTING} onClose={onClose} />,
+    );
+    fireEvent.click(getByText('Close'));
+    expect(onClose).toHaveBeenCalledTimes(1); // clean form closes silently
+    fireEvent.change(getByLabelText('Shots'), { target: { value: '5' } });
+    fireEvent.click(getByText('Close'));
+    expect(confirmSpy).toHaveBeenCalled();
+    expect(onClose).toHaveBeenCalledTimes(1); // user declined
+    confirmSpy.mockReturnValue(true);
+    fireEvent.click(getByText('Close'));
+    expect(onClose).toHaveBeenCalledTimes(2);
+    confirmSpy.mockRestore();
   });
 });

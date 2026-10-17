@@ -103,7 +103,8 @@ describe('RunDetail', () => {
 
     expect(getByText('Status')).toBeTruthy();
     expect(getByText('complete')).toBeTruthy();
-    expect(getByText(/"theta":1\.5/)).toBeTruthy();
+    expect(getByText('theta = 1.5')).toBeTruthy();
+    expect(getByText('energy = -1.13')).toBeTruthy();
     expect(getByText(/deadbeef/)).toBeTruthy();
   });
 
@@ -140,5 +141,19 @@ describe('RunDetail', () => {
     useExperimentUiStore.setState({ selectedExperimentFileName: null, selectedRunDir: null });
     const { getByText } = render(<RunDetail />);
     expect(getByText(/select a run/i)).toBeTruthy();
+  });
+
+  it('opens a failed run on stderr with the error in its own block and no empty output sections (research-19)', async () => {
+    const failed: RunRecord = { ...RECORD, manifest: { ...MANIFEST, status: 'failed', error: 'Traceback\n  boom' }, metrics: {} };
+    useExperimentStore.setState({ runsByExperiment: { [FILE_NAME]: [failed] } });
+    readTextFileMock.mockImplementation(async (path: string) => {
+      if (pathEndsWith(path, 'stderr.txt')) return 'ValueError: boom';
+      throw new Error('ENOENT');
+    });
+    const { getByRole, queryByText, getByText } = render(<RunDetail />);
+    await waitFor(() => expect(getByText(/ValueError: boom/)).toBeTruthy());
+    expect(getByRole('tab', { name: 'stderr' }).getAttribute('aria-selected')).toBe('true');
+    expect(queryByText('Measurements')).toBeNull();
+    expect(getByText(/Traceback/).tagName).toBe('PRE');
   });
 });

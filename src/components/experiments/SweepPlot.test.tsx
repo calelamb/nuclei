@@ -70,7 +70,7 @@ function installStore(spec: ExperimentSpec, runs: RunRecord[]) {
 
 describe('SweepPlot', () => {
   beforeEach(() => {
-    useExperimentUiStore.setState({ selectedExperimentFileName: FILE_NAME, selectedRunDir: null });
+    useExperimentUiStore.setState({ selectedExperimentFileName: FILE_NAME, selectedRunDir: null, runsViewByExperiment: {} });
     installStore(SPEC, RUNS);
   });
 
@@ -89,11 +89,31 @@ describe('SweepPlot', () => {
     expect(container.querySelectorAll('circle')).toHaveLength(4);
   });
 
-  it('shows a per-group legend once "Group by" is set to the other swept parameter', () => {
+  it('groups a 2-param sweep by the other parameter by default (research-11)', () => {
     const { getByLabelText, getByText } = render(<SweepPlot />);
-    fireEvent.change(getByLabelText('Group by parameter'), { target: { value: 'layers' } });
+    expect((getByLabelText('Group by parameter') as HTMLSelectElement).value).toBe('layers');
     expect(getByText('layers = 1')).toBeTruthy();
     expect(getByText('layers = 2')).toBeTruthy();
+  });
+
+  it('draws markers only (no zig-zag path) when ungrouped points share an x (research-11)', () => {
+    const { getByLabelText, container } = render(<SweepPlot />);
+    fireEvent.change(getByLabelText('Group by parameter'), { target: { value: '' } });
+    expect(container.querySelectorAll('svg path[stroke-width="2"]')).toHaveLength(0);
+    expect(container.querySelectorAll('circle')).toHaveLength(4);
+  });
+
+  it('shows a tooltip for the nearest point on hover and opens the run on click (research-25)', () => {
+    const { container, getByRole } = render(<SweepPlot />);
+    const svg = container.querySelector('svg[role="img"]') as SVGSVGElement;
+    const circle = container.querySelector('circle') as SVGCircleElement;
+    vi.spyOn(svg, 'getBoundingClientRect').mockReturnValue({ left: 0, top: 0, width: 640, height: 400, right: 640, bottom: 400, x: 0, y: 0, toJSON: () => ({}) });
+    const cx = Number(circle.getAttribute('cx')) + 60;
+    const cy = Number(circle.getAttribute('cy')) + 16;
+    fireEvent.mouseMove(svg, { clientX: cx, clientY: cy });
+    expect(getByRole('tooltip').textContent).toContain('energy');
+    fireEvent.click(svg);
+    expect(useExperimentUiStore.getState().selectedRunDir).not.toBeNull();
   });
 
   it('shows a placeholder when the experiment has no swept parameters', () => {

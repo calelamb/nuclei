@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { Play } from 'lucide-react';
 import { useThemeStore } from '../../stores/themeStore';
 import { useExperimentRun } from '../../hooks/useExperimentRun';
 import { useExperimentRunStore } from '../../stores/experimentRunStore';
@@ -17,9 +18,11 @@ interface RunButtonProps {
   experiment: DiscoveredExperiment;
   projectRoot: string;
   pointCount: number;
+  /** `ghost` = quiet icon button for list rows; `solid` = primary CTA (runs header). */
+  variant?: 'solid' | 'ghost';
 }
 
-export function RunButton({ experiment, projectRoot, pointCount }: RunButtonProps) {
+export function RunButton({ experiment, projectRoot, pointCount, variant = 'solid' }: RunButtonProps) {
   const colors = useThemeStore((s) => s.colors);
   const { run } = useExperimentRun();
   const active = useExperimentRunStore((s) => s.active);
@@ -71,7 +74,13 @@ export function RunButton({ experiment, projectRoot, pointCount }: RunButtonProp
         onClick={(e) => { e.stopPropagation(); handleClick(); }}
         disabled={anyActive}
         title={anyActive ? 'A sweep is already running' : 'Run this experiment'}
-        style={{
+        style={variant === 'ghost' ? {
+          display: 'inline-flex', alignItems: 'center', gap: 4, padding: '2px 8px',
+          background: 'transparent', color: anyActive ? colors.textDim : colors.accent,
+          border: `1px solid ${colors.border}`, borderRadius: 4,
+          cursor: anyActive ? 'not-allowed' : 'pointer',
+          fontSize: 10.5, fontWeight: 600, fontFamily: "'Geist Sans', sans-serif",
+        } : {
           padding: '4px 12px',
           background: anyActive ? colors.border : colors.accent,
           color: anyActive ? colors.textDim : '#0a1220',
@@ -80,7 +89,7 @@ export function RunButton({ experiment, projectRoot, pointCount }: RunButtonProp
           fontSize: 11, fontWeight: 600, fontFamily: "'Geist Sans', sans-serif",
         }}
       >
-        Run
+        {variant === 'ghost' ? <><Play size={10} /> Run</> : 'Run'}
       </button>
       {showGuard && (
         <HardwareSweepGuard

@@ -1,6 +1,6 @@
-import { Bar, BarChart, Legend, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
+import { Bar, BarChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { useThemeStore } from '../../stores/themeStore';
-import { getMultiSeriesHistogramData, type HistogramSeriesInput } from './histogramData';
+import { formatProbabilityTick, getMultiSeriesHistogramData, PROBABILITY_TICKS, type HistogramSeriesInput } from './histogramData';
 
 import { TYPOGRAPHY } from '../../styles/tokens';
 export interface MultiSeriesHistogramSeries extends HistogramSeriesInput {
@@ -39,6 +39,7 @@ export function MultiSeriesHistogram({ series }: { series: MultiSeriesHistogramS
 
   return (
     <div style={{ height: 260, display: 'flex', flexDirection: 'column' }}>
+      <div style={{ flex: 1, minHeight: 0 }}>
       <ResponsiveContainer width="100%" height="100%">
         <BarChart data={data} margin={{ top: 5, right: 10, bottom: 5, left: 10 }}>
           <XAxis
@@ -52,7 +53,8 @@ export function MultiSeriesHistogram({ series }: { series: MultiSeriesHistogramS
             tick={{ fill: colors.textDim, fontSize: 11, fontFamily: TYPOGRAPHY.fontMono }}
             axisLine={{ stroke: colors.border }}
             tickLine={{ stroke: colors.border }}
-            tickFormatter={(v: number) => v.toFixed(1)}
+            ticks={[...PROBABILITY_TICKS]}
+            tickFormatter={formatProbabilityTick}
           />
           <Tooltip
             contentStyle={{
@@ -65,12 +67,21 @@ export function MultiSeriesHistogram({ series }: { series: MultiSeriesHistogramS
             labelStyle={{ color: colors.text }}
             formatter={(value) => [typeof value === 'number' ? value.toFixed(4) : String(value ?? ''), 'Probability']}
           />
-          <Legend wrapperStyle={{ fontSize: 11, fontFamily: TYPOGRAPHY.fontSans }} />
           {series.map((s) => (
             <Bar key={s.label} dataKey={s.label} fill={s.color} radius={[3, 3, 0, 0]} />
           ))}
         </BarChart>
       </ResponsiveContainer>
+      </div>
+      {/* Own legend (series order) — recharts reverses grouped-bar legend order. */}
+      <ul style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'center', gap: '4px 14px', margin: '4px 0 0', padding: 0, listStyle: 'none', fontSize: 11, fontFamily: TYPOGRAPHY.fontSans, color: colors.textMuted }}>
+        {series.map((s) => (
+          <li key={s.label} style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+            <span style={{ width: 9, height: 9, borderRadius: 2, background: s.color, display: 'inline-block' }} />
+            {s.label}
+          </li>
+        ))}
+      </ul>
     </div>
   );
 }

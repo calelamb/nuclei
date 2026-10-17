@@ -74,3 +74,13 @@ export function getMultiSeriesHistogramData(
     return row;
   });
 }
+
+/** Evenly spaced y ticks for a 0..1 probability axis. */
+export const PROBABILITY_TICKS: readonly number[] = [0, 0.25, 0.5, 0.75, 1];
+
+/** Tick label that never rounds 0.25/0.75 to a misleading 0.3/0.8. */
+export function formatProbabilityTick(value: number): string {
+  if (value === 0) return '0';
+  if (value === 1) return '1';
+  return value.toFixed(2);
+}

@@ -28,6 +28,8 @@ interface ExperimentRunState {
   start(run: { experimentFileName: string; experimentName: string; cancel: () => void }): void;
   updateProgress(progress: RunProgress): void;
   finish(summary: RunSummary | null, error?: string | null): void;
+  /** Dismiss the post-run banner (error or summary). */
+  clearFeedback(): void;
 }
 
 const IDLE_PROGRESS: RunProgress = { completed: 0, total: 0, failures: 0, currentPoint: -1 };
@@ -48,4 +50,6 @@ export const useExperimentRunStore = create<ExperimentRunState>((set) => ({
     set((s) => (s.active ? { active: { ...s.active, progress } } : s)),
 
   finish: (summary, error = null) => set({ active: null, lastSummary: summary, lastError: error }),
+
+  clearFeedback: () => set({ lastSummary: null, lastError: null }),
 }));

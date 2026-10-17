@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type MutableRefObject } from 'react';
 import { mkdir, writeTextFile } from '@tauri-apps/plugin-fs';
 import { stringify } from 'yaml';
 import { Plus, Trash2 } from 'lucide-react';
@@ -44,6 +44,8 @@ interface NewExperimentFormProps {
   projectRoot: string;
   /** Present when editing an existing experiment; absent for "New experiment". */
   existing?: DiscoveredExperiment;
+  /** Optional shared flag the parent reads to confirm before swapping targets. */
+  dirtyRef?: MutableRefObject<boolean>;
   onClose(): void;
 }
 
@@ -59,14 +61,35 @@ function fieldFromSpec(spec: ExperimentSpec, nextId: () => string) {
   };
 }
 
-function formatZodErrors(error: { issues: Array<{ path: PropertyKey[]; message: string }> }): string[] {
-  return error.issues.map((issue) => {
-    const path = issue.path.map(String).join('.');
-    return path ? `${path}: ${issue.message}` : issue.message;
-  });
+type FormField = 'name' | 'entry' | 'shots' | 'seed' | 'sweep' | 'notes' | 'form';
+
+interface FormIssue {
+  field: FormField;
+  text: string;
 }
 
-export function NewExperimentForm({ projectRoot, existing, onClose }: NewExperimentFormProps) {
+const FIELD_COPY: Record<string, { field: FormField; text: string }> = {
+  name: { field: 'name', text: 'Give the experiment a name.' },
+  entry: { field: 'entry', text: 'Choose the file to run.' },
+  shots: { field: 'shots', text: 'Shots must be a whole number of at least 1.' },
+  seed: { field: 'seed', text: 'Seed must be a whole number.' },
+};
+
+/** Maps a Zod issue to a human-readable message attached to the field it concerns. */
+function humanizeIssue(issue: { path: PropertyKey[]; message: string }): FormIssue {
+  const head = String(issue.path[0] ?? '');
+  const known = FIELD_COPY[head];
+  if (known) return known;
+  const path = issue.path.map(String).join('.');
+  const field: FormField = head === 'sweep' ? 'sweep' : head === 'notes' ? 'notes' : 'form';
+  return { field, text: path ? `${path}: ${issue.message}` : issue.message };
+}
+
+function formatZodErrors(error: { issues: Array<{ path: PropertyKey[]; message: string }> }): FormIssue[] {
+  return error.issues.map(humanizeIssue);
+}
+
+export function NewExperimentForm({ projectRoot, existing, dirtyRef: sharedDirtyRef, onClose }: NewExperimentFormProps) {
   const colors = useThemeStore((s) => s.colors);
   const platform = usePlatform();
   const hardwareBackends = useHardwareStore((s) => s.backends);
@@ -91,8 +114,17 @@ export function NewExperimentForm({ projectRoot, existing, onClose }: NewExperim
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
 
-  const dirtyRef = useRef(false);
-  const markDirty = () => { dirtyRef.current = true; };
+  const ownDirtyRef = useRef(false);
+  const dirtyRef = sharedDirtyRef ?? ownDirtyRef;
+  const [touched, setTouched] = useState<ReadonlySet<FormField>>(new Set());
+  const markDirty = (field: FormField = 'form') => {
+    dirtyRef.current = true;
+    setTouched((prev) => (prev.has(field) ? prev : new Set([...prev, field])));
+  };
+  const handleClose = () => {
+    if (dirtyRef.current && !window.confirm('Discard your unsaved changes to this experiment?')) return;
+    onClose();
+  };
 
   // Discover candidate entry files for the datalist — best-effort, never blocks.
   useEffect(() => {
@@ -122,7 +154,7 @@ export function NewExperimentForm({ projectRoot, existing, onClose }: NewExperim
       setNotes(fields.notes);
       setSweepRows(fields.sweepRows);
     });
-  }, [existing]);
+  }, [existing, dirtyRef]);
 
   const backends: BackendInfo[] = useMemo(() => {
     const rest = hardwareBackends.filter((b) => b.provider !== 'simulator');
@@ -151,22 +183,33 @@ export function NewExperimentForm({ projectRoot, existing, onClose }: NewExperim
     }
     try {
       const gridSize = expandGrid(parsed.data.sweep).length;
-      return { ok: true as const, spec: parsed.data, errors: [] as string[], gridSize };
+      return { ok: true as const, spec: parsed.data, errors: [] as FormIssue[], gridSize };
     } catch (e) {
       if (e instanceof GridExpansionError) {
-        return { ok: false as const, spec: null, errors: [e.message], gridSize: e.count > 0 ? e.count : null };
+        return { ok: false as const, spec: null, errors: [{ field: 'sweep' as FormField, text: e.message }], gridSize: e.count > 0 ? e.count : null };
       }
       throw e;
     }
   }, [candidate]);
 
   const entryKnown = entry.trim().length > 0 && entryFiles.includes(entry.trim());
+  const visibleIssues = validation.errors.filter((i) => touched.has(i.field) || i.field === 'form' && touched.size > 0);
+  const gridLabel = sweepRows.length === 0
+    ? '1 point (no sweep)'
+    : validation.gridSize === null
+      ? '—'
+      : `${validation.gridSize} point${validation.gridSize === 1 ? '' : 's'}`;
   const canSubmit = validation.ok && !submitting && entry.trim().length > 0;
+  const disabledReason = canSubmit || submitting
+    ? undefined
+    : entry.trim().length === 0
+      ? 'Choose an entry file to continue'
+      : validation.errors[0]?.text;
 
-  const handleAddRow = () => { markDirty(); setSweepRows((rows) => [...rows, newSweepRow(nextRowId())]); };
-  const handleRemoveRow = (id: string) => { markDirty(); setSweepRows((rows) => rows.filter((r) => r.id !== id)); };
+  const handleAddRow = () => { markDirty('sweep'); setSweepRows((rows) => [...rows, newSweepRow(nextRowId())]); };
+  const handleRemoveRow = (id: string) => { markDirty('sweep'); setSweepRows((rows) => rows.filter((r) => r.id !== id)); };
   const updateRow = (id: string, patch: Partial<SweepRowState>) => {
-    markDirty();
+    markDirty('sweep');
     setSweepRows((rows) => rows.map((r) => (r.id === id ? { ...r, ...patch } : r)));
   };
 
@@ -203,6 +246,7 @@ export function NewExperimentForm({ projectRoot, existing, onClose }: NewExperim
     width: '100%', padding: '6px 8px', fontSize: 12,
     fontFamily: "'Fira Code', monospace", background: colors.bgPanel,
     border: `1px solid ${colors.border}`, borderRadius: 4, color: colors.text, outline: 'none',
+    minWidth: 0, boxSizing: 'border-box',
   };
 
   return (
@@ -216,10 +260,10 @@ export function NewExperimentForm({ projectRoot, existing, onClose }: NewExperim
     >
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
         <span style={{ color: colors.text, fontSize: 12, fontWeight: 600 }}>
-          {existing ? 'Edit experiment' : 'New experiment'}
+          {existing ? `Edit ${existing.spec.name}` : 'New experiment'}
         </span>
         <button
-          type="button" onClick={onClose}
+          type="button" onClick={handleClose}
           style={{ background: 'transparent', border: 'none', color: colors.textDim, cursor: 'pointer', fontSize: 11 }}
         >
           Close
@@ -230,8 +274,8 @@ export function NewExperimentForm({ projectRoot, existing, onClose }: NewExperim
         <label style={labelStyle} htmlFor="exp-name">Name</label>
         <input
           id="exp-name" value={name}
-          onChange={(e) => { markDirty(); setName(e.target.value); }}
-          placeholder="theta-sweep" style={inputStyle}
+          onChange={(e) => { markDirty('name'); setName(e.target.value); }}
+          placeholder="e.g. theta-sweep" style={inputStyle}
         />
       </div>
 
@@ -239,8 +283,8 @@ export function NewExperimentForm({ projectRoot, existing, onClose }: NewExperim
         <label style={labelStyle} htmlFor="exp-entry">Entry file</label>
         <input
           id="exp-entry" list="exp-entry-files" value={entry}
-          onChange={(e) => { markDirty(); setEntry(e.target.value); }}
-          placeholder="vqe_h2.py" style={inputStyle}
+          onChange={(e) => { markDirty('entry'); setEntry(e.target.value); }}
+          placeholder="e.g. vqe_h2.py" style={inputStyle}
         />
         <datalist id="exp-entry-files">
           {entryFiles.map((f) => <option key={f} value={f} />)}
@@ -262,14 +306,14 @@ export function NewExperimentForm({ projectRoot, existing, onClose }: NewExperim
           <label style={labelStyle} htmlFor="exp-shots">Shots</label>
           <input
             id="exp-shots" type="number" min={1} value={shots}
-            onChange={(e) => { markDirty(); setShots(e.target.value); }} style={inputStyle}
+            onChange={(e) => { markDirty('shots'); setShots(e.target.value); }} style={inputStyle}
           />
         </div>
         <div style={{ flex: 1 }}>
           <label style={labelStyle} htmlFor="exp-seed">Seed</label>
           <input
             id="exp-seed" type="number" value={seed}
-            onChange={(e) => { markDirty(); setSeed(e.target.value); }} style={inputStyle}
+            onChange={(e) => { markDirty('seed'); setSeed(e.target.value); }} style={inputStyle}
           />
         </div>
       </div>
@@ -289,40 +333,48 @@ export function NewExperimentForm({ projectRoot, existing, onClose }: NewExperim
           </button>
         </div>
         {sweepRows.map((row) => (
-          <div key={row.id} style={{ display: 'flex', gap: 6, alignItems: 'center', marginBottom: 6 }}>
-            <input
-              value={row.name} placeholder="theta"
-              onChange={(e) => updateRow(row.id, { name: e.target.value })}
-              style={{ ...inputStyle, width: 80 }}
-            />
-            <select
-              value={row.mode}
-              onChange={(e) => updateRow(row.id, { mode: e.target.value as 'range' | 'values' })}
-              style={{ ...inputStyle, width: 80 }}
-            >
-              <option value="range">range</option>
-              <option value="values">values</option>
-            </select>
+          <div
+            key={row.id} data-sweep-row
+            style={{
+              display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 8, padding: 8,
+              border: `1px solid ${colors.border}`, borderRadius: 6, background: colors.bgPanel,
+            }}
+          >
+            <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+              <input
+                value={row.name} placeholder="theta" aria-label="Parameter name"
+                onChange={(e) => updateRow(row.id, { name: e.target.value })}
+                style={{ ...inputStyle, flex: 1, background: colors.bg }}
+              />
+              <select
+                value={row.mode} aria-label="Sweep mode"
+                onChange={(e) => updateRow(row.id, { mode: e.target.value as 'range' | 'values' })}
+                style={{ ...inputStyle, width: 84, flexShrink: 0, background: colors.bg }}
+              >
+                <option value="range">range</option>
+                <option value="values">values</option>
+              </select>
+              <button
+                type="button" onClick={() => handleRemoveRow(row.id)}
+                aria-label={`Remove sweep parameter ${row.name || row.id}`}
+                style={{ background: 'transparent', border: 'none', color: colors.error, cursor: 'pointer', display: 'flex', flexShrink: 0 }}
+              >
+                <Trash2 size={13} />
+              </button>
+            </div>
             {row.mode === 'range' ? (
-              <>
-                <input value={row.rangeStart} onChange={(e) => updateRow(row.id, { rangeStart: e.target.value })} placeholder="start" style={{ ...inputStyle, width: 60 }} />
-                <input value={row.rangeStop} onChange={(e) => updateRow(row.id, { rangeStop: e.target.value })} placeholder="stop" style={{ ...inputStyle, width: 60 }} />
-                <input value={row.rangeStep} onChange={(e) => updateRow(row.id, { rangeStep: e.target.value })} placeholder="step" style={{ ...inputStyle, width: 60 }} />
-              </>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 6 }}>
+                <input value={row.rangeStart} onChange={(e) => updateRow(row.id, { rangeStart: e.target.value })} placeholder="start" aria-label="Range start" style={{ ...inputStyle, background: colors.bg }} />
+                <input value={row.rangeStop} onChange={(e) => updateRow(row.id, { rangeStop: e.target.value })} placeholder="stop" aria-label="Range stop" style={{ ...inputStyle, background: colors.bg }} />
+                <input value={row.rangeStep} onChange={(e) => updateRow(row.id, { rangeStep: e.target.value })} placeholder="step" aria-label="Range step" style={{ ...inputStyle, background: colors.bg }} />
+              </div>
             ) : (
               <input
-                value={row.valuesText} placeholder="0, 1, 2"
+                value={row.valuesText} placeholder="0, 1, 2" aria-label="Values (comma separated)"
                 onChange={(e) => updateRow(row.id, { valuesText: e.target.value })}
-                style={{ ...inputStyle, flex: 1 }}
+                style={{ ...inputStyle, background: colors.bg }}
               />
             )}
-            <button
-              type="button" onClick={() => handleRemoveRow(row.id)}
-              aria-label={`Remove sweep parameter ${row.name || row.id}`}
-              style={{ background: 'transparent', border: 'none', color: colors.error, cursor: 'pointer' }}
-            >
-              <Trash2 size={13} />
-            </button>
           </div>
         ))}
       </div>
@@ -331,26 +383,29 @@ export function NewExperimentForm({ projectRoot, existing, onClose }: NewExperim
         <label style={labelStyle} htmlFor="exp-notes">Notes (optional)</label>
         <textarea
           id="exp-notes" value={notes} rows={2}
-          onChange={(e) => { markDirty(); setNotes(e.target.value); }}
+          onChange={(e) => { markDirty('notes'); setNotes(e.target.value); }}
           style={{ ...inputStyle, fontFamily: "'Geist Sans', sans-serif", resize: 'vertical' }}
         />
       </div>
 
       <div style={{ color: colors.textDim, fontSize: 11 }}>
-        Grid size: {validation.gridSize ?? '—'} point{validation.gridSize === 1 ? '' : 's'} (cap {MAX_GRID_POINTS})
+        Grid size: {gridLabel}{sweepRows.length > 0 ? ` · max ${MAX_GRID_POINTS}` : ''}
       </div>
 
-      {validation.errors.length > 0 && (
+      {visibleIssues.length > 0 && (
         <ul style={{ margin: 0, paddingLeft: 18, color: colors.error, fontSize: 11 }}>
-          {validation.errors.map((err) => <li key={err}>{err}</li>)}
+          {visibleIssues.map((err) => <li key={err.text}>{err.text}</li>)}
         </ul>
+      )}
+      {disabledReason && visibleIssues.length === 0 && name.trim().length > 0 && (
+        <div style={{ color: colors.textDim, fontSize: 11 }}>{disabledReason}</div>
       )}
       {submitError && (
         <div style={{ color: colors.error, fontSize: 11 }}>{submitError}</div>
       )}
 
       <button
-        type="submit" disabled={!canSubmit}
+        type="submit" disabled={!canSubmit} title={disabledReason}
         style={{
           padding: '7px 12px', background: canSubmit ? colors.accent : colors.border,
           color: canSubmit ? '#0a1220' : colors.textDim, border: 'none', borderRadius: 4,

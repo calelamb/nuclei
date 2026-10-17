@@ -2,6 +2,7 @@ import { useEditorStore } from '../../stores/editorStore';
 import { useThemeStore } from '../../stores/themeStore';
 import { useExperimentUiStore } from '../../stores/experimentUiStore';
 import { useExperimentStore } from '../../services/experimentStore';
+import { formatRunLabel } from '../experiments/runsTableColumns';
 import { ChevronRight, MoreHorizontal } from 'lucide-react';
 
 import { TYPOGRAPHY } from '../../styles/tokens';
@@ -108,6 +109,7 @@ export function ExperimentBreadcrumbs() {
   const selectRun = useExperimentUiStore((s) => s.selectRun);
   const closeCompare = useExperimentUiStore((s) => s.closeCompare);
   const experiments = useExperimentStore((s) => s.experiments);
+  const runs = useExperimentStore((s) => s.runsByExperiment[experimentFileName ?? '']);
 
   if (!experimentFileName) return null;
 
@@ -116,7 +118,11 @@ export function ExperimentBreadcrumbs() {
 
   // A trailing segment exists when the user has drilled into a run or the
   // compare view; then the experiment segment becomes a clickable "back".
-  const trailing = compareOpen ? `Compare (${compareCount})` : runDir;
+  const runRecord = runDir ? runs?.find((r) => r.dir === runDir) : undefined;
+  const trailing = compareOpen
+    ? `Compare (${compareCount})`
+    : runDir ? formatRunLabel(runDir, runRecord?.manifest.started_at) : null;
+  const trailingTitle = !compareOpen && runDir ? runDir : undefined;
   const backToRuns = () => { selectRun(null); closeCompare(); };
 
   const segmentStyle = (isLast: boolean, clickable: boolean): React.CSSProperties => ({
@@ -142,7 +148,7 @@ export function ExperimentBreadcrumbs() {
       {trailing && (
         <span style={{ display: 'flex', alignItems: 'center', gap: 2 }}>
           <ChevronRight size={12} style={{ color: colors.textDim }} />
-          <span style={{ ...segmentStyle(true, false), fontFamily: TYPOGRAPHY.fontMono }}>
+          <span title={trailingTitle} style={{ ...segmentStyle(true, false), fontFamily: TYPOGRAPHY.fontMono }}>
             {trailing}
           </span>
         </span>

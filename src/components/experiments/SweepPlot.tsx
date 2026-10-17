@@ -1,10 +1,10 @@
-import { useMemo, useRef, useState } from 'react';
+import { useMemo, useRef } from 'react';
 import { Download } from 'lucide-react';
 import { useThemeStore } from '../../stores/themeStore';
 import { useExperimentStore } from '../../services/experimentStore';
-import { useExperimentUiStore } from '../../stores/experimentUiStore';
+import { DEFAULT_RUNS_VIEW, useExperimentUiStore } from '../../stores/experimentUiStore';
 import { seriesColor } from '../../lib/seriesPalette';
-import { buildSweepSeries } from '../../services/sweepPlot';
+import { buildSweepSeries, findFailedMarkers, pickDefaultMetric } from '../../services/sweepPlot';
 import { toCsv, downloadCsv, downloadSvg } from '../../services/experimentExport';
 import { deriveColumns } from './runsTableColumns';
 import { SweepPlotChart } from './SweepPlotChart';
@@ -51,15 +51,24 @@ export function SweepPlot() {
     [runs],
   );
 
-  const [xParam, setXParam] = useState('');
-  const [yMetric, setYMetric] = useState('');
-  const [groupParam, setGroupParam] = useState('');
+  // Picker choices persist per experiment (they survive leaving for run detail).
+  const fileKey = selectedFileName ?? '';
+  const view = useExperimentUiStore((s) => s.runsViewByExperiment[fileKey]) ?? DEFAULT_RUNS_VIEW;
+  const patchRunsView = useExperimentUiStore((s) => s.patchRunsView);
+  const selectRun = useExperimentUiStore((s) => s.selectRun);
+  const setXParam = (v: string) => patchRunsView(fileKey, { sweepX: v, sweepGroup: null });
+  const setYMetric = (v: string) => patchRunsView(fileKey, { sweepY: v });
+  const setGroupParam = (v: string) => patchRunsView(fileKey, { sweepGroup: v });
   const svgRef = useRef<SVGSVGElement | null>(null);
 
-  const effectiveX = sweepParams.includes(xParam) ? xParam : sweepParams[0] ?? '';
-  const effectiveY = metricNames.includes(yMetric) ? yMetric : metricNames[0] ?? '';
+  const effectiveX = view.sweepX && sweepParams.includes(view.sweepX) ? view.sweepX : sweepParams[0] ?? '';
+  const effectiveY = view.sweepY && metricNames.includes(view.sweepY) ? view.sweepY : pickDefaultMetric(metricNames);
   const otherParams = sweepParams.filter((p) => p !== effectiveX);
-  const effectiveGroup = otherParams.includes(groupParam) ? groupParam : '';
+  // A 2-param sweep defaults to grouping by the other parameter: ungrouped,
+  // a line through points sharing an x draws a false sawtooth.
+  const effectiveGroup = view.sweepGroup !== null && (view.sweepGroup === '' || otherParams.includes(view.sweepGroup))
+    ? view.sweepGroup
+    : otherParams[0] ?? '';
 
   if (!experiment) {
     return (
@@ -84,6 +93,7 @@ export function SweepPlot() {
   }
 
   const series = buildSweepSeries(runs, effectiveX, effectiveY, effectiveGroup || undefined);
+  const failed = findFailedMarkers(runs, effectiveX, effectiveGroup || undefined);
   const isGrouped = series.length > 1 || (series.length === 1 && series[0].group !== null);
 
   const handleExportSvg = () => {
@@ -143,7 +153,7 @@ export function SweepPlot() {
         </div>
       )}
 
-      <SweepPlotChart series={series} xLabel={effectiveX} yLabel={effectiveY} svgRef={svgRef} />
+      <SweepPlotChart series={series} xLabel={effectiveX} yLabel={effectiveY} groupLabel={effectiveGroup} failed={failed} onSelectRun={selectRun} svgRef={svgRef} />
     </div>
   );
 }

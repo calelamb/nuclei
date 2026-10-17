@@ -172,12 +172,12 @@ All panels resizable and rearrangeable. Layout persists across sessions.
 
 ## Visual Design
 
-- **Dark theme** by default (base surface #0D131E, teal accents #00B4D8)
+- **Dark theme** by default (navy background #0F1B2D, teal accents #00B4D8)
 - Light theme option
-- **Code font:** Geist Mono (bundled locally, no CDN)
-- **UI font:** Geist Sans (bundled locally, no CDN); always via `TYPOGRAPHY.fontSans` / `fontMono`
+- **Code font:** JetBrains Mono
+- **UI font:** Inter
 - **Quantum elements:** Teal (#00B4D8)
-- **Dirac AI elements:** Purple, reserved for Dirac only (use `diracText` for small text); Research mode, QEC bases and overlays have their own tokens
+- **Dirac AI elements:** Purple (#7B2D8E)
 - 60fps animation target for Bloch sphere
 
 ## Dirac (AI Assistant)

@@ -81,4 +81,19 @@ describe('useActiveTabSync — Q# framework inference', () => {
 
     expect(useEditorStore.getState().framework).toBe('cirq');
   });
+
+  it('drops back to the last Python framework when leaving a .stim tab for a .py tab (research-05)', () => {
+    renderHook(() => useActiveTabSync());
+    act(() => {
+      useEditorStore.getState().setFramework('cirq');
+    });
+    act(() => {
+      useProjectStore.getState().openTab({ path: 'memory://p/rep.stim', content: 'H 0\n' });
+    });
+    expect(useEditorStore.getState().framework).toBe('stim');
+    act(() => {
+      useProjectStore.getState().openTab({ path: 'memory://p/bell.py', content: PY_SOURCE });
+    });
+    expect(useEditorStore.getState().framework).toBe('cirq');
+  });
 });

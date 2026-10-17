@@ -1,13 +1,15 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useProjectStore } from '../../stores/projectStore';
 import { useEditorStore } from '../../stores/editorStore';
 import { useSimulationStore } from '../../stores/simulationStore';
 import { useThemeStore } from '../../stores/themeStore';
-import { X, FileCode, Play, Loader2, Rocket } from 'lucide-react';
+import { X, FileCode, Play, Loader2, Rocket, ChevronDown } from 'lucide-react';
 import { getExecute, getFileOps } from '../../App';
 import { requestCloseTab } from '../../lib/tabClose';
 import { FrameworkSelector } from './FrameworkSelector';
 import { useHardwareStore } from '../../stores/hardwareStore';
+import { tabBarDensity, type TabBarDensity } from './tabBarLayout';
 
 import { TYPOGRAPHY } from '../../styles/tokens';
 const basename = (p: string) => p.split('/').pop() ?? p;
@@ -27,6 +29,15 @@ export function EditorTabs() {
   const [renaming, setRenaming] = useState(false);
   const [renameValue, setRenameValue] = useState('');
   const inputRef = useRef<HTMLInputElement>(null);
+  const barRef = useRef<HTMLDivElement>(null);
+  const stripRef = useRef<HTMLDivElement>(null);
+  const overflowBtnRef = useRef<HTMLButtonElement>(null);
+  const [density, setDensity] = useState<TabBarDensity>('full');
+  const compact = density !== 'full';
+  const tight = density === 'tight';
+  const [overflowing, setOverflowing] = useState(false);
+  const [overflowOpen, setOverflowOpen] = useState(false);
+  const [overflowPos, setOverflowPos] = useState<{ top: number; right: number } | null>(null);
   const legacyName = legacyFilePath ? basename(legacyFilePath) : 'untitled.py';
 
   useEffect(() => {
@@ -36,12 +47,64 @@ export function EditorTabs() {
     }
   }, [renaming]);
 
+  const measure = useCallback(() => {
+    const bar = barRef.current;
+    const strip = stripRef.current;
+    if (bar) setDensity(tabBarDensity(bar.clientWidth));
+    if (strip) setOverflowing(strip.scrollWidth > strip.clientWidth + 1);
+  }, []);
+
+  useEffect(() => {
+    measure();
+    if (typeof ResizeObserver === 'undefined' || !barRef.current) return;
+    const observer = new ResizeObserver(measure);
+    observer.observe(barRef.current);
+    if (stripRef.current) observer.observe(stripRef.current);
+    return () => observer.disconnect();
+  }, [measure, tabs.length]);
+
+  // Toolbar content (kernel state, framework chip) changes the strip's width
+  // without resizing the bar, so re-measure after every render; setState
+  // bails out when nothing changed.
+  useLayoutEffect(() => { measure(); });
+
+  // Keep the active tab visible when it changes or the strip is narrow.
+  useEffect(() => {
+    const strip = stripRef.current;
+    if (!strip || !activeTabPath) return;
+    const active = Array.from(strip.querySelectorAll<HTMLElement>('[role="tab"]')).find(
+      (el) => el.dataset.tabPath === activeTabPath,
+    );
+    active?.scrollIntoView?.({ block: 'nearest', inline: 'nearest' });
+  }, [activeTabPath, tabs.length]);
+
+  useEffect(() => {
+    if (!overflowOpen) return;
+    const btn = overflowBtnRef.current;
+    if (btn) {
+      const r = btn.getBoundingClientRect();
+      setOverflowPos({ top: r.bottom + 6, right: window.innerWidth - r.right });
+    }
+    const close = (e: MouseEvent) => {
+      const target = e.target as HTMLElement;
+      if (btn?.contains(target) || target.closest('[data-tab-overflow-menu]')) return;
+      setOverflowOpen(false);
+    };
+    const esc = (e: KeyboardEvent) => { if (e.key === 'Escape') setOverflowOpen(false); };
+    document.addEventListener('mousedown', close);
+    document.addEventListener('keydown', esc);
+    return () => {
+      document.removeEventListener('mousedown', close);
+      document.removeEventListener('keydown', esc);
+    };
+  }, [overflowOpen]);
+
   const canRun = kernelReady && !isRunning;
   const handleRun = () => {
     const e = getExecute();
     if (e) e();
   };
-  const runLabel = isRunning ? 'Running…' : !kernelReady ? 'Loading kernel…' : 'Run';
+  const runLabel = isRunning ? 'Running…' : !kernelReady ? (compact ? 'Loading…' : 'Loading kernel…') : 'Run';
   const runTitle = isRunning
     ? 'Simulation running'
     : !kernelReady
@@ -74,6 +137,7 @@ export function EditorTabs() {
       <div
         key={path}
         role="tab"
+        data-tab-path={path}
         aria-selected={isActive}
         onClick={() => setActiveTab(path)}
         onAuxClick={(e) => {
@@ -95,6 +159,7 @@ export function EditorTabs() {
           color: isActive ? colors.text : colors.textDim,
           cursor: 'pointer',
           maxWidth: 220,
+          flexShrink: 0,
           transition: 'background 120ms ease',
         }}
       >
@@ -239,6 +304,7 @@ export function EditorTabs() {
 
   return (
     <div
+      ref={barRef}
       style={{
         height: 40,
         display: 'flex',
@@ -251,27 +317,84 @@ export function EditorTabs() {
         gap: 8,
       }}
     >
-      <div style={{ display: 'flex', alignItems: 'stretch', overflow: 'auto', minWidth: 0 }}>
+      <div
+        ref={stripRef}
+        role="tablist"
+        aria-label="Open files"
+        onScroll={measure}
+        style={{ display: 'flex', alignItems: 'stretch', overflowX: 'auto', overflowY: 'hidden', minWidth: 0, flex: '1 1 0', scrollbarWidth: 'none' }}
+      >
         {usingLegacy ? renderLegacyTab() : tabs.map((t) => renderProjectTab(t.path, t.isDirty))}
       </div>
 
-      <div style={{ display: 'flex', alignItems: 'center' }}>
+      {overflowing && !usingLegacy && (
+        <div style={{ display: 'flex', alignItems: 'center', flexShrink: 0 }}>
+          <button
+            ref={overflowBtnRef}
+            onClick={() => setOverflowOpen((o) => !o)}
+            aria-label={`Show all ${tabs.length} open files`}
+            aria-haspopup="menu"
+            aria-expanded={overflowOpen}
+            title={`All open files (${tabs.length})`}
+            style={{
+              height: 26, display: 'flex', alignItems: 'center', gap: 3, padding: '0 6px',
+              background: overflowOpen ? colors.bgElevated : 'transparent', color: colors.textDim,
+              border: `1px solid ${colors.border}`, borderRadius: 5, cursor: 'pointer',
+              fontSize: 11, fontFamily: TYPOGRAPHY.fontMono,
+            }}
+          >
+            <ChevronDown size={12} /> {tabs.length}
+          </button>
+          {overflowOpen && overflowPos && createPortal(
+            <div
+              role="menu"
+              data-tab-overflow-menu
+              style={{
+                position: 'fixed', top: overflowPos.top, right: overflowPos.right, zIndex: 1000,
+                minWidth: 200, maxWidth: 320, maxHeight: 320, overflowY: 'auto', padding: '4px 0',
+                background: colors.bgPanel, border: `1px solid ${colors.borderStrong}`, borderRadius: 6,
+                boxShadow: '0 8px 24px rgba(0,0,0,0.25)',
+              }}
+            >
+              {tabs.map((t) => (
+                <button
+                  key={t.path}
+                  role="menuitem"
+                  onClick={() => { setActiveTab(t.path); setOverflowOpen(false); }}
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: 8, width: '100%', padding: '6px 12px',
+                    background: t.path === activeTabPath ? `${colors.accent}14` : 'transparent',
+                    color: t.path === activeTabPath ? colors.accent : colors.text, border: 'none',
+                    cursor: 'pointer', fontSize: 12, textAlign: 'left', fontFamily: TYPOGRAPHY.fontSans,
+                  }}
+                >
+                  <FileCode size={12} style={{ flexShrink: 0 }} />
+                  <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>{basename(t.path)}</span>
+                  {t.isDirty && <span style={{ width: 6, height: 6, borderRadius: '50%', background: colors.warning }} />}
+                </button>
+              ))}
+            </div>,
+            document.body,
+          )}
+        </div>
+      )}
+
+      <div style={{ display: 'flex', alignItems: 'center', flexShrink: 0 }}>
         <FrameworkSelector />
       </div>
 
-      <div style={{ flex: 1 }} />
-
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
         <button
           onClick={() => useHardwareStore.getState().openLaunch()}
           title="Launch on hardware (⌘⇧R)"
           aria-label="Launch on hardware"
           style={{
             height: 28,
-            padding: '0 12px',
+            padding: compact ? '0 8px' : '0 12px',
             display: 'flex',
             alignItems: 'center',
             gap: 6,
+            whiteSpace: 'nowrap',
             background: 'transparent',
             color: colors.accentLight,
             border: `1px solid ${colors.accent}40`,
@@ -292,8 +415,8 @@ export function EditorTabs() {
           }}
         >
           <Rocket size={12} />
-          <span>Launch</span>
-          <span style={{ fontSize: 11, opacity: 0.7, marginLeft: 2 }}>⌘⇧R</span>
+          {!compact && <span>Launch</span>}
+          {!compact && <span style={{ fontSize: 11, opacity: 0.7, marginLeft: 2 }}>⌘⇧R</span>}
         </button>
         <button
           onClick={handleRun}
@@ -302,10 +425,11 @@ export function EditorTabs() {
           aria-label={runTitle}
           style={{
             height: 28,
-            padding: '0 14px',
+            padding: tight ? '0 8px' : compact ? '0 10px' : '0 14px',
             display: 'flex',
             alignItems: 'center',
             gap: 7,
+            whiteSpace: 'nowrap',
             background: canRun ? colors.accent : colors.bgElevated,
             color: canRun ? '#0a0f1a' : colors.textDim,
             border: canRun ? 'none' : `1px solid ${colors.border}`,
@@ -336,8 +460,8 @@ export function EditorTabs() {
           ) : (
             <Play size={12} fill="currentColor" />
           )}
-          <span>{runLabel}</span>
-          {canRun && (
+          {!tight && <span>{runLabel}</span>}
+          {canRun && !compact && (
             <span
               style={{
                 fontSize: 11,

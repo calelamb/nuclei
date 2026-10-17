@@ -74,6 +74,13 @@ export function getRunValue(run: RunRecord, column: RunColumn): number | string 
   }
 }
 
+const TEXT_FIELD_KEYS = new Set(['status', 'seed_honored']);
+
+/** Whether a column's cells (and header) right-align as numbers. */
+export function isNumericColumn(column: RunColumn): boolean {
+  return column.kind !== 'field' || !TEXT_FIELD_KEYS.has(column.key);
+}
+
 export type SortDirection = 'asc' | 'desc';
 
 function compareValues(a: number | string | boolean | null, b: number | string | boolean | null): number {
@@ -106,4 +113,48 @@ export function filterByStatus(
 ): RunRecord[] {
   if (status === 'all') return [...runs];
   return runs.filter((run) => run.manifest.status === status);
+}
+
+const MAX_DECIMALS = 4;
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+const RUN_DIR_PATTERN = /^(\d{4})(\d{2})(\d{2})-(\d{2})(\d{2})(\d{2})-([A-Za-z0-9]+)$/;
+
+function decimalsOf(value: number): number {
+  if (Number.isInteger(value)) return 0;
+  const [, fraction = ''] = value.toFixed(MAX_DECIMALS).split('.');
+  return fraction.replace(/0+$/, '').length;
+}
+
+/**
+ * Decimals every cell of a numeric column should show: the most any row needs,
+ * capped at 4, so a column reads 6.2 / 6.0 / 5.8 rather than 6.2000 / 6 / 5.8000.
+ */
+export function columnDecimals(runs: readonly RunRecord[], column: RunColumn): number {
+  let decimals = 0;
+  for (const run of runs) {
+    const value = getRunValue(run, column);
+    if (typeof value === 'number' && Number.isFinite(value)) decimals = Math.max(decimals, decimalsOf(value));
+  }
+  return decimals;
+}
+
+const pad2 = (n: number) => String(n).padStart(2, '0');
+
+/**
+ * "Oct 15 08:20:30 · a458" in local time, matching the sidebar and run detail.
+ * Run dirs are named in UTC, so the clock time comes from `startedAt` (an ISO
+ * instant) when valid; otherwise the dir's own timestamp is parsed as UTC and
+ * converted. Shapes that aren't run dirs pass through.
+ */
+export function formatRunLabel(dir: string, startedAt?: string): string {
+  const match = RUN_DIR_PATTERN.exec(dir);
+  if (!match) return dir;
+  const [, year, month, day, hh, mm, ss, suffix] = match;
+  const fromManifest = startedAt ? new Date(startedAt) : null;
+  const instant = fromManifest && !Number.isNaN(fromManifest.getTime())
+    ? fromManifest
+    : new Date(Date.UTC(Number(year), Number(month) - 1, Number(day), Number(hh), Number(mm), Number(ss)));
+  if (Number.isNaN(instant.getTime())) return dir;
+  const monthName = MONTHS[instant.getMonth()];
+  return `${monthName} ${instant.getDate()} ${pad2(instant.getHours())}:${pad2(instant.getMinutes())}:${pad2(instant.getSeconds())} · ${suffix}`;
 }
