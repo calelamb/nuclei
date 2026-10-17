@@ -143,4 +143,17 @@ describe('useKernel (web)', () => {
     const separators = useSimulationStore.getState().terminalOutput.filter((l) => l.type === 'separator');
     expect(separators).toHaveLength(1);
   });
+
+  it('queues a Run requested while Python boots and starts it when ready', async () => {
+    controls.holdBoot = true;
+    const { result } = renderHook(() => useKernel(), { wrapper });
+    await waitFor(() => expect(controls.releaseBoot).not.toBeNull());
+
+    act(() => result.current.execute());
+    expect(controls.executeCalls).toBe(0);
+    expect(useSimulationStore.getState().terminalOutput.some((l) => /queued/i.test(l.text))).toBe(true);
+
+    act(() => controls.releaseBoot?.());
+    await waitFor(() => expect(controls.executeCalls).toBe(1));
+  });
 });

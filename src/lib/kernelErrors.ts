@@ -23,6 +23,8 @@ export interface KernelFailure {
   message: string;
   /** Short heading for the banner. */
   title: string;
+  /** The message minus any leading repeat of the title (what the banner body shows). */
+  detail: string;
   docsUrl: string;
 }
 
@@ -63,5 +65,9 @@ function classify(message: string): KernelFailureKind {
 export function describeKernelFailure(error: unknown): KernelFailure {
   const message = normalizeKernelError(error);
   const kind = classify(message);
-  return { kind, message, title: TITLES[kind], docsUrl: `${DOCS_BASE}#${kind}` };
+  const title = TITLES[kind];
+  const detail = message.startsWith(title)
+    ? message.slice(title.length).replace(/^[\s.:—-]+/, '').trim()
+    : message;
+  return { kind, message, title, detail: detail || message, docsUrl: `${DOCS_BASE}#${kind}` };
 }

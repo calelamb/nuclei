@@ -182,6 +182,9 @@ export function QuantumPlayground({ onComplete, onBridgeToIDE }: PlaygroundProps
     } else if (action === 'bridge') {
       // Load the Bell state code into the editor before transitioning
       setCode(BELL_STATE_CODE);
+      // A generated starter is not the student's own work: closing the tab
+      // right after the playground must not prompt about "unsaved changes".
+      useEditorStore.getState().setIsDirty(false);
       setFramework('qiskit');
       // Trigger bridge animation
       setPg((s) => ({ ...s, bridging: true }));

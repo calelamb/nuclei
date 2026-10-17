@@ -32,4 +32,12 @@ describe('describeKernelFailure', () => {
     expect(failure.message).toBe(message);
     expect(failure.docsUrl).toBe(`https://getnuclei.dev/docs/introduction/kernel-troubleshooting/#${kind}`);
   });
+
+  it('does not repeat the title in the banner body', () => {
+    const failure = describeKernelFailure(
+      "Couldn't start the browser Python engine. Check your connection or content blocker, then retry.",
+    );
+    expect(failure.detail).toBe('Check your connection or content blocker, then retry.');
+    expect(describeKernelFailure('Port 8742 is already in use.').detail).toBe('Port 8742 is already in use.');
+  });
 });

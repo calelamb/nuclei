@@ -49,7 +49,7 @@ export function KernelBanner() {
         <div style={{ minWidth: 0, flex: 1 }}>
           <div style={{ color: colors.text, fontSize: 13, fontWeight: 600 }}>{failure.title}</div>
           <div style={{ color: colors.textMuted, fontSize: 12, marginTop: 2, userSelect: 'text', wordBreak: 'break-word' }}>
-            {failure.message}
+            {failure.detail}
           </div>
           <div style={{ display: 'flex', gap: 6, marginTop: 8, flexWrap: 'wrap' }}>
             <button type="button" onClick={retryKernel} style={{ ...buttonStyle, borderColor: colors.accent, color: colors.accentLight }}>

@@ -78,6 +78,8 @@ export function useKernel() {
   const retryCountRef = useRef(0);
   const explainSeqRef = useRef(0);
   const runtimeSubscriptionsRef = useRef<Array<() => void>>([]);
+  // A Run requested before the kernel was ready; fired by the effect after `execute`.
+  const queuedRunRef = useRef(false);
   // Per-provider "connecting" watchdogs: a hardware_connect that's sent but
   // never answered (provider auth hangs) would leave the UI stuck on
   // "Connecting…" forever. Each connect arms a timer here; the
@@ -573,9 +575,11 @@ export function useKernel() {
       watchRuntime(pyodideRuntime);
 
       const kernel = new PyodideKernel((msg) => handleMessage(msg as KernelResponse));
+      // Available before the boot finishes: the runtime flips the status to
+      // ready first, and a queued Run fires from that very transition.
+      pyodideRef.current = kernel;
       await kernel.init();
       if (!mountedRef.current) return;
-      pyodideRef.current = kernel;
       markWebReady();
 
       // Initial parse of whatever is in the editor (never rewrites it).
@@ -584,6 +588,7 @@ export function useKernel() {
         void kernel.send({ type: 'parse', code, language: kernelLanguageFor(framework, filePath) });
       }
     } catch (e) {
+      pyodideRef.current = null;
       if (mountedRef.current) failKernel(normalizeKernelError(e));
     }
   }, [failKernel, handleMessage, isWeb, markWebReady, watchRuntime]);
@@ -690,15 +695,20 @@ export function useKernel() {
     const { kernelReady } = useEditorStore.getState();
     if (!kernelReady) {
       const { kernelStatus, kernelError } = useEditorStore.getState();
+      const failed = kernelStatus === 'failed';
+      // While Python is still starting, a Run is remembered and fires the
+      // moment the kernel is ready (see the effect below), instead of being dropped.
+      queuedRunRef.current = !failed;
       useSimulationStore.getState().addOutput(
-        kernelStatus === 'failed'
+        failed
           ? `The kernel is not running (${kernelError ?? 'start failed'}). Use Retry in the editor toolbar.`
-          : 'Kernel is still loading. Please wait...',
+          : 'Python is still starting. Your run is queued and will start automatically.',
         'info',
       );
       useBottomPanelStore.getState().focusTerminal();
       return;
     }
+    queuedRunRef.current = false;
 
     const { code } = useEditorStore.getState();
     const { shots } = useSimulationStore.getState();
@@ -736,6 +746,17 @@ export function useKernel() {
       ws.send(JSON.stringify({ type: 'execute', code, shots, language }));
     }
   }, [isWeb]);
+
+  // Fire a Run that was requested while the kernel was still starting.
+  useEffect(() => {
+    return useEditorStore.subscribe((state, prev) => {
+      if (state.kernelReady && !prev.kernelReady && queuedRunRef.current) {
+        queuedRunRef.current = false;
+        execute();
+      }
+      if (state.kernelStatus === 'failed') queuedRunRef.current = false;
+    });
+  }, [execute]);
 
   // Send a hardware request over the desktop WebSocket. No-ops on web since
   // there's no local kernel process to talk to there.
