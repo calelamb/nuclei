@@ -7,7 +7,7 @@ export const MAX_SPHERES_PER_PAGE = 8;
 /** Space under each sphere for its qubit label and readout. */
 export const CELL_CAPTION_PX = 36;
 const GAP_PX = 8;
-const MAX_CELL_ASPECT = 1.45;
+const MAX_CELL_ASPECT = 1.15;
 
 export interface BlochGridInput {
   count: number;
