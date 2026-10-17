@@ -158,3 +158,22 @@ export function formatRunLabel(dir: string, startedAt?: string): string {
   const monthName = MONTHS[instant.getMonth()];
   return `${monthName} ${instant.getDate()} ${pad2(instant.getHours())}:${pad2(instant.getMinutes())}:${pad2(instant.getSeconds())} · ${suffix}`;
 }
+
+/**
+ * Decimals each metric needs across `runs` (same rule as the runs table), so
+ * the table, run detail and Compare print one metric identically.
+ */
+export function metricDecimals(runs: readonly RunRecord[]): ReadonlyMap<string, number> {
+  const names = new Set<string>();
+  for (const run of runs) for (const name of Object.keys(run.metrics)) names.add(name);
+  const map = new Map<string, number>();
+  for (const name of names) map.set(name, columnDecimals(runs, { key: name, label: name, kind: 'metric' }));
+  return map;
+}
+
+/** "counts_entropy" -> "Counts entropy": readable two-line headers instead of clipped snake_case. */
+export function humanizeColumnLabel(label: string): string {
+  if (!/[_-]/.test(label)) return label;
+  const spaced = label.replace(/[_-]+/g, ' ').trim();
+  return spaced.length === 0 ? label : spaced.charAt(0).toUpperCase() + spaced.slice(1);
+}

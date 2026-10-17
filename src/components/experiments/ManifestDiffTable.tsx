@@ -3,22 +3,24 @@ import type { DiffResult, ManifestFieldValue } from '../../services/manifestDiff
 import type { RunRecord } from '../../types/experiment';
 import { TYPOGRAPHY } from '../../styles/tokens';
 import { Table, Thead, Tbody, Tr, Th, Td } from '../ui/Table';
+import { differsFromBaseline, formatDiffValue, splitDiffFields } from './compareDiffModel';
+import { formatRunLabel } from './runsTableColumns';
+import './experiments.css';
 
-function formatValue(v: ManifestFieldValue | undefined): string {
-  if (v === undefined) return '—';
-  if (v === null) return 'null';
-  return String(v);
-}
+const FIELD_COLUMN_WIDTH = 160;
 
 /**
- * PRD 09 Phase E (E1) — renders `diffManifests`' output: a small table of
- * only the DIFFERING fields (one column per selected run, highlighted),
- * with the identical fields collapsed behind a `<details>` disclosure so a
- * long manifest doesn't drown the interesting differences.
+ * PRD 09 Phase E (E1) — renders `diffManifests`' output: a table of only the
+ * DIFFERING short fields (equal-width run columns; values that differ from the
+ * first run are highlighted), long values such as a failed run's traceback as
+ * full-width blocks below, and the identical fields collapsed behind a
+ * `<details>` disclosure.
  */
 export function ManifestDiffTable({ diff, runs }: { diff: DiffResult; runs: readonly RunRecord[] }) {
   const colors = useThemeStore((s) => s.colors);
   const cellFont = { fontSize: 11, fontFamily: TYPOGRAPHY.fontMono };
+  const { grid, long } = splitDiffFields(diff.differing);
+  const runLabel = (run: RunRecord) => formatRunLabel(run.dir, run.manifest.started_at);
 
   return (
     <div>
@@ -27,24 +29,33 @@ export function ManifestDiffTable({ diff, runs }: { diff: DiffResult; runs: read
           All manifest fields are identical across the selected runs.
         </div>
       ) : (
-        <Table label="Differing manifest fields" dense>
-          <Thead>
-            <Tr>
-              <Th plain>Field</Th>
-              {runs.map((run) => <Th key={run.dir} plain>{run.dir}</Th>)}
-            </Tr>
-          </Thead>
-          <Tbody>
-            {diff.differing.map((field) => (
-              <Tr key={field.key}>
-                <Td muted style={{ fontWeight: 600 }}>{field.key}</Td>
-                {field.values.map((value, i) => (
-                  <Td key={runs[i]?.dir ?? i} style={{ color: colors.accentText }}>{formatValue(value)}</Td>
+        <>
+          {grid.length > 0 && (
+            <Table label="Differing manifest fields" dense className="nuclei-compare-diff">
+              <Thead>
+                <Tr>
+                  <Th plain style={{ width: FIELD_COLUMN_WIDTH }}>Field</Th>
+                  {runs.map((run) => <Th key={run.dir} plain title={run.dir}>{runLabel(run)}</Th>)}
+                </Tr>
+              </Thead>
+              <Tbody>
+                {grid.map((field) => (
+                  <Tr key={field.key}>
+                    <Td muted style={{ fontWeight: 600 }}>{field.key}</Td>
+                    {field.values.map((value, i) => (
+                      <Td key={runs[i]?.dir ?? i} style={differsFromBaseline(field.values, i) ? { color: colors.accentText } : undefined}>
+                        {formatDiffValue(field.key, value)}
+                      </Td>
+                    ))}
+                  </Tr>
                 ))}
-              </Tr>
-            ))}
-          </Tbody>
-        </Table>
+              </Tbody>
+            </Table>
+          )}
+          {long.map((field) => (
+            <LongField key={field.key} fieldKey={field.key} values={field.values} runs={runs} runLabel={runLabel} />
+          ))}
+        </>
       )}
 
       <details style={{ marginTop: 10 }}>
@@ -54,11 +65,35 @@ export function ManifestDiffTable({ diff, runs }: { diff: DiffResult; runs: read
         <ul style={{ margin: '6px 0 0', paddingLeft: 16 }}>
           {diff.identical.map((field) => (
             <li key={field.key} style={{ color: colors.textDim, ...cellFont, fontSize: 11, listStyle: 'none' }}>
-              {field.key}: {formatValue(field.value)}
+              {field.key}: {formatDiffValue(field.key, field.value)}
             </li>
           ))}
         </ul>
       </details>
+    </div>
+  );
+}
+
+function LongField({ fieldKey, values, runs, runLabel }: {
+  fieldKey: string;
+  values: ReadonlyArray<ManifestFieldValue | undefined>;
+  runs: readonly RunRecord[];
+  runLabel: (run: RunRecord) => string;
+}) {
+  const isError = fieldKey === 'error';
+  return (
+    <div className="nuclei-compare-long" data-field={fieldKey}>
+      <div className="nuclei-compare-long__key">{fieldKey}</div>
+      {values.map((value, i) => {
+        const run = runs[i];
+        if (!run || value === undefined || value === null) return null;
+        return (
+          <div key={run.dir} className="nuclei-compare-long__item">
+            <div className="nuclei-compare-long__run" title={run.dir}>{runLabel(run)}</div>
+            <pre className="nuclei-compare-long__value" data-tone={isError ? 'error' : undefined}>{String(value)}</pre>
+          </div>
+        );
+      })}
     </div>
   );
 }

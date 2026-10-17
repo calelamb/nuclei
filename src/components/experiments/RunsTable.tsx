@@ -8,7 +8,9 @@ import { expandGrid } from '../../types/experiment';
 import type { RunStatus } from '../../types/experiment';
 import { createTauriExperimentFs } from '../../services/experimentFs';
 import { toCsv, downloadCsv } from '../../services/experimentExport';
-import { columnDecimals, isNumericColumn, deriveColumns, filterByStatus, getRunValue, sortRuns } from './runsTableColumns';
+import { columnDecimals, humanizeColumnLabel, isNumericColumn, deriveColumns, filterByStatus, getRunValue, sortRuns } from './runsTableColumns';
+import { nextRowIndex, scrollTopToReveal } from './runsTableNavigation';
+import { rememberOpenedRun, takeOpenedRun } from './runFocusMemory';
 import { RunsTableRow, ROW_HEIGHT } from './RunsTableRow';
 import { RunButton } from './RunButton';
 import { RunFeedback } from './RunFeedback';
@@ -21,8 +23,10 @@ const OVERSCAN = 6;
 const STATUS_OPTIONS: Array<RunStatus | 'all'> = ['all', 'complete', 'failed', 'running', 'stale'];
 const CHECKBOX_COLUMN_WIDTH = 32;
 const RUN_COLUMN_WIDTH = 190;
+const NARROW_RUN_COLUMN_WIDTH = 168;
+const NARROW_VIEWPORT = 1000;
 const MIN_DATA_COLUMN_WIDTH = 116;
-const HEADER_HEIGHT = 28;
+const HEADER_HEIGHT = 40;
 
 /**
  * PRD 09 Phase D (D2/D4) — the runs table: main content area when an
@@ -71,6 +75,9 @@ function RunsTableBody() {
 
   const [scrollTop, setScrollTop] = useState(0);
   const [viewportHeight, setViewportHeight] = useState(400);
+  const [viewportWidth, setViewportWidth] = useState(1200);
+  const [activeDir, setActiveDir] = useState<string | null>(null);
+  const pendingFocusRef = useRef<string | null>(null);
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const latestScrollTop = useRef(view.scrollTop);
   // Offset captured the instant the user leaves for run detail / compare; the
@@ -94,9 +101,10 @@ function RunsTableBody() {
     scrollRef.current = el;
     if (!el) return;
     setViewportHeight(el.clientHeight);
+    setViewportWidth(el.clientWidth);
     // Guard for environments without ResizeObserver (older webviews, jsdom).
     if (typeof ResizeObserver === 'undefined') return;
-    const observer = new ResizeObserver(() => setViewportHeight(el.clientHeight));
+    const observer = new ResizeObserver(() => { setViewportHeight(el.clientHeight); setViewportWidth(el.clientWidth); });
     observer.observe(el);
     observerRef.current = observer;
   }, []);
@@ -140,8 +148,49 @@ function RunsTableBody() {
     return map;
   }, [columns, allRuns]);
 
-  const gridTemplateColumns = `${CHECKBOX_COLUMN_WIDTH}px ${RUN_COLUMN_WIDTH}px repeat(${columns.length}, minmax(${MIN_DATA_COLUMN_WIDTH}px, 1fr))`;
-  const contentMinWidth = CHECKBOX_COLUMN_WIDTH + RUN_COLUMN_WIDTH + columns.length * MIN_DATA_COLUMN_WIDTH;
+  const runColumnWidth = viewportWidth < NARROW_VIEWPORT ? NARROW_RUN_COLUMN_WIDTH : RUN_COLUMN_WIDTH;
+  const gridTemplateColumns = `${CHECKBOX_COLUMN_WIDTH}px ${runColumnWidth}px repeat(${columns.length}, minmax(${MIN_DATA_COLUMN_WIDTH}px, 1fr))`;
+  const contentMinWidth = CHECKBOX_COLUMN_WIDTH + runColumnWidth + columns.length * MIN_DATA_COLUMN_WIDTH;
+
+  // Roving tabindex: one row is the Tab stop; arrows move it. The row is
+  // focused after render because virtualization may not have mounted it yet.
+  const activeIndex = Math.max(0, rows.findIndex((r) => r.dir === activeDir));
+  const activeRowDir = rows[activeIndex]?.dir ?? null;
+
+  const focusRow = useCallback((dir: string) => {
+    const index = rows.findIndex((r) => r.dir === dir);
+    if (index < 0) return;
+    const el = scrollRef.current;
+    if (el) el.scrollTop = scrollTopToReveal(index, el.scrollTop, el.clientHeight || viewportHeight, HEADER_HEIGHT);
+    pendingFocusRef.current = dir;
+    setActiveDir(dir);
+    setScrollTop(el?.scrollTop ?? 0);
+  }, [rows, viewportHeight]);
+
+  const navigateRows = (key: string, fromDir: string) => {
+    const from = rows.findIndex((r) => r.dir === fromDir);
+    const pageSize = Math.max(1, Math.floor((viewportHeight - HEADER_HEIGHT) / ROW_HEIGHT) - 1);
+    const target = rows[nextRowIndex(key, from, rows.length, pageSize)];
+    if (target) focusRow(target.dir);
+  };
+
+  useEffect(() => {
+    const dir = pendingFocusRef.current;
+    if (!dir) return;
+    const el = scrollRef.current?.querySelector<HTMLElement>(`[data-run-dir="${dir}"]`);
+    if (!el) return;
+    pendingFocusRef.current = null;
+    el.focus({ preventScroll: true });
+  });
+
+  // Coming back from run detail: put focus on the row that opened it.
+  const restoredFocusRef = useRef(false);
+  useEffect(() => {
+    if (restoredFocusRef.current || rows.length === 0) return;
+    restoredFocusRef.current = true;
+    const dir = takeOpenedRun();
+    if (dir) focusRow(dir);
+  }, [rows, focusRow]);
 
   const toggleSort = (key: string) => {
     if (sortKey !== key) patchRunsView(fileKey, { sortKey: key, sortDirection: 'asc' });
@@ -260,30 +309,42 @@ function RunsTableBody() {
               className="nuclei-runs-header"
               style={{ gridTemplateColumns, height: HEADER_HEIGHT, position: 'sticky', top: 0 }}
             >
-              <div role="columnheader" aria-label="Select for comparison" />
-              <div role="columnheader" className="nuclei-runs-header__cell">Run</div>
+              <div role="columnheader" aria-label="Select for comparison" className="nuclei-runs-header__sticky nuclei-runs-header__sticky--check" />
+              <div role="columnheader" className="nuclei-runs-header__cell nuclei-runs-header__sticky nuclei-runs-header__sticky--run">Run</div>
               {columns.map((column) => (
-                <button
+                <div
                   key={column.key}
-                  type="button"
                   role="columnheader"
-                  title={column.label}
-                  className="nuclei-runs-header__cell nuclei-runs-header__sort"
+                  aria-sort={sortKey !== column.key ? 'none' : sortDirection === 'asc' ? 'ascending' : 'descending'}
+                  className="nuclei-runs-header__cell"
                   data-numeric={isNumericColumn(column)}
-                  data-sorted={sortKey === column.key}
-                  onClick={() => toggleSort(column.key)}
                 >
-                  <span className="nuclei-runs-header__label">{column.label}</span>
-                  {sortKey === column.key && (sortDirection === 'asc'
-                    ? <ChevronUp size={ICON_SIZE.xs} strokeWidth={ICON_STROKE} style={{ flexShrink: 0 }} />
-                    : <ChevronDown size={ICON_SIZE.xs} strokeWidth={ICON_STROKE} style={{ flexShrink: 0 }} />)}
-                </button>
+                  <button
+                    type="button"
+                    title={column.label}
+                    className="nuclei-runs-header__sort"
+                    data-sorted={sortKey === column.key}
+                    onClick={() => toggleSort(column.key)}
+                  >
+                    <span className="nuclei-runs-header__label">{humanizeColumnLabel(column.label)}</span>
+                    {sortKey === column.key && (sortDirection === 'asc'
+                      ? <ChevronUp size={ICON_SIZE.xs} strokeWidth={ICON_STROKE} style={{ flexShrink: 0 }} />
+                      : <ChevronDown size={ICON_SIZE.xs} strokeWidth={ICON_STROKE} style={{ flexShrink: 0 }} />)}
+                  </button>
+                </div>
               ))}
             </div>
 
             {rows.length === 0 ? (
               <div style={{ padding: 24, color: colors.textDim, fontSize: 12, fontFamily: TYPOGRAPHY.fontSans }}>
-                {allRuns.length === 0 ? 'No runs yet. Hit Run to start a sweep.' : 'No runs match this filter.'}
+                {allRuns.length === 0
+                  ? (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                      <span>{pointCount} point{pointCount === 1 ? '' : 's'} ready</span>
+                      <RunButton experiment={experiment} projectRoot={projectRoot} pointCount={pointCount} label={hasSweep ? 'Run sweep' : 'Run'} />
+                    </div>
+                  )
+                  : 'No runs match this filter.'}
               </div>
             ) : (
               <div style={{ height: totalHeight, position: 'relative' }}>
@@ -296,7 +357,10 @@ function RunsTableBody() {
                     gridTemplateColumns={gridTemplateColumns}
                     top={(startIndex + i) * ROW_HEIGHT}
                     compareSelected={compareSelection.includes(run.dir)}
-                    onSelect={(dir) => { rememberScroll(); selectRun(dir); }}
+                    active={run.dir === activeRowDir}
+                    onFocusRow={setActiveDir}
+                    onNavigate={navigateRows}
+                    onSelect={(dir) => { rememberScroll(); rememberOpenedRun(dir); selectRun(dir); }}
                     onToggleCompare={toggleCompareSelection}
                   />
                 ))}

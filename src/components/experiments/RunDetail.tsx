@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { ArrowLeft, Copy, FolderOpen } from 'lucide-react';
 import { useThemeStore } from '../../stores/themeStore';
 import { useProjectStore } from '../../stores/projectStore';
@@ -7,10 +7,10 @@ import { useExperimentUiStore } from '../../stores/experimentUiStore';
 import { runsDirForExperiment } from '../../services/experimentRunner';
 import { createTauriExperimentFs } from '../../services/experimentFs';
 import { openRunFolder } from '../../lib/openRunFolder';
-import { formatSignificant, formatStartedAt, toChips } from './runDetailFormat';
+import { formatStartedAt, toChips, toMetricChips } from './runDetailFormat';
 import { RunHistogram } from './RunHistogram';
 import { RunCircuitDiagram } from './RunCircuitDiagram';
-import { formatRunLabel } from './runsTableColumns';
+import { formatRunLabel, metricDecimals } from './runsTableColumns';
 import { PanelHeader } from '../layout/PanelHeader';
 import type { CircuitSnapshot, SimulationResult } from '../../types/quantum';
 import type { RunRecord } from '../../types/experiment';
@@ -128,7 +128,7 @@ function ManifestRow({ row }: { row: ManifestRowData }) {
   );
 }
 
-function manifestRows(run: RunRecord): ManifestRowData[] {
+function manifestRows(run: RunRecord, decimals: ReadonlyMap<string, number>): ManifestRowData[] {
   const m = run.manifest;
   const rows: ManifestRowData[] = [
     { label: 'Status', value: text(m.status) },
@@ -147,7 +147,7 @@ function manifestRows(run: RunRecord): ManifestRowData[] {
     { label: 'Error', value: m.error ? { kind: 'error', text: m.error } : text('—') },
   ];
   if (Object.keys(run.metrics).length > 0) {
-    rows.push({ label: 'Metrics', value: { kind: 'chips', chips: toChips(run.metrics, formatSignificant) } });
+    rows.push({ label: 'Metrics', value: { kind: 'chips', chips: toMetricChips(run.metrics, decimals) } });
   }
   return rows;
 }
@@ -165,6 +165,10 @@ export function RunDetail() {
   const run = selectedFileName
     ? (runsByExperiment[selectedFileName] ?? []).find((r) => r.dir === selectedRunDir) ?? null
     : null;
+
+  const backRef = useRef<HTMLButtonElement>(null);
+  const siblingRuns = selectedFileName ? runsByExperiment[selectedFileName] : undefined;
+  const decimals = useMemo(() => metricDecimals(siblingRuns ?? []), [siblingRuns]);
 
   const [artifacts, setArtifacts] = useState<RunArtifacts>(EMPTY_ARTIFACTS);
   const [tab, setTab] = useState<OutputTab>(run?.manifest.status === 'failed' ? 'stderr' : 'stdout');
@@ -187,6 +191,12 @@ export function RunDetail() {
     };
   }, [projectRoot, experiment, selectedRunDir]);
 
+  // Opening a run moves focus to Back, so the keyboard user lands inside the detail.
+  const hasRun = Boolean(experiment && run && projectRoot);
+  useEffect(() => {
+    if (hasRun) backRef.current?.focus();
+  }, [hasRun]);
+
   if (!experiment || !run || !projectRoot) {
     return (
       <div style={{ padding: 24, color: colors.textDim, fontSize: 12, fontFamily: TYPOGRAPHY.fontSans }}>
@@ -203,16 +213,24 @@ export function RunDetail() {
   const showOutputs = run.manifest.status !== 'failed' || artifacts.result !== null || artifacts.snapshot !== null;
 
   return (
-    <div style={{ height: '100%', overflow: 'auto', background: colors.bg }}>
+    <div
+      style={{ height: '100%', overflow: 'auto', background: colors.bg }}
+      onKeyDown={(e) => {
+        if (e.key !== 'Escape' || e.defaultPrevented) return;
+        const target = e.target;
+        if (target instanceof HTMLElement && target.closest('input, textarea, select, [role="menu"]')) return;
+        e.preventDefault();
+        selectRun(null);
+      }}
+    >
       {/* Shared PanelHeader (PRD 11 Phase C) — replaces the hand-rolled header.
           Leading = back-to-runs, title = run dir, actions = open run folder,
           overflow = Help→docs. */}
       <PanelHeader
         title={formatRunLabel(run.dir, run.manifest.started_at)}
-        context={experiment.spec.name}
         helpHref="https://getnuclei.dev/docs/research/experiments/"
         leading={
-          <Button variant="ghost" size="sm" onClick={() => selectRun(null)} icon={<ArrowLeft size={ICON_SIZE.sm} strokeWidth={ICON_STROKE} />}>
+          <Button ref={backRef} variant="ghost" size="sm" onClick={() => selectRun(null)} icon={<ArrowLeft size={ICON_SIZE.sm} strokeWidth={ICON_STROKE} />}>
             Back to runs
           </Button>
         }
@@ -229,7 +247,7 @@ export function RunDetail() {
             Manifest
           </div>
           <dl style={{ margin: 0 }}>
-            {manifestRows(run).map((row) => (
+            {manifestRows(run, decimals).map((row) => (
               <ManifestRow key={row.label} row={row} />
             ))}
           </dl>

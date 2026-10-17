@@ -156,4 +156,11 @@ describe('RunDetail', () => {
     expect(queryByText('Measurements')).toBeNull();
     expect(getByText(/Traceback/).tagName).toBe('PRE');
   });
+
+  it('focuses Back on open and closes on Escape (LR-10)', async () => {
+    const { getByText, container } = render(<RunDetail />);
+    expect(document.activeElement).toBe(getByText('Back to runs').closest('button'));
+    fireEvent.keyDown(container.firstElementChild as HTMLElement, { key: 'Escape' });
+    expect(useExperimentUiStore.getState().selectedRunDir).toBeNull();
+  });
 });

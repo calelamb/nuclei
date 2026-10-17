@@ -1,7 +1,7 @@
 import { Badge, type BadgeTone } from '../ui';
 import { formatRunLabel, isNumericColumn, getRunValue, type RunColumn } from './runsTableColumns';
 import type { RunRecord, RunStatus } from '../../types/experiment';
-import { activateOnKey } from '../../lib/a11y';
+import { ROW_NAV_KEYS } from './runsTableNavigation';
 
 export const ROW_HEIGHT = 30;
 
@@ -30,7 +30,11 @@ interface RunsTableRowProps {
   top: number;
   /** PRD 09 Phase E — whether this row is checked for the Compare view. */
   compareSelected: boolean;
+  /** Roving tabindex: only the active row is a Tab stop. */
+  active: boolean;
   onSelect(dir: string): void;
+  onNavigate(key: string, dir: string): void;
+  onFocusRow(dir: string): void;
   onToggleCompare(dir: string): void;
 }
 
@@ -42,7 +46,10 @@ export function RunsTableRow({
   gridTemplateColumns,
   top,
   compareSelected,
+  active,
   onSelect,
+  onNavigate,
+  onFocusRow,
   onToggleCompare,
 }: RunsTableRowProps) {
   const statusTone = STATUS_TONE[run.manifest.status];
@@ -53,9 +60,23 @@ export function RunsTableRow({
       className="nuclei-runs-row"
       data-run-dir={run.dir}
       data-checked={compareSelected}
-      tabIndex={0}
+      tabIndex={active ? 0 : -1}
+      aria-selected={compareSelected}
       onClick={() => onSelect(run.dir)}
-      onKeyDown={activateOnKey(() => onSelect(run.dir))}
+      onFocus={(e) => { if (e.target === e.currentTarget) onFocusRow(run.dir); }}
+      onKeyDown={(e) => {
+        if (e.target !== e.currentTarget) return;
+        if (ROW_NAV_KEYS.has(e.key)) {
+          e.preventDefault();
+          onNavigate(e.key, run.dir);
+        } else if (e.key === 'Enter') {
+          e.preventDefault();
+          onSelect(run.dir);
+        } else if (e.key === ' ') {
+          e.preventDefault();
+          onToggleCompare(run.dir);
+        }
+      }}
       style={{ top, height: ROW_HEIGHT, gridTemplateColumns }}
     >
       <div
@@ -66,6 +87,7 @@ export function RunsTableRow({
         <input
           type="checkbox"
           checked={compareSelected}
+          tabIndex={active ? 0 : -1}
           onChange={() => onToggleCompare(run.dir)}
           aria-label={`Select ${run.dir} for comparison`}
         />

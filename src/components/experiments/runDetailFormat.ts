@@ -20,11 +20,18 @@ export function formatRelative(then: Date, now: Date): string {
   return `${Math.floor(delta / DAY)} d ago`;
 }
 
+/** Local date-time, e.g. "Oct 15, 2:18:30 PM". Raw string if unparsable. */
+export function formatLocalDateTime(iso: string): string {
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return iso;
+  return date.toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', second: '2-digit' });
+}
+
 /** Local date-time plus relative age, e.g. "Oct 15, 2:18 PM (3 d ago)". Raw string if unparsable. */
 export function formatStartedAt(iso: string, now: Date = new Date()): string {
   const date = new Date(iso);
   if (Number.isNaN(date.getTime())) return iso;
-  const local = date.toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', second: '2-digit' });
+  const local = formatLocalDateTime(iso);
   const relative = formatRelative(date, now);
   return relative ? `${local} (${relative})` : local;
 }
@@ -33,4 +40,17 @@ export function formatStartedAt(iso: string, now: Date = new Date()): string {
 export function toChips(record: Record<string, unknown>, numberFormat: (n: number) => string = String): string[] {
   return Object.entries(record).map(([key, value]) =>
     `${key} = ${typeof value === 'number' ? numberFormat(value) : String(value)}`);
+}
+
+/** Sidebar "last run": relative age with the full local time for a tooltip; "never run" without runs. */
+export function describeLastRun(iso: string | undefined, now: Date = new Date()): { label: string; title: string } {
+  if (!iso) return { label: 'never run', title: 'No runs yet' };
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return { label: iso, title: iso };
+  return { label: formatRelative(date, now) || formatLocalDateTime(iso), title: formatLocalDateTime(iso) };
+}
+
+/** Metric chips printed with the same per-metric decimals the runs table uses. */
+export function toMetricChips(metrics: Record<string, number>, decimals: ReadonlyMap<string, number>): string[] {
+  return Object.entries(metrics).map(([name, value]) => `${name} = ${value.toFixed(decimals.get(name) ?? 4)}`);
 }
