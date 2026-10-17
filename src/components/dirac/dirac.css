@@ -112,3 +112,6 @@
 .dirac-rail__label { color: var(--color-accent-dirac-text); font: var(--font-weight-semibold) var(--font-size-caption) var(--font-sans); letter-spacing: 1px; }
 
 .dirac-run-stop.nuclei-btn { align-self: flex-start; }
+
+/* No-key state: the connect card sits near the top, under the header, instead of floating mid-panel. */
+.dirac-connect { flex: 1; min-height: 0; overflow: auto; display: flex; align-items: flex-start; justify-content: center; padding-top: var(--space-6); }

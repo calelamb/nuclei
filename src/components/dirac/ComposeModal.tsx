@@ -5,6 +5,7 @@ import { useDiracStore } from '../../stores/diracStore';
 import { useThemeStore } from '../../stores/themeStore';
 import { compose } from '../../services/compose';
 
+import { IconButton, TextInput } from '../ui';
 import { TYPOGRAPHY } from '../../styles/tokens';
 interface ComposeModalProps {
   open: boolean;
@@ -111,24 +112,13 @@ export function ComposeModal({ open, onClose }: ComposeModalProps) {
           <Sparkles size={14} />
           Dirac · Compose
           <div style={{ flex: 1 }} />
-          <button
-            onClick={onClose}
-            aria-label="Close"
-            style={{
-              background: 'transparent',
-              border: 'none',
-              color: colors.textDim,
-              cursor: 'pointer',
-              padding: 2,
-              display: 'flex',
-              alignItems: 'center',
-            }}
-          >
+          <IconButton size="sm" aria-label="Close" onClick={onClose}>
             <X size={14} />
-          </button>
+          </IconButton>
         </div>
-        <input
+        <TextInput
           ref={inputRef}
+          size="lg"
           value={intent}
           onChange={(e) => setIntent(e.target.value)}
           onKeyDown={(e) => {
@@ -138,15 +128,7 @@ export function ComposeModal({ open, onClose }: ComposeModalProps) {
             }
           }}
           placeholder="Describe what you want — e.g. 'a 3-qubit GHZ state'"
-          style={{
-            background: colors.bgElevated,
-            border: `1px solid ${colors.border}`,
-            borderRadius: 8,
-            padding: '10px 12px',
-            color: colors.text,
-            fontSize: 14,
-            fontFamily: TYPOGRAPHY.fontSans,
-          }}
+          aria-label="Describe what Dirac should compose"
         />
         <div
           style={{
@@ -159,7 +141,7 @@ export function ComposeModal({ open, onClose }: ComposeModalProps) {
         >
           {loading && (
             <>
-              <Loader2 size={12} style={{ animation: 'nuclei-spin 800ms linear infinite' }} /> Thinking…
+              <Loader2 className="nuclei-spin" size={12} /> Thinking…
             </>
           )}
           {!loading && (

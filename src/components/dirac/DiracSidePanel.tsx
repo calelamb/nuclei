@@ -396,7 +396,7 @@ export function DiracSidePanel() {
 
       {!hasApiKey || keyEntryOpen ? (
         /* No (or rejected) API key: connect inline instead of showing chat */
-        <div style={{ flex: 1, minHeight: 0, overflow: 'auto', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <div className="dirac-connect">
           <DiracNoKey replacing={hasApiKey} />
         </div>
       ) : (
