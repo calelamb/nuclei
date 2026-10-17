@@ -708,12 +708,21 @@ describe('<QecWorkbench />', () => {
   it('renders a safe empty state when no Studies exist', () => {
     useQecStudyUiStore.setState({ activeStudyId: null });
     useQecStudyStore.setState({ studies: [], validationErrors: [], loading: false });
+    useProjectStore.setState({ projectRoot: '/project' });
     render(<QecWorkbench />);
     expect(screen.getByText('No Studies found')).toBeTruthy();
     expect(screen.getByText(/Create a Study manifest/)).toBeTruthy();
     expect(screen.getByRole<HTMLSelectElement>('combobox', { name: 'Active QEC Study' }).disabled).toBe(true);
     expect(screen.getByText('Not evaluated')).toBeTruthy();
     expect(screen.getAllByText('Provenance not evaluated')).toHaveLength(2);
+  });
+
+  it('does not tell a project-less user to create a manifest in a folder they do not have (qec-r-14)', () => {
+    useQecStudyUiStore.setState({ activeStudyId: null });
+    useQecStudyStore.setState({ studies: [], validationErrors: [], loading: false });
+    render(<QecWorkbench />);
+    expect(screen.queryByText(/Create a Study manifest/)).toBeNull();
+    expect(screen.getByText(/Open a project folder to create Studies/)).toBeTruthy();
   });
 
   it('distinguishes manifest validity from provenance evaluation', () => {

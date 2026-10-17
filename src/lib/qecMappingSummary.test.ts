@@ -5,26 +5,24 @@ import { describeCounts, describeMapping } from './qecMappingSummary';
 const base: SinterMapping = { p: 'p', d: 'd', rounds: 'r', decoder: DECODER_COLUMN, groupBy: [] };
 
 describe('describeMapping', () => {
-  it('lists each mapped field and names the decoder column', () => {
-    expect(describeMapping(base)).toBe('p = p · d = d · rounds = r · series by decoder column');
+  it('lists only what departs from the defaults, in one notation', () => {
+    expect(describeMapping(base)).toBe('rounds = r');
+    expect(describeMapping({ ...base, p: 'q' })).toBe('p = q · rounds = r');
+  });
+
+  it('says columns matched by name when nothing departs', () => {
+    expect(describeMapping({ ...base, rounds: 'rounds' })).toBe('columns matched by name');
   });
 
   it('says so when a field is unmapped rather than hiding it', () => {
-    expect(describeMapping({ ...base, p: null, rounds: null })).toBe('p unmapped · d = d · rounds unmapped · series by decoder column');
+    expect(describeMapping({ ...base, p: null, rounds: null })).toBe('p unmapped · rounds unmapped');
   });
 
-  it('includes decoder metadata keys and split keys', () => {
+  it('includes decoder metadata keys, split keys and replicate sums', () => {
     expect(describeMapping({ ...base, decoder: 'dec', groupBy: ['basis', 'noise'] })).toBe(
-      'p = p · d = d · rounds = r · series by dec · split by basis, noise',
+      'rounds = r · decoder = dec · split by basis, noise',
     );
-  });
-});
-
-describe('describeMapping with replicates', () => {
-  it('names the keys that are summed as replicates', () => {
-    expect(describeMapping({ ...base, mergeKeys: ['seed'] })).toBe(
-      'p = p · d = d · rounds = r · series by decoder column · seed summed as replicates',
-    );
+    expect(describeMapping({ ...base, mergeKeys: ['seed'] })).toBe('rounds = r · seed summed as replicates');
   });
 });
 

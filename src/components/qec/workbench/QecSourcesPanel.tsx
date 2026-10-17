@@ -35,7 +35,11 @@ function LoadingStudies(): ReactElement {
 }
 
 function EmptyStudies(): ReactElement {
-  return <div className="qec-zone-empty"><FolderTree aria-hidden="true" size={20} /><strong>No Studies found</strong><span>Create a Study manifest in the studies folder to organize QEC sources and evidence.</span></div>;
+  const projectRoot = useProjectStore((state) => state.projectRoot);
+  const body = projectRoot
+    ? 'Create a Study manifest in the studies folder to organize QEC sources and evidence.'
+    : 'Open a project folder to create Studies. Analyze works without one: drop a sinter stats CSV there.';
+  return <div className="qec-zone-empty"><FolderTree aria-hidden="true" size={20} /><strong>No Studies found</strong><span>{body}</span></div>;
 }
 
 function ChooseStudy(): ReactElement {

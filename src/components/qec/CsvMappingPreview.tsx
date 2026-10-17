@@ -7,6 +7,7 @@ import {
   metadataKeys, splitMetadataKeys, type SinterMapping,
 } from '../../types/sinterMapping';
 import { toStatsPoint } from '../../types/qecStats';
+import { describeMapping } from '../../lib/qecMappingSummary';
 import { isNotProbability } from '../../lib/qecProbability';
 import { formatNoise, formatCount } from '../../lib/qecPlotFormat';
 import { ICON_SIZE, ICON_STROKE, TYPOGRAPHY } from '../../styles/tokens';
@@ -16,20 +17,14 @@ import { Table, Thead, Tbody, Tr, Th, Td } from '../ui/Table';
 const PREVIEW_ROWS = 10;
 type Field = 'p' | 'd' | 'rounds' | 'decoder';
 
-const FIELDS: Array<{ field: Field; label: string; short: string }> = [
-  { field: 'p', label: 'x-axis: physical error p', short: 'p' },
-  { field: 'd', label: 'code distance d', short: 'd' },
-  { field: 'rounds', label: 'rounds', short: 'rounds' },
-  { field: 'decoder', label: 'decoder', short: 'decoder' },
+const FIELDS: Array<{ field: Field; label: string }> = [
+  { field: 'p', label: 'x-axis: physical error p' },
+  { field: 'd', label: 'code distance d' },
+  { field: 'rounds', label: 'rounds' },
+  { field: 'decoder', label: 'decoder' },
 ];
 
 const plural = (n: number, one: string, many = `${one}s`) => `${n.toLocaleString()} ${n === 1 ? one : many}`;
-
-function fieldSummary(mapping: SinterMapping, field: Field): string {
-  const value = mapping[field];
-  if (field === 'decoder') return value === DECODER_COLUMN ? 'decoder column' : String(value);
-  return value ?? 'none';
-}
 
 /**
  * The loaded sinter CSV's json_metadata mapping. After a load it is one line
@@ -115,9 +110,8 @@ export function CsvMappingPreview() {
     ...(csv.rejectedRows > 0 ? [`${csv.rejectedRows.toLocaleString()} rejected (see below)`] : []),
     `${plottable.toLocaleString()} plottable${countsNameMerge ? ` after summing ${mapping.mergeKeys?.join(', ')} replicates` : ''}`,
   ];
-  const mapped = FIELDS.map((f) => `${f.short}: ${fieldSummary(mapping, f.field)}`).join(' · ');
-  const seriesBy = mapping.groupBy.length > 0 ? ` · series by ${mapping.groupBy.join(', ')}` : '';
-  const replicates = (mapping.mergeKeys ?? []).length > 0 && !countsNameMerge ? ` · ${mapping.mergeKeys?.join(', ')} summed` : '';
+  // countsNameMerge already says which replicates were summed; do not say it twice.
+  const mapped = describeMapping(countsNameMerge ? { ...mapping, mergeKeys: [] } : mapping);
 
   return (
     <section
@@ -128,9 +122,9 @@ export function CsvMappingPreview() {
       }}
     >
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, color: colors.textMuted, minWidth: 0 }}>
-        <div style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={`${counts.join(' · ')} · ${mapped}${seriesBy}${replicates}`}>
+        <div style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={`${counts.join(' · ')} · ${mapped}`}>
           <strong style={{ color: colors.text }}>{csv.sourceName}</strong>
-          {` · ${counts.join(' · ')} · ${mapped}${seriesBy}${replicates}`}
+          {` · ${counts.join(' · ')} · ${mapped}`}
         </div>
         <Button
           size="sm" variant="ghost" aria-expanded={open} aria-controls="qec-mapping-editor"
