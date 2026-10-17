@@ -36,11 +36,11 @@ describe('<Sidebar> QEC integration', () => {
 
     expect(screen.getByText('QEC Workbench')).toBeTruthy();
     expect(await screen.findByText(/Drop a sinter stats CSV/)).toBeTruthy();
-    expect(screen.getByText(/QEC Studies need a project folder/)).toBeTruthy();
+    expect(screen.getByText(/Studies need a project folder/)).toBeTruthy();
     expect(screen.queryByText(/Open a project to manage QEC Studies/)).toBeNull();
   });
 
-  it('shows the loaded CSV name, row count and mapping when no project is open', async () => {
+  it('leaves the loaded CSV name, counts and mapping to the summary bar when no project is open', async () => {
     useQecCampaignStore.getState().reset();
     const csv = [
       'shots,errors,discards,seconds,decoder,strong_id,json_metadata,custom_counts',
@@ -53,9 +53,10 @@ describe('<Sidebar> QEC integration', () => {
         <Sidebar view="qec" width={260} onWidthChange={vi.fn()} />
       </PlatformProvider>,
     );
-    expect(await screen.findByText('stats.csv')).toBeTruthy();
-    expect(screen.getByText(/2 rows/)).toBeTruthy();
-    expect(screen.getByText(/p = p · d = d/)).toBeTruthy();
+    expect(await screen.findByText(/Studies need a project folder/)).toBeTruthy();
+    expect(screen.queryByText('stats.csv')).toBeNull();
+    expect(screen.queryByText(/2 rows/)).toBeNull();
+    expect(screen.queryByText(/p = p/)).toBeNull();
     useQecCampaignStore.getState().reset();
   });
 
