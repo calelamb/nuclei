@@ -149,7 +149,7 @@ describe('qecRatesToCsv matches the figure', () => {
   });
   it('exports at most 8 significant figures, never binary noise like 0.010375899999999999 (qec-r-11)', () => {
     const csv = qecRatesToCsv(rows, { units: 'per_shot' });
-    const longDigits = csv.split('\n').slice(1).flatMap((l) => l.split(',')).filter((c) => /^\d*\.\d{10,}$/.test(c));
+    const longDigits = csv.split('\n').slice(1).flatMap((l) => l.split(',')).filter((c) => /^[\d.]+$/.test(c) && c.replace(/^0\.0*/, '').replace('.', '').length > 8);
     expect(longDigits).toEqual([]);
   });
   it('per-round export uses per-round rates and says so', () => {
