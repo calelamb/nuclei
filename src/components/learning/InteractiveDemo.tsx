@@ -9,6 +9,7 @@ import { openAuthenticatedKernelSocket } from '../../services/kernelSocket';
 import type { Framework, CircuitSnapshot, SimulationResult, KernelResponse } from '../../types/quantum';
 import { Play, RotateCcw, ExternalLink, Terminal, BarChart3 } from 'lucide-react';
 import { isQuantumCode } from './exerciseValidation';
+import { UnsupportedNotice } from './UnsupportedNotice';
 
 import { TYPOGRAPHY } from '../../styles/tokens';
 interface InteractiveDemoProps {
@@ -39,7 +40,7 @@ function ProbabilityBars({ probabilities, accent, colors }: {
             fontFamily: TYPOGRAPHY.fontMono, fontSize: 12,
             color: colors.text, fontWeight: 500,
           }}>
-            |{state}\u27E9
+            |{state}{'\u27E9'}
           </span>
           <div style={{
             flex: 1, height: 18, borderRadius: 4,
@@ -82,6 +83,7 @@ export function InteractiveDemo({ code: initialCode, framework, description, exp
   const [output, setOutput] = useState<string[]>([]);
   const [isRunning, setIsRunning] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [unsupported, setUnsupported] = useState<string | null>(null);
   const [showOutput, setShowOutput] = useState(false);
   const wsRef = useRef<WebSocket | null>(null);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -103,10 +105,21 @@ export function InteractiveDemo({ code: initialCode, framework, description, exp
         setError(null);
         break;
       case 'output':
+        // Output from the live preview re-running half-typed code is not a run.
+        if (msg.phase === 'parse') break;
         setOutput((prev) => [...prev, msg.text]);
         setShowOutput(true);
         break;
       case 'error':
+        if (msg.code === 'unsupported_framework') {
+          // Outside the browser Qiskit subset: a calm notice, not a red error.
+          setUnsupported(msg.message);
+          setError(null);
+          setIsRunning(false);
+          break;
+        }
+        // While typing, errors from the live preview wait until the student runs.
+        if (msg.phase === 'parse') break;
         setError(msg.message);
         setIsRunning(false);
         break;
@@ -118,7 +131,10 @@ export function InteractiveDemo({ code: initialCode, framework, description, exp
     if (isWeb) {
       import('../../platform/pyodideKernel').then(({ PyodideKernel }) => {
         const k = new PyodideKernel((msg) => handleMessage(msg as KernelResponse));
-        k.init().then(() => { pyodideRef.current = k; });
+        k.init().then(
+          () => { pyodideRef.current = k; },
+          (e: unknown) => setError(e instanceof Error ? e.message : String(e)),
+        );
       });
       return;
     }
@@ -173,6 +189,7 @@ export function InteractiveDemo({ code: initialCode, framework, description, exp
   const handleRun = () => {
     setIsRunning(true);
     setError(null);
+    setUnsupported(null);
     setOutput([]);
     setResult(null);
 
@@ -216,6 +233,7 @@ export function InteractiveDemo({ code: initialCode, framework, description, exp
   const handleCodeChange = (value: string | undefined) => {
     const v = value ?? '';
     setLocalCode(v);
+    setUnsupported(null);
     sendParse(v);
   };
 
@@ -371,6 +389,12 @@ export function InteractiveDemo({ code: initialCode, framework, description, exp
               </span>
             ))}
           </span>
+        </div>
+      )}
+
+      {unsupported && (
+        <div style={{ padding: '10px 16px', borderBottom: `1px solid ${colors.border}` }}>
+          <UnsupportedNotice message={unsupported} />
         </div>
       )}
 

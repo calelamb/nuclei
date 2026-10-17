@@ -7,6 +7,8 @@ export type PlatformKind = 'desktop' | 'web';
 export interface KernelSession {
   send(message: KernelMessage): void | Promise<void>;
   close(): void;
+  /** Stop whatever is running right now (web: restart the worker; desktop: no-op). */
+  abort?(): void;
 }
 
 export async function createKernelSession(
@@ -16,6 +18,7 @@ export async function createKernelSession(
 ): Promise<KernelSession> {
   if (platform === 'web') {
     const { PyodideKernel } = await import('../platform/pyodideKernel');
+    const { pyodideRuntime } = await import('../platform/pyodide/pyodideClient');
     const kernel = new PyodideKernel((msg) => onMessage(msg as KernelResponse));
     await kernel.init();
 
@@ -25,6 +28,11 @@ export async function createKernelSession(
       },
       close() {
         // Pyodide is kept alive for the page lifetime.
+      },
+      abort() {
+        // The only way to stop runaway Python is to kill its worker; the
+        // shared runtime boots a fresh one on the next call.
+        pyodideRuntime.restart();
       },
     };
   }

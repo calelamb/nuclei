@@ -197,6 +197,12 @@ export interface TestCaseResult {
   actualOutput?: ChallengeJsonValue | Record<string, number>;
   message: string;
   executionTimeMs: number;
+  /**
+   * The browser build can't run this program (outside the Qiskit browser
+   * subset). This is the platform's limit, not the student's mistake, so it
+   * never counts as a failed submission.
+   */
+  unsupported?: boolean;
 }
 
 export interface Submission {

@@ -188,8 +188,11 @@ export type KernelResponse =
       /** Echoed from the request when the kernel handler supports it (qec_explain). */
       request_id?: string;
     }
-  | { type: 'output'; text: string }
-  | { type: 'stderr'; text: string }
+  // `phase: 'parse'` marks output captured while the live preview re-ran the
+  // user's program on a pause in typing. It is not a user-requested run, so
+  // consumers keep it out of the Terminal.
+  | { type: 'output'; text: string; phase?: 'parse' }
+  | { type: 'stderr'; text: string; phase?: 'parse' }
   // Protocol v1.1 (PRD 09 Phase B) — reply to the `environment` request.
   | ({ type: 'environment' } & KernelEnvironment)
   | { type: 'hardware_connected'; provider: string; success: boolean }

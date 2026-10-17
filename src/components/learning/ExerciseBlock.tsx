@@ -9,6 +9,7 @@ import { openAuthenticatedKernelSocket } from '../../services/kernelSocket';
 import type { Framework, SimulationResult, KernelResponse } from '../../types/quantum';
 import { Play, Lightbulb, CheckCircle, XCircle, HelpCircle, Terminal } from 'lucide-react';
 import { hasExpectedDistribution, isQuantumCode, validateExerciseResult } from './exerciseValidation';
+import { UnsupportedNotice } from './UnsupportedNotice';
 
 import { TYPOGRAPHY } from '../../styles/tokens';
 interface ExerciseBlockProps {
@@ -45,6 +46,7 @@ export function ExerciseBlock({
   const [output, setOutput] = useState<string[]>([]);
   const [isRunning, setIsRunning] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [unsupported, setUnsupported] = useState<string | null>(null);
   const [feedback, setFeedback] = useState<{ success: boolean; message: string } | null>(null);
   const [hintsRevealed, setHintsRevealed] = useState(0);
   const [showDiracPrompt, setShowDiracPrompt] = useState(false);
@@ -110,8 +112,17 @@ export function ExerciseBlock({
         }
       }
     } else if (msg.type === 'output') {
+      // Output from the live preview re-running half-typed code is not a run.
+      if (msg.phase === 'parse') return;
       setOutput((prev) => [...prev, msg.text]);
     } else if (msg.type === 'error') {
+      if (msg.code === 'unsupported_framework') {
+        setUnsupported(msg.message);
+        setError(null);
+        setIsRunning(false);
+        return;
+      }
+      if (msg.phase === 'parse') return;
       setError(msg.message);
       setIsRunning(false);
     }
@@ -121,7 +132,10 @@ export function ExerciseBlock({
     if (isWeb) {
       import('../../platform/pyodideKernel').then(({ PyodideKernel }) => {
         const k = new PyodideKernel((msg) => handleMessage(msg as KernelResponse));
-        k.init().then(() => { pyodideRef.current = k; });
+        k.init().then(
+          () => { pyodideRef.current = k; },
+          (e: unknown) => setError(e instanceof Error ? e.message : String(e)),
+        );
       });
       return;
     }
@@ -169,12 +183,14 @@ export function ExerciseBlock({
 
   const handleCodeChange = (value: string | undefined) => {
     setLocalCode(value ?? '');
+    setUnsupported(null);
     resetInactivity();
   };
 
   const handleRun = () => {
     setIsRunning(true);
     setError(null);
+    setUnsupported(null);
     setFeedback(null);
     setOutput([]);
     setResult(null);
@@ -345,6 +361,12 @@ export function ExerciseBlock({
           </button>
         )}
       </div>
+
+      {unsupported && (
+        <div style={{ padding: '10px 16px' }}>
+          <UnsupportedNotice message={unsupported} />
+        </div>
+      )}
 
       {/* Error */}
       {error && (

@@ -7,6 +7,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Browser runtime and status bar
+
+- The web build now runs Qiskit lessons and challenges through a small pure-Python
+  "Qiskit (browser subset)": `QuantumCircuit` with the standard gates, measurement,
+  barriers, `c_if`, composition, `QFT`, `Statevector`/`Operator`/`Pauli` and ideal
+  `AerSimulator` sampling. Anything outside the subset (noise models, `transpile`,
+  primitives, IBM Runtime) shows a calm "Runs in the desktop app" notice and never
+  counts as a failed challenge attempt.
+- Pyodide and your code now run in a web worker: the page stays responsive while
+  Python loads (about 3-10 s) and a runaway program is stopped instead of freezing
+  the tab. Cirq installs on first use.
+- Real boot progress (Downloading Python, Loading NumPy, Starting kernel) in the Run
+  button, status bar and a thin progress bar; a Run requested during boot is queued.
+- Kernel and Python load failures now show the real reason with Retry, Copy details
+  and a troubleshooting link instead of "Loading kernel..." forever.
+- The editor is never rewritten or marked unsaved while the kernel boots, so closing
+  an untouched tab no longer prompts.
+- Typing no longer floods the Terminal with live-preview output and tracebacks;
+  the desktop kernel tags parse-phase `output`/`stderr` with `phase: "parse"`.
+- Programs without measurements run in the browser; rapid Run clicks no longer queue.
+- Status bar: one truthful kernel/run item, 24 px height, readable contrast, a named
+  22 px theme toggle, and the UI-mode control only in Learn.
+
 ### Security hardening
 
 - The kernel WebSocket now requires a per-launch secret token, an allowed

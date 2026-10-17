@@ -11,13 +11,13 @@ difference; `tauriBridge` and `webBridge` implement it.
 
 ## Capability matrix
 
-{/* Pyodide: src/platform/pyodideKernel.ts:34-97, 387-404; hardware: src/hooks/useKernel.ts:518-526 */}
+{/* Pyodide worker: src/platform/pyodide/; Qiskit subset: src/platform/pyodide/shim/; hardware: src/hooks/useKernel.ts */}
 
 | Capability | Desktop | Web (`/try`) |
 |------------|---------|--------------|
-| Python kernel | Managed-venv CPython subprocess over WebSocket | Pyodide v0.27.0, loaded from the jsDelivr CDN, in-page |
-| Qiskit | Yes (Aer simulator) | No — `ModuleNotFoundError` is translated to a "download the desktop app" message |
-| Cirq | Yes (full `cirq`) | Yes — `cirq-core==1.5.0` installed via micropip; statevector, sampled counts, and Bloch coords all work |
+| Python kernel | Managed-venv CPython subprocess over WebSocket | Pyodide v0.27.0, loaded from the jsDelivr CDN, in a web worker (the page stays responsive while Python loads and runs) |
+| Qiskit | Yes (Aer simulator) | **Browser subset** — a small pure-Python/NumPy implementation: `QuantumCircuit` with the standard gates, `measure`/`barrier`/`reset`/`c_if`, `compose`/`append`/`to_gate`, `QFT`, `Statevector`/`Operator`/`Pauli`, and ideal `AerSimulator` sampling (up to 22 qubits). Noise models, `transpile`, primitives, IBM Runtime and fake backends are not included; they raise a message that points to the desktop app |
+| Cirq | Yes (full `cirq`) | Yes — `cirq-core==1.5.0` installed via micropip the first time a program imports it; statevector, sampled counts, and Bloch coords all work |
 | CUDA-Q | Yes (CPU everywhere; GPU on Linux + CUDA) | No — same translated error as Qiskit |
 | Q# execution | Yes (QDK via the `qdk` package) | No — rejected *before* Pyodide with code `unsupported_framework` and a desktop-only message |
 | Q# editor intelligence | Yes — `qsharp-lang` WASM compiler in a web worker: live diagnostics, completions, hover | Yes — same worker loads lazily in both builds {/* QuantumEditor.tsx:78-83 */} |
@@ -31,10 +31,11 @@ difference; `tauriBridge` and `webBridge` implement it.
 Framework auto-detection, circuit rendering, the Bloch sphere, histograms,
 and the snapshot/result schemas are identical across both builds — the web
 kernel emits the same `CircuitSnapshot` and `SimulationResult` shapes.
-{/* pyodideKernel.ts:100-299 */}
+{/* src/platform/pyodide/kernel_runtime.py */}
 
 ## Choosing
 
-**Choose desktop** when you need Qiskit, CUDA-Q, or Q# execution, real
-hardware submission, or real files. **Choose web** for zero-install Cirq
-experimentation, demos, and classrooms where installing anything is a fight.
+**Choose desktop** when you need full Qiskit (noise models, transpilation,
+primitives), CUDA-Q, or Q# execution, real hardware submission, or real
+files. **Choose web** for zero-install Qiskit-subset and Cirq experimentation,
+demos, and classrooms where installing anything is a fight.

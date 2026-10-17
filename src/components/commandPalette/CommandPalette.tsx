@@ -299,7 +299,9 @@ export function buildCommands(actions: CommandActions, context: CommandContext):
     { id: 'save', label: 'Save File', category: 'File', shortcut: '⌘+S', action: actions.saveFile },
     { id: 'new', label: 'New File', category: 'File', shortcut: '⌘+N', action: actions.newFile },
     { id: 'theme', label: 'Toggle Theme', category: 'View', shortcut: '⌘+Shift+T', action: actions.toggleTheme },
-    { id: 'mode', label: 'Cycle UI Mode (Beginner/Intermediate/Advanced)', category: 'View', shortcut: '⌘+Shift+L', action: actions.cycleMode },
+    ...(context.mode === 'learn'
+      ? [{ id: 'mode', label: 'Cycle UI Mode (Beginner/Intermediate/Advanced)', category: 'View', shortcut: '⌘+Shift+L', action: actions.cycleMode }]
+      : []),
     { id: 'dirac', label: 'Toggle Dirac Panel', category: 'Dirac', shortcut: '⌘+D', action: actions.toggleDirac },
     { id: 'dirac-focus', label: 'Focus Dirac Input', category: 'Dirac', shortcut: '⌘+L', action: actions.toggleDirac },
     { id: 'step-through', label: 'Step Through Circuit', category: 'Circuit', action: () => {

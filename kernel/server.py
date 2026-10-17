@@ -359,16 +359,21 @@ async def handle_message(websocket):
                 executor.parse, code, language=language
             )
 
+            # Parse re-runs the user's program on every pause in typing, so its
+            # output is tagged `phase: "parse"`: clients keep it out of the
+            # Terminal (only `execute` output is a user-requested run).
             if stdout:
                 await websocket.send(json.dumps({
                     "type": "output",
                     "text": stdout,
+                    "phase": "parse",
                 }))
 
             if stderr:
                 await websocket.send(json.dumps({
                     "type": "stderr",
                     "text": stderr,
+                    "phase": "parse",
                 }))
 
             await websocket.send(json.dumps({

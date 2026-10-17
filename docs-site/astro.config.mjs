@@ -67,6 +67,7 @@ export default defineConfig({
             'introduction/architecture',
             'introduction/install-and-build',
             'introduction/desktop-vs-web',
+            'introduction/kernel-troubleshooting',
           ],
         },
         {

@@ -2,6 +2,7 @@ import { createContext, useContext, useState, type CSSProperties, type ReactNode
 import { ChevronDown, ChevronRight, RotateCcw, Sun, Moon, Eye, EyeOff, ExternalLink } from 'lucide-react';
 import { useThemeStore } from '../../stores/themeStore';
 import { useUIModeStore, type UIMode } from '../../stores/uiModeStore';
+import { useWorkspaceStore } from '../../stores/workspaceStore';
 import { useSettingsStore } from '../../stores/settingsStore';
 import { useSimulationStore } from '../../stores/simulationStore';
 import { useDiracStore } from '../../stores/diracStore';
@@ -269,6 +270,7 @@ export function SettingsPanel() {
   const themeMode = useThemeStore((s) => s.mode);
   const setThemeMode = useThemeStore((s) => s.setMode);
   const uiMode = useUIModeStore((s) => s.mode);
+  const workspaceMode = useWorkspaceStore((s) => s.mode);
   const setUIMode = useUIModeStore((s) => s.setMode);
 
   const editor = useSettingsStore((s) => s.editor);
@@ -310,17 +312,19 @@ export function SettingsPanel() {
               ))}
             </div>
           </SettingRow>
-          <SettingRow label="UI Mode">
-            <SettingSelect<UIMode>
-              value={uiMode}
-              options={[
-                { value: 'beginner', label: 'Beginner' },
-                { value: 'intermediate', label: 'Intermediate' },
-                { value: 'advanced', label: 'Advanced' },
-              ]}
-              onChange={setUIMode}
-            />
-          </SettingRow>
+          {workspaceMode === 'learn' && (
+            <SettingRow label="UI Mode">
+              <SettingSelect<UIMode>
+                value={uiMode}
+                options={[
+                  { value: 'beginner', label: 'Beginner' },
+                  { value: 'intermediate', label: 'Intermediate' },
+                  { value: 'advanced', label: 'Advanced' },
+                ]}
+                onChange={setUIMode}
+              />
+            </SettingRow>
+          )}
         </Section>
 
         {/* ── Editor ── */}

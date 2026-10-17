@@ -1,0 +1,66 @@
+---
+title: "Kernel troubleshooting"
+description: "What to do when Nuclei says the kernel failed to start, or the browser Python engine won't load."
+---
+
+When the editor toolbar says **Kernel failed · Retry**, Nuclei shows the
+reason in a banner under the editor tabs. Each heading below matches one of
+those reasons. **Retry** stops any half-started kernel and starts a fresh
+one.
+
+## port-in-use
+
+The desktop kernel listens on `127.0.0.1:8742`. Another program (often an old
+Nuclei window or a stray `python kernel/server.py`) is already using it.
+
+1. Quit other Nuclei windows.
+2. Find the process: `lsof -i :8742` on macOS/Linux, `netstat -ano | findstr 8742` on Windows.
+3. Stop it, then click **Retry**.
+
+## script-missing
+
+Nuclei could not find `kernel/server.py` next to the app. This usually means
+a damaged or partial install. Reinstall from the
+[latest release](https://github.com/calelamb/nuclei/releases/latest). If you
+run from source, start the app from the repository root.
+
+## python-missing
+
+The kernel runs in a managed Python environment. If that environment could not
+be created, Nuclei falls back to a system `python3`; if neither can start, you
+see this message. Install Python 3.10 or newer, make sure `python3` is on your
+`PATH`, then click **Retry**. See [Install and build](/docs/introduction/install-and-build/).
+
+## auth-rejected
+
+The kernel refused this session's token. Restart Nuclei; a new token is
+generated on every launch.
+
+## not-responding
+
+The kernel process started but never accepted a connection within 15
+attempts (about 30 seconds). Check the Terminal panel for a Python traceback,
+then click **Retry**.
+
+## browser-load
+
+The web build downloads Python (Pyodide, about 10 MB) from the jsDelivr CDN
+the first time you open it. This message means that download failed:
+
+- Check your network connection.
+- Disable content blockers or privacy extensions for `cdn.jsdelivr.net`.
+- Click **Retry**. Nuclei restarts the Python worker from scratch.
+
+The browser build keeps Python in a web worker, so a program that runs
+forever is stopped (the worker restarts) instead of freezing the page. While
+a run is in progress, the **Run** button becomes **Stop**: click it to end the
+program immediately. Python restarts in a few seconds ("Restarting Python…"),
+and the Terminal notes that the run was stopped. A program that runs for more
+than 120 seconds (5 seconds for the live preview while you type) is stopped
+the same way.
+
+## unknown
+
+Copy the details from the banner and open an issue on
+[GitHub](https://github.com/calelamb/nuclei/issues) with your platform and the
+text of the message.

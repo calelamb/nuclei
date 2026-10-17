@@ -4,12 +4,14 @@ import { useProjectStore } from '../../stores/projectStore';
 import { useEditorStore } from '../../stores/editorStore';
 import { useSimulationStore } from '../../stores/simulationStore';
 import { useThemeStore } from '../../stores/themeStore';
-import { X, FileCode, Play, Loader2, Rocket, ChevronDown } from 'lucide-react';
+import { X, FileCode, Play, Loader2, Rocket, ChevronDown, RotateCw, Square } from 'lucide-react';
 import { getExecute, getFileOps } from '../../App';
 import { requestCloseTab } from '../../lib/tabClose';
 import { FrameworkSelector } from './FrameworkSelector';
 import { useHardwareStore } from '../../stores/hardwareStore';
 import { tabBarDensity, type TabBarDensity } from './tabBarLayout';
+import { canStopKernelRun, retryKernel, stopKernelRun } from '../../lib/kernelControl';
+import { getRunButtonState } from './runButtonState';
 
 import { TYPOGRAPHY } from '../../styles/tokens';
 const basename = (p: string) => p.split('/').pop() ?? p;
@@ -21,6 +23,9 @@ export function EditorTabs() {
   const legacyFilePath = useEditorStore((s) => s.filePath);
   const legacyIsDirty = useEditorStore((s) => s.isDirty);
   const kernelReady = useEditorStore((s) => s.kernelReady);
+  const kernelStatus = useEditorStore((s) => s.kernelStatus);
+  const kernelError = useEditorStore((s) => s.kernelError);
+  const kernelProgress = useEditorStore((s) => s.kernelProgress);
   const isRunning = useSimulationStore((s) => s.isRunning);
   const colors = useThemeStore((s) => s.colors);
   const shadow = useThemeStore((s) => s.shadow);
@@ -99,17 +104,24 @@ export function EditorTabs() {
     };
   }, [overflowOpen]);
 
-  const canRun = kernelReady && !isRunning;
+  const runState = getRunButtonState({ kernelReady, kernelStatus, kernelProgress, kernelError, isRunning, canStop: canStopKernelRun() });
+  const canRun = runState.kind === 'ready';
   const handleRun = () => {
+    if (runState.stoppable) {
+      stopKernelRun();
+      return;
+    }
+    if (runState.kind === 'failed') {
+      retryKernel();
+      return;
+    }
     const e = getExecute();
     if (e) e();
   };
-  const runLabel = isRunning ? 'Running…' : !kernelReady ? (compact ? 'Loading…' : 'Loading kernel…') : 'Run';
-  const runTitle = isRunning
-    ? 'Simulation running'
-    : !kernelReady
-      ? 'Waiting for Python kernel'
-      : 'Run simulation (⌘+Enter)';
+  // A narrow toolbar can't fit the long failure label; the banner carries the detail.
+  const runLabel = runState.kind === 'failed' && compact ? 'Retry kernel' : runState.label;
+  const runTitle = runState.title;
+  const runFailed = runState.kind === 'failed';
 
   const commitLegacyRename = async () => {
     const next = renameValue.trim();
@@ -236,6 +248,7 @@ export function EditorTabs() {
         color: colors.text,
         cursor: 'default',
         maxWidth: 260,
+        minWidth: 0,
       }}
     >
       <FileCode size={14} style={{ color: colors.accent, flexShrink: 0 }} />
@@ -380,7 +393,7 @@ export function EditorTabs() {
       )}
 
       <div style={{ display: 'flex', alignItems: 'center', flexShrink: 0 }}>
-        <FrameworkSelector />
+        <FrameworkSelector compact={compact} />
       </div>
 
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
@@ -391,6 +404,7 @@ export function EditorTabs() {
           style={{
             height: 28,
             padding: compact ? '0 8px' : '0 12px',
+            flexShrink: 0,
             display: 'flex',
             alignItems: 'center',
             gap: 6,
@@ -420,7 +434,7 @@ export function EditorTabs() {
         </button>
         <button
           onClick={handleRun}
-          disabled={!canRun}
+          disabled={runState.disabled}
           title={runTitle}
           aria-label={runTitle}
           style={{
@@ -429,12 +443,13 @@ export function EditorTabs() {
             display: 'flex',
             alignItems: 'center',
             gap: 7,
+            flexShrink: 0,
             whiteSpace: 'nowrap',
             background: canRun ? colors.accent : colors.bgElevated,
-            color: canRun ? '#0a0f1a' : colors.textDim,
-            border: canRun ? 'none' : `1px solid ${colors.border}`,
+            color: canRun ? '#0a0f1a' : runFailed ? colors.error : runState.stoppable ? colors.text : colors.textMuted,
+            border: canRun ? 'none' : `1px solid ${runFailed ? colors.error : colors.border}`,
             borderRadius: 6,
-            cursor: canRun ? 'pointer' : 'default',
+            cursor: runState.disabled ? 'default' : 'pointer',
             fontSize: 13,
             fontFamily: TYPOGRAPHY.fontSans,
             fontWeight: 600,
@@ -455,8 +470,12 @@ export function EditorTabs() {
             }
           }}
         >
-          {isRunning ? (
-            <Loader2 size={14} style={{ animation: 'nuclei-spin 800ms linear infinite' }} />
+          {runState.stoppable ? (
+            <Square size={11} fill="currentColor" />
+          ) : isRunning || runState.kind === 'loading' ? (
+            <Loader2 size={13} style={{ animation: 'nuclei-spin 800ms linear infinite' }} />
+          ) : runFailed ? (
+            <RotateCw size={12} />
           ) : (
             <Play size={12} fill="currentColor" />
           )}

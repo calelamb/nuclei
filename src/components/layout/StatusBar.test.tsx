@@ -61,9 +61,8 @@ describe('<StatusBar> (extracted from PanelLayout, Phase A)', () => {
     expect(getByText('Qubits: —')).toBeTruthy();
     expect(getByText('Depth: —')).toBeTruthy();
     expect(getByRole('combobox', { name: 'Layout preset' })).toBeTruthy();
-    // Right slots: kernel state, run status
-    expect(getByText(/^Kernel/)).toBeTruthy();
-    expect(getByText('Ready')).toBeTruthy();
+    // Right slot: one truthful kernel/run item (idle until a kernel starts)
+    expect(getByText('Kernel idle')).toBeTruthy();
     // Far-left mode chip carries the "Switch workspace mode" control (Phase B).
     expect(getByRole('button', { name: 'Switch workspace mode' })).toBeTruthy();
   });
@@ -109,11 +108,59 @@ describe('<StatusBar> (extracted from PanelLayout, Phase A)', () => {
   });
 });
 
-describe('StatusBar kernel failure', () => {
-  it('shows the auth-rejected message inline, not only in the tooltip', () => {
+describe('StatusBar kernel state', () => {
+  beforeEach(() => {
+    useWorkspaceStore.setState({ mode: 'learn' });
+    useSimulationStore.setState({ isRunning: false, result: null });
+    useEditorStore.setState({ kernelReady: false, kernelStatus: 'idle', kernelError: null, kernelProgress: null });
+  });
+
+  it('is a retry action that carries the error when the kernel failed', () => {
     useEditorStore.getState().setKernelStatus('failed', 'Kernel rejected the session token — restart Nuclei');
+    const { getByRole } = renderStatusBar();
+    const chip = getByRole('button', { name: /Kernel failed/ });
+    expect(chip.getAttribute('title')).toContain('Kernel rejected the session token — restart Nuclei');
+  });
+
+  it('never says ready while the kernel is still loading', () => {
+    useEditorStore.setState({
+      kernelStatus: 'connecting',
+      kernelProgress: { step: 2, total: 3, label: 'Loading NumPy', fraction: 0.6 },
+    });
+    const { getByText, queryByText } = renderStatusBar();
+    expect(getByText('Loading NumPy…')).toBeTruthy();
+    expect(queryByText(/ready/i)).toBeNull();
+  });
+
+  it('shows Done with the run time once a result exists', () => {
+    useEditorStore.setState({ kernelReady: true, kernelStatus: 'ready' });
+    useSimulationStore.setState({ result: { execution_time_ms: 41.6 } as never });
     const { getByText } = renderStatusBar();
-    expect(getByText(/Kernel rejected the session token — restart Nuclei/)).toBeTruthy();
-    useEditorStore.getState().setKernelStatus('ready');
+    expect(getByText('Done · 42 ms')).toBeTruthy();
+  });
+});
+
+describe('StatusBar controls', () => {
+  beforeEach(() => {
+    useEditorStore.setState({ kernelReady: true, kernelStatus: 'ready' });
+    useSimulationStore.setState({ isRunning: false, result: null });
+  });
+
+  it('names the theme toggle for assistive tech', () => {
+    const { getByRole } = renderStatusBar();
+    const toggle = getByRole('button', { name: /Switch to (light|dark) theme/ });
+    expect(toggle.style.width).toBe('22px');
+    expect(toggle.style.height).toBe('22px');
+  });
+
+  it('offers the UI-mode control in Learn but not in Research', () => {
+    useWorkspaceStore.setState({ mode: 'learn' });
+    const learn = renderStatusBar();
+    expect(learn.getByRole('button', { name: /^UI mode:/ })).toBeTruthy();
+    learn.unmount();
+
+    useWorkspaceStore.setState({ mode: 'research' });
+    const research = renderStatusBar();
+    expect(research.queryByRole('button', { name: /^UI mode:/ })).toBeNull();
   });
 });

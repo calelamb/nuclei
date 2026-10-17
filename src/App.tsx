@@ -300,6 +300,8 @@ function AppInner() {
     },
     toggleDirac,
     cycleMode: () => {
+      // Research ignores uiModeStore entirely, so cycling it there is a no-op.
+      if (useWorkspaceStore.getState().mode !== 'learn') return;
       cycleMode();
       // Non-critical: UI mode persistence failure does not affect current session
       platform.setStoredValue('ui_mode', useUIModeStore.getState().mode).catch(() => {});
@@ -353,6 +355,7 @@ function AppInner() {
         setShowCommandPalette((s) => !s);
       } else if (e.key === 'l' && e.shiftKey) {
         e.preventDefault();
+        if (useWorkspaceStore.getState().mode !== 'learn') return;
         cycleMode();
         // Non-critical: UI mode persistence failure does not affect current session
         platform.setStoredValue('ui_mode', useUIModeStore.getState().mode).catch(() => {});

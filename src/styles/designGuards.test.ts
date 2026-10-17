@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest';
 
 const SRC = join(process.cwd(), 'src');
 // Trees owned by other in-flight lanes; remove an entry once it migrates.
-const PENDING_MIGRATION = ['components/experiments/', 'components/layout/StatusBar.tsx'];
+const PENDING_MIGRATION = ['components/experiments/'];
 
 function walk(dir: string): string[] {
   return readdirSync(dir, { withFileTypes: true }).flatMap((e) => {

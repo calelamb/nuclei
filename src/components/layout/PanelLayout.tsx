@@ -3,6 +3,7 @@ import { usePlatform } from '../../platform/PlatformProvider';
 import { ErrorBoundary } from '../ErrorBoundary';
 import { QuantumEditor } from '../editor/QuantumEditor';
 import { EditorTabs } from '../editor/EditorTabs';
+import { KernelBanner } from '../editor/KernelBanner';
 import { Breadcrumbs, ExperimentBreadcrumbs } from '../editor/Breadcrumbs';
 import { ProbabilityHistogram } from '../histogram/ProbabilityHistogram';
 import { VizZone } from '../qec/VizZone';
@@ -859,6 +860,7 @@ export function PanelLayout() {
                 {/* Left: Editor with tabs + breadcrumbs + launch strip */}
                 <div style={{ width: `${editorPaneWidth}%`, display: 'flex', flexDirection: 'column', minWidth: 0 }}>
                   <EditorTabs />
+                  <KernelBanner />
                   <Breadcrumbs />
                   <ErrorBoundary label="Launch Strip">
                     <LaunchStrip />
