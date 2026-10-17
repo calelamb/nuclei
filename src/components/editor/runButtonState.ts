@@ -6,7 +6,7 @@ export interface RunButtonState {
   kind: RunButtonKind;
   label: string;
   title: string;
-  /** Failed stays clickable: the button becomes the Retry action. */
+  /** The failed kernel slot is a neutral status: the banner under the toolbar owns Retry. */
   disabled: boolean;
   /** Clicking stops the running program instead of starting a run. */
   stoppable?: boolean;
@@ -42,9 +42,9 @@ export function getRunButtonState(input: RunButtonInput): RunButtonState {
   if (input.kernelStatus === 'failed') {
     return {
       kind: 'failed',
-      label: 'Kernel failed · Retry',
-      title: `${input.kernelError ?? 'The kernel did not start'} — click to retry`,
-      disabled: false,
+      label: 'Kernel failed',
+      title: `${input.kernelError ?? 'The kernel did not start'}. Use Retry in the banner below.`,
+      disabled: true,
     };
   }
   // The toolbar is narrow, so the button carries the step count and the full
@@ -60,4 +60,16 @@ export function getRunButtonState(input: RunButtonInput): RunButtonState {
     title: progress ? `${progress.label} (step ${progress.step} of ${progress.total})` : 'Waiting for the Python kernel',
     disabled: true,
   };
+}
+
+/** A Stop click this soon after a run starts is almost certainly the second half of a double-click. */
+export const STOP_GRACE_MS = 500;
+
+/**
+ * True when a click on the in-place Stop button should be ignored: the run began
+ * moments ago (the button swapped under the cursor mid double-click), or the click
+ * is itself part of a multi-click gesture.
+ */
+export function isAccidentalStop(clickDetail: number, runStartedAt: number, now: number): boolean {
+  return clickDetail > 1 || now - runStartedAt < STOP_GRACE_MS;
 }

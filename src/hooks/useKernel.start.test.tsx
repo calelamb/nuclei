@@ -119,4 +119,22 @@ describe('useKernel desktop start', () => {
     expect(useEditorStore.getState().kernelError).toBe(KERNEL_NOT_RESPONDING_MESSAGE);
     expect(useEditorStore.getState().kernelProgress).toBeNull();
   });
+
+  it('writes the give-up error to the terminal once, even if a late socket reports the same failure', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    const { bridge } = makeBridge(async () => 'started');
+    mount(bridge);
+    await waitFor(() => expect(FakeSocket.instances).toHaveLength(1));
+    FakeSocket.instances[0].closeFromServer(1006);
+    for (let i = 0; i < 16; i++) {
+      await vi.advanceTimersByTimeAsync(2_100);
+      FakeSocket.instances[FakeSocket.instances.length - 1].closeFromServer(1006);
+    }
+    await waitFor(() => expect(useEditorStore.getState().kernelStatus).toBe('failed'));
+    // A straggling close from an earlier socket must not repeat the message.
+    FakeSocket.instances[FakeSocket.instances.length - 1].closeFromServer(1006);
+    FakeSocket.instances[0].closeFromServer(1006);
+    const lines = useSimulationStore.getState().terminalOutput.filter((l) => l.text.includes(KERNEL_NOT_RESPONDING_MESSAGE));
+    expect(lines).toHaveLength(1);
+  });
 });

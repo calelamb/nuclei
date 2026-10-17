@@ -41,7 +41,7 @@ function pickFramework(name: string) {
   // The "Framework" section item is named exactly e.g. 'Q# (QDK)'; the
   // template section item is 'New Q# (QDK) file', so the query is
   // unambiguous.
-  fireEvent.click(screen.getByRole('button', { name }));
+  fireEvent.click(screen.getByRole('menuitemradio', { name }));
 }
 
 const pickQsharp = () => pickFramework('Q# (QDK)');

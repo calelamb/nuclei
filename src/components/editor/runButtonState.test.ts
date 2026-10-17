@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { getRunButtonState } from './runButtonState';
+import { getRunButtonState, isAccidentalStop, STOP_GRACE_MS } from './runButtonState';
 
 const base = { kernelReady: false, kernelStatus: 'idle' as const, kernelProgress: null, kernelError: null, isRunning: false };
 
@@ -34,9 +34,9 @@ describe('getRunButtonState', () => {
     expect(getRunButtonState({ ...base, kernelStatus: 'connecting' }).label).toBe('Starting…');
   });
 
-  it('turns into an enabled Retry action when the kernel failed', () => {
+  it('is a neutral status when the kernel failed (the banner owns Retry)', () => {
     const state = getRunButtonState({ ...base, kernelStatus: 'failed', kernelError: 'Port 8742 is already in use' });
-    expect(state).toMatchObject({ kind: 'failed', label: 'Kernel failed · Retry', disabled: false });
+    expect(state).toMatchObject({ kind: 'failed', label: 'Kernel failed', disabled: true });
     expect(state.title).toContain('Port 8742 is already in use');
   });
 
@@ -51,5 +51,17 @@ describe('getRunButtonState', () => {
 
   it('prefers Running over everything else', () => {
     expect(getRunButtonState({ ...base, kernelReady: true, isRunning: true }).kind).toBe('running');
+  });
+});
+
+describe('isAccidentalStop', () => {
+  it('ignores a Stop click inside the grace window after the run started', () => {
+    expect(isAccidentalStop(1, 1000, 1000 + STOP_GRACE_MS - 1)).toBe(true);
+  });
+  it('allows a deliberate Stop once the grace window has passed', () => {
+    expect(isAccidentalStop(1, 1000, 1000 + STOP_GRACE_MS + 1)).toBe(false);
+  });
+  it('ignores the second click of a double-click even outside the window', () => {
+    expect(isAccidentalStop(2, 1000, 1000 + STOP_GRACE_MS * 4)).toBe(true);
   });
 });
