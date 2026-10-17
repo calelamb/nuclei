@@ -91,7 +91,10 @@ fn runtime_file_pid(path: &Path) -> Option<u64> {
 /// kernel's own cleanup). Only files that record `pid` are removed, so a
 /// newer kernel that took over `kernel.json` keeps its files.
 pub fn remove_kernel_runtime_files(dir: &Path, port: u16, pid: u32) {
-    for name in [per_port_runtime_name(port), RUNTIME_POINTER_NAME.to_string()] {
+    for name in [
+        per_port_runtime_name(port),
+        RUNTIME_POINTER_NAME.to_string(),
+    ] {
         let path = dir.join(name);
         if runtime_file_pid(&path) == Some(u64::from(pid)) {
             let _ = fs::remove_file(path);
@@ -403,7 +406,8 @@ mod tests {
     }
 
     fn write_runtime(dir: &Path, name: &str, pid: u32, port: u16) {
-        let body = format!(r#"{{"url":"ws://localhost:{port}","port":{port},"pid":{pid},"token":"t"}}"#);
+        let body =
+            format!(r#"{{"url":"ws://localhost:{port}","port":{port},"pid":{pid},"token":"t"}}"#);
         fs::write(dir.join(name), body).unwrap();
     }
 
