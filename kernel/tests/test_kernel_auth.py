@@ -11,6 +11,11 @@ from pathlib import Path
 
 import pytest
 import websockets
+# The kernel serves with websockets' asyncio implementation (13.0+); the
+# tests must too, or they silently exercise a different API on old pins.
+from websockets.asyncio.client import connect as ws_connect
+from websockets.asyncio.server import serve as ws_serve
+from websockets.exceptions import InvalidStatus
 
 from kernel import auth, server
 
@@ -37,7 +42,7 @@ class Recorder:
 
 async def _serve(config, inner):
     handler = auth.secure_handler(inner, config)
-    ws_server = await websockets.serve(handler, "127.0.0.1", 0)
+    ws_server = await ws_serve(handler, "127.0.0.1", 0)
     return ws_server, ws_server.sockets[0].getsockname()[1]
 
 
@@ -53,7 +58,7 @@ async def _attempt(port, first_frames, headers=None, host=None):
     received: list[dict] = []
     close_code = None
     try:
-        async with websockets.connect(
+        async with ws_connect(
             f"ws://{authority}",
             host="127.0.0.1",
             port=port,
@@ -69,7 +74,9 @@ async def _attempt(port, first_frames, headers=None, host=None):
                 pass
             except TimeoutError:  # connection stayed open and went quiet
                 pass
-            close_code = ws.close_code
+            # ``ws.close_code`` only exists from websockets 14; the protocol
+            # object carries it on every supported version (13.0+).
+            close_code = ws.protocol.close_code
     except websockets.ConnectionClosed as closed:
         close_code = closed.rcvd.code if closed.rcvd else None
     return received, close_code
@@ -132,7 +139,7 @@ def test_silent_client_times_out_without_reaching_handler():
     async def scenario():
         inner = Recorder()
         handler = auth.secure_handler(inner, _config(), auth_timeout=0.2)
-        ws_server = await websockets.serve(handler, "127.0.0.1", 0)
+        ws_server = await ws_serve(handler, "127.0.0.1", 0)
         port = ws_server.sockets[0].getsockname()[1]
         try:
             return inner, await _attempt(port, [])
@@ -273,8 +280,8 @@ def test_foreign_origin_gets_http_403_before_handshake_completes(origin):
         ws_server = await server._try_serve(0, _config())
         port = _real_server_port(ws_server)
         try:
-            with pytest.raises(websockets.InvalidStatus) as info:
-                async with websockets.connect(
+            with pytest.raises(InvalidStatus) as info:
+                async with ws_connect(
                     f"ws://127.0.0.1:{port}", origin=origin
                 ):
                     pass
@@ -289,8 +296,8 @@ def test_foreign_host_gets_http_403_before_handshake_completes():
         ws_server = await server._try_serve(0, _config())
         port = _real_server_port(ws_server)
         try:
-            with pytest.raises(websockets.InvalidStatus) as info:
-                async with websockets.connect(
+            with pytest.raises(InvalidStatus) as info:
+                async with ws_connect(
                     f"ws://attacker.example:{port}", host="127.0.0.1", port=port
                 ):
                     pass
