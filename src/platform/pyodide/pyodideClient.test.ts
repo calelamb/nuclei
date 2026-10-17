@@ -153,4 +153,29 @@ describe('PyodideRuntimeClient', () => {
     workers[0].onerror?.({ message: 'Script error' });
     await assertion;
   });
+
+  it('stop() cancels the in-flight call with a stopped error, not a timeout', async () => {
+    const { client, workers } = makeClient((req, reply) => {
+      if (req.type === 'init') reply({ id: req.id, type: 'result', value: 'ready' });
+      else reply({ id: req.id, type: 'started' }); // runs forever
+    });
+    await client.ensureStarted();
+    const call = client.call('nuclei_execute', ['while True: pass']);
+    const assertion = expect(call).rejects.toMatchObject({ code: 'stopped', message: 'Run stopped.' });
+    await Promise.resolve();
+    client.stop();
+    await assertion;
+    expect(workers[0].terminated).toBe(true);
+    expect(client.getState()).toBe('idle');
+  });
+
+  it('labels the boot after a restart as restarting, not downloading', async () => {
+    const { client } = makeClient(okResponder);
+    await client.ensureStarted();
+    client.stop();
+    const seen: string[] = [];
+    client.onProgress((p) => { if (p) seen.push(p.label); });
+    await client.ensureStarted();
+    expect(seen).toEqual(['Restarting Python', 'Restarting Python']);
+  });
 });

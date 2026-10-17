@@ -397,6 +397,7 @@ function createExecutionDriver(session: KernelSession) {
           { code: 'timeout', phase: 'execute' },
         ));
         pending = null;
+        session.abort?.();
       }, TEST_TIMEOUT_MS);
 
       pending = { kind: 'circuit', resolve, reject, timeoutId, snapshot: null, output: [] };
@@ -441,6 +442,7 @@ function createExecutionDriver(session: KernelSession) {
           { code: 'timeout', phase: 'python' },
         ));
         pending = null;
+        session.abort?.();
       }, TEST_TIMEOUT_MS);
 
       pending = { kind: 'value', resolve, reject, timeoutId, output: [], error: null };
@@ -476,6 +478,7 @@ function createExecutionDriver(session: KernelSession) {
     clearTimeout(pending.timeoutId);
     pending.reject(new ChallengeKernelError('Execution canceled'));
     pending = null;
+    session.abort?.();
   };
 
   return { handleMessage, execute, runPython, cancel };

@@ -40,6 +40,15 @@ describe('getRunButtonState', () => {
     expect(state.title).toContain('Port 8742 is already in use');
   });
 
+  it('becomes a Stop action while running when the runtime can interrupt', () => {
+    expect(getRunButtonState({ ...base, kernelReady: true, isRunning: true, canStop: true })).toMatchObject({
+      kind: 'running', label: 'Stop', disabled: false, stoppable: true,
+    });
+    expect(getRunButtonState({ ...base, kernelReady: true, isRunning: true })).toMatchObject({
+      label: 'Running…', disabled: true,
+    });
+  });
+
   it('prefers Running over everything else', () => {
     expect(getRunButtonState({ ...base, kernelReady: true, isRunning: true }).kind).toBe('running');
   });

@@ -63,7 +63,7 @@ describe('PyodideKernel — Q# rejection', () => {
 describe('PyodideKernel — worker-backed runtime', () => {
   type Reply = Record<string, unknown>;
 
-  function makeKernel(handlers: { parse?: Reply | 'hang'; execute?: Reply; run_python?: Reply; notice?: string }) {
+  function makeKernel(handlers: { parse?: Reply | 'hang'; execute?: Reply | 'hang'; run_python?: Reply; notice?: string }) {
     const captured: CapturedMessage[] = [];
     const workers: FakeWorker[] = [];
     const runtime = new PyodideRuntimeClient(() => {
@@ -145,6 +145,20 @@ describe('PyodideKernel — worker-backed runtime', () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+
+  it('a user stop ends the run quietly: output note and empty result, no error or wiped circuit', async () => {
+    const { kernel, captured, runtime } = makeKernel({ execute: 'hang' });
+    await kernel.init();
+    const sending = kernel.send({ type: 'execute', code: 'while True: pass', shots: 10 });
+    await vi.waitFor(() => expect(runtime.getState()).toBe('ready'));
+    await Promise.resolve();
+    runtime.stop();
+    await sending;
+    expect(captured).toEqual([
+      { type: 'output', text: 'Run stopped.\n' },
+      { type: 'result', data: null },
+    ]);
   });
 
   it('skips parse requests while Python is not running instead of erroring', async () => {

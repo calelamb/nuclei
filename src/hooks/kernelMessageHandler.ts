@@ -212,6 +212,7 @@ export function handleKernelMessage(msg: KernelResponse, connectTimers: ConnectT
       if (!isParseError) {
         useSimulationStore.getState().addOutput(`Error: ${detail}`, 'stderr');
         useSimulationStore.getState().setRunning(false);
+        useSimulationStore.getState().setRunFailed(true);
         useBottomPanelStore.getState().focusTerminal();
       }
 

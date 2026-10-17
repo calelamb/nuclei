@@ -226,6 +226,30 @@ describe('challengeExecution', () => {
       await vi.waitFor(() => expect(send).toHaveBeenCalledTimes(1));
     });
 
+    it('aborts the session when a test overruns, so a runaway solution cannot keep Python busy', async () => {
+      vi.useFakeTimers();
+      try {
+        const { createKernelSession } = await import('./kernelSession');
+        const abort = vi.fn();
+        vi.mocked(createKernelSession).mockImplementation(async () => ({
+          send: vi.fn(), // never answers
+          close: vi.fn(),
+          abort,
+        }));
+        const promise = runTestCases(
+          'def solve(bell_index):\n    pass\n',
+          { ...baseChallenge, testCases: [testCase] },
+          [testCase], 'qiskit', 'web', 1024, vi.fn(), vi.fn(), vi.fn(),
+        );
+        await vi.advanceTimersByTimeAsync(36_000);
+        const results = await promise;
+        expect(results[0].verdict).toBe('time_limit_exceeded');
+        expect(abort).toHaveBeenCalledTimes(1);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
     it('marks features outside the browser subset as unsupported, not as a failed attempt', async () => {
       const { createKernelSession } = await import('./kernelSession');
       vi.mocked(createKernelSession).mockImplementation(async (_platform, onMessage) => ({

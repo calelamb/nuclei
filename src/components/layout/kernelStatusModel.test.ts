@@ -3,7 +3,7 @@ import { getKernelStatusModel } from './kernelStatusModel';
 
 const base = {
   kernelStatus: 'idle' as const, kernelReady: false, kernelError: null,
-  kernelProgress: null, isRunning: false, executionTimeMs: null, isWeb: true,
+  kernelProgress: null, isRunning: false, executionTimeMs: null, lastRunFailed: false, isWeb: true,
 };
 
 describe('getKernelStatusModel', () => {
@@ -38,5 +38,18 @@ describe('getKernelStatusModel', () => {
 
   it('is idle before the kernel has started', () => {
     expect(getKernelStatusModel({ ...base, isWeb: false })).toMatchObject({ label: 'Kernel idle', tone: 'idle' });
+  });
+
+  it('does not claim a clean finish after the last run raised an error', () => {
+    const model = getKernelStatusModel({ ...base, kernelStatus: 'ready', kernelReady: true, lastRunFailed: true });
+    expect(model).toMatchObject({ label: 'Last run failed', tone: 'warn' });
+    expect(model.detail).toMatch(/error/i);
+  });
+
+  it('a run in progress wins over the previous failure', () => {
+    const model = getKernelStatusModel({
+      ...base, kernelStatus: 'ready', kernelReady: true, lastRunFailed: true, isRunning: true,
+    });
+    expect(model.tone).toBe('running');
   });
 });

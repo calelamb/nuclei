@@ -1,6 +1,6 @@
 import type { KernelProgress, KernelStatus } from '../../stores/editorStore';
 
-export type KernelTone = 'idle' | 'busy' | 'running' | 'ok' | 'error';
+export type KernelTone = 'idle' | 'busy' | 'running' | 'ok' | 'warn' | 'error';
 
 export interface KernelStatusModel {
   label: string;
@@ -16,6 +16,8 @@ interface KernelStatusInput {
   kernelProgress: KernelProgress | null;
   isRunning: boolean;
   executionTimeMs: number | null;
+  /** The most recent run ended in an error (the kernel itself is fine). */
+  lastRunFailed: boolean;
   isWeb: boolean;
 }
 
@@ -44,6 +46,13 @@ export function getKernelStatusModel(input: KernelStatusInput): KernelStatusMode
 
   if (input.isRunning) {
     return { label: 'Running…', tone: 'running', detail: 'A simulation is running.' };
+  }
+  if (input.lastRunFailed) {
+    return {
+      label: 'Last run failed',
+      tone: 'warn',
+      detail: `${engine} is ready. The last run ended with an error; see the Terminal.`,
+    };
   }
   if (input.executionTimeMs !== null) {
     return {

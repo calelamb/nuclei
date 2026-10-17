@@ -8,6 +8,8 @@ export interface RunButtonState {
   title: string;
   /** Failed stays clickable: the button becomes the Retry action. */
   disabled: boolean;
+  /** Clicking stops the running program instead of starting a run. */
+  stoppable?: boolean;
 }
 
 interface RunButtonInput {
@@ -16,10 +18,21 @@ interface RunButtonInput {
   kernelProgress: KernelProgress | null;
   kernelError: string | null;
   isRunning: boolean;
+  /** The runtime can interrupt a run (browser worker). */
+  canStop?: boolean;
 }
 
 /** One truthful label for the toolbar's Run slot across every kernel state. */
 export function getRunButtonState(input: RunButtonInput): RunButtonState {
+  if (input.isRunning && input.canStop) {
+    return {
+      kind: 'running',
+      label: 'Stop',
+      title: 'Stop the running program',
+      disabled: false,
+      stoppable: true,
+    };
+  }
   if (input.isRunning) {
     return { kind: 'running', label: 'Running…', title: 'Simulation running', disabled: true };
   }

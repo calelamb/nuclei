@@ -268,6 +268,9 @@ export function TestRunner({ challenge }: TestRunnerProps) {
     visibleTests,
   ]);
 
+  // A platform limit is not a verdict: no red badge, score or failed rows for it.
+  const desktopOnly = unsupportedMessage !== null;
+
   const verdictColor = overallVerdict === 'accepted'
     ? colors.success
     : overallVerdict === 'wrong_answer'
@@ -394,7 +397,7 @@ export function TestRunner({ challenge }: TestRunnerProps) {
           </button>
         </div>
 
-        {overallVerdict && !isRunning && (
+        {overallVerdict && !isRunning && !desktopOnly && (
           <div style={{
             marginLeft: 'auto',
             display: 'flex',
@@ -488,7 +491,7 @@ export function TestRunner({ challenge }: TestRunnerProps) {
             )}
 
             {visibleTests.map((testCase, index) => {
-              const result = currentTestResults.find((entry) => entry.testCaseId === testCase.id);
+              const result = desktopOnly ? undefined : currentTestResults.find((entry) => entry.testCaseId === testCase.id);
               const running = isRunning && runningTestIndex === index;
               return (
                 <TestCaseRow
@@ -502,7 +505,7 @@ export function TestRunner({ challenge }: TestRunnerProps) {
             })}
 
             {hiddenTests.map((testCase, index) => {
-              const result = currentTestResults.find((entry) => entry.testCaseId === testCase.id);
+              const result = desktopOnly ? undefined : currentTestResults.find((entry) => entry.testCaseId === testCase.id);
               const absoluteIndex = visibleTests.length + index;
               const running = isRunning && runningTestIndex === absoluteIndex;
               return (

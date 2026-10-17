@@ -138,6 +138,10 @@ export class PyodideKernel {
     });
   }
 
+  private endedByStop(error: unknown): boolean {
+    return error instanceof PyodideRuntimeError && error.code === 'stopped';
+  }
+
   private emitCallFailure(phase: Phase, error: unknown) {
     if (error instanceof PyodideRuntimeError && error.code === 'timeout') {
       const seconds = (phase === 'parse' ? PARSE_TIMEOUT_MS : EXECUTE_TIMEOUT_MS) / 1000;
@@ -156,6 +160,7 @@ export class PyodideKernel {
       this.onMessage({ type: 'snapshot', data: data.snapshot ?? null });
       if (data.error) this.emitError('parse', data.error);
     } catch (error) {
+      if (this.endedByStop(error)) return;
       this.onMessage({ type: 'snapshot', data: null });
       this.emitCallFailure('parse', error);
     }
@@ -175,6 +180,11 @@ export class PyodideKernel {
         this.onMessage({ type: 'result', data: data.result ?? null });
       }
     } catch (error) {
+      if (this.endedByStop(error)) {
+        this.onMessage({ type: 'output', text: 'Run stopped.\n' });
+        this.onMessage({ type: 'result', data: null });
+        return;
+      }
       this.onMessage({ type: 'snapshot', data: null });
       this.onMessage({ type: 'result', data: null });
       this.emitCallFailure('execute', error);
@@ -188,7 +198,8 @@ export class PyodideKernel {
       if (data.error) this.emitError('python', data.error);
       this.onMessage({ type: 'python_result', success: !data.error });
     } catch (error) {
-      this.emitCallFailure('python', error);
+      if (this.endedByStop(error)) this.onMessage({ type: 'output', text: 'Run stopped.\n' });
+      else this.emitCallFailure('python', error);
       this.onMessage({ type: 'python_result', success: false });
     }
   }

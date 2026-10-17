@@ -81,6 +81,7 @@ export function StatusBar() {
   const snapshot = useCircuitStore((s) => s.snapshot);
   const isRunning = useSimulationStore((s) => s.isRunning);
   const result = useSimulationStore((s) => s.result);
+  const lastRunFailed = useSimulationStore((s) => s.lastRunFailed);
   const kernelReady = useEditorStore((s) => s.kernelReady);
   const kernelStatus = useEditorStore((s) => s.kernelStatus);
   const kernelError = useEditorStore((s) => s.kernelError);
@@ -105,6 +106,7 @@ export function StatusBar() {
     kernelError,
     kernelProgress,
     isRunning,
+    lastRunFailed,
     executionTimeMs: result ? result.execution_time_ms : null,
     isWeb: platform.getPlatform() === 'web',
   });
@@ -113,6 +115,7 @@ export function StatusBar() {
     busy: colors.warning,
     running: colors.accent,
     ok: colors.success,
+    warn: colors.warning,
     error: colors.error,
   };
 

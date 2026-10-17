@@ -12,7 +12,7 @@ import { CLOSE_UNAUTHENTICATED, KERNEL_AUTH_REJECTED_MESSAGE, KernelAuthRejected
 import type { PyodideKernel } from '../platform/pyodideKernel';
 import type { PyodideRuntimeClient } from '../platform/pyodide/pyodideClient';
 import { KERNEL_NOT_RESPONDING_MESSAGE, normalizeKernelError } from '../lib/kernelErrors';
-import { registerKernelRetry } from '../lib/kernelControl';
+import { registerKernelRetry, registerKernelStop } from '../lib/kernelControl';
 import { useHardwareStore } from '../stores/hardwareStore';
 import { useQecStore } from '../stores/qecStore';
 import { useQecEstimateStore } from '../stores/qecEstimateStore';
@@ -213,6 +213,7 @@ export function useKernel() {
       const { pyodideRuntime } = await import('../platform/pyodide/pyodideClient');
       if (!mountedRef.current) return;
       watchRuntime(pyodideRuntime);
+      registerKernelStop(() => pyodideRuntime.stop());
 
       const kernel = new PyodideKernel((msg) => handleMessage(msg as KernelResponse));
       // Available before the boot finishes: the runtime flips the status to
@@ -265,7 +266,10 @@ export function useKernel() {
 
   useEffect(() => {
     registerKernelRetry(restartKernel);
-    return () => registerKernelRetry(null);
+    return () => {
+      registerKernelRetry(null);
+      registerKernelStop(null);
+    };
   }, [restartKernel]);
 
   // Start kernel. The old code slept 3000ms blind after startKernel() resolved;

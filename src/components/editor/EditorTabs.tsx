@@ -3,12 +3,12 @@ import { useProjectStore } from '../../stores/projectStore';
 import { useEditorStore } from '../../stores/editorStore';
 import { useSimulationStore } from '../../stores/simulationStore';
 import { useThemeStore } from '../../stores/themeStore';
-import { X, FileCode, Play, Loader2, Rocket, RotateCw } from 'lucide-react';
+import { X, FileCode, Play, Loader2, Rocket, RotateCw, Square } from 'lucide-react';
 import { getExecute, getFileOps } from '../../App';
 import { requestCloseTab } from '../../lib/tabClose';
 import { FrameworkSelector } from './FrameworkSelector';
 import { useHardwareStore } from '../../stores/hardwareStore';
-import { retryKernel } from '../../lib/kernelControl';
+import { canStopKernelRun, retryKernel, stopKernelRun } from '../../lib/kernelControl';
 import { useElementSize } from '../../hooks/useElementSize';
 import { getRunButtonState } from './runButtonState';
 
@@ -47,9 +47,13 @@ export function EditorTabs() {
     }
   }, [renaming]);
 
-  const runState = getRunButtonState({ kernelReady, kernelStatus, kernelProgress, kernelError, isRunning });
+  const runState = getRunButtonState({ kernelReady, kernelStatus, kernelProgress, kernelError, isRunning, canStop: canStopKernelRun() });
   const canRun = runState.kind === 'ready';
   const handleRun = () => {
+    if (runState.stoppable) {
+      stopKernelRun();
+      return;
+    }
     if (runState.kind === 'failed') {
       retryKernel();
       return;
@@ -328,7 +332,7 @@ export function EditorTabs() {
             flexShrink: 0,
             whiteSpace: 'nowrap',
             background: canRun ? colors.accent : colors.bgElevated,
-            color: canRun ? '#0a0f1a' : runFailed ? colors.error : colors.textMuted,
+            color: canRun ? '#0a0f1a' : runFailed ? colors.error : runState.stoppable ? colors.text : colors.textMuted,
             border: canRun ? 'none' : `1px solid ${runFailed ? colors.error : colors.border}`,
             borderRadius: 6,
             cursor: runState.disabled ? 'default' : 'pointer',
@@ -352,7 +356,9 @@ export function EditorTabs() {
             }
           }}
         >
-          {isRunning || runState.kind === 'loading' ? (
+          {runState.stoppable ? (
+            <Square size={11} fill="currentColor" />
+          ) : isRunning || runState.kind === 'loading' ? (
             <Loader2 size={13} style={{ animation: 'nuclei-spin 800ms linear infinite' }} />
           ) : runFailed ? (
             <RotateCw size={12} />

@@ -23,7 +23,7 @@ export interface WorkerLike {
 
 export type WorkerFactory = () => WorkerLike;
 
-export type RuntimeErrorCode = 'load_failed' | 'timeout' | 'runtime_error';
+export type RuntimeErrorCode = 'load_failed' | 'timeout' | 'runtime_error' | 'stopped';
 
 export class PyodideRuntimeError extends Error {
   readonly code: RuntimeErrorCode;
@@ -69,6 +69,8 @@ export class PyodideRuntimeClient {
   private readonly progressListeners = new Set<ProgressListener>();
   private readonly noticeListeners = new Set<NoticeListener>();
   private lastProgress: BootProgress | null = null;
+  /** True after a worker was killed: the next boot is a restart, not a first download. */
+  private restarted = false;
 
   constructor(factory: WorkerFactory) {
     this.factory = factory;
@@ -133,9 +135,14 @@ export class PyodideRuntimeClient {
     return this.request({ type: 'call', fn, args }, options.timeoutMs);
   }
 
-  /** Kill the worker; the next call boots a new one. */
+  /** Kill the worker; the next call boots a new one. In-flight calls fail as timeouts. */
   restart(): void {
-    this.teardown();
+    this.teardown('timeout');
+  }
+
+  /** The user asked to stop the running program: kill the worker, fail the call as stopped. */
+  stop(): void {
+    this.teardown('stopped');
   }
 
   private request(
@@ -193,7 +200,9 @@ export class PyodideRuntimeClient {
     }, entry.timeoutMs);
   }
 
-  private setProgress(progress: BootProgress | null) {
+  private setProgress(raw: BootProgress | null) {
+    // The runtime files are cached after the first boot, so a restart is not a download.
+    const progress = raw && this.restarted ? { ...raw, label: 'Restarting Python' } : raw;
     this.lastProgress = progress;
     this.progressListeners.forEach((listener) => listener(progress));
   }
@@ -210,7 +219,7 @@ export class PyodideRuntimeClient {
     return entries;
   }
 
-  private teardown() {
+  private teardown(reason: 'timeout' | 'stopped' = 'timeout') {
     const hadWorker = this.worker !== null;
     this.worker?.terminate();
     this.worker = null;
@@ -221,11 +230,14 @@ export class PyodideRuntimeClient {
     const orphaned = this.takePending();
     this.setProgress(null);
     this.setState('idle');
+    if (hadWorker) this.restarted = true;
     if (hadWorker || orphaned.length > 0) {
-      const error = new PyodideRuntimeError(
-        'The Python engine was restarted because the code took too long to run.',
-        'timeout',
-      );
+      const error = reason === 'stopped'
+        ? new PyodideRuntimeError('Run stopped.', 'stopped')
+        : new PyodideRuntimeError(
+          'The Python engine was restarted because the code took too long to run.',
+          'timeout',
+        );
       orphaned.forEach((entry) => entry.reject(error));
     }
   }

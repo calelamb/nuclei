@@ -12,3 +12,19 @@ export function registerKernelRetry(handler: (() => void) | null): void {
 export function retryKernel(): void {
   retryHandler?.();
 }
+
+let stopHandler: (() => void) | null = null;
+
+/** Registered only by runtimes that can interrupt a run (the browser Python worker). */
+export function registerKernelStop(handler: (() => void) | null): void {
+  stopHandler = handler;
+}
+
+export function canStopKernelRun(): boolean {
+  return stopHandler !== null;
+}
+
+/** Stop the program that is running right now. No-op when the runtime cannot. */
+export function stopKernelRun(): void {
+  stopHandler?.();
+}

@@ -20,11 +20,14 @@ export interface TerminalLine {
 interface SimulationState {
   result: SimulationResult | null;
   isRunning: boolean;
+  /** The last run ended in an error; cleared when a new run starts or a result lands. */
+  lastRunFailed: boolean;
   shots: number;
   terminalOutput: TerminalLine[];
   setResult: (result: SimulationResult | null) => void;
   clearResult: () => void;
   setRunning: (running: boolean) => void;
+  setRunFailed: (failed: boolean) => void;
   setShots: (shots: number) => void;
   addOutput: (text: string, type?: TerminalLineType) => void;
   clearOutput: () => void;
@@ -53,11 +56,13 @@ function appendCapped(buffer: TerminalLine[], additions: TerminalLine[]): Termin
 export const useSimulationStore = create<SimulationState>((set) => ({
   result: null,
   isRunning: false,
+  lastRunFailed: false,
   shots: 1024,
   terminalOutput: [],
-  setResult: (result) => set({ result, isRunning: false }),
+  setResult: (result) => set((s) => ({ result, isRunning: false, lastRunFailed: result ? false : s.lastRunFailed })),
   clearResult: () => set({ result: null, isRunning: false }),
-  setRunning: (isRunning) => set({ isRunning }),
+  setRunning: (isRunning) => set((s) => ({ isRunning, lastRunFailed: isRunning ? false : s.lastRunFailed })),
+  setRunFailed: (lastRunFailed) => set({ lastRunFailed }),
   setShots: (shots) => set({ shots }),
   addOutput: (text, type = 'stdout') => set((s) => {
     const timestamp = Date.now();
