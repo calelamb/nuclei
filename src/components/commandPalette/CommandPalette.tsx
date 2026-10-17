@@ -240,7 +240,7 @@ export interface CommandActions {
   startResearchTour: () => void;
   /** Open a rail view (navigationStore.setActiveView). */
   navigate: (view: LeftPanelId) => void;
-  /** Flip a viz/bottom panel's visibility (layoutStore.togglePanel). */
+  /** Flip a viz/bottom panel against its resolved visibility (togglePanelResolved). */
   togglePanel: (id: PanelId) => void;
   /** Start a discovered experiment by its yaml file name. */
   runExperiment: (fileName: string) => void;

@@ -20,6 +20,7 @@ import { useActiveTabSync } from './hooks/useActiveTabSync';
 import { useKeychainKeyMigration } from './hooks/useKeychainKeyMigration';
 import { useProjectStore } from './stores/projectStore';
 import { useThemeStore, isThemePreference } from './stores/themeStore';
+import { getResolvedVisibility, togglePanelResolved } from './layout/resolvedVisibility';
 import { useEditorStore } from './stores/editorStore';
 import { useHelpOverlayStore } from './stores/helpOverlayStore';
 import { useWhatsNewStore } from './stores/whatsNewStore';
@@ -124,7 +125,6 @@ function AppInner() {
   const focusDirac = useDiracPanelStore((s) => s.focusInput);
   // Workspace navigation + command-palette context (PRD 11 Phase D).
   const navigate = useNavigationStore((s) => s.setActiveView);
-  const togglePanel = useLayoutStore((s) => s.togglePanel);
   const workspaceMode = useWorkspaceStore((s) => s.mode);
   const experimentalFeatures = useSettingsStore((s) => s.general.experimentalFeatures);
   const experiments = useExperimentStore((s) => s.experiments);
@@ -339,7 +339,7 @@ function AppInner() {
     switchWorkspaceMode: () => useModeSwitchStore.getState().requestToggle(),
     startResearchTour: () => useResearchTourStore.getState().start(),
     navigate,
-    togglePanel,
+    togglePanel: togglePanelResolved,
     runExperiment: (fileName: string) => {
       const experiment = experiments.find((e) => e.fileName === fileName);
       if (!experiment || !projectRoot) return;
@@ -401,9 +401,13 @@ function AppInner() {
         }
         case 'toggle-bottom-panel': {
           // Opening the bottom panel always focuses the terminal tab so
-          // print-debug output is immediately visible.
+          // print-debug output is immediately visible. A terminal the layout
+          // preset keeps hidden (Clean, no output yet) is forced visible first.
           const store = useBottomPanelStore.getState();
-          if (store.collapsed) store.focusTerminal();
+          if (!getResolvedVisibility().terminal) {
+            useLayoutStore.getState().setPanelOverride('terminal', true);
+            store.focusTerminal();
+          } else if (store.collapsed) store.focusTerminal();
           else if (store.activeTab !== 'terminal') store.setActiveTab('terminal');
           else store.setCollapsed(true);
           break;

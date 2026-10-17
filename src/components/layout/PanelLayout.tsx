@@ -95,6 +95,7 @@ export function PanelLayout() {
   const workspaceMode = useWorkspaceStore((s) => s.mode);
   const result = useSimulationStore((s) => s.result);
   const terminalOutput = useSimulationStore((s) => s.terminalOutput);
+  const lastRunFailed = useSimulationStore((s) => s.lastRunFailed);
   const snapshot = useCircuitStore((s) => s.snapshot);
   const platform = usePlatform();
   const isLearnMode = useLearnStore((s) => s.isLearnMode);
@@ -125,7 +126,7 @@ export function PanelLayout() {
       snapshot,
       result,
       hasTerminalOutput: terminalOutput.length > 0,
-      errorActive: false,
+      errorActive: lastRunFailed,
       mode: workspaceMode,
       framework: snapshot?.framework ?? null,
     },

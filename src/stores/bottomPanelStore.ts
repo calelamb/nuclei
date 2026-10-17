@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { useLayoutStore } from './layoutStore';
 
 export type BottomPanelTab = 'terminal' | 'histogram';
 
@@ -35,5 +36,10 @@ export const useBottomPanelStore = create<BottomPanelState>((set) => ({
   setFilter: (filter) => set({ filter }),
   // Open the bottom panel and focus the terminal tab. Used by Cmd+`
   // and by the kernel-message handler to surface fresh output.
-  focusTerminal: () => set({ collapsed: false, activeTab: 'terminal' }),
+  // A user-hidden terminal override is dropped so fresh output or a failed run is never invisible.
+  focusTerminal: () => {
+    const layout = useLayoutStore.getState();
+    if (layout.overrides.terminal === false) layout.clearPanelOverride('terminal');
+    set({ collapsed: false, activeTab: 'terminal' });
+  },
 }));
