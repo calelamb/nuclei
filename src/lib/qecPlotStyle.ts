@@ -52,7 +52,7 @@ export function luminance(hex: string): number {
 const sortedUnique = <T,>(xs: T[], cmp: (a: T, b: T) => number) => [...new Set(xs)].sort(cmp);
 
 /**
- * Colour per distance, marker shape per decoder, dash per experiment. Each
+ * Colour per distance, marker shape per decoder, dash per experiment (or per decoder when there is one experiment). Each
  * channel redundantly encodes something the legend lists, so the figure still
  * reads in greyscale or for colour-blind readers.
  */
@@ -66,10 +66,14 @@ export function buildPlotStyle(
 
   const colorOf = (d: number | null) => palette[distances.indexOf(d) % palette.length];
   const shapeOf = (dec: string) => SHAPES[decoders.indexOf(dec) % SHAPES.length];
+  // Dash encodes the experiment when several are plotted; with one, the channel is free and
+  // separates decoders so they stay apart in greyscale beyond marker shape alone.
+  const dashByExperiment = labels.length > 1;
   const dashOf = (label: string) => DASHES[labels.indexOf(label) % DASHES.length];
+  const dashOfDecoder = (dec: string) => (dashByExperiment ? undefined : DASHES[decoders.indexOf(dec) % DASHES.length]);
 
   const byKey = new Map(series.map((s) => [
-    s.key, { color: colorOf(s.distance), shape: shapeOf(s.decoder), dash: dashOf(s.label) } satisfies SeriesStyle,
+    s.key, { color: colorOf(s.distance), shape: shapeOf(s.decoder), dash: dashByExperiment ? dashOf(s.label) : dashOfDecoder(s.decoder) } satisfies SeriesStyle,
   ]));
 
   const legend: LegendGroup[] = [{
@@ -79,7 +83,7 @@ export function buildPlotStyle(
   if (decoders.length > 1) {
     legend.push({
       kind: 'decoder', title: 'Decoder',
-      entries: decoders.map((dec) => ({ id: dec, label: dec, color: neutral, shape: shapeOf(dec) })),
+      entries: decoders.map((dec) => ({ id: dec, label: dec, color: neutral, shape: shapeOf(dec), dash: dashOfDecoder(dec) })),
     });
   }
   if (labels.length > 1) {

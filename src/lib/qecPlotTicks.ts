@@ -64,6 +64,15 @@ export function logAxis(values: readonly number[], opts: { pad?: number } = {}):
       else minors.push(value);
     }
   }
+  if (!sparse && !narrow) {
+    // Three or more decades label only whole decades; keep 2x and 5x in the closing partial decades.
+    for (const e of [Math.floor(lo), Math.floor(hi)]) {
+      for (const m of [2, 5]) {
+        const value = m * 10 ** e;
+        if (inside(value) && !extra.some((t) => t.value === value)) extra.push({ value, label: formatMultiplierTick(m, e), major: false });
+      }
+    }
+  }
   const labeled = [...majorTicks, ...extra].sort((a, b) => a.value - b.value);
   return { lo, hi, labeled, minors };
 }
@@ -77,4 +86,28 @@ export function makeLogScale(
     if (!(value > 0) || !Number.isFinite(value)) return r0;
     return r0 + ((Math.log10(value) - domain.lo) / span) * (r1 - r0);
   };
+}
+
+const mantissaRank = (value: number): number => {
+  const m = Math.round(value / 10 ** Math.floor(Math.log10(value) + 1e-9));
+  return m === 1 ? 0 : m === 5 ? 1 : m === 2 ? 2 : 3 + m;
+};
+
+/**
+ * Tick labels that fit without touching: whole decades first, then 5x, 2x and the other multiples,
+ * each kept only if it clears every label already placed by `gap` pixels. Returned in axis order.
+ */
+export function visibleLabels<T extends { value: number; major: boolean }>(
+  ticks: readonly T[], px: (value: number) => number, widthOf: (tick: T) => number, gap = 8,
+): T[] {
+  const byPriority = [...ticks].sort((a, b) => Number(b.major) - Number(a.major) || mantissaRank(a.value) - mantissaRank(b.value));
+  const placed: Array<{ tick: T; lo: number; hi: number }> = [];
+  for (const tick of byPriority) {
+    const centre = px(tick.value);
+    const half = widthOf(tick) / 2;
+    const lo = centre - half - gap / 2;
+    const hi = centre + half + gap / 2;
+    if (placed.every((p) => hi <= p.lo || lo >= p.hi)) placed.push({ tick, lo, hi });
+  }
+  return placed.map((p) => p.tick).sort((a, b) => a.value - b.value);
 }

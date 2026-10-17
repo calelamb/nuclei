@@ -4,7 +4,7 @@ import type { ThemeColors } from '../../stores/themeStore';
 import { whiskerLow, type PlotModel } from '../../lib/qecPlotModel';
 import type { SeriesPoint } from '../../lib/qecPlotPoints';
 import { nearestPoint } from '../../lib/qecPlotPoints';
-import { makeLogScale } from '../../lib/qecPlotTicks';
+import { makeLogScale, visibleLabels } from '../../lib/qecPlotTicks';
 import {
   FIGURE_PAD, FONT, LEGEND_SWATCH_GAP, LEGEND_SWATCH_WIDTH, NOTE_LINE_HEIGHT, TICK_LENGTH,
   fitAxisTitle, layoutFigure, type FigureLayout,
@@ -17,6 +17,8 @@ export type FigureColors = Pick<ThemeColors, 'bg' | 'text' | 'textMuted' | 'text
 
 export const FIGURE_FONT = "'Geist Sans', 'Helvetica Neue', Arial, sans-serif";
 const HIT_RADIUS = 12;
+const TICK_CHAR_WIDTH = 0.58;
+const TICK_LABEL_GAP = 8;
 const CAP = 2.5;
 
 export interface HoverTarget {
@@ -123,9 +125,11 @@ export function QecPlotFigure(props: QecPlotFigureProps) {
           x={plot.x} y={plot.y} width={plot.w} height={plot.h} fill="transparent"
           tabIndex={0} role="group"
           aria-label="Plot points. Use the arrow keys to move between points, Escape to clear."
-          stroke={focused ? colors.textMuted : 'none'} strokeDasharray="4 3" strokeWidth={1}
           onKeyDown={onKey} onFocus={onFocus} onBlur={() => { setFocused(false); onHover(null); }}
-          onMouseMove={onMove} onMouseLeave={() => onHover(null)} style={{ cursor: 'crosshair' }}
+          onMouseMove={onMove} onMouseLeave={() => onHover(null)}
+          style={{
+            cursor: 'crosshair', stroke: focused ? 'var(--focus-ring-color)' : 'none', strokeWidth: 'var(--focus-ring-width)',
+          }}
         />
       )}
     </svg>
@@ -149,6 +153,9 @@ interface AxesProps { model: PlotModel; layout: FigureLayout; scales: Scales; co
 function Axes({ model, layout, scales, colors }: AxesProps) {
   const { plot } = layout;
   const bottom = plot.y + plot.h;
+  // Labels that would touch are dropped (whole decades first); their gridlines stay.
+  const xLabeled = visibleLabels(model.xAxis.labeled, scales.sx, (t) => t.label.length * FONT.tick * TICK_CHAR_WIDTH, TICK_LABEL_GAP);
+  const yLabeled = visibleLabels(model.yAxis.labeled, scales.sy, () => FONT.tick, TICK_LABEL_GAP / 2);
   const grid = (key: string, x1: number, y1: number, x2: number, y2: number, major: boolean) => (
     <line key={key} x1={x1} y1={y1} x2={x2} y2={y2} stroke={colors.textDim} strokeOpacity={major ? 0.3 : 0.12} strokeWidth={1} />
   );
@@ -160,13 +167,13 @@ function Axes({ model, layout, scales, colors }: AxesProps) {
       {model.yAxis.labeled.map((t) => grid(`yM${t.value}`, plot.x, scales.sy(t.value), plot.x + plot.w, scales.sy(t.value), true))}
       <line x1={plot.x} y1={plot.y} x2={plot.x} y2={bottom} stroke={colors.textMuted} strokeWidth={1} />
       <line x1={plot.x} y1={bottom} x2={plot.x + plot.w} y2={bottom} stroke={colors.textMuted} strokeWidth={1} />
-      {model.xAxis.labeled.map((t) => (
+      {xLabeled.map((t) => (
         <g key={`xt${t.value}`}>
           <line x1={scales.sx(t.value)} y1={bottom} x2={scales.sx(t.value)} y2={bottom + TICK_LENGTH} stroke={colors.textMuted} />
           <text x={scales.sx(t.value)} y={bottom + TICK_LENGTH + 4 + 9} fontSize={FONT.tick} fill={colors.textMuted} textAnchor="middle">{t.label}</text>
         </g>
       ))}
-      {model.yAxis.labeled.map((t) => (
+      {yLabeled.map((t) => (
         <g key={`yt${t.value}`}>
           <line x1={plot.x - TICK_LENGTH} y1={scales.sy(t.value)} x2={plot.x} y2={scales.sy(t.value)} stroke={colors.textMuted} />
           <text x={plot.x - TICK_LENGTH - 4} y={scales.sy(t.value)} dy="0.35em" fontSize={FONT.tick} fill={colors.textMuted} textAnchor="end">{t.label}</text>

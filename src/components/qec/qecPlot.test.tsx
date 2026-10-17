@@ -138,7 +138,7 @@ describe('point tooltip', () => {
     expect(text).toMatch(/d = 3/);
     expect(text).toMatch(/mwpm/);
     expect(text).toMatch(/rate per round/);
-    expect(text).toMatch(/interval: .* to /);
+    expect(text).toMatch(/sinter likelihood-ratio interval: .* to /);
     expect(text).toMatch(/errors in 100,000 kept shots/);
     fireEvent.mouseLeave(overlay);
     expect(queryByRole('tooltip')).toBeNull();
@@ -157,6 +157,18 @@ describe('keyboard access to points (qec-18)', () => {
     expect(getByRole('tooltip').textContent).not.toBe(first);
     fireEvent.keyDown(plot, { key: 'Escape' });
     expect(queryByRole('tooltip')).toBeNull();
+  });
+
+  it('draws the shared focus ring (solid, ring token) rather than a dashed muted stroke', () => {
+    load(grid(['mwpm']));
+    const { getByRole } = render(<ThresholdPanel />);
+    const plot = getByRole('group', { name: /Plot points/ });
+    expect(plot.getAttribute('stroke-dasharray')).toBeNull();
+    fireEvent.focus(plot);
+    expect(plot.style.stroke).toBe('var(--focus-ring-color)');
+    expect(plot.style.strokeWidth).toBe('var(--focus-ring-width)');
+    fireEvent.blur(plot);
+    expect(plot.style.stroke).toBe('none');
   });
 });
 
