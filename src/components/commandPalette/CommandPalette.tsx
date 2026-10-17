@@ -103,8 +103,8 @@ export function CommandPalette({ commands, onClose }: CommandPaletteProps) {
     <div
       style={{
         position: 'fixed', inset: 0, zIndex: 5000,
-        background: 'rgba(0,0,0,0.5)',
-        backdropFilter: 'blur(12px)',
+        background: colors.scrim,
+        backdropFilter: 'blur(4px)',
         display: 'flex', alignItems: 'flex-start', justifyContent: 'center',
         paddingTop: '15vh',
         animation: prefersReducedMotion() ? 'none' : `nuclei-fade-in ${DURATION.fast}ms`,

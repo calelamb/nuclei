@@ -26,7 +26,7 @@
 .dirac-onboard__links { display: flex; justify-content: center; gap: var(--space-3); font-size: var(--font-size-caption); }
 .dirac-link {
   background: none; border: none; padding: 0; cursor: pointer; font: inherit;
-  color: var(--color-accent-quantum); text-decoration: none;
+  color: var(--color-accent-quantum-text); text-decoration: none;
 }
 .dirac-link:hover { text-decoration: underline; }
 .dirac-btn-dirac.nuclei-btn.nuclei-btn--primary,
@@ -46,7 +46,7 @@
 }
 .dirac-starter:hover { background: var(--color-surface-overlay); border-color: var(--color-accent-dirac); }
 .dirac-empty__hint { margin: var(--space-3) 0 0; font-size: var(--font-size-caption); color: var(--color-text-tertiary); }
-.dirac-empty__hint code { font-family: var(--font-mono); padding: 1px 6px; border-radius: var(--radius-xs); background: var(--color-surface-raised); border: 1px solid var(--color-border-strong); color: var(--color-accent-quantum); }
+.dirac-empty__hint code { font-family: var(--font-mono); padding: 1px 6px; border-radius: var(--radius-xs); background: var(--color-surface-raised); border: 1px solid var(--color-border-strong); color: var(--color-accent-quantum-text); }
 
 /* Error card */
 .dirac-error {
@@ -72,7 +72,7 @@
   font: var(--font-size-chrome-label) var(--font-sans); color: var(--color-text-primary);
 }
 .dirac-slash__item:hover, .dirac-slash__item[aria-selected='true'] { background: var(--color-surface-overlay); }
-.dirac-slash__cmd { font-family: var(--font-mono); color: var(--color-accent-quantum); }
+.dirac-slash__cmd { font-family: var(--font-mono); color: var(--color-accent-quantum-text); }
 .dirac-slash__desc { color: var(--color-text-secondary); }
 
 /* Composer */

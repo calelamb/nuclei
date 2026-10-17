@@ -17,8 +17,9 @@ import { shortcutLabel } from '../../config/keybindings';
  * `modeSwitchStore.requestSwitch`, which confirms first if a sweep/campaign
  * is running (and never cancels it).
  *
- * The accent is Dirac purple for Research, quantum teal for Learn — reusing
- * the existing palette tokens rather than inventing colours.
+ * The accent is the Research blue for Research and quantum teal for Learn.
+ * Purple is reserved for Dirac. Teal text/icons use `accentText` (AA on every
+ * surface); the raw `accent` only tints the fill and border.
  */
 
 const MODE_META: Record<WorkspaceMode, { label: string; icon: typeof GraduationCap }> = {
@@ -37,6 +38,7 @@ export function ModeChip() {
   const menuRef = useRef<HTMLDivElement>(null);
 
   const accent = mode === 'research' ? colors.modeResearch : colors.accent;
+  const accentText = mode === 'research' ? colors.modeResearch : colors.accentText;
   const meta = MODE_META[mode];
   const Icon = meta.icon;
 
@@ -121,6 +123,7 @@ export function ModeChip() {
         const MIcon = mMeta.icon;
         const isCurrent = m === mode;
         const mAccent = m === 'research' ? colors.modeResearch : colors.accent;
+        const mAccentText = m === 'research' ? colors.modeResearch : colors.accentText;
         return (
           <button
             key={m}
@@ -144,9 +147,9 @@ export function ModeChip() {
               textAlign: 'left',
             } as React.CSSProperties}
           >
-            <MIcon size={14} color={mAccent} strokeWidth={2} />
+            <MIcon size={14} color={mAccentText} strokeWidth={2} />
             <span style={{ flex: 1 }}>{m === 'research' ? 'Research workspace' : 'Learn quantum computing'}</span>
-            {isCurrent && <Check size={14} color={mAccent} />}
+            {isCurrent && <Check size={14} color={mAccentText} />}
           </button>
         );
       })}
@@ -173,7 +176,7 @@ export function ModeChip() {
           border: `1px solid ${accent}`,
           borderRadius: 4,
           cursor: 'pointer',
-          color: accent,
+          color: accentText,
           fontSize: 11,
           fontWeight: 700,
           letterSpacing: 0.5,

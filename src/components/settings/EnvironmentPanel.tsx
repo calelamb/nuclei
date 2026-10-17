@@ -168,7 +168,7 @@ export function EnvironmentPanel() {
       {/* Health header */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
         {report?.healthy ? (
-          <Check size={16} style={{ color: colors.success }} />
+          <Check size={16} style={{ color: colors.successText }} />
         ) : (
           <AlertTriangle size={16} style={{ color: colors.warning }} />
         )}
@@ -251,7 +251,7 @@ export function EnvironmentPanel() {
                     <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
                       <span style={{ fontSize: 13, fontWeight: 500, color: colors.text }}>{fw.label}</span>
                       {installed && (
-                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3, fontSize: 11, color: colors.success }}>
+                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3, fontSize: 11, color: colors.successText }}>
                           <Check size={12} /> installed
                         </span>
                       )}

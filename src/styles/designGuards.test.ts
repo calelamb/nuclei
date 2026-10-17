@@ -58,4 +58,16 @@ describe('design guards', () => {
   it('has no purple (Dirac) colours in the research trees', () => {
     expect(offenders((f) => /^components\/(experiments|qec)\//.test(f.rel) && /colors\.dirac\b/.test(f.text))).toEqual([]);
   });
+
+  it('uses accentText (not the raw teal fill colour) for text outside the trees other lanes still own', () => {
+    // Raw accent teal fails AA as small text on white; fills and borders may still use it.
+    const pending = /^components\/(learning|challenges|community|experiments|markdown|qec)\/|^components\/hardware\/(HardwarePanel|LaunchPortal)\.tsx$/;
+    const rawAccentText = /(?<![-\w])color:\s*(?:colors\.accent\b(?!Text|Light)|var\(--color-accent-quantum\))/;
+    expect(offenders((f) => !pending.test(f.rel) && rawAccentText.test(f.text))).toEqual([]);
+  });
+
+  it('draws modal backdrops with the scrim token, not a hard-coded black', () => {
+    const modalFiles = ['components/onboarding/KeyboardShortcuts.tsx', 'components/commandPalette/CommandPalette.tsx', 'components/ui/Dialog.tsx'];
+    expect(offenders((f) => modalFiles.includes(f.rel) && /background:\s*['"]rgba\(0,\s*0,\s*0/.test(f.text))).toEqual([]);
+  });
 });

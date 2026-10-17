@@ -341,7 +341,7 @@ export function FrameworkSetup({ open, onClose, firstRun = false }: FrameworkSet
             >
               {lastFailures.length === 0 ? (
                 <>
-                  <Check size={12} style={{ color: colors.success, marginRight: 6 }} />
+                  <Check size={12} style={{ color: colors.successText, marginRight: 6 }} />
                   All selected frameworks installed. Restart the kernel to pick them up.
                 </>
               ) : (

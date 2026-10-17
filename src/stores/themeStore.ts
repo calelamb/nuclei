@@ -63,9 +63,13 @@ export interface ThemeColors {
   basisZ: string;
   overlayMatching: string;
   success: string;
+  /** Green for small text/glyphs (AA on every surface); `success` is for fills and dots. */
+  successText: string;
   warning: string;
   error: string;
   info: string;
+  /** Modal backdrop colour. */
+  scrim: string;
   comment: string;
   string: string;
   number: string;
@@ -98,9 +102,11 @@ function legacyFromTokens(c: ColorTokens): ThemeColors {
     basisZ: c.basisZ,
     overlayMatching: c.overlayMatching,
     success: c.success,
+    successText: c.successText,
     warning: c.warning,
     error: c.danger,
     info: c.info,
+    scrim: c.scrim,
     comment: c.syntaxComment,
     string: c.syntaxString,
     number: c.syntaxNumber,

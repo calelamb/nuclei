@@ -59,7 +59,7 @@ function GateExplorerPopup({ gateIndex, onClose }: { gateIndex: number; onClose:
         overflow: 'auto',
       }} onClick={(e) => e.stopPropagation()}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-          <span style={{ color: colors.accent, fontWeight: 700, fontSize: 16, fontFamily: TYPOGRAPHY.fontMono }}>
+          <span style={{ color: colors.accentText, fontWeight: 700, fontSize: 16, fontFamily: TYPOGRAPHY.fontMono }}>
             {data.symbol}
           </span>
           <button onClick={onClose} style={{ background: 'none', border: 'none', color: colors.textMuted, cursor: 'pointer', fontSize: 16 }}>✕</button>
@@ -73,7 +73,7 @@ function GateExplorerPopup({ gateIndex, onClose }: { gateIndex: number; onClose:
 
         <div style={{ marginBottom: 10 }}>
           <div style={{ color: colors.textMuted, fontSize: 11, fontFamily: TYPOGRAPHY.fontSans, marginBottom: 4 }}>MATRIX</div>
-          <code style={{ color: colors.accent, fontSize: 12, fontFamily: TYPOGRAPHY.fontMono, background: colors.bgPanel, padding: '4px 8px', borderRadius: 4, display: 'block' }}>
+          <code style={{ color: colors.accentText, fontSize: 12, fontFamily: TYPOGRAPHY.fontMono, background: colors.bgPanel, padding: '4px 8px', borderRadius: 4, display: 'block' }}>
             {data.matrix}
           </code>
         </div>
@@ -102,7 +102,7 @@ function GateExplorerPopup({ gateIndex, onClose }: { gateIndex: number; onClose:
             <div style={{ color: colors.textMuted, fontSize: 11, fontFamily: TYPOGRAPHY.fontSans, marginBottom: 4 }}>RELATED GATES</div>
             <div style={{ display: 'flex', gap: 6 }}>
               {data.relatedGates.map((g) => (
-                <span key={g} style={{ color: colors.accent, fontSize: 12, fontFamily: TYPOGRAPHY.fontMono, background: colors.bgPanel, padding: '2px 6px', borderRadius: 3 }}>
+                <span key={g} style={{ color: colors.accentText, fontSize: 12, fontFamily: TYPOGRAPHY.fontMono, background: colors.bgPanel, padding: '2px 6px', borderRadius: 3 }}>
                   {g}
                 </span>
               ))}
@@ -294,7 +294,7 @@ function DebugStateReadout({ stepIndex }: { stepIndex: number }) {
   const step = activeDebugStep(trace, stepIndex);
   if (!step) return null;
   return (
-    <span style={{ ...base, color: colors.accent }}>
+    <span style={{ ...base, color: colors.accentText }}>
       state after {step.gate_index < 0 ? 'start' : step.label}
     </span>
   );
@@ -459,7 +459,7 @@ export function CircuitRenderer() {
             borderRadius: 6, padding: '8px 12px',
             zIndex: 1000, pointerEvents: 'none', maxWidth: 250,
           }}>
-            <div style={{ color: colors.accent, fontWeight: 600, fontSize: 13, fontFamily: TYPOGRAPHY.fontMono }}>{tooltip.gate.type}</div>
+            <div style={{ color: colors.accentText, fontWeight: 600, fontSize: 13, fontFamily: TYPOGRAPHY.fontMono }}>{tooltip.gate.type}</div>
             <div style={{ color: colors.text, fontSize: 12, fontFamily: TYPOGRAPHY.fontSans, marginTop: 4 }}>Targets: q{tooltip.gate.targets.join(', q')}</div>
             {tooltip.gate.controls.length > 0 && <div style={{ color: colors.text, fontSize: 12, fontFamily: TYPOGRAPHY.fontSans }}>Controls: q{tooltip.gate.controls.join(', q')}</div>}
             {tooltip.gate.params.length > 0 && <div style={{ color: colors.number, fontSize: 12, fontFamily: TYPOGRAPHY.fontMono }}>Params: {tooltip.gate.params.map(formatAngle).join(', ')}</div>}

@@ -37,6 +37,7 @@ export function shortcutGroups(mac: boolean = isMacPlatform()): Array<{ title: s
 
 export function KeyboardShortcuts({ onClose }: KeyboardShortcutsProps) {
   const colors = useThemeStore((s) => s.colors);
+  const shadow = useThemeStore((s) => s.shadow);
   useEscapeToClose(onClose);
   const dialogRef = useRef<HTMLDivElement>(null);
   useFocusTrap(dialogRef);
@@ -46,7 +47,7 @@ export function KeyboardShortcuts({ onClose }: KeyboardShortcutsProps) {
     <div
       style={{
         position: 'fixed', inset: 0, zIndex: 4500,
-        background: 'rgba(0,0,0,0.5)',
+        background: colors.scrim,
         backdropFilter: 'blur(4px)',
         display: 'flex', alignItems: 'center', justifyContent: 'center',
         animation: prefersReducedMotion() ? 'none' : `nuclei-fade-in ${DURATION.fast}ms`,
@@ -67,7 +68,7 @@ export function KeyboardShortcuts({ onClose }: KeyboardShortcutsProps) {
           maxWidth: 520, width: '90%',
           maxHeight: '80vh',
           overflow: 'auto',
-          boxShadow: '0 16px 48px rgba(0,0,0,0.4)',
+          boxShadow: shadow.lg,
           animation: prefersReducedMotion() ? 'none' : `nuclei-slide-up ${DURATION.normal}ms ${EASING.spring}`,
         }}
         onClick={(e) => e.stopPropagation()}

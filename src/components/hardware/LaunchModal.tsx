@@ -593,7 +593,7 @@ export function LaunchModal() {
                     fontFamily: TYPOGRAPHY.fontSans,
                   }}
                 >
-                  <FileCode size={12} style={{ color: colors.success }} />
+                  <FileCode size={12} style={{ color: colors.successText }} />
                   <span style={{ color: colors.textDim }}>Submitting:</span>
                   <span style={{ fontWeight: 600 }}>{stagedSubmission.fileName}</span>
                 </div>
@@ -702,7 +702,7 @@ export function LaunchModal() {
                     alignItems: 'center',
                     gap: 6,
                     fontSize: 11,
-                    color: colors.success,
+                    color: colors.successText,
                     fontFamily: TYPOGRAPHY.fontSans,
                     textTransform: 'uppercase',
                     letterSpacing: 0.5,

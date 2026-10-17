@@ -157,7 +157,7 @@ function ToolCallCard({ toolCall, onAction }: { toolCall: ToolCall; onAction: (i
           display: 'flex', alignItems: 'center', gap: 8,
           padding: '6px 10px', background: colors.bgPanel,
         }}>
-          <span style={{ color: colors.accent, fontSize: 12, fontWeight: 600, fontFamily: TYPOGRAPHY.fontMono }}>insert_code</span>
+          <span style={{ color: colors.accentText, fontSize: 12, fontWeight: 600, fontFamily: TYPOGRAPHY.fontMono }}>insert_code</span>
           <span style={{ color: colors.textMuted, fontSize: 11, flex: 1, fontFamily: TYPOGRAPHY.fontSans }}>{description || 'Code insertion'}</span>
           <span style={{ color: statusColor, fontSize: 11, fontFamily: TYPOGRAPHY.fontSans }}>{statusText}</span>
         </div>
@@ -184,7 +184,7 @@ function ToolCallCard({ toolCall, onAction }: { toolCall: ToolCall; onAction: (i
         padding: '6px 10px', borderLeft: `3px solid ${statusColor}`,
         background: colors.bgPanel, display: 'flex', alignItems: 'center', gap: 8,
       }}>
-        <span style={{ color: colors.accent, fontSize: 12, fontWeight: 600, fontFamily: TYPOGRAPHY.fontMono }}>run_simulation</span>
+        <span style={{ color: colors.accentText, fontSize: 12, fontWeight: 600, fontFamily: TYPOGRAPHY.fontMono }}>run_simulation</span>
         <span style={{ color: colors.textMuted, fontSize: 11, flex: 1, fontFamily: TYPOGRAPHY.fontSans }}>{toolCall.input.shots ? `${toolCall.input.shots} shots` : 'Default shots'}</span>
         {isPending && (
           <Button size="sm" variant="primary" onClick={() => onAction(toolCall.id, true)}>Run</Button>
@@ -199,7 +199,7 @@ function ToolCallCard({ toolCall, onAction }: { toolCall: ToolCall; onAction: (i
       border: `1px solid ${colors.border}`, borderRadius: 6, margin: '8px 0',
       padding: '6px 10px', borderLeft: `3px solid ${statusColor}`, background: colors.bgPanel,
     }}>
-      <span style={{ color: colors.accent, fontSize: 12, fontWeight: 600, fontFamily: TYPOGRAPHY.fontMono }}>{toolCall.name}</span>
+      <span style={{ color: colors.accentText, fontSize: 12, fontWeight: 600, fontFamily: TYPOGRAPHY.fontMono }}>{toolCall.name}</span>
       <span style={{ color: statusColor, fontSize: 11, fontFamily: TYPOGRAPHY.fontSans, marginLeft: 8 }}>{statusText}</span>
     </div>
   );

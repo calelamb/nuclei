@@ -45,6 +45,8 @@ const colorKeyMap: Record<keyof typeof DARK_COLORS, string> = {
   basisZ: '--color-basis-z',
   overlayMatching: '--color-overlay-matching',
   success: '--color-success',
+  successText: '--color-success-text',
+  scrim: '--color-scrim',
   warning: '--color-warning',
   danger: '--color-danger',
   info: '--color-info',

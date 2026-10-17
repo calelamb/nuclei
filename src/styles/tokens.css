@@ -41,9 +41,11 @@
 
   /* Semantics */
   --color-success: #10B981;
+  --color-success-text: #10B981;
   --color-warning: #F59E0B;
   --color-danger: #EF4444;
   --color-info: #3B82F6;
+  --color-scrim: rgba(0, 0, 0, 0.5);
 
   /* Kernel status */
   --color-kernel-idle: #64748B;
@@ -98,9 +100,11 @@
   --color-overlay-matching: #C2410C;
 
   --color-success: #059669;
+  --color-success-text: #047857;
   --color-warning: #A8580A;
   --color-danger: #DC2626;
   --color-info: #2563EB;
+  --color-scrim: rgba(15, 23, 42, 0.28);
 
   --color-kernel-idle: #94A3B8;
   --color-kernel-connecting: #D97706;
