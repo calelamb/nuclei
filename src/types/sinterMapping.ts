@@ -179,6 +179,12 @@ export function guessMapping(rows: readonly QecCampaignStatsRow[]): SinterMappin
 
 const DEFAULT_LABEL = 'stats';
 
+/** Metadata keys the mapping consumed as axes or identity (p, d, rounds, decoder). */
+function mappedSourceKeys(mapping: SinterMapping): string[] {
+  return [mapping.p, mapping.d, mapping.rounds, mapping.decoder === DECODER_COLUMN ? null : mapping.decoder]
+    .filter((k): k is string => k !== null);
+}
+
 function withoutKey(md: Record<string, unknown>, key: string): Record<string, unknown> {
   return Object.fromEntries(Object.entries(md).filter(([k]) => k !== key));
 }
@@ -207,7 +213,7 @@ export function applyMapping(rows: readonly QecCampaignStatsRow[], mapping: Sint
     // The mapping is the single definition of experiment identity: the group-by
     // keys live in `decoder`, rounds in `rounds`. qecExperiments reads this
     // marker and pools only by (decoder, label, rounds scheme).
-    next = { ...next, label: baseLabel, [MAPPED_KEY]: { groupBy: [...mapping.groupBy] } };
+    next = { ...next, label: baseLabel, [MAPPED_KEY]: { groupBy: [...mapping.groupBy], sourceKeys: mappedSourceKeys(mapping) } };
     const decoderValue = mapping.decoder === DECODER_COLUMN ? row.decoder : md[mapping.decoder];
     const baseDecoder = typeof decoderValue === 'string' ? decoderValue : row.decoder;
     return {

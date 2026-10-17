@@ -26,7 +26,7 @@ export interface DecoderComparisonRow {
   /** True when another task shares this row's (experiment, decoder, d, p) cell. */
   collides: boolean;
   rate: { p: number; lo: number; hi: number };
-  /** Wall-seconds per shot (sinter timing, all shots including discards). */
+  /** CPU core-seconds per shot (sinter timing, all shots including discards). */
   secondsPerShot: number;
 }
 
@@ -39,19 +39,32 @@ export interface DecoderComparison {
 
 const CONTEXT_SKIP = new Set(['d', 'p', 'r', 'rounds', 'label', 'decoder', MAPPED_KEY]);
 
+const DEFAULT_IMPORT_LABEL = 'stats';
+
+/** Keys that restate an axis or identity for this row: conventional names plus
+ * whatever keys the active mapping consumed (p/d/rounds/decoder sources and group-by keys). */
+function skipKeysFor(md: Record<string, unknown>): Set<string> {
+  const mapped = md[MAPPED_KEY];
+  const info = mapped && typeof mapped === 'object' ? (mapped as { groupBy?: unknown; sourceKeys?: unknown }) : {};
+  const strings = (v: unknown): string[] => (Array.isArray(v) ? v.filter((k): k is string => typeof k === 'string') : []);
+  return new Set([...CONTEXT_SKIP, ...strings(info.groupBy), ...strings(info.sourceKeys)]);
+}
+
 const scalar = (v: unknown): string | null =>
   typeof v === 'string' || typeof v === 'number' || typeof v === 'boolean' ? String(v) : null;
 
 /** Human text for the experiment: rounds scheme, then the metadata that is not a sweep axis. */
 function experimentContext(md: Record<string, unknown>, roundsTag: string, name: string, derived: ReadonlySet<string>): string {
+  const skip = skipKeysFor(md);
   const parts = [
     ...(roundsTag ? [roundsTag.replace(/^r=/, 'rounds = ')] : []),
-    ...Object.keys(md).filter((k) => !CONTEXT_SKIP.has(k) && !derived.has(k)).sort().flatMap((k) => {
+    ...Object.keys(md).filter((k) => !skip.has(k) && !derived.has(k)).sort().flatMap((k) => {
       const v = scalar(md[k]);
       return v === null ? [] : [`${k}=${v}`];
     }),
   ];
-  return parts.length > 0 ? parts.join(' · ') : name;
+  if (parts.length > 0) return parts.join(' · ');
+  return name === DEFAULT_IMPORT_LABEL ? '' : name;
 }
 
 /** Numeric metadata keys that are a function of d across all rows (e.g. qubit
@@ -62,8 +75,9 @@ function distanceDerivedKeys(rows: readonly QecCampaignStatsRow[]): Set<string> 
   for (const row of rows) {
     const md = (row.json_metadata ?? {}) as Record<string, unknown>;
     const d = num(md.d);
+    const skip = skipKeysFor(md);
     for (const [k, v] of Object.entries(md)) {
-      if (CONTEXT_SKIP.has(k)) continue;
+      if (skip.has(k)) continue;
       if (d === null || typeof v !== 'number') { disqualified.add(k); continue; }
       const perD = byKey.get(k) ?? new Map<number, Set<unknown>>();
       perD.set(d, (perD.get(d) ?? new Set<unknown>()).add(v));

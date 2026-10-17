@@ -5,6 +5,7 @@ import { useQecCampaignStore } from '../../stores/qecCampaignStore';
 import { PanelHeader } from '../layout/PanelHeader';
 import { QecEmptyState } from './QecEmptyState';
 import { decoderComparison, formatSecondsPerShot } from '../../lib/qecWorkbench';
+import { isWebBuild } from '../../platform/buildTarget';
 import { downloadCsv } from '../../services/experimentExport';
 
 const DOCS = 'https://getnuclei.dev/docs/research/qec-studio/';
@@ -69,7 +70,9 @@ export function DecoderWorkbench() {
     return (
       <div style={{ height: '100%', display: 'flex', flexDirection: 'column', background: colors.bg }}>
         {header}
-        <QecEmptyState title="No campaign results yet" body="Run a QEC campaign, or drop a sinter stats CSV on the plot, to compare decoders side by side." docsHref={DOCS} />
+        <QecEmptyState title="No campaign results yet" body={isWebBuild()
+          ? 'Drop a sinter stats CSV on the plot to compare decoders side by side.'
+          : 'Run a QEC campaign, or drop a sinter stats CSV on the plot, to compare decoders side by side.'} docsHref={DOCS} />
       </div>
     );
   }
@@ -104,7 +107,7 @@ export function DecoderWorkbench() {
               <th style={th}>Kept shots</th>
               <th style={th}>Discards</th>
               <th style={th}>Errors</th>
-              <th style={th} title="Wall-clock decode time per shot, from sinter's seconds column">Time / shot</th>
+              <th style={th} title="CPU core-seconds per shot (sampling + decoding), from sinter's seconds column">Time / shot</th>
             </tr>
           </thead>
           <tbody>
@@ -135,7 +138,7 @@ export function DecoderWorkbench() {
           borderTop: `1px solid ${colors.border}`, fontFamily: "'Geist Sans', sans-serif",
         }}
       >
-        {!showExperiment && `Experiment: ${contexts[0]}. `}
+        {!showExperiment && contexts[0] !== '' && `Experiment: ${contexts[0]}. `}
         {`Rate = errors / (shots − discards), sinter likelihood-ratio interval (factor ${cmp.maxLikelihoodFactor}, about 3.7σ). One row per task (experiment, d, p); tasks sharing metadata are listed separately, never pooled.`}
         {cmp.skipped > 0 && ` ${cmp.skipped} malformed or fully-discarded row(s) skipped.`}
       </div>

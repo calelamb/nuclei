@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import type { QecCampaignStatsRow } from '../types/qec';
 import { decoderComparison, formatSecondsPerShot } from './qecWorkbench';
+import { applyMapping } from '../types/sinterMapping';
 
 function mk(over: Partial<QecCampaignStatsRow> & { meta?: Record<string, unknown> }): QecCampaignStatsRow {
   const { meta, ...rest } = over;
@@ -113,5 +114,27 @@ describe('decoderComparison context ignores keys derived from d', () => {
       mk({ meta: { d: 3, r: 3, p: 0.01, label: 'x', shots_per_task: 20 }, errors: 3 }),
     ]).rows;
     expect(rows.map((r) => r.context)).toEqual(['rounds = d · shots_per_task=10', 'rounds = d · shots_per_task=20']);
+  });
+});
+
+describe('decoderComparison context follows the active mapping', () => {
+  const mapping = { p: 'noise', d: 'distance', rounds: 'rounds', decoder: 'decoder_name', groupBy: ['s'] };
+  const raw = (noise: number, d: number) => mk({
+    meta: { noise, distance: d, rounds: d, decoder_name: 'fusion', s: 0, b: 'X' },
+    decoder: 'stats-col', errors: d,
+  });
+
+  it('does not show the mapped p / d / decoder / group-by keys as experiment metadata', () => {
+    const rows = decoderComparison(applyMapping([raw(0.001, 3), raw(0.002, 3), raw(0.002, 5)], mapping)).rows;
+    for (const r of rows) {
+      expect(r.context).not.toMatch(/noise=|distance=|decoder_name=|s=0/);
+      expect(r.context).toBe('rounds = d · b=X');
+    }
+    expect(new Set(rows.map((r) => r.context)).size).toBe(1);
+  });
+
+  it('leaves the context empty when only the default import label would remain', () => {
+    const [r] = decoderComparison([mk({ meta: { d: 3, p: 0.01, label: 'stats' } })]).rows;
+    expect(r.context).toBe('');
   });
 });

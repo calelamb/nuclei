@@ -3,10 +3,10 @@ title: "Plot a sinter CSV"
 description: "Drop a sinter stats CSV onto the QEC Workbench to get logical error rate vs physical error, a Λ estimate with an interval and warnings, and exports that carry their own provenance. Read locally; nothing is uploaded."
 ---
 
-import { Aside, Steps } from '@astrojs/starlight/components';
+import { Aside } from '@astrojs/starlight/components';
 
 Drop the CSV that `sinter collect --save_resume_filepath` (or `sinter.collect`
-with `--save_resume_filepath`) wrote onto the plot in the **QEC Workbench**.
+called with `save_resume_filepath=`) wrote onto the plot in the **QEC Workbench**.
 Nuclei plots logical error rate against physical error rate for each code
 distance, estimates the error-suppression factor Λ, and lets you export the
 figure and the numbers behind it. It works in the desktop app and in the
@@ -28,7 +28,7 @@ columns are ignored):
 | `shots` | Shots sampled for the task. |
 | `errors` | Shots with a logical error. |
 | `discards` | Shots discarded by post-selection (may be 0). |
-| `seconds` | Wall-clock decoding seconds for the task. |
+| `seconds` | CPU core time sinter spent sampling and decoding the task, summed across workers (not wall-clock). Compare it between runs only on the same hardware and worker count. |
 | `decoder` | Decoder name. |
 | `strong_id` | Hash that identifies the task. |
 | `json_metadata` | JSON object describing the task (`d`, `p`, `r`, basis, noise model, ...). |
@@ -99,7 +99,7 @@ uses. The fit is unweighted, so it ignores how many errors each point has.
 Series and experiments are never pooled: rows with different decoders, metadata
 or rounds schemes get separate fits.
 
-Warnings appear next to the Λ value and are written into exports:
+Warnings appear next to the Λ value. The `saturated`, `Λ ≤ 1`, `95% interval includes 1` and `r² < 0.5` warnings are also written into the SVG metadata; the collide and rounds-vary notes are shown in the app only, and the CSV export does not carry Λ:
 
 | Warning | What it means |
 | --- | --- |
@@ -113,14 +113,19 @@ Nuclei does not estimate or claim a threshold `p_th`.
 
 ## Exports
 
-- **SVG** is self-contained (fonts and colors are inlined, so it renders the same
-  outside the app) and embeds a `<metadata>` block with the units, rate estimator,
+- **SVG** carries its own data (colors are inlined; fonts are referenced by name, so a machine without
+  Fira Code and Geist Sans falls back to its defaults) and embeds a `<metadata>` block with the units, rate estimator,
   interval method and factor, the Λ estimates with their warnings, and the source:
   file name, task count and a digest of the sorted `strong_id`s.
-- **CSV** has one row per task with the rate, interval ends, units, `ci_method`,
-  `max_likelihood_factor`, and the original `strong_id`, `json_metadata` and
-  `custom_counts` as they were in your file (not the re-mapped copies), so a CSV
-  taken out of the app can be re-imported or audited.
+- **CSV** (the plot's export) has one row per task with the rate, interval ends,
+  units, `ci_method`, `max_likelihood_factor`, and the original `strong_id`,
+  `json_metadata` and `custom_counts` as they were in your file (not the
+  re-mapped copies). It has no `seconds` column, so it can be audited but not
+  re-imported.
+- **Export stats.csv** writes the sinter-format file (`shots`, `errors`,
+  `discards`, `seconds`, `decoder`, `strong_id`, `json_metadata`,
+  `custom_counts`). That file can be dropped back onto the plot or fed to
+  `sinter plot`.
 - The **Decoder Workbench** table exports its own CSV with the discard-aware rate,
   interval and time per shot for each decoder at each (d, p).
 

@@ -16,6 +16,12 @@ describe('isWebBuildTarget', () => {
     expect(isWebBuildTarget({}, ['vite', 'preview', '--outDir=dist-web/'])).toBe(true);
   });
 
+  it('recognizes relative and absolute spellings of the web output dir', () => {
+    expect(isWebBuildTarget({}, ['vite', 'preview', '--outDir', './dist-web'])).toBe(true);
+    expect(isWebBuildTarget({}, ['vite', 'preview', '--outDir=/work/nuclei/dist-web/'])).toBe(true);
+    expect(isWebBuildTarget({}, ['vite', 'preview', '--outDir', 'dist-webby'])).toBe(false);
+  });
+
   it('does not infer web from an unrelated dist-web mention outside preview', () => {
     expect(isWebBuildTarget({}, ['vite', 'build', '--outDir', 'dist-web'])).toBe(false);
   });

@@ -30,7 +30,7 @@ export const WHATS_NEW: WhatsNewEntry = {
     {
       icon: 'hardware',
       title: 'The kernel now needs a per-launch token',
-      text: 'Each launch generates a secret token the app and kernel share, so other local programs and web pages cannot drive your kernel.',
+      text: 'Each launch generates a secret token, so web pages and other users on this machine cannot drive your kernel. Your own scripts and agents connect through a user-only runtime file.',
     },
     {
       icon: 'circuit',

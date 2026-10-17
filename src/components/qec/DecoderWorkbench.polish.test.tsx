@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, render } from '@testing-library/react';
 import { DecoderWorkbench } from './DecoderWorkbench';
 import { useQecCampaignStore } from '../../stores/qecCampaignStore';
@@ -46,5 +46,31 @@ describe('DecoderWorkbench polish', () => {
     const { container } = render(<DecoderWorkbench />);
     expect(container.querySelector('tbody')!.textContent).toContain('12 µs');
     expect(container.querySelector('tbody')!.textContent).not.toContain('0.0000120');
+  });
+
+  it('omits the Experiment sentence when only the default import label remains', () => {
+    load([{ ...row('a', 3), json_metadata: { d: 3, p: 0.01, label: 'stats' } }]);
+    const { container } = render(<DecoderWorkbench />);
+    expect(container.textContent).not.toContain('Experiment:');
+  });
+
+  it('describes seconds as CPU core time, not wall-clock', () => {
+    load([row('a', 3)]);
+    const { container } = render(<DecoderWorkbench />);
+    const title = container.querySelector('th[title*="seconds"]')!.getAttribute('title')!;
+    expect(title).toMatch(/CPU core/i);
+    expect(title).not.toMatch(/wall-clock/i);
+  });
+});
+
+describe('DecoderWorkbench web empty state', () => {
+  it('does not tell web users to run a campaign', async () => {
+    vi.resetModules();
+    vi.doMock('../../platform/buildTarget', () => ({ isWebBuild: () => true }));
+    const { DecoderWorkbench: Web } = await import('./DecoderWorkbench');
+    const { container } = render(<Web />);
+    expect(container.textContent).not.toMatch(/run a qec campaign/i);
+    expect(container.textContent).toMatch(/drop a sinter stats csv/i);
+    vi.doUnmock('../../platform/buildTarget');
   });
 });

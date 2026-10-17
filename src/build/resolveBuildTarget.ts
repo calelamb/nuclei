@@ -13,7 +13,7 @@ function previewsWebOutDir(argv: readonly string[]): boolean {
   if (!argv.includes('preview')) return false;
   return argv.some((arg, i) => {
     const value = arg.startsWith('--outDir=') ? arg.slice('--outDir='.length) : argv[i - 1] === '--outDir' ? arg : null;
-    return value !== null && value.replace(/\/+$/, '') === WEB_OUT_DIR;
+    return value !== null && value.replace(/\/+$/, '').split('/').pop() === WEB_OUT_DIR;
   });
 }
 
