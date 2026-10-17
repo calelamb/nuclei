@@ -1,6 +1,6 @@
 import { Circle, Sun, Moon, X, Command } from 'lucide-react';
 import { usePlatform } from '../../platform/PlatformProvider';
-import { useCircuitStore } from '../../stores/circuitStore';
+import { useDisplaySnapshot } from '../../layout/useDisplaySnapshot';
 import { useSimulationStore } from '../../stores/simulationStore';
 import { useEditorStore } from '../../stores/editorStore';
 import { useThemeStore } from '../../stores/themeStore';
@@ -76,7 +76,7 @@ function KernelDot({ color, pulse }: { color: string; pulse: boolean }) {
 
 /* ── Status Bar ── */
 export function StatusBar() {
-  const snapshot = useCircuitStore((s) => s.snapshot);
+  const { snapshot } = useDisplaySnapshot();
   const isRunning = useSimulationStore((s) => s.isRunning);
   const result = useSimulationStore((s) => s.result);
   const lastRunFailed = useSimulationStore((s) => s.lastRunFailed);

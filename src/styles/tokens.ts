@@ -187,7 +187,7 @@ export const LIGHT_COLORS: ColorTokens = {
   syntaxComment: '#6A737D',
   syntaxString: '#22863A',
   syntaxNumber: '#B76E00',
-  syntaxKeyword: '#0891B2',
+  syntaxKeyword: '#0E7490',
   syntaxType: '#005F73',
   gateSingle: '#0891B2',
   gateMulti: '#3B6EA5',

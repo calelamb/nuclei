@@ -214,7 +214,7 @@ export function CircuitRenderer() {
           role="status"
           style={{ padding: '2px 12px 0', fontSize: 11, color: colors.warning, fontFamily: TYPOGRAPHY.fontSans }}
         >
-          Out of date: {errorLine !== null ? `syntax error on line ${errorLine}` : 'the code has a syntax error'}
+          Out of date: {errorLine !== null ? `error on line ${errorLine}` : 'the code has an error'}
         </div>
       )}
       <div

@@ -29,7 +29,7 @@ describe('CircuitRenderer during a transient syntax error', () => {
       useEditorStore.getState().setErrors([{ line: 7, message: 'invalid syntax' }]);
     });
     expect(screen.getByRole('img')).toBeTruthy();
-    expect(screen.getByText(/Out of date: syntax error on line 7/)).toBeTruthy();
+    expect(screen.getByText(/Out of date: error on line 7/)).toBeTruthy();
   });
 
   it('shows the error empty state when no circuit ever parsed', () => {
