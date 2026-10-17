@@ -1,3 +1,4 @@
+import { IconButton } from '../ui';
 import { useState } from 'react';
 import {
   ChevronDown,
@@ -46,7 +47,6 @@ export function OpenFilesSection() {
   const setActiveTab = useProjectStore((s) => s.setActiveTab);
   const colors = useThemeStore((s) => s.colors);
   const [collapsed, setCollapsed] = useState(false);
-  const [hoveredPath, setHoveredPath] = useState<string | null>(null);
 
   if (tabs.length === 0) return null;
 
@@ -87,15 +87,10 @@ export function OpenFilesSection() {
         <div style={{ display: 'flex', flexDirection: 'column', paddingBottom: 4 }}>
           {tabs.map((tab) => {
             const isActive = tab.path === activeTabPath;
-            const isHovered = hoveredPath === tab.path;
             const name = basename(tab.path);
             // Active file gets the accent tint + left bar (matching the tabs and
             // the file tree), so it never reads the same as a plain hover.
-            const background = isActive
-              ? `${colors.accent}14`
-              : isHovered
-                ? colors.bgElevated
-                : 'transparent';
+            const background = isActive ? `${colors.accent}14` : 'transparent';
             return (
               <div
                 key={tab.path}
@@ -108,9 +103,9 @@ export function OpenFilesSection() {
                     setActiveTab(tab.path);
                   }
                 }}
-                onMouseEnter={() => setHoveredPath(tab.path)}
-                onMouseLeave={() => setHoveredPath(null)}
                 title={tab.path}
+                className="nuclei-row nuclei-row--reveal"
+                data-active={isActive}
                 style={{
                   display: 'flex',
                   alignItems: 'center',
@@ -135,8 +130,9 @@ export function OpenFilesSection() {
                 >
                   {name}
                 </span>
-                {tab.isDirty && !isHovered && (
+                {tab.isDirty && (
                   <span
+                    className="nuclei-row__dirty"
                     title="Unsaved changes"
                     aria-label="Unsaved changes"
                     style={{
@@ -149,32 +145,18 @@ export function OpenFilesSection() {
                     }}
                   />
                 )}
-                <button
-                  type="button"
-                  title="Close"
+                <IconButton
+                  size="sm"
+                  className="nuclei-row__close"
+                  tooltip={{ label: 'Close' }}
                   aria-label={`Close ${name}`}
                   onClick={(e) => {
                     e.stopPropagation();
                     requestCloseTab(tab.path);
                   }}
-                  style={{
-                    background: 'transparent',
-                    border: 'none',
-                    color: colors.textDim,
-                    cursor: 'pointer',
-                    padding: 2,
-                    display: 'flex',
-                    borderRadius: 3,
-                    // Keep the close affordance consistent with the
-                    // top tab bar: visible on hover, out of the way otherwise.
-                    // Dirty-indicator dot takes the same spot when not hovering,
-                    // so layout never jumps.
-                    opacity: isHovered ? 1 : 0,
-                    pointerEvents: isHovered ? 'auto' : 'none',
-                  }}
                 >
                   <X size={12} />
-                </button>
+                </IconButton>
               </div>
             );
           })}

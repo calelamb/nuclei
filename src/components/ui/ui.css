@@ -140,7 +140,7 @@
 /* ── Menu items ── */
 .nuclei-menu-item { transition: background-color var(--duration-fast) var(--ease-standard); }
 .nuclei-menu-item:hover { background: var(--color-surface-overlay) !important; }
-.nuclei-menu-item.nuclei-menu-item--tint:hover { background: color-mix(in srgb, var(--item-accent) 12%, transparent) !important; }
+.nuclei-menu-item.nuclei-menu-item--tint:hover { background: color-mix(in srgb, var(--item-accent, var(--color-accent-quantum)) 12%, transparent) !important; }
 
 /* ── Segmented control (radiogroup of 2-4 short options) ── */
 .nuclei-segmented { display: inline-flex; gap: 2px; padding: 2px; border: 1px solid var(--color-border-strong); border-radius: var(--radius-soft); background: var(--color-surface-sunken); }
@@ -198,3 +198,20 @@
 .nuclei-badge--danger { --badge-color: var(--color-danger); --badge-text: color-mix(in srgb, var(--color-danger) 55%, var(--color-text-primary)); }
 .nuclei-badge--research { --badge-color: var(--color-mode-research); --badge-text: var(--color-mode-research); }
 .nuclei-badge--dirac { --badge-color: var(--color-accent-dirac); --badge-text: var(--color-accent-dirac-text); }
+
+/* Open/expanded state for menu triggers */
+.nuclei-icon-btn[aria-expanded='true'] { background: var(--color-surface-overlay); color: var(--color-text-primary); }
+
+/* ── Hover utilities: replace onMouseEnter/Leave style mutation ── */
+.nuclei-hover-bg { transition: background-color var(--duration-fast) var(--ease-standard), color var(--duration-fast) var(--ease-standard); }
+.nuclei-hover-bg:hover:not(:disabled):not([data-active='true']) { background: var(--color-surface-overlay); }
+.nuclei-hover-text:hover:not(:disabled) { color: var(--color-text-primary); }
+
+/* Tree / list rows (explorer, open files): active row keeps its own tint */
+.nuclei-row { cursor: pointer; transition: background-color var(--duration-fast) var(--ease-standard); }
+.nuclei-row:hover:not([aria-selected='true']):not([data-active='true']) { background: var(--color-surface-overlay) !important; }
+
+/* Row actions that appear on hover or keyboard focus; a dirty dot yields its slot to the close button */
+.nuclei-row--reveal .nuclei-row__close { opacity: 0; }
+.nuclei-row--reveal:hover .nuclei-row__close, .nuclei-row--reveal:focus-within .nuclei-row__close, .nuclei-row--reveal .nuclei-row__close:focus-visible { opacity: 1; }
+.nuclei-row--reveal:hover .nuclei-row__dirty, .nuclei-row--reveal:focus-within .nuclei-row__dirty { display: none; }
