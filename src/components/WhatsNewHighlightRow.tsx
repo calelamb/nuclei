@@ -39,7 +39,7 @@ export function WhatsNewHighlightRow({
           color,
         }}
       >
-        <Icon size={15} strokeWidth={2} />
+        <Icon size={16} strokeWidth={2} />
       </span>
       <span style={{ display: 'flex', flexDirection: 'column', gap: 2, paddingTop: 1 }}>
         <span style={{ fontSize: 13, fontWeight: 600, color: text, lineHeight: 1.35 }}>

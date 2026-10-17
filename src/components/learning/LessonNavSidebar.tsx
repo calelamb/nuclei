@@ -168,7 +168,7 @@ export function LessonNavSidebar({
                         onMouseEnter={(e) => { if (!active) e.currentTarget.style.color = colors.textMuted; }}
                         onMouseLeave={(e) => { if (!active) e.currentTarget.style.color = colors.textDim; }}
                       >
-                        <Icon size={11} style={{ flexShrink: 0 }} />
+                        <Icon size={12} style={{ flexShrink: 0 }} />
                         <span style={{ fontSize: 11, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                           {meta.label}
                         </span>

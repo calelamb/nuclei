@@ -98,7 +98,7 @@ export function PanelHeader({
         fontFamily: TYPOGRAPHY.fontSans,
       }}
     >
-      <MIcon size={13} color={colors.textDim} />
+      <MIcon size={14} color={colors.textDim} />
       {label}
     </button>
   );

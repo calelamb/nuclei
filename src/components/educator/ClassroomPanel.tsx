@@ -215,7 +215,7 @@ export function ClassroomPanel() {
               alignItems: 'center', padding: '8px 4px', gap: 2,
               borderRight: i < 2 ? `1px solid ${colors.border}` : 'none',
             }}>
-              <stat.icon size={13} color={stat.color} />
+              <stat.icon size={14} color={stat.color} />
               <span style={{ fontSize: 14, fontWeight: 700, color: colors.text }}>
                 {stat.value}
               </span>

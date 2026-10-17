@@ -119,7 +119,7 @@ export function ModeChip() {
               textAlign: 'left',
             } as React.CSSProperties}
           >
-            <MIcon size={13} color={mAccent} strokeWidth={2} />
+            <MIcon size={14} color={mAccent} strokeWidth={2} />
             <span style={{ flex: 1 }}>{m === 'research' ? 'Research workspace' : 'Learn quantum computing'}</span>
             {isCurrent && <Check size={14} color={mAccent} />}
           </button>
@@ -155,7 +155,7 @@ export function ModeChip() {
           fontFamily: TYPOGRAPHY.fontSans,
         }}
       >
-        <Icon size={11} strokeWidth={2.2} />
+        <Icon size={12} strokeWidth={2.2} />
         {meta.label}
       </button>
       {open && createPortal(menu, document.body)}

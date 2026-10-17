@@ -144,7 +144,7 @@ export function LaunchStrip() {
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: colors.textMuted }}>
           <StatusIcon
-            size={10}
+            size={12}
             style={{
               color: statusColor,
               animation: latestJob.status === 'running' ? 'nuclei-spin 800ms linear infinite' : 'none',

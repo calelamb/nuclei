@@ -30,7 +30,7 @@ function basename(path: string): string {
 function iconFor(name: string, color: string) {
   const ext = name.split('.').pop()?.toLowerCase() ?? '';
   const Icon = EXTENSION_ICONS[ext] ?? FileIconLucide;
-  return <Icon size={13} style={{ color, marginRight: 6, flexShrink: 0 }} />;
+  return <Icon size={14} style={{ color, marginRight: 6, flexShrink: 0 }} />;
 }
 
 /**

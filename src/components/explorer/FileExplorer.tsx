@@ -45,7 +45,7 @@ function iconFor(name: string, isDir: boolean, color: string) {
   if (isDir) return <Folder size={14} style={{ color, marginRight: 6, flexShrink: 0 }} />;
   const ext = name.split('.').pop()?.toLowerCase() ?? '';
   const Icon = EXTENSION_ICONS[ext] ?? FileIconLucide;
-  return <Icon size={13} style={{ color, marginRight: 6, flexShrink: 0 }} />;
+  return <Icon size={14} style={{ color, marginRight: 6, flexShrink: 0 }} />;
 }
 
 function basename(path: string): string {

@@ -105,7 +105,7 @@ function PracticeTabButton({
         background: active ? `${colors.accent}14` : colors.bgPanel,
         flexShrink: 0,
       }}>
-        <Icon size={15} />
+        <Icon size={16} />
       </span>
       <span style={{ minWidth: 0, flex: 1 }}>
         <span style={{
