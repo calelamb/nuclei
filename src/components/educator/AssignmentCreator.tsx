@@ -1,3 +1,4 @@
+import { Button, IconButton } from '../ui';
 import { useState } from 'react';
 import { X } from 'lucide-react';
 import { useThemeStore } from '../../stores/themeStore';
@@ -85,15 +86,7 @@ export function AssignmentCreator({ onClose, onSave }: AssignmentCreatorProps) {
           <span style={{ fontSize: 13, fontWeight: 600, color: colors.text }}>
             Create Assignment
           </span>
-          <button
-            onClick={onClose}
-            style={{
-              background: 'transparent', border: 'none', cursor: 'pointer',
-              color: colors.textDim, padding: 4, display: 'flex', borderRadius: 3,
-            }}
-          >
-            <X size={14} />
-          </button>
+          <IconButton size="sm" aria-label="Close" onClick={onClose}><X size={14} /></IconButton>
         </div>
 
         {/* Body */}
@@ -203,32 +196,8 @@ export function AssignmentCreator({ onClose, onSave }: AssignmentCreatorProps) {
           padding: '12px 16px',
           borderTop: `1px solid ${colors.border}`,
         }}>
-          <button
-            onClick={onClose}
-            style={{
-              fontSize: 11, fontWeight: 500, fontFamily: font,
-              padding: '6px 14px', borderRadius: 4,
-              border: `1px solid ${colors.border}`,
-              background: 'transparent', color: colors.textMuted,
-              cursor: 'pointer',
-            }}
-          >
-            Cancel
-          </button>
-          <button
-            onClick={handleSave}
-            disabled={!title.trim()}
-            style={{
-              fontSize: 11, fontWeight: 500, fontFamily: font,
-              padding: '6px 14px', borderRadius: 4,
-              border: 'none',
-              background: title.trim() ? colors.accent : colors.borderStrong,
-              color: title.trim() ? '#fff' : colors.textDim,
-              cursor: title.trim() ? 'pointer' : 'default',
-            }}
-          >
-            Save Assignment
-          </button>
+          <Button onClick={onClose}>Cancel</Button>
+          <Button variant="primary" onClick={handleSave} disabled={!title.trim()}>Save Assignment</Button>
         </div>
       </div>
     </div>
