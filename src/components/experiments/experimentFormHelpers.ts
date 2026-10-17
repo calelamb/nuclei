@@ -153,3 +153,14 @@ export async function discoverEntryFiles(
   await walk(projectRoot, '', 0);
   return results.sort();
 }
+
+/** The experiment (if any) whose YAML file a new experiment called `name` would overwrite. */
+export function findNameCollision<T extends { fileName: string; spec: { name: string } }>(
+  experiments: readonly T[],
+  name: string,
+): T | undefined {
+  const trimmed = name.trim();
+  if (trimmed.length === 0) return undefined;
+  const fileName = `${slugify(trimmed)}.experiment.yaml`;
+  return experiments.find((e) => e.fileName === fileName);
+}

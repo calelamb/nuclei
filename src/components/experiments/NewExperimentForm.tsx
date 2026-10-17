@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type MutableRefObject } from 'react';
-import { mkdir, writeTextFile } from '@tauri-apps/plugin-fs';
+import { exists, mkdir, writeTextFile } from '@tauri-apps/plugin-fs';
 import { stringify } from 'yaml';
 import { Plus, Trash2 } from 'lucide-react';
 import { useThemeStore } from '../../stores/themeStore';
@@ -12,6 +12,7 @@ import { BackendSelector } from '../hardware/BackendSelector';
 import {
   buildSweepFromRows,
   discoverEntryFiles,
+  findNameCollision,
   newSweepRow,
   parseNumberField,
   slugify,
@@ -95,6 +96,7 @@ export function NewExperimentForm({ projectRoot, existing, dirtyRef: sharedDirty
   const colors = useThemeStore((s) => s.colors);
   const platform = usePlatform();
   const hardwareBackends = useHardwareStore((s) => s.backends);
+  const knownExperiments = useExperimentStore((s) => s.experiments);
 
   const rowIdRef = useRef(0);
   const nextRowId = () => `row-${rowIdRef.current++}`;
@@ -201,12 +203,18 @@ export function NewExperimentForm({ projectRoot, existing, dirtyRef: sharedDirty
     : validation.gridSize === null
       ? '—'
       : `${validation.gridSize} point${validation.gridSize === 1 ? '' : 's'}`;
-  const canSubmit = validation.ok && !submitting && entry.trim().length > 0;
+  const collision = existing ? undefined : findNameCollision(knownExperiments, name);
+  const collisionText = collision
+    ? `An experiment named "${collision.spec.name}" already exists (${collision.fileName}). Choose a different name.`
+    : null;
+  const canSubmit = validation.ok && !submitting && entry.trim().length > 0 && !collision;
   const disabledReason = canSubmit || submitting
     ? undefined
-    : entry.trim().length === 0
-      ? 'Choose an entry file to continue'
-      : validation.errors[0]?.text;
+    : collisionText
+      ? collisionText
+      : entry.trim().length === 0
+        ? 'Choose an entry file to continue'
+        : validation.errors[0]?.text;
 
   const handleAddRow = () => { markDirty('sweep'); setSweepRows((rows) => [...rows, newSweepRow(nextRowId())]); };
   const handleRemoveRow = (id: string) => { markDirty('sweep'); setSweepRows((rows) => rows.filter((r) => r.id !== id)); };
@@ -228,6 +236,10 @@ export function NewExperimentForm({ projectRoot, existing, dirtyRef: sharedDirty
       const yamlText = stringify(specToYamlDoc(spec));
 
       await mkdir(dir, { recursive: true });
+      if (!existing && await exists(path)) {
+        setSubmitError(`A file named ${fileName} already exists in experiments/. Choose a different name.`);
+        return;
+      }
       await writeTextFile(path, yamlText);
 
       useProjectStore.getState().openTab({ path, content: yamlText });
@@ -372,11 +384,14 @@ export function NewExperimentForm({ projectRoot, existing, dirtyRef: sharedDirty
           {visibleIssues.map((err) => <li key={err.text}>{err.text}</li>)}
         </ul>
       )}
-      {disabledReason && visibleIssues.length === 0 && name.trim().length > 0 && (
+      {collisionText && (
+        <div role="alert" style={{ color: colors.error, fontSize: 11 }}>{collisionText}</div>
+      )}
+      {disabledReason && !collisionText && visibleIssues.length === 0 && name.trim().length > 0 && (
         <div style={{ color: colors.textDim, fontSize: 11 }}>{disabledReason}</div>
       )}
       {submitError && (
-        <div style={{ color: colors.error, fontSize: 11 }}>{submitError}</div>
+        <div role="alert" style={{ color: colors.error, fontSize: 11 }}>{submitError}</div>
       )}
 
       <Button type="submit" variant="primary" size="lg" disabled={!canSubmit} title={disabledReason}>

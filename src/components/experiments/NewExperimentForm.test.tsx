@@ -9,13 +9,14 @@ import { useHardwareStore } from '../../stores/hardwareStore';
 
 const mkdirMock = vi.hoisted(() => vi.fn(async () => {}));
 const writeTextFileMock = vi.hoisted(() => vi.fn(async () => {}));
+const existsMock = vi.hoisted(() => vi.fn(async (_path: string) => false));
 
 vi.mock('@tauri-apps/plugin-fs', () => ({
   mkdir: mkdirMock,
   writeTextFile: writeTextFileMock,
   readDir: vi.fn(async () => []),
   readTextFile: vi.fn(async () => ''),
-  exists: vi.fn(async () => false),
+  exists: existsMock,
   watch: vi.fn(async () => () => {}),
 }));
 
@@ -51,6 +52,8 @@ describe('NewExperimentForm', () => {
     useHardwareStore.setState({ backends: [] });
     mkdirMock.mockClear();
     writeTextFileMock.mockClear();
+    existsMock.mockReset();
+    existsMock.mockResolvedValue(false);
   });
 
   afterEach(() => {
@@ -202,5 +205,41 @@ describe('NewExperimentForm', () => {
     fireEvent.click(getByText('Close'));
     expect(onClose).toHaveBeenCalledTimes(2);
     confirmSpy.mockRestore();
+  });
+
+  it('blocks a new experiment whose name collides with an existing one (LR-01)', () => {
+    useExperimentStore.setState({ experiments: [EXISTING] });
+    const { getByLabelText, getByText, getByRole } = render(
+      <NewExperimentForm projectRoot="/proj" onClose={vi.fn()} />,
+    );
+    fireEvent.change(getByLabelText('Name'), { target: { value: 'Theta Sweep' } });
+    fireEvent.change(getByLabelText('Entry file'), { target: { value: 'other.py' } });
+    expect(getByRole('alert').textContent).toMatch(/already exists/i);
+    const submit = getByText('Create experiment') as HTMLButtonElement;
+    expect(submit.disabled).toBe(true);
+    fireEvent.click(submit);
+    expect(writeTextFileMock).not.toHaveBeenCalled();
+  });
+
+  it('refuses to write over a file that exists on disk but is not yet in the store (LR-01)', async () => {
+    existsMock.mockResolvedValue(true);
+    const { getByLabelText, getByText, findByText } = render(
+      <NewExperimentForm projectRoot="/proj" onClose={vi.fn()} />,
+    );
+    fireEvent.change(getByLabelText('Name'), { target: { value: 'fresh' } });
+    fireEvent.change(getByLabelText('Entry file'), { target: { value: 'run.py' } });
+    fireEvent.click(getByText('Create experiment'));
+    expect(await findByText(/already exists/i)).toBeTruthy();
+    expect(writeTextFileMock).not.toHaveBeenCalled();
+  });
+
+  it('still lets an existing experiment be saved under its own name (LR-01)', async () => {
+    useExperimentStore.setState({ experiments: [EXISTING] });
+    const { getByText } = render(
+      <NewExperimentForm projectRoot="/proj" existing={EXISTING} onClose={vi.fn()} />,
+    );
+    fireEvent.click(getByText('Save changes'));
+    await waitFor(() => expect(writeTextFileMock).toHaveBeenCalledTimes(1));
+    expect(existsMock).not.toHaveBeenCalled();
   });
 });
