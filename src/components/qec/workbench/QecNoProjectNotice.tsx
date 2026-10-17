@@ -12,7 +12,7 @@ export function QecNoProjectNotice() {
   const colors = useThemeStore((s) => s.colors);
   const isWeb = usePlatform().getPlatform() === 'web';
   const csv = useQecCampaignStore((s) => s.csvImport);
-  const dim = { color: colors.textDim, fontSize: 11, lineHeight: 1.5, margin: 0 } as const;
+  const dim = { color: colors.textMuted, fontSize: 11, lineHeight: 1.5, margin: 0 } as const;
   return (
     <div style={{ display: 'grid', gap: 10, padding: 12, fontFamily: FONT }}>
       {csv ? (

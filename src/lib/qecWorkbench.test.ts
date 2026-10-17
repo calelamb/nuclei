@@ -97,3 +97,21 @@ describe('formatSecondsPerShot', () => {
     expect(formatSecondsPerShot(v)).toBe(text);
   });
 });
+
+describe('decoderComparison context ignores keys derived from d', () => {
+  it('omits numeric metadata that is a function of d (e.g. qubit count) but keeps real splits', () => {
+    const rows = decoderComparison([
+      mk({ meta: { d: 3, r: 3, p: 0.01, label: 'x', q: 17, b: 'X' } }),
+      mk({ meta: { d: 5, r: 5, p: 0.01, label: 'x', q: 49, b: 'X' }, errors: 3 }),
+    ]).rows;
+    expect(rows.map((r) => r.context)).toEqual(['rounds = d · b=X', 'rounds = d · b=X']);
+  });
+
+  it('keeps a numeric key that differs at the same d', () => {
+    const rows = decoderComparison([
+      mk({ meta: { d: 3, r: 3, p: 0.01, label: 'x', shots_per_task: 10 } }),
+      mk({ meta: { d: 3, r: 3, p: 0.01, label: 'x', shots_per_task: 20 }, errors: 3 }),
+    ]).rows;
+    expect(rows.map((r) => r.context)).toEqual(['rounds = d · shots_per_task=10', 'rounds = d · shots_per_task=20']);
+  });
+});
