@@ -483,8 +483,10 @@
   display: inline; font-size: 13px; font-weight: 600;
 }
 
+.qec-instrument > header > div { display: flex; flex-wrap: wrap; align-items: baseline; column-gap: 8px; }
+
 .qec-instrument__context {
-  margin-left: 8px; color: var(--qec-text-muted); font-size: 12px;
+  white-space: nowrap; color: var(--qec-text-muted); font-size: 12px;
 }
 
 .qec-instrument__help {
