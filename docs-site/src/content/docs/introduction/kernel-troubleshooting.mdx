@@ -52,7 +52,12 @@ the first time you open it. This message means that download failed:
 - Click **Retry**. Nuclei restarts the Python worker from scratch.
 
 The browser build keeps Python in a web worker, so a program that runs
-forever is stopped (the worker restarts) instead of freezing the page.
+forever is stopped (the worker restarts) instead of freezing the page. While
+a run is in progress, the **Run** button becomes **Stop**: click it to end the
+program immediately. Python restarts in a few seconds ("Restarting Python…"),
+and the Terminal notes that the run was stopped. A program that runs for more
+than 120 seconds (5 seconds for the live preview while you type) is stopped
+the same way.
 
 ## unknown
 

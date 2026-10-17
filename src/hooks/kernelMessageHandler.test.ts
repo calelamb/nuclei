@@ -28,4 +28,16 @@ describe('handleKernelMessage — run failure tracking', () => {
     expect(useSimulationStore.getState().lastRunFailed).toBe(false);
     expect(useSimulationStore.getState().terminalOutput).toEqual([]);
   });
+
+  it('tells the user in the Terminal when a live preview was stopped for running too long', () => {
+    handleKernelMessage(
+      { type: 'error', message: 'Your code ran for more than 5 seconds and was stopped. Python is restarting.', phase: 'parse', code: 'timeout' },
+      {},
+    );
+    const lines = useSimulationStore.getState().terminalOutput;
+    expect(lines).toHaveLength(1);
+    expect(lines[0]).toMatchObject({ type: 'info' });
+    expect(lines[0].text).toContain('stopped');
+    expect(useSimulationStore.getState().lastRunFailed).toBe(false);
+  });
 });

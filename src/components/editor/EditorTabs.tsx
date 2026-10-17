@@ -277,7 +277,7 @@ export function EditorTabs() {
         {usingLegacy ? renderLegacyTab() : tabs.map((t) => renderProjectTab(t.path, t.isDirty))}
       </div>
 
-      <div style={{ display: 'flex', alignItems: 'center', flexShrink: 1, minWidth: 0 }}>
+      <div style={{ display: 'flex', alignItems: 'center', flexShrink: 1, minWidth: 72 }}>
         <FrameworkSelector compact={compact} />
       </div>
 
@@ -366,7 +366,7 @@ export function EditorTabs() {
             <Play size={12} fill="currentColor" />
           )}
           <span>{runLabel}</span>
-          {canRun && (
+          {canRun && !compact && (
             <span
               style={{
                 fontSize: 11,

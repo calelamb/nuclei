@@ -209,6 +209,10 @@ export function handleKernelMessage(msg: KernelResponse, connectTimers: ConnectT
       // belongs on the editor (marker + circuit panel), never in the Terminal,
       // and it must not cancel a run that happens to be in flight.
       const isParseError = msg.phase === 'parse';
+      // A preview that had to be killed is the one parse event worth saying out loud.
+      if (isParseError && msg.code === 'timeout') {
+        useSimulationStore.getState().addOutput(shortMessage, 'info');
+      }
       if (!isParseError) {
         useSimulationStore.getState().addOutput(`Error: ${detail}`, 'stderr');
         useSimulationStore.getState().setRunning(false);
