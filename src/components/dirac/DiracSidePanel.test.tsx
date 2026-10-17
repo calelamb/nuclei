@@ -6,6 +6,7 @@ import { useDiracStore } from '../../stores/diracStore';
 import { useDiracPanelStore } from '../../stores/diracPanelStore';
 import { useWorkspaceStore } from '../../stores/workspaceStore';
 import { useUIModeStore } from '../../stores/uiModeStore';
+import { useSettingsStore } from '../../stores/settingsStore';
 import { useNavigationStore } from '../../stores/navigationStore';
 
 function resetStores(apiKey: string | null) {
@@ -197,5 +198,14 @@ describe('DiracSidePanel', () => {
     render(<DiracSidePanel />);
     fireEvent.click(screen.getByRole('button', { name: /ambient narration/i }));
     expect(openSettings).toHaveBeenCalledWith('dirac');
+  });
+
+  it('hides the narration hint once ambient narration is on', () => {
+    resetStores('sk-ant-test');
+    const original = useSettingsStore.getState().dirac;
+    useSettingsStore.setState({ dirac: { ...original, ambientNarration: true } });
+    render(<DiracSidePanel />);
+    expect(screen.queryByRole('button', { name: /ambient narration/i })).toBeNull();
+    useSettingsStore.setState({ dirac: original });
   });
 });

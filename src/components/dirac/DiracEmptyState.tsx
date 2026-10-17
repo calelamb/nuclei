@@ -1,4 +1,5 @@
 import { useNavigationStore } from '../../stores/navigationStore';
+import { useSettingsStore } from '../../stores/settingsStore';
 import { useWorkspaceStore, type WorkspaceMode } from '../../stores/workspaceStore';
 import { DiracAtomIcon } from './DiracAtomIcon';
 import './dirac.css';
@@ -23,6 +24,7 @@ export function DiracEmptyState({ onPick }: { onPick: (text: string) => void }) 
   const mode = useWorkspaceStore((s) => s.mode);
   const copy = DIRAC_EMPTY_COPY[mode];
   const openSettings = useNavigationStore((s) => s.openSettings);
+  const narrationOn = useSettingsStore((s) => s.dirac.ambientNarration);
   return (
     <div className="dirac-empty">
       <DiracAtomIcon />
@@ -36,12 +38,14 @@ export function DiracEmptyState({ onPick }: { onPick: (text: string) => void }) 
         ))}
       </div>
       <p className="dirac-empty__hint">Or try a slash command like <code>/explain</code></p>
-      <p className="dirac-empty__hint">
-        Want a running commentary on your circuit?{' '}
-        <button type="button" className="dirac-link" onClick={() => openSettings('dirac')}>
-          Turn on ambient narration
-        </button>
-      </p>
+      {!narrationOn && (
+        <p className="dirac-empty__hint">
+          Want a running commentary on your circuit?{' '}
+          <button type="button" className="dirac-link" onClick={() => openSettings('dirac')}>
+            Turn on ambient narration
+          </button>
+        </p>
+      )}
     </div>
   );
 }
