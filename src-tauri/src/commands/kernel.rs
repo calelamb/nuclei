@@ -202,7 +202,10 @@ pub fn start_kernel(
 
     let pid = child.id();
     if let Some(dir) = runtime_dir.as_deref() {
-        let record = ownership::OwnerRecord { pid, port: KERNEL_PORT };
+        let record = ownership::OwnerRecord {
+            pid,
+            port: KERNEL_PORT,
+        };
         if let Err(e) = ownership::write_owner_record(dir, &record) {
             log::warn!("Could not record kernel ownership: {e}");
         }
