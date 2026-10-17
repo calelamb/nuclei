@@ -28,6 +28,7 @@ export type WorkerRequest =
 
 export type WorkerResponse =
   | { type: 'progress'; progress: BootProgress }
+  /** A line for the terminal: a lazy-install notice, or one line of the program's live output. */
   | { type: 'notice'; text: string }
   /** The worker has begun running this call's Python (after any lazy installs). */
   | { id: number; type: 'started' }

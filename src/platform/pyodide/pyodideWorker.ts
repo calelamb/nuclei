@@ -88,6 +88,11 @@ async function boot(): Promise<void> {
   // Warm the import caches so the first parse does not pay for them.
   py.runPython('import qiskit, qiskit_aer, qiskit.quantum_info, qiskit.circuit.library');
   const kernel = py.pyimport('kernel_runtime');
+  // Live output: each complete line the program prints is posted as it is
+  // written (a synchronous post, so it reaches the page while Python is still
+  // running), instead of arriving all at once when the run ends. The page
+  // shows these through the same `notice` channel it already prints.
+  kernel.set_output_sink((line: string) => post({ type: 'notice', text: line }));
   runtime = {
     nuclei_parse: (...a) => kernel.nuclei_parse(...a) as string,
     nuclei_execute: (...a) => kernel.nuclei_execute(...a) as string,
