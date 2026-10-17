@@ -217,4 +217,10 @@ describe('RunsTable', () => {
     const cells = Array.from(container.querySelectorAll('[data-run-dir]')).map((r) => r.querySelectorAll('[role="cell"]')[2].textContent);
     expect(cells).toEqual(['6.2', '6.0']);
   });
+
+  it('restores the saved scroll offset when returning to the table (research-12)', () => {
+    useExperimentUiStore.getState().patchRunsView(FILE_NAME, { scrollTop: 120 });
+    const { container } = render(<RunsTable />);
+    expect((container.querySelector('[role="rowgroup"]') as HTMLElement).scrollTop).toBe(120);
+  });
 });

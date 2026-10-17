@@ -63,6 +63,9 @@ export function RunsTable() {
   const [viewportHeight, setViewportHeight] = useState(400);
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const latestScrollTop = useRef(view.scrollTop);
+  // Offset captured the instant the user leaves for run detail / compare; the
+  // scroller can report a spurious 0 while the next view is mounting.
+  const leavingScrollTop = useRef<number | null>(null);
   const observerRef = useRef<ResizeObserver | null>(null);
 
   useEffect(() => {
@@ -100,7 +103,7 @@ export function RunsTable() {
   useEffect(() => {
     latestScrollTop.current = useExperimentUiStore.getState().runsViewByExperiment[fileKey]?.scrollTop ?? 0;
     return () => {
-      if (fileKey) patchRunsView(fileKey, { scrollTop: latestScrollTop.current });
+      if (fileKey) patchRunsView(fileKey, { scrollTop: leavingScrollTop.current ?? latestScrollTop.current });
     };
   }, [fileKey, patchRunsView]);
 
@@ -135,6 +138,7 @@ export function RunsTable() {
     else if (sortDirection === 'asc') patchRunsView(fileKey, { sortDirection: 'desc' });
     else patchRunsView(fileKey, { sortKey: null });
   };
+  const rememberScroll = () => { leavingScrollTop.current = scrollRef.current?.scrollTop ?? latestScrollTop.current; };
   const setMainTab = (tab: RunsMainTab) => patchRunsView(fileKey, { mainTab: tab });
 
   const handleExportCsv = () => {
@@ -227,7 +231,7 @@ export function RunsTable() {
                 <Download size={12} /> Export CSV
               </button>
               <button
-                onClick={openCompare}
+                onClick={() => { rememberScroll(); openCompare(); }}
                 disabled={compareSelection.length < 2}
                 title={compareSelection.length < 2 ? 'Check 2 or more runs to compare' : 'Compare the checked runs'}
                 style={{
@@ -311,7 +315,7 @@ export function RunsTable() {
                     gridTemplateColumns={gridTemplateColumns}
                     top={(startIndex + i) * ROW_HEIGHT}
                     compareSelected={compareSelection.includes(run.dir)}
-                    onSelect={selectRun}
+                    onSelect={(dir) => { rememberScroll(); selectRun(dir); }}
                     onToggleCompare={toggleCompareSelection}
                   />
                 ))}
