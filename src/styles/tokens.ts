@@ -161,7 +161,7 @@ export const LIGHT_COLORS: ColorTokens = {
   basisZ: '#B45309',
   overlayMatching: '#C2410C',
   success: '#059669',
-  warning: '#D97706',
+  warning: '#A8580A',
   danger: '#DC2626',
   info: '#2563EB',
   kernelIdle: '#94A3B8',

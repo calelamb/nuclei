@@ -139,5 +139,5 @@
 
 /* ── Menu items ── */
 .nuclei-menu-item { transition: background-color var(--duration-fast) var(--ease-standard); }
-.nuclei-menu-item:hover { background: var(--color-surface-raised) !important; }
+.nuclei-menu-item:hover { background: var(--color-surface-overlay) !important; }
 .nuclei-menu-item.nuclei-menu-item--tint:hover { background: color-mix(in srgb, var(--item-accent) 12%, transparent) !important; }
