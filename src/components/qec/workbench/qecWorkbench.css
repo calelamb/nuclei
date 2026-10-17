@@ -61,7 +61,7 @@
   padding: 0; list-style: none;
 }
 
-.qec-workbench button {
+.qec-workbench button:where(:not([class*='nuclei-'])) {
   color: inherit; font: inherit;
 }
 

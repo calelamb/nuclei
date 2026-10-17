@@ -117,7 +117,7 @@ export function CsvMappingPreview() {
       aria-label="CSV column mapping"
       style={{
         padding: '6px 12px', borderBottom: `1px solid ${colors.border}`, fontFamily: TYPOGRAPHY.fontSans,
-        maxHeight: open ? 'min(46vh, 380px)' : undefined, overflow: open ? 'auto' : undefined, flex: 'none',
+        flex: 'none',
       }}
     >
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, color: colors.textMuted, minWidth: 0 }}>

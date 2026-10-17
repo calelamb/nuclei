@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { render, cleanup } from '@testing-library/react';
+import { render, cleanup, fireEvent } from '@testing-library/react';
 import { QecAnalysisView } from './QecAnalysisView';
 import { ThresholdPanel } from './ThresholdPanel';
 import { useQecCampaignStore } from '../../stores/qecCampaignStore';
@@ -21,15 +21,29 @@ describe('Campaign Center chrome', () => {
     expect(queryAllByText('Campaign')).toHaveLength(0);
   });
 
-  it('names the loaded file instead when one is open', () => {
+  it('names the loaded file once (in the mapping summary), not again in a title bar', () => {
     useQecCampaignStore.getState().loadFromCsv(csv, 'realistic.csv');
     const { getAllByText } = render(<QecAnalysisView embedded />);
-    expect(getAllByText('realistic.csv').length).toBeGreaterThan(0);
+    expect(getAllByText('realistic.csv')).toHaveLength(1);
   });
 
   it('uses a plot title short enough to survive a narrow card', () => {
     useQecCampaignStore.getState().loadFromCsv(csv, 'realistic.csv');
     const { getByText } = render(<ThresholdPanel />);
     expect(getByText('Logical error vs p')).toBeTruthy();
+  });
+});
+
+describe('Edit mapping does not squeeze the plot', () => {
+  it('lives inside the scrolling analysis area, so opening it adds scroll instead of taking height from the plot', () => {
+    useQecCampaignStore.getState().loadFromCsv(csv, 'realistic.csv');
+    const { getByLabelText, getByRole, container } = render(<QecAnalysisView embedded />);
+    const scroller = container.querySelector('[data-testid="qec-analysis-scroll"]') as HTMLElement;
+    expect(scroller).toBeTruthy();
+    expect(scroller.contains(getByLabelText('CSV column mapping'))).toBe(true);
+    fireEvent.click(getByRole('button', { name: /Edit mapping/ }));
+    const section = getByLabelText('CSV column mapping');
+    expect(section.style.maxHeight).toBe('');
+    expect(scroller.contains(getByRole('group', { name: /Plot points/ }))).toBe(true);
   });
 });
