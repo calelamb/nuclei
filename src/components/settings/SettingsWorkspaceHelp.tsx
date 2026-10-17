@@ -17,7 +17,7 @@ export function WorkspaceSection() {
 
   return (
     <Section id="workspace" title="Workspace" defaultOpen>
-      <SettingRow label="Workspace mode" hint={mode === 'learn' ? 'Lessons, challenges and Dirac as your tutor.' : 'Projects, experiments and Dirac as a terse collaborator.'}>
+      <SettingRow label="Workspace mode" stacked hint={mode === 'learn' ? 'Lessons, challenges and Dirac as your tutor.' : 'Projects, experiments and Dirac as a terse collaborator.'}>
         <SegmentedControl<WorkspaceMode>
           aria-label="Workspace mode"
           value={mode}

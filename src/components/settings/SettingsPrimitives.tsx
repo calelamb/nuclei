@@ -9,12 +9,13 @@ import { TYPOGRAPHY } from '../../styles/tokens';
 export const RowLabelContext = createContext<string | undefined>(undefined);
 
 
-export function SettingRow({ label, hint, children }: { label: string; hint?: string; children: ReactNode }) {
+export function SettingRow({ label, hint, stacked = false, children }: { label: string; hint?: string; /** Put the control under the label (for wide controls in the 240px sidebar). */ stacked?: boolean; children: ReactNode }) {
   const colors = useThemeStore((s) => s.colors);
   return (
     <div style={{
-      display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-      padding: '6px 0', gap: 8,
+      display: 'flex', alignItems: stacked ? 'flex-start' : 'center', justifyContent: 'space-between',
+      flexDirection: stacked ? 'column' : 'row',
+      padding: '6px 0', gap: stacked ? 6 : 8,
     }}>
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 2 }}>
         <span style={{ fontSize: 12, color: colors.textMuted, fontFamily: TYPOGRAPHY.fontSans }}>

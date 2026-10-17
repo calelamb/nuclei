@@ -223,7 +223,7 @@ export function SettingsPanel() {
       <div style={{ flex: 1, minHeight: 0, overflowY: 'auto' }}>
         {/* ── Appearance ── */}
         <Section id="appearance" title="Appearance" defaultOpen>
-          <SettingRow label="Theme">
+          <SettingRow label="Theme" stacked>
             <SegmentedControl<ThemePreference>
               aria-label="Theme"
               value={themePreference}
