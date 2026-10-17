@@ -177,7 +177,7 @@ fn read_study_manifest_files(project_root: &Path) -> Result<Vec<QecStudyManifest
         .collect()
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn qec_create_study_manifest(
     window: WebviewWindow,
     project_root: String,
@@ -192,7 +192,7 @@ pub fn qec_create_study_manifest(
     create_study_manifest_file(Path::new(&project_root), &file_name, &content)
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn qec_read_study_manifests(
     window: WebviewWindow,
     project_root: String,

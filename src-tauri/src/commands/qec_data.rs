@@ -652,7 +652,7 @@ fn production_config(
     ))
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn qec_data_start(
     state: State<'_, QecDataManager>,
     app_handle: tauri::AppHandle,
@@ -665,7 +665,7 @@ pub fn qec_data_start(
     state.start(config)
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn qec_data_stop(state: State<'_, QecDataManager>) -> Result<(), QecDataError> {
     state.stop()
 }
