@@ -761,3 +761,8 @@
 .qec-investigation__actions {
   flex: 0 0 auto;
 }
+
+/* The detector graph needs its canvas (220px minimum) plus the header, toolbar and footer around it. */
+.qec-investigation__panels > .qec-instrument[data-panel='detector-graph'] {
+  min-height: 460px;
+}

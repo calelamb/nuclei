@@ -105,6 +105,7 @@ function CanvasInstrument({ panel, primary, rowSpan }: { panel: QecWorkbenchPane
     <section
       className={`qec-instrument qec-instrument--${primary ? 'primary' : 'secondary'}`}
       aria-labelledby={`${panel.id}-instrument-heading`}
+      data-panel={panel.id}
       style={style}
     >
       <header>

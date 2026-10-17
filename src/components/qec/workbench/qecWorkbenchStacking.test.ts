@@ -11,4 +11,11 @@ describe('stacked workbench canvas', () => {
     expect(primary).toMatch(/\.qec-instrument\s*\{[^}]*min-height:\s*260px/)
     expect(primary).toMatch(/\.qec-instrument--primary\s*\{[^}]*min-height:\s*min\(640px/)
   })
+
+  it('keeps the detector graph tall enough to show its 220px canvas, not just a sliver', () => {
+    const css = readFileSync(join(__dirname, 'qecWorkbench.css'), 'utf8')
+    const rule = css.match(/\[data-panel='detector-graph'\]\s*\{[^}]*min-height:\s*(\d+)px/)
+    expect(rule).not.toBeNull()
+    expect(Number(rule![1])).toBeGreaterThanOrEqual(440)
+  })
 })
