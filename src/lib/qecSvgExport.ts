@@ -1,5 +1,6 @@
 import { createElement } from 'react';
-import { renderToStaticMarkup } from 'react-dom/server';
+import { flushSync } from 'react-dom';
+import { createRoot } from 'react-dom/client';
 import { QecPlotFigure, type QecPlotFigureProps } from '../components/qec/QecPlotFigure';
 
 /** Pixel width of an exported QEC figure. Text stays at its on-screen pixel sizes. */
@@ -11,19 +12,23 @@ export type ExportFigureProps = Omit<QecPlotFigureProps, 'width' | 'height' | 'p
 
 /**
  * Renders the same figure the panel shows (legend, superscript ticks, fixed
- * font sizes) at a fixed export size and returns it as a standalone SVG
- * element: absolute pixel size, background rectangle, no CSS or fonts beyond
- * a generic fallback stack.
+ * font sizes) at a fixed export size, off-screen, and returns a detached copy
+ * as a standalone SVG element: absolute pixel size, background rectangle, no
+ * CSS or fonts beyond a generic fallback stack.
  */
 export function renderFigureSvg(props: ExportFigureProps, width = QEC_EXPORT_WIDTH): SVGSVGElement {
-  const markup = renderToStaticMarkup(
-    createElement(QecPlotFigure, { ...props, width, plotHeight: QEC_EXPORT_PLOT_HEIGHT, idPrefix: 'qec-export' }),
-  );
-  const doc = new DOMParser().parseFromString(markup, 'image/svg+xml');
-  const svg = doc.documentElement as unknown as SVGSVGElement;
-  if (doc.querySelector('parsererror') || svg.nodeName.toLowerCase() !== 'svg') {
-    throw new Error('Could not render the figure as SVG');
+  const host = document.createElement('div');
+  const root = createRoot(host);
+  try {
+    flushSync(() => {
+      root.render(createElement(QecPlotFigure, { ...props, width, plotHeight: QEC_EXPORT_PLOT_HEIGHT, idPrefix: 'qec-export' }));
+    });
+    const rendered = host.querySelector('svg');
+    if (!rendered) throw new Error('Could not render the figure as SVG');
+    const copy = rendered.cloneNode(true) as SVGSVGElement;
+    copy.removeAttribute('style');
+    return copy;
+  } finally {
+    root.unmount();
   }
-  svg.removeAttribute('style');
-  return svg;
 }

@@ -48,6 +48,13 @@ describe('layoutLegend', () => {
     for (const it of narrow.items) expect(it.x + it.width).toBeLessThanOrEqual(160);
     expect(narrow.height).toBeGreaterThan(wide.height);
   });
+  it('never strands a group title at the end of a row away from its entries', () => {
+    const l = layoutLegend([group(2), group(2, 'decoder')], 150);
+    for (const h of l.items.filter((i) => i.type === 'header')) {
+      const first = l.items.find((i) => i.type === 'entry' && i.group === h.group)!;
+      expect(first.y).toBe(h.y);
+    }
+  });
   it('is empty for no groups', () => {
     expect(layoutLegend([], 500)).toMatchObject({ items: [], rows: 0, height: 0 });
   });
