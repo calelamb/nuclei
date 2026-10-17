@@ -260,7 +260,7 @@ export function NewExperimentForm({ projectRoot, existing, dirtyRef: sharedDirty
     <form
       onSubmit={(e) => { void handleSubmit(e); }}
       style={{
-        padding: 12, borderTop: `1px solid ${colors.border}`,
+        padding: '12px 12px 0', borderTop: `1px solid ${colors.border}`,
         display: 'flex', flexDirection: 'column', gap: 10,
         fontFamily: TYPOGRAPHY.fontSans,
       }}

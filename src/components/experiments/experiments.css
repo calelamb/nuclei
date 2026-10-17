@@ -121,4 +121,4 @@
 /* The form scrolls on its own so the experiment list keeps its height at small window sizes. */
 .nuclei-experiment-form-region { flex: 0 1 auto; min-height: 0; max-height: calc(100% - 160px); display: flex; flex-direction: column; }
 .nuclei-experiment-form-region > form { min-height: 0; overflow-y: auto; }
-.nuclei-experiment-form__footer { position: sticky; bottom: 0; margin: 0 -12px -12px; padding: var(--space-3) 12px 12px; background: var(--color-surface-base); border-top: 1px solid var(--color-border-subtle); display: flex; flex-direction: column; gap: var(--space-2); }
+.nuclei-experiment-form__footer { position: sticky; bottom: 0; margin: 0 -12px; padding: var(--space-3) 12px; background: var(--color-surface-base); border-top: 1px solid var(--color-border-subtle); display: flex; flex-direction: column; gap: var(--space-2); }
