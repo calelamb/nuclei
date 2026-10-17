@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { isQuantumCode, validateExerciseResult } from './exerciseValidation';
+import { isQuantumCode, shouldAutoGrade, validateExerciseResult } from './exerciseValidation';
 
 const baseResult = {
   state_vector: [],
@@ -42,5 +42,14 @@ describe('exerciseValidation', () => {
       success: true,
       message: 'Solution matches the expected distribution.',
     });
+  });
+});
+
+describe('shouldAutoGrade (LR-15)', () => {
+  it('does not grade an untouched starter, ignoring whitespace at the ends', () => {
+    expect(shouldAutoGrade('qc.h(0)\n', 'qc.h(0)')).toBe(false);
+  });
+  it('grades once the learner has changed the code', () => {
+    expect(shouldAutoGrade('qc.x(0)', 'qc.h(0)')).toBe(true);
   });
 });
