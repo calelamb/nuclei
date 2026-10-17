@@ -74,10 +74,14 @@ Response sequence, in order: {/* server.py:184-209 */}
 
 | # | Message | When |
 |---|---------|------|
-| 1 | `output` | Only if the code printed to stdout. |
-| 2 | `stderr` | Only if the code wrote to stderr. |
+| 1 | `output` | Only if the code printed to stdout. Carries `phase: "parse"`. |
+| 2 | `stderr` | Only if the code wrote to stderr. Carries `phase: "parse"`. |
 | 3 | `snapshot` | **Always.** `data` is the `CircuitSnapshot`, or `null` when there is no circuit or the code failed. |
 | 4 | `error` | Only on failure, with `phase: "parse"`. |
+
+Parse re-runs the program on every pause in typing, so its `output` and
+`stderr` are tagged `phase: "parse"`. Clients should not show them in the
+Terminal; only `execute` output is a user-requested run.
 
 A source file with no circuit in it is **not** a parse error: the kernel
 sends `snapshot` with `data: null` and no `error`, so a live-typing user
