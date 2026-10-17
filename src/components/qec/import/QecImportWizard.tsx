@@ -465,10 +465,12 @@ function WizardFooter(props: WizardFooterProps): ReactElement {
   );
 }
 
-/** The newest import job for this source, if any. */
+/** The newest import job for this source launched since this wizard opened; earlier jobs never finish a fresh run. */
 function useImportJob(source: string) {
   const jobs = useQecJobStore((state) => state.jobs);
-  return Object.values(jobs).reverse().find((candidate) => candidate.source === source) ?? null;
+  const [priorIds] = useState(() => new Set(Object.keys(useQecJobStore.getState().jobs)));
+  const fresh = Object.entries(jobs).filter(([id]) => !priorIds.has(id)).map(([, job]) => job);
+  return fresh.reverse().find((candidate) => candidate.source === source) ?? null;
 }
 
 /** Preselect the best supported adapter once the probe lands, so Next is never a dead end on stage 2. */

@@ -121,8 +121,8 @@
 .qec-tray__jobs dt { color: var(--qec-text-muted); font-size: 12px; }
 .qec-tray__jobs dd { overflow-wrap: anywhere; color: var(--qec-text); font-size: 12px; }
 
-.qec-import-wizard__footer--finished { justify-content: flex-end; }
 .qec-import-wizard__footer { display: flex; min-height: 64px; align-items: center; justify-content: space-between; gap: 12px; padding: 9px 14px; border-top: 1px solid var(--qec-line); background: var(--qec-canvas); }
+.qec-import-wizard__footer--finished { justify-content: flex-end; }
 .qec-import-nav, .qec-import-commit { display: flex; min-width: 0; align-items: center; gap: 7px; }
 .qec-import-commit { justify-content: flex-end; }
 .qec-import-commit > span { display: inline-flex; min-width: 0; align-items: center; gap: 5px; color: var(--qec-warning-text); font-size: 12px; }

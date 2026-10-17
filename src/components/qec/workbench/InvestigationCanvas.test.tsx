@@ -31,3 +31,13 @@ describe('canvas instrument order (qec-07)', () => {
     expect(screen.getByLabelText('Open sinter stats CSV')).toBeTruthy();
   });
 });
+
+describe('canvas grid rows', () => {
+  it('leaves auto-row sizing to the stylesheet so the stacked container query can override it', () => {
+    useQecWorkbenchStore.setState({ preset: 'analyze' });
+    const noop = () => undefined;
+    const { container } = render(<InvestigationCanvas inspectorOpen onToggleInspector={noop} toggleRef={{ current: null }} />);
+    const grid = container.querySelector('.qec-investigation__panels') as HTMLElement;
+    expect(grid.style.gridAutoRows).toBe('');
+  });
+});

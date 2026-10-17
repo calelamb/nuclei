@@ -192,7 +192,7 @@ export function InvestigationCanvas(props: InvestigationCanvasProps): ReactEleme
   return (
     <main className="qec-investigation" aria-label="QEC investigation canvas">
       <CanvasHeader {...props} />
-      <div className="qec-investigation__panels" style={{ gridTemplateRows: `repeat(${rows}, ${rowSize})`, gridAutoRows: rowSize, alignContent: compact ? 'start' : undefined }}>
+      <div className="qec-investigation__panels" style={{ gridTemplateRows: `repeat(${rows}, ${rowSize})`, alignContent: compact ? 'start' : undefined }}>
         {panels.map((panel, index) => <CanvasInstrument key={panel.id} panel={panel} primary={index === 0} rowSpan={rows} />)}
       </div>
     </main>

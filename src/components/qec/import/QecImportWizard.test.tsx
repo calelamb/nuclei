@@ -403,4 +403,16 @@ describe('<QecImportWizard />', () => {
     expect(view.container.querySelector('.lucide-loader-circle')).toBeNull();
     if (status === 'failed') expect(screen.getByRole('alert').textContent).toContain('Canonical write failed.');
   });
+
+  it('reopening for an already-imported source starts at stage 1 with the normal footer', async () => {
+    useQecJobStore.setState({ jobs: { 'old-job': {
+      id: 'old-job', kind: 'import', status: 'complete', message: 'Import complete',
+      source: 'captures/capture.parquet', adapterId: 'x', sessionId: 'old-session', sessionKind: 'hardware_import',
+      sourceHash: 'a', provenanceId: 'p', sourceByteSize: 1, projectRoot: '/project',
+    } as never } });
+    render(<QecImportWizard source="captures/capture.parquet" client={client()} onClose={() => undefined} />);
+    await screen.findByText('2.00 KiB');
+    expect(screen.getByRole('button', { name: 'Next stage' })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Show session' })).toBeNull();
+  });
 });
