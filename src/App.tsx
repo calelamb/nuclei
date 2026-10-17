@@ -27,6 +27,7 @@ import { useWhatsNewStore } from './stores/whatsNewStore';
 import { useUIModeStore } from './stores/uiModeStore';
 import { findBindingId } from './config/keybindings';
 import { usePersistedPrefs } from './hooks/usePersistedPrefs';
+import { scheduleLandingFocus } from './components/onboarding/focusLanding';
 import { applyOnboardingPath, type OnboardingChoice } from './components/onboarding/applyOnboardingPath';
 import { useWorkspaceStore } from './stores/workspaceStore';
 import { useModeSwitchStore } from './stores/modeSwitchStore';
@@ -311,6 +312,7 @@ function AppInner() {
     // Apply to the stores first (persisted by usePersistedPrefs) so a failing
     // storage write can never leave the user in the wrong workspace.
     applyOnboardingPath(path);
+    if (path) scheduleLandingFocus();
     try {
       await platform.setStoredValue('onboarding_complete', true);
       if (path) await platform.setStoredValue('onboarding_path', path);
