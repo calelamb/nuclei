@@ -4,7 +4,7 @@ import { useQecStore } from '../../stores/qecStore';
 import { useCircuitStore } from '../../stores/circuitStore';
 import { PanelHeader } from '../layout/PanelHeader';
 import { QecEmptyState } from './QecEmptyState';
-import { latticeLayout, activeQubitsAtTick } from './qecGeometry';
+import { latticeLayout, activeQubitsAtTick, tickMomentCount } from './qecGeometry';
 
 import { TYPOGRAPHY } from '../../styles/tokens';
 const DOCS = 'https://getnuclei.dev/docs/research/qec-studio/';
@@ -45,7 +45,7 @@ export function CodeLatticePanel() {
     );
   }
 
-  const maxTick = Math.max(0, (qec.num_ticks || 1) - 1);
+  const maxTick = tickMomentCount(qec.num_ticks, snapshot?.gates ?? []) - 1;
   const basisColor = (b: string) => (b === 'X' ? colors.basisX : b === 'Z' ? colors.basisZ : colors.textDim);
 
   return (

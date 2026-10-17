@@ -143,12 +143,27 @@ export function activeQubitsAtTick(gates: Gate[], tick: number): Set<number> {
   return out;
 }
 
+/**
+ * Number of moments the circuit spans. `num_ticks` counts TICK instructions,
+ * which separate moments, so N ticks leave N + 1 columns (layers 0..N); the
+ * last one holds the final measurements, detectors and observable.
+ */
+export function tickMomentCount(numTicks: number, gates: ReadonlyArray<{ layer: number }>): number {
+  const maxLayer = gates.reduce((m, g) => Math.max(m, g.layer), -1);
+  return Math.max(1, numTicks + 1, maxLayer + 1);
+}
+
 // ─────────────────────────── Detector graph ───────────────────────────
 
 export interface DetectorNode {
   detector: number;
   x: number;
   y: number;
+  /** Measurement round (the detector's third coordinate); 0 on the circle fallback. */
+  t: number;
+  /** Source (pre-shear) coordinates, used to recognise time-like edges. */
+  sx?: number;
+  sy?: number;
 }
 
 export interface DetectorGraphEdge {
@@ -157,6 +172,8 @@ export interface DetectorGraphEdge {
   b: number;
   p: number;
   obs: number[];
+  /** True when both ends sit at the same (x, y) in different rounds. */
+  timelike: boolean;
 }
 
 export interface DetectorGraphLayout {
@@ -166,7 +183,14 @@ export interface DetectorGraphLayout {
   edges: DetectorGraphEdge[];
   /** True when detector coordinates drove the layout (else a circle fallback). */
   hasCoordinates: boolean;
+  /** Width / height of the unit box the node positions live in; draw it with ONE uniform scale. */
+  aspect: number;
 }
+
+/** Fraction of the largest spatial span that the whole round axis is sheared across. */
+const ROUND_SHEAR = 0.35;
+/** Gap (in spatial-span units) between the graph and the virtual boundary strip. */
+const BOUNDARY_GAP = 0.12;
 
 /** Position lookup for the detector-graph renderer. O(1) per edge endpoint
  * instead of the old O(edges·nodes) linear `.find()`. Detector -1 (the virtual
@@ -232,35 +256,97 @@ export function detectorGraphLayout(qec: QecSnapshot): DetectorGraphLayout {
   const present = coords.filter((c): c is [number, number, number] => c !== null);
   const hasCoordinates = present.length === n && n > 0;
 
-  let nodes: DetectorNode[];
-  if (hasCoordinates) {
-    const xs = present.map((c) => c[0]);
-    const ys = present.map((c) => c[1]);
-    const minX = Math.min(...xs);
-    const maxX = Math.max(...xs);
-    const minY = Math.min(...ys);
-    const maxY = Math.max(...ys);
-    const spanX = maxX - minX || 1;
-    const spanY = maxY - minY || 1;
-    nodes = coords.map((c, detector) => {
-      const cc = c as [number, number, number];
-      return {
-        detector,
-        x: 0.05 + 0.9 * ((cc[0] - minX) / spanX),
-        y: 0.05 + 0.85 * ((cc[1] - minY) / spanY),
-      };
-    });
-  } else {
-    nodes = Array.from({ length: n }, (_, detector) => ({ detector, ...circlePosition(detector, n) }));
-  }
+  const placed = hasCoordinates ? shearedNodes(coords as Array<[number, number, number]>) : circleNodes(n);
+  const nodeByDetector = new Map(placed.nodes.map((node) => [node.detector, node]));
 
   const edges: DetectorGraphEdge[] = [];
   if (dem) {
-    for (const e of dem.edges) edges.push({ a: e.d1, b: e.d2, p: e.p, obs: e.obs });
-    for (const e of dem.boundary_edges) edges.push({ a: e.d, b: -1, p: e.p, obs: e.obs });
+    for (const e of dem.edges) {
+      edges.push({ a: e.d1, b: e.d2, p: e.p, obs: e.obs, timelike: isTimelike(nodeByDetector.get(e.d1), nodeByDetector.get(e.d2)) });
+    }
+    for (const e of dem.boundary_edges) edges.push({ a: e.d, b: -1, p: e.p, obs: e.obs, timelike: false });
   }
 
-  return { nodes, boundary: { x: 0.5, y: 0.97 }, edges, hasCoordinates };
+  return { nodes: placed.nodes, boundary: placed.boundary, edges, hasCoordinates, aspect: placed.aspect };
+}
+
+interface PlacedNodes {
+  nodes: DetectorNode[];
+  boundary: { x: number; y: number };
+  aspect: number;
+}
+
+function isTimelike(a?: DetectorNode, b?: DetectorNode): boolean {
+  if (!a || !b) return false;
+  return a.t !== b.t && a.sx !== undefined && a.sx === b.sx && a.sy === b.sy;
+}
+
+function circleNodes(n: number): PlacedNodes {
+  const nodes = Array.from({ length: n }, (_, detector) => ({ detector, t: 0, ...circlePosition(detector, n) }));
+  return { nodes, boundary: { x: 0.5, y: 0.97 }, aspect: 1 };
+}
+
+/**
+ * Place detectors by (x, y), then shear each round along a fixed diagonal so
+ * the rounds stay visibly apart instead of stacking on top of one another.
+ * Everything is scaled by ONE factor into a unit box whose aspect is reported,
+ * so the renderer never stretches x and y independently.
+ */
+function shearedNodes(coords: Array<[number, number, number]>): PlacedNodes {
+  const xs = coords.map((c) => c[0]);
+  const ys = coords.map((c) => c[1]);
+  const ts = coords.map((c) => c[2]);
+  const minX = Math.min(...xs);
+  const minY = Math.min(...ys);
+  const minT = Math.min(...ts);
+  const spanT = Math.max(...ts) - minT;
+  const spatial = Math.max(Math.max(...xs) - minX, Math.max(...ys) - minY, 1);
+  const shear = spanT > 0 ? (ROUND_SHEAR * spatial) / spanT : 0;
+
+  const world = coords.map((c, detector) => ({
+    detector,
+    t: c[2],
+    sx: c[0],
+    sy: c[1],
+    x: c[0] - minX + (c[2] - minT) * shear,
+    y: c[1] - minY - (c[2] - minT) * shear,
+  }));
+  const yOffset = Math.max(0, ...world.map((w) => -w.y));
+  const shifted = world.map((w) => ({ ...w, y: w.y + yOffset }));
+  const width = Math.max(...shifted.map((w) => w.x), 1e-9);
+  const graphHeight = Math.max(...shifted.map((w) => w.y), 1e-9);
+  const boundaryY = graphHeight + BOUNDARY_GAP * spatial;
+  const height = boundaryY + 0.04 * spatial;
+  const margin = 0.04 * spatial;
+  const boxW = width + 2 * margin;
+  const boxH = height + margin;
+
+  const nodes = shifted.map((w) => ({
+    detector: w.detector, t: w.t, sx: w.sx, sy: w.sy,
+    x: (w.x + margin) / boxW,
+    y: (w.y + margin) / boxH,
+  }));
+  return {
+    nodes,
+    boundary: { x: 0.5, y: (boundaryY + margin) / boxH },
+    aspect: boxW / boxH,
+  };
+}
+
+/**
+ * Map the unit box onto a canvas with ONE scale factor, centred, inside `pad`.
+ * Returns the x / y mappers plus the drawn box size.
+ */
+export function fitGraphBox(
+  aspect: number, cssW: number, cssH: number, pad: number,
+): { X: (nx: number) => number; Y: (ny: number) => number; boxW: number; boxH: number } {
+  const availW = Math.max(1, cssW - 2 * pad);
+  const availH = Math.max(1, cssH - 2 * pad);
+  const boxW = Math.min(availW, availH * aspect);
+  const boxH = boxW / aspect;
+  const left = (cssW - boxW) / 2;
+  const top = (cssH - boxH) / 2;
+  return { X: (nx) => left + nx * boxW, Y: (ny) => top + ny * boxH, boxW, boxH };
 }
 
 // ─────────────────────────── Decode overlay ───────────────────────────

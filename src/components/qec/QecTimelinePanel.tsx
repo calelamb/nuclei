@@ -5,7 +5,7 @@ import { useQecStore } from '../../stores/qecStore';
 import { PanelHeader } from '../layout/PanelHeader';
 import { QecEmptyState } from './QecEmptyState';
 import {
-  activeTimelineQubits, classifyTimelineGates, detectorTrackByTick, timelineLabel, type TimelineGate,
+  activeTimelineQubits, classifyTimelineGates, detectorTrackByTick, tickMomentCount, timelineLabel, type TimelineGate,
 } from './qecGeometry';
 
 import { TYPOGRAPHY } from '../../styles/tokens';
@@ -47,7 +47,7 @@ export function QecTimelinePanel() {
     );
   }
 
-  const numTicks = Math.max(1, qec?.num_ticks ?? Math.max(...gates.map((g) => g.layer + 1)));
+  const numTicks = tickMomentCount(qec?.num_ticks ?? 0, gates);
   const qubits = activeTimelineQubits(snapshot.gates);
   const rowOf = new Map(qubits.map((q, i) => [q, i]));
   const width = LABEL_W + numTicks * COL_W + PAD * 2;
