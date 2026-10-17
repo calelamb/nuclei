@@ -91,8 +91,8 @@ export function DecoderWorkbench() {
             <Tr>
               <Th>Decoder</Th>
               {showExperiment && <Th>Experiment</Th>}
-              <Th numeric>d</Th>
-              <Th numeric>p</Th>
+              <Th numeric plain>d</Th>
+              <Th numeric plain>p</Th>
               <Th numeric>Logical error rate ({unitText})</Th>
               <Th numeric>Kept shots</Th>
               <Th numeric>Discards</Th>

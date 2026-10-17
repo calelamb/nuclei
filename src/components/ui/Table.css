@@ -30,5 +30,5 @@
 .nuclei-table td.nuclei-table__muted { color: var(--color-text-secondary); }
 
 /* Scroll cue: a soft edge on the right while columns are clipped. */
-.nuclei-table-scroll[data-overflow='true'] { mask-image: linear-gradient(to right, #000 calc(100% - 24px), transparent); }
+.nuclei-table-scroll[data-overflow='true'] { mask-image: linear-gradient(to right, #000 calc(100% - 32px), transparent); }
 .nuclei-table-scroll[data-overflow='true'][data-scrolled-end='true'] { mask-image: none; }
