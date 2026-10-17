@@ -1,8 +1,8 @@
+import { Button } from '../ui';
 import { useState } from 'react';
 import { AlertTriangle, Copy, ExternalLink, RotateCw } from 'lucide-react';
 import { useEditorStore } from '../../stores/editorStore';
 import { useThemeStore } from '../../stores/themeStore';
-import { TYPOGRAPHY } from '../../styles/tokens';
 import { describeKernelFailure } from '../../lib/kernelErrors';
 import { retryKernel } from '../../lib/kernelControl';
 import { openExternal } from '../../lib/openExternal';
@@ -32,11 +32,6 @@ export function KernelBanner() {
         setCopied(false); // clipboard blocked: the message is selectable on screen anyway
       }
     };
-    const buttonStyle = {
-      display: 'inline-flex', alignItems: 'center', gap: 5, height: 24, padding: '0 10px',
-      background: 'transparent', color: colors.text, border: `1px solid ${colors.borderStrong}`,
-      borderRadius: 6, cursor: 'pointer', fontSize: 12, fontFamily: TYPOGRAPHY.fontSans,
-    } as const;
     return (
       <div
         role="alert"
@@ -53,15 +48,9 @@ export function KernelBanner() {
             {failure.detail}
           </div>
           <div style={{ display: 'flex', gap: 6, marginTop: 8, flexWrap: 'wrap' }}>
-            <button type="button" onClick={retryKernel} style={{ ...buttonStyle, borderColor: colors.accent, color: colors.accentLight }}>
-              <RotateCw size={12} /> Retry
-            </button>
-            <button type="button" onClick={copy} style={buttonStyle}>
-              <Copy size={12} /> {copied ? 'Copied' : 'Copy details'}
-            </button>
-            <button type="button" onClick={() => { void openExternal(failure.docsUrl); }} style={buttonStyle}>
-              <ExternalLink size={12} /> Troubleshooting
-            </button>
+            <Button size="sm" variant="primary" onClick={retryKernel} icon={<RotateCw size={12} />}>Retry</Button>
+            <Button size="sm" onClick={copy} icon={<Copy size={12} />}>{copied ? 'Copied' : 'Copy details'}</Button>
+            <Button size="sm" onClick={() => { void openExternal(failure.docsUrl); }} icon={<ExternalLink size={12} />}>Troubleshooting</Button>
           </div>
         </div>
       </div>

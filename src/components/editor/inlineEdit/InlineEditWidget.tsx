@@ -1,3 +1,4 @@
+import { Button } from '../../ui';
 import { useState, useRef, useEffect, useCallback } from 'react';
 import type { Monaco } from '@monaco-editor/react';
 import type * as monaco from 'monaco-editor';
@@ -219,18 +220,8 @@ export function InlineEditWidget({ editor, monaco, onClose }: InlineEditProps) {
             </pre>
           </div>
           <div style={{ display: 'flex', gap: 6, padding: '6px 10px', borderTop: `1px solid ${colors.border}` }}>
-            <button
-              onClick={handleAccept}
-              style={{ padding: '4px 12px', background: '#98C379', color: '#fff', border: 'none', borderRadius: 3, cursor: 'pointer', fontSize: 12, fontFamily: TYPOGRAPHY.fontSans }}
-            >
-              Apply (⌘+Enter)
-            </button>
-            <button
-              onClick={onClose}
-              style={{ padding: '4px 12px', background: colors.border, color: colors.text, border: 'none', borderRadius: 3, cursor: 'pointer', fontSize: 12, fontFamily: TYPOGRAPHY.fontSans }}
-            >
-              Dismiss (Esc)
-            </button>
+            <Button size="sm" variant="primary" onClick={handleAccept}>Apply (⌘+Enter)</Button>
+            <Button size="sm" onClick={onClose}>Dismiss (Esc)</Button>
           </div>
         </div>
       )}

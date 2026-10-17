@@ -1,3 +1,4 @@
+import { Button } from '../ui';
 import { useEffect } from 'react';
 import { Check, X } from 'lucide-react';
 import { useDiracStore } from '../../stores/diracStore';
@@ -194,42 +195,12 @@ export function DiffPreview() {
             justifyContent: 'flex-end',
           }}
         >
-          <button
-            onClick={reject}
-            style={{
-              background: 'transparent',
-              color: colors.text,
-              border: `1px solid ${colors.border}`,
-              borderRadius: 8,
-              padding: '6px 14px',
-              cursor: 'pointer',
-              fontSize: 12,
-              fontWeight: 500,
-              display: 'flex',
-              alignItems: 'center',
-              gap: 6,
-            }}
-          >
-            <X size={14} /> Reject <span style={{ color: colors.textDim, fontSize: 11 }}>Esc</span>
-          </button>
-          <button
-            onClick={accept}
-            style={{
-              background: colors.success,
-              color: '#0a0f1a',
-              border: 'none',
-              borderRadius: 8,
-              padding: '6px 14px',
-              cursor: 'pointer',
-              fontSize: 12,
-              fontWeight: 600,
-              display: 'flex',
-              alignItems: 'center',
-              gap: 6,
-            }}
-          >
-            <Check size={14} /> Apply <span style={{ opacity: 0.7, fontSize: 11 }}>↵</span>
-          </button>
+          <Button onClick={reject} icon={<X size={14} />}>
+            Reject <span style={{ color: colors.textDim, fontSize: 11 }}>Esc</span>
+          </Button>
+          <Button variant="primary" onClick={accept} icon={<Check size={14} />}>
+            Apply <span style={{ opacity: 0.7, fontSize: 11 }}>↵</span>
+          </Button>
         </div>
       </div>
     </>

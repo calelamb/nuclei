@@ -248,3 +248,10 @@
 .nuclei-tabs[data-overflow='both'] { -webkit-mask-image: linear-gradient(to right, transparent, #000 28px, #000 calc(100% - 28px), transparent); mask-image: linear-gradient(to right, transparent, #000 28px, #000 calc(100% - 28px), transparent); }
 .nuclei-tabs__tab { display: inline-flex; align-items: center; gap: var(--space-1); }
 .nuclei-tabs.viz-zone-tabs { flex: 0 0 auto; background: var(--color-surface-base); padding: 0 var(--space-1); }
+
+/* Menu items: never react to hover while disabled */
+.nuclei-menu-item:disabled { cursor: not-allowed; }
+.nuclei-menu-item:disabled:hover { background: transparent !important; }
+.nuclei-btn[aria-expanded='true']:not(.nuclei-btn--primary) { background: var(--color-surface-overlay); }
+.nuclei-btn.nuclei-framework-btn { color: var(--color-accent-quantum-text); }
+.nuclei-icon-btn.nuclei-tab-close { width: 18px; height: 18px; border-radius: var(--radius-xs); }
