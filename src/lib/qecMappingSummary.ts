@@ -16,7 +16,7 @@ export function describeMapping(mapping: SinterMapping): string {
     field('p', mapping.p),
     field('d', mapping.d),
     field('rounds', mapping.rounds),
-    mapping.decoder === DECODER_COLUMN ? null : `decoder = ${mapping.decoder}`,
+    mapping.decoder === DECODER_COLUMN || mapping.decoder === 'decoder' ? null : `decoder = ${mapping.decoder}`,
   ].filter((part): part is string => part !== null);
   if (mapping.groupBy.length > 0) parts.push(`split by ${mapping.groupBy.join(', ')}`);
   const merged = mapping.mergeKeys ?? [];

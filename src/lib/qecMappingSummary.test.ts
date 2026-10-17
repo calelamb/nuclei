@@ -14,6 +14,10 @@ describe('describeMapping', () => {
     expect(describeMapping({ ...base, rounds: 'rounds' })).toBe('columns matched by name');
   });
 
+  it('never prints an identity mapping for a column literally named decoder', () => {
+    expect(describeMapping({ ...base, rounds: 'rounds', decoder: 'decoder' })).toBe('columns matched by name');
+  });
+
   it('says so when a field is unmapped rather than hiding it', () => {
     expect(describeMapping({ ...base, p: null, rounds: null })).toBe('p unmapped · rounds unmapped');
   });
