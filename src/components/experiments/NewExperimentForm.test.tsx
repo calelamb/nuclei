@@ -9,7 +9,7 @@ import { useHardwareStore } from '../../stores/hardwareStore';
 
 const mkdirMock = vi.hoisted(() => vi.fn(async () => {}));
 const writeTextFileMock = vi.hoisted(() => vi.fn(async () => {}));
-const existsMock = vi.hoisted(() => vi.fn(async (_path: string) => false));
+const existsMock = vi.hoisted(() => vi.fn<(path: string) => Promise<boolean>>(async () => false));
 
 vi.mock('@tauri-apps/plugin-fs', () => ({
   mkdir: mkdirMock,
