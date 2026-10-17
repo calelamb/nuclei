@@ -10,7 +10,9 @@ import { ThresholdPanel } from './ThresholdPanel';
 import { DecoderWorkbench } from './DecoderWorkbench';
 import { isWebBuild } from '../../platform/buildTarget';
 import { CsvMappingPreview } from './CsvMappingPreview';
-import { QecCsvOpenButton } from './QecCsvDropZone';
+import { QecCsvDropZone, QecCsvOpenButton } from './QecCsvDropZone';
+import { QecEmptyState } from './QecEmptyState';
+import { QEC_PLOT_CSV_DOCS } from '../../config/docsLinks';
 import { useCsvDrop } from './useCsvDrop';
 import { downloadCsv } from '../../services/experimentExport';
 
@@ -24,7 +26,7 @@ const TABLE_MIN_HEIGHT = 170;
  * plot over the decoder workbench; a slim progress strip on top reflects the
  * live campaign (or a resumable prior run).
  */
-export function QecAnalysisView() {
+export function QecAnalysisView({ embedded = false }: { embedded?: boolean } = {}) {
   const colors = useThemeStore((s) => s.colors);
   const running = useQecCampaignStore((s) => s.running);
   const progress = useQecCampaignStore((s) => s.progress);
@@ -40,9 +42,12 @@ export function QecAnalysisView() {
   const csvLoading = useQecCampaignStore((s) => s.csvLoading);
   const statsCsv = useQecCampaignStore((s) => s.statsCsv);
   const { over, handlers } = useCsvDrop();
+  const hasData = useQecCampaignStore((s) => Object.keys(s.rowsByStrongId).length > 0);
 
   const webOnly = isWebBuild(); // no kernel to run campaigns in the browser
   const canRun = Boolean(experiment && projectRoot && experiment.spec.type === 'qec_campaign');
+  // Inside the workbench a Run button with nothing to run would be dead weight.
+  const showRun = !webOnly && (!embedded || canRun || running);
 
   return (
     <div
@@ -58,7 +63,7 @@ export function QecAnalysisView() {
           borderBottom: `1px solid ${colors.border}`, fontFamily: TYPOGRAPHY.fontSans,
         }}
       >
-        <span style={{ fontSize: 13, fontWeight: 600, color: colors.text }}>
+        <span style={{ fontSize: 13, fontWeight: 600, color: colors.text, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
           {csvSource ?? experiment?.spec.name ?? 'Campaign'}
         </span>
         <div style={{ flex: 1 }} />
@@ -73,7 +78,7 @@ export function QecAnalysisView() {
             Export stats.csv
           </Button>
         ) : null}
-        {webOnly ? null : running ? (
+        {!showRun ? null : running ? (
           <Button size="sm" variant="danger" onClick={cancel} icon={<Square size={ICON_SIZE.xs} strokeWidth={ICON_STROKE} />}>
             Cancel
           </Button>
@@ -127,16 +132,28 @@ export function QecAnalysisView() {
           ) : null}
         </div>
       )}
-      {/* The plot keeps a usable height; on short windows the page scrolls
-          instead of squeezing the plot and the decoder table to slivers. */}
-      <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', display: 'flex', flexDirection: 'column' }}>
-        <div style={{ flex: '2 1 0', minHeight: PLOT_MIN_HEIGHT, borderBottom: `1px solid ${colors.border}` }}>
-          <ThresholdPanel />
+      {embedded && !hasData ? (
+        <QecEmptyState
+          title="No campaign results yet"
+          body={webOnly
+            ? 'Open or drop a sinter stats CSV to see logical error rate vs physical error and compare decoders.'
+            : 'Open or drop a sinter stats CSV, or run a QEC campaign from Experiments, to see logical error rate vs physical error and compare decoders.'}
+          docsHref={QEC_PLOT_CSV_DOCS}
+        >
+          {!csvSource && <QecCsvDropZone />}
+        </QecEmptyState>
+      ) : (
+        /* The plot keeps a usable height; on short windows the page scrolls
+           instead of squeezing the plot and the decoder table to slivers. */
+        <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', display: 'flex', flexDirection: 'column' }}>
+          <div style={{ flex: '2 1 0', minHeight: PLOT_MIN_HEIGHT, borderBottom: `1px solid ${colors.border}` }}>
+            <ThresholdPanel />
+          </div>
+          <div style={{ flex: '1 1 0', minHeight: TABLE_MIN_HEIGHT }}>
+            <DecoderWorkbench />
+          </div>
         </div>
-        <div style={{ flex: '1 1 0', minHeight: TABLE_MIN_HEIGHT }}>
-          <DecoderWorkbench />
-        </div>
-      </div>
+      )}
     </div>
   );
 }

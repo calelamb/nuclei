@@ -240,6 +240,11 @@ describe('<QecWorkbench />', () => {
   it('persists keyboard resizing for sources, inspector, and tray', async () => {
     vi.useFakeTimers();
     useProjectStore.setState({ projectRoot: '/project' });
+    // A running job keeps the tray at its full, resizable height.
+    useQecJobStore.getState().setProjectScope('/project');
+    useQecJobStore.setState({
+      jobs: { running: { id: 'running', kind: 'import', status: 'running', message: 'Import running', projectRoot: '/project' } },
+    });
     const writes: unknown[] = [];
     const bridge = persistenceBridge(
       vi.fn(async () => null),
@@ -312,9 +317,33 @@ describe('<QecWorkbench />', () => {
     expect(screen.getByRole('button', { name: 'Show research inspector' })).toBe(document.activeElement);
 
     fireEvent.click(screen.getByRole('button', { name: 'Show research inspector' }));
-    fireEvent.keyDown(window, { key: 'Escape' });
+    const reopened = screen.getByRole('complementary', { name: 'Research inspector' });
+    expect(reopened.contains(document.activeElement)).toBe(true);
+    fireEvent.keyDown(document.activeElement ?? reopened, { key: 'Escape' });
     expect(screen.queryByRole('complementary', { name: 'Research inspector' })).toBeNull();
     expect(screen.getByRole('button', { name: 'Show research inspector' })).toBe(document.activeElement);
+  });
+
+  it('does not close the inspector when Escape comes from elsewhere (qec-08)', () => {
+    render(<QecWorkbench />);
+    const input = screen.getByRole('combobox', { name: 'Active QEC Study' });
+    input.focus();
+    fireEvent.keyDown(input, { key: 'Escape' });
+    fireEvent.keyDown(window, { key: 'Escape' });
+    expect(screen.getByRole('complementary', { name: 'Research inspector' })).toBeTruthy();
+  });
+
+  it('has no dead Run / Capture button and no inert view strip (interaction-15, qec-06)', () => {
+    render(<QecWorkbench />);
+    expect(screen.queryByText(/Run \/ Capture/)).toBeNull();
+    expect(screen.queryByText('Split view')).toBeNull();
+    expect(screen.queryByText(/later workbench task/)).toBeNull();
+  });
+
+  it('shows honest empty states instead of data-like placeholders (qec-06, design-22)', () => {
+    const { container } = render(<QecWorkbench />);
+    expect(container.querySelector('.qec-instrument__trace, .qec-instrument__field')).toBeNull();
+    expect(container.querySelectorAll('.qec-instrument__empty').length).toBeGreaterThan(0);
   });
 
   it('moves backward and forward through the shared Research Trail', () => {

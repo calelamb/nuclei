@@ -24,10 +24,6 @@
     flex-basis: min(100%, 280px);
   }
 
-  .qec-primary-action {
-    margin-left: 0;
-  }
-
   .qec-research-bar__metadata {
     display: none;
   }

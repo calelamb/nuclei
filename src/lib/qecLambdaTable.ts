@@ -48,11 +48,14 @@ function shortReason(warning: string): string {
   return warning.split(/[:;]/)[0];
 }
 
+function distanceList(dropped: readonly number[]): string {
+  return dropped.length === 1 ? `d = ${dropped[0]}` : `d = ${dropped.slice(0, -1).join(', ')} and ${dropped[dropped.length - 1]}`;
+}
+
 function droppedNote(e: LambdaGroupEstimate): string[] {
   const dropped = e.estimate.droppedZeroError;
   if (dropped.length === 0) return [];
-  const list = dropped.length === 1 ? `d = ${dropped[0]}` : `d = ${dropped.slice(0, -1).join(', ')} and ${dropped[dropped.length - 1]}`;
-  return [`${list} had no logical errors and is left out of the fit (suppression is at least as strong)`];
+  return [`${distanceList(dropped)} had no logical errors and ${dropped.length === 1 ? 'is' : 'are'} left out of the fit (suppression is at least as strong)`];
 }
 
 function toRow(e: LambdaGroupEstimate, showExperiment: boolean): LambdaRowView {
@@ -70,7 +73,7 @@ function toRow(e: LambdaGroupEstimate, showExperiment: boolean): LambdaRowView {
 }
 
 function collapsedSummary(hidden: LambdaRowView[], shown: LambdaRowView[]): string {
-  const reasons = [...new Set(hidden.flatMap((r) => r.flags.filter((f) => !/left out of the fit|collide|rounds vary/.test(f)).map(shortReason)))];
+  const reasons = [...new Set(hidden.flatMap((r) => r.flags.filter((f) => !/left out of the fit|collide|rounds vary/.test(f)).map(shortReason)))].slice(0, 2);
   const maxShown = Math.max(0, ...shown.map((r) => r.noise));
   const minHidden = Math.min(...hidden.map((r) => r.noise));
   const where = minHidden > maxShown || shown.length === 0
@@ -80,8 +83,13 @@ function collapsedSummary(hidden: LambdaRowView[], shown: LambdaRowView[]): stri
 }
 
 function distinctNotes(estimates: readonly LambdaGroupEstimate[]): string[] {
-  const shared = estimates.filter((e) => e.estimate.intervalMeaningful).flatMap((e) => [...lambdaCaveats(e), ...droppedNote(e)]);
-  return [...new Set(shared)];
+  const meaningful = estimates.filter((e) => e.estimate.intervalMeaningful);
+  const caveats = meaningful.flatMap((e) => lambdaCaveats(e));
+  const dropped = [...new Set(meaningful.flatMap((e) => e.estimate.droppedZeroError))].sort((a, b) => a - b);
+  const droppedNote = dropped.length > 0
+    ? [`${distanceList(dropped)} had no logical errors at some p and ${dropped.length === 1 ? 'is' : 'are'} left out of those fits (suppression is at least as strong there)`]
+    : [];
+  return [...new Set([...caveats, ...droppedNote])];
 }
 
 /**

@@ -17,6 +17,7 @@ import {
 } from '../../../stores/qecSessionCatalogStore';
 import { useQecWorkbenchStore } from '../../../stores/qecWorkbenchStore';
 import { QecImportWizard } from '../import/QecImportWizard';
+import { useQecTrayIdle } from './useQecTrayIdle';
 import { Button } from '../../ui';
 import { ICON_SIZE, ICON_STROKE } from '../../../styles/tokens';
 
@@ -279,8 +280,9 @@ export function QecWorkbenchTray({ client: providedClient, connectClient }: QecW
     if (targetId) queueMicrotask(() => document.getElementById(targetId)?.focus());
   };
   const expanded = !collapsed;
+  const idle = useQecTrayIdle();
   return (
-    <section className={`qec-tray qec-tray--${expanded ? 'expanded' : 'collapsed'}${scopedSource ? ' qec-tray--import' : ''}`} aria-label="QEC jobs and streams">
+    <section className={`qec-tray qec-tray--${expanded ? 'expanded' : 'collapsed'}${scopedSource ? ' qec-tray--import' : ''}${expanded && idle ? ' qec-tray--idle' : ''}`} aria-label="QEC jobs and streams">
       <TrayHeader expanded={expanded} importing={scopedSource !== null} onToggle={toggleCollapsed} />
       {!scopedSource && expanded && (!engine.client && (engine.loading || engine.retry || engine.disconnected)
         ? <EngineNotice state={engine} />

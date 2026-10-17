@@ -1,10 +1,12 @@
 import { Info, Pin, X } from 'lucide-react';
-import type { ReactElement } from 'react';
+import { useEffect, useRef, type KeyboardEvent, type ReactElement } from 'react';
 import { resolveQecPanels } from '../../../layout/qecPanelRegistry';
 import { useQecWorkbenchStore } from '../../../stores/qecWorkbenchStore';
 import { qecEntityRefKey, useResearchSelectionStore } from '../../../stores/researchSelectionStore';
 import type { ResearchSelection } from '../../../types/qecSelection';
 import { QecPanelPinButton } from './QecPanelPinButton';
+import { ICON_SIZE, ICON_STROKE } from '../../../styles/tokens';
+import { IconButton } from '../../ui';
 
 export const QEC_RESEARCH_INSPECTOR_ID = 'qec-research-inspector';
 
@@ -15,9 +17,9 @@ function InspectorHeading({ onClose }: { onClose(): void }): ReactElement {
         <span className="qec-zone-heading__eyebrow">Contextual detail</span>
         <h2>Inspector</h2>
       </div>
-      <button type="button" className="qec-inspector__close" aria-label="Close research inspector" onClick={onClose}>
-        <X aria-hidden="true" size={16} />
-      </button>
+      <IconButton className="qec-inspector__close" aria-label="Close research inspector" onClick={onClose}>
+        <X aria-hidden="true" size={ICON_SIZE.md} strokeWidth={ICON_STROKE} />
+      </IconButton>
     </header>
   );
 }
@@ -78,10 +80,27 @@ function LineageState(): ReactElement {
 
 interface QecResearchInspectorProps { open: boolean; onClose(): void; }
 
+/** Moves focus into the inspector when it is opened after mount, so Escape (handled on the panel) works. */
+function useFocusOnOpen(open: boolean) {
+  const ref = useRef<HTMLElement>(null);
+  const mounted = useRef(false);
+  useEffect(() => {
+    if (mounted.current && open) ref.current?.querySelector<HTMLElement>('.qec-inspector__close')?.focus();
+    mounted.current = true;
+  }, [open]);
+  return ref;
+}
+
 export function QecResearchInspector({ open, onClose }: QecResearchInspectorProps): ReactElement {
   const selection = useResearchSelectionStore((state) => state.present);
+  const ref = useFocusOnOpen(open);
+  // Escape closes the inspector only while focus is inside it; a global
+  // listener would also fire from form fields, Monaco and dialogs.
+  const onKeyDown = (event: KeyboardEvent<HTMLElement>): void => {
+    if (event.key === 'Escape' && !event.defaultPrevented) onClose();
+  };
   return (
-    <aside id={QEC_RESEARCH_INSPECTOR_ID} className="qec-inspector" aria-label="Research inspector" hidden={!open}>
+    <aside ref={ref} id={QEC_RESEARCH_INSPECTOR_ID} className="qec-inspector" aria-label="Research inspector" hidden={!open} onKeyDown={onKeyDown}>
       <InspectorHeading onClose={onClose} />
       <div className="qec-inspector__content">
         <SelectionDetails selection={selection} /><InspectorTools /><LineageState />

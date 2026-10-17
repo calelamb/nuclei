@@ -78,12 +78,12 @@ export function DecoderWorkbench() {
   const th: React.CSSProperties = {
     textAlign: 'left', padding: '6px 10px', color: colors.textMuted, fontSize: 11,
     fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.4, borderBottom: `1px solid ${colors.borderStrong}`,
-    position: 'sticky', top: 0, background: colors.bg, zIndex: 1,
+    position: 'sticky', top: 0, background: colors.bg, zIndex: 1, whiteSpace: 'nowrap',
   };
   const thNum: React.CSSProperties = { ...th, textAlign: 'right' };
   const td: React.CSSProperties = {
     padding: '6px 10px', fontSize: 12, color: colors.text, borderBottom: `1px solid ${colors.border}`,
-    fontFamily: TYPOGRAPHY.fontMono, fontVariantNumeric: 'tabular-nums',
+    fontFamily: TYPOGRAPHY.fontMono, fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap',
   };
   const tdNum: React.CSSProperties = { ...td, textAlign: 'right' };
   const collisionTag = (w: (typeof wb)[number]) =>
@@ -96,7 +96,7 @@ export function DecoderWorkbench() {
     <div style={{ height: '100%', display: 'flex', flexDirection: 'column', background: colors.bg }}>
       {header}
       <div style={{ flex: 1, minHeight: 0, overflow: 'auto' }}>
-        <table style={{ width: '100%', borderCollapse: 'collapse', fontFamily: TYPOGRAPHY.fontSans }}>
+        <table style={{ width: '100%', minWidth: 'max-content', borderCollapse: 'collapse', fontFamily: TYPOGRAPHY.fontSans }}>
           <thead>
             <tr>
               <th style={th}>Decoder</th>
