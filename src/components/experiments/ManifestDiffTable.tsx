@@ -31,7 +31,7 @@ export function ManifestDiffTable({ diff, runs }: { diff: DiffResult; runs: read
               <tr>
                 <th style={headerCellStyle(colors)}>Field</th>
                 {runs.map((run) => (
-                  <th key={run.dir} style={headerCellStyle(colors)}>{run.dir}</th>
+                  <th key={run.dir} style={{ ...headerCellStyle(colors), textTransform: 'none' }}>{run.dir}</th>
                 ))}
               </tr>
             </thead>

@@ -1,6 +1,6 @@
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 import { useThemeStore } from '../../stores/themeStore';
-import { getHistogramData } from '../histogram/histogramData';
+import { formatProbabilityTick, getHistogramData, PROBABILITY_TICKS } from '../histogram/histogramData';
 import type { SimulationResult } from '../../types/quantum';
 
 /**
@@ -55,7 +55,8 @@ export function RunHistogram({ measurements }: { measurements: Record<string, nu
             tick={{ fill: colors.textDim, fontSize: 11, fontFamily: "'Fira Code', monospace" }}
             axisLine={{ stroke: colors.border }}
             tickLine={{ stroke: colors.border }}
-            tickFormatter={(v: number) => v.toFixed(1)}
+            ticks={[...PROBABILITY_TICKS]}
+            tickFormatter={formatProbabilityTick}
           />
           <Tooltip
             contentStyle={{

@@ -53,3 +53,13 @@ describe('getMultiSeriesHistogramData', () => {
     ]);
   });
 });
+
+import { formatProbabilityTick, PROBABILITY_TICKS } from './histogramData';
+
+describe('probability axis ticks', () => {
+  it('labels every tick distinctly so quarter ticks are not rounded to tenths (research-10)', () => {
+    const labels = PROBABILITY_TICKS.map(formatProbabilityTick);
+    expect(labels).toEqual(['0', '0.25', '0.50', '0.75', '1']);
+    expect(new Set(labels).size).toBe(labels.length);
+  });
+});
