@@ -729,8 +729,9 @@
     min-height: max(520px, calc(100cqh - 24px));
   }
 
+  /* Auto rows of overflow-hidden cards collapse to their borders, so an empty card names its own height: header + empty field. */
   .qec-investigation__panels > .qec-instrument[data-empty='true'] {
-    min-height: 0;
+    min-height: 224px;
   }
 }
 
