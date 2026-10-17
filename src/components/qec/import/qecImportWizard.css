@@ -7,7 +7,7 @@
 .qec-import-sheet__panel {
   position: relative; display: flex; width: min(920px, 100%); height: min(680px, 100%); min-height: 0; overflow: hidden;
   border: 1px solid var(--qec-border); border-radius: 10px; background: var(--qec-wash);
-  box-shadow: 0 24px 64px rgb(8 13 22 / 0.4);
+  box-shadow: var(--shadow-lg, 0 24px 64px rgb(8 13 22 / 0.4));
 }
 .qec-import-sheet__panel > .qec-import-wizard { height: auto; flex: 1; }
 @media (max-width: 699px) { .qec-import-sheet { padding: 0; } .qec-import-sheet__panel { height: 100%; border-radius: 0; border: 0; } }

@@ -78,13 +78,13 @@ export function logAxis(values: readonly number[], opts: { pad?: number } = {}):
   return { lo, hi, labeled, minors };
 }
 
-const END_GAP_FRACTION = 0.3;
+const END_GAP_FRACTION = 0.2;
 const FINE_MANTISSAS = [1.2, 1.4, 1.6, 1.8];
 
 /**
- * When the first or last label sits more than 30% of the axis from its end,
+ * When the first or last label sits more than 20% of the axis from its end,
  * data there would have no label to read against; add the 1.2 .. 1.8
- * multiples of the decade so each 30% of the axis carries at least one label.
+ * multiples of the decade so each 20% of the axis carries at least one label.
  */
 function fillEndGaps(ticks: LogTick[], lo: number, hi: number): LogTick[] {
   const span = hi - lo;

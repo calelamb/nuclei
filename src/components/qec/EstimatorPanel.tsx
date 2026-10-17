@@ -85,9 +85,9 @@ export function EstimatorPanel() {
     requestQecEstimate(code, language, { ...options });
   };
 
-  // Slim actions row (the SidebarHeader already carries the "Estimator"
+  // Slim actions row, shown once there is something to export (the SidebarHeader already carries the "Estimator"
   // title, so this panel adds only the docs link + JSON export).
-  const toolbar = (
+  const toolbar = !result ? null : (
     <div
       style={{
         display: 'flex', alignItems: 'center', gap: 6, padding: '6px 12px',

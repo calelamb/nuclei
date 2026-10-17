@@ -302,6 +302,11 @@
   display: flex; align-items: center; gap: 0; padding-right: var(--space-1);
 }
 
+/* Row actions appear on hover or keyboard focus so the id and path keep the row's width. */
+.qec-source-row-shell:not(:hover):not(:focus-within):not([aria-current='true']) .qec-source-row__actions {
+  position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); padding: 0;
+}
+
 .qec-source-group__error { color: var(--qec-danger); }
 
 .qec-source-row:hover {
@@ -404,8 +409,9 @@
 .qec-sources__footer {
   display: flex; min-height: 40px; flex: 0 0 auto; align-items: center;
   justify-content: space-between; gap: 8px; padding: 0 12px; border-top: 1px solid var(--qec-border);
-  color: var(--qec-text-muted); font-size: 12px;
+  color: var(--qec-text-muted); font-size: 12px; white-space: nowrap;
 }
+.qec-sources__footer > * { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 
 .qec-zone-empty {
   display: flex; min-height: 180px; flex: 1; flex-direction: column;
@@ -750,3 +756,7 @@
 .qec-investigation__panels > .qec-instrument[data-panel='detector-graph']:not([data-empty='true']) {
   min-height: 460px;
 }
+
+/* Three empty circuit cards offer one Open button: only the first empty card keeps it. */
+.qec-open-circuit { display: contents; }
+.qec-instrument[data-empty='true'] ~ .qec-instrument[data-empty='true'] .qec-open-circuit { display: none; }

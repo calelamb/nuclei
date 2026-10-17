@@ -104,10 +104,10 @@ function OpenCircuitAction(): ReactElement {
   }
   const circuit = circuits[0];
   return (
-    <>
+    <span className="qec-open-circuit">
       <Button size="sm" variant="primary" onClick={() => { void open(circuit); }}>{`Open ${circuit.path.split('/').pop()}`}</Button>
       {error && <span className="qec-instrument__hint" role="alert">{error}</span>}
-    </>
+    </span>
   );
 }
 

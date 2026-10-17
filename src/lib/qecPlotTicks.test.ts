@@ -62,7 +62,7 @@ describe('end-of-axis coverage', () => {
     const axis = logAxis([1e-4, 1.4e-3])!;
     const span = axis.hi - axis.lo;
     const last = Math.max(...axis.labeled.map((t) => Math.log10(t.value)));
-    expect(axis.hi - last).toBeLessThanOrEqual(0.3 * span);
+    expect(axis.hi - last).toBeLessThanOrEqual(0.2 * span);
   });
 
   it('labels the tail of the mid.csv range (5e-4 .. 1.4e-3) beyond 10^-3', () => {
@@ -71,13 +71,13 @@ describe('end-of-axis coverage', () => {
     expect(axis.labeled.map((t) => t.label)).toContain('1.2×10⁻³');
   });
 
-  it('puts a label in the first and last 30% of the axis for realistic sweeps', () => {
+  it('puts a label in the first and last 20% of the axis for realistic sweeps', () => {
     for (const range of [[3e-4, 1.48e-3], [1e-3, 1e-2], [1e-4, 1e-2], [5e-4, 1.4e-3]]) {
       const axis = logAxis(range)!;
       const span = axis.hi - axis.lo;
       const logs = axis.labeled.map((t) => Math.log10(t.value));
-      expect(axis.hi - Math.max(...logs)).toBeLessThanOrEqual(0.3 * span + 1e-9);
-      expect(Math.min(...logs) - axis.lo).toBeLessThanOrEqual(0.3 * span + 1e-9);
+      expect(axis.hi - Math.max(...logs)).toBeLessThanOrEqual(0.2 * span + 1e-9);
+      expect(Math.min(...logs) - axis.lo).toBeLessThanOrEqual(0.2 * span + 1e-9);
     }
   });
 });
