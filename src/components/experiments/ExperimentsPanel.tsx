@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Pencil, FlaskConical, Waves } from 'lucide-react';
+import { Pencil, FlaskConical, Plus, Waves } from 'lucide-react';
 import { isWebBuild } from '../../platform/buildTarget';
 import { useNavigationStore } from '../../stores/navigationStore';
 import { useThemeStore } from '../../stores/themeStore';
@@ -25,6 +25,9 @@ import './experiments.css';
  * cards (never a crash — matches `experimentStore`'s contract), and opens
  * `NewExperimentForm` for creating (or editing) an experiment.
  */
+
+/** The experiment list never collapses below this, however tall the open form is. */
+const LIST_MIN_HEIGHT = 120;
 
 function formatLastRun(experiment: DiscoveredExperiment, runsByExperiment: Record<string, { manifest: { started_at: string } }[]>): { label: string; title: string } {
   // Runs are stored newest-first by directory name.
@@ -199,8 +202,13 @@ export function ExperimentsPanel() {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
       <div style={{ padding: '8px 10px', display: 'flex', gap: 6, alignItems: 'center', borderBottom: `1px solid ${colors.border}` }}>
-        <Button variant="secondary" onClick={() => openForm(undefined)} style={{ flex: 1, minWidth: 0 }}>
-          + New experiment
+        <Button
+          variant="secondary"
+          onClick={() => openForm(undefined)}
+          style={{ flex: 1, minWidth: 0 }}
+          icon={<Plus size={ICON_SIZE.xs} strokeWidth={ICON_STROKE} aria-hidden="true" />}
+        >
+          New experiment
         </Button>
         <NewQecExperimentMenu projectRoot={projectRoot} />
         <IconButton variant="secondary" aria-label="Noise models" title="Noise models" onClick={() => setNoiseLibOpen(true)}>
@@ -209,7 +217,7 @@ export function ExperimentsPanel() {
       </div>
       <RunFeedback compact />
 
-      <div style={{ flex: 1, minHeight: 0, overflow: 'auto' }}>
+      <div style={{ flex: 1, minHeight: LIST_MIN_HEIGHT, overflow: 'auto' }}>
         {experiments.length === 0 && validationErrors.length === 0 && (
           <div style={{ padding: 16, color: colors.textDim, fontSize: 12, fontFamily: TYPOGRAPHY.fontSans }}>
             No experiments yet. Create one to declare a parameter sweep.
@@ -248,6 +256,7 @@ export function ExperimentsPanel() {
       </div>
 
       {formOpen && (
+        <div className="nuclei-experiment-form-region">
         <NewExperimentForm
           key={editing?.fileName ?? 'new'}
           projectRoot={projectRoot}
@@ -255,6 +264,7 @@ export function ExperimentsPanel() {
           dirtyRef={formDirtyRef}
           onClose={() => { formDirtyRef.current = false; setFormOpen(false); setEditing(undefined); }}
         />
+        </div>
       )}
 
       {noiseLibOpen && (

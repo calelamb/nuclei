@@ -117,3 +117,8 @@
 .nuclei-compare-long__value[data-tone='error'] { border-color: var(--color-danger); color: var(--color-text-primary); background: color-mix(in srgb, var(--color-danger) 8%, var(--color-surface-sunken)); }
 
 .nuclei-experiment-row__meta { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* The form scrolls on its own so the experiment list keeps its height at small window sizes. */
+.nuclei-experiment-form-region { flex: 0 1 auto; min-height: 0; max-height: calc(100% - 160px); display: flex; flex-direction: column; }
+.nuclei-experiment-form-region > form { min-height: 0; overflow-y: auto; }
+.nuclei-experiment-form__footer { position: sticky; bottom: 0; margin: 0 -12px -12px; padding: var(--space-3) 12px 12px; background: var(--color-surface-base); border-top: 1px solid var(--color-border-subtle); display: flex; flex-direction: column; gap: var(--space-2); }

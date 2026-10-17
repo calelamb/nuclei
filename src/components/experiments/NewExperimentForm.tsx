@@ -379,6 +379,7 @@ export function NewExperimentForm({ projectRoot, existing, dirtyRef: sharedDirty
         Grid size: {gridLabel}{sweepRows.length > 0 ? ` · max ${MAX_GRID_POINTS}` : ''}
       </div>
 
+      <div className="nuclei-experiment-form__footer">
       {visibleIssues.length > 0 && (
         <ul style={{ margin: 0, paddingLeft: 18, color: colors.error, fontSize: 11 }}>
           {visibleIssues.map((err) => <li key={err.text}>{err.text}</li>)}
@@ -397,6 +398,7 @@ export function NewExperimentForm({ projectRoot, existing, dirtyRef: sharedDirty
       <Button type="submit" variant="primary" size="lg" disabled={!canSubmit} title={disabledReason}>
         {submitting ? 'Saving…' : existing ? 'Save changes' : 'Create experiment'}
       </Button>
+      </div>
     </form>
   );
 }

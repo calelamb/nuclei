@@ -124,10 +124,10 @@ describe('ExperimentsPanel', () => {
     confirmSpy.mockRestore();
   });
 
-  it('"+ New experiment" while editing switches to a blank form instead of closing (research-17)', () => {
+  it('"New experiment" while editing switches to a blank form instead of closing (research-17)', () => {
     const { getByLabelText, getByText, container } = render(<ExperimentsPanel />);
     fireEvent.click(getByLabelText('Edit theta-sweep'));
-    fireEvent.click(getByText('+ New experiment'));
+    fireEvent.click(getByText('New experiment', { selector: 'button' }));
     const name = container.querySelector('#exp-name') as HTMLInputElement;
     expect(name).toBeTruthy();
     expect(name.value).toBe('');
