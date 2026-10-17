@@ -1,5 +1,5 @@
 import { useThemeStore } from '../../stores/themeStore';
-import { getRunValue, type RunColumn } from './runsTableColumns';
+import { formatRunLabel, getRunValue, type RunColumn } from './runsTableColumns';
 import type { RunRecord, RunStatus } from '../../types/experiment';
 import { activateOnKey } from '../../lib/a11y';
 
@@ -12,19 +12,20 @@ const STATUS_COLOR_KEY: Record<RunStatus, 'success' | 'error' | 'warning' | 'tex
   stale: 'textDim',
 };
 
-function formatCell(value: number | string | boolean | null, column: RunColumn): string {
+function formatCell(value: number | string | boolean | null, column: RunColumn, decimals: number): string {
   if (value === null) return '—';
   if (column.key === 'duration_ms') return `${(value as number).toLocaleString()}`;
   if (column.key === 'seed_honored') return value ? 'yes' : 'no';
-  if (typeof value === 'number') {
-    return Number.isInteger(value) ? String(value) : value.toFixed(4);
-  }
+  if (column.key === 'seed') return String(value);
+  if (typeof value === 'number') return value.toFixed(decimals);
   return String(value);
 }
 
 interface RunsTableRowProps {
   run: RunRecord;
   columns: RunColumn[];
+  /** Decimals per numeric column so every row of a column prints identically. */
+  decimalsByColumn: ReadonlyMap<string, number>;
   gridTemplateColumns: string;
   top: number;
   /** PRD 09 Phase E — whether this row is checked for the Compare view. */
@@ -37,6 +38,7 @@ interface RunsTableRowProps {
 export function RunsTableRow({
   run,
   columns,
+  decimalsByColumn,
   gridTemplateColumns,
   top,
   compareSelected,
@@ -49,6 +51,7 @@ export function RunsTableRow({
   return (
     <div
       role="row"
+      data-run-dir={run.dir}
       tabIndex={0}
       onClick={() => onSelect(run.dir)}
       onKeyDown={activateOnKey(() => onSelect(run.dir))}
@@ -83,18 +86,21 @@ export function RunsTableRow({
           aria-label={`Select ${run.dir} for comparison`}
         />
       </div>
-      <div role="cell" style={{ padding: '0 8px', color: colors.textDim, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-        {run.dir}
+      <div role="cell" title={run.dir} style={{ padding: '0 8px', color: colors.textDim, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+        {formatRunLabel(run.dir)}
       </div>
       {columns.map((column) => {
         const value = getRunValue(run, column);
         const isStatus = column.key === 'status';
+        const isNumeric = typeof value === 'number' || value === null && !isStatus;
         return (
           <div
             key={column.key}
             role="cell"
             style={{
               padding: '0 8px',
+              textAlign: isNumeric ? 'right' : 'left',
+              fontVariantNumeric: 'tabular-nums',
               overflow: 'hidden',
               textOverflow: 'ellipsis',
               whiteSpace: 'nowrap',
@@ -102,7 +108,7 @@ export function RunsTableRow({
               fontWeight: isStatus ? 600 : 400,
             }}
           >
-            {formatCell(value, column)}
+            {formatCell(value, column, decimalsByColumn.get(column.key) ?? 0)}
           </div>
         );
       })}

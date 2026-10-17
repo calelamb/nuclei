@@ -16,6 +16,26 @@ import { create } from 'zustand';
  * folding them together: a user can have both a run open in detail AND a
  * multi-run comparison selection pending at the same time.
  */
+export type RunsMainTab = 'runs' | 'sweep';
+
+/** Per-experiment runs-table view state, kept so returning from run detail or
+ * compare restores exactly what the user was looking at. */
+export interface RunsViewState {
+  mainTab: RunsMainTab;
+  statusFilter: string;
+  sortKey: string | null;
+  sortDirection: 'asc' | 'desc';
+  scrollTop: number;
+}
+
+export const DEFAULT_RUNS_VIEW: RunsViewState = {
+  mainTab: 'runs',
+  statusFilter: 'all',
+  sortKey: null,
+  sortDirection: 'asc',
+  scrollTop: 0,
+};
+
 interface ExperimentUiState {
   selectedExperimentFileName: string | null;
   selectedRunDir: string | null;
@@ -24,7 +44,9 @@ interface ExperimentUiState {
   compareSelection: string[];
   /** Whether `CompareView` is showing instead of `RunsTable` / `RunDetail`. */
   compareOpen: boolean;
+  runsViewByExperiment: Record<string, RunsViewState>;
 
+  patchRunsView(fileName: string, patch: Partial<RunsViewState>): void;
   selectExperiment(fileName: string | null): void;
   selectRun(dir: string | null): void;
   toggleCompareSelection(dir: string): void;
@@ -38,6 +60,15 @@ export const useExperimentUiStore = create<ExperimentUiState>((set) => ({
   selectedRunDir: null,
   compareSelection: [],
   compareOpen: false,
+  runsViewByExperiment: {},
+
+  patchRunsView: (fileName, patch) =>
+    set((s) => ({
+      runsViewByExperiment: {
+        ...s.runsViewByExperiment,
+        [fileName]: { ...DEFAULT_RUNS_VIEW, ...s.runsViewByExperiment[fileName], ...patch },
+      },
+    })),
 
   // Picking a (possibly different) experiment always drops any selected run,
   // pending compare selection, and open compare view from the previous

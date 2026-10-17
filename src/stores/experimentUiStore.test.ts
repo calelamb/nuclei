@@ -6,6 +6,7 @@ const RESET = {
   selectedRunDir: null,
   compareSelection: [],
   compareOpen: false,
+  runsViewByExperiment: {},
 };
 
 describe('experimentUiStore', () => {
@@ -57,5 +58,15 @@ describe('experimentUiStore', () => {
     expect(state.selectedRunDir).toBeNull();
     expect(state.compareSelection).toEqual([]);
     expect(state.compareOpen).toBe(false);
+  });
+
+  it('remembers runs-table view state per experiment and survives selecting another experiment', () => {
+    const { patchRunsView, selectExperiment } = useExperimentUiStore.getState();
+    patchRunsView('a.yaml', { sortKey: 'energy', sortDirection: 'desc', scrollTop: 120 });
+    selectExperiment('b.yaml');
+    selectExperiment('a.yaml');
+    const view = useExperimentUiStore.getState().runsViewByExperiment['a.yaml'];
+    expect(view).toMatchObject({ sortKey: 'energy', sortDirection: 'desc', scrollTop: 120, statusFilter: 'all', mainTab: 'runs' });
+    expect(useExperimentUiStore.getState().runsViewByExperiment['b.yaml']).toBeUndefined();
   });
 });

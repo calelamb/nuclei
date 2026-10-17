@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { deriveColumns, filterByStatus, getRunValue, sortRuns } from './runsTableColumns';
+import { columnDecimals, deriveColumns, filterByStatus, formatRunLabel, getRunValue, sortRuns } from './runsTableColumns';
 import type { RunManifest, RunRecord } from '../../types/experiment';
 
 function manifest(overrides: Partial<RunManifest>): RunManifest {
@@ -111,5 +111,33 @@ describe('filterByStatus', () => {
   it('filters down to a single status', () => {
     const failed = filterByStatus(RUNS, 'failed');
     expect(failed.map((r) => r.dir)).toEqual(['run-b']);
+  });
+});
+
+describe('columnDecimals', () => {
+  it('uses the max decimals needed across rows, capped at 4', () => {
+    const runs = [
+      record('a', { params: { theta: 6.2 } }),
+      record('b', { params: { theta: 6 } }),
+      record('c', { params: { theta: 5.123456 } }),
+    ];
+    const theta = deriveColumns(runs)[0];
+    expect(columnDecimals(runs, theta)).toBe(4);
+    expect(columnDecimals(runs.slice(0, 2), theta)).toBe(1);
+  });
+
+  it('is 0 for an all-integer column', () => {
+    const runs = [record('a', { params: { theta: 1 } }), record('b', { params: { theta: 2 } })];
+    expect(columnDecimals(runs, deriveColumns(runs)[0])).toBe(0);
+  });
+});
+
+describe('formatRunLabel', () => {
+  it('renders timestamped run dirs as date, time and short id', () => {
+    expect(formatRunLabel('20261015-142150-a458')).toBe('Oct 15 14:21:50 · a458');
+  });
+
+  it('falls back to the raw dir name for other shapes', () => {
+    expect(formatRunLabel('run-a')).toBe('run-a');
   });
 });

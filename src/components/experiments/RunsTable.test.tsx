@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { render, cleanup, fireEvent } from '@testing-library/react';
+import { render, cleanup, fireEvent, act } from '@testing-library/react';
 import { RunsTable } from './RunsTable';
 import { useExperimentStore } from '../../services/experimentStore';
 import { useProjectStore } from '../../stores/projectStore';
@@ -66,19 +66,17 @@ function installFixtureStore() {
   });
 }
 
-const RUN_DIR_RE = /^\d{8}-\d{6}-[a-z0-9]{4}/;
 
 /** Rows are absolutely positioned by `top`, ordered as rendered — this reads
  * the "Run" (dir) column back off the DOM in the order the component chose.
  * (The column-header bar also has `role="row"`, so filter to rows whose text
  * actually starts with a run-dir slug.) */
 function bodyRows(container: HTMLElement): HTMLElement[] {
-  return Array.from(container.querySelectorAll<HTMLElement>('[role="row"]'))
-    .filter((row) => RUN_DIR_RE.test(row.textContent ?? ''));
+  return Array.from(container.querySelectorAll<HTMLElement>('[data-run-dir]'));
 }
 
 function visibleRunDirs(container: HTMLElement): string[] {
-  return bodyRows(container).map((row) => row.textContent!.match(RUN_DIR_RE)![0]);
+  return bodyRows(container).map((row) => row.dataset.runDir!);
 }
 
 describe('RunsTable', () => {
@@ -86,7 +84,7 @@ describe('RunsTable', () => {
     useProjectStore.setState({ projectRoot: '/proj', tabs: [], activeTabPath: null });
     useExperimentUiStore.setState({
       selectedExperimentFileName: FILE_NAME, selectedRunDir: null,
-      compareSelection: [], compareOpen: false,
+      compareSelection: [], compareOpen: false, runsViewByExperiment: {},
     });
     useExperimentRunStore.setState({ active: null, lastSummary: null, lastError: null });
     installFixtureStore();
@@ -170,5 +168,53 @@ describe('RunsTable', () => {
     const { getByText, queryByLabelText } = render(<RunsTable />);
     fireEvent.click(getByText('Sweep plot'));
     expect(queryByLabelText('X parameter')).toBeTruthy();
+  });
+
+  it('keeps column headers inside the horizontally scrolling body so they stay aligned (research-03)', () => {
+    const { container } = render(<RunsTable />);
+    const scroller = container.querySelector('[role="rowgroup"]') as HTMLElement;
+    const header = container.querySelector('[data-testid="runs-header"]') as HTMLElement;
+    expect(scroller.contains(header)).toBe(true);
+    expect(header.style.position).toBe('sticky');
+  });
+
+  it('renders every visible row after runs arrive post-mount (research-04)', () => {
+    const clientHeight = vi.spyOn(HTMLElement.prototype, 'clientHeight', 'get').mockReturnValue(900);
+    useExperimentStore.setState({ runsByExperiment: { [FILE_NAME]: [] } });
+    const { container } = render(<RunsTable />);
+    const many = Array.from({ length: 80 }, (_, i) =>
+      record(`20260712-${String(i).padStart(6, '0')}-aaaa`, { params: { theta: i } }));
+    act(() => { useExperimentStore.setState({ runsByExperiment: { [FILE_NAME]: many } }); });
+    // 900px / 30px rows = 30 visible (+ overscan below)
+    expect(bodyRows(container).length).toBeGreaterThanOrEqual(30);
+    clientHeight.mockRestore();
+  });
+
+  it('keeps sort and filter after unmounting for run detail and coming back (research-12)', () => {
+    const first = render(<RunsTable />);
+    fireEvent.click(first.getByText('energy'));
+    fireEvent.change(first.getByLabelText('Filter by status'), { target: { value: 'complete' } });
+    first.unmount();
+    const { container, getByLabelText } = render(<RunsTable />);
+    expect((getByLabelText('Filter by status') as HTMLSelectElement).value).toBe('complete');
+    expect(visibleRunDirs(container)).toEqual(['20260712-000003-cccc', '20260712-000001-aaaa']);
+  });
+
+  it('shows a failed-start error under the header (research-02)', () => {
+    useExperimentRunStore.setState({ lastError: 'Failed to connect to kernel' });
+    const { getByRole } = render(<RunsTable />);
+    expect(getByRole('status').textContent).toContain('Failed to connect to kernel');
+  });
+
+  it('formats a numeric column with consistent decimals (research-18)', () => {
+    useExperimentStore.setState({
+      runsByExperiment: { [FILE_NAME]: [
+        record('20260712-000001-aaaa', { params: { theta: 6.2 } }),
+        record('20260712-000002-bbbb', { params: { theta: 6 } }),
+      ] },
+    });
+    const { container } = render(<RunsTable />);
+    const cells = Array.from(container.querySelectorAll('[data-run-dir]')).map((r) => r.querySelectorAll('[role="cell"]')[2].textContent);
+    expect(cells).toEqual(['6.2', '6.0']);
   });
 });
