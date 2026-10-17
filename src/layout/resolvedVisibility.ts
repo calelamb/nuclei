@@ -1,7 +1,8 @@
 import { resolveVisiblePanels, type PanelId, type VisiblePanels } from './panelRegistry';
 import { useLayoutStore } from '../stores/layoutStore';
 import { useSimulationStore } from '../stores/simulationStore';
-import { useCircuitStore } from '../stores/circuitStore';
+import { BUFFER_KEY, selectDisplaySnapshot, useCircuitStore } from '../stores/circuitStore';
+import { useProjectStore } from '../stores/projectStore';
 import { useWorkspaceStore } from '../stores/workspaceStore';
 import { useBottomPanelStore } from '../stores/bottomPanelStore';
 
@@ -13,7 +14,7 @@ import { useBottomPanelStore } from '../stores/bottomPanelStore';
 export function getResolvedVisibility(): VisiblePanels {
   const { preset, overrides } = useLayoutStore.getState();
   const { result, terminalOutput, lastRunFailed } = useSimulationStore.getState();
-  const snapshot = useCircuitStore.getState().snapshot;
+  const { snapshot } = selectDisplaySnapshot(useCircuitStore.getState(), useProjectStore.getState().activeTabPath ?? BUFFER_KEY);
   return resolveVisiblePanels(
     {
       preset,

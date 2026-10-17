@@ -29,7 +29,7 @@ import { ResearchTour } from './ResearchTour';
 import { useModeSwitchStore } from '../../stores/modeSwitchStore';
 import { useResearchTourStore } from '../../stores/researchTourStore';
 import { DEFAULT_EDITOR_PANE_WIDTH, computeEditorPaneWidth } from './layoutMath';
-import { useCircuitStore } from '../../stores/circuitStore';
+import { useDisplaySnapshot } from '../../layout/useDisplaySnapshot';
 import { useSimulationStore } from '../../stores/simulationStore';
 import { useThemeStore } from '../../stores/themeStore';
 import { useUIModeStore } from '../../stores/uiModeStore';
@@ -96,7 +96,7 @@ export function PanelLayout() {
   const result = useSimulationStore((s) => s.result);
   const terminalOutput = useSimulationStore((s) => s.terminalOutput);
   const lastRunFailed = useSimulationStore((s) => s.lastRunFailed);
-  const snapshot = useCircuitStore((s) => s.snapshot);
+  const { snapshot } = useDisplaySnapshot();
   const platform = usePlatform();
   const isLearnMode = useLearnStore((s) => s.isLearnMode);
   const enterLearnMode = useLearnStore((s) => s.enterLearnMode);

@@ -3,6 +3,9 @@ import { useCircuitStore } from '../../stores/circuitStore';
 import { useDebugStore } from '../../stores/debugStore';
 import { activeDebugStep } from '../../lib/debugTrace';
 import { useThemeStore } from '../../stores/themeStore';
+import { useEditorStore } from '../../stores/editorStore';
+import { useSimulationStore } from '../../stores/simulationStore';
+import { useDisplaySnapshot } from '../../layout/useDisplaySnapshot';
 import { renderGate, gateY, GATE_SIZE, LABEL_WIDTH } from './gates';
 import { computeCircuitGeometry, columnX } from './geometry';
 import { formatAngle } from './formatAngle';
@@ -141,8 +144,10 @@ function describeCircuit(snapshot: import('../../types/quantum').CircuitSnapshot
 }
 
 export function CircuitRenderer() {
-  const snapshot = useCircuitStore((s) => s.snapshot);
+  const { snapshot, stale } = useDisplaySnapshot();
   const error = useCircuitStore((s) => s.error);
+  const errorLine = useEditorStore((s) => s.errors[0]?.line ?? null);
+  const isRunning = useSimulationStore((s) => s.isRunning);
   const highlights = useCircuitStore((s) => s.highlights);
   const stepMode = useCircuitStore((s) => s.stepMode);
   const stepIndex = useCircuitStore((s) => s.stepIndex);
@@ -195,12 +200,23 @@ export function CircuitRenderer() {
             {qubit_count} {qubit_count === 1 ? 'qubit' : 'qubits'} · depth {depth}
           </span>
         </span>
-        <ExportMenu />
+        <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          {isRunning && <span role="status" style={{ fontSize: 11, color: colors.textMuted, fontFamily: TYPOGRAPHY.fontSans }}>Running…</span>}
+          <ExportMenu />
+        </span>
       </div>
+      {stale && (
+        <div
+          role="status"
+          style={{ padding: '2px 12px 0', fontSize: 11, color: colors.warning, fontFamily: TYPOGRAPHY.fontSans }}
+        >
+          Out of date: {errorLine !== null ? `syntax error on line ${errorLine}` : 'the code has a syntax error'}
+        </div>
+      )}
       <div
         ref={containerRef}
         className="circuit-renderer-container"
-        style={{ flex: 1, minHeight: 0, overflow: 'auto', position: 'relative', padding: '4px 0 6px' }}
+        style={{ flex: 1, minHeight: 0, overflow: 'auto', position: 'relative', padding: '4px 0 6px', opacity: stale ? 0.45 : 1, transition: 'opacity var(--duration-fast) var(--ease-standard)' }}
         aria-description={ariaDescription}
       >
         <svg
