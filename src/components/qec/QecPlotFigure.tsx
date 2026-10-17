@@ -72,7 +72,6 @@ export function QecPlotFigure(props: QecPlotFigureProps) {
   const clipId = `${idPrefix}-clip`;
 
   const [focusIdx, setFocusIdx] = useState<number | null>(null);
-  const [focused, setFocused] = useState(false);
   const toHover = (h: Hit): HoverTarget => ({ seriesKey: h.seriesKey, point: h.point, upper: h.upper, x: h.x, y: h.y });
   const onKey = (e: KeyboardEvent<SVGRectElement>) => {
     if (!onHover) return;
@@ -84,7 +83,6 @@ export function QecPlotFigure(props: QecPlotFigureProps) {
     onHover(toHover(targets[next]));
   };
   const onFocus = () => {
-    setFocused(true);
     const first = nextTargetIndex(targets, focusIdx, 'ArrowRight');
     if (first !== null && onHover) { setFocusIdx(first); onHover(toHover(targets[first])); }
   };
@@ -125,11 +123,9 @@ export function QecPlotFigure(props: QecPlotFigureProps) {
           x={plot.x} y={plot.y} width={plot.w} height={plot.h} fill="transparent"
           tabIndex={0} role="group"
           aria-label="Plot points. Use the arrow keys to move between points, Escape to clear."
-          onKeyDown={onKey} onFocus={onFocus} onBlur={() => { setFocused(false); onHover(null); }}
+          onKeyDown={onKey} onFocus={onFocus} onBlur={() => onHover(null)}
           onMouseMove={onMove} onMouseLeave={() => onHover(null)}
-          style={{
-            cursor: 'crosshair', stroke: focused ? 'var(--focus-ring-color)' : 'none', strokeWidth: 'var(--focus-ring-width)',
-          }}
+          style={{ cursor: 'crosshair' }}
         />
       )}
     </svg>

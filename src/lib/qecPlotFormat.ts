@@ -31,12 +31,18 @@ export function formatSci(x: number): string {
   return `${trimmed}×${formatPow10(Number(exp))}`;
 }
 
+/** Three significant figures with trailing zeros kept; rounding up into the next decade (999.7) drops to plain digits. */
+const fixedSig3 = (x: number): string => {
+  const text = x.toPrecision(3);
+  return text.includes('e') ? String(Number(text)) : text;
+};
+
 /** Tooltip rate: three significant figures, trailing zeros kept so it matches the interval's precision. */
 export function formatRatePrecise(x: number): string {
   if (!Number.isFinite(x)) return '—';
   if (x === 0) return '0';
   const abs = Math.abs(x);
-  if (abs >= 0.01 && abs < 1000) return String(Number(x.toPrecision(3)));
+  if (abs >= 0.01 && abs < 1000) return fixedSig3(x);
   const [mant, exp] = x.toExponential(2).split('e');
   return `${mant}×${formatPow10(Number(exp))}`;
 }
@@ -56,10 +62,7 @@ export function formatNoise(p: number): string {
 }
 
 /** Three significant figures with trailing zeros kept, so a column's cells share one precision. */
-const sig3 = (x: number): string => {
-  const text = x.toPrecision(3);
-  return text.includes('e') ? String(Number(text)) : text;
-};
+const sig3 = fixedSig3;
 
 /**
  * A rate with its interval on one shared power of ten:

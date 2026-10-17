@@ -159,16 +159,15 @@ describe('keyboard access to points (qec-18)', () => {
     expect(queryByRole('tooltip')).toBeNull();
   });
 
-  it('draws the shared focus ring (solid, ring token) rather than a dashed muted stroke', () => {
+  it('leaves the focus ring to the shared :focus-visible token, with no private dashed stroke', () => {
     load(grid(['mwpm']));
     const { getByRole } = render(<ThresholdPanel />);
     const plot = getByRole('group', { name: /Plot points/ });
-    expect(plot.getAttribute('stroke-dasharray')).toBeNull();
     fireEvent.focus(plot);
-    expect(plot.style.stroke).toBe('var(--focus-ring-color)');
-    expect(plot.style.strokeWidth).toBe('var(--focus-ring-width)');
-    fireEvent.blur(plot);
-    expect(plot.style.stroke).toBe('none');
+    expect(plot.getAttribute('stroke-dasharray')).toBeNull();
+    expect(plot.getAttribute('stroke')).toBeNull();
+    expect(plot.style.stroke).toBe('');
+    expect(plot.style.outline).toBe('');
   });
 });
 
