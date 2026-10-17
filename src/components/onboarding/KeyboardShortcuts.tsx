@@ -1,56 +1,44 @@
+import { useMemo, useRef } from 'react';
 import { useThemeStore } from '../../stores/themeStore';
 import { EASING, DURATION, prefersReducedMotion } from '../../lib/animations';
 import { useEscapeToClose } from '../../hooks/useEscapeToClose';
+import { useFocusTrap } from '../../hooks/useFocusTrap';
+import { KEYBINDINGS, formatKeys, isMacPlatform, shortcutLabel, type KeybindingGroup } from '../../config/keybindings';
 
 import { TYPOGRAPHY } from '../../styles/tokens';
 interface KeyboardShortcutsProps {
   onClose: () => void;
 }
 
-const SHORTCUT_GROUPS = [
-  {
-    title: 'Essential',
-    shortcuts: [
-      { keys: '⌘+Enter', description: 'Run circuit' },
-      { keys: '⌘+S', description: 'Save file' },
-      { keys: '⌘+Shift+P', description: 'Command palette' },
-      { keys: '⌘+D', description: 'Toggle Dirac panel' },
-      { keys: '⌘+L', description: 'Focus Dirac input' },
-    ],
-  },
-  {
-    title: 'Editor',
-    shortcuts: [
-      { keys: '⌘+K', description: 'Inline edit (with selection)' },
-      { keys: 'Tab', description: 'Accept ghost completion' },
-      { keys: '⌘+.', description: 'Quick fix / code action' },
-      { keys: '⌘+F', description: 'Find' },
-      { keys: '⌘+H', description: 'Find and replace' },
-    ],
-  },
-  {
-    title: 'Navigation',
-    shortcuts: [
-      { keys: '⌘+O', description: 'Open file' },
-      { keys: '⌘+N', description: 'New file' },
-      { keys: '⌘+J', description: 'Toggle bottom panel' },
-      { keys: '⌘+Shift+L', description: 'Cycle UI mode' },
-      { keys: '⌘+Shift+T', description: 'Toggle theme' },
-    ],
-  },
-  {
-    title: 'Circuit',
-    shortcuts: [
-      { keys: '⌘+→', description: 'Step forward' },
-      { keys: '⌘+←', description: 'Step backward' },
-      { keys: 'Esc', description: 'Exit step-through / focus editor' },
-    ],
-  },
-];
+interface ShortcutRow { keys: string; description: string }
+
+/** Editor behaviours that are not global bindings but are real. */
+const EDITOR_EXTRAS: Record<string, ShortcutRow> = {
+  ghost: { keys: 'Tab', description: 'Accept ghost completion' },
+  tabFocus: { keys: 'Ctrl+M', description: 'Let Tab move focus out of the editor' },
+};
+
+const GROUP_ORDER: KeybindingGroup[] = ['Essential', 'Editor', 'Navigation', 'View'];
+
+/** Generated from the one keybinding registry, so the sheet matches reality. */
+// eslint-disable-next-line react-refresh/only-export-components
+export function shortcutGroups(mac: boolean = isMacPlatform()): Array<{ title: string; shortcuts: ShortcutRow[] }> {
+  return GROUP_ORDER.map((title) => {
+    const rows: ShortcutRow[] = KEYBINDINGS.filter((b) => b.group === title).map((b) => ({
+      keys: formatKeys(b, mac),
+      description: b.label,
+    }));
+    if (title === 'Editor') rows.push(EDITOR_EXTRAS.ghost, EDITOR_EXTRAS.tabFocus);
+    return { title, shortcuts: rows };
+  });
+}
 
 export function KeyboardShortcuts({ onClose }: KeyboardShortcutsProps) {
   const colors = useThemeStore((s) => s.colors);
   useEscapeToClose(onClose);
+  const dialogRef = useRef<HTMLDivElement>(null);
+  useFocusTrap(dialogRef);
+  const groups = useMemo(() => shortcutGroups(), []);
 
   return (
     <div
@@ -62,6 +50,8 @@ export function KeyboardShortcuts({ onClose }: KeyboardShortcutsProps) {
         animation: prefersReducedMotion() ? 'none' : `nuclei-fade-in ${DURATION.fast}ms`,
       }}
       onClick={onClose}
+      ref={dialogRef}
+      tabIndex={-1}
       role="dialog"
       aria-label="Keyboard shortcuts"
       aria-modal="true"
@@ -100,7 +90,7 @@ export function KeyboardShortcuts({ onClose }: KeyboardShortcutsProps) {
           </button>
         </div>
 
-        {SHORTCUT_GROUPS.map((group) => (
+        {groups.map((group) => (
           <div key={group.title} style={{ marginBottom: 16 }}>
             <div style={{
               color: colors.accent, fontSize: 11, fontWeight: 600,
@@ -111,7 +101,7 @@ export function KeyboardShortcuts({ onClose }: KeyboardShortcutsProps) {
               {group.title}
             </div>
             {group.shortcuts.map((s) => (
-              <div key={s.keys} style={{
+              <div key={s.description} style={{
                 display: 'flex', justifyContent: 'space-between',
                 alignItems: 'center', padding: '5px 0',
               }}>
@@ -143,7 +133,7 @@ export function KeyboardShortcuts({ onClose }: KeyboardShortcutsProps) {
           fontFamily: TYPOGRAPHY.fontSans,
           textAlign: 'center', marginTop: 8,
         }}>
-          Press ⌘+Shift+P to open the command palette for all commands
+          Press {shortcutLabel('palette')} to open the command palette for all commands
         </div>
       </div>
     </div>

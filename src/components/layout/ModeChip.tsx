@@ -26,6 +26,7 @@ const MODE_META: Record<WorkspaceMode, { label: string; icon: typeof GraduationC
 
 export function ModeChip() {
   const colors = useThemeStore((s) => s.colors);
+  const shadow = useThemeStore((s) => s.shadow);
   const mode = useWorkspaceStore((s) => s.mode);
   const requestSwitch = useModeSwitchStore((s) => s.requestSwitch);
   const [open, setOpen] = useState(false);
@@ -56,19 +57,40 @@ export function ModeChip() {
         setOpen(false);
       }
     };
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setOpen(false);
-    };
     document.addEventListener('mousedown', onDocMouseDown);
-    document.addEventListener('keydown', onKey);
-    return () => {
-      document.removeEventListener('mousedown', onDocMouseDown);
-      document.removeEventListener('keydown', onKey);
-    };
+    return () => document.removeEventListener('mousedown', onDocMouseDown);
   }, [open]);
 
-  const pick = (target: WorkspaceMode) => {
+  // Move focus into the menu (onto the current mode) once it is mounted.
+  useEffect(() => {
+    if (!open || !menuPos) return;
+    const items = menuRef.current?.querySelectorAll<HTMLElement>('[role="menuitemradio"]');
+    const current = Array.from(items ?? []).find((el) => el.getAttribute('aria-checked') === 'true');
+    (current ?? items?.[0])?.focus();
+  }, [open, menuPos]);
+
+  const closeAndRefocus = () => {
     setOpen(false);
+    buttonRef.current?.focus();
+  };
+
+  const onMenuKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
+    const items = Array.from(menuRef.current?.querySelectorAll<HTMLElement>('[role="menuitemradio"]') ?? []);
+    const at = items.indexOf(document.activeElement as HTMLElement);
+    const focusAt = (i: number) => items[(i + items.length) % items.length]?.focus();
+    switch (e.key) {
+      case 'Escape': e.preventDefault(); closeAndRefocus(); break;
+      case 'ArrowDown': e.preventDefault(); focusAt(at + 1); break;
+      case 'ArrowUp': e.preventDefault(); focusAt(at - 1); break;
+      case 'Home': e.preventDefault(); focusAt(0); break;
+      case 'End': e.preventDefault(); focusAt(items.length - 1); break;
+      case 'Tab': setOpen(false); break;
+      default: break;
+    }
+  };
+
+  const pick = (target: WorkspaceMode) => {
+    closeAndRefocus();
     requestSwitch(target);
   };
 
@@ -77,6 +99,7 @@ export function ModeChip() {
       ref={menuRef}
       role="menu"
       aria-label="Switch workspace mode"
+      onKeyDown={onMenuKeyDown}
       style={{
         position: 'fixed',
         left: menuPos.left,
@@ -85,7 +108,7 @@ export function ModeChip() {
         background: colors.bgElevated,
         border: `1px solid ${colors.border}`,
         borderRadius: 8,
-        boxShadow: '0 6px 24px rgba(0,0,0,0.28)',
+        boxShadow: shadow.md,
         padding: 4,
         zIndex: 1000,
         fontFamily: TYPOGRAPHY.fontSans,

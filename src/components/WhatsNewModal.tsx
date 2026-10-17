@@ -4,6 +4,8 @@ import { useThemeStore } from '../stores/themeStore';
 import { WHATS_NEW, type WhatsNewEntry } from '../data/whatsNew';
 import { DURATION, EASING, prefersReducedMotion } from '../lib/animations';
 import { openExternal } from '../lib/openExternal';
+import { useWhatsNewStore } from '../stores/whatsNewStore';
+import { Button, IconButton } from './ui';
 import { WhatsNewHeader } from './WhatsNewHeader';
 import { WhatsNewHighlightRow } from './WhatsNewHighlightRow';
 
@@ -26,11 +28,25 @@ export function shouldShowWhatsNew(
   currentVersion: string,
   entryVersion: string,
 ): boolean {
-  return (
-    storedVersion !== null &&
-    storedVersion !== currentVersion &&
-    entryVersion === currentVersion
-  );
+  if (storedVersion === null) return false;
+  // The notes are new to this user (newer than what they last saw) and already
+  // shipped (not newer than what is running). A patch release (0.14.1) that
+  // ships no notes of its own therefore still surfaces the 0.14.0 notes to
+  // anyone upgrading from 0.13.x, instead of silently skipping them.
+  return compareVersions(storedVersion, entryVersion) < 0 && compareVersions(entryVersion, currentVersion) <= 0;
+}
+
+/** Numeric dotted-version compare (ignores any pre-release suffix). */
+// eslint-disable-next-line react-refresh/only-export-components
+export function compareVersions(a: string, b: string): number {
+  const parse = (v: string) => v.split('-')[0].split('.').map((n) => Number.parseInt(n, 10) || 0);
+  const pa = parse(a);
+  const pb = parse(b);
+  for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
+    const diff = (pa[i] ?? 0) - (pb[i] ?? 0);
+    if (diff !== 0) return diff < 0 ? -1 : 1;
+  }
+  return 0;
 }
 
 interface WhatsNewModalProps {
@@ -61,11 +77,9 @@ export function WhatsNewModal({
   const [visible, setVisible] = useState(false);
   const [entered, setEntered] = useState(false);
   const [leaving, setLeaving] = useState(false);
-  const [gotItHover, setGotItHover] = useState(false);
-  const [gotItFocus, setGotItFocus] = useState(false);
-  const [dismissHover, setDismissHover] = useState(false);
-  const [dismissFocus, setDismissFocus] = useState(false);
   const [linkHover, setLinkHover] = useState(false);
+  const requested = useWhatsNewStore((st) => st.requested);
+  const clearRequest = useWhatsNewStore((st) => st.clearRequest);
 
   const dialogRef = useRef<HTMLDivElement>(null);
   const primaryButtonRef = useRef<HTMLButtonElement>(null);
@@ -85,6 +99,14 @@ export function WhatsNewModal({
       setVisible(true);
     }
   }, [isDesktop, currentVersion, entry.version]);
+
+  // Re-open on demand (command palette / Settings > Help), on any platform.
+  useEffect(() => {
+    if (!requested) return;
+    previousFocusRef.current = document.activeElement as HTMLElement | null;
+    setVisible(true);
+    clearRequest();
+  }, [requested, clearRequest]);
 
   // Flip to the "entered" state a tick after mount so the entrance
   // transition has an initial state to animate from.
@@ -189,7 +211,7 @@ export function WhatsNewModal({
           role="dialog"
           aria-modal="true"
           aria-labelledby={TITLE_ID}
-          aria-label={`What's new in Nuclei ${currentVersion}`}
+          aria-label={`What's new in Nuclei ${entry.version}`}
           style={{
             pointerEvents: 'auto',
             position: 'relative',
@@ -226,35 +248,18 @@ export function WhatsNewModal({
               background: `linear-gradient(90deg, ${colors.accent}, transparent 70%)`,
             }}
           />
-          <button
-            onClick={handleDismiss}
+          <IconButton
             aria-label="Dismiss what's new"
-            onMouseEnter={() => setDismissHover(true)}
-            onMouseLeave={() => setDismissHover(false)}
-            onFocus={() => setDismissFocus(true)}
-            onBlur={() => setDismissFocus(false)}
-            style={{
-              position: 'absolute',
-              top: 14,
-              right: 14,
-              background: dismissHover ? colors.border : 'none',
-              border: 'none',
-              color: dismissHover || dismissFocus ? colors.text : colors.textDim,
-              cursor: 'pointer',
-              padding: 5,
-              display: 'flex',
-              alignItems: 'center',
-              borderRadius: 6,
-              boxShadow: dismissFocus ? `0 0 0 2px ${colors.accent}66` : 'none',
-              transition: `background ${DURATION.fast}ms ${EASING.enter}, color ${DURATION.fast}ms ${EASING.enter}, box-shadow ${DURATION.fast}ms ${EASING.enter}`,
-            }}
+            size="sm"
+            onClick={handleDismiss}
+            style={{ position: 'absolute', top: 14, right: 14 }}
           >
             <X size={16} />
-          </button>
+          </IconButton>
 
           <div style={{ overflowY: 'auto', padding: '28px 28px 22px' }}>
             <WhatsNewHeader
-              currentVersion={currentVersion}
+              currentVersion={entry.version}
               accent={colors.accent}
               textDim={colors.textDim}
               reduced={reduced}
@@ -303,7 +308,6 @@ export function WhatsNewModal({
                   highlight={highlight}
                   index={i}
                   accent={colors.accent}
-                  dirac={colors.dirac}
                   text={colors.text}
                   textMuted={colors.textMuted}
                 />
@@ -348,34 +352,9 @@ export function WhatsNewModal({
                 Full changelog
                 <ArrowUpRight size={14} />
               </a>
-              <button
-                ref={primaryButtonRef}
-                onClick={handleDismiss}
-                onMouseEnter={() => setGotItHover(true)}
-                onMouseLeave={() => setGotItHover(false)}
-                onFocus={() => setGotItFocus(true)}
-                onBlur={() => setGotItFocus(false)}
-                style={{
-                  background: gotItHover ? colors.accentLight : colors.accent,
-                  color: '#0a0f1a',
-                  border: 'none',
-                  borderRadius: 8,
-                  padding: '7px 16px',
-                  cursor: 'pointer',
-                  fontSize: 13,
-                  fontWeight: 600,
-                  fontFamily: TYPOGRAPHY.fontSans,
-                  boxShadow: gotItFocus
-                    ? `0 0 0 2px ${colors.accent}66`
-                    : gotItHover
-                      ? shadow.md
-                      : shadow.sm,
-                  transform: gotItHover ? 'translateY(-1px)' : 'translateY(0)',
-                  transition: `background ${DURATION.fast}ms ${EASING.enter}, box-shadow ${DURATION.fast}ms ${EASING.enter}, transform ${DURATION.fast}ms ${EASING.enter}`,
-                }}
-              >
+              <Button ref={primaryButtonRef} variant="primary" onClick={handleDismiss}>
                 Got it
-              </button>
+              </Button>
             </div>
           </div>
         </div>

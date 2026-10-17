@@ -37,12 +37,42 @@ describe('shouldShowWhatsNew', () => {
     expect(shouldShowWhatsNew('0.4.17', '0.5.0', '0.5.0')).toBe(true);
   });
 
-  it('returns false when the entry does not describe the current version', () => {
-    expect(shouldShowWhatsNew('0.4.17', '0.5.0', '0.4.18')).toBe(false);
+  it('returns false when the entry is newer than the running build', () => {
+    expect(shouldShowWhatsNew('0.4.17', '0.5.0', '0.5.1')).toBe(false);
+  });
+
+  it('shows the notes after a patch release that ships none of its own (shell-19)', () => {
+    // Running 0.14.1, notes are for 0.14.0, user last saw 0.13.0.
+    expect(shouldShowWhatsNew('0.13.0', '0.14.1', '0.14.0')).toBe(true);
+  });
+
+  it('does not re-show notes the user already saw', () => {
+    expect(shouldShowWhatsNew('0.14.0', '0.14.1', '0.14.0')).toBe(false);
+  });
+
+  it('compares versions numerically, not lexically', () => {
+    expect(shouldShowWhatsNew('0.9.0', '0.10.0', '0.10.0')).toBe(true);
   });
 });
 
 describe('<WhatsNewModal>', () => {
+  it('can be reopened on demand, even on web and after being seen (shell-19)', async () => {
+    const { useWhatsNewStore } = await import('../stores/whatsNewStore');
+    window.localStorage.setItem(SEEN_KEY, CURRENT);
+    const { queryByRole, findByRole } = render(<WhatsNewModal isDesktop={false} currentVersion={CURRENT} />);
+    expect(queryByRole('dialog')).toBeNull();
+    useWhatsNewStore.getState().openWhatsNew();
+    expect(await findByRole('dialog')).toBeTruthy();
+  });
+
+  it('labels the dialog with the release the notes describe, not the running build (reopen)', async () => {
+    const { useWhatsNewStore } = await import('../stores/whatsNewStore');
+    const { findByRole } = render(<WhatsNewModal isDesktop={false} currentVersion="0.13.0" />);
+    useWhatsNewStore.getState().openWhatsNew();
+    const dialog = await findByRole('dialog');
+    expect(dialog.getAttribute('aria-label')).toBe(`What's new in Nuclei ${WHATS_NEW.version}`);
+  });
+
   it('renders nothing on fresh install and primes the seen-version key', () => {
     const { container } = render(<WhatsNewModal isDesktop currentVersion={CURRENT} />);
 

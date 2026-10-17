@@ -12,6 +12,9 @@ import { useHardwareStore } from '../../stores/hardwareStore';
 import { tabBarDensity, type TabBarDensity } from './tabBarLayout';
 import { canStopKernelRun, retryKernel, stopKernelRun } from '../../lib/kernelControl';
 import { getRunButtonState } from './runButtonState';
+import { Button, Tooltip } from '../ui';
+import { shortcutLabel } from '../../config/keybindings';
+import { useUiFeatures } from '../../hooks/useUiFeatures';
 
 import { TYPOGRAPHY } from '../../styles/tokens';
 const basename = (p: string) => p.split('/').pop() ?? p;
@@ -28,7 +31,7 @@ export function EditorTabs() {
   const kernelProgress = useEditorStore((s) => s.kernelProgress);
   const isRunning = useSimulationStore((s) => s.isRunning);
   const colors = useThemeStore((s) => s.colors);
-  const shadow = useThemeStore((s) => s.shadow);
+  const features = useUiFeatures();
 
   const usingLegacy = tabs.length === 0;
   const [renaming, setRenaming] = useState(false);
@@ -392,108 +395,51 @@ export function EditorTabs() {
         </div>
       )}
 
-      <div style={{ display: 'flex', alignItems: 'center', flexShrink: 0 }}>
-        <FrameworkSelector compact={compact} />
-      </div>
+      {features.frameworkPicker && (
+        <div style={{ display: 'flex', alignItems: 'center', flexShrink: 0 }}>
+          <FrameworkSelector compact={compact} />
+        </div>
+      )}
 
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
-        <button
-          onClick={() => useHardwareStore.getState().openLaunch()}
-          title="Launch on hardware (⌘⇧R)"
-          aria-label="Launch on hardware"
-          style={{
-            height: 28,
-            padding: compact ? '0 8px' : '0 12px',
-            flexShrink: 0,
-            display: 'flex',
-            alignItems: 'center',
-            gap: 6,
-            whiteSpace: 'nowrap',
-            background: 'transparent',
-            color: colors.accentLight,
-            border: `1px solid ${colors.accent}40`,
-            borderRadius: 6,
-            cursor: 'pointer',
-            fontSize: 12,
-            fontFamily: TYPOGRAPHY.fontSans,
-            fontWeight: 600,
-            transition: 'background 120ms ease, border-color 120ms ease',
-          }}
-          onMouseEnter={(e) => {
-            e.currentTarget.style.background = `${colors.accent}12`;
-            e.currentTarget.style.borderColor = colors.accent;
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.background = 'transparent';
-            e.currentTarget.style.borderColor = `${colors.accent}40`;
-          }}
-        >
-          <Rocket size={12} />
-          {!compact && <span>Launch</span>}
-          {!compact && <span style={{ fontSize: 11, opacity: 0.7, marginLeft: 2 }}>⌘⇧R</span>}
-        </button>
-        <button
-          onClick={handleRun}
-          disabled={runState.disabled}
-          title={runTitle}
-          aria-label={runTitle}
-          style={{
-            height: 28,
-            padding: tight ? '0 8px' : compact ? '0 10px' : '0 14px',
-            display: 'flex',
-            alignItems: 'center',
-            gap: 7,
-            flexShrink: 0,
-            whiteSpace: 'nowrap',
-            background: canRun ? colors.accent : colors.bgElevated,
-            color: canRun ? '#0a0f1a' : runFailed ? colors.error : runState.stoppable ? colors.text : colors.textMuted,
-            border: canRun ? 'none' : `1px solid ${runFailed ? colors.error : colors.border}`,
-            borderRadius: 6,
-            cursor: runState.disabled ? 'default' : 'pointer',
-            fontSize: 13,
-            fontFamily: TYPOGRAPHY.fontSans,
-            fontWeight: 600,
-            boxShadow: canRun ? shadow.sm : 'none',
-            transition:
-              'transform 120ms cubic-bezier(0.16, 1, 0.3, 1), box-shadow 150ms ease, background 120ms ease',
-          }}
-          onMouseEnter={(e) => {
-            if (canRun) {
-              e.currentTarget.style.boxShadow = '0 0 14px rgba(0,180,216,0.4)';
-              e.currentTarget.style.transform = 'translateY(-1px)';
-            }
-          }}
-          onMouseLeave={(e) => {
-            if (canRun) {
-              e.currentTarget.style.boxShadow = shadow.sm;
-              e.currentTarget.style.transform = 'translateY(0)';
-            }
-          }}
-        >
-          {runState.stoppable ? (
-            <Square size={11} fill="currentColor" />
-          ) : isRunning || runState.kind === 'loading' ? (
-            <Loader2 size={13} style={{ animation: 'nuclei-spin 800ms linear infinite' }} />
-          ) : runFailed ? (
-            <RotateCw size={12} />
-          ) : (
-            <Play size={12} fill="currentColor" />
-          )}
-          {!tight && <span>{runLabel}</span>}
-          {canRun && !compact && (
-            <span
-              style={{
-                fontSize: 11,
-                fontWeight: 500,
-                opacity: 0.75,
-                marginLeft: 2,
-                letterSpacing: 0.3,
-              }}
+        {features.launchHardware && (
+          <Tooltip label="Launch on hardware" shortcut={shortcutLabel('launch')}>
+            <Button
+              variant="secondary"
+              onClick={() => useHardwareStore.getState().openLaunch()}
+              aria-label="Launch on hardware"
+              icon={<Rocket size={12} />}
             >
-              ⌘↵
-            </span>
-          )}
-        </button>
+              {!compact && <span>Launch</span>}
+              {!compact && <span style={{ fontSize: 11, opacity: 0.7, marginLeft: 2 }}>{shortcutLabel('launch')}</span>}
+            </Button>
+          </Tooltip>
+        )}
+        <Tooltip label={runTitle} shortcut={canRun ? shortcutLabel('run') : undefined}>
+          <Button
+            variant={canRun ? 'primary' : runFailed ? 'danger' : 'secondary'}
+            onClick={handleRun}
+            disabled={runState.disabled}
+            aria-label={runTitle}
+            style={{ fontWeight: 600, padding: tight ? '0 8px' : compact ? '0 10px' : '0 14px', gap: 7 }}
+          >
+            {runState.stoppable ? (
+              <Square size={11} fill="currentColor" />
+            ) : isRunning || runState.kind === 'loading' ? (
+              <Loader2 size={13} className="nuclei-spin" />
+            ) : runFailed ? (
+              <RotateCw size={12} />
+            ) : (
+              <Play size={12} fill="currentColor" />
+            )}
+            {!tight && <span>{runLabel}</span>}
+            {canRun && !compact && (
+              <span style={{ fontSize: 11, fontWeight: 500, opacity: 0.75, marginLeft: 2, letterSpacing: 0.3 }}>
+                {shortcutLabel('run')}
+              </span>
+            )}
+          </Button>
+        </Tooltip>
       </div>
     </div>
   );

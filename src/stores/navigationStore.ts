@@ -32,32 +32,81 @@ function leaveFullViewSurfaces(): void {
  */
 export type NavView = LeftPanelId;
 
+export type SettingsSectionId = 'appearance' | 'workspace' | 'editor' | 'dirac' | 'help';
+export interface SettingsTarget { section: SettingsSectionId; nonce: number }
+const SETTINGS_SECTIONS: readonly string[] = ['appearance', 'workspace', 'editor', 'dirac', 'help'];
+const DEFAULT_SETTINGS_SECTION: SettingsSectionId = 'dirac';
+
 interface NavigationState {
   activeView: NavView | null;
   /** Set (or clear, with null) the open rail view. */
   setActiveView: (view: NavView | null) => void;
   /** Click-through toggle: selecting the already-open view collapses it. */
   toggleView: (view: NavView) => void;
-  /** Open the Settings view (the Dirac panel's gear; formerly `openSettings`
-   * via `settingsSignal`). PanelLayout's mode-exit effect handles leaving any
-   * Learn/Challenge full-view surface. */
-  openSettings: () => void;
+  /** The view the sidebar was showing before it auto-collapsed for a narrow window. */
+  autoCollapsedView: NavView | null;
+  /** Last viewport band seen by `applyNarrow` (null before the first call). */
+  lastNarrow: boolean | null;
+  /** Collapse the sidebar when narrow and restore it on grow. `canCollapse` is false
+   * while a full-width takeover view is showing (collapsing it would drop the view). */
+  applyNarrow: (narrow: boolean, canCollapse: boolean) => void;
+  /** Select a view after a workspace switch without re-opening a sidebar that is
+   * folded away for a narrow window: it is parked and restored on grow instead. */
+  setViewKeepingViewport: (view: NavView, canCollapse: boolean) => void;
+  /** Section the Settings panel should expand, scroll to and focus on its next render. */
+  settingsTarget: SettingsTarget | null;
+  clearSettingsTarget: () => void;
+  /** Open the Settings view, optionally at a section. The only caller today is the
+   * Dirac panel (its gear / "Open Settings" CTA, which passes a click event, not a
+   * section), so the default lands on the Dirac AI section where the API key lives. */
+  openSettings: (section?: unknown) => void;
 }
 
-export const useNavigationStore = create<NavigationState>((set) => ({
+export const useNavigationStore = create<NavigationState>((set, get) => ({
   activeView: 'files',
+  autoCollapsedView: null,
+  lastNarrow: null,
+  // Any explicit selection cancels a pending automatic restore.
   setActiveView: (view) => {
     if (view !== null) leaveFullViewSurfaces();
-    set({ activeView: view });
+    set({ activeView: view, autoCollapsedView: null });
   },
   toggleView: (view) =>
     set((s) => {
       const next = s.activeView === view ? null : view;
       if (next !== null) leaveFullViewSurfaces();
-      return { activeView: next };
+      return { activeView: next, autoCollapsedView: null };
     }),
-  openSettings: () => {
+  setViewKeepingViewport: (view, canCollapse) => {
+    if (get().lastNarrow === true && canCollapse) {
+      set({ activeView: null, autoCollapsedView: view });
+      return;
+    }
+    get().setActiveView(view);
+  },
+  applyNarrow: (narrow, canCollapse) =>
+    set((s) => {
+      if (s.lastNarrow === narrow) return s;
+      if (narrow) {
+        return canCollapse && s.activeView !== null
+          ? { lastNarrow: narrow, activeView: null, autoCollapsedView: s.activeView }
+          : { lastNarrow: narrow };
+      }
+      return s.autoCollapsedView !== null && s.activeView === null
+        ? { lastNarrow: narrow, activeView: s.autoCollapsedView, autoCollapsedView: null }
+        : { lastNarrow: narrow, autoCollapsedView: null };
+    }),
+  settingsTarget: null,
+  clearSettingsTarget: () => set({ settingsTarget: null }),
+  openSettings: (section) => {
     leaveFullViewSurfaces();
-    set({ activeView: 'settings' });
+    const id = typeof section === 'string' && SETTINGS_SECTIONS.includes(section)
+      ? (section as SettingsSectionId)
+      : DEFAULT_SETTINGS_SECTION;
+    set((s) => ({
+      activeView: 'settings',
+      autoCollapsedView: null,
+      settingsTarget: { section: id, nonce: (s.settingsTarget?.nonce ?? 0) + 1 },
+    }));
   },
 }));

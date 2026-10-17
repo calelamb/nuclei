@@ -1,17 +1,76 @@
-import { useState } from 'react';
+import { useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
 import { useThemeStore } from '../../stores/themeStore';
 import { QuantumPlayground } from './QuantumPlayground';
 import { EASING, DURATION, prefersReducedMotion } from '../../lib/animations';
 
 import { TYPOGRAPHY } from '../../styles/tokens';
-import { ChoiceCard } from '../ui';
+import { Button, ChoiceCard } from '../ui';
+import { useFocusTrap } from '../../hooks/useFocusTrap';
+
 type OnboardingPath = 'welcome' | 'beginner' | 'intermediate' | 'experienced' | 'research';
 
 interface OnboardingProps {
-  onComplete: (path: OnboardingPath) => void;
+  /** `path` is omitted when a returning user continues, so nothing about
+   *  their stored preferences is overwritten. */
+  onComplete: (path?: OnboardingPath) => void;
   isReturningUser?: boolean;
   lastOpenedFile?: string;
   daysSinceLastSession?: number;
+}
+
+
+interface DialogFrameProps {
+  label: string;
+  maxWidth: number;
+  children: ReactNode;
+  /** Escape handler. Omit when the screen has nothing sensible to escape to. */
+  onEscape?: () => void;
+}
+
+/**
+ * Shared modal shell for every onboarding screen: role=dialog + aria-modal,
+ * focus trapped inside (and moved to the first card on mount), arrow keys
+ * move between choice cards, Escape does whatever the screen says is sensible.
+ */
+function DialogFrame({ label, maxWidth, children, onEscape }: DialogFrameProps) {
+  const colors = useThemeStore((s) => s.colors);
+  const rootRef = useRef<HTMLDivElement>(null);
+  useFocusTrap(rootRef, { restoreFocus: false });
+
+  const handleKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
+    if (e.key === 'Escape' && onEscape) {
+      e.preventDefault();
+      e.stopPropagation();
+      onEscape();
+      return;
+    }
+    const step = e.key === 'ArrowDown' || e.key === 'ArrowRight' ? 1 : e.key === 'ArrowUp' || e.key === 'ArrowLeft' ? -1 : 0;
+    if (step === 0) return;
+    const cards = Array.from(rootRef.current?.querySelectorAll<HTMLElement>('.nuclei-choice-card') ?? []);
+    const at = cards.indexOf(document.activeElement as HTMLElement);
+    if (at < 0 || cards.length === 0) return;
+    e.preventDefault();
+    cards[(at + step + cards.length) % cards.length].focus();
+  };
+
+  return (
+    <div
+      ref={rootRef}
+      role="dialog"
+      aria-modal="true"
+      aria-label={label}
+      tabIndex={-1}
+      onKeyDown={handleKeyDown}
+      style={{
+        position: 'fixed', inset: 0, zIndex: 4000,
+        background: `linear-gradient(180deg, ${colors.bg} 0%, ${colors.bgPanel} 100%)`,
+        display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+        padding: 32, overflowY: 'auto',
+      }}
+    >
+      <div style={{ maxWidth, width: '100%', textAlign: 'center' }}>{children}</div>
+    </div>
+  );
 }
 
 /**
@@ -45,13 +104,8 @@ function ModeSelectScreen({ onSelectLearn, onSelectResearch }: {
   ];
 
   return (
-    <div style={{
-      position: 'fixed', inset: 0, zIndex: 4000,
-      background: `linear-gradient(180deg, ${colors.bg} 0%, ${colors.bgPanel} 100%)`,
-      display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
-      padding: 32,
-    }}>
-      <div style={{ maxWidth: 560, width: '100%', textAlign: 'center' }}>
+    <DialogFrame label="Welcome to Nuclei" maxWidth={560}>
+      <>
         <div style={{
           color: colors.accent, fontSize: 40, fontWeight: 700,
           fontFamily: TYPOGRAPHY.fontSans,
@@ -82,12 +136,12 @@ function ModeSelectScreen({ onSelectLearn, onSelectResearch }: {
             />
           ))}
         </div>
-      </div>
-    </div>
+      </>
+    </DialogFrame>
   );
 }
 
-function WelcomeScreen({ onSelect }: { onSelect: (path: OnboardingPath) => void }) {
+function WelcomeScreen({ onSelect, onBack }: { onSelect: (path: OnboardingPath) => void; onBack: () => void }) {
   const colors = useThemeStore((s) => s.colors);
 
   const paths: Array<{ id: OnboardingPath; title: string; description: string; accent: string }> = [
@@ -97,13 +151,8 @@ function WelcomeScreen({ onSelect }: { onSelect: (path: OnboardingPath) => void 
   ];
 
   return (
-    <div style={{
-      position: 'fixed', inset: 0, zIndex: 4000,
-      background: `linear-gradient(180deg, ${colors.bg} 0%, ${colors.bgPanel} 100%)`,
-      display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
-      padding: 32,
-    }}>
-      <div style={{ maxWidth: 520, width: '100%', textAlign: 'center' }}>
+    <DialogFrame label="Choose your experience level" maxWidth={520} onEscape={onBack}>
+      <>
         {/* Logo */}
         <div style={{
           color: colors.accent, fontSize: 40, fontWeight: 700,
@@ -136,8 +185,8 @@ function WelcomeScreen({ onSelect }: { onSelect: (path: OnboardingPath) => void 
             />
           ))}
         </div>
-      </div>
-    </div>
+      </>
+    </DialogFrame>
   );
 }
 
@@ -154,13 +203,8 @@ function ReturningUserScreen({ onContinue, onStartFresh, lastFile, daysSince }: 
     : 'Welcome back!';
 
   return (
-    <div style={{
-      position: 'fixed', inset: 0, zIndex: 4000,
-      background: `linear-gradient(180deg, ${colors.bg} 0%, ${colors.bgPanel} 100%)`,
-      display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
-      padding: 32,
-    }}>
-      <div style={{ maxWidth: 420, width: '100%', textAlign: 'center' }}>
+    <DialogFrame label="Welcome back" maxWidth={420} onEscape={onContinue}>
+      <>
         <div style={{
           color: colors.accent, fontSize: 32, fontWeight: 700,
           fontFamily: TYPOGRAPHY.fontSans,
@@ -186,40 +230,15 @@ function ReturningUserScreen({ onContinue, onStartFresh, lastFile, daysSince }: 
           </p>
         )}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 16 }}>
-          <button
-            onClick={onContinue}
-            style={{
-              padding: '12px 24px',
-              background: colors.accent,
-              color: '#fff',
-              border: 'none',
-              borderRadius: 8,
-              cursor: 'pointer',
-              fontSize: 14,
-              fontWeight: 600,
-              fontFamily: TYPOGRAPHY.fontSans,
-            }}
-          >
+          <Button variant="primary" size="lg" onClick={onContinue}>
             {lastFile ? 'Continue where I left off' : 'Open IDE'}
-          </button>
-          <button
-            onClick={onStartFresh}
-            style={{
-              padding: '10px 24px',
-              background: 'transparent',
-              color: colors.textMuted,
-              border: `1px solid ${colors.border}`,
-              borderRadius: 8,
-              cursor: 'pointer',
-              fontSize: 13,
-              fontFamily: TYPOGRAPHY.fontSans,
-            }}
-          >
+          </Button>
+          <Button variant="secondary" size="lg" onClick={onStartFresh}>
             Start fresh
-          </button>
+          </Button>
         </div>
-      </div>
-    </div>
+      </>
+    </DialogFrame>
   );
 }
 
@@ -239,7 +258,7 @@ export function Onboarding({ onComplete, isReturningUser, lastOpenedFile, daysSi
   if (screen === 'returning') {
     return (
       <ReturningUserScreen
-        onContinue={() => onComplete('experienced')}
+        onContinue={() => onComplete(undefined)}
         onStartFresh={() => setScreen('mode-select')}
         lastFile={lastOpenedFile}
         daysSince={daysSinceLastSession}
@@ -265,5 +284,5 @@ export function Onboarding({ onComplete, isReturningUser, lastOpenedFile, daysSi
     );
   }
 
-  return <WelcomeScreen onSelect={handleSelect} />;
+  return <WelcomeScreen onSelect={handleSelect} onBack={() => setScreen('mode-select')} />;
 }

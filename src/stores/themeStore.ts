@@ -11,6 +11,25 @@ import {
 
 export type { ThemeMode };
 
+/** What the user picked. `system` follows the OS and resolves to a ThemeMode. */
+export type ThemePreference = 'system' | ThemeMode;
+
+export function isThemePreference(value: unknown): value is ThemePreference {
+  return value === 'system' || value === 'dark' || value === 'light';
+}
+
+/** Resolve a preference to a concrete mode. Falls back to dark without matchMedia. */
+export function resolveThemePreference(pref: ThemePreference): ThemeMode {
+  if (pref !== 'system') return pref;
+  try {
+    const mq = typeof window !== 'undefined' ? window.matchMedia?.('(prefers-color-scheme: dark)') : undefined;
+    if (!mq) return 'dark';
+    return mq.matches ? 'dark' : 'light';
+  } catch {
+    return 'dark';
+  }
+}
+
 export interface ThemeShadows {
   sm: string;
   md: string;
@@ -92,6 +111,8 @@ function shadowsFromTokens(s: ShadowTokens): ThemeShadows {
 
 interface ThemeState {
   mode: ThemeMode;
+  /** The user's choice; `mode` is what it currently resolves to. */
+  preference: ThemePreference;
   colors: ThemeColors;
   shadow: ThemeShadows;
   /**
@@ -101,6 +122,9 @@ interface ThemeState {
    */
   pluginOverlay: Partial<ThemeColors> | null;
   setMode: (mode: ThemeMode) => void;
+  setPreference: (pref: ThemePreference) => void;
+  /** Re-resolve `system` against the OS (pass the OS's dark flag from a matchMedia listener). */
+  syncSystem: (osPrefersDark: boolean) => void;
   toggle: () => void;
   /** Apply a plugin theme's colours (intersected against known theme keys). */
   applyPluginTheme: (colors: Record<string, string>) => void;
@@ -135,9 +159,20 @@ function snapshot(mode: ThemeMode, overlay: Partial<ThemeColors> | null) {
 
 export const useThemeStore = create<ThemeState>((set, get) => ({
   ...snapshot('dark', null),
+  preference: 'dark',
   pluginOverlay: null,
-  setMode: (mode) => set(snapshot(mode, get().pluginOverlay)),
-  toggle: () => set((s) => snapshot(s.mode === 'dark' ? 'light' : 'dark', s.pluginOverlay)),
+  setMode: (mode) => set({ ...snapshot(mode, get().pluginOverlay), preference: mode }),
+  setPreference: (preference) =>
+    set({ ...snapshot(resolveThemePreference(preference), get().pluginOverlay), preference }),
+  syncSystem: (osPrefersDark) => {
+    if (get().preference !== 'system') return;
+    set(snapshot(osPrefersDark ? 'dark' : 'light', get().pluginOverlay));
+  },
+  toggle: () =>
+    set((s) => {
+      const next: ThemeMode = s.mode === 'dark' ? 'light' : 'dark';
+      return { ...snapshot(next, s.pluginOverlay), preference: next };
+    }),
   applyPluginTheme: (raw) => {
     const overlay = intersectThemeColors(raw);
     set((s) => ({ ...snapshot(s.mode, overlay), pluginOverlay: overlay }));

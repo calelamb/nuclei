@@ -1,0 +1,59 @@
+import { describe, it, expect } from 'vitest';
+import { KEYBINDINGS, findBindingId, formatKeys, bindingFor, shortcutLabel, type KeyLike } from './keybindings';
+
+function ev(key: string, mods: Partial<KeyLike> = {}): KeyLike {
+  return { key, metaKey: true, ctrlKey: false, shiftKey: false, altKey: false, ...mods };
+}
+
+describe('keybinding registry', () => {
+  it('matches Shift chords regardless of the casing Chromium reports', () => {
+    // Chromium reports e.key as 'P' when Shift is held; Safari/Firefox report 'p'.
+    expect(findBindingId(ev('P', { shiftKey: true }))).toBe('palette');
+    expect(findBindingId(ev('p', { shiftKey: true }))).toBe('palette');
+    expect(findBindingId(ev('S', { shiftKey: true }))).toBe('save-as');
+    expect(findBindingId(ev('L', { shiftKey: true }))).toBe('cycle-ui-mode');
+    expect(findBindingId(ev('T', { shiftKey: true }))).toBe('toggle-theme');
+    expect(findBindingId(ev('R', { shiftKey: true }))).toBe('launch');
+    expect(findBindingId(ev('M', { shiftKey: true }))).toBe('switch-workspace');
+  });
+
+  it('distinguishes the plain and shifted forms of the same letter', () => {
+    expect(findBindingId(ev('s'))).toBe('save');
+    expect(findBindingId(ev('l'))).toBe('focus-dirac');
+    expect(findBindingId(ev('d'))).toBe('toggle-dirac');
+  });
+
+  it('accepts Ctrl as the modifier on non-Mac platforms and ignores unmodified keys', () => {
+    expect(findBindingId(ev('s', { metaKey: false, ctrlKey: true }))).toBe('save');
+    expect(findBindingId(ev('s', { metaKey: false }))).toBeNull();
+  });
+
+  it('maps 1-9 to the rail views and the backtick to the bottom panel', () => {
+    expect(findBindingId(ev('3'))).toBe('goto-rail-view');
+    expect(findBindingId(ev('`'))).toBe('toggle-bottom-panel');
+  });
+
+  it('does not claim chords that have no binding (the old sheet listed Cmd+J)', () => {
+    expect(findBindingId(ev('j'))).toBeNull();
+    expect(findBindingId(ev('ArrowRight'))).toBeNull();
+    expect(KEYBINDINGS.some((b) => b.key === 'j')).toBe(false);
+  });
+
+  it('formats glyphs for Mac and words for other platforms', () => {
+    const palette = bindingFor('palette');
+    expect(formatKeys(palette, true)).toBe('⌘⇧P');
+    expect(formatKeys(palette, false)).toBe('Ctrl+Shift+P');
+    expect(formatKeys(bindingFor('run'), true)).toBe('⌘↵');
+    expect(formatKeys(bindingFor('goto-rail-view'), true)).toBe('⌘1–9');
+  });
+
+  it('has unique ids', () => {
+    const ids = KEYBINDINGS.map((b) => b.id);
+    expect(new Set(ids).size).toBe(ids.length);
+  });
+
+  it('exposes a palette-ready label by id', () => {
+    expect(shortcutLabel('palette', true)).toBe('⌘⇧P');
+    expect(shortcutLabel('nope', true)).toBeUndefined();
+  });
+});

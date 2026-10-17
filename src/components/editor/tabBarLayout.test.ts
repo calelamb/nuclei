@@ -5,7 +5,8 @@ describe('tabBarDensity', () => {
   it('is full for wide bars', () => expect(tabBarDensity(1000)).toBe('full'));
   it('is compact between the thresholds', () => {
     expect(tabBarDensity(859)).toBe('compact');
-    expect(tabBarDensity(520)).toBe('compact');
+    expect(tabBarDensity(480)).toBe('compact');
+    expect(tabBarDensity(499)).toBe('compact'); // default 1440 layout keeps the Run label
   });
   it('is tight for narrow editors', () => expect(tabBarDensity(290)).toBe('tight'));
 });
