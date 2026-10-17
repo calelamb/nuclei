@@ -358,7 +358,8 @@ export function PanelLayout() {
         width: '100vw', height: '100vh',
         display: 'flex', flexDirection: 'column',
         backgroundColor: colors.bg,
-        overflow: 'hidden',
+        // clip, not hidden: `hidden` leaves the shell scrollable, so scrollIntoView could shift the whole app up.
+        overflow: 'clip',
         userSelect: isDraggingH || isDraggingV ? 'none' : 'auto',
       }}
       onMouseMove={handleMouseMove}
@@ -556,24 +557,10 @@ export function PanelLayout() {
 }
 
 /** Visually-hidden aria-live region announcing workspace-mode changes. */
-function ModeAnnouncer() {
+export function ModeAnnouncer() {
   const announcement = useModeSwitchStore((s) => s.announcement);
   return (
-    <div
-      aria-live="polite"
-      aria-atomic="true"
-      style={{
-        position: 'absolute',
-        width: 1,
-        height: 1,
-        padding: 0,
-        margin: -1,
-        overflow: 'hidden',
-        clip: 'rect(0 0 0 0)',
-        whiteSpace: 'nowrap',
-        border: 0,
-      }}
-    >
+    <div aria-live="polite" aria-atomic="true" className="nuclei-sr-only">
       {announcement}
     </div>
   );

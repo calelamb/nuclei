@@ -345,3 +345,9 @@
 .nuclei-fade-x[data-overflow='start'] { -webkit-mask-image: linear-gradient(to left, #000 calc(100% - 28px), transparent); mask-image: linear-gradient(to left, #000 calc(100% - 28px), transparent); }
 .nuclei-fade-x[data-overflow='both'] { -webkit-mask-image: linear-gradient(to right, transparent, #000 28px, #000 calc(100% - 28px), transparent); mask-image: linear-gradient(to right, transparent, #000 28px, #000 calc(100% - 28px), transparent); }
 .nuclei-file-tab:focus-visible { outline-offset: -2px; }
+
+/* Visually hidden but announced. Anchored at the origin so it can never extend the page's scroll area. */
+.nuclei-sr-only {
+  position: absolute; top: 0; left: 0; width: 1px; height: 1px; margin: -1px; padding: 0; border: 0;
+  overflow: hidden; clip: rect(0 0 0 0); clip-path: inset(50%); white-space: nowrap;
+}

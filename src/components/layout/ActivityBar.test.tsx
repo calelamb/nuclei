@@ -46,4 +46,10 @@ describe('<ActivityBar>', () => {
     expect(getByLabelText('Learning').getAttribute('aria-pressed')).toBe('true');
     expect(getByLabelText('Explorer').getAttribute('aria-pressed')).toBe('false');
   });
+
+  it('draws no mode-accent stripe across the top of the rail (it read as a stray line)', () => {
+    const { getByRole } = render(<ActivityBar active="files" onSelect={() => {}} visibleViews={['files', 'settings']} workspaceMode="research" />);
+    const bar = getByRole('toolbar', { name: 'Activity bar' });
+    expect(bar.style.borderTop).toBe('');
+  });
 });
