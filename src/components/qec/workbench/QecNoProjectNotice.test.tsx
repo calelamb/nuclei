@@ -16,7 +16,8 @@ describe('no-project sidebar copy (qec-r-14, qec-r-21)', () => {
   it('points at Analyze instead of promising a drop zone Build does not have', () => {
     render(<QecNoProjectNotice />);
     expect(screen.getByText(/Plot a sinter stats CSV in the Analyze view/)).toBeTruthy();
-    expect(screen.getByText(/Open a project folder to create Studies/)).toBeTruthy();
+    expect(screen.getByText(/Studies need a project folder|Open a project folder to create Studies/)).toBeTruthy();
+    expect(screen.queryByText(/Drop a sinter stats CSV in the main panel/)).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: 'Open Analyze' }));
     expect(useQecWorkbenchStore.getState().preset).toBe('analyze');
   });
