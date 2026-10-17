@@ -152,7 +152,7 @@ function ApiKeyInput() {
             {visible ? <EyeOff size={12} /> : <Eye size={12} />}
           </IconButton>
         </div>
-        <Button size="sm" className="nuclei-btn--dirac" onClick={handleSave}>
+        <Button size="lg" className="nuclei-btn--dirac" onClick={handleSave}>
           {saved ? 'Saved' : 'Save'}
         </Button>
       </div>

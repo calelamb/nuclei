@@ -11,6 +11,7 @@ import { editorFileKind } from './editorFileKind';
 import { tabBarDensity, type TabBarDensity } from './tabBarLayout';
 import { RunButton } from '../experiments/RunButton';
 import { Button, Menu, type MenuEntry } from '../ui';
+import { focusTabForPath } from './focusTab';
 import { useUiFeatures } from '../../hooks/useUiFeatures';
 
 const basename = (p: string) => p.split('/').pop() ?? p;
@@ -50,7 +51,7 @@ export function EditorTabs() {
     icon: <FileCode size={12} />,
     hint: t.isDirty ? <span style={{ display: 'inline-block', width: 6, height: 6, borderRadius: '50%', background: colors.warning }} role="img" aria-label="Unsaved changes" /> : undefined,
     checked: t.path === activeTabPath,
-    onSelect: () => setActiveTab(t.path),
+    onSelect: () => { setActiveTab(t.path); focusTabForPath(t.path); },
   }));
 
   return (

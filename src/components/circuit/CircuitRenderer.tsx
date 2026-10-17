@@ -203,20 +203,17 @@ export function CircuitRenderer() {
           <span style={{ fontSize: 11, color: colors.textDim, fontFamily: TYPOGRAPHY.fontSans, whiteSpace: 'nowrap' }}>
             {qubit_count} {qubit_count === 1 ? 'qubit' : 'qubits'} · depth {depth}
           </span>
+          {stale && (
+            <span role="status" style={{ fontSize: 11, color: colors.warning, fontFamily: TYPOGRAPHY.fontSans, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+              Out of date: {errorLine !== null ? `error on line ${errorLine}` : 'the code has an error'}
+            </span>
+          )}
         </span>
         <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           {isRunning && <span role="status" style={{ fontSize: 11, color: colors.textMuted, fontFamily: TYPOGRAPHY.fontSans }}>Running…</span>}
           <ExportMenu />
         </span>
       </div>
-      {stale && (
-        <div
-          role="status"
-          style={{ padding: '2px 12px 0', fontSize: 11, color: colors.warning, fontFamily: TYPOGRAPHY.fontSans }}
-        >
-          Out of date: {errorLine !== null ? `error on line ${errorLine}` : 'the code has an error'}
-        </div>
-      )}
       <div
         ref={measureContainer}
         className="circuit-renderer-container"

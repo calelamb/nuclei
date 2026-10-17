@@ -141,7 +141,7 @@
   background: var(--color-surface-base); border: 1px solid var(--color-border-strong); border-radius: var(--radius-round);
 }
 .dirac-code pre code { padding: 0; background: none; color: var(--color-text-primary); font-size: var(--font-size-chrome-label); line-height: var(--line-height-code); }
-.dirac-code__copy.nuclei-icon-btn { position: absolute; top: var(--space-1); right: var(--space-1); color: var(--color-text-tertiary); }
+.dirac-code__copy.nuclei-icon-btn { position: absolute; top: var(--space-1); right: var(--space-1); color: var(--color-text-tertiary); background: var(--color-surface-base); border: 1px solid var(--color-border-strong); }
 .dirac-code__status { position: absolute; right: var(--space-2); bottom: var(--space-1); font-size: var(--font-size-caption); color: var(--color-text-secondary); }
 .dirac-code__status:empty { display: none; }
 .dirac-code .tok--keyword { color: var(--color-accent-quantum-text); }
