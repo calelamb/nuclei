@@ -52,9 +52,9 @@ const PRESET_STATES: Array<{ label: string; theta: number; phi: number }> = [
   { label: '|0\u27E9', theta: 0, phi: 0 },
   { label: '|1\u27E9', theta: Math.PI, phi: 0 },
   { label: '|+\u27E9', theta: Math.PI / 2, phi: 0 },
-  { label: '|-\u27E9', theta: Math.PI / 2, phi: Math.PI },
+  { label: '|\u2212\u27E9', theta: Math.PI / 2, phi: Math.PI },
   { label: '|+i\u27E9', theta: Math.PI / 2, phi: Math.PI / 2 },
-  { label: '|-i\u27E9', theta: Math.PI / 2, phi: 3 * Math.PI / 2 },
+  { label: '|\u2212i\u27E9', theta: Math.PI / 2, phi: 3 * Math.PI / 2 },
 ];
 
 const ALL_GATES = ['H', 'X', 'Y', 'Z', 'S', 'T'];
@@ -500,6 +500,7 @@ export function InteractiveBlochSphere({
               onClick={() => { setTheta(preset.theta); setPhi(preset.phi); }}
               style={{
                 ...btnBase,
+                fontVariantLigatures: 'none',
                 background: Math.abs(theta - preset.theta) < 0.01 && Math.abs(phi - preset.phi) < 0.01
                   ? `${colors.accent}22`
                   : colors.bgElevated,

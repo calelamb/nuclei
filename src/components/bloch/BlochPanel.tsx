@@ -6,6 +6,7 @@ import { activeDebugStep } from '../../lib/debugTrace';
 import { ClassicBlochSphere } from './ClassicBlochSphere';
 
 import { TYPOGRAPHY } from '../../styles/tokens';
+import { useThemeStore } from '../../stores/themeStore';
 /**
  * Bloch sphere panel — a classic interactive sphere (one per qubit),
  * rotatable and zoomable, that updates from the Python kernel's
@@ -17,6 +18,7 @@ import { TYPOGRAPHY } from '../../styles/tokens';
  */
 export function BlochPanel() {
   const result = useSimulationStore((s) => s.result);
+  const colors = useThemeStore((s) => s.colors);
   // Quantum Debugger (Phase 3): while stepping, show the Bloch state AT the
   // cursor from the cached trace; otherwise the final simulation result.
   const stepMode = useCircuitStore((s) => s.stepMode);
@@ -59,9 +61,8 @@ export function BlochPanel() {
             minWidth: 0,
             position: 'relative',
             borderRadius: 10,
-            background:
-              'radial-gradient(circle at 50% 45%, rgba(20,28,44,0.85) 0%, rgba(8,12,22,0.82) 65%, rgba(5,8,16,0.9) 100%)',
-            border: '1px solid rgba(64, 86, 120, 0.28)',
+            background: colors.bgElevated,
+            border: `1px solid ${colors.borderStrong}`,
             overflow: 'hidden',
           }}
         >
@@ -76,6 +77,7 @@ export function BlochPanel() {
 }
 
 function EmptyState() {
+  const colors = useThemeStore((s) => s.colors);
   return (
     <div
       style={{
@@ -85,22 +87,22 @@ function EmptyState() {
         justifyContent: 'center',
         flexDirection: 'column',
         gap: 10,
-        color: '#475569',
+        color: colors.textDim,
       }}
     >
       <svg width={72} height={72} viewBox="0 0 72 72" style={{ opacity: 0.15 }}>
         <defs>
           <radialGradient id="empty-glow" cx="50%" cy="50%" r="50%">
-            <stop offset="0%" stopColor="#00B4D8" stopOpacity="0.25" />
-            <stop offset="100%" stopColor="#00B4D8" stopOpacity="0" />
+            <stop offset="0%" stopColor={colors.accent} stopOpacity="0.25" />
+            <stop offset="100%" stopColor={colors.accent} stopOpacity="0" />
           </radialGradient>
         </defs>
         <circle cx={36} cy={36} r={32} fill="url(#empty-glow)" />
-        <circle cx={36} cy={36} r={30} fill="none" stroke="#3D5A80" strokeWidth={1} />
-        <ellipse cx={36} cy={36} rx={30} ry={10} fill="none" stroke="#3D5A80" strokeWidth={0.5} />
-        <ellipse cx={36} cy={36} rx={10} ry={30} fill="none" stroke="#3D5A80" strokeWidth={0.5} />
-        <line x1={36} y1={4} x2={36} y2={68} stroke="#3D5A80" strokeWidth={0.5} strokeDasharray="2,2" />
-        <line x1={4} y1={36} x2={68} y2={36} stroke="#3D5A80" strokeWidth={0.5} strokeDasharray="2,2" />
+        <circle cx={36} cy={36} r={30} fill="none" stroke={colors.wire} strokeWidth={1} />
+        <ellipse cx={36} cy={36} rx={30} ry={10} fill="none" stroke={colors.wire} strokeWidth={0.5} />
+        <ellipse cx={36} cy={36} rx={10} ry={30} fill="none" stroke={colors.wire} strokeWidth={0.5} />
+        <line x1={36} y1={4} x2={36} y2={68} stroke={colors.wire} strokeWidth={0.5} strokeDasharray="2,2" />
+        <line x1={4} y1={36} x2={68} y2={36} stroke={colors.wire} strokeWidth={0.5} strokeDasharray="2,2" />
       </svg>
       <span style={{ fontSize: 12, fontFamily: TYPOGRAPHY.fontSans }}>
         Run a simulation to visualize qubit states
