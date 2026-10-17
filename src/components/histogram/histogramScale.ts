@@ -41,16 +41,20 @@ export function formatPercentTick(value: number): string {
   return Number.isInteger(Number(percent.toFixed(6))) ? `${Math.round(percent)}%` : `${Number(percent.toFixed(2))}%`;
 }
 
+const EVEN_SPREAD_RATIO = 1.5;
+
 export interface TopOutcomes {
   shown: HistogramRow[];
   hiddenCount: number;
   hiddenProbability: number;
+  /** True when the outcomes are about equally likely, so the cut-off is arbitrary. */
+  evenlySpread: boolean;
 }
 
 /** The `limit` most likely outcomes (shown in basis order), plus what was left out. */
 export function topOutcomes(rows: readonly HistogramRow[], limit: number = MAX_VISIBLE_OUTCOMES): TopOutcomes {
   if (rows.length <= limit) {
-    return { shown: [...rows].sort((a, b) => a.state.localeCompare(b.state)), hiddenCount: 0, hiddenProbability: 0 };
+    return { shown: [...rows].sort((a, b) => a.state.localeCompare(b.state)), hiddenCount: 0, hiddenProbability: 0, evenlySpread: false };
   }
   const ranked = [...rows].sort((a, b) => b.probability - a.probability || a.state.localeCompare(b.state));
   const kept = ranked.slice(0, limit);
@@ -59,5 +63,6 @@ export function topOutcomes(rows: readonly HistogramRow[], limit: number = MAX_V
     shown: kept.sort((a, b) => a.state.localeCompare(b.state)),
     hiddenCount: dropped.length,
     hiddenProbability: dropped.reduce((sum, r) => sum + r.probability, 0),
+    evenlySpread: ranked[0].probability <= ranked[ranked.length - 1].probability * EVEN_SPREAD_RATIO,
   };
 }

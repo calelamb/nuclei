@@ -288,9 +288,10 @@ export function SettingsPanel() {
   const updateAgentHardware = useSettingsStore((s) => s.updateAgentHardware);
   const resetAll = useSettingsStore((s) => s.resetAll);
   const setSimShots = useSimulationStore((s) => s.setShots);
-  const focusDirac = useNavigationStore((s) => s.settingsSection) === 'dirac';
+  // Capture the deep-link target once, then consume it. Local state survives StrictMode remounts.
+  const [focusDirac] = useState(() => useNavigationStore.getState().settingsSection === 'dirac');
   const clearSettingsSection = useNavigationStore((s) => s.clearSettingsSection);
-  useEffect(() => clearSettingsSection, [clearSettingsSection]);
+  useEffect(() => { clearSettingsSection(); }, [clearSettingsSection]);
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>

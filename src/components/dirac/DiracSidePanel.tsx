@@ -338,8 +338,9 @@ export function DiracSidePanel() {
   useEffect(() => {
     if (!pendingPrompt || !hasApiKey || isLoading) return;
     clearPendingPrompt();
-    dispatch(pendingPrompt);
-  }, [pendingPrompt, hasApiKey, isLoading, clearPendingPrompt, dispatch]);
+    userScrolledUp.current = false;
+    void sendMessage(pendingPrompt.trim());
+  }, [pendingPrompt, hasApiKey, isLoading, clearPendingPrompt, sendMessage]);
 
   const handleResizeStart = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
@@ -457,8 +458,8 @@ export function DiracSidePanel() {
             ) : (
               <div style={{
                 padding: '8px 0 8px 12px',
-                borderLeft: `2px solid ${colors.dirac}`,
-                boxShadow: `inset 3px 0 8px -3px ${colors.dirac}15`,
+                borderLeft: msg.error ? '2px solid transparent' : `2px solid ${colors.dirac}`,
+                boxShadow: msg.error ? 'none' : `inset 3px 0 8px -3px ${colors.dirac}15`,
                 color: colors.text, fontSize: 13,
                 fontFamily: TYPOGRAPHY.fontSans,
                 lineHeight: 1.6,

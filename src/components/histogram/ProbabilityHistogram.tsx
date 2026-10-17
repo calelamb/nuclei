@@ -73,8 +73,8 @@ function HistogramChart({ data, srDescription, scroll = false }: { data: Histogr
 }
 
 /** "Showing the 16 most likely of 64 outcomes" with a switch to see them all. */
-function OutcomeCap({ shown, hiddenCount, hiddenProbability, showAll, onToggle }: {
-  shown: number; hiddenCount: number; hiddenProbability: number; showAll: boolean; onToggle: () => void;
+function OutcomeCap({ shown, hiddenCount, hiddenProbability, evenlySpread, showAll, onToggle }: {
+  shown: number; hiddenCount: number; hiddenProbability: number; evenlySpread: boolean; showAll: boolean; onToggle: () => void;
 }) {
   const colors = useThemeStore((s) => s.colors);
   if (hiddenCount === 0 && !showAll) return <div style={{ flex: 1 }} />;
@@ -83,7 +83,9 @@ function OutcomeCap({ shown, hiddenCount, hiddenProbability, showAll, onToggle }
       <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', minWidth: 0 }} title={showAll ? undefined : `${hiddenCount} other outcomes hold ${formatPercentTick(hiddenProbability)} of shots`}>
         {showAll
           ? 'Every outcome shown. Scroll sideways.'
-          : `Top ${shown} outcomes. ${hiddenCount} others hold ${formatPercentTick(hiddenProbability)} of shots.`}
+          : evenlySpread
+            ? `${shown + hiddenCount} outcomes, all about equally likely. Showing ${shown}.`
+            : `Top ${shown} outcomes. ${hiddenCount} others hold ${formatPercentTick(hiddenProbability)} of shots.`}
       </span>
       <Button size="sm" variant="ghost" onClick={onToggle} style={{ flexShrink: 0 }}>{showAll ? 'Show top outcomes' : 'Show all'}</Button>
     </div>
@@ -124,7 +126,7 @@ export function ProbabilityHistogram() {
           <span style={{ color: colors.accent, fontSize: 11, fontWeight: 600, fontFamily: TYPOGRAPHY.fontSans }}>
             Ideal probabilities · state at {step.gate_index < 0 ? 'start' : `${step.label}`}
           </span>
-          <OutcomeCap shown={data.length} hiddenCount={stepView.hiddenCount} hiddenProbability={stepView.hiddenProbability} showAll={showAll} onToggle={() => setShowAll((v) => !v)} />
+          <OutcomeCap shown={data.length} hiddenCount={stepView.hiddenCount} hiddenProbability={stepView.hiddenProbability} evenlySpread={stepView.evenlySpread} showAll={showAll} onToggle={() => setShowAll((v) => !v)} />
         </div>
         <HistogramChart data={data} srDescription={srDescription} scroll={showAll && stepRows.length > MAX_VISIBLE_OUTCOMES} />
       </div>
@@ -227,7 +229,7 @@ export function ProbabilityHistogram() {
           />
         </label>
 
-        <OutcomeCap shown={data.length} hiddenCount={view.hiddenCount} hiddenProbability={view.hiddenProbability} showAll={showAll} onToggle={() => setShowAll((v) => !v)} />
+        <OutcomeCap shown={data.length} hiddenCount={view.hiddenCount} hiddenProbability={view.hiddenProbability} evenlySpread={view.evenlySpread} showAll={showAll} onToggle={() => setShowAll((v) => !v)} />
 
         {/* Export */}
         <Button size="sm" onClick={handleExportCSV}>

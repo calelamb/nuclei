@@ -46,7 +46,8 @@ export function LessonCodeEditor({ value, onChange }: Props) {
           lineNumbersMinChars: 2,
           renderLineHighlight: 'none',
           overviewRulerLanes: 0,
-          scrollbar: { vertical: 'auto', horizontal: 'auto', alwaysConsumeMouseWheel: false },
+          scrollbar: { vertical: 'auto', horizontal: 'hidden', alwaysConsumeMouseWheel: false },
+          wordWrap: 'on',
           padding: { top: 8, bottom: 8 },
           fontFamily: TYPOGRAPHY.fontMono,
         }}

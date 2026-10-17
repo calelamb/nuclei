@@ -19,6 +19,14 @@ interface HistogramChipProps {
 
 const EPSILON = 1e-6;
 const MAX_BARS = 3;
+const MAX_LABEL_BITS = 8;
+
+/** Keep long bitstrings readable in a narrow chip: |0000…0000⟩. */
+function chipLabel(state: string): string {
+  if (state.length <= MAX_LABEL_BITS) return state;
+  const half = MAX_LABEL_BITS / 2;
+  return `${state.slice(0, half)}…${state.slice(-half)}`;
+}
 
 /**
  * Compact inline histogram — 2-3 bars showing top outcomes by probability.
@@ -55,6 +63,7 @@ export function HistogramChip({
     .sort((a, b) => b[1].max - a[1].max || a[0].localeCompare(b[0]));
   const entries = ranked.slice(0, MAX_BARS);
   const hiddenCount = ranked.length - entries.length;
+  const hiddenLabel = hiddenCount.toLocaleString('en-US');
 
   if (entries.length === 0) return null;
 
@@ -66,6 +75,7 @@ export function HistogramChip({
         display: 'flex',
         alignItems: 'center',
         gap: 12,
+        minWidth: 0,
         padding: '6px 10px',
         background: `${colors.accent}0A`,
         border: `1px solid ${colors.border}`,
@@ -74,21 +84,22 @@ export function HistogramChip({
         fontFamily: TYPOGRAPHY.fontSans,
       }}
     >
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10, flex: 1, minWidth: 0 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, flex: 1, minWidth: 0, overflow: 'hidden' }}>
         {entries.map(([state, { cls, hw }]) => (
           <div
             key={state}
             data-testid="histogram-chip-bar"
-            style={{ display: 'flex', alignItems: 'center', gap: 6, flex: 1, minWidth: 0 }}
+            style={{ display: 'flex', alignItems: 'center', gap: 6, flex: 1, minWidth: 0, overflow: 'hidden', whiteSpace: 'nowrap' }}
           >
             <span
+              title={`|${state}⟩`}
               style={{
                 fontFamily: TYPOGRAPHY.fontMono,
                 color: colors.accentLight,
                 flexShrink: 0,
               }}
             >
-              |{state}⟩
+              |{chipLabel(state)}⟩
             </span>
             <div
               style={{
@@ -96,7 +107,7 @@ export function HistogramChip({
                 display: 'flex',
                 flexDirection: 'column',
                 gap: 2,
-                minWidth: 20,
+                minWidth: 8,
               }}
             >
               <div
@@ -153,19 +164,19 @@ export function HistogramChip({
           </div>
         ))}
       </div>
-      <div style={{ display: 'flex', gap: 4, flexShrink: 0, alignItems: 'center' }}>
+      <div style={{ display: 'flex', gap: 4, flexShrink: 0, alignItems: 'center', maxWidth: '45%' }}>
         {hiddenCount > 0 && (onExpand ? (
           <button
             type="button"
-            aria-label={`Show ${hiddenCount} more outcomes`}
+            aria-label={`Show ${hiddenLabel} more outcomes`}
             onClick={onExpand}
             className="histogram-chip__more"
           >
-            +{hiddenCount} more
+            +{hiddenLabel} more
           </button>
         ) : (
-          <span className="histogram-chip__more histogram-chip__more--static" title={`${hiddenCount} more outcomes. Open the full histogram to see them.`}>
-            +{hiddenCount} more
+          <span className="histogram-chip__more histogram-chip__more--static" title={`${hiddenLabel} more outcomes. Open the full histogram to see them.`}>
+            +{hiddenLabel} more
           </span>
         ))}
         {onExpand && (

@@ -2,6 +2,7 @@ import { useCallback } from 'react';
 import Editor from '@monaco-editor/react';
 import { Braces } from 'lucide-react';
 import { useThemeStore } from '../../stores/themeStore';
+import { registerNucleiThemes } from '../editor/monacoThemes';
 import { useChallengeModeStore } from '../../stores/challengeModeStore';
 import type { QuantumChallenge } from '../../types/challenge';
 
@@ -22,6 +23,7 @@ function buildSignature(challenge: QuantumChallenge) {
 export function ProblemEditor({ challenge }: ProblemEditorProps) {
   const colors = useThemeStore((s) => s.colors);
   const shadow = useThemeStore((s) => s.shadow);
+  const mode = useThemeStore((s) => s.mode);
   const activeFramework = useChallengeModeStore((s) => s.activeFramework);
   const updateDraftCode = useChallengeModeStore((s) => s.updateDraftCode);
   const progress = useChallengeModeStore((s) => s.progress);
@@ -103,7 +105,8 @@ export function ProblemEditor({ challenge }: ProblemEditorProps) {
 
       <div style={{ flex: 1, minHeight: 0 }}>
         <Editor
-          theme="vs-dark"
+          theme={mode === 'dark' ? 'nuclei-dark' : 'nuclei-light'}
+          beforeMount={registerNucleiThemes}
           language="python"
           value={editorValue}
           onChange={handleChange}

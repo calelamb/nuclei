@@ -28,4 +28,20 @@ describe('blochGridLayout', () => {
     expect(l.pageSize).toBe(1);
     expect(l.pageCount).toBe(5);
   });
+
+  it('never pages 2 qubits, even in the narrow 1100px slot', () => {
+    const l = blochGridLayout({ count: 2, width: 200, height: 224 });
+    expect(l.pageCount).toBe(1);
+    expect(l.pageSize).toBe(2);
+  });
+
+  it('keeps 3 qubits together in a narrow slot and a wider one', () => {
+    expect(blochGridLayout({ count: 3, width: 200, height: 224 }).pageCount).toBe(1);
+    expect(blochGridLayout({ count: 3, width: 316, height: 224 }).pageCount).toBe(1);
+  });
+
+  it('keeps full-size spheres when there is room', () => {
+    const l = blochGridLayout({ count: 2, width: 480, height: 300 });
+    expect(l.cellWidth).toBeGreaterThanOrEqual(MIN_SPHERE_PX);
+  });
 });

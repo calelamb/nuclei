@@ -74,4 +74,11 @@ describe('topOutcomes', () => {
   it('can show everything on request', () => {
     expect(topOutcomes(rows, Infinity).shown).toHaveLength(64);
   });
+
+  it('flags a uniform distribution so the cut-off is not read as structure', () => {
+    const rows = Array.from({ length: 64 }, (_, i) => ({ state: i.toString(2).padStart(6, '0'), probability: 1 / 64 }));
+    expect(topOutcomes(rows).evenlySpread).toBe(true);
+    const skewed = rows.map((r, i) => (i === 0 ? { ...r, probability: 0.5 } : r));
+    expect(topOutcomes(skewed).evenlySpread).toBe(false);
+  });
 });
