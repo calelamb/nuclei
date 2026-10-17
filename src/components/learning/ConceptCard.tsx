@@ -1,6 +1,5 @@
 import { useThemeStore } from '../../stores/themeStore';
 import { useDiracPanelStore } from '../../stores/diracPanelStore';
-import { useDiracStore } from '../../stores/diracStore';
 
 import { TYPOGRAPHY } from '../../styles/tokens';
 interface ConceptCardProps {
@@ -84,15 +83,9 @@ function VisualPlaceholder({ type }: { type: ConceptCardProps['visual'] }) {
 export function ConceptCard({ title, visual, explanation }: ConceptCardProps) {
   const colors = useThemeStore((s) => s.colors);
   const shadow = useThemeStore((s) => s.shadow);
-  const openDirac = useDiracPanelStore((s) => s.open);
-  const focusDirac = useDiracPanelStore((s) => s.focusInput);
-  const addMessage = useDiracStore((s) => s.addMessage);
+  const ask = useDiracPanelStore((s) => s.ask);
 
-  const askDirac = () => {
-    openDirac();
-    addMessage({ role: 'user', content: `Can you explain "${title}" in more detail?` });
-    setTimeout(focusDirac, 100);
-  };
+  const askDirac = () => ask(`Can you explain "${title}" in more detail?`);
 
   return (
     <div style={{

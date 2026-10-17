@@ -16,7 +16,7 @@ export interface EditorSettings {
 export interface DiracSettings {
   ghostCompletions: boolean;      // inline ghost suggestions (off by default for beginners)
   autoExplainErrors: boolean;     // auto-rewrite Python tracebacks into concept-level explanations
-  narration: boolean;             // ambient one-liner narration after parse / run
+  ambientNarration: boolean;      // ambient one-liner narration (paid Claude call; off by default, see services/ambientNarrator.ts)
   extendedThinking: boolean;      // auto-escalate reasoning-keyword chats to thinking; /think always works
   preferredModel: 'auto' | 'haiku' | 'sonnet'; // chat model; tool turns always run Sonnet
   contextDepth: 'minimal' | 'standard' | 'full'; // how much IDE context chat injects (see diracRouting.ts)
@@ -83,7 +83,7 @@ const DEFAULT_EDITOR: EditorSettings = {
 const DEFAULT_DIRAC: DiracSettings = {
   ghostCompletions: false, // beginner default per AI-native design
   autoExplainErrors: true,
-  narration: true,
+  ambientNarration: false, // costs money per call: opt-in only
   extendedThinking: true,
   preferredModel: 'auto',
   contextDepth: 'standard',

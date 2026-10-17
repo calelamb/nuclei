@@ -12,6 +12,7 @@ import { EnvironmentPanel } from './EnvironmentPanel';
 import { Button, IconButton, SegmentedControl, Select, Switch, TextInput } from '../ui';
 import { WorkspaceSection, HelpSection } from './SettingsWorkspaceHelp';
 import { Section, SettingRow, RowLabelContext } from './SettingsPrimitives';
+import { validateApiKey } from '../../lib/apiKey';
 
 import { TYPOGRAPHY } from '../../styles/tokens';
 /* ── Shared Controls ────────────────────────────────────── */
@@ -102,11 +103,7 @@ function ApiKeyInput() {
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState('');
 
-  const validate = (key: string): string => {
-    if (key.trim() === '') return '';
-    if (!key.startsWith('sk-ant-')) return 'Key should start with "sk-ant-"';
-    return '';
-  };
+  const validate = validateApiKey;
 
   const handleSave = () => {
     const trimmed = keyValue.trim();
@@ -301,6 +298,11 @@ export function SettingsPanel() {
           <SettingRow label="Auto-Explain Errors">
             <Toggle value={dirac.autoExplainErrors}
               onChange={(v) => updateDirac({ autoExplainErrors: v })} />
+          </SettingRow>
+          <SettingRow label="Ambient Narration"
+            hint="Dirac comments on your circuit after you pause typing. Each comment is a paid Claude call, so it is off by default and limited to one every 10 seconds.">
+            <Toggle value={dirac.ambientNarration}
+              onChange={(v) => updateDirac({ ambientNarration: v })} />
           </SettingRow>
           <SettingRow label="Extended Thinking"
             hint="Auto-escalate hard chat questions to deep reasoning. /think always works.">

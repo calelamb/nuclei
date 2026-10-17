@@ -10,7 +10,7 @@ export const wState: QuantumChallenge = {
 The **W state** is the other genuinely-multipartite three-qubit entangled state —
 an equal superposition of every single-excitation basis state:
 
-\`|W_n\\u27E9 = (|10\\u20260\\u27E9 + |01\\u20260\\u27E9 + \\u2026 + |0\\u20260 1\\u27E9) / \\u221A n\`
+\`|W_n⟩ = (|10…0⟩ + |01…0⟩ + … + |0…0 1⟩) / √ n\`
 
 Unlike GHZ, a W state keeps its entanglement when any one qubit is lost — which
 makes it valuable for robust quantum memory and leader-election protocols. It's
@@ -19,7 +19,7 @@ states, so you can't get there with a single Hadamard and a CNOT chain.
 
 ### Your Task
 
-Given \`n_qubits\`, prepare \`|W_n\\u27E9\`. Exactly the \`n\` single-excitation
+Given \`n_qubits\`, prepare \`|W_n⟩\`. Exactly the \`n\` single-excitation
 outcomes should appear, each with probability 1/n.
 
 > **Graded by state fidelity.** The specific amplitude pattern (all equal, all in

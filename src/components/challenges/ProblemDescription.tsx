@@ -1,4 +1,4 @@
-import ReactMarkdown from 'react-markdown';
+import { MarkdownWithTables } from '../markdown/MarkdownWithTables';
 import { useThemeStore } from '../../stores/themeStore';
 import { MaxCutGraphViz } from './MaxCutGraphViz';
 import type { QuantumChallenge, ChallengeExample } from '../../types/challenge';
@@ -179,7 +179,8 @@ export function ProblemDescription({ challenge }: ProblemDescriptionProps) {
         fontFamily: TYPOGRAPHY.fontSans,
         lineHeight: 1.7,
       }}>
-        <ReactMarkdown
+        <MarkdownWithTables
+        markdown={challenge.description}
           components={{
             h1: ({ children }) => (
               <h1 style={{ fontSize: 20, fontWeight: 700, color: colors.text, margin: '0 0 12px' }}>
@@ -238,9 +239,7 @@ export function ProblemDescription({ challenge }: ProblemDescriptionProps) {
               </strong>
             ),
           }}
-        >
-          {challenge.description}
-        </ReactMarkdown>
+        />
       </div>
 
       {/* Visualization (if present) */}

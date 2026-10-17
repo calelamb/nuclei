@@ -11,6 +11,15 @@ interface DiracPanelState {
   autoCollapsed: boolean;
   /** Last viewport band seen by `applyNarrow` (null before the first call). */
   lastNarrow: boolean | null;
+  /** A question queued from elsewhere in the app (e.g. a concept card). The panel sends it once Dirac is connected. */
+  pendingPrompt: string | null;
+  /** Open the panel and queue `text` to be sent as a user message. */
+  ask: (text: string) => void;
+  clearPendingPrompt: () => void;
+  /** True while the key form is shown over the chat (rejected key, or the user asked to change it). */
+  keyEntryOpen: boolean;
+  requestKeyUpdate: () => void;
+  closeKeyEntry: () => void;
   toggle: () => void;
   open: () => void;
   close: () => void;
@@ -63,4 +72,10 @@ export const useDiracPanelStore = create<DiracPanelState>((set) => ({
       autoCollapsed: false,
       lastNarrow: null,
     })),
+  pendingPrompt: null,
+  keyEntryOpen: false,
+  requestKeyUpdate: () => set({ isOpen: true, autoCollapsed: false, keyEntryOpen: true }),
+  closeKeyEntry: () => set({ keyEntryOpen: false }),
+  ask: (text) => set({ isOpen: true, autoCollapsed: false, pendingPrompt: text }),
+  clearPendingPrompt: () => set({ pendingPrompt: null }),
 }));

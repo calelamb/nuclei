@@ -18,7 +18,7 @@ computing. The parity of a bit-string is the XOR of all its bits:
 In a quantum circuit you can compute parity without destroying the original data.
 The trick uses an **ancilla qubit** and the CNOT gate:
 
-- CNOT flips the target qubit whenever the control qubit is \`|1\\u27E9\`
+- CNOT flips the target qubit whenever the control qubit is \`|1⟩\`
 - Chaining CNOTs from every data qubit into a single ancilla accumulates the XOR
 
 After the cascade, the ancilla holds the parity of the entire register.
@@ -32,9 +32,9 @@ After the cascade, the ancilla holds the parity of the entire register.
 ### Example
 
 For \`bitstring = "01"\`:
-- Qubit 0 stays \`|0\\u27E9\`, qubit 1 is flipped to \`|1\\u27E9\`
-- CNOT(0, ancilla) leaves ancilla as \`|0\\u27E9\`
-- CNOT(1, ancilla) flips ancilla to \`|1\\u27E9\`
+- Qubit 0 stays \`|0⟩\`, qubit 1 is flipped to \`|1⟩\`
+- CNOT(0, ancilla) leaves ancilla as \`|0⟩\`
+- CNOT(1, ancilla) flips ancilla to \`|1⟩\`
 - Measurement yields \`"1"\` with certainty (odd parity)`,
 
   constraints: [

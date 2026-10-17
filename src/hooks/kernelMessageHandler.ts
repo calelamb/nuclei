@@ -15,7 +15,7 @@ import { useTranspileStore } from '../stores/transpileStore';
 import { useDebugStore } from '../stores/debugStore';
 import { resolveFormat } from '../lib/lintSender';
 import { useLintStore } from '../stores/lintStore';
-import { narrateParse, narrateResult } from '../services/narration';
+import { requestParseNarration, requestResultNarration } from '../services/ambientNarrator';
 import { rewriteExecutionError } from '../services/errorRewrite';
 
 /** Per-provider "connecting" watchdog timers, owned by the hook. */
@@ -68,14 +68,7 @@ export function handleKernelMessage(msg: KernelResponse, connectTimers: ConnectT
           useEditorStore.getState().setFramework(msg.data.framework);
         }
         useDiracStore.getState().clearRewrittenError();
-        if (useSettingsStore.getState().dirac.narration) {
-          const codeForNarration = useEditorStore.getState().code;
-          narrateParse({ code: codeForNarration, snapshot: msg.data })
-            .then((line) => {
-              if (line) useDiracStore.getState().pushAmbient({ kind: 'parse', text: line });
-            })
-            .catch(() => { /* graceful — ambient AI must never throw */ });
-        }
+        requestParseNarration(useEditorStore.getState().code, msg.data);
       }
       break;
     case 'result':
@@ -83,15 +76,7 @@ export function handleKernelMessage(msg: KernelResponse, connectTimers: ConnectT
       useEditorStore.getState().clearErrors();
       if (msg.data) {
         useDiracStore.getState().clearRewrittenError();
-        if (useSettingsStore.getState().dirac.narration) {
-          const codeForNarration = useEditorStore.getState().code;
-          const snap = useCircuitStore.getState().snapshot;
-          narrateResult({ code: codeForNarration, snapshot: snap, result: msg.data })
-            .then((line) => {
-              if (line) useDiracStore.getState().pushAmbient({ kind: 'result', text: line });
-            })
-            .catch(() => { /* graceful */ });
-        }
+        requestResultNarration(useEditorStore.getState().code, useCircuitStore.getState().snapshot, msg.data);
       }
       break;
     case 'python_result':

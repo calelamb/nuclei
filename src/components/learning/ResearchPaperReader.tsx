@@ -2,14 +2,11 @@ import { useState } from 'react';
 import { FileText, Cpu } from 'lucide-react';
 import { useThemeStore } from '../../stores/themeStore';
 import { useDiracPanelStore } from '../../stores/diracPanelStore';
-import { useDiracStore } from '../../stores/diracStore';
 
 import { TYPOGRAPHY } from '../../styles/tokens';
 export function ResearchPaperReader() {
   const colors = useThemeStore((s) => s.colors);
-  const openDirac = useDiracPanelStore((s) => s.open);
-  const focusDirac = useDiracPanelStore((s) => s.focusInput);
-  const addMessage = useDiracStore((s) => s.addMessage);
+  const ask = useDiracPanelStore((s) => s.ask);
   const [arxivUrl, setArxivUrl] = useState('');
   const [abstractText, setAbstractText] = useState('');
 
@@ -18,9 +15,7 @@ export function ResearchPaperReader() {
 
   const sendToDirac = (prefix: string) => {
     if (!hasContent) return;
-    addMessage({ role: 'user', content: `${prefix}\n${content}` });
-    openDirac();
-    focusDirac();
+    ask(`${prefix}\n${content}`);
   };
 
   return (

@@ -1,0 +1,10 @@
+/* Chip affordance for outcomes that do not fit in the compact strip. */
+.histogram-chip__more {
+  padding: 2px var(--space-2); border-radius: var(--radius-pill); cursor: pointer; white-space: nowrap; min-width: 0; overflow: hidden; text-overflow: ellipsis;
+  border: 1px solid var(--color-border-strong); background: var(--color-surface-raised);
+  font: var(--font-size-caption) var(--font-sans); color: var(--color-text-secondary);
+  transition: background-color var(--duration-fast) var(--ease-standard), color var(--duration-fast) var(--ease-standard);
+}
+.histogram-chip__more:hover { background: var(--color-surface-overlay); color: var(--color-text-primary); }
+.histogram-chip__more--static { cursor: default; }
+.histogram-chip__more--static:hover { background: var(--color-surface-raised); color: var(--color-text-secondary); }

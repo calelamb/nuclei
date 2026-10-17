@@ -8,32 +8,32 @@ export const groversSearch: QuantumChallenge = {
   description: `## Grover's Search
 
 **Grover's algorithm** finds a marked item in an unstructured database of \`N =
-2^n\` items in \`~\\u221AN\` queries — a quadratic speedup over the \`N/2\`
+2^n\` items in \`~√N\` queries — a quadratic speedup over the \`N/2\`
 classical average.
 
 ### The Problem
 
 You are handed an opaque **oracle** on \`n\` qubits that phase-marks the hidden
-solution \`|s\\u27E9\` (it flips the sign of that one amplitude and leaves the rest
+solution \`|s⟩\` (it flips the sign of that one amplitude and leaves the rest
 alone). **You are not given \`s\`.** Recover it by amplifying its amplitude with
 Grover iterations.
 
 ### The Algorithm
 
 1. Put all \`n\` qubits into equal superposition (H on each).
-2. Repeat **\`k = \\u230A\\u03C0/4 \\u00B7 \\u221AN\\u230B\`** times:
+2. Repeat **\`k = ⌊π/4 · √N⌋\`** times:
    - **Query the oracle** (phase-flip the solution).
    - Apply the **diffuser** — reflect every amplitude about their mean:
-     H\\u00B7X on all, a multi-controlled Z, then X\\u00B7H on all.
-3. Measure — the solution \`|s\\u27E9\` dominates.
+     H·X on all, a multi-controlled Z, then X·H on all.
+3. Measure — the solution \`|s⟩\` dominates.
 
-> Use exactly \`k = \\u230A\\u03C0/4 \\u00B7 \\u221A(2^n)\\u230B\` iterations. Too few
+> Use exactly \`k = ⌊π/4 · √(2^n)⌋\` iterations. Too few
 > or too many and the amplitude swings away from the solution.
 
 ### Your Task
 
 Implement \`solve(oracle)\`. Read \`n = oracle.num_qubits\`, run Grover with the
-optimal number of iterations, and return the measured circuit. The \\u2605
+optimal number of iterations, and return the measured circuit. The ★
 rewards using the optimal query count.`,
 
   constraints: [

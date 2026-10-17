@@ -29,6 +29,7 @@ import { useQecStore } from '../stores/qecStore';
 import { useQecCampaignStore } from '../stores/qecCampaignStore';
 import { resolveNoiseModel } from '../types/noiseModel';
 import type { RunRecord } from '../types/experiment';
+import { describeHttpError, describeThrownError } from '../lib/diracErrors';
 
 // The capabilities/tools section is appended after the persona preamble
 // (see personaPreamble in services/diracPersona.ts) for both workspace
@@ -475,7 +476,7 @@ function executeToolById(toolId: string, accepted: boolean) {
 }
 
 export function useDirac() {
-  const { addMessage, updateLastAssistant, updateLastThinking, updateLastToolCalls, setLoading } = useDiracStore();
+  const { addMessage, updateLastAssistant, updateLastThinking, updateLastToolCalls, failLastAssistant, setLoading } = useDiracStore();
 
   // API key is now initialized in diracStore (from localStorage / env).
   // No mount-time override needed.
@@ -532,6 +533,8 @@ export function useDirac() {
 
     for (let i = 0; i < storeMessages.length; i++) {
       const m = storeMessages[i];
+      // A failed turn carries no content; sending it would be an empty assistant message.
+      if (m.role === 'assistant' && m.error) continue;
       if (m.role === 'user') {
         const isLast = i === storeMessages.length - 1;
         apiMessages.push({
@@ -588,14 +591,14 @@ export function useDirac() {
 
       if (!response.ok) {
         const errorText = await response.text();
-        updateLastAssistant(`Error: ${response.status} — ${errorText}`);
+        failLastAssistant(describeHttpError(response.status, errorText));
         setLoading(false);
         return;
       }
 
       const reader = response.body?.getReader();
       if (!reader) {
-        updateLastAssistant('Error: No response stream');
+        failLastAssistant(describeThrownError(new Error('No response stream')));
         setLoading(false);
         return;
       }
@@ -678,10 +681,10 @@ export function useDirac() {
 
       setLoading(false);
     } catch (e) {
-      updateLastAssistant(`Error: ${e instanceof Error ? e.message : 'Unknown error'}`);
+      failLastAssistant(describeThrownError(e));
       setLoading(false);
     }
-  }, [addMessage, updateLastAssistant, updateLastThinking, updateLastToolCalls, setLoading]);
+  }, [addMessage, updateLastAssistant, updateLastThinking, updateLastToolCalls, failLastAssistant, setLoading]);
 
   const handleToolAction = useCallback((toolId: string, accepted: boolean) => {
     executeToolById(toolId, accepted);

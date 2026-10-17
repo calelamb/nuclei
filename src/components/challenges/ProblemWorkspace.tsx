@@ -200,7 +200,6 @@ export function ProblemWorkspace() {
               </span>
             </>
           )}
-          <span>{Math.round(activeProblem.acceptanceRate * 100)}% acceptance</span>
           <span>{visibleTests.length} visible / {hiddenTests.length} hidden</span>
           <span>{submissions.length} submissions</span>
         </div>
