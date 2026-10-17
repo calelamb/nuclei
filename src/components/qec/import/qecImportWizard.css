@@ -3,7 +3,7 @@
 .qec-tray__import-host { min-width: 0; }
 
 .qec-import-sheet { position: fixed; z-index: 60; inset: 0; display: grid; place-items: center; padding: 24px; }
-.qec-import-sheet__scrim { position: absolute; inset: 0; background: rgb(8 13 22 / 0.55); animation: nuclei-fade-in 120ms ease; }
+.qec-import-sheet__scrim { position: absolute; inset: 0; background: var(--color-scrim, rgb(8 13 22 / 0.55)); animation: nuclei-fade-in 120ms ease; }
 .qec-import-sheet__panel {
   position: relative; display: flex; width: min(920px, 100%); height: min(680px, 100%); min-height: 0; overflow: hidden;
   border: 1px solid var(--qec-border); border-radius: 10px; background: var(--qec-wash);
