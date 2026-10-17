@@ -7,6 +7,8 @@ export const MAX_SPHERES_PER_PAGE = 8;
 /** Space under each sphere for its qubit label and readout. */
 export const CELL_CAPTION_PX = 36;
 const GAP_PX = 8;
+/** When the qubits must page anyway, shrink spheres only until a page holds this many. */
+const MIN_PAGE_TILES_WHEN_PAGED = 4;
 const MAX_CELL_ASPECT = 1.15;
 
 export interface BlochGridInput {
@@ -32,9 +34,9 @@ export interface BlochGridLayout {
 export function blochGridLayout({ count, width, height }: BlochGridInput): BlochGridLayout {
   const safeCount = Math.max(1, Math.floor(count));
   // Up to a page of qubits should never page: shrink the spheres first, page only as a last resort.
-  const steps = safeCount <= COMPACT_MAX_COUNT ? SIZE_STEPS : [MIN_SPHERE_PX];
-  const fitting = steps.find((px) => capacityFor(px, width, height) >= safeCount);
-  return layoutFor(safeCount, fitting ?? steps[0], width, height);
+  const wanted = Math.min(safeCount, MIN_PAGE_TILES_WHEN_PAGED);
+  const fitting = SIZE_STEPS.find((px) => capacityFor(px, width, height) >= (safeCount <= COMPACT_MAX_COUNT ? safeCount : wanted));
+  return layoutFor(safeCount, fitting ?? MIN_SPHERE_PX, width, height);
 }
 
 function capacityFor(minPx: number, width: number, height: number): number {

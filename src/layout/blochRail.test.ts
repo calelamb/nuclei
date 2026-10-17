@@ -14,7 +14,7 @@ describe('blochRailHeights', () => {
   });
 
   it('adds room for the pager once the qubits outnumber a page', () => {
-    expect(blochRailHeights(18, 332).desired).toBeGreaterThan(blochRailHeights(6, 332).desired);
+    expect(blochRailHeights(18, 332).desired).toBe(blochRailHeights(4, 332).desired + 32);
   });
 
   it('never lets the rail shrink below one full row (no 152x12 slivers at 18 qubits)', () => {

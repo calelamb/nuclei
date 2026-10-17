@@ -6,6 +6,8 @@ const GAP_PX = 8;
 const PAGER_PX = 32;
 /** The most qubits the rail aims to show at once (a 2-column rail makes this a 3x2 grid). */
 export const BLOCH_TARGET_VISIBLE = 6;
+/** When the qubits page anyway, the rail only asks for a 2x2 page so the circuit keeps its room. */
+const BLOCH_PAGED_VISIBLE = 4;
 /** A comfortable tile: a readable sphere plus its caption. Taller adds only dead space. */
 export const BLOCH_ROW_MAX_PX = 170;
 /** One row of the smallest allowed sphere (112px) plus its 36px caption. */
@@ -27,7 +29,7 @@ export interface BlochRailHeights {
 export function blochRailHeights(count: number, width: number): BlochRailHeights {
   const n = Math.max(1, Math.floor(count));
   const usable = Math.max(0, (width > 0 ? width : FALLBACK_RAIL_WIDTH) - STAGE_PAD_PX);
-  const shown = Math.min(n, BLOCH_TARGET_VISIBLE);
+  const shown = n > BLOCH_TARGET_VISIBLE ? BLOCH_PAGED_VISIBLE : n;
   const probe = blochGridLayout({ count: shown, width: usable, height: 10_000 });
   const rows = Math.ceil(shown / probe.cols);
   const row = Math.min(probe.cellHeight, BLOCH_ROW_MAX_PX);
