@@ -53,7 +53,7 @@ function snapshotToQasm(snapshot: CircuitSnapshot): string {
   return lines.join('\n');
 }
 
-function getCircuitSvgElement(): SVGSVGElement | null {
+export function getCircuitSvgElement(): SVGSVGElement | null {
   return document.querySelector('.circuit-renderer-container svg') as SVGSVGElement | null;
 }
 
@@ -126,21 +126,24 @@ export function useCircuitExport() {
     downloadDataUrl(URL.createObjectURL(blob), 'circuit.qasm');
   }, [exportQasm]);
 
-  const exportSvg = useCallback(async () => {
+  /** Resolves false when the diagram is not on screen, so the caller can say so. */
+  const exportSvg = useCallback(async (): Promise<boolean> => {
     const svg = getCircuitSvgElement();
-    if (!svg) return;
+    if (!svg) return false;
     const url = await svgToDataUrl(svg);
     downloadDataUrl(url, 'circuit.svg');
+    return true;
   }, []);
 
-  const exportPng = useCallback(async (scale = 2) => {
+  const exportPng = useCallback(async (scale = 2): Promise<boolean> => {
     const svg = getCircuitSvgElement();
-    if (!svg) return;
+    if (!svg) return false;
     const dataUrl = await svgToPngDataUrl(svg, scale);
     const a = document.createElement('a');
     a.href = dataUrl;
     a.download = 'circuit.png';
     a.click();
+    return true;
   }, []);
 
   const copyCodeToClipboard = useCallback(async () => {

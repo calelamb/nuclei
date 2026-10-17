@@ -1,5 +1,6 @@
 import { useThemeStore } from '../../stores/themeStore';
-import { renderGate, gateY, WIRE_SPACING, LAYER_SPACING, LABEL_WIDTH, PADDING } from '../circuit/gates';
+import { renderGate, gateY, LABEL_WIDTH } from '../circuit/gates';
+import { computeCircuitGeometry, columnX } from '../circuit/geometry';
 import { TYPOGRAPHY } from '../../styles/tokens';
 import type { CircuitSnapshot } from '../../types/quantum';
 
@@ -27,15 +28,8 @@ export function RunCircuitDiagram({ snapshot }: { snapshot: CircuitSnapshot | nu
     );
   }
 
-  const { qubit_count, depth, gates, classical_bit_count } = snapshot;
-  const hasClassical = classical_bit_count > 0;
-  const layerCount = Math.max(depth, ...gates.map((g) => g.layer + 1));
-  const svgWidth = LABEL_WIDTH + layerCount * LAYER_SPACING + PADDING;
-  const lastQubitY = PADDING + (qubit_count - 1) * WIRE_SPACING;
-  const classicalWireY = lastQubitY + WIRE_SPACING * 0.9;
-  const svgHeight = (hasClassical ? classicalWireY : lastQubitY) + PADDING + 8;
-  const wireStart = LABEL_WIDTH - 8;
-  const wireEnd = svgWidth - PADDING / 2;
+  const { qubit_count, gates } = snapshot;
+  const { hasClassical, columns, svgWidth, svgHeight, classicalWireY, wireStart, wireEnd } = computeCircuitGeometry(snapshot);
 
   return (
     <div style={{ overflow: 'auto' }} role="region" aria-label="Run circuit diagram">
@@ -58,7 +52,7 @@ export function RunCircuitDiagram({ snapshot }: { snapshot: CircuitSnapshot | nu
         )}
 
         {gates.map((gate, idx) => {
-          const x = LABEL_WIDTH + gate.layer * LAYER_SPACING + LAYER_SPACING / 2;
+          const x = columnX(columns[idx]);
           return <g key={`gate-${idx}`}>{renderGate(gate, x, noop, noop, hasClassical ? classicalWireY : undefined)}</g>;
         })}
       </svg>

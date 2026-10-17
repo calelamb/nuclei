@@ -3,7 +3,8 @@ import { useCircuitStore } from '../../stores/circuitStore';
 import { useDebugStore } from '../../stores/debugStore';
 import { activeDebugStep } from '../../lib/debugTrace';
 import { useThemeStore } from '../../stores/themeStore';
-import { renderGate, gateY, WIRE_SPACING, LAYER_SPACING, LABEL_WIDTH, PADDING, GATE_SIZE } from './gates';
+import { renderGate, gateY, GATE_SIZE, LABEL_WIDTH } from './gates';
+import { computeCircuitGeometry, columnX } from './geometry';
 import { formatAngle } from './formatAngle';
 import { CircuitEmptyState } from './CircuitEmptyState';
 import { getGateData } from '../../data/gates';
@@ -115,6 +116,7 @@ function GateExplorerPopup({ gateIndex, onClose }: { gateIndex: number; onClose:
 
 function ExportMenu() {
   const [open, setOpen] = useState(false);
+  const [notice, setNotice] = useState<string | null>(null);
   const colors = useThemeStore((s) => s.colors);
   const snapshot = useCircuitStore((s) => s.snapshot);
   const { exportQasmFile, exportSvg, exportPng, copyCodeToClipboard, copyQasmToClipboard, copyShareUrl, exportJsonSnapshot } = useCircuitExport();
@@ -131,20 +133,29 @@ function ExportMenu() {
 
   if (!snapshot || snapshot.gates.length === 0) return null;
 
+  const finishImageExport = async (pending: Promise<boolean>) => {
+    setOpen(false);
+    try {
+      setNotice((await pending) ? null : 'The diagram is not on screen, so there is nothing to export.');
+    } catch (err) {
+      setNotice(`Export failed: ${err instanceof Error ? err.message : 'unknown error'}`);
+    }
+  };
+
   const items = [
     { label: 'Copy code', action: () => { copyCodeToClipboard(); setOpen(false); } },
     { label: 'Copy QASM', action: () => { copyQasmToClipboard(); setOpen(false); } },
     { label: 'Copy share URL', action: () => { copyShareUrl(); setOpen(false); } },
     { label: 'Export QASM file', action: () => { exportQasmFile(); setOpen(false); } },
-    { label: 'Export SVG', action: () => { exportSvg(); setOpen(false); } },
-    { label: 'Export PNG (2x)', action: () => { exportPng(2); setOpen(false); } },
+    { label: 'Export SVG', action: () => { void finishImageExport(exportSvg()); } },
+    { label: 'Export PNG (2x)', action: () => { void finishImageExport(exportPng(2)); } },
     { label: 'Export JSON', action: () => { exportJsonSnapshot(); setOpen(false); } },
   ];
 
   return (
     <div ref={menuRef} style={{ position: 'relative', zIndex: 100 }}>
       <button
-        onClick={() => setOpen(!open)}
+        onClick={() => { setNotice(null); setOpen(!open); }}
         style={{
           padding: '3px 8px', background: colors.bgPanel, color: colors.textMuted,
           border: `1px solid ${colors.border}`, borderRadius: 3, cursor: 'pointer',
@@ -153,6 +164,15 @@ function ExportMenu() {
       >
         Export ▾
       </button>
+      {notice && (
+        <div role="status" style={{
+          position: 'absolute', top: '100%', right: 0, marginTop: 4, width: 200, padding: '6px 10px',
+          background: colors.bgPanel, border: `1px solid ${colors.border}`, borderRadius: 4,
+          color: colors.textMuted, fontSize: 11, fontFamily: TYPOGRAPHY.fontSans, lineHeight: 1.4,
+        }}>
+          {notice}
+        </div>
+      )}
       {open && (
         <div style={{
           position: 'absolute', top: '100%', right: 0, marginTop: 2,
@@ -331,13 +351,7 @@ export function CircuitRenderer() {
 
   const { qubit_count, depth, gates, classical_bit_count } = snapshot;
   const hasClassical = classical_bit_count > 0;
-  const layerCount = Math.max(depth, ...gates.map((g) => g.layer + 1));
-  const svgWidth = LABEL_WIDTH + layerCount * LAYER_SPACING + PADDING;
-  const lastQubitY = PADDING + (qubit_count - 1) * WIRE_SPACING;
-  const classicalWireY = lastQubitY + WIRE_SPACING * 0.9;
-  const svgHeight = (hasClassical ? classicalWireY : lastQubitY) + PADDING + 8;
-  const wireStart = LABEL_WIDTH - 8;
-  const wireEnd = svgWidth - PADDING / 2;
+  const { columns, svgWidth, svgHeight, classicalWireY, wireStart, wireEnd } = computeCircuitGeometry(snapshot);
 
   const highlightSet = new Set(highlights.map((h) => h.gateIndex));
 
@@ -358,6 +372,7 @@ export function CircuitRenderer() {
       </div>
       <div
         ref={containerRef}
+        className="circuit-renderer-container"
         style={{ flex: 1, minHeight: 0, overflow: 'auto', position: 'relative', padding: '4px 0 6px' }}
         aria-description={ariaDescription}
       >
@@ -400,7 +415,7 @@ export function CircuitRenderer() {
 
           {/* Gates with highlight/step overlays */}
           {gates.map((gate, idx) => {
-            const x = LABEL_WIDTH + gate.layer * LAYER_SPACING + LAYER_SPACING / 2;
+            const x = columnX(columns[idx]);
             const isHighlighted = highlightSet.has(idx);
             const isGrayedOut = stepMode && idx > stepIndex;
             const opacity = isGrayedOut ? 0.2 : 1;
