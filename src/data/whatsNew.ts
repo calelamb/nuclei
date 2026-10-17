@@ -45,7 +45,7 @@ export const WHATS_NEW: WhatsNewEntry = {
     {
       icon: 'dirac',
       title: 'Explain why this circuit fails',
-      text: 'Static analysis of your Stim circuit: why a detector is non-deterministic, and a minimum-weight undetected logical error with each fault's tick, qubits and source line.',
+      text: 'Static analysis of your Stim circuit: why a detector is non-deterministic, and a minimum-weight undetected logical error with the tick, qubits and source line of every fault.',
     },
     {
       icon: 'editor',
