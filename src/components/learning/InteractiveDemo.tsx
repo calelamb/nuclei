@@ -39,7 +39,7 @@ function ProbabilityBars({ probabilities, accent, colors }: {
             fontFamily: "'Geist Mono', monospace", fontSize: 12,
             color: colors.text, fontWeight: 500,
           }}>
-            |{state}\u27E9
+            |{state}{'\u27E9'}
           </span>
           <div style={{
             flex: 1, height: 18, borderRadius: 4,

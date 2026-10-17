@@ -34,11 +34,13 @@ export function getRunButtonState(input: RunButtonInput): RunButtonState {
       disabled: false,
     };
   }
+  // The toolbar is narrow, so the button carries the step count and the full
+  // stage text lives in the tooltip and the status bar chip.
   const progress = input.kernelProgress;
   return {
     kind: 'loading',
-    label: progress ? `${progress.label} · ${progress.step}/${progress.total}` : 'Starting kernel…',
-    title: 'Waiting for the Python kernel',
+    label: progress ? `Loading ${progress.step}/${progress.total}` : 'Starting…',
+    title: progress ? `${progress.label} (step ${progress.step} of ${progress.total})` : 'Waiting for the Python kernel',
     disabled: true,
   };
 }

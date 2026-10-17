@@ -321,7 +321,7 @@ export function FrameworkSelector() {
           }
         }}
       >
-        {labelFor(framework)}
+        <span style={{ whiteSpace: 'nowrap' }}>{labelFor(framework)}</span>
         <ChevronDown
           size={12}
           style={{

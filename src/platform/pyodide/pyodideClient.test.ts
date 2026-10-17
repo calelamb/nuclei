@@ -85,7 +85,7 @@ describe('PyodideRuntimeClient', () => {
     let calls = 0;
     const { client, workers } = makeClient((req, reply) => {
       if (req.type === 'init') reply({ id: req.id, type: 'result', value: 'ready' });
-      else if (++calls === 1) return; // never answers: infinite loop in user code
+      else if (++calls === 1) reply({ id: req.id, type: 'started' }); // then never answers: infinite loop in user code
       else reply({ id: req.id, type: 'result', value: 'second' });
     });
 
@@ -97,6 +97,39 @@ describe('PyodideRuntimeClient', () => {
 
     await expect(client.call('nuclei_parse', ['x'])).resolves.toBe('second');
     expect(workers).toHaveLength(2);
+  });
+
+  it('does not fail a reboot started by a state listener while tearing down', async () => {
+    let calls = 0;
+    const { client, workers } = makeClient((req, reply) => {
+      if (req.type === 'init') reply({ id: req.id, type: 'result', value: 'ready' });
+      else if (++calls === 1) reply({ id: req.id, type: 'started' });
+    });
+    await client.ensureStarted();
+    let reboot: Promise<void> | null = null;
+    client.onState((state) => { if (state === 'idle') reboot = client.ensureStarted(); });
+
+    const hung = client.call('nuclei_parse', ['while True: pass'], { timeoutMs: 1000 });
+    const assertion = expect(hung).rejects.toMatchObject({ code: 'timeout' });
+    await vi.advanceTimersByTimeAsync(1001);
+    await assertion;
+
+    await expect(reboot).resolves.toBeUndefined();
+    expect(workers).toHaveLength(2);
+    expect(client.isReady()).toBe(true);
+  });
+
+  it('does not start the timeout clock until the worker reports it began the call', async () => {
+    const { client, workers } = makeClient((req, reply) => {
+      if (req.type === 'init') reply({ id: req.id, type: 'result', value: 'ready' });
+      // call: no 'started', e.g. still installing Cirq or queued behind another call
+    });
+    const waiting = client.call('nuclei_parse', ['import cirq'], { timeoutMs: 3000 });
+    let settled = false;
+    waiting.then(() => { settled = true; }, () => { settled = true; });
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect(settled).toBe(false);
+    expect(workers[0].terminated).toBe(false);
   });
 
   it('forwards worker notices (lazy Cirq install) to listeners', async () => {

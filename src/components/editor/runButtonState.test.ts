@@ -10,17 +10,18 @@ describe('getRunButtonState', () => {
     });
   });
 
-  it('shows the current boot stage with its step count while loading', () => {
+  it('shows the step count while loading and the stage name in the tooltip', () => {
     const state = getRunButtonState({
       ...base,
       kernelStatus: 'connecting',
       kernelProgress: { step: 2, total: 3, label: 'Loading NumPy', fraction: 0.6 },
     });
-    expect(state).toMatchObject({ kind: 'loading', label: 'Loading NumPy · 2/3', disabled: true });
+    expect(state).toMatchObject({ kind: 'loading', label: 'Loading 2/3', disabled: true });
+    expect(state.title).toBe('Loading NumPy (step 2 of 3)');
   });
 
   it('falls back to a plain label before the first stage is reported', () => {
-    expect(getRunButtonState({ ...base, kernelStatus: 'connecting' }).label).toBe('Starting kernel…');
+    expect(getRunButtonState({ ...base, kernelStatus: 'connecting' }).label).toBe('Starting…');
   });
 
   it('turns into an enabled Retry action when the kernel failed', () => {

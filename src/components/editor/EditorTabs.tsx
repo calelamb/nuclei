@@ -9,7 +9,11 @@ import { requestCloseTab } from '../../lib/tabClose';
 import { FrameworkSelector } from './FrameworkSelector';
 import { useHardwareStore } from '../../stores/hardwareStore';
 import { retryKernel } from '../../lib/kernelControl';
+import { useElementSize } from '../../hooks/useElementSize';
 import { getRunButtonState } from './runButtonState';
+
+// Strip width under which secondary hints collapse (tab + framework + Launch + Run).
+const COMPACT_STRIP_WIDTH = 560;
 
 const basename = (p: string) => p.split('/').pop() ?? p;
 
@@ -27,6 +31,9 @@ export function EditorTabs() {
   const colors = useThemeStore((s) => s.colors);
   const shadow = useThemeStore((s) => s.shadow);
 
+  const [stripRef, stripSize] = useElementSize<HTMLDivElement>();
+  // Below this width the shortcut hint on Launch is dropped so Run never clips.
+  const compact = stripSize.width > 0 && stripSize.width < COMPACT_STRIP_WIDTH;
   const usingLegacy = tabs.length === 0;
   const [renaming, setRenaming] = useState(false);
   const [renameValue, setRenameValue] = useState('');
@@ -50,7 +57,8 @@ export function EditorTabs() {
     const e = getExecute();
     if (e) e();
   };
-  const runLabel = runState.label;
+  // A narrow toolbar can't fit the long failure label; the banner carries the detail.
+  const runLabel = runState.kind === 'failed' && compact ? 'Retry kernel' : runState.label;
   const runTitle = runState.title;
   const runFailed = runState.kind === 'failed';
 
@@ -246,6 +254,7 @@ export function EditorTabs() {
 
   return (
     <div
+      ref={stripRef}
       style={{
         height: 40,
         display: 'flex',
@@ -258,17 +267,17 @@ export function EditorTabs() {
         gap: 8,
       }}
     >
-      <div style={{ display: 'flex', alignItems: 'stretch', overflow: 'auto', minWidth: 0 }}>
+      <div style={{ display: 'flex', alignItems: 'stretch', overflow: 'auto', minWidth: 64 }}>
         {usingLegacy ? renderLegacyTab() : tabs.map((t) => renderProjectTab(t.path, t.isDirty))}
       </div>
 
-      <div style={{ display: 'flex', alignItems: 'center' }}>
+      <div style={{ display: 'flex', alignItems: 'center', flexShrink: 0 }}>
         <FrameworkSelector />
       </div>
 
       <div style={{ flex: 1 }} />
 
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
         <button
           onClick={() => useHardwareStore.getState().openLaunch()}
           title="Launch on hardware (⌘⇧R)"
@@ -300,7 +309,7 @@ export function EditorTabs() {
         >
           <Rocket size={12} />
           <span>Launch</span>
-          <span style={{ fontSize: 10, opacity: 0.7, marginLeft: 2 }}>⌘⇧R</span>
+          {!compact && <span style={{ fontSize: 10, opacity: 0.7, marginLeft: 2 }}>⌘⇧R</span>}
         </button>
         <button
           onClick={handleRun}
@@ -313,6 +322,8 @@ export function EditorTabs() {
             display: 'flex',
             alignItems: 'center',
             gap: 7,
+            flexShrink: 0,
+            whiteSpace: 'nowrap',
             background: canRun ? colors.accent : colors.bgElevated,
             color: canRun ? '#0a0f1a' : runFailed ? colors.error : colors.textMuted,
             border: canRun ? 'none' : `1px solid ${runFailed ? colors.error : colors.border}`,

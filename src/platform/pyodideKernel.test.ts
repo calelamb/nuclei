@@ -74,7 +74,10 @@ describe('PyodideKernel — worker-backed runtime', () => {
         }
         const key = req.fn.replace('nuclei_', '') as 'parse' | 'execute' | 'run_python';
         const body = handlers[key];
-        if (body === 'hang') return;
+        if (body === 'hang') {
+          reply({ id: req.id, type: 'started' });
+          return;
+        }
         if (handlers.notice) reply({ type: 'notice', text: handlers.notice });
         reply({ id: req.id, type: 'result', value: JSON.stringify(body ?? {}) });
       });

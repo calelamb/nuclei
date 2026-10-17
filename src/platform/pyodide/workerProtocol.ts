@@ -29,6 +29,8 @@ export type WorkerRequest =
 export type WorkerResponse =
   | { type: 'progress'; progress: BootProgress }
   | { type: 'notice'; text: string }
+  /** The worker has begun running this call's Python (after any lazy installs). */
+  | { id: number; type: 'started' }
   | { id: number; type: 'result'; value: string }
   | { id: number; type: 'failure'; message: string; code: 'load_failed' | 'runtime_error' };
 

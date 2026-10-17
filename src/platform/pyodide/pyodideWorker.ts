@@ -85,6 +85,8 @@ async function boot(): Promise<void> {
 
   reportStage(2);
   writeShimFiles(py);
+  // Warm the import caches so the first parse does not pay for them.
+  py.runPython('import qiskit, qiskit_aer, qiskit.quantum_info, qiskit.circuit.library');
   const kernel = py.pyimport('kernel_runtime');
   runtime = {
     nuclei_parse: (...a) => kernel.nuclei_parse(...a) as string,
@@ -102,6 +104,9 @@ function ensureCirq(): Promise<void> {
   cirqPromise = (async () => {
     await py.loadPackage('micropip');
     await py.pyimport('micropip').install(CIRQ_REQUIREMENT);
+    // Importing cirq takes seconds the first time; do it now so the student's
+    // own `import cirq` (inside the parse/run time budget) is instant.
+    py.runPython('import cirq');
   })();
   cirqPromise.catch(() => { cirqPromise = null; }); // allow a retry after a network failure
   return cirqPromise;
@@ -109,7 +114,7 @@ function ensureCirq(): Promise<void> {
 
 const CIRQ_MENTION = /\b(?:import|from)\s+cirq\b/;
 
-async function runCall(fn: RuntimeFunction, args: unknown[]): Promise<string> {
+async function runCall(id: number, fn: RuntimeFunction, args: unknown[]): Promise<string> {
   if (!runtime) throw new Error('Python is not ready');
   if (typeof args[0] === 'string' && CIRQ_MENTION.test(args[0])) {
     try {
@@ -120,6 +125,9 @@ async function runCall(fn: RuntimeFunction, args: unknown[]): Promise<string> {
       );
     }
   }
+  // From here the user's Python is running: the client's timeout starts now,
+  // so waiting behind another call or installing Cirq never counts against it.
+  post({ id, type: 'started' });
   return runtime[fn](...args);
 }
 
@@ -130,7 +138,7 @@ async function handle(request: WorkerRequest): Promise<void> {
       post({ id: request.id, type: 'result', value: 'ready' });
       return;
     }
-    const value = await runCall(request.fn, request.args);
+    const value = await runCall(request.id, request.fn, request.args);
     post({ id: request.id, type: 'result', value });
   } catch (error) {
     post({

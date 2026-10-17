@@ -546,7 +546,12 @@ export function useKernel() {
         runtime.ensureStarted().catch((e: unknown) => failKernel(normalizeKernelError(e)));
       }
     });
-    runtimeSubscriptionsRef.current = [offProgress, offState];
+    // A lazy install (Cirq) triggered by the live preview explains the pause;
+    // during a Run the kernel forwards the same notice as ordinary output.
+    const offNotice = runtime.onNotice((text) => {
+      if (!useSimulationStore.getState().isRunning) useSimulationStore.getState().addOutput(text, 'info');
+    });
+    runtimeSubscriptionsRef.current = [offProgress, offState, offNotice];
   }, [failKernel, markWebReady]);
 
   // Web: boot the shared Pyodide worker and mirror its state into the editor

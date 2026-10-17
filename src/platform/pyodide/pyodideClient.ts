@@ -42,6 +42,8 @@ interface Pending {
   resolve: (value: string) => void;
   reject: (error: PyodideRuntimeError) => void;
   timer: ReturnType<typeof setTimeout> | null;
+  /** Budget for the Python itself; the timer starts when the worker reports `started`. */
+  timeoutMs: number | undefined;
 }
 
 export interface CallOptions {
@@ -143,14 +145,7 @@ export class PyodideRuntimeClient {
     const worker = this.ensureWorker();
     const id = this.nextId++;
     return new Promise<string>((resolve, reject) => {
-      const entry: Pending = { resolve, reject, timer: null };
-      if (timeoutMs !== undefined) {
-        entry.timer = setTimeout(() => {
-          if (!this.pending.has(id)) return;
-          this.teardown(); // rejects everything, including this call, with a timeout
-        }, timeoutMs);
-      }
-      this.pending.set(id, entry);
+      this.pending.set(id, { resolve, reject, timer: null, timeoutMs });
       worker.postMessage({ ...body, id } as WorkerRequest);
     });
   }
@@ -177,6 +172,10 @@ export class PyodideRuntimeClient {
     }
     const entry = this.pending.get(message.id);
     if (!entry) return;
+    if (message.type === 'started') {
+      this.armTimeout(message.id, entry);
+      return;
+    }
     this.pending.delete(message.id);
     if (entry.timer) clearTimeout(entry.timer);
     if (message.type === 'result') entry.resolve(message.value);
@@ -186,17 +185,29 @@ export class PyodideRuntimeClient {
     ));
   }
 
+  private armTimeout(id: number, entry: Pending) {
+    if (entry.timeoutMs === undefined || entry.timer) return;
+    entry.timer = setTimeout(() => {
+      if (!this.pending.has(id)) return;
+      this.teardown(); // rejects everything, including this call, with a timeout
+    }, entry.timeoutMs);
+  }
+
   private setProgress(progress: BootProgress | null) {
     this.lastProgress = progress;
     this.progressListeners.forEach((listener) => listener(progress));
   }
 
   private failAll(error: PyodideRuntimeError) {
-    for (const [id, entry] of this.pending) {
-      if (entry.timer) clearTimeout(entry.timer);
-      this.pending.delete(id);
-      entry.reject(error);
-    }
+    this.takePending().forEach((entry) => entry.reject(error));
+  }
+
+  /** Detach every in-flight call (cancelling their timers) without settling them. */
+  private takePending(): Pending[] {
+    const entries = [...this.pending.values()];
+    entries.forEach((entry) => { if (entry.timer) clearTimeout(entry.timer); });
+    this.pending.clear();
+    return entries;
   }
 
   private teardown() {
@@ -205,13 +216,17 @@ export class PyodideRuntimeClient {
     this.worker = null;
     this.ready = false;
     this.bootPromise = null;
+    // Detach the old calls BEFORE notifying listeners: a listener may start a
+    // new boot synchronously, and that new request must not be failed with them.
+    const orphaned = this.takePending();
     this.setProgress(null);
     this.setState('idle');
-    if (hadWorker || this.pending.size > 0) {
-      this.failAll(new PyodideRuntimeError(
+    if (hadWorker || orphaned.length > 0) {
+      const error = new PyodideRuntimeError(
         'The Python engine was restarted because the code took too long to run.',
         'timeout',
-      ));
+      );
+      orphaned.forEach((entry) => entry.reject(error));
     }
   }
 }
