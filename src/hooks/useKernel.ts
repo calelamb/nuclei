@@ -15,6 +15,9 @@ import {
   openKernelConnection,
 } from '../services/kernelSocket';
 import type { PyodideKernel } from '../platform/pyodideKernel';
+import type { PyodideRuntimeClient } from '../platform/pyodide/pyodideClient';
+import { KERNEL_NOT_RESPONDING_MESSAGE, normalizeKernelError } from '../lib/kernelErrors';
+import { registerKernelRetry } from '../lib/kernelControl';
 import { useDiracStore } from '../stores/diracStore';
 import { useHardwareStore } from '../stores/hardwareStore';
 import { useQecStore } from '../stores/qecStore';
@@ -41,22 +44,6 @@ const KERNEL_URL = KERNEL_WS_URL;
  * connect attempt (provider auth can hang without ever answering). */
 export const HARDWARE_CONNECT_TIMEOUT_MS = 45_000;
 
-const CIRQ_WEB_DEFAULT = `import cirq
-
-# Create a Bell State
-q0, q1 = cirq.LineQubit.range(2)
-circuit = cirq.Circuit([
-    cirq.H(q0),
-    cirq.CNOT(q0, q1),
-    cirq.measure(q0, q1, key='result')
-])
-`;
-const PYTHON_ONLY_WEB_DEFAULT = `# The browser IDE is in limited mode — Cirq couldn't load.
-# You can still run plain Python. For full quantum support,
-# download the desktop app from getnuclei.dev.
-
-print("Hello from Pyodide!")
-`;
 const DEFAULT_DEBOUNCE_MS = 300;
 const RETRY_DELAY_MS = 2000;
 const MAX_RETRIES = 15;
@@ -90,6 +77,7 @@ export function useKernel() {
   const mountedRef = useRef(true);
   const retryCountRef = useRef(0);
   const explainSeqRef = useRef(0);
+  const runtimeSubscriptionsRef = useRef<Array<() => void>>([]);
   // Per-provider "connecting" watchdogs: a hardware_connect that's sent but
   // never answered (provider auth hangs) would leave the UI stuck on
   // "Connecting…" forever. Each connect arms a timer here; the
@@ -206,10 +194,13 @@ export function useKernel() {
         resolveFormat(msg.formatted);
         break;
       case 'output':
+        // Live-preview (parse) output is noise from half-typed code: drop it.
+        if (msg.phase === 'parse') break;
         useSimulationStore.getState().addOutput(msg.text, 'stdout');
         useBottomPanelStore.getState().focusTerminal();
         break;
       case 'stderr':
+        if (msg.phase === 'parse') break;
         useSimulationStore.getState().addOutput(msg.text, 'stderr');
         useBottomPanelStore.getState().focusTerminal();
         break;
@@ -261,11 +252,17 @@ export function useKernel() {
 
         const { detail, line, shortMessage } = getErrorContext(msg);
 
-        useSimulationStore.getState().addOutput(`Error: ${detail}`, 'stderr');
-        useSimulationStore.getState().setRunning(false);
-        useBottomPanelStore.getState().focusTerminal();
+        // A parse error is the live preview tripping over half-typed code: it
+        // belongs on the editor (marker + circuit panel), never in the Terminal,
+        // and it must not cancel a run that happens to be in flight.
+        const isParseError = msg.phase === 'parse';
+        if (!isParseError) {
+          useSimulationStore.getState().addOutput(`Error: ${detail}`, 'stderr');
+          useSimulationStore.getState().setRunning(false);
+          useBottomPanelStore.getState().focusTerminal();
+        }
 
-        if (useSettingsStore.getState().dirac.autoExplainErrors) {
+        if (!isParseError && useSettingsStore.getState().dirac.autoExplainErrors) {
           const codeForRewrite = useEditorStore.getState().code;
           const framework = useEditorStore.getState().framework;
           rewriteExecutionError({ code: codeForRewrite, framework, traceback: detail })
@@ -444,6 +441,14 @@ export function useKernel() {
     useSimulationStore.getState().addOutput(`Error: ${KERNEL_AUTH_REJECTED_MESSAGE}`, 'stderr');
   }, []);
 
+  /** Surface a start/connect failure once: status chip, banner state, and the Terminal. */
+  const failKernel = useCallback((message: string) => {
+    useEditorStore.getState().setKernelConnected(false);
+    useEditorStore.getState().setKernelReady(false);
+    useEditorStore.getState().setKernelStatus('failed', message);
+    useSimulationStore.getState().addOutput(`Error: ${message}`, 'stderr');
+  }, []);
+
   const connect = useCallback(() => {
     if (!mountedRef.current || isWeb) return;
     if (wsRef.current?.readyState === WebSocket.OPEN) return;
@@ -492,60 +497,126 @@ export function useKernel() {
 
         if (retryCountRef.current < MAX_RETRIES) {
           retryCountRef.current++;
+          const attempt = retryCountRef.current;
+          useEditorStore.getState().setKernelStatus('connecting');
+          useEditorStore.getState().setKernelProgress({
+            step: attempt,
+            total: MAX_RETRIES,
+            label: `Connecting to the kernel (${attempt}/${MAX_RETRIES})`,
+            fraction: attempt / MAX_RETRIES,
+          });
           setTimeout(connect, RETRY_DELAY_MS);
         } else {
-          useEditorStore.getState().setKernelStatus(
-            'failed',
-            'Kernel is not responding. Check that Python is installed and try reconnecting.',
-          );
+          failKernel(KERNEL_NOT_RESPONDING_MESSAGE);
         }
       };
 
       ws.onerror = () => { ws.close(); };
     });
-  }, [failAuthRejected, handleMessage, isWeb, platform]);
+  }, [failAuthRejected, failKernel, handleMessage, isWeb, platform]);
 
 
-  // Initialize Pyodide kernel for web
+  const markWebReady = useCallback(() => {
+    const editor = useEditorStore.getState();
+    editor.setKernelConnected(true);
+    editor.setKernelReady(true);
+    editor.setKernelStatus('ready');
+  }, []);
+
+  /** Keep the status chip truthful across boots and worker restarts. */
+  const watchRuntime = useCallback((runtime: PyodideRuntimeClient) => {
+    runtimeSubscriptionsRef.current.forEach((off) => off());
+    let wasReady = runtime.isReady();
+    const offProgress = runtime.onProgress((progress) => {
+      if (progress) useEditorStore.getState().setKernelProgress(progress);
+    });
+    const offState = runtime.onState((state) => {
+      if (!mountedRef.current) return;
+      const editor = useEditorStore.getState();
+      if (state === 'booting') {
+        editor.setKernelConnected(false);
+        editor.setKernelReady(false);
+        editor.setKernelStatus('connecting');
+      } else if (state === 'ready') {
+        wasReady = true;
+        markWebReady();
+      } else if (wasReady) {
+        // The worker was killed (runaway code): boot a fresh one right away.
+        wasReady = false;
+        runtime.ensureStarted().catch((e: unknown) => failKernel(normalizeKernelError(e)));
+      }
+    });
+    runtimeSubscriptionsRef.current = [offProgress, offState];
+  }, [failKernel, markWebReady]);
+
+  // Web: boot the shared Pyodide worker and mirror its state into the editor
+  // store (status chip, progress stages, restart after a runaway program).
   const initPyodide = useCallback(async () => {
     if (!isWeb) return;
+    runtimeSubscriptionsRef.current.forEach((off) => off());
+    runtimeSubscriptionsRef.current = [];
+
+    const editor = useEditorStore.getState();
+    editor.setKernelConnected(false);
+    editor.setKernelReady(false);
+    editor.setKernelStatus('connecting');
+
+    try {
+      const { PyodideKernel } = await import('../platform/pyodideKernel');
+      const { pyodideRuntime } = await import('../platform/pyodide/pyodideClient');
+      if (!mountedRef.current) return;
+      watchRuntime(pyodideRuntime);
+
+      const kernel = new PyodideKernel((msg) => handleMessage(msg as KernelResponse));
+      await kernel.init();
+      if (!mountedRef.current) return;
+      pyodideRef.current = kernel;
+      markWebReady();
+
+      // Initial parse of whatever is in the editor (never rewrites it).
+      const { code, framework, filePath } = useEditorStore.getState();
+      if (code.trim()) {
+        void kernel.send({ type: 'parse', code, language: kernelLanguageFor(framework, filePath) });
+      }
+    } catch (e) {
+      if (mountedRef.current) failKernel(normalizeKernelError(e));
+    }
+  }, [failKernel, handleMessage, isWeb, markWebReady, watchRuntime]);
+
+  const startDesktopKernel = useCallback(async () => {
+    retryCountRef.current = 0;
     useEditorStore.getState().setKernelConnected(false);
     useEditorStore.getState().setKernelReady(false);
     useEditorStore.getState().setKernelStatus('connecting');
-
+    useEditorStore.getState().setKernelProgress({ step: 0, total: MAX_RETRIES, label: 'Starting the kernel', fraction: 0 });
     try {
-      const { PyodideKernel, isCirqAvailable } = await import('../platform/pyodideKernel');
-      const kernel = new PyodideKernel((msg) => handleMessage(msg as KernelResponse));
-      await kernel.init();
-      pyodideRef.current = kernel;
-      useEditorStore.getState().setKernelConnected(true);
-      useEditorStore.getState().setKernelReady(true);
-      useEditorStore.getState().setKernelStatus('ready');
-
-      // Only rewrite the user's starting code if they're still on the Qiskit
-      // default. Pick a replacement that matches what actually works in the
-      // browser — Cirq if it loaded, plain-Python otherwise.
-      const currentCode = useEditorStore.getState().code;
-      if (currentCode.includes('from qiskit import QuantumCircuit')) {
-        if (isCirqAvailable()) {
-          useEditorStore.getState().setCode(CIRQ_WEB_DEFAULT);
-          useEditorStore.getState().setFramework('cirq');
-        } else {
-          useEditorStore.getState().setCode(PYTHON_ONLY_WEB_DEFAULT);
-        }
-      }
-
-      // Initial parse
-      const code = useEditorStore.getState().code;
-      if (code.trim()) {
-        const language = kernelLanguageFor(useEditorStore.getState().framework, useEditorStore.getState().filePath);
-        kernel.send({ type: 'parse', code, language });
-      }
+      await platform.startKernel();
     } catch (e) {
-      useEditorStore.getState().setKernelStatus('failed', `Failed to load browser Python engine: ${e}`);
-      useSimulationStore.getState().addOutput(`Error: Failed to load browser Python engine: ${e}`, 'stderr');
+      // The Rust side explains exactly what went wrong (port busy, script
+      // missing, python missing): show it instead of retrying a dead process.
+      if (mountedRef.current) failKernel(normalizeKernelError(e));
+      return;
     }
-  }, [handleMessage, isWeb]);
+    connect();
+  }, [connect, failKernel, platform]);
+
+  const restartKernel = useCallback(() => {
+    if (isWeb) {
+      pyodideRef.current = null;
+      void initPyodide();
+      return;
+    }
+    wsRef.current?.close();
+    wsRef.current = null;
+    void platform.stopKernel().catch(() => { /* nothing running is fine */ }).then(() => {
+      if (mountedRef.current) return startDesktopKernel();
+    });
+  }, [initPyodide, isWeb, platform, startDesktopKernel]);
+
+  useEffect(() => {
+    registerKernelRetry(restartKernel);
+    return () => registerKernelRetry(null);
+  }, [restartKernel]);
 
   // Start kernel. The old code slept 3000ms blind after startKernel() resolved;
   // we now rely on the retry loop instead — if the Python socket isn't open
@@ -555,11 +626,9 @@ export function useKernel() {
     retryCountRef.current = 0;
 
     if (isWeb) {
-      initPyodide();
+      void initPyodide();
     } else {
-      platform.startKernel()
-        .then(() => connect())
-        .catch(() => connect());
+      void startDesktopKernel();
     }
 
     return () => {
@@ -567,10 +636,12 @@ export function useKernel() {
       if (debounceRef.current) clearTimeout(debounceRef.current);
       Object.values(connectTimersRef.current).forEach(clearTimeout);
       connectTimersRef.current = {};
+      runtimeSubscriptionsRef.current.forEach((off) => off());
+      runtimeSubscriptionsRef.current = [];
       if (wsRef.current) { wsRef.current.close(); wsRef.current = null; }
       if (!isWeb) platform.stopKernel().catch(() => {});
     };
-  }, [connect, initPyodide, platform, isWeb]);
+  }, [initPyodide, startDesktopKernel, platform, isWeb]);
 
   // Debounced parse on code change
   useEffect(() => {
@@ -613,7 +684,13 @@ export function useKernel() {
 
     const { kernelReady } = useEditorStore.getState();
     if (!kernelReady) {
-      useSimulationStore.getState().addOutput('Kernel is still loading. Please wait...', 'info');
+      const { kernelStatus, kernelError } = useEditorStore.getState();
+      useSimulationStore.getState().addOutput(
+        kernelStatus === 'failed'
+          ? `The kernel is not running (${kernelError ?? 'start failed'}). Use Retry in the editor toolbar.`
+          : 'Kernel is still loading. Please wait...',
+        'info',
+      );
       useBottomPanelStore.getState().focusTerminal();
       return;
     }
@@ -631,8 +708,10 @@ export function useKernel() {
         useBottomPanelStore.getState().focusTerminal();
         return;
       }
-      useSimulationStore.getState().setRunning(true);
+      // clearResult() resets isRunning, so it must come first: setting the
+      // flag before it silently re-enabled Run while a run was in flight.
       useSimulationStore.getState().clearResult();
+      useSimulationStore.getState().setRunning(true);
       useSimulationStore.getState().addOutput(separator, 'separator');
       useBottomPanelStore.getState().focusTerminal();
       pyodideRef.current.send({ type: 'execute', code, shots, language });
@@ -643,8 +722,10 @@ export function useKernel() {
         useBottomPanelStore.getState().focusTerminal();
         return;
       }
-      useSimulationStore.getState().setRunning(true);
+      // clearResult() resets isRunning, so it must come first: setting the
+      // flag before it silently re-enabled Run while a run was in flight.
       useSimulationStore.getState().clearResult();
+      useSimulationStore.getState().setRunning(true);
       useSimulationStore.getState().addOutput(separator, 'separator');
       useBottomPanelStore.getState().focusTerminal();
       ws.send(JSON.stringify({ type: 'execute', code, shots, language }));

@@ -17,6 +17,15 @@ qc.measure([0, 1], [0, 1])
 
 export type KernelStatus = 'idle' | 'connecting' | 'ready' | 'failed';
 
+/** Where a kernel boot is, in human terms (web: Python stages; desktop: connect attempts). */
+export interface KernelProgress {
+  step: number;
+  total: number;
+  label: string;
+  /** 0..1 overall completion. */
+  fraction: number;
+}
+
 interface EditorState {
   code: string;
   framework: Framework;
@@ -32,6 +41,7 @@ interface EditorState {
   kernelReady: boolean;
   kernelStatus: KernelStatus;
   kernelError: string | null;
+  kernelProgress: KernelProgress | null;
   errors: EditorError[];
   setCode: (code: string) => void;
   setFramework: (framework: Framework) => void;
@@ -40,6 +50,7 @@ interface EditorState {
   setKernelConnected: (connected: boolean) => void;
   setKernelReady: (ready: boolean) => void;
   setKernelStatus: (status: KernelStatus, error?: string | null) => void;
+  setKernelProgress: (progress: KernelProgress | null) => void;
   setErrors: (errors: EditorError[]) => void;
   clearErrors: () => void;
 }
@@ -54,6 +65,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   kernelReady: false,
   kernelStatus: 'idle',
   kernelError: null,
+  kernelProgress: null,
   errors: [],
   setCode: (code) => {
     // Don't re-mark as dirty if the user hasn't actually changed anything
@@ -74,7 +86,14 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   setIsDirty: (isDirty) => set({ isDirty }),
   setKernelConnected: (kernelConnected) => set({ kernelConnected }),
   setKernelReady: (kernelReady) => set({ kernelReady }),
-  setKernelStatus: (kernelStatus, kernelError = null) => set({ kernelStatus, kernelError }),
+  // Progress only means something while connecting; any other status ends it.
+  setKernelStatus: (kernelStatus, kernelError = null) =>
+    set((s) => ({
+      kernelStatus,
+      kernelError,
+      kernelProgress: kernelStatus === 'connecting' ? s.kernelProgress : null,
+    })),
+  setKernelProgress: (kernelProgress) => set({ kernelProgress }),
   setErrors: (errors) => set({ errors }),
   clearErrors: () => set({ errors: [] }),
 }));
