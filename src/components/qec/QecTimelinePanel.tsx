@@ -4,20 +4,28 @@ import { useCircuitStore } from '../../stores/circuitStore';
 import { useQecStore } from '../../stores/qecStore';
 import { PanelHeader } from '../layout/PanelHeader';
 import { QecEmptyState } from './QecEmptyState';
-import { classifyTimelineGates, detectorTrackByTick, type TimelineGate } from './qecGeometry';
+import {
+  activeTimelineQubits, classifyTimelineGates, detectorTrackByTick, timelineLabel, type TimelineGate,
+} from './qecGeometry';
 
 import { TYPOGRAPHY } from '../../styles/tokens';
 const DOCS = 'https://getnuclei.dev/docs/research/qec-studio/';
-const COL_W = 26;
-const ROW_H = 22;
-const LABEL_W = 34;
+const COL_W = 34;
+const ROW_H = 26;
+const LABEL_W = 36;
 const PAD = 8;
+/** Smallest text in the figure; below this the labels stop being readable. */
+const FONT_PX = 10;
+const GATE_W = 24;
+const GATE_H = 18;
 
 /**
  * PRD 10 Phase D — the QEC timeline. The mapped stim CircuitSnapshot in
  * moment-mode (layer = tick), with two extensions over the plain circuit
  * diagram: noise ops rendered with a hazard tint (+ probability on hover),
- * and a DETECTOR/OBSERVABLE track along the bottom, aligned to ticks.
+ * and a DETECTOR/OBSERVABLE track along the bottom, aligned to ticks. Gates are
+ * labelled with their Stim mnemonics, noise is an amber dot with the kind and
+ * probability on hover, and qubits with no operations are not drawn.
  */
 export function QecTimelinePanel() {
   const colors = useThemeStore((s) => s.colors);
@@ -40,12 +48,13 @@ export function QecTimelinePanel() {
   }
 
   const numTicks = Math.max(1, qec?.num_ticks ?? Math.max(...gates.map((g) => g.layer + 1)));
-  const numQubits = snapshot.qubit_count;
+  const qubits = activeTimelineQubits(snapshot.gates);
+  const rowOf = new Map(qubits.map((q, i) => [q, i]));
   const width = LABEL_W + numTicks * COL_W + PAD * 2;
-  const gateRows = numQubits;
+  const gateRows = qubits.length;
   const height = PAD * 2 + gateRows * ROW_H + 44; // + detector track
 
-  const qy = (q: number) => PAD + q * ROW_H + ROW_H / 2;
+  const qy = (q: number) => PAD + (rowOf.get(q) ?? 0) * ROW_H + ROW_H / 2;
   const tx = (t: number) => LABEL_W + t * COL_W + COL_W / 2;
 
   return (
@@ -54,9 +63,9 @@ export function QecTimelinePanel() {
       <div style={{ flex: 1, minHeight: 0, overflow: 'auto', position: 'relative' }}>
         <svg width={width} height={height} style={{ display: 'block', fontFamily: TYPOGRAPHY.fontMono }}>
           {/* qubit wires */}
-          {Array.from({ length: numQubits }, (_, q) => (
+          {qubits.map((q) => (
             <g key={`wire-${q}`}>
-              <text x={PAD} y={qy(q) + 3} fontSize={9} fill={colors.textDim}>q{q}</text>
+              <text x={PAD} y={qy(q) + 3.5} fontSize={FONT_PX} fill={colors.textMuted}>q{q}</text>
               <line x1={LABEL_W} y1={qy(q)} x2={width - PAD} y2={qy(q)} stroke={colors.border} strokeWidth={0.5} />
             </g>
           ))}
@@ -75,9 +84,7 @@ export function QecTimelinePanel() {
                 <g key={g.gateIndex}
                   onMouseEnter={(e) => setHover({ g, x: e.clientX, y: e.clientY })}
                   onMouseLeave={() => setHover(null)}>
-                  <rect x={x - 9} y={qy(q) - 8} width={18} height={16} rx={2}
-                    fill={`${colors.warning}33`} stroke={colors.warning} strokeWidth={0.6} strokeDasharray="2 1.5" />
-                  <text x={x} y={qy(q) + 3} fontSize={7} fill={colors.warning} textAnchor="middle">{g.noiseKind?.slice(0, 4)}</text>
+                  <circle cx={x + GATE_W / 2 - 1} cy={qy(q) - GATE_H / 2 + 1} r={3.5} fill={colors.warning} />
                 </g>
               );
             }
@@ -89,16 +96,18 @@ export function QecTimelinePanel() {
                   <line x1={x} y1={qy(g.controls![0])} x2={x} y2={qy(g.targets[0])} stroke={colors.text} strokeWidth={0.8} />
                 )}
                 {isTwoQ && <circle cx={x} cy={qy(g.controls![0])} r={1.8} fill={colors.text} />}
-                <rect x={x - 8} y={qy(q) - 8} width={16} height={16} rx={2}
-                  fill={colors.bgElevated} stroke={colors.accent} strokeWidth={0.7} />
-                <text x={x} y={qy(q) + 3} fontSize={7.5} fill={colors.text} textAnchor="middle">
-                  {g.type === 'CNOT' ? 'X' : g.type.slice(0, 3)}
+                <rect x={x - GATE_W / 2} y={qy(q) - GATE_H / 2} width={GATE_W} height={GATE_H} rx={2}
+                  fill={colors.bgElevated} stroke={colors.accent} strokeWidth={0.8}>
+                  <title>{g.type}</title>
+                </rect>
+                <text x={x} y={qy(q) + 3.5} fontSize={FONT_PX} fill={colors.text} textAnchor="middle">
+                  {timelineLabel(g.type)}
                 </text>
               </g>
             );
           })}
           {/* detector/observable bottom track, aligned to ticks */}
-          <text x={PAD} y={PAD + gateRows * ROW_H + 26} fontSize={8} fill={colors.textDim}>det</text>
+          <text x={PAD} y={PAD + gateRows * ROW_H + 28} fontSize={FONT_PX} fill={colors.textMuted}>det</text>
           {[...track.entries()].map(([tick, markers]) => {
             const hasObs = markers.some((m) => m.isObservable);
             const detCount = markers.filter((m) => m.isDetector).length;
@@ -106,13 +115,13 @@ export function QecTimelinePanel() {
             return (
               <g key={`det-${tick}`}>
                 {detCount > 0 && (
-                  <rect x={tx(tick) - 6} y={y} width={12} height={8} rx={1.5}
-                    fill={`${colors.overlayMatching}44`} stroke={colors.overlayMatching} strokeWidth={0.5} />
+                  <rect x={tx(tick) - 8} y={y} width={16} height={13} rx={2}
+                    fill={`${colors.overlayMatching}44`} stroke={colors.overlayMatching} strokeWidth={0.6} />
                 )}
                 {detCount > 0 && (
-                  <text x={tx(tick)} y={y + 6} fontSize={6.5} fill={colors.overlayMatching} textAnchor="middle">{detCount}</text>
+                  <text x={tx(tick)} y={y + 10} fontSize={FONT_PX} fill={colors.overlayMatching} textAnchor="middle">{detCount}</text>
                 )}
-                {hasObs && <circle cx={tx(tick)} cy={y + 14} r={2} fill={colors.success} />}
+                {hasObs && <circle cx={tx(tick)} cy={y + 20} r={3} fill={colors.success} />}
               </g>
             );
           })}
@@ -129,6 +138,16 @@ export function QecTimelinePanel() {
             {hover.g.noiseKind} · p = {hover.g.probability}
           </div>
         )}
+      </div>
+      <div
+        style={{
+          display: 'flex', gap: 12, padding: '4px 12px', borderTop: `1px solid ${colors.border}`,
+          fontSize: 11, color: colors.textMuted, fontFamily: TYPOGRAPHY.fontSans,
+        }}
+      >
+        <span><span style={{ color: colors.warning }}>●</span> noise (hover)</span>
+        <span><span style={{ color: colors.overlayMatching }}>■</span> detectors</span>
+        <span><span style={{ color: colors.success }}>●</span> observable</span>
       </div>
     </div>
   );

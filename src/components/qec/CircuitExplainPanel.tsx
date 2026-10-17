@@ -1,4 +1,5 @@
-import { useCallback } from 'react';
+import { useCallback, useState } from 'react';
+import { ChevronDown, ChevronRight } from 'lucide-react';
 import { useThemeStore } from '../../stores/themeStore';
 import { useEditorStore } from '../../stores/editorStore';
 import { useQecExplainStore } from '../../stores/qecExplainStore';
@@ -27,6 +28,10 @@ export function CircuitExplainPanel() {
 
   const analysable = isStimCircuitText(code, filePath);
   const stale = result !== null && forText !== code;
+  // Collapsed until asked for; anything worth reading (a result, an error, a
+  // running analysis) opens it so it is never hidden.
+  const [userOpen, setUserOpen] = useState(false);
+  const open = userOpen || result !== null || pending || Boolean(error);
 
   const run = useCallback(() => {
     requestQecExplain(code, 'both');
@@ -41,7 +46,19 @@ export function CircuitExplainPanel() {
       }}
     >
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 12px' }}>
-        <span style={{ fontSize: 12, fontWeight: 600, color: colors.text }}>Why does this circuit fail?</span>
+        <button
+          type="button"
+          aria-expanded={open}
+          aria-controls="qec-explain-body"
+          onClick={() => setUserOpen((v) => !v)}
+          style={{
+            display: 'inline-flex', alignItems: 'center', gap: 4, padding: 0, border: 'none', background: 'transparent',
+            fontSize: 12, fontWeight: 600, color: colors.text, cursor: 'pointer', fontFamily: FONT, textAlign: 'left',
+          }}
+        >
+          {open ? <ChevronDown size={12} aria-hidden="true" /> : <ChevronRight size={12} aria-hidden="true" />}
+          Why does this circuit fail?
+        </button>
         <button
           type="button"
           onClick={run}
@@ -55,7 +72,7 @@ export function CircuitExplainPanel() {
           {pending ? 'Analysing…' : result ? 'Re-run' : 'Explain circuit'}
         </button>
       </div>
-      <div style={{ padding: '0 12px 10px', display: 'flex', flexDirection: 'column', gap: 10 }}>
+      <div id="qec-explain-body" hidden={!open} style={{ padding: '0 12px 10px', display: open ? 'flex' : 'none', flexDirection: 'column', gap: 10 }}>
         {!analysable && (
           <div style={{ fontSize: 11, color: colors.textDim }}>
             Open a .stim circuit to analyse it. Python-built circuits have no single circuit text to map lines onto.

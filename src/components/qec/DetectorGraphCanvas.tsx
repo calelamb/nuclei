@@ -7,7 +7,9 @@ import {
   type DecodeOverlay,
 } from './qecGeometry';
 
-import { TYPOGRAPHY } from '../../styles/tokens';
+import { ICON_SIZE, ICON_STROKE, TYPOGRAPHY } from '../../styles/tokens';
+import { Info } from 'lucide-react';
+import { IconButton } from '../ui';
 interface DetectorGraphCanvasProps {
   layout: DetectorGraphLayout;
   overlay: DecodeOverlay | null;
@@ -45,6 +47,7 @@ export function DetectorGraphCanvas({ layout, overlay, onDetectorClick }: Detect
   const wrapRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [hover, setHover] = useState<HoverInfo | null>(null);
+  const [legendOpen, setLegendOpen] = useState(false);
 
   // Precomputed once per layout: O(1) node lookup + incident-edge degree.
   const nodeIndex = useMemo(() => detectorNodeIndex(layout), [layout]);
@@ -248,7 +251,15 @@ export function DetectorGraphCanvas({ layout, overlay, onDetectorClick }: Detect
         }}
       />
 
-      <GraphLegend colors={colors} />
+      {legendOpen && <GraphLegend colors={colors} />}
+      <IconButton
+        size="sm" variant="secondary" aria-label="Legend" aria-pressed={legendOpen}
+        title="What the colours and lines mean"
+        onClick={() => setLegendOpen((v) => !v)}
+        style={{ position: 'absolute', left: 10, bottom: 10, zIndex: 3 }}
+      >
+        <Info size={ICON_SIZE.sm} strokeWidth={ICON_STROKE} aria-hidden="true" />
+      </IconButton>
 
       {hover && (
         <div
@@ -299,7 +310,7 @@ function GraphLegend({ colors }: { colors: ThemeColors }) {
       style={{
         position: 'absolute',
         left: 10,
-        bottom: 10,
+        bottom: 42,
         display: 'flex',
         flexDirection: 'column',
         gap: 4,

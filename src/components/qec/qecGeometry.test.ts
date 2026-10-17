@@ -12,6 +12,8 @@ import {
   measureQubits,
   activeQubitsAtTick,
   classifyTimelineGates,
+  timelineLabel,
+  activeTimelineQubits,
   detectorTrackByTick,
 } from './qecGeometry';
 
@@ -42,10 +44,12 @@ describe('latticeLayout', () => {
     const kinds = new Set(layout.qubits.map((q) => q.kind));
     expect(kinds.has('data')).toBe(true);
     expect(kinds.has('measure')).toBe(true);
-    // Measure qubits carry a basis; every measure in this Z-memory is Z.
+    // Stim's rotated surface code has equal numbers of X-type (ancilla controls CNOTs)
+    // and Z-type (ancilla is the CNOT target) checks; none may be left unknown.
     const measures = layout.qubits.filter((q) => q.kind === 'measure');
-    expect(measures.length).toBeGreaterThan(0);
-    expect(measures.every((q) => q.basis === 'Z')).toBe(true);
+    expect(measures.length).toBe(8);
+    expect(measures.filter((q) => q.basis === 'X').map((q) => q.index).sort((a, b) => a - b)).toEqual([2, 11, 16, 25]);
+    expect(measures.filter((q) => q.basis === 'Z').map((q) => q.index).sort((a, b) => a - b)).toEqual([9, 13, 14, 18]);
   });
 
   it('normalizes so the extreme qubits sit at the [0,1] bounds', () => {
@@ -197,5 +201,24 @@ describe('edgeHeatColor', () => {
     }
     expect(edgeHeatColor(-1)).toEqual(edgeHeatColor(0));
     expect(edgeHeatColor(2)).toEqual(edgeHeatColor(1));
+  });
+});
+
+describe('timeline legibility (qec-24)', () => {
+  it('uses Stim mnemonics instead of truncated names', () => {
+    expect(timelineLabel('CNOT')).toBe('CX');
+    expect(timelineLabel('Measure')).toBe('M');
+    expect(timelineLabel('Reset')).toBe('R');
+    expect(timelineLabel('MR')).toBe('MR');
+    expect(timelineLabel('H')).toBe('H');
+    expect(timelineLabel('SQRT_XX_DAG')).toBe('SQRT');
+  });
+
+  it('lists only qubits that have operations', () => {
+    const used = activeTimelineQubits(surfSnap.gates);
+    expect(used.length).toBeGreaterThan(0);
+    expect(used.length).toBeLessThanOrEqual(surfSnap.qubit_count);
+    expect(used).toEqual([...used].sort((a, b) => a - b));
+    expect(activeTimelineQubits([{ type: 'H', targets: [5], controls: [], params: [], layer: 0 }])).toEqual([5]);
   });
 });
