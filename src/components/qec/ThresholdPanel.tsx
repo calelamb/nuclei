@@ -1,5 +1,4 @@
 import { useDeferredValue, useMemo } from 'react';
-import { Download } from 'lucide-react';
 import { useThemeStore } from '../../stores/themeStore';
 import { useQecCampaignStore } from '../../stores/qecCampaignStore';
 import { PanelHeader } from '../layout/PanelHeader';
@@ -9,8 +8,7 @@ import { isWebBuild } from '../../platform/buildTarget';
 import { QecLambdaReadout } from './QecLambdaReadout';
 import { QecUnitsToggle } from './QecUnitsToggle';
 import { useQecUnits } from '../../hooks/useQecUnits';
-import { Button, IconButton } from '../ui';
-import { ICON_SIZE, ICON_STROKE } from '../../styles/tokens';
+import { Button } from '../ui';
 import { QecPlotView } from './QecPlotView';
 import { ScrollFade } from './ScrollFade';
 import { useElementSize } from '../../hooks/useElementSize';
@@ -32,17 +30,13 @@ import { QEC_PLOT_CSV_DOCS } from '../../config/docsLinks';
 import { TYPOGRAPHY } from '../../styles/tokens';
 const DOCS = 'https://getnuclei.dev/docs/research/qec-studio/';
 const PLOT_ONLY_PAD = 24;
-/** Below this panel width the title would be squeezed out, so exports shrink to icons. */
+/** Below this panel width the title would be squeezed out, so the units toggle moves below the header and both labelled exports stay. */
 const COMPACT_HEADER_WIDTH = 480;
 
-function ExportButton({ compact, label, title, ariaLabel, onClick }: {
-  compact: boolean; label: string; title: string; ariaLabel: string; onClick: () => void;
+function ExportButton({ label, title, ariaLabel, onClick }: {
+  label: string; title: string; ariaLabel: string; onClick: () => void;
 }) {
-  const icon = <Download size={ICON_SIZE.xs} strokeWidth={ICON_STROKE} />;
-  if (compact) {
-    return <IconButton size="sm" variant="secondary" title={title} aria-label={ariaLabel} onClick={onClick}>{icon}</IconButton>;
-  }
-  return <Button size="sm" onClick={onClick} title={title} aria-label={ariaLabel} icon={icon}>{label}</Button>;
+  return <Button size="sm" onClick={onClick} title={title} aria-label={ariaLabel}>{label}</Button>;
 }
 
 /**
@@ -119,11 +113,11 @@ export function ThresholdPanel({ part = 'all' }: { part?: ThresholdPart } = {}) 
           <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
             {roundsKnown && !compact && <QecUnitsToggle units={units} onChange={setRequested} />}
             <ExportButton
-              compact={compact} label="SVG" onClick={exportSvg}
+              label="SVG" onClick={exportSvg}
               title="Export the plot as a print-ready SVG (white background)" ariaLabel="Export plot as SVG"
             />
             <ExportButton
-              compact={compact} label="CSV" onClick={() => downloadCsv(qecRatesToCsv(rows, { units, originals }), 'logical-error-vs-p.csv')}
+              label="CSV" onClick={() => downloadCsv(qecRatesToCsv(rows, { units, originals }), 'logical-error-vs-p.csv')}
               title="Export the plotted rates as CSV" ariaLabel="Export plot data (CSV)"
             />
           </div>
@@ -195,7 +189,7 @@ export function ThresholdPanel({ part = 'all' }: { part?: ThresholdPart } = {}) 
           </div>
         )}
         {roundsKnown && compact && (
-          <div style={{ padding: '6px 12px 0' }}><QecUnitsToggle units={units} onChange={setRequested} /></div>
+          <div style={{ padding: '6px 12px 8px' }}><QecUnitsToggle units={units} onChange={setRequested} /></div>
         )}
         <div style={{ display: 'flex', flexDirection: box.layout === 'row' ? 'row' : 'column', gap: 12, alignItems: 'flex-start', padding: box.layout === 'row' ? '4px 12px 8px 0' : '4px 0 10px' }}>
           {part !== 'lambda' && (
