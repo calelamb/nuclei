@@ -69,7 +69,7 @@ export function DecoderWorkbench() {
     return (
       <div style={{ height: '100%', display: 'flex', flexDirection: 'column', background: colors.bg }}>
         {header}
-        <QecEmptyState title="No campaign results yet" body="Run a QEC campaign, or drop a sinter stats CSV in the Threshold panel, to compare decoders side by side." docsHref={DOCS} />
+        <QecEmptyState title="No campaign results yet" body="Run a QEC campaign, or drop a sinter stats CSV on the plot, to compare decoders side by side." docsHref={DOCS} />
       </div>
     );
   }

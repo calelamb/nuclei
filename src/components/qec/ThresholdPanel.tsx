@@ -23,6 +23,7 @@ import { exportableSvg } from '../../lib/qecSvgExport';
 import { lambdaSummary } from '../../lib/qecLambdaText';
 import { qecRatesToCsv } from '../../lib/qecExport';
 import { downloadCsv, downloadSvg } from '../../services/experimentExport';
+import { QEC_PLOT_CSV_DOCS } from '../../config/docsLinks';
 
 const DOCS = 'https://getnuclei.dev/docs/research/qec-studio/';
 const LEGEND_HEIGHT = 22;
@@ -93,7 +94,7 @@ export function ThresholdPanel() {
         <QecEmptyState
           title={csvImport ? 'No plottable points' : 'No campaign results yet'}
           body={emptyBody}
-          docsHref={DOCS}
+          docsHref={QEC_PLOT_CSV_DOCS}
         >
           <QecCsvDropZone />
         </QecEmptyState>
