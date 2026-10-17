@@ -1,5 +1,5 @@
 import { useThemeStore } from '../../stores/themeStore';
-import { formatRunLabel, getRunValue, type RunColumn } from './runsTableColumns';
+import { formatRunLabel, isNumericColumn, getRunValue, type RunColumn } from './runsTableColumns';
 import type { RunRecord, RunStatus } from '../../types/experiment';
 import { activateOnKey } from '../../lib/a11y';
 
@@ -87,12 +87,12 @@ export function RunsTableRow({
         />
       </div>
       <div role="cell" title={run.dir} style={{ padding: '0 8px', color: colors.textDim, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-        {formatRunLabel(run.dir)}
+        {formatRunLabel(run.dir, run.manifest.started_at)}
       </div>
       {columns.map((column) => {
         const value = getRunValue(run, column);
         const isStatus = column.key === 'status';
-        const isNumeric = typeof value === 'number' || value === null && !isStatus;
+        const isNumeric = isNumericColumn(column);
         return (
           <div
             key={column.key}
@@ -108,7 +108,14 @@ export function RunsTableRow({
               fontWeight: isStatus ? 600 : 400,
             }}
           >
-            {formatCell(value, column, decimalsByColumn.get(column.key) ?? 0)}
+            {isStatus ? (
+              <span style={{
+                display: 'inline-block', padding: '1px 8px', borderRadius: 10, lineHeight: '16px',
+                background: `${colors[statusKey]}1f`, fontSize: 10.5,
+              }}>
+                {formatCell(value, column, 0)}
+              </span>
+            ) : formatCell(value, column, decimalsByColumn.get(column.key) ?? 0)}
           </div>
         );
       })}

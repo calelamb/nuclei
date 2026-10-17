@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type MutableRefObject } from 'react';
 import { mkdir, writeTextFile } from '@tauri-apps/plugin-fs';
 import { stringify } from 'yaml';
 import { Plus, Trash2 } from 'lucide-react';
@@ -44,6 +44,8 @@ interface NewExperimentFormProps {
   projectRoot: string;
   /** Present when editing an existing experiment; absent for "New experiment". */
   existing?: DiscoveredExperiment;
+  /** Optional shared flag the parent reads to confirm before swapping targets. */
+  dirtyRef?: MutableRefObject<boolean>;
   onClose(): void;
 }
 
@@ -87,7 +89,7 @@ function formatZodErrors(error: { issues: Array<{ path: PropertyKey[]; message: 
   return error.issues.map(humanizeIssue);
 }
 
-export function NewExperimentForm({ projectRoot, existing, onClose }: NewExperimentFormProps) {
+export function NewExperimentForm({ projectRoot, existing, dirtyRef: sharedDirtyRef, onClose }: NewExperimentFormProps) {
   const colors = useThemeStore((s) => s.colors);
   const platform = usePlatform();
   const hardwareBackends = useHardwareStore((s) => s.backends);
@@ -112,7 +114,8 @@ export function NewExperimentForm({ projectRoot, existing, onClose }: NewExperim
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
 
-  const dirtyRef = useRef(false);
+  const ownDirtyRef = useRef(false);
+  const dirtyRef = sharedDirtyRef ?? ownDirtyRef;
   const [touched, setTouched] = useState<ReadonlySet<FormField>>(new Set());
   const markDirty = (field: FormField = 'form') => {
     dirtyRef.current = true;
@@ -151,7 +154,7 @@ export function NewExperimentForm({ projectRoot, existing, onClose }: NewExperim
       setNotes(fields.notes);
       setSweepRows(fields.sweepRows);
     });
-  }, [existing]);
+  }, [existing, dirtyRef]);
 
   const backends: BackendInfo[] = useMemo(() => {
     const rest = hardwareBackends.filter((b) => b.provider !== 'simulator');
@@ -197,6 +200,11 @@ export function NewExperimentForm({ projectRoot, existing, onClose }: NewExperim
       ? '—'
       : `${validation.gridSize} point${validation.gridSize === 1 ? '' : 's'}`;
   const canSubmit = validation.ok && !submitting && entry.trim().length > 0;
+  const disabledReason = canSubmit || submitting
+    ? undefined
+    : entry.trim().length === 0
+      ? 'Choose an entry file to continue'
+      : validation.errors[0]?.text;
 
   const handleAddRow = () => { markDirty('sweep'); setSweepRows((rows) => [...rows, newSweepRow(nextRowId())]); };
   const handleRemoveRow = (id: string) => { markDirty('sweep'); setSweepRows((rows) => rows.filter((r) => r.id !== id)); };
@@ -381,7 +389,7 @@ export function NewExperimentForm({ projectRoot, existing, onClose }: NewExperim
       </div>
 
       <div style={{ color: colors.textDim, fontSize: 11 }}>
-        Grid size: {gridLabel} (cap {MAX_GRID_POINTS})
+        Grid size: {gridLabel}{sweepRows.length > 0 ? ` · max ${MAX_GRID_POINTS}` : ''}
       </div>
 
       {visibleIssues.length > 0 && (
@@ -389,12 +397,15 @@ export function NewExperimentForm({ projectRoot, existing, onClose }: NewExperim
           {visibleIssues.map((err) => <li key={err.text}>{err.text}</li>)}
         </ul>
       )}
+      {disabledReason && visibleIssues.length === 0 && name.trim().length > 0 && (
+        <div style={{ color: colors.textDim, fontSize: 11 }}>{disabledReason}</div>
+      )}
       {submitError && (
         <div style={{ color: colors.error, fontSize: 11 }}>{submitError}</div>
       )}
 
       <button
-        type="submit" disabled={!canSubmit}
+        type="submit" disabled={!canSubmit} title={disabledReason}
         style={{
           padding: '7px 12px', background: canSubmit ? colors.accent : colors.border,
           color: canSubmit ? '#0a1220' : colors.textDim, border: 'none', borderRadius: 4,

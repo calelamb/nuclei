@@ -8,7 +8,7 @@ import { expandGrid } from '../../types/experiment';
 import type { RunStatus } from '../../types/experiment';
 import { createTauriExperimentFs } from '../../services/experimentFs';
 import { toCsv, downloadCsv } from '../../services/experimentExport';
-import { columnDecimals, deriveColumns, filterByStatus, getRunValue, sortRuns } from './runsTableColumns';
+import { columnDecimals, isNumericColumn, deriveColumns, filterByStatus, getRunValue, sortRuns } from './runsTableColumns';
 import { RunsTableRow, ROW_HEIGHT } from './RunsTableRow';
 import { RunButton } from './RunButton';
 import { RunFeedback } from './RunFeedback';
@@ -35,6 +35,13 @@ const HEADER_HEIGHT = 28;
  * shot" lives one click away from the table it's derived from).
  */
 export function RunsTable() {
+  const selectedFileName = useExperimentUiStore((s) => s.selectedExperimentFileName);
+  // Keyed per experiment so scroll offset and virtualization state never leak
+  // from one experiment's table into the next.
+  return <RunsTableBody key={selectedFileName ?? ''} />;
+}
+
+function RunsTableBody() {
   const colors = useThemeStore((s) => s.colors);
   const projectRoot = useProjectStore((s) => s.projectRoot);
   const selectedFileName = useExperimentUiStore((s) => s.selectedExperimentFileName);
@@ -289,7 +296,7 @@ export function RunsTable() {
                   onClick={() => toggleSort(column.key)}
                   style={{
                     ...HEADER_CELL, display: 'flex', alignItems: 'center', gap: 4, minWidth: 0,
-                    justifyContent: column.kind === 'field' && column.key === 'status' ? 'flex-start' : 'flex-end',
+                    justifyContent: isNumericColumn(column) ? 'flex-end' : 'flex-start',
                     background: 'transparent', border: 'none', cursor: 'pointer',
                     color: sortKey === column.key ? colors.accent : colors.textDim,
                   }}

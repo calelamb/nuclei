@@ -120,12 +120,12 @@ export function ResearchTour() {
     : undefined;
 
   const overlay = (
-    <div style={{ position: 'fixed', inset: 0, zIndex: 1200 }}>
+    <div style={{ position: 'fixed', inset: 0, zIndex: 1200, pointerEvents: 'none' }}>
       {/* Click-catcher outside the target (click to skip). The dim is the spotlight's
           shadow below, so the target itself is never darkened. */}
       <div
         onClick={dismiss}
-        style={{ position: 'absolute', inset: 0, clipPath: hole, background: rect ? 'transparent' : 'rgba(0,0,0,0.5)' }}
+        style={{ position: 'absolute', inset: 0, pointerEvents: 'auto', clipPath: hole, background: rect ? 'transparent' : 'rgba(0,0,0,0.5)' }}
       />
       {/* Spotlight ring around the target. */}
       {rect && (
@@ -156,6 +156,7 @@ export function ResearchTour() {
           borderRadius: 12,
           padding: 16,
           boxShadow: '0 12px 48px rgba(0,0,0,0.4)',
+          pointerEvents: 'auto',
           fontFamily: "'Geist Sans', sans-serif",
         }}
       >

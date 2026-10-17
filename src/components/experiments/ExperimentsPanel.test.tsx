@@ -110,6 +110,20 @@ describe('ExperimentsPanel', () => {
     expect((container.querySelector('#exp-shots') as HTMLInputElement).value).toBe('2048');
   });
 
+  it('asks before discarding dirty edits when switching to another experiment (research-01)', () => {
+    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(false);
+    const { getByLabelText, container } = render(<ExperimentsPanel />);
+    fireEvent.click(getByLabelText('Edit theta-sweep'));
+    fireEvent.change(container.querySelector('#exp-shots') as HTMLInputElement, { target: { value: '555' } });
+    fireEvent.click(getByLabelText('Edit depth-grid'));
+    expect(confirmSpy).toHaveBeenCalled();
+    expect((container.querySelector('#exp-name') as HTMLInputElement).value).toBe('theta-sweep');
+    confirmSpy.mockReturnValue(true);
+    fireEvent.click(getByLabelText('Edit depth-grid'));
+    expect((container.querySelector('#exp-name') as HTMLInputElement).value).toBe('depth-grid');
+    confirmSpy.mockRestore();
+  });
+
   it('"+ New experiment" while editing switches to a blank form instead of closing (research-17)', () => {
     const { getByLabelText, getByText, container } = render(<ExperimentsPanel />);
     fireEvent.click(getByLabelText('Edit theta-sweep'));
@@ -134,6 +148,6 @@ describe('ExperimentsPanel', () => {
   it('surfaces a failed sweep start instead of staying silent (research-02)', () => {
     useExperimentRunStore.setState({ active: null, lastSummary: null, lastError: 'Failed to connect to kernel' });
     const { getByRole } = render(<ExperimentsPanel />);
-    expect(getByRole('status').textContent).toContain('Failed to connect to kernel');
+    expect(getByRole('status').textContent).toContain("Couldn't reach the Python kernel");
   });
 });

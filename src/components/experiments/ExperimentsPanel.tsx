@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Pencil, FlaskConical, Waves } from 'lucide-react';
 import { isWebBuild } from '../../platform/buildTarget';
 import { useNavigationStore } from '../../stores/navigationStore';
@@ -169,6 +169,16 @@ export function ExperimentsPanel() {
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState<DiscoveredExperiment | undefined>(undefined);
   const [noiseLibOpen, setNoiseLibOpen] = useState(false);
+  const formDirtyRef = useRef(false);
+
+  /** Opens the form on `target` (undefined = blank), asking first if the open form has unsaved edits. */
+  const openForm = (target: DiscoveredExperiment | undefined) => {
+    const switching = formOpen && (editing?.fileName ?? 'new') !== (target?.fileName ?? 'new');
+    if (switching && formDirtyRef.current && !window.confirm('Discard your unsaved changes to this experiment?')) return;
+    formDirtyRef.current = false;
+    setEditing(target);
+    setFormOpen(true);
+  };
 
   useEffect(() => {
     if (!projectRoot) return;
@@ -204,9 +214,9 @@ export function ExperimentsPanel() {
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
       <div style={{ padding: '8px 10px', display: 'flex', gap: 6, alignItems: 'center', borderBottom: `1px solid ${colors.border}` }}>
         <button
-          onClick={() => { setEditing(undefined); setFormOpen(true); }}
+          onClick={() => openForm(undefined)}
           style={{
-            flex: 1, minWidth: 0, padding: '5px 10px', background: 'transparent', border: `1px solid ${colors.accent}`,
+            flex: 1, minWidth: 0, height: 28, padding: '0 10px', background: 'transparent', border: `1px solid ${colors.accent}`,
             borderRadius: 4, color: colors.accent, cursor: 'pointer', fontSize: 11, fontWeight: 600,
             fontFamily: "'Geist Sans', sans-serif", whiteSpace: 'nowrap',
           }}
@@ -244,7 +254,7 @@ export function ExperimentsPanel() {
             lastRun={formatLastRun(experiment, runsByExperiment)}
             selected={selectedFileName === experiment.fileName}
             onSelect={() => selectExperiment(experiment.fileName)}
-            onEdit={() => { setEditing(experiment); setFormOpen(true); }}
+            onEdit={() => openForm(experiment)}
           />
         ))}
 
@@ -272,7 +282,8 @@ export function ExperimentsPanel() {
           key={editing?.fileName ?? 'new'}
           projectRoot={projectRoot}
           existing={editing}
-          onClose={() => { setFormOpen(false); setEditing(undefined); }}
+          dirtyRef={formDirtyRef}
+          onClose={() => { formDirtyRef.current = false; setFormOpen(false); setEditing(undefined); }}
         />
       )}
 

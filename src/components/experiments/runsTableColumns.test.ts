@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { columnDecimals, deriveColumns, filterByStatus, formatRunLabel, getRunValue, sortRuns } from './runsTableColumns';
+import { columnDecimals, deriveColumns, filterByStatus, formatRunLabel, getRunValue, isNumericColumn, sortRuns } from './runsTableColumns';
 import type { RunManifest, RunRecord } from '../../types/experiment';
 
 function manifest(overrides: Partial<RunManifest>): RunManifest {
@@ -134,10 +134,28 @@ describe('columnDecimals', () => {
 
 describe('formatRunLabel', () => {
   it('renders timestamped run dirs as date, time and short id', () => {
-    expect(formatRunLabel('20261015-142150-a458')).toBe('Oct 15 14:21:50 · a458');
+    const started = new Date(2026, 9, 15, 8, 21, 50).toISOString();
+    expect(formatRunLabel('20261015-142150-a458', started)).toBe('Oct 15 08:21:50 · a458');
+  });
+
+  it('treats the dir timestamp as UTC when no start time is given', () => {
+    const d = new Date(Date.UTC(2026, 9, 15, 14, 21, 50));
+    const pad = (n: number) => String(n).padStart(2, '0');
+    expect(formatRunLabel('20261015-142150-a458')).toBe(
+      `Oct ${d.getDate()} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())} · a458`,
+    );
   });
 
   it('falls back to the raw dir name for other shapes', () => {
     expect(formatRunLabel('run-a')).toBe('run-a');
+  });
+});
+
+describe('isNumericColumn', () => {
+  it('right-aligns params, metrics and numeric fields but not status or seed_honored', () => {
+    expect(isNumericColumn({ key: 'theta', label: 'theta', kind: 'param' })).toBe(true);
+    expect(isNumericColumn({ key: 'duration_ms', label: 'd', kind: 'field' })).toBe(true);
+    expect(isNumericColumn({ key: 'status', label: 's', kind: 'field' })).toBe(false);
+    expect(isNumericColumn({ key: 'seed_honored', label: 's', kind: 'field' })).toBe(false);
   });
 });

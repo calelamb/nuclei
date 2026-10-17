@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { X } from 'lucide-react';
 import { useThemeStore } from '../../stores/themeStore';
+import { useExperimentUiStore } from '../../stores/experimentUiStore';
 import { useExperimentRunStore } from '../../stores/experimentRunStore';
 import type { RunSummary } from '../../services/experimentRunner';
 
@@ -14,6 +15,14 @@ function describeRunSummary(summary: RunSummary): string {
   return `${summary.total} ${noun}${failed}`;
 }
 
+/** Turns raw transport errors into a sentence a person can act on. */
+function humanizeRunError(raw: string): string {
+  if (/failed to connect to kernel/i.test(raw)) {
+    return "Couldn't reach the Python kernel. Start it from the status bar, then run again.";
+  }
+  return raw;
+}
+
 /**
  * Post-run feedback: surfaces `lastError` (sweep could not start or crashed)
  * and `lastSummary` (outcome) which previously had no UI consumer, so failed
@@ -23,6 +32,9 @@ export function RunFeedback({ compact = false }: { compact?: boolean }) {
   const colors = useThemeStore((s) => s.colors);
   const lastError = useExperimentRunStore((s) => s.lastError);
   const lastSummary = useExperimentRunStore((s) => s.lastSummary);
+  // The runs table shows the full banner when an experiment is open; the
+  // sidebar copy is then visual only so screen readers hear the message once.
+  const tableVisible = useExperimentUiStore((s) => s.selectedExperimentFileName !== null);
   const clearFeedback = useExperimentRunStore((s) => s.clearFeedback);
 
   useEffect(() => {
@@ -35,11 +47,12 @@ export function RunFeedback({ compact = false }: { compact?: boolean }) {
   const isError = lastError !== null;
   const hasFailures = !isError && lastSummary !== null && lastSummary.failed > 0;
   const tone = isError || hasFailures ? colors.error : colors.success;
-  const text = isError ? lastError : describeRunSummary(lastSummary as RunSummary);
+  const text = isError ? humanizeRunError(lastError) : describeRunSummary(lastSummary as RunSummary);
 
   return (
     <div
-      role="status"
+      role={compact && tableVisible ? undefined : 'status'}
+      aria-hidden={compact && tableVisible ? true : undefined}
       style={{
         display: 'flex', alignItems: 'flex-start', gap: 8,
         padding: compact ? '5px 8px' : '8px 14px',

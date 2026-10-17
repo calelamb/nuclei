@@ -10,6 +10,7 @@ import { openRunFolder } from '../../lib/openRunFolder';
 import { formatSignificant, formatStartedAt, toChips } from './runDetailFormat';
 import { RunHistogram } from './RunHistogram';
 import { RunCircuitDiagram } from './RunCircuitDiagram';
+import { formatRunLabel } from './runsTableColumns';
 import { PanelHeader } from '../layout/PanelHeader';
 import type { CircuitSnapshot, SimulationResult } from '../../types/quantum';
 import type { RunRecord } from '../../types/experiment';
@@ -209,7 +210,7 @@ export function RunDetail() {
           Leading = back-to-runs, title = run dir, actions = open run folder,
           overflow = Help→docs. */}
       <PanelHeader
-        title={run.dir}
+        title={formatRunLabel(run.dir, run.manifest.started_at)}
         context={experiment.spec.name}
         helpHref="https://getnuclei.dev/docs/research/experiments/"
         leading={

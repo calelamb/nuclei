@@ -203,7 +203,7 @@ describe('RunsTable', () => {
   it('shows a failed-start error under the header (research-02)', () => {
     useExperimentRunStore.setState({ lastError: 'Failed to connect to kernel' });
     const { getByRole } = render(<RunsTable />);
-    expect(getByRole('status').textContent).toContain('Failed to connect to kernel');
+    expect(getByRole('status').textContent).toContain("Couldn't reach the Python kernel");
   });
 
   it('formats a numeric column with consistent decimals (research-18)', () => {
@@ -222,5 +222,27 @@ describe('RunsTable', () => {
     useExperimentUiStore.getState().patchRunsView(FILE_NAME, { scrollTop: 120 });
     const { container } = render(<RunsTable />);
     expect((container.querySelector('[role="rowgroup"]') as HTMLElement).scrollTop).toBe(120);
+  });
+  it('keeps scroll offsets separate per experiment (research-12 regression)', () => {
+    const other = 'other.experiment.yaml';
+    useExperimentStore.setState({
+      experiments: [
+        { fileName: FILE_NAME, path: `/proj/experiments/${FILE_NAME}`, spec: SPEC },
+        { fileName: other, path: `/proj/experiments/${other}`, spec: { ...SPEC, name: 'other' } },
+      ],
+      runsByExperiment: { [FILE_NAME]: RUNS, [other]: RUNS },
+    });
+    const { container } = render(<RunsTable />);
+    const scroller = () => container.querySelector('[role="rowgroup"]') as HTMLElement;
+    scroller().scrollTop = 500;
+    fireEvent.scroll(scroller());
+    act(() => { useExperimentUiStore.setState({ selectedExperimentFileName: other }); });
+    expect(scroller().scrollTop).toBe(0);
+    scroller().scrollTop = 1200;
+    fireEvent.scroll(scroller());
+    act(() => { useExperimentUiStore.setState({ selectedExperimentFileName: FILE_NAME }); });
+    expect(scroller().scrollTop).toBe(500);
+    act(() => { useExperimentUiStore.setState({ selectedExperimentFileName: other }); });
+    expect(scroller().scrollTop).toBe(1200);
   });
 });

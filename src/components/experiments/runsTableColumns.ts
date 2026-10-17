@@ -74,6 +74,13 @@ export function getRunValue(run: RunRecord, column: RunColumn): number | string 
   }
 }
 
+const TEXT_FIELD_KEYS = new Set(['status', 'seed_honored']);
+
+/** Whether a column's cells (and header) right-align as numbers. */
+export function isNumericColumn(column: RunColumn): boolean {
+  return column.kind !== 'field' || !TEXT_FIELD_KEYS.has(column.key);
+}
+
 export type SortDirection = 'asc' | 'desc';
 
 function compareValues(a: number | string | boolean | null, b: number | string | boolean | null): number {
@@ -131,12 +138,23 @@ export function columnDecimals(runs: readonly RunRecord[], column: RunColumn): n
   return decimals;
 }
 
-/** "20261015-142150-a458" -> "Oct 15 14:21:50 · a458"; other shapes pass through. */
-export function formatRunLabel(dir: string): string {
+const pad2 = (n: number) => String(n).padStart(2, '0');
+
+/**
+ * "Oct 15 08:20:30 · a458" in local time, matching the sidebar and run detail.
+ * Run dirs are named in UTC, so the clock time comes from `startedAt` (an ISO
+ * instant) when valid; otherwise the dir's own timestamp is parsed as UTC and
+ * converted. Shapes that aren't run dirs pass through.
+ */
+export function formatRunLabel(dir: string, startedAt?: string): string {
   const match = RUN_DIR_PATTERN.exec(dir);
   if (!match) return dir;
-  const [, , month, day, hh, mm, ss, suffix] = match;
-  const monthName = MONTHS[Number(month) - 1];
-  if (!monthName) return dir;
-  return `${monthName} ${Number(day)} ${hh}:${mm}:${ss} · ${suffix}`;
+  const [, year, month, day, hh, mm, ss, suffix] = match;
+  const fromManifest = startedAt ? new Date(startedAt) : null;
+  const instant = fromManifest && !Number.isNaN(fromManifest.getTime())
+    ? fromManifest
+    : new Date(Date.UTC(Number(year), Number(month) - 1, Number(day), Number(hh), Number(mm), Number(ss)));
+  if (Number.isNaN(instant.getTime())) return dir;
+  const monthName = MONTHS[instant.getMonth()];
+  return `${monthName} ${instant.getDate()} ${pad2(instant.getHours())}:${pad2(instant.getMinutes())}:${pad2(instant.getSeconds())} · ${suffix}`;
 }

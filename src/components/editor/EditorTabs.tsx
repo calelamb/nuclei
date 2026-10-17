@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useProjectStore } from '../../stores/projectStore';
 import { useEditorStore } from '../../stores/editorStore';
@@ -9,11 +9,9 @@ import { getExecute, getFileOps } from '../../App';
 import { requestCloseTab } from '../../lib/tabClose';
 import { FrameworkSelector } from './FrameworkSelector';
 import { useHardwareStore } from '../../stores/hardwareStore';
+import { tabBarDensity, type TabBarDensity } from './tabBarLayout';
 
 const basename = (p: string) => p.split('/').pop() ?? p;
-
-/** Below this bar width the toolbar drops labels/hints so the tab strip keeps room. */
-const COMPACT_BAR_WIDTH = 860;
 
 export function EditorTabs() {
   const tabs = useProjectStore((s) => s.tabs);
@@ -33,7 +31,9 @@ export function EditorTabs() {
   const barRef = useRef<HTMLDivElement>(null);
   const stripRef = useRef<HTMLDivElement>(null);
   const overflowBtnRef = useRef<HTMLButtonElement>(null);
-  const [compact, setCompact] = useState(false);
+  const [density, setDensity] = useState<TabBarDensity>('full');
+  const compact = density !== 'full';
+  const tight = density === 'tight';
   const [overflowing, setOverflowing] = useState(false);
   const [overflowOpen, setOverflowOpen] = useState(false);
   const [overflowPos, setOverflowPos] = useState<{ top: number; right: number } | null>(null);
@@ -49,7 +49,7 @@ export function EditorTabs() {
   const measure = useCallback(() => {
     const bar = barRef.current;
     const strip = stripRef.current;
-    if (bar) setCompact(bar.clientWidth < COMPACT_BAR_WIDTH);
+    if (bar) setDensity(tabBarDensity(bar.clientWidth));
     if (strip) setOverflowing(strip.scrollWidth > strip.clientWidth + 1);
   }, []);
 
@@ -58,8 +58,14 @@ export function EditorTabs() {
     if (typeof ResizeObserver === 'undefined' || !barRef.current) return;
     const observer = new ResizeObserver(measure);
     observer.observe(barRef.current);
+    if (stripRef.current) observer.observe(stripRef.current);
     return () => observer.disconnect();
   }, [measure, tabs.length]);
+
+  // Toolbar content (kernel state, framework chip) changes the strip's width
+  // without resizing the bar, so re-measure after every render; setState
+  // bails out when nothing changed.
+  useLayoutEffect(() => { measure(); });
 
   // Keep the active tab visible when it changes or the strip is narrow.
   useEffect(() => {
@@ -419,7 +425,7 @@ export function EditorTabs() {
           aria-label={runTitle}
           style={{
             height: 28,
-            padding: compact ? '0 10px' : '0 14px',
+            padding: tight ? '0 8px' : compact ? '0 10px' : '0 14px',
             display: 'flex',
             alignItems: 'center',
             gap: 7,
@@ -454,7 +460,7 @@ export function EditorTabs() {
           ) : (
             <Play size={12} fill="currentColor" />
           )}
-          <span>{runLabel}</span>
+          {!tight && <span>{runLabel}</span>}
           {canRun && !compact && (
             <span
               style={{
