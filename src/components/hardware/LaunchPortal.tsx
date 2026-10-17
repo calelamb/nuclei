@@ -10,6 +10,7 @@ import { getHardware } from '../../App';
 import { providerAllowsQsharp, QSHARP_GATE_TOOLTIP } from './launchGating';
 import type { HardwareProviderType } from '../../types/hardware';
 
+import './launchPortal.css';
 import { TYPOGRAPHY } from '../../styles/tokens';
 interface ProviderPortalMeta {
   name: HardwareProviderType;
@@ -131,31 +132,6 @@ export function LaunchPortal() {
 
   return (
     <div style={{ height: '100%', display: 'flex', flexDirection: 'column', overflow: 'auto' }}>
-      {/* Header */}
-      <div
-        style={{
-          padding: '10px 12px',
-          borderBottom: `1px solid ${colors.border}`,
-          display: 'flex',
-          alignItems: 'center',
-          gap: 8,
-        }}
-      >
-        <Rocket size={14} style={{ color: colors.accentText }} />
-        <span
-          style={{
-            fontSize: 11,
-            fontWeight: 600,
-            textTransform: 'uppercase',
-            letterSpacing: 0.5,
-            color: colors.textMuted,
-            fontFamily: TYPOGRAPHY.fontSans,
-          }}
-        >
-          Launch
-        </span>
-      </div>
-
       {/* Drop zone */}
       <div style={{ padding: 12 }}>
         <div
@@ -249,7 +225,7 @@ export function LaunchPortal() {
         >
           Choose a destination
         </div>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
+        <div className="launch-grid">
           {PORTAL_PROVIDERS.map((p) => {
             const qsharpBlocked = qsharpBlocks(p.name);
             const isDisabled = p.disabled || qsharpBlocked;
@@ -289,7 +265,7 @@ export function LaunchPortal() {
               >
                 <ProviderLogo provider={p.name} size={20} />
               </div>
-              <div style={{ fontSize: 11, fontWeight: 600, color: colors.text }}>{p.label}</div>
+              <div className="launch-grid__name" style={{ fontSize: 11, fontWeight: 600, color: colors.text }}>{p.label}</div>
               <div
                 style={{
                   fontSize: 11,
