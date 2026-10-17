@@ -206,6 +206,14 @@ describe('RunsTable', () => {
     expect(getByRole('status').textContent).toContain("Couldn't reach the Python kernel");
   });
 
+  it('points the kernel error at the toolbar and offers Retry (LR-19)', () => {
+    useExperimentRunStore.setState({ lastError: 'Failed to connect to kernel' });
+    const { getByRole } = render(<RunsTable />);
+    expect(getByRole('status').textContent).toContain('toolbar');
+    expect(getByRole('status').textContent).not.toContain('status bar');
+    expect(getByRole('button', { name: 'Retry' })).toBeTruthy();
+  });
+
   it('formats a numeric column with consistent decimals (research-18)', () => {
     useExperimentStore.setState({
       runsByExperiment: { [FILE_NAME]: [

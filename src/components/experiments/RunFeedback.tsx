@@ -5,7 +5,10 @@ import { useExperimentUiStore } from '../../stores/experimentUiStore';
 import { useExperimentRunStore } from '../../stores/experimentRunStore';
 import type { RunSummary } from '../../services/experimentRunner';
 import { TYPOGRAPHY, ICON_SIZE, ICON_STROKE } from '../../styles/tokens';
-import { IconButton } from '../ui';
+import { useProjectStore } from '../../stores/projectStore';
+import { useExperimentStore } from '../../services/experimentStore';
+import { useExperimentRun } from '../../hooks/useExperimentRun';
+import { Button, IconButton } from '../ui';
 
 const SUMMARY_VISIBLE_MS = 8000;
 
@@ -20,7 +23,7 @@ function describeRunSummary(summary: RunSummary): string {
 /** Turns raw transport errors into a sentence a person can act on. */
 function humanizeRunError(raw: string): string {
   if (/failed to connect to kernel/i.test(raw)) {
-    return "Couldn't reach the Python kernel. Start it from the status bar, then run again.";
+    return "Couldn't reach the Python kernel. Check the kernel status in the toolbar, then retry.";
   }
   return raw;
 }
@@ -38,6 +41,10 @@ export function RunFeedback({ compact = false }: { compact?: boolean }) {
   // sidebar copy is then visual only so screen readers hear the message once.
   const tableVisible = useExperimentUiStore((s) => s.selectedExperimentFileName !== null);
   const clearFeedback = useExperimentRunStore((s) => s.clearFeedback);
+  const projectRoot = useProjectStore((s) => s.projectRoot);
+  const selectedFileName = useExperimentUiStore((s) => s.selectedExperimentFileName);
+  const experiments = useExperimentStore((s) => s.experiments);
+  const { run } = useExperimentRun();
 
   useEffect(() => {
     if (lastError || !lastSummary || compact) return;
@@ -49,6 +56,15 @@ export function RunFeedback({ compact = false }: { compact?: boolean }) {
   const isError = lastError !== null;
   const hasFailures = !isError && lastSummary !== null && lastSummary.failed > 0;
   const tone = isError || hasFailures ? colors.error : colors.success;
+  // Retry re-runs the open experiment; hardware sweeps keep their confirm step on the Run button.
+  const retryTarget = experiments.find((e) => e.fileName === selectedFileName);
+  const canRetry = isError && !compact && projectRoot !== null && retryTarget !== undefined
+    && retryTarget.spec.type !== 'qec_campaign' && retryTarget.spec.backend.provider === 'simulator';
+  const handleRetry = () => {
+    if (!retryTarget || !projectRoot) return;
+    clearFeedback();
+    void run(retryTarget, projectRoot);
+  };
   const text = isError ? humanizeRunError(lastError) : describeRunSummary(lastSummary as RunSummary);
 
   return (
@@ -68,6 +84,7 @@ export function RunFeedback({ compact = false }: { compact?: boolean }) {
       <span style={{ flex: 1, minWidth: 0, overflowWrap: 'anywhere' }}>
         {isError ? <><strong style={{ color: tone }}>Run failed.</strong> {text}</> : text}
       </span>
+      {canRetry && <Button size="sm" variant="secondary" onClick={handleRetry}>Retry</Button>}
       <IconButton size="sm" aria-label="Dismiss run message" onClick={clearFeedback}>
         <X size={ICON_SIZE.xs} strokeWidth={ICON_STROKE} />
       </IconButton>
