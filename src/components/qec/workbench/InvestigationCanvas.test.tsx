@@ -41,3 +41,13 @@ describe('canvas grid rows', () => {
     expect(grid.style.gridAutoRows).toBe('');
   });
 });
+
+describe('empty circuit hint', () => {
+  it('does not claim a Study references no circuit when no Study exists', () => {
+    useQecWorkbenchStore.setState({ preset: 'build' });
+    const noop = () => undefined;
+    render(<InvestigationCanvas inspectorOpen onToggleInspector={noop} toggleRef={{ current: null }} />);
+    expect(screen.queryAllByText('This Study references no .stim circuit.')).toHaveLength(0);
+    expect(screen.getAllByText('Create a Study to attach a .stim circuit.').length).toBeGreaterThan(0);
+  });
+});

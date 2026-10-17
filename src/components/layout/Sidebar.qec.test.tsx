@@ -35,7 +35,7 @@ describe('<Sidebar> QEC integration', () => {
     );
 
     expect(screen.getByText('QEC Workbench')).toBeTruthy();
-    expect(await screen.findByText(/Drop a sinter stats CSV/)).toBeTruthy();
+    expect(await screen.findByText(/sinter stats CSV/)).toBeTruthy();
     expect(screen.getByText(/Studies need a project folder/)).toBeTruthy();
     expect(screen.queryByText(/Open a project to manage QEC Studies/)).toBeNull();
   });

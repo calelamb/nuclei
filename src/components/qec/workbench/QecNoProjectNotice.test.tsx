@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import * as buildTarget from '../../../platform/buildTarget';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { QecNoProjectNotice } from './QecNoProjectNotice';
 import { useQecCampaignStore } from '../../../stores/qecCampaignStore';
@@ -15,10 +16,11 @@ const HEADER = 'shots,errors,discards,seconds,decoder,strong_id,json_metadata,cu
 const csv = [HEADER, `1000,5,0,1,pymatching,a,"{""d"":3,""p"":0.001}",`].join('\n');
 
 beforeEach(() => { resetQecWorkbenchTestState(); useQecCampaignStore.getState().reset(); });
-afterEach(cleanup);
+afterEach(() => { cleanup(); vi.restoreAllMocks(); });
 
 describe('no-project sidebar copy (qec-r-14, qec-r-21)', () => {
   it('on the web the drop zone is the main panel, so say so and offer no preset switch', () => {
+    vi.spyOn(buildTarget, 'isWebBuild').mockReturnValue(true);
     render(<QecNoProjectNotice />);
     expect(screen.getByText(/Drop a sinter stats CSV in the main panel/)).toBeTruthy();
     expect(screen.queryByRole('button', { name: 'Open Analyze' })).toBeNull();

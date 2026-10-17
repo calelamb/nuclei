@@ -1,3 +1,4 @@
+import { isWebBuild } from '../../../platform/buildTarget';
 import { usePlatform } from '../../../platform/PlatformProvider';
 import { useQecCampaignStore } from '../../../stores/qecCampaignStore';
 import { useThemeStore } from '../../../stores/themeStore';
@@ -20,7 +21,7 @@ export function QecNoProjectNotice() {
   const setPreset = useQecWorkbenchStore((s) => s.setPreset);
   const dim = { color: colors.textMuted, fontSize: 12, lineHeight: 1.5, margin: 0 } as const;
   // The web build has no presets: its main panel is the analysis view, so the CSV drop zone is always in front of the person.
-  const analyzeHere = isWeb || preset === 'analyze';
+  const analyzeHere = isWebBuild() || preset === 'analyze';
   const showHint = csvName === null || !analyzeHere;
   const hint = csvName !== null
     ? `${csvName} is loaded. Open Analyze to see it.`

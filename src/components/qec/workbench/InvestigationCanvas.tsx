@@ -87,6 +87,11 @@ function EmptyInstrument({ panelId }: { panelId: QecWorkbenchPanelId }): ReactEl
   );
 }
 
+function circuitHint(study: unknown, count: number): string {
+  if (study === null) return 'Create a Study to attach a .stim circuit.';
+  return count > 1 ? 'Double-click a .stim file under Referenced files to open it.' : 'This Study references no .stim circuit.';
+}
+
 /** One click to the circuit when the active Study names exactly one; otherwise say where the files are. */
 function OpenCircuitAction(): ReactElement {
   const studies = useQecStudyStore((state) => state.studies);
@@ -95,7 +100,7 @@ function OpenCircuitAction(): ReactElement {
   const study = studies.find((entry) => entry.study.id === activeStudyId)?.study ?? null;
   const circuits = study?.sources.filter((source) => source.kind === 'stim') ?? [];
   if (circuits.length !== 1) {
-    return <span className="qec-instrument__hint">{circuits.length > 1 ? 'Double-click a .stim file under Referenced files to open it.' : 'This Study references no .stim circuit.'}</span>;
+    return <span className="qec-instrument__hint">{circuitHint(study, circuits.length)}</span>;
   }
   const circuit = circuits[0];
   return (
