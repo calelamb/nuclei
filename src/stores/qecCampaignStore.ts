@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import type { QecCampaignStatsRow } from '../types/qec';
 import { parseSinterCsvDetailed, serializeSinterCsv, type CsvRowIssue } from '../types/sinterCsv';
-import { applyMapping, guessMapping, type SinterMapping } from '../types/sinterMapping';
+import { applyMapping, guessMapping, noNumericKeysProblem, type SinterMapping } from '../types/sinterMapping';
 
 /**
  * PRD 10 Phase E — live QEC campaign state for the analysis surfaces.
@@ -32,6 +32,8 @@ export interface CsvImport {
   issues: CsvRowIssue[];
   /** Data records in the file before duplicate strong_ids were folded. */
   totalDataRows: number;
+  /** Data records dropped as invalid (not merged). */
+  rejectedRows: number;
 }
 
 export interface CsvLoadResult {
@@ -97,10 +99,16 @@ export const useQecCampaignStore = create<QecCampaignState>((set) => ({
       set({ csvError: parsed.fatal });
       return { ok: false, fatal: parsed.fatal, issues: [] };
     }
+    const noKeys = noNumericKeysProblem(parsed.rows);
+    if (noKeys !== null) {
+      set({ csvError: noKeys });
+      return { ok: false, fatal: noKeys, issues: parsed.issues };
+    }
     const mapping = guessMapping(parsed.rows);
     set({
       csvImport: {
-        sourceName, rows: parsed.rows, mapping, issues: parsed.issues, totalDataRows: parsed.totalDataRows,
+        sourceName, rows: parsed.rows, mapping, issues: parsed.issues,
+        totalDataRows: parsed.totalDataRows, rejectedRows: parsed.rejectedRows,
       },
       csvError: null,
       statsCsv: serializeSinterCsv(parsed.rows),

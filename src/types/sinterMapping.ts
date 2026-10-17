@@ -1,4 +1,5 @@
 import type { QecCampaignStatsRow } from './qec';
+import { foldStatsRows } from './sinterCsv';
 
 /**
  * Explicit mapping from a sinter CSV's free-form json_metadata keys to the
@@ -26,10 +27,18 @@ export interface SinterMapping {
    * Λ fits), e.g. basis / noise model. Folded into the decoder string so that
    * both the series key and the Λ fit keep the groups apart. */
   groupBy: string[];
+  /** Replicate keys (seed, shard, ...): tasks that differ only in these are
+   * summed into one task, as sinter pools replicates. Absent means none. */
+  mergeKeys?: string[];
+  /** Set to 'user' once the person picked the x-axis themselves, so the
+   * "p was guessed" warning stops. Absent means the mapping is a guess. */
+  pOrigin?: 'user';
 }
 
 export interface MetadataKeyInfo {
   key: string;
+  /** Rows that carry the key. */
+  count: number;
   /** Every row that has the key holds a number (or numeric string). */
   numeric: boolean;
   distinct: number;
@@ -40,6 +49,8 @@ const P_NAMES = ['p', 'noise', 'physical_error_rate', 'physical_error', 'error_r
 const D_NAMES = ['d', 'distance', 'code_distance', 'dist'];
 const R_NAMES = ['r', 'rounds', 'num_rounds', 'n_rounds', 'round'];
 const DECODER_NAMES = ['decoder', 'decoder_name'];
+/** Keys that are replicate indices, not experiment parameters. */
+const REPLICATE_NAMES = ['s', 'seed', 'seeds', 'shard', 'shard_id', 'rep', 'replicate', 'repeat', 'trial', 'sample_id'];
 
 function meta(row: QecCampaignStatsRow): Record<string, unknown> {
   const m = row.json_metadata;
@@ -57,17 +68,18 @@ function asNumber(v: unknown): number | null {
 
 /** Keys present in any row's metadata, sorted, with type info for the UI. */
 export function metadataKeys(rows: readonly QecCampaignStatsRow[]): MetadataKeyInfo[] {
-  const acc = new Map<string, { numeric: boolean; values: Set<string>; sample: unknown }>();
+  const acc = new Map<string, { numeric: boolean; values: Set<string>; sample: unknown; count: number }>();
   for (const row of rows) {
     for (const [key, value] of Object.entries(meta(row))) {
-      const e = acc.get(key) ?? { numeric: true, values: new Set<string>(), sample: value };
+      const e = acc.get(key) ?? { numeric: true, values: new Set<string>(), sample: value, count: 0 };
+      e.count += 1;
       e.numeric = e.numeric && asNumber(value) !== null;
       e.values.add(JSON.stringify(value));
       acc.set(key, e);
     }
   }
   return [...acc.entries()]
-    .map(([key, e]) => ({ key, numeric: e.numeric, distinct: e.values.size, sample: e.sample }))
+    .map(([key, e]) => ({ key, count: e.count, numeric: e.numeric, distinct: e.values.size, sample: e.sample }))
     .sort((a, b) => a.key.localeCompare(b.key));
 }
 
@@ -82,7 +94,33 @@ function pick(keys: readonly MetadataKeyInfo[], names: readonly string[], numeri
 /** True when p was chosen by the "first varying numeric key" fallback rather
  * than a conventional name, so the UI can flag it as a low-confidence guess. */
 export function isFallbackPGuess(mapping: SinterMapping): boolean {
-  return mapping.p !== null && !P_NAMES.includes(mapping.p.toLowerCase());
+  return mapping.pOrigin !== 'user' && mapping.p !== null && !P_NAMES.includes(mapping.p.toLowerCase());
+}
+
+/** Fatal message when no row's json_metadata has a numeric key, so no x-axis
+ * can ever be mapped; null when the file has at least one numeric key. */
+export function noNumericKeysProblem(rows: readonly QecCampaignStatsRow[]): string | null {
+  const keys = metadataKeys(rows);
+  if (keys.some((k) => k.numeric)) return null;
+  const found = keys.length > 0 ? keys.slice(0, 8).map((k) => k.key).join(', ') : 'none';
+  return `json_metadata has no numeric keys (found: ${found}). sinter needs numbers there, e.g. {"d":5,"p":0.001}.`;
+}
+
+/** Keys with at least two values (usable to split series) apart from keys
+ * that are constant across the file (shown as read-only context). */
+export function splitMetadataKeys(keys: readonly MetadataKeyInfo[]): { varying: MetadataKeyInfo[]; constant: MetadataKeyInfo[] } {
+  return {
+    varying: keys.filter((k) => k.distinct >= 2),
+    constant: keys.filter((k) => k.distinct < 2),
+  };
+}
+
+/** Rows that can sit on the plot: p is mapped and positive. Rows with p = 0
+ * (noiseless references) carry no series structure, so heuristics ignore them. */
+function plottedRows(rows: readonly QecCampaignStatsRow[], mapping: SinterMapping): QecCampaignStatsRow[] {
+  if (mapping.p === null) return [...rows];
+  const p = mapping.p;
+  return rows.filter((r) => (asNumber(meta(r)[p]) ?? 0) > 0);
 }
 
 /** Total tasks beyond the first at each (series, d, decoder, p) cell. */
@@ -97,6 +135,7 @@ export interface PartitionKey {
 }
 
 const valueOf = (row: QecCampaignStatsRow, key: string): string => JSON.stringify(meta(row)[key] ?? null);
+const has = (row: QecCampaignStatsRow, key: string): boolean => Object.hasOwn(meta(row), key);
 
 /** True when `key` and `axis` determine each other (one value of one per
  * value of the other), e.g. a qubit count that is a function of d. */
@@ -104,6 +143,8 @@ function isBijective(rows: readonly QecCampaignStatsRow[], key: string, axis: st
   const forward = new Map<string, Set<string>>();
   const backward = new Map<string, Set<string>>();
   for (const row of rows) {
+    // A row without the key says nothing about whether the key follows the axis.
+    if (!has(row, key) || !has(row, axis)) continue;
     const k = valueOf(row, key);
     const a = valueOf(row, axis);
     forward.set(k, (forward.get(k) ?? new Set<string>()).add(a));
@@ -121,12 +162,17 @@ function isBijective(rows: readonly QecCampaignStatsRow[], key: string, axis: st
  * these keys; anything still returned here must be shown to the user.
  */
 export function findPartitionKeys(rows: readonly QecCampaignStatsRow[], mapping: SinterMapping): PartitionKey[] {
-  const taken = new Set<string | null>([mapping.p, mapping.d, mapping.rounds, mapping.decoder, 'label', ...mapping.groupBy]);
+  const taken = new Set<string | null>([
+    mapping.p, mapping.d, mapping.rounds, mapping.decoder, 'label', ...mapping.groupBy, ...(mapping.mergeKeys ?? []),
+  ]);
   const axes = [mapping.d, mapping.p, mapping.rounds].filter((a): a is string => a !== null);
-  return metadataKeys(rows)
+  const plotted = plottedRows(rows, mapping);
+  return metadataKeys(plotted)
     .filter((k) => !taken.has(k.key))
-    .filter((k) => k.distinct >= 2 && k.distinct < rows.length)
-    .filter((k) => !axes.some((a) => isBijective(rows, k.key, a)))
+    // A key missing on some plotted rows cannot define a series for all of them.
+    .filter((k) => k.count === plotted.length)
+    .filter((k) => k.distinct >= 2 && k.distinct < plotted.length)
+    .filter((k) => !axes.some((a) => isBijective(plotted, k.key, a)))
     .map((k) => ({ key: k.key, distinct: k.distinct }));
 }
 
@@ -135,8 +181,8 @@ export function findPartitionKeys(rows: readonly QecCampaignStatsRow[], mapping:
 function autoGroupBy(
   rows: readonly QecCampaignStatsRow[], base: SinterMapping, keys: readonly MetadataKeyInfo[],
 ): string[] {
-  const taken = new Set([base.p, base.d, base.rounds, base.decoder, 'label']);
-  const candidates = keys.filter((k) => k.distinct > 1 && !taken.has(k.key)).sort((a, b) => a.distinct - b.distinct);
+  const taken = new Set([base.p, base.d, base.rounds, base.decoder, 'label', ...(base.mergeKeys ?? [])]);
+  const candidates = keys.filter((k) => k.distinct > 1 && k.count === rows.length && !taken.has(k.key)).sort((a, b) => a.distinct - b.distinct);
   let groupBy: string[] = [];
   let current = excess(rows, base);
   while (current > 0) {
@@ -171,8 +217,12 @@ export function guessMapping(rows: readonly QecCampaignStatsRow[]): SinterMappin
   if (p === null) {
     p = keys.find((k) => k.numeric && k.distinct > 1 && k.key !== d && k.key !== rounds)?.key ?? null;
   }
+  const mergeKeys = keys
+    .filter((k) => k.distinct > 1 && k.key !== p && k.key !== d && k.key !== rounds && REPLICATE_NAMES.includes(k.key.toLowerCase()))
+    .map((k) => k.key);
   const base: SinterMapping = {
     p, d, rounds, decoder: pick(keys, DECODER_NAMES, false) ?? DECODER_COLUMN, groupBy: [],
+    ...(mergeKeys.length > 0 ? { mergeKeys } : {}),
   };
   return { ...base, groupBy: guessGroupBy(rows, base, keys) };
 }
@@ -200,6 +250,23 @@ function groupSuffix(md: Record<string, unknown>, groupBy: readonly string[], de
  * rows and leaves the input untouched. Rows whose p is missing/non-numeric
  * lose `p` and are simply not plotted. */
 export function applyMapping(rows: readonly QecCampaignStatsRow[], mapping: SinterMapping): QecCampaignStatsRow[] {
+  return mergeReplicates(mapRows(rows, mapping), mapping.mergeKeys ?? []);
+}
+
+/** Tasks that differ only in the replicate keys become one summed task. */
+function mergeReplicates(rows: QecCampaignStatsRow[], mergeKeys: readonly string[]): QecCampaignStatsRow[] {
+  if (mergeKeys.length === 0) return rows;
+  const merged = new Map<string, QecCampaignStatsRow>();
+  for (const row of rows) {
+    const rest = Object.fromEntries(Object.entries(meta(row)).filter(([k]) => !mergeKeys.includes(k)));
+    const key = JSON.stringify([row.decoder, rest]);
+    const prev = merged.get(key);
+    merged.set(key, prev ? foldStatsRows(prev, row) : { ...row, json_metadata: rest });
+  }
+  return [...merged.values()];
+}
+
+function mapRows(rows: readonly QecCampaignStatsRow[], mapping: SinterMapping): QecCampaignStatsRow[] {
   return rows.map((row) => {
     const md = meta(row);
     let next: Record<string, unknown> = { ...md };
