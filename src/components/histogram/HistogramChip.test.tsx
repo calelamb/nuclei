@@ -69,4 +69,18 @@ describe('<HistogramChip>', () => {
     const { queryByText } = render(<HistogramChip probabilities={{ '00': 0.5, '11': 0.5 }} onExpand={() => {}} />);
     expect(queryByText(/more/)).toBeNull();
   });
+
+  it('colours the hardware series with the research blue, never Dirac purple', () => {
+    const { container } = render(<HistogramChip probabilities={{ '00': 0.5, '11': 0.5 }} hwProbabilities={{ '00': 0.4, '11': 0.6 }} />);
+    const html = container.innerHTML.toLowerCase();
+    expect(html).not.toContain('#7b2d8e');
+    expect(html).not.toContain('#6b21a8');
+  });
+
+  it('stacks into rows when the chip is too narrow for ket, bar and percentage on one line', () => {
+    Object.defineProperty(HTMLElement.prototype, 'clientWidth', { configurable: true, get() { return 300; } });
+    const { container } = render(<HistogramChip probabilities={{ '000': 0.4, '001': 0.3, '111': 0.3 }} />);
+    expect(container.firstElementChild?.getAttribute('data-layout')).toBe('rows');
+    delete (HTMLElement.prototype as unknown as Record<string, unknown>).clientWidth;
+  });
 });
