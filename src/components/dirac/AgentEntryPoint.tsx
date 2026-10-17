@@ -5,7 +5,9 @@ import { useThemeStore } from '../../stores/themeStore';
 import { usePlatform } from '../../platform/PlatformProvider';
 import { AgentRunCard } from './AgentRunCard';
 
-import { TYPOGRAPHY } from '../../styles/tokens';
+import { useWorkspaceStore } from '../../stores/workspaceStore';
+import { Button, TextInput } from '../ui';
+import './dirac.css';
 /**
  * Goal input + Run button for Dirac's agent mode, plus the live
  * AgentRunCard once a run starts. Kept as its own component (rather than
@@ -16,22 +18,31 @@ export function AgentEntryPoint() {
   const colors = useThemeStore((s) => s.colors);
   const platform = usePlatform();
   const isWeb = platform.getPlatform() === 'web';
+  const workspaceMode = useWorkspaceStore((s) => s.mode);
   const apiKey = useDiracStore((s) => s.apiKey);
   const hasApiKey = Boolean(apiKey && apiKey.trim() !== '');
   const { start, cancel, isRunning, activeRun } = useDiracAgent();
   const [goal, setGoal] = useState('');
 
-  const disabledReason = isWeb
-    ? 'Agent mode requires the desktop app.'
-    : !hasApiKey
-      ? 'Add your Anthropic API key in Settings to use the agent.'
-      : isRunning
-        ? 'An agent run is already in progress.'
-        : null;
+  // Nothing to run without a key, and on the web build agent mode does not exist:
+  // say so once, visibly, instead of showing controls that cannot work.
+  if (!hasApiKey) return null;
+  if (isWeb) {
+    return (
+      <div className="dirac-agent-note">
+        <span className="dirac-agent-note__chip">Agent mode &middot; desktop app</span>
+      </div>
+    );
+  }
+
+  const busyReason = isRunning ? 'An agent run is already in progress.' : null;
+  const placeholder = workspaceMode === 'research'
+    ? 'Agent goal, e.g. sweep theta 0\u20132\u03c0 and plot energy'
+    : 'Agent goal, e.g. build a Bell state';
 
   const handleRun = () => {
     const trimmed = goal.trim();
-    if (!trimmed || disabledReason) return;
+    if (!trimmed || busyReason) return;
     setGoal('');
     void start(trimmed);
   };
@@ -48,46 +59,26 @@ export function AgentEntryPoint() {
       }}
     >
       <div style={{ display: 'flex', gap: 6 }}>
-        <input
+        <TextInput
+          size="md"
           value={goal}
           onChange={(e) => setGoal(e.target.value)}
           onKeyDown={(e) => {
             if (e.key === 'Enter') handleRun();
           }}
-          placeholder="Agent goal — e.g. build a Bell state"
-          disabled={Boolean(disabledReason)}
-          title={disabledReason ?? undefined}
+          placeholder={placeholder}
+          disabled={Boolean(busyReason)}
           aria-label="Agent goal"
-          style={{
-            flex: 1,
-            padding: '6px 10px',
-            fontSize: 12,
-            fontFamily: TYPOGRAPHY.fontSans,
-            background: colors.bgPanel,
-            border: `1px solid ${colors.border}`,
-            borderRadius: 6,
-            color: colors.text,
-          }}
+          style={{ flex: 1, minWidth: 0 }}
         />
-        <button
+        <Button
+          variant="secondary"
           onClick={handleRun}
-          disabled={Boolean(disabledReason) || !goal.trim()}
-          title={disabledReason ?? 'Run the agent toward this goal'}
-          style={{
-            padding: '6px 12px',
-            fontSize: 12,
-            fontWeight: 500,
-            fontFamily: TYPOGRAPHY.fontSans,
-            background: disabledReason || !goal.trim() ? colors.border : colors.dirac,
-            color: disabledReason || !goal.trim() ? colors.textMuted : '#fff',
-            border: 'none',
-            borderRadius: 6,
-            cursor: disabledReason || !goal.trim() ? 'default' : 'pointer',
-            whiteSpace: 'nowrap',
-          }}
+          disabled={Boolean(busyReason) || !goal.trim()}
+          title={busyReason ?? 'Run the agent toward this goal'}
         >
           Run Agent
-        </button>
+        </Button>
       </div>
 
       {activeRun && <AgentRunCard run={activeRun} isRunning={isRunning} onStop={cancel} />}

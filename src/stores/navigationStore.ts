@@ -41,8 +41,13 @@ interface NavigationState {
   /** Open the Settings view (the Dirac panel's gear; formerly `openSettings`
    * via `settingsSignal`). PanelLayout's mode-exit effect handles leaving any
    * Learn/Challenge full-view surface. */
-  openSettings: () => void;
+  openSettings: (section?: SettingsSection) => void;
+  /** Which Settings section to expand and focus on open; consumed by SettingsPanel. */
+  settingsSection: SettingsSection | null;
+  clearSettingsSection: () => void;
 }
+
+export type SettingsSection = 'dirac';
 
 export const useNavigationStore = create<NavigationState>((set) => ({
   activeView: 'files',
@@ -56,8 +61,10 @@ export const useNavigationStore = create<NavigationState>((set) => ({
       if (next !== null) leaveFullViewSurfaces();
       return { activeView: next };
     }),
-  openSettings: () => {
+  settingsSection: null,
+  clearSettingsSection: () => set({ settingsSection: null }),
+  openSettings: (section) => {
     leaveFullViewSurfaces();
-    set({ activeView: 'settings' });
+    set({ activeView: 'settings', settingsSection: section === 'dirac' ? 'dirac' : null });
   },
 }));

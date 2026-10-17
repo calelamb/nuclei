@@ -1,4 +1,5 @@
 import { useRef, useCallback, useEffect, useState } from 'react';
+import { useDiracPanelStore } from '../../stores/diracPanelStore';
 import Editor from '@monaco-editor/react';
 import type { OnMount, Monaco } from '@monaco-editor/react';
 import type * as monaco from 'monaco-editor';
@@ -125,6 +126,21 @@ export function QuantumEditor() {
       label: 'Inline Edit (Cmd+K)',
       keybindings: [monacoApi.KeyMod.CtrlCmd | monacoApi.KeyCode.KeyK],
       run: () => setShowInlineEdit(true),
+    });
+
+    // Monaco swallows these before the window-level shortcut handler sees them,
+    // so the Dirac shortcuts must also be registered inside the editor.
+    editor.addAction({
+      id: 'toggle-dirac',
+      label: 'Toggle Dirac Panel',
+      keybindings: [monacoApi.KeyMod.CtrlCmd | monacoApi.KeyCode.KeyD],
+      run: () => useDiracPanelStore.getState().toggle(),
+    });
+    editor.addAction({
+      id: 'focus-dirac',
+      label: 'Focus Dirac Input',
+      keybindings: [monacoApi.KeyMod.CtrlCmd | monacoApi.KeyCode.KeyL],
+      run: () => useDiracPanelStore.getState().focusInput(),
     });
 
     registerGhostCompletions(monacoApi);

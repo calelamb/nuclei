@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, type CSSProperties, type ReactNode } from 'react';
+import { createContext, useContext, useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import { ChevronDown, ChevronRight, RotateCcw, Sun, Moon, Eye, EyeOff, ExternalLink } from 'lucide-react';
 import { useThemeStore } from '../../stores/themeStore';
 import { useUIModeStore, type UIMode } from '../../stores/uiModeStore';
@@ -6,9 +6,11 @@ import { useWorkspaceStore } from '../../stores/workspaceStore';
 import { useSettingsStore } from '../../stores/settingsStore';
 import { useSimulationStore } from '../../stores/simulationStore';
 import { useDiracStore } from '../../stores/diracStore';
+import { useNavigationStore } from '../../stores/navigationStore';
 import { useFrameworksStore } from '../../stores/frameworksStore';
 import { EnvironmentPanel } from './EnvironmentPanel';
 import { Select, Switch, TextInput } from '../ui';
+import { validateApiKey } from '../../lib/apiKey';
 
 import { TYPOGRAPHY } from '../../styles/tokens';
 /* ── Shared Controls ────────────────────────────────────── */
@@ -116,10 +118,12 @@ function Slider({ value, min, max, step, onChange, displayValue }: {
 
 /* ── Collapsible Section ────────────────────────────────── */
 
-function Section({ title, defaultOpen = false, children }: {
-  title: string; defaultOpen?: boolean; children: ReactNode;
+function Section({ title, defaultOpen = false, forceOpen = false, children }: {
+  title: string; defaultOpen?: boolean; forceOpen?: boolean; children: ReactNode;
 }) {
-  const [open, setOpen] = useState(defaultOpen);
+  const [userOpen, setUserOpen] = useState<boolean | null>(null);
+  const open = userOpen ?? (defaultOpen || forceOpen);
+  const setOpen = setUserOpen;
   const colors = useThemeStore((s) => s.colors);
   const Icon = open ? ChevronDown : ChevronRight;
 
@@ -156,7 +160,9 @@ function Section({ title, defaultOpen = false, children }: {
 
 /* ── API Key Input ─────────────────────────────────────── */
 
-function ApiKeyInput() {
+function ApiKeyInput({ autoFocus = false }: { autoFocus?: boolean }) {
+  const inputRef = useRef<HTMLInputElement>(null);
+  useEffect(() => { if (autoFocus) inputRef.current?.focus(); }, [autoFocus]);
   const colors = useThemeStore((s) => s.colors);
   const currentKey = useDiracStore((s) => s.apiKey);
   const [keyValue, setKeyValue] = useState(currentKey ?? '');
@@ -164,11 +170,7 @@ function ApiKeyInput() {
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState('');
 
-  const validate = (key: string): string => {
-    if (key.trim() === '') return '';
-    if (!key.startsWith('sk-ant-')) return 'Key should start with "sk-ant-"';
-    return '';
-  };
+  const validate = validateApiKey;
 
   const handleSave = () => {
     const trimmed = keyValue.trim();
@@ -199,6 +201,7 @@ function ApiKeyInput() {
           borderRadius: 4, overflow: 'hidden',
         }} className="nuclei-field-group">
           <input
+            ref={inputRef}
             type={visible ? 'text' : 'password'}
             value={keyValue}
             onChange={(e) => handleChange(e.target.value)}
@@ -285,6 +288,9 @@ export function SettingsPanel() {
   const updateAgentHardware = useSettingsStore((s) => s.updateAgentHardware);
   const resetAll = useSettingsStore((s) => s.resetAll);
   const setSimShots = useSimulationStore((s) => s.setShots);
+  const focusDirac = useNavigationStore((s) => s.settingsSection) === 'dirac';
+  const clearSettingsSection = useNavigationStore((s) => s.clearSettingsSection);
+  useEffect(() => clearSettingsSection, [clearSettingsSection]);
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
@@ -358,7 +364,7 @@ export function SettingsPanel() {
         </Section>
 
         {/* ── Dirac AI ── */}
-        <Section title="Dirac AI">
+        <Section title="Dirac AI" forceOpen={focusDirac}>
           <div style={{ marginBottom: 8 }}>
             <span style={{
               fontSize: 11, color: colors.textMuted,
@@ -367,7 +373,7 @@ export function SettingsPanel() {
             }}>
               API Key
             </span>
-            <ApiKeyInput />
+            <ApiKeyInput autoFocus={focusDirac} />
           </div>
           <SettingRow label="Ghost Completions">
             <Toggle value={dirac.ghostCompletions}

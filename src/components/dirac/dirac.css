@@ -1,0 +1,88 @@
+/*
+ * Dirac panel surfaces added in the learn lane: no-key onboarding, empty
+ * state, error card, slash menu. Colours come from tokens.css; purple is
+ * used only because this is Dirac's own surface.
+ */
+
+.dirac-onboard {
+  margin: var(--space-4); padding: var(--space-4);
+  border: 1px solid var(--color-border-strong); border-radius: var(--radius-round);
+  background: var(--color-surface-raised);
+  display: flex; flex-direction: column; gap: var(--space-3);
+  font-family: var(--font-sans);
+}
+.dirac-onboard__title { margin: 0; text-align: center; font-size: var(--font-size-body); font-weight: var(--font-weight-semibold); color: var(--color-text-primary); }
+.dirac-onboard__lede { margin: 0; text-align: center; font-size: var(--font-size-chrome-label); line-height: 1.5; color: var(--color-text-secondary); }
+.dirac-onboard__pending {
+  margin: 0; padding: var(--space-2) var(--space-3);
+  border-left: 2px solid var(--color-accent-dirac); border-radius: var(--radius-xs);
+  background: var(--color-surface-overlay);
+  font-size: var(--font-size-chrome-label); line-height: 1.5; color: var(--color-text-primary);
+}
+.dirac-onboard__form { display: flex; gap: var(--space-2); }
+.dirac-onboard__form .nuclei-input { flex: 1; min-width: 0; }
+.dirac-onboard__error { margin: 0; font-size: var(--font-size-caption); color: var(--color-danger); }
+.dirac-onboard__fine { margin: 0; text-align: center; font-size: var(--font-size-caption); line-height: 1.5; color: var(--color-text-tertiary); }
+.dirac-onboard__links { display: flex; justify-content: center; gap: var(--space-3); font-size: var(--font-size-caption); }
+.dirac-link {
+  background: none; border: none; padding: 0; cursor: pointer; font: inherit;
+  color: var(--color-accent-quantum); text-decoration: none;
+}
+.dirac-link:hover { text-decoration: underline; }
+.dirac-btn-dirac.nuclei-btn { background: var(--color-accent-dirac); border-color: var(--color-accent-dirac); color: #fff; }
+.dirac-btn-dirac.nuclei-btn:hover:not(:disabled) { filter: brightness(1.12); background: var(--color-accent-dirac); border-color: var(--color-accent-dirac); }
+
+/* Empty chat state */
+.dirac-empty { margin-top: var(--space-8); text-align: center; font-family: var(--font-sans); display: flex; flex-direction: column; align-items: center; gap: var(--space-1); }
+.dirac-empty__title { margin: 0; font-size: var(--font-size-heading); font-weight: var(--font-weight-semibold); color: var(--color-accent-dirac-text); }
+.dirac-empty__sub { margin: 0; font-size: var(--font-size-body); color: var(--color-text-secondary); }
+.dirac-empty__starters { display: flex; flex-direction: column; gap: var(--space-1); width: 100%; margin-top: var(--space-4); }
+.dirac-starter {
+  text-align: left; padding: var(--space-2) var(--space-3); cursor: pointer;
+  font: var(--font-size-chrome-label) var(--font-sans); color: var(--color-text-primary);
+  background: var(--color-surface-raised); border: 1px solid var(--color-border-strong); border-radius: var(--radius-soft);
+  transition: background-color var(--duration-fast) var(--ease-standard), border-color var(--duration-fast) var(--ease-standard);
+}
+.dirac-starter:hover { background: var(--color-surface-overlay); border-color: var(--color-accent-dirac); }
+.dirac-empty__hint { margin: var(--space-3) 0 0; font-size: var(--font-size-caption); color: var(--color-text-tertiary); }
+.dirac-empty__hint code { font-family: var(--font-mono); padding: 1px 6px; border-radius: var(--radius-xs); background: var(--color-surface-raised); border: 1px solid var(--color-border-strong); color: var(--color-accent-quantum); }
+
+/* Error card */
+.dirac-error {
+  border: 1px solid var(--color-border-strong); border-left: 3px solid var(--color-danger);
+  border-radius: var(--radius-soft); background: var(--color-surface-raised);
+  padding: var(--space-3); display: flex; flex-direction: column; gap: var(--space-1);
+  font-family: var(--font-sans);
+}
+.dirac-error__title { margin: 0; font-size: var(--font-size-code); font-weight: var(--font-weight-semibold); color: var(--color-text-primary); }
+.dirac-error__message { margin: 0; font-size: var(--font-size-chrome-label); line-height: 1.5; color: var(--color-text-secondary); }
+.dirac-error__actions { display: flex; gap: var(--space-2); margin-top: var(--space-2); }
+
+/* Slash menu */
+.dirac-slash {
+  position: absolute; bottom: 100%; left: 0; right: 0; z-index: 10; overflow: hidden;
+  background: var(--color-surface-raised); border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-soft) var(--radius-soft) 0 0; box-shadow: var(--shadow-md);
+}
+.dirac-slash__item {
+  display: flex; align-items: center; gap: var(--space-2); width: 100%; cursor: pointer;
+  padding: var(--space-1) var(--space-3); min-height: var(--control-height-md);
+  background: transparent; border: none; text-align: left;
+  font: var(--font-size-chrome-label) var(--font-sans); color: var(--color-text-primary);
+}
+.dirac-slash__item:hover, .dirac-slash__item[aria-selected='true'] { background: var(--color-surface-overlay); }
+.dirac-slash__cmd { font-family: var(--font-mono); color: var(--color-accent-quantum); }
+.dirac-slash__desc { color: var(--color-text-secondary); }
+
+/* Composer */
+.dirac-input.nuclei-textarea { flex: 1; min-height: 36px; max-height: 120px; resize: none; line-height: 1.4; font-family: var(--font-sans); font-size: var(--font-size-code); }
+.dirac-send.nuclei-icon-btn { width: 32px; height: 32px; background: var(--color-accent-dirac); border-color: var(--color-accent-dirac); color: #fff; }
+.dirac-send.nuclei-icon-btn:hover:not(:disabled) { background: var(--color-accent-dirac); filter: brightness(1.15); color: #fff; }
+
+/* Agent mode unavailable on web */
+.dirac-agent-note { padding: var(--space-2) var(--space-3); border-bottom: 1px solid var(--color-border-strong); flex-shrink: 0; }
+.dirac-agent-note__chip {
+  display: inline-block; padding: 2px var(--space-2); border-radius: var(--radius-pill);
+  border: 1px solid var(--color-border-strong); background: var(--color-surface-raised);
+  font: var(--font-size-caption) var(--font-sans); color: var(--color-text-secondary);
+}
