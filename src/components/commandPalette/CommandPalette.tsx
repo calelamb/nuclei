@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useMemo } from 'react';
+import { useState, useRef, useEffect, useMemo, useId } from 'react';
 import { useThemeStore } from '../../stores/themeStore';
 import { EASING, DURATION, getDuration, prefersReducedMotion } from '../../lib/animations';
 import {
@@ -10,6 +10,8 @@ import {
   type LeftPanelId,
 } from '../../layout/panelRegistry';
 import type { WorkspaceMode } from '../../stores/workspaceStore';
+import { rankCommands } from './rankCommands';
+import { shortcutLabel, isMacPlatform } from '../../config/keybindings';
 
 import { TYPOGRAPHY } from '../../styles/tokens';
 export interface Command {
@@ -17,6 +19,8 @@ export interface Command {
   label: string;
   category: string;
   shortcut?: string;
+  /** Extra search terms (synonyms) that are not shown. */
+  keywords?: string[];
   action: () => void;
 }
 
@@ -25,15 +29,8 @@ interface CommandPaletteProps {
   onClose: () => void;
 }
 
-function fuzzyMatch(query: string, text: string): boolean {
-  const q = query.toLowerCase();
-  const t = text.toLowerCase();
-  let qi = 0;
-  for (let ti = 0; ti < t.length && qi < q.length; ti++) {
-    if (t[ti] === q[qi]) qi++;
-  }
-  return qi === q.length;
-}
+const ROW_HEIGHT = 34;
+const VISIBLE_ROWS = 9;
 
 export function CommandPalette({ commands, onClose }: CommandPaletteProps) {
   const [query, setQuery] = useState('');
@@ -43,16 +40,19 @@ export function CommandPalette({ commands, onClose }: CommandPaletteProps) {
   const colors = useThemeStore((s) => s.colors);
   const shadow = useThemeStore((s) => s.shadow);
 
+  const listId = useId();
+
+  // Focus the input on open, and hand focus back to whatever had it (the
+  // editor, a button) when the palette closes — otherwise it falls to <body>.
   useEffect(() => {
+    const opener = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     inputRef.current?.focus();
+    return () => {
+      if (opener && document.contains(opener)) opener.focus();
+    };
   }, []);
 
-  const filtered = useMemo(() => {
-    if (!query.trim()) return commands;
-    return commands.filter((c) =>
-      fuzzyMatch(query, c.label) || fuzzyMatch(query, c.category)
-    );
-  }, [query, commands]);
+  const filtered = useMemo(() => rankCommands(commands, query), [query, commands]);
 
   // eslint-disable-next-line react-hooks/set-state-in-effect -- resets index on query change
   useEffect(() => { setSelectedIdx(0); }, [query]);
@@ -85,16 +85,17 @@ export function CommandPalette({ commands, onClose }: CommandPaletteProps) {
   };
 
   const categoryColors: Record<string, string> = {
-    File: '#98C379',
-    Edit: '#D19A66',
-    View: '#48CAE4',
-    Run: '#00B4D8',
-    Dirac: '#7B2D8E',
-    Circuit: '#E06C75',
-    Learn: '#10B981',
-    Settings: '#6A737D',
-    Go: '#48CAE4',
-    Experiment: '#B78AF0',
+    File: colors.success,
+    Edit: colors.warning,
+    View: colors.info,
+    Run: colors.accent,
+    Dirac: colors.diracText,
+    Circuit: colors.error,
+    Learn: colors.success,
+    Settings: colors.textMuted,
+    Help: colors.textMuted,
+    Navigate: colors.info,
+    Experiment: colors.modeResearch,
   };
 
   return (
@@ -117,7 +118,7 @@ export function CommandPalette({ commands, onClose }: CommandPaletteProps) {
           background: colors.bg,
           border: `1px solid ${colors.border}`,
           borderRadius: 12,
-          width: '100%', maxWidth: 520, maxHeight: '50vh',
+          width: '100%', maxWidth: 520, maxHeight: '70vh',
           overflow: 'hidden',
           boxShadow: shadow.lg,
           animation: prefersReducedMotion() ? 'none' : `nuclei-slide-down ${DURATION.normal}ms ${EASING.spring}`,
@@ -142,12 +143,14 @@ export function CommandPalette({ commands, onClose }: CommandPaletteProps) {
             aria-label="Search commands"
             role="combobox"
             aria-expanded="true"
-            aria-controls="command-list"
+            aria-controls={listId}
+            aria-autocomplete="list"
+            aria-activedescendant={filtered[selectedIdx] ? `${listId}-${filtered[selectedIdx].id}` : undefined}
           />
         </div>
 
         {/* Results */}
-        <div ref={listRef} id="command-list" style={{ maxHeight: '40vh', overflow: 'auto', padding: '4px 0' }} role="listbox">
+        <div ref={listRef} id={listId} style={{ maxHeight: ROW_HEIGHT * VISIBLE_ROWS + 8, overflow: 'auto', padding: '4px 0' }} role="listbox">
           {filtered.length === 0 ? (
             <div style={{ padding: 16, color: colors.textMuted, fontSize: 13, fontFamily: TYPOGRAPHY.fontSans, textAlign: 'center' }}>
               No matching commands
@@ -156,10 +159,13 @@ export function CommandPalette({ commands, onClose }: CommandPaletteProps) {
             filtered.map((cmd, i) => (
               <button
                 key={cmd.id}
-                onClick={() => { cmd.action(); onClose(); }}
+                id={`${listId}-${cmd.id}`}
+                tabIndex={-1}
+                onMouseMove={() => { if (i !== selectedIdx) setSelectedIdx(i); }}
+                onClick={() => { onClose(); requestAnimationFrame(cmd.action); }}
                 style={{
                   display: 'flex', alignItems: 'center',
-                  width: '100%', padding: '8px 16px',
+                  width: '100%', height: ROW_HEIGHT, padding: '0 16px',
                   background: i === selectedIdx ? colors.border : 'transparent',
                   border: 'none', cursor: 'pointer',
                   color: colors.text, fontSize: 13,
@@ -200,8 +206,9 @@ export function CommandPalette({ commands, onClose }: CommandPaletteProps) {
 /** ⌘1..9 map onto the first nine top-rail views, in registry order (PRD 11
  * Phase D). Exported so App.tsx binds the same mapping the palette displays. */
 // eslint-disable-next-line react-refresh/only-export-components
-export function railShortcutFor(index: number): string | undefined {
-  return index < 9 ? `⌘${index + 1}` : undefined;
+export function railShortcutFor(index: number, mac: boolean = isMacPlatform()): string | undefined {
+  if (index >= 9) return undefined;
+  return mac ? `⌘${index + 1}` : `Ctrl+${index + 1}`;
 }
 
 export interface CommandContext {
@@ -211,6 +218,8 @@ export interface CommandContext {
   experiments: ReadonlyArray<{ fileName: string; name: string }>;
   /** Whether a run is selected (enables "Open run folder"). */
   hasSelectedRun: boolean;
+  /** Render shortcut hints as glyphs (Mac) or words (Ctrl+...). Defaults to the host platform. */
+  mac?: boolean;
 }
 
 export interface CommandActions {
@@ -220,8 +229,12 @@ export interface CommandActions {
   newFile: () => void;
   toggleTheme: () => void;
   toggleDirac: () => void;
+  /** Open Dirac if needed and focus its input. */
+  focusDirac: () => void;
   cycleMode: () => void;
   toggleShortcuts: () => void;
+  /** Re-open the What's New notes. */
+  openWhatsNew: () => void;
   switchWorkspaceMode: () => void;
   startResearchTour: () => void;
   /** Open a rail view (navigationStore.setActiveView). */
@@ -244,11 +257,13 @@ export interface CommandActions {
 // eslint-disable-next-line react-refresh/only-export-components
 export function buildCommands(actions: CommandActions, context: CommandContext): Command[] {
   const commands: Command[] = [];
+  const mac = context.mac ?? isMacPlatform();
+  const sc = (id: string) => shortcutLabel(id, mac);
 
   // Workspace + orientation.
-  commands.push({ id: 'workspace-mode', label: 'Switch workspace mode (Learn/Research)', category: 'Go', shortcut: '⌘⇧M', action: actions.switchWorkspaceMode });
+  commands.push({ id: 'workspace-mode', label: 'Switch workspace mode (Learn/Research)', category: 'Navigate', shortcut: sc('switch-workspace'), keywords: ['learn', 'research', 'workspace'], action: actions.switchWorkspaceMode });
   if (context.mode === 'research') {
-    commands.push({ id: 'research-tour', label: 'Replay the Research mode tour', category: 'Go', action: actions.startResearchTour });
+    commands.push({ id: 'research-tour', label: 'Replay the Research mode tour', category: 'Navigate', action: actions.startResearchTour });
   }
 
   // Go to <view> — every rail view this mode offers, in registry order.
@@ -257,12 +272,12 @@ export function buildCommands(actions: CommandActions, context: CommandContext):
   let railIndex = 0;
   for (const view of views) {
     const isTop = !bottomPinned.has(view);
-    const shortcut = isTop ? railShortcutFor(railIndex) : undefined;
+    const shortcut = isTop ? railShortcutFor(railIndex, mac) : undefined;
     if (isTop) railIndex += 1;
     commands.push({
       id: `goto-${view}`,
       label: `Go to ${leftPanelLabel(view)}`,
-      category: 'Go',
+      category: 'Navigate',
       shortcut,
       action: () => actions.navigate(view),
     });
@@ -275,6 +290,7 @@ export function buildCommands(actions: CommandActions, context: CommandContext):
       id: `toggle-panel-${panel.id}`,
       label: `Toggle ${panel.title} panel`,
       category: 'View',
+      keywords: ['show', 'hide'],
       action: () => actions.togglePanel(panel.id),
     });
   }
@@ -294,16 +310,16 @@ export function buildCommands(actions: CommandActions, context: CommandContext):
 
   // Static app commands.
   commands.push(
-    { id: 'run', label: 'Run Circuit', category: 'Run', shortcut: '⌘+Enter', action: actions.run },
-    { id: 'open', label: 'Open File', category: 'File', shortcut: '⌘+O', action: actions.openFile },
-    { id: 'save', label: 'Save File', category: 'File', shortcut: '⌘+S', action: actions.saveFile },
-    { id: 'new', label: 'New File', category: 'File', shortcut: '⌘+N', action: actions.newFile },
-    { id: 'theme', label: 'Toggle Theme', category: 'View', shortcut: '⌘+Shift+T', action: actions.toggleTheme },
+    { id: 'run', label: 'Run Circuit', category: 'Run', shortcut: sc('run'), keywords: ['execute', 'simulate', 'play'], action: actions.run },
+    { id: 'open', label: 'Open File', category: 'File', shortcut: sc('open'), action: actions.openFile },
+    { id: 'save', label: 'Save File', category: 'File', shortcut: sc('save'), action: actions.saveFile },
+    { id: 'new', label: 'New File', category: 'File', shortcut: sc('new'), action: actions.newFile },
+    { id: 'theme', label: 'Toggle Theme', category: 'View', shortcut: sc('toggle-theme'), keywords: ['dark', 'light', 'appearance', 'color', 'mode'], action: actions.toggleTheme },
     ...(context.mode === 'learn'
-      ? [{ id: 'mode', label: 'Cycle UI Mode (Beginner/Intermediate/Advanced)', category: 'View', shortcut: '⌘+Shift+L', action: actions.cycleMode }]
+      ? [{ id: 'mode', label: 'Cycle UI Mode (Beginner/Intermediate/Advanced)', category: 'View', shortcut: sc('cycle-ui-mode'), keywords: ['beginner', 'advanced', 'simple'], action: actions.cycleMode }]
       : []),
-    { id: 'dirac', label: 'Toggle Dirac Panel', category: 'Dirac', shortcut: '⌘+D', action: actions.toggleDirac },
-    { id: 'dirac-focus', label: 'Focus Dirac Input', category: 'Dirac', shortcut: '⌘+L', action: actions.toggleDirac },
+    { id: 'dirac', label: 'Toggle Dirac Panel', category: 'Dirac', shortcut: sc('toggle-dirac'), keywords: ['ai', 'assistant', 'chat'], action: actions.toggleDirac },
+    { id: 'dirac-focus', label: 'Focus Dirac Input', category: 'Dirac', shortcut: sc('focus-dirac'), keywords: ['ai', 'assistant', 'chat', 'ask'], action: actions.focusDirac },
     { id: 'step-through', label: 'Step Through Circuit', category: 'Circuit', action: () => {
       import('../../stores/circuitStore').then(({ useCircuitStore }) => {
         useCircuitStore.getState().setStepMode(true);
@@ -314,8 +330,8 @@ export function buildCommands(actions: CommandActions, context: CommandContext):
         useCircuitStore.getState().setStepMode(false);
       });
     }},
-    { id: 'exercise', label: 'Start Exercise (via Dirac)', category: 'Learn', action: actions.toggleDirac },
-    { id: 'shortcuts', label: 'Keyboard Shortcuts', category: 'Settings', shortcut: '⌘+/', action: actions.toggleShortcuts },
+    { id: 'shortcuts', label: 'Keyboard Shortcuts', category: 'Help', shortcut: sc('shortcuts'), keywords: ['keys', 'hotkeys', 'bindings'], action: actions.toggleShortcuts },
+    { id: 'whats-new', label: "What's New", category: 'Help', keywords: ['release', 'notes', 'changelog', 'version'], action: actions.openWhatsNew },
   );
 
   return commands;

@@ -6,7 +6,6 @@ interface WhatsNewHighlightRowProps {
   highlight: WhatsNewHighlight;
   index: number;
   accent: string;
-  dirac: string;
   text: string;
   textMuted: string;
 }
@@ -16,12 +15,12 @@ export function WhatsNewHighlightRow({
   highlight,
   index,
   accent,
-  dirac,
   text,
   textMuted,
 }: WhatsNewHighlightRowProps) {
   const Icon = WHATS_NEW_ICONS[highlight.icon];
-  const color = highlight.icon === 'dirac' ? dirac : accent;
+  // Purple is reserved for Dirac itself; none of these items are Dirac features.
+  const color = accent;
 
   return (
     <li style={{ display: 'flex', alignItems: 'flex-start', gap: 12, ...staggerStyle(index) }}>

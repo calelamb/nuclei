@@ -25,7 +25,8 @@ export function WhatsNewHeader({ currentVersion, accent, textDim, reduced }: Wha
             borderRadius: 12,
             border: `1px solid ${accent}35`,
             borderTopColor: accent,
-            animation: reduced ? 'none' : 'nuclei-spin 8s linear infinite',
+            // One settled turn on open; a ring that spins forever reads as a loading state.
+            animation: reduced ? 'none' : 'nuclei-spin 1.4s cubic-bezier(0.22, 1, 0.36, 1) 1',
             willChange: 'transform',
           }}
         />

@@ -11,14 +11,14 @@ function noop() {}
 function makeActions(overrides: Partial<CommandActions> = {}): CommandActions {
   return {
     run: noop, openFile: noop, saveFile: noop, newFile: noop, toggleTheme: noop,
-    toggleDirac: noop, cycleMode: noop, toggleShortcuts: noop, switchWorkspaceMode: noop,
+    toggleDirac: noop, focusDirac: noop, openWhatsNew: noop, cycleMode: noop, toggleShortcuts: noop, switchWorkspaceMode: noop,
     startResearchTour: noop, navigate: noop, togglePanel: noop, runExperiment: noop,
     openRunFolder: noop, ...overrides,
   };
 }
 
 function makeContext(overrides: Partial<CommandContext> = {}): CommandContext {
-  return { mode: 'research', developerViews: false, experiments: [], hasSelectedRun: false, ...overrides };
+  return { mode: 'research', developerViews: false, experiments: [], hasSelectedRun: false, mac: true, ...overrides };
 }
 
 describe('buildCommands', () => {
@@ -89,5 +89,39 @@ describe('palette ↔ registry parity', () => {
     const learn = buildCommands(makeActions(), makeContext({ mode: 'learn' }));
     expect(research.some((c) => c.id === 'research-tour')).toBe(true);
     expect(learn.some((c) => c.id === 'research-tour')).toBe(false);
+  });
+});
+
+describe('palette commands (shell-07, shell-13, shell-19)', () => {
+  it('"Focus Dirac Input" focuses Dirac instead of toggling it closed', () => {
+    const toggleDirac = vi.fn();
+    const focusDirac = vi.fn();
+    const cmd = buildCommands(makeActions({ toggleDirac, focusDirac }), makeContext()).find((c) => c.id === 'dirac-focus');
+    cmd?.action();
+    expect(focusDirac).toHaveBeenCalledTimes(1);
+    expect(toggleDirac).not.toHaveBeenCalled();
+  });
+
+  it('drops the "Start Exercise (via Dirac)" command that only toggled Dirac', () => {
+    const commands = buildCommands(makeActions(), makeContext({ mode: 'learn' }));
+    expect(commands.some((c) => c.id === 'exercise')).toBe(false);
+  });
+
+  it('gives every command a unique label (the two histogram toggles used to collide)', () => {
+    for (const mode of ['learn', 'research'] as const) {
+      const labels = buildCommands(makeActions(), makeContext({ mode })).map((c) => c.label);
+      expect(new Set(labels).size).toBe(labels.length);
+    }
+  });
+
+  it('shows Ctrl-style hints off Mac', () => {
+    const cmd = buildCommands(makeActions(), makeContext({ mac: false })).find((c) => c.id === 'theme');
+    expect(cmd?.shortcut).toBe('Ctrl+Shift+T');
+  });
+
+  it('adds a What\'s New command wired to openWhatsNew', () => {
+    const openWhatsNew = vi.fn();
+    buildCommands(makeActions({ openWhatsNew }), makeContext()).find((c) => c.id === 'whats-new')?.action();
+    expect(openWhatsNew).toHaveBeenCalled();
   });
 });
