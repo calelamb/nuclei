@@ -25,7 +25,13 @@ describe('runDetailFormat', () => {
     const described = describeLastRun('2026-10-12T12:00:00Z', now);
     expect(described.label).toBe('3 d ago');
     expect(described.title).toBe(formatLocalDateTime('2026-10-12T12:00:00Z'));
+    expect(described.summary).toBe('last run 3 d ago');
     expect(describeLastRun(undefined, now).label).toBe('never run');
+    expect(describeLastRun(undefined, now).summary).toBe('not run yet');
+  });
+
+  it('prints times in 24-hour form like the run labels', () => {
+    expect(formatLocalDateTime('2026-10-15T20:05:09')).toMatch(/20:05:09/);
   });
 
   it('prints metric chips with the table decimals (LR-12)', () => {

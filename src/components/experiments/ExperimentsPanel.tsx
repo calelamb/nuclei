@@ -130,8 +130,8 @@ function ExperimentRow({
         style={{ color: colors.textDim, fontSize: 11, fontFamily: TYPOGRAPHY.fontSans }}
       >
         {spec.type === 'qec_campaign'
-          ? `campaign · ${gridSizeLabel(experiment)} task${gridSizeLabel(experiment) === '1' ? '' : 's'} · last run ${lastRun.label}`
-          : `${gridSizeLabel(experiment)} point${gridSizeLabel(experiment) === '1' ? '' : 's'} · last run ${lastRun.label}`}
+          ? `campaign · ${gridSizeLabel(experiment)} task${gridSizeLabel(experiment) === '1' ? '' : 's'} · ${lastRun.summary}`
+          : `${gridSizeLabel(experiment)} point${gridSizeLabel(experiment) === '1' ? '' : 's'} · ${lastRun.summary}`}
       </div>
       {spec.type !== 'qec_campaign' && (
         <div onClick={(e) => e.stopPropagation()}>

@@ -20,14 +20,15 @@ export function formatRelative(then: Date, now: Date): string {
   return `${Math.floor(delta / DAY)} d ago`;
 }
 
-/** Local date-time, e.g. "Oct 15, 2:18:30 PM". Raw string if unparsable. */
+/** Local 24-hour date-time, e.g. "Oct 15, 14:18:30". Raw string if unparsable. */
 export function formatLocalDateTime(iso: string): string {
   const date = new Date(iso);
   if (Number.isNaN(date.getTime())) return iso;
-  return date.toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', second: '2-digit' });
+  // 24-hour, matching the run labels in the runs table and Compare headers.
+  return date.toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23' });
 }
 
-/** Local date-time plus relative age, e.g. "Oct 15, 2:18 PM (3 d ago)". Raw string if unparsable. */
+/** Local date-time plus relative age, e.g. "Oct 15, 14:18:30 (3 d ago)". Raw string if unparsable. */
 export function formatStartedAt(iso: string, now: Date = new Date()): string {
   const date = new Date(iso);
   if (Number.isNaN(date.getTime())) return iso;
@@ -43,11 +44,15 @@ export function toChips(record: Record<string, unknown>, numberFormat: (n: numbe
 }
 
 /** Sidebar "last run": relative age with the full local time for a tooltip; "never run" without runs. */
-export function describeLastRun(iso: string | undefined, now: Date = new Date()): { label: string; title: string } {
-  if (!iso) return { label: 'never run', title: 'No runs yet' };
+export function describeLastRun(
+  iso: string | undefined,
+  now: Date = new Date(),
+): { label: string; title: string; summary: string } {
+  if (!iso) return { label: 'never run', title: 'No runs yet', summary: 'not run yet' };
   const date = new Date(iso);
-  if (Number.isNaN(date.getTime())) return { label: iso, title: iso };
-  return { label: formatRelative(date, now) || formatLocalDateTime(iso), title: formatLocalDateTime(iso) };
+  if (Number.isNaN(date.getTime())) return { label: iso, title: iso, summary: `last run ${iso}` };
+  const label = formatRelative(date, now) || formatLocalDateTime(iso);
+  return { label, title: formatLocalDateTime(iso), summary: `last run ${label}` };
 }
 
 /** Metric chips printed with the same per-metric decimals the runs table uses. */

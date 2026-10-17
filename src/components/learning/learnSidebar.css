@@ -127,7 +127,7 @@
 .csum { list-style: none; margin: 0; padding: var(--space-3); display: flex; flex-direction: column; gap: var(--space-3); overflow-y: auto; font-family: var(--font-sans); }
 .csum__head { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: var(--space-1); font-size: 12px; }
 .csum__label { color: var(--color-text-primary); }
-.csum__count { color: var(--color-text-muted); font-variant-numeric: tabular-nums; }
+.csum__count { color: var(--color-text-secondary); font-variant-numeric: tabular-nums; }
 .csum__bar { display: flex; height: 4px; border-radius: 2px; overflow: hidden; background: var(--color-surface-sunken); }
 .csum__fill { background: var(--color-success); }
 .csum__fill--progress { background: var(--color-accent-quantum); }
