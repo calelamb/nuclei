@@ -55,7 +55,11 @@ export function formatNoise(p: number): string {
   return `${String(Number(mant))}×${formatPow10(Number(exp))}`;
 }
 
-const sig3 = (x: number): string => String(Number(x.toPrecision(3)));
+/** Three significant figures with trailing zeros kept, so a column's cells share one precision. */
+const sig3 = (x: number): string => {
+  const text = x.toPrecision(3);
+  return text.includes('e') ? String(Number(text)) : text;
+};
 
 /**
  * A rate with its interval on one shared power of ten:
