@@ -79,6 +79,7 @@ export function PanelLayout() {
   // palette, ⌘1..9 shortcuts, and the Dirac gear can drive it.
   const activeView = useNavigationStore((s) => s.activeView);
   const setActiveView = useNavigationStore((s) => s.setActiveView);
+  const setViewKeepingViewport = useNavigationStore((s) => s.setViewKeepingViewport);
   const toggleView = useNavigationStore((s) => s.toggleView);
   const [sidebarWidth, setSidebarWidth] = useState(DEFAULT_SIDEBAR_WIDTH);
   const [bottomHeight, setBottomHeight] = useState(DEFAULT_BOTTOM_HEIGHT);
@@ -227,7 +228,7 @@ export function PanelLayout() {
     prevWorkspaceModeRef.current = workspaceMode;
     if (isLearnMode) exitLearnMode();
     if (isChallengeMode) exitChallengeMode();
-    setActiveView(activeView && visibleActivityViews.includes(activeView) ? activeView : 'files');
+    setViewKeepingViewport(activeView && visibleActivityViews.includes(activeView) ? activeView : 'files', !editorHidden);
     // First entry into Research shows the orientation tour once (PRD 11 B).
     if (workspaceMode === 'research') maybeAutoStartTour();
     // eslint-disable-next-line react-hooks/exhaustive-deps

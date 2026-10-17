@@ -61,3 +61,26 @@ describe('sidebar auto-collapse', () => {
     expect(useNavigationStore.getState().activeView).toBe('search');
   });
 });
+
+describe('setViewKeepingViewport (workspace switch while narrow)', () => {
+  it('parks the view instead of re-opening the sidebar below the breakpoint', () => {
+    useNavigationStore.getState().applyNarrow(true, true);
+    useNavigationStore.getState().setViewKeepingViewport('files', true);
+    expect(useNavigationStore.getState().activeView).toBeNull();
+    useNavigationStore.getState().applyNarrow(false, true);
+    expect(useNavigationStore.getState().activeView).toBe('files');
+  });
+
+  it('selects normally when the window is wide', () => {
+    useNavigationStore.getState().applyNarrow(false, true);
+    useNavigationStore.getState().setActiveView(null);
+    useNavigationStore.getState().setViewKeepingViewport('files', true);
+    expect(useNavigationStore.getState().activeView).toBe('files');
+  });
+
+  it('selects even when narrow if the sidebar cannot collapse (full-width view)', () => {
+    useNavigationStore.getState().applyNarrow(true, false);
+    useNavigationStore.getState().setViewKeepingViewport('search', false);
+    expect(useNavigationStore.getState().activeView).toBe('search');
+  });
+});

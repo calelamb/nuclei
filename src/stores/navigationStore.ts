@@ -50,6 +50,9 @@ interface NavigationState {
   /** Collapse the sidebar when narrow and restore it on grow. `canCollapse` is false
    * while a full-width takeover view is showing (collapsing it would drop the view). */
   applyNarrow: (narrow: boolean, canCollapse: boolean) => void;
+  /** Select a view after a workspace switch without re-opening a sidebar that is
+   * folded away for a narrow window: it is parked and restored on grow instead. */
+  setViewKeepingViewport: (view: NavView, canCollapse: boolean) => void;
   /** Section the Settings panel should expand, scroll to and focus on its next render. */
   settingsTarget: SettingsTarget | null;
   clearSettingsTarget: () => void;
@@ -59,7 +62,7 @@ interface NavigationState {
   openSettings: (section?: unknown) => void;
 }
 
-export const useNavigationStore = create<NavigationState>((set) => ({
+export const useNavigationStore = create<NavigationState>((set, get) => ({
   activeView: 'files',
   autoCollapsedView: null,
   lastNarrow: null,
@@ -74,6 +77,13 @@ export const useNavigationStore = create<NavigationState>((set) => ({
       if (next !== null) leaveFullViewSurfaces();
       return { activeView: next, autoCollapsedView: null };
     }),
+  setViewKeepingViewport: (view, canCollapse) => {
+    if (get().lastNarrow === true && canCollapse) {
+      set({ activeView: null, autoCollapsedView: view });
+      return;
+    }
+    get().setActiveView(view);
+  },
   applyNarrow: (narrow, canCollapse) =>
     set((s) => {
       if (s.lastNarrow === narrow) return s;
