@@ -10,6 +10,7 @@ import { ProviderLogo } from './ProviderLogo';
 import { providerAllowsQsharp, submissionLanguage, QSHARP_GATE_TOOLTIP } from './launchGating';
 import type { HardwareProviderType, BackendInfo } from '../../types/hardware';
 
+import { TYPOGRAPHY } from '../../styles/tokens';
 interface ProviderMeta {
   name: HardwareProviderType;
   label: string;
@@ -366,7 +367,7 @@ export function LaunchModal() {
           display: 'flex',
           flexDirection: 'column',
           overflow: 'hidden',
-          fontFamily: "'Geist Sans', sans-serif",
+          fontFamily: TYPOGRAPHY.fontSans,
         }}
       >
         {/* Header */}
@@ -394,7 +395,7 @@ export function LaunchModal() {
                 gap: 4,
                 cursor: 'pointer',
                 fontSize: 11,
-                fontFamily: "'Geist Sans', sans-serif",
+                fontFamily: TYPOGRAPHY.fontSans,
               }}
             >
               <ChevronLeft size={12} /> Back
@@ -480,7 +481,7 @@ export function LaunchModal() {
                         padding: 16,
                         cursor: disabled ? 'not-allowed' : 'pointer',
                         color: colors.text,
-                        fontFamily: "'Geist Sans', sans-serif",
+                        fontFamily: TYPOGRAPHY.fontSans,
                         display: 'flex',
                         flexDirection: 'column',
                         gap: 10,
@@ -516,7 +517,7 @@ export function LaunchModal() {
                         </div>
                         <span
                           style={{
-                            fontSize: 10,
+                            fontSize: 11,
                             fontWeight: 600,
                             color: pricingColor(p.pricing),
                             textTransform: 'uppercase',
@@ -547,7 +548,7 @@ export function LaunchModal() {
                       <div style={{ flex: 1 }} />
                       <div
                         style={{
-                          fontSize: 10,
+                          fontSize: 11,
                           color: colors.textDim,
                           display: 'flex',
                           alignItems: 'center',
@@ -606,7 +607,7 @@ export function LaunchModal() {
                     borderRadius: 8,
                     fontSize: 11,
                     color: colors.text,
-                    fontFamily: "'Geist Sans', sans-serif",
+                    fontFamily: TYPOGRAPHY.fontSans,
                   }}
                 >
                   <FileCode size={12} style={{ color: colors.success }} />
@@ -636,15 +637,15 @@ export function LaunchModal() {
                       display: 'flex',
                       alignItems: 'center',
                       gap: 6,
-                      fontSize: 10,
+                      fontSize: 11,
                       fontWeight: 600,
                       textTransform: 'uppercase',
                       letterSpacing: 0.5,
                       color: colors.textDim,
-                      fontFamily: "'Geist Sans', sans-serif",
+                      fontFamily: TYPOGRAPHY.fontSans,
                     }}
                   >
-                    <KeyRound size={11} />
+                    <KeyRound size={12} />
                     {INLINE_KEY_FIELD[selectedProvider]?.label}
                   </label>
                   <div style={{ display: 'flex', gap: 6 }}>
@@ -672,8 +673,7 @@ export function LaunchModal() {
                         color: colors.text,
                         padding: '6px 10px',
                         fontSize: 12,
-                        fontFamily: "'JetBrains Mono', ui-monospace, monospace",
-                        outline: 'none',
+                        fontFamily: TYPOGRAPHY.fontMono,
                       }}
                     />
                     <button
@@ -693,7 +693,7 @@ export function LaunchModal() {
                         padding: '6px 12px',
                         fontSize: 12,
                         fontWeight: 600,
-                        fontFamily: "'Geist Sans', sans-serif",
+                        fontFamily: TYPOGRAPHY.fontSans,
                         cursor: keyDraft.trim() ? 'pointer' : 'default',
                       }}
                     >
@@ -701,7 +701,7 @@ export function LaunchModal() {
                     </button>
                   </div>
                   {selectedProvider && connectionErrors[selectedProvider] && (
-                    <div style={{ fontSize: 10, color: colors.error, fontFamily: "'Geist Sans', sans-serif" }}>
+                    <div style={{ fontSize: 11, color: colors.error, fontFamily: TYPOGRAPHY.fontSans }}>
                       {connectionErrors[selectedProvider]}
                     </div>
                   )}
@@ -711,10 +711,10 @@ export function LaunchModal() {
                       target="_blank"
                       rel="noreferrer"
                       style={{
-                        fontSize: 10,
+                        fontSize: 11,
                         color: colors.accentLight,
                         textDecoration: 'none',
-                        fontFamily: "'Geist Sans', sans-serif",
+                        fontFamily: TYPOGRAPHY.fontSans,
                       }}
                     >
                       {INLINE_KEY_FIELD[selectedProvider]?.helpText} ↗
@@ -728,14 +728,14 @@ export function LaunchModal() {
                     display: 'flex',
                     alignItems: 'center',
                     gap: 6,
-                    fontSize: 10,
+                    fontSize: 11,
                     color: colors.success,
-                    fontFamily: "'Geist Sans', sans-serif",
+                    fontFamily: TYPOGRAPHY.fontSans,
                     textTransform: 'uppercase',
                     letterSpacing: 0.5,
                   }}
                 >
-                  <KeyRound size={10} /> Token saved — ready to launch
+                  <KeyRound size={12} /> Token saved — ready to launch
                 </div>
               )}
 
@@ -756,7 +756,7 @@ export function LaunchModal() {
                           borderRadius: 999,
                           fontSize: 11,
                           fontWeight: 500,
-                          fontFamily: "'Geist Sans', sans-serif",
+                          fontFamily: TYPOGRAPHY.fontSans,
                           cursor: 'pointer',
                         }}
                       >
@@ -808,7 +808,7 @@ export function LaunchModal() {
                           padding: '12px 14px',
                           cursor: 'pointer',
                           color: colors.text,
-                          fontFamily: "'Geist Sans', sans-serif",
+                          fontFamily: TYPOGRAPHY.fontSans,
                           display: 'grid',
                           gridTemplateColumns: '1fr auto auto auto',
                           gap: 16,
@@ -830,7 +830,7 @@ export function LaunchModal() {
                         </div>
                         <div
                           style={{
-                            fontSize: 10,
+                            fontSize: 11,
                             fontWeight: 600,
                             padding: '2px 8px',
                             borderRadius: 999,
@@ -862,7 +862,7 @@ export function LaunchModal() {
                 <div>
                   <label
                     style={{
-                      fontSize: 10,
+                      fontSize: 11,
                       fontWeight: 600,
                       textTransform: 'uppercase',
                       letterSpacing: 0.5,
@@ -902,8 +902,7 @@ export function LaunchModal() {
                       color: colors.text,
                       padding: '8px 12px',
                       fontSize: 13,
-                      fontFamily: "'Geist Sans', sans-serif",
-                      outline: 'none',
+                      fontFamily: TYPOGRAPHY.fontSans,
                       width: 140,
                     }}
                   />
@@ -915,7 +914,7 @@ export function LaunchModal() {
                     'Pick a backend to continue.'
                   ) : (
                     <>
-                      <DollarSign size={11} style={{ verticalAlign: -2, marginRight: 2 }} />
+                      <DollarSign size={12} style={{ verticalAlign: -2, marginRight: 2 }} />
                       {selectedProviderMeta?.pricing === 'Paid'
                         ? 'Uses IonQ credits. See dashboard for pricing.'
                         : selectedProviderMeta?.pricing === 'Credits'
@@ -938,7 +937,7 @@ export function LaunchModal() {
                     cursor: 'pointer',
                     fontSize: 13,
                     fontWeight: 500,
-                    fontFamily: "'Geist Sans', sans-serif",
+                    fontFamily: TYPOGRAPHY.fontSans,
                   }}
                 >
                   Cancel
@@ -970,7 +969,7 @@ export function LaunchModal() {
                     cursor: !selectedBackend || code.trim().length === 0 ? 'default' : 'pointer',
                     fontSize: 13,
                     fontWeight: 600,
-                    fontFamily: "'Geist Sans', sans-serif",
+                    fontFamily: TYPOGRAPHY.fontSans,
                     display: 'flex',
                     alignItems: 'center',
                     gap: 8,

@@ -1,6 +1,7 @@
 import { AlertTriangle } from 'lucide-react';
 import { useThemeStore } from '../../stores/themeStore';
 
+import { TYPOGRAPHY } from '../../styles/tokens';
 interface PluginErrorCardProps {
   /** Short label (usually the plugin or panel name) shown in the card header. */
   title: string;
@@ -15,7 +16,7 @@ interface PluginErrorCardProps {
  */
 export function PluginErrorCard({ title, message }: PluginErrorCardProps) {
   const colors = useThemeStore((s) => s.colors);
-  const font = "'Geist Sans', sans-serif";
+  const font = TYPOGRAPHY.fontSans;
 
   return (
     <div
@@ -41,7 +42,7 @@ export function PluginErrorCard({ title, message }: PluginErrorCardProps) {
             marginTop: 2,
             lineHeight: 1.4,
             wordBreak: 'break-word',
-            fontFamily: "'Geist Mono', monospace",
+            fontFamily: TYPOGRAPHY.fontMono,
           }}
         >
           {message}

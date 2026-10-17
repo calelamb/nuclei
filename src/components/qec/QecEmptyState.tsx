@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react';
 import { useThemeStore } from '../../stores/themeStore';
 
+import { TYPOGRAPHY } from '../../styles/tokens';
 export interface QecEmptyStateAction {
   label: string;
   onClick: () => void;
@@ -29,11 +30,11 @@ export function QecEmptyState({
       style={{
         flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center',
         justifyContent: 'center', gap: 8, padding: 24, textAlign: 'center',
-        fontFamily: "'Geist Sans', sans-serif",
+        fontFamily: TYPOGRAPHY.fontSans,
       }}
     >
       <div style={{ fontSize: 13, fontWeight: 600, color: colors.textMuted }}>{title}</div>
-      <div style={{ fontSize: 11.5, color: colors.textDim, maxWidth: 320, lineHeight: 1.5 }}>{body}</div>
+      <div style={{ fontSize: 12, color: colors.textDim, maxWidth: 320, lineHeight: 1.5 }}>{body}</div>
       {(action || docsHref) && (
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 4 }}>
           {action && (
@@ -43,7 +44,7 @@ export function QecEmptyState({
               style={{
                 padding: '5px 12px', borderRadius: 5, border: `1px solid ${colors.accent}`,
                 background: colors.accent, color: colors.bg, fontSize: 12, fontWeight: 600,
-                cursor: 'pointer', fontFamily: "'Geist Sans', sans-serif",
+                cursor: 'pointer', fontFamily: TYPOGRAPHY.fontSans,
               }}
             >
               {action.label}
@@ -54,7 +55,7 @@ export function QecEmptyState({
               href={docsHref}
               target="_blank"
               rel="noreferrer"
-              style={{ fontSize: 11.5, color: colors.accent, textDecoration: 'none' }}
+              style={{ fontSize: 12, color: colors.accent, textDecoration: 'none' }}
             >
               Read the docs →
             </a>

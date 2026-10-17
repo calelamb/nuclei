@@ -1,4 +1,4 @@
-import { ChevronDown, ChevronUp, CircleDot, ListChecks, LoaderCircle, Radio } from 'lucide-react';
+import { ChevronDown, ChevronUp, CircleDot, ListChecks, LoaderCircle, Radio, RefreshCw } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState, type ReactElement } from 'react';
 
 import { resolveQecPanels } from '../../../layout/qecPanelRegistry';
@@ -17,6 +17,8 @@ import {
 } from '../../../stores/qecSessionCatalogStore';
 import { useQecWorkbenchStore } from '../../../stores/qecWorkbenchStore';
 import { QecImportWizard } from '../import/QecImportWizard';
+import { Button } from '../../ui';
+import { ICON_SIZE, ICON_STROKE } from '../../../styles/tokens';
 
 interface TrayHeaderProps { expanded: boolean; importing: boolean; onToggle(): void; }
 
@@ -27,12 +29,12 @@ function TrayHeader({ expanded, importing, onToggle }: TrayHeaderProps): ReactEl
   return (
     <header className="qec-tray__header">
       <div className="qec-tray__tabs" aria-label="Operational instruments">
-        {importing && <span className="qec-tray__active-instrument"><ListChecks aria-hidden="true" size={15} />Import</span>}
-        {!importing && panels.map((panel) => <span className="qec-tray__active-instrument" key={panel.id}><ListChecks aria-hidden="true" size={15} />{panel.title}</span>)}
+        {importing && <span className="qec-tray__active-instrument"><ListChecks aria-hidden="true" size={16} />Import</span>}
+        {!importing && panels.map((panel) => <span className="qec-tray__active-instrument" key={panel.id}><ListChecks aria-hidden="true" size={16} />{panel.title}</span>)}
         <span><Radio aria-hidden="true" size={14} /> Streams</span><span>Logs</span><span>Comparisons</span>
       </div>
       <button type="button" className="qec-tray__toggle" aria-expanded={expanded} aria-label={`${expanded ? 'Collapse' : 'Expand'} jobs and streams`} onClick={onToggle}>
-        {expanded ? <ChevronDown aria-hidden="true" size={17} /> : <ChevronUp aria-hidden="true" size={17} />}
+        {expanded ? <ChevronDown aria-hidden="true" size={16} /> : <ChevronUp aria-hidden="true" size={16} />}
       </button>
     </header>
   );
@@ -47,8 +49,8 @@ function TrayContent({ client, projectRoot }: { client: QecImportClient | null; 
   return (
     <div className="qec-tray__content">
       {jobs.length === 0
-        ? <div className="qec-tray__empty"><CircleDot aria-hidden="true" size={18} /><div><strong>No active jobs</strong><span>Campaign, import, and stream lifecycle will remain visible here.</span></div></div>
-        : <div className="qec-tray__empty"><ListChecks aria-hidden="true" size={18} /><div><strong>{jobs.length} durable {jobs.length === 1 ? 'job' : 'jobs'}</strong><span>Completion and cancellation state remain available in this tray.</span></div></div>}
+        ? <div className="qec-tray__empty"><CircleDot aria-hidden="true" size={16} /><div><strong>No active jobs</strong><span>Campaign, import, and stream lifecycle will remain visible here.</span></div></div>
+        : <div className="qec-tray__empty"><ListChecks aria-hidden="true" size={16} /><div><strong>{jobs.length} durable {jobs.length === 1 ? 'job' : 'jobs'}</strong><span>Completion and cancellation state remain available in this tray.</span></div></div>}
       <dl className="qec-tray__summary">
         <div><dt>Queued</dt><dd className="qec-mono">{queued}</dd></div>
         <div><dt>Running</dt><dd className="qec-mono">{running}</dd></div>
@@ -206,8 +208,8 @@ function useImportEngine(
 }
 
 function EngineNotice({ state }: { state: EngineState }): ReactElement {
-  if (state.loading) return <div className="qec-tray__engine" role="status"><LoaderCircle aria-hidden="true" size={18} /><span>Starting authenticated QEC Data Engine…</span></div>;
-  return <div className="qec-tray__engine" role="alert"><CircleDot aria-hidden="true" size={18} /><span>{state.error}</span>{state.retry && <button type="button" onClick={state.retry}>Retry QEC Data Engine</button>}</div>;
+  if (state.loading) return <div className="qec-tray__engine" role="status"><LoaderCircle className="nuclei-spin" aria-hidden="true" size={ICON_SIZE.lg} /><span>Starting authenticated QEC Data Engine…</span></div>;
+  return <div className="qec-tray__engine" role="alert"><CircleDot aria-hidden="true" size={ICON_SIZE.lg} /><span>{state.error}</span>{state.retry && <Button size="sm" icon={<RefreshCw aria-hidden="true" size={ICON_SIZE.sm} strokeWidth={ICON_STROKE} />} onClick={state.retry}>Retry QEC Data Engine</Button>}</div>;
 }
 
 function supportsSessionCatalog(client: QecWorkbenchClient): client is QecWorkbenchClient & QecSessionCatalogClient {

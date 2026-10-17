@@ -3,6 +3,7 @@ import { CONCEPT_GRAPH, type ConceptNode } from '../../data/conceptMap';
 import { useStudentStore } from '../../stores/studentStore';
 import { useThemeStore } from '../../stores/themeStore';
 
+import { TYPOGRAPHY } from '../../styles/tokens';
 const CATEGORY_X: Record<string, number> = {
   basics: 80,
   gates: 220,
@@ -84,15 +85,15 @@ export function ConceptMap() {
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
       {/* Legend */}
       <div style={{ padding: '8px 12px', display: 'flex', gap: 14, alignItems: 'center', flexShrink: 0 }}>
-        <span style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 10, fontFamily: 'Geist Sans, Inter, sans-serif', color: colors.textMuted }}>
+        <span style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, fontFamily: TYPOGRAPHY.fontSans, color: colors.textMuted }}>
           <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#10B981', display: 'inline-block' }} />
           Mastered
         </span>
-        <span style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 10, fontFamily: 'Geist Sans, Inter, sans-serif', color: colors.textMuted }}>
+        <span style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, fontFamily: TYPOGRAPHY.fontSans, color: colors.textMuted }}>
           <span style={{ width: 8, height: 8, borderRadius: '50%', background: colors.accent, display: 'inline-block' }} />
           In Progress
         </span>
-        <span style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 10, fontFamily: 'Geist Sans, Inter, sans-serif', color: colors.textMuted }}>
+        <span style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, fontFamily: TYPOGRAPHY.fontSans, color: colors.textMuted }}>
           <span style={{ width: 8, height: 8, borderRadius: '50%', background: colors.textDim, opacity: 0.45, display: 'inline-block' }} />
           Unseen
         </span>
@@ -110,7 +111,7 @@ export function ConceptMap() {
               textAnchor="middle"
               fill={colors.textDim}
               fontSize={9}
-              fontFamily="Geist Sans, Inter, sans-serif"
+              fontFamily={TYPOGRAPHY.fontSans}
               fontWeight={600}
               style={{ textTransform: 'uppercase', letterSpacing: '0.5px' }}
             >
@@ -174,7 +175,7 @@ export function ConceptMap() {
                   textAnchor="middle"
                   fill={colors.textMuted}
                   fontSize={8}
-                  fontFamily="Geist Sans, Inter, sans-serif"
+                  fontFamily={TYPOGRAPHY.fontSans}
                 >
                   {pos.node.label}
                 </text>
@@ -200,7 +201,7 @@ export function ConceptMap() {
             }}
           >
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
-              <span style={{ color: colors.text, fontSize: 13, fontWeight: 600, fontFamily: 'Geist Sans, Inter, sans-serif' }}>
+              <span style={{ color: colors.text, fontSize: 13, fontWeight: 600, fontFamily: TYPOGRAPHY.fontSans }}>
                 {selectedNode.node.label}
               </span>
               <button
@@ -210,13 +211,13 @@ export function ConceptMap() {
                 x
               </button>
             </div>
-            <div style={{ color: colors.textMuted, fontSize: 11, fontFamily: 'Geist Sans, Inter, sans-serif', lineHeight: 1.5, marginBottom: 6 }}>
+            <div style={{ color: colors.textMuted, fontSize: 11, fontFamily: TYPOGRAPHY.fontSans, lineHeight: 1.5, marginBottom: 6 }}>
               {selectedNode.node.description}
             </div>
             <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
               <span style={{
-                fontSize: 9,
-                fontFamily: 'Geist Sans, Inter, sans-serif',
+                fontSize: 11,
+                fontFamily: TYPOGRAPHY.fontSans,
                 padding: '2px 6px',
                 borderRadius: 3,
                 background: getNodeColor(selectedNode.id) + '22',
@@ -227,8 +228,8 @@ export function ConceptMap() {
               </span>
               {selectedNode.node.exerciseIds.length > 0 && (
                 <span style={{
-                  fontSize: 9,
-                  fontFamily: 'Geist Sans, Inter, sans-serif',
+                  fontSize: 11,
+                  fontFamily: TYPOGRAPHY.fontSans,
                   color: colors.accent,
                 }}>
                   {selectedNode.node.exerciseIds.length} exercise{selectedNode.node.exerciseIds.length > 1 ? 's' : ''} available

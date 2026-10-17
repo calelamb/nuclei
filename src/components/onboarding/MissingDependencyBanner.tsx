@@ -4,6 +4,7 @@ import { useThemeStore } from '../../stores/themeStore';
 import { useMissingDependencyStore } from '../../stores/missingDependencyStore';
 import type { FrameworkInfo } from '../../stores/frameworksStore';
 import { isDesktop, resolveFramework, installFrameworks } from '../../services/environment';
+import { TYPOGRAPHY } from '../../styles/tokens';
 
 type Phase = 'idle' | 'installing' | 'done' | 'error';
 
@@ -83,7 +84,7 @@ export function MissingDependencyBanner() {
         borderRadius: 10,
         boxShadow: '0 18px 44px -18px rgba(0,0,0,0.65)',
         padding: '12px 14px',
-        fontFamily: "'Geist Sans', sans-serif",
+        fontFamily: TYPOGRAPHY.fontSans,
         animation: 'nuclei-slide-down 200ms ease',
       }}
     >
@@ -138,19 +139,19 @@ export function MissingDependencyBanner() {
                   display: 'inline-flex', alignItems: 'center', gap: 6,
                   padding: '6px 12px', borderRadius: 6, border: 'none',
                   background: colors.accent, color: '#0a0f1a',
-                  fontSize: 12, fontWeight: 600, fontFamily: "'Geist Sans', sans-serif",
+                  fontSize: 12, fontWeight: 600, fontFamily: TYPOGRAPHY.fontSans,
                   cursor: phase === 'installing' ? 'default' : 'pointer',
                   opacity: phase === 'installing' ? 0.7 : 1,
                 }}
               >
                 {phase === 'installing' ? (
                   <>
-                    <Loader2 size={13} style={{ animation: 'nuclei-spin 800ms linear infinite' }} />
+                    <Loader2 size={14} style={{ animation: 'nuclei-spin 800ms linear infinite' }} />
                     Installing {name}…
                   </>
                 ) : (
                   <>
-                    <Download size={13} />
+                    <Download size={14} />
                     {phase === 'error' ? 'Retry install' : `Install ${name}`}
                   </>
                 )}
@@ -162,7 +163,7 @@ export function MissingDependencyBanner() {
               style={{
                 padding: '6px 10px', borderRadius: 6,
                 border: `1px solid ${colors.border}`, background: 'transparent',
-                color: colors.textMuted, fontSize: 12, fontFamily: "'Geist Sans', sans-serif",
+                color: colors.textMuted, fontSize: 12, fontFamily: TYPOGRAPHY.fontSans,
                 cursor: 'pointer',
               }}
             >
@@ -177,7 +178,7 @@ export function MissingDependencyBanner() {
           aria-label="Dismiss"
           style={{ background: 'transparent', border: 'none', color: colors.textDim, cursor: 'pointer', padding: 2, flexShrink: 0 }}
         >
-          <X size={15} />
+          <X size={16} />
         </button>
       </div>
     </div>

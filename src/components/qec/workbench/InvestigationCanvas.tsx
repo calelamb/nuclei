@@ -37,7 +37,7 @@ function CanvasHeader({ inspectorOpen, onToggleInspector, toggleRef }: Investiga
           aria-expanded={inspectorOpen}
           onClick={onToggleInspector}
         >
-          <PanelRight aria-hidden="true" size={15} />
+          <PanelRight aria-hidden="true" size={16} />
           {inspectorOpen ? 'Hide' : 'Show'} research inspector
         </button>
       </div>
@@ -54,7 +54,7 @@ function CanvasInstrument({ panel, primary }: { panel: QecWorkbenchPanelDef; pri
     >
       <header>
         <span className="qec-instrument__icon"><Icon aria-hidden="true" size={16} /></span>
-        <div><h2 id={`${panel.id}-instrument-heading`}>{panel.title}</h2><span className="qec-mono">Linked · awaiting session data</span></div>
+        <div><h2 id={`${panel.id}-instrument-heading`}>{panel.title}</h2><span className="qec-mono" title="Linked · awaiting session data">Linked · awaiting session data</span></div>
         <QecPanelPinButton panel={panel} />
       </header>
       <div className="qec-instrument__field" aria-hidden="true">

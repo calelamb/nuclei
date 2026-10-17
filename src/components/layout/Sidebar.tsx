@@ -8,6 +8,7 @@ import type { ActivityView } from './ActivityBar';
 import { createPlatformQecStudyFs, createTauriQecStudyFs } from '../../services/qecStudyFs';
 import { usePlatform } from '../../platform/PlatformProvider';
 
+import { TYPOGRAPHY } from '../../styles/tokens';
 const LearningPathSidebar = lazy(async () => ({
   default: (await import('../learning/LearningPathSidebar')).LearningPathSidebar,
 }));
@@ -51,14 +52,14 @@ function SearchPanel() {
         aria-label="Search files"
         style={{
           width: '100%', padding: '6px 10px',
-          fontSize: 12, fontFamily: "'Geist Sans', system-ui, sans-serif",
+          fontSize: 12, fontFamily: TYPOGRAPHY.fontSans,
           background: colors.bg, border: `1px solid ${colors.border}`,
-          borderRadius: 4, color: colors.text, outline: 'none',
+          borderRadius: 4, color: colors.text,
         }}
         onFocus={(e) => { e.currentTarget.style.borderColor = colors.accent; }}
         onBlur={(e) => { e.currentTarget.style.borderColor = colors.border; }}
       />
-      <div style={{ color: colors.textDim, fontSize: 11, fontFamily: "'Geist Sans', sans-serif", textAlign: 'center', marginTop: 16 }}>
+      <div style={{ color: colors.textDim, fontSize: 11, fontFamily: TYPOGRAPHY.fontSans, textAlign: 'center', marginTop: 16 }}>
         Type to search across files
       </div>
     </div>
@@ -68,8 +69,8 @@ function SearchPanel() {
 function CircuitInfoPanel() {
   const colors = useThemeStore((s) => s.colors);
   return (
-    <div style={{ padding: 12, color: colors.textMuted, fontSize: 12, fontFamily: "'Geist Sans', sans-serif" }}>
-      <div style={{ color: colors.textDim, fontSize: 10, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 8 }}>
+    <div style={{ padding: 12, color: colors.textMuted, fontSize: 12, fontFamily: TYPOGRAPHY.fontSans }}>
+      <div style={{ color: colors.textDim, fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 8 }}>
         Circuit Info
       </div>
       <div style={{ color: colors.textDim, fontSize: 11 }}>
@@ -89,9 +90,9 @@ function SidebarHeader({ title }: { title: string }) {
       padding: '0 12px', flexShrink: 0,
     }}>
       <span style={{
-        fontSize: 10, fontWeight: 600, textTransform: 'uppercase',
+        fontSize: 11, fontWeight: 600, textTransform: 'uppercase',
         letterSpacing: 0.5, color: colors.textMuted,
-        fontFamily: "'Geist Sans', sans-serif",
+        fontFamily: TYPOGRAPHY.fontSans,
       }}>
         {title}
       </span>
@@ -108,7 +109,7 @@ function SidebarSuspense({ children }: { children: React.ReactNode }) {
         padding: 16,
         color: colors.textDim,
         fontSize: 12,
-        fontFamily: "'Geist Sans', sans-serif",
+        fontFamily: TYPOGRAPHY.fontSans,
       }}>
         Loading…
       </div>
@@ -166,9 +167,9 @@ function LearningSidebarTabs() {
                 border: 'none',
                 borderBottom: isActive ? `2px solid ${colors.accent}` : '2px solid transparent',
                 color: isActive ? colors.accent : colors.textDim,
-                fontSize: 10,
+                fontSize: 11,
                 fontWeight: 600,
-                fontFamily: "'Geist Sans', sans-serif",
+                fontFamily: TYPOGRAPHY.fontSans,
                 textTransform: 'uppercase',
                 letterSpacing: 0.3,
                 cursor: 'pointer',

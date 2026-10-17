@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useThemeStore } from '../../stores/themeStore';
 import { Lightbulb } from 'lucide-react';
 
+import { TYPOGRAPHY } from '../../styles/tokens';
 interface HintPanelProps {
   hints: string[];
 }
@@ -16,7 +17,7 @@ export function HintPanel({ hints }: HintPanelProps) {
         color: colors.textDim,
         fontSize: 12,
         fontStyle: 'italic',
-        fontFamily: "'Geist Sans', sans-serif",
+        fontFamily: TYPOGRAPHY.fontSans,
       }}>
         No hints available for this challenge.
       </span>
@@ -58,7 +59,7 @@ export function HintPanel({ hints }: HintPanelProps) {
               color: colors.warning,
               fontSize: 11,
               fontWeight: 700,
-              fontFamily: "'Geist Mono', monospace",
+              fontFamily: TYPOGRAPHY.fontMono,
             }}>
               {i + 1}
             </span>
@@ -66,7 +67,7 @@ export function HintPanel({ hints }: HintPanelProps) {
           <span style={{
             color: colors.textMuted,
             fontSize: 13,
-            fontFamily: "'Geist Sans', sans-serif",
+            fontFamily: TYPOGRAPHY.fontSans,
             lineHeight: 1.5,
           }}>
             {hint}
@@ -89,7 +90,7 @@ export function HintPanel({ hints }: HintPanelProps) {
             color: colors.warning,
             fontSize: 12,
             fontWeight: 500,
-            fontFamily: "'Geist Sans', sans-serif",
+            fontFamily: TYPOGRAPHY.fontSans,
             cursor: 'pointer',
             alignSelf: 'flex-start',
             transition: 'all 150ms ease',
@@ -113,7 +114,7 @@ export function HintPanel({ hints }: HintPanelProps) {
           color: colors.textDim,
           fontSize: 11,
           fontStyle: 'italic',
-          fontFamily: "'Geist Sans', sans-serif",
+          fontFamily: TYPOGRAPHY.fontSans,
         }}>
           All hints revealed.
         </span>

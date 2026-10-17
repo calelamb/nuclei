@@ -11,10 +11,28 @@
   --qec-warning-field: #fffbeb; --qec-warning-border: #fcd34d; --qec-warning-divider: #fde68a; --qec-warning-text: #854d0e;
   --qec-danger: #b91c1c; --qec-danger-field: #fef2f2; --qec-danger-border: #fecaca;
   --qec-success-field: #f0fdf4; --qec-success-border: #bbf7d0;
+  --qec-wash: #f7fafe; --qec-line: #dbeafe; --qec-line-strong: #bfdbfe; --qec-line-hover: #93c5fd; --qec-tint: #eff6ff;
+  --qec-analytical-text: #1d4ed8; --qec-info-edge: #0284c7; --qec-on-strong: #ffffff;
   color: var(--qec-text); background: var(--qec-canvas); display: grid;
   grid-template-rows: auto minmax(0, 1fr) 9px auto; width: 100%; height: 100%; min-width: 0;
-  min-height: 0; overflow: hidden; font-family: Inter, var(--font-sans); font-size: 13px;
+  min-height: 0; overflow: hidden; font-family: var(--font-sans); font-size: 13px;
   line-height: 1.45;
+}
+
+/* Dark theme: same --qec-* contract, resolved from the app's global tokens so the
+   workbench follows the theme toggle instead of staying a white slab. */
+:root[data-theme='dark'] .qec-workbench {
+  --qec-canvas: var(--color-surface-base); --qec-raised: var(--color-surface-raised);
+  --qec-recessed: var(--color-surface-sunken); --qec-border: var(--color-border-strong);
+  --qec-text: var(--color-text-primary); --qec-text-muted: var(--color-text-secondary);
+  --qec-quantum: var(--color-accent-quantum-soft); --qec-interactive: var(--color-accent-quantum);
+  --qec-analytical: #60a5fa; --qec-field: #0f2233; --qec-selection: #0e2f44; --qec-selection-strong: #14425f;
+  --qec-quantum-strong: #7dd3e8; --qec-analytical-strong: #93c5fd; --qec-success: #34d399; --qec-warning: #fbbf24;
+  --qec-warning-field: #2a2210; --qec-warning-border: #6b5311; --qec-warning-divider: #4a3a10; --qec-warning-text: #fcd34d;
+  --qec-danger: #f87171; --qec-danger-field: #2a1417; --qec-danger-border: #6e2a2f;
+  --qec-success-field: #0f2a1e; --qec-success-border: #1e5c3f;
+  --qec-wash: #0a101a; --qec-line: #1e2d45; --qec-line-strong: #2a3f5e; --qec-line-hover: #3b5a85; --qec-tint: #112036;
+  --qec-analytical-text: #93c5fd; --qec-info-edge: #38bdf8; --qec-on-strong: #ffffff;
 }
 
 .qec-workbench--tray-collapsed {
@@ -59,7 +77,7 @@
 .qec-workbench input:focus-visible,
 .qec-workbench [tabindex]:focus-visible,
 .qec-workbench [role='option']:focus-visible {
-  outline: 2px solid var(--qec-analytical); outline-offset: 2px;
+  outline: var(--focus-ring-width) solid var(--focus-ring-color); outline-offset: var(--focus-ring-offset);
 }
 
 .qec-mono {
@@ -82,20 +100,12 @@
 
 .qec-study-picker {
   display: grid; flex: 0 1 290px; min-width: 190px; gap: 2px;
-  color: var(--qec-text-muted); font-size: 9px; font-weight: 700; letter-spacing: 0.08em;
+  color: var(--qec-text-muted); font-size: 11px; font-weight: 700; letter-spacing: 0.08em;
   text-transform: uppercase;
 }
 
-.qec-study-picker select {
-  width: 100%; min-height: 44px; padding: 0 34px 0 11px; border: 1px solid var(--qec-border);
-  border-radius: 6px; background: var(--qec-raised); color: var(--qec-text); font-family: Inter, var(--font-sans);
-  font-size: 12px; font-weight: 600; letter-spacing: normal; text-transform: none;
-  transition: background-color 160ms ease, border-color 160ms ease;
-}
-
-.qec-study-picker select:not(:disabled):hover {
-  border-color: var(--qec-selection-strong); background: var(--qec-field);
-}
+.qec-study-select { width: 100%; }
+.qec-study-select > select { font-weight: 600; letter-spacing: normal; text-transform: none; }
 
 .qec-preset-switcher {
   display: flex; flex: 0 0 auto; overflow: hidden; border: 1px solid var(--qec-border);
@@ -152,17 +162,13 @@
   color: var(--qec-text-muted);
 }
 
-.qec-study-create-button:not(:disabled) {
-  background: var(--qec-action) !important; color: var(--qec-action-foreground) !important;
-}
-
 .qec-research-trail {
   display: flex; min-width: 260px; max-width: 58%; align-items: center;
   gap: 3px; overflow: hidden;
 }
 
 .qec-research-trail__label {
-  margin-right: 3px; color: var(--qec-text-muted); font-size: 10px; font-weight: 700;
+  margin-right: 3px; color: var(--qec-text-muted); font-size: 11px; font-weight: 700;
   letter-spacing: 0.08em; text-transform: uppercase;
 }
 
@@ -240,7 +246,7 @@
 .qec-resize-handle:hover,
 .qec-resize-handle:focus-visible {
   background: var(--qec-selection);
-  outline: 2px solid var(--qec-analytical); outline-offset: -2px;
+  outline: var(--focus-ring-width) solid var(--focus-ring-color); outline-offset: -2px;
 }
 
 .qec-panel-pin {
@@ -261,11 +267,11 @@
 
 .qec-zone-heading h2,
 .qec-investigation__header h1 {
-  font-size: 15px; font-weight: 700; line-height: 1.25;
+  font-size: 14px; font-weight: 700; line-height: 1.25;
 }
 
 .qec-zone-heading__eyebrow {
-  display: block; margin-bottom: 2px; color: var(--qec-text-muted); font-size: 9px;
+  display: block; margin-bottom: 2px; color: var(--qec-text-muted); font-size: 11px;
   font-weight: 700; letter-spacing: 0.09em; text-transform: uppercase;
 }
 
@@ -294,7 +300,7 @@
 
 .qec-source-group h3,
 .qec-inspector__section h3 {
-  margin: 0 4px 7px; color: var(--qec-text-muted); font-size: 10px; font-weight: 700;
+  margin: 0 4px 7px; color: var(--qec-text-muted); font-size: 11px; font-weight: 700;
   letter-spacing: 0.07em; text-transform: uppercase;
 }
 
@@ -356,15 +362,15 @@
 }
 
 .qec-source-row strong {
-  font-size: 12px; font-weight: 650;
+  font-size: 12px; font-weight: 600;
 }
 
 .qec-source-row small {
-  margin-top: 2px; color: var(--qec-text-muted); font-size: 10px;
+  margin-top: 2px; color: var(--qec-text-muted); font-size: 11px;
 }
 
 .qec-source-row__kind {
-  color: var(--qec-text-muted); font-family: var(--font-mono); font-size: 9px; text-transform: uppercase;
+  color: var(--qec-text-muted); font-family: var(--font-mono); font-size: 11px; text-transform: uppercase;
 }
 
 .qec-session-tree {
@@ -377,7 +383,7 @@
 
 .qec-session-row__status {
   padding: 3px 5px; border: 1px solid var(--qec-border); border-radius: 999px;
-  color: var(--qec-text-muted); font-family: var(--font-mono); font-size: 8px; text-transform: uppercase;
+  color: var(--qec-text-muted); font-family: var(--font-mono); font-size: 11px; text-transform: uppercase;
 }
 
 .qec-session-row__status--complete {
@@ -395,7 +401,7 @@
 }
 
 .qec-source-instrument .qec-mono {
-  font-size: 9px; text-transform: uppercase;
+  font-size: 11px; text-transform: uppercase;
 }
 
 .qec-source-group__empty {
@@ -418,7 +424,7 @@
 }
 
 .qec-study-errors > header span {
-  margin-top: 2px; font-size: 10px;
+  margin-top: 2px; font-size: 11px;
 }
 
 .qec-study-errors > ul {
@@ -434,13 +440,13 @@
 }
 
 .qec-study-errors li li {
-  margin-top: 4px; color: var(--qec-text-muted); font-size: 10px; line-height: 1.45;
+  margin-top: 4px; color: var(--qec-text-muted); font-size: 11px; line-height: 1.45;
 }
 
 .qec-sources__footer {
   display: flex; min-height: 40px; flex: 0 0 auto; align-items: center;
   justify-content: space-between; gap: 8px; padding: 0 12px; border-top: 1px solid var(--qec-border);
-  color: var(--qec-text-muted); font-size: 10px;
+  color: var(--qec-text-muted); font-size: 11px;
 }
 
 .qec-zone-empty {
@@ -479,7 +485,7 @@
 .qec-inspector__close {
   display: inline-flex; min-height: 44px; align-items: center; justify-content: center;
   gap: 6px; padding: 0 10px; border: 1px solid var(--qec-border); border-radius: 5px;
-  background: var(--qec-raised); color: var(--qec-text-muted); font-size: 10px; font-weight: 650;
+  background: var(--qec-raised); color: var(--qec-text-muted); font-size: 11px; font-weight: 600;
   transition: color 160ms ease, background-color 160ms ease;
 }
 
@@ -495,7 +501,7 @@
 .qec-instrument-state {
   display: inline-flex; min-height: 28px; align-items: center; gap: 6px;
   padding: 0 8px; border: 1px solid var(--qec-selection-strong); border-radius: 4px; background: var(--qec-field);
-  color: var(--qec-analytical-strong); font-size: 10px; font-weight: 600;
+  color: var(--qec-analytical-strong); font-size: 11px; font-weight: 600;
 }
 
 .qec-instrument-strip {
@@ -505,7 +511,7 @@
 }
 
 .qec-instrument-strip span {
-  padding: 3px 8px; border-right: 1px solid var(--qec-border); color: var(--qec-text-muted); font-size: 10px;
+  padding: 3px 8px; border-right: 1px solid var(--qec-border); color: var(--qec-text-muted); font-size: 11px;
   white-space: nowrap;
 }
 
@@ -548,8 +554,10 @@
   font-size: 12px; font-weight: 700;
 }
 
+.qec-instrument header > div { min-width: 0; }
 .qec-instrument header .qec-mono {
-  display: block; margin-top: 1px; color: var(--qec-text-muted); font-size: 9px;
+  display: block; margin-top: 1px; color: var(--qec-text-muted); font-size: 11px;
+  font-family: var(--font-sans); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 
 .qec-instrument__field {
@@ -576,7 +584,7 @@
 }
 
 .qec-instrument > p {
-  padding: 0 13px 12px; color: var(--qec-text-muted); font-size: 10px; line-height: 1.5;
+  padding: 0 13px 12px; color: var(--qec-text-muted); font-size: 11px; line-height: 1.5;
 }
 
 .qec-inspector {
@@ -605,11 +613,11 @@
 }
 
 .qec-inspector dt {
-  color: var(--qec-text-muted); font-size: 10px; text-transform: capitalize;
+  color: var(--qec-text-muted); font-size: 11px; text-transform: capitalize;
 }
 
 .qec-inspector dd {
-  overflow: hidden; font-size: 10px; text-align: right; text-overflow: ellipsis;
+  overflow: hidden; font-size: 11px; text-align: right; text-overflow: ellipsis;
 }
 
 .qec-inspector__tools {
@@ -641,7 +649,7 @@
 }
 
 .qec-lineage-state span {
-  margin-top: 2px; color: var(--qec-text-muted); font-size: 10px;
+  margin-top: 2px; color: var(--qec-text-muted); font-size: 11px;
 }
 
 .qec-inspector__footer {
@@ -684,7 +692,7 @@
 }
 
 .qec-tray__tabs .qec-tray__active-instrument {
-  box-shadow: inset 0 -2px 0 var(--qec-analytical); background: var(--qec-canvas); color: var(--qec-text); font-weight: 650;
+  box-shadow: inset 0 -2px 0 var(--qec-analytical); background: var(--qec-canvas); color: var(--qec-text); font-weight: 600;
 }
 
 .qec-tray__toggle {
@@ -716,7 +724,7 @@
 }
 
 .qec-tray__empty span {
-  margin-top: 2px; font-size: 10px;
+  margin-top: 2px; font-size: 11px;
 }
 
 .qec-tray__summary {
@@ -732,9 +740,16 @@
 }
 
 .qec-tray__summary dt {
-  color: var(--qec-text-muted); font-size: 9px; text-transform: uppercase;
+  color: var(--qec-text-muted); font-size: 11px; text-transform: uppercase;
 }
 
 .qec-tray__summary dd {
   margin-top: 3px; font-size: 14px; font-weight: 600;
 }
+
+/* Engine status notice (starting / unavailable / disconnected) */
+.qec-tray__engine {
+  display: flex; flex-wrap: wrap; min-height: 150px; align-items: center; justify-content: center;
+  gap: 8px 10px; padding: 24px; background: var(--qec-wash); color: var(--qec-text-muted); font-size: 12px;
+}
+.qec-tray__engine > span { min-width: 0; overflow-wrap: anywhere; }

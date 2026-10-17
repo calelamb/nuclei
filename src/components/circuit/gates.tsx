@@ -1,5 +1,6 @@
 import type { Gate } from '../../types/quantum';
 
+import { TYPOGRAPHY } from '../../styles/tokens';
 // Layout constants
 export const GATE_SIZE = 40;
 export const WIRE_SPACING = 50;
@@ -76,7 +77,7 @@ export function SingleQubitGate({ gate, x, onHover, onLeave }: GateProps) {
         dominantBaseline="central"
         fill={COLORS.singleQubit}
         fontSize={14}
-        fontFamily="'JetBrains Mono', monospace"
+        fontFamily={TYPOGRAPHY.fontMono}
         fontWeight={600}
       >
         {gate.type}
@@ -88,7 +89,7 @@ export function SingleQubitGate({ gate, x, onHover, onLeave }: GateProps) {
           textAnchor="middle"
           fill={COLORS.wire}
           fontSize={10}
-          fontFamily="'JetBrains Mono', monospace"
+          fontFamily={TYPOGRAPHY.fontMono}
         >
           {gate.params.map(p => p.toFixed(2)).join(', ')}
         </text>

@@ -6,6 +6,7 @@ import type { HardwareProviderType } from '../../types/hardware';
 import { getHardware } from '../../App';
 import { useEscapeToClose } from '../../hooks/useEscapeToClose';
 
+import { TYPOGRAPHY } from '../../styles/tokens';
 interface CredentialSetupProps {
   provider: HardwareProviderType;
   onClose: () => void;
@@ -146,7 +147,7 @@ export function CredentialSetup({ provider, onClose }: CredentialSetupProps) {
   });
 
   const font: React.CSSProperties = {
-    fontFamily: "'Geist Sans', sans-serif",
+    fontFamily: TYPOGRAPHY.fontSans,
   };
 
   const handleSave = () => {
@@ -250,7 +251,7 @@ export function CredentialSetup({ provider, onClose }: CredentialSetupProps) {
                 htmlFor={`credential-${provider}-${field.key}`}
                 style={{
                   display: 'block',
-                  fontSize: 10,
+                  fontSize: 11,
                   fontWeight: 600,
                   color: colors.textMuted,
                   textTransform: 'uppercase',
@@ -277,7 +278,6 @@ export function CredentialSetup({ provider, onClose }: CredentialSetupProps) {
                   border: `1px solid ${colors.border}`,
                   borderRadius: 4,
                   color: colors.text,
-                  outline: 'none',
                   boxSizing: 'border-box',
                   ...font,
                 }}
@@ -294,7 +294,7 @@ export function CredentialSetup({ provider, onClose }: CredentialSetupProps) {
           {config.helpText && (
             <p
               style={{
-                fontSize: 10,
+                fontSize: 11,
                 color: colors.textDim,
                 margin: '0 0 12px',
                 ...font,

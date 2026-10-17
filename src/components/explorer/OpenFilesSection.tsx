@@ -14,6 +14,7 @@ import { useProjectStore } from '../../stores/projectStore';
 import { useThemeStore } from '../../stores/themeStore';
 import { requestCloseTab } from '../../lib/tabClose';
 
+import { TYPOGRAPHY } from '../../styles/tokens';
 const EXTENSION_ICONS: Record<string, LucideIcon> = {
   py: FileCode,
   qasm: Atom,
@@ -29,7 +30,7 @@ function basename(path: string): string {
 function iconFor(name: string, color: string) {
   const ext = name.split('.').pop()?.toLowerCase() ?? '';
   const Icon = EXTENSION_ICONS[ext] ?? FileIconLucide;
-  return <Icon size={13} style={{ color, marginRight: 6, flexShrink: 0 }} />;
+  return <Icon size={14} style={{ color, marginRight: 6, flexShrink: 0 }} />;
 }
 
 /**
@@ -70,15 +71,15 @@ export function OpenFilesSection() {
           background: 'transparent',
           border: 'none',
           cursor: 'pointer',
-          fontSize: 10,
+          fontSize: 11,
           fontWeight: 600,
           textTransform: 'uppercase',
           letterSpacing: 0.5,
           color: colors.textMuted,
-          fontFamily: "'Geist Sans', sans-serif",
+          fontFamily: TYPOGRAPHY.fontSans,
         }}
       >
-        {collapsed ? <ChevronRight size={11} /> : <ChevronDown size={11} />}
+        {collapsed ? <ChevronRight size={12} /> : <ChevronDown size={12} />}
         <span>Open Files</span>
         <span style={{ color: colors.textDim, fontWeight: 500 }}>({tabs.length})</span>
       </button>
@@ -120,8 +121,7 @@ export function OpenFilesSection() {
                   color: isActive ? colors.text : colors.textMuted,
                   fontWeight: isActive ? 500 : 400,
                   fontSize: 12,
-                  fontFamily: "'Geist Sans', sans-serif",
-                  outline: 'none',
+                  fontFamily: TYPOGRAPHY.fontSans,
                 }}
               >
                 {iconFor(name, isActive ? colors.accent : colors.textDim)}
@@ -173,7 +173,7 @@ export function OpenFilesSection() {
                     pointerEvents: isHovered ? 'auto' : 'none',
                   }}
                 >
-                  <X size={11} />
+                  <X size={12} />
                 </button>
               </div>
             );

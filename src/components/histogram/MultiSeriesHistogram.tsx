@@ -2,6 +2,7 @@ import { Bar, BarChart, Legend, ResponsiveContainer, Tooltip, XAxis, YAxis } fro
 import { useThemeStore } from '../../stores/themeStore';
 import { getMultiSeriesHistogramData, type HistogramSeriesInput } from './histogramData';
 
+import { TYPOGRAPHY } from '../../styles/tokens';
 export interface MultiSeriesHistogramSeries extends HistogramSeriesInput {
   color: string;
 }
@@ -20,7 +21,7 @@ export function MultiSeriesHistogram({ series }: { series: MultiSeriesHistogramS
 
   if (series.length === 0) {
     return (
-      <div style={{ padding: 16, color: colors.textDim, fontSize: 12, fontFamily: "'Geist Sans', sans-serif" }}>
+      <div style={{ padding: 16, color: colors.textDim, fontSize: 12, fontFamily: TYPOGRAPHY.fontSans }}>
         Select runs to compare their measurements.
       </div>
     );
@@ -30,7 +31,7 @@ export function MultiSeriesHistogram({ series }: { series: MultiSeriesHistogramS
 
   if (data.length === 0) {
     return (
-      <div style={{ padding: 16, color: colors.textDim, fontSize: 12, fontFamily: "'Geist Sans', sans-serif" }}>
+      <div style={{ padding: 16, color: colors.textDim, fontSize: 12, fontFamily: TYPOGRAPHY.fontSans }}>
         No measurements recorded for the selected runs.
       </div>
     );
@@ -42,13 +43,13 @@ export function MultiSeriesHistogram({ series }: { series: MultiSeriesHistogramS
         <BarChart data={data} margin={{ top: 5, right: 10, bottom: 5, left: 10 }}>
           <XAxis
             dataKey="state"
-            tick={{ fill: colors.text, fontSize: 11, fontFamily: "'Fira Code', monospace" }}
+            tick={{ fill: colors.text, fontSize: 11, fontFamily: TYPOGRAPHY.fontMono }}
             axisLine={{ stroke: colors.border }}
             tickLine={{ stroke: colors.border }}
           />
           <YAxis
             domain={[0, 1]}
-            tick={{ fill: colors.textDim, fontSize: 11, fontFamily: "'Fira Code', monospace" }}
+            tick={{ fill: colors.textDim, fontSize: 11, fontFamily: TYPOGRAPHY.fontMono }}
             axisLine={{ stroke: colors.border }}
             tickLine={{ stroke: colors.border }}
             tickFormatter={(v: number) => v.toFixed(1)}
@@ -59,12 +60,12 @@ export function MultiSeriesHistogram({ series }: { series: MultiSeriesHistogramS
               border: `1px solid ${colors.border}`,
               borderRadius: 6,
               fontSize: 12,
-              fontFamily: "'Fira Code', monospace",
+              fontFamily: TYPOGRAPHY.fontMono,
             }}
             labelStyle={{ color: colors.text }}
             formatter={(value) => [typeof value === 'number' ? value.toFixed(4) : String(value ?? ''), 'Probability']}
           />
-          <Legend wrapperStyle={{ fontSize: 11, fontFamily: "'Geist Sans', sans-serif" }} />
+          <Legend wrapperStyle={{ fontSize: 11, fontFamily: TYPOGRAPHY.fontSans }} />
           {series.map((s) => (
             <Bar key={s.label} dataKey={s.label} fill={s.color} radius={[3, 3, 0, 0]} />
           ))}

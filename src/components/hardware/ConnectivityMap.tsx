@@ -1,6 +1,7 @@
 import { useMemo } from 'react';
 import { useThemeStore } from '../../stores/themeStore';
 
+import { TYPOGRAPHY } from '../../styles/tokens';
 interface ConnectivityMapProps {
   connectivity: Array<[number, number]>;
   qubitCount: number;
@@ -46,7 +47,7 @@ export function ConnectivityMap({ connectivity, qubitCount }: ConnectivityMapPro
         style={{
           fontSize: 11,
           color: colors.textDim,
-          fontFamily: "'Geist Sans', sans-serif",
+          fontFamily: TYPOGRAPHY.fontSans,
           textAlign: 'center',
           padding: '12px 0',
         }}
@@ -98,7 +99,7 @@ export function ConnectivityMap({ connectivity, qubitCount }: ConnectivityMapPro
             textAnchor="middle"
             dominantBaseline="central"
             fontSize={8}
-            fontFamily="'Geist Sans', sans-serif"
+            fontFamily={TYPOGRAPHY.fontSans}
             fill={colors.textMuted}
           >
             {i}

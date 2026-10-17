@@ -1,6 +1,7 @@
 import { Component } from 'react';
 import type { ReactNode, ErrorInfo } from 'react';
 
+import { TYPOGRAPHY } from '../styles/tokens';
 interface ErrorBoundaryProps {
   children: ReactNode;
   fallback?: (error: Error, reset: () => void) => ReactNode;
@@ -51,7 +52,7 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
             padding: 32,
             height: '100%',
             width: '100%',
-            fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, sans-serif",
+            fontFamily: TYPOGRAPHY.fontSans,
             color: '#64748B',
             background: 'transparent',
           }}
@@ -68,7 +69,7 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
           <div
             style={{
               fontSize: 12,
-              fontFamily: "'JetBrains Mono', 'Roboto Mono', monospace",
+              fontFamily: TYPOGRAPHY.fontMono,
               color: '#94A3B8',
               maxWidth: 480,
               textAlign: 'center',

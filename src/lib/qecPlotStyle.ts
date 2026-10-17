@@ -28,10 +28,10 @@ export interface LegendGroup {
   entries: LegendEntry[];
 }
 
-/** Teal and purple lead (the product's accent hues); the rest are well separated in hue and lightness. */
+/** Teal leads (the product accent); purple is reserved for Dirac so it only appears as the last slot. */
 export const DISTANCE_PALETTE: Readonly<Record<ThemeMode, readonly string[]>> = {
-  dark: ['#48CAE4', '#C084FC', '#FBBF24', '#FB7185', '#4ADE80', '#7DA2FF', '#FB923C', '#CBD5E1'],
-  light: ['#0891B2', '#6B21A8', '#CA8A04', '#DC2626', '#15803D', '#2563EB', '#C2410C', '#475569'],
+  dark: ['#48CAE4', '#FBBF24', '#FB7185', '#4ADE80', '#7DA2FF', '#FB923C', '#CBD5E1', '#F0ABFC'],
+  light: ['#0891B2', '#CA8A04', '#DC2626', '#15803D', '#2563EB', '#C2410C', '#475569', '#A21CAF'],
 };
 
 export const SHAPES: readonly MarkerShape[] = [

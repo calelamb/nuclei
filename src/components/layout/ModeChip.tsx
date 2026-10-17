@@ -5,6 +5,7 @@ import { useThemeStore } from '../../stores/themeStore';
 import { useWorkspaceStore, type WorkspaceMode } from '../../stores/workspaceStore';
 import { useModeSwitchStore } from '../../stores/modeSwitchStore';
 
+import { TYPOGRAPHY } from '../../styles/tokens';
 /**
  * PRD 11 Phase B — the mode chip.
  *
@@ -32,7 +33,7 @@ export function ModeChip() {
   const buttonRef = useRef<HTMLButtonElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
 
-  const accent = mode === 'research' ? colors.dirac : colors.accent;
+  const accent = mode === 'research' ? colors.modeResearch : colors.accent;
   const meta = MODE_META[mode];
   const Icon = meta.icon;
 
@@ -87,21 +88,23 @@ export function ModeChip() {
         boxShadow: '0 6px 24px rgba(0,0,0,0.28)',
         padding: 4,
         zIndex: 1000,
-        fontFamily: "'Geist Sans', sans-serif",
+        fontFamily: TYPOGRAPHY.fontSans,
       }}
     >
       {(['learn', 'research'] as WorkspaceMode[]).map((m) => {
         const mMeta = MODE_META[m];
         const MIcon = mMeta.icon;
         const isCurrent = m === mode;
-        const mAccent = m === 'research' ? colors.dirac : colors.accent;
+        const mAccent = m === 'research' ? colors.modeResearch : colors.accent;
         return (
           <button
             key={m}
             role="menuitemradio"
             aria-checked={isCurrent}
             onClick={() => pick(m)}
+            className="nuclei-menu-item nuclei-menu-item--tint"
             style={{
+              ...({ '--item-accent': mAccent } as Record<string, string>),
               display: 'flex',
               alignItems: 'center',
               gap: 8,
@@ -114,13 +117,11 @@ export function ModeChip() {
               color: colors.text,
               fontSize: 12,
               textAlign: 'left',
-            }}
-            onMouseEnter={(e) => { e.currentTarget.style.background = `${mAccent}18`; }}
-            onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
+            } as React.CSSProperties}
           >
-            <MIcon size={13} color={mAccent} strokeWidth={2} />
+            <MIcon size={14} color={mAccent} strokeWidth={2} />
             <span style={{ flex: 1 }}>{m === 'research' ? 'Research workspace' : 'Learn quantum computing'}</span>
-            {isCurrent && <Check size={13} color={mAccent} />}
+            {isCurrent && <Check size={14} color={mAccent} />}
           </button>
         );
       })}
@@ -148,13 +149,13 @@ export function ModeChip() {
           borderRadius: 4,
           cursor: 'pointer',
           color: accent,
-          fontSize: 10,
+          fontSize: 11,
           fontWeight: 700,
           letterSpacing: 0.5,
-          fontFamily: "'Geist Sans', sans-serif",
+          fontFamily: TYPOGRAPHY.fontSans,
         }}
       >
-        <Icon size={11} strokeWidth={2.2} />
+        <Icon size={12} strokeWidth={2.2} />
         {meta.label}
       </button>
       {open && createPortal(menu, document.body)}

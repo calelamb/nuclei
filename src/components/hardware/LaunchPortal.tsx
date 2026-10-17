@@ -9,6 +9,7 @@ import { getHardware } from '../../App';
 import { providerAllowsQsharp, QSHARP_GATE_TOOLTIP } from './launchGating';
 import type { HardwareProviderType } from '../../types/hardware';
 
+import { TYPOGRAPHY } from '../../styles/tokens';
 interface ProviderPortalMeta {
   name: HardwareProviderType;
   label: string;
@@ -147,7 +148,7 @@ export function LaunchPortal() {
             textTransform: 'uppercase',
             letterSpacing: 0.5,
             color: colors.textMuted,
-            fontFamily: "'Geist Sans', sans-serif",
+            fontFamily: TYPOGRAPHY.fontSans,
           }}
         >
           Launch
@@ -184,13 +185,13 @@ export function LaunchPortal() {
             gap: 8,
             cursor: 'pointer',
             transition: 'border-color 120ms ease, background 120ms ease',
-            fontFamily: "'Geist Sans', sans-serif",
+            fontFamily: TYPOGRAPHY.fontSans,
           }}
         >
-          <Upload size={18} style={{ color: dragActive ? colors.accent : colors.textMuted }} />
+          <Upload size={16} style={{ color: dragActive ? colors.accent : colors.textMuted }} />
           <div style={{ fontSize: 11, color: colors.text, textAlign: 'center', lineHeight: 1.5 }}>
-            Drop a <code style={{ fontFamily: "'JetBrains Mono', monospace", color: colors.accentLight }}>.py</code>{' '}
-            or <code style={{ fontFamily: "'JetBrains Mono', monospace", color: colors.accentLight }}>.qs</code>{' '}
+            Drop a <code style={{ fontFamily: TYPOGRAPHY.fontMono, color: colors.accentLight }}>.py</code>{' '}
+            or <code style={{ fontFamily: TYPOGRAPHY.fontMono, color: colors.accentLight }}>.qs</code>{' '}
             or click to browse
           </div>
           {activeFileName && (
@@ -199,7 +200,7 @@ export function LaunchPortal() {
                 display: 'flex',
                 alignItems: 'center',
                 gap: 6,
-                fontSize: 10,
+                fontSize: 11,
                 color: colors.textDim,
                 background: `${colors.success}12`,
                 border: `1px solid ${colors.success}30`,
@@ -209,7 +210,7 @@ export function LaunchPortal() {
                 minWidth: 0,
               }}
             >
-              <FileCode size={11} style={{ color: colors.success, flexShrink: 0 }} />
+              <FileCode size={12} style={{ color: colors.success, flexShrink: 0 }} />
               <span
                 style={{
                   overflow: 'hidden',
@@ -236,13 +237,13 @@ export function LaunchPortal() {
       <div style={{ padding: '0 12px 12px' }}>
         <div
           style={{
-            fontSize: 10,
+            fontSize: 11,
             fontWeight: 600,
             textTransform: 'uppercase',
             letterSpacing: 0.5,
             color: colors.textMuted,
             marginBottom: 8,
-            fontFamily: "'Geist Sans', sans-serif",
+            fontFamily: TYPOGRAPHY.fontSans,
           }}
         >
           Choose a destination
@@ -265,7 +266,7 @@ export function LaunchPortal() {
                 padding: 10,
                 cursor: isDisabled ? 'not-allowed' : 'pointer',
                 color: colors.text,
-                fontFamily: "'Geist Sans', sans-serif",
+                fontFamily: TYPOGRAPHY.fontSans,
                 display: 'flex',
                 flexDirection: 'column',
                 gap: 6,
@@ -299,7 +300,7 @@ export function LaunchPortal() {
               <div style={{ fontSize: 11, fontWeight: 600, color: colors.text }}>{p.label}</div>
               <div
                 style={{
-                  fontSize: 10,
+                  fontSize: 11,
                   color: colors.textDim,
                   lineHeight: 1.4,
                   overflow: 'hidden',
@@ -328,15 +329,15 @@ export function LaunchPortal() {
             cursor: 'pointer',
             fontSize: 12,
             fontWeight: 600,
-            fontFamily: "'Geist Sans', sans-serif",
+            fontFamily: TYPOGRAPHY.fontSans,
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
             gap: 6,
           }}
         >
-          <Rocket size={13} /> Open full launcher
-          <span style={{ fontSize: 10, opacity: 0.7, marginLeft: 4 }}>⌘⇧R</span>
+          <Rocket size={14} /> Open full launcher
+          <span style={{ fontSize: 11, opacity: 0.7, marginLeft: 4 }}>⌘⇧R</span>
         </button>
       </div>
 
@@ -345,13 +346,13 @@ export function LaunchPortal() {
         <div style={{ padding: '0 12px 12px' }}>
           <div
             style={{
-              fontSize: 10,
+              fontSize: 11,
               fontWeight: 600,
               textTransform: 'uppercase',
               letterSpacing: 0.5,
               color: colors.textMuted,
               marginBottom: 6,
-              fontFamily: "'Geist Sans', sans-serif",
+              fontFamily: TYPOGRAPHY.fontSans,
             }}
           >
             Active jobs
@@ -369,7 +370,7 @@ export function LaunchPortal() {
                   border: `1px solid ${colors.border}`,
                   borderRadius: 6,
                   fontSize: 11,
-                  fontFamily: "'Geist Sans', sans-serif",
+                  fontFamily: TYPOGRAPHY.fontSans,
                 }}
               >
                 <Loader2
@@ -391,7 +392,7 @@ export function LaunchPortal() {
                   >
                     {j.backend}
                   </div>
-                  <div style={{ color: colors.textDim, fontSize: 10 }}>
+                  <div style={{ color: colors.textDim, fontSize: 11 }}>
                     {j.status}
                     {j.queuePosition !== null && ` · pos ${j.queuePosition}`}
                   </div>
@@ -415,8 +416,8 @@ export function LaunchPortal() {
                     display: 'flex',
                     alignItems: 'center',
                     gap: 2,
-                    fontSize: 10,
-                    fontFamily: "'Geist Sans', sans-serif",
+                    fontSize: 11,
+                    fontFamily: TYPOGRAPHY.fontSans,
                   }}
                   onMouseEnter={(e) => {
                     e.currentTarget.style.color = colors.error;
@@ -427,7 +428,7 @@ export function LaunchPortal() {
                     e.currentTarget.style.borderColor = colors.border;
                   }}
                 >
-                  <X size={10} />
+                  <X size={12} />
                 </button>
               </div>
             ))}
@@ -448,12 +449,12 @@ export function LaunchPortal() {
           >
             <div
               style={{
-                fontSize: 10,
+                fontSize: 11,
                 fontWeight: 600,
                 textTransform: 'uppercase',
                 letterSpacing: 0.5,
                 color: colors.textMuted,
-                fontFamily: "'Geist Sans', sans-serif",
+                fontFamily: TYPOGRAPHY.fontSans,
               }}
             >
               Recent results
@@ -466,8 +467,8 @@ export function LaunchPortal() {
                 color: colors.textDim,
                 cursor: 'pointer',
                 padding: 0,
-                fontSize: 10,
-                fontFamily: "'Geist Sans', sans-serif",
+                fontSize: 11,
+                fontFamily: TYPOGRAPHY.fontSans,
               }}
               onMouseEnter={(e) => { e.currentTarget.style.color = colors.text; }}
               onMouseLeave={(e) => { e.currentTarget.style.color = colors.textDim; }}
@@ -490,7 +491,7 @@ export function LaunchPortal() {
                     border: `1px solid ${colors.success}20`,
                     borderRadius: 6,
                     fontSize: 11,
-                    fontFamily: "'Geist Sans', sans-serif",
+                    fontFamily: TYPOGRAPHY.fontSans,
                   }}
                 >
                   {hasResult ? (
@@ -512,13 +513,13 @@ export function LaunchPortal() {
                     <div
                       style={{
                         color: colors.textDim,
-                        fontSize: 10,
+                        fontSize: 11,
                         display: 'flex',
                         alignItems: 'center',
                         gap: 4,
                       }}
                     >
-                      <Clock size={9} />
+                      <Clock size={12} />
                       {fmtElapsed(j.submittedAt)}
                     </div>
                   </div>

@@ -8,6 +8,7 @@ import { useEducatorStore, type Assignment } from '../../stores/educatorStore';
 import { AssignmentCreator } from './AssignmentCreator';
 import { ProgressReport } from './ProgressReport';
 
+import { TYPOGRAPHY } from '../../styles/tokens';
 /* ── Collapsible Section (matches SettingsPanel pattern) ── */
 
 function Section({ title, icon: Icon, defaultOpen = false, children }: {
@@ -30,8 +31,8 @@ function Section({ title, icon: Icon, defaultOpen = false, children }: {
         <Chevron size={12} />
         {Icon && <Icon size={12} />}
         <span style={{
-          fontSize: 10, fontWeight: 600, textTransform: 'uppercase',
-          letterSpacing: 0.5, fontFamily: "'Geist Sans', sans-serif",
+          fontSize: 11, fontWeight: 600, textTransform: 'uppercase',
+          letterSpacing: 0.5, fontFamily: TYPOGRAPHY.fontSans,
         }}>
           {title}
         </span>
@@ -53,7 +54,7 @@ function Section({ title, icon: Icon, defaultOpen = false, children }: {
 
 export function ClassroomPanel() {
   const colors = useThemeStore((s) => s.colors);
-  const font = "'Geist Sans', sans-serif";
+  const font = TYPOGRAPHY.fontSans;
 
   const isEducator = useEducatorStore((s) => s.isEducator);
   const classroomName = useEducatorStore((s) => s.classroomName);
@@ -165,7 +166,7 @@ export function ClassroomPanel() {
                   flex: 1, padding: '4px 8px', fontSize: 13, fontWeight: 600,
                   fontFamily: font, background: colors.bg,
                   border: `1px solid ${colors.accent}`,
-                  borderRadius: 4, color: colors.text, outline: 'none',
+                  borderRadius: 4, color: colors.text,
                 }}
               />
               <button
@@ -214,11 +215,11 @@ export function ClassroomPanel() {
               alignItems: 'center', padding: '8px 4px', gap: 2,
               borderRight: i < 2 ? `1px solid ${colors.border}` : 'none',
             }}>
-              <stat.icon size={13} color={stat.color} />
+              <stat.icon size={14} color={stat.color} />
               <span style={{ fontSize: 14, fontWeight: 700, color: colors.text }}>
                 {stat.value}
               </span>
-              <span style={{ fontSize: 9, color: colors.textDim, textTransform: 'uppercase', letterSpacing: 0.3 }}>
+              <span style={{ fontSize: 11, color: colors.textDim, textTransform: 'uppercase', letterSpacing: 0.3 }}>
                 {stat.label}
               </span>
             </div>
@@ -246,7 +247,7 @@ export function ClassroomPanel() {
                   }}>
                     {st.name}
                   </div>
-                  <div style={{ fontSize: 10, color: colors.textDim, marginTop: 1 }}>
+                  <div style={{ fontSize: 11, color: colors.textDim, marginTop: 1 }}>
                     {st.exercisesCompleted.length} exercises &middot; {formatDate(st.lastActive)}
                   </div>
                 </div>
@@ -274,7 +275,7 @@ export function ClassroomPanel() {
                 style={{
                   flex: 1, padding: '5px 8px', fontSize: 11, fontFamily: font,
                   background: colors.bg, border: `1px solid ${colors.border}`,
-                  borderRadius: 4, color: colors.text, outline: 'none',
+                  borderRadius: 4, color: colors.text,
                 }}
                 onFocus={(e) => { e.currentTarget.style.borderColor = colors.accent; }}
                 onBlur={(e) => { e.currentTarget.style.borderColor = colors.border; }}
@@ -283,7 +284,7 @@ export function ClassroomPanel() {
                 onClick={handleAddStudent}
                 style={{
                   display: 'flex', alignItems: 'center', gap: 3,
-                  fontSize: 10, fontWeight: 500, fontFamily: font,
+                  fontSize: 11, fontWeight: 500, fontFamily: font,
                   padding: '5px 8px', borderRadius: 4,
                   border: 'none',
                   background: colors.accent,
@@ -292,7 +293,7 @@ export function ClassroomPanel() {
                   flexShrink: 0,
                 }}
               >
-                <Plus size={11} />
+                <Plus size={12} />
                 Add
               </button>
             </div>
@@ -320,7 +321,7 @@ export function ClassroomPanel() {
                   }}>
                     {a.title}
                   </div>
-                  <div style={{ fontSize: 10, color: colors.textDim, marginTop: 1 }}>
+                  <div style={{ fontSize: 11, color: colors.textDim, marginTop: 1 }}>
                     {a.exerciseIds.length} exercises
                     {a.dueDate && <> &middot; Due {formatDate(a.dueDate)}</>}
                   </div>

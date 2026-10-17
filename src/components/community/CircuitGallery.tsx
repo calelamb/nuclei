@@ -6,6 +6,7 @@ import { useEditorStore } from '../../stores/editorStore';
 import { CircuitCard } from './CircuitCard';
 import { CircuitDetail } from './CircuitDetail';
 
+import { TYPOGRAPHY } from '../../styles/tokens';
 const CATEGORIES: { value: string | null; label: string }[] = [
   { value: null, label: 'All' },
   { value: 'tutorial', label: 'Tutorials' },
@@ -74,7 +75,7 @@ export function CircuitGallery() {
     cursor: 'pointer',
     fontSize: 11,
     fontWeight: 500,
-    fontFamily: "'Geist Sans', sans-serif",
+    fontFamily: TYPOGRAPHY.fontSans,
     transition: 'background 0.15s, color 0.15s',
   };
 
@@ -83,7 +84,7 @@ export function CircuitGallery() {
       {/* Search */}
       <div style={{ position: 'relative', flexShrink: 0 }}>
         <Search
-          size={13}
+          size={14}
           style={{
             position: 'absolute',
             left: 8,
@@ -107,8 +108,7 @@ export function CircuitGallery() {
             background: colors.bg,
             color: colors.text,
             fontSize: 12,
-            fontFamily: "'Geist Sans', sans-serif",
-            outline: 'none',
+            fontFamily: TYPOGRAPHY.fontSans,
             boxSizing: 'border-box',
           }}
           onFocus={(e) => {
@@ -142,7 +142,7 @@ export function CircuitGallery() {
 
       {/* Sort */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
-        <span style={{ fontSize: 10, color: colors.textDim, fontFamily: "'Geist Sans', sans-serif" }}>
+        <span style={{ fontSize: 11, color: colors.textDim, fontFamily: TYPOGRAPHY.fontSans }}>
           Sort:
         </span>
         <select
@@ -156,8 +156,7 @@ export function CircuitGallery() {
             padding: '3px 6px',
             fontSize: 11,
             cursor: 'pointer',
-            fontFamily: "'Geist Sans', sans-serif",
-            outline: 'none',
+            fontFamily: TYPOGRAPHY.fontSans,
           }}
         >
           {SORTS.map((s) => (
@@ -199,7 +198,7 @@ export function CircuitGallery() {
               padding: 24,
               color: colors.textDim,
               fontSize: 12,
-              fontFamily: "'Geist Sans', sans-serif",
+              fontFamily: TYPOGRAPHY.fontSans,
             }}
           >
             No community circuits shared yet — publishing isn't live yet.

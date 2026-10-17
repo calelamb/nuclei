@@ -8,6 +8,7 @@ import { requestTranspile } from '../../lib/transpileSender';
 import { ConnectivityMap } from '../hardware/ConnectivityMap';
 import { resolveTargetRequest } from './transpileMath';
 
+import { TYPOGRAPHY } from '../../styles/tokens';
 const DOCS = 'https://getnuclei.dev/docs/developer-tools/transpiler-explorer/';
 const OPT_LEVELS: Array<0 | 1 | 2 | 3> = [0, 1, 2, 3];
 
@@ -47,7 +48,7 @@ export function TranspilerControls() {
 
   const shell: CSSProperties = {
     display: 'flex', flexDirection: 'column', gap: 14, padding: 12,
-    fontFamily: "'Geist Sans', sans-serif", color: colors.text,
+    fontFamily: TYPOGRAPHY.fontSans, color: colors.text,
   };
 
   if (!isQiskit) {
@@ -57,7 +58,7 @@ export function TranspilerControls() {
           <strong style={{ display: 'block', marginBottom: 4, fontSize: 12 }}>
             Transpiler Explorer needs Qiskit
           </strong>
-          <span style={{ fontSize: 11.5, color: colors.textMuted, lineHeight: 1.5 }}>
+          <span style={{ fontSize: 12, color: colors.textMuted, lineHeight: 1.5 }}>
             The active buffer is {framework}. Qiskit is the only framework with an
             introspectable compiler, so the pass-by-pass view is Qiskit-only.
           </span>
@@ -154,7 +155,7 @@ function selectStyle(colors: ThemeColors): CSSProperties {
   return {
     background: colors.bg, color: colors.text,
     border: `1px solid ${colors.border}`, borderRadius: 5,
-    padding: '6px 8px', fontSize: 12, fontFamily: "'Geist Sans', sans-serif", outline: 'none',
+    padding: '6px 8px', fontSize: 12, fontFamily: TYPOGRAPHY.fontSans,
   };
 }
 
@@ -164,7 +165,7 @@ function segBtn(colors: ThemeColors, active: boolean): CSSProperties {
     border: `1px solid ${active ? colors.accent : colors.border}`,
     background: active ? colors.accent : 'transparent',
     color: active ? colors.bg : colors.textMuted,
-    fontSize: 12, fontWeight: 600, fontFamily: "'Geist Mono', monospace",
+    fontSize: 12, fontWeight: 600, fontFamily: TYPOGRAPHY.fontMono,
     cursor: 'pointer', transition: 'background 120ms, color 120ms, border-color 120ms',
   };
 }
@@ -184,7 +185,7 @@ function chip(colors: ThemeColors): CSSProperties {
   return {
     padding: '2px 7px', borderRadius: 4, border: `1px solid ${colors.border}`,
     background: colors.bg, color: colors.textMuted,
-    fontSize: 10.5, fontFamily: "'Geist Mono', monospace",
+    fontSize: 11, fontFamily: TYPOGRAPHY.fontMono,
   };
 }
 

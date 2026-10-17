@@ -3,6 +3,9 @@ import { Canvas } from '@react-three/fiber';
 import { OrbitControls, Line, Html } from '@react-three/drei';
 import * as THREE from 'three';
 
+import { TYPOGRAPHY } from '../../styles/tokens';
+import { useThemeStore } from '../../stores/themeStore';
+import { blochPalette, type BlochPalette } from '../../lib/blochPalette';
 /**
  * Interactive Bloch sphere in the style of the bits-and-electrons
  * simulator (https://github.com/bits-and-electrons/bloch-sphere-simulator).
@@ -20,16 +23,6 @@ import * as THREE from 'three';
  * to (x, y, z). A length shorter than 1 signals a mixed / entangled
  * reduced state (also shown in the readout).
  */
-
-// Axis colors lifted from the reference so our sphere reads the same.
-const AXIS_X_COLOR = '#e05252';
-const AXIS_Y_COLOR = '#3ddc84';
-const AXIS_Z_COLOR = '#4a9eff';
-
-const STATE_COLOR = '#00e5ff';
-const WIRE_COLOR = '#42506a';
-const EQUATOR_COLOR = '#5b6d8a';
-const LABEL_COLOR = '#cdd6e2';
 
 interface BlochCoord {
   x: number;
@@ -68,7 +61,7 @@ function meridianPoints(segments = 96): THREE.Vector3[] {
   return pts;
 }
 
-function StateArrow({ coord }: { coord: BlochCoord }) {
+function StateArrow({ coord, color }: { coord: BlochCoord; color: string }) {
   // Render the vector as a thick line from origin to the tip plus a small
   // sphere at the tip so the state is visible at any camera angle.
   const tip = useMemo(() => new THREE.Vector3(coord.x, coord.z, coord.y), [coord]);
@@ -79,14 +72,14 @@ function StateArrow({ coord }: { coord: BlochCoord }) {
     <group>
       <Line
         points={[new THREE.Vector3(0, 0, 0), tip]}
-        color={STATE_COLOR}
+        color={color}
         lineWidth={2.5}
       />
       <mesh position={tip}>
         <sphereGeometry args={[0.045, 16, 16]} />
         <meshStandardMaterial
-          color={STATE_COLOR}
-          emissive={STATE_COLOR}
+          color={color}
+          emissive={color}
           emissiveIntensity={0.8}
           roughness={0.3}
         />
@@ -95,7 +88,7 @@ function StateArrow({ coord }: { coord: BlochCoord }) {
       {len > 0.02 && (
         <mesh position={tip.clone().multiplyScalar(0.97)}>
           <sphereGeometry args={[0.022, 12, 12]} />
-          <meshBasicMaterial color={STATE_COLOR} />
+          <meshBasicMaterial color={color} />
         </mesh>
       )}
     </group>
@@ -124,7 +117,7 @@ function AxisLine({
         zIndexRange={[10, 0]}
         style={{
           color,
-          fontFamily: "'Geist Sans', sans-serif",
+          fontFamily: TYPOGRAPHY.fontSans,
           fontSize: 11,
           fontWeight: 600,
           pointerEvents: 'none',
@@ -144,6 +137,8 @@ export function ClassicBlochSphere({
   qubitLabel,
   size,
 }: ClassicBlochSphereProps) {
+  const mode = useThemeStore((st) => st.mode);
+  const palette: BlochPalette = blochPalette(mode);
   const equator = useMemo(() => equatorPoints(), []);
   const meridianA = useMemo(() => meridianPoints(), []);
   const meridianB = useMemo(() => {
@@ -176,22 +171,22 @@ export function ClassicBlochSphere({
         <mesh>
           <sphereGeometry args={[1, 48, 48]} />
           <meshBasicMaterial
-            color="#0d1520"
+            color={palette.shell}
             transparent
-            opacity={0.18}
+            opacity={palette.shellOpacity}
             side={THREE.BackSide}
           />
         </mesh>
 
         {/* Wireframe: equator + two meridians. */}
-        <Line points={equator} color={EQUATOR_COLOR} lineWidth={0.8} />
-        <Line points={meridianA} color={WIRE_COLOR} lineWidth={0.6} />
-        <Line points={meridianB} color={WIRE_COLOR} lineWidth={0.6} />
+        <Line points={equator} color={palette.equator} lineWidth={0.8} />
+        <Line points={meridianA} color={palette.wire} lineWidth={0.6} />
+        <Line points={meridianB} color={palette.wire} lineWidth={0.6} />
 
         {/* Cartesian axes: note world-Y is kernel-Z so |0⟩ reads as up. */}
-        <AxisLine dir="y" color={AXIS_Z_COLOR} label="Z" />
-        <AxisLine dir="x" color={AXIS_X_COLOR} label="X" />
-        <AxisLine dir="z" color={AXIS_Y_COLOR} label="Y" />
+        <AxisLine dir="y" color={palette.axisZ} label="Z" />
+        <AxisLine dir="x" color={palette.axisX} label="X" />
+        <AxisLine dir="z" color={palette.axisY} label="Y" />
 
         {/* Basis state labels at the poles. Rendered as DOM overlays via
             drei <Html> so we don't depend on any external font load (which
@@ -201,8 +196,8 @@ export function ClassicBlochSphere({
           center
           zIndexRange={[10, 0]}
           style={{
-            color: LABEL_COLOR,
-            fontFamily: "'Geist Sans', sans-serif",
+            color: palette.label,
+            fontFamily: TYPOGRAPHY.fontSans,
             fontSize: 11,
             fontWeight: 500,
             pointerEvents: 'none',
@@ -217,8 +212,8 @@ export function ClassicBlochSphere({
           center
           zIndexRange={[10, 0]}
           style={{
-            color: LABEL_COLOR,
-            fontFamily: "'Geist Sans', sans-serif",
+            color: palette.label,
+            fontFamily: TYPOGRAPHY.fontSans,
             fontSize: 11,
             fontWeight: 500,
             pointerEvents: 'none',
@@ -230,7 +225,7 @@ export function ClassicBlochSphere({
         </Html>
 
         {/* State vector. */}
-        {coord && <StateArrow coord={coord} />}
+        {coord && <StateArrow coord={coord} color={palette.state} />}
 
         <OrbitControls
           enablePan={false}
@@ -251,9 +246,9 @@ export function ClassicBlochSphere({
             position: 'absolute',
             left: 8,
             bottom: 6,
-            color: LABEL_COLOR,
+            color: palette.label,
             opacity: 0.72,
-            fontFamily: "'Geist Sans', sans-serif",
+            fontFamily: TYPOGRAPHY.fontSans,
             fontSize: 11,
             letterSpacing: 0.3,
             pointerEvents: 'none',

@@ -10,6 +10,7 @@ import { HintPanel } from './HintPanel';
 import { SubmissionHistory } from './SubmissionHistory';
 import type { ChallengeDifficulty } from '../../types/challenge';
 
+import { TYPOGRAPHY } from '../../styles/tokens';
 const DIFFICULTY_COLORS: Record<ChallengeDifficulty, string> = {
   easy: '#10B981',
   medium: '#F59E0B',
@@ -40,7 +41,7 @@ function WorkspaceTabButton({
         color: active ? colors.text : colors.textMuted,
         fontSize: 12,
         fontWeight: active ? 600 : 500,
-        fontFamily: "'Geist Sans', sans-serif",
+        fontFamily: TYPOGRAPHY.fontSans,
         cursor: 'pointer',
       }}
     >
@@ -116,7 +117,7 @@ export function ProblemWorkspace() {
               color: diffColor,
               fontSize: 11,
               fontWeight: 600,
-              fontFamily: "'Geist Sans', sans-serif",
+              fontFamily: TYPOGRAPHY.fontSans,
               textTransform: 'capitalize',
             }}>
               {activeProblem.difficulty}
@@ -124,7 +125,7 @@ export function ProblemWorkspace() {
             <span style={{
               color: colors.textMuted,
               fontSize: 11,
-              fontFamily: "'Geist Sans', sans-serif",
+              fontFamily: TYPOGRAPHY.fontSans,
               textTransform: 'uppercase',
               letterSpacing: 0.4,
             }}>
@@ -142,21 +143,21 @@ export function ProblemWorkspace() {
                   background: `${colors.success}16`,
                   border: `1px solid ${colors.success}44`,
                   color: colors.success,
-                  fontSize: 10.5,
+                  fontSize: 11,
                   fontWeight: 700,
-                  fontFamily: "'Geist Sans', sans-serif",
+                  fontFamily: TYPOGRAPHY.fontSans,
                 }}
               >
-                <ShieldCheck size={11} />
+                <ShieldCheck size={12} />
                 State-verified
               </span>
             )}
           </div>
           <div style={{
             color: colors.text,
-            fontSize: 18,
+            fontSize: 16,
             fontWeight: 700,
-            fontFamily: "'Geist Sans', sans-serif",
+            fontFamily: TYPOGRAPHY.fontSans,
             overflow: 'hidden',
             textOverflow: 'ellipsis',
             whiteSpace: 'nowrap',
@@ -171,7 +172,7 @@ export function ProblemWorkspace() {
           gap: 14,
           color: colors.textMuted,
           fontSize: 12,
-          fontFamily: "'Geist Sans', sans-serif",
+          fontFamily: TYPOGRAPHY.fontSans,
           flexWrap: 'wrap',
           justifyContent: 'flex-end',
         }}>
@@ -271,7 +272,7 @@ export function ProblemWorkspace() {
           borderTop: `1px solid ${colors.border}`,
           color: colors.textMuted,
           fontSize: 11,
-          fontFamily: "'Geist Sans', sans-serif",
+          fontFamily: TYPOGRAPHY.fontSans,
           cursor: 'pointer',
           textAlign: 'left',
         }}

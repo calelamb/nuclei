@@ -22,7 +22,7 @@ export function QecPanelPinButton({ panel }: QecPanelPinButtonProps): ReactEleme
       title={`${action} ${panel.title} across workspace presets`}
       onClick={() => pinned ? unpinPanel(panel.id) : pinPanel(panel.id)}
     >
-      <Pin aria-hidden="true" size={15} fill={pinned ? 'currentColor' : 'none'} />
+      <Pin aria-hidden="true" size={16} fill={pinned ? 'currentColor' : 'none'} />
     </button>
   );
 }

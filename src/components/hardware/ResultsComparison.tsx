@@ -1,6 +1,7 @@
 import { useMemo } from 'react';
 import { useThemeStore } from '../../stores/themeStore';
 
+import { TYPOGRAPHY } from '../../styles/tokens';
 interface ResultsComparisonProps {
   simulatorResult: Record<string, number> | null;
   hardwareResult: Record<string, number> | null;
@@ -36,7 +37,7 @@ export function ResultsComparison({
   }, [simulatorResult, hardwareResult]);
 
   const font: React.CSSProperties = {
-    fontFamily: "'Geist Sans', sans-serif",
+    fontFamily: TYPOGRAPHY.fontSans,
   };
 
   return (
@@ -49,14 +50,14 @@ export function ResultsComparison({
           marginBottom: 8,
         }}
       >
-        <div style={{ flex: 1, fontSize: 10, fontWeight: 600, color: colors.accent, ...font }}>
+        <div style={{ flex: 1, fontSize: 11, fontWeight: 600, color: colors.accent, ...font }}>
           Simulator
         </div>
         <div style={{ width: 44 }} />
         <div
           style={{
             flex: 1,
-            fontSize: 10,
+            fontSize: 11,
             fontWeight: 600,
             color: colors.accentLight,
             textAlign: 'right',
@@ -99,7 +100,7 @@ export function ResultsComparison({
           >
             {/* Simulator bar (right-aligned) */}
             <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 4 }}>
-              <span style={{ fontSize: 9, color: colors.textDim, ...font }}>{simPct}%</span>
+              <span style={{ fontSize: 11, color: colors.textDim, ...font }}>{simPct}%</span>
               <div
                 style={{
                   height: 10,
@@ -116,9 +117,9 @@ export function ResultsComparison({
               style={{
                 width: 44,
                 textAlign: 'center',
-                fontSize: 9,
+                fontSize: 11,
                 color: colors.textMuted,
-                fontFamily: "'JetBrains Mono', monospace",
+                fontFamily: TYPOGRAPHY.fontMono,
                 flexShrink: 0,
               }}
             >
@@ -136,7 +137,7 @@ export function ResultsComparison({
                   borderRadius: 2,
                 }}
               />
-              <span style={{ fontSize: 9, color: colors.textDim, ...font }}>{hwPct}%</span>
+              <span style={{ fontSize: 11, color: colors.textDim, ...font }}>{hwPct}%</span>
             </div>
           </div>
         );
@@ -144,12 +145,12 @@ export function ResultsComparison({
 
       {/* Placeholder when only one side has data */}
       {simulatorResult && !hardwareResult && allKeys.length > 0 && (
-        <div style={{ fontSize: 10, color: colors.textDim, textAlign: 'center', marginTop: 8, ...font }}>
+        <div style={{ fontSize: 11, color: colors.textDim, textAlign: 'center', marginTop: 8, ...font }}>
           Run on hardware to compare
         </div>
       )}
       {!simulatorResult && hardwareResult && allKeys.length > 0 && (
-        <div style={{ fontSize: 10, color: colors.textDim, textAlign: 'center', marginTop: 8, ...font }}>
+        <div style={{ fontSize: 11, color: colors.textDim, textAlign: 'center', marginTop: 8, ...font }}>
           Run simulator to compare
         </div>
       )}

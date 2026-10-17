@@ -10,6 +10,7 @@ import { DIRAC_API_URL, SONNET_MODEL } from '../../../config/dirac';
 import { QSHARP_STYLE_GUIDE } from '../../../services/qsharpStyle';
 import { kernelLanguageFor } from '../../../types/quantum';
 
+import { TYPOGRAPHY } from '../../../styles/tokens';
 const HISTORY_KEY = 'cmdk_history';
 const MAX_HISTORY = 20;
 
@@ -171,22 +172,22 @@ export function InlineEditWidget({ editor, monaco, onClose }: InlineEditProps) {
     }}>
       {/* Input */}
       <div style={{ display: 'flex', alignItems: 'center', padding: '6px 10px', gap: 8 }}>
-        <span style={{ color: colors.accent, fontSize: 12, fontWeight: 600, fontFamily: "'Fira Code', monospace" }}>⌘K</span>
+        <span style={{ color: colors.accent, fontSize: 12, fontWeight: 600, fontFamily: TYPOGRAPHY.fontMono }}>⌘K</span>
         <input
           ref={inputRef}
           value={instruction}
           onChange={(e) => { setInstruction(e.target.value); setHistoryIdx(-1); }}
           onKeyDown={handleKeyDown}
           placeholder="Describe the change..."
+            className="nuclei-bare-input"
           disabled={loading}
           style={{
             flex: 1,
             background: 'transparent',
             border: 'none',
-            outline: 'none',
             color: colors.text,
             fontSize: 13,
-            fontFamily: 'Inter, sans-serif',
+            fontFamily: TYPOGRAPHY.fontSans,
           }}
         />
         {loading && <span style={{ color: colors.accent, fontSize: 11 }}>Thinking...</span>}
@@ -194,7 +195,7 @@ export function InlineEditWidget({ editor, monaco, onClose }: InlineEditProps) {
 
       {/* Error */}
       {error && !loading && (
-        <div style={{ padding: '0 10px 8px', color: colors.error, fontSize: 11.5, fontFamily: 'Inter, sans-serif', lineHeight: 1.4 }}>
+        <div style={{ padding: '0 10px 8px', color: colors.error, fontSize: 12, fontFamily: TYPOGRAPHY.fontSans, lineHeight: 1.4 }}>
           {error}
         </div>
       )}
@@ -210,7 +211,7 @@ export function InlineEditWidget({ editor, monaco, onClose }: InlineEditProps) {
               borderRadius: 4,
               color: '#98C379',
               fontSize: 12,
-              fontFamily: "'Fira Code', monospace",
+              fontFamily: TYPOGRAPHY.fontMono,
               overflow: 'auto',
               maxHeight: 200,
             }}>
@@ -220,13 +221,13 @@ export function InlineEditWidget({ editor, monaco, onClose }: InlineEditProps) {
           <div style={{ display: 'flex', gap: 6, padding: '6px 10px', borderTop: `1px solid ${colors.border}` }}>
             <button
               onClick={handleAccept}
-              style={{ padding: '4px 12px', background: '#98C379', color: '#fff', border: 'none', borderRadius: 3, cursor: 'pointer', fontSize: 12, fontFamily: 'Inter, sans-serif' }}
+              style={{ padding: '4px 12px', background: '#98C379', color: '#fff', border: 'none', borderRadius: 3, cursor: 'pointer', fontSize: 12, fontFamily: TYPOGRAPHY.fontSans }}
             >
               Apply (⌘+Enter)
             </button>
             <button
               onClick={onClose}
-              style={{ padding: '4px 12px', background: colors.border, color: colors.text, border: 'none', borderRadius: 3, cursor: 'pointer', fontSize: 12, fontFamily: 'Inter, sans-serif' }}
+              style={{ padding: '4px 12px', background: colors.border, color: colors.text, border: 'none', borderRadius: 3, cursor: 'pointer', fontSize: 12, fontFamily: TYPOGRAPHY.fontSans }}
             >
               Dismiss (Esc)
             </button>

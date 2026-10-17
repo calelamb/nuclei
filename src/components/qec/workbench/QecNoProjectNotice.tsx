@@ -4,7 +4,8 @@ import { describeMapping } from '../../../lib/qecMappingSummary';
 import { useQecCampaignStore } from '../../../stores/qecCampaignStore';
 import { useThemeStore } from '../../../stores/themeStore';
 
-const FONT = "'Geist Sans', sans-serif";
+import { TYPOGRAPHY } from '../../../styles/tokens';
+const FONT = TYPOGRAPHY.fontSans;
 
 /** Sidebar content when no project folder is open (always the case in the web
  * build): says what still works here, and what the loaded CSV is. */
@@ -17,7 +18,7 @@ export function QecNoProjectNotice() {
     <div style={{ display: 'grid', gap: 10, padding: 12, fontFamily: FONT }}>
       {csv ? (
         <section aria-label="Loaded CSV" style={{ display: 'grid', gap: 3 }}>
-          <div style={{ display: 'flex', gap: 5, alignItems: 'center', color: colors.textMuted, fontSize: 10, fontWeight: 600 }}>
+          <div style={{ display: 'flex', gap: 5, alignItems: 'center', color: colors.textMuted, fontSize: 11, fontWeight: 600 }}>
             <FileSpreadsheet size={12} />LOADED CSV
           </div>
           <div style={{ color: colors.text, fontSize: 12, fontWeight: 600, wordBreak: 'break-all' }}>{csv.sourceName}</div>

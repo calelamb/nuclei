@@ -8,6 +8,8 @@ import { decoderComparison, formatSecondsPerShot } from '../../lib/qecWorkbench'
 import { isWebBuild } from '../../platform/buildTarget';
 import { downloadCsv } from '../../services/experimentExport';
 
+import { TYPOGRAPHY, ICON_SIZE, ICON_STROKE } from '../../styles/tokens';
+import { Button } from '../ui';
 const DOCS = 'https://getnuclei.dev/docs/research/qec-studio/';
 
 /**
@@ -49,18 +51,9 @@ export function DecoderWorkbench() {
       helpHref={DOCS}
       actions={
         wb.length > 0 ? (
-          <button
-            onClick={exportCsv}
-            title="Export CSV"
-            aria-label="Export CSV"
-            style={{
-              display: 'flex', alignItems: 'center', gap: 4, background: 'transparent',
-              border: `1px solid ${colors.border}`, borderRadius: 4, color: colors.textMuted,
-              cursor: 'pointer', fontSize: 11, padding: '4px 8px', fontFamily: "'Geist Sans', sans-serif",
-            }}
-          >
-            <Download size={12} /> CSV
-          </button>
+          <Button size="sm" onClick={exportCsv} title="Export CSV" aria-label="Export CSV" icon={<Download size={ICON_SIZE.xs} strokeWidth={ICON_STROKE} />}>
+            CSV
+          </Button>
         ) : undefined
       }
     />
@@ -78,13 +71,16 @@ export function DecoderWorkbench() {
   }
 
   const th: React.CSSProperties = {
-    textAlign: 'left', padding: '6px 10px', color: colors.textMuted, fontSize: 10,
-    fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.4, borderBottom: `1px solid ${colors.border}`,
+    textAlign: 'left', padding: '6px 10px', color: colors.textMuted, fontSize: 11,
+    fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.4, borderBottom: `1px solid ${colors.borderStrong}`,
+    position: 'sticky', top: 0, background: colors.bg, zIndex: 1,
   };
+  const thNum: React.CSSProperties = { ...th, textAlign: 'right' };
   const td: React.CSSProperties = {
-    padding: '6px 10px', fontSize: 11, color: colors.text, borderBottom: `1px solid ${colors.border}`,
-    fontFamily: "'Fira Code', monospace",
+    padding: '6px 10px', fontSize: 12, color: colors.text, borderBottom: `1px solid ${colors.border}`,
+    fontFamily: TYPOGRAPHY.fontMono, fontVariantNumeric: 'tabular-nums',
   };
+  const tdNum: React.CSSProperties = { ...td, textAlign: 'right' };
   const collisionTag = (w: (typeof wb)[number]) =>
     w.collides ? (
       <span title={`Another task has the same experiment, d and p (strong_id ${w.strongId}); shown separately, not pooled.`}
@@ -96,37 +92,37 @@ export function DecoderWorkbench() {
     <div style={{ height: '100%', display: 'flex', flexDirection: 'column', background: colors.bg }}>
       {header}
       <div style={{ flex: 1, minHeight: 0, overflow: 'auto' }}>
-        <table style={{ width: '100%', borderCollapse: 'collapse', fontFamily: "'Geist Sans', sans-serif" }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse', fontFamily: TYPOGRAPHY.fontSans }}>
           <thead>
             <tr>
               <th style={th}>Decoder</th>
               {showExperiment && <th style={th}>Experiment</th>}
-              <th style={th}>d</th>
-              <th style={th}>p</th>
-              <th style={th}>Logical error rate (per shot)</th>
-              <th style={th}>Kept shots</th>
-              <th style={th}>Discards</th>
-              <th style={th}>Errors</th>
-              <th style={th} title="CPU core-seconds per shot (sampling + decoding), from sinter's seconds column">Time / shot</th>
+              <th style={thNum}>d</th>
+              <th style={thNum}>p</th>
+              <th style={thNum}>Logical error rate (per shot)</th>
+              <th style={thNum}>Kept shots</th>
+              <th style={thNum}>Discards</th>
+              <th style={thNum}>Errors</th>
+              <th style={thNum} title="CPU core-seconds per shot (sampling + decoding), from sinter's seconds column">Time / shot</th>
             </tr>
           </thead>
           <tbody>
             {wb.map((w) => (
               <tr key={`${w.experiment}|${w.decoder}|${w.distance}|${w.noise}|${w.strongId}`}>
-                <td style={{ ...td, color: colors.dirac, fontWeight: 600 }}>{w.decoder}</td>
+                <td style={{ ...td, color: colors.text, fontWeight: 500 }}>{w.decoder}</td>
                 {showExperiment && <td style={td}>{w.context}{collisionTag(w)}</td>}
-                <td style={td}>{w.distance ?? '—'}{!showExperiment && collisionTag(w)}</td>
-                <td style={td}>{w.noise ?? '—'}</td>
-                <td style={td}>
+                <td style={tdNum}>{w.distance ?? '—'}{!showExperiment && collisionTag(w)}</td>
+                <td style={tdNum}>{w.noise ?? '—'}</td>
+                <td style={tdNum}>
                   {pct(w.rate.p)}{' '}
-                  <span style={{ color: colors.textMuted, fontSize: 10.5 }}>
+                  <span style={{ color: colors.textMuted, fontSize: 11 }}>
                     [{pct(w.rate.lo)}, {pct(w.rate.hi)}]
                   </span>
                 </td>
-                <td style={td}>{w.kept.toLocaleString()}</td>
-                <td style={td}>{w.discards.toLocaleString()}</td>
-                <td style={td}>{w.errors.toLocaleString()}</td>
-                <td style={td}>{formatSecondsPerShot(w.secondsPerShot)}</td>
+                <td style={tdNum}>{w.kept.toLocaleString()}</td>
+                <td style={tdNum}>{w.discards.toLocaleString()}</td>
+                <td style={tdNum}>{w.errors.toLocaleString()}</td>
+                <td style={tdNum}>{formatSecondsPerShot(w.secondsPerShot)}</td>
               </tr>
             ))}
           </tbody>
@@ -134,8 +130,8 @@ export function DecoderWorkbench() {
       </div>
       <div
         style={{
-          padding: '5px 10px', fontSize: 10, color: colors.textDim,
-          borderTop: `1px solid ${colors.border}`, fontFamily: "'Geist Sans', sans-serif",
+          padding: '6px 10px', fontSize: 11, color: colors.textDim,
+          borderTop: `1px solid ${colors.border}`, fontFamily: TYPOGRAPHY.fontSans,
         }}
       >
         {!showExperiment && contexts[0] !== '' && `Experiment: ${contexts[0]}. `}

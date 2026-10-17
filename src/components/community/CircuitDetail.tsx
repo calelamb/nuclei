@@ -3,6 +3,7 @@ import { X, Copy, Play } from 'lucide-react';
 import { useThemeStore } from '../../stores/themeStore';
 import type { GalleryCircuit } from '../../data/community/mockGallery';
 
+import { TYPOGRAPHY } from '../../styles/tokens';
 const FRAMEWORK_COLORS: Record<string, string> = {
   qiskit: '#6929C4',
   cirq: '#F4B400',
@@ -78,7 +79,7 @@ export function CircuitDetail({ circuit, onClose, onOpenInEditor }: CircuitDetai
                 fontSize: 16,
                 fontWeight: 700,
                 color: colors.text,
-                fontFamily: "'Geist Sans', sans-serif",
+                fontFamily: TYPOGRAPHY.fontSans,
               }}
             >
               {circuit.title}
@@ -88,16 +89,16 @@ export function CircuitDetail({ circuit, onClose, onOpenInEditor }: CircuitDetai
                 style={{
                   fontSize: 12,
                   color: colors.textMuted,
-                  fontFamily: "'Geist Sans', sans-serif",
+                  fontFamily: TYPOGRAPHY.fontSans,
                 }}
               >
                 by {circuit.author.displayName}
               </span>
               <span
                 style={{
-                  fontSize: 9,
+                  fontSize: 11,
                   fontWeight: 600,
-                  fontFamily: "'Geist Sans', sans-serif",
+                  fontFamily: TYPOGRAPHY.fontSans,
                   color: '#fff',
                   background: FRAMEWORK_COLORS[circuit.framework] ?? colors.accent,
                   padding: '2px 6px',
@@ -123,7 +124,7 @@ export function CircuitDetail({ circuit, onClose, onOpenInEditor }: CircuitDetai
               flexShrink: 0,
             }}
           >
-            <X size={18} />
+            <X size={16} />
           </button>
         </div>
 
@@ -134,7 +135,7 @@ export function CircuitDetail({ circuit, onClose, onOpenInEditor }: CircuitDetai
             style={{
               fontSize: 12,
               color: colors.textMuted,
-              fontFamily: "'Geist Sans', sans-serif",
+              fontFamily: TYPOGRAPHY.fontSans,
               lineHeight: 1.6,
               margin: '0 0 16px',
             }}
@@ -148,8 +149,8 @@ export function CircuitDetail({ circuit, onClose, onOpenInEditor }: CircuitDetai
               <span
                 key={tag}
                 style={{
-                  fontSize: 10,
-                  fontFamily: "'Geist Sans', sans-serif",
+                  fontSize: 11,
+                  fontFamily: TYPOGRAPHY.fontSans,
                   color: colors.accent,
                   background: `${colors.accent}15`,
                   padding: '2px 8px',
@@ -176,7 +177,7 @@ export function CircuitDetail({ circuit, onClose, onOpenInEditor }: CircuitDetai
             <code
               style={{
                 fontSize: 12,
-                fontFamily: "'JetBrains Mono', monospace",
+                fontFamily: TYPOGRAPHY.fontMono,
                 color: colors.text,
                 whiteSpace: 'pre-wrap',
                 wordBreak: 'break-word',
@@ -203,11 +204,11 @@ export function CircuitDetail({ circuit, onClose, onOpenInEditor }: CircuitDetai
                 color: '#fff',
                 fontSize: 12,
                 fontWeight: 600,
-                fontFamily: "'Geist Sans', sans-serif",
+                fontFamily: TYPOGRAPHY.fontSans,
                 cursor: 'pointer',
               }}
             >
-              <Play size={13} />
+              <Play size={14} />
               Open in Editor
             </button>
             <button
@@ -224,12 +225,12 @@ export function CircuitDetail({ circuit, onClose, onOpenInEditor }: CircuitDetai
                 color: copied ? colors.success : colors.textMuted,
                 fontSize: 12,
                 fontWeight: 600,
-                fontFamily: "'Geist Sans', sans-serif",
+                fontFamily: TYPOGRAPHY.fontSans,
                 cursor: 'pointer',
                 transition: 'color 0.15s',
               }}
             >
-              <Copy size={13} />
+              <Copy size={14} />
               {copied ? 'Copied!' : 'Copy Code'}
             </button>
           </div>
@@ -246,7 +247,7 @@ export function CircuitDetail({ circuit, onClose, onOpenInEditor }: CircuitDetai
               style={{
                 fontSize: 12,
                 color: colors.textDim,
-                fontFamily: "'Geist Sans', sans-serif",
+                fontFamily: TYPOGRAPHY.fontSans,
                 fontStyle: 'italic',
               }}
             >

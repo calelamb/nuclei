@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { MousePointerClick } from 'lucide-react';
 import { useThemeStore } from '../../stores/themeStore';
 import { useQecStore } from '../../stores/qecStore';
+import { Button } from '../ui/Button';
 import { PanelHeader } from '../layout/PanelHeader';
 import { QecEmptyState } from './QecEmptyState';
 import { CircuitExplainPanel } from './CircuitExplainPanel';
@@ -12,6 +13,7 @@ import { decodeSyndrome, isDecoderAvailable } from '../../lib/qecDecoderWasm';
 import { parseDemGraphWasm, type DemDetectorGraph } from '../../lib/qecDemWasm';
 import { requestQecDecodeSample, requestQecSnapshot } from '../../lib/qecDecodeSender';
 
+import { TYPOGRAPHY } from '../../styles/tokens';
 const DOCS = 'https://getnuclei.dev/docs/kernel-api/messages-qec/';
 
 /** The in-app interactive decoder is the WASM greedy matcher, not PyMatching. */
@@ -140,8 +142,8 @@ export function DetectorGraphPanel() {
                 data-testid="interactive-decoder-label"
                 title="Interactive decoding runs a fast greedy matcher in the app. Use Sample a shot (PyMatching) or a campaign for accurate decoding."
                 style={{
-                  fontSize: 10, color: colors.warning, border: `1px solid ${colors.warning}`,
-                  borderRadius: 3, padding: '1px 5px', fontFamily: "'Geist Sans', sans-serif",
+                  fontSize: 11, color: colors.warning, border: `1px solid ${colors.warning}`,
+                  borderRadius: 3, padding: '1px 5px', fontFamily: TYPOGRAPHY.fontSans,
                 }}
               >
                 {INTERACTIVE_DECODER_LABEL}
@@ -157,7 +159,7 @@ export function DetectorGraphPanel() {
                   color: interactive ? '#fff' : colors.text,
                   border: `1px solid ${interactive ? colors.accent : colors.border}`,
                   borderRadius: 4, cursor: 'pointer', fontSize: 11, padding: '4px 9px',
-                  fontFamily: "'Geist Sans', sans-serif",
+                  fontFamily: TYPOGRAPHY.fontSans,
                 }}
               >
                 <MousePointerClick size={12} />
@@ -165,19 +167,15 @@ export function DetectorGraphPanel() {
               </button>
             )}
             {circuitText && !interactive && (
-              <button
+              <Button
+                variant="primary"
+                size="sm"
                 onClick={() => requestQecDecodeSample(circuitText)}
                 disabled={decodePending}
                 title="Sample one shot and decode it"
-                style={{
-                  display: 'flex', alignItems: 'center', gap: 4,
-                  background: colors.dirac, color: '#fff', border: 'none', borderRadius: 4,
-                  cursor: decodePending ? 'default' : 'pointer', fontSize: 11, padding: '4px 9px',
-                  opacity: decodePending ? 0.6 : 1, fontFamily: "'Geist Sans', sans-serif",
-                }}
               >
                 {decodePending ? 'Sampling…' : 'Sample a shot'}
-              </button>
+              </Button>
             )}
           </div>
         ) : undefined
@@ -218,7 +216,7 @@ export function DetectorGraphPanel() {
           style={{
             display: 'flex', alignItems: 'center', gap: 10, padding: '6px 12px',
             fontSize: 11, color: colors.warning, borderBottom: `1px solid ${colors.border}`,
-            fontFamily: "'Geist Sans', sans-serif",
+            fontFamily: TYPOGRAPHY.fontSans,
           }}
         >
           <span>
@@ -232,7 +230,7 @@ export function DetectorGraphPanel() {
             style={{
               background: 'transparent', border: `1px solid ${colors.border}`, borderRadius: 4,
               color: colors.text, cursor: clientRendering ? 'default' : 'pointer', fontSize: 11, padding: '3px 8px',
-              opacity: clientRendering ? 0.6 : 1, fontFamily: "'Geist Sans', sans-serif",
+              opacity: clientRendering ? 0.6 : 1, fontFamily: TYPOGRAPHY.fontSans,
             }}
           >
             {clientRendering ? 'Rendering…' : 'Render full graph'}
@@ -243,8 +241,8 @@ export function DetectorGraphPanel() {
         <div
           style={{
             display: 'flex', alignItems: 'center', gap: 6, padding: '5px 12px',
-            fontSize: 10, color: colors.accent, borderBottom: `1px solid ${colors.border}`,
-            fontFamily: "'Geist Sans', sans-serif",
+            fontSize: 11, color: colors.accent, borderBottom: `1px solid ${colors.border}`,
+            fontFamily: TYPOGRAPHY.fontSans,
           }}
         >
           Full graph rendered in-app · {clientDem.edge_count} edges + {clientDem.boundary_edge_count} boundary
@@ -254,8 +252,8 @@ export function DetectorGraphPanel() {
       {snapshot.dem.hyperedges_count > 0 && (
         <div
           style={{
-            padding: '5px 12px', fontSize: 10, color: colors.textDim,
-            borderBottom: `1px solid ${colors.border}`, fontFamily: "'Geist Sans', sans-serif",
+            padding: '5px 12px', fontSize: 11, color: colors.textDim,
+            borderBottom: `1px solid ${colors.border}`, fontFamily: TYPOGRAPHY.fontSans,
           }}
         >
           Pairwise projection shown · {snapshot.dem.hyperedges_count} hyperedge(s) not drawn
@@ -274,11 +272,11 @@ export function DetectorGraphPanel() {
           style={{
             display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap',
             padding: '6px 12px', fontSize: 11, borderTop: `1px solid ${colors.border}`,
-            fontFamily: "'Geist Sans', sans-serif",
+            fontFamily: TYPOGRAPHY.fontSans,
           }}
         >
           <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, color: colors.textMuted }}>
-            <MousePointerClick size={11} /> Click detectors to toggle the syndrome
+            <MousePointerClick size={12} /> Click detectors to toggle the syndrome
           </span>
           {syndrome.size > 0 ? (
             <span style={{ color: interactiveOverlay?.logicalError ? colors.error : colors.success }}>
@@ -293,8 +291,8 @@ export function DetectorGraphPanel() {
               onClick={() => setSyndrome(new Set())}
               style={{
                 marginLeft: 'auto', background: 'transparent', border: `1px solid ${colors.border}`,
-                borderRadius: 4, color: colors.textMuted, cursor: 'pointer', fontSize: 10, padding: '2px 7px',
-                fontFamily: "'Geist Sans', sans-serif",
+                borderRadius: 4, color: colors.textMuted, cursor: 'pointer', fontSize: 11, padding: '2px 7px',
+                fontFamily: TYPOGRAPHY.fontSans,
               }}
             >
               Clear
@@ -307,7 +305,7 @@ export function DetectorGraphPanel() {
           style={{
             padding: '6px 12px', fontSize: 11, borderTop: `1px solid ${colors.border}`,
             color: overlay.logicalError ? colors.error : colors.success,
-            fontFamily: "'Geist Sans', sans-serif",
+            fontFamily: TYPOGRAPHY.fontSans,
           }}
         >
           {overlay.firedDetectors.size} detector(s) fired · {overlay.matchedEdges.length} matched ·{' '}

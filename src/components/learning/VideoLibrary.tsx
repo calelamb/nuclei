@@ -5,6 +5,7 @@ import type { CuratedVideo } from '../../data/videos/curatedLibrary';
 import { Play } from 'lucide-react';
 import { openExternal, buildYouTubeWatchUrl } from '../../lib/openExternal';
 
+import { TYPOGRAPHY } from '../../styles/tokens';
 type CreatorFilter = 'all' | CuratedVideo['creator'];
 type DifficultyFilter = 'all' | CuratedVideo['difficulty'];
 
@@ -117,8 +118,8 @@ function VideoCard({
           right: 3,
           background: 'rgba(0,0,0,0.75)',
           color: '#fff',
-          fontSize: 9,
-          fontFamily: "'Geist Mono', monospace",
+          fontSize: 11,
+          fontFamily: TYPOGRAPHY.fontMono,
           padding: '1px 4px',
           borderRadius: 2,
         }}>
@@ -132,7 +133,7 @@ function VideoCard({
           color: colors.text,
           fontSize: 12,
           fontWeight: 500,
-          fontFamily: "'Geist Sans', sans-serif",
+          fontFamily: TYPOGRAPHY.fontSans,
           lineHeight: 1.3,
           overflow: 'hidden',
           display: '-webkit-box',
@@ -143,8 +144,8 @@ function VideoCard({
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
           <span style={{
-            fontSize: 9,
-            fontFamily: "'Geist Sans', sans-serif",
+            fontSize: 11,
+            fontFamily: TYPOGRAPHY.fontSans,
             fontWeight: 600,
             color: CREATOR_COLORS[video.creator],
             background: `${CREATOR_COLORS[video.creator]}18`,
@@ -154,8 +155,8 @@ function VideoCard({
             {CREATOR_LABELS[video.creator]}
           </span>
           <span style={{
-            fontSize: 9,
-            fontFamily: "'Geist Sans', sans-serif",
+            fontSize: 11,
+            fontFamily: TYPOGRAPHY.fontSans,
             fontWeight: 500,
             color: DIFFICULTY_COLORS[video.difficulty],
             textTransform: 'capitalize',
@@ -165,8 +166,8 @@ function VideoCard({
         </div>
         <div style={{
           color: colors.textDim,
-          fontSize: 10,
-          fontFamily: "'Geist Sans', sans-serif",
+          fontSize: 11,
+          fontFamily: TYPOGRAPHY.fontSans,
           lineHeight: 1.3,
           overflow: 'hidden',
           display: '-webkit-box',
@@ -222,9 +223,9 @@ export function VideoLibrary() {
                 border: 'none',
                 borderBottom: isActive ? `2px solid ${colors.accent}` : '2px solid transparent',
                 color: isActive ? colors.accent : colors.textDim,
-                fontSize: 10,
+                fontSize: 11,
                 fontWeight: 600,
-                fontFamily: "'Geist Sans', sans-serif",
+                fontFamily: TYPOGRAPHY.fontSans,
                 cursor: 'pointer',
                 transition: 'color 150ms, border-color 150ms',
               }}
@@ -256,8 +257,8 @@ export function VideoLibrary() {
                 border: `1px solid ${isActive ? pillColor : colors.border}`,
                 borderRadius: 10,
                 color: isActive ? pillColor : colors.textDim,
-                fontSize: 10,
-                fontFamily: "'Geist Sans', sans-serif",
+                fontSize: 11,
+                fontFamily: TYPOGRAPHY.fontSans,
                 fontWeight: 500,
                 cursor: 'pointer',
                 transition: 'all 150ms ease',
@@ -273,8 +274,8 @@ export function VideoLibrary() {
       <div style={{
         padding: '0 12px 6px',
         color: colors.textDim,
-        fontSize: 10,
-        fontFamily: "'Geist Sans', sans-serif",
+        fontSize: 11,
+        fontFamily: TYPOGRAPHY.fontSans,
         flexShrink: 0,
       }}>
         {filteredVideos.length} video{filteredVideos.length !== 1 ? 's' : ''}
@@ -293,7 +294,7 @@ export function VideoLibrary() {
             textAlign: 'center',
             color: colors.textDim,
             fontSize: 12,
-            fontFamily: "'Geist Sans', sans-serif",
+            fontFamily: TYPOGRAPHY.fontSans,
           }}>
             No videos match the current filters.
           </div>

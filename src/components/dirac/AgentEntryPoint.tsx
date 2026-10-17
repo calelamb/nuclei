@@ -5,6 +5,7 @@ import { useThemeStore } from '../../stores/themeStore';
 import { usePlatform } from '../../platform/PlatformProvider';
 import { AgentRunCard } from './AgentRunCard';
 
+import { TYPOGRAPHY } from '../../styles/tokens';
 /**
  * Goal input + Run button for Dirac's agent mode, plus the live
  * AgentRunCard once a run starts. Kept as its own component (rather than
@@ -61,12 +62,11 @@ export function AgentEntryPoint() {
             flex: 1,
             padding: '6px 10px',
             fontSize: 12,
-            fontFamily: "'Geist Sans', sans-serif",
+            fontFamily: TYPOGRAPHY.fontSans,
             background: colors.bgPanel,
             border: `1px solid ${colors.border}`,
             borderRadius: 6,
             color: colors.text,
-            outline: 'none',
           }}
         />
         <button
@@ -77,7 +77,7 @@ export function AgentEntryPoint() {
             padding: '6px 12px',
             fontSize: 12,
             fontWeight: 500,
-            fontFamily: "'Geist Sans', sans-serif",
+            fontFamily: TYPOGRAPHY.fontSans,
             background: disabledReason || !goal.trim() ? colors.border : colors.dirac,
             color: disabledReason || !goal.trim() ? colors.textMuted : '#fff',
             border: 'none',

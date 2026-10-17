@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { useThemeStore } from '../../stores/themeStore';
 import { useModeSwitchStore } from '../../stores/modeSwitchStore';
 
+import { TYPOGRAPHY } from '../../styles/tokens';
 /**
  * PRD 11 Phase B — the in-flight-work confirm dialog.
  *
@@ -67,13 +68,13 @@ export function ModeSwitchDialog() {
           border: `1px solid ${colors.border}`,
           borderRadius: 12,
           padding: 20,
-          fontFamily: "'Geist Sans', sans-serif",
+          fontFamily: TYPOGRAPHY.fontSans,
           boxShadow: '0 12px 48px rgba(0,0,0,0.4)',
         }}
       >
         <div
           id="mode-switch-title"
-          style={{ fontSize: 15, fontWeight: 600, color: colors.text, marginBottom: 8 }}
+          style={{ fontSize: 14, fontWeight: 600, color: colors.text, marginBottom: 8 }}
         >
           Switch to {targetLabel} mode?
         </div>
@@ -96,7 +97,7 @@ export function ModeSwitchDialog() {
               borderRadius: 8,
               fontSize: 12,
               cursor: 'pointer',
-              fontFamily: "'Geist Sans', sans-serif",
+              fontFamily: TYPOGRAPHY.fontSans,
             }}
           >
             Stay in {pending.target === 'research' ? 'Learn' : 'Research'}
@@ -113,7 +114,7 @@ export function ModeSwitchDialog() {
               fontSize: 12,
               fontWeight: 600,
               cursor: 'pointer',
-              fontFamily: "'Geist Sans', sans-serif",
+              fontFamily: TYPOGRAPHY.fontSans,
             }}
           >
             Switch to {targetLabel}

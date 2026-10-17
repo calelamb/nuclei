@@ -26,6 +26,7 @@ import type {
 } from '../../types/challenge';
 import type { CircuitSnapshot } from '../../types/quantum';
 
+import { TYPOGRAPHY } from '../../styles/tokens';
 interface TestRunnerProps {
   challenge: QuantumChallenge;
 }
@@ -300,7 +301,7 @@ export function TestRunner({ challenge }: TestRunnerProps) {
             color: colors.accent,
             fontSize: 12,
             fontWeight: 600,
-            fontFamily: "'Geist Sans', sans-serif",
+            fontFamily: TYPOGRAPHY.fontSans,
             cursor: isRunning ? 'not-allowed' : 'pointer',
             opacity: isRunning ? 0.5 : 1,
           }}
@@ -323,7 +324,7 @@ export function TestRunner({ challenge }: TestRunnerProps) {
             color: '#fff',
             fontSize: 12,
             fontWeight: 600,
-            fontFamily: "'Geist Sans', sans-serif",
+            fontFamily: TYPOGRAPHY.fontSans,
             cursor: isRunning ? 'not-allowed' : 'pointer',
             opacity: isRunning ? 0.5 : 1,
             boxShadow: shadow.sm,
@@ -351,7 +352,7 @@ export function TestRunner({ challenge }: TestRunnerProps) {
               padding: '6px 10px',
               color: colors.text,
               fontSize: 11,
-              fontFamily: "'Geist Sans', sans-serif",
+              fontFamily: TYPOGRAPHY.fontSans,
             }}
           >
             {visibleTests.map((testCase: TestCase) => (
@@ -375,7 +376,7 @@ export function TestRunner({ challenge }: TestRunnerProps) {
               color: colors.text,
               fontSize: 12,
               fontWeight: 600,
-              fontFamily: "'Geist Sans', sans-serif",
+              fontFamily: TYPOGRAPHY.fontSans,
               cursor: isRunning ? 'not-allowed' : 'pointer',
               opacity: isRunning ? 0.5 : 1,
             }}
@@ -402,7 +403,7 @@ export function TestRunner({ challenge }: TestRunnerProps) {
               color: verdictColor,
               fontSize: 12,
               fontWeight: 700,
-              fontFamily: "'Geist Sans', sans-serif",
+              fontFamily: TYPOGRAPHY.fontSans,
             }}>
               {overallVerdict === 'accepted' ? <Check size={12} /> : <X size={12} />}
               {formatVerdict(overallVerdict)}
@@ -411,7 +412,7 @@ export function TestRunner({ challenge }: TestRunnerProps) {
               <span style={{
                 color: colors.textMuted,
                 fontSize: 11,
-                fontFamily: "'Geist Sans', sans-serif",
+                fontFamily: TYPOGRAPHY.fontSans,
               }}>
                 Score: {totalScore}%
               </span>
@@ -439,7 +440,7 @@ export function TestRunner({ challenge }: TestRunnerProps) {
             color: activeBottomTab === 'tests' ? colors.text : colors.textMuted,
             fontSize: 11,
             fontWeight: 600,
-            fontFamily: "'Geist Sans', sans-serif",
+            fontFamily: TYPOGRAPHY.fontSans,
             cursor: 'pointer',
           }}
         >
@@ -455,7 +456,7 @@ export function TestRunner({ challenge }: TestRunnerProps) {
             color: activeBottomTab === 'inspection' ? colors.text : colors.textMuted,
             fontSize: 11,
             fontWeight: 600,
-            fontFamily: "'Geist Sans', sans-serif",
+            fontFamily: TYPOGRAPHY.fontSans,
             cursor: 'pointer',
           }}
         >
@@ -509,9 +510,9 @@ export function TestRunner({ challenge }: TestRunnerProps) {
                 padding: '18px 16px',
                 color: colors.textMuted,
                 fontSize: 12,
-                fontFamily: "'Geist Sans', sans-serif",
+                fontFamily: TYPOGRAPHY.fontSans,
               }}>
-                <Loader size={13} color={colors.accent} style={{ animation: 'spin 1s linear infinite' }} />
+                <Loader size={14} color={colors.accent} style={{ animation: 'spin 1s linear infinite' }} />
                 <style>{`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
                 Preparing the kernel and running tests… the first run downloads the in-browser Python kernel and can take a few seconds.
               </div>
@@ -522,7 +523,7 @@ export function TestRunner({ challenge }: TestRunnerProps) {
                 padding: '18px 16px',
                 color: colors.textDim,
                 fontSize: 12,
-                fontFamily: "'Geist Sans', sans-serif",
+                fontFamily: TYPOGRAPHY.fontSans,
               }}>
                 Run the visible tests to validate your solver, then submit once the visible cases are passing.
               </div>

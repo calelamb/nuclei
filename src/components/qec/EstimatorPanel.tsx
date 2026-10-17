@@ -14,6 +14,7 @@ import {
 } from '../../types/qec';
 import type { Framework } from '../../types/quantum';
 
+import { TYPOGRAPHY } from '../../styles/tokens';
 const DOCS = 'https://getnuclei.dev/docs/research/resource-estimation/';
 
 // Frameworks the Azure Quantum Resource Estimator can cost. Q# is estimated
@@ -102,7 +103,7 @@ export function EstimatorPanel() {
       }}
     >
       <span style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, fontWeight: 600, color: colors.text }}>
-        <Cpu size={13} /> Resource Estimator
+        <Cpu size={14} /> Resource Estimator
       </span>
       <div style={{ flex: 1 }} />
       {result && (
@@ -112,11 +113,11 @@ export function EstimatorPanel() {
           title="Export the full estimator document as JSON"
           style={iconBtn(colors)}
         >
-          <Download size={13} /> JSON
+          <Download size={14} /> JSON
         </button>
       )}
       <a href={DOCS} target="_blank" rel="noreferrer" title="Resource estimation docs" style={{ ...iconBtn(colors), padding: '3px 5px' }}>
-        <HelpCircle size={13} />
+        <HelpCircle size={14} />
       </a>
     </div>
   );
@@ -127,7 +128,7 @@ export function EstimatorPanel() {
     flexDirection: 'column',
     background: colors.bg,
     color: colors.text,
-    fontFamily: "'Geist Sans', sans-serif",
+    fontFamily: TYPOGRAPHY.fontSans,
   };
 
   if (!supported) {
@@ -237,7 +238,7 @@ export function EstimatorPanel() {
               style={detailToggle(colors, showDetail)}
             >
               <ChevronRight
-                size={13}
+                size={14}
                 style={{ transform: showDetail ? 'rotate(90deg)' : 'none', transition: 'transform 120ms' }}
               />
               Full estimator output
@@ -257,7 +258,7 @@ type Colors = ThemeColors;
 function Field({ label, colors, children }: { label: string; colors: Colors; children: React.ReactNode }) {
   return (
     <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-      <span style={{ fontSize: 10.5, textTransform: 'uppercase', letterSpacing: '0.04em', color: colors.textDim }}>
+      <span style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.04em', color: colors.textDim }}>
         {label}
       </span>
       {children}
@@ -288,12 +289,12 @@ function Stat({
         background: colors.bg,
       }}
     >
-      <span style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.04em', color: colors.textDim }}>
+      <span style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.04em', color: colors.textDim }}>
         {label}
       </span>
       <span
         style={{
-          fontFamily: "'Geist Mono', monospace",
+          fontFamily: TYPOGRAPHY.fontMono,
           fontSize: accent ? 22 : 18,
           fontWeight: 600,
           color: accent ? colors.accent : colors.text,
@@ -314,8 +315,7 @@ function selectStyle(colors: Colors): CSSProperties {
     borderRadius: 5,
     padding: '6px 8px',
     fontSize: 12,
-    fontFamily: "'Geist Sans', sans-serif",
-    outline: 'none',
+    fontFamily: TYPOGRAPHY.fontSans,
   };
 }
 
@@ -388,8 +388,8 @@ function detailPre(colors: Colors): CSSProperties {
     border: `1px solid ${colors.border}`,
     background: colors.bg,
     color: colors.textMuted,
-    fontFamily: "'Geist Mono', monospace",
-    fontSize: 10.5,
+    fontFamily: TYPOGRAPHY.fontMono,
+    fontSize: 11,
     lineHeight: 1.5,
     maxHeight: 260,
     overflow: 'auto',

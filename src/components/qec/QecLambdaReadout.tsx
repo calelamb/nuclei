@@ -46,7 +46,7 @@ function LambdaRow({ e, units, colors }: { e: LambdaGroupEstimate; units: RateUn
           `; d ${e.estimate.droppedZeroError.join(',')} had 0 errors and is not in the fit (suppression is at least as strong)`}
       </span>
       {warnings.map((w) => (
-        <div key={w} role="note" style={{ color: colors.warning, fontSize: 10 }}>{`Warning: ${w}`}</div>
+        <div key={w} role="note" style={{ color: colors.warning, fontSize: 11 }}>{`Warning: ${w}`}</div>
       ))}
     </div>
   );

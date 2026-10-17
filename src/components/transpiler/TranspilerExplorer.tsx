@@ -13,6 +13,7 @@ import {
   formatAddedGates,
 } from './transpileMath';
 
+import { TYPOGRAPHY } from '../../styles/tokens';
 const DOCS = 'https://getnuclei.dev/docs/developer-tools/transpiler-explorer/';
 
 /**
@@ -39,7 +40,7 @@ export function TranspilerExplorer() {
         </span>
         <div style={{ flex: 1 }} />
         <a href={DOCS} target="_blank" rel="noreferrer" title="Transpiler Explorer docs" style={iconBtn(colors)}>
-          <HelpCircle size={13} />
+          <HelpCircle size={14} />
         </a>
       </div>
 
@@ -139,22 +140,22 @@ function PassRow({ pass, index }: { pass: TranspilePass; index: number }) {
       border: `1px solid ${entangling ? colors.accent : colors.border}`,
       background: entangling ? `${colors.accent}12` : 'transparent',
     }}>
-      <span style={{ width: 20, textAlign: 'right', fontSize: 11, color: colors.textDim, fontFamily: "'Geist Mono', monospace" }}>
+      <span style={{ width: 20, textAlign: 'right', fontSize: 11, color: colors.textDim, fontFamily: TYPOGRAPHY.fontMono }}>
         {index}
       </span>
-      <span style={{ flex: 1, fontSize: 12.5, color: colors.text, fontWeight: entangling ? 600 : 400 }}>
+      <span style={{ flex: 1, fontSize: 13, color: colors.text, fontWeight: entangling ? 600 : 400 }}>
         {pass.name}
         {entangling && (
-          <span style={{ marginLeft: 8, fontSize: 10.5, color: colors.accent, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+          <span style={{ marginLeft: 8, fontSize: 11, color: colors.accent, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
             routing
           </span>
         )}
       </span>
-      <span style={{ fontSize: 11.5, fontFamily: "'Geist Mono', monospace", color: colors.textMuted }}>
+      <span style={{ fontSize: 12, fontFamily: TYPOGRAPHY.fontMono, color: colors.textMuted }}>
         {formatAddedGates(pass)}
       </span>
       <span style={{
-        width: 40, textAlign: 'right', fontSize: 11.5, fontFamily: "'Geist Mono', monospace",
+        width: 40, textAlign: 'right', fontSize: 12, fontFamily: TYPOGRAPHY.fontMono,
         color: net > 0 ? colors.accent : net < 0 ? colors.textDim : colors.textMuted,
       }}>
         {formatSigned(net)}
@@ -183,11 +184,11 @@ function MetricStrip({
         const tone = deltaTone(delta.before, delta.after);
         return (
           <span key={label} style={{ display: 'flex', alignItems: 'baseline', gap: 4, fontSize: 12 }}>
-            <span style={{ fontFamily: "'Geist Mono', monospace", fontWeight: 600, color: colors.text }}>{value}</span>
-            <span style={{ fontSize: 10.5, color: colors.textDim, textTransform: 'uppercase', letterSpacing: '0.03em' }}>{label}</span>
+            <span style={{ fontFamily: TYPOGRAPHY.fontMono, fontWeight: 600, color: colors.text }}>{value}</span>
+            <span style={{ fontSize: 11, color: colors.textDim, textTransform: 'uppercase', letterSpacing: '0.03em' }}>{label}</span>
             {showDelta && (
               <span style={{
-                fontSize: 10.5, fontFamily: "'Geist Mono', monospace",
+                fontSize: 11, fontFamily: TYPOGRAPHY.fontMono,
                 color: tone === 'increase' ? colors.accent : colors.textDim,
               }}>
                 {formatSigned(delta.after - delta.before)}
@@ -224,7 +225,7 @@ function Centered({ colors, icon, title, body }: {
     }}>
       {icon && <div style={{ color: colors.accent }}>{icon}</div>}
       <div style={{ fontSize: 14, fontWeight: 600, color: colors.text }}>{title}</div>
-      <div style={{ fontSize: 12.5, maxWidth: 420, lineHeight: 1.5 }}>{body}</div>
+      <div style={{ fontSize: 13, maxWidth: 420, lineHeight: 1.5 }}>{body}</div>
     </div>
   );
 }
@@ -232,7 +233,7 @@ function Centered({ colors, icon, title, body }: {
 function shell(colors: ThemeColors): CSSProperties {
   return {
     height: '100%', display: 'flex', flexDirection: 'column',
-    background: colors.bg, color: colors.text, fontFamily: "'Geist Sans', sans-serif",
+    background: colors.bg, color: colors.text, fontFamily: TYPOGRAPHY.fontSans,
   };
 }
 
@@ -254,7 +255,7 @@ function iconBtn(colors: ThemeColors): CSSProperties {
 function errorBox(colors: ThemeColors): CSSProperties {
   return {
     border: `1px solid ${colors.error}`, borderRadius: 6, padding: '10px 12px',
-    fontSize: 12.5, color: colors.error, lineHeight: 1.45,
+    fontSize: 13, color: colors.error, lineHeight: 1.45,
   };
 }
 
@@ -269,6 +270,6 @@ function chip(colors: ThemeColors): CSSProperties {
   return {
     display: 'inline-block', margin: '0 3px', padding: '1px 6px', borderRadius: 4,
     border: `1px solid ${colors.border}`, background: colors.bg, color: colors.textMuted,
-    fontSize: 10.5, fontFamily: "'Geist Mono', monospace",
+    fontSize: 11, fontFamily: TYPOGRAPHY.fontMono,
   };
 }

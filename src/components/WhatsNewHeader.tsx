@@ -1,6 +1,7 @@
 import { Atom } from 'lucide-react';
 import type { ThemeColors } from '../stores/themeStore';
 
+import { TYPOGRAPHY } from '../styles/tokens';
 interface WhatsNewHeaderProps {
   currentVersion: string;
   accent: string;
@@ -48,7 +49,7 @@ export function WhatsNewHeader({ currentVersion, accent, textDim, reduced }: Wha
       <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
         <span
           style={{
-            fontSize: 10.5,
+            fontSize: 11,
             fontWeight: 700,
             letterSpacing: '0.12em',
             textTransform: 'uppercase',
@@ -67,7 +68,7 @@ export function WhatsNewHeader({ currentVersion, accent, textDim, reduced }: Wha
             fontSize: 11,
             fontWeight: 700,
             letterSpacing: '0.02em',
-            fontFamily: "'JetBrains Mono', ui-monospace, monospace",
+            fontFamily: TYPOGRAPHY.fontMono,
             color: accent,
             background: `${accent}1f`,
             border: `1px solid ${accent}55`,

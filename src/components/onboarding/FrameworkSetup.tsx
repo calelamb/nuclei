@@ -11,6 +11,7 @@ import {
   type InstallEvent,
 } from '../../stores/frameworksStore';
 
+import { TYPOGRAPHY } from '../../styles/tokens';
 interface FrameworkSetupProps {
   open: boolean;
   onClose: () => void;
@@ -164,7 +165,7 @@ export function FrameworkSetup({ open, onClose, firstRun = false }: FrameworkSet
           boxShadow: shadow.lg,
           display: 'flex',
           flexDirection: 'column',
-          fontFamily: "'Geist Sans', sans-serif",
+          fontFamily: TYPOGRAPHY.fontSans,
         }}
       >
         {/* Header */}
@@ -301,7 +302,7 @@ export function FrameworkSetup({ open, onClose, firstRun = false }: FrameworkSet
                 border: `1px solid ${colors.border}`,
                 fontSize: 11,
                 color: colors.textMuted,
-                fontFamily: "'Fira Code', monospace",
+                fontFamily: TYPOGRAPHY.fontMono,
                 display: 'flex',
                 alignItems: 'center',
                 gap: 8,
@@ -454,7 +455,7 @@ function SectionHeader({ label }: { label: string }) {
   return (
     <div
       style={{
-        fontSize: 10,
+        fontSize: 11,
         fontWeight: 600,
         textTransform: 'uppercase',
         letterSpacing: 0.5,
@@ -510,7 +511,7 @@ function FrameworkRow({
           {installed && (
             <span
               style={{
-                fontSize: 9,
+                fontSize: 11,
                 fontWeight: 600,
                 color: colors.success,
                 background: `${colors.success}18`,
@@ -526,7 +527,7 @@ function FrameworkRow({
           {fw.recommended && !installed && (
             <span
               style={{
-                fontSize: 9,
+                fontSize: 11,
                 fontWeight: 600,
                 color: colors.accentLight,
                 background: `${colors.accent}18`,
@@ -543,7 +544,7 @@ function FrameworkRow({
         <div style={{ fontSize: 11, color: colors.textMuted, marginTop: 2, lineHeight: 1.45 }}>
           {fw.description}
         </div>
-        <div style={{ fontSize: 10, color: colors.textDim, marginTop: 3 }}>
+        <div style={{ fontSize: 11, color: colors.textDim, marginTop: 3 }}>
           ~{fw.approximate_size_mb} MB
         </div>
       </div>
@@ -563,7 +564,7 @@ function btnPrimary(colors: ReturnType<typeof useThemeStore.getState>['colors'])
     borderRadius: 6,
     fontSize: 12,
     fontWeight: 600,
-    fontFamily: "'Geist Sans', sans-serif",
+    fontFamily: TYPOGRAPHY.fontSans,
     cursor: 'pointer',
   };
 }
@@ -580,7 +581,7 @@ function btnSecondary(colors: ReturnType<typeof useThemeStore.getState>['colors'
     borderRadius: 6,
     fontSize: 12,
     fontWeight: 500,
-    fontFamily: "'Geist Sans', sans-serif",
+    fontFamily: TYPOGRAPHY.fontSans,
     cursor: 'pointer',
   };
 }

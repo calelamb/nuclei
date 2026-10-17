@@ -3,6 +3,7 @@ import { useThemeStore } from '../../stores/themeStore';
 import type { GalleryCircuit } from '../../data/community/mockGallery';
 import { activateOnKey } from '../../lib/a11y';
 
+import { TYPOGRAPHY } from '../../styles/tokens';
 interface CircuitCardProps {
   circuit: GalleryCircuit;
   isLiked: boolean;
@@ -59,9 +60,9 @@ export function CircuitCard({ circuit, isLiked, isBookmarked, onLike, onBookmark
           position: 'absolute',
           top: 8,
           right: 8,
-          fontSize: 9,
+          fontSize: 11,
           fontWeight: 600,
-          fontFamily: "'Geist Sans', sans-serif",
+          fontFamily: TYPOGRAPHY.fontSans,
           color: colors.textDim,
           textTransform: 'uppercase',
           letterSpacing: 0.5,
@@ -79,7 +80,7 @@ export function CircuitCard({ circuit, isLiked, isBookmarked, onLike, onBookmark
           fontSize: 13,
           fontWeight: 700,
           color: colors.text,
-          fontFamily: "'Geist Sans', sans-serif",
+          fontFamily: TYPOGRAPHY.fontSans,
           paddingRight: 50,
           lineHeight: 1.3,
         }}
@@ -93,16 +94,16 @@ export function CircuitCard({ circuit, isLiked, isBookmarked, onLike, onBookmark
           style={{
             fontSize: 11,
             color: colors.textMuted,
-            fontFamily: "'Geist Sans', sans-serif",
+            fontFamily: TYPOGRAPHY.fontSans,
           }}
         >
           {circuit.author.displayName}
         </span>
         <span
           style={{
-            fontSize: 9,
+            fontSize: 11,
             fontWeight: 600,
-            fontFamily: "'Geist Sans', sans-serif",
+            fontFamily: TYPOGRAPHY.fontSans,
             color: '#fff',
             background: FRAMEWORK_COLORS[circuit.framework] ?? colors.accent,
             padding: '1px 5px',
@@ -132,11 +133,11 @@ export function CircuitCard({ circuit, isLiked, isBookmarked, onLike, onBookmark
             borderRadius: 4,
             color: isLiked ? colors.accent : colors.textDim,
             fontSize: 11,
-            fontFamily: "'Geist Sans', sans-serif",
+            fontFamily: TYPOGRAPHY.fontSans,
             transition: 'color 0.15s',
           }}
         >
-          <Heart size={13} fill={isLiked ? colors.accent : 'none'} />
+          <Heart size={14} fill={isLiked ? colors.accent : 'none'} />
           {circuit.likes + (isLiked ? 1 : 0)}
         </button>
 
@@ -157,7 +158,7 @@ export function CircuitCard({ circuit, isLiked, isBookmarked, onLike, onBookmark
             transition: 'color 0.15s',
           }}
         >
-          <Bookmark size={13} fill={isBookmarked ? colors.warning : 'none'} />
+          <Bookmark size={14} fill={isBookmarked ? colors.warning : 'none'} />
         </button>
       </div>
     </div>

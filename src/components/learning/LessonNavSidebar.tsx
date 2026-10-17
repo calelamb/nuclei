@@ -18,6 +18,7 @@ import { useLearnStore } from '../../stores/learnStore';
 import { getTrack } from '../../data/lessons/tracks';
 import type { ContentBlock } from '../../data/lessons/types';
 
+import { TYPOGRAPHY } from '../../styles/tokens';
 const BLOCK_META: Record<string, { icon: LucideIcon; label: string }> = {
   text: { icon: BookOpen, label: 'Read' },
   video: { icon: Play, label: 'Watch' },
@@ -87,14 +88,14 @@ export function LessonNavSidebar({
       style={{
         width: 260, flexShrink: 0, borderRight: `1px solid ${colors.border}`,
         background: colors.bgPanel, display: 'flex', flexDirection: 'column',
-        overflow: 'hidden', fontFamily: "'Geist Sans', sans-serif",
+        overflow: 'hidden', fontFamily: TYPOGRAPHY.fontSans,
       }}
     >
       {/* Track (epic) header */}
       <div style={{ padding: '12px 12px 10px', borderBottom: `1px solid ${colors.border}`, flexShrink: 0 }}>
         <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8 }}>
           <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ fontSize: 10, fontWeight: 600, letterSpacing: 0.4, textTransform: 'uppercase', color: colors.accent }}>
+            <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: 0.4, textTransform: 'uppercase', color: colors.accent }}>
               Track
             </div>
             <div style={{ fontSize: 14, fontWeight: 600, color: colors.text, marginTop: 2, lineHeight: 1.25 }}>
@@ -102,7 +103,7 @@ export function LessonNavSidebar({
             </div>
           </div>
           <button onClick={onToggleCollapsed} title="Hide lesson navigation" aria-label="Hide lesson navigation" style={iconBtn(colors)}>
-            <PanelLeftClose size={15} />
+            <PanelLeftClose size={16} />
           </button>
         </div>
         {/* Track progress */}
@@ -110,7 +111,7 @@ export function LessonNavSidebar({
           <div style={{ flex: 1, height: 4, borderRadius: 2, background: colors.border, overflow: 'hidden' }}>
             <div style={{ width: `${lessons.length ? (completedInTrack / lessons.length) * 100 : 0}%`, height: '100%', background: colors.accent, transition: 'width 300ms ease' }} />
           </div>
-          <span style={{ fontSize: 10.5, color: colors.textDim, fontVariantNumeric: 'tabular-nums' }}>
+          <span style={{ fontSize: 11, color: colors.textDim, fontVariantNumeric: 'tabular-nums' }}>
             {completedInTrack}/{lessons.length}
           </span>
         </div>
@@ -136,13 +137,13 @@ export function LessonNavSidebar({
                 onMouseLeave={(e) => { if (!isCurrent) e.currentTarget.style.background = 'transparent'; }}
               >
                 {isDone ? (
-                  <CheckCircle2 size={15} style={{ color: colors.success, flexShrink: 0 }} />
+                  <CheckCircle2 size={16} style={{ color: colors.success, flexShrink: 0 }} />
                 ) : isCurrent ? (
-                  <Dot size={15} style={{ color: colors.accent, flexShrink: 0 }} />
+                  <Dot size={16} style={{ color: colors.accent, flexShrink: 0 }} />
                 ) : (
-                  <Circle size={13} style={{ color: colors.textDim, flexShrink: 0 }} />
+                  <Circle size={14} style={{ color: colors.textDim, flexShrink: 0 }} />
                 )}
-                <span style={{ flex: 1, fontSize: 12.5, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                <span style={{ flex: 1, fontSize: 13, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                   {i + 1}. {lesson.title}
                 </span>
               </button>
@@ -167,7 +168,7 @@ export function LessonNavSidebar({
                         onMouseEnter={(e) => { if (!active) e.currentTarget.style.color = colors.textMuted; }}
                         onMouseLeave={(e) => { if (!active) e.currentTarget.style.color = colors.textDim; }}
                       >
-                        <Icon size={11} style={{ flexShrink: 0 }} />
+                        <Icon size={12} style={{ flexShrink: 0 }} />
                         <span style={{ fontSize: 11, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                           {meta.label}
                         </span>

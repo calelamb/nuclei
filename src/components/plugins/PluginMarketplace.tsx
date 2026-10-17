@@ -20,9 +20,10 @@ import { PluginPanelHost } from './PluginPanelHost';
 import { PluginErrorCard } from './PluginErrorCard';
 import type { InstalledPlugin } from '../../plugins/types';
 
+import { TYPOGRAPHY } from '../../styles/tokens';
 type Tab = 'installed' | 'panels';
 
-const FONT = "'Geist Sans', sans-serif";
+const FONT = TYPOGRAPHY.fontSans;
 
 /* ── Small building blocks ───────────────────────────────── */
 
@@ -50,7 +51,7 @@ function ActionButton({
         display: 'flex',
         alignItems: 'center',
         gap: 4,
-        fontSize: 10,
+        fontSize: 11,
         fontWeight: 500,
         fontFamily: FONT,
         color,
@@ -175,7 +176,6 @@ export function PluginMarketplace() {
               border: `1px solid ${colors.border}`,
               borderRadius: 4,
               color: colors.text,
-              outline: 'none',
             }}
             onFocus={(e) => {
               e.currentTarget.style.borderColor = colors.accent;
@@ -317,7 +317,7 @@ function PluginRow({
         </span>
         <span
           style={{
-            fontSize: 9,
+            fontSize: 11,
             color: colors.textDim,
             background: colors.bg,
             padding: '1px 4px',
@@ -331,7 +331,7 @@ function PluginRow({
       </div>
 
       {plugin.manifest.author && (
-        <span style={{ fontSize: 10, color: colors.textMuted, fontFamily: FONT }}>
+        <span style={{ fontSize: 11, color: colors.textMuted, fontFamily: FONT }}>
           by {plugin.manifest.author}
         </span>
       )}
@@ -347,8 +347,8 @@ function PluginRow({
           <span
             key={cap}
             style={{
-              fontSize: 9,
-              fontFamily: "'Geist Mono', monospace",
+              fontSize: 11,
+              fontFamily: TYPOGRAPHY.fontMono,
               color: colors.accentLight,
               background: `${colors.accent}12`,
               padding: '1px 5px',
@@ -363,9 +363,9 @@ function PluginRow({
       {plugin.status === 'error' && plugin.error && (
         <span
           style={{
-            fontSize: 10,
+            fontSize: 11,
             color: colors.error,
-            fontFamily: "'Geist Mono', monospace",
+            fontFamily: TYPOGRAPHY.fontMono,
             wordBreak: 'break-word',
           }}
         >
@@ -376,7 +376,7 @@ function PluginRow({
       <div style={{ display: 'flex', gap: 6, marginTop: 2, flexWrap: 'wrap' }}>
         <ActionButton
           label={plugin.enabled ? 'Disable' : 'Enable'}
-          icon={<Package size={11} />}
+          icon={<Package size={12} />}
           disabled={busy}
           onClick={() =>
             run(async () => {
@@ -387,13 +387,13 @@ function PluginRow({
         />
         <ActionButton
           label="Reload"
-          icon={<RefreshCw size={11} />}
+          icon={<RefreshCw size={12} />}
           disabled={busy || !plugin.source}
           onClick={() => run(async () => void (await reloadPlugin(name)))}
         />
         <ActionButton
           label="Uninstall"
-          icon={<Trash2 size={11} />}
+          icon={<Trash2 size={12} />}
           tone="danger"
           disabled={busy}
           onClick={() => { if (window.confirm(`Uninstall "${name}"? It will be removed from Nuclei.`)) run(() => uninstallPlugin(name)); }}
@@ -410,7 +410,7 @@ function StatusPill({ status }: { status: InstalledPlugin['status'] }) {
   return (
     <span
       style={{
-        fontSize: 9,
+        fontSize: 11,
         fontWeight: 600,
         textTransform: 'uppercase',
         letterSpacing: 0.3,
@@ -475,7 +475,7 @@ function PanelsTab() {
             <Palette size={12} color={colors.textMuted} />
             <span
               style={{
-                fontSize: 10,
+                fontSize: 11,
                 fontWeight: 600,
                 textTransform: 'uppercase',
                 letterSpacing: 0.5,
@@ -493,7 +493,7 @@ function PanelsTab() {
                 }}
                 style={{
                   marginLeft: 'auto',
-                  fontSize: 10,
+                  fontSize: 11,
                   fontFamily: FONT,
                   color: colors.textMuted,
                   background: 'transparent',
@@ -524,7 +524,7 @@ function PanelsTab() {
                       setAppliedTheme(`${theme.pluginName}:${theme.name}`);
                     }}
                     style={{
-                      fontSize: 10,
+                      fontSize: 11,
                       fontFamily: FONT,
                       color: active ? colors.success : colors.accent,
                       background: 'transparent',

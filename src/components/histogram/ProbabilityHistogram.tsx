@@ -6,36 +6,40 @@ import { useDebugStore } from '../../stores/debugStore';
 import { activeDebugStep } from '../../lib/debugTrace';
 import { getHistogramData, getProbabilityHistogramData, type HistogramViewMode } from './histogramData';
 
+import { TYPOGRAPHY } from '../../styles/tokens';
+import { useThemeStore } from '../../stores/themeStore';
+import { Button, TextInput } from '../ui';
 type HistogramRow = { state: string; probability: number };
 
 /** The recharts bar chart, shared by the run view and the debugger step view. */
 function HistogramChart({ data, srDescription }: { data: HistogramRow[]; srDescription: string }) {
+  const colors = useThemeStore((s) => s.colors);
   return (
     <div style={{ flex: 1, minHeight: 0 }} role="region" aria-label="Probability histogram" aria-description={srDescription}>
       <ResponsiveContainer width="100%" height="100%">
         <BarChart data={data} margin={{ top: 5, right: 10, bottom: 5, left: 10 }}>
           <XAxis
             dataKey="state"
-            tick={{ fill: '#E0E0E0', fontSize: 11, fontFamily: "'Fira Code', monospace" }}
-            axisLine={{ stroke: '#1A2A42' }}
-            tickLine={{ stroke: '#1A2A42' }}
+            tick={{ fill: colors.text, fontSize: 11, fontFamily: TYPOGRAPHY.fontMono }}
+            axisLine={{ stroke: colors.borderStrong }}
+            tickLine={{ stroke: colors.borderStrong }}
           />
           <YAxis
             domain={[0, 1]}
-            tick={{ fill: '#3D5A80', fontSize: 11, fontFamily: "'Fira Code', monospace" }}
-            axisLine={{ stroke: '#1A2A42' }}
-            tickLine={{ stroke: '#1A2A42' }}
+            tick={{ fill: colors.textMuted, fontSize: 11, fontFamily: TYPOGRAPHY.fontMono }}
+            axisLine={{ stroke: colors.borderStrong }}
+            tickLine={{ stroke: colors.borderStrong }}
             tickFormatter={(v: number) => v.toFixed(1)}
           />
           <Tooltip
-            contentStyle={{ background: '#0A1220', border: '1px solid #1A2A42', borderRadius: 6, fontSize: 12, fontFamily: "'Fira Code', monospace" }}
-            labelStyle={{ color: '#E0E0E0' }}
-            itemStyle={{ color: '#00B4D8' }}
+            contentStyle={{ background: colors.bgElevated, border: `1px solid ${colors.borderStrong}`, borderRadius: 6, fontSize: 12, fontFamily: TYPOGRAPHY.fontMono }}
+            labelStyle={{ color: colors.text }}
+            itemStyle={{ color: colors.accent }}
             formatter={(value) => [typeof value === 'number' ? value.toFixed(4) : String(value ?? ''), 'Probability']}
           />
           <Bar dataKey="probability" radius={[4, 4, 0, 0]}>
             {data.map((_, index) => (
-              <Cell key={index} fill="#00B4D8" fillOpacity={0.8} />
+              <Cell key={index} fill={colors.accent} fillOpacity={0.8} />
             ))}
           </Bar>
         </BarChart>
@@ -45,6 +49,7 @@ function HistogramChart({ data, srDescription }: { data: HistogramRow[]; srDescr
 }
 
 export function ProbabilityHistogram() {
+  const colors = useThemeStore((s) => s.colors);
   const result = useSimulationStore((s) => s.result);
   const shots = useSimulationStore((s) => s.shots);
   const setShots = useSimulationStore((s) => s.setShots);
@@ -71,7 +76,7 @@ export function ProbabilityHistogram() {
     return (
       <div style={{ height: '100%', display: 'flex', flexDirection: 'column', padding: '8px 12px' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8, flexShrink: 0 }}>
-          <span style={{ color: '#00B4D8', fontSize: 11, fontWeight: 600, fontFamily: 'Inter, sans-serif' }}>
+          <span style={{ color: colors.accent, fontSize: 11, fontWeight: 600, fontFamily: TYPOGRAPHY.fontSans }}>
             Ideal probabilities · state at {step.gate_index < 0 ? 'start' : `${step.label}`}
           </span>
         </div>
@@ -91,12 +96,12 @@ export function ProbabilityHistogram() {
         <div style={{ display: 'flex', alignItems: 'flex-end', gap: 8, opacity: 0.12 }}>
           {[28, 42, 18, 36].map((h, i) => (
             <div key={i} style={{
-              width: 16, height: h, background: '#3D5A80',
+              width: 16, height: h, background: colors.wire,
               borderRadius: '3px 3px 0 0',
             }} />
           ))}
         </div>
-        <span style={{ color: '#475569', fontSize: 12, fontFamily: "'Geist Sans', sans-serif" }}>
+        <span style={{ color: colors.textDim, fontSize: 12, fontFamily: TYPOGRAPHY.fontSans }}>
           Run a simulation to see results
         </span>
       </div>
@@ -135,7 +140,7 @@ export function ProbabilityHistogram() {
           display: 'flex',
           borderRadius: 4,
           overflow: 'hidden',
-          border: '1px solid #1A2A42',
+          border: `1px solid ${colors.borderStrong}`,
         }}>
           {(['sampled', 'ideal'] as const).map((mode) => (
             <button
@@ -144,11 +149,11 @@ export function ProbabilityHistogram() {
               style={{
                 padding: '4px 10px',
                 fontSize: 11,
-                fontFamily: 'Inter, sans-serif',
+                fontFamily: TYPOGRAPHY.fontSans,
                 border: 'none',
                 cursor: 'pointer',
-                background: viewMode === mode ? '#00B4D8' : '#0A1220',
-                color: viewMode === mode ? '#0F1B2D' : '#3D5A80',
+                background: viewMode === mode ? colors.accent : colors.bgElevated,
+                color: viewMode === mode ? colors.bgPanel : colors.textMuted,
                 fontWeight: viewMode === mode ? 600 : 400,
               }}
             >
@@ -158,50 +163,31 @@ export function ProbabilityHistogram() {
         </div>
 
         {/* Shots control */}
-        <label style={{ color: '#3D5A80', fontSize: 11, fontFamily: 'Inter, sans-serif', display: 'flex', alignItems: 'center', gap: 6 }}>
+        <label style={{ color: colors.textMuted, fontSize: 11, fontFamily: TYPOGRAPHY.fontSans, display: 'flex', alignItems: 'center', gap: 6 }}>
           Shots:
-          <input
+          <TextInput
             type="number"
+            size="sm"
+            mono
             value={shots}
             onChange={handleShotsChange}
             min={100}
             max={100000}
             step={100}
-            style={{
-              width: 70,
-              padding: '3px 6px',
-              fontSize: 11,
-              fontFamily: "'Fira Code', monospace",
-              background: '#0A1220',
-              border: '1px solid #1A2A42',
-              borderRadius: 3,
-              color: '#E0E0E0',
-              outline: 'none',
-            }}
+            aria-label="Shots"
+            style={{ width: 80 }}
           />
         </label>
 
         <div style={{ flex: 1 }} />
 
         {/* Export */}
-        <button
-          onClick={handleExportCSV}
-          style={{
-            padding: '4px 10px',
-            fontSize: 11,
-            fontFamily: 'Inter, sans-serif',
-            background: '#0A1220',
-            border: '1px solid #1A2A42',
-            borderRadius: 4,
-            color: '#3D5A80',
-            cursor: 'pointer',
-          }}
-        >
+        <Button size="sm" onClick={handleExportCSV}>
           Export CSV
-        </button>
+        </Button>
 
         {/* Execution time */}
-        <span style={{ color: '#3D5A80', fontSize: 11, fontFamily: "'Fira Code', monospace" }}>
+        <span style={{ color: colors.textMuted, fontSize: 11, fontFamily: TYPOGRAPHY.fontMono }}>
           {result.execution_time_ms.toFixed(0)}ms
         </span>
       </div>

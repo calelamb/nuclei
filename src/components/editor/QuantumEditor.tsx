@@ -20,6 +20,7 @@ import { ensureQsharpLanguageService } from './qsharpLanguageService';
 import { useRevealLine } from './useRevealLine';
 import type { Framework } from '../../types/quantum';
 
+import { TYPOGRAPHY } from '../../styles/tokens';
 type StandaloneEditor = monaco.editor.IStandaloneCodeEditor;
 
 // Map of file extensions to Monaco language ids. Extensions Monaco doesn't
@@ -101,6 +102,13 @@ export function QuantumEditor() {
     monacoRef.current = monacoApi;
     setEditorInstance(editor);
     setMonacoInstance(monacoApi);
+
+    // Monaco measures glyph widths once; re-measure when the bundled mono face finishes loading.
+    void document.fonts.ready
+      .then(() => monacoApi.editor.remeasureFonts())
+      .catch((err: unknown) => {
+        if (import.meta.env.DEV) console.warn('[Nuclei] font remeasure failed:', err);
+      });
 
     editor.addAction({
       id: 'run-circuit',
@@ -272,7 +280,7 @@ export function QuantumEditor() {
         onMount={handleMount}
         options={{
           fontSize: editorSettings.fontSize,
-          fontFamily: "'JetBrains Mono', 'Geist Mono', ui-monospace, monospace",
+          fontFamily: TYPOGRAPHY.fontMono,
           fontLigatures: true,
           minimap: { enabled: editorSettings.minimap },
           scrollBeyondLastLine: false,

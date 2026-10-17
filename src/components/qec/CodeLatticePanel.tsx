@@ -6,6 +6,7 @@ import { PanelHeader } from '../layout/PanelHeader';
 import { QecEmptyState } from './QecEmptyState';
 import { latticeLayout, activeQubitsAtTick } from './qecGeometry';
 
+import { TYPOGRAPHY } from '../../styles/tokens';
 const DOCS = 'https://getnuclei.dev/docs/research/qec-studio/';
 
 /**
@@ -45,7 +46,7 @@ export function CodeLatticePanel() {
   }
 
   const maxTick = Math.max(0, (qec.num_ticks || 1) - 1);
-  const basisColor = (b: string) => (b === 'X' ? colors.accent : b === 'Z' ? colors.dirac : colors.textDim);
+  const basisColor = (b: string) => (b === 'X' ? colors.basisX : b === 'Z' ? colors.basisZ : colors.textDim);
 
   return (
     <div style={{ height: '100%', display: 'flex', flexDirection: 'column', background: colors.bg }}>
@@ -80,8 +81,8 @@ export function CodeLatticePanel() {
       <div
         style={{
           display: 'flex', alignItems: 'center', gap: 8, padding: '6px 12px',
-          borderTop: `1px solid ${colors.border}`, fontSize: 10, color: colors.textDim,
-          fontFamily: "'Geist Sans', sans-serif",
+          borderTop: `1px solid ${colors.border}`, fontSize: 11, color: colors.textDim,
+          fontFamily: TYPOGRAPHY.fontSans,
         }}
       >
         <span>Tick {tick}/{maxTick}</span>
@@ -93,8 +94,8 @@ export function CodeLatticePanel() {
         />
         <span style={{ display: 'flex', gap: 8 }}>
           <span style={{ color: colors.textDim }}>● data</span>
-          <span style={{ color: colors.accent }}>■ X</span>
-          <span style={{ color: colors.dirac }}>■ Z</span>
+          <span style={{ color: colors.basisX }}>■ X</span>
+          <span style={{ color: colors.basisZ }}>■ Z</span>
         </span>
       </div>
     </div>

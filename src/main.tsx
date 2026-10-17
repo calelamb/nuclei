@@ -7,6 +7,7 @@ import './styles/tokens.css'
 import './components/qec/workbench/qecWorkbench.css'
 import './components/qec/workbench/qecWorkbenchResponsive.css'
 import './index.css'
+import './components/ui/ui.css'
 import App from './App.tsx'
 import { installFileDropGuard } from './platform/fileDropGuard'
 

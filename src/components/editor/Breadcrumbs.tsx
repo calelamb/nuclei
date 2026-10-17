@@ -4,6 +4,7 @@ import { useExperimentUiStore } from '../../stores/experimentUiStore';
 import { useExperimentStore } from '../../services/experimentStore';
 import { ChevronRight, MoreHorizontal } from 'lucide-react';
 
+import { TYPOGRAPHY } from '../../styles/tokens';
 const MAX_VISIBLE_SEGMENTS = 3;
 
 /** Shared breadcrumb bar chrome — the file trail and the experiment→run trail
@@ -65,19 +66,19 @@ export function Breadcrumbs() {
           title={filePath ?? undefined}
           style={{ display: 'flex', alignItems: 'center', gap: 2, color: colors.textDim }}
         >
-          <MoreHorizontal size={11} />
-          <ChevronRight size={10} />
+          <MoreHorizontal size={12} />
+          <ChevronRight size={12} />
         </span>
       )}
       {visible.map((seg, i) => {
         const isLast = i === visible.length - 1;
         return (
           <span key={`${seg}-${i}`} style={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-            {i > 0 && <ChevronRight size={10} style={{ color: colors.textDim }} />}
+            {i > 0 && <ChevronRight size={12} style={{ color: colors.textDim }} />}
             <span
               style={{
                 fontSize: 11,
-                fontFamily: "'Geist Sans', system-ui, sans-serif",
+                fontFamily: TYPOGRAPHY.fontSans,
                 color: isLast ? colors.textMuted : colors.textDim,
                 whiteSpace: 'nowrap',
               }}
@@ -120,7 +121,7 @@ export function ExperimentBreadcrumbs() {
 
   const segmentStyle = (isLast: boolean, clickable: boolean): React.CSSProperties => ({
     fontSize: 11,
-    fontFamily: "'Geist Sans', system-ui, sans-serif",
+    fontFamily: TYPOGRAPHY.fontSans,
     color: isLast ? colors.textMuted : colors.accent,
     whiteSpace: 'nowrap',
     background: 'transparent',
@@ -140,8 +141,8 @@ export function ExperimentBreadcrumbs() {
       )}
       {trailing && (
         <span style={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-          <ChevronRight size={10} style={{ color: colors.textDim }} />
-          <span style={{ ...segmentStyle(true, false), fontFamily: "'Fira Code', monospace" }}>
+          <ChevronRight size={12} style={{ color: colors.textDim }} />
+          <span style={{ ...segmentStyle(true, false), fontFamily: TYPOGRAPHY.fontMono }}>
             {trailing}
           </span>
         </span>

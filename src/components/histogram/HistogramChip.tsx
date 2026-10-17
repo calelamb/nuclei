@@ -1,6 +1,7 @@
 import { X, Maximize2 } from 'lucide-react';
 import { useThemeStore } from '../../stores/themeStore';
 
+import { TYPOGRAPHY } from '../../styles/tokens';
 interface HistogramChipProps {
   probabilities: Record<string, number> | null;
   /**
@@ -68,7 +69,7 @@ export function HistogramChip({
         border: `1px solid ${colors.border}`,
         borderRadius: 10,
         fontSize: 11,
-        fontFamily: "'Geist Sans', sans-serif",
+        fontFamily: TYPOGRAPHY.fontSans,
       }}
     >
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, flex: 1, minWidth: 0 }}>
@@ -80,7 +81,7 @@ export function HistogramChip({
           >
             <span
               style={{
-                fontFamily: "'JetBrains Mono', ui-monospace, monospace",
+                fontFamily: TYPOGRAPHY.fontMono,
                 color: colors.accentLight,
                 flexShrink: 0,
               }}

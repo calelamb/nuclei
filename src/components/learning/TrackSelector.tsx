@@ -6,6 +6,7 @@ import { CURATED_VIDEOS } from '../../data/videos/curatedLibrary';
 import { BookOpen, ChevronRight, CheckCircle, Lock, Play } from 'lucide-react';
 import { openExternal, buildYouTubeWatchUrl } from '../../lib/openExternal';
 
+import { TYPOGRAPHY } from '../../styles/tokens';
 export function TrackSelector() {
   const colors = useThemeStore((s) => s.colors);
   const shadow = useThemeStore((s) => s.shadow);
@@ -41,9 +42,9 @@ export function TrackSelector() {
           <div>
             <h1 style={{
               color: colors.text,
-              fontSize: 24,
+              fontSize: 20,
               fontWeight: 700,
-              fontFamily: "'Geist Sans', sans-serif",
+              fontFamily: TYPOGRAPHY.fontSans,
               margin: 0,
             }}>
               Learn Quantum Computing
@@ -51,7 +52,7 @@ export function TrackSelector() {
             <p style={{
               color: colors.textMuted,
               fontSize: 14,
-              fontFamily: "'Geist Sans', sans-serif",
+              fontFamily: TYPOGRAPHY.fontSans,
               margin: '2px 0 0',
             }}>
               Code-first lessons with interactive demos. Watch, play, prove.
@@ -114,12 +115,12 @@ export function TrackSelector() {
                   : colors.bgPanel,
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
                 color: hasLessons ? colors.accent : colors.textDim,
-                fontSize: 18, fontWeight: 700,
-                fontFamily: "'Geist Sans', sans-serif",
+                fontSize: 16, fontWeight: 700,
+                fontFamily: TYPOGRAPHY.fontSans,
               }}>
                 {completed === lessonCount && lessonCount > 0
-                  ? <CheckCircle size={22} />
-                  : !hasLessons ? <Lock size={18} />
+                  ? <CheckCircle size={20} />
+                  : !hasLessons ? <Lock size={16} />
                   : track.id.split('-')[1]
                 }
               </div>
@@ -130,7 +131,7 @@ export function TrackSelector() {
                   color: colors.text,
                   fontSize: 16,
                   fontWeight: 600,
-                  fontFamily: "'Geist Sans', sans-serif",
+                  fontFamily: TYPOGRAPHY.fontSans,
                   marginBottom: 4,
                 }}>
                   {track.title}
@@ -138,7 +139,7 @@ export function TrackSelector() {
                 <div style={{
                   color: colors.textMuted,
                   fontSize: 13,
-                  fontFamily: "'Geist Sans', sans-serif",
+                  fontFamily: TYPOGRAPHY.fontSans,
                   lineHeight: 1.4,
                   marginBottom: 8,
                 }}>
@@ -148,15 +149,15 @@ export function TrackSelector() {
                 <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                   <span style={{
                     color: colors.textDim, fontSize: 11,
-                    fontFamily: "'Geist Sans', sans-serif",
+                    fontFamily: TYPOGRAPHY.fontSans,
                   }}>
                     {hasLessons ? `${lessonCount} lessons` : 'Coming soon'}
                   </span>
                   <span style={{
                     padding: '1px 6px', borderRadius: 3,
                     background: `${colors.accent}12`,
-                    color: colors.accent, fontSize: 10,
-                    fontWeight: 500, fontFamily: "'Geist Sans', sans-serif",
+                    color: colors.accent, fontSize: 11,
+                    fontWeight: 500, fontFamily: TYPOGRAPHY.fontSans,
                   }}>
                     {track.difficulty}
                   </span>
@@ -176,8 +177,8 @@ export function TrackSelector() {
                         }} />
                       </div>
                       <span style={{
-                        color: colors.textDim, fontSize: 10,
-                        fontFamily: "'Geist Sans', sans-serif",
+                        color: colors.textDim, fontSize: 11,
+                        fontFamily: TYPOGRAPHY.fontSans,
                       }}>
                         {completed}/{lessonCount}
                       </span>
@@ -201,18 +202,18 @@ export function TrackSelector() {
           <div>
             <h2 style={{
               color: colors.text, fontSize: 20, fontWeight: 700,
-              fontFamily: "'Geist Sans', sans-serif", margin: 0,
+              fontFamily: TYPOGRAPHY.fontSans, margin: 0,
             }}>
               Video Library
             </h2>
             <p style={{
               color: colors.textMuted, fontSize: 13,
-              fontFamily: "'Geist Sans', sans-serif", margin: '4px 0 0',
+              fontFamily: TYPOGRAPHY.fontSans, margin: '4px 0 0',
             }}>
               Curated from 3Blue1Brown, IBM, NVIDIA, and Qiskit
             </p>
           </div>
-          <span style={{ color: colors.textDim, fontSize: 12, fontFamily: "'Geist Sans', sans-serif" }}>
+          <span style={{ color: colors.textDim, fontSize: 12, fontFamily: TYPOGRAPHY.fontSans }}>
             {CURATED_VIDEOS.length} videos
           </span>
         </div>
@@ -237,7 +238,7 @@ export function TrackSelector() {
                   background: active ? `${tab.color}18` : 'transparent',
                   color: active ? tab.color : colors.textMuted,
                   fontSize: 12, fontWeight: active ? 600 : 400,
-                  fontFamily: "'Geist Sans', sans-serif",
+                  fontFamily: TYPOGRAPHY.fontSans,
                   cursor: 'pointer', transition: 'all 150ms',
                 }}
                 onMouseEnter={(e) => { if (!active) { e.currentTarget.style.borderColor = colors.borderStrong; e.currentTarget.style.color = colors.text; } }}
@@ -294,7 +295,7 @@ export function TrackSelector() {
                       background: 'rgba(0,0,0,0.7)', display: 'flex',
                       alignItems: 'center', justifyContent: 'center',
                     }}>
-                      <Play size={22} color="#fff" fill="#fff" />
+                      <Play size={20} color="#fff" fill="#fff" />
                     </div>
                   </div>
                   {/* Duration badge */}
@@ -302,7 +303,7 @@ export function TrackSelector() {
                     position: 'absolute', bottom: 6, right: 6,
                     background: 'rgba(0,0,0,0.8)', color: '#fff',
                     padding: '2px 6px', borderRadius: 4,
-                    fontSize: 11, fontFamily: "'Geist Mono', monospace",
+                    fontSize: 11, fontFamily: TYPOGRAPHY.fontMono,
                   }}>
                     {video.duration}
                   </div>
@@ -311,7 +312,7 @@ export function TrackSelector() {
                 <div style={{ padding: '10px 12px' }}>
                   <div style={{
                     color: colors.text, fontSize: 13, fontWeight: 500,
-                    fontFamily: "'Geist Sans', sans-serif",
+                    fontFamily: TYPOGRAPHY.fontSans,
                     lineHeight: 1.3, marginBottom: 6,
                     display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden',
                   }}>
@@ -321,14 +322,14 @@ export function TrackSelector() {
                     <span style={{
                       padding: '1px 6px', borderRadius: 3,
                       background: `${creatorColor}15`, color: creatorColor,
-                      fontSize: 10, fontWeight: 600, fontFamily: "'Geist Sans', sans-serif",
+                      fontSize: 11, fontWeight: 600, fontFamily: TYPOGRAPHY.fontSans,
                     }}>
                       {creatorLabel}
                     </span>
                     <span style={{
                       padding: '1px 6px', borderRadius: 3,
                       background: `${diffColor}15`, color: diffColor,
-                      fontSize: 10, fontWeight: 500, fontFamily: "'Geist Sans', sans-serif",
+                      fontSize: 11, fontWeight: 500, fontFamily: TYPOGRAPHY.fontSans,
                       textTransform: 'capitalize',
                     }}>
                       {video.difficulty}
@@ -336,7 +337,7 @@ export function TrackSelector() {
                   </div>
                   <div style={{
                     color: colors.textDim, fontSize: 11,
-                    fontFamily: "'Geist Sans', sans-serif",
+                    fontFamily: TYPOGRAPHY.fontSans,
                     marginTop: 4, lineHeight: 1.4,
                   }}>
                     {video.description}

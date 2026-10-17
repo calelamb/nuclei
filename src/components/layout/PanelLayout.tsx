@@ -42,6 +42,7 @@ import { ChevronDown, ChevronUp, Trash2, Copy, Clock } from 'lucide-react';
 import { useBottomPanelStore } from '../../stores/bottomPanelStore';
 import type { TerminalLine } from '../../stores/simulationStore';
 
+import { TYPOGRAPHY } from '../../styles/tokens';
 const LearnModeView = lazy(async () => ({
   default: (await import('../learning/LearnModeView')).LearnModeView,
 }));
@@ -155,8 +156,8 @@ function ToolbarButton({
         borderRadius: 3,
         color: active ? colors.accent : colors.textDim,
         cursor: 'pointer',
-        fontSize: 10,
-        fontFamily: "'Geist Sans', sans-serif",
+        fontSize: 11,
+        fontFamily: TYPOGRAPHY.fontSans,
         fontWeight: 500,
       }}
       onMouseEnter={(e) => {
@@ -206,18 +207,18 @@ function TerminalToolbar({
       aria-label="Terminal toolbar"
     >
       <ToolbarButton onClick={onClear} title="Clear terminal">
-        <Trash2 size={11} />
+        <Trash2 size={12} />
       </ToolbarButton>
       <ToolbarButton onClick={onCopy} title={copied ? 'Copied!' : 'Copy all output'}>
-        <Copy size={11} />
-        {copied && <span style={{ fontSize: 9 }}>copied</span>}
+        <Copy size={12} />
+        {copied && <span style={{ fontSize: 11 }}>copied</span>}
       </ToolbarButton>
       <ToolbarButton
         onClick={toggleShowTimestamps}
         title="Toggle timestamps"
         active={showTimestamps}
       >
-        <Clock size={11} />
+        <Clock size={12} />
       </ToolbarButton>
       <ToolbarButton
         onClick={toggleAutoScroll}
@@ -242,9 +243,8 @@ function TerminalToolbar({
           border: `1px solid ${colors.border}`,
           borderRadius: 3,
           color: colors.text,
-          fontSize: 10,
-          fontFamily: "'Geist Sans', sans-serif",
-          outline: 'none',
+          fontSize: 11,
+          fontFamily: TYPOGRAPHY.fontSans,
         }}
       />
 
@@ -253,8 +253,8 @@ function TerminalToolbar({
       <span
         style={{
           color: colors.textDim,
-          fontSize: 10,
-          fontFamily: "'Geist Mono', monospace",
+          fontSize: 11,
+          fontFamily: TYPOGRAPHY.fontMono,
         }}
       >
         {lineCount} {lineCount === 1 ? 'line' : 'lines'}
@@ -316,7 +316,7 @@ function TerminalPanel() {
         style={{
           flex: 1,
           overflow: 'auto',
-          fontFamily: "'Geist Mono', 'JetBrains Mono', monospace",
+          fontFamily: TYPOGRAPHY.fontMono,
           fontSize: 12,
           color: colors.text,
           padding: '8px 12px',
@@ -332,13 +332,13 @@ function TerminalPanel() {
               border: `1px solid ${colors.dirac}40`,
               borderRadius: 10,
               background: `${colors.dirac}12`,
-              fontFamily: "'Geist Sans', sans-serif",
+              fontFamily: TYPOGRAPHY.fontSans,
               fontSize: 12,
               lineHeight: 1.5,
               color: colors.text,
             }}
           >
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6, color: colors.dirac, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.5, fontSize: 10 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6, color: colors.diracText, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.5, fontSize: 11 }}>
               Dirac
             </div>
             <div style={{ marginBottom: rewritten.fix ? 10 : 0 }}>{rewritten.explanation}</div>
@@ -349,7 +349,7 @@ function TerminalPanel() {
                   style={{
                     background: colors.dirac, color: '#fff', border: 'none',
                     borderRadius: 6, padding: '4px 10px', fontSize: 11, fontWeight: 600,
-                    cursor: 'pointer', fontFamily: "'Geist Sans', sans-serif",
+                    cursor: 'pointer', fontFamily: TYPOGRAPHY.fontSans,
                   }}
                 >Apply fix</button>
               )}
@@ -359,7 +359,7 @@ function TerminalPanel() {
                   background: 'transparent', color: colors.textDim,
                   border: `1px solid ${colors.border}`,
                   borderRadius: 6, padding: '4px 10px', fontSize: 11,
-                  cursor: 'pointer', fontFamily: "'Geist Sans', sans-serif",
+                  cursor: 'pointer', fontFamily: TYPOGRAPHY.fontSans,
                 }}
               >Dismiss</button>
             </div>
@@ -367,7 +367,7 @@ function TerminalPanel() {
         )}
         {visibleLines.length === 0 && !rewritten ? (
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: colors.textDim }}>
-            <span style={{ color: colors.accent, opacity: 0.3, fontFamily: "'Geist Mono', monospace" }}>{'>'}_</span>
+            <span style={{ color: colors.accent, opacity: 0.3, fontFamily: TYPOGRAPHY.fontMono }}>{'>'}_</span>
             <span style={{ fontSize: 11 }}>
               {filterLower ? 'No lines match the filter.' : 'Terminal output will appear here'}
             </span>
@@ -463,8 +463,8 @@ function BottomPanel({
               color: !collapsed && activeTab === tab ? colors.text : colors.textDim,
               border: 'none',
               borderBottom: !collapsed && activeTab === tab ? `1px solid ${colors.accent}` : '1px solid transparent',
-              cursor: 'pointer', fontSize: 10, fontWeight: 500,
-              fontFamily: "'Geist Sans', sans-serif", textTransform: 'uppercase', letterSpacing: 0.5,
+              cursor: 'pointer', fontSize: 11, fontWeight: 500,
+              fontFamily: TYPOGRAPHY.fontSans, textTransform: 'uppercase', letterSpacing: 0.5,
             }}
             role="tab"
             aria-selected={!collapsed && activeTab === tab}

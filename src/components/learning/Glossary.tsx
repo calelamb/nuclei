@@ -3,6 +3,7 @@ import { useGlossaryStore } from '../../stores/glossaryStore';
 import { useThemeStore } from '../../stores/themeStore';
 import { GlossaryEntry } from './GlossaryEntry';
 
+import { TYPOGRAPHY } from '../../styles/tokens';
 const CATEGORIES = [
   { key: 'all', label: 'All' },
   { key: 'basics', label: 'Basics' },
@@ -35,16 +36,16 @@ export function Glossary() {
             type="text"
             placeholder="Search terms..."
             aria-label="Search glossary terms"
+            className="nuclei-bare-input"
             value={searchQuery}
             onChange={(e) => setSearch(e.target.value)}
             style={{
               flex: 1,
               background: 'transparent',
               border: 'none',
-              outline: 'none',
               color: colors.text,
               fontSize: 12,
-              fontFamily: 'Geist Sans, Inter, sans-serif',
+              fontFamily: TYPOGRAPHY.fontSans,
             }}
           />
         </div>
@@ -58,8 +59,8 @@ export function Glossary() {
             onClick={() => setCategory(cat.key)}
             style={{
               padding: '2px 8px',
-              fontSize: 10,
-              fontFamily: 'Geist Sans, Inter, sans-serif',
+              fontSize: 11,
+              fontFamily: TYPOGRAPHY.fontSans,
               fontWeight: selectedCategory === cat.key ? 600 : 400,
               background: selectedCategory === cat.key ? colors.accent + '22' : 'transparent',
               color: selectedCategory === cat.key ? colors.accent : colors.textMuted,
@@ -77,7 +78,7 @@ export function Glossary() {
       {/* Term list */}
       <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: '0 12px 12px' }}>
         {filteredTerms.length === 0 ? (
-          <div style={{ color: colors.textDim, fontSize: 12, fontFamily: 'Geist Sans, Inter, sans-serif', textAlign: 'center', paddingTop: 24 }}>
+          <div style={{ color: colors.textDim, fontSize: 12, fontFamily: TYPOGRAPHY.fontSans, textAlign: 'center', paddingTop: 24 }}>
             No terms found.
           </div>
         ) : (

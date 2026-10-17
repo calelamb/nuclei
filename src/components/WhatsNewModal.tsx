@@ -7,6 +7,7 @@ import { openExternal } from '../lib/openExternal';
 import { WhatsNewHeader } from './WhatsNewHeader';
 import { WhatsNewHighlightRow } from './WhatsNewHighlightRow';
 
+import { TYPOGRAPHY } from '../styles/tokens';
 const SEEN_STORAGE_KEY = 'nuclei:whats_new_seen_version';
 const CHANGELOG_URL = 'https://github.com/calelamb/nuclei/releases';
 const TITLE_ID = 'whats-new-title';
@@ -202,7 +203,7 @@ export function WhatsNewModal({
             borderRadius: 16,
             boxShadow: `0 0 0 1px ${colors.accent}22, 0 24px 60px -20px ${colors.accent}40, ${shadow.lg}`,
             overflow: 'hidden',
-            fontFamily: "'Geist Sans', sans-serif",
+            fontFamily: TYPOGRAPHY.fontSans,
             opacity: shown ? 1 : 0,
             transform: reduced
               ? 'none'
@@ -244,12 +245,11 @@ export function WhatsNewModal({
               display: 'flex',
               alignItems: 'center',
               borderRadius: 6,
-              outline: 'none',
               boxShadow: dismissFocus ? `0 0 0 2px ${colors.accent}66` : 'none',
               transition: `background ${DURATION.fast}ms ${EASING.enter}, color ${DURATION.fast}ms ${EASING.enter}, box-shadow ${DURATION.fast}ms ${EASING.enter}`,
             }}
           >
-            <X size={15} />
+            <X size={16} />
           </button>
 
           <div style={{ overflowY: 'auto', padding: '28px 28px 22px' }}>
@@ -264,8 +264,8 @@ export function WhatsNewModal({
               id={TITLE_ID}
               style={{
                 margin: 0,
-                fontSize: 24,
-                fontWeight: 650,
+                fontSize: 20,
+                fontWeight: 600,
                 letterSpacing: '-0.02em',
                 lineHeight: 1.25,
                 color: colors.text,
@@ -278,7 +278,7 @@ export function WhatsNewModal({
               <p
                 style={{
                   margin: '6px 0 0',
-                  fontSize: 13.5,
+                  fontSize: 13,
                   lineHeight: 1.5,
                   color: colors.textMuted,
                 }}
@@ -338,7 +338,7 @@ export function WhatsNewModal({
                   display: 'inline-flex',
                   alignItems: 'center',
                   gap: 4,
-                  fontSize: 12.5,
+                  fontSize: 13,
                   fontWeight: 500,
                   textDecoration: 'none',
                   color: linkHover ? colors.text : colors.textMuted,
@@ -346,7 +346,7 @@ export function WhatsNewModal({
                 }}
               >
                 Full changelog
-                <ArrowUpRight size={13} />
+                <ArrowUpRight size={14} />
               </a>
               <button
                 ref={primaryButtonRef}
@@ -362,16 +362,15 @@ export function WhatsNewModal({
                   borderRadius: 8,
                   padding: '7px 16px',
                   cursor: 'pointer',
-                  fontSize: 12.5,
+                  fontSize: 13,
                   fontWeight: 600,
-                  fontFamily: "'Geist Sans', sans-serif",
+                  fontFamily: TYPOGRAPHY.fontSans,
                   boxShadow: gotItFocus
                     ? `0 0 0 2px ${colors.accent}66`
                     : gotItHover
                       ? shadow.md
                       : shadow.sm,
                   transform: gotItHover ? 'translateY(-1px)' : 'translateY(0)',
-                  outline: 'none',
                   transition: `background ${DURATION.fast}ms ${EASING.enter}, box-shadow ${DURATION.fast}ms ${EASING.enter}, transform ${DURATION.fast}ms ${EASING.enter}`,
                 }}
               >

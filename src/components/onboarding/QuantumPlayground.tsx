@@ -3,6 +3,8 @@ import { useThemeStore } from '../../stores/themeStore';
 import { useEditorStore } from '../../stores/editorStore';
 import { EASING, DURATION, getDuration, prefersReducedMotion } from '../../lib/animations';
 
+import { TYPOGRAPHY } from '../../styles/tokens';
+import { Button } from '../ui';
 interface PlaygroundState {
   step: number;
   qubitState: 'zero' | 'one' | 'superposition' | 'measured';
@@ -78,8 +80,8 @@ function QubitViz({ state, label, size = 120 }: { state: PlaygroundState['qubitS
           fill="none" stroke={colors.border} strokeWidth={1.5}
           opacity={0.4}
         />
-        <text x={size / 2} y={12} textAnchor="middle" fill={colors.textMuted} fontSize={10} fontFamily="'Geist Sans', Inter, sans-serif">|0⟩</text>
-        <text x={size / 2} y={size - 4} textAnchor="middle" fill={colors.textMuted} fontSize={10} fontFamily="'Geist Sans', Inter, sans-serif">|1⟩</text>
+        <text x={size / 2} y={12} textAnchor="middle" fill={colors.textMuted} fontSize={10} fontFamily={TYPOGRAPHY.fontSans}>|0⟩</text>
+        <text x={size / 2} y={size - 4} textAnchor="middle" fill={colors.textMuted} fontSize={10} fontFamily={TYPOGRAPHY.fontSans}>|1⟩</text>
         <line
           x1={size / 2} y1={size / 2}
           x2={size / 2 + arrowX} y2={size / 2 + arrowY}
@@ -97,7 +99,7 @@ function QubitViz({ state, label, size = 120 }: { state: PlaygroundState['qubitS
         />
       </svg>
       {label && (
-        <span style={{ color: colors.textMuted, fontSize: 11, fontFamily: "'Geist Sans', sans-serif" }}>{label}</span>
+        <span style={{ color: colors.textMuted, fontSize: 11, fontFamily: TYPOGRAPHY.fontSans }}>{label}</span>
       )}
     </div>
   );
@@ -122,8 +124,8 @@ function MiniHistogram({ measurements }: { measurements: number[] }) {
           borderRadius: '4px 4px 0 0',
           transition: `height ${getDuration(DURATION.normal)}ms ${EASING.enter}`,
         }} />
-        <span style={{ color: colors.text, fontSize: 11, fontFamily: "'Geist Sans', sans-serif" }}>|0⟩</span>
-        <span style={{ color: colors.textMuted, fontSize: 10 }}>{zeros}</span>
+        <span style={{ color: colors.text, fontSize: 11, fontFamily: TYPOGRAPHY.fontSans }}>|0⟩</span>
+        <span style={{ color: colors.textMuted, fontSize: 11 }}>{zeros}</span>
       </div>
       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
         <div style={{
@@ -131,8 +133,8 @@ function MiniHistogram({ measurements }: { measurements: number[] }) {
           borderRadius: '4px 4px 0 0',
           transition: `height ${getDuration(DURATION.normal)}ms ${EASING.enter}`,
         }} />
-        <span style={{ color: colors.text, fontSize: 11, fontFamily: "'Geist Sans', sans-serif" }}>|1⟩</span>
-        <span style={{ color: colors.textMuted, fontSize: 10 }}>{ones}</span>
+        <span style={{ color: colors.text, fontSize: 11, fontFamily: TYPOGRAPHY.fontSans }}>|1⟩</span>
+        <span style={{ color: colors.textMuted, fontSize: 11 }}>{ones}</span>
       </div>
     </div>
   );
@@ -203,7 +205,7 @@ export function QuantumPlayground({ onComplete, onBridgeToIDE }: PlaygroundProps
   return (
     <div style={{
       position: 'fixed', inset: 0, zIndex: 4000,
-      background: `linear-gradient(135deg, ${colors.bg} 0%, #080E18 100%)`,
+      background: `linear-gradient(135deg, ${colors.bg} 0%, ${colors.bgPanel} 100%)`,
       display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
       padding: 32,
       opacity: pg.bridging ? 0 : 1,
@@ -222,24 +224,20 @@ export function QuantumPlayground({ onComplete, onBridgeToIDE }: PlaygroundProps
       </div>
 
       {/* Skip button */}
-      <button
+      <Button
+        variant="ghost"
         onClick={onComplete}
-        style={{
-          position: 'absolute', top: 32, right: 32,
-          background: 'none', border: 'none',
-          color: colors.textMuted, cursor: 'pointer',
-          fontSize: 13, fontFamily: "'Geist Sans', sans-serif",
-        }}
+        style={{ position: 'absolute', top: 24, right: 24 }}
         aria-label="Skip onboarding"
       >
         Skip
-      </button>
+      </Button>
 
       {/* Main content */}
       <div style={{ maxWidth: 560, width: '100%', textAlign: 'center' }}>
         <h1 style={{
           color: colors.accent, fontSize: 28, fontWeight: 700,
-          fontFamily: "'Geist Sans', Inter, sans-serif",
+          fontFamily: TYPOGRAPHY.fontSans,
           marginBottom: 16,
           animation: prefersReducedMotion() ? 'none' : `nuclei-fade-in ${DURATION.slow}ms ${EASING.enter}`,
         }}>
@@ -266,12 +264,12 @@ export function QuantumPlayground({ onComplete, onBridgeToIDE }: PlaygroundProps
           marginBottom: 24,
           animation: prefersReducedMotion() ? 'none' : `nuclei-slide-up ${DURATION.slow}ms ${EASING.enter}`,
         }}>
-          <span style={{ color: colors.dirac, fontSize: 12, fontWeight: 600, fontFamily: "'Geist Sans', sans-serif", display: 'block', marginBottom: 6 }}>
+          <span style={{ color: colors.diracText, fontSize: 12, fontWeight: 600, fontFamily: TYPOGRAPHY.fontSans, display: 'block', marginBottom: 6 }}>
             Dirac
           </span>
           <p style={{
-            color: colors.text, fontSize: 15,
-            fontFamily: "'Geist Sans', Inter, sans-serif",
+            color: colors.text, fontSize: 14,
+            fontFamily: TYPOGRAPHY.fontSans,
             lineHeight: 1.7, margin: 0,
           }}>
             {currentStep?.dirac}
@@ -290,7 +288,7 @@ export function QuantumPlayground({ onComplete, onBridgeToIDE }: PlaygroundProps
             cursor: 'pointer',
             fontSize: 16,
             fontWeight: 600,
-            fontFamily: "'Geist Sans', Inter, sans-serif",
+            fontFamily: TYPOGRAPHY.fontSans,
             transition: `transform ${getDuration(DURATION.normal)}ms ${EASING.enter}, box-shadow ${getDuration(DURATION.normal)}ms`,
           }}
           onMouseDown={(e) => { (e.target as HTMLElement).style.transform = 'scale(0.97)'; }}

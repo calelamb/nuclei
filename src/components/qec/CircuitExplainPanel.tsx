@@ -62,7 +62,7 @@ export function CircuitExplainPanel() {
           </div>
         )}
         {error && (
-          <div role="alert" style={{ fontSize: 11.5, color: colors.error, lineHeight: 1.5 }}>
+          <div role="alert" style={{ fontSize: 12, color: colors.error, lineHeight: 1.5 }}>
             {error}
           </div>
         )}
@@ -75,7 +75,7 @@ export function CircuitExplainPanel() {
           <NondeterministicSection data={result.nondeterministic} stale={stale} onJump={revealLine} />
         )}
         {result?.min_weight && <MinWeightSection data={result.min_weight} stale={stale} onJump={revealLine} />}
-        <div style={{ fontSize: 10, color: colors.textDim }}>{STATIC_NOTE}</div>
+        <div style={{ fontSize: 11, color: colors.textDim }}>{STATIC_NOTE}</div>
       </div>
     </section>
   );

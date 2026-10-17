@@ -2,6 +2,7 @@ import { Clock } from 'lucide-react';
 import type { CapstoneProject } from '../../data/capstoneProjects';
 import { useThemeStore } from '../../stores/themeStore';
 
+import { TYPOGRAPHY } from '../../styles/tokens';
 interface CapstoneCardProps {
   project: CapstoneProject;
   completedCount: number;
@@ -27,12 +28,12 @@ export function CapstoneCard({ project, completedCount, onStart }: CapstoneCardP
     }}>
       {/* Title + difficulty */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-        <span style={{ color: colors.text, fontSize: 14, fontWeight: 600, fontFamily: 'Geist Sans, Inter, sans-serif', flex: 1 }}>
+        <span style={{ color: colors.text, fontSize: 14, fontWeight: 600, fontFamily: TYPOGRAPHY.fontSans, flex: 1 }}>
           {project.title}
         </span>
         <span style={{
-          fontSize: 9,
-          fontFamily: 'Geist Sans, Inter, sans-serif',
+          fontSize: 11,
+          fontFamily: TYPOGRAPHY.fontSans,
           padding: '1px 6px',
           borderRadius: 10,
           background: diffColor + '22',
@@ -49,7 +50,7 @@ export function CapstoneCard({ project, completedCount, onStart }: CapstoneCardP
       <div style={{
         color: colors.textMuted,
         fontSize: 12,
-        fontFamily: 'Geist Sans, Inter, sans-serif',
+        fontFamily: TYPOGRAPHY.fontSans,
         lineHeight: 1.4,
         display: '-webkit-box',
         WebkitLineClamp: 2,
@@ -60,9 +61,9 @@ export function CapstoneCard({ project, completedCount, onStart }: CapstoneCardP
       </div>
 
       {/* Meta */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12, color: colors.textDim, fontSize: 11, fontFamily: 'Geist Sans, Inter, sans-serif' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, color: colors.textDim, fontSize: 11, fontFamily: TYPOGRAPHY.fontSans }}>
         <span style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
-          <Clock size={10} />
+          <Clock size={12} />
           {project.estimatedWeeks} week{project.estimatedWeeks > 1 ? 's' : ''}
         </span>
         <span>
@@ -88,7 +89,7 @@ export function CapstoneCard({ project, completedCount, onStart }: CapstoneCardP
           cursor: 'pointer',
           fontSize: 11,
           fontWeight: 600,
-          fontFamily: 'Geist Sans, Inter, sans-serif',
+          fontFamily: TYPOGRAPHY.fontSans,
           alignSelf: 'flex-start',
         }}
       >

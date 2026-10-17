@@ -10,6 +10,7 @@ import type { Framework, SimulationResult, KernelResponse } from '../../types/qu
 import { Play, Lightbulb, CheckCircle, XCircle, HelpCircle, Terminal } from 'lucide-react';
 import { hasExpectedDistribution, isQuantumCode, validateExerciseResult } from './exerciseValidation';
 
+import { TYPOGRAPHY } from '../../styles/tokens';
 interface ExerciseBlockProps {
   id: string;
   title: string;
@@ -232,7 +233,7 @@ export function ExerciseBlock({
           color: colors.textMuted,
           fontSize: 12,
           fontWeight: 500,
-          fontFamily: "'Geist Sans', sans-serif",
+          fontFamily: TYPOGRAPHY.fontSans,
           textTransform: 'uppercase',
           letterSpacing: 0.5,
         }}>
@@ -247,7 +248,7 @@ export function ExerciseBlock({
           color: colors.text,
           fontSize: 16,
           fontWeight: 600,
-          fontFamily: "'Geist Sans', sans-serif",
+          fontFamily: TYPOGRAPHY.fontSans,
           marginBottom: 6,
         }}>
           {title}
@@ -255,7 +256,7 @@ export function ExerciseBlock({
         <div style={{
           color: colors.textMuted,
           fontSize: 14,
-          fontFamily: "'Geist Sans', sans-serif",
+          fontFamily: TYPOGRAPHY.fontSans,
           lineHeight: 1.5,
         }}>
           {description}
@@ -283,7 +284,7 @@ export function ExerciseBlock({
             overviewRulerLanes: 0,
             scrollbar: { vertical: 'hidden', horizontal: 'auto' },
             padding: { top: 8, bottom: 8 },
-            fontFamily: "'JetBrains Mono', 'Geist Mono', monospace",
+            fontFamily: TYPOGRAPHY.fontMono,
           }}
         />
       </div>
@@ -301,7 +302,7 @@ export function ExerciseBlock({
           padding: '6px 14px',
           background: isRunning ? colors.bgPanel : colors.accent,
           color: '#fff', border: 'none', borderRadius: 6,
-          fontSize: 12, fontWeight: 600, fontFamily: "'Geist Sans', sans-serif",
+          fontSize: 12, fontWeight: 600, fontFamily: TYPOGRAPHY.fontSans,
           cursor: isRunning ? 'default' : 'pointer',
         }}>
           <Play size={12} fill="currentColor" />
@@ -313,7 +314,7 @@ export function ExerciseBlock({
             padding: '6px 14px',
             background: colors.success,
             color: '#fff', border: 'none', borderRadius: 6,
-            fontSize: 12, fontWeight: 600, fontFamily: "'Geist Sans', sans-serif",
+            fontSize: 12, fontWeight: 600, fontFamily: TYPOGRAPHY.fontSans,
             cursor: 'pointer',
           }}>
             <CheckCircle size={12} />
@@ -322,10 +323,10 @@ export function ExerciseBlock({
         )}
         {feedback?.success && !hasExpectations && (
           <span style={{
-            color: colors.success, fontSize: 11, fontFamily: "'Geist Sans', sans-serif",
+            color: colors.success, fontSize: 11, fontFamily: TYPOGRAPHY.fontSans,
             display: 'flex', alignItems: 'center', gap: 4,
           }}>
-            <CheckCircle size={11} />
+            <CheckCircle size={12} />
             Code ran successfully — explore the output above
           </span>
         )}
@@ -336,7 +337,7 @@ export function ExerciseBlock({
             padding: '6px 14px',
             background: 'transparent', color: colors.warning,
             border: `1px solid ${colors.warning}40`, borderRadius: 6,
-            fontSize: 12, fontFamily: "'Geist Sans', sans-serif",
+            fontSize: 12, fontFamily: TYPOGRAPHY.fontSans,
             cursor: 'pointer',
           }}>
             <Lightbulb size={12} />
@@ -352,7 +353,7 @@ export function ExerciseBlock({
           background: `${colors.error}10`,
           color: colors.error,
           fontSize: 12,
-          fontFamily: "'Geist Mono', monospace",
+          fontFamily: TYPOGRAPHY.fontMono,
           borderBottom: `1px solid ${colors.border}`,
         }}>
           {error}
@@ -372,7 +373,7 @@ export function ExerciseBlock({
             <div key={i} style={{
               display: 'flex', gap: 8, alignItems: 'flex-start',
               color: colors.warning, fontSize: 13,
-              fontFamily: "'Geist Sans', sans-serif",
+              fontFamily: TYPOGRAPHY.fontSans,
             }}>
               <Lightbulb size={14} style={{ marginTop: 2, flexShrink: 0 }} />
               <span style={{ color: colors.textMuted }}>{hint}</span>
@@ -390,10 +391,10 @@ export function ExerciseBlock({
           maxHeight: 120, overflowY: 'auto',
         }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginBottom: 4 }}>
-            <Terminal size={10} color={colors.textDim} />
-            <span style={{ color: colors.textDim, fontSize: 10, fontFamily: "'Geist Sans', sans-serif", textTransform: 'uppercase', letterSpacing: 0.5 }}>Output</span>
+            <Terminal size={12} color={colors.textDim} />
+            <span style={{ color: colors.textDim, fontSize: 11, fontFamily: TYPOGRAPHY.fontSans, textTransform: 'uppercase', letterSpacing: 0.5 }}>Output</span>
           </div>
-          <div style={{ fontFamily: "'Geist Mono', monospace", fontSize: 12, color: colors.text, lineHeight: 1.5, whiteSpace: 'pre-wrap' }}>
+          <div style={{ fontFamily: TYPOGRAPHY.fontMono, fontSize: 12, color: colors.text, lineHeight: 1.5, whiteSpace: 'pre-wrap' }}>
             {output.map((line, i) => <div key={i}>{line}</div>)}
           </div>
         </div>
@@ -405,7 +406,7 @@ export function ExerciseBlock({
           <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
             {probEntries.map(([state, prob]) => (
               <div key={state} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <span style={{ width: 48, textAlign: 'right', fontFamily: "'Geist Mono', monospace", fontSize: 12, color: colors.text, fontWeight: 500 }}>
+                <span style={{ width: 48, textAlign: 'right', fontFamily: TYPOGRAPHY.fontMono, fontSize: 12, color: colors.text, fontWeight: 500 }}>
                   |{state}{'\u27E9'}
                 </span>
                 <div style={{ flex: 1, height: 16, borderRadius: 3, background: colors.bgPanel, overflow: 'hidden' }}>
@@ -416,7 +417,7 @@ export function ExerciseBlock({
                     minWidth: prob > 0 ? 2 : 0,
                   }} />
                 </div>
-                <span style={{ width: 42, textAlign: 'right', fontFamily: "'Geist Mono', monospace", fontSize: 11, color: colors.textMuted }}>
+                <span style={{ width: 42, textAlign: 'right', fontFamily: TYPOGRAPHY.fontMono, fontSize: 11, color: colors.textMuted }}>
                   {(prob * 100).toFixed(1)}%
                 </span>
               </div>
@@ -436,13 +437,13 @@ export function ExerciseBlock({
           gap: 10,
         }}>
           {feedback.success
-            ? <CheckCircle size={18} color={colors.success} style={{ flexShrink: 0, marginTop: 1 }} />
-            : <XCircle size={18} color={colors.error} style={{ flexShrink: 0, marginTop: 1 }} />
+            ? <CheckCircle size={16} color={colors.success} style={{ flexShrink: 0, marginTop: 1 }} />
+            : <XCircle size={16} color={colors.error} style={{ flexShrink: 0, marginTop: 1 }} />
           }
           <span style={{
             color: feedback.success ? colors.success : colors.error,
             fontSize: 14,
-            fontFamily: "'Geist Sans', sans-serif",
+            fontFamily: TYPOGRAPHY.fontSans,
             lineHeight: 1.5,
           }}>
             {feedback.message}
@@ -458,10 +459,10 @@ export function ExerciseBlock({
           alignItems: 'center',
           gap: 8,
         }}>
-          <HelpCircle size={14} color={colors.dirac} />
+          <HelpCircle size={14} color={colors.diracText} />
           <span style={{
             color: colors.textMuted, fontSize: 13,
-            fontFamily: "'Geist Sans', sans-serif",
+            fontFamily: TYPOGRAPHY.fontSans,
           }}>
             Need help?
           </span>
@@ -469,11 +470,11 @@ export function ExerciseBlock({
             background: `${colors.dirac}18`,
             border: `1px solid ${colors.dirac}40`,
             borderRadius: 4,
-            color: colors.dirac,
+            color: colors.diracText,
             fontSize: 12,
             padding: '3px 10px',
             cursor: 'pointer',
-            fontFamily: "'Geist Sans', sans-serif",
+            fontFamily: TYPOGRAPHY.fontSans,
           }}>
             Ask Dirac
           </button>

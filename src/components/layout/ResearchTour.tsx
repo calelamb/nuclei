@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { useThemeStore } from '../../stores/themeStore';
 import { useResearchTourStore, RESEARCH_TOUR_STEP_COUNT } from '../../stores/researchTourStore';
 
+import { TYPOGRAPHY } from '../../styles/tokens';
 /**
  * PRD 11 Phase B — the first-run Research coach-mark tour.
  *
@@ -132,7 +133,7 @@ export function ResearchTour() {
             width: rect.width + 8,
             height: rect.height + 8,
             borderRadius: 8,
-            border: `2px solid ${colors.dirac}`,
+            border: `2px solid ${colors.modeResearch}`,
             boxShadow: '0 0 0 9999px rgba(0,0,0,0.5)',
             pointerEvents: 'none',
           }}
@@ -150,16 +151,16 @@ export function ResearchTour() {
           borderRadius: 12,
           padding: 16,
           boxShadow: '0 12px 48px rgba(0,0,0,0.4)',
-          fontFamily: "'Geist Sans', sans-serif",
+          fontFamily: TYPOGRAPHY.fontSans,
         }}
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
           <span
-            style={{ fontSize: 10, fontWeight: 700, letterSpacing: 0.5, color: colors.dirac, textTransform: 'uppercase' }}
+            style={{ fontSize: 11, fontWeight: 700, letterSpacing: 0.5, color: colors.modeResearch, textTransform: 'uppercase' }}
           >
             Research tour
           </span>
-          <span style={{ fontSize: 10, color: colors.textDim }}>
+          <span style={{ fontSize: 11, color: colors.textDim }}>
             {step + 1} / {RESEARCH_TOUR_STEP_COUNT}
           </span>
         </div>
@@ -169,7 +170,7 @@ export function ResearchTour() {
         >
           {current.title}
         </div>
-        <div aria-live="polite" style={{ fontSize: 12.5, lineHeight: 1.5, color: colors.textMuted, marginBottom: 16 }}>
+        <div aria-live="polite" style={{ fontSize: 13, lineHeight: 1.5, color: colors.textMuted, marginBottom: 16 }}>
           {current.body}
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -178,7 +179,7 @@ export function ResearchTour() {
             style={{
               padding: '5px 10px', background: 'transparent', color: colors.textDim,
               border: 'none', borderRadius: 6, fontSize: 11, cursor: 'pointer',
-              fontFamily: "'Geist Sans', sans-serif",
+              fontFamily: TYPOGRAPHY.fontSans,
             }}
           >
             Skip
@@ -190,7 +191,7 @@ export function ResearchTour() {
               style={{
                 padding: '5px 12px', background: 'transparent', color: colors.textDim,
                 border: `1px solid ${colors.border}`, borderRadius: 6, fontSize: 11, cursor: 'pointer',
-                fontFamily: "'Geist Sans', sans-serif",
+                fontFamily: TYPOGRAPHY.fontSans,
               }}
             >
               Back
@@ -200,9 +201,9 @@ export function ResearchTour() {
             ref={primaryRef}
             onClick={next}
             style={{
-              padding: '5px 14px', background: colors.dirac, color: '#fff',
+              padding: '5px 14px', background: colors.modeResearch, color: '#fff',
               border: 'none', borderRadius: 6, fontSize: 11, fontWeight: 600, cursor: 'pointer',
-              fontFamily: "'Geist Sans', sans-serif",
+              fontFamily: TYPOGRAPHY.fontSans,
             }}
           >
             {isLast ? 'Done' : 'Next'}

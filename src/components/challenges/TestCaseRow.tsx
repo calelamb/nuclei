@@ -3,6 +3,7 @@ import { useThemeStore } from '../../stores/themeStore';
 import { Check, X, Loader, Minus, ChevronRight, ChevronDown } from 'lucide-react';
 import type { TestCase, TestCaseResult } from '../../types/challenge';
 
+import { TYPOGRAPHY } from '../../styles/tokens';
 interface TestCaseRowProps {
   testCase: TestCase;
   result?: TestCaseResult;
@@ -47,7 +48,7 @@ function StatusIcon({ result, isRunning }: { result?: TestCaseResult; isRunning:
         alignItems: 'center',
         justifyContent: 'center',
       }}>
-        <Check size={11} color={colors.success} strokeWidth={3} />
+        <Check size={12} color={colors.success} strokeWidth={3} />
       </div>
     );
   }
@@ -62,7 +63,7 @@ function StatusIcon({ result, isRunning }: { result?: TestCaseResult; isRunning:
       alignItems: 'center',
       justifyContent: 'center',
     }}>
-      <X size={11} color={colors.error} strokeWidth={3} />
+      <X size={12} color={colors.error} strokeWidth={3} />
     </div>
   );
 }
@@ -122,7 +123,7 @@ export function TestCaseRow({ testCase, result, isRunning, index }: TestCaseRowP
           flex: 1,
           color: isHidden && !result ? colors.textDim : colors.text,
           fontSize: 12,
-          fontFamily: "'Geist Sans', sans-serif",
+          fontFamily: TYPOGRAPHY.fontSans,
           fontStyle: isHidden && !result ? 'italic' : 'normal',
         }}>
           {label}
@@ -134,7 +135,7 @@ export function TestCaseRow({ testCase, result, isRunning, index }: TestCaseRowP
             color: result.passed ? colors.success : colors.error,
             fontSize: 11,
             fontWeight: 600,
-            fontFamily: "'Geist Mono', monospace",
+            fontFamily: TYPOGRAPHY.fontMono,
           }}>
             {(result.score * 100).toFixed(0)}%
           </span>
@@ -144,8 +145,8 @@ export function TestCaseRow({ testCase, result, isRunning, index }: TestCaseRowP
         {result && result.executionTimeMs > 0 && (
           <span style={{
             color: colors.textDim,
-            fontSize: 10,
-            fontFamily: "'Geist Mono', monospace",
+            fontSize: 11,
+            fontFamily: TYPOGRAPHY.fontMono,
             minWidth: 48,
             textAlign: 'right',
           }}>
@@ -167,7 +168,7 @@ export function TestCaseRow({ testCase, result, isRunning, index }: TestCaseRowP
               color: colors.textDim,
               fontSize: 12,
               fontStyle: 'italic',
-              fontFamily: "'Geist Sans', sans-serif",
+              fontFamily: TYPOGRAPHY.fontSans,
             }}>
               Hidden -- revealed after submission
             </span>
@@ -185,15 +186,15 @@ export function TestCaseRow({ testCase, result, isRunning, index }: TestCaseRowP
                 border: `1px solid ${result.passed ? `${colors.success}20` : `${colors.error}20`}`,
                 color: colors.textMuted,
                 fontSize: 12,
-                fontFamily: "'Geist Sans', sans-serif",
+                fontFamily: TYPOGRAPHY.fontSans,
                 lineHeight: 1.5,
               }}>
                 {verdictLabel && (
                   <div style={{
                     color: result.passed ? colors.success : colors.error,
-                    fontSize: 10,
+                    fontSize: 11,
                     fontWeight: 700,
-                    fontFamily: "'Geist Sans', sans-serif",
+                    fontFamily: TYPOGRAPHY.fontSans,
                     textTransform: 'uppercase',
                     letterSpacing: 0.4,
                     marginBottom: 4,
@@ -210,13 +211,13 @@ export function TestCaseRow({ testCase, result, isRunning, index }: TestCaseRowP
                   display: 'flex',
                   gap: 12,
                   fontSize: 11,
-                  fontFamily: "'Geist Mono', monospace",
+                  fontFamily: TYPOGRAPHY.fontMono,
                 }}>
                   <div style={{ flex: 1 }}>
                     <div style={{
                       color: colors.textDim,
                       marginBottom: 2,
-                      fontFamily: "'Geist Sans', sans-serif",
+                      fontFamily: TYPOGRAPHY.fontSans,
                       fontWeight: 600,
                     }}>
                       Actual Output

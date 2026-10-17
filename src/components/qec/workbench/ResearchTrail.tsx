@@ -33,8 +33,8 @@ interface TrailButtonsProps { canBack: boolean; canForward: boolean; onBack(): v
 function TrailButtons({ canBack, canForward, onBack, onForward }: TrailButtonsProps): ReactElement {
   return (
     <>
-      <button type="button" aria-label="Back in research trail" title="Back" disabled={!canBack} onClick={onBack}><ChevronLeft aria-hidden="true" size={15} /></button>
-      <button type="button" aria-label="Forward in research trail" title="Forward" disabled={!canForward} onClick={onForward}><ChevronRight aria-hidden="true" size={15} /></button>
+      <button type="button" aria-label="Back in research trail" title="Back" disabled={!canBack} onClick={onBack}><ChevronLeft aria-hidden="true" size={16} /></button>
+      <button type="button" aria-label="Forward in research trail" title="Forward" disabled={!canForward} onClick={onForward}><ChevronRight aria-hidden="true" size={16} /></button>
     </>
   );
 }

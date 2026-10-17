@@ -3,6 +3,7 @@ import { ChevronDown, ChevronRight } from 'lucide-react';
 import { useThemeStore } from '../../stores/themeStore';
 import type { JobHandle, HardwareResult } from '../../types/hardware';
 
+import { TYPOGRAPHY } from '../../styles/tokens';
 interface JobTrackerProps {
   jobs: JobHandle[];
   results: Record<string, HardwareResult>;
@@ -67,9 +68,9 @@ function JobRow({
       >
         {canExpand ? (
           expanded ? (
-            <ChevronDown size={10} color={colors.textDim} />
+            <ChevronDown size={12} color={colors.textDim} />
           ) : (
-            <ChevronRight size={10} color={colors.textDim} />
+            <ChevronRight size={12} color={colors.textDim} />
           )
         ) : (
           <div style={{ width: 10 }} />
@@ -80,7 +81,7 @@ function JobRow({
             style={{
               fontSize: 11,
               color: colors.text,
-              fontFamily: "'Geist Sans', sans-serif",
+              fontFamily: TYPOGRAPHY.fontSans,
               overflow: 'hidden',
               textOverflow: 'ellipsis',
               whiteSpace: 'nowrap',
@@ -90,9 +91,9 @@ function JobRow({
           </div>
           <div
             style={{
-              fontSize: 10,
+              fontSize: 11,
               color: colors.textDim,
-              fontFamily: "'Geist Sans', sans-serif",
+              fontFamily: TYPOGRAPHY.fontSans,
               marginTop: 1,
             }}
           >
@@ -102,13 +103,13 @@ function JobRow({
 
         <span
           style={{
-            fontSize: 9,
+            fontSize: 11,
             fontWeight: 600,
             padding: '2px 6px',
             borderRadius: 3,
             background: `${statusColor}20`,
             color: statusColor,
-            fontFamily: "'Geist Sans', sans-serif",
+            fontFamily: TYPOGRAPHY.fontSans,
             textTransform: 'uppercase',
             letterSpacing: 0.3,
             flexShrink: 0,
@@ -122,9 +123,9 @@ function JobRow({
         <div style={{ padding: '0 0 8px 16px' }}>
           <div
             style={{
-              fontSize: 10,
+              fontSize: 11,
               color: colors.textDim,
-              fontFamily: "'Geist Sans', sans-serif",
+              fontFamily: TYPOGRAPHY.fontSans,
               marginBottom: 4,
             }}
           >
@@ -145,9 +146,9 @@ function JobRow({
               >
                 <span
                   style={{
-                    fontSize: 10,
+                    fontSize: 11,
                     color: colors.textMuted,
-                    fontFamily: "'JetBrains Mono', monospace",
+                    fontFamily: TYPOGRAPHY.fontMono,
                     minWidth: 40,
                   }}
                 >
@@ -155,9 +156,9 @@ function JobRow({
                 </span>
                 <span
                   style={{
-                    fontSize: 10,
+                    fontSize: 11,
                     color: colors.textDim,
-                    fontFamily: "'Geist Sans', sans-serif",
+                    fontFamily: TYPOGRAPHY.fontSans,
                   }}
                 >
                   {count}
@@ -180,7 +181,7 @@ export function JobTracker({ jobs, results }: JobTrackerProps) {
           padding: '16px 0',
           fontSize: 11,
           color: colors.textDim,
-          fontFamily: "'Geist Sans', sans-serif",
+          fontFamily: TYPOGRAPHY.fontSans,
           textAlign: 'center',
         }}
       >

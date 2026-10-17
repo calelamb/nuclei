@@ -1,8 +1,10 @@
 import { useState } from 'react';
 import { useThemeStore } from '../../stores/themeStore';
 import { QuantumPlayground } from './QuantumPlayground';
-import { EASING, DURATION, getDuration, prefersReducedMotion } from '../../lib/animations';
+import { EASING, DURATION, prefersReducedMotion } from '../../lib/animations';
 
+import { TYPOGRAPHY } from '../../styles/tokens';
+import { ChoiceCard } from '../ui';
 type OnboardingPath = 'welcome' | 'beginner' | 'intermediate' | 'experienced' | 'research';
 
 interface OnboardingProps {
@@ -24,7 +26,6 @@ function ModeSelectScreen({ onSelectLearn, onSelectResearch }: {
   onSelectResearch: () => void;
 }) {
   const colors = useThemeStore((s) => s.colors);
-  const [hoveredId, setHoveredId] = useState<string | null>(null);
 
   const cards: Array<{ id: string; title: string; description: string; accent: string; onSelect: () => void }> = [
     {
@@ -38,7 +39,7 @@ function ModeSelectScreen({ onSelectLearn, onSelectResearch }: {
       id: 'research',
       title: 'Research workspace',
       description: 'A multi-file workspace for experiments, parameter sweeps, and reproducible runs, with Dirac as a terse collaborator.',
-      accent: colors.dirac,
+      accent: colors.modeResearch,
       onSelect: onSelectResearch,
     },
   ];
@@ -46,14 +47,14 @@ function ModeSelectScreen({ onSelectLearn, onSelectResearch }: {
   return (
     <div style={{
       position: 'fixed', inset: 0, zIndex: 4000,
-      background: `linear-gradient(180deg, ${colors.bg} 0%, #080E18 100%)`,
+      background: `linear-gradient(180deg, ${colors.bg} 0%, ${colors.bgPanel} 100%)`,
       display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
       padding: 32,
     }}>
       <div style={{ maxWidth: 560, width: '100%', textAlign: 'center' }}>
         <div style={{
-          color: colors.accent, fontSize: 40, fontWeight: 800,
-          fontFamily: "'Geist Sans', Inter, sans-serif",
+          color: colors.accent, fontSize: 40, fontWeight: 700,
+          fontFamily: TYPOGRAPHY.fontSans,
           letterSpacing: -1,
           marginBottom: 8,
           animation: prefersReducedMotion() ? 'none' : `nuclei-fade-in ${DURATION.emphasis}ms ${EASING.enter}`,
@@ -62,7 +63,7 @@ function ModeSelectScreen({ onSelectLearn, onSelectResearch }: {
         </div>
         <p style={{
           color: colors.textMuted, fontSize: 16,
-          fontFamily: "'Geist Sans', Inter, sans-serif",
+          fontFamily: TYPOGRAPHY.fontSans,
           marginBottom: 40, lineHeight: 1.6,
         }}>
           What are you here to do?
@@ -70,39 +71,15 @@ function ModeSelectScreen({ onSelectLearn, onSelectResearch }: {
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
           {cards.map((card, i) => (
-            <button
+            <ChoiceCard
               key={card.id}
+              accent={card.accent}
+              title={card.title}
+              description={card.description}
               onClick={card.onSelect}
-              onMouseEnter={() => setHoveredId(card.id)}
-              onMouseLeave={() => setHoveredId(null)}
-              style={{
-                display: 'flex', flexDirection: 'column', alignItems: 'flex-start',
-                padding: '18px 20px',
-                background: hoveredId === card.id ? colors.bgElevated : colors.bgPanel,
-                border: `1px solid ${hoveredId === card.id ? card.accent : colors.border}`,
-                borderLeft: `3px solid ${card.accent}`,
-                borderRadius: '0 8px 8px 0',
-                cursor: 'pointer',
-                textAlign: 'left',
-                transition: `border-color ${getDuration(DURATION.normal)}ms, background ${getDuration(DURATION.normal)}ms`,
-                animation: prefersReducedMotion() ? 'none' : `nuclei-slide-up ${DURATION.slow}ms ${EASING.enter} ${i * 80}ms both`,
-              }}
               aria-label={card.title}
-            >
-              <span style={{
-                color: colors.text, fontSize: 17, fontWeight: 600,
-                fontFamily: "'Geist Sans', Inter, sans-serif",
-              }}>
-                {card.title}
-              </span>
-              <span style={{
-                color: colors.textMuted, fontSize: 13,
-                fontFamily: "'Geist Sans', Inter, sans-serif",
-                marginTop: 4, lineHeight: 1.5,
-              }}>
-                {card.description}
-              </span>
-            </button>
+              style={{ animation: prefersReducedMotion() ? 'none' : `nuclei-slide-up ${DURATION.slow}ms ${EASING.enter} ${i * 80}ms both` }}
+            />
           ))}
         </div>
       </div>
@@ -112,7 +89,6 @@ function ModeSelectScreen({ onSelectLearn, onSelectResearch }: {
 
 function WelcomeScreen({ onSelect }: { onSelect: (path: OnboardingPath) => void }) {
   const colors = useThemeStore((s) => s.colors);
-  const [hoveredId, setHoveredId] = useState<string | null>(null);
 
   const paths: Array<{ id: OnboardingPath; title: string; description: string; accent: string }> = [
     { id: 'beginner', title: "I'm brand new", description: 'Never done quantum computing? Start with an interactive playground — no code required.', accent: colors.accent },
@@ -123,15 +99,15 @@ function WelcomeScreen({ onSelect }: { onSelect: (path: OnboardingPath) => void 
   return (
     <div style={{
       position: 'fixed', inset: 0, zIndex: 4000,
-      background: `linear-gradient(180deg, ${colors.bg} 0%, #080E18 100%)`,
+      background: `linear-gradient(180deg, ${colors.bg} 0%, ${colors.bgPanel} 100%)`,
       display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
       padding: 32,
     }}>
       <div style={{ maxWidth: 520, width: '100%', textAlign: 'center' }}>
         {/* Logo */}
         <div style={{
-          color: colors.accent, fontSize: 40, fontWeight: 800,
-          fontFamily: "'Geist Sans', Inter, sans-serif",
+          color: colors.accent, fontSize: 40, fontWeight: 700,
+          fontFamily: TYPOGRAPHY.fontSans,
           letterSpacing: -1,
           marginBottom: 8,
           animation: prefersReducedMotion() ? 'none' : `nuclei-fade-in ${DURATION.emphasis}ms ${EASING.enter}`,
@@ -140,7 +116,7 @@ function WelcomeScreen({ onSelect }: { onSelect: (path: OnboardingPath) => void 
         </div>
         <p style={{
           color: colors.textMuted, fontSize: 16,
-          fontFamily: "'Geist Sans', Inter, sans-serif",
+          fontFamily: TYPOGRAPHY.fontSans,
           marginBottom: 40, lineHeight: 1.6,
         }}>
           Ready to explore quantum computing?
@@ -149,39 +125,15 @@ function WelcomeScreen({ onSelect }: { onSelect: (path: OnboardingPath) => void 
         {/* Path selection */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
           {paths.map((path, i) => (
-            <button
+            <ChoiceCard
               key={path.id}
+              accent={path.accent}
+              title={path.title}
+              description={path.description}
               onClick={() => onSelect(path.id)}
-              onMouseEnter={() => setHoveredId(path.id)}
-              onMouseLeave={() => setHoveredId(null)}
-              style={{
-                display: 'flex', flexDirection: 'column', alignItems: 'flex-start',
-                padding: '16px 20px',
-                background: hoveredId === path.id ? colors.bgElevated : colors.bgPanel,
-                border: `1px solid ${hoveredId === path.id ? path.accent : colors.border}`,
-                borderLeft: `3px solid ${path.accent}`,
-                borderRadius: '0 8px 8px 0',
-                cursor: 'pointer',
-                textAlign: 'left',
-                transition: `border-color ${getDuration(DURATION.normal)}ms, background ${getDuration(DURATION.normal)}ms`,
-                animation: prefersReducedMotion() ? 'none' : `nuclei-slide-up ${DURATION.slow}ms ${EASING.enter} ${i * 80}ms both`,
-              }}
               aria-label={path.title}
-            >
-              <span style={{
-                color: colors.text, fontSize: 16, fontWeight: 600,
-                fontFamily: "'Geist Sans', Inter, sans-serif",
-              }}>
-                {path.title}
-              </span>
-              <span style={{
-                color: colors.textMuted, fontSize: 13,
-                fontFamily: "'Geist Sans', Inter, sans-serif",
-                marginTop: 4, lineHeight: 1.5,
-              }}>
-                {path.description}
-              </span>
-            </button>
+              style={{ animation: prefersReducedMotion() ? 'none' : `nuclei-slide-up ${DURATION.slow}ms ${EASING.enter} ${i * 80}ms both` }}
+            />
           ))}
         </div>
       </div>
@@ -204,22 +156,22 @@ function ReturningUserScreen({ onContinue, onStartFresh, lastFile, daysSince }: 
   return (
     <div style={{
       position: 'fixed', inset: 0, zIndex: 4000,
-      background: `linear-gradient(180deg, ${colors.bg} 0%, #080E18 100%)`,
+      background: `linear-gradient(180deg, ${colors.bg} 0%, ${colors.bgPanel} 100%)`,
       display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
       padding: 32,
     }}>
       <div style={{ maxWidth: 420, width: '100%', textAlign: 'center' }}>
         <div style={{
-          color: colors.accent, fontSize: 32, fontWeight: 800,
-          fontFamily: "'Geist Sans', Inter, sans-serif",
+          color: colors.accent, fontSize: 32, fontWeight: 700,
+          fontFamily: TYPOGRAPHY.fontSans,
           letterSpacing: -1,
           marginBottom: 12,
         }}>
           NUCLEI
         </div>
         <p style={{
-          color: colors.text, fontSize: 18, fontWeight: 500,
-          fontFamily: "'Geist Sans', Inter, sans-serif",
+          color: colors.text, fontSize: 16, fontWeight: 500,
+          fontFamily: TYPOGRAPHY.fontSans,
           marginBottom: 8,
         }}>
           {greeting}
@@ -227,7 +179,7 @@ function ReturningUserScreen({ onContinue, onStartFresh, lastFile, daysSince }: 
         {lastFile && (
           <p style={{
             color: colors.textMuted, fontSize: 13,
-            fontFamily: "'Geist Sans', Inter, sans-serif",
+            fontFamily: TYPOGRAPHY.fontSans,
             marginBottom: 24,
           }}>
             Pick up where you left off?
@@ -243,9 +195,9 @@ function ReturningUserScreen({ onContinue, onStartFresh, lastFile, daysSince }: 
               border: 'none',
               borderRadius: 8,
               cursor: 'pointer',
-              fontSize: 15,
+              fontSize: 14,
               fontWeight: 600,
-              fontFamily: "'Geist Sans', Inter, sans-serif",
+              fontFamily: TYPOGRAPHY.fontSans,
             }}
           >
             {lastFile ? 'Continue where I left off' : 'Open IDE'}
@@ -260,7 +212,7 @@ function ReturningUserScreen({ onContinue, onStartFresh, lastFile, daysSince }: 
               borderRadius: 8,
               cursor: 'pointer',
               fontSize: 13,
-              fontFamily: "'Geist Sans', sans-serif",
+              fontFamily: TYPOGRAPHY.fontSans,
             }}
           >
             Start fresh

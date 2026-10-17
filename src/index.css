@@ -1,32 +1,29 @@
 /* Nuclei — Global Styles */
-/* Fonts: Geist Sans (UI) + JetBrains Mono (code) */
-@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&display=swap');
-
-/* Geist Sans font-face (from npm package) */
+/*
+ * Fonts: Geist Sans (UI) + Geist Mono (code). Both are bundled variable fonts
+ * (SIL OFL, from the `geist` package) so the desktop app works offline and
+ * under the strict Tauri CSP (font-src 'self' data:). Never @import from a CDN.
+ */
 @font-face {
   font-family: 'Geist Sans';
-  src: url('/node_modules/geist/dist/fonts/geist-sans/Geist-Regular.woff2') format('woff2');
-  font-weight: 400; font-style: normal; font-display: swap;
-}
-@font-face {
-  font-family: 'Geist Sans';
-  src: url('/node_modules/geist/dist/fonts/geist-sans/Geist-Medium.woff2') format('woff2');
-  font-weight: 500; font-style: normal; font-display: swap;
-}
-@font-face {
-  font-family: 'Geist Sans';
-  src: url('/node_modules/geist/dist/fonts/geist-sans/Geist-SemiBold.woff2') format('woff2');
-  font-weight: 600; font-style: normal; font-display: swap;
-}
-@font-face {
-  font-family: 'Geist Sans';
-  src: url('/node_modules/geist/dist/fonts/geist-sans/Geist-Bold.woff2') format('woff2');
-  font-weight: 700; font-style: normal; font-display: swap;
+  src: url('./assets/fonts/Geist-Variable.woff2') format('woff2');
+  font-weight: 100 900; font-style: normal; font-display: swap;
 }
 @font-face {
   font-family: 'Geist Mono';
-  src: url('/node_modules/geist/dist/fonts/geist-mono/GeistMono-Regular.woff2') format('woff2');
-  font-weight: 400; font-style: normal; font-display: swap;
+  src: url('./assets/fonts/GeistMono-Variable.woff2') format('woff2');
+  font-weight: 100 900; font-style: normal; font-display: swap;
+}
+
+/*
+ * Compatibility alias: src/components/experiments/** still names 'Fira Code', a
+ * font that was never shipped (it rendered as Courier). Point it at the bundled
+ * mono until that tree migrates to TYPOGRAPHY.fontMono, then delete this block.
+ */
+@font-face {
+  font-family: 'Fira Code';
+  src: url('./assets/fonts/GeistMono-Variable.woff2') format('woff2');
+  font-weight: 100 900; font-style: normal; font-display: swap;
 }
 
 * {
@@ -47,10 +44,16 @@ body {
   height: 100vh;
 }
 
-/* ── Accessibility: visible focus indicators ── */
+/* Form controls do not inherit typography by default (UA monospace textareas, Arial buttons). */
+button, input, select, textarea {
+  font: inherit;
+  color: inherit;
+}
+
+/* ── Accessibility: one focus ring for the whole app (see --focus-ring in tokens.css) ── */
 :focus-visible {
-  outline: 2px solid var(--color-accent-quantum);
-  outline-offset: 2px;
+  outline: var(--focus-ring-width) solid var(--focus-ring-color);
+  outline-offset: var(--focus-ring-offset);
 }
 
 button:focus:not(:focus-visible) {
@@ -151,7 +154,16 @@ button:focus:not(:focus-visible) {
 
 /* ── Interactive element defaults ── */
 button, [role="button"] {
-  transition: all var(--duration-fast) var(--ease-standard);
+  transition: background-color var(--duration-fast) var(--ease-standard),
+              color var(--duration-fast) var(--ease-standard),
+              border-color var(--duration-fast) var(--ease-standard),
+              box-shadow var(--duration-fast) var(--ease-standard),
+              opacity var(--duration-fast) var(--ease-standard);
+}
+
+/* Ket/bra labels: JetBrains-style ligatures turn "|-⟩" into a turnstile. Keep glyphs literal. */
+code, pre, kbd, samp, .nuclei-code, .nuclei-ket {
+  font-variant-ligatures: none;
 }
 
 /* ── Circuit gate hover ── */

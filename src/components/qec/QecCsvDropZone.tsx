@@ -4,6 +4,7 @@ import { useThemeStore } from '../../stores/themeStore';
 import { firstFile, loadCsvFile } from '../../services/qecCsvFile';
 import { useCsvDrop } from './useCsvDrop';
 
+import { TYPOGRAPHY } from '../../styles/tokens';
 /** Drop target + file picker for a sinter stats CSV. Parsing happens locally;
  * nothing is uploaded. Load errors are shown by QecAnalysisView's banner. */
 export function QecCsvDropZone() {
@@ -19,7 +20,7 @@ export function QecCsvDropZone() {
         border: `1.5px dashed ${over ? colors.accent : colors.border}`,
         background: over ? `${colors.accent}14` : 'transparent',
         display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6,
-        fontFamily: "'Geist Sans', sans-serif",
+        fontFamily: TYPOGRAPHY.fontSans,
       }}
     >
       <Upload size={16} color={colors.textMuted} aria-hidden="true" />
@@ -29,7 +30,7 @@ export function QecCsvDropZone() {
         onClick={() => inputRef.current?.click()}
         style={{
           padding: '4px 10px', borderRadius: 5, border: `1px solid ${colors.border}`,
-          background: 'transparent', color: colors.textMuted, fontSize: 11.5, cursor: 'pointer',
+          background: 'transparent', color: colors.textMuted, fontSize: 12, cursor: 'pointer',
         }}
       >
         Choose file…
@@ -46,7 +47,7 @@ export function QecCsvDropZone() {
           e.target.value = ''; // allow re-picking the same file
         }}
       />
-      <div style={{ fontSize: 10.5, color: colors.textDim }}>Read in this app only — nothing is uploaded.</div>
+      <div style={{ fontSize: 11, color: colors.textDim }}>Read in this app only — nothing is uploaded.</div>
     </div>
   );
 }
@@ -63,7 +64,7 @@ export function QecCsvOpenButton() {
         style={{
           display: 'flex', alignItems: 'center', gap: 5, background: 'transparent',
           border: `1px solid ${colors.border}`, borderRadius: 5, color: colors.textMuted,
-          cursor: 'pointer', fontSize: 12, padding: '5px 10px', fontFamily: "'Geist Sans', sans-serif",
+          cursor: 'pointer', fontSize: 12, padding: '5px 10px', fontFamily: TYPOGRAPHY.fontSans,
         }}
       >
         <Upload size={12} aria-hidden="true" /> Open CSV

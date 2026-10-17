@@ -4,6 +4,7 @@ import { useDiracStore } from '../../stores/diracStore';
 import { useEditorStore } from '../../stores/editorStore';
 import { useThemeStore } from '../../stores/themeStore';
 
+import { TYPOGRAPHY } from '../../styles/tokens';
 /**
  * Overlay shown after a successful compose. Side-by-side Current vs
  * Proposed buffer, Accept replaces the whole editor content, Reject
@@ -73,7 +74,7 @@ export function DiffPreview() {
           display: 'flex',
           flexDirection: 'column',
           overflow: 'hidden',
-          fontFamily: "'Geist Sans', sans-serif",
+          fontFamily: TYPOGRAPHY.fontSans,
         }}
       >
         <div
@@ -87,7 +88,7 @@ export function DiffPreview() {
         >
           <span
             style={{
-              color: colors.dirac,
+              color: colors.diracText,
               fontSize: 11,
               fontWeight: 600,
               textTransform: 'uppercase',
@@ -131,7 +132,7 @@ export function DiffPreview() {
             <div
               style={{
                 padding: '6px 12px',
-                fontSize: 10,
+                fontSize: 11,
                 color: colors.textDim,
                 textTransform: 'uppercase',
                 letterSpacing: 0.5,
@@ -147,7 +148,7 @@ export function DiffPreview() {
                 overflow: 'auto',
                 flex: 1,
                 fontSize: 12,
-                fontFamily: "'JetBrains Mono', ui-monospace, monospace",
+                fontFamily: TYPOGRAPHY.fontMono,
                 color: colors.textMuted,
                 background: `${colors.error}08`,
               }}
@@ -159,7 +160,7 @@ export function DiffPreview() {
             <div
               style={{
                 padding: '6px 12px',
-                fontSize: 10,
+                fontSize: 11,
                 color: colors.textDim,
                 textTransform: 'uppercase',
                 letterSpacing: 0.5,
@@ -175,7 +176,7 @@ export function DiffPreview() {
                 overflow: 'auto',
                 flex: 1,
                 fontSize: 12,
-                fontFamily: "'JetBrains Mono', ui-monospace, monospace",
+                fontFamily: TYPOGRAPHY.fontMono,
                 color: colors.text,
                 background: `${colors.success}08`,
               }}
@@ -209,7 +210,7 @@ export function DiffPreview() {
               gap: 6,
             }}
           >
-            <X size={13} /> Reject <span style={{ color: colors.textDim, fontSize: 11 }}>Esc</span>
+            <X size={14} /> Reject <span style={{ color: colors.textDim, fontSize: 11 }}>Esc</span>
           </button>
           <button
             onClick={accept}
@@ -227,7 +228,7 @@ export function DiffPreview() {
               gap: 6,
             }}
           >
-            <Check size={13} /> Apply <span style={{ opacity: 0.7, fontSize: 11 }}>↵</span>
+            <Check size={14} /> Apply <span style={{ opacity: 0.7, fontSize: 11 }}>↵</span>
           </button>
         </div>
       </div>

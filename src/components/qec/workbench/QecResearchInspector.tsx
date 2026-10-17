@@ -16,7 +16,7 @@ function InspectorHeading({ onClose }: { onClose(): void }): ReactElement {
         <h2>Inspector</h2>
       </div>
       <button type="button" className="qec-inspector__close" aria-label="Close research inspector" onClick={onClose}>
-        <X aria-hidden="true" size={17} />
+        <X aria-hidden="true" size={16} />
       </button>
     </header>
   );
@@ -27,7 +27,7 @@ function SelectionDetails({ selection }: { selection: ResearchSelection }): Reac
   if (refs.length === 0) {
     return (
       <div className="qec-zone-empty qec-zone-empty--compact">
-        <Info aria-hidden="true" size={22} />
+        <Info aria-hidden="true" size={20} />
         <strong>Nothing selected</strong>
         <span>Select a source or canvas object to inspect values and lineage.</span>
       </div>
@@ -88,7 +88,7 @@ export function QecResearchInspector({ open, onClose }: QecResearchInspectorProp
       </div>
       <footer className="qec-inspector__footer">
         <button type="button" disabled title="Select evidence before pinning a Finding">
-          <Pin aria-hidden="true" size={15} />Pin Finding
+          <Pin aria-hidden="true" size={16} />Pin Finding
         </button>
       </footer>
     </aside>

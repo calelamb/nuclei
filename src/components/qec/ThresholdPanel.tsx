@@ -27,6 +27,7 @@ import { qecRatesToCsv } from '../../lib/qecExport';
 import { downloadCsv, downloadSvg } from '../../services/experimentExport';
 import { QEC_PLOT_CSV_DOCS } from '../../config/docsLinks';
 
+import { TYPOGRAPHY } from '../../styles/tokens';
 const DOCS = 'https://getnuclei.dev/docs/research/qec-studio/';
 
 /**
@@ -121,7 +122,7 @@ export function ThresholdPanel() {
   const readoutBody = (
     <>
       <QecLambdaReadout decoders={decoders} estimates={lambdas} units={units} colors={colors} />
-      <div style={{ fontSize: 10, color: colors.textMuted, marginTop: 6, lineHeight: 1.45 }}>
+      <div style={{ fontSize: 11, color: colors.textMuted, marginTop: 6, lineHeight: 1.45 }}>
         {`Whiskers: sinter ${whiskerConvention()}, `}
         {hasDiscards ? 'on shots − discards. ' : 'on shots. '}
         {excluded > 0 && `${excluded} row(s) without known rounds are hidden in per-round view. `}
@@ -131,7 +132,7 @@ export function ThresholdPanel() {
       </div>
     </>
   );
-  const readoutFont = "'Geist Sans', sans-serif";
+  const readoutFont = TYPOGRAPHY.fontSans;
   const readout = box.layout === 'row' ? (
     <ScrollFade style={{ fontFamily: readoutFont, width: READOUT_WIDTH, flex: 'none', maxHeight: box.plotH }}>
       {readoutBody}
@@ -173,7 +174,7 @@ function UnitsToggle({ units, onChange, colors }: { units: RateUnits; onChange: 
             background: units === u ? colors.accent : 'transparent',
             color: units === u ? colors.bg : colors.textMuted,
             border: `1px solid ${colors.border}`, borderRadius: 4, cursor: 'pointer',
-            fontSize: 11, padding: '3px 8px', whiteSpace: 'nowrap', fontFamily: "'Geist Sans', sans-serif",
+            fontSize: 11, padding: '3px 8px', whiteSpace: 'nowrap', fontFamily: TYPOGRAPHY.fontSans,
           }}
         >
           {text}
@@ -192,7 +193,7 @@ function ExportButton({ label, onClick, colors }: { label: string; onClick: () =
       style={{
         display: 'flex', alignItems: 'center', gap: 4, background: 'transparent',
         border: `1px solid ${colors.border}`, borderRadius: 4, color: colors.textMuted,
-        cursor: 'pointer', fontSize: 11, padding: '4px 8px', fontFamily: "'Geist Sans', sans-serif",
+        cursor: 'pointer', fontSize: 11, padding: '4px 8px', fontFamily: TYPOGRAPHY.fontSans,
       }}
     >
       <Download size={12} /> {label}

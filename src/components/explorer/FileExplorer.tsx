@@ -31,6 +31,7 @@ import {
 } from '../../data/starterTemplates';
 import { MEMORY_PREFIX, isMemoryPath } from '../../hooks/useFileOps';
 
+import { TYPOGRAPHY } from '../../styles/tokens';
 const EXTENSION_ICONS: Record<string, LucideIcon> = {
   py: FileCode,
   qs: Sigma,
@@ -41,10 +42,10 @@ const EXTENSION_ICONS: Record<string, LucideIcon> = {
 };
 
 function iconFor(name: string, isDir: boolean, color: string) {
-  if (isDir) return <Folder size={13} style={{ color, marginRight: 6, flexShrink: 0 }} />;
+  if (isDir) return <Folder size={14} style={{ color, marginRight: 6, flexShrink: 0 }} />;
   const ext = name.split('.').pop()?.toLowerCase() ?? '';
   const Icon = EXTENSION_ICONS[ext] ?? FileIconLucide;
-  return <Icon size={13} style={{ color, marginRight: 6, flexShrink: 0 }} />;
+  return <Icon size={14} style={{ color, marginRight: 6, flexShrink: 0 }} />;
 }
 
 function basename(path: string): string {
@@ -281,7 +282,7 @@ export function FileExplorer() {
     alignItems: 'center',
     padding: `3px 8px 3px ${8 + depth * 12}px`,
     fontSize: 12,
-    fontFamily: "'Geist Sans', sans-serif",
+    fontFamily: TYPOGRAPHY.fontSans,
     color: isActive ? colors.accent : colors.text,
     background: isActive ? `${colors.accent}14` : 'transparent',
     // Accent left bar on the open file — same signal as the tabs and the
@@ -351,8 +352,7 @@ export function FileExplorer() {
               fontSize: 12,
               padding: '2px 6px',
               borderRadius: 4,
-              outline: 'none',
-              fontFamily: "'Geist Sans', sans-serif",
+              fontFamily: TYPOGRAPHY.fontSans,
             }}
           />
         </div>
@@ -437,7 +437,7 @@ export function FileExplorer() {
           padding: 14,
           color: colors.textDim,
           fontSize: 12,
-          fontFamily: "'Geist Sans', sans-serif",
+          fontFamily: TYPOGRAPHY.fontSans,
           lineHeight: 1.6,
         }}
       >
@@ -463,7 +463,7 @@ export function FileExplorer() {
       borderRadius: 6,
       fontSize: 12,
       fontWeight: 600,
-      fontFamily: "'Geist Sans', sans-serif",
+      fontFamily: TYPOGRAPHY.fontSans,
       cursor: 'pointer',
     };
     const secondaryBtn: React.CSSProperties = {
@@ -478,7 +478,7 @@ export function FileExplorer() {
       borderRadius: 6,
       fontSize: 12,
       fontWeight: 500,
-      fontFamily: "'Geist Sans', sans-serif",
+      fontFamily: TYPOGRAPHY.fontSans,
       cursor: 'pointer',
     };
     const quickChipBtn: React.CSSProperties = {
@@ -494,7 +494,7 @@ export function FileExplorer() {
       borderRadius: 6,
       fontSize: 11,
       fontWeight: 600,
-      fontFamily: "'Geist Sans', sans-serif",
+      fontFamily: TYPOGRAPHY.fontSans,
       cursor: 'pointer',
     };
     return (
@@ -511,11 +511,11 @@ export function FileExplorer() {
           existing folder.
         </p>
         <button onClick={handleNewProject} style={primaryBtn}>
-          <Plus size={13} /> New Project…
+          <Plus size={14} /> New Project…
         </button>
         <div
           style={{
-            fontSize: 10,
+            fontSize: 11,
             textTransform: 'uppercase',
             letterSpacing: 0.5,
             color: colors.textDim,
@@ -526,20 +526,20 @@ export function FileExplorer() {
         </div>
         <div style={{ display: 'flex', gap: 6 }}>
           <button onClick={() => quickCreateCircuit('qiskit')} style={quickChipBtn}>
-            <AtomIcon size={11} /> Qiskit
+            <AtomIcon size={12} /> Qiskit
           </button>
           <button onClick={() => quickCreateCircuit('cirq')} style={quickChipBtn}>
-            <AtomIcon size={11} /> Cirq
+            <AtomIcon size={12} /> Cirq
           </button>
           <button onClick={() => quickCreateCircuit('cuda-q')} style={quickChipBtn}>
-            <AtomIcon size={11} /> CUDA-Q
+            <AtomIcon size={12} /> CUDA-Q
           </button>
           <button onClick={() => quickCreateCircuit('qsharp')} style={quickChipBtn}>
-            <AtomIcon size={11} /> Q#
+            <AtomIcon size={12} /> Q#
           </button>
         </div>
         <button onClick={handleOpenFolder} style={secondaryBtn}>
-          <FolderOpen size={13} /> Open Folder…
+          <FolderOpen size={14} /> Open Folder…
         </button>
         {error && (
           <div style={{ color: colors.error, fontSize: 11 }}>{error}</div>
@@ -559,7 +559,7 @@ export function FileExplorer() {
     border: 'none',
     cursor: 'pointer',
     fontSize: 12,
-    fontFamily: "'Geist Sans', sans-serif",
+    fontFamily: TYPOGRAPHY.fontSans,
     textAlign: 'left',
   };
 
@@ -587,7 +587,7 @@ export function FileExplorer() {
             overflow: 'hidden',
             textOverflow: 'ellipsis',
             whiteSpace: 'nowrap',
-            fontFamily: "'Geist Sans', sans-serif",
+            fontFamily: TYPOGRAPHY.fontSans,
           }}
         >
           {rootName}
@@ -646,8 +646,8 @@ export function FileExplorer() {
                 onMouseEnter={(e) => { e.currentTarget.style.background = `${colors.accent}12`; }}
                 onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
               >
-                <FilePlus size={13} style={{ color: colors.textDim }} /> New File
-                <span style={{ marginLeft: 'auto', fontSize: 10, color: colors.textDim }}>.py</span>
+                <FilePlus size={14} style={{ color: colors.textDim }} /> New File
+                <span style={{ marginLeft: 'auto', fontSize: 11, color: colors.textDim }}>.py</span>
               </button>
 
               <div
@@ -659,7 +659,7 @@ export function FileExplorer() {
                   style={menuItemStyle}
                   onClick={() => setCircuitSubmenu((s) => !s)}
                 >
-                  <AtomIcon size={13} style={{ color: colors.accentLight }} /> New Circuit
+                  <AtomIcon size={14} style={{ color: colors.accentLight }} /> New Circuit
                   <ChevronRight size={12} style={{ marginLeft: 'auto', color: colors.textDim }} />
                 </button>
                 {circuitSubmenu && (
@@ -690,7 +690,7 @@ export function FileExplorer() {
                         onMouseEnter={(e) => { e.currentTarget.style.background = `${colors.accent}12`; }}
                         onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
                       >
-                        <AtomIcon size={13} style={{ color: colors.accentLight }} />
+                        <AtomIcon size={14} style={{ color: colors.accentLight }} />
                         {displayFrameworkName(f)}
                       </button>
                     ))}
@@ -706,7 +706,7 @@ export function FileExplorer() {
                 onMouseEnter={(e) => { e.currentTarget.style.background = `${colors.accent}12`; }}
                 onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
               >
-                <Package size={13} style={{ color: colors.textDim }} /> New Python Package
+                <Package size={14} style={{ color: colors.textDim }} /> New Python Package
               </button>
               <button
                 style={menuItemStyle}
@@ -714,7 +714,7 @@ export function FileExplorer() {
                 onMouseEnter={(e) => { e.currentTarget.style.background = `${colors.accent}12`; }}
                 onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
               >
-                <FolderPlus size={13} style={{ color: colors.textDim }} /> New Folder
+                <FolderPlus size={14} style={{ color: colors.textDim }} /> New Folder
               </button>
             </div>
           )}
@@ -755,7 +755,7 @@ export function FileExplorer() {
             cursor: 'pointer',
             padding: 4,
             fontSize: 11,
-            fontFamily: "'Geist Sans', sans-serif",
+            fontFamily: TYPOGRAPHY.fontSans,
           }}
           onMouseEnter={(e) => {
             e.currentTarget.style.color = colors.text;
@@ -772,7 +772,7 @@ export function FileExplorer() {
         <div style={{ padding: '4px 8px', borderBottom: `1px solid ${colors.border}` }}>
           <div
             style={{
-              fontSize: 10,
+              fontSize: 11,
               textTransform: 'uppercase',
               letterSpacing: 0.5,
               color: colors.textDim,
@@ -799,8 +799,7 @@ export function FileExplorer() {
               fontSize: 12,
               padding: '4px 8px',
               borderRadius: 4,
-              outline: 'none',
-              fontFamily: "'Geist Sans', sans-serif",
+              fontFamily: TYPOGRAPHY.fontSans,
             }}
           />
         </div>
@@ -813,7 +812,7 @@ export function FileExplorer() {
               padding: 14,
               color: colors.textDim,
               fontSize: 12,
-              fontFamily: "'Geist Sans', sans-serif",
+              fontFamily: TYPOGRAPHY.fontSans,
             }}
           >
             Loading…
@@ -825,7 +824,7 @@ export function FileExplorer() {
               padding: 14,
               color: colors.error,
               fontSize: 12,
-              fontFamily: "'Geist Sans', sans-serif",
+              fontFamily: TYPOGRAPHY.fontSans,
             }}
           >
             {error}
@@ -837,10 +836,10 @@ export function FileExplorer() {
               style={{
                 padding: '8px 14px 4px',
                 color: colors.textDim,
-                fontSize: 10,
+                fontSize: 11,
                 textTransform: 'uppercase',
                 letterSpacing: 0.5,
-                fontFamily: "'Geist Sans', sans-serif",
+                fontFamily: TYPOGRAPHY.fontSans,
               }}
             >
               Unsaved — ⌘S to save to disk
@@ -852,7 +851,7 @@ export function FileExplorer() {
                   padding: 14,
                   color: colors.textDim,
                   fontSize: 12,
-                  fontFamily: "'Geist Sans', sans-serif",
+                  fontFamily: TYPOGRAPHY.fontSans,
                 }}
               >
                 Click + to add a file or circuit. ⌘S to save to disk.
@@ -867,7 +866,7 @@ export function FileExplorer() {
               padding: 14,
               color: colors.textDim,
               fontSize: 12,
-              fontFamily: "'Geist Sans', sans-serif",
+              fontFamily: TYPOGRAPHY.fontSans,
             }}
           >
             Folder is empty. Click + to add a file, package, or circuit.

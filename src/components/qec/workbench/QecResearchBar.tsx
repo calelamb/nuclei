@@ -1,3 +1,4 @@
+import { Select } from '../../ui/Select';
 import { Play } from 'lucide-react';
 import type { ReactElement } from 'react';
 import { useQecStudyStore } from '../../../services/qecStudyStore';
@@ -24,7 +25,9 @@ function StudyPicker(): ReactElement {
   return (
     <label className="qec-study-picker" htmlFor="qec-active-study">
       <span>Study</span>
-      <select
+      <Select
+        size="lg"
+        className="qec-study-select"
         id="qec-active-study"
         aria-label="Active QEC Study"
         disabled={studies.length === 0}
@@ -33,7 +36,7 @@ function StudyPicker(): ReactElement {
       >
         <option value="">{studies.length === 0 ? 'No Studies available' : 'Select a Study'}</option>
         {studies.map(({ study }) => <option key={study.id} value={study.id}>{study.name}</option>)}
-      </select>
+      </Select>
     </label>
   );
 }
@@ -55,7 +58,7 @@ function PresetSwitcher(): ReactElement {
 function DeferredRunAction(): ReactElement {
   return (
     <button type="button" className="qec-primary-action" aria-label="Run or capture (not connected)" title="Run and capture controls connect in a later workbench task" disabled>
-      <Play aria-hidden="true" size={15} fill="currentColor" />
+      <Play aria-hidden="true" size={16} fill="currentColor" />
       Run / Capture
     </button>
   );

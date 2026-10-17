@@ -3,6 +3,7 @@ import { useThemeStore } from '../../stores/themeStore';
 import { PluginErrorCard } from './PluginErrorCard';
 import type { PluginExtensions } from '../../plugins/pluginManager';
 
+import { TYPOGRAPHY } from '../../styles/tokens';
 type PluginPanel = PluginExtensions['panels'][number];
 
 /**
@@ -16,7 +17,7 @@ export function PluginPanelHost({ panel }: { panel: PluginPanel }) {
   const colors = useThemeStore((s) => s.colors);
   const ref = useRef<HTMLDivElement>(null);
   const [error, setError] = useState<string | null>(null);
-  const font = "'Geist Sans', sans-serif";
+  const font = TYPOGRAPHY.fontSans;
 
   useEffect(() => {
     const el = ref.current;
@@ -59,7 +60,7 @@ export function PluginPanelHost({ panel }: { panel: PluginPanel }) {
       >
         <span
           style={{
-            fontSize: 10,
+            fontSize: 11,
             fontWeight: 600,
             textTransform: 'uppercase',
             letterSpacing: 0.5,
@@ -71,9 +72,9 @@ export function PluginPanelHost({ panel }: { panel: PluginPanel }) {
         </span>
         <span
           style={{
-            fontSize: 9,
+            fontSize: 11,
             color: colors.textDim,
-            fontFamily: "'Geist Mono', monospace",
+            fontFamily: TYPOGRAPHY.fontMono,
           }}
         >
           {panel.pluginName}

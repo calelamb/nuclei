@@ -3,6 +3,7 @@ import { useThemeStore } from '../../stores/themeStore';
 import { useLearnStore } from '../../stores/learnStore';
 import type { QuizQuestion } from '../../data/lessons/types';
 
+import { TYPOGRAPHY } from '../../styles/tokens';
 interface QuizBlockProps {
   questions: QuizQuestion[];
 }
@@ -47,10 +48,10 @@ export function QuizBlock({ questions }: QuizBlockProps) {
           }}>
             <div style={{
               color: colors.text,
-              fontSize: 15,
+              fontSize: 14,
               fontWeight: 500,
               marginBottom: 12,
-              fontFamily: "'Geist Sans', sans-serif",
+              fontFamily: TYPOGRAPHY.fontSans,
             }}>
               {q.question}
             </div>
@@ -89,7 +90,7 @@ export function QuizBlock({ questions }: QuizBlockProps) {
                       borderRadius: 8,
                       color: textColor,
                       fontSize: 14,
-                      fontFamily: "'Geist Sans', sans-serif",
+                      fontFamily: TYPOGRAPHY.fontSans,
                       cursor: isRevealed ? 'default' : 'pointer',
                       textAlign: 'left',
                       transition: 'all 150ms ease',
@@ -134,7 +135,7 @@ export function QuizBlock({ questions }: QuizBlockProps) {
                 alignItems: 'center',
                 justifyContent: 'space-between',
               }}>
-                <span style={{ color: colors.error, fontSize: 13, fontFamily: "'Geist Sans', sans-serif" }}>
+                <span style={{ color: colors.error, fontSize: 13, fontFamily: TYPOGRAPHY.fontSans }}>
                   Not quite — try again!
                 </span>
                 <button
@@ -147,7 +148,7 @@ export function QuizBlock({ questions }: QuizBlockProps) {
                     fontSize: 12,
                     padding: '3px 10px',
                     cursor: 'pointer',
-                    fontFamily: "'Geist Sans', sans-serif",
+                    fontFamily: TYPOGRAPHY.fontSans,
                   }}
                 >
                   Try Again
@@ -164,7 +165,7 @@ export function QuizBlock({ questions }: QuizBlockProps) {
                 borderRadius: 6,
                 color: colors.success,
                 fontSize: 13,
-                fontFamily: "'Geist Sans', sans-serif",
+                fontFamily: TYPOGRAPHY.fontSans,
                 lineHeight: 1.5,
               }}>
                 <span style={{ fontWeight: 600 }}>Correct!</span> {q.explanation}

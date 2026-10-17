@@ -8,6 +8,7 @@ import { kernelLanguageFor } from '../../types/quantum';
 import type { Framework } from '../../types/quantum';
 import { STARTER_TEMPLATES, displayFrameworkName } from '../../data/starterTemplates';
 
+import { TYPOGRAPHY } from '../../styles/tokens';
 const FRAMEWORKS: Framework[] = ['qiskit', 'cirq', 'cuda-q', 'qsharp'];
 
 const displayName = displayFrameworkName;
@@ -164,10 +165,10 @@ export function FrameworkSelector() {
         <div
           style={{
             padding: '6px 12px 4px',
-            fontSize: 9,
+            fontSize: 11,
             fontWeight: 600,
             color: colors.textDim,
-            fontFamily: "'Geist Sans', sans-serif",
+            fontFamily: TYPOGRAPHY.fontSans,
             textTransform: 'uppercase',
             letterSpacing: 0.5,
           }}
@@ -197,7 +198,7 @@ export function FrameworkSelector() {
                 border: 'none',
                 cursor: disabled ? 'not-allowed' : 'pointer',
                 fontSize: 12,
-                fontFamily: "'Geist Sans', sans-serif",
+                fontFamily: TYPOGRAPHY.fontSans,
                 textAlign: 'left',
                 opacity: disabled ? 0.55 : 1,
               }}
@@ -209,12 +210,12 @@ export function FrameworkSelector() {
                 if (!isActive && !disabled) e.currentTarget.style.background = 'transparent';
               }}
             >
-              {isActive && <span style={{ color: colors.accent, fontSize: 10 }}>●</span>}
+              {isActive && <span style={{ color: colors.accent, fontSize: 11 }}>●</span>}
               <span style={{ marginLeft: isActive ? 0 : 18, flex: 1 }}>{displayName(f)}</span>
               {disabled && (
                 <span
                   style={{
-                    fontSize: 9,
+                    fontSize: 11,
                     color: colors.textDim,
                     fontWeight: 500,
                     textTransform: 'uppercase',
@@ -232,10 +233,10 @@ export function FrameworkSelector() {
         <div
           style={{
             padding: '6px 12px 4px',
-            fontSize: 9,
+            fontSize: 11,
             fontWeight: 600,
             color: colors.textDim,
-            fontFamily: "'Geist Sans', sans-serif",
+            fontFamily: TYPOGRAPHY.fontSans,
             textTransform: 'uppercase',
             letterSpacing: 0.5,
           }}
@@ -262,7 +263,7 @@ export function FrameworkSelector() {
                 border: 'none',
                 cursor: disabled ? 'not-allowed' : 'pointer',
                 fontSize: 12,
-                fontFamily: "'Geist Sans', sans-serif",
+                fontFamily: TYPOGRAPHY.fontSans,
                 textAlign: 'left',
                 opacity: disabled ? 0.55 : 1,
               }}
@@ -300,7 +301,7 @@ export function FrameworkSelector() {
           color: colors.accentLight,
           cursor: 'pointer',
           fontSize: 12,
-          fontFamily: "'Geist Sans', sans-serif",
+          fontFamily: TYPOGRAPHY.fontSans,
           fontWeight: 500,
           padding: '0 10px',
           display: 'flex',

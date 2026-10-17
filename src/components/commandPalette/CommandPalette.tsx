@@ -11,6 +11,7 @@ import {
 } from '../../layout/panelRegistry';
 import type { WorkspaceMode } from '../../stores/workspaceStore';
 
+import { TYPOGRAPHY } from '../../styles/tokens';
 export interface Command {
   id: string;
   label: string;
@@ -127,11 +128,12 @@ export function CommandPalette({ commands, onClose }: CommandPaletteProps) {
             onChange={(e) => setQuery(e.target.value)}
             onKeyDown={handleKeyDown}
             placeholder="Type a command..."
+            className="nuclei-bare-input"
             style={{
               width: '100%', background: 'transparent',
-              border: 'none', outline: 'none',
-              color: colors.text, fontSize: 15,
-              fontFamily: "'Geist Sans', Inter, sans-serif",
+              border: 'none',
+              color: colors.text, fontSize: 14,
+              fontFamily: TYPOGRAPHY.fontSans,
             }}
             aria-label="Search commands"
             role="combobox"
@@ -143,7 +145,7 @@ export function CommandPalette({ commands, onClose }: CommandPaletteProps) {
         {/* Results */}
         <div ref={listRef} id="command-list" style={{ maxHeight: '40vh', overflow: 'auto', padding: '4px 0' }} role="listbox">
           {filtered.length === 0 ? (
-            <div style={{ padding: 16, color: colors.textMuted, fontSize: 13, fontFamily: "'Geist Sans', sans-serif", textAlign: 'center' }}>
+            <div style={{ padding: 16, color: colors.textMuted, fontSize: 13, fontFamily: TYPOGRAPHY.fontSans, textAlign: 'center' }}>
               No matching commands
             </div>
           ) : (
@@ -157,7 +159,7 @@ export function CommandPalette({ commands, onClose }: CommandPaletteProps) {
                   background: i === selectedIdx ? colors.border : 'transparent',
                   border: 'none', cursor: 'pointer',
                   color: colors.text, fontSize: 13,
-                  fontFamily: "'Geist Sans', Inter, sans-serif",
+                  fontFamily: TYPOGRAPHY.fontSans,
                   textAlign: 'left', gap: 10,
                   transition: `background ${getDuration(DURATION.instant)}ms`,
                 }}
@@ -165,16 +167,16 @@ export function CommandPalette({ commands, onClose }: CommandPaletteProps) {
                 aria-selected={i === selectedIdx}
               >
                 <span style={{
-                  fontSize: 10, fontWeight: 600,
+                  fontSize: 11, fontWeight: 600,
                   color: categoryColors[cmd.category] ?? colors.textMuted,
-                  minWidth: 48, fontFamily: "'Geist Sans', sans-serif",
+                  minWidth: 48, fontFamily: TYPOGRAPHY.fontSans,
                 }}>
                   {cmd.category}
                 </span>
                 <span style={{ flex: 1 }}>{cmd.label}</span>
                 {cmd.shortcut && (
                   <kbd style={{
-                    fontSize: 11, fontFamily: "'JetBrains Mono', monospace",
+                    fontSize: 11, fontFamily: TYPOGRAPHY.fontMono,
                     color: colors.textMuted, background: colors.bgPanel,
                     padding: '1px 6px', borderRadius: 3,
                     border: `1px solid ${colors.border}`,

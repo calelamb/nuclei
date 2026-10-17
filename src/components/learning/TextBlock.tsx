@@ -1,6 +1,7 @@
 import ReactMarkdown from 'react-markdown';
 import { useThemeStore } from '../../stores/themeStore';
 
+import { TYPOGRAPHY } from '../../styles/tokens';
 interface TextBlockProps {
   markdown: string;
 }
@@ -13,8 +14,8 @@ export function TextBlock({ markdown }: TextBlockProps) {
       className="nuclei-markdown"
       style={{
         color: colors.text,
-        fontFamily: "'Geist Sans', Inter, system-ui, sans-serif",
-        fontSize: 15,
+        fontFamily: TYPOGRAPHY.fontSans,
+        fontSize: 14,
         lineHeight: 1.7,
       }}
     >
@@ -24,10 +25,10 @@ export function TextBlock({ markdown }: TextBlockProps) {
             <h1 style={{ fontSize: 28, fontWeight: 700, color: colors.text, margin: '24px 0 12px', lineHeight: 1.3 }}>{children}</h1>
           ),
           h2: ({ children }) => (
-            <h2 style={{ fontSize: 22, fontWeight: 600, color: colors.text, margin: '20px 0 10px', lineHeight: 1.3 }}>{children}</h2>
+            <h2 style={{ fontSize: 20, fontWeight: 600, color: colors.text, margin: '20px 0 10px', lineHeight: 1.3 }}>{children}</h2>
           ),
           h3: ({ children }) => (
-            <h3 style={{ fontSize: 18, fontWeight: 600, color: colors.text, margin: '16px 0 8px', lineHeight: 1.3 }}>{children}</h3>
+            <h3 style={{ fontSize: 16, fontWeight: 600, color: colors.text, margin: '16px 0 8px', lineHeight: 1.3 }}>{children}</h3>
           ),
           p: ({ children }) => (
             <p style={{ margin: '0 0 12px', color: colors.text }}>{children}</p>
@@ -45,7 +46,7 @@ export function TextBlock({ markdown }: TextBlockProps) {
                   border: `1px solid ${colors.border}`,
                   borderRadius: 6,
                   padding: '12px 16px',
-                  fontFamily: "'JetBrains Mono', 'Geist Mono', monospace",
+                  fontFamily: TYPOGRAPHY.fontMono,
                   fontSize: 13,
                   lineHeight: 1.5,
                   color: colors.text,
@@ -60,7 +61,7 @@ export function TextBlock({ markdown }: TextBlockProps) {
                 background: colors.bgElevated,
                 padding: '2px 6px',
                 borderRadius: 4,
-                fontFamily: "'JetBrains Mono', 'Geist Mono', monospace",
+                fontFamily: TYPOGRAPHY.fontMono,
                 fontSize: '0.9em',
                 color: colors.accent,
               }}>

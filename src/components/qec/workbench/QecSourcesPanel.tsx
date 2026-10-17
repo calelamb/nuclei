@@ -22,28 +22,28 @@ function SourcesHeading(): ReactElement {
   return (
     <header className="qec-zone-heading">
       <div><span className="qec-zone-heading__eyebrow">Study workspace</span><h2>Sources / Data</h2></div>
-      <FolderTree aria-hidden="true" size={18} strokeWidth={1.7} />
+      <FolderTree aria-hidden="true" size={16} strokeWidth={1.7} />
     </header>
   );
 }
 
 function LoadingStudies(): ReactElement {
-  return <div className="qec-zone-empty" role="status" aria-label="Loading QEC Studies"><LoaderCircle aria-hidden="true" size={24} /><strong>Loading Studies…</strong><span>Parsing and validating Study manifests.</span></div>;
+  return <div className="qec-zone-empty" role="status" aria-label="Loading QEC Studies"><LoaderCircle aria-hidden="true" size={20} /><strong>Loading Studies…</strong><span>Parsing and validating Study manifests.</span></div>;
 }
 
 function EmptyStudies(): ReactElement {
-  return <div className="qec-zone-empty"><FolderTree aria-hidden="true" size={24} /><strong>No Studies found</strong><span>Create a Study manifest in the studies folder to organize QEC sources and evidence.</span></div>;
+  return <div className="qec-zone-empty"><FolderTree aria-hidden="true" size={20} /><strong>No Studies found</strong><span>Create a Study manifest in the studies folder to organize QEC sources and evidence.</span></div>;
 }
 
 function ChooseStudy(): ReactElement {
-  return <div className="qec-zone-empty"><FlaskConical aria-hidden="true" size={24} /><strong>Choose a Study</strong><span>Use the Study control in the research bar to inspect its referenced sources.</span></div>;
+  return <div className="qec-zone-empty"><FlaskConical aria-hidden="true" size={20} /><strong>Choose a Study</strong><span>Use the Study control in the research bar to inspect its referenced sources.</span></div>;
 }
 
 function ValidationDetails({ errors }: { errors: readonly QecStudyValidationError[] }): ReactElement {
   return (
     <section className="qec-study-errors" role="alert" aria-label="Study validation issues">
       <header>
-        <TriangleAlert aria-hidden="true" size={17} />
+        <TriangleAlert aria-hidden="true" size={16} />
         <div><strong>Study manifests need attention</strong><span>Fix these fields and save the files to retry validation.</span></div>
       </header>
       <ul>{errors.map((entry) => (

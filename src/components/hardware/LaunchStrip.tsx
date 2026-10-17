@@ -6,6 +6,7 @@ import { ProviderLogo } from './ProviderLogo';
 import { getHardware } from '../../App';
 import type { HardwareProviderType } from '../../types/hardware';
 
+import { TYPOGRAPHY } from '../../styles/tokens';
 function fmtElapsed(startIso: string): string {
   const ms = Date.now() - new Date(startIso).getTime();
   if (ms < 1000) return '<1s';
@@ -120,7 +121,7 @@ export function LaunchStrip() {
         borderRadius: 10,
         color: colors.text,
         cursor: 'pointer',
-        fontFamily: "'Geist Sans', sans-serif",
+        fontFamily: TYPOGRAPHY.fontSans,
         fontSize: 11,
         textAlign: 'left',
         width: 'calc(100% - 20px)',
@@ -143,14 +144,14 @@ export function LaunchStrip() {
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: colors.textMuted }}>
           <StatusIcon
-            size={10}
+            size={12}
             style={{
               color: statusColor,
               animation: latestJob.status === 'running' ? 'nuclei-spin 800ms linear infinite' : 'none',
             }}
           />
           {label}
-          <Clock size={10} style={{ marginLeft: 4 }} />
+          <Clock size={12} style={{ marginLeft: 4 }} />
           {isTerminal ? relativeAge(latestJob.submittedAt) : fmtElapsed(latestJob.submittedAt)}
         </div>
       </div>
@@ -168,9 +169,9 @@ export function LaunchStrip() {
           display: 'flex',
           alignItems: 'center',
           gap: 4,
-          fontSize: 10,
+          fontSize: 11,
           fontWeight: 500,
-          fontFamily: "'Geist Sans', sans-serif",
+          fontFamily: TYPOGRAPHY.fontSans,
         }}
         onMouseEnter={(e) => {
           e.currentTarget.style.color = colors.error;
@@ -181,7 +182,7 @@ export function LaunchStrip() {
           e.currentTarget.style.borderColor = colors.border;
         }}
       >
-        <X size={10} />
+        <X size={12} />
         {cancellable ? 'Cancel' : 'Dismiss'}
       </button>
     </div>

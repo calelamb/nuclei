@@ -10,6 +10,7 @@ import { Glossary } from './Glossary';
 import { CapstoneCard } from './CapstoneCard';
 import { CapstoneProjectView } from './CapstoneProject';
 
+import { TYPOGRAPHY } from '../../styles/tokens';
 type TabKey = 'tracks' | 'concepts' | 'capstones' | 'glossary';
 
 const TABS: { key: TabKey; label: string }[] = [
@@ -69,14 +70,14 @@ function TracksTab() {
               style={{
                 display: 'flex', alignItems: 'center', gap: 6, width: '100%', textAlign: 'left',
                 padding: '7px 12px', background: 'transparent', border: 'none', cursor: 'pointer',
-                color: colors.textMuted, fontFamily: "'Geist Sans', sans-serif",
+                color: colors.textMuted, fontFamily: TYPOGRAPHY.fontSans,
               }}
             >
-              {isOpen ? <ChevronDown size={13} style={{ flexShrink: 0 }} /> : <ChevronRight size={13} style={{ flexShrink: 0 }} />}
-              <span style={{ flex: 1, fontSize: 12.5, fontWeight: 600, color: colors.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {isOpen ? <ChevronDown size={14} style={{ flexShrink: 0 }} /> : <ChevronRight size={14} style={{ flexShrink: 0 }} />}
+              <span style={{ flex: 1, fontSize: 13, fontWeight: 600, color: colors.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                 {track.title}
               </span>
-              <span style={{ fontSize: 10, color: colors.textDim, fontVariantNumeric: 'tabular-nums' }}>
+              <span style={{ fontSize: 11, color: colors.textDim, fontVariantNumeric: 'tabular-nums' }}>
                 {done}/{total}
               </span>
             </button>
@@ -93,17 +94,17 @@ function TracksTab() {
                     background: isCurrent ? `${colors.accent}14` : 'transparent',
                     borderLeft: `2px solid ${isCurrent ? colors.accent : 'transparent'}`,
                     color: isCurrent ? colors.text : colors.textMuted,
-                    fontWeight: isCurrent ? 600 : 400, fontFamily: "'Geist Sans', sans-serif",
+                    fontWeight: isCurrent ? 600 : 400, fontFamily: TYPOGRAPHY.fontSans,
                   }}
                   onMouseEnter={(e) => { if (!isCurrent) e.currentTarget.style.background = colors.bgElevated; }}
                   onMouseLeave={(e) => { if (!isCurrent) e.currentTarget.style.background = 'transparent'; }}
                 >
                   {isDone ? (
-                    <CheckCircle2 size={13} style={{ color: colors.success, flexShrink: 0 }} />
+                    <CheckCircle2 size={14} style={{ color: colors.success, flexShrink: 0 }} />
                   ) : isCurrent ? (
                     <Dot size={14} style={{ color: colors.accent, flexShrink: 0 }} />
                   ) : (
-                    <Circle size={11} style={{ color: colors.textDim, flexShrink: 0 }} />
+                    <Circle size={12} style={{ color: colors.textDim, flexShrink: 0 }} />
                   )}
                   <span style={{ flex: 1, fontSize: 12, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                     {i + 1}. {lesson.title}
@@ -112,7 +113,7 @@ function TracksTab() {
               );
             })}
             {isOpen && total === 0 && (
-              <div style={{ padding: '2px 12px 8px 30px', fontSize: 11, color: colors.textDim, fontFamily: "'Geist Sans', sans-serif" }}>
+              <div style={{ padding: '2px 12px 8px 30px', fontSize: 11, color: colors.textDim, fontFamily: TYPOGRAPHY.fontSans }}>
                 Coming soon
               </div>
             )}
@@ -172,7 +173,7 @@ export function LearningPathSidebar() {
                 flex: 1, padding: '6px 0', background: 'transparent', border: 'none',
                 borderBottom: isActive ? `2px solid ${colors.accent}` : '2px solid transparent',
                 color: isActive ? colors.accent : colors.textDim,
-                fontSize: 10, fontWeight: 600, fontFamily: "'Geist Sans', sans-serif",
+                fontSize: 11, fontWeight: 600, fontFamily: TYPOGRAPHY.fontSans,
                 textTransform: 'uppercase', letterSpacing: '0.3px', cursor: 'pointer',
                 transition: 'color 0.15s, border-color 0.15s',
               }}

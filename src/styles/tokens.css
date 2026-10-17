@@ -18,7 +18,7 @@
   /* Text */
   --color-text-primary: #E8ECF1;
   --color-text-secondary: #94A3B8;
-  --color-text-tertiary: #64748B;
+  --color-text-tertiary: #7C8BA1;
   --color-text-disabled: #475569;
 
   /* Borders */
@@ -29,6 +29,13 @@
   --color-accent-quantum: #00B4D8;
   --color-accent-quantum-soft: #48CAE4;
   --color-accent-dirac: #7B2D8E;
+  --color-accent-dirac-text: #C084FC;
+
+  /* Domain identities (purple is reserved for Dirac) */
+  --color-mode-research: #60A5FA;
+  --color-basis-x: #00B4D8;
+  --color-basis-z: #FBBF24;
+  --color-overlay-matching: #FB923C;
 
   /* Semantics */
   --color-success: #10B981;
@@ -69,8 +76,8 @@
   --color-surface-sunken: #F1F5F9;
 
   --color-text-primary: #1A1A2E;
-  --color-text-secondary: #64748B;
-  --color-text-tertiary: #475569;
+  --color-text-secondary: #475569;
+  --color-text-tertiary: #5B6B80;
   --color-text-disabled: #94A3B8;
 
   --color-border-subtle: rgba(0, 0, 0, 0.06);
@@ -79,9 +86,15 @@
   --color-accent-quantum: #0891B2;
   --color-accent-quantum-soft: #00B4D8;
   --color-accent-dirac: #6B21A8;
+  --color-accent-dirac-text: #6B21A8;
+
+  --color-mode-research: #1D4ED8;
+  --color-basis-x: #0E7490;
+  --color-basis-z: #B45309;
+  --color-overlay-matching: #C2410C;
 
   --color-success: #059669;
-  --color-warning: #D97706;
+  --color-warning: #A8580A;
   --color-danger: #DC2626;
   --color-info: #2563EB;
 
@@ -116,6 +129,7 @@
   --ease-emphasized-out: cubic-bezier(0.16, 1, 0.3, 1);
   --ease-emphasized-in: cubic-bezier(0.7, 0, 0.84, 0);
 
+  --space-0: 2px;
   --space-1: 4px;
   --space-2: 8px;
   --space-3: 12px;
@@ -126,12 +140,13 @@
   --space-12: 48px;
 
   --radius-sharp: 0;
+  --radius-xs: 4px;
   --radius-soft: 6px;
   --radius-round: 10px;
   --radius-pill: 999px;
 
-  --font-sans: 'Geist Sans', Inter, -apple-system, system-ui, sans-serif;
-  --font-mono: 'JetBrains Mono', 'Geist Mono', ui-monospace, monospace;
+  --font-sans: 'Geist Sans', -apple-system, system-ui, sans-serif;
+  --font-mono: 'Geist Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
 
   --font-size-display: 28px;
   --font-size-title: 20px;
@@ -139,9 +154,36 @@
   --font-size-code: 13px;
   --font-size-caption: 11px;
   --font-size-chrome-label: 12px;
+  --font-size-heading: 16px;
+
+  /* Line heights pair with the scale: caption/label 16, code 20, body 22, heading 24, title 28, display 34 */
+  --line-height-caption: 16px;
+  --line-height-label: 16px;
+  --line-height-code: 20px;
+  --line-height-body: 22px;
+  --line-height-heading: 24px;
+  --line-height-title: 28px;
+  --line-height-display: 34px;
 
   --font-weight-regular: 400;
   --font-weight-medium: 500;
   --font-weight-semibold: 600;
   --font-weight-bold: 700;
+
+  /* Control heights shared by every Button / Select / Input primitive */
+  --control-height-sm: 24px;
+  --control-height-md: 28px;
+  --control-height-lg: 32px;
+
+  /* The single focus ring (all components inherit from :focus-visible) */
+  --focus-ring-color: var(--color-accent-quantum);
+  --focus-ring-width: 2px;
+  --focus-ring-offset: 2px;
+  --focus-ring: 0 0 0 2px var(--color-surface-base), 0 0 0 4px var(--focus-ring-color);
+
+  /* Icon sizes (lucide): inline meta, controls/tabs, rail/panel headers, empty states */
+  --icon-xs: 12px;
+  --icon-sm: 14px;
+  --icon-md: 16px;
+  --icon-lg: 20px;
 }
