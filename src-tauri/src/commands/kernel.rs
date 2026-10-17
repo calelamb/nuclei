@@ -34,8 +34,7 @@ impl KernelState {
     pub fn stop(&self) {
         if let Ok(mut guard) = self.process.lock() {
             if let Some(ref mut child) = *guard {
-                let _ = child.kill();
-                let _ = child.wait();
+                stop_child_gracefully(child, KERNEL_STOP_GRACE);
             }
             *guard = None;
         }
@@ -46,6 +45,33 @@ impl KernelState {
             ownership::remove_owner_record(&dir);
         }
     }
+}
+
+/// How long the kernel gets to handle SIGTERM (it deletes its runtime file
+/// on the way out) before it is killed outright.
+const KERNEL_STOP_GRACE: std::time::Duration = std::time::Duration::from_millis(1500);
+const KERNEL_STOP_POLL: std::time::Duration = std::time::Duration::from_millis(25);
+
+/// SIGTERM, wait up to `grace` for a clean exit, then SIGKILL. A bare
+/// `kill()` is SIGKILL on unix, which left `~/.nuclei/runtime/kernel.json`
+/// (with a dead token and port) behind after every quit.
+fn stop_child_gracefully(child: &mut Child, grace: std::time::Duration) {
+    #[cfg(unix)]
+    {
+        let _ = Command::new("kill")
+            .args(["-TERM", &child.id().to_string()])
+            .status();
+        let exited = ownership::wait_until(grace, KERNEL_STOP_POLL, || {
+            matches!(child.try_wait(), Ok(Some(_)))
+        });
+        if exited {
+            return;
+        }
+    }
+    #[cfg(not(unix))]
+    let _ = grace;
+    let _ = child.kill();
+    let _ = child.wait();
 }
 
 impl Default for KernelState {
@@ -60,7 +86,7 @@ impl Drop for KernelState {
     }
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn start_kernel(
     state: State<'_, KernelState>,
     app_handle: tauri::AppHandle,
@@ -70,8 +96,7 @@ pub fn start_kernel(
     // Kill existing in-process handle if any — relevant during reconnect
     // flows where the user triggered a kernel restart from the UI.
     if let Some(ref mut child) = *guard {
-        let _ = child.kill();
-        let _ = child.wait();
+        stop_child_gracefully(child, KERNEL_STOP_GRACE);
     }
 
     // Reap a kernel that a previous Nuclei run recorded and left behind
@@ -220,7 +245,7 @@ pub fn start_kernel(
     ))
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn stop_kernel(state: State<'_, KernelState>) -> Result<String, String> {
     state.stop();
     Ok("Kernel stopped".to_string())
@@ -247,4 +272,36 @@ pub fn kernel_auth_token(state: State<'_, KernelState>) -> Result<String, String
         .map_err(|e| e.to_string())?
         .clone()
         .ok_or_else(|| "Kernel has not been started".to_string())
+}
+
+#[cfg(all(test, unix))]
+mod tests {
+    use super::*;
+    use std::time::Duration;
+
+    #[test]
+    fn stop_sends_sigterm_first_so_the_kernel_can_clean_up() {
+        let dir = tempfile::tempdir().unwrap();
+        let marker = dir.path().join("got-term");
+        let script = format!(
+            "trap 'touch \"{}\"; exit 0' TERM; while :; do sleep 0.05; done",
+            marker.display()
+        );
+        let mut child = Command::new("sh").args(["-c", &script]).spawn().unwrap();
+        std::thread::sleep(Duration::from_millis(200));
+        stop_child_gracefully(&mut child, Duration::from_secs(2));
+        assert!(marker.exists(), "child never saw SIGTERM");
+        assert!(child.try_wait().unwrap().is_some());
+    }
+
+    #[test]
+    fn stop_falls_back_to_kill_when_the_child_ignores_sigterm() {
+        let mut child = Command::new("sh")
+            .args(["-c", "trap '' TERM; while :; do sleep 0.05; done"])
+            .spawn()
+            .unwrap();
+        std::thread::sleep(Duration::from_millis(200));
+        stop_child_gracefully(&mut child, Duration::from_millis(300));
+        assert!(child.try_wait().unwrap().is_some());
+    }
 }
