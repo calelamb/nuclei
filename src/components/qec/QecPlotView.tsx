@@ -28,6 +28,12 @@ export function QecPlotView({ model, colors, width, height, metadata, title, des
         model={model} colors={colors} width={width} height={height} metadata={metadata}
         title={title} description={description} hover={hover} onHover={setHover}
       />
+      <div
+        aria-live="polite"
+        style={{ position: 'absolute', width: 1, height: 1, overflow: 'hidden', clip: 'rect(0 0 0 0)', whiteSpace: 'nowrap' }}
+      >
+        {hover && series ? tooltipLines(series, hover.point, model.units).join('. ') : ''}
+      </div>
       {hover && series && (
         <div
           role="tooltip"

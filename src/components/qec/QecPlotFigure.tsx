@@ -1,4 +1,5 @@
-import { useMemo, type MouseEvent } from 'react';
+import { useMemo, useState, type KeyboardEvent, type MouseEvent } from 'react';
+import { nextTargetIndex } from '../../lib/qecPlotKeyboard';
 import type { ThemeColors } from '../../stores/themeStore';
 import { whiskerLow, type PlotModel } from '../../lib/qecPlotModel';
 import type { SeriesPoint } from '../../lib/qecPlotPoints';
@@ -68,6 +69,24 @@ export function QecPlotFigure(props: QecPlotFigureProps) {
   const { plot } = layout;
   const clipId = `${idPrefix}-clip`;
 
+  const [focusIdx, setFocusIdx] = useState<number | null>(null);
+  const [focused, setFocused] = useState(false);
+  const toHover = (h: Hit): HoverTarget => ({ seriesKey: h.seriesKey, point: h.point, upper: h.upper, x: h.x, y: h.y });
+  const onKey = (e: KeyboardEvent<SVGRectElement>) => {
+    if (!onHover) return;
+    if (e.key === 'Escape') { onHover(null); return; }
+    const next = nextTargetIndex(targets, focusIdx, e.key);
+    if (next === null || !e.key.startsWith('Arrow') && e.key !== 'Home' && e.key !== 'End') return;
+    e.preventDefault();
+    setFocusIdx(next);
+    onHover(toHover(targets[next]));
+  };
+  const onFocus = () => {
+    setFocused(true);
+    const first = nextTargetIndex(targets, focusIdx, 'ArrowRight');
+    if (first !== null && onHover) { setFocusIdx(first); onHover(toHover(targets[first])); }
+  };
+
   const onMove = (e: MouseEvent<SVGRectElement>) => {
     if (!onHover) return;
     const box = e.currentTarget.getBoundingClientRect();
@@ -102,7 +121,11 @@ export function QecPlotFigure(props: QecPlotFigureProps) {
       {onHover && (
         <rect
           x={plot.x} y={plot.y} width={plot.w} height={plot.h} fill="transparent"
-          onMouseMove={onMove} onMouseLeave={() => onHover(null)} style={{ cursor: 'crosshair' }}
+          tabIndex={0} role="group"
+          aria-label="Plot points. Use the arrow keys to move between points, Escape to clear."
+          stroke={focused ? colors.textMuted : 'none'} strokeDasharray="4 3" strokeWidth={1}
+          onKeyDown={onKey} onFocus={onFocus} onBlur={() => { setFocused(false); onHover(null); }}
+          onMouseMove={onMove} onMouseLeave={() => onHover(null)} style={{ cursor: 'crosshair', outline: 'none' }}
         />
       )}
     </svg>

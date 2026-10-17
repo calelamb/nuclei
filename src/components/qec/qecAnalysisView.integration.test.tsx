@@ -69,6 +69,7 @@ describe('QecAnalysisView with a dropped CSV (every panel in one view)', () => {
   it('unticking the partition key shows a visible alert instead of silently pooling', () => {
     useQecCampaignStore.getState().loadFromCsv(disjointCsv, 'j.csv');
     const { getByLabelText, getByRole } = render(<QecAnalysisView />);
+    fireEvent.click(getByRole('button', { name: /Edit mapping/ }));
     fireEvent.click(getByLabelText('Group series by code'));
     expect(getByRole('alert').textContent).toMatch(/code.*splits the tasks into blocks/s);
   });

@@ -4,7 +4,8 @@ import { useThemeStore } from '../../stores/themeStore';
 import { firstFile, loadCsvFile } from '../../services/qecCsvFile';
 import { useCsvDrop } from './useCsvDrop';
 
-import { TYPOGRAPHY } from '../../styles/tokens';
+import { ICON_SIZE, ICON_STROKE, TYPOGRAPHY } from '../../styles/tokens';
+import { Button } from '../ui';
 /** Drop target + file picker for a sinter stats CSV. Parsing happens locally;
  * nothing is uploaded. Load errors are shown by QecAnalysisView's banner. */
 export function QecCsvDropZone() {
@@ -25,16 +26,7 @@ export function QecCsvDropZone() {
     >
       <Upload size={16} color={colors.textMuted} aria-hidden="true" />
       <div style={{ fontSize: 12, color: colors.text }}>Drop a sinter stats CSV to plot it</div>
-      <button
-        type="button"
-        onClick={() => inputRef.current?.click()}
-        style={{
-          padding: '4px 10px', borderRadius: 5, border: `1px solid ${colors.border}`,
-          background: 'transparent', color: colors.textMuted, fontSize: 12, cursor: 'pointer',
-        }}
-      >
-        Choose file…
-      </button>
+      <Button size="sm" onClick={() => inputRef.current?.click()}>Choose file…</Button>
       <input
         ref={inputRef}
         type="file"
@@ -54,21 +46,16 @@ export function QecCsvDropZone() {
 
 /** Compact header button to open a CSV when results are already showing. */
 export function QecCsvOpenButton() {
-  const colors = useThemeStore((s) => s.colors);
   const inputRef = useRef<HTMLInputElement>(null);
   return (
     <>
-      <button
-        type="button"
+      <Button
+        size="sm"
         onClick={() => inputRef.current?.click()}
-        style={{
-          display: 'flex', alignItems: 'center', gap: 5, background: 'transparent',
-          border: `1px solid ${colors.border}`, borderRadius: 5, color: colors.textMuted,
-          cursor: 'pointer', fontSize: 12, padding: '5px 10px', fontFamily: TYPOGRAPHY.fontSans,
-        }}
+        icon={<Upload size={ICON_SIZE.xs} strokeWidth={ICON_STROKE} aria-hidden="true" />}
       >
-        <Upload size={12} aria-hidden="true" /> Open CSV
-      </button>
+        Open CSV
+      </Button>
       <input
         ref={inputRef}
         type="file"

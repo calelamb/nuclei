@@ -62,6 +62,8 @@ interface QecCampaignState {
    * table, and kept while they navigate away. Falls back to per-shot where
    * rounds are unknown (see useQecUnits). */
   requestedUnits: RateUnits;
+  /** Name of the CSV being read/parsed right now, for "Reading…" feedback. */
+  csvLoading: string | null;
 
   /** Parse untrusted sinter CSV text, aggregate duplicate strong_ids, guess a
    * mapping, and plot it. On a whole-file failure existing data is kept. */
@@ -69,6 +71,7 @@ interface QecCampaignState {
   setCsvMapping(mapping: SinterMapping): void;
   clearCsvError(): void;
   setRequestedUnits(units: RateUnits): void;
+  setCsvLoading(name: string | null): void;
 
   startCampaign(name: string, tasksTotal: number): void;
   /** Merge changed-row events (keyed by strong_id) + progress counters. */
@@ -94,6 +97,7 @@ export const useQecCampaignStore = create<QecCampaignState>((set) => ({
   csvImport: null,
   csvError: null,
   requestedUnits: 'per_round',
+  csvLoading: null,
 
   loadFromCsv: (text, sourceName) => {
     if (useQecCampaignStore.getState().running) {
@@ -141,6 +145,8 @@ export const useQecCampaignStore = create<QecCampaignState>((set) => ({
 
   setRequestedUnits: (requestedUnits) => set({ requestedUnits }),
 
+  setCsvLoading: (csvLoading) => set({ csvLoading }),
+
   startCampaign: (campaignName, tasksTotal) =>
     set({
       csvImport: null,
@@ -174,7 +180,7 @@ export const useQecCampaignStore = create<QecCampaignState>((set) => ({
   reset: () =>
     set({
       statsCsv: null, rowsByStrongId: {}, running: false, progress: null, campaignName: null,
-      resumable: null, csvImport: null, csvError: null, requestedUnits: 'per_round',
+      resumable: null, csvImport: null, csvError: null, requestedUnits: 'per_round', csvLoading: null,
     }),
 }));
 

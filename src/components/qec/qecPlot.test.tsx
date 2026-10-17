@@ -145,6 +145,21 @@ describe('point tooltip', () => {
   });
 });
 
+describe('keyboard access to points (qec-18)', () => {
+  it('focuses the plot, shows a point, and arrow keys move to the next', () => {
+    load(grid(['mwpm']));
+    const { getByRole, queryByRole } = render(<ThresholdPanel />);
+    const plot = getByRole('group', { name: /Plot points/ });
+    expect(plot.getAttribute('tabindex')).toBe('0');
+    fireEvent.focus(plot);
+    const first = getByRole('tooltip').textContent;
+    fireEvent.keyDown(plot, { key: 'ArrowRight' });
+    expect(getByRole('tooltip').textContent).not.toBe(first);
+    fireEvent.keyDown(plot, { key: 'Escape' });
+    expect(queryByRole('tooltip')).toBeNull();
+  });
+});
+
 describe('exported figure', () => {
   const exportOf = (c: ReturnType<typeof render>) => {
     fireEvent.click(c.getByRole('button', { name: 'Export plot as SVG' }));

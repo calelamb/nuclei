@@ -65,7 +65,8 @@ describe('CsvMappingPreview', () => {
 
   it('guesses the mapping, previews rows, and re-plots when a key changes', () => {
     useQecCampaignStore.getState().loadFromCsv(NON_STANDARD, 'x.csv');
-    const { getByLabelText, container, getAllByRole } = render(<Both />);
+    const { getByLabelText, container, getAllByRole, getByRole } = render(<Both />);
+    fireEvent.click(getByRole('button', { name: /Edit mapping/ }));
     expect((getByLabelText('Map p') as HTMLSelectElement).value).toBe('noise');
     expect((getByLabelText('Map d') as HTMLSelectElement).value).toBe('distance');
     expect(getAllByRole('row').length).toBe(1 + 4); // header + 4 rows (<= 10)
@@ -82,7 +83,8 @@ describe('CsvMappingPreview', () => {
 
   it('clearing p leaves nothing plottable (empty state returns)', () => {
     useQecCampaignStore.getState().loadFromCsv(NON_STANDARD, 'x.csv');
-    const { getByLabelText, container } = render(<Both />);
+    const { getByLabelText, container, getByRole } = render(<Both />);
+    fireEvent.click(getByRole('button', { name: /Edit mapping/ }));
     fireEvent.change(getByLabelText('Map p'), { target: { value: '' } });
     expect(container.querySelectorAll('polyline').length).toBe(0);
   });
@@ -102,8 +104,9 @@ describe('CsvMappingPreview', () => {
 
 describe('QecAnalysisView', () => {
   it('accepts a drop anywhere on the view and shows the mapping panel', async () => {
-    const { container, findByLabelText } = render(<QecAnalysisView />);
+    const { container, findByLabelText, findByRole } = render(<QecAnalysisView />);
     await act(async () => { dropFiles(container.firstChild as Element, [csvFile(csv, 'campaign.csv')]); });
+    fireEvent.click(await findByRole('button', { name: /Edit mapping/ }));
     expect(await findByLabelText('Map p')).toBeTruthy();
     expect(container.textContent).toContain('campaign.csv');
   });

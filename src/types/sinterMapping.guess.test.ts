@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import type { QecCampaignStatsRow } from './qec';
 import { lambdaEstimates, likelihoodSeries } from '../lib/qecFit';
 import {
-  applyMapping, findCollisions, guessMapping, isFallbackPGuess, metadataKeys, splitMetadataKeys,
+  applyMapping, bestCollisionKey, findCollisions, guessMapping, isFallbackPGuess, metadataKeys, splitMetadataKeys,
 } from './sinterMapping';
 
 function row(id: string, meta: Record<string, unknown>, errors = 10, shots = 1000): QecCampaignStatsRow {
@@ -75,5 +75,15 @@ describe('splitMetadataKeys (qec-20)', () => {
     const { varying, constant } = splitMetadataKeys(metadataKeys(rows));
     expect(constant.map((k) => k.key)).toEqual(['b', 'c']);
     expect(varying.map((k) => k.key)).toEqual(['d', 'p', 'r']);
+  });
+});
+
+describe('bestCollisionKey', () => {
+  it('names the key that separates colliding tasks', () => {
+    const rows = [3, 5, 7].flatMap((d) => [0.001, 0.002].flatMap((p) =>
+      ['X', 'Z'].map((b) => row(`${d}-${p}-${b}`, { d, p, r: d, basis: b }))));
+    const plain = { p: 'p', d: 'd', rounds: 'r', decoder: '__decoder_column__', groupBy: [] };
+    expect(bestCollisionKey(rows, plain)).toBe('basis');
+    expect(bestCollisionKey(rows, { ...plain, groupBy: ['basis'] })).toBeNull();
   });
 });

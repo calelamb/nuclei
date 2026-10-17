@@ -176,6 +176,23 @@ export function findPartitionKeys(rows: readonly QecCampaignStatsRow[], mapping:
     .map((k) => ({ key: k.key, distinct: k.distinct }));
 }
 
+/** The single unmapped key that best resolves plotted-point collisions
+ * (fewest tasks left sharing a point), or null when none helps. Used to offer
+ * "merge as replicates" / "split by" on the collision banner. */
+export function bestCollisionKey(rows: readonly QecCampaignStatsRow[], mapping: SinterMapping): string | null {
+  const taken = new Set<string | null>([
+    mapping.p, mapping.d, mapping.rounds, mapping.decoder, 'label', ...mapping.groupBy, ...(mapping.mergeKeys ?? []),
+  ]);
+  const current = excess(rows, mapping);
+  let best: { key: string; score: number } | null = null;
+  for (const k of metadataKeys(rows)) {
+    if (taken.has(k.key) || k.distinct < 2 || k.count !== rows.length) continue;
+    const score = excess(rows, { ...mapping, groupBy: [...mapping.groupBy, k.key] });
+    if (score < current && (best === null || score < best.score)) best = { key: k.key, score };
+  }
+  return best?.key ?? null;
+}
+
 /** Greedily add unmapped varying keys to groupBy until no two tasks share a
  * plotted point (or no key helps). Fewer-valued keys win ties. */
 function autoGroupBy(

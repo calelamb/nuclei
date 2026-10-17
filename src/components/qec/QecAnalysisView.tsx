@@ -14,7 +14,10 @@ import { QecCsvOpenButton } from './QecCsvDropZone';
 import { useCsvDrop } from './useCsvDrop';
 import { downloadCsv } from '../../services/experimentExport';
 
-import { TYPOGRAPHY } from '../../styles/tokens';
+import { ICON_SIZE, ICON_STROKE, TYPOGRAPHY } from '../../styles/tokens';
+const PLOT_MIN_HEIGHT = 300;
+const TABLE_MIN_HEIGHT = 170;
+
 /**
  * PRD 10 Phase E — the campaign analysis surface, shown in the experiments
  * main area when a QEC campaign experiment is selected. Stacks the threshold/Λ
@@ -34,6 +37,7 @@ export function QecAnalysisView() {
   const { run, cancel } = useQecCampaignRun();
   const csvSource = useQecCampaignStore((s) => s.csvImport?.sourceName ?? null);
   const csvError = useQecCampaignStore((s) => s.csvError);
+  const csvLoading = useQecCampaignStore((s) => s.csvLoading);
   const statsCsv = useQecCampaignStore((s) => s.statsCsv);
   const { over, handlers } = useCsvDrop();
 
@@ -60,45 +64,40 @@ export function QecAnalysisView() {
         <div style={{ flex: 1 }} />
         <QecCsvOpenButton />
         {statsCsv ? (
-          <button
-            type="button"
+          <Button
+            size="sm"
             title="sinter-native stats.csv: shots, errors, discards, seconds, decoder, strong_id, json_metadata, custom_counts"
             onClick={() => downloadCsv(statsCsv, 'stats.csv')}
-            style={{
-              display: 'flex', alignItems: 'center', gap: 5, background: 'transparent',
-              border: `1px solid ${colors.border}`, borderRadius: 5, color: colors.textMuted,
-              cursor: 'pointer', fontSize: 12, padding: '5px 10px', fontFamily: TYPOGRAPHY.fontSans,
-            }}
+            icon={<Download size={ICON_SIZE.xs} strokeWidth={ICON_STROKE} aria-hidden="true" />}
           >
-            <Download size={12} aria-hidden="true" /> Export stats.csv
-          </button>
+            Export stats.csv
+          </Button>
         ) : null}
         {webOnly ? null : running ? (
-          <button
-            onClick={cancel}
-            style={{
-              display: 'flex', alignItems: 'center', gap: 5, background: 'transparent',
-              border: `1px solid ${colors.border}`, borderRadius: 5, color: colors.error,
-              cursor: 'pointer', fontSize: 12, padding: '5px 12px', fontFamily: TYPOGRAPHY.fontSans,
-            }}
-          >
-            <Square size={12} /> Cancel
-          </button>
+          <Button size="sm" variant="danger" onClick={cancel} icon={<Square size={ICON_SIZE.xs} strokeWidth={ICON_STROKE} />}>
+            Cancel
+          </Button>
         ) : (
           <Button
             variant="primary"
             size="sm"
             onClick={() => { if (experiment && projectRoot) void run(experiment, projectRoot); }}
             disabled={!canRun}
-            icon={<Play size={12} />}
+            icon={<Play size={ICON_SIZE.xs} strokeWidth={ICON_STROKE} />}
           >
             Run campaign
           </Button>
         )}
       </div>
+      {csvLoading && (
+        <div role="status" aria-live="polite" style={{ padding: '6px 12px', fontSize: 12, color: colors.textMuted, borderBottom: `1px solid ${colors.border}`, fontFamily: TYPOGRAPHY.fontSans }}>
+          {`Reading ${csvLoading}…`}
+        </div>
+      )}
       {csvError && (
-        <div role="alert" style={{ padding: '6px 12px', fontSize: 12, color: colors.error, borderBottom: `1px solid ${colors.border}` }}>
+        <div role="alert" style={{ padding: '6px 12px', fontSize: 12, color: colors.error, borderBottom: `1px solid ${colors.border}`, fontFamily: TYPOGRAPHY.fontSans }}>
           {csvError}
+          {csvSource ? ` Still showing ${csvSource}.` : ''}
         </div>
       )}
       <CsvMappingPreview />
@@ -128,11 +127,13 @@ export function QecAnalysisView() {
           ) : null}
         </div>
       )}
-      <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
-        <div style={{ flex: 2, minHeight: 0, borderBottom: `1px solid ${colors.border}` }}>
+      {/* The plot keeps a usable height; on short windows the page scrolls
+          instead of squeezing the plot and the decoder table to slivers. */}
+      <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', display: 'flex', flexDirection: 'column' }}>
+        <div style={{ flex: '2 1 0', minHeight: PLOT_MIN_HEIGHT, borderBottom: `1px solid ${colors.border}` }}>
           <ThresholdPanel />
         </div>
-        <div style={{ flex: 1, minHeight: 0 }}>
+        <div style={{ flex: '1 1 0', minHeight: TABLE_MIN_HEIGHT }}>
           <DecoderWorkbench />
         </div>
       </div>
