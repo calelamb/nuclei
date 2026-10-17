@@ -25,6 +25,7 @@ export function Table({ label, dense = false, className, children }: TableProps)
     const overflowing = el.scrollWidth > el.clientWidth + 1;
     const atEnd = el.scrollLeft + el.clientWidth >= el.scrollWidth - 1;
     el.dataset.overflow = String(overflowing);
+    el.tabIndex = overflowing ? 0 : -1;
     el.dataset.scrolledEnd = String(atEnd);
   }, []);
 
@@ -40,7 +41,7 @@ export function Table({ label, dense = false, className, children }: TableProps)
   }, [syncOverflow]);
 
   return (
-    <div ref={scrollRef} className="nuclei-table-scroll" tabIndex={0} onScroll={syncOverflow}>
+    <div ref={scrollRef} className="nuclei-table-scroll" role="region" aria-label={label} tabIndex={-1} onScroll={syncOverflow}>
       <table className={cx('nuclei-table', dense && 'nuclei-table--dense', className)} aria-label={label}>
         {children}
       </table>
