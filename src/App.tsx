@@ -340,6 +340,7 @@ function AppInner() {
     startResearchTour: () => useResearchTourStore.getState().start(),
     navigate,
     togglePanel: togglePanelResolved,
+    setLayoutPreset: (preset) => useLayoutStore.getState().setPreset(preset),
     runExperiment: (fileName: string) => {
       const experiment = experiments.find((e) => e.fileName === fileName);
       if (!experiment || !projectRoot) return;

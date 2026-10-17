@@ -50,6 +50,56 @@ describe('CommandPalette interactions', () => {
     expect(screen.getByRole('option').textContent).not.toMatch(/^Go\s*Go to/);
   });
 
+  it('groups an unfiltered list under one header per category instead of a label on every row', () => {
+    const cmds: Command[] = [
+      { id: 'a', label: 'Go to Explorer', category: 'Navigate', action: vi.fn() },
+      { id: 'b', label: 'Go to Settings', category: 'Navigate', action: vi.fn() },
+      { id: 'c', label: 'Execute circuit', category: 'Run', action: vi.fn() },
+    ];
+    render(<CommandPalette commands={cmds} onClose={vi.fn()} />);
+    expect(screen.getAllByRole('group').map((g) => g.getAttribute('aria-label'))).toEqual(['Navigate', 'Run']);
+    for (const option of screen.getAllByRole('option')) {
+      expect(option.textContent).not.toMatch(/Navigate|Run$/);
+    }
+  });
+
+  it('keeps arrow-key order across groups', () => {
+    const cmds: Command[] = [
+      { id: 'a', label: 'Alpha', category: 'File', action: vi.fn() },
+      { id: 'b', label: 'Beta', category: 'View', action: vi.fn() },
+    ];
+    render(<CommandPalette commands={cmds} onClose={vi.fn()} />);
+    const input = screen.getByRole('combobox');
+    fireEvent.keyDown(input, { key: 'ArrowDown' });
+    expect(screen.getAllByRole('option')[1].getAttribute('aria-selected')).toBe('true');
+  });
+
+  it('shows a ranked flat list (with a quiet category tag) while searching', () => {
+    const cmds: Command[] = [
+      { id: 'a', label: 'Layout: Clean', category: 'View', keywords: ['layout'], action: vi.fn() },
+      { id: 'b', label: 'Run Circuit', category: 'Run', action: vi.fn() },
+    ];
+    render(<CommandPalette commands={cmds} onClose={vi.fn()} />);
+    fireEvent.change(screen.getByRole('combobox'), { target: { value: 'layout' } });
+    expect(screen.queryAllByRole('group')).toHaveLength(0);
+    expect(screen.getAllByRole('option')).toHaveLength(1);
+  });
+
+  it('wraps the input in a field container with a search icon', () => {
+    const { container } = render(<CommandPalette commands={[mk('a', 'Alpha')]} onClose={vi.fn()} />);
+    const input = screen.getByRole('combobox');
+    expect(input.parentElement?.className).toContain('nuclei-field-group');
+    expect(container.querySelector('svg[data-search-icon]')).toBeTruthy();
+  });
+
+  it('keeps Tab inside the palette', () => {
+    render(<CommandPalette commands={[mk('a', 'Alpha')]} onClose={vi.fn()} />);
+    const input = screen.getByRole('combobox');
+    input.focus();
+    fireEvent.keyDown(input, { key: 'Tab' });
+    expect(screen.getByRole('dialog').contains(document.activeElement)).toBe(true);
+  });
+
   it('Enter runs the highlighted command after closing', () => {
     const action = vi.fn();
     const onClose = vi.fn();
