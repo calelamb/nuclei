@@ -5,33 +5,11 @@ import {
   type InspectionView,
 } from '../../stores/challengeModeStore';
 
+import './challenges.css';
 import { TYPOGRAPHY } from '../../styles/tokens';
-function TabButton({
-  active,
-  label,
-  onClick,
-}: {
-  active: boolean;
-  label: string;
-  onClick: () => void;
-}) {
-  const colors = useThemeStore((s) => s.colors);
-
+function TabButton({ active, label, onClick }: { active: boolean; label: string; onClick: () => void }) {
   return (
-    <button
-      onClick={onClick}
-      style={{
-        padding: '6px 10px',
-        background: 'transparent',
-        border: 'none',
-        borderBottom: active ? `2px solid ${colors.accent}` : '2px solid transparent',
-        color: active ? colors.text : colors.textMuted,
-        fontSize: 11,
-        fontWeight: active ? 600 : 500,
-        fontFamily: TYPOGRAPHY.fontSans,
-        cursor: 'pointer',
-      }}
-    >
+    <button type="button" role="tab" aria-selected={active} className="trun__tab" onClick={onClick}>
       {label}
     </button>
   );

@@ -3,6 +3,7 @@ import { useThemeStore } from '../../stores/themeStore';
 import { Check, X, Clock, ChevronRight, ChevronDown, Star } from 'lucide-react';
 import type { Submission, SubmissionStatus } from '../../types/challenge';
 
+import './challenges.css';
 import { TYPOGRAPHY } from '../../styles/tokens';
 interface SubmissionHistoryProps {
   submissions: Submission[];
@@ -37,6 +38,9 @@ function SubmissionRow({ submission, index }: { submission: Submission; index: n
       borderBottom: `1px solid ${colors.border}`,
     }}>
       <button
+        type="button"
+        className="row-btn"
+        aria-expanded={expanded}
         onClick={() => setExpanded(!expanded)}
         style={{
           width: '100%',
@@ -49,8 +53,6 @@ function SubmissionRow({ submission, index }: { submission: Submission; index: n
           cursor: 'pointer',
           textAlign: 'left',
         }}
-        onMouseEnter={(e) => { e.currentTarget.style.background = colors.bgElevated; }}
-        onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
       >
         {expanded
           ? <ChevronDown size={12} color={colors.textDim} />

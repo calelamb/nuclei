@@ -1,5 +1,4 @@
 import { useRef, useEffect } from 'react';
-import { useThemeStore } from '../../stores/themeStore';
 import { useLearnStore } from '../../stores/learnStore';
 import { getTrack } from '../../data/lessons/tracks';
 import { TextBlock } from './TextBlock';
@@ -11,8 +10,15 @@ import { ConceptCard } from './ConceptCard';
 import { InteractiveBlochSphere } from './InteractiveBlochSphere';
 import type { Lesson, ContentBlock } from '../../data/lessons/types';
 import { ArrowLeft, ChevronLeft, ChevronRight, CheckCircle } from 'lucide-react';
+import { Button, IconButton } from '../ui';
+import './lessonView.css';
 
-import { TYPOGRAPHY } from '../../styles/tokens';
+const LEVEL_COLOR: Record<Lesson['difficulty'], string> = {
+  'absolute-beginner': 'var(--color-info)',
+  beginner: 'var(--color-success)',
+  intermediate: 'var(--color-warning)',
+  advanced: 'var(--color-danger)',
+};
 function ContentBlockRenderer({ block }: { block: ContentBlock }) {
   switch (block.type) {
     case 'text':
@@ -40,8 +46,6 @@ interface LessonViewProps {
 }
 
 export function LessonView({ lesson, trackId }: LessonViewProps) {
-  const colors = useThemeStore((s) => s.colors);
-  const shadow = useThemeStore((s) => s.shadow);
   const clearCurrentLesson = useLearnStore((s) => s.clearCurrentLesson);
   const setCurrentLesson = useLearnStore((s) => s.setCurrentLesson);
   const setCurrentBlockIndex = useLearnStore((s) => s.setCurrentBlockIndex);
@@ -87,173 +91,80 @@ export function LessonView({ lesson, trackId }: LessonViewProps) {
     return () => io.disconnect();
   }, [lesson.id, setCurrentBlockIndex]);
 
-  const difficultyColor = {
-    'absolute-beginner': colors.info,
-    beginner: colors.success,
-    intermediate: colors.warning,
-    advanced: colors.error,
-  }[lesson.difficulty];
-
   const readProgress = blockCount > 0 ? Math.min(1, (currentBlockIndex + 1) / blockCount) : 0;
 
   return (
-    <div style={{
-      flex: 1,
-      minHeight: 0,
-      display: 'flex',
-      flexDirection: 'column',
-      overflow: 'hidden',
-      background: colors.bg,
-    }}>
-      {/* Top bar: breadcrumb + position + prev/next */}
-      <div style={{
-        flexShrink: 0,
-        display: 'flex',
-        alignItems: 'center',
-        padding: '0 16px',
-        height: 44,
-        gap: 10,
-        borderBottom: `1px solid ${colors.border}`,
-        background: colors.bgPanel,
-      }}>
-        <button
-          onClick={clearCurrentLesson}
-          title="Back to all tracks"
-          style={{
-            display: 'flex', alignItems: 'center', gap: 4,
-            background: 'transparent', border: 'none',
-            color: colors.textMuted, cursor: 'pointer',
-            fontSize: 12, fontFamily: TYPOGRAPHY.fontSans,
-            padding: '4px 8px', borderRadius: 4,
-          }}
-          onMouseEnter={(e) => { e.currentTarget.style.color = colors.text; e.currentTarget.style.background = colors.bgElevated; }}
-          onMouseLeave={(e) => { e.currentTarget.style.color = colors.textMuted; e.currentTarget.style.background = 'transparent'; }}
-        >
-          <ArrowLeft size={14} />
+    <div className="lesson">
+      <div className="lesson__bar">
+        <Button size="sm" variant="ghost" icon={<ArrowLeft size={14} aria-hidden="true" />} onClick={clearCurrentLesson} title="Back to all tracks">
           Tracks
-        </button>
+        </Button>
 
-        {/* Breadcrumb */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6, flex: 1, minWidth: 0, fontFamily: TYPOGRAPHY.fontSans }}>
-          <span style={{ color: colors.textDim, fontSize: 12, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 200 }}>
-            {track?.title}
-          </span>
-          <ChevronRight size={12} color={colors.textDim} style={{ flexShrink: 0 }} />
-          <span style={{ color: colors.text, fontSize: 13, fontWeight: 500, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-            {lesson.title}
-          </span>
-          {isCompleted && <CheckCircle size={14} color={colors.success} style={{ flexShrink: 0 }} />}
+        <div className="lesson__crumbs">
+          <span className="lesson__crumb-track">{track?.title}</span>
+          <ChevronRight className="lesson__crumb-sep" size={12} aria-hidden="true" />
+          <span className="lesson__crumb-title">{lesson.title}</span>
+          {isCompleted && <CheckCircle className="lesson__done" size={14} aria-label="Completed" />}
         </div>
 
-        <span style={{ color: colors.textDim, fontSize: 11, fontFamily: TYPOGRAPHY.fontSans, whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }}>
-          Lesson {currentIndex + 1} / {lessons.length}
-        </span>
+        <span className="lesson__position">Lesson {currentIndex + 1} / {lessons.length}</span>
 
-        <div style={{ display: 'flex', gap: 4 }}>
-          <button
-            onClick={() => prevLesson && setCurrentLesson(trackId, prevLesson.id)}
+        <div className="lesson__steps">
+          <IconButton
+            variant="secondary"
+            size="sm"
+            aria-label={prevLesson ? `Previous lesson: ${prevLesson.title}` : 'No previous lesson'}
             disabled={!prevLesson}
-            title={prevLesson ? `Previous: ${prevLesson.title}` : 'No previous lesson'}
-            style={navBtn(colors, !!prevLesson)}
+            onClick={() => prevLesson && setCurrentLesson(trackId, prevLesson.id)}
           >
             <ChevronLeft size={14} />
-          </button>
-          <button
-            onClick={() => nextLesson && setCurrentLesson(trackId, nextLesson.id)}
+          </IconButton>
+          <IconButton
+            variant="secondary"
+            size="sm"
+            aria-label={nextLesson ? `Next lesson: ${nextLesson.title}` : 'No next lesson'}
             disabled={!nextLesson}
-            title={nextLesson ? `Next: ${nextLesson.title}` : 'No next lesson'}
-            style={navBtn(colors, !!nextLesson)}
+            onClick={() => nextLesson && setCurrentLesson(trackId, nextLesson.id)}
           >
             <ChevronRight size={14} />
-          </button>
+          </IconButton>
         </div>
       </div>
 
-      {/* Within-lesson reading progress */}
-      <div style={{ flexShrink: 0, height: 2, background: colors.border }}>
-        <div style={{ width: `${readProgress * 100}%`, height: '100%', background: colors.accent, transition: 'width 200ms ease' }} />
+      <div className="lesson__progress" role="progressbar" aria-label="Reading progress" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(readProgress * 100)}>
+        <div className="lesson__progress-fill" style={{ width: `${readProgress * 100}%` }} />
       </div>
 
-      {/* Scrollable content */}
-      <div
-        ref={scrollRef}
-        style={{
-          flex: 1,
-          minHeight: 0,
-          overflowY: 'auto',
-          padding: '24px 32px 64px',
-        }}
-      >
-        {/* Lesson header */}
-        <div style={{ marginBottom: 24, maxWidth: 760 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-            <span style={{
-              padding: '2px 8px', borderRadius: 4,
-              background: `${difficultyColor}18`, color: difficultyColor,
-              fontSize: 11, fontWeight: 600, fontFamily: TYPOGRAPHY.fontSans,
-              textTransform: 'capitalize',
-            }}>
+      <div ref={scrollRef} className="lesson__scroll">
+        <header className="lesson__header">
+          <div className="lesson__meta">
+            <span className="lesson__level" style={{ ['--level-color' as string]: LEVEL_COLOR[lesson.difficulty] }}>
               {lesson.difficulty.replace('-', ' ')}
             </span>
-            <span style={{ color: colors.textDim, fontSize: 11, fontFamily: TYPOGRAPHY.fontSans }}>
-              ~{lesson.estimatedMinutes} min
-            </span>
+            <span>~{lesson.estimatedMinutes} min</span>
           </div>
-          <h1 style={{ color: colors.text, fontSize: 28, fontWeight: 700, fontFamily: TYPOGRAPHY.fontSans, margin: 0, lineHeight: 1.2 }}>
-            {lesson.title}
-          </h1>
-          <p style={{ color: colors.textMuted, fontSize: 14, fontFamily: TYPOGRAPHY.fontSans, margin: '8px 0 0', lineHeight: 1.5 }}>
-            {lesson.description}
-          </p>
-        </div>
+          <h1 className="lesson__title">{lesson.title}</h1>
+          <p className="lesson__lede">{lesson.description}</p>
+        </header>
 
-        {/* Content blocks */}
         {lesson.contentBlocks.map((block, i) => (
-          <div key={i} id={`block-${i}`} data-block-index={i} style={{ marginBottom: 8, scrollMarginTop: 16, maxWidth: 760 }}>
+          <div key={i} id={`block-${i}`} data-block-index={i} className="lesson__block">
             <ContentBlockRenderer block={block} />
           </div>
         ))}
 
-        {/* Next lesson prompt */}
         {nextLesson && (
-          <div style={{
-            marginTop: 32, maxWidth: 760, padding: 20,
-            background: colors.bgElevated, border: `1px solid ${colors.border}`,
-            borderRadius: 12, display: 'flex', alignItems: 'center',
-            justifyContent: 'space-between', boxShadow: shadow.sm,
-          }}>
+          <div className="lesson__next">
             <div>
-              <div style={{ color: colors.textDim, fontSize: 12, fontFamily: TYPOGRAPHY.fontSans, marginBottom: 4 }}>
-                Up next
-              </div>
-              <div style={{ color: colors.text, fontSize: 14, fontWeight: 500, fontFamily: TYPOGRAPHY.fontSans }}>
-                {nextLesson.title}
-              </div>
+              <div className="lesson__next-kicker">Up next</div>
+              <div className="lesson__next-title">{nextLesson.title}</div>
             </div>
-            <button
-              onClick={() => setCurrentLesson(trackId, nextLesson.id)}
-              style={{
-                display: 'flex', alignItems: 'center', gap: 6, padding: '8px 20px',
-                background: colors.accent, color: '#fff', border: 'none', borderRadius: 8,
-                fontSize: 13, fontWeight: 600, fontFamily: TYPOGRAPHY.fontSans,
-                cursor: 'pointer', boxShadow: shadow.sm,
-              }}
-            >
-              Next Lesson <ChevronRight size={16} />
-            </button>
+            <Button variant="primary" size="lg" onClick={() => setCurrentLesson(trackId, nextLesson.id)}>
+              Next Lesson <ChevronRight size={16} aria-hidden="true" />
+            </Button>
           </div>
         )}
       </div>
     </div>
   );
-}
-
-function navBtn(colors: { border: string; textMuted: string; textDim: string }, enabled: boolean): React.CSSProperties {
-  return {
-    display: 'flex', alignItems: 'center',
-    background: 'transparent', border: `1px solid ${colors.border}`,
-    borderRadius: 4, padding: '3px 6px',
-    color: enabled ? colors.textMuted : colors.textDim,
-    cursor: enabled ? 'pointer' : 'default',
-  };
 }

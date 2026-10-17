@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import type { BlochPalette } from '../../lib/blochPalette';
 import { MIXED_EPSILON, PURE_THRESHOLD, blochLength, type BlochVector } from '../../lib/blochMath';
 import { TYPOGRAPHY } from '../../styles/tokens';
+import { labelHeightFraction } from './blochFraming';
 
 /**
  * The static Bloch-sphere scene shared by every viewport: shell, great circles,
@@ -47,6 +48,7 @@ function labelSprite(text: string, color: string, height: number): THREE.Sprite 
   const material = new THREE.SpriteMaterial({ map: texture, transparent: true, depthTest: false, toneMapped: false, sizeAttenuation: false });
   const sprite = new THREE.Sprite(material);
   sprite.scale.set(height * (w / h), height, 1);
+  sprite.userData = { base: height, aspect: w / h };
   sprite.renderOrder = 10;
   return sprite;
 }
@@ -71,6 +73,8 @@ export interface BlochScene {
   scene: THREE.Scene;
   /** Pose the arrow and mixed-state marker for `coord` (call before rendering that sphere). */
   pose(coord: BlochVector): void;
+  /** Size the labels for a viewport `viewportPx` tall (call before rendering that sphere). */
+  fitLabels(viewportPx: number): void;
   setPalette(palette: BlochPalette): void;
   dispose(): void;
 }
@@ -154,6 +158,13 @@ export function createBlochScene(initial: BlochPalette): BlochScene {
       mixed.visible = r < PURE_THRESHOLD;
       mixed.scale.setScalar(Math.max(0.05, r));
       (mixed.material as THREE.MeshBasicMaterial).opacity = r < MIXED_EPSILON ? 0.85 : 0.16;
+    },
+    fitLabels(viewportPx) {
+      for (const s of labels) {
+        const { base, aspect } = s.userData as { base: number; aspect: number };
+        const height = labelHeightFraction(base, viewportPx);
+        s.scale.set(height * aspect, height, 1);
+      }
     },
     setPalette(p) {
       (shell.material as THREE.MeshBasicMaterial).color.set(p.shell);

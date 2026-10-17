@@ -6,6 +6,7 @@ import type { AgentRunUi } from '../../stores/agentRunStore';
 import { useEditorStore } from '../../stores/editorStore';
 import type { JournalEntry, PatchTransaction } from '../../services/agent/types';
 
+import { Button } from '../ui';
 import { TYPOGRAPHY } from '../../styles/tokens';
 const RUNNING_STATES = new Set(['planning', 'working', 'paused']);
 
@@ -152,21 +153,7 @@ function PatchRow({ tx }: { tx: PatchTransaction }) {
           File changed — can’t roll back
         </span>
       ) : (
-        <button
-          onClick={handleRollback}
-          style={{
-            padding: '2px 8px',
-            fontSize: 11,
-            fontFamily: TYPOGRAPHY.fontSans,
-            background: colors.border,
-            color: colors.text,
-            border: 'none',
-            borderRadius: 4,
-            cursor: 'pointer',
-          }}
-        >
-          Rollback
-        </button>
+        <Button size="sm" variant="secondary" onClick={handleRollback}>Rollback</Button>
       )}
     </div>
   );
@@ -285,22 +272,7 @@ export function AgentRunCard({ run, isRunning, onStop }: AgentRunCardProps) {
       )}
 
       {canStop && (
-        <button
-          onClick={onStop}
-          style={{
-            alignSelf: 'flex-start',
-            padding: '4px 12px',
-            fontSize: 11,
-            fontFamily: TYPOGRAPHY.fontSans,
-            background: colors.error,
-            color: '#fff',
-            border: 'none',
-            borderRadius: 6,
-            cursor: 'pointer',
-          }}
-        >
-          Stop
-        </button>
+        <Button size="sm" variant="danger" className="dirac-run-stop" onClick={onStop}>Stop</Button>
       )}
     </div>
   );

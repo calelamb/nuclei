@@ -3,6 +3,7 @@ import { useThemeStore } from '../../stores/themeStore';
 import { Check, X, Loader, Minus, ChevronRight, ChevronDown } from 'lucide-react';
 import type { TestCase, TestCaseResult } from '../../types/challenge';
 
+import './challenges.css';
 import { TYPOGRAPHY } from '../../styles/tokens';
 interface TestCaseRowProps {
   testCase: TestCase;
@@ -87,6 +88,10 @@ export function TestCaseRow({ testCase, result, isRunning, index }: TestCaseRowP
     }}>
       {/* Row header */}
       <button
+        type="button"
+        className="row-btn"
+        data-static={!canExpand}
+        aria-expanded={canExpand ? expanded : undefined}
         onClick={() => canExpand && setExpanded(!expanded)}
         style={{
           width: '100%',
@@ -98,12 +103,6 @@ export function TestCaseRow({ testCase, result, isRunning, index }: TestCaseRowP
           border: 'none',
           cursor: canExpand ? 'pointer' : 'default',
           textAlign: 'left',
-        }}
-        onMouseEnter={(e) => {
-          if (canExpand) e.currentTarget.style.background = colors.bgElevated;
-        }}
-        onMouseLeave={(e) => {
-          e.currentTarget.style.background = 'transparent';
         }}
       >
         {/* Expand chevron */}

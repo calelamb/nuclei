@@ -7,66 +7,122 @@ import { activeDebugStep } from '../../lib/debugTrace';
 import { getHistogramData, getProbabilityHistogramData, type HistogramViewMode } from './histogramData';
 import { formatPercentTick, probabilityAxis, topOutcomes, MAX_VISIBLE_OUTCOMES, type HistogramRow } from './histogramScale';
 
+import { useScrollbarInset } from '../../hooks/useScrollbarInset';
 import { TYPOGRAPHY } from '../../styles/tokens';
 import { useThemeStore } from '../../stores/themeStore';
-import { Button, TextInput } from '../ui';
+import { Button, SegmentedControl, TextInput, type SegmentedOption } from '../ui';
+import './histogram.css';
+const VIEW_OPTIONS: ReadonlyArray<SegmentedOption<HistogramViewMode>> = [
+  { value: 'sampled', label: 'Sampled' },
+  { value: 'ideal', label: 'Ideal' },
+];
 const MANY_BARS = 8;
 const SCROLL_BAR_SLOT_PX = 30;
+
+const Y_AXIS_WIDTH = 44;
+const CHART_MARGIN_RIGHT = 10;
+
+interface ChartProps {
+  data: HistogramRow[];
+  srDescription: string;
+  scroll?: boolean;
+}
+
+interface PinnedYAxisProps {
+  ticks: readonly number[];
+  max: number;
+  /** Plot-area offsets that match the scrolling chart's margins and x axis. */
+  top: number;
+  bottom: number;
+}
+
+/** The y axis for the scrolling chart: plain DOM, so it never scrolls away with the bars. */
+function PinnedYAxis({ ticks, max, top, bottom }: PinnedYAxisProps) {
+  return (
+    <div className="histogram-scroll__axis" data-testid="histogram-yaxis" aria-hidden="true" style={{ width: Y_AXIS_WIDTH, paddingTop: top, paddingBottom: bottom }}>
+      <div className="histogram-scroll__plot">
+        {ticks.map((tick) => (
+          <span key={tick} className="histogram-scroll__tick" style={{ bottom: `${max > 0 ? (tick / max) * 100 : 0}%` }}>
+            {formatPercentTick(tick)}
+          </span>
+        ))}
+      </div>
+    </div>
+  );
+}
 
 /**
  * The recharts bar chart, shared by the run view and the debugger step view.
  * The y axis fits the data (so a 64-outcome uniform run is not a flat line),
  * ticks are whole percents, and labels tilt when there are many bars. In
- * `scroll` mode every outcome keeps a readable slot and the chart scrolls.
+ * `scroll` mode every outcome keeps a readable slot and the bars scroll while
+ * the y axis stays pinned in its own column.
  */
-function HistogramChart({ data, srDescription, scroll = false }: { data: HistogramRow[]; srDescription: string; scroll?: boolean }) {
+function HistogramChart({ data, srDescription, scroll = false }: ChartProps) {
   const colors = useThemeStore((s) => s.colors);
   const axis = probabilityAxis(Math.max(0, ...data.map((d) => d.probability)));
   const crowded = data.length > MANY_BARS;
+  const xAxisHeight = crowded ? 54 : 26;
+  const margin = { top: 5, right: CHART_MARGIN_RIGHT, bottom: crowded ? 8 : 0, left: 0 };
+  const axisStroke = { stroke: colors.borderStrong };
+  const [barsRef, scrollbarInset] = useScrollbarInset<HTMLDivElement>();
+
+  const yAxis = (visible: boolean) => (
+    <YAxis
+      hide={!visible}
+      domain={[0, axis.max]}
+      ticks={axis.ticks}
+      width={visible ? Y_AXIS_WIDTH : 0}
+      tick={{ fill: colors.textMuted, fontSize: 11, fontFamily: TYPOGRAPHY.fontMono }}
+      axisLine={axisStroke}
+      tickLine={axisStroke}
+      tickFormatter={formatPercentTick}
+    />
+  );
+
+  const bars = (
+    <ResponsiveContainer width="100%" height="100%">
+      <BarChart data={data} margin={scroll ? { ...margin, left: 16 } : margin}>
+        <XAxis
+          dataKey="state"
+          interval={scroll ? 0 : 'preserveStartEnd'}
+          angle={crowded ? -45 : 0}
+          textAnchor={crowded ? 'end' : 'middle'}
+          height={xAxisHeight}
+          tick={{ fill: colors.text, fontSize: 11, fontFamily: TYPOGRAPHY.fontMono }}
+          axisLine={axisStroke}
+          tickLine={axisStroke}
+        />
+        {yAxis(!scroll)}
+        <Tooltip
+          cursor={{ fill: colors.bgElevated }}
+          contentStyle={{ background: colors.bgElevated, border: `1px solid ${colors.borderStrong}`, borderRadius: 6, fontSize: 12, fontFamily: TYPOGRAPHY.fontMono }}
+          labelStyle={{ color: colors.text }}
+          itemStyle={{ color: colors.accent }}
+          formatter={(value) => [typeof value === 'number' ? `${(value * 100).toFixed(2)}%` : String(value ?? ''), 'Probability']}
+        />
+        <Bar dataKey="probability" radius={[4, 4, 0, 0]} isAnimationActive={false}>
+          {data.map((_, index) => (
+            <Cell key={index} fill={colors.accent} fillOpacity={0.8} />
+          ))}
+        </Bar>
+      </BarChart>
+    </ResponsiveContainer>
+  );
+
+  if (!scroll) {
+    return (
+      <div style={{ flex: 1, minHeight: 0, overflow: 'hidden' }} role="region" aria-label="Probability histogram" aria-description={srDescription}>
+        {bars}
+      </div>
+    );
+  }
+
   return (
-    <div
-      style={{ flex: 1, minHeight: 0, overflowX: scroll ? 'auto' : 'hidden', overflowY: 'hidden' }}
-      role="region"
-      aria-label="Probability histogram"
-      aria-description={srDescription}
-      tabIndex={scroll ? 0 : undefined}
-    >
-      <div style={{ height: '100%', minWidth: scroll ? data.length * SCROLL_BAR_SLOT_PX + 56 : undefined }}>
-        <ResponsiveContainer width="100%" height="100%">
-          <BarChart data={data} margin={{ top: 5, right: 10, bottom: crowded ? 8 : 0, left: 0 }}>
-            <XAxis
-              dataKey="state"
-              interval={scroll ? 0 : 'preserveStartEnd'}
-              angle={crowded ? -45 : 0}
-              textAnchor={crowded ? 'end' : 'middle'}
-              height={crowded ? 54 : 26}
-              tick={{ fill: colors.text, fontSize: 11, fontFamily: TYPOGRAPHY.fontMono }}
-              axisLine={{ stroke: colors.borderStrong }}
-              tickLine={{ stroke: colors.borderStrong }}
-            />
-            <YAxis
-              domain={[0, axis.max]}
-              ticks={axis.ticks}
-              width={44}
-              tick={{ fill: colors.textMuted, fontSize: 11, fontFamily: TYPOGRAPHY.fontMono }}
-              axisLine={{ stroke: colors.borderStrong }}
-              tickLine={{ stroke: colors.borderStrong }}
-              tickFormatter={formatPercentTick}
-            />
-            <Tooltip
-              cursor={{ fill: colors.bgElevated }}
-              contentStyle={{ background: colors.bgElevated, border: `1px solid ${colors.borderStrong}`, borderRadius: 6, fontSize: 12, fontFamily: TYPOGRAPHY.fontMono }}
-              labelStyle={{ color: colors.text }}
-              itemStyle={{ color: colors.accent }}
-              formatter={(value) => [typeof value === 'number' ? `${(value * 100).toFixed(2)}%` : String(value ?? ''), 'Probability']}
-            />
-            <Bar dataKey="probability" radius={[4, 4, 0, 0]} isAnimationActive={false}>
-              {data.map((_, index) => (
-                <Cell key={index} fill={colors.accent} fillOpacity={0.8} />
-              ))}
-            </Bar>
-          </BarChart>
-        </ResponsiveContainer>
+    <div className="histogram-scroll" role="region" aria-label="Probability histogram" aria-description={srDescription}>
+      <PinnedYAxis ticks={axis.ticks} max={axis.max} top={margin.top} bottom={xAxisHeight + margin.bottom + scrollbarInset} />
+      <div ref={barsRef} className="histogram-scroll__bars" tabIndex={0} aria-label="Scrollable outcome bars">
+        <div style={{ height: '100%', minWidth: data.length * SCROLL_BAR_SLOT_PX + CHART_MARGIN_RIGHT }}>{bars}</div>
       </div>
     </div>
   );
@@ -185,32 +241,12 @@ export function ProbabilityHistogram() {
         marginBottom: 8,
         flexShrink: 0,
       }}>
-        {/* View mode toggle */}
-        <div style={{
-          display: 'flex',
-          borderRadius: 4,
-          overflow: 'hidden',
-          border: `1px solid ${colors.borderStrong}`,
-        }}>
-          {(['sampled', 'ideal'] as const).map((mode) => (
-            <button
-              key={mode}
-              onClick={() => setViewMode(mode)}
-              style={{
-                padding: '4px 10px',
-                fontSize: 11,
-                fontFamily: TYPOGRAPHY.fontSans,
-                border: 'none',
-                cursor: 'pointer',
-                background: viewMode === mode ? colors.accent : colors.bgElevated,
-                color: viewMode === mode ? colors.bgPanel : colors.textMuted,
-                fontWeight: viewMode === mode ? 600 : 400,
-              }}
-            >
-              {mode.charAt(0).toUpperCase() + mode.slice(1)}
-            </button>
-          ))}
-        </div>
+        <SegmentedControl
+          aria-label="Histogram view"
+          value={viewMode}
+          onChange={setViewMode}
+          options={VIEW_OPTIONS}
+        />
 
         {/* Shots control */}
         <label style={{ color: colors.textMuted, fontSize: 11, fontFamily: TYPOGRAPHY.fontSans, display: 'flex', alignItems: 'center', gap: 6 }}>

@@ -2,7 +2,9 @@ import { useState, useMemo } from 'react';
 import { CONCEPT_GRAPH, type ConceptNode } from '../../data/conceptMap';
 import { useStudentStore } from '../../stores/studentStore';
 import { useThemeStore } from '../../stores/themeStore';
-
+import { X } from 'lucide-react';
+import { IconButton } from '../ui';
+import { activateOnKey } from '../../lib/a11y';
 import { TYPOGRAPHY } from '../../styles/tokens';
 const CATEGORY_X: Record<string, number> = {
   basics: 80,
@@ -71,7 +73,7 @@ export function ConceptMap() {
   const selectedNode = selectedId ? posMap[selectedId] : null;
 
   const getNodeColor = (id: string): string => {
-    if (conceptsMastered.includes(id)) return '#10B981';
+    if (conceptsMastered.includes(id)) return colors.success;
     if (conceptsStruggling.includes(id)) return colors.accent;
     return colors.textDim;
   };
@@ -86,7 +88,7 @@ export function ConceptMap() {
       {/* Legend */}
       <div style={{ padding: '8px 12px', display: 'flex', gap: 14, alignItems: 'center', flexShrink: 0 }}>
         <span style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, fontFamily: TYPOGRAPHY.fontSans, color: colors.textMuted }}>
-          <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#10B981', display: 'inline-block' }} />
+          <span style={{ width: 8, height: 8, borderRadius: '50%', background: colors.success, display: 'inline-block' }} />
           Mastered
         </span>
         <span style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, fontFamily: TYPOGRAPHY.fontSans, color: colors.textMuted }}>
@@ -147,8 +149,14 @@ export function ConceptMap() {
             return (
               <g
                 key={pos.id}
+                className="concept-node"
+                role="button"
+                tabIndex={0}
+                aria-pressed={isSelected}
+                aria-label={pos.node.label}
                 style={{ cursor: 'pointer' }}
                 onClick={() => setSelectedId(isSelected ? null : pos.id)}
+                onKeyDown={activateOnKey(() => setSelectedId(isSelected ? null : pos.id))}
               >
                 {/* Glow ring for selected */}
                 {isSelected && (
@@ -204,12 +212,9 @@ export function ConceptMap() {
               <span style={{ color: colors.text, fontSize: 13, fontWeight: 600, fontFamily: TYPOGRAPHY.fontSans }}>
                 {selectedNode.node.label}
               </span>
-              <button
-                onClick={() => setSelectedId(null)}
-                style={{ background: 'none', border: 'none', color: colors.textDim, cursor: 'pointer', fontSize: 14, padding: 0 }}
-              >
-                x
-              </button>
+              <IconButton size="sm" aria-label="Close concept details" onClick={() => setSelectedId(null)}>
+                <X size={12} />
+              </IconButton>
             </div>
             <div style={{ color: colors.textMuted, fontSize: 11, fontFamily: TYPOGRAPHY.fontSans, lineHeight: 1.5, marginBottom: 6 }}>
               {selectedNode.node.description}

@@ -163,9 +163,9 @@ export function MaxCutGraphViz({ visualization, bestBitstring }: MaxCutGraphVizP
           const fillColor = bit === '0'
             ? colors.accent
             : bit === '1'
-              ? colors.dirac
+              ? colors.info
               : colors.bgElevated;
-          const textColor = bit !== undefined ? '#fff' : colors.text;
+          const textColor = bit !== undefined ? colors.bg : colors.text;
 
           return (
             <g key={node.id}>
@@ -223,7 +223,7 @@ export function MaxCutGraphViz({ visualization, bestBitstring }: MaxCutGraphVizP
               width: 10,
               height: 10,
               borderRadius: '50%',
-              background: colors.dirac,
+              background: colors.info,
             }} />
             <span style={{
               color: colors.textDim,

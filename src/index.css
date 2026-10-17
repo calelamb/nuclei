@@ -199,8 +199,3 @@ code, pre, kbd, samp, .nuclei-code, .nuclei-ket {
   width: 3px !important;
   margin-left: 3px;
 }
-
-/* Progressive disclosure: below Advanced the autonomous-agent goal row in the Dirac
-   panel is hidden. PanelLayout sets data-feature-agent; the row has no class of its
-   own, so it is matched by its labelled input (!important: the row sets display inline). */
-[data-feature-agent='off'] div:has(> div > input[aria-label='Agent goal']) { display: none !important; }

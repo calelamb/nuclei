@@ -1,0 +1,22 @@
+/* Lesson reader: top bar, reading progress, header, next-lesson prompt. */
+.lesson { flex: 1; min-height: 0; display: flex; flex-direction: column; overflow: hidden; background: var(--color-surface-base); font-family: var(--font-sans); }
+.lesson__bar { flex-shrink: 0; display: flex; align-items: center; gap: var(--space-3); height: 44px; padding: 0 var(--space-4); border-bottom: 1px solid var(--color-border-strong); background: var(--color-surface-raised); }
+.lesson__crumbs { display: flex; align-items: center; flex: 1; min-width: 0; gap: var(--space-2); }
+.lesson__crumb-track { max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--font-size-chrome-label); color: var(--color-text-secondary); }
+.lesson__crumb-sep { flex-shrink: 0; color: var(--color-text-tertiary); }
+.lesson__crumb-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--font-size-code); font-weight: var(--font-weight-medium); color: var(--color-text-primary); }
+.lesson__done { flex-shrink: 0; color: var(--color-success); }
+.lesson__position { white-space: nowrap; font-size: var(--font-size-caption); color: var(--color-text-secondary); font-variant-numeric: tabular-nums; }
+.lesson__steps { display: flex; gap: var(--space-1); }
+.lesson__progress { flex-shrink: 0; height: 2px; background: var(--color-border-strong); }
+.lesson__progress-fill { height: 100%; background: var(--color-accent-quantum); transition: width var(--duration-normal) var(--ease-standard); }
+.lesson__scroll { flex: 1; min-height: 0; overflow-y: auto; padding: var(--space-6) var(--space-8) 64px; }
+.lesson__header { max-width: 760px; margin-inline: auto; margin-bottom: var(--space-6); }
+.lesson__meta { display: flex; align-items: center; gap: var(--space-2); margin-bottom: var(--space-2); font-size: var(--font-size-caption); color: var(--color-text-secondary); }
+.lesson__level { padding: 2px var(--space-2); border-radius: var(--radius-xs); font-weight: var(--font-weight-semibold); text-transform: capitalize; background: color-mix(in srgb, var(--level-color) 14%, transparent); color: var(--level-color); }
+.lesson__title { margin: 0; font-size: var(--font-size-display); font-weight: var(--font-weight-bold); line-height: 1.2; color: var(--color-text-primary); }
+.lesson__lede { margin: var(--space-2) 0 0; font-size: var(--font-size-body); line-height: 1.5; color: var(--color-text-secondary); }
+.lesson__block { max-width: 760px; margin-inline: auto; margin-bottom: var(--space-2); scroll-margin-top: var(--space-4); }
+.lesson__next { display: flex; align-items: center; justify-content: space-between; gap: var(--space-4); max-width: 760px; margin-inline: auto; margin-top: var(--space-8); padding: var(--space-5); border: 1px solid var(--color-border-strong); border-radius: var(--radius-round); background: var(--color-surface-raised); box-shadow: var(--shadow-sm); }
+.lesson__next-kicker { margin-bottom: var(--space-1); font-size: var(--font-size-chrome-label); color: var(--color-text-secondary); }
+.lesson__next-title { font-size: var(--font-size-body); font-weight: var(--font-weight-medium); color: var(--color-text-primary); }

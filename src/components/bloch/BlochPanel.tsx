@@ -16,7 +16,7 @@ import { prefersReducedMotion } from '../../lib/animations';
 import { BlochEmptyState } from './BlochEmptyState';
 import './bloch.css';
 
-const COMPACT_CELL_PX = 190;
+const COMPACT_CELL_PX = 250;
 /** Matches --space-2 on .bloch-panel__canvas-host. */
 const STAGE_INSET_PX = 8;
 

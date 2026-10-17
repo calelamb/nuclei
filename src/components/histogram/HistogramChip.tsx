@@ -1,4 +1,5 @@
 import { X, Maximize2 } from 'lucide-react';
+import { IconButton } from '../ui';
 import './histogram.css';
 import { useThemeStore } from '../../stores/themeStore';
 
@@ -180,44 +181,14 @@ export function HistogramChip({
           </span>
         ))}
         {onExpand && (
-          <button
-            aria-label="Expand histogram"
-            onClick={onExpand}
-            style={{
-              background: 'transparent',
-              border: 'none',
-              color: colors.textDim,
-              cursor: 'pointer',
-              padding: 2,
-              display: 'flex',
-              alignItems: 'center',
-              borderRadius: 4,
-            }}
-            onMouseEnter={(e) => { e.currentTarget.style.color = colors.text; }}
-            onMouseLeave={(e) => { e.currentTarget.style.color = colors.textDim; }}
-          >
+          <IconButton size="sm" className="histogram-chip__icon" aria-label="Expand histogram" onClick={onExpand}>
             <Maximize2 size={12} />
-          </button>
+          </IconButton>
         )}
         {onDismiss && (
-          <button
-            aria-label="Dismiss histogram"
-            onClick={onDismiss}
-            style={{
-              background: 'transparent',
-              border: 'none',
-              color: colors.textDim,
-              cursor: 'pointer',
-              padding: 2,
-              display: 'flex',
-              alignItems: 'center',
-              borderRadius: 4,
-            }}
-            onMouseEnter={(e) => { e.currentTarget.style.color = colors.error; }}
-            onMouseLeave={(e) => { e.currentTarget.style.color = colors.textDim; }}
-          >
+          <IconButton size="sm" className="histogram-chip__icon histogram-chip__icon--danger" aria-label="Dismiss histogram" onClick={onDismiss}>
             <X size={12} />
-          </button>
+          </IconButton>
         )}
       </div>
     </div>

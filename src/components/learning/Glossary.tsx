@@ -1,9 +1,8 @@
 import { Search } from 'lucide-react';
 import { useGlossaryStore } from '../../stores/glossaryStore';
-import { useThemeStore } from '../../stores/themeStore';
 import { GlossaryEntry } from './GlossaryEntry';
+import './learnSidebar.css';
 
-import { TYPOGRAPHY } from '../../styles/tokens';
 const CATEGORIES = [
   { key: 'all', label: 'All' },
   { key: 'basics', label: 'Basics' },
@@ -15,72 +14,41 @@ const CATEGORIES = [
 ];
 
 export function Glossary() {
-  const colors = useThemeStore((s) => s.colors);
   const { searchQuery, selectedTerm, filteredTerms, selectedCategory, setSearch, selectTerm, setCategory } = useGlossaryStore();
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
-      {/* Search input */}
-      <div style={{ padding: '8px 12px', flexShrink: 0 }}>
-        <div style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: 6,
-          background: colors.bgPanel,
-          border: `1px solid ${colors.border}`,
-          borderRadius: 4,
-          padding: '4px 8px',
-        }}>
-          <Search size={12} color={colors.textDim} />
+    <div className="gloss">
+      <div className="gloss__search">
+        <label className="gloss__field nuclei-field-group">
+          <Search size={12} aria-hidden="true" />
           <input
             type="text"
             placeholder="Search terms..."
             aria-label="Search glossary terms"
-            className="nuclei-bare-input"
+            className="gloss__input nuclei-bare-input"
             value={searchQuery}
             onChange={(e) => setSearch(e.target.value)}
-            style={{
-              flex: 1,
-              background: 'transparent',
-              border: 'none',
-              color: colors.text,
-              fontSize: 12,
-              fontFamily: TYPOGRAPHY.fontSans,
-            }}
           />
-        </div>
+        </label>
       </div>
 
-      {/* Category pills */}
-      <div style={{ padding: '0 12px 8px', display: 'flex', gap: 4, flexWrap: 'wrap', flexShrink: 0 }}>
+      <div className="gloss__cats" role="group" aria-label="Filter by category">
         {CATEGORIES.map((cat) => (
           <button
             key={cat.key}
+            type="button"
+            className="gloss__cat"
+            aria-pressed={selectedCategory === cat.key}
             onClick={() => setCategory(cat.key)}
-            style={{
-              padding: '2px 8px',
-              fontSize: 11,
-              fontFamily: TYPOGRAPHY.fontSans,
-              fontWeight: selectedCategory === cat.key ? 600 : 400,
-              background: selectedCategory === cat.key ? colors.accent + '22' : 'transparent',
-              color: selectedCategory === cat.key ? colors.accent : colors.textMuted,
-              border: `1px solid ${selectedCategory === cat.key ? colors.accent + '44' : colors.border}`,
-              borderRadius: 10,
-              cursor: 'pointer',
-              transition: 'all 0.15s',
-            }}
           >
             {cat.label}
           </button>
         ))}
       </div>
 
-      {/* Term list */}
-      <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: '0 12px 12px' }}>
+      <div className="gloss__list">
         {filteredTerms.length === 0 ? (
-          <div style={{ color: colors.textDim, fontSize: 12, fontFamily: TYPOGRAPHY.fontSans, textAlign: 'center', paddingTop: 24 }}>
-            No terms found.
-          </div>
+          <div className="gloss__empty">No terms found.</div>
         ) : (
           filteredTerms.map((term) => (
             <GlossaryEntry

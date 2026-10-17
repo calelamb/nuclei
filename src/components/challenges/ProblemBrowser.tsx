@@ -1,6 +1,5 @@
 import { useEffect, useMemo } from 'react';
-import { CheckCircle2, Circle, Clock3, ListChecks, ShieldCheck, Star } from 'lucide-react';
-import { useThemeStore } from '../../stores/themeStore';
+import { ArrowRight, CheckCircle2, Circle, ListChecks, ShieldCheck, Star } from 'lucide-react';
 import { isStateVerified } from '../../services/challengeGrading';
 import {
   type ChallengePracticeTab,
@@ -16,12 +15,12 @@ import type {
   ProblemStatus,
   QuantumChallenge,
 } from '../../types/challenge';
+import './challenges.css';
 
-import { TYPOGRAPHY } from '../../styles/tokens';
 const DIFFICULTY_COLORS: Record<ChallengeDifficulty, string> = {
-  easy: '#10B981',
-  medium: '#F59E0B',
-  hard: '#EF4444',
+  easy: 'var(--color-success)',
+  medium: 'var(--color-warning)',
+  hard: 'var(--color-danger)',
 };
 
 const CATEGORY_LABELS: Record<ChallengeCategory, string> = {
@@ -43,274 +42,74 @@ const PRACTICE_TABS: Array<{
   detail: string;
   icon: typeof ListChecks;
 }> = [
-  {
-    value: 'all',
-    label: 'All Practice',
-    detail: 'Circuit builders and protocol drills',
-    icon: ListChecks,
-  },
-  {
-    value: 'qkd',
-    label: 'QKD Protocols',
-    detail: 'BB84, QBER, intercept-resend, E91',
-    icon: ShieldCheck,
-  },
+  { value: 'all', label: 'All Practice', detail: 'Circuit builders and protocol drills', icon: ListChecks },
+  { value: 'qkd', label: 'QKD Protocols', detail: 'BB84, QBER, intercept-resend, E91', icon: ShieldCheck },
 ];
 
-function PracticeTabButton({
-  active,
-  tab,
-  count,
-  onClick,
-}: {
+function PracticeTabButton({ active, tab, count, onClick }: {
   active: boolean;
   tab: (typeof PRACTICE_TABS)[number];
   count: number;
   onClick: () => void;
 }) {
-  const colors = useThemeStore((s) => s.colors);
   const Icon = tab.icon;
-
   return (
-    <button
-      onClick={onClick}
-      style={{
-        position: 'relative',
-        display: 'flex',
-        alignItems: 'center',
-        gap: 12,
-        minWidth: 220,
-        padding: '10px 14px',
-        borderRadius: 8,
-        border: `1px solid ${active ? colors.accent : colors.border}`,
-        background: active
-          ? `linear-gradient(135deg, ${colors.accent}26, ${colors.bgElevated})`
-          : colors.bg,
-        color: active ? colors.text : colors.textMuted,
-        cursor: 'pointer',
-        textAlign: 'left',
-        boxShadow: active ? `0 0 24px ${colors.accent}18 inset` : 'none',
-        overflow: 'hidden',
-      }}
-    >
-      <span style={{
-        width: 28,
-        height: 28,
-        borderRadius: 6,
-        border: `1px solid ${active ? `${colors.accent}80` : colors.border}`,
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        color: active ? colors.accent : colors.textDim,
-        background: active ? `${colors.accent}14` : colors.bgPanel,
-        flexShrink: 0,
-      }}>
-        <Icon size={16} />
+    <button type="button" role="tab" aria-selected={active} className="ptab" onClick={onClick}>
+      <span className="ptab__icon"><Icon size={16} aria-hidden="true" /></span>
+      <span className="ptab__text">
+        <span className="ptab__label">{tab.label}</span>
+        <span className="ptab__detail">{tab.detail}</span>
       </span>
-      <span style={{ minWidth: 0, flex: 1 }}>
-        <span style={{
-          display: 'block',
-          fontSize: 13,
-          fontWeight: 700,
-          fontFamily: TYPOGRAPHY.fontSans,
-          color: active ? colors.text : colors.textMuted,
-          whiteSpace: 'nowrap',
-          overflow: 'hidden',
-          textOverflow: 'ellipsis',
-        }}>
-          {tab.label}
-        </span>
-        <span style={{
-          display: 'block',
-          marginTop: 2,
-          fontSize: 11,
-          fontFamily: TYPOGRAPHY.fontSans,
-          color: colors.textDim,
-          whiteSpace: 'nowrap',
-          overflow: 'hidden',
-          textOverflow: 'ellipsis',
-        }}>
-          {tab.detail}
-        </span>
-      </span>
-      <span style={{
-        padding: '2px 7px',
-        borderRadius: 999,
-        background: active ? `${colors.accent}20` : colors.bgPanel,
-        color: active ? colors.accent : colors.textDim,
-        fontSize: 11,
-        fontWeight: 700,
-        fontFamily: TYPOGRAPHY.fontMono,
-      }}>
-        {count}
-      </span>
+      <span className="ptab__count">{count}</span>
     </button>
   );
 }
 
 function StatusCell({ status, optimal }: { status: ProblemStatus; optimal?: boolean }) {
-  const colors = useThemeStore((s) => s.colors);
-
-  if (status === 'solved') {
-    return (
-      <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: colors.success }}>
-        <CheckCircle2 size={14} />
-        <span>Solved</span>
-        {optimal && (
-          <Star
-            size={12}
-            fill={colors.success}
-            strokeWidth={0}
-            aria-label="Solved optimally"
-          />
-        )}
-      </div>
-    );
-  }
-
-  if (status === 'attempted') {
-    return (
-      <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: colors.warning }}>
-        <Circle size={14} fill={colors.warning} stroke="none" />
-        <span>Attempted</span>
-      </div>
-    );
-  }
-
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: colors.textDim }}>
-      <Circle size={14} />
-      <span>Not Started</span>
+    <div className="prow__status" data-status={status}>
+      {status === 'solved' ? <CheckCircle2 size={14} aria-hidden="true" /> : <Circle size={14} aria-hidden="true" fill={status === 'attempted' ? 'currentColor' : 'none'} stroke={status === 'attempted' ? 'none' : 'currentColor'} />}
+      <span>{STATUS_LABELS[status]}</span>
+      {status === 'solved' && optimal && <Star size={12} fill="currentColor" strokeWidth={0} aria-label="Solved optimally" />}
     </div>
   );
 }
 
-function ProblemRow({
-  challenge,
-  progress,
-  onClick,
-}: {
+function ProblemRow({ challenge, progress, onClick }: {
   challenge: QuantumChallenge;
   progress?: ProblemProgress;
   onClick: () => void;
 }) {
-  const colors = useThemeStore((s) => s.colors);
   const status = progress?.status ?? 'not_started';
   const attempts = progress?.attempts ?? 0;
-  const solved = status === 'solved';
   const bestScore = progress?.bestScore ?? 0;
 
   return (
-    <button
-      onClick={onClick}
-      style={{
-        width: '100%',
-        display: 'grid',
-        gridTemplateColumns: '150px minmax(260px, 2fr) 110px 130px 130px',
-        gap: 16,
-        alignItems: 'center',
-        padding: '14px 20px',
-        background: 'transparent',
-        border: 'none',
-        borderBottom: `1px solid ${colors.border}`,
-        color: colors.text,
-        cursor: 'pointer',
-        textAlign: 'left',
-      }}
-      onMouseEnter={(event) => {
-        event.currentTarget.style.background = colors.bgElevated;
-      }}
-      onMouseLeave={(event) => {
-        event.currentTarget.style.background = 'transparent';
-      }}
-    >
-      <div style={{ fontSize: 12, fontFamily: TYPOGRAPHY.fontSans }}>
-        <StatusCell status={status} optimal={progress?.solvedOptimally} />
-      </div>
+    <button type="button" className="prow prow-grid" onClick={onClick}>
+      <StatusCell status={status} optimal={progress?.solvedOptimally} />
 
-      <div style={{ minWidth: 0 }}>
-        <div style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: 6,
-          marginBottom: 4,
-          minWidth: 0,
-        }}>
-          <span style={{
-            color: colors.text,
-            fontSize: 14,
-            fontWeight: 600,
-            fontFamily: TYPOGRAPHY.fontSans,
-            overflow: 'hidden',
-            textOverflow: 'ellipsis',
-            whiteSpace: 'nowrap',
-          }}>
-            {challenge.title}
-          </span>
-          {isStateVerified(challenge) && (
-            <ShieldCheck
-              size={12}
-              color={colors.success}
-              style={{ flexShrink: 0 }}
-              aria-label="State-verified grading"
-            />
-          )}
+      <div className="prow__main">
+        <div className="prow__title-row">
+          <span className="prow__title">{challenge.title}</span>
+          {isStateVerified(challenge) && <ShieldCheck className="prow__verified" size={12} aria-label="State-verified grading" />}
         </div>
-        <div style={{
-          color: colors.textMuted,
-          fontSize: 12,
-          fontFamily: TYPOGRAPHY.fontSans,
-          overflow: 'hidden',
-          textOverflow: 'ellipsis',
-          whiteSpace: 'nowrap',
-        }}>
-          {challenge.tags.slice(0, 3).join(' • ')}
-        </div>
+        <div className="prow__tags">{challenge.tags.slice(0, 3).join(' \u2022 ')}</div>
       </div>
 
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-        <span style={{
-          padding: '3px 9px',
-          borderRadius: 999,
-          background: `${DIFFICULTY_COLORS[challenge.difficulty]}18`,
-          color: DIFFICULTY_COLORS[challenge.difficulty],
-          fontSize: 11,
-          fontWeight: 600,
-          fontFamily: TYPOGRAPHY.fontSans,
-          textTransform: 'capitalize',
-        }}>
-          {challenge.difficulty}
-        </span>
-      </div>
-
-      <span style={{
-        color: colors.textMuted,
-        fontSize: 12,
-        fontFamily: TYPOGRAPHY.fontSans,
-      }}>
-        {CATEGORY_LABELS[challenge.category]}
+      <span className="prow__level" style={{ ['--level-color' as string]: DIFFICULTY_COLORS[challenge.difficulty] }}>
+        {challenge.difficulty}
       </span>
 
-      <div style={{
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        gap: 10,
-        color: colors.textMuted,
-        fontSize: 12,
-        fontFamily: TYPOGRAPHY.fontSans,
-      }}>
-        <span>{solved ? 'Accepted' : `${STATUS_LABELS[status]}`}</span>
-        <span>
-          {attempts > 0 ? `${attempts} / ${bestScore}%` : '0 / --'}
-        </span>
-      </div>
+      <span className="prow__cat">{CATEGORY_LABELS[challenge.category]}</span>
+
+      <span className="prow__best">
+        {attempts > 0 ? `${attempts} ${attempts === 1 ? 'attempt' : 'attempts'}, best ${bestScore}%` : '\u2014'}
+      </span>
     </button>
   );
 }
 
 export function ProblemBrowser() {
-  const colors = useThemeStore((s) => s.colors);
   const setChallenges = useChallengeModeStore((s) => s.setChallenges);
   const challenges = useChallengeModeStore((s) => s.challenges);
   const difficultyFilter = useChallengeModeStore((s) => s.difficultyFilter);
@@ -323,159 +122,60 @@ export function ProblemBrowser() {
   const setPracticeTab = useChallengeModeStore((s) => s.setPracticeTab);
 
   useEffect(() => {
-    if (challenges.length === 0) {
-      setChallenges(QUANTUM_CHALLENGES);
-    }
+    if (challenges.length === 0) setChallenges(QUANTUM_CHALLENGES);
   }, [challenges.length, setChallenges]);
 
   const filtered = useMemo(() => (
-    filterChallenges(
-      challenges,
-      difficultyFilter,
-      categoryFilter,
-      searchQuery,
-      statusFilter,
-      progress,
-      practiceTab,
-    )
-  ), [
-    challenges,
-    difficultyFilter,
-    categoryFilter,
-    searchQuery,
-    statusFilter,
-    progress,
-    practiceTab,
-  ]);
+    filterChallenges(challenges, difficultyFilter, categoryFilter, searchQuery, statusFilter, progress, practiceTab)
+  ), [challenges, difficultyFilter, categoryFilter, searchQuery, statusFilter, progress, practiceTab]);
 
   const qkdCount = challenges.filter((challenge) => challenge.practiceTrack === 'qkd').length;
   const solvedCount = Object.values(progress).filter((entry) => entry.status === 'solved').length;
   const isQkdTab = practiceTab === 'qkd';
 
   return (
-    <div style={{
-      height: '100%',
-      display: 'flex',
-      flexDirection: 'column',
-      overflow: 'hidden',
-      background: colors.bg,
-    }}>
-      <div style={{
-        padding: '14px 24px',
-        borderBottom: `1px solid ${colors.border}`,
-        background: colors.bgPanel,
-      }}>
-        <div style={{
-          display: 'flex',
-          alignItems: 'stretch',
-          gap: 10,
-          overflowX: 'auto',
-          paddingBottom: 1,
-        }}>
-          {PRACTICE_TABS.map((tab) => (
-            <PracticeTabButton
-              key={tab.value}
-              tab={tab}
-              active={practiceTab === tab.value}
-              count={tab.value === 'qkd' ? qkdCount : challenges.length}
-              onClick={() => setPracticeTab(tab.value)}
-            />
-          ))}
-        </div>
+    <div className="pbrowse">
+      <div className="pbrowse__tabs" role="tablist" aria-label="Practice track">
+        {PRACTICE_TABS.map((tab) => (
+          <PracticeTabButton
+            key={tab.value}
+            tab={tab}
+            active={practiceTab === tab.value}
+            count={tab.value === 'qkd' ? qkdCount : challenges.length}
+            onClick={() => setPracticeTab(tab.value)}
+          />
+        ))}
       </div>
 
       <ProblemFilters />
 
-      <div style={{
-        padding: '18px 24px 12px',
-        borderBottom: `1px solid ${colors.border}`,
-        background: colors.bgPanel,
-      }}>
-        <div style={{
-          color: colors.text,
-          fontSize: 20,
-          fontWeight: 700,
-          fontFamily: TYPOGRAPHY.fontSans,
-          marginBottom: 6,
-        }}>
-          {isQkdTab ? 'QKD Protocol Practice' : 'Quantum Problem Set'}
-        </div>
-        {isQkdTab && (
-          <div style={{
-            color: colors.textMuted,
-            fontSize: 13,
-            fontFamily: TYPOGRAPHY.fontSans,
-            marginBottom: 10,
-            lineHeight: 1.45,
-          }}>
-            Practice the classical post-processing and security checks behind QKD.
-          </div>
-        )}
-        <div style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: 18,
-          color: colors.textMuted,
-          fontSize: 12,
-          fontFamily: TYPOGRAPHY.fontSans,
-          flexWrap: 'wrap',
-        }}>
+      <div className="pbrowse__head">
+        <h2 className="pbrowse__title">{isQkdTab ? 'QKD Protocol Practice' : 'Quantum Problem Set'}</h2>
+        {isQkdTab && <p className="pbrowse__lede">Practice the classical post-processing and security checks behind QKD.</p>}
+        <div className="pbrowse__stats">
           <span>{filtered.length} visible problems</span>
           <span>{solvedCount} solved</span>
           <span>{isQkdTab ? 'Browser + desktop Python value contracts' : 'Qiskit-first function contracts'}</span>
-          <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-            <Clock3 size={12} />
-            {isQkdTab ? 'Run Visible Tests -> Submit -> Inspect Return Value' : 'Run Visible Tests -> Submit -> Inspect Quantum Output'}
+          <span>
+            Run Visible Tests <ArrowRight size={12} aria-hidden="true" /> Submit <ArrowRight size={12} aria-hidden="true" /> {isQkdTab ? 'Inspect Return Value' : 'Inspect Quantum Output'}
           </span>
         </div>
       </div>
 
-      <div style={{ flex: 1, minHeight: 0, overflow: 'auto' }}>
+      <div className="pbrowse__list">
         {filtered.length === 0 ? (
-          <div style={{
-            height: '100%',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            color: colors.textDim,
-            fontSize: 14,
-            fontFamily: TYPOGRAPHY.fontSans,
-          }}>
-            No problems match the current filters.
-          </div>
+          <div className="pbrowse__empty">No problems match the current filters.</div>
         ) : (
-          <div style={{ minWidth: 900 }}>
-            <div style={{
-              display: 'grid',
-              gridTemplateColumns: '150px minmax(260px, 2fr) 110px 130px 130px',
-              gap: 16,
-              padding: '10px 20px',
-              borderBottom: `1px solid ${colors.border}`,
-              color: colors.textDim,
-              fontSize: 11,
-              fontWeight: 600,
-              fontFamily: TYPOGRAPHY.fontSans,
-              textTransform: 'uppercase',
-              letterSpacing: 0.4,
-              background: colors.bgPanel,
-              position: 'sticky',
-              top: 0,
-              zIndex: 1,
-            }}>
+          <div className="pbrowse__table">
+            <div className="pbrowse__cols prow-grid">
               <span>Status</span>
               <span>Title</span>
               <span>Difficulty</span>
               <span>Category</span>
-              <span>Solved / Best</span>
+              <span>Attempts / Best</span>
             </div>
-
             {filtered.map((challenge) => (
-              <ProblemRow
-                key={challenge.id}
-                challenge={challenge}
-                progress={progress[challenge.id]}
-                onClick={() => setActiveProblem(challenge)}
-              />
+              <ProblemRow key={challenge.id} challenge={challenge} progress={progress[challenge.id]} onClick={() => setActiveProblem(challenge)} />
             ))}
           </div>
         )}

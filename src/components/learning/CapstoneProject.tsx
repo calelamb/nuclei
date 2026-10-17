@@ -2,11 +2,12 @@ import { useState } from 'react';
 import { ArrowLeft, ChevronDown, ChevronRight, Lightbulb, Play } from 'lucide-react';
 import { useCapstoneStore } from '../../stores/capstoneStore';
 import { useEditorStore } from '../../stores/editorStore';
-import { useThemeStore } from '../../stores/themeStore';
+import { Button } from '../ui';
+import './learnSidebar.css';
 
-import { TYPOGRAPHY } from '../../styles/tokens';
+const truncate = (text: string, max: number) => (text.length > max ? `${text.slice(0, max)}...` : text);
+
 export function CapstoneProjectView() {
-  const colors = useThemeStore((s) => s.colors);
   const { activeProject, activeMilestoneIndex, completedMilestones, completeMilestone, exitProject } = useCapstoneStore();
   const setCode = useEditorStore((s) => s.setCode);
   const [revealedHints, setRevealedHints] = useState(0);
@@ -34,198 +35,64 @@ export function CapstoneProjectView() {
   };
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
-      {/* Header */}
-      <div style={{ padding: '8px 12px', borderBottom: `1px solid ${colors.border}`, flexShrink: 0 }}>
-        <button
-          onClick={exitProject}
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: 4,
-            background: 'none',
-            border: 'none',
-            color: colors.textMuted,
-            cursor: 'pointer',
-            fontSize: 11,
-            fontFamily: TYPOGRAPHY.fontSans,
-            padding: 0,
-            marginBottom: 6,
-          }}
-        >
-          <ArrowLeft size={12} />
+    <div className="capv">
+      <div className="capv__head">
+        <Button size="sm" variant="ghost" icon={<ArrowLeft size={12} aria-hidden="true" />} onClick={exitProject}>
           Back to projects
-        </button>
-        <div style={{ color: colors.text, fontSize: 14, fontWeight: 600, fontFamily: TYPOGRAPHY.fontSans }}>
-          {activeProject.title}
-        </div>
-        <div style={{ color: colors.textMuted, fontSize: 11, fontFamily: TYPOGRAPHY.fontSans, lineHeight: 1.4, marginTop: 4 }}>
-          {activeProject.description.length > 120 ? activeProject.description.slice(0, 120) + '...' : activeProject.description}
-        </div>
+        </Button>
+        <div className="capv__title">{activeProject.title}</div>
+        <div className="capv__desc">{truncate(activeProject.description, 120)}</div>
       </div>
 
-      {/* Milestone timeline */}
-      <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: '8px 12px' }}>
+      <div className="capv__body">
         {activeProject.milestones.map((milestone, i) => {
           const isCompleted = projectCompleted.includes(milestone.id);
           const isCurrent = i === activeMilestoneIndex;
-          const isFuture = !isCompleted && !isCurrent;
-
-          const circleColor = isCompleted ? colors.success : isCurrent ? colors.accent : colors.textDim;
+          const state = isCompleted ? 'done' : isCurrent ? 'current' : 'future';
 
           return (
-            <div key={milestone.id} style={{ marginBottom: 12 }}>
-              {/* Milestone header */}
-              <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8 }}>
-                {/* Number circle */}
-                <div style={{
-                  width: 22,
-                  height: 22,
-                  borderRadius: '50%',
-                  background: circleColor,
-                  color: isCompleted || isCurrent ? '#fff' : colors.bgPanel,
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  fontSize: 11,
-                  fontWeight: 700,
-                  fontFamily: TYPOGRAPHY.fontSans,
-                  flexShrink: 0,
-                  marginTop: 1,
-                }}>
-                  {isCompleted ? '\u2713' : i + 1}
-                </div>
-                <div style={{ flex: 1 }}>
-                  <div style={{
-                    color: isFuture ? colors.textDim : colors.text,
-                    fontSize: 12,
-                    fontWeight: 500,
-                    fontFamily: TYPOGRAPHY.fontSans,
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 4,
-                  }}>
-                    {isCurrent ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
+            <div key={milestone.id} className="capv__step" data-state={state}>
+              <div className="capv__step-row">
+                <div className="capv__num" aria-hidden="true">{isCompleted ? '\u2713' : i + 1}</div>
+                <div className="capv__step-body">
+                  <div className="capv__step-title">
+                    {isCurrent ? <ChevronDown size={12} aria-hidden="true" /> : <ChevronRight size={12} aria-hidden="true" />}
                     {milestone.title}
                   </div>
 
-                  {/* Expanded current milestone */}
                   {isCurrent && (
-                    <div style={{ marginTop: 6 }}>
-                      <div style={{ color: colors.textMuted, fontSize: 11, fontFamily: TYPOGRAPHY.fontSans, lineHeight: 1.5, marginBottom: 8 }}>
-                        {milestone.description}
+                    <div>
+                      <div className="capv__step-desc">{milestone.description}</div>
+                      <div className="capv__actions">
+                        <Button size="sm" variant="primary" icon={<Play size={12} aria-hidden="true" />} onClick={loadStarter}>Load Starter Code</Button>
+                        <Button size="sm" onClick={handleComplete}>Mark Complete</Button>
                       </div>
 
-                      {/* Action buttons */}
-                      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 8 }}>
-                        <button
-                          onClick={loadStarter}
-                          style={{
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: 4,
-                            padding: '4px 10px',
-                            background: colors.accent,
-                            color: '#fff',
-                            border: 'none',
-                            borderRadius: 3,
-                            cursor: 'pointer',
-                            fontSize: 11,
-                            fontFamily: TYPOGRAPHY.fontSans,
-                          }}
-                        >
-                          <Play size={12} />
-                          Load Starter Code
-                        </button>
-                        <button
-                          onClick={handleComplete}
-                          style={{
-                            padding: '4px 10px',
-                            background: 'transparent',
-                            color: colors.success,
-                            border: `1px solid ${colors.success}`,
-                            borderRadius: 3,
-                            cursor: 'pointer',
-                            fontSize: 11,
-                            fontFamily: TYPOGRAPHY.fontSans,
-                          }}
-                        >
-                          Mark Complete
-                        </button>
-                      </div>
-
-                      {/* Hints */}
-                      {milestone.hints.length > 0 && (
-                        <div style={{ marginBottom: 8 }}>
-                          {milestone.hints.slice(0, revealedHints).map((hint, hi) => (
-                            <div
-                              key={hi}
-                              style={{
-                                display: 'flex',
-                                alignItems: 'flex-start',
-                                gap: 6,
-                                padding: '4px 8px',
-                                background: colors.warning + '12',
-                                borderRadius: 4,
-                                marginBottom: 4,
-                              }}
-                            >
-                              <Lightbulb size={12} color={colors.warning} style={{ flexShrink: 0, marginTop: 2 }} />
-                              <span style={{ color: colors.textMuted, fontSize: 11, fontFamily: TYPOGRAPHY.fontSans, lineHeight: 1.4 }}>
-                                {hint}
-                              </span>
-                            </div>
-                          ))}
-                          {revealedHints < milestone.hints.length && (
-                            <button
-                              onClick={showNextHint}
-                              style={{
-                                display: 'flex',
-                                alignItems: 'center',
-                                gap: 4,
-                                background: 'none',
-                                border: 'none',
-                                color: colors.warning,
-                                cursor: 'pointer',
-                                fontSize: 11,
-                                fontFamily: TYPOGRAPHY.fontSans,
-                                padding: '2px 0',
-                              }}
-                            >
-                              <Lightbulb size={12} />
-                              Show Hint ({revealedHints + 1}/{milestone.hints.length})
-                            </button>
-                          )}
+                      {milestone.hints.slice(0, revealedHints).map((hint, hi) => (
+                        <div key={hi} className="capv__hint">
+                          <Lightbulb size={12} aria-hidden="true" />
+                          <span>{hint}</span>
                         </div>
+                      ))}
+                      {revealedHints < milestone.hints.length && (
+                        <Button size="sm" variant="ghost" className="capv__link" icon={<Lightbulb size={12} aria-hidden="true" />} onClick={showNextHint}>
+                          Show Hint ({revealedHints + 1}/{milestone.hints.length})
+                        </Button>
                       )}
                     </div>
                   )}
                 </div>
               </div>
 
-              {/* Connector line between milestones */}
-              {i < activeProject.milestones.length - 1 && (
-                <div style={{ marginLeft: 10, width: 2, height: 8, background: colors.border }} />
-              )}
+              {i < activeProject.milestones.length - 1 && <div className="capv__line" />}
             </div>
           );
         })}
 
-        {/* Dirac guidance callout */}
         {activeProject.diracGuidancePrompt && (
-          <div style={{
-            marginTop: 8,
-            padding: 10,
-            borderRadius: 6,
-            border: `1px solid ${colors.dirac}44`,
-            background: colors.dirac + '0A',
-          }}>
-            <div style={{ color: colors.diracText, fontSize: 11, fontWeight: 600, fontFamily: TYPOGRAPHY.fontSans, marginBottom: 4 }}>
-              Dirac Guidance
-            </div>
-            <div style={{ color: colors.textMuted, fontSize: 11, fontFamily: TYPOGRAPHY.fontSans, lineHeight: 1.4 }}>
-              {activeProject.diracGuidancePrompt.length > 200 ? activeProject.diracGuidancePrompt.slice(0, 200) + '...' : activeProject.diracGuidancePrompt}
-            </div>
+          <div className="capv__dirac">
+            <div className="capv__dirac-title">Dirac Guidance</div>
+            <div className="capv__dirac-text">{truncate(activeProject.diracGuidancePrompt, 200)}</div>
           </div>
         )}
       </div>

@@ -90,3 +90,28 @@
 }
 
 .dirac-slash-hint { font-size: var(--font-size-caption); color: var(--color-text-tertiary); padding: 0 var(--space-1) var(--space-1); }
+
+/* Reasoning disclosure inside a Dirac message */
+.dirac-think__toggle {
+  display: flex; align-items: center; gap: var(--space-1); width: 100%; cursor: pointer;
+  padding: var(--space-1) var(--space-2); border: none; background: var(--color-surface-raised);
+  color: var(--color-accent-dirac-text); font: italic var(--font-size-caption) var(--font-sans);
+  transition: background-color var(--duration-fast) var(--ease-standard);
+}
+.dirac-think__toggle:hover { background: var(--color-surface-overlay); }
+
+/* Collapsed Dirac rail */
+.dirac-rail {
+  display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+  width: 28px; height: 100%; padding: 0; cursor: pointer; writing-mode: vertical-rl;
+  border: none; border-left: 1px solid var(--color-border-strong);
+  background: var(--color-surface-raised);
+  transition: background-color var(--duration-fast) var(--ease-standard);
+}
+.dirac-rail:hover { background: var(--color-surface-overlay); }
+.dirac-rail__label { color: var(--color-accent-dirac-text); font: var(--font-weight-semibold) var(--font-size-caption) var(--font-sans); letter-spacing: 1px; }
+
+.dirac-run-stop.nuclei-btn { align-self: flex-start; }
+
+/* No-key state: the connect card sits near the top, under the header, instead of floating mid-panel. */
+.dirac-connect { flex: 1; min-height: 0; overflow: auto; display: flex; align-items: flex-start; justify-content: center; padding-top: var(--space-6); }

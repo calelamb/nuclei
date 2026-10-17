@@ -9,6 +9,7 @@ import {
   zoomPose,
   type OrbitPose,
 } from '../../lib/blochOrbit';
+import { fovForAspect } from './blochFraming';
 import { createBlochScene, type BlochScene } from './blochScene';
 
 /**
@@ -195,7 +196,9 @@ export class BlochStage {
     this.camera.position.set(x, y, z);
     this.camera.lookAt(0, 0, 0);
     this.camera.aspect = box.width / box.height;
+    this.camera.fov = fovForAspect(this.camera.aspect);
     this.camera.updateProjectionMatrix();
+    this.blochScene.fitLabels(box.height);
     this.blochScene.pose(view.shown);
     this.renderer.render(this.blochScene.scene, this.camera);
   }
