@@ -193,7 +193,8 @@ export function CircuitRenderer() {
   const fit = fitCircuitWidth(svgWidth, containerSize.width);
 
   return (
-    <div style={{ flex: '1 1 auto', minHeight: 0, display: 'flex', flexDirection: 'column' }} role="region" aria-label="Circuit diagram">
+    // The diagram never takes more than ~40% of the screen height: the Bloch spheres below need room to stay readable, and a tall circuit scrolls inside its own box.
+    <div style={{ flex: '1 1 auto', minHeight: 0, maxHeight: '40vh', display: 'flex', flexDirection: 'column' }} role="region" aria-label="Circuit diagram">
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, padding: '8px 10px 0 12px', flexShrink: 0 }}>
         <span style={{ display: 'flex', alignItems: 'baseline', gap: 8, minWidth: 0 }}>
           <span style={{ fontSize: 11, fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase', color: colors.textDim, fontFamily: TYPOGRAPHY.fontSans }}>
