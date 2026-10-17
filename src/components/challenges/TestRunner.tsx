@@ -15,6 +15,7 @@ import {
 import { TestCaseRow } from './TestCaseRow';
 import { ChallengeInspector } from './ChallengeInspector';
 import { PerformancePanel } from './PerformancePanel';
+import { UnsupportedNotice } from '../learning/UnsupportedNotice';
 import type {
   CircuitMetrics,
   EfficiencyReport,
@@ -79,6 +80,9 @@ export function TestRunner({ challenge }: TestRunnerProps) {
   // Efficiency report from the most recent accepted submission — surfaced as a
   // LeetCode-style performance panel above the test rows.
   const [perfReport, setPerfReport] = useState<EfficiencyReport | null>(null);
+  // Set when the browser build can't run the student's program (outside the
+  // Qiskit browser subset): shown calmly, and the attempt is not recorded.
+  const [unsupportedMessage, setUnsupportedMessage] = useState<string | null>(null);
   const [inspectionCaseId, setInspectionCaseId] = useState<string | null>(
     challenge.visible_tests?.[0]?.id ?? challenge.testCases.find((testCase) => !testCase.hidden)?.id ?? null,
   );
@@ -122,6 +126,7 @@ export function TestRunner({ challenge }: TestRunnerProps) {
     clearTestResults();
     setInspection(null);
     setPerfReport(null);
+    setUnsupportedMessage(null);
     setRunning(true);
     setActiveBottomTab('tests');
 
@@ -141,8 +146,9 @@ export function TestRunner({ challenge }: TestRunnerProps) {
         addTestResult(result);
         setRunningTestIndex(index);
       },
-      () => {
-        // Per-test failures are surfaced inline.
+      (message: string) => {
+        // Per-test failures are surfaced inline; a platform limit gets its own notice.
+        if (message.startsWith('Not supported in the browser')) setUnsupportedMessage(message);
       },
       (snapshot: CircuitSnapshot | null, result) => {
         if (snapshot) {
@@ -157,6 +163,9 @@ export function TestRunner({ challenge }: TestRunnerProps) {
     setRunningTestIndex(-1);
 
     if (!submit) return;
+
+    // A platform limit is not the student's mistake: don't record a failed attempt.
+    if (results.some((result) => result.unsupported)) return;
 
     const status = deriveSubmissionStatus(results);
     const earnedWeight = results.reduce((sum, result) => {
@@ -468,6 +477,12 @@ export function TestRunner({ challenge }: TestRunnerProps) {
           <ChallengeInspector />
         ) : (
           <div style={{ height: '100%', overflowY: 'auto', padding: '4px 0' }}>
+            {unsupportedMessage && !isRunning && (
+              <div style={{ padding: '8px 12px' }}>
+                <UnsupportedNotice message={unsupportedMessage.replace(/^Not supported in the browser: /, '')} />
+              </div>
+            )}
+
             {perfReport && overallVerdict === 'accepted' && !isRunning && (
               <PerformancePanel report={perfReport} />
             )}

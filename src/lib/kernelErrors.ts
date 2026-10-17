@@ -6,6 +6,8 @@
  * Both arrive here as `unknown`.
  */
 
+import { DOCS_BASE as DOCS_ROOT } from '../config/docsLinks';
+
 export type KernelFailureKind =
   | 'port-in-use'
   | 'script-missing'
@@ -24,7 +26,7 @@ export interface KernelFailure {
   docsUrl: string;
 }
 
-const DOCS_BASE = 'https://getnuclei.dev/docs/introduction/kernel-troubleshooting/';
+const DOCS_BASE = `${DOCS_ROOT}/introduction/kernel-troubleshooting/`;
 
 const TITLES: Record<KernelFailureKind, string> = {
   'port-in-use': 'Another app is using the kernel port',

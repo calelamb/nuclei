@@ -84,10 +84,11 @@ export function FrameworkSelector() {
     };
   }, [open]);
 
-  // In the browser IDE only Cirq can actually run — Qiskit/CUDA-Q require the
-  // desktop app's native Python kernel. Non-Cirq options stay visible (so
-  // students know they exist) but are disabled with a tooltip.
-  const isDisabled = (f: Framework) => isWeb && f !== 'cirq';
+  // In the browser IDE Cirq runs natively and Qiskit through a pure-Python
+  // subset; CUDA-Q/Q# need the desktop app's native kernel. Those options stay
+  // visible (so students know they exist) but are disabled with a tooltip.
+  const isDisabled = (f: Framework) => isWeb && f !== 'cirq' && f !== 'qiskit';
+  const labelFor = (f: Framework) => (isWeb && f === 'qiskit' ? 'Qiskit (browser subset)' : displayName(f));
 
   const applyTemplate = (f: Framework) => {
     if (isDirty) {
@@ -210,7 +211,7 @@ export function FrameworkSelector() {
               }}
             >
               {isActive && <span style={{ color: colors.accent, fontSize: 10 }}>●</span>}
-              <span style={{ marginLeft: isActive ? 0 : 18, flex: 1 }}>{displayName(f)}</span>
+              <span style={{ marginLeft: isActive ? 0 : 18, flex: 1 }}>{labelFor(f)}</span>
               {disabled && (
                 <span
                   style={{
@@ -320,7 +321,7 @@ export function FrameworkSelector() {
           }
         }}
       >
-        {displayName(framework)}
+        {labelFor(framework)}
         <ChevronDown
           size={12}
           style={{

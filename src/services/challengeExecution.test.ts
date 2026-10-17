@@ -204,4 +204,52 @@ describe('challengeExecution', () => {
       actualOutput: { kept: [1, 0] },
     }));
   });
+
+  describe('browser (web) circuit challenges', () => {
+    const testCase: TestCase = {
+      id: 'tc-1', label: 'Case', description: 'd', params: { bell_index: 0 },
+      validation: { type: 'state_fidelity' }, hidden: false, weight: 1,
+    };
+
+    it('lets Qiskit circuit challenges run on web instead of refusing them', async () => {
+      const { createKernelSession } = await import('./kernelSession');
+      const send = vi.fn((message: { type: string }) => {
+        expect(message.type).toBe('execute');
+      });
+      vi.mocked(createKernelSession).mockImplementation(async () => ({ send, close: vi.fn() }));
+
+      void runTestCases(
+        'def solve(bell_index):\n    pass\n',
+        { ...baseChallenge, testCases: [testCase] },
+        [testCase], 'qiskit', 'web', 1024, vi.fn(), vi.fn(), vi.fn(),
+      );
+      await vi.waitFor(() => expect(send).toHaveBeenCalledTimes(1));
+    });
+
+    it('marks features outside the browser subset as unsupported, not as a failed attempt', async () => {
+      const { createKernelSession } = await import('./kernelSession');
+      vi.mocked(createKernelSession).mockImplementation(async (_platform, onMessage) => ({
+        send: vi.fn(() => {
+          onMessage({
+            type: 'error',
+            phase: 'execute',
+            code: 'unsupported_framework',
+            message: "qiskit_aer.noise.NoiseModel isn't available in the browser version of Qiskit",
+          });
+        }),
+        close: vi.fn(),
+      }));
+      const onError = vi.fn();
+
+      const results = await runTestCases(
+        'def solve(bell_index):\n    pass\n',
+        { ...baseChallenge, testCases: [testCase] },
+        [testCase], 'qiskit', 'web', 1024, vi.fn(), vi.fn(), onError,
+      );
+
+      expect(results[0]).toMatchObject({ passed: false, unsupported: true });
+      expect(results[0].message).toContain('Not supported in the browser');
+      expect(onError).toHaveBeenCalledTimes(1);
+    });
+  });
 });

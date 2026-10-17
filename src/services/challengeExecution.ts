@@ -16,6 +16,8 @@ import { createKernelSession, type KernelSession, type PlatformKind } from './ke
 import type { KernelTokenProvider } from './kernelSocket';
 
 const TEST_TIMEOUT_MS = 35_000;
+// The browser build simulates Qiskit through a pure-Python subset, and Cirq natively.
+const WEB_CIRCUIT_FRAMEWORKS: ReadonlySet<Framework> = new Set<Framework>(['qiskit', 'cirq']);
 const VALUE_RESULT_MARKER = '__NUCLEI_CHALLENGE_VALUE__=';
 
 type FailureVerdict = Extract<
@@ -26,6 +28,8 @@ type FailureVerdict = Extract<
 interface ChallengeExecutionFailure {
   verdict: FailureVerdict;
   message: string;
+  /** Platform limit (e.g. outside the browser Qiskit subset), not a student error. */
+  unsupported?: boolean;
 }
 
 interface ChallengeExecutionArtifact {
@@ -483,6 +487,14 @@ function classifyExecutionFailure(error: unknown): ChallengeExecutionFailure {
   const code = error instanceof ChallengeKernelError ? error.code : undefined;
   const normalizedMessage = message.trim();
 
+  if (code === 'unsupported_framework') {
+    return {
+      verdict: 'runtime_error',
+      message: `Not supported in the browser: ${normalizedMessage}`,
+      unsupported: true,
+    };
+  }
+
   if (
     code === 'timeout'
     || /timed out/i.test(normalizedMessage)
@@ -525,8 +537,8 @@ export async function runTestCases(
 ): Promise<TestCaseResult[]> {
   const isValueContract = challenge.contract_kind === 'returns_value';
 
-  if (!isValueContract && platform === 'web' && framework !== 'cirq') {
-    const message = `This circuit challenge requires the desktop Qiskit kernel. QKD protocol challenges work in browser.`;
+  if (!isValueContract && platform === 'web' && !WEB_CIRCUIT_FRAMEWORKS.has(framework)) {
+    const message = `This circuit challenge requires the desktop app (the browser runs Qiskit and Cirq only). QKD protocol challenges work in browser.`;
     onError(message);
     return emitFailureResults(testCases, message, onResult);
   }
@@ -548,6 +560,7 @@ export async function runTestCases(
   }
 
   const results: TestCaseResult[] = [];
+  let reportedUnsupported = false;
 
   try {
     for (let index = 0; index < testCases.length; index++) {
@@ -575,6 +588,10 @@ export async function runTestCases(
       } catch (err: unknown) {
         const elapsed = performance.now() - startTime;
         const failure = classifyExecutionFailure(err);
+        if (failure.unsupported && !reportedUnsupported) {
+          reportedUnsupported = true;
+          onError(failure.message);
+        }
         const failedResult: TestCaseResult = {
           testCaseId: testCase.id,
           passed: false,
@@ -582,6 +599,7 @@ export async function runTestCases(
           verdict: failure.verdict,
           message: failure.message,
           executionTimeMs: elapsed,
+          ...(failure.unsupported ? { unsupported: true } : {}),
         };
         results.push(failedResult);
         onResult(failedResult, index);
@@ -611,14 +629,14 @@ export async function inspectChallengeCase(
 }> {
   const isValueContract = challenge.contract_kind === 'returns_value';
 
-  if (!isValueContract && platform === 'web' && framework !== 'cirq') {
+  if (!isValueContract && platform === 'web' && !WEB_CIRCUIT_FRAMEWORKS.has(framework)) {
     return {
       snapshot: null,
       result: null,
       stdout: '',
       failure: {
         verdict: 'runtime_error',
-        message: `Runtime Error: This circuit challenge requires the desktop Qiskit kernel. QKD protocol challenges work in browser.`,
+        message: `Runtime Error: This circuit challenge requires the desktop app (the browser runs Qiskit and Cirq only). QKD protocol challenges work in browser.`,
       },
     };
   }
