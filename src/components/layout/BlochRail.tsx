@@ -19,22 +19,28 @@ export function BlochRail({ children }: { children: ReactNode }) {
   const result = useSimulationStore((s) => s.result);
   const count = result?.bloch_coords?.length ?? 0;
   const [measureRef, size] = useElementSize<HTMLDivElement>();
-  const [tightened, setTightened] = useState<number | null>(null);
+  const [resizeTick, setResizeTick] = useState(0);
+  const [probe, setProbe] = useState<{ result: unknown; count: number; width: number; tick: number; tight: number | null }>(
+    { result, count, width: size.width, tick: 0, tight: null },
+  );
   const { desired, min } = blochRailHeights(count, size.width);
 
   useEffect(() => {
-    setTightened(null);
-    const loosen = () => setTightened(null);
+    const loosen = () => setResizeTick((t) => t + 1);
     window.addEventListener('resize', loosen);
     return () => window.removeEventListener('resize', loosen);
-  }, [count, size.width, result]);
+  }, []);
 
-  useEffect(() => {
-    if (count === 0 || size.height <= 0 || size.width <= 0) return;
+  // Adjust state while rendering (React's derived-state pattern): loosen on a new run, count, width or window
+  // size, then tighten once the measured box proves the grid needs less than it was given.
+  const stale = probe.result !== result || probe.count !== count || probe.width !== size.width || probe.tick !== resizeTick;
+  if (stale) {
+    setProbe({ result, count, width: size.width, tick: resizeTick, tight: null });
+  } else if (probe.tight === null && count > 0 && size.height > 0 && size.width > 0) {
     const used = Math.max(min, blochRailUsedHeight(count, size.width, size.height));
-    if (used < size.height - SNUG_SLACK_PX) setTightened(used);
-  }, [count, size.width, size.height, min]);
-
+    if (used < size.height - SNUG_SLACK_PX) setProbe({ ...probe, tight: used });
+  }
+  const tightened = stale ? null : probe.tight;
   const height = tightened === null ? desired : Math.min(desired, tightened);
   return (
     <div
