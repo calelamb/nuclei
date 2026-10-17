@@ -6,6 +6,7 @@ import { PanelHeader } from '../layout/PanelHeader';
 import { QecEmptyState } from './QecEmptyState';
 import { latticeLayout, activeQubitsAtTick } from './qecGeometry';
 
+import { TYPOGRAPHY } from '../../styles/tokens';
 const DOCS = 'https://getnuclei.dev/docs/research/qec-studio/';
 
 /**
@@ -81,7 +82,7 @@ export function CodeLatticePanel() {
         style={{
           display: 'flex', alignItems: 'center', gap: 8, padding: '6px 12px',
           borderTop: `1px solid ${colors.border}`, fontSize: 10, color: colors.textDim,
-          fontFamily: "'Geist Sans', sans-serif",
+          fontFamily: TYPOGRAPHY.fontSans,
         }}
       >
         <span>Tick {tick}/{maxTick}</span>

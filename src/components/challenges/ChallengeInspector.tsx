@@ -5,6 +5,7 @@ import {
   type InspectionView,
 } from '../../stores/challengeModeStore';
 
+import { TYPOGRAPHY } from '../../styles/tokens';
 function TabButton({
   active,
   label,
@@ -27,7 +28,7 @@ function TabButton({
         color: active ? colors.text : colors.textMuted,
         fontSize: 11,
         fontWeight: active ? 600 : 500,
-        fontFamily: "'Geist Sans', sans-serif",
+        fontFamily: TYPOGRAPHY.fontSans,
         cursor: 'pointer',
       }}
     >
@@ -58,7 +59,7 @@ export function ChallengeInspector() {
         justifyContent: 'center',
         color: colors.textDim,
         fontSize: 12,
-        fontFamily: "'Geist Sans', sans-serif",
+        fontFamily: TYPOGRAPHY.fontSans,
       }}>
         Run inspection to inspect a visible case.
       </div>
@@ -97,7 +98,7 @@ export function ChallengeInspector() {
         <div style={{
           color: colors.textMuted,
           fontSize: 11,
-          fontFamily: "'Geist Sans', sans-serif",
+          fontFamily: TYPOGRAPHY.fontSans,
         }}>
           Inspecting {inspection.label}
         </div>
@@ -112,7 +113,7 @@ export function ChallengeInspector() {
             background: `${colors.error}12`,
             color: colors.text,
             fontSize: 12,
-            fontFamily: "'Geist Sans', sans-serif",
+            fontFamily: TYPOGRAPHY.fontSans,
             marginBottom: 14,
             lineHeight: 1.5,
           }}>
@@ -125,7 +126,7 @@ export function ChallengeInspector() {
             <div style={{
               color: colors.textMuted,
               fontSize: 12,
-              fontFamily: "'Geist Sans', sans-serif",
+              fontFamily: TYPOGRAPHY.fontSans,
             }}>
               {inspection.snapshot
                 ? `${inspection.snapshot.qubit_count} qubits • depth ${inspection.snapshot.depth} • ${inspection.snapshot.gates.length} gates`
@@ -142,7 +143,7 @@ export function ChallengeInspector() {
                 background: colors.bgPanel,
                 color: colors.text,
                 fontSize: 12,
-                fontFamily: "'Geist Sans', sans-serif",
+                fontFamily: TYPOGRAPHY.fontSans,
               }}>
                 <strong style={{ color: colors.accent }}>{gate.type}</strong>
                 <span>Targets: {gate.targets.join(', ') || '—'}</span>
@@ -162,7 +163,7 @@ export function ChallengeInspector() {
                   justifyContent: 'space-between',
                   color: colors.textMuted,
                   fontSize: 12,
-                  fontFamily: "'Geist Sans', sans-serif",
+                  fontFamily: TYPOGRAPHY.fontSans,
                   marginBottom: 4,
                 }}>
                   <span>|{state}⟩</span>
@@ -203,7 +204,7 @@ export function ChallengeInspector() {
                   color: colors.text,
                   fontSize: 13,
                   fontWeight: 600,
-                  fontFamily: "'Geist Sans', sans-serif",
+                  fontFamily: TYPOGRAPHY.fontSans,
                   marginBottom: 10,
                 }}>
                   Qubit {index}
@@ -214,7 +215,7 @@ export function ChallengeInspector() {
                   gap: 6,
                   color: colors.textMuted,
                   fontSize: 12,
-                  fontFamily: "'Geist Mono', monospace",
+                  fontFamily: TYPOGRAPHY.fontMono,
                 }}>
                   <span>x</span><span>{coord.x.toFixed(3)}</span>
                   <span>y</span><span>{coord.y.toFixed(3)}</span>
@@ -233,7 +234,7 @@ export function ChallengeInspector() {
             background: colors.bgPanel,
             color: colors.text,
             fontSize: 12,
-            fontFamily: "'Geist Mono', 'JetBrains Mono', monospace",
+            fontFamily: TYPOGRAPHY.fontMono,
             whiteSpace: 'pre-wrap',
             lineHeight: 1.6,
           }}>

@@ -5,6 +5,7 @@ import { useThemeStore } from '../../stores/themeStore';
 import { useWorkspaceStore, type WorkspaceMode } from '../../stores/workspaceStore';
 import { useModeSwitchStore } from '../../stores/modeSwitchStore';
 
+import { TYPOGRAPHY } from '../../styles/tokens';
 /**
  * PRD 11 Phase B — the mode chip.
  *
@@ -87,7 +88,7 @@ export function ModeChip() {
         boxShadow: '0 6px 24px rgba(0,0,0,0.28)',
         padding: 4,
         zIndex: 1000,
-        fontFamily: "'Geist Sans', sans-serif",
+        fontFamily: TYPOGRAPHY.fontSans,
       }}
     >
       {(['learn', 'research'] as WorkspaceMode[]).map((m) => {
@@ -151,7 +152,7 @@ export function ModeChip() {
           fontSize: 10,
           fontWeight: 700,
           letterSpacing: 0.5,
-          fontFamily: "'Geist Sans', sans-serif",
+          fontFamily: TYPOGRAPHY.fontSans,
         }}
       >
         <Icon size={11} strokeWidth={2.2} />

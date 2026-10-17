@@ -18,6 +18,7 @@ import { useLearnStore } from '../../stores/learnStore';
 import { getTrack } from '../../data/lessons/tracks';
 import type { ContentBlock } from '../../data/lessons/types';
 
+import { TYPOGRAPHY } from '../../styles/tokens';
 const BLOCK_META: Record<string, { icon: LucideIcon; label: string }> = {
   text: { icon: BookOpen, label: 'Read' },
   video: { icon: Play, label: 'Watch' },
@@ -87,7 +88,7 @@ export function LessonNavSidebar({
       style={{
         width: 260, flexShrink: 0, borderRight: `1px solid ${colors.border}`,
         background: colors.bgPanel, display: 'flex', flexDirection: 'column',
-        overflow: 'hidden', fontFamily: "'Geist Sans', sans-serif",
+        overflow: 'hidden', fontFamily: TYPOGRAPHY.fontSans,
       }}
     >
       {/* Track (epic) header */}

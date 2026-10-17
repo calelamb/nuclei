@@ -2,6 +2,7 @@ import type { GlossaryTerm } from '../../data/glossary';
 import { useThemeStore } from '../../stores/themeStore';
 import { activateOnKey } from '../../lib/a11y';
 
+import { TYPOGRAPHY } from '../../styles/tokens';
 interface GlossaryEntryProps {
   term: GlossaryTerm;
   isSelected: boolean;
@@ -46,12 +47,12 @@ export function GlossaryEntry({ term, isSelected, onClick }: GlossaryEntryProps)
     >
       {/* Header row */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
-        <span style={{ color: colors.text, fontSize: 13, fontWeight: 600, fontFamily: 'Geist Sans, Inter, sans-serif' }}>
+        <span style={{ color: colors.text, fontSize: 13, fontWeight: 600, fontFamily: TYPOGRAPHY.fontSans }}>
           {term.term}
         </span>
         <span style={{
           fontSize: 9,
-          fontFamily: 'Geist Sans, Inter, sans-serif',
+          fontFamily: TYPOGRAPHY.fontSans,
           padding: '1px 5px',
           borderRadius: 3,
           background: catColor + '22',
@@ -67,7 +68,7 @@ export function GlossaryEntry({ term, isSelected, onClick }: GlossaryEntryProps)
       <div style={{
         color: colors.textMuted,
         fontSize: 12,
-        fontFamily: 'Geist Sans, Inter, sans-serif',
+        fontFamily: TYPOGRAPHY.fontSans,
         lineHeight: 1.5,
         marginBottom: isSelected ? 8 : 0,
       }}>
@@ -82,7 +83,7 @@ export function GlossaryEntry({ term, isSelected, onClick }: GlossaryEntryProps)
             <div style={{
               color: colors.textDim,
               fontSize: 12,
-              fontFamily: 'JetBrains Mono, monospace',
+              fontFamily: TYPOGRAPHY.fontMono,
               padding: '6px 8px',
               background: colors.bgPanel,
               borderRadius: 4,
@@ -98,7 +99,7 @@ export function GlossaryEntry({ term, isSelected, onClick }: GlossaryEntryProps)
             <pre style={{
               color: colors.text,
               fontSize: 11,
-              fontFamily: 'JetBrains Mono, monospace',
+              fontFamily: TYPOGRAPHY.fontMono,
               padding: '6px 8px',
               background: colors.bgEditor,
               borderRadius: 4,
@@ -115,7 +116,7 @@ export function GlossaryEntry({ term, isSelected, onClick }: GlossaryEntryProps)
           {/* Related concepts */}
           {term.relatedConcepts.length > 0 && (
             <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', marginBottom: 4 }}>
-              <span style={{ color: colors.textDim, fontSize: 10, fontFamily: 'Geist Sans, Inter, sans-serif', marginRight: 2 }}>
+              <span style={{ color: colors.textDim, fontSize: 10, fontFamily: TYPOGRAPHY.fontSans, marginRight: 2 }}>
                 Related:
               </span>
               {term.relatedConcepts.map((rc) => (
@@ -123,7 +124,7 @@ export function GlossaryEntry({ term, isSelected, onClick }: GlossaryEntryProps)
                   key={rc}
                   style={{
                     fontSize: 10,
-                    fontFamily: 'Geist Sans, Inter, sans-serif',
+                    fontFamily: TYPOGRAPHY.fontSans,
                     padding: '1px 5px',
                     borderRadius: 3,
                     background: colors.accent + '18',
@@ -139,7 +140,7 @@ export function GlossaryEntry({ term, isSelected, onClick }: GlossaryEntryProps)
           {/* Aliases */}
           {term.aliases.length > 0 && (
             <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
-              <span style={{ color: colors.textDim, fontSize: 10, fontFamily: 'Geist Sans, Inter, sans-serif', marginRight: 2 }}>
+              <span style={{ color: colors.textDim, fontSize: 10, fontFamily: TYPOGRAPHY.fontSans, marginRight: 2 }}>
                 Also:
               </span>
               {term.aliases.map((a) => (
@@ -147,7 +148,7 @@ export function GlossaryEntry({ term, isSelected, onClick }: GlossaryEntryProps)
                   key={a}
                   style={{
                     fontSize: 9,
-                    fontFamily: 'Geist Sans, Inter, sans-serif',
+                    fontFamily: TYPOGRAPHY.fontSans,
                     padding: '1px 4px',
                     borderRadius: 2,
                     background: colors.border,

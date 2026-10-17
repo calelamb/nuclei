@@ -10,6 +10,7 @@ import type { Framework, CircuitSnapshot, SimulationResult, KernelResponse } fro
 import { Play, RotateCcw, ExternalLink, Terminal, BarChart3 } from 'lucide-react';
 import { isQuantumCode } from './exerciseValidation';
 
+import { TYPOGRAPHY } from '../../styles/tokens';
 interface InteractiveDemoProps {
   code: string;
   framework: Framework;
@@ -35,7 +36,7 @@ function ProbabilityBars({ probabilities, accent, colors }: {
         <div key={state} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           <span style={{
             width: 48, textAlign: 'right',
-            fontFamily: "'Geist Mono', monospace", fontSize: 12,
+            fontFamily: TYPOGRAPHY.fontMono, fontSize: 12,
             color: colors.text, fontWeight: 500,
           }}>
             |{state}\u27E9
@@ -55,7 +56,7 @@ function ProbabilityBars({ probabilities, accent, colors }: {
           </div>
           <span style={{
             width: 42, textAlign: 'right',
-            fontFamily: "'Geist Mono', monospace", fontSize: 11,
+            fontFamily: TYPOGRAPHY.fontMono, fontSize: 11,
             color: colors.textMuted,
           }}>
             {(prob * 100).toFixed(1)}%
@@ -245,12 +246,12 @@ export function InteractiveDemo({ code: initialCode, framework, description, exp
         <div style={{ width: 6, height: 6, borderRadius: '50%', background: colors.accent }} />
         <span style={{
           color: colors.textMuted, fontSize: 12, fontWeight: 500,
-          fontFamily: "'Geist Sans', sans-serif",
+          fontFamily: TYPOGRAPHY.fontSans,
           textTransform: 'uppercase', letterSpacing: 0.5,
         }}>
           Interactive Demo
         </span>
-        <span style={{ color: colors.textDim, fontSize: 12, fontFamily: "'Geist Sans', sans-serif", marginLeft: 4 }}>
+        <span style={{ color: colors.textDim, fontSize: 12, fontFamily: TYPOGRAPHY.fontSans, marginLeft: 4 }}>
           {description}
         </span>
       </div>
@@ -276,7 +277,7 @@ export function InteractiveDemo({ code: initialCode, framework, description, exp
             overviewRulerLanes: 0,
             scrollbar: { vertical: 'hidden', horizontal: 'auto' },
             padding: { top: 8, bottom: 8 },
-            fontFamily: "'JetBrains Mono', 'Geist Mono', monospace",
+            fontFamily: TYPOGRAPHY.fontMono,
           }}
         />
       </div>
@@ -292,7 +293,7 @@ export function InteractiveDemo({ code: initialCode, framework, description, exp
           padding: '6px 14px',
           background: isRunning ? colors.bgPanel : colors.accent,
           color: '#fff', border: 'none', borderRadius: 6,
-          fontSize: 12, fontWeight: 600, fontFamily: "'Geist Sans', sans-serif",
+          fontSize: 12, fontWeight: 600, fontFamily: TYPOGRAPHY.fontSans,
           cursor: isRunning ? 'default' : 'pointer',
           boxShadow: isRunning ? 'none' : shadow.sm,
         }}>
@@ -303,7 +304,7 @@ export function InteractiveDemo({ code: initialCode, framework, description, exp
           display: 'flex', alignItems: 'center', gap: 6,
           padding: '6px 14px', background: 'transparent',
           color: colors.textMuted, border: `1px solid ${colors.border}`,
-          borderRadius: 6, fontSize: 12, fontFamily: "'Geist Sans', sans-serif", cursor: 'pointer',
+          borderRadius: 6, fontSize: 12, fontFamily: TYPOGRAPHY.fontSans, cursor: 'pointer',
         }}>
           <RotateCcw size={12} /> Reset
         </button>
@@ -318,7 +319,7 @@ export function InteractiveDemo({ code: initialCode, framework, description, exp
                 padding: '4px 10px', borderRadius: 4, border: 'none',
                 background: showOutput ? `${colors.accent}18` : 'transparent',
                 color: showOutput ? colors.accent : colors.textDim,
-                fontSize: 11, fontFamily: "'Geist Sans', sans-serif", cursor: 'pointer',
+                fontSize: 11, fontFamily: TYPOGRAPHY.fontSans, cursor: 'pointer',
               }}>
                 <Terminal size={11} /> Output
               </button>
@@ -329,7 +330,7 @@ export function InteractiveDemo({ code: initialCode, framework, description, exp
                 padding: '4px 10px', borderRadius: 4, border: 'none',
                 background: !showOutput ? `${colors.accent}18` : 'transparent',
                 color: !showOutput ? colors.accent : colors.textDim,
-                fontSize: 11, fontFamily: "'Geist Sans', sans-serif", cursor: 'pointer',
+                fontSize: 11, fontFamily: TYPOGRAPHY.fontSans, cursor: 'pointer',
               }}>
                 <BarChart3 size={11} /> Probabilities
               </button>
@@ -342,7 +343,7 @@ export function InteractiveDemo({ code: initialCode, framework, description, exp
           display: 'flex', alignItems: 'center', gap: 6,
           padding: '6px 14px', background: 'transparent',
           color: colors.textMuted, border: `1px solid ${colors.border}`,
-          borderRadius: 6, fontSize: 12, fontFamily: "'Geist Sans', sans-serif", cursor: 'pointer',
+          borderRadius: 6, fontSize: 12, fontFamily: TYPOGRAPHY.fontSans, cursor: 'pointer',
         }}>
           <ExternalLink size={12} /> Open in Editor
         </button>
@@ -353,7 +354,7 @@ export function InteractiveDemo({ code: initialCode, framework, description, exp
         <div style={{
           padding: '6px 16px',
           borderBottom: (hasResults || hasOutput || error) ? `1px solid ${colors.border}` : 'none',
-          fontSize: 11, fontFamily: "'Geist Mono', monospace", color: colors.textMuted,
+          fontSize: 11, fontFamily: TYPOGRAPHY.fontMono, color: colors.textMuted,
           display: 'flex', alignItems: 'center', gap: 8,
         }}>
           <span style={{ color: colors.textDim, fontSize: 10, textTransform: 'uppercase', letterSpacing: 0.5 }}>
@@ -380,7 +381,7 @@ export function InteractiveDemo({ code: initialCode, framework, description, exp
           background: `${colors.error}10`,
           color: colors.error,
           fontSize: 12,
-          fontFamily: "'Geist Mono', monospace",
+          fontFamily: TYPOGRAPHY.fontMono,
           borderBottom: `1px solid ${colors.border}`,
           whiteSpace: 'pre-wrap',
           lineHeight: 1.5,
@@ -398,7 +399,7 @@ export function InteractiveDemo({ code: initialCode, framework, description, exp
           overflowY: 'auto',
         }}>
           <div style={{
-            fontFamily: "'Geist Mono', monospace",
+            fontFamily: TYPOGRAPHY.fontMono,
             fontSize: 12, color: colors.text,
             lineHeight: 1.6, whiteSpace: 'pre-wrap',
           }}>
@@ -424,7 +425,7 @@ export function InteractiveDemo({ code: initialCode, framework, description, exp
         }}>
           <p style={{
             color: colors.textMuted, fontSize: 13, fontStyle: 'italic',
-            fontFamily: "'Geist Sans', sans-serif", lineHeight: 1.5, margin: 0,
+            fontFamily: TYPOGRAPHY.fontSans, lineHeight: 1.5, margin: 0,
           }}>
             {explorationPrompt}
           </p>

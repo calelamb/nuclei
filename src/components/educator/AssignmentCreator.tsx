@@ -4,6 +4,7 @@ import { useThemeStore } from '../../stores/themeStore';
 import { getExercisesByTopic } from '../../data/exercises/index';
 import type { Assignment } from '../../stores/educatorStore';
 
+import { TYPOGRAPHY } from '../../styles/tokens';
 interface AssignmentCreatorProps {
   onClose: () => void;
   onSave: (assignment: Assignment) => void;
@@ -19,7 +20,7 @@ export function AssignmentCreator({ onClose, onSave }: AssignmentCreatorProps) {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
   const exercisesByTopic = getExercisesByTopic();
-  const font = "'Geist Sans', sans-serif";
+  const font = TYPOGRAPHY.fontSans;
 
   const toggleExercise = (id: string) => {
     setSelectedIds((prev) => {

@@ -5,6 +5,7 @@ import { useProfileStore } from '../../stores/profileStore';
 import { useEditorStore } from '../../stores/editorStore';
 import { BadgeDisplay } from './BadgeDisplay';
 
+import { TYPOGRAPHY } from '../../styles/tokens';
 export function UserProfile() {
   const colors = useThemeStore((s) => s.colors);
   const displayName = useProfileStore((s) => s.displayName);
@@ -68,7 +69,7 @@ export function UserProfile() {
                 color: colors.text,
                 fontSize: 14,
                 fontWeight: 700,
-                fontFamily: "'Geist Sans', sans-serif",
+                fontFamily: TYPOGRAPHY.fontSans,
                 outline: 'none',
               }}
             />
@@ -94,7 +95,7 @@ export function UserProfile() {
                 fontSize: 14,
                 fontWeight: 700,
                 color: colors.text,
-                fontFamily: "'Geist Sans', sans-serif",
+                fontFamily: TYPOGRAPHY.fontSans,
                 flex: 1,
               }}
             >
@@ -125,7 +126,7 @@ export function UserProfile() {
         style={{
           fontSize: 10,
           color: colors.textDim,
-          fontFamily: "'Geist Sans', sans-serif",
+          fontFamily: TYPOGRAPHY.fontSans,
           marginTop: -10,
         }}
       >
@@ -164,7 +165,7 @@ export function UserProfile() {
                   fontSize: 18,
                   fontWeight: 700,
                   color: colors.text,
-                  fontFamily: "'Geist Sans', sans-serif",
+                  fontFamily: TYPOGRAPHY.fontSans,
                 }}
               >
                 {stat.value}
@@ -175,7 +176,7 @@ export function UserProfile() {
               style={{
                 fontSize: 9,
                 color: colors.textDim,
-                fontFamily: "'Geist Sans', sans-serif",
+                fontFamily: TYPOGRAPHY.fontSans,
                 textTransform: 'uppercase',
                 letterSpacing: 0.5,
                 fontWeight: 600,
@@ -196,7 +197,7 @@ export function UserProfile() {
             textTransform: 'uppercase',
             letterSpacing: 0.5,
             color: colors.textMuted,
-            fontFamily: "'Geist Sans', sans-serif",
+            fontFamily: TYPOGRAPHY.fontSans,
             display: 'block',
             marginBottom: 8,
           }}
@@ -223,7 +224,7 @@ export function UserProfile() {
             color: colors.accent,
             fontSize: 12,
             fontWeight: 600,
-            fontFamily: "'Geist Sans', sans-serif",
+            fontFamily: TYPOGRAPHY.fontSans,
             cursor: 'pointer',
             transition: 'background 0.15s',
           }}

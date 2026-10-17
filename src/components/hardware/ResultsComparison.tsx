@@ -1,6 +1,7 @@
 import { useMemo } from 'react';
 import { useThemeStore } from '../../stores/themeStore';
 
+import { TYPOGRAPHY } from '../../styles/tokens';
 interface ResultsComparisonProps {
   simulatorResult: Record<string, number> | null;
   hardwareResult: Record<string, number> | null;
@@ -36,7 +37,7 @@ export function ResultsComparison({
   }, [simulatorResult, hardwareResult]);
 
   const font: React.CSSProperties = {
-    fontFamily: "'Geist Sans', sans-serif",
+    fontFamily: TYPOGRAPHY.fontSans,
   };
 
   return (
@@ -118,7 +119,7 @@ export function ResultsComparison({
                 textAlign: 'center',
                 fontSize: 9,
                 color: colors.textMuted,
-                fontFamily: "'JetBrains Mono', monospace",
+                fontFamily: TYPOGRAPHY.fontMono,
                 flexShrink: 0,
               }}
             >

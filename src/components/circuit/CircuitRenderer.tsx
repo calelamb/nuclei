@@ -8,6 +8,7 @@ import { getGateData } from '../../data/gates';
 import { useCircuitExport } from '../../hooks/useCircuitExport';
 import type { Gate } from '../../types/quantum';
 
+import { TYPOGRAPHY } from '../../styles/tokens';
 interface Tooltip {
   gate: Gate;
   gateIndex: number;
@@ -55,50 +56,50 @@ function GateExplorerPopup({ gateIndex, onClose }: { gateIndex: number; onClose:
         overflow: 'auto',
       }} onClick={(e) => e.stopPropagation()}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-          <span style={{ color: colors.accent, fontWeight: 700, fontSize: 18, fontFamily: "'Fira Code', monospace" }}>
+          <span style={{ color: colors.accent, fontWeight: 700, fontSize: 18, fontFamily: TYPOGRAPHY.fontMono }}>
             {data.symbol}
           </span>
           <button onClick={onClose} style={{ background: 'none', border: 'none', color: colors.textMuted, cursor: 'pointer', fontSize: 16 }}>✕</button>
         </div>
-        <div style={{ color: colors.text, fontSize: 16, fontWeight: 600, fontFamily: 'Inter, sans-serif', marginBottom: 8 }}>
+        <div style={{ color: colors.text, fontSize: 16, fontWeight: 600, fontFamily: TYPOGRAPHY.fontSans, marginBottom: 8 }}>
           {data.name}
         </div>
-        <div style={{ color: colors.text, fontSize: 13, fontFamily: 'Inter, sans-serif', lineHeight: 1.6, marginBottom: 12 }}>
+        <div style={{ color: colors.text, fontSize: 13, fontFamily: TYPOGRAPHY.fontSans, lineHeight: 1.6, marginBottom: 12 }}>
           {data.description}
         </div>
 
         <div style={{ marginBottom: 10 }}>
-          <div style={{ color: colors.textMuted, fontSize: 11, fontFamily: 'Inter, sans-serif', marginBottom: 4 }}>MATRIX</div>
-          <code style={{ color: colors.accent, fontSize: 12, fontFamily: "'Fira Code', monospace", background: colors.bgPanel, padding: '4px 8px', borderRadius: 4, display: 'block' }}>
+          <div style={{ color: colors.textMuted, fontSize: 11, fontFamily: TYPOGRAPHY.fontSans, marginBottom: 4 }}>MATRIX</div>
+          <code style={{ color: colors.accent, fontSize: 12, fontFamily: TYPOGRAPHY.fontMono, background: colors.bgPanel, padding: '4px 8px', borderRadius: 4, display: 'block' }}>
             {data.matrix}
           </code>
         </div>
 
         {data.blochRotation && (
           <div style={{ marginBottom: 10 }}>
-            <div style={{ color: colors.textMuted, fontSize: 11, fontFamily: 'Inter, sans-serif', marginBottom: 4 }}>BLOCH SPHERE EFFECT</div>
-            <div style={{ color: colors.text, fontSize: 12, fontFamily: 'Inter, sans-serif' }}>
+            <div style={{ color: colors.textMuted, fontSize: 11, fontFamily: TYPOGRAPHY.fontSans, marginBottom: 4 }}>BLOCH SPHERE EFFECT</div>
+            <div style={{ color: colors.text, fontSize: 12, fontFamily: TYPOGRAPHY.fontSans }}>
               Rotation around <strong style={{ color: colors.accentLight }}>{data.blochRotation.axis}</strong> axis by <strong style={{ color: colors.accentLight }}>{data.blochRotation.angle}</strong>
             </div>
           </div>
         )}
 
         <div style={{ marginBottom: 10 }}>
-          <div style={{ color: colors.textMuted, fontSize: 11, fontFamily: 'Inter, sans-serif', marginBottom: 4 }}>FRAMEWORK SYNTAX</div>
+          <div style={{ color: colors.textMuted, fontSize: 11, fontFamily: TYPOGRAPHY.fontSans, marginBottom: 4 }}>FRAMEWORK SYNTAX</div>
           {Object.entries(data.frameworkSyntax).map(([fw, syntax]) => (
             <div key={fw} style={{ display: 'flex', gap: 8, marginBottom: 2 }}>
-              <span style={{ color: colors.textMuted, fontSize: 11, fontFamily: 'Inter, sans-serif', width: 60 }}>{fw}</span>
-              <code style={{ color: colors.string, fontSize: 12, fontFamily: "'Fira Code', monospace" }}>{syntax}</code>
+              <span style={{ color: colors.textMuted, fontSize: 11, fontFamily: TYPOGRAPHY.fontSans, width: 60 }}>{fw}</span>
+              <code style={{ color: colors.string, fontSize: 12, fontFamily: TYPOGRAPHY.fontMono }}>{syntax}</code>
             </div>
           ))}
         </div>
 
         {data.relatedGates.length > 0 && (
           <div>
-            <div style={{ color: colors.textMuted, fontSize: 11, fontFamily: 'Inter, sans-serif', marginBottom: 4 }}>RELATED GATES</div>
+            <div style={{ color: colors.textMuted, fontSize: 11, fontFamily: TYPOGRAPHY.fontSans, marginBottom: 4 }}>RELATED GATES</div>
             <div style={{ display: 'flex', gap: 6 }}>
               {data.relatedGates.map((g) => (
-                <span key={g} style={{ color: colors.accent, fontSize: 12, fontFamily: "'Fira Code', monospace", background: colors.bgPanel, padding: '2px 6px', borderRadius: 3 }}>
+                <span key={g} style={{ color: colors.accent, fontSize: 12, fontFamily: TYPOGRAPHY.fontMono, background: colors.bgPanel, padding: '2px 6px', borderRadius: 3 }}>
                   {g}
                 </span>
               ))}
@@ -145,7 +146,7 @@ function ExportMenu() {
         style={{
           padding: '3px 8px', background: colors.bgPanel, color: colors.textMuted,
           border: `1px solid ${colors.border}`, borderRadius: 3, cursor: 'pointer',
-          fontSize: 11, fontFamily: 'Inter, sans-serif',
+          fontSize: 11, fontFamily: TYPOGRAPHY.fontSans,
         }}
       >
         Export ▾
@@ -163,7 +164,7 @@ function ExportMenu() {
               style={{
                 display: 'block', width: '100%', padding: '6px 12px',
                 background: 'transparent', color: colors.text, border: 'none',
-                cursor: 'pointer', fontSize: 12, fontFamily: 'Inter, sans-serif', textAlign: 'left',
+                cursor: 'pointer', fontSize: 12, fontFamily: TYPOGRAPHY.fontSans, textAlign: 'left',
               }}
               onMouseEnter={(e) => (e.target as HTMLElement).style.background = colors.border}
               onMouseLeave={(e) => (e.target as HTMLElement).style.background = 'transparent'}
@@ -233,7 +234,7 @@ function StepControls() {
     borderRadius: 3,
     cursor: 'pointer' as const,
     fontSize: 11,
-    fontFamily: 'Inter, sans-serif',
+    fontFamily: TYPOGRAPHY.fontSans,
   };
 
   return (
@@ -250,7 +251,7 @@ function StepControls() {
       <button onClick={handlePlay} style={btnStyle}>{isPlaying ? '⏸ Pause' : '▶ Play'}</button>
       <button onClick={() => setStepMode(false)} style={{ ...btnStyle, color: colors.error }}>✕ Exit</button>
       <DebugStateReadout stepIndex={stepIndex} />
-      <span style={{ color: colors.textMuted, fontSize: 11, fontFamily: 'Inter, sans-serif', marginLeft: 'auto' }}>
+      <span style={{ color: colors.textMuted, fontSize: 11, fontFamily: TYPOGRAPHY.fontSans, marginLeft: 'auto' }}>
         Step {stepIndex + 1} / {totalGates}
       </span>
     </div>
@@ -265,7 +266,7 @@ function DebugStateReadout({ stepIndex }: { stepIndex: number }) {
   const error = useDebugStore((s) => s.error);
   const trace = useDebugStore((s) => s.trace);
 
-  const base = { fontSize: 11, fontFamily: 'Inter, sans-serif', marginLeft: 10 } as const;
+  const base = { fontSize: 11, fontFamily: TYPOGRAPHY.fontSans, marginLeft: 10 } as const;
   if (pending) return <span style={{ ...base, color: colors.textMuted }}>computing state…</span>;
   if (error) return <span style={{ ...base, color: colors.textMuted }}>{error}</span>;
 
@@ -331,21 +332,21 @@ export function CircuitRenderer() {
         flexDirection: 'column', gap: 12,
       }}>
         {error ? (
-          <span style={{ color: colors.error, fontSize: 13, fontFamily: "'Geist Sans', sans-serif" }}>{error}</span>
+          <span style={{ color: colors.error, fontSize: 13, fontFamily: TYPOGRAPHY.fontSans }}>{error}</span>
         ) : (
           <>
             {/* Ghost circuit outline */}
             <svg width={160} height={60} viewBox="0 0 160 60" style={{ opacity: 0.15 }}>
               <line x1={20} y1={15} x2={140} y2={15} stroke={colors.wire} strokeWidth={1.5} strokeDasharray="4,4" />
               <line x1={20} y1={45} x2={140} y2={45} stroke={colors.wire} strokeWidth={1.5} strokeDasharray="4,4" />
-              <text x={8} y={15} dominantBaseline="central" fill={colors.textMuted} fontSize={10} fontFamily="'JetBrains Mono', monospace">|0⟩</text>
-              <text x={8} y={45} dominantBaseline="central" fill={colors.textMuted} fontSize={10} fontFamily="'JetBrains Mono', monospace">|1⟩</text>
+              <text x={8} y={15} dominantBaseline="central" fill={colors.textMuted} fontSize={10} fontFamily={TYPOGRAPHY.fontMono}>|0⟩</text>
+              <text x={8} y={45} dominantBaseline="central" fill={colors.textMuted} fontSize={10} fontFamily={TYPOGRAPHY.fontMono}>|1⟩</text>
               <rect x={45} y={3} width={24} height={24} rx={4} fill="none" stroke={colors.accent} strokeWidth={1} strokeDasharray="3,3" />
-              <text x={57} y={15} textAnchor="middle" dominantBaseline="central" fill={colors.accent} fontSize={10} fontFamily="'JetBrains Mono', monospace">H</text>
+              <text x={57} y={15} textAnchor="middle" dominantBaseline="central" fill={colors.accent} fontSize={10} fontFamily={TYPOGRAPHY.fontMono}>H</text>
               <rect x={95} y={33} width={24} height={24} rx={4} fill="none" stroke={colors.gateMeasure} strokeWidth={1} strokeDasharray="3,3" />
-              <text x={107} y={45} textAnchor="middle" dominantBaseline="central" fill={colors.gateMeasure} fontSize={9} fontFamily="'JetBrains Mono', monospace">M</text>
+              <text x={107} y={45} textAnchor="middle" dominantBaseline="central" fill={colors.gateMeasure} fontSize={9} fontFamily={TYPOGRAPHY.fontMono}>M</text>
             </svg>
-            <span style={{ color: colors.textDim, fontSize: 12, fontFamily: "'Geist Sans', sans-serif" }}>
+            <span style={{ color: colors.textDim, fontSize: 12, fontFamily: TYPOGRAPHY.fontSans }}>
               Write quantum code to see your circuit
             </span>
           </>
@@ -395,7 +396,7 @@ export function CircuitRenderer() {
                   x={LABEL_WIDTH - 20} y={y}
                   textAnchor="end" dominantBaseline="central"
                   fill={colors.text} fontSize={13}
-                  fontFamily="'Fira Code', monospace"
+                  fontFamily={TYPOGRAPHY.fontMono}
                 >
                   |{i}⟩
                 </text>
@@ -408,7 +409,7 @@ export function CircuitRenderer() {
             <g>
               <line x1={LABEL_WIDTH - 10} y1={classicalWireY - 2} x2={svgWidth - PADDING} y2={classicalWireY - 2} stroke={colors.wire} strokeWidth={1} strokeDasharray="4,3" />
               <line x1={LABEL_WIDTH - 10} y1={classicalWireY + 2} x2={svgWidth - PADDING} y2={classicalWireY + 2} stroke={colors.wire} strokeWidth={1} strokeDasharray="4,3" />
-              <text x={LABEL_WIDTH - 20} y={classicalWireY} textAnchor="end" dominantBaseline="central" fill={colors.textDim} fontSize={11} fontFamily="'Fira Code', monospace">c</text>
+              <text x={LABEL_WIDTH - 20} y={classicalWireY} textAnchor="end" dominantBaseline="central" fill={colors.textDim} fontSize={11} fontFamily={TYPOGRAPHY.fontMono}>c</text>
             </g>
           )}
 
@@ -458,11 +459,11 @@ export function CircuitRenderer() {
             borderRadius: 6, padding: '8px 12px',
             zIndex: 1000, pointerEvents: 'none', maxWidth: 250,
           }}>
-            <div style={{ color: colors.accent, fontWeight: 600, fontSize: 13, fontFamily: "'Fira Code', monospace" }}>{tooltip.gate.type}</div>
-            <div style={{ color: colors.text, fontSize: 12, fontFamily: 'Inter, sans-serif', marginTop: 4 }}>Targets: q{tooltip.gate.targets.join(', q')}</div>
-            {tooltip.gate.controls.length > 0 && <div style={{ color: colors.text, fontSize: 12, fontFamily: 'Inter, sans-serif' }}>Controls: q{tooltip.gate.controls.join(', q')}</div>}
-            {tooltip.gate.params.length > 0 && <div style={{ color: colors.number, fontSize: 12, fontFamily: "'Fira Code', monospace" }}>Params: {tooltip.gate.params.map(p => p.toFixed(4)).join(', ')}</div>}
-            <div style={{ color: colors.textMuted, fontSize: 11, fontFamily: 'Inter, sans-serif', marginTop: 2 }}>Layer {tooltip.gate.layer} • Right-click to explore</div>
+            <div style={{ color: colors.accent, fontWeight: 600, fontSize: 13, fontFamily: TYPOGRAPHY.fontMono }}>{tooltip.gate.type}</div>
+            <div style={{ color: colors.text, fontSize: 12, fontFamily: TYPOGRAPHY.fontSans, marginTop: 4 }}>Targets: q{tooltip.gate.targets.join(', q')}</div>
+            {tooltip.gate.controls.length > 0 && <div style={{ color: colors.text, fontSize: 12, fontFamily: TYPOGRAPHY.fontSans }}>Controls: q{tooltip.gate.controls.join(', q')}</div>}
+            {tooltip.gate.params.length > 0 && <div style={{ color: colors.number, fontSize: 12, fontFamily: TYPOGRAPHY.fontMono }}>Params: {tooltip.gate.params.map(p => p.toFixed(4)).join(', ')}</div>}
+            <div style={{ color: colors.textMuted, fontSize: 11, fontFamily: TYPOGRAPHY.fontSans, marginTop: 2 }}>Layer {tooltip.gate.layer} • Right-click to explore</div>
           </div>
         )}
 
@@ -478,7 +479,7 @@ export function CircuitRenderer() {
           }}>
             <button
               onClick={() => { setExplorerGateIndex(contextMenu.gateIndex); setContextMenu(null); }}
-              style={{ display: 'block', width: '100%', padding: '8px 12px', background: 'transparent', color: colors.text, border: 'none', cursor: 'pointer', fontSize: 12, fontFamily: 'Inter, sans-serif', textAlign: 'left' }}
+              style={{ display: 'block', width: '100%', padding: '8px 12px', background: 'transparent', color: colors.text, border: 'none', cursor: 'pointer', fontSize: 12, fontFamily: TYPOGRAPHY.fontSans, textAlign: 'left' }}
               onMouseEnter={(e) => (e.target as HTMLElement).style.background = colors.border}
               onMouseLeave={(e) => (e.target as HTMLElement).style.background = 'transparent'}
             >
@@ -490,7 +491,7 @@ export function CircuitRenderer() {
                 useCircuitStore.getState().setStepIndex(contextMenu.gateIndex);
                 setContextMenu(null);
               }}
-              style={{ display: 'block', width: '100%', padding: '8px 12px', background: 'transparent', color: colors.text, border: 'none', cursor: 'pointer', fontSize: 12, fontFamily: 'Inter, sans-serif', textAlign: 'left' }}
+              style={{ display: 'block', width: '100%', padding: '8px 12px', background: 'transparent', color: colors.text, border: 'none', cursor: 'pointer', fontSize: 12, fontFamily: TYPOGRAPHY.fontSans, textAlign: 'left' }}
               onMouseEnter={(e) => (e.target as HTMLElement).style.background = colors.border}
               onMouseLeave={(e) => (e.target as HTMLElement).style.background = 'transparent'}
             >

@@ -9,6 +9,7 @@ import { requestCloseTab } from '../../lib/tabClose';
 import { FrameworkSelector } from './FrameworkSelector';
 import { useHardwareStore } from '../../stores/hardwareStore';
 
+import { TYPOGRAPHY } from '../../styles/tokens';
 const basename = (p: string) => p.split('/').pop() ?? p;
 
 export function EditorTabs() {
@@ -90,7 +91,7 @@ export function EditorTabs() {
           background: isActive ? colors.bgEditor : 'transparent',
           borderBottom: isActive ? `2px solid ${colors.accent}` : '2px solid transparent',
           fontSize: 12,
-          fontFamily: "'Geist Sans', system-ui, sans-serif",
+          fontFamily: TYPOGRAPHY.fontSans,
           color: isActive ? colors.text : colors.textDim,
           cursor: 'pointer',
           maxWidth: 220,
@@ -166,7 +167,7 @@ export function EditorTabs() {
         backgroundColor: colors.bgEditor,
         borderBottom: `2px solid ${colors.accent}`,
         fontSize: 12,
-        fontFamily: "'Geist Sans', system-ui, sans-serif",
+        fontFamily: TYPOGRAPHY.fontSans,
         color: colors.text,
         cursor: 'default',
         maxWidth: 260,
@@ -210,7 +211,7 @@ export function EditorTabs() {
             borderRadius: 3,
             color: colors.text,
             fontSize: 12,
-            fontFamily: "'Geist Sans', system-ui, sans-serif",
+            fontFamily: TYPOGRAPHY.fontSans,
             padding: '2px 6px',
             outline: 'none',
             minWidth: 120,
@@ -278,7 +279,7 @@ export function EditorTabs() {
             borderRadius: 6,
             cursor: 'pointer',
             fontSize: 12,
-            fontFamily: "'Geist Sans', sans-serif",
+            fontFamily: TYPOGRAPHY.fontSans,
             fontWeight: 600,
             transition: 'background 120ms ease, border-color 120ms ease',
           }}
@@ -312,7 +313,7 @@ export function EditorTabs() {
             borderRadius: 6,
             cursor: canRun ? 'pointer' : 'default',
             fontSize: 13,
-            fontFamily: "'Geist Sans', sans-serif",
+            fontFamily: TYPOGRAPHY.fontSans,
             fontWeight: 600,
             boxShadow: canRun ? shadow.sm : 'none',
             transition:

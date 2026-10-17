@@ -2,6 +2,7 @@ import { useThemeStore } from '../../stores/themeStore';
 import { EASING, DURATION, prefersReducedMotion } from '../../lib/animations';
 import { useEscapeToClose } from '../../hooks/useEscapeToClose';
 
+import { TYPOGRAPHY } from '../../styles/tokens';
 interface KeyboardShortcutsProps {
   onClose: () => void;
 }
@@ -82,7 +83,7 @@ export function KeyboardShortcuts({ onClose }: KeyboardShortcutsProps) {
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
           <h2 style={{
             color: colors.text, fontSize: 18, fontWeight: 600,
-            fontFamily: "'Geist Sans', sans-serif",
+            fontFamily: TYPOGRAPHY.fontSans,
           }}>
             Keyboard Shortcuts
           </h2>
@@ -103,7 +104,7 @@ export function KeyboardShortcuts({ onClose }: KeyboardShortcutsProps) {
           <div key={group.title} style={{ marginBottom: 16 }}>
             <div style={{
               color: colors.accent, fontSize: 11, fontWeight: 600,
-              fontFamily: "'Geist Sans', sans-serif",
+              fontFamily: TYPOGRAPHY.fontSans,
               textTransform: 'uppercase', letterSpacing: 0.5,
               marginBottom: 6,
             }}>
@@ -116,13 +117,13 @@ export function KeyboardShortcuts({ onClose }: KeyboardShortcutsProps) {
               }}>
                 <span style={{
                   color: colors.text, fontSize: 13,
-                  fontFamily: "'Geist Sans', sans-serif",
+                  fontFamily: TYPOGRAPHY.fontSans,
                 }}>
                   {s.description}
                 </span>
                 <kbd style={{
                   fontSize: 12,
-                  fontFamily: "'JetBrains Mono', monospace",
+                  fontFamily: TYPOGRAPHY.fontMono,
                   color: colors.textMuted,
                   background: colors.bgPanel,
                   padding: '2px 8px',
@@ -139,7 +140,7 @@ export function KeyboardShortcuts({ onClose }: KeyboardShortcutsProps) {
 
         <div style={{
           color: colors.textDim, fontSize: 11,
-          fontFamily: "'Geist Sans', sans-serif",
+          fontFamily: TYPOGRAPHY.fontSans,
           textAlign: 'center', marginTop: 8,
         }}>
           Press ⌘+Shift+P to open the command palette for all commands

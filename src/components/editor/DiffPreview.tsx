@@ -4,6 +4,7 @@ import { useDiracStore } from '../../stores/diracStore';
 import { useEditorStore } from '../../stores/editorStore';
 import { useThemeStore } from '../../stores/themeStore';
 
+import { TYPOGRAPHY } from '../../styles/tokens';
 /**
  * Overlay shown after a successful compose. Side-by-side Current vs
  * Proposed buffer, Accept replaces the whole editor content, Reject
@@ -73,7 +74,7 @@ export function DiffPreview() {
           display: 'flex',
           flexDirection: 'column',
           overflow: 'hidden',
-          fontFamily: "'Geist Sans', sans-serif",
+          fontFamily: TYPOGRAPHY.fontSans,
         }}
       >
         <div
@@ -147,7 +148,7 @@ export function DiffPreview() {
                 overflow: 'auto',
                 flex: 1,
                 fontSize: 12,
-                fontFamily: "'JetBrains Mono', ui-monospace, monospace",
+                fontFamily: TYPOGRAPHY.fontMono,
                 color: colors.textMuted,
                 background: `${colors.error}08`,
               }}
@@ -175,7 +176,7 @@ export function DiffPreview() {
                 overflow: 'auto',
                 flex: 1,
                 fontSize: 12,
-                fontFamily: "'JetBrains Mono', ui-monospace, monospace",
+                fontFamily: TYPOGRAPHY.fontMono,
                 color: colors.text,
                 background: `${colors.success}08`,
               }}

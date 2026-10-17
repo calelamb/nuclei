@@ -17,6 +17,7 @@ import type {
   QuantumChallenge,
 } from '../../types/challenge';
 
+import { TYPOGRAPHY } from '../../styles/tokens';
 const DIFFICULTY_COLORS: Record<ChallengeDifficulty, string> = {
   easy: '#10B981',
   medium: '#F59E0B',
@@ -111,7 +112,7 @@ function PracticeTabButton({
           display: 'block',
           fontSize: 13,
           fontWeight: 700,
-          fontFamily: "'Geist Sans', sans-serif",
+          fontFamily: TYPOGRAPHY.fontSans,
           color: active ? colors.text : colors.textMuted,
           whiteSpace: 'nowrap',
           overflow: 'hidden',
@@ -123,7 +124,7 @@ function PracticeTabButton({
           display: 'block',
           marginTop: 2,
           fontSize: 11,
-          fontFamily: "'Geist Sans', sans-serif",
+          fontFamily: TYPOGRAPHY.fontSans,
           color: colors.textDim,
           whiteSpace: 'nowrap',
           overflow: 'hidden',
@@ -139,7 +140,7 @@ function PracticeTabButton({
         color: active ? colors.accent : colors.textDim,
         fontSize: 11,
         fontWeight: 700,
-        fontFamily: "'Geist Mono', 'JetBrains Mono', monospace",
+        fontFamily: TYPOGRAPHY.fontMono,
       }}>
         {count}
       </span>
@@ -223,7 +224,7 @@ function ProblemRow({
         event.currentTarget.style.background = 'transparent';
       }}
     >
-      <div style={{ fontSize: 12, fontFamily: "'Geist Sans', sans-serif" }}>
+      <div style={{ fontSize: 12, fontFamily: TYPOGRAPHY.fontSans }}>
         <StatusCell status={status} optimal={progress?.solvedOptimally} />
       </div>
 
@@ -239,7 +240,7 @@ function ProblemRow({
             color: colors.text,
             fontSize: 14,
             fontWeight: 600,
-            fontFamily: "'Geist Sans', sans-serif",
+            fontFamily: TYPOGRAPHY.fontSans,
             overflow: 'hidden',
             textOverflow: 'ellipsis',
             whiteSpace: 'nowrap',
@@ -258,7 +259,7 @@ function ProblemRow({
         <div style={{
           color: colors.textMuted,
           fontSize: 12,
-          fontFamily: "'Geist Sans', sans-serif",
+          fontFamily: TYPOGRAPHY.fontSans,
           overflow: 'hidden',
           textOverflow: 'ellipsis',
           whiteSpace: 'nowrap',
@@ -275,7 +276,7 @@ function ProblemRow({
           color: DIFFICULTY_COLORS[challenge.difficulty],
           fontSize: 11,
           fontWeight: 600,
-          fontFamily: "'Geist Sans', sans-serif",
+          fontFamily: TYPOGRAPHY.fontSans,
           textTransform: 'capitalize',
         }}>
           {challenge.difficulty}
@@ -285,7 +286,7 @@ function ProblemRow({
       <span style={{
         color: colors.textMuted,
         fontSize: 12,
-        fontFamily: "'Geist Sans', sans-serif",
+        fontFamily: TYPOGRAPHY.fontSans,
       }}>
         {CATEGORY_LABELS[challenge.category]}
       </span>
@@ -293,7 +294,7 @@ function ProblemRow({
       <span style={{
         color: colors.textMuted,
         fontSize: 12,
-        fontFamily: "'Geist Sans', sans-serif",
+        fontFamily: TYPOGRAPHY.fontSans,
       }}>
         {Math.round(challenge.acceptanceRate * 100)}%
       </span>
@@ -305,7 +306,7 @@ function ProblemRow({
         gap: 10,
         color: colors.textMuted,
         fontSize: 12,
-        fontFamily: "'Geist Sans', sans-serif",
+        fontFamily: TYPOGRAPHY.fontSans,
       }}>
         <span>{solved ? 'Accepted' : `${STATUS_LABELS[status]}`}</span>
         <span>
@@ -402,7 +403,7 @@ export function ProblemBrowser() {
           color: colors.text,
           fontSize: 22,
           fontWeight: 700,
-          fontFamily: "'Geist Sans', sans-serif",
+          fontFamily: TYPOGRAPHY.fontSans,
           marginBottom: 6,
         }}>
           {isQkdTab ? 'QKD Protocol Practice' : 'Quantum Problem Set'}
@@ -411,7 +412,7 @@ export function ProblemBrowser() {
           <div style={{
             color: colors.textMuted,
             fontSize: 13,
-            fontFamily: "'Geist Sans', sans-serif",
+            fontFamily: TYPOGRAPHY.fontSans,
             marginBottom: 10,
             lineHeight: 1.45,
           }}>
@@ -424,7 +425,7 @@ export function ProblemBrowser() {
           gap: 18,
           color: colors.textMuted,
           fontSize: 12,
-          fontFamily: "'Geist Sans', sans-serif",
+          fontFamily: TYPOGRAPHY.fontSans,
           flexWrap: 'wrap',
         }}>
           <span>{filtered.length} visible problems</span>
@@ -446,7 +447,7 @@ export function ProblemBrowser() {
             justifyContent: 'center',
             color: colors.textDim,
             fontSize: 14,
-            fontFamily: "'Geist Sans', sans-serif",
+            fontFamily: TYPOGRAPHY.fontSans,
           }}>
             No problems match the current filters.
           </div>
@@ -461,7 +462,7 @@ export function ProblemBrowser() {
               color: colors.textDim,
               fontSize: 11,
               fontWeight: 600,
-              fontFamily: "'Geist Sans', sans-serif",
+              fontFamily: TYPOGRAPHY.fontSans,
               textTransform: 'uppercase',
               letterSpacing: 0.4,
               background: colors.bgPanel,

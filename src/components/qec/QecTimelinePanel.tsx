@@ -6,6 +6,7 @@ import { PanelHeader } from '../layout/PanelHeader';
 import { QecEmptyState } from './QecEmptyState';
 import { classifyTimelineGates, detectorTrackByTick, type TimelineGate } from './qecGeometry';
 
+import { TYPOGRAPHY } from '../../styles/tokens';
 const DOCS = 'https://getnuclei.dev/docs/research/qec-studio/';
 const COL_W = 26;
 const ROW_H = 22;
@@ -51,7 +52,7 @@ export function QecTimelinePanel() {
     <div style={{ height: '100%', display: 'flex', flexDirection: 'column', background: colors.bg }}>
       {header}
       <div style={{ flex: 1, minHeight: 0, overflow: 'auto', position: 'relative' }}>
-        <svg width={width} height={height} style={{ display: 'block', fontFamily: "'Fira Code', monospace" }}>
+        <svg width={width} height={height} style={{ display: 'block', fontFamily: TYPOGRAPHY.fontMono }}>
           {/* qubit wires */}
           {Array.from({ length: numQubits }, (_, q) => (
             <g key={`wire-${q}`}>
@@ -122,7 +123,7 @@ export function QecTimelinePanel() {
               position: 'fixed', left: hover.x + 12, top: hover.y + 12, zIndex: 2000,
               background: colors.bgElevated, border: `1px solid ${colors.border}`, borderRadius: 6,
               padding: '5px 8px', fontSize: 10, color: colors.text, pointerEvents: 'none',
-              fontFamily: "'Geist Sans', sans-serif", boxShadow: '0 4px 16px rgba(0,0,0,0.3)',
+              fontFamily: TYPOGRAPHY.fontSans, boxShadow: '0 4px 16px rgba(0,0,0,0.3)',
             }}
           >
             {hover.g.noiseKind} · p = {hover.g.probability}

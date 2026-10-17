@@ -5,6 +5,7 @@ import { useDebugStore } from '../../stores/debugStore';
 import { activeDebugStep } from '../../lib/debugTrace';
 import { ClassicBlochSphere } from './ClassicBlochSphere';
 
+import { TYPOGRAPHY } from '../../styles/tokens';
 /**
  * Bloch sphere panel — a classic interactive sphere (one per qubit),
  * rotatable and zoomable, that updates from the Python kernel's
@@ -101,7 +102,7 @@ function EmptyState() {
         <line x1={36} y1={4} x2={36} y2={68} stroke="#3D5A80" strokeWidth={0.5} strokeDasharray="2,2" />
         <line x1={4} y1={36} x2={68} y2={36} stroke="#3D5A80" strokeWidth={0.5} strokeDasharray="2,2" />
       </svg>
-      <span style={{ fontSize: 12, fontFamily: "'Geist Sans', sans-serif" }}>
+      <span style={{ fontSize: 12, fontFamily: TYPOGRAPHY.fontSans }}>
         Run a simulation to visualize qubit states
       </span>
     </div>

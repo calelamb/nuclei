@@ -42,6 +42,7 @@ import { ChevronDown, ChevronUp, Trash2, Copy, Clock } from 'lucide-react';
 import { useBottomPanelStore } from '../../stores/bottomPanelStore';
 import type { TerminalLine } from '../../stores/simulationStore';
 
+import { TYPOGRAPHY } from '../../styles/tokens';
 const LearnModeView = lazy(async () => ({
   default: (await import('../learning/LearnModeView')).LearnModeView,
 }));
@@ -156,7 +157,7 @@ function ToolbarButton({
         color: active ? colors.accent : colors.textDim,
         cursor: 'pointer',
         fontSize: 10,
-        fontFamily: "'Geist Sans', sans-serif",
+        fontFamily: TYPOGRAPHY.fontSans,
         fontWeight: 500,
       }}
       onMouseEnter={(e) => {
@@ -243,7 +244,7 @@ function TerminalToolbar({
           borderRadius: 3,
           color: colors.text,
           fontSize: 10,
-          fontFamily: "'Geist Sans', sans-serif",
+          fontFamily: TYPOGRAPHY.fontSans,
           outline: 'none',
         }}
       />
@@ -254,7 +255,7 @@ function TerminalToolbar({
         style={{
           color: colors.textDim,
           fontSize: 10,
-          fontFamily: "'Geist Mono', monospace",
+          fontFamily: TYPOGRAPHY.fontMono,
         }}
       >
         {lineCount} {lineCount === 1 ? 'line' : 'lines'}
@@ -316,7 +317,7 @@ function TerminalPanel() {
         style={{
           flex: 1,
           overflow: 'auto',
-          fontFamily: "'Geist Mono', 'JetBrains Mono', monospace",
+          fontFamily: TYPOGRAPHY.fontMono,
           fontSize: 12,
           color: colors.text,
           padding: '8px 12px',
@@ -332,7 +333,7 @@ function TerminalPanel() {
               border: `1px solid ${colors.dirac}40`,
               borderRadius: 10,
               background: `${colors.dirac}12`,
-              fontFamily: "'Geist Sans', sans-serif",
+              fontFamily: TYPOGRAPHY.fontSans,
               fontSize: 12,
               lineHeight: 1.5,
               color: colors.text,
@@ -349,7 +350,7 @@ function TerminalPanel() {
                   style={{
                     background: colors.dirac, color: '#fff', border: 'none',
                     borderRadius: 6, padding: '4px 10px', fontSize: 11, fontWeight: 600,
-                    cursor: 'pointer', fontFamily: "'Geist Sans', sans-serif",
+                    cursor: 'pointer', fontFamily: TYPOGRAPHY.fontSans,
                   }}
                 >Apply fix</button>
               )}
@@ -359,7 +360,7 @@ function TerminalPanel() {
                   background: 'transparent', color: colors.textDim,
                   border: `1px solid ${colors.border}`,
                   borderRadius: 6, padding: '4px 10px', fontSize: 11,
-                  cursor: 'pointer', fontFamily: "'Geist Sans', sans-serif",
+                  cursor: 'pointer', fontFamily: TYPOGRAPHY.fontSans,
                 }}
               >Dismiss</button>
             </div>
@@ -367,7 +368,7 @@ function TerminalPanel() {
         )}
         {visibleLines.length === 0 && !rewritten ? (
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: colors.textDim }}>
-            <span style={{ color: colors.accent, opacity: 0.3, fontFamily: "'Geist Mono', monospace" }}>{'>'}_</span>
+            <span style={{ color: colors.accent, opacity: 0.3, fontFamily: TYPOGRAPHY.fontMono }}>{'>'}_</span>
             <span style={{ fontSize: 11 }}>
               {filterLower ? 'No lines match the filter.' : 'Terminal output will appear here'}
             </span>
@@ -464,7 +465,7 @@ function BottomPanel({
               border: 'none',
               borderBottom: !collapsed && activeTab === tab ? `1px solid ${colors.accent}` : '1px solid transparent',
               cursor: 'pointer', fontSize: 10, fontWeight: 500,
-              fontFamily: "'Geist Sans', sans-serif", textTransform: 'uppercase', letterSpacing: 0.5,
+              fontFamily: TYPOGRAPHY.fontSans, textTransform: 'uppercase', letterSpacing: 0.5,
             }}
             role="tab"
             aria-selected={!collapsed && activeTab === tab}

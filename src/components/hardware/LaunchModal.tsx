@@ -10,6 +10,7 @@ import { ProviderLogo } from './ProviderLogo';
 import { providerAllowsQsharp, submissionLanguage, QSHARP_GATE_TOOLTIP } from './launchGating';
 import type { HardwareProviderType, BackendInfo } from '../../types/hardware';
 
+import { TYPOGRAPHY } from '../../styles/tokens';
 interface ProviderMeta {
   name: HardwareProviderType;
   label: string;
@@ -366,7 +367,7 @@ export function LaunchModal() {
           display: 'flex',
           flexDirection: 'column',
           overflow: 'hidden',
-          fontFamily: "'Geist Sans', sans-serif",
+          fontFamily: TYPOGRAPHY.fontSans,
         }}
       >
         {/* Header */}
@@ -394,7 +395,7 @@ export function LaunchModal() {
                 gap: 4,
                 cursor: 'pointer',
                 fontSize: 11,
-                fontFamily: "'Geist Sans', sans-serif",
+                fontFamily: TYPOGRAPHY.fontSans,
               }}
             >
               <ChevronLeft size={12} /> Back
@@ -480,7 +481,7 @@ export function LaunchModal() {
                         padding: 16,
                         cursor: disabled ? 'not-allowed' : 'pointer',
                         color: colors.text,
-                        fontFamily: "'Geist Sans', sans-serif",
+                        fontFamily: TYPOGRAPHY.fontSans,
                         display: 'flex',
                         flexDirection: 'column',
                         gap: 10,
@@ -606,7 +607,7 @@ export function LaunchModal() {
                     borderRadius: 8,
                     fontSize: 11,
                     color: colors.text,
-                    fontFamily: "'Geist Sans', sans-serif",
+                    fontFamily: TYPOGRAPHY.fontSans,
                   }}
                 >
                   <FileCode size={12} style={{ color: colors.success }} />
@@ -641,7 +642,7 @@ export function LaunchModal() {
                       textTransform: 'uppercase',
                       letterSpacing: 0.5,
                       color: colors.textDim,
-                      fontFamily: "'Geist Sans', sans-serif",
+                      fontFamily: TYPOGRAPHY.fontSans,
                     }}
                   >
                     <KeyRound size={11} />
@@ -672,7 +673,7 @@ export function LaunchModal() {
                         color: colors.text,
                         padding: '6px 10px',
                         fontSize: 12,
-                        fontFamily: "'JetBrains Mono', ui-monospace, monospace",
+                        fontFamily: TYPOGRAPHY.fontMono,
                         outline: 'none',
                       }}
                     />
@@ -693,7 +694,7 @@ export function LaunchModal() {
                         padding: '6px 12px',
                         fontSize: 12,
                         fontWeight: 600,
-                        fontFamily: "'Geist Sans', sans-serif",
+                        fontFamily: TYPOGRAPHY.fontSans,
                         cursor: keyDraft.trim() ? 'pointer' : 'default',
                       }}
                     >
@@ -701,7 +702,7 @@ export function LaunchModal() {
                     </button>
                   </div>
                   {selectedProvider && connectionErrors[selectedProvider] && (
-                    <div style={{ fontSize: 10, color: colors.error, fontFamily: "'Geist Sans', sans-serif" }}>
+                    <div style={{ fontSize: 10, color: colors.error, fontFamily: TYPOGRAPHY.fontSans }}>
                       {connectionErrors[selectedProvider]}
                     </div>
                   )}
@@ -714,7 +715,7 @@ export function LaunchModal() {
                         fontSize: 10,
                         color: colors.accentLight,
                         textDecoration: 'none',
-                        fontFamily: "'Geist Sans', sans-serif",
+                        fontFamily: TYPOGRAPHY.fontSans,
                       }}
                     >
                       {INLINE_KEY_FIELD[selectedProvider]?.helpText} ↗
@@ -730,7 +731,7 @@ export function LaunchModal() {
                     gap: 6,
                     fontSize: 10,
                     color: colors.success,
-                    fontFamily: "'Geist Sans', sans-serif",
+                    fontFamily: TYPOGRAPHY.fontSans,
                     textTransform: 'uppercase',
                     letterSpacing: 0.5,
                   }}
@@ -756,7 +757,7 @@ export function LaunchModal() {
                           borderRadius: 999,
                           fontSize: 11,
                           fontWeight: 500,
-                          fontFamily: "'Geist Sans', sans-serif",
+                          fontFamily: TYPOGRAPHY.fontSans,
                           cursor: 'pointer',
                         }}
                       >
@@ -808,7 +809,7 @@ export function LaunchModal() {
                           padding: '12px 14px',
                           cursor: 'pointer',
                           color: colors.text,
-                          fontFamily: "'Geist Sans', sans-serif",
+                          fontFamily: TYPOGRAPHY.fontSans,
                           display: 'grid',
                           gridTemplateColumns: '1fr auto auto auto',
                           gap: 16,
@@ -902,7 +903,7 @@ export function LaunchModal() {
                       color: colors.text,
                       padding: '8px 12px',
                       fontSize: 13,
-                      fontFamily: "'Geist Sans', sans-serif",
+                      fontFamily: TYPOGRAPHY.fontSans,
                       outline: 'none',
                       width: 140,
                     }}
@@ -938,7 +939,7 @@ export function LaunchModal() {
                     cursor: 'pointer',
                     fontSize: 13,
                     fontWeight: 500,
-                    fontFamily: "'Geist Sans', sans-serif",
+                    fontFamily: TYPOGRAPHY.fontSans,
                   }}
                 >
                   Cancel
@@ -970,7 +971,7 @@ export function LaunchModal() {
                     cursor: !selectedBackend || code.trim().length === 0 ? 'default' : 'pointer',
                     fontSize: 13,
                     fontWeight: 600,
-                    fontFamily: "'Geist Sans', sans-serif",
+                    fontFamily: TYPOGRAPHY.fontSans,
                     display: 'flex',
                     alignItems: 'center',
                     gap: 8,

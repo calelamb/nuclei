@@ -31,6 +31,7 @@ import {
 } from '../../data/starterTemplates';
 import { MEMORY_PREFIX, isMemoryPath } from '../../hooks/useFileOps';
 
+import { TYPOGRAPHY } from '../../styles/tokens';
 const EXTENSION_ICONS: Record<string, LucideIcon> = {
   py: FileCode,
   qs: Sigma,
@@ -281,7 +282,7 @@ export function FileExplorer() {
     alignItems: 'center',
     padding: `3px 8px 3px ${8 + depth * 12}px`,
     fontSize: 12,
-    fontFamily: "'Geist Sans', sans-serif",
+    fontFamily: TYPOGRAPHY.fontSans,
     color: isActive ? colors.accent : colors.text,
     background: isActive ? `${colors.accent}14` : 'transparent',
     // Accent left bar on the open file — same signal as the tabs and the
@@ -352,7 +353,7 @@ export function FileExplorer() {
               padding: '2px 6px',
               borderRadius: 4,
               outline: 'none',
-              fontFamily: "'Geist Sans', sans-serif",
+              fontFamily: TYPOGRAPHY.fontSans,
             }}
           />
         </div>
@@ -437,7 +438,7 @@ export function FileExplorer() {
           padding: 14,
           color: colors.textDim,
           fontSize: 12,
-          fontFamily: "'Geist Sans', sans-serif",
+          fontFamily: TYPOGRAPHY.fontSans,
           lineHeight: 1.6,
         }}
       >
@@ -463,7 +464,7 @@ export function FileExplorer() {
       borderRadius: 6,
       fontSize: 12,
       fontWeight: 600,
-      fontFamily: "'Geist Sans', sans-serif",
+      fontFamily: TYPOGRAPHY.fontSans,
       cursor: 'pointer',
     };
     const secondaryBtn: React.CSSProperties = {
@@ -478,7 +479,7 @@ export function FileExplorer() {
       borderRadius: 6,
       fontSize: 12,
       fontWeight: 500,
-      fontFamily: "'Geist Sans', sans-serif",
+      fontFamily: TYPOGRAPHY.fontSans,
       cursor: 'pointer',
     };
     const quickChipBtn: React.CSSProperties = {
@@ -494,7 +495,7 @@ export function FileExplorer() {
       borderRadius: 6,
       fontSize: 11,
       fontWeight: 600,
-      fontFamily: "'Geist Sans', sans-serif",
+      fontFamily: TYPOGRAPHY.fontSans,
       cursor: 'pointer',
     };
     return (
@@ -559,7 +560,7 @@ export function FileExplorer() {
     border: 'none',
     cursor: 'pointer',
     fontSize: 12,
-    fontFamily: "'Geist Sans', sans-serif",
+    fontFamily: TYPOGRAPHY.fontSans,
     textAlign: 'left',
   };
 
@@ -587,7 +588,7 @@ export function FileExplorer() {
             overflow: 'hidden',
             textOverflow: 'ellipsis',
             whiteSpace: 'nowrap',
-            fontFamily: "'Geist Sans', sans-serif",
+            fontFamily: TYPOGRAPHY.fontSans,
           }}
         >
           {rootName}
@@ -755,7 +756,7 @@ export function FileExplorer() {
             cursor: 'pointer',
             padding: 4,
             fontSize: 11,
-            fontFamily: "'Geist Sans', sans-serif",
+            fontFamily: TYPOGRAPHY.fontSans,
           }}
           onMouseEnter={(e) => {
             e.currentTarget.style.color = colors.text;
@@ -800,7 +801,7 @@ export function FileExplorer() {
               padding: '4px 8px',
               borderRadius: 4,
               outline: 'none',
-              fontFamily: "'Geist Sans', sans-serif",
+              fontFamily: TYPOGRAPHY.fontSans,
             }}
           />
         </div>
@@ -813,7 +814,7 @@ export function FileExplorer() {
               padding: 14,
               color: colors.textDim,
               fontSize: 12,
-              fontFamily: "'Geist Sans', sans-serif",
+              fontFamily: TYPOGRAPHY.fontSans,
             }}
           >
             Loading…
@@ -825,7 +826,7 @@ export function FileExplorer() {
               padding: 14,
               color: colors.error,
               fontSize: 12,
-              fontFamily: "'Geist Sans', sans-serif",
+              fontFamily: TYPOGRAPHY.fontSans,
             }}
           >
             {error}
@@ -840,7 +841,7 @@ export function FileExplorer() {
                 fontSize: 10,
                 textTransform: 'uppercase',
                 letterSpacing: 0.5,
-                fontFamily: "'Geist Sans', sans-serif",
+                fontFamily: TYPOGRAPHY.fontSans,
               }}
             >
               Unsaved — ⌘S to save to disk
@@ -852,7 +853,7 @@ export function FileExplorer() {
                   padding: 14,
                   color: colors.textDim,
                   fontSize: 12,
-                  fontFamily: "'Geist Sans', sans-serif",
+                  fontFamily: TYPOGRAPHY.fontSans,
                 }}
               >
                 Click + to add a file or circuit. ⌘S to save to disk.
@@ -867,7 +868,7 @@ export function FileExplorer() {
               padding: 14,
               color: colors.textDim,
               fontSize: 12,
-              fontFamily: "'Geist Sans', sans-serif",
+              fontFamily: TYPOGRAPHY.fontSans,
             }}
           >
             Folder is empty. Click + to add a file, package, or circuit.

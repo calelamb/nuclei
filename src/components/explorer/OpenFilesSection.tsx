@@ -14,6 +14,7 @@ import { useProjectStore } from '../../stores/projectStore';
 import { useThemeStore } from '../../stores/themeStore';
 import { requestCloseTab } from '../../lib/tabClose';
 
+import { TYPOGRAPHY } from '../../styles/tokens';
 const EXTENSION_ICONS: Record<string, LucideIcon> = {
   py: FileCode,
   qasm: Atom,
@@ -75,7 +76,7 @@ export function OpenFilesSection() {
           textTransform: 'uppercase',
           letterSpacing: 0.5,
           color: colors.textMuted,
-          fontFamily: "'Geist Sans', sans-serif",
+          fontFamily: TYPOGRAPHY.fontSans,
         }}
       >
         {collapsed ? <ChevronRight size={11} /> : <ChevronDown size={11} />}
@@ -120,7 +121,7 @@ export function OpenFilesSection() {
                   color: isActive ? colors.text : colors.textMuted,
                   fontWeight: isActive ? 500 : 400,
                   fontSize: 12,
-                  fontFamily: "'Geist Sans', sans-serif",
+                  fontFamily: TYPOGRAPHY.fontSans,
                   outline: 'none',
                 }}
               >

@@ -8,6 +8,7 @@ import { decoderComparison, formatSecondsPerShot } from '../../lib/qecWorkbench'
 import { isWebBuild } from '../../platform/buildTarget';
 import { downloadCsv } from '../../services/experimentExport';
 
+import { TYPOGRAPHY } from '../../styles/tokens';
 const DOCS = 'https://getnuclei.dev/docs/research/qec-studio/';
 
 /**
@@ -56,7 +57,7 @@ export function DecoderWorkbench() {
             style={{
               display: 'flex', alignItems: 'center', gap: 4, background: 'transparent',
               border: `1px solid ${colors.border}`, borderRadius: 4, color: colors.textMuted,
-              cursor: 'pointer', fontSize: 11, padding: '4px 8px', fontFamily: "'Geist Sans', sans-serif",
+              cursor: 'pointer', fontSize: 11, padding: '4px 8px', fontFamily: TYPOGRAPHY.fontSans,
             }}
           >
             <Download size={12} /> CSV
@@ -83,7 +84,7 @@ export function DecoderWorkbench() {
   };
   const td: React.CSSProperties = {
     padding: '6px 10px', fontSize: 11, color: colors.text, borderBottom: `1px solid ${colors.border}`,
-    fontFamily: "'Fira Code', monospace",
+    fontFamily: TYPOGRAPHY.fontMono,
   };
   const collisionTag = (w: (typeof wb)[number]) =>
     w.collides ? (
@@ -96,7 +97,7 @@ export function DecoderWorkbench() {
     <div style={{ height: '100%', display: 'flex', flexDirection: 'column', background: colors.bg }}>
       {header}
       <div style={{ flex: 1, minHeight: 0, overflow: 'auto' }}>
-        <table style={{ width: '100%', borderCollapse: 'collapse', fontFamily: "'Geist Sans', sans-serif" }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse', fontFamily: TYPOGRAPHY.fontSans }}>
           <thead>
             <tr>
               <th style={th}>Decoder</th>
@@ -135,7 +136,7 @@ export function DecoderWorkbench() {
       <div
         style={{
           padding: '5px 10px', fontSize: 10, color: colors.textDim,
-          borderTop: `1px solid ${colors.border}`, fontFamily: "'Geist Sans', sans-serif",
+          borderTop: `1px solid ${colors.border}`, fontFamily: TYPOGRAPHY.fontSans,
         }}
       >
         {!showExperiment && contexts[0] !== '' && `Experiment: ${contexts[0]}. `}

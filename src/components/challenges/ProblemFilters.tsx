@@ -3,6 +3,7 @@ import { useChallengeModeStore } from '../../stores/challengeModeStore';
 import { Search } from 'lucide-react';
 import type { ChallengeDifficulty, ChallengeCategory } from '../../types/challenge';
 
+import { TYPOGRAPHY } from '../../styles/tokens';
 const DIFFICULTIES: Array<{ label: string; value: ChallengeDifficulty | null }> = [
   { label: 'All', value: null },
   { label: 'Easy', value: 'easy' },
@@ -51,7 +52,7 @@ function PillButton({ active, label, accentColor, onClick }: {
         color: active ? tint : colors.textMuted,
         fontSize: 12,
         fontWeight: active ? 600 : 400,
-        fontFamily: "'Geist Sans', sans-serif",
+        fontFamily: TYPOGRAPHY.fontSans,
         cursor: 'pointer',
         transition: 'all 150ms ease',
         whiteSpace: 'nowrap',
@@ -117,7 +118,7 @@ export function ProblemFilters() {
             background: 'transparent',
             color: colors.text,
             fontSize: 13,
-            fontFamily: "'Geist Sans', sans-serif",
+            fontFamily: TYPOGRAPHY.fontSans,
           }}
         />
       </div>
@@ -134,7 +135,7 @@ export function ProblemFilters() {
           <span style={{
             color: colors.textDim,
             fontSize: 11,
-            fontFamily: "'Geist Sans', sans-serif",
+            fontFamily: TYPOGRAPHY.fontSans,
             marginRight: 4,
           }}>
             Difficulty
@@ -157,7 +158,7 @@ export function ProblemFilters() {
           <span style={{
             color: colors.textDim,
             fontSize: 11,
-            fontFamily: "'Geist Sans', sans-serif",
+            fontFamily: TYPOGRAPHY.fontSans,
             marginRight: 4,
           }}>
             Category
@@ -179,7 +180,7 @@ export function ProblemFilters() {
           <span style={{
             color: colors.textDim,
             fontSize: 11,
-            fontFamily: "'Geist Sans', sans-serif",
+            fontFamily: TYPOGRAPHY.fontSans,
             marginRight: 4,
           }}>
             Status

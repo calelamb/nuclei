@@ -3,6 +3,7 @@ import { Download, Check, Minus, Clock } from 'lucide-react';
 import { useThemeStore } from '../../stores/themeStore';
 import type { Student, Assignment } from '../../stores/educatorStore';
 
+import { TYPOGRAPHY } from '../../styles/tokens';
 interface ProgressReportProps {
   students: Student[];
   assignments: Assignment[];
@@ -10,7 +11,7 @@ interface ProgressReportProps {
 
 export function ProgressReport({ students, assignments }: ProgressReportProps) {
   const colors = useThemeStore((s) => s.colors);
-  const font = "'Geist Sans', sans-serif";
+  const font = TYPOGRAPHY.fontSans;
 
   // Compute per-cell status: 'complete' | 'partial' | 'none'
   const grid = useMemo(() => {

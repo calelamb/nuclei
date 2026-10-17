@@ -6,6 +6,7 @@ import {
 } from '../../types/sinterMapping';
 import { toStatsPoint } from '../../types/qecStats';
 
+import { TYPOGRAPHY } from '../../styles/tokens';
 const PREVIEW_ROWS = 10;
 type Field = 'p' | 'd' | 'rounds' | 'decoder';
 
@@ -72,12 +73,12 @@ export function CsvMappingPreview() {
   const note = { margin: '0 0 6px', fontSize: 11, color: colors.warning } as const;
 
   const th = { textAlign: 'left' as const, padding: '2px 8px', color: colors.textDim, fontWeight: 500 };
-  const td = { padding: '2px 8px', color: colors.text, fontFamily: "'Fira Code', monospace" };
+  const td = { padding: '2px 8px', color: colors.text, fontFamily: TYPOGRAPHY.fontMono };
   return (
     <section
       aria-label="CSV column mapping"
       style={{
-        padding: '8px 12px', borderBottom: `1px solid ${colors.border}`, fontFamily: "'Geist Sans', sans-serif",
+        padding: '8px 12px', borderBottom: `1px solid ${colors.border}`, fontFamily: TYPOGRAPHY.fontSans,
         maxHeight: 220, overflow: 'auto',
       }}
     >

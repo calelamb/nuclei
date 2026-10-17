@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { useThemeStore } from '../../stores/themeStore';
 import { useResearchTourStore, RESEARCH_TOUR_STEP_COUNT } from '../../stores/researchTourStore';
 
+import { TYPOGRAPHY } from '../../styles/tokens';
 /**
  * PRD 11 Phase B — the first-run Research coach-mark tour.
  *
@@ -150,7 +151,7 @@ export function ResearchTour() {
           borderRadius: 12,
           padding: 16,
           boxShadow: '0 12px 48px rgba(0,0,0,0.4)',
-          fontFamily: "'Geist Sans', sans-serif",
+          fontFamily: TYPOGRAPHY.fontSans,
         }}
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
@@ -178,7 +179,7 @@ export function ResearchTour() {
             style={{
               padding: '5px 10px', background: 'transparent', color: colors.textDim,
               border: 'none', borderRadius: 6, fontSize: 11, cursor: 'pointer',
-              fontFamily: "'Geist Sans', sans-serif",
+              fontFamily: TYPOGRAPHY.fontSans,
             }}
           >
             Skip
@@ -190,7 +191,7 @@ export function ResearchTour() {
               style={{
                 padding: '5px 12px', background: 'transparent', color: colors.textDim,
                 border: `1px solid ${colors.border}`, borderRadius: 6, fontSize: 11, cursor: 'pointer',
-                fontFamily: "'Geist Sans', sans-serif",
+                fontFamily: TYPOGRAPHY.fontSans,
               }}
             >
               Back
@@ -202,7 +203,7 @@ export function ResearchTour() {
             style={{
               padding: '5px 14px', background: colors.dirac, color: '#fff',
               border: 'none', borderRadius: 6, fontSize: 11, fontWeight: 600, cursor: 'pointer',
-              fontFamily: "'Geist Sans', sans-serif",
+              fontFamily: TYPOGRAPHY.fontSans,
             }}
           >
             {isLast ? 'Done' : 'Next'}

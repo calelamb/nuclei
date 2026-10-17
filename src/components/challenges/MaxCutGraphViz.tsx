@@ -2,6 +2,7 @@ import { useMemo } from 'react';
 import { useThemeStore } from '../../stores/themeStore';
 import type { ChallengeVisualization } from '../../types/challenge';
 
+import { TYPOGRAPHY } from '../../styles/tokens';
 interface MaxCutGraphVizProps {
   visualization: ChallengeVisualization;
   bestBitstring?: string;
@@ -96,7 +97,7 @@ export function MaxCutGraphViz({ visualization, bestBitstring }: MaxCutGraphVizP
           color: colors.textMuted,
           fontSize: 11,
           fontWeight: 600,
-          fontFamily: "'Geist Sans', sans-serif",
+          fontFamily: TYPOGRAPHY.fontSans,
         }}>
           Graph Visualization
         </span>
@@ -105,7 +106,7 @@ export function MaxCutGraphViz({ visualization, bestBitstring }: MaxCutGraphVizP
             color: colors.accent,
             fontSize: 11,
             fontWeight: 600,
-            fontFamily: "'Geist Mono', monospace",
+            fontFamily: TYPOGRAPHY.fontMono,
           }}>
             Cut value: {cutValue}
           </span>
@@ -147,7 +148,7 @@ export function MaxCutGraphViz({ visualization, bestBitstring }: MaxCutGraphVizP
                   textAnchor="middle"
                   fill={colors.textDim}
                   fontSize={9}
-                  fontFamily="'Geist Mono', monospace"
+                  fontFamily={TYPOGRAPHY.fontMono}
                 >
                   {edge.weight}
                 </text>
@@ -184,7 +185,7 @@ export function MaxCutGraphViz({ visualization, bestBitstring }: MaxCutGraphVizP
                 fill={textColor}
                 fontSize={11}
                 fontWeight={600}
-                fontFamily="'Geist Sans', sans-serif"
+                fontFamily={TYPOGRAPHY.fontSans}
               >
                 {node.label}
               </text>
@@ -212,7 +213,7 @@ export function MaxCutGraphViz({ visualization, bestBitstring }: MaxCutGraphVizP
             <span style={{
               color: colors.textDim,
               fontSize: 10,
-              fontFamily: "'Geist Sans', sans-serif",
+              fontFamily: TYPOGRAPHY.fontSans,
             }}>
               Partition 0
             </span>
@@ -227,7 +228,7 @@ export function MaxCutGraphViz({ visualization, bestBitstring }: MaxCutGraphVizP
             <span style={{
               color: colors.textDim,
               fontSize: 10,
-              fontFamily: "'Geist Sans', sans-serif",
+              fontFamily: TYPOGRAPHY.fontSans,
             }}>
               Partition 1
             </span>

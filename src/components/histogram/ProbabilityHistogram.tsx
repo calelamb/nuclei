@@ -6,6 +6,7 @@ import { useDebugStore } from '../../stores/debugStore';
 import { activeDebugStep } from '../../lib/debugTrace';
 import { getHistogramData, getProbabilityHistogramData, type HistogramViewMode } from './histogramData';
 
+import { TYPOGRAPHY } from '../../styles/tokens';
 type HistogramRow = { state: string; probability: number };
 
 /** The recharts bar chart, shared by the run view and the debugger step view. */
@@ -16,19 +17,19 @@ function HistogramChart({ data, srDescription }: { data: HistogramRow[]; srDescr
         <BarChart data={data} margin={{ top: 5, right: 10, bottom: 5, left: 10 }}>
           <XAxis
             dataKey="state"
-            tick={{ fill: '#E0E0E0', fontSize: 11, fontFamily: "'Fira Code', monospace" }}
+            tick={{ fill: '#E0E0E0', fontSize: 11, fontFamily: TYPOGRAPHY.fontMono }}
             axisLine={{ stroke: '#1A2A42' }}
             tickLine={{ stroke: '#1A2A42' }}
           />
           <YAxis
             domain={[0, 1]}
-            tick={{ fill: '#3D5A80', fontSize: 11, fontFamily: "'Fira Code', monospace" }}
+            tick={{ fill: '#3D5A80', fontSize: 11, fontFamily: TYPOGRAPHY.fontMono }}
             axisLine={{ stroke: '#1A2A42' }}
             tickLine={{ stroke: '#1A2A42' }}
             tickFormatter={(v: number) => v.toFixed(1)}
           />
           <Tooltip
-            contentStyle={{ background: '#0A1220', border: '1px solid #1A2A42', borderRadius: 6, fontSize: 12, fontFamily: "'Fira Code', monospace" }}
+            contentStyle={{ background: '#0A1220', border: '1px solid #1A2A42', borderRadius: 6, fontSize: 12, fontFamily: TYPOGRAPHY.fontMono }}
             labelStyle={{ color: '#E0E0E0' }}
             itemStyle={{ color: '#00B4D8' }}
             formatter={(value) => [typeof value === 'number' ? value.toFixed(4) : String(value ?? ''), 'Probability']}
@@ -71,7 +72,7 @@ export function ProbabilityHistogram() {
     return (
       <div style={{ height: '100%', display: 'flex', flexDirection: 'column', padding: '8px 12px' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8, flexShrink: 0 }}>
-          <span style={{ color: '#00B4D8', fontSize: 11, fontWeight: 600, fontFamily: 'Inter, sans-serif' }}>
+          <span style={{ color: '#00B4D8', fontSize: 11, fontWeight: 600, fontFamily: TYPOGRAPHY.fontSans }}>
             Ideal probabilities · state at {step.gate_index < 0 ? 'start' : `${step.label}`}
           </span>
         </div>
@@ -96,7 +97,7 @@ export function ProbabilityHistogram() {
             }} />
           ))}
         </div>
-        <span style={{ color: '#475569', fontSize: 12, fontFamily: "'Geist Sans', sans-serif" }}>
+        <span style={{ color: '#475569', fontSize: 12, fontFamily: TYPOGRAPHY.fontSans }}>
           Run a simulation to see results
         </span>
       </div>
@@ -144,7 +145,7 @@ export function ProbabilityHistogram() {
               style={{
                 padding: '4px 10px',
                 fontSize: 11,
-                fontFamily: 'Inter, sans-serif',
+                fontFamily: TYPOGRAPHY.fontSans,
                 border: 'none',
                 cursor: 'pointer',
                 background: viewMode === mode ? '#00B4D8' : '#0A1220',
@@ -158,7 +159,7 @@ export function ProbabilityHistogram() {
         </div>
 
         {/* Shots control */}
-        <label style={{ color: '#3D5A80', fontSize: 11, fontFamily: 'Inter, sans-serif', display: 'flex', alignItems: 'center', gap: 6 }}>
+        <label style={{ color: '#3D5A80', fontSize: 11, fontFamily: TYPOGRAPHY.fontSans, display: 'flex', alignItems: 'center', gap: 6 }}>
           Shots:
           <input
             type="number"
@@ -171,7 +172,7 @@ export function ProbabilityHistogram() {
               width: 70,
               padding: '3px 6px',
               fontSize: 11,
-              fontFamily: "'Fira Code', monospace",
+              fontFamily: TYPOGRAPHY.fontMono,
               background: '#0A1220',
               border: '1px solid #1A2A42',
               borderRadius: 3,
@@ -189,7 +190,7 @@ export function ProbabilityHistogram() {
           style={{
             padding: '4px 10px',
             fontSize: 11,
-            fontFamily: 'Inter, sans-serif',
+            fontFamily: TYPOGRAPHY.fontSans,
             background: '#0A1220',
             border: '1px solid #1A2A42',
             borderRadius: 4,
@@ -201,7 +202,7 @@ export function ProbabilityHistogram() {
         </button>
 
         {/* Execution time */}
-        <span style={{ color: '#3D5A80', fontSize: 11, fontFamily: "'Fira Code', monospace" }}>
+        <span style={{ color: '#3D5A80', fontSize: 11, fontFamily: TYPOGRAPHY.fontMono }}>
           {result.execution_time_ms.toFixed(0)}ms
         </span>
       </div>

@@ -13,6 +13,7 @@ import { QecCsvOpenButton } from './QecCsvDropZone';
 import { useCsvDrop } from './useCsvDrop';
 import { downloadCsv } from '../../services/experimentExport';
 
+import { TYPOGRAPHY } from '../../styles/tokens';
 /**
  * PRD 10 Phase E — the campaign analysis surface, shown in the experiments
  * main area when a QEC campaign experiment is selected. Stacks the threshold/Λ
@@ -49,7 +50,7 @@ export function QecAnalysisView() {
       <div
         style={{
           display: 'flex', alignItems: 'center', gap: 10, padding: '8px 12px',
-          borderBottom: `1px solid ${colors.border}`, fontFamily: "'Geist Sans', sans-serif",
+          borderBottom: `1px solid ${colors.border}`, fontFamily: TYPOGRAPHY.fontSans,
         }}
       >
         <span style={{ fontSize: 13, fontWeight: 600, color: colors.text }}>
@@ -65,7 +66,7 @@ export function QecAnalysisView() {
             style={{
               display: 'flex', alignItems: 'center', gap: 5, background: 'transparent',
               border: `1px solid ${colors.border}`, borderRadius: 5, color: colors.textMuted,
-              cursor: 'pointer', fontSize: 12, padding: '5px 10px', fontFamily: "'Geist Sans', sans-serif",
+              cursor: 'pointer', fontSize: 12, padding: '5px 10px', fontFamily: TYPOGRAPHY.fontSans,
             }}
           >
             <Download size={12} aria-hidden="true" /> Export stats.csv
@@ -77,7 +78,7 @@ export function QecAnalysisView() {
             style={{
               display: 'flex', alignItems: 'center', gap: 5, background: 'transparent',
               border: `1px solid ${colors.border}`, borderRadius: 5, color: colors.error,
-              cursor: 'pointer', fontSize: 12, padding: '5px 12px', fontFamily: "'Geist Sans', sans-serif",
+              cursor: 'pointer', fontSize: 12, padding: '5px 12px', fontFamily: TYPOGRAPHY.fontSans,
             }}
           >
             <Square size={12} /> Cancel
@@ -90,7 +91,7 @@ export function QecAnalysisView() {
               display: 'flex', alignItems: 'center', gap: 5, background: colors.dirac, color: '#fff',
               border: 'none', borderRadius: 5, cursor: canRun ? 'pointer' : 'default',
               opacity: canRun ? 1 : 0.5, fontSize: 12, fontWeight: 600, padding: '5px 12px',
-              fontFamily: "'Geist Sans', sans-serif",
+              fontFamily: TYPOGRAPHY.fontSans,
             }}
           >
             <Play size={12} /> Run campaign
@@ -109,7 +110,7 @@ export function QecAnalysisView() {
           style={{
             display: 'flex', alignItems: 'center', gap: 8, padding: '6px 12px',
             borderBottom: `1px solid ${colors.border}`, fontSize: 11,
-            color: running ? colors.accent : colors.warning, fontFamily: "'Geist Sans', sans-serif",
+            color: running ? colors.accent : colors.warning, fontFamily: TYPOGRAPHY.fontSans,
           }}
         >
           {running && progress ? (

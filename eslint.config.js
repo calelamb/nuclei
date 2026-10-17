@@ -29,4 +29,23 @@ export default defineConfig([
       globals: globals.browser,
     },
   },
+  {
+    // Design-system guard: fonts come from TYPOGRAPHY / var(--font-*), never literals.
+    // src/components/experiments is exempt until its lane migrates (index.css aliases 'Fira Code').
+    files: ['src/**/*.{ts,tsx}'],
+    ignores: ['src/styles/**', 'src/components/experiments/**', '**/*.test.{ts,tsx}'],
+    rules: {
+      'no-restricted-syntax': [
+        'error',
+        {
+          selector: "Property[key.name='fontFamily'] > Literal[value=/(Geist|JetBrains|Fira|Inter|monospace|sans-serif|system-ui)/]",
+          message: 'Use TYPOGRAPHY.fontSans / TYPOGRAPHY.fontMono from src/styles/tokens instead of a literal font stack.',
+        },
+        {
+          selector: "JSXAttribute[name.name='fontFamily'] > Literal",
+          message: 'Use fontFamily={TYPOGRAPHY.fontSans} / fontMono instead of a literal font stack.',
+        },
+      ],
+    },
+  },
 ])

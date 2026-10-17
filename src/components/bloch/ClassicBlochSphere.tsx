@@ -3,6 +3,7 @@ import { Canvas } from '@react-three/fiber';
 import { OrbitControls, Line, Html } from '@react-three/drei';
 import * as THREE from 'three';
 
+import { TYPOGRAPHY } from '../../styles/tokens';
 /**
  * Interactive Bloch sphere in the style of the bits-and-electrons
  * simulator (https://github.com/bits-and-electrons/bloch-sphere-simulator).
@@ -124,7 +125,7 @@ function AxisLine({
         zIndexRange={[10, 0]}
         style={{
           color,
-          fontFamily: "'Geist Sans', sans-serif",
+          fontFamily: TYPOGRAPHY.fontSans,
           fontSize: 11,
           fontWeight: 600,
           pointerEvents: 'none',
@@ -202,7 +203,7 @@ export function ClassicBlochSphere({
           zIndexRange={[10, 0]}
           style={{
             color: LABEL_COLOR,
-            fontFamily: "'Geist Sans', sans-serif",
+            fontFamily: TYPOGRAPHY.fontSans,
             fontSize: 11,
             fontWeight: 500,
             pointerEvents: 'none',
@@ -218,7 +219,7 @@ export function ClassicBlochSphere({
           zIndexRange={[10, 0]}
           style={{
             color: LABEL_COLOR,
-            fontFamily: "'Geist Sans', sans-serif",
+            fontFamily: TYPOGRAPHY.fontSans,
             fontSize: 11,
             fontWeight: 500,
             pointerEvents: 'none',
@@ -253,7 +254,7 @@ export function ClassicBlochSphere({
             bottom: 6,
             color: LABEL_COLOR,
             opacity: 0.72,
-            fontFamily: "'Geist Sans', sans-serif",
+            fontFamily: TYPOGRAPHY.fontSans,
             fontSize: 11,
             letterSpacing: 0.3,
             pointerEvents: 'none',

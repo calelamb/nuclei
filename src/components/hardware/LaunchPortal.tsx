@@ -9,6 +9,7 @@ import { getHardware } from '../../App';
 import { providerAllowsQsharp, QSHARP_GATE_TOOLTIP } from './launchGating';
 import type { HardwareProviderType } from '../../types/hardware';
 
+import { TYPOGRAPHY } from '../../styles/tokens';
 interface ProviderPortalMeta {
   name: HardwareProviderType;
   label: string;
@@ -147,7 +148,7 @@ export function LaunchPortal() {
             textTransform: 'uppercase',
             letterSpacing: 0.5,
             color: colors.textMuted,
-            fontFamily: "'Geist Sans', sans-serif",
+            fontFamily: TYPOGRAPHY.fontSans,
           }}
         >
           Launch
@@ -184,13 +185,13 @@ export function LaunchPortal() {
             gap: 8,
             cursor: 'pointer',
             transition: 'border-color 120ms ease, background 120ms ease',
-            fontFamily: "'Geist Sans', sans-serif",
+            fontFamily: TYPOGRAPHY.fontSans,
           }}
         >
           <Upload size={18} style={{ color: dragActive ? colors.accent : colors.textMuted }} />
           <div style={{ fontSize: 11, color: colors.text, textAlign: 'center', lineHeight: 1.5 }}>
-            Drop a <code style={{ fontFamily: "'JetBrains Mono', monospace", color: colors.accentLight }}>.py</code>{' '}
-            or <code style={{ fontFamily: "'JetBrains Mono', monospace", color: colors.accentLight }}>.qs</code>{' '}
+            Drop a <code style={{ fontFamily: TYPOGRAPHY.fontMono, color: colors.accentLight }}>.py</code>{' '}
+            or <code style={{ fontFamily: TYPOGRAPHY.fontMono, color: colors.accentLight }}>.qs</code>{' '}
             or click to browse
           </div>
           {activeFileName && (
@@ -242,7 +243,7 @@ export function LaunchPortal() {
             letterSpacing: 0.5,
             color: colors.textMuted,
             marginBottom: 8,
-            fontFamily: "'Geist Sans', sans-serif",
+            fontFamily: TYPOGRAPHY.fontSans,
           }}
         >
           Choose a destination
@@ -265,7 +266,7 @@ export function LaunchPortal() {
                 padding: 10,
                 cursor: isDisabled ? 'not-allowed' : 'pointer',
                 color: colors.text,
-                fontFamily: "'Geist Sans', sans-serif",
+                fontFamily: TYPOGRAPHY.fontSans,
                 display: 'flex',
                 flexDirection: 'column',
                 gap: 6,
@@ -328,7 +329,7 @@ export function LaunchPortal() {
             cursor: 'pointer',
             fontSize: 12,
             fontWeight: 600,
-            fontFamily: "'Geist Sans', sans-serif",
+            fontFamily: TYPOGRAPHY.fontSans,
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
@@ -351,7 +352,7 @@ export function LaunchPortal() {
               letterSpacing: 0.5,
               color: colors.textMuted,
               marginBottom: 6,
-              fontFamily: "'Geist Sans', sans-serif",
+              fontFamily: TYPOGRAPHY.fontSans,
             }}
           >
             Active jobs
@@ -369,7 +370,7 @@ export function LaunchPortal() {
                   border: `1px solid ${colors.border}`,
                   borderRadius: 6,
                   fontSize: 11,
-                  fontFamily: "'Geist Sans', sans-serif",
+                  fontFamily: TYPOGRAPHY.fontSans,
                 }}
               >
                 <Loader2
@@ -416,7 +417,7 @@ export function LaunchPortal() {
                     alignItems: 'center',
                     gap: 2,
                     fontSize: 10,
-                    fontFamily: "'Geist Sans', sans-serif",
+                    fontFamily: TYPOGRAPHY.fontSans,
                   }}
                   onMouseEnter={(e) => {
                     e.currentTarget.style.color = colors.error;
@@ -453,7 +454,7 @@ export function LaunchPortal() {
                 textTransform: 'uppercase',
                 letterSpacing: 0.5,
                 color: colors.textMuted,
-                fontFamily: "'Geist Sans', sans-serif",
+                fontFamily: TYPOGRAPHY.fontSans,
               }}
             >
               Recent results
@@ -467,7 +468,7 @@ export function LaunchPortal() {
                 cursor: 'pointer',
                 padding: 0,
                 fontSize: 10,
-                fontFamily: "'Geist Sans', sans-serif",
+                fontFamily: TYPOGRAPHY.fontSans,
               }}
               onMouseEnter={(e) => { e.currentTarget.style.color = colors.text; }}
               onMouseLeave={(e) => { e.currentTarget.style.color = colors.textDim; }}
@@ -490,7 +491,7 @@ export function LaunchPortal() {
                     border: `1px solid ${colors.success}20`,
                     borderRadius: 6,
                     fontSize: 11,
-                    fontFamily: "'Geist Sans', sans-serif",
+                    fontFamily: TYPOGRAPHY.fontSans,
                   }}
                 >
                   {hasResult ? (

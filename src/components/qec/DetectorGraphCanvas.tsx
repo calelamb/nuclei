@@ -7,6 +7,7 @@ import {
   type DecodeOverlay,
 } from './qecGeometry';
 
+import { TYPOGRAPHY } from '../../styles/tokens';
 interface DetectorGraphCanvasProps {
   layout: DetectorGraphLayout;
   overlay: DecodeOverlay | null;
@@ -261,7 +262,7 @@ export function DetectorGraphCanvas({ layout, overlay, onDetectorClick }: Detect
             borderRadius: 6,
             padding: '5px 9px',
             fontSize: 11,
-            fontFamily: "'Geist Sans', sans-serif",
+            fontFamily: TYPOGRAPHY.fontSans,
             color: colors.text,
             boxShadow: '0 4px 14px rgba(0,0,0,0.35)',
             zIndex: 3,
@@ -272,7 +273,7 @@ export function DetectorGraphCanvas({ layout, overlay, onDetectorClick }: Detect
             Detector D{hover.detector}
             {hover.fired && <span style={{ color: colors.error, marginLeft: 6 }}>fired</span>}
           </div>
-          <div style={{ color: colors.textMuted, fontFamily: "'Geist Mono', monospace", fontSize: 10 }}>
+          <div style={{ color: colors.textMuted, fontFamily: TYPOGRAPHY.fontMono, fontSize: 10 }}>
             {hover.degree} incident edge{hover.degree === 1 ? '' : 's'}
           </div>
         </div>
@@ -290,7 +291,7 @@ function GraphLegend({ colors }: { colors: ThemeColors }) {
     gap: 6,
     fontSize: 9.5,
     color: colors.textDim,
-    fontFamily: "'Geist Sans', sans-serif",
+    fontFamily: TYPOGRAPHY.fontSans,
   } as const;
 
   return (

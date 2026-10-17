@@ -3,6 +3,7 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { useThemeStore } from '../../stores/themeStore';
 
+import { TYPOGRAPHY } from '../../styles/tokens';
 const AXIS_LENGTH = 1.3;
 const LERP_FACTOR = 0.12;
 
@@ -436,7 +437,7 @@ export function InteractiveBlochSphere({
     background: colors.bgElevated,
     color: colors.text,
     fontSize: 12,
-    fontFamily: "'JetBrains Mono', monospace",
+    fontFamily: TYPOGRAPHY.fontMono,
     cursor: 'pointer',
     transition: 'background 150ms ease, border-color 150ms ease',
   };
@@ -479,11 +480,11 @@ export function InteractiveBlochSphere({
           }}>
             <span style={{ fontSize: 16 }}>{isMatched ? '\u2705' : '\uD83C\uDFAF'}</span>
             <div style={{ flex: 1 }}>
-              <div style={{ fontSize: 12, fontWeight: 600, color: isMatched ? colors.success : colors.warning, fontFamily: "'Geist Sans', sans-serif" }}>
+              <div style={{ fontSize: 12, fontWeight: 600, color: isMatched ? colors.success : colors.warning, fontFamily: TYPOGRAPHY.fontSans }}>
                 {isMatched ? 'Matched!' : challenge.description}
               </div>
               {!isMatched && challengeDistance !== null && (
-                <div style={{ fontSize: 11, color: colors.textDim, fontFamily: "'Geist Sans', sans-serif", marginTop: 2 }}>
+                <div style={{ fontSize: 11, color: colors.textDim, fontFamily: TYPOGRAPHY.fontSans, marginTop: 2 }}>
                   Distance: {challengeDistance.toFixed(3)}
                 </div>
               )}
@@ -545,7 +546,7 @@ export function InteractiveBlochSphere({
         {/* Theta / Phi sliders */}
         <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
           <label style={{ display: 'flex', alignItems: 'center', gap: 8, flex: 1, minWidth: 180 }}>
-            <span style={{ fontSize: 13, fontFamily: "'JetBrains Mono', monospace", color: colors.textMuted, minWidth: 78 }}>
+            <span style={{ fontSize: 13, fontFamily: TYPOGRAPHY.fontMono, color: colors.textMuted, minWidth: 78 }}>
               {'\u03B8'} = {theta.toFixed(2)}
             </span>
             <input
@@ -560,7 +561,7 @@ export function InteractiveBlochSphere({
             />
           </label>
           <label style={{ display: 'flex', alignItems: 'center', gap: 8, flex: 1, minWidth: 180 }}>
-            <span style={{ fontSize: 13, fontFamily: "'JetBrains Mono', monospace", color: colors.textMuted, minWidth: 78 }}>
+            <span style={{ fontSize: 13, fontFamily: TYPOGRAPHY.fontMono, color: colors.textMuted, minWidth: 78 }}>
               {'\u03C6'} = {phi.toFixed(2)}
             </span>
             <input
@@ -582,7 +583,7 @@ export function InteractiveBlochSphere({
           borderRadius: 8,
           background: colors.bg,
           border: `1px solid ${colors.border}`,
-          fontFamily: "'JetBrains Mono', monospace",
+          fontFamily: TYPOGRAPHY.fontMono,
           fontSize: 14,
           color: colors.text,
           textAlign: 'center',

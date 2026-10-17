@@ -14,6 +14,7 @@ import {
 } from '../../types/qec';
 import type { Framework } from '../../types/quantum';
 
+import { TYPOGRAPHY } from '../../styles/tokens';
 const DOCS = 'https://getnuclei.dev/docs/research/resource-estimation/';
 
 // Frameworks the Azure Quantum Resource Estimator can cost. Q# is estimated
@@ -127,7 +128,7 @@ export function EstimatorPanel() {
     flexDirection: 'column',
     background: colors.bg,
     color: colors.text,
-    fontFamily: "'Geist Sans', sans-serif",
+    fontFamily: TYPOGRAPHY.fontSans,
   };
 
   if (!supported) {
@@ -293,7 +294,7 @@ function Stat({
       </span>
       <span
         style={{
-          fontFamily: "'Geist Mono', monospace",
+          fontFamily: TYPOGRAPHY.fontMono,
           fontSize: accent ? 22 : 18,
           fontWeight: 600,
           color: accent ? colors.accent : colors.text,
@@ -314,7 +315,7 @@ function selectStyle(colors: Colors): CSSProperties {
     borderRadius: 5,
     padding: '6px 8px',
     fontSize: 12,
-    fontFamily: "'Geist Sans', sans-serif",
+    fontFamily: TYPOGRAPHY.fontSans,
     outline: 'none',
   };
 }
@@ -388,7 +389,7 @@ function detailPre(colors: Colors): CSSProperties {
     border: `1px solid ${colors.border}`,
     background: colors.bg,
     color: colors.textMuted,
-    fontFamily: "'Geist Mono', monospace",
+    fontFamily: TYPOGRAPHY.fontMono,
     fontSize: 10.5,
     lineHeight: 1.5,
     maxHeight: 260,

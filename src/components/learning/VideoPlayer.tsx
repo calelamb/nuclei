@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useThemeStore } from '../../stores/themeStore';
 import { openExternal, buildYouTubeWatchUrl } from '../../lib/openExternal';
 
+import { TYPOGRAPHY } from '../../styles/tokens';
 type VideoSource = '3blue1brown' | 'ibm-technology' | 'nvidia' | 'qiskit' | 'other';
 
 interface VideoChapter {
@@ -76,14 +77,14 @@ export function VideoPlayer({ youtubeId, title, creator, startTime, source, chap
                 <polygon points="5 3 19 12 5 21 5 3" />
               </svg>
             </div>
-            <span style={{ color: colors.textMuted, fontSize: 14, fontFamily: "'Geist Sans', sans-serif" }}>
+            <span style={{ color: colors.textMuted, fontSize: 14, fontFamily: TYPOGRAPHY.fontSans }}>
               Video coming soon
             </span>
           </div>
         </div>
         <div style={{ padding: '10px 16px' }}>
-          <div style={{ color: colors.text, fontSize: 14, fontWeight: 500, fontFamily: "'Geist Sans', sans-serif" }}>{title}</div>
-          <div style={{ color: colors.textDim, fontSize: 12, fontFamily: "'Geist Sans', sans-serif", marginTop: 2 }}>{creator}</div>
+          <div style={{ color: colors.text, fontSize: 14, fontWeight: 500, fontFamily: TYPOGRAPHY.fontSans }}>{title}</div>
+          <div style={{ color: colors.textDim, fontSize: 12, fontFamily: TYPOGRAPHY.fontSans, marginTop: 2 }}>{creator}</div>
         </div>
       </div>
     );
@@ -168,7 +169,7 @@ export function VideoPlayer({ youtubeId, title, creator, startTime, source, chap
             background: 'rgba(0,0,0,0.75)',
             color: '#fff',
             fontSize: 10,
-            fontFamily: "'Geist Sans', sans-serif",
+            fontFamily: TYPOGRAPHY.fontSans,
             fontWeight: 500,
             padding: '3px 8px',
             borderRadius: 4,
@@ -180,11 +181,11 @@ export function VideoPlayer({ youtubeId, title, creator, startTime, source, chap
       </button>
       <div style={{ padding: '10px 16px' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <div style={{ color: colors.text, fontSize: 14, fontWeight: 500, fontFamily: "'Geist Sans', sans-serif" }}>{title}</div>
+          <div style={{ color: colors.text, fontSize: 14, fontWeight: 500, fontFamily: TYPOGRAPHY.fontSans }}>{title}</div>
           {source && (
             <span style={{
               fontSize: 9,
-              fontFamily: "'Geist Sans', sans-serif",
+              fontFamily: TYPOGRAPHY.fontSans,
               fontWeight: 600,
               color: SOURCE_BADGES[source].color,
               background: `${SOURCE_BADGES[source].color}18`,
@@ -196,7 +197,7 @@ export function VideoPlayer({ youtubeId, title, creator, startTime, source, chap
             </span>
           )}
         </div>
-        <div style={{ color: colors.textDim, fontSize: 12, fontFamily: "'Geist Sans', sans-serif", marginTop: 2 }}>{creator}</div>
+        <div style={{ color: colors.textDim, fontSize: 12, fontFamily: TYPOGRAPHY.fontSans, marginTop: 2 }}>{creator}</div>
 
         {chapters && chapters.length > 0 && (
           <div style={{ marginTop: 8, display: 'flex', flexDirection: 'column', gap: 2 }}>
@@ -204,7 +205,7 @@ export function VideoPlayer({ youtubeId, title, creator, startTime, source, chap
               color: colors.textMuted,
               fontSize: 10,
               fontWeight: 600,
-              fontFamily: "'Geist Sans', sans-serif",
+              fontFamily: TYPOGRAPHY.fontSans,
               textTransform: 'uppercase',
               letterSpacing: 0.5,
               marginBottom: 2,
@@ -233,7 +234,7 @@ export function VideoPlayer({ youtubeId, title, creator, startTime, source, chap
                 <span style={{
                   color: colors.accent,
                   fontSize: 10,
-                  fontFamily: "'Geist Mono', monospace",
+                  fontFamily: TYPOGRAPHY.fontMono,
                   fontWeight: 500,
                   minWidth: 32,
                 }}>
@@ -242,7 +243,7 @@ export function VideoPlayer({ youtubeId, title, creator, startTime, source, chap
                 <span style={{
                   color: colors.text,
                   fontSize: 11,
-                  fontFamily: "'Geist Sans', sans-serif",
+                  fontFamily: TYPOGRAPHY.fontSans,
                 }}>
                   {chapter.label}
                 </span>

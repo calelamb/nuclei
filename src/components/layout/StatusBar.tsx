@@ -13,6 +13,7 @@ import { useExerciseStore } from '../../stores/exerciseStore';
 import { useLayoutStore, type LayoutPreset } from '../../stores/layoutStore';
 import { ModeChip } from './ModeChip';
 
+import { TYPOGRAPHY } from '../../styles/tokens';
 /**
  * PRD 11 Phase A — the status bar, extracted VERBATIM from `PanelLayout.tsx`.
  *
@@ -50,7 +51,7 @@ function LayoutPresetSwitcher() {
         borderRadius: 6,
         padding: '1px 6px',
         fontSize: 10,
-        fontFamily: "'Geist Sans', sans-serif",
+        fontFamily: TYPOGRAPHY.fontSans,
         cursor: 'pointer',
       }}
     >
@@ -106,7 +107,7 @@ export function StatusBar() {
       height: 22, backgroundColor: colors.bgPanel,
       display: 'flex', alignItems: 'center',
       padding: '0 8px', gap: 8,
-      fontSize: 11, fontFamily: "'Geist Sans', sans-serif",
+      fontSize: 11, fontFamily: TYPOGRAPHY.fontSans,
       flexShrink: 0, zIndex: 10,
       borderTop: `1px solid ${colors.border}`,
     }} role="toolbar" aria-label="Status bar">
@@ -208,7 +209,7 @@ export function StatusBar() {
           the redundant right-side text toggle was removed. */}
       <button onClick={handleCycleMode} title="Cycle UI mode (⌘+Shift+L)" style={{
         padding: '0 6px', height: 16, background: 'transparent', border: 'none', borderRadius: 3,
-        color: modeColors[uiMode], cursor: 'pointer', fontSize: 10, fontFamily: "'Geist Sans', sans-serif",
+        color: modeColors[uiMode], cursor: 'pointer', fontSize: 10, fontFamily: TYPOGRAPHY.fontSans,
         fontWeight: 500, textTransform: 'capitalize',
       }}
         onMouseEnter={(e) => { e.currentTarget.style.background = colors.bgElevated; }}

@@ -5,6 +5,7 @@ import { useThemeStore } from '../../stores/themeStore';
 import { useChallengeModeStore } from '../../stores/challengeModeStore';
 import type { QuantumChallenge } from '../../types/challenge';
 
+import { TYPOGRAPHY } from '../../styles/tokens';
 interface ProblemEditorProps {
   challenge: QuantumChallenge;
 }
@@ -57,7 +58,7 @@ export function ProblemEditor({ challenge }: ProblemEditorProps) {
             color: colors.text,
             fontSize: 12,
             fontWeight: 600,
-            fontFamily: "'Geist Sans', sans-serif",
+            fontFamily: TYPOGRAPHY.fontSans,
             marginBottom: 4,
           }}>
             Function Contract
@@ -68,7 +69,7 @@ export function ProblemEditor({ challenge }: ProblemEditorProps) {
             gap: 8,
             color: colors.accent,
             fontSize: 12,
-            fontFamily: "'Geist Mono', 'JetBrains Mono', monospace",
+            fontFamily: TYPOGRAPHY.fontMono,
           }}>
             <Braces size={12} />
             <span>{buildSignature(challenge)}</span>
@@ -81,7 +82,7 @@ export function ProblemEditor({ challenge }: ProblemEditorProps) {
           gap: 8,
           color: colors.textMuted,
           fontSize: 11,
-          fontFamily: "'Geist Sans', sans-serif",
+          fontFamily: TYPOGRAPHY.fontSans,
         }}>
           <span style={{
             padding: '3px 8px',
@@ -108,7 +109,7 @@ export function ProblemEditor({ challenge }: ProblemEditorProps) {
           onChange={handleChange}
           options={{
             fontSize: 13,
-            fontFamily: "'Geist Mono', 'JetBrains Mono', monospace",
+            fontFamily: TYPOGRAPHY.fontMono,
             minimap: { enabled: false },
             scrollBeyondLastLine: false,
             padding: { top: 12 },

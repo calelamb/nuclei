@@ -4,6 +4,7 @@ import { ProblemBrowser } from './ProblemBrowser';
 import { ProblemWorkspace } from './ProblemWorkspace';
 import { ChevronLeft, Trophy } from 'lucide-react';
 
+import { TYPOGRAPHY } from '../../styles/tokens';
 export function ChallengeModeView() {
   const colors = useThemeStore((s) => s.colors);
   const activeProblem = useChallengeModeStore((s) => s.activeProblem);
@@ -42,7 +43,7 @@ export function ChallengeModeView() {
               color: colors.textMuted,
               cursor: 'pointer',
               fontSize: 12,
-              fontFamily: "'Geist Sans', sans-serif",
+              fontFamily: TYPOGRAPHY.fontSans,
               padding: '4px 8px',
               borderRadius: 4,
             }}
@@ -70,7 +71,7 @@ export function ChallengeModeView() {
               color: colors.textMuted,
               cursor: 'pointer',
               fontSize: 12,
-              fontFamily: "'Geist Sans', sans-serif",
+              fontFamily: TYPOGRAPHY.fontSans,
               padding: '4px 8px',
               borderRadius: 4,
             }}
@@ -95,7 +96,7 @@ export function ChallengeModeView() {
           color: colors.text,
           fontSize: 13,
           fontWeight: 600,
-          fontFamily: "'Geist Sans', sans-serif",
+          fontFamily: TYPOGRAPHY.fontSans,
         }}>
           Quantum Challenges
         </span>
@@ -106,7 +107,7 @@ export function ChallengeModeView() {
             <span style={{
               color: colors.textMuted,
               fontSize: 12,
-              fontFamily: "'Geist Sans', sans-serif",
+              fontFamily: TYPOGRAPHY.fontSans,
               overflow: 'hidden',
               textOverflow: 'ellipsis',
               whiteSpace: 'nowrap',

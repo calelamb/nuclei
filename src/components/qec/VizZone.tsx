@@ -11,6 +11,7 @@ import { CodeLatticePanel } from './CodeLatticePanel';
 import { DetectorGraphPanel } from './DetectorGraphPanel';
 import type { VisiblePanels, PanelId } from '../../layout/panelRegistry';
 
+import { TYPOGRAPHY } from '../../styles/tokens';
 /**
  * PRD 10 Phase D — the viz zone (right rail).
  *
@@ -117,7 +118,7 @@ export function VizZone({
                 background: 'transparent', border: 'none',
                 borderBottom: isActive ? `2px solid ${colors.accent}` : '2px solid transparent',
                 color: isActive ? colors.text : colors.textDim, cursor: 'pointer',
-                fontSize: 10.5, fontFamily: "'Geist Sans', sans-serif", fontWeight: 500,
+                fontSize: 10.5, fontFamily: TYPOGRAPHY.fontSans, fontWeight: 500,
                 whiteSpace: 'nowrap',
               }}
               onMouseEnter={(e) => { if (!isActive) e.currentTarget.style.color = colors.textMuted; }}

@@ -5,6 +5,7 @@ import type { CuratedVideo } from '../../data/videos/curatedLibrary';
 import { Play } from 'lucide-react';
 import { openExternal, buildYouTubeWatchUrl } from '../../lib/openExternal';
 
+import { TYPOGRAPHY } from '../../styles/tokens';
 type CreatorFilter = 'all' | CuratedVideo['creator'];
 type DifficultyFilter = 'all' | CuratedVideo['difficulty'];
 
@@ -118,7 +119,7 @@ function VideoCard({
           background: 'rgba(0,0,0,0.75)',
           color: '#fff',
           fontSize: 9,
-          fontFamily: "'Geist Mono', monospace",
+          fontFamily: TYPOGRAPHY.fontMono,
           padding: '1px 4px',
           borderRadius: 2,
         }}>
@@ -132,7 +133,7 @@ function VideoCard({
           color: colors.text,
           fontSize: 12,
           fontWeight: 500,
-          fontFamily: "'Geist Sans', sans-serif",
+          fontFamily: TYPOGRAPHY.fontSans,
           lineHeight: 1.3,
           overflow: 'hidden',
           display: '-webkit-box',
@@ -144,7 +145,7 @@ function VideoCard({
         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
           <span style={{
             fontSize: 9,
-            fontFamily: "'Geist Sans', sans-serif",
+            fontFamily: TYPOGRAPHY.fontSans,
             fontWeight: 600,
             color: CREATOR_COLORS[video.creator],
             background: `${CREATOR_COLORS[video.creator]}18`,
@@ -155,7 +156,7 @@ function VideoCard({
           </span>
           <span style={{
             fontSize: 9,
-            fontFamily: "'Geist Sans', sans-serif",
+            fontFamily: TYPOGRAPHY.fontSans,
             fontWeight: 500,
             color: DIFFICULTY_COLORS[video.difficulty],
             textTransform: 'capitalize',
@@ -166,7 +167,7 @@ function VideoCard({
         <div style={{
           color: colors.textDim,
           fontSize: 10,
-          fontFamily: "'Geist Sans', sans-serif",
+          fontFamily: TYPOGRAPHY.fontSans,
           lineHeight: 1.3,
           overflow: 'hidden',
           display: '-webkit-box',
@@ -224,7 +225,7 @@ export function VideoLibrary() {
                 color: isActive ? colors.accent : colors.textDim,
                 fontSize: 10,
                 fontWeight: 600,
-                fontFamily: "'Geist Sans', sans-serif",
+                fontFamily: TYPOGRAPHY.fontSans,
                 cursor: 'pointer',
                 transition: 'color 150ms, border-color 150ms',
               }}
@@ -257,7 +258,7 @@ export function VideoLibrary() {
                 borderRadius: 10,
                 color: isActive ? pillColor : colors.textDim,
                 fontSize: 10,
-                fontFamily: "'Geist Sans', sans-serif",
+                fontFamily: TYPOGRAPHY.fontSans,
                 fontWeight: 500,
                 cursor: 'pointer',
                 transition: 'all 150ms ease',
@@ -274,7 +275,7 @@ export function VideoLibrary() {
         padding: '0 12px 6px',
         color: colors.textDim,
         fontSize: 10,
-        fontFamily: "'Geist Sans', sans-serif",
+        fontFamily: TYPOGRAPHY.fontSans,
         flexShrink: 0,
       }}>
         {filteredVideos.length} video{filteredVideos.length !== 1 ? 's' : ''}
@@ -293,7 +294,7 @@ export function VideoLibrary() {
             textAlign: 'center',
             color: colors.textDim,
             fontSize: 12,
-            fontFamily: "'Geist Sans', sans-serif",
+            fontFamily: TYPOGRAPHY.fontSans,
           }}>
             No videos match the current filters.
           </div>

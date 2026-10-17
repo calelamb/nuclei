@@ -2,6 +2,7 @@ import { useThemeStore } from '../../stores/themeStore';
 import { useDiracPanelStore } from '../../stores/diracPanelStore';
 import { useDiracStore } from '../../stores/diracStore';
 
+import { TYPOGRAPHY } from '../../styles/tokens';
 interface ConceptCardProps {
   title: string;
   visual: 'bloch' | 'circuit' | 'histogram' | 'custom-svg';
@@ -110,7 +111,7 @@ export function ConceptCard({ title, visual, explanation }: ConceptCardProps) {
           fontSize: 16,
           fontWeight: 600,
           marginBottom: 8,
-          fontFamily: "'Geist Sans', sans-serif",
+          fontFamily: TYPOGRAPHY.fontSans,
         }}>
           {title}
         </div>
@@ -118,7 +119,7 @@ export function ConceptCard({ title, visual, explanation }: ConceptCardProps) {
           color: colors.textMuted,
           fontSize: 14,
           lineHeight: 1.6,
-          fontFamily: "'Geist Sans', sans-serif",
+          fontFamily: TYPOGRAPHY.fontSans,
         }}>
           {explanation}
         </div>
@@ -133,7 +134,7 @@ export function ConceptCard({ title, visual, explanation }: ConceptCardProps) {
             color: colors.dirac,
             fontSize: 12,
             fontWeight: 500,
-            fontFamily: "'Geist Sans', sans-serif",
+            fontFamily: TYPOGRAPHY.fontSans,
             cursor: 'pointer',
             transition: 'all 150ms ease',
           }}

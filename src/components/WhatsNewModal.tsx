@@ -7,6 +7,7 @@ import { openExternal } from '../lib/openExternal';
 import { WhatsNewHeader } from './WhatsNewHeader';
 import { WhatsNewHighlightRow } from './WhatsNewHighlightRow';
 
+import { TYPOGRAPHY } from '../styles/tokens';
 const SEEN_STORAGE_KEY = 'nuclei:whats_new_seen_version';
 const CHANGELOG_URL = 'https://github.com/calelamb/nuclei/releases';
 const TITLE_ID = 'whats-new-title';
@@ -202,7 +203,7 @@ export function WhatsNewModal({
             borderRadius: 16,
             boxShadow: `0 0 0 1px ${colors.accent}22, 0 24px 60px -20px ${colors.accent}40, ${shadow.lg}`,
             overflow: 'hidden',
-            fontFamily: "'Geist Sans', sans-serif",
+            fontFamily: TYPOGRAPHY.fontSans,
             opacity: shown ? 1 : 0,
             transform: reduced
               ? 'none'
@@ -364,7 +365,7 @@ export function WhatsNewModal({
                   cursor: 'pointer',
                   fontSize: 12.5,
                   fontWeight: 600,
-                  fontFamily: "'Geist Sans', sans-serif",
+                  fontFamily: TYPOGRAPHY.fontSans,
                   boxShadow: gotItFocus
                     ? `0 0 0 2px ${colors.accent}66`
                     : gotItHover

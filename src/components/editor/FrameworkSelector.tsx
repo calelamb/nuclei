@@ -8,6 +8,7 @@ import { kernelLanguageFor } from '../../types/quantum';
 import type { Framework } from '../../types/quantum';
 import { STARTER_TEMPLATES, displayFrameworkName } from '../../data/starterTemplates';
 
+import { TYPOGRAPHY } from '../../styles/tokens';
 const FRAMEWORKS: Framework[] = ['qiskit', 'cirq', 'cuda-q', 'qsharp'];
 
 const displayName = displayFrameworkName;
@@ -167,7 +168,7 @@ export function FrameworkSelector() {
             fontSize: 9,
             fontWeight: 600,
             color: colors.textDim,
-            fontFamily: "'Geist Sans', sans-serif",
+            fontFamily: TYPOGRAPHY.fontSans,
             textTransform: 'uppercase',
             letterSpacing: 0.5,
           }}
@@ -197,7 +198,7 @@ export function FrameworkSelector() {
                 border: 'none',
                 cursor: disabled ? 'not-allowed' : 'pointer',
                 fontSize: 12,
-                fontFamily: "'Geist Sans', sans-serif",
+                fontFamily: TYPOGRAPHY.fontSans,
                 textAlign: 'left',
                 opacity: disabled ? 0.55 : 1,
               }}
@@ -235,7 +236,7 @@ export function FrameworkSelector() {
             fontSize: 9,
             fontWeight: 600,
             color: colors.textDim,
-            fontFamily: "'Geist Sans', sans-serif",
+            fontFamily: TYPOGRAPHY.fontSans,
             textTransform: 'uppercase',
             letterSpacing: 0.5,
           }}
@@ -262,7 +263,7 @@ export function FrameworkSelector() {
                 border: 'none',
                 cursor: disabled ? 'not-allowed' : 'pointer',
                 fontSize: 12,
-                fontFamily: "'Geist Sans', sans-serif",
+                fontFamily: TYPOGRAPHY.fontSans,
                 textAlign: 'left',
                 opacity: disabled ? 0.55 : 1,
               }}
@@ -300,7 +301,7 @@ export function FrameworkSelector() {
           color: colors.accentLight,
           cursor: 'pointer',
           fontSize: 12,
-          fontFamily: "'Geist Sans', sans-serif",
+          fontFamily: TYPOGRAPHY.fontSans,
           fontWeight: 500,
           padding: '0 10px',
           display: 'flex',

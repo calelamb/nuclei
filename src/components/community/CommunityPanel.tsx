@@ -7,6 +7,7 @@ import { CircuitGallery } from './CircuitGallery';
 import { ChallengeBoard } from './ChallengeBoard';
 import { UserProfile } from './UserProfile';
 
+import { TYPOGRAPHY } from '../../styles/tokens';
 type Tab = 'gallery' | 'challenges' | 'profile';
 
 const TABS: { value: Tab; label: string }[] = [
@@ -52,7 +53,7 @@ export function CommunityPanel() {
         display: 'flex',
         flexDirection: 'column',
         height: '100%',
-        fontFamily: "'Geist Sans', sans-serif",
+        fontFamily: TYPOGRAPHY.fontSans,
       }}
     >
       {/* Tab bar */}
@@ -78,7 +79,7 @@ export function CommunityPanel() {
                 color: active ? colors.accent : colors.textMuted,
                 fontSize: 11,
                 fontWeight: active ? 600 : 400,
-                fontFamily: "'Geist Sans', sans-serif",
+                fontFamily: TYPOGRAPHY.fontSans,
                 cursor: 'pointer',
                 transition: 'color 0.15s, border-color 0.15s',
               }}

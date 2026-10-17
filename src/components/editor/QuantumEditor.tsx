@@ -20,6 +20,7 @@ import { ensureQsharpLanguageService } from './qsharpLanguageService';
 import { useRevealLine } from './useRevealLine';
 import type { Framework } from '../../types/quantum';
 
+import { TYPOGRAPHY } from '../../styles/tokens';
 type StandaloneEditor = monaco.editor.IStandaloneCodeEditor;
 
 // Map of file extensions to Monaco language ids. Extensions Monaco doesn't
@@ -272,7 +273,7 @@ export function QuantumEditor() {
         onMount={handleMount}
         options={{
           fontSize: editorSettings.fontSize,
-          fontFamily: "'JetBrains Mono', 'Geist Mono', ui-monospace, monospace",
+          fontFamily: TYPOGRAPHY.fontMono,
           fontLigatures: true,
           minimap: { enabled: editorSettings.minimap },
           scrollBeyondLastLine: false,

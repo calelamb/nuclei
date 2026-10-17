@@ -12,6 +12,7 @@ import { InteractiveBlochSphere } from './InteractiveBlochSphere';
 import type { Lesson, ContentBlock } from '../../data/lessons/types';
 import { ArrowLeft, ChevronLeft, ChevronRight, CheckCircle } from 'lucide-react';
 
+import { TYPOGRAPHY } from '../../styles/tokens';
 function ContentBlockRenderer({ block }: { block: ContentBlock }) {
   switch (block.type) {
     case 'text':
@@ -122,7 +123,7 @@ export function LessonView({ lesson, trackId }: LessonViewProps) {
             display: 'flex', alignItems: 'center', gap: 4,
             background: 'transparent', border: 'none',
             color: colors.textMuted, cursor: 'pointer',
-            fontSize: 12, fontFamily: "'Geist Sans', sans-serif",
+            fontSize: 12, fontFamily: TYPOGRAPHY.fontSans,
             padding: '4px 8px', borderRadius: 4,
           }}
           onMouseEnter={(e) => { e.currentTarget.style.color = colors.text; e.currentTarget.style.background = colors.bgElevated; }}
@@ -133,7 +134,7 @@ export function LessonView({ lesson, trackId }: LessonViewProps) {
         </button>
 
         {/* Breadcrumb */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6, flex: 1, minWidth: 0, fontFamily: "'Geist Sans', sans-serif" }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, flex: 1, minWidth: 0, fontFamily: TYPOGRAPHY.fontSans }}>
           <span style={{ color: colors.textDim, fontSize: 12, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 200 }}>
             {track?.title}
           </span>
@@ -144,7 +145,7 @@ export function LessonView({ lesson, trackId }: LessonViewProps) {
           {isCompleted && <CheckCircle size={14} color={colors.success} style={{ flexShrink: 0 }} />}
         </div>
 
-        <span style={{ color: colors.textDim, fontSize: 11, fontFamily: "'Geist Sans', sans-serif", whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }}>
+        <span style={{ color: colors.textDim, fontSize: 11, fontFamily: TYPOGRAPHY.fontSans, whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }}>
           Lesson {currentIndex + 1} / {lessons.length}
         </span>
 
@@ -189,19 +190,19 @@ export function LessonView({ lesson, trackId }: LessonViewProps) {
             <span style={{
               padding: '2px 8px', borderRadius: 4,
               background: `${difficultyColor}18`, color: difficultyColor,
-              fontSize: 11, fontWeight: 600, fontFamily: "'Geist Sans', sans-serif",
+              fontSize: 11, fontWeight: 600, fontFamily: TYPOGRAPHY.fontSans,
               textTransform: 'capitalize',
             }}>
               {lesson.difficulty.replace('-', ' ')}
             </span>
-            <span style={{ color: colors.textDim, fontSize: 11, fontFamily: "'Geist Sans', sans-serif" }}>
+            <span style={{ color: colors.textDim, fontSize: 11, fontFamily: TYPOGRAPHY.fontSans }}>
               ~{lesson.estimatedMinutes} min
             </span>
           </div>
-          <h1 style={{ color: colors.text, fontSize: 28, fontWeight: 700, fontFamily: "'Geist Sans', sans-serif", margin: 0, lineHeight: 1.2 }}>
+          <h1 style={{ color: colors.text, fontSize: 28, fontWeight: 700, fontFamily: TYPOGRAPHY.fontSans, margin: 0, lineHeight: 1.2 }}>
             {lesson.title}
           </h1>
-          <p style={{ color: colors.textMuted, fontSize: 15, fontFamily: "'Geist Sans', sans-serif", margin: '8px 0 0', lineHeight: 1.5 }}>
+          <p style={{ color: colors.textMuted, fontSize: 15, fontFamily: TYPOGRAPHY.fontSans, margin: '8px 0 0', lineHeight: 1.5 }}>
             {lesson.description}
           </p>
         </div>
@@ -222,10 +223,10 @@ export function LessonView({ lesson, trackId }: LessonViewProps) {
             justifyContent: 'space-between', boxShadow: shadow.sm,
           }}>
             <div>
-              <div style={{ color: colors.textDim, fontSize: 12, fontFamily: "'Geist Sans', sans-serif", marginBottom: 4 }}>
+              <div style={{ color: colors.textDim, fontSize: 12, fontFamily: TYPOGRAPHY.fontSans, marginBottom: 4 }}>
                 Up next
               </div>
-              <div style={{ color: colors.text, fontSize: 15, fontWeight: 500, fontFamily: "'Geist Sans', sans-serif" }}>
+              <div style={{ color: colors.text, fontSize: 15, fontWeight: 500, fontFamily: TYPOGRAPHY.fontSans }}>
                 {nextLesson.title}
               </div>
             </div>
@@ -234,7 +235,7 @@ export function LessonView({ lesson, trackId }: LessonViewProps) {
               style={{
                 display: 'flex', alignItems: 'center', gap: 6, padding: '8px 20px',
                 background: colors.accent, color: '#fff', border: 'none', borderRadius: 8,
-                fontSize: 13, fontWeight: 600, fontFamily: "'Geist Sans', sans-serif",
+                fontSize: 13, fontWeight: 600, fontFamily: TYPOGRAPHY.fontSans,
                 cursor: 'pointer', boxShadow: shadow.sm,
               }}
             >

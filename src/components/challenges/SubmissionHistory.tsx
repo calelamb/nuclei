@@ -3,6 +3,7 @@ import { useThemeStore } from '../../stores/themeStore';
 import { Check, X, Clock, ChevronRight, ChevronDown, Star } from 'lucide-react';
 import type { Submission, SubmissionStatus } from '../../types/challenge';
 
+import { TYPOGRAPHY } from '../../styles/tokens';
 interface SubmissionHistoryProps {
   submissions: Submission[];
 }
@@ -59,7 +60,7 @@ function SubmissionRow({ submission, index }: { submission: Submission; index: n
         <span style={{
           color: colors.textDim,
           fontSize: 11,
-          fontFamily: "'Geist Mono', monospace",
+          fontFamily: TYPOGRAPHY.fontMono,
           width: 20,
         }}>
           #{index + 1}
@@ -76,7 +77,7 @@ function SubmissionRow({ submission, index }: { submission: Submission; index: n
           color: statusMeta.color,
           fontSize: 11,
           fontWeight: 600,
-          fontFamily: "'Geist Sans', sans-serif",
+          fontFamily: TYPOGRAPHY.fontSans,
         }}>
           {isAccepted ? <Check size={10} /> : <X size={10} />}
           {statusMeta.label}
@@ -87,7 +88,7 @@ function SubmissionRow({ submission, index }: { submission: Submission; index: n
           color: colors.textMuted,
           fontSize: 11,
           fontWeight: 600,
-          fontFamily: "'Geist Mono', monospace",
+          fontFamily: TYPOGRAPHY.fontMono,
         }}>
           {submission.totalScore}%
         </span>
@@ -99,7 +100,7 @@ function SubmissionRow({ submission, index }: { submission: Submission; index: n
           background: `${colors.accent}12`,
           color: colors.accent,
           fontSize: 10,
-          fontFamily: "'Geist Sans', sans-serif",
+          fontFamily: TYPOGRAPHY.fontSans,
         }}>
           {submission.framework}
         </span>
@@ -113,7 +114,7 @@ function SubmissionRow({ submission, index }: { submission: Submission; index: n
           gap: 4,
           color: colors.textDim,
           fontSize: 10,
-          fontFamily: "'Geist Sans', sans-serif",
+          fontFamily: TYPOGRAPHY.fontSans,
         }}>
           <Clock size={10} />
           {timeStr}
@@ -145,7 +146,7 @@ function SubmissionRow({ submission, index }: { submission: Submission; index: n
               <span style={{
                 color: colors.textMuted,
                 fontSize: 11,
-                fontFamily: "'Geist Sans', sans-serif",
+                fontFamily: TYPOGRAPHY.fontSans,
                 flex: 1,
               }}>
                 Test {i + 1}
@@ -154,7 +155,7 @@ function SubmissionRow({ submission, index }: { submission: Submission; index: n
                 color: tcr.passed ? colors.success : colors.error,
                 fontSize: 10,
                 fontWeight: 600,
-                fontFamily: "'Geist Mono', monospace",
+                fontFamily: TYPOGRAPHY.fontMono,
               }}>
                 {(tcr.score * 100).toFixed(0)}%
               </span>
@@ -162,7 +163,7 @@ function SubmissionRow({ submission, index }: { submission: Submission; index: n
                 <span style={{
                   color: colors.textDim,
                   fontSize: 10,
-                  fontFamily: "'Geist Mono', monospace",
+                  fontFamily: TYPOGRAPHY.fontMono,
                   minWidth: 40,
                   textAlign: 'right',
                 }}>
@@ -183,7 +184,7 @@ function SubmissionRow({ submission, index }: { submission: Submission; index: n
               flexWrap: 'wrap',
               color: colors.textDim,
               fontSize: 10,
-              fontFamily: "'Geist Mono', monospace",
+              fontFamily: TYPOGRAPHY.fontMono,
             }}>
               {submission.efficiency?.isOptimal && (
                 <span style={{
@@ -192,7 +193,7 @@ function SubmissionRow({ submission, index }: { submission: Submission; index: n
                   gap: 3,
                   color: colors.success,
                   fontWeight: 700,
-                  fontFamily: "'Geist Sans', sans-serif",
+                  fontFamily: TYPOGRAPHY.fontSans,
                 }}>
                   <Star size={10} fill={colors.success} strokeWidth={0} />
                   Optimal
@@ -216,7 +217,7 @@ function SubmissionRow({ submission, index }: { submission: Submission; index: n
             <span style={{
               color: colors.textDim,
               fontSize: 10,
-              fontFamily: "'Geist Sans', sans-serif",
+              fontFamily: TYPOGRAPHY.fontSans,
             }}>
               Total execution: {Math.round(submission.executionTimeMs)}ms
             </span>
@@ -236,7 +237,7 @@ export function SubmissionHistory({ submissions }: SubmissionHistoryProps) {
         color: colors.textDim,
         fontSize: 12,
         fontStyle: 'italic',
-        fontFamily: "'Geist Sans', sans-serif",
+        fontFamily: TYPOGRAPHY.fontSans,
       }}>
         No submissions yet.
       </span>
@@ -252,7 +253,7 @@ export function SubmissionHistory({ submissions }: SubmissionHistoryProps) {
         color: colors.textMuted,
         fontSize: 11,
         fontWeight: 600,
-        fontFamily: "'Geist Sans', sans-serif",
+        fontFamily: TYPOGRAPHY.fontSans,
         marginBottom: 6,
       }}>
         Submission History ({submissions.length})

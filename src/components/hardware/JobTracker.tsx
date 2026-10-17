@@ -3,6 +3,7 @@ import { ChevronDown, ChevronRight } from 'lucide-react';
 import { useThemeStore } from '../../stores/themeStore';
 import type { JobHandle, HardwareResult } from '../../types/hardware';
 
+import { TYPOGRAPHY } from '../../styles/tokens';
 interface JobTrackerProps {
   jobs: JobHandle[];
   results: Record<string, HardwareResult>;
@@ -80,7 +81,7 @@ function JobRow({
             style={{
               fontSize: 11,
               color: colors.text,
-              fontFamily: "'Geist Sans', sans-serif",
+              fontFamily: TYPOGRAPHY.fontSans,
               overflow: 'hidden',
               textOverflow: 'ellipsis',
               whiteSpace: 'nowrap',
@@ -92,7 +93,7 @@ function JobRow({
             style={{
               fontSize: 10,
               color: colors.textDim,
-              fontFamily: "'Geist Sans', sans-serif",
+              fontFamily: TYPOGRAPHY.fontSans,
               marginTop: 1,
             }}
           >
@@ -108,7 +109,7 @@ function JobRow({
             borderRadius: 3,
             background: `${statusColor}20`,
             color: statusColor,
-            fontFamily: "'Geist Sans', sans-serif",
+            fontFamily: TYPOGRAPHY.fontSans,
             textTransform: 'uppercase',
             letterSpacing: 0.3,
             flexShrink: 0,
@@ -124,7 +125,7 @@ function JobRow({
             style={{
               fontSize: 10,
               color: colors.textDim,
-              fontFamily: "'Geist Sans', sans-serif",
+              fontFamily: TYPOGRAPHY.fontSans,
               marginBottom: 4,
             }}
           >
@@ -147,7 +148,7 @@ function JobRow({
                   style={{
                     fontSize: 10,
                     color: colors.textMuted,
-                    fontFamily: "'JetBrains Mono', monospace",
+                    fontFamily: TYPOGRAPHY.fontMono,
                     minWidth: 40,
                   }}
                 >
@@ -157,7 +158,7 @@ function JobRow({
                   style={{
                     fontSize: 10,
                     color: colors.textDim,
-                    fontFamily: "'Geist Sans', sans-serif",
+                    fontFamily: TYPOGRAPHY.fontSans,
                   }}
                 >
                   {count}
@@ -180,7 +181,7 @@ export function JobTracker({ jobs, results }: JobTrackerProps) {
           padding: '16px 0',
           fontSize: 11,
           color: colors.textDim,
-          fontFamily: "'Geist Sans', sans-serif",
+          fontFamily: TYPOGRAPHY.fontSans,
           textAlign: 'center',
         }}
       >

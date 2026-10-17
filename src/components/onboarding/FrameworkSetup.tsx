@@ -11,6 +11,7 @@ import {
   type InstallEvent,
 } from '../../stores/frameworksStore';
 
+import { TYPOGRAPHY } from '../../styles/tokens';
 interface FrameworkSetupProps {
   open: boolean;
   onClose: () => void;
@@ -164,7 +165,7 @@ export function FrameworkSetup({ open, onClose, firstRun = false }: FrameworkSet
           boxShadow: shadow.lg,
           display: 'flex',
           flexDirection: 'column',
-          fontFamily: "'Geist Sans', sans-serif",
+          fontFamily: TYPOGRAPHY.fontSans,
         }}
       >
         {/* Header */}
@@ -301,7 +302,7 @@ export function FrameworkSetup({ open, onClose, firstRun = false }: FrameworkSet
                 border: `1px solid ${colors.border}`,
                 fontSize: 11,
                 color: colors.textMuted,
-                fontFamily: "'Fira Code', monospace",
+                fontFamily: TYPOGRAPHY.fontMono,
                 display: 'flex',
                 alignItems: 'center',
                 gap: 8,
@@ -563,7 +564,7 @@ function btnPrimary(colors: ReturnType<typeof useThemeStore.getState>['colors'])
     borderRadius: 6,
     fontSize: 12,
     fontWeight: 600,
-    fontFamily: "'Geist Sans', sans-serif",
+    fontFamily: TYPOGRAPHY.fontSans,
     cursor: 'pointer',
   };
 }
@@ -580,7 +581,7 @@ function btnSecondary(colors: ReturnType<typeof useThemeStore.getState>['colors'
     borderRadius: 6,
     fontSize: 12,
     fontWeight: 500,
-    fontFamily: "'Geist Sans', sans-serif",
+    fontFamily: TYPOGRAPHY.fontSans,
     cursor: 'pointer',
   };
 }

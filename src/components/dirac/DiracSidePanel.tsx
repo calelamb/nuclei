@@ -13,6 +13,7 @@ import { useNavigationStore } from '../../stores/navigationStore';
 import { AgentEntryPoint } from './AgentEntryPoint';
 import { ChevronRight, ChevronDown, Plus, ArrowUp, Settings } from 'lucide-react';
 
+import { TYPOGRAPHY } from '../../styles/tokens';
 const SLASH_COMMANDS = [
   { command: '/explain', description: 'Explain the current circuit', insert: '/explain ' },
   { command: '/fix', description: 'Diagnose and fix the current error', insert: '/fix ' },
@@ -48,7 +49,7 @@ function AmbientFeed() {
             fontSize: 11,
             color: colors.textDim,
             lineHeight: 1.4,
-            fontFamily: "'Geist Sans', sans-serif",
+            fontFamily: TYPOGRAPHY.fontSans,
             opacity: 0.9,
           }}
         >
@@ -77,7 +78,7 @@ function ContextIndicator() {
     <div style={{
       display: 'flex', alignItems: 'center', gap: 6,
       padding: '5px 12px',
-      fontSize: 11, fontFamily: "'Geist Sans', sans-serif",
+      fontSize: 11, fontFamily: TYPOGRAPHY.fontSans,
       color: colors.textDim,
     }}>
       <span style={{ fontSize: 10 }}>Seeing:</span>
@@ -126,13 +127,13 @@ function SlashCommandMenu({ query, onSelect }: { query: string; onSelect: (cmd: 
             width: '100%', padding: '6px 12px',
             background: 'transparent', border: 'none', cursor: 'pointer',
             color: colors.text, fontSize: 12,
-            fontFamily: "'Geist Sans', sans-serif", textAlign: 'left',
+            fontFamily: TYPOGRAPHY.fontSans, textAlign: 'left',
             transition: 'background 150ms ease',
           }}
           onMouseEnter={(e) => { e.currentTarget.style.background = colors.border; }}
           onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
         >
-          <span style={{ color: colors.accent, fontFamily: "'JetBrains Mono', monospace", fontSize: 12 }}>{cmd.command}</span>
+          <span style={{ color: colors.accent, fontFamily: TYPOGRAPHY.fontMono, fontSize: 12 }}>{cmd.command}</span>
           <span style={{ color: colors.textMuted }}>{cmd.description}</span>
         </button>
       ))}
@@ -156,7 +157,7 @@ function ThinkingBlock({ thinking }: { thinking: string }) {
           display: 'flex', alignItems: 'center', gap: 6, width: '100%',
           padding: '4px 8px', background: colors.bgPanel, border: 'none',
           cursor: 'pointer', color: colors.dirac, fontSize: 11,
-          fontFamily: "'Geist Sans', sans-serif", fontStyle: 'italic',
+          fontFamily: TYPOGRAPHY.fontSans, fontStyle: 'italic',
         }}
       >
         {expanded ? <ChevronDown size={10} /> : <ChevronRight size={10} />}
@@ -165,7 +166,7 @@ function ThinkingBlock({ thinking }: { thinking: string }) {
       {expanded && (
         <pre style={{
           margin: 0, padding: '6px 10px', fontSize: 11,
-          fontFamily: "'JetBrains Mono', monospace", color: colors.textMuted,
+          fontFamily: TYPOGRAPHY.fontMono, color: colors.textMuted,
           background: colors.bg, whiteSpace: 'pre-wrap', wordBreak: 'break-word',
           maxHeight: 300, overflow: 'auto', lineHeight: 1.5,
         }}>
@@ -197,14 +198,14 @@ function ToolCallCard({ toolCall, onAction }: { toolCall: ToolCall; onAction: (i
           display: 'flex', alignItems: 'center', gap: 8,
           padding: '6px 10px', background: colors.bgPanel,
         }}>
-          <span style={{ color: colors.accent, fontSize: 12, fontWeight: 600, fontFamily: "'JetBrains Mono', monospace" }}>insert_code</span>
-          <span style={{ color: colors.textMuted, fontSize: 11, flex: 1, fontFamily: "'Geist Sans', sans-serif" }}>{description || 'Code insertion'}</span>
-          <span style={{ color: statusColor, fontSize: 10, fontFamily: "'Geist Sans', sans-serif" }}>{statusText}</span>
+          <span style={{ color: colors.accent, fontSize: 12, fontWeight: 600, fontFamily: TYPOGRAPHY.fontMono }}>insert_code</span>
+          <span style={{ color: colors.textMuted, fontSize: 11, flex: 1, fontFamily: TYPOGRAPHY.fontSans }}>{description || 'Code insertion'}</span>
+          <span style={{ color: statusColor, fontSize: 10, fontFamily: TYPOGRAPHY.fontSans }}>{statusText}</span>
         </div>
         <pre style={{
           margin: 0, padding: 10, background: colors.bg,
           color: colors.text, fontSize: 12,
-          fontFamily: "'JetBrains Mono', monospace",
+          fontFamily: TYPOGRAPHY.fontMono,
           overflow: 'auto', maxHeight: 200,
         }}>{code}</pre>
         {isPending && (
@@ -212,12 +213,12 @@ function ToolCallCard({ toolCall, onAction }: { toolCall: ToolCall; onAction: (i
             <button onClick={() => onAction(toolCall.id, true)} style={{
               padding: '4px 12px', background: colors.success, color: '#fff',
               border: 'none', borderRadius: 4, cursor: 'pointer',
-              fontSize: 12, fontFamily: "'Geist Sans', sans-serif", transition: 'all 150ms ease',
+              fontSize: 12, fontFamily: TYPOGRAPHY.fontSans, transition: 'all 150ms ease',
             }}>Apply to Editor</button>
             <button onClick={() => onAction(toolCall.id, false)} style={{
               padding: '4px 12px', background: colors.border, color: colors.text,
               border: 'none', borderRadius: 4, cursor: 'pointer',
-              fontSize: 12, fontFamily: "'Geist Sans', sans-serif", transition: 'all 150ms ease',
+              fontSize: 12, fontFamily: TYPOGRAPHY.fontSans, transition: 'all 150ms ease',
             }}>Dismiss</button>
           </div>
         )}
@@ -232,16 +233,16 @@ function ToolCallCard({ toolCall, onAction }: { toolCall: ToolCall; onAction: (i
         padding: '6px 10px', borderLeft: `3px solid ${statusColor}`,
         background: colors.bgPanel, display: 'flex', alignItems: 'center', gap: 8,
       }}>
-        <span style={{ color: colors.accent, fontSize: 12, fontWeight: 600, fontFamily: "'JetBrains Mono', monospace" }}>run_simulation</span>
-        <span style={{ color: colors.textMuted, fontSize: 11, flex: 1, fontFamily: "'Geist Sans', sans-serif" }}>{toolCall.input.shots ? `${toolCall.input.shots} shots` : 'Default shots'}</span>
+        <span style={{ color: colors.accent, fontSize: 12, fontWeight: 600, fontFamily: TYPOGRAPHY.fontMono }}>run_simulation</span>
+        <span style={{ color: colors.textMuted, fontSize: 11, flex: 1, fontFamily: TYPOGRAPHY.fontSans }}>{toolCall.input.shots ? `${toolCall.input.shots} shots` : 'Default shots'}</span>
         {isPending && (
           <button onClick={() => onAction(toolCall.id, true)} style={{
             padding: '3px 10px', background: colors.accent, color: '#fff',
             border: 'none', borderRadius: 4, cursor: 'pointer',
-            fontSize: 11, fontFamily: "'Geist Sans', sans-serif",
+            fontSize: 11, fontFamily: TYPOGRAPHY.fontSans,
           }}>Run</button>
         )}
-        <span style={{ color: statusColor, fontSize: 10, fontFamily: "'Geist Sans', sans-serif" }}>{statusText}</span>
+        <span style={{ color: statusColor, fontSize: 10, fontFamily: TYPOGRAPHY.fontSans }}>{statusText}</span>
       </div>
     );
   }
@@ -251,8 +252,8 @@ function ToolCallCard({ toolCall, onAction }: { toolCall: ToolCall; onAction: (i
       border: `1px solid ${colors.border}`, borderRadius: 6, margin: '8px 0',
       padding: '6px 10px', borderLeft: `3px solid ${statusColor}`, background: colors.bgPanel,
     }}>
-      <span style={{ color: colors.accent, fontSize: 12, fontWeight: 600, fontFamily: "'JetBrains Mono', monospace" }}>{toolCall.name}</span>
-      <span style={{ color: statusColor, fontSize: 10, fontFamily: "'Geist Sans', sans-serif", marginLeft: 8 }}>{statusText}</span>
+      <span style={{ color: colors.accent, fontSize: 12, fontWeight: 600, fontFamily: TYPOGRAPHY.fontMono }}>{toolCall.name}</span>
+      <span style={{ color: statusColor, fontSize: 10, fontFamily: TYPOGRAPHY.fontSans, marginLeft: 8 }}>{statusText}</span>
     </div>
   );
 }
@@ -333,13 +334,13 @@ function ApiKeyBanner() {
       </div>
       <div style={{
         fontSize: 13, fontWeight: 600, color: colors.text,
-        fontFamily: "'Geist Sans', sans-serif", marginBottom: 6,
+        fontFamily: TYPOGRAPHY.fontSans, marginBottom: 6,
       }}>
         API Key Required
       </div>
       <div style={{
         fontSize: 12, color: colors.textMuted, lineHeight: 1.5,
-        fontFamily: "'Geist Sans', sans-serif", marginBottom: 12,
+        fontFamily: TYPOGRAPHY.fontSans, marginBottom: 12,
       }}>
         To use Dirac, add your Anthropic API key in Settings. Your key stays on your machine.
       </div>
@@ -347,7 +348,7 @@ function ApiKeyBanner() {
         onClick={openSettings}
         style={{
           padding: '6px 16px', fontSize: 12, fontWeight: 500,
-          fontFamily: "'Geist Sans', sans-serif",
+          fontFamily: TYPOGRAPHY.fontSans,
           background: colors.dirac, color: '#fff',
           border: 'none', borderRadius: 6, cursor: 'pointer',
           transition: 'box-shadow 150ms ease',
@@ -364,7 +365,7 @@ function ApiKeyBanner() {
           rel="noopener noreferrer"
           style={{
             fontSize: 11, color: colors.accent, textDecoration: 'none',
-            fontFamily: "'Geist Sans', sans-serif",
+            fontFamily: TYPOGRAPHY.fontSans,
           }}
         >
           Get an API key from Anthropic
@@ -478,7 +479,7 @@ export function DiracSidePanel() {
       >
         <span style={{
           color: colors.dirac, fontSize: 11, fontWeight: 600,
-          fontFamily: "'Geist Sans', sans-serif", letterSpacing: 1,
+          fontFamily: TYPOGRAPHY.fontSans, letterSpacing: 1,
         }}>DIRAC</span>
       </div>
     );
@@ -509,7 +510,7 @@ export function DiracSidePanel() {
       }}>
         <span style={{
           color: colors.dirac, fontSize: 13, fontWeight: 700,
-          fontFamily: "'Geist Sans', sans-serif",
+          fontFamily: TYPOGRAPHY.fontSans,
         }}>Dirac</span>
         <div style={{ flex: 1 }} />
         <button
@@ -520,7 +521,7 @@ export function DiracSidePanel() {
             color: colors.textMuted, cursor: 'pointer',
             padding: '2px 6px', borderRadius: 4,
             display: 'flex', alignItems: 'center', gap: 3,
-            fontSize: 11, fontFamily: "'Geist Sans', sans-serif",
+            fontSize: 11, fontFamily: TYPOGRAPHY.fontSans,
             transition: 'all 150ms ease',
           }}
           onMouseEnter={(e) => { e.currentTarget.style.color = colors.text; e.currentTarget.style.background = colors.bgElevated; }}
@@ -564,7 +565,7 @@ export function DiracSidePanel() {
         {messages.length === 0 && (
           <div style={{
             color: colors.textMuted, fontSize: 13,
-            fontFamily: "'Geist Sans', sans-serif",
+            fontFamily: TYPOGRAPHY.fontSans,
             textAlign: 'center', marginTop: 48, lineHeight: 1.7,
           }}>
             <AtomIcon />
@@ -576,7 +577,7 @@ export function DiracSidePanel() {
               Try a slash command like{' '}
               <code style={{
                 background: colors.bgElevated, padding: '2px 6px', borderRadius: 4,
-                fontFamily: "'JetBrains Mono', monospace", fontSize: 11, color: colors.accent,
+                fontFamily: TYPOGRAPHY.fontMono, fontSize: 11, color: colors.accent,
                 border: `1px solid ${colors.border}`,
               }}>/explain</code>
             </div>
@@ -592,7 +593,7 @@ export function DiracSidePanel() {
                 padding: '8px 12px', borderRadius: 8,
                 background: colors.bgElevated,
                 color: colors.text, fontSize: 13,
-                fontFamily: "'Geist Sans', sans-serif",
+                fontFamily: TYPOGRAPHY.fontSans,
                 lineHeight: 1.5,
                 boxShadow: shadow.sm,
               }}>
@@ -604,7 +605,7 @@ export function DiracSidePanel() {
                 borderLeft: `2px solid ${colors.dirac}`,
                 boxShadow: `inset 3px 0 8px -3px ${colors.dirac}15`,
                 color: colors.text, fontSize: 13,
-                fontFamily: "'Geist Sans', sans-serif",
+                fontFamily: TYPOGRAPHY.fontSans,
                 lineHeight: 1.6,
               }}>
                 {msg.thinking && <ThinkingBlock thinking={msg.thinking} />}
@@ -620,7 +621,7 @@ export function DiracSidePanel() {
             )}
             <div style={{
               fontSize: 10, color: colors.textDim,
-              fontFamily: "'Geist Sans', sans-serif",
+              fontFamily: TYPOGRAPHY.fontSans,
               marginTop: 2,
               textAlign: msg.role === 'user' ? 'right' : 'left',
               paddingLeft: msg.role === 'assistant' ? 12 : 0,
@@ -657,7 +658,7 @@ export function DiracSidePanel() {
             rows={1}
             style={{
               flex: 1, padding: '8px 12px', fontSize: 13,
-              fontFamily: "'Geist Sans', sans-serif",
+              fontFamily: TYPOGRAPHY.fontSans,
               background: colors.bgPanel,
               border: `1px solid ${colors.border}`,
               borderRadius: 6, color: colors.text,

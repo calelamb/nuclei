@@ -12,6 +12,7 @@ import { ResultsComparison } from './ResultsComparison';
 import { CredentialSetup } from './CredentialSetup';
 import type { HardwareProviderType, BackendInfo } from '../../types/hardware';
 
+import { TYPOGRAPHY } from '../../styles/tokens';
 /* ── Section (local copy matching SettingsPanel pattern) ── */
 
 function Section({
@@ -50,7 +51,7 @@ function Section({
             fontWeight: 600,
             textTransform: 'uppercase',
             letterSpacing: 0.5,
-            fontFamily: "'Geist Sans', sans-serif",
+            fontFamily: TYPOGRAPHY.fontSans,
           }}
         >
           {title}
@@ -196,7 +197,7 @@ export function HardwarePanel() {
     : null;
 
   const font: React.CSSProperties = {
-    fontFamily: "'Geist Sans', sans-serif",
+    fontFamily: TYPOGRAPHY.fontSans,
   };
 
   return (
@@ -385,7 +386,7 @@ export function HardwarePanel() {
                           borderRadius: 3,
                           background: `${colors.accent}15`,
                           color: colors.accent,
-                          fontFamily: "'JetBrains Mono', monospace",
+                          fontFamily: TYPOGRAPHY.fontMono,
                         }}
                       >
                         {gate}

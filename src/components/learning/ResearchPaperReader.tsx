@@ -4,6 +4,7 @@ import { useThemeStore } from '../../stores/themeStore';
 import { useDiracPanelStore } from '../../stores/diracPanelStore';
 import { useDiracStore } from '../../stores/diracStore';
 
+import { TYPOGRAPHY } from '../../styles/tokens';
 export function ResearchPaperReader() {
   const colors = useThemeStore((s) => s.colors);
   const openDirac = useDiracPanelStore((s) => s.open);
@@ -24,10 +25,10 @@ export function ResearchPaperReader() {
 
   return (
     <div style={{ padding: 12, display: 'flex', flexDirection: 'column', gap: 10 }}>
-      <div style={{ color: colors.text, fontSize: 13, fontWeight: 600, fontFamily: 'Geist Sans, Inter, sans-serif' }}>
+      <div style={{ color: colors.text, fontSize: 13, fontWeight: 600, fontFamily: TYPOGRAPHY.fontSans }}>
         Research Paper Reader
       </div>
-      <div style={{ color: colors.textMuted, fontSize: 11, fontFamily: 'Geist Sans, Inter, sans-serif', lineHeight: 1.4 }}>
+      <div style={{ color: colors.textMuted, fontSize: 11, fontFamily: TYPOGRAPHY.fontSans, lineHeight: 1.4 }}>
         Paste an arXiv link or abstract and let Dirac explain it or generate a circuit from it.
       </div>
 
@@ -45,7 +46,7 @@ export function ResearchPaperReader() {
           borderRadius: 4,
           color: colors.text,
           fontSize: 12,
-          fontFamily: 'Geist Sans, Inter, sans-serif',
+          fontFamily: TYPOGRAPHY.fontSans,
           outline: 'none',
           boxSizing: 'border-box',
         }}
@@ -54,7 +55,7 @@ export function ResearchPaperReader() {
       {/* OR divider */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
         <div style={{ flex: 1, height: 1, background: colors.border }} />
-        <span style={{ color: colors.textDim, fontSize: 10, fontFamily: 'Geist Sans, Inter, sans-serif' }}>OR</span>
+        <span style={{ color: colors.textDim, fontSize: 10, fontFamily: TYPOGRAPHY.fontSans }}>OR</span>
         <div style={{ flex: 1, height: 1, background: colors.border }} />
       </div>
 
@@ -72,7 +73,7 @@ export function ResearchPaperReader() {
           borderRadius: 4,
           color: colors.text,
           fontSize: 12,
-          fontFamily: 'Geist Sans, Inter, sans-serif',
+          fontFamily: TYPOGRAPHY.fontSans,
           outline: 'none',
           resize: 'vertical',
           lineHeight: 1.5,
@@ -99,7 +100,7 @@ export function ResearchPaperReader() {
             cursor: hasContent ? 'pointer' : 'default',
             fontSize: 11,
             fontWeight: 600,
-            fontFamily: 'Geist Sans, Inter, sans-serif',
+            fontFamily: TYPOGRAPHY.fontSans,
             opacity: hasContent ? 1 : 0.5,
           }}
         >
@@ -123,7 +124,7 @@ export function ResearchPaperReader() {
             cursor: hasContent ? 'pointer' : 'default',
             fontSize: 11,
             fontWeight: 600,
-            fontFamily: 'Geist Sans, Inter, sans-serif',
+            fontFamily: TYPOGRAPHY.fontSans,
             opacity: hasContent ? 1 : 0.5,
           }}
         >

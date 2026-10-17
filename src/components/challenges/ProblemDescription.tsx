@@ -3,6 +3,7 @@ import { useThemeStore } from '../../stores/themeStore';
 import { MaxCutGraphViz } from './MaxCutGraphViz';
 import type { QuantumChallenge, ChallengeExample } from '../../types/challenge';
 
+import { TYPOGRAPHY } from '../../styles/tokens';
 interface ProblemDescriptionProps {
   challenge: QuantumChallenge;
 }
@@ -25,7 +26,7 @@ function ExampleBox({ example, index }: { example: ChallengeExample; index: numb
         color: colors.textMuted,
         fontSize: 11,
         fontWeight: 600,
-        fontFamily: "'Geist Sans', sans-serif",
+        fontFamily: TYPOGRAPHY.fontSans,
       }}>
         Example {index + 1}
       </div>
@@ -34,7 +35,7 @@ function ExampleBox({ example, index }: { example: ChallengeExample; index: numb
           <span style={{
             color: colors.textDim,
             fontSize: 11,
-            fontFamily: "'Geist Mono', monospace",
+            fontFamily: TYPOGRAPHY.fontMono,
             fontWeight: 600,
           }}>
             Input:
@@ -46,7 +47,7 @@ function ExampleBox({ example, index }: { example: ChallengeExample; index: numb
             background: colors.bg,
             color: colors.text,
             fontSize: 12,
-            fontFamily: "'Geist Mono', monospace",
+            fontFamily: TYPOGRAPHY.fontMono,
             overflowX: 'auto',
             whiteSpace: 'pre-wrap',
           }}>
@@ -57,7 +58,7 @@ function ExampleBox({ example, index }: { example: ChallengeExample; index: numb
           <span style={{
             color: colors.textDim,
             fontSize: 11,
-            fontFamily: "'Geist Mono', monospace",
+            fontFamily: TYPOGRAPHY.fontMono,
             fontWeight: 600,
           }}>
             Output:
@@ -69,7 +70,7 @@ function ExampleBox({ example, index }: { example: ChallengeExample; index: numb
             background: colors.bg,
             color: colors.text,
             fontSize: 12,
-            fontFamily: "'Geist Mono', monospace",
+            fontFamily: TYPOGRAPHY.fontMono,
             overflowX: 'auto',
             whiteSpace: 'pre-wrap',
           }}>
@@ -81,7 +82,7 @@ function ExampleBox({ example, index }: { example: ChallengeExample; index: numb
             <span style={{
               color: colors.textDim,
               fontSize: 11,
-              fontFamily: "'Geist Mono', monospace",
+              fontFamily: TYPOGRAPHY.fontMono,
               fontWeight: 600,
             }}>
               Explanation:
@@ -90,7 +91,7 @@ function ExampleBox({ example, index }: { example: ChallengeExample; index: numb
               margin: '4px 0 0',
               color: colors.textMuted,
               fontSize: 12,
-              fontFamily: "'Geist Sans', sans-serif",
+              fontFamily: TYPOGRAPHY.fontSans,
               lineHeight: 1.5,
             }}>
               {example.explanation}
@@ -128,7 +129,7 @@ export function ProblemDescription({ challenge }: ProblemDescriptionProps) {
           color: colors.textDim,
           fontSize: 11,
           fontWeight: 600,
-          fontFamily: "'Geist Sans', sans-serif",
+          fontFamily: TYPOGRAPHY.fontSans,
           textTransform: 'uppercase',
           letterSpacing: 0.4,
           marginBottom: 8,
@@ -138,7 +139,7 @@ export function ProblemDescription({ challenge }: ProblemDescriptionProps) {
         <div style={{
           color: colors.accent,
           fontSize: 13,
-          fontFamily: "'Geist Mono', monospace",
+          fontFamily: TYPOGRAPHY.fontMono,
           marginBottom: 8,
         }}>
           {signature} -&gt; {returnType}
@@ -146,7 +147,7 @@ export function ProblemDescription({ challenge }: ProblemDescriptionProps) {
         <div style={{
           color: colors.textMuted,
           fontSize: 12,
-          fontFamily: "'Geist Sans', sans-serif",
+          fontFamily: TYPOGRAPHY.fontSans,
           lineHeight: 1.6,
         }}>
           {contractBlurb}
@@ -159,9 +160,9 @@ export function ProblemDescription({ challenge }: ProblemDescriptionProps) {
                 gap: 8,
                 color: colors.textMuted,
                 fontSize: 12,
-                fontFamily: "'Geist Sans', sans-serif",
+                fontFamily: TYPOGRAPHY.fontSans,
               }}>
-                <code style={{ color: colors.text, fontFamily: "'Geist Mono', monospace" }}>
+                <code style={{ color: colors.text, fontFamily: TYPOGRAPHY.fontMono }}>
                   {arg.name}: {arg.type}
                 </code>
                 <span>{arg.description}</span>
@@ -175,7 +176,7 @@ export function ProblemDescription({ challenge }: ProblemDescriptionProps) {
       <div style={{
         color: colors.text,
         fontSize: 14,
-        fontFamily: "'Geist Sans', sans-serif",
+        fontFamily: TYPOGRAPHY.fontSans,
         lineHeight: 1.7,
       }}>
         <ReactMarkdown
@@ -211,7 +212,7 @@ export function ProblemDescription({ challenge }: ProblemDescriptionProps) {
                     border: `1px solid ${colors.border}`,
                     overflowX: 'auto',
                     fontSize: 12,
-                    fontFamily: "'Geist Mono', monospace",
+                    fontFamily: TYPOGRAPHY.fontMono,
                     margin: '0 0 12px',
                   }}>
                     <code>{children}</code>
@@ -224,7 +225,7 @@ export function ProblemDescription({ challenge }: ProblemDescriptionProps) {
                   borderRadius: 3,
                   background: colors.bgElevated,
                   fontSize: 12,
-                  fontFamily: "'Geist Mono', monospace",
+                  fontFamily: TYPOGRAPHY.fontMono,
                   color: colors.accent,
                 }}>
                   {children}
@@ -256,7 +257,7 @@ export function ProblemDescription({ challenge }: ProblemDescriptionProps) {
             color: colors.text,
             fontSize: 14,
             fontWeight: 600,
-            fontFamily: "'Geist Sans', sans-serif",
+            fontFamily: TYPOGRAPHY.fontSans,
             margin: '0 0 8px',
           }}>
             Constraints
@@ -266,7 +267,7 @@ export function ProblemDescription({ challenge }: ProblemDescriptionProps) {
             padding: '0 0 0 20px',
             color: colors.textMuted,
             fontSize: 13,
-            fontFamily: "'Geist Sans', sans-serif",
+            fontFamily: TYPOGRAPHY.fontSans,
             lineHeight: 1.8,
           }}>
             {challenge.constraints.map((c, i) => (
@@ -283,7 +284,7 @@ export function ProblemDescription({ challenge }: ProblemDescriptionProps) {
             color: colors.text,
             fontSize: 14,
             fontWeight: 600,
-            fontFamily: "'Geist Sans', sans-serif",
+            fontFamily: TYPOGRAPHY.fontSans,
             margin: '0 0 10px',
           }}>
             Examples

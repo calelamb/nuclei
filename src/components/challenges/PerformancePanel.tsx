@@ -2,6 +2,7 @@ import { Star, Zap } from 'lucide-react';
 import { useThemeStore } from '../../stores/themeStore';
 import type { EfficiencyMetricReport, EfficiencyReport, EfficiencyTier } from '../../types/challenge';
 
+import { TYPOGRAPHY } from '../../styles/tokens';
 interface PerformancePanelProps {
   report: EfficiencyReport;
 }
@@ -47,7 +48,7 @@ function PrimaryMetricRow({ metric }: { metric: EfficiencyMetricReport }) {
         width: 108,
         color: colors.textMuted,
         fontSize: 12,
-        fontFamily: "'Geist Sans', sans-serif",
+        fontFamily: TYPOGRAPHY.fontSans,
       }}>
         {metric.label}
       </span>
@@ -57,7 +58,7 @@ function PrimaryMetricRow({ metric }: { metric: EfficiencyMetricReport }) {
         color: colors.text,
         fontSize: 13,
         fontWeight: 700,
-        fontFamily: "'Geist Mono', monospace",
+        fontFamily: TYPOGRAPHY.fontMono,
       }}>
         {metric.value}
       </span>
@@ -67,7 +68,7 @@ function PrimaryMetricRow({ metric }: { metric: EfficiencyMetricReport }) {
           <span style={{
             color: colors.textDim,
             fontSize: 10,
-            fontFamily: "'Geist Mono', monospace",
+            fontFamily: TYPOGRAPHY.fontMono,
             width: 58,
           }}>
             opt {metric.optimal}
@@ -79,7 +80,7 @@ function PrimaryMetricRow({ metric }: { metric: EfficiencyMetricReport }) {
             color,
             fontSize: 10.5,
             fontWeight: 700,
-            fontFamily: "'Geist Sans', sans-serif",
+            fontFamily: TYPOGRAPHY.fontSans,
           }}>
             {metric.tier === 'optimal' && <Star size={10} fill={color} strokeWidth={0} />}
             {TIER_LABEL[metric.tier]}
@@ -89,7 +90,7 @@ function PrimaryMetricRow({ metric }: { metric: EfficiencyMetricReport }) {
         <span style={{
           color: colors.textDim,
           fontSize: 10.5,
-          fontFamily: "'Geist Sans', sans-serif",
+          fontFamily: TYPOGRAPHY.fontSans,
         }}>
           measured
         </span>
@@ -127,7 +128,7 @@ export function PerformancePanel({ report }: PerformancePanelProps) {
           color: colors.text,
           fontSize: 12,
           fontWeight: 700,
-          fontFamily: "'Geist Sans', sans-serif",
+          fontFamily: TYPOGRAPHY.fontSans,
           textTransform: 'uppercase',
           letterSpacing: 0.5,
         }}>
@@ -145,7 +146,7 @@ export function PerformancePanel({ report }: PerformancePanelProps) {
             color: colors.success,
             fontSize: 11,
             fontWeight: 700,
-            fontFamily: "'Geist Sans', sans-serif",
+            fontFamily: TYPOGRAPHY.fontSans,
           }}>
             <Star size={11} fill={colors.success} strokeWidth={0} />
             Optimal solution
@@ -156,7 +157,7 @@ export function PerformancePanel({ report }: PerformancePanelProps) {
             marginLeft: 'auto',
             color: colors.textMuted,
             fontSize: 10.5,
-            fontFamily: "'Geist Sans', sans-serif",
+            fontFamily: TYPOGRAPHY.fontSans,
           }}>
             Hit every optimal target for the ★
           </span>
@@ -166,7 +167,7 @@ export function PerformancePanel({ report }: PerformancePanelProps) {
             marginLeft: 'auto',
             color: colors.textDim,
             fontSize: 10.5,
-            fontFamily: "'Geist Sans', sans-serif",
+            fontFamily: TYPOGRAPHY.fontSans,
           }}>
             No efficiency par for this problem yet
           </span>
@@ -189,7 +190,7 @@ export function PerformancePanel({ report }: PerformancePanelProps) {
           gap: 14,
           color: colors.textDim,
           fontSize: 11,
-          fontFamily: "'Geist Mono', monospace",
+          fontFamily: TYPOGRAPHY.fontMono,
         }}>
           {secondary.map((metric) => (
             <span key={metric.key}>

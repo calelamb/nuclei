@@ -12,6 +12,7 @@ import {
   type QecWorkspacePreset,
 } from '../../../types/qecStudy';
 
+import { TYPOGRAPHY } from '../../../styles/tokens';
 interface QecStudySidebarProps {
   fs: QecStudyFs;
 }
@@ -166,7 +167,7 @@ export function QecStudySidebar({ fs }: QecStudySidebarProps): ReactElement {
   };
   if (!projectRoot) return <QecNoProjectNotice />;
   return (
-    <div style={{ display: 'grid', gap: 12, padding: 10, fontFamily: "'Geist Sans', sans-serif" }}>
+    <div style={{ display: 'grid', gap: 12, padding: 10, fontFamily: TYPOGRAPHY.fontSans }}>
       <section aria-label="QEC Studies"><div style={{ display: 'flex', gap: 5, alignItems: 'center', color: colors.textMuted, fontSize: 10, fontWeight: 600, marginBottom: 6 }}><BookOpen size={12} />STUDIES</div><StudyList studies={studies} busy={loading || submitting} /></section>
       <ValidationCards colors={colors} />
       <section aria-label="Create Study"><div style={{ color: colors.textMuted, fontSize: 10, fontWeight: 600, marginBottom: 6 }}>NEW STUDY</div><StudyForm busy={loading || submitting} submitting={submitting} draft={draft} error={error} onChange={setDraft} onSubmit={(event) => void submit(event)} /></section>

@@ -5,6 +5,7 @@ import { useDiracStore } from '../../stores/diracStore';
 import { useThemeStore } from '../../stores/themeStore';
 import { compose } from '../../services/compose';
 
+import { TYPOGRAPHY } from '../../styles/tokens';
 interface ComposeModalProps {
   open: boolean;
   onClose: () => void;
@@ -92,7 +93,7 @@ export function ComposeModal({ open, onClose }: ComposeModalProps) {
           display: 'flex',
           flexDirection: 'column',
           gap: 10,
-          fontFamily: "'Geist Sans', sans-serif",
+          fontFamily: TYPOGRAPHY.fontSans,
         }}
       >
         <div
@@ -144,7 +145,7 @@ export function ComposeModal({ open, onClose }: ComposeModalProps) {
             padding: '10px 12px',
             color: colors.text,
             fontSize: 14,
-            fontFamily: "'Geist Sans', sans-serif",
+            fontFamily: TYPOGRAPHY.fontSans,
             outline: 'none',
           }}
         />

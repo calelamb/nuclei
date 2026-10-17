@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { MoreVertical, EyeOff, RotateCcw, HelpCircle, type LucideIcon } from 'lucide-react';
 import { useThemeStore } from '../../stores/themeStore';
 
+import { TYPOGRAPHY } from '../../styles/tokens';
 /**
  * PRD 11 Phase C — the shared panel header.
  *
@@ -92,7 +93,7 @@ export function PanelHeader({
         display: 'flex', alignItems: 'center', gap: 8, width: '100%',
         padding: '7px 10px', background: 'transparent', border: 'none', borderRadius: 6,
         cursor: 'pointer', color: colors.text, fontSize: 12, textAlign: 'left',
-        fontFamily: "'Geist Sans', sans-serif",
+        fontFamily: TYPOGRAPHY.fontSans,
       }}
       onMouseEnter={(e) => { e.currentTarget.style.background = colors.bgElevated; }}
       onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
@@ -135,7 +136,7 @@ export function PanelHeader({
       <span
         style={{
           fontSize: 13, fontWeight: 600, color: colors.text,
-          fontFamily: "'Geist Sans', sans-serif",
+          fontFamily: TYPOGRAPHY.fontSans,
           overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
         }}
       >
@@ -144,7 +145,7 @@ export function PanelHeader({
       {context && (
         <span
           style={{
-            fontSize: 11, color: colors.textDim, fontFamily: "'Fira Code', monospace",
+            fontSize: 11, color: colors.textDim, fontFamily: TYPOGRAPHY.fontMono,
             overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
           }}
         >

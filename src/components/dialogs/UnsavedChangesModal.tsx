@@ -3,6 +3,7 @@ import { useDialogStore } from '../../stores/dialogStore';
 import { useThemeStore } from '../../stores/themeStore';
 import { useEscapeToClose } from '../../hooks/useEscapeToClose';
 
+import { TYPOGRAPHY } from '../../styles/tokens';
 export function UnsavedChangesModal() {
   const pending = useDialogStore((s) => s.pendingClose);
   const clearPending = useDialogStore((s) => s.clearPendingClose);
@@ -51,7 +52,7 @@ export function UnsavedChangesModal() {
           boxShadow: shadow.lg,
           padding: 18,
           zIndex: 9999,
-          fontFamily: "'Geist Sans', sans-serif",
+          fontFamily: TYPOGRAPHY.fontSans,
         }}
       >
         <div
@@ -89,7 +90,7 @@ export function UnsavedChangesModal() {
               cursor: 'pointer',
               fontSize: 12,
               fontWeight: 500,
-              fontFamily: "'Geist Sans', sans-serif",
+              fontFamily: TYPOGRAPHY.fontSans,
             }}
           >
             Cancel
@@ -108,7 +109,7 @@ export function UnsavedChangesModal() {
               cursor: 'pointer',
               fontSize: 12,
               fontWeight: 500,
-              fontFamily: "'Geist Sans', sans-serif",
+              fontFamily: TYPOGRAPHY.fontSans,
             }}
           >
             Don't save
@@ -127,7 +128,7 @@ export function UnsavedChangesModal() {
               cursor: 'pointer',
               fontSize: 12,
               fontWeight: 600,
-              fontFamily: "'Geist Sans', sans-serif",
+              fontFamily: TYPOGRAPHY.fontSans,
             }}
           >
             Save

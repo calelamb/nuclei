@@ -20,9 +20,10 @@ import { PluginPanelHost } from './PluginPanelHost';
 import { PluginErrorCard } from './PluginErrorCard';
 import type { InstalledPlugin } from '../../plugins/types';
 
+import { TYPOGRAPHY } from '../../styles/tokens';
 type Tab = 'installed' | 'panels';
 
-const FONT = "'Geist Sans', sans-serif";
+const FONT = TYPOGRAPHY.fontSans;
 
 /* ── Small building blocks ───────────────────────────────── */
 
@@ -348,7 +349,7 @@ function PluginRow({
             key={cap}
             style={{
               fontSize: 9,
-              fontFamily: "'Geist Mono', monospace",
+              fontFamily: TYPOGRAPHY.fontMono,
               color: colors.accentLight,
               background: `${colors.accent}12`,
               padding: '1px 5px',
@@ -365,7 +366,7 @@ function PluginRow({
           style={{
             fontSize: 10,
             color: colors.error,
-            fontFamily: "'Geist Mono', monospace",
+            fontFamily: TYPOGRAPHY.fontMono,
             wordBreak: 'break-word',
           }}
         >

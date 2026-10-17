@@ -6,6 +6,7 @@ import type { AgentRunUi } from '../../stores/agentRunStore';
 import { useEditorStore } from '../../stores/editorStore';
 import type { JournalEntry, PatchTransaction } from '../../services/agent/types';
 
+import { TYPOGRAPHY } from '../../styles/tokens';
 const RUNNING_STATES = new Set(['planning', 'working', 'paused']);
 
 function stateLabel(state: AgentRunUi['state']): string {
@@ -80,7 +81,7 @@ function TimelineRow({ text }: { text: string }) {
     <div
       style={{
         fontSize: 11,
-        fontFamily: "'JetBrains Mono', monospace",
+        fontFamily: TYPOGRAPHY.fontMono,
         color: colors.textMuted,
         padding: '2px 0',
         overflow: 'hidden',
@@ -129,7 +130,7 @@ function PatchRow({ tx }: { tx: PatchTransaction }) {
       <span
         style={{
           fontSize: 11,
-          fontFamily: "'JetBrains Mono', monospace",
+          fontFamily: TYPOGRAPHY.fontMono,
           color: colors.text,
           flex: 1,
           overflow: 'hidden',
@@ -140,13 +141,13 @@ function PatchRow({ tx }: { tx: PatchTransaction }) {
         {tx.path}
       </span>
       {tx.rolledBack ? (
-        <span style={{ fontSize: 10, color: colors.textDim, fontFamily: "'Geist Sans', sans-serif" }}>
+        <span style={{ fontSize: 10, color: colors.textDim, fontFamily: TYPOGRAPHY.fontSans }}>
           Rolled back
         </span>
       ) : blocked ? (
         <span
           title="Undo your own edits to this file first, then roll back."
-          style={{ fontSize: 10, color: colors.warning, fontFamily: "'Geist Sans', sans-serif" }}
+          style={{ fontSize: 10, color: colors.warning, fontFamily: TYPOGRAPHY.fontSans }}
         >
           File changed — can’t roll back
         </span>
@@ -156,7 +157,7 @@ function PatchRow({ tx }: { tx: PatchTransaction }) {
           style={{
             padding: '2px 8px',
             fontSize: 10,
-            fontFamily: "'Geist Sans', sans-serif",
+            fontFamily: TYPOGRAPHY.fontSans,
             background: colors.border,
             color: colors.text,
             border: 'none',
@@ -209,7 +210,7 @@ export function AgentRunCard({ run, isRunning, onStop }: AgentRunCardProps) {
             fontSize: 12,
             fontWeight: 600,
             color: colors.text,
-            fontFamily: "'Geist Sans', sans-serif",
+            fontFamily: TYPOGRAPHY.fontSans,
             flex: 1,
             overflow: 'hidden',
             textOverflow: 'ellipsis',
@@ -228,7 +229,7 @@ export function AgentRunCard({ run, isRunning, onStop }: AgentRunCardProps) {
             background: `${badgeColor}18`,
             color: badgeColor,
             border: `1px solid ${badgeColor}40`,
-            fontFamily: "'Geist Sans', sans-serif",
+            fontFamily: TYPOGRAPHY.fontSans,
           }}
         >
           {stateLabel(run.state)}
@@ -239,7 +240,7 @@ export function AgentRunCard({ run, isRunning, onStop }: AgentRunCardProps) {
         style={{
           fontSize: 10,
           color: colors.textDim,
-          fontFamily: "'Geist Sans', sans-serif",
+          fontFamily: TYPOGRAPHY.fontSans,
         }}
       >
         {run.iterations} tool call{run.iterations === 1 ? '' : 's'}
@@ -275,7 +276,7 @@ export function AgentRunCard({ run, isRunning, onStop }: AgentRunCardProps) {
           style={{
             fontSize: 11,
             color: colors.textMuted,
-            fontFamily: "'Geist Sans', sans-serif",
+            fontFamily: TYPOGRAPHY.fontSans,
             lineHeight: 1.4,
           }}
         >
@@ -290,7 +291,7 @@ export function AgentRunCard({ run, isRunning, onStop }: AgentRunCardProps) {
             alignSelf: 'flex-start',
             padding: '4px 12px',
             fontSize: 11,
-            fontFamily: "'Geist Sans', sans-serif",
+            fontFamily: TYPOGRAPHY.fontSans,
             background: colors.error,
             color: '#fff',
             border: 'none',

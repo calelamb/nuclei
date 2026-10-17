@@ -3,6 +3,7 @@ import { Trophy } from 'lucide-react';
 import { useThemeStore } from '../../stores/themeStore';
 import { BADGES } from '../../data/community/badges';
 
+import { TYPOGRAPHY } from '../../styles/tokens';
 interface BadgeDisplayProps {
   earnedBadgeIds: string[];
 }
@@ -53,7 +54,7 @@ export function BadgeDisplay({ earnedBadgeIds }: BadgeDisplayProps) {
               style={{
                 fontSize: 9,
                 fontWeight: 600,
-                fontFamily: "'Geist Sans', sans-serif",
+                fontFamily: TYPOGRAPHY.fontSans,
                 color: earned ? colors.text : colors.textDim,
                 textAlign: 'center',
                 lineHeight: 1.2,
@@ -85,7 +86,7 @@ export function BadgeDisplay({ earnedBadgeIds }: BadgeDisplayProps) {
                   style={{
                     fontSize: 10,
                     color: colors.textMuted,
-                    fontFamily: "'Geist Sans', sans-serif",
+                    fontFamily: TYPOGRAPHY.fontSans,
                   }}
                 >
                   {badge.description}

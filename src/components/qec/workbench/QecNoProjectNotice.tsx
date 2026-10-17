@@ -4,7 +4,8 @@ import { describeMapping } from '../../../lib/qecMappingSummary';
 import { useQecCampaignStore } from '../../../stores/qecCampaignStore';
 import { useThemeStore } from '../../../stores/themeStore';
 
-const FONT = "'Geist Sans', sans-serif";
+import { TYPOGRAPHY } from '../../../styles/tokens';
+const FONT = TYPOGRAPHY.fontSans;
 
 /** Sidebar content when no project folder is open (always the case in the web
  * build): says what still works here, and what the loaded CSV is. */

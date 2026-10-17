@@ -4,6 +4,7 @@ import { useEditorStore } from '../../stores/editorStore';
 import { useDiracPanelStore } from '../../stores/diracPanelStore';
 import { Play, Lightbulb, Trophy } from 'lucide-react';
 
+import { TYPOGRAPHY } from '../../styles/tokens';
 const DIFFICULTY_COLORS: Record<string, string> = {
   beginner: '#10B981',
   intermediate: '#F59E0B',
@@ -51,7 +52,7 @@ export function ChallengeBoard() {
           height: '100%',
           color: colors.textDim,
           fontSize: 12,
-          fontFamily: "'Geist Sans', sans-serif",
+          fontFamily: TYPOGRAPHY.fontSans,
         }}
       >
         No challenges available
@@ -77,7 +78,7 @@ export function ChallengeBoard() {
                   background: active ? `${colors.accent}18` : 'transparent',
                   color: active ? colors.accent : colors.textMuted,
                   fontSize: 10,
-                  fontFamily: "'Geist Sans', sans-serif",
+                  fontFamily: TYPOGRAPHY.fontSans,
                   cursor: 'pointer',
                   fontWeight: active ? 600 : 400,
                 }}
@@ -108,7 +109,7 @@ export function ChallengeBoard() {
               fontSize: 14,
               fontWeight: 700,
               color: colors.text,
-              fontFamily: "'Geist Sans', sans-serif",
+              fontFamily: TYPOGRAPHY.fontSans,
               flex: 1,
               minWidth: 0,
             }}
@@ -119,7 +120,7 @@ export function ChallengeBoard() {
             style={{
               fontSize: 9,
               fontWeight: 600,
-              fontFamily: "'Geist Sans', sans-serif",
+              fontFamily: TYPOGRAPHY.fontSans,
               color: '#fff',
               background: DIFFICULTY_COLORS[displayed.difficulty] ?? colors.accent,
               padding: '2px 6px',
@@ -136,7 +137,7 @@ export function ChallengeBoard() {
           style={{
             fontSize: 11,
             color: colors.textMuted,
-            fontFamily: "'Geist Sans', sans-serif",
+            fontFamily: TYPOGRAPHY.fontSans,
             lineHeight: 1.5,
             margin: 0,
             display: '-webkit-box',
@@ -153,7 +154,7 @@ export function ChallengeBoard() {
             style={{
               fontSize: 10,
               color: colors.textDim,
-              fontFamily: "'Geist Sans', sans-serif",
+              fontFamily: TYPOGRAPHY.fontSans,
             }}
           >
             {formatCountdown(displayed.deadline)}
@@ -162,7 +163,7 @@ export function ChallengeBoard() {
             style={{
               fontSize: 10,
               color: colors.textDim,
-              fontFamily: "'Geist Sans', sans-serif",
+              fontFamily: TYPOGRAPHY.fontSans,
             }}
           >
             {displayed.submissions} submissions
@@ -186,7 +187,7 @@ export function ChallengeBoard() {
               color: '#fff',
               fontSize: 11,
               fontWeight: 600,
-              fontFamily: "'Geist Sans', sans-serif",
+              fontFamily: TYPOGRAPHY.fontSans,
               cursor: 'pointer',
             }}
           >
@@ -207,7 +208,7 @@ export function ChallengeBoard() {
               color: colors.dirac,
               fontSize: 11,
               fontWeight: 600,
-              fontFamily: "'Geist Sans', sans-serif",
+              fontFamily: TYPOGRAPHY.fontSans,
               cursor: 'pointer',
             }}
           >
@@ -235,7 +236,7 @@ export function ChallengeBoard() {
               textTransform: 'uppercase',
               letterSpacing: 0.5,
               color: colors.textMuted,
-              fontFamily: "'Geist Sans', sans-serif",
+              fontFamily: TYPOGRAPHY.fontSans,
             }}
           >
             Leaderboard
@@ -247,7 +248,7 @@ export function ChallengeBoard() {
             width: '100%',
             borderCollapse: 'collapse',
             fontSize: 11,
-            fontFamily: "'Geist Sans', sans-serif",
+            fontFamily: TYPOGRAPHY.fontSans,
           }}
         >
           <thead>

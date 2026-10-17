@@ -4,6 +4,7 @@ import { useCapstoneStore } from '../../stores/capstoneStore';
 import { useEditorStore } from '../../stores/editorStore';
 import { useThemeStore } from '../../stores/themeStore';
 
+import { TYPOGRAPHY } from '../../styles/tokens';
 export function CapstoneProjectView() {
   const colors = useThemeStore((s) => s.colors);
   const { activeProject, activeMilestoneIndex, completedMilestones, completeMilestone, exitProject } = useCapstoneStore();
@@ -47,7 +48,7 @@ export function CapstoneProjectView() {
             color: colors.textMuted,
             cursor: 'pointer',
             fontSize: 11,
-            fontFamily: 'Geist Sans, Inter, sans-serif',
+            fontFamily: TYPOGRAPHY.fontSans,
             padding: 0,
             marginBottom: 6,
           }}
@@ -55,10 +56,10 @@ export function CapstoneProjectView() {
           <ArrowLeft size={12} />
           Back to projects
         </button>
-        <div style={{ color: colors.text, fontSize: 14, fontWeight: 600, fontFamily: 'Geist Sans, Inter, sans-serif' }}>
+        <div style={{ color: colors.text, fontSize: 14, fontWeight: 600, fontFamily: TYPOGRAPHY.fontSans }}>
           {activeProject.title}
         </div>
-        <div style={{ color: colors.textMuted, fontSize: 11, fontFamily: 'Geist Sans, Inter, sans-serif', lineHeight: 1.4, marginTop: 4 }}>
+        <div style={{ color: colors.textMuted, fontSize: 11, fontFamily: TYPOGRAPHY.fontSans, lineHeight: 1.4, marginTop: 4 }}>
           {activeProject.description.length > 120 ? activeProject.description.slice(0, 120) + '...' : activeProject.description}
         </div>
       </div>
@@ -88,7 +89,7 @@ export function CapstoneProjectView() {
                   justifyContent: 'center',
                   fontSize: 10,
                   fontWeight: 700,
-                  fontFamily: 'Geist Sans, Inter, sans-serif',
+                  fontFamily: TYPOGRAPHY.fontSans,
                   flexShrink: 0,
                   marginTop: 1,
                 }}>
@@ -99,7 +100,7 @@ export function CapstoneProjectView() {
                     color: isFuture ? colors.textDim : colors.text,
                     fontSize: 12,
                     fontWeight: 500,
-                    fontFamily: 'Geist Sans, Inter, sans-serif',
+                    fontFamily: TYPOGRAPHY.fontSans,
                     display: 'flex',
                     alignItems: 'center',
                     gap: 4,
@@ -111,7 +112,7 @@ export function CapstoneProjectView() {
                   {/* Expanded current milestone */}
                   {isCurrent && (
                     <div style={{ marginTop: 6 }}>
-                      <div style={{ color: colors.textMuted, fontSize: 11, fontFamily: 'Geist Sans, Inter, sans-serif', lineHeight: 1.5, marginBottom: 8 }}>
+                      <div style={{ color: colors.textMuted, fontSize: 11, fontFamily: TYPOGRAPHY.fontSans, lineHeight: 1.5, marginBottom: 8 }}>
                         {milestone.description}
                       </div>
 
@@ -130,7 +131,7 @@ export function CapstoneProjectView() {
                             borderRadius: 3,
                             cursor: 'pointer',
                             fontSize: 11,
-                            fontFamily: 'Geist Sans, Inter, sans-serif',
+                            fontFamily: TYPOGRAPHY.fontSans,
                           }}
                         >
                           <Play size={10} />
@@ -146,7 +147,7 @@ export function CapstoneProjectView() {
                             borderRadius: 3,
                             cursor: 'pointer',
                             fontSize: 11,
-                            fontFamily: 'Geist Sans, Inter, sans-serif',
+                            fontFamily: TYPOGRAPHY.fontSans,
                           }}
                         >
                           Mark Complete
@@ -170,7 +171,7 @@ export function CapstoneProjectView() {
                               }}
                             >
                               <Lightbulb size={11} color={colors.warning} style={{ flexShrink: 0, marginTop: 2 }} />
-                              <span style={{ color: colors.textMuted, fontSize: 11, fontFamily: 'Geist Sans, Inter, sans-serif', lineHeight: 1.4 }}>
+                              <span style={{ color: colors.textMuted, fontSize: 11, fontFamily: TYPOGRAPHY.fontSans, lineHeight: 1.4 }}>
                                 {hint}
                               </span>
                             </div>
@@ -187,7 +188,7 @@ export function CapstoneProjectView() {
                                 color: colors.warning,
                                 cursor: 'pointer',
                                 fontSize: 10,
-                                fontFamily: 'Geist Sans, Inter, sans-serif',
+                                fontFamily: TYPOGRAPHY.fontSans,
                                 padding: '2px 0',
                               }}
                             >
@@ -219,10 +220,10 @@ export function CapstoneProjectView() {
             border: `1px solid ${colors.dirac}44`,
             background: colors.dirac + '0A',
           }}>
-            <div style={{ color: colors.dirac, fontSize: 10, fontWeight: 600, fontFamily: 'Geist Sans, Inter, sans-serif', marginBottom: 4 }}>
+            <div style={{ color: colors.dirac, fontSize: 10, fontWeight: 600, fontFamily: TYPOGRAPHY.fontSans, marginBottom: 4 }}>
               Dirac Guidance
             </div>
-            <div style={{ color: colors.textMuted, fontSize: 11, fontFamily: 'Geist Sans, Inter, sans-serif', lineHeight: 1.4 }}>
+            <div style={{ color: colors.textMuted, fontSize: 11, fontFamily: TYPOGRAPHY.fontSans, lineHeight: 1.4 }}>
               {activeProject.diracGuidancePrompt.length > 200 ? activeProject.diracGuidancePrompt.slice(0, 200) + '...' : activeProject.diracGuidancePrompt}
             </div>
           </div>

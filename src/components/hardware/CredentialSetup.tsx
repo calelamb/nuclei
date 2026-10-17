@@ -6,6 +6,7 @@ import type { HardwareProviderType } from '../../types/hardware';
 import { getHardware } from '../../App';
 import { useEscapeToClose } from '../../hooks/useEscapeToClose';
 
+import { TYPOGRAPHY } from '../../styles/tokens';
 interface CredentialSetupProps {
   provider: HardwareProviderType;
   onClose: () => void;
@@ -146,7 +147,7 @@ export function CredentialSetup({ provider, onClose }: CredentialSetupProps) {
   });
 
   const font: React.CSSProperties = {
-    fontFamily: "'Geist Sans', sans-serif",
+    fontFamily: TYPOGRAPHY.fontSans,
   };
 
   const handleSave = () => {

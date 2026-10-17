@@ -3,6 +3,7 @@ import { useThemeStore } from '../../stores/themeStore';
 import { QuantumPlayground } from './QuantumPlayground';
 import { EASING, DURATION, getDuration, prefersReducedMotion } from '../../lib/animations';
 
+import { TYPOGRAPHY } from '../../styles/tokens';
 type OnboardingPath = 'welcome' | 'beginner' | 'intermediate' | 'experienced' | 'research';
 
 interface OnboardingProps {
@@ -53,7 +54,7 @@ function ModeSelectScreen({ onSelectLearn, onSelectResearch }: {
       <div style={{ maxWidth: 560, width: '100%', textAlign: 'center' }}>
         <div style={{
           color: colors.accent, fontSize: 40, fontWeight: 800,
-          fontFamily: "'Geist Sans', Inter, sans-serif",
+          fontFamily: TYPOGRAPHY.fontSans,
           letterSpacing: -1,
           marginBottom: 8,
           animation: prefersReducedMotion() ? 'none' : `nuclei-fade-in ${DURATION.emphasis}ms ${EASING.enter}`,
@@ -62,7 +63,7 @@ function ModeSelectScreen({ onSelectLearn, onSelectResearch }: {
         </div>
         <p style={{
           color: colors.textMuted, fontSize: 16,
-          fontFamily: "'Geist Sans', Inter, sans-serif",
+          fontFamily: TYPOGRAPHY.fontSans,
           marginBottom: 40, lineHeight: 1.6,
         }}>
           What are you here to do?
@@ -91,13 +92,13 @@ function ModeSelectScreen({ onSelectLearn, onSelectResearch }: {
             >
               <span style={{
                 color: colors.text, fontSize: 17, fontWeight: 600,
-                fontFamily: "'Geist Sans', Inter, sans-serif",
+                fontFamily: TYPOGRAPHY.fontSans,
               }}>
                 {card.title}
               </span>
               <span style={{
                 color: colors.textMuted, fontSize: 13,
-                fontFamily: "'Geist Sans', Inter, sans-serif",
+                fontFamily: TYPOGRAPHY.fontSans,
                 marginTop: 4, lineHeight: 1.5,
               }}>
                 {card.description}
@@ -131,7 +132,7 @@ function WelcomeScreen({ onSelect }: { onSelect: (path: OnboardingPath) => void 
         {/* Logo */}
         <div style={{
           color: colors.accent, fontSize: 40, fontWeight: 800,
-          fontFamily: "'Geist Sans', Inter, sans-serif",
+          fontFamily: TYPOGRAPHY.fontSans,
           letterSpacing: -1,
           marginBottom: 8,
           animation: prefersReducedMotion() ? 'none' : `nuclei-fade-in ${DURATION.emphasis}ms ${EASING.enter}`,
@@ -140,7 +141,7 @@ function WelcomeScreen({ onSelect }: { onSelect: (path: OnboardingPath) => void 
         </div>
         <p style={{
           color: colors.textMuted, fontSize: 16,
-          fontFamily: "'Geist Sans', Inter, sans-serif",
+          fontFamily: TYPOGRAPHY.fontSans,
           marginBottom: 40, lineHeight: 1.6,
         }}>
           Ready to explore quantum computing?
@@ -170,13 +171,13 @@ function WelcomeScreen({ onSelect }: { onSelect: (path: OnboardingPath) => void 
             >
               <span style={{
                 color: colors.text, fontSize: 16, fontWeight: 600,
-                fontFamily: "'Geist Sans', Inter, sans-serif",
+                fontFamily: TYPOGRAPHY.fontSans,
               }}>
                 {path.title}
               </span>
               <span style={{
                 color: colors.textMuted, fontSize: 13,
-                fontFamily: "'Geist Sans', Inter, sans-serif",
+                fontFamily: TYPOGRAPHY.fontSans,
                 marginTop: 4, lineHeight: 1.5,
               }}>
                 {path.description}
@@ -211,7 +212,7 @@ function ReturningUserScreen({ onContinue, onStartFresh, lastFile, daysSince }: 
       <div style={{ maxWidth: 420, width: '100%', textAlign: 'center' }}>
         <div style={{
           color: colors.accent, fontSize: 32, fontWeight: 800,
-          fontFamily: "'Geist Sans', Inter, sans-serif",
+          fontFamily: TYPOGRAPHY.fontSans,
           letterSpacing: -1,
           marginBottom: 12,
         }}>
@@ -219,7 +220,7 @@ function ReturningUserScreen({ onContinue, onStartFresh, lastFile, daysSince }: 
         </div>
         <p style={{
           color: colors.text, fontSize: 18, fontWeight: 500,
-          fontFamily: "'Geist Sans', Inter, sans-serif",
+          fontFamily: TYPOGRAPHY.fontSans,
           marginBottom: 8,
         }}>
           {greeting}
@@ -227,7 +228,7 @@ function ReturningUserScreen({ onContinue, onStartFresh, lastFile, daysSince }: 
         {lastFile && (
           <p style={{
             color: colors.textMuted, fontSize: 13,
-            fontFamily: "'Geist Sans', Inter, sans-serif",
+            fontFamily: TYPOGRAPHY.fontSans,
             marginBottom: 24,
           }}>
             Pick up where you left off?
@@ -245,7 +246,7 @@ function ReturningUserScreen({ onContinue, onStartFresh, lastFile, daysSince }: 
               cursor: 'pointer',
               fontSize: 15,
               fontWeight: 600,
-              fontFamily: "'Geist Sans', Inter, sans-serif",
+              fontFamily: TYPOGRAPHY.fontSans,
             }}
           >
             {lastFile ? 'Continue where I left off' : 'Open IDE'}
@@ -260,7 +261,7 @@ function ReturningUserScreen({ onContinue, onStartFresh, lastFile, daysSince }: 
               borderRadius: 8,
               cursor: 'pointer',
               fontSize: 13,
-              fontFamily: "'Geist Sans', sans-serif",
+              fontFamily: TYPOGRAPHY.fontSans,
             }}
           >
             Start fresh

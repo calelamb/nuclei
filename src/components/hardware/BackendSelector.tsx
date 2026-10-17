@@ -3,6 +3,7 @@ import { ChevronDown, ChevronUp } from 'lucide-react';
 import { useThemeStore } from '../../stores/themeStore';
 import type { BackendInfo, HardwareProviderType } from '../../types/hardware';
 
+import { TYPOGRAPHY } from '../../styles/tokens';
 const PROVIDER_LABELS: Record<HardwareProviderType, string> = {
   ibm: 'IBM',
   google: 'Google',
@@ -43,7 +44,7 @@ export function BackendSelector({ backends, selected, onSelect }: BackendSelecto
           borderRadius: 4,
           color: selectedBackend ? colors.text : colors.textDim,
           fontSize: 11,
-          fontFamily: "'Geist Sans', sans-serif",
+          fontFamily: TYPOGRAPHY.fontSans,
           cursor: 'pointer',
           outline: 'none',
           gap: 6,
@@ -84,7 +85,7 @@ export function BackendSelector({ backends, selected, onSelect }: BackendSelecto
                 padding: '12px 10px',
                 fontSize: 11,
                 color: colors.textDim,
-                fontFamily: "'Geist Sans', sans-serif",
+                fontFamily: TYPOGRAPHY.fontSans,
                 textAlign: 'center',
               }}
             >
@@ -143,7 +144,7 @@ export function BackendSelector({ backends, selected, onSelect }: BackendSelecto
                       style={{
                         fontSize: 11,
                         color: colors.text,
-                        fontFamily: "'Geist Sans', sans-serif",
+                        fontFamily: TYPOGRAPHY.fontSans,
                         flex: 1,
                         minWidth: 0,
                         overflow: 'hidden',
@@ -163,7 +164,7 @@ export function BackendSelector({ backends, selected, onSelect }: BackendSelecto
                         borderRadius: 3,
                         background: `${colors.accent}18`,
                         color: colors.accent,
-                        fontFamily: "'Geist Sans', sans-serif",
+                        fontFamily: TYPOGRAPHY.fontSans,
                         flexShrink: 0,
                       }}
                     >
@@ -176,7 +177,7 @@ export function BackendSelector({ backends, selected, onSelect }: BackendSelecto
                       gap: 10,
                       fontSize: 10,
                       color: colors.textDim,
-                      fontFamily: "'Geist Sans', sans-serif",
+                      fontFamily: TYPOGRAPHY.fontSans,
                       paddingLeft: 12,
                     }}
                   >

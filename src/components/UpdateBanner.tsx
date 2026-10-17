@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { Download, RefreshCw, X } from 'lucide-react';
 import { useThemeStore } from '../stores/themeStore';
 
+import { TYPOGRAPHY } from '../styles/tokens';
 type PhaseIdle = { kind: 'idle' };
 type PhaseAvailable = { kind: 'available'; version: string; notes?: string };
 type PhaseDownloading = { kind: 'downloading'; version: string; percent: number };
@@ -206,7 +207,7 @@ export function UpdateBanner() {
             style={{
               color: colors.text,
               fontSize: 13,
-              fontFamily: "'Geist Sans', sans-serif",
+              fontFamily: TYPOGRAPHY.fontSans,
               fontWeight: 600,
             }}
           >
@@ -216,7 +217,7 @@ export function UpdateBanner() {
             style={{
               color: colors.textMuted,
               fontSize: 12,
-              fontFamily: "'Geist Sans', sans-serif",
+              fontFamily: TYPOGRAPHY.fontSans,
               marginTop: 2,
               lineHeight: 1.4,
             }}
@@ -280,7 +281,7 @@ function buttonStyle(
     borderRadius: 5,
     padding: '6px 12px',
     fontSize: 12,
-    fontFamily: "'Geist Sans', sans-serif",
+    fontFamily: TYPOGRAPHY.fontSans,
     fontWeight: 600,
     cursor: 'pointer',
     display: 'inline-flex',

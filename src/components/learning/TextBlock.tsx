@@ -1,6 +1,7 @@
 import ReactMarkdown from 'react-markdown';
 import { useThemeStore } from '../../stores/themeStore';
 
+import { TYPOGRAPHY } from '../../styles/tokens';
 interface TextBlockProps {
   markdown: string;
 }
@@ -13,7 +14,7 @@ export function TextBlock({ markdown }: TextBlockProps) {
       className="nuclei-markdown"
       style={{
         color: colors.text,
-        fontFamily: "'Geist Sans', Inter, system-ui, sans-serif",
+        fontFamily: TYPOGRAPHY.fontSans,
         fontSize: 15,
         lineHeight: 1.7,
       }}
@@ -45,7 +46,7 @@ export function TextBlock({ markdown }: TextBlockProps) {
                   border: `1px solid ${colors.border}`,
                   borderRadius: 6,
                   padding: '12px 16px',
-                  fontFamily: "'JetBrains Mono', 'Geist Mono', monospace",
+                  fontFamily: TYPOGRAPHY.fontMono,
                   fontSize: 13,
                   lineHeight: 1.5,
                   color: colors.text,
@@ -60,7 +61,7 @@ export function TextBlock({ markdown }: TextBlockProps) {
                 background: colors.bgElevated,
                 padding: '2px 6px',
                 borderRadius: 4,
-                fontFamily: "'JetBrains Mono', 'Geist Mono', monospace",
+                fontFamily: TYPOGRAPHY.fontMono,
                 fontSize: '0.9em',
                 color: colors.accent,
               }}>

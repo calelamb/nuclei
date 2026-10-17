@@ -8,6 +8,7 @@ import { useEducatorStore, type Assignment } from '../../stores/educatorStore';
 import { AssignmentCreator } from './AssignmentCreator';
 import { ProgressReport } from './ProgressReport';
 
+import { TYPOGRAPHY } from '../../styles/tokens';
 /* ── Collapsible Section (matches SettingsPanel pattern) ── */
 
 function Section({ title, icon: Icon, defaultOpen = false, children }: {
@@ -31,7 +32,7 @@ function Section({ title, icon: Icon, defaultOpen = false, children }: {
         {Icon && <Icon size={12} />}
         <span style={{
           fontSize: 10, fontWeight: 600, textTransform: 'uppercase',
-          letterSpacing: 0.5, fontFamily: "'Geist Sans', sans-serif",
+          letterSpacing: 0.5, fontFamily: TYPOGRAPHY.fontSans,
         }}>
           {title}
         </span>
@@ -53,7 +54,7 @@ function Section({ title, icon: Icon, defaultOpen = false, children }: {
 
 export function ClassroomPanel() {
   const colors = useThemeStore((s) => s.colors);
-  const font = "'Geist Sans', sans-serif";
+  const font = TYPOGRAPHY.fontSans;
 
   const isEducator = useEducatorStore((s) => s.isEducator);
   const classroomName = useEducatorStore((s) => s.classroomName);

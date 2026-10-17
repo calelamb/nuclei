@@ -6,6 +6,7 @@ import { ProviderLogo } from './ProviderLogo';
 import { getHardware } from '../../App';
 import type { HardwareProviderType } from '../../types/hardware';
 
+import { TYPOGRAPHY } from '../../styles/tokens';
 function fmtElapsed(startIso: string): string {
   const ms = Date.now() - new Date(startIso).getTime();
   if (ms < 1000) return '<1s';
@@ -120,7 +121,7 @@ export function LaunchStrip() {
         borderRadius: 10,
         color: colors.text,
         cursor: 'pointer',
-        fontFamily: "'Geist Sans', sans-serif",
+        fontFamily: TYPOGRAPHY.fontSans,
         fontSize: 11,
         textAlign: 'left',
         width: 'calc(100% - 20px)',
@@ -170,7 +171,7 @@ export function LaunchStrip() {
           gap: 4,
           fontSize: 10,
           fontWeight: 500,
-          fontFamily: "'Geist Sans', sans-serif",
+          fontFamily: TYPOGRAPHY.fontSans,
         }}
         onMouseEnter={(e) => {
           e.currentTarget.style.color = colors.error;

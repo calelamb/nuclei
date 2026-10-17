@@ -3,6 +3,7 @@ import { useThemeStore } from '../../stores/themeStore';
 import { useEditorStore } from '../../stores/editorStore';
 import { EASING, DURATION, getDuration, prefersReducedMotion } from '../../lib/animations';
 
+import { TYPOGRAPHY } from '../../styles/tokens';
 interface PlaygroundState {
   step: number;
   qubitState: 'zero' | 'one' | 'superposition' | 'measured';
@@ -78,8 +79,8 @@ function QubitViz({ state, label, size = 120 }: { state: PlaygroundState['qubitS
           fill="none" stroke={colors.border} strokeWidth={1.5}
           opacity={0.4}
         />
-        <text x={size / 2} y={12} textAnchor="middle" fill={colors.textMuted} fontSize={10} fontFamily="'Geist Sans', Inter, sans-serif">|0⟩</text>
-        <text x={size / 2} y={size - 4} textAnchor="middle" fill={colors.textMuted} fontSize={10} fontFamily="'Geist Sans', Inter, sans-serif">|1⟩</text>
+        <text x={size / 2} y={12} textAnchor="middle" fill={colors.textMuted} fontSize={10} fontFamily={TYPOGRAPHY.fontSans}>|0⟩</text>
+        <text x={size / 2} y={size - 4} textAnchor="middle" fill={colors.textMuted} fontSize={10} fontFamily={TYPOGRAPHY.fontSans}>|1⟩</text>
         <line
           x1={size / 2} y1={size / 2}
           x2={size / 2 + arrowX} y2={size / 2 + arrowY}
@@ -97,7 +98,7 @@ function QubitViz({ state, label, size = 120 }: { state: PlaygroundState['qubitS
         />
       </svg>
       {label && (
-        <span style={{ color: colors.textMuted, fontSize: 11, fontFamily: "'Geist Sans', sans-serif" }}>{label}</span>
+        <span style={{ color: colors.textMuted, fontSize: 11, fontFamily: TYPOGRAPHY.fontSans }}>{label}</span>
       )}
     </div>
   );
@@ -122,7 +123,7 @@ function MiniHistogram({ measurements }: { measurements: number[] }) {
           borderRadius: '4px 4px 0 0',
           transition: `height ${getDuration(DURATION.normal)}ms ${EASING.enter}`,
         }} />
-        <span style={{ color: colors.text, fontSize: 11, fontFamily: "'Geist Sans', sans-serif" }}>|0⟩</span>
+        <span style={{ color: colors.text, fontSize: 11, fontFamily: TYPOGRAPHY.fontSans }}>|0⟩</span>
         <span style={{ color: colors.textMuted, fontSize: 10 }}>{zeros}</span>
       </div>
       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
@@ -131,7 +132,7 @@ function MiniHistogram({ measurements }: { measurements: number[] }) {
           borderRadius: '4px 4px 0 0',
           transition: `height ${getDuration(DURATION.normal)}ms ${EASING.enter}`,
         }} />
-        <span style={{ color: colors.text, fontSize: 11, fontFamily: "'Geist Sans', sans-serif" }}>|1⟩</span>
+        <span style={{ color: colors.text, fontSize: 11, fontFamily: TYPOGRAPHY.fontSans }}>|1⟩</span>
         <span style={{ color: colors.textMuted, fontSize: 10 }}>{ones}</span>
       </div>
     </div>
@@ -228,7 +229,7 @@ export function QuantumPlayground({ onComplete, onBridgeToIDE }: PlaygroundProps
           position: 'absolute', top: 32, right: 32,
           background: 'none', border: 'none',
           color: colors.textMuted, cursor: 'pointer',
-          fontSize: 13, fontFamily: "'Geist Sans', sans-serif",
+          fontSize: 13, fontFamily: TYPOGRAPHY.fontSans,
         }}
         aria-label="Skip onboarding"
       >
@@ -239,7 +240,7 @@ export function QuantumPlayground({ onComplete, onBridgeToIDE }: PlaygroundProps
       <div style={{ maxWidth: 560, width: '100%', textAlign: 'center' }}>
         <h1 style={{
           color: colors.accent, fontSize: 28, fontWeight: 700,
-          fontFamily: "'Geist Sans', Inter, sans-serif",
+          fontFamily: TYPOGRAPHY.fontSans,
           marginBottom: 16,
           animation: prefersReducedMotion() ? 'none' : `nuclei-fade-in ${DURATION.slow}ms ${EASING.enter}`,
         }}>
@@ -266,12 +267,12 @@ export function QuantumPlayground({ onComplete, onBridgeToIDE }: PlaygroundProps
           marginBottom: 24,
           animation: prefersReducedMotion() ? 'none' : `nuclei-slide-up ${DURATION.slow}ms ${EASING.enter}`,
         }}>
-          <span style={{ color: colors.dirac, fontSize: 12, fontWeight: 600, fontFamily: "'Geist Sans', sans-serif", display: 'block', marginBottom: 6 }}>
+          <span style={{ color: colors.dirac, fontSize: 12, fontWeight: 600, fontFamily: TYPOGRAPHY.fontSans, display: 'block', marginBottom: 6 }}>
             Dirac
           </span>
           <p style={{
             color: colors.text, fontSize: 15,
-            fontFamily: "'Geist Sans', Inter, sans-serif",
+            fontFamily: TYPOGRAPHY.fontSans,
             lineHeight: 1.7, margin: 0,
           }}>
             {currentStep?.dirac}
@@ -290,7 +291,7 @@ export function QuantumPlayground({ onComplete, onBridgeToIDE }: PlaygroundProps
             cursor: 'pointer',
             fontSize: 16,
             fontWeight: 600,
-            fontFamily: "'Geist Sans', Inter, sans-serif",
+            fontFamily: TYPOGRAPHY.fontSans,
             transition: `transform ${getDuration(DURATION.normal)}ms ${EASING.enter}, box-shadow ${getDuration(DURATION.normal)}ms`,
           }}
           onMouseDown={(e) => { (e.target as HTMLElement).style.transform = 'scale(0.97)'; }}
