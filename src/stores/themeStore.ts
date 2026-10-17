@@ -51,6 +51,8 @@ export interface ThemeColors {
   textDisabled: string;
   accent: string;
   accentLight: string;
+  /** Teal for small text/links (AA on every surface); `accent` is for fills, borders and icons. */
+  accentText: string;
   dirac: string;
   /** Dirac purple for text (AA contrast); `dirac` is for fills only. */
   diracText: string;
@@ -85,6 +87,7 @@ function legacyFromTokens(c: ColorTokens): ThemeColors {
     textDisabled: c.textDisabled,
     accent: c.accentQuantum,
     accentLight: c.accentQuantumSoft,
+    accentText: c.accentQuantumText,
     dirac: c.accentDirac,
     diracText: c.accentDiracText,
     modeResearch: c.modeResearch,

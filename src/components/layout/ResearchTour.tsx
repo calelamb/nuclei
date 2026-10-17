@@ -1,3 +1,4 @@
+import { Button } from '../ui';
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { useThemeStore } from '../../stores/themeStore';
@@ -193,40 +194,12 @@ export function ResearchTour() {
           {current.body}
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <button
-            onClick={dismiss}
-            style={{
-              padding: '5px 10px', background: 'transparent', color: colors.textDim,
-              border: 'none', borderRadius: 6, fontSize: 11, cursor: 'pointer',
-              fontFamily: TYPOGRAPHY.fontSans,
-            }}
-          >
-            Skip
-          </button>
+          <Button size="sm" variant="ghost" onClick={dismiss}>Skip</Button>
           <div style={{ flex: 1 }} />
-          {step > 0 && (
-            <button
-              onClick={prev}
-              style={{
-                padding: '5px 12px', background: 'transparent', color: colors.textDim,
-                border: `1px solid ${colors.border}`, borderRadius: 6, fontSize: 11, cursor: 'pointer',
-                fontFamily: TYPOGRAPHY.fontSans,
-              }}
-            >
-              Back
-            </button>
-          )}
-          <button
-            ref={primaryRef}
-            onClick={next}
-            style={{
-              padding: '5px 14px', background: colors.modeResearch, color: '#fff',
-              border: 'none', borderRadius: 6, fontSize: 11, fontWeight: 600, cursor: 'pointer',
-              fontFamily: TYPOGRAPHY.fontSans,
-            }}
-          >
+          {step > 0 && <Button size="sm" onClick={prev}>Back</Button>}
+          <Button size="sm" variant="primary" ref={primaryRef} onClick={next}>
             {isLast ? 'Done' : 'Next'}
-          </button>
+          </Button>
         </div>
       </div>
     </div>

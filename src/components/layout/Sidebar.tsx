@@ -9,6 +9,7 @@ import { createPlatformQecStudyFs, createTauriQecStudyFs } from '../../services/
 import { usePlatform } from '../../platform/PlatformProvider';
 
 import { TYPOGRAPHY } from '../../styles/tokens';
+import { TextInput } from '../ui';
 const LearningPathSidebar = lazy(async () => ({
   default: (await import('../learning/LearningPathSidebar')).LearningPathSidebar,
 }));
@@ -47,18 +48,7 @@ function SearchPanel() {
   const colors = useThemeStore((s) => s.colors);
   return (
     <div style={{ padding: 12, display: 'flex', flexDirection: 'column', gap: 8 }}>
-      <input
-        placeholder="Search files..."
-        aria-label="Search files"
-        style={{
-          width: '100%', padding: '6px 10px',
-          fontSize: 12, fontFamily: TYPOGRAPHY.fontSans,
-          background: colors.bg, border: `1px solid ${colors.border}`,
-          borderRadius: 4, color: colors.text,
-        }}
-        onFocus={(e) => { e.currentTarget.style.borderColor = colors.accent; }}
-        onBlur={(e) => { e.currentTarget.style.borderColor = colors.border; }}
-      />
+      <TextInput size="sm" placeholder="Search files..." aria-label="Search files" />
       <div style={{ color: colors.textDim, fontSize: 11, fontFamily: TYPOGRAPHY.fontSans, textAlign: 'center', marginTop: 16 }}>
         Type to search across files
       </div>

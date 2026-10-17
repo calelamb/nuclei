@@ -7,6 +7,7 @@ import { useEditorStore } from '../../stores/editorStore';
 import { useBottomPanelStore } from '../../stores/bottomPanelStore';
 import { ProbabilityHistogram } from '../histogram/ProbabilityHistogram';
 import { TYPOGRAPHY } from '../../styles/tokens';
+import { Button, IconButton, Tooltip } from '../ui';
 
 /* ── Terminal Panel ── */
 
@@ -46,39 +47,19 @@ function ToolbarButton({
   active?: boolean;
   children: React.ReactNode;
 }) {
-  const colors = useThemeStore((s) => s.colors);
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      title={title}
-      aria-label={title}
-      aria-pressed={active}
-      style={{
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        gap: 4,
-        height: 18,
-        padding: '0 6px',
-        background: active ? `${colors.accent}20` : 'transparent',
-        border: 'none',
-        borderRadius: 3,
-        color: active ? colors.accent : colors.textDim,
-        cursor: 'pointer',
-        fontSize: 11,
-        fontFamily: TYPOGRAPHY.fontSans,
-        fontWeight: 500,
-      }}
-      onMouseEnter={(e) => {
-        if (!active) e.currentTarget.style.color = colors.text;
-      }}
-      onMouseLeave={(e) => {
-        if (!active) e.currentTarget.style.color = colors.textDim;
-      }}
-    >
-      {children}
-    </button>
+    <Tooltip label={title} placement="below">
+      <button
+        type="button"
+        onClick={onClick}
+        aria-label={title}
+        aria-pressed={active}
+        data-active={active ? 'true' : undefined}
+        className="nuclei-toolbtn"
+      >
+        {children}
+      </button>
+    </Tooltip>
   );
 }
 
@@ -254,24 +235,9 @@ function TerminalPanel() {
             <div style={{ marginBottom: rewritten.fix ? 10 : 0 }}>{rewritten.explanation}</div>
             <div style={{ display: 'flex', gap: 6 }}>
               {rewritten.fix && (
-                <button
-                  onClick={() => { setCode(rewritten.fix!); clearRewrittenError(); }}
-                  style={{
-                    background: colors.dirac, color: '#fff', border: 'none',
-                    borderRadius: 6, padding: '4px 10px', fontSize: 11, fontWeight: 600,
-                    cursor: 'pointer', fontFamily: TYPOGRAPHY.fontSans,
-                  }}
-                >Apply fix</button>
+                <Button size="sm" className="nuclei-btn--dirac" onClick={() => { setCode(rewritten.fix!); clearRewrittenError(); }}>Apply fix</Button>
               )}
-              <button
-                onClick={clearRewrittenError}
-                style={{
-                  background: 'transparent', color: colors.textDim,
-                  border: `1px solid ${colors.border}`,
-                  borderRadius: 6, padding: '4px 10px', fontSize: 11,
-                  cursor: 'pointer', fontFamily: TYPOGRAPHY.fontSans,
-                }}
-              >Dismiss</button>
+              <Button size="sm" variant="ghost" onClick={clearRewrittenError}>Dismiss</Button>
             </div>
           </div>
         )}
@@ -366,16 +332,9 @@ export function BottomPanel({
         {tabs.map((tab) => (
           <button
             key={tab}
+            type="button"
             onClick={() => { if (collapsed) setCollapsed(false); setActiveTab(tab); }}
-            style={{
-              padding: '0 14px', height: '100%',
-              background: 'transparent',
-              color: !collapsed && activeTab === tab ? colors.text : colors.textDim,
-              border: 'none',
-              borderBottom: !collapsed && activeTab === tab ? `1px solid ${colors.accent}` : '1px solid transparent',
-              cursor: 'pointer', fontSize: 11, fontWeight: 500,
-              fontFamily: TYPOGRAPHY.fontSans, textTransform: 'uppercase', letterSpacing: 0.5,
-            }}
+            className="nuclei-panel-tab"
             role="tab"
             aria-selected={!collapsed && activeTab === tab}
           >
@@ -383,12 +342,9 @@ export function BottomPanel({
           </button>
         ))}
         <div style={{ flex: 1 }} />
-        <button onClick={toggleCollapsed} style={{ background: 'transparent', border: 'none', color: colors.textDim, cursor: 'pointer', padding: '0 10px', display: 'flex', alignItems: 'center' }}
-          onMouseEnter={(e) => { e.currentTarget.style.color = colors.text; }}
-          onMouseLeave={(e) => { e.currentTarget.style.color = colors.textDim; }}
-          aria-label={collapsed ? 'Expand' : 'Collapse'}>
+        <IconButton size="sm" onClick={toggleCollapsed} aria-label={collapsed ? 'Expand panel' : 'Collapse panel'} tooltip={{ placement: 'above' }} style={{ marginRight: 6 }}>
           {collapsed ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
-        </button>
+        </IconButton>
       </div>
       {!collapsed && (
         <div style={{ flex: 1, overflow: 'hidden' }}>

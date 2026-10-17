@@ -12,7 +12,7 @@ import { useQecCampaignStore } from '../../stores/qecCampaignStore';
 import { useExerciseStore } from '../../stores/exerciseStore';
 import { useLayoutStore, type LayoutPreset } from '../../stores/layoutStore';
 import { ModeChip } from './ModeChip';
-import { Tooltip } from '../ui';
+import { IconButton, Select, Tooltip } from '../ui';
 import { shortcutLabel } from '../../config/keybindings';
 import { useEditorFocusStore } from '../../stores/editorFocusStore';
 import { tabFocusHint } from '../../lib/tabFocusHint';
@@ -36,7 +36,6 @@ import { retryKernel } from '../../lib/kernelControl';
 function LayoutPresetSwitcher() {
   const preset = useLayoutStore((s) => s.preset);
   const setPreset = useLayoutStore((s) => s.setPreset);
-  const colors = useThemeStore((s) => s.colors);
   const platform = usePlatform();
 
   const options: LayoutPreset[] = ['clean', 'balanced', 'full'];
@@ -47,26 +46,17 @@ function LayoutPresetSwitcher() {
 
   return (
     <Tooltip label="Layout preset" placement="above">
-    <select
-      value={preset}
-      onChange={(e) => onChange(e.target.value as LayoutPreset)}
-      aria-label="Layout preset"
-      style={{
-        background: 'transparent',
-        color: colors.textMuted,
-        border: `1px solid ${colors.border}`,
-        borderRadius: 6,
-        height: 20,
-        padding: '0 6px',
-        fontSize: 11,
-        fontFamily: TYPOGRAPHY.fontSans,
-        cursor: 'pointer',
-      }}
-    >
-      {options.map((o) => (
-        <option key={o} value={o}>{o[0].toUpperCase() + o.slice(1)}</option>
-      ))}
-    </select>
+      <Select
+        size="sm"
+        className="nuclei-statusbar-select"
+        value={preset}
+        onChange={(e) => onChange(e.target.value as LayoutPreset)}
+        aria-label="Layout preset"
+      >
+        {options.map((o) => (
+          <option key={o} value={o}>{o[0].toUpperCase() + o.slice(1)}</option>
+        ))}
+      </Select>
     </Tooltip>
   );
 }
@@ -169,13 +159,11 @@ export function StatusBar() {
       {features.layoutPresets && <LayoutPresetSwitcher />}
 
       {exercise && (
-        <span style={{ display: 'flex', alignItems: 'center', gap: 3, color: colors.dirac, fontSize: 11, minWidth: 0 }}>
+        <span style={{ display: 'flex', alignItems: 'center', gap: 3, color: colors.diracText, fontSize: 11, minWidth: 0 }}>
           <span style={truncName}>{exercise.title}</span>
-          <button onClick={endExercise} aria-label="End exercise" title="End exercise" style={{ background: 'none', border: 'none', color: colors.textMuted, cursor: 'pointer', padding: 0, width: 20, height: 20, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-            onMouseEnter={(e) => { e.currentTarget.style.color = colors.error; }}
-            onMouseLeave={(e) => { e.currentTarget.style.color = colors.textMuted; }}>
-            <X size={11} />
-          </button>
+          <IconButton size="sm" className="nuclei-statusbar-end" onClick={endExercise} aria-label="End exercise" tooltip={{ label: 'End exercise' }}>
+            <X size={12} />
+          </IconButton>
         </span>
       )}
 
@@ -183,7 +171,7 @@ export function StatusBar() {
       {workspaceMode === 'research' && activeRun && (
         <span
           title={`${activeRun.experimentName}: ${activeRun.progress.completed}/${activeRun.progress.total} runs`}
-          style={{ display: 'flex', alignItems: 'center', gap: 4, color: colors.accent, fontSize: 11, minWidth: 0 }}
+          style={{ display: 'flex', alignItems: 'center', gap: 4, color: colors.accentText, fontSize: 11, minWidth: 0 }}
         >
           <Circle size={5} fill={colors.accent} stroke="none" style={{ animation: 'nuclei-heartbeat 1.5s ease infinite', flexShrink: 0 }} />
           <span style={truncName}>{activeRun.experimentName}</span>
@@ -197,9 +185,9 @@ export function StatusBar() {
       {workspaceMode === 'research' && campaignRunning && campaignProgress && (
         <span
           title={`${campaignName ?? 'Campaign'}: ${campaignProgress.tasksComplete}/${campaignProgress.tasksTotal} tasks, ${campaignProgress.sampledShots.toLocaleString()} shots`}
-          style={{ display: 'flex', alignItems: 'center', gap: 4, color: colors.dirac, fontSize: 11, minWidth: 0 }}
+          style={{ display: 'flex', alignItems: 'center', gap: 4, color: colors.modeResearch, fontSize: 11, minWidth: 0 }}
         >
-          <Circle size={5} fill={colors.dirac} stroke="none" style={{ animation: 'nuclei-heartbeat 1.5s ease infinite', flexShrink: 0 }} />
+          <Circle size={5} fill={colors.modeResearch} stroke="none" style={{ animation: 'nuclei-heartbeat 1.5s ease infinite', flexShrink: 0 }} />
           <span style={truncName}>{campaignName ?? 'campaign'}</span>
           <span style={{ flexShrink: 0 }}>: {campaignProgress.tasksComplete}/{campaignProgress.tasksTotal}</span>
         </span>

@@ -215,3 +215,31 @@
 .nuclei-row--reveal .nuclei-row__close { opacity: 0; }
 .nuclei-row--reveal:hover .nuclei-row__close, .nuclei-row--reveal:focus-within .nuclei-row__close, .nuclei-row--reveal .nuclei-row__close:focus-visible { opacity: 1; }
 .nuclei-row--reveal:hover .nuclei-row__dirty, .nuclei-row--reveal:focus-within .nuclei-row__dirty { display: none; }
+
+/* Status bar density: compact select and an exercise-end icon that warns on hover */
+.nuclei-statusbar-select > select { height: 20px; background: transparent; border-color: var(--color-border-subtle); color: var(--color-text-secondary); font-size: var(--font-size-caption); }
+.nuclei-statusbar-select > select:hover:not(:disabled) { background: var(--color-surface-overlay); border-color: var(--color-border-strong); }
+.nuclei-icon-btn.nuclei-statusbar-end { width: 20px; height: 20px; }
+.nuclei-icon-btn.nuclei-statusbar-end:hover:not(:disabled) { color: var(--color-danger); }
+
+/* Dense toolbar button (terminal toolbar) and the bottom-panel tab */
+.nuclei-toolbtn {
+  display: inline-flex; align-items: center; justify-content: center; gap: var(--space-1);
+  height: 18px; padding: 0 var(--space-2); border: none; border-radius: var(--radius-xs); cursor: pointer;
+  background: transparent; color: var(--color-text-tertiary);
+  font-family: var(--font-sans); font-size: var(--font-size-caption); font-weight: var(--font-weight-medium);
+  transition: color var(--duration-fast) var(--ease-standard), background-color var(--duration-fast) var(--ease-standard);
+}
+.nuclei-toolbtn:hover { color: var(--color-text-primary); }
+.nuclei-toolbtn[data-active='true'] { background: color-mix(in srgb, var(--color-accent-quantum) 14%, transparent); color: var(--color-accent-quantum-text); }
+.nuclei-panel-tab {
+  height: 100%; padding: 0 var(--space-4); border: none; border-bottom: 1px solid transparent; background: transparent; cursor: pointer;
+  font-family: var(--font-sans); font-size: var(--font-size-caption); font-weight: var(--font-weight-medium); text-transform: uppercase; letter-spacing: 0.5px;
+  color: var(--color-text-tertiary); transition: color var(--duration-fast) var(--ease-standard);
+}
+.nuclei-panel-tab:hover { color: var(--color-text-secondary); }
+.nuclei-panel-tab[aria-selected='true'] { color: var(--color-text-primary); border-bottom-color: var(--color-accent-quantum); }
+
+/* Dirac-accented Button (purple is for Dirac only) */
+.nuclei-btn.nuclei-btn--dirac { background: var(--color-accent-dirac); border-color: var(--color-accent-dirac); color: #fff; }
+.nuclei-btn.nuclei-btn--dirac:hover:not(:disabled) { filter: brightness(1.12); }
