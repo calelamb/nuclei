@@ -1,3 +1,4 @@
+import { Button } from '../../ui';
 import { useState, useRef, useEffect, useCallback } from 'react';
 import type { Monaco } from '@monaco-editor/react';
 import type * as monaco from 'monaco-editor';
@@ -172,7 +173,7 @@ export function InlineEditWidget({ editor, monaco, onClose }: InlineEditProps) {
     }}>
       {/* Input */}
       <div style={{ display: 'flex', alignItems: 'center', padding: '6px 10px', gap: 8 }}>
-        <span style={{ color: colors.accent, fontSize: 12, fontWeight: 600, fontFamily: TYPOGRAPHY.fontMono }}>⌘K</span>
+        <span style={{ color: colors.accentText, fontSize: 12, fontWeight: 600, fontFamily: TYPOGRAPHY.fontMono }}>⌘K</span>
         <input
           ref={inputRef}
           value={instruction}
@@ -190,7 +191,7 @@ export function InlineEditWidget({ editor, monaco, onClose }: InlineEditProps) {
             fontFamily: TYPOGRAPHY.fontSans,
           }}
         />
-        {loading && <span style={{ color: colors.accent, fontSize: 11 }}>Thinking...</span>}
+        {loading && <span style={{ color: colors.accentText, fontSize: 11 }}>Thinking...</span>}
       </div>
 
       {/* Error */}
@@ -207,9 +208,10 @@ export function InlineEditWidget({ editor, monaco, onClose }: InlineEditProps) {
             <pre style={{
               margin: '8px 0',
               padding: 8,
-              background: '#1A3D1A',
+              background: 'color-mix(in srgb, var(--color-success) 14%, transparent)',
+              borderLeft: `3px solid ${colors.success}`,
               borderRadius: 4,
-              color: '#98C379',
+              color: colors.text,
               fontSize: 12,
               fontFamily: TYPOGRAPHY.fontMono,
               overflow: 'auto',
@@ -219,18 +221,8 @@ export function InlineEditWidget({ editor, monaco, onClose }: InlineEditProps) {
             </pre>
           </div>
           <div style={{ display: 'flex', gap: 6, padding: '6px 10px', borderTop: `1px solid ${colors.border}` }}>
-            <button
-              onClick={handleAccept}
-              style={{ padding: '4px 12px', background: '#98C379', color: '#fff', border: 'none', borderRadius: 3, cursor: 'pointer', fontSize: 12, fontFamily: TYPOGRAPHY.fontSans }}
-            >
-              Apply (⌘+Enter)
-            </button>
-            <button
-              onClick={onClose}
-              style={{ padding: '4px 12px', background: colors.border, color: colors.text, border: 'none', borderRadius: 3, cursor: 'pointer', fontSize: 12, fontFamily: TYPOGRAPHY.fontSans }}
-            >
-              Dismiss (Esc)
-            </button>
+            <Button size="sm" variant="primary" onClick={handleAccept}>Apply (⌘+Enter)</Button>
+            <Button size="sm" onClick={onClose}>Dismiss (Esc)</Button>
           </div>
         </div>
       )}

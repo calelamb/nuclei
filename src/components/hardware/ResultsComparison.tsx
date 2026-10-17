@@ -50,7 +50,7 @@ export function ResultsComparison({
           marginBottom: 8,
         }}
       >
-        <div style={{ flex: 1, fontSize: 11, fontWeight: 600, color: colors.accent, ...font }}>
+        <div style={{ flex: 1, fontSize: 11, fontWeight: 600, color: colors.accentText, ...font }}>
           Simulator
         </div>
         <div style={{ width: 44 }} />
@@ -59,7 +59,7 @@ export function ResultsComparison({
             flex: 1,
             fontSize: 11,
             fontWeight: 600,
-            color: colors.accentLight,
+            color: colors.accentText,
             textAlign: 'right',
             ...font,
           }}

@@ -1,3 +1,4 @@
+import { Button } from '../ui';
 import { useState } from 'react';
 import { X } from 'lucide-react';
 import { useThemeStore } from '../../stores/themeStore';
@@ -246,7 +247,7 @@ export function CredentialSetup({ provider, onClose }: CredentialSetupProps) {
           </p>
 
           {config.fields.map((field) => (
-            <div key={field.key} style={{ marginBottom: 12 }}>
+            <div className="nuclei-focus-accent" key={field.key} style={{ marginBottom: 12 }}>
               <label
                 htmlFor={`credential-${provider}-${field.key}`}
                 style={{
@@ -281,12 +282,6 @@ export function CredentialSetup({ provider, onClose }: CredentialSetupProps) {
                   boxSizing: 'border-box',
                   ...font,
                 }}
-                onFocus={(e) => {
-                  e.currentTarget.style.borderColor = colors.accent;
-                }}
-                onBlur={(e) => {
-                  e.currentTarget.style.borderColor = colors.border;
-                }}
               />
             </div>
           ))}
@@ -305,7 +300,7 @@ export function CredentialSetup({ provider, onClose }: CredentialSetupProps) {
                   href={config.helpUrl}
                   target="_blank"
                   rel="noreferrer"
-                  style={{ color: colors.accent, cursor: 'pointer' }}
+                  style={{ color: colors.accentText, cursor: 'pointer' }}
                 >
                   {config.helpText}
                 </a>
@@ -341,23 +336,7 @@ export function CredentialSetup({ provider, onClose }: CredentialSetupProps) {
           >
             Cancel
           </button>
-          <button
-            onClick={handleSave}
-            disabled={!allFilled}
-            style={{
-              padding: '6px 14px',
-              fontSize: 11,
-              fontWeight: 600,
-              borderRadius: 4,
-              border: 'none',
-              background: allFilled ? colors.accent : colors.borderStrong,
-              color: allFilled ? '#fff' : colors.textDim,
-              cursor: allFilled ? 'pointer' : 'not-allowed',
-              ...font,
-            }}
-          >
-            Save
-          </button>
+          <Button variant="primary" size="sm" onClick={handleSave} disabled={!allFilled}>Save</Button>
         </div>
       </div>
     </div>

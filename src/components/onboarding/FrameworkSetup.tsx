@@ -178,7 +178,7 @@ export function FrameworkSetup({ open, onClose, firstRun = false }: FrameworkSet
             borderBottom: `1px solid ${colors.border}`,
           }}
         >
-          <Sparkles size={16} style={{ color: colors.accent }} />
+          <Sparkles size={16} style={{ color: colors.accentText }} />
           <div style={{ flex: 1 }}>
             <div style={{ fontSize: 14, fontWeight: 600, color: colors.text }}>
               {firstRun ? 'Welcome — set up your quantum frameworks' : 'Quantum frameworks'}
@@ -235,7 +235,7 @@ export function FrameworkSetup({ open, onClose, firstRun = false }: FrameworkSet
                 href="https://www.python.org/downloads/"
                 target="_blank"
                 rel="noreferrer"
-                style={{ color: colors.accent }}
+                style={{ color: colors.accentText }}
               >
                 python.org
               </a>
@@ -311,7 +311,7 @@ export function FrameworkSetup({ open, onClose, firstRun = false }: FrameworkSet
               <Loader2
                 size={12}
                 style={{
-                  color: colors.accent,
+                  color: colors.accentText,
                   animation: 'nuclei-spin 800ms linear infinite',
                   flexShrink: 0,
                 }}
@@ -529,7 +529,7 @@ function FrameworkRow({
               style={{
                 fontSize: 11,
                 fontWeight: 600,
-                color: colors.accentLight,
+                color: colors.accentText,
                 background: `${colors.accent}18`,
                 padding: '2px 6px',
                 borderRadius: 4,
@@ -559,7 +559,7 @@ function btnPrimary(colors: ReturnType<typeof useThemeStore.getState>['colors'])
     gap: 6,
     padding: '7px 14px',
     background: colors.accent,
-    color: '#0a0f1a',
+    color: colors.onAccent,
     border: 'none',
     borderRadius: 6,
     fontSize: 12,

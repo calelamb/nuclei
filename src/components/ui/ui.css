@@ -140,7 +140,7 @@
 /* ── Menu items ── */
 .nuclei-menu-item { transition: background-color var(--duration-fast) var(--ease-standard); }
 .nuclei-menu-item:hover { background: var(--color-surface-overlay) !important; }
-.nuclei-menu-item.nuclei-menu-item--tint:hover { background: color-mix(in srgb, var(--item-accent) 12%, transparent) !important; }
+.nuclei-menu-item.nuclei-menu-item--tint:hover { background: color-mix(in srgb, var(--item-accent, var(--color-accent-quantum)) 12%, transparent) !important; }
 
 /* ── Segmented control (radiogroup of 2-4 short options) ── */
 .nuclei-segmented { display: inline-flex; gap: 2px; padding: 2px; border: 1px solid var(--color-border-strong); border-radius: var(--radius-soft); background: var(--color-surface-sunken); }
@@ -152,3 +152,131 @@
 }
 .nuclei-segmented__option:hover { color: var(--color-text-primary); }
 .nuclei-segmented__option[aria-checked='true'] { background: var(--color-surface-raised); color: var(--color-text-primary); box-shadow: 0 0 0 1px var(--color-border-strong); }
+
+/* ── Checkbox: native input stays the control (focus, Space, forms); the box is drawn beside it ── */
+.nuclei-checkbox { position: relative; display: inline-flex; align-items: center; gap: var(--space-2); cursor: pointer; font-size: var(--font-size-chrome-label); color: var(--color-text-primary); }
+.nuclei-checkbox > input { position: absolute; width: 16px; height: 16px; margin: 0; opacity: 0; cursor: inherit; }
+.nuclei-checkbox__box {
+  display: inline-grid; place-items: center; flex: 0 0 auto; width: 16px; height: 16px;
+  border: 1px solid var(--color-text-tertiary); border-radius: var(--radius-xs);
+  background: var(--color-surface-base); color: transparent;
+  transition: background-color var(--duration-fast) var(--ease-standard), border-color var(--duration-fast) var(--ease-standard);
+}
+.nuclei-checkbox:hover > input:not(:disabled) + .nuclei-checkbox__box { border-color: var(--color-text-secondary); }
+.nuclei-checkbox > input:checked + .nuclei-checkbox__box,
+.nuclei-checkbox > input:indeterminate + .nuclei-checkbox__box { background: var(--color-accent-quantum); border-color: var(--color-accent-quantum); color: var(--color-surface-sunken); }
+:root[data-theme='light'] .nuclei-checkbox > input:checked + .nuclei-checkbox__box,
+:root[data-theme='light'] .nuclei-checkbox > input:indeterminate + .nuclei-checkbox__box { color: var(--color-on-accent); }
+.nuclei-checkbox > input:focus-visible + .nuclei-checkbox__box { outline: var(--focus-ring-width, 2px) solid var(--focus-ring-color); outline-offset: 2px; }
+.nuclei-checkbox--disabled { cursor: not-allowed; opacity: 0.5; }
+
+/* ── Tabs ── */
+.nuclei-tabs { scroll-padding-inline: 28px; display: flex; align-items: stretch; gap: var(--space-1); border-bottom: 1px solid var(--color-border-subtle); overflow-x: auto; scrollbar-width: none; }
+.nuclei-tabs::-webkit-scrollbar { display: none; }
+.nuclei-tabs__tab {
+  position: relative; flex: 0 0 auto; height: var(--control-height-md); padding: 0 var(--space-2);
+  border: none; background: transparent; cursor: pointer; white-space: nowrap;
+  font-family: var(--font-sans); font-size: var(--font-size-chrome-label); font-weight: var(--font-weight-medium); color: var(--color-text-tertiary);
+  transition: color var(--duration-fast) var(--ease-standard);
+}
+.nuclei-tabs__tab:hover:not(:disabled) { color: var(--color-text-secondary); }
+.nuclei-tabs__tab[aria-selected='true'] { color: var(--color-text-primary); }
+.nuclei-tabs__tab[aria-selected='true']::after { content: ''; position: absolute; left: var(--space-2); right: var(--space-2); bottom: -1px; height: 2px; border-radius: 1px; background: var(--color-accent-quantum); }
+.nuclei-tabs__tab:disabled { cursor: not-allowed; opacity: 0.5; }
+
+/* ── Badge ── */
+.nuclei-badge {
+  display: inline-flex; align-items: center; gap: var(--space-1); height: 18px; padding: 0 var(--space-2);
+  border: 1px solid var(--badge-color, var(--color-border-strong)); border-radius: var(--radius-pill);
+  background: color-mix(in srgb, var(--badge-color, var(--color-text-tertiary)) 12%, transparent);
+  color: var(--badge-text, var(--color-text-secondary));
+  font-family: var(--font-sans); font-size: var(--font-size-caption); font-weight: var(--font-weight-medium); line-height: 1; white-space: nowrap;
+}
+.nuclei-badge--accent { --badge-color: var(--color-accent-quantum); --badge-text: var(--color-accent-quantum-text); }
+.nuclei-badge--success { --badge-color: var(--color-success); --badge-text: color-mix(in srgb, var(--color-success) 55%, var(--color-text-primary)); }
+.nuclei-badge--warning { --badge-color: var(--color-warning); --badge-text: var(--color-warning); }
+.nuclei-badge--danger { --badge-color: var(--color-danger); --badge-text: color-mix(in srgb, var(--color-danger) 55%, var(--color-text-primary)); }
+.nuclei-badge--research { --badge-color: var(--color-mode-research); --badge-text: var(--color-mode-research); }
+.nuclei-badge--dirac { --badge-color: var(--color-accent-dirac); --badge-text: var(--color-accent-dirac-text); }
+
+/* Open/expanded state for menu triggers */
+.nuclei-icon-btn[aria-expanded='true'] { background: var(--color-surface-overlay); color: var(--color-text-primary); }
+
+/* ── Hover utilities: replace onMouseEnter/Leave style mutation ── */
+.nuclei-hover-bg:hover:not(:disabled):not([data-active='true']) { background: var(--color-surface-overlay) !important; }
+.nuclei-hover-text:hover:not(:disabled) { color: var(--color-text-primary) !important; }
+
+/* Tree / list rows (explorer, open files): active row keeps its own tint */
+.nuclei-row { cursor: pointer; transition: background-color var(--duration-fast) var(--ease-standard); }
+.nuclei-row:hover:not([aria-selected='true']):not([data-active='true']) { background: var(--color-surface-overlay) !important; }
+
+/* Row actions that appear on hover or keyboard focus; a dirty dot yields its slot to the close button */
+.nuclei-row--reveal .nuclei-row__close { opacity: 0; }
+.nuclei-row--reveal:hover .nuclei-row__close, .nuclei-row--reveal:focus-within .nuclei-row__close, .nuclei-row--reveal .nuclei-row__close:focus-visible { opacity: 1; }
+.nuclei-row--reveal:hover .nuclei-row__dirty, .nuclei-row--reveal:focus-within .nuclei-row__dirty { display: none; }
+
+/* Status bar density: compact select and an exercise-end icon that warns on hover */
+.nuclei-statusbar-select > select { height: 20px; background: transparent; border-color: var(--color-border-subtle); color: var(--color-text-secondary); font-size: var(--font-size-caption); }
+.nuclei-statusbar-select > select:hover:not(:disabled) { background: var(--color-surface-overlay); border-color: var(--color-border-strong); }
+.nuclei-icon-btn.nuclei-statusbar-end { width: 20px; height: 20px; }
+.nuclei-icon-btn.nuclei-statusbar-end:hover:not(:disabled) { color: var(--color-danger); }
+
+/* Dense toolbar button (terminal toolbar) and the bottom-panel tab */
+.nuclei-toolbtn {
+  display: inline-flex; align-items: center; justify-content: center; gap: var(--space-1);
+  height: 18px; padding: 0 var(--space-2); border: none; border-radius: var(--radius-xs); cursor: pointer;
+  background: transparent; color: var(--color-text-tertiary);
+  font-family: var(--font-sans); font-size: var(--font-size-caption); font-weight: var(--font-weight-medium);
+  transition: color var(--duration-fast) var(--ease-standard), background-color var(--duration-fast) var(--ease-standard);
+}
+.nuclei-toolbtn:hover { color: var(--color-text-primary); }
+.nuclei-toolbtn[data-active='true'] { background: color-mix(in srgb, var(--color-accent-quantum) 14%, transparent); color: var(--color-accent-quantum-text); }
+.nuclei-panel-tab {
+  height: 100%; padding: 0 var(--space-4); border: none; border-bottom: 1px solid transparent; background: transparent; cursor: pointer;
+  font-family: var(--font-sans); font-size: var(--font-size-caption); font-weight: var(--font-weight-medium); text-transform: uppercase; letter-spacing: 0.5px;
+  color: var(--color-text-tertiary); transition: color var(--duration-fast) var(--ease-standard);
+}
+.nuclei-panel-tab:hover { color: var(--color-text-secondary); }
+.nuclei-panel-tab[aria-selected='true'] { color: var(--color-text-primary); border-bottom-color: var(--color-accent-quantum); }
+
+/* Dirac-accented Button (purple is for Dirac only) */
+.nuclei-btn.nuclei-btn--dirac { background: var(--color-accent-dirac); border-color: var(--color-accent-dirac); color: #fff; }
+.nuclei-btn.nuclei-btn--dirac:hover:not(:disabled) { filter: brightness(1.12); }
+.nuclei-tabs[data-overflow='end'] { -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 28px), transparent); mask-image: linear-gradient(to right, #000 calc(100% - 28px), transparent); }
+.nuclei-tabs[data-overflow='start'] { -webkit-mask-image: linear-gradient(to left, #000 calc(100% - 28px), transparent); mask-image: linear-gradient(to left, #000 calc(100% - 28px), transparent); }
+.nuclei-tabs[data-overflow='both'] { -webkit-mask-image: linear-gradient(to right, transparent, #000 28px, #000 calc(100% - 28px), transparent); mask-image: linear-gradient(to right, transparent, #000 28px, #000 calc(100% - 28px), transparent); }
+.nuclei-tabs__tab { display: inline-flex; align-items: center; gap: var(--space-1); }
+.nuclei-tabs.viz-zone-tabs { flex: 0 0 auto; background: var(--color-surface-base); padding: 0 var(--space-1); }
+
+/* Menu items: never react to hover while disabled */
+.nuclei-menu-item:disabled { cursor: not-allowed; }
+.nuclei-menu-item:disabled:hover { background: transparent !important; }
+.nuclei-btn[aria-expanded='true']:not(.nuclei-btn--primary) { background: var(--color-surface-overlay); }
+.nuclei-btn.nuclei-framework-btn { color: var(--color-accent-quantum-text); }
+.nuclei-icon-btn.nuclei-tab-close { width: 18px; height: 18px; border-radius: var(--radius-xs); }
+
+/* ── Hover utilities (replace onMouseEnter/Leave style mutation). !important beats the inline base styles these elements still carry. ── */
+[class*='nuclei-hover-'] { transition: color var(--duration-fast) var(--ease-standard), background-color var(--duration-fast) var(--ease-standard), border-color var(--duration-fast) var(--ease-standard), transform var(--duration-fast) var(--ease-standard), opacity var(--duration-fast) var(--ease-standard); }
+.nuclei-hover-danger:hover:not(:disabled) { color: var(--color-danger) !important; border-color: color-mix(in srgb, var(--color-danger) 40%, transparent) !important; }
+.nuclei-hover-accent:hover:not(:disabled) { color: var(--color-accent-quantum-text) !important; border-color: var(--color-accent-quantum) !important; }
+.nuclei-hover-tint:hover:not(:disabled):not([aria-selected='true']) { background: color-mix(in srgb, var(--color-accent-quantum) 10%, transparent) !important; }
+.nuclei-hover-lift:hover:not(:disabled) { border-color: var(--color-accent-quantum) !important; transform: translateY(-1px); }
+.nuclei-hover-dim:hover:not(:disabled) { opacity: 0.85; }
+
+/* Status-tinted strip: --strip carries the status colour */
+.nuclei-strip-chip { background: color-mix(in srgb, var(--strip) 6%, transparent); transition: background-color var(--duration-fast) var(--ease-standard); }
+.nuclei-strip-chip:hover { background: color-mix(in srgb, var(--strip) 10%, transparent); }
+
+/* ── Chip: toggleable pill filter (aria-pressed) ── */
+.nuclei-chip {
+  display: inline-flex; align-items: center; gap: var(--space-1); height: 22px; padding: 0 var(--space-3);
+  border: 1px solid var(--color-border-strong); border-radius: var(--radius-pill); background: transparent; cursor: pointer;
+  color: var(--color-text-secondary); font-family: var(--font-sans); font-size: var(--font-size-caption); font-weight: var(--font-weight-medium);
+  transition: background-color var(--duration-fast) var(--ease-standard), border-color var(--duration-fast) var(--ease-standard), color var(--duration-fast) var(--ease-standard);
+}
+.nuclei-chip:hover { border-color: var(--color-text-tertiary); color: var(--color-text-primary); }
+.nuclei-chip[aria-pressed='true'] { background: color-mix(in srgb, var(--color-accent-quantum) 14%, transparent); border-color: var(--color-accent-quantum); color: var(--color-accent-quantum-text); }
+.nuclei-segmented.nuclei-segmented--block { display: flex; }
+.nuclei-segmented--block .nuclei-segmented__option { flex: 1; justify-content: center; }
+.nuclei-hover-border:hover { border-color: var(--color-text-tertiary) !important; }
+.nuclei-focus-accent:focus-visible { border-color: var(--focus-ring-color) !important; outline: none; }

@@ -146,7 +146,7 @@ function PassRow({ pass, index }: { pass: TranspilePass; index: number }) {
       <span style={{ flex: 1, fontSize: 13, color: colors.text, fontWeight: entangling ? 600 : 400 }}>
         {pass.name}
         {entangling && (
-          <span style={{ marginLeft: 8, fontSize: 11, color: colors.accent, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+          <span style={{ marginLeft: 8, fontSize: 11, color: colors.accentText, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
             routing
           </span>
         )}
@@ -156,7 +156,7 @@ function PassRow({ pass, index }: { pass: TranspilePass; index: number }) {
       </span>
       <span style={{
         width: 40, textAlign: 'right', fontSize: 12, fontFamily: TYPOGRAPHY.fontMono,
-        color: net > 0 ? colors.accent : net < 0 ? colors.textDim : colors.textMuted,
+        color: net > 0 ? colors.accentText : net < 0 ? colors.textDim : colors.textMuted,
       }}>
         {formatSigned(net)}
       </span>
@@ -189,7 +189,7 @@ function MetricStrip({
             {showDelta && (
               <span style={{
                 fontSize: 11, fontFamily: TYPOGRAPHY.fontMono,
-                color: tone === 'increase' ? colors.accent : colors.textDim,
+                color: tone === 'increase' ? colors.accentText : colors.textDim,
               }}>
                 {formatSigned(delta.after - delta.before)}
               </span>
@@ -223,7 +223,7 @@ function Centered({ colors, icon, title, body }: {
       justifyContent: 'center', textAlign: 'center', gap: 8, padding: 24,
       color: colors.textMuted,
     }}>
-      {icon && <div style={{ color: colors.accent }}>{icon}</div>}
+      {icon && <div style={{ color: colors.accentText }}>{icon}</div>}
       <div style={{ fontSize: 14, fontWeight: 600, color: colors.text }}>{title}</div>
       <div style={{ fontSize: 13, maxWidth: 420, lineHeight: 1.5 }}>{body}</div>
     </div>

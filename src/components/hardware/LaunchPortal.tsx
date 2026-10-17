@@ -1,3 +1,4 @@
+import { Button, Tooltip } from '../ui';
 import { useState, useCallback, useRef } from 'react';
 import { Rocket, Upload, FileCode, CheckCircle2, XCircle, Loader2, Clock, X } from 'lucide-react';
 import { useHardwareStore } from '../../stores/hardwareStore';
@@ -140,7 +141,7 @@ export function LaunchPortal() {
           gap: 8,
         }}
       >
-        <Rocket size={14} style={{ color: colors.accent }} />
+        <Rocket size={14} style={{ color: colors.accentText }} />
         <span
           style={{
             fontSize: 11,
@@ -188,10 +189,10 @@ export function LaunchPortal() {
             fontFamily: TYPOGRAPHY.fontSans,
           }}
         >
-          <Upload size={16} style={{ color: dragActive ? colors.accent : colors.textMuted }} />
+          <Upload size={16} style={{ color: dragActive ? colors.accentText : colors.textMuted }} />
           <div style={{ fontSize: 11, color: colors.text, textAlign: 'center', lineHeight: 1.5 }}>
-            Drop a <code style={{ fontFamily: TYPOGRAPHY.fontMono, color: colors.accentLight }}>.py</code>{' '}
-            or <code style={{ fontFamily: TYPOGRAPHY.fontMono, color: colors.accentLight }}>.qs</code>{' '}
+            Drop a <code style={{ fontFamily: TYPOGRAPHY.fontMono, color: colors.accentText }}>.py</code>{' '}
+            or <code style={{ fontFamily: TYPOGRAPHY.fontMono, color: colors.accentText }}>.qs</code>{' '}
             or click to browse
           </div>
           {activeFileName && (
@@ -253,7 +254,7 @@ export function LaunchPortal() {
             const qsharpBlocked = qsharpBlocks(p.name);
             const isDisabled = p.disabled || qsharpBlocked;
             return (
-            <button
+            <button className="nuclei-hover-lift"
               key={p.name}
               onClick={() => handlePickProvider(p)}
               disabled={isDisabled}
@@ -272,15 +273,6 @@ export function LaunchPortal() {
                 gap: 6,
                 opacity: isDisabled ? 0.5 : 1,
                 transition: 'border-color 120ms ease, background 120ms ease, transform 120ms ease',
-              }}
-              onMouseEnter={(e) => {
-                if (isDisabled) return;
-                e.currentTarget.style.borderColor = colors.accent;
-                e.currentTarget.style.transform = 'translateY(-1px)';
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.borderColor = colors.border;
-                e.currentTarget.style.transform = 'translateY(0)';
               }}
             >
               <div
@@ -316,29 +308,10 @@ export function LaunchPortal() {
           })}
         </div>
 
-        <button
-          onClick={openLaunchBlank}
-          style={{
-            marginTop: 10,
-            width: '100%',
-            padding: '8px 10px',
-            background: colors.accent,
-            color: '#0a0f1a',
-            border: 'none',
-            borderRadius: 8,
-            cursor: 'pointer',
-            fontSize: 12,
-            fontWeight: 600,
-            fontFamily: TYPOGRAPHY.fontSans,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            gap: 6,
-          }}
-        >
-          <Rocket size={14} /> Open full launcher
+        <Button variant="primary" style={{ marginTop: 10, width: '100%' }} onClick={openLaunchBlank} icon={<Rocket size={14} />}>
+          Open full launcher
           <span style={{ fontSize: 11, opacity: 0.7, marginLeft: 4 }}>⌘⇧R</span>
-        </button>
+        </Button>
       </div>
 
       {/* Active jobs */}
@@ -398,14 +371,14 @@ export function LaunchPortal() {
                   </div>
                 </div>
                 <ProviderLogo provider={j.provider as HardwareProviderType} size={14} color={colors.textDim} />
-                <button
+                <Tooltip label="Cancel job" placement="above">
+                <button className="nuclei-hover-danger"
                   onClick={(e) => {
                     e.stopPropagation();
                     const hw = getHardware();
                     if (hw) hw.hardwareCancel(j.id);
                   }}
                   aria-label={`Cancel ${j.backend}`}
-                  title="Cancel job"
                   style={{
                     background: 'transparent',
                     border: `1px solid ${colors.border}`,
@@ -419,17 +392,10 @@ export function LaunchPortal() {
                     fontSize: 11,
                     fontFamily: TYPOGRAPHY.fontSans,
                   }}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.color = colors.error;
-                    e.currentTarget.style.borderColor = `${colors.error}60`;
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.color = colors.textDim;
-                    e.currentTarget.style.borderColor = colors.border;
-                  }}
                 >
                   <X size={12} />
                 </button>
+                </Tooltip>
               </div>
             ))}
           </div>
@@ -459,7 +425,7 @@ export function LaunchPortal() {
             >
               Recent results
             </div>
-            <button
+            <button className="nuclei-hover-text"
               onClick={() => { if (window.confirm('Clear all hardware jobs from the list?')) useHardwareStore.getState().clearJobs(); }}
               style={{
                 background: 'transparent',
@@ -470,8 +436,6 @@ export function LaunchPortal() {
                 fontSize: 11,
                 fontFamily: TYPOGRAPHY.fontSans,
               }}
-              onMouseEnter={(e) => { e.currentTarget.style.color = colors.text; }}
-              onMouseLeave={(e) => { e.currentTarget.style.color = colors.textDim; }}
             >
               Clear all
             </button>

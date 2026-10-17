@@ -1,3 +1,4 @@
+import { Button } from '../ui';
 import { useState, useRef, useEffect, useLayoutEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { ChevronDown } from 'lucide-react';
@@ -184,6 +185,7 @@ export function FrameworkSelector({ compact = false }: { compact?: boolean } = {
             <button
               key={f}
               disabled={disabled}
+              className="nuclei-menu-item nuclei-menu-item--tint"
               onClick={() => {
                 if (disabled) return;
                 handleFrameworkPick(f);
@@ -196,7 +198,7 @@ export function FrameworkSelector({ compact = false }: { compact?: boolean } = {
                 width: '100%',
                 padding: '6px 12px',
                 background: isActive ? `${colors.accent}12` : 'transparent',
-                color: disabled ? colors.textDim : isActive ? colors.accent : colors.text,
+                color: disabled ? colors.textDim : isActive ? colors.accentText : colors.text,
                 border: 'none',
                 cursor: disabled ? 'not-allowed' : 'pointer',
                 fontSize: 12,
@@ -204,15 +206,8 @@ export function FrameworkSelector({ compact = false }: { compact?: boolean } = {
                 textAlign: 'left',
                 opacity: disabled ? 0.55 : 1,
               }}
-              onMouseEnter={(e) => {
-                if (!isActive && !disabled)
-                  e.currentTarget.style.background = `${colors.accent}08`;
-              }}
-              onMouseLeave={(e) => {
-                if (!isActive && !disabled) e.currentTarget.style.background = 'transparent';
-              }}
             >
-              {isActive && <span style={{ color: colors.accent, fontSize: 11 }}>●</span>}
+              {isActive && <span style={{ color: colors.accentText, fontSize: 11 }}>●</span>}
               <span style={{ marginLeft: isActive ? 0 : 18, flex: 1 }}>{labelFor(f)}</span>
               {disabled && (
                 <span
@@ -251,6 +246,7 @@ export function FrameworkSelector({ compact = false }: { compact?: boolean } = {
             <button
               key={`tpl-${f}`}
               disabled={disabled}
+              className="nuclei-menu-item nuclei-menu-item--tint"
               onClick={() => {
                 if (disabled) return;
                 applyTemplate(f);
@@ -269,16 +265,6 @@ export function FrameworkSelector({ compact = false }: { compact?: boolean } = {
                 textAlign: 'left',
                 opacity: disabled ? 0.55 : 1,
               }}
-              onMouseEnter={(e) => {
-                if (disabled) return;
-                e.currentTarget.style.color = colors.text;
-                e.currentTarget.style.background = `${colors.accent}08`;
-              }}
-              onMouseLeave={(e) => {
-                if (disabled) return;
-                e.currentTarget.style.color = colors.textMuted;
-                e.currentTarget.style.background = 'transparent';
-              }}
             >
               New {displayName(f)} file
             </button>
@@ -290,40 +276,14 @@ export function FrameworkSelector({ compact = false }: { compact?: boolean } = {
 
   return (
     <>
-      <button
+      <Button
         ref={buttonRef}
+        className="nuclei-framework-btn"
         onClick={() => setOpen((o) => !o)}
         aria-haspopup="menu"
         aria-expanded={open}
         title={compact ? `Framework: ${fullLabelFor(framework)}` : 'Framework'}
-        style={{
-          minWidth: 0,
-          maxWidth: '100%',
-          background: open ? colors.bgElevated : 'transparent',
-          border: `1px solid ${open ? colors.borderStrong : colors.border}`,
-          borderRadius: 5,
-          color: colors.accentLight,
-          cursor: 'pointer',
-          fontSize: 12,
-          fontFamily: TYPOGRAPHY.fontSans,
-          fontWeight: 500,
-          padding: '0 10px',
-          display: 'flex',
-          alignItems: 'center',
-          gap: 5,
-          height: 26,
-          transition: 'background 120ms ease, border-color 120ms ease',
-        }}
-        onMouseEnter={(e) => {
-          e.currentTarget.style.background = colors.bgElevated;
-          e.currentTarget.style.borderColor = colors.borderStrong;
-        }}
-        onMouseLeave={(e) => {
-          if (!open) {
-            e.currentTarget.style.background = 'transparent';
-            e.currentTarget.style.borderColor = colors.border;
-          }
-        }}
+        style={{ minWidth: 0, maxWidth: '100%' }}
       >
         <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{labelFor(framework)}</span>
         <ChevronDown
@@ -335,7 +295,7 @@ export function FrameworkSelector({ compact = false }: { compact?: boolean } = {
             transition: 'transform 150ms cubic-bezier(0.16, 1, 0.3, 1)',
           }}
         />
-      </button>
+      </Button>
       {menu && createPortal(menu, document.body)}
     </>
   );

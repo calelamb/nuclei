@@ -9,9 +9,11 @@ import { HistogramChip } from '../histogram/HistogramChip';
 export function HardwareAwareHistogramChip({
   simProbabilities,
   onDismiss,
+  onExpand,
 }: {
   simProbabilities: Record<string, number> | null;
   onDismiss: () => void;
+  onExpand?: () => void;
 }) {
   const jobs = useHardwareStore((s) => s.jobs);
   const results = useHardwareStore((s) => s.results);
@@ -24,6 +26,7 @@ export function HardwareAwareHistogramChip({
       hwProbabilities={hwProbabilities}
       hwLabel={hwLabel}
       onDismiss={onDismiss}
+      onExpand={onExpand}
     />
   );
 }

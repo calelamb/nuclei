@@ -208,7 +208,7 @@ export function UserProfile() {
 
       {/* Share button */}
       <div style={{ marginTop: 'auto', flexShrink: 0 }}>
-        <button
+        <button className="nuclei-hover-tint"
           onClick={handleShare}
           style={{
             width: '100%',
@@ -220,18 +220,12 @@ export function UserProfile() {
             borderRadius: 6,
             border: `1px solid ${colors.accent}`,
             background: `${colors.accent}15`,
-            color: colors.accent,
+            color: colors.accentText,
             fontSize: 12,
             fontWeight: 600,
             fontFamily: TYPOGRAPHY.fontSans,
             cursor: 'pointer',
             transition: 'background 0.15s',
-          }}
-          onMouseEnter={(e) => {
-            e.currentTarget.style.background = `${colors.accent}25`;
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.background = `${colors.accent}15`;
           }}
         >
           <Upload size={14} />

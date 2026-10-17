@@ -1,3 +1,4 @@
+import { Button } from '../ui';
 import { useState, useCallback } from 'react';
 import { ChevronDown, ChevronRight, Play, Trash2 } from 'lucide-react';
 import { useThemeStore } from '../../stores/themeStore';
@@ -244,23 +245,17 @@ export function HardwarePanel() {
               )}
 
               {!p.connected && p.name !== 'simulator' && !STUB_PROVIDERS.has(p.name) && (
-                <button
+                <button className="nuclei-hover-tint"
                   onClick={() => setShowCredentialSetup(p.name)}
                   style={{
                     fontSize: 11,
-                    color: colors.accent,
+                    color: colors.accentText,
                     background: 'transparent',
                     border: `1px solid ${colors.accent}40`,
                     borderRadius: 3,
                     padding: '2px 8px',
                     cursor: 'pointer',
                     ...font,
-                  }}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.background = `${colors.accent}15`;
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.background = 'transparent';
                   }}
                 >
                   Configure
@@ -357,7 +352,7 @@ export function HardwarePanel() {
                     <div style={{ fontSize: 11, color: colors.textDim, textTransform: 'uppercase', ...font }}>
                       Provider
                     </div>
-                    <div style={{ fontSize: 12, color: colors.accent, fontWeight: 600, ...font }}>
+                    <div style={{ fontSize: 12, color: colors.accentText, fontWeight: 600, ...font }}>
                       {PROVIDER_LABELS[selectedBackendInfo.provider]}
                     </div>
                   </div>
@@ -385,7 +380,7 @@ export function HardwarePanel() {
                           padding: '1px 6px',
                           borderRadius: 3,
                           background: `${colors.accent}15`,
-                          color: colors.accent,
+                          color: colors.accentText,
                           fontFamily: TYPOGRAPHY.fontMono,
                         }}
                       >
@@ -398,38 +393,16 @@ export function HardwarePanel() {
             )}
 
             {/* Run button */}
-            <button
+            <Button
+              variant="primary"
+              style={{ width: '100%', marginTop: 10 }}
               onClick={handleRunOnHardware}
               disabled={!selectedBackend || backendBusy}
               title={backendBusy ? 'This backend already has a job in the queue' : undefined}
-              style={{
-                width: '100%',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: 6,
-                marginTop: 10,
-                padding: '8px 0',
-                borderRadius: 4,
-                border: 'none',
-                background: selectedBackend && !backendBusy ? colors.accent : colors.borderStrong,
-                color: selectedBackend && !backendBusy ? '#fff' : colors.textDim,
-                fontSize: 11,
-                fontWeight: 600,
-                cursor: selectedBackend && !backendBusy ? 'pointer' : 'not-allowed',
-                transition: 'opacity 0.15s',
-                ...font,
-              }}
-              onMouseEnter={(e) => {
-                if (selectedBackend && !backendBusy) e.currentTarget.style.opacity = '0.85';
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.opacity = '1';
-              }}
+              icon={<Play size={12} />}
             >
-              <Play size={12} />
               {backendBusy ? 'Job in queue' : 'Run on Hardware'}
-            </button>
+            </Button>
           </Section>
         )}
 
@@ -447,7 +420,7 @@ export function HardwarePanel() {
         <Section title="Jobs" defaultOpen={jobs.length > 0}>
           <JobTracker jobs={jobs} results={results} />
           {jobs.length > 0 && (
-            <button
+            <button className="nuclei-hover-danger"
               onClick={() => { if (window.confirm('Clear all hardware jobs from the list?')) clearJobs(); }}
               style={{
                 display: 'flex',
@@ -464,14 +437,6 @@ export function HardwarePanel() {
                 borderRadius: 3,
                 cursor: 'pointer',
                 ...font,
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.borderColor = colors.error;
-                e.currentTarget.style.color = colors.error;
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.borderColor = colors.border;
-                e.currentTarget.style.color = colors.textDim;
               }}
             >
               <Trash2 size={12} />

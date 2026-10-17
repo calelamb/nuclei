@@ -183,6 +183,13 @@ export function PanelLayout() {
   // editor can keep a usable width beside it. Otherwise the editor gets the
   // whole row (the rail is empty before the first parse in the Clean preset,
   // and a 200px empty column used to crush the editor at <= 1100px).
+  // "+N more" on the chip opens the full histogram: the Full preset puts it in the bottom panel.
+  const setBottomTab = useBottomPanelStore((s) => s.setActiveTab);
+  const expandHistogram = useCallback(() => {
+    setPreset('full');
+    setBottomCollapsed(false);
+    setBottomTab('histogram');
+  }, [setPreset, setBottomCollapsed, setBottomTab]);
   const chipShown = visible.histogramChip && !chipDismissed;
   const latticeHasCoords = Boolean(qecSnapshot?.coords.qubits.some((c) => c !== null));
   const vizHasContent = vizColumnHasContent(visible, { latticeHasCoords }, chipShown);
@@ -490,6 +497,7 @@ export function PanelLayout() {
                               <HardwareAwareHistogramChip
                                 simProbabilities={result?.probabilities ?? null}
                                 onDismiss={dismissChip}
+                                onExpand={expandHistogram}
                               />
                             </div>
                           </PanelReveal>

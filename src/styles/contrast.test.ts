@@ -14,7 +14,7 @@ function ratio(a: string, b: string): number {
 }
 
 const SURFACES: (keyof ColorTokens)[] = ['surfaceBase', 'surfaceRaised', 'surfaceOverlay', 'surfaceSunken'];
-const BODY_TEXT: (keyof ColorTokens)[] = ['textPrimary', 'textSecondary', 'textTertiary', 'accentDiracText', 'modeResearch', 'warning'];
+const BODY_TEXT: (keyof ColorTokens)[] = ['textPrimary', 'textSecondary', 'textTertiary', 'accentQuantumText', 'accentDiracText', 'modeResearch', 'warning'];
 
 describe.each([['dark', DARK_COLORS], ['light', LIGHT_COLORS]] as const)('%s palette contrast', (_n, c) => {
   for (const text of BODY_TEXT) {
@@ -29,6 +29,9 @@ describe.each([['dark', DARK_COLORS], ['light', LIGHT_COLORS]] as const)('%s pal
     expect(r('textPrimary')).toBeGreaterThan(r('textSecondary'));
     expect(r('textSecondary')).toBeGreaterThan(r('textTertiary'));
     expect(r('textTertiary')).toBeGreaterThan(r('textDisabled'));
+  });
+  it('onAccent text on the accent fill meets AA 4.5:1 for small button text', () => {
+    expect(ratio(c.onAccent, c.accentQuantum)).toBeGreaterThanOrEqual(4.5);
   });
   it('white text on the Dirac fill meets AA', () => {
     expect(ratio('#FFFFFF', c.accentDirac)).toBeGreaterThanOrEqual(4.5);

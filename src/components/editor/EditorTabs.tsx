@@ -12,7 +12,7 @@ import { useHardwareStore } from '../../stores/hardwareStore';
 import { tabBarDensity, type TabBarDensity } from './tabBarLayout';
 import { canStopKernelRun, retryKernel, stopKernelRun } from '../../lib/kernelControl';
 import { getRunButtonState } from './runButtonState';
-import { Button, Tooltip } from '../ui';
+import { Button, IconButton, Tooltip } from '../ui';
 import { shortcutLabel } from '../../config/keybindings';
 import { useUiFeatures } from '../../hooks/useUiFeatures';
 
@@ -180,7 +180,7 @@ export function EditorTabs() {
       >
         <FileCode
           size={14}
-          style={{ color: isActive ? colors.accent : colors.textDim, flexShrink: 0 }}
+          style={{ color: isActive ? colors.accentText : colors.textDim, flexShrink: 0 }}
         />
         {isDirty && (
           <span
@@ -203,35 +203,18 @@ export function EditorTabs() {
         >
           {name}
         </span>
-        <button
+        <IconButton
+          size="sm"
+          className="nuclei-tab-close"
+          aria-label={`Close ${name}`}
+          tooltip={{ label: `Close ${name}`, placement: 'below' }}
           onClick={(e) => {
             e.stopPropagation();
             requestClose(path);
           }}
-          aria-label={`Close ${name}`}
-          title={`Close ${name}`}
-          style={{
-            background: 'none',
-            border: 'none',
-            padding: 2,
-            color: colors.textDim,
-            cursor: 'pointer',
-            display: 'flex',
-            alignItems: 'center',
-            borderRadius: 3,
-            flexShrink: 0,
-          }}
-          onMouseEnter={(e) => {
-            e.currentTarget.style.background = colors.bgElevated;
-            e.currentTarget.style.color = colors.text;
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.background = 'transparent';
-            e.currentTarget.style.color = colors.textDim;
-          }}
         >
           <X size={12} />
-        </button>
+        </IconButton>
       </div>
     );
   };
@@ -254,7 +237,7 @@ export function EditorTabs() {
         minWidth: 0,
       }}
     >
-      <FileCode size={14} style={{ color: colors.accent, flexShrink: 0 }} />
+      <FileCode size={14} style={{ color: colors.accentText, flexShrink: 0 }} />
       {legacyIsDirty && !renaming && (
         <span
           title="Unsaved changes"
@@ -345,22 +328,17 @@ export function EditorTabs() {
 
       {overflowing && !usingLegacy && (
         <div style={{ display: 'flex', alignItems: 'center', flexShrink: 0 }}>
-          <button
+          <Button
             ref={overflowBtnRef}
+            size="md"
             onClick={() => setOverflowOpen((o) => !o)}
             aria-label={`Show all ${tabs.length} open files`}
             aria-haspopup="menu"
             aria-expanded={overflowOpen}
-            title={`All open files (${tabs.length})`}
-            style={{
-              height: 26, display: 'flex', alignItems: 'center', gap: 3, padding: '0 6px',
-              background: overflowOpen ? colors.bgElevated : 'transparent', color: colors.textDim,
-              border: `1px solid ${colors.border}`, borderRadius: 5, cursor: 'pointer',
-              fontSize: 11, fontFamily: TYPOGRAPHY.fontMono,
-            }}
+            icon={<ChevronDown size={12} />}
           >
-            <ChevronDown size={12} /> {tabs.length}
-          </button>
+            {tabs.length}
+          </Button>
           {overflowOpen && overflowPos && createPortal(
             <div
               role="menu"
@@ -369,7 +347,7 @@ export function EditorTabs() {
                 position: 'fixed', top: overflowPos.top, right: overflowPos.right, zIndex: 1000,
                 minWidth: 200, maxWidth: 320, maxHeight: 320, overflowY: 'auto', padding: '4px 0',
                 background: colors.bgPanel, border: `1px solid ${colors.borderStrong}`, borderRadius: 6,
-                boxShadow: '0 8px 24px rgba(0,0,0,0.25)',
+                boxShadow: 'var(--shadow-popover, 0 8px 24px rgba(0,0,0,0.25))',
               }}
             >
               {tabs.map((t) => (
@@ -377,10 +355,11 @@ export function EditorTabs() {
                   key={t.path}
                   role="menuitem"
                   onClick={() => { setActiveTab(t.path); setOverflowOpen(false); }}
+                  className="nuclei-menu-item"
                   style={{
                     display: 'flex', alignItems: 'center', gap: 8, width: '100%', padding: '6px 12px',
                     background: t.path === activeTabPath ? `${colors.accent}14` : 'transparent',
-                    color: t.path === activeTabPath ? colors.accent : colors.text, border: 'none',
+                    color: t.path === activeTabPath ? colors.accentText : colors.text, border: 'none',
                     cursor: 'pointer', fontSize: 12, textAlign: 'left', fontFamily: TYPOGRAPHY.fontSans,
                   }}
                 >

@@ -1,3 +1,4 @@
+import { Badge } from '../ui';
 import { Heart, Bookmark } from 'lucide-react';
 import { useThemeStore } from '../../stores/themeStore';
 import type { GalleryCircuit } from '../../data/community/mockGallery';
@@ -13,12 +14,6 @@ interface CircuitCardProps {
   onClick: () => void;
 }
 
-const FRAMEWORK_COLORS: Record<string, string> = {
-  qiskit: '#6929C4',
-  cirq: '#F4B400',
-  'cuda-q': '#76B900',
-};
-
 const CATEGORY_LABELS: Record<string, string> = {
   tutorial: 'Tutorial',
   algorithm: 'Algorithm',
@@ -30,7 +25,7 @@ export function CircuitCard({ circuit, isLiked, isBookmarked, onLike, onBookmark
   const colors = useThemeStore((s) => s.colors);
 
   return (
-    <div
+    <div className="nuclei-hover-border"
       role="button"
       tabIndex={0}
       onClick={onClick}
@@ -46,12 +41,6 @@ export function CircuitCard({ circuit, isLiked, isBookmarked, onLike, onBookmark
         gap: 8,
         transition: 'border-color 0.15s',
         position: 'relative',
-      }}
-      onMouseEnter={(e) => {
-        e.currentTarget.style.borderColor = colors.borderStrong;
-      }}
-      onMouseLeave={(e) => {
-        e.currentTarget.style.borderColor = colors.border;
       }}
     >
       {/* Category tag */}
@@ -99,20 +88,7 @@ export function CircuitCard({ circuit, isLiked, isBookmarked, onLike, onBookmark
         >
           {circuit.author.displayName}
         </span>
-        <span
-          style={{
-            fontSize: 11,
-            fontWeight: 600,
-            fontFamily: TYPOGRAPHY.fontSans,
-            color: '#fff',
-            background: FRAMEWORK_COLORS[circuit.framework] ?? colors.accent,
-            padding: '1px 5px',
-            borderRadius: 3,
-            textTransform: 'uppercase',
-          }}
-        >
-          {circuit.framework}
-        </span>
+        <Badge style={{ textTransform: 'uppercase' }}>{circuit.framework}</Badge>
       </div>
 
       {/* Bottom row: like + bookmark */}
@@ -131,7 +107,7 @@ export function CircuitCard({ circuit, isLiked, isBookmarked, onLike, onBookmark
             cursor: 'pointer',
             padding: '2px 4px',
             borderRadius: 4,
-            color: isLiked ? colors.accent : colors.textDim,
+            color: isLiked ? colors.accentText : colors.textDim,
             fontSize: 11,
             fontFamily: TYPOGRAPHY.fontSans,
             transition: 'color 0.15s',

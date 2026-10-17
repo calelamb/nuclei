@@ -11,13 +11,15 @@ export interface SegmentedControlProps<T extends string> {
   options: ReadonlyArray<SegmentedOption<T>>;
   onChange: (next: T) => void;
   'aria-label': string;
+  /** Stretch to the container width with equal-width options. */
+  block?: boolean;
 }
 
 /**
  * A radiogroup of short options. One tab stop, arrow keys move and select
  * (WAI-ARIA radio group), so it is as keyboard-operable as a native select.
  */
-export function SegmentedControl<T extends string>({ value, options, onChange, 'aria-label': ariaLabel }: SegmentedControlProps<T>) {
+export function SegmentedControl<T extends string>({ value, options, onChange, 'aria-label': ariaLabel, block = false }: SegmentedControlProps<T>) {
   const groupRef = useRef<HTMLDivElement>(null);
 
   const onKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
@@ -33,7 +35,7 @@ export function SegmentedControl<T extends string>({ value, options, onChange, '
   };
 
   return (
-    <div ref={groupRef} role="radiogroup" aria-label={ariaLabel} className="nuclei-segmented" onKeyDown={onKeyDown}>
+    <div ref={groupRef} role="radiogroup" aria-label={ariaLabel} className={block ? 'nuclei-segmented nuclei-segmented--block' : 'nuclei-segmented'} onKeyDown={onKeyDown}>
       {options.map((o) => (
         <button
           key={o.value}

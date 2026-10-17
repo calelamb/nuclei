@@ -97,7 +97,7 @@ export function ProgressReport({ students, assignments }: ProgressReportProps) {
     <div style={{ fontFamily: font }}>
       {/* Export button */}
       <div style={{ display: 'flex', justifyContent: 'flex-end', padding: '0 0 8px' }}>
-        <button
+        <button className="nuclei-hover-accent"
           onClick={handleExportCSV}
           style={{
             display: 'flex', alignItems: 'center', gap: 4,
@@ -106,14 +106,6 @@ export function ProgressReport({ students, assignments }: ProgressReportProps) {
             border: `1px solid ${colors.border}`,
             background: 'transparent', color: colors.textMuted,
             cursor: 'pointer',
-          }}
-          onMouseEnter={(e) => {
-            e.currentTarget.style.borderColor = colors.accent;
-            e.currentTarget.style.color = colors.accent;
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.borderColor = colors.border;
-            e.currentTarget.style.color = colors.textMuted;
           }}
         >
           <Download size={12} />

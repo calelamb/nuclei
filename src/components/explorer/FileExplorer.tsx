@@ -19,6 +19,7 @@ import {
   X,
   type LucideIcon,
 } from 'lucide-react';
+import { Button, IconButton } from '../ui';
 import { useProjectStore } from '../../stores/projectStore';
 import { useEditorStore } from '../../stores/editorStore';
 import { useThemeStore } from '../../stores/themeStore';
@@ -151,8 +152,17 @@ export function FileExplorer() {
       setMenuOpen(false);
       setCircuitSubmenu(false);
     };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return;
+      setMenuOpen(false);
+      setCircuitSubmenu(false);
+    };
     document.addEventListener('mousedown', h);
-    return () => document.removeEventListener('mousedown', h);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('mousedown', h);
+      document.removeEventListener('keydown', onKey);
+    };
   }, [menuOpen]);
 
   const handleOpenFolder = useCallback(async () => {
@@ -312,7 +322,7 @@ export function FileExplorer() {
     padding: `3px 8px 3px ${8 + depth * 12}px`,
     fontSize: 12,
     fontFamily: TYPOGRAPHY.fontSans,
-    color: isActive ? colors.accent : colors.text,
+    color: isActive ? colors.accentText : colors.text,
     background: isActive ? `${colors.accent}14` : 'transparent',
     // Accent left bar on the open file — same signal as the tabs and the
     // Open Files list, so the active file is unmistakable in all three.
@@ -336,13 +346,8 @@ export function FileExplorer() {
             tabIndex={rovingTabIndex(entry.path)}
             onFocus={() => setFocusedPath(entry.path)}
             onClick={() => toggleExpand(entry.path)}
+            className="nuclei-row"
             style={rowStyle(false, depth)}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.background = colors.bgElevated;
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.background = 'transparent';
-            }}
           >
             {isExpanded ? (
               <ChevronDown size={12} style={{ color: colors.textDim, marginRight: 2 }} />
@@ -405,15 +410,8 @@ export function FileExplorer() {
           setRenameDraft(entry.name);
           setRenameTarget(entry.path);
         }}
+        className="nuclei-row"
         style={rowStyle(isActive, depth)}
-        onMouseEnter={(e) => {
-          if (!isActive) e.currentTarget.style.background = colors.bgElevated;
-        }}
-        onMouseLeave={(e) => {
-          e.currentTarget.style.background = isActive
-            ? `${colors.accent}14`
-            : 'transparent';
-        }}
       >
         {iconFor(entry.name, false, isActive ? colors.accent : colors.textMuted)}
         <span
@@ -521,7 +519,7 @@ export function FileExplorer() {
         }}
       >
         Folder projects are a desktop-only feature right now. Download Nuclei from{' '}
-        <a href="https://getnuclei.dev" style={{ color: colors.accent }}>
+        <a href="https://getnuclei.dev" style={{ color: colors.accentText }}>
           getnuclei.dev
         </a>{' '}
         to open a whole lecture folder. You can still edit and simulate circuits here.
@@ -530,52 +528,6 @@ export function FileExplorer() {
   }
 
   if (!projectRoot) {
-    const primaryBtn: React.CSSProperties = {
-      display: 'flex',
-      alignItems: 'center',
-      gap: 6,
-      justifyContent: 'center',
-      padding: '8px 12px',
-      background: colors.accent,
-      color: '#0a0f1a',
-      border: 'none',
-      borderRadius: 6,
-      fontSize: 12,
-      fontWeight: 600,
-      fontFamily: TYPOGRAPHY.fontSans,
-      cursor: 'pointer',
-    };
-    const secondaryBtn: React.CSSProperties = {
-      display: 'flex',
-      alignItems: 'center',
-      gap: 6,
-      justifyContent: 'center',
-      padding: '8px 12px',
-      background: 'transparent',
-      color: colors.text,
-      border: `1px solid ${colors.border}`,
-      borderRadius: 6,
-      fontSize: 12,
-      fontWeight: 500,
-      fontFamily: TYPOGRAPHY.fontSans,
-      cursor: 'pointer',
-    };
-    const quickChipBtn: React.CSSProperties = {
-      flex: 1,
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'center',
-      gap: 4,
-      padding: '6px 8px',
-      background: colors.bgElevated,
-      color: colors.accentLight,
-      border: `1px solid ${colors.border}`,
-      borderRadius: 6,
-      fontSize: 11,
-      fontWeight: 600,
-      fontFamily: TYPOGRAPHY.fontSans,
-      cursor: 'pointer',
-    };
     return (
       <div style={{ padding: 14, display: 'flex', flexDirection: 'column', gap: 10 }}>
         <p
@@ -589,9 +541,9 @@ export function FileExplorer() {
           Start a new quantum project, jump straight into a circuit, or open an
           existing folder.
         </p>
-        <button onClick={handleNewProject} style={primaryBtn}>
-          <Plus size={14} /> New Project…
-        </button>
+        <Button variant="primary" onClick={handleNewProject} icon={<Plus size={14} />}>
+          New Project…
+        </Button>
         <div
           style={{
             fontSize: 11,
@@ -604,22 +556,12 @@ export function FileExplorer() {
           Quick start
         </div>
         <div style={{ display: 'flex', gap: 6 }}>
-          <button onClick={() => quickCreateCircuit('qiskit')} style={quickChipBtn}>
-            <AtomIcon size={12} /> Qiskit
-          </button>
-          <button onClick={() => quickCreateCircuit('cirq')} style={quickChipBtn}>
-            <AtomIcon size={12} /> Cirq
-          </button>
-          <button onClick={() => quickCreateCircuit('cuda-q')} style={quickChipBtn}>
-            <AtomIcon size={12} /> CUDA-Q
-          </button>
-          <button onClick={() => quickCreateCircuit('qsharp')} style={quickChipBtn}>
-            <AtomIcon size={12} /> Q#
-          </button>
+          <Button size="sm" style={{ flex: 1 }} onClick={() => quickCreateCircuit('qiskit')} icon={<AtomIcon size={12} />}>Qiskit</Button>
+          <Button size="sm" style={{ flex: 1 }} onClick={() => quickCreateCircuit('cirq')} icon={<AtomIcon size={12} />}>Cirq</Button>
+          <Button size="sm" style={{ flex: 1 }} onClick={() => quickCreateCircuit('cuda-q')} icon={<AtomIcon size={12} />}>CUDA-Q</Button>
+          <Button size="sm" style={{ flex: 1 }} onClick={() => quickCreateCircuit('qsharp')} icon={<AtomIcon size={12} />}>Q#</Button>
         </div>
-        <button onClick={handleOpenFolder} style={secondaryBtn}>
-          <FolderOpen size={14} /> Open Folder…
-        </button>
+        <Button onClick={handleOpenFolder} icon={<FolderOpen size={14} />}>Open Folder…</Button>
         {error && (
           <div style={{ color: colors.error, fontSize: 11 }}>{error}</div>
         )}
@@ -671,49 +613,31 @@ export function FileExplorer() {
         >
           {rootName}
         </span>
-        <div ref={menuContainerRef} style={{ position: 'relative' }}>
-          <button
-            title="New…"
+        <div ref={menuContainerRef}>
+          <IconButton
+            size="sm"
             aria-label="New file, circuit or folder"
+            tooltip={{ label: 'New…' }}
             onClick={() => {
               setMenuOpen((o) => !o);
               setCircuitSubmenu(false);
             }}
             aria-haspopup="menu"
             aria-expanded={menuOpen}
-            style={{
-              background: menuOpen ? colors.bgElevated : 'transparent',
-              border: 'none',
-              color: menuOpen ? colors.text : colors.textDim,
-              cursor: 'pointer',
-              padding: 4,
-              display: 'flex',
-              borderRadius: 4,
-            }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.color = colors.text;
-              e.currentTarget.style.background = colors.bgElevated;
-            }}
-            onMouseLeave={(e) => {
-              if (!menuOpen) {
-                e.currentTarget.style.color = colors.textDim;
-                e.currentTarget.style.background = 'transparent';
-              }
-            }}
           >
             <Plus size={14} />
-          </button>
+          </IconButton>
           {menuOpen && (
             <div
               role="menu"
               style={{
                 position: 'absolute',
-                right: 0,
+                left: 8,
+                right: 8,
                 top: 'calc(100% + 4px)',
                 background: colors.bgPanel,
                 border: `1px solid ${colors.borderStrong}`,
-                borderRadius: 6,
-                minWidth: 220,
+                borderRadius: 'var(--radius-round)',
                 zIndex: 100,
                 overflow: 'visible',
                 boxShadow: '0 8px 24px rgba(0,0,0,0.25)',
@@ -721,54 +645,42 @@ export function FileExplorer() {
               }}
             >
               <button
+                className="nuclei-menu-item nuclei-menu-item--tint"
                 style={menuItemStyle}
                 onClick={() => startCreate({ kind: 'file', initial: 'untitled.py' })}
-                onMouseEnter={(e) => { e.currentTarget.style.background = `${colors.accent}12`; }}
-                onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
               >
                 <FilePlus size={14} style={{ color: colors.textDim }} /> New File
                 <span style={{ marginLeft: 'auto', fontSize: 11, color: colors.textDim }}>.py</span>
               </button>
 
-              <div
-                style={{ position: 'relative' }}
-                onMouseEnter={() => setCircuitSubmenu(true)}
-                onMouseLeave={() => setCircuitSubmenu(false)}
-              >
+              <div style={{ position: 'relative' }}>
                 <button
-                  style={menuItemStyle}
+                  className="nuclei-menu-item nuclei-menu-item--tint"
+                style={menuItemStyle}
+                  aria-haspopup="menu"
+                  aria-expanded={circuitSubmenu}
                   onClick={() => setCircuitSubmenu((s) => !s)}
                 >
                   <AtomIcon size={14} style={{ color: colors.accentLight }} /> New Circuit
-                  <ChevronRight size={12} style={{ marginLeft: 'auto', color: colors.textDim }} />
+                  {circuitSubmenu
+                    ? <ChevronDown size={12} style={{ marginLeft: 'auto', color: colors.textDim }} />
+                    : <ChevronRight size={12} style={{ marginLeft: 'auto', color: colors.textDim }} />}
                 </button>
                 {circuitSubmenu && (
                   <div
                     role="menu"
-                    style={{
-                      position: 'absolute',
-                      right: '100%',
-                      top: 0,
-                      marginRight: 4,
-                      background: colors.bgPanel,
-                      border: `1px solid ${colors.borderStrong}`,
-                      borderRadius: 6,
-                      minWidth: 180,
-                      boxShadow: '0 8px 24px rgba(0,0,0,0.25)',
-                      padding: '4px 0',
-                    }}
+                    style={{ paddingLeft: 12 }}
                   >
                     {(['qiskit', 'cirq', 'cuda-q', 'qsharp'] as Framework[]).map((f) => (
                       <button
                         key={f}
-                        style={menuItemStyle}
+                        className="nuclei-menu-item nuclei-menu-item--tint"
+                style={menuItemStyle}
                         onClick={() => startCreate({
                           kind: 'circuit',
                           framework: f,
                           initial: defaultCircuitFileName(f),
                         })}
-                        onMouseEnter={(e) => { e.currentTarget.style.background = `${colors.accent}12`; }}
-                        onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
                       >
                         <AtomIcon size={14} style={{ color: colors.accentLight }} />
                         {displayFrameworkName(f)}
@@ -781,75 +693,36 @@ export function FileExplorer() {
               <div style={{ borderTop: `1px solid ${colors.border}`, margin: '4px 0' }} />
 
               <button
+                className="nuclei-menu-item nuclei-menu-item--tint"
                 style={menuItemStyle}
                 onClick={() => startCreate({ kind: 'package', initial: 'new_package' })}
-                onMouseEnter={(e) => { e.currentTarget.style.background = `${colors.accent}12`; }}
-                onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
               >
                 <Package size={14} style={{ color: colors.textDim }} /> New Python Package
               </button>
               <button
+                className="nuclei-menu-item nuclei-menu-item--tint"
                 style={menuItemStyle}
                 onClick={() => startCreate({ kind: 'folder', initial: 'new_folder' })}
-                onMouseEnter={(e) => { e.currentTarget.style.background = `${colors.accent}12`; }}
-                onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
               >
                 <FolderPlus size={14} style={{ color: colors.textDim }} /> New Folder
               </button>
             </div>
           )}
         </div>
-        <button
-          title="Refresh"
-          aria-label="Refresh file list"
-          onClick={handleRefresh}
-          style={{
-            background: 'transparent',
-            border: 'none',
-            color: colors.textDim,
-            cursor: 'pointer',
-            padding: 4,
-            display: 'flex',
-            borderRadius: 4,
-          }}
-          onMouseEnter={(e) => {
-            e.currentTarget.style.color = colors.text;
-            e.currentTarget.style.background = colors.bgElevated;
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.color = colors.textDim;
-            e.currentTarget.style.background = 'transparent';
-          }}
-        >
+        <IconButton size="sm" aria-label="Refresh file list" tooltip={{ label: 'Refresh' }} onClick={handleRefresh}>
           <RefreshCw size={12} />
-        </button>
-        <button
-          title="Close folder"
+        </IconButton>
+        <IconButton
+          size="sm"
           aria-label="Close folder"
+          tooltip={{ label: 'Close folder' }}
           onClick={() => {
             setProjectRoot(null);
             platform.setStoredValue('project_root', null).catch(() => {});
           }}
-          style={{
-            background: 'transparent',
-            border: 'none',
-            color: colors.textDim,
-            cursor: 'pointer',
-            padding: 4,
-            display: 'flex',
-            borderRadius: 4,
-            fontSize: 11,
-            fontFamily: TYPOGRAPHY.fontSans,
-          }}
-          onMouseEnter={(e) => {
-            e.currentTarget.style.color = colors.text;
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.color = colors.textDim;
-          }}
         >
           <X size={13} />
-        </button>
+        </IconButton>
       </div>
 
       {pending && (

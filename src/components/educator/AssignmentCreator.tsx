@@ -1,3 +1,4 @@
+import { Button, Checkbox, IconButton } from '../ui';
 import { useState } from 'react';
 import { X } from 'lucide-react';
 import { useThemeStore } from '../../stores/themeStore';
@@ -85,21 +86,13 @@ export function AssignmentCreator({ onClose, onSave }: AssignmentCreatorProps) {
           <span style={{ fontSize: 13, fontWeight: 600, color: colors.text }}>
             Create Assignment
           </span>
-          <button
-            onClick={onClose}
-            style={{
-              background: 'transparent', border: 'none', cursor: 'pointer',
-              color: colors.textDim, padding: 4, display: 'flex', borderRadius: 3,
-            }}
-          >
-            <X size={14} />
-          </button>
+          <IconButton size="sm" aria-label="Close" onClick={onClose}><X size={14} /></IconButton>
         </div>
 
         {/* Body */}
         <div style={{ flex: 1, overflowY: 'auto', padding: 16, display: 'flex', flexDirection: 'column', gap: 12 }}>
           {/* Title */}
-          <div>
+          <div className="nuclei-focus-accent">
             <label style={{ fontSize: 11, fontWeight: 600, color: colors.textMuted, textTransform: 'uppercase', letterSpacing: 0.5 }}>
               Title
             </label>
@@ -108,13 +101,11 @@ export function AssignmentCreator({ onClose, onSave }: AssignmentCreatorProps) {
               onChange={(e) => setTitle(e.target.value)}
               placeholder="Assignment title..."
               style={{ ...inputStyle, marginTop: 4 }}
-              onFocus={(e) => { e.currentTarget.style.borderColor = colors.accent; }}
-              onBlur={(e) => { e.currentTarget.style.borderColor = colors.border; }}
             />
           </div>
 
           {/* Description */}
-          <div>
+          <div className="nuclei-focus-accent">
             <label style={{ fontSize: 11, fontWeight: 600, color: colors.textMuted, textTransform: 'uppercase', letterSpacing: 0.5 }}>
               Description
             </label>
@@ -124,8 +115,6 @@ export function AssignmentCreator({ onClose, onSave }: AssignmentCreatorProps) {
               placeholder="Describe the assignment..."
               rows={3}
               style={{ ...inputStyle, marginTop: 4, resize: 'vertical' }}
-              onFocus={(e) => { e.currentTarget.style.borderColor = colors.accent; }}
-              onBlur={(e) => { e.currentTarget.style.borderColor = colors.border; }}
             />
           </div>
 
@@ -164,32 +153,31 @@ export function AssignmentCreator({ onClose, onSave }: AssignmentCreatorProps) {
                     {topic}
                   </div>
                   {exercises.map((ex) => (
-                    <label
+                    <div
                       key={ex.id}
                       style={{
                         display: 'flex', alignItems: 'center', gap: 8,
-                        padding: '5px 10px',
-                        cursor: 'pointer',
+                        padding: '4px 8px',
                         borderBottom: `1px solid ${colors.border}`,
                         fontSize: 11,
                         color: colors.text,
                       }}
                     >
-                      <input
-                        type="checkbox"
-                        checked={selectedIds.has(ex.id)}
-                        onChange={() => toggleExercise(ex.id)}
-                        style={{ accentColor: colors.accent, cursor: 'pointer' }}
-                      />
-                      <span style={{ flex: 1 }}>{ex.title}</span>
+                      <div style={{ flex: 1, display: 'flex' }}>
+                        <Checkbox
+                          checked={selectedIds.has(ex.id)}
+                          onCheckedChange={() => toggleExercise(ex.id)}
+                          label={ex.title}
+                        />
+                      </div>
                       <span style={{
                         fontSize: 11, color: colors.textDim,
-                        padding: '1px 5px', borderRadius: 3,
+                        padding: '2px 4px', borderRadius: 4,
                         background: colors.bgElevated,
                       }}>
                         {ex.difficulty}
                       </span>
-                    </label>
+                    </div>
                   ))}
                 </div>
               ))}
@@ -203,32 +191,8 @@ export function AssignmentCreator({ onClose, onSave }: AssignmentCreatorProps) {
           padding: '12px 16px',
           borderTop: `1px solid ${colors.border}`,
         }}>
-          <button
-            onClick={onClose}
-            style={{
-              fontSize: 11, fontWeight: 500, fontFamily: font,
-              padding: '6px 14px', borderRadius: 4,
-              border: `1px solid ${colors.border}`,
-              background: 'transparent', color: colors.textMuted,
-              cursor: 'pointer',
-            }}
-          >
-            Cancel
-          </button>
-          <button
-            onClick={handleSave}
-            disabled={!title.trim()}
-            style={{
-              fontSize: 11, fontWeight: 500, fontFamily: font,
-              padding: '6px 14px', borderRadius: 4,
-              border: 'none',
-              background: title.trim() ? colors.accent : colors.borderStrong,
-              color: title.trim() ? '#fff' : colors.textDim,
-              cursor: title.trim() ? 'pointer' : 'default',
-            }}
-          >
-            Save Assignment
-          </button>
+          <Button onClick={onClose}>Cancel</Button>
+          <Button variant="primary" onClick={handleSave} disabled={!title.trim()}>Save Assignment</Button>
         </div>
       </div>
     </div>

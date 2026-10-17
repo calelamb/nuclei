@@ -107,7 +107,7 @@ function ModeSelectScreen({ onSelectLearn, onSelectResearch }: {
     <DialogFrame label="Welcome to Nuclei" maxWidth={560}>
       <>
         <div style={{
-          color: colors.accent, fontSize: 40, fontWeight: 700,
+          color: colors.accentText, fontSize: 40, fontWeight: 700,
           fontFamily: TYPOGRAPHY.fontSans,
           letterSpacing: -1,
           marginBottom: 8,
@@ -155,7 +155,7 @@ function WelcomeScreen({ onSelect, onBack }: { onSelect: (path: OnboardingPath) 
       <>
         {/* Logo */}
         <div style={{
-          color: colors.accent, fontSize: 40, fontWeight: 700,
+          color: colors.accentText, fontSize: 40, fontWeight: 700,
           fontFamily: TYPOGRAPHY.fontSans,
           letterSpacing: -1,
           marginBottom: 8,
@@ -206,7 +206,7 @@ function ReturningUserScreen({ onContinue, onStartFresh, lastFile, daysSince }: 
     <DialogFrame label="Welcome back" maxWidth={420} onEscape={onContinue}>
       <>
         <div style={{
-          color: colors.accent, fontSize: 32, fontWeight: 700,
+          color: colors.accentText, fontSize: 32, fontWeight: 700,
           fontFamily: TYPOGRAPHY.fontSans,
           letterSpacing: -1,
           marginBottom: 12,

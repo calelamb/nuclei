@@ -1,3 +1,4 @@
+import { Button, IconButton } from '../ui';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 import {
@@ -210,7 +211,7 @@ export function EnvironmentPanel() {
                 href={python.download_url}
                 target="_blank"
                 rel="noreferrer"
-                style={{ fontSize: 12, color: colors.accent, textDecoration: 'none' }}
+                style={{ fontSize: 12, color: colors.accentText, textDecoration: 'none' }}
               >
                 Download from python.org →
               </a>
@@ -366,36 +367,20 @@ function SectionLabel({ colors, children }: { colors: C; children: React.ReactNo
     </div>
   );
 }
-function IconBtn({ colors, busy, onClick, title, children }: { colors: C; busy?: boolean; onClick: () => void; title: string; children: React.ReactNode }) {
+function IconBtn({ busy, onClick, title, children }: { colors?: C; busy?: boolean; onClick: () => void; title: string; children: React.ReactNode }) {
   return (
-    <button
-      type="button" onClick={onClick} title={title} disabled={busy}
-      style={{ display: 'flex', alignItems: 'center', padding: 5, borderRadius: 5, background: 'transparent', border: `1px solid ${colors.border}`, color: colors.textMuted, cursor: busy ? 'default' : 'pointer', opacity: busy ? 0.5 : 1 }}
-    >
+    <IconButton size="sm" variant="secondary" aria-label={title} tooltip={{ label: title }} onClick={onClick} disabled={busy}>
       {children}
-    </button>
+    </IconButton>
   );
 }
-function PrimaryBtn({ colors, busy, onClick, children }: { colors: C; busy?: boolean; onClick: () => void; children: React.ReactNode }) {
-  return (
-    <button
-      type="button" onClick={onClick} disabled={busy}
-      style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '7px 13px', borderRadius: 6, background: colors.accent, color: '#0a0f1a', border: 'none', fontSize: 12, fontWeight: 600, fontFamily: TYPOGRAPHY.fontSans, cursor: busy ? 'default' : 'pointer', opacity: busy ? 0.7 : 1 }}
-    >
-      {busy ? <Loader2 size={14} style={{ animation: 'nuclei-spin 800ms linear infinite' }} /> : null}
-      {children}
-    </button>
-  );
+function PrimaryBtn({ busy, onClick, children }: { colors?: C; busy?: boolean; onClick: () => void; children: React.ReactNode }) {
+  return <Button variant="primary" onClick={onClick} loading={busy}>{children}</Button>;
 }
-function GhostBtn({ colors, busy, danger, disabled, onClick, title, children }: { colors: C; busy?: boolean; danger?: boolean; disabled?: boolean; onClick: () => void; title?: string; children: React.ReactNode }) {
-  const off = disabled || busy;
-  const color = danger ? colors.error : colors.textMuted;
+function GhostBtn({ busy, danger, disabled, onClick, title, children }: { colors?: C; busy?: boolean; danger?: boolean; disabled?: boolean; onClick: () => void; title?: string; children: React.ReactNode }) {
   return (
-    <button
-      type="button" onClick={onClick} title={title} disabled={off}
-      style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '5px 10px', borderRadius: 6, background: 'transparent', border: `1px solid ${colors.border}`, color, fontSize: 12, fontWeight: 500, fontFamily: TYPOGRAPHY.fontSans, cursor: off ? 'default' : 'pointer', opacity: off ? 0.45 : 1, flexShrink: 0 }}
-    >
-      {busy ? <Loader2 size={12} style={{ animation: 'nuclei-spin 800ms linear infinite' }} /> : children}
-    </button>
+    <Button size="sm" variant={danger ? 'danger' : 'secondary'} onClick={onClick} title={title} disabled={disabled} loading={busy}>
+      {children}
+    </Button>
   );
 }

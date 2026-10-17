@@ -1,4 +1,4 @@
-import { useContext, useEffect, useState, type CSSProperties } from 'react';
+import { useContext, useEffect, useState } from 'react';
 import { RotateCcw, Sun, Moon, Monitor, Eye, EyeOff, ExternalLink } from 'lucide-react';
 import { useThemeStore, type ThemePreference } from '../../stores/themeStore';
 import { useNavigationStore } from '../../stores/navigationStore';
@@ -37,20 +37,13 @@ function NumberStepper({ value, min, max, step, onChange }: {
   value: number; min: number; max: number; step: number; onChange: (v: number) => void;
 }) {
   const colors = useThemeStore((s) => s.colors);
-  const btnStyle: CSSProperties = {
-    width: 20, height: 20, border: `1px solid ${colors.border}`,
-    background: colors.bgElevated, color: colors.textMuted,
-    borderRadius: 3, cursor: 'pointer', fontSize: 12,
-    display: 'flex', alignItems: 'center', justifyContent: 'center',
-    fontFamily: TYPOGRAPHY.fontSans, padding: 0,
-  };
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-      <button type="button" aria-label="Decrease" style={btnStyle} onClick={() => onChange(Math.max(min, value - step))}>{'\u2212'}</button>
+      <IconButton size="sm" variant="secondary" aria-label="Decrease" onClick={() => onChange(Math.max(min, value - step))}>{'\u2212'}</IconButton>
       <span style={{ fontSize: 11, color: colors.text, minWidth: 28, textAlign: 'center', fontFamily: TYPOGRAPHY.fontSans }}>
         {value}
       </span>
-      <button type="button" aria-label="Increase" style={btnStyle} onClick={() => onChange(Math.min(max, value + step))}>+</button>
+      <IconButton size="sm" variant="secondary" aria-label="Increase" onClick={() => onChange(Math.min(max, value + step))}>+</IconButton>
     </div>
   );
 }
@@ -170,7 +163,7 @@ function ApiKeyInput() {
         rel="noopener noreferrer"
         style={{
           display: 'inline-flex', alignItems: 'center', gap: 4,
-          fontSize: 11, color: colors.accent, textDecoration: 'none',
+          fontSize: 11, color: colors.accentText, textDecoration: 'none',
           fontFamily: TYPOGRAPHY.fontSans,
         }}
       >
@@ -448,27 +441,14 @@ export function SettingsPanel() {
 /* ── Frameworks section (desktop-only) ────────────────────── */
 
 function FrameworksSection() {
-  const colors = useThemeStore((s) => s.colors);
   const openModal = useFrameworksStore((s) => s.openModal);
 
   return (
     <Section title="Environment" defaultOpen={false}>
       <EnvironmentPanel />
-      <button
-        onClick={() => openModal(false)}
-        style={{
-          marginTop: 12,
-          background: 'transparent',
-          border: 'none',
-          padding: 0,
-          color: colors.accent,
-          fontSize: 12,
-          fontFamily: TYPOGRAPHY.fontSans,
-          cursor: 'pointer',
-        }}
-      >
+      <Button variant="ghost" size="sm" className="nuclei-framework-btn" style={{ marginTop: 12 }} onClick={() => openModal(false)}>
         Open the setup wizard…
-      </button>
+      </Button>
     </Section>
   );
 }

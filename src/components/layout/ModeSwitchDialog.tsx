@@ -1,3 +1,4 @@
+import { Button } from '../ui';
 import { useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { useThemeStore } from '../../stores/themeStore';
@@ -87,38 +88,12 @@ export function ModeSwitchDialog() {
           run keeps going, the Experiments panel just won't be visible in {targetLabel}.
         </div>
         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
-          <button
-            onClick={cancelPending}
-            style={{
-              padding: '7px 14px',
-              background: 'transparent',
-              color: colors.textDim,
-              border: `1px solid ${colors.border}`,
-              borderRadius: 8,
-              fontSize: 12,
-              cursor: 'pointer',
-              fontFamily: TYPOGRAPHY.fontSans,
-            }}
-          >
+          <Button onClick={cancelPending}>
             Stay in {pending.target === 'research' ? 'Learn' : 'Research'}
-          </button>
-          <button
-            ref={confirmRef}
-            onClick={confirmPending}
-            style={{
-              padding: '7px 14px',
-              background: colors.accent,
-              color: '#fff',
-              border: 'none',
-              borderRadius: 8,
-              fontSize: 12,
-              fontWeight: 600,
-              cursor: 'pointer',
-              fontFamily: TYPOGRAPHY.fontSans,
-            }}
-          >
+          </Button>
+          <Button variant="primary" ref={confirmRef} onClick={confirmPending}>
             Switch to {targetLabel}
-          </button>
+          </Button>
         </div>
       </div>
     </div>

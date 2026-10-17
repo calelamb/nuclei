@@ -1,3 +1,4 @@
+import { Select } from '../ui';
 import { useRef, type CSSProperties } from 'react';
 import { Search } from 'lucide-react';
 import { useThemeStore } from '../../stores/themeStore';
@@ -82,7 +83,7 @@ export function CircuitGallery() {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', gap: 10 }}>
       {/* Search */}
-      <div style={{ position: 'relative', flexShrink: 0 }}>
+      <div className="nuclei-focus-accent" style={{ position: 'relative', flexShrink: 0 }}>
         <Search
           size={14}
           style={{
@@ -111,12 +112,6 @@ export function CircuitGallery() {
             fontFamily: TYPOGRAPHY.fontSans,
             boxSizing: 'border-box',
           }}
-          onFocus={(e) => {
-            e.currentTarget.style.borderColor = colors.accent;
-          }}
-          onBlur={(e) => {
-            e.currentTarget.style.borderColor = colors.border;
-          }}
         />
       </div>
 
@@ -131,7 +126,7 @@ export function CircuitGallery() {
               style={{
                 ...pillBase,
                 background: active ? colors.accent : colors.bg,
-                color: active ? '#fff' : colors.textMuted,
+                color: active ? colors.onAccent : colors.textMuted,
               }}
             >
               {cat.label}
@@ -145,26 +140,18 @@ export function CircuitGallery() {
         <span style={{ fontSize: 11, color: colors.textDim, fontFamily: TYPOGRAPHY.fontSans }}>
           Sort:
         </span>
-        <select
+        <Select
+          size="sm"
+          aria-label="Sort circuits"
           value={sortBy}
           onChange={(e) => setSortBy(e.target.value as 'recent' | 'popular' | 'featured')}
-          style={{
-            background: colors.bgElevated,
-            color: colors.text,
-            border: `1px solid ${colors.border}`,
-            borderRadius: 4,
-            padding: '3px 6px',
-            fontSize: 11,
-            cursor: 'pointer',
-            fontFamily: TYPOGRAPHY.fontSans,
-          }}
         >
           {SORTS.map((s) => (
             <option key={s.value} value={s.value}>
               {s.label}
             </option>
           ))}
-        </select>
+        </Select>
       </div>
 
       {/* Grid */}

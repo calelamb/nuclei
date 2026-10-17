@@ -6,6 +6,8 @@ import { useWorkspaceStore, type WorkspaceMode } from '../../stores/workspaceSto
 import { useModeSwitchStore } from '../../stores/modeSwitchStore';
 
 import { TYPOGRAPHY } from '../../styles/tokens';
+import { Tooltip } from '../ui';
+import { shortcutLabel } from '../../config/keybindings';
 /**
  * PRD 11 Phase B — the mode chip.
  *
@@ -153,10 +155,10 @@ export function ModeChip() {
 
   return (
     <>
+      <Tooltip label="Switch workspace mode" shortcut={shortcutLabel('switch-workspace')} placement="above">
       <button
         ref={buttonRef}
         onClick={() => setOpen((o) => !o)}
-        title="Switch workspace mode"
         aria-label="Switch workspace mode"
         aria-haspopup="menu"
         aria-expanded={open}
@@ -181,6 +183,7 @@ export function ModeChip() {
         <Icon size={12} strokeWidth={2.2} />
         {meta.label}
       </button>
+      </Tooltip>
       {open && createPortal(menu, document.body)}
     </>
   );

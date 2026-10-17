@@ -6,7 +6,7 @@ import { useProjectStore } from '../../stores/projectStore';
 import { useVizZoneStore } from '../../stores/vizZoneStore';
 import { PanelReveal } from '../layout/PanelReveal';
 import { CircuitRenderer } from '../circuit/CircuitRenderer';
-import { Button } from '../ui';
+import { Button, Tabs } from '../ui';
 import { getExecute } from '../../App';
 import { visibleVizPanelIds } from '../../layout/vizPanels';
 import { shortcutLabel } from '../../config/keybindings';
@@ -35,15 +35,17 @@ interface VizPanelDef {
   id: PanelId;
   title: string;
   icon: LucideIcon;
+  /** 'content' panels size to what they show (Bloch tiles); 'fill' panels take the rest of the rail. */
+  fit: 'content' | 'fill';
   render: () => ReactNode;
 }
 
 const MAIN_VIZ_PANELS: VizPanelDef[] = [
-  { id: 'circuit', title: 'Circuit', icon: Workflow, render: () => <CircuitRenderer /> },
-  { id: 'bloch', title: 'Bloch Sphere', icon: Orbit, render: () => <BlochRail><BlochPanel /></BlochRail> },
-  { id: 'qecTimeline', title: 'Timeline', icon: LayoutGrid, render: () => <QecTimelinePanel /> },
-  { id: 'qecLattice', title: 'Code Lattice', icon: Grid3x3, render: () => <CodeLatticePanel /> },
-  { id: 'qecDetectorGraph', title: 'Detector Graph', icon: Share2, render: () => <DetectorGraphPanel /> },
+  { id: 'circuit', title: 'Circuit', icon: Workflow, fit: 'content', render: () => <CircuitRenderer /> },
+  { id: 'bloch', title: 'Bloch Sphere', icon: Orbit, fit: 'content', render: () => <BlochRail><BlochPanel /></BlochRail> },
+  { id: 'qecTimeline', title: 'Timeline', icon: LayoutGrid, fit: 'fill', render: () => <QecTimelinePanel /> },
+  { id: 'qecLattice', title: 'Code Lattice', icon: Grid3x3, fit: 'fill', render: () => <CodeLatticePanel /> },
+  { id: 'qecDetectorGraph', title: 'Detector Graph', icon: Share2, fit: 'fill', render: () => <DetectorGraphPanel /> },
 ];
 
 export function VizZone({
@@ -75,7 +77,7 @@ export function VizZone({
   return (
     <div style={COLUMN_STYLE}>
       {circuitPanel && (
-        <PanelReveal when from="right" style={{ flexShrink: 0, maxHeight: '45%', display: 'flex', flexDirection: 'column', minHeight: 0 }}>
+        <PanelReveal when from="right" style={CIRCUIT_REVEAL_STYLE}>
           <section aria-label={circuitPanel.title} style={{ borderBottom: `1px solid ${colors.border}`, display: 'flex', flexDirection: 'column', minHeight: 0, maxHeight: '100%' }}>
             {circuitPanel.render()}
           </section>
@@ -85,8 +87,8 @@ export function VizZone({
       {statePanels.length === 0 && circuitPanel && <RunPrompt />}
 
       {statePanels.length > 0 && statePanels.length <= 2 && statePanels.map((p) => (
-        <PanelReveal key={p.id} when from="right" style={FILL_STYLE}>
-          <div style={{ flex: 1, overflow: 'hidden', position: 'relative', minHeight: 240, display: 'flex', flexDirection: 'column' }}>
+        <PanelReveal key={p.id} when from="right" style={p.fit === 'fill' ? FILL_STYLE : CONTENT_STYLE}>
+          <div style={p.fit === 'fill' ? FILL_BODY_STYLE : CONTENT_BODY_STYLE}>
             {p.render()}
           </div>
         </PanelReveal>
@@ -105,6 +107,11 @@ export function VizZone({
 }
 
 const COLUMN_STYLE = { width: '100%', height: '100%', minWidth: 0, display: 'flex', flexDirection: 'column' } as const;
+// The circuit grows to its content and only yields space (scrolling inside) when the rail is short.
+const CIRCUIT_REVEAL_STYLE = { flex: '0 1 auto', minHeight: 96, display: 'flex', flexDirection: 'column' } as const;
+const CONTENT_STYLE = { flex: '0 1 auto', minHeight: 0, display: 'flex', flexDirection: 'column' } as const;
+const CONTENT_BODY_STYLE = { overflow: 'hidden', position: 'relative', minHeight: 0, display: 'flex', flexDirection: 'column' } as const;
+const FILL_BODY_STYLE = { flex: 1, overflow: 'hidden', position: 'relative', minHeight: 240, display: 'flex', flexDirection: 'column' } as const;
 const FILL_STYLE = { flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' } as const;
 
 /**
@@ -135,49 +142,21 @@ function TabbedPanels({ panels, rememberedTab, onSelect }: {
   rememberedTab: string | null;
   onSelect: (id: PanelId) => void;
 }) {
-  const colors = useThemeStore((s) => s.colors);
   // Persisted active tab, falling back to the first panel when the remembered
   // one isn't currently available.
   const active = panels.find((p) => p.id === rememberedTab) ?? panels[0];
   return (
     <>
-      <div
-        role="tablist"
+      <Tabs
         aria-label="Visualization panels"
-        style={{
-          display: 'flex', alignItems: 'stretch', height: 28, flexShrink: 0,
-          borderBottom: `1px solid ${colors.border}`, background: colors.bg,
-          // A narrow rail scrolls the tabs sideways instead of clipping the last one.
-          overflowX: 'auto', overflowY: 'hidden', scrollbarWidth: 'none',
-        }}
-      >
-        {panels.map((p) => {
+        className="viz-zone-tabs"
+        value={active.id}
+        onChange={(id) => onSelect(id as PanelId)}
+        options={panels.map((p) => {
           const Icon = p.icon;
-          const isActive = p.id === active.id;
-          return (
-            <button
-              key={p.id}
-              role="tab"
-              aria-selected={isActive}
-              data-active={isActive}
-              className="nuclei-quiet"
-              onClick={() => onSelect(p.id)}
-              title={p.title}
-              style={{
-                display: 'flex', alignItems: 'center', gap: 5, padding: '0 10px',
-                background: 'transparent', border: 'none',
-                borderBottom: isActive ? `2px solid ${colors.accent}` : '2px solid transparent',
-                cursor: 'pointer',
-                fontSize: 11, fontFamily: TYPOGRAPHY.fontSans, fontWeight: 500,
-                whiteSpace: 'nowrap', flex: '0 0 auto',
-              }}
-            >
-              <Icon size={12} />
-              {p.title}
-            </button>
-          );
+          return { value: p.id, label: <><Icon size={12} />{p.title}</> };
         })}
-      </div>
+      />
       <div style={{ flex: 1, minHeight: 240, overflow: 'hidden', position: 'relative', display: 'flex', flexDirection: 'column' }}>
         {active.render()}
       </div>

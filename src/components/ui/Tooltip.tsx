@@ -116,7 +116,7 @@ export function Tooltip({ label, shortcut, placement = 'above', children }: Tool
             zIndex: 6000,
             pointerEvents: 'none',
             display: 'flex', alignItems: 'center', gap: 8,
-            maxWidth: 260, padding: '5px 8px',
+            width: 'max-content', maxWidth: 260, padding: '4px 8px',
             background: colors.bgElevated, color: colors.text,
             border: `1px solid ${colors.borderStrong}`, borderRadius: 6, boxShadow: shadow.md,
             fontSize: 12, lineHeight: 1.3, fontFamily: TYPOGRAPHY.fontSans,
