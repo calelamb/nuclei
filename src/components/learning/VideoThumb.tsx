@@ -14,6 +14,12 @@ interface VideoThumbProps {
  * YouTube still with a graceful fallback: a dead or blocked poster renders a
  * quiet placeholder instead of a broken or grey tile.
  */
+/**
+ * YouTube answers a dead or private id with a 120x90 grey still that loads
+ * fine (no error event). Every real still is at least 320 wide.
+ */
+const PLACEHOLDER_MAX_WIDTH = 120;
+
 export function VideoThumb({ youtubeId, quality, className, width, height }: VideoThumbProps) {
   const [failed, setFailed] = useState(false);
   if (failed) {
@@ -32,6 +38,9 @@ export function VideoThumb({ youtubeId, quality, className, width, height }: Vid
       width={width}
       height={height}
       onError={() => setFailed(true)}
+      onLoad={(event) => {
+        if (event.currentTarget.naturalWidth <= PLACEHOLDER_MAX_WIDTH) setFailed(true);
+      }}
     />
   );
 }

@@ -122,3 +122,12 @@
 .vrow__desc { font-size: var(--font-size-caption); line-height: 1.3; color: var(--color-text-secondary); }
 /* Warning badge text over its own tint is 4.2:1 in light; darken it inside the screens this lane owns. */
 .vrow__tags .nuclei-badge--warning, .cap-card__meta .nuclei-badge--warning { --badge-text: color-mix(in srgb, var(--color-warning) 72%, var(--color-text-primary)); }
+
+/* Rail Concepts tab: per-category progress instead of a shrunken graph. */
+.csum { list-style: none; margin: 0; padding: var(--space-3); display: flex; flex-direction: column; gap: var(--space-3); overflow-y: auto; font-family: var(--font-sans); }
+.csum__head { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: var(--space-1); font-size: 12px; }
+.csum__label { color: var(--color-text-primary); }
+.csum__count { color: var(--color-text-muted); font-variant-numeric: tabular-nums; }
+.csum__bar { display: flex; height: 4px; border-radius: 2px; overflow: hidden; background: var(--color-surface-sunken); }
+.csum__fill { background: var(--color-success); }
+.csum__fill--progress { background: var(--color-accent-quantum); }

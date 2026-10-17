@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { ChevronRight, ChevronDown, CheckCircle2, Circle, CircleDot, Maximize2, BookOpen, Network, Trophy, Library } from 'lucide-react';
 import { useLearnStore } from '../../stores/learnStore';
 import { TRACKS } from '../../data/lessons/tracks';
-import { ConceptMap } from './ConceptMap';
+import { ConceptSummary } from './ConceptSummary';
 import { Glossary } from './Glossary';
 import { CapstonesPanel } from './CapstonesPanel';
 import { Button, Tabs, type TabOption } from '../ui';
@@ -113,7 +113,7 @@ export function LearningPathSidebar() {
 
       <div className="lpath__panel" role="tabpanel" aria-label={`${activeTab} panel`}>
         {activeTab === 'tracks' && <TracksTab />}
-        {activeTab === 'concepts' && <ConceptMap />}
+        {activeTab === 'concepts' && <ConceptSummary />}
         {activeTab === 'capstones' && <CapstonesPanel />}
         {activeTab === 'glossary' && <Glossary />}
       </div>
