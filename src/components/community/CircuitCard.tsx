@@ -113,7 +113,7 @@ export function CircuitCard({ circuit, isLiked, isBookmarked, onLike, onBookmark
             cursor: 'pointer',
             padding: '2px 4px',
             borderRadius: 4,
-            color: isLiked ? colors.accent : colors.textDim,
+            color: isLiked ? colors.accentText : colors.textDim,
             fontSize: 11,
             fontFamily: TYPOGRAPHY.fontSans,
             transition: 'color 0.15s',

@@ -306,7 +306,7 @@ export function CredentialSetup({ provider, onClose }: CredentialSetupProps) {
                   href={config.helpUrl}
                   target="_blank"
                   rel="noreferrer"
-                  style={{ color: colors.accent, cursor: 'pointer' }}
+                  style={{ color: colors.accentText, cursor: 'pointer' }}
                 >
                   {config.helpText}
                 </a>

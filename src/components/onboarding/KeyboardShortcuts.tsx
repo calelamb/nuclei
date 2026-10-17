@@ -1,3 +1,5 @@
+import { IconButton } from '../ui';
+import { X } from 'lucide-react';
 import { useMemo, useRef } from 'react';
 import { useThemeStore } from '../../stores/themeStore';
 import { EASING, DURATION, prefersReducedMotion } from '../../lib/animations';
@@ -77,23 +79,13 @@ export function KeyboardShortcuts({ onClose }: KeyboardShortcutsProps) {
           }}>
             Keyboard Shortcuts
           </h2>
-          <button
-            onClick={onClose}
-            style={{
-              background: 'none', border: 'none',
-              color: colors.textMuted, cursor: 'pointer',
-              fontSize: 16, padding: '4px 8px',
-            }}
-            aria-label="Close shortcuts"
-          >
-            ×
-          </button>
+          <IconButton aria-label="Close shortcuts" onClick={onClose}><X size={16} /></IconButton>
         </div>
 
         {groups.map((group) => (
           <div key={group.title} style={{ marginBottom: 16 }}>
             <div style={{
-              color: colors.accent, fontSize: 11, fontWeight: 600,
+              color: colors.accentText, fontSize: 11, fontWeight: 600,
               fontFamily: TYPOGRAPHY.fontSans,
               textTransform: 'uppercase', letterSpacing: 0.5,
               marginBottom: 6,

@@ -173,7 +173,7 @@ export function InlineEditWidget({ editor, monaco, onClose }: InlineEditProps) {
     }}>
       {/* Input */}
       <div style={{ display: 'flex', alignItems: 'center', padding: '6px 10px', gap: 8 }}>
-        <span style={{ color: colors.accent, fontSize: 12, fontWeight: 600, fontFamily: TYPOGRAPHY.fontMono }}>⌘K</span>
+        <span style={{ color: colors.accentText, fontSize: 12, fontWeight: 600, fontFamily: TYPOGRAPHY.fontMono }}>⌘K</span>
         <input
           ref={inputRef}
           value={instruction}
@@ -191,7 +191,7 @@ export function InlineEditWidget({ editor, monaco, onClose }: InlineEditProps) {
             fontFamily: TYPOGRAPHY.fontSans,
           }}
         />
-        {loading && <span style={{ color: colors.accent, fontSize: 11 }}>Thinking...</span>}
+        {loading && <span style={{ color: colors.accentText, fontSize: 11 }}>Thinking...</span>}
       </div>
 
       {/* Error */}

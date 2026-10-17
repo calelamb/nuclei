@@ -179,7 +179,7 @@ export function ClassroomPanel() {
           borderBottom: `1px solid ${colors.border}`,
         }}>
           {[
-            { label: 'Students', value: students.length, icon: Users, color: colors.accent },
+            { label: 'Students', value: students.length, icon: Users, color: colors.accentText },
             { label: 'Assignments', value: assignments.length, icon: BookOpen, color: colors.info },
             { label: 'Avg Completion', value: `${avgCompletion}%`, icon: TrendingUp, color: colors.success },
           ].map((stat, i) => (

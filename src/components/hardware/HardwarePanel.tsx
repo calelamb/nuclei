@@ -249,7 +249,7 @@ export function HardwarePanel() {
                   onClick={() => setShowCredentialSetup(p.name)}
                   style={{
                     fontSize: 11,
-                    color: colors.accent,
+                    color: colors.accentText,
                     background: 'transparent',
                     border: `1px solid ${colors.accent}40`,
                     borderRadius: 3,
@@ -352,7 +352,7 @@ export function HardwarePanel() {
                     <div style={{ fontSize: 11, color: colors.textDim, textTransform: 'uppercase', ...font }}>
                       Provider
                     </div>
-                    <div style={{ fontSize: 12, color: colors.accent, fontWeight: 600, ...font }}>
+                    <div style={{ fontSize: 12, color: colors.accentText, fontWeight: 600, ...font }}>
                       {PROVIDER_LABELS[selectedBackendInfo.provider]}
                     </div>
                   </div>
@@ -380,7 +380,7 @@ export function HardwarePanel() {
                           padding: '1px 6px',
                           borderRadius: 3,
                           background: `${colors.accent}15`,
-                          color: colors.accent,
+                          color: colors.accentText,
                           fontFamily: TYPOGRAPHY.fontMono,
                         }}
                       >

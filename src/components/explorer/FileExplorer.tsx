@@ -313,7 +313,7 @@ export function FileExplorer() {
     padding: `3px 8px 3px ${8 + depth * 12}px`,
     fontSize: 12,
     fontFamily: TYPOGRAPHY.fontSans,
-    color: isActive ? colors.accent : colors.text,
+    color: isActive ? colors.accentText : colors.text,
     background: isActive ? `${colors.accent}14` : 'transparent',
     // Accent left bar on the open file — same signal as the tabs and the
     // Open Files list, so the active file is unmistakable in all three.
@@ -510,7 +510,7 @@ export function FileExplorer() {
         }}
       >
         Folder projects are a desktop-only feature right now. Download Nuclei from{' '}
-        <a href="https://getnuclei.dev" style={{ color: colors.accent }}>
+        <a href="https://getnuclei.dev" style={{ color: colors.accentText }}>
           getnuclei.dev
         </a>{' '}
         to open a whole lecture folder. You can still edit and simulate circuits here.

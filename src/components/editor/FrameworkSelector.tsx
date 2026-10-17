@@ -198,7 +198,7 @@ export function FrameworkSelector({ compact = false }: { compact?: boolean } = {
                 width: '100%',
                 padding: '6px 12px',
                 background: isActive ? `${colors.accent}12` : 'transparent',
-                color: disabled ? colors.textDim : isActive ? colors.accent : colors.text,
+                color: disabled ? colors.textDim : isActive ? colors.accentText : colors.text,
                 border: 'none',
                 cursor: disabled ? 'not-allowed' : 'pointer',
                 fontSize: 12,
@@ -207,7 +207,7 @@ export function FrameworkSelector({ compact = false }: { compact?: boolean } = {
                 opacity: disabled ? 0.55 : 1,
               }}
             >
-              {isActive && <span style={{ color: colors.accent, fontSize: 11 }}>●</span>}
+              {isActive && <span style={{ color: colors.accentText, fontSize: 11 }}>●</span>}
               <span style={{ marginLeft: isActive ? 0 : 18, flex: 1 }}>{labelFor(f)}</span>
               {disabled && (
                 <span

@@ -242,7 +242,7 @@ export function QuantumPlayground({ onComplete, onBridgeToIDE }: PlaygroundProps
       {/* Main content */}
       <div style={{ maxWidth: 560, width: '100%', textAlign: 'center' }}>
         <h1 style={{
-          color: colors.accent, fontSize: 28, fontWeight: 700,
+          color: colors.accentText, fontSize: 28, fontWeight: 700,
           fontFamily: TYPOGRAPHY.fontSans,
           marginBottom: 16,
           animation: prefersReducedMotion() ? 'none' : `nuclei-fade-in ${DURATION.slow}ms ${EASING.enter}`,

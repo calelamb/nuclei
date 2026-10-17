@@ -122,7 +122,7 @@ export function TranspilerControls() {
           All-to-all connectivity, no basis-gate constraint — the pure
           optimization passes with no routing. Pick a connected hardware backend
           to see device routing.{' '}
-          <a href={DOCS} target="_blank" rel="noreferrer" style={{ color: colors.accent }}>
+          <a href={DOCS} target="_blank" rel="noreferrer" style={{ color: colors.accentText }}>
             Learn more
           </a>
         </span>

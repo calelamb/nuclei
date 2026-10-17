@@ -46,7 +46,7 @@ export function BadgeDisplay({ earnedBadgeIds }: BadgeDisplayProps) {
             <Trophy
               size={20}
               style={{
-                color: earned ? colors.accent : colors.textDim,
+                color: earned ? colors.accentText : colors.textDim,
                 transition: 'color 0.15s',
               }}
             />

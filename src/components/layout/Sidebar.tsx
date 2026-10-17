@@ -156,7 +156,7 @@ function LearningSidebarTabs() {
                 background: 'transparent',
                 border: 'none',
                 borderBottom: isActive ? `2px solid ${colors.accent}` : '2px solid transparent',
-                color: isActive ? colors.accent : colors.textDim,
+                color: isActive ? colors.accentText : colors.textDim,
                 fontSize: 11,
                 fontWeight: 600,
                 fontFamily: TYPOGRAPHY.fontSans,

@@ -156,7 +156,7 @@ export function BackendSelector({ backends, selected, onSelect }: BackendSelecto
                         padding: '1px 5px',
                         borderRadius: 3,
                         background: `${colors.accent}18`,
-                        color: colors.accent,
+                        color: colors.accentText,
                         fontFamily: TYPOGRAPHY.fontSans,
                         flexShrink: 0,
                       }}

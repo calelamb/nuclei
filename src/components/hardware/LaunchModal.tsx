@@ -402,7 +402,7 @@ export function LaunchModal() {
               <ChevronLeft size={12} /> Back
             </button>
           )}
-          <Rocket size={16} style={{ color: colors.accent }} />
+          <Rocket size={16} style={{ color: colors.accentText }} />
           <span
             style={{
               fontSize: 14,

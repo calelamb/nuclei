@@ -133,7 +133,7 @@ export function CircuitDetail({ circuit, onClose, onOpenInEditor }: CircuitDetai
                 style={{
                   fontSize: 11,
                   fontFamily: TYPOGRAPHY.fontSans,
-                  color: colors.accent,
+                  color: colors.accentText,
                   background: `${colors.accent}15`,
                   padding: '2px 8px',
                   borderRadius: 10,

@@ -243,7 +243,7 @@ function TerminalPanel() {
         )}
         {visibleLines.length === 0 && !rewritten ? (
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: colors.textDim }}>
-            <span style={{ color: colors.accent, opacity: 0.3, fontFamily: TYPOGRAPHY.fontMono }}>{'>'}_</span>
+            <span style={{ color: colors.accentText, opacity: 0.3, fontFamily: TYPOGRAPHY.fontMono }}>{'>'}_</span>
             <span style={{ fontSize: 11 }}>
               {filterLower ? 'No lines match the filter.' : 'Terminal output will appear here'}
             </span>

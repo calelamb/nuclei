@@ -76,7 +76,7 @@ export function CommunityPanel() {
                 border: 'none',
                 borderBottom: `2px solid ${active ? colors.accent : 'transparent'}`,
                 background: 'transparent',
-                color: active ? colors.accent : colors.textMuted,
+                color: active ? colors.accentText : colors.textMuted,
                 fontSize: 11,
                 fontWeight: active ? 600 : 400,
                 fontFamily: TYPOGRAPHY.fontSans,

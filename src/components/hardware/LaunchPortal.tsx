@@ -141,7 +141,7 @@ export function LaunchPortal() {
           gap: 8,
         }}
       >
-        <Rocket size={14} style={{ color: colors.accent }} />
+        <Rocket size={14} style={{ color: colors.accentText }} />
         <span
           style={{
             fontSize: 11,
@@ -189,7 +189,7 @@ export function LaunchPortal() {
             fontFamily: TYPOGRAPHY.fontSans,
           }}
         >
-          <Upload size={16} style={{ color: dragActive ? colors.accent : colors.textMuted }} />
+          <Upload size={16} style={{ color: dragActive ? colors.accentText : colors.textMuted }} />
           <div style={{ fontSize: 11, color: colors.text, textAlign: 'center', lineHeight: 1.5 }}>
             Drop a <code style={{ fontFamily: TYPOGRAPHY.fontMono, color: colors.accentLight }}>.py</code>{' '}
             or <code style={{ fontFamily: TYPOGRAPHY.fontMono, color: colors.accentLight }}>.qs</code>{' '}

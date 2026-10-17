@@ -77,7 +77,7 @@ export function ChallengeBoard() {
                   borderRadius: 4,
                   border: `1px solid ${active ? colors.accent : colors.border}`,
                   background: active ? `${colors.accent}18` : 'transparent',
-                  color: active ? colors.accent : colors.textMuted,
+                  color: active ? colors.accentText : colors.textMuted,
                   fontSize: 11,
                   fontFamily: TYPOGRAPHY.fontSans,
                   cursor: 'pointer',
@@ -215,7 +215,7 @@ export function ChallengeBoard() {
             marginBottom: 8,
           }}
         >
-          <Trophy size={12} style={{ color: colors.accent }} />
+          <Trophy size={12} style={{ color: colors.accentText }} />
           <span
             style={{
               fontSize: 11,
@@ -265,7 +265,7 @@ export function ChallengeBoard() {
                 <td
                   style={{
                     padding: '5px 6px',
-                    color: entry.rank <= 3 ? colors.accent : colors.textMuted,
+                    color: entry.rank <= 3 ? colors.accentText : colors.textMuted,
                     fontWeight: entry.rank <= 3 ? 700 : 400,
                     borderBottom: `1px solid ${colors.border}`,
                     width: 28,

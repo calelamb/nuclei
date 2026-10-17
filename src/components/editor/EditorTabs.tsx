@@ -180,7 +180,7 @@ export function EditorTabs() {
       >
         <FileCode
           size={14}
-          style={{ color: isActive ? colors.accent : colors.textDim, flexShrink: 0 }}
+          style={{ color: isActive ? colors.accentText : colors.textDim, flexShrink: 0 }}
         />
         {isDirty && (
           <span
@@ -237,7 +237,7 @@ export function EditorTabs() {
         minWidth: 0,
       }}
     >
-      <FileCode size={14} style={{ color: colors.accent, flexShrink: 0 }} />
+      <FileCode size={14} style={{ color: colors.accentText, flexShrink: 0 }} />
       {legacyIsDirty && !renaming && (
         <span
           title="Unsaved changes"

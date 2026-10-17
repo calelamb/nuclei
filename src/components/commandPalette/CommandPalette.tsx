@@ -86,16 +86,16 @@ export function CommandPalette({ commands, onClose }: CommandPaletteProps) {
   };
 
   const categoryColors: Record<string, string> = {
-    File: colors.success,
-    Edit: colors.warning,
-    View: colors.info,
-    Run: colors.accent,
+    File: colors.textMuted,
+    Edit: colors.textMuted,
+    View: colors.textMuted,
+    Run: colors.accentText,
     Dirac: colors.diracText,
-    Circuit: colors.error,
-    Learn: colors.success,
+    Circuit: colors.textMuted,
+    Learn: colors.textMuted,
     Settings: colors.textMuted,
     Help: colors.textMuted,
-    Navigate: colors.info,
+    Navigate: colors.textMuted,
     Experiment: colors.modeResearch,
   };
 
@@ -167,7 +167,7 @@ export function CommandPalette({ commands, onClose }: CommandPaletteProps) {
                 style={{
                   display: 'flex', alignItems: 'center',
                   width: '100%', height: ROW_HEIGHT, padding: '0 16px',
-                  background: i === selectedIdx ? colors.border : 'transparent',
+                  background: i === selectedIdx ? 'var(--color-surface-overlay)' : 'transparent',
                   border: 'none', cursor: 'pointer',
                   color: colors.text, fontSize: 13,
                   fontFamily: TYPOGRAPHY.fontSans,

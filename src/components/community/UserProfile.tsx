@@ -220,7 +220,7 @@ export function UserProfile() {
             borderRadius: 6,
             border: `1px solid ${colors.accent}`,
             background: `${colors.accent}15`,
-            color: colors.accent,
+            color: colors.accentText,
             fontSize: 12,
             fontWeight: 600,
             fontFamily: TYPOGRAPHY.fontSans,

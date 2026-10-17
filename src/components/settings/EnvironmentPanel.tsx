@@ -211,7 +211,7 @@ export function EnvironmentPanel() {
                 href={python.download_url}
                 target="_blank"
                 rel="noreferrer"
-                style={{ fontSize: 12, color: colors.accent, textDecoration: 'none' }}
+                style={{ fontSize: 12, color: colors.accentText, textDecoration: 'none' }}
               >
                 Download from python.org →
               </a>
