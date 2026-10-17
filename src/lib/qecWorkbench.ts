@@ -5,11 +5,14 @@
  * the same discard-aware rate and sinter likelihood interval as the figure.
  */
 import type { QecCampaignStatsRow } from '../types/qec';
+import { MAPPED_KEY } from '../types/sinterMapping';
 import { assignExperiments } from './qecExperiments';
 import { DEFAULT_MAX_LIKELIHOOD_FACTOR, rowProblem, rowRate } from './qecFit';
 
 export interface DecoderComparisonRow {
   experiment: string;
+  /** Distinguishing experiment metadata (rounds scheme + non-sweep metadata keys). */
+  context: string;
   decoder: string;
   distance: number | null;
   noise: number | null;
@@ -32,6 +35,31 @@ export interface DecoderComparison {
   /** Malformed or fully-discarded rows left out. */
   skipped: number;
   maxLikelihoodFactor: number;
+}
+
+const CONTEXT_SKIP = new Set(['d', 'p', 'r', 'rounds', 'label', 'decoder', MAPPED_KEY]);
+
+const scalar = (v: unknown): string | null =>
+  typeof v === 'string' || typeof v === 'number' || typeof v === 'boolean' ? String(v) : null;
+
+/** Human text for the experiment: rounds scheme, then the metadata that is not a sweep axis. */
+function experimentContext(md: Record<string, unknown>, roundsTag: string, name: string): string {
+  const parts = [
+    ...(roundsTag ? [roundsTag.replace(/^r=/, 'rounds = ')] : []),
+    ...Object.keys(md).filter((k) => !CONTEXT_SKIP.has(k)).sort().flatMap((k) => {
+      const v = scalar(md[k]);
+      return v === null ? [] : [`${k}=${v}`];
+    }),
+  ];
+  return parts.length > 0 ? parts.join(' · ') : name;
+}
+
+/** Seconds per shot with units (ns / µs / ms / s), three significant digits. */
+export function formatSecondsPerShot(seconds: number): string {
+  if (!Number.isFinite(seconds) || seconds <= 0) return '—';
+  const units: Array<[number, string]> = [[1, 's'], [1e-3, 'ms'], [1e-6, 'µs'], [1e-9, 'ns']];
+  const [scale, unit] = units.find(([s]) => seconds >= s * 0.9995) ?? units[units.length - 1];
+  return `${Number((seconds / scale).toPrecision(3))} ${unit}`;
 }
 
 const num = (v: unknown): number | null => (typeof v === 'number' && Number.isFinite(v) ? v : null);
@@ -63,7 +91,9 @@ export function decoderComparison(
     const md = (c.row.json_metadata ?? {}) as Record<string, unknown>;
     const { fit, kept } = rowRate({ ...c.row, shots: c.shots, discards: c.discards, errors: c.errors }, { maxLikelihoodFactor: factor });
     return {
-      experiment: experiments.get(c.row)!.name, decoder: c.row.decoder, distance: num(md.d), noise: num(md.p),
+      experiment: experiments.get(c.row)!.name,
+      context: experimentContext(md, experiments.get(c.row)!.roundsTag, experiments.get(c.row)!.name),
+      decoder: c.row.decoder, distance: num(md.d), noise: num(md.p),
       shots: c.shots, discards: c.discards, kept, errors: c.errors,
       strongId: c.row.strong_id,
       collides: (siblings.get((JSON.parse(key) as unknown[]).slice(0, 4).join('\u0000')) ?? 0) > 1,

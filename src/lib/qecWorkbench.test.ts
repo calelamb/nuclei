@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import type { QecCampaignStatsRow } from '../types/qec';
-import { decoderComparison } from './qecWorkbench';
+import { decoderComparison, formatSecondsPerShot } from './qecWorkbench';
 
 function mk(over: Partial<QecCampaignStatsRow> & { meta?: Record<string, unknown> }): QecCampaignStatsRow {
   const { meta, ...rest } = over;
@@ -60,5 +60,40 @@ describe('decoderComparison (workbench rows)', () => {
     expect(d7.map((r) => r.errors).sort((a, b) => a - b)).toEqual([170, 441]);
     expect(d7.every((r) => r.collides && r.strongId !== '')).toBe(true);
     expect(rows.find((r) => r.distance === 5)!.collides).toBe(false);
+  });
+});
+
+describe('decoderComparison context (distinguishing experiment metadata)', () => {
+  it('describes the experiment by its non-sweep metadata, not the import label', () => {
+    const [r] = decoderComparison([
+      mk({ meta: { d: 3, r: 3, p: 0.01, label: 'stats', b: 'X', q: 17, decoder: 'pymatching', c: 'surface_code' } }),
+    ]).rows;
+    expect(r.context).toBe('rounds = d · b=X · c=surface_code · q=17');
+  });
+
+  it('is just the rounds scheme when there is no other metadata', () => {
+    const rows = decoderComparison([
+      mk({ meta: { d: 3, r: 3, p: 0.01, label: 'x' } }), mk({ meta: { d: 5, r: 5, p: 0.01, label: 'x' }, errors: 3 }),
+    ]).rows;
+    expect(rows.map((r) => r.context)).toEqual(['rounds = d', 'rounds = d']);
+  });
+
+  it('falls back to the experiment name when nothing else distinguishes it', () => {
+    const [r] = decoderComparison([mk({ meta: { d: 3, p: 0.01, label: 'run7' } })]).rows;
+    expect(r.context).toBe('run7');
+  });
+});
+
+describe('formatSecondsPerShot', () => {
+  it.each([
+    [1.2e-5, '12 µs'],
+    [2.4e-3, '2.4 ms'],
+    [0.5, '500 ms'],
+    [1.5, '1.5 s'],
+    [1e-7, '100 ns'],
+    [0, '—'],
+    [Number.NaN, '—'],
+  ])('%s -> %s', (v, text) => {
+    expect(formatSecondsPerShot(v)).toBe(text);
   });
 });
