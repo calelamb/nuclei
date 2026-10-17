@@ -65,6 +65,14 @@ describe('<WhatsNewModal>', () => {
     expect(await findByRole('dialog')).toBeTruthy();
   });
 
+  it('labels the dialog with the release the notes describe, not the running build (reopen)', async () => {
+    const { useWhatsNewStore } = await import('../stores/whatsNewStore');
+    const { findByRole } = render(<WhatsNewModal isDesktop={false} currentVersion="0.13.0" />);
+    useWhatsNewStore.getState().openWhatsNew();
+    const dialog = await findByRole('dialog');
+    expect(dialog.getAttribute('aria-label')).toBe(`What's new in Nuclei ${WHATS_NEW.version}`);
+  });
+
   it('renders nothing on fresh install and primes the seen-version key', () => {
     const { container } = render(<WhatsNewModal isDesktop currentVersion={CURRENT} />);
 

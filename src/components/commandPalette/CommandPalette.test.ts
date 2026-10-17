@@ -125,3 +125,12 @@ describe('palette commands (shell-07, shell-13, shell-19)', () => {
     expect(openWhatsNew).toHaveBeenCalled();
   });
 });
+
+import { panelToggleLabel } from './panelLabels';
+
+describe('panelToggleLabel', () => {
+  it('does not repeat the word panel', () => {
+    expect(panelToggleLabel('Histogram (bottom panel)')).toBe('Toggle Histogram (bottom panel)');
+    expect(panelToggleLabel('Circuit')).toBe('Toggle Circuit panel');
+  });
+});

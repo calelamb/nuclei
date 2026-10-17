@@ -361,6 +361,8 @@ function AppInner() {
   // reports e.key as 'P' under Shift, so comparing against 'p' silently failed.
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
+      // The first-launch chooser is modal: no global shortcut may act behind it.
+      if (showOnboarding) return;
       const id = findBindingId(e);
       if (!id) return;
       e.preventDefault();
@@ -411,7 +413,7 @@ function AppInner() {
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [fileOps, themeToggle, cycleMode, toggleDirac, focusDirac, setShowShortcuts, setShowCommandPalette]);
+  }, [fileOps, themeToggle, cycleMode, toggleDirac, focusDirac, setShowShortcuts, setShowCommandPalette, showOnboarding]);
 
   return (
     <>

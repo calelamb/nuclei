@@ -7,15 +7,20 @@ export const TOOLTIP_OPEN_DELAY_MS = 400;
 export const TOOLTIP_CLOSE_DELAY_MS = 100;
 const GAP = 6;
 const EDGE = 8;
+const TRANSFORMS = {
+  above: 'translate(-50%, -100%)',
+  below: 'translate(-50%, 0)',
+  right: 'translate(0, -50%)',
+} as const;
 
-interface Position { left: number; top: number; placement: 'above' | 'below' }
+interface Position { left: number; top: number; placement: 'above' | 'below' | 'right' }
 
 export interface TooltipProps {
   label: string;
   /** Shortcut in glyph form (use `shortcutLabel`); rendered as a kbd chip. */
   shortcut?: string;
   /** Preferred side; flips when there is no room. Default: above. */
-  placement?: 'above' | 'below';
+  placement?: 'above' | 'below' | 'right';
   /** The single trigger element. It keeps its own handlers; the tooltip adds aria-describedby. */
   children: ReactElement<Record<string, unknown>>;
 }
@@ -35,6 +40,9 @@ export function Tooltip({ label, shortcut, placement = 'above', children }: Tool
   const wrapRef = useRef<HTMLSpanElement>(null);
   const openTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // A click focuses the control right after mousedown; that focus is not keyboard focus
+  // and must not re-arm the tooltip the click just dismissed.
+  const pointerFocus = useRef(false);
 
   const clearTimers = useCallback(() => {
     if (openTimer.current) clearTimeout(openTimer.current);
@@ -48,6 +56,10 @@ export function Tooltip({ label, shortcut, placement = 'above', children }: Tool
     const target = wrapRef.current?.firstElementChild;
     if (!target) return;
     const r = target.getBoundingClientRect();
+    if (placement === 'right') {
+      setPos({ left: r.right + GAP, top: r.top + r.height / 2, placement: 'right' });
+      return;
+    }
     const wantBelow = placement === 'below' || r.top < 40;
     setPos({
       left: Math.min(Math.max(r.left + r.width / 2, EDGE + 60), window.innerWidth - EDGE - 60),
@@ -82,9 +94,13 @@ export function Tooltip({ label, shortcut, placement = 'above', children }: Tool
       style={{ display: 'contents' }}
       onMouseEnter={show}
       onMouseLeave={() => hide()}
-      onFocus={show}
+      onFocus={() => { if (!pointerFocus.current) show(); }}
       onBlur={() => hide(true)}
-      onMouseDown={() => hide(true)}
+      onMouseDown={() => {
+        hide(true);
+        pointerFocus.current = true;
+        setTimeout(() => { pointerFocus.current = false; }, 0);
+      }}
       onKeyDown={(e) => { if (e.key === 'Escape') hide(true); }}
     >
       {trigger}
@@ -96,7 +112,7 @@ export function Tooltip({ label, shortcut, placement = 'above', children }: Tool
             position: 'fixed',
             left: pos.left,
             top: pos.top,
-            transform: pos.placement === 'above' ? 'translate(-50%, -100%)' : 'translate(-50%, 0)',
+            transform: TRANSFORMS[pos.placement],
             zIndex: 6000,
             pointerEvents: 'none',
             display: 'flex', alignItems: 'center', gap: 8,

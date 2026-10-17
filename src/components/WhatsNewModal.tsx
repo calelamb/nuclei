@@ -211,7 +211,7 @@ export function WhatsNewModal({
           role="dialog"
           aria-modal="true"
           aria-labelledby={TITLE_ID}
-          aria-label={`What's new in Nuclei ${currentVersion}`}
+          aria-label={`What's new in Nuclei ${entry.version}`}
           style={{
             pointerEvents: 'auto',
             position: 'relative',
@@ -259,7 +259,7 @@ export function WhatsNewModal({
 
           <div style={{ overflowY: 'auto', padding: '28px 28px 22px' }}>
             <WhatsNewHeader
-              currentVersion={currentVersion}
+              currentVersion={entry.version}
               accent={colors.accent}
               textDim={colors.textDim}
               reduced={reduced}

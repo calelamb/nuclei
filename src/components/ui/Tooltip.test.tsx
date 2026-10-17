@@ -62,4 +62,22 @@ describe('Tooltip', () => {
     const tip = screen.getByRole('tooltip');
     expect(screen.getByText('mode').getAttribute('aria-describedby')).toBe(tip.id);
   });
+
+  it('does not re-open from the focus a mouse click causes', () => {
+    setup();
+    const btn = screen.getByText('mode');
+    fireEvent.mouseEnter(btn);
+    act(() => { vi.advanceTimersByTime(TOOLTIP_OPEN_DELAY_MS + 10); });
+    fireEvent.mouseDown(btn);
+    fireEvent.focus(btn);
+    act(() => { vi.advanceTimersByTime(TOOLTIP_OPEN_DELAY_MS + 10); });
+    expect(screen.queryByRole('tooltip')).toBeNull();
+  });
+
+  it('places itself beside the trigger for rail icons', () => {
+    render(<Tooltip label="Explorer" placement="right"><button>files</button></Tooltip>);
+    fireEvent.mouseEnter(screen.getByText('files'));
+    act(() => { vi.advanceTimersByTime(TOOLTIP_OPEN_DELAY_MS + 10); });
+    expect(screen.getByRole('tooltip').style.transform).toBe('translate(0, -50%)');
+  });
 });

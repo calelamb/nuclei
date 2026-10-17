@@ -31,7 +31,6 @@ export const KEYBINDINGS: readonly Keybinding[] = [
   { id: 'inline-edit', key: 'k', label: 'Inline edit with Dirac (selection)', group: 'Editor', owner: 'editor' },
   { id: 'compose', key: 'i', label: 'Compose with Dirac', group: 'Editor', owner: 'app' },
   { id: 'find', key: 'f', label: 'Find', group: 'Editor', owner: 'editor' },
-  { id: 'replace', key: 'h', label: 'Find and replace', group: 'Editor', owner: 'editor' },
 
   { id: 'open', key: 'o', label: 'Open file', group: 'Navigation', owner: 'app' },
   { id: 'new', key: 'n', label: 'New file', group: 'Navigation', owner: 'app' },

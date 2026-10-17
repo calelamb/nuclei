@@ -1,3 +1,4 @@
+import { panelToggleLabel } from './panelLabels';
 import { useState, useRef, useEffect, useMemo, useId } from 'react';
 import { useThemeStore } from '../../stores/themeStore';
 import { EASING, DURATION, getDuration, prefersReducedMotion } from '../../lib/animations';
@@ -288,7 +289,7 @@ export function buildCommands(actions: CommandActions, context: CommandContext):
     if (!panel.modes.includes(context.mode)) continue;
     commands.push({
       id: `toggle-panel-${panel.id}`,
-      label: `Toggle ${panel.title} panel`,
+      label: panelToggleLabel(panel.title),
       category: 'View',
       keywords: ['show', 'hide'],
       action: () => actions.togglePanel(panel.id),

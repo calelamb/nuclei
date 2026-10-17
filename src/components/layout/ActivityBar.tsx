@@ -1,5 +1,6 @@
 import { Files, Search, Cpu, GraduationCap, Blocks, Settings, Server, Users, Trophy, Rocket, FlaskConical, Calculator, Shuffle, Atom } from 'lucide-react';
 import { useThemeStore } from '../../stores/themeStore';
+import { Tooltip } from '../ui/Tooltip';
 import { bottomViewsForMode } from './panelRegistry';
 import type { WorkspaceMode } from '../../stores/workspaceStore';
 
@@ -59,29 +60,29 @@ function ActivityIcon({ item, isActive, onClick, shortcut }: {
 }) {
   const colors = useThemeStore((s) => s.colors);
   const Icon = item.icon;
-  const title = shortcut ? `${item.label} (${shortcut})` : item.label;
 
   return (
-    <button
-      onClick={onClick}
-      title={title}
-      aria-label={item.label}
-      aria-pressed={isActive}
-      data-active={isActive}
-      className="nuclei-quiet"
-      data-tour-target={`activity-${item.id}`}
-      style={{
-        width: 48, height: 44,
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
-        background: 'transparent',
-        border: 'none',
-        borderLeft: isActive ? `2px solid ${colors.accent}` : '2px solid transparent',
-        cursor: 'pointer',
-        position: 'relative',
-      }}
-    >
-      <Icon size={20} strokeWidth={isActive ? 2 : 1.5} />
-    </button>
+    <Tooltip label={item.label} shortcut={shortcut} placement="right">
+      <button
+        onClick={onClick}
+        aria-label={item.label}
+        aria-pressed={isActive}
+        data-active={isActive}
+        className="nuclei-quiet"
+        data-tour-target={`activity-${item.id}`}
+        style={{
+          width: 48, height: 44,
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          background: 'transparent',
+          border: 'none',
+          borderLeft: isActive ? `2px solid ${colors.accent}` : '2px solid transparent',
+          cursor: 'pointer',
+          position: 'relative',
+        }}
+      >
+        <Icon size={20} strokeWidth={isActive ? 2 : 1.5} />
+      </button>
+    </Tooltip>
   );
 }
 

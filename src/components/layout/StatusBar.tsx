@@ -46,11 +46,11 @@ function LayoutPresetSwitcher() {
   };
 
   return (
+    <Tooltip label="Layout preset" placement="above">
     <select
       value={preset}
       onChange={(e) => onChange(e.target.value as LayoutPreset)}
       aria-label="Layout preset"
-      title="Layout preset"
       style={{
         background: 'transparent',
         color: colors.textMuted,
@@ -67,6 +67,7 @@ function LayoutPresetSwitcher() {
         <option key={o} value={o}>{o[0].toUpperCase() + o.slice(1)}</option>
       ))}
     </select>
+    </Tooltip>
   );
 }
 
