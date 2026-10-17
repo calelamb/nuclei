@@ -28,9 +28,17 @@ export interface ThemeColors {
   text: string;
   textMuted: string;
   textDim: string;
+  /** Disabled controls only. Never use for readable text. */
+  textDisabled: string;
   accent: string;
   accentLight: string;
   dirac: string;
+  /** Dirac purple for text (AA contrast); `dirac` is for fills only. */
+  diracText: string;
+  modeResearch: string;
+  basisX: string;
+  basisZ: string;
+  overlayMatching: string;
   success: string;
   warning: string;
   error: string;
@@ -54,10 +62,16 @@ function legacyFromTokens(c: ColorTokens): ThemeColors {
     borderStrong: c.borderStrong,
     text: c.textPrimary,
     textMuted: c.textSecondary,
-    textDim: c.textDisabled,
+    textDim: c.textTertiary,
+    textDisabled: c.textDisabled,
     accent: c.accentQuantum,
     accentLight: c.accentQuantumSoft,
     dirac: c.accentDirac,
+    diracText: c.accentDiracText,
+    modeResearch: c.modeResearch,
+    basisX: c.basisX,
+    basisZ: c.basisZ,
+    overlayMatching: c.overlayMatching,
     success: c.success,
     warning: c.warning,
     error: c.danger,

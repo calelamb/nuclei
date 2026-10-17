@@ -25,6 +25,13 @@ export interface ColorTokens {
   accentQuantum: string;
   accentQuantumSoft: string;
   accentDirac: string;
+  /** Dirac purple tuned for use as TEXT (AA on every surface); accentDirac is for fills. */
+  accentDiracText: string;
+  // Domain identities (purple is reserved for Dirac)
+  modeResearch: string;
+  basisX: string;
+  basisZ: string;
+  overlayMatching: string;
   // Semantics
   success: string;
   warning: string;
@@ -65,12 +72,13 @@ export interface MotionTokens {
 }
 
 export interface SpacingTokens {
-  s1: string; s2: string; s3: string; s4: string;
+  s0: string; s1: string; s2: string; s3: string; s4: string;
   s5: string; s6: string; s8: string; s12: string;
 }
 
 export interface RadiusTokens {
   sharp: string;
+  xs: string;
   soft: string;
   round: string;
   pill: string;
@@ -85,6 +93,7 @@ export interface TypographyTokens {
   sizeCode: string;
   sizeCaption: string;
   sizeChromeLabel: string;
+  sizeHeading: string;
   weightRegular: string;
   weightMedium: string;
   weightSemibold: string;
@@ -101,13 +110,18 @@ export const DARK_COLORS: ColorTokens = {
   surfaceSunken: '#080D16',
   textPrimary: '#E8ECF1',
   textSecondary: '#94A3B8',
-  textTertiary: '#64748B',
+  textTertiary: '#7C8BA1',
   textDisabled: '#475569',
   borderSubtle: 'rgba(255, 255, 255, 0.06)',
   borderStrong: '#1A2A42',
   accentQuantum: '#00B4D8',
   accentQuantumSoft: '#48CAE4',
   accentDirac: '#7B2D8E',
+  accentDiracText: '#C084FC',
+  modeResearch: '#60A5FA',
+  basisX: '#00B4D8',
+  basisZ: '#FBBF24',
+  overlayMatching: '#FB923C',
   success: '#10B981',
   warning: '#F59E0B',
   danger: '#EF4444',
@@ -133,14 +147,19 @@ export const LIGHT_COLORS: ColorTokens = {
   surfaceOverlay: '#ECF0F5',
   surfaceSunken: '#F1F5F9',
   textPrimary: '#1A1A2E',
-  textSecondary: '#64748B',
-  textTertiary: '#475569',
+  textSecondary: '#475569',
+  textTertiary: '#5B6B80',
   textDisabled: '#94A3B8',
   borderSubtle: 'rgba(0, 0, 0, 0.06)',
   borderStrong: '#E2E8F0',
   accentQuantum: '#0891B2',
   accentQuantumSoft: '#00B4D8',
   accentDirac: '#6B21A8',
+  accentDiracText: '#6B21A8',
+  modeResearch: '#1D4ED8',
+  basisX: '#0E7490',
+  basisZ: '#B45309',
+  overlayMatching: '#C2410C',
   success: '#059669',
   warning: '#D97706',
   danger: '#DC2626',
@@ -184,26 +203,28 @@ export const MOTION: MotionTokens = {
 };
 
 export const SPACING: SpacingTokens = {
-  s1: '4px', s2: '8px', s3: '12px', s4: '16px',
+  s0: '2px', s1: '4px', s2: '8px', s3: '12px', s4: '16px',
   s5: '20px', s6: '24px', s8: '32px', s12: '48px',
 };
 
 export const RADIUS: RadiusTokens = {
   sharp: '0',
+  xs: '4px',
   soft: '6px',
   round: '10px',
   pill: '999px',
 };
 
 export const TYPOGRAPHY: TypographyTokens = {
-  fontSans: "'Geist Sans', Inter, -apple-system, system-ui, sans-serif",
-  fontMono: "'JetBrains Mono', 'Geist Mono', ui-monospace, monospace",
+  fontSans: "'Geist Sans', -apple-system, system-ui, sans-serif",
+  fontMono: "'Geist Mono', ui-monospace, SFMono-Regular, Menlo, monospace",
   sizeDisplay: '28px',
   sizeTitle: '20px',
   sizeBody: '14px',
   sizeCode: '13px',
   sizeCaption: '11px',
   sizeChromeLabel: '12px',
+  sizeHeading: '16px',
   weightRegular: '400',
   weightMedium: '500',
   weightSemibold: '600',
@@ -217,3 +238,10 @@ export function getColors(mode: ThemeMode): ColorTokens {
 export function getShadows(mode: ThemeMode): ShadowTokens {
   return mode === 'dark' ? DARK_SHADOWS : LIGHT_SHADOWS;
 }
+
+/** Shared control heights (px) for Button / Select / Input primitives. */
+export const CONTROL_HEIGHT = { sm: 24, md: 28, lg: 32 } as const;
+
+/** The four sanctioned icon sizes (px). */
+export const ICON_SIZE = { xs: 12, sm: 14, md: 16, lg: 20 } as const;
+export const ICON_STROKE = 1.75;
