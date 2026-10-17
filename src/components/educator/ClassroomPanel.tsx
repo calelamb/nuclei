@@ -31,7 +31,7 @@ function Section({ title, icon: Icon, defaultOpen = false, children }: {
         <Chevron size={12} />
         {Icon && <Icon size={12} />}
         <span style={{
-          fontSize: 10, fontWeight: 600, textTransform: 'uppercase',
+          fontSize: 11, fontWeight: 600, textTransform: 'uppercase',
           letterSpacing: 0.5, fontFamily: TYPOGRAPHY.fontSans,
         }}>
           {title}
@@ -219,7 +219,7 @@ export function ClassroomPanel() {
               <span style={{ fontSize: 14, fontWeight: 700, color: colors.text }}>
                 {stat.value}
               </span>
-              <span style={{ fontSize: 9, color: colors.textDim, textTransform: 'uppercase', letterSpacing: 0.3 }}>
+              <span style={{ fontSize: 11, color: colors.textDim, textTransform: 'uppercase', letterSpacing: 0.3 }}>
                 {stat.label}
               </span>
             </div>
@@ -247,7 +247,7 @@ export function ClassroomPanel() {
                   }}>
                     {st.name}
                   </div>
-                  <div style={{ fontSize: 10, color: colors.textDim, marginTop: 1 }}>
+                  <div style={{ fontSize: 11, color: colors.textDim, marginTop: 1 }}>
                     {st.exercisesCompleted.length} exercises &middot; {formatDate(st.lastActive)}
                   </div>
                 </div>
@@ -284,7 +284,7 @@ export function ClassroomPanel() {
                 onClick={handleAddStudent}
                 style={{
                   display: 'flex', alignItems: 'center', gap: 3,
-                  fontSize: 10, fontWeight: 500, fontFamily: font,
+                  fontSize: 11, fontWeight: 500, fontFamily: font,
                   padding: '5px 8px', borderRadius: 4,
                   border: 'none',
                   background: colors.accent,
@@ -321,7 +321,7 @@ export function ClassroomPanel() {
                   }}>
                     {a.title}
                   </div>
-                  <div style={{ fontSize: 10, color: colors.textDim, marginTop: 1 }}>
+                  <div style={{ fontSize: 11, color: colors.textDim, marginTop: 1 }}>
                     {a.exerciseIds.length} exercises
                     {a.dueDate && <> &middot; Due {formatDate(a.dueDate)}</>}
                   </div>

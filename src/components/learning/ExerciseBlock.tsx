@@ -392,7 +392,7 @@ export function ExerciseBlock({
         }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginBottom: 4 }}>
             <Terminal size={10} color={colors.textDim} />
-            <span style={{ color: colors.textDim, fontSize: 10, fontFamily: TYPOGRAPHY.fontSans, textTransform: 'uppercase', letterSpacing: 0.5 }}>Output</span>
+            <span style={{ color: colors.textDim, fontSize: 11, fontFamily: TYPOGRAPHY.fontSans, textTransform: 'uppercase', letterSpacing: 0.5 }}>Output</span>
           </div>
           <div style={{ fontFamily: TYPOGRAPHY.fontMono, fontSize: 12, color: colors.text, lineHeight: 1.5, whiteSpace: 'pre-wrap' }}>
             {output.map((line, i) => <div key={i}>{line}</div>)}

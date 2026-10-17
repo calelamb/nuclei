@@ -91,7 +91,7 @@ function JobRow({
           </div>
           <div
             style={{
-              fontSize: 10,
+              fontSize: 11,
               color: colors.textDim,
               fontFamily: TYPOGRAPHY.fontSans,
               marginTop: 1,
@@ -103,7 +103,7 @@ function JobRow({
 
         <span
           style={{
-            fontSize: 9,
+            fontSize: 11,
             fontWeight: 600,
             padding: '2px 6px',
             borderRadius: 3,
@@ -123,7 +123,7 @@ function JobRow({
         <div style={{ padding: '0 0 8px 16px' }}>
           <div
             style={{
-              fontSize: 10,
+              fontSize: 11,
               color: colors.textDim,
               fontFamily: TYPOGRAPHY.fontSans,
               marginBottom: 4,
@@ -146,7 +146,7 @@ function JobRow({
               >
                 <span
                   style={{
-                    fontSize: 10,
+                    fontSize: 11,
                     color: colors.textMuted,
                     fontFamily: TYPOGRAPHY.fontMono,
                     minWidth: 40,
@@ -156,7 +156,7 @@ function JobRow({
                 </span>
                 <span
                   style={{
-                    fontSize: 10,
+                    fontSize: 11,
                     color: colors.textDim,
                     fontFamily: TYPOGRAPHY.fontSans,
                   }}

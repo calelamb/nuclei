@@ -145,7 +145,7 @@ export function TestCaseRow({ testCase, result, isRunning, index }: TestCaseRowP
         {result && result.executionTimeMs > 0 && (
           <span style={{
             color: colors.textDim,
-            fontSize: 10,
+            fontSize: 11,
             fontFamily: TYPOGRAPHY.fontMono,
             minWidth: 48,
             textAlign: 'right',
@@ -192,7 +192,7 @@ export function TestCaseRow({ testCase, result, isRunning, index }: TestCaseRowP
                 {verdictLabel && (
                   <div style={{
                     color: result.passed ? colors.success : colors.error,
-                    fontSize: 10,
+                    fontSize: 11,
                     fontWeight: 700,
                     fontFamily: TYPOGRAPHY.fontSans,
                     textTransform: 'uppercase',

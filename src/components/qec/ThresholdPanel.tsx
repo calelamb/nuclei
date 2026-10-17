@@ -122,7 +122,7 @@ export function ThresholdPanel() {
   const readoutBody = (
     <>
       <QecLambdaReadout decoders={decoders} estimates={lambdas} units={units} colors={colors} />
-      <div style={{ fontSize: 10, color: colors.textMuted, marginTop: 6, lineHeight: 1.45 }}>
+      <div style={{ fontSize: 11, color: colors.textMuted, marginTop: 6, lineHeight: 1.45 }}>
         {`Whiskers: sinter ${whiskerConvention()}, `}
         {hasDiscards ? 'on shots − discards. ' : 'on shots. '}
         {excluded > 0 && `${excluded} row(s) without known rounds are hidden in per-round view. `}

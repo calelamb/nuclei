@@ -131,3 +131,13 @@
 
 /* Borderless inputs embedded in a bar (palette, inline edit, search): swap the outline for an underline ring. */
 .nuclei-bare-input:focus-visible { outline: none; box-shadow: 0 2px 0 0 var(--focus-ring-color); }
+
+/* ── Quiet items (rail icons, tabs): CSS-driven hover, active state via data-active ── */
+.nuclei-quiet { color: var(--color-text-tertiary); }
+.nuclei-quiet:hover { color: var(--color-text-secondary); }
+.nuclei-quiet[data-active='true'] { color: var(--color-text-primary); }
+
+/* ── Menu items ── */
+.nuclei-menu-item { transition: background-color var(--duration-fast) var(--ease-standard); }
+.nuclei-menu-item:hover { background: var(--color-surface-raised) !important; }
+.nuclei-menu-item.nuclei-menu-item--tint:hover { background: color-mix(in srgb, var(--item-accent) 12%, transparent) !important; }

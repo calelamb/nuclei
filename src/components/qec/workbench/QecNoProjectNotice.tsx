@@ -18,7 +18,7 @@ export function QecNoProjectNotice() {
     <div style={{ display: 'grid', gap: 10, padding: 12, fontFamily: FONT }}>
       {csv ? (
         <section aria-label="Loaded CSV" style={{ display: 'grid', gap: 3 }}>
-          <div style={{ display: 'flex', gap: 5, alignItems: 'center', color: colors.textMuted, fontSize: 10, fontWeight: 600 }}>
+          <div style={{ display: 'flex', gap: 5, alignItems: 'center', color: colors.textMuted, fontSize: 11, fontWeight: 600 }}>
             <FileSpreadsheet size={12} />LOADED CSV
           </div>
           <div style={{ color: colors.text, fontSize: 12, fontWeight: 600, wordBreak: 'break-all' }}>{csv.sourceName}</div>

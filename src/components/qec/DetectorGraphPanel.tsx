@@ -141,7 +141,7 @@ export function DetectorGraphPanel() {
                 data-testid="interactive-decoder-label"
                 title="Interactive decoding runs a fast greedy matcher in the app. Use Sample a shot (PyMatching) or a campaign for accurate decoding."
                 style={{
-                  fontSize: 10, color: colors.warning, border: `1px solid ${colors.warning}`,
+                  fontSize: 11, color: colors.warning, border: `1px solid ${colors.warning}`,
                   borderRadius: 3, padding: '1px 5px', fontFamily: TYPOGRAPHY.fontSans,
                 }}
               >
@@ -244,7 +244,7 @@ export function DetectorGraphPanel() {
         <div
           style={{
             display: 'flex', alignItems: 'center', gap: 6, padding: '5px 12px',
-            fontSize: 10, color: colors.accent, borderBottom: `1px solid ${colors.border}`,
+            fontSize: 11, color: colors.accent, borderBottom: `1px solid ${colors.border}`,
             fontFamily: TYPOGRAPHY.fontSans,
           }}
         >
@@ -255,7 +255,7 @@ export function DetectorGraphPanel() {
       {snapshot.dem.hyperedges_count > 0 && (
         <div
           style={{
-            padding: '5px 12px', fontSize: 10, color: colors.textDim,
+            padding: '5px 12px', fontSize: 11, color: colors.textDim,
             borderBottom: `1px solid ${colors.border}`, fontFamily: TYPOGRAPHY.fontSans,
           }}
         >
@@ -294,7 +294,7 @@ export function DetectorGraphPanel() {
               onClick={() => setSyndrome(new Set())}
               style={{
                 marginLeft: 'auto', background: 'transparent', border: `1px solid ${colors.border}`,
-                borderRadius: 4, color: colors.textMuted, cursor: 'pointer', fontSize: 10, padding: '2px 7px',
+                borderRadius: 4, color: colors.textMuted, cursor: 'pointer', fontSize: 11, padding: '2px 7px',
                 fontFamily: TYPOGRAPHY.fontSans,
               }}
             >

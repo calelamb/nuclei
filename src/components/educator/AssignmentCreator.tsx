@@ -100,7 +100,7 @@ export function AssignmentCreator({ onClose, onSave }: AssignmentCreatorProps) {
         <div style={{ flex: 1, overflowY: 'auto', padding: 16, display: 'flex', flexDirection: 'column', gap: 12 }}>
           {/* Title */}
           <div>
-            <label style={{ fontSize: 10, fontWeight: 600, color: colors.textMuted, textTransform: 'uppercase', letterSpacing: 0.5 }}>
+            <label style={{ fontSize: 11, fontWeight: 600, color: colors.textMuted, textTransform: 'uppercase', letterSpacing: 0.5 }}>
               Title
             </label>
             <input
@@ -115,7 +115,7 @@ export function AssignmentCreator({ onClose, onSave }: AssignmentCreatorProps) {
 
           {/* Description */}
           <div>
-            <label style={{ fontSize: 10, fontWeight: 600, color: colors.textMuted, textTransform: 'uppercase', letterSpacing: 0.5 }}>
+            <label style={{ fontSize: 11, fontWeight: 600, color: colors.textMuted, textTransform: 'uppercase', letterSpacing: 0.5 }}>
               Description
             </label>
             <textarea
@@ -131,7 +131,7 @@ export function AssignmentCreator({ onClose, onSave }: AssignmentCreatorProps) {
 
           {/* Due date */}
           <div>
-            <label style={{ fontSize: 10, fontWeight: 600, color: colors.textMuted, textTransform: 'uppercase', letterSpacing: 0.5 }}>
+            <label style={{ fontSize: 11, fontWeight: 600, color: colors.textMuted, textTransform: 'uppercase', letterSpacing: 0.5 }}>
               Due Date
             </label>
             <input
@@ -144,7 +144,7 @@ export function AssignmentCreator({ onClose, onSave }: AssignmentCreatorProps) {
 
           {/* Exercise selector */}
           <div>
-            <label style={{ fontSize: 10, fontWeight: 600, color: colors.textMuted, textTransform: 'uppercase', letterSpacing: 0.5 }}>
+            <label style={{ fontSize: 11, fontWeight: 600, color: colors.textMuted, textTransform: 'uppercase', letterSpacing: 0.5 }}>
               Exercises ({selectedIds.size} selected)
             </label>
             <div style={{
@@ -155,7 +155,7 @@ export function AssignmentCreator({ onClose, onSave }: AssignmentCreatorProps) {
               {Object.entries(exercisesByTopic).map(([topic, exercises]) => (
                 <div key={topic}>
                   <div style={{
-                    fontSize: 10, fontWeight: 600, color: colors.textMuted,
+                    fontSize: 11, fontWeight: 600, color: colors.textMuted,
                     padding: '6px 10px 4px',
                     textTransform: 'uppercase', letterSpacing: 0.4,
                     background: colors.bgElevated,
@@ -183,7 +183,7 @@ export function AssignmentCreator({ onClose, onSave }: AssignmentCreatorProps) {
                       />
                       <span style={{ flex: 1 }}>{ex.title}</span>
                       <span style={{
-                        fontSize: 9, color: colors.textDim,
+                        fontSize: 11, color: colors.textDim,
                         padding: '1px 5px', borderRadius: 3,
                         background: colors.bgElevated,
                       }}>

@@ -67,7 +67,7 @@ function PrimaryMetricRow({ metric }: { metric: EfficiencyMetricReport }) {
           <MetricBar ratio={fillRatio(metric.value, metric.optimal!)} color={color} track={`${colors.textDim}22`} />
           <span style={{
             color: colors.textDim,
-            fontSize: 10,
+            fontSize: 11,
             fontFamily: TYPOGRAPHY.fontMono,
             width: 58,
           }}>
@@ -78,7 +78,7 @@ function PrimaryMetricRow({ metric }: { metric: EfficiencyMetricReport }) {
             alignItems: 'center',
             gap: 3,
             color,
-            fontSize: 10.5,
+            fontSize: 11,
             fontWeight: 700,
             fontFamily: TYPOGRAPHY.fontSans,
           }}>
@@ -89,7 +89,7 @@ function PrimaryMetricRow({ metric }: { metric: EfficiencyMetricReport }) {
       ) : (
         <span style={{
           color: colors.textDim,
-          fontSize: 10.5,
+          fontSize: 11,
           fontFamily: TYPOGRAPHY.fontSans,
         }}>
           measured
@@ -156,7 +156,7 @@ export function PerformancePanel({ report }: PerformancePanelProps) {
           <span style={{
             marginLeft: 'auto',
             color: colors.textMuted,
-            fontSize: 10.5,
+            fontSize: 11,
             fontFamily: TYPOGRAPHY.fontSans,
           }}>
             Hit every optimal target for the ★
@@ -166,7 +166,7 @@ export function PerformancePanel({ report }: PerformancePanelProps) {
           <span style={{
             marginLeft: 'auto',
             color: colors.textDim,
-            fontSize: 10.5,
+            fontSize: 11,
             fontFamily: TYPOGRAPHY.fontSans,
           }}>
             No efficiency par for this problem yet

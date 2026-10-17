@@ -60,7 +60,7 @@ export function PluginPanelHost({ panel }: { panel: PluginPanel }) {
       >
         <span
           style={{
-            fontSize: 10,
+            fontSize: 11,
             fontWeight: 600,
             textTransform: 'uppercase',
             letterSpacing: 0.5,
@@ -72,7 +72,7 @@ export function PluginPanelHost({ panel }: { panel: PluginPanel }) {
         </span>
         <span
           style={{
-            fontSize: 9,
+            fontSize: 11,
             color: colors.textDim,
             fontFamily: TYPOGRAPHY.fontMono,
           }}

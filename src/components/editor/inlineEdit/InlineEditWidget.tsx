@@ -195,7 +195,7 @@ export function InlineEditWidget({ editor, monaco, onClose }: InlineEditProps) {
 
       {/* Error */}
       {error && !loading && (
-        <div style={{ padding: '0 10px 8px', color: colors.error, fontSize: 11.5, fontFamily: TYPOGRAPHY.fontSans, lineHeight: 1.4 }}>
+        <div style={{ padding: '0 10px 8px', color: colors.error, fontSize: 12, fontFamily: TYPOGRAPHY.fontSans, lineHeight: 1.4 }}>
           {error}
         </div>
       )}

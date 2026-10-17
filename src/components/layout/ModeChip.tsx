@@ -102,7 +102,9 @@ export function ModeChip() {
             role="menuitemradio"
             aria-checked={isCurrent}
             onClick={() => pick(m)}
+            className="nuclei-menu-item nuclei-menu-item--tint"
             style={{
+              ...({ '--item-accent': mAccent } as Record<string, string>),
               display: 'flex',
               alignItems: 'center',
               gap: 8,
@@ -115,9 +117,7 @@ export function ModeChip() {
               color: colors.text,
               fontSize: 12,
               textAlign: 'left',
-            }}
-            onMouseEnter={(e) => { e.currentTarget.style.background = `${mAccent}18`; }}
-            onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
+            } as React.CSSProperties}
           >
             <MIcon size={13} color={mAccent} strokeWidth={2} />
             <span style={{ flex: 1 }}>{m === 'research' ? 'Research workspace' : 'Learn quantum computing'}</span>
@@ -149,7 +149,7 @@ export function ModeChip() {
           borderRadius: 4,
           cursor: 'pointer',
           color: accent,
-          fontSize: 10,
+          fontSize: 11,
           fontWeight: 700,
           letterSpacing: 0.5,
           fontFamily: TYPOGRAPHY.fontSans,

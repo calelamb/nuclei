@@ -264,7 +264,7 @@ export function WhatsNewModal({
               id={TITLE_ID}
               style={{
                 margin: 0,
-                fontSize: 24,
+                fontSize: 20,
                 fontWeight: 600,
                 letterSpacing: '-0.02em',
                 lineHeight: 1.25,
@@ -278,7 +278,7 @@ export function WhatsNewModal({
               <p
                 style={{
                   margin: '6px 0 0',
-                  fontSize: 13.5,
+                  fontSize: 13,
                   lineHeight: 1.5,
                   color: colors.textMuted,
                 }}
@@ -338,7 +338,7 @@ export function WhatsNewModal({
                   display: 'inline-flex',
                   alignItems: 'center',
                   gap: 4,
-                  fontSize: 12.5,
+                  fontSize: 13,
                   fontWeight: 500,
                   textDecoration: 'none',
                   color: linkHover ? colors.text : colors.textMuted,
@@ -362,7 +362,7 @@ export function WhatsNewModal({
                   borderRadius: 8,
                   padding: '7px 16px',
                   cursor: 'pointer',
-                  fontSize: 12.5,
+                  fontSize: 13,
                   fontWeight: 600,
                   fontFamily: TYPOGRAPHY.fontSans,
                   boxShadow: gotItFocus

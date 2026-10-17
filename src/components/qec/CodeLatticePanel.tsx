@@ -81,7 +81,7 @@ export function CodeLatticePanel() {
       <div
         style={{
           display: 'flex', alignItems: 'center', gap: 8, padding: '6px 12px',
-          borderTop: `1px solid ${colors.border}`, fontSize: 10, color: colors.textDim,
+          borderTop: `1px solid ${colors.border}`, fontSize: 11, color: colors.textDim,
           fontFamily: TYPOGRAPHY.fontSans,
         }}
       >

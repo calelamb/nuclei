@@ -517,7 +517,7 @@ export function LaunchModal() {
                         </div>
                         <span
                           style={{
-                            fontSize: 10,
+                            fontSize: 11,
                             fontWeight: 600,
                             color: pricingColor(p.pricing),
                             textTransform: 'uppercase',
@@ -548,7 +548,7 @@ export function LaunchModal() {
                       <div style={{ flex: 1 }} />
                       <div
                         style={{
-                          fontSize: 10,
+                          fontSize: 11,
                           color: colors.textDim,
                           display: 'flex',
                           alignItems: 'center',
@@ -637,7 +637,7 @@ export function LaunchModal() {
                       display: 'flex',
                       alignItems: 'center',
                       gap: 6,
-                      fontSize: 10,
+                      fontSize: 11,
                       fontWeight: 600,
                       textTransform: 'uppercase',
                       letterSpacing: 0.5,
@@ -701,7 +701,7 @@ export function LaunchModal() {
                     </button>
                   </div>
                   {selectedProvider && connectionErrors[selectedProvider] && (
-                    <div style={{ fontSize: 10, color: colors.error, fontFamily: TYPOGRAPHY.fontSans }}>
+                    <div style={{ fontSize: 11, color: colors.error, fontFamily: TYPOGRAPHY.fontSans }}>
                       {connectionErrors[selectedProvider]}
                     </div>
                   )}
@@ -711,7 +711,7 @@ export function LaunchModal() {
                       target="_blank"
                       rel="noreferrer"
                       style={{
-                        fontSize: 10,
+                        fontSize: 11,
                         color: colors.accentLight,
                         textDecoration: 'none',
                         fontFamily: TYPOGRAPHY.fontSans,
@@ -728,7 +728,7 @@ export function LaunchModal() {
                     display: 'flex',
                     alignItems: 'center',
                     gap: 6,
-                    fontSize: 10,
+                    fontSize: 11,
                     color: colors.success,
                     fontFamily: TYPOGRAPHY.fontSans,
                     textTransform: 'uppercase',
@@ -830,7 +830,7 @@ export function LaunchModal() {
                         </div>
                         <div
                           style={{
-                            fontSize: 10,
+                            fontSize: 11,
                             fontWeight: 600,
                             padding: '2px 8px',
                             borderRadius: 999,
@@ -862,7 +862,7 @@ export function LaunchModal() {
                 <div>
                   <label
                     style={{
-                      fontSize: 10,
+                      fontSize: 11,
                       fontWeight: 600,
                       textTransform: 'uppercase',
                       letterSpacing: 0.5,

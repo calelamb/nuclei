@@ -155,7 +155,7 @@ export function BackendSelector({ backends, selected, onSelect }: BackendSelecto
                     </span>
                     <span
                       style={{
-                        fontSize: 9,
+                        fontSize: 11,
                         fontWeight: 600,
                         textTransform: 'uppercase',
                         letterSpacing: 0.5,
@@ -174,7 +174,7 @@ export function BackendSelector({ backends, selected, onSelect }: BackendSelecto
                     style={{
                       display: 'flex',
                       gap: 10,
-                      fontSize: 10,
+                      fontSize: 11,
                       color: colors.textDim,
                       fontFamily: TYPOGRAPHY.fontSans,
                       paddingLeft: 12,

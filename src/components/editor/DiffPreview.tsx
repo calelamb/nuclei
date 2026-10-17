@@ -132,7 +132,7 @@ export function DiffPreview() {
             <div
               style={{
                 padding: '6px 12px',
-                fontSize: 10,
+                fontSize: 11,
                 color: colors.textDim,
                 textTransform: 'uppercase',
                 letterSpacing: 0.5,
@@ -160,7 +160,7 @@ export function DiffPreview() {
             <div
               style={{
                 padding: '6px 12px',
-                fontSize: 10,
+                fontSize: 11,
                 color: colors.textDim,
                 textTransform: 'uppercase',
                 letterSpacing: 0.5,

@@ -59,7 +59,7 @@ export function Glossary() {
             onClick={() => setCategory(cat.key)}
             style={{
               padding: '2px 8px',
-              fontSize: 10,
+              fontSize: 11,
               fontFamily: TYPOGRAPHY.fontSans,
               fontWeight: selectedCategory === cat.key ? 600 : 400,
               background: selectedCategory === cat.key ? colors.accent + '22' : 'transparent',

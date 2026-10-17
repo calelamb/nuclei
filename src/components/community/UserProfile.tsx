@@ -123,7 +123,7 @@ export function UserProfile() {
 
       <span
         style={{
-          fontSize: 10,
+          fontSize: 11,
           color: colors.textDim,
           fontFamily: TYPOGRAPHY.fontSans,
           marginTop: -10,
@@ -161,7 +161,7 @@ export function UserProfile() {
             <div style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
               <span
                 style={{
-                  fontSize: 18,
+                  fontSize: 16,
                   fontWeight: 700,
                   color: colors.text,
                   fontFamily: TYPOGRAPHY.fontSans,
@@ -173,7 +173,7 @@ export function UserProfile() {
             </div>
             <span
               style={{
-                fontSize: 9,
+                fontSize: 11,
                 color: colors.textDim,
                 fontFamily: TYPOGRAPHY.fontSans,
                 textTransform: 'uppercase',
@@ -191,7 +191,7 @@ export function UserProfile() {
       <div>
         <span
           style={{
-            fontSize: 10,
+            fontSize: 11,
             fontWeight: 600,
             textTransform: 'uppercase',
             letterSpacing: 0.5,

@@ -19,7 +19,7 @@ export function JumpButton({
   text?: string;
 }) {
   const colors = useThemeStore((s) => s.colors);
-  if (line == null) return <span style={{ color: colors.textDim, fontSize: 10 }}>line unknown</span>;
+  if (line == null) return <span style={{ color: colors.textDim, fontSize: 11 }}>line unknown</span>;
   return (
     <button
       type="button"
@@ -30,7 +30,7 @@ export function JumpButton({
       style={{
         background: 'transparent', border: `1px solid ${colors.border}`, borderRadius: 4,
         color: disabled ? colors.textDim : colors.accent, cursor: disabled ? 'default' : 'pointer',
-        fontSize: 10.5, padding: '1px 6px', fontFamily: MONO,
+        fontSize: 11, padding: '1px 6px', fontFamily: MONO,
       }}
     >
       {text ?? `line ${line}`}
@@ -145,7 +145,7 @@ export function NondeterministicSection({
         </div>
       )}
       {bad && data.stim_message && (
-        <details style={{ fontSize: 10.5, color: colors.textDim }}>
+        <details style={{ fontSize: 11, color: colors.textDim }}>
           <summary style={{ cursor: 'pointer' }}>Stim's own message</summary>
           <pre style={{ whiteSpace: 'pre-wrap', fontFamily: MONO, margin: '4px 0 0' }}>{data.stim_message}</pre>
         </details>
@@ -196,7 +196,7 @@ export function MinWeightSection({
           </span>
         </div>
       )}
-      <p style={{ margin: 0, fontSize: 11.5, lineHeight: 1.5, color: found ? colors.textMuted : colors.warning }}>
+      <p style={{ margin: 0, fontSize: 12, lineHeight: 1.5, color: found ? colors.textMuted : colors.warning }}>
         {data.sentence}
       </p>
       {found && data.faults.length > 0 && (

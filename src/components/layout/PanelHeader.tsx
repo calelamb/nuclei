@@ -3,7 +3,8 @@ import { createPortal } from 'react-dom';
 import { MoreVertical, EyeOff, RotateCcw, HelpCircle, type LucideIcon } from 'lucide-react';
 import { useThemeStore } from '../../stores/themeStore';
 
-import { TYPOGRAPHY } from '../../styles/tokens';
+import { TYPOGRAPHY, ICON_SIZE, ICON_STROKE } from '../../styles/tokens';
+import { IconButton } from '../ui';
 /**
  * PRD 11 Phase C — the shared panel header.
  *
@@ -89,14 +90,13 @@ export function PanelHeader({
     <button
       role="menuitem"
       onClick={onClick}
+      className="nuclei-menu-item"
       style={{
         display: 'flex', alignItems: 'center', gap: 8, width: '100%',
         padding: '7px 10px', background: 'transparent', border: 'none', borderRadius: 6,
         cursor: 'pointer', color: colors.text, fontSize: 12, textAlign: 'left',
         fontFamily: TYPOGRAPHY.fontSans,
       }}
-      onMouseEnter={(e) => { e.currentTarget.style.background = colors.bgElevated; }}
-      onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
     >
       <MIcon size={13} color={colors.textDim} />
       {label}
@@ -155,23 +155,16 @@ export function PanelHeader({
       <div style={{ flex: 1 }} />
       {actions}
       {hasOverflow && (
-        <button
+        <IconButton
           ref={overflowRef}
+          size="sm"
           onClick={() => setMenuOpen((o) => !o)}
-          title="Panel options"
           aria-label="Panel options"
           aria-haspopup="menu"
           aria-expanded={menuOpen}
-          style={{
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            width: 24, height: 24, background: 'transparent', border: 'none',
-            borderRadius: 6, cursor: 'pointer', color: colors.textDim,
-          }}
-          onMouseEnter={(e) => { e.currentTarget.style.color = colors.text; }}
-          onMouseLeave={(e) => { e.currentTarget.style.color = colors.textDim; }}
         >
-          <MoreVertical size={15} />
-        </button>
+          <MoreVertical size={ICON_SIZE.md} strokeWidth={ICON_STROKE} />
+        </IconButton>
       )}
       {menuOpen && createPortal(menu, document.body)}
     </div>

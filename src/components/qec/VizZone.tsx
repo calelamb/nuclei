@@ -111,18 +111,18 @@ export function VizZone({
               key={p.id}
               role="tab"
               aria-selected={isActive}
+              data-active={isActive}
+              className="nuclei-quiet"
               onClick={() => setActiveTab(projectRoot, p.id)}
               title={p.title}
               style={{
                 display: 'flex', alignItems: 'center', gap: 5, padding: '0 10px',
                 background: 'transparent', border: 'none',
                 borderBottom: isActive ? `2px solid ${colors.accent}` : '2px solid transparent',
-                color: isActive ? colors.text : colors.textDim, cursor: 'pointer',
-                fontSize: 10.5, fontFamily: TYPOGRAPHY.fontSans, fontWeight: 500,
+                cursor: 'pointer',
+                fontSize: 11, fontFamily: TYPOGRAPHY.fontSans, fontWeight: 500,
                 whiteSpace: 'nowrap',
               }}
-              onMouseEnter={(e) => { if (!isActive) e.currentTarget.style.color = colors.textMuted; }}
-              onMouseLeave={(e) => { if (!isActive) e.currentTarget.style.color = colors.textDim; }}
             >
               <Icon size={12} />
               {p.title}

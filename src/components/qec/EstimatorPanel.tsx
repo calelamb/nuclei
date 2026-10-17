@@ -258,7 +258,7 @@ type Colors = ThemeColors;
 function Field({ label, colors, children }: { label: string; colors: Colors; children: React.ReactNode }) {
   return (
     <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-      <span style={{ fontSize: 10.5, textTransform: 'uppercase', letterSpacing: '0.04em', color: colors.textDim }}>
+      <span style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.04em', color: colors.textDim }}>
         {label}
       </span>
       {children}
@@ -289,7 +289,7 @@ function Stat({
         background: colors.bg,
       }}
     >
-      <span style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.04em', color: colors.textDim }}>
+      <span style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.04em', color: colors.textDim }}>
         {label}
       </span>
       <span
@@ -389,7 +389,7 @@ function detailPre(colors: Colors): CSSProperties {
     background: colors.bg,
     color: colors.textMuted,
     fontFamily: TYPOGRAPHY.fontMono,
-    fontSize: 10.5,
+    fontSize: 11,
     lineHeight: 1.5,
     maxHeight: 260,
     overflow: 'auto',

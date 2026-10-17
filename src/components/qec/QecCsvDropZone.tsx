@@ -30,7 +30,7 @@ export function QecCsvDropZone() {
         onClick={() => inputRef.current?.click()}
         style={{
           padding: '4px 10px', borderRadius: 5, border: `1px solid ${colors.border}`,
-          background: 'transparent', color: colors.textMuted, fontSize: 11.5, cursor: 'pointer',
+          background: 'transparent', color: colors.textMuted, fontSize: 12, cursor: 'pointer',
         }}
       >
         Choose file…
@@ -47,7 +47,7 @@ export function QecCsvDropZone() {
           e.target.value = ''; // allow re-picking the same file
         }}
       />
-      <div style={{ fontSize: 10.5, color: colors.textDim }}>Read in this app only — nothing is uploaded.</div>
+      <div style={{ fontSize: 11, color: colors.textDim }}>Read in this app only — nothing is uploaded.</div>
     </div>
   );
 }

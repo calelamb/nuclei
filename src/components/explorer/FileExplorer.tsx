@@ -515,7 +515,7 @@ export function FileExplorer() {
         </button>
         <div
           style={{
-            fontSize: 10,
+            fontSize: 11,
             textTransform: 'uppercase',
             letterSpacing: 0.5,
             color: colors.textDim,
@@ -647,7 +647,7 @@ export function FileExplorer() {
                 onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
               >
                 <FilePlus size={13} style={{ color: colors.textDim }} /> New File
-                <span style={{ marginLeft: 'auto', fontSize: 10, color: colors.textDim }}>.py</span>
+                <span style={{ marginLeft: 'auto', fontSize: 11, color: colors.textDim }}>.py</span>
               </button>
 
               <div
@@ -772,7 +772,7 @@ export function FileExplorer() {
         <div style={{ padding: '4px 8px', borderBottom: `1px solid ${colors.border}` }}>
           <div
             style={{
-              fontSize: 10,
+              fontSize: 11,
               textTransform: 'uppercase',
               letterSpacing: 0.5,
               color: colors.textDim,
@@ -836,7 +836,7 @@ export function FileExplorer() {
               style={{
                 padding: '8px 14px 4px',
                 color: colors.textDim,
-                fontSize: 10,
+                fontSize: 11,
                 textTransform: 'uppercase',
                 letterSpacing: 0.5,
                 fontFamily: TYPOGRAPHY.fontSans,

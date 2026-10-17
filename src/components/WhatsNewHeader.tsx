@@ -49,7 +49,7 @@ export function WhatsNewHeader({ currentVersion, accent, textDim, reduced }: Wha
       <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
         <span
           style={{
-            fontSize: 10.5,
+            fontSize: 11,
             fontWeight: 700,
             letterSpacing: '0.12em',
             textTransform: 'uppercase',

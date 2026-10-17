@@ -42,7 +42,7 @@ export function TrackSelector() {
           <div>
             <h1 style={{
               color: colors.text,
-              fontSize: 24,
+              fontSize: 20,
               fontWeight: 700,
               fontFamily: TYPOGRAPHY.fontSans,
               margin: 0,
@@ -115,7 +115,7 @@ export function TrackSelector() {
                   : colors.bgPanel,
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
                 color: hasLessons ? colors.accent : colors.textDim,
-                fontSize: 18, fontWeight: 700,
+                fontSize: 16, fontWeight: 700,
                 fontFamily: TYPOGRAPHY.fontSans,
               }}>
                 {completed === lessonCount && lessonCount > 0
@@ -156,7 +156,7 @@ export function TrackSelector() {
                   <span style={{
                     padding: '1px 6px', borderRadius: 3,
                     background: `${colors.accent}12`,
-                    color: colors.accent, fontSize: 10,
+                    color: colors.accent, fontSize: 11,
                     fontWeight: 500, fontFamily: TYPOGRAPHY.fontSans,
                   }}>
                     {track.difficulty}
@@ -177,7 +177,7 @@ export function TrackSelector() {
                         }} />
                       </div>
                       <span style={{
-                        color: colors.textDim, fontSize: 10,
+                        color: colors.textDim, fontSize: 11,
                         fontFamily: TYPOGRAPHY.fontSans,
                       }}>
                         {completed}/{lessonCount}
@@ -322,14 +322,14 @@ export function TrackSelector() {
                     <span style={{
                       padding: '1px 6px', borderRadius: 3,
                       background: `${creatorColor}15`, color: creatorColor,
-                      fontSize: 10, fontWeight: 600, fontFamily: TYPOGRAPHY.fontSans,
+                      fontSize: 11, fontWeight: 600, fontFamily: TYPOGRAPHY.fontSans,
                     }}>
                       {creatorLabel}
                     </span>
                     <span style={{
                       padding: '1px 6px', borderRadius: 3,
                       background: `${diffColor}15`, color: diffColor,
-                      fontSize: 10, fontWeight: 500, fontFamily: TYPOGRAPHY.fontSans,
+                      fontSize: 11, fontWeight: 500, fontFamily: TYPOGRAPHY.fontSans,
                       textTransform: 'capitalize',
                     }}>
                       {video.difficulty}

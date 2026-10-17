@@ -99,7 +99,7 @@ function SubmissionRow({ submission, index }: { submission: Submission; index: n
           borderRadius: 3,
           background: `${colors.accent}12`,
           color: colors.accent,
-          fontSize: 10,
+          fontSize: 11,
           fontFamily: TYPOGRAPHY.fontSans,
         }}>
           {submission.framework}
@@ -113,7 +113,7 @@ function SubmissionRow({ submission, index }: { submission: Submission; index: n
           alignItems: 'center',
           gap: 4,
           color: colors.textDim,
-          fontSize: 10,
+          fontSize: 11,
           fontFamily: TYPOGRAPHY.fontSans,
         }}>
           <Clock size={10} />
@@ -153,7 +153,7 @@ function SubmissionRow({ submission, index }: { submission: Submission; index: n
               </span>
               <span style={{
                 color: tcr.passed ? colors.success : colors.error,
-                fontSize: 10,
+                fontSize: 11,
                 fontWeight: 600,
                 fontFamily: TYPOGRAPHY.fontMono,
               }}>
@@ -162,7 +162,7 @@ function SubmissionRow({ submission, index }: { submission: Submission; index: n
               {tcr.executionTimeMs > 0 && (
                 <span style={{
                   color: colors.textDim,
-                  fontSize: 10,
+                  fontSize: 11,
                   fontFamily: TYPOGRAPHY.fontMono,
                   minWidth: 40,
                   textAlign: 'right',
@@ -183,7 +183,7 @@ function SubmissionRow({ submission, index }: { submission: Submission; index: n
               gap: 12,
               flexWrap: 'wrap',
               color: colors.textDim,
-              fontSize: 10,
+              fontSize: 11,
               fontFamily: TYPOGRAPHY.fontMono,
             }}>
               {submission.efficiency?.isOptimal && (
@@ -216,7 +216,7 @@ function SubmissionRow({ submission, index }: { submission: Submission; index: n
           }}>
             <span style={{
               color: colors.textDim,
-              fontSize: 10,
+              fontSize: 11,
               fontFamily: TYPOGRAPHY.fontSans,
             }}>
               Total execution: {Math.round(submission.executionTimeMs)}ms

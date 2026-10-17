@@ -273,7 +273,7 @@ export function DetectorGraphCanvas({ layout, overlay, onDetectorClick }: Detect
             Detector D{hover.detector}
             {hover.fired && <span style={{ color: colors.error, marginLeft: 6 }}>fired</span>}
           </div>
-          <div style={{ color: colors.textMuted, fontFamily: TYPOGRAPHY.fontMono, fontSize: 10 }}>
+          <div style={{ color: colors.textMuted, fontFamily: TYPOGRAPHY.fontMono, fontSize: 11 }}>
             {hover.degree} incident edge{hover.degree === 1 ? '' : 's'}
           </div>
         </div>
@@ -289,7 +289,7 @@ function GraphLegend({ colors }: { colors: ThemeColors }) {
     display: 'flex',
     alignItems: 'center',
     gap: 6,
-    fontSize: 9.5,
+    fontSize: 11,
     color: colors.textDim,
     fontFamily: TYPOGRAPHY.fontSans,
   } as const;

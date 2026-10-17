@@ -401,7 +401,7 @@ export function ProblemBrowser() {
       }}>
         <div style={{
           color: colors.text,
-          fontSize: 22,
+          fontSize: 20,
           fontWeight: 700,
           fontFamily: TYPOGRAPHY.fontSans,
           marginBottom: 6,

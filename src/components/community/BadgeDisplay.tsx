@@ -52,7 +52,7 @@ export function BadgeDisplay({ earnedBadgeIds }: BadgeDisplayProps) {
             />
             <span
               style={{
-                fontSize: 9,
+                fontSize: 11,
                 fontWeight: 600,
                 fontFamily: TYPOGRAPHY.fontSans,
                 color: earned ? colors.text : colors.textDim,
@@ -84,7 +84,7 @@ export function BadgeDisplay({ earnedBadgeIds }: BadgeDisplayProps) {
               >
                 <span
                   style={{
-                    fontSize: 10,
+                    fontSize: 11,
                     color: colors.textMuted,
                     fontFamily: TYPOGRAPHY.fontSans,
                   }}

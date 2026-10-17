@@ -74,7 +74,7 @@ export function ModeSwitchDialog() {
       >
         <div
           id="mode-switch-title"
-          style={{ fontSize: 15, fontWeight: 600, color: colors.text, marginBottom: 8 }}
+          style={{ fontSize: 14, fontWeight: 600, color: colors.text, marginBottom: 8 }}
         >
           Switch to {targetLabel} mode?
         </div>

@@ -74,10 +74,10 @@ function TracksTab() {
               }}
             >
               {isOpen ? <ChevronDown size={13} style={{ flexShrink: 0 }} /> : <ChevronRight size={13} style={{ flexShrink: 0 }} />}
-              <span style={{ flex: 1, fontSize: 12.5, fontWeight: 600, color: colors.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              <span style={{ flex: 1, fontSize: 13, fontWeight: 600, color: colors.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                 {track.title}
               </span>
-              <span style={{ fontSize: 10, color: colors.textDim, fontVariantNumeric: 'tabular-nums' }}>
+              <span style={{ fontSize: 11, color: colors.textDim, fontVariantNumeric: 'tabular-nums' }}>
                 {done}/{total}
               </span>
             </button>
@@ -173,7 +173,7 @@ export function LearningPathSidebar() {
                 flex: 1, padding: '6px 0', background: 'transparent', border: 'none',
                 borderBottom: isActive ? `2px solid ${colors.accent}` : '2px solid transparent',
                 color: isActive ? colors.accent : colors.textDim,
-                fontSize: 10, fontWeight: 600, fontFamily: TYPOGRAPHY.fontSans,
+                fontSize: 11, fontWeight: 600, fontFamily: TYPOGRAPHY.fontSans,
                 textTransform: 'uppercase', letterSpacing: '0.3px', cursor: 'pointer',
                 transition: 'color 0.15s, border-color 0.15s',
               }}

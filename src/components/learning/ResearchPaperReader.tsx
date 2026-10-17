@@ -54,7 +54,7 @@ export function ResearchPaperReader() {
       {/* OR divider */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
         <div style={{ flex: 1, height: 1, background: colors.border }} />
-        <span style={{ color: colors.textDim, fontSize: 10, fontFamily: TYPOGRAPHY.fontSans }}>OR</span>
+        <span style={{ color: colors.textDim, fontSize: 11, fontFamily: TYPOGRAPHY.fontSans }}>OR</span>
         <div style={{ flex: 1, height: 1, background: colors.border }} />
       </div>
 

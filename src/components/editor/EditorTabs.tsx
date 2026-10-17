@@ -293,7 +293,7 @@ export function EditorTabs() {
         >
           <Rocket size={12} />
           <span>Launch</span>
-          <span style={{ fontSize: 10, opacity: 0.7, marginLeft: 2 }}>⌘⇧R</span>
+          <span style={{ fontSize: 11, opacity: 0.7, marginLeft: 2 }}>⌘⇧R</span>
         </button>
         <button
           onClick={handleRun}

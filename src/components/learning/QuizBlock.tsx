@@ -48,7 +48,7 @@ export function QuizBlock({ questions }: QuizBlockProps) {
           }}>
             <div style={{
               color: colors.text,
-              fontSize: 15,
+              fontSize: 14,
               fontWeight: 500,
               marginBottom: 12,
               fontFamily: TYPOGRAPHY.fontSans,

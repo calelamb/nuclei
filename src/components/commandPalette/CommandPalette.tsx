@@ -132,7 +132,7 @@ export function CommandPalette({ commands, onClose }: CommandPaletteProps) {
             style={{
               width: '100%', background: 'transparent',
               border: 'none',
-              color: colors.text, fontSize: 15,
+              color: colors.text, fontSize: 14,
               fontFamily: TYPOGRAPHY.fontSans,
             }}
             aria-label="Search commands"
@@ -167,7 +167,7 @@ export function CommandPalette({ commands, onClose }: CommandPaletteProps) {
                 aria-selected={i === selectedIdx}
               >
                 <span style={{
-                  fontSize: 10, fontWeight: 600,
+                  fontSize: 11, fontWeight: 600,
                   color: categoryColors[cmd.category] ?? colors.textMuted,
                   minWidth: 48, fontFamily: TYPOGRAPHY.fontSans,
                 }}>

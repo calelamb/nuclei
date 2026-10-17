@@ -251,7 +251,7 @@ export function CredentialSetup({ provider, onClose }: CredentialSetupProps) {
                 htmlFor={`credential-${provider}-${field.key}`}
                 style={{
                   display: 'block',
-                  fontSize: 10,
+                  fontSize: 11,
                   fontWeight: 600,
                   color: colors.textMuted,
                   textTransform: 'uppercase',
@@ -294,7 +294,7 @@ export function CredentialSetup({ provider, onClose }: CredentialSetupProps) {
           {config.helpText && (
             <p
               style={{
-                fontSize: 10,
+                fontSize: 11,
                 color: colors.textDim,
                 margin: '0 0 12px',
                 ...font,

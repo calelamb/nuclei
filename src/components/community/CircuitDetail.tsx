@@ -96,7 +96,7 @@ export function CircuitDetail({ circuit, onClose, onOpenInEditor }: CircuitDetai
               </span>
               <span
                 style={{
-                  fontSize: 9,
+                  fontSize: 11,
                   fontWeight: 600,
                   fontFamily: TYPOGRAPHY.fontSans,
                   color: '#fff',
@@ -149,7 +149,7 @@ export function CircuitDetail({ circuit, onClose, onOpenInEditor }: CircuitDetai
               <span
                 key={tag}
                 style={{
-                  fontSize: 10,
+                  fontSize: 11,
                   fontFamily: TYPOGRAPHY.fontSans,
                   color: colors.accent,
                   background: `${colors.accent}15`,

@@ -95,7 +95,7 @@ export function LessonNavSidebar({
       <div style={{ padding: '12px 12px 10px', borderBottom: `1px solid ${colors.border}`, flexShrink: 0 }}>
         <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8 }}>
           <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ fontSize: 10, fontWeight: 600, letterSpacing: 0.4, textTransform: 'uppercase', color: colors.accent }}>
+            <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: 0.4, textTransform: 'uppercase', color: colors.accent }}>
               Track
             </div>
             <div style={{ fontSize: 14, fontWeight: 600, color: colors.text, marginTop: 2, lineHeight: 1.25 }}>
@@ -111,7 +111,7 @@ export function LessonNavSidebar({
           <div style={{ flex: 1, height: 4, borderRadius: 2, background: colors.border, overflow: 'hidden' }}>
             <div style={{ width: `${lessons.length ? (completedInTrack / lessons.length) * 100 : 0}%`, height: '100%', background: colors.accent, transition: 'width 300ms ease' }} />
           </div>
-          <span style={{ fontSize: 10.5, color: colors.textDim, fontVariantNumeric: 'tabular-nums' }}>
+          <span style={{ fontSize: 11, color: colors.textDim, fontVariantNumeric: 'tabular-nums' }}>
             {completedInTrack}/{lessons.length}
           </span>
         </div>
@@ -143,7 +143,7 @@ export function LessonNavSidebar({
                 ) : (
                   <Circle size={13} style={{ color: colors.textDim, flexShrink: 0 }} />
                 )}
-                <span style={{ flex: 1, fontSize: 12.5, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                <span style={{ flex: 1, fontSize: 13, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                   {i + 1}. {lesson.title}
                 </span>
               </button>

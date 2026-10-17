@@ -70,7 +70,7 @@ function CircuitInfoPanel() {
   const colors = useThemeStore((s) => s.colors);
   return (
     <div style={{ padding: 12, color: colors.textMuted, fontSize: 12, fontFamily: TYPOGRAPHY.fontSans }}>
-      <div style={{ color: colors.textDim, fontSize: 10, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 8 }}>
+      <div style={{ color: colors.textDim, fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 8 }}>
         Circuit Info
       </div>
       <div style={{ color: colors.textDim, fontSize: 11 }}>
@@ -90,7 +90,7 @@ function SidebarHeader({ title }: { title: string }) {
       padding: '0 12px', flexShrink: 0,
     }}>
       <span style={{
-        fontSize: 10, fontWeight: 600, textTransform: 'uppercase',
+        fontSize: 11, fontWeight: 600, textTransform: 'uppercase',
         letterSpacing: 0.5, color: colors.textMuted,
         fontFamily: TYPOGRAPHY.fontSans,
       }}>
@@ -167,7 +167,7 @@ function LearningSidebarTabs() {
                 border: 'none',
                 borderBottom: isActive ? `2px solid ${colors.accent}` : '2px solid transparent',
                 color: isActive ? colors.accent : colors.textDim,
-                fontSize: 10,
+                fontSize: 11,
                 fontWeight: 600,
                 fontFamily: TYPOGRAPHY.fontSans,
                 textTransform: 'uppercase',

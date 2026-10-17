@@ -103,6 +103,13 @@ export function QuantumEditor() {
     setEditorInstance(editor);
     setMonacoInstance(monacoApi);
 
+    // Monaco measures glyph widths once; re-measure when the bundled mono face finishes loading.
+    void document.fonts.ready
+      .then(() => monacoApi.editor.remeasureFonts())
+      .catch((err: unknown) => {
+        if (import.meta.env.DEV) console.warn('[Nuclei] font remeasure failed:', err);
+      });
+
     editor.addAction({
       id: 'run-circuit',
       label: 'Run Circuit',

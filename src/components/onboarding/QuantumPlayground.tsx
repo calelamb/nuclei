@@ -125,7 +125,7 @@ function MiniHistogram({ measurements }: { measurements: number[] }) {
           transition: `height ${getDuration(DURATION.normal)}ms ${EASING.enter}`,
         }} />
         <span style={{ color: colors.text, fontSize: 11, fontFamily: TYPOGRAPHY.fontSans }}>|0⟩</span>
-        <span style={{ color: colors.textMuted, fontSize: 10 }}>{zeros}</span>
+        <span style={{ color: colors.textMuted, fontSize: 11 }}>{zeros}</span>
       </div>
       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
         <div style={{
@@ -134,7 +134,7 @@ function MiniHistogram({ measurements }: { measurements: number[] }) {
           transition: `height ${getDuration(DURATION.normal)}ms ${EASING.enter}`,
         }} />
         <span style={{ color: colors.text, fontSize: 11, fontFamily: TYPOGRAPHY.fontSans }}>|1⟩</span>
-        <span style={{ color: colors.textMuted, fontSize: 10 }}>{ones}</span>
+        <span style={{ color: colors.textMuted, fontSize: 11 }}>{ones}</span>
       </div>
     </div>
   );
@@ -268,7 +268,7 @@ export function QuantumPlayground({ onComplete, onBridgeToIDE }: PlaygroundProps
             Dirac
           </span>
           <p style={{
-            color: colors.text, fontSize: 15,
+            color: colors.text, fontSize: 14,
             fontFamily: TYPOGRAPHY.fontSans,
             lineHeight: 1.7, margin: 0,
           }}>

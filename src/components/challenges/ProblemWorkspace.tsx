@@ -143,7 +143,7 @@ export function ProblemWorkspace() {
                   background: `${colors.success}16`,
                   border: `1px solid ${colors.success}44`,
                   color: colors.success,
-                  fontSize: 10.5,
+                  fontSize: 11,
                   fontWeight: 700,
                   fontFamily: TYPOGRAPHY.fontSans,
                 }}
@@ -155,7 +155,7 @@ export function ProblemWorkspace() {
           </div>
           <div style={{
             color: colors.text,
-            fontSize: 18,
+            fontSize: 16,
             fontWeight: 700,
             fontFamily: TYPOGRAPHY.fontSans,
             overflow: 'hidden',

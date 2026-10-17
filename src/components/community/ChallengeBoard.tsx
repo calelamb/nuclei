@@ -77,7 +77,7 @@ export function ChallengeBoard() {
                   border: `1px solid ${active ? colors.accent : colors.border}`,
                   background: active ? `${colors.accent}18` : 'transparent',
                   color: active ? colors.accent : colors.textMuted,
-                  fontSize: 10,
+                  fontSize: 11,
                   fontFamily: TYPOGRAPHY.fontSans,
                   cursor: 'pointer',
                   fontWeight: active ? 600 : 400,
@@ -118,7 +118,7 @@ export function ChallengeBoard() {
           </span>
           <span
             style={{
-              fontSize: 9,
+              fontSize: 11,
               fontWeight: 600,
               fontFamily: TYPOGRAPHY.fontSans,
               color: '#fff',
@@ -152,7 +152,7 @@ export function ChallengeBoard() {
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
           <span
             style={{
-              fontSize: 10,
+              fontSize: 11,
               color: colors.textDim,
               fontFamily: TYPOGRAPHY.fontSans,
             }}
@@ -161,7 +161,7 @@ export function ChallengeBoard() {
           </span>
           <span
             style={{
-              fontSize: 10,
+              fontSize: 11,
               color: colors.textDim,
               fontFamily: TYPOGRAPHY.fontSans,
             }}
@@ -231,7 +231,7 @@ export function ChallengeBoard() {
           <Trophy size={12} style={{ color: colors.accent }} />
           <span
             style={{
-              fontSize: 10,
+              fontSize: 11,
               fontWeight: 600,
               textTransform: 'uppercase',
               letterSpacing: 0.5,
@@ -261,7 +261,7 @@ export function ChallengeBoard() {
                     padding: '4px 6px',
                     color: colors.textDim,
                     fontWeight: 600,
-                    fontSize: 9,
+                    fontSize: 11,
                     textTransform: 'uppercase',
                     letterSpacing: 0.5,
                     borderBottom: `1px solid ${colors.border}`,

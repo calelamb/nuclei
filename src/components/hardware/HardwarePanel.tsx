@@ -47,7 +47,7 @@ function Section({
         <Icon size={12} />
         <span
           style={{
-            fontSize: 10,
+            fontSize: 11,
             fontWeight: 600,
             textTransform: 'uppercase',
             letterSpacing: 0.5,
@@ -233,7 +233,7 @@ export function HardwarePanel() {
               {!p.connected && p.name !== 'simulator' && STUB_PROVIDERS.has(p.name) && (
                 <span
                   style={{
-                    fontSize: 9,
+                    fontSize: 11,
                     color: colors.textDim,
                     fontStyle: 'italic',
                     ...font,
@@ -247,7 +247,7 @@ export function HardwarePanel() {
                 <button
                   onClick={() => setShowCredentialSetup(p.name)}
                   style={{
-                    fontSize: 10,
+                    fontSize: 11,
                     color: colors.accent,
                     background: 'transparent',
                     border: `1px solid ${colors.accent}40`,
@@ -268,7 +268,7 @@ export function HardwarePanel() {
               )}
 
               {p.connected && (
-                <span style={{ fontSize: 10, color: colors.success, ...font }}>
+                <span style={{ fontSize: 11, color: colors.success, ...font }}>
                   Connected
                 </span>
               )}
@@ -308,7 +308,7 @@ export function HardwarePanel() {
                   </span>
                   <span
                     style={{
-                      fontSize: 9,
+                      fontSize: 11,
                       fontWeight: 600,
                       textTransform: 'uppercase',
                       padding: '1px 5px',
@@ -330,7 +330,7 @@ export function HardwarePanel() {
 
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px 12px' }}>
                   <div>
-                    <div style={{ fontSize: 9, color: colors.textDim, textTransform: 'uppercase', ...font }}>
+                    <div style={{ fontSize: 11, color: colors.textDim, textTransform: 'uppercase', ...font }}>
                       Qubits
                     </div>
                     <div style={{ fontSize: 12, color: colors.text, fontWeight: 600, ...font }}>
@@ -338,7 +338,7 @@ export function HardwarePanel() {
                     </div>
                   </div>
                   <div>
-                    <div style={{ fontSize: 9, color: colors.textDim, textTransform: 'uppercase', ...font }}>
+                    <div style={{ fontSize: 11, color: colors.textDim, textTransform: 'uppercase', ...font }}>
                       Queue
                     </div>
                     <div style={{ fontSize: 12, color: colors.text, fontWeight: 600, ...font }}>
@@ -346,7 +346,7 @@ export function HardwarePanel() {
                     </div>
                   </div>
                   <div>
-                    <div style={{ fontSize: 9, color: colors.textDim, textTransform: 'uppercase', ...font }}>
+                    <div style={{ fontSize: 11, color: colors.textDim, textTransform: 'uppercase', ...font }}>
                       Error Rate
                     </div>
                     <div style={{ fontSize: 12, color: colors.text, fontWeight: 600, ...font }}>
@@ -354,7 +354,7 @@ export function HardwarePanel() {
                     </div>
                   </div>
                   <div>
-                    <div style={{ fontSize: 9, color: colors.textDim, textTransform: 'uppercase', ...font }}>
+                    <div style={{ fontSize: 11, color: colors.textDim, textTransform: 'uppercase', ...font }}>
                       Provider
                     </div>
                     <div style={{ fontSize: 12, color: colors.accent, fontWeight: 600, ...font }}>
@@ -367,7 +367,7 @@ export function HardwarePanel() {
                 <div style={{ marginTop: 8 }}>
                   <div
                     style={{
-                      fontSize: 9,
+                      fontSize: 11,
                       color: colors.textDim,
                       textTransform: 'uppercase',
                       marginBottom: 4,
@@ -381,7 +381,7 @@ export function HardwarePanel() {
                       <span
                         key={gate}
                         style={{
-                          fontSize: 9,
+                          fontSize: 11,
                           padding: '1px 6px',
                           borderRadius: 3,
                           background: `${colors.accent}15`,
@@ -457,7 +457,7 @@ export function HardwarePanel() {
                 width: '100%',
                 marginTop: 8,
                 padding: '5px 0',
-                fontSize: 10,
+                fontSize: 11,
                 color: colors.textDim,
                 background: 'transparent',
                 border: `1px solid ${colors.border}`,

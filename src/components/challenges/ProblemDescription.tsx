@@ -182,17 +182,17 @@ export function ProblemDescription({ challenge }: ProblemDescriptionProps) {
         <ReactMarkdown
           components={{
             h1: ({ children }) => (
-              <h1 style={{ fontSize: 22, fontWeight: 700, color: colors.text, margin: '0 0 12px' }}>
+              <h1 style={{ fontSize: 20, fontWeight: 700, color: colors.text, margin: '0 0 12px' }}>
                 {children}
               </h1>
             ),
             h2: ({ children }) => (
-              <h2 style={{ fontSize: 17, fontWeight: 600, color: colors.text, margin: '20px 0 8px' }}>
+              <h2 style={{ fontSize: 16, fontWeight: 600, color: colors.text, margin: '20px 0 8px' }}>
                 {children}
               </h2>
             ),
             h3: ({ children }) => (
-              <h3 style={{ fontSize: 15, fontWeight: 600, color: colors.text, margin: '16px 0 6px' }}>
+              <h3 style={{ fontSize: 14, fontWeight: 600, color: colors.text, margin: '16px 0 6px' }}>
                 {children}
               </h3>
             ),

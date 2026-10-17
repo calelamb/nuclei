@@ -250,7 +250,7 @@ export function EnvironmentPanel() {
                     <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
                       <span style={{ fontSize: 13, fontWeight: 500, color: colors.text }}>{fw.label}</span>
                       {installed && (
-                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3, fontSize: 10.5, color: colors.success }}>
+                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3, fontSize: 11, color: colors.success }}>
                           <Check size={11} /> installed
                         </span>
                       )}
@@ -259,7 +259,7 @@ export function EnvironmentPanel() {
                       {fw.description}
                     </div>
                   </div>
-                  <span style={{ fontSize: 10.5, color: colors.textDim, fontFamily: TYPOGRAPHY.fontMono, flexShrink: 0 }}>
+                  <span style={{ fontSize: 11, color: colors.textDim, fontFamily: TYPOGRAPHY.fontMono, flexShrink: 0 }}>
                     ~{fw.approximate_size_mb}MB
                   </span>
                   {installed ? (
@@ -324,7 +324,7 @@ export function EnvironmentPanel() {
             style={{
               margin: 0, padding: 10, borderRadius: 6, border: `1px solid ${colors.border}`,
               background: colors.bg, color: colors.textMuted, fontFamily: TYPOGRAPHY.fontMono,
-              fontSize: 10.5, lineHeight: 1.5, maxHeight: 140, overflow: 'auto', whiteSpace: 'pre-wrap',
+              fontSize: 11, lineHeight: 1.5, maxHeight: 140, overflow: 'auto', whiteSpace: 'pre-wrap',
             }}
           >
             {log.slice(-30).join('\n')}
@@ -354,14 +354,14 @@ function Row({ children }: { children: React.ReactNode }) {
   return <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>{children}</div>;
 }
 function Label({ colors, children }: { colors: C; children: React.ReactNode }) {
-  return <span style={{ fontSize: 12.5, fontWeight: 500, color: colors.text, flex: 1 }}>{children}</span>;
+  return <span style={{ fontSize: 13, fontWeight: 500, color: colors.text, flex: 1 }}>{children}</span>;
 }
 function Mono({ colors, children }: { colors: C; children: React.ReactNode }) {
-  return <span style={{ fontSize: 11.5, color: colors.textMuted, fontFamily: TYPOGRAPHY.fontMono }}>{children}</span>;
+  return <span style={{ fontSize: 12, color: colors.textMuted, fontFamily: TYPOGRAPHY.fontMono }}>{children}</span>;
 }
 function SectionLabel({ colors, children }: { colors: C; children: React.ReactNode }) {
   return (
-    <div style={{ fontSize: 10, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.5, color: colors.textDim, margin: '0 0 6px' }}>
+    <div style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.5, color: colors.textDim, margin: '0 0 6px' }}>
       {children}
     </div>
   );
@@ -393,7 +393,7 @@ function GhostBtn({ colors, busy, danger, disabled, onClick, title, children }: 
   return (
     <button
       type="button" onClick={onClick} title={title} disabled={off}
-      style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '5px 10px', borderRadius: 6, background: 'transparent', border: `1px solid ${colors.border}`, color, fontSize: 11.5, fontWeight: 500, fontFamily: TYPOGRAPHY.fontSans, cursor: off ? 'default' : 'pointer', opacity: off ? 0.45 : 1, flexShrink: 0 }}
+      style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '5px 10px', borderRadius: 6, background: 'transparent', border: `1px solid ${colors.border}`, color, fontSize: 12, fontWeight: 500, fontFamily: TYPOGRAPHY.fontSans, cursor: off ? 'default' : 'pointer', opacity: off ? 0.45 : 1, flexShrink: 0 }}
     >
       {busy ? <Loader2 size={12} style={{ animation: 'nuclei-spin 800ms linear infinite' }} /> : children}
     </button>

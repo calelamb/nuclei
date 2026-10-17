@@ -156,7 +156,7 @@ function ToolbarButton({
         borderRadius: 3,
         color: active ? colors.accent : colors.textDim,
         cursor: 'pointer',
-        fontSize: 10,
+        fontSize: 11,
         fontFamily: TYPOGRAPHY.fontSans,
         fontWeight: 500,
       }}
@@ -211,7 +211,7 @@ function TerminalToolbar({
       </ToolbarButton>
       <ToolbarButton onClick={onCopy} title={copied ? 'Copied!' : 'Copy all output'}>
         <Copy size={11} />
-        {copied && <span style={{ fontSize: 9 }}>copied</span>}
+        {copied && <span style={{ fontSize: 11 }}>copied</span>}
       </ToolbarButton>
       <ToolbarButton
         onClick={toggleShowTimestamps}
@@ -243,7 +243,7 @@ function TerminalToolbar({
           border: `1px solid ${colors.border}`,
           borderRadius: 3,
           color: colors.text,
-          fontSize: 10,
+          fontSize: 11,
           fontFamily: TYPOGRAPHY.fontSans,
         }}
       />
@@ -253,7 +253,7 @@ function TerminalToolbar({
       <span
         style={{
           color: colors.textDim,
-          fontSize: 10,
+          fontSize: 11,
           fontFamily: TYPOGRAPHY.fontMono,
         }}
       >
@@ -338,7 +338,7 @@ function TerminalPanel() {
               color: colors.text,
             }}
           >
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6, color: colors.diracText, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.5, fontSize: 10 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6, color: colors.diracText, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.5, fontSize: 11 }}>
               Dirac
             </div>
             <div style={{ marginBottom: rewritten.fix ? 10 : 0 }}>{rewritten.explanation}</div>
@@ -463,7 +463,7 @@ function BottomPanel({
               color: !collapsed && activeTab === tab ? colors.text : colors.textDim,
               border: 'none',
               borderBottom: !collapsed && activeTab === tab ? `1px solid ${colors.accent}` : '1px solid transparent',
-              cursor: 'pointer', fontSize: 10, fontWeight: 500,
+              cursor: 'pointer', fontSize: 11, fontWeight: 500,
               fontFamily: TYPOGRAPHY.fontSans, textTransform: 'uppercase', letterSpacing: 0.5,
             }}
             role="tab"

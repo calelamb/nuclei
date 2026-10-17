@@ -156,11 +156,11 @@ export function ResearchTour() {
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
           <span
-            style={{ fontSize: 10, fontWeight: 700, letterSpacing: 0.5, color: colors.modeResearch, textTransform: 'uppercase' }}
+            style={{ fontSize: 11, fontWeight: 700, letterSpacing: 0.5, color: colors.modeResearch, textTransform: 'uppercase' }}
           >
             Research tour
           </span>
-          <span style={{ fontSize: 10, color: colors.textDim }}>
+          <span style={{ fontSize: 11, color: colors.textDim }}>
             {step + 1} / {RESEARCH_TOUR_STEP_COUNT}
           </span>
         </div>
@@ -170,7 +170,7 @@ export function ResearchTour() {
         >
           {current.title}
         </div>
-        <div aria-live="polite" style={{ fontSize: 12.5, lineHeight: 1.5, color: colors.textMuted, marginBottom: 16 }}>
+        <div aria-live="polite" style={{ fontSize: 13, lineHeight: 1.5, color: colors.textMuted, marginBottom: 16 }}>
           {current.body}
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>

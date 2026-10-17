@@ -34,7 +34,7 @@ export function QecEmptyState({
       }}
     >
       <div style={{ fontSize: 13, fontWeight: 600, color: colors.textMuted }}>{title}</div>
-      <div style={{ fontSize: 11.5, color: colors.textDim, maxWidth: 320, lineHeight: 1.5 }}>{body}</div>
+      <div style={{ fontSize: 12, color: colors.textDim, maxWidth: 320, lineHeight: 1.5 }}>{body}</div>
       {(action || docsHref) && (
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 4 }}>
           {action && (
@@ -55,7 +55,7 @@ export function QecEmptyState({
               href={docsHref}
               target="_blank"
               rel="noreferrer"
-              style={{ fontSize: 11.5, color: colors.accent, textDecoration: 'none' }}
+              style={{ fontSize: 12, color: colors.accent, textDecoration: 'none' }}
             >
               Read the docs →
             </a>

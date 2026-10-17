@@ -212,7 +212,7 @@ export function MaxCutGraphViz({ visualization, bestBitstring }: MaxCutGraphVizP
             }} />
             <span style={{
               color: colors.textDim,
-              fontSize: 10,
+              fontSize: 11,
               fontFamily: TYPOGRAPHY.fontSans,
             }}>
               Partition 0
@@ -227,7 +227,7 @@ export function MaxCutGraphViz({ visualization, bestBitstring }: MaxCutGraphVizP
             }} />
             <span style={{
               color: colors.textDim,
-              fontSize: 10,
+              fontSize: 11,
               fontFamily: TYPOGRAPHY.fontSans,
             }}>
               Partition 1

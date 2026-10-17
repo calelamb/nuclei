@@ -142,7 +142,7 @@ export function CircuitGallery() {
 
       {/* Sort */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
-        <span style={{ fontSize: 10, color: colors.textDim, fontFamily: TYPOGRAPHY.fontSans }}>
+        <span style={{ fontSize: 11, color: colors.textDim, fontFamily: TYPOGRAPHY.fontSans }}>
           Sort:
         </span>
         <select

@@ -32,7 +32,7 @@ export function CapstoneCard({ project, completedCount, onStart }: CapstoneCardP
           {project.title}
         </span>
         <span style={{
-          fontSize: 9,
+          fontSize: 11,
           fontFamily: TYPOGRAPHY.fontSans,
           padding: '1px 6px',
           borderRadius: 10,

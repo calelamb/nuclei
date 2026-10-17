@@ -134,7 +134,7 @@ function Section({ title, defaultOpen = false, children }: {
       >
         <Icon size={12} />
         <span style={{
-          fontSize: 10, fontWeight: 600, textTransform: 'uppercase',
+          fontSize: 11, fontWeight: 600, textTransform: 'uppercase',
           letterSpacing: 0.5, fontFamily: TYPOGRAPHY.fontSans,
         }}>
           {title}
@@ -236,7 +236,7 @@ function ApiKeyInput() {
         </button>
       </div>
       {error && (
-        <span style={{ fontSize: 10, color: colors.error, fontFamily: TYPOGRAPHY.fontSans }}>
+        <span style={{ fontSize: 11, color: colors.error, fontFamily: TYPOGRAPHY.fontSans }}>
           {error}
         </span>
       )}
@@ -246,7 +246,7 @@ function ApiKeyInput() {
         rel="noopener noreferrer"
         style={{
           display: 'inline-flex', alignItems: 'center', gap: 4,
-          fontSize: 10, color: colors.accent, textDecoration: 'none',
+          fontSize: 11, color: colors.accent, textDecoration: 'none',
           fontFamily: TYPOGRAPHY.fontSans,
         }}
       >
@@ -407,7 +407,7 @@ export function SettingsPanel() {
             background: `${colors.error}12`, border: `1px solid ${colors.error}40`,
           }}>
             <span style={{
-              fontSize: 10, color: colors.textMuted, lineHeight: 1.5,
+              fontSize: 11, color: colors.textMuted, lineHeight: 1.5,
               fontFamily: TYPOGRAPHY.fontSans, display: 'block',
             }}>
               Enabling this lets Dirac submit jobs to real, paid quantum hardware on your behalf,

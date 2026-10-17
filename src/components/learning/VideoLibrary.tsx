@@ -118,7 +118,7 @@ function VideoCard({
           right: 3,
           background: 'rgba(0,0,0,0.75)',
           color: '#fff',
-          fontSize: 9,
+          fontSize: 11,
           fontFamily: TYPOGRAPHY.fontMono,
           padding: '1px 4px',
           borderRadius: 2,
@@ -144,7 +144,7 @@ function VideoCard({
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
           <span style={{
-            fontSize: 9,
+            fontSize: 11,
             fontFamily: TYPOGRAPHY.fontSans,
             fontWeight: 600,
             color: CREATOR_COLORS[video.creator],
@@ -155,7 +155,7 @@ function VideoCard({
             {CREATOR_LABELS[video.creator]}
           </span>
           <span style={{
-            fontSize: 9,
+            fontSize: 11,
             fontFamily: TYPOGRAPHY.fontSans,
             fontWeight: 500,
             color: DIFFICULTY_COLORS[video.difficulty],
@@ -166,7 +166,7 @@ function VideoCard({
         </div>
         <div style={{
           color: colors.textDim,
-          fontSize: 10,
+          fontSize: 11,
           fontFamily: TYPOGRAPHY.fontSans,
           lineHeight: 1.3,
           overflow: 'hidden',
@@ -223,7 +223,7 @@ export function VideoLibrary() {
                 border: 'none',
                 borderBottom: isActive ? `2px solid ${colors.accent}` : '2px solid transparent',
                 color: isActive ? colors.accent : colors.textDim,
-                fontSize: 10,
+                fontSize: 11,
                 fontWeight: 600,
                 fontFamily: TYPOGRAPHY.fontSans,
                 cursor: 'pointer',
@@ -257,7 +257,7 @@ export function VideoLibrary() {
                 border: `1px solid ${isActive ? pillColor : colors.border}`,
                 borderRadius: 10,
                 color: isActive ? pillColor : colors.textDim,
-                fontSize: 10,
+                fontSize: 11,
                 fontFamily: TYPOGRAPHY.fontSans,
                 fontWeight: 500,
                 cursor: 'pointer',
@@ -274,7 +274,7 @@ export function VideoLibrary() {
       <div style={{
         padding: '0 12px 6px',
         color: colors.textDim,
-        fontSize: 10,
+        fontSize: 11,
         fontFamily: TYPOGRAPHY.fontSans,
         flexShrink: 0,
       }}>

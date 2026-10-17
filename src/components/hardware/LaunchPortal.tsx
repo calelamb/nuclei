@@ -200,7 +200,7 @@ export function LaunchPortal() {
                 display: 'flex',
                 alignItems: 'center',
                 gap: 6,
-                fontSize: 10,
+                fontSize: 11,
                 color: colors.textDim,
                 background: `${colors.success}12`,
                 border: `1px solid ${colors.success}30`,
@@ -237,7 +237,7 @@ export function LaunchPortal() {
       <div style={{ padding: '0 12px 12px' }}>
         <div
           style={{
-            fontSize: 10,
+            fontSize: 11,
             fontWeight: 600,
             textTransform: 'uppercase',
             letterSpacing: 0.5,
@@ -300,7 +300,7 @@ export function LaunchPortal() {
               <div style={{ fontSize: 11, fontWeight: 600, color: colors.text }}>{p.label}</div>
               <div
                 style={{
-                  fontSize: 10,
+                  fontSize: 11,
                   color: colors.textDim,
                   lineHeight: 1.4,
                   overflow: 'hidden',
@@ -337,7 +337,7 @@ export function LaunchPortal() {
           }}
         >
           <Rocket size={13} /> Open full launcher
-          <span style={{ fontSize: 10, opacity: 0.7, marginLeft: 4 }}>⌘⇧R</span>
+          <span style={{ fontSize: 11, opacity: 0.7, marginLeft: 4 }}>⌘⇧R</span>
         </button>
       </div>
 
@@ -346,7 +346,7 @@ export function LaunchPortal() {
         <div style={{ padding: '0 12px 12px' }}>
           <div
             style={{
-              fontSize: 10,
+              fontSize: 11,
               fontWeight: 600,
               textTransform: 'uppercase',
               letterSpacing: 0.5,
@@ -392,7 +392,7 @@ export function LaunchPortal() {
                   >
                     {j.backend}
                   </div>
-                  <div style={{ color: colors.textDim, fontSize: 10 }}>
+                  <div style={{ color: colors.textDim, fontSize: 11 }}>
                     {j.status}
                     {j.queuePosition !== null && ` · pos ${j.queuePosition}`}
                   </div>
@@ -416,7 +416,7 @@ export function LaunchPortal() {
                     display: 'flex',
                     alignItems: 'center',
                     gap: 2,
-                    fontSize: 10,
+                    fontSize: 11,
                     fontFamily: TYPOGRAPHY.fontSans,
                   }}
                   onMouseEnter={(e) => {
@@ -449,7 +449,7 @@ export function LaunchPortal() {
           >
             <div
               style={{
-                fontSize: 10,
+                fontSize: 11,
                 fontWeight: 600,
                 textTransform: 'uppercase',
                 letterSpacing: 0.5,
@@ -467,7 +467,7 @@ export function LaunchPortal() {
                 color: colors.textDim,
                 cursor: 'pointer',
                 padding: 0,
-                fontSize: 10,
+                fontSize: 11,
                 fontFamily: TYPOGRAPHY.fontSans,
               }}
               onMouseEnter={(e) => { e.currentTarget.style.color = colors.text; }}
@@ -513,7 +513,7 @@ export function LaunchPortal() {
                     <div
                       style={{
                         color: colors.textDim,
-                        fontSize: 10,
+                        fontSize: 11,
                         display: 'flex',
                         alignItems: 'center',
                         gap: 4,

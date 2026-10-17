@@ -58,7 +58,7 @@ export function TranspilerControls() {
           <strong style={{ display: 'block', marginBottom: 4, fontSize: 12 }}>
             Transpiler Explorer needs Qiskit
           </strong>
-          <span style={{ fontSize: 11.5, color: colors.textMuted, lineHeight: 1.5 }}>
+          <span style={{ fontSize: 12, color: colors.textMuted, lineHeight: 1.5 }}>
             The active buffer is {framework}. Qiskit is the only framework with an
             introspectable compiler, so the pass-by-pass view is Qiskit-only.
           </span>
@@ -185,7 +185,7 @@ function chip(colors: ThemeColors): CSSProperties {
   return {
     padding: '2px 7px', borderRadius: 4, border: `1px solid ${colors.border}`,
     background: colors.bg, color: colors.textMuted,
-    fontSize: 10.5, fontFamily: TYPOGRAPHY.fontMono,
+    fontSize: 11, fontFamily: TYPOGRAPHY.fontMono,
   };
 }
 

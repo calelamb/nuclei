@@ -15,7 +15,7 @@ export function TextBlock({ markdown }: TextBlockProps) {
       style={{
         color: colors.text,
         fontFamily: TYPOGRAPHY.fontSans,
-        fontSize: 15,
+        fontSize: 14,
         lineHeight: 1.7,
       }}
     >
@@ -25,10 +25,10 @@ export function TextBlock({ markdown }: TextBlockProps) {
             <h1 style={{ fontSize: 28, fontWeight: 700, color: colors.text, margin: '24px 0 12px', lineHeight: 1.3 }}>{children}</h1>
           ),
           h2: ({ children }) => (
-            <h2 style={{ fontSize: 22, fontWeight: 600, color: colors.text, margin: '20px 0 10px', lineHeight: 1.3 }}>{children}</h2>
+            <h2 style={{ fontSize: 20, fontWeight: 600, color: colors.text, margin: '20px 0 10px', lineHeight: 1.3 }}>{children}</h2>
           ),
           h3: ({ children }) => (
-            <h3 style={{ fontSize: 18, fontWeight: 600, color: colors.text, margin: '16px 0 8px', lineHeight: 1.3 }}>{children}</h3>
+            <h3 style={{ fontSize: 16, fontWeight: 600, color: colors.text, margin: '16px 0 8px', lineHeight: 1.3 }}>{children}</h3>
           ),
           p: ({ children }) => (
             <p style={{ margin: '0 0 12px', color: colors.text }}>{children}</p>

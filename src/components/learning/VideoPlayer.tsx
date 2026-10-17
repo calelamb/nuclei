@@ -168,7 +168,7 @@ export function VideoPlayer({ youtubeId, title, creator, startTime, source, chap
             top: 8, right: 8,
             background: 'rgba(0,0,0,0.75)',
             color: '#fff',
-            fontSize: 10,
+            fontSize: 11,
             fontFamily: TYPOGRAPHY.fontSans,
             fontWeight: 500,
             padding: '3px 8px',
@@ -184,7 +184,7 @@ export function VideoPlayer({ youtubeId, title, creator, startTime, source, chap
           <div style={{ color: colors.text, fontSize: 14, fontWeight: 500, fontFamily: TYPOGRAPHY.fontSans }}>{title}</div>
           {source && (
             <span style={{
-              fontSize: 9,
+              fontSize: 11,
               fontFamily: TYPOGRAPHY.fontSans,
               fontWeight: 600,
               color: SOURCE_BADGES[source].color,
@@ -203,7 +203,7 @@ export function VideoPlayer({ youtubeId, title, creator, startTime, source, chap
           <div style={{ marginTop: 8, display: 'flex', flexDirection: 'column', gap: 2 }}>
             <div style={{
               color: colors.textMuted,
-              fontSize: 10,
+              fontSize: 11,
               fontWeight: 600,
               fontFamily: TYPOGRAPHY.fontSans,
               textTransform: 'uppercase',
@@ -233,7 +233,7 @@ export function VideoPlayer({ youtubeId, title, creator, startTime, source, chap
               >
                 <span style={{
                   color: colors.accent,
-                  fontSize: 10,
+                  fontSize: 11,
                   fontFamily: TYPOGRAPHY.fontMono,
                   fontWeight: 500,
                   minWidth: 32,

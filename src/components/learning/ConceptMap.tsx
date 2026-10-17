@@ -85,15 +85,15 @@ export function ConceptMap() {
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
       {/* Legend */}
       <div style={{ padding: '8px 12px', display: 'flex', gap: 14, alignItems: 'center', flexShrink: 0 }}>
-        <span style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 10, fontFamily: TYPOGRAPHY.fontSans, color: colors.textMuted }}>
+        <span style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, fontFamily: TYPOGRAPHY.fontSans, color: colors.textMuted }}>
           <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#10B981', display: 'inline-block' }} />
           Mastered
         </span>
-        <span style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 10, fontFamily: TYPOGRAPHY.fontSans, color: colors.textMuted }}>
+        <span style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, fontFamily: TYPOGRAPHY.fontSans, color: colors.textMuted }}>
           <span style={{ width: 8, height: 8, borderRadius: '50%', background: colors.accent, display: 'inline-block' }} />
           In Progress
         </span>
-        <span style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 10, fontFamily: TYPOGRAPHY.fontSans, color: colors.textMuted }}>
+        <span style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, fontFamily: TYPOGRAPHY.fontSans, color: colors.textMuted }}>
           <span style={{ width: 8, height: 8, borderRadius: '50%', background: colors.textDim, opacity: 0.45, display: 'inline-block' }} />
           Unseen
         </span>
@@ -216,7 +216,7 @@ export function ConceptMap() {
             </div>
             <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
               <span style={{
-                fontSize: 9,
+                fontSize: 11,
                 fontFamily: TYPOGRAPHY.fontSans,
                 padding: '2px 6px',
                 borderRadius: 3,
@@ -228,7 +228,7 @@ export function ConceptMap() {
               </span>
               {selectedNode.node.exerciseIds.length > 0 && (
                 <span style={{
-                  fontSize: 9,
+                  fontSize: 11,
                   fontFamily: TYPOGRAPHY.fontSans,
                   color: colors.accent,
                 }}>

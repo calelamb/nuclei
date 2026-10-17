@@ -82,7 +82,7 @@ export function KeyboardShortcuts({ onClose }: KeyboardShortcutsProps) {
       >
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
           <h2 style={{
-            color: colors.text, fontSize: 18, fontWeight: 600,
+            color: colors.text, fontSize: 16, fontWeight: 600,
             fontFamily: TYPOGRAPHY.fontSans,
           }}>
             Keyboard Shortcuts

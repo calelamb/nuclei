@@ -100,7 +100,7 @@
 
 .qec-study-picker {
   display: grid; flex: 0 1 290px; min-width: 190px; gap: 2px;
-  color: var(--qec-text-muted); font-size: 9px; font-weight: 700; letter-spacing: 0.08em;
+  color: var(--qec-text-muted); font-size: 11px; font-weight: 700; letter-spacing: 0.08em;
   text-transform: uppercase;
 }
 
@@ -180,7 +180,7 @@
 }
 
 .qec-research-trail__label {
-  margin-right: 3px; color: var(--qec-text-muted); font-size: 10px; font-weight: 700;
+  margin-right: 3px; color: var(--qec-text-muted); font-size: 11px; font-weight: 700;
   letter-spacing: 0.08em; text-transform: uppercase;
 }
 
@@ -279,11 +279,11 @@
 
 .qec-zone-heading h2,
 .qec-investigation__header h1 {
-  font-size: 15px; font-weight: 700; line-height: 1.25;
+  font-size: 14px; font-weight: 700; line-height: 1.25;
 }
 
 .qec-zone-heading__eyebrow {
-  display: block; margin-bottom: 2px; color: var(--qec-text-muted); font-size: 9px;
+  display: block; margin-bottom: 2px; color: var(--qec-text-muted); font-size: 11px;
   font-weight: 700; letter-spacing: 0.09em; text-transform: uppercase;
 }
 
@@ -312,7 +312,7 @@
 
 .qec-source-group h3,
 .qec-inspector__section h3 {
-  margin: 0 4px 7px; color: var(--qec-text-muted); font-size: 10px; font-weight: 700;
+  margin: 0 4px 7px; color: var(--qec-text-muted); font-size: 11px; font-weight: 700;
   letter-spacing: 0.07em; text-transform: uppercase;
 }
 
@@ -378,11 +378,11 @@
 }
 
 .qec-source-row small {
-  margin-top: 2px; color: var(--qec-text-muted); font-size: 10px;
+  margin-top: 2px; color: var(--qec-text-muted); font-size: 11px;
 }
 
 .qec-source-row__kind {
-  color: var(--qec-text-muted); font-family: var(--font-mono); font-size: 9px; text-transform: uppercase;
+  color: var(--qec-text-muted); font-family: var(--font-mono); font-size: 11px; text-transform: uppercase;
 }
 
 .qec-session-tree {
@@ -395,7 +395,7 @@
 
 .qec-session-row__status {
   padding: 3px 5px; border: 1px solid var(--qec-border); border-radius: 999px;
-  color: var(--qec-text-muted); font-family: var(--font-mono); font-size: 8px; text-transform: uppercase;
+  color: var(--qec-text-muted); font-family: var(--font-mono); font-size: 11px; text-transform: uppercase;
 }
 
 .qec-session-row__status--complete {
@@ -413,7 +413,7 @@
 }
 
 .qec-source-instrument .qec-mono {
-  font-size: 9px; text-transform: uppercase;
+  font-size: 11px; text-transform: uppercase;
 }
 
 .qec-source-group__empty {
@@ -436,7 +436,7 @@
 }
 
 .qec-study-errors > header span {
-  margin-top: 2px; font-size: 10px;
+  margin-top: 2px; font-size: 11px;
 }
 
 .qec-study-errors > ul {
@@ -452,13 +452,13 @@
 }
 
 .qec-study-errors li li {
-  margin-top: 4px; color: var(--qec-text-muted); font-size: 10px; line-height: 1.45;
+  margin-top: 4px; color: var(--qec-text-muted); font-size: 11px; line-height: 1.45;
 }
 
 .qec-sources__footer {
   display: flex; min-height: 40px; flex: 0 0 auto; align-items: center;
   justify-content: space-between; gap: 8px; padding: 0 12px; border-top: 1px solid var(--qec-border);
-  color: var(--qec-text-muted); font-size: 10px;
+  color: var(--qec-text-muted); font-size: 11px;
 }
 
 .qec-zone-empty {
@@ -497,7 +497,7 @@
 .qec-inspector__close {
   display: inline-flex; min-height: 44px; align-items: center; justify-content: center;
   gap: 6px; padding: 0 10px; border: 1px solid var(--qec-border); border-radius: 5px;
-  background: var(--qec-raised); color: var(--qec-text-muted); font-size: 10px; font-weight: 600;
+  background: var(--qec-raised); color: var(--qec-text-muted); font-size: 11px; font-weight: 600;
   transition: color 160ms ease, background-color 160ms ease;
 }
 
@@ -513,7 +513,7 @@
 .qec-instrument-state {
   display: inline-flex; min-height: 28px; align-items: center; gap: 6px;
   padding: 0 8px; border: 1px solid var(--qec-selection-strong); border-radius: 4px; background: var(--qec-field);
-  color: var(--qec-analytical-strong); font-size: 10px; font-weight: 600;
+  color: var(--qec-analytical-strong); font-size: 11px; font-weight: 600;
 }
 
 .qec-instrument-strip {
@@ -523,7 +523,7 @@
 }
 
 .qec-instrument-strip span {
-  padding: 3px 8px; border-right: 1px solid var(--qec-border); color: var(--qec-text-muted); font-size: 10px;
+  padding: 3px 8px; border-right: 1px solid var(--qec-border); color: var(--qec-text-muted); font-size: 11px;
   white-space: nowrap;
 }
 
@@ -567,7 +567,7 @@
 }
 
 .qec-instrument header .qec-mono {
-  display: block; margin-top: 1px; color: var(--qec-text-muted); font-size: 9px;
+  display: block; margin-top: 1px; color: var(--qec-text-muted); font-size: 11px;
 }
 
 .qec-instrument__field {
@@ -594,7 +594,7 @@
 }
 
 .qec-instrument > p {
-  padding: 0 13px 12px; color: var(--qec-text-muted); font-size: 10px; line-height: 1.5;
+  padding: 0 13px 12px; color: var(--qec-text-muted); font-size: 11px; line-height: 1.5;
 }
 
 .qec-inspector {
@@ -623,11 +623,11 @@
 }
 
 .qec-inspector dt {
-  color: var(--qec-text-muted); font-size: 10px; text-transform: capitalize;
+  color: var(--qec-text-muted); font-size: 11px; text-transform: capitalize;
 }
 
 .qec-inspector dd {
-  overflow: hidden; font-size: 10px; text-align: right; text-overflow: ellipsis;
+  overflow: hidden; font-size: 11px; text-align: right; text-overflow: ellipsis;
 }
 
 .qec-inspector__tools {
@@ -659,7 +659,7 @@
 }
 
 .qec-lineage-state span {
-  margin-top: 2px; color: var(--qec-text-muted); font-size: 10px;
+  margin-top: 2px; color: var(--qec-text-muted); font-size: 11px;
 }
 
 .qec-inspector__footer {
@@ -734,7 +734,7 @@
 }
 
 .qec-tray__empty span {
-  margin-top: 2px; font-size: 10px;
+  margin-top: 2px; font-size: 11px;
 }
 
 .qec-tray__summary {
@@ -750,7 +750,7 @@
 }
 
 .qec-tray__summary dt {
-  color: var(--qec-text-muted); font-size: 9px; text-transform: uppercase;
+  color: var(--qec-text-muted); font-size: 11px; text-transform: uppercase;
 }
 
 .qec-tray__summary dd {

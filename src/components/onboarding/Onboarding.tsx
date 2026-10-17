@@ -170,7 +170,7 @@ function ReturningUserScreen({ onContinue, onStartFresh, lastFile, daysSince }: 
           NUCLEI
         </div>
         <p style={{
-          color: colors.text, fontSize: 18, fontWeight: 500,
+          color: colors.text, fontSize: 16, fontWeight: 500,
           fontFamily: TYPOGRAPHY.fontSans,
           marginBottom: 8,
         }}>
@@ -195,7 +195,7 @@ function ReturningUserScreen({ onContinue, onStartFresh, lastFile, daysSince }: 
               border: 'none',
               borderRadius: 8,
               cursor: 'pointer',
-              fontSize: 15,
+              fontSize: 14,
               fontWeight: 600,
               fontFamily: TYPOGRAPHY.fontSans,
             }}

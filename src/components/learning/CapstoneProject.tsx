@@ -87,7 +87,7 @@ export function CapstoneProjectView() {
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  fontSize: 10,
+                  fontSize: 11,
                   fontWeight: 700,
                   fontFamily: TYPOGRAPHY.fontSans,
                   flexShrink: 0,
@@ -187,7 +187,7 @@ export function CapstoneProjectView() {
                                 border: 'none',
                                 color: colors.warning,
                                 cursor: 'pointer',
-                                fontSize: 10,
+                                fontSize: 11,
                                 fontFamily: TYPOGRAPHY.fontSans,
                                 padding: '2px 0',
                               }}
@@ -220,7 +220,7 @@ export function CapstoneProjectView() {
             border: `1px solid ${colors.dirac}44`,
             background: colors.dirac + '0A',
           }}>
-            <div style={{ color: colors.diracText, fontSize: 10, fontWeight: 600, fontFamily: TYPOGRAPHY.fontSans, marginBottom: 4 }}>
+            <div style={{ color: colors.diracText, fontSize: 11, fontWeight: 600, fontFamily: TYPOGRAPHY.fontSans, marginBottom: 4 }}>
               Dirac Guidance
             </div>
             <div style={{ color: colors.textMuted, fontSize: 11, fontFamily: TYPOGRAPHY.fontSans, lineHeight: 1.4 }}>

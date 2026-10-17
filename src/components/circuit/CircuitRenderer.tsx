@@ -56,7 +56,7 @@ function GateExplorerPopup({ gateIndex, onClose }: { gateIndex: number; onClose:
         overflow: 'auto',
       }} onClick={(e) => e.stopPropagation()}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-          <span style={{ color: colors.accent, fontWeight: 700, fontSize: 18, fontFamily: TYPOGRAPHY.fontMono }}>
+          <span style={{ color: colors.accent, fontWeight: 700, fontSize: 16, fontFamily: TYPOGRAPHY.fontMono }}>
             {data.symbol}
           </span>
           <button onClick={onClose} style={{ background: 'none', border: 'none', color: colors.textMuted, cursor: 'pointer', fontSize: 16 }}>✕</button>

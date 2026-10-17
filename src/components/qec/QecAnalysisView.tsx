@@ -99,7 +99,7 @@ export function QecAnalysisView() {
         )}
       </div>
       {csvError && (
-        <div role="alert" style={{ padding: '6px 12px', fontSize: 11.5, color: colors.error, borderBottom: `1px solid ${colors.border}` }}>
+        <div role="alert" style={{ padding: '6px 12px', fontSize: 12, color: colors.error, borderBottom: `1px solid ${colors.border}` }}>
           {csvError}
         </div>
       )}

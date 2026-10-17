@@ -67,6 +67,8 @@ function ActivityIcon({ item, isActive, onClick, shortcut }: {
       title={title}
       aria-label={item.label}
       aria-pressed={isActive}
+      data-active={isActive}
+      className="nuclei-quiet"
       data-tour-target={`activity-${item.id}`}
       style={{
         width: 48, height: 44,
@@ -75,14 +77,7 @@ function ActivityIcon({ item, isActive, onClick, shortcut }: {
         border: 'none',
         borderLeft: isActive ? `2px solid ${colors.accent}` : '2px solid transparent',
         cursor: 'pointer',
-        color: isActive ? colors.text : colors.textDim,
         position: 'relative',
-      }}
-      onMouseEnter={(e) => {
-        if (!isActive) e.currentTarget.style.color = colors.textMuted;
-      }}
-      onMouseLeave={(e) => {
-        if (!isActive) e.currentTarget.style.color = colors.textDim;
       }}
     >
       <Icon size={20} strokeWidth={isActive ? 2 : 1.5} />

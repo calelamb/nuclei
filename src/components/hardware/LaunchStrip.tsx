@@ -169,7 +169,7 @@ export function LaunchStrip() {
           display: 'flex',
           alignItems: 'center',
           gap: 4,
-          fontSize: 10,
+          fontSize: 11,
           fontWeight: 500,
           fontFamily: TYPOGRAPHY.fontSans,
         }}

@@ -66,7 +66,7 @@ function StudyList({ studies, busy }: { studies: readonly DiscoveredQecStudy[]; 
       {studies.map(({ study }) => (
         <button key={study.id} type="button" disabled={busy} aria-pressed={activeStudyId === study.id} onClick={() => setActiveStudy(study.id)} style={{ padding: '7px 8px', borderRadius: 4, border: `1px solid ${activeStudyId === study.id ? colors.accent : colors.border}`, background: activeStudyId === study.id ? `${colors.accent}18` : colors.bgElevated, color: colors.text, textAlign: 'left', cursor: busy ? 'wait' : 'pointer' }}>
           <strong style={{ display: 'block', fontSize: 11 }}>{study.name}</strong>
-          <span style={{ display: 'block', color: colors.textDim, fontSize: 10, marginTop: 2 }}>{study.question}</span>
+          <span style={{ display: 'block', color: colors.textDim, fontSize: 11, marginTop: 2 }}>{study.question}</span>
         </button>
       ))}
     </div>
@@ -80,8 +80,8 @@ function ValidationCards({ colors }: { colors: ThemeColors }): ReactElement | nu
     <section aria-label="Study validation errors" style={{ display: 'grid', gap: 6 }}>
       {validationErrors.map(({ fileName, errors }) => (
         <article key={fileName} style={{ border: `1px solid ${colors.warning}60`, borderRadius: 4, padding: 8, background: `${colors.warning}0d` }}>
-          <strong style={{ color: colors.warning, fontSize: 10 }}>{fileName}</strong>
-          {errors.map((error) => <p key={error} style={{ color: colors.textMuted, fontSize: 10, lineHeight: 1.4, margin: '4px 0 0' }}>{error}</p>)}
+          <strong style={{ color: colors.warning, fontSize: 11 }}>{fileName}</strong>
+          {errors.map((error) => <p key={error} style={{ color: colors.textMuted, fontSize: 11, lineHeight: 1.4, margin: '4px 0 0' }}>{error}</p>)}
         </article>
       ))}
     </section>
@@ -168,9 +168,9 @@ export function QecStudySidebar({ fs }: QecStudySidebarProps): ReactElement {
   if (!projectRoot) return <QecNoProjectNotice />;
   return (
     <div style={{ display: 'grid', gap: 12, padding: 10, fontFamily: TYPOGRAPHY.fontSans }}>
-      <section aria-label="QEC Studies"><div style={{ display: 'flex', gap: 5, alignItems: 'center', color: colors.textMuted, fontSize: 10, fontWeight: 600, marginBottom: 6 }}><BookOpen size={12} />STUDIES</div><StudyList studies={studies} busy={loading || submitting} /></section>
+      <section aria-label="QEC Studies"><div style={{ display: 'flex', gap: 5, alignItems: 'center', color: colors.textMuted, fontSize: 11, fontWeight: 600, marginBottom: 6 }}><BookOpen size={12} />STUDIES</div><StudyList studies={studies} busy={loading || submitting} /></section>
       <ValidationCards colors={colors} />
-      <section aria-label="Create Study"><div style={{ color: colors.textMuted, fontSize: 10, fontWeight: 600, marginBottom: 6 }}>NEW STUDY</div><StudyForm busy={loading || submitting} submitting={submitting} draft={draft} error={error} onChange={setDraft} onSubmit={(event) => void submit(event)} /></section>
+      <section aria-label="Create Study"><div style={{ color: colors.textMuted, fontSize: 11, fontWeight: 600, marginBottom: 6 }}>NEW STUDY</div><StudyForm busy={loading || submitting} submitting={submitting} draft={draft} error={error} onChange={setDraft} onSubmit={(event) => void submit(event)} /></section>
     </div>
   );
 }

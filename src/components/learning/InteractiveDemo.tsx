@@ -357,7 +357,7 @@ export function InteractiveDemo({ code: initialCode, framework, description, exp
           fontSize: 11, fontFamily: TYPOGRAPHY.fontMono, color: colors.textMuted,
           display: 'flex', alignItems: 'center', gap: 8,
         }}>
-          <span style={{ color: colors.textDim, fontSize: 10, textTransform: 'uppercase', letterSpacing: 0.5 }}>
+          <span style={{ color: colors.textDim, fontSize: 11, textTransform: 'uppercase', letterSpacing: 0.5 }}>
             {snapshot.qubit_count}q depth-{snapshot.depth}
           </span>
           <span style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
@@ -365,7 +365,7 @@ export function InteractiveDemo({ code: initialCode, framework, description, exp
               <span key={i} style={{
                 padding: '1px 5px', borderRadius: 3,
                 background: `${colors.accent}12`, color: colors.accent,
-                fontSize: 10, fontWeight: 500,
+                fontSize: 11, fontWeight: 500,
               }}>
                 {g.type}
               </span>

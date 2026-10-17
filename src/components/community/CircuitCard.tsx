@@ -60,7 +60,7 @@ export function CircuitCard({ circuit, isLiked, isBookmarked, onLike, onBookmark
           position: 'absolute',
           top: 8,
           right: 8,
-          fontSize: 9,
+          fontSize: 11,
           fontWeight: 600,
           fontFamily: TYPOGRAPHY.fontSans,
           color: colors.textDim,
@@ -101,7 +101,7 @@ export function CircuitCard({ circuit, isLiked, isBookmarked, onLike, onBookmark
         </span>
         <span
           style={{
-            fontSize: 9,
+            fontSize: 11,
             fontWeight: 600,
             fontFamily: TYPOGRAPHY.fontSans,
             color: '#fff',

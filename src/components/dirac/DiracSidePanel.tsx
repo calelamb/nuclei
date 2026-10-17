@@ -81,14 +81,14 @@ function ContextIndicator() {
       fontSize: 11, fontFamily: TYPOGRAPHY.fontSans,
       color: colors.textDim,
     }}>
-      <span style={{ fontSize: 10 }}>Seeing:</span>
+      <span style={{ fontSize: 11 }}>Seeing:</span>
       {items.map((item) => (
         <span
           key={item.label}
           style={{
             padding: '2px 8px',
             borderRadius: 4,
-            fontSize: 10, fontWeight: 500,
+            fontSize: 11, fontWeight: 500,
             background: item.active ? `${colors.accent}18` : colors.bgPanel,
             color: item.active ? colors.accent : colors.textDim,
             border: `1px solid ${item.active ? `${colors.accent}30` : 'transparent'}`,
@@ -200,7 +200,7 @@ function ToolCallCard({ toolCall, onAction }: { toolCall: ToolCall; onAction: (i
         }}>
           <span style={{ color: colors.accent, fontSize: 12, fontWeight: 600, fontFamily: TYPOGRAPHY.fontMono }}>insert_code</span>
           <span style={{ color: colors.textMuted, fontSize: 11, flex: 1, fontFamily: TYPOGRAPHY.fontSans }}>{description || 'Code insertion'}</span>
-          <span style={{ color: statusColor, fontSize: 10, fontFamily: TYPOGRAPHY.fontSans }}>{statusText}</span>
+          <span style={{ color: statusColor, fontSize: 11, fontFamily: TYPOGRAPHY.fontSans }}>{statusText}</span>
         </div>
         <pre style={{
           margin: 0, padding: 10, background: colors.bg,
@@ -242,7 +242,7 @@ function ToolCallCard({ toolCall, onAction }: { toolCall: ToolCall; onAction: (i
             fontSize: 11, fontFamily: TYPOGRAPHY.fontSans,
           }}>Run</button>
         )}
-        <span style={{ color: statusColor, fontSize: 10, fontFamily: TYPOGRAPHY.fontSans }}>{statusText}</span>
+        <span style={{ color: statusColor, fontSize: 11, fontFamily: TYPOGRAPHY.fontSans }}>{statusText}</span>
       </div>
     );
   }
@@ -253,7 +253,7 @@ function ToolCallCard({ toolCall, onAction }: { toolCall: ToolCall; onAction: (i
       padding: '6px 10px', borderLeft: `3px solid ${statusColor}`, background: colors.bgPanel,
     }}>
       <span style={{ color: colors.accent, fontSize: 12, fontWeight: 600, fontFamily: TYPOGRAPHY.fontMono }}>{toolCall.name}</span>
-      <span style={{ color: statusColor, fontSize: 10, fontFamily: TYPOGRAPHY.fontSans, marginLeft: 8 }}>{statusText}</span>
+      <span style={{ color: statusColor, fontSize: 11, fontFamily: TYPOGRAPHY.fontSans, marginLeft: 8 }}>{statusText}</span>
     </div>
   );
 }
@@ -569,7 +569,7 @@ export function DiracSidePanel() {
             textAlign: 'center', marginTop: 48, lineHeight: 1.7,
           }}>
             <AtomIcon />
-            <div style={{ color: colors.accentLight, fontSize: 18, fontWeight: 600, marginBottom: 4 }}>
+            <div style={{ color: colors.accentLight, fontSize: 16, fontWeight: 600, marginBottom: 4 }}>
               Hi, I'm Dirac
             </div>
             <div style={{ fontSize: 13, color: colors.textMuted }}>Your quantum computing tutor.</div>
@@ -620,7 +620,7 @@ export function DiracSidePanel() {
               </div>
             )}
             <div style={{
-              fontSize: 10, color: colors.textDim,
+              fontSize: 11, color: colors.textDim,
               fontFamily: TYPOGRAPHY.fontSans,
               marginTop: 2,
               textAlign: msg.role === 'user' ? 'right' : 'left',

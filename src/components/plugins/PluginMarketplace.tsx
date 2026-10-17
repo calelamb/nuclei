@@ -51,7 +51,7 @@ function ActionButton({
         display: 'flex',
         alignItems: 'center',
         gap: 4,
-        fontSize: 10,
+        fontSize: 11,
         fontWeight: 500,
         fontFamily: FONT,
         color,
@@ -317,7 +317,7 @@ function PluginRow({
         </span>
         <span
           style={{
-            fontSize: 9,
+            fontSize: 11,
             color: colors.textDim,
             background: colors.bg,
             padding: '1px 4px',
@@ -331,7 +331,7 @@ function PluginRow({
       </div>
 
       {plugin.manifest.author && (
-        <span style={{ fontSize: 10, color: colors.textMuted, fontFamily: FONT }}>
+        <span style={{ fontSize: 11, color: colors.textMuted, fontFamily: FONT }}>
           by {plugin.manifest.author}
         </span>
       )}
@@ -347,7 +347,7 @@ function PluginRow({
           <span
             key={cap}
             style={{
-              fontSize: 9,
+              fontSize: 11,
               fontFamily: TYPOGRAPHY.fontMono,
               color: colors.accentLight,
               background: `${colors.accent}12`,
@@ -363,7 +363,7 @@ function PluginRow({
       {plugin.status === 'error' && plugin.error && (
         <span
           style={{
-            fontSize: 10,
+            fontSize: 11,
             color: colors.error,
             fontFamily: TYPOGRAPHY.fontMono,
             wordBreak: 'break-word',
@@ -410,7 +410,7 @@ function StatusPill({ status }: { status: InstalledPlugin['status'] }) {
   return (
     <span
       style={{
-        fontSize: 9,
+        fontSize: 11,
         fontWeight: 600,
         textTransform: 'uppercase',
         letterSpacing: 0.3,
@@ -475,7 +475,7 @@ function PanelsTab() {
             <Palette size={12} color={colors.textMuted} />
             <span
               style={{
-                fontSize: 10,
+                fontSize: 11,
                 fontWeight: 600,
                 textTransform: 'uppercase',
                 letterSpacing: 0.5,
@@ -493,7 +493,7 @@ function PanelsTab() {
                 }}
                 style={{
                   marginLeft: 'auto',
-                  fontSize: 10,
+                  fontSize: 11,
                   fontFamily: FONT,
                   color: colors.textMuted,
                   background: 'transparent',
@@ -524,7 +524,7 @@ function PanelsTab() {
                       setAppliedTheme(`${theme.pluginName}:${theme.name}`);
                     }}
                     style={{
-                      fontSize: 10,
+                      fontSize: 11,
                       fontFamily: FONT,
                       color: active ? colors.success : colors.accent,
                       background: 'transparent',

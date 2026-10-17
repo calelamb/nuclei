@@ -202,7 +202,7 @@ export function LessonView({ lesson, trackId }: LessonViewProps) {
           <h1 style={{ color: colors.text, fontSize: 28, fontWeight: 700, fontFamily: TYPOGRAPHY.fontSans, margin: 0, lineHeight: 1.2 }}>
             {lesson.title}
           </h1>
-          <p style={{ color: colors.textMuted, fontSize: 15, fontFamily: TYPOGRAPHY.fontSans, margin: '8px 0 0', lineHeight: 1.5 }}>
+          <p style={{ color: colors.textMuted, fontSize: 14, fontFamily: TYPOGRAPHY.fontSans, margin: '8px 0 0', lineHeight: 1.5 }}>
             {lesson.description}
           </p>
         </div>
@@ -226,7 +226,7 @@ export function LessonView({ lesson, trackId }: LessonViewProps) {
               <div style={{ color: colors.textDim, fontSize: 12, fontFamily: TYPOGRAPHY.fontSans, marginBottom: 4 }}>
                 Up next
               </div>
-              <div style={{ color: colors.text, fontSize: 15, fontWeight: 500, fontFamily: TYPOGRAPHY.fontSans }}>
+              <div style={{ color: colors.text, fontSize: 14, fontWeight: 500, fontFamily: TYPOGRAPHY.fontSans }}>
                 {nextLesson.title}
               </div>
             </div>

@@ -51,7 +51,7 @@ export function GlossaryEntry({ term, isSelected, onClick }: GlossaryEntryProps)
           {term.term}
         </span>
         <span style={{
-          fontSize: 9,
+          fontSize: 11,
           fontFamily: TYPOGRAPHY.fontSans,
           padding: '1px 5px',
           borderRadius: 3,
@@ -116,14 +116,14 @@ export function GlossaryEntry({ term, isSelected, onClick }: GlossaryEntryProps)
           {/* Related concepts */}
           {term.relatedConcepts.length > 0 && (
             <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', marginBottom: 4 }}>
-              <span style={{ color: colors.textDim, fontSize: 10, fontFamily: TYPOGRAPHY.fontSans, marginRight: 2 }}>
+              <span style={{ color: colors.textDim, fontSize: 11, fontFamily: TYPOGRAPHY.fontSans, marginRight: 2 }}>
                 Related:
               </span>
               {term.relatedConcepts.map((rc) => (
                 <span
                   key={rc}
                   style={{
-                    fontSize: 10,
+                    fontSize: 11,
                     fontFamily: TYPOGRAPHY.fontSans,
                     padding: '1px 5px',
                     borderRadius: 3,
@@ -140,14 +140,14 @@ export function GlossaryEntry({ term, isSelected, onClick }: GlossaryEntryProps)
           {/* Aliases */}
           {term.aliases.length > 0 && (
             <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
-              <span style={{ color: colors.textDim, fontSize: 10, fontFamily: TYPOGRAPHY.fontSans, marginRight: 2 }}>
+              <span style={{ color: colors.textDim, fontSize: 11, fontFamily: TYPOGRAPHY.fontSans, marginRight: 2 }}>
                 Also:
               </span>
               {term.aliases.map((a) => (
                 <span
                   key={a}
                   style={{
-                    fontSize: 9,
+                    fontSize: 11,
                     fontFamily: TYPOGRAPHY.fontSans,
                     padding: '1px 4px',
                     borderRadius: 2,

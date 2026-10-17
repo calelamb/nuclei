@@ -101,7 +101,7 @@ export function ProgressReport({ students, assignments }: ProgressReportProps) {
           onClick={handleExportCSV}
           style={{
             display: 'flex', alignItems: 'center', gap: 4,
-            fontSize: 10, fontWeight: 500, fontFamily: font,
+            fontSize: 11, fontWeight: 500, fontFamily: font,
             padding: '4px 8px', borderRadius: 4,
             border: `1px solid ${colors.border}`,
             background: 'transparent', color: colors.textMuted,
@@ -130,7 +130,7 @@ export function ProgressReport({ students, assignments }: ProgressReportProps) {
             <tr>
               <th style={{
                 textAlign: 'left', padding: '6px 8px',
-                fontSize: 10, fontWeight: 600, color: colors.textMuted,
+                fontSize: 11, fontWeight: 600, color: colors.textMuted,
                 textTransform: 'uppercase', letterSpacing: 0.4,
                 borderBottom: `1px solid ${colors.borderStrong}`,
                 position: 'sticky', left: 0,
@@ -141,7 +141,7 @@ export function ProgressReport({ students, assignments }: ProgressReportProps) {
               {assignments.map((a) => (
                 <th key={a.id} style={{
                   textAlign: 'center', padding: '6px 8px',
-                  fontSize: 10, fontWeight: 600, color: colors.textMuted,
+                  fontSize: 11, fontWeight: 600, color: colors.textMuted,
                   textTransform: 'uppercase', letterSpacing: 0.4,
                   borderBottom: `1px solid ${colors.borderStrong}`,
                   maxWidth: 100, overflow: 'hidden', textOverflow: 'ellipsis',
@@ -183,7 +183,7 @@ export function ProgressReport({ students, assignments }: ProgressReportProps) {
             <tr>
               <td style={{
                 padding: '6px 8px', fontWeight: 600, color: colors.textMuted,
-                fontSize: 10, textTransform: 'uppercase', letterSpacing: 0.4,
+                fontSize: 11, textTransform: 'uppercase', letterSpacing: 0.4,
                 borderTop: `1px solid ${colors.borderStrong}`,
                 position: 'sticky', left: 0,
                 background: colors.bgElevated,

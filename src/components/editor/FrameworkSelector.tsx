@@ -165,7 +165,7 @@ export function FrameworkSelector() {
         <div
           style={{
             padding: '6px 12px 4px',
-            fontSize: 9,
+            fontSize: 11,
             fontWeight: 600,
             color: colors.textDim,
             fontFamily: TYPOGRAPHY.fontSans,
@@ -210,12 +210,12 @@ export function FrameworkSelector() {
                 if (!isActive && !disabled) e.currentTarget.style.background = 'transparent';
               }}
             >
-              {isActive && <span style={{ color: colors.accent, fontSize: 10 }}>●</span>}
+              {isActive && <span style={{ color: colors.accent, fontSize: 11 }}>●</span>}
               <span style={{ marginLeft: isActive ? 0 : 18, flex: 1 }}>{displayName(f)}</span>
               {disabled && (
                 <span
                   style={{
-                    fontSize: 9,
+                    fontSize: 11,
                     color: colors.textDim,
                     fontWeight: 500,
                     textTransform: 'uppercase',
@@ -233,7 +233,7 @@ export function FrameworkSelector() {
         <div
           style={{
             padding: '6px 12px 4px',
-            fontSize: 9,
+            fontSize: 11,
             fontWeight: 600,
             color: colors.textDim,
             fontFamily: TYPOGRAPHY.fontSans,
