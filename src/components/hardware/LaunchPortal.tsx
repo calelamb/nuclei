@@ -1,4 +1,4 @@
-import { Button } from '../ui';
+import { Button, Tooltip } from '../ui';
 import { useState, useCallback, useRef } from 'react';
 import { Rocket, Upload, FileCode, CheckCircle2, XCircle, Loader2, Clock, X } from 'lucide-react';
 import { useHardwareStore } from '../../stores/hardwareStore';
@@ -371,6 +371,7 @@ export function LaunchPortal() {
                   </div>
                 </div>
                 <ProviderLogo provider={j.provider as HardwareProviderType} size={14} color={colors.textDim} />
+                <Tooltip label="Cancel job" placement="above">
                 <button className="nuclei-hover-danger"
                   onClick={(e) => {
                     e.stopPropagation();
@@ -378,7 +379,6 @@ export function LaunchPortal() {
                     if (hw) hw.hardwareCancel(j.id);
                   }}
                   aria-label={`Cancel ${j.backend}`}
-                  title="Cancel job"
                   style={{
                     background: 'transparent',
                     border: `1px solid ${colors.border}`,
@@ -395,6 +395,7 @@ export function LaunchPortal() {
                 >
                   <X size={12} />
                 </button>
+                </Tooltip>
               </div>
             ))}
           </div>

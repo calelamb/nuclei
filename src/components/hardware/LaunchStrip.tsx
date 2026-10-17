@@ -1,3 +1,4 @@
+import { Tooltip } from '../ui';
 import { useEffect, useState } from 'react';
 import { Rocket, Clock, CheckCircle2, XCircle, Loader2, X } from 'lucide-react';
 import { useHardwareStore } from '../../stores/hardwareStore';
@@ -150,10 +151,10 @@ export function LaunchStrip() {
           {isTerminal ? relativeAge(latestJob.submittedAt) : fmtElapsed(latestJob.submittedAt)}
         </div>
       </div>
+      <Tooltip label={cancellable ? 'Cancel this job' : 'Dismiss'} placement="above">
       <button className="nuclei-hover-danger"
         onClick={onCancelClick}
         aria-label={cancellable ? 'Cancel job' : 'Dismiss job'}
-        title={cancellable ? 'Cancel this job' : 'Dismiss'}
         style={{
           background: 'transparent',
           border: `1px solid ${colors.border}`,
@@ -172,6 +173,7 @@ export function LaunchStrip() {
         <X size={12} />
         {cancellable ? 'Cancel' : 'Dismiss'}
       </button>
+      </Tooltip>
     </div>
   );
 }
