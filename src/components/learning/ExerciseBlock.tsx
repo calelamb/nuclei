@@ -9,7 +9,7 @@ import type { Framework, SimulationResult, KernelResponse } from '../../types/qu
 import { Play, Lightbulb, CheckCircle, XCircle, HelpCircle, Terminal } from 'lucide-react';
 import { hasExpectedDistribution, isQuantumCode, validateExerciseResult } from './exerciseValidation';
 import { UnsupportedNotice } from './UnsupportedNotice';
-import { ProbabilityBars } from './ProbabilityBars';
+import { OutcomeResults } from './OutcomeResults';
 import { Button } from '../ui';
 import '../dirac/dirac.css';
 import './demo.css';
@@ -278,7 +278,7 @@ export function ExerciseBlock({
       )}
 
       {result && hasProbabilities && (
-        <div className="exercise__results"><ProbabilityBars probabilities={result.probabilities} /></div>
+        <div className="exercise__results"><OutcomeResults result={result} /></div>
       )}
 
       {feedback && (
