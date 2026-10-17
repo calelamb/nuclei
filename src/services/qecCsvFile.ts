@@ -1,5 +1,6 @@
 import { MAX_CSV_BYTES } from '../types/sinterCsv';
 import { useQecCampaignStore, type CsvLoadResult } from '../stores/qecCampaignStore';
+import { prepareSinterCsvOffThread } from './qecCsvParseClient';
 
 /** Files above this size take long enough to parse that the UI shows progress first. */
 const SLOW_PARSE_BYTES = 256 * 1024;
@@ -29,9 +30,10 @@ export async function loadCsvFile(file: CsvFileLike): Promise<CsvLoadResult> {
   store.setCsvLoading(file.name);
   try {
     const text = await file.text();
-    // Parsing a big file blocks the main thread: let "Reading…" paint first.
+    // Let "Reading…" paint first; big files then parse in a worker so the UI stays live.
     if (file.size > SLOW_PARSE_BYTES) await nextPaint();
-    return useQecCampaignStore.getState().loadFromCsv(text, file.name);
+    const { parsed, prepared } = await prepareSinterCsvOffThread(text);
+    return useQecCampaignStore.getState().loadParsed(parsed, file.name, prepared);
   } catch (err) {
     const fatal = `Could not read ${file.name}: ${err instanceof Error ? err.message : 'unknown error'}`;
     useQecCampaignStore.setState({ csvError: fatal });

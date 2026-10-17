@@ -1,7 +1,8 @@
 // @vitest-environment jsdom
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { render, cleanup, fireEvent } from '@testing-library/react';
-import { QecAnalysisView, isShortAnalysis, SHORT_ANALYSIS_HEIGHT } from './QecAnalysisView';
+import { QecAnalysisView } from './QecAnalysisView';
+import { isShortAnalysis, SHORT_ANALYSIS_HEIGHT } from '../../lib/qecAnalysisLayout';
 import { useQecCampaignStore } from '../../stores/qecCampaignStore';
 
 const size = vi.hoisted(() => ({ current: { width: 700, height: 420 } }));

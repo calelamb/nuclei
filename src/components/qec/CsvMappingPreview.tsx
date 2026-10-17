@@ -42,13 +42,11 @@ export function CsvMappingPreview() {
   const setMapping = useQecCampaignStore((s) => s.setCsvMapping);
   const [open, setOpen] = useState(false);
   const keys = useMemo(() => (csv ? metadataKeys(csv.rows) : []), [csv]);
-  const collisions = useMemo(
-    () => (csv ? findCollisions(applyMapping(csv.rows, csv.mapping)) : []),
-    [csv],
-  );
-  const collisionKey = useMemo(() => (csv && collisions.length > 0 ? bestCollisionKey(csv.rows, csv.mapping) : null), [csv, collisions]);
   const partitions = useMemo(() => (csv ? findPartitionKeys(csv.rows, csv.mapping) : []), [csv]);
   const plotted = useQecCampaignStore((s) => s.rowsByStrongId);
+  // The store already holds the mapped rows; re-mapping a 100k-row file here would repeat that work.
+  const collisions = useMemo(() => (csv ? findCollisions(Object.values(plotted)) : []), [csv, plotted]);
+  const collisionKey = useMemo(() => (csv && collisions.length > 0 ? bestCollisionKey(csv.rows, csv.mapping) : null), [csv, collisions]);
   const plottable = useMemo(
     () => Object.values(plotted).filter((r) => toStatsPoint(r).noise !== null).length,
     [plotted],
