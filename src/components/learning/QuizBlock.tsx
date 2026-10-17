@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useState, type KeyboardEvent } from 'react';
+import { arrowNavTarget } from '../../lib/arrowNav';
 import { useLearnStore } from '../../stores/learnStore';
 import type { QuizQuestion } from '../../data/lessons/types';
 import { Button } from '../ui';
@@ -14,6 +15,15 @@ function optionState(index: number, chosen: number | null, correctIndex: number,
   if (solved && index === correctIndex) return 'right';
   if (!solved && chosen === index) return 'wrong';
   return 'idle';
+}
+
+function moveOptionFocus(event: KeyboardEvent<HTMLDivElement>, count: number) {
+  const radios = Array.from(event.currentTarget.querySelectorAll<HTMLButtonElement>('[role="radio"]'));
+  const current = radios.findIndex((r) => r === document.activeElement);
+  const target = arrowNavTarget(event.key, Math.max(0, current), count);
+  if (target === null) return;
+  event.preventDefault();
+  radios[target]?.focus();
 }
 
 export function QuizBlock({ questions }: QuizBlockProps) {
@@ -45,7 +55,7 @@ export function QuizBlock({ questions }: QuizBlockProps) {
           <div key={q.id} className="quiz__card" data-solved={solved}>
             <p className="quiz__question" id={questionId}>{q.question}</p>
 
-            <div className="quiz__options" role="radiogroup" aria-labelledby={questionId}>
+            <div className="quiz__options" role="radiogroup" aria-labelledby={questionId} onKeyDown={(e) => moveOptionFocus(e, q.options.length)}>
               {q.options.map((opt, i) => (
                 <button
                   key={i}
@@ -54,6 +64,7 @@ export function QuizBlock({ questions }: QuizBlockProps) {
                   aria-checked={chosen === i}
                   className="quiz__option"
                   data-state={optionState(i, chosen, q.correctIndex, solved)}
+                  tabIndex={i === (chosen ?? 0) ? 0 : -1}
                   disabled={solved}
                   onClick={() => handleAnswer(q.id, i, q.correctIndex)}
                 >

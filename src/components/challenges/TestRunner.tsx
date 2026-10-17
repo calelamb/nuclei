@@ -1,4 +1,5 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useMemo, useState, type KeyboardEvent } from 'react';
+import { arrowNavTarget } from '../../lib/arrowNav';
 import { Check, Loader, Play, SearchCode, X } from 'lucide-react';
 import { useChallengeModeStore } from '../../stores/challengeModeStore';
 import {
@@ -294,6 +295,14 @@ export function TestRunner({ challenge }: TestRunnerProps) {
     { key: 'inspection', label: isValueContract ? 'Return Output' : 'Quantum Output' },
   ];
 
+  const handleTabKeys = (event: KeyboardEvent<HTMLDivElement>) => {
+    const target = arrowNavTarget(event.key, tabs.findIndex((t) => t.key === activeBottomTab), tabs.length);
+    if (target === null) return;
+    event.preventDefault();
+    setActiveBottomTab(tabs[target].key);
+    event.currentTarget.querySelector<HTMLElement>(`#trun-tab-${tabs[target].key}`)?.focus();
+  };
+
   return (
     <div className="trun">
       <div className="trun__bar">
@@ -331,13 +340,16 @@ export function TestRunner({ challenge }: TestRunnerProps) {
         )}
       </div>
 
-      <div className="trun__tabs" role="tablist" aria-label="Result view">
+      <div className="trun__tabs" role="tablist" aria-label="Result view" onKeyDown={handleTabKeys}>
         {tabs.map((tab) => (
           <button
             key={tab.key}
             type="button"
             role="tab"
+            id={`trun-tab-${tab.key}`}
             aria-selected={activeBottomTab === tab.key}
+            aria-controls="trun-panel"
+            tabIndex={activeBottomTab === tab.key ? 0 : -1}
             className="trun__tab"
             onClick={() => setActiveBottomTab(tab.key)}
           >
@@ -346,7 +358,7 @@ export function TestRunner({ challenge }: TestRunnerProps) {
         ))}
       </div>
 
-      <div className="trun__body">
+      <div className="trun__body" id="trun-panel" role="tabpanel" aria-labelledby={`trun-tab-${activeBottomTab}`}>
         {activeBottomTab === 'inspection' ? (
           <ChallengeInspector />
         ) : (

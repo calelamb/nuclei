@@ -34,4 +34,16 @@ describe('QuizBlock', () => {
     expect(screen.getByText('A bit is 0 or 1.')).toBeTruthy();
     expect(setQuizScore).toHaveBeenCalledWith('lesson-1', 'q1', 1);
   });
+
+  it('uses a roving tabindex and moves focus between options with the arrow keys', () => {
+    render(<QuizBlock questions={QUESTIONS} />);
+    const radios = screen.getAllByRole('radio');
+    expect(radios.map((r) => r.getAttribute('tabindex'))).toEqual(['0', '-1', '-1']);
+    radios[0].focus();
+    fireEvent.keyDown(radios[0], { key: 'ArrowDown' });
+    expect(document.activeElement).toBe(radios[1]);
+    fireEvent.keyDown(radios[1], { key: 'End' });
+    expect(document.activeElement).toBe(radios[2]);
+    expect(radios.every((r) => r.getAttribute('aria-checked') === 'false')).toBe(true);
+  });
 });
