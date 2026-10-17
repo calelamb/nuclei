@@ -7,6 +7,7 @@ import { TYPOGRAPHY } from '../../styles/tokens';
 import { Button, ChoiceCard } from '../ui';
 import { useFocusTrap } from '../../hooks/useFocusTrap';
 import { isWebBuild } from '../../platform/buildTarget';
+import { researchCardDescription } from './researchCardCopy';
 
 type OnboardingPath = 'welcome' | 'beginner' | 'intermediate' | 'experienced' | 'research';
 
@@ -19,13 +20,6 @@ interface OnboardingProps {
   daysSinceLastSession?: number;
 }
 
-
-/** What the Research card promises must be true in the build the person is using. */
-export function researchCardDescription(web: boolean): string {
-  return web
-    ? 'Analyse QEC data in your browser: drop a sinter CSV, fit Λ, compare decoders. Experiments and projects need the desktop app.'
-    : 'A multi-file workspace for experiments, parameter sweeps, and reproducible runs, with Dirac as a terse collaborator.';
-}
 
 interface DialogFrameProps {
   label: string;

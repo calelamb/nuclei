@@ -1,7 +1,8 @@
 // @vitest-environment jsdom
 import { describe, it, expect, afterEach, beforeAll, vi } from 'vitest';
 import { render, screen, fireEvent, cleanup } from '@testing-library/react';
-import { Onboarding, researchCardDescription } from './Onboarding';
+import { Onboarding } from './Onboarding';
+import { researchCardDescription } from './researchCardCopy';
 
 beforeAll(() => {
   window.matchMedia = ((query: string) => ({
