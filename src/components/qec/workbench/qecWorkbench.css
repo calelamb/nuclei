@@ -730,11 +730,17 @@
 /* A narrow canvas stacks the instruments instead of squeezing the leading one. */
 @container (max-width: 560px) {
   .qec-investigation__panels {
-    grid-template-columns: minmax(0, 1fr); grid-template-rows: none !important; grid-auto-rows: 260px;
+    grid-template-columns: minmax(0, 1fr); grid-template-rows: none !important; grid-auto-rows: auto;
+  }
+
+  .qec-investigation__panels > .qec-instrument {
+    min-height: 260px;
   }
 
   .qec-investigation__panels > .qec-instrument--primary {
     grid-row: auto !important;
+    /* The leading instrument hosts the readable analysis; it must not share the secondary row height. */
+    min-height: min(640px, max(520px, calc(100cqh - 24px)));
   }
 }
 
