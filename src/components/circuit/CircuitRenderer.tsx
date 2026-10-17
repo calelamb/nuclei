@@ -11,6 +11,8 @@ import { computeCircuitGeometry, columnX } from './geometry';
 import { formatAngle } from './formatAngle';
 import { CircuitEmptyState } from './CircuitEmptyState';
 import { ExportMenu } from './ExportMenu';
+import { fitCircuitWidth } from './fitCircuit';
+import { useElementSize } from '../../hooks/useElementSize';
 import { GateExplorerPopup } from './GateExplorerPopup';
 import type { Gate } from '../../types/quantum';
 
@@ -155,7 +157,7 @@ export function CircuitRenderer() {
   const setExplorerGateIndex = useCircuitStore((s) => s.setExplorerGateIndex);
   const colors = useThemeStore((s) => s.colors);
 
-  const containerRef = useRef<HTMLDivElement>(null);
+  const [measureContainer, containerSize] = useElementSize<HTMLDivElement>();
   const [tooltip, setTooltip] = useState<Tooltip | null>(null);
   const [contextMenu, setContextMenu] = useState<ContextMenu | null>(null);
 
@@ -188,6 +190,7 @@ export function CircuitRenderer() {
   const highlightSet = new Set(highlights.map((h) => h.gateIndex));
 
   const ariaDescription = describeCircuit(snapshot);
+  const fit = fitCircuitWidth(svgWidth, containerSize.width);
 
   return (
     <div style={{ flex: '1 1 auto', minHeight: 0, display: 'flex', flexDirection: 'column' }} role="region" aria-label="Circuit diagram">
@@ -214,16 +217,16 @@ export function CircuitRenderer() {
         </div>
       )}
       <div
-        ref={containerRef}
+        ref={measureContainer}
         className="circuit-renderer-container"
         style={{ flex: 1, minHeight: 0, overflow: 'auto', position: 'relative', padding: '4px 0 6px', opacity: stale ? 0.45 : 1, transition: 'opacity var(--duration-fast) var(--ease-standard)' }}
         aria-description={ariaDescription}
       >
         <svg
-          width={svgWidth}
-          height={svgHeight}
+          width={svgWidth * fit.scale}
+          height={svgHeight * fit.scale}
           viewBox={`0 0 ${svgWidth} ${svgHeight}`}
-          style={{ display: 'block', margin: '0 auto', minWidth: svgWidth }}
+          style={{ display: 'block', margin: '0 auto', minWidth: svgWidth * fit.scale }}
           role="img"
           aria-label={ariaDescription}
         >
