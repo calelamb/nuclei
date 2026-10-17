@@ -288,7 +288,7 @@ export function QuantumPlayground({ onComplete, onBridgeToIDE }: PlaygroundProps
           style={{
             padding: '12px 32px',
             background: currentStep?.action === 'bridge' ? `linear-gradient(135deg, ${colors.accent}, ${colors.dirac})` : colors.accent,
-            color: '#fff',
+            color: colors.onAccent,
             border: 'none',
             borderRadius: 8,
             cursor: 'pointer',

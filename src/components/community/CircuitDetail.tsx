@@ -1,15 +1,10 @@
+import { Badge } from '../ui';
 import { useState } from 'react';
 import { X, Copy, Play } from 'lucide-react';
 import { useThemeStore } from '../../stores/themeStore';
 import type { GalleryCircuit } from '../../data/community/mockGallery';
 
 import { TYPOGRAPHY } from '../../styles/tokens';
-const FRAMEWORK_COLORS: Record<string, string> = {
-  qiskit: '#6929C4',
-  cirq: '#F4B400',
-  'cuda-q': '#76B900',
-};
-
 interface CircuitDetailProps {
   circuit: GalleryCircuit;
   onClose: () => void;
@@ -94,20 +89,7 @@ export function CircuitDetail({ circuit, onClose, onOpenInEditor }: CircuitDetai
               >
                 by {circuit.author.displayName}
               </span>
-              <span
-                style={{
-                  fontSize: 11,
-                  fontWeight: 600,
-                  fontFamily: TYPOGRAPHY.fontSans,
-                  color: '#fff',
-                  background: FRAMEWORK_COLORS[circuit.framework] ?? colors.accent,
-                  padding: '2px 6px',
-                  borderRadius: 3,
-                  textTransform: 'uppercase',
-                }}
-              >
-                {circuit.framework}
-              </span>
+              <Badge style={{ textTransform: 'uppercase' }}>{circuit.framework}</Badge>
             </div>
           </div>
           <button
@@ -201,7 +183,7 @@ export function CircuitDetail({ circuit, onClose, onOpenInEditor }: CircuitDetai
                 borderRadius: 6,
                 border: 'none',
                 background: colors.accent,
-                color: '#fff',
+                color: colors.onAccent,
                 fontSize: 12,
                 fontWeight: 600,
                 fontFamily: TYPOGRAPHY.fontSans,

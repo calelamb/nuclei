@@ -1,5 +1,6 @@
 import { type CSSProperties } from 'react';
-import { Shuffle, Loader2 } from 'lucide-react';
+import { Shuffle } from 'lucide-react';
+import { Button, Select, SegmentedControl } from '../ui';
 import { useThemeStore, type ThemeColors } from '../../stores/themeStore';
 import { useEditorStore } from '../../stores/editorStore';
 import { useHardwareStore } from '../../stores/hardwareStore';
@@ -71,46 +72,29 @@ export function TranspilerControls() {
     <div style={shell}>
       <label style={fieldLabel(colors)}>
         Target
-        <select
-          value={targetId}
-          onChange={(e) => setTarget(e.target.value)}
-          style={selectStyle(colors)}
-        >
+        <Select value={targetId} onChange={(e) => setTarget(e.target.value)} aria-label="Transpile target" style={{ display: 'flex' }}>
           <option value={SIMULATOR_TARGET_ID}>Simulator (all-to-all)</option>
           {backends.map((b) => (
             <option key={b.name} value={b.name}>
               {b.name} · {b.qubitCount}q
             </option>
           ))}
-        </select>
+        </Select>
       </label>
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
         <span style={{ fontSize: 11, color: colors.textDim }}>Optimization level</span>
-        <div style={{ display: 'flex', gap: 4 }}>
-          {OPT_LEVELS.map((lvl) => {
-            const active = lvl === optimizationLevel;
-            return (
-              <button
-                key={lvl}
-                type="button"
-                onClick={() => setOptimizationLevel(lvl)}
-                aria-pressed={active}
-                style={segBtn(colors, active)}
-              >
-                {lvl}
-              </button>
-            );
-          })}
-        </div>
+        <SegmentedControl
+          aria-label="Optimization level"
+          value={String(optimizationLevel)}
+          options={OPT_LEVELS.map((lvl) => ({ value: String(lvl), label: String(lvl) }))}
+          onChange={(v) => setOptimizationLevel(Number(v) as 0 | 1 | 2 | 3)}
+        />
       </div>
 
-      <button type="button" onClick={run} disabled={pending} style={runBtn(colors, pending)}>
-        {pending
-          ? <Loader2 size={14} style={{ animation: 'nuclei-spin 800ms linear infinite' }} />
-          : <Shuffle size={14} />}
+      <Button variant="primary" onClick={run} loading={pending} icon={pending ? undefined : <Shuffle size={14} />}>
         {pending ? 'Transpiling…' : result ? 'Re-transpile' : 'Transpile'}
-      </button>
+      </Button>
 
       {/* The target's physical constraints — the topology and basis set that
           force the routing the main view then explains. */}
@@ -149,36 +133,6 @@ export function TranspilerControls() {
 
 function fieldLabel(colors: ThemeColors): CSSProperties {
   return { display: 'flex', flexDirection: 'column', gap: 5, fontSize: 11, color: colors.textDim };
-}
-
-function selectStyle(colors: ThemeColors): CSSProperties {
-  return {
-    background: colors.bg, color: colors.text,
-    border: `1px solid ${colors.border}`, borderRadius: 5,
-    padding: '6px 8px', fontSize: 12, fontFamily: TYPOGRAPHY.fontSans,
-  };
-}
-
-function segBtn(colors: ThemeColors, active: boolean): CSSProperties {
-  return {
-    flex: 1, padding: '6px 0', borderRadius: 5,
-    border: `1px solid ${active ? colors.accent : colors.border}`,
-    background: active ? colors.accent : 'transparent',
-    color: active ? colors.bg : colors.textMuted,
-    fontSize: 12, fontWeight: 600, fontFamily: TYPOGRAPHY.fontMono,
-    cursor: 'pointer', transition: 'background 120ms, color 120ms, border-color 120ms',
-  };
-}
-
-function runBtn(colors: ThemeColors, pending: boolean): CSSProperties {
-  return {
-    display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7,
-    padding: '9px 14px', borderRadius: 6, border: `1px solid ${colors.accent}`,
-    background: pending ? colors.bg : colors.accent,
-    color: pending ? colors.textMuted : colors.bg,
-    fontSize: 13, fontWeight: 600, cursor: pending ? 'default' : 'pointer',
-    opacity: pending ? 0.8 : 1, transition: 'opacity 120ms, background 120ms',
-  };
 }
 
 function chip(colors: ThemeColors): CSSProperties {

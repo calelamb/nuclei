@@ -1,3 +1,4 @@
+import { Badge, type BadgeTone } from '../ui';
 import { useThemeStore } from '../../stores/themeStore';
 import { useChallengeStore } from '../../stores/challengeStore';
 import { useEditorStore } from '../../stores/editorStore';
@@ -5,10 +6,10 @@ import { useDiracPanelStore } from '../../stores/diracPanelStore';
 import { Play, Lightbulb, Trophy } from 'lucide-react';
 
 import { TYPOGRAPHY } from '../../styles/tokens';
-const DIFFICULTY_COLORS: Record<string, string> = {
-  beginner: '#10B981',
-  intermediate: '#F59E0B',
-  advanced: '#EF4444',
+const DIFFICULTY_TONE: Record<string, BadgeTone> = {
+  beginner: 'success',
+  intermediate: 'warning',
+  advanced: 'danger',
 };
 
 function formatCountdown(deadline: string): string {
@@ -116,21 +117,7 @@ export function ChallengeBoard() {
           >
             {displayed.title}
           </span>
-          <span
-            style={{
-              fontSize: 11,
-              fontWeight: 600,
-              fontFamily: TYPOGRAPHY.fontSans,
-              color: '#fff',
-              background: DIFFICULTY_COLORS[displayed.difficulty] ?? colors.accent,
-              padding: '2px 6px',
-              borderRadius: 3,
-              textTransform: 'uppercase',
-              flexShrink: 0,
-            }}
-          >
-            {displayed.difficulty}
-          </span>
+          <Badge tone={DIFFICULTY_TONE[displayed.difficulty] ?? 'neutral'} style={{ textTransform: 'uppercase', flexShrink: 0 }}>{displayed.difficulty}</Badge>
         </div>
 
         <p
@@ -184,7 +171,7 @@ export function ChallengeBoard() {
               borderRadius: 6,
               border: 'none',
               background: colors.accent,
-              color: '#fff',
+              color: colors.onAccent,
               fontSize: 11,
               fontWeight: 600,
               fontFamily: TYPOGRAPHY.fontSans,

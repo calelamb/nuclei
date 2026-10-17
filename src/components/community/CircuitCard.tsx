@@ -1,3 +1,4 @@
+import { Badge } from '../ui';
 import { Heart, Bookmark } from 'lucide-react';
 import { useThemeStore } from '../../stores/themeStore';
 import type { GalleryCircuit } from '../../data/community/mockGallery';
@@ -12,12 +13,6 @@ interface CircuitCardProps {
   onBookmark: () => void;
   onClick: () => void;
 }
-
-const FRAMEWORK_COLORS: Record<string, string> = {
-  qiskit: '#6929C4',
-  cirq: '#F4B400',
-  'cuda-q': '#76B900',
-};
 
 const CATEGORY_LABELS: Record<string, string> = {
   tutorial: 'Tutorial',
@@ -99,20 +94,7 @@ export function CircuitCard({ circuit, isLiked, isBookmarked, onLike, onBookmark
         >
           {circuit.author.displayName}
         </span>
-        <span
-          style={{
-            fontSize: 11,
-            fontWeight: 600,
-            fontFamily: TYPOGRAPHY.fontSans,
-            color: '#fff',
-            background: FRAMEWORK_COLORS[circuit.framework] ?? colors.accent,
-            padding: '1px 5px',
-            borderRadius: 3,
-            textTransform: 'uppercase',
-          }}
-        >
-          {circuit.framework}
-        </span>
+        <Badge style={{ textTransform: 'uppercase' }}>{circuit.framework}</Badge>
       </div>
 
       {/* Bottom row: like + bookmark */}

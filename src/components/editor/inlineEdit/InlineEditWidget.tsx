@@ -208,9 +208,10 @@ export function InlineEditWidget({ editor, monaco, onClose }: InlineEditProps) {
             <pre style={{
               margin: '8px 0',
               padding: 8,
-              background: '#1A3D1A',
+              background: 'color-mix(in srgb, var(--color-success) 14%, transparent)',
+              borderLeft: `3px solid ${colors.success}`,
               borderRadius: 4,
-              color: '#98C379',
+              color: colors.text,
               fontSize: 12,
               fontFamily: TYPOGRAPHY.fontMono,
               overflow: 'auto',

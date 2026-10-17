@@ -29,6 +29,7 @@
   --color-accent-quantum: #00B4D8;
   --color-accent-quantum-soft: #48CAE4;
   --color-accent-quantum-text: #00B4D8;
+  --color-on-accent: #080D16;
   --color-accent-dirac: #7B2D8E;
   --color-accent-dirac-text: #C084FC;
 
@@ -87,6 +88,7 @@
   --color-accent-quantum: #0891B2;
   --color-accent-quantum-soft: #00B4D8;
   --color-accent-quantum-text: #0E7490;
+  --color-on-accent: #FFFFFF;
   --color-accent-dirac: #6B21A8;
   --color-accent-dirac-text: #6B21A8;
 

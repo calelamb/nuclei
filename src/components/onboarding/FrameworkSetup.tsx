@@ -559,7 +559,7 @@ function btnPrimary(colors: ReturnType<typeof useThemeStore.getState>['colors'])
     gap: 6,
     padding: '7px 14px',
     background: colors.accent,
-    color: '#0a0f1a',
+    color: colors.onAccent,
     border: 'none',
     borderRadius: 6,
     fontSize: 12,
