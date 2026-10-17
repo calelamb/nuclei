@@ -104,3 +104,21 @@ describe('SegmentedControl block', () => {
     expect(screen.getByRole('radiogroup').className).toContain('nuclei-segmented--block');
   });
 });
+
+describe('Tabs focus visibility', () => {
+  it('scrolls the newly selected tab into view on keyboard navigation', async () => {
+    const spy = vi.fn();
+    Element.prototype.scrollIntoView = spy;
+    render(<Harness />);
+    fireEvent.keyDown(screen.getByRole('tablist'), { key: 'End' });
+    await act(async () => { await new Promise((r) => requestAnimationFrame(() => r(null))); });
+    expect(spy).toHaveBeenCalled();
+  });
+});
+
+describe('Checkbox semantics', () => {
+  it('does not add a redundant aria-checked to a plain checkbox', () => {
+    render(<Checkbox checked onCheckedChange={() => undefined} aria-label="x" />);
+    expect(screen.getByRole('checkbox').hasAttribute('aria-checked')).toBe(false);
+  });
+});

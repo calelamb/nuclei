@@ -34,7 +34,7 @@ export const Checkbox = forwardRef<HTMLInputElement, CheckboxProps>(function Che
         type="checkbox"
         checked={checked}
         disabled={disabled}
-        aria-checked={indeterminate ? 'mixed' : checked}
+        aria-checked={indeterminate ? 'mixed' : undefined}
         onChange={(event) => { if (!disabled) onCheckedChange(event.target.checked); }}
       />
       <span className="nuclei-checkbox__box" aria-hidden="true">

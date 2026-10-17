@@ -55,7 +55,9 @@ export function Tabs<T extends string>({ value, options, onChange, 'aria-label':
     onChange(next.value);
     const target = next.value;
     requestAnimationFrame(() => {
-      listRef.current?.querySelector<HTMLElement>(`[data-value="${target}"]`)?.focus();
+      const el = listRef.current?.querySelector<HTMLElement>(`[data-value="${target}"]`);
+      el?.focus();
+      el?.scrollIntoView?.({ inline: 'nearest', block: 'nearest' });
     });
   };
 
