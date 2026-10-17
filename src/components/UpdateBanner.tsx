@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Download, RefreshCw, X } from 'lucide-react';
 import { useThemeStore } from '../stores/themeStore';
+import { useDiracPanelStore } from '../stores/diracPanelStore';
+import { updateBannerOffsets } from '../lib/updateBannerOffsets';
 
 import { TYPOGRAPHY } from '../styles/tokens';
 type PhaseIdle = { kind: 'idle' };
@@ -32,6 +34,9 @@ export function UpdateBanner() {
   const shadow = useThemeStore((s) => s.shadow);
   const [phase, setPhase] = useState<Phase>({ kind: 'idle' });
   const [dismissed, setDismissed] = useState(false);
+  const diracOpen = useDiracPanelStore((s) => s.isOpen);
+  const diracWidth = useDiracPanelStore((s) => s.width);
+  const offsets = updateBannerOffsets(diracOpen, diracWidth);
 
   const runCheck = useCallback(async () => {
     // Dynamically import so the web bundle doesn't pull in the Tauri plugin.
@@ -185,8 +190,8 @@ export function UpdateBanner() {
       role="status"
       style={{
         position: 'fixed',
-        right: 20,
-        bottom: 20,
+        right: offsets.right,
+        bottom: offsets.bottom,
         zIndex: 2000,
         minWidth: 280,
         maxWidth: 360,

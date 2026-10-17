@@ -85,7 +85,11 @@ function AppInner() {
     const store = useHelpOverlayStore.getState();
     store.setShortcutsOpen(typeof v === 'function' ? v(store.shortcutsOpen) : v);
   }, []);
-  const [showCommandPalette, setShowCommandPalette] = useState(false);
+  const showCommandPalette = useHelpOverlayStore((s) => s.paletteOpen);
+  const setShowCommandPalette = useCallback((v: boolean | ((cur: boolean) => boolean)) => {
+    const store = useHelpOverlayStore.getState();
+    store.setPaletteOpen(typeof v === 'function' ? v(store.paletteOpen) : v);
+  }, []);
   const [composeOpen, setComposeOpen] = useState(false);
   const [isReturningUser, setIsReturningUser] = useState(false);
   const [lastOpenedFile, setLastOpenedFile] = useState<string | undefined>();
@@ -407,7 +411,7 @@ function AppInner() {
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [fileOps, themeToggle, cycleMode, toggleDirac, focusDirac, setShowShortcuts]);
+  }, [fileOps, themeToggle, cycleMode, toggleDirac, focusDirac, setShowShortcuts, setShowCommandPalette]);
 
   return (
     <>

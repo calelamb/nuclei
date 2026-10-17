@@ -9,6 +9,7 @@ import { ProbabilityHistogram } from '../histogram/ProbabilityHistogram';
 import { VizZone } from '../qec/VizZone';
 import { useQecStore } from '../../stores/qecStore';
 import { useShellLayout } from '../../hooks/useShellLayout';
+import { useUiFeatures } from '../../hooks/useUiFeatures';
 import { useElementSize } from '../../hooks/useElementSize';
 import { vizColumnHasContent } from '../../layout/vizPanels';
 import { EDITOR_MIN_WIDTH, VIZ_MIN_WIDTH } from '../../layout/breakpoints';
@@ -576,7 +577,10 @@ export function PanelLayout() {
   );
 
   const showBottomPanel = visible.terminal || visible.histogramFull;
-  const showSidebar = !isLearnMode && !isChallengeMode && activeView !== null;
+  const features = useUiFeatures();
+  // Beginner mode hides the Explorer; every other rail view still opens its sidebar.
+  const showSidebar = !isLearnMode && !isChallengeMode && activeView !== null
+    && (features.explorerSidebar || activeView !== 'files');
   const topSplitRef = useRef<HTMLDivElement | null>(null);
   const [measureTopSplit, topSplitSize] = useElementSize<HTMLDivElement>();
   const setTopSplitRef = useCallback((el: HTMLDivElement | null) => {
@@ -616,7 +620,8 @@ export function PanelLayout() {
   // see panelRegistry.ts. Learn mode reproduces today's exact set; Research
   // mode hides learning/challenges/community and adds the Experiments
   // placeholder.
-  const visibleActivityViews = activityViewsForMode(workspaceMode, { experimentalFeatures });
+  const visibleActivityViews = activityViewsForMode(workspaceMode, { experimentalFeatures })
+    .filter((v) => features.explorerSidebar || v !== 'files');
 
   // The right rail only takes space when it has something to show AND the
   // editor can keep a usable width beside it. Otherwise the editor gets the
@@ -646,12 +651,12 @@ export function PanelLayout() {
 
   useEffect(() => {
     if (activeView && !visibleActivityViews.includes(activeView)) {
-      setActiveView('files');
+      setActiveView(features.explorerSidebar ? 'files' : null);
     }
     // visibleActivityViews is recomputed every render (new array identity);
     // depend on its inputs instead so this doesn't refire spuriously.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeView, experimentalFeatures, workspaceMode]);
+  }, [activeView, experimentalFeatures, workspaceMode, features.explorerSidebar]);
 
   // Workspace mode switch (PRD 09 A3): Learn-only full-view surfaces
   // (Learn Mode, Challenge Mode) are unreachable in Research, so exiting
@@ -895,9 +900,11 @@ export function PanelLayout() {
                   <EditorTabs />
                   <KernelBanner />
                   <Breadcrumbs />
-                  <ErrorBoundary label="Launch Strip">
-                    <LaunchStrip />
-                  </ErrorBoundary>
+                  {features.launchHardware && (
+                    <ErrorBoundary label="Launch Strip">
+                      <LaunchStrip />
+                    </ErrorBoundary>
+                  )}
                   <div style={{ flex: 1, minHeight: 0 }}>
                     <ErrorBoundary label="Code Editor">
                       <QuantumEditor />
@@ -959,7 +966,11 @@ export function PanelLayout() {
 
             {/* Dirac side panel (Code Mode only — hidden during a Research
                 takeover, matching the pre-P4.1 behavior). */}
-            {!editorHidden && <DiracSidePanel />}
+            {!editorHidden && (
+              <div style={{ display: 'contents' }} data-feature-agent={features.agentEntry ? 'on' : 'off'}>
+                <DiracSidePanel />
+              </div>
+            )}
           </>
         )}
       </div>

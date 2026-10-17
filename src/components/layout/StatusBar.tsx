@@ -1,5 +1,4 @@
-import { useCallback } from 'react';
-import { Circle, Sun, Moon, X } from 'lucide-react';
+import { Circle, Sun, Moon, X, Command } from 'lucide-react';
 import { usePlatform } from '../../platform/PlatformProvider';
 import { useCircuitStore } from '../../stores/circuitStore';
 import { useSimulationStore } from '../../stores/simulationStore';
@@ -13,6 +12,12 @@ import { useQecCampaignStore } from '../../stores/qecCampaignStore';
 import { useExerciseStore } from '../../stores/exerciseStore';
 import { useLayoutStore, type LayoutPreset } from '../../stores/layoutStore';
 import { ModeChip } from './ModeChip';
+import { Tooltip } from '../ui';
+import { shortcutLabel } from '../../config/keybindings';
+import { useEditorFocusStore } from '../../stores/editorFocusStore';
+import { tabFocusHint } from '../../lib/tabFocusHint';
+import { useHelpOverlayStore } from '../../stores/helpOverlayStore';
+import { useUiFeatures } from '../../hooks/useUiFeatures';
 import { getKernelStatusModel, type KernelTone } from './kernelStatusModel';
 import { retryKernel } from '../../lib/kernelControl';
 
@@ -90,6 +95,10 @@ export function StatusBar() {
   const colors = useThemeStore((s) => s.colors);
   const uiMode = useUIModeStore((s) => s.mode);
   const cycleMode = useUIModeStore((s) => s.cycleMode);
+  const features = useUiFeatures();
+  const editorFocused = useEditorFocusStore((s) => s.focused);
+  const tabMovesFocus = useEditorFocusStore((s) => s.tabMovesFocus);
+  const openPalette = useHelpOverlayStore((s) => s.setPaletteOpen);
   const themeMode = useThemeStore((s) => s.mode);
   const themeToggle = useThemeStore((s) => s.toggle);
   const workspaceMode = useWorkspaceStore((s) => s.mode);
@@ -136,8 +145,6 @@ export function StatusBar() {
     fontSize: 11, fontFamily: TYPOGRAPHY.fontSans, whiteSpace: 'nowrap',
   };
 
-  const handleCycleMode = useCallback(async () => { cycleMode(); try { await platform.setStoredValue('ui_mode', useUIModeStore.getState().mode); } catch { /* non-critical persistence */ } }, [cycleMode, platform]);
-  const handleThemeToggle = useCallback(async () => { themeToggle(); try { await platform.setStoredValue('theme', themeMode === 'dark' ? 'light' : 'dark'); } catch { /* non-critical persistence */ } }, [themeToggle, themeMode, platform]);
 
   return (
     <div style={{
@@ -158,7 +165,7 @@ export function StatusBar() {
       <span style={{ color: colors.textMuted }}>
         Depth: {snapshot ? snapshot.depth : '—'}
       </span>
-      <LayoutPresetSwitcher />
+      {features.layoutPresets && <LayoutPresetSwitcher />}
 
       {exercise && (
         <span style={{ display: 'flex', alignItems: 'center', gap: 3, color: colors.dirac, fontSize: 11, minWidth: 0 }}>
@@ -209,6 +216,12 @@ export function StatusBar() {
 
       <div style={{ flex: 1 }} />
 
+      {editorFocused && (
+        <span style={{ color: colors.textDim, whiteSpace: 'nowrap' }} aria-live="off">
+          {tabFocusHint(tabMovesFocus)}
+        </span>
+      )}
+
       {/* Right side. One truthful item for kernel + run state (driven by the
           kernel first); a failed kernel makes it the Retry action. */}
       {kernelModel.tone === 'error' ? (
@@ -230,29 +243,46 @@ export function StatusBar() {
       )}
       {/* The workspace-mode toggle moved to the far-left ModeChip (Phase B).
           UI mode only exists in Learn: Research ignores uiModeStore entirely. */}
-      {workspaceMode === 'learn' && (
-        <button onClick={handleCycleMode} title="Cycle UI mode (⌘+Shift+L)" aria-label={`UI mode: ${uiMode}. Click to change`} style={{
-          padding: '0 8px', height: 20, background: 'transparent', border: 'none', borderRadius: 4,
-          color: colors.textMuted, cursor: 'pointer', fontSize: 11, fontFamily: TYPOGRAPHY.fontSans,
-          fontWeight: 500, textTransform: 'capitalize',
-        }}
-          onMouseEnter={(e) => { e.currentTarget.style.background = colors.bgElevated; e.currentTarget.style.color = colors.text; }}
-          onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = colors.textMuted; }}>
-          {uiMode}
+      <Tooltip label="Command palette" shortcut={shortcutLabel('palette')} placement="above">
+        <button
+          onClick={() => openPalette(true)}
+          aria-label="Open command palette"
+          className="nuclei-quiet"
+          style={{ ...chipStyle, background: 'transparent', border: 'none', borderRadius: 4, cursor: 'pointer', gap: 5 }}
+        >
+          <Command size={12} />
+          <span>Commands</span>
         </button>
+      </Tooltip>
+      {workspaceMode === 'learn' && (
+        <Tooltip label="Cycle UI mode" shortcut={shortcutLabel('cycle-ui-mode')}>
+          <button
+            onClick={cycleMode}
+            aria-label={`UI mode: ${uiMode}. Click to change`}
+            className="nuclei-quiet"
+            style={{
+              padding: '0 8px', height: 20, background: 'transparent', border: 'none', borderRadius: 4,
+              cursor: 'pointer', fontSize: 11, fontFamily: TYPOGRAPHY.fontSans,
+              fontWeight: 500, textTransform: 'capitalize',
+            }}
+          >
+            {uiMode}
+          </button>
+        </Tooltip>
       )}
-      <button
-        onClick={handleThemeToggle}
-        title={`Switch to ${themeMode === 'dark' ? 'light' : 'dark'} theme`}
-        aria-label={`Switch to ${themeMode === 'dark' ? 'light' : 'dark'} theme`}
-        style={{
-          background: 'transparent', border: 'none', borderRadius: 4, color: colors.textMuted, cursor: 'pointer',
-          width: 22, height: 22, padding: 0, display: 'flex', alignItems: 'center', justifyContent: 'center',
-        }}
-        onMouseEnter={(e) => { e.currentTarget.style.color = colors.text; e.currentTarget.style.background = colors.bgElevated; }}
-        onMouseLeave={(e) => { e.currentTarget.style.color = colors.textMuted; e.currentTarget.style.background = 'transparent'; }}>
-        {themeMode === 'dark' ? <Sun size={13} /> : <Moon size={13} />}
-      </button>
+      <Tooltip label={`Switch to ${themeMode === 'dark' ? 'light' : 'dark'} theme`} shortcut={shortcutLabel('toggle-theme')}>
+        <button
+          onClick={themeToggle}
+          aria-label={`Switch to ${themeMode === 'dark' ? 'light' : 'dark'} theme`}
+          className="nuclei-quiet"
+          style={{
+            background: 'transparent', border: 'none', borderRadius: 4, cursor: 'pointer',
+            width: 22, height: 22, padding: 0, display: 'flex', alignItems: 'center', justifyContent: 'center',
+          }}
+        >
+          {themeMode === 'dark' ? <Sun size={13} /> : <Moon size={13} />}
+        </button>
+      </Tooltip>
     </div>
   );
 }

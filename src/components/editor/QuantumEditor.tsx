@@ -18,6 +18,8 @@ import { registerQsharpLanguage } from './qsharpLanguage';
 import { registerStimLanguage } from './stimLanguage';
 import { ensureQsharpLanguageService } from './qsharpLanguageService';
 import { useRevealLine } from './useRevealLine';
+import { useEditorFocusStore } from '../../stores/editorFocusStore';
+import { isMacPlatform } from '../../config/keybindings';
 import type { Framework } from '../../types/quantum';
 
 import { TYPOGRAPHY } from '../../styles/tokens';
@@ -126,6 +128,25 @@ export function QuantumEditor() {
       keybindings: [monacoApi.KeyMod.CtrlCmd | monacoApi.KeyCode.KeyK],
       run: () => setShowInlineEdit(true),
     });
+
+    // Keyboard escape hatch: Monaco swallows Tab for indentation, which traps
+    // keyboard-only users. Ctrl+M toggles "Tab moves focus"; the status bar
+    // shows the hint while the editor has focus.
+    const tabFocusChord = isMacPlatform()
+      ? monacoApi.KeyMod.WinCtrl | monacoApi.KeyCode.KeyM
+      : monacoApi.KeyMod.CtrlCmd | monacoApi.KeyCode.KeyM;
+    editor.addAction({
+      id: 'nuclei.toggleTabFocus',
+      label: 'Toggle Tab Key Moves Focus',
+      keybindings: [tabFocusChord],
+      run: (ed) => {
+        const next = !useEditorFocusStore.getState().tabMovesFocus;
+        useEditorFocusStore.getState().setTabMovesFocus(next);
+        ed.updateOptions({ tabFocusMode: next });
+      },
+    });
+    editor.onDidFocusEditorText(() => useEditorFocusStore.getState().setFocused(true));
+    editor.onDidBlurEditorText(() => useEditorFocusStore.getState().setFocused(false));
 
     registerGhostCompletions(monacoApi);
     // Python formatting via ruff (⇧⌥F / "Format Document"), Phase 4.

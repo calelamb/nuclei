@@ -37,7 +37,7 @@ export function getRunButtonState(input: RunButtonInput): RunButtonState {
     return { kind: 'running', label: 'Running…', title: 'Simulation running', disabled: true };
   }
   if (input.kernelReady) {
-    return { kind: 'ready', label: 'Run', title: 'Run simulation (⌘+Enter)', disabled: false };
+    return { kind: 'ready', label: 'Run', title: 'Run simulation', disabled: false };
   }
   if (input.kernelStatus === 'failed') {
     return {
