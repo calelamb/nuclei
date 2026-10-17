@@ -73,8 +73,37 @@ export function logAxis(values: readonly number[], opts: { pad?: number } = {}):
       }
     }
   }
-  const labeled = [...majorTicks, ...extra].sort((a, b) => a.value - b.value);
+  const base = [...majorTicks, ...extra].sort((a, b) => a.value - b.value);
+  const labeled = fillEndGaps(base, lo, hi);
   return { lo, hi, labeled, minors };
+}
+
+const END_GAP_FRACTION = 0.2;
+const FINE_MANTISSAS = [1.2, 1.4, 1.6, 1.8];
+
+/**
+ * When the first or last label sits more than 20% of the axis from its end,
+ * data there would have no label to read against; add the 1.2 .. 1.8
+ * multiples of the decade so each 20% of the axis carries at least one label.
+ */
+function fillEndGaps(ticks: LogTick[], lo: number, hi: number): LogTick[] {
+  const span = hi - lo;
+  const logs = ticks.map((t) => Math.log10(t.value));
+  const needsTail = logs.length === 0 || hi - Math.max(...logs) > END_GAP_FRACTION * span;
+  const needsHead = logs.length === 0 || Math.min(...logs) - lo > END_GAP_FRACTION * span;
+  if (!needsTail && !needsHead) return ticks;
+  const fine: LogTick[] = [];
+  for (let e = Math.floor(lo) - 1; e <= Math.ceil(hi); e++) {
+    for (const m of FINE_MANTISSAS) {
+      const value = m * 10 ** e;
+      const log = Math.log10(value);
+      if (log < lo - EPS || log > hi + EPS) continue;
+      const tail = needsTail && log > Math.max(...logs, lo);
+      const head = needsHead && log < Math.min(...logs, hi);
+      if (tail || head) fine.push({ value, label: formatMultiplierTick(m, e), major: false });
+    }
+  }
+  return [...ticks, ...fine].sort((a, b) => a.value - b.value);
 }
 
 /** Linear map from a log10 domain to a pixel range; non-positive input clamps to the range start. */

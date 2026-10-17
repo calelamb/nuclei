@@ -1,6 +1,6 @@
 import type { Rate, ThresholdSeries } from '../types/qecStats';
 import type { RateUnits } from './qecFit';
-import { formatNoise, formatRatePrecise, formatSci } from './qecPlotFormat';
+import { formatNoise, formatRatePrecise } from './qecPlotFormat';
 
 export type SeriesPoint = ThresholdSeries['points'][number];
 export type PointKind = 'normal' | 'upper' | 'skip-noise' | 'skip-rate';
@@ -89,11 +89,22 @@ export function tooltipLines(
   const zero = p.rate.p === 0;
   const lines = [
     `d = ${s.distance ?? '?'} · p = ${formatNoise(p.noise)} · ${s.decoder}`,
-    zero ? `rate ${unitText}: 0 observed (upper bound ${formatSci(rate.hi)})` : `rate ${unitText}: ${formatRatePrecise(rate.p)}`,
+    zero ? `rate ${unitText}: 0 observed (upper bound ${formatRatePrecise(rate.hi)})` : `rate ${unitText}: ${formatRatePrecise(rate.p)}`,
     `sinter likelihood-ratio interval: ${formatRatePrecise(rate.lo)} to ${formatRatePrecise(rate.hi)}`,
   ];
   if (p.errors !== undefined && p.kept !== undefined) {
     lines.push(`${intl(p.errors)} ${p.errors === 1 ? 'error' : 'errors'} in ${intl(p.kept)} kept shots${zero ? ' (0 errors: upper bound)' : ''}`);
   }
+  if (units === 'per_round' && isSaturated(p)) {
+    lines.push('Saturated (per-shot rate near 0.5): the per-round conversion is unreliable here');
+  }
   return lines;
+}
+
+/** Per-shot logical error rate at or above which a shot is close to a coin flip and per-round conversion stops being meaningful. */
+export const SATURATED_SHOT_RATE = 0.45;
+
+/** True when the raw per-shot rate (errors over kept shots) is at or above SATURATED_SHOT_RATE. */
+export function isSaturated(p: SeriesPoint): boolean {
+  return p.errors !== undefined && p.kept !== undefined && p.kept > 0 && p.errors / p.kept >= SATURATED_SHOT_RATE;
 }

@@ -2,6 +2,7 @@ import { useState, type CSSProperties } from 'react';
 import { Cpu, Download, ChevronRight, HelpCircle } from 'lucide-react';
 import { useThemeStore, type ThemeColors } from '../../stores/themeStore';
 import { useEditorStore } from '../../stores/editorStore';
+import { humanNs } from '../../lib/qecEstimateFormat';
 import { useQecEstimateStore } from '../../stores/qecEstimateStore';
 import { QecEmptyState } from './QecEmptyState';
 import { downloadJson } from '../../services/experimentExport';
@@ -50,16 +51,6 @@ function compact(n: number | null): string {
   return `${(n / 1e9).toFixed(2)}B`;
 }
 
-/** Nanoseconds → the most legible unit. */
-function humanNs(ns: number | null): string {
-  if (ns === null || !Number.isFinite(ns)) return '—';
-  if (ns < 1e3) return `${ns} ns`;
-  if (ns < 1e6) return `${(ns / 1e3).toFixed(2)} µs`;
-  if (ns < 1e9) return `${(ns / 1e6).toFixed(2)} ms`;
-  if (ns < 6e10) return `${(ns / 1e9).toFixed(2)} s`;
-  return `${(ns / 6e10).toFixed(2)} min`;
-}
-
 function sci(x: number | null): string {
   if (x === null || !Number.isFinite(x)) return '—';
   return x.toExponential(2);
@@ -94,18 +85,15 @@ export function EstimatorPanel() {
     requestQecEstimate(code, language, { ...options });
   };
 
-  // Slim actions row (the SidebarHeader already carries the "Estimator"
+  // Slim actions row, shown once there is something to export (the SidebarHeader already carries the "Estimator"
   // title, so this panel adds only the docs link + JSON export).
-  const toolbar = (
+  const toolbar = !result ? null : (
     <div
       style={{
         display: 'flex', alignItems: 'center', gap: 6, padding: '6px 12px',
         borderBottom: `1px solid ${colors.border}`,
       }}
     >
-      <span style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, fontWeight: 600, color: colors.text }}>
-        <Cpu size={ICON_SIZE.sm} strokeWidth={ICON_STROKE} /> Resource Estimator
-      </span>
       <div style={{ flex: 1 }} />
       {result && (
         <Button
@@ -207,6 +195,7 @@ export function EstimatorPanel() {
 
         {!result && !error && !pending && (
           <QecEmptyState
+            align="top"
             title="No estimate yet"
             body="Use Run estimate above to see the physical qubits, wall-clock runtime, and code distance a fault-tolerant run of this circuit would require."
             docsHref={DOCS}
@@ -256,7 +245,7 @@ type Colors = ThemeColors;
 function Field({ label, colors, children }: { label: string; colors: Colors; children: React.ReactNode }) {
   return (
     <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-      <span style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.04em', color: colors.textDim }}>
+      <span style={{ fontSize: 12, fontWeight: 500, color: colors.textMuted }}>
         {label}
       </span>
       {children}
@@ -287,7 +276,7 @@ function Stat({
         background: colors.bg,
       }}
     >
-      <span style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.04em', color: colors.textDim }}>
+      <span style={{ fontSize: 12, fontWeight: 500, color: colors.textMuted }}>
         {label}
       </span>
       <span
@@ -295,7 +284,7 @@ function Stat({
           fontFamily: TYPOGRAPHY.fontMono,
           fontSize: accent ? 22 : 18,
           fontWeight: 600,
-          color: accent ? colors.accent : colors.text,
+          color: accent ? colors.accentText : colors.text,
           lineHeight: 1.1,
         }}
       >

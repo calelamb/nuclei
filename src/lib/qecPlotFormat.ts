@@ -37,12 +37,16 @@ const fixedSig3 = (x: number): string => {
   return text.includes('e') ? String(Number(text)) : text;
 };
 
-/** Tooltip rate: three significant figures, trailing zeros kept so it matches the interval's precision. */
+/**
+ * Tooltip and live-region rate: the same convention as the decoder table and
+ * Λ readout (plain from 0.1, m×10ⁿ below), three significant figures with
+ * trailing zeros kept so it matches the interval's precision.
+ */
 export function formatRatePrecise(x: number): string {
   if (!Number.isFinite(x)) return '—';
   if (x === 0) return '0';
   const abs = Math.abs(x);
-  if (abs >= 0.01 && abs < 1000) return fixedSig3(x);
+  if (abs >= 0.1 && abs < 1000) return fixedSig3(x);
   const [mant, exp] = x.toExponential(2).split('e');
   return `${mant}×${formatPow10(Number(exp))}`;
 }
@@ -82,4 +86,14 @@ export function formatRateInterval(best: number, lo: number, hi: number): string
 /** One number convention for Λ on every surface: 3 significant figures, none after 100. */
 export function formatLambda(x: number): string {
   return x >= 100 ? x.toFixed(0) : x.toPrecision(3);
+}
+
+/** A whole number with thousands separators, so previews match the tables. */
+export function formatCount(n: number): string {
+  return Number.isFinite(n) ? n.toLocaleString('en-US') : '—';
+}
+
+/** Round a float for export to 8 significant figures, dropping binary noise such as 0.010375899999999999. */
+export function roundForExport(x: number): number {
+  return Number.isFinite(x) ? Number(x.toPrecision(8)) : x;
 }

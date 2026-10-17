@@ -1,4 +1,4 @@
-import { useDeferredValue, useMemo } from 'react';
+import { useDeferredValue, useMemo, type ReactNode } from 'react';
 import { useThemeStore } from '../../stores/themeStore';
 import { useQecCampaignStore } from '../../stores/qecCampaignStore';
 import { PanelHeader } from '../layout/PanelHeader';
@@ -25,13 +25,14 @@ import {
 import { PRINT_COLORS, renderFigureSvg } from '../../lib/qecSvgExport';
 import { qecRatesToCsv } from '../../lib/qecExport';
 import { downloadCsv, downloadSvg } from '../../services/experimentExport';
+import './qecAnalysis.css';
 import { QEC_PLOT_CSV_DOCS } from '../../config/docsLinks';
 
 import { TYPOGRAPHY } from '../../styles/tokens';
 const DOCS = 'https://getnuclei.dev/docs/research/qec-studio/';
 const PLOT_ONLY_PAD = 24;
 /** Below this panel width the title would be squeezed out, so the units toggle moves below the header and both labelled exports stay. */
-const COMPACT_HEADER_WIDTH = 480;
+const COMPACT_HEADER_WIDTH = 620;
 
 function ExportButton({ label, title, ariaLabel, onClick }: {
   label: string; title: string; ariaLabel: string; onClick: () => void;
@@ -52,7 +53,7 @@ function ExportButton({ label, title, ariaLabel, onClick }: {
 /** Which half of the figure to show: both side by side, only the plot, or only the Λ readout. */
 export type ThresholdPart = 'all' | 'plot' | 'lambda';
 
-export function ThresholdPanel({ part = 'all' }: { part?: ThresholdPart } = {}) {
+export function ThresholdPanel({ part = 'all', tabs }: { part?: ThresholdPart; tabs?: ReactNode } = {}) {
   const colors = useThemeStore((s) => s.colors);
   const mode = useThemeStore((s) => s.mode);
   const rowsByStrongId = useQecCampaignStore((s) => s.rowsByStrongId);
@@ -106,22 +107,25 @@ export function ThresholdPanel({ part = 'all' }: { part?: ThresholdPart } = {}) 
   const compact = area.width > 0 && area.width < COMPACT_HEADER_WIDTH;
   const header = (
     <PanelHeader
-      title="Logical error vs p"
+      title={part === 'lambda' ? 'Error suppression Λ' : 'Logical error vs p'}
       helpHref={DOCS}
       actions={
-        model ? (
-          <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-            {roundsKnown && !compact && <QecUnitsToggle units={units} onChange={setRequested} />}
-            <ExportButton
-              label="SVG" onClick={exportSvg}
-              title="Export the plot as a print-ready SVG (white background)" ariaLabel="Export plot as SVG"
-            />
-            <ExportButton
-              label="CSV" onClick={() => downloadCsv(qecRatesToCsv(rows, { units, originals }), 'logical-error-vs-p.csv')}
-              title="Export the plotted rates as CSV" ariaLabel="Export plot data (CSV)"
-            />
-          </div>
-        ) : undefined
+        <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+          {tabs}
+          {model && roundsKnown && !compact && <QecUnitsToggle units={units} onChange={setRequested} />}
+          {model && part !== 'lambda' && (
+            <>
+              <ExportButton
+                label="SVG" onClick={exportSvg}
+                title="Export the plot as a print-ready SVG (white background)" ariaLabel="Export plot as SVG"
+              />
+              <ExportButton
+                label="CSV" onClick={() => downloadCsv(qecRatesToCsv(rows, { units, originals }), 'logical-error-vs-p.csv')}
+                title="Export the plotted rates as CSV" ariaLabel="Export plot data (CSV)"
+              />
+            </>
+          )}
+        </div>
       }
     />
   );
@@ -152,7 +156,7 @@ export function ThresholdPanel({ part = 'all' }: { part?: ThresholdPart } = {}) 
     : fullBox;
   const readoutBody = (
     <>
-      <QecLambdaReadout decoders={decoders} estimates={lambdas} units={units} colors={colors} />
+      <QecLambdaReadout decoders={decoders} estimates={lambdas} units={units} colors={colors} hideTitle={part === 'lambda'} />
       <div style={{ fontSize: 11, color: colors.textMuted, marginTop: 6, lineHeight: 1.45 }}>
         {`Whiskers: sinter ${whiskerConvention()}, `}
         {hasDiscards ? 'on shots − discards. ' : 'on shots. '}

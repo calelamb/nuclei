@@ -1,6 +1,6 @@
-import { Database, FileCode2, FlaskConical, FolderInput, FolderTree, LoaderCircle, TriangleAlert } from 'lucide-react';
+import { Database, ExternalLink, FileCode2, FlaskConical, FolderInput, FolderTree, LoaderCircle, TriangleAlert } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
-import type { ReactElement } from 'react';
+import type { KeyboardEvent, ReactElement } from 'react';
 import { resolveQecPanels } from '../../../layout/qecPanelRegistry';
 import { useQecStudyStore, type QecStudyValidationError } from '../../../services/qecStudyStore';
 import { useQecStudyUiStore } from '../../../stores/qecStudyUiStore';
@@ -12,7 +12,8 @@ import { useResearchSelectionStore } from '../../../stores/researchSelectionStor
 import type { QecStudy, QecStudySource, QecWorkspacePreset } from '../../../types/qecStudy';
 import type { QecSession } from '../../../types/qecData';
 import { QecPanelPinButton } from './QecPanelPinButton';
-import { IconButton } from '../../ui';
+import { Badge, IconButton } from '../../ui';
+import { isOpenableSource, useOpenSource } from './useOpenSource';
 import { ICON_SIZE, ICON_STROKE } from '../../../styles/tokens';
 
 const SOURCE_ICONS: Readonly<Record<QecStudySource['kind'], LucideIcon>> = {
@@ -34,7 +35,11 @@ function LoadingStudies(): ReactElement {
 }
 
 function EmptyStudies(): ReactElement {
-  return <div className="qec-zone-empty"><FolderTree aria-hidden="true" size={20} /><strong>No Studies found</strong><span>Create a Study manifest in the studies folder to organize QEC sources and evidence.</span></div>;
+  const projectRoot = useProjectStore((state) => state.projectRoot);
+  const body = projectRoot
+    ? 'Create a Study manifest in the studies folder to organize QEC sources and evidence.'
+    : 'Open a project folder to create Studies. Analyze works without one: drop a sinter stats CSV there.';
+  return <div className="qec-zone-empty"><FolderTree aria-hidden="true" size={20} /><strong>No Studies found</strong><span>{body}</span></div>;
 }
 
 function ChooseStudy(): ReactElement {
@@ -73,7 +78,7 @@ function StudyOverview({ study }: { study: QecStudy }): ReactElement {
   );
 }
 
-function SourceFileRow({ source }: { source: QecStudySource }): ReactElement {
+function SourceFileRow({ source, onOpen }: { source: QecStudySource; onOpen: (source: QecStudySource) => void }): ReactElement {
   const selected = useResearchSelectionStore((state) => state.present.primary);
   const select = useResearchSelectionStore((state) => state.selectPrimary);
   const Icon = SOURCE_ICONS[source.kind];
@@ -83,30 +88,54 @@ function SourceFileRow({ source }: { source: QecStudySource }): ReactElement {
   const jobProjectRoot = useQecJobStore((state) => state.projectRoot);
   const setTrayCollapsed = useQecWorkbenchStore((state) => state.setTrayCollapsed);
   const importButtonId = `qec-import-${source.id.replaceAll(/[^a-zA-Z0-9_-]/g, '-')}`;
+  const openable = isOpenableSource(source);
   const launchImport = (): void => {
     if (!projectRoot || jobProjectRoot !== projectRoot) return;
     openImport(projectRoot, source.path, importButtonId);
     setTrayCollapsed(false);
   };
+  const selectSource = (): void => select({ kind: 'source', id: source.id }, 'user');
+  const onKeyDown = (event: KeyboardEvent<HTMLButtonElement>): void => {
+    if (event.key !== 'Enter' || !openable) return;
+    event.preventDefault();
+    selectSource();
+    onOpen(source);
+  };
   return (
-    <div className="qec-source-row-shell" aria-current={current ? 'true' : undefined}>
-      <button type="button" className="qec-source-row" onClick={() => select({ kind: 'source', id: source.id }, 'user')}>
+    <div className="qec-source-row-shell" aria-current={current ? 'true' : undefined} data-openable={openable ? 'true' : undefined}>
+      <button
+        type="button"
+        className="qec-source-row"
+        title={openable ? 'Double-click or press Enter to open in the editor' : undefined}
+        onClick={selectSource}
+        onDoubleClick={openable ? () => onOpen(source) : undefined}
+        onKeyDown={onKeyDown}
+      >
         <Icon aria-hidden="true" size={16} />
         <span><strong>{source.id}</strong><small className="qec-mono">{source.path}</small></span>
-        <span className="qec-source-row__kind">{source.kind}</span>
+        <Badge className="qec-source-row__kind">{source.kind}</Badge>
       </button>
-      <IconButton id={importButtonId} className="qec-source-row__import" aria-label={`Import ${source.id}`} title={projectRoot ? 'Import into canonical QEC data' : 'Open a project before importing QEC data'} disabled={!projectRoot || jobProjectRoot !== projectRoot} onClick={launchImport}>
-        <FolderInput aria-hidden="true" size={ICON_SIZE.md} strokeWidth={ICON_STROKE} />
-      </IconButton>
+      <span className="qec-source-row__actions">
+        {openable && (
+          <IconButton aria-label={`Open ${source.id}`} title="Open in the editor" onClick={() => onOpen(source)}>
+            <ExternalLink aria-hidden="true" size={ICON_SIZE.md} strokeWidth={ICON_STROKE} />
+          </IconButton>
+        )}
+        <IconButton id={importButtonId} className="qec-source-row__import" aria-label={`Import ${source.id}`} title={projectRoot ? 'Import into canonical QEC data' : 'Open a project before importing QEC data'} disabled={!projectRoot || jobProjectRoot !== projectRoot} onClick={launchImport}>
+          <FolderInput aria-hidden="true" size={ICON_SIZE.md} strokeWidth={ICON_STROKE} />
+        </IconButton>
+      </span>
     </div>
   );
 }
 
 function ReferencedFiles({ sources }: { sources: readonly QecStudySource[] }): ReactElement {
+  const { open, error } = useOpenSource();
   return (
     <section className="qec-source-group" aria-labelledby="study-sources-heading">
       <h3 id="study-sources-heading">Referenced files</h3>
-      {sources.length > 0 ? sources.map((source) => <SourceFileRow key={source.id} source={source} />) : <p className="qec-source-group__empty">No files referenced by this Study.</p>}
+      {error && <p className="qec-source-group__empty qec-source-group__error" role="alert">{error}</p>}
+      {sources.length > 0 ? sources.map((source) => <SourceFileRow key={source.id} source={source} onOpen={(entry) => { void open(entry); }} />) : <p className="qec-source-group__empty">No files referenced by this Study.</p>}
     </section>
   );
 }

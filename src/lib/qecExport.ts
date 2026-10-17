@@ -8,6 +8,7 @@
  */
 import type { QecCampaignStatsRow } from '../types/qec';
 import { assignExperiments } from './qecExperiments';
+import { roundForExport } from './qecPlotFormat';
 import {
   DEFAULT_MAX_LIKELIHOOD_FACTOR, roundsFromMetadata, rowProblem, rowRate, type RateUnits,
 } from './qecFit';
@@ -26,7 +27,7 @@ function csvCell(v: string | number | null | undefined): string {
 
 const metaNum = (meta: unknown, key: string): number | '' => {
   const v = (meta as Record<string, unknown> | null)?.[key];
-  return typeof v === 'number' && Number.isFinite(v) ? v : '';
+  return typeof v === 'number' && Number.isFinite(v) ? roundForExport(v) : '';
 };
 
 const NOTES = { invalid: 'invalid: errors exceed kept shots', no_kept: 'no kept shots' } as const;
@@ -59,7 +60,7 @@ export function qecRatesToCsv(rows: readonly QecCampaignStatsRow[], opts: QecRat
     }
     const { fit, units } = rowRate(row, { units: opts.units, maxLikelihoodFactor: factor });
     const note = opts.units === 'per_round' && units === 'per_shot' ? 'rounds unknown: per-shot rate' : '';
-    return [...common, fit.best, fit.low, fit.high, units, 'likelihood_ratio', factor, note, ...provenance].map(csvCell).join(',');
+    return [...common, roundForExport(fit.best), roundForExport(fit.low), roundForExport(fit.high), units, 'likelihood_ratio', factor, note, ...provenance].map(csvCell).join(',');
   });
   return [QEC_RATES_CSV_COLUMNS.join(','), ...lines].join('\n') + '\n';
 }

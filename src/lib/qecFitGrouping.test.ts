@@ -138,7 +138,7 @@ describe('qecRatesToCsv matches the figure', () => {
     const plotted = series.flatMap((s) => s.points.map((p) => p.rate.p));
     expect(out).toHaveLength(rows.length);
     for (const r of out) {
-      expect(plotted.some((v) => Math.abs(v - Number(r.rate)) < 1e-15)).toBe(true);
+      expect(plotted.some((v) => Math.abs(v - Number(r.rate)) <= 1e-7 * v)).toBe(true);
       expect(r.units).toBe('per_shot');
       expect(r.ci_method).toBe('likelihood_ratio');
       expect(r.max_likelihood_factor).toBe('1000');
@@ -146,6 +146,11 @@ describe('qecRatesToCsv matches the figure', () => {
       expect(Number(r.rate_low)).toBeLessThanOrEqual(Number(r.rate));
       expect(Number(r.rate_high)).toBeGreaterThanOrEqual(Number(r.rate));
     }
+  });
+  it('exports at most 8 significant figures, never binary noise like 0.010375899999999999 (qec-r-11)', () => {
+    const csv = qecRatesToCsv(rows, { units: 'per_shot' });
+    const longDigits = csv.split('\n').slice(1).flatMap((l) => l.split(',')).filter((c) => /^[\d.]+$/.test(c) && c.replace(/^0\.0*/, '').replace('.', '').length > 8);
+    expect(longDigits).toEqual([]);
   });
   it('per-round export uses per-round rates and says so', () => {
     const out = parse(qecRatesToCsv(rows, { units: 'per_round' }));

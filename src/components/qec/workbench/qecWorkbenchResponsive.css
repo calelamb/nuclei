@@ -54,12 +54,12 @@
 }
 
 @media (max-width: 699px) {
-  .qec-preset-switcher {
+  .qec-research-bar__primary > .nuclei-segmented {
     width: 100%; order: 3;
   }
 
-  .qec-preset-switcher button {
-    min-width: 0; flex: 1;
+  .qec-research-bar__primary > .nuclei-segmented .nuclei-segmented__option {
+    flex: 1; justify-content: center;
   }
 
   .qec-workbench__body {

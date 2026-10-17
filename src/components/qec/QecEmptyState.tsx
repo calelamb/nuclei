@@ -16,12 +16,15 @@ export function QecEmptyState({
   body,
   action,
   docsHref,
+  align = 'center',
   children,
 }: {
   title: string;
   body: string;
   action?: QecEmptyStateAction;
   docsHref?: string;
+  /** 'top' anchors the message under whatever is above it instead of centring it in the remaining height. */
+  align?: 'center' | 'top';
   /** Extra content under the actions (e.g. a file drop zone). */
   children?: ReactNode;
 }) {
@@ -29,8 +32,8 @@ export function QecEmptyState({
   return (
     <div
       style={{
-        flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center',
-        justifyContent: 'center', gap: 8, padding: 24, textAlign: 'center',
+        flex: align === 'top' ? 'none' : 1, display: 'flex', flexDirection: 'column', alignItems: 'center',
+        justifyContent: align === 'top' ? 'flex-start' : 'center', gap: 8, padding: align === 'top' ? '12px 24px' : 24, textAlign: 'center',
         fontFamily: TYPOGRAPHY.fontSans,
       }}
     >
@@ -46,7 +49,7 @@ export function QecEmptyState({
               href={docsHref}
               target="_blank"
               rel="noreferrer"
-              style={{ fontSize: 12, color: colors.accent, textDecoration: 'none' }}
+              style={{ fontSize: 12, color: colors.accentText, textDecoration: 'none' }}
             >
               Read the docs →
             </a>

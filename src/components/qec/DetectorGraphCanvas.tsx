@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useThemeStore, type ThemeColors } from '../../stores/themeStore';
 import {
   detectorNodeIndex,
+  fitGraphBox,
   edgeHeatColor,
   type DetectorGraphLayout,
   type DecodeOverlay,
@@ -28,6 +29,8 @@ interface HoverInfo {
 }
 
 const PAD = 16;
+const NODE_R = 3.5;
+const NODE_R_FIRED = 4.5;
 
 function edgeKey(a: number, b: number): string {
   return a <= b ? `${a}:${b}` : `${b}:${a}`;
@@ -80,8 +83,7 @@ export function DetectorGraphCanvas({ layout, overlay, onDetectorClick }: Detect
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
       ctx.clearRect(0, 0, cssW, cssH);
 
-      const X = (nx: number) => PAD + nx * (cssW - 2 * PAD);
-      const Y = (ny: number) => PAD + ny * (cssH - 2 * PAD);
+      const { X, Y } = fitGraphBox(layout.aspect, cssW, cssH, PAD);
       const matched = new Set(overlay?.matchedEdges.map((m) => edgeKey(m.a, m.b)));
 
       // Edges — sorted so higher-probability (hotter) edges draw on top.
@@ -109,7 +111,7 @@ export function DetectorGraphCanvas({ layout, overlay, onDetectorClick }: Detect
           ctx.strokeStyle = `rgb(${r},${g},${bl})`;
           ctx.lineWidth = 0.6 + 2.4 * t;
           ctx.globalAlpha = isBoundary ? 0.5 : 0.7;
-          ctx.setLineDash(isBoundary ? [3, 3] : []);
+          ctx.setLineDash(isBoundary ? [3, 3] : e.timelike ? [5, 3] : []);
         }
         ctx.beginPath();
         ctx.moveTo(x1, y1);
@@ -156,12 +158,12 @@ export function DetectorGraphCanvas({ layout, overlay, onDetectorClick }: Detect
         const fired = overlay?.firedDetectors.has(n.detector) ?? false;
         if (fired) {
           ctx.beginPath();
-          ctx.arc(cx, cy, 6, 0, Math.PI * 2);
+          ctx.arc(cx, cy, NODE_R_FIRED + 3, 0, Math.PI * 2);
           ctx.fillStyle = `${colors.error}44`;
           ctx.fill();
         }
         ctx.beginPath();
-        ctx.arc(cx, cy, fired ? 3.4 : 2.1, 0, Math.PI * 2);
+        ctx.arc(cx, cy, fired ? NODE_R_FIRED : NODE_R, 0, Math.PI * 2);
         ctx.fillStyle = fired ? colors.error : colors.accent;
         ctx.fill();
         ctx.lineWidth = 0.5;
@@ -174,7 +176,7 @@ export function DetectorGraphCanvas({ layout, overlay, onDetectorClick }: Detect
         const n = layout.nodes.find((node) => node.detector === hover.detector);
         if (n) {
           ctx.beginPath();
-          ctx.arc(X(n.x), Y(n.y), 6.5, 0, Math.PI * 2);
+          ctx.arc(X(n.x), Y(n.y), NODE_R_FIRED + 3.5, 0, Math.PI * 2);
           ctx.strokeStyle = colors.text;
           ctx.lineWidth = 1.2;
           ctx.stroke();
@@ -198,8 +200,7 @@ export function DetectorGraphCanvas({ layout, overlay, onDetectorClick }: Detect
     const my = clientY - rect.top;
     const cssW = rect.width;
     const cssH = rect.height;
-    const X = (nx: number) => PAD + nx * (cssW - 2 * PAD);
-    const Y = (ny: number) => PAD + ny * (cssH - 2 * PAD);
+    const { X, Y } = fitGraphBox(layout.aspect, cssW, cssH, PAD);
 
     let best: HoverInfo | null = null;
     let bestDist = 11 * 11;

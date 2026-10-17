@@ -201,9 +201,9 @@ describe('<QecWorkbench />', () => {
     expect(isBefore(canvas, inspector)).toBe(true);
     expect(isBefore(inspector, tray)).toBe(true);
 
-    fireEvent.click(screen.getByRole('button', { name: 'Analyze' }));
+    fireEvent.click(screen.getByRole('radio', { name: 'Analyze' }));
     expect(useQecWorkbenchStore.getState().preset).toBe('analyze');
-    expect(screen.getByRole('button', { name: 'Analyze' }).getAttribute('aria-pressed')).toBe('true');
+    expect(screen.getByRole('radio', { name: 'Analyze' }).getAttribute('aria-checked')).toBe('true');
   });
 
   it('uses the active Study and panel registry to populate shell instruments', () => {
@@ -217,19 +217,19 @@ describe('<QecWorkbench />', () => {
     expect(within(canvas).getByText('Timeline')).toBeTruthy();
     expect(within(canvas).getByText('Code Lattice')).toBeTruthy();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Analyze' }));
+    fireEvent.click(screen.getByRole('radio', { name: 'Analyze' }));
     expect(within(canvas).getByText('Campaign Center')).toBeTruthy();
   });
 
   it('keeps a pinned canvas instrument visible across preset changes and can unpin it', () => {
     render(<QecWorkbench />);
-    fireEvent.click(screen.getByRole('button', { name: 'Analyze' }));
+    fireEvent.click(screen.getByRole('radio', { name: 'Analyze' }));
     const pin = screen.getByRole('button', { name: 'Pin Campaign Center' });
     expect(pin.getAttribute('aria-pressed')).toBe('false');
     fireEvent.click(pin);
     expect(useQecWorkbenchStore.getState().pinnedPanelIds).toEqual(['campaign-center']);
 
-    fireEvent.click(screen.getByRole('button', { name: 'Build' }));
+    fireEvent.click(screen.getByRole('radio', { name: 'Build' }));
     expect(screen.getByText('Campaign Center')).toBeTruthy();
     const unpin = screen.getByRole('button', { name: 'Unpin Campaign Center' });
     expect(unpin.getAttribute('aria-pressed')).toBe('true');
@@ -708,12 +708,21 @@ describe('<QecWorkbench />', () => {
   it('renders a safe empty state when no Studies exist', () => {
     useQecStudyUiStore.setState({ activeStudyId: null });
     useQecStudyStore.setState({ studies: [], validationErrors: [], loading: false });
+    useProjectStore.setState({ projectRoot: '/project' });
     render(<QecWorkbench />);
     expect(screen.getByText('No Studies found')).toBeTruthy();
     expect(screen.getByText(/Create a Study manifest/)).toBeTruthy();
     expect(screen.getByRole<HTMLSelectElement>('combobox', { name: 'Active QEC Study' }).disabled).toBe(true);
     expect(screen.getByText('Not evaluated')).toBeTruthy();
     expect(screen.getAllByText('Provenance not evaluated')).toHaveLength(2);
+  });
+
+  it('does not tell a project-less user to create a manifest in a folder they do not have (qec-r-14)', () => {
+    useQecStudyUiStore.setState({ activeStudyId: null });
+    useQecStudyStore.setState({ studies: [], validationErrors: [], loading: false });
+    render(<QecWorkbench />);
+    expect(screen.queryByText(/Create a Study manifest/)).toBeNull();
+    expect(screen.getByText(/Open a project folder to create Studies/)).toBeTruthy();
   });
 
   it('distinguishes manifest validity from provenance evaluation', () => {

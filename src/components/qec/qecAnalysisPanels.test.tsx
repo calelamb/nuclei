@@ -99,8 +99,8 @@ describe('ThresholdPanel', () => {
     expect(container.querySelector('[aria-label="Error suppression factor Λ"]')!.textContent).toMatch(/\d\.\d+–\d/);
     // Rounds are known, so the default is the per-cycle definition of Λ.
     expect(getByText('logical error per round')).toBeTruthy();
-    expect(getByRole('button', { name: 'Per round' }).getAttribute('aria-pressed')).toBe('true');
-    fireEvent.click(getByRole('button', { name: 'Per shot' }));
+    expect(getByRole('radio', { name: 'Per round' }).getAttribute('aria-checked')).toBe('true');
+    fireEvent.click(getByRole('radio', { name: 'Per shot' }));
     expect(getByText('logical error per shot')).toBeTruthy();
   });
 
@@ -116,7 +116,7 @@ describe('ThresholdPanel', () => {
     };
     expect(svgText()).toMatch(/Λ = [^,]*,[^Λ]*per round/);
     expect(svgText()).not.toMatch(/rounds vary with d/);
-    fireEvent.click(getByRole('button', { name: 'Per shot' }));
+    fireEvent.click(getByRole('radio', { name: 'Per shot' }));
     expect(svgText()).toMatch(/Λ = [^,]*,[^Λ]*per shot/);
     expect(svgText()).toMatch(/rounds vary with d/);
   });

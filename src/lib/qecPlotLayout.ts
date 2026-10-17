@@ -108,7 +108,7 @@ export function wrapLines(lines: readonly string[], maxWidth: number, fontSize: 
 
 // ───────────────────────────── container -> plot box ─────────────────────────────
 
-export const READOUT_WIDTH = 300;
+export const READOUT_WIDTH = 340;
 export const WIDE_MIN_WIDTH = 780;
 export const MIN_PLOT_W = 240;
 export const MIN_PLOT_H = 220;

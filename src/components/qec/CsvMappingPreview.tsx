@@ -7,7 +7,9 @@ import {
   metadataKeys, splitMetadataKeys, type SinterMapping,
 } from '../../types/sinterMapping';
 import { toStatsPoint } from '../../types/qecStats';
-import { formatNoise } from '../../lib/qecPlotFormat';
+import { describeMapping } from '../../lib/qecMappingSummary';
+import { isNotProbability } from '../../lib/qecProbability';
+import { formatNoise, formatCount } from '../../lib/qecPlotFormat';
 import { ICON_SIZE, ICON_STROKE, TYPOGRAPHY } from '../../styles/tokens';
 import { Button, Select } from '../ui';
 import { Table, Thead, Tbody, Tr, Th, Td } from '../ui/Table';
@@ -15,20 +17,14 @@ import { Table, Thead, Tbody, Tr, Th, Td } from '../ui/Table';
 const PREVIEW_ROWS = 10;
 type Field = 'p' | 'd' | 'rounds' | 'decoder';
 
-const FIELDS: Array<{ field: Field; label: string; short: string }> = [
-  { field: 'p', label: 'x-axis: physical error p', short: 'p' },
-  { field: 'd', label: 'code distance d', short: 'd' },
-  { field: 'rounds', label: 'rounds', short: 'rounds' },
-  { field: 'decoder', label: 'decoder', short: 'decoder' },
+const FIELDS: Array<{ field: Field; label: string }> = [
+  { field: 'p', label: 'x-axis: physical error p' },
+  { field: 'd', label: 'code distance d' },
+  { field: 'rounds', label: 'rounds' },
+  { field: 'decoder', label: 'decoder' },
 ];
 
 const plural = (n: number, one: string, many = `${one}s`) => `${n.toLocaleString()} ${n === 1 ? one : many}`;
-
-function fieldSummary(mapping: SinterMapping, field: Field): string {
-  const value = mapping[field];
-  if (field === 'decoder') return value === DECODER_COLUMN ? 'decoder column' : String(value);
-  return value ?? 'none';
-}
 
 /**
  * The loaded sinter CSV's json_metadata mapping. After a load it is one line
@@ -44,6 +40,10 @@ export function CsvMappingPreview() {
   const [open, setOpen] = useState(false);
   const keys = useMemo(() => (csv ? metadataKeys(csv.rows) : []), [csv]);
   const partitions = useMemo(() => (csv ? findPartitionKeys(csv.rows, csv.mapping) : []), [csv]);
+  const notProbability = useMemo(
+    () => new Set(csv ? keys.filter((k) => k.numeric && isNotProbability(csv.rows, k.key)).map((k) => k.key) : []),
+    [csv, keys],
+  );
   const plotted = useQecCampaignStore((s) => s.rowsByStrongId);
   // The store already holds the mapped rows; re-mapping a 100k-row file here would repeat that work.
   const collisions = useMemo(() => (csv ? findCollisions(Object.values(plotted)) : []), [csv, plotted]);
@@ -57,7 +57,8 @@ export function CsvMappingPreview() {
   const { mapping } = csv;
   const note = { margin: '0 0 6px', fontSize: 12, color: colors.warning, lineHeight: 1.45 } as const;
   const merged = Math.max(0, csv.totalDataRows - csv.rejectedRows - csv.rows.length);
-  const needsAttention = collisions.length > 0 || partitions.length > 0 || isFallbackPGuess(mapping) || mapping.p === null;
+  const needsAttention = collisions.length > 0 || partitions.length > 0 || isFallbackPGuess(mapping) || mapping.p === null
+    || (mapping.p !== null && notProbability.has(mapping.p));
 
   const update = (next: SinterMapping) => setMapping(next);
   const mergeAsReplicates = (key: string) => update({
@@ -92,7 +93,11 @@ export function CsvMappingPreview() {
         >
           {field !== 'decoder' && <option value="">— none —</option>}
           {field === 'decoder' && <option value={DECODER_COLUMN}>decoder column</option>}
-          {options.map((k) => <option key={k.key} value={k.key}>{k.key}</option>)}
+          {options.map((k) => (
+            <option key={k.key} value={k.key}>
+              {field === 'p' && notProbability.has(k.key) ? `${k.key} (not a probability)` : k.key}
+            </option>
+          ))}
         </Select>
       </label>
     );
@@ -105,9 +110,8 @@ export function CsvMappingPreview() {
     ...(csv.rejectedRows > 0 ? [`${csv.rejectedRows.toLocaleString()} rejected (see below)`] : []),
     `${plottable.toLocaleString()} plottable${countsNameMerge ? ` after summing ${mapping.mergeKeys?.join(', ')} replicates` : ''}`,
   ];
-  const mapped = FIELDS.map((f) => `${f.short}: ${fieldSummary(mapping, f.field)}`).join(' · ');
-  const seriesBy = mapping.groupBy.length > 0 ? ` · series by ${mapping.groupBy.join(', ')}` : '';
-  const replicates = (mapping.mergeKeys ?? []).length > 0 && !countsNameMerge ? ` · ${mapping.mergeKeys?.join(', ')} summed` : '';
+  // countsNameMerge already says which replicates were summed; do not say it twice.
+  const mapped = describeMapping(countsNameMerge ? { ...mapping, mergeKeys: [] } : mapping);
 
   return (
     <section
@@ -118,9 +122,9 @@ export function CsvMappingPreview() {
       }}
     >
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, color: colors.textMuted, minWidth: 0 }}>
-        <div style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={`${counts.join(' · ')} · ${mapped}${seriesBy}${replicates}`}>
+        <div style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={`${counts.join(' · ')} · ${mapped}`}>
           <strong style={{ color: colors.text }}>{csv.sourceName}</strong>
-          {` · ${counts.join(' · ')} · ${mapped}${seriesBy}${replicates}`}
+          {` · ${counts.join(' · ')} · ${mapped}`}
         </div>
         <Button
           size="sm" variant="ghost" aria-expanded={open} aria-controls="qec-mapping-editor"
@@ -155,6 +159,11 @@ export function CsvMappingPreview() {
         {isFallbackPGuess(mapping) && (
           <div style={note}>
             {`p was guessed: "${mapping.p}" is not a conventional name for the noise parameter. Confirm the x-axis under Edit mapping.`}
+          </div>
+        )}
+        {mapping.p !== null && notProbability.has(mapping.p) && (
+          <div role="alert" style={note}>
+            {`"${mapping.p}" has values outside 0 to 1, so it is not a physical error probability. The x-axis and any threshold read from it would be meaningless; pick the probability column under Edit mapping.`}
           </div>
         )}
         {csv.issues.length > 0 && (
@@ -216,9 +225,9 @@ export function CsvMappingPreview() {
                 return (
                   <Tr key={r.strong_id}>
                     <Td style={{ maxWidth: 180, overflow: 'hidden', textOverflow: 'ellipsis' }} title={r.strong_id}>{r.strong_id}</Td>
-                    <Td numeric>{r.shots}</Td>
-                    <Td numeric>{r.errors}</Td>
-                    <Td numeric>{r.discards}</Td>
+                    <Td numeric>{formatCount(r.shots)}</Td>
+                    <Td numeric>{formatCount(r.errors)}</Td>
+                    <Td numeric>{formatCount(r.discards)}</Td>
                     <Td numeric>{typeof m.p === 'number' ? formatNoise(m.p) : '—'}</Td>
                     <Td numeric>{String(m.d ?? '—')}</Td>
                     <Td numeric>{String(m.rounds ?? '—')}</Td>

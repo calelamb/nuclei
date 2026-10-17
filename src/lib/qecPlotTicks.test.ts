@@ -57,6 +57,31 @@ describe('logAxis', () => {
   });
 });
 
+describe('end-of-axis coverage', () => {
+  it('labels past the last decade when data reaches 1.4e-3 (domain 1e-4 .. 1.4e-3)', () => {
+    const axis = logAxis([1e-4, 1.4e-3])!;
+    const span = axis.hi - axis.lo;
+    const last = Math.max(...axis.labeled.map((t) => Math.log10(t.value)));
+    expect(axis.hi - last).toBeLessThanOrEqual(0.2 * span);
+  });
+
+  it('labels the tail of the mid.csv range (5e-4 .. 1.4e-3) beyond 10^-3', () => {
+    const axis = logAxis([5e-4, 1.4e-3])!;
+    expect(axis.labeled.some((t) => t.value > 1.05e-3)).toBe(true);
+    expect(axis.labeled.map((t) => t.label)).toContain('1.2×10⁻³');
+  });
+
+  it('puts a label in the first and last 20% of the axis for realistic sweeps', () => {
+    for (const range of [[3e-4, 1.48e-3], [1e-3, 1e-2], [1e-4, 1e-2], [5e-4, 1.4e-3]]) {
+      const axis = logAxis(range)!;
+      const span = axis.hi - axis.lo;
+      const logs = axis.labeled.map((t) => Math.log10(t.value));
+      expect(axis.hi - Math.max(...logs)).toBeLessThanOrEqual(0.2 * span + 1e-9);
+      expect(Math.min(...logs) - axis.lo).toBeLessThanOrEqual(0.2 * span + 1e-9);
+    }
+  });
+});
+
 describe('partial decades at the ends of a wide axis', () => {
   it('labels 2x and 5x in the closing partial decade so the last stretch can be read', () => {
     const labels = logAxis([1e-5, 5e-2])!.labeled.map((t) => t.label);

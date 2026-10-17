@@ -4,7 +4,7 @@ import { useQecStore } from '../../stores/qecStore';
 import { useCircuitStore } from '../../stores/circuitStore';
 import { PanelHeader } from '../layout/PanelHeader';
 import { QecEmptyState } from './QecEmptyState';
-import { latticeLayout, activeQubitsAtTick } from './qecGeometry';
+import { latticeLayout, activeQubitsAtTick, tickMomentCount } from './qecGeometry';
 
 import { TYPOGRAPHY } from '../../styles/tokens';
 const DOCS = 'https://getnuclei.dev/docs/research/qec-studio/';
@@ -16,7 +16,7 @@ const DOCS = 'https://getnuclei.dev/docs/research/qec-studio/';
  * Hidden gracefully (a designed empty state) when the circuit carries no
  * qubit coordinates.
  */
-export function CodeLatticePanel() {
+export function CodeLatticePanel({ embedded = false }: { embedded?: boolean } = {}) {
   const colors = useThemeStore((s) => s.colors);
   const qec = useQecStore((s) => s.snapshot);
   const snapshot = useCircuitStore((s) => s.snapshot);
@@ -28,7 +28,7 @@ export function CodeLatticePanel() {
     [snapshot, tick],
   );
 
-  const header = <PanelHeader title="Code Lattice" helpHref={DOCS} />;
+  const header = embedded ? null : <PanelHeader title="Code Lattice" helpHref={DOCS} />;
 
   if (!qec) return <div style={{ height: '100%', background: colors.bg }}>{header}</div>;
 
@@ -45,7 +45,7 @@ export function CodeLatticePanel() {
     );
   }
 
-  const maxTick = Math.max(0, (qec.num_ticks || 1) - 1);
+  const maxTick = tickMomentCount(qec.num_ticks, snapshot?.gates ?? []) - 1;
   const basisColor = (b: string) => (b === 'X' ? colors.basisX : b === 'Z' ? colors.basisZ : colors.textDim);
 
   return (

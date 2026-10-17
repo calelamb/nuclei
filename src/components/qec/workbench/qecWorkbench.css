@@ -4,12 +4,17 @@
 }
 
 .qec-workbench {
-  --qec-canvas: #ffffff; --qec-raised: #f8fafc; --qec-recessed: #f1f5f9; --qec-border: #e2e8f0;
-  --qec-text: #1a1a2e; --qec-text-muted: #526175; --qec-quantum: #0891b2; --qec-interactive: #00b4d8;
+  /* Surfaces, text and status resolve from the app's global tokens (which already flip with the theme);
+     the literals are only fallbacks. The washes and lines below are QEC-specific. */
+  --qec-canvas: var(--color-surface-base, #ffffff); --qec-raised: var(--color-surface-raised, #f8fafc);
+  --qec-recessed: var(--color-surface-sunken, #f1f5f9); --qec-border: var(--color-border-strong, #e2e8f0);
+  --qec-text: var(--color-text-primary, #1a1a2e); --qec-text-muted: var(--color-text-secondary, #475569);
+  --qec-quantum: var(--color-accent-quantum, #0891b2); --qec-interactive: var(--color-accent-quantum-soft, #00b4d8);
   --qec-analytical: #2563eb; --qec-field: #f0f9ff; --qec-selection: #e0f2fe; --qec-selection-strong: #bae6fd;
-  --qec-quantum-strong: #164e63; --qec-analytical-strong: #075985; --qec-success: #15803d; --qec-warning: #a16207;
+  --qec-quantum-strong: #164e63; --qec-analytical-strong: #075985;
+  --qec-success: var(--color-success-text, var(--color-success, #059669)); --qec-warning: var(--color-warning, #a8580a);
   --qec-warning-field: #fffbeb; --qec-warning-border: #fcd34d; --qec-warning-divider: #fde68a; --qec-warning-text: #854d0e;
-  --qec-danger: #b91c1c; --qec-danger-field: #fef2f2; --qec-danger-border: #fecaca;
+  --qec-danger: var(--color-danger-text, var(--color-danger, #dc2626)); --qec-danger-field: #fef2f2; --qec-danger-border: #fecaca;
   --qec-success-field: #f0fdf4; --qec-success-border: #bbf7d0;
   --qec-wash: #f7fafe; --qec-line: #dbeafe; --qec-line-strong: #bfdbfe; --qec-line-hover: #93c5fd; --qec-tint: #eff6ff;
   --qec-analytical-text: #1d4ed8; --qec-info-edge: #0284c7; --qec-on-strong: #ffffff;
@@ -19,17 +24,13 @@
   line-height: 1.45;
 }
 
-/* Dark theme: same --qec-* contract, resolved from the app's global tokens so the
-   workbench follows the theme toggle instead of staying a white slab. */
+/* Dark theme: only the QEC-specific washes and accents change; everything aliased above follows the global theme. */
 :root[data-theme='dark'] .qec-workbench {
-  --qec-canvas: var(--color-surface-base); --qec-raised: var(--color-surface-raised);
-  --qec-recessed: var(--color-surface-sunken); --qec-border: var(--color-border-strong);
-  --qec-text: var(--color-text-primary); --qec-text-muted: var(--color-text-secondary);
   --qec-quantum: var(--color-accent-quantum-soft); --qec-interactive: var(--color-accent-quantum);
   --qec-analytical: #60a5fa; --qec-field: #0f2233; --qec-selection: #0e2f44; --qec-selection-strong: #14425f;
-  --qec-quantum-strong: #7dd3e8; --qec-analytical-strong: #93c5fd; --qec-success: #34d399; --qec-warning: #fbbf24;
+  --qec-quantum-strong: #7dd3e8; --qec-analytical-strong: #93c5fd;
   --qec-warning-field: #2a2210; --qec-warning-border: #6b5311; --qec-warning-divider: #4a3a10; --qec-warning-text: #fcd34d;
-  --qec-danger: #f87171; --qec-danger-field: #2a1417; --qec-danger-border: #6e2a2f;
+  --qec-danger-field: #2a1417; --qec-danger-border: #6e2a2f;
   --qec-success-field: #0f2a1e; --qec-success-border: #1e5c3f;
   --qec-wash: #0a101a; --qec-line: #1e2d45; --qec-line-strong: #2a3f5e; --qec-line-hover: #3b5a85; --qec-tint: #112036;
   --qec-analytical-text: #93c5fd; --qec-info-edge: #38bdf8; --qec-on-strong: #ffffff;
@@ -101,39 +102,15 @@
 
 .qec-study-picker {
   display: grid; flex: 0 1 290px; min-width: 190px; gap: 2px;
-  color: var(--qec-text-muted); font-size: 11px; font-weight: 700; letter-spacing: 0.08em;
-  text-transform: uppercase;
+  color: var(--qec-text-muted); font-size: 12px; font-weight: 500;
 }
 
 .qec-study-select { width: 100%; }
 .qec-study-select > select { font-weight: 600; letter-spacing: normal; text-transform: none; }
 
-.qec-preset-switcher {
-  display: flex; flex: 0 0 auto; overflow: hidden; border: 1px solid var(--qec-border);
-  border-radius: 6px; background: var(--qec-raised);
-}
-
-.qec-preset-switcher button {
-  min-width: 84px; min-height: 32px; padding: 0 13px; border: 0;
-  border-right: 1px solid var(--qec-border); background: transparent; color: var(--qec-text-muted); font-size: 11px;
-  font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; transition: color 160ms ease, background-color 160ms ease;
-}
-
-.qec-preset-switcher button:last-child {
-  border-right: 0;
-}
-
-.qec-preset-switcher button:hover {
-  color: var(--qec-text); background: var(--qec-field);
-}
-
-.qec-preset-switcher button[aria-pressed='true'] {
-  color: var(--qec-quantum-strong); background: var(--qec-selection); box-shadow: inset 0 -2px 0 var(--qec-quantum);
-}
-
 .qec-research-bar__metadata {
   display: flex; min-width: 0; flex-wrap: wrap; gap: 6px 16px;
-  color: var(--qec-text-muted); font-size: 11px;
+  color: var(--qec-text-muted); font-size: 12px;
 }
 
 .qec-status {
@@ -163,8 +140,7 @@
 }
 
 .qec-research-trail__label {
-  margin-right: 3px; color: var(--qec-text-muted); font-size: 11px; font-weight: 700;
-  letter-spacing: 0.08em; text-transform: uppercase;
+  margin-right: 3px; color: var(--qec-text-muted); font-size: 12px; font-weight: 500;
 }
 
 .qec-research-trail ol {
@@ -174,7 +150,7 @@
 
 .qec-research-trail li {
   display: flex; min-width: 0; align-items: center; gap: 5px;
-  color: var(--qec-analytical); font-size: 11px;
+  color: var(--qec-analytical); font-size: 12px;
 }
 
 .qec-research-trail li .qec-mono {
@@ -252,7 +228,7 @@
 
 .qec-zone-heading h2,
 .qec-investigation__header h1 {
-  font-size: 14px; font-weight: 700; line-height: 1.25;
+  font-size: 14px; font-weight: 600; line-height: 1.25;
 }
 
 .qec-investigation__header h1 {
@@ -261,7 +237,7 @@
 
 .qec-zone-heading__eyebrow {
   display: block; margin-bottom: 2px; color: var(--qec-text-muted); font-size: 11px;
-  font-weight: 700; letter-spacing: 0.09em; text-transform: uppercase;
+  font-weight: 500; letter-spacing: 0.04em; text-transform: uppercase;
 }
 
 .qec-sources,
@@ -289,8 +265,7 @@
 
 .qec-source-group h3,
 .qec-inspector__section h3 {
-  margin: 0 4px 7px; color: var(--qec-text-muted); font-size: 11px; font-weight: 700;
-  letter-spacing: 0.07em; text-transform: uppercase;
+  margin: 0 4px 7px; color: var(--qec-text-muted); font-size: 12px; font-weight: 500;
 }
 
 .qec-source-row {
@@ -301,7 +276,7 @@
 }
 
 .qec-source-row-shell {
-  position: relative; display: grid; min-width: 0; grid-template-columns: minmax(0, 1fr) 44px;
+  position: relative; display: grid; min-width: 0; grid-template-columns: minmax(0, 1fr) auto;
   margin: 2px 0; overflow: hidden; border: 1px solid transparent; border-radius: 5px;
   transition: background-color 160ms ease, border-color 160ms ease;
 }
@@ -323,9 +298,16 @@
   border-color: transparent; background: transparent;
 }
 
-.qec-source-row__import.nuclei-icon-btn {
-  align-self: center; margin: 0 var(--space-1);
+.qec-source-row__actions {
+  display: flex; align-items: center; gap: 0; padding-right: var(--space-1);
 }
+
+/* Row actions appear on hover or keyboard focus so the id and path keep the row's width. */
+.qec-source-row-shell:not(:hover):not(:focus-within):not([aria-current='true']) .qec-source-row__actions {
+  position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); padding: 0;
+}
+
+.qec-source-group__error { color: var(--qec-danger); }
 
 .qec-source-row:hover {
   border-color: var(--qec-border); background: var(--qec-raised);
@@ -352,9 +334,7 @@
   margin-top: 2px; color: var(--qec-text-muted); font-size: 11px;
 }
 
-.qec-source-row__kind {
-  color: var(--qec-text-muted); font-family: var(--font-mono); font-size: 11px; text-transform: uppercase;
-}
+.qec-source-row__kind { text-transform: uppercase; }
 
 .qec-session-tree {
   display: grid; gap: 2px; margin: 0; padding: 0; list-style: none;
@@ -365,8 +345,8 @@
 }
 
 .qec-session-row__status {
-  padding: 3px 5px; border: 1px solid var(--qec-border); border-radius: 999px;
-  color: var(--qec-text-muted); font-family: var(--font-mono); font-size: 11px; text-transform: uppercase;
+  padding: 3px 6px; border: 1px solid var(--qec-border); border-radius: 999px;
+  color: var(--qec-text-muted); font-size: 11px; text-transform: capitalize;
 }
 
 .qec-session-row__status--complete {
@@ -375,7 +355,7 @@
 
 .qec-source-instrument {
   display: grid; min-height: 44px; grid-template-columns: 8px minmax(0, 1fr) auto 44px; align-items: center;
-  gap: 8px; padding: 0 8px; color: var(--qec-text-muted); font-size: 11px;
+  gap: 8px; padding: 0 8px; color: var(--qec-text-muted); font-size: 12px;
 }
 
 .qec-source-instrument__mark {
@@ -384,11 +364,11 @@
 }
 
 .qec-source-instrument__state {
-  font-size: 11px; text-transform: capitalize;
+  font-size: 12px; text-transform: capitalize;
 }
 
 .qec-source-group__empty {
-  padding: 8px; color: var(--qec-text-muted); font-size: 11px;
+  padding: 8px; color: var(--qec-text-muted); font-size: 12px;
 }
 
 .qec-study-errors {
@@ -407,7 +387,7 @@
 }
 
 .qec-study-errors > header span {
-  margin-top: 2px; font-size: 11px;
+  margin-top: 2px; font-size: 12px;
 }
 
 .qec-study-errors > ul {
@@ -423,14 +403,15 @@
 }
 
 .qec-study-errors li li {
-  margin-top: 4px; color: var(--qec-text-muted); font-size: 11px; line-height: 1.45;
+  margin-top: 4px; color: var(--qec-text-muted); font-size: 12px; line-height: 1.45;
 }
 
 .qec-sources__footer {
   display: flex; min-height: 40px; flex: 0 0 auto; align-items: center;
   justify-content: space-between; gap: 8px; padding: 0 12px; border-top: 1px solid var(--qec-border);
-  color: var(--qec-text-muted); font-size: 11px;
+  color: var(--qec-text-muted); font-size: 12px; white-space: nowrap;
 }
+.qec-sources__footer > * { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 
 .qec-zone-empty {
   display: flex; min-height: 180px; flex: 1; flex-direction: column;
@@ -443,7 +424,7 @@
 }
 
 .qec-zone-empty span {
-  max-width: 260px; font-size: 11px; line-height: 1.5;
+  max-width: 260px; font-size: 12px; line-height: 1.5;
 }
 
 .qec-zone-empty--compact {
@@ -469,9 +450,8 @@
 }
 
 .qec-instrument-state {
-  white-space: nowrap; display: inline-flex; min-height: 28px; align-items: center; gap: 6px;
-  padding: 0 8px; border: 1px solid var(--qec-selection-strong); border-radius: 4px; background: var(--qec-field);
-  color: var(--qec-analytical-strong); font-size: 11px; font-weight: 600;
+  white-space: nowrap; display: inline-flex; align-items: center; gap: 6px;
+  color: var(--qec-text-muted); font-size: 12px; font-weight: 400;
 }
 
 .qec-investigation__panels {
@@ -506,8 +486,28 @@
 }
 
 .qec-instrument h2 {
-  font-size: 12px; font-weight: 700;
+  display: inline; font-size: 13px; font-weight: 600;
 }
+
+.qec-instrument > header > div { display: flex; flex-wrap: wrap; align-items: baseline; column-gap: 8px; }
+
+.qec-instrument__context {
+  white-space: nowrap; color: var(--qec-text-muted); font-size: 12px;
+}
+
+.qec-instrument__help {
+  display: inline-grid; width: 28px; height: 28px; flex: 0 0 auto; place-items: center; border-radius: 5px;
+  color: var(--qec-text-muted); text-decoration: none;
+}
+
+.qec-instrument__help:hover { background: var(--qec-selection); color: var(--qec-text); }
+
+.qec-instrument__hint { max-width: 280px; color: var(--qec-text-muted); font-size: 12px; line-height: 1.45; }
+
+/* No circuit yet: a short card, not a 640px dotted field. */
+.qec-instrument[data-empty='true'] { align-self: start; min-height: 0; }
+.qec-instrument[data-empty='true'] .qec-instrument__body { flex: none; overflow: visible; }
+.qec-instrument[data-empty='true'] .qec-instrument__empty { min-height: 140px; flex: none; }
 
 .qec-instrument header > div { min-width: 0; }
 
@@ -557,11 +557,11 @@
 }
 
 .qec-inspector dt {
-  color: var(--qec-text-muted); font-size: 11px; text-transform: capitalize;
+  color: var(--qec-text-muted); font-size: 12px; text-transform: capitalize;
 }
 
 .qec-inspector dd {
-  overflow: hidden; font-size: 11px; text-align: right; text-overflow: ellipsis;
+  overflow: hidden; font-size: 12px; text-align: right; text-overflow: ellipsis;
 }
 
 .qec-inspector__tools {
@@ -570,7 +570,7 @@
 
 .qec-inspector__tools li {
   display: flex; min-height: 44px; align-items: center; justify-content: space-between;
-  gap: 8px; padding: 0 0 0 9px; color: var(--qec-text-muted); font-size: 11px;
+  gap: 8px; padding: 0 0 0 9px; color: var(--qec-text-muted); font-size: 12px;
 }
 
 .qec-lineage-state {
@@ -589,11 +589,11 @@
 }
 
 .qec-lineage-state strong {
-  font-size: 11px;
+  font-size: 12px;
 }
 
 .qec-lineage-state span {
-  margin-top: 2px; color: var(--qec-text-muted); font-size: 11px;
+  margin-top: 2px; color: var(--qec-text-muted); font-size: 12px;
 }
 
 .qec-inspector__footer {
@@ -619,8 +619,11 @@
   height: auto;
 }
 
-.qec-tray--idle .qec-tray__content {
-  padding: 8px 14px;
+.qec-tray--idle .qec-tray__header { min-height: 36px; border-bottom: 0; }
+
+.qec-tray__idle-note {
+  display: inline-flex; align-items: center; gap: 6px; align-self: center; margin-left: auto; padding-right: var(--space-2);
+  color: var(--qec-text-muted); font-size: 12px;
 }
 
 .qec-tray--idle .qec-tray__engine {
@@ -640,7 +643,7 @@
 .qec-tray__tabs > span {
   display: inline-flex; min-width: 0; align-items: center; gap: 6px;
   padding: 0 14px; border: 0; border-right: 1px solid var(--qec-border); background: transparent;
-  color: var(--qec-text-muted); font-size: 11px; white-space: nowrap;
+  color: var(--qec-text-muted); font-size: 12px; white-space: nowrap;
 }
 
 .qec-tray__tabs .qec-tray__active-instrument {
@@ -670,7 +673,7 @@
 }
 
 .qec-tray__empty span {
-  margin-top: 2px; font-size: 11px;
+  margin-top: 2px; font-size: 12px;
 }
 
 .qec-tray__summary {
@@ -686,7 +689,7 @@
 }
 
 .qec-tray__summary dt {
-  color: var(--qec-text-muted); font-size: 11px; text-transform: uppercase;
+  color: var(--qec-text-muted); font-size: 12px;
 }
 
 .qec-tray__summary dd {
@@ -699,6 +702,13 @@
   gap: 8px 10px; padding: 24px; background: var(--qec-wash); color: var(--qec-text-muted); font-size: 12px;
 }
 .qec-tray__engine > span { min-width: 0; overflow-wrap: anywhere; }
+.qec-tray__engine--error { justify-content: flex-start; min-height: 0; padding: 14px 18px; background: var(--qec-danger-field); color: var(--qec-danger); }
+.qec-tray__engine-text { display: grid; min-width: 0; flex: 1; gap: 2px; }
+.qec-tray__engine-text strong { color: var(--qec-text); font-weight: 600; }
+.qec-tray__engine-text span { color: var(--qec-text-muted); }
+.qec-tray__engine-text details { margin-top: 4px; color: var(--qec-text-muted); }
+.qec-tray__engine-text summary { cursor: pointer; }
+.qec-tray__engine-text code { display: block; margin-top: 4px; overflow-wrap: anywhere; font-family: var(--font-mono); font-size: 12px; }
 
 /* A narrow canvas stacks the instruments instead of squeezing the leading one. */
 @container (max-width: 560px) {
@@ -712,8 +722,16 @@
 
   .qec-investigation__panels > .qec-instrument--primary {
     grid-row: auto !important;
-    /* The leading instrument hosts the readable analysis; it must not share the secondary row height. */
-    min-height: min(640px, max(520px, calc(100cqh - 24px)));
+  }
+
+  /* The leading instrument hosts the readable analysis and fills the canvas; an empty one stays a short card. */
+  .qec-investigation__panels > .qec-instrument--primary:not([data-empty='true']) {
+    min-height: max(520px, calc(100cqh - 24px));
+  }
+
+  /* Auto rows of overflow-hidden cards collapse to their borders, so an empty card names its own height: header + empty field. */
+  .qec-investigation__panels > .qec-instrument[data-empty='true'] {
+    min-height: 224px;
   }
 }
 
@@ -736,6 +754,10 @@
 }
 
 /* The detector graph needs its canvas (220px minimum) plus the header, toolbar and footer around it. */
-.qec-investigation__panels > .qec-instrument[data-panel='detector-graph'] {
+.qec-investigation__panels > .qec-instrument[data-panel='detector-graph']:not([data-empty='true']) {
   min-height: 460px;
 }
+
+/* Three empty circuit cards offer one Open button: only the first empty card keeps it. */
+.qec-open-circuit { display: contents; }
+.qec-instrument[data-empty='true'] ~ .qec-instrument[data-empty='true'] .qec-open-circuit { display: none; }

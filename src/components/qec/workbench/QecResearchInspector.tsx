@@ -15,7 +15,7 @@ function InspectorHeading({ onClose }: { onClose(): void }): ReactElement {
     <header className="qec-zone-heading">
       <div>
         <span className="qec-zone-heading__eyebrow">Contextual detail</span>
-        <h2>Inspector</h2>
+        <h2 tabIndex={-1} className="qec-inspector__title">Inspector</h2>
       </div>
       <IconButton className="qec-inspector__close" aria-label="Close research inspector" onClick={onClose}>
         <X aria-hidden="true" size={ICON_SIZE.md} strokeWidth={ICON_STROKE} />
@@ -52,10 +52,12 @@ function SelectionDetails({ selection }: { selection: ResearchSelection }): Reac
   );
 }
 
-function InspectorTools(): ReactElement {
+function InspectorTools(): ReactElement | null {
   const preset = useQecWorkbenchStore((state) => state.preset);
   const pinnedPanelIds = useQecWorkbenchStore((state) => state.pinnedPanelIds);
-  const panels = resolveQecPanels(preset, 'inspector', pinnedPanelIds);
+  // The inspector is the surface you are looking at; listing it as an instrument you could pin is circular.
+  const panels = resolveQecPanels(preset, 'inspector', pinnedPanelIds).filter((panel) => panel.id !== 'research-inspector');
+  if (panels.length === 0) return null;
   return (
     <section className="qec-inspector__section" aria-labelledby="inspector-tools-heading">
       <h3 id="inspector-tools-heading">Available instruments</h3>
@@ -80,13 +82,17 @@ function LineageState(): ReactElement {
 
 interface QecResearchInspectorProps { open: boolean; onClose(): void; }
 
-/** Moves focus into the inspector when it is opened after mount, so Escape (handled on the panel) works. */
+/**
+ * Moves focus to the inspector's heading when it is opened by the person, so
+ * Escape (handled on the panel) works. Only a closed -> open change counts:
+ * mounting already open (or React re-running the effect) must not take focus.
+ */
 function useFocusOnOpen(open: boolean) {
   const ref = useRef<HTMLElement>(null);
-  const mounted = useRef(false);
+  const wasOpen = useRef(open);
   useEffect(() => {
-    if (mounted.current && open) ref.current?.querySelector<HTMLElement>('.qec-inspector__close')?.focus();
-    mounted.current = true;
+    if (open && !wasOpen.current) ref.current?.querySelector<HTMLElement>('.qec-inspector__title')?.focus();
+    wasOpen.current = open;
   }, [open]);
   return ref;
 }

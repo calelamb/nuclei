@@ -3,6 +3,7 @@ import { MIN_LAMBDA_DISTANCES, type LambdaGroupEstimate, type RateUnits } from '
 import { buildLambdaTable, type LambdaRowView } from '../../lib/qecLambdaTable';
 import type { ThemeColors } from '../../stores/themeStore';
 import { ICON_SIZE, ICON_STROKE, TYPOGRAPHY } from '../../styles/tokens';
+import './qecAnalysis.css';
 import { Table, Thead, Tbody, Tr, Th, Td } from '../ui/Table';
 
 interface Props {
@@ -10,6 +11,8 @@ interface Props {
   estimates: LambdaGroupEstimate[];
   units: RateUnits;
   colors: ThemeColors;
+  /** The panel header already carries this title (the Λ tab), so the readout does not repeat it. */
+  hideTitle?: boolean;
 }
 
 /**
@@ -18,18 +21,20 @@ interface Props {
  * distinct caveat is stated once, and per-row detail sits in the warning icon's
  * tooltip. Same numbers and caveats as the exported figure and Dirac.
  */
-export function QecLambdaReadout({ decoders, estimates, units, colors }: Props) {
+export function QecLambdaReadout({ decoders, estimates, units, colors, hideTitle = false }: Props) {
   const table = buildLambdaTable(estimates, units);
   const withoutFit = decoders.filter((d) => !table.groups.some((g) => g.decoder === d));
   return (
     <section aria-label="Error suppression factor Λ" style={{ fontFamily: TYPOGRAPHY.fontSans, fontSize: 12, color: colors.text }}>
-      <h3 style={{ margin: 0, fontSize: 11, fontWeight: 600, letterSpacing: 0.4, textTransform: 'uppercase', color: colors.textMuted }}>
-        Error suppression Λ
-      </h3>
+      {!hideTitle && (
+        <h3 style={{ margin: 0, fontSize: 12, fontWeight: 600, color: colors.textMuted }}>
+          Error suppression Λ
+        </h3>
+      )}
       {table.subtitle && <div style={{ fontSize: 11, color: colors.textMuted, margin: '2px 0 6px' }}>{table.subtitle}</div>}
       {table.groups.map((g) => (
         <div key={g.decoder} style={{ marginBottom: 8 }}>
-          <Table label={`Λ for ${g.decoder}`} dense>
+          <Table label={`Λ for ${g.decoder}`} dense className="qec-lambda-table">
             <caption style={{ captionSide: 'top', textAlign: 'left', fontWeight: 600, padding: '4px 8px', color: colors.text }}>{g.decoder}</caption>
             <Thead>
               <Tr>
@@ -49,7 +54,7 @@ export function QecLambdaReadout({ decoders, estimates, units, colors }: Props) 
                   <Td colSpan={5} text>
                     <details style={{ color: colors.textMuted, fontSize: 11 }}>
                       <summary style={{ cursor: 'pointer' }}>{g.collapsed.summary}</summary>
-                      <Table label={`Λ for ${g.decoder}, rows not meaningful`} dense>
+                      <Table label={`Λ for ${g.decoder}, rows not meaningful`} dense className="qec-lambda-table">
                         <Tbody>
                           {g.collapsed.rows.map((r) => <LambdaRow key={`${r.experiment}|${r.noise}`} row={r} colors={colors} />)}
                         </Tbody>
@@ -89,7 +94,7 @@ function LambdaRow({ row, colors }: { row: LambdaRowView; colors: ThemeColors })
       <Td numeric style={{ color: tone, fontWeight: row.meaningful ? 600 : 400 }}>{row.lambda}</Td>
       <Td numeric style={{ color: tone }}>{row.ci ?? '—'}</Td>
       <Td numeric style={{ color: tone }}>{row.rSquared}</Td>
-      <Td style={{ width: 18 }}>
+      <Td>
         {row.flags.length > 0 && (
           <span role="img" aria-label={`Warnings: ${row.flags.join('; ')}`} title={flagText} style={{ color: colors.warning, display: 'inline-flex' }}>
             <TriangleAlert size={ICON_SIZE.xs} strokeWidth={ICON_STROKE} aria-hidden="true" />

@@ -1,4 +1,5 @@
 import { Select } from '../../ui/Select';
+import { SegmentedControl } from '../../ui/SegmentedControl';
 import type { ReactElement } from 'react';
 import { useQecStudyStore } from '../../../services/qecStudyStore';
 import { useQecStudyUiStore } from '../../../stores/qecStudyUiStore';
@@ -40,18 +41,12 @@ function StudyPicker(): ReactElement {
   );
 }
 
+const PRESET_OPTIONS = PRESETS.map((value) => ({ value, label: presetLabel(value) }));
+
 function PresetSwitcher(): ReactElement {
   const preset = useQecWorkbenchStore((state) => state.preset);
   const setPreset = useQecWorkbenchStore((state) => state.setPreset);
-  return (
-    <div className="qec-preset-switcher" role="group" aria-label="Workspace preset">
-      {PRESETS.map((option) => (
-        <button key={option} type="button" aria-pressed={preset === option} onClick={() => setPreset(option)}>
-          {presetLabel(option)}
-        </button>
-      ))}
-    </div>
-  );
+  return <SegmentedControl aria-label="Workspace preset" value={preset} options={PRESET_OPTIONS} onChange={setPreset} />;
 }
 
 function ResearchContext(): ReactElement {
