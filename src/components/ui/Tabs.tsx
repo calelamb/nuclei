@@ -1,4 +1,4 @@
-import { useId, useRef, type KeyboardEvent, type ReactNode } from 'react';
+import { useCallback, useEffect, useId, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
 import { cx } from './cx';
 
 export interface TabOption<T extends string> {
@@ -23,6 +23,25 @@ export function Tabs<T extends string>({ value, options, onChange, 'aria-label':
   const listRef = useRef<HTMLDivElement>(null);
   const baseId = useId();
   const enabled = options.filter((o) => !o.disabled);
+  const [overflow, setOverflow] = useState<'none' | 'end' | 'start' | 'both'>('none');
+
+  // A scrollable strip fades its clipped edge so hidden tabs are discoverable.
+  const measure = useCallback(() => {
+    const el = listRef.current;
+    if (!el) return;
+    const start = el.scrollLeft > 1;
+    const end = el.scrollLeft + el.clientWidth < el.scrollWidth - 1;
+    setOverflow(start && end ? 'both' : start ? 'start' : end ? 'end' : 'none');
+  }, []);
+  useEffect(() => {
+    const el = listRef.current;
+    if (!el) return undefined;
+    const frame = requestAnimationFrame(measure);
+    if (typeof ResizeObserver === 'undefined') return () => cancelAnimationFrame(frame);
+    const observer = new ResizeObserver(measure);
+    observer.observe(el);
+    return () => { cancelAnimationFrame(frame); observer.disconnect(); };
+  }, [measure, options.length]);
 
   const onKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
     const at = enabled.findIndex((o) => o.value === value);
@@ -41,7 +60,15 @@ export function Tabs<T extends string>({ value, options, onChange, 'aria-label':
   };
 
   return (
-    <div ref={listRef} role="tablist" aria-label={ariaLabel} className={cx('nuclei-tabs', className)} onKeyDown={onKeyDown}>
+    <div
+      ref={listRef}
+      role="tablist"
+      aria-label={ariaLabel}
+      data-overflow={overflow}
+      className={cx('nuclei-tabs', className)}
+      onKeyDown={onKeyDown}
+      onScroll={measure}
+    >
       {options.map((o) => {
         const selected = o.value === value;
         return (

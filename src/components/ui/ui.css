@@ -243,3 +243,8 @@
 /* Dirac-accented Button (purple is for Dirac only) */
 .nuclei-btn.nuclei-btn--dirac { background: var(--color-accent-dirac); border-color: var(--color-accent-dirac); color: #fff; }
 .nuclei-btn.nuclei-btn--dirac:hover:not(:disabled) { filter: brightness(1.12); }
+.nuclei-tabs[data-overflow='end'] { -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 28px), transparent); mask-image: linear-gradient(to right, #000 calc(100% - 28px), transparent); }
+.nuclei-tabs[data-overflow='start'] { -webkit-mask-image: linear-gradient(to left, #000 calc(100% - 28px), transparent); mask-image: linear-gradient(to left, #000 calc(100% - 28px), transparent); }
+.nuclei-tabs[data-overflow='both'] { -webkit-mask-image: linear-gradient(to right, transparent, #000 28px, #000 calc(100% - 28px), transparent); mask-image: linear-gradient(to right, transparent, #000 28px, #000 calc(100% - 28px), transparent); }
+.nuclei-tabs__tab { display: inline-flex; align-items: center; gap: var(--space-1); }
+.nuclei-tabs.viz-zone-tabs { flex: 0 0 auto; background: var(--color-surface-base); padding: 0 var(--space-1); }

@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { useState } from 'react';
 import { Checkbox } from './Checkbox';
 import { Tabs } from './Tabs';
@@ -77,5 +77,22 @@ describe('Badge', () => {
   it('renders children with the tone class', () => {
     render(<Badge tone="success">Ready</Badge>);
     expect(screen.getByText('Ready').className).toContain('nuclei-badge--success');
+  });
+});
+
+describe('Tabs overflow cue', () => {
+  it('flags a clipped end edge so the strip can fade it', async () => {
+    const rect = { scrollWidth: 400, clientWidth: 200, scrollLeft: 0 };
+    const spies = (Object.keys(rect) as Array<keyof typeof rect>).map((k) =>
+      vi.spyOn(HTMLElement.prototype, k, 'get').mockReturnValue(rect[k]));
+    render(<Harness />);
+    await act(async () => { await new Promise((r) => requestAnimationFrame(() => r(null))); });
+    expect(screen.getByRole('tablist').getAttribute('data-overflow')).toBe('end');
+    spies.forEach((s) => s.mockRestore());
+  });
+
+  it('reports no overflow when everything fits', () => {
+    render(<Harness />);
+    expect(screen.getByRole('tablist').getAttribute('data-overflow')).toBe('none');
   });
 });
