@@ -13,6 +13,9 @@ import { NewQecExperimentMenu } from './NewQecExperimentMenu';
 import { NoiseModelLibrary } from './NoiseModelLibrary';
 import { RunButton } from './RunButton';
 import { RunFeedback } from './RunFeedback';
+import { TYPOGRAPHY, ICON_SIZE, ICON_STROKE } from '../../styles/tokens';
+import { Button, IconButton } from '../ui';
+import './experiments.css';
 
 /**
  * PRD 09 Phase D (D1) — Research-mode left-rail Experiments panel. Replaces
@@ -49,30 +52,23 @@ function gridSizeLabel(experiment: DiscoveredExperiment): string {
 function WebExperimentsEmptyState() {
   const colors = useThemeStore((s) => s.colors);
   const setActiveView = useNavigationStore((s) => s.setActiveView);
-  const linkBtn: React.CSSProperties = {
-    display: 'block', width: '100%', padding: '7px 10px', borderRadius: 4, fontSize: 12, fontWeight: 600,
-    fontFamily: "'Geist Sans', sans-serif", cursor: 'pointer', textAlign: 'center', textDecoration: 'none',
-    boxSizing: 'border-box',
-  };
   return (
-    <div style={{ padding: 16, display: 'flex', flexDirection: 'column', gap: 10, fontFamily: "'Geist Sans', sans-serif" }}>
-      <FlaskConical size={20} style={{ color: colors.textDim, opacity: 0.6 }} />
+    <div style={{ padding: 16, display: 'flex', flexDirection: 'column', gap: 12, fontFamily: TYPOGRAPHY.fontSans }}>
+      <FlaskConical size={ICON_SIZE.lg} strokeWidth={ICON_STROKE} style={{ color: colors.textDim }} />
       <div style={{ color: colors.text, fontSize: 13, fontWeight: 600 }}>Experiments live in the desktop app</div>
-      <div style={{ color: colors.textDim, fontSize: 12, lineHeight: 1.55 }}>
+      <div style={{ color: colors.textMuted, fontSize: 12, lineHeight: 1.55 }}>
         Experiments are parameter sweeps saved as files in a project folder, so they need the desktop app.
         In the browser you can still analyse QEC data and edit and simulate circuits.
       </div>
-      <button
-        onClick={() => setActiveView('qec')}
-        style={{ ...linkBtn, background: colors.accent, color: '#0a1220', border: 'none' }}
-      >
+      <Button variant="primary" size="lg" onClick={() => setActiveView('qec')} style={{ width: '100%' }}>
         Open QEC Workbench
-      </button>
+      </Button>
       <a
         href="https://getnuclei.dev"
         target="_blank"
         rel="noreferrer"
-        style={{ ...linkBtn, background: 'transparent', color: colors.accent, border: `1px solid ${colors.border}` }}
+        className="nuclei-btn nuclei-btn--secondary nuclei-btn--lg"
+        style={{ width: '100%', textDecoration: 'none' }}
       >
         Download Nuclei
       </a>
@@ -100,46 +96,35 @@ function ExperimentRow({
 
   return (
     <div
+      className="nuclei-experiment-row"
       data-testid={`experiment-row-${experiment.fileName}`}
       aria-current={selected ? 'true' : undefined}
       onClick={onSelect}
-      style={{
-        padding: '8px 10px', borderBottom: `1px solid ${colors.border}`,
-        cursor: 'pointer', display: 'flex', flexDirection: 'column', gap: 4,
-        background: selected ? `${colors.accent}14` : 'transparent',
-        boxShadow: selected ? `inset 2px 0 0 ${colors.accent}` : 'none',
-      }}
-      onMouseEnter={(e) => { if (!selected) e.currentTarget.style.background = colors.bgElevated; }}
-      onMouseLeave={(e) => { e.currentTarget.style.background = selected ? `${colors.accent}14` : 'transparent'; }}
     >
-      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
         <button
+          type="button"
+          className="nuclei-experiment-row__name"
           onClick={(e) => { e.stopPropagation(); onSelect(); }}
           title={`Open ${spec.name}`}
-          style={{
-            background: 'transparent', border: 'none', padding: 0, textAlign: 'left', cursor: 'pointer',
-            color: selected ? colors.accent : colors.text, fontSize: 12, fontWeight: 600,
-            fontFamily: "'Geist Sans', sans-serif", flex: 1, minWidth: 0,
-            overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-          }}
         >
           {spec.name}
         </button>
-        <button
-          onClick={(e) => { e.stopPropagation(); onEdit(); }}
-          title="Edit experiment"
+        <IconButton
+          size="sm"
           aria-label={`Edit ${spec.name}`}
-          style={{ background: 'transparent', border: 'none', color: colors.textDim, cursor: 'pointer', display: 'flex' }}
+          title="Edit experiment"
+          onClick={(e) => { e.stopPropagation(); onEdit(); }}
         >
-          <Pencil size={12} />
-        </button>
+          <Pencil size={ICON_SIZE.xs} strokeWidth={ICON_STROKE} />
+        </IconButton>
       </div>
-      <div style={{ color: colors.textDim, fontSize: 10, fontFamily: "'Fira Code', monospace" }}>
+      <div style={{ color: colors.textDim, fontSize: 11, fontFamily: TYPOGRAPHY.fontMono }}>
         {spec.type === 'qec_campaign'
           ? `${'generate' in spec.source ? spec.source.generate.code : spec.source.entry} · ${spec.noise.model} · ${spec.decoders.join('+')}`
           : `${spec.entry} · ${spec.backend.provider}/${spec.backend.target}`}
       </div>
-      <div style={{ color: colors.textDim, fontSize: 10, fontFamily: "'Geist Sans', sans-serif" }}>
+      <div style={{ color: colors.textDim, fontSize: 11, fontFamily: TYPOGRAPHY.fontSans }}>
         {spec.type === 'qec_campaign'
           ? `campaign · ${gridSizeLabel(experiment)} task${gridSizeLabel(experiment) === '1' ? '' : 's'} · last run: ${lastRun}`
           : `${gridSizeLabel(experiment)} point${gridSizeLabel(experiment) === '1' ? '' : 's'} · last run: ${lastRun}`}
@@ -203,8 +188,8 @@ export function ExperimentsPanel() {
 
   if (!projectRoot) {
     return (
-      <div style={{ padding: 16, color: colors.textDim, fontSize: 12, fontFamily: "'Geist Sans', sans-serif", textAlign: 'center' }}>
-        <FlaskConical size={20} style={{ opacity: 0.4, marginBottom: 8 }} />
+      <div style={{ padding: 16, color: colors.textDim, fontSize: 12, fontFamily: TYPOGRAPHY.fontSans, textAlign: 'center' }}>
+        <FlaskConical size={ICON_SIZE.lg} strokeWidth={ICON_STROKE} style={{ opacity: 0.6, marginBottom: 8 }} />
         <div>Open a folder to start experimenting.</div>
       </div>
     );
@@ -213,35 +198,19 @@ export function ExperimentsPanel() {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
       <div style={{ padding: '8px 10px', display: 'flex', gap: 6, alignItems: 'center', borderBottom: `1px solid ${colors.border}` }}>
-        <button
-          onClick={() => openForm(undefined)}
-          style={{
-            flex: 1, minWidth: 0, height: 28, padding: '0 10px', background: 'transparent', border: `1px solid ${colors.accent}`,
-            borderRadius: 4, color: colors.accent, cursor: 'pointer', fontSize: 11, fontWeight: 600,
-            fontFamily: "'Geist Sans', sans-serif", whiteSpace: 'nowrap',
-          }}
-        >
+        <Button variant="secondary" onClick={() => openForm(undefined)} style={{ flex: 1, minWidth: 0 }}>
           + New experiment
-        </button>
+        </Button>
         <NewQecExperimentMenu projectRoot={projectRoot} />
-        <button
-          onClick={() => setNoiseLibOpen(true)}
-          title="Noise models"
-          aria-label="Noise models"
-          style={{
-            display: 'flex', alignItems: 'center', justifyContent: 'center', width: 28, height: 28, flexShrink: 0,
-            background: 'transparent', border: `1px solid ${colors.border}`, borderRadius: 4,
-            color: colors.textMuted, cursor: 'pointer',
-          }}
-        >
-          <Waves size={13} />
-        </button>
+        <IconButton variant="secondary" aria-label="Noise models" title="Noise models" onClick={() => setNoiseLibOpen(true)}>
+          <Waves size={ICON_SIZE.sm} strokeWidth={ICON_STROKE} />
+        </IconButton>
       </div>
       <RunFeedback compact />
 
       <div style={{ flex: 1, minHeight: 0, overflow: 'auto' }}>
         {experiments.length === 0 && validationErrors.length === 0 && (
-          <div style={{ padding: 16, color: colors.textDim, fontSize: 12, fontFamily: "'Geist Sans', sans-serif" }}>
+          <div style={{ padding: 16, color: colors.textDim, fontSize: 12, fontFamily: TYPOGRAPHY.fontSans }}>
             No experiments yet. Create one to declare a parameter sweep.
           </div>
         )}
@@ -263,14 +232,14 @@ export function ExperimentsPanel() {
             key={err.fileName}
             role="alert"
             style={{
-              margin: 8, padding: 10, border: `1px solid ${colors.error}`, borderRadius: 6,
+              margin: 8, padding: 10, border: `1px solid ${colors.error}`, borderRadius: 'var(--radius-soft)',
               background: `${colors.error}12`,
             }}
           >
-            <div style={{ color: colors.error, fontSize: 11, fontWeight: 600, marginBottom: 4, fontFamily: "'Fira Code', monospace" }}>
+            <div style={{ color: colors.error, fontSize: 11, fontWeight: 600, marginBottom: 4, fontFamily: TYPOGRAPHY.fontMono }}>
               {err.fileName}
             </div>
-            <ul style={{ margin: 0, paddingLeft: 16, color: colors.textMuted, fontSize: 10 }}>
+            <ul style={{ margin: 0, paddingLeft: 16, color: colors.textMuted, fontSize: 11 }}>
               {err.errors.map((msg) => <li key={msg}>{msg}</li>)}
             </ul>
           </div>

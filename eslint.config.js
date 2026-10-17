@@ -31,9 +31,8 @@ export default defineConfig([
   },
   {
     // Design-system guard: fonts come from TYPOGRAPHY / var(--font-*), never literals.
-    // src/components/experiments is exempt until its lane migrates (index.css aliases 'Fira Code').
     files: ['src/**/*.{ts,tsx}'],
-    ignores: ['src/styles/**', 'src/components/experiments/**', '**/*.test.{ts,tsx}'],
+    ignores: ['src/styles/**', '**/*.test.{ts,tsx}'],
     rules: {
       'no-restricted-syntax': [
         'error',

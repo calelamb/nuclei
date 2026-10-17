@@ -5,6 +5,8 @@ import { useExperimentRun } from '../../hooks/useExperimentRun';
 import { useExperimentRunStore } from '../../stores/experimentRunStore';
 import { HardwareSweepGuard } from './HardwareSweepGuard';
 import type { DiscoveredExperiment } from '../../services/experimentStore';
+import { TYPOGRAPHY, ICON_SIZE, ICON_STROKE } from '../../styles/tokens';
+import { Button } from '../ui';
 
 /**
  * PRD 09 Phase D — shared "Run" affordance for both the Experiments panel
@@ -50,47 +52,28 @@ export function RunButton({ experiment, projectRoot, pointCount, variant = 'soli
   if (isThisActive) {
     const { progress } = active;
     return (
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 11, fontFamily: "'Geist Sans', sans-serif" }}>
-        <span style={{ color: colors.accent }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 11, fontFamily: TYPOGRAPHY.fontSans }}>
+        <span style={{ color: colors.accent, fontVariantNumeric: 'tabular-nums' }}>
           {progress.completed}/{progress.total}
           {progress.failures > 0 ? ` (${progress.failures} failed)` : ''}
         </span>
-        <button
-          onClick={active.cancel}
-          style={{
-            padding: '3px 10px', background: 'transparent', color: colors.error,
-            border: `1px solid ${colors.error}`, borderRadius: 4, cursor: 'pointer', fontSize: 11,
-          }}
-        >
-          Cancel
-        </button>
+        <Button variant="danger" size="sm" onClick={active.cancel}>Cancel</Button>
       </div>
     );
   }
 
   return (
     <>
-      <button
+      <Button
+        variant={variant === 'ghost' ? 'secondary' : 'primary'}
+        size="sm"
         onClick={(e) => { e.stopPropagation(); handleClick(); }}
         disabled={anyActive}
         title={anyActive ? 'A sweep is already running' : 'Run this experiment'}
-        style={variant === 'ghost' ? {
-          display: 'inline-flex', alignItems: 'center', gap: 4, padding: '2px 8px',
-          background: 'transparent', color: anyActive ? colors.textDim : colors.accent,
-          border: `1px solid ${colors.border}`, borderRadius: 4,
-          cursor: anyActive ? 'not-allowed' : 'pointer',
-          fontSize: 10.5, fontWeight: 600, fontFamily: "'Geist Sans', sans-serif",
-        } : {
-          padding: '4px 12px',
-          background: anyActive ? colors.border : colors.accent,
-          color: anyActive ? colors.textDim : '#0a1220',
-          border: 'none', borderRadius: 4,
-          cursor: anyActive ? 'not-allowed' : 'pointer',
-          fontSize: 11, fontWeight: 600, fontFamily: "'Geist Sans', sans-serif",
-        }}
+        icon={variant === 'ghost' ? <Play size={ICON_SIZE.xs} strokeWidth={ICON_STROKE} /> : undefined}
       >
-        {variant === 'ghost' ? <><Play size={10} /> Run</> : 'Run'}
-      </button>
+        Run
+      </Button>
       {showGuard && (
         <HardwareSweepGuard
           experimentName={experiment.spec.name}

@@ -51,32 +51,17 @@ export function RunsTableRow({
   return (
     <div
       role="row"
+      className="nuclei-runs-row"
       data-run-dir={run.dir}
+      data-checked={compareSelected}
       tabIndex={0}
       onClick={() => onSelect(run.dir)}
       onKeyDown={activateOnKey(() => onSelect(run.dir))}
-      style={{
-        position: 'absolute',
-        top,
-        left: 0,
-        right: 0,
-        height: ROW_HEIGHT,
-        display: 'grid',
-        gridTemplateColumns,
-        alignItems: 'center',
-        borderBottom: `1px solid ${colors.border}`,
-        background: compareSelected ? colors.bgElevated : 'transparent',
-        cursor: 'pointer',
-        fontSize: 11,
-        fontFamily: "'Fira Code', monospace",
-        color: colors.text,
-      }}
-      onMouseEnter={(e) => { e.currentTarget.style.background = colors.bgElevated; }}
-      onMouseLeave={(e) => { e.currentTarget.style.background = compareSelected ? colors.bgElevated : 'transparent'; }}
+      style={{ top, height: ROW_HEIGHT, gridTemplateColumns }}
     >
       <div
         role="cell"
-        style={{ padding: '0 8px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+        className="nuclei-runs-row__check"
         onClick={(e) => e.stopPropagation()}
       >
         <input
@@ -86,7 +71,7 @@ export function RunsTableRow({
           aria-label={`Select ${run.dir} for comparison`}
         />
       </div>
-      <div role="cell" title={run.dir} style={{ padding: '0 8px', color: colors.textDim, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+      <div role="cell" title={run.dir} className="nuclei-runs-row__run">
         {formatRunLabel(run.dir, run.manifest.started_at)}
       </div>
       {columns.map((column) => {
@@ -97,22 +82,12 @@ export function RunsTableRow({
           <div
             key={column.key}
             role="cell"
-            style={{
-              padding: '0 8px',
-              textAlign: isNumeric ? 'right' : 'left',
-              fontVariantNumeric: 'tabular-nums',
-              overflow: 'hidden',
-              textOverflow: 'ellipsis',
-              whiteSpace: 'nowrap',
-              color: isStatus ? colors[statusKey] : colors.text,
-              fontWeight: isStatus ? 600 : 400,
-            }}
+            className="nuclei-runs-row__cell"
+            data-numeric={isNumeric}
+            style={isStatus ? { color: colors[statusKey], fontWeight: 600 } : undefined}
           >
             {isStatus ? (
-              <span style={{
-                display: 'inline-block', padding: '1px 8px', borderRadius: 10, lineHeight: '16px',
-                background: `${colors[statusKey]}1f`, fontSize: 10.5,
-              }}>
+              <span className="nuclei-runs-row__status" style={{ background: `color-mix(in srgb, ${colors[statusKey]} 12%, transparent)` }}>
                 {formatCell(value, column, 0)}
               </span>
             ) : formatCell(value, column, decimalsByColumn.get(column.key) ?? 0)}

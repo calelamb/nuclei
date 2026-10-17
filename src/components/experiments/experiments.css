@@ -1,0 +1,84 @@
+/* Experiments workspace: small structural classes; everything resolves from tokens.css. */
+
+.nuclei-experiment-template {
+  display: block; width: 100%; margin-bottom: var(--space-1); padding: var(--space-2);
+  text-align: left; cursor: pointer; color: var(--color-text-primary);
+  background: transparent; border: 1px solid var(--color-border-subtle); border-radius: var(--radius-soft);
+  font-family: var(--font-sans);
+  transition: background-color var(--duration-fast) var(--ease-standard), border-color var(--duration-fast) var(--ease-standard);
+}
+.nuclei-experiment-template:hover { border-color: var(--color-accent-quantum); }
+
+/* Left-rail experiment rows: CSS hover and a selected state instead of inline style mutation. */
+.nuclei-experiment-row {
+  display: flex; flex-direction: column; gap: var(--space-1); padding: var(--space-2) var(--space-3);
+  border-bottom: 1px solid var(--color-border-subtle); cursor: pointer;
+  transition: background-color var(--duration-fast) var(--ease-standard);
+}
+.nuclei-experiment-row:hover { background: var(--color-surface-raised); }
+.nuclei-experiment-row[aria-current='true'] {
+  background: color-mix(in srgb, var(--color-accent-quantum) 8%, transparent);
+  box-shadow: inset 2px 0 0 var(--color-accent-quantum);
+}
+.nuclei-experiment-row__name {
+  flex: 1; min-width: 0; padding: 0; background: transparent; border: none; cursor: pointer; text-align: left;
+  color: var(--color-text-primary); font-family: var(--font-sans); font-size: var(--font-size-chrome-label); font-weight: var(--font-weight-semibold);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.nuclei-experiment-row[aria-current='true'] .nuclei-experiment-row__name { color: var(--color-accent-quantum); }
+
+/* Runs table (virtualised grid; keeps ARIA table roles). Same type scale as the Table primitive. */
+.nuclei-runs-header {
+  display: grid; box-sizing: border-box; position: sticky; top: 0; z-index: 2;
+  background: var(--color-surface-sunken); border-bottom: 1px solid var(--color-border-strong);
+}
+.nuclei-runs-header__cell {
+  display: flex; align-items: center; gap: var(--space-1); min-width: 0; padding: 0 var(--space-2);
+  background: transparent; border: none; text-align: left; justify-content: flex-start;
+  color: var(--color-text-secondary); font-family: var(--font-sans); font-size: var(--font-size-caption);
+  font-weight: var(--font-weight-semibold); text-transform: uppercase; letter-spacing: 0.04em;
+}
+.nuclei-runs-header__cell[data-numeric='true'] { justify-content: flex-end; }
+.nuclei-runs-header__sort { cursor: pointer; transition: color var(--duration-fast) var(--ease-standard); }
+.nuclei-runs-header__sort:hover { color: var(--color-text-primary); }
+.nuclei-runs-header__sort[data-sorted='true'] { color: var(--color-accent-quantum); }
+.nuclei-runs-header__label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.nuclei-runs-row {
+  position: absolute; left: 0; right: 0; display: grid; align-items: center; cursor: pointer;
+  border-bottom: 1px solid var(--color-border-subtle); color: var(--color-text-primary);
+  font-family: var(--font-mono); font-size: var(--font-size-chrome-label);
+  transition: background-color var(--duration-fast) var(--ease-standard);
+}
+.nuclei-runs-row:hover, .nuclei-runs-row[data-checked='true'] { background: var(--color-surface-raised); }
+.nuclei-runs-row__check { display: flex; align-items: center; justify-content: center; padding: 0 var(--space-2); }
+.nuclei-runs-row__run { padding: 0 var(--space-2); color: var(--color-text-tertiary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.nuclei-runs-row__cell {
+  padding: 0 var(--space-2); font-variant-numeric: tabular-nums;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: left;
+}
+.nuclei-runs-row__cell[data-numeric='true'] { text-align: right; }
+.nuclei-runs-row__status {
+  display: inline-block; padding: 1px var(--space-2); border-radius: var(--radius-pill);
+  font-family: var(--font-sans); font-size: var(--font-size-caption); line-height: 16px;
+}
+
+/* stdout / stderr switch in run detail */
+.nuclei-output-tab {
+  height: var(--control-height-sm); padding: 0 var(--space-3); cursor: pointer;
+  border: 1px solid var(--color-border-strong); border-radius: var(--radius-soft); background: transparent;
+  color: var(--color-text-secondary); font-family: var(--font-sans); font-size: var(--font-size-caption);
+  font-weight: var(--font-weight-semibold); text-transform: uppercase; letter-spacing: 0.04em;
+  transition: background-color var(--duration-fast) var(--ease-standard), color var(--duration-fast) var(--ease-standard);
+}
+.nuclei-output-tab:hover { background: var(--color-surface-overlay); color: var(--color-text-primary); }
+.nuclei-output-tab[aria-selected='true'] { background: var(--color-surface-overlay); border-color: var(--color-accent-quantum); color: var(--color-text-primary); }
+
+/* Noise model list rows */
+.nuclei-noise-row {
+  display: block; width: 100%; padding: var(--space-2) var(--space-3); text-align: left; cursor: pointer;
+  background: transparent; border: none; border-left: 2px solid transparent;
+  color: var(--color-text-primary); font-family: var(--font-sans); font-size: var(--font-size-chrome-label);
+}
+.nuclei-noise-row[data-active='true'] { background: var(--color-surface-overlay); }
+.nuclei-noise-row[data-compare='true'] { border-left-color: var(--color-accent-quantum); }

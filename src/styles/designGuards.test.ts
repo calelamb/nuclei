@@ -3,8 +3,6 @@ import { join, relative } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 const SRC = join(process.cwd(), 'src');
-// Trees owned by other in-flight lanes; remove an entry once it migrates.
-const PENDING_MIGRATION = ['components/experiments/'];
 
 function walk(dir: string): string[] {
   return readdirSync(dir, { withFileTypes: true }).flatMap((e) => {
@@ -15,8 +13,8 @@ function walk(dir: string): string[] {
 }
 
 const files = walk(SRC)
-  .map((p) => ({ rel: relative(SRC, p).replace(/\\/g, '/'), text: readFileSync(p, 'utf8') }))
-  .filter((f) => !PENDING_MIGRATION.some((m) => f.rel.startsWith(m)));
+  .map((p) => ({ rel: relative(SRC, p).replace(/\\/g, '/'), text: readFileSync(p, 'utf8') }));
+
 
 function offenders(test: (f: { rel: string; text: string }) => boolean): string[] {
   return files.filter(test).map((f) => f.rel);

@@ -14,6 +14,9 @@ import { formatRunLabel } from './runsTableColumns';
 import { PanelHeader } from '../layout/PanelHeader';
 import type { CircuitSnapshot, SimulationResult } from '../../types/quantum';
 import type { RunRecord } from '../../types/experiment';
+import { TYPOGRAPHY, ICON_SIZE, ICON_STROKE } from '../../styles/tokens';
+import { Button, IconButton } from '../ui';
+import './experiments.css';
 
 type OutputTab = 'stdout' | 'stderr';
 
@@ -87,10 +90,10 @@ function copyToClipboard(value: string): void {
 function ManifestRow({ row }: { row: ManifestRowData }) {
   const colors = useThemeStore((s) => s.colors);
   const { value } = row;
-  const mono = { color: colors.text, fontSize: 11, fontFamily: "'Fira Code', monospace" };
+  const mono = { color: colors.text, fontSize: 11, fontFamily: TYPOGRAPHY.fontMono };
   return (
-    <div style={{ display: 'flex', gap: 10, padding: '3px 0', alignItems: 'baseline' }}>
-      <dt style={{ width: 130, flexShrink: 0, color: colors.textDim, fontSize: 11, fontFamily: "'Geist Sans', sans-serif" }}>
+    <div style={{ display: 'flex', gap: 10, padding: '4px 0', alignItems: 'baseline' }}>
+      <dt style={{ width: 130, flexShrink: 0, color: colors.textMuted, fontSize: 11, fontFamily: TYPOGRAPHY.fontSans }}>
         {row.label}
       </dt>
       <dd style={{ margin: 0, minWidth: 0, flex: 1 }}>
@@ -98,7 +101,7 @@ function ManifestRow({ row }: { row: ManifestRowData }) {
         {value.kind === 'chips' && (
           <span style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
             {value.chips.map((chip) => (
-              <span key={chip} style={{ ...mono, padding: '1px 6px', borderRadius: 4, background: colors.bgPanel, border: `1px solid ${colors.border}` }}>
+              <span key={chip} style={{ ...mono, padding: '1px 8px', borderRadius: 'var(--radius-xs)', background: colors.bgPanel, border: `1px solid ${colors.border}` }}>
                 {chip}
               </span>
             ))}
@@ -107,20 +110,15 @@ function ManifestRow({ row }: { row: ManifestRowData }) {
         {value.kind === 'copy' && (
           <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
             <span style={{ ...mono, wordBreak: 'break-all' }}>{value.text}</span>
-            <button
-              onClick={() => copyToClipboard(value.text)}
-              aria-label={`Copy ${row.label}`}
-              title={`Copy ${row.label}`}
-              style={{ background: 'transparent', border: 'none', color: colors.textDim, cursor: 'pointer', display: 'flex', padding: 2, flexShrink: 0 }}
-            >
-              <Copy size={11} />
-            </button>
+            <IconButton size="sm" aria-label={`Copy ${row.label}`} onClick={() => copyToClipboard(value.text)}>
+              <Copy size={ICON_SIZE.xs} strokeWidth={ICON_STROKE} />
+            </IconButton>
           </span>
         )}
         {value.kind === 'error' && (
           <pre style={{
             ...mono, margin: 0, padding: 8, whiteSpace: 'pre-wrap', wordBreak: 'break-word',
-            color: colors.error, background: `${colors.error}14`, border: `1px solid ${colors.error}55`, borderRadius: 4,
+            color: colors.error, background: `${colors.error}14`, border: `1px solid ${colors.error}`, borderRadius: 'var(--radius-xs)',
           }}>
             {value.text}
           </pre>
@@ -191,7 +189,7 @@ export function RunDetail() {
 
   if (!experiment || !run || !projectRoot) {
     return (
-      <div style={{ padding: 24, color: colors.textDim, fontSize: 12, fontFamily: "'Geist Sans', sans-serif" }}>
+      <div style={{ padding: 24, color: colors.textDim, fontSize: 12, fontFamily: TYPOGRAPHY.fontSans }}>
         Select a run to see its details.
       </div>
     );
@@ -214,36 +212,20 @@ export function RunDetail() {
         context={experiment.spec.name}
         helpHref="https://getnuclei.dev/docs/research/experiments/"
         leading={
-          <button
-            onClick={() => selectRun(null)}
-            style={{
-              display: 'flex', alignItems: 'center', gap: 4, background: 'transparent',
-              border: 'none', color: colors.textMuted, cursor: 'pointer', fontSize: 12,
-              fontFamily: "'Geist Sans', sans-serif", padding: 0,
-            }}
-          >
-            <ArrowLeft size={13} /> Back to runs
-          </button>
+          <Button variant="ghost" size="sm" onClick={() => selectRun(null)} icon={<ArrowLeft size={ICON_SIZE.sm} strokeWidth={ICON_STROKE} />}>
+            Back to runs
+          </Button>
         }
         actions={
-          <button
-            onClick={() => void openRunFolder(runDirPath)}
-            title="Open run folder"
-            style={{
-              display: 'flex', alignItems: 'center', gap: 4,
-              background: 'transparent', border: `1px solid ${colors.border}`, borderRadius: 4,
-              color: colors.textMuted, cursor: 'pointer', fontSize: 11, padding: '4px 8px',
-              fontFamily: "'Geist Sans', sans-serif",
-            }}
-          >
-            <FolderOpen size={12} /> Open run folder
-          </button>
+          <Button size="sm" onClick={() => void openRunFolder(runDirPath)} title="Open run folder" icon={<FolderOpen size={ICON_SIZE.xs} strokeWidth={ICON_STROKE} />}>
+            Open run folder
+          </Button>
         }
       />
 
-      <div style={{ padding: 14, display: 'flex', flexDirection: 'column', gap: 20 }}>
+      <div style={{ padding: 16, display: 'flex', flexDirection: 'column', gap: 20 }}>
         <section>
-          <div style={{ color: colors.textDim, fontSize: 10, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 8 }}>
+          <div style={{ color: colors.textMuted, fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 8 }}>
             Manifest
           </div>
           <dl style={{ margin: 0 }}>
@@ -256,14 +238,14 @@ export function RunDetail() {
         {showOutputs && (
           <>
         <section>
-          <div style={{ color: colors.textDim, fontSize: 10, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 8 }}>
+          <div style={{ color: colors.textMuted, fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 8 }}>
             Measurements
           </div>
           <RunHistogram measurements={artifacts.result?.measurements ?? {}} />
         </section>
 
         <section>
-          <div style={{ color: colors.textDim, fontSize: 10, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 8 }}>
+          <div style={{ color: colors.textMuted, fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 8 }}>
             Circuit
           </div>
           <RunCircuitDiagram snapshot={artifacts.snapshot} />
@@ -273,29 +255,24 @@ export function RunDetail() {
         )}
 
         <section>
-          <div style={{ display: 'flex', gap: 4, marginBottom: 8 }}>
+          <div role="tablist" aria-label="Run output" style={{ display: 'flex', gap: 4, marginBottom: 8 }}>
             {(['stdout', 'stderr'] as const).map((t) => (
               <button
                 key={t}
+                type="button"
+                className="nuclei-output-tab"
                 onClick={() => setTab(t)}
                 role="tab"
                 aria-selected={tab === t}
-                style={{
-                  padding: '4px 12px', fontSize: 11, fontWeight: 600, textTransform: 'uppercase',
-                  background: tab === t ? colors.accent : 'transparent',
-                  color: tab === t ? '#0a1220' : colors.textDim,
-                  border: `1px solid ${tab === t ? colors.accent : colors.border}`,
-                  borderRadius: 4, cursor: 'pointer', fontFamily: "'Geist Sans', sans-serif",
-                }}
               >
                 {t}
               </button>
             ))}
           </div>
           <pre style={{
-            margin: 0, padding: 10, background: colors.bgPanel, border: `1px solid ${colors.border}`,
-            borderRadius: 6, color: tab === 'stderr' ? colors.error : colors.text,
-            fontSize: 11, fontFamily: "'Fira Code', monospace", whiteSpace: 'pre-wrap',
+            margin: 0, padding: 12, background: colors.bgPanel, border: `1px solid ${colors.border}`,
+            borderRadius: 'var(--radius-soft)', color: tab === 'stderr' ? colors.error : colors.text,
+            fontSize: 11, fontFamily: TYPOGRAPHY.fontMono, whiteSpace: 'pre-wrap',
             maxHeight: 200, overflow: 'auto',
           }}>
             {output || `No ${tab} recorded for this run.`}

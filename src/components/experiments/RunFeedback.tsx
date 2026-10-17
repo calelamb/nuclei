@@ -4,6 +4,8 @@ import { useThemeStore } from '../../stores/themeStore';
 import { useExperimentUiStore } from '../../stores/experimentUiStore';
 import { useExperimentRunStore } from '../../stores/experimentRunStore';
 import type { RunSummary } from '../../services/experimentRunner';
+import { TYPOGRAPHY, ICON_SIZE, ICON_STROKE } from '../../styles/tokens';
+import { IconButton } from '../ui';
 
 const SUMMARY_VISIBLE_MS = 8000;
 
@@ -58,21 +60,17 @@ export function RunFeedback({ compact = false }: { compact?: boolean }) {
         padding: compact ? '5px 8px' : '8px 14px',
         margin: compact ? '4px 0 0' : 0,
         background: `${tone}14`, borderBottom: compact ? undefined : `1px solid ${colors.border}`,
-        borderLeft: `2px solid ${tone}`, borderRadius: compact ? 3 : 0,
-        color: colors.text, fontSize: compact ? 10.5 : 12, lineHeight: 1.4,
-        fontFamily: "'Geist Sans', sans-serif", flexShrink: 0,
+        borderLeft: `2px solid ${tone}`, borderRadius: compact ? 'var(--radius-xs)' : 0,
+        color: colors.text, fontSize: compact ? 11 : 12, lineHeight: 1.4,
+        fontFamily: TYPOGRAPHY.fontSans, flexShrink: 0,
       }}
     >
       <span style={{ flex: 1, minWidth: 0, overflowWrap: 'anywhere' }}>
         {isError ? <><strong style={{ color: tone }}>Run failed.</strong> {text}</> : text}
       </span>
-      <button
-        onClick={clearFeedback}
-        aria-label="Dismiss run message"
-        style={{ background: 'transparent', border: 'none', color: colors.textDim, cursor: 'pointer', display: 'flex', padding: 0 }}
-      >
-        <X size={compact ? 11 : 13} />
-      </button>
+      <IconButton size="sm" aria-label="Dismiss run message" onClick={clearFeedback}>
+        <X size={ICON_SIZE.xs} strokeWidth={ICON_STROKE} />
+      </IconButton>
     </div>
   );
 }

@@ -3,6 +3,7 @@ import { extent, line as d3Line, scaleLinear } from 'd3';
 import { useThemeStore } from '../../stores/themeStore';
 import { seriesColor } from '../../lib/seriesPalette';
 import { hasRepeatedX, splitAtFailures, type FailedMarker, type SweepPoint, type SweepSeries } from '../../services/sweepPlot';
+import { TYPOGRAPHY } from '../../styles/tokens';
 
 const MARGIN = { top: 16, right: 20, bottom: 44, left: 60 };
 const DEFAULT_WIDTH = 640;
@@ -73,7 +74,7 @@ export function SweepPlotChart({ series, xLabel, yLabel, groupLabel, failed, onS
 
   if (allPoints.length === 0) {
     return (
-      <div style={{ padding: 24, color: colors.textDim, fontSize: 12, fontFamily: "'Geist Sans', sans-serif" }}>
+      <div style={{ padding: 24, color: colors.textDim, fontSize: 12, fontFamily: TYPOGRAPHY.fontSans }}>
         No data points for this selection.
       </div>
     );
@@ -96,8 +97,8 @@ export function SweepPlotChart({ series, xLabel, yLabel, groupLabel, failed, onS
 
   const xTicks = xScale.ticks(Math.max(3, Math.floor(innerWidth / 90)));
   const yTicks = yScale.ticks(Math.max(3, Math.floor(innerHeight / 50)));
-  const tickFont = { fontSize: 11, fontFamily: "'Fira Code', monospace", fill: colors.textDim };
-  const labelFont = { fontSize: 12, fontFamily: "'Geist Sans', sans-serif", fill: colors.textMuted };
+  const tickFont = { fontSize: 11, fontFamily: TYPOGRAPHY.fontMono, fill: colors.textDim };
+  const labelFont = { fontSize: 12, fontFamily: TYPOGRAPHY.fontSans, fill: colors.textMuted };
 
   const handleMove = (e: React.MouseEvent<SVGSVGElement>) => {
     const rect = e.currentTarget.getBoundingClientRect();
@@ -188,9 +189,9 @@ export function SweepPlotChart({ series, xLabel, yLabel, groupLabel, failed, onS
             position: 'absolute', pointerEvents: 'none', zIndex: 3,
             left: Math.min(hovered.px + MARGIN.left + 12, Math.max(0, width - 170)),
             top: Math.max(0, hovered.py + MARGIN.top - 52),
-            background: colors.bgElevated, border: `1px solid ${colors.border}`, borderRadius: 6,
+            background: colors.bgElevated, border: `1px solid ${colors.border}`, borderRadius: 'var(--radius-soft)',
             padding: '6px 8px', fontSize: 11, lineHeight: 1.45, color: colors.text,
-            fontFamily: "'Fira Code', monospace", boxShadow: '0 4px 14px rgba(0,0,0,0.25)', whiteSpace: 'nowrap',
+            fontFamily: TYPOGRAPHY.fontMono, boxShadow: 'var(--shadow-md)', whiteSpace: 'nowrap',
           }}
         >
           <div>{xLabel} = {formatNumber(hovered.point.x)}</div>
