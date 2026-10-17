@@ -10,6 +10,7 @@ import { toStatsPoint } from '../../types/qecStats';
 import { formatNoise } from '../../lib/qecPlotFormat';
 import { ICON_SIZE, ICON_STROKE, TYPOGRAPHY } from '../../styles/tokens';
 import { Button, Select } from '../ui';
+import { Table, Thead, Tbody, Tr, Th, Td } from '../ui/Table';
 
 const PREVIEW_ROWS = 10;
 type Field = 'p' | 'd' | 'rounds' | 'decoder';
@@ -97,8 +98,6 @@ export function CsvMappingPreview() {
     );
   };
 
-  const th = { textAlign: 'left' as const, padding: '2px 8px', color: colors.textMuted, fontWeight: 500 };
-  const td = { padding: '2px 8px', color: colors.text, fontFamily: TYPOGRAPHY.fontMono };
   const countsNameMerge = (mapping.mergeKeys ?? []).length > 0 && plottable < csv.rows.length;
   const counts = [
     `${plural(csv.totalDataRows, 'row')} → ${plural(csv.rows.length, 'task')}`,
@@ -203,32 +202,32 @@ export function CsvMappingPreview() {
               ))}
             </div>
           )}
-          <table style={{ borderCollapse: 'collapse', fontSize: 11 }}>
-            <thead>
-              <tr>
+          <Table label="Mapped rows preview" dense>
+            <Thead>
+              <Tr>
                 {['strong_id', 'shots', 'errors', 'discards', 'p', 'd', 'rounds', 'decoder'].map((h) => (
-                  <th key={h} style={th}>{h}</th>
+                  <Th key={h} plain numeric={['shots', 'errors', 'discards', 'p', 'd', 'rounds'].includes(h)}>{h}</Th>
                 ))}
-              </tr>
-            </thead>
-            <tbody>
+              </Tr>
+            </Thead>
+            <Tbody>
               {applyMapping(csv.rows.slice(0, PREVIEW_ROWS), mapping).map((r) => {
                 const m = r.json_metadata as Record<string, unknown>;
                 return (
-                  <tr key={r.strong_id}>
-                    <td style={{ ...td, maxWidth: 180, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={r.strong_id}>{r.strong_id}</td>
-                    <td style={td}>{r.shots}</td>
-                    <td style={td}>{r.errors}</td>
-                    <td style={td}>{r.discards}</td>
-                    <td style={td}>{typeof m.p === 'number' ? formatNoise(m.p) : '—'}</td>
-                    <td style={td}>{String(m.d ?? '—')}</td>
-                    <td style={td}>{String(m.rounds ?? '—')}</td>
-                    <td style={td}>{r.decoder}</td>
-                  </tr>
+                  <Tr key={r.strong_id}>
+                    <Td style={{ maxWidth: 180, overflow: 'hidden', textOverflow: 'ellipsis' }} title={r.strong_id}>{r.strong_id}</Td>
+                    <Td numeric>{r.shots}</Td>
+                    <Td numeric>{r.errors}</Td>
+                    <Td numeric>{r.discards}</Td>
+                    <Td numeric>{typeof m.p === 'number' ? formatNoise(m.p) : '—'}</Td>
+                    <Td numeric>{String(m.d ?? '—')}</Td>
+                    <Td numeric>{String(m.rounds ?? '—')}</Td>
+                    <Td>{r.decoder}</Td>
+                  </Tr>
                 );
               })}
-            </tbody>
-          </table>
+            </Tbody>
+          </Table>
         </div>
       )}
     </section>
