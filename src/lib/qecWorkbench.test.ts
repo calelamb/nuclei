@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import type { QecCampaignStatsRow } from '../types/qec';
-import { decoderComparison } from './qecWorkbench';
+import { decoderComparison, formatSecondsPerShot } from './qecWorkbench';
+import { applyMapping } from '../types/sinterMapping';
 
 function mk(over: Partial<QecCampaignStatsRow> & { meta?: Record<string, unknown> }): QecCampaignStatsRow {
   const { meta, ...rest } = over;
@@ -60,5 +61,80 @@ describe('decoderComparison (workbench rows)', () => {
     expect(d7.map((r) => r.errors).sort((a, b) => a - b)).toEqual([170, 441]);
     expect(d7.every((r) => r.collides && r.strongId !== '')).toBe(true);
     expect(rows.find((r) => r.distance === 5)!.collides).toBe(false);
+  });
+});
+
+describe('decoderComparison context (distinguishing experiment metadata)', () => {
+  it('describes the experiment by its non-sweep metadata, not the import label', () => {
+    const [r] = decoderComparison([
+      mk({ meta: { d: 3, r: 3, p: 0.01, label: 'stats', b: 'X', q: 17, decoder: 'pymatching', c: 'surface_code' } }),
+    ]).rows;
+    expect(r.context).toBe('rounds = d · b=X · c=surface_code · q=17');
+  });
+
+  it('is just the rounds scheme when there is no other metadata', () => {
+    const rows = decoderComparison([
+      mk({ meta: { d: 3, r: 3, p: 0.01, label: 'x' } }), mk({ meta: { d: 5, r: 5, p: 0.01, label: 'x' }, errors: 3 }),
+    ]).rows;
+    expect(rows.map((r) => r.context)).toEqual(['rounds = d', 'rounds = d']);
+  });
+
+  it('falls back to the experiment name when nothing else distinguishes it', () => {
+    const [r] = decoderComparison([mk({ meta: { d: 3, p: 0.01, label: 'run7' } })]).rows;
+    expect(r.context).toBe('run7');
+  });
+});
+
+describe('formatSecondsPerShot', () => {
+  it.each([
+    [1.2e-5, '12 µs'],
+    [2.4e-3, '2.4 ms'],
+    [0.5, '500 ms'],
+    [1.5, '1.5 s'],
+    [1e-7, '100 ns'],
+    [0, '—'],
+    [Number.NaN, '—'],
+  ])('%s -> %s', (v, text) => {
+    expect(formatSecondsPerShot(v)).toBe(text);
+  });
+});
+
+describe('decoderComparison context ignores keys derived from d', () => {
+  it('omits numeric metadata that is a function of d (e.g. qubit count) but keeps real splits', () => {
+    const rows = decoderComparison([
+      mk({ meta: { d: 3, r: 3, p: 0.01, label: 'x', q: 17, b: 'X' } }),
+      mk({ meta: { d: 5, r: 5, p: 0.01, label: 'x', q: 49, b: 'X' }, errors: 3 }),
+    ]).rows;
+    expect(rows.map((r) => r.context)).toEqual(['rounds = d · b=X', 'rounds = d · b=X']);
+  });
+
+  it('keeps a numeric key that differs at the same d', () => {
+    const rows = decoderComparison([
+      mk({ meta: { d: 3, r: 3, p: 0.01, label: 'x', shots_per_task: 10 } }),
+      mk({ meta: { d: 3, r: 3, p: 0.01, label: 'x', shots_per_task: 20 }, errors: 3 }),
+    ]).rows;
+    expect(rows.map((r) => r.context)).toEqual(['rounds = d · shots_per_task=10', 'rounds = d · shots_per_task=20']);
+  });
+});
+
+describe('decoderComparison context follows the active mapping', () => {
+  const mapping = { p: 'noise', d: 'distance', rounds: 'rounds', decoder: 'decoder_name', groupBy: ['s'] };
+  const raw = (noise: number, d: number) => mk({
+    meta: { noise, distance: d, rounds: d, decoder_name: 'fusion', s: 0, b: 'X' },
+    decoder: 'stats-col', errors: d,
+  });
+
+  it('does not show the mapped p / d / decoder / group-by keys as experiment metadata', () => {
+    const rows = decoderComparison(applyMapping([raw(0.001, 3), raw(0.002, 3), raw(0.002, 5)], mapping)).rows;
+    for (const r of rows) {
+      expect(r.context).not.toMatch(/noise=|distance=|decoder_name=|s=0/);
+      expect(r.context).toBe('rounds = d · b=X');
+    }
+    expect(new Set(rows.map((r) => r.context)).size).toBe(1);
+  });
+
+  it('leaves the context empty when only the default import label would remain', () => {
+    const [r] = decoderComparison([mk({ meta: { d: 3, p: 0.01, label: 'stats' } })]).rows;
+    expect(r.context).toBe('');
   });
 });

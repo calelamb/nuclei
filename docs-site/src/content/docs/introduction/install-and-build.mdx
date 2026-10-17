@@ -40,6 +40,7 @@ All verified against `package.json` scripts:
 | `npm run tauri build` | repo root | Package installers (.dmg / .msi / .AppImage, .deb) |
 | `npm run dev:web` | repo root | Browser build dev server (Pyodide kernel) |
 | `npm run build:web` | repo root | Browser build → `dist-web/` |
+| `npm run preview:web` | repo root | Serve `dist-web/` at `http://localhost:4173/try/` (run `build:web` first; the browser build lives under `/try/`, and `/` redirects there) |
 | `npm test` | repo root | Frontend tests (Vitest) |
 | `npm run lint` | repo root | ESLint |
 | `python3 -m pytest kernel/tests` | repo root | Kernel test suite — including the protocol fixtures the [Kernel API docs](/docs/kernel-api/overview/) replay |

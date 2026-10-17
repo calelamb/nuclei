@@ -78,6 +78,7 @@ export default defineConfig({
             'research/qec-studio',
             'research/qec-workbench',
             'research/qec-data-import',
+            'research/plot-a-sinter-csv',
             'research/campaigns',
             'research/noise-models',
             'research/resource-estimation',

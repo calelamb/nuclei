@@ -50,6 +50,8 @@ Starting with v0.1.2, Nuclei for macOS is **signed with an Apple Developer ID an
 
 No installation required. Try Nuclei in your browser at [getnuclei.dev](https://getnuclei.dev). The web version uses Pyodide to run Python entirely client-side.
 
+To run the web build locally: `npm run build:web && npm run preview:web`, then open <http://localhost:4173/try/> (the web build is served under `/try/`; `/` redirects there).
+
 ---
 
 ## Dirac AI Setup

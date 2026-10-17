@@ -2,6 +2,7 @@ import { useEffect, useState, type FormEvent, type ReactElement } from 'react';
 import { AlertTriangle, BookOpen, Plus } from 'lucide-react';
 import { useQecStudyStore, type DiscoveredQecStudy } from '../../../services/qecStudyStore';
 import type { QecStudyFs } from '../../../services/qecStudyFs';
+import { QecNoProjectNotice } from './QecNoProjectNotice';
 import { useProjectStore } from '../../../stores/projectStore';
 import { useQecStudyUiStore } from '../../../stores/qecStudyUiStore';
 import { useThemeStore, type ThemeColors } from '../../../stores/themeStore';
@@ -163,7 +164,7 @@ export function QecStudySidebar({ fs }: QecStudySidebarProps): ReactElement {
       setSubmitting(false);
     }
   };
-  if (!projectRoot) return <p style={{ color: colors.textDim, fontSize: 11, padding: 12 }}>Open a project to manage QEC Studies.</p>;
+  if (!projectRoot) return <QecNoProjectNotice />;
   return (
     <div style={{ display: 'grid', gap: 12, padding: 10, fontFamily: "'Geist Sans', sans-serif" }}>
       <section aria-label="QEC Studies"><div style={{ display: 'flex', gap: 5, alignItems: 'center', color: colors.textMuted, fontSize: 10, fontWeight: 600, marginBottom: 6 }}><BookOpen size={12} />STUDIES</div><StudyList studies={studies} busy={loading || submitting} /></section>
