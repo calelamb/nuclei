@@ -23,7 +23,7 @@ describe('primary button identity', () => {
   });
 
   it('has a pressed state', () => {
-    expect(rule('.nuclei-btn.nuclei-btn--primary:active:not(:disabled)')).toContain('brightness');
+    expect(rule(".nuclei-btn.nuclei-btn--primary:active:not(:disabled):not([aria-busy='true'])")).toContain('brightness');
   });
 
   it('renders disabled primary as a neutral surface, not faded teal', () => {

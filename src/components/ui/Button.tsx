@@ -9,7 +9,10 @@ export type ButtonSize = 'sm' | 'md' | 'lg';
 export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   variant?: ButtonVariant;
   size?: ButtonSize;
-  /** Disables the button, sets aria-busy and swaps the icon for a spinner. */
+  /**
+   * Busy state: swaps the icon for a spinner, sets aria-busy and ignores presses, but stays focusable
+   * (aria-disabled, not `disabled`) so keyboard focus is not dropped to <body> when a press starts work.
+   */
   loading?: boolean;
   /** Optional leading icon (a lucide element at ICON_SIZE.sm). */
   icon?: ReactNode;
@@ -20,7 +23,7 @@ export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
  * disabled) so there are no inline style mutations or per-component hover state.
  */
 export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button(
-  { variant = 'secondary', size = 'md', loading = false, icon, className, children, disabled, type = 'button', ...rest },
+  { variant = 'secondary', size = 'md', loading = false, icon, className, children, disabled, type = 'button', onClick, ...rest },
   ref,
 ) {
   return (
@@ -28,8 +31,10 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button
       {...rest}
       ref={ref}
       type={type}
-      disabled={disabled || loading}
+      disabled={disabled}
+      aria-disabled={loading || undefined}
       aria-busy={loading || undefined}
+      onClick={loading ? undefined : onClick}
       className={cx('nuclei-btn', `nuclei-btn--${variant}`, `nuclei-btn--${size}`, className)}
     >
       {loading

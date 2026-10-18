@@ -26,14 +26,30 @@ describe('Button', () => {
     expect(el.className).toContain('nuclei-btn--sm');
   });
 
-  it('is disabled and aria-busy while loading, and does not fire onClick', () => {
+  it('stays focusable while loading (aria-disabled, not disabled), is busy, and ignores clicks', () => {
     const onClick = vi.fn();
     render(<Button loading onClick={onClick}>Retry</Button>);
     const el = screen.getByRole('button', { name: /Retry/ }) as HTMLButtonElement;
-    expect(el.disabled).toBe(true);
+    expect(el.disabled).toBe(false);
+    expect(el.getAttribute('aria-disabled')).toBe('true');
     expect(el.getAttribute('aria-busy')).toBe('true');
     fireEvent.click(el);
     expect(onClick).not.toHaveBeenCalled();
+  });
+
+  it('keeps keyboard focus across a loading flip', () => {
+    const { rerender } = render(<Button onClick={() => undefined}>Run</Button>);
+    const el = screen.getByRole('button', { name: 'Run' });
+    el.focus();
+    rerender(<Button loading onClick={() => undefined}>Run</Button>);
+    expect(document.activeElement).toBe(el);
+    rerender(<Button onClick={() => undefined}>Run</Button>);
+    expect(document.activeElement).toBe(el);
+  });
+
+  it('keeps the real disabled attribute for disabled', () => {
+    render(<Button disabled>Nope</Button>);
+    expect((screen.getByRole('button', { name: 'Nope' }) as HTMLButtonElement).disabled).toBe(true);
   });
 
   it('fires onClick when enabled', () => {
