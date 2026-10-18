@@ -7,7 +7,7 @@ const boot = vi.hoisted(() => {
     resolveInit: () => {},
     sent: [] as Array<Record<string, unknown>>,
     onMessage: (() => {}) as (m: unknown) => void,
-    progress: null as ((p: { label: string } | null) => void) | null,
+    progress: null as ((p: { step: number; total: number; label: string; fraction: number } | null) => void) | null,
     stateCb: null as ((s: string) => void) | null,
     failInit: false,
     inits: 0,
@@ -22,7 +22,7 @@ vi.mock('./LessonCodeEditor', () => ({ LessonCodeEditor: () => <div /> }));
 vi.mock('../../platform/pyodide/pyodideClient', () => ({
   pyodideRuntime: {
     isReady: () => false,
-    onProgress: (cb: (p: { label: string } | null) => void) => { boot.progress = cb; return () => {}; },
+    onProgress: (cb: (p: { step: number; total: number; label: string; fraction: number } | null) => void) => { boot.progress = cb; return () => {}; },
     onState: (cb: (s: string) => void) => { boot.stateCb = cb; return () => {}; },
   },
 }));
@@ -49,16 +49,32 @@ describe('InteractiveDemo on the web before Python is ready', () => {
   it('queues Run instead of showing the desktop-only kernel error', async () => {
     render(<InteractiveDemo code={CODE} framework="qiskit" description="demo" />);
     await act(async () => { await Promise.resolve(); });
-    await act(async () => { boot.progress?.({ label: 'Downloading Python' }); });
+    await act(async () => { boot.progress?.({ step: 1, total: 3, label: 'Downloading Python', fraction: 0 }); });
 
     fireEvent.click(screen.getByRole('button', { name: /^Run$/ }));
     expect(screen.queryByText(/Kernel not connected/)).toBeNull();
-    expect(screen.getByRole('button', { name: /Loading Python/ })).toBeTruthy();
+    expect(screen.getByRole('button', { name: /Queued · 1\/3/ })).toBeTruthy();
     expect(boot.sent.filter((m) => m.type === 'execute')).toHaveLength(0);
 
     await act(async () => { boot.resolveInit(); await Promise.resolve(); });
     expect(boot.sent.filter((m) => m.type === 'execute')).toHaveLength(1);
     expect(screen.queryByText(/Kernel not connected/)).toBeNull();
+  });
+
+  it('shares the toolbar queue model: Run until pressed, Queued while waiting, a second press cancels', async () => {
+    render(<InteractiveDemo code={CODE} framework="qiskit" description="demo" />);
+    await act(async () => { await Promise.resolve(); });
+    await act(async () => { boot.progress?.({ step: 2, total: 3, label: 'Loading NumPy', fraction: 0.6 }); });
+    expect(screen.getByRole('button', { name: /^Run$/ }).getAttribute('aria-pressed')).toBe('false');
+
+    fireEvent.click(screen.getByRole('button', { name: /^Run$/ }));
+    const queued = screen.getByRole('button', { name: /Queued · 2\/3/ });
+    expect(queued.getAttribute('aria-pressed')).toBe('true');
+
+    fireEvent.click(queued);
+    expect(screen.getByRole('button', { name: /^Run$/ })).toBeTruthy();
+    await act(async () => { boot.resolveInit(); await Promise.resolve(); await Promise.resolve(); });
+    expect(boot.sent.filter((m) => m.type === 'execute')).toHaveLength(0);
   });
 
   it('re-sends the live parse once Python is ready so the circuit summary can appear', async () => {

@@ -219,7 +219,7 @@ export function ExerciseBlock({
       </div>
 
       <div className="demo__actions demo__actions--divided">
-        <LessonRunButton isRunning={isRunning} pythonLoading={kernel.loading} stage={kernel.stage} onRun={handleRun} />
+        <LessonRunButton isRunning={isRunning} pythonLoading={kernel.loading} progress={kernel.progress} onRun={handleRun} />
         {hasRun && hasExpectations && !isRunning && (
           <Button onClick={checkSolution} icon={<CheckCircle size={12} aria-hidden="true" />}>Check solution</Button>
         )}
