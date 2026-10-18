@@ -111,7 +111,11 @@ export function VizZone({
   const [measureColumn, columnSize] = useElementSize<HTMLDivElement>();
   const measuredBlochCount = useSimulationStore((st) => st.result?.bloch_coords?.length ?? 0);
   const preset = useLayoutStore((s) => s.preset);
-  const initialQubits = measuredBlochCount === 0 && preset === 'balanced' ? (circuitSnapshot?.qubit_count ?? 0) : 0;
+  // Initial |0> spheres only before any run: a failed run must show its failure state instead.
+  const lastRunFailed = useSimulationStore((st) => st.lastRunFailed);
+  const lastRunNoCircuit = useSimulationStore((st) => st.lastRunNoCircuit);
+  const noRunYet = !lastRunFailed && !lastRunNoCircuit;
+  const initialQubits = measuredBlochCount === 0 && preset === 'balanced' && noRunYet ? (circuitSnapshot?.qubit_count ?? 0) : 0;
   const blochCount = measuredBlochCount > 0 ? measuredBlochCount : initialQubits;
   const renderCtx: VizRenderContext = { blochCount, initialQubits };
   const [measureChip, chipSize] = useElementSize<HTMLDivElement>();
@@ -177,7 +181,7 @@ export function VizZone({
         <PanelReveal key={p.id} when from="right" style={p.id === 'bloch' ? { ...FILL_STYLE, minHeight: blochMin } : fills ? FILL_STYLE : CONTENT_STYLE}>
           <div
             className={p.id === 'bloch' && stale ? 'nuclei-stale-results' : undefined}
-            style={fills || p.id === 'bloch' ? FILL_BODY_STYLE_FLEX : CONTENT_BODY_STYLE}
+            style={p.id === 'bloch' ? FILL_BODY_STYLE_FLEX : fills ? FILL_BODY_STYLE : CONTENT_BODY_STYLE}
           >
             {p.id === 'bloch' && stale && <StaleResultNotice />}
             {p.render(renderCtx)}
@@ -207,7 +211,8 @@ const COLUMN_STYLE = { width: '100%', height: '100%', minWidth: 0, display: 'fle
 const CIRCUIT_REVEAL_STYLE = { flex: '0 0 auto', display: 'flex', flexDirection: 'column' } as const;
 const CONTENT_STYLE = { flex: '0 1 auto', minHeight: 0, display: 'flex', flexDirection: 'column' } as const;
 const CONTENT_BODY_STYLE = { overflow: 'hidden', position: 'relative', minHeight: 0, display: 'flex', flexDirection: 'column' } as const;
-// A body that fills its wrapper without the 240px floor of the QEC panels (the Bloch rail carries its own minimum).
+// The QEC panels keep a 240px floor; the Bloch body fills without one (the Bloch rail carries its own minimum).
+const FILL_BODY_STYLE = { flex: 1, overflow: 'hidden', position: 'relative', minHeight: 240, display: 'flex', flexDirection: 'column' } as const;
 const FILL_BODY_STYLE_FLEX = { flex: 1, overflow: 'hidden', position: 'relative', minHeight: 0, display: 'flex', flexDirection: 'column' } as const;
 const FILL_STYLE = { flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' } as const;
 

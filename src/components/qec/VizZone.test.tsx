@@ -14,7 +14,7 @@ import surface from './__fixtures__/surface_d3.json';
 import type { QecSnapshot } from '../../types/qec';
 
 // Stub the heavy panel bodies so the test focuses on VizZone's tabbing/stacking.
-vi.mock('../bloch/BlochPanel', () => ({ BlochPanel: () => <div data-testid="bloch" /> }));
+vi.mock('../bloch/BlochPanel', () => ({ BlochPanel: ({ initialQubits }: { initialQubits?: number }) => <div data-testid="bloch" data-initial={initialQubits ?? 0} /> }));
 vi.mock('./QecTimelinePanel', () => ({ QecTimelinePanel: () => <div data-testid="timeline" /> }));
 vi.mock('./CodeLatticePanel', () => ({ CodeLatticePanel: () => <div data-testid="lattice" /> }));
 vi.mock('./DetectorGraphPanel', () => ({ DetectorGraphPanel: () => <div data-testid="detector" /> }));
@@ -149,6 +149,24 @@ describe('<VizZone> results empty state (shell-r3-05/07)', () => {
     useSimulationStore.setState({ isRunning: true });
     const { container } = render(<VizZone visible={visible({ circuit: true })} chip={null} />);
     expect(container.querySelector('.viz-results-empty')?.textContent).toContain('Running');
+  });
+});
+
+describe('<VizZone> initial spheres in Balanced', () => {
+  it('draws no initial spheres once a run has failed', async () => {
+    const { useLayoutStore } = await import('../../stores/layoutStore');
+    const { useCircuitStore } = await import('../../stores/circuitStore');
+    useLayoutStore.setState({ preset: 'balanced' });
+    useCircuitStore.setState({ snapshot: { framework: 'qiskit', qubit_count: 2, classical_bit_count: 0, depth: 1, gates: [{ type: 'H', targets: [0], controls: [], params: [], layer: 0 }] } });
+    useSimulationStore.setState({ result: null, lastRunFailed: false });
+    const ok = render(<VizZone visible={visible({ circuit: true, bloch: true })} chip={null} />);
+    expect(ok.queryByTestId('bloch')?.getAttribute('data-initial')).toBe('2');
+    cleanup();
+    useSimulationStore.setState({ lastRunFailed: true });
+    const failed = render(<VizZone visible={visible({ circuit: true, bloch: true })} chip={null} />);
+    expect(failed.queryByTestId('bloch')?.getAttribute('data-initial') ?? '0').toBe('0');
+    useSimulationStore.setState({ lastRunFailed: false });
+    useLayoutStore.setState({ preset: 'clean' });
   });
 });
 
