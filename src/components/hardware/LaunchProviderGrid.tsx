@@ -41,8 +41,9 @@ export function LaunchProviderGrid({ isWeb, cudaqInstalled, connected, qsharpBlo
         });
         const qsharpBlocked = qsharpBlocks(p.name);
         const disabled = status.kind === 'coming-soon' || qsharpBlocked;
-        const card = (
+        return (
           <button
+            key={p.name}
             type="button"
             className="nuclei-hover-lift"
             data-provider={p.name}
@@ -98,7 +99,6 @@ export function LaunchProviderGrid({ isWeb, cudaqInstalled, connected, qsharpBlo
             </div>
           </button>
         );
-        return <span key={p.name} style={{ display: 'contents' }}>{card}</span>;
       })}
     </div>
   );

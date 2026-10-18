@@ -1,5 +1,5 @@
 import { useState, type CSSProperties } from 'react';
-import { Cpu, Download, ChevronRight, HelpCircle } from 'lucide-react';
+import { Cpu, Download, ChevronRight, HelpCircle, Calculator } from 'lucide-react';
 import { useThemeStore, type ThemeColors } from '../../stores/themeStore';
 import { useEditorStore } from '../../stores/editorStore';
 import { humanNs } from '../../lib/qecEstimateFormat';
@@ -125,6 +125,7 @@ export function EstimatorPanel() {
       <div style={shell}>
         {toolbar}
         <QecEmptyState
+          icon={Calculator}
           title="Resource estimation supports Q# and Qiskit"
           body={`The active buffer is ${framework}. Switch to a Q# or Qiskit circuit to estimate the physical qubits and runtime a fault-tolerant implementation would need.`}
           docsHref={DOCS}
@@ -196,6 +197,7 @@ export function EstimatorPanel() {
         {!result && !error && !pending && (
           <QecEmptyState
             align="top"
+            icon={Calculator}
             title="No estimate yet"
             body="Use Run estimate above to see the physical qubits, wall-clock runtime, and code distance a fault-tolerant run of this circuit would require."
             docsHref={DOCS}

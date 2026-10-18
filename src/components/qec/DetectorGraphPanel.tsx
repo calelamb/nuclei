@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { MousePointerClick } from 'lucide-react';
+import { MousePointerClick, Network } from 'lucide-react';
 import { useThemeStore } from '../../stores/themeStore';
 import { useQecStore } from '../../stores/qecStore';
 import { Button } from '../ui/Button';
@@ -191,6 +191,7 @@ export function DetectorGraphPanel({ embedded = false }: { embedded?: boolean } 
       <div style={{ height: '100%', display: 'flex', flexDirection: 'column', background: colors.bg }}>
         {header}
         <QecEmptyState
+          icon={Network}
           title="No detector error model"
           body={snapshot.dem_error ?? 'stim could not build a detector error model for this circuit.'}
           docsHref={DOCS}

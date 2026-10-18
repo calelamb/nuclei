@@ -1,3 +1,4 @@
+import { Clock } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { useThemeStore } from '../../stores/themeStore';
 import { useCircuitStore } from '../../stores/circuitStore';
@@ -43,7 +44,7 @@ export function QecTimelinePanel({ embedded = false }: { embedded?: boolean } = 
     return (
       <div style={{ height: '100%', display: 'flex', flexDirection: 'column', background: colors.bg }}>
         {header}
-        <QecEmptyState title="No circuit yet" body="Parse a Stim circuit to see its moment-by-moment timeline." docsHref={DOCS} />
+        <QecEmptyState icon={Clock} title="No circuit yet" body="Parse a Stim circuit to see its moment-by-moment timeline." docsHref={DOCS} />
       </div>
     );
   }

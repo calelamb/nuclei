@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react';
 import { Button, EmptyState } from '../ui';
 import { ICON_SIZE, ICON_STROKE } from '../../styles/tokens';
-import { ChartSpline } from 'lucide-react';
+import { ChartSpline, type LucideIcon } from 'lucide-react';
 
 export interface QecEmptyStateAction {
   label: string;
@@ -18,6 +18,7 @@ export function QecEmptyState({
   body,
   action,
   docsHref,
+  icon: Icon = ChartSpline,
   align = 'center',
   children,
 }: {
@@ -25,6 +26,8 @@ export function QecEmptyState({
   body: string;
   action?: QecEmptyStateAction;
   docsHref?: string;
+  /** The panel's own icon; a chart line is only right for plots. */
+  icon?: LucideIcon;
   /** 'top' anchors the message under whatever is above it instead of centring it in the remaining height. */
   align?: 'center' | 'top';
   /** Extra content under the actions (e.g. a file drop zone). */
@@ -33,7 +36,7 @@ export function QecEmptyState({
   const primary = action ? <Button variant="primary" onClick={action.onClick}>{action.label}</Button> : undefined;
   return (
     <div className={`qec-empty qec-empty--${align}`}>
-      <EmptyState icon={<ChartSpline size={ICON_SIZE.lg} strokeWidth={ICON_STROKE} />} title={title} action={primary}>
+      <EmptyState icon={<Icon size={ICON_SIZE.lg} strokeWidth={ICON_STROKE} />} title={title} action={primary}>
         {body}
       </EmptyState>
       {docsHref && (

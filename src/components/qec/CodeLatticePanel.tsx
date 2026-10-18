@@ -1,3 +1,4 @@
+import { Grid3x3 } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { useThemeStore } from '../../stores/themeStore';
 import { useQecStore } from '../../stores/qecStore';
@@ -37,6 +38,7 @@ export function CodeLatticePanel({ embedded = false }: { embedded?: boolean } = 
       <div style={{ height: '100%', display: 'flex', flexDirection: 'column', background: colors.bg }}>
         {header}
         <QecEmptyState
+          icon={Grid3x3}
           title="No qubit coordinates"
           body="This circuit doesn't declare qubit coordinates, so there's no lattice to draw. Generated surface/repetition codes include them."
           docsHref={DOCS}
