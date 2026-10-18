@@ -60,6 +60,14 @@
   --lab-div-mid: #383835;
   --lab-div-pos: #e66767;
 
+  /* WCAG AA (>= 4.5:1) text inks. The app tokens are tuned for the editor
+     chrome; the Lab renders 10-12 px text on raised/overlay surfaces and soft
+     tinted pills, so it re-declares the ink tokens it reads. The contrast
+     unit test (labContrast.test.ts) pins every pair below. */
+  --color-text-tertiary: #8393aa;
+  --color-danger: #f87171;
+  --lab-dirac-ink: #d4a9ec;
+
   color-scheme: dark;
   font-family: var(--font-sans);
   font-size: var(--font-size-chrome-label);
@@ -91,6 +99,15 @@
   --lab-div-neg: #2a78d6;
   --lab-div-mid: #f0efec;
   --lab-div-pos: #e34948;
+
+  --color-text-secondary: #4c5b70;
+  --color-text-tertiary: #475569;
+  --color-accent-quantum: #0b6580;
+  --color-success: #046548;
+  --color-warning: #92400e;
+  --color-danger: #b91c1c;
+  --color-info: #1d4ed8;
+  --lab-dirac-ink: #6b21a8;
 
   color-scheme: light;
 }
@@ -318,7 +335,7 @@
 
 .lab-pill svg { flex-shrink: 0; }
 .lab-pill--quantum { background: var(--lab-quantum-soft); color: var(--color-accent-quantum); }
-.lab-pill--dirac { background: var(--lab-dirac-soft); color: color-mix(in srgb, var(--color-accent-dirac) 70%, var(--color-text-primary)); }
+.lab-pill--dirac { background: var(--lab-dirac-soft); color: var(--lab-dirac-ink); }
 .lab-pill--success { background: var(--lab-success-soft); color: var(--color-success); }
 .lab-pill--warning { background: var(--lab-warning-soft); color: var(--color-warning); }
 .lab-pill--danger { background: var(--lab-danger-soft); color: var(--color-danger); }
@@ -367,7 +384,7 @@
 .lab-button:active:not(:disabled) { transform: translateY(0.5px); }
 .lab-button:disabled { opacity: 0.45; cursor: not-allowed; }
 
-.lab-button--sm { height: 26px; padding: 0 9px; font-size: 11.5px; }
+.lab-button--sm { height: 28px; padding: 0 9px; font-size: 11.5px; }
 .lab-button--md { height: 32px; padding: 0 14px; }
 .lab-button--icon { width: 28px; padding: 0; }
 
@@ -376,6 +393,8 @@
   border-color: var(--color-accent-quantum);
   color: var(--color-surface-base);
   font-weight: var(--font-weight-semibold);
+  /* Primary actions get the larger 32 px target, at any button size. */
+  height: 32px;
 }
 
 .lab-button--primary:hover:not(:disabled) {
@@ -416,7 +435,7 @@
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  height: 26px;
+  height: 28px;
   padding: 0 10px;
   border: 0;
   border-radius: 4px;
@@ -680,7 +699,7 @@ textarea.lab-input { height: auto; padding: 8px 10px; resize: vertical; line-hei
   white-space: nowrap;
 }
 
-.lab-table th button { all: unset; cursor: pointer; display: inline-flex; align-items: center; gap: 4px; }
+.lab-table th button { all: unset; cursor: pointer; display: inline-flex; align-items: center; gap: 4px; min-height: 28px; }
 .lab-table th button:focus-visible { outline: 2px solid var(--lab-focus); outline-offset: 2px; border-radius: 2px; }
 .lab-table td { padding: 7px 10px; border-bottom: 1px solid var(--lab-hairline); white-space: nowrap; }
 .lab-table td.lab-num, .lab-table th.lab-num { text-align: right; font-family: var(--font-mono); font-variant-numeric: tabular-nums; }

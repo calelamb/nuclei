@@ -3,6 +3,7 @@ import type { LandscapeResult } from '../../../types/trainability';
 
 /** Row-major, y outer (`values[iy][ix]`); iy = 0 is drawn at the bottom. */
 export function drawLandscape(canvas: HTMLCanvasElement, data: LandscapeResult, ramp: string[]): boolean {
+  if (ramp.length < 2) return false;
   const ctx = canvas.getContext('2d');
   if (!ctx) return false;
   const { resolution, values, min, max } = data;
