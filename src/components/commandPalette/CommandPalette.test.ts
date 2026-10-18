@@ -86,7 +86,7 @@ describe('palette ↔ registry parity', () => {
     }
   }
 
-  it('lists "Replay the Research mode tour" only in Research mode (shell-12)', () => {
+  it('lists "Replay Research tour" only in Research mode (shell-12)', () => {
     const research = buildCommands(makeActions(), makeContext({ mode: 'research' }));
     const learn = buildCommands(makeActions(), makeContext({ mode: 'learn' }));
     expect(research.some((c) => c.id === 'research-tour')).toBe(true);

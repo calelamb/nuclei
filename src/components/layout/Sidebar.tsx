@@ -107,7 +107,7 @@ const VIEW_TITLES: Record<ActivityView, string> = {
   settings: 'Settings',
   experiments: 'Experiments',
   qec: 'QEC Workbench',
-  estimator: 'Estimator',
+  estimator: 'Resource Estimator',
   transpiler: 'Transpiler',
 };
 

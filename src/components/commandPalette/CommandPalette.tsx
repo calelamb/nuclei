@@ -284,7 +284,7 @@ export function buildCommands(actions: CommandActions, context: CommandContext):
   // Workspace + orientation.
   commands.push({ id: 'workspace-mode', label: bindingLabel('switch-workspace'), category: 'Navigate', shortcut: sc('switch-workspace'), keywords: ['learn', 'research', 'workspace'], action: actions.switchWorkspaceMode });
   if (context.mode === 'research') {
-    commands.push({ id: 'research-tour', label: 'Replay the Research mode tour', category: 'Navigate', action: actions.startResearchTour });
+    commands.push({ id: 'research-tour', label: 'Replay Research tour', category: 'Navigate', action: actions.startResearchTour });
   }
 
   // Go to <view> — every rail view this mode offers, in registry order.
