@@ -16,7 +16,7 @@ describe('getRunButtonState', () => {
       kernelStatus: 'connecting',
       kernelProgress: { step: 2, total: 3, label: 'Loading NumPy', fraction: 0.6 },
     });
-    expect(state).toMatchObject({ kind: 'loading', label: 'Loading 2/3', queueable: true });
+    expect(state).toMatchObject({ kind: 'loading', label: 'Starting 2/3', queueable: true });
     expect(state.title).toBe('Loading NumPy (step 2 of 3). Click to run as soon as Python is ready.');
   });
 
@@ -60,7 +60,7 @@ describe('getRunButtonState', () => {
       kernelStatus: 'connecting',
       kernelProgress: { step: 2, total: 15, kind: 'attempts', label: 'Starting kernel', fraction: 0.13 },
     });
-    expect(state).toMatchObject({ kind: 'loading', label: 'Starting kernel…', queueable: true });
+    expect(state).toMatchObject({ kind: 'loading', label: 'Starting…', queueable: true });
     expect(state.label).not.toMatch(/\d/);
   });
 

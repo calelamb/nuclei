@@ -11,6 +11,7 @@ import { CircuitRenderer } from '../circuit/CircuitRenderer';
 import { Button, EmptyState, Tabs } from '../ui';
 import { kernelStartFailureTitle } from '../../lib/kernelErrors';
 import { retryKernel } from '../../lib/kernelControl';
+import { bootStepLabel } from '../layout/kernelStatusModel';
 import { usePlatform } from '../../platform/PlatformProvider';
 import { useEditorStore } from '../../stores/editorStore';
 import { visibleVizPanelIds } from '../../layout/vizPanels';
@@ -137,10 +138,10 @@ export function VizZone({
 
   const progress = useEditorStore((st) => st.kernelProgress);
   if (booting && panels.length === 0) {
-    const stage = progress && progress.kind !== 'attempts' && progress.total > 0 ? ` (step ${progress.step} of ${progress.total})` : '';
+    const heading = bootStepLabel(progress, { isWeb: platform.getPlatform() === 'web' }).long;
     return (
       <div style={COLUMN_STYLE}>
-        <EmptyState className="viz-empty viz-empty--boot" icon={<Workflow size={20} />} title={`Preparing Python${stage}`}>
+        <EmptyState className="viz-empty viz-empty--boot" icon={<Workflow size={20} />} title={heading}>
           Circuit and results appear when it&rsquo;s ready.
         </EmptyState>
       </div>

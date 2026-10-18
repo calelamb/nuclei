@@ -198,7 +198,7 @@ describe('StatusBar kernel state', () => {
       kernelProgress: { step: 2, total: 3, label: 'Loading NumPy', fraction: 0.6 },
     });
     const { getByText, queryByText } = renderStatusBar();
-    expect(getByText('Loading NumPy…')).toBeTruthy();
+    expect(getByText(/^Starting (Python|kernel) 2\/3$/)).toBeTruthy();
     expect(queryByText(/ready/i)).toBeNull();
   });
 

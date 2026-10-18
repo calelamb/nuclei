@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { getKernelStatusModel } from './kernelStatusModel';
+import { bootStepLabel, getKernelStatusModel } from './kernelStatusModel';
 import { getRunButtonState } from '../editor/runButtonState';
 import { BOOT_STAGES } from '../../platform/pyodide/workerProtocol';
 
@@ -14,11 +14,11 @@ describe('getKernelStatusModel', () => {
       ...base, kernelStatus: 'connecting',
       kernelProgress: { step: 1, total: 3, label: 'Downloading Python', fraction: 0 },
     });
-    expect(model).toMatchObject({ label: 'Downloading Python…', tone: 'busy' });
+    expect(model).toMatchObject({ label: 'Starting Python 1/3', tone: 'busy' });
   });
 
   it('uses platform wording before any stage is reported', () => {
-    expect(getKernelStatusModel({ ...base, kernelStatus: 'connecting' }).label).toBe('Preparing Python…');
+    expect(getKernelStatusModel({ ...base, kernelStatus: 'connecting' }).label).toBe('Starting Python…');
     expect(getKernelStatusModel({ ...base, kernelStatus: 'connecting', isWeb: false }).label).toBe('Starting kernel…');
   });
 
@@ -77,5 +77,36 @@ describe('web boot vocabulary (design-r5-02)', () => {
     expect(`${early.label} ${early.detail}`).not.toMatch(/kernel/i);
     const failed = getKernelStatusModel({ ...base, kernelStatus: 'failed' });
     expect(`${failed.label} ${failed.detail}`).not.toMatch(/kernel/i);
+  });
+});
+
+describe('bootStepLabel (shell-r6-05)', () => {
+  const step = (n: number, label: string) => ({ step: n, total: 3, label, fraction: n / 3 });
+
+  it('derives the Run slot, results heading and status bar from one count', () => {
+    expect(bootStepLabel(step(1, 'Downloading Python'), { isWeb: true })).toEqual({
+      short: 'Starting 1/3',
+      long: 'Starting Python (1 of 3)',
+      status: 'Starting Python 1/3',
+      stage: 'Downloading Python',
+      counted: true,
+    });
+  });
+
+  it('keeps the stage name out of every label, whichever stage', () => {
+    ['Downloading Python', 'Loading NumPy', 'Starting Python'].forEach((stage, i) => {
+      const out = bootStepLabel(step(i + 1, stage), { isWeb: true });
+      for (const text of [out.short, out.long, out.status]) {
+        expect(text).not.toMatch(/Downloading|NumPy/);
+        expect(text).not.toMatch(/kernel/i);
+      }
+    });
+  });
+
+  it('says kernel on desktop and carries no number before a stage or for connect retries', () => {
+    expect(bootStepLabel(null, { isWeb: false })).toMatchObject({ short: 'Starting…', long: 'Starting kernel…', status: 'Starting kernel…', counted: false });
+    const attempts = bootStepLabel({ step: 2, total: 15, kind: 'attempts', label: 'Starting kernel', fraction: 0.1 }, { isWeb: false });
+    expect(attempts).toMatchObject({ short: 'Starting…', counted: false, stage: 'Starting kernel' });
+    expect(bootStepLabel(null, { isWeb: true }).long).toBe('Starting Python…');
   });
 });
