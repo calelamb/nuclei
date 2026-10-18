@@ -106,4 +106,14 @@ describe('dead ends (qec-16)', () => {
     expect(pCell.className).toContain('nuclei-table__text');
     expect(pCell.style.fontVariantNumeric).toBe('tabular-nums');
   });
+
+  it('previews five rows with a count of the rest so the editor stays short (rq-r3-05)', () => {
+    const rows = Array.from({ length: 12 }, (_, i) => line(`r${i}`, { d: 3, p: 0.001 * (i + 1), r: 3 }));
+    useQecCampaignStore.getState().loadFromCsv([HEADER, ...rows].join('\n'), 'x.csv');
+    const r = render(<CsvMappingPreview />);
+    open(r);
+    const table = r.getByRole('table', { name: 'Mapped rows preview' });
+    expect(table.querySelectorAll('tbody tr')).toHaveLength(5);
+    expect(r.getByText('Showing the first 5 of 12 rows.')).toBeTruthy();
+  });
 });

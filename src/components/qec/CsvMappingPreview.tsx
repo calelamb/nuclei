@@ -14,7 +14,8 @@ import { ICON_SIZE, ICON_STROKE, TYPOGRAPHY } from '../../styles/tokens';
 import { Button, Checkbox, Select } from '../ui';
 import { Table, Thead, Tbody, Tr, Th, Td } from '../ui/Table';
 
-const PREVIEW_ROWS = 10;
+/** The editor opens above the plot: five rows are enough to check a mapping without pushing the figure off screen. */
+const PREVIEW_ROWS = 5;
 type Field = 'p' | 'd' | 'rounds' | 'decoder';
 
 const FIELDS: Array<{ field: Field; label: string }> = [
@@ -235,6 +236,9 @@ export function CsvMappingPreview() {
               })}
             </Tbody>
           </Table>
+          {csv.rows.length > PREVIEW_ROWS && (
+            <p style={{ margin: '4px 0 0', fontSize: 11, color: colors.textMuted }}>{`Showing the first ${PREVIEW_ROWS} of ${csv.rows.length} rows.`}</p>
+          )}
         </div>
       )}
     </section>

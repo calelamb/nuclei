@@ -17,7 +17,8 @@ import { QEC_PLOT_CSV_DOCS } from '../../config/docsLinks';
 import { useCsvDrop } from './useCsvDrop';
 
 import { TYPOGRAPHY } from '../../styles/tokens';
-const PLOT_MIN_HEIGHT = 300;
+/** Opening the mapping editor must never squeeze the figure below this; the column scrolls instead. */
+const PLOT_MIN_HEIGHT = 320;
 const TABLE_MIN_HEIGHT = 170;
 type AnalysisTab = 'plot' | 'lambda' | 'decoders';
 const ANALYSIS_TABS = [
