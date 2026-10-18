@@ -71,75 +71,80 @@ export function CircuitGallery() {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', gap: 10 }}>
-      {/* Search */}
-      <div className="nuclei-focus-accent" style={{ position: 'relative', flexShrink: 0 }}>
-        <Search
-          size={14}
-          style={{
-            position: 'absolute',
-            left: 8,
-            top: '50%',
-            transform: 'translateY(-50%)',
-            color: colors.textDim,
-            pointerEvents: 'none',
-          }}
-        />
-        <input
-          ref={searchInputRef}
-          type="text"
-          placeholder="Search circuits..."
-          value={searchQuery}
-          onChange={(e) => setSearch(e.target.value)}
-          style={{
-            width: '100%',
-            padding: '7px 10px 7px 28px',
-            borderRadius: 6,
-            border: `1px solid ${colors.border}`,
-            background: colors.bg,
-            color: colors.text,
-            fontSize: 12,
-            fontFamily: TYPOGRAPHY.fontSans,
-            boxSizing: 'border-box',
-          }}
-        />
-      </div>
+      {/* Nothing to search, filter or sort until there is at least one circuit. */}
+      {circuits.length > 0 && (
+        <>
+          {/* Search */}
+          <div className="nuclei-focus-accent" style={{ position: 'relative', flexShrink: 0 }}>
+            <Search
+              size={14}
+              style={{
+                position: 'absolute',
+                left: 8,
+                top: '50%',
+                transform: 'translateY(-50%)',
+                color: colors.textDim,
+                pointerEvents: 'none',
+              }}
+            />
+            <input
+              ref={searchInputRef}
+              type="text"
+              placeholder="Search circuits..."
+              value={searchQuery}
+              onChange={(e) => setSearch(e.target.value)}
+              style={{
+                width: '100%',
+                padding: '7px 10px 7px 28px',
+                borderRadius: 6,
+                border: `1px solid ${colors.border}`,
+                background: colors.bg,
+                color: colors.text,
+                fontSize: 12,
+                fontFamily: TYPOGRAPHY.fontSans,
+                boxSizing: 'border-box',
+              }}
+            />
+          </div>
 
-      {/* Category filters */}
-      <div role="group" aria-label="Filter by category" style={{ display: 'flex', flexWrap: 'wrap', gap: 4, flexShrink: 0 }}>
-        {CATEGORIES.map((cat) => {
-          const active = selectedCategory === cat.value;
-          return (
-            <button
-              key={cat.label}
-              type="button"
-              className="nuclei-chip"
-              aria-pressed={active}
-              onClick={() => setCategory(cat.value)}
+          {/* Category filters */}
+          <div role="group" aria-label="Filter by category" style={{ display: 'flex', flexWrap: 'wrap', gap: 4, flexShrink: 0 }}>
+            {CATEGORIES.map((cat) => {
+              const active = selectedCategory === cat.value;
+              return (
+                <button
+                  key={cat.label}
+                  type="button"
+                  className="nuclei-chip"
+                  aria-pressed={active}
+                  onClick={() => setCategory(cat.value)}
+                >
+                  {cat.label}
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Sort */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
+            <span style={{ fontSize: 11, color: colors.textDim, fontFamily: TYPOGRAPHY.fontSans }}>
+              Sort:
+            </span>
+            <Select
+              size="sm"
+              aria-label="Sort circuits"
+              value={sortBy}
+              onChange={(e) => setSortBy(e.target.value as 'recent' | 'popular' | 'featured')}
             >
-              {cat.label}
-            </button>
-          );
-        })}
-      </div>
-
-      {/* Sort */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
-        <span style={{ fontSize: 11, color: colors.textDim, fontFamily: TYPOGRAPHY.fontSans }}>
-          Sort:
-        </span>
-        <Select
-          size="sm"
-          aria-label="Sort circuits"
-          value={sortBy}
-          onChange={(e) => setSortBy(e.target.value as 'recent' | 'popular' | 'featured')}
-        >
-          {SORTS.map((s) => (
-            <option key={s.value} value={s.value}>
-              {s.label}
-            </option>
-          ))}
-        </Select>
-      </div>
+              {SORTS.map((s) => (
+                <option key={s.value} value={s.value}>
+                  {s.label}
+                </option>
+              ))}
+            </Select>
+          </div>
+        </>
+      )}
 
       {/* Grid */}
       <div

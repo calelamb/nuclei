@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 import { Check, AlertCircle, Loader2, Download } from 'lucide-react';
-import { Button, Dialog } from '../ui';
+import { Button, Checkbox, Dialog } from '../ui';
 import { useThemeStore } from '../../stores/themeStore';
 import {
   useFrameworksStore,
@@ -12,6 +12,7 @@ import {
 } from '../../stores/frameworksStore';
 
 import { TYPOGRAPHY } from '../../styles/tokens';
+import './frameworkSetup.css';
 interface FrameworkSetupProps {
   open: boolean;
   onClose: () => void;
@@ -390,49 +391,44 @@ function FrameworkRow({
 }) {
   const colors = useThemeStore((s) => s.colors);
   return (
-    <label
+    <div
+      className="fw-row"
       style={{
-        display: 'flex',
-        alignItems: 'flex-start',
-        gap: 10,
-        padding: '8px 10px',
         marginBottom: 4,
         borderRadius: 8,
         border: `1px solid ${checked ? `${colors.accent}55` : colors.border}`,
         background: checked ? `${colors.accent}0c` : 'transparent',
-        cursor: disabled ? 'not-allowed' : 'pointer',
-        opacity: disabled ? 0.6 : 1,
         transition: 'background 120ms ease, border-color 120ms ease',
       }}
     >
-      <input
-        type="checkbox"
+      <Checkbox
+        className="fw-row__check"
         checked={checked}
         disabled={disabled}
-        onChange={onToggle}
-        style={{ marginTop: 3, accentColor: colors.accent }}
-      />
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <span style={{ fontSize: 13, fontWeight: 600, color: colors.text }}>{fw.label}</span>
-          {installed && (
-            <span
-              style={{
-                fontSize: 11,
-                fontWeight: 600,
-                color: colors.success,
-                background: `${colors.success}18`,
-                padding: '2px 6px',
-                borderRadius: 4,
-                letterSpacing: '0.04em',
-                textTransform: 'uppercase',
-              }}
-            >
-              Installed
-            </span>
-          )}
-          {fw.recommended && !installed && (
-            <span
+        onCheckedChange={onToggle}
+        aria-label={fw.label}
+        label={(
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <span style={{ fontSize: 13, fontWeight: 600, color: colors.text }}>{fw.label}</span>
+              {installed && (
+                <span
+                  style={{
+                    fontSize: 11,
+                    fontWeight: 600,
+                    color: colors.success,
+                    background: `${colors.success}18`,
+                    padding: '2px 6px',
+                    borderRadius: 4,
+                    letterSpacing: '0.04em',
+                    textTransform: 'uppercase',
+                  }}
+                >
+                  Installed
+                </span>
+            )}
+            {fw.recommended && !installed && (
+              <span
               style={{
                 fontSize: 11,
                 fontWeight: 600,
@@ -455,6 +451,8 @@ function FrameworkRow({
           ~{fw.approximate_size_mb} MB
         </div>
       </div>
-    </label>
+      )}
+    />
+    </div>
   );
 }

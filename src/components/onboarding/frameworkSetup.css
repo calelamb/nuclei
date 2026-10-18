@@ -1,0 +1,5 @@
+/* Framework picker rows: the whole row is one checkbox label, so the click target is the full card. */
+.fw-row__check { display: flex; align-items: flex-start; gap: var(--space-3); width: 100%; box-sizing: border-box; padding: var(--space-2) var(--space-3); }
+.fw-row__check .nuclei-checkbox__box { margin-top: 2px; }
+.fw-row__check .nuclei-checkbox__label { flex: 1; min-width: 0; }
+.fw-row__check.nuclei-checkbox--disabled { opacity: 0.6; }

@@ -37,6 +37,7 @@ print(2 + 2)`,
 # TODO: Print the number 42
 `,
         framework: 'qiskit',
+        expectedOutput: ['Quantum computing is cool!', '\\b42\\b'],
         tolerancePercent: 0,
         hints: [
           'Use print() with text in quotes: print("your text here")',
@@ -95,6 +96,7 @@ print("Rotation angle:", angle)`,
 # TODO: Print them both
 `,
         framework: 'qiskit',
+        expectedOutput: ['\\b2\\b', 'qiskit'],
         tolerancePercent: 0,
         hints: [
           'Assign a number: num_qubits = 2',
@@ -154,6 +156,8 @@ print("Circuit created:", result, "qubits")`,
 # TODO: Call it with "H"
 `,
         framework: 'qiskit',
+        requiredCode: ['def\\s+describe_gate'],
+        expectedOutput: ['\\bH\\b'],
         tolerancePercent: 0,
         hints: [
           'Start with: def describe_gate(gate_name):',
@@ -211,6 +215,8 @@ print(f"\\nDone! Applied H to all {num_qubits} qubits")`,
 # "Measuring qubit X" for each qubit 0-3
 `,
         framework: 'qiskit',
+        requiredCode: ['for\\s+\\w+\\s+in'],
+        expectedOutput: ['qubit\\s*0', 'qubit\\s*1', 'qubit\\s*2', 'qubit\\s*3'],
         tolerancePercent: 0,
         hints: [
           'Use: for i in range(4):',
@@ -272,7 +278,9 @@ print("Circuit created successfully!")`,
 
 print("Circuit ready!")`,
         framework: 'qiskit',
-        tolerancePercent: 0,
+        expectedProbabilities: { '0': 0.5, '1': 0.5 },
+        requiredCode: ['\\.h\\(\\s*0\\s*\\)', '\\.measure\\('],
+        tolerancePercent: 10,
         hints: [
           'Import: from qiskit import QuantumCircuit',
           'Create: qc = QuantumCircuit(1, 1)',

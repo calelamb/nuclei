@@ -1,10 +1,10 @@
-import { useState, useRef, useCallback, useEffect } from 'react';
+import { useState, useRef, useCallback, useEffect, useMemo } from 'react';
 import { LessonCodeEditor } from './LessonCodeEditor';
 import { useLearnStore } from '../../stores/learnStore';
 import { useDiracPanelStore } from '../../stores/diracPanelStore';
 import type { Framework, SimulationResult, KernelResponse } from '../../types/quantum';
 import { Lightbulb, CheckCircle, XCircle, HelpCircle, Terminal } from 'lucide-react';
-import { hasExpectedDistribution, isQuantumCode, shouldAutoGrade, validateExerciseResult } from './exerciseValidation';
+import { hasAnyExpectation, hasExpectedDistribution, isQuantumCode, shouldAutoGrade, validateExerciseRun } from './exerciseValidation';
 import { UnsupportedNotice } from './UnsupportedNotice';
 import { OutcomeResults } from './OutcomeResults';
 import { useLessonKernel } from './useLessonKernel';
@@ -21,6 +21,8 @@ interface ExerciseBlockProps {
   framework: Framework;
   expectedProbabilities?: Record<string, number>;
   expectedMeasurements?: Record<string, number>;
+  expectedOutput?: string[];
+  requiredCode?: string[];
   tolerancePercent: number;
   hints: string[];
   successMessage: string;
@@ -28,7 +30,7 @@ interface ExerciseBlockProps {
 
 export function ExerciseBlock({
   id, title, description, starterCode,
-  expectedProbabilities, expectedMeasurements, tolerancePercent, hints, successMessage,
+  expectedProbabilities, expectedMeasurements, expectedOutput, requiredCode, tolerancePercent, hints, successMessage,
 }: ExerciseBlockProps) {
   const lessonId = useLearnStore((s) => s.currentLessonId);
   const passExercise = useLearnStore((s) => s.passExercise);
@@ -47,10 +49,18 @@ export function ExerciseBlock({
   const [feedback, setFeedback] = useState<{ success: boolean; message: string } | null>(null);
   const [hintsRevealed, setHintsRevealed] = useState(0);
   const [showDiracPrompt, setShowDiracPrompt] = useState(false);
+  const [hasRun, setHasRun] = useState(false);
 
   const inactivityRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const codeRef = useRef(starterCode);
-  const hasExpectations = hasExpectedDistribution(expectedProbabilities)
+  const outputRef = useRef<string[]>([]);
+  const resultRef = useRef<SimulationResult | null>(null);
+  const expectations = useMemo(
+    () => ({ expectedProbabilities, expectedMeasurements, expectedOutput, requiredCode }),
+    [expectedProbabilities, expectedMeasurements, expectedOutput, requiredCode],
+  );
+  const hasExpectations = hasAnyExpectation(expectations);
+  const wantsDistribution = hasExpectedDistribution(expectedProbabilities)
     || hasExpectedDistribution(expectedMeasurements);
 
   const completeExercise = useCallback((message: string) => {
@@ -60,57 +70,52 @@ export function ExerciseBlock({
     }
   }, [id, lessonId, passExercise]);
 
-  const checkSolution = useCallback((nextResult: SimulationResult) => {
-    const validation = validateExerciseResult(nextResult, {
-      expectedProbabilities,
-      expectedMeasurements,
-      tolerancePercent,
-    });
-
-    if (!validation) {
-      completeExercise(successMessage);
-      return;
-    }
-
+  // Grades the latest finished run: stdout, the simulation result and the code.
+  const checkSolution = useCallback(() => {
+    const validation = validateExerciseRun(
+      {
+        result: resultRef.current,
+        output: outputRef.current,
+        code: codeRef.current,
+        starterCode,
+        tolerancePercent,
+      },
+      expectations,
+    );
     if (validation.success) {
       completeExercise(successMessage);
     } else {
       setFeedback({ success: false, message: validation.message });
     }
-  }, [
-    completeExercise,
-    expectedMeasurements,
-    expectedProbabilities,
-    successMessage,
-    tolerancePercent,
-  ]);
+  }, [completeExercise, expectations, starterCode, successMessage, tolerancePercent]);
+
+  // A plain Run only grades once the learner has changed the starter; Check solution always grades.
+  const finishRun = useCallback((gradable: boolean) => {
+    setHasRun(true);
+    if (gradable && hasExpectations && shouldAutoGrade(codeRef.current, starterCode)) checkSolution();
+  }, [checkSolution, hasExpectations, starterCode]);
 
   const handleMessage = useCallback((msg: KernelResponse) => {
     if (msg.type === 'result') {
       setResult(msg.data);
       setIsRunning(false);
       setError(null);
-      if (msg.data) {
-        if (hasExpectations) {
-          // An untouched starter is shown, not graded; Check solution grades it.
-          if (shouldAutoGrade(codeRef.current, starterCode)) checkSolution(msg.data);
-        } else {
-          completeExercise(successMessage);
-        }
-      }
+      resultRef.current = msg.data ?? null;
+      if (msg.data) finishRun(true);
     } else if (msg.type === 'python_result') {
       setResult(null);
       setIsRunning(false);
+      resultRef.current = null;
       if (msg.success) {
         setError(null);
-        if (!hasExpectations) {
-          completeExercise(successMessage);
-        }
+        // A distribution exercise needs a circuit result; a bare script cannot satisfy it.
+        finishRun(!wantsDistribution);
       }
     } else if (msg.type === 'output') {
       // Output from the live preview re-running half-typed code is not a run.
       if (msg.phase === 'parse') return;
-      setOutput((prev) => [...prev, msg.text]);
+      outputRef.current = [...outputRef.current, msg.text];
+      setOutput(outputRef.current);
     } else if (msg.type === 'error') {
       if (msg.code === 'unsupported_framework') {
         setUnsupported(msg.message);
@@ -122,7 +127,7 @@ export function ExerciseBlock({
       setError(msg.message);
       setIsRunning(false);
     }
-  }, [checkSolution, completeExercise, hasExpectations, starterCode, successMessage]);
+  }, [finishRun, wantsDistribution]);
 
   const kernel = useLessonKernel({
     onMessage: handleMessage,
@@ -151,6 +156,8 @@ export function ExerciseBlock({
     codeRef.current = value ?? '';
     setLocalCode(value ?? '');
     setUnsupported(null);
+    // The last run no longer reflects this code, so it cannot be graded until the learner runs again.
+    setHasRun(false);
     resetInactivity();
   };
 
@@ -159,8 +166,11 @@ export function ExerciseBlock({
     setError(null);
     setUnsupported(null);
     setFeedback(null);
+    outputRef.current = [];
+    resultRef.current = null;
     setOutput([]);
     setResult(null);
+    setHasRun(false);
 
     // Learning content is Python-only today, so the language is fixed.
     const message = isQuantumCode(localCode)
@@ -210,11 +220,11 @@ export function ExerciseBlock({
 
       <div className="demo__actions demo__actions--divided">
         <LessonRunButton isRunning={isRunning} pythonLoading={kernel.loading} stage={kernel.stage} onRun={handleRun} />
-        {result && hasExpectations && (
-          <Button onClick={() => checkSolution(result)} icon={<CheckCircle size={12} aria-hidden="true" />}>Check solution</Button>
+        {hasRun && hasExpectations && !isRunning && (
+          <Button onClick={checkSolution} icon={<CheckCircle size={12} aria-hidden="true" />}>Check solution</Button>
         )}
-        {feedback?.success && !hasExpectations && (
-          <span className="exercise__ok"><CheckCircle size={12} aria-hidden="true" /> Code ran successfully. Explore the output above.</span>
+        {hasRun && !hasExpectations && (
+          <span className="exercise__ok"><CheckCircle size={12} aria-hidden="true" /> Ran. Compare {output.length > 0 ? 'the output above' : 'your output'} with the task.</span>
         )}
         <span className="demo__spacer" />
         {hintsRevealed < hints.length && (

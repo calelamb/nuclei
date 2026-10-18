@@ -25,11 +25,12 @@ interface FakeEditor {
   getContentHeight: () => number;
 }
 
-const harness = vi.hoisted(() => ({ focus: () => {}, blur: () => {} }));
+const harness = vi.hoisted(() => ({ focus: () => {}, blur: () => {}, options: {} as Record<string, unknown> }));
 
-function FakeMonaco({ onMount }: { onMount: (e: FakeEditor, m: unknown) => void }) {
+function FakeMonaco({ onMount, options }: { onMount: (e: FakeEditor, m: unknown) => void; options?: Record<string, unknown> }) {
   // Like the real component, mount the editor once, not on every re-render.
   React.useEffect(() => {
+    harness.options = options ?? {};
     const editor: FakeEditor = {
       addAction: vi.fn(),
       onDidFocusEditorText: (cb) => { harness.focus = cb; },
@@ -74,5 +75,13 @@ describe('LessonCodeEditor keyboard model (LR-03)', () => {
     act(() => harness.focus());
     act(() => flag.set(false));
     expect(screen.getByRole('note').textContent).toMatch(/Tab indents/);
+  });
+});
+
+describe('LessonCodeEditor gutter', () => {
+  it('keeps line numbers off the card border with an inset gutter and room for three digits', () => {
+    render(<LessonCodeEditor value="x = 1" onChange={() => {}} />);
+    expect(harness.options.glyphMargin).toBe(true);
+    expect(harness.options.lineNumbersMinChars).toBeGreaterThanOrEqual(3);
   });
 });

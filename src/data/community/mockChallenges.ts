@@ -9,7 +9,8 @@ export interface Challenge {
   starterCode: string;
   hints: string[];
   deadline: string;
-  submissions: number;
+  /** Only set when real submission data backs it; never invent a count. */
+  submissions?: number;
   weekNumber: number;
 }
 
@@ -48,7 +49,6 @@ print(counts)`,
       'After the Hadamard, use a CNOT gate (qc.cx) to entangle the two qubits.',
     ],
     deadline: '2026-04-07T23:59:59Z',
-    submissions: 156,
     weekNumber: 1,
   },
   {
@@ -90,7 +90,6 @@ print(counts)`,
       'For 2 qubits, a single Grover iteration gives the correct answer with 100% probability.',
     ],
     deadline: '2026-04-14T23:59:59Z',
-    submissions: 98,
     weekNumber: 2,
   },
   {
@@ -141,7 +140,6 @@ print(counts)`,
       'Bob applies X correction conditioned on qubit 1 measurement, and Z correction conditioned on qubit 0 measurement.',
     ],
     deadline: '2026-04-21T23:59:59Z',
-    submissions: 72,
     weekNumber: 3,
   },
   {
@@ -189,7 +187,6 @@ print("Original output:", counts)`,
       'After all cancellations, figure out the net effect on each qubit and rebuild from scratch.',
     ],
     deadline: '2026-04-28T23:59:59Z',
-    submissions: 45,
     weekNumber: 4,
   },
   {
@@ -244,7 +241,6 @@ print("After correction:", counts)`,
       'Correction: if both syndromes fire, the error is on qubit 1. If only the first syndrome fires, error is on qubit 0. If only the second, error is on qubit 2. Use Toffoli and CNOT gates for conditional correction.',
     ],
     deadline: '2026-05-05T23:59:59Z',
-    submissions: 31,
     weekNumber: 5,
   },
 ];

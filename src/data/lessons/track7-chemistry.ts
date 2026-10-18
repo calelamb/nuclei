@@ -233,7 +233,7 @@ print(f"Exact H2 ground state: -1.8573 Ha")`,
         type: 'exercise',
         id: '7.3-ex1',
         title: 'Build a VQE Ansatz for H2',
-        description: 'Build a 2-qubit ansatz (2+ RY gates, 1 CNOT). Find parameters giving energy below -1.05 Ha (beat Hartree-Fock).',
+        description: 'Build a 2-qubit ansatz (2+ RY gates, 1 CNOT). Find parameters giving an energy below -1.85 Ha. The Hartree-Fock reference state (q0 = 1, the lowest-energy basis state) sits at -1.837 Ha, so you need to correlate the two orbitals to beat it. The untouched |00⟩ starter gives only -1.06 Ha.',
         starterCode: `from qiskit import QuantumCircuit
 from qiskit.quantum_info import SparsePauliOp, Statevector
 
@@ -247,12 +247,13 @@ qc = QuantumCircuit(2)
 sv = Statevector.from_instruction(qc)
 print(f"Energy: {sv.expectation_value(h2_op).real:.4f} Ha")`,
         framework: 'qiskit',
-        expectedProbabilities: {},
+        requiredCode: ['\\.ry\\(', '\\.cx\\('],
+        expectedOutput: ['Energy:\\s*-(1\\.8[5-9]|1\\.9|[2-9]\\.)'],
         tolerancePercent: 5,
         hints: [
           'Start with RY(theta, 0) and RY(theta, 1) to rotate both qubits.',
           'Add CX(0, 1) to entangle the two orbitals.',
-          'Try theta values near pi — this prepares a state close to the bonding orbital.',
+          'Try RY(pi) on qubit 1 (it flips that orbital) and an angle near 3.4 radians on qubit 0 — this prepares a state close to the bonding orbital. Scan the angle a little to refine.',
         ],
         successMessage: 'You beat Hartree-Fock! A full VQE optimizer would refine further toward -1.857 Ha.',
       },

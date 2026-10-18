@@ -493,6 +493,7 @@ qc = QuantumCircuit(3, 2)
 # TODO: Prepare (|0⟩+i|1⟩)/√2 on q0, Bell pair on q1-q2, Bell measure, corrections
 `,
         framework: 'qiskit',
+        requiredCode: ['\\.(s|sdg|p|rz|rx|ry|u)\\(', '\\.cx\\(\\s*1\\s*,\\s*2\\s*\\)', '\\.cx\\(\\s*0\\s*,\\s*1\\s*\\)', '\\.measure\\('],
         tolerancePercent: 5,
         hints: [
           'State prep: qc.h(0) then qc.s(0)',
@@ -680,6 +681,8 @@ def get_mystery():
 # TODO: Measure <Z>, <X>, <Y> and print the Bloch vector (r_x, r_y, r_z)
 `,
         framework: 'qiskit',
+        requiredCode: ['\\.measure\\(', '\\.(sdg|sxdg|rx|ry)\\('],
+        expectedOutput: ['(?<![\\d.-])(0\\.9\\d*|1(\\.0*)?)(?!\\d)'],
         tolerancePercent: 8,
         hints: [
           'Copy the circuit, add qc.measure(0, 0), run, compute (count_0 - count_1)/shots',

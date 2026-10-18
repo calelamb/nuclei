@@ -24,7 +24,7 @@ function ContentBlockRenderer({ block }: { block: ContentBlock }) {
     case 'demo':
       return <InteractiveDemo code={block.code} framework={block.framework} description={block.description} explorationPrompt={block.explorationPrompt} />;
     case 'exercise':
-      return <ExerciseBlock id={block.id} title={block.title} description={block.description} starterCode={block.starterCode} framework={block.framework} expectedProbabilities={block.expectedProbabilities} expectedMeasurements={block.expectedMeasurements} tolerancePercent={block.tolerancePercent} hints={block.hints} successMessage={block.successMessage} />;
+      return <ExerciseBlock id={block.id} title={block.title} description={block.description} starterCode={block.starterCode} framework={block.framework} expectedProbabilities={block.expectedProbabilities} expectedMeasurements={block.expectedMeasurements} expectedOutput={block.expectedOutput} requiredCode={block.requiredCode} tolerancePercent={block.tolerancePercent} hints={block.hints} successMessage={block.successMessage} />;
     case 'quiz':
       return <QuizBlock questions={block.questions} />;
     case 'concept-card':
@@ -168,7 +168,7 @@ export function LessonView({ lesson, trackId }: LessonViewProps) {
         </header>
 
         {lesson.contentBlocks.map((block, i) => (
-          <div key={i} id={`block-${i}`} data-block-index={i} className="lesson__block">
+          <div key={`${lesson.id}:${i}`} id={`block-${i}`} data-block-index={i} className="lesson__block">
             <ContentBlockRenderer block={block} />
           </div>
         ))}

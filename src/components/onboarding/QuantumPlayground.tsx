@@ -55,9 +55,17 @@ const STEPS = [
   },
 ];
 
+const LABEL_BAND = 18;
+/** The 3:1 control border, so the sphere outline reads in both themes (the card borders do not). */
+const OUTLINE = 'var(--color-border-control)';
+
 function QubitViz({ kind, outcome, label, size = 120 }: { kind: QubitKind; outcome: Outcome | null; label?: string; size?: number }) {
   const colors = useThemeStore((s) => s.colors);
   const r = size / 2 - 4;
+  // Pole labels live in bands above and below the circle so the arrow tip never covers them.
+  const cx = size / 2;
+  const cy = size / 2 + LABEL_BAND;
+  const height = size + LABEL_BAND * 2;
   const rad = (arrowAngle(kind, outcome) * Math.PI) / 180;
   const arrowX = Math.cos(rad) * r * 0.8;
   const arrowY = Math.sin(rad) * r * 0.8;
@@ -66,24 +74,20 @@ function QubitViz({ kind, outcome, label, size = 120 }: { kind: QubitKind; outco
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
-      <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} role="img" aria-label={`Qubit ${description}`}>
-        <circle
-          cx={size / 2} cy={size / 2} r={r}
-          fill="none" stroke={colors.border} strokeWidth={1.5}
-          opacity={0.4}
-        />
-        <text x={size / 2} y={12} textAnchor="middle" fill={colors.textMuted} fontSize={11} fontFamily={TYPOGRAPHY.fontSans}>|0⟩</text>
-        <text x={size / 2} y={size - 4} textAnchor="middle" fill={colors.textMuted} fontSize={11} fontFamily={TYPOGRAPHY.fontSans}>|1⟩</text>
+      <svg width={size} height={height} viewBox={`0 0 ${size} ${height}`} role="img" aria-label={`Qubit ${description}`}>
+        <circle cx={cx} cy={cy} r={r} fill="none" strokeWidth={1.5} style={{ stroke: OUTLINE }} />
+        <text x={cx} y={LABEL_BAND - 5} textAnchor="middle" fill={colors.textMuted} fontSize={11} fontFamily={TYPOGRAPHY.fontSans}>|0⟩</text>
+        <text x={cx} y={height - 5} textAnchor="middle" fill={colors.textMuted} fontSize={11} fontFamily={TYPOGRAPHY.fontSans}>|1⟩</text>
         <line
-          x1={size / 2} y1={size / 2}
-          x2={size / 2 + arrowX} y2={size / 2 + arrowY}
+          x1={cx} y1={cy}
+          x2={cx + arrowX} y2={cy + arrowY}
           stroke={arrowColor}
           strokeWidth={2.5}
           strokeLinecap="round"
           style={{ transition: `all ${getDuration(DURATION.slow)}ms ${EASING.enter}` }}
         />
         <circle
-          cx={size / 2 + arrowX} cy={size / 2 + arrowY}
+          cx={cx + arrowX} cy={cy + arrowY}
           r={4}
           fill={arrowColor}
           opacity={0.8}
@@ -103,11 +107,16 @@ function Bar({ label, count, total, color }: { label: string; count: number; tot
   const colors = useThemeStore((s) => s.colors);
   return (
     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
-      <div style={{
-        width: 36, height: total > 0 ? (count / total) * BAR_MAX_PX : 0, background: color,
-        borderRadius: '4px 4px 0 0',
-        transition: `height ${getDuration(DURATION.normal)}ms ${EASING.enter}`,
-      }} />
+      <div
+        data-bar-baseline=""
+        style={{ display: 'flex', alignItems: 'flex-end', height: BAR_MAX_PX, borderBottom: `1px solid ${OUTLINE}` }}
+      >
+        <div style={{
+          width: 36, height: total > 0 ? (count / total) * BAR_MAX_PX : 0, background: color,
+          borderRadius: '4px 4px 0 0',
+          transition: `height ${getDuration(DURATION.normal)}ms ${EASING.enter}`,
+        }} />
+      </div>
       <span style={{ color: colors.text, fontSize: 11, fontFamily: TYPOGRAPHY.fontSans }}>{label}</span>
       <span style={{ color: colors.textMuted, fontSize: 11 }}>{count}</span>
     </div>

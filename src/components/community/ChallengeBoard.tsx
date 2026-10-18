@@ -13,6 +13,10 @@ const DIFFICULTY_TONE: Record<string, BadgeTone> = {
   advanced: 'danger',
 };
 
+function hasEnded(deadline: string): boolean {
+  return new Date(deadline).getTime() - Date.now() <= 0;
+}
+
 function formatCountdown(deadline: string): string {
   const ms = new Date(deadline).getTime() - Date.now();
   if (ms <= 0) return 'Ended';
@@ -32,6 +36,7 @@ export function ChallengeBoard() {
   const openDirac = useDiracPanelStore((s) => s.open);
 
   const displayed = activeChallenge ?? challenges[0] ?? null;
+  const ended = displayed ? hasEnded(displayed.deadline) : false;
 
   const handleStart = () => {
     if (displayed) {
@@ -127,21 +132,23 @@ export function ChallengeBoard() {
           >
             {formatCountdown(displayed.deadline)}
           </span>
-          <span
-            style={{
-              fontSize: 11,
-              color: colors.textDim,
-              fontFamily: TYPOGRAPHY.fontSans,
-            }}
-          >
-            {displayed.submissions} {displayed.submissions === 1 ? 'submission' : 'submissions'}
-          </span>
+          {displayed.submissions !== undefined && (
+            <span
+              style={{
+                fontSize: 11,
+                color: colors.textDim,
+                fontFamily: TYPOGRAPHY.fontSans,
+              }}
+            >
+              {displayed.submissions} {displayed.submissions === 1 ? 'submission' : 'submissions'}
+            </span>
+          )}
         </div>
 
         {/* Actions stack so the labels never wrap in the narrow rail */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-          <Button variant="primary" size="sm" icon={<Play size={ICON_SIZE.xs} aria-hidden="true" />} onClick={handleStart} style={{ width: '100%' }}>
-            Start challenge
+          <Button variant={ended ? 'secondary' : 'primary'} size="sm" icon={<Play size={ICON_SIZE.xs} aria-hidden="true" />} onClick={handleStart} style={{ width: '100%' }}>
+            {ended ? 'Practice this challenge' : 'Start challenge'}
           </Button>
           <Button variant="secondary" size="sm" icon={<Lightbulb size={ICON_SIZE.xs} aria-hidden="true" />} onClick={handleHint} style={{ width: '100%' }}>
             Ask Dirac
@@ -158,7 +165,7 @@ export function ChallengeBoard() {
 
         {leaderboard.length === 0 ? (
           <p style={{ margin: 0, padding: 16, textAlign: 'center', fontSize: 12, color: colors.textMuted }}>
-            No submissions yet. Be the first.
+            {ended ? 'No submissions were recorded for this challenge.' : 'No submissions yet. Be the first.'}
           </p>
         ) : (
           <Table label="Leaderboard" dense>

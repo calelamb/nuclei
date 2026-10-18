@@ -68,6 +68,25 @@ describe('DiracSidePanel', () => {
     expect(useDiracStore.getState().apiKey).toBeNull();
   });
 
+  it('tells the learner to paste a key when Save is pressed empty', () => {
+    resetStores(null);
+    render(<DiracSidePanel />);
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    expect(screen.getByRole('alert').textContent).toBe('Paste your Anthropic API key first.');
+    expect(useDiracStore.getState().apiKey).toBeNull();
+  });
+
+  it('moves focus to the message box once a key is saved, not to the body', async () => {
+    resetStores(null);
+    render(<DiracSidePanel />);
+    const field = screen.getByLabelText('Anthropic API key');
+    field.focus();
+    fireEvent.change(field, { target: { value: 'sk-ant-abc' } });
+    await act(async () => { fireEvent.submit(field.closest('form')!); });
+    expect(useDiracStore.getState().apiKey).toBe('sk-ant-abc');
+    expect(document.activeElement).toBe(screen.getByLabelText('Message Dirac'));
+  });
+
   it('shows each message at its own timestamp, not the current time (learn-04)', () => {
     resetStores('sk-ant-test');
     useDiracStore.setState({
