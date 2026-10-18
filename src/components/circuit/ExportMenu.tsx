@@ -5,6 +5,7 @@ import { useCircuitExport } from '../../hooks/useCircuitExport';
 import { TYPOGRAPHY } from '../../styles/tokens';
 import { useDisplaySnapshot } from '../../layout/useDisplaySnapshot';
 import { useEditorStore } from '../../stores/editorStore';
+import { exportDisabledReason } from './exportDisabledReason';
 import { useCircuitStore } from '../../stores/circuitStore';
 import { Button, Menu, Tooltip, type MenuEntry } from '../ui';
 
@@ -17,11 +18,6 @@ const CLIPBOARD_BLOCKED = "Couldn't copy: clipboard blocked";
  * blocked clipboard instead of failing silently; image exports say so when the diagram
  * is not on screen.
  */
-export function exportDisabledReason({ errorLine, previewPaused }: { errorLine: number | null; previewPaused: boolean }): string {
-  if (errorLine !== null) return `Fix line ${errorLine} to export`;
-  return previewPaused ? 'Run the code to export' : 'Fix the code error to export';
-}
-
 export function ExportMenu() {
   const [notice, setNotice] = useState<string | null>(null);
   const [failed, setFailed] = useState(false);
