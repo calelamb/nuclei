@@ -134,9 +134,9 @@
 /* Keyboard focus draws the ring and the accent stripe as one shape; the border does not shift colour underneath it. */
 .nuclei-choice-card:focus-visible {
   /* The 1px border takes the ring colour and the outer shadow supplies the rest of the ring's width, so the ring is one
-     unbroken band and the accent stripe sits flush against it (no pale gap, no doubled left edge). */
+     unbroken band; the stripe takes the ring colour while focused so the left edge is one colour, not blue inside teal. */
   outline: none; border-color: var(--focus-ring-color);
-  box-shadow: inset 3px 0 0 var(--choice-accent), 0 0 0 calc(var(--focus-ring-width) - 1px) var(--focus-ring-color);
+  box-shadow: inset 3px 0 0 var(--focus-ring-color), 0 0 0 calc(var(--focus-ring-width) - 1px) var(--focus-ring-color);
 }
 /* In the light theme the sunken surface reads as disabled; resting cards sit on the raised surface and lift to white. */
 :root[data-theme='light'] .nuclei-choice-card { background: var(--color-surface-raised); }

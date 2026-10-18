@@ -26,9 +26,19 @@ describe('Button', () => {
     expect(el.className).toContain('nuclei-btn--sm');
   });
 
-  it('stays focusable while loading (aria-disabled, not disabled), is busy, and ignores clicks', () => {
+  it('is disabled and aria-busy while loading by default, and does not fire onClick', () => {
     const onClick = vi.fn();
     render(<Button loading onClick={onClick}>Retry</Button>);
+    const el = screen.getByRole('button', { name: /Retry/ }) as HTMLButtonElement;
+    expect(el.disabled).toBe(true);
+    expect(el.getAttribute('aria-busy')).toBe('true');
+    fireEvent.click(el);
+    expect(onClick).not.toHaveBeenCalled();
+  });
+
+  it('with keepFocus it stays focusable while loading (aria-disabled, not disabled), is busy, and ignores clicks', () => {
+    const onClick = vi.fn();
+    render(<Button loading keepFocus onClick={onClick}>Retry</Button>);
     const el = screen.getByRole('button', { name: /Retry/ }) as HTMLButtonElement;
     expect(el.disabled).toBe(false);
     expect(el.getAttribute('aria-disabled')).toBe('true');
@@ -37,13 +47,13 @@ describe('Button', () => {
     expect(onClick).not.toHaveBeenCalled();
   });
 
-  it('keeps keyboard focus across a loading flip', () => {
-    const { rerender } = render(<Button onClick={() => undefined}>Run</Button>);
+  it('keeps keyboard focus across a loading flip when keepFocus is set', () => {
+    const { rerender } = render(<Button keepFocus onClick={() => undefined}>Run</Button>);
     const el = screen.getByRole('button', { name: 'Run' });
     el.focus();
-    rerender(<Button loading onClick={() => undefined}>Run</Button>);
+    rerender(<Button loading keepFocus onClick={() => undefined}>Run</Button>);
     expect(document.activeElement).toBe(el);
-    rerender(<Button onClick={() => undefined}>Run</Button>);
+    rerender(<Button keepFocus onClick={() => undefined}>Run</Button>);
     expect(document.activeElement).toBe(el);
   });
 

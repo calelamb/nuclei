@@ -102,6 +102,9 @@ describe('design guards', () => {
     const rule = css.match(/\.nuclei-choice-card:focus-visible\s*\{([^}]*)\}/)?.[1] ?? '';
     expect(rule).toMatch(/border-color:\s*var\(--focus-ring-color\)/);
     expect(rule).not.toMatch(/border-color:\s*var\(--color-border-subtle\)/);
+    // The inset stripe takes the ring colour too, so the left edge is one colour rather than the accent inside the ring.
+    expect(rule).toMatch(/inset 3px 0 0 var\(--focus-ring-color\)/);
+    expect(rule).not.toMatch(/--choice-accent/);
   });
 
   it('balances the lines of centred empty-state copy', () => {

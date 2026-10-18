@@ -201,11 +201,14 @@ export function SettingsPanel() {
   const rootRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     let frame = 0;
+    // The request is consumed inside the frame, not before it: a StrictMode remount (or a quick re-render) cancels
+    // the first frame, and the surviving effect must still find the request.
     const focusFirst = () => {
-      if (!takeSettingsFocusRequest()) return;
       cancelAnimationFrame(frame);
       frame = requestAnimationFrame(() => {
-        rootRef.current?.querySelector<HTMLElement>('button:not([disabled]), input, select')?.focus();
+        const root = rootRef.current;
+        if (!root || !takeSettingsFocusRequest()) return; // a frame from an unmounted panel must not eat the request
+        root.querySelector<HTMLElement>('button:not([disabled]), input, select')?.focus();
       });
     };
     focusFirst();
