@@ -64,6 +64,13 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe('ExerciseBlock grading honesty', () => {
+  it('withdraws Check solution once the code is edited after a run', async () => {
+    await runWith('print(41)', ['41']);
+    expect(screen.getByRole('button', { name: /Check solution/ })).toBeTruthy();
+    fireEvent.change(screen.getByLabelText('code'), { target: { value: 'print(42)' } });
+    expect(screen.queryByRole('button', { name: /Check solution/ })).toBeNull();
+  });
+
   it('does not record a pass when Run is pressed on the untouched starter', async () => {
     await runWith(STARTER, []);
     expect(passed()).toEqual([]);

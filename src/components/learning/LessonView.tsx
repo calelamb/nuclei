@@ -168,7 +168,7 @@ export function LessonView({ lesson, trackId }: LessonViewProps) {
         </header>
 
         {lesson.contentBlocks.map((block, i) => (
-          <div key={i} id={`block-${i}`} data-block-index={i} className="lesson__block">
+          <div key={`${lesson.id}:${i}`} id={`block-${i}`} data-block-index={i} className="lesson__block">
             <ContentBlockRenderer block={block} />
           </div>
         ))}

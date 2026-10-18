@@ -8,7 +8,16 @@ import { useLearnSectionStore } from './learnSectionStore';
 import { TRACKS } from '../../data/lessons/tracks';
 
 vi.mock('./InteractiveDemo', () => ({ InteractiveDemo: () => <div /> }));
-vi.mock('./ExerciseBlock', () => ({ ExerciseBlock: () => <div /> }));
+const mounts = vi.hoisted(() => ({ exercise: [] as string[] }));
+vi.mock('./ExerciseBlock', async () => {
+  const { useEffect } = await import('react');
+  return {
+    ExerciseBlock: ({ id }: { id: string }) => {
+      useEffect(() => { mounts.exercise.push(id); }, []); // eslint-disable-line react-hooks/exhaustive-deps -- counts true mounts
+      return <div />;
+    },
+  };
+});
 vi.mock('./VideoPlayer', () => ({ VideoPlayer: () => <div /> }));
 vi.mock('./InteractiveBlochSphere', () => ({ InteractiveBlochSphere: () => <div /> }));
 
@@ -34,6 +43,16 @@ beforeEach(() => {
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 
 describe('LessonView', () => {
+  it('remounts exercise blocks when the lesson changes so no code or output carries over', () => {
+    mounts.exercise.length = 0;
+    const withExercise = track.lessons.filter((l) => l.contentBlocks.some((b) => b.type === 'exercise'));
+    const [a, b] = withExercise;
+    const { rerender } = render(<LessonView lesson={a} trackId={track.id} />);
+    const first = mounts.exercise.length;
+    rerender(<LessonView lesson={b} trackId={track.id} />);
+    expect(mounts.exercise.length).toBeGreaterThan(first);
+  });
+
   it('moves focus to the lesson heading when a lesson opens', () => {
     render(<LessonView lesson={lesson} trackId={track.id} />);
     expect(document.activeElement).toBe(screen.getByRole('heading', { level: 1 }));

@@ -156,6 +156,8 @@ export function ExerciseBlock({
     codeRef.current = value ?? '';
     setLocalCode(value ?? '');
     setUnsupported(null);
+    // The last run no longer reflects this code, so it cannot be graded until the learner runs again.
+    setHasRun(false);
     resetInactivity();
   };
 
