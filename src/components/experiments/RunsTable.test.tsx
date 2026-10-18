@@ -1,7 +1,8 @@
 // @vitest-environment jsdom
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { render, cleanup, fireEvent, act } from '@testing-library/react';
-import { RunsTable } from './RunsTable';
+import { RunsTable, RUN_COLUMN_WIDTH } from './RunsTable';
+import { formatRunLabel } from './runsTableColumns';
 import { useExperimentStore } from '../../services/experimentStore';
 import { useProjectStore } from '../../stores/projectStore';
 import { useExperimentUiStore } from '../../stores/experimentUiStore';
@@ -363,5 +364,12 @@ describe('RunsTable', () => {
       const { getByText } = render(<RunsTable />);
       expect(getByText('theta')).toBeTruthy();
     });
+  });
+});
+
+describe('run column width', () => {
+  it('leaves room for the longest run label at roughly 7.5px a character plus cell padding', () => {
+    const longest = formatRunLabel('2026-10-15_082150_a458');
+    expect(RUN_COLUMN_WIDTH).toBeGreaterThanOrEqual(longest.length * 7.5 + 16);
   });
 });

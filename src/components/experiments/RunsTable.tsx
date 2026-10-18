@@ -22,8 +22,8 @@ import './experiments.css';
 const OVERSCAN = 6;
 const STATUS_OPTIONS: Array<RunStatus | 'all'> = ['all', 'complete', 'failed', 'running', 'stale'];
 const CHECKBOX_COLUMN_WIDTH = 32;
-const RUN_COLUMN_WIDTH = 176;
-const NARROW_RUN_COLUMN_WIDTH = 160;
+/** "Oct 15 08:21:50 · a458" measures 174px with its padding; the short run id is the part that tells runs apart, so it never ellipsizes. */
+export const RUN_COLUMN_WIDTH = 184;
 const NARROW_VIEWPORT = 1000;
 const MIN_DATA_COLUMN_WIDTH = 116;
 const NARROW_MIN_DATA_COLUMN_WIDTH = 84;
@@ -154,7 +154,7 @@ function RunsTableBody() {
   }, [columns, allRuns]);
 
   const narrow = viewportWidth < NARROW_VIEWPORT;
-  const runColumnWidth = narrow ? NARROW_RUN_COLUMN_WIDTH : RUN_COLUMN_WIDTH;
+  const runColumnWidth = RUN_COLUMN_WIDTH;
   const dataColumnWidth = narrow ? NARROW_MIN_DATA_COLUMN_WIDTH : MIN_DATA_COLUMN_WIDTH;
   const gridTemplateColumns = `${CHECKBOX_COLUMN_WIDTH}px ${runColumnWidth}px repeat(${columns.length}, minmax(${dataColumnWidth}px, 1fr))`;
   const contentMinWidth = CHECKBOX_COLUMN_WIDTH + runColumnWidth + columns.length * dataColumnWidth;

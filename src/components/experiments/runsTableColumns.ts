@@ -171,13 +171,6 @@ export function metricDecimals(runs: readonly RunRecord[]): ReadonlyMap<string, 
   return map;
 }
 
-/** "counts_entropy" -> "Counts entropy": readable two-line headers instead of clipped snake_case. */
-export function humanizeColumnLabel(label: string): string {
-  if (!/[_-]/.test(label)) return label;
-  const spaced = label.replace(/[_-]+/g, ' ').trim();
-  return spaced.length === 0 ? label : spaced.charAt(0).toUpperCase() + spaced.slice(1);
-}
-
 /** The one spelling of a metric name in every view: "counts_entropy" -> "Counts entropy", "energy" -> "Energy". */
 export function metricLabel(name: string): string {
   const spaced = name.replace(/[_-]+/g, ' ').trim();
