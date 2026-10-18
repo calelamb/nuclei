@@ -185,11 +185,11 @@ test('@qec maps the jobs tray separator value to visible laptop height', async (
 
 test('@qec creates and restores an Analyze Study across immediate navigation', async ({ page }) => {
   await openWorkbench(page);
-  const createStudy = page.getByRole('region', { name: 'Create Study' });
+  const createStudy = page.getByRole('region', { name: 'Create study' });
   await createStudy.getByLabel('Study name').fill('Decoder Sweep');
   await createStudy.getByLabel('Research question').fill('Which decoder is stable?');
   await createStudy.getByRole('combobox', { name: 'Workspace preset' }).selectOption('analyze');
-  const create = createStudy.getByRole('button', { name: 'Create Study' });
+  const create = createStudy.getByRole('button', { name: 'Create study' });
   await expect(create).toHaveCSS('background-color', 'rgb(14, 116, 144)');
   await expect(create).toHaveCSS('color', 'rgb(255, 255, 255)');
   await create.click();
