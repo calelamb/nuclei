@@ -8,10 +8,14 @@ import { QecEmptyState } from './QecEmptyState';
 import {
   activeTimelineQubits, classifyTimelineGates, detectorTrackByTick, tickMomentCount, timelineLabel, type TimelineGate,
 } from './qecGeometry';
+import { subColumnCentre, timelineColumnLayout, type TimelineColumnLayout } from './qecTimelineLayout';
+import { ScrollFade } from './ScrollFade';
 
 import { TYPOGRAPHY } from '../../styles/tokens';
 const DOCS = 'https://getnuclei.dev/docs/research/qec-studio/';
+/** Narrowest a tick may be, and the width of each sub-column when a tick holds overlapping gates. */
 const COL_W = 34;
+const SUB_COL_W = 28;
 const ROW_H = 26;
 const LABEL_W = 36;
 const PAD = 8;
@@ -19,6 +23,8 @@ const PAD = 8;
 const FONT_PX = 10;
 const GATE_W = 24;
 const GATE_H = 18;
+const TARGET_R = 7;
+const CONTROL_R = 3;
 
 /**
  * PRD 10 Phase D — the QEC timeline. The mapped stim CircuitSnapshot in
@@ -52,18 +58,25 @@ export function QecTimelinePanel({ embedded = false }: { embedded?: boolean } = 
   const numTicks = tickMomentCount(qec?.num_ticks ?? 0, gates);
   const qubits = activeTimelineQubits(snapshot.gates);
   const rowOf = new Map(qubits.map((q, i) => [q, i]));
-  const width = LABEL_W + numTicks * COL_W + PAD * 2;
+  const columns = timelineColumnLayout(gates, numTicks, rowOf, { subColumnPx: SUB_COL_W, minLayerPx: COL_W });
+  const width = LABEL_W + columns.totalWidthPx + PAD * 2;
   const gateRows = qubits.length;
   const height = PAD * 2 + gateRows * ROW_H + 44; // + detector track
 
   const qy = (q: number) => PAD + (rowOf.get(q) ?? 0) * ROW_H + ROW_H / 2;
-  const tx = (t: number) => LABEL_W + t * COL_W + COL_W / 2;
+  /** Centre of a tick's band (detector track and gridline). */
+  const tx = (t: number) => LABEL_W + (columns.layerStartPx[t] ?? 0) + (columns.layerWidthPx[t] ?? COL_W) / 2;
+  /** Centre of one gate's sub-column inside its tick. */
+  const gx = (g: TimelineGate) => LABEL_W + subColumnCentre(columns, g.layer, columns.subColumnOf.get(g.gateIndex) ?? 0, SUB_COL_W);
 
   return (
     <div style={{ height: '100%', display: 'flex', flexDirection: 'column', background: colors.bg }}>
       {header}
-      <div style={{ flex: 1, minHeight: 0, overflow: 'auto', position: 'relative' }}>
-        <svg width={width} height={height} style={{ display: 'block', fontFamily: TYPOGRAPHY.fontMono }}>
+      <ScrollFade
+        axis="x" label="Timeline, scrolls sideways" style={{ flex: 1, minHeight: 0, position: 'relative' }}
+      >
+        <svg width={width} height={height} style={{ display: 'block', margin: '0 auto', fontFamily: TYPOGRAPHY.fontMono }}>
+          <TickBands columns={columns} labelW={LABEL_W} top={PAD} height={gateRows * ROW_H} fill={colors.border} />
           {/* qubit wires */}
           {qubits.map((q) => (
             <g key={`wire-${q}`}>
@@ -80,7 +93,7 @@ export function QecTimelinePanel({ embedded = false }: { embedded?: boolean } = 
           {gates.map((g) => {
             if (g.isDetector || g.isObservable) return null;
             const q = g.targets[0] ?? g.controls?.[0] ?? 0;
-            const x = tx(g.layer);
+            const x = gx(g);
             if (g.isNoise) {
               return (
                 <g key={g.gateIndex}
@@ -90,23 +103,7 @@ export function QecTimelinePanel({ embedded = false }: { embedded?: boolean } = 
                 </g>
               );
             }
-            // Two-qubit gate: draw a vertical connector.
-            const isTwoQ = (g.controls?.length ?? 0) > 0 && g.targets.length > 0;
-            return (
-              <g key={g.gateIndex}>
-                {isTwoQ && (
-                  <line x1={x} y1={qy(g.controls![0])} x2={x} y2={qy(g.targets[0])} stroke={colors.text} strokeWidth={0.8} />
-                )}
-                {isTwoQ && <circle cx={x} cy={qy(g.controls![0])} r={1.8} fill={colors.text} />}
-                <rect x={x - GATE_W / 2} y={qy(q) - GATE_H / 2} width={GATE_W} height={GATE_H} rx={2}
-                  fill={colors.bgElevated} stroke={colors.accent} strokeWidth={0.8}>
-                  <title>{g.type}</title>
-                </rect>
-                <text x={x} y={qy(q) + 3.5} fontSize={FONT_PX} fill={colors.text} textAnchor="middle">
-                  {timelineLabel(g.type)}
-                </text>
-              </g>
-            );
+            return <TimelineOp key={g.gateIndex} g={g} x={x} qy={qy} q={q} colors={colors} />;
           })}
           {/* detector/observable bottom track, aligned to ticks */}
           <text x={PAD} y={PAD + gateRows * ROW_H + 28} fontSize={FONT_PX} fill={colors.textMuted}>det</text>
@@ -140,7 +137,7 @@ export function QecTimelinePanel({ embedded = false }: { embedded?: boolean } = 
             {hover.g.noiseKind} · p = {hover.g.probability}
           </div>
         )}
-      </div>
+      </ScrollFade>
       <div
         style={{
           display: 'flex', gap: 12, padding: '4px 12px', borderTop: `1px solid ${colors.border}`,
@@ -152,5 +149,61 @@ export function QecTimelinePanel({ embedded = false }: { embedded?: boolean } = 
         <span><span style={{ color: colors.success }}>●</span> observable</span>
       </div>
     </div>
+  );
+}
+
+interface TickBandsProps {
+  columns: TimelineColumnLayout;
+  labelW: number;
+  top: number;
+  height: number;
+  fill: string;
+}
+
+/** A faint band behind every other tick, spanning all of its sub-columns, so parallel gates read as one moment. */
+function TickBands({ columns, labelW, top, height, fill }: TickBandsProps) {
+  return (
+    <g aria-hidden="true">
+      {columns.layerStartPx.map((start, tick) => tick % 2 === 0 && (
+        <rect key={`band-${tick}`} x={labelW + start} y={top} width={columns.layerWidthPx[tick]} height={height} fill={fill} fillOpacity={0.25} />
+      ))}
+    </g>
+  );
+}
+
+interface TimelineOpProps {
+  g: TimelineGate;
+  x: number;
+  q: number;
+  qy: (q: number) => number;
+  colors: ReturnType<typeof useThemeStore.getState>['colors'];
+}
+
+/** One operation: a control dot joined to a target circle-plus for CNOT, a dot and box for other controlled gates, a box for the rest. */
+function TimelineOp({ g, x, q, qy, colors }: TimelineOpProps) {
+  const control = g.controls?.[0];
+  const isTwoQ = control !== undefined && g.targets.length > 0;
+  if (isTwoQ && g.type === 'CNOT') {
+    const ty = qy(g.targets[0]);
+    return (
+      <g>
+        <line x1={x} y1={qy(control)} x2={x} y2={ty} stroke={colors.text} strokeWidth={1} />
+        <circle cx={x} cy={qy(control)} r={CONTROL_R} fill={colors.text} />
+        <circle cx={x} cy={ty} r={TARGET_R} fill={colors.bgElevated} stroke={colors.accent} strokeWidth={1} />
+        <path d={`M${x - TARGET_R} ${ty}H${x + TARGET_R}M${x} ${ty - TARGET_R}V${ty + TARGET_R}`} stroke={colors.accent} strokeWidth={1} />
+        <title>CX {`q${control} to q${g.targets[0]}`}</title>
+      </g>
+    );
+  }
+  return (
+    <g>
+      {isTwoQ && <line x1={x} y1={qy(control)} x2={x} y2={qy(g.targets[0])} stroke={colors.text} strokeWidth={1} />}
+      {isTwoQ && <circle cx={x} cy={qy(control)} r={CONTROL_R} fill={colors.text} />}
+      <rect x={x - GATE_W / 2} y={qy(q) - GATE_H / 2} width={GATE_W} height={GATE_H} rx={2}
+        fill={colors.bgElevated} stroke={colors.accent} strokeWidth={0.8}>
+        <title>{g.type}</title>
+      </rect>
+      <text x={x} y={qy(q) + 3.5} fontSize={FONT_PX} fill={colors.text} textAnchor="middle">{timelineLabel(g.type)}</text>
+    </g>
   );
 }

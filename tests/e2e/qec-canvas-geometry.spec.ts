@@ -118,3 +118,89 @@ test('@qec canvas cards stay clear of each other once a campaign CSV is loaded',
     expect(overlaps(await instrumentBoxes(page)), `inspector ${inspectorOpen ? 'open' : 'closed'}`).toEqual([]);
   }
 });
+
+async function loadSurfaceCircuit(page: Page): Promise<void> {
+  await page.evaluate(async () => {
+    const fixture = (await import('/src/components/qec/__fixtures__/surface_d3.json')).default;
+    const { useQecStore } = await import('/src/stores/qecStore.ts');
+    const { useCircuitStore } = await import('/src/stores/circuitStore.ts');
+    useQecStore.setState({ snapshot: fixture.qec, circuitText: '# stim', decodeSample: null, decodePending: false });
+    useCircuitStore.setState({ snapshot: fixture.snapshot });
+  });
+}
+
+/** Share of a card's height below its last piece of content (header excluded). */
+async function emptyShare(page: Page, panel: string): Promise<number> {
+  return page.$eval(`.qec-instrument[data-panel="${panel}"]`, (node) => {
+    const card = node as HTMLElement;
+    const box = card.getBoundingClientRect();
+    let bottom = box.top;
+    card.querySelectorAll('.qec-instrument__body *').forEach((el) => {
+      const r = el.getBoundingClientRect();
+      if (r.height > 0 && r.width > 0) bottom = Math.max(bottom, r.bottom);
+    });
+    return Math.max(0, box.bottom - Math.min(bottom, box.bottom)) / box.height;
+  });
+}
+
+/** Scrollers whose content is wider than the card must be keyboard-reachable and fade their edge. */
+async function silentlyClippedScrollers(page: Page): Promise<string[]> {
+  return page.$$eval('.qec-instrument__body *', (nodes) => nodes.flatMap((node) => {
+    const el = node as HTMLElement;
+    const style = getComputedStyle(el);
+    const scrolls = style.overflowX === 'auto' || style.overflowX === 'scroll';
+    if (!scrolls || el.scrollWidth <= el.clientWidth + 1) return [];
+    const reachable = el.tabIndex >= 0 && el.hasAttribute('data-more-right');
+    return reachable ? [] : [`${el.tagName.toLowerCase()}.${el.className}`];
+  }));
+}
+
+const DATA_VIEWPORTS = [{ width: 1440, height: 900 }, { width: 1100, height: 800 }, { width: 1920, height: 1080 }];
+
+for (const viewport of DATA_VIEWPORTS) {
+  for (const preset of ['Analyze', 'Build'] as const) {
+    test(`@qec ${preset} with data never stretches the leading card or clips a scroller silently at ${viewport.width}x${viewport.height}`, async ({ page }) => {
+      await page.setViewportSize(viewport);
+      await installEngineStub(page);
+      await page.goto(FIXTURE_URL);
+      await page.getByRole('button', { name: 'QEC Workbench' }).click();
+      await page.getByRole('radio', { name: 'Analyze' }).click();
+      await loadSurfaceCircuit(page);
+      await page.setInputFiles('input[type=file]', CSV_FIXTURE);
+      await expect(page.getByLabel('CSV column mapping')).toBeVisible();
+      await page.getByRole('radio', { name: preset }).click();
+      await setInspector(page, false);
+      const boxes = await instrumentBoxes(page);
+      const leading = boxes[0];
+      expect(leading.h, `${preset}: leading card height`).toBeLessThanOrEqual(viewport.height);
+      expect(await emptyShare(page, leading.id), `${preset}: empty share of ${leading.id}`).toBeLessThan(0.25);
+      expect(overlaps(boxes)).toEqual([]);
+      for (const box of boxes) expect(box.clipped, `${preset}: ${box.id} is cut off by its own card`).toBeLessThanOrEqual(1);
+      // A side rail is never narrower than its figures need.
+      for (const box of boxes.slice(1).filter((b) => b.x > leading.x + leading.w - 1)) {
+        expect(box.w, `${preset}: rail card ${box.id} width`).toBeGreaterThanOrEqual(340);
+      }
+      expect(await silentlyClippedScrollers(page)).toEqual([]);
+    });
+  }
+}
+
+test('@qec at 900px the sources fold to a rail so the canvas keeps the width and card titles stay on one line', async ({ page }) => {
+  await page.setViewportSize({ width: 900, height: 700 });
+  await installEngineStub(page);
+  await page.goto(FIXTURE_URL);
+  await page.getByRole('button', { name: 'QEC Workbench' }).click();
+  await page.getByRole('radio', { name: 'Analyze' }).click();
+  await page.setInputFiles('input[type=file]', CSV_FIXTURE);
+  await expect(page.getByLabel('CSV column mapping')).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Show sources' })).toBeVisible();
+  const { canvas, body } = await page.evaluate(() => ({
+    canvas: document.querySelector('.qec-investigation')?.getBoundingClientRect().width ?? 0,
+    body: document.querySelector('.qec-workbench__body')?.getBoundingClientRect().width ?? 1,
+  }));
+  expect(canvas / body, 'canvas share of the workbench').toBeGreaterThan(0.85);
+  const titleHeights = await page.$$eval('.qec-instrument h2', (nodes) => nodes.map((n) => n.getBoundingClientRect().height));
+  for (const height of titleHeights) expect(height, 'card title is one line').toBeLessThan(24);
+  await page.getByRole('button', { name: 'Show sources' }).click();
+  await expect(page.getByRole('heading', { name: 'Sources / Data' })).toBeVisible();
+});

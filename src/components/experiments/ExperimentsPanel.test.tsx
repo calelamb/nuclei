@@ -135,6 +135,20 @@ describe('ExperimentsPanel', () => {
     expect(name.value).toBe('');
   });
 
+  it('offers exactly one New experiment action while the list is empty (rq-r3-13)', () => {
+    useExperimentStore.setState({ experiments: [], validationErrors: [] });
+    const { getAllByRole } = render(<ExperimentsPanel />);
+    expect(getAllByRole('button', { name: /New experiment/ })).toHaveLength(1);
+  });
+
+  it('shows the header New experiment as pressed while its blank form is open (rq-r3-13)', () => {
+    const { getByRole } = render(<ExperimentsPanel />);
+    const button = getByRole('button', { name: /New experiment/ });
+    expect(button.getAttribute('aria-pressed')).toBe('false');
+    fireEvent.click(button);
+    expect(getByRole('button', { name: /New experiment/ }).getAttribute('aria-pressed')).toBe('true');
+  });
+
   it('marks the open experiment as selected (research-24)', () => {
     useExperimentUiStore.setState({ selectedExperimentFileName: 'depth-grid.experiment.yaml' });
     const { getByTestId } = render(<ExperimentsPanel />);

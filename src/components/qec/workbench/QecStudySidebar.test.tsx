@@ -87,14 +87,14 @@ describe('<QecStudySidebar />', () => {
     await waitFor(() => expect(useQecStudyStore.getState().loading).toBe(false));
     expect(view.queryByLabelText('Study name')).toBeNull();
 
-    fireEvent.click(view.getByRole('button', { name: 'New Study' }));
+    fireEvent.click(view.getByRole('button', { name: 'New study' }));
     fireEvent.click(view.getByRole('button', { name: 'Cancel' }));
     expect(view.queryByLabelText('Study name')).toBeNull();
 
-    fireEvent.click(view.getByRole('button', { name: 'New Study' }));
+    fireEvent.click(view.getByRole('button', { name: 'New study' }));
     fireEvent.change(view.getByLabelText('Study name'), { target: { value: 'Quick' } });
     fireEvent.change(view.getByLabelText('Research question'), { target: { value: 'Fast?' } });
-    fireEvent.click(view.getByRole('button', { name: 'Create Study' }));
+    fireEvent.click(view.getByRole('button', { name: 'Create study' }));
     await waitFor(() => expect(view.queryByLabelText('Study name')).toBeNull());
   });
 
@@ -104,11 +104,11 @@ describe('<QecStudySidebar />', () => {
     const view = render(<QecStudySidebar fs={fs} />);
     await waitFor(() => expect(useQecStudyStore.getState().loading).toBe(false));
 
-    fireEvent.click(view.getByRole('button', { name: 'New Study' }));
+    fireEvent.click(view.getByRole('button', { name: 'New study' }));
     fireEvent.change(view.getByLabelText('Study name'), { target: { value: 'Surface Memory' } });
     fireEvent.change(view.getByLabelText('Research question'), { target: { value: 'Does d=7 suppress errors?' } });
-    fireEvent.change(view.getByLabelText('Workspace preset'), { target: { value: 'observe' } });
-    fireEvent.click(view.getByRole('button', { name: 'Create Study' }));
+    fireEvent.change(view.getByLabelText('Starting preset'), { target: { value: 'observe' } });
+    fireEvent.click(view.getByRole('button', { name: 'Create study' }));
 
     await waitFor(() => expect(useQecStudyUiStore.getState().activeStudyId).toBe('surface-memory'));
     const written = fs.files.get('/project/studies/surface-memory.qec-study.yaml');
@@ -125,10 +125,10 @@ describe('<QecStudySidebar />', () => {
     const view = render(<QecStudySidebar fs={fs} />);
     await waitFor(() => expect(useQecStudyStore.getState().loading).toBe(false));
 
-    fireEvent.click(view.getByRole('button', { name: 'New Study' }));
-    fireEvent.click(view.getByRole('button', { name: 'Create Study' }));
+    fireEvent.click(view.getByRole('button', { name: 'New study' }));
+    fireEvent.click(view.getByRole('button', { name: 'Create study' }));
 
-    expect(view.getByRole('alert').textContent).toContain('Enter a Study name');
+    expect(view.getByRole('alert').textContent).toContain('Enter a name for the study');
     expect(fs.createTextFileExclusive).not.toHaveBeenCalled();
   });
 
@@ -139,10 +139,10 @@ describe('<QecStudySidebar />', () => {
     const view = render(<QecStudySidebar fs={fs} />);
     await view.findByRole('button', { name: /Existing/ });
 
-    fireEvent.click(view.getByRole('button', { name: 'New Study' }));
+    fireEvent.click(view.getByRole('button', { name: 'New study' }));
     fireEvent.change(view.getByLabelText('Study name'), { target: { value: 'Existing' } });
     fireEvent.change(view.getByLabelText('Research question'), { target: { value: 'Replace it?' } });
-    fireEvent.click(view.getByRole('button', { name: 'Create Study' }));
+    fireEvent.click(view.getByRole('button', { name: 'Create study' }));
 
     expect(await view.findByText('A Study named "existing" already exists.')).toBeTruthy();
     expect(fs.files.get('/project/studies/existing.qec-study.yaml')).toBe(original);
@@ -159,12 +159,12 @@ describe('<QecStudySidebar />', () => {
     useProjectStore.setState({ projectRoot: '/project' });
     const view = render(<QecStudySidebar fs={fs} />);
     await waitFor(() => expect(useQecStudyStore.getState().loading).toBe(false));
-    fireEvent.click(view.getByRole('button', { name: 'New Study' }));
+    fireEvent.click(view.getByRole('button', { name: 'New study' }));
     fireEvent.change(view.getByLabelText('Study name'), { target: { value: 'Pending' } });
     fireEvent.change(view.getByLabelText('Research question'), { target: { value: 'Still writing?' } });
 
-    fireEvent.click(view.getByRole('button', { name: 'Create Study' }));
-    await waitFor(() => expect(view.getByRole('button', { name: 'Creating Study…' }).hasAttribute('disabled')).toBe(true));
+    fireEvent.click(view.getByRole('button', { name: 'Create study' }));
+    await waitFor(() => expect(view.getByRole('button', { name: 'Creating study…' }).hasAttribute('disabled')).toBe(true));
     expect(view.getByLabelText('Study name').hasAttribute('disabled')).toBe(true);
 
     finishWrite?.();
@@ -266,5 +266,26 @@ describe('<QecStudySidebar />', () => {
     const view = render(<QecStudySidebar fs={fs} />);
 
     expect(await view.findByText('Could not watch the Studies folder: watch service unavailable')).toBeTruthy();
+  });
+
+  it('labels every field visibly and puts the error under the field it belongs to (rq-r3-11)', async () => {
+    const fs = memoryStudyFs();
+    useProjectStore.setState({ projectRoot: '/project' });
+    const view = render(<QecStudySidebar fs={fs} />);
+    await waitFor(() => expect(useQecStudyStore.getState().loading).toBe(false));
+
+    fireEvent.click(view.getByRole('button', { name: 'New study' }));
+    for (const label of ['Study name', 'Research question', 'Starting preset']) {
+      const control = view.getByLabelText(label);
+      expect(view.container.querySelector(`label[for="${control.id}"]`)?.textContent).toBe(label);
+      expect(control.getAttribute('placeholder')).toBeNull();
+    }
+    fireEvent.click(view.getByRole('button', { name: 'Create study' }));
+    const name = view.getByLabelText('Study name');
+    expect(name.getAttribute('aria-invalid')).toBe('true');
+    const alert = view.getByRole('alert');
+    expect(name.getAttribute('aria-describedby')).toBe(alert.id);
+    expect(alert.parentElement?.contains(name)).toBe(true);
+    expect(view.getByLabelText('Research question').getAttribute('aria-invalid')).toBeNull();
   });
 });

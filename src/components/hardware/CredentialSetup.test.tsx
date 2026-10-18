@@ -73,4 +73,10 @@ describe('CredentialSetup — kernel credential contract', () => {
     // Kernel reads credentials.get("token") — nothing else.
     expect(credentials).toEqual({ token: 'ionq-secret-key' });
   });
+
+  it('azure: field labels are sentence case', () => {
+    const { getByLabelText } = render(<CredentialSetup provider="azure" onClose={vi.fn()} />);
+    expect(getByLabelText('Resource group')).toBeTruthy();
+    expect(getByLabelText('Workspace name')).toBeTruthy();
+  });
 });

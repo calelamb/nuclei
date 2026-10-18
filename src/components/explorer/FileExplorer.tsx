@@ -390,6 +390,8 @@ export function FileExplorer() {
         className="nuclei-row"
         style={rowStyle(isActive, depth)}
       >
+        {/* Same 12px + 2px gutter as a folder's chevron, so file and folder icons share one column. */}
+        <span aria-hidden="true" data-tree-spacer style={{ width: 12, marginRight: 2, flexShrink: 0 }} />
         {iconFor(entry.name, false, isActive ? colors.accent : colors.textMuted)}
         <span
           style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
@@ -538,7 +540,7 @@ export function FileExplorer() {
           <Button size="sm" style={{ flex: 1 }} onClick={() => quickCreateCircuit('cuda-q')} icon={<AtomIcon size={12} />}>CUDA-Q</Button>
           <Button size="sm" style={{ flex: 1 }} onClick={() => quickCreateCircuit('qsharp')} icon={<AtomIcon size={12} />}>Q#</Button>
         </div>
-        <Button onClick={handleOpenFolder} icon={<FolderOpen size={14} />}>Open Folder…</Button>
+        <Button onClick={handleOpenFolder} icon={<FolderOpen size={14} />}>Open folder…</Button>
         {error && (
           <div style={{ color: colors.error, fontSize: 11 }}>{error}</div>
         )}
@@ -548,11 +550,11 @@ export function FileExplorer() {
 
   const newMenuEntries: MenuEntry[] = [
     {
-      id: 'file', label: 'New File', icon: <FilePlus size={14} />, hint: '.py',
+      id: 'file', label: 'New file', icon: <FilePlus size={14} />, hint: '.py',
       onSelect: () => startCreate({ kind: 'file', initial: 'untitled.py' }),
     },
     {
-      id: 'circuit', label: 'New Circuit', icon: <AtomIcon size={14} />,
+      id: 'circuit', label: 'New circuit', icon: <AtomIcon size={14} />,
       items: (['qiskit', 'cirq', 'cuda-q', 'qsharp'] as Framework[]).map((f) => ({
         id: `circuit-${f}`,
         label: displayFrameworkName(f),
@@ -561,8 +563,8 @@ export function FileExplorer() {
       })),
     },
     { id: 'sep', separator: true },
-    { id: 'package', label: 'New Python Package', icon: <Package size={14} />, onSelect: () => startCreate({ kind: 'package', initial: 'new_package' }) },
-    { id: 'folder', label: 'New Folder', icon: <FolderPlus size={14} />, onSelect: () => startCreate({ kind: 'folder', initial: 'new_folder' }) },
+    { id: 'package', label: 'New Python package', icon: <Package size={14} />, onSelect: () => startCreate({ kind: 'package', initial: 'new_package' }) },
+    { id: 'folder', label: 'New folder', icon: <FolderPlus size={14} />, onSelect: () => startCreate({ kind: 'folder', initial: 'new_folder' }) },
   ];
 
   return (

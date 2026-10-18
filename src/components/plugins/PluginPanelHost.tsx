@@ -17,7 +17,6 @@ export function PluginPanelHost({ panel }: { panel: PluginPanel }) {
   const colors = useThemeStore((s) => s.colors);
   const ref = useRef<HTMLDivElement>(null);
   const [error, setError] = useState<string | null>(null);
-  const font = TYPOGRAPHY.fontSans;
 
   useEffect(() => {
     const el = ref.current;
@@ -58,16 +57,7 @@ export function PluginPanelHost({ panel }: { panel: PluginPanel }) {
           background: colors.bg,
         }}
       >
-        <span
-          style={{
-            fontSize: 11,
-            fontWeight: 600,
-            textTransform: 'uppercase',
-            letterSpacing: 0.5,
-            color: colors.textMuted,
-            fontFamily: font,
-          }}
-        >
+        <span className="nuclei-overline">
           {panel.title}
         </span>
         <span

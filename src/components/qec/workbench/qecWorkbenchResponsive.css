@@ -99,3 +99,31 @@
     scroll-behavior: auto !important; transition-duration: 0.01ms !important; animation-duration: 0.01ms !important; animation-iteration-count: 1 !important;
   }
 }
+
+/* Sources fold to a 44px rail on narrow windows so the canvas keeps the width. */
+.qec-workbench.qec-workbench--sources-collapsed .qec-workbench__body {
+  grid-template-columns: 44px minmax(0, 1fr) 9px minmax(280px, var(--qec-inspector-width));
+}
+
+.qec-workbench.qec-workbench--sources-collapsed.qec-workbench--inspector-closed .qec-workbench__body {
+  grid-template-columns: 44px minmax(0, 1fr);
+}
+
+.qec-workbench--sources-collapsed .qec-workbench__body > .qec-resize-handle:nth-of-type(1) { display: none; }
+
+@media (max-width: 1179px) {
+  .qec-workbench.qec-workbench--sources-collapsed .qec-workbench__body { grid-template-columns: 44px minmax(0, 1fr); }
+}
+
+.qec-sources--rail { align-items: center; gap: 10px; padding: 8px 0; }
+.qec-sources__rail-icon { color: var(--qec-text-muted); }
+.qec-sources__rail-count { color: var(--qec-text-muted); font-size: var(--font-size-caption); }
+
+@media (max-width: 699px) {
+  .qec-workbench.qec-workbench--sources-collapsed .qec-workbench__body,
+  .qec-workbench.qec-workbench--sources-collapsed.qec-workbench--inspector-closed .qec-workbench__body {
+    grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr);
+  }
+
+  .qec-sources--rail { flex-direction: row; justify-content: flex-start; padding: 4px 10px; }
+}

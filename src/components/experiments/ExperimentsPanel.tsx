@@ -17,6 +17,7 @@ import { RunButton } from './RunButton';
 import { RunFeedback } from './RunFeedback';
 import { TYPOGRAPHY, ICON_SIZE, ICON_STROKE } from '../../styles/tokens';
 import { Button, EmptyState, IconButton } from '../ui';
+import { DesktopOnlyState } from '../hardware/DesktopOnlyState';
 import './experiments.css';
 
 /**
@@ -51,29 +52,14 @@ function gridSizeLabel(experiment: DiscoveredExperiment): string {
 }
 
 function WebExperimentsEmptyState() {
-  const colors = useThemeStore((s) => s.colors);
   const setActiveView = useNavigationStore((s) => s.setActiveView);
   return (
-    <div style={{ padding: 16, display: 'flex', flexDirection: 'column', gap: 12, fontFamily: TYPOGRAPHY.fontSans }}>
-      <FlaskConical size={ICON_SIZE.lg} strokeWidth={ICON_STROKE} style={{ color: colors.textDim }} />
-      <div style={{ color: colors.text, fontSize: 13, fontWeight: 600 }}>Experiments live in the desktop app</div>
-      <div style={{ color: colors.textMuted, fontSize: 12, lineHeight: 1.55 }}>
-        Experiments are parameter sweeps saved as files in a project folder, so they need the desktop app.
-        In the browser you can still analyse QEC data and edit and simulate circuits.
-      </div>
-      <Button variant="primary" size="lg" onClick={() => setActiveView('qec')} style={{ width: '100%' }}>
-        Open QEC Workbench
-      </Button>
-      <a
-        href="https://getnuclei.dev"
-        target="_blank"
-        rel="noreferrer"
-        className="nuclei-btn nuclei-btn--secondary nuclei-btn--lg"
-        style={{ width: '100%', textDecoration: 'none' }}
-      >
-        Download Nuclei
-      </a>
-    </div>
+    <DesktopOnlyState
+      title="Experiments live in the desktop app"
+      alternative={<Button size="sm" onClick={() => setActiveView('qec')}>Open QEC Workbench</Button>}
+    >
+      Experiments are parameter sweeps saved as files in a project folder. In the browser you can still analyse QEC data and edit and simulate circuits.
+    </DesktopOnlyState>
   );
 }
 
@@ -192,6 +178,7 @@ export function ExperimentsPanel() {
   }, [projectRoot, experiments, scanRuns]);
 
   if (isWebBuild()) return <WebExperimentsEmptyState />;
+  const listEmpty = experiments.length === 0 && validationErrors.length === 0;
 
   if (!projectRoot) {
     return (
@@ -204,15 +191,20 @@ export function ExperimentsPanel() {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
-      <div style={{ padding: '8px 10px', display: 'flex', gap: 6, alignItems: 'center', borderBottom: `1px solid ${colors.border}` }}>
-        <Button
-          variant="secondary"
-          onClick={() => openForm(undefined)}
-          style={{ flex: 1, minWidth: 0 }}
-          icon={<Plus size={ICON_SIZE.xs} strokeWidth={ICON_STROKE} aria-hidden="true" />}
-        >
-          New experiment
-        </Button>
+      <div style={{ padding: '8px 10px', display: 'flex', gap: 6, alignItems: 'center', justifyContent: listEmpty ? 'flex-end' : undefined, borderBottom: `1px solid ${colors.border}` }}>
+        {/* While the list is empty the empty state carries the one New experiment action. */}
+        {!listEmpty && (
+          <Button
+            variant="secondary"
+            className="nuclei-experiment-new"
+            aria-pressed={formOpen && editing === undefined}
+            onClick={() => openForm(undefined)}
+            style={{ flex: 1, minWidth: 0 }}
+            icon={<Plus size={ICON_SIZE.xs} strokeWidth={ICON_STROKE} aria-hidden="true" />}
+          >
+            New experiment
+          </Button>
+        )}
         <NewQecExperimentMenu projectRoot={projectRoot} />
         <IconButton variant="secondary" aria-label="Noise models" title="Noise models" onClick={() => setNoiseLibOpen(true)}>
           <Waves size={ICON_SIZE.sm} strokeWidth={ICON_STROKE} />
@@ -221,7 +213,7 @@ export function ExperimentsPanel() {
       <RunFeedback compact />
 
       <div style={{ flex: 1, minHeight: LIST_MIN_HEIGHT, overflow: 'auto' }}>
-        {experiments.length === 0 && validationErrors.length === 0 && (
+        {listEmpty && (
           <EmptyState
             icon={<FlaskConical size={ICON_SIZE.lg} strokeWidth={ICON_STROKE} />}
             title="No experiments yet"

@@ -64,6 +64,21 @@ describe('layoutLegend', () => {
     const ys = l.items.filter((i) => i.group === 1).map((i) => i.y);
     expect(new Set(ys).size).toBe(1);
   });
+  it('never leaves a lone entry on the last row of a wrapped group (rq-r3-16)', () => {
+    const labels = ['d = 3', 'd = 5', 'd = 7', 'd = 9', 'd = 11'];
+    const distance: LegendGroup = { kind: 'distance', title: 'Distance', entries: labels.map((label) => ({ id: label, label, color: '#000', shape: 'circle' as const })) };
+    // Wide enough for four entries after the title but not five.
+    const full = layoutLegend([distance], 2000);
+    const width = full.maxItemRight - 40;
+    const l = layoutLegend([distance], width);
+    expect(l.rows).toBeGreaterThan(1);
+    const perRow = new Map<number, number>();
+    for (const item of l.items.filter((i) => i.type === 'entry')) perRow.set(item.y, (perRow.get(item.y) ?? 0) + 1);
+    const counts = [...perRow.entries()].sort((a, b) => a[0] - b[0]).map(([, n]) => n);
+    expect(counts[counts.length - 1]).toBeGreaterThan(1);
+    for (const item of l.items) expect(item.x + item.width).toBeLessThanOrEqual(width);
+    expect(l.items.filter((i) => i.type === 'entry').map((i) => i.text)).toEqual(labels);
+  });
   it('is empty for no groups', () => {
     expect(layoutLegend([], 500)).toMatchObject({ items: [], rows: 0, height: 0 });
   });

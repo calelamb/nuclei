@@ -9,7 +9,8 @@ describe('stacked workbench canvas', () => {
     const primary = block.slice(0, block.indexOf('@container qec-canvas (max-width: 440px)'))
     expect(primary).toMatch(/grid-auto-rows:\s*minmax\(max-content,\s*auto\)/)
     expect(primary).toMatch(/\.qec-instrument\s*\{[^}]*min-height:\s*260px/)
-    expect(primary).toMatch(/\.qec-instrument--primary:not\(\[data-empty='true'\]\)\s*\{[^}]*(?:min-)?height:\s*max\(520px/)
+    // Only the analysis plot fills a screen-sized card; a figure with a natural size (the timeline) keeps its own height.
+    expect(primary).toMatch(/\.qec-instrument--primary\[data-panel='campaign-center'\]:not\(\[data-empty='true'\]\)\s*\{[^}]*(?:min-)?height:\s*max\(520px/)
     // An instrument with nothing to show is a short card with its own height: auto rows of overflow-hidden cards collapse to 2px otherwise.
     expect(primary).toMatch(/\[data-empty='true'\]\s*\{[^}]*min-height:\s*(\d+)px/)
     const empty = Number(primary.match(/\[data-empty='true'\]\s*\{[^}]*min-height:\s*(\d+)px/)![1])

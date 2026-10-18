@@ -33,6 +33,30 @@ describe('canvas instrument order (qec-07)', () => {
   });
 });
 
+describe('instrument headers (rq-r3-17)', () => {
+  it.each(['build', 'analyze', 'observe'] as const)('gives every %s instrument the same help and pin pair', (preset) => {
+    useQecWorkbenchStore.setState({ preset });
+    const noop = () => undefined;
+    const { container } = render(<InvestigationCanvas inspectorOpen onToggleInspector={noop} toggleRef={{ current: null }} />);
+    const headers = Array.from(container.querySelectorAll('.qec-instrument > header'));
+    expect(headers.length).toBeGreaterThan(1);
+    for (const header of headers) {
+      expect(header.querySelector('a[aria-label="Open documentation in a new tab"]')).not.toBeNull();
+      expect(header.querySelector('button[aria-pressed]')).not.toBeNull();
+    }
+  });
+
+  it('marks only circuit instruments so the open hint appears once, in the first empty circuit card', () => {
+    useQecWorkbenchStore.setState({ preset: 'build', pinnedPanelIds: ['stream-health'] });
+    const noop = () => undefined;
+    const { container } = render(<InvestigationCanvas inspectorOpen onToggleInspector={noop} toggleRef={{ current: null }} />);
+    const marked = Array.from(container.querySelectorAll('.qec-instrument[data-circuit]')).map((el) => (el as HTMLElement).dataset.panel);
+    expect(marked.length).toBeGreaterThan(0);
+    for (const id of marked) expect(['timeline', 'lattice', 'detector-graph']).toContain(id);
+    expect(container.querySelector('.qec-instrument[data-panel="stream-health"][data-circuit]')).toBeNull();
+  });
+});
+
 describe('canvas grid rows', () => {
   it('leaves auto-row sizing to the stylesheet so the stacked container query can override it', () => {
     useQecWorkbenchStore.setState({ preset: 'analyze' });

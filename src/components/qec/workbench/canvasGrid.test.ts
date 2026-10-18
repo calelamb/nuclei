@@ -15,16 +15,24 @@ describe('isInstrumentEmpty', () => {
   });
 });
 
-describe('canvasGrid (qec-r-25)', () => {
-  it('sizes every row to at least its content so cards cannot overlap', () => {
-    expect(canvasGrid(4, false).gridTemplateRows).toBe('repeat(3, minmax(max-content, 1fr))');
+describe('canvasGrid (qec-r-25, rq-r3-02)', () => {
+  it('puts the other instruments in their own rail beside the leading one when there is data', () => {
+    const grid = canvasGrid(4, false);
+    expect(grid.railed).toBe(true);
+    expect(grid.compact).toBe(false);
   });
-  it('lets the leading instrument span the other rows when there is data', () => {
-    expect(canvasGrid(4, false).primaryRowSpan).toBe(3);
+  it('never makes the leading instrument span content-sized rows', () => {
+    const grid = canvasGrid(4, false);
+    expect(grid.primaryRowSpan).toBe(1);
+    expect(grid.gridTemplateRows).toBe('max-content');
+  });
+  it('has no rail when the leading instrument is the only one', () => {
+    expect(canvasGrid(1, false).railed).toBe(false);
   });
   it('keeps the primary card to one row when everything is empty', () => {
     const grid = canvasGrid(3, true);
     expect(grid.compact).toBe(true);
+    expect(grid.railed).toBe(false);
     expect(grid.primaryRowSpan).toBe(1);
     expect(grid.gridTemplateRows).toBe('repeat(2, max-content)');
   });

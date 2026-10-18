@@ -1,11 +1,10 @@
 import { Badge, Button, EmptyState, Select } from '../ui';
+import { DesktopOnlyState } from './DesktopOnlyState';
 import { useState } from 'react';
-import { ChevronDown, ChevronRight, Download, Rocket, Trash2 } from 'lucide-react';
+import { ChevronDown, ChevronRight, Rocket, Trash2 } from 'lucide-react';
 import { useThemeStore } from '../../stores/themeStore';
 import { useHardwareStore } from '../../stores/hardwareStore';
 import { hasActiveJobForBackend } from '../../lib/hardwareJobs';
-import { openExternal } from '../../lib/openExternal';
-import { DESKTOP_DOWNLOAD_URL } from '../../config/docsLinks';
 import { useFrameworksStore } from '../../stores/frameworksStore';
 import { usePlatform } from '../../platform/PlatformProvider';
 import { ProviderStatusBadge } from './ProviderStatusBadge';
@@ -50,17 +49,7 @@ function Section({
         }}
       >
         <Icon size={12} />
-        <span
-          style={{
-            fontSize: 11,
-            fontWeight: 600,
-            textTransform: 'uppercase',
-            letterSpacing: 0.5,
-            fontFamily: TYPOGRAPHY.fontSans,
-          }}
-        >
-          {title}
-        </span>
+        <span className="nuclei-overline" style={{ color: 'inherit' }}>{title}</span>
       </button>
       <div
         style={{
@@ -133,19 +122,11 @@ export function HardwarePanel() {
         {/* ── Providers ── */}
         <Section title="Providers" defaultOpen>
           {isWeb && (
-            <EmptyState
-              icon={<Download size={20} />}
-              title="Hardware runs need the desktop app"
-              action={(
-                <Button size="sm" variant="primary" onClick={() => { void openExternal(DESKTOP_DOWNLOAD_URL); }}>
-                  Download Nuclei
-                </Button>
-              )}
-            >
+            <DesktopOnlyState title="Hardware runs need the desktop app">
               Provider connections and job queues need the local kernel.
-            </EmptyState>
+            </DesktopOnlyState>
           )}
-          {providers.map((p) => {
+          {[...providers].sort((a, b) => Number(b.name === 'simulator') - Number(a.name === 'simulator')).map((p) => {
             const status = providerStatus({ provider: p.name, connected: p.connected, isWeb, cudaqInstalled });
             return (
             <div
@@ -154,22 +135,24 @@ export function HardwarePanel() {
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'space-between',
+                flexWrap: 'wrap',
+                gap: '4px 8px',
                 padding: '5px 0',
               }}
             >
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <span style={{ fontSize: 11, color: colors.text, ...font }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
+                <span style={{ fontSize: 12, fontWeight: 600, color: colors.text, whiteSpace: 'nowrap', ...font }}>
                   {PROVIDER_LABELS[p.name]}
                 </span>
               </div>
 
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginLeft: 'auto' }}>
                 {status.kind === 'needs-setup' && providerNeedsToken(p.name) && (
                   <Button size="sm" variant="secondary" onClick={() => setShowCredentialSetup(p.name)}>
                     Configure
                   </Button>
                 )}
-                <ProviderStatusBadge status={status} />
+                <ProviderStatusBadge status={isWeb && p.name === 'simulator' ? { ...status, label: 'In your browser' } : status} />
               </div>
             </div>
             );
@@ -215,7 +198,7 @@ export function HardwarePanel() {
                     marginBottom: 8,
                   }}
                 >
-                  <span style={{ fontSize: 12, fontWeight: 600, color: colors.text, ...font }}>
+                  <span style={{ fontSize: 12, fontWeight: 600, color: colors.text, whiteSpace: 'nowrap', ...font }}>
                     {selectedBackendInfo.name}
                   </span>
                   <Badge tone={selectedBackendInfo.status === 'online' ? 'success' : 'danger'} style={{ textTransform: 'uppercase' }}>
@@ -225,33 +208,25 @@ export function HardwarePanel() {
 
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px 12px' }}>
                   <div>
-                    <div style={{ fontSize: 11, color: colors.textDim, textTransform: 'uppercase', ...font }}>
-                      Qubits
-                    </div>
+                    <div className="nuclei-overline">Qubits</div>
                     <div style={{ fontSize: 12, color: colors.text, fontWeight: 600, ...font }}>
                       {selectedBackendInfo.qubitCount}
                     </div>
                   </div>
                   <div>
-                    <div style={{ fontSize: 11, color: colors.textDim, textTransform: 'uppercase', ...font }}>
-                      Queue
-                    </div>
+                    <div className="nuclei-overline">Queue</div>
                     <div style={{ fontSize: 12, color: colors.text, fontWeight: 600, ...font }}>
                       {selectedBackendInfo.queueLength}
                     </div>
                   </div>
                   <div>
-                    <div style={{ fontSize: 11, color: colors.textDim, textTransform: 'uppercase', ...font }}>
-                      Error Rate
-                    </div>
+                    <div className="nuclei-overline">Error rate</div>
                     <div style={{ fontSize: 12, color: colors.text, fontWeight: 600, ...font }}>
                       {(selectedBackendInfo.averageErrorRate * 100).toFixed(2)}%
                     </div>
                   </div>
                   <div>
-                    <div style={{ fontSize: 11, color: colors.textDim, textTransform: 'uppercase', ...font }}>
-                      Provider
-                    </div>
+                    <div className="nuclei-overline">Provider</div>
                     <div style={{ fontSize: 12, color: colors.accentText, fontWeight: 600, ...font }}>
                       {PROVIDER_LABELS[selectedBackendInfo.provider]}
                     </div>
@@ -260,17 +235,7 @@ export function HardwarePanel() {
 
                 {/* Gate set pills */}
                 <div style={{ marginTop: 8 }}>
-                  <div
-                    style={{
-                      fontSize: 11,
-                      color: colors.textDim,
-                      textTransform: 'uppercase',
-                      marginBottom: 4,
-                      ...font,
-                    }}
-                  >
-                    Gate Set
-                  </div>
+                  <div className="nuclei-overline" style={{ marginBottom: 4 }}>Gate set</div>
                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: 3 }}>
                     {selectedBackendInfo.gateSet.map((gate) => (
                       <Badge key={gate} tone="accent" style={{ fontFamily: TYPOGRAPHY.fontMono }}>
@@ -329,13 +294,13 @@ export function HardwarePanel() {
               }}
             >
               <Trash2 size={12} />
-              Clear Jobs
+              Clear jobs
             </button>
           )}
         </Section>
 
         {/* ── Results Comparison ── */}
-        <Section title="Sim vs Hardware">
+        <Section title="Sim vs hardware">
           <ResultsComparison
             simulatorResult={simProbabilities}
             hardwareResult={hwProbabilities}

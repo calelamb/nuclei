@@ -6,7 +6,8 @@ import { useEditorStore } from '../../stores/editorStore';
 import { useProjectStore } from '../../stores/projectStore';
 import { useThemeStore } from '../../stores/themeStore';
 import { ProviderLogo } from './ProviderLogo';
-import { getHardware } from '../../App';
+import { getExecute, getHardware } from '../../App';
+import { usePlatform } from '../../platform/PlatformProvider';
 import { providerAllowsQsharp, QSHARP_GATE_TOOLTIP } from './launchGating';
 import type { HardwareProviderType } from '../../types/hardware';
 
@@ -20,13 +21,13 @@ interface ProviderPortalMeta {
 }
 
 const PORTAL_PROVIDERS: ProviderPortalMeta[] = [
+  { name: 'simulator', label: 'Local Simulator', tagline: 'Instant · no account' },
   { name: 'ibm', label: 'IBM Quantum', tagline: 'Superconducting · free tier' },
   { name: 'ionq', label: 'IonQ', tagline: 'Trapped ion · all-to-all' },
   { name: 'quantinuum', label: 'Quantinuum', tagline: 'Highest fidelity · H1/H2' },
   { name: 'braket', label: 'AWS Braket', tagline: 'IonQ · Rigetti · QuEra · IQM · OQC · Pasqal' },
   { name: 'azure', label: 'Azure Quantum', tagline: 'Quantinuum · IonQ · Rigetti · Pasqal · IQM' },
   { name: 'nvidia', label: 'NVIDIA CUDA-Q', tagline: 'GPU simulator · up to 34 qubits' },
-  { name: 'simulator', label: 'Local Simulator', tagline: 'Instant · no account' },
   { name: 'google', label: 'Google Quantum AI', tagline: 'Research access only', disabled: true },
   { name: 'xanadu', label: 'Xanadu', tagline: 'Photonic · different model', disabled: true },
   { name: 'dwave', label: 'D-Wave', tagline: 'Annealer · different model', disabled: true },
@@ -44,6 +45,7 @@ function fmtElapsed(startIso: string): string {
 
 export function LaunchPortal() {
   const colors = useThemeStore((s) => s.colors);
+  const isWeb = usePlatform().getPlatform() === 'web';
   const jobs = useHardwareStore((s) => s.jobs);
   const results = useHardwareStore((s) => s.results);
   const openLaunch = useHardwareStore((s) => s.openLaunch);
@@ -113,6 +115,11 @@ export function LaunchPortal() {
 
   const handlePickProvider = (p: ProviderPortalMeta) => {
     if (p.disabled || qsharpBlocks(p.name)) return;
+    // The browser build has no hardware path: the simulator card runs the circuit right here.
+    if (isWeb && p.name === 'simulator') {
+      getExecute()?.();
+      return;
+    }
     selectProvider(p.name);
     openLaunch();
   };
@@ -154,14 +161,14 @@ export function LaunchPortal() {
           style={{
             border: `1.5px dashed ${dragActive ? colors.accent : colors.border}`,
             background: dragActive ? `${colors.accent}08` : colors.bgElevated,
-            borderRadius: 10,
+            borderRadius: 'var(--radius-round)',
             padding: 14,
             display: 'flex',
             flexDirection: 'column',
             alignItems: 'center',
             gap: 8,
             cursor: 'pointer',
-            transition: 'border-color 120ms ease, background 120ms ease',
+            transition: 'border-color var(--duration-fast) var(--ease-standard), background var(--duration-fast) var(--ease-standard)',
             fontFamily: TYPOGRAPHY.fontSans,
           }}
         >
@@ -212,34 +219,24 @@ export function LaunchPortal() {
 
       {/* Provider grid */}
       <div style={{ padding: '0 12px 12px' }}>
-        <div
-          style={{
-            fontSize: 11,
-            fontWeight: 600,
-            textTransform: 'uppercase',
-            letterSpacing: 0.5,
-            color: colors.textMuted,
-            marginBottom: 8,
-            fontFamily: TYPOGRAPHY.fontSans,
-          }}
-        >
+        <div className="nuclei-overline" style={{ marginBottom: 8 }}>
           Choose a destination
         </div>
         <div className="launch-grid">
           {PORTAL_PROVIDERS.map((p) => {
             const qsharpBlocked = qsharpBlocks(p.name);
             const isDisabled = p.disabled || qsharpBlocked;
-            return (
-            <button className="nuclei-hover-lift"
+            const reason = p.disabled ? 'Coming soon' : qsharpBlocked ? QSHARP_GATE_TOOLTIP : null;
+            const card = (
+            <button className={isDisabled ? undefined : 'nuclei-hover-lift'}
               key={p.name}
               onClick={() => handlePickProvider(p)}
-              disabled={isDisabled}
-              title={qsharpBlocked ? QSHARP_GATE_TOOLTIP : p.tagline}
+              aria-disabled={isDisabled || undefined}
               style={{
                 textAlign: 'left',
                 background: colors.bgElevated,
                 border: `1px solid ${colors.border}`,
-                borderRadius: 8,
+                borderRadius: 'var(--radius-round)',
                 padding: 10,
                 cursor: isDisabled ? 'not-allowed' : 'pointer',
                 color: colors.text,
@@ -248,7 +245,7 @@ export function LaunchPortal() {
                 flexDirection: 'column',
                 gap: 6,
                 opacity: isDisabled ? 0.5 : 1,
-                transition: 'border-color 120ms ease, background 120ms ease, transform 120ms ease',
+                transition: 'border-color var(--duration-fast) var(--ease-standard), background var(--duration-fast) var(--ease-standard), transform var(--duration-fast) var(--ease-standard)',
               }}
             >
               <div
@@ -265,11 +262,11 @@ export function LaunchPortal() {
               >
                 <ProviderLogo provider={p.name} size={20} />
               </div>
-              <div className="launch-grid__name" style={{ fontSize: 11, fontWeight: 600, color: colors.text }}>{p.label}</div>
+              <div className="launch-grid__name" style={{ fontSize: 12, fontWeight: 600, color: colors.text }}>{p.label}</div>
               <div
                 style={{
                   fontSize: 11,
-                  color: colors.textDim,
+                  color: colors.textMuted,
                   lineHeight: 1.4,
                   overflow: 'hidden',
                   display: '-webkit-box',
@@ -281,6 +278,8 @@ export function LaunchPortal() {
               </div>
             </button>
             );
+            // A blocked card stays focusable so its reason is reachable by keyboard as well as by pointer.
+            return reason ? <Tooltip key={p.name} label={reason} placement="above">{card}</Tooltip> : card;
           })}
         </div>
 
@@ -293,17 +292,7 @@ export function LaunchPortal() {
       {/* Active jobs */}
       {activeJobs.length > 0 && (
         <div style={{ padding: '0 12px 12px' }}>
-          <div
-            style={{
-              fontSize: 11,
-              fontWeight: 600,
-              textTransform: 'uppercase',
-              letterSpacing: 0.5,
-              color: colors.textMuted,
-              marginBottom: 6,
-              fontFamily: TYPOGRAPHY.fontSans,
-            }}
-          >
+          <div className="nuclei-overline" style={{ marginBottom: 6 }}>
             Active jobs
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
@@ -389,16 +378,7 @@ export function LaunchPortal() {
               marginBottom: 6,
             }}
           >
-            <div
-              style={{
-                fontSize: 11,
-                fontWeight: 600,
-                textTransform: 'uppercase',
-                letterSpacing: 0.5,
-                color: colors.textMuted,
-                fontFamily: TYPOGRAPHY.fontSans,
-              }}
-            >
+            <div className="nuclei-overline">
               Recent results
             </div>
             <button className="nuclei-hover-text"

@@ -11,10 +11,11 @@ import { describeMapping } from '../../lib/qecMappingSummary';
 import { isNotProbability } from '../../lib/qecProbability';
 import { formatNoise, formatCount } from '../../lib/qecPlotFormat';
 import { ICON_SIZE, ICON_STROKE, TYPOGRAPHY } from '../../styles/tokens';
-import { Button, Select } from '../ui';
+import { Button, Checkbox, Select } from '../ui';
 import { Table, Thead, Tbody, Tr, Th, Td } from '../ui/Table';
 
-const PREVIEW_ROWS = 10;
+/** The editor opens above the plot: five rows are enough to check a mapping without pushing the figure off screen. */
+const PREVIEW_ROWS = 5;
 type Field = 'p' | 'd' | 'rounds' | 'decoder';
 
 const FIELDS: Array<{ field: Field; label: string }> = [
@@ -182,16 +183,13 @@ export function CsvMappingPreview() {
             <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 10, marginBottom: 6, fontSize: 12, color: colors.textMuted }}>
               {groupable.length > 0 && <span>Series split by:</span>}
               {groupable.map((k) => (
-                <label key={k.key} style={{ display: 'flex', alignItems: 'center', gap: 4, color: colors.text }}>
-                  <input
-                    type="checkbox"
-                    style={{ accentColor: colors.accent }}
-                    aria-label={`Group series by ${k.key}`}
-                    checked={mapping.groupBy.includes(k.key)}
-                    onChange={(e) => toggleGroup(k.key, e.target.checked)}
-                  />
-                  {k.key}
-                </label>
+                <Checkbox
+                  key={k.key}
+                  label={k.key}
+                  aria-label={`Group series by ${k.key}`}
+                  checked={mapping.groupBy.includes(k.key)}
+                  onCheckedChange={(next) => toggleGroup(k.key, next)}
+                />
               ))}
               {(mapping.mergeKeys ?? []).map((key) => (
                 <span key={key} style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
@@ -228,7 +226,8 @@ export function CsvMappingPreview() {
                     <Td numeric>{formatCount(r.shots)}</Td>
                     <Td numeric>{formatCount(r.errors)}</Td>
                     <Td numeric>{formatCount(r.discards)}</Td>
-                    <Td numeric>{typeof m.p === 'number' ? formatNoise(m.p) : '—'}</Td>
+                    {/* Superscript powers of ten need the sans face; the mono face spaces them apart. */}
+                    <Td numeric text style={{ fontVariantNumeric: 'tabular-nums' }}>{typeof m.p === 'number' ? formatNoise(m.p) : '—'}</Td>
                     <Td numeric>{String(m.d ?? '—')}</Td>
                     <Td numeric>{String(m.rounds ?? '—')}</Td>
                     <Td>{r.decoder}</Td>
@@ -237,6 +236,9 @@ export function CsvMappingPreview() {
               })}
             </Tbody>
           </Table>
+          {csv.rows.length > PREVIEW_ROWS && (
+            <p style={{ margin: '4px 0 0', fontSize: 11, color: colors.textMuted }}>{`Showing the first ${PREVIEW_ROWS} of ${csv.rows.length} rows.`}</p>
+          )}
         </div>
       )}
     </section>

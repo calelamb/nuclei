@@ -24,7 +24,9 @@ interface StudyDraft {
   preset: QecWorkspacePreset;
 }
 
-type DraftResult = { study: QecStudy; error: null } | { study: null; error: string };
+type ErrorField = 'name' | 'question' | 'form';
+interface FormError { field: ErrorField; message: string }
+type DraftResult = { study: QecStudy; error: null } | { study: null; error: FormError };
 
 const EMPTY_DRAFT: StudyDraft = { name: '', question: '', preset: 'build' };
 
@@ -39,8 +41,8 @@ function studyId(name: string): string {
 }
 
 function validateDraft(draft: StudyDraft): DraftResult {
-  if (!draft.name.trim()) return { study: null, error: 'Enter a Study name before creating it.' };
-  if (!draft.question.trim()) return { study: null, error: 'Enter a research question before creating the Study.' };
+  if (!draft.name.trim()) return { study: null, error: { field: 'name', message: 'Enter a name for the study.' } };
+  if (!draft.question.trim()) return { study: null, error: { field: 'question', message: 'Enter the research question this study answers.' } };
   const parsed = qecStudySchema.safeParse({
     schema: 1,
     id: studyId(draft.name),
@@ -51,7 +53,7 @@ function validateDraft(draft: StudyDraft): DraftResult {
     sources: [],
   });
   if (parsed.success) return { study: parsed.data, error: null };
-  return { study: null, error: 'Use a Study name containing at least one letter or number.' };
+  return { study: null, error: { field: 'name', message: 'Use a name with at least one letter or number.' } };
 }
 
 function StudyList({ studies, busy }: { studies: readonly DiscoveredQecStudy[]; busy: boolean }): ReactElement {
@@ -92,24 +94,54 @@ interface StudyFormProps {
   busy: boolean;
   submitting: boolean;
   draft: StudyDraft;
-  error: string | null;
+  error: FormError | null;
   onChange: (draft: StudyDraft) => void;
   onSubmit: (event: FormEvent) => void;
   onCancel: () => void;
 }
 
-function StudyForm({ busy, submitting, draft, error, onChange, onSubmit, onCancel }: StudyFormProps): ReactElement {
+interface FieldProps {
+  id: string;
+  label: string;
+  error?: string;
+  children: ReactElement;
+}
+
+/** A visible label above its control, with the control's own error underneath, wired for assistive tech. */
+function FormField({ id, label, error, children }: FieldProps): ReactElement {
   const colors = useThemeStore((state) => state.colors);
   return (
-    <form onSubmit={onSubmit} style={{ display: 'grid', gap: 7 }}>
-      <TextInput autoFocus aria-label="Study name" placeholder="Study name" value={draft.name} disabled={busy} onChange={(event) => onChange({ ...draft, name: event.target.value })} />
-      <TextArea aria-label="Research question" placeholder="Research question" value={draft.question} disabled={busy} onChange={(event) => onChange({ ...draft, question: event.target.value })} rows={3} />
-      <Select aria-label="Workspace preset" value={draft.preset} disabled={busy} onChange={(event) => onChange({ ...draft, preset: event.target.value as QecWorkspacePreset })}>
-        <option value="build">Build</option><option value="analyze">Analyze</option><option value="observe">Observe</option>
-      </Select>
-      {error && <div role="alert" style={{ color: colors.error, fontSize: 11, lineHeight: 1.4 }}><AlertTriangle size={12} /> {error}</div>}
+    <div style={{ display: 'grid', gap: 4 }}>
+      <label htmlFor={id} style={{ color: colors.text, fontSize: 12, fontWeight: 600 }}>{label}</label>
+      {children}
+      {error && <div id={`${id}-error`} role="alert" style={{ color: colors.error, fontSize: 11, lineHeight: 1.4 }}><AlertTriangle size={12} /> {error}</div>}
+    </div>
+  );
+}
+
+function StudyForm({ busy, submitting, draft, error, onChange, onSubmit, onCancel }: StudyFormProps): ReactElement {
+  const colors = useThemeStore((state) => state.colors);
+  const errorFor = (field: ErrorField): string | undefined => (error?.field === field ? error.message : undefined);
+  const describe = (field: ErrorField): { 'aria-describedby'?: string; invalid: boolean } => ({
+    invalid: errorFor(field) !== undefined,
+    'aria-describedby': errorFor(field) ? `qec-study-${field}-error` : undefined,
+  });
+  return (
+    <form onSubmit={onSubmit} style={{ display: 'grid', gap: 10 }}>
+      <FormField id="qec-study-name" label="Study name" error={errorFor('name')}>
+        <TextInput id="qec-study-name" autoFocus value={draft.name} disabled={busy} {...describe('name')} onChange={(event) => onChange({ ...draft, name: event.target.value })} />
+      </FormField>
+      <FormField id="qec-study-question" label="Research question" error={errorFor('question')}>
+        <TextArea id="qec-study-question" value={draft.question} disabled={busy} {...describe('question')} onChange={(event) => onChange({ ...draft, question: event.target.value })} rows={3} />
+      </FormField>
+      <FormField id="qec-study-preset" label="Starting preset">
+        <Select id="qec-study-preset" value={draft.preset} disabled={busy} onChange={(event) => onChange({ ...draft, preset: event.target.value as QecWorkspacePreset })}>
+          <option value="build">Build</option><option value="analyze">Analyze</option><option value="observe">Observe</option>
+        </Select>
+      </FormField>
+      {error?.field === 'form' && <div role="alert" style={{ color: colors.error, fontSize: 11, lineHeight: 1.4 }}><AlertTriangle size={12} /> {error.message}</div>}
       <Button type="submit" variant="primary" className="qec-study-create-button" disabled={busy} loading={submitting} icon={submitting ? undefined : <Plus size={12} />}>
-        {submitting ? 'Creating Study…' : 'Create Study'}
+        {submitting ? 'Creating study…' : 'Create study'}
       </Button>
       <Button type="button" variant="ghost" size="sm" disabled={submitting} onClick={onCancel}>Cancel</Button>
     </form>
@@ -149,11 +181,11 @@ export function QecStudySidebar({ fs }: QecStudySidebarProps): ReactElement {
   const [draft, setDraft] = useState<StudyDraft>(EMPTY_DRAFT);
   const [submitting, setSubmitting] = useState(false);
   const [creating, setCreating] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<FormError | null>(null);
   useStudyLifecycle(projectRoot, fs);
   const submit = async (event: FormEvent): Promise<void> => {
     event.preventDefault();
-    if (!projectRoot) return setError('Open a project before creating a Study.');
+    if (!projectRoot) return setError({ field: 'form', message: 'Open a project before creating a study.' });
     const validated = validateDraft(draft);
     if (!validated.study) return setError(validated.error);
     setError(null);
@@ -164,7 +196,7 @@ export function QecStudySidebar({ fs }: QecStudySidebarProps): ReactElement {
       setDraft(EMPTY_DRAFT);
       setCreating(false);
     } catch (cause: unknown) {
-      setError(cause instanceof Error ? cause.message : 'Could not create the Study. Try again.');
+      setError({ field: 'form', message: cause instanceof Error ? cause.message : 'Could not create the study. Try again.' });
     } finally {
       setSubmitting(false);
     }
@@ -174,10 +206,10 @@ export function QecStudySidebar({ fs }: QecStudySidebarProps): ReactElement {
     <div style={{ display: 'grid', gap: 12, padding: 10, fontFamily: TYPOGRAPHY.fontSans }}>
       <section aria-label="QEC Studies"><div style={{ display: 'flex', gap: 5, alignItems: 'center', color: colors.textMuted, fontSize: 12, fontWeight: 500, marginBottom: 6 }}><BookOpen size={12} />Studies</div><StudyList studies={studies} busy={loading || submitting} /></section>
       <ValidationCards colors={colors} />
-      <section aria-label="Create Study">
+      <section aria-label="Create study">
         {creating
           ? <StudyForm busy={loading || submitting} submitting={submitting} draft={draft} error={error} onChange={setDraft} onSubmit={(event) => void submit(event)} onCancel={() => { setCreating(false); setError(null); }} />
-          : <Button size="sm" icon={<Plus size={12} />} onClick={() => setCreating(true)}>New Study</Button>}
+          : <Button size="sm" icon={<Plus size={12} />} onClick={() => setCreating(true)}>New study</Button>}
       </section>
     </div>
   );

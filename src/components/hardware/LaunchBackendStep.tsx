@@ -149,14 +149,15 @@ export function LaunchBackendStep(props: LaunchBackendStepProps) {
   }
 
   const empty = emptyBackendsCopy(provider, connected);
+  const needsSetup = (needsToken || needsCredentialForm) && !connected;
   return (
     <div className="launch-step">
-      {!((needsToken || needsCredentialForm) && !connected) && (
+      {!needsSetup && (
         <h3 className="launch-step__heading" tabIndex={-1} data-launch-focus>
           {providerNeedsToken(provider.name) ? 'Choose a backend' : `Choose a ${provider.label} target`}
         </h3>
       )}
-      {props.stagedFileName && (
+      {!needsSetup && props.stagedFileName && (
         <div className="launch-staged">
           <FileCode size={12} aria-hidden="true" />
           <span style={{ color: colors.textMuted }}>Submitting</span>
@@ -169,7 +170,7 @@ export function LaunchBackendStep(props: LaunchBackendStepProps) {
         <div className="launch-token">
           <span className="launch-token__label"><KeyRound size={12} aria-hidden="true" /> {provider.label} needs several credentials</span>
           <div>
-            <Button variant="primary" onClick={() => props.onSetupCredentials(provider.name)}>
+            <Button variant="primary" data-launch-focus onClick={() => props.onSetupCredentials(provider.name)}>
               Set up {provider.label}
             </Button>
           </div>
@@ -182,6 +183,8 @@ export function LaunchBackendStep(props: LaunchBackendStepProps) {
         <div role="alert" className="launch-error">{props.connectionError}</div>
       )}
 
+      {/* Until the provider connects the setup card is the whole step: nothing below can be acted on yet. */}
+      {needsSetup ? null : (<>
       {subs && (
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
           {subs.map((sub) => (
@@ -235,6 +238,7 @@ export function LaunchBackendStep(props: LaunchBackendStepProps) {
           Launch
         </Button>
       </div>
+      </>)}
     </div>
   );
 }

@@ -45,7 +45,7 @@ describe('a tall narrow card shows Λ under the plot instead of behind a tab (qe
     size.current = { width: 470, height: 900 };
     const { getByRole, getByLabelText, queryByRole } = render(<QecAnalysisView embedded />);
     expect(getByRole('tab', { name: 'Plot' })).toBeTruthy();
-    expect(queryByRole('tab', { name: 'Λ' })).toBeNull();
+    expect(queryByRole('tab', { name: 'Λ fit' })).toBeNull();
     expect(getByLabelText('Error suppression factor Λ')).toBeTruthy();
   });
 });
@@ -61,7 +61,7 @@ describe('short windows show one analysis section at a time (qec-09)', () => {
 
   it('switches to the Λ readout and to the decoder table', () => {
     const { getByRole, queryByRole, getByLabelText } = render(<QecAnalysisView embedded />);
-    fireEvent.click(getByRole('tab', { name: 'Λ' }));
+    fireEvent.click(getByRole('tab', { name: 'Λ fit' }));
     expect(getByLabelText('Error suppression factor Λ')).toBeTruthy();
     expect(queryByRole('group', { name: /Plot points/ })).toBeNull();
     fireEvent.click(getByRole('tab', { name: 'Decoders' }));
@@ -70,7 +70,7 @@ describe('short windows show one analysis section at a time (qec-09)', () => {
 
   it('does not repeat the Λ title inside the readout when the tab header already carries it', () => {
     const { getByRole, getByLabelText } = render(<QecAnalysisView embedded />);
-    fireEvent.click(getByRole('tab', { name: 'Λ' }));
+    fireEvent.click(getByRole('tab', { name: 'Λ fit' }));
     expect(getByLabelText('Error suppression factor Λ').querySelector('h3')).toBeNull();
   });
 
@@ -87,5 +87,20 @@ describe('short windows show one analysis section at a time (qec-09)', () => {
     expect(getByRole('group', { name: /Plot points/ })).toBeTruthy();
     expect(getByLabelText('Error suppression factor Λ')).toBeTruthy();
     expect(getByRole('table', { name: 'Decoder comparison' })).toBeTruthy();
+  });
+});
+
+describe('one units control in the analysis (rq-r3-16)', () => {
+  it('shows Per shot / Per round once when the plot and decoder table are visible together', () => {
+    size.current = { width: 1000, height: 900 };
+    const { container, getAllByRole } = render(<QecAnalysisView embedded />);
+    expect(getAllByRole('radio', { name: /Per shot/ })).toHaveLength(1);
+    expect(container.querySelector('[aria-label="Decoder comparison"]')).not.toBeNull();
+  });
+
+  it('keeps the control on the Decoders tab, where the plot header is not visible', () => {
+    const { getByRole, getAllByRole } = render(<QecAnalysisView embedded />);
+    fireEvent.click(getByRole('tab', { name: 'Decoders' }));
+    expect(getAllByRole('radio', { name: /Per shot/ })).toHaveLength(1);
   });
 });

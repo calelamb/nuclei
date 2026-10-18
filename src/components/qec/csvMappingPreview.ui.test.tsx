@@ -89,4 +89,31 @@ describe('dead ends (qec-16)', () => {
     const r = render(<ThresholdPanel />);
     expect(r.queryByTestId('csv-drop-zone')).toBeNull();
   });
+
+  it('draws the series-split controls with the shared Checkbox and sets p in the sans face (rq-r3-12)', () => {
+    const rows = [3, 5].map((d) => line(`a${d}`, { d, p: 0.001, r: d, trial_tag: d }));
+    useQecCampaignStore.getState().loadFromCsv([HEADER, ...rows].join('\n'), 'x.csv');
+    const store = useQecCampaignStore.getState();
+    store.setCsvMapping({ ...store.csvImport!.mapping, groupBy: [], mergeKeys: [] });
+    const r = render(<CsvMappingPreview />);
+    open(r);
+    const boxes = Array.from(r.container.querySelectorAll('input[type="checkbox"]'));
+    expect(boxes.length).toBeGreaterThan(0);
+    for (const box of boxes) expect(box.closest('label')?.className).toContain('nuclei-checkbox');
+    const table = r.getByRole('table', { name: 'Mapped rows preview' });
+    const pCell = Array.from(table.querySelectorAll('tbody tr:first-child td'))[4] as HTMLElement;
+    expect(pCell.textContent).toBe('1×10⁻³');
+    expect(pCell.className).toContain('nuclei-table__text');
+    expect(pCell.style.fontVariantNumeric).toBe('tabular-nums');
+  });
+
+  it('previews five rows with a count of the rest so the editor stays short (rq-r3-05)', () => {
+    const rows = Array.from({ length: 12 }, (_, i) => line(`r${i}`, { d: 3, p: 0.001 * (i + 1), r: 3 }));
+    useQecCampaignStore.getState().loadFromCsv([HEADER, ...rows].join('\n'), 'x.csv');
+    const r = render(<CsvMappingPreview />);
+    open(r);
+    const table = r.getByRole('table', { name: 'Mapped rows preview' });
+    expect(table.querySelectorAll('tbody tr')).toHaveLength(5);
+    expect(r.getByText('Showing the first 5 of 12 rows.')).toBeTruthy();
+  });
 });

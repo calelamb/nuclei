@@ -182,7 +182,7 @@ export function EstimatorPanel() {
 
         <Button
           variant="primary"
-          size="lg"
+          size="md"
           onClick={run}
           loading={pending}
           icon={pending ? undefined : <Cpu size={ICON_SIZE.sm} strokeWidth={ICON_STROKE} />}

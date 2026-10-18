@@ -17,12 +17,13 @@ import { QEC_PLOT_CSV_DOCS } from '../../config/docsLinks';
 import { useCsvDrop } from './useCsvDrop';
 
 import { TYPOGRAPHY } from '../../styles/tokens';
-const PLOT_MIN_HEIGHT = 300;
+/** Opening the mapping editor must never squeeze the figure below this; the column scrolls instead. */
+const PLOT_MIN_HEIGHT = 320;
 const TABLE_MIN_HEIGHT = 170;
 type AnalysisTab = 'plot' | 'lambda' | 'decoders';
 const ANALYSIS_TABS = [
   { value: 'plot', label: 'Plot' },
-  { value: 'lambda', label: 'Λ' },
+  { value: 'lambda', label: 'Λ fit' },
   { value: 'decoders', label: 'Decoders' },
 ] as const;
 /** When Λ sits under the plot there is no separate Λ section. */
@@ -166,7 +167,8 @@ export function QecAnalysisView({ embedded = false, actionsInHeader = false }: {
               {/* Until data loads there is nothing to compare: one empty state, not one per panel. */}
               {hasData && (
                 <div style={{ flex: '1 1 0', minHeight: TABLE_MIN_HEIGHT }}>
-                  <DecoderWorkbench />
+                  {/* The plot header above already carries the units control; a second one would be a duplicate. */}
+                  <DecoderWorkbench showUnits={false} />
                 </div>
               )}
             </>

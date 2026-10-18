@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
-  providerAllowsQsharp, submissionLanguage, providerStatus, providerNeedsToken, formatErrorRate,
+  providerAllowsQsharp, submissionLanguage, providerStatus, providerNeedsToken, formatErrorRate, sortProvidersByStatus,
 } from './launchGating';
 
 describe('providerAllowsQsharp', () => {
@@ -45,11 +45,15 @@ describe('providerStatus', () => {
     }
   });
 
-  it('badges every launchable provider desktop-only on the web build', () => {
-    for (const provider of ['ibm', 'ionq', 'quantinuum', 'braket', 'azure', 'nvidia', 'simulator'] as const) {
+  it('badges every hardware and GPU provider desktop-only on the web build', () => {
+    for (const provider of ['ibm', 'ionq', 'quantinuum', 'braket', 'azure', 'nvidia'] as const) {
       const status = providerStatus({ ...base, provider, isWeb: true, connected: true, cudaqInstalled: true });
       expect(status).toMatchObject({ kind: 'desktop-only', label: 'Desktop app' });
     }
+  });
+
+  it('lets the browser build run on the local simulator right here', () => {
+    expect(providerStatus({ ...base, provider: 'simulator', isWeb: true })).toMatchObject({ kind: 'ready', label: 'Run here' });
   });
 
   it('needs a token for credentialed providers until the kernel confirms the connection', () => {
@@ -80,5 +84,26 @@ describe('formatErrorRate', () => {
   it('spells the error rate out instead of using a plus-minus sign', () => {
     expect(formatErrorRate(0.0032)).toBe('err 0.32%');
     expect(formatErrorRate(0)).toBe('Ideal');
+  });
+});
+
+describe('sortProvidersByStatus (rq-r3-08)', () => {
+  const names = ['ibm', 'ionq', 'google', 'nvidia', 'simulator', 'braket'] as const;
+  const list = names.map((name) => ({ name }));
+  const sorted = (isWeb: boolean) =>
+    sortProvidersByStatus(list, (p) => providerStatus({ provider: p.name, connected: false, isWeb, cudaqInstalled: true }).kind).map((p) => p.name);
+
+  it('puts the Local Simulator first, then ready, needs-setup, desktop-only, coming-soon', () => {
+    expect(sorted(false)).toEqual(['simulator', 'nvidia', 'ibm', 'ionq', 'braket', 'google']);
+  });
+
+  it('keeps the simulator first on the web build, ahead of the desktop-only cards', () => {
+    expect(sorted(true)).toEqual(['simulator', 'ibm', 'ionq', 'nvidia', 'braket', 'google']);
+  });
+
+  it('does not mutate its input', () => {
+    const before = list.map((p) => p.name);
+    sorted(false);
+    expect(list.map((p) => p.name)).toEqual(before);
   });
 });

@@ -7,13 +7,14 @@ import type { PlatformBridge } from '../../platform/bridge';
 import { useHardwareStore } from '../../stores/hardwareStore';
 import { useEditorStore } from '../../stores/editorStore';
 
+const mockExecute = vi.fn();
 const mockHardware = {
   hardwareConnect: vi.fn(),
   hardwareSubmit: vi.fn(() => true),
   hardwareCancel: vi.fn(),
   hardwareDismiss: vi.fn(),
 };
-vi.mock('../../App', () => ({ getHardware: () => mockHardware }));
+vi.mock('../../App', () => ({ getHardware: () => mockHardware, getExecute: () => mockExecute }));
 
 const bridge = (platform: 'web' | 'desktop') => ({ getPlatform: () => platform }) as unknown as PlatformBridge;
 
@@ -51,7 +52,8 @@ describe('LaunchModal honesty', () => {
     mount('desktop');
     fireEvent.click(screen.getByText('IBM Quantum'));
     expect(screen.queryByText('ibm_brisbane')).toBeNull();
-    expect(screen.getByText(/Connect your IBM Quantum account/)).toBeTruthy();
+    expect(screen.getByLabelText('IBM Quantum API token')).toBeTruthy();
+    expect(screen.queryByText(/Connect your IBM Quantum account/)).toBeNull();
     expect(screen.queryByText(/jobs ahead/)).toBeNull();
   });
 
@@ -67,12 +69,60 @@ describe('LaunchModal honesty', () => {
     expect(screen.getByText('2 jobs ahead')).toBeTruthy();
   });
 
-  it('badges every provider Desktop app on the web build and offers a download instead of Launch', () => {
+  it('badges hardware providers Desktop app on the web build and offers a download instead of Launch', () => {
     mount('web');
-    expect(screen.getAllByText('Desktop app').length).toBeGreaterThanOrEqual(7);
-    fireEvent.click(screen.getByText('Local Simulator'));
+    expect(screen.getAllByText('Desktop app').length).toBeGreaterThanOrEqual(6);
+    fireEvent.click(screen.getByText('IBM Quantum'));
     expect(screen.getByRole('button', { name: /Download Nuclei to launch/ })).toBeTruthy();
     expect(screen.queryByRole('button', { name: 'Launch' })).toBeNull();
+  });
+
+  it('on the web build the Local Simulator says Run here, closes the dialog and runs', () => {
+    mount('web');
+    expect(screen.getAllByText('Run here').length).toBe(1);
+    fireEvent.click(screen.getByText('Local Simulator'));
+    expect(useHardwareStore.getState().launchOpen).toBe(false);
+    expect(mockExecute).toHaveBeenCalledTimes(1);
+    expect(mockHardware.hardwareSubmit).not.toHaveBeenCalled();
+  });
+
+  it('leads with the Local Simulator and keeps coming-soon providers last', () => {
+    mount('desktop');
+    const cards = Array.from(document.querySelectorAll<HTMLElement>('[data-provider]')).map((el) => el.dataset.provider);
+    expect(cards[0]).toBe('simulator');
+    expect(cards.slice(-3).sort()).toEqual(['dwave', 'google', 'xanadu']);
+  });
+
+  it('keeps the dialog anchored to the top so it does not re-centre between steps', () => {
+    mount('desktop');
+    expect(screen.getByTestId('dialog-scrim').className).toContain('nuclei-dialog-scrim--top');
+  });
+
+  it('shows only the setup card until a multi-credential provider connects (rq-r3-08)', () => {
+    mount('desktop');
+    fireEvent.click(screen.getByText('AWS Braket'));
+    expect(screen.getByRole('button', { name: 'Set up AWS Braket' })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Launch' })).toBeNull();
+    expect(screen.queryByLabelText('Shots')).toBeNull();
+    expect(screen.queryByRole('button', { name: 'IonQ' })).toBeNull();
+    expect(screen.queryByText(/Connect your AWS Braket account/)).toBeNull();
+  });
+
+  it('reveals the filter chips, backends and shots once the provider is connected', () => {
+    useHardwareStore.getState().setProviderConnected('braket', true);
+    mount('desktop');
+    fireEvent.click(screen.getByText('AWS Braket'));
+    expect(screen.getByRole('button', { name: 'IonQ' })).toBeTruthy();
+    expect(screen.getByLabelText('Shots')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Launch' })).toBeTruthy();
+  });
+
+  it('moves keyboard focus into step two for a provider that needs the credential form (rq-r3-09)', async () => {
+    mount('desktop');
+    fireEvent.click(screen.getByText('AWS Braket'));
+    await act(async () => { await new Promise((r) => requestAnimationFrame(() => r(null))); });
+    expect(document.activeElement?.textContent).toContain('Set up AWS Braket');
+    expect(document.activeElement?.hasAttribute('data-launch-focus')).toBe(true);
   });
 
   it('renders a connection error for providers that have no token field', () => {

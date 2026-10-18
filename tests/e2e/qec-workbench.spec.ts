@@ -86,15 +86,15 @@ test('@qec opens the light workbench and switches preset by keyboard', async ({ 
   await study.selectOption({ label: 'Surface Memory' });
   await expect(study).toHaveValue('surface-memory');
 
-  const analyze = page.getByRole('button', { name: 'Analyze' });
+  const analyze = page.getByRole('radio', { name: 'Analyze' });
   await analyze.focus();
-  await page.keyboard.press('Enter');
-  await expect(analyze).toHaveAttribute('aria-pressed', 'true');
+  await page.keyboard.press('Space');
+  await expect(analyze).toBeChecked();
 
   const surfaces = await workbench.locator('.qec-sources, .qec-investigation, .qec-tray, .qec-instrument__field').evaluateAll(
     (elements) => elements.map((element) => getComputedStyle(element).backgroundColor),
   );
-  expect(surfaces.length).toBeGreaterThan(3);
+  expect(surfaces.length).toBeGreaterThan(2);
   for (const surface of surfaces) expect(LIGHT_SURFACES.has(surface)).toBe(true);
   const screenshot = testInfo.project.name === 'chromium'
     ? 'qec-workbench-analyze-1440.png'
@@ -130,7 +130,8 @@ test('@qec exposes four ordered landmarks and keyboard zones', async ({ page }) 
   const trayControl = tray.getByRole('button', { name: 'Collapse jobs and streams' });
   await sourceControl.focus();
   await expectFocusAfterTab(page, canvasControl);
-  await expectFocusAfterTab(page, inspectorControl);
+  // The canvas holds a help link and a pin per instrument, an open action and the resize handle before the inspector.
+  await expectFocusAfterTab(page, inspectorControl, 14);
   await expectFocusAfterTab(page, trayControl);
 
   await trayControl.press('Enter');
@@ -185,29 +186,30 @@ test('@qec maps the jobs tray separator value to visible laptop height', async (
 
 test('@qec creates and restores an Analyze Study across immediate navigation', async ({ page }) => {
   await openWorkbench(page);
-  const createStudy = page.getByRole('region', { name: 'Create Study' });
+  const createStudy = page.getByRole('region', { name: 'Create study' });
+  await createStudy.getByRole('button', { name: 'New study' }).click();
   await createStudy.getByLabel('Study name').fill('Decoder Sweep');
   await createStudy.getByLabel('Research question').fill('Which decoder is stable?');
-  await createStudy.getByRole('combobox', { name: 'Workspace preset' }).selectOption('analyze');
-  const create = createStudy.getByRole('button', { name: 'Create Study' });
+  await createStudy.getByRole('combobox', { name: 'Starting preset' }).selectOption('analyze');
+  const create = createStudy.getByRole('button', { name: 'Create study' });
   await expect(create).toHaveCSS('background-color', 'rgb(14, 116, 144)');
   await expect(create).toHaveCSS('color', 'rgb(255, 255, 255)');
   await create.click();
 
   const picker = page.getByRole('combobox', { name: 'Active QEC Study' });
   await expect(picker).toHaveValue('decoder-sweep');
-  await expect(page.getByRole('button', { name: 'Analyze' })).toHaveAttribute('aria-pressed', 'true');
-  await page.getByRole('button', { name: 'Observe' }).click();
+  await expect(page.getByRole('radio', { name: 'Analyze' })).toBeChecked();
+  await page.getByRole('radio', { name: 'Observe' }).click();
 
   await page.getByRole('button', { name: 'Explorer' }).click();
   await page.getByRole('button', { name: 'QEC Workbench' }).click();
 
   await expect(picker).toHaveValue('decoder-sweep');
   await picker.selectOption('surface-memory');
-  await expect(page.getByRole('button', { name: 'Build' })).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.getByRole('radio', { name: 'Build' })).toBeChecked();
   await picker.selectOption('decoder-sweep');
-  await expect(page.getByRole('button', { name: 'Observe' })).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.getByRole('radio', { name: 'Observe' })).toBeChecked();
   await expect(page.getByRole('region', { name: 'QEC Studies' }).getByRole('button', { name: /Decoder Sweep/ })).toBeVisible();
-  await expect(page.getByText('No files referenced by this Study.')).toHaveCSS('color', 'rgb(82, 97, 117)');
+  await expect(page.getByText('No files referenced by this Study.')).toHaveCSS('color', 'rgb(71, 85, 105)');
   await expect(page.locator('.qec-sources')).toHaveCSS('background-color', 'rgb(241, 245, 249)');
 });

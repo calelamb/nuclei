@@ -64,8 +64,9 @@ export interface ProviderStatusInput {
  */
 export function providerStatus({ provider, connected, isWeb, cudaqInstalled }: ProviderStatusInput): ProviderStatus {
   if (COMING_SOON.has(provider)) return { kind: 'coming-soon', label: 'Coming soon' };
+  // The browser build simulates circuits in the page, so the simulator is the one provider that works there.
+  if (provider === 'simulator') return { kind: 'ready', label: isWeb ? 'Run here' : 'Ready' };
   if (isWeb) return { kind: 'desktop-only', label: 'Desktop app' };
-  if (provider === 'simulator') return { kind: 'ready', label: 'Ready' };
   if (provider === 'nvidia') {
     return cudaqInstalled
       ? { kind: 'ready', label: 'Ready' }
@@ -79,4 +80,26 @@ export function providerStatus({ provider, connected, isWeb, cudaqInstalled }: P
 /** Backend error chip text; never a bare plus-minus. */
 export function formatErrorRate(rate: number): string {
   return rate === 0 ? 'Ideal' : `err ${(rate * 100).toFixed(2)}%`;
+}
+
+const STATUS_RANK: Readonly<Record<ProviderStatusKind, number>> = {
+  ready: 0,
+  'needs-setup': 1,
+  'desktop-only': 2,
+  'coming-soon': 3,
+};
+
+/**
+ * What works leads: the Local Simulator, then everything else that is ready, then providers
+ * that need setup, desktop-only ones and coming-soon last. Stable within a tier; never mutates.
+ */
+export function sortProvidersByStatus<T extends { readonly name: HardwareProviderType }>(
+  providers: readonly T[],
+  statusKind: (provider: T) => ProviderStatusKind,
+): T[] {
+  const rank = (p: T): number => STATUS_RANK[statusKind(p)] * 2 + (p.name === 'simulator' ? 0 : 1);
+  return providers
+    .map((provider, index) => ({ provider, index }))
+    .sort((a, b) => rank(a.provider) - rank(b.provider) || a.index - b.index)
+    .map((entry) => entry.provider);
 }

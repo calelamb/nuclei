@@ -382,6 +382,21 @@ describe('<QecImportWizard />', () => {
     expect(view.container.querySelector('.lucide-loader-circle')).toBeNull();
   });
 
+  it('keeps focus inside the dialog while the import runs and hides Back (rq-r3-04)', async () => {
+    const fake = client();
+    vi.mocked(fake.startImport).mockImplementation(async (_input, onEvent) => {
+      onEvent?.({ type: 'job_started', requestId: 'import-run', jobId: 'import-run', jobKind: 'import', sourcePolicy: 'copy' });
+      return new Promise(() => undefined);
+    });
+    const view = render(<QecImportWizard source="captures/capture.parquet" client={fake} />);
+    await reachImportStage();
+    fireEvent.click(screen.getByRole('button', { name: 'Import data' }));
+    const progress = await screen.findByRole('progressbar');
+    await waitFor(() => expect(document.activeElement).toBe(progress));
+    expect(view.container.contains(document.activeElement)).toBe(true);
+    expect(screen.queryByRole('button', { name: 'Previous stage' })).toBeNull();
+  });
+
   it.each([
     ['cancelled', 'Import cancelled', undefined],
     ['failed', 'Import failed', 'Canonical write failed.'],

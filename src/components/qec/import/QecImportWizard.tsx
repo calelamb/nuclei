@@ -23,7 +23,7 @@ import { ICON_SIZE, ICON_STROKE } from '../../../styles/tokens';
 import './qecImportWizard.css';
 
 import type { QecImportClient as ClientContract } from '../../../services/qecDataClient';
-import { useQecJobStore } from '../../../stores/qecJobStore';
+import { useQecJobStore, type QecJobRecord } from '../../../stores/qecJobStore';
 import { useResearchSelectionStore } from '../../../stores/researchSelectionStore';
 import type {
   ImportPreviewResult,
@@ -279,7 +279,6 @@ function DestinationStage(props: DestinationStageProps): ReactElement {
 function ImportStage({ source, client }: { source: string; client: QecImportClient }): ReactElement {
   const jobs = useQecJobStore((state) => state.jobs);
   const job = Object.values(jobs).reverse().find((candidate) => candidate.source === source);
-  const cancelJob = useQecJobStore((state) => state.cancelJob);
   const error = useQecJobStore((state) => state.launchError);
   if (!job) return error
     ? <InlineError message={error} />
@@ -287,7 +286,15 @@ function ImportStage({ source, client }: { source: string; client: QecImportClie
   if (job.status === 'complete') return <div className="qec-import-success" role="status"><CheckCircle2 aria-hidden="true" size={20} /><div><strong>{countLabel(job.recordsWritten ?? 0, 'record')} written</strong><span>{countLabel(job.partitionsWritten ?? 0, 'canonical partition')} · Original preserved</span></div></div>;
   if (job.status === 'cancelled') return <div className="qec-import-notice qec-import-terminal" role="status"><Circle aria-hidden="true" size={20} /><div><strong>Import cancelled</strong><span>Canonical writing stopped; the original source remains preserved.</span></div></div>;
   if (job.status === 'failed') return <div className="qec-import-error qec-import-terminal" role="alert"><AlertCircle aria-hidden="true" size={20} /><div><strong>Import failed</strong><span>{job.error ?? error ?? 'Canonical data was not completed.'}</span></div></div>;
-  return <div className="qec-import-progress" role="progressbar" aria-label="QEC data import" aria-valuetext={job.message}><LoaderCircle aria-hidden="true" size={16} /><strong>{job.message}</strong><span className="qec-mono">{job.id}</span>{['running', 'starting'].includes(job.status) && <Button size="sm" aria-label={`Cancel import ${job.id}`} onClick={() => void cancelJob(client, job.id)}>Cancel</Button>}</div>;
+  return <ImportProgress job={job} client={client} />;
+}
+
+/** The running row takes focus when it appears: the Import button that had it is gone, and Back is hidden while it runs. */
+function ImportProgress({ job, client }: { job: QecJobRecord; client: QecImportClient }): ReactElement {
+  const cancelJob = useQecJobStore((state) => state.cancelJob);
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => { ref.current?.focus(); }, []);
+  return <div ref={ref} tabIndex={-1} className="qec-import-progress" role="progressbar" aria-label="QEC data import" aria-valuetext={job.message}><LoaderCircle aria-hidden="true" size={16} /><strong>{job.message}</strong><span className="qec-mono">{job.id}</span>{['running', 'starting'].includes(job.status) && <Button size="sm" aria-label={`Cancel import ${job.id}`} onClick={() => void cancelJob(client, job.id)}>Cancel</Button>}</div>;
 }
 
 function nextAllowed(stage: number, probe: ImportProbeResult | null, adapterId: string, mappingReady: boolean, valid: boolean, sessionId: string): boolean {
@@ -433,11 +440,12 @@ function StageContent(props: StageContentProps): ReactElement {
 
 interface WizardFooterProps {
   stage: number; canAdvance: boolean; unavailable: string | null; launching: boolean;
-  finished: boolean; sessionId: string | null;
+  finished: boolean; running: boolean; sessionId: string | null;
   onBack(): void; onNext(): void; onImport(): void; onClose?(): void;
 }
 
 const LAST_STAGE = IMPORT_STAGES.length - 1;
+const RUNNING_STATUSES: ReadonlySet<string> = new Set(['starting', 'running', 'cancelling']);
 
 function FinishedFooter({ sessionId, onClose }: { sessionId: string | null; onClose?(): void }): ReactElement {
   const selectPrimary = useResearchSelectionStore((state) => state.selectPrimary);
@@ -464,7 +472,7 @@ function WizardFooter(props: WizardFooterProps): ReactElement {
   const reason = props.stage === LAST_STAGE ? props.unavailable : null;
   return (
     <footer className="qec-import-wizard__footer">
-      <div className="qec-import-nav"><Button aria-label="Previous stage" disabled={props.stage === 0} onClick={props.onBack} icon={<ArrowLeft aria-hidden="true" size={ICON_SIZE.sm} strokeWidth={ICON_STROKE} />}>Back</Button></div>
+      <div className="qec-import-nav">{!props.running && <Button aria-label="Previous stage" disabled={props.stage === 0} onClick={props.onBack} icon={<ArrowLeft aria-hidden="true" size={ICON_SIZE.sm} strokeWidth={ICON_STROKE} />}>Back</Button>}</div>
       <div className="qec-import-commit">
         {reason && <span role="status"><AlertCircle aria-hidden="true" size={14} />Import unavailable: {reason}</span>}
         {/* One primary action per stage: Next while the mapping is being built, Import data only on the last stage. */}
@@ -534,7 +542,7 @@ function QecImportWizardSession({ source, client, onClose, hosted = false }: Qec
           </div>
         </div>
       </div>
-      <WizardFooter stage={stage} canAdvance={nextAllowed(stage, probe.value, editor.adapterId, editor.mappingReady, valid, sessionId)} unavailable={unavailable} launching={launching} finished={finished} sessionId={job?.sessionId ?? (sessionId.trim() || null)} onClose={onClose} onBack={() => setStage((current) => Math.max(0, current - 1))} onNext={() => setStage((current) => Math.min(IMPORT_STAGES.length - 1, current + 1))} onImport={() => void start()} />
+      <WizardFooter stage={stage} canAdvance={nextAllowed(stage, probe.value, editor.adapterId, editor.mappingReady, valid, sessionId)} unavailable={unavailable} launching={launching} finished={finished} running={launching || (job !== null && RUNNING_STATUSES.has(job.status))} sessionId={job?.sessionId ?? (sessionId.trim() || null)} onClose={onClose} onBack={() => setStage((current) => Math.max(0, current - 1))} onNext={() => setStage((current) => Math.min(IMPORT_STAGES.length - 1, current + 1))} onImport={() => void start()} />
     </section>
   );
 }

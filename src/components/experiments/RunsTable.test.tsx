@@ -142,6 +142,12 @@ describe('RunsTable', () => {
     expect(getByText(/select an experiment/i)).toBeTruthy();
   });
 
+  it('draws the compare checkbox with the shared Checkbox, not the OS control (rq-r3-12)', () => {
+    const { container } = render(<RunsTable />);
+    const checkbox = container.querySelector('input[type="checkbox"]') as HTMLInputElement;
+    expect(checkbox.closest('label')?.className).toContain('nuclei-checkbox');
+  });
+
   it('checking a row does not also select it for detail (checkbox click is isolated from row click)', () => {
     const { container } = render(<RunsTable />);
     const checkbox = container.querySelector('input[type="checkbox"]') as HTMLInputElement;

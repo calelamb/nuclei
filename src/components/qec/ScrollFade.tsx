@@ -1,14 +1,27 @@
-import { hasMoreBelow } from '../../lib/scrollMetrics';
+import { hasMoreBelow, hasMoreRight } from '../../lib/scrollMetrics';
 import { useCallback, useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 
 const FADE_PX = 28;
 
-/** Scrollable block that fades its bottom edge while more content is below. */
-export function ScrollFade({ children, style }: { children: ReactNode; style?: CSSProperties }) {
+function hasMoreBeyond(el: HTMLElement): boolean {
+  return el.dataset.axis === 'x' ? hasMoreRight(el) : hasMoreBelow(el);
+}
+
+interface ScrollFadeProps {
+  children: ReactNode;
+  style?: CSSProperties;
+  /** Which edge fades while more content lies beyond it: the bottom (default) or the right. */
+  axis?: 'y' | 'x';
+  /** When set, the scroller is a labelled, focusable region so the keyboard can scroll it. */
+  label?: string;
+}
+
+/** Scrollable block that fades its trailing edge while more content is beyond it. */
+export function ScrollFade({ children, style, axis = 'y', label }: ScrollFadeProps) {
   const ref = useRef<HTMLDivElement>(null);
   const [more, setMore] = useState(false);
   const measure = useCallback(() => {
-    if (ref.current) setMore(hasMoreBelow(ref.current));
+    if (ref.current) setMore(hasMoreBeyond(ref.current));
   }, []);
   useEffect(() => {
     measure();
@@ -18,11 +31,15 @@ export function ScrollFade({ children, style }: { children: ReactNode; style?: C
     ro.observe(el);
     return () => ro.disconnect();
   });
-  const mask = `linear-gradient(to bottom, #000 calc(100% - ${FADE_PX}px), transparent)`;
+  const direction = axis === 'x' ? 'to right' : 'to bottom';
+  const mask = `linear-gradient(${direction}, #000 calc(100% - ${FADE_PX}px), transparent)`;
+  const overflow: CSSProperties = axis === 'x' ? { overflow: 'auto' } : { overflowY: 'auto' };
+  const region = label ? { role: 'region', 'aria-label': label, tabIndex: 0 } : {};
   return (
     <div
-      ref={ref} onScroll={measure} data-more-below={more}
-      style={{ ...style, overflowY: 'auto', ...(more ? { WebkitMaskImage: mask, maskImage: mask } : {}) }}
+      ref={ref} onScroll={measure} data-axis={axis} data-more-below={axis === 'y' ? more : undefined} data-more-right={axis === 'x' ? more : undefined}
+      {...region}
+      style={{ ...style, ...overflow, ...(more ? { WebkitMaskImage: mask, maskImage: mask } : {}) }}
     >
       {children}
     </div>

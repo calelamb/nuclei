@@ -289,13 +289,13 @@
 .qec-source-row {
   display: grid; width: 100%; min-height: 52px; grid-template-columns: 18px minmax(0, 1fr) auto;
   align-items: center; gap: 8px; margin: 2px 0; padding: 7px 8px;
-  border: 1px solid transparent; border-radius: 5px; background: transparent; text-align: left;
+  border: 1px solid transparent; border-radius: var(--radius-soft); background: transparent; text-align: left;
   transition: background-color 160ms ease, border-color 160ms ease;
 }
 
 .qec-source-row-shell {
   position: relative; display: grid; min-width: 0; grid-template-columns: minmax(0, 1fr) auto;
-  margin: 2px 0; overflow: hidden; border: 1px solid transparent; border-radius: 5px;
+  margin: 2px 0; overflow: hidden; border: 1px solid transparent; border-radius: var(--radius-soft);
   transition: background-color 160ms ease, border-color 160ms ease;
 }
 
@@ -390,7 +390,7 @@
 }
 
 .qec-study-errors {
-  margin: 12px 10px; overflow: hidden; border: 1px solid var(--qec-warning-border); border-radius: 6px;
+  margin: 12px 10px; overflow: hidden; border: 1px solid var(--qec-warning-border); border-radius: var(--radius-round);
   background: var(--qec-warning-field);
 }
 
@@ -475,7 +475,7 @@
 
 .qec-instrument {
   position: relative; display: flex; min-width: 0; min-height: 0;
-  flex-direction: column; overflow: hidden; border: 1px solid var(--qec-border); border-radius: 6px;
+  flex-direction: column; overflow: hidden; border: 1px solid var(--qec-border); border-radius: var(--radius-round);
   background: var(--qec-canvas);
 }
 
@@ -494,22 +494,24 @@
 
 .qec-instrument__icon {
   display: grid; width: 28px; height: 28px; flex: 0 0 auto;
-  place-items: center; border: 1px solid var(--qec-selection-strong); border-radius: 4px; background: var(--qec-selection);
+  place-items: center; border: 1px solid var(--qec-selection-strong); border-radius: var(--radius-xs); background: var(--qec-selection);
   color: var(--qec-quantum);
 }
 
 .qec-instrument h2 {
-  display: inline; font-size: var(--font-size-code); font-weight: 600;
+  display: block; min-width: 0; overflow: hidden; font-size: var(--font-size-code); font-weight: 600;
+  text-overflow: ellipsis; white-space: nowrap;
 }
 
-.qec-instrument > header > div { display: flex; flex-wrap: wrap; align-items: baseline; column-gap: 8px; }
+/* A card title is one line: it truncates before it wraps under its own actions. */
+.qec-instrument > header > div { display: flex; flex-wrap: nowrap; align-items: baseline; column-gap: 8px; }
 
 .qec-instrument__context {
   white-space: nowrap; color: var(--qec-text-muted); font-size: var(--font-size-chrome-label);
 }
 
 .qec-instrument__help {
-  display: inline-grid; width: 28px; height: 28px; flex: 0 0 auto; place-items: center; border-radius: 5px;
+  display: inline-grid; width: 28px; height: 28px; flex: 0 0 auto; place-items: center; border-radius: var(--radius-soft);
   color: var(--qec-text-muted); text-decoration: none;
 }
 
@@ -531,7 +533,7 @@
 /* Empty instrument: a neutral dotted field and one sentence, never a data-like shape. */
 .qec-instrument__empty {
   display: flex; min-height: 0; flex: 1; flex-direction: column; align-items: center; justify-content: center;
-  gap: 6px; margin: 10px; padding: 16px; border: 1px dashed var(--qec-border); border-radius: 6px;
+  gap: 6px; margin: 10px; padding: 16px; border: 1px dashed var(--qec-border); border-radius: var(--radius-soft);
   background-image: radial-gradient(var(--qec-border) 1px, transparent 1px); background-size: 14px 14px;
   color: var(--qec-text-muted); text-align: center;
 }
@@ -557,7 +559,7 @@
 }
 
 .qec-inspector__section dl {
-  overflow: hidden; border: 1px solid var(--qec-border); border-radius: 5px; background: var(--qec-canvas);
+  overflow: hidden; border: 1px solid var(--qec-border); border-radius: var(--radius-soft); background: var(--qec-canvas);
 }
 
 .qec-inspector__section dl > div {
@@ -668,8 +670,13 @@
 }
 
 .qec-tray__content {
-  display: flex; min-height: 0; flex: 1; align-items: center;
+  display: flex; min-height: 0; flex: 1; align-items: flex-start;
   justify-content: space-between; gap: 24px; overflow: auto; padding: 18px;
+}
+
+/* Centre children while they fit, but never push the start out of the scroller. */
+.qec-tray__content > * {
+  margin-block: auto;
 }
 
 .qec-tray__empty {
@@ -738,7 +745,7 @@
   }
 
   /* The leading instrument hosts the readable analysis and fills the canvas; an empty one stays a short card. */
-  .qec-investigation__panels > .qec-instrument--primary:not([data-empty='true']) {
+  .qec-investigation__panels > .qec-instrument--primary[data-panel='campaign-center']:not([data-empty='true']) {
     /* A definite height lets the plot inside measure its card and fill it. */
     height: max(520px, calc(100cqh - 24px));
   }
@@ -765,6 +772,55 @@
   min-height: 460px;
 }
 
+/*
+ * With data the leading card sits beside a rail of the other instruments. It keeps a viewport-sized
+ * height and stays pinned while the rail scrolls, so it is never stretched around empty space and
+ * the rail cards keep the width their figures need (the rail is never narrower than 340px).
+ */
+.qec-investigation__panels[data-railed='true'] {
+  grid-template-columns: minmax(0, 1.55fr) minmax(340px, 0.85fr); align-items: start; grid-auto-rows: auto;
+}
+
+.qec-investigation__panels[data-railed='true'] > .qec-instrument--primary {
+  position: sticky; top: 0; max-height: clamp(480px, calc(100cqh - 24px), 820px);
+}
+
+/* The analysis plot fills its card; figures with a natural size (the timeline) keep it and leave no blank field. */
+.qec-investigation__panels[data-railed='true'] > .qec-instrument--primary[data-panel='campaign-center'] {
+  height: clamp(480px, calc(100cqh - 24px), 820px);
+}
+
+.qec-investigation__rail { display: flex; min-width: 0; flex-direction: column; gap: 10px; }
+.qec-investigation__rail > .qec-instrument { flex: none; min-height: 0; }
+
+/* A figure with a natural size gives its card that height whatever the layout: the body never shrinks below its content. */
+.qec-investigation__panels[data-railed='true'] > .qec-instrument--primary:not([data-panel='campaign-center']) > .qec-instrument__body {
+  flex: 1 0 auto;
+}
+
+/* Below ~1080px the rail would be narrower than its figures: stack the instruments instead. */
+@container qec-canvas (max-width: 1079px) {
+  .qec-investigation__panels[data-railed='true'] {
+    grid-template-columns: minmax(0, 1fr); grid-template-rows: none !important; grid-auto-rows: minmax(max-content, auto);
+  }
+
+  .qec-investigation__panels[data-railed='true'] > .qec-instrument--primary {
+    position: static; max-height: none; grid-column: 1 / -1;
+  }
+
+  /* The analysis fills a screen-sized card; a figure with a natural size (the timeline) keeps all of it. */
+  .qec-investigation__panels[data-railed='true'] > .qec-instrument--primary[data-panel='campaign-center'] {
+    height: max(520px, calc(100cqh - 24px));
+  }
+
+  .qec-investigation__panels[data-railed='true'] > .qec-investigation__rail { display: contents; }
+  .qec-investigation__panels[data-railed='true'] .qec-investigation__rail > .qec-instrument { grid-column: 1 / -1; min-height: 260px; }
+}
+
 /* Three empty circuit cards offer one Open button: only the first empty card keeps it. */
 .qec-open-circuit { display: contents; }
-.qec-instrument[data-empty='true'] ~ .qec-instrument[data-empty='true'] .qec-open-circuit { display: none; }
+.qec-instrument[data-circuit][data-empty='true'] ~ .qec-instrument[data-circuit][data-empty='true'] .qec-open-circuit,
+.qec-instrument[data-circuit][data-empty='true'] ~ .qec-instrument[data-circuit][data-empty='true'] [data-hint] { display: none; }
+.qec-instrument__link {
+  padding: 0; border: 0; background: none; color: var(--color-accent-quantum-text); font: inherit; cursor: pointer; text-decoration: underline;
+}

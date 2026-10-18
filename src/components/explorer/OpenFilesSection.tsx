@@ -80,7 +80,7 @@ export function OpenFilesSection() {
         }}
       >
         {collapsed ? <ChevronRight size={12} /> : <ChevronDown size={12} />}
-        <span>Open Files</span>
+        <span>Open files</span>
         <span style={{ color: colors.textDim, fontWeight: 500 }}>({tabs.length})</span>
       </button>
       {!collapsed && (
