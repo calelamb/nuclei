@@ -32,7 +32,7 @@ describe('QecTrayJobCard (rq-r3-01)', () => {
     expect(head.contains(screen.getByRole('button', { name: /^Cancel import/ }))).toBe(true);
     expect(screen.getByText(JOB.id.slice(0, 8)).getAttribute('title')).toBe(JOB.id);
     expect(screen.queryByText(JOB.id)).toBeNull();
-    expect(screen.getByRole('button', { name: 'Copy job id' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: /^Copy job id / })).toBeTruthy();
   });
 
   it('writes the kind and status in plain words', () => {
@@ -52,5 +52,19 @@ describe('QecTrayJobCard (rq-r3-01)', () => {
   it('says Pending until size and hash are known', () => {
     render(<ul><QecTrayJobCard job={{ ...JOB, sourceByteSize: null, sourceHash: null }} client={null} onCancel={() => undefined} /></ul>);
     expect(screen.getAllByText('Pending').length).toBeGreaterThanOrEqual(2);
+  });
+});
+
+describe('QecTrayJobCard copy buttons', () => {
+  it('names each copy-job-id button after its job so several cards stay distinguishable', () => {
+    const other: QecJobRecord = { ...JOB, id: 'ffff1111-aaaa-bbbb-cccc-1234567890ab' };
+    render(<ul><QecTrayJobCard job={JOB} client={null} onCancel={() => undefined} /><QecTrayJobCard job={other} client={null} onCancel={() => undefined} /></ul>);
+    expect(screen.getByRole('button', { name: 'Copy job id 0b6c1f3e' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Copy job id ffff1111' })).toBeTruthy();
+  });
+
+  it('keeps the lead row top-aligned in the tray', () => {
+    const css = readFileSync('src/components/qec/workbench/qecWorkbench.css', 'utf8');
+    expect(css).toMatch(/\.qec-tray__content > \.qec-tray__lead \{ margin-block: 0 auto; \}/);
   });
 });

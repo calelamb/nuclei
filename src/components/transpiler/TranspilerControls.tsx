@@ -6,7 +6,6 @@ import { useEditorStore } from '../../stores/editorStore';
 import { useHardwareStore } from '../../stores/hardwareStore';
 import { useTranspileStore, SIMULATOR_TARGET_ID } from '../../stores/transpileStore';
 import { requestTranspile } from '../../lib/transpileSender';
-import { DesktopOnlyState } from '../hardware/DesktopOnlyState';
 import { isWebBuild } from '../../platform/buildTarget';
 import { ConnectivityMap } from '../hardware/ConnectivityMap';
 import { resolveTargetRequest } from './transpileMath';
@@ -55,11 +54,14 @@ export function TranspilerControls() {
     fontFamily: TYPOGRAPHY.fontSans, color: colors.text,
   };
 
+  // The main area already explains this with a Download action; the sidebar stays a quiet pointer, not a second card.
   if (desktopOnly) {
     return (
-      <DesktopOnlyState title="Transpiling needs the desktop app">
-        Qiskit's pass manager runs in the local kernel.
-      </DesktopOnlyState>
+      <div style={shell}>
+        <span style={{ fontSize: 12, color: colors.textMuted, lineHeight: 1.5 }}>
+          Transpiling runs in the desktop app.
+        </span>
+      </div>
     );
   }
 

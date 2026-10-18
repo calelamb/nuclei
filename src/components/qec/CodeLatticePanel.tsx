@@ -76,7 +76,7 @@ export function CodeLatticePanel({ embedded = false }: { embedded?: boolean } = 
                 <line
                   key={`${e.from}-${e.to}`}
                   x1={percent(from.x)} y1={percent(from.y)} x2={percent(to.x)} y2={percent(to.y)}
-                  stroke={colors.border} strokeWidth={1} vectorEffect="non-scaling-stroke"
+                  stroke={colors.textDim} strokeOpacity={0.55} strokeWidth={1} vectorEffect="non-scaling-stroke"
                 />
               );
             })}
@@ -96,8 +96,8 @@ export function CodeLatticePanel({ embedded = false }: { embedded?: boolean } = 
                   width: NODE_PX, height: NODE_PX, transform: 'translate(-50%, -50%)', boxSizing: 'border-box',
                   borderRadius: isMeasure ? 3 : '50%',
                   background: isMeasure ? `color-mix(in srgb, ${tint} ${isActive ? 75 : 35}%, ${colors.bg})` : colors.bgElevated,
-                  border: `1.5px solid ${isActive ? colors.accent : isMeasure ? tint : colors.textDim}`,
-                  boxShadow: isActive ? `0 0 0 2px color-mix(in srgb, ${colors.accent} 35%, transparent)` : undefined,
+                  border: `1.5px solid ${isActive ? colors.text : isMeasure ? tint : colors.textDim}`,
+                  boxShadow: isActive ? `0 0 0 2px color-mix(in srgb, ${colors.text} 30%, transparent)` : undefined,
                 }}
               />
             );
@@ -122,7 +122,7 @@ export function CodeLatticePanel({ embedded = false }: { embedded?: boolean } = 
           <span style={{ color: colors.textDim }}>● data</span>
           <span style={{ color: colors.basisX }}>■ X</span>
           <span style={{ color: colors.basisZ }}>■ Z</span>
-          <span style={{ color: colors.accentText }}>◎ active this tick</span>
+          <span style={{ color: colors.text }}>◎ active this tick</span>
         </span>
       </div>
     </div>

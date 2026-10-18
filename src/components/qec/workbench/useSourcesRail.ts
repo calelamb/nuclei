@@ -1,12 +1,9 @@
 import { useCallback, useEffect, useState } from 'react';
-import { isWebBuild } from '../../../platform/buildTarget';
 
 /** Below this viewport width the canvas needs the room more than the file list does. */
 export const SOURCES_RAIL_QUERY = '(max-width: 999px)';
 
-/** The web build has no project folder, so the panel only holds a sentence: it starts and stays folded to the rail. */
 function initiallyCollapsed(): boolean {
-  if (isWebBuild()) return true;
   try {
     return typeof window.matchMedia === 'function' && window.matchMedia(SOURCES_RAIL_QUERY).matches;
   } catch {
@@ -25,7 +22,7 @@ export function useSourcesRail(): { collapsed: boolean; toggle: () => void } {
     if (typeof window.matchMedia !== 'function') return undefined;
     const query = window.matchMedia(SOURCES_RAIL_QUERY);
     if (typeof query.addEventListener !== 'function') return undefined;
-    const onChange = (event: MediaQueryListEvent): void => setCollapsed(isWebBuild() || event.matches);
+    const onChange = (event: MediaQueryListEvent): void => setCollapsed(event.matches);
     query.addEventListener('change', onChange);
     return () => query.removeEventListener('change', onChange);
   }, []);

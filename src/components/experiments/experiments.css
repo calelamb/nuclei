@@ -66,7 +66,11 @@
 .nuclei-runs-header__sticky, .nuclei-runs-row__check, .nuclei-runs-row__run { position: sticky; z-index: 1; background: var(--color-surface-base); }
 .nuclei-runs-header__sticky { background: var(--color-surface-sunken); z-index: 4; }
 .nuclei-runs-header__sticky--check, .nuclei-runs-row__check { left: 0; }
-.nuclei-runs-header__sticky--run, .nuclei-runs-row__run { left: 32px; box-shadow: 1px 0 0 var(--color-border-subtle); }
+.nuclei-runs-header__sticky--run, .nuclei-runs-row__run {
+  left: 32px;
+  /* Hairline plus a soft right-edge shadow so scrolled columns visibly slide under the frozen Run column. */
+  box-shadow: 1px 0 0 var(--color-border-subtle), 6px 0 8px -6px color-mix(in srgb, var(--color-text-primary) 28%, transparent);
+}
 
 .nuclei-runs-row {
   position: absolute; left: 0; right: 0; display: grid; align-items: stretch; cursor: pointer;

@@ -1,13 +1,13 @@
 import { Check, Copy, LoaderCircle } from 'lucide-react';
-import { useState, type ReactElement } from 'react';
+import type { ReactElement } from 'react';
 
 import type { QecImportClient } from '../../../services/qecDataClient';
 import type { QecJobRecord } from '../../../stores/qecJobStore';
 import { ICON_SIZE, ICON_STROKE } from '../../../styles/tokens';
 import { Button, IconButton } from '../../ui';
 import { formatByteSize, shortHash } from './formatBytes';
+import { useCopied } from './useCopied';
 
-const COPIED_RESET_MS = 1500;
 /** Job ids are UUIDs; eight characters tell jobs apart and the full id stays in the tooltip and copy. */
 const SHORT_ID_LENGTH = 8;
 const ACTIVE_STATUSES: ReadonlySet<string> = new Set(['running', 'starting']);
@@ -20,27 +20,22 @@ function Field({ label, children }: { label: string; children: ReactElement | st
   return <div><dt>{label}</dt><dd className="qec-mono">{children}</dd></div>;
 }
 
+function CopyIcon({ copied }: { copied: boolean }): ReactElement {
+  return copied
+    ? <Check aria-hidden="true" size={ICON_SIZE.xs} strokeWidth={ICON_STROKE} />
+    : <Copy aria-hidden="true" size={ICON_SIZE.xs} strokeWidth={ICON_STROKE} />;
+}
+
 function HashField({ hash }: { hash: string | null | undefined }): ReactElement {
-  const [copied, setCopied] = useState(false);
+  const { copied, copy } = useCopied(hash ?? '');
   if (!hash) return <Field label="Hash">Pending</Field>;
-  const copy = (): void => {
-    void navigator.clipboard?.writeText(hash).then(
-      () => {
-        setCopied(true);
-        window.setTimeout(() => setCopied(false), COPIED_RESET_MS);
-      },
-      () => setCopied(false),
-    );
-  };
   return (
     <div>
       <dt>Hash</dt>
       <dd className="qec-mono qec-tray__hash">
         <span>{shortHash(hash)}</span>
         <IconButton size="sm" aria-label="Copy source hash" tooltip={{ label: copied ? 'Copied' : 'Copy full hash' }} onClick={copy}>
-          {copied
-            ? <Check aria-hidden="true" size={ICON_SIZE.xs} strokeWidth={ICON_STROKE} />
-            : <Copy aria-hidden="true" size={ICON_SIZE.xs} strokeWidth={ICON_STROKE} />}
+          <CopyIcon copied={copied} />
         </IconButton>
       </dd>
     </div>
@@ -48,23 +43,13 @@ function HashField({ hash }: { hash: string | null | undefined }): ReactElement 
 }
 
 function CopyJobId({ id }: { id: string }): ReactElement {
-  const [copied, setCopied] = useState(false);
-  const copy = (): void => {
-    void navigator.clipboard?.writeText(id).then(
-      () => {
-        setCopied(true);
-        window.setTimeout(() => setCopied(false), COPIED_RESET_MS);
-      },
-      () => setCopied(false),
-    );
-  };
+  const { copied, copy } = useCopied(id);
+  const short = id.slice(0, SHORT_ID_LENGTH);
   return (
     <>
-      <span className="qec-mono" title={id}>{id.slice(0, SHORT_ID_LENGTH)}</span>
-      <IconButton size="sm" aria-label="Copy job id" tooltip={{ label: copied ? 'Copied' : 'Copy full job id' }} onClick={copy}>
-        {copied
-          ? <Check aria-hidden="true" size={ICON_SIZE.xs} strokeWidth={ICON_STROKE} />
-          : <Copy aria-hidden="true" size={ICON_SIZE.xs} strokeWidth={ICON_STROKE} />}
+      <span className="qec-mono" title={id}>{short}</span>
+      <IconButton size="sm" aria-label={`Copy job id ${short}`} tooltip={{ label: copied ? 'Copied' : 'Copy full job id' }} onClick={copy}>
+        <CopyIcon copied={copied} />
       </IconButton>
     </>
   );
