@@ -14,9 +14,13 @@ Verdict and honesty rules:
 * ``refuted``: at least one circuit violates it. Each violator is a
   counterexample with its family parameters, regenerable seed and IR JSON. A
   counterexample stands even if a budget later ran out, because the violation
-  is already established by rigorous intervals.
+  already holds under the most favorable reading of the data. The per-point
+  Pauli-propagation intervals are rigorous truncation bounds, but the beta
+  interval is a bootstrap estimate from 4 to 8 points (widened to the point-interval
+  extremes), so a counterexample is strong evidence, not a proof.
 * ``inconclusive``: anything else: indeterminate circuits, a family that cannot
-  realize the predicate, or a time-budget overrun (reported with the partial
+  realize the predicate or N *distinct* members (circuits are deduplicated by IR hash),
+  or a time-budget overrun (reported with the partial
   evidence collected so far).
 
 Features used for the predicate are measured at the largest tested n. Wall
@@ -39,7 +43,7 @@ from kernel.discovery.conjecture.spec import prediction_text, qubit_counts, vali
 from kernel.discovery.features import extract_features
 from kernel.trainability._analysis_common import AnalysisCancelled, AnalysisError
 from kernel.trainability.analyses import gradient_statistics
-from kernel.trainability.ir import IrError, ParamCircuit
+from kernel.trainability.ir import IrError, ParamCircuit, ir_hash
 from kernel.trainability.lie import lie_algebra
 from kernel.trainability.pauliprop import ppe_applicable, ppe_gradient_variances
 from kernel.trainability.scaling import fit_scaling
@@ -83,7 +87,10 @@ def _ppe_point(circuit: ParamCircuit, obs, n: int, budget: float, cancel) -> dic
                                  time_budget_s=max(budget, 0.01), cancel=cancel)
     if res["status"] == "cancelled":
         raise AnalysisCancelled()
-    variance, interval = float(res["variance_mean"]), [float(x) for x in res["variance_mean_interval"]]
+    # variance_mean is None when the PPE did not resolve the point (timeout or uninformative interval): the
+    # point keeps its truncation interval and is "loose", never a midpoint.
+    variance = None if res["variance_mean"] is None else float(res["variance_mean"])
+    interval = [float(x) for x in res["variance_mean_interval"]]
     return {"n_qubits": n, "n_params": len(circuit.parameters), "variance": variance, "interval": interval,
             "method": "ppe", "status": res["status"], "loose": point_is_loose(variance, interval, res["status"]),
             "frontier_peak": res.get("frontier_peak"), "error": None}
@@ -149,6 +156,27 @@ def _ir_for(family, n_range, seed, variant) -> tuple[dict[str, Any], int]:
     return circuit.to_json(), circuit.n_qubits
 
 
+def _beta_interval(fit: dict | None, good: list[dict]) -> tuple[list[float] | None, list[float] | None]:
+    """``(beta interval used for decisions, interval-extremes secant)`` (PH-M1).
+
+    The fit's own interval is a parametric bootstrap from the point intervals.  For Pauli-propagation points
+    with a nonzero truncation interval it is additionally widened to the extremes, as the frontier's
+    ``_secant`` does: slope from the smallest-n upper bound to the largest-n lower bound and vice versa.
+    """
+    exp = (fit or {}).get("exponential")
+    if not exp:
+        return None, None
+    own = list(exp["beta_ci95"])
+    bounded = [p for p in good if p["method"] == "ppe" and p["interval"][1] > p["interval"][0]]
+    if not bounded or any(p["interval"][0] <= 0 for p in good):
+        return own, None
+    first, last = min(good, key=lambda p: p["n_qubits"]), max(good, key=lambda p: p["n_qubits"])
+    span = float(last["n_qubits"] - first["n_qubits"])
+    low = (math.log2(first["interval"][0]) - math.log2(last["interval"][1])) / span
+    high = (math.log2(first["interval"][1]) - math.log2(last["interval"][0])) / span
+    return [min(own[0], low), max(own[1], high)], [low, high]
+
+
 def _evaluate_circuit(conj, ns, seed, variant, info, features, index, budget: _Budget, cancel,
                       progress: Progress | None) -> dict[str, Any]:
     family, prediction = conj["test_family"], conj["prediction"]
@@ -169,9 +197,11 @@ def _evaluate_circuit(conj, ns, seed, variant, info, features, index, budget: _B
     dla = None
     if prediction["quantity"] == "log2_dla_dimension" and not timed_out:
         dla = _dla(family, conj["dla_probe_qubits"], seed, variant, budget, cancel)
+    beta_ci, beta_extremes = _beta_interval(fit, good)
     observed = {
-        "beta_ci95": (fit or {}).get("exponential", {}) and fit["exponential"]["beta_ci95"] or None,
+        "beta_ci95": beta_ci, "beta_extremes": beta_extremes,
         "fit_verdict": fit["verdict"] if fit else None, "fit_summary": fit["summary"] if fit else None,
+        "fit_verdict_basis": (fit or {}).get("verdict_basis"),
         "max_n_interval": next((p["interval"] for p in good if p["n_qubits"] == ns[-1]), None),
         "log2_dla_interval": dla["log2_interval"] if dla else None, "max_n": ns[-1],
         "loose_points": [p["n_qubits"] for p in good if p["loose"]],
@@ -190,21 +220,33 @@ def _evaluate_circuit(conj, ns, seed, variant, info, features, index, budget: _B
 
 
 def _select_circuits(conj, seed, cancel) -> tuple[list[tuple[int, dict, dict]], dict[str, Any]]:
-    """Resample family members until ``circuits`` satisfy the predicate (or the cap is hit)."""
+    """Resample family members until ``circuits`` *distinct* ones satisfy the predicate (or the cap is hit).
+
+    Members are deduplicated by IR hash at the largest ``n``: a small family can repeat the same circuit under
+    different variant indices (the default family realized only 8 distinct circuits in 32 draws), and counting
+    repeats as independent held-out circuits would overstate the evidence.
+    """
     family, n_max = conj["test_family"], conj["n_range"][1]
     cap = max(40, conj["circuits"] * RESAMPLE_FACTOR)
     chosen: list[tuple[int, dict, dict]] = []
-    rejected = attempts = 0
+    seen: set[str] = set()
+    rejected = duplicates = attempts = 0
     while len(chosen) < conj["circuits"] and attempts < cap:
         _check(cancel)
         circuit, info = build_variant(family, n_max, seed, attempts)
-        features = extract_features(circuit, n_layers=info["layers"])
-        if pred.evaluate(conj["feature_predicate"], features):
-            chosen.append((attempts, info, features))
+        digest = ir_hash(circuit)
+        if digest in seen:
+            duplicates += 1
         else:
-            rejected += 1
+            seen.add(digest)
+            features = extract_features(circuit, n_layers=info["layers"])
+            if pred.evaluate(conj["feature_predicate"], features):
+                chosen.append((attempts, {**info, "ir_hash": digest}, features))
+            else:
+                rejected += 1
         attempts += 1
-    return chosen, {"attempts": attempts, "accepted": len(chosen), "rejected": rejected, "cap": cap}
+    return chosen, {"attempts": attempts, "accepted": len(chosen), "rejected": rejected, "cap": cap,
+                    "duplicates": duplicates, "distinct": len(seen)}
 
 
 def tested_n_max(conj: dict[str, Any], evidence: list[dict[str, Any]]) -> int:
@@ -281,6 +323,17 @@ def partial_result(conjecture: dict[str, Any], evidence: list[dict[str, Any]], r
                            elapsed_ms=elapsed_ms)
 
 
+def _unrealizable_reason(conj: dict[str, Any], found: int, resampling: dict[str, Any]) -> str:
+    base = (f"{found} of {conj['circuits']} distinct circuits satisfied the predicate in "
+            f"{resampling['attempts']} draws")
+    if resampling["duplicates"] and not resampling["rejected"]:
+        return (f"family does not realize {conj['circuits']} distinct members: it realizes only "
+                f"{resampling['distinct']} distinct circuits ({resampling['duplicates']} repeats in "
+                f"{resampling['attempts']} draws)")
+    extra = f" ({resampling['duplicates']} repeated circuits were discarded)" if resampling["duplicates"] else ""
+    return f"{UNREALIZABLE}: {base}{extra}"
+
+
 def test_conjecture(
     conjecture: dict[str, Any], *, seed: int = 0, progress: Progress | None = None,
     cancel: Callable[[], bool] | None = None, on_evidence: Callable[[dict], None] | None = None,
@@ -309,8 +362,7 @@ def test_conjecture(
     if len(chosen) < conj["circuits"]:
         return assemble_result(
             conj, [], seed=seed, ns=ns, resampling=resampling, elapsed_ms=elapsed(),
-            stop_reason=f"{UNREALIZABLE}: {len(chosen)} of {conj['circuits']} circuits satisfied it in "
-                        f"{resampling['attempts']} draws")
+            stop_reason=_unrealizable_reason(conj, len(chosen), resampling))
     evidence: list[dict[str, Any]] = []
     stop_reason = None
     for index, (variant, info, features) in enumerate(chosen):

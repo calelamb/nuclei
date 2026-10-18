@@ -5,7 +5,15 @@ circuits from it at random *within the family's degrees of freedom*: the layer
 count within its range, the axis order inside each layer, which bonds start a
 brick, optional random single-qubit Clifford dressings, and (for
 ``"random_subset"``) the set of rotation axes. The circuits are therefore
-held out: they are new draws, never copies of archive elites.
+held out in the sense that they are fresh draws from a parametric family (distinct by IR hash,
+see ``tester._select_circuits``); they are *not* compared against archive elites.
+
+Axes actually applied: per layer, ``rotations_per_qubit_per_layer`` rotations are placed on each qubit,
+cycling through that layer's shuffled axis order.  With ``rotations_per_qubit_per_layer = 1`` only the
+first axis of each layer's order is applied, so a family listing ``["Y", "Z"]`` yields layers that are
+RY-only or RZ-only.  ``family_params["rotation_axes"]`` therefore reports the axes *actually applied*
+(``rotation_axes_listed`` keeps the family's list, ``axes_applied_per_layer`` the per-layer sequence);
+it used to echo the listed axes and overstate the family.
 
 Determinism: a circuit is a pure function of ``(family, n, seed, variant)``.
 Structural randomness (layers, axis orders, brick start, axis subset) depends
@@ -179,6 +187,8 @@ def build_variant(family: dict[str, Any], n: int, seed: int, variant: int) -> tu
     params: list[str] = []
     dressings = 0
     reps = family["rotations_per_qubit_per_layer"]
+    applied_per_layer = ["".join(order[k % len(order)] for k in range(reps)) for order in st["orders"]]
+    applied = {a for seq in applied_per_layer for a in seq}
     for layer in range(st["layers"]):
         order = st["orders"][layer]
         for q in range(n):
@@ -197,7 +207,8 @@ def build_variant(family: dict[str, Any], n: int, seed: int, variant: int) -> tu
     circuit = ParamCircuit(n, [IrGate(g.name, g.qubits, g.angles, i) for i, g in enumerate(gates)], params, "native")
     info = {
         "variant": variant, "seed": seed, "n_qubits": n, "layers": st["layers"],
-        "rotation_axes": st["axes"], "axis_order_per_layer": ["".join(o) for o in st["orders"]],
+        "rotation_axes": [a for a in st["axes"] if a in applied], "rotation_axes_listed": st["axes"],
+        "axes_applied_per_layer": applied_per_layer, "axis_order_per_layer": ["".join(o) for o in st["orders"]],
         "brick_start": st["brick_start"], "clifford_dressings": dressings,
         "entangler": family["entangler"], "pattern": family["pattern"],
         "rotations_per_qubit_per_layer": reps, "observable": family["observable"],

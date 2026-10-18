@@ -333,3 +333,38 @@ def test_clifford_frame_matches_conjugator():
         got = ("-" if sign < 0 else "") + "".join(
             "IXZY"[((x2 >> q) & 1) | (((z2 >> q) & 1) << 1)] for q in range(n))
         assert got == want
+
+
+# ---- PH-LOW: RZZ/RXX/RYY/RZX at k*pi/2 are Clifford (checked against dense matrices)
+@pytest.mark.parametrize("name", ["RZZ", "RXX", "RYY", "RZX"])
+@pytest.mark.parametrize("k", [-3, -1, 0, 1, 2, 3, 5])
+@pytest.mark.parametrize("qubits", [(0, 1), (1, 0), (2, 0)])
+def test_two_qubit_rotations_at_quarter_turns_are_clifford_and_match_dense(name, k, qubits):
+    from kernel.trainability._symplectic_gates import clifford_sequence
+    theta = k * np.pi / 2
+    steps = clifford_sequence(name, (theta,))
+    assert steps is not None and is_clifford_gate(name, (theta,))
+    n = 3
+    letters = name[1:]
+    p = np.kron(MATS[letters[0]], MATS[letters[1]])
+    rot2 = np.cos(theta / 2) * np.eye(4) - 1j * np.sin(theta / 2) * p
+    # embed the 4x4 rotation on `qubits` (first operand = most significant) via full_dense's convention
+    want = np.zeros((8, 8), complex)
+    for col in range(8):
+        bits = [(col >> (n - 1 - q)) & 1 for q in range(n)]
+        sub = bits[qubits[0]] * 2 + bits[qubits[1]]
+        for row_sub in range(4):
+            amp = rot2[row_sub, sub]
+            out = list(bits)
+            out[qubits[0]], out[qubits[1]] = row_sub >> 1, row_sub & 1
+            want[sum(b << (n - 1 - q) for q, b in enumerate(out)), col] += amp
+    got = np.eye(8, dtype=complex)
+    for nm, loc in steps:
+        got = full_dense(nm, tuple(qubits[i] for i in loc), n) @ got
+    ov = np.trace(got.conj().T @ want) / 8
+    assert abs(abs(ov) - 1) < 1e-9, (name, k, qubits)
+
+
+def test_non_quarter_two_qubit_rotation_is_not_clifford():
+    from kernel.trainability._symplectic_gates import clifford_sequence
+    assert clifford_sequence("RZZ", (0.3,)) is None and not is_clifford_gate("RXX", (np.pi / 4,))

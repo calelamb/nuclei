@@ -15,7 +15,7 @@ from dataclasses import dataclass
 
 from kernel.trainability.gates import GATE_SPECS
 from kernel.trainability.ir import IrGate, ParamCircuit, ParamRef
-from kernel.trainability.symplectic import clifford_decomposition
+from kernel.trainability.symplectic import clifford_decomposition, clifford_sequence
 
 Ops = tuple[tuple[int, str], ...]
 
@@ -53,14 +53,23 @@ def _generator_terms(gate_name: str, qubits: tuple[int, ...]) -> tuple[tuple[flo
     return tuple((float(t.coeff), t.ops) for t in gen.terms if t.ops)
 
 
-def _fixed_for(index: int, name: str, qubits: tuple[int, ...], angles: tuple[float, ...]) -> Item | None:
-    """A constant-angle gate: skipped if trivial, Clifford if a quarter turn, else 'other'."""
+def _fixed_for(index: int, name: str, qubits: tuple[int, ...], angles: tuple[float, ...]) -> list[Item]:
+    """A constant-angle gate: nothing if trivial, Clifford item(s) if a quarter turn, else 'other'.
+
+    Two-qubit rotations at ``kπ/2`` (RZZ/RXX/RYY/RZX) lower to several Clifford items (CX, S, H, ...),
+    each on its own qubit subset."""
     if angles[0] == 0.0 and GATE_SPECS[name].generator is not None:
-        return None  # exp(-i 0 G) = identity
-    names = clifford_decomposition(name, angles)
-    if names is not None:
-        return FixedClifford(index, name, qubits, tuple(names)) if names else None
-    return FixedOther(index, name, qubits, angles)
+        return []  # exp(-i 0 G) = identity
+    steps = clifford_sequence(name, angles)
+    if steps is not None:
+        grouped: list[tuple[tuple[int, ...], list[str]]] = []
+        for nm, loc in steps:                      # merge consecutive steps on the same operands
+            if grouped and grouped[-1][0] == loc:
+                grouped[-1][1].append(nm)
+            else:
+                grouped.append((loc, [nm]))
+        return [FixedClifford(index, name, tuple(qubits[i] for i in loc), tuple(nms)) for loc, nms in grouped]
+    return [FixedOther(index, name, qubits, angles)]
 
 
 def _walk_gate(index: int, g: IrGate) -> list[Item]:
@@ -83,8 +92,7 @@ def _walk_gate(index: int, g: IrGate) -> list[Item]:
 def _one_angle(index: int, name: str, qubits: tuple[int, ...], angle) -> list[Item]:
     if isinstance(angle, ParamRef):
         return [Rotation(index, name, qubits, angle, _generator_terms(name, qubits))]
-    item = _fixed_for(index, name, qubits, (float(angle),))
-    return [item] if item is not None else []
+    return _fixed_for(index, name, qubits, (float(angle),))
 
 
 def walk(circuit: ParamCircuit) -> list[Item]:

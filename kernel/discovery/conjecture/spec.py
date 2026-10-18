@@ -24,13 +24,15 @@ _NUMERIC_OPS = ("<", "<=", ">", ">=")
 #: name -> (allowed ops, value type, description)
 QUANTITIES: dict[str, tuple[tuple[str, ...], str, str]] = {
     "beta_upper95": (_NUMERIC_OPS, "number",
-                     "The 95% confidence interval of the exponential decay rate beta in Var ~ 2^(-beta n), fitted "
-                     "over the tested qubit counts. A circuit meets 'beta_upper95 < c' only if the whole interval "
-                     "lies below c."),
+                     "The 95% interval of the exponential decay rate beta in Var ~ 2^(-beta n), fitted over the "
+                     "tested qubit counts (a parametric bootstrap from the per-point intervals, widened to the "
+                     "interval extremes for Pauli-propagation points; an estimate from 4 to 8 points, not a proof). "
+                     "A circuit meets 'beta_upper95 < c' only if the whole interval lies below c."),
     "verdict": (("==", "!=", "in"), "string",
-                "The scaling-fit verdict: barren_plateau, polynomial or inconclusive."),
+                "The scaling-fit verdict: barren_plateau, polynomial or inconclusive. A 'polynomial' reached only "
+                "through the beta-interval rule is judged indeterminate for this quantity."),
     "variance_at_max_n": (_NUMERIC_OPS, "number",
-                          "Mean gradient variance (with its rigorous interval) at the largest tested qubit count."),
+                          "Mean gradient variance (with its Pauli-propagation truncation or bootstrap interval) at the largest tested qubit count."),
     "log2_dla_dimension": (_NUMERIC_OPS, "number",
                            "log2 of the dynamical Lie algebra dimension at the small probe qubit count."),
 }

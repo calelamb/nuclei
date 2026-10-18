@@ -98,12 +98,13 @@ def test_global_z_brick_is_refuted_with_a_counterexample_near_beta_one():
     claim = conjecture(
         prediction={"quantity": "beta_upper95", "op": "<", "value": 0.1}, n_range=[6, 64], points=5,
         test_family={"rotation_axes": ["Y", "Z"], "entangler": "cz", "pattern": "brick", "brick_start": "even",
-                     "layers": 1, "rotations_per_qubit_per_layer": 2, "observable": "preset:global_z"})
+                     "layers": 1, "rotations_per_qubit_per_layer": 2, "observable": "preset:global_z",
+                     "clifford_dressing": 0.4})        # enough distinct members (PH-H5: repeats are not evidence)
     result = tester.test_conjecture(claim, seed=3)
     assert result["verdict"] == "refuted", result["summary"]
     ce = result["counterexamples"][0]
     lo, hi = ce["quantity"]["observed"]
-    assert lo == pytest.approx(1.0, abs=0.05) and hi == pytest.approx(1.0, abs=0.05)
+    assert 0.9 < lo <= hi < 1.5     # beta ~ 1 per qubit for a global observable
     assert ce["family_params"]["observable"] == "preset:global_z" and ce["regenerate"]["variant"] >= 0
     # The IR is loadable and regenerable from (family, seed, variant).
     circuit = ParamCircuit.from_json(ce["ir"])
@@ -117,7 +118,8 @@ def test_unrealizable_predicate_is_inconclusive():
     result = tester.test_conjecture(claim, seed=1)
     assert result["verdict"] == "inconclusive" and result["evidence"] == []
     assert "family does not realize the predicate" in result["reasons"][0]
-    assert result["resampling"]["accepted"] == 0 and result["resampling"]["rejected"] == result["resampling"]["attempts"]
+    rs = result["resampling"]
+    assert rs["accepted"] == 0 and rs["rejected"] + rs["duplicates"] == rs["attempts"] and rs["rejected"] >= 1
 
 
 def test_predicate_resampling_discards_nonconforming_draws():
@@ -129,14 +131,15 @@ def test_predicate_resampling_discards_nonconforming_draws():
 
 def test_budget_overrun_is_inconclusive_with_partial_evidence():
     claim = conjecture(
-        prediction={"quantity": "beta_upper95", "op": "<", "value": 0.1}, n_range=[8, 48], points=5,
+        prediction={"quantity": "beta_upper95", "op": "<", "value": 5.0}, n_range=[8, 48], points=5,
         test_family={"rotation_axes": ["Y", "Z"], "entangler": "cz", "pattern": "brick", "brick_start": "even",
-                     "layers": 2, "rotations_per_qubit_per_layer": 2, "observable": "preset:global_z"})
+                     "layers": [1, 3], "rotations_per_qubit_per_layer": 2, "observable": "preset:global_z",
+                     "clifford_dressing": 0.4})        # always met, so only the budget can make it inconclusive
     result = tester.test_conjecture(claim, seed=3, total_budget_s=0.05)
     assert result["verdict"] == "inconclusive" and result["partial"] is True
     assert "budget" in result["summary"].lower()
     assert 1 <= len(result["evidence"]) < 5
-    assert result["evidence"][0]["outcome"] == "indeterminate"
+    assert result["evidence"][-1]["outcome"] == "indeterminate" and result["evidence"][-1]["timed_out"]
 
 
 def test_zero_total_budget_tests_nothing_and_says_so():
@@ -188,7 +191,7 @@ def test_sampling_is_used_only_when_the_ppe_does_not_apply_and_n_is_small(monkey
     monkeypatch.setattr(tester, "ppe_applicable", lambda *a, **k: (False, "forced for the test"))
     claim = conjecture(n_range=[4, 12], points=4, circuits=5,
                        test_family={**conjecture()["test_family"], "layers": 1, "rotations_per_qubit_per_layer": 1,
-                                    "rotation_axes": ["Y"]})
+                                    "rotation_axes": ["Y"], "clifford_dressing": 0.5})
     small = tester.test_conjecture(claim, seed=2)
     assert all(p["method"] == "sampling" for e in small["evidence"] for p in e["points"])
     big = tester.test_conjecture({**claim, "n_range": [6, 16]}, seed=2)
@@ -350,3 +353,93 @@ def test_dla_only_prediction_reports_the_probe_n():
     assert result["n_max_planned"] == 8
     failed_dla = _item([4, 8], dla={"probe_n": 3, "log2_interval": None, "error": "boom"})
     assert tester.tested_n_max(claim, [failed_dla]) == 0
+
+
+# ------------------------------------------------ physics review: duplicates, axes, interval propagation
+def _default_family_conjecture(**overrides):
+    always = {"feature": "n_layers", "op": ">=", "value": 1}
+    return conjecture(test_family={}, circuits=32, n_range=[6, 24], points=4, feature_predicate=always, **overrides)
+
+
+def test_default_family_cannot_realize_32_distinct_circuits_and_says_so():
+    """Review PH-H5: the default family gave only 8 distinct circuits out of 32 'held-out' ones."""
+    result = tester.test_conjecture(_default_family_conjecture(), seed=0)
+    assert result["verdict"] == "inconclusive" and result["evidence"] == []
+    rs = result["resampling"]
+    assert rs["duplicates"] > 0 and rs["distinct"] < 32
+    assert "32 distinct members" in result["reasons"][0] and f"only {rs['distinct']} distinct" in result["reasons"][0]
+
+
+def test_selected_circuits_are_pairwise_distinct_by_ir_hash():
+    claim = validate_conjecture(conjecture(circuits=5, n_range=[8, 16], points=4))
+    chosen, rs = tester._select_circuits(claim, seed=2, cancel=None)
+    hashes = [info["ir_hash"] for _, info, _ in chosen]
+    assert len(chosen) == 5 and len(set(hashes)) == 5
+    for (variant, info, _), h in zip(chosen, hashes):
+        circuit, _ = build_variant(claim["test_family"], 16, 2, variant)
+        assert ir_hash(circuit) == h
+
+
+@pytest.mark.parametrize("reps", [1, 2, 3])
+def test_family_params_report_the_axes_actually_applied(reps):
+    """Review PH-H5: with rotations_per_qubit_per_layer = 1 only order[0] is applied but 'YZ' was claimed."""
+    family = validate_family({"rotation_axes": ["Y", "Z"], "layers": [1, 3], "rotations_per_qubit_per_layer": reps})
+    saw_partial = False
+    for variant in range(24):
+        circuit, info = build_variant(family, 4, 1, variant)
+        used = {g.name[1] for g in circuit.gates if g.name.startswith("R")}
+        assert used == set(info["rotation_axes"]), (variant, used, info)
+        assert info["rotation_axes_listed"] == ["Y", "Z"]
+        assert all(len(seq) == reps for seq in info["axes_applied_per_layer"])
+        saw_partial |= len(info["rotation_axes"]) < 2
+    assert saw_partial == (reps == 1)
+
+
+def test_ppe_point_that_did_not_resolve_is_loose_and_the_circuit_is_indeterminate(monkeypatch):
+    real = tester.ppe_gradient_variances
+
+    def unresolved(circuit, obs, **kw):
+        res = real(circuit, obs, **kw)
+        return {**res, "variance_mean": None, "status": "budget_exhausted"}
+
+    monkeypatch.setattr(tester, "ppe_gradient_variances", unresolved)
+    result = tester.test_conjecture(conjecture(n_range=[8, 16], points=4), seed=1)
+    assert result["verdict"] == "inconclusive"
+    for e in result["evidence"]:
+        assert e["outcome"] == "indeterminate" and all(p["variance"] is None and p["loose"] for p in e["points"])
+        assert e["fit"]["verdict"] == "inconclusive" and "null" in e["fit"]["summary"]
+
+
+def test_beta_interval_is_widened_to_the_ppe_interval_extremes():
+    fit = {"exponential": {"beta_ci95": [0.50, 0.52]}}
+    pts = [{"n_qubits": n, "method": "ppe", "interval": [v * 0.7, v * 1.4]}
+           for n, v in ((8, 2.0 ** -4), (16, 2.0 ** -8), (32, 2.0 ** -16))]
+    hull, ext = tester._beta_interval(fit, pts)
+    assert ext[0] < 0.5 and ext[1] > 0.52 and hull == [min(0.50, ext[0]), max(0.52, ext[1])]
+    exact = [{**p, "interval": [p["interval"][0], p["interval"][0]]} for p in pts]
+    assert tester._beta_interval(fit, exact) == ([0.50, 0.52], None)        # exact points add nothing
+
+
+def test_polynomial_verdict_from_the_beta_rule_alone_is_indeterminate_for_verdict_predictions():
+    pred = {"quantity": "verdict", "op": "==", "value": "polynomial"}
+    weak = {"fit_verdict": "polynomial", "fit_verdict_basis": "beta_upper", "beta_ci95": [0.0, 0.05]}
+    out, _, why = semantics.evaluate_prediction(pred, weak)
+    assert out == "indeterminate" and "beta interval alone" in why
+    for op, value in (("!=", "polynomial"), ("==", "barren_plateau")):
+        assert semantics.evaluate_prediction({**pred, "op": op, "value": value}, weak)[0] == "indeterminate"
+    strong = {**weak, "fit_verdict_basis": "aic_power_law"}
+    assert semantics.evaluate_prediction(pred, strong)[0] == "meets"
+
+
+def test_barren_plateau_verdict_not_robust_to_point_intervals_is_indeterminate():
+    pred = {"quantity": "verdict", "op": "==", "value": "barren_plateau"}
+    robust = {"fit_verdict": "barren_plateau", "fit_verdict_basis": "aic_beta_lower", "beta_ci95": [0.9, 1.1]}
+    assert semantics.evaluate_prediction(pred, robust)[0] == "meets"
+    fragile = {**robust, "beta_ci95": [0.05, 1.1]}
+    assert semantics.evaluate_prediction(pred, fragile)[0] == "indeterminate"
+
+
+def test_summaries_do_not_overclaim():
+    result = tester.test_conjecture(conjecture(), seed=3)
+    text = (result["summary"] + tester.__doc__).lower()
+    assert "rigorous" not in text.replace("rigorous truncation bounds", "") and "proven" not in result["summary"].lower()
