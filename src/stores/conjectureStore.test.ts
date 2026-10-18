@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ConjectureEnv } from '../services/conjecture/env';
 import { fixtureConjecture, fixtureResult, frontierFixture, FIXTURE_SCHEMA_REPLY, FRONTIER_RUN_ID } from '../services/conjecture/fixtures';
 import type { ConjectureProposer, ProposeResult } from '../services/conjecture/proposer';
@@ -55,6 +55,45 @@ const run = () => useConjectureStore.getState().byRun[FRONTIER_RUN_ID];
 const LEDGER = '/proj/experiments/w-state-synthesis/discovery/' + FRONTIER_RUN_ID + '/conjectures.json';
 
 beforeEach(() => useConjectureStore.getState().reset());
+
+describe('conjectureStore.propose abort (CR-H6)', () => {
+  it('cancelPropose aborts the request and clears proposing without an error banner', async () => {
+    const h = boot();
+    let signal: AbortSignal | undefined;
+    const proposer: ConjectureProposer = {
+      hasKey: () => true,
+      propose: (_input, s) => new Promise((resolve) => {
+        signal = s;
+        s?.addEventListener('abort', () => resolve({ ok: false, code: 'aborted', message: 'The request was cancelled.', usage: null, prompt_sha256: null }));
+      }),
+    };
+    useConjectureStore.getState().configure({
+      fs: h.fs, join: platformJoin, hash, now: () => NOW, proposer, openSession: async () => h.session,
+    });
+    const pending = useConjectureStore.getState().propose(FRONTIER_RUN_ID);
+    await vi.waitFor(() => expect(signal).toBeDefined());
+    expect(run().proposing).toBe(true);
+    useConjectureStore.getState().cancelPropose(FRONTIER_RUN_ID);
+    expect(run().proposing).toBe(false);
+    const res = await pending;
+    expect(res.ok).toBe(false);
+    expect(signal?.aborted).toBe(true);
+    expect(run().proposing).toBe(false);
+    expect(run().proposeError).toBeNull();
+  });
+
+  it('a timeout failure clears proposing and shows the error', async () => {
+    const h = boot();
+    const proposer: ConjectureProposer = {
+      hasKey: () => true,
+      propose: async () => ({ ok: false, code: 'timeout', message: 'Anthropic did not answer', usage: null, prompt_sha256: null }),
+    };
+    useConjectureStore.getState().configure({ fs: h.fs, join: platformJoin, hash, now: () => NOW, proposer, openSession: async () => h.session });
+    await useConjectureStore.getState().propose(FRONTIER_RUN_ID);
+    expect(run().proposing).toBe(false);
+    expect(run().proposeError?.code).toBe('timeout');
+  });
+});
 
 describe('conjectureStore.propose', () => {
   it('adds drafts with proposer metadata and caches the kernel schema', async () => {

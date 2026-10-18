@@ -220,3 +220,55 @@ describe('batch mode', () => {
     expect(await mutator(bad as unknown as typeof fetch, null).submitBatch(items)).toMatchObject({ ok: false });
   });
 });
+
+describe('timeouts and abort (CR-H6)', () => {
+  /** A fetch that only ever ends when its signal aborts, like a stalled connection. */
+  const hanging = vi.fn((_url: string, init?: RequestInit) =>
+    new Promise<Response>((_resolve, reject) => {
+      init?.signal?.addEventListener('abort', () => reject(new DOMException('Aborted', 'AbortError')));
+    }));
+
+  it('passes a signal to fetch and fails with a typed timeout instead of hanging', async () => {
+    const llm = createLlmMutator({ getApiKey: () => 'k', hash: testHash, fetch: hanging as unknown as typeof fetch, requestTimeoutMs: 20 });
+    const res = await llm.propose(input());
+    expect(res).toMatchObject({ ok: false, code: 'timeout' });
+    expect(hanging.mock.calls[0][1]?.signal).toBeInstanceOf(AbortSignal);
+  });
+
+  it('aborts an in-flight proposal when the run signal fires', async () => {
+    const llm = createLlmMutator({ getApiKey: () => 'k', hash: testHash, fetch: hanging as unknown as typeof fetch, requestTimeoutMs: 60_000 });
+    const controller = new AbortController();
+    const pending = llm.propose(input(), controller.signal);
+    setTimeout(() => controller.abort(), 10);
+    expect(await pending).toMatchObject({ ok: false, code: 'aborted' });
+  });
+
+  it('does not call fetch when already aborted', async () => {
+    const f = vi.fn();
+    const llm = createLlmMutator({ getApiKey: () => 'k', hash: testHash, fetch: f as unknown as typeof fetch });
+    const controller = new AbortController();
+    controller.abort();
+    expect(await llm.propose(input(), controller.signal)).toMatchObject({ ok: false, code: 'aborted' });
+    expect(f).not.toHaveBeenCalled();
+  });
+
+  it('times out and aborts the batch calls as data', async () => {
+    const llm = createLlmMutator({ getApiKey: () => 'k', hash: testHash, fetch: hanging as unknown as typeof fetch, batchTimeoutMs: 20 });
+    expect(await llm.submitBatch([{ customId: 'a', input: input() }])).toMatchObject({ ok: false, message: expect.stringMatching(/did not answer/) });
+    expect(await llm.pollBatch('b')).toMatchObject({ state: 'error' });
+    await expect(llm.batchResults('b')).rejects.toThrow(/did not answer/);
+    const controller = new AbortController();
+    const pending = llm.pollBatch('b', controller.signal);
+    controller.abort();
+    expect(await pending).toMatchObject({ state: 'error', message: 'The request was cancelled.' });
+  });
+
+  it('counts a thinking retry as two API calls', async () => {
+    const replies = [message([{ type: 'text', text: 'hm' }]), message([toolUse(goodTool)])];
+    const f = vi.fn(async () => jsonResponse(replies.shift()));
+    const res = await mutator(f as unknown as typeof fetch).propose(input({ tier: 'opus', depth: true, thinking: true }));
+    expect(res.api_calls).toBe(2);
+    const single = await mutator((async () => jsonResponse(message([toolUse(goodTool)]))) as unknown as typeof fetch).propose(input());
+    expect(single.api_calls).toBe(1);
+  });
+});

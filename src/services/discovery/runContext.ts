@@ -106,6 +106,8 @@ export interface RunContext {
   /** Non-null only in Red Queen mode. Replaced, never mutated in place. */
   rq: RedQueenState | null;
   control: RunControl;
+  /** Aborted when the run stops or ends fatally: cancels in-flight LLM requests. */
+  signal: AbortSignal;
   system: SystemBlock[];
   candidates: Map<string, CandidateRecord>;
   seenHashes: Map<string, string>;

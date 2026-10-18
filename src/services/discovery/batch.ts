@@ -25,7 +25,7 @@ export async function submitBatch(
     const hash = await ctx.deps.hash(JSON.stringify({ model, thinking: item.depth && item.thinking, system: input.system, user: input.user }));
     prepared.push({ item, input, hash });
   }
-  const res = await ctx.deps.llm.submitBatch(prepared.map((p) => ({ customId: p.item.candidateId, input: p.input })));
+  const res = await ctx.deps.llm.submitBatch(prepared.map((p) => ({ customId: p.item.candidateId, input: p.input })), ctx.signal);
   if (!res.ok) return res;
   return {
     ok: true,
@@ -35,6 +35,14 @@ export async function submitBatch(
       items: prepared.map((p) => toPendingBatchItem(p.item, { promptSha256: p.hash, model: TIER_MODEL_IDS[p.item.tier] })),
     },
   };
+}
+
+/** Resolves when the signal aborts (never, for a run that is not stopped). */
+function whenAborted(signal: AbortSignal): Promise<void> {
+  return new Promise((resolve) => {
+    if (signal.aborted) resolve();
+    else signal.addEventListener('abort', () => resolve(), { once: true });
+  });
 }
 
 function missing(message: string): LlmResult {
@@ -50,18 +58,19 @@ export async function awaitBatch(
   for (;;) {
     if (ctx.control.stopped) return 'interrupted';
     await ctx.control.gate();
-    const poll = await ctx.deps.llm.pollBatch(pending.batch_id);
+    const poll = await ctx.deps.llm.pollBatch(pending.batch_id, ctx.signal);
+    if (ctx.control.stopped) return 'interrupted';
     if (poll.state === 'ended') break;
     if (poll.state === 'error') {
       errors += 1;
       ctx.notice(`Batch poll error: ${poll.message}`);
       if (errors >= MAX_POLL_ERRORS) return Object.fromEntries(pending.items.map((i) => [i.candidate_id, missing(`Batch polling failed: ${poll.message}`)]));
     }
-    await ctx.deps.clock.sleep(BATCH_POLL_MS);
+    await Promise.race([ctx.deps.clock.sleep(BATCH_POLL_MS), whenAborted(ctx.signal)]);
   }
   let raw: Record<string, LlmResult> = {};
   try {
-    raw = await ctx.deps.llm.batchResults(pending.batch_id);
+    raw = await ctx.deps.llm.batchResults(pending.batch_id, ctx.signal);
   } catch (e) {
     ctx.notice(e instanceof Error ? e.message : String(e));
   }

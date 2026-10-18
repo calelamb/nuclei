@@ -36,6 +36,8 @@ export interface ConjectureState {
 
   configure(env: ConjectureEnv | null): void;
   propose(runId: string): Promise<ActionResult>;
+  /** Abort an in-flight proposal request; `proposing` clears when it settles. */
+  cancelPropose(runId: string): void;
   editDraft(runId: string, conjectureId: string, next: Conjecture): ActionResult;
   decide(runId: string, conjectureId: string, decision: 'draft' | 'accepted' | 'rejected'): void;
   test(runId: string, conjectureId: string): Promise<ActionResult>;
@@ -54,6 +56,7 @@ export interface ConjectureState {
 let env: ConjectureEnv | null = null;
 let tester: ConjectureTester | null = null;
 const handles = new Map<string, TestHandle>();
+const proposeAborts = new Map<string, AbortController>();
 let queue: Promise<unknown> = Promise.resolve();
 
 const fail = (error: string, issues?: SchemaIssue[]): { ok: false; error: string; issues?: SchemaIssue[] } => ({ ok: false, error, ...(issues ? { issues } : {}) });
@@ -203,9 +206,19 @@ export const useConjectureStore = create<ConjectureState>()((set, get) => {
         return fail(text);
       }
       const proposedAt = e.now();
-      const res = await e.proposer.propose({ digest, schema, idPrefix: `cj-${timestampSlug(proposedAt)}` });
+      const abort = new AbortController();
+      proposeAborts.set(runId, abort);
+      let res: Awaited<ReturnType<typeof e.proposer.propose>>;
+      try {
+        res = await e.proposer.propose({ digest, schema, idPrefix: `cj-${timestampSlug(proposedAt)}` }, abort.signal);
+      } catch (err) {
+        res = { ok: false, code: 'network', message: message(err), usage: null, prompt_sha256: null };
+      } finally {
+        if (proposeAborts.get(runId) === abort) proposeAborts.delete(runId);
+      }
       if (!res.ok) {
-        update(runId, () => ({ proposing: false, proposeError: { code: res.code, message: res.message }, dropped: res.dropped ?? [] }));
+        // A cancel is the user's choice: clear the spinner without an error banner.
+        update(runId, () => ({ proposing: false, proposeError: res.code === 'aborted' ? null : { code: res.code, message: res.message }, dropped: res.dropped ?? [] }));
         return fail(res.message);
       }
       const meta: ProposerMeta = {
@@ -221,6 +234,12 @@ export const useConjectureStore = create<ConjectureState>()((set, get) => {
         proposals: [...res.conjectures.map((conjecture) => ({ conjecture, decision: 'draft' as const, meta, edited: false })), ...c.proposals],
       }));
       return { ok: true };
+    },
+
+    cancelPropose(runId) {
+      proposeAborts.get(runId)?.abort();
+      // Clear at once: the request settles as 'aborted' a moment later and clears again.
+      if (get().byRun[runId]?.proposing) update(runId, () => ({ proposing: false }));
     },
 
     editDraft(runId, conjectureId, next) {
@@ -354,6 +373,8 @@ export const useConjectureStore = create<ConjectureState>()((set, get) => {
     reset() {
       for (const handle of handles.values()) void handle.cancel();
       handles.clear();
+      for (const abort of proposeAborts.values()) abort.abort();
+      proposeAborts.clear();
       tester?.close();
       tester = null;
       queue = Promise.resolve();

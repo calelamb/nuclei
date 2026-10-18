@@ -81,8 +81,9 @@ async function produceWithLlm(
     const input = buildProposeInput(ctx, item, generation);
     if (!input) return { kind: 'skip' };
     ctx.activity(item.candidateId, 'proposing');
-    result = await ctx.llmLimit(() => ctx.deps.llm.propose(input));
-    ctx.setUsage((u) => ({ ...u, llm_calls: u.llm_calls + 1 }));
+    result = await ctx.llmLimit(() => ctx.deps.llm.propose(input, ctx.signal));
+    const calls = result.api_calls ?? 1;
+    ctx.setUsage((u) => ({ ...u, llm_calls: u.llm_calls + calls }));
   }
   if (result.usage) {
     const usage = result.usage;
@@ -95,6 +96,8 @@ async function produceWithLlm(
     }));
   }
   if (!result.ok) {
+    // Stop aborts the request on purpose: not a failure to report, and never a hybrid fallback.
+    if (ctx.control.stopped) return { kind: 'skip' };
     ctx.notice(`LLM proposal failed (${result.code}): ${result.message}`);
     return ctx.spec.mutator.kind === 'hybrid' ? 'fallback' : { kind: 'skip' };
   }

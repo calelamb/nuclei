@@ -13,6 +13,7 @@ import { DIRAC_API_URL } from '../../config/dirac';
 import type { Conjecture, ConjectureSchemaInfo } from '../../types/conjecture';
 import { MAX_CONJECTURES } from '../../types/conjecture';
 import type { LlmUsage } from '../../types/discovery';
+import { GuardError, LLM_REQUEST_TIMEOUT_MS, withGuard } from '../discovery/fetchGuard';
 import { DISCOVERY_OPUS_MODEL } from '../discovery/models';
 import type { Digest } from './digest';
 import type { SchemaIssue } from './jsonSchema';
@@ -23,7 +24,7 @@ import { validateConjecture } from './validate';
 export const PROPOSER_MODEL = DISCOVERY_OPUS_MODEL;
 const MAX_TOKENS = 8192;
 
-export type ProposeFailureCode = 'no_key' | 'network' | 'http' | 'malformed_output' | 'schema_mismatch';
+export type ProposeFailureCode = 'no_key' | 'network' | 'http' | 'malformed_output' | 'schema_mismatch' | 'aborted' | 'timeout';
 
 export interface DroppedConjecture {
   index: number;
@@ -56,6 +57,8 @@ export interface ProposerDeps {
   hash: (text: string) => Promise<string>;
   fetch?: typeof fetch;
   apiUrl?: string;
+  /** Request timeout (default 5 min). */
+  requestTimeoutMs?: number;
 }
 
 export interface ProposeInput {
@@ -67,7 +70,8 @@ export interface ProposeInput {
 
 export interface ConjectureProposer {
   hasKey(): boolean;
-  propose(input: ProposeInput): Promise<ProposeResult>;
+  /** `signal` cancels the request; the call also has its own timeout. */
+  propose(input: ProposeInput, signal?: AbortSignal): Promise<ProposeResult>;
 }
 
 function toUsage(raw: unknown): LlmUsage {
@@ -117,34 +121,47 @@ export function createConjectureProposer(deps: ProposerDeps): ConjectureProposer
     ...extra,
   });
 
-  async function propose(input: ProposeInput): Promise<ProposeResult> {
+  async function propose(input: ProposeInput, signal?: AbortSignal): Promise<ProposeResult> {
     const apiKey = key();
     if (!apiKey) return fail('no_key', 'No Anthropic API key. Add one in Settings, Dirac.');
     const body = buildProposeRequestBody(input);
     const prompt_sha256 = await deps.hash(JSON.stringify(body));
 
-    let response: Response;
-    try {
-      response = await doFetch(apiUrl, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-api-key': apiKey,
-          'anthropic-version': '2023-06-01',
-          'anthropic-dangerous-direct-browser-access': 'true',
-        },
-        body: JSON.stringify(body),
-      });
-    } catch (e) {
-      return fail('network', `Network error contacting Anthropic: ${e instanceof Error ? e.message : String(e)}`, { prompt_sha256 });
-    }
-    if (!response.ok) return fail('http', await httpError(response), { status: response.status, prompt_sha256 });
-
     let data: Record<string, unknown>;
     try {
-      data = (await response.json()) as Record<string, unknown>;
-    } catch {
-      return fail('malformed_output', 'Anthropic returned a non-JSON response.', { prompt_sha256 });
+      const fetched = await withGuard(signal, deps.requestTimeoutMs ?? LLM_REQUEST_TIMEOUT_MS, async (guard) => {
+        let response: Response;
+        try {
+          response = await doFetch(apiUrl, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'x-api-key': apiKey,
+              'anthropic-version': '2023-06-01',
+              'anthropic-dangerous-direct-browser-access': 'true',
+            },
+            body: JSON.stringify(body),
+            signal: guard,
+          });
+        } catch (e) {
+          if (guard.aborted) throw e;
+          return fail('network', `Network error contacting Anthropic: ${e instanceof Error ? e.message : String(e)}`, { prompt_sha256 });
+        }
+        if (!response.ok) return fail('http', await httpError(response), { status: response.status, prompt_sha256 });
+        try {
+          return (await response.json()) as Record<string, unknown>;
+        } catch (e) {
+          if (guard.aborted) throw e;
+          return fail('malformed_output', 'Anthropic returned a non-JSON response.', { prompt_sha256 });
+        }
+      });
+      if ('ok' in fetched && fetched.ok === false) return fetched as ProposeFailure;
+      data = fetched as Record<string, unknown>;
+    } catch (e) {
+      if (e instanceof GuardError) {
+        return fail(e.kind, e.kind === 'aborted' ? 'The request was cancelled.' : `Anthropic did not answer: ${e.message}`, { prompt_sha256 });
+      }
+      throw e;
     }
     const usage = toUsage(data.usage);
     const blocks = Array.isArray(data.content) ? (data.content as Array<{ type?: string; name?: string; input?: unknown }>) : [];

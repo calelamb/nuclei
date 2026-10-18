@@ -313,6 +313,27 @@ describe('pause, resume and stop', () => {
   });
 });
 
+describe('stop aborts in-flight LLM requests (CR-H6)', () => {
+  it('Stop resolves the run even while the LLM never answers', async () => {
+    const { deps, llm, kernel } = setup();
+    const seen: AbortSignal[] = [];
+    llm.propose = (_input, signal) =>
+      new Promise((resolve) => {
+        if (signal) seen.push(signal);
+        signal?.addEventListener('abort', () => resolve({ ok: false, code: 'aborted', message: 'The request was cancelled.', usage: null, prompt_sha256: null }));
+      });
+    const handle = runDiscovery(makeSpec({ mutator: { kind: 'llm' }, confirm: { seeds: 0 } }), ctx, deps);
+    await until(() => seen.length > 0, 'first LLM request');
+    expect(evaluates(kernel).length).toBeGreaterThan(0);
+    handle.stop();
+    const run = await Promise.race([handle.done, wait(500).then(() => 'hung' as const)]);
+    expect(run).not.toBe('hung');
+    expect((run as RunRecord).status).toBe('stopped');
+    expect(seen.every((s) => s.aborted)).toBe(true);
+    expect((run as RunRecord).notices.some((n) => /LLM proposal failed/.test(n))).toBe(false);
+  });
+});
+
 describe('resume from disk', () => {
   async function stoppedRun() {
     const first = setup();

@@ -91,6 +91,7 @@ export function runDiscovery(
   let paused = false;
   let stopped = false;
   let finished = false;
+  const llmAbort = new AbortController();
   let run: RunRecord | null = null;
   let onControlChange: () => void = () => undefined;
   const gateWaiters: Array<() => void> = [];
@@ -186,6 +187,7 @@ export function runDiscovery(
       spec, runId, evaluator: rctx.evaluator, deps, kernel: k, audits: auditClient,
       rq: redQueen ? { config: redQueenConfig(spec), policy: EMPTY_POLICY, started: 0, findings: [] } : null,
       control,
+      signal: llmAbort.signal,
       system: redQueen ? buildRedQueenSystemPrompt(promptInput) : buildSystemPrompt(promptInput),
       candidates, seenHashes: new Map(), seenProgramKeys: new Map(), rejections: [],
       evalLimit: createLimiter(spec.budget.max_concurrent_evaluations),
@@ -436,7 +438,7 @@ export function runDiscovery(
     done,
     pause() { if (!finished && !stopped) { paused = true; onControlChange(); } },
     resume() { if (!finished && paused) { paused = false; releaseGate(); onControlChange(); } },
-    stop() { if (!finished && !stopped) { stopped = true; releaseGate(); kernel?.cancelRun(runId); auditClient?.cancel(runId); } },
+    stop() { if (!finished && !stopped) { stopped = true; llmAbort.abort(); releaseGate(); kernel?.cancelRun(runId); auditClient?.cancel(runId); } },
     current: () => run,
   };
 }
