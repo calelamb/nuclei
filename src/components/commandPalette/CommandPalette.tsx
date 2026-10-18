@@ -8,7 +8,7 @@ import { useThemeStore } from '../../stores/themeStore';
 import { EASING, DURATION, getDuration, prefersReducedMotion } from '../../lib/animations';
 import {
   PANEL_REGISTRY,
-  leftPanelsForMode,
+  railViewsFor,
   bottomLeftPanelsForMode,
   leftPanelLabel,
   panelPassesFramework,
@@ -231,6 +231,8 @@ export function railShortcutFor(index: number, mac: boolean = isMacPlatform()): 
 export interface CommandContext {
   mode: WorkspaceMode;
   developerViews: boolean;
+  /** Learn Beginner has no Explorer sidebar; Go to Explorer and the numbering skip it. Defaults to true. */
+  explorerSidebar?: boolean;
   /** Discovered experiments, for "Run experiment <name>". */
   experiments: ReadonlyArray<{ fileName: string; name: string }>;
   /** Whether a run is selected (enables "Open run folder"). */
@@ -288,7 +290,7 @@ export function buildCommands(actions: CommandActions, context: CommandContext):
   }
 
   // Go to <view> — every rail view this mode offers, in registry order.
-  const views = leftPanelsForMode(context.mode, { developerViews: context.developerViews });
+  const views = railViewsFor(context.mode, { developerViews: context.developerViews, explorerSidebar: context.explorerSidebar ?? true });
   const bottomPinned = new Set(bottomLeftPanelsForMode(context.mode));
   let railIndex = 0;
   for (const view of views) {

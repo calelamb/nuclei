@@ -354,3 +354,23 @@ export function leftPanelsForMode(mode: WorkspaceMode, { developerViews }: LeftR
 export function bottomLeftPanelsForMode(mode: WorkspaceMode): LeftPanelId[] {
   return railFor(mode, true, true);
 }
+
+export interface RailViewOptions extends LeftRailOptions {
+  /** Whether the Explorer sidebar exists at this level (Learn Beginner has none). */
+  explorerSidebar: boolean;
+}
+
+/**
+ * The views the activity bar actually shows. The rail, its Cmd+N hints, the
+ * Cmd+N handler and the palette Go-to list all read this one list so they can
+ * never disagree about which view is number one.
+ */
+export function railViewsFor(mode: WorkspaceMode, { developerViews, explorerSidebar }: RailViewOptions): LeftPanelId[] {
+  return leftPanelsForMode(mode, { developerViews }).filter((v) => explorerSidebar || v !== 'files');
+}
+
+/** The numbered (top) part of the rail: Cmd+1 is the first entry. */
+export function topRailViewsFor(mode: WorkspaceMode, options: RailViewOptions): LeftPanelId[] {
+  const bottom = new Set(bottomLeftPanelsForMode(mode));
+  return railViewsFor(mode, options).filter((v) => !bottom.has(v));
+}

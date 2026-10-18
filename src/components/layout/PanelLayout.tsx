@@ -47,7 +47,7 @@ import { useWorkspaceStore } from '../../stores/workspaceStore';
 import { useProjectStore } from '../../stores/projectStore';
 import { useExperimentUiStore } from '../../stores/experimentUiStore';
 import { useExperimentStore } from '../../services/experimentStore';
-import { activityViewsForMode } from './panelRegistry';
+import { railViewsFor } from '../../layout/panelRegistry';
 import { isWebBuild } from '../../platform/buildTarget';
 import { Tooltip } from '../ui';
 import { focusVizLanding } from './focusViz';
@@ -193,8 +193,10 @@ export function PanelLayout() {
   // see panelRegistry.ts. Learn mode reproduces today's exact set; Research
   // mode hides learning/challenges/community and adds the Experiments
   // placeholder.
-  const visibleActivityViews = activityViewsForMode(workspaceMode, { experimentalFeatures })
-    .filter((v) => features.explorerSidebar || v !== 'files');
+  const visibleActivityViews = railViewsFor(workspaceMode, {
+    developerViews: experimentalFeatures,
+    explorerSidebar: features.explorerSidebar,
+  });
 
   // The right rail only takes space when it has something to show AND the
   // editor can keep a usable width beside it. Otherwise the editor gets the

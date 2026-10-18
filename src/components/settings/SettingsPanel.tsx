@@ -13,6 +13,7 @@ import { Button, IconButton, SecretField, SegmentedControl, Select, Switch, Text
 import { WorkspaceSection, HelpSection } from './SettingsWorkspaceHelp';
 import { Section, SettingRow, RowLabelContext } from './SettingsPrimitives';
 import { onSettingsFocusRequest, takeSettingsFocusRequest } from './settingsFocus';
+import { featuresFor } from '../../layout/uiModeFeatures';
 import { isWebBuild } from '../../platform/buildTarget';
 import { kernelEngineName } from '../../lib/kernelErrors';
 import { validateApiKey } from '../../lib/apiKey';
@@ -201,7 +202,7 @@ export function SettingsPanel() {
   const resetAll = useSettingsStore((s) => s.resetAll);
   const isWeb = isWebBuild();
   // Paid-hardware autonomy is a researcher's choice, and the browser build has no hardware to spend on.
-  const showHardwareAutonomy = !isWeb && (workspaceMode === 'research' || uiMode === 'advanced');
+  const showHardwareAutonomy = !isWeb && featuresFor(workspaceMode, uiMode).agentEntry;
   const frameworkOptions = KERNEL_FRAMEWORK_OPTIONS.filter((o) => !isWeb || o.webSupported);
   const setSimShots = useSimulationStore((s) => s.setShots);
   const settingsTarget = useNavigationStore((s) => s.settingsTarget);

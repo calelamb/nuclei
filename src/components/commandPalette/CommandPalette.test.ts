@@ -247,3 +247,12 @@ describe('one name for every command (palette, shortcuts sheet, registry)', () =
     expect(labels.some((l) => /\(inline\)|\(bottom panel\)/.test(l))).toBe(false);
   });
 });
+
+describe('palette Go-to follows the rail the person sees (shell-r6-03)', () => {
+  it('Beginner has no Go to Explorer, and Learning is Cmd+1', () => {
+    const commands = buildCommands(makeActions(), makeContext({ mode: 'learn', explorerSidebar: false }));
+    expect(commands.some((c) => c.id === 'goto-files')).toBe(false);
+    expect(commands.find((c) => c.id === 'goto-learning')?.shortcut).toBe('⌘1');
+    expect(commands.find((c) => c.id === 'goto-challenges')?.shortcut).toBe('⌘2');
+  });
+});
