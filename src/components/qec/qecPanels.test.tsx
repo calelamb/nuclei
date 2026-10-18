@@ -82,8 +82,8 @@ describe('CodeLatticePanel', () => {
     expect(container.querySelector('svg')).toBeTruthy();
     expect(getByLabelText('Tick scrubber')).toBeTruthy();
     // data (circles) + measure (rects) both present.
-    expect(container.querySelectorAll('circle').length).toBeGreaterThan(0);
-    expect(container.querySelectorAll('rect').length).toBeGreaterThan(0);
+    expect(container.querySelectorAll('[data-lattice-node="data"]').length).toBeGreaterThan(0);
+    expect(container.querySelectorAll('[data-lattice-node="measure"]').length).toBeGreaterThan(0);
   });
 
   it('hides gracefully (empty state) when the circuit has no qubit coords (repetition code)', () => {

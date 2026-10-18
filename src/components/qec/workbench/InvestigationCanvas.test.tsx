@@ -41,7 +41,7 @@ describe('instrument headers (rq-r3-17)', () => {
     const headers = Array.from(container.querySelectorAll('.qec-instrument > header'));
     expect(headers.length).toBeGreaterThan(1);
     for (const header of headers) {
-      expect(header.querySelector('a[aria-label="Open documentation in a new tab"]')).not.toBeNull();
+      expect(header.querySelector('a[aria-label$="docs (opens in new tab)"]')).not.toBeNull();
       expect(header.querySelector('button[aria-pressed]')).not.toBeNull();
     }
   });

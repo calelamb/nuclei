@@ -4,6 +4,7 @@ import { DESKTOP_DOWNLOAD_URL } from '../../config/docsLinks';
 import { openExternal } from '../../lib/openExternal';
 import { ICON_SIZE, ICON_STROKE } from '../../styles/tokens';
 import { Button, EmptyState } from '../ui';
+import './desktopOnly.css';
 
 interface DesktopOnlyStateProps {
   /** What needs the desktop app, as a short sentence ("Hardware runs need the desktop app"). */
@@ -22,6 +23,7 @@ interface DesktopOnlyStateProps {
 export function DesktopOnlyState({ title, children, alternative }: DesktopOnlyStateProps) {
   return (
     <EmptyState
+      className="nuclei-desktop-only"
       icon={<Download size={ICON_SIZE.lg} strokeWidth={ICON_STROKE} />}
       title={title}
       action={(

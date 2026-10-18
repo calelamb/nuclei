@@ -113,7 +113,7 @@ function useInstrumentContext(panelId: QecWorkbenchPanelId): string | null {
 }
 
 /** Every instrument header carries the same pair: a docs link and the pin. */
-function InstrumentActions({ panelId }: { panelId: QecWorkbenchPanelId }): ReactElement {
+function InstrumentActions({ panelId, title }: { panelId: QecWorkbenchPanelId; title: string }): ReactElement {
   return (
     <>
       {panelId === 'campaign-center' && <QecCampaignActions embedded />}
@@ -122,7 +122,7 @@ function InstrumentActions({ panelId }: { panelId: QecWorkbenchPanelId }): React
         href={instrumentDocsHref(panelId)}
         target="_blank"
         rel="noopener noreferrer"
-        aria-label="Open documentation in a new tab"
+        aria-label={`${title} docs (opens in new tab)`}
       >
         <HelpCircle aria-hidden="true" size={ICON_SIZE.sm} strokeWidth={ICON_STROKE} />
       </a>
@@ -159,7 +159,7 @@ function CanvasInstrument({ panel, primary, rowSpan, empty, fullWidth }: CanvasI
           <h2 id={`${panel.id}-instrument-heading`}>{panel.title}</h2>
           {context && <span className="qec-instrument__context qec-mono">{context}</span>}
         </div>
-        <InstrumentActions panelId={panel.id} />
+        <InstrumentActions panelId={panel.id} title={panel.title} />
         <QecPanelPinButton panel={panel} />
       </header>
       <div className="qec-instrument__body">{instrumentBody(panel.id)}</div>

@@ -22,7 +22,8 @@ describe('Transpiler Explorer platform honesty', () => {
     platform.web = true;
     render(<><TranspilerControls /><TranspilerExplorer /></>);
     expect(screen.getByText('Transpiler Explorer runs in the desktop app')).toBeTruthy();
-    expect(screen.getByRole('button', { name: /Download Nuclei/ })).toBeTruthy();
+    expect(screen.getByText('Transpiling runs in the desktop app.')).toBeTruthy();
+    expect(screen.getAllByRole('button', { name: /Download Nuclei/ })).toHaveLength(1);
     expect(screen.queryByRole('button', { name: /Transpile$/ })).toBeNull();
     expect(document.body.textContent).not.toMatch(/Start it/);
   });

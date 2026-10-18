@@ -114,7 +114,12 @@
 .qec-import-progress { display: grid; grid-template-columns: 24px auto minmax(0, 1fr) auto; color: var(--qec-analytical-strong); }
 .qec-import-progress .qec-mono { overflow: hidden; color: var(--qec-text-muted); font-size: var(--font-size-chrome-label); text-align: right; text-overflow: ellipsis; }
 .qec-tray__jobs > li > button { justify-self: start; }
-.qec-tray__jobs { display: grid; gap: 8px; margin: 10px 12px; }
+.qec-tray__jobs > li > .qec-tray__job-head { flex-wrap: nowrap; align-items: center; justify-content: flex-start; gap: 6px 8px; }
+.qec-tray__job-head > .nuclei-spin { flex: 0 0 auto; color: var(--qec-analytical); }
+.qec-tray__job-head > .qec-mono { color: var(--qec-text-muted); font-size: var(--font-size-chrome-label); }
+/* Cancel lives in the header, always above the fold, at the far end. */
+.qec-tray__job-head > button:last-child { margin-left: auto; }
+.qec-tray__jobs { display: grid; min-width: 0; flex: 1; gap: 8px; margin: 0; }
 .qec-tray__jobs > li { display: grid; grid-template-columns: minmax(0, 1fr); gap: 8px 12px; padding: 10px; border: 1px solid var(--qec-line); border-radius: var(--radius-soft); background: var(--qec-canvas); }
 .qec-tray__jobs > li > div { display: flex; min-width: 0; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 2px 12px; }
 .qec-tray__jobs > li > div > span { overflow: hidden; color: var(--qec-text-muted); font-size: var(--font-size-chrome-label); text-overflow: ellipsis; white-space: nowrap; }
@@ -154,7 +159,8 @@
   .qec-import-commit { flex-wrap: wrap; }
   .qec-import-commit > span { flex: 1 1 190px; }
   .qec-import-commit > button { flex: 0 0 auto; }
-  .qec-tray__jobs > li, .qec-tray__jobs dl { grid-template-columns: minmax(0, 1fr); }
+  .qec-tray__jobs > li { grid-template-columns: minmax(0, 1fr); }
+  .qec-tray__jobs dl { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 
 .qec-import-caption {
