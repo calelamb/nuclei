@@ -197,7 +197,7 @@ export function CommandPalette({ commands, onClose }: CommandPaletteProps) {
         </div>
 
         {/* Results */}
-        <div id={listId} ref={listFadeRef} onScroll={onListScroll} style={{ ...listFadeStyle, maxHeight: LIST_MAX_HEIGHT, overflow: 'auto', padding: '4px 0' }} role="listbox" aria-label="Commands">
+        <div id={listId} ref={listFadeRef} onScroll={onListScroll} style={{ ...listFadeStyle, maxHeight: LIST_MAX_HEIGHT, overflow: 'auto', padding: '4px 0' }} role="listbox" aria-label="Commands" tabIndex={-1}>
           {filtered.length === 0 ? (
             <div style={{ padding: 16, color: colors.textMuted, fontSize: 13, fontFamily: TYPOGRAPHY.fontSans, textAlign: 'center' }}>
               No matching commands
