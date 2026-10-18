@@ -186,14 +186,16 @@ def audit(
         "decodable", f"Decodable under {alt['model']} noise", alt_cases,
         lambda c: _decodable(c, alt),
     )
+    for case in alt_cases:  # the exact search needs only the noisy circuit, never a decodable model
+        try:
+            _noisy(case, alt)
+        except ValueError:
+            break  # the exact-search check then reports that it could not run
+    run("exact_fault_distance", "Exact fault distance (no pruning)", alt_cases,
+        lambda c: _check_exact_distance(c, cancel, notes))
     if decodable:
         run("nontrivial_observable", "Observable can be flipped", alt_cases, check_nontrivial_observable)
         run("observables_flippable", "Every observable is flippable", alt_cases, _check_flippable)
-        run("exact_fault_distance", "Exact fault distance (no pruning)", alt_cases,
-            lambda c: _check_exact_distance(c, cancel, notes))
-    else:
-        for cid, label in (("exact_fault_distance", "Exact fault distance (no pruning)"),):
-            checks.append(not_reached(cid, label, "the error model is not decodable"))
     run("evaluator_fault_distance", "Evaluator's recorded distance is honest", alt_cases,
         lambda c: _fault_distance_agrees(evaluation, alt_cases))
     fitness = _sampling_checks(checks, config, noise, alt, alt_cases, matched_cases, seed, evaluation, cancel, notes, decodable)
