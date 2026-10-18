@@ -21,12 +21,33 @@ export interface WhatsNewHighlight {
   modes?: readonly WhatsNewMode[];
 }
 
+export interface WhatsNewHeadline {
+  title: string;
+  /** Optional one-line subtitle shown under the title. */
+  tagline?: string;
+}
+
 export interface WhatsNewEntry {
   version: string;
   title: string;
   /** Optional one-line subtitle shown under the title. */
   tagline?: string;
+  /** Headline per workspace, for releases whose main story differs between Learn and Research. */
+  modeHeadlines?: Partial<Record<WhatsNewMode, WhatsNewHeadline>>;
+  /** Tagline for the web build, which has no local kernel to harden. */
+  webTagline?: string;
   highlights: WhatsNewHighlight[];
+}
+
+/** The title and subtitle that describe what this reader will actually see in the list below. */
+export function headlineFor(
+  entry: WhatsNewEntry,
+  context: { platform: WhatsNewPlatform; mode: WhatsNewMode },
+): WhatsNewHeadline {
+  const modeHeadline = entry.modeHeadlines?.[context.mode];
+  if (modeHeadline) return modeHeadline;
+  const tagline = context.platform === 'web' ? entry.webTagline ?? entry.tagline : entry.tagline;
+  return { title: entry.title, tagline };
 }
 
 /** The highlights that apply to this platform and workspace: nobody is told about a feature they cannot use. */
@@ -43,6 +64,13 @@ export const WHATS_NEW: WhatsNewEntry = {
   version: '0.14.0',
   title: 'QEC statistics you can cite',
   tagline: 'Drop a sinter CSV, get sinter-grade numbers with their uncertainty, and a kernel that no longer trusts every local process.',
+  webTagline: 'Drop a sinter CSV and get sinter-grade numbers with their uncertainty.',
+  modeHeadlines: {
+    learn: {
+      title: 'Dirac answers you can copy',
+      tagline: 'Tables, quotes and readable formulas in Dirac replies, with a copy button on every code block.',
+    },
+  },
   highlights: [
     {
       icon: 'chart',

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { WHATS_NEW } from './whatsNew';
+import { headlineFor, highlightsFor, WHATS_NEW } from './whatsNew';
 
 describe('WHATS_NEW', () => {
   it('describes the upcoming 0.14.0 release', () => {
@@ -19,5 +19,18 @@ describe('WHATS_NEW', () => {
       expect(h.text.length).toBeGreaterThan(20);
       expect(h.text.length).toBeLessThanOrEqual(220);
     }
+  });
+
+  it('headlines the Learn story in Learn, not QEC jargon', () => {
+    const head = headlineFor(WHATS_NEW, { platform: 'desktop', mode: 'learn' });
+    expect(head.title.toLowerCase()).not.toContain('qec');
+    expect(head.tagline ?? '').not.toMatch(/sinter|kernel/i);
+    expect(highlightsFor(WHATS_NEW, { platform: 'desktop', mode: 'learn' }).length).toBeGreaterThan(0);
+  });
+
+  it('does not claim a local-kernel change on the web build', () => {
+    const head = headlineFor(WHATS_NEW, { platform: 'web', mode: 'research' });
+    expect(head.tagline ?? '').not.toMatch(/kernel/i);
+    expect(headlineFor(WHATS_NEW, { platform: 'desktop', mode: 'research' }).tagline).toMatch(/kernel/i);
   });
 });

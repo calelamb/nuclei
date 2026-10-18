@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { ArrowUpRight, X } from 'lucide-react';
 import { useThemeStore } from '../stores/themeStore';
-import { WHATS_NEW, highlightsFor, type WhatsNewEntry } from '../data/whatsNew';
+import { WHATS_NEW, headlineFor, highlightsFor, type WhatsNewEntry } from '../data/whatsNew';
 import { useWorkspaceStore } from '../stores/workspaceStore';
 import { DURATION, EASING, prefersReducedMotion } from '../lib/animations';
 import { openExternal } from '../lib/openExternal';
@@ -189,7 +189,9 @@ export function WhatsNewModal({
   const reduced = prefersReducedMotion();
   const shown = entered && !leaving;
   const scrim = colors.scrim;
-  const highlights = highlightsFor(entry, { platform: isDesktop ? 'desktop' : 'web', mode: workspaceMode });
+  const context = { platform: isDesktop ? ('desktop' as const) : ('web' as const), mode: workspaceMode };
+  const highlights = highlightsFor(entry, context);
+  const headline = headlineFor(entry, context);
 
   return (
     <>
@@ -290,9 +292,9 @@ export function WhatsNewModal({
                 textWrap: 'balance',
               }}
             >
-              {entry.title}
+              {headline.title}
             </h2>
-            {entry.tagline && (
+            {headline.tagline && (
               <p
                 style={{
                   margin: '6px 0 0',
@@ -301,7 +303,7 @@ export function WhatsNewModal({
                   color: colors.textMuted,
                 }}
               >
-                {entry.tagline}
+                {headline.tagline}
               </p>
             )}
 
