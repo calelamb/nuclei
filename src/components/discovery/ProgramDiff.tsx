@@ -1,7 +1,8 @@
-import { Suspense, lazy } from 'react';
+import { Suspense, lazy, useEffect, useRef } from 'react';
 import { LabCode, LabSkeleton } from '../lab';
 import { registerNucleiThemes } from '../editor/monacoThemes';
 import { diffStats, lineDiff, renderDiffText } from '../../services/discovery/lineDiff';
+import { attachDiffEditor, type DiffEditorLike } from './diffEditorLifecycle';
 import { useThemeStore } from '../../stores/themeStore';
 
 const MonacoDiff = lazy(async () => {
@@ -12,6 +13,11 @@ const MonacoDiff = lazy(async () => {
 /** Read-only Monaco diff (inline); a plain-text diff shows while the editor loads. */
 export function ProgramDiff({ original, modified, label, height = 260 }: { original: string; modified: string; label: string; height?: number }) {
   const mode = useThemeStore((s) => s.mode);
+  const detach = useRef<(() => void) | null>(null);
+  useEffect(() => () => {
+    detach.current?.();
+    detach.current = null;
+  }, []);
   const lines = lineDiff(original, modified);
   const { added, removed } = diffStats(lines);
   const identical = added === 0 && removed === 0;
@@ -31,6 +37,12 @@ export function ProgramDiff({ original, modified, label, height = 260 }: { origi
               language="python"
               theme={mode === 'dark' ? 'nuclei-dark' : 'nuclei-light'}
               beforeMount={registerNucleiThemes}
+              keepCurrentOriginalModel
+              keepCurrentModifiedModel
+              onMount={(editor) => {
+                detach.current?.();
+                detach.current = attachDiffEditor(editor as unknown as DiffEditorLike);
+              }}
               loading={<LabSkeleton height={height} />}
               options={{
                 readOnly: true,

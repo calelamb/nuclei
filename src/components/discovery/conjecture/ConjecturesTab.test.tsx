@@ -246,6 +246,20 @@ describe('verdict cards', () => {
     expect(within(verdict).getAllByText('Indeterminate').length).toBe(3);
   });
 
+  it('inconclusive: the sentence is not repeated three times', () => {
+    put({ proposals: [proposal('cj-1', { decision: 'accepted' })], jobs: { 'cj-1': finished('cj-1', 'inconclusive') } });
+    renderTab();
+    const verdict = screen.getByRole('region', { name: 'Verdict: inconclusive' });
+    expect(verdict.textContent).not.toMatch(/Inconclusive: /);
+    expect(verdict.textContent?.match(/circuit\(s\) were indeterminate/g)?.length).toBe(1);
+  });
+
+  it('explains why Test is disabled while another conjecture is being tested', () => {
+    put({ proposals: [proposal('cj-1'), proposal('cj-2')], jobs: { 'cj-2': job('cj-2') } });
+    renderTab();
+    expect(screen.getAllByTestId('test-blocked-reason')[0].textContent).toMatch(/Another conjecture is being tested/);
+  });
+
   it('warns when the result could not be saved to the ledger', () => {
     const j = { ...finished('cj-1', 'supported'), ledgerError: 'read-only volume' };
     put({ proposals: [proposal('cj-1', { decision: 'accepted' })], jobs: { 'cj-1': j } });

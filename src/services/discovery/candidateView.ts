@@ -38,6 +38,20 @@ export function candidateKind(c: CandidateRecord): CandidateKind {
   return c.mutator === 'seed' ? 'seed' : 'pending';
 }
 
+const PROMOTE_BLOCKED: Partial<Record<CandidateKind, string>> = {
+  failed: 'Failed candidates did not run to a score, so there is nothing trustworthy to promote.',
+  rejected: 'A guardrail rejected this candidate; promoting it would ship a program the evaluator refuses to score.',
+  duplicate: 'This is a duplicate of an earlier candidate; promote the original instead.',
+  invalid: 'This proposal was not a valid program.',
+  screened_out: 'This candidate was screened out before a full evaluation.',
+  pending: 'This candidate has not been evaluated yet.',
+};
+
+/** Why Promote is unavailable for this candidate, or null when it can be promoted. */
+export function promoteBlockedReason(kind: CandidateKind): string | null {
+  return PROMOTE_BLOCKED[kind] ?? null;
+}
+
 export function candidateFitness(c: CandidateRecord): number | null {
   const f = c.evaluation?.fitness;
   return typeof f === 'number' && Number.isFinite(f) ? f : null;

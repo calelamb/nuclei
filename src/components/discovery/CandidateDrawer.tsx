@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { ExternalLink, FileOutput, RefreshCw, ShieldCheck } from 'lucide-react';
 import { LabButton, LabCallout, LabCode, LabDrawer, formatSci } from '../lab';
-import { candidateKind, primaryEvaluation } from '../../services/discovery/candidateView';
+import { candidateKind, primaryEvaluation, promoteBlockedReason } from '../../services/discovery/candidateView';
 import { useDiscoveryStore, type RunView } from '../../stores/discoveryStore';
 import { useNavigationStore } from '../../stores/navigationStore';
 import { useProjectStore } from '../../stores/projectStore';
@@ -57,6 +57,7 @@ export function CandidateDrawer({ view, candidateId, onClose, onSelect }: { view
 function DrawerBody({ view, candidate, onClose, onSelect }: { view: RunView; candidate: CandidateRecord; onClose: () => void; onSelect: (id: string) => void }) {
   const { live, reevaluating, auditing, notice, doPromote, openAsFile, doReevaluate, doAudit } = useDrawerActions(view, candidate);
   const kind = candidateKind(candidate);
+  const promoteBlocked = promoteBlockedReason(kind);
   const evaluation = candidate.evaluation;
   const shown = primaryEvaluation(candidate);
   const parent = candidate.parent_id ? view.candidates[candidate.parent_id] : undefined;
@@ -80,7 +81,7 @@ function DrawerBody({ view, candidate, onClose, onSelect }: { view: RunView; can
       actions={
         <>
           <LabButton size="md" icon={ExternalLink} onClick={() => void openAsFile()}>Open as file</LabButton>
-          <LabButton size="md" icon={FileOutput} onClick={() => void doPromote()}>Promote</LabButton>
+          <LabButton size="md" icon={FileOutput} disabled={promoteBlocked !== null} title={promoteBlocked ?? undefined} onClick={() => void doPromote()}>Promote</LabButton>
           <LabButton size="md" icon={RefreshCw} disabled={!canReevaluate} title={live ? 'Wait for the run to finish or stop it first' : evaluation === null ? 'Only evaluated candidates can be re-evaluated' : undefined} onClick={() => void doReevaluate()}>
             {reevaluating ? 'Re-evaluating…' : 'Re-evaluate'}
           </LabButton>

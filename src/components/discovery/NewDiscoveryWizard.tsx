@@ -24,6 +24,21 @@ const AUDIT_EVERY_LABEL: Record<AuditEvery, string> = {
   top_k: 'Top k by evaluator fitness',
 };
 
+/** Example names per template, shown as the Name placeholder. */
+const NAME_PLACEHOLDER: Record<string, string> = {
+  'qec-repetition-schedule': 'rep-code-fewer-rounds',
+  'w-state-synthesis': 'w-state-fewer-cx',
+  'tfim-ansatz': 'tfim-shallow-ansatz',
+  'trainability-frontier': 'frontier-counterexample-hunt',
+};
+
+const MUTATOR_SUBTITLE: Record<MutatorKind, string> = {
+  hybrid: 'Many cheap broad edits plus a few deep ones, AlphaEvolve style.',
+  llm: 'Every proposal comes from the LLM: many cheap broad edits plus a few deep ones.',
+  ast: 'Random structural edits to the program. No LLM calls and no API key needed.',
+  red_queen: 'An adversary hunts for programs the evaluator over-scores, and an independent audit checks each one.',
+};
+
 const DEFAULTS = {
   evaluations: 200,
   llmCalls: 160,
@@ -46,7 +61,7 @@ function TemplateCard({ template, selected, onSelect }: { template: DiscoveryTem
       onClick={onSelect}
       className="lab-card"
       style={{
-        textAlign: 'left', cursor: 'pointer', padding: 'var(--space-3) var(--space-4)', display: 'grid', gap: 'var(--space-2)',
+        textAlign: 'left', cursor: 'pointer', padding: 'var(--space-3) var(--space-4)', display: 'grid', gap: 'var(--space-2)', alignContent: 'start',
         font: 'inherit', color: 'inherit',
         borderColor: selected ? 'var(--color-accent-quantum)' : undefined,
         boxShadow: selected ? '0 0 0 3px var(--lab-quantum-soft)' : undefined,
@@ -60,7 +75,7 @@ function TemplateCard({ template, selected, onSelect }: { template: DiscoveryTem
       {frontier && (
         <span style={{ display: 'grid', gap: 4, fontSize: 11.5, lineHeight: 1.5 }}>
           <span>Open question: <em>{FRONTIER_QUESTION}</em></span>
-          <span className="lab-dim">{FRONTIER_HONESTY}</span>
+          <span className="lab-muted">{FRONTIER_HONESTY}</span>
         </span>
       )}
     </button>
@@ -129,7 +144,7 @@ export function NewDiscoveryWizard() {
     >
       <section aria-label="Template" className="lab-stack">
         <LabSectionLabel>1 · Choose a template</LabSectionLabel>
-        <div role="radiogroup" aria-label="Discovery template" className="lab-grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))' }}>
+        <div role="radiogroup" aria-label="Discovery template" className="lab-grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', alignItems: 'start' }}>
           {DISCOVERY_TEMPLATES.map((t) => (
             <TemplateCard key={t.id} template={t} selected={t.id === templateId} onSelect={() => setTemplateId(t.id)} />
           ))}
@@ -139,7 +154,7 @@ export function NewDiscoveryWizard() {
       <LabCard title="2 · Name and budgets" subtitle="Budgets are written into the file, so the file always says what ran.">
         <div className="lab-grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(190px, 1fr))' }}>
           <LabField label="Name" htmlFor={nameId} error={nameError} hint={slug ? `Writes experiments/${slug}.discovery.yaml` : undefined}>
-            <LabInput id={nameId} value={name} placeholder="w-state-fewer-cx" aria-invalid={!!nameError} onChange={(e) => setName(e.target.value)} />
+            <LabInput id={nameId} value={name} placeholder={NAME_PLACEHOLDER[templateId] ?? templateId} aria-invalid={!!nameError} onChange={(e) => setName(e.target.value)} />
           </LabField>
           <LabField label="Max evaluations" htmlFor="wiz-evals" hint="1 to 5000; each screen and each full run counts">
             <LabNumber id="wiz-evals" value={evaluations} min={1} max={5000} onCommit={setEvaluations} width="100%" />
@@ -156,7 +171,7 @@ export function NewDiscoveryWizard() {
         </div>
       </LabCard>
 
-      <LabCard title="3 · Mutator" subtitle="Many cheap broad edits plus a few deep ones, AlphaEvolve style.">
+      <LabCard title="3 · Mutator" subtitle={MUTATOR_SUBTITLE[kind]}>
         <div className="lab-stack">
           <LabSegmented
             label="Mutator kind"
@@ -171,7 +186,7 @@ export function NewDiscoveryWizard() {
           />
           {kind === 'red_queen' && (
             <div className="lab-stack" data-testid="red-queen-options">
-              <LabCallout tone="danger" title="Red Queen mode">{RED_QUEEN_EXPLAINER}</LabCallout>
+              <LabCallout tone="warning" title="Red Queen mode">{RED_QUEEN_EXPLAINER}</LabCallout>
               <div className="lab-grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(190px, 1fr))' }}>
                 <LabField label="Audit when" htmlFor="wiz-audit-every">
                   <LabSelect id="wiz-audit-every" value={auditEvery} onChange={(e) => setAuditEvery(e.target.value as AuditEvery)}>

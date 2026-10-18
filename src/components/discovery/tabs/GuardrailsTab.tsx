@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { ChartFrame, LabButton, LabCallout, LabCard, LabEmptyState, formatPct } from '../../lab';
 import { guardrailPassRates, isolationNote, isolationUsed, rejectionReasons, type GuardrailPassRate, type RejectionReason } from '../../../services/discovery/guardrailStats';
-import { SANDBOX_HONESTY } from '../../../services/discovery/honesty';
+import { SANDBOX_HONESTY, SANDBOX_READS_CAVEAT, SANDBOX_READS_TITLE } from '../../../services/discovery/honesty';
 import type { RunView } from '../../../services/discovery/runView';
 import { useCandidateList } from '../useCandidateList';
 import { exploitsOf, summarizeAudits } from '../../../services/discovery/redQueen';
@@ -88,8 +88,21 @@ export function GuardrailsTab({ view, onOpen }: { view: RunView; onOpen: (id: st
   // Derived from the candidates and the spec only: usage and status events do not recompute it.
   const exploits = useMemo(() => exploitsOf(runId, list, spec), [runId, list, spec]);
   const audits = useMemo(() => summarizeAudits(list), [list]);
+  const redQueen = view.run.spec.mutator.kind === 'red_queen';
+  // In Red Queen runs the exploits are the point of the run, so they lead.
+  const lane = (
+    <ExploitsFoundLane
+      exploits={exploits}
+      summary={audits}
+      redQueen={redQueen}
+      runStatus={view.run.status}
+      onSelectCandidate={onOpen}
+      onExport={(candidateId) => exportFixture(runId, candidateId)}
+    />
+  );
   return (
     <div className="disc-tabpanel">
+      {redQueen && lane}
       <div className="disc-two-col">
         <LabCard title="Rejection reasons" subtitle="Every rejection names the guardrail that stopped it">
           {reasons.length === 0 ? (
@@ -117,8 +130,8 @@ export function GuardrailsTab({ view, onOpen }: { view: RunView; onOpen: (id: st
                 ))}
               </ul>
             )}
-            <LabCallout tone="warning" title="File reads are not blocked">
-              {SANDBOX_HONESTY} Candidates run in a separate subprocess, but a candidate can still read files the app can read. The trusted scorer never runs in the candidate's process.
+            <LabCallout tone="warning" title={SANDBOX_READS_TITLE}>
+              {SANDBOX_HONESTY} {SANDBOX_READS_CAVEAT} Candidates run in a separate subprocess. The trusted scorer never runs in the candidate's process.
             </LabCallout>
           </div>
         </LabCard>
@@ -137,14 +150,7 @@ export function GuardrailsTab({ view, onOpen }: { view: RunView; onOpen: (id: st
         )}
       </LabCard>
 
-      <ExploitsFoundLane
-        exploits={exploits}
-        summary={audits}
-        redQueen={view.run.spec.mutator.kind === 'red_queen'}
-        runStatus={view.run.status}
-        onSelectCandidate={onOpen}
-        onExport={(candidateId) => exportFixture(runId, candidateId)}
-      />
+      {!redQueen && lane}
     </div>
   );
 }

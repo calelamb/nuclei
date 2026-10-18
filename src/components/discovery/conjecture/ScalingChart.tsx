@@ -4,13 +4,20 @@ import type { EvidenceRow } from '../../../types/conjecture';
 
 const STROKE = { meets: 'var(--color-success)', violates: 'var(--color-danger)', indeterminate: 'var(--color-warning)' } as const;
 
+/** Whole-decade bounds, so the axis starts and ends on a labelled tick (always at least one decade). */
+function decadeBounds(lo: number, hi: number): [number, number] {
+  const floor = Math.floor(Math.log10(lo));
+  const ceil = Math.max(Math.ceil(Math.log10(hi)), floor + 1);
+  return [Number(`1e${floor}`), Number(`1e${ceil}`)];
+}
+
 /** Variance against qubit count for every held-out circuit; violating circuits are drawn on top. */
 export function ScalingChart({ rows }: { rows: EvidenceRow[] }) {
   const series = useMemo(() => rows.map((r) => ({ ...r, pts: r.points.filter((p) => p.variance > 0) })).filter((r) => r.pts.length >= 2), [rows]);
   const domains = useMemo(() => {
     const ns = series.flatMap((s) => s.pts.map((p) => p.n));
     const vs = series.flatMap((s) => s.pts.map((p) => p.variance));
-    return ns.length ? { n: [Math.min(...ns), Math.max(...ns)] as [number, number], v: [Math.min(...vs) / 2, Math.max(...vs) * 2] as [number, number] } : null;
+    return ns.length ? { n: [Math.min(...ns), Math.max(...ns)] as [number, number], v: decadeBounds(Math.min(...vs), Math.max(...vs)) } : null;
   }, [series]);
   if (!domains) return null;
   const ordered = [...series].sort((a, b) => Number(a.outcome === 'violates') - Number(b.outcome === 'violates'));

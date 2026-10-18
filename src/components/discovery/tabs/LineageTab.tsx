@@ -11,7 +11,7 @@ import {
   isImprovement,
   normalizeFitness,
 } from '../../../services/discovery/candidateView';
-import { buildLineageLayout, lineageNeighbor, lineageSignature, type LineageKey, type LineageLayout } from '../../../services/discovery/lineageLayout';
+import { buildLineageLayout, isMoreNode, lineageNeighbor, lineageSignature, type LineageKey, type LineageLayout } from '../../../services/discovery/lineageLayout';
 import type { RunView } from '../../../services/discovery/runView';
 import { useCandidateList } from '../useCandidateList';
 import type { CandidateRecord } from '../../../types/discovery';
@@ -60,6 +60,17 @@ const NodeLayer = memo(function NodeLayer({ layout, byId, extent, championId, se
         return <path key={`${l.source}-${l.target}`} className="disc-lineage__link" d={`M${a.x},${a.y}C${mid},${a.y} ${mid},${b.y} ${b.x},${b.y}`} />;
       })}
       {layout.nodes.map((n) => {
+        if (n.collapsed) {
+          const count = n.collapsed.ids.length;
+          return (
+            <g key={n.id} className="disc-lineage__node disc-lineage__more" data-id={n.id} transform={`translate(${n.x},${n.y})`}>
+              <title>{`${count} more children of ${n.collapsed.parentId}. Click to show them.`}</title>
+              <rect x={-16} y={-9} width={32} height={18} rx={9} fill="var(--lab-surface-2)" stroke="var(--color-text-tertiary)" strokeDasharray="3 2" />
+              <text textAnchor="middle" dy="0.34em" fontSize={10} fill="var(--color-text-secondary)">{`+${count}`}</text>
+              {n.id === cursorId && <circle className="disc-lineage__selected" r={16} strokeDasharray="3 2" />}
+            </g>
+          );
+        }
         const c = byId.get(n.id);
         if (!c) return null;
         const s = nodeStyle(c, extent);
@@ -86,10 +97,21 @@ export function LineageTab({ view, selectedId, onOpen }: { view: RunView; select
   // Duplicates and invalid proposals never have children; hiding them keeps big trees readable.
   const noise = useMemo(() => all.filter((c) => ['duplicate', 'invalid'].includes(candidateKind(c))).length, [all]);
   const list = useMemo(() => (showNoise ? all : all.filter((c) => !['duplicate', 'invalid'].includes(candidateKind(c)))), [all, showNoise]);
-  const signature = lineageSignature(list);
+  const [expanded, setExpanded] = useState<ReadonlySet<string>>(() => new Set());
+  const signature = `${lineageSignature(list)}#${[...expanded].join(',')}`;
   // The layout depends on structure only; fitness updates never re-run it.
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  const layout = useMemo(() => buildLineageLayout(list), [signature]);
+  const layout = useMemo(() => buildLineageLayout(list, { expanded }), [signature]);
+  const expandMore = (moreId: string) => {
+    const parentId = layout.byId.get(moreId)?.collapsed?.parentId;
+    if (!parentId) return;
+    setExpanded((prev) => new Set([...prev, parentId]));
+    setAnnouncement(`Showing all children of ${parentId}`);
+  };
+  const activate = (id: string) => {
+    if (isMoreNode(id)) expandMore(id);
+    else onOpen(id);
+  };
   const byId = useMemo(() => indexById(list), [list]);
   const extent = useMemo(() => fitnessExtent(list), [list]);
   const [wrapRef, width] = useElementWidth<HTMLDivElement>(720);
@@ -139,7 +161,7 @@ export function LineageTab({ view, selectedId, onOpen }: { view: RunView; select
 
   const describeNode = (id: string) => {
     const c = byId.get(id);
-    if (!c) return id;
+    if (!c) return isMoreNode(id) ? `${layout.byId.get(id)?.collapsed?.ids.length ?? 0} more children, press Enter to show` : id;
     const f = candidateFitness(c);
     return `${id}, ${CANDIDATE_KIND_LABEL[candidateKind(c)]}${f === null ? '' : `, fitness ${formatSci(f)}`}${c.parent_id ? `, child of ${c.parent_id}` : ', root'}`;
   };
@@ -147,7 +169,7 @@ export function LineageTab({ view, selectedId, onOpen }: { view: RunView; select
   const onKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
     if (event.key === 'Enter' && cursorId) {
       event.preventDefault();
-      onOpen(cursorId);
+      activate(cursorId);
       return;
     }
     if (!['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(event.key) || !cursorId) return;
@@ -163,7 +185,7 @@ export function LineageTab({ view, selectedId, onOpen }: { view: RunView; select
     const id = (event.target as Element).closest('[data-id]')?.getAttribute('data-id');
     if (id) {
       setCursorId(id);
-      onOpen(id);
+      activate(id);
     }
   };
 

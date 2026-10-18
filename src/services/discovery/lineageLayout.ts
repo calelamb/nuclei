@@ -12,15 +12,29 @@ const LINEAGE_COL = 64;
 const LINEAGE_ROW = 22;
 const VIRTUAL_ROOT = '__lineage_root__';
 
-interface LineageNode {
+/** Leaf siblings shown per parent before the rest collapse into a "+N more" node. */
+export const LINEAGE_MAX_LEAF_SIBLINGS = 12;
+export const MORE_PREFIX = '__more__:';
+
+export interface LineageNode {
   id: string;
   parentId: string | null;
   x: number;
   y: number;
   depth: number;
+  /** Set on synthetic "+N more" nodes: the leaf candidates they stand for. */
+  collapsed?: { parentId: string; ids: string[] };
 }
 
-interface LineageLink {
+export interface LineageLayoutOptions {
+  /** Parents whose full sibling list is shown. */
+  expanded?: ReadonlySet<string>;
+  maxLeafSiblings?: number;
+}
+
+export const isMoreNode = (id: string): boolean => id.startsWith(MORE_PREFIX);
+
+export interface LineageLink {
   source: string;
   target: string;
 }
@@ -45,7 +59,35 @@ export function lineageSignature(candidates: readonly CandidateRecord[]): string
   return candidates.map((c) => `${c.id}<${c.parent_id ?? ''}`).join('|');
 }
 
-export function buildLineageLayout(candidates: readonly CandidateRecord[]): LineageLayout {
+/**
+ * Star-shaped trees (60+ children of one parent) are unreadable at any zoom.
+ * Leaf children beyond the cap collapse into one "+N more" node per parent;
+ * children that have descendants of their own are never hidden, so no
+ * lineage path is lost. Expanding a parent restores its full sibling list.
+ */
+function collapseLeafSiblings(kids: Map<string, string[]>, options: LineageLayoutOptions): { shown: Map<string, string[]>; hidden: Map<string, string[]> } {
+  const cap = options.maxLeafSiblings ?? LINEAGE_MAX_LEAF_SIBLINGS;
+  const out = new Map<string, string[]>();
+  const hidden = new Map<string, string[]>();
+  for (const [parent, list] of kids) {
+    if (options.expanded?.has(parent)) {
+      out.set(parent, list);
+      continue;
+    }
+    const leaves = list.filter((k) => !kids.has(k));
+    if (leaves.length <= cap) {
+      out.set(parent, list);
+      continue;
+    }
+    const keepLeaves = new Set(leaves.slice(0, cap));
+    const collapsedIds = leaves.slice(cap);
+    out.set(parent, [...list.filter((k) => kids.has(k) || keepLeaves.has(k)), `${MORE_PREFIX}${parent}`]);
+    hidden.set(parent, collapsedIds);
+  }
+  return { shown: out, hidden };
+}
+
+export function buildLineageLayout(candidates: readonly CandidateRecord[], options: LineageLayoutOptions = {}): LineageLayout {
   const ids = new Set(candidates.map((c) => c.id));
   const kids = new Map<string, string[]>();
   const roots: string[] = [];
@@ -56,9 +98,10 @@ export function buildLineageLayout(candidates: readonly CandidateRecord[]): Line
       roots.push(c.id);
     }
   }
+  const { shown: shownKids, hidden: hiddenIds } = collapseLeafSiblings(kids, options);
   const datum = (id: string, seen: Set<string>): TreeDatum => {
     seen.add(id);
-    return { id, children: (kids.get(id) ?? []).filter((k) => !seen.has(k)).map((k) => datum(k, seen)) };
+    return { id, children: (shownKids.get(id) ?? []).filter((k) => !seen.has(k)).map((k) => datum(k, seen)) };
   };
   const seen = new Set<string>();
   const rootDatum: TreeDatum =
@@ -80,6 +123,7 @@ export function buildLineageLayout(candidates: readonly CandidateRecord[]): Line
     const parentId = n.parent && n.parent.data.id !== VIRTUAL_ROOT ? n.parent.data.id : null;
     const depth = n.depth - (roots.length === 1 ? 0 : 1);
     const node: LineageNode = { id: n.data.id, parentId, x: depth * LINEAGE_COL, y: n.x ?? 0, depth };
+    if (isMoreNode(node.id) && parentId) node.collapsed = { parentId, ids: hiddenIds.get(parentId) ?? [] };
     nodes.push(node);
     minY = Math.min(minY, node.y);
     maxY = Math.max(maxY, node.y);

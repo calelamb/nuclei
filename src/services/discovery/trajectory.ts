@@ -5,6 +5,7 @@
  */
 
 import type { CandidateMutator, CandidateRecord } from '../../types/discovery';
+import { scoredCountLabel } from './format';
 import { candidateFitness, candidateKind, indexById, isImprovement, numericId, screenFitness } from './candidateView';
 
 type TrajectoryKind = 'scored' | 'rejected' | 'failed' | 'screened_out';
@@ -105,10 +106,11 @@ export function stepPath(steps: readonly IslandStep[], xEnd: number, x: (v: numb
 }
 
 export function trajectorySummary(t: Trajectory): string {
-  const scored = t.points.filter((p) => p.kind === 'scored').length;
+  const scored = t.points.filter((p) => p.kind === 'scored' && p.mutator !== 'seed').length;
+  const seedScored = t.points.some((p) => p.mutator === 'seed' && p.kind === 'scored');
   const rejected = t.points.filter((p) => p.kind === 'rejected').length;
   const failed = t.points.filter((p) => p.kind === 'failed').length;
   const screened = t.points.filter((p) => p.kind === 'screened_out').length;
   const bests = t.islands.map((s) => `island ${s.island + 1} best ${s.steps[s.steps.length - 1].best.toPrecision(4)}`).join(', ');
-  return `Fitness over ${t.xMax} candidates: ${scored} scored, ${rejected} rejected, ${failed} failed, ${screened} screened out. ${bests || 'No scored candidate yet.'}`;
+  return `Fitness over ${t.xMax} candidates: ${scoredCountLabel(scored, seedScored)}, ${rejected} rejected, ${failed} failed, ${screened} screened out. ${bests || 'No scored candidate yet.'}`;
 }
