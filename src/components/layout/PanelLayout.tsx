@@ -35,6 +35,7 @@ import { DEFAULT_EDITOR_PANE_WIDTH, computeEditorPaneWidth } from './layoutMath'
 import { useDisplaySnapshot } from '../../layout/useDisplaySnapshot';
 import { useEditorStore } from '../../stores/editorStore';
 import { hasMeaningfulOutput, useSimulationStore } from '../../stores/simulationStore';
+import { sampledProbabilities } from '../histogram/histogramData';
 import { shouldRenderBottomPanel } from '../../layout/bottomPanelPresence';
 import { useThemeStore } from '../../stores/themeStore';
 import { useUIModeStore } from '../../stores/uiModeStore';
@@ -518,7 +519,7 @@ export function PanelLayout() {
                           <PanelReveal when={chipShown} from="bottom">
                             <div style={{ padding: '6px 10px 10px', flexShrink: 0 }}>
                               <HardwareAwareHistogramChip
-                                simProbabilities={result?.probabilities ?? null}
+                                simProbabilities={result ? sampledProbabilities(result) : null}
                                 onDismiss={dismissChip}
                                 onExpand={expandHistogram}
                               />
