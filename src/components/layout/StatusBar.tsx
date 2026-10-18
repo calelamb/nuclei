@@ -22,6 +22,7 @@ import { useUiFeatures } from '../../hooks/useUiFeatures';
 import { getKernelStatusModel, type KernelTone } from './kernelStatusModel';
 import { focusKernelBanner, retryKernel } from '../../lib/kernelControl';
 import { useMainAreaTakeover } from '../../layout/takeover';
+import './statusBar.css';
 
 /**
  * PRD 11 Phase A — the status bar, extracted VERBATIM from `PanelLayout.tsx`.
@@ -33,6 +34,15 @@ import { useMainAreaTakeover } from '../../layout/takeover';
  * (`StatusBar.test.tsx`) proves the extracted component matches the pre-
  * extraction output.
  */
+
+/** A status-bar menu trigger: sized like the chips, coloured and hovered by .statusbar-ctl. */
+const MENU_TRIGGER_STYLE: React.CSSProperties = {
+  padding: '0 8px', height: 20, background: 'transparent', border: 'none',
+  cursor: 'pointer', fontSize: 11, fontFamily: TYPOGRAPHY.fontSans, fontWeight: 500,
+};
+
+/** Qubits and Depth describe the code before the last edit while the diagram is stale or catching up. */
+const STALE_STATS_OPACITY = 0.6;
 
 /* ── Learn level picker ── */
 const LEVEL_OPTIONS: ReadonlyArray<{ value: UIMode; label: string; hint: string }> = [
@@ -59,11 +69,8 @@ function UiLevelMenu() {
           <button
             {...p}
             aria-label={`Level: ${label}`}
-            className="nuclei-quiet"
-            style={{
-              padding: '0 8px', height: 20, background: 'transparent', border: 'none', borderRadius: 4,
-              cursor: 'pointer', fontSize: 11, fontFamily: TYPOGRAPHY.fontSans, fontWeight: 500,
-            }}
+            className="statusbar-ctl"
+            style={MENU_TRIGGER_STYLE}
           >
             Level: {label}
           </button>
@@ -105,11 +112,8 @@ function LayoutPresetSwitcher() {
           <button
             {...p}
             aria-label={`Layout preset: ${label}`}
-            className="nuclei-quiet"
-            style={{
-              padding: '0 8px', height: 20, background: 'transparent', border: 'none', borderRadius: 4,
-              cursor: 'pointer', fontSize: 11, fontFamily: TYPOGRAPHY.fontSans, fontWeight: 500,
-            }}
+            className="statusbar-ctl"
+            style={MENU_TRIGGER_STYLE}
           >
             Layout: {label}
           </button>
@@ -133,8 +137,9 @@ function KernelDot({ color, pulse }: { color: string; pulse: boolean }) {
 
 /* ── Status Bar ── */
 export function StatusBar() {
-  const { snapshot } = useDisplaySnapshot();
+  const { snapshot, stale } = useDisplaySnapshot();
   const previewPending = usePreviewPending();
+  const statsStale = stale || previewPending;
   const isRunning = useSimulationStore((s) => s.isRunning);
   const result = useSimulationStore((s) => s.result);
   const lastRunFailed = useSimulationStore((s) => s.lastRunFailed);
@@ -205,17 +210,17 @@ export function StatusBar() {
       fontSize: 11, fontFamily: TYPOGRAPHY.fontSans,
       flexShrink: 0, zIndex: 10,
       borderTop: `1px solid ${colors.border}`,
-    }} role="toolbar" aria-label="Status bar">
+    }} role="group" aria-label="Status bar">
       {/* Mode chip — far-left mode identity + switcher (PRD 11 Phase B). */}
       <ModeChip />
 
       {/* Left side: editor stats and the layout preset only mean something while the editor is on screen. */}
       {!takeover && (
         <>
-          <span style={{ color: colors.textMuted, opacity: previewPending ? 0.6 : 1 }}>
+          <span style={{ color: colors.textMuted, opacity: statsStale ? STALE_STATS_OPACITY : 1 }}>
             Qubits: {snapshot ? snapshot.qubit_count : '—'}
           </span>
-          <span style={{ color: colors.textMuted, opacity: previewPending ? 0.6 : 1 }}>
+          <span style={{ color: colors.textMuted, opacity: statsStale ? STALE_STATS_OPACITY : 1 }}>
             Depth: {snapshot ? snapshot.depth : '—'}
           </span>
           {features.layoutPresets && <LayoutPresetSwitcher />}
@@ -284,6 +289,7 @@ export function StatusBar() {
             type="button"
             onClick={() => { if (!focusKernelBanner()) retryKernel(); }}
             aria-label={`${kernelModel.label}. Show details and retry`}
+            className="statusbar-ctl"
             style={{ ...chipStyle, color: toneColor.error, cursor: 'pointer', background: 'transparent', border: 'none' }}
           >
             <KernelDot color={toneColor.error} pulse={false} />
@@ -304,8 +310,8 @@ export function StatusBar() {
         <button
           onClick={() => openPalette(true)}
           aria-label="Open command palette"
-          className="nuclei-quiet"
-          style={{ ...chipStyle, background: 'transparent', border: 'none', borderRadius: 4, cursor: 'pointer', gap: 5 }}
+          className="statusbar-ctl"
+          style={{ ...chipStyle, background: 'transparent', border: 'none', cursor: 'pointer', gap: 5 }}
         >
           <Command size={12} />
           <span>Commands</span>
@@ -316,9 +322,9 @@ export function StatusBar() {
         <button
           onClick={themeToggle}
           aria-label={`Switch to ${themeMode === 'dark' ? 'light' : 'dark'} theme`}
-          className="nuclei-quiet"
+          className="statusbar-ctl"
           style={{
-            background: 'transparent', border: 'none', borderRadius: 4, cursor: 'pointer',
+            background: 'transparent', border: 'none', cursor: 'pointer',
             width: 22, height: 22, padding: 0, display: 'flex', alignItems: 'center', justifyContent: 'center',
           }}
         >
