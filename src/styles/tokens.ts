@@ -21,6 +21,8 @@ export interface ColorTokens {
   // Borders
   borderSubtle: string;
   borderStrong: string;
+  /** Boundary of inputs, selects, checkboxes and switch tracks: 3:1 against every surface (WCAG 1.4.11). */
+  borderControl: string;
   // Accents
   accentQuantum: string;
   accentQuantumSoft: string;
@@ -122,6 +124,7 @@ export const DARK_COLORS: ColorTokens = {
   textDisabled: '#475569',
   borderSubtle: 'rgba(255, 255, 255, 0.06)',
   borderStrong: '#1A2A42',
+  borderControl: '#62728C',
   accentQuantum: '#00B4D8',
   accentQuantumSoft: '#48CAE4',
   accentQuantumText: '#00B4D8',
@@ -164,6 +167,7 @@ export const LIGHT_COLORS: ColorTokens = {
   textDisabled: '#94A3B8',
   borderSubtle: 'rgba(0, 0, 0, 0.06)',
   borderStrong: '#E2E8F0',
+  borderControl: '#7A889D',
   accentQuantum: '#0891B2',
   accentQuantumSoft: '#00B4D8',
   accentQuantumText: '#0E7490',

@@ -5,6 +5,12 @@ export interface TabOption<T extends string> {
   value: T;
   label: ReactNode;
   disabled?: boolean;
+  /** Optional leading icon (lucide at ICON_SIZE.sm); decorative, so give icon-only tabs a `title`. */
+  icon?: ReactNode;
+  /** Optional trailing count, rendered as quiet tabular text. */
+  count?: number;
+  /** Tooltip and accessible name override (required for an icon-only tab). */
+  title?: string;
 }
 
 export interface TabsProps<T extends string> {
@@ -84,9 +90,13 @@ export function Tabs<T extends string>({ value, options, onChange, 'aria-label':
             disabled={o.disabled}
             tabIndex={selected ? 0 : -1}
             className="nuclei-tabs__tab"
+            title={o.title}
+            aria-label={o.title && !o.label ? o.title : undefined}
             onClick={() => onChange(o.value)}
           >
+            {o.icon && <span className="nuclei-tabs__icon" aria-hidden="true">{o.icon}</span>}
             {o.label}
+            {o.count !== undefined && <span className="nuclei-tabs__count">{o.count}</span>}
           </button>
         );
       })}

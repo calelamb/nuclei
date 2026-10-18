@@ -39,7 +39,7 @@
 .video__poster:hover .video__veil { background: rgba(0, 0, 0, 0.35); }
 .video__disc { display: grid; place-items: center; width: 64px; height: 64px; border-radius: 50%; background: rgba(0, 0, 0, 0.7); color: #fff; box-shadow: var(--shadow-md); transition: transform var(--duration-fast) var(--ease-standard); }
 .video__poster:hover .video__disc { transform: scale(1.08); }
-.video__disc--soon { background: color-mix(in srgb, var(--color-accent-quantum) 14%, transparent); color: var(--color-accent-quantum); box-shadow: none; }
+.video__disc--soon { background: color-mix(in srgb, var(--color-accent-quantum) 14%, transparent); color: var(--color-accent-quantum-text); box-shadow: none; }
 .video__soon { font-size: var(--font-size-body); color: var(--color-text-secondary); }
 .video__badge { position: absolute; top: var(--space-2); right: var(--space-2); padding: 2px var(--space-2); border-radius: var(--radius-xs); background: rgba(0, 0, 0, 0.75); color: #fff; font-size: var(--font-size-caption); font-weight: var(--font-weight-medium); }
 .video__meta { padding: var(--space-3) var(--space-4); }

@@ -24,6 +24,11 @@ describe.each([['dark', DARK_COLORS], ['light', LIGHT_COLORS]] as const)('%s pal
       });
     }
   }
+  for (const surface of SURFACES) {
+    it(`borderControl on ${surface} meets the 3:1 non-text boundary (WCAG 1.4.11)`, () => {
+      expect(ratio(c.borderControl, c[surface])).toBeGreaterThanOrEqual(3);
+    });
+  }
   it('keeps the text hierarchy ordered (primary > secondary > tertiary > disabled)', () => {
     const r = (k: keyof ColorTokens) => ratio(c[k], c.surfaceBase);
     expect(r('textPrimary')).toBeGreaterThan(r('textSecondary'));

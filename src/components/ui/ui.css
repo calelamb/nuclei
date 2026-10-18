@@ -62,7 +62,7 @@
 .nuclei-select > select {
   appearance: none; -webkit-appearance: none; width: 100%; min-width: 0;
   padding: 0 calc(var(--space-2) + var(--icon-sm) + var(--space-1)) 0 var(--space-2);
-  border: 1px solid var(--color-border-strong); border-radius: var(--radius-soft);
+  border: 1px solid var(--color-border-control); border-radius: var(--radius-soft);
   background: var(--color-surface-raised); color: var(--color-text-primary);
   font-family: var(--font-sans); font-size: var(--font-size-chrome-label); cursor: pointer;
   transition: border-color var(--duration-fast) var(--ease-standard), background-color var(--duration-fast) var(--ease-standard);
@@ -78,7 +78,7 @@
 /* ── TextInput / TextArea ── */
 .nuclei-input, .nuclei-textarea {
   width: 100%; min-width: 0; padding: 0 var(--space-2);
-  border: 1px solid var(--color-border-strong); border-radius: var(--radius-soft);
+  border: 1px solid var(--color-border-control); border-radius: var(--radius-soft);
   background: var(--color-surface-base); color: var(--color-text-primary);
   font-family: var(--font-sans); font-size: var(--font-size-chrome-label);
   transition: border-color var(--duration-fast) var(--ease-standard);
@@ -97,7 +97,7 @@
 /* ── Switch ── */
 .nuclei-switch {
   position: relative; flex: 0 0 auto; width: 32px; height: 18px; padding: 0; cursor: pointer;
-  border: 1px solid var(--color-border-strong); border-radius: var(--radius-pill);
+  border: 1px solid var(--color-border-control); border-radius: var(--radius-pill);
   background: var(--color-surface-overlay);
   transition: background-color var(--duration-fast) var(--ease-standard), border-color var(--duration-fast) var(--ease-standard);
 }
@@ -122,7 +122,11 @@
               border-color var(--duration-normal) var(--ease-standard);
 }
 .nuclei-choice-card:hover { background: var(--color-surface-raised); border-color: var(--choice-accent); }
-.nuclei-choice-card:focus-visible { outline-offset: 0; }
+/* Keyboard focus draws the ring and the accent stripe as one shape; the border does not shift colour underneath it. */
+.nuclei-choice-card:focus-visible {
+  outline: none; border-color: var(--color-border-subtle);
+  box-shadow: inset 3px 0 0 var(--choice-accent), 0 0 0 var(--focus-ring-width) var(--focus-ring-color);
+}
 .nuclei-choice-card__title { color: var(--color-text-primary); font-size: var(--font-size-heading); font-weight: var(--font-weight-semibold); }
 .nuclei-choice-card__desc { margin-top: var(--space-1); color: var(--color-text-secondary); font-size: var(--font-size-code); line-height: 1.5; }
 
@@ -159,7 +163,7 @@
 .nuclei-checkbox > input { position: absolute; width: 16px; height: 16px; margin: 0; opacity: 0; cursor: inherit; }
 .nuclei-checkbox__box {
   display: inline-grid; place-items: center; flex: 0 0 auto; width: 16px; height: 16px;
-  border: 1px solid var(--color-text-tertiary); border-radius: var(--radius-xs);
+  border: 1px solid var(--color-border-control); border-radius: var(--radius-xs);
   background: var(--color-surface-base); color: transparent;
   transition: background-color var(--duration-fast) var(--ease-standard), border-color var(--duration-fast) var(--ease-standard);
 }
@@ -183,6 +187,9 @@
 .nuclei-tabs__tab:hover:not(:disabled) { color: var(--color-text-secondary); }
 .nuclei-tabs__tab[aria-selected='true'] { color: var(--color-text-primary); }
 .nuclei-tabs__tab[aria-selected='true']::after { content: ''; position: absolute; left: var(--space-2); right: var(--space-2); bottom: -1px; height: 2px; border-radius: 1px; background: var(--color-accent-quantum); }
+.nuclei-tabs__tab { display: inline-flex; align-items: center; gap: var(--space-1); }
+.nuclei-tabs__icon { display: inline-flex; flex: 0 0 auto; }
+.nuclei-tabs__count { font-variant-numeric: tabular-nums; font-weight: var(--font-weight-regular); color: var(--color-text-tertiary); }
 .nuclei-tabs__tab:disabled { cursor: not-allowed; opacity: 0.5; }
 
 /* ── Badge ── */
@@ -340,7 +347,7 @@
 .nuclei-empty { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: var(--space-1); padding: var(--space-6) var(--space-4); text-align: center; font-family: var(--font-sans); }
 .nuclei-empty__icon { display: inline-flex; margin-bottom: var(--space-1); color: var(--color-text-tertiary); }
 .nuclei-empty__title { margin: 0; font-size: var(--font-size-code); font-weight: var(--font-weight-semibold); line-height: var(--line-height-label); color: var(--color-text-primary); }
-.nuclei-empty__body { margin: 0; max-width: 32ch; font-size: var(--font-size-chrome-label); font-weight: var(--font-weight-regular); line-height: 1.5; color: var(--color-text-secondary); }
+.nuclei-empty__body { margin: 0; max-width: 32ch; font-size: var(--font-size-chrome-label); font-weight: var(--font-weight-regular); line-height: 1.5; color: var(--color-text-secondary); text-wrap: pretty; }
 .nuclei-empty__action { margin-top: var(--space-3); }
 
 /* Horizontal scroll strips (editor file tabs): fade the clipped edge so hidden tabs are discoverable. */
@@ -354,3 +361,17 @@
   position: absolute; top: 0; left: 0; width: 1px; height: 1px; margin: -1px; padding: 0; border: 0;
   overflow: hidden; clip: rect(0 0 0 0); clip-path: inset(50%); white-space: nowrap;
 }
+
+/* ── Overline and pane header: the two shared header recipes ── */
+/* Small uppercase eyebrow: 11/600, one tracking value, tertiary text. */
+.nuclei-overline {
+  margin: 0; color: var(--color-text-tertiary); font-family: var(--font-sans);
+  font-size: var(--font-size-caption); font-weight: var(--font-weight-semibold);
+  letter-spacing: 0.04em; line-height: var(--line-height-label); text-transform: uppercase;
+}
+/* Pane header: a 40px row with a bottom rule and a vertically centred title; actions sit on the right. */
+.nuclei-pane-header {
+  display: flex; align-items: center; gap: var(--space-2); flex: 0 0 auto; box-sizing: border-box; height: 40px; padding: 0 var(--space-3);
+  border-bottom: 1px solid var(--color-border-subtle); background: var(--color-surface-base);
+}
+.nuclei-pane-header__title { margin: 0; min-width: 0; flex: 1 1 auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

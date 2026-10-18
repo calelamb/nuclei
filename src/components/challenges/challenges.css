@@ -2,7 +2,7 @@
 .cmode { display: flex; flex-direction: column; width: 100%; height: 100%; overflow: hidden; background: var(--color-surface-base); font-family: var(--font-sans); }
 .cmode__bar { display: flex; align-items: center; flex-shrink: 0; gap: var(--space-3); height: 44px; padding: 0 var(--space-4); border-bottom: 1px solid var(--color-border-strong); background: var(--color-surface-raised); }
 .cmode__sep { width: 1px; height: 16px; background: var(--color-border-strong); }
-.cmode__trophy { color: var(--color-accent-quantum); }
+.cmode__trophy { color: var(--color-accent-quantum-text); }
 .cmode__title { font-size: var(--font-size-code); font-weight: var(--font-weight-semibold); color: var(--color-text-primary); }
 .cmode__problem { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--font-size-chrome-label); color: var(--color-text-secondary); }
 .cmode__content { flex: 1; overflow: hidden; }
@@ -26,7 +26,7 @@
 .trun__results { height: 100%; overflow-y: auto; padding: var(--space-1) 0; }
 .trun__notice { padding: var(--space-2) var(--space-3); }
 .trun__note { display: flex; align-items: center; gap: var(--space-2); padding: 18px var(--space-4); font-size: var(--font-size-chrome-label); color: var(--color-text-secondary); }
-.trun__note svg { color: var(--color-accent-quantum); flex-shrink: 0; }
+.trun__note svg { color: var(--color-accent-quantum-text); flex-shrink: 0; }
 
 /* Problem filters */
 .pfilters { display: flex; flex-direction: column; gap: var(--space-3); padding: var(--space-3) var(--space-6); border-bottom: 1px solid var(--color-border-strong); background: var(--color-surface-raised); font-family: var(--font-sans); }
@@ -48,7 +48,7 @@
 .ptab:hover { border-color: var(--color-text-tertiary); }
 .ptab[aria-selected='true'] { border-color: var(--color-accent-quantum); background: color-mix(in srgb, var(--color-accent-quantum) 10%, var(--color-surface-raised)); color: var(--color-text-primary); }
 .ptab__icon { display: grid; place-items: center; width: 28px; height: 28px; flex-shrink: 0; border: 1px solid var(--color-border-strong); border-radius: var(--radius-soft); background: var(--color-surface-raised); color: var(--color-text-tertiary); }
-.ptab[aria-selected='true'] .ptab__icon { border-color: var(--color-accent-quantum); color: var(--color-accent-quantum); }
+.ptab[aria-selected='true'] .ptab__icon { border-color: var(--color-accent-quantum); color: var(--color-accent-quantum-text); }
 .ptab__text { flex: 1; min-width: 0; }
 .ptab__label, .ptab__detail { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ptab__label { font-size: var(--font-size-code); font-weight: var(--font-weight-bold); color: var(--color-text-primary); }

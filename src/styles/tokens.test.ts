@@ -34,6 +34,7 @@ const colorKeyMap: Record<keyof typeof DARK_COLORS, string> = {
   textDisabled: '--color-text-disabled',
   borderSubtle: '--color-border-subtle',
   borderStrong: '--color-border-strong',
+  borderControl: '--color-border-control',
   accentQuantum: '--color-accent-quantum',
   accentQuantumSoft: '--color-accent-quantum-soft',
   accentQuantumText: '--color-accent-quantum-text',
