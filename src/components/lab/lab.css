@@ -752,3 +752,33 @@ textarea.lab-input { height: auto; padding: 8px 10px; resize: vertical; line-hei
     transition-duration: 1ms !important;
   }
 }
+
+/* ── Error state (LabErrorBoundary) ──────────────────────────────────── */
+
+.lab-error {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  gap: var(--space-2);
+  padding: var(--space-8) var(--space-6);
+  min-height: 180px;
+  color: var(--color-text-secondary);
+  background: transparent;
+}
+
+.lab-error__icon {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  background: var(--lab-danger-soft);
+  color: var(--color-danger);
+  margin-bottom: var(--space-1);
+}
+
+.lab-error__details { max-width: 60ch; width: 100%; text-align: left; font-size: 12px; }
+.lab-error__details summary { cursor: pointer; min-height: 28px; display: flex; align-items: center; }
+.lab-error__details pre { white-space: pre-wrap; overflow-wrap: anywhere; }
