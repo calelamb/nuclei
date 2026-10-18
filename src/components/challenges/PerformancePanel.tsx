@@ -131,7 +131,7 @@ export function PerformancePanel({ report }: PerformancePanelProps) {
           fontWeight: 700,
           fontFamily: TYPOGRAPHY.fontSans,
           textTransform: 'uppercase',
-          letterSpacing: 0.5,
+          letterSpacing: '0.04em',
         }}>
           Performance
         </span>

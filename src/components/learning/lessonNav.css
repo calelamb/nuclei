@@ -8,7 +8,7 @@
 .lnav__head { flex-shrink: 0; padding: var(--space-3); border-bottom: 1px solid var(--color-border-strong); }
 .lnav__head-row { display: flex; align-items: flex-start; gap: var(--space-2); }
 .lnav__head-text { flex: 1; min-width: 0; }
-.lnav__eyebrow { font-size: var(--font-size-caption); font-weight: var(--font-weight-semibold); letter-spacing: 0.4px; text-transform: uppercase; color: var(--color-text-secondary); }
+.lnav__eyebrow { font-size: var(--font-size-caption); font-weight: var(--font-weight-semibold); letter-spacing: 0.04em; text-transform: uppercase; color: var(--color-text-secondary); }
 .lnav__track { margin-top: var(--space-0); font-size: var(--font-size-body); font-weight: var(--font-weight-semibold); line-height: 1.25; color: var(--color-text-primary); }
 .lnav__progress { display: flex; align-items: center; gap: var(--space-2); margin-top: var(--space-3); }
 .lnav__bar { flex: 1; height: 4px; border-radius: var(--radius-xs); background: var(--color-border-strong); overflow: hidden; }

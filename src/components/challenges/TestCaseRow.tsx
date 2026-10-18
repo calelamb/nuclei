@@ -199,7 +199,7 @@ export function TestCaseRow({ testCase, result, isRunning, index }: TestCaseRowP
                     fontWeight: 700,
                     fontFamily: TYPOGRAPHY.fontSans,
                     textTransform: 'uppercase',
-                    letterSpacing: 0.4,
+                    letterSpacing: '0.04em',
                     marginBottom: 4,
                   }}>
                     {verdictLabel}

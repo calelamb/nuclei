@@ -73,6 +73,11 @@ describe('design guards', () => {
     expect(css).toMatch(new RegExp(`\\.lucide\\s*\\{\\s*stroke-width:\\s*${ICON_STROKE}\\s*;`));
   });
 
+  it('uses the single overline tracking (0.04em) in the Learn, challenge, community, settings and onboarding trees', () => {
+    const owned = (f: { rel: string }) => /^components\/(learning|challenges|community|settings|onboarding)\//.test(f.rel) && !f.rel.endsWith('KeyboardShortcuts.tsx');
+    expect(offenders((f) => owned(f) && (/letterSpacing:\s*0\.[45]\b(?!\s*\w)/.test(f.text) || /letter-spacing:\s*0\.[45]px/.test(f.text)))).toEqual([]);
+  });
+
   it('draws modal backdrops with the scrim token, not a hard-coded black', () => {
     const modalFiles = ['components/onboarding/KeyboardShortcuts.tsx', 'components/commandPalette/CommandPalette.tsx', 'components/ui/Dialog.tsx'];
     expect(offenders((f) => modalFiles.includes(f.rel) && /background:\s*['"]rgba\(0,\s*0,\s*0/.test(f.text))).toEqual([]);

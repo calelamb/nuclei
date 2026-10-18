@@ -54,7 +54,7 @@ export function CircuitCard({ circuit, isLiked, isBookmarked, onLike, onBookmark
           fontFamily: TYPOGRAPHY.fontSans,
           color: colors.textDim,
           textTransform: 'uppercase',
-          letterSpacing: 0.5,
+          letterSpacing: '0.04em',
           background: colors.bg,
           padding: '2px 6px',
           borderRadius: 4,

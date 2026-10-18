@@ -2,7 +2,7 @@
 .demo { margin: var(--space-4) 0; overflow: hidden; border: 1px solid var(--color-border-strong); border-radius: var(--radius-round); background: var(--color-surface-raised); box-shadow: var(--shadow-sm); font-family: var(--font-sans); }
 .demo__head { display: flex; align-items: center; gap: var(--space-2); padding: var(--space-3) var(--space-4); border-bottom: 1px solid var(--color-border-strong); }
 .demo__dot { width: 6px; height: 6px; flex-shrink: 0; border-radius: 50%; background: var(--color-accent-quantum); }
-.demo__kicker { font-size: var(--font-size-chrome-label); font-weight: var(--font-weight-medium); letter-spacing: 0.5px; text-transform: uppercase; color: var(--color-text-secondary); white-space: nowrap; }
+.demo__kicker { font-size: var(--font-size-caption); font-weight: var(--font-weight-semibold); letter-spacing: 0.04em; text-transform: uppercase; color: var(--color-text-secondary); white-space: nowrap; }
 .demo__desc { min-width: 0; font-size: var(--font-size-chrome-label); color: var(--color-text-secondary); }
 .demo__editor { border-bottom: 1px solid var(--color-border-strong); }
 .demo__actions { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); padding: var(--space-2) var(--space-4); }
@@ -42,7 +42,7 @@
 .exercise__hint { display: flex; align-items: flex-start; gap: var(--space-2); font-size: var(--font-size-code); color: var(--color-text-secondary); }
 .exercise__hint svg { flex-shrink: 0; margin-top: 2px; color: var(--color-warning); }
 .exercise__output { max-height: 120px; overflow-y: auto; padding: var(--space-2) var(--space-4); border-bottom: 1px solid var(--color-border-strong); background: var(--color-surface-sunken); }
-.exercise__output-label { display: flex; align-items: center; gap: var(--space-1); margin-bottom: var(--space-1); font-size: var(--font-size-caption); letter-spacing: 0.5px; text-transform: uppercase; color: var(--color-text-secondary); }
+.exercise__output-label { display: flex; align-items: center; gap: var(--space-1); margin-bottom: var(--space-1); font-size: var(--font-size-caption); letter-spacing: 0.04em; text-transform: uppercase; color: var(--color-text-secondary); }
 .exercise__output-lines { font: var(--font-size-chrome-label) var(--font-mono); line-height: 1.5; color: var(--color-text-primary); white-space: pre-wrap; }
 .exercise__results { padding: var(--space-2) var(--space-4); border-bottom: 1px solid var(--color-border-strong); }
 .exercise__feedback { display: flex; align-items: flex-start; gap: var(--space-3); padding: var(--space-3) var(--space-4); border-bottom: 1px solid var(--color-border-strong); font-size: var(--font-size-body); line-height: 1.5; }
