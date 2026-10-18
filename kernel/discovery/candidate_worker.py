@@ -82,6 +82,7 @@ _BLOCKED_OS_ATTRS = (
 )
 _ENTRY_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 _MESSAGE_CAP = 2000
+CANDIDATE_FILENAME = "<candidate>"
 
 
 class WorkerFailure(Exception):
@@ -160,6 +161,11 @@ def _preimport(task: str) -> None:
         except ImportError:
             pass
     if task == "quantum_circuit":
+        # Qiskit probes for a writable temp dir at import time, which the write-denying
+        # sandbox (macOS sandbox-exec) makes impossible; naming one skips the probe.
+        import tempfile
+
+        tempfile.tempdir = tempfile.tempdir or "/tmp"
         for name in ("qiskit", "cirq", "kernel.trainability.convert"):
             if importlib.util.find_spec(name.split(".")[0]) is None:
                 continue
@@ -219,7 +225,7 @@ def _describe_exception(exc: BaseException) -> str:
     message = f"{type(exc).__name__}: {exc}"
     line = None
     for frame in traceback.extract_tb(exc.__traceback__):
-        if frame.filename == "<candidate>":
+        if frame.filename == CANDIDATE_FILENAME:
             line = frame.lineno
     if line is not None:
         message += f" (candidate line {line})"
@@ -228,7 +234,7 @@ def _describe_exception(exc: BaseException) -> str:
 
 def _load_entry(request: dict[str, Any]):
     try:
-        code = compile(request["program"], "<candidate>", "exec")
+        code = compile(request["program"], CANDIDATE_FILENAME, "exec")
     except (SyntaxError, ValueError, RecursionError, MemoryError) as exc:
         raise WorkerFailure("compile_error", f"{type(exc).__name__}: {exc}"[:_MESSAGE_CAP])
     namespace: dict[str, Any] = {"__name__": "nuclei_candidate", "__builtins__": builtins}
@@ -242,7 +248,7 @@ def _load_entry(request: dict[str, Any]):
     return entry
 
 
-def _to_artifact(task: str, value: Any, index: int) -> dict[str, Any]:
+def _to_artifact(task: str, value: Any, index: int, line_map: Any = None) -> dict[str, Any]:
     if task == "stim_circuit":
         import stim
 
@@ -253,10 +259,10 @@ def _to_artifact(task: str, value: Any, index: int) -> dict[str, Any]:
                 index,
             )
         return {"circuit_text": str(value)}
-    return _quantum_artifact(value, index)
+    return _quantum_artifact(value, index, line_map)
 
 
-def _quantum_artifact(value: Any, index: int) -> dict[str, Any]:
+def _quantum_artifact(value: Any, index: int, line_map: Any = None) -> dict[str, Any]:
     framework = None
     qiskit = sys.modules.get("qiskit")
     cirq = sys.modules.get("cirq")
@@ -272,25 +278,52 @@ def _quantum_artifact(value: Any, index: int) -> dict[str, Any]:
         )
     try:
         from kernel.trainability.convert import from_object  # lazy: owned by another module
-
-        ir = from_object(value).to_json()
+        from kernel.trainability.ir import IrError
+    except Exception as exc:  # noqa: BLE001
+        raise WorkerFailure("conversion_failed", _describe_exception(exc), index)
+    try:
+        ir = from_object(value, line_map=line_map).to_json()
         if isinstance(ir, str):
             ir = json.loads(ir)
         json.dumps(ir, allow_nan=False)
+    except IrError as exc:
+        # A circuit the IR cannot express (opaque initialize/unitary gates, dynamic
+        # circuits, ...) is a *candidate* defect, not a sandbox failure: hand the
+        # converter's verdict to the trusted scorer so its ``ir_conversion``
+        # guardrail rejects it visibly instead of the call failing opaquely.
+        return {
+            "ir": None,
+            "ir_error": {"code": exc.code, "message": exc.message[:_MESSAGE_CAP]},
+            "framework": framework,
+        }
     except Exception as exc:  # noqa: BLE001
         raise WorkerFailure("conversion_failed", _describe_exception(exc), index)
     return {"ir": ir, "framework": framework}
 
 
-def run_calls(request: dict[str, Any], entry) -> list[dict[str, Any]]:
+def run_calls(request: dict[str, Any], entry, line_map: Any = None) -> list[dict[str, Any]]:
     artifacts: list[dict[str, Any]] = []
     for index, call in enumerate(request["calls"]):
         try:
             value = entry(*call.get("args", []), **call.get("kwargs", {}))
         except BaseException as exc:  # noqa: BLE001
             raise WorkerFailure("entry_raised", _describe_exception(exc), index)
-        artifacts.append({"call_index": index, "artifact": _to_artifact(request["task"], value, index)})
+        artifacts.append({"call_index": index, "artifact": _to_artifact(request["task"], value, index, line_map)})
     return artifacts
+
+
+def _run_program(request: dict[str, Any]) -> list[dict[str, Any]]:
+    """Load and call the candidate. Quantum tasks run under ``trace_gate_lines`` so
+    IR gates carry the candidate line they came from (addendum section C)."""
+    if request["task"] != "quantum_circuit":
+        return run_calls(request, _load_entry(request))
+    try:
+        from kernel.trainability.linetrace import trace_gate_lines
+    except Exception:  # noqa: BLE001 - line numbers are an optional enrichment
+        return run_calls(request, _load_entry(request))
+    with trace_gate_lines(CANDIDATE_FILENAME) as line_map:
+        entry = _load_entry(request)
+        return run_calls(request, entry, line_map)
 
 
 def build_response(
@@ -343,8 +376,7 @@ def main() -> int:
         real_out, real_err = sys.stdout, sys.stderr
         sys.stdout, sys.stderr = stdout_cap, stderr_cap
         try:
-            entry = _load_entry(request)
-            artifacts = run_calls(request, entry)
+            artifacts = _run_program(request)
         finally:
             sys.stdout, sys.stderr = real_out, real_err
     except WorkerFailure as exc:
