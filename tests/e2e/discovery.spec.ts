@@ -28,9 +28,11 @@ const FRONTIER_EVALUATOR: DiscoveryEvaluatorInfo = {
   entry_signature: 'build(n_qubits: int, n_layers: int) -> QuantumCircuit',
   objectives: [
     { key: 'beta', label: 'beta', direction: 'minimize' },
-    { key: 'estimation_hardness', label: 'Estimation hardness', direction: 'maximize' },
+    { key: 'pp_exact_cost', label: 'Pauli-propagation exact cost (log10 strings)', direction: 'maximize' },
   ],
   descriptors: [
+    { key: 'dla_fill_fraction', label: 'DLA fill fraction', min: 0, max: 1, default_bins: 8 },
+    { key: 'light_cone_qubits', label: 'Observable light-cone width (qubits)', min: 0, max: 64, default_bins: 8 },
     { key: 'log2_dla_dimension', label: 'log2 DLA dimension', min: 0, max: 16, default_bins: 8 },
     { key: 'two_qubit_gates_per_layer', label: 'Two-qubit gates per layer', min: 0, max: 64, default_bins: 8 },
   ],
@@ -129,9 +131,12 @@ async function installStubKernel(page: Page): Promise<void> {
                 candidate_id: m.candidate_id, run_id: m.run_id, status: 'scored', fitness: 1 + idx * 0.1,
                 objectives: {
                   beta: { value: beta, ci95: [beta - 0.02, beta + 0.03], direction: 'minimize', label: 'beta' },
-                  estimation_hardness: { value: 3 + (idx % 3), direction: 'maximize', label: 'Estimation hardness' },
+                  pp_exact_cost: { value: 3 + (idx % 3), direction: 'maximize', label: 'Pauli-propagation exact cost (log10 strings)' },
                 },
-                descriptors: { log2_dla_dimension: (idx * 3) % 16, two_qubit_gates_per_layer: (idx * 7) % 64 },
+                descriptors: {
+                  dla_fill_fraction: ((idx * 3) % 16) / 16, light_cone_qubits: (idx * 5) % 17,
+                  log2_dla_dimension: (idx * 3) % 16, two_qubit_gates_per_layer: (idx * 7) % 64,
+                },
                 metrics: {
                   features: {
                     n_qubits: 16, n_params: 32 + idx, parametric_gates: 32 + idx, params_per_qubit: 2, two_qubit_gates: 30,
