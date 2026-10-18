@@ -137,7 +137,7 @@ function AdapterStage({ probe, selected, onSelect }: AdapterStageProps): ReactEl
         return (
           <label key={`${adapter.adapterId}:${adapter.adapterVersion}`} className="qec-import-adapter" data-checked={checked || undefined}>
             <input aria-label={`${adapter.adapterId[0]?.toUpperCase()}${adapter.adapterId.slice(1)} adapter, ${confidence}% confidence`} type="radio" name="qec-adapter" checked={checked} onChange={() => onSelect(adapter.adapterId)} />
-            <span className="qec-import-adapter__mark" aria-hidden="true">{checked && <Check size={ICON_SIZE.xs} strokeWidth={3} />}</span>
+            <span className="qec-import-adapter__mark" aria-hidden="true">{checked && <Check className="nuclei-icon--bold" size={ICON_SIZE.xs} strokeWidth={3} />}</span>
             <Database aria-hidden="true" size={ICON_SIZE.md} />
             <span><strong>{name} · {confidence}% confidence</strong><small className="qec-mono">v{adapter.adapterVersion} · {adapter.sourceKind}</small></span>
             {Object.keys(adapter.details).length > 0 && <small className="qec-import-adapter-details">{Object.entries(adapter.details).map(([key, value]) => `${key}: ${String(value)}`).join(' · ')}</small>}

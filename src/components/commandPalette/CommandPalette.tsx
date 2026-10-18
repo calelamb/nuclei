@@ -357,7 +357,7 @@ export function buildCommands(actions: CommandActions, context: CommandContext):
         useCircuitStore.getState().setStepMode(false);
       });
     }},
-    { id: 'shortcuts', label: 'Keyboard Shortcuts', category: 'Help', shortcut: sc('shortcuts'), keywords: ['keys', 'hotkeys', 'bindings'], action: actions.toggleShortcuts },
+    { id: 'shortcuts', label: 'Keyboard shortcuts', category: 'Help', shortcut: sc('shortcuts'), keywords: ['keys', 'hotkeys', 'bindings'], action: actions.toggleShortcuts },
     { id: 'whats-new', label: "What's New", category: 'Help', keywords: ['release', 'notes', 'changelog', 'version'], action: actions.openWhatsNew },
   );
 
