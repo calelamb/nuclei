@@ -148,7 +148,7 @@ export interface ConjectureResult {
 // ── Protocol ─────────────────────────────────────────────────────────────
 
 export type ConjectureRequest =
-  | { type: 'discovery_conjecture_schema' }
+  | { type: 'discovery_conjecture_schema'; request_id?: string }
   | { type: 'discovery_conjecture_test'; job_id: string; conjecture: Conjecture; seed: number }
   | { type: 'discovery_conjecture_cancel'; job_id: string };
 
@@ -160,6 +160,7 @@ export type ConjectureResponse =
       families: JsonSchema;
       predicate: JsonSchema;
       limits?: Partial<ConjectureLimits>;
+      request_id?: string;
     }
   | { type: 'discovery_conjecture_started'; job_id: string }
   | { type: 'discovery_conjecture_progress'; job_id: string; fraction: number; message: string; circuit_index: number }

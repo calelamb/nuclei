@@ -142,7 +142,7 @@ export interface DiscoveryAudit {
 }
 
 export type DiscoveryRequest =
-  | { type: 'discovery_evaluators' }
+  | { type: 'discovery_evaluators'; request_id?: string }
   | {
       type: 'discovery_evaluate';
       run_id: string;
@@ -173,17 +173,21 @@ export type DiscoveryRequest =
       end_marker?: string;
       seed: number;
       count: number;
-    };
+      request_id?: string;
+    }
+  /** Cheap AST-normalised dedup key for a program (CR-M1); an older kernel answers `invalid_request`. */
+  | { type: 'discovery_program_key'; program: string; request_id?: string };
 
 export type DiscoveryResponse =
-  | { type: 'discovery_evaluators_result'; evaluators: DiscoveryEvaluatorInfo[] }
+  | { type: 'discovery_evaluators_result'; evaluators: DiscoveryEvaluatorInfo[]; request_id?: string }
   | { type: 'discovery_evaluate_accepted'; run_id: string; candidate_id: string; queue_position: number }
   | { type: 'discovery_evaluation'; run_id: string; candidate_id: string; evaluation: DiscoveryEvaluation }
   | { type: 'discovery_cancelled'; run_id: string; candidate_id: string | null; cancelled: number }
   | { type: 'discovery_audit_accepted'; run_id: string; candidate_id: string; queue_position: number }
   | { type: 'discovery_audit_result'; run_id: string; candidate_id: string; audit: DiscoveryAudit }
   | { type: 'discovery_audit_cancelled'; run_id: string; candidate_id: string | null; cancelled: number }
-  | { type: 'discovery_mutations'; mutations: AstMutation[] };
+  | { type: 'discovery_mutations'; mutations: AstMutation[]; request_id?: string }
+  | { type: 'discovery_program_key_result'; program_key: string; request_id?: string };
 
 export const EVOLVE_START_MARKER = '# EVOLVE-BLOCK-START';
 export const EVOLVE_END_MARKER = '# EVOLVE-BLOCK-END';

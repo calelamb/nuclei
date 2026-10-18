@@ -24,6 +24,19 @@ describe('conjecture tester', () => {
     expect(res).toEqual({ ok: false, error: { code: 'conjecture_internal', message: 'boom' } });
   });
 
+  it('correlates the schema request by request_id and drops mismatched replies and errors (CR-M4)', async () => {
+    const session = createFakeSession();
+    const pending = createConjectureTester(session).schema();
+    await new Promise((r) => setTimeout(r, 0));
+    const id = (session.sent[0] as { request_id?: string }).request_id;
+    expect(id).toBeTruthy();
+    session.emit({ type: 'error', phase: 'discovery', code: 'conjecture_internal', message: 'not mine', request_id: 'other' });
+    session.emit({ ...FIXTURE_SCHEMA_REPLY, request_id: 'stale' });
+    session.emit({ ...FIXTURE_SCHEMA_REPLY, request_id: id });
+    const res = await pending;
+    expect(res.ok).toBe(true);
+  });
+
   it('streams started, progress, evidence and the result in order', async () => {
     const session = createFakeSession();
     const tester = createConjectureTester(session, { newJobId: ids });

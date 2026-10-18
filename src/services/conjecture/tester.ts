@@ -12,6 +12,7 @@
 import type { Conjecture, ConjectureResponse, ConjectureResult, ConjectureSchemaInfo } from '../../types/conjecture';
 import type { KernelResponse } from '../../types/quantum';
 import { request, type LabSession } from '../lab/labSession';
+import { newRequestId, replyMatches } from '../discovery/requestId';
 import { normalizeSchemaResult } from './schema';
 
 export interface TesterError {
@@ -94,11 +95,14 @@ export function createConjectureTester(session: LabSession, options: TesterOptio
     schema() {
       return enqueue(async () => {
         try {
+          // Matched by request_id (CR-M4); an older kernel echoes none and is matched as before.
+          const requestId = newRequestId('discovery_conjecture_schema');
           const out = await request(
             session,
-            { type: 'discovery_conjecture_schema' },
-            (m): m is Extract<ConjectureResponse, { type: 'discovery_conjecture_schema_result' }> => m.type === 'discovery_conjecture_schema_result',
-            { timeoutMs: opts.schemaTimeoutMs, matchError: (e) => isDiscoveryError(e) && e.job_id === undefined },
+            { type: 'discovery_conjecture_schema', request_id: requestId },
+            (m): m is Extract<ConjectureResponse, { type: 'discovery_conjecture_schema_result' }> =>
+              m.type === 'discovery_conjecture_schema_result' && replyMatches(requestId, (m as { request_id?: unknown }).request_id),
+            { timeoutMs: opts.schemaTimeoutMs, matchError: (e) => isDiscoveryError(e) && e.job_id === undefined && replyMatches(requestId, e.request_id) },
           );
           if (!out.ok) return { ok: false as const, error: fromKernelError(out.error) };
           const info = normalizeSchemaResult(out.value);
