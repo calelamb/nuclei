@@ -156,7 +156,7 @@ export function VizZone({
           title={kernelStartFailureTitle(platform.getPlatform() === 'web')}
           action={<Button variant="secondary" size="sm" onClick={retryKernel}>Retry</Button>}
         >
-          Retry here, or see the banner above for details.
+          Retry here, or use the banner in the editor for details.
         </EmptyState>
       </div>
     );
