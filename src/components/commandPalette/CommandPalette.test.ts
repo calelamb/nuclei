@@ -214,7 +214,7 @@ describe('one name for every command (palette, shortcuts sheet, registry)', () =
     'Dirac', 'Python', 'Qiskit', 'Learn', 'Research', 'QEC', 'Bloch', 'Go', 'Layout',
     // Names of surfaces a command navigates to (the rail's own labels).
     'Explorer', 'Learning', 'Experiments', 'Challenges', 'Hardware', 'Resource', 'Estimator', 'Transpiler',
-    'Launch', 'Community', 'Plugins', 'Search', 'Circuit', 'Settings', 'Workbench', 'Clean', 'Balanced', 'Full', "What's", 'New',
+    'Histogram', 'Launch', 'Community', 'Plugins', 'Search', 'Circuit', 'Settings', 'Workbench', 'Clean', 'Balanced', 'Full', "What's", 'New',
   ]);
 
   it.each(['learn', 'research'] as const)('%s: labels are sentence case (no second capitalised word outside proper nouns)', (mode) => {
@@ -225,8 +225,8 @@ describe('one name for every command (palette, shortcuts sheet, registry)', () =
 
   it('names the two histogram surfaces by what they are, not by where they sit', () => {
     const labels = all('research').map((c) => c.label);
-    expect(labels).toContain('Toggle histogram chip panel');
-    expect(labels).toContain('Toggle histogram tab panel');
+    expect(labels).toContain('Toggle Histogram chip');
+    expect(labels).toContain('Toggle Histogram tab');
     expect(labels.some((l) => /\(inline\)|\(bottom panel\)/.test(l))).toBe(false);
   });
 });

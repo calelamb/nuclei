@@ -19,8 +19,8 @@ interface StaleResultNoticeProps {
 
 /**
  * Pill at the top of a results panel when what is shown no longer matches the code. By default it
- * sits in the flow, above the cards, so it never covers what it describes; `overlay` floats it
- * over a diagram so appearing does not move anything.
+ * sits in the flow, above the cards, so it never covers what it describes; `inline` puts it in a
+ * header row, where it shrinks with an ellipsis instead of taking a row of its own.
  */
 export function StaleResultNotice({ label, tooltip, onActivate, inline = false }: StaleResultNoticeProps = {}) {
   const colors = useThemeStore((s) => s.colors);

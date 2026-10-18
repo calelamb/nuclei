@@ -74,9 +74,9 @@ function UiLevelMenu() {
 
 /* ── Layout Preset Switcher: a menu like Level, so it is exactly as wide as its label ── */
 const PRESET_OPTIONS: ReadonlyArray<{ value: LayoutPreset; label: string; hint: string }> = [
-  { value: 'clean', label: 'Clean', hint: 'Editor and circuit' },
-  { value: 'balanced', label: 'Balanced', hint: 'Adds Bloch spheres and the histogram' },
-  { value: 'full', label: 'Full', hint: 'Adds the terminal and full histogram' },
+  { value: 'clean', label: 'Clean', hint: 'Results appear after you run' },
+  { value: 'balanced', label: 'Balanced', hint: 'Bloch spheres shown from the start' },
+  { value: 'full', label: 'Full', hint: 'Adds the Terminal and Histogram tab' },
 ];
 
 function LayoutPresetSwitcher() {

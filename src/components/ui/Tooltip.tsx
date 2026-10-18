@@ -31,10 +31,29 @@ export interface TooltipProps {
  * as kbd chips in one glyph notation. Replaces native `title` for icon-only and
  * shortcut-bearing controls.
  */
+const POINTER_FOCUS_WINDOW_MS = 600;
+let lastPointerDownAt = Number.NEGATIVE_INFINITY;
+let pointerListenerInstalled = false;
+
+function trackPointerDown(): void {
+  if (pointerListenerInstalled || typeof window === 'undefined') return;
+  pointerListenerInstalled = true;
+  window.addEventListener('pointerdown', () => { lastPointerDownAt = Date.now(); }, { capture: true, passive: true });
+}
+
+/**
+ * Focus that lands right after a mouse press anywhere (a menu closing back onto its trigger)
+ * is not keyboard focus and must not pop a tooltip over the thing just chosen.
+ */
+function focusFollowsPointer(): boolean {
+  return Date.now() - lastPointerDownAt < POINTER_FOCUS_WINDOW_MS;
+}
+
 export function Tooltip({ label, shortcut, placement = 'above', children }: TooltipProps) {
   const colors = useThemeStore((s) => s.colors);
   const shadow = useThemeStore((s) => s.shadow);
   const id = useId();
+  useEffect(trackPointerDown, []);
   const [pos, setPos] = useState<Position | null>(null);
   const [open, setOpen] = useState(false);
   const wrapRef = useRef<HTMLSpanElement>(null);
@@ -113,7 +132,7 @@ export function Tooltip({ label, shortcut, placement = 'above', children }: Tool
       style={{ display: 'contents' }}
       onMouseEnter={show}
       onMouseLeave={() => { suppressed.current = false; hide(); }}
-      onFocus={() => { if (!pointerFocus.current) show(); }}
+      onFocus={() => { if (!pointerFocus.current && !focusFollowsPointer()) show(); }}
       onBlur={() => hide(true)}
       onMouseDown={() => {
         suppressed.current = true;
