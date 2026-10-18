@@ -267,6 +267,17 @@ export function DiracSidePanel() {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
   }, [messages]);
 
+  // Saving a key swaps the connect card for the chat; the focused key field is gone, so land on the composer.
+  const showConnect = !hasApiKey || keyEntryOpen;
+  const wasShowingConnect = useRef(showConnect);
+  useEffect(() => {
+    const cardJustClosed = wasShowingConnect.current && !showConnect;
+    wasShowingConnect.current = showConnect;
+    if (cardJustClosed && (!document.activeElement || document.activeElement === document.body)) {
+      inputRef.current?.focus();
+    }
+  }, [showConnect]);
+
   useEffect(() => {
     if (focusSignal === 0) return undefined;
     // With no key the composer does not exist: the API key field is the input to focus.
@@ -422,7 +433,7 @@ export function DiracSidePanel() {
 
       {hasApiKey && agentEntry && <AgentEntryPoint />}
 
-      {!hasApiKey || keyEntryOpen ? (
+      {showConnect ? (
         /* No (or rejected) API key: connect inline instead of showing chat */
         <div className="dirac-connect">
           <DiracNoKey replacing={hasApiKey} />
