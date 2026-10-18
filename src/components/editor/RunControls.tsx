@@ -8,7 +8,7 @@ import { canStopKernelRun, stopKernelRun } from '../../lib/kernelControl';
 import { shortcutLabel } from '../../config/keybindings';
 import { useUiFeatures } from '../../hooks/useUiFeatures';
 import { Button, Tooltip } from '../ui';
-import { isWebBuild } from '../../platform/buildTarget';
+import { usePlatform } from '../../platform/PlatformProvider';
 import { getRunButtonState, isAccidentalStop } from './runButtonState';
 import type { TabBarDensity } from './tabBarLayout';
 
@@ -33,7 +33,8 @@ export function RunControls({ density }: { density: TabBarDensity }) {
     if (isRunning) runStartedAt.current = performance.now();
   }, [isRunning]);
 
-  const runState = getRunButtonState({ kernelReady, kernelStatus, kernelProgress, kernelError, isRunning, canStop: canStopKernelRun(), engine: isWebBuild() ? 'Python' : 'Kernel' });
+  const platform = usePlatform();
+  const runState = getRunButtonState({ kernelReady, kernelStatus, kernelProgress, kernelError, isRunning, canStop: canStopKernelRun(), engine: platform.getPlatform() === 'web' ? 'Python' : 'Kernel' });
   const canRun = runState.kind === 'ready';
   const showFailed = runState.kind === 'failed';
 

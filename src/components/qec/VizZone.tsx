@@ -9,7 +9,7 @@ import { PanelReveal } from '../layout/PanelReveal';
 import { CircuitRenderer } from '../circuit/CircuitRenderer';
 import { Button, EmptyState, Tabs } from '../ui';
 import { retryKernel } from '../../lib/kernelControl';
-import { isWebBuild } from '../../platform/buildTarget';
+import { usePlatform } from '../../platform/PlatformProvider';
 import { useEditorStore } from '../../stores/editorStore';
 import { visibleVizPanelIds } from '../../layout/vizPanels';
 import { chipFitsRail, circuitMinHeight } from '../../layout/circuitRail';
@@ -88,6 +88,7 @@ export function VizZone({
   }, [visible, qec]);
 
   const stale = useResultStale();
+  const platform = usePlatform();
   const { snapshot: circuitSnapshot } = useDisplaySnapshot();
   const [measureColumn, columnSize] = useElementSize<HTMLDivElement>();
   const blochCount = useSimulationStore((st) => st.result?.bloch_coords?.length ?? 0);
@@ -119,7 +120,7 @@ export function VizZone({
   }
 
   if (startFailed && panels.length === 0) {
-    const engine = isWebBuild() ? 'Python' : 'The kernel';
+    const engine = platform.getPlatform() === 'web' ? 'Python' : 'The kernel';
     return (
       <div style={COLUMN_STYLE}>
         <EmptyState
