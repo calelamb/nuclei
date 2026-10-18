@@ -235,6 +235,70 @@ describe('conjectureStore.test', () => {
   });
 });
 
+describe('conjectureStore ledger completeness (CR-M6)', () => {
+  it('records a cancelled test that already holds a counterexample as a refutation', async () => {
+    const refuted = { ...fixtureResult('refuted'), partial: true };
+    const h = boot((m, s) => {
+      if (m.type === 'discovery_conjecture_test') s.emit({ type: 'discovery_conjecture_started', job_id: m.job_id });
+      if (m.type === 'discovery_conjecture_cancel') {
+        s.emit({ type: 'discovery_conjecture_cancelled', job_id: m.job_id, accepted: true });
+        s.emit({ type: 'discovery_conjecture_result', job_id: m.job_id, status: 'cancelled', result: refuted });
+      }
+    });
+    await useConjectureStore.getState().propose(FRONTIER_RUN_ID);
+    const pending = useConjectureStore.getState().test(FRONTIER_RUN_ID, 'cj-t-1');
+    await new Promise((r) => setTimeout(r, 0));
+    await useConjectureStore.getState().cancel(FRONTIER_RUN_ID, 'cj-t-1');
+    await pending;
+    const entry = JSON.parse(h.fs.files.get(LEDGER)!).entries[0];
+    expect(entry).toMatchObject({ id: 'cj-t-1', outcome: 'complete' });
+    expect(entry.result.verdict).toBe('refuted');
+    expect(entry.result.counterexamples).toHaveLength(1);
+    expect(run().jobs['cj-t-1'].status).toBe('cancelled');
+    expect(run().jobs['cj-t-1'].result?.counterexamples).toHaveLength(1);
+    expect(isConjectureTestActive(useConjectureStore.getState())).toBe(false);
+  });
+
+  it('reads the failure message from the top level of the result envelope', async () => {
+    const h = boot((m, s) => {
+      if (m.type !== 'discovery_conjecture_test') return;
+      s.emit({ type: 'discovery_conjecture_started', job_id: m.job_id });
+      s.emit({ type: 'discovery_conjecture_result', job_id: m.job_id, status: 'failed', result: null, error: { code: 'conjecture_internal', message: 'Pauli propagation ran out of memory' } });
+    });
+    await useConjectureStore.getState().propose(FRONTIER_RUN_ID);
+    await useConjectureStore.getState().test(FRONTIER_RUN_ID, 'cj-t-1');
+    expect(run().jobs['cj-t-1']).toMatchObject({ status: 'failed', error: { code: 'conjecture_internal', message: 'Pauli propagation ran out of memory' } });
+    expect(JSON.parse(h.fs.files.get(LEDGER)!).entries[0]).toMatchObject({ outcome: 'failed', error: 'Pauli propagation ran out of memory' });
+  });
+
+  it('never leaves a job running when its proposal is gone: the ledger entry uses the snapshot', async () => {
+    let finish: (() => void) | null = null;
+    const h = boot((m, s) => {
+      if (m.type !== 'discovery_conjecture_test') return;
+      s.emit({ type: 'discovery_conjecture_started', job_id: m.job_id });
+      finish = () => s.emit({ type: 'discovery_conjecture_result', job_id: m.job_id, status: 'complete', result: fixtureResult('supported') });
+    });
+    await useConjectureStore.getState().propose(FRONTIER_RUN_ID);
+    const pending = useConjectureStore.getState().test(FRONTIER_RUN_ID, 'cj-t-1');
+    await new Promise((r) => setTimeout(r, 0));
+    useConjectureStore.setState((s) => ({ byRun: { ...s.byRun, [FRONTIER_RUN_ID]: { ...s.byRun[FRONTIER_RUN_ID], proposals: [] } } }));
+    finish?.();
+    await pending;
+    expect(run().jobs['cj-t-1'].status).toBe('complete');
+    expect(JSON.parse(h.fs.files.get(LEDGER)!).entries[0]).toMatchObject({ id: 'cj-t-1', outcome: 'complete' });
+  });
+
+  it('caps the proposals kept per run but never drops one with a test job', async () => {
+    const h = boot();
+    h.proposals[0] = {
+      ok: true, conjectures: Array.from({ length: 5 }, (_, i) => fixtureConjecture({ id: `cj-n-${i}` })),
+      dropped: [], model: 'claude-opus-5-5', usage: USAGE, prompt_sha256: 'f'.repeat(64),
+    };
+    for (let i = 0; i < 12; i += 1) await useConjectureStore.getState().propose(FRONTIER_RUN_ID);
+    expect(run().proposals.length).toBe(50);
+  });
+});
+
 describe('conjectureStore.testAll / ledger / counterexample', () => {
   it('tests accepted proposals one after another and accumulates the ledger', async () => {
     const h = boot((m, s) => complete(m.type === 'discovery_conjecture_test' && m.conjecture.id === 'cj-t-2' ? fixtureResult('inconclusive') : fixtureResult('supported'))(m, s));

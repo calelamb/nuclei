@@ -14,6 +14,7 @@ import { ledgerPaths, loadLedger, renderLedgerMarkdown, saveLedger, upsertEntry 
 import { irToQiskitProgram } from '../services/conjecture/qiskitExport';
 import type { SchemaIssue } from '../services/conjecture/jsonSchema';
 import {
+  capProposals,
   isActiveJob,
   patchJob,
   patchProposal,
@@ -137,42 +138,56 @@ export const useConjectureStore = create<ConjectureState>()((set, get) => {
     return saved.ok ? null : saved.error;
   }
 
-  async function finishJob(runId: string, conjectureId: string, end: TestEnd, seed: number): Promise<void> {
+  /** What a ledger entry needs about the proposal, captured when the test starts so a replaced proposal cannot strand the job. */
+  interface ProposalSnapshot {
+    conjecture: Conjecture;
+    meta: ProposerMeta | null;
+  }
+
+  async function finishJob(runId: string, conjectureId: string, end: TestEnd, seed: number, snapshot: ProposalSnapshot): Promise<void> {
     handles.delete(jobKey(runId, conjectureId));
-    if (end.kind === 'result') {
+    try {
+      if (end.kind !== 'result') {
+        const error = end.kind === 'error' ? end.error : { code: 'disconnected', message: 'The kernel connection closed during the test.' };
+        set((s) => ({ byRun: patchJob(s.byRun, runId, conjectureId, () => ({ status: 'failed', error })) }));
+        return;
+      }
       const result = end.result;
-      if (end.status === 'cancelled') {
+      // A cancelled test that already found a counterexample is a valid refutation: keep it (CR-M6).
+      const refutation = end.status === 'cancelled' && result !== null && result.counterexamples.length > 0;
+      if (end.status === 'cancelled' && !refutation) {
         set((s) => ({ byRun: patchJob(s.byRun, runId, conjectureId, () => ({ status: 'cancelled', result, fraction: 1 })) }));
         return;
       }
-      const proposal = get().byRun[runId]?.proposals.find((p) => p.conjecture.id === conjectureId);
-      if (proposal) {
-        const failed = end.status === 'failed' || !result;
-        const entry: LedgerEntry = {
-          id: conjectureId,
-          conjecture: proposal.conjecture,
-          proposer: proposal.meta,
-          outcome: failed ? 'failed' : 'complete',
-          result: result ?? null,
-          error: failed ? (result?.error?.message ?? result?.summary ?? 'The kernel reported the test failed.') : null,
-          seed,
-          tested_at: needEnv().now().toISOString(),
-        };
-        const ledgerError = await recordEntry(runId, entry);
-        set((s) => ({
-          byRun: patchJob(s.byRun, runId, conjectureId, () => ({
-            status: failed ? 'failed' : 'complete',
-            result,
-            fraction: 1,
-            error: failed ? { code: 'test_failed', message: entry.error ?? '' } : null,
-            ledgerError,
-          })),
-        }));
-      }
-      return;
+      const current = get().byRun[runId]?.proposals.find((p) => p.conjecture.id === conjectureId);
+      const source = current ? { conjecture: current.conjecture, meta: current.meta } : snapshot;
+      const failed = end.status === 'failed' || !result;
+      const errorMessage = failed ? (end.error?.message ?? result?.summary ?? 'The kernel reported the test failed.') : null;
+      const entry: LedgerEntry = {
+        id: conjectureId,
+        conjecture: source.conjecture,
+        proposer: source.meta,
+        outcome: failed ? 'failed' : 'complete',
+        result: result ?? null,
+        error: errorMessage,
+        seed,
+        tested_at: needEnv().now().toISOString(),
+      };
+      const ledgerError = await recordEntry(runId, entry);
+      set((s) => ({
+        byRun: patchJob(s.byRun, runId, conjectureId, () => ({
+          status: failed ? 'failed' : refutation ? 'cancelled' : 'complete',
+          result,
+          fraction: 1,
+          message: refutation ? 'Cancelled after a counterexample was found; the refutation is in the ledger.' : undefined,
+          error: failed ? { code: end.error?.code ?? 'test_failed', message: errorMessage ?? '' } : null,
+          ledgerError,
+        })),
+      }));
+    } catch (e) {
+      // Whatever went wrong, the job must not stay "running" forever.
+      set((s) => ({ byRun: patchJob(s.byRun, runId, conjectureId, () => ({ status: 'failed', error: { code: 'ledger_failed', message: message(e) } })) }));
     }
-    const error = end.kind === 'error' ? end.error : { code: 'disconnected', message: 'The kernel connection closed during the test.' };
-    set((s) => ({ byRun: patchJob(s.byRun, runId, conjectureId, () => ({ status: 'failed', error })) }));
   }
 
   return {
@@ -231,7 +246,7 @@ export const useConjectureStore = create<ConjectureState>()((set, get) => {
       update(runId, (c) => ({
         proposing: false,
         dropped: res.dropped,
-        proposals: [...res.conjectures.map((conjecture) => ({ conjecture, decision: 'draft' as const, meta, edited: false })), ...c.proposals],
+        proposals: capProposals([...res.conjectures.map((conjecture) => ({ conjecture, decision: 'draft' as const, meta, edited: false })), ...c.proposals], c.jobs),
       }));
       return { ok: true };
     },
@@ -294,7 +309,7 @@ export const useConjectureStore = create<ConjectureState>()((set, get) => {
       });
       handles.set(jobKey(runId, conjectureId), handle);
       set((s) => ({ byRun: patchJob(s.byRun, runId, conjectureId, () => ({ jobId: handle.jobId })) }));
-      await finishJob(runId, conjectureId, await handle.done, seed);
+      await finishJob(runId, conjectureId, await handle.done, seed, { conjecture: proposal.conjecture, meta: proposal.meta });
       return { ok: true };
     },
 

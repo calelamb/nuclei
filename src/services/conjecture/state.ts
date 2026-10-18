@@ -101,3 +101,11 @@ export function proposeBlocker(input: { hasKey: boolean; scoredElites: number; l
   if (!input.hasKey) return { code: 'no_key', reason: 'Add an Anthropic API key in Settings, Dirac to propose conjectures.' };
   return null;
 }
+
+/** Proposals kept per run: the newest, plus any older one that has a test job (its ledger entry points at it). */
+export const MAX_PROPOSALS = 50;
+
+export function capProposals(proposals: Proposal[], jobs: Record<string, TestJob>, max = MAX_PROPOSALS): Proposal[] {
+  if (proposals.length <= max) return proposals;
+  return proposals.filter((p, i) => i < max || jobs[p.conjecture.id] !== undefined);
+}

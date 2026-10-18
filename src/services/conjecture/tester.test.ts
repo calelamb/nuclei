@@ -63,8 +63,15 @@ describe('conjecture tester', () => {
     expect(await handle.cancel()).toBe(true);
     expect(session.sent.some((m) => m.type === 'discovery_conjecture_cancel')).toBe(true);
     session.emit({ type: 'discovery_conjecture_result', job_id: 'job-1', status: 'cancelled', result: null });
-    expect(await handle.done).toEqual({ kind: 'result', status: 'cancelled', result: null });
+    expect(await handle.done).toEqual({ kind: 'result', status: 'cancelled', result: null, error: null });
     expect(await handle.cancel()).toBe(false);
+  });
+
+  it('carries the failure error from the top level of the result message (CR-M6)', async () => {
+    const session = createFakeSession();
+    const handle = createConjectureTester(session, { newJobId: ids }).start({ conjecture: fixtureConjecture(), seed: 1 }, () => undefined);
+    session.emit({ type: 'discovery_conjecture_result', job_id: 'job-1', status: 'failed', result: null, error: { code: 'conjecture_internal', message: 'boom', path: 'n_range' } });
+    expect(await handle.done).toEqual({ kind: 'result', status: 'failed', result: null, error: { code: 'conjecture_internal', message: 'boom', path: 'n_range' } });
   });
 
   it('resolves kernel error envelopes, with the offending path', async () => {

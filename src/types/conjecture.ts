@@ -139,8 +139,6 @@ export interface ConjectureResult {
   counterexamples: Counterexample[];
   /** The normalised conjecture with kernel defaults filled in. */
   conjecture?: Record<string, unknown>;
-  /** Present on failed or cancelled results. */
-  error?: { code: string; message: string; path?: string };
   /** Evaluator fingerprint, when the kernel reports one. */
   fingerprint?: string;
 }
@@ -170,6 +168,8 @@ export type ConjectureResponse =
       job_id: string;
       status: 'complete' | 'cancelled' | 'failed';
       result: ConjectureResult | null;
+      /** On failed (and some cancelled) results the failure sits here, at the top level, not in `result`. */
+      error?: { code: string; message: string; path?: string } | null;
     }
   | { type: 'discovery_conjecture_cancelled'; job_id: string; accepted: boolean };
 

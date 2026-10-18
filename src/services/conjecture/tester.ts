@@ -28,7 +28,7 @@ export type TestEvent =
   | { kind: 'evidence'; item: unknown };
 
 export type TestEnd =
-  | { kind: 'result'; status: 'complete' | 'cancelled' | 'failed'; result: ConjectureResult | null }
+  | { kind: 'result'; status: 'complete' | 'cancelled' | 'failed'; result: ConjectureResult | null; error: TesterError | null }
   | { kind: 'error'; error: TesterError }
   | { kind: 'disconnected' };
 
@@ -158,7 +158,12 @@ export function createConjectureTester(session: LabSession, options: TesterOptio
             onEvent({ kind: 'evidence', item: message.item });
             return;
           case 'discovery_conjecture_result':
-            finish({ kind: 'result', status: message.status, result: message.result ?? null });
+            finish({
+              kind: 'result',
+              status: message.status,
+              result: message.result ?? null,
+              error: message.error ? { code: message.error.code, message: message.error.message, ...(message.error.path ? { path: message.error.path } : {}) } : null,
+            });
             return;
           default:
             return;
