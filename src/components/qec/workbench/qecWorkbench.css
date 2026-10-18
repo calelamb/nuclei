@@ -670,8 +670,13 @@
 }
 
 .qec-tray__content {
-  display: flex; min-height: 0; flex: 1; align-items: center;
+  display: flex; min-height: 0; flex: 1; align-items: flex-start;
   justify-content: space-between; gap: 24px; overflow: auto; padding: 18px;
+}
+
+/* Centre children while they fit, but never push the start out of the scroller. */
+.qec-tray__content > * {
+  margin-block: auto;
 }
 
 .qec-tray__empty {

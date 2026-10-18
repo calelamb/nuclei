@@ -160,6 +160,9 @@ test('@qec a finished import job card keeps its title clear of its own fields', 
     await expect(card).toBeVisible();
     const header = await card.locator(':scope > div').first().boundingBox();
     const fields = await card.locator('dl').boundingBox();
+    const scroller = await page.locator('.qec-tray__content').boundingBox();
+    const cardBox = await card.boundingBox();
+    expect(cardBox!.y, `${viewport.width}: card top is not above the tray scroller`).toBeGreaterThanOrEqual(scroller!.y - 0.5);
     expect(header, 'title row is drawn').not.toBeNull();
     expect(fields, 'fields are drawn').not.toBeNull();
     expect(header!.width, `${viewport.width}: title row width`).toBeGreaterThan(100);
