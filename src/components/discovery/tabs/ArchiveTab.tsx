@@ -3,6 +3,8 @@ import { LabCard, LabEmptyState, LabSegmented, RampLegend, formatPct, formatSci,
 import { archiveCoverage, cellKey, sortElites } from '../../../services/discovery/archive';
 import type { ArchiveElite, ArchiveState } from '../../../types/discovery';
 
+const MAX_CELL_PX = 72;
+
 type IslandChoice = 'merged' | `${number}`;
 
 function gridFor(archive: ArchiveState, choice: IslandChoice): Record<string, ArchiveElite> {
@@ -32,6 +34,7 @@ export function ArchiveTab({ archive, onOpen }: { archive: ArchiveState; onOpen:
     return all.length > 0 ? ([Math.min(...all), Math.max(...all)] as const) : null;
   }, [archive]);
   const total = axisX.bins * axisY.bins;
+  const tickStep = axisX.bins > 10 ? 2 : 1;
   const coverage = choice === 'merged' ? (total === 0 ? 0 : elites.length / total) : archiveCoverage(archive, Number(choice));
   const items = [
     { id: 'merged' as IslandChoice, label: 'All islands' },
@@ -52,11 +55,18 @@ export function ArchiveTab({ archive, onOpen }: { archive: ArchiveState; onOpen:
         <div className="lab-stack">
           <div style={{ display: 'flex', gap: 'var(--space-4)', alignItems: 'center', flexWrap: 'wrap' }}>
             <span className="lab-mono" role="status">Coverage {formatPct(coverage, 0)} · {elites.length}/{total} cells</span>
-            <RampLegend low={range ? formatSci(range[0]) : '—'} high={range ? formatSci(range[1]) : '—'} label="Fitness" />
+            {range && range[0] === range[1]
+              ? <span className="lab-muted" style={{ fontSize: 12 }}>Fitness {formatSci(range[0])} in every filled cell</span>
+              : <RampLegend low={range ? formatSci(range[0]) : '—'} high={range ? formatSci(range[1]) : '—'} label="Fitness" />}
           </div>
           <figure style={{ margin: 0 }} aria-label="Archive grid" aria-describedby="archive-summary">
-            <div style={{ display: 'grid', gridTemplateColumns: 'auto minmax(0, 1fr)', gap: 'var(--space-2)', maxWidth: 640 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'auto auto minmax(0, 1fr)', gap: 'var(--space-2)', width: '100%', maxWidth: Math.max(1, axisX.bins) * MAX_CELL_PX + 90 }}>
               <div className="lab-chart__axis-label lab-muted" style={{ writingMode: 'vertical-rl', transform: 'rotate(180deg)', textAlign: 'center' }}>{axisY.label} →</div>
+              <div className="lab-chart__tick lab-mono lab-dim" aria-hidden style={{ display: 'grid', gridTemplateRows: `repeat(${axisY.bins}, minmax(0, 1fr))`, gap: 2, textAlign: 'right' }}>
+                {Array.from({ length: axisY.bins }, (_, i) => (
+                  <span key={i} style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end' }}>{axisTick(axisY, axisY.bins - 1 - i)}</span>
+                ))}
+              </div>
               <div>
                 <div className="disc-archive" style={{ gridTemplateColumns: `repeat(${axisX.bins}, minmax(0, 1fr))` }}>
                   {Array.from({ length: axisX.bins * axisY.bins }, (_, i) => {
@@ -78,11 +88,12 @@ export function ArchiveTab({ archive, onOpen }: { archive: ArchiveState; onOpen:
                     );
                   })}
                 </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 4 }} className="lab-chart__tick lab-mono lab-dim" aria-hidden>
-                  <span>{axisTick(axisX, 0)}</span>
-                  <span>{axisX.label} →</span>
-                  <span>{formatSci(axisX.max, 2)}</span>
+                <div className="lab-chart__tick lab-mono lab-dim" aria-hidden style={{ display: 'grid', gridTemplateColumns: `repeat(${axisX.bins}, minmax(0, 1fr))`, gap: 2, marginTop: 4 }}>
+                  {Array.from({ length: axisX.bins }, (_, i) => (
+                    <span key={i} style={{ overflow: 'hidden', whiteSpace: 'nowrap' }}>{i % tickStep === 0 ? axisTick(axisX, i) : ''}</span>
+                  ))}
                 </div>
+                <div className="lab-chart__axis-label lab-muted" aria-hidden style={{ textAlign: 'center', marginTop: 2 }}>{axisX.label} → (bin lower edge)</div>
               </div>
             </div>
             <figcaption id="archive-summary" className="lab-sr-only">{summary}</figcaption>

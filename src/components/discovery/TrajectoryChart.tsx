@@ -60,7 +60,7 @@ export function TrajectoryChart({ trajectory, onSelect }: { trajectory: Trajecto
   const xSpec = useMemo(() => ({ domain: [0, trajectory.xMax] as [number, number], label: 'Candidate (creation order)', format: (v: number) => String(Math.round(v)) }), [trajectory.xMax]);
   const ySpec = useMemo(() => {
     const span = trajectory.yMax - trajectory.yMin || 1;
-    return { domain: [trajectory.laneY - span * 0.08, trajectory.yMax + span * 0.06] as [number, number], label: 'Fitness (higher is better)', nice: false };
+    return { domain: [trajectory.laneY - span * 0.08, trajectory.yMax + span * 0.06] as [number, number], label: 'Fitness ↑', nice: false };
   }, [trajectory.laneY, trajectory.yMax, trajectory.yMin]);
 
   const position = useCallback((p: TrajectoryPoint, s: ChartScales) => [s.x(p.index), s.y(p.kind === 'rejected' || p.kind === 'failed' ? trajectory.laneY : p.y)] as const, [trajectory.laneY]);
@@ -93,7 +93,7 @@ export function TrajectoryChart({ trajectory, onSelect }: { trajectory: Trajecto
   );
   return (
     <div onClick={() => hover && onSelect(hover.item.id)} style={{ cursor: hover ? 'pointer' : undefined }}>
-      <ChartFrame x={xSpec} y={ySpec} height={300} ariaLabel="Fitness trajectory" summary={trajectorySummary(trajectory)} legend={legend} onPointer={onPointer} crosshair>
+      <ChartFrame x={xSpec} y={ySpec} height={300} margin={{ left: 70 }} ariaLabel="Fitness trajectory" summary={trajectorySummary(trajectory)} legend={legend} onPointer={onPointer} crosshair>
         {(scales) => (
           <>
             {sink(scales)}
