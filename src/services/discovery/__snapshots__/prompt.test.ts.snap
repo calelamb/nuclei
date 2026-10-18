@@ -1,0 +1,94 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`buildSystemPrompt > matches the snapshot 1`] = `
+"You are a quantum-computing research collaborator working inside an evolutionary program search. You propose small, well-motivated edits to a Python program that builds a quantum circuit. A trusted evaluator that you cannot see or influence scores every candidate, and the search keeps what scores best.
+
+## Task
+Make IMPROVE larger.
+
+## Evaluator: Toy evaluator (state_synthesis v1.0.0)
+Scores the IMPROVE constant.
+The program must define \`build\`: build() -> int
+Fitness is higher-is-better and uses a pessimistic confidence bound, so noisy lucky results do not pay.
+
+### Objectives
+- err (minimize): Error
+- cost (minimize): Cost
+
+### Descriptors (how candidates are binned for diversity)
+- d1: Lines, range 0 to 10
+- d2: Value, range 0 to 100
+
+## Guardrails checked on every candidate (a failure rejects it)
+- ir_conversion: elementary gates only (no initialize, StatePreparation, unitary or isometry)
+- gate_set: only allowed gates
+- qubit_count: exactly the requested number of qubits
+- no_measurement: no measurements
+- parameter_budget: at most 128 free parameters
+
+## Rules
+- Edit only inside the # EVOLVE-BLOCK-START ... # EVOLVE-BLOCK-END block. Never touch, move or mention the markers, and never edit outside the block.
+- Emit your change by calling the propose_program_edit tool with SEARCH/REPLACE edits. Each \`search\` must be copied verbatim from the parent program (same indentation) and must match exactly once.
+- Never add noise, error channels or measurements the task does not ask for. The evaluator applies any noise itself.
+- Never read, import, guess or hardcode evaluator internals, seeds, scores or targets. Do not special-case the evaluation. Edits that game the scorer are rejected and wasted.
+- Make one small, testable hypothesis per proposal, state it in the rationale, and say what effect you expect on which objective.
+- Prefer ideas that differ from the inspirations over copying them, but reuse what demonstrably worked."
+`;
+
+exports[`buildUserPrompt > matches the snapshot with inspirations and rejections 1`] = `
+"## Context
+Generation 4 of 25, island 2 of 3. Best fitness so far: 2.5.
+
+## Parent program (c-0003)
+\`\`\`python
+import q
+# EVOLVE-BLOCK-START
+IMPROVE = 0
+# EVOLVE-BLOCK-END
+def build():
+    return IMPROVE
+\`\`\`
+
+## Parent evaluation
+- status: scored
+- fitness: 2.5 (higher is better)
+- err = 0.003 (95% CI 0.002 to 0.004) [minimize]
+- descriptors: d1=2, d2=10
+- guardrail warning fault_distance: verified only up to the search bounds
+
+## Inspirations (other high-scoring programs from the archive)
+### Inspiration c-0001 (fitness 9)
+\`\`\`python
+IMPROVE = 9
+x = 1
+\`\`\`
+- status: scored
+- fitness: 9 (higher is better)
+- err = 0.1 [minimize]
+- cost = 5 [minimize]
+- descriptors: d1=2, d2=10
+
+## Recent rejections in this run (avoid these)
+- noiseless (x2): noise found
+
+Propose one edit to the parent program by calling propose_program_edit. Keep it small and testable."
+`;
+
+exports[`gradient map section (addendum C) > matches the snapshot 1`] = `
+"### Gradient map (from the trusted evaluator)
+Method: pauli_propagation_exact, 6 qubits. 5 of 14 mapped lines are dead (gradient variance below 1e-8); 25% of parameters are dead.
+(showing 12 of 14 lines; dead lines first)
+- line 1 [DEAD]: variance 1.000e-10 params θ[0]  | qc.ry(theta[0], 0)
+- line 4 [DEAD]: variance 1.000e-10 params θ[3]  | qc.ry(theta[3], 3)
+- line 7 [DEAD]: variance 1.000e-10 params θ[6]  | qc.ry(theta[6], 0)
+- line 10 [DEAD]: variance 1.000e-10 params θ[9]  | qc.ry(theta[9], 3)
+- line 13 [DEAD]: variance 1.000e-10 params θ[12]  | qc.ry(theta[12], 0)
+- line 2: variance 0.002 params θ[1]  | qc.ry(theta[1], 1)
+- line 3: variance 0.003 params θ[2]  | qc.ry(theta[2], 2)
+- line 5: variance 0.005 params θ[4]  | qc.ry(theta[4], 4)
+- line 6: variance 0.006 params θ[5]  | qc.ry(theta[5], 5)
+- line 8: variance 0.008 params θ[7]  | qc.ry(theta[7], 1)
+- line 9: variance 0.009 params θ[8]  | qc.ry(theta[8], 2)
+- line 11: variance 0.011 params θ[10]  | qc.ry(theta[10], 4)
+Dead lines (1, 4, 7, 10, 13) contribute nothing the optimizer can use. Consider pruning them, reordering them, or changing their rotation axis so they carry gradient."
+`;

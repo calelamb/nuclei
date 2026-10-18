@@ -1,0 +1,416 @@
+/**
+ * The Discovery Engine runner (PRD 14 §7.4): `runDiscovery(spec, ctx, deps, opts)`.
+ *
+ * One run = a seed evaluation, then up to `generations` generations. Each
+ * generation plans its proposals synchronously from a frozen copy of the
+ * archive (all RNG draws happen up front, so plans are deterministic), then
+ * produces and evaluates them concurrently, then integrates the results in
+ * id order. Budgets are checked before every proposal. Every state change is
+ * persisted through the injected fs; `resumeRunId` continues from disk.
+ *
+ * Dedup decision: the runner dedups on the SHA-256 of the program text
+ * client-side (free, catches byte-identical proposals) and records the
+ * kernel's AST-normalized `program_key` from each evaluation, marking later
+ * candidates with a known key as `duplicate`. The key itself is computed
+ * kernel-side only.
+ */
+
+import {
+  type ArchiveAxis,
+  type CandidateRecord,
+  type DiscoveryEvaluatorInfo,
+  type DiscoverySpec,
+  type RunRecord,
+  type RunStatus,
+  type StopReason,
+} from '../../types/discovery';
+import { bestElite, createArchive, eliteFromEvaluation, axisFromDescriptor, insertElite } from './archive';
+import { findRegion } from './diff';
+import { createKernelEvaluator, type KernelEvaluator } from './kernelEval';
+import { awaitBatch, submitBatch } from './batch';
+import { confirmChampion } from './confirmation';
+import { buildSystemPrompt } from './prompt';
+import { emptyUsage, exhaustedBudget, llmBudgetLeft, planProposal, thresholdForIsland, type PlanItem } from './planning';
+import { evaluateCandidate, runProposal } from './proposalTask';
+import {
+  candidateIdFor, createPersister, loadCandidates, loadRunRecord, makeRunId, runPaths, type Persister,
+} from './records';
+import { createLimiter, type DiscoveryDeps, type DiscoveryRunContext, type DiscoveryRunOptions, type RunContext, type RunControl, type RunnerEvent } from './runContext';
+import { createRng, deriveSeed, restoreRng, type Rng } from './rng';
+import { migrate } from './selection';
+
+export type { DiscoveryDeps, DiscoveryRunContext, DiscoveryRunOptions, RunnerEvent } from './runContext';
+
+export interface DiscoveryRunHandle {
+  runId: string;
+  /** Resolves (never rejects) with the final run record. */
+  done: Promise<RunRecord>;
+  pause(): void;
+  resume(): void;
+  stop(): void;
+  current(): RunRecord | null;
+}
+
+export type AxesResult = { ok: true; axes: readonly [ArchiveAxis, ArchiveAxis] } | { ok: false; message: string };
+
+/** Resolve the two archive axes from the spec (or the evaluator's first two descriptors). */
+export function resolveAxes(spec: DiscoverySpec, evaluator: DiscoveryEvaluatorInfo): AxesResult {
+  const chosen = spec.search.archive.descriptors ?? evaluator.descriptors.slice(0, 2).map((d) => d.key);
+  if (chosen.length < 2) return { ok: false, message: `Evaluator ${evaluator.kind} needs two descriptors for the archive.` };
+  const axes = chosen.map((key, i) => {
+    const def = evaluator.descriptors.find((d) => d.key === key);
+    return def ? axisFromDescriptor(def, spec.search.archive.bins?.[i]) : null;
+  });
+  if (!axes[0] || !axes[1]) {
+    const known = evaluator.descriptors.map((d) => d.key).join(', ');
+    return { ok: false, message: `Archive descriptors [${chosen.join(', ')}] are not all evaluator descriptors (${known}).` };
+  }
+  return { ok: true, axes: [axes[0], axes[1]] };
+}
+
+function seedCandidate(program: string, evalSeed: number, hash: string, now: string): CandidateRecord {
+  return {
+    id: candidateIdFor(0), parent_id: null, island: 0, generation: 0, mutator: 'seed', program, program_sha256: hash,
+    llm: null, ast_ops: null, evaluation: null, created_at: now, outcome: 'pending', eval_seed: evalSeed,
+    inspiration_ids: [], screen: null, duplicate_of: null, proposal_error: null, in_archive: false,
+    region_warning: false, reevaluations: [],
+  };
+}
+
+export function runDiscovery(
+  spec: DiscoverySpec,
+  rctx: DiscoveryRunContext,
+  deps: DiscoveryDeps,
+  opts: DiscoveryRunOptions = {},
+): DiscoveryRunHandle {
+  let paused = false;
+  let stopped = false;
+  let finished = false;
+  let run: RunRecord | null = null;
+  let onControlChange: () => void = () => undefined;
+  const gateWaiters: Array<() => void> = [];
+  const releaseGate = () => gateWaiters.splice(0).forEach((resolve) => resolve());
+  const control: RunControl = {
+    get stopped() { return stopped; },
+    get paused() { return paused; },
+    gate: () => (paused && !stopped ? new Promise<void>((resolve) => gateWaiters.push(resolve)) : Promise.resolve()),
+  };
+  const startedAt = deps.clock.now();
+  const runId = rctx.resumeRunId ?? makeRunId(startedAt, deriveSeed(spec.seed, startedAt.getTime()));
+  const emit = (event: RunnerEvent) => opts.onEvent?.(event);
+  let kernel: KernelEvaluator | null = null;
+
+  const done = execute().catch((e: unknown): RunRecord => {
+    const message = `Discovery run crashed: ${e instanceof Error ? e.message : String(e)}`;
+    const failed = { ...(run as RunRecord), status: 'failed' as RunStatus, stop_reason: 'error' as StopReason, message };
+    emit({ type: 'status', run: failed });
+    return failed;
+  }).finally(() => {
+    finished = true;
+    kernel?.dispose();
+  });
+
+  async function execute(): Promise<RunRecord> {
+    const paths = runPaths(deps.join, rctx.projectRoot, rctx.definitionFile, runId);
+    const persistErrors: string[] = [];
+    const persister: Persister = createPersister(deps.fs, paths, (m) => {
+      persistErrors.push(m);
+      emit({ type: 'notice', message: m });
+    });
+    const axes = resolveAxes(spec, rctx.evaluator);
+    const candidates = new Map<string, CandidateRecord>();
+    let rng: Rng = createRng(spec.seed);
+    let segmentStart = deps.clock.now().getTime();
+    let priorWall = 0;
+
+    // ── Load or create the run record ─────────────────────────────────
+    if (rctx.resumeRunId) {
+      const loaded = await loadRunRecord(deps.fs, paths);
+      if (!loaded) return fail(`Run ${runId} has no readable run.json to resume.`);
+      const files = await loadCandidates(deps.fs, paths);
+      files.candidates.forEach((c) => candidates.set(c.id, c));
+      files.warnings.forEach((w) => emit({ type: 'notice', message: w }));
+      run = { ...loaded, status: 'running', stop_reason: null, message: null, finished_at: null };
+      priorWall = loaded.usage.wall_ms;
+      rng = restoreRng(loaded.rng);
+      if (loaded.status === 'completed' || loaded.status === 'failed') {
+        run = loaded;
+        emit({ type: 'status', run });
+        return loaded;
+      }
+    } else {
+      if (!axes.ok) return fail(axes.message);
+      run = {
+        schema: 1, run_id: runId, definition_file: rctx.definitionFile, spec,
+        evaluator: { kind: rctx.evaluator.kind, version: rctx.evaluator.version, fingerprint: null },
+        status: 'running', stop_reason: null, message: null, started_at: startedAt.toISOString(),
+        updated_at: startedAt.toISOString(), finished_at: null, generation: 0, next_candidate_index: 1,
+        rng: rng.state(), archive: createArchive(axes.axes, rctx.evaluator.objectives, spec.search.islands),
+        usage: emptyUsage(), champion_id: null, seed_fitness: null, best_fitness_history: [], stale_generations: 0,
+        pending_batch: null, notices: [], confirmation: null,
+      };
+    }
+
+    if (spec.mutator.kind === 'llm' && !deps.llm.hasKey()) {
+      return fail('LLM mutation needs an Anthropic API key. Add one in Settings, Dirac, or switch the mutator to hybrid or ast.');
+    }
+
+    const wall = () => priorWall + (deps.clock.now().getTime() - segmentStart);
+    const snapshot = (): RunRecord => ({ ...(run as RunRecord), usage: { ...(run as RunRecord).usage, wall_ms: wall() } });
+    const persistRun = () => {
+      run = { ...snapshot(), rng: rng.state(), updated_at: deps.clock.now().toISOString() };
+      persister.writeRun(run);
+      emit({ type: 'status', run });
+    };
+    const setRun = (patch: Partial<RunRecord>) => {
+      run = { ...(run as RunRecord), ...patch };
+      emit({ type: 'status', run: snapshot() });
+    };
+
+    kernel = createKernelEvaluator({ session: deps.session, info: rctx.evaluator, sleep: deps.clock.sleep });
+    const k = kernel;
+    const ctx: RunContext = {
+      spec, runId, evaluator: rctx.evaluator, deps, kernel: k, control,
+      system: buildSystemPrompt({ evaluator: rctx.evaluator, task: spec.description, entry: spec.entry }),
+      candidates, seenHashes: new Map(), seenProgramKeys: new Map(), rejections: [],
+      evalLimit: createLimiter(spec.budget.max_concurrent_evaluations),
+      llmLimit: createLimiter(opts.maxLlmConcurrency ?? 4),
+      getRun: () => run as RunRecord,
+      setUsage: (update) => setRun({ usage: update((run as RunRecord).usage) }),
+      setRun,
+      saveCandidate: (c) => {
+        candidates.set(c.id, c);
+        persister.writeCandidate(c);
+        emit({ type: 'candidate', candidate: c });
+      },
+      notice: (message) => {
+        const r = run as RunRecord;
+        if (r.notices.includes(message)) return;
+        setRun({ notices: [...r.notices, message].slice(-20) });
+        emit({ type: 'notice', message });
+      },
+      activity: (candidateId, phase) => emit({ type: 'activity', candidateId, phase }),
+      persister,
+    };
+    for (const c of candidates.values()) {
+      if (c.outcome === 'invalid_proposal') continue;
+      ctx.seenHashes.set(c.program_sha256, c.id);
+      if (c.evaluation?.program_key) ctx.seenProgramKeys.set(c.evaluation.program_key, c.id);
+      if (c.evaluation?.status === 'rejected' && c.evaluation.rejection) ctx.rejections.push(c.evaluation.rejection);
+    }
+    const integrated = new Set(
+      [...candidates.values()]
+        .filter((c) => c.generation <= (run as RunRecord).generation && c.outcome !== 'pending')
+        .map((c) => c.id),
+    );
+
+    onControlChange = () => {
+      if (finished || !run) return;
+      const r = run as RunRecord;
+      if (stopped || (paused ? 'paused' : 'running') === r.status) return;
+      setRun({ status: paused ? 'paused' : 'running' });
+      persistRun();
+    };
+    if (paused) onControlChange();
+
+    const integrate = (generation: number) => {
+      const batch = [...candidates.values()].filter((c) => c.generation === generation && !integrated.has(c.id));
+      for (const c of batch.sort((a, b) => a.id.localeCompare(b.id))) {
+        if (c.outcome === 'pending') continue;
+        integrated.add(c.id);
+        if (c.outcome !== 'evaluated' || !c.evaluation) continue;
+        let archive = (run as RunRecord).archive;
+        const elite = eliteFromEvaluation(archive, { candidateId: c.id, island: c.island, programHash: c.program_sha256 }, c.evaluation);
+        if (!elite) continue;
+        const targets = c.mutator === 'seed' ? archive.islands.map((_, i) => i) : [c.island];
+        let accepted = false;
+        for (const island of targets) {
+          const res = insertElite(archive, { ...elite, island });
+          archive = res.archive;
+          accepted = accepted || res.accepted;
+        }
+        setRun({ archive });
+        if (accepted) ctx.saveCandidate({ ...c, in_archive: true });
+      }
+      const best = bestElite((run as RunRecord).archive);
+      setRun({ champion_id: best?.candidateId ?? null });
+    };
+
+    // ── Seed ──────────────────────────────────────────────────────────
+    if (!rctx.resumeRunId) {
+      const hash = await deps.hash(rctx.seedProgram);
+      const seed = seedCandidate(rctx.seedProgram, rng.childSeed(), hash, startedAt.toISOString());
+      const region = findRegion(rctx.seedProgram);
+      const withWarning = { ...seed, region_warning: region.ok && region.region.wholeFile };
+      if (withWarning.region_warning) ctx.notice('The seed program has no EVOLVE-BLOCK markers; the whole file is editable.');
+      ctx.saveCandidate(withWarning);
+      ctx.seenHashes.set(hash, seed.id);
+    }
+    const seedRecord = candidates.get(candidateIdFor(0));
+    if (seedRecord && seedRecord.outcome === 'pending') {
+      persistRun();
+      const evaluated = await evaluateSeed(ctx, seedRecord);
+      if (evaluated.outcome === 'pending') return finish('user');
+      ctx.saveCandidate(evaluated);
+      const ev = evaluated.evaluation;
+      if (ev?.evaluator.fingerprint) setRun({ evaluator: { ...(run as RunRecord).evaluator, fingerprint: ev.evaluator.fingerprint } });
+      integrate(0);
+      if (ev?.status !== 'scored') {
+        const why = ev?.rejection ? `${ev.rejection.guardrail}: ${ev.rejection.message}` : ev?.failure?.message ?? 'unknown reason';
+        return finish('seed_rejected', `The seed program was not scored (${why}). Fix the seed before searching.`);
+      }
+      setRun({ seed_fitness: ev.fitness });
+      persistRun();
+    }
+
+    // ── Generations ───────────────────────────────────────────────────
+    let stopReason: StopReason | null = null;
+    while (!stopped && !stopReason && (run as RunRecord).generation < spec.search.generations) {
+      await control.gate();
+      if (stopped) break;
+      const g = (run as RunRecord).generation + 1;
+      const outcome = await runGeneration(g);
+      if (outcome.interrupted) break;
+      integrate(g);
+      const migrated = migrate((run as RunRecord).archive, g, spec.search.migration_interval);
+      const best = bestElite(migrated.archive)?.fitness ?? null;
+      const prev = (run as RunRecord).best_fitness_history.at(-1) ?? (run as RunRecord).seed_fitness;
+      const improved = best !== null && (prev === null || best > prev + 1e-12);
+      setRun({
+        archive: migrated.archive, generation: g,
+        best_fitness_history: best === null ? (run as RunRecord).best_fitness_history : [...(run as RunRecord).best_fitness_history, best],
+        stale_generations: improved ? 0 : (run as RunRecord).stale_generations + 1,
+      });
+      persistRun();
+      stopReason = outcome.budgetStop;
+      const patience = spec.search.early_stop_patience;
+      if (!stopReason && patience > 0 && (run as RunRecord).stale_generations >= patience) stopReason = 'early_stop';
+    }
+    if (stopped) return finish('user');
+    return finish(stopReason ?? 'generations');
+
+    // ── Generation ────────────────────────────────────────────────────
+    async function runGeneration(g: number): Promise<{ interrupted: boolean; budgetStop: StopReason | null }> {
+      const r0 = run as RunRecord;
+      const resumeBatch = r0.pending_batch?.generation === g ? r0.pending_batch : null;
+      const orphans = [...candidates.values()].filter((c) => c.generation === g && c.mutator !== 'seed');
+      const requeue = orphans.filter((c) => c.outcome === 'pending' && c.evaluation === null && !c.proposal_error);
+      const planned: PlanItem[] = (resumeBatch?.items ?? []).map((it) => ({
+        candidateId: it.candidate_id, island: it.island, parentId: it.parent_id, inspirationIds: it.inspiration_ids,
+        mutator: 'llm', tier: it.tier, depth: it.depth, thinking: it.thinking, astSeed: 0, evalSeed: it.eval_seed,
+        threshold: null,
+      }));
+      let budgetStop: StopReason | null = null;
+      const target = spec.search.candidates_per_generation - orphans.length - planned.length;
+      for (let n = 0; n < target; n += 1) {
+        const r = run as RunRecord;
+        const view = {
+          usage: r.usage, wallMs: wall(),
+          plannedEvaluations: planned.length + requeue.length,
+          plannedLlmCalls: planned.filter((p) => p.mutator === 'llm').length,
+        };
+        budgetStop = exhaustedBudget(spec, view);
+        if (budgetStop) break;
+        const plan = planProposal({
+          spec, archive: r.archive, rng, candidateId: candidateIdFor(r.next_candidate_index),
+          proposalIndex: r.next_candidate_index, llmAvailable: deps.llm.hasKey(), llmBudgetLeft: llmBudgetLeft(spec, view),
+        });
+        if (plan.kind === 'stop') { budgetStop = plan.reason; break; }
+        if (plan.kind === 'empty') break;
+        if (plan.llmFallback === 'no_key') ctx.notice('No Anthropic API key: using AST mutations only.');
+        if (plan.llmFallback === 'llm_budget') ctx.notice('LLM call budget used up: using AST mutations for the rest of the run.');
+        planned.push(plan.item);
+        setRun({ next_candidate_index: r.next_candidate_index + 1 });
+      }
+      persistRun();
+
+      const frozen = (run as RunRecord).archive;
+      const batch = await resolveBatch(g, planned, resumeBatch !== null);
+      if (batch === 'interrupted') return { interrupted: true, budgetStop };
+      const tasks: Array<Promise<unknown>> = [
+        ...requeue.map((c) => evaluateCandidate(ctx, c, thresholdForIsland(spec, frozen, c.island)).then((done) => ctx.saveCandidate(done))),
+        ...planned.map((item) =>
+          runProposal(ctx, item, g, batch ? { result: batch.results[item.candidateId], batchId: batch.id } : undefined)),
+      ];
+      await Promise.all(tasks);
+      return { interrupted: stopped, budgetStop };
+    }
+
+    async function resolveBatch(g: number, planned: PlanItem[], resuming: boolean) {
+      const llmItems = planned.filter((p) => p.mutator === 'llm');
+      if (!spec.mutator.batch_mode || llmItems.length === 0) return null;
+      if (!resuming) {
+        const submitted = await submitBatch(ctx, llmItems, g);
+        if (!submitted.ok) {
+          ctx.notice(`Batch submit failed: ${submitted.message}`);
+          return { id: '', results: {} };
+        }
+        setRun({ pending_batch: submitted.pending, usage: { ...(run as RunRecord).usage, llm_calls: (run as RunRecord).usage.llm_calls + llmItems.length } });
+        persistRun();
+      }
+      const pending = (run as RunRecord).pending_batch;
+      if (!pending) return null;
+      const outcome = await awaitBatch(ctx, pending);
+      if (outcome === 'interrupted') return 'interrupted' as const;
+      setRun({ pending_batch: null });
+      persistRun();
+      return { id: pending.batch_id, results: outcome };
+    }
+
+    // ── Finish ────────────────────────────────────────────────────────
+    async function finish(reason: StopReason, message: string | null = null): Promise<RunRecord> {
+      const r = run as RunRecord;
+      const userStop = reason === 'user';
+      const failed = reason === 'seed_rejected';
+      setRun({ status: failed ? 'failed' : userStop ? 'stopped' : 'completed', stop_reason: reason, message });
+      if (userStop) k.cancelRun(runId);
+      const champion = r.champion_id ? candidates.get(r.champion_id) : undefined;
+      if (champion && !userStop && !failed && spec.confirm.seeds > 0 && champion.evaluation) {
+        const confirmation = await confirmChampion(ctx, champion, spec.confirm.seeds, 'run');
+        setRun({ confirmation });
+      }
+      if (champion && !userStop && !failed) persister.writeChampion(champion.program);
+      setRun({ finished_at: deps.clock.now().toISOString() });
+      persistRun();
+      await persister.flush();
+      if (persistErrors.length > 0) emit({ type: 'notice', message: `${persistErrors.length} file write(s) failed; see earlier notices.` });
+      return run as RunRecord;
+    }
+  }
+
+  function fail(message: string): RunRecord {
+    const base = run ?? {
+      schema: 1 as const, run_id: runId, definition_file: rctx.definitionFile, spec,
+      evaluator: { kind: rctx.evaluator.kind, version: rctx.evaluator.version, fingerprint: null },
+      status: 'failed' as RunStatus, stop_reason: 'error' as StopReason, message, started_at: startedAt.toISOString(),
+      updated_at: startedAt.toISOString(), finished_at: startedAt.toISOString(), generation: 0, next_candidate_index: 1,
+      rng: [1, 2, 3, 4] as const, archive: createArchive([{ key: '', label: '', min: 0, max: 1, bins: 1 }, { key: '', label: '', min: 0, max: 1, bins: 1 }], [], 1),
+      usage: emptyUsage(), champion_id: null, seed_fitness: null, best_fitness_history: [], stale_generations: 0,
+      pending_batch: null, notices: [], confirmation: null,
+    };
+    const failed: RunRecord = { ...base, status: 'failed', stop_reason: 'error', message };
+    run = failed;
+    emit({ type: 'status', run: failed });
+    return failed;
+  }
+
+  return {
+    runId,
+    done,
+    pause() { if (!finished && !stopped) { paused = true; onControlChange(); } },
+    resume() { if (!finished && paused) { paused = false; releaseGate(); onControlChange(); } },
+    stop() { if (!finished && !stopped) { stopped = true; releaseGate(); kernel?.cancelRun(runId); } },
+    current: () => run,
+  };
+}
+
+async function evaluateSeed(ctx: RunContext, seed: CandidateRecord): Promise<CandidateRecord> {
+  const { spec } = ctx;
+  const evaluation = await ctx.kernel.evaluate({
+    runId: ctx.runId, wireId: seed.id, evaluator: { kind: spec.evaluator.kind, config: spec.evaluator.config },
+    program: seed.program, entry: spec.entry, seed: seed.eval_seed, stage: 'full',
+  });
+  ctx.setUsage((u) => ({ ...u, evaluations: u.evaluations + 1 }));
+  if (evaluation.status === 'failed' && evaluation.failure?.code === 'cancelled') return seed;
+  return { ...seed, evaluation, outcome: 'evaluated' };
+}

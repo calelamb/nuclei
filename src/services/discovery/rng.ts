@@ -60,8 +60,8 @@ function rotl(x: number, k: number): number {
 }
 
 export function restoreRng(initial: RngState): Rng {
-  const s = [initial[0] >>> 0, initial[1] >>> 0, initial[2] >>> 0, initial[3] >>> 0];
-  if (s.every((word) => word === 0)) s[0] = 1; // xoshiro must not be all-zero.
+  const s: number[] = [initial[0] >>> 0, initial[1] >>> 0, initial[2] >>> 0, initial[3] >>> 0];
+  if (!s.some((word) => word !== 0)) s[0] = 1; // xoshiro must not be all-zero.
 
   const nextU32 = (): number => {
     const result = (Math.imul(rotl(Math.imul(s[1], 5), 7), 9) >>> 0);
