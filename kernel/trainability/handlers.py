@@ -14,6 +14,7 @@ import time
 from typing import Any
 
 from kernel.lab_context import LabContext
+from kernel.lab_protocol import request_id_problem, with_request_id
 from kernel.trainability._errors import TrainabilityError, normalize_error
 from kernel.trainability._settings import normalize_analyses, normalize_settings
 from kernel.trainability.inspect import inspect_code, load_for_lint, source_lines
@@ -109,13 +110,17 @@ def _inspect_sync(msg: dict) -> dict[str, Any]:
 
 
 async def _run_sync(ctx: LabContext, fn, msg: dict) -> None:
+    """Run a sync request off the event loop; the reply and any error echo the request's ``request_id``."""
     try:
+        problem = request_id_problem(msg)
+        if problem is not None:
+            raise TrainabilityError("invalid_request", problem)
         response = await asyncio.to_thread(fn, msg)
     except TrainabilityError as err:
         response = error_envelope(err)
     except Exception as exc:
         response = error_envelope(normalize_error(exc))
-    await ctx.send_json(response)
+    await ctx.send_json(with_request_id(response, msg))
 
 
 # --------------------------------------------------------------------- jobs
@@ -160,7 +165,7 @@ async def handle(msg: dict, ctx: LabContext) -> None:
     except Exception as exc:  # noqa: BLE001 - last line of defence for this handler
         logger.exception("trainability handler failed for %s", msg.get("type"))
         job_id = msg.get("job_id") if isinstance(msg.get("job_id"), str) else None
-        await ctx.send_json(error_envelope(normalize_error(exc), job_id))
+        await ctx.send_json(with_request_id(error_envelope(normalize_error(exc), job_id), msg))
 
 
 async def _dispatch(msg: dict, ctx: LabContext) -> None:

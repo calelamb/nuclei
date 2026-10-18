@@ -8,7 +8,7 @@ Routed from ``kernel/discovery/handlers.py`` for every ``discovery_conjecture*``
       -> discovery_conjecture_evidence {job_id, item}                                (one per circuit)
       -> discovery_conjecture_result {job_id, status: complete|cancelled|failed, result, error?}
     discovery_conjecture_cancel {job_id} -> discovery_conjecture_cancelled {job_id, accepted}
-    discovery_conjecture_schema {} -> discovery_conjecture_schema_result {features, quantities, families, predicate, limits}
+    discovery_conjecture_schema {request_id?} -> discovery_conjecture_schema_result {features, quantities, families, predicate, limits, request_id?}
 
 Errors use the discovery envelope: ``{"type": "error", "phase": "discovery", "code", "message", "job_id"?, "path"?}``
 with codes ``invalid_conjecture`` (carries ``path``), ``conjecture_busy``, ``conjecture_internal`` and
@@ -22,6 +22,7 @@ from typing import Any
 from kernel.discovery.conjecture.errors import SpecError
 from kernel.discovery.conjecture.jobs import ConjectureJobError, get_manager
 from kernel.discovery.conjecture.spec import schema_payload, validate_conjecture
+from kernel.lab_protocol import request_id_problem, with_request_id
 
 MAX_ID_LENGTH = 200
 
@@ -33,7 +34,7 @@ def _error(code: str, message: str, msg: dict[str, Any], path: str | None = None
         payload["job_id"] = job_id[:MAX_ID_LENGTH]
     if path is not None:
         payload["path"] = path
-    return payload
+    return with_request_id(payload, msg)
 
 
 def _job_id(msg: dict[str, Any]) -> str | None:
@@ -74,7 +75,11 @@ async def handle(msg: dict[str, Any], ctx) -> None:
             accepted = get_manager().cancel(ctx.owner, job_id)
             await ctx.send_json({"type": "discovery_conjecture_cancelled", "job_id": job_id, "accepted": accepted})
         elif msg_type == "discovery_conjecture_schema":
-            await ctx.send_json({"type": "discovery_conjecture_schema_result", **schema_payload()})
+            problem = request_id_problem(msg)
+            if problem is not None:
+                await ctx.send_json(_error("invalid_request", problem, msg))
+                return
+            await ctx.send_json(with_request_id({"type": "discovery_conjecture_schema_result", **schema_payload()}, msg))
         else:
             await ctx.send_json(_error("invalid_request", f"Unknown conjecture message '{msg_type}'.", msg))
     except Exception as exc:  # noqa: BLE001 - the connection must survive a handler bug

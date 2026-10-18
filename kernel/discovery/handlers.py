@@ -21,6 +21,7 @@ from kernel.discovery.constants import (
 from kernel.discovery.evaluators import EVALUATORS, InvalidConfig, normalize_config
 from kernel.discovery.manager import BusyError, EvaluateRequest, get_manager
 from kernel.discovery.mutate import MutationError, mutate
+from kernel.lab_protocol import request_id_problem, with_request_id
 
 MAX_PROGRAM_BYTES = 400_000
 MAX_MUTATIONS = 64
@@ -41,7 +42,11 @@ def _error(code: str, message: str, msg: dict[str, Any] | None = None) -> dict[s
         value = (msg or {}).get(key)
         if isinstance(value, str) and value:
             payload[key] = value[:MAX_ID_LENGTH]
-    return payload
+    return with_request_id(payload, msg)
+
+
+#: Sync requests that may carry an optional ``request_id`` (echoed on the reply and on errors).
+SYNC_TYPES = ("discovery_evaluators", "discovery_mutate", "discovery_program_key", "discovery_conjecture_schema")
 
 
 def _text(msg: dict[str, Any], key: str, *, required: bool = True) -> str | None:
@@ -135,7 +140,7 @@ async def _mutate(msg: dict[str, Any], ctx) -> None:
         )
     except MutationError as exc:
         raise RequestError("mutation_failed", str(exc)) from exc
-    await ctx.send_json({"type": "discovery_mutations", "mutations": mutations})
+    await ctx.send_json(with_request_id({"type": "discovery_mutations", "mutations": mutations}, msg))
 
 
 async def handle(msg: dict[str, Any], ctx) -> None:
@@ -144,11 +149,14 @@ async def handle(msg: dict[str, Any], ctx) -> None:
     ctx.on_release("discovery", lambda owner=ctx.owner: manager.release_owner(owner))
     msg_type = msg.get("type")
     try:
+        problem = request_id_problem(msg) if msg_type in SYNC_TYPES else None
+        if problem is not None:
+            raise RequestError(ERR_INVALID_REQUEST, problem)
         if msg_type == "discovery_evaluators":
-            await ctx.send_json({
+            await ctx.send_json(with_request_id({
                 "type": "discovery_evaluators_result",
                 "evaluators": [spec.to_json() for spec in EVALUATORS.values()],
-            })
+            }, msg))
         elif msg_type == "discovery_evaluate":
             await _evaluate(msg, ctx)
         elif msg_type == "discovery_cancel":
