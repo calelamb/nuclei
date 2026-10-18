@@ -26,10 +26,18 @@ export const TRAINABILITY_ANALYSES: readonly TrainabilityAnalysis[] = [
 
 export type GradientInit = 'uniform' | 'small';
 
+/** Spec v2 §5.5/§5.6: how gradient variance is estimated. */
+export type TrainabilityMethod = 'auto' | 'sampling' | 'ppe';
+/** The method that actually produced a result (never `auto`). */
+export type ResolvedMethod = 'sampling' | 'ppe';
+export type TrainabilityBackendChoice = 'auto' | 'numpy' | 'cupy' | 'jax';
+
 export interface TrainabilitySettings {
   samples?: number;
   seed?: number;
   init?: GradientInit;
+  method?: TrainabilityMethod;
+  backend?: TrainabilityBackendChoice;
   scaling?: {
     qubits?: number[];
     layers?: number[];
@@ -61,6 +69,12 @@ export interface GradientStatistics {
   gradient_norm_mean: number;
   gate_values: Array<{ source_index: number; parameter: string; variance: number; abs_mean: number }>;
   elapsed_ms: number;
+  /** Spec v2: the estimator used. For `ppe`, `variance_ci95` values are the
+   * rigorous truncation interval, not a bootstrap CI. */
+  method?: ResolvedMethod;
+  backend?: string;
+  /** PPE only: truncation interval on `variance_mean`. */
+  interval?: Interval;
 }
 
 export type ScalingVerdict = 'barren_plateau' | 'polynomial' | 'inconclusive';
@@ -82,6 +96,11 @@ export interface ScalingStudy {
     n_params: number;
     variance: number;
     variance_ci95: Interval;
+    /** Spec v2: per-point estimator; PPE points reach 128 qubits. */
+    method?: ResolvedMethod;
+    backend?: string;
+    /** PPE only: rigorous truncation interval (not a CI). */
+    interval?: Interval;
   }>;
   fits: ScalingFit[];
   observable?: string;
@@ -190,6 +209,24 @@ export interface TrainabilityInspection {
   notes: string[];
 }
 
+/** Addendum §D — certificate provenance carried on `trainability_result`. */
+export interface TrainabilityProvenance {
+  code_sha256: string;
+  observable: string;
+  settings: TrainabilitySettings;
+  kernel: {
+    nuclei_protocol: string;
+    python: string;
+    numpy: string;
+    stim: string | null;
+    qiskit?: string | null;
+    cirq?: string | null;
+  };
+  analyses_fingerprint: string;
+  backend: string;
+  created_at: string;
+}
+
 // ── Messages ────────────────────────────────────────────────────────────
 
 export type TrainabilityRequest =
@@ -231,7 +268,92 @@ export type TrainabilityResponse =
       results: TrainabilityResults;
       errors: Partial<Record<TrainabilityAnalysis, { code: string; message: string }>>;
       elapsed_ms: number;
+      /** Addendum §D. Optional so older kernels still parse. */
+      provenance?: TrainabilityProvenance;
     }
   | { type: 'trainability_cancelled'; job_id: string; accepted: boolean };
 
 // ── UI types ────────────────────────────────────────────────────────────
+
+export type TrainabilityTabId = 'gradients' | 'scaling' | 'lie' | 'expressibility' | 'landscape';
+
+export type TrainabilityJobStatus = 'starting' | 'running' | 'cancelling' | 'complete' | 'cancelled' | 'failed';
+
+export const ACTIVE_JOB_STATUSES: readonly TrainabilityJobStatus[] = ['starting', 'running', 'cancelling'];
+
+export interface TrainabilityTargetSnapshot {
+  fileName: string;
+  filePath: string | null;
+  framework: string;
+  nQubits: number | null;
+  nParameters: number | null;
+  observable: string;
+}
+
+export interface TrainabilityJobRecord {
+  id: string;
+  status: TrainabilityJobStatus;
+  target: TrainabilityTargetSnapshot;
+  analyses: TrainabilityAnalysis[];
+  settings: TrainabilitySettings;
+  progress: Partial<Record<TrainabilityAnalysis, { fraction: number; message: string }>>;
+  /** Per-analysis results, filled as `trainability_partial` messages arrive. */
+  results: TrainabilityResults;
+  errors: Partial<Record<TrainabilityAnalysis, { code: string; message: string }>>;
+  startedAt: number;
+  finishedAt: number | null;
+  elapsedMs: number | null;
+  provenance: TrainabilityProvenance | null;
+  /** Job-level failure (kernel error envelope, timeout, disconnect). */
+  error: { code: string; message: string } | null;
+  /** Hash of the analysed source, used to flag stale results. */
+  codeKey: string;
+}
+
+export type AsyncStatus = 'idle' | 'loading' | 'ready' | 'error';
+
+export interface InspectState {
+  status: AsyncStatus;
+  data: TrainabilityInspection | null;
+  error: string | null;
+  /** Key (hash of code + params) the data belongs to. */
+  codeKey: string | null;
+}
+
+export interface LintState {
+  status: AsyncStatus;
+  diagnostics: TrainabilityDiagnostic[];
+  summary: TrainabilityLintSummary | null;
+  error: string | null;
+  codeKey: string | null;
+}
+
+export interface SavedCertificate {
+  jsonPath: string;
+  markdownPath: string;
+  savedAt: number;
+  fileName: string;
+  jobId: string;
+}
+
+/** Addendum §D — the `.trainability.json` document. */
+export interface TrainabilityCertificateJson {
+  schema: 'nuclei.trainability.certificate/1';
+  file: string;
+  framework: string;
+  n_qubits: number | null;
+  n_parameters: number | null;
+  observable: string;
+  created_at: string;
+  job_id: string;
+  provenance: TrainabilityProvenance | null;
+  settings: TrainabilitySettings;
+  verdicts: {
+    trainability: { risk: 'high' | 'medium' | 'low' | 'unknown'; evidence: Array<{ source: string; level: string; text: string }> };
+    simulability: { kind: string; summary: string; ppe_points: number; caveat: string };
+    scaling: ScalingVerdict | null;
+  };
+  results: TrainabilityResults;
+  errors: Partial<Record<TrainabilityAnalysis, { code: string; message: string }>>;
+  lint: TrainabilityDiagnostic[];
+}
