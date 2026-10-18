@@ -53,4 +53,28 @@ describe('rankCommands', () => {
     const list = [cmd('a', 'Open one'), cmd('b', 'Open two')];
     expect(rankCommands(list, 'open').map((c) => c.id)).toEqual(['a', 'b']);
   });
+
+  it('does not match scattered letters: "theme" is not "Switch workspace mode"', () => {
+    const ids = rankCommands(COMMANDS, 'theme').map((c) => c.id);
+    expect(ids).toEqual(['theme']);
+  });
+
+  it('"terminal" finds the terminal, not every command whose letters happen to contain it', () => {
+    const list = [
+      cmd('hist', 'Toggle histogram tab panel'),
+      cmd('term', 'Toggle terminal panel'),
+      cmd('est', 'Go to Resource Estimator', 'Navigate'),
+    ];
+    expect(rankCommands(list, 'terminal').map((c) => c.id)).toEqual(['term']);
+  });
+
+  it('"sett" lists Settings and nothing that merely contains s, e, t, t in order', () => {
+    const list = [cmd('est', 'Go to Resource Estimator', 'Navigate'), cmd('step', 'Step through circuit', 'Circuit'), cmd('set', 'Go to Settings', 'Navigate')];
+    expect(rankCommands(list, 'sett').map((c) => c.id)).toEqual(['set']);
+  });
+
+  it('still finds a command by the initials of its words ("tdp")', () => {
+    const list = [cmd('dirac', 'Toggle Dirac panel', 'Dirac'), cmd('theme', 'Toggle theme')];
+    expect(rankCommands(list, 'tdp').map((c) => c.id)).toEqual(['dirac']);
+  });
 });

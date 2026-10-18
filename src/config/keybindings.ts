@@ -48,12 +48,13 @@ export const KEYBINDINGS: readonly Keybinding[] = [
   { id: 'open', key: 'o', label: 'Open file', group: 'Navigation', owner: 'app' },
   { id: 'new', key: 'n', label: 'New file', group: 'Navigation', owner: 'app', browserReserved: true },
   { id: 'save-as', key: 's', shift: true, label: 'Save as', group: 'Navigation', owner: 'app' },
+  { id: 'settings', key: ',', label: 'Open settings', group: 'Navigation', owner: 'app' },
   { id: 'goto-rail-view', key: '1-9', display: '1–9', label: 'Jump to sidebar view', group: 'Navigation', owner: 'app' },
   { id: 'toggle-bottom-panel', key: '`', label: 'Toggle terminal panel', group: 'Navigation', owner: 'app' },
-  { id: 'switch-workspace', key: 'm', shift: true, label: 'Switch Learn / Research', group: 'Navigation', owner: 'app' },
+  { id: 'switch-workspace', key: 'm', shift: true, label: 'Switch workspace mode', group: 'Navigation', owner: 'app' },
 
   { id: 'toggle-theme', key: 't', shift: true, label: 'Toggle theme', group: 'View', owner: 'app', browserReserved: true },
-  { id: 'cycle-ui-mode', key: 'l', shift: true, label: 'Cycle level (Learn)', group: 'View', owner: 'app' },
+  { id: 'cycle-ui-mode', key: 'l', shift: true, label: 'Change level', group: 'View', owner: 'app' },
   { id: 'launch', key: 'r', shift: true, label: 'Launch on hardware', group: 'View', owner: 'app' },
 ];
 
@@ -84,6 +85,11 @@ export function bindingFor(id: string): Keybinding {
   const found = KEYBINDINGS.find((b) => b.id === id);
   if (!found) throw new Error(`Unknown keybinding: ${id}`);
   return found;
+}
+
+/** The one display name of a bound command: the palette, the shortcuts sheet and tooltips all say this. */
+export function bindingLabel(id: string): string {
+  return bindingFor(id).label;
 }
 
 export function isMacPlatform(): boolean {
