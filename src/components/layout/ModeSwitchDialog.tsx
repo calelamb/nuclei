@@ -26,6 +26,7 @@ export function ModeSwitchDialog() {
       title={`Switch to ${targetLabel} mode?`}
       width={420}
       onClose={cancelPending}
+      hideClose
       initialFocus="[data-confirm]"
       footer={(
         <>

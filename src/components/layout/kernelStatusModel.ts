@@ -56,6 +56,8 @@ interface KernelStatusInput {
   lastRunFailed: boolean;
   /** The most recent run finished but defined no circuit (plain Python): a clean finish, not a failure. */
   lastRunNoCircuit?: boolean;
+  /** The most recent run was stopped by the user before it finished. */
+  lastRunStopped?: boolean;
   isWeb: boolean;
 }
 
@@ -92,6 +94,9 @@ export function getKernelStatusModel(input: KernelStatusInput): KernelStatusMode
       tone: 'warn',
       detail: `${engine} is ready. The last run ended with an error; see the Terminal.`,
     };
+  }
+  if (input.lastRunStopped) {
+    return { label: 'Run stopped', tone: 'idle', detail: `${engine} is ready. You stopped the last run before it finished.` };
   }
   if (input.lastRunNoCircuit) {
     return {

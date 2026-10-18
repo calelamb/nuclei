@@ -144,6 +144,7 @@ export function StatusBar() {
   const result = useSimulationStore((s) => s.result);
   const lastRunFailed = useSimulationStore((s) => s.lastRunFailed);
   const lastRunNoCircuit = useSimulationStore((s) => s.lastRunNoCircuit);
+  const lastRunStopped = useSimulationStore((s) => s.lastRunStopped);
   const kernelReady = useEditorStore((s) => s.kernelReady);
   const kernelStatus = useEditorStore((s) => s.kernelStatus);
   const kernelError = useEditorStore((s) => s.kernelError);
@@ -173,6 +174,7 @@ export function StatusBar() {
     isRunning,
     lastRunFailed,
     lastRunNoCircuit,
+    lastRunStopped,
     executionTimeMs: result ? result.execution_time_ms : null,
     isWeb: platform.getPlatform() === 'web',
   });

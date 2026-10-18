@@ -54,6 +54,14 @@ describe('getKernelStatusModel', () => {
     expect(model.detail).toMatch(/plain Python|no circuit/i);
   });
 
+  it('says the run was stopped instead of the previous run\'s timing', () => {
+    const model = getKernelStatusModel({
+      ...base, kernelStatus: 'ready', kernelReady: true, executionTimeMs: 812, lastRunStopped: true,
+    });
+    expect(model).toMatchObject({ label: 'Run stopped', tone: 'idle' });
+    expect(model.label).not.toMatch(/ms/);
+  });
+
   it('a run in progress wins over the previous failure', () => {
     const model = getKernelStatusModel({
       ...base, kernelStatus: 'ready', kernelReady: true, lastRunFailed: true, isRunning: true,
