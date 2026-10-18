@@ -30,6 +30,16 @@ describe('templates', () => {
   });
 });
 
+describe('frontier template (CR-M5)', () => {
+  it('uses four qubit sizes, so the beta fit has more than a secant', () => {
+    const res = scaffoldDiscovery('trainability-frontier', 'Frontier', {}, { kind: 'ast' });
+    expect(res.ok).toBe(true);
+    if (!res.ok) return;
+    const parsed = parseDiscoveryYaml(res.files[0].content, 'frontier.discovery.yaml');
+    expect(parsed.ok && parsed.spec.evaluator.config.qubits).toEqual([8, 16, 32, 64]);
+  });
+});
+
 describe('scaffoldDiscovery', () => {
   it.each(DISCOVERY_TEMPLATES)('$id scaffolds a schema-valid definition', (t) => {
     const res = scaffoldDiscovery(t.id, 'My Study 1', { max_evaluations: 50 }, { kind: 'ast' });
