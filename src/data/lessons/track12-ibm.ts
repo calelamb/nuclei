@@ -668,7 +668,8 @@ backend = GenericBackendV2(num_qubits=5)
 # 3. Number of two-qubit gates before and after`,
         framework: 'qiskit',
         requiredCode: ['\\.ccx\\(', '\\.cx\\([\\s\\S]*\\.cx\\(', 'optimization_level\\s*=\\s*3', '\\.depth\\('],
-        expectedOutput: ['\\d'],
+        // Original and transpiled depth plus gate counts: at least four numbers must be printed.
+        expectedOutput: ['(\\d+\\D+){3}\\d+'],
         tolerancePercent: 15,
         hints: [
           'Use qc.count_ops() to see the gate breakdown and qc.depth() for circuit depth.',

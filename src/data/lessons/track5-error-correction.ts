@@ -2678,7 +2678,6 @@ for c in [3, 5, 50, 100]:
 # c =  50  →  threshold ≈ 0.0200
 `,
         framework: 'qiskit',
-        requiredCode: ['return\\s+1\\s*/\\s*c'],
         expectedOutput: ['c\\s*=\\s*50\\s.*0\\.0200'],
         tolerancePercent: 100,
         hints: [

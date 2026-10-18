@@ -493,7 +493,7 @@ qc = QuantumCircuit(3, 2)
 # TODO: Prepare (|0⟩+i|1⟩)/√2 on q0, Bell pair on q1-q2, Bell measure, corrections
 `,
         framework: 'qiskit',
-        requiredCode: ['\\.s\\(\\s*0\\s*\\)', '\\.cx\\(\\s*1\\s*,\\s*2\\s*\\)', '\\.cx\\(\\s*0\\s*,\\s*1\\s*\\)', '\\.measure\\('],
+        requiredCode: ['\\.(s|sdg|p|rz|rx|ry|u)\\(', '\\.cx\\(\\s*1\\s*,\\s*2\\s*\\)', '\\.cx\\(\\s*0\\s*,\\s*1\\s*\\)', '\\.measure\\('],
         tolerancePercent: 5,
         hints: [
           'State prep: qc.h(0) then qc.s(0)',
