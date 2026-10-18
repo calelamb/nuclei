@@ -34,6 +34,7 @@ import {
 import { MEMORY_PREFIX, isMemoryPath } from '../../hooks/useFileOps';
 import { DesktopOnlyState } from '../hardware/DesktopOnlyState';
 import { ExplorerNameInput } from './ExplorerNameInput';
+import { ExplorerRenameRow } from './ExplorerRenameRow';
 import { validateNewName } from './createNameValidation';
 import { flattenVisible, resolveTreeKey } from './treeNavigation';
 
@@ -93,12 +94,12 @@ export function FileExplorer() {
   const [createError, setCreateError] = useState<string | null>(null);
   const [renameTarget, setRenameTarget] = useState<string | null>(null);
   const [renameDraft, setRenameDraft] = useState('');
+  const [renameError, setRenameError] = useState<string | null>(null);
+  const renameBusy = useRef(false);
   const [pending, setPending] = useState<CreateKind | null>(null);
   const [draft, setDraft] = useState('');
   const treeRef = useRef<HTMLDivElement>(null);
   const rootRef = useRef<HTMLDivElement>(null);
-  // The row the first press of a double-click landed on: the tree may move between the two clicks.
-  const pressedPath = useRef<string | null>(null);
   const [focusedPath, setFocusedPath] = useState<string | null>(null);
 
   const loadRoot = useCallback(
@@ -302,19 +303,39 @@ export function FileExplorer() {
     if (viaKeyboard) useEditorStore.getState().requestEditorFocus();
   }, [draft, pending, projectRoot, platform, reloadTree, revealCreatedFolder, openTab, setEditorFramework, tabs, rootEntries]);
 
-  const commitRename = useCallback(
-    async (oldPath: string) => {
-      const d = renameDraft.trim();
-      setRenameTarget(null);
-      if (!d || d === basename(oldPath)) return;
-      const res = await platform.renameFile(oldPath, d);
-      if (res) {
-        useProjectStore.getState().renameTab(oldPath, res.path);
-        if (projectRoot) void reloadTree(projectRoot);
+  const endRename = useCallback((focusPath: string | null) => {
+    setRenameTarget(null);
+    setRenameError(null);
+    if (focusPath) focusRow(focusPath);
+  }, [focusRow]);
+
+  /** Names already taken beside `oldPath`, so a rename cannot collide with a sibling. */
+  const siblingNames = (oldPath: string): string[] => {
+    const parent = oldPath.slice(0, oldPath.lastIndexOf('/'));
+    const entries = parent === projectRoot ? treeEntries : childEntries[parent] ?? [];
+    return entries.filter((e) => e.path !== oldPath).map((e) => e.name);
+  };
+
+  const commitRename = async (oldPath: string, viaKeyboard: boolean) => {
+    if (renameBusy.current) return;
+    const name = renameDraft.trim();
+    if (!name || name === basename(oldPath)) { endRename(viaKeyboard ? oldPath : null); return; }
+    const invalid = validateNewName({ name, existingNames: siblingNames(oldPath) });
+    if (invalid) { setRenameError(invalid); return; }
+    renameBusy.current = true;
+    try {
+      const res = await platform.renameFile(oldPath, name);
+      if (!res) {
+        setRenameError(`Couldn't rename ${basename(oldPath)}. A file with that name may already exist.`);
+        return;
       }
-    },
-    [renameDraft, platform, projectRoot, reloadTree],
-  );
+      useProjectStore.getState().renameTab(oldPath, res.path);
+      if (projectRoot) await reloadTree(projectRoot);
+      endRename(res.path);
+    } finally {
+      renameBusy.current = false;
+    }
+  };
 
   const rowStyle = (isActive: boolean, depth: number): React.CSSProperties => ({
     display: 'flex',
@@ -369,32 +390,18 @@ export function FileExplorer() {
     }
     if (renameTarget === entry.path) {
       return (
-        <div key={entry.path} style={rowStyle(isActive, depth)}>
-          <ExplorerNameInput
-            ariaLabel={`Rename ${entry.name}`}
-            selectBaseName
-            value={renameDraft}
-            onChange={setRenameDraft}
-            onBlur={() => commitRename(entry.path)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') {
-                e.preventDefault();
-                commitRename(entry.path);
-              }
-              if (e.key === 'Escape') setRenameTarget(null);
-            }}
-            style={{
-              flex: 1,
-              background: colors.bgElevated,
-              border: `1px solid ${colors.accent}`,
-              color: colors.text,
-              fontSize: 12,
-              padding: '2px 6px',
-              borderRadius: 4,
-              fontFamily: TYPOGRAPHY.fontSans,
-            }}
-          />
-        </div>
+        <ExplorerRenameRow
+          key={entry.path}
+          name={entry.name}
+          rowStyle={rowStyle(isActive, depth)}
+          icon={iconFor(entry.name, false, isActive ? colors.accent : colors.textMuted)}
+          value={renameDraft}
+          error={renameError}
+          colors={colors}
+          onChange={(v) => { setRenameDraft(v); if (renameError) setRenameError(null); }}
+          onCommit={(viaKeyboard) => { void commitRename(entry.path, viaKeyboard); }}
+          onCancel={(viaKeyboard) => endRename(viaKeyboard ? entry.path : null)}
+        />
       );
     }
     return (
@@ -407,12 +414,7 @@ export function FileExplorer() {
         tabIndex={rovingTabIndex(entry.path)}
         onFocus={() => setFocusedPath(entry.path)}
         onClick={() => handleOpenFile(entry.path)}
-        onMouseDown={(e) => { if (e.detail <= 1) pressedPath.current = entry.path; }}
-        onDoubleClick={() => {
-          if (pressedPath.current !== entry.path) return;
-          setRenameDraft(entry.name);
-          setRenameTarget(entry.path);
-        }}
+        onDoubleClick={() => { void handleOpenFile(entry.path); }}
         className="nuclei-row"
         style={rowStyle(isActive, depth)}
       >
