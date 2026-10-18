@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 
 /**
  * True when a result landed while the results column was folded away behind a rail tab, and the
@@ -6,8 +6,7 @@ import { useEffect, useState } from 'react';
  */
 export function useUnseenResult(result: unknown, columnFolded: boolean): boolean {
   const [seen, setSeen] = useState<unknown>(result);
-  useEffect(() => {
-    if (!columnFolded) setSeen(result);
-  }, [columnFolded, result]);
+  // While the column is on screen every result counts as seen (derived during render, not in an effect).
+  if (!columnFolded && seen !== result) setSeen(result);
   return columnFolded && result != null && result !== seen;
 }
