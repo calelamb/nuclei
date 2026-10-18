@@ -31,3 +31,29 @@ describe('openSettings', () => {
     expect(useLearnStore.getState().isLearnMode).toBe(false);
   });
 });
+
+describe('room retreat', () => {
+  beforeEach(() => {
+    useNavigationStore.setState({ activeView: 'files', autoCollapsedView: null, lastNarrow: false });
+  });
+
+  it('parks the open view and restores it when room returns', () => {
+    useNavigationStore.getState().retreatSidebarForRoom();
+    expect(useNavigationStore.getState().activeView).toBeNull();
+    expect(useNavigationStore.getState().autoCollapsedView).toBe('files');
+    useNavigationStore.getState().restoreSidebarForRoom();
+    expect(useNavigationStore.getState().activeView).toBe('files');
+    expect(useNavigationStore.getState().autoCollapsedView).toBeNull();
+  });
+
+  it('does not restore over a sidebar the user already reopened or a narrow-window fold', () => {
+    useNavigationStore.getState().retreatSidebarForRoom();
+    useNavigationStore.getState().setActiveView('settings');
+    useNavigationStore.getState().restoreSidebarForRoom();
+    expect(useNavigationStore.getState().activeView).toBe('settings');
+
+    useNavigationStore.setState({ activeView: null, autoCollapsedView: 'files', lastNarrow: true });
+    useNavigationStore.getState().restoreSidebarForRoom();
+    expect(useNavigationStore.getState().activeView).toBeNull();
+  });
+});

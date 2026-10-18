@@ -7,6 +7,9 @@ import { KernelBanner } from '../editor/KernelBanner';
 import { Breadcrumbs, ExperimentBreadcrumbs } from '../editor/Breadcrumbs';
 import { VizZone } from '../qec/VizZone';
 import { useQecStore } from '../../stores/qecStore';
+import './vizRail.css';
+import { useDiracPanelStore } from '../../stores/diracPanelStore';
+import { useRoomRetreat } from '../../layout/useRoomRetreat';
 import { useShellLayout } from '../../hooks/useShellLayout';
 import { useUiFeatures } from '../../hooks/useUiFeatures';
 import { useElementSize } from '../../hooks/useElementSize';
@@ -198,6 +201,10 @@ export function PanelLayout() {
   const vizHasContent = vizColumnHasContent(visible, { latticeHasCoords }, chipShown);
   const vizFits = topSplitSize.width === 0 || topSplitSize.width >= EDITOR_MIN_WIDTH + VIZ_MIN_WIDTH;
   const showViz = vizHasContent && vizFits;
+
+  const diracOpen = useDiracPanelStore((s) => s.isOpen);
+  const closeDirac = useDiracPanelStore((s) => s.close);
+  useRoomRetreat({ sidebarWidth, vizWanted: vizHasContent, canCollapseSidebar: !editorHidden && !fullViewOwnsArea });
 
   useShellLayout({
     platform,
@@ -478,6 +485,12 @@ export function PanelLayout() {
                     </ErrorBoundary>
                   </div>
                 </div>
+
+                {vizHasContent && !vizFits && diracOpen && (
+                  <button type="button" className="viz-rail" onClick={closeDirac} aria-label="Show circuit and results (folds Dirac)">
+                    <span className="viz-rail__label">CIRCUIT</span>
+                  </button>
+                )}
 
                 {showViz && (
                   <>

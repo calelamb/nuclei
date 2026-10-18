@@ -27,3 +27,37 @@ export function bandsForWidth(width: number): ViewportBands {
     sidebarNarrow: width < SIDEBAR_COLLAPSE_BELOW,
   };
 }
+
+/** The activity bar's fixed width. */
+export const ACTIVITY_BAR_WIDTH = 48;
+/** What a folded Dirac still takes: its vertical rail tab. */
+export const DIRAC_RAIL_WIDTH = 28;
+
+export interface RoomInput {
+  viewport: number;
+  sidebarWidth: number;
+  /** Dirac's open width, or null when it is folded to its rail tab. */
+  diracWidth: number | null;
+  /** The right-hand viz column has something to show and so wants VIZ_MIN_WIDTH. */
+  vizWanted: boolean;
+}
+
+export interface RoomPlan {
+  /** Close the sidebar: the editor would otherwise drop below EDITOR_MIN_WIDTH (or force the viz column away). */
+  closeSidebar: boolean;
+  /** The viz column cannot fit even with the sidebar closed. */
+  hideViz: boolean;
+}
+
+/**
+ * Retreat order when something opens and the row gets tight: the sidebar folds first (it is the
+ * most easily reopened), and only then does the viz column step aside. The editor is never squeezed below
+ * EDITOR_MIN_WIDTH by an open sidebar.
+ */
+export function planRoom({ viewport, sidebarWidth, diracWidth, vizWanted }: RoomInput): RoomPlan {
+  const rightEdge = diracWidth ?? DIRAC_RAIL_WIDTH;
+  const row = viewport - ACTIVITY_BAR_WIDTH - rightEdge;
+  const need = EDITOR_MIN_WIDTH + (vizWanted ? VIZ_MIN_WIDTH : 0);
+  const closeSidebar = row - sidebarWidth < need;
+  return { closeSidebar, hideViz: vizWanted && row < need };
+}
