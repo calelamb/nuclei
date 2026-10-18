@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { describeKernelFailure, normalizeKernelError } from './kernelErrors';
+import { describeKernelFailure, kernelStartFailureTitle, normalizeKernelError } from './kernelErrors';
 
 describe('normalizeKernelError', () => {
   it('keeps the verbatim Rust string', () => {
@@ -33,11 +33,28 @@ describe('describeKernelFailure', () => {
     expect(failure.docsUrl).toBe(`https://getnuclei.dev/docs/introduction/kernel-troubleshooting/#${kind}`);
   });
 
-  it('does not repeat the title in the banner body', () => {
-    const failure = describeKernelFailure(
+  it('names every failed start once per runtime, whatever the cause', () => {
+    for (const message of ['Port 8742 is already in use.', 'Kernel script not found at: /x', 'something else entirely', 'The kernel did not respond after 15 attempts.']) {
+      expect(describeKernelFailure(message, { isWeb: true }).title).toBe("Python didn't start");
+      expect(describeKernelFailure(message, { isWeb: false }).title).toBe("Kernel didn't start");
+    }
+  });
+
+  it('moves the specific reason into the body without repeating it', () => {
+    const web = describeKernelFailure(
       "Couldn't start the browser Python engine. Check your connection or content blocker, then retry.",
+      { isWeb: true },
     );
-    expect(failure.detail).toBe('Check your connection or content blocker, then retry.');
-    expect(describeKernelFailure('Port 8742 is already in use.').detail).toBe('Port 8742 is already in use.');
+    expect(web.detail).toBe("Couldn't start the browser Python engine. Check your connection or content blocker, then retry.");
+    expect(describeKernelFailure('Port 8742 is already in use.', { isWeb: false }).detail)
+      .toBe('Another app is using the kernel port. Port 8742 is already in use.');
+    expect(describeKernelFailure('something else entirely', { isWeb: false }).detail).toBe('something else entirely');
+  });
+});
+
+describe('kernelStartFailureTitle', () => {
+  it('is one phrase per runtime', () => {
+    expect(kernelStartFailureTitle(true)).toBe("Python didn't start");
+    expect(kernelStartFailureTitle(false)).toBe("Kernel didn't start");
   });
 });

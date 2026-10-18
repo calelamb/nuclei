@@ -7,6 +7,7 @@
  */
 
 import { DOCS_BASE as DOCS_ROOT } from '../config/docsLinks';
+import { isWebBuild } from '../platform/buildTarget';
 
 export type KernelFailureKind =
   | 'port-in-use'
@@ -21,16 +22,17 @@ export interface KernelFailure {
   kind: KernelFailureKind;
   /** The message shown to the student (verbatim Rust text where we have it). */
   message: string;
-  /** Short heading for the banner. */
+  /** The single name for a failed start on this runtime ("Python didn't start" / "Kernel didn't start"). */
   title: string;
-  /** The message minus any leading repeat of the title (what the banner body shows). */
+  /** The specific reason followed by the message (what the banner body shows). */
   detail: string;
   docsUrl: string;
 }
 
 const DOCS_BASE = `${DOCS_ROOT}/introduction/kernel-troubleshooting/`;
 
-const TITLES: Record<KernelFailureKind, string> = {
+/** What went wrong, in a phrase. Becomes the start of the body, never the heading. */
+const REASONS: Record<KernelFailureKind, string> = {
   'port-in-use': 'Another app is using the kernel port',
   'script-missing': "Nuclei couldn't find its Python kernel",
   'python-missing': "Nuclei couldn't start Python",
@@ -39,6 +41,11 @@ const TITLES: Record<KernelFailureKind, string> = {
   'browser-load': "Couldn't start the browser Python engine",
   unknown: "The kernel didn't start",
 };
+
+/** One name per runtime for a start that failed, shared by the banner, the results column and the status bar. */
+export function kernelStartFailureTitle(isWeb: boolean): string {
+  return isWeb ? "Python didn't start" : "Kernel didn't start";
+}
 
 export const KERNEL_NOT_RESPONDING_MESSAGE =
   'The kernel did not respond after 15 attempts. Check that Python is installed, then retry.';
@@ -62,12 +69,19 @@ function classify(message: string): KernelFailureKind {
   return 'unknown';
 }
 
-export function describeKernelFailure(error: unknown): KernelFailure {
+export function describeKernelFailure(error: unknown, options: { isWeb?: boolean } = {}): KernelFailure {
   const message = normalizeKernelError(error);
   const kind = classify(message);
-  const title = TITLES[kind];
-  const detail = message.startsWith(title)
-    ? message.slice(title.length).replace(/^[\s.:—-]+/, '').trim()
-    : message;
-  return { kind, message, title, detail: detail || message, docsUrl: `${DOCS_BASE}#${kind}` };
+  const reason = REASONS[kind];
+  // 'unknown' and 'not-responding' reasons only restate the heading, so the message stands alone.
+  const standsAlone = kind === 'unknown' || kind === 'not-responding';
+  const rest = message.startsWith(reason) ? message.slice(reason.length).replace(/^[\s.:—-]+/, '').trim() : message;
+  const detail = standsAlone ? message : `${reason.replace(/[.]$/, '')}.${rest ? ` ${rest}` : ''}`;
+  return {
+    kind,
+    message,
+    title: kernelStartFailureTitle(options.isWeb ?? isWebBuild()),
+    detail,
+    docsUrl: `${DOCS_BASE}#${kind}`,
+  };
 }
