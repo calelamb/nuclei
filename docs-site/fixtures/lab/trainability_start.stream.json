@@ -1,0 +1,489 @@
+{
+  "request": {
+    "type": "trainability_start",
+    "job_id": "docs-job-1",
+    "code": "from qiskit import QuantumCircuit\nfrom qiskit.circuit import ParameterVector\n\nn = params.get(\"n_qubits\", 4)\ntheta = ParameterVector(\"t\", 2 * n)\nqc = QuantumCircuit(n)\nfor q in range(n):\n    qc.ry(theta[q], q)\nfor q in range(n - 1):\n    qc.cz(q, q + 1)\nfor q in range(n):\n    qc.ry(theta[n + q], q)\n",
+    "language": "python",
+    "params": {
+      "n_qubits": 3
+    },
+    "observable": "preset:local_z",
+    "analyses": [
+      "gradients",
+      "lie"
+    ],
+    "settings": {
+      "samples": 64,
+      "seed": 7,
+      "init": "uniform",
+      "method": "auto"
+    }
+  },
+  "until": "trainability_result",
+  "ignore_types": [
+    "trainability_progress"
+  ],
+  "responses": [
+    {
+      "type": "trainability_started",
+      "job_id": "docs-job-1"
+    },
+    {
+      "type": "trainability_partial",
+      "job_id": "docs-job-1",
+      "analysis": "gradients",
+      "result": {
+        "samples": null,
+        "init": "uniform",
+        "method": "ppe",
+        "backend": "<any>",
+        "interval_kind": "truncation",
+        "interval": {
+          "kind": "truncation",
+          "variance_mean": [
+            "<approx:0.046296296296296:0.00000462962963>",
+            "<approx:0.046296296296296:0.00000462962963>"
+          ],
+          "ppe_method": "pauli_propagation_exact",
+          "status": "complete",
+          "frontier_peak": "<any>",
+          "discarded_mass": "<approx:0:0.000000001>"
+        },
+        "per_parameter": [
+          {
+            "name": "t[0]",
+            "mean": "<approx:0:0.000000001>",
+            "variance": "<approx:0.048611111111111:0.000004861111111>",
+            "abs_mean": null,
+            "variance_ci95": [
+              "<approx:0.048611111111111:0.000004861111111>",
+              "<approx:0.048611111111111:0.000004861111111>"
+            ],
+            "dead": false,
+            "dead_reason": null
+          },
+          {
+            "name": "t[1]",
+            "mean": "<approx:0:0.000000001>",
+            "variance": "<approx:0.0625:0.00000625>",
+            "abs_mean": null,
+            "variance_ci95": [
+              "<approx:0.0625:0.00000625>",
+              "<approx:0.0625:0.00000625>"
+            ],
+            "dead": false,
+            "dead_reason": null
+          },
+          {
+            "name": "t[2]",
+            "mean": "<approx:0:0.000000001>",
+            "variance": "<approx:0.048611111111111:0.000004861111111>",
+            "abs_mean": null,
+            "variance_ci95": [
+              "<approx:0.048611111111111:0.000004861111111>",
+              "<approx:0.048611111111111:0.000004861111111>"
+            ],
+            "dead": false,
+            "dead_reason": null
+          },
+          {
+            "name": "t[3]",
+            "mean": "<approx:0:0.000000001>",
+            "variance": "<approx:0.041666666666667:0.000004166666667>",
+            "abs_mean": null,
+            "variance_ci95": [
+              "<approx:0.041666666666667:0.000004166666667>",
+              "<approx:0.041666666666667:0.000004166666667>"
+            ],
+            "dead": false,
+            "dead_reason": null
+          },
+          {
+            "name": "t[4]",
+            "mean": "<approx:0:0.000000001>",
+            "variance": "<approx:0.034722222222222:0.000003472222222>",
+            "abs_mean": null,
+            "variance_ci95": [
+              "<approx:0.034722222222222:0.000003472222222>",
+              "<approx:0.034722222222222:0.000003472222222>"
+            ],
+            "dead": false,
+            "dead_reason": null
+          },
+          {
+            "name": "t[5]",
+            "mean": "<approx:0:0.000000001>",
+            "variance": "<approx:0.041666666666667:0.000004166666667>",
+            "abs_mean": null,
+            "variance_ci95": [
+              "<approx:0.041666666666667:0.000004166666667>",
+              "<approx:0.041666666666667:0.000004166666667>"
+            ],
+            "dead": false,
+            "dead_reason": null
+          }
+        ],
+        "variance_mean": "<approx:0.046296296296296:0.00000462962963>",
+        "variance_mean_ci95": [
+          "<approx:0.046296296296296:0.00000462962963>",
+          "<approx:0.046296296296296:0.00000462962963>"
+        ],
+        "gradient_norm_mean": null,
+        "gradient_norm_rms": "<approx:0.52704627669473:0.000052704627669>",
+        "gate_values": [
+          {
+            "source_index": 0,
+            "gate_index": 0,
+            "parameter": "t[0]",
+            "variance": "<approx:0.048611111111111:0.000004861111111>",
+            "abs_mean": null
+          },
+          {
+            "source_index": 1,
+            "gate_index": 1,
+            "parameter": "t[1]",
+            "variance": "<approx:0.0625:0.00000625>",
+            "abs_mean": null
+          },
+          {
+            "source_index": 2,
+            "gate_index": 2,
+            "parameter": "t[2]",
+            "variance": "<approx:0.048611111111111:0.000004861111111>",
+            "abs_mean": null
+          },
+          {
+            "source_index": 5,
+            "gate_index": 5,
+            "parameter": "t[3]",
+            "variance": "<approx:0.041666666666667:0.000004166666667>",
+            "abs_mean": null
+          },
+          {
+            "source_index": 6,
+            "gate_index": 6,
+            "parameter": "t[4]",
+            "variance": "<approx:0.034722222222222:0.000003472222222>",
+            "abs_mean": null
+          },
+          {
+            "source_index": 7,
+            "gate_index": 7,
+            "parameter": "t[5]",
+            "variance": "<approx:0.041666666666667:0.000004166666667>",
+            "abs_mean": null
+          }
+        ],
+        "seed": 7,
+        "notes": [],
+        "fallback_reason": null,
+        "elapsed_ms": "<any>"
+      }
+    },
+    {
+      "type": "trainability_partial",
+      "job_id": "docs-job-1",
+      "analysis": "lie",
+      "result": {
+        "status": "complete",
+        "reason": null,
+        "n_qubits": 3,
+        "dimension": 12,
+        "dimension_lower_bound": 12,
+        "max_dimension": 4096,
+        "classification": {
+          "label": "other",
+          "family": "other",
+          "confidence": "none",
+          "note": "Classification is by exact dimension match, not an isomorphism proof; other algebras can share a dimension."
+        },
+        "path": "pauli_strings",
+        "generators": {
+          "count": 6,
+          "unique": 6,
+          "examples": [
+            "Y0",
+            "Y1",
+            "Y2",
+            "Y0Z1"
+          ]
+        },
+        "fixed_gates": {
+          "clifford": true,
+          "handled_by": "clifford_conjugation"
+        },
+        "purity": {
+          "initial_state": "<approx:0:0.000000001>",
+          "observable": "<approx:0:0.000000001>",
+          "observable_in_algebra": false,
+          "state_in_algebra": false
+        },
+        "predicted_variance": null,
+        "prediction_applicable": false,
+        "prediction_quantity": "cost_variance",
+        "abelian": false,
+        "assumptions": [
+          "Deep-circuit regime: the circuit is an approximate 2-design over e^𝔤 (not guaranteed for shallow circuits).",
+          "𝔤 treated as simple; for reductive 𝔤 this is the leading term.",
+          "The predicted quantity is the variance of the cost C over the group, not of a single gradient component.",
+          "Initial state |0…0⟩; fixed gates are pushed to the end of the circuit."
+        ],
+        "simulability": {
+          "kind": "g_sim_feasible",
+          "summary": "dim 𝔤 = 12 (≤ 4n² = 36). Expectations are classically simulable in poly(dim 𝔤) time when the observable or the initial state lies in 𝔤 (𝔤-sim, Goh et al. 2023 (arXiv:2308.01432)). Observable in 𝔤: no; initial state in 𝔤: no."
+        },
+        "elapsed_ms": "<any>"
+      }
+    },
+    {
+      "type": "trainability_result",
+      "job_id": "docs-job-1",
+      "status": "complete",
+      "results": {
+        "gradients": {
+          "samples": null,
+          "init": "uniform",
+          "method": "ppe",
+          "backend": "<any>",
+          "interval_kind": "truncation",
+          "interval": {
+            "kind": "truncation",
+            "variance_mean": [
+              "<approx:0.046296296296296:0.00000462962963>",
+              "<approx:0.046296296296296:0.00000462962963>"
+            ],
+            "ppe_method": "pauli_propagation_exact",
+            "status": "complete",
+            "frontier_peak": "<any>",
+            "discarded_mass": "<approx:0:0.000000001>"
+          },
+          "per_parameter": [
+            {
+              "name": "t[0]",
+              "mean": "<approx:0:0.000000001>",
+              "variance": "<approx:0.048611111111111:0.000004861111111>",
+              "abs_mean": null,
+              "variance_ci95": [
+                "<approx:0.048611111111111:0.000004861111111>",
+                "<approx:0.048611111111111:0.000004861111111>"
+              ],
+              "dead": false,
+              "dead_reason": null
+            },
+            {
+              "name": "t[1]",
+              "mean": "<approx:0:0.000000001>",
+              "variance": "<approx:0.0625:0.00000625>",
+              "abs_mean": null,
+              "variance_ci95": [
+                "<approx:0.0625:0.00000625>",
+                "<approx:0.0625:0.00000625>"
+              ],
+              "dead": false,
+              "dead_reason": null
+            },
+            {
+              "name": "t[2]",
+              "mean": "<approx:0:0.000000001>",
+              "variance": "<approx:0.048611111111111:0.000004861111111>",
+              "abs_mean": null,
+              "variance_ci95": [
+                "<approx:0.048611111111111:0.000004861111111>",
+                "<approx:0.048611111111111:0.000004861111111>"
+              ],
+              "dead": false,
+              "dead_reason": null
+            },
+            {
+              "name": "t[3]",
+              "mean": "<approx:0:0.000000001>",
+              "variance": "<approx:0.041666666666667:0.000004166666667>",
+              "abs_mean": null,
+              "variance_ci95": [
+                "<approx:0.041666666666667:0.000004166666667>",
+                "<approx:0.041666666666667:0.000004166666667>"
+              ],
+              "dead": false,
+              "dead_reason": null
+            },
+            {
+              "name": "t[4]",
+              "mean": "<approx:0:0.000000001>",
+              "variance": "<approx:0.034722222222222:0.000003472222222>",
+              "abs_mean": null,
+              "variance_ci95": [
+                "<approx:0.034722222222222:0.000003472222222>",
+                "<approx:0.034722222222222:0.000003472222222>"
+              ],
+              "dead": false,
+              "dead_reason": null
+            },
+            {
+              "name": "t[5]",
+              "mean": "<approx:0:0.000000001>",
+              "variance": "<approx:0.041666666666667:0.000004166666667>",
+              "abs_mean": null,
+              "variance_ci95": [
+                "<approx:0.041666666666667:0.000004166666667>",
+                "<approx:0.041666666666667:0.000004166666667>"
+              ],
+              "dead": false,
+              "dead_reason": null
+            }
+          ],
+          "variance_mean": "<approx:0.046296296296296:0.00000462962963>",
+          "variance_mean_ci95": [
+            "<approx:0.046296296296296:0.00000462962963>",
+            "<approx:0.046296296296296:0.00000462962963>"
+          ],
+          "gradient_norm_mean": null,
+          "gradient_norm_rms": "<approx:0.52704627669473:0.000052704627669>",
+          "gate_values": [
+            {
+              "source_index": 0,
+              "gate_index": 0,
+              "parameter": "t[0]",
+              "variance": "<approx:0.048611111111111:0.000004861111111>",
+              "abs_mean": null
+            },
+            {
+              "source_index": 1,
+              "gate_index": 1,
+              "parameter": "t[1]",
+              "variance": "<approx:0.0625:0.00000625>",
+              "abs_mean": null
+            },
+            {
+              "source_index": 2,
+              "gate_index": 2,
+              "parameter": "t[2]",
+              "variance": "<approx:0.048611111111111:0.000004861111111>",
+              "abs_mean": null
+            },
+            {
+              "source_index": 5,
+              "gate_index": 5,
+              "parameter": "t[3]",
+              "variance": "<approx:0.041666666666667:0.000004166666667>",
+              "abs_mean": null
+            },
+            {
+              "source_index": 6,
+              "gate_index": 6,
+              "parameter": "t[4]",
+              "variance": "<approx:0.034722222222222:0.000003472222222>",
+              "abs_mean": null
+            },
+            {
+              "source_index": 7,
+              "gate_index": 7,
+              "parameter": "t[5]",
+              "variance": "<approx:0.041666666666667:0.000004166666667>",
+              "abs_mean": null
+            }
+          ],
+          "seed": 7,
+          "notes": [],
+          "fallback_reason": null,
+          "elapsed_ms": "<any>"
+        },
+        "lie": {
+          "status": "complete",
+          "reason": null,
+          "n_qubits": 3,
+          "dimension": 12,
+          "dimension_lower_bound": 12,
+          "max_dimension": 4096,
+          "classification": {
+            "label": "other",
+            "family": "other",
+            "confidence": "none",
+            "note": "Classification is by exact dimension match, not an isomorphism proof; other algebras can share a dimension."
+          },
+          "path": "pauli_strings",
+          "generators": {
+            "count": 6,
+            "unique": 6,
+            "examples": [
+              "Y0",
+              "Y1",
+              "Y2",
+              "Y0Z1"
+            ]
+          },
+          "fixed_gates": {
+            "clifford": true,
+            "handled_by": "clifford_conjugation"
+          },
+          "purity": {
+            "initial_state": "<approx:0:0.000000001>",
+            "observable": "<approx:0:0.000000001>",
+            "observable_in_algebra": false,
+            "state_in_algebra": false
+          },
+          "predicted_variance": null,
+          "prediction_applicable": false,
+          "prediction_quantity": "cost_variance",
+          "abelian": false,
+          "assumptions": [
+            "Deep-circuit regime: the circuit is an approximate 2-design over e^𝔤 (not guaranteed for shallow circuits).",
+            "𝔤 treated as simple; for reductive 𝔤 this is the leading term.",
+            "The predicted quantity is the variance of the cost C over the group, not of a single gradient component.",
+            "Initial state |0…0⟩; fixed gates are pushed to the end of the circuit."
+          ],
+          "simulability": {
+            "kind": "g_sim_feasible",
+            "summary": "dim 𝔤 = 12 (≤ 4n² = 36). Expectations are classically simulable in poly(dim 𝔤) time when the observable or the initial state lies in 𝔤 (𝔤-sim, Goh et al. 2023 (arXiv:2308.01432)). Observable in 𝔤: no; initial state in 𝔤: no."
+          },
+          "elapsed_ms": "<any>"
+        }
+      },
+      "errors": {},
+      "elapsed_ms": "<any>",
+      "provenance": {
+        "code_sha256": "e0fe018aba5c0bffca76d586a1e5a98df1798ebd451d6817e3cecc73672eafd9",
+        "observable": "0.3333333333333333*Z0 + 0.3333333333333333*Z1 + 0.3333333333333333*Z2",
+        "settings": {
+          "samples": 64,
+          "seed": 7,
+          "init": "uniform",
+          "method": "auto",
+          "backend": "<any>",
+          "scaling": {
+            "qubits": [
+              2,
+              3,
+              4,
+              5,
+              6
+            ],
+            "layers": [
+              4
+            ],
+            "qubit_param": "n_qubits",
+            "layer_param": "n_layers"
+          },
+          "expressibility": {
+            "pairs": 2000,
+            "bins": 75
+          },
+          "entanglement": {
+            "samples": 1000
+          },
+          "landscape": {
+            "resolution": 41,
+            "span": "<approx:3.141592653589793:0.000314159265359>"
+          },
+          "lie": {
+            "max_dimension": 4096,
+            "time_budget_s": "<approx:10:0.001>"
+          }
+        },
+        "kernel": "<any>",
+        "analyses_fingerprint": "<any>",
+        "backend": "<any>",
+        "created_at": "<any>"
+      }
+    }
+  ]
+}

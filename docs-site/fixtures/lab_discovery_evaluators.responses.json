@@ -1,0 +1,96 @@
+[
+  {
+    "type": "discovery_evaluators_result",
+    "evaluators": [
+      {
+        "kind": "qec_memory",
+        "version": "<any>",
+        "title": "QEC memory experiment",
+        "description": "<any>",
+        "task": "stim_circuit",
+        "entry_signature": "<any>",
+        "objectives": "<any>",
+        "descriptors": "<any>",
+        "config_schema": "<any>",
+        "default_config": "<any>",
+        "stages": {
+          "screen": {
+            "shots": {
+              "min": 1000,
+              "max": 5000,
+              "max_errors": 50
+            }
+          },
+          "full": {},
+          "confirm": {}
+        }
+      },
+      {
+        "kind": "state_synthesis",
+        "version": "<any>",
+        "title": "State preparation",
+        "description": "<any>",
+        "task": "quantum_circuit",
+        "entry_signature": "<any>",
+        "objectives": "<any>",
+        "descriptors": "<any>",
+        "config_schema": "<any>",
+        "default_config": "<any>",
+        "stages": {
+          "screen": {
+            "optimize_parameters": {
+              "restarts": 1,
+              "steps": 60
+            }
+          },
+          "full": {},
+          "confirm": {}
+        }
+      },
+      {
+        "kind": "trainability_frontier",
+        "version": "<any>",
+        "title": "Trainability frontier",
+        "description": "<any>",
+        "task": "quantum_circuit",
+        "entry_signature": "<any>",
+        "objectives": "<any>",
+        "descriptors": "<any>",
+        "config_schema": "<any>",
+        "default_config": "<any>",
+        "stages": {
+          "screen": {
+            "max_sizes": 2
+          },
+          "full": {},
+          "confirm": {}
+        }
+      },
+      {
+        "kind": "vqe_ground_state",
+        "version": "<any>",
+        "title": "Variational ground state",
+        "description": "<any>",
+        "task": "quantum_circuit",
+        "entry_signature": "<any>",
+        "objectives": "<any>",
+        "descriptors": "<any>",
+        "config_schema": "<any>",
+        "default_config": "<any>",
+        "stages": {
+          "screen": {
+            "training": {
+              "restarts": 1,
+              "steps": 50
+            },
+            "trainability_prefilter": {
+              "samples": 32
+            }
+          },
+          "full": {},
+          "confirm": {}
+        }
+      }
+    ]
+  }
+]

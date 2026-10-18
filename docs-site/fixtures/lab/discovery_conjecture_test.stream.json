@@ -1,0 +1,177 @@
+{
+  "request": {
+    "type": "discovery_conjecture_test",
+    "job_id": "docs-cj-1",
+    "conjecture": {
+      "id": "cj-docs-1",
+      "statement": "Brick-pattern CZ circuits with YZ rotations keep the upper 95% bound on beta below 0.1 up to 32 qubits at four layers.",
+      "feature_predicate": {
+        "all": [
+          {
+            "feature": "entangler_pattern",
+            "op": "==",
+            "value": "brick"
+          },
+          {
+            "feature": "n_layers",
+            "op": "<=",
+            "value": 4
+          }
+        ]
+      },
+      "prediction": {
+        "quantity": "beta_upper95",
+        "op": "<",
+        "value": 0.1
+      },
+      "test_family": {
+        "family": "layered",
+        "rotation_axes": [
+          "Y",
+          "Z"
+        ],
+        "entangler": "cz",
+        "pattern": "brick",
+        "layers": 4,
+        "rotations_per_qubit_per_layer": 2,
+        "observable": "preset:local_z",
+        "variants": 4
+      },
+      "n_range": [
+        4,
+        32
+      ],
+      "circuits": 5,
+      "points": 4
+    },
+    "seed": 11
+  },
+  "until": "discovery_conjecture_result",
+  "ignore_types": [
+    "discovery_conjecture_progress"
+  ],
+  "responses": [
+    {
+      "type": "discovery_conjecture_started",
+      "job_id": "docs-cj-1"
+    },
+    {
+      "type": "discovery_conjecture_evidence",
+      "job_id": "docs-cj-1",
+      "item": "<any>"
+    },
+    {
+      "type": "discovery_conjecture_evidence",
+      "job_id": "docs-cj-1",
+      "item": "<any>"
+    },
+    {
+      "type": "discovery_conjecture_evidence",
+      "job_id": "docs-cj-1",
+      "item": "<any>"
+    },
+    {
+      "type": "discovery_conjecture_evidence",
+      "job_id": "docs-cj-1",
+      "item": "<any>"
+    },
+    {
+      "type": "discovery_conjecture_evidence",
+      "job_id": "docs-cj-1",
+      "item": "<any>"
+    },
+    {
+      "type": "discovery_conjecture_result",
+      "job_id": "docs-cj-1",
+      "status": "complete",
+      "result": {
+        "conjecture_id": "cj-docs-1",
+        "verdict": "refuted",
+        "summary": "Refuted: 5 of 5 held-out circuits tested violate 'beta_upper95 < 0.1'. First counterexample: v4 (see counterexamples).",
+        "reasons": [],
+        "partial": false,
+        "tally": {
+          "meets": 0,
+          "violates": 5,
+          "indeterminate": 0
+        },
+        "n_circuits_requested": 5,
+        "n_circuits_tested": 5,
+        "n_range": [
+          4,
+          32
+        ],
+        "n_values": [
+          4,
+          8,
+          16,
+          32
+        ],
+        "n_max_tested": 32,
+        "counterexamples": "<any>",
+        "evidence": "<any>",
+        "resampling": {
+          "attempts": 13,
+          "accepted": 5,
+          "rejected": 8,
+          "cap": 125
+        },
+        "seed": 11,
+        "timings": "<any>",
+        "conjecture": {
+          "id": "cj-docs-1",
+          "statement": "Brick-pattern CZ circuits with YZ rotations keep the upper 95% bound on beta below 0.1 up to 32 qubits at four layers.",
+          "feature_predicate": {
+            "all": [
+              {
+                "feature": "entangler_pattern",
+                "op": "==",
+                "value": "brick"
+              },
+              {
+                "feature": "n_layers",
+                "op": "<=",
+                "value": 4
+              }
+            ]
+          },
+          "prediction": {
+            "quantity": "beta_upper95",
+            "op": "<",
+            "value": "<approx:0.1:0.00001>"
+          },
+          "test_family": {
+            "family": "layered",
+            "rotation_axes": [
+              "Y",
+              "Z"
+            ],
+            "entangler": "cz",
+            "pattern": "brick",
+            "layers": [
+              4,
+              4
+            ],
+            "rotations_per_qubit_per_layer": 2,
+            "observable": "preset:local_z",
+            "variants": 4,
+            "clifford_dressing": "<approx:0:0.000000001>",
+            "brick_start": "random"
+          },
+          "n_range": [
+            4,
+            32
+          ],
+          "circuits": 5,
+          "points": 4,
+          "dla_probe_qubits": 4,
+          "budget": {
+            "per_circuit_s": "<approx:60:0.006>",
+            "total_s": "<approx:600:0.06>"
+          }
+        },
+        "fingerprint": "<any>"
+      }
+    }
+  ]
+}

@@ -1,0 +1,171 @@
+[
+  {
+    "type": "discovery_conjecture_schema_result",
+    "features": [
+      {
+        "key": "n_qubits",
+        "type": "integer",
+        "description": "<any>"
+      },
+      {
+        "key": "n_params",
+        "type": "integer",
+        "description": "<any>"
+      },
+      {
+        "key": "parametric_gates",
+        "type": "integer",
+        "description": "<any>"
+      },
+      {
+        "key": "params_per_qubit",
+        "type": "number",
+        "description": "<any>"
+      },
+      {
+        "key": "two_qubit_gates",
+        "type": "integer",
+        "description": "<any>"
+      },
+      {
+        "key": "two_qubit_depth",
+        "type": "integer",
+        "description": "<any>"
+      },
+      {
+        "key": "rotation_axes",
+        "type": "string",
+        "description": "<any>"
+      },
+      {
+        "key": "entangler",
+        "type": "string",
+        "description": "<any>",
+        "values": [
+          "cx",
+          "cy",
+          "cz",
+          "iswap",
+          "swap",
+          "other",
+          "mixed",
+          "none"
+        ]
+      },
+      {
+        "key": "entangler_pattern",
+        "type": "string",
+        "description": "<any>",
+        "values": [
+          "ladder",
+          "brick",
+          "ring",
+          "all_to_all",
+          "nearest_neighbor",
+          "long_range",
+          "none"
+        ]
+      },
+      {
+        "key": "distinct_bonds",
+        "type": "integer",
+        "description": "<any>"
+      },
+      {
+        "key": "connectivity_fraction",
+        "type": "number",
+        "description": "<any>"
+      },
+      {
+        "key": "n_layers",
+        "type": "integer",
+        "description": "<any>"
+      },
+      {
+        "key": "two_qubit_gates_per_layer",
+        "type": "number",
+        "description": "<any>"
+      },
+      {
+        "key": "params_per_layer",
+        "type": "number",
+        "description": "<any>"
+      },
+      {
+        "key": "rotation_axis_counts.X",
+        "type": "integer",
+        "description": "<any>"
+      },
+      {
+        "key": "rotation_axis_counts.Y",
+        "type": "integer",
+        "description": "<any>"
+      },
+      {
+        "key": "rotation_axis_counts.Z",
+        "type": "integer",
+        "description": "<any>"
+      }
+    ],
+    "quantities": [
+      {
+        "name": "beta_upper95",
+        "ops": [
+          "<",
+          "<=",
+          ">",
+          ">="
+        ],
+        "value_type": "number",
+        "description": "<any>"
+      },
+      {
+        "name": "verdict",
+        "ops": [
+          "==",
+          "!=",
+          "in"
+        ],
+        "value_type": "string",
+        "description": "<any>"
+      },
+      {
+        "name": "variance_at_max_n",
+        "ops": [
+          "<",
+          "<=",
+          ">",
+          ">="
+        ],
+        "value_type": "number",
+        "description": "<any>"
+      },
+      {
+        "name": "log2_dla_dimension",
+        "ops": [
+          "<",
+          "<=",
+          ">",
+          ">="
+        ],
+        "value_type": "number",
+        "description": "<any>"
+      }
+    ],
+    "families": "<any>",
+    "predicate": "<any>",
+    "limits": {
+      "circuits": [
+        5,
+        32
+      ],
+      "points": [
+        4,
+        8
+      ],
+      "n_max": 128,
+      "per_circuit_s": "<approx:60:0.006>",
+      "total_s": "<approx:600:0.06>"
+    }
+  }
+]

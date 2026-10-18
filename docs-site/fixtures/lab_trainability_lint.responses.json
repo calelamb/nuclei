@@ -1,0 +1,44 @@
+[
+  {
+    "type": "trainability_lint_result",
+    "diagnostics": [
+      {
+        "code": "TRN001",
+        "severity": "warning",
+        "title": "Global cost function",
+        "message": "<any>",
+        "citation": {
+          "label": "Cerezo et al., Nat. Commun. 12, 1791 (2021)",
+          "url": "https://doi.org/10.1038/s41467-021-21728-w"
+        },
+        "line": null,
+        "source_indices": []
+      },
+      {
+        "code": "TRN003",
+        "severity": "info",
+        "title": "Polynomial dynamical Lie algebra",
+        "message": "<any>",
+        "citation": {
+          "label": "Goh et al., arXiv:2308.01432 (2023)",
+          "url": "https://arxiv.org/abs/2308.01432"
+        },
+        "line": null,
+        "source_indices": []
+      }
+    ],
+    "summary": {
+      "n_qubits": 6,
+      "n_parameters": 12,
+      "dla": {
+        "status": "complete",
+        "dimension": 42
+      },
+      "observable": "Z0*Z1*Z2*Z3*Z4*Z5",
+      "elapsed_ms": "<any>",
+      "skipped_rules": [],
+      "skipped_reason": null,
+      "trn004": "complete"
+    }
+  }
+]

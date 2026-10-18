@@ -1,0 +1,10 @@
+[
+  {
+    "type": "error",
+    "phase": "discovery",
+    "code": "invalid_conjecture",
+    "message": "<any>",
+    "job_id": "docs-cj-1",
+    "path": "statement"
+  }
+]

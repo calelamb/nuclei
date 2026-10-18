@@ -1,0 +1,8 @@
+{
+  "type": "discovery_conjecture_test",
+  "job_id": "docs-cj-1",
+  "conjecture": {
+    "id": "x"
+  },
+  "seed": 1
+}

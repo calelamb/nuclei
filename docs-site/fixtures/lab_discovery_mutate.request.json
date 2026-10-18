@@ -1,0 +1,6 @@
+{
+  "type": "discovery_mutate",
+  "program": "from qiskit import QuantumCircuit\n\n\ndef build(n_qubits):\n    qc = QuantumCircuit(n_qubits)\n    qc.h(0)\n    for q in range(1, n_qubits):\n        qc.cx(q - 1, q)\n    return qc\n",
+  "seed": 7,
+  "count": 2
+}
