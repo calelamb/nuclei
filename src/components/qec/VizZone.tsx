@@ -9,6 +9,7 @@ import { useVizZoneStore } from '../../stores/vizZoneStore';
 import { PanelReveal } from '../layout/PanelReveal';
 import { CircuitRenderer } from '../circuit/CircuitRenderer';
 import { Button, EmptyState, Tabs } from '../ui';
+import { kernelStartFailureTitle } from '../../lib/kernelErrors';
 import { retryKernel } from '../../lib/kernelControl';
 import { usePlatform } from '../../platform/PlatformProvider';
 import { useEditorStore } from '../../stores/editorStore';
@@ -128,11 +129,11 @@ export function VizZone({
 
   const progress = useEditorStore((st) => st.kernelProgress);
   if (booting && panels.length === 0) {
-    const stage = progress && progress.kind !== 'attempts' && progress.total > 0 ? ` · ${progress.step}/${progress.total}` : '';
+    const stage = progress && progress.kind !== 'attempts' && progress.total > 0 ? ` (step ${progress.step} of ${progress.total})` : '';
     return (
       <div style={COLUMN_STYLE}>
-        <EmptyState className="viz-empty viz-empty--boot" icon={<Workflow size={20} />} title="Preparing Python">
-          {`Circuit and results appear when Python is ready${stage}.`}
+        <EmptyState className="viz-empty viz-empty--boot" icon={<Workflow size={20} />} title={`Preparing Python${stage}`}>
+          Circuit and results appear when it&rsquo;s ready.
         </EmptyState>
       </div>
     );
@@ -143,16 +144,15 @@ export function VizZone({
   }
 
   if (startFailed && panels.length === 0) {
-    const engine = platform.getPlatform() === 'web' ? 'Python' : 'The kernel';
     return (
       <div style={COLUMN_STYLE}>
         <EmptyState
           className="viz-empty viz-empty--boot"
           icon={<Workflow size={20} />}
-          title={`${engine} didn't start`}
+          title={kernelStartFailureTitle(platform.getPlatform() === 'web')}
           action={<Button variant="secondary" size="sm" onClick={retryKernel}>Retry</Button>}
         >
-          Circuit and results appear once it is running.
+          Retry here, or see the banner above for details.
         </EmptyState>
       </div>
     );
