@@ -70,7 +70,7 @@ function CircuitInfoPanel() {
 function SidebarHeader({ title }: { title: string }) {
   return (
     <div className="nuclei-pane-header">
-      <h2 className="nuclei-pane-header__title nuclei-overline">{title}</h2>
+      <h2 className="nuclei-pane-header__title nuclei-overline" tabIndex={-1} data-nav-landing="">{title}</h2>
     </div>
   );
 }
@@ -107,7 +107,7 @@ const VIEW_TITLES: Record<ActivityView, string> = {
   settings: 'Settings',
   experiments: 'Experiments',
   qec: 'QEC Workbench',
-  estimator: 'Estimator',
+  estimator: 'Resource Estimator',
   transpiler: 'Transpiler',
 };
 
@@ -143,7 +143,7 @@ export function Sidebar({ view, width, onWidthChange }: SidebarProps) {
   }, [width, onWidthChange]);
 
   return (
-    <div style={{
+    <div data-tour-sidebar="" style={{
       width, height: '100%',
       backgroundColor: colors.bg,
       display: 'flex', flexDirection: 'column',

@@ -13,8 +13,18 @@ function ratio(a: string, b: string): number {
   return (hi + 0.05) / (lo + 0.05);
 }
 
+/** Hex of `fill` at `alpha` composited over `surface` (the badge background). */
+function wash(fill: string, surface: string, alpha: number): string {
+  const mix = (i: number) => {
+    const f = parseInt(fill.slice(1 + i * 2, 3 + i * 2), 16);
+    const s = parseInt(surface.slice(1 + i * 2, 3 + i * 2), 16);
+    return Math.round(f * alpha + s * (1 - alpha)).toString(16).padStart(2, '0');
+  };
+  return `#${mix(0)}${mix(1)}${mix(2)}`;
+}
+
 const SURFACES: (keyof ColorTokens)[] = ['surfaceBase', 'surfaceRaised', 'surfaceOverlay', 'surfaceSunken'];
-const BODY_TEXT: (keyof ColorTokens)[] = ['textPrimary', 'textSecondary', 'textTertiary', 'accentQuantumText', 'accentDiracText', 'modeResearch', 'warning', 'successText', 'syntaxKeyword'];
+const BODY_TEXT: (keyof ColorTokens)[] = ['textPrimary', 'textSecondary', 'textTertiary', 'accentQuantumText', 'accentDiracText', 'modeResearch', 'warning', 'warningText', 'dangerText', 'successText', 'syntaxKeyword'];
 
 describe.each([['dark', DARK_COLORS], ['light', LIGHT_COLORS]] as const)('%s palette contrast', (_n, c) => {
   for (const text of BODY_TEXT) {
@@ -29,6 +39,14 @@ describe.each([['dark', DARK_COLORS], ['light', LIGHT_COLORS]] as const)('%s pal
       expect(ratio(c.borderControl, c[surface])).toBeGreaterThanOrEqual(3);
     });
   }
+  it.each([['successText', 'success'], ['warningText', 'warning'], ['dangerText', 'danger']] as const)(
+    '%s on its own 12%% badge wash keeps AA at 11px (the badge background)',
+    (textKey, fillKey) => {
+      for (const surface of SURFACES) {
+        expect(ratio(c[textKey], wash(c[fillKey], c[surface], 0.12)), `${textKey} on ${surface}`).toBeGreaterThanOrEqual(4.5);
+      }
+    },
+  );
   it('keeps the text hierarchy ordered (primary > secondary > tertiary > disabled)', () => {
     const r = (k: keyof ColorTokens) => ratio(c[k], c.surfaceBase);
     expect(r('textPrimary')).toBeGreaterThan(r('textSecondary'));

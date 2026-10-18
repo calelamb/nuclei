@@ -177,7 +177,7 @@ describe('<VizZone> when Python did not start (shell-r3-06)', () => {
     control.registerKernelRetry(retry);
     const { container, getByRole } = render(<VizZone visible={visible({})} chip={null} startFailed />);
     expect(container.textContent).toMatch(/(Kernel|Python) didn't start/);
-    expect(container.textContent).toContain('see the banner above for details');
+    expect(container.textContent).toContain('use the banner in the editor for details');
     fireEvent.click(getByRole('button', { name: 'Retry' }));
     expect(retry).toHaveBeenCalledTimes(1);
     control.registerKernelRetry(null);

@@ -7,196 +7,207 @@
  * opt in to theming still render with the intended palette.
  */
 
-:root,
-:root[data-theme='dark'] {
-  /* Native controls (checkbox, select popup, scrollbars) take the app theme, not the OS one. */
-  color-scheme: dark;
-  /* Surfaces — softer near-black with subtle cool tint (hex for Monaco compat) */
-  --color-surface-base: #0D131E;
-  --color-surface-raised: #141B29;
-  --color-surface-overlay: #1A2232;
-  --color-surface-sunken: #080D16;
+/* Cascade order is declared once, here, because this is the first stylesheet loaded.
+ * Layered CSS loses to every unlayered rule regardless of specificity or chunk order, so
+ * component CSS (unlayered) always outranks the primitives, in dev and in the shipped build. */
+@layer reset, tokens, primitives;
 
-  /* Text */
-  --color-text-primary: #E8ECF1;
-  --color-text-secondary: #94A3B8;
-  --color-text-tertiary: #7C8BA1;
-  --color-text-disabled: #475569;
+@layer tokens {
+  :root,
+  :root[data-theme='dark'] {
+    /* Native controls (checkbox, select popup, scrollbars) take the app theme, not the OS one. */
+    color-scheme: dark;
+    /* Surfaces — softer near-black with subtle cool tint (hex for Monaco compat) */
+    --color-surface-base: #0D131E;
+    --color-surface-raised: #141B29;
+    --color-surface-overlay: #1A2232;
+    --color-surface-sunken: #080D16;
 
-  /* Borders */
-  --color-border-subtle: rgba(255, 255, 255, 0.06);
-  --color-border-strong: #1A2A42;
-  --color-border-control: #62728C;
+    /* Text */
+    --color-text-primary: #E8ECF1;
+    --color-text-secondary: #94A3B8;
+    --color-text-tertiary: #7C8BA1;
+    --color-text-disabled: #475569;
 
-  /* Accents */
-  --color-accent-quantum: #00B4D8;
-  --color-accent-quantum-soft: #48CAE4;
-  --color-accent-quantum-text: #00B4D8;
-  --color-on-accent: #080D16;
-  --color-accent-dirac: #7B2D8E;
-  --color-accent-dirac-text: #C084FC;
+    /* Borders */
+    --color-border-subtle: rgba(255, 255, 255, 0.06);
+    --color-border-strong: #1A2A42;
+    --color-border-control: #62728C;
 
-  /* Domain identities (purple is reserved for Dirac) */
-  --color-mode-research: #60A5FA;
-  --color-basis-x: #00B4D8;
-  --color-basis-z: #FBBF24;
-  --color-overlay-matching: #FB923C;
+    /* Accents */
+    --color-accent-quantum: #00B4D8;
+    --color-accent-quantum-soft: #48CAE4;
+    --color-accent-quantum-text: #00B4D8;
+    --color-on-accent: #080D16;
+    --color-accent-dirac: #7B2D8E;
+    --color-accent-dirac-text: #C084FC;
 
-  /* Semantics */
-  --color-success: #10B981;
-  --color-success-text: #10B981;
-  --color-warning: #F59E0B;
-  --color-danger: #EF4444;
-  --color-info: #3B82F6;
-  --color-scrim: rgba(0, 0, 0, 0.5);
+    /* Domain identities (purple is reserved for Dirac) */
+    --color-mode-research: #60A5FA;
+    --color-basis-x: #00B4D8;
+    --color-basis-z: #FBBF24;
+    --color-overlay-matching: #FB923C;
 
-  /* Kernel status */
-  --color-kernel-idle: #64748B;
-  --color-kernel-connecting: #F59E0B;
-  --color-kernel-ready: #10B981;
-  --color-kernel-error: #EF4444;
+    /* Semantics */
+    --color-success: #10B981;
+    --color-success-text: #10B981;
+    --color-warning: #F59E0B;
+    --color-warning-text: #F59E0B;
+    --color-danger: #EF4444;
+    --color-danger-text: #F87171;
+    --color-info: #3B82F6;
+    --color-scrim: rgba(0, 0, 0, 0.5);
 
-  /* Syntax */
-  --color-syntax-comment: #6A737D;
-  --color-syntax-string: #98C379;
-  --color-syntax-number: #D19A66;
-  --color-syntax-keyword: #00B4D8;
-  --color-syntax-type: #48CAE4;
+    /* Kernel status */
+    --color-kernel-idle: #64748B;
+    --color-kernel-connecting: #F59E0B;
+    --color-kernel-ready: #10B981;
+    --color-kernel-error: #EF4444;
 
-  /* Circuit */
-  --color-gate-single: #00B4D8;
-  --color-gate-multi: #1E3A5F;
-  --color-gate-measure: #6A737D;
-  --color-wire: #3D5A80;
+    /* Syntax */
+    --color-syntax-comment: #6A737D;
+    --color-syntax-string: #98C379;
+    --color-syntax-number: #D19A66;
+    --color-syntax-keyword: #00B4D8;
+    --color-syntax-type: #48CAE4;
 
-  /* Shadows */
-  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.25);
-  --shadow-md: 0 6px 18px rgba(0, 0, 0, 0.32);
-  --shadow-lg: 0 12px 32px rgba(0, 0, 0, 0.4);
-  --shadow-glow: 0 0 18px rgba(0, 180, 216, 0.14);
-}
+    /* Circuit */
+    --color-gate-single: #00B4D8;
+    --color-gate-multi: #1E3A5F;
+    --color-gate-measure: #6A737D;
+    --color-wire: #3D5A80;
 
-:root[data-theme='light'] {
-  color-scheme: light;
-  --color-surface-base: #FFFFFF;
-  --color-surface-raised: #F8FAFC;
-  --color-surface-overlay: #ECF0F5;
-  --color-surface-sunken: #F1F5F9;
+    /* Shadows */
+    --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.25);
+    --shadow-md: 0 6px 18px rgba(0, 0, 0, 0.32);
+    --shadow-lg: 0 12px 32px rgba(0, 0, 0, 0.4);
+    --shadow-glow: 0 0 18px rgba(0, 180, 216, 0.14);
+  }
 
-  --color-text-primary: #1A1A2E;
-  --color-text-secondary: #475569;
-  --color-text-tertiary: #5B6B80;
-  --color-text-disabled: #94A3B8;
+  :root[data-theme='light'] {
+    color-scheme: light;
+    --color-surface-base: #FFFFFF;
+    --color-surface-raised: #F8FAFC;
+    --color-surface-overlay: #ECF0F5;
+    --color-surface-sunken: #F1F5F9;
 
-  --color-border-subtle: rgba(0, 0, 0, 0.06);
-  --color-border-strong: #E2E8F0;
-  --color-border-control: #7A889D;
+    --color-text-primary: #1A1A2E;
+    --color-text-secondary: #475569;
+    --color-text-tertiary: #5B6B80;
+    --color-text-disabled: #94A3B8;
 
-  --color-accent-quantum: #0891B2;
-  --color-accent-quantum-soft: #00B4D8;
-  --color-accent-quantum-text: #0E7490;
-  --color-on-accent: #080D16;
-  --color-accent-dirac: #6B21A8;
-  --color-accent-dirac-text: #6B21A8;
+    --color-border-subtle: rgba(0, 0, 0, 0.06);
+    --color-border-strong: #E2E8F0;
+    --color-border-control: #7A889D;
 
-  --color-mode-research: #1D4ED8;
-  --color-basis-x: #0E7490;
-  --color-basis-z: #B45309;
-  --color-overlay-matching: #C2410C;
+    --color-accent-quantum: #0891B2;
+    --color-accent-quantum-soft: #00B4D8;
+    --color-accent-quantum-text: #0E7490;
+    --color-on-accent: #080D16;
+    --color-accent-dirac: #6B21A8;
+    --color-accent-dirac-text: #6B21A8;
 
-  --color-success: #059669;
-  --color-success-text: #047857;
-  --color-warning: #A8580A;
-  --color-danger: #DC2626;
-  --color-info: #2563EB;
-  --color-scrim: rgba(15, 23, 42, 0.28);
+    --color-mode-research: #1D4ED8;
+    --color-basis-x: #0E7490;
+    --color-basis-z: #B45309;
+    --color-overlay-matching: #C2410C;
 
-  --color-kernel-idle: #94A3B8;
-  --color-kernel-connecting: #D97706;
-  --color-kernel-ready: #059669;
-  --color-kernel-error: #DC2626;
+    --color-success: #059669;
+    --color-success-text: #066048;
+    --color-warning: #A8580A;
+    --color-warning-text: #8A4708;
+    --color-danger: #DC2626;
+    --color-danger-text: #B91C1C;
+    --color-info: #2563EB;
+    --color-scrim: rgba(15, 23, 42, 0.28);
 
-  --color-syntax-comment: #6A737D;
-  --color-syntax-string: #22863A;
-  --color-syntax-number: #B76E00;
-  --color-syntax-keyword: #0E7490;
-  --color-syntax-type: #005F73;
+    --color-kernel-idle: #94A3B8;
+    --color-kernel-connecting: #D97706;
+    --color-kernel-ready: #059669;
+    --color-kernel-error: #DC2626;
 
-  --color-gate-single: #0891B2;
-  --color-gate-multi: #3B6EA5;
-  --color-gate-measure: #6A737D;
-  --color-wire: #959DA5;
+    --color-syntax-comment: #6A737D;
+    --color-syntax-string: #22863A;
+    --color-syntax-number: #B76E00;
+    --color-syntax-keyword: #0E7490;
+    --color-syntax-type: #005F73;
 
-  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.08);
-  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.1);
-  --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.15);
-  --shadow-glow: 0 0 20px rgba(8, 145, 178, 0.12);
-}
+    --color-gate-single: #0891B2;
+    --color-gate-multi: #3B6EA5;
+    --color-gate-measure: #6A737D;
+    --color-wire: #959DA5;
 
-/* Motion / spacing / radius / typography tokens are theme-independent */
-:root {
-  --duration-fast: 120ms;
-  --duration-normal: 200ms;
-  --duration-slow: 360ms;
-  --ease-standard: cubic-bezier(0.4, 0, 0.2, 1);
-  --ease-emphasized-out: cubic-bezier(0.16, 1, 0.3, 1);
-  --ease-emphasized-in: cubic-bezier(0.7, 0, 0.84, 0);
+    --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.08);
+    --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.1);
+    --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.15);
+    --shadow-glow: 0 0 20px rgba(8, 145, 178, 0.12);
+  }
 
-  --space-0: 2px;
-  --space-1: 4px;
-  --space-2: 8px;
-  --space-3: 12px;
-  --space-4: 16px;
-  --space-5: 20px;
-  --space-6: 24px;
-  --space-8: 32px;
-  --space-12: 48px;
+  /* Motion / spacing / radius / typography tokens are theme-independent */
+  :root {
+    --duration-fast: 120ms;
+    --duration-normal: 200ms;
+    --duration-slow: 360ms;
+    --ease-standard: cubic-bezier(0.4, 0, 0.2, 1);
+    --ease-emphasized-out: cubic-bezier(0.16, 1, 0.3, 1);
+    --ease-emphasized-in: cubic-bezier(0.7, 0, 0.84, 0);
 
-  --radius-sharp: 0;
-  --radius-xs: 4px;
-  --radius-soft: 6px;
-  --radius-round: 10px;
-  --radius-pill: 999px;
+    --space-0: 2px;
+    --space-1: 4px;
+    --space-2: 8px;
+    --space-3: 12px;
+    --space-4: 16px;
+    --space-5: 20px;
+    --space-6: 24px;
+    --space-8: 32px;
+    --space-12: 48px;
 
-  --font-sans: 'Geist Sans', -apple-system, system-ui, sans-serif;
-  --font-mono: 'Geist Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+    --radius-sharp: 0;
+    --radius-xs: 4px;
+    --radius-soft: 6px;
+    --radius-round: 10px;
+    --radius-pill: 999px;
 
-  --font-size-display: 28px;
-  --font-size-title: 20px;
-  --font-size-body: 14px;
-  --font-size-code: 13px;
-  --font-size-caption: 11px;
-  --font-size-chrome-label: 12px;
-  --font-size-heading: 16px;
+    --font-sans: 'Geist Sans', -apple-system, system-ui, sans-serif;
+    --font-mono: 'Geist Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
 
-  /* Line heights pair with the scale: caption/label 16, code 20, body 22, heading 24, title 28, display 34 */
-  --line-height-caption: 16px;
-  --line-height-label: 16px;
-  --line-height-code: 20px;
-  --line-height-body: 22px;
-  --line-height-heading: 24px;
-  --line-height-title: 28px;
-  --line-height-display: 34px;
+    --font-size-display: 28px;
+    --font-size-title: 20px;
+    --font-size-body: 14px;
+    --font-size-code: 13px;
+    --font-size-caption: 11px;
+    --font-size-chrome-label: 12px;
+    --font-size-heading: 16px;
 
-  --font-weight-regular: 400;
-  --font-weight-medium: 500;
-  --font-weight-semibold: 600;
-  --font-weight-bold: 700;
+    /* Line heights pair with the scale: caption/label 16, code 20, body 22, heading 24, title 28, display 34 */
+    --line-height-caption: 16px;
+    --line-height-label: 16px;
+    --line-height-code: 20px;
+    --line-height-body: 22px;
+    --line-height-heading: 24px;
+    --line-height-title: 28px;
+    --line-height-display: 34px;
 
-  /* Control heights shared by every Button / Select / Input primitive */
-  --control-height-sm: 24px;
-  --control-height-md: 28px;
-  --control-height-lg: 32px;
+    --font-weight-regular: 400;
+    --font-weight-medium: 500;
+    --font-weight-semibold: 600;
+    --font-weight-bold: 700;
 
-  /* The single focus ring (all components inherit from :focus-visible) */
-  --focus-ring-color: var(--color-accent-quantum);
-  --focus-ring-width: 2px;
-  --focus-ring-offset: 2px;
-  --focus-ring: 0 0 0 2px var(--color-surface-base), 0 0 0 4px var(--focus-ring-color);
+    /* Control heights shared by every Button / Select / Input primitive */
+    --control-height-sm: 24px;
+    --control-height-md: 28px;
+    --control-height-lg: 32px;
 
-  /* Icon sizes (lucide): inline meta, controls/tabs, rail/panel headers, empty states */
-  --icon-xs: 12px;
-  --icon-sm: 14px;
-  --icon-md: 16px;
-  --icon-lg: 20px;
+    /* The single focus ring (all components inherit from :focus-visible) */
+    --focus-ring-color: var(--color-accent-quantum);
+    --focus-ring-width: 2px;
+    --focus-ring-offset: 2px;
+    --focus-ring: 0 0 0 2px var(--color-surface-base), 0 0 0 4px var(--focus-ring-color);
+
+    /* Icon sizes (lucide): inline meta, controls/tabs, rail/panel headers, empty states */
+    --icon-xs: 12px;
+    --icon-sm: 14px;
+    --icon-md: 16px;
+    --icon-lg: 20px;
+  }
 }

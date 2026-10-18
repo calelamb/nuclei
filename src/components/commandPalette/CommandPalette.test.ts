@@ -86,7 +86,7 @@ describe('palette ↔ registry parity', () => {
     }
   }
 
-  it('lists "Replay the Research mode tour" only in Research mode (shell-12)', () => {
+  it('lists "Replay Research tour" only in Research mode (shell-12)', () => {
     const research = buildCommands(makeActions(), makeContext({ mode: 'research' }));
     const learn = buildCommands(makeActions(), makeContext({ mode: 'learn' }));
     expect(research.some((c) => c.id === 'research-tour')).toBe(true);
@@ -186,6 +186,23 @@ const BOUND_COMMANDS: Record<string, string> = {
   'goto-settings': 'settings',
   'toggle-panel-terminal': 'toggle-bottom-panel',
 };
+
+describe('framework-gated panel toggles', () => {
+  const toggles = (framework: CommandContext['framework']) =>
+    buildCommands(makeActions(), makeContext({ framework })).filter((c) => c.id.startsWith('toggle-panel-')).map((c) => c.label);
+
+  it('hides Stim-only panels for a Qiskit file', () => {
+    const labels = toggles('qiskit');
+    expect(labels).not.toContain('Toggle code lattice panel');
+    expect(labels).not.toContain('Toggle detector graph panel');
+  });
+
+  it('offers Stim-only panels for a Stim file and when no framework is known', () => {
+    expect(toggles('stim')).toContain('Toggle code lattice panel');
+    expect(toggles(null)).toContain('Toggle code lattice panel');
+    expect(toggles(undefined)).toContain('Toggle code lattice panel');
+  });
+});
 
 describe('one name for every command (palette, shortcuts sheet, registry)', () => {
   const all = (mode: WorkspaceMode) => buildCommands(makeActions(), makeContext({ mode, developerViews: true, hasSelectedRun: true }));

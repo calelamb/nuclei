@@ -1,10 +1,13 @@
 import type { WorkspaceMode } from '../../stores/workspaceStore';
+import type { NavView } from '../../stores/navigationStore';
 
 export interface TourStep {
   target: string;
   title: string;
   body: string;
   placement: 'right' | 'above';
+  /** Rail view the step shows, so the card never describes a pane that is not on screen. */
+  view?: NavView;
 }
 
 export interface TourContext {
@@ -28,15 +31,17 @@ export function researchTourSteps(ctx: TourContext): TourStep[] {
         title: 'QEC Workbench',
         body: 'Drop a sinter CSV to plot logical error rate against physical error rate, right in the browser.',
         placement: 'right',
+        view: 'qec',
       }
     : {
         target: 'activity-experiments',
         title: 'Experiments',
         body: 'Declare parameter sweeps and QEC campaigns, run them, and compare results — all as files in your project.',
         placement: 'right',
+        view: 'experiments',
       };
   return [
-    { target: 'activity-files', title: 'Explorer', body: filesBody(ctx), placement: 'right' },
+    { target: 'activity-files', title: 'Explorer', body: filesBody(ctx), placement: 'right', view: 'files' },
     second,
     {
       target: 'mode-chip',

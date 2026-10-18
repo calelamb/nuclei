@@ -150,3 +150,4 @@
 .dirac-code .tok--string { color: var(--color-syntax-string); }
 .dirac-code .tok--number { color: var(--color-syntax-number); }
 .dirac-code .tok--comment { color: var(--color-text-tertiary); font-style: italic; }
+.dirac-code__copy.nuclei-icon-btn:hover:not(:disabled) { background: var(--color-surface-overlay); color: var(--color-text-primary); }

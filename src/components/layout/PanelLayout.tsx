@@ -49,6 +49,9 @@ import { useExperimentUiStore } from '../../stores/experimentUiStore';
 import { useExperimentStore } from '../../services/experimentStore';
 import { activityViewsForMode } from './panelRegistry';
 import { isWebBuild } from '../../platform/buildTarget';
+import { Tooltip } from '../ui';
+import { focusVizLanding } from './focusViz';
+import { useUnseenResult } from './useUnseenResult';
 import { useBottomPanelStore } from '../../stores/bottomPanelStore';
 
 const LearnModeView = lazy(async () => ({
@@ -235,6 +238,7 @@ export function PanelLayout() {
   const diracOpen = useDiracPanelStore((s) => s.isOpen);
   const closeDirac = useDiracPanelStore((s) => s.close);
   const railTab = vizRailTab({ vizHasContent, vizFits, diracOpen, sidebarOpen: showSidebar });
+  const unseenResult = useUnseenResult(result, railTab !== null);
   useRoomRetreat({ sidebarWidth, vizWanted: vizHasContent, canCollapseSidebar: !editorHidden && !fullViewOwnsArea, sidebarOpen: showSidebar });
 
   useShellLayout({
@@ -518,14 +522,20 @@ export function PanelLayout() {
                 </div>
 
                 {railTab && (
-                  <button
-                    type="button"
-                    className="viz-rail"
-                    onClick={() => (railTab.action === 'foldDirac' ? closeDirac() : setActiveView(null))}
-                    aria-label={railTab.ariaLabel}
-                  >
-                    <span className="viz-rail__label">CIRCUIT</span>
-                  </button>
+                  <Tooltip label={unseenResult ? 'Show circuit and results · results ready' : 'Show circuit and results'} placement="left">
+                    <button
+                      type="button"
+                      className="viz-rail"
+                      onClick={() => {
+                        if (railTab.action === 'foldDirac') closeDirac(); else setActiveView(null);
+                        focusVizLanding();
+                      }}
+                      aria-label={unseenResult ? `${railTab.ariaLabel} · results ready` : railTab.ariaLabel}
+                    >
+                      <span className="viz-rail__label">CIRCUIT</span>
+                      {unseenResult && <span className="viz-rail__dot" aria-hidden="true" />}
+                    </button>
+                  </Tooltip>
                 )}
 
                 {showViz && (

@@ -1,0 +1,3 @@
+/* Section headers sit flush against the clipped settings scroller: draw their focus ring inside the box
+   so all four edges stay visible (an outside ring is cut to a single underline). */
+.settings-section__header:focus-visible { outline-offset: -2px; border-radius: var(--radius-sm); }

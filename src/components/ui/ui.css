@@ -1,9 +1,12 @@
 /*
  * UI primitives (Button, IconButton, Select, TextInput/TextArea, Switch).
  * Everything resolves from tokens.css so both themes work; hover/active/focus
- * are CSS states, never inline-style mutation. Selectors use two classes so they
- * beat contextual resets such as `.qec-workbench button { color: inherit }`.
+ * are CSS states, never inline-style mutation. Everything sits in `@layer primitives`, so any
+ * unlayered component rule beats it regardless of specificity: a component that restyles colour or
+ * background on a primitive must also write its own :hover (and [aria-pressed]) rule.
  */
+
+@layer primitives {
 
 .nuclei-spin { animation: nuclei-spin 900ms linear infinite; }
 
@@ -217,9 +220,9 @@
   font-family: var(--font-sans); font-size: var(--font-size-caption); font-weight: var(--font-weight-medium); line-height: 1; white-space: nowrap;
 }
 .nuclei-badge--accent { --badge-color: var(--color-accent-quantum); --badge-text: var(--color-accent-quantum-text); }
-.nuclei-badge--success { --badge-color: var(--color-success); --badge-text: color-mix(in srgb, var(--color-success) 55%, var(--color-text-primary)); }
-.nuclei-badge--warning { --badge-color: var(--color-warning); --badge-text: var(--color-warning); }
-.nuclei-badge--danger { --badge-color: var(--color-danger); --badge-text: color-mix(in srgb, var(--color-danger) 55%, var(--color-text-primary)); }
+.nuclei-badge--success { --badge-color: var(--color-success); --badge-text: var(--color-success-text); }
+.nuclei-badge--warning { --badge-color: var(--color-warning); --badge-text: var(--color-warning-text); }
+.nuclei-badge--danger { --badge-color: var(--color-danger); --badge-text: var(--color-danger-text); }
 .nuclei-badge--research { --badge-color: var(--color-mode-research); --badge-text: var(--color-mode-research); }
 .nuclei-badge--dirac { --badge-color: var(--color-accent-dirac); --badge-text: var(--color-accent-dirac-text); }
 
@@ -398,3 +401,4 @@
 /* ErrorBoundary fallback: EmptyState centred in the failed panel; the message stays mono and wraps. */
 .nuclei-error-boundary { display: flex; align-items: center; justify-content: center; width: 100%; height: 100%; }
 .nuclei-error-boundary__message { font-family: var(--font-mono); font-size: var(--font-size-caption); word-break: break-word; }
+}

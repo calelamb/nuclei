@@ -1,3 +1,4 @@
+import './settings.css';
 import { createContext, useEffect, useId, useRef, useState, type ReactNode } from 'react';
 import { ChevronDown, ChevronRight } from 'lucide-react';
 import { useThemeStore } from '../../stores/themeStore';
@@ -63,7 +64,7 @@ export function Section({ id, title, defaultOpen = false, children }: {
         onClick={() => setOpen(!open)}
         aria-expanded={open}
         aria-controls={bodyId}
-        className="nuclei-quiet"
+        className="nuclei-quiet settings-section__header"
         style={{
           width: '100%', display: 'flex', alignItems: 'center', gap: 6,
           padding: '8px 12px', border: 'none', background: 'transparent',
