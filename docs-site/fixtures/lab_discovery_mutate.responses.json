@@ -1,0 +1,23 @@
+[
+  {
+    "type": "discovery_mutations",
+    "mutations": [
+      {
+        "program": "<any>",
+        "operators": [
+          "duplicate_statement",
+          "change_index"
+        ],
+        "description": "<any>"
+      },
+      {
+        "program": "<any>",
+        "operators": [
+          "swap_gate_method",
+          "swap_statements"
+        ],
+        "description": "<any>"
+      }
+    ]
+  }
+]

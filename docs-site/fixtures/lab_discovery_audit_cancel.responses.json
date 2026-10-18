@@ -1,0 +1,8 @@
+[
+  {
+    "type": "discovery_audit_cancelled",
+    "run_id": "docs-run",
+    "candidate_id": null,
+    "cancelled": 0
+  }
+]

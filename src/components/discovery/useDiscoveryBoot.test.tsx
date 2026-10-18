@@ -4,6 +4,7 @@ import { cleanup, screen, waitFor } from '@testing-library/react';
 import { DiscoverySidebar } from './DiscoverySidebar';
 import { DiscoveryWorkbench } from './DiscoveryWorkbench';
 import { useDiscoveryStore } from '../../stores/discoveryStore';
+import { useConjectureStore } from '../../stores/conjectureStore';
 import { useProjectStore } from '../../stores/projectStore';
 import type { DiscoveryEnv } from '../../services/discovery/env';
 import { createFakeKernel, createFakeLlm, createManualClock, createMemoryFs, joinPath, testHash } from '../../services/discovery/testkit';
@@ -60,6 +61,14 @@ describe('useDiscoveryBoot', () => {
     expect(created).toHaveLength(1);
     expect(kernelOpened).toBe(1);
     expect(screen.getAllByText('toy').length).toBeGreaterThan(0);
+  });
+
+  it('also configures the conjecture store so tests can start from the Discovery view', async () => {
+    const configure = vi.spyOn(useConjectureStore.getState(), 'configure');
+    useProjectStore.setState({ projectRoot: PROJECT_ROOT });
+    renderOn(<DiscoveryWorkbench />);
+    await waitFor(() => expect(configure).toHaveBeenCalledTimes(1));
+    configure.mockRestore();
   });
 
   it('does nothing on the web build', () => {

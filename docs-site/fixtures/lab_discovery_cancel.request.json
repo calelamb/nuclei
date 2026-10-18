@@ -1,0 +1,5 @@
+{
+  "type": "discovery_cancel",
+  "run_id": "docs-run",
+  "candidate_id": "c-0001"
+}

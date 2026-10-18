@@ -3,6 +3,8 @@ import { usePlatform } from '../../platform/PlatformProvider';
 import type { PlatformBridge } from '../../platform/bridge';
 import { labAvailability } from '../../services/lab/labSession';
 import { createDiscoveryEnv } from '../../services/discovery/env';
+import { createConjectureEnv } from '../../services/conjecture/env';
+import { useConjectureStore } from '../../stores/conjectureStore';
 import { useDiscoveryStore } from '../../stores/discoveryStore';
 import { useProjectStore } from '../../stores/projectStore';
 
@@ -37,6 +39,8 @@ export function useDiscoveryBoot(): DiscoveryBoot {
     if (!available || configuredFor === platform) return;
     configuredFor = platform;
     useDiscoveryStore.getState().configure(createDiscoveryEnv(platform));
+    // Conjecture tests are started from the Discovery view, so its store boots here too.
+    useConjectureStore.getState().configure(createConjectureEnv(platform));
   }, [available, platform]);
 
   useEffect(() => {
@@ -44,6 +48,7 @@ export function useDiscoveryBoot(): DiscoveryBoot {
     if (configuredFor !== platform) {
       configuredFor = platform;
       useDiscoveryStore.getState().configure(createDiscoveryEnv(platform));
+      useConjectureStore.getState().configure(createConjectureEnv(platform));
     }
     const state = useDiscoveryStore.getState();
     if (state.projectRoot !== projectRoot) void state.reload(projectRoot);

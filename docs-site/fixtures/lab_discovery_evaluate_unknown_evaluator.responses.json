@@ -1,0 +1,10 @@
+[
+  {
+    "type": "error",
+    "phase": "discovery",
+    "code": "unknown_evaluator",
+    "message": "<any>",
+    "run_id": "docs-run",
+    "candidate_id": "c-0001"
+  }
+]

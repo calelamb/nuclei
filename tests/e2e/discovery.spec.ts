@@ -1,5 +1,12 @@
 import { expect, test, type Page } from '@playwright/test';
 import { FIXTURE_EVALUATOR } from '../../src/services/discovery/fixtures';
+import {
+  FIXTURE_SCHEMA_REPLY,
+  fixtureConjecture,
+  fixtureEvidenceItem,
+  fixtureResult,
+} from '../../src/services/conjecture/fixtures';
+import type { DiscoveryEvaluatorInfo } from '../../src/types/discovery';
 
 /**
  * PRD 14 — Discovery Engine against a stubbed kernel (WebSocket replacement).
@@ -11,9 +18,29 @@ import { FIXTURE_EVALUATOR } from '../../src/services/discovery/fixtures';
  */
 const FIXTURE_URL = '/?e2eProject=lab-project&workspace=research&labKernel=ws://127.0.0.1:9778';
 
+/** Catalogue entry for the Frontier evaluator (descriptor keys match the kernel). */
+const FRONTIER_EVALUATOR: DiscoveryEvaluatorInfo = {
+  kind: 'trainability_frontier',
+  version: '1.0.0',
+  title: 'Trainability frontier',
+  description: 'Gradient-variance scaling against resistance to Pauli propagation.',
+  task: 'quantum_circuit',
+  entry_signature: 'build(n_qubits: int, n_layers: int) -> QuantumCircuit',
+  objectives: [
+    { key: 'beta', label: 'beta', direction: 'minimize' },
+    { key: 'estimation_hardness', label: 'Estimation hardness', direction: 'maximize' },
+  ],
+  descriptors: [
+    { key: 'log2_dla_dimension', label: 'log2 DLA dimension', min: 0, max: 16, default_bins: 8 },
+    { key: 'two_qubit_gates_per_layer', label: 'Two-qubit gates per layer', min: 0, max: 64, default_bins: 8 },
+  ],
+  config_schema: {},
+  default_config: {},
+};
+
 async function installStubKernel(page: Page): Promise<void> {
   await page.addInitScript(
-    (evaluator) => {
+    ({ evaluator, frontier, conjectureSchema, conjectureEvidence, conjectureResult }) => {
       type Listener = (event: Event | MessageEvent<string>) => void;
       class StubKernelSocket {
         readyState = 0;
@@ -35,10 +62,22 @@ async function installStubKernel(page: Page): Promise<void> {
         send(serialized: string): void {
           const m = JSON.parse(serialized) as {
             type: string; run_id: string; candidate_id: string; program: string; count: number; seed: number; stage?: string;
+            job_id?: string; evaluator?: { kind: string };
           };
           const reply = (frame: unknown) =>
             setTimeout(() => this.emit('message', new MessageEvent('message', { data: JSON.stringify(frame) })), 0);
-          if (m.type === 'discovery_evaluators') reply({ type: 'discovery_evaluators_result', evaluators: [evaluator] });
+          if (m.type === 'discovery_evaluators') reply({ type: 'discovery_evaluators_result', evaluators: [evaluator, frontier] });
+          if (m.type === 'discovery_conjecture_schema') reply(conjectureSchema);
+          if (m.type === 'discovery_conjecture_test') {
+            // Held-out test stub: one evidence row per circuit, then a supported verdict.
+            const job_id = m.job_id;
+            reply({ type: 'discovery_conjecture_started', job_id });
+            conjectureEvidence.forEach((item, i) => {
+              reply({ type: 'discovery_conjecture_progress', job_id, fraction: (i + 1) / conjectureEvidence.length, message: `circuit ${i + 1}`, circuit_index: i });
+              reply({ type: 'discovery_conjecture_evidence', job_id, item });
+            });
+            reply({ type: 'discovery_conjecture_result', job_id, status: 'complete', result: conjectureResult });
+          }
           if (m.type === 'discovery_mutate') {
             const mutations = Array.from({ length: m.count }, (_, i) => ({
               program: `${m.program}\n# mutation ${m.seed}-${i}`,
@@ -76,7 +115,37 @@ async function installStubKernel(page: Page): Promise<void> {
               },
             });
           }
-          if (m.type === 'discovery_evaluate') {
+          if (m.type === 'discovery_evaluate' && m.evaluator?.kind === 'trainability_frontier') {
+            // Frontier stub: every candidate scores, spread over distinct archive cells with structural features.
+            const idx = Number(m.candidate_id.replace(/\D/g, ''));
+            const beta = 0.05 + (idx % 6) * 0.07;
+            reply({
+              type: 'discovery_evaluation',
+              run_id: m.run_id,
+              candidate_id: m.candidate_id,
+              evaluation: {
+                candidate_id: m.candidate_id, run_id: m.run_id, status: 'scored', fitness: 1 + idx * 0.1,
+                objectives: {
+                  beta: { value: beta, ci95: [beta - 0.02, beta + 0.03], direction: 'minimize', label: 'beta' },
+                  estimation_hardness: { value: 3 + (idx % 3), direction: 'maximize', label: 'Estimation hardness' },
+                },
+                descriptors: { log2_dla_dimension: (idx * 3) % 16, two_qubit_gates_per_layer: (idx * 7) % 64 },
+                metrics: {
+                  features: {
+                    n_qubits: 16, n_params: 32 + idx, parametric_gates: 32 + idx, params_per_qubit: 2, two_qubit_gates: 30,
+                    two_qubit_depth: 2, rotation_axes: idx % 2 ? 'YZ' : 'XY', rotation_axis_counts: { X: 0, Y: 16, Z: 16 },
+                    entangler: 'cz', entangler_pattern: ['brick', 'ladder', 'ring'][idx % 3], distinct_bonds: 15,
+                    connectivity_fraction: 0.12, n_layers: 2 + (idx % 5), two_qubit_gates_per_layer: 15,
+                  },
+                },
+                guardrails: [], rejection: null, failure: null, stdout: '', stderr: '',
+                timings_ms: { sandbox: 5, score: 5, total: 10 },
+                evaluator: { kind: 'trainability_frontier', version: '1.0.0', fingerprint: 'ef56'.repeat(16) },
+                seed: m.seed, stage: m.stage ?? 'full', program_key: `f-${idx}-${m.program.length}`, cache_hit: false, isolation: 'sandbox-exec',
+              },
+            });
+          }
+          if (m.type === 'discovery_evaluate' && m.evaluator?.kind !== 'trainability_frontier') {
             const n = String(m.program).split('\n').length;
             const rejected = n % 7 === 0;
             const gates = Math.max(1, 16 - (n % 12));
@@ -119,7 +188,13 @@ async function installStubKernel(page: Page): Promise<void> {
       }
       Object.defineProperty(window, 'WebSocket', { configurable: true, value: StubKernelSocket });
     },
-    FIXTURE_EVALUATOR,
+    {
+      evaluator: FIXTURE_EVALUATOR,
+      frontier: FRONTIER_EVALUATOR,
+      conjectureSchema: FIXTURE_SCHEMA_REPLY,
+      conjectureEvidence: Array.from({ length: 8 }, (_, i) => fixtureEvidenceItem(i, 'meets')),
+      conjectureResult: fixtureResult('supported'),
+    },
   );
 }
 
@@ -251,4 +326,62 @@ test('@discovery red queen mode surfaces an exploit and exports it as a regressi
   const drawer = page.getByRole('dialog', { name: 'Candidate c-0002' });
   await expect(drawer.getByRole('region', { name: 'Audit' })).toContainText('Exploit');
   await expect(drawer.getByRole('button', { name: 'Run audit' })).toBeVisible();
+});
+
+/** The stubbed Anthropic API proposes one valid conjecture (the Opus proposer, forced tool). */
+async function installStubConjectureProposer(page: Page): Promise<void> {
+  await page.addInitScript(() => localStorage.setItem('nuclei-dirac-api-key', 'sk-ant-e2e-stub'));
+  await page.route('https://api.anthropic.com/v1/messages', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        model: 'claude-opus-5-5',
+        usage: { input_tokens: 400, output_tokens: 120 },
+        content: [{ type: 'tool_use', id: 'toolu_cj', name: 'propose_conjectures', input: { conjectures: [fixtureConjecture()] } }],
+      }),
+    });
+  });
+}
+
+test('@discovery conjecture engine proposes, tests on held-out circuits and writes a ledger', async ({ page }) => {
+  await installStubKernel(page);
+  await installStubConjectureProposer(page);
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await page.goto(FIXTURE_URL);
+  await page.getByRole('button', { name: 'Discovery Engine' }).click();
+  await page.getByRole('region', { name: 'Discovery Engine sidebar' }).getByRole('button', { name: /New discovery/ }).click();
+
+  const form = page.getByRole('form', { name: 'New discovery' });
+  await form.getByRole('radio', { name: /Trainability frontier/ }).click();
+  await form.getByRole('textbox', { name: 'Name' }).fill('cj e2e');
+  const evaluations = form.getByLabel('Max evaluations');
+  await evaluations.fill('24');
+  await evaluations.blur();
+  await form.getByRole('tab', { name: 'AST only (no API key)' }).click();
+  await form.getByRole('button', { name: 'Create discovery' }).click();
+
+  const lab = page.getByRole('region', { name: 'Discovery Engine', exact: true });
+  await lab.getByRole('button', { name: 'Start run' }).click();
+  await expect(lab.getByRole('region', { name: 'Run header' }).getByText('Completed')).toBeVisible({ timeout: 60_000 });
+
+  await lab.getByRole('tab', { name: /^Conjectures/ }).click();
+  const tab = lab.getByRole('region', { name: 'Conjectures', exact: true });
+  await tab.getByRole('button', { name: 'Propose conjectures' }).click();
+
+  const card = tab.getByRole('group', { name: /^Conjecture cj-/ }).or(tab.getByLabel(/^Conjecture cj-/)).first();
+  await expect(card).toContainText('Brick-pattern CZ circuits');
+  await card.getByRole('button', { name: 'Accept' }).click();
+  await card.getByRole('button', { name: 'Test', exact: true }).click();
+
+  const verdict = card.getByRole('region', { name: 'Verdict: supported' });
+  await expect(verdict).toBeVisible({ timeout: 30_000 });
+  await expect(verdict).toContainText(/8 held-out circuits/);
+  await expect(verdict).not.toContainText(/proven/i);
+  await expect(tab.getByRole('button', { name: 'Test again' })).toBeVisible();
+
+  // The result lands in the run's ledger (conjectures.json / .md), refuted or not.
+  const ledger = tab.getByRole('table', { name: 'Conjecture ledger' });
+  await expect(ledger).toContainText('Brick-pattern CZ circuits');
+  await expect(tab.getByRole('button', { name: 'Open ledger (.md)' })).toBeEnabled();
 });

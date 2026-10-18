@@ -9,7 +9,7 @@ import {
 
 /**
  * PRD 14 — Trainability Lab against a stubbed kernel (WebSocket replacement).
- * DRAFT: not yet run in CI. The DEV-only `?labKernel=` override lets the web
+ * The DEV-only `?labKernel=` override lets the web
  * build open a Lab session; the stub answers every trainability message with
  * the unit-test fixtures (spec §5.6 shapes).
  */
@@ -77,15 +77,16 @@ test('@trainability runs the analyses and shows verdicts', async ({ page }) => {
   await page.getByRole('button', { name: 'Trainability Lab' }).click();
 
   const lab = page.getByRole('region', { name: 'Trainability Lab', exact: true });
-  await expect(lab).toBeVisible();
-  await expect(lab.getByText('n = 4')).toBeVisible();
+  // The Lab chunk compiles on first open in the dev server; allow for a cold start under load.
+  await expect(lab).toBeVisible({ timeout: 15_000 });
+  await expect(lab.getByText('n = 4', { exact: true })).toBeVisible();
 
   await lab.getByRole('button', { name: /Run analyses/ }).click();
-  await expect(lab.getByText('BP risk: high')).toBeVisible();
+  await expect(lab.getByText('BP risk: high', { exact: true })).toBeVisible();
   await expect(lab.getByRole('img', { name: 'Per-parameter gradient variance' })).toBeVisible();
 
   await lab.getByRole('tab', { name: 'Scaling' }).click();
-  await expect(lab.getByText('Barren plateau')).toBeVisible();
+  await expect(lab.getByText('Barren plateau', { exact: true })).toBeVisible();
   await lab.getByRole('tab', { name: 'Lie algebra' }).click();
   await expect(lab.getByRole('meter')).toBeVisible();
   await lab.getByRole('tab', { name: 'Landscape' }).click();

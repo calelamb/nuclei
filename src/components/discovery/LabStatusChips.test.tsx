@@ -10,11 +10,14 @@ import { jobFixture } from '../../services/trainability/fixtures';
 import { useDiscoveryStore } from '../../stores/discoveryStore';
 import { FIXTURE_RUN_ID, fixtureRun } from '../../services/discovery/fixtures';
 import { createRunView } from '../../services/discovery/runView';
+import { useConjectureStore } from '../../stores/conjectureStore';
+import { emptyRunConjectures, type TestJob } from '../../services/conjecture/state';
 
 beforeEach(() => {
   useLabActivityStore.setState({ discovery: null });
   useTrainabilityStore.getState().reset();
   useDiscoveryStore.getState().reset();
+  useConjectureStore.getState().reset();
   useWorkspaceStore.setState({ mode: 'research' });
   useNavigationStore.setState({ activeView: 'files' });
 });
@@ -51,6 +54,16 @@ describe('LabStatusChips', () => {
     expect(useNavigationStore.getState().activeView).toBe('trainability');
     act(() => useTrainabilityStore.setState({ jobs: { [job.id]: { ...job, status: 'complete' } }, activeJobId: null }));
     expect(screen.queryByRole('button', { name: /Trainability Lab/ })).toBeNull();
+  });
+
+  it('shows a conjecture chip only while a test is active', () => {
+    const job = (status: TestJob['status']) => ({ r: { ...emptyRunConjectures(), jobs: { j: { jobId: 'j', conjectureId: 'cj-1', status } as TestJob } } });
+    useConjectureStore.setState({ byRun: job('running') });
+    render(<LabStatusChips />);
+    fireEvent.click(screen.getByRole('button', { name: /Conjecture Engine: a held-out test is running/ }));
+    expect(useNavigationStore.getState().activeView).toBe('discovery');
+    act(() => useConjectureStore.setState({ byRun: job('complete') }));
+    expect(screen.queryByRole('button', { name: /Conjecture Engine/ })).toBeNull();
   });
 
   it('opens Research mode first when clicked from Learn', () => {

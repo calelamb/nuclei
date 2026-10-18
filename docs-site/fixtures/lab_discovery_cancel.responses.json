@@ -1,0 +1,8 @@
+[
+  {
+    "type": "discovery_cancelled",
+    "run_id": "docs-run",
+    "candidate_id": "c-0001",
+    "cancelled": 0
+  }
+]
