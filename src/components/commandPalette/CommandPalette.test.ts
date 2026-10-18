@@ -255,4 +255,15 @@ describe('palette Go-to follows the rail the person sees (shell-r6-03)', () => {
     expect(commands.find((c) => c.id === 'goto-learning')?.shortcut).toBe('⌘1');
     expect(commands.find((c) => c.id === 'goto-challenges')?.shortcut).toBe('⌘2');
   });
+
+  it('hides the Layout presets when the status bar cannot show them (Learn Beginner)', () => {
+    const labels = (c: CommandContext) => buildCommands(makeActions(), c).map((x) => x.label);
+    expect(labels(makeContext({ layoutPresets: false })).some((l) => l.startsWith('Layout:'))).toBe(false);
+    expect(labels(makeContext()).filter((l) => l.startsWith('Layout:'))).toHaveLength(3);
+  });
+
+  it('files Replay Research tour under Help', () => {
+    const tour = buildCommands(makeActions(), makeContext()).find((c) => c.id === 'research-tour');
+    expect(tour?.category).toBe('Help');
+  });
 });

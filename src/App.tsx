@@ -375,6 +375,7 @@ function AppInner() {
     mode: workspaceMode,
     developerViews: experimentalFeatures,
     explorerSidebar: uiFeatures.explorerSidebar,
+    layoutPresets: uiFeatures.layoutPresets,
     experiments: experiments.map((e) => ({ fileName: e.fileName, name: e.spec.name })),
     hasSelectedRun: selectedRunDir !== null,
     framework,
