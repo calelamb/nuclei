@@ -17,7 +17,7 @@ describe('BlochRail', () => {
     render(<BlochRail><div>tiles</div></BlochRail>);
     const rail = screen.getByTestId('bloch-rail');
     expect(rail.style.flexGrow).toBe('0');
-    expect(rail.style.flexShrink).toBe('1');
+    expect(rail.style.flexShrink).toBe('3');
   });
 
   it('does not vertically centre the content', () => {

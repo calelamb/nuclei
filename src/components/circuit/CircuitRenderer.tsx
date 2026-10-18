@@ -14,6 +14,8 @@ import { ExportMenu } from './ExportMenu';
 import { useEdgeFades } from './edgeFades';
 import { fitCircuitWidth } from './fitCircuit';
 import { describeStale } from './staleCaption';
+import { hiddenWireCount } from '../../layout/circuitRail';
+import { prefersReducedMotion } from '../../lib/animations';
 import { StaleResultNotice } from '../layout/StaleResultNotice';
 import { useEditorRevealStore } from '../../stores/editorRevealStore';
 import { useElementSize } from '../../hooks/useElementSize';
@@ -168,7 +170,19 @@ export function CircuitRenderer() {
 
   const [measureContainer, containerSize] = useElementSize<HTMLDivElement>();
   const { ref: fadeRef, onScroll: onContainerScroll, style: fadeStyle } = useEdgeFades<HTMLDivElement>();
-  const setContainerRef = useCallback((el: HTMLDivElement | null) => { measureContainer(el); fadeRef(el); }, [measureContainer, fadeRef]);
+  const scrollerRef = useRef<HTMLDivElement | null>(null);
+  const [clippedWires, setClippedWires] = useState(0);
+  const qubitTotal = snapshot?.qubit_count ?? 0;
+  const measureClipped = useCallback(() => {
+    const el = scrollerRef.current;
+    if (!el) return;
+    const next = hiddenWireCount({ scrollTop: el.scrollTop, clientHeight: el.clientHeight, scrollHeight: el.scrollHeight }, qubitTotal);
+    setClippedWires((prev) => (prev === next ? prev : next));
+  }, [qubitTotal]);
+  const setContainerRef = useCallback((el: HTMLDivElement | null) => { scrollerRef.current = el; measureContainer(el); fadeRef(el); }, [measureContainer, fadeRef]);
+  const handleScroll = useCallback(() => { onContainerScroll(); measureClipped(); }, [onContainerScroll, measureClipped]);
+  useEffect(() => { measureClipped(); }, [measureClipped, containerSize.height, containerSize.width, snapshot]);
+  const showRemainingWires = () => scrollerRef.current?.scrollTo({ top: scrollerRef.current.scrollHeight, behavior: prefersReducedMotion() ? 'auto' : 'smooth' });
   const [tooltip, setTooltip] = useState<Tooltip | null>(null);
   const [contextMenu, setContextMenu] = useState<ContextMenu | null>(null);
 
@@ -234,7 +248,7 @@ export function CircuitRenderer() {
       )}
       <div
         ref={setContainerRef}
-        onScroll={onContainerScroll}
+        onScroll={handleScroll}
         className="circuit-renderer-container"
         style={{ ...fadeStyle, flex: 1, minHeight: 0, overflow: 'auto', position: 'relative', padding: '4px 0 6px', opacity: stale ? 0.45 : 1, transition: 'opacity var(--duration-fast) var(--ease-standard)' }}
         aria-description={ariaDescription}
@@ -362,6 +376,16 @@ export function CircuitRenderer() {
         )}
       </div>
 
+      {clippedWires > 0 && (
+        <button
+          type="button"
+          className="circuit-more-wires"
+          onClick={showRemainingWires}
+          aria-label={`Show ${clippedWires} more ${clippedWires === 1 ? 'wire' : 'wires'}`}
+        >
+          +{clippedWires} {clippedWires === 1 ? 'wire' : 'wires'}
+        </button>
+      )}
       </div>
 
       {/* Step controls */}

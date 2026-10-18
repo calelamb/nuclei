@@ -1,6 +1,7 @@
 import { useMemo, type ReactNode } from 'react';
 import { LayoutGrid, Grid3x3, Share2, Orbit, Workflow, type LucideIcon } from 'lucide-react';
 import { useThemeStore } from '../../stores/themeStore';
+import { useSimulationStore } from '../../stores/simulationStore';
 import { useQecStore } from '../../stores/qecStore';
 import { useProjectStore } from '../../stores/projectStore';
 import { useVizZoneStore } from '../../stores/vizZoneStore';
@@ -11,6 +12,9 @@ import { retryKernel } from '../../lib/kernelControl';
 import { isWebBuild } from '../../platform/buildTarget';
 import { useEditorStore } from '../../stores/editorStore';
 import { visibleVizPanelIds } from '../../layout/vizPanels';
+import { chipFitsRail, circuitMinHeight } from '../../layout/circuitRail';
+import { useDisplaySnapshot } from '../../layout/useDisplaySnapshot';
+import { useElementSize } from '../../hooks/useElementSize';
 import { useResultStale } from '../../hooks/useResultStale';
 import { StaleResultNotice, STALE_RESULT_OPACITY } from '../layout/StaleResultNotice';
 import { BlochRail } from '../layout/BlochRail';
@@ -81,6 +85,17 @@ export function VizZone({
   }, [visible, qec]);
 
   const stale = useResultStale();
+  const { snapshot: circuitSnapshot } = useDisplaySnapshot();
+  const [measureColumn, columnSize] = useElementSize<HTMLDivElement>();
+  const blochCount = useSimulationStore((st) => st.result?.bloch_coords?.length ?? 0);
+  const chipFits = chipFitsRail({
+    railHeight: columnSize.height, railWidth: columnSize.width,
+    qubitCount: circuitSnapshot?.qubit_count ?? 1, blochCount,
+  });
+  const circuitRevealStyle = {
+    ...CIRCUIT_REVEAL_STYLE,
+    minHeight: Math.max(96, circuitMinHeight(circuitSnapshot?.qubit_count ?? 1, columnSize.height)),
+  };
   const circuitPanel = panels.find((p) => p.id === 'circuit');
   const statePanels = panels.filter((p) => p.id !== 'circuit');
 
@@ -113,9 +128,9 @@ export function VizZone({
   }
 
   return (
-    <div style={COLUMN_STYLE}>
+    <div ref={measureColumn} style={COLUMN_STYLE}>
       {circuitPanel && (
-        <PanelReveal when from="right" style={CIRCUIT_REVEAL_STYLE}>
+        <PanelReveal when from="right" style={circuitRevealStyle}>
           <section aria-label={circuitPanel.title} style={{ borderBottom: `1px solid ${colors.border}`, display: 'flex', flexDirection: 'column', minHeight: 0, maxHeight: '100%' }}>
             {circuitPanel.render()}
           </section>
@@ -143,7 +158,7 @@ export function VizZone({
           onSelect={(id) => setActiveTab(projectRoot, id)}
         />
       )}
-      <div style={stale ? STALE_CHIP_STYLE : undefined} data-stale={stale ? 'true' : undefined}>{chip}</div>
+      {chipFits && <div style={stale ? STALE_CHIP_STYLE : undefined} data-stale={stale ? 'true' : undefined}>{chip}</div>}
     </div>
   );
 }

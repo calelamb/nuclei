@@ -47,7 +47,8 @@ export function BlochRail({ children }: { children: ReactNode }) {
       ref={measureRef}
       data-testid="bloch-rail"
       style={{
-        flex: count > 0 ? '0 1 auto' : '1 1 auto', minHeight: count > 0 ? min : 240, height: count > 0 ? height : undefined,
+        // The Bloch grid pages when squeezed, so it gives up height before the circuit does.
+        flex: count > 0 ? '0 3 auto' : '1 1 auto', minHeight: count > 0 ? min : 240, height: count > 0 ? height : undefined,
         display: 'flex', flexDirection: 'column', overflow: 'hidden',
       }}
     >
