@@ -4,6 +4,7 @@ import { QuantumPlayground } from './QuantumPlayground';
 import { EASING, DURATION, prefersReducedMotion } from '../../lib/animations';
 
 import { ArrowLeft } from 'lucide-react';
+import './onboarding.css';
 import { ICON_SIZE, TYPOGRAPHY } from '../../styles/tokens';
 import { Button, ChoiceCard } from '../ui';
 import { useFocusTrap } from '../../hooks/useFocusTrap';
@@ -80,6 +81,7 @@ function DialogFrame({ label, maxWidth, children, onEscape }: DialogFrameProps) 
     <div
       ref={rootRef}
       role="dialog"
+      className="onboarding-frame"
       aria-modal="true"
       aria-label={label}
       tabIndex={-1}
@@ -88,7 +90,7 @@ function DialogFrame({ label, maxWidth, children, onEscape }: DialogFrameProps) 
         position: 'fixed', inset: 0, zIndex: 4000,
         background: `linear-gradient(180deg, ${colors.bg} 0%, ${colors.bgPanel} 100%)`,
         display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'flex-start',
-        padding: 32, paddingTop: 'clamp(32px, 16vh, 160px)', overflowY: 'auto', outline: 'none',
+        padding: 32, paddingTop: 'clamp(32px, 16vh, 160px)', overflowY: 'auto',
       }}
     >
       <div style={{ maxWidth, width: '100%', textAlign: 'center' }}>{children}</div>
