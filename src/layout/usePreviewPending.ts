@@ -1,14 +1,22 @@
 import { useEffect, useRef, useState } from 'react';
 import { useCircuitStore } from '../stores/circuitStore';
 import { useEditorStore } from '../stores/editorStore';
+import type { CircuitSnapshot } from '../types/quantum';
 
 /** The editor debounces the parse by 300 ms; past this with no new snapshot the preview is visibly slow. */
 export const PREVIEW_PENDING_DELAY_MS = 400;
 
+/** The kernel's last answer when the wait began: any different answer (snapshot, error, pause) ends it. */
+interface Answer {
+  snapshot: CircuitSnapshot | null;
+  error: string | null;
+  previewPaused: boolean;
+}
+
 /**
  * True when the code has changed but no snapshot (or error, or pause) for it has arrived yet, so the circuit
- * on screen still describes the previous code. Cleared by whatever the kernel answers next. Only claimed while
- * the kernel is ready (before that no update is on its way) and a circuit is on screen.
+ * on screen still describes the previous code. Only claimed while the kernel is ready (before that no update
+ * is on its way) and a circuit is on screen.
  */
 export function usePreviewPending(): boolean {
   const code = useEditorStore((s) => s.code);
@@ -16,23 +24,23 @@ export function usePreviewPending(): boolean {
   const snapshot = useCircuitStore((s) => s.snapshot);
   const error = useCircuitStore((s) => s.error);
   const previewPaused = useCircuitStore((s) => s.previewPaused);
-  const [pending, setPending] = useState(false);
+  const [waitingOn, setWaitingOn] = useState<Answer | null>(null);
 
-  // An answer for the current code (snapshot, error or pause) ends the wait.
-  useEffect(() => {
-    setPending(false);
-  }, [snapshot, error, previewPaused]);
-
-  // A new edit starts it, but only once the preview has been quiet for longer than the usual debounce.
+  // A new edit starts the wait, but only once the preview has been quiet for longer than the usual debounce.
   const lastCode = useRef(code);
   useEffect(() => {
     const edited = lastCode.current !== code;
     lastCode.current = code;
     if (!edited || !kernelReady || code.trim() === '') return undefined;
-    const timer = setTimeout(() => setPending(true), PREVIEW_PENDING_DELAY_MS);
+    // Read the answer on screen when the timer fires, not when the edit happened.
+    const timer = setTimeout(() => {
+      const { snapshot: current, error: currentError, previewPaused: paused } = useCircuitStore.getState();
+      setWaitingOn({ snapshot: current, error: currentError, previewPaused: paused });
+    }, PREVIEW_PENDING_DELAY_MS);
     return () => clearTimeout(timer);
   }, [code, kernelReady]);
 
-  // Only a circuit on screen can be out of date; with none, the next answer (or its absence) is not news.
-  return pending && kernelReady && snapshot !== null;
+  const unchanged = waitingOn !== null
+    && waitingOn.snapshot === snapshot && waitingOn.error === error && waitingOn.previewPaused === previewPaused;
+  return unchanged && kernelReady && snapshot !== null;
 }
