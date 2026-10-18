@@ -94,6 +94,15 @@
 .nuclei-input:disabled, .nuclei-textarea:disabled { cursor: not-allowed; opacity: 0.5; }
 .nuclei-input[aria-invalid='true'], .nuclei-textarea[aria-invalid='true'] { border-color: var(--color-danger); }
 
+/* Adornments: the input keeps its border and focus ring; the icon/control float inside its edges. */
+.nuclei-input-wrap { position: relative; display: flex; align-items: center; width: 100%; min-width: 0; }
+.nuclei-input-wrap__lead, .nuclei-input-wrap__trail { position: absolute; top: 0; bottom: 0; display: inline-flex; align-items: center; }
+.nuclei-input-wrap__lead { left: var(--space-2); color: var(--color-text-tertiary); pointer-events: none; }
+.nuclei-input-wrap__trail { right: var(--space-1); }
+.nuclei-input-wrap:focus-within > .nuclei-input-wrap__lead { color: var(--color-text-secondary); }
+.nuclei-input.nuclei-input--lead { padding-left: calc(var(--space-2) + var(--icon-sm) + var(--space-2)); }
+.nuclei-input.nuclei-input--trail { padding-right: calc(var(--space-1) + var(--control-height-sm) + var(--space-1)); }
+
 /* ── Switch ── */
 .nuclei-switch {
   position: relative; flex: 0 0 auto; width: 32px; height: 18px; padding: 0; cursor: pointer;
@@ -141,6 +150,8 @@
 
 /* Borderless inputs embedded in a bar (palette, inline edit, search): swap the outline for an underline ring. */
 .nuclei-bare-input:focus-visible { outline: none; box-shadow: 0 2px 0 0 var(--focus-ring-color); }
+/* Inside a field group the wrapper's ring is the indicator; the underline would be a second one. */
+.nuclei-field-group > .nuclei-bare-input:focus-visible { box-shadow: none; }
 
 /* ── Quiet items (rail icons, tabs): CSS-driven hover, active state via data-active ── */
 .nuclei-quiet { color: var(--color-text-tertiary); }

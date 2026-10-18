@@ -101,6 +101,28 @@ describe('TextInput / TextArea', () => {
     render(<TextInput aria-label="Name" invalid />);
     expect(screen.getByRole('textbox', { name: 'Name' }).getAttribute('aria-invalid')).toBe('true');
   });
+
+  it('renders without a wrapper when it has no adornments', () => {
+    const { container } = render(<TextInput aria-label="Plain" />);
+    expect(container.querySelector('.nuclei-input-wrap')).toBeNull();
+  });
+
+  it('keeps the input as the one bordered, focusable element when it has a leading icon and trailing control', () => {
+    const { container } = render(
+      <TextInput
+        aria-label="Search"
+        leadingIcon={<svg data-testid="icon" />}
+        trailing={<button type="button" aria-label="Clear">x</button>}
+      />,
+    );
+    const input = screen.getByRole('textbox', { name: 'Search' });
+    expect(input.className).toContain('nuclei-input--lead');
+    expect(input.className).toContain('nuclei-input--trail');
+    const lead = container.querySelector('.nuclei-input-wrap__lead');
+    expect(lead?.getAttribute('aria-hidden')).toBe('true');
+    expect(lead?.contains(screen.getByTestId('icon'))).toBe(true);
+    expect(screen.getByRole('button', { name: 'Clear' })).toBeTruthy();
+  });
 });
 
 describe('Switch', () => {
