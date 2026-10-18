@@ -37,7 +37,7 @@ import './statusBar.css';
 
 /** A status-bar menu trigger: sized like the chips, coloured and hovered by .statusbar-ctl. */
 const MENU_TRIGGER_STYLE: React.CSSProperties = {
-  padding: '0 8px', height: 20, background: 'transparent', border: 'none',
+  padding: '0 8px', height: 20, border: 'none',
   cursor: 'pointer', fontSize: 11, fontFamily: TYPOGRAPHY.fontSans, fontWeight: 500,
 };
 
@@ -290,7 +290,7 @@ export function StatusBar() {
             onClick={() => { if (!focusKernelBanner()) retryKernel(); }}
             aria-label={`${kernelModel.label}. Show details and retry`}
             className="statusbar-ctl"
-            style={{ ...chipStyle, color: toneColor.error, cursor: 'pointer', background: 'transparent', border: 'none' }}
+            style={{ ...chipStyle, color: toneColor.error, cursor: 'pointer', border: 'none' }}
           >
             <KernelDot color={toneColor.error} pulse={false} />
             {kernelModel.label}
@@ -311,7 +311,7 @@ export function StatusBar() {
           onClick={() => openPalette(true)}
           aria-label="Open command palette"
           className="statusbar-ctl"
-          style={{ ...chipStyle, background: 'transparent', border: 'none', cursor: 'pointer', gap: 5 }}
+          style={{ ...chipStyle, border: 'none', cursor: 'pointer', gap: 5 }}
         >
           <Command size={12} />
           <span>Commands</span>
@@ -324,7 +324,7 @@ export function StatusBar() {
           aria-label={`Switch to ${themeMode === 'dark' ? 'light' : 'dark'} theme`}
           className="statusbar-ctl"
           style={{
-            background: 'transparent', border: 'none', cursor: 'pointer',
+            border: 'none', cursor: 'pointer',
             width: 22, height: 22, padding: 0, display: 'flex', alignItems: 'center', justifyContent: 'center',
           }}
         >
