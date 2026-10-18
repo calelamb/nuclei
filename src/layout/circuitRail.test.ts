@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { WIRE_SPACING } from '../components/circuit/gates';
-import { chipFitsRail, circuitMinHeight, hiddenWireCount } from './circuitRail';
+import { circuitMinHeight, circuitOverflows, hiddenQubitWires } from './circuitRail';
 
 describe('circuitMinHeight', () => {
   it('guarantees four wires of a five-qubit circuit when the rail has room', () => {
@@ -20,34 +20,23 @@ describe('circuitMinHeight', () => {
   });
 });
 
-describe('hiddenWireCount', () => {
-  const box = { scrollTop: 0, clientHeight: 100, scrollHeight: 283 };
-
-  it('counts the wires clipped under the bottom edge', () => {
-    expect(hiddenWireCount(box, 5)).toBe(4);
+describe('hiddenQubitWires', () => {
+  it('counts only qubit wires below the visible bottom edge, never the classical register', () => {
+    // 5 qubits: wires at 24 + 52q (4px scroller padding). 200px visible shows q0..q3 (q3 at 180).
+    expect(hiddenQubitWires({ scrollTop: 0, visibleHeight: 200, scale: 1 }, 5)).toBe(1);
+    expect(hiddenQubitWires({ scrollTop: 0, visibleHeight: 400, scale: 1 }, 5)).toBe(0);
   });
 
-  it('is zero once scrolled to the end or when nothing overflows', () => {
-    expect(hiddenWireCount({ ...box, scrollTop: 183 }, 5)).toBe(0);
-    expect(hiddenWireCount({ ...box, scrollHeight: 100 }, 5)).toBe(0);
-  });
-
-  it('never claims more hidden wires than the circuit has below the first', () => {
-    expect(hiddenWireCount({ scrollTop: 0, clientHeight: 20, scrollHeight: 900 }, 3)).toBe(2);
+  it('follows the scroll position and the fit scale', () => {
+    expect(hiddenQubitWires({ scrollTop: 60, visibleHeight: 200, scale: 1 }, 5)).toBe(0);
+    expect(hiddenQubitWires({ scrollTop: 0, visibleHeight: 200, scale: 0.5 }, 5)).toBe(0);
   });
 });
 
-describe('chipFitsRail', () => {
-  it('keeps the chip on a tall rail', () => {
-    expect(chipFitsRail({ railHeight: 760, railWidth: 316, qubitCount: 5, blochCount: 5 })).toBe(true);
-  });
-
-  it('drops the chip on the short 900x700 rail so it never overlaps the Bloch spheres', () => {
-    expect(chipFitsRail({ railHeight: 435, railWidth: 316, qubitCount: 5, blochCount: 5 })).toBe(false);
-  });
-
-  it('keeps it before the rail is measured, and when there are no spheres to collide with', () => {
-    expect(chipFitsRail({ railHeight: 0, railWidth: 0, qubitCount: 5, blochCount: 5 })).toBe(true);
-    expect(chipFitsRail({ railHeight: 435, railWidth: 316, qubitCount: 2, blochCount: 0 })).toBe(true);
+describe('circuitOverflows', () => {
+  it('compares content with the whole pane, so showing the strip cannot flip the answer', () => {
+    expect(circuitOverflows(300, 280)).toBe(true);
+    expect(circuitOverflows(280, 280)).toBe(false);
+    expect(circuitOverflows(100, 280)).toBe(false);
   });
 });

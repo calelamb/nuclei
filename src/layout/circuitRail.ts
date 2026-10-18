@@ -1,8 +1,4 @@
-import { WIRE_SPACING } from '../components/circuit/gates';
-import { blochRailHeights } from './blochRail';
-
-/** What the histogram chip strip needs below the panels (the chip plus its padding). */
-export const HISTOGRAM_CHIP_RESERVE_PX = 96;
+import { PADDING, WIRE_SPACING } from '../components/circuit/gates';
 
 /** Header row, padding and one wire's breathing room around the wires themselves. */
 const CIRCUIT_CHROME_PX = 64;
@@ -23,21 +19,28 @@ export function circuitMinHeight(qubitCount: number, railHeight: number): number
   return Math.min(wanted, Math.floor(railHeight * CIRCUIT_MAX_SHARE));
 }
 
-export interface ScrollMetrics { scrollTop: number; clientHeight: number; scrollHeight: number }
+/** Vertical padding of the scrolling diagram box, above the first wire. */
+const SCROLLER_TOP_PAD_PX = 4;
+/** Half the height of a gate box: a wire counts as visible once its gate row clears the bottom edge. */
+const WIRE_HALF_HEIGHT_PX = 8;
 
-/** How many whole wires the bottom edge of the scrolled diagram is hiding. */
-export function hiddenWireCount(box: ScrollMetrics, qubitCount: number): number {
-  const below = box.scrollHeight - box.scrollTop - box.clientHeight;
-  if (below <= WIRE_SPACING / 2) return 0;
-  return Math.min(Math.max(0, qubitCount - 1), Math.max(1, Math.round(below / WIRE_SPACING)));
+export interface WireViewport { scrollTop: number; visibleHeight: number; scale: number }
+
+/** How many qubit wires (not the classical register) lie below the bottom edge of the scrolled diagram. */
+export function hiddenQubitWires(view: WireViewport, qubitCount: number): number {
+  const bottom = view.scrollTop + view.visibleHeight;
+  let hidden = 0;
+  for (let q = 0; q < qubitCount; q += 1) {
+    const rowBottom = SCROLLER_TOP_PAD_PX + (PADDING + q * WIRE_SPACING) * view.scale + WIRE_HALF_HEIGHT_PX;
+    if (rowBottom > bottom) hidden += 1;
+  }
+  return hidden;
 }
 
 /**
- * Whether the histogram chip strip still fits under the circuit and a one-row Bloch rail. When the rail is short
- * the chip steps aside rather than overlapping the spheres; its data stays in the Terminal and the Histogram tab.
+ * Whether the diagram is taller than the whole pane. Judged against the pane (scroller plus the
+ * "+N wires" strip) rather than the scroller, so showing the strip cannot change the answer.
  */
-export function chipFitsRail(input: { railHeight: number; railWidth: number; qubitCount: number; blochCount: number }): boolean {
-  if (input.railHeight <= 0) return true;
-  const blochMin = input.blochCount > 0 ? blochRailHeights(input.blochCount, input.railWidth).min : 0;
-  return input.railHeight >= circuitMinHeight(input.qubitCount, input.railHeight) + blochMin + HISTOGRAM_CHIP_RESERVE_PX;
+export function circuitOverflows(contentHeight: number, paneHeight: number): boolean {
+  return contentHeight > paneHeight;
 }

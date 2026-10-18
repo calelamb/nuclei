@@ -12,7 +12,7 @@ import { retryKernel } from '../../lib/kernelControl';
 import { usePlatform } from '../../platform/PlatformProvider';
 import { useEditorStore } from '../../stores/editorStore';
 import { visibleVizPanelIds } from '../../layout/vizPanels';
-import { chipFitsRail, circuitMinHeight } from '../../layout/circuitRail';
+import { circuitMinHeight } from '../../layout/circuitRail';
 import { useDisplaySnapshot } from '../../layout/useDisplaySnapshot';
 import { useElementSize } from '../../hooks/useElementSize';
 import { useResultStale } from '../../hooks/useResultStale';
@@ -92,10 +92,6 @@ export function VizZone({
   const { snapshot: circuitSnapshot } = useDisplaySnapshot();
   const [measureColumn, columnSize] = useElementSize<HTMLDivElement>();
   const blochCount = useSimulationStore((st) => st.result?.bloch_coords?.length ?? 0);
-  const chipFits = chipFitsRail({
-    railHeight: columnSize.height, railWidth: columnSize.width,
-    qubitCount: circuitSnapshot?.qubit_count ?? 1, blochCount,
-  });
   const circuitRevealStyle = {
     ...CIRCUIT_REVEAL_STYLE,
     minHeight: Math.max(96, circuitMinHeight(circuitSnapshot?.qubit_count ?? 1, columnSize.height)),
@@ -170,10 +166,11 @@ export function VizZone({
           onSelect={(id) => setActiveTab(projectRoot, id)}
         />
       )}
-      {chipFits && <div style={stale ? STALE_CHIP_STYLE : undefined} data-stale={stale ? 'true' : undefined}>{chip}</div>}
+      <div style={stale ? STALE_CHIP_STYLE : CHIP_STYLE} data-stale={stale ? 'true' : undefined}>{chip}</div>
     </div>
   );
 }
+const CHIP_STYLE = { flexShrink: 0 } as const;
 const STALE_CHIP_STYLE = { opacity: STALE_RESULT_OPACITY, flexShrink: 0 } as const;
 
 const COLUMN_STYLE = { width: '100%', height: '100%', minWidth: 0, display: 'flex', flexDirection: 'column' } as const;
