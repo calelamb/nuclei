@@ -27,11 +27,12 @@ class LabContext:
 
     def emit_threadsafe(self, payload: dict) -> None:
         """Send ``payload`` from a worker thread; never raises."""
+        coro = self.send_json(payload)
         try:
-            asyncio.run_coroutine_threadsafe(self.send_json(payload), self.loop)
+            asyncio.run_coroutine_threadsafe(coro, self.loop)
         except RuntimeError:
             # Event loop already closed (kernel shutting down).
-            pass
+            coro.close()
 
     def on_release(self, key: str, hook: Callable[[], None]) -> None:
         """Run ``hook`` when this connection closes (idempotent per key)."""
