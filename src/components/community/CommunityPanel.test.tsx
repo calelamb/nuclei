@@ -65,6 +65,7 @@ describe('ChallengeBoard with mock challenges', () => {
     expect(screen.queryByRole('button', { name: 'Start challenge' })).toBeNull();
     const practice = screen.getByRole('button', { name: 'Practice this challenge' });
     expect(practice.className).toContain('secondary');
+    expect(screen.queryByText(/Be the first/)).toBeNull();
   });
 
   it('keeps Start challenge as the primary action while a week is open', () => {

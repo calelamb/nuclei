@@ -165,7 +165,7 @@ export function ChallengeBoard() {
 
         {leaderboard.length === 0 ? (
           <p style={{ margin: 0, padding: 16, textAlign: 'center', fontSize: 12, color: colors.textMuted }}>
-            No submissions yet. Be the first.
+            {ended ? 'No submissions were recorded for this challenge.' : 'No submissions yet. Be the first.'}
           </p>
         ) : (
           <Table label="Leaderboard" dense>
