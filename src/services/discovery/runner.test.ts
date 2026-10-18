@@ -110,6 +110,7 @@ describe('budgets and early stop', () => {
     expect(run.stop_reason).toBe('early_stop');
     expect(run.generation).toBe(2);
     expect(run.stale_generations).toBe(2);
+    expect(run.message).toBe('Stopped early: no improvement in 2 generations (patience 2).');
   });
 
   it('keeps going when patience is 0', async () => {

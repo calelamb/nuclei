@@ -340,7 +340,11 @@ export function runDiscovery(
       if (!stopReason && patience > 0 && (run as RunRecord).stale_generations >= patience) stopReason = 'early_stop';
     }
     if (control.stopped) return haltFinish();
-    return finish(stopReason ?? 'generations');
+    const final = (run as RunRecord);
+    const earlyMessage = stopReason === 'early_stop'
+      ? `Stopped early: no improvement in ${final.stale_generations} generations (patience ${spec.search.early_stop_patience}).`
+      : null;
+    return finish(stopReason ?? 'generations', earlyMessage);
 
     // ── Generation ────────────────────────────────────────────────────
     async function runGeneration(g: number): Promise<{ interrupted: boolean; budgetStop: StopReason | null }> {
