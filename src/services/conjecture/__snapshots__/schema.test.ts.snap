@@ -1,0 +1,276 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`buildProposeTool > builds the forced tool from the kernel schema (snapshot) 1`] = `
+{
+  "description": "Propose 1 to 5 falsifiable conjectures about which circuit structures stay trainable.
+
+Each one is tested by the kernel on NEW circuits drawn from test_family, so test_family must realise feature_predicate.
+
+Features available to feature_predicate:
+n_layers (integer): Number of repeated layers.
+entangler (string): Two-qubit gate used (cz, cx, mixed, none).
+entangler_pattern (string): brick, ladder, ring, all_to_all, nearest_neighbor, long_range or none.
+rotation_axes (string): Axes of the parametric rotations, for example "YZ".
+params_per_qubit (number): Parameters divided by qubits.
+
+Quantities available to prediction:
+beta_upper95: Upper 95% bound of the exponential variance-decay rate beta.
+verdict: The scaling verdict (polynomial, exponential, inconclusive).
+variance_at_max_n: Gradient variance at the largest n.
+log2_dla_dimension: log2 of the dynamical Lie algebra dimension.",
+  "input_schema": {
+    "$defs": {
+      "predicate__node": {
+        "anyOf": [
+          {
+            "properties": {
+              "feature": {
+                "type": "string",
+              },
+              "op": {
+                "enum": [
+                  "==",
+                  "!=",
+                  "<",
+                  "<=",
+                  ">",
+                  ">=",
+                  "in",
+                ],
+              },
+              "value": {},
+            },
+            "required": [
+              "feature",
+              "op",
+              "value",
+            ],
+            "type": "object",
+          },
+          {
+            "properties": {
+              "all": {
+                "items": {
+                  "$ref": "#/$defs/predicate__node",
+                },
+                "type": "array",
+              },
+            },
+            "required": [
+              "all",
+            ],
+            "type": "object",
+          },
+          {
+            "properties": {
+              "any": {
+                "items": {
+                  "$ref": "#/$defs/predicate__node",
+                },
+                "type": "array",
+              },
+            },
+            "required": [
+              "any",
+            ],
+            "type": "object",
+          },
+        ],
+      },
+      "predicate__root": {
+        "anyOf": [
+          {
+            "required": [
+              "all",
+            ],
+          },
+          {
+            "required": [
+              "any",
+            ],
+          },
+        ],
+        "properties": {
+          "all": {
+            "items": {
+              "$ref": "#/$defs/predicate__node",
+            },
+            "minItems": 1,
+            "type": "array",
+          },
+          "any": {
+            "items": {
+              "$ref": "#/$defs/predicate__node",
+            },
+            "minItems": 1,
+            "type": "array",
+          },
+        },
+        "type": "object",
+      },
+    },
+    "properties": {
+      "conjectures": {
+        "items": {
+          "properties": {
+            "circuits": {
+              "maximum": 32,
+              "minimum": 5,
+              "type": "integer",
+            },
+            "feature_predicate": {
+              "$ref": "#/$defs/predicate__root",
+            },
+            "id": {
+              "description": "Short unique id such as "c1".",
+              "type": "string",
+            },
+            "n_range": {
+              "description": "[n_min, n_max], n_max at most 128.",
+              "items": {
+                "maximum": 128,
+                "minimum": 2,
+                "type": "integer",
+              },
+              "maxItems": 2,
+              "minItems": 2,
+              "type": "array",
+            },
+            "points": {
+              "maximum": 8,
+              "minimum": 4,
+              "type": "integer",
+            },
+            "prediction": {
+              "properties": {
+                "op": {
+                  "enum": [
+                    "==",
+                    "!=",
+                    "<",
+                    "<=",
+                    ">",
+                    ">=",
+                    "in",
+                  ],
+                  "type": "string",
+                },
+                "quantity": {
+                  "enum": [
+                    "beta_upper95",
+                    "verdict",
+                    "variance_at_max_n",
+                    "log2_dla_dimension",
+                  ],
+                  "type": "string",
+                },
+                "value": {
+                  "type": [
+                    "number",
+                    "string",
+                  ],
+                },
+              },
+              "required": [
+                "quantity",
+                "op",
+                "value",
+              ],
+              "type": "object",
+            },
+            "statement": {
+              "description": "One falsifiable sentence naming the structure, the quantity and the direction of the claim.",
+              "maxLength": 400,
+              "type": "string",
+            },
+            "test_family": {
+              "additionalProperties": false,
+              "properties": {
+                "entangler": {
+                  "enum": [
+                    "cz",
+                    "cx",
+                  ],
+                  "type": "string",
+                },
+                "family": {
+                  "const": "layered",
+                },
+                "layers": {
+                  "maximum": 64,
+                  "minimum": 1,
+                  "type": "integer",
+                },
+                "observable": {
+                  "type": "string",
+                },
+                "pattern": {
+                  "enum": [
+                    "brick",
+                    "ladder",
+                    "ring",
+                    "all_to_all",
+                  ],
+                  "type": "string",
+                },
+                "rotation_axes": {
+                  "enum": [
+                    "X",
+                    "Y",
+                    "Z",
+                    "XY",
+                    "YZ",
+                    "XZ",
+                    "XYZ",
+                  ],
+                  "type": "string",
+                },
+                "rotations_per_qubit_per_layer": {
+                  "maximum": 3,
+                  "minimum": 1,
+                  "type": "integer",
+                },
+                "variants": {
+                  "maximum": 8,
+                  "minimum": 1,
+                  "type": "integer",
+                },
+              },
+              "required": [
+                "family",
+                "rotation_axes",
+                "entangler",
+                "pattern",
+                "layers",
+                "rotations_per_qubit_per_layer",
+                "observable",
+                "variants",
+              ],
+              "type": "object",
+            },
+          },
+          "required": [
+            "id",
+            "statement",
+            "feature_predicate",
+            "prediction",
+            "test_family",
+            "n_range",
+            "circuits",
+            "points",
+          ],
+          "type": "object",
+        },
+        "maxItems": 5,
+        "minItems": 1,
+        "type": "array",
+      },
+    },
+    "required": [
+      "conjectures",
+    ],
+    "type": "object",
+  },
+  "name": "propose_conjectures",
+}
+`;

@@ -1,5 +1,6 @@
 import type { TrainabilityRequest, TrainabilityResponse } from './trainability';
 import type { DiscoveryRequest, DiscoveryResponse } from './discovery';
+import type { ConjectureRequest, ConjectureResponse } from './conjecture';
 import type {
   QecCampaignProgress,
   QecCampaignResult,
@@ -168,7 +169,8 @@ export type KernelMessage =
   // Protocol v1.3 (PRD 14) — Quantum AI Lab: Trainability Lab + Discovery
   // Engine. Additive; Research mode. Wire shapes live in their own modules.
   | TrainabilityRequest
-  | DiscoveryRequest;
+  | DiscoveryRequest
+  | ConjectureRequest;
 
 interface HardwareJobDTO {
   id: string;
@@ -234,7 +236,8 @@ export type KernelResponse =
   | { type: 'format_result'; formatted: string | null }
   // Protocol v1.3 (PRD 14) — Quantum AI Lab.
   | TrainabilityResponse
-  | DiscoveryResponse;
+  | DiscoveryResponse
+  | ConjectureResponse;
 
 /** One ruff diagnostic — 1-based positions, matching the kernel's `lint`
  * payload. `severity` is `'error'` only for syntax errors (E9xx). */
