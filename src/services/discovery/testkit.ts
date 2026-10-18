@@ -5,6 +5,7 @@
 
 import type {
   AstMutation,
+  DiscoveryAudit,
   DiscoveryEvaluation,
   DiscoveryEvaluatorInfo,
   DiscoverySpec,
@@ -89,6 +90,27 @@ export function makeEvaluation(patch: Partial<DiscoveryEvaluation> = {}): Discov
   };
 }
 
+export function makeAudit(patch: Partial<DiscoveryAudit> = {}): DiscoveryAudit {
+  return {
+    verdict: 'consistent',
+    evaluator_fitness: 1,
+    audit_fitness: 1,
+    gap: 0,
+    checks: [{ id: 'reparse', label: 'Re-parse from scratch', status: 'pass', detail: null }],
+    reasons: [],
+    evaluator: { kind: 'state_synthesis', version: '1.0.0', fingerprint: 'f'.repeat(64) },
+    audit_fingerprint: 'a'.repeat(64),
+    seed: 99,
+    isolation: 'process',
+    timings_ms: { sandbox: 2, audit: 5, total: 8 },
+    notes: null,
+    ...patch,
+  };
+}
+
+export type AuditMessage = Extract<KernelMessage, { type: 'discovery_audit' }>;
+export type Auditor = (message: AuditMessage) => Partial<DiscoveryAudit>;
+
 export type Scorer = (program: string, stage: DiscoveryStage, seed: number, id: string) => Partial<DiscoveryEvaluation>;
 
 export const defaultScorer: Scorer = (program, stage, seed) => {
@@ -118,9 +140,23 @@ export interface FakeKernel {
   release(): void;
   inFlight(): number;
   maxInFlight(): number;
+  /** Hold audit replies until `releaseAudits()`. */
+  holdAudits: { value: boolean };
+  releaseAudits(): void;
+  /** Peak of evaluations and audits in flight together. */
+  maxTotalInFlight(): number;
+  audits(): AuditMessage[];
 }
 
-export function createFakeKernel(options: { scorer?: Scorer; latencyMs?: number; mutate?: (program: string, seed: number) => AstMutation[] } = {}): FakeKernel {
+export interface FakeKernelOptions {
+  scorer?: Scorer;
+  latencyMs?: number;
+  mutate?: (program: string, seed: number) => AstMutation[];
+  /** Answers `discovery_audit`; default is a consistent verdict. */
+  auditor?: Auditor;
+}
+
+export function createFakeKernel(options: FakeKernelOptions = {}): FakeKernel {
   const scorer = options.scorer ?? defaultScorer;
   const handlers = new Set<(m: KernelResponse) => void>();
   const sent: KernelMessage[] = [];
@@ -128,6 +164,11 @@ export function createFakeKernel(options: { scorer?: Scorer; latencyMs?: number;
   const hold = { value: false };
   let active = 0;
   let peak = 0;
+  let auditActive = 0;
+  let totalPeak = 0;
+  const heldAudits: Array<() => void> = [];
+  const holdAudits = { value: false };
+  const cancelledAudits = new Set<string>();
   const cancelled = new Set<string>();
   const emit = (m: KernelResponse) => handlers.forEach((h) => h(m));
   const mutate =
@@ -140,6 +181,7 @@ export function createFakeKernel(options: { scorer?: Scorer; latencyMs?: number;
   const respond = (message: Extract<KernelMessage, { type: 'discovery_evaluate' }>) => {
     active += 1;
     peak = Math.max(peak, active);
+    totalPeak = Math.max(totalPeak, active + auditActive);
     const reply = () => {
       active -= 1;
       const key = `${message.run_id}/${message.candidate_id}`;
@@ -159,6 +201,20 @@ export function createFakeKernel(options: { scorer?: Scorer; latencyMs?: number;
     else setTimeout(reply, options.latencyMs ?? 0);
   };
 
+  const respondAudit = (message: AuditMessage) => {
+    auditActive += 1;
+    totalPeak = Math.max(totalPeak, active + auditActive);
+    setTimeout(() => emit({ type: 'discovery_audit_accepted', run_id: message.run_id, candidate_id: message.candidate_id, queue_position: 0 }), 0);
+    const reply = () => {
+      auditActive -= 1;
+      if (cancelledAudits.has(message.run_id)) return;
+      const partial = (options.auditor ?? (() => ({})))(message);
+      emit({ type: 'discovery_audit_result', run_id: message.run_id, candidate_id: message.candidate_id, audit: makeAudit({ seed: message.seed, evaluator_fitness: message.evaluation.fitness, ...partial }) });
+    };
+    if (holdAudits.value) heldAudits.push(reply);
+    else setTimeout(reply, options.latencyMs ?? 0);
+  };
+
   const session: FakeKernel['session'] = {
     send(message: KernelMessage) {
       sent.push(message);
@@ -168,6 +224,11 @@ export function createFakeKernel(options: { scorer?: Scorer; latencyMs?: number;
       else if (message.type === 'discovery_mutate') {
         const mutations = mutate(message.program, message.seed);
         setTimeout(() => emit({ type: 'discovery_mutations', mutations }), 0);
+      } else if (message.type === 'discovery_audit') respondAudit(message);
+      else if (message.type === 'discovery_audit_cancel') {
+        cancelledAudits.add(message.run_id);
+        heldAudits.splice(0).forEach((reply) => reply());
+        setTimeout(() => emit({ type: 'discovery_audit_cancelled', run_id: message.run_id, candidate_id: message.candidate_id ?? null, cancelled: 1 }), 0);
       } else if (message.type === 'discovery_cancel') {
         cancelled.add(message.run_id);
         held.splice(0).forEach((reply) => reply());
@@ -188,6 +249,13 @@ export function createFakeKernel(options: { scorer?: Scorer; latencyMs?: number;
     },
     inFlight: () => active,
     maxInFlight: () => peak,
+    holdAudits,
+    releaseAudits: () => {
+      holdAudits.value = false;
+      heldAudits.splice(0).forEach((reply) => reply());
+    },
+    maxTotalInFlight: () => totalPeak,
+    audits: () => sent.filter((m): m is AuditMessage => m.type === 'discovery_audit'),
   };
 }
 

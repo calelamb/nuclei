@@ -15,7 +15,7 @@ import { computeKpis } from '../../services/discovery/kpis';
 import { createRunView } from '../../services/discovery/runView';
 import { useDiscoveryStore, type DiscoveryState } from '../../stores/discoveryStore';
 import { useProjectStore } from '../../stores/projectStore';
-import type { RunRecord } from '../../types/discovery';
+import type { CandidateRecord, RunRecord } from '../../types/discovery';
 import { __resetDiscoveryBoot } from './useDiscoveryBoot';
 
 export const PROJECT_ROOT = '/proj';
@@ -31,12 +31,15 @@ type Seed = Partial<Pick<DiscoveryState, 'liveRunIds' | 'pendingActions' | 'erro
   confirmed?: boolean;
   select?: 'run' | 'definition' | 'none';
   candidateId?: string | null;
+  /** Replace the fixture candidates. */
+  candidates?: CandidateRecord[];
 };
 
 /** Seed the store with the fixture run (and its definition) as if loaded from disk. */
 export function seedPopulated(seed: Seed = {}): void {
   const run = fixtureRun({ ...(seed.confirmed ? { confirmation: fixtureConfirmation() } : {}), ...seed.run });
-  const view = createRunView(run, fixtureCandidates());
+  const candidates = seed.candidates ?? fixtureCandidates();
+  const view = createRunView(run, candidates);
   const select = seed.select ?? 'run';
   useProjectStore.setState({ projectRoot: PROJECT_ROOT });
   useDiscoveryStore.setState({
@@ -45,7 +48,7 @@ export function seedPopulated(seed: Seed = {}): void {
     evaluators: [FIXTURE_EVALUATOR],
     runsByDefinition: { [FIXTURE_DEFINITION_FILE]: [run] },
     views: { [FIXTURE_RUN_ID]: view },
-    kpis: { [FIXTURE_RUN_ID]: computeKpis(run, fixtureCandidates()) },
+    kpis: { [FIXTURE_RUN_ID]: computeKpis(run, candidates) },
     liveRunIds: seed.liveRunIds ?? [],
     pendingActions: seed.pendingActions ?? {},
     error: seed.error ?? null,

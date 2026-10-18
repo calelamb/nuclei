@@ -48,6 +48,34 @@ async function installStubKernel(page: Page): Promise<void> {
             reply({ type: 'discovery_mutations', mutations });
           }
           if (m.type === 'discovery_cancel') reply({ type: 'discovery_cancelled', run_id: m.run_id, candidate_id: null, cancelled: 0 });
+          if (m.type === 'discovery_audit_cancel') reply({ type: 'discovery_audit_cancelled', run_id: m.run_id, candidate_id: null, cancelled: 0 });
+          if (m.type === 'discovery_audit') {
+            // Red Queen stub: the audit rejects candidate c-0002 and agrees with every other score.
+            const exploit = m.candidate_id === 'c-0002';
+            reply({ type: 'discovery_audit_accepted', run_id: m.run_id, candidate_id: m.candidate_id, queue_position: 0 });
+            reply({
+              type: 'discovery_audit_result',
+              run_id: m.run_id,
+              candidate_id: m.candidate_id,
+              audit: {
+                verdict: exploit ? 'exploit' : 'consistent',
+                evaluator_fitness: 1.5,
+                audit_fitness: exploit ? 0.3 : 1.5,
+                gap: exploit ? 1.2 : 0,
+                checks: [
+                  { id: 'reparse', label: 'Re-parse from scratch', status: 'pass', detail: null },
+                  { id: 'determinism', label: 'Deterministic under a fresh seed', status: exploit ? 'fail' : 'pass', detail: exploit ? 'observable flipped under seed 99' : null },
+                ],
+                reasons: exploit ? ['determinism holds only under the evaluator seed'] : [],
+                evaluator: { kind: 'state_synthesis', version: '1.2.0', fingerprint: 'ab12'.repeat(16) },
+                audit_fingerprint: 'cd34'.repeat(16),
+                seed: 99,
+                isolation: 'sandbox-exec',
+                timings_ms: { sandbox: 3, audit: 9, total: 12 },
+                notes: null,
+              },
+            });
+          }
           if (m.type === 'discovery_evaluate') {
             const n = String(m.program).split('\n').length;
             const rejected = n % 7 === 0;
@@ -147,4 +175,80 @@ test('@discovery new discovery wizard offers the Frontier research instrument', 
   await form.getByRole('textbox', { name: 'Name' }).fill('frontier e2e');
   await form.getByRole('button', { name: 'Create discovery' }).click();
   await expect(page.getByText(/Is every trainable ansatz classically simulable\?/).first()).toBeVisible();
+});
+
+/**
+ * Red Queen: the stubbed Anthropic API proposes a harmless edit per call (no
+ * network involved) and the stubbed kernel's audit rejects one candidate.
+ */
+async function installStubAnthropic(page: Page): Promise<void> {
+  await page.addInitScript(() => localStorage.setItem('nuclei-dirac-api-key', 'sk-ant-e2e-stub'));
+  let calls = 0;
+  await page.route('https://api.anthropic.com/v1/messages', async (route) => {
+    calls += 1;
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        model: 'claude-haiku-4-5-20251001',
+        usage: { input_tokens: 100, output_tokens: 20 },
+        // The stub kernel's program_key includes the program length, so each call grows the comment to stay distinct.
+        content: [
+          {
+            type: 'tool_use',
+            id: `toolu_${calls}`,
+            name: 'propose_program_edit',
+            input: {
+              rationale: 'Probe whether a trailing comment changes the evaluator score.',
+              expected_effect: 'None under an honest evaluator.',
+              edits: [{ search: 'qc.x(0)', replace: `qc.x(0)  # rq probe ${'x'.repeat(calls)}` }],
+            },
+          },
+        ],
+      }),
+    });
+  });
+}
+
+test('@discovery red queen mode surfaces an exploit and exports it as a regression fixture', async ({ page }) => {
+  await installStubKernel(page);
+  await installStubAnthropic(page);
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await page.goto(FIXTURE_URL);
+  await page.getByRole('button', { name: 'Discovery Engine' }).click();
+  await page.getByRole('region', { name: 'Discovery Engine sidebar' }).getByRole('button', { name: /New discovery/ }).click();
+
+  const form = page.getByRole('form', { name: 'New discovery' });
+  await form.getByRole('radio', { name: /W-state synthesis/ }).click();
+  await form.getByRole('textbox', { name: 'Name' }).fill('rq e2e');
+  const evaluations = form.getByLabel('Max evaluations');
+  await evaluations.fill('10');
+  await evaluations.blur();
+  await form.getByRole('tab', { name: 'Red Queen (audit the evaluator)' }).click();
+  await expect(form.getByText(/security testing of Nuclei/)).toBeVisible();
+  await form.getByLabel('Audit when').selectOption('all');
+  await form.getByRole('button', { name: 'Create discovery' }).click();
+
+  const lab = page.getByRole('region', { name: 'Discovery Engine', exact: true });
+  await expect(lab.getByText('Red Queen mode').first()).toBeVisible();
+  await lab.getByRole('button', { name: 'Start run' }).click();
+
+  const header = lab.getByRole('region', { name: 'Run header' });
+  await expect(header.getByText('Red Queen', { exact: true })).toBeVisible();
+  await expect(header.getByText('Completed')).toBeVisible({ timeout: 60_000 });
+  await expect(lab.getByRole('group', { name: 'Run KPIs' }).getByText('Exploits')).toBeVisible();
+
+  await lab.getByRole('tab', { name: /^Guardrails/ }).click();
+  const lane = lab.getByTestId('exploits-found-lane');
+  await expect(lane).toHaveAttribute('data-state', 'filled');
+  const card = lane.getByRole('listitem', { name: 'Exploit c-0002' });
+  await expect(card).toContainText('determinism holds only under the evaluator seed');
+  await expect(card).toContainText('Deterministic under a fresh seed');
+  await card.getByRole('button', { name: 'Export as regression fixture' }).click();
+  await expect(card.getByText(/Wrote .*rq-.*-c-0002\.json/)).toBeVisible();
+
+  await card.getByRole('button', { name: 'Open candidate c-0002' }).click();
+  const drawer = page.getByRole('dialog', { name: 'Candidate c-0002' });
+  await expect(drawer.getByRole('region', { name: 'Audit' })).toContainText('Exploit');
+  await expect(drawer.getByRole('button', { name: 'Run audit' })).toBeVisible();
 });
