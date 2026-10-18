@@ -392,7 +392,9 @@ class ParamCircuit:
   np.ndarray`, and, for single-angle parametric gates, `generator(qubits) ->
   PauliSum` with the convention **U(θ) = exp(−i θ G)**. For RX,
   G = X/2. For CRZ, G = (I − Z_c)/2 ⊗ Z_t/2 = Z_t/4 − Z_c Z_t/4. For P,
-  G = (I − Z)/2. For CP, G = (I − Z_c − Z_t + Z_c Z_t)/4. Identity
+  G = (Z − I)/2 (so that exp(−iθG) = diag(1, e^{iθ}) = P(θ)). For CP,
+  G = −(I − Z_c − Z_t + Z_c Z_t)/4. (Corrected 2026-10-18: the earlier
+  signs produced P(−θ).) Identity
   components are kept for simulation and ignored for the DLA.
 - Errors are `IrError(code, message)` with codes `unsupported_gate`,
   `nonlinear_parameter`, `too_many_qubits`, `mid_circuit_measurement`,
