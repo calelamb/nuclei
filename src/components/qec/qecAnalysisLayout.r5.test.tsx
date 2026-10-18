@@ -2,6 +2,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { render, cleanup, screen } from '@testing-library/react';
 import { QecAnalysisView } from './QecAnalysisView';
+import { QecCampaignActions } from './QecCampaignActions';
 import { useQecCampaignStore } from '../../stores/qecCampaignStore';
 
 vi.mock('../../platform/buildTarget', () => ({ isWebBuild: () => true }));
@@ -30,5 +31,21 @@ describe('QecAnalysisView layout (qec-r-58, qec-r-64)', () => {
       .filter((h) => Number.isFinite(h));
     expect(heights.length).toBeGreaterThanOrEqual(2);
     heights.forEach((h) => expect(h).toBeGreaterThanOrEqual(320));
+  });
+
+  it('reserves room for the plot header, controls and legend so the drawing area is not crushed', () => {
+    useQecCampaignStore.getState().loadFromCsv([HEADER, ...csv].join('\n'), 'd.csv');
+    render(<QecAnalysisView />);
+    const first = screen.getByTestId('qec-analysis-scroll').querySelector<HTMLElement>(':scope > div[style*="min-height"]');
+    expect(parseInt(first?.style.minHeight ?? '0', 10)).toBeGreaterThanOrEqual(440);
+  });
+
+  it('drops the header Open CSV button from the workbench card before data loads (qec-r-64)', () => {
+    render(<QecCampaignActions embedded />);
+    expect(screen.queryByRole('button', { name: /^Open CSV/ })).toBeNull();
+    useQecCampaignStore.getState().loadFromCsv([HEADER, ...csv].join('\n'), 'd.csv');
+    cleanup();
+    render(<QecCampaignActions embedded />);
+    expect(screen.getByRole('button', { name: /^Open CSV/ })).toBeTruthy();
   });
 });

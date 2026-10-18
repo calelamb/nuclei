@@ -19,6 +19,8 @@ import { useCsvDrop } from './useCsvDrop';
 import { TYPOGRAPHY } from '../../styles/tokens';
 /** Opening the mapping editor must never squeeze the figure below this; the column scrolls instead. */
 const PLOT_MIN_HEIGHT = 320;
+/** Stacked with the table the section also holds the title bar, controls, legend and footnote: ~240px of drawing area needs this much. */
+const PLOT_SECTION_MIN_HEIGHT = 440;
 /** About eight decoder rows plus the sticky header: below this the column scrolls instead of crushing the table. */
 const TABLE_MIN_HEIGHT = 390;
 type AnalysisTab = 'plot' | 'lambda' | 'decoders';
@@ -93,7 +95,7 @@ export function QecAnalysisView({ embedded = false, actionsInHeader = false }: {
           </span>
         )}
         <div style={{ flex: 1 }} />
-        <QecCampaignActions embedded={embedded} showOpenCsv={!awaitingData} />
+        <QecCampaignActions embedded={embedded} />
       </div>
       )}
       {csvLoading && (
@@ -165,7 +167,7 @@ export function QecAnalysisView({ embedded = false, actionsInHeader = false }: {
             </>
           ) : (
             <>
-              <div style={{ flex: hasData ? '2 1 0' : '1 1 0', minHeight: PLOT_MIN_HEIGHT, borderBottom: hasData ? `1px solid ${colors.border}` : undefined }}>
+              <div style={{ flex: hasData ? '2 1 0' : '1 1 0', minHeight: hasData ? PLOT_SECTION_MIN_HEIGHT : PLOT_MIN_HEIGHT, borderBottom: hasData ? `1px solid ${colors.border}` : undefined }}>
                 <ThresholdPanel bare={awaitingData} />
               </div>
               {/* Until data loads there is nothing to compare: one empty state, not one per panel. */}

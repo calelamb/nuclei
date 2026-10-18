@@ -18,8 +18,13 @@ import { ICON_SIZE, ICON_STROKE } from '../../styles/tokens';
  * `embedded` hides Run when there is nothing to run (the workbench has no
  * experiment picker, so a dead button would only add noise).
  */
-export function QecCampaignActions({ embedded = false, showOpenCsv = true }: { embedded?: boolean; showOpenCsv?: boolean }) {
+export function QecCampaignActions({ embedded = false }: { embedded?: boolean }) {
   const running = useQecCampaignStore((s) => s.running);
+  const resumable = useQecCampaignStore((s) => s.resumable);
+  const hasData = useQecCampaignStore((s) => Object.keys(s.rowsByStrongId).length > 0);
+  const hasCsvSource = useQecCampaignStore((s) => s.csvImport !== null);
+  // Before any data the empty state's drop zone is the one way in; a header button would be a second.
+  const showOpenCsv = hasData || hasCsvSource || running || Boolean(resumable);
   const statsCsv = useQecCampaignStore((s) => s.statsCsv);
   const projectRoot = useProjectStore((s) => s.projectRoot);
   const selectedFileName = useExperimentUiStore((s) => s.selectedExperimentFileName);

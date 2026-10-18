@@ -49,10 +49,11 @@ describe('HardwarePanel on desktop (research-r-04)', () => {
     expect(within(row).getByRole('button', { name: 'Retry' })).toBeTruthy();
   });
 
-  it('keeps each provider on one row: name, status, and a Configure icon for a provider that needs a token', () => {
+  it('keeps the provider name readable first: wraps the status instead of truncating the name, and offers a Configure icon', () => {
     render(<PlatformProvider bridge={desktop}><HardwarePanel /></PlatformProvider>);
     const row = screen.getByText('IBM Quantum').parentElement?.parentElement as HTMLElement;
-    expect(row.style.flexWrap).not.toBe('wrap');
+    expect(row.style.flexWrap).toBe('wrap');
+    expect((screen.getByText('IBM Quantum').parentElement as HTMLElement).style.minWidth).toBe('11ch');
     expect(within(row).getByRole('button', { name: 'Configure IBM Quantum' })).toBeTruthy();
   });
 });
