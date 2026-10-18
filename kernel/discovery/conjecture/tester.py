@@ -207,6 +207,25 @@ def _select_circuits(conj, seed, cancel) -> tuple[list[tuple[int, dict, dict]], 
     return chosen, {"attempts": attempts, "accepted": len(chosen), "rejected": rejected, "cap": cap}
 
 
+def tested_n_max(conj: dict[str, Any], evidence: list[dict[str, Any]]) -> int:
+    """The largest qubit count that was actually tested (0 when nothing was).
+
+    ``n_values`` is the *plan*; with partial evidence (cancel, crash, budget) the plan overstates the
+    reach.  A point counts when it produced a variance; a DLA-only prediction is judged at the DLA probe
+    size, so that is the n it reaches.
+    """
+    dla_only = conj["prediction"]["quantity"] == "log2_dla_dimension"
+    reached = 0
+    for item in evidence:
+        if dla_only:
+            dla = item.get("dla") or {}
+            if dla.get("log2_interval") is not None:
+                reached = max(reached, int(dla["probe_n"]))
+        else:
+            reached = max([reached, *(int(p["n_qubits"]) for p in item.get("points", []) if p.get("error") is None)])
+    return reached
+
+
 def assemble_result(conj: dict[str, Any], evidence: list[dict[str, Any]], *, seed: int, ns: list[int],
                     resampling: dict[str, Any], stop_reason: str | None, elapsed_ms: int) -> dict[str, Any]:
     """Build the result dict from the evidence so far (also used for partial results)."""
@@ -218,7 +237,8 @@ def assemble_result(conj: dict[str, Any], evidence: list[dict[str, Any]], *, see
             counterexamples.append({k: e[k] for k in ("circuit_index", "variant_id", "family_params", "features",
                                                       "regenerate", "points", "fit", "quantity", "reason")}
                                    | {"ir": ir, "ir_n_qubits": ir_n})
-    total, n_max, text = len(evidence), ns[-1], prediction_text(conj["prediction"])
+    total, n_max, text = len(evidence), tested_n_max(conj, evidence), prediction_text(conj["prediction"])
+    reach = f"up to n = {n_max}" if n_max else "at no qubit count"
     reasons: list[str] = []
     if stop_reason:
         reasons.append(stop_reason)
@@ -229,7 +249,7 @@ def assemble_result(conj: dict[str, Any], evidence: list[dict[str, Any]], *, see
                    f"First counterexample: {first['variant_id']} (see counterexamples).")
     elif not stop_reason and total == conj["circuits"] and tally[MEETS] == total:
         verdict = "supported"
-        summary = (f"Conjecture supported on {total} held-out circuits up to n = {n_max}: '{text}' held for every "
+        summary = (f"Conjecture supported on {total} held-out circuits {reach}: '{text}' held for every "
                    "circuit within its 95% interval. This is evidence on sampled circuits, not a guarantee.")
     else:
         verdict = "inconclusive"
@@ -238,12 +258,13 @@ def assemble_result(conj: dict[str, Any], evidence: list[dict[str, Any]], *, see
         if not stop_reason and total < conj["circuits"]:
             reasons.append(f"only {total} of {conj['circuits']} circuits were tested")
         summary = (f"Inconclusive: {'; '.join(reasons) or 'no decisive evidence'}. Of {total} held-out circuits "
-                   f"tested up to n = {n_max}, {tally[MEETS]} met '{text}', {tally[INDETERMINATE]} were "
+                   f"tested {reach}, {tally[MEETS]} met '{text}', {tally[INDETERMINATE]} were "
                    "indeterminate.")
     return {
         "conjecture_id": conj["id"], "verdict": verdict, "summary": summary, "reasons": reasons,
         "partial": bool(stop_reason), "tally": tally, "n_circuits_requested": conj["circuits"],
         "n_circuits_tested": total, "n_range": conj["n_range"], "n_values": ns, "n_max_tested": n_max,
+        "n_max_planned": ns[-1],
         "counterexamples": counterexamples, "evidence": evidence, "resampling": resampling, "seed": seed,
         "timings": {"elapsed_ms": elapsed_ms}, "conjecture": conj,
         # Honesty principle 7: every verdict names the exact tester code that produced it.
