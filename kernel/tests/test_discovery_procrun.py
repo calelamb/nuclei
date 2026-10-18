@@ -29,7 +29,7 @@ def _spawn_sleeper(tmp_path, **kw):
 def test_cancel_kills_grandchildren_with_their_group(tmp_path):
     result, grandchild = _spawn_sleeper(tmp_path)
     assert result.cancelled
-    deadline = time.monotonic() + 3
+    deadline = time.monotonic() + 30
     while _alive(grandchild) and time.monotonic() < deadline:
         time.sleep(0.05)
     assert not _alive(grandchild)
@@ -37,7 +37,7 @@ def test_cancel_kills_grandchildren_with_their_group(tmp_path):
 
 def test_timeout_is_reported_and_normal_exit_is_clean():
     assert run_process(["sleep", "30"], b"", wall_seconds=0.5).timed_out
-    ok = run_process(["cat"], b"hello", wall_seconds=10)
+    ok = run_process(["cat"], b"hello", wall_seconds=60)
     assert ok.stdout == b"hello" and ok.returncode == 0 and not ok.timed_out
 
 

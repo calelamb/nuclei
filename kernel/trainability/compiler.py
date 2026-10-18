@@ -25,7 +25,7 @@ from __future__ import annotations
 import threading
 import time
 from collections import OrderedDict
-from typing import Any
+from typing import Any, Callable
 
 import numpy as np
 
@@ -55,6 +55,9 @@ _CACHE_SIZE = 32
 _MAX_OUTPUT_BYTES = 4 << 30
 _cache: "OrderedDict[tuple[str, str], KernelProgram]" = OrderedDict()
 _cache_lock = threading.Lock()
+
+
+CostateFn = Callable[[Any], tuple[Any, Any]]
 
 
 class KernelProgram:
@@ -187,17 +190,46 @@ class KernelProgram:
         """Batched adjoint: ``(values (B,), grads (B, m))``."""
         v = self._check_values(values)
         plan = self._plan(observable)
-        fn = self._jitted(("vag", observable), lambda vc, s0: self._vag_chunk(vc, plan, s0))
-        parts = self._run(fn, v, initial)
+        fn = self._jitted(
+            ("vag", observable), lambda vc, s0: self._adjoint_chunk(vc, s0, self._pauli_costate(plan))
+        )
+        return self._collect_vag(self._run(fn, v, initial), v.shape[0])
+
+    def value_and_grad_costate(
+        self, values: Any, costate_fn: CostateFn, initial: Any = None
+    ) -> tuple[np.ndarray, np.ndarray]:
+        """Batched adjoint sweep for a caller-defined real objective.
+
+        ``costate_fn`` maps the batched final state ``psi`` (``(B, 2**n)``, backend
+        array) to ``(value (B,), lam (B, 2**n))`` where ``lam = dvalue/d<psi|``
+        up to the compiler's convention: for ``value = <psi|O|psi>`` it is
+        ``lam = O psi`` (see :meth:`value_and_grad`). The method returns
+        ``(value (B,), grad (B, m))`` using the same per-op backward sweep. The
+        callback should use array methods of ``psi`` (``.conj()``, ``.sum``) so it
+        stays backend-neutral; it is invoked once per memory chunk and is never jitted.
+        """
+        v = self._check_values(values)
+        parts = self._run(lambda vc, s0: self._adjoint_chunk(vc, s0, costate_fn), v, initial)
+        return self._collect_vag(parts, v.shape[0])
+
+    def _collect_vag(self, parts: list[Any], batch: int) -> tuple[np.ndarray, np.ndarray]:
         vals = np.concatenate([self._bk.to_numpy(p[0]) for p in parts])
         grads = np.concatenate([self._bk.to_numpy(p[1]) for p in parts], axis=0)
-        return vals, grads.reshape(v.shape[0], self.n_params)
+        return vals, grads.reshape(batch, self.n_params)
 
-    def _vag_chunk(self, v: Any, plan: ObservablePlan, s0: Any):
+    def _pauli_costate(self, plan: ObservablePlan) -> CostateFn:
+        bk = self._bk
+
+        def costate(s: Any) -> tuple[Any, Any]:
+            lam = plan.apply(bk, s)
+            return bk.xp.sum(s.real * lam.real + s.imag * lam.imag, axis=1), lam
+
+        return costate
+
+    def _adjoint_chunk(self, v: Any, s0: Any, costate_fn: CostateFn):
         bk = self._bk
         s, auxs = self._forward(v, s0, True)
-        lam = plan.apply(bk, s)
-        value = bk.xp.sum(s.real * lam.real + s.imag * lam.imag, axis=1)
+        value, lam = costate_fn(s)
         grad = bk.xp.zeros((v.shape[0], self.n_params), dtype=bk.xp.float64)
         phi = s
         first = self._first_param_op

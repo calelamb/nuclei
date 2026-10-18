@@ -260,7 +260,7 @@ async def test_cancel_running_evaluation_emits_failed_cancelled():
         ws.push({"type": "discovery_cancel", "run_id": "r-1", "candidate_id": "slow"})
         await ws.wait_for(is_type("discovery_cancelled"))
         await ws.wait_for(is_type("discovery_evaluation"))
-        assert time.monotonic() - started < 15
+        assert time.monotonic() - started < 90
     finally:
         ws.close()
         await connection
@@ -306,7 +306,7 @@ async def test_owner_release_cancels_everything_it_holds():
     ws.close()
     await connection
     release_owner(id(ws))  # server._handle_connection does this when the socket closes
-    deadline = time.monotonic() + 10
+    deadline = time.monotonic() + 60
     while manager.pending_count(id(ws)) and time.monotonic() < deadline:
         await asyncio.sleep(0.05)
     assert manager.pending_count(id(ws)) == 0

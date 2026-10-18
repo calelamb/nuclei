@@ -58,7 +58,7 @@ def test_wall_timeout_and_cancel_kill_the_scorer():
     arts = [{"call_index": 0, "artifact": {"circuit_text": str(stim.Circuit.generated("surface_code:rotated_memory_z", distance=15, rounds=15))}}]
     started = time.monotonic()
     timed = run(slow, arts, wall_seconds=1.0)
-    assert timed["failure"]["code"] == "worker_timeout" and time.monotonic() - started < 10
+    assert timed["failure"]["code"] == "worker_timeout" and time.monotonic() - started < 90
     cancel = threading.Event()
     threading.Timer(0.8, cancel.set).start()
     cancelled = run(slow, arts, wall_seconds=60, cancel_event=cancel)

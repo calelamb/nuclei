@@ -4,9 +4,9 @@
 differentiate it directly. The compiler's adjoint recursion only needs a
 "co-state" ``lam = O |psi>``; for the rank-one projector ``O = |t><t|`` that is
 ``lam = <t|psi> |t>``. We run the compiler's own forward pass and backward
-sweep with that ``lam`` (the same per-op ``backward`` calls ``_vag_chunk``
-makes), so every gate type, fused diagonal op and shared parameter is handled
-exactly as for Pauli observables:
+sweep with that ``lam`` via the public ``KernelProgram.value_and_grad_costate``,
+so every gate type, fused diagonal op and shared parameter is handled exactly
+as for Pauli observables:
 
     dF/dtheta_j = 2 Im sum_ops <lam| G |phi>        (the compiler's formula)
 
@@ -28,29 +28,14 @@ def fidelity_value_and_grad(
     program: KernelProgram, values: np.ndarray, target: np.ndarray
 ) -> tuple[np.ndarray, np.ndarray]:
     """Batched ``(F (B,), dF/dtheta (B, m))`` for ``values`` of shape ``(B, m)``."""
-    v = program._check_values(values)
-    bk = program._bk
-    xp = bk.xp
-    target_dev = bk.asarray(np.asarray(target, dtype=np.complex128))
+    target_c = np.asarray(target, dtype=np.complex128)
+    target_conj = np.conj(target_c)
 
-    def chunk(vc: Any, s0: Any):
-        state, auxs = program._forward(vc, s0, True)
-        overlap = xp.sum(xp.conj(target_dev)[None, :] * state, axis=1)
-        lam = overlap[:, None] * target_dev[None, :]
-        value = xp.abs(overlap) ** 2
-        grad = xp.zeros((vc.shape[0], program.n_params), dtype=xp.float64)
-        phi = state
-        for k in range(len(program.ops) - 1, program._first_param_op - 1, -1):
-            op = program.ops[k]
-            phi, lam, dgrad = op.backward(bk, phi, lam, vc, auxs[k])
-            if dgrad is not None and op.param_idx.size:
-                grad = bk.add_at_cols(grad, op.param_idx, dgrad)
-        return value, grad
+    def costate(psi: Any) -> tuple[Any, Any]:
+        overlap = (target_conj[None, :] * psi).sum(axis=1)
+        return abs(overlap) ** 2, overlap[:, None] * target_c[None, :]
 
-    parts = program._run(chunk, v, None)
-    values_out = np.concatenate([bk.to_numpy(p[0]) for p in parts])
-    grads_out = np.concatenate([bk.to_numpy(p[1]) for p in parts], axis=0)
-    return values_out, grads_out.reshape(v.shape[0], program.n_params)
+    return program.value_and_grad_costate(values, costate)
 
 
 def fidelity_from_states(states: np.ndarray, target: np.ndarray) -> np.ndarray:

@@ -92,7 +92,15 @@ CONFIG_SCHEMA: dict[str, Any] = {
             "properties": {
                 "enabled": {"type": "boolean"},
                 "samples": {"type": "integer", "minimum": 2, "maximum": 1024},
-                "min_variance": {"type": "number", "minimum": 0, "maximum": 1},
+                "min_variance": {
+                    "type": "number", "minimum": 0, "maximum": 1,
+                    "description": (
+                        "Reject ansatzes whose mean initial gradient variance is below this. "
+                        "The 1e-5 default only catches severe plateaus: a deep 2-design-like global "
+                        "cost (Z on every qubit) measures about 1.7e-3 at n=8 and 4.6e-4 at n=10, "
+                        "far above it. Raise it (e.g. 1e-3) to be stricter at small n."
+                    ),
+                },
             },
         },
         "max_parameters": {"type": "integer", "minimum": 1, "maximum": 1024},
@@ -140,6 +148,13 @@ def _has_parameters_check(holder: CircuitHolder) -> tuple[str, str | None]:
 def _prefilter_check(
     holder: CircuitHolder, hamiltonian: PauliSum, config: dict[str, Any], seed: int
 ) -> tuple[str, str | None]:
+    """Reject ansatzes with a barren plateau at initialization.
+
+    The default ``min_variance`` (1e-5) is deliberately lax and only catches severe
+    plateaus. Reference values (deep hardware-efficient ansatz, uniform init, mean
+    over parameters): a global cost Z^n has variance ~1.7e-3 at n=8 and ~4.6e-4 at
+    n=10, i.e. it passes the default even though it decays as ~2^-n.
+    """
     settings = config["trainability_prefilter"]
     if not settings["enabled"]:
         return PASS, "prefilter disabled by config"

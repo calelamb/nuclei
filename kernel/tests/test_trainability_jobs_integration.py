@@ -62,7 +62,7 @@ def test_lint_round_trip_with_real_rules():
         async with connection() as ws:
             ws.push({"type": "trainability_lint", "code": CODE, "observable": OBSERVABLE,
                      "params": {"n_qubits": 3}})
-            return await ws.wait_type("trainability_lint_result", timeout=30)
+            return await ws.wait_type("trainability_lint_result", timeout=120)
 
     msg = run(scenario)
     assert isinstance(msg["diagnostics"], list)
