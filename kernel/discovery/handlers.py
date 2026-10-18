@@ -155,6 +155,14 @@ async def handle(msg: dict[str, Any], ctx) -> None:
             await _cancel(msg, ctx)
         elif msg_type == "discovery_mutate":
             await _mutate(msg, ctx)
+        elif isinstance(msg_type, str) and msg_type.startswith("discovery_audit"):
+            # Red Queen mode (addendum §F): independent audits of scored artifacts.
+            from kernel.discovery.audits.handlers import handle as handle_audit
+            await handle_audit(msg, ctx)
+        elif isinstance(msg_type, str) and msg_type.startswith("discovery_conjecture"):
+            # Conjecture Engine (addendum §G): held-out tests of proposed conjectures.
+            from kernel.discovery.conjecture.handlers import handle as handle_conjecture
+            await handle_conjecture(msg, ctx)
         else:
             await ctx.send_json(_error(ERR_INVALID_REQUEST, f"Unknown discovery message '{msg_type}'.", msg))
     except RequestError as exc:
