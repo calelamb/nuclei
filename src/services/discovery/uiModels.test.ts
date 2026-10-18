@@ -4,6 +4,7 @@ import { candidateKind, fitnessExtent, indexById, isImprovement, normalizeFitnes
 import { buildTrajectory, stepPath, trajectorySummary } from './trajectory';
 import { buildLineageLayout, lineageNeighbor, lineageSignature } from './lineageLayout';
 import { DEFAULT_FILTER, filterCandidates, sortCandidates } from './candidateTable';
+import { RED_QUEEN_EXPLAINER, SANDBOX_HONESTY } from './honesty';
 import { guardrailPassRates, isolationNote, isolationUsed, rejectionReasons } from './guardrailStats';
 
 const candidates = fixtureCandidates();
@@ -133,8 +134,14 @@ describe('guardrail stats', () => {
   });
   it('reports the isolation mode and states what it does not block', () => {
     expect(isolationUsed(candidates)[0].mode).toBe('sandbox-exec');
-    expect(isolationNote('sandbox-exec')).toMatch(/File reads are not blocked/);
+    expect(isolationNote('sandbox-exec')).toMatch(/file reads are being restricted/);
     expect(isolationNote('process')).toMatch(/no OS sandbox/);
+  });
+  it('red queen copy says instructed, not forbidden, and reuses the sandbox constant', () => {
+    expect(RED_QUEEN_EXPLAINER).not.toMatch(/forbidden/);
+    expect(RED_QUEEN_EXPLAINER).toMatch(/instructed not to/);
+    expect(RED_QUEEN_EXPLAINER).toContain(SANDBOX_HONESTY);
+    expect(SANDBOX_HONESTY).toMatch(/blocks network access and file writes; file reads are being restricted/);
   });
   it('fixture run archive holds the elites', () => {
     expect(Object.values(fixtureRun().archive.islands[0]).length).toBeGreaterThan(0);

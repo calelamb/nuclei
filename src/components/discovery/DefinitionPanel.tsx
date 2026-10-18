@@ -44,7 +44,7 @@ export function DefinitionPanel({ definition }: { definition: DiscoveryDefinitio
             </LabCallout>
           )}
           {spec.mutator.kind === 'red_queen' && (
-            <LabCallout tone="danger" title="Red Queen mode">{RED_QUEEN_EXPLAINER}</LabCallout>
+            <LabCallout tone="warning" title="Red Queen mode">{RED_QUEEN_EXPLAINER}</LabCallout>
           )}
           {usesLlm && !hasKey && (
             <LabCallout tone="warning" title="No API key set">

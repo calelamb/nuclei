@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { ChartFrame, LabButton, LabCallout, LabCard, LabEmptyState, formatPct } from '../../lab';
 import { guardrailPassRates, isolationNote, isolationUsed, rejectionReasons, type GuardrailPassRate, type RejectionReason } from '../../../services/discovery/guardrailStats';
-import { SANDBOX_HONESTY } from '../../../services/discovery/honesty';
+import { SANDBOX_HONESTY, SANDBOX_READS_CAVEAT, SANDBOX_READS_TITLE } from '../../../services/discovery/honesty';
 import { candidateList, type RunView } from '../../../services/discovery/runView';
 import { summarizeAudits } from '../../../services/discovery/redQueen';
 import { selectRunExploits, useDiscoveryStore } from '../../../stores/discoveryStore';
@@ -114,8 +114,8 @@ export function GuardrailsTab({ view, onOpen }: { view: RunView; onOpen: (id: st
                 ))}
               </ul>
             )}
-            <LabCallout tone="warning" title="File reads are not blocked">
-              {SANDBOX_HONESTY} Candidates run in a separate subprocess, but a candidate can still read files the app can read. The trusted scorer never runs in the candidate's process.
+            <LabCallout tone="warning" title={SANDBOX_READS_TITLE}>
+              {SANDBOX_HONESTY} {SANDBOX_READS_CAVEAT} Candidates run in a separate subprocess. The trusted scorer never runs in the candidate's process.
             </LabCallout>
           </div>
         </LabCard>

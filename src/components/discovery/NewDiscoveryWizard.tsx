@@ -171,7 +171,7 @@ export function NewDiscoveryWizard() {
           />
           {kind === 'red_queen' && (
             <div className="lab-stack" data-testid="red-queen-options">
-              <LabCallout tone="danger" title="Red Queen mode">{RED_QUEEN_EXPLAINER}</LabCallout>
+              <LabCallout tone="warning" title="Red Queen mode">{RED_QUEEN_EXPLAINER}</LabCallout>
               <div className="lab-grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(190px, 1fr))' }}>
                 <LabField label="Audit when" htmlFor="wiz-audit-every">
                   <LabSelect id="wiz-audit-every" value={auditEvery} onChange={(e) => setAuditEvery(e.target.value as AuditEvery)}>

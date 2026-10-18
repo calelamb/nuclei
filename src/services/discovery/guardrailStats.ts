@@ -4,6 +4,7 @@
  */
 
 import type { CandidateRecord, DiscoveryIsolation, GuardrailStatus } from '../../types/discovery';
+import { SANDBOX_HONESTY, SANDBOX_READS_CAVEAT } from './honesty';
 import { numericId, primaryEvaluation } from './candidateView';
 
 export interface RejectionReason {
@@ -85,9 +86,9 @@ export function isolationNote(mode: DiscoveryIsolation | 'unknown'): string {
   switch (mode) {
     case 'sandbox-exec':
     case 'bwrap':
-      return 'OS sandbox: network access and file writes are blocked. File reads are not blocked.';
+      return `${SANDBOX_HONESTY} ${SANDBOX_READS_CAVEAT}`;
     case 'process':
-      return 'Process isolation: a separate subprocess with resource limits and a cooperative import blocker. There is no OS sandbox, so file reads are not blocked either, and the import blocker is defense in depth rather than a boundary.';
+      return 'Process isolation: a separate subprocess with resource limits and a cooperative import blocker. There is no OS sandbox, so network access, file writes and file reads are all unblocked at the OS level, and the import blocker is defense in depth rather than a boundary.';
     case 'unknown':
       return 'The kernel did not report an isolation mode for these evaluations.';
   }
