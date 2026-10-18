@@ -99,6 +99,18 @@ describe('LaunchModal honesty', () => {
     expect(useHardwareStore.getState().launchOpen).toBe(false);
   });
 
+  it('closes the dialog when the scrim is pressed, even on the backend step', () => {
+    mount('desktop');
+    fireEvent.click(screen.getByText('IonQ'));
+    fireEvent.mouseDown(screen.getByTestId('dialog-scrim'));
+    expect(useHardwareStore.getState().launchOpen).toBe(false);
+  });
+
+  it('offers the desktop download on the first step of the web build', () => {
+    mount('web');
+    expect(screen.getByRole('button', { name: /Download Nuclei/ })).toBeTruthy();
+  });
+
   it('keeps keyboard focus inside the dialog after choosing a provider', async () => {
     mount('desktop');
     fireEvent.click(screen.getByText('IBM Quantum'));

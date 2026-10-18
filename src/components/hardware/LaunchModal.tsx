@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { ChevronLeft, Rocket, X } from 'lucide-react';
+import { ChevronLeft, Download, Rocket, X } from 'lucide-react';
+import { openExternal } from '../../lib/openExternal';
+import { DESKTOP_DOWNLOAD_URL } from '../../config/docsLinks';
 import { Button, Dialog, IconButton } from '../ui';
 import { useHardwareStore } from '../../stores/hardwareStore';
 import { useEditorStore } from '../../stores/editorStore';
@@ -66,6 +68,21 @@ export function LaunchModal() {
       setShotsDraft(String(shots || DEFAULT_SHOTS));
     });
   }, [open, shots]);
+
+  // Escape steps back from a provider before it closes the dialog. Claiming the event first keeps
+  // the Dialog's own Escape handler (which closes) from also running.
+  const hasProvider = selectedProvider !== null;
+  useEffect(() => {
+    if (!open || !hasProvider) return undefined;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape' || e.defaultPrevented) return;
+      e.preventDefault();
+      selectProvider(null);
+      selectBackend(null);
+    };
+    window.addEventListener('keydown', onKey, true);
+    return () => window.removeEventListener('keydown', onKey, true);
+  }, [open, hasProvider, selectProvider, selectBackend]);
 
   // Keyboard focus follows the step: into the dialog's step two, back onto the card that opened it.
   useEffect(() => {
@@ -151,8 +168,8 @@ export function LaunchModal() {
       )}
       width={1040}
       flush
-      // Escape and the scrim step back from a provider before they close the dialog.
-      onClose={selectedProvider ? handleBack : closeLaunch}
+      // Escape steps back from a provider (see the key effect above); the scrim always closes.
+      onClose={closeLaunch}
       leading={selectedProvider ? (
         <Button size="sm" onClick={handleBack} aria-label="Back" icon={<ChevronLeft size={12} />}>Back</Button>
       ) : undefined}
@@ -165,11 +182,18 @@ export function LaunchModal() {
       <div ref={bodyRef} style={{ overflow: 'auto', flex: 1 }}>
         {!selectedMeta ? (
           <div style={{ padding: 20 }}>
-            <p style={{ color: colors.textMuted, fontSize: 12, lineHeight: 1.6, margin: '0 0 18px' }}>
-              {isWeb
-                ? 'Hardware launches run in the desktop app. The browser build simulates circuits in the page.'
-                : 'Pick where to run your circuit. Real hardware runs take minutes to hours depending on queue; simulators run instantly.'}
-            </p>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, margin: '0 0 18px' }}>
+              <p style={{ color: colors.textMuted, fontSize: 12, lineHeight: 1.6, margin: 0 }}>
+                {isWeb
+                  ? 'Hardware launches run in the desktop app. The browser build simulates circuits in the page.'
+                  : 'Pick where to run your circuit. Real hardware runs take minutes to hours depending on queue; simulators run instantly.'}
+              </p>
+              {isWeb && (
+                <Button variant="primary" size="sm" icon={<Download size={14} />} onClick={() => { void openExternal(DESKTOP_DOWNLOAD_URL); }}>
+                  Download Nuclei
+                </Button>
+              )}
+            </div>
             <LaunchProviderGrid
               isWeb={isWeb}
               cudaqInstalled={cudaqInstalled}
