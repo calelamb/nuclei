@@ -17,6 +17,10 @@ const VIEW_OPTIONS: ReadonlyArray<SegmentedOption<HistogramViewMode>> = [
   { value: 'ideal', label: 'Ideal' },
 ];
 const MANY_BARS = 8;
+/** Two outcomes in a wide slab are not 300px bars: cap them and centre in their slot. */
+const MAX_BAR_WIDTH_PX = 56;
+/** The chart renders only once its box has a size; this floor stops the zero-width warning. */
+const MIN_CHART_HEIGHT_PX = 120;
 const SCROLL_BAR_SLOT_PX = 30;
 
 const Y_AXIS_WIDTH = 44;
@@ -81,8 +85,8 @@ function HistogramChart({ data, srDescription, scroll = false }: ChartProps) {
   );
 
   const bars = (
-    <ResponsiveContainer width="100%" height="100%">
-      <BarChart data={data} margin={scroll ? { ...margin, left: 16 } : margin}>
+    <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={MIN_CHART_HEIGHT_PX}>
+      <BarChart data={data} margin={scroll ? { ...margin, left: 16, right: 16 } : margin}>
         <XAxis
           dataKey="state"
           interval={scroll ? 0 : 'preserveStartEnd'}
@@ -101,7 +105,7 @@ function HistogramChart({ data, srDescription, scroll = false }: ChartProps) {
           itemStyle={{ color: colors.accentText }}
           formatter={(value) => [typeof value === 'number' ? `${(value * 100).toFixed(2)}%` : String(value ?? ''), 'Probability']}
         />
-        <Bar dataKey="probability" radius={[4, 4, 0, 0]} isAnimationActive={false}>
+        <Bar dataKey="probability" radius={[4, 4, 0, 0]} maxBarSize={MAX_BAR_WIDTH_PX} isAnimationActive={false}>
           {data.map((_, index) => (
             <Cell key={index} fill={colors.accent} fillOpacity={0.8} />
           ))}
@@ -122,7 +126,7 @@ function HistogramChart({ data, srDescription, scroll = false }: ChartProps) {
     <div className="histogram-scroll" role="region" aria-label="Probability histogram" aria-description={srDescription}>
       <PinnedYAxis ticks={axis.ticks} max={axis.max} top={margin.top} bottom={xAxisHeight + margin.bottom + scrollbarInset} />
       <div ref={barsRef} className="histogram-scroll__bars" tabIndex={0} aria-label="Scrollable outcome bars">
-        <div style={{ height: '100%', minWidth: data.length * SCROLL_BAR_SLOT_PX + CHART_MARGIN_RIGHT }}>{bars}</div>
+        <div style={{ height: '100%', minWidth: data.length * SCROLL_BAR_SLOT_PX + CHART_MARGIN_RIGHT + 22 }}>{bars}</div>
       </div>
     </div>
   );

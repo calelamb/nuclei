@@ -4,6 +4,7 @@ import './histogram.css';
 import { useThemeStore } from '../../stores/themeStore';
 import { useElementSize } from '../../hooks/useElementSize';
 import { chooseChipLayout } from './chipLayout';
+import { formatChipPercent } from './histogramScale';
 
 import { TYPOGRAPHY } from '../../styles/tokens';
 interface HistogramChipProps {
@@ -179,8 +180,8 @@ export function HistogramChip({
               }}
             >
               {hasHw
-                ? `${Math.round(cls * 100)}% · ${Math.round(hw * 100)}%`
-                : `${Math.round(cls * 100)}%`}
+                ? `${formatChipPercent(cls)} · ${formatChipPercent(hw)}`
+                : formatChipPercent(cls)}
             </span>
           </div>
         ))}
