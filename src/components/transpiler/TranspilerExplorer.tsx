@@ -1,9 +1,8 @@
 import { type CSSProperties } from 'react';
-import { Shuffle, Loader2, HelpCircle, Download } from 'lucide-react';
-import { Button, EmptyState } from '../ui';
+import { Shuffle, Loader2, HelpCircle } from 'lucide-react';
+import { EmptyState, Tooltip } from '../ui';
+import { DesktopOnlyState } from '../hardware/DesktopOnlyState';
 import { isWebBuild } from '../../platform/buildTarget';
-import { openExternal } from '../../lib/openExternal';
-import { DESKTOP_DOWNLOAD_URL } from '../../config/docsLinks';
 import { useThemeStore, type ThemeColors } from '../../stores/themeStore';
 import { useEditorStore } from '../../stores/editorStore';
 import { useTranspileStore } from '../../stores/transpileStore';
@@ -43,23 +42,18 @@ export function TranspilerExplorer() {
           <Shuffle size={14} /> Transpiler Explorer
         </span>
         <div style={{ flex: 1 }} />
-        <a href={DOCS} target="_blank" rel="noreferrer" aria-label="Transpiler docs" title="Transpiler Explorer docs" style={iconBtn(colors)}>
-          <HelpCircle size={14} />
-        </a>
+        <Tooltip label="Transpiler Explorer docs" placement="below">
+          <a href={DOCS} target="_blank" rel="noreferrer" aria-label="Transpiler docs" style={iconBtn(colors)}>
+            <HelpCircle size={14} />
+          </a>
+        </Tooltip>
       </div>
 
       <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: 16 }}>
         {isWebBuild() ? (
-          <Centered
-            icon={<Download size={20} />}
-            title="Transpiler Explorer runs in the desktop app"
-            body="Qiskit's pass manager runs in the local kernel, which the browser build does not include."
-            action={(
-              <Button size="sm" variant="primary" onClick={() => { void openExternal(DESKTOP_DOWNLOAD_URL); }}>
-                Download Nuclei
-              </Button>
-            )}
-          />
+          <DesktopOnlyState title="Transpiler Explorer runs in the desktop app">
+            Qiskit's pass manager runs in the local kernel, which the browser build does not include.
+          </DesktopOnlyState>
         ) : !isQiskit ? (
           <Centered
             title="Transpiler Explorer needs Qiskit"
@@ -161,7 +155,7 @@ function PassRow({ pass, index }: { pass: TranspilePass; index: number }) {
       <span style={{ flex: 1, fontSize: 13, color: colors.text, fontWeight: entangling ? 600 : 400 }}>
         {pass.name}
         {entangling && (
-          <span style={{ marginLeft: 8, fontSize: 11, color: colors.accentText, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+          <span className="nuclei-overline" style={{ marginLeft: 8, color: colors.accentText }}>
             routing
           </span>
         )}
@@ -200,7 +194,7 @@ function MetricStrip({
         return (
           <span key={label} style={{ display: 'flex', alignItems: 'baseline', gap: 4, fontSize: 12 }}>
             <span style={{ fontFamily: TYPOGRAPHY.fontMono, fontWeight: 600, color: colors.text }}>{value}</span>
-            <span style={{ fontSize: 11, color: colors.textDim, textTransform: 'uppercase', letterSpacing: '0.03em' }}>{label}</span>
+            <span className="nuclei-overline">{label}</span>
             {showDelta && (
               <span style={{
                 fontSize: 11, fontFamily: TYPOGRAPHY.fontMono,
@@ -219,7 +213,7 @@ function MetricStrip({
 function Side({ colors, caption, children }: { colors: ThemeColors; caption: string; children: React.ReactNode }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', minWidth: 0 }}>
-      <div style={{ fontSize: 11, color: colors.textDim, marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+      <div className="nuclei-overline" style={{ marginBottom: 6 }}>
         {caption}
       </div>
       <div style={{ border: `1px solid ${colors.border}`, borderRadius: 6, padding: 8, background: colors.bg }}>
@@ -266,8 +260,7 @@ function errorBox(colors: ThemeColors): CSSProperties {
 
 function sectionHead(colors: ThemeColors): CSSProperties {
   return {
-    fontSize: 12, fontWeight: 600, color: colors.text, marginBottom: 8,
-    textTransform: 'uppercase', letterSpacing: '0.04em',
+    fontSize: 13, fontWeight: 600, color: colors.text, marginBottom: 8,
   };
 }
 

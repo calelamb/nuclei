@@ -289,13 +289,13 @@
 .qec-source-row {
   display: grid; width: 100%; min-height: 52px; grid-template-columns: 18px minmax(0, 1fr) auto;
   align-items: center; gap: 8px; margin: 2px 0; padding: 7px 8px;
-  border: 1px solid transparent; border-radius: 5px; background: transparent; text-align: left;
+  border: 1px solid transparent; border-radius: var(--radius-soft); background: transparent; text-align: left;
   transition: background-color 160ms ease, border-color 160ms ease;
 }
 
 .qec-source-row-shell {
   position: relative; display: grid; min-width: 0; grid-template-columns: minmax(0, 1fr) auto;
-  margin: 2px 0; overflow: hidden; border: 1px solid transparent; border-radius: 5px;
+  margin: 2px 0; overflow: hidden; border: 1px solid transparent; border-radius: var(--radius-soft);
   transition: background-color 160ms ease, border-color 160ms ease;
 }
 
@@ -390,7 +390,7 @@
 }
 
 .qec-study-errors {
-  margin: 12px 10px; overflow: hidden; border: 1px solid var(--qec-warning-border); border-radius: 6px;
+  margin: 12px 10px; overflow: hidden; border: 1px solid var(--qec-warning-border); border-radius: var(--radius-round);
   background: var(--qec-warning-field);
 }
 
@@ -475,7 +475,7 @@
 
 .qec-instrument {
   position: relative; display: flex; min-width: 0; min-height: 0;
-  flex-direction: column; overflow: hidden; border: 1px solid var(--qec-border); border-radius: 6px;
+  flex-direction: column; overflow: hidden; border: 1px solid var(--qec-border); border-radius: var(--radius-round);
   background: var(--qec-canvas);
 }
 
@@ -494,7 +494,7 @@
 
 .qec-instrument__icon {
   display: grid; width: 28px; height: 28px; flex: 0 0 auto;
-  place-items: center; border: 1px solid var(--qec-selection-strong); border-radius: 4px; background: var(--qec-selection);
+  place-items: center; border: 1px solid var(--qec-selection-strong); border-radius: var(--radius-xs); background: var(--qec-selection);
   color: var(--qec-quantum);
 }
 
@@ -509,7 +509,7 @@
 }
 
 .qec-instrument__help {
-  display: inline-grid; width: 28px; height: 28px; flex: 0 0 auto; place-items: center; border-radius: 5px;
+  display: inline-grid; width: 28px; height: 28px; flex: 0 0 auto; place-items: center; border-radius: var(--radius-soft);
   color: var(--qec-text-muted); text-decoration: none;
 }
 
@@ -531,7 +531,7 @@
 /* Empty instrument: a neutral dotted field and one sentence, never a data-like shape. */
 .qec-instrument__empty {
   display: flex; min-height: 0; flex: 1; flex-direction: column; align-items: center; justify-content: center;
-  gap: 6px; margin: 10px; padding: 16px; border: 1px dashed var(--qec-border); border-radius: 6px;
+  gap: 6px; margin: 10px; padding: 16px; border: 1px dashed var(--qec-border); border-radius: var(--radius-soft);
   background-image: radial-gradient(var(--qec-border) 1px, transparent 1px); background-size: 14px 14px;
   color: var(--qec-text-muted); text-align: center;
 }
@@ -557,7 +557,7 @@
 }
 
 .qec-inspector__section dl {
-  overflow: hidden; border: 1px solid var(--qec-border); border-radius: 5px; background: var(--qec-canvas);
+  overflow: hidden; border: 1px solid var(--qec-border); border-radius: var(--radius-soft); background: var(--qec-canvas);
 }
 
 .qec-inspector__section dl > div {

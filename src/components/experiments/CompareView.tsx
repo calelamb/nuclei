@@ -180,7 +180,6 @@ export function CompareView() {
 
 function SectionHeader({
   title,
-  colors,
   children,
 }: {
   title: string;
@@ -189,7 +188,7 @@ function SectionHeader({
 }) {
   return (
     <div style={{ display: 'flex', alignItems: 'center', marginBottom: 8 }}>
-      <div style={{ color: colors.textMuted, fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.5 }}>
+      <div className="nuclei-overline">
         {title}
       </div>
       <div style={{ marginLeft: 'auto' }}>{children}</div>

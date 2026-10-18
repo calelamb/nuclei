@@ -251,7 +251,7 @@ export function RunDetail() {
 
       <div style={{ padding: 16, display: 'flex', flexDirection: 'column', gap: 20 }}>
         <section>
-          <div style={{ color: colors.textMuted, fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 8 }}>
+          <div className="nuclei-overline" style={{ marginBottom: 8 }}>
             Manifest
           </div>
           <dl style={{ margin: 0 }}>
@@ -271,14 +271,14 @@ export function RunDetail() {
         {showOutputs && (
           <>
         <section>
-          <div style={{ color: colors.textMuted, fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 8 }}>
+          <div className="nuclei-overline" style={{ marginBottom: 8 }}>
             Measurements
           </div>
           <RunHistogram measurements={artifacts.result?.measurements ?? {}} />
         </section>
 
         <section>
-          <div style={{ color: colors.textMuted, fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 8 }}>
+          <div className="nuclei-overline" style={{ marginBottom: 8 }}>
             Circuit
           </div>
           <RunCircuitDiagram snapshot={artifacts.snapshot} />

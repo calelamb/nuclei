@@ -34,7 +34,12 @@ function ActionButton({
   onClick,
   disabled,
   tone = 'default',
+  size = 'md',
+  block = false,
 }: {
+  size?: 'sm' | 'md';
+  /** Full width of its container, for stacked panel actions. */
+  block?: boolean;
   label: string;
   icon: React.ReactNode;
   onClick: () => void;
@@ -43,7 +48,7 @@ function ActionButton({
 }) {
   const variant = tone === 'accent' ? 'primary' : tone === 'danger' ? 'danger' : 'secondary';
   return (
-    <Button size="sm" variant={variant} onClick={onClick} disabled={disabled} icon={icon}>
+    <Button size={size} variant={variant} onClick={onClick} disabled={disabled} icon={icon} style={block ? { width: '100%' } : undefined}>
       {label}
     </Button>
   );
@@ -108,13 +113,14 @@ export function PluginMarketplace() {
       <div
         style={{
           display: 'flex',
+          flexDirection: 'column',
           gap: 6,
           padding: '10px 12px 8px',
           flexShrink: 0,
-          flexWrap: 'wrap',
         }}
       >
         <ActionButton
+          block
           label="Load plugin…"
           icon={<FolderOpen size={12} />}
           onClick={handleLoad}
@@ -122,6 +128,7 @@ export function PluginMarketplace() {
           tone="accent"
         />
         <ActionButton
+          block
           label="Create plugin…"
           icon={<Plus size={12} />}
           onClick={() => {
@@ -147,6 +154,7 @@ export function PluginMarketplace() {
             aria-label="New plugin name"
           />
           <ActionButton
+            size="sm"
             label="Choose folder…"
             icon={<FolderOpen size={12} />}
             onClick={handleCreate}
@@ -400,18 +408,7 @@ function PanelsTab() {
             }}
           >
             <Palette size={12} color={colors.textMuted} />
-            <span
-              style={{
-                fontSize: 11,
-                fontWeight: 600,
-                textTransform: 'uppercase',
-                letterSpacing: 0.5,
-                color: colors.textMuted,
-                fontFamily: FONT,
-              }}
-            >
-              Themes
-            </span>
+            <span className="nuclei-overline">Themes</span>
             {overlayActive && (
               <button
                 onClick={() => {

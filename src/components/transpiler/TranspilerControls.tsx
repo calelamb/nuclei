@@ -54,15 +54,13 @@ export function TranspilerControls() {
     fontFamily: TYPOGRAPHY.fontSans, color: colors.text,
   };
 
+  // The main area already explains this with a Download action; the sidebar stays a quiet pointer, not a second card.
   if (desktopOnly) {
     return (
       <div style={shell}>
-        <div style={noteBox(colors)}>
-          <strong style={{ display: 'block', marginBottom: 4, fontSize: 12 }}>Desktop app only</strong>
-          <span style={{ fontSize: 12, color: colors.textMuted, lineHeight: 1.5 }}>
-            Transpiling needs the local Qiskit compiler, which the browser build does not include.
-          </span>
-        </div>
+        <span style={{ fontSize: 12, color: colors.textMuted, lineHeight: 1.5 }}>
+          Transpiling runs in the desktop app.
+        </span>
       </div>
     );
   }
@@ -85,6 +83,10 @@ export function TranspilerControls() {
 
   return (
     <div style={shell}>
+      <Button variant="primary" onClick={run} loading={pending} icon={pending ? undefined : <Shuffle size={14} />}>
+        {pending ? 'Transpiling…' : result ? 'Re-transpile' : 'Transpile'}
+      </Button>
+
       <label style={fieldLabel(colors)}>
         Target
         <Select value={targetId} onChange={(e) => setTarget(e.target.value)} aria-label="Transpile target" style={{ display: 'flex' }}>
@@ -98,7 +100,7 @@ export function TranspilerControls() {
       </label>
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
-        <span style={{ fontSize: 11, color: colors.textDim }}>Optimization level</span>
+        <span style={fieldTitle(colors)}>Optimization level</span>
         <SegmentedControl
           block
           aria-label="Optimization level"
@@ -108,16 +110,12 @@ export function TranspilerControls() {
         />
       </div>
 
-      <Button variant="primary" onClick={run} loading={pending} icon={pending ? undefined : <Shuffle size={14} />}>
-        {pending ? 'Transpiling…' : result ? 'Re-transpile' : 'Transpile'}
-      </Button>
-
       {/* The target's physical constraints — the topology and basis set that
           force the routing the main view then explains. */}
       {selectedBackend ? (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-          <span style={{ fontSize: 11, color: colors.textDim }}>
-            Target topology · {selectedBackend.qubitCount} qubits
+          <span style={fieldTitle(colors)}>
+            Target topology · <span style={{ fontWeight: 400 }}>{selectedBackend.qubitCount} qubits</span>
           </span>
           <div style={{ border: `1px solid ${colors.border}`, borderRadius: 6, padding: 6 }}>
             <ConnectivityMap
@@ -147,8 +145,13 @@ export function TranspilerControls() {
   );
 }
 
+/** A field's title: one step above its 11px meta so every row reads title then meta. */
+function fieldTitle(colors: ThemeColors): CSSProperties {
+  return { fontSize: 12, fontWeight: 600, color: colors.text };
+}
+
 function fieldLabel(colors: ThemeColors): CSSProperties {
-  return { display: 'flex', flexDirection: 'column', gap: 5, fontSize: 11, color: colors.textDim };
+  return { display: 'flex', flexDirection: 'column', gap: 5, ...fieldTitle(colors) };
 }
 
 function chip(colors: ThemeColors): CSSProperties {

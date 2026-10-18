@@ -235,10 +235,10 @@ export function NoiseModelLibrary({ projectRoot, onClose }: { projectRoot: strin
 
 interface C { bg: string; border: string; text: string; textMuted: string; textDim: string; error: string; }
 
-function ListGroup({ label, colors, children }: { label: string; colors: C; children: React.ReactNode }) {
+function ListGroup({ label, children }: { label: string; colors: C; children: React.ReactNode }) {
   return (
     <div>
-      <div style={{ padding: '8px 12px 4px', fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.4, color: colors.textMuted }}>{label}</div>
+      <div className="nuclei-overline" style={{ padding: '8px 12px 4px' }}>{label}</div>
       {children}
     </div>
   );
@@ -258,6 +258,6 @@ function ModelRow({ model, active, compareActive, onSelect }: { model: NoiseMode
   );
 }
 
-function SectionLabel({ colors, children }: { colors: C; children: React.ReactNode }) {
-  return <div style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.4, color: colors.textMuted, margin: '16px 0 8px' }}>{children}</div>;
+function SectionLabel({ children }: { colors: C; children: React.ReactNode }) {
+  return <div className="nuclei-overline" style={{ margin: '16px 0 8px' }}>{children}</div>;
 }

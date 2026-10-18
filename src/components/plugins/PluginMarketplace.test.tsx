@@ -17,11 +17,12 @@ describe('PluginMarketplace', () => {
     expect(screen.getAllByRole('tab')[1].getAttribute('aria-selected')).toBe('true');
   });
 
-  it('Load and Create are the shared small Buttons', () => {
+  it('Load and Create are stacked, equal-width medium Buttons (rq-r3-10)', () => {
     render(<PluginMarketplace />);
     for (const name of [/Load plugin/, /Create plugin/]) {
       const btn = screen.getByRole('button', { name });
-      expect(btn.className).toContain('nuclei-btn--sm');
+      expect(btn.className).toContain('nuclei-btn--md');
+      expect(btn.style.width).toBe('100%');
     }
   });
 

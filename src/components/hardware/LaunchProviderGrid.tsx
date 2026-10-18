@@ -50,7 +50,7 @@ export function LaunchProviderGrid({ isWeb, cudaqInstalled, connected, qsharpBlo
               textAlign: 'left',
               background: disabled ? 'transparent' : colors.bgElevated,
               border: `1px solid ${colors.border}`,
-              borderRadius: 14,
+              borderRadius: 'var(--radius-round)',
               padding: 16,
               cursor: disabled ? 'not-allowed' : 'pointer',
               color: colors.text,
@@ -59,7 +59,7 @@ export function LaunchProviderGrid({ isWeb, cudaqInstalled, connected, qsharpBlo
               flexDirection: 'column',
               gap: 10,
               minHeight: 160,
-              transition: 'transform 150ms ease, border-color 120ms ease, background 120ms ease',
+              transition: 'transform var(--duration-fast) var(--ease-standard), border-color var(--duration-fast) var(--ease-standard), background var(--duration-fast) var(--ease-standard)',
               opacity: disabled ? 0.55 : 1,
             }}
           >
@@ -68,7 +68,7 @@ export function LaunchProviderGrid({ isWeb, cudaqInstalled, connected, qsharpBlo
                 style={{
                   width: 48,
                   height: 48,
-                  borderRadius: 12,
+                  borderRadius: 'var(--radius-soft)',
                   background: `${colors.accent}14`,
                   display: 'flex',
                   alignItems: 'center',
