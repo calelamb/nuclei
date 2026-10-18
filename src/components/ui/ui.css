@@ -346,7 +346,7 @@
 .nuclei-menu__slot { display: inline-grid; place-items: center; flex: 0 0 var(--icon-xs); width: var(--icon-xs); color: var(--color-accent-quantum-text); }
 .nuclei-menu__icon { display: inline-flex; flex: 0 0 auto; color: var(--color-text-tertiary); }
 .nuclei-menu__label { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.nuclei-menu__hint { flex: 0 0 auto; color: var(--color-text-tertiary); font-size: var(--font-size-caption); }
+.nuclei-menu__hint { flex: 0 0 auto; margin-left: var(--space-4); color: var(--color-text-tertiary); font-size: var(--font-size-caption); }
 .nuclei-menu__heading { padding: 6px var(--space-3) var(--space-1); color: var(--color-text-tertiary); font-size: var(--font-size-caption); font-weight: var(--font-weight-semibold); }
 .nuclei-menu__separator { height: 1px; margin: var(--space-1) 0; background: var(--color-border-strong); }
 .nuclei-menu__notice { padding: 6px var(--space-3); border-top: 1px solid var(--color-border-subtle); color: var(--color-text-secondary); font-size: var(--font-size-caption); }

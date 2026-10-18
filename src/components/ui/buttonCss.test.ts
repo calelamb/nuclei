@@ -50,3 +50,12 @@ describe('disabled primary under the light theme (cascade)', () => {
     document.documentElement.removeAttribute('data-theme');
   });
 });
+
+describe('menu hints', () => {
+  it('keeps at least 24px (gap + margin) between a label and its hint so they do not read as one phrase', () => {
+    const item = rule('.nuclei-menu__item');
+    const hint = rule('.nuclei-menu__hint');
+    expect(item).toContain('gap: var(--space-2)');
+    expect(hint).toMatch(/margin-left:\s*var\(--space-4\)/);
+  });
+});
