@@ -3,7 +3,7 @@
 export const FRONTIER_QUESTION = 'Is every trainable ansatz classically simulable?';
 
 export const FRONTIER_HONESTY =
-  'Hardness is resistance to this Pauli-propagation estimator under this budget. It is not a proof of classical hardness. A high score is a lead to investigate, not a counterexample.';
+  'Cost is the number of Pauli strings Pauli propagation needed to compute ⟨O⟩ exactly (log10, censored at the budget). A high cost means this estimator is expensive, not that the circuit is classically hard: tensor networks, light-cone simulation and other methods may still be cheap. It is not a proof of classical hardness. A high score is a lead to investigate, not a counterexample.';
 
 export const FRONTIER_CONTEXT =
   'Cerezo et al. conjecture that every provably barren-plateau-free ansatz is also classically simulable. This evaluator searches for counterexamples, scored exactly by Pauli propagation at 8 to 64 qubits.';
