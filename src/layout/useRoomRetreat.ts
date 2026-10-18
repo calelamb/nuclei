@@ -35,7 +35,14 @@ export function useRoomRetreat({ sidebarWidth, vizWanted, canCollapseSidebar, si
   const diracOpen = useDiracPanelStore((s) => s.isOpen);
   const diracWidth = useDiracPanelStore((s) => s.width);
 
+  // Set when Dirac folded itself because the user opened the sidebar: that fold must not bounce the sidebar back out.
+  const foldedForSidebar = useRef(false);
+
   useEffect(() => {
+    if (foldedForSidebar.current) {
+      foldedForSidebar.current = false;
+      return;
+    }
     const plan = planRoom({ viewport, sidebarWidth, diracWidth: diracOpen ? diracWidth : null, vizWanted });
     const nav = useNavigationStore.getState();
     if (plan.closeSidebar) {
@@ -53,7 +60,10 @@ export function useRoomRetreat({ sidebarWidth, vizWanted, canCollapseSidebar, si
     wasSidebarOpen.current = sidebarOpen;
     if (!opened) return;
     const { isOpen, width, close } = useDiracPanelStore.getState();
-    if (isOpen && shouldFoldDiracForSidebar({ viewport, sidebarWidth, diracWidth: width })) close();
+    if (isOpen && shouldFoldDiracForSidebar({ viewport, sidebarWidth, diracWidth: width })) {
+      foldedForSidebar.current = true;
+      close();
+    }
     // Only the sidebar opening matters; viewport / width are read at that moment.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sidebarOpen]);

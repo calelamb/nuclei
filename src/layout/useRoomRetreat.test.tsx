@@ -27,6 +27,16 @@ describe('useRoomRetreat (sidebar opened by hand while Dirac is open)', () => {
     expect(useDiracPanelStore.getState().isOpen).toBe(false);
   });
 
+  it('keeps the sidebar the user just opened: folding Dirac for it must not fold the sidebar straight back out', () => {
+    const { rerender } = renderHook((p: { sidebarOpen: boolean }) =>
+      useRoomRetreat({ sidebarWidth: 240, vizWanted: true, canCollapseSidebar: true, sidebarOpen: p.sidebarOpen }),
+    { initialProps: { sidebarOpen: false } });
+    act(() => { useNavigationStore.setState({ activeView: 'files' }); });
+    rerender({ sidebarOpen: true });
+    expect(useDiracPanelStore.getState().isOpen).toBe(false);
+    expect(useNavigationStore.getState().activeView).toBe('files');
+  });
+
   it('leaves Dirac alone when everything fits', () => {
     setViewport(1440);
     const { rerender } = renderHook((p: { sidebarOpen: boolean }) =>
