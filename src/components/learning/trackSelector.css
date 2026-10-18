@@ -64,7 +64,8 @@
 .video-card__desc { margin-top: var(--space-2); font-size: var(--font-size-caption); line-height: 1.4; color: var(--color-text-secondary); }
 
 .tracks__tabs { margin-bottom: var(--space-6); }
-.tracks__concepts, .tracks__capstones, .tracks__glossary { height: calc(100vh - 280px); min-height: 360px; }
+/* Concepts and capstones flow at natural height so the page is the only scroller; the glossary keeps its own list scroll. */
+.tracks__glossary { height: calc(100vh - 280px); min-height: 360px; }
 .tracks__capstones .lpath__caps { max-width: 640px; }
 .tracks__section > .shelf { margin-top: 0; }
 /* Warning badge text over its own tint is 4.2:1 in light; darken it inside the screens this lane owns. */
