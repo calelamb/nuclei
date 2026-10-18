@@ -39,8 +39,9 @@ export function LaunchProviderGrid({ isWeb, cudaqInstalled, connected, qsharpBlo
       {ordered.map((p) => {
         const status = statusOf(p);
         const qsharpBlocked = qsharpBlocks(p.name);
+        // A starting local kernel has no backends to list yet, so its card waits for the Ready badge.
         // Desktop-only providers on the web are as inert as coming-soon ones; the header's Download button is the way forward.
-        const disabled = status.kind === 'coming-soon' || status.kind === 'desktop-only' || status.kind === 'unavailable' || qsharpBlocked;
+        const disabled = status.kind === 'coming-soon' || status.kind === 'desktop-only' || status.kind === 'unavailable' || status.kind === 'starting' || qsharpBlocked;
         return (
           <button
             key={p.name}

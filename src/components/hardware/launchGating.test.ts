@@ -146,4 +146,14 @@ describe('sortProvidersForDisplay (research-r-04)', () => {
     expect(sortProvidersForDisplay(shuffled, kind).map((p) => p.name)).toEqual(sortProvidersForDisplay(catalog, kind).map((p) => p.name));
     expect(sortProvidersForDisplay(shuffled, kind)[0].name).toBe('simulator');
   });
+
+  it('keeps the Local Simulator first when the kernel failed or is starting', () => {
+    const catalog = PROVIDERS.map((p) => ({ name: p.name }));
+    for (const kernelStatus of ['failed', 'connecting'] as const) {
+      const kind = (p: { name: HardwareProviderType }) => providerStatus({ provider: p.name, connected: false, isWeb: false, cudaqInstalled: true, kernelStatus }).kind;
+      const names = sortProvidersForDisplay(catalog, kind).map((p) => p.name);
+      expect(names[0]).toBe('simulator');
+      expect(names[1]).toBe('nvidia');
+    }
+  });
 });

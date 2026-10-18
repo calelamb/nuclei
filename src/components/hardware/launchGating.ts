@@ -119,7 +119,7 @@ export function sortProvidersByStatus<T extends { readonly name: HardwareProvide
 /**
  * The one provider order, for the Hardware panel and the Launch grid alike: the catalog's own order
  * (launchProviders.ts) first, so a store that lists providers differently cannot reorder them, then
- * what works leads (see sortProvidersByStatus).
+ * the Local Simulator pinned first and hardware providers ranked by status (see sortProvidersByStatus).
  */
 export function sortProvidersForDisplay<T extends { readonly name: HardwareProviderType }>(
   providers: readonly T[],
@@ -130,5 +130,8 @@ export function sortProvidersForDisplay<T extends { readonly name: HardwareProvi
     return index === -1 ? PROVIDERS.length : index;
   };
   const inCatalogOrder = [...providers].sort((a, b) => position(a.name) - position(b.name));
-  return sortProvidersByStatus(inCatalogOrder, statusKind);
+  const sorted = sortProvidersByStatus(inCatalogOrder, statusKind);
+  // The simulator is the anchor row: it stays first whatever the kernel is doing, so a failed or
+  // starting kernel shows as its own badge instead of moving the row.
+  return [...sorted.filter((p) => p.name === 'simulator'), ...sorted.filter((p) => p.name !== 'simulator')];
 }

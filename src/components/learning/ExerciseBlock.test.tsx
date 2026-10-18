@@ -111,3 +111,67 @@ describe('ExerciseBlock grading honesty', () => {
     expect(screen.getByRole('status').textContent).toMatch(/Replace the starter/);
   });
 });
+
+describe('ExerciseBlock draft persistence', () => {
+  const draft = () => useLearnStore.getState().lessonProgress['L1']?.drafts?.['ex-1'];
+
+  it('saves a typed draft after the debounce and restores it on remount', async () => {
+    vi.useFakeTimers();
+    try {
+      const first = render(<ExerciseBlock {...props} />);
+      fireEvent.change(screen.getByLabelText('code'), { target: { value: 'print(7)' } });
+      expect(draft()).toBeUndefined();
+      act(() => { vi.advanceTimersByTime(350); });
+      expect(draft()).toBe('print(7)');
+      first.unmount();
+      render(<ExerciseBlock {...props} />);
+      expect((screen.getByLabelText('code') as HTMLTextAreaElement).value).toBe('print(7)');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('flushes a pending draft when the lesson unmounts inside the debounce window', () => {
+    const view = render(<ExerciseBlock {...props} />);
+    fireEvent.change(screen.getByLabelText('code'), { target: { value: 'print(8)' } });
+    view.unmount();
+    expect(draft()).toBe('print(8)');
+  });
+
+  it('keeps Reset in place but disabled until edited, and asks before discarding', () => {
+    render(<ExerciseBlock {...props} />);
+    const reset = () => screen.getByRole('button', { name: /^(Reset|Discard edits\?)/ }) as HTMLButtonElement;
+    expect(reset().disabled).toBe(true);
+    fireEvent.change(screen.getByLabelText('code'), { target: { value: 'print(9)' } });
+    expect(reset().disabled).toBe(false);
+    fireEvent.click(reset());
+    expect((screen.getByLabelText('code') as HTMLTextAreaElement).value).toBe('print(9)');
+    expect(reset().textContent).toMatch(/Discard edits\?/);
+    fireEvent.click(reset());
+    expect((screen.getByLabelText('code') as HTMLTextAreaElement).value).toBe(STARTER);
+    expect(draft()).toBeUndefined();
+    expect(reset().disabled).toBe(true);
+  });
+
+  it('typing disarms a pending Reset confirmation', () => {
+    render(<ExerciseBlock {...props} />);
+    fireEvent.change(screen.getByLabelText('code'), { target: { value: 'print(9)' } });
+    fireEvent.click(screen.getByRole('button', { name: /^Reset/ }));
+    fireEvent.change(screen.getByLabelText('code'), { target: { value: 'print(10)' } });
+    expect(screen.getByRole('button', { name: /^Reset/ })).toBeTruthy();
+  });
+});
+
+describe('ExerciseBlock run feedback', () => {
+  it('says so when a run produced nothing', async () => {
+    await runWith(STARTER, []);
+    expect(screen.getByText(/Ran · no output yet/)).toBeTruthy();
+  });
+
+  it('clears a failed Check message as soon as the code is edited', async () => {
+    await runWith('print(41)', ['41']);
+    expect(screen.getByRole('status').textContent).toMatch(/output does not match/i);
+    fireEvent.change(screen.getByLabelText('code'), { target: { value: 'print(4' } });
+    expect(screen.queryByRole('status')).toBeNull();
+  });
+});

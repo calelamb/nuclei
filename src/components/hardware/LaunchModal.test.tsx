@@ -57,6 +57,22 @@ describe('LaunchModal honesty', () => {
     expect(screen.queryByText(/jobs ahead/)).toBeNull();
   });
 
+  it('disables the Local Simulator card while the kernel is starting', () => {
+    useEditorStore.setState({ kernelStatus: 'connecting' });
+    mount('desktop');
+    const card = document.querySelector('[data-provider="simulator"]') as HTMLButtonElement;
+    expect(card.disabled).toBe(true);
+    expect(card.textContent).toMatch(/Starting/);
+    useEditorStore.setState({ kernelStatus: 'idle' });
+  });
+
+  it('never says kernel on the web launch step', () => {
+    useHardwareStore.setState({ selectedProvider: 'ibm' });
+    mount('web');
+    expect(document.body.textContent ?? '').toMatch(/need the desktop app/);
+    expect(document.body.textContent ?? '').not.toMatch(/kernel/i);
+  });
+
   it('lists only the backends the kernel reported', () => {
     useHardwareStore.setState({
       backends: [{ name: 'ibm_real', provider: 'ibm', qubitCount: 133, connectivity: [], queueLength: 2, averageErrorRate: 0.0021, gateSet: ['CZ'], status: 'online' }],

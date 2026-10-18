@@ -22,14 +22,14 @@ export function OutcomeResults({ result }: { result: SimulationResult }) {
 
   return (
     <div className="outcomes">
-      {sampled && (
-        <div className="outcomes__head">
-          <span className="outcomes__meta">
-            {showing === 'sampled' ? `${result.shot_count.toLocaleString()} shots` : 'Exact amplitudes'}
-          </span>
+      <div className="outcomes__head">
+        <span className="outcomes__meta">
+          {showing === 'sampled' ? `${result.shot_count.toLocaleString()} shots` : 'Exact amplitudes'}
+        </span>
+        {sampled && (
           <SegmentedControl aria-label="Outcome distribution" value={showing} options={OPTIONS} onChange={setKind} />
-        </div>
-      )}
+        )}
+      </div>
       <ProbabilityBars probabilities={probabilities} />
     </div>
   );
