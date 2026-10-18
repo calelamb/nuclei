@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { render, fireEvent, cleanup, screen } from '@testing-library/react';
+import { render, fireEvent, cleanup, screen, waitFor } from '@testing-library/react';
 import { FrameworkSelector } from './FrameworkSelector';
 import { PlatformProvider } from '../../platform/PlatformProvider';
 import { useEditorStore } from '../../stores/editorStore';
@@ -88,29 +88,33 @@ describe('FrameworkSelector — Q#', () => {
     expect(state.code).toBe(userCode);
   });
 
-  it('cross-boundary pick on a dirty buffer is a no-op when the confirm is cancelled', () => {
+  it('cross-boundary pick on a dirty buffer is a no-op when the confirm is cancelled', async () => {
     const userCode = 'from qiskit import QuantumCircuit\n# my homework in progress\n';
     useEditorStore.setState({ code: userCode, isDirty: true });
-    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(false);
+    const nativeSpy = vi.spyOn(window, 'confirm');
 
     renderSelector();
     pickQsharp();
 
-    expect(confirmSpy).toHaveBeenCalledOnce();
+    const dialog = await screen.findByRole('dialog');
+    expect(dialog.textContent).toContain('Replace your code with the Q# (QDK) starter?');
+    fireEvent.click(screen.getByRole('button', { name: 'Keep editing' }));
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    expect(nativeSpy).not.toHaveBeenCalled();
     const state = useEditorStore.getState();
     expect(state.framework).toBe('qiskit');
     expect(state.code).toBe(userCode);
     expect(state.isDirty).toBe(true);
   });
 
-  it('cross-boundary pick on a dirty buffer swaps in the Q# starter when confirmed', () => {
+  it('cross-boundary pick on a dirty buffer swaps in the Q# starter when confirmed', async () => {
     const userCode = 'from qiskit import QuantumCircuit\n# my homework in progress\n';
     useEditorStore.setState({ code: userCode, isDirty: true, filePath: '/work/homework.py' });
-    vi.spyOn(window, 'confirm').mockReturnValue(true);
-
     renderSelector();
     pickQsharp();
+    fireEvent.click(await screen.findByRole('button', { name: 'Replace' }));
 
+    await waitFor(() => expect(useEditorStore.getState().framework).toBe('qsharp'));
     const state = useEditorStore.getState();
     expect(state.framework).toBe('qsharp');
     expect(state.code).toBe(STARTER_TEMPLATES.qsharp);

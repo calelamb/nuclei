@@ -1,4 +1,4 @@
-import { Button, Tooltip } from '../ui';
+import { Button, Tooltip, useConfirm } from '../ui';
 import { useState, useCallback, useRef } from 'react';
 import { Rocket, Upload, FileCode, CheckCircle2, XCircle, Loader2, Clock, X } from 'lucide-react';
 import { useHardwareStore } from '../../stores/hardwareStore';
@@ -44,6 +44,7 @@ function fmtElapsed(startIso: string): string {
 }
 
 export function LaunchPortal() {
+  const { confirm, confirmDialog } = useConfirm();
   const colors = useThemeStore((s) => s.colors);
   const isWeb = usePlatform().getPlatform() === 'web';
   const jobs = useHardwareStore((s) => s.jobs);
@@ -139,6 +140,7 @@ export function LaunchPortal() {
 
   return (
     <div style={{ height: '100%', display: 'flex', flexDirection: 'column', overflow: 'auto' }}>
+      {confirmDialog}
       {/* Drop zone */}
       <div style={{ padding: 12 }}>
         <div
@@ -382,7 +384,16 @@ export function LaunchPortal() {
               Recent results
             </div>
             <button className="nuclei-hover-text"
-              onClick={() => { if (window.confirm('Clear all hardware jobs from the list?')) useHardwareStore.getState().clearJobs(); }}
+              onClick={async () => {
+                const ok = await confirm({
+                  title: 'Clear all hardware jobs?',
+                  description: 'They are removed from the list.',
+                  confirmLabel: 'Clear',
+                  cancelLabel: 'Keep jobs',
+                  tone: 'danger',
+                });
+                if (ok) useHardwareStore.getState().clearJobs();
+              }}
               style={{
                 background: 'transparent',
                 border: 'none',
