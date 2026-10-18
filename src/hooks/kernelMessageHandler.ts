@@ -16,6 +16,7 @@ import { useDebugStore } from '../stores/debugStore';
 import { resolveFormat } from '../lib/lintSender';
 import { useLintStore } from '../stores/lintStore';
 import { requestParseNarration, requestResultNarration } from '../services/ambientNarrator';
+import { runSummary } from './runSummary';
 import { rewriteExecutionError } from '../services/errorRewrite';
 
 /** Per-provider "connecting" watchdog timers, owned by the hook. */
@@ -75,6 +76,7 @@ export function handleKernelMessage(msg: KernelResponse, connectTimers: ConnectT
       useSimulationStore.getState().setResult(msg.data);
       useEditorStore.getState().clearErrors();
       if (msg.data) {
+        useSimulationStore.getState().addOutput(runSummary(msg.data), 'summary');
         useDiracStore.getState().clearRewrittenError();
         requestResultNarration(useEditorStore.getState().code, useCircuitStore.getState().snapshot, msg.data);
       }

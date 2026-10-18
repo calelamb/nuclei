@@ -27,7 +27,7 @@ function lineColor(
   line: TerminalLine,
   colors: ReturnType<typeof useThemeStore.getState>['colors'],
 ): string {
-  if (line.type === 'separator') return colors.textDim;
+  if (line.type === 'separator' || line.type === 'summary') return colors.textDim;
   if (line.type === 'stderr') return colors.error;
   if (line.type === 'info') return colors.textMuted;
   // stdout — but still flag tracebacks/warnings that bubbled through the

@@ -9,7 +9,7 @@ const MAX_TERMINAL_LINES = 2000;
 // eslint-disable-next-line no-control-regex -- the ANSI escape we're matching IS a control char
 const ANSI_PATTERN = /\x1b\[[0-9;]*m/g;
 
-export type TerminalLineType = 'stdout' | 'stderr' | 'separator' | 'info';
+export type TerminalLineType = 'stdout' | 'stderr' | 'separator' | 'info' | 'summary';
 
 export interface TerminalLine {
   text: string;
@@ -64,9 +64,9 @@ export function isResultStale(resultCode: string | null, currentCode: string, ha
   return hasResult && resultCode !== null && resultCode !== currentCode;
 }
 
-/** Whether the Terminal holds anything the user would want to read (run separators alone do not count). */
+/** Whether the Terminal holds anything the user would want to read (run separators and per-run summaries alone do not count). */
 export function hasMeaningfulOutput(lines: readonly TerminalLine[]): boolean {
-  return lines.some((l) => l.type !== 'separator');
+  return lines.some((l) => l.type !== 'separator' && l.type !== 'summary');
 }
 
 export const useSimulationStore = create<SimulationState>((set) => ({

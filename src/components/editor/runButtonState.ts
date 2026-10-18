@@ -43,7 +43,7 @@ export function getRunButtonState(input: RunButtonInput): RunButtonState {
     return {
       kind: 'failed',
       label: 'Kernel failed',
-      title: `${input.kernelError ?? 'The kernel did not start'}. Use Retry in the banner below.`,
+      title: `${(input.kernelError ?? 'The kernel did not start').replace(/[.\s]+$/, '')}. Use Retry in the banner below.`,
       disabled: true,
     };
   }

@@ -64,4 +64,9 @@ describe('isAccidentalStop', () => {
   it('ignores the second click of a double-click even outside the window', () => {
     expect(isAccidentalStop(2, 1000, 1000 + STOP_GRACE_MS * 4)).toBe(true);
   });
+
+  it('does not double the full stop when the kernel error already ends with one', () => {
+    const state = getRunButtonState({ ...base, kernelStatus: 'failed', kernelError: "Couldn't start the engine." });
+    expect(state.title).toBe("Couldn't start the engine. Use Retry in the banner below.");
+  });
 });

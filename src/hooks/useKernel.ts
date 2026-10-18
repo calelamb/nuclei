@@ -164,6 +164,8 @@ export function useKernel() {
 
   const markWebReady = useCallback(() => {
     const editor = useEditorStore.getState();
+    // A Retry that worked: say so, so the earlier failure line is not the last word in the Terminal.
+    if (editor.kernelStatus === 'failed') useSimulationStore.getState().addOutput('Python ready', 'info');
     editor.setKernelConnected(true);
     editor.setKernelReady(true);
     editor.setKernelStatus('ready');
