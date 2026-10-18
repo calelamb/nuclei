@@ -2,7 +2,7 @@ import { expect, test } from '@playwright/test';
 
 const FIXTURE_URL = '/?e2eProject=qec-project&workspace=research';
 
-test.describe('the cascade renders the same in dev and in the shipped build', () => {
+test.describe('boot placeholder geometry (dev server; the shipped-build cascade is covered by cascadeLayers.test.ts)', () => {
   test('the boot placeholder is top-aligned in the results column (component CSS outranks the primitive)', async ({ page }) => {
     await page.goto(FIXTURE_URL);
     const title = page.locator('.viz-empty--boot .nuclei-empty__title');

@@ -16,7 +16,7 @@ export function focusWhenMounted(attr: string, settleFrames = 0, doc: Document =
   const attempt = () => {
     frame += 1;
     const target = frame > settleFrames ? doc.querySelector<HTMLElement>(`[${attr}]`) : null;
-    if (target) { target.focus({ preventScroll: true, focusVisible: true } as FocusOptions); return; }
+    if (target) { target.focus({ preventScroll: true }); return; }
     if (frame < MAX_FRAMES) handle = requestAnimationFrame(attempt);
   };
   handle = requestAnimationFrame(attempt);

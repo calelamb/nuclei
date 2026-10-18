@@ -60,7 +60,7 @@ export function ResearchTour() {
 
   // Each step shows the pane it describes. The view the student had is put back when the tour ends,
   // unless they navigated somewhere else themselves meanwhile.
-  const tourView = useRef<{ prior: NavView | null; shown: NavView | null } | null>(null);
+  const tourView = useRef<{ readonly prior: NavView | null; readonly shown: NavView | null } | null>(null);
   useEffect(() => {
     if (!active) return undefined;
     const nav = useNavigationStore.getState();
@@ -68,7 +68,7 @@ export function ResearchTour() {
     tourView.current = record;
     if (current.view && nav.activeView !== current.view) {
       nav.setActiveView(current.view);
-      record.shown = current.view;
+      tourView.current = { ...record, shown: current.view };
     }
     return undefined;
   }, [active, current.view]);

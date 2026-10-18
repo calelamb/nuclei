@@ -1,8 +1,9 @@
 /*
  * UI primitives (Button, IconButton, Select, TextInput/TextArea, Switch).
  * Everything resolves from tokens.css so both themes work; hover/active/focus
- * are CSS states, never inline-style mutation. Selectors use two classes so they
- * beat contextual resets such as `.qec-workbench button { color: inherit }`.
+ * are CSS states, never inline-style mutation. Everything sits in `@layer primitives`, so any
+ * unlayered component rule beats it regardless of specificity: a component that restyles colour or
+ * background on a primitive must also write its own :hover (and [aria-pressed]) rule.
  */
 
 @layer primitives {
