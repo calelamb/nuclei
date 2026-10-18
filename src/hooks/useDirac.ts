@@ -24,6 +24,7 @@ import { personaPreamble } from '../services/diracPersona';
 import { useExperimentUiStore } from '../stores/experimentUiStore';
 import { useExperimentStore } from '../services/experimentStore';
 import { buildExperimentContext } from '../services/experimentContext';
+import { buildTrainabilityContextFromStores } from '../services/trainability/contextFromStores';
 import { buildQecContext } from '../services/qecContext';
 import { useQecStore } from '../stores/qecStore';
 import { useQecCampaignStore } from '../stores/qecCampaignStore';
@@ -324,6 +325,13 @@ function buildContextBlock(plan: ContextPlan): string {
         parts.push(buildExperimentContext({ ...experiment, spec: experiment.spec }, selectedRuns));
       }
     }
+  }
+
+  // PRD 14 — Trainability Lab context (Research only, guarded like the
+  // experiments context above; Learn mode's assembly is unaffected).
+  if (workspaceMode === 'research' && includeExperimentContext(contextDepth)) {
+    const trainabilityContext = buildTrainabilityContextFromStores();
+    if (trainabilityContext) parts.push(trainabilityContext);
   }
 
   return parts.join('\n\n');
