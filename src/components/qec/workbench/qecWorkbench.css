@@ -642,7 +642,7 @@
 .qec-tray__tabs button,
 .qec-tray__tabs > span {
   display: inline-flex; min-width: 0; align-items: center; gap: 6px;
-  padding: 0 14px; border: 0; border-right: 1px solid var(--qec-border); background: transparent;
+  padding: 0 14px; border: 0; background: transparent;
   color: var(--qec-text-muted); font-size: 12px; white-space: nowrap;
 }
 

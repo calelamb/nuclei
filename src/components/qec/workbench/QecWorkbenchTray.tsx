@@ -1,4 +1,4 @@
-import { ChevronDown, ChevronUp, CircleAlert, CircleDot, ListChecks, LoaderCircle, Radio, RefreshCw } from 'lucide-react';
+import { ChevronDown, ChevronUp, CircleAlert, CircleDot, ListChecks, LoaderCircle, RefreshCw } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState, type ReactElement } from 'react';
 
 import { resolveQecPanels } from '../../../layout/qecPanelRegistry';
@@ -34,7 +34,6 @@ function TrayHeader({ expanded, importing, idle, onToggle }: TrayHeaderProps): R
       <div className="qec-tray__tabs" aria-label="Operational instruments">
         {importing && <span className="qec-tray__active-instrument"><ListChecks aria-hidden="true" size={16} />Import</span>}
         {!importing && panels.map((panel) => <span className="qec-tray__active-instrument" key={panel.id}><ListChecks aria-hidden="true" size={16} />{panel.title}</span>)}
-        <span><Radio aria-hidden="true" size={14} /> Streams</span><span>Logs</span><span>Comparisons</span>
       </div>
       {idle && expanded && <span className="qec-tray__idle-note"><CircleDot aria-hidden="true" size={ICON_SIZE.xs} />No active jobs</span>}
       <IconButton className="qec-tray__toggle" aria-expanded={expanded} aria-label={`${expanded ? 'Collapse' : 'Expand'} jobs and streams`} onClick={onToggle}>
