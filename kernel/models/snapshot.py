@@ -1,6 +1,13 @@
 from dataclasses import dataclass, field, asdict
 
 
+# Raised (as a plain ValueError) when a circuit with free parameters is
+# simulated; surfaces to the user as a `simulation_error`.
+UNBOUND_PARAMETERS_MESSAGE = (
+    "bind circuit parameters before simulating (Trainability Lab analyzes free parameters)"
+)
+
+
 @dataclass
 class Gate:
     type: str
@@ -8,9 +15,16 @@ class Gate:
     controls: list[int] = field(default_factory=list)
     params: list[float] = field(default_factory=list)
     layer: int = 0
+    # PRD 14: for gates built from unbound parameters, `params[i]` is 0.0 and
+    # `symbols[i]` names the free symbol (None = numeric). Omitted from the
+    # wire when None or all-None so existing snapshots stay byte-identical.
+    symbols: list[str | None] | None = None
 
     def to_dict(self) -> dict:
-        return asdict(self)
+        data = asdict(self)
+        if self.symbols is None or all(s is None for s in self.symbols):
+            data.pop("symbols", None)
+        return data
 
 
 @dataclass
