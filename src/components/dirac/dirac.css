@@ -61,9 +61,10 @@
 
 /* Slash menu */
 .dirac-slash {
-  position: absolute; bottom: 100%; left: 0; right: 0; z-index: 10; overflow: hidden;
+  /* Inset to the composer's own edges (the input area pads 12px) and lifted off it. */
+  position: absolute; bottom: calc(100% - var(--space-1)); left: var(--space-3); right: var(--space-3); z-index: 10; overflow: hidden;
   background: var(--color-surface-raised); border: 1px solid var(--color-border-strong);
-  border-radius: var(--radius-soft) var(--radius-soft) 0 0; box-shadow: var(--shadow-md);
+  border-radius: var(--radius-round); box-shadow: var(--shadow-lg);
 }
 .dirac-slash__item {
   display: flex; align-items: center; gap: var(--space-2); width: 100%; cursor: pointer;
@@ -71,7 +72,8 @@
   background: transparent; border: none; text-align: left;
   font: var(--font-size-chrome-label) var(--font-sans); color: var(--color-text-primary);
 }
-.dirac-slash__item:hover, .dirac-slash__item[aria-selected='true'] { background: var(--color-surface-overlay); }
+.dirac-slash__item:hover { background: var(--color-surface-overlay); }
+.dirac-slash__item[aria-selected='true'] { background: color-mix(in srgb, var(--color-accent-quantum) 14%, transparent); box-shadow: inset 2px 0 0 var(--color-accent-quantum); }
 .dirac-slash__cmd { font-family: var(--font-mono); color: var(--color-accent-quantum-text); }
 .dirac-slash__desc { color: var(--color-text-secondary); }
 

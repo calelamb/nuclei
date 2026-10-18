@@ -9,6 +9,7 @@ import { KEYBINDINGS, formatKeys, isBindingAvailable, isMacPlatform, shortcutLab
 import { isWebBuild } from '../../platform/buildTarget';
 
 import { TYPOGRAPHY } from '../../styles/tokens';
+import './shortcuts.css';
 interface KeyboardShortcutsProps {
   onClose: () => void;
 }
@@ -66,9 +67,9 @@ export function KeyboardShortcuts({ onClose }: KeyboardShortcutsProps) {
           border: `1px solid ${colors.border}`,
           borderRadius: 12,
           padding: 24,
-          maxWidth: 520, width: '90%',
-          maxHeight: '80vh',
-          overflow: 'auto',
+          maxWidth: 760, width: '92%',
+          maxHeight: '86vh',
+          display: 'flex', flexDirection: 'column',
           boxShadow: shadow.lg,
           animation: prefersReducedMotion() ? 'none' : `nuclei-slide-up ${DURATION.normal}ms ${EASING.spring}`,
         }}
@@ -84,8 +85,9 @@ export function KeyboardShortcuts({ onClose }: KeyboardShortcutsProps) {
           <IconButton aria-label="Close shortcuts" onClick={onClose}><X size={16} /></IconButton>
         </div>
 
+        <div className="shortcuts-groups">
         {groups.map((group) => (
-          <div key={group.title} style={{ marginBottom: 16 }}>
+          <div key={group.title} style={{ breakInside: 'avoid', marginBottom: 16 }}>
             <div style={{
               color: colors.accentText, fontSize: 11, fontWeight: 600,
               fontFamily: TYPOGRAPHY.fontSans,
@@ -121,11 +123,13 @@ export function KeyboardShortcuts({ onClose }: KeyboardShortcutsProps) {
             ))}
           </div>
         ))}
+        </div>
 
         <div style={{
           color: colors.textDim, fontSize: 11,
           fontFamily: TYPOGRAPHY.fontSans,
-          textAlign: 'center', marginTop: 8,
+          textAlign: 'center', paddingTop: 10, marginTop: 4, flexShrink: 0,
+          borderTop: `1px solid ${colors.border}`,
         }}>
           Press {shortcutLabel('palette')} to open the command palette for all commands
           {web && ' (including New file and Toggle theme, whose keys your browser keeps for itself)'}
