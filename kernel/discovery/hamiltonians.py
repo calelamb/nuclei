@@ -112,6 +112,11 @@ def exact_ground_energy(ps: PauliSum, n: int) -> float:
         raise HamiltonianError(f"exact ground energy supports at most {SPARSE_MAX_QUBITS} qubits (got {n})")
     if n <= DENSE_MAX_QUBITS:
         return float(np.linalg.eigvalsh(pauli_sum_matrix(ps, n))[0])
+    return _sparse_ground_energy(ps, n)
+
+
+def _sparse_ground_energy(ps: PauliSum, n: int) -> float:
+    """Matrix-free ``eigsh`` (smallest algebraic eigenvalue); also used by tests at small n."""
     sla = _scipy_sparse()
     if sla is None:
         raise HamiltonianError(f"exact ground energy for n > {DENSE_MAX_QUBITS} needs scipy, which is not installed")
