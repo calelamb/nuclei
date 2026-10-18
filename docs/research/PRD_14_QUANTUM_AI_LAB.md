@@ -1,6 +1,6 @@
 # PRD 14 — Quantum AI Lab: Trainability Lab ("Microscope") + Discovery Engine
 
-**Status:** Approved for build · branch `feat/quantum-ai-lab`
+**Status:** Spec v2 (revised 2026-10-18 for the compute strategy, §4.1) · implementation paused pending go-ahead · branch `feat/quantum-ai-lab`
 **Date:** 2026-10-18
 **Workspace:** Research mode only (Learn is byte-for-byte unchanged)
 **Protocol:** Kernel Protocol v1.3 (additive-only)
@@ -197,6 +197,156 @@ The kernel routing hook already exists in `kernel/server.py`
 `on_release`, `forget`). `release_owner` fires on connection close. Each
 package exposes `async def handle(msg: dict, ctx: LabContext) -> None`.
 
+### 4.1 Compute strategy: the best tools, plus our own compiler where it pays
+
+We do not hand-roll what a strong library already does well, and we *do*
+build our own compiler and kernels where the Lab's workload is unusual.
+
+The Lab's workload is not "simulate one circuit". It is "evaluate the same
+parameterized circuit and its gradient at hundreds of random parameter
+points, across a sweep of sizes". That shape rewards **compilation +
+batching**, and for the central barren-plateau question it rewards
+**exact classical math instead of sampling**.
+
+**1. Lab Compiler (`kernel/trainability/compiler.py`).** This is a small
+optimizing compiler from the IR (§5.1) to a *kernel program*: a flat list of
+batched tensor ops. It is built once per circuit and run many times.
+
+- **Passes, in order:**
+  - Canonicalize (U → RZ·RY·RZ; controlled rotations to their generator
+    form).
+  - Merge adjacent same-axis rotations on the same qubit that have the same
+    `ParamRef` or constant angles.
+  - Fuse runs of fixed single-qubit gates into one 2×2 matrix per qubit.
+  - **Diagonal-run fusion:** consecutive diagonal gates (Z, S, T, RZ, P,
+    CZ, CP, RZZ, CRZ, …) on any qubits collapse into one phase op,
+    `ψ ← ψ · exp(−i Σₖ θₖ gₖ − i φ_fixed)`. Here `gₖ ∈ ℝ^{2ⁿ}` are
+    precomputed generator eigenvalue vectors, so a whole QAOA/HVA cost layer
+    becomes **one** elementwise exponential.
+  - Mark Clifford segments for the Pauli-propagation engine.
+- **Lowering:**
+  - Ops act on a state tensor of shape `(B, 2, …, 2)`, where the **batch
+    axis B is the parameter-sample axis**. 200 gradient samples cost one
+    pass of vectorized ops, not 200 Python loops.
+  - Rotations broadcast per-batch `cos/sin`. Fixed gates use `tensordot` on
+    one axis. Diagonal ops are elementwise.
+  - The adjoint gradient is batched the same way.
+- **Backends (Python array API):** the lowered program is written against
+  an array namespace.
+  - `numpy` is always present.
+  - `cupy` (NVIDIA GPU) and `jax.numpy` (`jit` over the static op list, CPU
+    or GPU) are used when installed.
+  - The backend is chosen automatically, can be overridden in settings, and
+    is reported in every result (`backend: "numpy" | "cupy" | "jax"`).
+- **Reference oracle:** a deliberately naive, unfused, unbatched simulator
+  (`reference.py`) is the correctness oracle. CI asserts
+  compiled ≡ reference to 1e-10 on randomized circuits for every backend
+  present. Qiskit Aer `Statevector` and Cirq's simulator are an independent
+  cross-check in tests.
+
+**2. Pauli Propagation Engine, PPE (`kernel/trainability/pauliprop.py`).**
+This is the innovation that lets the Microscope answer the barren-plateau
+question **exactly, at 100+ qubits**, where statevector sampling cannot
+go.
+
+- **Setting:** the circuit is Pauli rotations R(θ) = exp(−iθP/2) with
+  **independent** parameters θₖ ~ U[0, 2π), Clifford fixed gates, an
+  observable O = Σⱼ cⱼ Qⱼ (Pauli sum), and input |0…0⟩.
+- **Heisenberg picture:** at an anticommuting rotation,
+  Q → cos θ·Q + sin θ·(iPQ). Averaging over θ kills every cross term,
+  because E[cos] = E[sin] = E[cos·sin] = 0 and E[cos²] = E[sin²] = ½.
+- **The doubled chain:** E_θ[C²] is therefore the output of a **doubled
+  Markov chain on pairs of Pauli strings** (Q, Q′):
+  - both commute → the pair stays;
+  - both anticommute → stay, or flip both, each with weight ½;
+  - exactly one anticommutes → the pair dies.
+  
+  Then E[C²] = Σ over surviving pairs of w · ⟨0|Q|0⟩⟨0|Q′|0⟩, and only
+  {I,Z}-type strings contribute. For a single-Pauli observable this
+  reduces to a single chain whose total mass is conserved.
+- **Gradients:** E[(∂ₖC)²] is the same chain, except that at gate k
+  commuting pairs die (they don't depend on θₖ). E[∂ₖC] = 0 under uniform
+  angles. This gives **Var[∂ₖC] in expectation, with no sampling noise**.
+  The same construction underlies the tight variance bounds in the
+  literature (e.g. Napp 2022; Letcher, Woerner & Zoufal 2023). It must be
+  re-derived in the module docstring and verified against batched
+  statevector sampling (agreement within the sampling CI) for n ≤ 12.
+- **Representation:**
+  - Pauli strings are bit-packed symplectic `uint64` arrays (x | z words;
+    two words reach 128 qubits). Commutation of one string against the
+    whole frontier is a single vectorized popcount of
+    `(x₁ & z₂) ^ (z₁ & x₂)`.
+  - Clifford conjugation uses vectorized tableau rules, delegating to
+    Stim's C++ `stim.PauliString.after` / `stim.Tableau` when Stim is
+    installed. Identical strings merge in a hash map.
+- **Truncation with rigorous bounds:**
+  - Truncate by max Pauli weight and min |weight|, and record the discarded
+    absolute mass D. Single-chain masses are non-negative, so the true
+    value lies in [kept, kept + D].
+  - Pair chains use |w|, which gives a symmetric interval.
+  - Results report `method: "pauli_propagation_exact" | "pauli_propagation_bounded"`,
+    the interval, the frontier size and the discarded mass.
+- **Fallback:** if parameters are shared or affine, the init is `small`,
+  the fixed gates are non-Clifford, or the bound width exceeds 10% of the
+  estimate, the analysis falls back to compiled statevector sampling and
+  says why.
+- **The simulability link, made computational:** when the PPE can estimate
+  ⟨O⟩ itself with a tight bound at large n, that is direct evidence the
+  cost is classically estimable for random parameters (Angrisani et al.,
+  2024, on classically estimating noiseless circuit observables). The
+  simulability card shows this alongside the DLA verdict.
+
+**3. Lie closure at scale.** The same bit-packed representation means each
+new element is tested against the whole basis in one vectorized pass, so
+closures up to dim ≈ 10⁵ fit in seconds. PennyLane's `qml.lie_closure` is
+a test-only cross-check when installed (never a runtime dependency).
+
+**4. QEC evaluation uses Stim + PyMatching 2 natively.**
+- Sampling is batched and run in the scorer subprocess. Concurrency comes
+  from parallel scorer processes, never from threads in the kernel process.
+- **The fault-distance search is budgeted** (measured here: full
+  `search_for_undetectable_logical_errors` ≈ 0.8 s at d = 5 and ≈ 131 s at
+  d = 7):
+  - an exact search with a 10 s budget for d ≤ 5;
+  - for larger d, `shortest_graphlike_error` (finds a real logical error,
+    so it is an *upper* bound and catches cheaters whose distance is
+    lower) plus a pruned search, with the guardrail marked
+    `warn: "distance verified only up to the search bounds"`.
+- Results are cached by the structural SHA-256 of the noisy circuit, so a
+  circuit's distance is computed once per run no matter how many seeds
+  evaluate it.
+
+**5. Evaluation cascade + cache (from AlphaEvolve).**
+- **Stage 0:** static guardrails (milliseconds).
+- **Stage 1:** a cheap score (e.g. 2 000 shots; 1 restart × 50 steps).
+- **Stage 2:** the full score, only if stage 1's *optimistic* bound beats
+  the island's current median elite.
+- **Stage 3 (champion only):** confirmation on fresh seeds.
+- Every evaluation is cached by (normalized-program hash, evaluator
+  fingerprint, seed, stage). Normalization is `ast.dump` of the module, so
+  comment and whitespace edits are free. Rejected-at-stage-0 programs never
+  reach the scorer.
+
+**6. Canonical cost model.** Two-qubit cost and depth are measured after
+canonical decomposition into {1q, CX}, using a fixed table: CX = CZ = CY =
+1, ISWAP = 2, SWAP = 3, RXX = RYY = RZZ = RZX = 2, CRX = CRY = CRZ = CP =
+CH = 2, CCX = CCZ = 6, CSWAP = 8. A composite gate can never look cheaper
+than what it compiles to.
+
+**7. Isolation, reported honestly.**
+- The baseline is a subprocess, rlimits and the import blocker.
+- Stronger OS isolation is used opportunistically when present:
+  - Linux `bwrap --unshare-net --unshare-pid --die-with-parent` with
+    read-only binds;
+  - macOS `sandbox-exec` with a deny-network profile.
+- Each evaluation records `isolation: "process" | "bwrap" | "sandbox-exec"`
+  and never claims more than what actually ran.
+
+**8. Deferred, deliberately.** A native Rust statevector kernel (PyO3,
+rayon) is deferred. Batched array-API lowering removes the Python
+per-sample overhead that dominates this workload. We revisit only if
+profiling shows the remaining per-op dispatch dominates at n ≤ 14.
+
 ---
 
 ## 5. Kernel contract — `kernel/trainability/`
@@ -319,23 +469,71 @@ There is also a fast Pauli application on statevectors
 (`apply_pauli_term(state, term, n)` via bit masks), plus
 `pauli_sum_matrix(ps, n)` for tests (n ≤ 10).
 
-### 5.4 Simulator (`statevector.py`)
+### 5.4 Compiler + simulator (`compiler.py`, `statevector.py`, `reference.py`, `backends.py`)
+
+See §4.1.1 for the design. The public API is batch-first; the unbatched
+names are thin B = 1 wrappers that other packages import.
 
 ```python
-def simulate(circuit: ParamCircuit, values: np.ndarray, initial: np.ndarray | None = None) -> np.ndarray
-def expectation(circuit, values, observable: PauliSum) -> float
-def value_and_grad(circuit, values, observable) -> tuple[float, np.ndarray]   # adjoint differentiation
-def parameter_shift_grad(circuit, values, observable) -> np.ndarray           # reference / tests (2-term & 4-term rules)
-MAX_STATEVECTOR_QUBITS = 18
+def compile_circuit(circuit: ParamCircuit, *, backend: str = "auto") -> KernelProgram   # cached by IR hash
+class KernelProgram:
+    n_qubits: int; n_params: int; backend: str; ops: tuple[Op, ...]; stats: dict   # fused-op counts for the UI
+    def states(self, values: Array) -> Array                                   # (B, m) -> (B, 2**n) complex
+    def expectations(self, values: Array, observable: PauliSum) -> Array       # (B,)
+    def value_and_grad(self, values: Array, observable: PauliSum) -> tuple[Array, Array]  # (B,), (B, m) — batched adjoint
+# Unbatched convenience (stable names used by kernel/discovery):
+def simulate(circuit, values, initial=None) -> np.ndarray
+def expectation(circuit, values, observable) -> float
+def value_and_grad(circuit, values, observable) -> tuple[float, np.ndarray]
+def parameter_shift_grad(circuit, values, observable) -> np.ndarray   # reference/tests (2-term & 4-term rules)
+MAX_STATEVECTOR_QUBITS = 20
 ```
 
-- Use complex128 with in-place tensor reshapes (`state.reshape([2]*n)` axis
-  ops or einsum). There are no per-amplitude Python loops.
-- Adjoint method: dC/dθ_gate = 2·Im⟨λ|G|φ⟩, using the chain rule through
-  `ParamRef.coeff` and summed over gates that share a parameter.
-- Tests: the adjoint result must match parameter-shift and central finite
-  differences to 1e-8 on random circuits with shared and affine parameters,
-  controlled rotations, U gates and n up to 8.
+- Use complex128 throughout (complex64 is opt-in per backend for GPU
+  memory, and results report the dtype). There are no per-amplitude Python
+  loops. Memory guard: refuse a batch when B·2ⁿ·16 bytes > 1 GiB, and split
+  it into chunks automatically.
+- Adjoint method: dC/dθ_gate = 2·Im⟨λ|G|φ⟩, batched over B, using the chain
+  rule through `ParamRef.coeff` and summed over gates that share a
+  parameter. Fused diagonal ops differentiate analytically: ∂/∂θₖ of the
+  phase op is −i·gₖ elementwise.
+- `reference.py` is the unfused, unbatched oracle (§4.1.1).
+- **Tests:**
+  - compiled (every backend present) ≡ reference to 1e-10;
+  - adjoint ≡ parameter-shift ≡ central finite differences to 1e-8, on
+    random circuits with shared and affine parameters, controlled
+    rotations, U gates and diagonal runs, for n up to 8;
+  - cross-checks against Qiskit `Statevector` and the Cirq simulator.
+- **Performance targets (numpy backend, this container):**
+  - batched value_and_grad for n = 12, 72 params, B = 256 in < 2 s;
+  - n = 16, B = 64 in < 10 s.
+  
+  The measured numbers go in the docs.
+
+### 5.4b Pauli Propagation Engine (`pauliprop.py`)
+
+The design is in §4.1.2.
+
+```python
+def ppe_applicable(circuit: ParamCircuit, observable: PauliSum, *, init: str) -> tuple[bool, str | None]   # (ok, reason-if-not)
+def ppe_gradient_variances(circuit, observable, *, max_weight: int | None = None, min_weight_abs: float = 1e-12,
+                           max_frontier: int = 2_000_000, time_budget_s: float = 20.0,
+                           progress=None, cancel=None) -> dict
+# -> {"method": "pauli_propagation_exact"|"pauli_propagation_bounded",
+#     "per_parameter": [{"name", "variance", "interval": [lo, hi]}], "variance_mean", "variance_mean_interval",
+#     "frontier_peak": int, "discarded_mass": float, "elapsed_ms": int}
+def ppe_expectation_bounds(circuit, observable, values, **budget) -> dict   # ⟨O⟩ at fixed params with truncation interval
+```
+
+Required tests:
+- agreement with batched statevector sampling (within the 95% CI) on
+  random Clifford+Pauli-rotation circuits for n ≤ 12;
+- exact closed forms for a single rotation (Var = ½ for an anticommuting
+  Pauli);
+- the global-Z hardware-efficient ansatz whose variance decays as known;
+- bounds that always contain the exact value when truncation is forced;
+- the n = 64 and n = 128 local-observable shallow circuits finish within
+  the budget.
 
 ### 5.5 Analyses (`analyses.py`, `lie.py`, `expressibility.py`, `scaling.py`, `landscape.py`, `lint.py`)
 
@@ -358,6 +556,13 @@ output.
 `init`: `uniform` is θ ~ U[0, 2π). `small` is θ ~ N(0, 0.1²). CIs are
 percentile bootstrap (1000 resamples, seeded).
 
+The output also carries `"method"`, `"backend"` and, for the PPE,
+`"interval"` fields. `method="auto"` (the default) uses the PPE when
+`ppe_applicable` holds and its bound is tight, else compiled batched
+sampling. `method` can be forced to `"sampling"` or `"ppe"`. When the PPE
+is used, `per_parameter[].variance_ci95` is the rigorous truncation
+interval, not a bootstrap CI, and the UI labels it as such.
+
 `scaling_study(build: Callable[[int, int], ParamCircuit], *, qubits: list[int], layers: list[int], observable_spec: str, samples, seed, init) ->`
 ```json
 {"points": [{"n_qubits": 2, "n_layers": 4, "n_params": 16, "variance": 0.05, "variance_ci95": [0.04, 0.06]}],
@@ -368,8 +573,10 @@ percentile bootstrap (1000 resamples, seeded).
            "verdict": "barren_plateau",
            "summary": "Var[∂C] ∝ 2^(−0.93 n) (95% CI 0.81–1.05); exponential preferred over power law (ΔAIC 8.3)."}]}
 ```
-Fit by weighted least squares on log₂(Var), with weights from the bootstrap
-CI width. β's CI comes from a bootstrap over points. Verdicts:
+Qubit ranges go up to 128 when the PPE applies at every point, and up to
+`MAX_STATEVECTOR_QUBITS` otherwise; each point records its `method`. Fit by
+weighted least squares on log₂(Var), with weights from the CI/interval
+width. β's CI comes from a bootstrap over points. Verdicts:
 `barren_plateau` if exponential is preferred by ΔAIC ≥ 2 and β's lower CI is
 > 0.1. `polynomial` if power-law is preferred by ΔAIC ≥ 2, or β's CI includes
 ≤ 0.1. Otherwise `inconclusive`, which is also forced when there are fewer
@@ -480,7 +687,9 @@ Errors use `{"type":"error","phase":"trainability","code","message", "job_id"?}`
   - `samples` 16–4096 (200)
   - `seed` (0)
   - `init` `uniform|small`
-  - `scaling: {qubits: int[] (2–16, ≤ 10 values), layers: int[] (≤ 4 values), qubit_param: "n_qubits", layer_param: "n_layers"}`
+  - `scaling: {qubits: int[] (2–128, ≤ 12 values; values above 20 require the PPE path, and a point fails with `ppe_required` otherwise), layers: int[] (≤ 4 values), qubit_param: "n_qubits", layer_param: "n_layers"}`
+  - `method: "auto" | "sampling" | "ppe"`
+  - `backend: "auto" | "numpy" | "cupy" | "jax"`
   - `expressibility: {pairs 100–20000 (2000), bins 75}`
   - `entanglement: {samples (1000)}`
   - `landscape: {resolution 11–81 (41), span (π)}`
@@ -496,8 +705,9 @@ Errors use `{"type":"error","phase":"trainability","code","message", "job_id"?}`
   subprocess streams JSON lines on stdout and is killed by process group on
   cancel, owner release, or the 20-minute wall limit. Limits: at most 2
   running jobs per owner and 4 globally; extra starts get an `error` with code
-  `trainability_busy`. Gradients and landscape are capped at
-  `MAX_STATEVECTOR_QUBITS = 18`, but the default UI caps scaling at 14.
+  `trainability_busy`. Statevector paths (sampling, expressibility,
+  entanglement, landscape) are capped at `MAX_STATEVECTOR_QUBITS = 20`, and
+  the default UI caps them at 14. PPE gradient paths go to 128 qubits.
 - User code is the user's own (same trust as `execute`). It runs inside the
   job subprocess, not in the kernel process.
 
@@ -576,7 +786,16 @@ Errors use `{"type":"error","phase":"trainability","code","message", "job_id"?}`
   7. `duration` — the number of TICK-delimited layers that contain measurements is ≥ rounds.
   8. `decodable` — `detector_error_model(decompose_errors=True)` succeeds (graphlike for matching).
   9. `nontrivial_observable` — at least one error mechanism flips an observable.
-  10. `fault_distance` — `circuit.search_for_undetectable_logical_errors(dont_explore_detection_event_sets_with_size_above=4, dont_explore_edges_with_degree_above=4, dont_explore_edges_increasing_symptom_degree=False, canonicalize_circuit_errors=True)`. The weight must be ≥ the requested distance. If the search is too expensive (it is skipped when `num_detectors > 5000`), fall back to `len(shortest_graphlike_error())` and mark `warn` "graphlike bound only".
+  10. `fault_distance` — uses the budget policy of §4.1.4:
+      - d ≤ 5: an exact `circuit.search_for_undetectable_logical_errors(dont_explore_detection_event_sets_with_size_above=4, dont_explore_edges_with_degree_above=4, dont_explore_edges_increasing_symptom_degree=False, canonicalize_circuit_errors=True)` under a 10 s budget;
+      - d > 5, or a budget overrun: `len(shortest_graphlike_error())`, plus a pruned search under the remaining budget.
+
+      Any logical error found with weight < the requested distance is a
+      `fail` (that is cheating caught). Passing only under bounded search
+      is a `warn` with "distance verified only up to the search bounds".
+      The result is cached by the structural hash of the noisy circuit.
+      This guardrail runs only in the `full` and `confirm` stages; `screen`
+      reports it as `skipped (deferred to full stage)`.
 - **Sampling:** `compile_detector_sampler(seed=derived_seed)` plus
   `pymatching.Matching.from_detector_error_model`. Sample in batches until
   `errors ≥ max_errors` or `shots ≥ max`, never fewer than `min`. This is
@@ -599,7 +818,7 @@ Errors use `{"type":"error","phase":"trainability","code","message", "job_id"?}`
 - **Config:**
   - `target: {kind: "ghz"|"w"|"dicke"|"haar", n_qubits 2–12, k (dicke), seed (haar)}`
   - `fidelity_threshold` (default 0.999)
-  - `cost: "two_qubit_gates"|"depth"|"t_count"` (default two_qubit_gates)
+  - `cost: "two_qubit_gates"|"depth"|"t_count"` (default two_qubit_gates). Costs are measured after the canonical decomposition of §4.1.6, so composite gates are charged what they compile to.
   - `cost_weight` (0.1)
   - `allowed_gates` (IR names; default `["H","X","Y","Z","S","SDG","T","TDG","SX","RX","RY","RZ","CX","CZ"]`)
   - `optimize_parameters: {restarts: 8, steps: 300, learning_rate: 0.05}`
@@ -656,7 +875,12 @@ Errors use `{"type":"error","phase":"trainability","code","message", "job_id"?}`
   "stdout": "", "stderr": "",
   "timings_ms": {"sandbox": 812, "score": 2290, "total": 3120},
   "evaluator": {"kind": "qec_memory", "version": "1.0.0", "fingerprint": "<64 hex>"},
-  "seed": 1234
+  "seed": 1234,
+  "stage": "screen" | "full" | "confirm",
+  "program_key": "<64 hex: sha256 of ast.dump(normalized module)>",
+  "cache_hit": false,
+  "isolation": "process" | "bwrap" | "sandbox-exec",
+  "compute": {"backend": "numpy", "method": "statevector_sampling" | "pauli_propagation_exact" | null}
 }
 ```
 `fitness` is null unless the status is `scored`. Guardrails not reached are
@@ -691,10 +915,22 @@ listed with `status: "skipped"`.
 | Request | Response(s) |
 |---|---|
 | `discovery_evaluators {}` | `discovery_evaluators_result {evaluators: [EvaluatorSpec as JSON: kind, version, title, description, task, entry_signature, objectives, descriptors, config_schema, default_config]}` |
-| `discovery_evaluate {run_id, candidate_id, evaluator: {kind, config}, program, entry?, seed}` | `discovery_evaluate_accepted {run_id, candidate_id, queue_position}` → later `discovery_evaluation {run_id, candidate_id, evaluation}` |
+| `discovery_evaluate {run_id, candidate_id, evaluator: {kind, config}, program, entry?, seed, stage?: "screen"\|"full"\|"confirm" (default "full")}` | `discovery_evaluate_accepted {run_id, candidate_id, queue_position}` → later `discovery_evaluation {run_id, candidate_id, evaluation}` |
 | `discovery_cancel {run_id, candidate_id?}` | `discovery_cancelled {run_id, candidate_id, cancelled: int}`. Cancelled jobs still emit `discovery_evaluation` with status `failed` and code `cancelled`. |
 | `discovery_mutate {program, start_marker?, end_marker?, seed, count}` | `discovery_mutations {mutations: [...]}` |
 
+- **Cascade (§4.1.5):** each `EvaluatorSpec` declares `stages: {screen: {...config overrides}, full: {}, confirm: {...}}`.
+  - `qec_memory` screen: `shots {min: 1000, max: 5000, max_errors: 50}`, fault distance deferred.
+  - `state_synthesis` screen: `optimize_parameters {restarts: 1, steps: 60}`.
+  - `vqe_ground_state` screen: `training {restarts: 1, steps: 50}`, prefilter samples 32.
+  
+  The *runner* decides promotion. The kernel evaluates the stage it is
+  asked for.
+- **Cache:** an in-kernel LRU of 512 entries keyed by
+  `(program_key, fingerprint, seed, stage)`. A hit returns the stored
+  evaluation with `cache_hit: true` and new timings. The frontend also
+  skips proposals whose `program_key` it has already evaluated in the run,
+  recording a `duplicate` proposal.
 - Errors: `{"type":"error","phase":"discovery","code","message","run_id"?,"candidate_id"?}`.
   Invalid evaluator config is answered with an `error` with code
   `invalid_config` (validated with `jsonschema` when available, else by
@@ -790,10 +1026,18 @@ search:
   migration_interval: 5          # generations; 0 disables
   exploration: 0.15              # probability of a random elite parent
   early_stop_patience: 10        # generations without best-fitness improvement; 0 disables
+evaluation:
+  cascade: true                  # screen → full only when promising (§4.1.5)
+  promote_if: island_median      # island_median | island_best | always
 mutator:
   kind: hybrid                   # llm | ast | hybrid
   llm_share: 0.75                # hybrid only
-  model: sonnet                  # haiku | sonnet | opus → src/config/dirac.ts ids
+  models:                        # AlphaEvolve-style ensemble: many cheap broad edits + some deep ones
+    breadth: haiku               # haiku | sonnet | opus → src/config/dirac.ts ids
+    depth: opus
+    depth_share: 0.2             # fraction of LLM proposals sent to the depth model
+    depth_thinking: true         # extended thinking on depth calls
+  batch_mode: false              # true → Message Batches API (async, cheaper); for unattended overnight runs
   inspirations: 2
 budget:
   max_evaluations: 200
@@ -853,12 +1097,22 @@ experiments/
     It records `usage` and never throws. No key means the hybrid falls back
     to AST with a visible notice, and `llm` mode refuses to start with a
     clear message.
+    It routes each proposal to the breadth or depth model per
+    `mutator.models` (deterministic from the run RNG) and enables extended
+    thinking on depth calls when configured. In `batch_mode` it submits a
+    generation's prompts through the Message Batches API and polls,
+    persisting batch ids so that a resumed run reattaches.
   - `runner.ts` — `runDiscovery(spec, ctx, deps, opts)`, dependency-injected
     (`session`, `fs`, `llm`, `clock`, `hash`), with pause / resume / stop.
     Each generation proposes `candidates_per_generation` children across
     islands round-robin and evaluates them with
     `max_concurrent_evaluations` in flight. Budgets are enforced before
-    every proposal. Early stop applies. At the end, the confirmation step
+    every proposal. With `evaluation.cascade`, every child is evaluated at
+    `stage: "screen"` first. It is promoted to `full` only when its
+    optimistic screen bound beats `promote_if` (the island median by
+    default), and only `full`/`confirm` evaluations can enter the archive.
+    Screen-only candidates are kept in the lineage, marked "screened out".
+    Early stop applies. At the end, the confirmation step
     re-evaluates the champion on `confirm.seeds` fresh seeds and reports the
     mean ± CI as the **confirmed** objective. Every state change is
     persisted; the runner survives the panel unmounting because it is owned
@@ -914,6 +1168,35 @@ experiments/
 - Distributed evaluation.
 - Learned decoders.
 - A Pyodide execution path for the Lab.
+- A native Rust statevector kernel (deferred per §4.1.8).
+- Evolving the prompts themselves (AlphaEvolve's meta-prompt evolution) —
+  a v2 candidate once the run journal has enough data.
+
+## 9b. Build order and verification gates
+
+1. **Compute core:** IR, converters, adapter change, the reference oracle,
+   the Lab Compiler (numpy backend first, then the cupy/jax lowering
+   behind availability checks) and the PPE.
+   *Gate:* compiled ≡ reference; adjoint ≡ parameter-shift; PPE ≡ sampling
+   within CI; the §5.4 performance targets are met.
+2. **Analyses + lint + jobs** (§5.5–5.6).
+   *Gate:* the known-result tests; the barren-plateau scaling verdict test
+   at n = 2..10 by sampling **and** to n = 64 by the PPE.
+3. **Discovery kernel:** sandbox, scorer, the three evaluators with
+   stages, the cache, canonical cost, the isolation probe and the AST
+   mutator.
+   *Gate:* every guardrail has a cheating candidate rejected by exactly
+   that guardrail; sandbox abuse tests; surface code d = 3 → 5 shows Λ > 1.
+4. **Frontend:** the Trainability Lab, then the Discovery Engine
+   (schema, search, cascade orchestration, ensemble mutator, runner,
+   UI).
+   *Gate:* unit + jsdom suites; Playwright stubbed-kernel specs;
+   real-kernel screenshots at 1440/1024 in light and dark, reviewed
+   against the design-system rules.
+5. **Integration + independent review:** Dirac context, the status chips,
+   the mode-switch guard, docs. Then adversarial reviews: research
+   correctness, red-teaming the evaluators, code review, UI review. Fix
+   until clean.
 
 ## 10. File ownership for the parallel build
 
