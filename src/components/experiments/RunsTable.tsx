@@ -23,10 +23,10 @@ const OVERSCAN = 6;
 const STATUS_OPTIONS: Array<RunStatus | 'all'> = ['all', 'complete', 'failed', 'running', 'stale'];
 const CHECKBOX_COLUMN_WIDTH = 32;
 const RUN_COLUMN_WIDTH = 176;
-const NARROW_RUN_COLUMN_WIDTH = 150;
+const NARROW_RUN_COLUMN_WIDTH = 160;
 const NARROW_VIEWPORT = 1000;
 const MIN_DATA_COLUMN_WIDTH = 116;
-const NARROW_MIN_DATA_COLUMN_WIDTH = 92;
+const NARROW_MIN_DATA_COLUMN_WIDTH = 84;
 const HEADER_HEIGHT = 40;
 
 /**
