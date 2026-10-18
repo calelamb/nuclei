@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { render, cleanup, fireEvent, waitFor, act } from '@testing-library/react';
+import { render, cleanup, fireEvent, waitFor, act, screen } from '@testing-library/react';
 import { parse as parseYaml } from 'yaml';
 import { NewExperimentForm } from './NewExperimentForm';
 import { useProjectStore } from '../../stores/projectStore';
@@ -189,22 +189,26 @@ describe('NewExperimentForm', () => {
     expect(getByText('Edit theta-sweep')).toBeTruthy();
   });
 
-  it('asks before discarding unsaved edits on Close (research-01)', () => {
+  it('asks before discarding unsaved edits on Close, in an in-app dialog (research-01, research-r-07)', async () => {
     const onClose = vi.fn();
-    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(false);
-    const { getByLabelText, getByText } = render(
+    const nativeConfirm = vi.spyOn(window, 'confirm');
+    const { getByLabelText, getByText, findByRole, queryByRole } = render(
       <NewExperimentForm projectRoot="/proj" existing={EXISTING} onClose={onClose} />,
     );
     fireEvent.click(getByText('Close'));
     expect(onClose).toHaveBeenCalledTimes(1); // clean form closes silently
     fireEvent.change(getByLabelText('Shots'), { target: { value: '5' } });
     fireEvent.click(getByText('Close'));
-    expect(confirmSpy).toHaveBeenCalled();
+    const dialog = await findByRole('dialog', { name: 'Discard your unsaved changes?' });
+    expect(dialog).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Keep editing' }));
+    await waitFor(() => expect(queryByRole('dialog')).toBeNull());
     expect(onClose).toHaveBeenCalledTimes(1); // user declined
-    confirmSpy.mockReturnValue(true);
     fireEvent.click(getByText('Close'));
-    expect(onClose).toHaveBeenCalledTimes(2);
-    confirmSpy.mockRestore();
+    fireEvent.click(await screen.findByRole('button', { name: 'Discard' }));
+    await waitFor(() => expect(onClose).toHaveBeenCalledTimes(2));
+    expect(nativeConfirm).not.toHaveBeenCalled();
+    nativeConfirm.mockRestore();
   });
 
   it('blocks a new experiment whose name collides with an existing one (LR-01)', () => {
@@ -215,6 +219,11 @@ describe('NewExperimentForm', () => {
     fireEvent.change(getByLabelText('Name'), { target: { value: 'Theta Sweep' } });
     fireEvent.change(getByLabelText('Entry file'), { target: { value: 'other.py' } });
     expect(getByRole('alert').textContent).toMatch(/already exists/i);
+    // The message sits under the Name field and is wired to it (research-r-08).
+    const nameInput = getByLabelText('Name');
+    expect(nameInput.getAttribute('aria-invalid')).toBe('true');
+    expect(document.getElementById(nameInput.getAttribute('aria-describedby') ?? '')).toBe(getByRole('alert'));
+    expect(nameInput.parentElement?.contains(getByRole('alert'))).toBe(true);
     const submit = getByText('Create experiment') as HTMLButtonElement;
     expect(submit.disabled).toBe(true);
     fireEvent.click(submit);
