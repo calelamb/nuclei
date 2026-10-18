@@ -3,7 +3,7 @@ import { LessonCodeEditor } from './LessonCodeEditor';
 import { useLearnStore } from '../../stores/learnStore';
 import { useDiracPanelStore } from '../../stores/diracPanelStore';
 import type { Framework, SimulationResult, KernelResponse } from '../../types/quantum';
-import { Lightbulb, CheckCircle, XCircle, HelpCircle, Terminal } from 'lucide-react';
+import { Lightbulb, CheckCircle, XCircle, HelpCircle, Terminal, RotateCcw } from 'lucide-react';
 import { hasAnyExpectation, hasExpectedDistribution, isQuantumCode, shouldAutoGrade, validateExerciseRun } from './exerciseValidation';
 import { UnsupportedNotice } from './UnsupportedNotice';
 import { OutcomeResults } from './OutcomeResults';
@@ -28,6 +28,13 @@ interface ExerciseBlockProps {
   successMessage: string;
 }
 
+const DRAFT_DEBOUNCE_MS = 300;
+
+function initialCode(lessonId: string | null, exerciseId: string, starterCode: string): string {
+  if (!lessonId) return starterCode;
+  return useLearnStore.getState().lessonProgress[lessonId]?.drafts?.[exerciseId] ?? starterCode;
+}
+
 export function ExerciseBlock({
   id, title, description, starterCode,
   expectedProbabilities, expectedMeasurements, expectedOutput, requiredCode, tolerancePercent, hints, successMessage,
@@ -35,12 +42,14 @@ export function ExerciseBlock({
   const lessonId = useLearnStore((s) => s.currentLessonId);
   const passExercise = useLearnStore((s) => s.passExercise);
   const addHintUsed = useLearnStore((s) => s.addHintUsed);
+  const setExerciseDraft = useLearnStore((s) => s.setExerciseDraft);
+  const clearExerciseDraft = useLearnStore((s) => s.clearExerciseDraft);
   const lessonProgress = useLearnStore((s) => s.lessonProgress);
   const openDirac = useDiracPanelStore((s) => s.open);
 
   const isPassed = lessonId ? lessonProgress[lessonId]?.exercisesPassed?.includes(id) ?? false : false;
 
-  const [localCode, setLocalCode] = useState(starterCode);
+  const [localCode, setLocalCode] = useState(() => initialCode(lessonId, id, starterCode));
   const [result, setResult] = useState<SimulationResult | null>(null);
   const [output, setOutput] = useState<string[]>([]);
   const [isRunning, setIsRunning] = useState(false);
@@ -52,7 +61,10 @@ export function ExerciseBlock({
   const [hasRun, setHasRun] = useState(false);
 
   const inactivityRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const codeRef = useRef(starterCode);
+  const codeRef = useRef(localCode);
+  const draftTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const draftTargetRef = useRef({ lessonId, id });
+  draftTargetRef.current = { lessonId, id };
   const runTokenRef = useRef(0);
   const outputRef = useRef<string[]>([]);
   const resultRef = useRef<SimulationResult | null>(null);
@@ -153,11 +165,46 @@ export function ExerciseBlock({
     return () => { if (inactivityRef.current) clearTimeout(inactivityRef.current); };
   }, [armInactivityTimer]);
 
+  // Persists the draft so it survives the lesson unmounting (Glossary, Next/Prev, Explorer).
+  const flushDraft = useCallback(() => {
+    if (draftTimerRef.current) clearTimeout(draftTimerRef.current);
+    draftTimerRef.current = null;
+    const target = draftTargetRef.current;
+    if (!target.lessonId) return;
+    if (codeRef.current === starterCode) clearExerciseDraft(target.lessonId, target.id);
+    else setExerciseDraft(target.lessonId, target.id, codeRef.current);
+  }, [clearExerciseDraft, setExerciseDraft, starterCode]);
+
+  useEffect(() => {
+    const pending = draftTimerRef;
+    return () => { if (pending.current) flushDraft(); };
+  }, [flushDraft]);
+
   const handleCodeChange = (value: string | undefined) => {
     codeRef.current = value ?? '';
     setLocalCode(value ?? '');
+    setFeedback(null);
+    if (draftTimerRef.current) clearTimeout(draftTimerRef.current);
+    draftTimerRef.current = setTimeout(flushDraft, DRAFT_DEBOUNCE_MS);
     setUnsupported(null);
     // The last run no longer reflects this code, so it cannot be graded until the learner runs again.
+    setHasRun(false);
+    resetInactivity();
+  };
+
+  const handleReset = () => {
+    if (draftTimerRef.current) clearTimeout(draftTimerRef.current);
+    draftTimerRef.current = null;
+    codeRef.current = starterCode;
+    setLocalCode(starterCode);
+    if (lessonId) clearExerciseDraft(lessonId, id);
+    outputRef.current = [];
+    resultRef.current = null;
+    setOutput([]);
+    setResult(null);
+    setError(null);
+    setUnsupported(null);
+    setFeedback(null);
     setHasRun(false);
     resetInactivity();
   };
@@ -206,6 +253,8 @@ export function ExerciseBlock({
   };
 
   const hasProbabilities = Boolean(result && Object.values(result.probabilities).some((p) => p > 0.001));
+  const ranEmpty = hasRun && !isRunning && hasExpectations && !feedback && !error && !unsupported
+    && output.length === 0 && !hasProbabilities;
   const state = isPassed ? 'passed' : feedback?.success === false ? 'failed' : 'open';
 
   return (
@@ -234,12 +283,21 @@ export function ExerciseBlock({
           <span className="exercise__ok"><CheckCircle size={12} aria-hidden="true" /> Ran. Compare {output.length > 0 ? 'the output above' : 'your output'} with the task.</span>
         )}
         <span className="demo__spacer" />
+        {localCode !== starterCode && (
+          <Button variant="ghost" onClick={handleReset} icon={<RotateCcw size={12} aria-hidden="true" />} title="Restore the starter code">
+            Reset
+          </Button>
+        )}
         {hintsRevealed < hints.length && (
           <Button onClick={revealHint} icon={<Lightbulb size={12} aria-hidden="true" />}>
             Show hint ({hintsRevealed}/{hints.length})
           </Button>
         )}
       </div>
+
+      {ranEmpty && (
+        <div className="exercise__idle" role="status">Ran · no output yet. Replace the TODO lines, then Run.</div>
+      )}
 
       {unsupported && <div className="demo__notice"><UnsupportedNotice message={unsupported} /></div>}
 

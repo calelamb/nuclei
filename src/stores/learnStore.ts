@@ -7,6 +7,8 @@ export interface LessonProgress {
   exercisesPassed: string[];
   quizScores: Record<string, number>;
   hintsUsed: number;
+  /** Unsubmitted exercise code, keyed by exercise id. */
+  drafts?: Record<string, string>;
 }
 
 export type AssessedLevel = 'absolute-beginner' | 'beginner' | 'intermediate' | 'advanced';
@@ -38,6 +40,8 @@ interface LearnState {
   passExercise: (lessonId: string, exerciseId: string) => void;
   setQuizScore: (lessonId: string, quizId: string, score: number) => void;
   addHintUsed: (lessonId: string) => void;
+  setExerciseDraft: (lessonId: string, exerciseId: string, code: string) => void;
+  clearExerciseDraft: (lessonId: string, exerciseId: string) => void;
   setAssessedLevel: (level: AssessedLevel) => void;
   setNeedsPythonTrack: (needs: boolean) => void;
 }
@@ -206,6 +210,26 @@ export const useLearnStore = create<LearnState>((set, get) => ({
     if (!progress) return;
     const updatedProgress = { ...get().lessonProgress, [lessonId]: { ...progress, hintsUsed: progress.hintsUsed + 1 } };
     set({ lessonProgress: updatedProgress });
+    persist(get());
+  },
+
+  setExerciseDraft: (lessonId, exerciseId, code) => {
+    const progress = get().lessonProgress[lessonId]
+      ?? { startedAt: new Date().toISOString(), exercisesPassed: [], quizScores: {}, hintsUsed: 0 };
+    const updatedProgress = {
+      ...get().lessonProgress,
+      [lessonId]: { ...progress, drafts: { ...progress.drafts, [exerciseId]: code } },
+    };
+    set({ lessonProgress: updatedProgress });
+    persist(get());
+  },
+
+  clearExerciseDraft: (lessonId, exerciseId) => {
+    const progress = get().lessonProgress[lessonId];
+    if (!progress?.drafts || !(exerciseId in progress.drafts)) return;
+    const { [exerciseId]: _removed, ...rest } = progress.drafts;
+    void _removed;
+    set({ lessonProgress: { ...get().lessonProgress, [lessonId]: { ...progress, drafts: rest } } });
     persist(get());
   },
 
