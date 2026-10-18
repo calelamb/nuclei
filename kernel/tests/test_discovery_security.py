@@ -162,3 +162,17 @@ def build():
             while _pid_alive(pid) and time.monotonic() < deadline:
                 time.sleep(0.1)
             assert not _pid_alive(pid), f"survivor pid {pid}"
+
+
+@pytest.mark.parametrize("module", ["kernel.discovery.score_worker", "kernel.discovery.audits.audit_worker"])
+def test_workers_turn_unserialisable_results_into_a_coded_failure(module):
+    import importlib
+
+    worker = importlib.import_module(module)
+    for bad in (float("nan"), float("inf")):
+        line = worker._encode_response({"status": "scored", "fitness": bad, "metrics": {"x": bad}})
+        assert line.endswith(b"\n") and line.count(b"\n") == 1
+        payload = json.loads(line)
+        assert payload["status"] == "failed" and payload["failure"]["code"] == "non_finite_result"
+    ok = json.loads(worker._encode_response({"status": "scored", "fitness": 1.5}))
+    assert ok["fitness"] == 1.5 and ok["protocol_version"] == 1

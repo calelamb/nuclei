@@ -96,6 +96,15 @@ def _read_request(raw: bytes) -> dict[str, Any]:
     return request
 
 
+def _encode_response(result: dict[str, Any]) -> bytes:
+    """Serialise the one response line; NaN/Infinity or an unserialisable value becomes a coded failure."""
+    try:
+        return json.dumps({"protocol_version": PROTOCOL_VERSION, **result}, allow_nan=False, default=str).encode() + b"\n"
+    except (TypeError, ValueError, OverflowError, RecursionError) as exc:
+        fallback = failed("non_finite_result", f"Result could not be serialised as strict JSON: {type(exc).__name__}")
+        return json.dumps({"protocol_version": PROTOCOL_VERSION, **fallback}, allow_nan=False).encode() + b"\n"
+
+
 def main() -> int:
     out_fd = os.dup(1)
     devnull = os.open(os.devnull, os.O_RDWR)
@@ -114,7 +123,7 @@ def main() -> int:
             result = failed("cancelled", "Evaluation was cancelled.")
         except BaseException as exc:  # noqa: BLE001 - always answer with a coded failure
             result = failed("scorer_exception", f"{type(exc).__name__}: {exc}")
-    data = json.dumps({"protocol_version": PROTOCOL_VERSION, **result}, allow_nan=False, default=str).encode() + b"\n"
+    data = _encode_response(result)
     view = memoryview(data)
     while view:
         view = view[os.write(out_fd, view):]
