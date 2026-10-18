@@ -127,7 +127,7 @@ export function QuantumEditor() {
 
     editor.addAction({
       id: 'inline-edit',
-      label: 'Inline Edit (Cmd+K)',
+      label: 'Inline Edit with Dirac',
       keybindings: [monacoApi.KeyMod.CtrlCmd | monacoApi.KeyCode.KeyK],
       run: () => setShowInlineEdit(true),
     });

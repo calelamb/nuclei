@@ -6,7 +6,7 @@ import { useThemeStore } from '../../stores/themeStore';
 import { getFileOps } from '../../App';
 import { requestCloseTab } from '../../lib/tabClose';
 import { arrowNavTarget } from '../../lib/arrowNav';
-import { IconButton } from '../ui';
+import { IconButton, Tooltip } from '../ui';
 import { TYPOGRAPHY } from '../../styles/tokens';
 
 const basename = (p: string) => p.split('/').pop() ?? p;
@@ -129,12 +129,13 @@ function ProjectTab({ path, isDirty, isActive }: { path: string; isDirty: boolea
     >
       <FileCode size={14} style={{ color: isActive ? colors.accentText : colors.textDim, flexShrink: 0 }} />
       {isDirty && (
-        <span
-          role="img"
-          aria-label="Unsaved changes"
-          title="Unsaved changes"
-          style={{ width: 6, height: 6, borderRadius: '50%', backgroundColor: colors.warning, flexShrink: 0 }}
-        />
+        <Tooltip label="Unsaved changes" placement="below">
+          <span
+            role="img"
+            aria-label="Unsaved changes"
+            style={{ width: 6, height: 6, borderRadius: '50%', backgroundColor: colors.warning, flexShrink: 0 }}
+          />
+        </Tooltip>
       )}
       <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{name}</span>
       <IconButton
@@ -159,6 +160,7 @@ function LegacyTab() {
   const [renaming, setRenaming] = useState(false);
   const [value, setValue] = useState('');
   const inputRef = useRef<HTMLInputElement>(null);
+  const tabRef = useRef<HTMLDivElement>(null);
   const name = filePath ? basename(filePath) : 'untitled.py';
 
   useEffect(() => {
@@ -166,18 +168,24 @@ function LegacyTab() {
   }, [renaming]);
 
   const startRename = () => { setValue(name); setRenaming(true); };
-  const stopRename = () => { setRenaming(false); setValue(''); };
-  const commit = async () => {
+  // `refocus`: the user finished with the keyboard (Enter/Escape), so the input's removal must not drop focus to <body>.
+  const stopRename = (refocus = false) => {
+    setRenaming(false);
+    setValue('');
+    if (refocus) requestAnimationFrame(() => tabRef.current?.focus());
+  };
+  const commit = async (refocus = false) => {
     const next = value.trim();
-    if (!next || next === name) { stopRename(); return; }
+    if (!next || next === name) { stopRename(refocus); return; }
     const ops = getFileOps();
     const result = ops ? await ops.renameFile(next) : null;
     if (!result) { inputRef.current?.select(); return; }
-    stopRename();
+    stopRename(refocus);
   };
 
   return (
     <div
+      ref={tabRef}
       role="tab"
       aria-selected="true"
       tabIndex={0}
@@ -192,7 +200,9 @@ function LegacyTab() {
     >
       <FileCode size={14} style={{ color: colors.accentText, flexShrink: 0 }} />
       {isDirty && !renaming && (
-        <span role="img" aria-label="Unsaved changes" title="Unsaved changes" style={{ width: 6, height: 6, borderRadius: '50%', backgroundColor: colors.warning, flexShrink: 0 }} />
+        <Tooltip label="Unsaved changes" placement="below">
+          <span role="img" aria-label="Unsaved changes" style={{ width: 6, height: 6, borderRadius: '50%', backgroundColor: colors.warning, flexShrink: 0 }} />
+        </Tooltip>
       )}
       {renaming ? (
         <input
@@ -200,8 +210,8 @@ function LegacyTab() {
           value={value}
           onChange={(e) => setValue(e.target.value)}
           onKeyDown={(e) => {
-            if (e.key === 'Enter') { e.preventDefault(); void commit(); }
-            else if (e.key === 'Escape') { e.preventDefault(); stopRename(); }
+            if (e.key === 'Enter') { e.preventDefault(); void commit(true); }
+            else if (e.key === 'Escape') { e.preventDefault(); stopRename(true); }
             e.stopPropagation();
           }}
           onBlur={() => { void commit(); }}
@@ -213,13 +223,14 @@ function LegacyTab() {
           }}
         />
       ) : (
-        <span
-          onDoubleClick={startRename}
-          title="Double-click or press F2 to rename"
-          style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', cursor: 'text', userSelect: 'none' }}
-        >
-          {name}
-        </span>
+        <Tooltip label="Double-click or press F2 to rename" placement="below">
+          <span
+            onDoubleClick={startRename}
+            style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', cursor: 'text', userSelect: 'none' }}
+          >
+            {name}
+          </span>
+        </Tooltip>
       )}
     </div>
   );

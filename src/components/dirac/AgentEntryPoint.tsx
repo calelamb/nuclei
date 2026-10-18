@@ -6,7 +6,7 @@ import { usePlatform } from '../../platform/PlatformProvider';
 import { AgentRunCard } from './AgentRunCard';
 
 import { useWorkspaceStore } from '../../stores/workspaceStore';
-import { Button, TextInput } from '../ui';
+import { Button, TextInput, Tooltip } from '../ui';
 import './dirac.css';
 /**
  * Goal input + Run button for Dirac's agent mode, plus the live
@@ -71,14 +71,17 @@ export function AgentEntryPoint() {
           aria-label="Agent goal"
           style={{ flex: 1, minWidth: 0 }}
         />
-        <Button
-          variant="secondary"
-          onClick={handleRun}
-          disabled={Boolean(busyReason) || !goal.trim()}
-          title={busyReason ?? 'Run the agent toward this goal'}
-        >
-          Run Agent
-        </Button>
+        <Tooltip label={busyReason ?? 'Run the agent toward this goal'} placement="below">
+          <span style={{ display: 'inline-flex' }}>
+            <Button
+              variant="secondary"
+              onClick={handleRun}
+              disabled={Boolean(busyReason) || !goal.trim()}
+            >
+              Run Agent
+            </Button>
+          </span>
+        </Tooltip>
       </div>
 
       {activeRun && <AgentRunCard run={activeRun} isRunning={isRunning} onStop={cancel} />}

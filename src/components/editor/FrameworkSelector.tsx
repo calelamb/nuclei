@@ -126,7 +126,7 @@ export function FrameworkSelector({ compact = false }: { compact?: boolean } = {
           {...p}
           aria-expanded={expanded}
           className="nuclei-framework-btn"
-          title={compact ? `Framework: ${fullLabelFor(framework)}` : 'Framework'}
+          aria-label={compact ? `Framework: ${fullLabelFor(framework)}` : 'Framework'}
           style={{ minWidth: 0, maxWidth: '100%' }}
         >
           <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{labelFor(framework)}</span>
