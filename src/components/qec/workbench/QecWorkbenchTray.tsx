@@ -305,11 +305,12 @@ export function QecWorkbenchTray({ client: providedClient, connectClient }: QecW
       {!scopedSource && expanded && (engineNotice
         ? <EngineNotice state={engine} />
         : <TrayContent client={engine.client} projectRoot={projectRoot} />)}
-      {scopedSource && <div className="qec-tray__import-host" hidden={!expanded}>
-        {engine.client
-          ? <QecImportSheet onDismiss={closeAndRestoreFocus}><QecImportWizard source={scopedSource} client={engine.client} onClose={closeAndRestoreFocus} /></QecImportSheet>
-          : <EngineNotice state={engine} />}
-      </div>}
+      {scopedSource && engine.client && (
+        <QecImportSheet source={scopedSource} onDismiss={closeAndRestoreFocus}>
+          <QecImportWizard source={scopedSource} client={engine.client} onClose={closeAndRestoreFocus} hosted />
+        </QecImportSheet>
+      )}
+      {scopedSource && !engine.client && <div className="qec-tray__import-host" hidden={!expanded}><EngineNotice state={engine} /></div>}
     </section>
   );
 }

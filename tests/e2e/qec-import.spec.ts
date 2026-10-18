@@ -48,7 +48,7 @@ test('@qec imports a detector stream and restores the canonical session after re
     await page.getByRole('button', { name: 'Import minimal-dets' }).click();
     const wizard = page.getByRole('region', { name: 'Import captures/minimal.dets' });
     await expect(wizard).toBeVisible();
-    await expect(wizard).toHaveCSS('background-color', 'rgb(247, 250, 254)');
+    await expect(wizard).toHaveCSS('background-color', 'rgb(241, 245, 249)');
     await expect(wizard.getByText(SOURCE_HASH)).toBeVisible();
 
     await nextStage(page, 'Adapter');

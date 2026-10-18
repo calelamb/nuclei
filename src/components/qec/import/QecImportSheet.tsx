@@ -1,57 +1,53 @@
-import { useEffect, useRef, type KeyboardEvent, type ReactElement, type ReactNode } from 'react';
+import { useEffect, useRef, type ReactElement, type ReactNode } from 'react';
+import { X } from 'lucide-react';
+import { Dialog, IconButton } from '../../ui';
+import { ICON_SIZE, ICON_STROKE } from '../../../styles/tokens';
 
 interface QecImportSheetProps {
-  /** Escape from inside the sheet (not from an open select) closes it. */
+  /** The source being imported, shown under the title. */
+  source: string;
+  /** Escape and the close button end the import wizard. */
   onDismiss?(): void;
   children: ReactNode;
 }
 
-const FOCUSABLE = 'a[href], button:not(:disabled), input:not(:disabled), select:not(:disabled), textarea:not(:disabled), [tabindex]:not([tabindex="-1"])';
-
-/** Tab / Shift+Tab wrap inside the sheet instead of escaping to the workbench behind the scrim. */
-function trapTab(event: KeyboardEvent<HTMLDivElement>, root: HTMLElement): void {
-  const items = [...root.querySelectorAll<HTMLElement>(FOCUSABLE)].filter((el) => el.offsetParent !== null || el === document.activeElement);
-  if (items.length === 0) return;
-  const first = items[0];
-  const last = items[items.length - 1];
-  const active = document.activeElement;
-  if (event.shiftKey && (active === first || !root.contains(active))) {
-    event.preventDefault();
-    last.focus();
-  } else if (!event.shiftKey && active === last) {
-    event.preventDefault();
-    first.focus();
-  }
-}
+const SHEET_WIDTH = 920;
 
 /**
- * Modal sheet for the import wizard: a scrim over the workbench and a centred
- * panel, so the wizard gets real room instead of stretching the jobs tray.
- * Local to the QEC workbench until the shared Dialog primitive lands; the
- * scrim deliberately does not dismiss (a half-finished mapping is not worth
- * losing to a stray click) while Escape does.
+ * The import wizard on the shared Dialog: focus trap, focus return and the scrim
+ * come from the primitive. A half-finished mapping is not worth losing to a stray
+ * click, so the scrim does not dismiss; Escape does, handled here because the
+ * Dialog's own dismissal covers both. The wizard keeps the workbench's token
+ * scope (`qec-workbench`) because the Dialog portals out of it.
  */
-export function QecImportSheet({ onDismiss, children }: QecImportSheetProps): ReactElement {
-  const panelRef = useRef<HTMLDivElement>(null);
+export function QecImportSheet({ source, onDismiss, children }: QecImportSheetProps): ReactElement {
+  const dismissRef = useRef(onDismiss);
+  useEffect(() => { dismissRef.current = onDismiss; });
   useEffect(() => {
-    const previous = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
-    return () => { document.body.style.overflow = previous; };
+    const onKey = (event: KeyboardEvent): void => {
+      if (event.key !== 'Escape' || event.defaultPrevented) return;
+      event.preventDefault();
+      dismissRef.current?.();
+    };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
   }, []);
-  const onKeyDown = (event: KeyboardEvent<HTMLDivElement>): void => {
-    if (event.key === 'Escape' && !event.defaultPrevented) {
-      event.stopPropagation();
-      onDismiss?.();
-    } else if (event.key === 'Tab' && panelRef.current) {
-      trapTab(event, panelRef.current);
-    }
-  };
   return (
-    <div className="qec-import-sheet" onKeyDown={onKeyDown}>
-      <div className="qec-import-sheet__scrim" aria-hidden="true" />
-      <div ref={panelRef} className="qec-import-sheet__panel" role="dialog" aria-modal="true" aria-label="Import QEC data">
-        {children}
-      </div>
-    </div>
+    <Dialog
+      title="Import source"
+      description={<span className="qec-mono">{source}</span>}
+      width={SHEET_WIDTH}
+      flush
+      dismissible={false}
+      onClose={() => dismissRef.current?.()}
+      className="qec-import-dialog"
+      trailing={(
+        <IconButton aria-label="Close import wizard" onClick={() => dismissRef.current?.()}>
+          <X aria-hidden="true" size={ICON_SIZE.md} strokeWidth={ICON_STROKE} />
+        </IconButton>
+      )}
+    >
+      <div className="qec-workbench qec-import-host">{children}</div>
+    </Dialog>
   );
 }

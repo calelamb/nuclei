@@ -37,7 +37,7 @@ describe('QEC workbench CSS tokens', () => {
   it('defines exact light, responsive, overflow, focus, and reduced-motion contracts', () => {
     expect(qecStyles).toContain('--qec-canvas: var(--color-surface-base, #ffffff)');
     expect(qecStyles).toContain('--qec-recessed: var(--color-surface-sunken, #f1f5f9)');
-    expect(qecStyles).toContain('--qec-analytical: #2563eb');
+    expect(qecStyles).toMatch(/--qec-analytical: var\(--color-accent-quantum/);
     expect(qecStyles).toMatch(/\.qec-workbench\s*{[\s\S]*?overflow: hidden;/);
     expect(responsiveStyles).toMatch(
       /@media \(max-width: 1179px\)[\s\S]*?\.qec-inspector\s*{[\s\S]*?position: absolute;/,

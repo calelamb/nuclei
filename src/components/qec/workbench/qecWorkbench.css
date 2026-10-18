@@ -3,6 +3,7 @@
   --qec-action-foreground: #ffffff;
 }
 
+/* Token scope. The import dialog portals out of the workbench, so it re-enters this scope with its own .qec-workbench wrapper. */
 .qec-workbench {
   /* Surfaces, text and status resolve from the app's global tokens (which already flip with the theme);
      the literals are only fallbacks. The washes and lines below are QEC-specific. */
@@ -10,30 +11,41 @@
   --qec-recessed: var(--color-surface-sunken, #f1f5f9); --qec-border: var(--color-border-strong, #e2e8f0);
   --qec-text: var(--color-text-primary, #1a1a2e); --qec-text-muted: var(--color-text-secondary, #475569);
   --qec-quantum: var(--color-accent-quantum, #0891b2); --qec-interactive: var(--color-accent-quantum-soft, #00b4d8);
-  --qec-analytical: #2563eb; --qec-field: #f0f9ff; --qec-selection: #e0f2fe; --qec-selection-strong: #bae6fd;
-  --qec-quantum-strong: #164e63; --qec-analytical-strong: #075985;
+  /* The analytical accent is the product's teal, not a second blue (qec-r-27). */
+  --qec-analytical: var(--color-accent-quantum, #0891b2); --qec-field: #f0f9ff; --qec-selection: #e0f2fe; --qec-selection-strong: #bae6fd;
+  --qec-quantum-strong: #164e63; --qec-analytical-strong: var(--qec-quantum-strong);
   --qec-success: var(--color-success-text, var(--color-success, #059669)); --qec-warning: var(--color-warning, #a8580a);
   --qec-warning-field: #fffbeb; --qec-warning-border: #fcd34d; --qec-warning-divider: #fde68a; --qec-warning-text: #854d0e;
   --qec-danger: var(--color-danger-text, var(--color-danger, #dc2626)); --qec-danger-field: #fef2f2; --qec-danger-border: #fecaca;
   --qec-success-field: #f0fdf4; --qec-success-border: #bbf7d0;
-  --qec-wash: #f7fafe; --qec-line: #dbeafe; --qec-line-strong: #bfdbfe; --qec-line-hover: #93c5fd; --qec-tint: #eff6ff;
-  --qec-analytical-text: #1d4ed8; --qec-info-edge: #0284c7; --qec-on-strong: #ffffff;
+  /* Washes and rules are neutral aliases, so they follow the theme without a navy tint. */
+  --qec-wash: var(--color-surface-sunken, #f1f5f9); --qec-line: var(--color-border-strong, #e2e8f0);
+  --qec-line-strong: color-mix(in srgb, var(--color-border-strong) 55%, var(--color-text-tertiary));
+  --qec-line-hover: var(--color-text-tertiary, #5b6b80); --qec-tint: var(--color-surface-raised, #f8fafc);
+  --qec-analytical-text: var(--color-accent-quantum-text, #0e7490); --qec-info-edge: #0284c7; --qec-on-strong: #ffffff;
+}
+
+.qec-workbench {
   color: var(--qec-text); background: var(--qec-canvas); display: grid;
   grid-template-rows: auto minmax(0, 1fr) 9px auto; width: 100%; height: 100%; min-width: 0;
   min-height: 0; overflow: hidden; font-family: var(--font-sans); font-size: 13px;
   line-height: 1.45;
 }
 
+/* The import dialog reuses the workbench's resets and tokens but is a plain block, not the workbench grid. */
+.qec-workbench.qec-import-host {
+  display: flex; flex: 1; flex-direction: column; width: 100%; height: auto; min-height: 0; background: transparent; overflow: hidden;
+}
+
 /* Dark theme: only the QEC-specific washes and accents change; everything aliased above follows the global theme. */
 :root[data-theme='dark'] .qec-workbench {
   --qec-quantum: var(--color-accent-quantum-soft); --qec-interactive: var(--color-accent-quantum);
-  --qec-analytical: #60a5fa; --qec-field: #0f2233; --qec-selection: #0e2f44; --qec-selection-strong: #14425f;
-  --qec-quantum-strong: #7dd3e8; --qec-analytical-strong: #93c5fd;
+  --qec-analytical: var(--color-accent-quantum-soft); --qec-field: #0f2233; --qec-selection: #0e2f44; --qec-selection-strong: #14425f;
+  --qec-quantum-strong: #7dd3e8;
   --qec-warning-field: #2a2210; --qec-warning-border: #6b5311; --qec-warning-divider: #4a3a10; --qec-warning-text: #fcd34d;
   --qec-danger-field: #2a1417; --qec-danger-border: #6e2a2f;
   --qec-success-field: #0f2a1e; --qec-success-border: #1e5c3f;
-  --qec-wash: #0a101a; --qec-line: #1e2d45; --qec-line-strong: #2a3f5e; --qec-line-hover: #3b5a85; --qec-tint: #112036;
-  --qec-analytical-text: #93c5fd; --qec-info-edge: #38bdf8; --qec-on-strong: #ffffff;
+  --qec-info-edge: #38bdf8; --qec-on-strong: #ffffff;
 }
 
 .qec-workbench--tray-collapsed,
@@ -150,7 +162,7 @@
 
 .qec-research-trail li {
   display: flex; min-width: 0; align-items: center; gap: 5px;
-  color: var(--qec-analytical); font-size: 12px;
+  color: var(--qec-analytical-text); font-size: 12px;
 }
 
 .qec-research-trail li > span {

@@ -2,14 +2,13 @@
 .qec-tray--import.qec-tray--expanded { height: auto; }
 .qec-tray__import-host { min-width: 0; }
 
-.qec-import-sheet { position: fixed; z-index: 60; inset: 0; display: grid; place-items: center; padding: 24px; }
-.qec-import-sheet__scrim { position: absolute; inset: 0; background: var(--color-scrim, rgb(8 13 22 / 0.55)); animation: nuclei-fade-in 120ms ease; }
-.qec-import-sheet__panel {
-  position: relative; display: flex; width: min(920px, 100%); height: min(680px, 100%); min-height: 0; overflow: hidden;
-  border: 1px solid var(--qec-border); border-radius: 10px; background: var(--qec-wash);
-  box-shadow: var(--shadow-lg, 0 24px 64px rgb(8 13 22 / 0.4));
-}
-.qec-import-sheet__panel > .qec-import-wizard { height: auto; flex: 1; }
+/* The wizard lives in the shared Dialog; it fixes the dialog's height so the stage list scrolls inside it. */
+.nuclei-dialog.qec-import-dialog { height: min(680px, calc(100vh - 48px)); max-height: none; }
+.qec-import-dialog > .nuclei-dialog__body { display: flex; flex: 1; min-height: 0; flex-direction: column; overflow: hidden; color: var(--color-text-primary); }
+.qec-import-host > .qec-import-wizard { flex: 1; height: auto; min-height: 0; }
+@media (max-width: 699px) { .nuclei-dialog.qec-import-dialog { width: 100vw !important; height: 100vh; max-width: none; border-radius: 0; border: 0; } }
+
+.qec-import-wizard { height: auto; flex: 1; }
 @media (max-width: 699px) { .qec-import-sheet { padding: 0; } .qec-import-sheet__panel { height: 100%; border-radius: 0; border: 0; } }
 
 .qec-import-wizard {
@@ -17,13 +16,14 @@
   grid-template-rows: auto minmax(0, 1fr) auto; overflow: hidden; background: var(--qec-wash);
   color: var(--qec-text); font-family: var(--font-sans);
 }
+.qec-import-wizard--hosted { grid-template-rows: minmax(0, 1fr) auto; }
 .qec-import-wizard__header { display: flex; min-height: 70px; align-items: center; justify-content: space-between; gap: 16px; padding: 10px 18px; border-bottom: 1px solid var(--qec-line); background: var(--qec-canvas); }
 .qec-import-wizard__header > div > span, .qec-import-stage > header > span { display: block; color: var(--qec-analytical-text); font-size: 12px; font-weight: 500; letter-spacing: 0.04em; text-transform: uppercase; }
 .qec-import-wizard__header h2 { margin-top: 2px; font-size: 16px; line-height: 1.2; }
 .qec-import-wizard__header p { max-width: min(70vw, 640px); margin-top: 3px; overflow: hidden; color: var(--qec-text-muted); font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
 .qec-import-wizard__body { display: grid; min-width: 0; min-height: 0; grid-template-columns: 150px minmax(0, 1fr); overflow: hidden; }
 
-.qec-import-steps { min-width: 0; overflow: auto; padding: 16px 10px !important; border-right: 1px solid var(--qec-line); background: var(--qec-tint); }
+.qec-import-steps { min-width: 0; overflow: auto; padding: 16px 10px !important; border-right: 1px solid var(--qec-line); background: var(--qec-raised); }
 .qec-import-steps li { position: relative; display: grid; min-height: 42px; grid-template-columns: 24px minmax(0, 1fr); align-items: center; gap: 7px; padding: 3px 5px; color: var(--qec-text-muted); font-size: 12px; font-weight: 600; }
 .qec-import-steps li > span:first-child { position: relative; z-index: 1; display: grid; width: 22px; height: 22px; place-items: center; border: 1px solid var(--qec-line-strong); border-radius: 50%; background: var(--qec-canvas); color: var(--qec-text-muted); }
 .qec-import-steps li:not(:last-child)::after { position: absolute; top: 32px; bottom: -10px; left: 15px; width: 1px; background: var(--qec-line-strong); content: ''; }
