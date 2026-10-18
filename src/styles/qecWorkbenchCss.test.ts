@@ -14,6 +14,20 @@ const responsiveStyles = readFileSync(
 );
 const mainSource = readFileSync(resolve(process.cwd(), 'src/main.tsx'), 'utf8');
 
+describe('QEC type scale (design-r-16)', () => {
+  const wizardStyles = readFileSync(
+    resolve(process.cwd(), 'src/components/qec/import/qecImportWizard.css'),
+    'utf8',
+  );
+
+  it.each([
+    ['qecWorkbench.css', qecStyles],
+    ['qecImportWizard.css', wizardStyles],
+  ])('uses the type-scale tokens, not pixel literals, in %s', (_name, css) => {
+    expect(css.match(/font-size:\s*\d+(\.\d+)?px/g) ?? []).toEqual([]);
+  });
+});
+
 describe('QEC workbench CSS tokens', () => {
   it('aliases surfaces, text and status colours to the global tokens instead of redefining them (design-r-12)', () => {
     for (const pair of [
