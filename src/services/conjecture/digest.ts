@@ -16,7 +16,7 @@ export const DIGEST_CAPS = { topElites: 30, bottomElites: 10, categories: 8, num
 
 type Features = Record<string, unknown>;
 
-export interface DigestElite {
+interface DigestElite {
   id: string;
   rank: 'top' | 'bottom';
   fitness: number;
@@ -31,21 +31,21 @@ export interface DigestElite {
   scaling_points: number | null;
 }
 
-export interface FeatureBucket {
+interface FeatureBucket {
   value: string;
   n: number;
   mean_fitness: number;
   mean_beta_upper95: number | null;
 }
 
-export interface FeatureSummary {
+interface FeatureSummary {
   feature: string;
   kind: 'numeric' | 'categorical';
   n_with_value: number;
   buckets: FeatureBucket[];
 }
 
-export interface DigestCounts {
+interface DigestCounts {
   candidates: number;
   scored: number;
   rejected: number;
@@ -55,7 +55,7 @@ export interface DigestCounts {
   scored_with_features: number;
 }
 
-export interface DigestPayload {
+interface DigestPayload {
   evaluator: string;
   evaluator_fingerprint: string | null;
   run_id: string;
@@ -75,7 +75,7 @@ export interface Digest {
   scoredElites: number;
 }
 
-export interface DigestInput {
+interface DigestInput {
   run: RunRecord;
   candidates: Record<string, CandidateRecord>;
 }

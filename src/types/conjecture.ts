@@ -22,8 +22,6 @@ export interface PredicateLeaf {
 export type PredicateGroup = { all: PredicateNode[] } | { any: PredicateNode[] };
 export type PredicateNode = PredicateLeaf | PredicateGroup;
 
-export type PredictionQuantity = 'beta_upper95' | 'verdict' | 'variance_at_max_n' | 'log2_dla_dimension';
-
 export interface ConjecturePrediction {
   quantity: string;
   op: PredicateOp;

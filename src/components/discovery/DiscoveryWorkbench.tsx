@@ -7,7 +7,7 @@ import { RunDetail } from './RunDetail';
 import { useDiscoveryBoot } from './useDiscoveryBoot';
 import './discovery.css';
 
-export function DiscoveryUnavailable({ message }: { message: string }) {
+function DiscoveryUnavailable({ message }: { message: string }) {
   return (
     <LabEmptyState
       icon={MonitorOff}

@@ -23,7 +23,7 @@ import type {
 
 export type { ArchiveElite, ArchiveState };
 
-export const DEFAULT_BINS = 8;
+const DEFAULT_BINS = 8;
 
 export function createArchive(
   axes: readonly [ArchiveAxis, ArchiveAxis],
@@ -58,7 +58,7 @@ export function cellKey(cell: readonly [number, number]): string {
   return `${cell[0]},${cell[1]}`;
 }
 
-export function candidateOrder(candidateId: string): number {
+function candidateOrder(candidateId: string): number {
   const match = /(\d+)$/.exec(candidateId);
   return match ? Number.parseInt(match[1], 10) : Number.MAX_SAFE_INTEGER;
 }
@@ -86,7 +86,7 @@ export function isArchiveEligible(evaluation: DiscoveryEvaluation | null | undef
   return evaluation.stage === 'full' || evaluation.stage === 'confirm';
 }
 
-export interface EliteSource {
+interface EliteSource {
   candidateId: string;
   island: number;
   programHash: string;
@@ -127,7 +127,7 @@ export function isBetterElite(a: ArchiveElite, b: ArchiveElite): boolean {
   return a.order < b.order;
 }
 
-export interface InsertResult {
+interface InsertResult {
   archive: ArchiveState;
   accepted: boolean;
   replaced: ArchiveElite | null;
@@ -273,7 +273,7 @@ export function crowdingDistance(
   return distance;
 }
 
-export interface RankedElite {
+interface RankedElite {
   elite: ArchiveElite;
   rank: number;
   crowding: number;

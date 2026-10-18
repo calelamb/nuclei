@@ -15,7 +15,7 @@ import { GuardrailsTab } from './tabs/GuardrailsTab';
 import { LineageTab } from './tabs/LineageTab';
 import { OverviewTab } from './tabs/OverviewTab';
 
-export type RunTab = 'overview' | 'lineage' | 'archive' | 'candidates' | 'guardrails' | 'conjectures';
+type RunTab = 'overview' | 'lineage' | 'archive' | 'candidates' | 'guardrails' | 'conjectures';
 
 const PREFIX = 'discovery-run';
 

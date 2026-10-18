@@ -30,12 +30,12 @@ function cellKey(ctx: RunContext, c: CandidateRecord): string | null {
 }
 
 /** A candidate the audit policy may consider: scored at the full stage with a numeric fitness. */
-export function isAuditable(c: CandidateRecord): boolean {
+function isAuditable(c: CandidateRecord): boolean {
   const e = c.evaluation;
   return c.outcome === 'evaluated' && e !== null && e.status === 'scored' && typeof e.fitness === 'number' && e.stage !== 'screen';
 }
 
-export function findingOf(c: CandidateRecord): AuditFinding | null {
+function findingOf(c: CandidateRecord): AuditFinding | null {
   const audit = c.audit;
   if (!audit) return null;
   return { candidateId: c.id, verdict: audit.verdict, gap: audit.gap, reasons: audit.reasons, failedChecks: failedChecks(audit).map((k) => k.label) };
@@ -91,7 +91,7 @@ export async function runAudit(ctx: RunContext, candidate: CandidateRecord): Pro
   return recordAudit(ctx, candidate, outcome.audit);
 }
 
-export function recordAudit(ctx: RunContext, candidate: CandidateRecord, rawAudit: DiscoveryAudit): CandidateRecord {
+function recordAudit(ctx: RunContext, candidate: CandidateRecord, rawAudit: DiscoveryAudit): CandidateRecord {
   const audit = gateExploit(rawAudit, candidate.evaluation?.fitness, ctx.getRun().seed_fitness);
   if (audit !== rawAudit) ctx.notice(`Audit of ${candidate.id} failed but is not an exploit: ${audit.reasons[0]}`);
   const done: CandidateRecord = { ...candidate, audit, audit_pending: false, audit_error: null, adversarial_fitness: adversarialFitness(audit) };

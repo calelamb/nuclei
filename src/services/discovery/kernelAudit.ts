@@ -9,7 +9,7 @@ import type { KernelResponse } from '../../types/quantum';
 import type { RunnerKernelSession } from '../experimentRunner';
 import { isAmbiguousError, trackInFlight } from './kernelEval';
 
-export interface AuditRequest {
+interface AuditRequest {
   runId: string;
   candidateId: string;
   evaluator: { kind: DiscoveryEvaluatorKind; config: Record<string, unknown> };
@@ -19,7 +19,7 @@ export interface AuditRequest {
   evaluation: DiscoveryEvaluation;
 }
 
-export type AuditOutcome =
+type AuditOutcome =
   | { status: 'ok'; audit: DiscoveryAudit }
   | { status: 'cancelled' }
   | { status: 'error'; code: string; message: string };
@@ -31,9 +31,9 @@ export interface AuditClient {
   dispose(): void;
 }
 
-export const DEFAULT_AUDIT_TIMEOUT_MS = 30 * 60_000;
-export const AUDIT_BUSY_RETRIES = 5;
-export const AUDIT_BUSY_BACKOFF_MS = 500;
+const DEFAULT_AUDIT_TIMEOUT_MS = 30 * 60_000;
+const AUDIT_BUSY_RETRIES = 5;
+const AUDIT_BUSY_BACKOFF_MS = 500;
 
 interface Options {
   session: RunnerKernelSession & { onClose?: (handler: () => void) => () => void };

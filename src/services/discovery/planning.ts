@@ -18,7 +18,7 @@ import { selectInspirations, selectParent } from './selection';
 import { promotionThreshold, screenReferences } from './cascade';
 import type { Rng } from './rng';
 
-export interface BudgetView {
+interface BudgetView {
   usage: RunUsage;
   /** Evaluations / LLM calls already planned in the current generation. */
   plannedEvaluations: number;
@@ -85,7 +85,7 @@ export function thresholdForIsland(
   return promotionThreshold(spec.evaluation.promote_if, references);
 }
 
-export interface PlanInput {
+interface PlanInput {
   spec: DiscoverySpec;
   archive: ArchiveState;
   rng: Rng;
@@ -98,7 +98,7 @@ export interface PlanInput {
   candidates: ScreenLookup;
 }
 
-export type PlanOutcome =
+type PlanOutcome =
   | { kind: 'plan'; item: PlanItem; llmFallback: 'no_key' | 'llm_budget' | null }
   | { kind: 'stop'; reason: StopReason }
   | { kind: 'empty' };

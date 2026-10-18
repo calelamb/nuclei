@@ -106,7 +106,7 @@ export function failedChecks(audit: DiscoveryAudit): AuditCheck[] {
   return audit.checks.filter((c) => c.status === 'fail' || c.status === 'warn');
 }
 
-export function auditNotes(audit: DiscoveryAudit): string {
+function auditNotes(audit: DiscoveryAudit): string {
   const reasons = audit.reasons.length > 0 ? ` Reasons: ${audit.reasons.join('; ')}.` : '';
   const gap = audit.gap === null ? 'unknown' : String(audit.gap);
   return `Audit verdict ${audit.verdict}: evaluator fitness ${audit.evaluator_fitness ?? 'n/a'}, audit fitness ${audit.audit_fitness ?? 'n/a'}, gap ${gap}.${reasons}${audit.notes?.length ? ` ${audit.notes.join(' ')}` : ''}`;
@@ -117,7 +117,7 @@ export function exploitTitle(candidateId: string, audit: DiscoveryAudit): string
   return `Candidate ${candidateId}: ${why}`;
 }
 
-export type DiscoveredBy = ExploitFixture['discovered_by'];
+type DiscoveredBy = ExploitFixture['discovered_by'];
 
 export function buildExploitRecord(
   spec: DiscoverySpec,

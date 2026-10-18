@@ -5,7 +5,6 @@
 
 import type {
   CandidateRecord,
-  DiscoveryEvaluation,
   DiscoveryEvaluatorInfo,
   DiscoverySpec,
   RedQueenConfig,
@@ -20,6 +19,9 @@ import type { DiscoveryLlm } from './llmMutator';
 import type { DiscoveryFs, JoinFn, Persister } from './records';
 import type { SystemBlock } from './prompt';
 import type { RunnerKernelSession } from '../experimentRunner';
+
+/** Notices kept on a run record and in a view: one cap for both. */
+export const MAX_NOTICES = 50;
 
 export interface RunnerClock {
   now(): Date;
@@ -88,7 +90,7 @@ export function createLimiter(limit: number): Limiter {
 }
 
 /** Red Queen bookkeeping: audit policy, budget used and what earlier audits found. */
-export interface RedQueenState {
+interface RedQueenState {
   config: RedQueenConfig;
   policy: AuditPolicyState;
   /** Audits sent so far (answered or pending), against `config.max_audits`. */
@@ -128,8 +130,4 @@ export interface RunContext {
 
 export function primaryObjective(evaluator: DiscoveryEvaluatorInfo) {
   return evaluator.objectives[0];
-}
-
-export function isFinalEvaluation(e: DiscoveryEvaluation | null): e is DiscoveryEvaluation {
-  return e !== null;
 }

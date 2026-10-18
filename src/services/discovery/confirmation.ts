@@ -17,7 +17,7 @@ import type { Limiter, RunControl, RunnerClock } from './runContext';
 import { syntheticFailure } from './kernelEval';
 import { deriveSeed } from './rng';
 
-export interface ConfirmEnv {
+interface ConfirmEnv {
   spec: DiscoverySpec;
   runId: string;
   evaluator: DiscoveryEvaluatorInfo;

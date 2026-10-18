@@ -21,7 +21,7 @@ import { deadGradientLines } from './gradient';
 export const INSPIRATION_MAX_LINES = 60;
 export const PARENT_MAX_LINES = 400;
 export const GRADIENT_MAP_MAX_LINES = 12;
-export const REJECTION_REASONS_SHOWN = 5;
+const REJECTION_REASONS_SHOWN = 5;
 
 export interface SystemBlock {
   type: 'text';
@@ -29,7 +29,7 @@ export interface SystemBlock {
   cache_control?: { type: 'ephemeral' };
 }
 
-export interface GuardrailInfo {
+interface GuardrailInfo {
   id: string;
   label: string;
 }
@@ -137,7 +137,7 @@ export interface RejectionReason {
   count: number;
 }
 
-export interface UserPromptInput {
+interface UserPromptInput {
   parent: PromptCandidate;
   inspirations: PromptCandidate[];
   rejections: RejectionReason[];

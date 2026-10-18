@@ -13,7 +13,7 @@ const CHECK_ICON: Record<GuardrailStatus, { icon: typeof CheckCircle2; color: st
   skipped: { icon: CircleSlash, color: 'var(--color-text-tertiary)', label: 'Skipped' },
 };
 
-export function AuditChecks({ checks }: { checks: readonly AuditCheck[] }) {
+function AuditChecks({ checks }: { checks: readonly AuditCheck[] }) {
   if (checks.length === 0) return <p className="lab-muted" style={{ margin: 0 }}>The audit recorded no individual checks.</p>;
   return (
     <ul aria-label="Audit checks" style={{ listStyle: 'none', margin: 0, padding: 0, display: 'grid', gap: 6 }}>

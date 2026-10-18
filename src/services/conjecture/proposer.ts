@@ -24,14 +24,14 @@ import { validateConjecture } from './validate';
 export const PROPOSER_MODEL = DISCOVERY_OPUS_MODEL;
 const MAX_TOKENS = 8192;
 
-export type ProposeFailureCode = 'no_key' | 'network' | 'http' | 'malformed_output' | 'schema_mismatch' | 'aborted' | 'timeout';
+type ProposeFailureCode = 'no_key' | 'network' | 'http' | 'malformed_output' | 'schema_mismatch' | 'aborted' | 'timeout';
 
 export interface DroppedConjecture {
   index: number;
   issues: SchemaIssue[];
 }
 
-export interface ProposeSuccess {
+interface ProposeSuccess {
   ok: true;
   conjectures: Conjecture[];
   dropped: DroppedConjecture[];
@@ -40,7 +40,7 @@ export interface ProposeSuccess {
   prompt_sha256: string;
 }
 
-export interface ProposeFailure {
+interface ProposeFailure {
   ok: false;
   code: ProposeFailureCode;
   message: string;
@@ -52,7 +52,7 @@ export interface ProposeFailure {
 
 export type ProposeResult = ProposeSuccess | ProposeFailure;
 
-export interface ProposerDeps {
+interface ProposerDeps {
   getApiKey: () => string | null | undefined;
   hash: (text: string) => Promise<string>;
   fetch?: typeof fetch;

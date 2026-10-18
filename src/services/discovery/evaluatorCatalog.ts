@@ -4,9 +4,9 @@ import type { DiscoveryEvaluatorInfo } from '../../types/discovery';
 import type { RunnerKernelSession } from '../experimentRunner';
 import { newRequestId, replyMatches } from './requestId';
 
-export const CATALOG_TIMEOUT_MS = 15_000;
+const CATALOG_TIMEOUT_MS = 15_000;
 
-export type CatalogResult = { ok: true; evaluators: DiscoveryEvaluatorInfo[] } | { ok: false; error: string };
+type CatalogResult = { ok: true; evaluators: DiscoveryEvaluatorInfo[] } | { ok: false; error: string };
 
 export function fetchEvaluators(session: RunnerKernelSession, timeoutMs = CATALOG_TIMEOUT_MS): Promise<CatalogResult> {
   return new Promise((resolve) => {

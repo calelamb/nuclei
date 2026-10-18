@@ -4,7 +4,7 @@
  */
 
 import type { CandidateRecord, RunRecord } from '../../types/discovery';
-import type { RunnerEvent } from './runContext';
+import { MAX_NOTICES, type RunnerEvent } from './runContext';
 
 export interface RunView {
   run: RunRecord;
@@ -17,7 +17,7 @@ export interface RunView {
   notices: string[];
 }
 
-export const MAX_VIEW_NOTICES = 50;
+export const MAX_VIEW_NOTICES = MAX_NOTICES;
 
 export function createRunView(run: RunRecord, candidates: readonly CandidateRecord[] = []): RunView {
   const sorted = [...candidates].sort((a, b) => a.id.localeCompare(b.id));

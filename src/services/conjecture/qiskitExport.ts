@@ -16,14 +16,14 @@ const ANGLED: Readonly<Record<string, { method: string; angles: number }>> = {
   CRX: { method: 'crx', angles: 1 }, CRY: { method: 'cry', angles: 1 }, CRZ: { method: 'crz', angles: 1 }, CP: { method: 'cp', angles: 1 },
 };
 
-export interface ProgramMeta {
+interface ProgramMeta {
   conjectureId: string;
   statement: string;
   seed: number | null;
   familyParams: Record<string, unknown>;
 }
 
-export type ProgramResult = { ok: true; code: string; gates: number } | { ok: false; error: string };
+type ProgramResult = { ok: true; code: string; gates: number } | { ok: false; error: string };
 
 const isObject = (v: unknown): v is Record<string, unknown> => v !== null && typeof v === 'object' && !Array.isArray(v);
 const pyString = (s: string) => JSON.stringify(s);

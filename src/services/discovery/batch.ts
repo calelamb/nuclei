@@ -10,7 +10,7 @@ import { toPendingBatchItem, type PlanItem } from './planning';
 import { buildProposeInput } from './proposalTask';
 import type { RunContext } from './runContext';
 
-export const MAX_POLL_ERRORS = 5;
+const MAX_POLL_ERRORS = 5;
 
 export async function submitBatch(
   ctx: RunContext,

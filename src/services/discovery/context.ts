@@ -9,12 +9,12 @@ import { computeKpis } from './kpis';
 import { summarizeRejections } from './prompt';
 
 export const CONTEXT_MAX_CHARS = 6000;
-export const CONTEXT_TOP_CANDIDATES = 5;
-export const CONTEXT_REJECTIONS = 5;
-export const CONTEXT_NOTICES = 3;
-export const CONTEXT_PROGRAM_LINES = 40;
+const CONTEXT_TOP_CANDIDATES = 5;
+const CONTEXT_REJECTIONS = 5;
+const CONTEXT_NOTICES = 3;
+const CONTEXT_PROGRAM_LINES = 40;
 
-export interface DiscoveryContextInput {
+interface DiscoveryContextInput {
   spec: DiscoverySpec | null;
   run: RunRecord | null;
   candidates: readonly CandidateRecord[];

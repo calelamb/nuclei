@@ -44,3 +44,11 @@ describe('run view reducer (CR-M10)', () => {
     expect(candidateList(afterCandidate).map((c) => c.id)).toEqual(['c-0001', 'c-0002', 'c-0003']);
   });
 });
+
+describe('notice caps (low)', () => {
+  it('the run record and the view share one cap', async () => {
+    const { MAX_NOTICES } = await import('./runContext');
+    const { MAX_VIEW_NOTICES } = await import('./runView');
+    expect(MAX_VIEW_NOTICES).toBe(MAX_NOTICES);
+  });
+});

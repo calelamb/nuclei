@@ -4,7 +4,7 @@ import type { Conjecture, ConjectureResult, EvidenceRow, LedgerFile, ProposerMet
 import type { DroppedConjecture } from './proposer';
 import type { TesterError } from './tester';
 
-export type ProposalDecision = 'draft' | 'accepted' | 'rejected';
+type ProposalDecision = 'draft' | 'accepted' | 'rejected';
 
 export interface Proposal {
   conjecture: Conjecture;

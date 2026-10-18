@@ -6,7 +6,7 @@
 import type { CandidateRecord, ConfirmedObjective, ObjectiveValue, RunRecord } from '../../types/discovery';
 import { summarizeAudits, type AuditSummary } from './redQueen';
 
-export interface CandidateCounts {
+interface CandidateCounts {
   /** Candidates with a program that was proposed (excludes the seed). */
   proposed: number;
   scored: number;

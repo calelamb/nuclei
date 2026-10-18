@@ -11,7 +11,7 @@ import type {
 } from '../../types/discovery';
 import type { ArchiveElite } from './archive';
 
-export type PromoteRule = 'island_median' | 'island_best' | 'always';
+type PromoteRule = 'island_median' | 'island_best' | 'always';
 
 /**
  * Optimistic screen bound. Kernel fitness is built from the pessimistic end
@@ -74,7 +74,7 @@ const T95 = [
   2.11, 2.101, 2.093, 2.086, 2.08, 2.074, 2.069, 2.064, 2.06, 2.056, 2.052, 2.048, 2.045, 2.042,
 ];
 
-export function meanCi95(values: readonly number[]): { mean: number; ci95: [number, number] | null } {
+function meanCi95(values: readonly number[]): { mean: number; ci95: [number, number] | null } {
   const n = values.length;
   const mean = values.reduce((a, b) => a + b, 0) / n;
   if (n < 2) return { mean, ci95: null };

@@ -28,9 +28,9 @@ export interface EvalRequest {
   stage: DiscoveryStage;
 }
 
-export type MutateResult = { ok: true; mutations: AstMutation[] } | { ok: false; message: string };
+type MutateResult = { ok: true; mutations: AstMutation[] } | { ok: false; message: string };
 export type ProgramKeyResult = { ok: true; key: string } | { ok: false; unsupported: boolean; message: string };
-export const MUTATE_TIMEOUT_MS = 60_000;
+const MUTATE_TIMEOUT_MS = 60_000;
 export const PROGRAM_KEY_TIMEOUT_MS = 10_000;
 
 export interface KernelEvaluator {
@@ -53,10 +53,10 @@ export interface KernelEvaluator {
   dispose(): void;
 }
 
-export const DEFAULT_EVAL_TIMEOUT_MS = 20 * 60_000;
+const DEFAULT_EVAL_TIMEOUT_MS = 20 * 60_000;
 export const BUSY_RETRIES = 5;
-export const BUSY_BACKOFF_MS = 500;
-export const CANCELLED_CODE = 'cancelled';
+const BUSY_BACKOFF_MS = 500;
+const CANCELLED_CODE = 'cancelled';
 
 export function isCancelled(evaluation: DiscoveryEvaluation): boolean {
   return evaluation.status === 'failed' && evaluation.failure?.code === CANCELLED_CODE;

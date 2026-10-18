@@ -47,7 +47,7 @@ export interface ConjectureTester {
   onClose(handler: () => void): () => void;
 }
 
-export interface TesterOptions {
+interface TesterOptions {
   schemaTimeoutMs?: number;
   ackTimeoutMs?: number;
   cancelTimeoutMs?: number;
@@ -56,7 +56,7 @@ export interface TesterOptions {
 
 const DEFAULTS = { schemaTimeoutMs: 15_000, ackTimeoutMs: 20_000, cancelTimeoutMs: 10_000 };
 
-export function newConjectureJobId(): string {
+function newConjectureJobId(): string {
   const c = globalThis.crypto;
   if (c && typeof c.randomUUID === 'function') return `cjt-${c.randomUUID()}`;
   return `cjt-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;

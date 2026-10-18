@@ -28,14 +28,14 @@ import type { SystemBlock } from './prompt';
 export { TIER_MODEL_IDS };
 
 export const PROPOSE_TOOL_NAME = 'propose_program_edit';
-export const MAX_RATIONALE = 800;
-export const MAX_EXPECTED_EFFECT = 300;
-export const MAX_EDITS = 8;
+const MAX_RATIONALE = 800;
+const MAX_EXPECTED_EFFECT = 300;
+const MAX_EDITS = 8;
 const MAX_TOKENS = 4096;
 const THINKING_BUDGET_TOKENS = 4096;
 export const BATCH_POLL_MS = 15_000;
 
-export const PROPOSE_TOOL = {
+const PROPOSE_TOOL = {
   name: PROPOSE_TOOL_NAME,
   description:
     'Propose one small edit to the parent program as SEARCH/REPLACE pairs. Each search must be copied verbatim and match exactly once, inside the EVOLVE-BLOCK region.',
@@ -72,15 +72,15 @@ export interface ProposeInput {
   thinking: boolean;
 }
 
-export interface LlmProposal {
+interface LlmProposal {
   rationale: string;
   expected_effect: string;
   edits: Edit[];
 }
 
-export type LlmFailureCode = 'no_key' | 'network' | 'http' | 'malformed_output' | 'batch_failed' | 'batch_expired' | 'aborted' | 'timeout';
+type LlmFailureCode = 'no_key' | 'network' | 'http' | 'malformed_output' | 'batch_failed' | 'batch_expired' | 'aborted' | 'timeout';
 
-export interface LlmSuccess {
+interface LlmSuccess {
   ok: true;
   proposal: LlmProposal;
   model: string;
@@ -91,7 +91,7 @@ export interface LlmSuccess {
   api_calls?: number;
 }
 
-export interface LlmFailure {
+interface LlmFailure {
   ok: false;
   code: LlmFailureCode;
   message: string;
@@ -103,12 +103,12 @@ export interface LlmFailure {
 
 export type LlmResult = LlmSuccess | LlmFailure;
 
-export interface BatchItem {
+interface BatchItem {
   customId: string;
   input: ProposeInput;
 }
 
-export type BatchPoll = { state: 'in_progress' } | { state: 'ended' } | { state: 'error'; message: string };
+type BatchPoll = { state: 'in_progress' } | { state: 'ended' } | { state: 'error'; message: string };
 
 /** The runner's view of the model; `createLlmMutator` is the production implementation. */
 export interface DiscoveryLlm {
@@ -121,7 +121,7 @@ export interface DiscoveryLlm {
   batchResults(batchId: string, signal?: AbortSignal): Promise<Record<string, LlmResult>>;
 }
 
-export interface LlmMutatorDeps {
+interface LlmMutatorDeps {
   getApiKey: () => string | null | undefined;
   hash: (text: string) => Promise<string>;
   fetch?: typeof fetch;
@@ -138,7 +138,7 @@ export function emptyUsage(): LlmUsage {
   return { input_tokens: 0, output_tokens: 0, cache_creation_input_tokens: 0, cache_read_input_tokens: 0 };
 }
 
-export function addUsage(a: LlmUsage, b: LlmUsage): LlmUsage {
+function addUsage(a: LlmUsage, b: LlmUsage): LlmUsage {
   return {
     input_tokens: a.input_tokens + b.input_tokens,
     output_tokens: a.output_tokens + b.output_tokens,

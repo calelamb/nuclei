@@ -40,7 +40,7 @@ import { countEvaluation, evaluateCandidate, registerKey, runProposal } from './
 import {
   candidateIdFor, createPersister, loadCandidates, loadRunRecord, makeRunId, runPaths, type Persister,
 } from './records';
-import { createLimiter, type DiscoveryDeps, type DiscoveryRunContext, type DiscoveryRunOptions, type RunContext, type RunControl, type RunnerEvent } from './runContext';
+import { MAX_NOTICES, createLimiter, type DiscoveryDeps, type DiscoveryRunContext, type DiscoveryRunOptions, type RunContext, type RunControl, type RunnerEvent } from './runContext';
 import { createRng, deriveSeed, restoreRng, type Rng } from './rng';
 import { migrate } from './selection';
 
@@ -59,10 +59,10 @@ export interface DiscoveryRunHandle {
   current(): RunRecord | null;
 }
 
-export type AxesResult = { ok: true; axes: readonly [ArchiveAxis, ArchiveAxis] } | { ok: false; message: string };
+type AxesResult = { ok: true; axes: readonly [ArchiveAxis, ArchiveAxis] } | { ok: false; message: string };
 
 /** Resolve the two archive axes from the spec (or the evaluator's first two descriptors). */
-export function resolveAxes(spec: DiscoverySpec, evaluator: DiscoveryEvaluatorInfo): AxesResult {
+function resolveAxes(spec: DiscoverySpec, evaluator: DiscoveryEvaluatorInfo): AxesResult {
   const chosen = spec.search.archive.descriptors ?? evaluator.descriptors.slice(0, 2).map((d) => d.key);
   if (chosen.length < 2) return { ok: false, message: `Evaluator ${evaluator.kind} needs two descriptors for the archive.` };
   const axes = chosen.map((key, i) => {
@@ -223,7 +223,7 @@ export function runDiscovery(
       notice: (message) => {
         const r = run as RunRecord;
         if (r.notices.includes(message)) return;
-        setRun({ notices: [...r.notices, message].slice(-20) });
+        setRun({ notices: [...r.notices, message].slice(-MAX_NOTICES) });
         emit({ type: 'notice', message });
       },
       activity: (candidateId, phase) => emit({ type: 'activity', candidateId, phase }),

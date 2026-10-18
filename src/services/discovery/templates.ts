@@ -18,7 +18,7 @@ import {
 } from '../../types/discovery';
 import { DEFAULT_RED_QUEEN } from './redQueen';
 
-export type DiscoveryTemplateId =
+type DiscoveryTemplateId =
   | 'qec-repetition-schedule'
   | 'w-state-synthesis'
   | 'tfim-ansatz'
@@ -248,7 +248,7 @@ export interface ScaffoldMutator {
   batch_mode?: boolean;
 }
 
-export interface ScaffoldFile {
+interface ScaffoldFile {
   /** Project-relative path. */
   path: string;
   content: string;

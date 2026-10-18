@@ -19,7 +19,7 @@ import {
 } from '../../types/conjecture';
 
 export const PROPOSE_TOOL_NAME = 'propose_conjectures';
-export const MAX_STATEMENT = 400;
+const MAX_STATEMENT = 400;
 
 const isObject = (v: unknown): v is Record<string, unknown> => v !== null && typeof v === 'object' && !Array.isArray(v);
 
@@ -105,7 +105,7 @@ function hoist(schema: JsonSchema, prefix: string, defs: Record<string, unknown>
   return { $ref: `#/$defs/${rootName}` };
 }
 
-export interface ProposeTool {
+interface ProposeTool {
   name: string;
   description: string;
   input_schema: JsonSchema;
@@ -139,7 +139,7 @@ function predictionSchema(quantities: readonly ConjectureQuantityInfo[]): JsonSc
   };
 }
 
-export function buildConjectureItemSchema(schema: ConjectureSchemaInfo, defs: Record<string, unknown> = {}): JsonSchema {
+function buildConjectureItemSchema(schema: ConjectureSchemaInfo, defs: Record<string, unknown> = {}): JsonSchema {
   return {
     type: 'object',
     properties: {

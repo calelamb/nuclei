@@ -23,7 +23,7 @@ export interface DiscoveryFs {
 
 export type JoinFn = (...parts: string[]) => string;
 
-export interface RunPaths {
+interface RunPaths {
   runDir: string;
   runJson: string;
   candidatesDir: string;
@@ -35,7 +35,7 @@ export interface RunPaths {
 }
 
 /** `experiments/<name>/discovery` for a definition file. */
-export function discoveryRunsDir(join: JoinFn, projectRoot: string, definitionFile: string): string {
+function discoveryRunsDir(join: JoinFn, projectRoot: string, definitionFile: string): string {
   return join(projectRoot, 'experiments', discoveryBaseName(definitionFile), 'discovery');
 }
 
@@ -107,12 +107,12 @@ export function createPersister(fs: DiscoveryFs, paths: RunPaths, onError: (mess
 
 export type Persister = ReturnType<typeof createPersister>;
 
-export function isRunRecord(value: unknown): value is RunRecord {
+function isRunRecord(value: unknown): value is RunRecord {
   const v = value as Partial<RunRecord> | null;
   return !!v && v.schema === 1 && typeof v.run_id === 'string' && !!v.spec && !!v.archive && Array.isArray(v.rng);
 }
 
-export function isCandidateRecord(value: unknown): value is CandidateRecord {
+function isCandidateRecord(value: unknown): value is CandidateRecord {
   const v = value as Partial<CandidateRecord> | null;
   return !!v && typeof v.id === 'string' && typeof v.program === 'string' && typeof v.island === 'number';
 }

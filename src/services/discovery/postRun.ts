@@ -10,7 +10,7 @@ import { createKernelEvaluator } from './kernelEval';
 import { loadCandidates, loadRunRecord, runPaths, toJson } from './records';
 import { createLimiter, type DiscoveryDeps, type DiscoveryRunContext } from './runContext';
 
-export type PostRunResult<T> = ({ ok: true } & T) | { ok: false; error: string };
+type PostRunResult<T> = ({ ok: true } & T) | { ok: false; error: string };
 
 async function open(spec: DiscoverySpec, rctx: DiscoveryRunContext, deps: DiscoveryDeps, runId: string) {
   const paths = runPaths(deps.join, rctx.projectRoot, rctx.definitionFile, runId);

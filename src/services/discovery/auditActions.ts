@@ -10,10 +10,10 @@ import { adversarialFitness, buildExploitRecord, gateExploit, isRedQueen, toKern
 import { loadCandidates, runPaths, toJson, type DiscoveryFs, type JoinFn } from './records';
 import type { DiscoveryDeps, DiscoveryRunContext } from './runContext';
 
-export type AuditActionResult<T> = ({ ok: true } & T) | { ok: false; error: string };
+type AuditActionResult<T> = ({ ok: true } & T) | { ok: false; error: string };
 
 /** Where the kernel's pytest replays exploit fixtures (addendum §F). */
-export const KERNEL_EXPLOIT_DIR = ['kernel', 'tests', 'fixtures', 'exploits'] as const;
+const KERNEL_EXPLOIT_DIR = ['kernel', 'tests', 'fixtures', 'exploits'] as const;
 
 const messageOf = (e: unknown) => (e instanceof Error ? e.message : String(e));
 

@@ -67,7 +67,7 @@ export function guardrailPassRates(candidates: readonly CandidateRecord[]): Guar
   });
 }
 
-export type IsolationUse = Array<{ mode: DiscoveryIsolation | 'unknown'; count: number }>;
+type IsolationUse = Array<{ mode: DiscoveryIsolation | 'unknown'; count: number }>;
 
 export function isolationUsed(candidates: readonly CandidateRecord[]): IsolationUse {
   const counts = new Map<DiscoveryIsolation | 'unknown', number>();
