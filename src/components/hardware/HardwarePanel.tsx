@@ -151,7 +151,7 @@ export function HardwarePanel() {
             const configurable = status.kind === 'needs-setup' && providerNeedsToken(p.name);
             return (
             <div key={p.name} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '0', height: 32 }}>
-              <span title={label} style={{ flex: '0 0 auto', fontSize: 12, fontWeight: 600, color: colors.text, whiteSpace: 'nowrap', ...font }}>
+              <span style={{ flex: '0 0 auto', fontSize: 12, fontWeight: 600, color: colors.text, whiteSpace: 'nowrap', ...font }}>
                 {label}
               </span>
               <span style={{ flex: '1 1 0', minWidth: 0, display: 'flex', justifyContent: 'flex-end', overflow: 'hidden' }}>
