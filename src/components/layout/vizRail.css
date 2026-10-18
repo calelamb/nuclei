@@ -10,8 +10,8 @@
 .viz-rail:hover { background: var(--color-surface-overlay); }
 .viz-rail:focus-visible, .dirac-rail:focus-visible { outline-offset: -2px; border-radius: var(--radius-xs); }
 .viz-rail { position: relative; }
-/* "Results are ready behind this tab": the same teal as the Terminal's unread badge. It sits in the flow just before the label (the tab is a vertical strip, so "before" is above), not pinned to the strip's far edge. */
-.viz-rail__dot { flex: none; width: 8px; height: 8px; margin-block-end: var(--space-2); border-radius: 50%; background: var(--color-accent-quantum); }
+/* "Results are ready behind this tab": the same teal as the Terminal's unread badge. It sits in the flow just before the label (the tab is vertical-rl, so the inline axis runs down the strip and margin-inline-end is the gap between dot and label), not pinned to the strip's far edge. */
+.viz-rail__dot { flex: none; width: 8px; height: 8px; margin-inline-end: var(--space-2); border-radius: 50%; background: var(--color-accent-quantum); }
 /* Where focus lands when the column comes back from its tab. */
 /* Programmatic landing target, not a control: no ring (same as the lesson and track titles). */
 [data-viz-landing]:focus, [data-viz-landing]:focus-visible { outline: none; }

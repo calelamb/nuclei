@@ -9,6 +9,8 @@ import { useSimulationStore } from '../stores/simulationStore';
 import { retryKernel } from '../lib/kernelControl';
 import { KERNEL_NOT_RESPONDING_MESSAGE } from '../lib/kernelErrors';
 import { useKernel } from './useKernel';
+import { requestTranspile } from '../lib/transpileSender';
+import { useTranspileStore } from '../stores/transpileStore';
 
 class FakeSocket {
   static instances: FakeSocket[] = [];
@@ -79,6 +81,15 @@ describe('useKernel desktop start', () => {
     const errors = useSimulationStore.getState().terminalOutput.filter((l) => l.type === 'stderr');
     expect(errors).toHaveLength(1);
     expect(errors[0].text).toContain(RUST_ERROR);
+  });
+
+  it('Transpile after a failed start says the kernel did not start, not "isn\'t connected"', async () => {
+    const { bridge } = makeBridge(async () => { throw RUST_ERROR; });
+    mount(bridge);
+    await waitFor(() => expect(useEditorStore.getState().kernelStatus).toBe('failed'));
+
+    expect(requestTranspile('qc', { optimizationLevel: 1 })).toBe(true);
+    expect(useTranspileStore.getState().error).toBe("Kernel didn't start. Check the status bar, then retry.");
   });
 
   it('Retry stops the stale kernel, starts again and connects', async () => {

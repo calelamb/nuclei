@@ -53,7 +53,7 @@ export function TranspilerExplorer() {
       <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: 16 }}>
         {isWebBuild() ? (
           <DesktopOnlyState title="Transpiler Explorer runs in the desktop app">
-            Qiskit's pass manager runs in the desktop app, which the browser build does not include.
+            The browser build doesn't include Qiskit's pass manager.
           </DesktopOnlyState>
         ) : !isQiskit ? (
           <Centered

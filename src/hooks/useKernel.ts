@@ -12,7 +12,7 @@ import { KERNEL_WS_URL } from '../config/kernel';
 import { CLOSE_UNAUTHENTICATED, KERNEL_AUTH_REJECTED_MESSAGE, KernelAuthRejectedError, openKernelConnection } from '../services/kernelSocket';
 import type { PyodideKernel } from '../platform/pyodideKernel';
 import type { PyodideRuntimeClient } from '../platform/pyodide/pyodideClient';
-import { KERNEL_NOT_RESPONDING_MESSAGE, kernelNotConnectedMessage, normalizeKernelError } from '../lib/kernelErrors';
+import { KERNEL_NOT_RESPONDING_MESSAGE, kernelUnavailableMessage, normalizeKernelError } from '../lib/kernelErrors';
 import { logKernelFailureOnce } from './kernelFailureLog';
 import { shouldMarkStaleWhileReparsing, shouldReparseAfterRestart } from './restartReparse';
 import { registerKernelRetry, registerKernelStop } from '../lib/kernelControl';
@@ -565,7 +565,7 @@ export function useKernel() {
       }
       // No socket → no reply will ever arrive; say so instead of spinning.
       if (!sendHardware({ type: 'qec_explain', circuit_text: circuitText, analysis, request_id: requestId })) {
-        store.setError(kernelNotConnectedMessage());
+        store.setError(kernelUnavailableMessage(useEditorStore.getState().kernelStatus));
       }
     },
     [sendHardware],
@@ -577,7 +577,7 @@ export function useKernel() {
       // No socket → no result will ever arrive; surface it instead of spinning
       // forever (setError also clears the pending flag).
       if (!sendHardware({ type: 'qec_estimate', code, language, options })) {
-        store.setError(kernelNotConnectedMessage());
+        store.setError(kernelUnavailableMessage(useEditorStore.getState().kernelStatus));
       }
     },
     [sendHardware],
@@ -597,7 +597,7 @@ export function useKernel() {
         optimization_level: target.optimizationLevel,
       });
       if (!ok) {
-        useTranspileStore.getState().setError(kernelNotConnectedMessage());
+        useTranspileStore.getState().setError(kernelUnavailableMessage(useEditorStore.getState().kernelStatus));
       }
     },
     [sendHardware],
@@ -609,7 +609,7 @@ export function useKernel() {
     (code: string) => {
       const language = kernelLanguageFor(useEditorStore.getState().framework, useEditorStore.getState().filePath);
       if (!sendHardware({ type: 'debug_trace', code, language })) {
-        useDebugStore.getState().setError(kernelNotConnectedMessage());
+        useDebugStore.getState().setError(kernelUnavailableMessage(useEditorStore.getState().kernelStatus));
       }
     },
     [sendHardware],
