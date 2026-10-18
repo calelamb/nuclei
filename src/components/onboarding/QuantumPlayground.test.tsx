@@ -2,7 +2,6 @@
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { QuantumPlayground } from './QuantumPlayground';
-import { useThemeStore } from '../../stores/themeStore';
 
 beforeAll(() => {
   window.matchMedia = ((query: string) => ({
@@ -70,7 +69,7 @@ describe('QuantumPlayground', () => {
     const svg = container.querySelector('svg[role="img"]')!;
     const circle = svg.querySelector('circle')!;
     expect(circle.getAttribute('opacity')).toBeNull();
-    expect(circle.getAttribute('stroke')).toBe(useThemeStore.getState().colors.borderStrong);
+    expect(circle.style.stroke).toBe('var(--color-border-control)');
 
     const cy = Number(circle.getAttribute('cy'));
     const r = Number(circle.getAttribute('r'));

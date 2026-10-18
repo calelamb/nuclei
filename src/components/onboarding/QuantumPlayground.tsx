@@ -56,6 +56,8 @@ const STEPS = [
 ];
 
 const LABEL_BAND = 18;
+/** The 3:1 control border, so the sphere outline reads in both themes (the card borders do not). */
+const OUTLINE = 'var(--color-border-control)';
 
 function QubitViz({ kind, outcome, label, size = 120 }: { kind: QubitKind; outcome: Outcome | null; label?: string; size?: number }) {
   const colors = useThemeStore((s) => s.colors);
@@ -73,7 +75,7 @@ function QubitViz({ kind, outcome, label, size = 120 }: { kind: QubitKind; outco
   return (
     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
       <svg width={size} height={height} viewBox={`0 0 ${size} ${height}`} role="img" aria-label={`Qubit ${description}`}>
-        <circle cx={cx} cy={cy} r={r} fill="none" stroke={colors.borderStrong} strokeWidth={1.5} />
+        <circle cx={cx} cy={cy} r={r} fill="none" strokeWidth={1.5} style={{ stroke: OUTLINE }} />
         <text x={cx} y={LABEL_BAND - 5} textAnchor="middle" fill={colors.textMuted} fontSize={11} fontFamily={TYPOGRAPHY.fontSans}>|0⟩</text>
         <text x={cx} y={height - 5} textAnchor="middle" fill={colors.textMuted} fontSize={11} fontFamily={TYPOGRAPHY.fontSans}>|1⟩</text>
         <line
@@ -107,7 +109,7 @@ function Bar({ label, count, total, color }: { label: string; count: number; tot
     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
       <div
         data-bar-baseline=""
-        style={{ display: 'flex', alignItems: 'flex-end', height: BAR_MAX_PX, borderBottom: `1px solid ${colors.borderStrong}` }}
+        style={{ display: 'flex', alignItems: 'flex-end', height: BAR_MAX_PX, borderBottom: `1px solid ${OUTLINE}` }}
       >
         <div style={{
           width: 36, height: total > 0 ? (count / total) * BAR_MAX_PX : 0, background: color,
