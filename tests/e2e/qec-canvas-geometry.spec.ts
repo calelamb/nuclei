@@ -13,7 +13,7 @@ const TOLERANCE_PX = 0.5;
 /** An empty card is a short card: never the 676-876px field the audit found. */
 const MAX_EMPTY_CARD_HEIGHT = 400;
 
-interface Box { id: string; x: number; y: number; w: number; h: number; empty: boolean }
+interface Box { id: string; x: number; y: number; w: number; h: number; empty: boolean; clipped: number }
 
 async function installEngineStub(page: Page): Promise<void> {
   await page.addInitScript(() => {
@@ -43,7 +43,11 @@ async function instrumentBoxes(page: Page): Promise<Box[]> {
   return page.$$eval('.qec-instrument', (nodes) => nodes.map((node) => {
     const el = node as HTMLElement;
     const r = el.getBoundingClientRect();
-    return { id: el.dataset.panel ?? '', x: r.x, y: r.y, w: r.width, h: r.height, empty: el.dataset.empty === 'true' };
+    return {
+      id: el.dataset.panel ?? '', x: r.x, y: r.y, w: r.width, h: r.height, empty: el.dataset.empty === 'true',
+      // Content taller than its card is cut off by the card's overflow: hidden.
+      clipped: Math.max(0, el.scrollHeight - el.clientHeight),
+    };
   }));
 }
 
@@ -92,6 +96,7 @@ for (const viewport of VIEWPORTS) {
         expect(overlaps(boxes), label).toEqual([]);
         for (const box of boxes.filter((b) => b.empty)) {
           expect(box.h, `${label}: ${box.id}`).toBeLessThanOrEqual(MAX_EMPTY_CARD_HEIGHT);
+          expect(box.clipped, `${label}: ${box.id} content is clipped`).toBeLessThanOrEqual(1);
         }
       }
     }

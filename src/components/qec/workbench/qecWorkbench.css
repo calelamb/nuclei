@@ -726,7 +726,7 @@
 /* A narrow canvas stacks the instruments instead of squeezing the leading one. */
 @container (max-width: 560px) {
   .qec-investigation__panels {
-    grid-template-columns: minmax(0, 1fr); grid-template-rows: none !important; grid-auto-rows: auto;
+    grid-template-columns: minmax(0, 1fr); grid-template-rows: none !important; grid-auto-rows: minmax(max-content, auto);
   }
 
   .qec-investigation__panels > .qec-instrument {

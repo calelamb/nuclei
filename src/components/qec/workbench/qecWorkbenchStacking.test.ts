@@ -7,7 +7,7 @@ describe('stacked workbench canvas', () => {
     const css = readFileSync(join(__dirname, 'qecWorkbench.css'), 'utf8')
     const block = css.slice(css.indexOf('@container (max-width: 560px)'))
     const primary = block.slice(0, block.indexOf('@container (max-width: 440px)'))
-    expect(primary).toMatch(/grid-auto-rows:\s*auto/)
+    expect(primary).toMatch(/grid-auto-rows:\s*minmax\(max-content,\s*auto\)/)
     expect(primary).toMatch(/\.qec-instrument\s*\{[^}]*min-height:\s*260px/)
     expect(primary).toMatch(/\.qec-instrument--primary:not\(\[data-empty='true'\]\)\s*\{[^}]*(?:min-)?height:\s*max\(520px/)
     // An instrument with nothing to show is a short card with its own height: auto rows of overflow-hidden cards collapse to 2px otherwise.
