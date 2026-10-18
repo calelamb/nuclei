@@ -18,6 +18,7 @@ import {
   slugify,
   specToYamlDoc,
   sweepToRows,
+  unnamedRowsNote,
   type SweepRowState,
 } from './experimentFormHelpers';
 import {
@@ -335,7 +336,7 @@ export function NewExperimentForm({ projectRoot, existing, dirtyRef: sharedDirty
           >
             <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
               <TextInput
-                mono value={row.name} placeholder="theta" aria-label="Parameter name"
+                mono value={row.name} placeholder="Parameter name" aria-label="Parameter name"
                 onChange={(e) => updateRow(row.id, { name: e.target.value })}
                 style={{ flex: 1 }}
               />
@@ -351,6 +352,9 @@ export function NewExperimentForm({ projectRoot, existing, dirtyRef: sharedDirty
                 <Trash2 size={ICON_SIZE.sm} strokeWidth={ICON_STROKE} />
               </IconButton>
             </div>
+            {row.name.trim() === '' && (
+              <div style={{ color: colors.textMuted, fontSize: 11 }}>Name this parameter to include it in the sweep.</div>
+            )}
             {row.mode === 'range' ? (
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 8 }}>
                 <TextInput mono value={row.rangeStart} onChange={(e) => updateRow(row.id, { rangeStart: e.target.value })} placeholder="start" aria-label="Range start" />
@@ -376,7 +380,7 @@ export function NewExperimentForm({ projectRoot, existing, dirtyRef: sharedDirty
       </div>
 
       <div style={{ color: colors.textDim, fontSize: 11 }}>
-        Grid size: {gridLabel}{sweepRows.length > 0 ? ` · max ${MAX_GRID_POINTS}` : ''}
+        Grid size: {gridLabel}{unnamedRowsNote(sweepRows)}{sweepRows.length > 0 ? ` · max ${MAX_GRID_POINTS}` : ''}
       </div>
 
       <div className="nuclei-experiment-form__footer">

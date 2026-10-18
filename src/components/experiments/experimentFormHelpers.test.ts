@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  unnamedRowsNote,
   buildSweepFromRows,
   discoverEntryFiles,
   newSweepRow,
@@ -160,5 +161,15 @@ describe('discoverEntryFiles', () => {
   it('never throws when listing fails', async () => {
     const port = { listDirectory: async () => { throw new Error('boom'); } };
     await expect(discoverEntryFiles(port, '/proj')).resolves.toEqual([]);
+  });
+});
+
+describe('unnamedRowsNote', () => {
+  it('is empty when every row has a name', () => {
+    expect(unnamedRowsNote([{ ...newSweepRow('a'), name: 'theta' }])).toBe('');
+  });
+  it('counts unnamed rows, singular and plural', () => {
+    expect(unnamedRowsNote([newSweepRow('a')])).toBe(' (1 parameter unnamed)');
+    expect(unnamedRowsNote([newSweepRow('a'), newSweepRow('b'), { ...newSweepRow('c'), name: 'x' }])).toBe(' (2 parameters unnamed)');
   });
 });
