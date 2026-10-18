@@ -21,10 +21,12 @@ from kernel.discovery.evaluators.base import (  # noqa: F401
 )
 from kernel.discovery.evaluators.qec_memory import SPEC as _QEC_MEMORY
 from kernel.discovery.evaluators.state_synthesis import SPEC as _STATE_SYNTHESIS
+from kernel.discovery.evaluators.trainability_frontier import SPEC as _TRAINABILITY_FRONTIER
 from kernel.discovery.evaluators.vqe_ground_state import SPEC as _VQE_GROUND_STATE
 
 EVALUATORS: dict[str, EvaluatorSpec] = {
     _QEC_MEMORY.kind: _QEC_MEMORY,
     _STATE_SYNTHESIS.kind: _STATE_SYNTHESIS,
+    _TRAINABILITY_FRONTIER.kind: _TRAINABILITY_FRONTIER,
     _VQE_GROUND_STATE.kind: _VQE_GROUND_STATE,
 }
