@@ -156,7 +156,7 @@ export function ExperimentsPanel() {
     if (switching && formDirtyRef.current) {
       const discard = await confirm({
         title: 'Discard your unsaved changes?',
-        description: 'The experiment you are editing has edits that have not been saved.',
+        description: 'This form has edits that have not been saved.',
         confirmLabel: 'Discard',
         cancelLabel: 'Keep editing',
         tone: 'danger',

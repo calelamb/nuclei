@@ -15,10 +15,13 @@ afterEach(cleanup);
 describe('OpenFilesSection (research-r-01)', () => {
   it('renders the same header whether or not a file is open, so the tree never shifts', () => {
     const { container, rerender } = render(<OpenFilesSection />);
-    const before = container.querySelector('.open-files__header')?.outerHTML.replace(/\(\d+\)/, '');
+    const shape = () => container.querySelector('.open-files__header')?.outerHTML.replace(/<span class="open-files__count">[^<]*<\/span>/, '');
+    const before = shape();
+    expect(container.querySelector('.open-files__count')).toBeNull();
     useProjectStore.setState({ tabs: [tab('/p/bell.py')], activeTabPath: '/p/bell.py' });
     rerender(<OpenFilesSection />);
-    expect(container.querySelector('.open-files__header')?.outerHTML.replace(/\(\d+\)/, '')).toBe(before);
+    expect(container.querySelector('.open-files__count')?.textContent).toBe('(1)');
+    expect(shape()).toBe(before);
     expect(container.querySelector('.open-files__list')).toBeNull();
   });
 

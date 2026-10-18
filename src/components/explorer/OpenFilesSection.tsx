@@ -75,7 +75,7 @@ export function OpenFilesSection() {
       <button type="button" className="open-files__header" onClick={toggle} aria-expanded={expanded}>
         {expanded ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
         <span>Open files</span>
-        <span className="open-files__count">({tabs.length})</span>
+        {tabs.length > 0 && <span className="open-files__count">({tabs.length})</span>}
       </button>
       {expanded && (
         <div className="open-files__list">

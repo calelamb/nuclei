@@ -23,6 +23,7 @@ export function UnsavedChangesModal() {
       title={`Save changes to ${fileName}?`}
       description="Your unsaved edits will be lost if you don't save."
       onClose={cancel}
+      hideClose
       footer={(
         <>
           <Button onClick={cancel}>Cancel</Button>
