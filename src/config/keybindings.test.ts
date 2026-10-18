@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { KEYBINDINGS, findBindingId, formatKeys, bindingFor, shortcutLabel, type KeyLike } from './keybindings';
+import { KEYBINDINGS, findBindingId, formatKeys, bindingFor, shortcutLabel, isBindingInMode, type KeyLike } from './keybindings';
 
 function ev(key: string, mods: Partial<KeyLike> = {}): KeyLike {
   return { key, metaKey: true, ctrlKey: false, shiftKey: false, altKey: false, ...mods };
@@ -82,5 +82,19 @@ describe('keybinding registry', () => {
     expect(shortcutLabel('toggle-theme', true, true)).toBeUndefined();
     expect(shortcutLabel('toggle-theme', true, false)).toBe('⌘⇧T');
     expect(shortcutLabel('palette', true, true)).toBe('⌘⇧P');
+  });
+});
+
+describe('workspace-scoped bindings', () => {
+  it('Change level is a Learn-only chord and is not advertised in Research', () => {
+    expect(bindingFor('cycle-ui-mode').modes).toEqual(['learn']);
+    expect(isBindingInMode(bindingFor('cycle-ui-mode'), 'research')).toBe(false);
+    expect(shortcutLabel('cycle-ui-mode', true, false, 'research')).toBeUndefined();
+    expect(shortcutLabel('cycle-ui-mode', true, false, 'learn')).toBe('⌘⇧L');
+    expect(shortcutLabel('cycle-ui-mode', true, false)).toBe('⌘⇧L');
+  });
+
+  it('Launch on hardware lives under Run', () => {
+    expect(bindingFor('launch').group).toBe('Run');
   });
 });

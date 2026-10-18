@@ -1,6 +1,19 @@
 /* The shortcut groups read as two columns where the dialog is wide, one scrolling column where it is not;
-   the footer note stays pinned beneath either. */
-.shortcuts-groups { flex: 1; min-height: 0; overflow-y: auto; columns: 1; column-gap: 32px; padding-right: 4px; }
+   the footer note stays pinned beneath either (it is the Dialog footer). */
+.shortcuts-dialog .nuclei-dialog__body { color: var(--color-text-primary); }
+.shortcuts-groups { columns: 1; column-gap: var(--space-8); padding-right: var(--space-1); }
 @media (min-width: 900px) {
   .shortcuts-groups { columns: 2; }
 }
+.shortcuts-group { break-inside: avoid; margin-bottom: var(--space-4); }
+.shortcuts-group__title { margin: 0 0 var(--space-1); }
+.shortcuts-row { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); padding: 5px 0; }
+.shortcuts-row__label { color: var(--color-text-primary); font-size: var(--font-size-code); font-family: var(--font-sans); }
+.shortcuts-row__keys {
+  padding: 2px var(--space-2); white-space: nowrap;
+  color: var(--color-text-secondary); background: var(--color-surface-sunken);
+  border: 1px solid var(--color-border-strong); border-radius: var(--radius-xs);
+  font-family: var(--font-mono); font-size: var(--font-size-caption);
+}
+.shortcuts-dialog .nuclei-dialog__footer { justify-content: center; margin-top: var(--space-3); padding-top: var(--space-3); border-top: 1px solid var(--color-border-strong); }
+.shortcuts-note { margin: 0; text-align: center; color: var(--color-text-tertiary); font-size: var(--font-size-caption); font-family: var(--font-sans); }
