@@ -22,11 +22,12 @@ export const FIXTURE_SCHEMA_REPLY: Extract<ConjectureResponse, { type: 'discover
     { key: 'params_per_qubit', type: 'number', description: 'Parameters divided by qubits.' },
   ],
   quantities: [
-    { key: 'beta_upper95', description: 'Upper 95% bound of the exponential variance-decay rate beta.' },
-    { key: 'verdict', description: 'The scaling verdict (polynomial, exponential, inconclusive).' },
-    { key: 'variance_at_max_n', description: 'Gradient variance at the largest n.' },
-    { key: 'log2_dla_dimension', description: 'log2 of the dynamical Lie algebra dimension.' },
+    { name: 'beta_upper95', ops: ['<', '<=', '>', '>='], value_type: 'number', description: 'Upper 95% bound of the exponential variance-decay rate beta.' },
+    { name: 'verdict', ops: ['==', '!=', 'in'], value_type: 'string', description: 'The scaling verdict (polynomial, exponential, inconclusive).' },
+    { name: 'variance_at_max_n', ops: ['<', '<=', '>', '>='], value_type: 'number', description: 'Gradient variance at the largest n.' },
+    { name: 'log2_dla_dimension', ops: ['<', '<=', '>', '>=', '=='], value_type: 'number', description: 'log2 of the dynamical Lie algebra dimension.' },
   ],
+  limits: { circuits: [5, 32], points: [4, 8], n_max: 128, per_circuit_s: 60, total_s: 600 },
   families: {
     type: 'object',
     properties: {
@@ -169,13 +170,20 @@ export function fixtureEvidenceItem(index: number, outcome: EvidenceRow['outcome
   const beta = outcome === 'violates' ? 0.34 : 0.04;
   return {
     circuit_index: index,
+    variant_id: `v${index}`,
     outcome,
-    seed: 1000 + index,
-    features: { n_layers: 6, entangler_pattern: 'brick', rotation_axes: 'YZ' },
-    beta,
-    beta_ci95: [beta - 0.01, beta + 0.02],
-    beta_upper95: beta + 0.02,
-    points: [8, 16, 32, 64, 128].map((n) => ({ n_qubits: n, variance: 2 ** (-beta * n) / 4, variance_ci95: [2 ** (-beta * n) / 5, 2 ** (-beta * n) / 3] })),
+    meets: outcome === 'meets' ? true : outcome === 'violates' ? false : null,
+    family_params: { layers: 6, axis_order_per_layer: ['YZ'], brick_start: 'even' },
+    regenerate: { seed: 1000 + index, variant: index, test_family: {} },
+    features: { n_layers: 6, entangler_pattern: 'brick', rotation_axes: 'YZ', rotation_axis_counts: { X: 0, Y: 64, Z: 64 } },
+    fit: { verdict: 'polynomial', exponential: { beta, beta_ci95: [beta - 0.01, beta + 0.02] }, summary: 'fit' },
+    dla: null,
+    quantity: { quantity: 'beta_upper95', op: '<', value: 0.1, observed: beta + 0.02 },
+    reason: outcome === 'violates' ? 'beta_upper95 0.36 is not below 0.1' : '',
+    points: [8, 16, 32, 64, 128].map((n) => ({
+      n_qubits: n, variance: 2 ** (-beta * n) / 4, interval: [2 ** (-beta * n) / 5, 2 ** (-beta * n) / 3],
+      method: 'ppe', status: 'complete', loose: false, error: null,
+    })),
   };
 }
 
@@ -200,20 +208,34 @@ export const FIXTURE_IR = {
 export function fixtureResult(verdict: ConjectureResult['verdict'] = 'supported'): ConjectureResult {
   const refuted = verdict === 'refuted';
   const n = verdict === 'inconclusive' ? 3 : 8;
+  const outcomeAt = (i: number): EvidenceRow['outcome'] => (refuted && i === 2 ? 'violates' : verdict === 'inconclusive' ? 'indeterminate' : 'meets');
+  const evidence = Array.from({ length: n }, (_, i) => fixtureEvidenceItem(i, outcomeAt(i)));
+  const violates = evidence.filter((e) => e.outcome === 'violates').length;
   return {
     verdict,
     summary:
       verdict === 'supported'
-        ? 'supported on 8 held-out circuits up to n = 128'
+        ? "Conjecture supported on 8 held-out circuits up to n = 128: 'beta_upper95 < 0.1' held for every circuit within its 95% interval. This is evidence on sampled circuits, not a guarantee."
         : verdict === 'refuted'
-          ? 'refuted: 1 of 8 held-out circuits violates beta_upper95 < 0.1 (n up to 128)'
-          : 'inconclusive: 3 of 8 held-out circuits could not be decided at the exactness budget',
-    evidence: Array.from({ length: n }, (_, i) => fixtureEvidenceItem(i, refuted && i === 2 ? 'violates' : verdict === 'inconclusive' ? 'indeterminate' : 'meets')),
+          ? "Refuted: 1 of 8 held-out circuits tested violate 'beta_upper95 < 0.1'. First counterexample: v2 (see counterexamples)."
+          : "Inconclusive: 3 circuit(s) were indeterminate. Of 3 held-out circuits tested up to n = 128, 0 met 'beta_upper95 < 0.1', 3 were indeterminate.",
+    reasons: verdict === 'inconclusive' ? ['3 circuit(s) were indeterminate'] : [],
+    partial: false,
+    tally: { meets: n - violates - (verdict === 'inconclusive' ? n : 0), violates, indeterminate: verdict === 'inconclusive' ? n : 0 },
+    n_circuits_tested: n,
+    n_values: [8, 16, 32, 64, 128],
+    n_max_tested: 128,
+    seed: 1000,
+    resampling: { attempts: 9, accepted: n, rejected: 1, cap: 40 },
+    timings: { elapsed_ms: 18_450 },
+    evidence,
     counterexamples: refuted
-      ? [{ family_params: { pattern: 'brick', layers: 6, variant: 2 }, seed: 1002, ir: FIXTURE_IR, circuit_index: 2, beta_upper95: 0.36 }]
+      ? [{
+          circuit_index: 2, variant_id: 'v2', family_params: { layers: 6, axis_order_per_layer: ['YZ'], brick_start: 'even' },
+          regenerate: { seed: 1002, variant: 2, test_family: {} }, ir: FIXTURE_IR, ir_n_qubits: 3,
+          quantity: { quantity: 'beta_upper95', op: '<', value: 0.1, observed: 0.36 }, reason: 'beta_upper95 0.36 is not below 0.1',
+        }]
       : [],
-    ledger_markdown: `### ${verdict}\n\nKernel evidence table goes here.`,
     fingerprint: 'cd'.repeat(32),
-    elapsed_ms: 18_450,
   };
 }

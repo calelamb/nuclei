@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Archive, GitBranch, LayoutDashboard, ListTree, ShieldCheck } from 'lucide-react';
+import { Archive, FlaskConical, GitBranch, LayoutDashboard, ListTree, ShieldCheck } from 'lucide-react';
 import { LabSegmented } from '../lab';
 import { candidateKind } from '../../services/discovery/candidateView';
 import { candidateList } from '../../services/discovery/runView';
@@ -8,13 +8,14 @@ import { CandidateDrawer } from './CandidateDrawer';
 import { RunHeader } from './RunHeader';
 import { RunKpis } from './RunKpis';
 import { RunNotices } from './RunNotices';
+import { ConjecturesTab } from './conjecture/ConjecturesTab';
 import { ArchiveTab } from './tabs/ArchiveTab';
 import { CandidatesTab } from './tabs/CandidatesTab';
 import { GuardrailsTab } from './tabs/GuardrailsTab';
 import { LineageTab } from './tabs/LineageTab';
 import { OverviewTab } from './tabs/OverviewTab';
 
-export type RunTab = 'overview' | 'lineage' | 'archive' | 'candidates' | 'guardrails';
+export type RunTab = 'overview' | 'lineage' | 'archive' | 'candidates' | 'guardrails' | 'conjectures';
 
 const PREFIX = 'discovery-run';
 
@@ -42,6 +43,7 @@ export function RunDetail({ view, kpis, initialTab = 'overview' }: { view: RunVi
           { id: 'archive', label: 'Archive', icon: Archive },
           { id: 'candidates', label: 'Candidates', icon: ListTree, badge: list.length },
           { id: 'guardrails', label: 'Guardrails', icon: ShieldCheck, badge: rejected > 0 ? rejected : undefined },
+          { id: 'conjectures', label: 'Conjectures', icon: FlaskConical },
         ]}
       />
       <div role="tabpanel" id={`${PREFIX}-panel-${tab}`} aria-labelledby={`${PREFIX}-tab-${tab}`}>
@@ -50,6 +52,7 @@ export function RunDetail({ view, kpis, initialTab = 'overview' }: { view: RunVi
         {tab === 'archive' && <ArchiveTab archive={view.run.archive} onOpen={selectCandidate} />}
         {tab === 'candidates' && <CandidatesTab view={view} selectedId={selectedCandidateId} onOpen={selectCandidate} />}
         {tab === 'guardrails' && <GuardrailsTab view={view} onOpen={selectCandidate} />}
+        {tab === 'conjectures' && <ConjecturesTab view={view} />}
       </div>
       <CandidateDrawer view={view} candidateId={selectedCandidateId} onClose={() => selectCandidate(null)} onSelect={selectCandidate} />
     </div>

@@ -52,13 +52,20 @@ describe('conjecture ledger', () => {
     const ledger = upsertEntry(upsertEntry(emptyLedger('run-1', NOW), entry('a', 'supported'), NOW), entry('b', 'refuted', '2026-10-18T15:05:00.000Z'), NOW);
     await saveLedger(fs, paths, ledger);
     const md = fs.files.get(paths.md)!;
-    expect(md).toContain('# Conjecture ledger, run run-1');
+    expect(md).toContain('# Conjecture ledger\n\nRun: run-1');
     expect(md).toContain('2 conjectures: 1 supported, 1 refuted, 0 inconclusive');
-    expect(md).toContain('Kernel evidence table goes here.');
+    expect(md).toContain('| Circuit | Layers | Pattern | Observed | Outcome |');
+    expect(md).toContain('### Counterexample v2');
+    expect(md).toContain('Regenerate with seed 1002, variant 2');
     expect(md).toContain('prompt sha256');
-    expect(md).toContain('evidence, not proof');
+    expect(md).toContain('evidence, not a guarantee');
     expect(md).not.toMatch(/\bproven\b/);
     expect(renderLedgerMarkdown(ledger)).toBe(md);
+  });
+
+  it('renders deterministic markdown (snapshot)', () => {
+    const ledger = upsertEntry(upsertEntry(emptyLedger('run-1', NOW), entry('a', 'supported', '2026-10-18T15:01:00.000Z'), NOW), entry('b', 'refuted', '2026-10-18T15:02:00.000Z'), NOW);
+    expect(renderLedgerMarkdown(ledger)).toMatchSnapshot();
   });
 
   it('treats a missing file as empty and refuses to overwrite a corrupt one', async () => {

@@ -1,0 +1,166 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`conjecture ledger > renders deterministic markdown (snapshot) 1`] = `
+"# Conjecture ledger
+
+Run: run-1
+
+Supported means the prediction held on held-out circuits within their 95% intervals. It is evidence, not a guarantee. Refuted and inconclusive conjectures are kept.
+
+2 conjectures: 1 supported, 1 refuted, 0 inconclusive, 0 failed to run.
+
+| Conjecture | Verdict | Circuits | Max n |
+|---|---|---|---|
+| b | refuted | 8 | 128 |
+| a | supported | 8 | 128 |
+
+## b: refuted
+
+> Brick-pattern CZ circuits with YZ rotations keep beta_upper95 below 0.1 up to 128 qubits at six layers.
+
+- Prediction: \`beta_upper95 < 0.1\`
+- Qubit range tested: 8 to 128 (8, 16, 32, 64, 128)
+- Circuits: 8 tested of 8 requested (meets 7, violates 1, indeterminate 0)
+- Seed: 42
+- Tested: 2026-10-18T15:02:00.000Z
+
+Refuted: 1 of 8 held-out circuits tested violate 'beta_upper95 < 0.1'. First counterexample: v2 (see counterexamples).
+
+### Evidence
+
+| Circuit | Layers | Pattern | Observed | Outcome |
+|---|---|---|---|---|
+| v0 | 6 | brick | 0.06 | meets |
+| v1 | 6 | brick | 0.06 | meets |
+| v2 | 6 | brick | 0.36 | violates |
+| v3 | 6 | brick | 0.06 | meets |
+| v4 | 6 | brick | 0.06 | meets |
+| v5 | 6 | brick | 0.06 | meets |
+| v6 | 6 | brick | 0.06 | meets |
+| v7 | 6 | brick | 0.06 | meets |
+
+### Counterexample v2
+
+- Observed: 0.36
+- Family parameters: layers 6, axis order YZ, brick start even
+- Regenerate with seed 1002, variant 2
+- IR: 8 gates on 3 qubits (in \`conjectures.json\`)
+
+Evaluator fingerprint: \`cdcdcdcdcdcdcdcd\`. Elapsed: 18450 ms.
+
+Proposer: claude-opus-5-5, prompt sha256 \`abababababababababababababababababababababababababababababababab\`, 10 in / 5 out tokens. Digest shows 12 of 12.
+
+\`\`\`json
+{
+  "id": "b",
+  "statement": "Brick-pattern CZ circuits with YZ rotations keep beta_upper95 below 0.1 up to 128 qubits at six layers.",
+  "feature_predicate": {
+    "all": [
+      {
+        "feature": "entangler_pattern",
+        "op": "==",
+        "value": "brick"
+      },
+      {
+        "feature": "n_layers",
+        "op": "<=",
+        "value": 6
+      }
+    ]
+  },
+  "prediction": {
+    "quantity": "beta_upper95",
+    "op": "<",
+    "value": 0.1
+  },
+  "test_family": {
+    "family": "layered",
+    "rotation_axes": "YZ",
+    "entangler": "cz",
+    "pattern": "brick",
+    "layers": 6,
+    "rotations_per_qubit_per_layer": 2,
+    "observable": "preset:local_z",
+    "variants": 4
+  },
+  "n_range": [
+    8,
+    128
+  ],
+  "circuits": 8,
+  "points": 5
+}
+\`\`\`
+
+## a: supported
+
+> Brick-pattern CZ circuits with YZ rotations keep beta_upper95 below 0.1 up to 128 qubits at six layers.
+
+- Prediction: \`beta_upper95 < 0.1\`
+- Qubit range tested: 8 to 128 (8, 16, 32, 64, 128)
+- Circuits: 8 tested of 8 requested (meets 8, violates 0, indeterminate 0)
+- Seed: 42
+- Tested: 2026-10-18T15:01:00.000Z
+
+Conjecture supported on 8 held-out circuits up to n = 128: 'beta_upper95 < 0.1' held for every circuit within its 95% interval. This is evidence on sampled circuits, not a guarantee.
+
+### Evidence
+
+| Circuit | Layers | Pattern | Observed | Outcome |
+|---|---|---|---|---|
+| v0 | 6 | brick | 0.06 | meets |
+| v1 | 6 | brick | 0.06 | meets |
+| v2 | 6 | brick | 0.06 | meets |
+| v3 | 6 | brick | 0.06 | meets |
+| v4 | 6 | brick | 0.06 | meets |
+| v5 | 6 | brick | 0.06 | meets |
+| v6 | 6 | brick | 0.06 | meets |
+| v7 | 6 | brick | 0.06 | meets |
+
+Evaluator fingerprint: \`cdcdcdcdcdcdcdcd\`. Elapsed: 18450 ms.
+
+Proposer: claude-opus-5-5, prompt sha256 \`abababababababababababababababababababababababababababababababab\`, 10 in / 5 out tokens. Digest shows 12 of 12.
+
+\`\`\`json
+{
+  "id": "a",
+  "statement": "Brick-pattern CZ circuits with YZ rotations keep beta_upper95 below 0.1 up to 128 qubits at six layers.",
+  "feature_predicate": {
+    "all": [
+      {
+        "feature": "entangler_pattern",
+        "op": "==",
+        "value": "brick"
+      },
+      {
+        "feature": "n_layers",
+        "op": "<=",
+        "value": 6
+      }
+    ]
+  },
+  "prediction": {
+    "quantity": "beta_upper95",
+    "op": "<",
+    "value": 0.1
+  },
+  "test_family": {
+    "family": "layered",
+    "rotation_axes": "YZ",
+    "entangler": "cz",
+    "pattern": "brick",
+    "layers": 6,
+    "rotations_per_qubit_per_layer": 2,
+    "observable": "preset:local_z",
+    "variants": 4
+  },
+  "n_range": [
+    8,
+    128
+  ],
+  "circuits": 8,
+  "points": 5
+}
+\`\`\`
+"
+`;

@@ -10,7 +10,7 @@ import type { Conjecture, ConjectureSchemaInfo, LedgerEntry, ProposerMeta } from
 import { MIN_SCORED_ELITES, buildDigest } from '../services/conjecture/digest';
 import type { ConjectureEnv } from '../services/conjecture/env';
 import { normalizeEvidence } from '../services/conjecture/evidence';
-import { ledgerPaths, loadLedger, saveLedger, upsertEntry } from '../services/conjecture/ledger';
+import { ledgerPaths, loadLedger, renderLedgerMarkdown, saveLedger, upsertEntry } from '../services/conjecture/ledger';
 import { irToQiskitProgram } from '../services/conjecture/qiskitExport';
 import type { SchemaIssue } from '../services/conjecture/jsonSchema';
 import {
@@ -42,6 +42,8 @@ export interface ConjectureState {
   cancel(runId: string, conjectureId: string): Promise<void>;
   testAll(runId: string): Promise<ActionResult<{ started: number }>>;
   reloadLedger(runId: string): Promise<void>;
+  /** Read the ledger markdown (rendered from memory when the file is not on disk yet). */
+  readLedgerMarkdown(runId: string): Promise<ActionResult<{ path: string; content: string }>>;
   /** Write a counterexample as a Qiskit program into the run folder; returns its absolute path and text. */
   writeCounterexample(runId: string, conjectureId: string, index: number): Promise<ActionResult<{ path: string; code: string }>>;
   reset(): void;
@@ -148,8 +150,8 @@ export const useConjectureStore = create<ConjectureState>()((set, get) => {
           conjecture: proposal.conjecture,
           proposer: proposal.meta,
           outcome: failed ? 'failed' : 'complete',
-          result: failed ? null : result,
-          error: failed ? (result?.summary ?? 'The kernel reported the test failed.') : null,
+          result: result ?? null,
+          error: failed ? (result?.error?.message ?? result?.summary ?? 'The kernel reported the test failed.') : null,
           seed,
           tested_at: needEnv().now().toISOString(),
         };
@@ -315,6 +317,20 @@ export const useConjectureStore = create<ConjectureState>()((set, get) => {
       }));
     },
 
+    async readLedgerMarkdown(runId) {
+      const ctx = runContext(runId);
+      const ledger = get().byRun[runId]?.ledger.ledger;
+      if (!ctx || !env) return fail('That run is not loaded.');
+      const path = ledgerPaths(env.join, ctx.projectRoot, ctx.view.run.definition_file, runId).md;
+      try {
+        const onDisk = await env.fs.readFile(path);
+        if (onDisk !== null) return { ok: true, path, content: onDisk };
+      } catch (err) {
+        return fail(`Could not read the ledger: ${message(err)}`);
+      }
+      return ledger ? { ok: true, path, content: renderLedgerMarkdown(ledger) } : fail('The ledger is empty. Test a conjecture first.');
+    },
+
     async writeCounterexample(runId, conjectureId, index) {
       const ctx = runContext(runId);
       const entry = get().byRun[runId]?.jobs[conjectureId]?.result ?? get().byRun[runId]?.ledger.ledger?.entries.find((x) => x.id === conjectureId)?.result;
@@ -322,7 +338,7 @@ export const useConjectureStore = create<ConjectureState>()((set, get) => {
       if (!ctx || !env || !cx) return fail('That counterexample is not available.');
       const conjecture = get().byRun[runId]?.proposals.find((p) => p.conjecture.id === conjectureId)?.conjecture
         ?? get().byRun[runId]?.ledger.ledger?.entries.find((x) => x.id === conjectureId)?.conjecture;
-      const program = irToQiskitProgram(cx.ir, { conjectureId, statement: conjecture?.statement ?? '', seed: cx.seed, familyParams: cx.family_params });
+      const program = irToQiskitProgram(cx.ir, { conjectureId, statement: conjecture?.statement ?? '', seed: cx.regenerate.seed, familyParams: cx.family_params });
       if (!program.ok) return fail(program.error);
       try {
         const dir = env.join(ledgerPaths(env.join, ctx.projectRoot, ctx.view.run.definition_file, runId).dir, 'counterexamples');

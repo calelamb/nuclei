@@ -57,6 +57,7 @@ export interface ConjectureFeatureInfo {
   key: string;
   type: string;
   description: string;
+  values?: unknown[];
 }
 
 export interface ConjectureQuantityInfo {
@@ -64,8 +65,17 @@ export interface ConjectureQuantityInfo {
   description: string;
 }
 
+export interface ConjectureLimits {
+  circuits: [number, number];
+  points: [number, number];
+  n_max: number;
+  per_circuit_s?: number;
+  total_s?: number;
+}
+
 /** The normalised `discovery_conjecture_schema_result`. */
 export interface ConjectureSchemaInfo {
+  limits: ConjectureLimits;
   features: ConjectureFeatureInfo[];
   quantities: ConjectureQuantityInfo[];
   families: JsonSchema;
@@ -87,6 +97,7 @@ export interface EvidencePoint {
 /** One held-out circuit, normalised from the kernel's evidence item. */
 export interface EvidenceRow {
   circuitIndex: number;
+  variantId: string | null;
   outcome: EvidenceOutcome;
   features: Record<string, unknown>;
   beta: number | null;
@@ -95,24 +106,43 @@ export interface EvidenceRow {
   points: EvidencePoint[];
   seed: number | null;
   note: string | null;
+  /** Observed value of the predicted quantity: a number or an interval (upper may be null for infinity). */
+  observed: number | [number, number | null] | null;
 }
 
 export interface Counterexample {
+  circuit_index?: number;
+  variant_id?: string;
   family_params: Record<string, unknown>;
-  seed: number | null;
+  /** `seed` and `variant` regenerate the circuit; `test_family` is the family it came from. */
+  regenerate: { seed: number; variant: number; test_family?: unknown };
   ir: unknown;
-  [key: string]: unknown;
+  ir_n_qubits?: number;
+  quantity?: unknown;
+  reason?: string;
 }
 
 export interface ConjectureResult {
   verdict: ConjectureVerdict;
   summary: string;
+  reasons: string[];
+  /** True when the test stopped early (cancel, crash, wall limit); such a result is never "supported". */
+  partial: boolean;
+  tally: { meets: number; violates: number; indeterminate: number };
+  n_circuits_tested: number;
+  n_values: number[];
+  n_max_tested: number;
+  seed?: number;
+  resampling?: unknown;
+  timings: { elapsed_ms: number };
   evidence: unknown[];
   counterexamples: Counterexample[];
-  ledger_markdown: string;
-  fingerprint: string;
-  elapsed_ms: number;
-  [key: string]: unknown;
+  /** The normalised conjecture with kernel defaults filled in. */
+  conjecture?: Record<string, unknown>;
+  /** Present on failed or cancelled results. */
+  error?: { code: string; message: string; path?: string };
+  /** Evaluator fingerprint, when the kernel reports one. */
+  fingerprint?: string;
 }
 
 // ── Protocol ─────────────────────────────────────────────────────────────
@@ -129,6 +159,7 @@ export type ConjectureResponse =
       quantities: unknown[];
       families: JsonSchema;
       predicate: JsonSchema;
+      limits?: Partial<ConjectureLimits>;
     }
   | { type: 'discovery_conjecture_started'; job_id: string }
   | { type: 'discovery_conjecture_progress'; job_id: string; fraction: number; message: string; circuit_index: number }

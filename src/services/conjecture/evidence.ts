@@ -1,8 +1,9 @@
 /**
- * Normalise the kernel's per-circuit evidence item. The wire contract fixes
- * the envelope (`discovery_conjecture_evidence {job_id, item}`) but leaves
- * the item open, so this reads the plausible spellings defensively and
- * falls back to "indeterminate" rather than inventing a verdict.
+ * Normalise the kernel's per-circuit evidence item:
+ * `{circuit_index, variant_id, family_params, features, regenerate, points[], fit, dla,
+ *   quantity{..., observed}, outcome, reason}` with points
+ * `{n_qubits, variance, interval, method, status, loose, error}`.
+ * Missing pieces degrade to "indeterminate" or null, never to an invented verdict.
  */
 
 import type { EvidenceOutcome, EvidencePoint, EvidenceRow } from '../../types/conjecture';
@@ -15,44 +16,49 @@ function pair(v: unknown): [number, number] | null {
 }
 
 function outcomeOf(item: Record<string, unknown>): EvidenceOutcome {
-  for (const v of [item.outcome, item.status, item.verdict, item.meets]) {
-    if (v === true) return 'meets';
-    if (v === false) return 'violates';
-    if (typeof v !== 'string') continue;
-    const s = v.toLowerCase();
-    if (['meets', 'meet', 'supported', 'pass', 'passes'].includes(s)) return 'meets';
-    if (['violates', 'violate', 'refuted', 'fail', 'fails'].includes(s)) return 'violates';
-    if (['indeterminate', 'inconclusive', 'unknown'].includes(s)) return 'indeterminate';
-  }
+  if (item.outcome === 'meets' || item.outcome === 'violates' || item.outcome === 'indeterminate') return item.outcome;
+  if (item.meets === true) return 'meets';
+  if (item.meets === false) return 'violates';
   return 'indeterminate';
 }
 
 function pointOf(raw: unknown): EvidencePoint | null {
   if (!isObject(raw)) return null;
-  const n = num(raw.n_qubits) ?? num(raw.n);
+  const n = num(raw.n_qubits);
   const variance = num(raw.variance);
   if (n === null || variance === null) return null;
-  const ci = pair(raw.variance_ci95) ?? pair(raw.interval) ?? pair(raw.ci95);
+  const ci = pair(raw.interval);
   return { n, variance, lo: ci ? ci[0] : null, hi: ci ? ci[1] : null };
+}
+
+function observedOf(quantity: unknown): EvidenceRow['observed'] {
+  const obs = isObject(quantity) ? quantity.observed : null;
+  if (num(obs) !== null) return obs as number;
+  if (Array.isArray(obs) && obs.length === 2 && num(obs[0]) !== null) return [obs[0] as number, num(obs[1])];
+  return null;
 }
 
 export function normalizeEvidence(item: unknown, fallbackIndex: number): EvidenceRow {
   const raw = isObject(item) ? item : {};
-  const fit = isObject(raw.fit) ? raw.fit : isObject(raw.exponential) ? raw.exponential : {};
-  const betaCi = pair(raw.beta_ci95) ?? pair(fit.beta_ci95);
+  const fit = isObject(raw.fit) ? raw.fit : {};
+  const exp = isObject(fit.exponential) ? fit.exponential : {};
+  const betaCi = pair(exp.beta_ci95);
+  const regenerate = isObject(raw.regenerate) ? raw.regenerate : {};
   const points = (Array.isArray(raw.points) ? raw.points : [])
     .map(pointOf)
     .filter((p): p is EvidencePoint => p !== null)
     .sort((a, b) => a.n - b.n);
   return {
-    circuitIndex: num(raw.circuit_index) ?? num(raw.index) ?? fallbackIndex,
+    circuitIndex: num(raw.circuit_index) ?? fallbackIndex,
+    variantId: typeof raw.variant_id === 'string' ? raw.variant_id : null,
     outcome: outcomeOf(raw),
     features: isObject(raw.features) ? raw.features : {},
-    beta: num(raw.beta) ?? num(fit.beta),
+    beta: num(exp.beta),
     betaCi,
-    betaUpper95: num(raw.beta_upper95) ?? num(fit.beta_upper95) ?? (betaCi ? betaCi[1] : null),
+    betaUpper95: betaCi ? betaCi[1] : null,
     points,
-    seed: num(raw.seed),
-    note: typeof raw.note === 'string' ? raw.note : typeof raw.reason === 'string' ? raw.reason : null,
+    seed: num(regenerate.seed),
+    note: typeof raw.reason === 'string' && raw.reason ? raw.reason : null,
+    observed: observedOf(raw.quantity),
   };
 }

@@ -25,7 +25,7 @@ const isObject = (v: unknown): v is Record<string, unknown> => v !== null && typ
 function normalizeQuantity(raw: unknown): ConjectureQuantityInfo | null {
   if (typeof raw === 'string') return raw ? { key: raw, description: '' } : null;
   if (!isObject(raw)) return null;
-  const key = [raw.key, raw.name, raw.quantity].find((k) => typeof k === 'string' && k) as string | undefined;
+  const key = [raw.name, raw.key, raw.quantity].find((k) => typeof k === 'string' && k) as string | undefined;
   if (!key) return null;
   return { key, description: typeof raw.description === 'string' ? raw.description : '' };
 }
@@ -43,8 +43,23 @@ export function normalizeSchemaResult(
   if (features.length === 0 || quantities.length === 0 || !isObject(message.families) || !isObject(message.predicate)) {
     return null;
   }
+  const lim = isObject(message.limits) ? message.limits : {};
+  const range = (v: unknown, fallback: readonly [number, number]): [number, number] =>
+    Array.isArray(v) && v.length === 2 && typeof v[0] === 'number' && typeof v[1] === 'number' ? [v[0], v[1]] : [fallback[0], fallback[1]];
   return {
-    features: features.map((f) => ({ key: f.key, type: String(f.type ?? ''), description: String(f.description ?? '') })),
+    limits: {
+      circuits: range(lim.circuits, CIRCUITS_RANGE),
+      points: range(lim.points, POINTS_RANGE),
+      n_max: typeof lim.n_max === 'number' ? lim.n_max : MAX_N_QUBITS,
+      ...(typeof lim.per_circuit_s === 'number' ? { per_circuit_s: lim.per_circuit_s } : {}),
+      ...(typeof lim.total_s === 'number' ? { total_s: lim.total_s } : {}),
+    },
+    features: features.map((f) => ({
+      key: f.key,
+      type: String(f.type ?? ''),
+      description: String(f.description ?? ''),
+      ...(Array.isArray(f.values) ? { values: f.values } : {}),
+    })),
     quantities,
     families: message.families,
     predicate: message.predicate,
@@ -112,13 +127,13 @@ export function buildConjectureItemSchema(schema: ConjectureSchemaInfo, defs: Re
       test_family: hoist(schema.families, 'families__', defs),
       n_range: {
         type: 'array',
-        items: { type: 'integer', minimum: 2, maximum: MAX_N_QUBITS },
+        items: { type: 'integer', minimum: 2, maximum: schema.limits.n_max },
         minItems: 2,
         maxItems: 2,
-        description: `[n_min, n_max], n_max at most ${MAX_N_QUBITS}.`,
+        description: `[n_min, n_max], n_max at most ${schema.limits.n_max}.`,
       },
-      circuits: { type: 'integer', minimum: CIRCUITS_RANGE[0], maximum: CIRCUITS_RANGE[1] },
-      points: { type: 'integer', minimum: POINTS_RANGE[0], maximum: POINTS_RANGE[1] },
+      circuits: { type: 'integer', minimum: schema.limits.circuits[0], maximum: schema.limits.circuits[1] },
+      points: { type: 'integer', minimum: schema.limits.points[0], maximum: schema.limits.points[1] },
     },
     required: ['id', 'statement', 'feature_predicate', 'prediction', 'test_family', 'n_range', 'circuits', 'points'],
   };
@@ -128,7 +143,9 @@ export function buildConjectureItemSchema(schema: ConjectureSchemaInfo, defs: Re
 export function buildProposeTool(schema: ConjectureSchemaInfo): ProposeTool {
   const defs: Record<string, unknown> = {};
   const item = buildConjectureItemSchema(schema, defs);
-  const featureLines = schema.features.map((f) => `${f.key} (${f.type}): ${f.description}`).join('\n');
+  const featureLines = schema.features
+    .map((f) => `${f.key} (${f.type}): ${f.description}${f.values ? ` Values: ${f.values.join(', ')}.` : ''}`)
+    .join('\n');
   const quantityLines = schema.quantities.map((q) => (q.description ? `${q.key}: ${q.description}` : q.key)).join('\n');
   return {
     name: PROPOSE_TOOL_NAME,

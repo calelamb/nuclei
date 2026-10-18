@@ -15,6 +15,8 @@ Rules for every conjecture:
 5. Honest about the data. The digest is a sample: a feature that correlates with trainability in it may be a confound. Watch in particular for: observable locality (a local observable can make a deep circuit look trainable); layer count and parameter count moving together; the qubit range of the search being narrower than the n_range you test; hardness values that are censored; and elites that differ in several features at once. If a pattern could be explained by a confound, either design the test family to separate it or choose a different claim.
 6. Calibrated ranges. Test up to n = ${MAX_N_QUBITS} only where the claim is meant to extrapolate beyond the searched sizes; use at least 4 distinct qubit counts. Use enough circuits (5 to 32) for the claim to be convincing and enough points (4 to 8) for the scaling fit.
 
+7. Kernel lessons. For RY/RZ families set rotations_per_qubit_per_layer to at least 2: with 1, a variant can be RZ-only, which has zero gradient variance and comes back indeterminate. Ask for 6 to 8 points; with 5 over n = 8 to 64 the beta interval often straddles the threshold. When the predicate requires entangler_pattern == "brick", set brick_start to "even" in test_family. Avoid deep global-Z observables at n >= 48: the Pauli-propagation frontier cap burns the per-circuit budget there and those points come back bounded rather than exact.
+
 Respond only by calling ${PROPOSE_TOOL_NAME}. Propose between 1 and ${MAX_CONJECTURES} conjectures. If the digest has no structural features, propose fewer and say in each statement that the grounding is weak.`;
 
 export function buildUserPrompt(digest: Digest, schema: ConjectureSchemaInfo): string {

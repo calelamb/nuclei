@@ -115,7 +115,7 @@ describe('DiscoveryWorkbench', () => {
     renderOn(<DiscoveryWorkbench />);
     expect(screen.getByRole('region', { name: 'Run header' })).toBeTruthy();
     expect(screen.getByRole('group', { name: 'Run KPIs' })).toBeTruthy();
-    expect(screen.getAllByRole('tab').map((t) => t.textContent?.replace(/\d+$/, ''))).toEqual(['Overview', 'Lineage', 'Archive', 'Candidates', 'Guardrails']);
+    expect(screen.getAllByRole('tab').map((t) => t.textContent?.replace(/\d+$/, ''))).toEqual(['Overview', 'Lineage', 'Archive', 'Candidates', 'Guardrails', 'Conjectures']);
   });
 
   it('definition without a run: shows settings and starts a run', () => {

@@ -1,9 +1,6 @@
 /** Client-side validation of a conjecture against the kernel's schema. Never throws. */
 
 import {
-  CIRCUITS_RANGE,
-  MAX_N_QUBITS,
-  POINTS_RANGE,
   PREDICATE_OPS,
   type Conjecture,
   type ConjectureSchemaInfo,
@@ -36,13 +33,13 @@ function checkNode(node: unknown, path: string, featureKeys: Set<string>, depth:
   return issues;
 }
 
-function checkScalars(raw: Record<string, unknown>): SchemaIssue[] {
+function checkScalars(raw: Record<string, unknown>, schema: ConjectureSchemaInfo): SchemaIssue[] {
   const issues: SchemaIssue[] = [];
   if (typeof raw.id !== 'string' || raw.id.trim() === '') issues.push({ path: 'id', message: 'must be a non-empty string' });
   if (typeof raw.statement !== 'string' || raw.statement.trim() === '') issues.push({ path: 'statement', message: 'must be a non-empty string' });
   const range = raw.n_range;
-  if (!Array.isArray(range) || range.length !== 2 || !range.every((n) => Number.isInteger(n) && n >= 2 && n <= MAX_N_QUBITS)) {
-    issues.push({ path: 'n_range', message: `must be [n_min, n_max] with whole numbers from 2 to ${MAX_N_QUBITS}` });
+  if (!Array.isArray(range) || range.length !== 2 || !range.every((n) => Number.isInteger(n) && n >= 2 && n <= schema.limits.n_max)) {
+    issues.push({ path: 'n_range', message: `must be [n_min, n_max] with whole numbers from 2 to ${schema.limits.n_max}` });
   } else if ((range[0] as number) >= (range[1] as number)) {
     issues.push({ path: 'n_range', message: 'n_min must be below n_max' });
   }
@@ -50,8 +47,8 @@ function checkScalars(raw: Record<string, unknown>): SchemaIssue[] {
     const v = raw[key];
     if (!Number.isInteger(v) || (v as number) < lo || (v as number) > hi) issues.push({ path: key, message: `must be a whole number from ${lo} to ${hi}` });
   };
-  bound('circuits', CIRCUITS_RANGE);
-  bound('points', POINTS_RANGE);
+  bound('circuits', schema.limits.circuits);
+  bound('points', schema.limits.points);
   return issues;
 }
 
@@ -60,7 +57,7 @@ export function validateConjecture(
   schema: ConjectureSchemaInfo,
 ): { ok: true; conjecture: Conjecture } | { ok: false; issues: SchemaIssue[] } {
   if (!isObject(raw)) return { ok: false, issues: [{ path: 'conjecture', message: 'must be an object' }] };
-  const issues = checkScalars(raw);
+  const issues = checkScalars(raw, schema);
   const featureKeys = new Set(schema.features.map((f) => f.key));
   issues.push(...checkNode(raw.feature_predicate, 'feature_predicate', featureKeys, 0));
   const top = raw.feature_predicate;

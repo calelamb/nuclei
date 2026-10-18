@@ -9,7 +9,8 @@
  * `services/discovery/platformFs.ts`). Updates are immutable.
  */
 
-import type { LedgerEntry, LedgerFile } from '../../types/conjecture';
+import type { Counterexample, EvidenceRow, LedgerEntry, LedgerFile } from '../../types/conjecture';
+import { normalizeEvidence } from './evidence';
 import { runPaths, toJson, type DiscoveryFs, type JoinFn } from '../discovery/records';
 
 export interface LedgerPaths {
@@ -60,38 +61,86 @@ export async function loadLedger(fs: DiscoveryFs, paths: LedgerPaths, runId: str
   return { ok: true, existed: true, ledger: { schema: 1, run_id: typeof raw.run_id === 'string' ? raw.run_id : runId, updated_at: typeof raw.updated_at === 'string' ? raw.updated_at : now, entries } };
 }
 
+const num = (v: unknown): string => (v === null || v === undefined ? 'n/a' : typeof v === 'number' ? String(Number(v.toPrecision(3))) : String(v));
+
+function observedText(quantity: unknown): string {
+  const obs = (quantity as { observed?: unknown } | null | undefined)?.observed;
+  if (Array.isArray(obs)) return `[${num(obs[0])}, ${obs[1] === null || obs[1] === undefined ? 'inf' : num(obs[1])}]`;
+  return num(obs);
+}
+
 function usageLine(entry: LedgerEntry): string {
   const p = entry.proposer;
   if (!p) return 'Proposer: edited or imported by hand.';
   const u = p.usage;
-  return `Proposer: ${p.model}, prompt sha256 ${p.prompt_sha256}, ${u.input_tokens} in / ${u.output_tokens} out tokens. ${p.digest_disclosure}`;
+  return `Proposer: ${p.model}, prompt sha256 \`${p.prompt_sha256}\`, ${u.input_tokens} in / ${u.output_tokens} out tokens. ${p.digest_disclosure}`;
 }
 
-function entryMarkdown(entry: LedgerEntry): string {
-  const verdict = entry.result?.verdict ?? 'failed';
-  const lines = [`## ${entry.id}: ${verdict}`, '', `> ${entry.conjecture.statement}`, ''];
-  if (entry.result) {
-    lines.push(entry.result.ledger_markdown?.trim() || entry.result.summary, '');
-    lines.push(`Fingerprint: \`${entry.result.fingerprint}\`. Elapsed: ${Math.round(entry.result.elapsed_ms)} ms. Counterexamples: ${entry.result.counterexamples.length}.`);
-  } else {
-    lines.push(`The test did not finish: ${entry.error ?? 'unknown error'}.`);
-  }
-  lines.push(`Seed ${entry.seed}, tested ${entry.tested_at}.`, usageLine(entry), '');
-  lines.push('```json', JSON.stringify(entry.conjecture, null, 2), '```', '');
-  return lines.join('\n');
+function evidenceTable(rows: EvidenceRow[]): string[] {
+  return [
+    '| Circuit | Layers | Pattern | Observed | Outcome |',
+    '|---|---|---|---|---|',
+    ...rows.map((r) => `| ${r.variantId ?? `#${r.circuitIndex + 1}`} | ${num(r.features.n_layers)} | ${String(r.features.entangler_pattern ?? 'n/a')} | ${r.observed === null ? 'n/a' : Array.isArray(r.observed) ? `[${num(r.observed[0])}, ${r.observed[1] === null ? 'inf' : num(r.observed[1])}]` : num(r.observed)} | ${r.outcome} |`),
+  ];
 }
+
+function counterexampleLines(cx: Counterexample): string[] {
+  const fp = cx.family_params;
+  const axes = Array.isArray(fp.axis_order_per_layer) ? fp.axis_order_per_layer.join(',') : num(fp.axis_order_per_layer);
+  const gates = Array.isArray((cx.ir as { gates?: unknown[] } | null)?.gates) ? (cx.ir as { gates: unknown[] }).gates.length : 0;
+  return [
+    `### Counterexample ${cx.variant_id ?? ''}`.trimEnd(), '',
+    `- Observed: ${observedText(cx.quantity)}`,
+    `- Family parameters: layers ${num(fp.layers)}, axis order ${axes}, brick start ${num(fp.brick_start)}`,
+    `- Regenerate with seed ${cx.regenerate.seed}, variant ${cx.regenerate.variant}`,
+    `- IR: ${gates} gates on ${cx.ir_n_qubits ?? 'n/a'} qubits (in \`conjectures.json\`)`, '',
+  ];
+}
+
+function entryMarkdown(entry: LedgerEntry): string[] {
+  const c = entry.conjecture;
+  const r = entry.result;
+  const verdict = entry.outcome === 'failed' ? 'failed' : (r?.verdict ?? 'failed');
+  const lines = [`## ${entry.id}: ${verdict}`, '', `> ${c.statement}`, '', `- Prediction: \`${c.prediction.quantity} ${c.prediction.op} ${c.prediction.value}\``];
+  if (r) {
+    lines.push(
+      `- Qubit range tested: ${c.n_range[0]} to ${r.n_max_tested} (${r.n_values.join(', ')})`,
+      `- Circuits: ${r.n_circuits_tested} tested of ${c.circuits} requested (meets ${r.tally.meets}, violates ${r.tally.violates}, indeterminate ${r.tally.indeterminate})`,
+    );
+  }
+  lines.push(`- Seed: ${entry.seed}`, `- Tested: ${entry.tested_at}`, '');
+  if (entry.error) lines.push(`The test did not finish: ${entry.error}.`, '');
+  if (r) {
+    lines.push(r.summary, '');
+    if (r.partial) lines.push('This is a partial result: the test stopped before every circuit finished.', '');
+    const rows = r.evidence.map((e, i) => normalizeEvidence(e, i));
+    if (rows.length > 0) lines.push('### Evidence', '', ...evidenceTable(rows), '');
+    for (const cx of r.counterexamples) lines.push(...counterexampleLines(cx));
+    lines.push(`Evaluator fingerprint: ${r.fingerprint ? `\`${r.fingerprint.slice(0, 16)}\`` : 'not reported'}. Elapsed: ${Math.round(r.timings.elapsed_ms)} ms.`, '');
+  }
+  lines.push(usageLine(entry), '', '```json', JSON.stringify(c, null, 2), '```', '');
+  return lines;
+}
+
+const verdictOf = (e: LedgerEntry): string => (e.outcome === 'failed' ? 'failed' : (e.result?.verdict ?? 'failed'));
 
 export function renderLedgerMarkdown(ledger: LedgerFile): string {
-  const count = (v: string) => ledger.entries.filter((e) => e.result?.verdict === v).length;
+  const count = (v: string) => ledger.entries.filter((e) => verdictOf(e) === v).length;
   const header = [
-    `# Conjecture ledger, run ${ledger.run_id}`,
+    '# Conjecture ledger',
     '',
-    `${ledger.entries.length} conjectures: ${count('supported')} supported, ${count('refuted')} refuted, ${count('inconclusive')} inconclusive, ${ledger.entries.filter((e) => !e.result).length} failed to run.`,
+    `Run: ${ledger.run_id}`,
     '',
-    '"Supported" means supported on the listed held-out circuits up to the stated n. It is evidence, not proof. Refuted and inconclusive results are kept on purpose.',
+    'Supported means the prediction held on held-out circuits within their 95% intervals. It is evidence, not a guarantee. Refuted and inconclusive conjectures are kept.',
+    '',
+    `${ledger.entries.length} conjectures: ${count('supported')} supported, ${count('refuted')} refuted, ${count('inconclusive')} inconclusive, ${count('failed')} failed to run.`,
+    '',
+    '| Conjecture | Verdict | Circuits | Max n |',
+    '|---|---|---|---|',
+    ...ledger.entries.map((e) => `| ${e.id} | ${verdictOf(e)} | ${e.result?.n_circuits_tested ?? 0} | ${e.result?.n_max_tested ?? 'n/a'} |`),
     '',
   ];
-  return `${[...header, ...ledger.entries.map(entryMarkdown)].join('\n').trimEnd()}\n`;
+  return `${[...header, ...ledger.entries.flatMap(entryMarkdown)].join('\n').trimEnd()}\n`;
 }
 
 export async function saveLedger(fs: DiscoveryFs, paths: LedgerPaths, ledger: LedgerFile): Promise<{ ok: true } | { ok: false; error: string }> {
