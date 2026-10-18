@@ -86,7 +86,7 @@ async def test_seed_passes_every_guardrail_at_the_default_config():
     assert set(ev["descriptors"]) == {"log2_dla_dimension", "two_qubit_gates_per_layer"}
     m = ev["metrics"]
     assert [p["n_qubits"] for p in m["variance_points"]] == [8, 16, 32, 64]
-    assert m["dla"]["dimension"] == 255 and m["hardness"]["censored"] is False
+    assert m["dla"]["dimension"] == 4095 and m["hardness"]["censored"] is False
     assert m["hardness"]["frontier_needed_lower"] == 10_000
     assert ev["fitness"] == pytest.approx(
         m["terms"]["trainability"] + m["terms"]["hardness"] + m["terms"]["inexact_penalty"])

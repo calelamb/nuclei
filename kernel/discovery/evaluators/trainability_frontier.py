@@ -50,25 +50,26 @@ from kernel.discovery.evaluators._frontier_metrics import (
     two_qubit_gates_per_layer,
 )
 from kernel.discovery.evaluators._frontier_structure import strip_trivial_prefix
+from kernel.discovery.evaluators._frontier_fitness import INEXACT_PENALTY, fitness_terms, inexact_sizes
+from kernel.discovery.evaluators._frontier_observable import frontier_observable
 from kernel.discovery.evaluators._frontier_probe import (
-    fit_beta,
     hardness_probe,
     is_exact_point,
     public_point,
     variance_point,
 )
+from kernel.discovery.evaluators._frontier_trainability import fit_trainability
 from kernel.discovery.evaluators.base import EvaluationCore, EvaluatorSpec
 from kernel.discovery.evaluators.guardrails import FAIL, PASS, WARN, CheckResult, Guardrail, run_guardrails
 from kernel.discovery.features import extract_features
 from kernel.trainability._analysis_common import AnalysisCancelled
 from kernel.trainability.ir import ParamCircuit
-from kernel.trainability.pauli import ObservableError, PauliSum, parse_observable
+from kernel.trainability.pauli import ObservableError, PauliSum
 from kernel.trainability.pauliprop import ppe_applicable
 
 KIND = "trainability_frontier"
 VERSION = "1.0.0"
 MIN_VARIANCE = 1e-6
-INEXACT_PENALTY = 1.0
 HONESTY = (
     "Hardness is resistance to *this* Pauli-propagation estimator under *this* budget. "
     "It is not a proof of classical hardness. A high score is a lead to investigate, not a counterexample."
@@ -112,9 +113,9 @@ class _Run:
     def observable(self, circuit: ParamCircuit, expected: int) -> PauliSum:
         """The observable on the circuit's own width (so a width bug is ``qubit_count``'s to report)."""
         try:
-            return parse_observable(self.config["observable"], circuit.n_qubits)
+            return frontier_observable(self.config["observable"], circuit.n_qubits)
         except ObservableError:
-            return parse_observable(self.config["observable"], expected)
+            return frontier_observable(self.config["observable"], expected)
 
     def point(self, n: int) -> dict[str, Any]:
         if n not in self.points:
@@ -154,10 +155,19 @@ def _budget_check(run: _Run) -> CheckResult:
 
 
 def _variance_check(run: _Run) -> CheckResult:
+    """Only an exact smallest-n point can certify a non-trivial variance (a stopped run is not a value)."""
     n = run.sizes[0]
     if not run.circuit(n).parameters:
         return FAIL, f"At n={n} the circuit has no free parameters, so its gradient variance is trivially zero."
-    variance = run.point(n)["variance"]
+    point = run.point(n)
+    if not is_exact_point(point):
+        low, high = point["variance_ci95"]
+        return FAIL, (
+            f"At n={n} the gradient variance is not pinned down (PPE status {point['status']}, interval "
+            f"[{low:.3e}, {high:.3e}]), so non-triviality cannot be certified. Simplify the ansatz or "
+            "raise the budget; an unreached interval is never read as a variance."
+        )
+    variance = point["variance"]
     if variance < MIN_VARIANCE:
         return FAIL, (
             f"At n={n} the mean gradient variance is {variance:.3e} < {MIN_VARIANCE:.0e}: "
@@ -187,11 +197,11 @@ def _algebra_check(run: _Run) -> CheckResult:
 
 
 def _exactness_check(run: _Run) -> CheckResult:
-    loose = [n for n in run.sizes if not is_exact_point(run.point(n))]
+    loose = inexact_sizes([run.point(n) for n in run.sizes])
     if not loose:
         return PASS, None
     return WARN, (
-        f"The variance interval is wider than 10% of the estimate at n={loose}; "
+        f"The variance is stopped, missing or wider than 10% of the estimate at n={loose}; "
         f"those points are down-weighted (fitness penalty {INEXACT_PENALTY} x their fraction)."
     )
 
@@ -220,8 +230,8 @@ def _cancelled() -> EvaluationCore:
 def _objectives(fit: dict[str, Any], hardness: dict[str, Any]) -> dict[str, Any]:
     return {
         "beta": {
-            "value": fit["beta"], "ci95": list(fit["beta_ci95"]), "direction": "minimize",
-            "label": "Barren-plateau exponent beta",
+            "value": fit["beta"], "ci95": fit["beta_ci95"], "fit_method": fit["fit_method"],
+            "direction": "minimize", "label": "Barren-plateau exponent beta",
         },
         "estimation_hardness": {
             "value": hardness["hardness_lower"], "direction": "maximize",
@@ -264,15 +274,11 @@ def _scored(
         target_width=est["target_width"], max_frontier=run.max_frontier,
         time_budget_s=est["time_budget_s"], cancel=run.cancel,
     )
-    fit = fit_beta(points, seed)
+    fit = fit_trainability(points, seed)
     weights = config["weights"]
-    inexact = [p["n_qubits"] for p in points if not is_exact_point(p)]
-    penalty = INEXACT_PENALTY * len(inexact) / len(points)
-    terms = {
-        "trainability": weights["trainability"] * fit["trainability_term"],
-        "hardness": weights["hardness"] * hardness["hardness_lower"],
-        "inexact_penalty": -penalty,
-    }
+    inexact = inexact_sizes(points)
+    terms = fitness_terms(weights, fit["trainability_term"], hardness["hardness_lower"], points)
+    penalty = -terms["inexact_penalty"]
     fitness = sum(terms.values())
     features = extract_features(largest, n_layers=config["n_layers"])
     probe_features = extract_features(run.probe_circuit(len(run.probes) - 1), n_layers=config["n_layers"])
@@ -282,7 +288,7 @@ def _scored(
     exact = all(p["method"] == "pauli_propagation_exact" for p in points)
     metrics = {
         "variance_points": [public_point(p) for p in points],
-        "fit": {k: v for k, v in fit.items()},
+        "fit": dict(fit),
         "hardness": hardness,
         "censored": hardness["censored"],
         "dla": dla,

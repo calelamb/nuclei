@@ -38,18 +38,13 @@ import numpy as np
 
 from kernel.discovery.evaluators._frontier_config import effective_sizes, frontier_cap
 from kernel.discovery.evaluators._frontier_metrics import algebra_verdict, dla_probe
-from kernel.discovery.evaluators.trainability_frontier import INEXACT_PENALTY
-from kernel.discovery.evaluators._frontier_probe import (
-    EXACT_REL_WIDTH,
-    PROBE_POINTS,
-    VARIANCE_FLOOR,
-    fit_beta,
-    frontier_grid,
-)
+from kernel.discovery.evaluators._frontier_fitness import fitness_terms
+from kernel.discovery.evaluators._frontier_observable import frontier_observable
+from kernel.discovery.evaluators._frontier_probe import PROBE_POINTS, frontier_grid, is_exact_point, is_informative_point
+from kernel.discovery.evaluators._frontier_trainability import fit_trainability
 from kernel.trainability.analyses import gradient_statistics
 from kernel.trainability.ir import IrError, ParamCircuit
 from kernel.trainability.lie import lie_algebra
-from kernel.trainability.pauli import parse_observable
 from kernel.trainability.pauliprop import ppe_applicable, ppe_frontier_curve, ppe_gradient_variances
 
 SAMPLING_MAX_QUBITS = 12
@@ -61,6 +56,10 @@ AUDIT_SEED_OFFSET = 1009
 DLA_AUDIT_MAX_DIMENSION = 8192
 DLA_AUDIT_TIME_S = 30.0
 NEST_TOL = 1e-9
+
+
+def _show(value: float | None) -> str:
+    return "none" if value is None else f"{value:.4e}"
 
 
 def _check(check_id: str, label: str, status: str, detail: str) -> dict[str, str]:
@@ -111,7 +110,7 @@ def _reparse_check(circuits: list[ParamCircuit], st: dict[str, Any]) -> dict[str
         if circuit.n_qubits != n:
             return _check("reparse", "Artifacts re-parse with the expected widths", "fail",
                           f"build({n}, ...) has {circuit.n_qubits} qubits on re-parse.")
-        ok, reason = ppe_applicable(circuit, parse_observable(st["observable"], n), init="uniform")
+        ok, reason = ppe_applicable(circuit, frontier_observable(st["observable"], n), init="uniform")
         if not ok:
             return _check("reparse", "Artifacts re-parse with the expected widths", "fail",
                           f"n={n}: PPE no longer applies on re-parse: {reason}")
@@ -120,14 +119,17 @@ def _reparse_check(circuits: list[ParamCircuit], st: dict[str, Any]) -> dict[str
 
 
 def _fresh_points(circuits: list[ParamCircuit], st: dict[str, Any], cancel, progress) -> list[dict[str, Any]]:
+    """Independent PPE variances. A stopped run's midpoint is not a value (``variance`` is ``None``)."""
     points = []
     for index, (circuit, n) in enumerate(zip(circuits, st["sizes"])):
         result = ppe_gradient_variances(
-            circuit, parse_observable(st["observable"], n), min_weight_abs=0,
+            circuit, frontier_observable(st["observable"], n), min_weight_abs=0,
             max_frontier=st["max_frontier"], time_budget_s=st["time_budget_s"], cancel=cancel,
         )
+        raw = result.get("variance_mean")
         points.append({
-            "n_qubits": n, "n_layers": st["n_layers"], "variance": float(result["variance_mean"]),
+            "n_qubits": n, "n_layers": st["n_layers"], "status": result["status"],
+            "variance": float(raw) if raw is not None and result["status"] == "complete" else None,
             "variance_ci95": [float(x) for x in result["variance_mean_interval"]],
         })
         if progress:
@@ -145,17 +147,17 @@ def _reproducible_check(fresh: list[dict[str, Any]], recorded: list[dict[str, An
         return _check("ppe_reproducible", label, "fail",
                       f"{len(recorded)} recorded variance points but {len(fresh)} sizes were scored.")
     for new, old in zip(fresh, recorded):
-        slack = 1e-12 * max(abs(new["variance"]), abs(old["variance"]), 1e-300)
+        slack = 1e-12 * max(abs(new["variance_ci95"][1]), abs(old["variance_ci95"][1]), 1e-300)
         if new["n_qubits"] != old["n_qubits"] or not _overlap(new["variance_ci95"], old["variance_ci95"], slack):
             return _check("ppe_reproducible", label, "fail", (
-                f"n={new['n_qubits']}: fresh PPE variance {new['variance']:.4e} {new['variance_ci95']} "
-                f"disagrees with the recorded {old['variance']:.4e} {old['variance_ci95']}."))
+                f"n={new['n_qubits']}: fresh PPE interval {new['variance_ci95']} (variance {_show(new['variance'])}) "
+                f"disagrees with the recorded {old['variance_ci95']} (variance {_show(old['variance'])})."))
     return _check("ppe_reproducible", label, "pass", "Every fresh variance interval overlaps the recorded one.")
 
 
 def _sample_ci99(circuit: ParamCircuit, st: dict[str, Any], samples: int, seed: int, cancel) -> tuple[float, list[float]]:
     stats = gradient_statistics(
-        circuit, parse_observable(st["observable"], circuit.n_qubits), samples=samples,
+        circuit, frontier_observable(st["observable"], circuit.n_qubits), samples=samples,
         seed=seed, init="uniform", method="sampling", cancel=cancel,
     )
     centre = float(stats["variance_mean"])
@@ -182,9 +184,9 @@ def _sampling_check(
         centre, ci99 = _sample_ci99(circuit, st, samples, seed + AUDIT_SEED_OFFSET + attempt, cancel)
         attempts.append(f"sampling {centre:.4e}, 99% CI [{ci99[0]:.4e}, {ci99[1]:.4e}] ({samples} samples)")
         if _overlap(claimed["variance_ci95"], ci99):
-            return _check("ppe_vs_sampling", label, "pass", f"n={n}: PPE {claimed['variance']:.4e} vs " + attempts[-1] + ".")
+            return _check("ppe_vs_sampling", label, "pass", f"n={n}: PPE {_show(claimed['variance'])} vs " + attempts[-1] + ".")
     return _check("ppe_vs_sampling", label, "fail", (
-        f"n={n}: the recorded PPE variance {claimed['variance']:.4e} is outside the sampling 99% CI twice: "
+        f"n={n}: the recorded PPE variance {_show(claimed['variance'])} is outside the sampling 99% CI twice: "
         + "; ".join(attempts) + "."))
 
 
@@ -211,7 +213,7 @@ def _dla_check(probe_circuit: ParamCircuit, evaluation: dict[str, Any], cancel) 
 
 
 def _fresh_hardness(circuit: ParamCircuit, st: dict[str, Any], seed: int, cancel) -> dict[str, Any]:
-    obs = parse_observable(st["observable"], circuit.n_qubits)
+    obs = frontier_observable(st["observable"], circuit.n_qubits)
     rng = np.random.default_rng([abs(int(seed)), AUDIT_STREAM])
     budget = st["time_budget_s"]
     values = rng.uniform(0.0, 2.0 * math.pi, (PROBE_POINTS, len(circuit.parameters)))
@@ -262,16 +264,9 @@ def _nested_check(fresh: dict[str, Any]) -> dict[str, str]:
 def _audit_fitness(
     points: list[dict[str, Any]], hardness: dict[str, Any], st: dict[str, Any], seed: int
 ) -> float:
-    fit = fit_beta(points, seed + AUDIT_SEED_OFFSET)
-    loose = sum(
-        1 for p in points
-        if (p["variance_ci95"][1] - p["variance_ci95"][0]) > EXACT_REL_WIDTH * max(p["variance"], VARIANCE_FLOOR)
-    )
-    weights = st["weights"]
-    return float(
-        weights["trainability"] * fit["trainability_term"] + weights["hardness"] * hardness["hardness_lower"]
-        - INEXACT_PENALTY * loose / len(points)
-    )
+    fit = fit_trainability(points, seed + AUDIT_SEED_OFFSET)
+    terms = fitness_terms(st["weights"], fit["trainability_term"], hardness["hardness_lower"], points)
+    return float(sum(terms.values()))
 
 
 def _gap_check(audit_fitness: float, evaluation: dict[str, Any], st: dict[str, Any]) -> dict[str, str]:

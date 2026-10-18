@@ -12,6 +12,7 @@ from qiskit.circuit import Parameter, ParameterVector  # noqa: E402
 from qiskit.circuit.library import UnitaryGate  # noqa: E402
 
 from kernel.discovery.evaluators import EVALUATORS, InvalidConfig, effective_config, normalize_config  # noqa: E402
+from kernel.discovery.evaluators._frontier_trainability import TRAIN_PENALTY_CAP  # noqa: E402
 from kernel.discovery.evaluators.trainability_frontier import HONESTY, SPEC  # noqa: E402
 from kernel.trainability.convert import from_object  # noqa: E402
 from kernel.trainability.ir import IrError  # noqa: E402
@@ -105,7 +106,10 @@ def test_stages_screen_uses_two_sizes_and_a_tenth_of_the_frontier():
     assert full["metrics"]["settings"]["max_frontier"] == 200000
     assert screen["metrics"]["settings"]["max_frontier"] == 20000
     assert screen["metrics"]["settings"]["sizes"] == [4, 6]
-    assert screen["metrics"]["fit"]["method"] == "secant"  # 2 sizes: below the fitter's minimum of 4
+    fit = screen["metrics"]["fit"]
+    assert fit["fit_method"] == "secant"  # 2 sizes: below the fitter's minimum of 4
+    assert fit["beta_ci95"] is None and screen["objectives"]["beta"]["ci95"] is None  # never a zero-width CI
+    assert screen["objectives"]["beta"]["fit_method"] == "secant" and fit["beta_extreme_bound"][0] <= fit["beta"]
 
 
 # --- one cheating or degenerate candidate per guardrail -------------------------
@@ -287,7 +291,7 @@ def test_no_parameters_is_nontrivial_variance_not_a_crash():
 
 
 def test_inexact_points_warn_and_downweight_but_never_fail():
-    tight = {"estimation": {"max_frontier": 100}, "n_layers": 4}
+    tight = {"estimation": {"max_frontier": 10000}, "n_layers": 4}  # n = 4, 6 exact; 8, 10 stopped
     result = run(seed_like, tight)
     assert result["status"] == "scored"
     exactness = next(g for g in result["guardrails"] if g["id"] == "exactness")
@@ -320,7 +324,7 @@ def test_scored_shape(scored):
     assert HONESTY.startswith("Hardness is resistance to *this* Pauli-propagation estimator under *this* budget.")
     assert [p["n_qubits"] for p in m["variance_points"]] == SIZES
     assert all(p["method"] == "pauli_propagation_exact" and p["variance_ci95"][0] <= p["variance"] * (1 + 1e-12) for p in m["variance_points"])
-    assert m["dla"]["dimension"] == 255 and m["dla"]["classification"]["label"] == "su(16)"
+    assert m["dla"]["dimension"] == 4095 and m["dla"]["classification"]["label"] == "su(64)"  # largest probe n = 6
     assert m["features"]["n_qubits"] == SIZES[-1] and m["features"]["entangler"] == "cz"
     assert m["censored"] is m["hardness"]["censored"]
 
@@ -328,11 +332,12 @@ def test_scored_shape(scored):
 def test_fitness_is_the_documented_combination(scored):
     m, w = scored["metrics"], scored["metrics"]["settings"]["weights"]
     fit = m["fit"]
-    assert fit["trainability_term"] == -max(fit["beta_upper95"], 0.0)
+    assert fit["trainability_term"] == -min(fit["decay_per_doubling"], TRAIN_PENALTY_CAP)
     expected = w["trainability"] * fit["trainability_term"] + w["hardness"] * m["hardness"]["hardness_lower"]
     assert scored["fitness"] == pytest.approx(expected - m["exactness"]["penalty"])
     beta = scored["objectives"]["beta"]
-    assert beta["direction"] == "minimize" and beta["ci95"][1] == pytest.approx(fit["beta_upper95"])
+    assert beta["direction"] == "minimize" and beta["fit_method"] == "weighted_log_fit"
+    assert beta["ci95"][1] == pytest.approx(fit["beta_upper95"])
     assert scored["objectives"]["estimation_hardness"]["direction"] == "maximize"
     assert scored["objectives"]["estimation_hardness"]["value"] == m["hardness"]["hardness_lower"]
 
@@ -350,11 +355,11 @@ def test_hardness_probe_is_pessimistic_over_three_points(scored):
 
 
 def test_censored_probe_reports_the_cap_not_a_measurement():
-    result = run(seed_like, {"estimation": {"max_frontier": 1000, "target_width": 1e-4}, "n_layers": 5})
+    result = run(seed_like, {"estimation": {"max_frontier": 10000, "target_width": 1e-4}, "n_layers": 4})
     hardness = result["metrics"]["hardness"]
     assert result["status"] == "scored"
     if hardness["censored"]:  # the lower bound on hardness is the cap itself
-        assert hardness["frontier_needed_lower"] == 1000 and hardness["hardness_lower"] == pytest.approx(3.0)
+        assert hardness["frontier_needed_lower"] == 10000 and hardness["hardness_lower"] == pytest.approx(4.0)
         assert result["metrics"]["censored"] is True
 
 

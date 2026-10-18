@@ -126,10 +126,12 @@ def ppe_gradient_map(
     for line, names in sorted(lines.items()):
         if not names:
             continue
-        variances = [float(rows[name]["variance"]) for name in names]
-        dead = all(rows[name]["dead"] or rows[name]["variance"] < DEAD_VARIANCE for name in names)
+        known = [float(rows[name]["variance"]) for name in names if rows[name]["variance"] is not None]
+        unknown = len(known) < len(names)  # a stopped run: no value, never a guessed one
+        dead = not unknown and all(rows[name]["dead"] or rows[name]["variance"] < DEAD_VARIANCE for name in names)
         entries.append({
-            "line": line, "parameters": list(names), "variance": sum(variances) / len(variances), "dead": dead,
+            "line": line, "parameters": list(names), "variance": (sum(known) / len(known)) if known and not unknown else None,
+            "dead": dead,
         })
     dead_count = sum(1 for e in entries if e["dead"])
     exact = point["method"] == "pauli_propagation_exact"

@@ -1,26 +1,7 @@
-"""PPE-backed measurements for ``trainability_frontier``: variance points, beta, hardness.
+"""PPE-backed measurements for ``trainability_frontier``: variance points and the hardness probe.
 
 Everything here is a measurement with an explicit method label; none of it is a proof.
-
-Trainability term
------------------
-``Var[dC/dtheta] ~ 2^(-beta n)`` is fitted by ``kernel.trainability.scaling.fit_scaling``
-(weighted log-fit with a bootstrap CI over points). ``beta_upper95`` is the upper end of the
-exponential model's 95% CI, **whether or not the exponential model is preferred**: a
-polynomially decaying variance still has a (small) exponential envelope, and reporting its
-upper bound is the pessimistic reading. The trainability term is ``-max(beta_upper95, 0)``,
-so a variance that is flat or growing earns 0, never a bonus. When ``fit_scaling`` is
-inconclusive (fewer than 4 distinct sizes, as on the ``screen`` stage, or a zero variance)
-a *pessimistic secant* over the extreme sizes is used instead and labelled as such.
-
-Estimation hardness
--------------------
-At the largest size, for three seeded random parameter points, the PPE interval width of
-``<O>`` is measured on a geometric grid of frontier sizes. ``frontier_needed`` is the
-smallest size reaching ``target_width``; if none does, ``max_frontier`` is used and the point
-is *censored* (the true need is at least that large). ``hardness = log10(frontier_needed)``;
-fitness uses the minimum over the points. This is resistance to *this* estimator under *this*
-budget, nothing more.
+The trainability fit lives in ``_frontier_trainability``.
 """
 
 from __future__ import annotations
@@ -35,12 +16,12 @@ from kernel.discovery.evaluators._frontier_config import MIN_FRONTIER
 from kernel.trainability.ir import ParamCircuit
 from kernel.trainability.pauli import PauliSum
 from kernel.trainability.pauliprop import ppe_frontier_curve, ppe_gradient_variances
-from kernel.trainability.scaling import fit_scaling
 
 PROBE_POINTS = 3
 FRONTIER_BASE = 100
 VARIANCE_FLOOR = 1e-300
 EXACT_REL_WIDTH = 0.10
+INFORMATIVE_RATIO = 2.0
 #: Independent random streams per stage so ``confirm`` never reuses ``full``'s points.
 STAGE_STREAM = {"screen": 1, "full": 2, "confirm": 3}
 #: Per-point probe cap, as a multiple of ``time_budget_s`` (each frontier size gets one budget).
@@ -53,27 +34,44 @@ def variance_point(
     circuit: ParamCircuit, observable: PauliSum, *, max_frontier: int, time_budget_s: float,
     n_layers: int, cancel: Cancel = None,
 ) -> dict[str, Any]:
-    """Exact (or rigorously bounded) mean gradient variance at one size, plus per-parameter rows."""
+    """Exact (or rigorously bounded) mean gradient variance at one size, plus per-parameter rows.
+
+    ``variance`` is ``None`` whenever the PPE reports no value (a timeout or an uninformative
+    interval): such a point is never a variance, only an interval (see ``is_exact_point``).
+    """
     result = ppe_gradient_variances(
         circuit, observable, min_weight_abs=0, max_frontier=max_frontier,
         time_budget_s=time_budget_s, cancel=cancel,
     )
     low, high = (float(x) for x in result["variance_mean_interval"])
-    mean = float(result["variance_mean"])
+    raw = result.get("variance_mean")
+    mean = float(raw) if raw is not None else None
+    status = result["status"]
+    if status != "complete":  # a stopped run's midpoint is not a measurement (adversarial review PH-C1)
+        mean = None
     return {
         "n_qubits": circuit.n_qubits, "n_layers": n_layers, "variance": mean,
-        "variance_ci95": [low, high], "method": result["method"], "status": result["status"],
-        "relative_width": (high - low) / mean if mean > 0 else None,
+        "variance_ci95": [low, high], "method": result["method"], "status": status,
+        "relative_width": (high - low) / mean if mean else None,
         "frontier_peak": int(result["frontier_peak"]), "per_parameter": result["per_parameter"],
     }
 
 
 def is_exact_point(point: dict[str, Any]) -> bool:
-    """Interval width <= 10% of the estimate (a zero estimate with zero width counts as exact)."""
+    """A value exists, the run completed, and the interval is within 10% of it (zero-width zero is exact)."""
+    variance = point["variance"]
+    if variance is None or point["status"] != "complete":
+        return False
     width = point["variance_ci95"][1] - point["variance_ci95"][0]
-    if point["variance"] <= 0:
+    if variance <= 0:
         return width == 0
-    return width <= EXACT_REL_WIDTH * point["variance"]
+    return width <= EXACT_REL_WIDTH * variance
+
+
+def is_informative_point(point: dict[str, Any]) -> bool:
+    """Usable in a log-fit: a value, a positive lower bound and ``hi / lo <= INFORMATIVE_RATIO``."""
+    low, high = point["variance_ci95"]
+    return point["variance"] is not None and low > 0 and high / low <= INFORMATIVE_RATIO
 
 
 def public_point(point: dict[str, Any]) -> dict[str, Any]:
@@ -81,42 +79,9 @@ def public_point(point: dict[str, Any]) -> dict[str, Any]:
 
     Wall-clock timings are deliberately absent from every metric so a re-run is bit-identical.
     """
-    return {k: v for k, v in point.items() if k != "per_parameter"} | {"exact": is_exact_point(point)}
-
-
-def _secant(points: list[dict[str, Any]], reason: str) -> dict[str, Any]:
-    """Pessimistic two-end secant: slope from the smallest-n upper bound to the largest-n lower bound."""
-    ordered = sorted(points, key=lambda p: p["n_qubits"])
-    first, last = ordered[0], ordered[-1]
-    span = float(last["n_qubits"] - first["n_qubits"])
-    log2 = lambda v: math.log2(max(v, VARIANCE_FLOOR))  # noqa: E731
-    beta = (log2(first["variance"]) - log2(last["variance"])) / span
-    low = (log2(first["variance_ci95"][0]) - log2(last["variance_ci95"][1])) / span
-    high = (log2(first["variance_ci95"][1]) - log2(last["variance_ci95"][0])) / span
-    return {
-        "method": "secant", "beta": beta, "beta_ci95": [low, high], "preferred": None,
-        "verdict": "inconclusive", "n_layers": first["n_layers"], "fits": [],
-        "summary": f"Secant over n={first['n_qubits']}..{last['n_qubits']} (interval extremes): {reason}.",
+    return {k: v for k, v in point.items() if k != "per_parameter"} | {
+        "exact": is_exact_point(point), "informative": is_informative_point(point),
     }
-
-
-def fit_beta(points: list[dict[str, Any]], seed: int) -> dict[str, Any]:
-    """beta, its 95% CI and ``beta_upper95`` / ``trainability_term`` (see the module docstring)."""
-    wire = [{k: p[k] for k in ("n_qubits", "n_layers", "variance", "variance_ci95")} for p in points]
-    fits = fit_scaling(wire, seed=seed)
-    exponential = fits[0]["exponential"] if fits else None
-    if exponential:
-        fit = {
-            "method": "weighted_log_fit", "beta": exponential["beta"], "beta_ci95": list(exponential["beta_ci95"]),
-            "preferred": fits[0]["preferred"], "verdict": fits[0]["verdict"], "n_layers": fits[0]["n_layers"],
-            "fits": fits, "summary": fits[0]["summary"],
-        }
-    else:
-        reason = fits[0]["summary"] if fits else "no usable variance points"
-        fit = _secant(points, reason.rstrip(".").lower())
-        fit["fits"] = fits
-    upper = float(fit["beta_ci95"][1])
-    return {**fit, "beta_upper95": upper, "trainability_term": -max(upper, 0.0)}
 
 
 def frontier_grid(max_frontier: int) -> list[int]:
