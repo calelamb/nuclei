@@ -40,7 +40,8 @@
 .shelf__title { margin: 0; font-size: var(--font-size-title); font-weight: var(--font-weight-bold); color: var(--color-text-primary); }
 .shelf__sub { margin: var(--space-1) 0 0; font-size: var(--font-size-code); color: var(--color-text-secondary); }
 .shelf__count { font-size: var(--font-size-chrome-label); color: var(--color-text-secondary); white-space: nowrap; }
-.shelf__filter { margin-bottom: var(--space-4); overflow-x: auto; }
+.shelf__filter { display: flex; align-items: center; flex-wrap: wrap; gap: var(--space-3); margin-bottom: var(--space-4); }
+.shelf__sub { margin: 0; }
 .shelf__grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: var(--space-4); }
 
 .video-card {
@@ -72,3 +73,7 @@
 .video-card__tags .nuclei-badge--warning { --badge-text: color-mix(in srgb, var(--color-warning) 72%, var(--color-text-primary)); }
 
 .tracks__back { margin-bottom: var(--space-4); }
+
+/* Capstones use the same card grid as the video shelf so every chooser tab shares one card width. */
+.tracks__capstones .lpath__caps { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: var(--space-4); }
+.tracks__capstones .cap-card { margin-bottom: 0; padding: var(--space-4); }

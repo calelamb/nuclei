@@ -11,6 +11,8 @@ export interface TabOption<T extends string> {
   count?: number;
   /** Tooltip and accessible name override (required for an icon-only tab). */
   title?: string;
+  /** Full accessible name when the visible label is an abbreviation ("3B1B" -> "3Blue1Brown"). */
+  ariaLabel?: string;
 }
 
 export interface TabsProps<T extends string> {
@@ -97,7 +99,7 @@ export function Tabs<T extends string>({ value, options, onChange, 'aria-label':
             tabIndex={selected ? 0 : -1}
             className="nuclei-tabs__tab"
             title={o.title}
-            aria-label={o.title && !o.label ? o.title : undefined}
+            aria-label={o.ariaLabel ?? (o.title && !o.label ? o.title : undefined)}
             onClick={() => onChange(o.value)}
           >
             {o.icon && <span className="nuclei-tabs__icon" aria-hidden="true">{o.icon}</span>}

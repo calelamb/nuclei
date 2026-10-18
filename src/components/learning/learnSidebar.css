@@ -94,15 +94,9 @@
 
 /* Video library sidebar */
 .vlib { display: flex; flex-direction: column; height: 100%; overflow: hidden; font-family: var(--font-sans); }
-.vlib__tabs { display: flex; flex-shrink: 0; padding: 0 var(--space-1); border-bottom: 1px solid var(--color-border-strong); }
-.vlib__tab {
-  flex: 1 1 auto; padding: var(--space-2) var(--space-2); white-space: nowrap; cursor: pointer; border: none; border-bottom: 2px solid transparent; background: transparent;
-  font: var(--font-weight-semibold) var(--font-size-caption) var(--font-sans); color: var(--color-text-tertiary);
-  transition: color var(--duration-fast) var(--ease-standard), border-color var(--duration-fast) var(--ease-standard);
-}
-.vlib__tab:hover { color: var(--color-text-primary); }
-.vlib__tab[aria-selected='true'] { color: var(--color-text-primary); border-bottom-color: var(--color-accent-quantum); }
-.vlib__levels { display: flex; flex-wrap: wrap; flex-shrink: 0; gap: var(--space-1); padding: var(--space-2) var(--space-2) var(--space-1); }
+.vlib__tabs { flex-shrink: 0; padding: 0 var(--space-1); }
+.vlib__levels { flex-shrink: 0; padding: var(--space-2) var(--space-3) var(--space-1); }
+.vlib__levels .nuclei-select { display: flex; }
 .vlib__count { flex-shrink: 0; padding: 0 var(--space-3) var(--space-1); font-size: var(--font-size-caption); color: var(--color-text-secondary); }
 .vlib__list { flex: 1; min-height: 0; overflow: auto; padding: 0 var(--space-1) var(--space-2); }
 .vlib__empty { padding: var(--space-6); text-align: center; font-size: var(--font-size-chrome-label); color: var(--color-text-secondary); }

@@ -1,6 +1,7 @@
 import { Clock } from 'lucide-react';
 import type { CapstoneProject } from '../../data/capstoneProjects';
 import { Badge, Button } from '../ui';
+import { levelTone } from './levelTone';
 import './learnSidebar.css';
 
 interface CapstoneCardProps {
@@ -20,7 +21,7 @@ export function CapstoneCard({ project, completedCount, onStart }: CapstoneCardP
       <div className="cap-card__meta">
         <span><Clock size={12} aria-hidden="true" />{project.estimatedWeeks} week{project.estimatedWeeks > 1 ? 's' : ''}</span>
         <span>{completedCount}/{total} milestones</span>
-        <Badge tone={project.difficulty === 'advanced' ? 'warning' : 'accent'} style={{ textTransform: 'capitalize' }}>{project.difficulty}</Badge>
+        <Badge tone={levelTone(project.difficulty)} style={{ textTransform: 'capitalize' }}>{project.difficulty}</Badge>
       </div>
       <div className="cap-card__bar" role="progressbar" aria-label={`${project.title} progress`} aria-valuemin={0} aria-valuemax={total} aria-valuenow={completedCount}>
         <div className="cap-card__bar-fill" style={{ width: `${total ? (completedCount / total) * 100 : 0}%` }} />

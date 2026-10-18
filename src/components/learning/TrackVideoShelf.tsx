@@ -3,27 +3,12 @@ import { Play } from 'lucide-react';
 import { VideoThumb } from './VideoThumb';
 import { CURATED_VIDEOS, type CuratedVideo } from '../../data/videos/curatedLibrary';
 import { openExternal, buildYouTubeWatchUrl } from '../../lib/openExternal';
-import { Badge, SegmentedControl, type SegmentedOption } from '../ui';
+import { Badge, SegmentedControl, Select, type SegmentedOption } from '../ui';
+import { CREATOR_FILTERS, CREATOR_LABEL, DIFFICULTY_FILTERS, filterVideos, type CreatorFilter, type DifficultyFilter } from './videoFilters';
 import { VIDEO_LEVEL_TONE } from './levelTone';
 import './trackSelector.css';
 
-type CreatorFilter = 'all' | CuratedVideo['creator'];
-
-const CREATOR_LABEL: Record<CuratedVideo['creator'], string> = {
-  '3blue1brown': '3Blue1Brown',
-  'ibm-technology': 'IBM',
-  nvidia: 'NVIDIA',
-  qiskit: 'Qiskit',
-  other: 'Other',
-};
-
-const FILTERS: ReadonlyArray<SegmentedOption<CreatorFilter>> = [
-  { value: 'all', label: 'All' },
-  { value: '3blue1brown', label: CREATOR_LABEL['3blue1brown'] },
-  { value: 'ibm-technology', label: CREATOR_LABEL['ibm-technology'] },
-  { value: 'nvidia', label: CREATOR_LABEL.nvidia },
-  { value: 'qiskit', label: CREATOR_LABEL.qiskit },
-];
+const FILTERS: ReadonlyArray<SegmentedOption<CreatorFilter>> = CREATOR_FILTERS;
 
 function VideoCard({ video }: { video: CuratedVideo }) {
   return (
@@ -47,22 +32,23 @@ function VideoCard({ video }: { video: CuratedVideo }) {
   );
 }
 
-/** Curated YouTube library under the track list, filterable by creator. */
+/** Curated YouTube library in the Learn chooser, filterable by creator and level (same filters as the rail). */
 export function TrackVideoShelf() {
   const [creator, setCreator] = useState<CreatorFilter>('all');
-  const videos = creator === 'all' ? CURATED_VIDEOS : CURATED_VIDEOS.filter((v) => v.creator === creator);
+  const [difficulty, setDifficulty] = useState<DifficultyFilter>('all');
+  const videos = filterVideos(CURATED_VIDEOS, creator, difficulty);
 
   return (
     <section className="shelf" aria-label="Video library">
       <div className="shelf__head">
-        <div>
-          <h2 className="shelf__title">Video library</h2>
-          <p className="shelf__sub">Curated from 3Blue1Brown, IBM, NVIDIA, and Qiskit</p>
-        </div>
+        <p className="shelf__sub">Curated from 3Blue1Brown, IBM, NVIDIA, and Qiskit</p>
         <span className="shelf__count">{videos.length} of {CURATED_VIDEOS.length} videos</span>
       </div>
       <div className="shelf__filter">
         <SegmentedControl aria-label="Filter videos by creator" value={creator} options={FILTERS} onChange={setCreator} />
+        <Select size="sm" aria-label="Filter videos by level" value={difficulty} onChange={(e) => setDifficulty(e.target.value as DifficultyFilter)}>
+          {DIFFICULTY_FILTERS.map((f) => <option key={f.value} value={f.value}>{f.label}</option>)}
+        </Select>
       </div>
       <div className="shelf__grid">
         {videos.map((video) => <VideoCard key={video.id} video={video} />)}
