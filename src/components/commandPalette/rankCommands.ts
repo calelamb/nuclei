@@ -8,15 +8,19 @@ const SCORE = {
   keywordWord: 50,
   keywordSubstring: 40,
   category: 30,
-  subsequence: 15,
+  initials: 15,
 } as const;
 
-function isSubsequence(q: string, t: string): boolean {
-  let qi = 0;
-  for (let ti = 0; ti < t.length && qi < q.length; ti++) {
-    if (t[ti] === q[qi]) qi++;
+/** The typed letters are the initials of consecutive-or-later words ("tdp" for "toggle Dirac panel"), never scattered letters. */
+function matchesInitials(token: string, label: string): boolean {
+  const initials = label.split(/[^a-z0-9]+/).filter(Boolean).map((w) => w[0]);
+  let at = 0;
+  for (const letter of token) {
+    const next = initials.indexOf(letter, at);
+    if (next === -1) return false;
+    at = next + 1;
   }
-  return qi === q.length;
+  return true;
 }
 
 function startsAWord(text: string, token: string): boolean {
@@ -34,7 +38,7 @@ function scoreToken(cmd: Command, token: string): number {
   if (keywords.some((k) => k.startsWith(token))) return SCORE.keywordWord;
   if (keywords.some((k) => k.includes(token))) return SCORE.keywordSubstring;
   if (cmd.category.toLowerCase().startsWith(token)) return SCORE.category;
-  if (token.length >= 3 && isSubsequence(token, label)) return SCORE.subsequence;
+  if (token.length >= 2 && matchesInitials(token, label)) return SCORE.initials;
   return 0;
 }
 

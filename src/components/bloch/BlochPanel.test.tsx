@@ -48,7 +48,7 @@ afterEach(() => {
 describe('BlochPanel', () => {
   it('shows the empty state before any run', () => {
     render(<BlochPanel />);
-    expect(screen.getByText(/run a simulation/i)).toBeTruthy();
+    expect(screen.getByText(/run your circuit to see each qubit/i)).toBeTruthy();
     expect(constructed).not.toHaveBeenCalled();
   });
 

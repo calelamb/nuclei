@@ -1,13 +1,11 @@
 import { modeChipTint } from './modeChipTint';
-import { useState, useRef, useLayoutEffect, useEffect } from 'react';
-import { createPortal } from 'react-dom';
-import { GraduationCap, FlaskConical, Check } from 'lucide-react';
+import { GraduationCap, FlaskConical } from 'lucide-react';
 import { useThemeStore } from '../../stores/themeStore';
 import { useWorkspaceStore, type WorkspaceMode } from '../../stores/workspaceStore';
 import { useModeSwitchStore } from '../../stores/modeSwitchStore';
 
 import { TYPOGRAPHY } from '../../styles/tokens';
-import { Tooltip } from '../ui';
+import { Menu, Tooltip, type MenuEntry } from '../ui';
 import { shortcutLabel } from '../../config/keybindings';
 /**
  * PRD 11 Phase B — the mode chip.
@@ -21,174 +19,73 @@ import { shortcutLabel } from '../../config/keybindings';
  * The accent is the Research blue for Research and quantum teal for Learn.
  * Purple is reserved for Dirac. Teal text/icons use `accentText` (AA on every
  * surface); the raw `accent` only tints the fill and border.
+ *
+ * The menu is the shared `ui/Menu`, so it behaves exactly like the Level menu:
+ * it opens on the checked mode and roves with the arrow keys.
  */
 
-const MODE_META: Record<WorkspaceMode, { label: string; icon: typeof GraduationCap }> = {
-  learn: { label: 'LEARN', icon: GraduationCap },
-  research: { label: 'RESEARCH', icon: FlaskConical },
+const MODE_META: Record<WorkspaceMode, { label: string; menuLabel: string; icon: typeof GraduationCap }> = {
+  learn: { label: 'LEARN', menuLabel: 'Learn quantum computing', icon: GraduationCap },
+  research: { label: 'RESEARCH', menuLabel: 'Research workspace', icon: FlaskConical },
 };
+const MODES: ReadonlyArray<WorkspaceMode> = ['learn', 'research'];
 
 export function ModeChip() {
   const colors = useThemeStore((s) => s.colors);
-  const shadow = useThemeStore((s) => s.shadow);
   const mode = useWorkspaceStore((s) => s.mode);
   const requestSwitch = useModeSwitchStore((s) => s.requestSwitch);
-  const [open, setOpen] = useState(false);
-  const [menuPos, setMenuPos] = useState<{ left: number; bottom: number } | null>(null);
-  const buttonRef = useRef<HTMLButtonElement>(null);
-  const menuRef = useRef<HTMLDivElement>(null);
 
   const accent = mode === 'research' ? colors.modeResearch : colors.accent;
   const accentText = mode === 'research' ? colors.modeResearch : colors.accentText;
   const meta = MODE_META[mode];
   const Icon = meta.icon;
 
-  useLayoutEffect(() => {
-    if (!open) return;
-    const btn = buttonRef.current;
-    if (!btn) return;
-    const r = btn.getBoundingClientRect();
-    // Anchored above the chip (status bar sits at the window bottom).
-    setMenuPos({ left: r.left, bottom: window.innerHeight - r.top + 4 });
-  }, [open]);
-
-  useEffect(() => {
-    if (!open) return;
-    const onDocMouseDown = (e: MouseEvent) => {
-      if (
-        !menuRef.current?.contains(e.target as Node) &&
-        !buttonRef.current?.contains(e.target as Node)
-      ) {
-        setOpen(false);
-      }
+  const entries: MenuEntry[] = MODES.map((m) => {
+    const MIcon = MODE_META[m].icon;
+    const tint = m === 'research' ? colors.modeResearch : colors.accentText;
+    return {
+      id: m,
+      label: MODE_META[m].menuLabel,
+      icon: <MIcon size={14} color={tint} strokeWidth={2} />,
+      checked: m === mode,
+      onSelect: () => requestSwitch(m),
     };
-    document.addEventListener('mousedown', onDocMouseDown);
-    return () => document.removeEventListener('mousedown', onDocMouseDown);
-  }, [open]);
-
-  // Move focus into the menu (onto the current mode) once it is mounted.
-  useEffect(() => {
-    if (!open || !menuPos) return;
-    const items = menuRef.current?.querySelectorAll<HTMLElement>('[role="menuitemradio"]');
-    const current = Array.from(items ?? []).find((el) => el.getAttribute('aria-checked') === 'true');
-    (current ?? items?.[0])?.focus();
-  }, [open, menuPos]);
-
-  const closeAndRefocus = () => {
-    setOpen(false);
-    buttonRef.current?.focus();
-  };
-
-  const onMenuKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
-    const items = Array.from(menuRef.current?.querySelectorAll<HTMLElement>('[role="menuitemradio"]') ?? []);
-    const at = items.indexOf(document.activeElement as HTMLElement);
-    const focusAt = (i: number) => items[(i + items.length) % items.length]?.focus();
-    switch (e.key) {
-      case 'Escape': e.preventDefault(); closeAndRefocus(); break;
-      case 'ArrowDown': e.preventDefault(); focusAt(at + 1); break;
-      case 'ArrowUp': e.preventDefault(); focusAt(at - 1); break;
-      case 'Home': e.preventDefault(); focusAt(0); break;
-      case 'End': e.preventDefault(); focusAt(items.length - 1); break;
-      case 'Tab': setOpen(false); break;
-      default: break;
-    }
-  };
-
-  const pick = (target: WorkspaceMode) => {
-    closeAndRefocus();
-    requestSwitch(target);
-  };
-
-  const menu = menuPos && (
-    <div
-      ref={menuRef}
-      role="menu"
-      aria-label="Switch workspace mode"
-      onKeyDown={onMenuKeyDown}
-      style={{
-        position: 'fixed',
-        left: menuPos.left,
-        bottom: menuPos.bottom,
-        minWidth: 180,
-        background: colors.bgElevated,
-        border: `1px solid ${colors.border}`,
-        borderRadius: 8,
-        boxShadow: shadow.md,
-        padding: 4,
-        zIndex: 1000,
-        fontFamily: TYPOGRAPHY.fontSans,
-      }}
-    >
-      {(['learn', 'research'] as WorkspaceMode[]).map((m) => {
-        const mMeta = MODE_META[m];
-        const MIcon = mMeta.icon;
-        const isCurrent = m === mode;
-        const mAccent = m === 'research' ? colors.modeResearch : colors.accent;
-        const mAccentText = m === 'research' ? colors.modeResearch : colors.accentText;
-        return (
-          <button
-            key={m}
-            role="menuitemradio"
-            aria-checked={isCurrent}
-            onClick={() => pick(m)}
-            className="nuclei-menu-item nuclei-menu-item--tint"
-            style={{
-              ...({ '--item-accent': mAccent } as Record<string, string>),
-              display: 'flex',
-              alignItems: 'center',
-              gap: 8,
-              width: '100%',
-              padding: '7px 10px',
-              background: 'transparent',
-              border: 'none',
-              borderRadius: 6,
-              cursor: 'pointer',
-              color: colors.text,
-              fontSize: 12,
-              textAlign: 'left',
-            } as React.CSSProperties}
-          >
-            <MIcon size={14} color={mAccentText} strokeWidth={2} />
-            <span style={{ flex: 1 }}>{m === 'research' ? 'Research workspace' : 'Learn quantum computing'}</span>
-            {isCurrent && <Check size={14} color={mAccentText} />}
-          </button>
-        );
-      })}
-    </div>
-  );
+  });
 
   return (
-    <>
-      <Tooltip label="Switch workspace mode" shortcut={shortcutLabel('switch-workspace')} placement="above">
-      <button
-        ref={buttonRef}
-        onClick={() => setOpen((o) => !o)}
-        aria-label="Switch workspace mode"
-        aria-haspopup="menu"
-        aria-expanded={open}
-        data-tour-target="mode-chip"
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: 5,
-          height: 20,
-          padding: '0 8px',
-          background: modeChipTint(accent),
-          border: `1px solid ${accent}`,
-          borderRadius: 4,
-          cursor: 'pointer',
-          color: accentText,
-          fontSize: 11,
-          fontWeight: 700,
-          letterSpacing: 0.5,
-          fontFamily: TYPOGRAPHY.fontSans,
-        }}
-      >
-        <Icon size={12} strokeWidth={2.2} />
-        {meta.label}
-      </button>
-      </Tooltip>
-      {open && createPortal(menu, document.body)}
-    </>
+    <Menu
+      label="Switch workspace mode"
+      placement="top-start"
+      minWidth={200}
+      entries={entries}
+      trigger={(p) => (
+        <Tooltip label="Switch workspace mode" shortcut={shortcutLabel('switch-workspace')} placement="above">
+          <button
+            {...p}
+            aria-label="Switch workspace mode"
+            data-tour-target="mode-chip"
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 5,
+              height: 20,
+              padding: '0 8px',
+              background: modeChipTint(accent),
+              border: `1px solid ${accent}`,
+              borderRadius: 4,
+              cursor: 'pointer',
+              color: accentText,
+              fontSize: 11,
+              fontWeight: 700,
+              letterSpacing: 0.5,
+              fontFamily: TYPOGRAPHY.fontSans,
+            }}
+          >
+            <Icon size={12} strokeWidth={2.2} />
+            {meta.label}
+          </button>
+        </Tooltip>
+      )}
+    />
   );
 }

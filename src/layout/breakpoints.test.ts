@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { bandsForWidth, DIRAC_COLLAPSE_BELOW, EDITOR_MIN_WIDTH, planRoom, SIDEBAR_COLLAPSE_BELOW } from './breakpoints';
+import {
+  ACTIVITY_BAR_WIDTH, bandsForWidth, DIRAC_COLLAPSE_BELOW, DIRAC_RAIL_WIDTH, EDITOR_MIN_WIDTH, planRoom,
+  shouldFoldDiracForSidebar, SIDEBAR_COLLAPSE_BELOW,
+} from './breakpoints';
 
 describe('bandsForWidth', () => {
   it.each([1280, 1366, 1399])('folds Dirac at %ipx so the editor keeps room for the circuit and a labelled Run', (w) => {
@@ -46,5 +49,27 @@ describe('planRoom (retreat order when Dirac opens)', () => {
 
   it('leaves the sidebar alone when Dirac is folded and the row is wide enough', () => {
     expect(planRoom({ ...base, viewport: 1100, diracWidth: null })).toEqual({ closeSidebar: false, hideViz: false });
+  });
+});
+
+describe('shouldFoldDiracForSidebar (the panel opened last wins)', () => {
+  const base = { sidebarWidth: 240 };
+
+  it('folds an open Dirac when the user opens the sidebar at 900 and the editor would drop under its minimum', () => {
+    // 900 - 48 - 240 - 320 = 292 < 420, but with Dirac folded to its rail: 900 - 48 - 240 - 28 = 584.
+    expect(shouldFoldDiracForSidebar({ ...base, viewport: 900, diracWidth: 320 })).toBe(true);
+    expect(900 - ACTIVITY_BAR_WIDTH - 240 - DIRAC_RAIL_WIDTH).toBeGreaterThanOrEqual(EDITOR_MIN_WIDTH);
+  });
+
+  it('leaves Dirac open when sidebar, Dirac and a 420 px editor all fit', () => {
+    expect(shouldFoldDiracForSidebar({ ...base, viewport: 1440, diracWidth: 320 })).toBe(false);
+  });
+
+  it('has nothing to fold when Dirac is already on its rail', () => {
+    expect(shouldFoldDiracForSidebar({ ...base, viewport: 900, diracWidth: null })).toBe(false);
+  });
+
+  it('does not fold Dirac when folding would not rescue the editor anyway', () => {
+    expect(shouldFoldDiracForSidebar({ sidebarWidth: 600, viewport: 900, diracWidth: 320 })).toBe(false);
   });
 });

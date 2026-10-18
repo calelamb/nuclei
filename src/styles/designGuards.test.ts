@@ -81,12 +81,31 @@ describe('design guards', () => {
   });
 
   it('uses the single overline tracking (0.04em) in the Learn, challenge, community, settings and onboarding trees', () => {
-    const owned = (f: { rel: string }) => /^components\/(learning|challenges|community|settings|onboarding)\//.test(f.rel) && !f.rel.endsWith('KeyboardShortcuts.tsx');
+    const owned = (f: { rel: string }) => /^components\/(learning|challenges|community|settings|onboarding)\//.test(f.rel);
     expect(offenders((f) => owned(f) && (/letterSpacing:\s*0\.[45]\b(?!\s*\w)/.test(f.text) || /letter-spacing:\s*0\.[45]px/.test(f.text)))).toEqual([]);
   });
 
   it('draws modal backdrops with the scrim token, not a hard-coded black', () => {
     const modalFiles = ['components/onboarding/KeyboardShortcuts.tsx', 'components/commandPalette/CommandPalette.tsx', 'components/ui/Dialog.tsx'];
     expect(offenders((f) => modalFiles.includes(f.rel) && /background:\s*['"]rgba\(0,\s*0,\s*0/.test(f.text))).toEqual([]);
+  });
+
+  it('declares color-scheme for both themes so native checkboxes, selects and scrollbars follow the app theme', () => {
+    const css = files.find((f) => f.rel === 'styles/tokens.css')?.text ?? '';
+    const block = (selector: RegExp) => css.match(new RegExp(`${selector.source}\\s*\\{([^}]*)\\}`))?.[1] ?? '';
+    expect(block(/:root,\s*:root\[data-theme='dark'\]/)).toMatch(/color-scheme:\s*dark\s*;/);
+    expect(block(/:root\[data-theme='light'\]/)).toMatch(/color-scheme:\s*light\s*;/);
+  });
+
+  it('draws a focused choice card as one band: the border takes the ring colour, no pale border between ring and accent stripe', () => {
+    const css = files.find((f) => f.rel === 'components/ui/ui.css')?.text ?? '';
+    const rule = css.match(/\.nuclei-choice-card:focus-visible\s*\{([^}]*)\}/)?.[1] ?? '';
+    expect(rule).toMatch(/border-color:\s*var\(--focus-ring-color\)/);
+    expect(rule).not.toMatch(/border-color:\s*var\(--color-border-subtle\)/);
+  });
+
+  it('balances the lines of centred empty-state copy', () => {
+    const css = files.find((f) => f.rel === 'components/ui/ui.css')?.text ?? '';
+    expect(css.match(/\.nuclei-empty__body\s*\{([^}]*)\}/)?.[1] ?? '').toMatch(/text-wrap:\s*balance/);
   });
 });

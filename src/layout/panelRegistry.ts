@@ -129,7 +129,7 @@ export const PANEL_REGISTRY: readonly PanelDef[] = [
   },
   {
     id: 'histogramChip',
-    title: 'Histogram (inline)',
+    title: 'Histogram chip',
     zone: 'viz',
     modes: ['learn', 'research'],
     frameworks: 'any',
@@ -142,7 +142,7 @@ export const PANEL_REGISTRY: readonly PanelDef[] = [
   },
   {
     id: 'histogramFull',
-    title: 'Histogram (bottom panel)',
+    title: 'Histogram tab',
     zone: 'bottom',
     modes: ['learn', 'research'],
     frameworks: 'any',

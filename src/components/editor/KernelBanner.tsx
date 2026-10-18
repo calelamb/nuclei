@@ -1,10 +1,10 @@
 import { Button } from '../ui';
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { AlertTriangle, Copy, ExternalLink, RotateCw } from 'lucide-react';
 import { useEditorStore } from '../../stores/editorStore';
 import { useThemeStore } from '../../stores/themeStore';
 import { describeKernelFailure } from '../../lib/kernelErrors';
-import { retryKernel } from '../../lib/kernelControl';
+import { registerKernelBannerFocus, retryKernel } from '../../lib/kernelControl';
 import { openExternal } from '../../lib/openExternal';
 
 /**
@@ -20,8 +20,20 @@ export function KernelBanner() {
   const progress = useEditorStore((s) => s.kernelProgress);
   const colors = useThemeStore((s) => s.colors);
   const [copied, setCopied] = useState(false);
+  const bannerRef = useRef<HTMLDivElement>(null);
+  const failed = status === 'failed' && !ready;
 
-  if (status === 'failed' && !ready) {
+  // The status bar sends people here instead of retrying on its own: one place owns Retry.
+  useEffect(() => {
+    if (!failed) return undefined;
+    registerKernelBannerFocus(() => {
+      bannerRef.current?.scrollIntoView?.({ block: 'nearest' });
+      bannerRef.current?.querySelector<HTMLElement>('button')?.focus();
+    });
+    return () => registerKernelBannerFocus(null);
+  }, [failed]);
+
+  if (failed) {
     const failure = describeKernelFailure(error);
     const copy = async () => {
       try {
@@ -34,6 +46,7 @@ export function KernelBanner() {
     };
     return (
       <div
+        ref={bannerRef}
         role="alert"
         style={{
           display: 'flex', alignItems: 'flex-start', gap: 10, padding: '10px 12px',

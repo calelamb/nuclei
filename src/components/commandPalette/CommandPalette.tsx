@@ -3,6 +3,7 @@ import { useState, useRef, useEffect, useMemo, useId } from 'react';
 import { Search } from 'lucide-react';
 import { useFocusTrap } from '../../hooks/useFocusTrap';
 import { groupByCategory } from './groupCommands';
+import { useEdgeFades } from '../circuit/edgeFades';
 import { useThemeStore } from '../../stores/themeStore';
 import { EASING, DURATION, getDuration, prefersReducedMotion } from '../../lib/animations';
 import {
@@ -16,7 +17,7 @@ import {
 import type { WorkspaceMode } from '../../stores/workspaceStore';
 import type { LayoutPreset } from '../../stores/layoutStore';
 import { rankCommands } from './rankCommands';
-import { shortcutLabel, isMacPlatform } from '../../config/keybindings';
+import { shortcutLabel, isMacPlatform, bindingLabel } from '../../config/keybindings';
 
 import { TYPOGRAPHY } from '../../styles/tokens';
 export interface Command {
@@ -36,6 +37,8 @@ interface CommandPaletteProps {
 
 const ROW_HEIGHT = 34;
 const VISIBLE_ROWS = 9;
+/** A whole number of rows: a clipped half-row at the bottom reads as a layout bug, so the edge fades instead. */
+const LIST_MAX_HEIGHT = ROW_HEIGHT * VISIBLE_ROWS;
 
 export function CommandPalette({ commands, onClose }: CommandPaletteProps) {
   const [query, setQuery] = useState('');
@@ -46,6 +49,7 @@ export function CommandPalette({ commands, onClose }: CommandPaletteProps) {
   const shadow = useThemeStore((s) => s.shadow);
 
   const listId = useId();
+  const { ref: listFadeRef, onScroll: onListScroll, style: listFadeStyle } = useEdgeFades<HTMLDivElement>();
 
   // Focus stays on the input (the combobox); the trap keeps Tab inside and hands focus back to
   // whatever had it (the editor, a button) when the palette closes.
@@ -191,7 +195,7 @@ export function CommandPalette({ commands, onClose }: CommandPaletteProps) {
         </div>
 
         {/* Results */}
-        <div id={listId} style={{ maxHeight: ROW_HEIGHT * VISIBLE_ROWS + 8, overflow: 'auto', padding: '4px 0' }} role="listbox" aria-label="Commands">
+        <div id={listId} ref={listFadeRef} onScroll={onListScroll} style={{ ...listFadeStyle, maxHeight: LIST_MAX_HEIGHT, overflow: 'auto', padding: '4px 0' }} role="listbox" aria-label="Commands">
           {filtered.length === 0 ? (
             <div style={{ padding: 16, color: colors.textMuted, fontSize: 13, fontFamily: TYPOGRAPHY.fontSans, textAlign: 'center' }}>
               No matching commands
@@ -199,10 +203,7 @@ export function CommandPalette({ commands, onClose }: CommandPaletteProps) {
           ) : groups ? (
             groups.map((group) => (
               <div key={group.category} role="group" aria-label={group.category}>
-                <div
-                  role="presentation"
-                  style={{ padding: '8px 16px 4px', fontSize: 11, fontWeight: 600, color: colors.textDim, fontFamily: TYPOGRAPHY.fontSans }}
-                >
+                <div role="presentation" className="nuclei-overline" style={{ padding: '8px 16px 4px' }}>
                   {group.category}
                 </div>
                 {group.commands.map((cmd) => renderRow(cmd, rowIndex++, false))}
@@ -277,7 +278,7 @@ export function buildCommands(actions: CommandActions, context: CommandContext):
   const sc = (id: string) => shortcutLabel(id, mac);
 
   // Workspace + orientation.
-  commands.push({ id: 'workspace-mode', label: 'Switch workspace mode (Learn/Research)', category: 'Navigate', shortcut: sc('switch-workspace'), keywords: ['learn', 'research', 'workspace'], action: actions.switchWorkspaceMode });
+  commands.push({ id: 'workspace-mode', label: bindingLabel('switch-workspace'), category: 'Navigate', shortcut: sc('switch-workspace'), keywords: ['learn', 'research', 'workspace'], action: actions.switchWorkspaceMode });
   if (context.mode === 'research') {
     commands.push({ id: 'research-tour', label: 'Replay the Research mode tour', category: 'Navigate', action: actions.startResearchTour });
   }
@@ -288,11 +289,11 @@ export function buildCommands(actions: CommandActions, context: CommandContext):
   let railIndex = 0;
   for (const view of views) {
     const isTop = !bottomPinned.has(view);
-    const shortcut = isTop ? railShortcutFor(railIndex, mac) : undefined;
+    const shortcut = view === 'settings' ? sc('settings') : isTop ? railShortcutFor(railIndex, mac) : undefined;
     if (isTop) railIndex += 1;
     commands.push({
       id: `goto-${view}`,
-      label: `Go to ${leftPanelLabel(view)}`,
+      label: view === 'settings' ? bindingLabel('settings') : `Go to ${leftPanelLabel(view)}`,
       category: 'Navigate',
       shortcut,
       action: () => actions.navigate(view),
@@ -306,6 +307,7 @@ export function buildCommands(actions: CommandActions, context: CommandContext):
       id: `toggle-panel-${panel.id}`,
       label: panelToggleLabel(panel.title),
       category: 'View',
+      shortcut: panel.id === 'terminal' ? sc('toggle-bottom-panel') : undefined,
       keywords: ['show', 'hide'],
       action: () => actions.togglePanel(panel.id),
     });
@@ -337,27 +339,27 @@ export function buildCommands(actions: CommandActions, context: CommandContext):
 
   // Static app commands.
   commands.push(
-    { id: 'run', label: 'Run Circuit', category: 'Run', shortcut: sc('run'), keywords: ['execute', 'simulate', 'play'], action: actions.run },
-    { id: 'open', label: 'Open File', category: 'File', shortcut: sc('open'), action: actions.openFile },
-    { id: 'save', label: 'Save File', category: 'File', shortcut: sc('save'), action: actions.saveFile },
-    { id: 'new', label: 'New File', category: 'File', shortcut: sc('new'), action: actions.newFile },
-    { id: 'theme', label: 'Toggle Theme', category: 'View', shortcut: sc('toggle-theme'), keywords: ['dark', 'light', 'appearance', 'color', 'mode'], action: actions.toggleTheme },
+    { id: 'run', label: bindingLabel('run'), category: 'Run', shortcut: sc('run'), keywords: ['execute', 'simulate', 'play'], action: actions.run },
+    { id: 'open', label: bindingLabel('open'), category: 'File', shortcut: sc('open'), action: actions.openFile },
+    { id: 'save', label: bindingLabel('save'), category: 'File', shortcut: sc('save'), action: actions.saveFile },
+    { id: 'new', label: bindingLabel('new'), category: 'File', shortcut: sc('new'), action: actions.newFile },
+    { id: 'theme', label: bindingLabel('toggle-theme'), category: 'View', shortcut: sc('toggle-theme'), keywords: ['dark', 'light', 'appearance', 'color', 'mode'], action: actions.toggleTheme },
     ...(context.mode === 'learn'
-      ? [{ id: 'mode', label: 'Cycle UI Mode (Beginner/Intermediate/Advanced)', category: 'View', shortcut: sc('cycle-ui-mode'), keywords: ['beginner', 'advanced', 'simple'], action: actions.cycleMode }]
+      ? [{ id: 'mode', label: bindingLabel('cycle-ui-mode'), category: 'View', shortcut: sc('cycle-ui-mode'), keywords: ['beginner', 'intermediate', 'advanced', 'simple', 'cycle', 'ui mode'], action: actions.cycleMode }]
       : []),
-    { id: 'dirac', label: 'Toggle Dirac Panel', category: 'Dirac', shortcut: sc('toggle-dirac'), keywords: ['ai', 'assistant', 'chat'], action: actions.toggleDirac },
-    { id: 'dirac-focus', label: 'Focus Dirac Input', category: 'Dirac', shortcut: sc('focus-dirac'), keywords: ['ai', 'assistant', 'chat', 'ask'], action: actions.focusDirac },
-    { id: 'step-through', label: 'Step Through Circuit', category: 'Circuit', action: () => {
+    { id: 'dirac', label: bindingLabel('toggle-dirac'), category: 'Dirac', shortcut: sc('toggle-dirac'), keywords: ['ai', 'assistant', 'chat'], action: actions.toggleDirac },
+    { id: 'dirac-focus', label: bindingLabel('focus-dirac'), category: 'Dirac', shortcut: sc('focus-dirac'), keywords: ['ai', 'assistant', 'chat', 'ask'], action: actions.focusDirac },
+    { id: 'step-through', label: 'Step through circuit', category: 'Circuit', action: () => {
       import('../../stores/circuitStore').then(({ useCircuitStore }) => {
         useCircuitStore.getState().setStepMode(true);
       });
     }},
-    { id: 'reset-step', label: 'Reset Step-Through', category: 'Circuit', action: () => {
+    { id: 'reset-step', label: 'Reset step-through', category: 'Circuit', action: () => {
       import('../../stores/circuitStore').then(({ useCircuitStore }) => {
         useCircuitStore.getState().setStepMode(false);
       });
     }},
-    { id: 'shortcuts', label: 'Keyboard shortcuts', category: 'Help', shortcut: sc('shortcuts'), keywords: ['keys', 'hotkeys', 'bindings'], action: actions.toggleShortcuts },
+    { id: 'shortcuts', label: bindingLabel('shortcuts'), category: 'Help', shortcut: sc('shortcuts'), keywords: ['keys', 'hotkeys', 'bindings'], action: actions.toggleShortcuts },
     { id: 'whats-new', label: "What's New", category: 'Help', keywords: ['release', 'notes', 'changelog', 'version'], action: actions.openWhatsNew },
   );
 

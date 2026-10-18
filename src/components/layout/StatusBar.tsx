@@ -12,14 +12,14 @@ import { useQecCampaignStore } from '../../stores/qecCampaignStore';
 import { useExerciseStore } from '../../stores/exerciseStore';
 import { useLayoutStore, type LayoutPreset } from '../../stores/layoutStore';
 import { ModeChip } from './ModeChip';
-import { IconButton, Menu, Select, Tooltip, type MenuEntry } from '../ui';
+import { IconButton, Menu, Tooltip, type MenuEntry } from '../ui';
 import { shortcutLabel } from '../../config/keybindings';
 import { useEditorFocusStore } from '../../stores/editorFocusStore';
 import { compactTabFocusHint } from '../../lib/tabFocusHint';
 import { useHelpOverlayStore } from '../../stores/helpOverlayStore';
 import { useUiFeatures } from '../../hooks/useUiFeatures';
 import { getKernelStatusModel, type KernelTone } from './kernelStatusModel';
-import { retryKernel } from '../../lib/kernelControl';
+import { focusKernelBanner, retryKernel } from '../../lib/kernelControl';
 import { useMainAreaTakeover } from '../../layout/takeover';
 
 /**
@@ -72,32 +72,49 @@ function UiLevelMenu() {
   );
 }
 
-/* ── Layout Preset Switcher ── */
+/* ── Layout Preset Switcher: a menu like Level, so it is exactly as wide as its label ── */
+const PRESET_OPTIONS: ReadonlyArray<{ value: LayoutPreset; label: string; hint: string }> = [
+  { value: 'clean', label: 'Clean', hint: 'Results appear after you run' },
+  { value: 'balanced', label: 'Balanced', hint: 'Bloch spheres shown from the start' },
+  { value: 'full', label: 'Full', hint: 'Adds the Terminal and Histogram tab' },
+];
+
 function LayoutPresetSwitcher() {
   const preset = useLayoutStore((s) => s.preset);
   const setPreset = useLayoutStore((s) => s.setPreset);
   const platform = usePlatform();
 
-  const options: LayoutPreset[] = ['clean', 'balanced', 'full'];
-  const onChange = async (next: LayoutPreset) => {
+  const choose = async (next: LayoutPreset) => {
     setPreset(next);
     try { await platform.setStoredValue('layout_preset', next); } catch { /* non-critical persistence */ }
   };
+  const label = PRESET_OPTIONS.find((o) => o.value === preset)?.label ?? preset;
+  const entries: MenuEntry[] = PRESET_OPTIONS.map((o) => ({
+    id: o.value, label: o.label, hint: o.hint, checked: o.value === preset, onSelect: () => { void choose(o.value); },
+  }));
 
   return (
-    <Tooltip label="Layout preset" placement="above">
-      <Select
-        size="sm"
-        className="nuclei-statusbar-select"
-        value={preset}
-        onChange={(e) => onChange(e.target.value as LayoutPreset)}
-        aria-label="Layout preset"
-      >
-        {options.map((o) => (
-          <option key={o} value={o}>{`Layout: ${o[0].toUpperCase() + o.slice(1)}`}</option>
-        ))}
-      </Select>
-    </Tooltip>
+    <Menu
+      label="Layout preset"
+      placement="top-start"
+      minWidth={260}
+      entries={entries}
+      trigger={(p) => (
+        <Tooltip label="Layout preset" placement="above">
+          <button
+            {...p}
+            aria-label={`Layout preset: ${label}`}
+            className="nuclei-quiet"
+            style={{
+              padding: '0 8px', height: 20, background: 'transparent', border: 'none', borderRadius: 4,
+              cursor: 'pointer', fontSize: 11, fontFamily: TYPOGRAPHY.fontSans, fontWeight: 500,
+            }}
+          >
+            Layout: {label}
+          </button>
+        </Tooltip>
+      )}
+    />
   );
 }
 
@@ -119,6 +136,7 @@ export function StatusBar() {
   const isRunning = useSimulationStore((s) => s.isRunning);
   const result = useSimulationStore((s) => s.result);
   const lastRunFailed = useSimulationStore((s) => s.lastRunFailed);
+  const lastRunNoCircuit = useSimulationStore((s) => s.lastRunNoCircuit);
   const kernelReady = useEditorStore((s) => s.kernelReady);
   const kernelStatus = useEditorStore((s) => s.kernelStatus);
   const kernelError = useEditorStore((s) => s.kernelError);
@@ -147,6 +165,7 @@ export function StatusBar() {
     kernelProgress,
     isRunning,
     lastRunFailed,
+    lastRunNoCircuit,
     executionTimeMs: result ? result.execution_time_ms : null,
     isWeb: platform.getPlatform() === 'web',
   });
@@ -257,21 +276,25 @@ export function StatusBar() {
       {/* Right side. One truthful item for kernel + run state (driven by the
           kernel first); a failed kernel makes it the Retry action. */}
       {kernelModel.tone === 'error' ? (
-        <button
-          type="button"
-          onClick={retryKernel}
-          title={kernelModel.detail}
-          aria-label={`${kernelModel.label}. Click to retry`}
-          style={{ ...chipStyle, color: toneColor.error, cursor: 'pointer', background: 'transparent', border: 'none' }}
-        >
-          <KernelDot color={toneColor.error} pulse={false} />
-          {kernelModel.label}
-        </button>
+        // The banner under the editor tabs owns Retry; this item takes you to it (and retries only when no banner is showing).
+        <Tooltip label={kernelModel.detail} placement="above">
+          <button
+            type="button"
+            onClick={() => { if (!focusKernelBanner()) retryKernel(); }}
+            aria-label={`${kernelModel.label}. Show details and retry`}
+            style={{ ...chipStyle, color: toneColor.error, cursor: 'pointer', background: 'transparent', border: 'none' }}
+          >
+            <KernelDot color={toneColor.error} pulse={false} />
+            {kernelModel.label}
+          </button>
+        </Tooltip>
       ) : (
-        <span style={{ ...chipStyle, color: kernelModel.tone === 'idle' ? colors.textMuted : colors.text }} title={kernelModel.detail} aria-live="polite">
-          <KernelDot color={toneColor[kernelModel.tone]} pulse={kernelModel.tone === 'busy' || kernelModel.tone === 'running'} />
-          {kernelModel.label}
-        </span>
+        <Tooltip label={kernelModel.detail} placement="above">
+          <span style={{ ...chipStyle, color: kernelModel.tone === 'idle' ? colors.textMuted : colors.text }} aria-live="polite">
+            <KernelDot color={toneColor[kernelModel.tone]} pulse={kernelModel.tone === 'busy' || kernelModel.tone === 'running'} />
+            {kernelModel.label}
+          </span>
+        </Tooltip>
       )}
       {/* The workspace-mode toggle moved to the far-left ModeChip (Phase B).
           UI mode only exists in Learn: Research ignores uiModeStore entirely. */}

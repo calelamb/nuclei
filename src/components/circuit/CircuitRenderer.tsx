@@ -13,7 +13,11 @@ import { CircuitEmptyState } from './CircuitEmptyState';
 import { ExportMenu } from './ExportMenu';
 import { useEdgeFades } from './edgeFades';
 import { fitCircuitWidth } from './fitCircuit';
-import { Tooltip as UiTooltip } from '../ui';
+import { describeStale } from './staleCaption';
+import { circuitOverflows, hiddenQubitWires } from '../../layout/circuitRail';
+import { prefersReducedMotion } from '../../lib/animations';
+import { StaleResultNotice } from '../layout/StaleResultNotice';
+import { useEditorRevealStore } from '../../stores/editorRevealStore';
 import { useElementSize } from '../../hooks/useElementSize';
 import { GateExplorerPopup } from './GateExplorerPopup';
 import type { Gate } from '../../types/quantum';
@@ -33,9 +37,6 @@ interface ContextMenu {
   y: number;
 }
 
-/** The header holds a button on some frames and not others; a floor keeps the diagram from hopping. */
-const CIRCUIT_HEADER_MIN_HEIGHT = 32;
-export const PREVIEW_PAUSED_CAPTION = 'Preview paused: this code runs longer than 5 s. Press Run to execute';
 
 function StepControls() {
   const stepMode = useCircuitStore((s) => s.stepMode);
@@ -163,10 +164,30 @@ export function CircuitRenderer() {
   const explorerGateIndex = useCircuitStore((s) => s.explorerGateIndex);
   const setExplorerGateIndex = useCircuitStore((s) => s.setExplorerGateIndex);
   const colors = useThemeStore((s) => s.colors);
+  const revealLine = useEditorRevealStore((s) => s.revealLine);
 
   const [measureContainer, containerSize] = useElementSize<HTMLDivElement>();
   const { ref: fadeRef, onScroll: onContainerScroll, style: fadeStyle } = useEdgeFades<HTMLDivElement>();
-  const setContainerRef = useCallback((el: HTMLDivElement | null) => { measureContainer(el); fadeRef(el); }, [measureContainer, fadeRef]);
+  const scrollerRef = useRef<HTMLDivElement | null>(null);
+  const [wireStrip, setWireStrip] = useState<{ shown: boolean; hidden: number; scrolled: boolean }>({ shown: false, hidden: 0, scrolled: false });
+  const [measurePane, paneSize] = useElementSize<HTMLDivElement>();
+  const qubitTotal = snapshot?.qubit_count ?? 0;
+  const measureClipped = useCallback(() => {
+    const el = scrollerRef.current;
+    if (!el) return;
+    const shown = circuitOverflows(el.scrollHeight, paneSize.height);
+    const svg = el.querySelector('svg');
+    const drawn = Number(svg?.getAttribute('height'));
+    const natural = Number(svg?.getAttribute('viewBox')?.split(/\s+/)[3]);
+    const scale = drawn > 0 && natural > 0 ? drawn / natural : 1;
+    const hidden = shown ? hiddenQubitWires({ scrollTop: el.scrollTop, visibleHeight: el.clientHeight, scale }, qubitTotal) : 0;
+    const next = { shown, hidden, scrolled: el.scrollTop > 0 };
+    setWireStrip((prev) => (prev.shown === next.shown && prev.hidden === next.hidden && prev.scrolled === next.scrolled ? prev : next));
+  }, [qubitTotal, paneSize.height]);
+  const setContainerRef = useCallback((el: HTMLDivElement | null) => { scrollerRef.current = el; measureContainer(el); fadeRef(el); }, [measureContainer, fadeRef]);
+  const handleScroll = useCallback(() => { onContainerScroll(); measureClipped(); }, [onContainerScroll, measureClipped]);
+  useEffect(() => { measureClipped(); }, [measureClipped, containerSize.height, containerSize.width, snapshot]);
+  const scrollWires = (top: number) => scrollerRef.current?.scrollTo({ top, behavior: prefersReducedMotion() ? 'auto' : 'smooth' });
   const [tooltip, setTooltip] = useState<Tooltip | null>(null);
   const [contextMenu, setContextMenu] = useState<ContextMenu | null>(null);
 
@@ -196,6 +217,7 @@ export function CircuitRenderer() {
   const hasClassical = classical_bit_count > 0;
   const { columns, svgWidth, svgHeight, classicalWireY, wireStart, wireEnd } = computeCircuitGeometry(snapshot);
 
+  const stalePill = stale ? describeStale({ previewPaused, error, errorLine }) : null;
   const highlightSet = new Set(highlights.map((h) => h.gateIndex));
 
   const ariaDescription = describeCircuit(snapshot);
@@ -204,22 +226,21 @@ export function CircuitRenderer() {
   return (
     // The diagram never takes more than ~40% of the screen height: the Bloch spheres below need room to stay readable, and a tall circuit scrolls inside its own box.
     <div style={{ flex: '1 1 auto', minHeight: 0, maxHeight: '40vh', display: 'flex', flexDirection: 'column' }} role="region" aria-label="Circuit diagram">
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, padding: '8px 10px 0 12px', flexShrink: 0, minHeight: CIRCUIT_HEADER_MIN_HEIGHT }}>
+      <div className="nuclei-pane-header" style={{ justifyContent: 'space-between', padding: '0 10px 0 12px' }}>
         <span style={{ display: 'flex', alignItems: 'baseline', gap: 8, minWidth: 0 }}>
-          <span style={{ fontSize: 11, fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase', color: colors.textDim, fontFamily: TYPOGRAPHY.fontSans }}>
-            Circuit
-          </span>
-          <span style={{ fontSize: 11, color: colors.textDim, fontFamily: TYPOGRAPHY.fontSans, whiteSpace: 'nowrap' }}>
-            {qubit_count} {qubit_count === 1 ? 'qubit' : 'qubits'} · depth {depth}
-          </span>
-          {stale && (
-            <UiTooltip label={previewPaused ? PREVIEW_PAUSED_CAPTION : 'The diagram shows the last code that parsed.'} placement="below">
-              <span role="status" aria-label={previewPaused ? PREVIEW_PAUSED_CAPTION : undefined} style={{ fontSize: 11, color: colors.warning, fontFamily: TYPOGRAPHY.fontSans, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                {previewPaused
-                  ? 'Preview paused · Run to execute'
-                  : `Out of date: ${errorLine !== null ? `error on line ${errorLine}` : 'the code has an error'}`}
-              </span>
-            </UiTooltip>
+          <span className="nuclei-overline">Circuit</span>
+          {!stale && (
+            <span style={{ fontSize: 11, color: colors.textDim, fontFamily: TYPOGRAPHY.fontSans, whiteSpace: 'nowrap' }}>
+              {qubit_count} {qubit_count === 1 ? 'qubit' : 'qubits'} · depth {depth}
+            </span>
+          )}
+          {stalePill && (
+            <StaleResultNotice
+              inline
+              label={stalePill.label}
+              tooltip={stalePill.tooltip}
+              onActivate={stalePill.line !== null ? () => revealLine(stalePill.line as number) : undefined}
+            />
           )}
         </span>
         <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -227,9 +248,10 @@ export function CircuitRenderer() {
           <ExportMenu />
         </span>
       </div>
+      <div ref={measurePane} style={{ position: 'relative', flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
       <div
         ref={setContainerRef}
-        onScroll={onContainerScroll}
+        onScroll={handleScroll}
         className="circuit-renderer-container"
         style={{ ...fadeStyle, flex: 1, minHeight: 0, overflow: 'auto', position: 'relative', padding: '4px 0 6px', opacity: stale ? 0.45 : 1, transition: 'opacity var(--duration-fast) var(--ease-standard)' }}
         aria-description={ariaDescription}
@@ -355,6 +377,24 @@ export function CircuitRenderer() {
             </button>
           </div>
         )}
+      </div>
+
+      {wireStrip.shown && (
+        <div className="circuit-more-wires-strip">
+          {wireStrip.hidden > 0 ? (
+            <button
+              type="button"
+              className="circuit-more-wires"
+              onClick={() => scrollWires(scrollerRef.current?.scrollHeight ?? 0)}
+              aria-label={`Show ${wireStrip.hidden} more ${wireStrip.hidden === 1 ? 'wire' : 'wires'}`}
+            >
+              +{wireStrip.hidden} {wireStrip.hidden === 1 ? 'wire' : 'wires'}
+            </button>
+          ) : wireStrip.scrolled && (
+            <button type="button" className="circuit-more-wires" onClick={() => scrollWires(0)}>Back to top</button>
+          )}
+        </div>
+      )}
       </div>
 
       {/* Step controls */}

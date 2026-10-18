@@ -6,6 +6,12 @@ function ev(key: string, mods: Partial<KeyLike> = {}): KeyLike {
 }
 
 describe('keybinding registry', () => {
+  it('opens settings on Cmd+, and lists it in the shortcuts sheet group Navigation', () => {
+    expect(findBindingId(ev(','))).toBe('settings');
+    expect(bindingFor('settings')).toMatchObject({ label: 'Open settings', group: 'Navigation', owner: 'app' });
+    expect(formatKeys(bindingFor('settings'), true)).toBe('⌘,');
+  });
+
   it('matches Shift chords regardless of the casing Chromium reports', () => {
     // Chromium reports e.key as 'P' when Shift is held; Safari/Firefox report 'p'.
     expect(findBindingId(ev('P', { shiftKey: true }))).toBe('palette');

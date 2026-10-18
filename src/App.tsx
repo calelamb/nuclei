@@ -394,6 +394,7 @@ function AppInner() {
         case 'toggle-dirac': toggleDirac(); break;
         case 'focus-dirac': focusDirac(); break;
         case 'compose': setComposeOpen((s) => !s); break;
+        case 'settings': useNavigationStore.getState().setActiveView('settings'); break;
         // Open the Launch modal (submit to hardware). Separate from the plain
         // Run shortcut, which stays on the classical simulator.
         case 'launch': useHardwareStore.getState().openLaunch(); break;

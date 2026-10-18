@@ -1,4 +1,4 @@
-import { lazy, Suspense, useState, useRef, useCallback, useMemo } from 'react';
+import { lazy, Suspense, useRef, useCallback, useMemo } from 'react';
 import { useThemeStore } from '../../stores/themeStore';
 import { FileExplorer } from '../explorer/FileExplorer';
 import { OpenFilesSection } from '../explorer/OpenFilesSection';
@@ -12,9 +12,6 @@ import { TYPOGRAPHY } from '../../styles/tokens';
 import { TextInput } from '../ui';
 const LearningPathSidebar = lazy(async () => ({
   default: (await import('../learning/LearningPathSidebar')).LearningPathSidebar,
-}));
-const VideoLibrary = lazy(async () => ({
-  default: (await import('../learning/VideoLibrary')).VideoLibrary,
 }));
 const PluginMarketplace = lazy(async () => ({
   default: (await import('../plugins/PluginMarketplace')).PluginMarketplace,
@@ -60,9 +57,7 @@ function CircuitInfoPanel() {
   const colors = useThemeStore((s) => s.colors);
   return (
     <div style={{ padding: 12, color: colors.textMuted, fontSize: 12, fontFamily: TYPOGRAPHY.fontSans }}>
-      <div style={{ color: colors.textDim, fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 8 }}>
-        Circuit Info
-      </div>
+      <h3 className="nuclei-overline" style={{ marginBottom: 8 }}>Circuit Info</h3>
       <div style={{ color: colors.textDim, fontSize: 11 }}>
         Run a simulation to see circuit details here.
       </div>
@@ -73,19 +68,9 @@ function CircuitInfoPanel() {
 
 
 function SidebarHeader({ title }: { title: string }) {
-  const colors = useThemeStore((s) => s.colors);
   return (
-    <div style={{
-      height: 32, display: 'flex', alignItems: 'center',
-      padding: '0 12px', flexShrink: 0,
-    }}>
-      <span style={{
-        fontSize: 11, fontWeight: 600, textTransform: 'uppercase',
-        letterSpacing: 0.5, color: colors.textMuted,
-        fontFamily: TYPOGRAPHY.fontSans,
-      }}>
-        {title}
-      </span>
+    <div className="nuclei-pane-header">
+      <h2 className="nuclei-pane-header__title nuclei-overline">{title}</h2>
     </div>
   );
 }
@@ -125,58 +110,6 @@ const VIEW_TITLES: Record<ActivityView, string> = {
   estimator: 'Estimator',
   transpiler: 'Transpiler',
 };
-
-type LearningTab = 'tracks' | 'videos';
-
-function LearningSidebarTabs() {
-  const colors = useThemeStore((s) => s.colors);
-  const [activeTab, setActiveTab] = useState<LearningTab>('tracks');
-
-  const tabs: { key: LearningTab; label: string }[] = [
-    { key: 'tracks', label: 'Tracks' },
-    { key: 'videos', label: 'Videos' },
-  ];
-
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
-      <div style={{
-        display: 'flex',
-        borderBottom: `1px solid ${colors.border}`,
-        flexShrink: 0,
-      }}>
-        {tabs.map((tab) => {
-          const isActive = activeTab === tab.key;
-          return (
-            <button
-              key={tab.key}
-              onClick={() => setActiveTab(tab.key)}
-              style={{
-                flex: 1,
-                padding: '5px 0',
-                background: 'transparent',
-                border: 'none',
-                borderBottom: isActive ? `2px solid ${colors.accent}` : '2px solid transparent',
-                color: isActive ? colors.accentText : colors.textDim,
-                fontSize: 11,
-                fontWeight: 600,
-                fontFamily: TYPOGRAPHY.fontSans,
-                textTransform: 'uppercase',
-                letterSpacing: 0.3,
-                cursor: 'pointer',
-                transition: 'color 150ms, border-color 150ms',
-              }}
-            >
-              {tab.label}
-            </button>
-          );
-        })}
-      </div>
-      <div style={{ flex: 1, overflow: 'hidden' }}>
-        {activeTab === 'tracks' ? <LearningPathSidebar /> : <VideoLibrary />}
-      </div>
-    </div>
-  );
-}
 
 export function Sidebar({ view, width, onWidthChange }: SidebarProps) {
   const colors = useThemeStore((s) => s.colors);
@@ -234,7 +167,7 @@ export function Sidebar({ view, width, onWidthChange }: SidebarProps) {
         {view === 'circuit' && <CircuitInfoPanel />}
         {view === 'learning' && (
           <SidebarSuspense>
-            <LearningSidebarTabs />
+            <LearningPathSidebar />
           </SidebarSuspense>
         )}
         {view === 'plugins' && (

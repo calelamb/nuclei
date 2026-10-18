@@ -122,6 +122,17 @@ describe('PyodideKernel — worker-backed runtime', () => {
     expect(captured.some((m) => m.type === 'result' && m.data === null)).toBe(true);
   });
 
+  it('keeps what plain Python printed and tags a run without a circuit as no_circuit (a clean finish for the UI)', async () => {
+    const { kernel, captured } = makeKernel({
+      execute: { result: null, snapshot: null, output: 'step 0\nDone\n', error: 'No circuit found.' },
+    });
+    await kernel.init();
+    await kernel.send({ type: 'execute', code: 'print("Done")', shots: 10 });
+    expect(captured[0]).toEqual({ type: 'output', text: 'step 0\nDone\n' });
+    const err = captured.find((m) => m.type === 'error')!;
+    expect(err).toMatchObject({ code: 'no_circuit', phase: 'execute' });
+  });
+
   it('emits result, snapshot and stdout for a successful execute', async () => {
     const { kernel, captured } = makeKernel({
       execute: { result: { shot_count: 10 }, snapshot: { framework: 'qiskit' }, output: 'hi\n', error: null },

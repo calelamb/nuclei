@@ -40,6 +40,10 @@ describe('getRunButtonState', () => {
     expect(state.title).toContain('Port 8742 is already in use');
   });
 
+  it('names the engine like the status bar does on the web build', () => {
+    expect(getRunButtonState({ ...base, kernelStatus: 'failed', engine: 'Python' }).label).toBe('Python failed');
+  });
+
   it('becomes a Stop action while running when the runtime can interrupt', () => {
     expect(getRunButtonState({ ...base, kernelReady: true, isRunning: true, canStop: true })).toMatchObject({
       kind: 'running', label: 'Stop', disabled: false, stoppable: true,

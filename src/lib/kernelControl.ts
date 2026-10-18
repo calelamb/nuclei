@@ -28,3 +28,17 @@ export function canStopKernelRun(): boolean {
 export function stopKernelRun(): void {
   stopHandler?.();
 }
+
+let bannerFocusHandler: (() => void) | null = null;
+
+/** The kernel failure banner registers itself while it is on screen, so other UI can bring the user to it. */
+export function registerKernelBannerFocus(handler: (() => void) | null): void {
+  bannerFocusHandler = handler;
+}
+
+/** Move focus to the kernel failure banner (where Retry lives). Returns false when no banner is showing. */
+export function focusKernelBanner(): boolean {
+  if (!bannerFocusHandler) return false;
+  bannerFocusHandler();
+  return true;
+}

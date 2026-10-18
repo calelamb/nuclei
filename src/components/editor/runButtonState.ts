@@ -20,6 +20,8 @@ interface RunButtonInput {
   isRunning: boolean;
   /** The runtime can interrupt a run (browser worker). */
   canStop?: boolean;
+  /** Names the engine in the failed label so the pill, status bar and banner share one name. */
+  engine?: 'Python' | 'Kernel';
 }
 
 /** One truthful label for the toolbar's Run slot across every kernel state. */
@@ -42,7 +44,7 @@ export function getRunButtonState(input: RunButtonInput): RunButtonState {
   if (input.kernelStatus === 'failed') {
     return {
       kind: 'failed',
-      label: 'Kernel failed',
+      label: `${input.engine ?? 'Kernel'} failed`,
       title: `${(input.kernelError ?? 'The kernel did not start').replace(/[.\s]+$/, '')}. Use Retry in the banner below.`,
       disabled: true,
     };

@@ -46,6 +46,12 @@ describe('getKernelStatusModel', () => {
     expect(model.detail).toMatch(/error/i);
   });
 
+  it('reports a finished run that defined no circuit as done, never as a failure', () => {
+    const model = getKernelStatusModel({ ...base, kernelStatus: 'ready', kernelReady: true, lastRunNoCircuit: true });
+    expect(model).toMatchObject({ label: 'Done · no circuit', tone: 'ok' });
+    expect(model.detail).toMatch(/plain Python|no circuit/i);
+  });
+
   it('a run in progress wins over the previous failure', () => {
     const model = getKernelStatusModel({
       ...base, kernelStatus: 'ready', kernelReady: true, lastRunFailed: true, isRunning: true,

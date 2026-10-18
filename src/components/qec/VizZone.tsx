@@ -1,5 +1,5 @@
 import { useMemo, type ReactNode } from 'react';
-import { LayoutGrid, Grid3x3, Share2, Orbit, Play, Workflow, type LucideIcon } from 'lucide-react';
+import { LayoutGrid, Grid3x3, Share2, Orbit, Workflow, type LucideIcon } from 'lucide-react';
 import { useThemeStore } from '../../stores/themeStore';
 import { useSimulationStore } from '../../stores/simulationStore';
 import { useQecStore } from '../../stores/qecStore';
@@ -8,20 +8,23 @@ import { useVizZoneStore } from '../../stores/vizZoneStore';
 import { PanelReveal } from '../layout/PanelReveal';
 import { CircuitRenderer } from '../circuit/CircuitRenderer';
 import { Button, EmptyState, Tabs } from '../ui';
+import { retryKernel } from '../../lib/kernelControl';
+import { usePlatform } from '../../platform/PlatformProvider';
 import { useEditorStore } from '../../stores/editorStore';
-import { getExecute } from '../../App';
 import { visibleVizPanelIds } from '../../layout/vizPanels';
-import { shortcutLabel } from '../../config/keybindings';
+import { circuitMinHeight } from '../../layout/circuitRail';
+import { useDisplaySnapshot } from '../../layout/useDisplaySnapshot';
+import { useElementSize } from '../../hooks/useElementSize';
 import { useResultStale } from '../../hooks/useResultStale';
 import { StaleResultNotice, STALE_RESULT_OPACITY } from '../layout/StaleResultNotice';
 import { BlochRail } from '../layout/BlochRail';
 import { BlochPanel } from '../bloch/BlochPanel';
+import { ResultsEmptyState } from '../bloch/ResultsEmptyState';
 import { QecTimelinePanel } from './QecTimelinePanel';
 import { CodeLatticePanel } from './CodeLatticePanel';
 import { DetectorGraphPanel } from './DetectorGraphPanel';
 import type { VisiblePanels, PanelId } from '../../layout/panelRegistry';
 
-import { TYPOGRAPHY } from '../../styles/tokens';
 /**
  * PRD 10 Phase D — the viz zone (right rail).
  *
@@ -56,10 +59,16 @@ export function VizZone({
   visible,
   chip,
   booting = false,
+  startFailed = false,
+  noCircuit = false,
 }: {
   visible: VisiblePanels;
   /** Python is still starting: hold the column open with a placeholder so the editor does not jump when it is ready. */
   booting?: boolean;
+  /** Python failed to start: keep the column and offer Retry, so the editor does not change width when it recovers. */
+  startFailed?: boolean;
+  /** The last run finished as plain Python: keep the column and say there was no circuit to draw. */
+  noCircuit?: boolean;
   /** The histogram-chip strip, rendered below the main panels (unchanged). */
   chip: ReactNode;
 }) {
@@ -79,6 +88,14 @@ export function VizZone({
   }, [visible, qec]);
 
   const stale = useResultStale();
+  const platform = usePlatform();
+  const { snapshot: circuitSnapshot } = useDisplaySnapshot();
+  const [measureColumn, columnSize] = useElementSize<HTMLDivElement>();
+  const blochCount = useSimulationStore((st) => st.result?.bloch_coords?.length ?? 0);
+  const circuitRevealStyle = {
+    ...CIRCUIT_REVEAL_STYLE,
+    minHeight: Math.max(96, circuitMinHeight(circuitSnapshot?.qubit_count ?? 1, columnSize.height)),
+  };
   const circuitPanel = panels.find((p) => p.id === 'circuit');
   const statePanels = panels.filter((p) => p.id !== 'circuit');
 
@@ -94,29 +111,53 @@ export function VizZone({
     );
   }
 
+  if (noCircuit && panels.length === 0) {
+    return <div style={COLUMN_STYLE}><ResultsEmptyState /></div>;
+  }
+
+  if (startFailed && panels.length === 0) {
+    const engine = platform.getPlatform() === 'web' ? 'Python' : 'The kernel';
+    return (
+      <div style={COLUMN_STYLE}>
+        <EmptyState
+          className="viz-empty viz-empty--boot"
+          icon={<Workflow size={20} />}
+          title={`${engine} didn't start`}
+          action={<Button variant="secondary" size="sm" onClick={retryKernel}>Retry</Button>}
+        >
+          Circuit and results appear once it is running.
+        </EmptyState>
+      </div>
+    );
+  }
+
   return (
-    <div style={COLUMN_STYLE}>
+    <div ref={measureColumn} style={COLUMN_STYLE}>
       {circuitPanel && (
-        <PanelReveal when from="right" style={CIRCUIT_REVEAL_STYLE}>
+        <PanelReveal when from="right" style={circuitRevealStyle}>
           <section aria-label={circuitPanel.title} style={{ borderBottom: `1px solid ${colors.border}`, display: 'flex', flexDirection: 'column', minHeight: 0, maxHeight: '100%' }}>
             {circuitPanel.render()}
           </section>
         </PanelReveal>
       )}
 
-      {statePanels.length === 0 && circuitPanel && <RunPrompt />}
+      {statePanels.length === 0 && circuitPanel && <ResultsEmptyState />}
 
-      {statePanels.length > 0 && statePanels.length <= 2 && statePanels.map((p) => (
-        <PanelReveal key={p.id} when from="right" style={p.fit === 'fill' ? FILL_STYLE : CONTENT_STYLE}>
+      {statePanels.length > 0 && statePanels.length <= 2 && statePanels.map((p) => {
+        // Before the first run the Bloch panel is just the shared empty state: it takes the rest of the rail so it is centred like the Clean preset's.
+        const fills = p.fit === 'fill' || (p.id === 'bloch' && blochCount === 0);
+        return (
+        <PanelReveal key={p.id} when from="right" style={fills ? FILL_STYLE : CONTENT_STYLE}>
           <div
             className={p.id === 'bloch' && stale ? 'nuclei-stale-results' : undefined}
-            style={p.fit === 'fill' ? FILL_BODY_STYLE : CONTENT_BODY_STYLE}
+            style={fills ? FILL_BODY_STYLE : CONTENT_BODY_STYLE}
           >
             {p.id === 'bloch' && stale && <StaleResultNotice />}
             {p.render()}
           </div>
         </PanelReveal>
-      ))}
+        );
+      })}
 
       {statePanels.length > 2 && (
         <TabbedPanels
@@ -125,10 +166,11 @@ export function VizZone({
           onSelect={(id) => setActiveTab(projectRoot, id)}
         />
       )}
-      <div style={stale ? STALE_CHIP_STYLE : undefined} data-stale={stale ? 'true' : undefined}>{chip}</div>
+      <div style={stale ? STALE_CHIP_STYLE : CHIP_STYLE} data-stale={stale ? 'true' : undefined}>{chip}</div>
     </div>
   );
 }
+const CHIP_STYLE = { flexShrink: 0 } as const;
 const STALE_CHIP_STYLE = { opacity: STALE_RESULT_OPACITY, flexShrink: 0 } as const;
 
 const COLUMN_STYLE = { width: '100%', height: '100%', minWidth: 0, display: 'flex', flexDirection: 'column' } as const;
@@ -138,38 +180,6 @@ const CONTENT_STYLE = { flex: '0 1 auto', minHeight: 0, display: 'flex', flexDir
 const CONTENT_BODY_STYLE = { overflow: 'hidden', position: 'relative', minHeight: 0, display: 'flex', flexDirection: 'column' } as const;
 const FILL_BODY_STYLE = { flex: 1, overflow: 'hidden', position: 'relative', minHeight: 240, display: 'flex', flexDirection: 'column' } as const;
 const FILL_STYLE = { flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' } as const;
-
-/**
- * Fills the rest of the rail when only the circuit can be shown (Clean preset,
- * before the first run): says what will appear and offers the one action that
- * makes it appear, instead of leaving a blank column.
- */
-function RunPrompt() {
-  const colors = useThemeStore((s) => s.colors);
-  const isRunning = useSimulationStore((s) => s.isRunning);
-  if (isRunning) {
-    return (
-      <div role="status" style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 12, padding: 24, textAlign: 'center' }}>
-        <Orbit size={28} strokeWidth={1.25} color={colors.accentText} aria-hidden="true" style={{ animation: 'nuclei-heartbeat 1.5s ease infinite' }} />
-        <p style={{ margin: 0, fontSize: 13, color: colors.textMuted, fontFamily: TYPOGRAPHY.fontSans }}>Running&hellip;</p>
-      </div>
-    );
-  }
-  return (
-    <div style={{
-      flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', alignItems: 'center',
-      justifyContent: 'center', gap: 12, padding: 24, textAlign: 'center',
-    }}>
-      <Orbit size={28} strokeWidth={1.25} color={colors.textDim} aria-hidden="true" />
-      <p style={{ margin: 0, maxWidth: 220, fontSize: 13, lineHeight: 1.5, color: colors.textMuted, fontFamily: TYPOGRAPHY.fontSans }}>
-        Run your circuit to see each qubit&apos;s Bloch sphere and the outcome histogram.
-      </p>
-      <Button variant="secondary" size="sm" icon={<Play size={12} />} onClick={() => getExecute()?.()}>
-        Run {shortcutLabel('run')}
-      </Button>
-    </div>
-  );
-}
 
 function TabbedPanels({ panels, rememberedTab, onSelect }: {
   panels: VizPanelDef[];

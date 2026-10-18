@@ -99,6 +99,43 @@ describe('PyodideRuntimeClient', () => {
     expect(workers).toHaveLength(2);
   });
 
+  it('flags the restart after a timed-out live-preview call as quiet, and clears it once Python is back', async () => {
+    let calls = 0;
+    const { client } = makeClient((req, reply) => {
+      if (req.type === 'init') reply({ id: req.id, type: 'result', value: 'ready' });
+      else if (++calls === 1) reply({ id: req.id, type: 'started' });
+      else reply({ id: req.id, type: 'result', value: 'ok' });
+    });
+    await client.ensureStarted();
+    const quietAtState: boolean[] = [];
+    client.onState((state) => { quietAtState.push(client.isQuietRestart()); if (state === 'idle') void client.ensureStarted(); });
+
+    const hung = client.call('nuclei_parse', ['while True: pass'], { timeoutMs: 1000, quietRestart: true });
+    const assertion = expect(hung).rejects.toMatchObject({ code: 'timeout' });
+    await vi.advanceTimersByTimeAsync(1001);
+    await assertion;
+    await vi.advanceTimersByTimeAsync(10);
+
+    expect(quietAtState[0]).toBe(true); // idle
+    expect(client.isReady()).toBe(true);
+    expect(client.isQuietRestart()).toBe(false);
+  });
+
+  it('a timed-out Run (not a preview) is an ordinary, visible restart', async () => {
+    const { client } = makeClient((req, reply) => {
+      if (req.type === 'init') reply({ id: req.id, type: 'result', value: 'ready' });
+      else reply({ id: req.id, type: 'started' });
+    });
+    await client.ensureStarted();
+    const seen: boolean[] = [];
+    client.onState(() => seen.push(client.isQuietRestart()));
+    const hung = client.call('nuclei_execute', ['while True: pass'], { timeoutMs: 1000 });
+    const assertion = expect(hung).rejects.toMatchObject({ code: 'timeout' });
+    await vi.advanceTimersByTimeAsync(1001);
+    await assertion;
+    expect(seen).toEqual([false]);
+  });
+
   it('does not fail a reboot started by a state listener while tearing down', async () => {
     let calls = 0;
     const { client, workers } = makeClient((req, reply) => {

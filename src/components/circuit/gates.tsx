@@ -7,7 +7,8 @@ import { formatGateParams } from './formatAngle';
 // Layout constants (px, at 1x). Compact enough for the 330px rail with room for
 // a few layers before the diagram scrolls horizontally.
 export const GATE_SIZE = 32;
-export const WIRE_SPACING = 46;
+// Room for a gate box (32), the parameter caption under it (11px) and a clear gap before the next row's box.
+export const WIRE_SPACING = 52;
 export const LAYER_SPACING = 56;
 export const LABEL_WIDTH = 44;
 export const PADDING = 20;
@@ -103,7 +104,7 @@ function GateBox({ x, y, label, params, palette }: { x: number; y: number; label
       </text>
       {sub && (
         <text
-          x={x} y={y + half + 12} textAnchor="middle"
+          x={x} y={y + half + 11} textAnchor="middle"
           fill={palette.param} fontSize={PARAM_FONT_SIZE} fontFamily={TYPOGRAPHY.fontMono}
         >
           {sub}

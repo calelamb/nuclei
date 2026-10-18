@@ -26,6 +26,8 @@ interface SimulationState {
   isRunning: boolean;
   /** The last run ended in an error; cleared when a new run starts or a result lands. */
   lastRunFailed: boolean;
+  /** The last run finished cleanly but defined no circuit (plain Python); cleared when a new run starts or a result lands. */
+  lastRunNoCircuit: boolean;
   shots: number;
   terminalOutput: TerminalLine[];
   /** Record the code being executed so its result can later be recognised as out of date. */
@@ -34,6 +36,7 @@ interface SimulationState {
   clearResult: () => void;
   setRunning: (running: boolean) => void;
   setRunFailed: (failed: boolean) => void;
+  setRunNoCircuit: (noCircuit: boolean) => void;
   setShots: (shots: number) => void;
   addOutput: (text: string, type?: TerminalLineType) => void;
   clearOutput: () => void;
@@ -75,6 +78,7 @@ export const useSimulationStore = create<SimulationState>((set) => ({
   resultCode: null,
   isRunning: false,
   lastRunFailed: false,
+  lastRunNoCircuit: false,
   shots: 1024,
   terminalOutput: [],
   beginRun: (runCode) => set({ runCode }),
@@ -83,10 +87,16 @@ export const useSimulationStore = create<SimulationState>((set) => ({
     resultCode: result ? s.runCode : null,
     isRunning: false,
     lastRunFailed: result ? false : s.lastRunFailed,
+    lastRunNoCircuit: result ? false : s.lastRunNoCircuit,
   })),
   clearResult: () => set({ result: null, resultCode: null, isRunning: false }),
-  setRunning: (isRunning) => set((s) => ({ isRunning, lastRunFailed: isRunning ? false : s.lastRunFailed })),
+  setRunning: (isRunning) => set((s) => ({
+    isRunning,
+    lastRunFailed: isRunning ? false : s.lastRunFailed,
+    lastRunNoCircuit: isRunning ? false : s.lastRunNoCircuit,
+  })),
   setRunFailed: (lastRunFailed) => set({ lastRunFailed }),
+  setRunNoCircuit: (lastRunNoCircuit) => set({ lastRunNoCircuit }),
   setShots: (shots) => set({ shots }),
   addOutput: (text, type = 'stdout') => set((s) => {
     const timestamp = Date.now();

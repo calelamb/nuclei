@@ -18,6 +18,8 @@ interface KernelStatusInput {
   executionTimeMs: number | null;
   /** The most recent run ended in an error (the kernel itself is fine). */
   lastRunFailed: boolean;
+  /** The most recent run finished but defined no circuit (plain Python): a clean finish, not a failure. */
+  lastRunNoCircuit?: boolean;
   isWeb: boolean;
 }
 
@@ -52,6 +54,13 @@ export function getKernelStatusModel(input: KernelStatusInput): KernelStatusMode
       label: 'Last run failed',
       tone: 'warn',
       detail: `${engine} is ready. The last run ended with an error; see the Terminal.`,
+    };
+  }
+  if (input.lastRunNoCircuit) {
+    return {
+      label: 'Done · no circuit',
+      tone: 'ok',
+      detail: 'The code ran as plain Python. It did not define a circuit, so there was nothing to simulate.',
     };
   }
   if (input.executionTimeMs !== null) {

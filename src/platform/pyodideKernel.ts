@@ -123,7 +123,7 @@ export class PyodideKernel {
       : () => {};
     const output = new OutputBatcher((text) => this.onMessage({ type: 'output', text }));
     try {
-      const raw = await this.runtime.call(fn, args, { timeoutMs, onOutput: output.push });
+      const raw = await this.runtime.call(fn, args, { timeoutMs, onOutput: output.push, quietRestart: fn === 'nuclei_parse' });
       return JSON.parse(raw) as RuntimeReply;
     } finally {
       unsubscribe();

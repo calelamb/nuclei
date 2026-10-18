@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { visibleVizPanelIds, vizColumnHasContent } from './vizPanels';
+import { visibleVizPanelIds, vizColumnHasContent, vizPlaceholder } from './vizPanels';
 import type { VisiblePanels } from './panelRegistry';
 
 const NONE: VisiblePanels = {
@@ -34,5 +34,32 @@ describe('vizColumnHasContent', () => {
   });
   it('is true when only the histogram chip is shown', () => {
     expect(vizColumnHasContent(vis({}), { latticeHasCoords: false }, true)).toBe(true);
+  });
+});
+
+describe('vizPlaceholder (the column is held open while Python boots or has failed)', () => {
+  const base = { hasContent: false, kernelStatus: 'idle', kernelReady: false, isWeb: true };
+
+  it('holds the column for a booting web kernel only', () => {
+    expect(vizPlaceholder({ ...base, kernelStatus: 'connecting' })).toBe('booting');
+    expect(vizPlaceholder({ ...base, kernelStatus: 'connecting', isWeb: false })).toBeNull();
+  });
+
+  it('keeps the column on failure, on web and desktop, so Retry does not make the editor jump', () => {
+    expect(vizPlaceholder({ ...base, kernelStatus: 'failed' })).toBe('failed');
+    expect(vizPlaceholder({ ...base, kernelStatus: 'failed', isWeb: false })).toBe('failed');
+  });
+
+  it('keeps the column after a run that finished without a circuit, so the plain-Python result has somewhere to say so', () => {
+    expect(vizPlaceholder({ ...base, kernelStatus: 'ready', kernelReady: true, lastRunNoCircuit: true })).toBe('noCircuit');
+    expect(vizPlaceholder({ ...base, kernelStatus: 'ready', kernelReady: true })).toBeNull();
+  });
+
+  it('steps aside as soon as the column has real content', () => {
+    expect(vizPlaceholder({ ...base, hasContent: true, kernelStatus: 'failed' })).toBeNull();
+  });
+
+  it('is not a failure once the kernel is ready again', () => {
+    expect(vizPlaceholder({ ...base, kernelStatus: 'failed', kernelReady: true })).toBeNull();
   });
 });

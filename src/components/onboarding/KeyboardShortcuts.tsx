@@ -88,14 +88,7 @@ export function KeyboardShortcuts({ onClose }: KeyboardShortcutsProps) {
         <div className="shortcuts-groups">
         {groups.map((group) => (
           <div key={group.title} style={{ breakInside: 'avoid', marginBottom: 16 }}>
-            <div style={{
-              color: colors.accentText, fontSize: 11, fontWeight: 600,
-              fontFamily: TYPOGRAPHY.fontSans,
-              textTransform: 'uppercase', letterSpacing: 0.5,
-              marginBottom: 6,
-            }}>
-              {group.title}
-            </div>
+            <h3 className="nuclei-overline" style={{ marginBottom: 6 }}>{group.title}</h3>
             {group.shortcuts.map((s) => (
               <div key={s.description} style={{
                 display: 'flex', justifyContent: 'space-between',
