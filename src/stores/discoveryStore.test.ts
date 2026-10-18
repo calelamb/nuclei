@@ -80,6 +80,31 @@ describe('a run that fails synchronously (CR-H8)', () => {
   });
 });
 
+describe('double Start and Resume (CR-M8)', () => {
+  it('two Start calls in the same tick launch exactly one runner', async () => {
+    const [a, b] = await Promise.all([store().startRun('toy.discovery.yaml'), store().startRun('toy.discovery.yaml')]);
+    expect([a.ok, b.ok].filter(Boolean)).toHaveLength(1);
+    expect(store().liveRunIds).toHaveLength(1);
+    await until(() => store().liveRunIds.length === 0, 'run to finish');
+    const seeds = kernel.sent.filter((m) => m.type === 'discovery_evaluate' && m.candidate_id === 'c-0000');
+    expect(seeds).toHaveLength(1);
+  });
+
+  it('two Resume calls in the same tick resume the stopped run once', async () => {
+    kernel.hold.value = true;
+    const started = await store().startRun('toy.discovery.yaml');
+    if (!started.ok) throw new Error('start failed');
+    await until(() => kernel.sent.filter((m) => m.type === 'discovery_evaluate').length >= 1, 'in flight');
+    store().stopRun(started.runId);
+    await until(() => store().liveRunIds.length === 0, 'stopped');
+    kernel.release();
+    const [a, b] = await Promise.all([store().resumeRun(started.runId), store().resumeRun(started.runId)]);
+    expect([a.ok, b.ok].filter(Boolean)).toHaveLength(1);
+    expect(store().liveRunIds).toHaveLength(1);
+    await until(() => store().liveRunIds.length === 0, 'resumed run to finish');
+  });
+});
+
 describe('definitions', () => {
   it('lists valid definitions and reports malformed ones as data', async () => {
     store().configure(makeEnv({ ...project(), 'proj/experiments/bad.discovery.yaml': 'schema: 1\ntype: discovery\n', 'proj/experiments/notes.txt': 'x' }));

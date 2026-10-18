@@ -13,7 +13,8 @@ import type {
 } from '../../types/discovery';
 import { summarizeConfirmation } from './cascade';
 import { isCancelled, type KernelEvaluator } from './kernelEval';
-import type { Limiter, RunnerClock } from './runContext';
+import type { Limiter, RunControl, RunnerClock } from './runContext';
+import { syntheticFailure } from './kernelEval';
 import { deriveSeed } from './rng';
 
 export interface ConfirmEnv {
@@ -24,6 +25,8 @@ export interface ConfirmEnv {
   evalLimit: Limiter;
   candidates: ReadonlyMap<string, CandidateRecord>;
   deps: { clock: RunnerClock };
+  /** Present in a live run: Stop and Pause reach the queued confirmation evaluations (CR-M8). */
+  control?: RunControl;
 }
 
 /** `count` seeds not used by any candidate evaluation; `salt` keeps repeated confirmations distinct. */
@@ -55,8 +58,8 @@ export async function evaluateOnFreshSeeds(
 ): Promise<DiscoveryEvaluation[]> {
   const results = await Promise.all(
     seeds.map((seed, i) =>
-      env.evalLimit(() =>
-        env.kernel.evaluate({
+      env.evalLimit(async () => {
+        const request = {
           runId: env.runId,
           wireId: `${wirePrefix}~${stage}${i}`,
           evaluator: { kind: env.spec.evaluator.kind, config: env.spec.evaluator.config },
@@ -64,8 +67,11 @@ export async function evaluateOnFreshSeeds(
           entry: env.spec.entry,
           seed,
           stage,
-        }),
-      ),
+        };
+        await env.control?.gate();
+        if (env.control?.stopped) return syntheticFailure(request, env.evaluator, 'cancelled', 'Run stopped.');
+        return env.kernel.evaluate(request);
+      }),
     ),
   );
   return results.filter((e) => !isCancelled(e));

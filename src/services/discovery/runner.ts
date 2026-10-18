@@ -89,6 +89,9 @@ export function runDiscovery(
   opts: DiscoveryRunOptions = {},
 ): DiscoveryRunHandle {
   let paused = false;
+  /** When the current pause began, and the total paused time so far: neither counts as wall time (CR-M8). */
+  let pausedAt: number | null = null;
+  let pausedTotalMs = 0;
   let stopped = false;
   /** Set when the kernel connection is lost: the run ends as failed (CR-H7). */
   let fatal: string | null = null;
@@ -169,7 +172,11 @@ export function runDiscovery(
       return fail('LLM mutation needs an Anthropic API key. Add one in Settings, Dirac, or switch the mutator to hybrid or ast.');
     }
 
-    const wall = () => priorWall + (deps.clock.now().getTime() - segmentStart);
+    const wall = () => {
+      const now = deps.clock.now().getTime();
+      const pausedNow = pausedAt !== null ? now - pausedAt : 0;
+      return priorWall + Math.max(0, now - segmentStart - pausedTotalMs - pausedNow);
+    };
     const snapshot = (): RunRecord => ({ ...(run as RunRecord), usage: { ...(run as RunRecord).usage, wall_ms: wall() } });
     const persistRun = () => {
       run = { ...snapshot(), rng: rng.state(), updated_at: deps.clock.now().toISOString() };
@@ -338,11 +345,15 @@ export function runDiscovery(
       const resumeBatch = r0.pending_batch?.generation === g ? r0.pending_batch : null;
       const orphans = [...candidates.values()].filter((c) => c.generation === g && c.mutator !== 'seed');
       const requeue = orphans.filter((c) => c.outcome === 'pending' && c.evaluation === null && !c.proposal_error);
+      // Resumed batch items go through the same cascade as fresh ones and get their own derived AST seed (CR-M8).
       const planned: PlanItem[] = (resumeBatch?.items ?? []).map((it) => ({
         candidateId: it.candidate_id, island: it.island, parentId: it.parent_id, inspirationIds: it.inspiration_ids,
-        mutator: 'llm', tier: it.tier, depth: it.depth, thinking: it.thinking, astSeed: 0, evalSeed: it.eval_seed,
-        threshold: null,
+        mutator: 'llm', tier: it.tier, depth: it.depth, thinking: it.thinking,
+        astSeed: deriveSeed(spec.seed, `ast:${it.candidate_id}`), evalSeed: it.eval_seed,
+        threshold: thresholdForIsland(spec, r0.archive, it.island, candidates),
       }));
+      // Their LLM calls were counted when the batch was submitted, before the interruption.
+      const resumedIds = new Set(planned.map((p) => p.candidateId));
       let budgetStop: StopReason | null = null;
       const target = spec.search.candidates_per_generation - orphans.length - planned.length;
       for (let n = 0; n < target; n += 1) {
@@ -350,7 +361,7 @@ export function runDiscovery(
         const view = {
           usage: r.usage, wallMs: wall(),
           plannedEvaluations: (planned.length + requeue.length) * (spec.evaluation.cascade ? 2 : 1),
-          plannedLlmCalls: planned.filter((p) => p.mutator === 'llm').length,
+          plannedLlmCalls: planned.filter((p) => p.mutator === 'llm' && !resumedIds.has(p.candidateId)).length,
         };
         budgetStop = exhaustedBudget(spec, view);
         if (budgetStop) break;
@@ -386,13 +397,15 @@ export function runDiscovery(
     async function resolveBatch(g: number, planned: PlanItem[], resuming: boolean) {
       const llmItems = planned.filter((p) => p.mutator === 'llm');
       if (!spec.mutator.batch_mode || llmItems.length === 0) return null;
+      await control.gate();
+      if (control.stopped) return 'interrupted' as const;
       if (!resuming) {
         const submitted = await submitBatch(ctx, llmItems, g);
         if (!submitted.ok) {
           ctx.notice(`Batch submit failed: ${submitted.message}`);
           return { id: '', results: {} };
         }
-        setRun({ pending_batch: submitted.pending, usage: { ...(run as RunRecord).usage, llm_calls: (run as RunRecord).usage.llm_calls + llmItems.length } });
+        setRun({ pending_batch: submitted.pending, usage: { ...(run as RunRecord).usage, llm_calls: (run as RunRecord).usage.llm_calls + submitted.pending.items.length } });
         persistRun();
       }
       const pending = (run as RunRecord).pending_batch;
@@ -417,7 +430,12 @@ export function runDiscovery(
       // Red Queen champions are chosen by adversarial fitness; confirming their evaluator score on fresh seeds says nothing about robustness.
       if (champion && !userStop && !failed && !ctx.rq && spec.confirm.seeds > 0 && champion.evaluation) {
         const confirmation = await confirmChampion(ctx, champion, spec.confirm.seeds, 'run');
-        setRun({ confirmation });
+        if (control.stopped && confirmation.n_scored < spec.confirm.seeds) {
+          // Stop (or a lost kernel) cut the confirmation short: a partial one would misreport the number.
+          ctx.notice('Confirmation was stopped before it finished; the champion number is unconfirmed.');
+        } else {
+          setRun({ confirmation });
+        }
       }
       if (champion && !userStop && !failed) persister.writeChampion(champion.program);
       setRun({ finished_at: deps.clock.now().toISOString() });
@@ -447,8 +465,20 @@ export function runDiscovery(
   return {
     runId,
     done,
-    pause() { if (!finished && !stopped) { paused = true; onControlChange(); } },
-    resume() { if (!finished && paused) { paused = false; releaseGate(); onControlChange(); } },
+    pause() {
+      if (finished || stopped || paused) return;
+      paused = true;
+      pausedAt = deps.clock.now().getTime();
+      onControlChange();
+    },
+    resume() {
+      if (finished || !paused) return;
+      paused = false;
+      if (pausedAt !== null) pausedTotalMs += Math.max(0, deps.clock.now().getTime() - pausedAt);
+      pausedAt = null;
+      releaseGate();
+      onControlChange();
+    },
     stop() { if (!finished && !stopped) { stopped = true; llmAbort.abort(); releaseGate(); kernel?.cancelRun(runId); auditClient?.cancel(runId); } },
     current: () => run,
   };

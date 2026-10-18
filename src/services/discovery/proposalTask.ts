@@ -80,8 +80,15 @@ async function produceWithLlm(
   if (!result) {
     const input = buildProposeInput(ctx, item, generation);
     if (!input) return { kind: 'skip' };
+    await ctx.control.gate();
+    if (ctx.control.stopped) return { kind: 'skip' };
     ctx.activity(item.candidateId, 'proposing');
-    result = await ctx.llmLimit(() => ctx.deps.llm.propose(input, ctx.signal));
+    result = await ctx.llmLimit(async () => {
+      // A call queued behind the limiter must not start while paused (CR-M8).
+      await ctx.control.gate();
+      if (ctx.control.stopped) return { ok: false as const, code: 'aborted' as const, message: 'The run was stopped.', usage: null, prompt_sha256: null, api_calls: 0 };
+      return ctx.deps.llm.propose(input, ctx.signal);
+    });
     const calls = result.api_calls ?? 1;
     ctx.setUsage((u) => ({ ...u, llm_calls: u.llm_calls + calls }));
   }
@@ -163,6 +170,8 @@ function baseRecord(
 }
 
 async function produceWithAst(ctx: RunContext, item: PlanItem, parent: CandidateRecord): Promise<ProduceOutcome> {
+  await ctx.control.gate();
+  if (ctx.control.stopped) return { kind: 'skip' };
   ctx.activity(item.candidateId, 'proposing');
   const res = await ctx.kernel.mutate(parent.program, item.astSeed, 1);
   if (!res.ok || res.mutations.length === 0) {
@@ -243,14 +252,20 @@ export async function evaluateCandidate(
     seed: candidate.eval_seed,
     stage,
   });
-  const run = async (stage: DiscoveryStage): Promise<DiscoveryEvaluation> =>
-    ctx.evalLimit(async () => {
+  const run = async (stage: DiscoveryStage): Promise<DiscoveryEvaluation> => {
+    await ctx.control.gate();
+    return ctx.evalLimit(async () => {
+      // Queued evaluations wait out a pause too (CR-M8).
+      await ctx.control.gate();
       if (ctx.control.stopped) return syntheticFailure(request(stage), ctx.evaluator, 'cancelled', 'Run stopped.');
       ctx.activity(candidate.id, stage === 'screen' ? 'screening' : 'evaluating');
       ctx.setUsage(countEvaluation);
       return ctx.kernel.evaluate(request(stage));
     });
+  };
 
+  await ctx.control.gate();
+  if (ctx.control.stopped) return candidate;
   // Ask the kernel for the AST-normalised key first, so a known duplicate costs no evaluation (CR-M1).
   const preKey = await programKeyOf(ctx, candidate.program);
   let release: () => void = () => undefined;

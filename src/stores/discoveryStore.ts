@@ -106,6 +106,8 @@ interface LiveRun {
   session: DiscoverySession;
 }
 const live = new Map<string, LiveRun>();
+/** True from the synchronous start of a Start/Resume until its runner is registered: a second click must not slip in during the awaits (CR-M8). */
+let launching = false;
 let env: DiscoveryEnv | null = null;
 
 const fail = (error: string): { ok: false; error: string } => ({ ok: false, error });
@@ -331,9 +333,10 @@ export const useDiscoveryStore = create<DiscoveryState>((set, get) => {
     async startRun(definitionFile) {
       const state = get();
       if (!state.projectRoot) return fail('Open a project first.');
-      if (state.liveRunIds.length > 0) return fail('A discovery run is already active. Stop it or wait for it to finish.');
+      if (state.liveRunIds.length > 0 || launching) return fail('A discovery run is already active. Stop it or wait for it to finish.');
       const definition = state.definitions.find((d) => d.fileName === definitionFile);
       if (!definition) return fail(`${definitionFile} is not a valid discovery definition.`);
+      launching = true;
       let session: DiscoverySession | null = null;
       try {
         const e = needEnv();
@@ -352,6 +355,8 @@ export const useDiscoveryStore = create<DiscoveryState>((set, get) => {
         const error = message(e);
         set({ error });
         return fail(error);
+      } finally {
+        launching = false;
       }
     },
 
@@ -367,9 +372,13 @@ export const useDiscoveryStore = create<DiscoveryState>((set, get) => {
       }
       const state = get();
       if (!state.projectRoot) return fail('Open a project first.');
-      if (state.liveRunIds.length > 0) return fail('Another discovery run is active.');
+      if (state.liveRunIds.length > 0 || launching) return fail('Another discovery run is active.');
+      launching = true;
       const file = Object.entries(state.runsByDefinition).find(([, runs]) => runs.some((r) => r.run_id === runId))?.[0];
-      if (!file) return fail(`Run ${runId} was not found.`);
+      if (!file) {
+        launching = false;
+        return fail(`Run ${runId} was not found.`);
+      }
       let session: DiscoverySession | null = null;
       try {
         const view = state.views[runId] ?? (await loadView(file, runId));
@@ -387,6 +396,8 @@ export const useDiscoveryStore = create<DiscoveryState>((set, get) => {
       } catch (e) {
         if (session) closeSession(session);
         return fail(message(e));
+      } finally {
+        launching = false;
       }
     },
 
@@ -468,6 +479,7 @@ export const useDiscoveryStore = create<DiscoveryState>((set, get) => {
         closeSession(session);
       }
       live.clear();
+      launching = false;
       set({ ...emptyData });
     },
   };
