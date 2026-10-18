@@ -443,7 +443,9 @@ export function useKernel() {
 
   // The toolbar can cancel a queued run (second click on the Queued slot): drop the deferred run with it.
   useEffect(() => useRunQueueStore.subscribe((state) => {
-    if (!state.queued) queuedRunRef.current = false;
+    if (state.queued || !queuedRunRef.current) return;
+    queuedRunRef.current = false;
+    useSimulationStore.getState().addOutput('Queued run cancelled.', 'info');
   }), []);
 
   // Send a hardware request over the desktop WebSocket. No-ops on web since

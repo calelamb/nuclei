@@ -37,7 +37,11 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button
       disabled={disabled || (loading && !keepFocus)}
       aria-disabled={(loading && keepFocus) || undefined}
       aria-busy={loading || undefined}
-      onClick={loading && keepFocus ? undefined : onClick}
+      onClick={(e) => {
+        // A busy keepFocus button stays focusable, so it must also refuse to submit its form.
+        if (loading && keepFocus) { e.preventDefault(); return; }
+        onClick?.(e);
+      }}
       className={cx('nuclei-btn', `nuclei-btn--${variant}`, `nuclei-btn--${size}`, className)}
     >
       {loading

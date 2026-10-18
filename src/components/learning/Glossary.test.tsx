@@ -17,8 +17,9 @@ describe('Glossary search', () => {
     fireEvent.change(input, { target: { value: 'zzzz' } });
     expect(screen.getByText('No terms match "zzzz"')).toBeTruthy();
     expect(screen.queryByText('No terms found.')).toBeNull();
-    const clears = screen.getAllByRole('button', { name: 'Clear search' });
-    fireEvent.click(clears[clears.length - 1]);
+    expect(screen.getAllByRole('button', { name: 'Clear search' })).toHaveLength(1);
+    fireEvent.click(screen.getByRole('button', { name: 'Show all terms' }));
+    expect(document.activeElement).toBe(input);
     expect(useGlossaryStore.getState().searchQuery).toBe('');
     expect(useGlossaryStore.getState().filteredTerms.length).toBeGreaterThan(0);
   });

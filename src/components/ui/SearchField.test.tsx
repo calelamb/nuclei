@@ -25,6 +25,7 @@ describe('SearchField', () => {
     expect(input.value).toBe('zzzz');
     fireEvent.click(screen.getByRole('button', { name: 'Clear search' }));
     expect(input.value).toBe('');
+    expect(document.activeElement).toBe(input);
   });
 
   it('Escape clears a non-empty query without blurring, then blurs when already empty', () => {

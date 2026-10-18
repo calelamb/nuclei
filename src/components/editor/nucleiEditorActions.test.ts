@@ -10,9 +10,14 @@ const KeyCode = { KeyL: 42, KeyP: 46 };
 
 function register() {
   const actions: monaco.editor.IActionDescriptor[] = [];
-  const editor = { addAction: (a: monaco.editor.IActionDescriptor) => { actions.push(a); } } as unknown as monaco.editor.IStandaloneCodeEditor;
+  const keys: Record<string, boolean> = {};
+  const editor = {
+    addAction: (a: monaco.editor.IActionDescriptor) => { actions.push(a); },
+    createContextKey: (name: string, value: boolean) => { keys[name] = value; return { set: (v: boolean) => { keys[name] = v; } }; },
+    onDidDispose: () => ({ dispose: () => undefined }),
+  } as unknown as monaco.editor.IStandaloneCodeEditor;
   registerNucleiEditorActions(editor, { KeyMod, KeyCode } as unknown as typeof monaco);
-  return actions;
+  return Object.assign(actions, { keys });
 }
 
 beforeEach(() => {
@@ -27,6 +32,15 @@ describe('editor-owned app chords', () => {
     expect(action?.keybindings).toEqual([KeyMod.CtrlCmd | KeyMod.Shift | KeyCode.KeyL]);
     action?.run({} as monaco.editor.ICodeEditor);
     expect(useUIModeStore.getState().mode).toBe('intermediate');
+  });
+
+  it('gates Change level on a Learn-only context key so Research keeps select-all-occurrences', () => {
+    useWorkspaceStore.setState({ mode: 'research' });
+    const actions = register();
+    expect(actions.find((a) => a.id === 'nuclei.cycleLevel')?.precondition).toBe('nuclei.learnWorkspace');
+    expect(actions.keys['nuclei.learnWorkspace']).toBe(false);
+    useWorkspaceStore.setState({ mode: 'learn' });
+    expect(actions.keys['nuclei.learnWorkspace']).toBe(true);
   });
 
   it('cycling the level is a no-op in Research', () => {

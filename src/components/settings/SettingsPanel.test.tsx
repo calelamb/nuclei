@@ -147,4 +147,21 @@ describe('SettingsPanel', () => {
     await waitFor(() => expect(container.contains(document.activeElement)).toBe(true));
     expect(takeSettingsFocusRequest()).toBe(false);
   });
+
+  it('takes focus back from a view that mounts after the panel and grabs it (editor from Challenges)', async () => {
+    requestSettingsFocus();
+    const { container } = render(<SettingsPanel />);
+    await waitFor(() => expect(container.contains(document.activeElement)).toBe(true));
+    const late = document.createElement('textarea');
+    document.body.appendChild(late);
+    late.focus();
+    expect(container.contains(document.activeElement)).toBe(true);
+    late.remove();
+  });
+
+  it('describes the Level row in one short line', () => {
+    useWorkspaceStore.setState({ mode: 'learn' });
+    const { container } = render(<SettingsPanel />);
+    expect(container.textContent).toContain('How much of the IDE is shown');
+  });
 });

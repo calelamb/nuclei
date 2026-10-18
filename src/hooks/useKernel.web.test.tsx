@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { useRunQueueStore } from '../stores/runQueueStore';
 import type { ReactNode } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, cleanup, renderHook, waitFor } from '@testing-library/react';
@@ -163,5 +164,19 @@ describe('useKernel (web)', () => {
 
     act(() => controls.releaseBoot?.());
     await waitFor(() => expect(controls.executeCalls).toBe(1));
+  });
+
+  it('says so in the Terminal when a queued run is cancelled, and never runs it', async () => {
+    controls.holdBoot = true;
+    const { result } = renderHook(() => useKernel(), { wrapper });
+    await waitFor(() => expect(controls.releaseBoot).not.toBeNull());
+
+    act(() => result.current.execute());
+    act(() => useRunQueueStore.getState().setQueued(false));
+    expect(useSimulationStore.getState().terminalOutput.some((l) => /queued run cancelled/i.test(l.text))).toBe(true);
+
+    act(() => controls.releaseBoot?.());
+    await waitFor(() => expect(useEditorStore.getState().kernelReady).toBe(true));
+    expect(controls.executeCalls).toBe(0);
   });
 });

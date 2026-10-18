@@ -1,4 +1,4 @@
-import { forwardRef, type KeyboardEvent } from 'react';
+import { forwardRef, useCallback, useRef, type KeyboardEvent } from 'react';
 import { Search, X } from 'lucide-react';
 import { ICON_SIZE, ICON_STROKE } from '../../styles/tokens';
 import { IconButton } from './IconButton';
@@ -19,6 +19,17 @@ export const SearchField = forwardRef<HTMLInputElement, SearchFieldProps>(functi
   { value, onValueChange, onKeyDown, ...rest },
   ref,
 ) {
+  const inputRef = useRef<HTMLInputElement | null>(null);
+  const setRefs = useCallback((node: HTMLInputElement | null) => {
+    inputRef.current = node;
+    if (typeof ref === 'function') ref(node);
+    else if (ref) ref.current = node;
+  }, [ref]);
+  // The Clear button unmounts once the value is empty; hand focus to the field so keyboard users do not land on <body>.
+  const clear = () => {
+    onValueChange('');
+    inputRef.current?.focus();
+  };
   const handleKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
     onKeyDown?.(e);
     if (e.defaultPrevented || e.key !== 'Escape') return;
@@ -33,7 +44,7 @@ export const SearchField = forwardRef<HTMLInputElement, SearchFieldProps>(functi
   return (
     <TextInput
       {...rest}
-      ref={ref}
+      ref={setRefs}
       value={value}
       onChange={(e) => onValueChange(e.target.value)}
       onKeyDown={handleKeyDown}
@@ -43,7 +54,7 @@ export const SearchField = forwardRef<HTMLInputElement, SearchFieldProps>(functi
           <IconButton
             size="sm"
             aria-label="Clear search"
-            onClick={() => onValueChange('')}
+            onClick={clear}
             onMouseDown={(e) => e.preventDefault()}
           >
             <X size={ICON_SIZE.xs} strokeWidth={ICON_STROKE} />

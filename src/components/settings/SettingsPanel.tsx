@@ -169,6 +169,8 @@ function ApiKeyInput() {
 
 /* ── Main Panel ─────────────────────────────────────────── */
 
+const FOCUS_SETTLE_MS = 400;
+
 export function SettingsPanel() {
   const colors = useThemeStore((s) => s.colors);
   const themePreference = useThemeStore((s) => s.preference);
@@ -201,6 +203,26 @@ export function SettingsPanel() {
   const rootRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     let frame = 0;
+    let settleTimer = 0;
+    let stopGuard: (() => void) | null = null;
+    const focusTarget = (root: HTMLElement) =>
+      root.querySelector<HTMLElement>('button:not([disabled]), input, select');
+    // A view that mounts after Settings (the editor, from Challenges) grabs focus for itself. For a short settle window,
+    // anything outside the panel that takes focus hands it straight back, so the next Tab does not indent code.
+    const guardFocus = (root: HTMLElement) => {
+      stopGuard?.();
+      const onFocusIn = (e: FocusEvent) => {
+        if (e.target instanceof Node && !root.contains(e.target)) focusTarget(root)?.focus({ focusVisible: true } as FocusOptions);
+      };
+      document.addEventListener('focusin', onFocusIn);
+      const stop = () => {
+        window.clearTimeout(settleTimer);
+        document.removeEventListener('focusin', onFocusIn);
+        stopGuard = null;
+      };
+      settleTimer = window.setTimeout(stop, FOCUS_SETTLE_MS);
+      stopGuard = stop;
+    };
     // The request is consumed inside the frame, not before it: a StrictMode remount (or a quick re-render) cancels
     // the first frame, and the surviving effect must still find the request.
     const focusFirst = () => {
@@ -208,12 +230,13 @@ export function SettingsPanel() {
       frame = requestAnimationFrame(() => {
         const root = rootRef.current;
         if (!root || !takeSettingsFocusRequest()) return; // a frame from an unmounted panel must not eat the request
-        root.querySelector<HTMLElement>('button:not([disabled]), input, select')?.focus();
+        focusTarget(root)?.focus({ focusVisible: true } as FocusOptions);
+        guardFocus(root);
       });
     };
     focusFirst();
     const off = onSettingsFocusRequest(focusFirst);
-    return () => { off(); cancelAnimationFrame(frame); };
+    return () => { off(); cancelAnimationFrame(frame); stopGuard?.(); };
   }, []);
 
   return (
@@ -234,7 +257,7 @@ export function SettingsPanel() {
             />
           </SettingRow>
           {workspaceMode === 'learn' && (
-            <SettingRow label="Level" hint="Beginner shows the editor and results. Intermediate adds Explorer and hardware. Advanced adds the Dirac agent.">
+            <SettingRow label="Level" hint="How much of the IDE is shown">
               <SettingSelect<UIMode>
                 value={uiMode}
                 options={[

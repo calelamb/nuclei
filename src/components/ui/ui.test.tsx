@@ -47,6 +47,13 @@ describe('Button', () => {
     expect(onClick).not.toHaveBeenCalled();
   });
 
+  it('a busy keepFocus submit button does not submit its form', () => {
+    const onSubmit = vi.fn((e: React.FormEvent) => e.preventDefault());
+    render(<form onSubmit={onSubmit}><Button type="submit" loading keepFocus>Save</Button></form>);
+    fireEvent.click(screen.getByRole('button', { name: /Save/ }));
+    expect(onSubmit).not.toHaveBeenCalled();
+  });
+
   it('keeps keyboard focus across a loading flip when keepFocus is set', () => {
     const { rerender } = render(<Button keepFocus onClick={() => undefined}>Run</Button>);
     const el = screen.getByRole('button', { name: 'Run' });
