@@ -17,7 +17,7 @@ export interface StalePill {
  */
 export function describeStale(input: { previewPaused: boolean; error: string | null; errorLine: number | null; previewPending?: boolean }): StalePill | null {
   if (input.previewPaused) {
-    return { label: 'Preview paused', tooltip: PREVIEW_PAUSED_CAPTION, line: null, action: 'run' };
+    return { label: 'Preview paused · previous code', tooltip: PREVIEW_PAUSED_CAPTION, line: null, action: 'run' };
   }
   if (input.previewPending) {
     return { label: PENDING_LABEL, tooltip: 'The diagram shows the previous code while the preview catches up.', line: null };

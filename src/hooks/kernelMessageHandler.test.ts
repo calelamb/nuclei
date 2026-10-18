@@ -152,3 +152,31 @@ describe('handleKernelMessage — plain-Python note ends when a circuit comes ba
     expect(useSimulationStore.getState().lastRunNoCircuit).toBe(true);
   });
 });
+
+describe('handleKernelMessage: a user Stop (research-r-02)', () => {
+  const previous = { counts: { '00': 512, '11': 512 } } as never;
+
+  beforeEach(() => {
+    useSimulationStore.setState({ result: previous, resultCode: 'old', isRunning: true, lastRunFailed: false, lastRunStopped: false, terminalOutput: [] });
+  });
+
+  it('keeps the results the person already had and ends the run', () => {
+    handleKernelMessage({ type: 'result', data: null, stopped: true }, {});
+    const sim = useSimulationStore.getState();
+    expect(sim.result).toBe(previous);
+    expect(sim.resultCode).toBe('old');
+    expect(sim.isRunning).toBe(false);
+    expect(sim.lastRunStopped).toBe(true);
+  });
+
+  it('a new run clears the stopped flag', () => {
+    handleKernelMessage({ type: 'result', data: null, stopped: true }, {});
+    useSimulationStore.getState().setRunning(true);
+    expect(useSimulationStore.getState().lastRunStopped).toBe(false);
+  });
+
+  it('an ordinary empty result still clears results', () => {
+    handleKernelMessage({ type: 'result', data: null }, {});
+    expect(useSimulationStore.getState().result).toBeNull();
+  });
+});

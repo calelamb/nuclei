@@ -28,6 +28,8 @@ interface SimulationState {
   lastRunFailed: boolean;
   /** The last run finished cleanly but defined no circuit (plain Python); cleared when a new run starts or a result lands. */
   lastRunNoCircuit: boolean;
+  /** The person pressed Stop on the last run; any earlier result is kept. Cleared when a new run starts or a result lands. */
+  lastRunStopped: boolean;
   shots: number;
   terminalOutput: TerminalLine[];
   /** Record the code being executed so its result can later be recognised as out of date. */
@@ -37,6 +39,7 @@ interface SimulationState {
   setRunning: (running: boolean) => void;
   setRunFailed: (failed: boolean) => void;
   setRunNoCircuit: (noCircuit: boolean) => void;
+  setRunStopped: (stopped: boolean) => void;
   setShots: (shots: number) => void;
   addOutput: (text: string, type?: TerminalLineType) => void;
   clearOutput: () => void;
@@ -79,6 +82,7 @@ export const useSimulationStore = create<SimulationState>((set) => ({
   isRunning: false,
   lastRunFailed: false,
   lastRunNoCircuit: false,
+  lastRunStopped: false,
   shots: 1024,
   terminalOutput: [],
   beginRun: (runCode) => set({ runCode }),
@@ -88,15 +92,18 @@ export const useSimulationStore = create<SimulationState>((set) => ({
     isRunning: false,
     lastRunFailed: result ? false : s.lastRunFailed,
     lastRunNoCircuit: result ? false : s.lastRunNoCircuit,
+    lastRunStopped: result ? false : s.lastRunStopped,
   })),
   clearResult: () => set({ result: null, resultCode: null, isRunning: false }),
   setRunning: (isRunning) => set((s) => ({
     isRunning,
     lastRunFailed: isRunning ? false : s.lastRunFailed,
     lastRunNoCircuit: isRunning ? false : s.lastRunNoCircuit,
+    lastRunStopped: isRunning ? false : s.lastRunStopped,
   })),
   setRunFailed: (lastRunFailed) => set({ lastRunFailed }),
   setRunNoCircuit: (lastRunNoCircuit) => set({ lastRunNoCircuit }),
+  setRunStopped: (lastRunStopped) => set({ lastRunStopped }),
   setShots: (shots) => set({ shots }),
   addOutput: (text, type = 'stdout') => set((s) => {
     const timestamp = Date.now();

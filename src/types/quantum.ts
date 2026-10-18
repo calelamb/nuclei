@@ -175,7 +175,8 @@ interface HardwareJobDTO {
 
 export type KernelResponse =
   | { type: 'snapshot'; data: CircuitSnapshot | null }
-  | { type: 'result'; data: SimulationResult | null }
+  /** `stopped`: the person pressed Stop; the previous result is still valid and must not be discarded. */
+  | { type: 'result'; data: SimulationResult | null; stopped?: boolean }
   | { type: 'python_result'; success: boolean }
   | {
       type: 'error';

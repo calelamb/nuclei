@@ -19,9 +19,10 @@ export function ResultsEmptyState() {
   const isRunning = useSimulationStore((s) => s.isRunning);
   const lastRunFailed = useSimulationStore((s) => s.lastRunFailed);
   const lastRunNoCircuit = useSimulationStore((s) => s.lastRunNoCircuit);
+  const lastRunStopped = useSimulationStore((s) => s.lastRunStopped);
   const errorLine = useEditorStore((s) => s.errors[0]?.line ?? null);
   const focusTerminal = useBottomPanelStore((s) => s.focusTerminal);
-  const variant = resultsEmptyVariant({ isRunning, lastRunFailed, lastRunNoCircuit });
+  const variant = resultsEmptyVariant({ isRunning, lastRunFailed, lastRunNoCircuit, lastRunStopped });
   const showError = () => {
     focusTerminal();
     // The Terminal may only mount after it opens, so look again on the next frame.
@@ -52,6 +53,20 @@ export function ResultsEmptyState() {
           )}
         >
           {errorLine !== null ? `Stopped at line\u00A0${errorLine} · nothing was plotted` : 'Stopped with an error · nothing was plotted'}
+        </EmptyState>
+      </div>
+    );
+  }
+  if (variant === 'stopped') {
+    return (
+      <div role="status" className="viz-results-empty">
+        <EmptyState
+          className="viz-empty"
+          icon={<Orbit size={20} />}
+          title="Run stopped"
+          action={<Button variant="secondary" size="sm" icon={<Play size={12} />} onClick={run}>Run again</Button>}
+        >
+          Nothing was plotted for this run.
         </EmptyState>
       </div>
     );
