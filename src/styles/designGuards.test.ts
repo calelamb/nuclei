@@ -89,4 +89,11 @@ describe('design guards', () => {
     const modalFiles = ['components/onboarding/KeyboardShortcuts.tsx', 'components/commandPalette/CommandPalette.tsx', 'components/ui/Dialog.tsx'];
     expect(offenders((f) => modalFiles.includes(f.rel) && /background:\s*['"]rgba\(0,\s*0,\s*0/.test(f.text))).toEqual([]);
   });
+
+  it('declares color-scheme for both themes so native checkboxes, selects and scrollbars follow the app theme', () => {
+    const css = files.find((f) => f.rel === 'styles/tokens.css')?.text ?? '';
+    const block = (selector: RegExp) => css.match(new RegExp(`${selector.source}\\s*\\{([^}]*)\\}`))?.[1] ?? '';
+    expect(block(/:root,\s*:root\[data-theme='dark'\]/)).toMatch(/color-scheme:\s*dark\s*;/);
+    expect(block(/:root\[data-theme='light'\]/)).toMatch(/color-scheme:\s*light\s*;/);
+  });
 });
