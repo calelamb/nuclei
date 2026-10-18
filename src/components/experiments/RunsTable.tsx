@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { ChevronDown, ChevronUp, Download } from 'lucide-react';
+import { ChevronDown, ChevronUp, Download, Play } from 'lucide-react';
 import { useThemeStore } from '../../stores/themeStore';
 import { useProjectStore } from '../../stores/projectStore';
 import { useExperimentStore } from '../../services/experimentStore';
@@ -8,7 +8,7 @@ import { expandGrid } from '../../types/experiment';
 import type { RunStatus } from '../../types/experiment';
 import { createTauriExperimentFs } from '../../services/experimentFs';
 import { toCsv, downloadCsv } from '../../services/experimentExport';
-import { columnDecimals, humanizeColumnLabel, isNumericColumn, deriveColumns, filterByStatus, getRunValue, sortRuns } from './runsTableColumns';
+import { columnDecimals, columnDisplayLabel, isNumericColumn, deriveColumns, filterByStatus, getRunValue, sortRuns, sweepAxesSummary } from './runsTableColumns';
 import { nextRowIndex, scrollTopToReveal } from './runsTableNavigation';
 import { rememberOpenedRun, takeOpenedRun } from './runFocusMemory';
 import { RunsTableRow, ROW_HEIGHT } from './RunsTableRow';
@@ -16,16 +16,17 @@ import { RunButton } from './RunButton';
 import { RunFeedback } from './RunFeedback';
 import { SweepPlot } from './SweepPlot';
 import { TYPOGRAPHY, ICON_SIZE, ICON_STROKE } from '../../styles/tokens';
-import { Button, Select, SegmentedControl } from '../ui';
+import { Button, EmptyState, Select, Tabs } from '../ui';
 import './experiments.css';
 
 const OVERSCAN = 6;
 const STATUS_OPTIONS: Array<RunStatus | 'all'> = ['all', 'complete', 'failed', 'running', 'stale'];
 const CHECKBOX_COLUMN_WIDTH = 32;
-const RUN_COLUMN_WIDTH = 190;
-const NARROW_RUN_COLUMN_WIDTH = 178;
+const RUN_COLUMN_WIDTH = 176;
+const NARROW_RUN_COLUMN_WIDTH = 150;
 const NARROW_VIEWPORT = 1000;
 const MIN_DATA_COLUMN_WIDTH = 116;
+const NARROW_MIN_DATA_COLUMN_WIDTH = 92;
 const HEADER_HEIGHT = 40;
 
 /**
@@ -125,7 +126,11 @@ function RunsTableBody() {
     };
   }, [fileKey, patchRunsView]);
 
-  const columns = useMemo(() => deriveColumns(allRuns), [allRuns]);
+  const sweepKeys = useMemo(
+    () => Object.keys((experiment && experiment.spec.type !== 'qec_campaign' ? experiment.spec.sweep : undefined) ?? {}),
+    [experiment],
+  );
+  const columns = useMemo(() => deriveColumns(allRuns, sweepKeys), [allRuns, sweepKeys]);
 
   const filtered = useMemo(() => filterByStatus(allRuns, statusFilter), [allRuns, statusFilter]);
   const sortColumn = columns.find((c) => c.key === sortKey) ?? null;
@@ -148,9 +153,11 @@ function RunsTableBody() {
     return map;
   }, [columns, allRuns]);
 
-  const runColumnWidth = viewportWidth < NARROW_VIEWPORT ? NARROW_RUN_COLUMN_WIDTH : RUN_COLUMN_WIDTH;
-  const gridTemplateColumns = `${CHECKBOX_COLUMN_WIDTH}px ${runColumnWidth}px repeat(${columns.length}, minmax(${MIN_DATA_COLUMN_WIDTH}px, 1fr))`;
-  const contentMinWidth = CHECKBOX_COLUMN_WIDTH + runColumnWidth + columns.length * MIN_DATA_COLUMN_WIDTH;
+  const narrow = viewportWidth < NARROW_VIEWPORT;
+  const runColumnWidth = narrow ? NARROW_RUN_COLUMN_WIDTH : RUN_COLUMN_WIDTH;
+  const dataColumnWidth = narrow ? NARROW_MIN_DATA_COLUMN_WIDTH : MIN_DATA_COLUMN_WIDTH;
+  const gridTemplateColumns = `${CHECKBOX_COLUMN_WIDTH}px ${runColumnWidth}px repeat(${columns.length}, minmax(${dataColumnWidth}px, 1fr))`;
+  const contentMinWidth = CHECKBOX_COLUMN_WIDTH + runColumnWidth + columns.length * dataColumnWidth;
 
   // Roving tabindex: one row is the Tab stop; arrows move it. The row is
   // focused after render because virtualization may not have mounted it yet.
@@ -222,6 +229,11 @@ function RunsTableBody() {
   const sweep = experiment.spec.type !== 'qec_campaign' ? experiment.spec.sweep : undefined;
   const pointCount = expandGrid(sweep).length;
   const hasSweep = Object.keys(sweep ?? {}).length > 0;
+  const hasNoRuns = allRuns.length === 0;
+  const hiddenSelected = compareSelection.filter((dir) => !rows.some((r) => r.dir === dir)).length;
+  const runsCount = rows.length === allRuns.length
+    ? `${rows.length} run${rows.length === 1 ? '' : 's'}`
+    : `${rows.length} of ${allRuns.length} runs`;
 
   return (
     <div style={{ height: '100%', display: 'flex', flexDirection: 'column', background: colors.bg }} role="table" aria-label={`Runs for ${experiment.spec.name}`}>
@@ -234,15 +246,15 @@ function RunsTableBody() {
           {experiment.spec.name}
         </span>
         <span style={{ color: colors.textDim, fontSize: 11, fontFamily: TYPOGRAPHY.fontMono }}>
-          {rows.length} run{rows.length === 1 ? '' : 's'}
+          {runsCount}
         </span>
 
         {hasSweep && (
-          <SegmentedControl
+          <Tabs
             aria-label="Runs view"
-            value={mainTab}
+            value={hasNoRuns ? 'runs' : mainTab}
             onChange={setMainTab}
-            options={[{ value: 'runs', label: 'Runs' }, { value: 'sweep', label: 'Sweep plot' }]}
+            options={[{ value: 'runs', label: 'Runs' }, { value: 'sweep', label: 'Sweep plot', disabled: hasNoRuns }]}
           />
         )}
 
@@ -273,22 +285,26 @@ function RunsTableBody() {
               </Button>
               <Button
                 size="sm"
-                variant={compareSelection.length >= 2 ? 'primary' : 'secondary'}
-                onClick={() => { rememberScroll(); openCompare(); }}
+                onClick={() => {
+                  rememberScroll();
+                  // Back from Compare lands on the first checked run instead of the page body.
+                  if (compareSelection[0]) rememberOpenedRun(compareSelection[0]);
+                  openCompare();
+                }}
                 disabled={compareSelection.length < 2}
                 title={compareSelection.length < 2 ? 'Check 2 or more runs to compare' : 'Compare the checked runs'}
               >
-                Compare{compareSelection.length > 0 ? ` (${compareSelection.length})` : ''}
+                Compare{compareSelection.length > 0 ? ` (${compareSelection.length}${hiddenSelected > 0 ? `, ${hiddenSelected} hidden` : ''})` : ''}
               </Button>
             </>
           )}
-          <RunButton experiment={experiment} projectRoot={projectRoot} pointCount={pointCount} />
+          {!hasNoRuns && <RunButton experiment={experiment} projectRoot={projectRoot} pointCount={pointCount} />}
         </div>
       </div>
 
       <RunFeedback />
 
-      {mainTab === 'sweep' ? (
+      {mainTab === 'sweep' && !hasNoRuns ? (
         <div style={{ flex: 1, minHeight: 0, overflow: 'auto' }}>
           <SweepPlot />
         </div>
@@ -326,7 +342,7 @@ function RunsTableBody() {
                     data-sorted={sortKey === column.key}
                     onClick={() => toggleSort(column.key)}
                   >
-                    <span className="nuclei-runs-header__label">{humanizeColumnLabel(column.label)}</span>
+                    <span className="nuclei-runs-header__label">{columnDisplayLabel(column)}</span>
                     {sortKey === column.key && (sortDirection === 'asc'
                       ? <ChevronUp size={ICON_SIZE.xs} strokeWidth={ICON_STROKE} style={{ flexShrink: 0 }} />
                       : <ChevronDown size={ICON_SIZE.xs} strokeWidth={ICON_STROKE} style={{ flexShrink: 0 }} />)}
@@ -336,16 +352,20 @@ function RunsTableBody() {
             </div>
 
             {rows.length === 0 ? (
-              <div style={{ padding: 24, color: colors.textDim, fontSize: 12, fontFamily: TYPOGRAPHY.fontSans }}>
-                {allRuns.length === 0
-                  ? (
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                      <span>{pointCount} point{pointCount === 1 ? '' : 's'} ready</span>
-                      <RunButton experiment={experiment} projectRoot={projectRoot} pointCount={pointCount} variant="ghost" label={hasSweep ? 'Run sweep' : 'Run'} />
-                    </div>
-                  )
-                  : 'No runs match this filter.'}
-              </div>
+              hasNoRuns ? (
+                <EmptyState
+                  className="nuclei-runs-empty"
+                  icon={<Play size={ICON_SIZE.lg} strokeWidth={ICON_STROKE} />}
+                  title={`${pointCount} point${pointCount === 1 ? '' : 's'} ready`}
+                  action={<RunButton experiment={experiment} projectRoot={projectRoot} pointCount={pointCount} label={hasSweep ? 'Run sweep' : 'Run'} />}
+                >
+                  {hasSweep ? `${sweepAxesSummary(sweep)}. Nothing has run yet.` : 'Nothing has run yet.'}
+                </EmptyState>
+              ) : (
+                <div style={{ padding: 24, color: colors.textDim, fontSize: 12, fontFamily: TYPOGRAPHY.fontSans }}>
+                  No runs match this filter.
+                </div>
+              )
             ) : (
               <div style={{ height: totalHeight, position: 'relative' }}>
                 {visibleRows.map((run, i) => (
