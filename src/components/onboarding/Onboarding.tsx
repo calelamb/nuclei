@@ -1,4 +1,4 @@
-import { useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
 import { useThemeStore } from '../../stores/themeStore';
 import { QuantumPlayground } from './QuantumPlayground';
 import { EASING, DURATION, prefersReducedMotion } from '../../lib/animations';
@@ -22,6 +22,9 @@ interface OnboardingProps {
 }
 
 
+/** Every onboarding step shares one width and wordmark offset so nothing jumps between them. */
+const DIALOG_MAX_WIDTH = 560;
+
 interface DialogFrameProps {
   label: string;
   maxWidth: number;
@@ -38,7 +41,16 @@ interface DialogFrameProps {
 function DialogFrame({ label, maxWidth, children, onEscape }: DialogFrameProps) {
   const colors = useThemeStore((s) => s.colors);
   const rootRef = useRef<HTMLDivElement>(null);
-  useFocusTrap(rootRef, { restoreFocus: false });
+  useFocusTrap(rootRef, { restoreFocus: false, autoFocus: false });
+
+  // Card screens open with the dialog itself focused so no card looks pre-selected; the first
+  // arrow key or Tab moves onto a card with a visible ring. Screens without cards focus their first control.
+  useEffect(() => {
+    const root = rootRef.current;
+    if (!root) return;
+    if (root.querySelector('.nuclei-choice-card')) { root.focus({ preventScroll: true }); return; }
+    root.querySelector<HTMLElement>('button')?.focus({ preventScroll: true });
+  }, []);
 
   const handleKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
     if (e.key === 'Escape' && onEscape) {
@@ -47,12 +59,20 @@ function DialogFrame({ label, maxWidth, children, onEscape }: DialogFrameProps) 
       onEscape();
       return;
     }
+    if (e.key === 'Tab' && e.target === rootRef.current) {
+      // Focus rests on the dialog itself; Tab enters the cards, Shift+Tab wraps to the last one.
+      const all = Array.from(rootRef.current?.querySelectorAll<HTMLElement>('button, [href], input, [tabindex="0"]') ?? []);
+      const next = e.shiftKey ? all[all.length - 1] : all[0];
+      if (next) { e.preventDefault(); next.focus(); }
+      return;
+    }
     const step = e.key === 'ArrowDown' || e.key === 'ArrowRight' ? 1 : e.key === 'ArrowUp' || e.key === 'ArrowLeft' ? -1 : 0;
     if (step === 0) return;
     const cards = Array.from(rootRef.current?.querySelectorAll<HTMLElement>('.nuclei-choice-card') ?? []);
+    if (cards.length === 0) return;
     const at = cards.indexOf(document.activeElement as HTMLElement);
-    if (at < 0 || cards.length === 0) return;
     e.preventDefault();
+    if (at < 0) { cards[step > 0 ? 0 : cards.length - 1].focus(); return; }
     cards[(at + step + cards.length) % cards.length].focus();
   };
 
@@ -67,8 +87,8 @@ function DialogFrame({ label, maxWidth, children, onEscape }: DialogFrameProps) 
       style={{
         position: 'fixed', inset: 0, zIndex: 4000,
         background: `linear-gradient(180deg, ${colors.bg} 0%, ${colors.bgPanel} 100%)`,
-        display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
-        padding: 32, overflowY: 'auto',
+        display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'flex-start',
+        padding: 32, paddingTop: 'clamp(32px, 16vh, 160px)', overflowY: 'auto', outline: 'none',
       }}
     >
       <div style={{ maxWidth, width: '100%', textAlign: 'center' }}>{children}</div>
@@ -107,7 +127,7 @@ function ModeSelectScreen({ onSelectLearn, onSelectResearch }: {
   ];
 
   return (
-    <DialogFrame label="Welcome to Nuclei" maxWidth={560}>
+    <DialogFrame label="Welcome to Nuclei" maxWidth={DIALOG_MAX_WIDTH}>
       <>
         <div style={{
           color: colors.accentText, fontSize: 40, fontWeight: 700,
@@ -155,7 +175,7 @@ function WelcomeScreen({ onSelect, onBack }: { onSelect: (path: OnboardingPath) 
   ];
 
   return (
-    <DialogFrame label="Choose your experience level" maxWidth={520} onEscape={onBack}>
+    <DialogFrame label="Choose your experience level" maxWidth={DIALOG_MAX_WIDTH} onEscape={onBack}>
       <>
         {/* Logo */}
         <div style={{
@@ -217,10 +237,10 @@ function ReturningUserScreen({ onContinue, onStartFresh, lastFile, daysSince }: 
     : 'Welcome back!';
 
   return (
-    <DialogFrame label="Welcome back" maxWidth={420} onEscape={onContinue}>
+    <DialogFrame label="Welcome back" maxWidth={DIALOG_MAX_WIDTH} onEscape={onContinue}>
       <>
         <div style={{
-          color: colors.accentText, fontSize: 32, fontWeight: 700,
+          color: colors.accentText, fontSize: 40, fontWeight: 700,
           fontFamily: TYPOGRAPHY.fontSans,
           letterSpacing: -1,
           marginBottom: 12,
