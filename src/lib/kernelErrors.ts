@@ -107,3 +107,17 @@ export function kernelNotConnectedMessage(options: { isWeb?: boolean } = {}): st
 export function kernelWaitingLabel(isWeb: boolean = isWebBuild()): string {
   return isWeb ? 'Waiting for Python…' : 'Waiting for the kernel…';
 }
+
+/** The one sentence for an action that needs the desktop app's native bridge. */
+export const DESKTOP_ONLY_MESSAGE = 'This runs in the desktop app. Download Nuclei to use it.';
+
+/**
+ * Text for an error from a desktop-only command. A missing Tauri bridge
+ * (`reading 'invoke'` / `'transformCallback'`) means the browser build, so say
+ * so instead of leaking the raw JavaScript message.
+ */
+export function describeDesktopCommandError(error: unknown): string {
+  const raw = error instanceof Error ? error.message : String(error);
+  if (/reading '(?:invoke|transformCallback)'|__TAURI/i.test(raw)) return DESKTOP_ONLY_MESSAGE;
+  return raw;
+}

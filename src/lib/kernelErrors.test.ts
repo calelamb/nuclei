@@ -80,3 +80,12 @@ describe('shared kernel vocabulary (research-r-02)', () => {
     expect(kernelWaitingLabel(false)).toBe('Waiting for the kernel…');
   });
 });
+
+describe('describeDesktopCommandError', () => {
+  it('maps a missing Tauri bridge to the desktop-only sentence and passes other errors through', async () => {
+    const { describeDesktopCommandError, DESKTOP_ONLY_MESSAGE } = await import('./kernelErrors');
+    expect(describeDesktopCommandError(new TypeError("Cannot read properties of undefined (reading 'invoke')"))).toBe(DESKTOP_ONLY_MESSAGE);
+    expect(describeDesktopCommandError("Cannot read properties of undefined (reading 'transformCallback')")).toBe(DESKTOP_ONLY_MESSAGE);
+    expect(describeDesktopCommandError(new Error('disk full'))).toBe('disk full');
+  });
+});

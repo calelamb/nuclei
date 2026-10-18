@@ -13,6 +13,8 @@ import { Button, IconButton, SecretField, SegmentedControl, Select, Switch, Text
 import { WorkspaceSection, HelpSection } from './SettingsWorkspaceHelp';
 import { Section, SettingRow, RowLabelContext } from './SettingsPrimitives';
 import { onSettingsFocusRequest, takeSettingsFocusRequest } from './settingsFocus';
+import { isWebBuild } from '../../platform/buildTarget';
+import { kernelEngineName } from '../../lib/kernelErrors';
 import { validateApiKey } from '../../lib/apiKey';
 import { API_KEY_PRIVACY_NOTE } from '../../config/apiKeyCopy';
 
@@ -171,6 +173,13 @@ function ApiKeyInput() {
 
 const FOCUS_SETTLE_MS = 400;
 
+const KERNEL_FRAMEWORK_OPTIONS: ReadonlyArray<{ value: 'qiskit' | 'cirq' | 'cuda-q' | 'qsharp'; label: string; webSupported: boolean }> = [
+  { value: 'qiskit', label: 'Qiskit', webSupported: true },
+  { value: 'cirq', label: 'Cirq', webSupported: true },
+  { value: 'cuda-q', label: 'CUDA-Q', webSupported: false },
+  { value: 'qsharp', label: 'Q# (QDK)', webSupported: false },
+];
+
 export function SettingsPanel() {
   const colors = useThemeStore((s) => s.colors);
   const themePreference = useThemeStore((s) => s.preference);
@@ -190,6 +199,10 @@ export function SettingsPanel() {
   const updateGeneral = useSettingsStore((s) => s.updateGeneral);
   const updateAgentHardware = useSettingsStore((s) => s.updateAgentHardware);
   const resetAll = useSettingsStore((s) => s.resetAll);
+  const isWeb = isWebBuild();
+  // Paid-hardware autonomy is a researcher's choice, and the browser build has no hardware to spend on.
+  const showHardwareAutonomy = !isWeb && (workspaceMode === 'research' || uiMode === 'advanced');
+  const frameworkOptions = KERNEL_FRAMEWORK_OPTIONS.filter((o) => !isWeb || o.webSupported);
   const setSimShots = useSimulationStore((s) => s.setShots);
   const settingsTarget = useNavigationStore((s) => s.settingsTarget);
   const clearSettingsTarget = useNavigationStore((s) => s.clearSettingsTarget);
@@ -356,7 +369,7 @@ export function SettingsPanel() {
         </Section>
 
         {/* ── Agent Hardware Autonomy ── */}
-        <Section title="Agent hardware autonomy">
+        {showHardwareAutonomy && <Section title="Agent hardware autonomy">
           <div style={{
             marginBottom: 8, padding: '8px 10px', borderRadius: 4,
             background: `${colors.error}12`, border: `1px solid ${colors.error}40`,
@@ -380,21 +393,16 @@ export function SettingsPanel() {
             <CurrencyInput value={agentHardware.maxSpend}
               onChange={(v) => updateAgentHardware({ maxSpend: v })} />
           </SettingRow>
-        </Section>
+        </Section>}
 
         {/* ── Frameworks ── */}
         <FrameworksSection />
 
         {/* ── Kernel ── */}
-        <Section title="Kernel">
+        <Section title={kernelEngineName(isWeb)}>
           <SettingRow label="Default framework">
             <SettingSelect value={kernel.defaultFramework}
-              options={[
-                { value: 'qiskit', label: 'Qiskit' },
-                { value: 'cirq', label: 'Cirq' },
-                { value: 'cuda-q', label: 'CUDA-Q' },
-                { value: 'qsharp', label: 'Q# (QDK)' },
-              ]}
+              options={frameworkOptions}
               onChange={(v) => updateKernel({ defaultFramework: v })} />
           </SettingRow>
           <SettingRow label="Default shots">
@@ -451,9 +459,11 @@ function FrameworksSection() {
   return (
     <Section title="Environment" defaultOpen={false}>
       <EnvironmentPanel />
-      <Button variant="ghost" size="sm" className="nuclei-framework-btn" style={{ marginTop: 12 }} onClick={() => openModal(false)}>
-        Open the setup wizard…
-      </Button>
+      {!isWebBuild() && (
+        <Button variant="ghost" size="sm" className="nuclei-framework-btn" style={{ marginTop: 12 }} onClick={() => openModal(false)}>
+          Open the setup wizard…
+        </Button>
+      )}
     </Section>
   );
 }

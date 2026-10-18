@@ -27,6 +27,7 @@ describe('Transpiler Explorer platform honesty', () => {
     expect(screen.getAllByRole('button', { name: /Download Nuclei/ })).toHaveLength(1);
     expect(screen.queryByRole('button', { name: /Transpile$/ })).toBeNull();
     expect(document.body.textContent).not.toMatch(/Start it/);
+    expect(document.body.textContent).not.toMatch(/kernel/i);
   });
 
   it('on desktop, Transpile is gated with a waiting label while the kernel starts (research-r-02)', () => {

@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { isWebBuild } from '../platform/buildTarget';
 
 export interface FrameworkInfo {
   id: string;
@@ -90,7 +91,11 @@ export const useFrameworksStore = create<FrameworksState>((set) => ({
   setStatus: (status) => set({ status }),
   setLoading: (loading) => set({ loading }),
   setInstalling: (installing) => set({ installing }),
-  openModal: (firstRun = false) => set({ modalOpen: true, modalFirstRun: firstRun }),
+  // The installer drives the desktop's Python environment; the browser build has none to manage.
+  openModal: (firstRun = false) => {
+    if (isWebBuild()) return;
+    set({ modalOpen: true, modalFirstRun: firstRun });
+  },
   closeModal: () => set({ modalOpen: false }),
   appendEvent: (event) =>
     set((s) => ({

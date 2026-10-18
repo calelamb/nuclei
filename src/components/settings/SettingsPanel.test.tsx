@@ -9,7 +9,11 @@ import { useWorkspaceStore } from '../../stores/workspaceStore';
 import { useHelpOverlayStore } from '../../stores/helpOverlayStore';
 import { useWhatsNewStore } from '../../stores/whatsNewStore';
 import { useUIModeStore } from '../../stores/uiModeStore';
+import { useFrameworksStore } from '../../stores/frameworksStore';
 import { requestSettingsFocus, takeSettingsFocusRequest } from './settingsFocus';
+
+const platform = vi.hoisted(() => ({ web: false }));
+vi.mock('../../platform/buildTarget', () => ({ isWebBuild: () => platform.web }));
 
 beforeAll(() => {
   window.matchMedia = ((query: string) => ({
@@ -22,6 +26,8 @@ beforeAll(() => {
 });
 
 beforeEach(() => {
+  platform.web = false;
+  useUIModeStore.setState({ mode: 'intermediate' });
   useThemeStore.getState().setMode('dark');
   useWorkspaceStore.setState({ mode: 'research' });
   useNavigationStore.setState({ settingsTarget: null, activeView: 'settings' });
@@ -163,5 +169,45 @@ describe('SettingsPanel', () => {
     useWorkspaceStore.setState({ mode: 'learn' });
     const { container } = render(<SettingsPanel />);
     expect(container.textContent).toContain('How much of the IDE is shown');
+  });
+});
+
+describe('SettingsPanel platform and audience honesty (shell-r6-01, shell-r6-04)', () => {
+  it('web: no setup wizard button, nothing opens the frameworks modal, and no Kernel section', () => {
+    platform.web = true;
+    render(<SettingsPanel />);
+    expect(screen.queryByRole('button', { name: /setup wizard/i })).toBeNull();
+    expect(screen.queryByText('Kernel')).toBeNull();
+    expect(screen.getByText('Python')).toBeTruthy();
+    useFrameworksStore.getState().openModal(false);
+    expect(useFrameworksStore.getState().modalOpen).toBe(false);
+  });
+
+  it('web: the default framework list offers only what the browser can run', () => {
+    platform.web = true;
+    render(<SettingsPanel />);
+    const select = screen.getByLabelText('Default framework') as HTMLSelectElement;
+    expect(Array.from(select.options).map((o) => o.value)).toEqual(['qiskit', 'cirq']);
+  });
+
+  it('desktop keeps the setup wizard button and the Kernel section', () => {
+    render(<SettingsPanel />);
+    expect(screen.getByRole('button', { name: /setup wizard/i })).toBeTruthy();
+    expect(screen.getByText('Kernel')).toBeTruthy();
+  });
+
+  it('paid-hardware autonomy is hidden for beginners in Learn and on the web, shown in Research', () => {
+    useWorkspaceStore.setState({ mode: 'learn' });
+    useUIModeStore.setState({ mode: 'beginner' });
+    const { unmount } = render(<SettingsPanel />);
+    expect(screen.queryByText('Agent hardware autonomy')).toBeNull();
+    unmount();
+    useWorkspaceStore.setState({ mode: 'research' });
+    const again = render(<SettingsPanel />);
+    expect(screen.getByText('Agent hardware autonomy')).toBeTruthy();
+    again.unmount();
+    platform.web = true;
+    render(<SettingsPanel />);
+    expect(screen.queryByText('Agent hardware autonomy')).toBeNull();
   });
 });
