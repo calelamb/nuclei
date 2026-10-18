@@ -15,6 +15,7 @@ import {
   type ConjectureResponse,
   type ConjectureSchemaInfo,
   type JsonSchema,
+  type PredicateOp,
 } from '../../types/conjecture';
 
 export const PROPOSE_TOOL_NAME = 'propose_conjectures';
@@ -27,7 +28,14 @@ function normalizeQuantity(raw: unknown): ConjectureQuantityInfo | null {
   if (!isObject(raw)) return null;
   const key = [raw.name, raw.key, raw.quantity].find((k) => typeof k === 'string' && k) as string | undefined;
   if (!key) return null;
-  return { key, description: typeof raw.description === 'string' ? raw.description : '' };
+  const ops = Array.isArray(raw.ops) ? raw.ops.filter((op): op is PredicateOp => (PREDICATE_OPS as readonly unknown[]).includes(op)) : [];
+  const valueType = raw.value_type === 'number' || raw.value_type === 'string' ? raw.value_type : null;
+  return {
+    key,
+    description: typeof raw.description === 'string' ? raw.description : '',
+    ...(ops.length > 0 ? { ops } : {}),
+    ...(valueType ? { value_type: valueType } : {}),
+  };
 }
 
 /** Normalise a schema reply; null when it lacks the pieces a proposer needs. */
@@ -103,8 +111,35 @@ export interface ProposeTool {
   input_schema: JsonSchema;
 }
 
+/** `prediction` as the kernel accepts it: each quantity with only its own operators and value type. */
+function predictionSchema(quantities: readonly ConjectureQuantityInfo[]): JsonSchema {
+  const valueSchema = (q: ConjectureQuantityInfo): JsonSchema =>
+    q.value_type ? { type: q.value_type } : { type: ['number', 'string'] };
+  if (!quantities.some((q) => q.ops || q.value_type)) {
+    return {
+      type: 'object',
+      properties: {
+        quantity: { type: 'string', enum: quantities.map((q) => q.key) },
+        op: { type: 'string', enum: [...PREDICATE_OPS] },
+        value: { type: ['number', 'string'] },
+      },
+      required: ['quantity', 'op', 'value'],
+    };
+  }
+  return {
+    oneOf: quantities.map((q) => ({
+      type: 'object',
+      properties: {
+        quantity: { type: 'string', enum: [q.key] },
+        op: { type: 'string', enum: q.ops ?? [...PREDICATE_OPS] },
+        value: valueSchema(q),
+      },
+      required: ['quantity', 'op', 'value'],
+    })),
+  };
+}
+
 export function buildConjectureItemSchema(schema: ConjectureSchemaInfo, defs: Record<string, unknown> = {}): JsonSchema {
-  const quantityKeys = schema.quantities.map((q) => q.key);
   return {
     type: 'object',
     properties: {
@@ -115,15 +150,7 @@ export function buildConjectureItemSchema(schema: ConjectureSchemaInfo, defs: Re
         description: 'One falsifiable sentence naming the structure, the quantity and the direction of the claim.',
       },
       feature_predicate: hoist(schema.predicate, 'predicate__', defs),
-      prediction: {
-        type: 'object',
-        properties: {
-          quantity: { type: 'string', enum: quantityKeys },
-          op: { type: 'string', enum: [...PREDICATE_OPS] },
-          value: { type: ['number', 'string'] },
-        },
-        required: ['quantity', 'op', 'value'],
-      },
+      prediction: predictionSchema(schema.quantities),
       test_family: hoist(schema.families, 'families__', defs),
       n_range: {
         type: 'array',
@@ -146,7 +173,13 @@ export function buildProposeTool(schema: ConjectureSchemaInfo): ProposeTool {
   const featureLines = schema.features
     .map((f) => `${f.key} (${f.type}): ${f.description}${f.values ? ` Values: ${f.values.join(', ')}.` : ''}`)
     .join('\n');
-  const quantityLines = schema.quantities.map((q) => (q.description ? `${q.key}: ${q.description}` : q.key)).join('\n');
+  const quantityLines = schema.quantities
+    .map((q) => {
+      const detail = [q.ops ? `ops ${q.ops.join(' ')}` : null, q.value_type ?? null].filter(Boolean).join(', ');
+      const head = detail ? `${q.key} (${detail})` : q.key;
+      return q.description ? `${head}: ${q.description}` : head;
+    })
+    .join('\n');
   return {
     name: PROPOSE_TOOL_NAME,
     description: [

@@ -63,6 +63,10 @@ export interface ConjectureFeatureInfo {
 export interface ConjectureQuantityInfo {
   key: string;
   description: string;
+  /** The comparison operators the kernel accepts for this quantity (absent: the schema did not say). */
+  ops?: PredicateOp[];
+  /** The kind of value the kernel compares the quantity with. */
+  value_type?: 'number' | 'string';
 }
 
 export interface ConjectureLimits {

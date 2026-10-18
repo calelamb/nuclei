@@ -71,14 +71,20 @@ export function validateConjecture(
   if (!isObject(prediction)) {
     issues.push({ path: 'prediction', message: 'must be an object' });
   } else {
-    if (typeof prediction.quantity !== 'string' || !quantityKeys.includes(prediction.quantity)) {
+    const quantity = schema.quantities.find((q) => q.key === prediction.quantity);
+    if (typeof prediction.quantity !== 'string' || !quantity) {
       issues.push({ path: 'prediction.quantity', message: `must be one of ${quantityKeys.join(', ')}` });
     }
-    if (typeof prediction.op !== 'string' || !(PREDICATE_OPS as readonly string[]).includes(prediction.op)) {
-      issues.push({ path: 'prediction.op', message: `must be one of ${PREDICATE_OPS.join(', ')}` });
+    // The kernel rejects an operator a quantity does not support, so check against the quantity's own list.
+    const allowedOps: readonly string[] = quantity?.ops ?? PREDICATE_OPS;
+    if (typeof prediction.op !== 'string' || !allowedOps.includes(prediction.op)) {
+      const scope = quantity?.ops ? ` for ${quantity.key}` : '';
+      issues.push({ path: 'prediction.op', message: `must be one of ${allowedOps.join(', ')}${scope}` });
     }
     if (typeof prediction.value !== 'number' && typeof prediction.value !== 'string') {
       issues.push({ path: 'prediction.value', message: 'must be a number or a string' });
+    } else if (quantity?.value_type && typeof prediction.value !== quantity.value_type) {
+      issues.push({ path: 'prediction.value', message: `must be a ${quantity.value_type} for ${quantity.key}` });
     }
   }
   issues.push(...validateAgainstSchema(schema.families, raw.test_family, 'test_family'));
