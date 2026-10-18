@@ -9,7 +9,9 @@ import { optimisticFitness, shouldPromote } from './cascade';
 import { isCancelled, syntheticFailure } from './kernelEval';
 import { resolveProposal, type LlmResult } from './llmMutator';
 import type { PlanItem } from './planning';
+import { auditIfDue } from './auditStep';
 import { buildUserPrompt, summarizeRejections, type PromptCandidate } from './prompt';
+import { buildRedQueenUserPrompt } from './redQueenPrompt';
 import { primaryObjective, type RunContext } from './runContext';
 import type { ProposeInput } from './llmMutator';
 
@@ -17,10 +19,11 @@ function promptView(c: CandidateRecord): PromptCandidate {
   return { id: c.id, program: c.program, evaluation: c.evaluation };
 }
 
+/** Best archived fitness; in Red Queen mode that is the adversarial fitness (see redQueen.ts). */
 export function bestFitness(ctx: RunContext): number | null {
   let best: number | null = null;
   for (const c of ctx.candidates.values()) {
-    const f = c.in_archive ? c.evaluation?.fitness : null;
+    const f = !c.in_archive ? null : ctx.rq ? c.adversarial_fitness ?? 0 : c.evaluation?.fitness;
     if (typeof f === 'number' && (best === null || f > best)) best = f;
   }
   return best;
@@ -34,7 +37,7 @@ export function buildProposeInput(ctx: RunContext, item: PlanItem, generation: n
     .filter((c): c is CandidateRecord => c !== undefined)
     .map(promptView);
   const { spec } = ctx;
-  const user = buildUserPrompt({
+  const common = {
     parent: promptView(parent),
     inspirations,
     rejections: summarizeRejections(ctx.rejections.slice(-50)),
@@ -43,7 +46,8 @@ export function buildProposeInput(ctx: RunContext, item: PlanItem, generation: n
     island: item.island,
     islands: spec.search.islands,
     bestFitness: bestFitness(ctx),
-  });
+  };
+  const user = ctx.rq ? buildRedQueenUserPrompt({ ...common, findings: ctx.rq.findings }) : buildUserPrompt(common);
   return { system: ctx.system, user, tier: item.tier, depth: item.depth, thinking: item.thinking };
 }
 
@@ -259,8 +263,9 @@ export async function runProposal(
     ctx.saveCandidate(pending);
     const done = await evaluateCandidate(ctx, pending, item.threshold);
     ctx.saveCandidate(done);
+    const audited = await auditIfDue(ctx, done);
     ctx.activity(item.candidateId, 'idle');
-    return done;
+    return audited;
   } catch (e) {
     ctx.notice(`Proposal ${item.candidateId} failed: ${e instanceof Error ? e.message : String(e)}`);
     return null;

@@ -1,3 +1,5 @@
+import type { MutatorKind } from '../../types/discovery';
+
 /** Small number formatters shared by the Discovery Engine UI. */
 
 /** 1234 → "1.2k", 1_500_000 → "1.5M"; small counts stay exact. */
@@ -27,7 +29,8 @@ export const EVALUATOR_TITLE = {
   trainability_frontier: 'Trainability frontier',
 } as const;
 
-export function mutatorLabel(kind: 'llm' | 'ast' | 'hybrid', breadth: string, depth: string): string {
+export function mutatorLabel(kind: MutatorKind, breadth: string, depth: string): string {
   if (kind === 'ast') return 'AST mutator';
+  if (kind === 'red_queen') return 'Red Queen';
   return `${kind === 'llm' ? 'LLM' : 'Hybrid'} · ${breadth}/${depth}`;
 }

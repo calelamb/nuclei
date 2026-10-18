@@ -13,7 +13,10 @@ import {
   type DiscoveryEvaluatorKind,
   type DiscoverySpec,
   type ModelTier,
+  type MutatorKind,
+  type RedQueenConfig,
 } from '../../types/discovery';
+import { DEFAULT_RED_QUEEN } from './redQueen';
 
 export type DiscoveryTemplateId =
   | 'qec-repetition-schedule'
@@ -234,7 +237,9 @@ export interface ScaffoldBudgets {
 }
 
 export interface ScaffoldMutator {
-  kind?: 'llm' | 'ast' | 'hybrid';
+  kind?: MutatorKind;
+  /** Written only for `red_queen`. */
+  red_queen?: Partial<RedQueenConfig>;
   llm_share?: number;
   breadth?: ModelTier;
   depth?: ModelTier;
@@ -300,6 +305,7 @@ export function scaffoldDiscovery(
       },
       batch_mode: mutator.batch_mode ?? false,
     },
+    ...(mutator.kind === 'red_queen' ? { red_queen: { ...DEFAULT_RED_QUEEN, ...mutator.red_queen } } : {}),
     budget: {
       max_evaluations: budgets.max_evaluations ?? 200,
       max_llm_calls: budgets.max_llm_calls ?? 160,

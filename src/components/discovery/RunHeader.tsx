@@ -2,6 +2,8 @@ import { Pause, Play, RotateCcw, Square } from 'lucide-react';
 import { LabButton, LabMeter, formatDuration } from '../lab';
 import { useDiscoveryStore, type RunView } from '../../stores/discoveryStore';
 import { formatCount } from '../../services/discovery/format';
+import { redQueenConfig, summarizeAudits } from '../../services/discovery/redQueen';
+import { candidateList } from '../../services/discovery/runView';
 import { EvaluatorChip, MutatorChip, RunStatusPill } from './pills';
 
 const RESUMABLE = new Set(['stale', 'paused', 'stopped', 'failed']);
@@ -17,12 +19,14 @@ export function RunHeader({ view }: { view: RunView }) {
   const startRun = useDiscoveryStore((s) => s.startRun);
   const { spec, usage } = run;
   const mutator = spec.mutator;
+  const redQueen = mutator.kind === 'red_queen';
+  const audits = redQueen ? summarizeAudits(candidateList(view)) : null;
   const resumable = !live && RESUMABLE.has(run.status) && run.stop_reason !== 'seed_rejected';
   const blocked = anyLive && !live;
   const blockedTitle = blocked ? 'Another discovery run is active. Stop it or wait for it to finish.' : undefined;
 
   return (
-    <section aria-label="Run header" className="lab-card" style={{ padding: 'var(--space-3) var(--space-4)', display: 'grid', gap: 'var(--space-3)' }}>
+    <section aria-label="Run header" data-mode={mutator.kind} className="lab-card" style={{ padding: 'var(--space-3) var(--space-4)', display: 'grid', gap: 'var(--space-3)' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', flexWrap: 'wrap' }}>
         <h2 style={{ margin: 0, fontSize: 15, fontWeight: 600 }}>{spec.name}</h2>
         <EvaluatorChip kind={spec.evaluator.kind} />
@@ -53,6 +57,7 @@ export function RunHeader({ view }: { view: RunView }) {
       <div className="lab-grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))' }}>
         <LabMeter label="Evaluations" value={usage.evaluations} max={spec.budget.max_evaluations} format={formatCount} />
         <LabMeter label="LLM calls" value={usage.llm_calls} max={spec.budget.max_llm_calls} format={formatCount} />
+        {audits && <LabMeter label="Audits" value={audits.run + audits.pending + audits.errors} max={redQueenConfig(spec).max_audits} format={formatCount} />}
         <LabMeter label="Wall time" value={usage.wall_ms} max={spec.budget.max_wall_minutes * 60_000} format={formatDuration} />
       </div>
     </section>

@@ -8,10 +8,14 @@ import type {
   DiscoveryEvaluation,
   DiscoveryEvaluatorInfo,
   DiscoverySpec,
+  RedQueenConfig,
   RunRecord,
   RunUsage,
 } from '../../types/discovery';
+import type { AuditClient } from './kernelAudit';
 import type { KernelEvaluator } from './kernelEval';
+import type { AuditPolicyState } from './redQueen';
+import type { AuditFinding } from './redQueenPrompt';
 import type { DiscoveryLlm } from './llmMutator';
 import type { DiscoveryFs, JoinFn, Persister } from './records';
 import type { SystemBlock } from './prompt';
@@ -80,12 +84,24 @@ export function createLimiter(limit: number): Limiter {
   };
 }
 
+/** Red Queen bookkeeping: audit policy, budget used and what earlier audits found. */
+export interface RedQueenState {
+  config: RedQueenConfig;
+  policy: AuditPolicyState;
+  /** Audits sent so far (answered or pending), against `config.max_audits`. */
+  started: number;
+  findings: AuditFinding[];
+}
+
 export interface RunContext {
   spec: DiscoverySpec;
   runId: string;
   evaluator: DiscoveryEvaluatorInfo;
   deps: DiscoveryDeps;
   kernel: KernelEvaluator;
+  audits: AuditClient;
+  /** Non-null only in Red Queen mode. Replaced, never mutated in place. */
+  rq: RedQueenState | null;
   control: RunControl;
   system: SystemBlock[];
   candidates: Map<string, CandidateRecord>;

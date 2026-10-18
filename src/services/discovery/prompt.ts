@@ -162,7 +162,7 @@ export function summarizeRejections(
   return [...counts.values()].sort((a, b) => b.count - a.count || a.guardrail.localeCompare(b.guardrail)).slice(0, limit);
 }
 
-function formatNumber(value: number): string {
+export function formatNumber(value: number): string {
   if (!Number.isFinite(value)) return String(value);
   const abs = Math.abs(value);
   return abs !== 0 && (abs < 1e-3 || abs >= 1e5) ? value.toExponential(3) : String(Number(value.toPrecision(5)));
@@ -188,7 +188,7 @@ export function summarizeEvaluation(evaluation: DiscoveryEvaluation | null): str
   return lines.map((l) => `- ${l}`).join('\n');
 }
 
-function truncateProgram(program: string, maxLines: number): { text: string; note: string } {
+export function truncateProgram(program: string, maxLines: number): { text: string; note: string } {
   const lines = program.replace(/\n$/, '').split('\n');
   if (lines.length <= maxLines) return { text: lines.join('\n'), note: '' };
   return {
@@ -197,7 +197,7 @@ function truncateProgram(program: string, maxLines: number): { text: string; not
   };
 }
 
-function fence(code: string): string {
+export function fence(code: string): string {
   return ['```python', code, '```'].join('\n');
 }
 

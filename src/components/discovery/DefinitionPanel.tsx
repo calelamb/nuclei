@@ -1,7 +1,7 @@
 import { Play } from 'lucide-react';
 import { LabButton, LabCallout, LabCard, LabEmptyState, LabPill } from '../lab';
 import { runTimeLabel } from '../../services/discovery/format';
-import { FRONTIER_CONTEXT, FRONTIER_HONESTY, FRONTIER_QUESTION } from '../../services/discovery/honesty';
+import { FRONTIER_CONTEXT, FRONTIER_HONESTY, FRONTIER_QUESTION, RED_QUEEN_EXPLAINER } from '../../services/discovery/honesty';
 import { useDiracStore } from '../../stores/diracStore';
 import { useDiscoveryStore, type DiscoveryDefinition } from '../../stores/discoveryStore';
 import { Facts } from './drawerSections';
@@ -18,6 +18,7 @@ export function DefinitionPanel({ definition }: { definition: DiscoveryDefinitio
   const hasKey = useDiracStore((s) => !!s.apiKey);
   const frontier = spec.evaluator.kind === 'trainability_frontier';
   const usesLlm = spec.mutator.kind !== 'ast';
+  const needsKey = spec.mutator.kind === 'llm' || spec.mutator.kind === 'red_queen';
   const { budget, search, mutator } = spec;
 
   return (
@@ -26,7 +27,7 @@ export function DefinitionPanel({ definition }: { definition: DiscoveryDefinitio
         title={spec.name}
         subtitle={spec.description || definition.fileName}
         actions={
-          <LabButton variant="primary" size="md" icon={Play} disabled={anyLive || (spec.mutator.kind === 'llm' && !hasKey)} title={anyLive ? 'A discovery run is already active' : undefined} onClick={() => void starting(definition.fileName)}>
+          <LabButton variant="primary" size="md" icon={Play} disabled={anyLive || (needsKey && !hasKey)} title={anyLive ? 'A discovery run is already active' : undefined} onClick={() => void starting(definition.fileName)}>
             Start run
           </LabButton>
         }
@@ -42,9 +43,12 @@ export function DefinitionPanel({ definition }: { definition: DiscoveryDefinitio
               {FRONTIER_CONTEXT} {FRONTIER_HONESTY}
             </LabCallout>
           )}
+          {spec.mutator.kind === 'red_queen' && (
+            <LabCallout tone="danger" title="Red Queen mode">{RED_QUEEN_EXPLAINER}</LabCallout>
+          )}
           {usesLlm && !hasKey && (
             <LabCallout tone="warning" title="No API key set">
-              {spec.mutator.kind === 'llm' ? 'An LLM-only run cannot start without an Anthropic API key. Add one in Settings, or switch the mutator to hybrid or AST.' : 'Hybrid runs will fall back to the AST mutator until an Anthropic API key is added in Settings.'}
+              {needsKey ? 'An LLM-only or Red Queen run cannot start without an Anthropic API key. Add one in Settings, or switch the mutator to hybrid or AST.' : 'Hybrid runs will fall back to the AST mutator until an Anthropic API key is added in Settings.'}
             </LabCallout>
           )}
           {evaluatorsError && <LabCallout tone="warning" title="The kernel's evaluators could not be listed">{evaluatorsError}</LabCallout>}

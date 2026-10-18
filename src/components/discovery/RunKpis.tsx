@@ -1,4 +1,4 @@
-import { Activity, Coins, Gauge, Percent, Share2, Trophy } from 'lucide-react';
+import { Activity, Coins, Gauge, Percent, Share2, ShieldAlert, Trophy } from 'lucide-react';
 import { LabKpi, LabKpiStrip, formatInterval, formatPct, formatSci } from '../lab';
 import type { DiscoveryKpis } from '../../stores/discoveryStore';
 import { formatCount, signed } from '../../services/discovery/format';
@@ -30,7 +30,7 @@ function EvaluationsTile({ kpis }: { kpis: DiscoveryKpis }) {
 }
 
 /** Best fitness, champion objective (with the confirmed value), evaluations, acceptance, improvement share, tokens. */
-export function RunKpis({ kpis }: { kpis: DiscoveryKpis }) {
+export function RunKpis({ kpis, redQueen = false }: { kpis: DiscoveryKpis; redQueen?: boolean }) {
   const objective = kpis.championObjective;
   const confirmed = kpis.confirmedObjective;
   const share = kpis.improvementShare;
@@ -69,6 +69,15 @@ export function RunKpis({ kpis }: { kpis: DiscoveryKpis }) {
       />
       <EvaluationsTile kpis={kpis} />
       <LabKpi icon={Percent} label="Acceptance rate" value={formatPct(kpis.acceptanceRate, 0)} detail="entered the archive" title="Share of evaluated candidates that entered the MAP-Elites archive." />
+      {redQueen ? (
+        <LabKpi
+          icon={ShieldAlert}
+          label="Exploits"
+          value={String(kpis.audits.exploits)}
+          detail={`${kpis.audits.run} audit${kpis.audits.run === 1 ? '' : 's'} · ${kpis.audits.consistent} consistent · ${kpis.audits.inconclusive} inconclusive`}
+          title="Programs the evaluator scored well but the independent audit rejected. Red Queen mode only."
+        />
+      ) : (
       <LabKpi
         icon={Share2}
         label="Improvements by mutator"
@@ -76,6 +85,7 @@ export function RunKpis({ kpis }: { kpis: DiscoveryKpis }) {
         detail={share ? `${kpis.improvements.llm} LLM · ${kpis.improvements.ast} AST` : 'no improvements yet'}
         title="Share of improving children produced by the LLM mutator versus the AST baseline."
       />
+      )}
       <LabKpi
         icon={Coins}
         label="Tokens"

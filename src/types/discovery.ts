@@ -114,6 +114,32 @@ export interface AstMutation {
   description: string;
 }
 
+/** Red Queen / independent audit (addendum §F): a stricter re-scoring of one artifact. */
+export type AuditVerdict = 'consistent' | 'exploit' | 'inconclusive';
+
+export interface AuditCheck {
+  id: string;
+  label: string;
+  status: GuardrailStatus;
+  detail: string | null;
+}
+
+export interface DiscoveryAudit {
+  verdict: AuditVerdict;
+  evaluator_fitness: number | null;
+  audit_fitness: number | null;
+  /** Evaluator fitness minus audit fitness; null when either is unknown. */
+  gap: number | null;
+  checks: AuditCheck[];
+  reasons: string[];
+  evaluator: { kind: DiscoveryEvaluatorKind; version: string; fingerprint: string };
+  audit_fingerprint: string;
+  seed: number;
+  isolation: DiscoveryIsolation;
+  timings_ms: { sandbox?: number; audit?: number; total: number };
+  notes: string | null;
+}
+
 export type DiscoveryRequest =
   | { type: 'discovery_evaluators' }
   | {
@@ -128,6 +154,18 @@ export type DiscoveryRequest =
     }
   | { type: 'discovery_cancel'; run_id: string; candidate_id?: string }
   | {
+      type: 'discovery_audit';
+      run_id: string;
+      candidate_id: string;
+      evaluator: { kind: DiscoveryEvaluatorKind; config: Record<string, unknown> };
+      program: string;
+      entry?: string;
+      seed: number;
+      /** The evaluator's own result for this program, which the audit re-checks. */
+      evaluation: DiscoveryEvaluation;
+    }
+  | { type: 'discovery_audit_cancel'; run_id: string; candidate_id?: string }
+  | {
       type: 'discovery_mutate';
       program: string;
       start_marker?: string;
@@ -141,6 +179,9 @@ export type DiscoveryResponse =
   | { type: 'discovery_evaluate_accepted'; run_id: string; candidate_id: string; queue_position: number }
   | { type: 'discovery_evaluation'; run_id: string; candidate_id: string; evaluation: DiscoveryEvaluation }
   | { type: 'discovery_cancelled'; run_id: string; candidate_id: string | null; cancelled: number }
+  | { type: 'discovery_audit_accepted'; run_id: string; candidate_id: string; queue_position: number }
+  | { type: 'discovery_audit_result'; run_id: string; candidate_id: string; audit: DiscoveryAudit }
+  | { type: 'discovery_audit_cancelled'; run_id: string; candidate_id: string | null; cancelled: number }
   | { type: 'discovery_mutations'; mutations: AstMutation[] };
 
 export const EVOLVE_START_MARKER = '# EVOLVE-BLOCK-START';
@@ -200,8 +241,23 @@ const modelsSchema = z.strictObject({
   depth_thinking: z.boolean().default(true),
 });
 
+export const MUTATOR_KINDS = ['llm', 'ast', 'hybrid', 'red_queen'] as const;
+export type MutatorKind = (typeof MUTATOR_KINDS)[number];
+
+export const AUDIT_EVERY_MODES = ['improvement', 'all', 'top_k'] as const;
+export type AuditEvery = (typeof AUDIT_EVERY_MODES)[number];
+
+/** Addendum §F: when and how often Red Queen mode audits a scored candidate. */
+const redQueenSchema = z.strictObject({
+  audit_every: z.enum(AUDIT_EVERY_MODES, { error: `red_queen.audit_every must be one of ${AUDIT_EVERY_MODES.join(', ')}` }).default('improvement'),
+  top_k: boundedInt('red_queen.top_k', 1, 100).default(5),
+  max_audits: boundedInt('red_queen.max_audits', 1, 5000).default(50),
+});
+
+export type RedQueenConfig = z.infer<typeof redQueenSchema>;
+
 const mutatorSchema = z.strictObject({
-  kind: z.enum(['llm', 'ast', 'hybrid']).default('hybrid'),
+  kind: z.enum(MUTATOR_KINDS).default('hybrid'),
   llm_share: unitInterval('mutator.llm_share').default(0.75),
   models: modelsSchema.prefault({}),
   batch_mode: z.boolean().default(false),
@@ -237,6 +293,8 @@ export const discoverySpecSchema = z
       })
       .prefault({}),
     mutator: mutatorSchema.prefault({}),
+    /** Optional; only read when `mutator.kind` is `red_queen` (defaults apply). */
+    red_queen: redQueenSchema.optional(),
     budget: budgetSchema.prefault({}),
     confirm: z.strictObject({ seeds: boundedInt('confirm.seeds', 0, 10).default(3) }).prefault({}),
     seed: z.number().int('seed must be a whole number').default(0),
@@ -385,6 +443,14 @@ export interface CandidateRecord {
   in_archive: boolean;
   region_warning: boolean;
   reevaluations: DiscoveryEvaluation[];
+  /** Independent audit of this candidate (Red Queen or a manual audit). */
+  audit?: DiscoveryAudit | null;
+  /** True from the moment an audit is sent until its result lands; resume re-sends it. */
+  audit_pending?: boolean;
+  /** Why the last audit attempt failed (transport or kernel error), if it did. */
+  audit_error?: string | null;
+  /** Red Queen fitness (the archive's fitness in that mode); see redQueen.ts. */
+  adversarial_fitness?: number | null;
 }
 
 export type RunStatus = 'running' | 'paused' | 'completed' | 'stopped' | 'failed' | 'stale';
@@ -480,19 +546,41 @@ export interface RunRecord {
   confirmation: RunConfirmation | null;
 }
 
-// ── Red Queen mode (later wave) ─────────────────────────────────────────
+// ── Red Queen mode ──────────────────────────────────────────────────────
 
 /**
- * An evaluator exploit found by the adversary in Red Queen mode (addendum
- * §F). The Guardrails tab already has a lane for them; a later wave fills it.
+ * An evaluator exploit: a candidate the evaluator scored well but the
+ * independent audit rejected (addendum §F). Derived from the candidate's
+ * audit; the fixture id doubles as the file name of its regression fixture.
  */
 export interface DiscoveryExploit {
+  /** Fixture id, `rq-<runId>-<candidateId>`. */
   id: string;
-  /** Candidate that triggered the exploit. */
   candidateId: string;
-  /** The guardrail or evaluator behavior that was bypassed. */
-  guardrail: string;
-  summary: string;
-  /** Whether the evaluator was patched to close the hole. */
-  patched: boolean;
+  title: string;
+  gap: number | null;
+  evaluatorFitness: number | null;
+  auditFitness: number | null;
+  /** Audit checks that failed (or warned), the evidence for the verdict. */
+  failedChecks: AuditCheck[];
+  reasons: string[];
+  audit: DiscoveryAudit;
+  discoveredBy: 'red_queen' | 'manual_audit';
 }
+
+/** The kernel fixture format of `kernel/tests/fixtures/exploits/*.json` (addendum §F). */
+export interface ExploitFixture {
+  id: string;
+  title: string;
+  evaluator: { kind: DiscoveryEvaluatorKind; config: Record<string, unknown> };
+  program: string;
+  entry: string;
+  seed: number;
+  stage: DiscoveryStage;
+  discovered_by: 'red_queen' | 'manual_audit';
+  expect: 'audit_exploit';
+  notes: string;
+}
+
+/** The persisted exploit: the fixture plus the audit that convicted it. */
+export type ExploitRecord = ExploitFixture & { audit: DiscoveryAudit };
