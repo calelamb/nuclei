@@ -43,8 +43,8 @@ describe('QEC workbench CSS tokens', () => {
     expect(qecStyles).not.toMatch(/letter-spacing: 0\.0[6-9]em/);
   });
 
-  it('keeps the action custom property and lets the shared primary Button style the Study create action', () => {
-    expect(qecStyles).toContain(`--qec-action: ${QEC_LIGHT_TOKENS.action.toLowerCase()}`);
+  it('carries no dead action custom properties and lets the shared primary Button style the Study create action', () => {
+    expect(qecStyles).not.toContain('--qec-action');
     expect(qecStyles).not.toContain('.qec-study-create-button');
   });
 

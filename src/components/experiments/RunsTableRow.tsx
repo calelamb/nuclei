@@ -92,7 +92,7 @@ export function RunsTableRow({
         />
       </div>
       <div role="cell" title={run.dir} className="nuclei-runs-row__run">
-        {formatRunLabel(run.dir, run.manifest.started_at)}
+        <span className="nuclei-runs-row__text">{formatRunLabel(run.dir, run.manifest.started_at)}</span>
       </div>
       {columns.map((column) => {
         const value = getRunValue(run, column);
@@ -107,7 +107,7 @@ export function RunsTableRow({
           >
             {isStatus ? (
               <Badge tone={statusTone}>{formatCell(value, column, 0)}</Badge>
-            ) : formatCell(value, column, decimalsByColumn.get(column.key) ?? 0)}
+            ) : <span className="nuclei-runs-row__text">{formatCell(value, column, decimalsByColumn.get(column.key) ?? 0)}</span>}
           </div>
         );
       })}

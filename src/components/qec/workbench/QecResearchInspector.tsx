@@ -79,7 +79,7 @@ function LineageState(): ReactElement {
     <section className="qec-inspector__section" aria-labelledby="lineage-heading">
       <h3 id="lineage-heading">Lineage</h3>
       <div className="qec-lineage-state">
-        <span className="qec-lineage-state__mark" aria-hidden="true" />
+        <span className="qec-lineage-state__mark" data-state="not-evaluated" aria-hidden="true" />
         <div><strong>Provenance not evaluated</strong><span>No source lineage check has run.</span></div>
       </div>
     </section>

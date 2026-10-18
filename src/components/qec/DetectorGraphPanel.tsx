@@ -17,7 +17,7 @@ import { requestQecDecodeSample, requestQecSnapshot } from '../../lib/qecDecodeS
 import { ICON_SIZE, ICON_STROKE, TYPOGRAPHY } from '../../styles/tokens';
 const DOCS = 'https://getnuclei.dev/docs/kernel-api/messages-qec/';
 /** The graph never collapses below this; the panel scrolls instead. */
-const GRAPH_MIN_HEIGHT = 220;
+const GRAPH_MIN_HEIGHT = 280;
 
 /** The in-app interactive decoder is the WASM greedy matcher, not PyMatching. */
 export const INTERACTIVE_DECODER_LABEL = 'preview: greedy matcher, not PyMatching';
