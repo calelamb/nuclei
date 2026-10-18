@@ -43,6 +43,9 @@ export interface ColorTokens {
   /** Green for small text/glyphs: AA on every surface in both themes (success is for fills and dots). */
   successText: string;
   warning: string;
+  /** Amber/red for small text on a tinted wash (badges); `warning`/`danger` are fills and dots. */
+  warningText: string;
+  dangerText: string;
   danger: string;
   info: string;
   /** Modal backdrop colour (dialogs, palette, shortcuts sheet). */
@@ -138,7 +141,9 @@ export const DARK_COLORS: ColorTokens = {
   success: '#10B981',
   successText: '#10B981',
   warning: '#F59E0B',
+  warningText: '#F59E0B',
   danger: '#EF4444',
+  dangerText: '#F87171',
   info: '#3B82F6',
   scrim: 'rgba(0, 0, 0, 0.5)',
   kernelIdle: '#64748B',
@@ -179,9 +184,11 @@ export const LIGHT_COLORS: ColorTokens = {
   basisZ: '#B45309',
   overlayMatching: '#C2410C',
   success: '#059669',
-  successText: '#047857',
+  successText: '#066048',
   warning: '#A8580A',
+  warningText: '#8A4708',
   danger: '#DC2626',
+  dangerText: '#B91C1C',
   info: '#2563EB',
   scrim: 'rgba(15, 23, 42, 0.28)',
   kernelIdle: '#94A3B8',
