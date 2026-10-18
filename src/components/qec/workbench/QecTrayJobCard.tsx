@@ -7,9 +7,8 @@ import { ICON_SIZE, ICON_STROKE } from '../../../styles/tokens';
 import { Button, IconButton } from '../../ui';
 import { formatByteSize, shortHash } from './formatBytes';
 import { useCopied } from './useCopied';
+import { CopyJobId } from './CopyJobId';
 
-/** Job ids are UUIDs; eight characters tell jobs apart and the full id stays in the tooltip and copy. */
-const SHORT_ID_LENGTH = 8;
 const ACTIVE_STATUSES: ReadonlySet<string> = new Set(['running', 'starting']);
 
 function capitalise(word: string): string {
@@ -39,19 +38,6 @@ function HashField({ hash }: { hash: string | null | undefined }): ReactElement 
         </IconButton>
       </dd>
     </div>
-  );
-}
-
-function CopyJobId({ id }: { id: string }): ReactElement {
-  const { copied, copy } = useCopied(id);
-  const short = id.slice(0, SHORT_ID_LENGTH);
-  return (
-    <>
-      <span className="qec-mono" title={id}>{short}</span>
-      <IconButton size="sm" aria-label={`Copy job id ${short}`} tooltip={{ label: copied ? 'Copied' : 'Copy full job id' }} onClick={copy}>
-        <CopyIcon copied={copied} />
-      </IconButton>
-    </>
   );
 }
 

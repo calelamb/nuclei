@@ -29,7 +29,7 @@ describe('canvas instrument order (qec-07)', () => {
     render(<InvestigationCanvas inspectorOpen onToggleInspector={noop} toggleRef={{ current: null }} />);
     const headings = screen.getAllByRole('heading', { level: 2 }).map((h) => h.textContent);
     expect(headings[0]).toBe('Campaign Center');
-    expect(screen.getByLabelText('Open sinter stats CSV')).toBeTruthy();
+    expect(screen.getByText('Choose file…')).toBeTruthy(); // the drop zone is the single way in
   });
 });
 

@@ -525,6 +525,11 @@
   position: relative; display: flex; min-height: 0; flex: 1; flex-direction: column; overflow: auto;
 }
 
+/* The detector graph's panel fills its card: its canvas absorbs the card's height floor instead of leaving a blank band under the footer. */
+.qec-instrument[data-panel='detector-graph'] > .qec-instrument__body > * {
+  flex: 1 1 auto; min-height: 0; height: auto;
+}
+
 /* Empty instrument: a neutral dotted field and one sentence, never a data-like shape. */
 .qec-instrument__empty {
   display: flex; min-height: 0; flex: 1; flex-direction: column; align-items: center; justify-content: center;
@@ -613,6 +618,7 @@
 }
 
 .qec-tray {
+  container: qec-tray / inline-size;
   display: flex; min-width: 0; flex-direction: column; overflow: hidden;
   border-top: 1px solid var(--qec-border); background: var(--qec-recessed);
 }
@@ -813,6 +819,7 @@
 
 /* Three empty circuit cards offer one Open button: only the first empty card keeps it. */
 .qec-open-circuit { display: contents; }
+.qec-open-circuit__actions { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 6px; margin-top: 6px; }
 .qec-instrument[data-circuit][data-empty='true'] ~ .qec-instrument[data-circuit][data-empty='true'] .qec-open-circuit,
 .qec-instrument[data-circuit][data-empty='true'] ~ .qec-instrument[data-circuit][data-empty='true'] [data-hint] { display: none; }
 .qec-instrument__link {

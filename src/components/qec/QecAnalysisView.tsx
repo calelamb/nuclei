@@ -19,7 +19,10 @@ import { useCsvDrop } from './useCsvDrop';
 import { TYPOGRAPHY } from '../../styles/tokens';
 /** Opening the mapping editor must never squeeze the figure below this; the column scrolls instead. */
 const PLOT_MIN_HEIGHT = 320;
-const TABLE_MIN_HEIGHT = 170;
+/** Stacked with the table the section also holds the title bar, controls, legend and footnote: ~240px of drawing area needs this much. */
+const PLOT_SECTION_MIN_HEIGHT = 440;
+/** About eight decoder rows plus the sticky header: below this the column scrolls instead of crushing the table. */
+const TABLE_MIN_HEIGHT = 390;
 type AnalysisTab = 'plot' | 'lambda' | 'decoders';
 const ANALYSIS_TABS = [
   { value: 'plot', label: 'Plot' },
@@ -64,6 +67,9 @@ export function QecAnalysisView({ embedded = false, actionsInHeader = false }: {
   );
 
   const webOnly = isWebBuild(); // no kernel to run campaigns in the browser
+  // Before any data there is one way in: the empty state's drop zone. A header Open CSV and a plot title bar would be two more.
+  const awaitingData = !hasData && !csvSource && !running && !resumable;
+  const showHeader = !actionsInHeader && !(awaitingData && webOnly);
   // A loaded file is named by the mapping summary below; inside the workbench the card heading already says
   // "Campaign Center", so a generic fallback would repeat it.
   const title = csvSource ? null : experiment?.spec.name ?? (embedded ? null : 'Campaign');
@@ -76,7 +82,7 @@ export function QecAnalysisView({ embedded = false, actionsInHeader = false }: {
         outline: over ? `2px dashed ${colors.accent}` : 'none', outlineOffset: -2,
       }}
     >
-      {!actionsInHeader && (
+      {showHeader && (
       <div
         style={{
           display: 'flex', alignItems: 'center', gap: 10, padding: '8px 12px',
@@ -161,8 +167,8 @@ export function QecAnalysisView({ embedded = false, actionsInHeader = false }: {
             </>
           ) : (
             <>
-              <div style={{ flex: hasData ? '2 1 0' : '1 1 0', minHeight: PLOT_MIN_HEIGHT, borderBottom: hasData ? `1px solid ${colors.border}` : undefined }}>
-                <ThresholdPanel />
+              <div style={{ flex: hasData ? '2 1 0' : '1 1 0', minHeight: hasData ? PLOT_SECTION_MIN_HEIGHT : PLOT_MIN_HEIGHT, borderBottom: hasData ? `1px solid ${colors.border}` : undefined }}>
+                <ThresholdPanel bare={awaitingData} />
               </div>
               {/* Until data loads there is nothing to compare: one empty state, not one per panel. */}
               {hasData && (

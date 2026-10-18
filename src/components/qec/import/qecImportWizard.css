@@ -112,6 +112,7 @@
 .qec-import-destination { display: grid; grid-template-columns: minmax(180px, 1fr) minmax(180px, 1fr); gap: 10px; padding: 12px; }
 .qec-import-destination .qec-import-policy { grid-column: 1 / -1; margin: 0; }
 .qec-import-progress { display: grid; grid-template-columns: 24px auto minmax(0, 1fr) auto; color: var(--qec-analytical-strong); }
+.qec-import-progress__id { display: inline-flex; min-width: 0; align-items: center; justify-content: flex-end; gap: 4px; }
 .qec-import-progress .qec-mono { overflow: hidden; color: var(--qec-text-muted); font-size: var(--font-size-chrome-label); text-align: right; text-overflow: ellipsis; }
 .qec-tray__jobs > li > button { justify-self: start; }
 .qec-tray__jobs > li > .qec-tray__job-head { flex-wrap: nowrap; align-items: center; justify-content: flex-start; gap: 6px 8px; }
@@ -159,8 +160,6 @@
   .qec-import-commit { flex-wrap: wrap; }
   .qec-import-commit > span { flex: 1 1 190px; }
   .qec-import-commit > button { flex: 0 0 auto; }
-  .qec-tray__jobs > li { grid-template-columns: minmax(0, 1fr); }
-  .qec-tray__jobs dl { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 
 .qec-import-caption {
@@ -171,3 +170,6 @@
   accent-color: var(--color-accent-quantum);
 }
 .qec-import-remove:hover { color: var(--color-error); }
+
+.qec-import-note { display: flex; align-items: flex-start; gap: 8px; margin: 0; color: var(--qec-text-muted); font-size: var(--font-size-chrome-label); line-height: 1.5; }
+.qec-import-note svg { flex: none; margin-top: 2px; }

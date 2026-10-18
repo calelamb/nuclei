@@ -19,12 +19,6 @@ export interface MappingOptions {
   bitOrder: string;
 }
 
-export function formatBytes(bytes: number): string {
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(2)} KiB`;
-  return `${(bytes / (1024 * 1024)).toFixed(2)} MiB`;
-}
-
 export function sessionIdIssue(value: string): string | null {
   if (value.length === 0) return 'choose a destination session ID';
   if (Array.from(value).length > 256) return 'session ID must be 256 characters or fewer';
@@ -53,12 +47,18 @@ export function adapterUsesNativeMapping(adapterId: string): boolean {
   return NATIVE_MAPPING_ADAPTERS.has(adapterId);
 }
 
+/** Sinter's statistics schema defines every field and unit, so there is nothing for a person to map or review. */
+export function adapterNeedsNoMapping(adapterId: string): boolean {
+  return adapterId === 'sinter-csv';
+}
+
 export function mappingIsReviewed(
   adapterId: string,
   rows: readonly MappingRow[],
   options: MappingOptions,
   reviewed: boolean,
 ): boolean {
+  if (adapterNeedsNoMapping(adapterId)) return true;
   if (!reviewed) return false;
   if (adapterId === 'stim-results') {
     const detectors = Number(options.detectorCount);

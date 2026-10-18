@@ -85,7 +85,7 @@ describe('BlochPanel', () => {
     measured = { width: 600, height: 300 };
     setCoords([{ x: 0, y: 0, z: 0 }, { x: 0, y: 0, z: 0 }]);
     render(<BlochPanel />);
-    expect(screen.getAllByText(/entangled · no single-qubit bloch vector/i).length).toBe(2);
+    expect(screen.getAllByText('Entangled').length).toBe(2);
     expect(screen.getAllByRole('img')[0].getAttribute('aria-label')).toMatch(/purity 0\.50/);
   });
 

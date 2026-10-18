@@ -66,4 +66,13 @@ describe('Open circuit feedback (rq-r3-07)', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
     expect(screen.getByRole('button', { name: /Open surface-d7\.stim/ })).toBeTruthy();
   });
+
+  it('separates the stall actions: a quiet link, a dot, and a real secondary button (qec-r-56)', async () => {
+    mount();
+    await clickOpen();
+    act(() => { vi.advanceTimersByTime(CIRCUIT_LOAD_TIMEOUT_MS + 50); });
+    const retry = screen.getByRole('button', { name: 'Try again' });
+    expect(retry.className).toContain('nuclei-btn--secondary');
+    expect(retry.parentElement?.textContent).toMatch(/Show in editor\s*·\s*Try again/);
+  });
 });

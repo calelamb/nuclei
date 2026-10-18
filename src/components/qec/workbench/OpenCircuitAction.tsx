@@ -27,7 +27,8 @@ function OpenProgress({ phase, onRetry }: { phase: Exclude<OpenFeedbackPhase, 'i
   }
   return (
     <span className="qec-instrument__hint" role="alert">
-      No circuit came back. Stim may not be available in this kernel, so the file is open in the editor but cannot be drawn here. {link} <button type="button" className="qec-instrument__link" onClick={onRetry}>Try again</button>
+      No circuit came back. Stim may not be available in this kernel, so the file is open in the editor but cannot be drawn here.
+      <span className="qec-open-circuit__actions">{link}<span aria-hidden="true"> · </span><Button size="sm" variant="secondary" onClick={onRetry}>Try again</Button></span>
     </span>
   );
 }

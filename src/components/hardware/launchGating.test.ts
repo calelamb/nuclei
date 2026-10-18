@@ -1,7 +1,9 @@
 import { describe, it, expect } from 'vitest';
 import {
-  providerAllowsQsharp, submissionLanguage, providerStatus, providerNeedsToken, formatErrorRate, sortProvidersByStatus,
+  providerAllowsQsharp, submissionLanguage, providerStatus, providerNeedsToken, formatErrorRate, sortProvidersByStatus, sortProvidersForDisplay,
 } from './launchGating';
+import { PROVIDERS } from './launchProviders';
+import type { HardwareProviderType } from '../../types/hardware';
 
 describe('providerAllowsQsharp', () => {
   it('allows Azure Quantum and the Local Simulator', () => {
@@ -105,5 +107,43 @@ describe('sortProvidersByStatus (rq-r3-08)', () => {
     const before = list.map((p) => p.name);
     sorted(false);
     expect(list.map((p) => p.name)).toEqual(before);
+  });
+});
+
+describe('Local Simulator follows the kernel (research-r-04)', () => {
+  const sim = { provider: 'simulator', connected: false, isWeb: false, cudaqInstalled: false } as const;
+
+  it('is Ready only once the kernel is up', () => {
+    expect(providerStatus({ ...sim, kernelStatus: 'ready' })).toMatchObject({ kind: 'ready', label: 'Ready' });
+  });
+
+  it('says Starting… while the kernel connects', () => {
+    expect(providerStatus({ ...sim, kernelStatus: 'connecting' })).toMatchObject({ kind: 'starting', label: 'Starting…' });
+  });
+
+  it("names a failed start with the shared phrase instead of claiming Ready", () => {
+    expect(providerStatus({ ...sim, kernelStatus: 'failed' })).toMatchObject({ kind: 'unavailable', label: "Kernel didn't start" });
+  });
+
+  it('is unaffected by the kernel in the browser build, where it runs in the page', () => {
+    expect(providerStatus({ ...sim, isWeb: true, kernelStatus: 'failed' })).toMatchObject({ kind: 'ready', label: 'Run here' });
+  });
+
+  it('sinks an unavailable simulator below providers that work', () => {
+    const kernelFailed = (name: 'simulator' | 'nvidia') => providerStatus({
+      provider: name, connected: false, isWeb: false, cudaqInstalled: true, kernelStatus: 'failed',
+    }).kind;
+    expect(sortProvidersByStatus([{ name: 'simulator' as const }, { name: 'nvidia' as const }], (p) => kernelFailed(p.name)).map((p) => p.name))
+      .toEqual(['nvidia', 'simulator']);
+  });
+});
+
+describe('sortProvidersForDisplay (research-r-04)', () => {
+  it('orders the Hardware panel and the Launch grid identically whatever order the store lists them in', () => {
+    const catalog = PROVIDERS.map((p) => ({ name: p.name }));
+    const shuffled = [...catalog].reverse();
+    const kind = (p: { name: HardwareProviderType }) => providerStatus({ provider: p.name, connected: false, isWeb: false, cudaqInstalled: true }).kind;
+    expect(sortProvidersForDisplay(shuffled, kind).map((p) => p.name)).toEqual(sortProvidersForDisplay(catalog, kind).map((p) => p.name));
+    expect(sortProvidersForDisplay(shuffled, kind)[0].name).toBe('simulator');
   });
 });

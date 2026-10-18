@@ -8,6 +8,7 @@ import {
   Copy,
   Database,
   FileCheck2,
+  Info,
   LoaderCircle,
   Plus,
   ShieldAlert,
@@ -19,6 +20,8 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ReactElement } 
 import { Button, Checkbox, IconButton, Select, TextInput } from '../../ui';
 import { Table, Thead, Tbody, Tr, Th, Td } from '../../ui/Table';
 import { ICON_SIZE, ICON_STROKE } from '../../../styles/tokens';
+import { CopyJobId } from '../workbench/CopyJobId';
+import { formatByteSize, shortHash } from '../workbench/formatBytes';
 
 import './qecImportWizard.css';
 
@@ -33,11 +36,11 @@ import type {
 import {
   IMPORT_STAGES,
   adapterDisplayName,
+  adapterNeedsNoMapping,
   adapterUsesNativeMapping,
   buildMapping,
   completeRows,
   countLabel,
-  formatBytes,
   mappingIsReviewed,
   sessionIdIssue,
   stageDescription,
@@ -88,8 +91,8 @@ function StepRail({ stage, finished }: { stage: number; finished: boolean }): Re
   );
 }
 
-function FieldValue({ label, value }: { label: string; value: string }): ReactElement {
-  return <div><dt>{label}</dt><dd className="qec-mono">{value}</dd></div>;
+function FieldValue({ label, value, title }: { label: string; value: string; title?: string }): ReactElement {
+  return <div><dt>{label}</dt><dd className="qec-mono" title={title}>{value}</dd></div>;
 }
 
 function SourceStage({ source, probe }: { source: string; probe: AsyncState<ImportProbeResult> }): ReactElement {
@@ -101,8 +104,8 @@ function SourceStage({ source, probe }: { source: string; probe: AsyncState<Impo
       <header><FileCheck2 aria-hidden="true" size={20} /><div><strong>Project source</strong><span>No absolute or canonical data paths are accepted.</span></div></header>
       <dl className="qec-import-facts">
         <FieldValue label="Source" value={source} />
-        <FieldValue label="Source size" value={probe.value ? formatBytes(probe.value.sourceByteSize) : 'Not reported'} />
-        <FieldValue label="SHA-256" value={firstHash ?? 'Not reported'} />
+        <FieldValue label="Source size" value={probe.value ? formatByteSize(probe.value.sourceByteSize) : 'Not reported'} />
+        <FieldValue label="SHA-256" value={firstHash ? shortHash(firstHash) : 'Not reported'} title={firstHash ?? undefined} />
         <FieldValue label="Source spans" value="Recorded by adapter during import" />
       </dl>
       <p className="qec-import-policy"><Copy aria-hidden="true" size={16} /><strong>Copy-only import</strong><span>Original preserved; canonical data receives a project-local source copy.</span></p>
@@ -111,7 +114,7 @@ function SourceStage({ source, probe }: { source: string; probe: AsyncState<Impo
 }
 
 function LoadingState({ label }: { label: string }): ReactElement {
-  return <div className="qec-import-loading" role="status"><LoaderCircle aria-hidden="true" size={20} /><span>{label}</span></div>;
+  return <div className="qec-import-loading" role="status"><LoaderCircle className="nuclei-spin" aria-hidden="true" size={20} /><span>{label}</span></div>;
 }
 
 function InlineError({ message }: { message: string }): ReactElement {
@@ -176,10 +179,12 @@ function MappingStage(props: MappingStageProps): ReactElement {
         </div>
       ))}
       <MappingOptionsForm adapterId={props.adapterId} options={props.options} onChange={props.onOptions} />
-      <div className="qec-import-review">
-        <Checkbox aria-label="Mapping reviewed" checked={props.reviewed} onCheckedChange={props.onReviewed} />
-        <span><strong>Mapping reviewed</strong><small>Widths, units, field meaning, and record class are explicit where required.</small></span>
-      </div>
+      {!adapterNeedsNoMapping(props.adapterId) && (
+        <div className="qec-import-review">
+          <Checkbox aria-label="Mapping reviewed" checked={props.reviewed} onCheckedChange={props.onReviewed} />
+          <span><strong>Mapping reviewed</strong><small>Widths, units, field meaning, and record class are explicit where required.</small></span>
+        </div>
+      )}
     </div>
   );
 }
@@ -187,7 +192,7 @@ function MappingStage(props: MappingStageProps): ReactElement {
 function MappingOptionsForm({ adapterId, options, onChange }: { adapterId: string; options: MappingOptions; onChange(value: MappingOptions): void }): ReactElement {
   const set = (key: keyof MappingOptions, value: string): void => onChange({ ...options, [key]: value });
   if (adapterId === 'sinter-csv') {
-    return <p className="qec-import-notice">Sinter defines campaign-point fields and units in its native statistics schema; no field mapping options are accepted.</p>;
+    return <p className="qec-import-note"><Info aria-hidden="true" size={ICON_SIZE.md} strokeWidth={ICON_STROKE} />Nothing to map: sinter's statistics schema defines every field and unit.</p>;
   }
   if (adapterId === 'stim-results') {
     return (
@@ -280,6 +285,8 @@ function ImportStage({ source, client }: { source: string; client: QecImportClie
   const jobs = useQecJobStore((state) => state.jobs);
   const job = Object.values(jobs).reverse().find((candidate) => candidate.source === source);
   const error = useQecJobStore((state) => state.launchError);
+  const launching = useQecJobStore((state) => state.launching);
+  if (!job && launching) return <LoadingState label="Starting import" />;
   if (!job) return error
     ? <InlineError message={error} />
     : <div className="qec-import-notice"><Database aria-hidden="true" size={20} /><div><strong>Ready for canonical import</strong><span>Import progress and completion remain in this tray if you change the active source.</span></div></div>;
@@ -294,7 +301,7 @@ function ImportProgress({ job, client }: { job: QecJobRecord; client: QecImportC
   const cancelJob = useQecJobStore((state) => state.cancelJob);
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => { ref.current?.focus(); }, []);
-  return <div ref={ref} tabIndex={-1} className="qec-import-progress" role="progressbar" aria-label="QEC data import" aria-valuetext={job.message}><LoaderCircle aria-hidden="true" size={16} /><strong>{job.message}</strong><span className="qec-mono">{job.id}</span>{['running', 'starting'].includes(job.status) && <Button size="sm" aria-label={`Cancel import ${job.id}`} onClick={() => void cancelJob(client, job.id)}>Cancel</Button>}</div>;
+  return <div ref={ref} tabIndex={-1} className="qec-import-progress" role="progressbar" aria-label="QEC data import" aria-valuetext={job.message}><LoaderCircle className="nuclei-spin" aria-hidden="true" size={16} /><strong>{job.message}</strong><span className="qec-import-progress__id"><CopyJobId id={job.id} /></span>{['running', 'starting'].includes(job.status) && <Button size="sm" aria-label={`Cancel import ${job.id}`} onClick={() => void cancelJob(client, job.id)}>Cancel</Button>}</div>;
 }
 
 function nextAllowed(stage: number, probe: ImportProbeResult | null, adapterId: string, mappingReady: boolean, valid: boolean, sessionId: string): boolean {
@@ -477,7 +484,7 @@ function WizardFooter(props: WizardFooterProps): ReactElement {
         {reason && <span role="status"><AlertCircle aria-hidden="true" size={14} />Import unavailable: {reason}</span>}
         {/* One primary action per stage: Next while the mapping is being built, Import data only on the last stage. */}
         {props.stage === LAST_STAGE
-          ? <Button variant="primary" disabled={props.unavailable !== null} title={props.unavailable ? `Import unavailable: ${props.unavailable}` : undefined} loading={props.launching} onClick={props.onImport} icon={props.launching ? undefined : <CheckCircle2 aria-hidden="true" size={ICON_SIZE.sm} strokeWidth={ICON_STROKE} />}>Import data</Button>
+          ? <Button variant="primary" disabled={props.unavailable !== null || props.launching} title={props.unavailable ? `Import unavailable: ${props.unavailable}` : undefined} onClick={props.onImport} icon={<CheckCircle2 aria-hidden="true" size={ICON_SIZE.sm} strokeWidth={ICON_STROKE} />}>Import data</Button>
           : <Button variant="primary" aria-label="Next stage" disabled={!props.canAdvance} onClick={props.onNext}>Next<ArrowRight aria-hidden="true" size={ICON_SIZE.sm} strokeWidth={ICON_STROKE} /></Button>}
       </div>
     </footer>

@@ -126,9 +126,33 @@ export function NewExperimentForm({ projectRoot, existing, dirtyRef: sharedDirty
     dirtyRef.current = true;
     setTouched((prev) => (prev.has(field) ? prev : new Set([...prev, field])));
   };
+  // The form takes focus when it opens and hands it back to whatever opened it when it closes.
+  const formRef = useRef<HTMLFormElement>(null);
+  const nameRef = useRef<HTMLInputElement>(null);
+  const closeRef = useRef<HTMLButtonElement>(null);
+  const openerRef = useRef<HTMLElement | null>(null);
+  useEffect(() => {
+    // Strict-mode re-runs this effect after focus has already moved into the form: keep the first capture.
+    const active = document.activeElement;
+    const outside = active instanceof HTMLElement && active !== document.body && !formRef.current?.contains(active);
+    if (outside) openerRef.current = active;
+    nameRef.current?.focus();
+  }, []);
+  const finish = () => {
+    const opener = openerRef.current;
+    onClose();
+    if (opener) queueMicrotask(() => { if (opener.isConnected) opener.focus(); });
+  };
   const handleClose = () => {
     if (dirtyRef.current && !window.confirm('Discard your unsaved changes to this experiment?')) return;
-    onClose();
+    finish();
+  };
+  // Escape closes a pristine form; with edits in it, it only points at Close so nothing is lost by a stray key.
+  const handleKeyDown = (event: React.KeyboardEvent<HTMLFormElement>) => {
+    if (event.key !== 'Escape' || event.defaultPrevented) return;
+    event.preventDefault();
+    if (dirtyRef.current) closeRef.current?.focus();
+    else finish();
   };
 
   // Discover candidate entry files for the datalist — best-effort, never blocks.
@@ -245,7 +269,7 @@ export function NewExperimentForm({ projectRoot, existing, dirtyRef: sharedDirty
 
       useProjectStore.getState().openTab({ path, content: yamlText });
       await useExperimentStore.getState().reload(projectRoot, createTauriExperimentFs());
-      onClose();
+      finish();
     } catch (err) {
       setSubmitError(err instanceof Error ? err.message : String(err));
     } finally {
@@ -259,7 +283,9 @@ export function NewExperimentForm({ projectRoot, existing, dirtyRef: sharedDirty
   };
   return (
     <form
+      ref={formRef}
       onSubmit={(e) => { void handleSubmit(e); }}
+      onKeyDown={handleKeyDown}
       style={{
         padding: '12px 12px 0', borderTop: `1px solid ${colors.border}`,
         display: 'flex', flexDirection: 'column', gap: 10,
@@ -270,13 +296,13 @@ export function NewExperimentForm({ projectRoot, existing, dirtyRef: sharedDirty
         <span style={{ color: colors.text, fontSize: 12, fontWeight: 600 }}>
           {existing ? `Edit ${existing.spec.name}` : 'New experiment'}
         </span>
-        <Button type="button" variant="ghost" size="sm" onClick={handleClose}>Close</Button>
+        <Button ref={closeRef} type="button" variant="ghost" size="sm" onClick={handleClose}>Close</Button>
       </div>
 
       <div>
         <label style={labelStyle} htmlFor="exp-name">Name</label>
         <TextInput
-          id="exp-name" mono value={name}
+          id="exp-name" ref={nameRef} mono value={name}
           onChange={(e) => { markDirty('name'); setName(e.target.value); }}
           placeholder="e.g. theta-sweep"
         />
