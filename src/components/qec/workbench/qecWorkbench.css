@@ -765,6 +765,41 @@
   min-height: 460px;
 }
 
+/*
+ * With data the leading card sits beside a rail of the other instruments. It keeps a viewport-sized
+ * height and stays pinned while the rail scrolls, so it is never stretched around empty space and
+ * the rail cards keep the width their figures need (the rail is never narrower than 340px).
+ */
+.qec-investigation__panels[data-railed='true'] {
+  grid-template-columns: minmax(0, 1.55fr) minmax(340px, 0.85fr); align-items: start; grid-auto-rows: auto;
+}
+
+.qec-investigation__panels[data-railed='true'] > .qec-instrument--primary {
+  position: sticky; top: 0; max-height: clamp(480px, calc(100cqh - 24px), 820px);
+}
+
+/* The analysis plot fills its card; figures with a natural size (the timeline) keep it and leave no blank field. */
+.qec-investigation__panels[data-railed='true'] > .qec-instrument--primary[data-panel='campaign-center'] {
+  height: clamp(480px, calc(100cqh - 24px), 820px);
+}
+
+.qec-investigation__rail { display: flex; min-width: 0; flex-direction: column; gap: 10px; }
+.qec-investigation__rail > .qec-instrument { flex: none; min-height: 0; }
+
+/* Below ~1080px the rail would be narrower than its figures: stack the instruments instead. */
+@container qec-canvas (max-width: 1079px) {
+  .qec-investigation__panels[data-railed='true'] {
+    grid-template-columns: minmax(0, 1fr); grid-template-rows: none !important; grid-auto-rows: minmax(max-content, auto);
+  }
+
+  .qec-investigation__panels[data-railed='true'] > .qec-instrument--primary {
+    position: static; height: max(520px, calc(100cqh - 24px)); grid-column: 1 / -1;
+  }
+
+  .qec-investigation__panels[data-railed='true'] > .qec-investigation__rail { display: contents; }
+  .qec-investigation__panels[data-railed='true'] .qec-investigation__rail > .qec-instrument { grid-column: 1 / -1; min-height: 260px; }
+}
+
 /* Three empty circuit cards offer one Open button: only the first empty card keeps it. */
 .qec-open-circuit { display: contents; }
 .qec-instrument[data-empty='true'] ~ .qec-instrument[data-empty='true'] .qec-open-circuit { display: none; }

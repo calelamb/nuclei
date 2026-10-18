@@ -203,24 +203,31 @@ export function InvestigationCanvas(props: InvestigationCanvasProps): ReactEleme
   const empties = panels.map((panel) => isInstrumentEmpty(panel.id, { hasCircuit, hasCampaignData }));
   // With nothing to draw every instrument is a short card: rows size to their content instead of stretching.
   const grid = canvasGrid(panels.length, empties.every(Boolean));
+  const renderInstrument = (panel: QecWorkbenchPanelDef, index: number): ReactElement => (
+    <CanvasInstrument
+      key={panel.id}
+      panel={panel}
+      primary={index === 0}
+      rowSpan={grid.primaryRowSpan}
+      empty={empties[index]}
+      fullWidth={grid.fullWidthIndex === index}
+    />
+  );
   return (
     <main className="qec-investigation" aria-label="QEC investigation canvas">
       <CanvasHeader {...props} />
       <div
         className="qec-investigation__panels"
         data-compact={grid.compact ? 'true' : undefined}
-        style={{ gridTemplateRows: grid.gridTemplateRows, alignContent: grid.compact ? 'start' : undefined }}
+        data-railed={grid.railed ? 'true' : undefined}
+        style={{ gridTemplateRows: grid.gridTemplateRows, alignContent: grid.compact || grid.railed ? 'start' : undefined }}
       >
-        {panels.map((panel, index) => (
-          <CanvasInstrument
-            key={panel.id}
-            panel={panel}
-            primary={index === 0}
-            rowSpan={grid.primaryRowSpan}
-            empty={empties[index]}
-            fullWidth={grid.fullWidthIndex === index}
-          />
-        ))}
+        {grid.railed ? (
+          <>
+            {renderInstrument(panels[0], 0)}
+            <div className="qec-investigation__rail">{panels.slice(1).map((panel, offset) => renderInstrument(panel, offset + 1))}</div>
+          </>
+        ) : panels.map(renderInstrument)}
       </div>
     </main>
   );

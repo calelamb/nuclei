@@ -23,13 +23,20 @@ export interface CanvasGrid {
   readonly primaryRowSpan: number;
   /** Index of an instrument that takes the whole row so an odd count leaves no hole. */
   readonly fullWidthIndex: number | null;
+  /**
+   * True when the instruments after the leading one live in their own rail column.
+   * The leading card then keeps a fixed, viewport-sized height and the rail grows
+   * to its content, so neither can stretch the other.
+   */
+  readonly railed: boolean;
 }
 
 /**
- * Row model for the two-column canvas. Rows are never shorter than their
- * content (`max-content` minimum), so two cards can never overlap; with data
- * the leading instrument spans the rest, with none every card is short and an
- * odd last card runs the full width instead of leaving a hole beside it.
+ * Row model for the two-column canvas. With nothing to draw every card is
+ * short and an odd last card runs the full width instead of leaving a hole
+ * beside it. With data the leading instrument sits beside a rail of the
+ * others: it never spans content-sized rows, so it cannot be stretched around
+ * empty space, and the rail cards keep their own natural height.
  */
 export function canvasGrid(panelCount: number, allEmpty: boolean): CanvasGrid {
   if (allEmpty) {
@@ -39,8 +46,8 @@ export function canvasGrid(panelCount: number, allEmpty: boolean): CanvasGrid {
       gridTemplateRows: `repeat(${rows}, max-content)`,
       primaryRowSpan: 1,
       fullWidthIndex: panelCount > 1 && panelCount % 2 === 1 ? panelCount - 1 : null,
+      railed: false,
     };
   }
-  const rows = Math.max(1, panelCount - 1);
-  return { compact: false, gridTemplateRows: `repeat(${rows}, minmax(max-content, 1fr))`, primaryRowSpan: rows, fullWidthIndex: null };
+  return { compact: false, gridTemplateRows: 'max-content', primaryRowSpan: 1, fullWidthIndex: null, railed: panelCount > 1 };
 }
