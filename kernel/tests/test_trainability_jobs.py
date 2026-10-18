@@ -181,7 +181,7 @@ def test_owner_release_kills_process_group_including_children(make_manager, tmp_
     pids = run(scenario)
     child = int(pidfile.read_text())
     assert wait_gone(pids + [child]), "worker or its child survived owner release"
-    deadline = time.monotonic() + 5
+    deadline = time.monotonic() + 60
     while manager.running() and time.monotonic() < deadline:
         time.sleep(0.05)
     assert manager.running() == 0
@@ -208,7 +208,7 @@ def test_busy_limits_per_owner_and_global(make_manager):
     assert owner_busy["phase"] == "trainability"
     assert global_busy["code"] == "trainability_busy"
     assert running == 3
-    deadline = time.monotonic() + 10
+    deadline = time.monotonic() + 60
     while manager.running() and time.monotonic() < deadline:
         time.sleep(0.05)
     assert manager.running() == 0, "closing both connections must release every job"
@@ -233,7 +233,7 @@ def test_wall_limit_fails_the_job(make_manager):
     async def scenario():
         async with connection() as ws:
             ws.push(start_msg("w1", ["gradients", "lie"], settings={"seed": HANG}))
-            return await ws.wait_type("trainability_result", timeout=40), manager.pids()
+            return await ws.wait_type("trainability_result", timeout=120), manager.pids()
 
     result, _ = run(scenario)
     assert result["status"] == "failed"

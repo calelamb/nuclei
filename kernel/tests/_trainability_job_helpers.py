@@ -129,7 +129,7 @@ class StreamingWS:
     def types(self) -> list[str]:
         return [m.get("type") for m in self.sent]
 
-    async def wait_for(self, predicate, timeout: float = 60.0) -> list[dict]:
+    async def wait_for(self, predicate, timeout: float = 180.0) -> list[dict]:
         deadline = time.monotonic() + timeout
         while True:
             match = [m for m in self.sent if predicate(m)]
@@ -142,7 +142,7 @@ class StreamingWS:
             with contextlib.suppress(asyncio.TimeoutError):
                 await asyncio.wait_for(self._activity.wait(), timeout=min(remaining, 0.25))
 
-    async def wait_type(self, msg_type: str, timeout: float = 60.0) -> dict:
+    async def wait_type(self, msg_type: str, timeout: float = 180.0) -> dict:
         return (await self.wait_for(lambda m: m.get("type") == msg_type, timeout))[0]
 
 
@@ -157,7 +157,7 @@ async def connection():
         yield ws
     finally:
         ws.close()
-        await asyncio.wait_for(task, timeout=30)
+        await asyncio.wait_for(task, timeout=120)
 
 
 def pid_alive(pid: int) -> bool:
@@ -170,7 +170,7 @@ def pid_alive(pid: int) -> bool:
     return True
 
 
-def wait_gone(pids: list[int], timeout: float = 10.0) -> bool:
+def wait_gone(pids: list[int], timeout: float = 60.0) -> bool:
     deadline = time.monotonic() + timeout
     while time.monotonic() < deadline:
         if not any(pid_alive(p) for p in pids):

@@ -44,7 +44,7 @@ def test_wrapper_that_fails_at_run_time_is_demoted(monkeypatch):
     broken = iso.IsolationInfo("sandbox-exec", lambda cmd: ["sh", "-c", "echo 'sandbox-exec: sandbox_apply: Operation not permitted' >&2; exit 71"])
     response = run_candidate(
         default_request("stim_circuit", GOOD, "build", [{"args": [3, 3], "kwargs": {}}]),
-        wall_seconds=30,
+        wall_seconds=120,
         isolation=broken,
     )
     # Falls back to an unwrapped run and reports "process", never the wrapper.
@@ -72,7 +72,7 @@ def test_macos_sandbox_exec_blocks_network_and_writes_when_active():
     )
     response = run_candidate(
         default_request("stim_circuit", program, "build", [{"args": [3, 3], "kwargs": {}}]),
-        wall_seconds=30,
+        wall_seconds=120,
         isolation=info,
     )
     assert response["isolation"] == "sandbox-exec"

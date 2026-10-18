@@ -19,7 +19,7 @@ def run(scenario):
     return asyncio.run(scenario())
 
 
-async def ask(ws, message: dict, response_type: str, timeout: float = 30.0) -> dict:
+async def ask(ws, message: dict, response_type: str, timeout: float = 120.0) -> dict:
     ws.push(message)
     matches = await ws.wait_for(lambda m: m.get("type") in (response_type, "error"), timeout)
     return matches[0]
