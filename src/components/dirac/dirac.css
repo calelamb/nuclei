@@ -11,8 +11,8 @@
   display: flex; flex-direction: column; gap: var(--space-3);
   font-family: var(--font-sans);
 }
-.dirac-onboard__title { margin: 0; text-align: center; font-size: var(--font-size-body); font-weight: var(--font-weight-semibold); color: var(--color-text-primary); }
-.dirac-onboard__lede { margin: 0; text-align: center; font-size: var(--font-size-chrome-label); line-height: 1.5; color: var(--color-text-secondary); }
+.dirac-onboard__title { margin: 0; text-align: center; text-wrap: balance; font-size: var(--font-size-body); font-weight: var(--font-weight-semibold); color: var(--color-text-primary); }
+.dirac-onboard__lede { margin: 0; text-align: center; text-wrap: balance; font-size: var(--font-size-chrome-label); line-height: 1.5; color: var(--color-text-secondary); }
 .dirac-onboard__pending {
   margin: 0; padding: var(--space-2) var(--space-3);
   border-left: 2px solid var(--color-accent-dirac); border-radius: var(--radius-xs);
@@ -22,7 +22,7 @@
 .dirac-onboard__form { display: flex; gap: var(--space-2); }
 .dirac-onboard__form .nuclei-input { flex: 1; min-width: 0; }
 .dirac-onboard__error { margin: 0; font-size: var(--font-size-caption); color: var(--color-danger); }
-.dirac-onboard__fine { margin: 0; text-align: center; font-size: var(--font-size-caption); line-height: 1.5; color: var(--color-text-tertiary); }
+.dirac-onboard__fine { margin: 0; text-align: center; text-wrap: balance; font-size: var(--font-size-caption); line-height: 1.5; color: var(--color-text-tertiary); }
 .dirac-onboard__links { display: flex; justify-content: center; gap: var(--space-3); font-size: var(--font-size-caption); }
 .dirac-link {
   background: none; border: none; padding: 0; cursor: pointer; font: inherit;
