@@ -18,6 +18,7 @@ import {
 import { useQecWorkbenchStore } from '../../../stores/qecWorkbenchStore';
 import { QecImportWizard } from '../import/QecImportWizard';
 import { QecImportSheet } from '../import/QecImportSheet';
+import { QecTrayJobCard } from './QecTrayJobCard';
 import { useQecTrayIdle } from './useQecTrayIdle';
 import { describeEngineFailure } from './qecEngineMessage';
 import { Button, IconButton } from '../../ui';
@@ -53,19 +54,17 @@ function TrayContent({ client, projectRoot }: { client: QecImportClient | null; 
   if (jobs.length === 0) return null;
   return (
     <div className="qec-tray__content">
-      <div className="qec-tray__empty"><ListChecks aria-hidden="true" size={16} /><div><strong>{jobs.length} durable {jobs.length === 1 ? 'job' : 'jobs'}</strong><span>Completion and cancellation state remain available in this tray.</span></div></div>
+      <div className="qec-tray__empty"><ListChecks aria-hidden="true" size={16} /><div><strong>{jobs.length} {jobs.length === 1 ? 'job' : 'jobs'}</strong><span>Finished and cancelled jobs stay here.</span></div></div>
       <dl className="qec-tray__summary">
         <div><dt>Queued</dt><dd className="qec-mono">{queued}</dd></div>
         <div><dt>Running</dt><dd className="qec-mono">{running}</dd></div>
         <div><dt>Streams</dt><dd className="qec-mono">0</dd></div>
       </dl>
-      {jobs.length > 0 && <ul className="qec-tray__jobs" aria-label="Durable QEC jobs">{jobs.map((job) => (
-        <li key={job.id}>
-          <div><strong>{job.kind} · {job.status}</strong><span className="qec-mono">{job.id}</span></div>
-          <dl><div><dt>Source</dt><dd className="qec-mono">{job.source ?? 'Not recorded'}</dd></div><div><dt>Adapter</dt><dd className="qec-mono">{job.adapterId ?? 'Not recorded'}</dd></div><div><dt>Session</dt><dd className="qec-mono">{job.sessionId ?? 'Not recorded'}</dd></div><div><dt>Size</dt><dd className="qec-mono">{job.sourceByteSize ?? 'Pending'}</dd></div><div><dt>Hash</dt><dd className="qec-mono">{job.sourceHash ?? 'Pending'}</dd></div><div><dt>Provenance</dt><dd className="qec-mono">{job.provenanceId ?? 'Pending'}</dd></div></dl>
-          {client && ['running', 'starting'].includes(job.status) && <Button size="sm" aria-label={`Cancel ${job.kind} ${job.id}`} onClick={() => void cancelJob(client, job.id)}>Cancel</Button>}
-        </li>
-      ))}</ul>}
+      <ul className="qec-tray__jobs" aria-label="Durable QEC jobs">
+        {jobs.map((job) => (
+          <QecTrayJobCard key={job.id} job={job} client={client} onCancel={(id) => { if (client) void cancelJob(client, id); }} />
+        ))}
+      </ul>
     </div>
   );
 }

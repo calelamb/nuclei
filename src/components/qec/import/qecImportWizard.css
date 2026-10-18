@@ -113,11 +113,13 @@
 .qec-import-destination .qec-import-policy { grid-column: 1 / -1; margin: 0; }
 .qec-import-progress { display: grid; grid-template-columns: 24px auto minmax(0, 1fr) auto; color: var(--qec-analytical-strong); }
 .qec-import-progress .qec-mono { overflow: hidden; color: var(--qec-text-muted); font-size: var(--font-size-chrome-label); text-align: right; text-overflow: ellipsis; }
-.qec-tray__jobs button { min-height: 44px; padding: 0 12px; border: 1px solid var(--qec-line-hover); border-radius: var(--radius-soft); background: var(--qec-canvas); color: var(--qec-analytical-text); font-weight: 600; }
+.qec-tray__jobs > li > button { justify-self: start; }
 .qec-tray__jobs { display: grid; gap: 8px; margin: 10px 12px; }
-.qec-tray__jobs > li { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px 12px; padding: 10px; border: 1px solid var(--qec-line); border-radius: var(--radius-soft); background: var(--qec-canvas); }
-.qec-tray__jobs > li > div { display: flex; min-width: 0; justify-content: space-between; gap: 8px; }
-.qec-tray__jobs dl { display: grid; min-width: 0; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.qec-tray__jobs > li { display: grid; grid-template-columns: minmax(0, 1fr); gap: 8px 12px; padding: 10px; border: 1px solid var(--qec-line); border-radius: var(--radius-soft); background: var(--qec-canvas); }
+.qec-tray__jobs > li > div { display: flex; min-width: 0; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 2px 12px; }
+.qec-tray__jobs > li > div > span { overflow: hidden; color: var(--qec-text-muted); font-size: var(--font-size-chrome-label); text-overflow: ellipsis; white-space: nowrap; }
+.qec-tray__jobs dl { display: grid; min-width: 0; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 8px 12px; }
+.qec-tray__hash { display: flex; align-items: center; gap: 4px; }
 .qec-tray__jobs dt { color: var(--qec-text-muted); font-size: var(--font-size-chrome-label); }
 .qec-tray__jobs dd { overflow-wrap: anywhere; color: var(--qec-text); font-size: var(--font-size-chrome-label); }
 

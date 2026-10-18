@@ -112,3 +112,59 @@ test('@qec imports a detector stream and restores the canonical session after re
     await engine.close();
   }
 });
+
+/** A finished import's card in the Jobs tray: title row above its fields, never drawn over them. */
+test('@qec a finished import job card keeps its title clear of its own fields', async ({ page }) => {
+  await page.addInitScript(() => {
+    class Stub {
+      private readonly listeners = new Map<string, Array<(event: Event | MessageEvent<string>) => void>>();
+      constructor() { queueMicrotask(() => this.emit('open', new Event('open'))); }
+      addEventListener(type: string, listener: (event: Event | MessageEvent<string>) => void): void { this.listeners.set(type, [...(this.listeners.get(type) ?? []), listener]); }
+      send(serialized: string): void {
+        const frame = JSON.parse(serialized) as { type?: string; requestId?: string };
+        if (frame.type === 'authenticate') queueMicrotask(() => this.message({ type: 'authenticated' }));
+        else if (frame.type === 'session_list') queueMicrotask(() => this.message({ type: 'session_list_result', requestId: frame.requestId, sessions: [], nextCursor: null }));
+      }
+      close(): void { this.emit('close', new Event('close')); }
+      private message(frame: unknown): void { this.emit('message', new MessageEvent('message', { data: JSON.stringify(frame) })); }
+      private emit(type: string, event: Event | MessageEvent<string>): void { for (const l of this.listeners.get(type) ?? []) l(event); }
+    }
+    Object.defineProperty(window, 'WebSocket', { configurable: true, value: Stub });
+    Object.defineProperty(window, '__NUCLEI_E2E_QEC_INVOKE__', {
+      configurable: true,
+      value: async (command: string): Promise<unknown> => command === 'qec_data_start' ? { url: 'ws://127.0.0.1:9743', token: '0'.repeat(64) } : null,
+    });
+  });
+  for (const viewport of [{ width: 1440, height: 900 }, { width: 1100, height: 800 }]) {
+    await page.setViewportSize(viewport);
+    await page.goto('/?e2eProject=qec-project&workspace=research');
+    await page.getByRole('button', { name: 'QEC Workbench' }).click();
+    // The tray scopes its jobs to the open project once it mounts; seed after that so the seed is kept.
+    await expect(page.getByRole('region', { name: 'QEC jobs and streams' })).toContainText('No active jobs');
+    await page.evaluate(async ({ hash }) => {
+      const { useQecJobStore } = await import('/src/stores/qecJobStore.ts');
+      const { useProjectStore } = await import('/src/stores/projectStore.ts');
+      useQecJobStore.setState({
+        jobs: {
+          a: {
+            id: 'f2c0b7d1-5b0e-4c36-9a3b-0d6a8d2e4b11', kind: 'import', status: 'complete', message: 'ok',
+            source: 'circuits/repetition.stim', adapterId: 'stim-circuit', sessionId: '0b6c1f3e-aaaa-4bbb-cccc-1234567890ab',
+            sourceByteSize: 8701, sourceHash: hash, provenanceId: 'prov-7788', projectRoot: useProjectStore.getState().projectRoot ?? undefined,
+          },
+        },
+      });
+    }, { hash: SOURCE_HASH });
+    const toggle = page.getByRole('button', { name: /Expand jobs and streams/ });
+    if (await toggle.count()) await toggle.click();
+    const card = page.getByRole('list', { name: 'Durable QEC jobs' }).getByRole('listitem').first();
+    await expect(card).toBeVisible();
+    const header = await card.locator(':scope > div').first().boundingBox();
+    const fields = await card.locator('dl').boundingBox();
+    expect(header, 'title row is drawn').not.toBeNull();
+    expect(fields, 'fields are drawn').not.toBeNull();
+    expect(header!.width, `${viewport.width}: title row width`).toBeGreaterThan(100);
+    expect(header!.y + header!.height, `${viewport.width}: title row ends above the fields`).toBeLessThanOrEqual(fields!.y + 0.5);
+    await expect(card).toContainText('8.5 KB');
+    await expect(card).not.toContainText(SOURCE_HASH);
+  }
+});
