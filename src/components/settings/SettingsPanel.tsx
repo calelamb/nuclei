@@ -9,7 +9,7 @@ import { useSimulationStore } from '../../stores/simulationStore';
 import { useDiracStore } from '../../stores/diracStore';
 import { useFrameworksStore } from '../../stores/frameworksStore';
 import { EnvironmentPanel } from './EnvironmentPanel';
-import { Button, IconButton, SecretField, SegmentedControl, Select, Switch, TextInput } from '../ui';
+import { Button, IconButton, SecretField, SegmentedControl, Select, Switch, TextInput, useConfirm } from '../ui';
 import { WorkspaceSection, HelpSection } from './SettingsWorkspaceHelp';
 import { Section, SettingRow, RowLabelContext } from './SettingsPrimitives';
 import { onSettingsFocusRequest, takeSettingsFocusRequest } from './settingsFocus';
@@ -182,6 +182,7 @@ const KERNEL_FRAMEWORK_OPTIONS: ReadonlyArray<{ value: 'qiskit' | 'cirq' | 'cuda
 ];
 
 export function SettingsPanel() {
+  const { confirm, confirmDialog } = useConfirm();
   const colors = useThemeStore((s) => s.colors);
   const themePreference = useThemeStore((s) => s.preference);
   const setThemePreference = useThemeStore((s) => s.setPreference);
@@ -397,11 +398,11 @@ export function SettingsPanel() {
         </Section>}
 
         {/* ── Frameworks ── */}
-        <FrameworksSection />
+        {!isWeb && <FrameworksSection />}
 
         {/* ── Kernel ── */}
         <Section title={kernelEngineName(isWeb)}>
-          <SettingRow label="Default framework">
+          <SettingRow label="Default framework" hint={isWeb ? 'The web version runs Python in your browser via Pyodide.' : undefined}>
             <SettingSelect value={kernel.defaultFramework}
               options={frameworkOptions}
               onChange={(v) => updateKernel({ defaultFramework: v })} />
@@ -443,10 +444,20 @@ export function SettingsPanel() {
           variant="secondary"
           icon={<RotateCcw size={12} />}
           style={{ width: '100%' }}
-          onClick={() => { if (window.confirm('Reset all settings to their defaults? This cannot be undone.')) resetAll(); }}
+          onClick={async () => {
+            const ok = await confirm({
+              title: 'Reset all settings?',
+              description: 'Every setting goes back to its default. This cannot be undone.',
+              confirmLabel: 'Reset',
+              cancelLabel: 'Keep settings',
+              tone: 'danger',
+            });
+            if (ok) resetAll();
+          }}
         >
           Reset to defaults
         </Button>
+        {confirmDialog}
       </div>
     </div>
   );

@@ -211,3 +211,24 @@ describe('SettingsPanel platform and audience honesty (shell-r6-01, shell-r6-04)
     expect(screen.queryByText('Agent hardware autonomy')).toBeNull();
   });
 });
+
+describe('SettingsPanel destructive and platform chrome (r7-chrome)', () => {
+  it('Reset to defaults asks through the themed dialog, never a native confirm', async () => {
+    const nativeSpy = vi.spyOn(window, 'confirm');
+    render(<SettingsPanel />);
+    fireEvent.click(screen.getByRole('button', { name: /Reset to defaults/ }));
+    const dialog = await screen.findByRole('dialog');
+    expect(dialog.textContent).toContain('Reset all settings?');
+    fireEvent.click(screen.getByRole('button', { name: 'Keep settings' }));
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    expect(nativeSpy).not.toHaveBeenCalled();
+    nativeSpy.mockRestore();
+  });
+
+  it('web omits the Environment section and keeps the Pyodide sentence in the Python section', () => {
+    platform.web = true;
+    render(<SettingsPanel />);
+    expect(screen.queryByText('Environment')).toBeNull();
+    expect(screen.getByText(/runs Python in your browser via Pyodide/)).toBeTruthy();
+  });
+});
