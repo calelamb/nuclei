@@ -58,4 +58,12 @@ describe('Open circuit feedback (rq-r3-07)', () => {
     expect(screen.getByRole('alert').textContent).toMatch(/Stim may not be available in this kernel/);
     expect(screen.queryByRole('button', { name: /Open surface-d7\.stim/ })).toBeNull();
   });
+
+  it('offers Try again after the stall, which brings the Open button back', async () => {
+    mount();
+    await clickOpen();
+    act(() => { vi.advanceTimersByTime(CIRCUIT_LOAD_TIMEOUT_MS + 50); });
+    fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
+    expect(screen.getByRole('button', { name: /Open surface-d7\.stim/ })).toBeTruthy();
+  });
 });

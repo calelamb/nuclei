@@ -228,7 +228,7 @@ export function LaunchPortal() {
             const isDisabled = p.disabled || qsharpBlocked;
             const reason = p.disabled ? 'Coming soon' : qsharpBlocked ? QSHARP_GATE_TOOLTIP : null;
             const card = (
-            <button className="nuclei-hover-lift"
+            <button className={isDisabled ? undefined : 'nuclei-hover-lift'}
               key={p.name}
               onClick={() => handlePickProvider(p)}
               aria-disabled={isDisabled || undefined}

@@ -16,7 +16,7 @@ function showInEditor(): void {
 }
 
 /** What happens after the file is open: a loading line with a way to the editor, then an honest reason if nothing arrives. */
-function OpenProgress({ phase }: { phase: Exclude<OpenFeedbackPhase, 'idle'> }): ReactElement {
+function OpenProgress({ phase, onRetry }: { phase: Exclude<OpenFeedbackPhase, 'idle'>; onRetry: () => void }): ReactElement {
   const link = <button type="button" className="qec-instrument__link" onClick={showInEditor}>Show in editor</button>;
   if (phase === 'loading') {
     return (
@@ -27,7 +27,7 @@ function OpenProgress({ phase }: { phase: Exclude<OpenFeedbackPhase, 'idle'> }):
   }
   return (
     <span className="qec-instrument__hint" role="alert">
-      No circuit came back. Stim may not be available in this kernel, so the file is open in the editor but cannot be drawn here. {link}
+      No circuit came back. Stim may not be available in this kernel, so the file is open in the editor but cannot be drawn here. {link} <button type="button" className="qec-instrument__link" onClick={onRetry}>Try again</button>
     </span>
   );
 }
@@ -65,7 +65,7 @@ export function OpenCircuitAction(): ReactElement {
   return (
     <span className="qec-open-circuit">
       {phase === 'idle' && <Button size="sm" variant="primary" onClick={onOpen}>{`Open ${circuit.path.split('/').pop()}`}</Button>}
-      {phase !== 'idle' && <OpenProgress phase={phase} />}
+      {phase !== 'idle' && <OpenProgress phase={phase} onRetry={() => setPhase('idle')} />}
       {error && <span className="qec-instrument__hint" role="alert">{error}</span>}
     </span>
   );
