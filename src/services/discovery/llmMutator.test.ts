@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { HAIKU_MODEL, OPUS_MODEL, SONNET_MODEL } from '../../config/dirac';
+import { DISCOVERY_HAIKU_MODEL, DISCOVERY_OPUS_MODEL, DISCOVERY_SONNET_MODEL } from './models';
 import {
   PROPOSE_TOOL_NAME, TIER_MODEL_IDS, buildRequestBody, createLlmMutator, resolveProposal, routeModel,
   usesAdaptiveThinking, validateProposal, type ProposeInput,
@@ -35,7 +35,7 @@ describe('request shape', () => {
       'x-api-key': 'sk-test', 'anthropic-version': '2023-06-01', 'anthropic-dangerous-direct-browser-access': 'true',
     });
     const body = JSON.parse(init.body as string);
-    expect(body.model).toBe(HAIKU_MODEL);
+    expect(body.model).toBe(DISCOVERY_HAIKU_MODEL);
     expect(body.tool_choice).toEqual({ type: 'tool', name: PROPOSE_TOOL_NAME });
     expect(body.system[0].cache_control).toEqual({ type: 'ephemeral' });
     expect(body.thinking).toBeUndefined();
@@ -108,14 +108,17 @@ describe('routing and thinking', () => {
   });
 
   it('maps tiers to the ids in config/dirac', () => {
-    expect(TIER_MODEL_IDS).toEqual({ haiku: HAIKU_MODEL, sonnet: SONNET_MODEL, opus: OPUS_MODEL });
+    expect(TIER_MODEL_IDS).toEqual({ haiku: DISCOVERY_HAIKU_MODEL, sonnet: DISCOVERY_SONNET_MODEL, opus: DISCOVERY_OPUS_MODEL });
+    expect(TIER_MODEL_IDS).toEqual({ haiku: 'claude-haiku-5-5', sonnet: 'claude-sonnet-5-5', opus: 'claude-opus-5-5' });
   });
 
   it('uses adaptive thinking with tool_choice auto on depth calls (forced choice is incompatible)', () => {
     const body = buildRequestBody(input({ tier: 'opus', depth: true, thinking: true }));
     expect(body.tool_choice).toEqual({ type: 'auto' });
     expect(body.thinking).toEqual({ type: 'adaptive' });
+    expect(body.model).toBe('claude-opus-5-5');
     expect(usesAdaptiveThinking('claude-opus-4-7')).toBe(true);
+    for (const id of Object.values(TIER_MODEL_IDS)) expect(usesAdaptiveThinking(id)).toBe(true);
     expect(usesAdaptiveThinking('claude-haiku-4-5-20251001')).toBe(false);
   });
 
