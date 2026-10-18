@@ -11,9 +11,17 @@ describe('describeStale', () => {
     expect(pill?.line).toBeNull();
   });
 
-  it('lets a real error or pause outrank a pending update', () => {
-    expect(describeStale({ ...quiet, previewPending: true, errorLine: 4 })?.label).toBe('Out of date · line 4');
+  it('lets a pending update outrank an error from older code (interaction-r-07), but not a pause', () => {
+    expect(describeStale({ ...quiet, previewPending: true, errorLine: 4 })?.label).toBe('Updating…');
+    expect(describeStale({ ...quiet, previewPending: true, error: 'x' })?.label).toBe('Updating…');
     expect(describeStale({ ...quiet, previewPending: true, previewPaused: true })?.label).toBe('Preview paused');
+    expect(describeStale({ ...quiet, errorLine: 4 })?.label).toBe('Out of date · line 4');
+  });
+
+  it('explains the pause in a sentence and makes it actionable (interaction-r-12)', () => {
+    const pill = describeStale({ ...quiet, previewPaused: true });
+    expect(pill?.tooltip).toBe('This code takes longer than 5 s to preview. Press Run to run it.');
+    expect(pill?.action).toBe('run');
   });
 
   it('is null when nothing is wrong', () => {

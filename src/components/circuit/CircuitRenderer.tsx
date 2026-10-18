@@ -7,6 +7,7 @@ import { useEditorStore } from '../../stores/editorStore';
 import { useSimulationStore } from '../../stores/simulationStore';
 import { useDisplaySnapshot } from '../../layout/useDisplaySnapshot';
 import { usePreviewPending } from '../../layout/usePreviewPending';
+import { useErrorPending } from './useErrorPending';
 import { renderGate, gateY, GATE_SIZE, LABEL_WIDTH } from './gates';
 import { computeCircuitGeometry, columnX } from './geometry';
 import { formatAngle } from './formatAngle';
@@ -14,7 +15,7 @@ import { CircuitEmptyState } from './CircuitEmptyState';
 import { ExportMenu } from './ExportMenu';
 import { useEdgeFades } from './edgeFades';
 import { fitCircuitWidth } from './fitCircuit';
-import { describeStale } from './staleCaption';
+import { describeStale, type StalePill } from './staleCaption';
 import { circuitOverflows, hiddenQubitWires } from '../../layout/circuitRail';
 import { prefersReducedMotion } from '../../lib/animations';
 import { StaleResultNotice } from '../layout/StaleResultNotice';
@@ -156,11 +157,19 @@ function describeCircuit(snapshot: import('../../types/quantum').CircuitSnapshot
 /** A diagram waiting on its refreshed preview: dimmer than live, lighter than the last-good stale state. */
 const PENDING_OPACITY = 0.6;
 
+/** A pill that names a line jumps to it; the pause pill runs the code (the Run it tells the person to press). */
+function staleActivation(pill: StalePill, revealLine: (line: number) => void): (() => void) | undefined {
+  if (pill.line !== null) return () => revealLine(pill.line as number);
+  if (pill.action === 'run') return () => { void import('../../App').then((app) => app.getExecute()?.()); };
+  return undefined;
+}
+
 export function CircuitRenderer() {
   const { snapshot, stale } = useDisplaySnapshot();
   const error = useCircuitStore((s) => s.error);
   const previewPaused = useCircuitStore((s) => s.previewPaused);
   const previewPending = usePreviewPending();
+  const errorPending = useErrorPending();
   const errorLine = useEditorStore((s) => s.errors[0]?.line ?? null);
   const isRunning = useSimulationStore((s) => s.isRunning);
   const highlights = useCircuitStore((s) => s.highlights);
@@ -222,8 +231,9 @@ export function CircuitRenderer() {
   const hasClassical = classical_bit_count > 0;
   const { columns, svgWidth, svgHeight, classicalWireY, wireStart, wireEnd } = computeCircuitGeometry(snapshot);
 
-  const stalePill = stale || previewPending ? describeStale({ previewPaused, error, errorLine, previewPending }) : null;
-  const dimmed = stale || previewPending;
+  const awaiting = previewPending || errorPending;
+  const stalePill = stale || awaiting ? describeStale({ previewPaused, error, errorLine, previewPending: awaiting }) : null;
+  const dimmed = stale || awaiting;
   const highlightSet = new Set(highlights.map((h) => h.gateIndex));
 
   const ariaDescription = describeCircuit(snapshot);
@@ -245,7 +255,7 @@ export function CircuitRenderer() {
               inline
               label={stalePill.label}
               tooltip={stalePill.tooltip}
-              onActivate={stalePill.line !== null ? () => revealLine(stalePill.line as number) : undefined}
+              onActivate={staleActivation(stalePill, revealLine)}
             />
           )}
         </span>
@@ -259,7 +269,7 @@ export function CircuitRenderer() {
         ref={setContainerRef}
         onScroll={handleScroll}
         className="circuit-renderer-container"
-        style={{ ...fadeStyle, flex: 1, minHeight: 0, overflow: 'auto', position: 'relative', padding: '4px 0 6px', opacity: stale ? 0.45 : previewPending ? PENDING_OPACITY : 1, transition: 'opacity var(--duration-fast) var(--ease-standard)' }}
+        style={{ ...fadeStyle, flex: 1, minHeight: 0, overflow: 'auto', position: 'relative', padding: '4px 0 6px', opacity: stale ? 0.45 : awaiting ? PENDING_OPACITY : 1, transition: 'opacity var(--duration-fast) var(--ease-standard)' }}
         aria-description={ariaDescription}
       >
         <svg
