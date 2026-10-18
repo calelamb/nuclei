@@ -52,14 +52,19 @@ def test_free_fermion_chain_has_dimension_n_times_2n_minus_1(n):
     assert res["path"] == "pauli_strings"
     assert res["classification"]["confidence"] == "exact_dimension_match"
     assert res["classification"]["label"] == f"so({2 * n})"
+    if n == 2:      # so(4) = so(2^2) is the full exponential family, even though 6 <= 4 n^2
+        assert res["simulability"]["kind"] == "exponential_dla"
+        return
     assert res["simulability"]["kind"] == "g_sim_feasible" and "Goh et al. 2023" in res["simulability"]["summary"]
+    assert "guarantee trainability" in res["simulability"]["summary"]
 
 
 def test_brickwork_ry_cz_hea_n3_is_so8_dimension_28():
     res = lie_algebra(brickwork_hea(3, 4))
     assert res["dimension"] == 28 and res["classification"]["label"] == "so(8)"
     assert res["classification"]["family"] == "so"
-    assert res["simulability"]["kind"] == "g_sim_feasible"   # 28 <= 4 n^2 = 36
+    # PH-M3: 28 <= 4 n^2 = 36, but so(8) = so(2^3) is the FULL exponential family: never g_sim_feasible
+    assert res["simulability"]["kind"] == "exponential_dla" and "so(8)" in res["simulability"]["summary"]
 
 
 def test_plain_repeated_ladder_gives_12_not_28():
@@ -428,3 +433,23 @@ def test_pauli_sum_path_predicts_only_for_the_provably_simple_su_2n():
     res = lie_algebra(shared, observable=parse_observable("Z0", 3))
     assert res["path"] == "pauli_sums" and res["dimension"] == 63          # dim 4^3 - 1: su(8), simple
     assert res["prediction_applicable"] is True and res["predicted_variance"] == pytest.approx(1 / 9)
+
+
+# -------------------------------------- PH-M3: family check precedes the polynomial-dimension cap
+@pytest.mark.parametrize("n,dim", [(2, 15), (2, 6), (2, 10), (3, 28), (3, 36), (3, 63)])
+def test_full_exponential_families_are_never_g_sim_feasible_even_below_4n2(n, dim):
+    """su(4)/sp(2)/so(4) at n=2, so(8)/sp(4) at n=3 (dim <= 4n^2) were labelled g_sim_feasible."""
+    from kernel.trainability.lie import _simulability
+    cls = lie_core.classify_dimension(dim, n)
+    assert cls["family"] in ("su", "so", "sp")
+    assert _simulability("complete", dim, dim, n, cls, None)["kind"] == "exponential_dla"
+
+
+def test_su4_at_n2_is_exponential_dla_via_the_full_pipeline():
+    res = lie_algebra(two_axis_hea(2, 3), observable=parse_observable("Z0", 2))
+    assert res["dimension"] == 15 and res["simulability"]["kind"] == "exponential_dla"
+
+
+def test_polynomial_non_family_algebra_is_still_g_sim_feasible():
+    res = lie_algebra(_free_fermion(5), observable=parse_observable("Z0*Z1", 5))
+    assert res["dimension"] == 45 and res["simulability"]["kind"] == "g_sim_feasible"

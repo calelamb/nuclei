@@ -206,16 +206,19 @@ def _simulability(status: str, dim: int | None, lower: int | None, n: int, cls: 
         return {"kind": "unknown", "summary": (
             f"The closure was truncated at dim 𝔤 ≥ {lower}; the full dimension is unknown, so no simulability "
             "claim is made.")}
+    # Family first (PH-M3): a full su/so/sp(2^n) is the exponential family at every n, even where its
+    # dimension happens to be below 4n² (so(8) at n = 3, su(4) at n = 2); never g_sim_feasible.
+    if cls["family"] in ("su", "so", "sp"):
+        return {"kind": "exponential_dla", "summary": (
+            f"dim 𝔤 = {dim} = {cls['label']}, the full exponential family: 𝔤-sim is not efficient in n and the "
+            "cost concentrates exponentially for deep circuits (Ragone et al. 2024).")}
     if dim <= cap:
         what = (f" = n(2n−1): free-fermion algebra {cls['label']}" if cls["family"] == "free_fermion"
                 else (f" = {cls['label']}" if cls["family"] != "other" else ""))
         return {"kind": "g_sim_feasible", "summary": (
             f"dim 𝔤 = {dim}{what} (≤ 4n² = {cap}). Expectations are classically simulable in poly(dim 𝔤) "
-            f"time when the observable or the initial state lies in 𝔤 ({_GOH}).{_membership(purity)}")}
-    if cls["family"] in ("su", "so", "sp"):
-        return {"kind": "exponential_dla", "summary": (
-            f"dim 𝔤 = {dim} = {cls['label']} (exponential in n): 𝔤-sim is not efficient and the cost "
-            "concentrates exponentially for deep circuits (Ragone et al. 2024).")}
+            f"time when the observable or the initial state lies in 𝔤 ({_GOH}); a polynomial dimension "
+            f"does not by itself bound the purities or guarantee trainability.{_membership(purity)}")}
     return {"kind": "unknown", "summary": (
         f"dim 𝔤 = {dim} > 4n² = {cap} and not a named full algebra: 𝔤-sim is not guaranteed efficient.")}
 
