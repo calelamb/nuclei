@@ -29,11 +29,20 @@ Classification, g-purities, prediction
 --------------------------------------
 Classification is by exact dimension match only (``classify_dimension``).  With
 ``B_j = P_j/√2^n``, ``P_𝔤(O) = 2^n Σ_{P∈𝔤} |c_P|²`` and ``P_𝔤(|0><0|) = #{P ∈ 𝔤 ∩ {I,Z}^n}/2^n``.  The
-Ragone et al. (Nat. Commun. 15, 7172 (2024)) formula ``Var_cost = P_𝔤(ρ) P_𝔤(O)/dim 𝔤`` is the
-variance of the **cost** over the group (not of one gradient component) in the deep-circuit
-limit for simple 𝔤.  It is flagged applicable only if the closure is complete, 𝔤 is not
-abelian (an abelian 𝔤 is far from a 2-design: e.g. one ``Z`` generator gives dim 1 and zero
-variance), and the observable or the state lies in 𝔤.
+Ragone et al. (Nat. Commun. 15, 7172 (2024)) formula ``Var_cost = Σ_j P_𝔤j(ρ) P_𝔤j(O)/dim 𝔤j``
+is the variance of the **cost** over the group (not of one gradient component) in the deep-circuit
+limit, summed over the simple ideals 𝔤j of the reductive ``𝔤 = 𝔷 ⊕ ⊕_j 𝔤j``; the centre 𝔷 does not
+contribute.  Pauli-string path: 𝔷 and the 𝔤j come from :func:`lie_core.ideal_decomposition` (centre =
+strings commuting with the whole basis, ideals = connected components of the anticommutation graph).
+Pauli-sum path: the ideal structure is not computed, so the prediction is flagged applicable only for
+the provably simple ``dim 𝔤 = 4^n − 1`` (𝔤 = su(2^n)).  It is flagged applicable only if the closure is
+complete, 𝔤 has a non-central ideal (an abelian 𝔤 is far from a 2-design: e.g. one ``Z`` generator
+gives dim 1 and zero variance), and the observable or the state lies in 𝔤.
+
+Simulability is decided from the family first: an exact dimension match to su/so/sp(2^n) is the
+*exponential* family and is never ``g_sim_feasible``, however small n is (so(8) at n = 3 is the full
+so(2^n)); only then is a dimension ≤ 4n² read as polynomial.  A polynomial dimension suggests 𝔤-sim
+simulability; it does not by itself bound the purities or guarantee trainability.
 
 ``elapsed_ms`` is the only run-dependent field; everything else is deterministic.
 """
@@ -61,6 +70,7 @@ _IN_ALGEBRA_TOL = 1e-9
 _ABELIAN_CHECK_LIMIT = 400
 #: skip g-purities on the Pauli-sum path when the basis has more nonzeros than this (pure-Python loops).
 _MAX_SUM_NNZ = 1_500_000
+_PURITY_KEYS = ("initial_state", "observable", "observable_in_algebra", "state_in_algebra")
 _LETTER = {(1, 0): "X", (0, 1): "Z", (1, 1): "Y"}
 _GOH = "𝔤-sim, Goh et al. 2023 (arXiv:2308.01432)"
 
@@ -152,7 +162,7 @@ def _sum_purities(basis: list[dict], obs_terms: list[tuple[float, tuple]], n: in
     residual = float(np.sqrt(max(total - proj, 0.0)))
     return {
         "purity_observable": float(2.0 ** n * proj), "purity_state": float(2.0 ** n * state_proj),
-        "observable_in_algebra": bool(obs) and residual < _IN_ALGEBRA_TOL * max(1.0, np.sqrt(total)),
+        "observable_in_algebra": bool(bool(obs) and residual < _IN_ALGEBRA_TOL * max(1.0, np.sqrt(total))),
         "state_in_algebra": bool((state_total - state_proj) / state_total < _IN_ALGEBRA_TOL),
     }
 
@@ -210,9 +220,9 @@ def _simulability(status: str, dim: int | None, lower: int | None, n: int, cls: 
         f"dim 𝔤 = {dim} > 4n² = {cap} and not a named full algebra: 𝔤-sim is not guaranteed efficient.")}
 
 
-def _assumptions(path: str, complete: bool, shared: bool) -> list[str]:
+def _assumptions(path: str, complete: bool, shared: bool, purity: dict | None = None) -> list[str]:
     out = ["Deep-circuit regime: the circuit is an approximate 2-design over e^𝔤 (not guaranteed for shallow circuits).",
-           "𝔤 treated as simple; for reductive 𝔤 this is the leading term.",
+           _ideal_assumption(path, purity),
            "The predicted quantity is the variance of the cost C over the group, not of a single gradient component.",
            "Initial state |0…0⟩; fixed gates are pushed to the end of the circuit."]
     if shared:
@@ -224,6 +234,17 @@ def _assumptions(path: str, complete: bool, shared: bool) -> list[str]:
     return out
 
 
+def _ideal_assumption(path: str, purity: dict | None) -> str:
+    if path == "pauli_strings" and purity and purity.get("ideals") is not None:
+        k, c = len(purity["ideals"]), purity["centre_dimension"]
+        return (f"𝔤 = centre (dim {c}) ⊕ {k} simple ideal(s) (connected components of the anticommutation "
+                "graph); the centre is excluded and the ideals' variances add, each ideal assumed Haar-random.")
+    if path == "pauli_sums":
+        return ("Pauli-sum generators: the ideal structure of 𝔤 is not computed; the prediction is made only "
+                "when 𝔤 = su(2^n) (dim 4^n − 1), the one verifiably simple case.")
+    return "The ideal structure of 𝔤 (centre, simple ideals) is not analysed on this path."
+
+
 def _empty_result(circuit: ParamCircuit, max_dimension: int, t0: float, fixed: dict) -> dict:
     return _assemble(circuit.n_qubits, max_dimension, {"status": "complete", "dimension": 0,
                      "dimension_lower_bound": 0, "reason": None}, [], fixed, None, "none", False, t0)
@@ -231,6 +252,7 @@ def _empty_result(circuit: ParamCircuit, max_dimension: int, t0: float, fixed: d
 
 def _assemble(n, max_dimension, closure, gens, fixed, purity, path, shared, t0, abelian=False,
               prediction=None, obs_given=False) -> dict:
+    note = prediction[2] if prediction and len(prediction) > 2 else None
     status = closure["status"]
     dim = closure["dimension"] if status == "complete" else None
     lower = closure.get("dimension_lower_bound")
@@ -252,27 +274,39 @@ def _assemble(n, max_dimension, closure, gens, fixed, purity, path, shared, t0, 
         "classification": cls, "path": path,
         "generators": {"count": len(gens), "unique": len(uniq), "examples": examples},
         "fixed_gates": fixed,
-        "purity": purity if purity is not None else {
+        "purity": {k: purity[k] for k in _PURITY_KEYS} if purity is not None else {
             "initial_state": None, "observable": None, "observable_in_algebra": None, "state_in_algebra": None},
+        # centre + simple ideals (Pauli-string path only); the prediction is Σ_j P_j(ρ) P_j(O) / dim_j over these
+        "ideals": ({"centre_dimension": purity["centre_dimension"], "items": purity["ideals"]}
+                   if purity is not None and purity.get("ideals") is not None else None),
         "predicted_variance": prediction[0] if prediction else None,
         "prediction_applicable": bool(prediction and prediction[1]),
-        "prediction_quantity": "cost_variance",
+        "prediction_quantity": "cost_variance", "prediction_note": note,
         "abelian": abelian if status == "complete" else None,
-        "assumptions": _assumptions(path, status == "complete", shared),
+        "assumptions": _assumptions(path, status == "complete", shared, purity),
         "simulability": sim,
         "elapsed_ms": int(round((time.perf_counter() - t0) * 1e3)),
     }
 
 
 # ---------------------------------------------------------------------- main
-def _prediction(purity: dict, dim: int, abelian: bool) -> tuple[float | None, bool]:
+def _prediction(purity: dict, dim: int, abelian: bool, path: str, n: int) -> tuple[float | None, bool, str | None]:
+    """``(prediction, applicable, note)``; never applicable unless the ideal structure is known to be right."""
     if abelian or dim <= 0:
-        return None, False
+        return None, False, "𝔤 is abelian: no Haar-random factor, the formula does not apply."
+    if path == "pauli_strings":
+        pred = lie_core.predicted_variance_reductive(purity)
+        if pred is None:
+            return None, False, "neither the observable nor the initial state lies in 𝔤."
+        return pred, True, None
+    if dim != 4 ** n - 1:
+        return None, False, ("Pauli-sum generators: the centre and simple ideals of 𝔤 are not computed and the "
+                             "single-ideal formula is wrong for a non-simple 𝔤, so no prediction is made "
+                             "(only 𝔤 = su(2^n) is verifiably simple).")
     pred = lie_core.predicted_variance(
         {"purity_state": purity["initial_state"], "purity_observable": purity["observable"],
-         "observable_in_algebra": purity["observable_in_algebra"], "state_in_algebra": purity["state_in_algebra"]},
-        dim)
-    return pred, pred is not None
+         "observable_in_algebra": purity["observable_in_algebra"], "state_in_algebra": purity["state_in_algebra"]}, dim)
+    return pred, pred is not None, (None if pred is not None else "neither the observable nor the state lies in 𝔤.")
 
 
 def _closure_clifford(gens: list[Gen], n, max_dimension, time_budget_s, cancel) -> tuple[dict, str]:
@@ -331,9 +365,11 @@ def lie_algebra(
         purity = {"initial_state": raw["purity_state"],
                   "observable": raw["purity_observable"] if observable is not None else None,
                   "observable_in_algebra": raw["observable_in_algebra"] if observable is not None else None,
-                  "state_in_algebra": raw["state_in_algebra"]}
+                  "state_in_algebra": raw["state_in_algebra"],
+                  "ideals": raw.get("ideals"), "centre_dimension": raw.get("centre_dimension")}
         abelian = _is_abelian(gens, closure["dimension"], n)
-        pred = _prediction(purity, closure["dimension"], abelian) if observable is not None else None
+        pred = (_prediction(purity, closure["dimension"], abelian, path, n)
+                if observable is not None else None)
     out = _assemble(n, max_dimension, closure, gens, fixed, purity, path, shared, t0, abelian, pred)
     if sum_too_big:
         out["assumptions"].append("The Pauli-sum basis is too large for g-purities; purities and the prediction "
@@ -349,10 +385,11 @@ def _dense(items, circuit, observable, max_dimension, time_budget_s, cancel, fix
             "n_qubits": n, "dimension": None, "dimension_lower_bound": None, "max_dimension": max_dimension,
             "classification": _classification("unsupported", None, n), "path": "dense",
             "generators": {"count": 0, "unique": 0, "examples": []}, "fixed_gates": fixed,
+            "ideals": None,
             "purity": {"initial_state": None, "observable": None, "observable_in_algebra": None,
                        "state_in_algebra": None},
             "predicted_variance": None, "prediction_applicable": False, "prediction_quantity": "cost_variance",
-            "abelian": None, "assumptions": _assumptions("dense", False, shared),
+            "prediction_note": "dense fallback: purities are not computed", "abelian": None, "assumptions": _assumptions("dense", False, shared),
             "simulability": _simulability("unsupported", None, None, n, {}, None),
             "elapsed_ms": int(round((time.perf_counter() - t0) * 1e3))}
         return res

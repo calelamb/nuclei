@@ -348,3 +348,83 @@ def test_predicted_cost_variance_lies_in_the_empirical_cost_variance_ci(name, ci
     assert abs(stats["cost_variance"] - pred["predicted_variance"]) < 0.15 * pred["predicted_variance"]
     # the old UI compared against this, a different quantity (ratio 0.48x exactly where the theory is exact)
     assert stats["variance_mean"] < 0.7 * stats["cost_variance"]
+
+
+# ---------------------------- PH-H1: Ragone for reductive 𝔤 (centre removed, ideals summed)
+def _deep(n, gens, layers):
+    b = Builder(n)
+    for _ in range(layers):
+        for name, qs in gens:
+            b.rot(name, qs)
+    return b.build()
+
+
+def _measured_cost_variance(c, obs, samples=4000, seed=1):
+    rng = np.random.default_rng(seed)
+    vals = rng.uniform(0, 2 * math.pi, (samples, len(c.parameters)))
+    prog = compile_circuit(c)
+    return float(np.concatenate([prog.expectations(vals[i:i + 500], obs) for i in range(0, samples, 500)]).var(ddof=1))
+
+
+def _xy_zz(qubits):
+    gens = [(a, (q,)) for q in qubits for a in ("RX", "RY")]
+    return gens + [("RZZ", (a, b)) for a, b in zip(qubits, qubits[1:])]
+
+
+@pytest.mark.parametrize("name,n,gens,layers,expected_ideals,expected", [
+    # reviewer: su(2) + su(4) predicted 0.222 vs measured 0.332 with the single-ideal formula
+    ("su(2)+su(4)", 3, [("RX", (0,)), ("RY", (0,))] + _xy_zz([1, 2]), 40, [3, 15], 1 / 3),
+    # reviewer: su(2) + su(16) predicted 0.062 vs measured 0.336
+    ("su(2)+su(16)", 5, [("RX", (0,)), ("RY", (0,))] + _xy_zz([1, 2, 3, 4]), 30, [3, 255], 1 / 3),
+    # a centre: su(2) on q0 plus an abelian RZ(q1), which commutes with everything
+    ("su(2)+u(1)", 2, [("RX", (0,)), ("RY", (0,)), ("RZ", (1,))], 20, [3], 1 / 3),
+])
+def test_ragone_sums_simple_ideals_and_drops_the_centre(name, n, gens, layers, expected_ideals, expected):
+    c = _deep(n, gens, layers)
+    obs = parse_observable("Z0", n)
+    res = lie_algebra(c, observable=obs)
+    assert res["prediction_applicable"] is True, name
+    assert sorted(i["dimension"] for i in res["ideals"]["items"]) == sorted(expected_ideals)
+    assert res["ideals"]["centre_dimension"] == (1 if name == "su(2)+u(1)" else 0)
+    assert res["predicted_variance"] == pytest.approx(expected, rel=1e-9)
+    assert _measured_cost_variance(c, obs) == pytest.approx(res["predicted_variance"], rel=0.12)
+    assert not any("treated as simple" in a or "leading term" in a for a in res["assumptions"])
+
+
+def test_ideal_decomposition_of_free_fermion_algebra_is_one_ideal_no_centre():
+    res = lie_algebra(_free_fermion(4, layers=3), observable=parse_observable("Z0*Z1", 4))
+    assert res["ideals"] == {"centre_dimension": 0, "items": [res["ideals"]["items"][0]]}
+    assert res["ideals"]["items"][0]["dimension"] == 28
+
+
+@pytest.mark.parametrize("n", [3, 4, 5])
+def test_qaoa_ring_prediction_is_never_applicable_and_wrong(n):
+    """Reviewer: the old single-ideal formula said 1.125/1.45/1.79 against a measured 0.66 (n=3)."""
+    gates = []
+    for p in range(30):
+        gates += [IrGate("RZZ", tuple(sorted((i, (i + 1) % n))), (ParamRef(f"g{p}"),)) for i in range(n)]
+        gates += [IrGate("RX", (i,), (ParamRef(f"b{p}"),)) for i in range(n)]
+    c = ParamCircuit(n, gates, [f"{k}{p}" for p in range(30) for k in ("g", "b")])
+    obs = PauliSum(tuple(PauliTerm(1.0, tuple(sorted(((i, "Z"), ((i + 1) % n, "Z"))))) for i in range(n)))
+    res = lie_algebra(c, observable=obs)
+    if res["prediction_applicable"]:
+        assert _measured_cost_variance(c, obs, samples=3000) == pytest.approx(res["predicted_variance"], rel=0.15)
+    else:
+        assert res["predicted_variance"] is None and "ideal" in res["prediction_note"]
+        assert any("ideal structure" in a for a in res["assumptions"])
+
+
+def test_pauli_sum_path_predicts_only_for_the_provably_simple_su_2n():
+    # shared-parameter generators with a full su(8): the dimension proves simplicity
+    b = Builder(3)
+    for _ in range(40):
+        for q in range(3):
+            b.rot("RX", (q,))
+            b.rot("RY", (q,))
+        b.rot("RZZ", (0, 1)).rot("RZZ", (1, 2))
+    base = b.build()
+    shared = ParamCircuit(3, [IrGate(g.name, g.qubits, (ParamRef("a" if i % 2 else "b"),)) if g.angles else g
+                              for i, g in enumerate(base.gates)], ["a", "b"])
+    res = lie_algebra(shared, observable=parse_observable("Z0", 3))
+    assert res["path"] == "pauli_sums" and res["dimension"] == 63          # dim 4^3 - 1: su(8), simple
+    assert res["prediction_applicable"] is True and res["predicted_variance"] == pytest.approx(1 / 9)
