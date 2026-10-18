@@ -139,7 +139,7 @@ export function HardwarePanel() {
               }}
             >
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <span style={{ fontSize: 12, fontWeight: 600, color: colors.text, ...font }}>
+                <span style={{ fontSize: 12, fontWeight: 600, color: colors.text, whiteSpace: 'nowrap', ...font }}>
                   {PROVIDER_LABELS[p.name]}
                 </span>
               </div>
@@ -150,7 +150,7 @@ export function HardwarePanel() {
                     Configure
                   </Button>
                 )}
-                <ProviderStatusBadge status={isWeb && p.name === 'simulator' ? { ...status, label: 'Running in your browser' } : status} />
+                <ProviderStatusBadge status={isWeb && p.name === 'simulator' ? { ...status, label: 'In your browser' } : status} />
               </div>
             </div>
             );
@@ -196,7 +196,7 @@ export function HardwarePanel() {
                     marginBottom: 8,
                   }}
                 >
-                  <span style={{ fontSize: 12, fontWeight: 600, color: colors.text, ...font }}>
+                  <span style={{ fontSize: 12, fontWeight: 600, color: colors.text, whiteSpace: 'nowrap', ...font }}>
                     {selectedBackendInfo.name}
                   </span>
                   <Badge tone={selectedBackendInfo.status === 'online' ? 'success' : 'danger'} style={{ textTransform: 'uppercase' }}>
