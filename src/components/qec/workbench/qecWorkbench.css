@@ -451,7 +451,7 @@
 
 .qec-investigation {
   display: flex; min-width: 0; min-height: 0; flex-direction: column;
-  overflow: hidden; background: var(--qec-canvas); container-type: inline-size;
+  overflow: hidden; background: var(--qec-canvas); container: qec-canvas / inline-size;
 }
 
 .qec-investigation__header {
@@ -724,7 +724,7 @@
 .qec-tray__engine-text code { display: block; margin-top: 4px; overflow-wrap: anywhere; font-family: var(--font-mono); font-size: var(--font-size-chrome-label); }
 
 /* A narrow canvas stacks the instruments instead of squeezing the leading one. */
-@container (max-width: 560px) {
+@container qec-canvas (max-width: 560px) {
   .qec-investigation__panels {
     grid-template-columns: minmax(0, 1fr); grid-template-rows: none !important; grid-auto-rows: minmax(max-content, auto);
   }

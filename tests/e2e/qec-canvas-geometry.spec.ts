@@ -7,6 +7,9 @@ const VIEWPORTS = [
   { width: 1440, height: 900 },
   { width: 1100, height: 800 },
   { width: 900, height: 700 },
+  { width: 1512, height: 982 },
+  { width: 1150, height: 800 },
+  { width: 1137, height: 800 },
 ];
 /** Rects closer than this still count as touching, not overlapping. */
 const TOLERANCE_PX = 0.5;
