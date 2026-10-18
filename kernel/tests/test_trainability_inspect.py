@@ -141,3 +141,52 @@ def test_resolution_order_request_then_module_then_preset():
     assert resolve_observable("  ", loaded).to_text() == "X0"
     bare = load_circuit(QISKIT, {})
     assert len(resolve_observable(None, bare).terms) == 3  # preset:local_z on 3 qubits
+
+
+def test_inspect_does_not_steal_concurrent_execute_output():
+    """CR-M9: inspect on a worker thread must not touch the process-global sys.stdout."""
+    import contextlib
+    import io
+    import sys
+    import threading
+
+    reached, release = threading.Event(), threading.Event()
+    sentinel = io.StringIO()
+    code = (
+        "from qiskit import QuantumCircuit\n"
+        "print('inspect noise')\n"
+        "import threading as _t\n"
+        "_t.current_thread()._reached.set(); _t.current_thread()._release.wait(10)\n"
+        "qc = QuantumCircuit(1)\nqc.h(0)\n"
+    )
+    results: list = []
+
+    def worker():
+        threading.current_thread()._reached = reached
+        threading.current_thread()._release = release
+        results.append(inspect_code(code))
+
+    editor_capture = io.StringIO()
+    thread = threading.Thread(target=worker)
+    original = sys.stdout
+    with contextlib.redirect_stdout(editor_capture):  # what Executor does for editor runs
+        installed = sys.stdout
+        thread.start()
+        assert reached.wait(10)
+        print("editor output")  # lands wherever sys.stdout points right now
+        assert sys.stdout is installed, "inspect must not swap sys.stdout"
+        release.set()
+        thread.join(10)
+    assert sys.stdout is original
+    assert editor_capture.getvalue() == "editor output\n"
+    assert results and results[0]["n_qubits"] == 1
+
+
+def test_inspect_still_swallows_user_prints():
+    import contextlib
+    import io
+
+    leaked = io.StringIO()
+    with contextlib.redirect_stdout(leaked):
+        inspect_code("from qiskit import QuantumCircuit\nprint('hi')\nqc = QuantumCircuit(1)\nqc.h(0)\n")
+    assert leaked.getvalue() == ""

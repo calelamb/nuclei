@@ -8,7 +8,7 @@ worker (in the subprocess).  Gate source lines are recovered with
 from __future__ import annotations
 
 import ast
-import contextlib
+import builtins
 import io
 import sys
 import traceback
@@ -34,10 +34,31 @@ class LoadedCircuit:
     lines: GateLineMap | None = None
 
 
+def _scoped_builtins(sink: io.StringIO) -> dict:
+    """A private copy of the builtins whose ``print`` writes to ``sink``.
+
+    Capturing user prints this way touches no process-global state.  The old
+    ``contextlib.redirect_stdout`` swapped ``sys.stdout`` while this ran on a
+    worker thread, so output of a concurrent editor ``execute`` landed in the
+    sink (and the restore order could leave the wrong stream installed).
+    In-process inspect/lint must stay fast (a subprocess costs ~250 ms, half
+    the lint budget, against ~0.3 ms in-process), hence no subprocess here.
+    """
+    scoped = dict(vars(builtins))
+    real_print = builtins.print
+
+    def captured_print(*args, sep=" ", end="\n", file=None, flush=False):
+        real_print(*args, sep=sep, end=end, file=sink if file is None else file, flush=False)
+
+    scoped["print"] = captured_print
+    return scoped
+
+
 def run_namespace(code: str, params: dict | None) -> tuple[dict, GateLineMap]:
     """Execute ``code`` with ``params`` injected; returns (namespace, lines)."""
+    sink = io.StringIO()
     namespace: dict = {
-        "__builtins__": __builtins__,
+        "__builtins__": _scoped_builtins(sink),
         "params": dict(params) if params else {},
         "record_metric": lambda name, value: None,
     }
@@ -45,11 +66,9 @@ def run_namespace(code: str, params: dict | None) -> tuple[dict, GateLineMap]:
         compiled = compile(code, FILENAME, "exec")
     except SyntaxError as exc:
         raise TrainabilityError("compile_error", f"{exc.msg} (line {exc.lineno})") from exc
-    sink = io.StringIO()
     try:
         with trace_gate_lines(FILENAME) as lines:
-            with contextlib.redirect_stdout(sink), contextlib.redirect_stderr(io.StringIO()):
-                exec(compiled, namespace)  # noqa: S102 - user's own code, same trust as execute
+            exec(compiled, namespace)  # noqa: S102 - user's own code, same trust as execute
     except TrainabilityError:
         raise
     except (Exception, SystemExit) as exc:
