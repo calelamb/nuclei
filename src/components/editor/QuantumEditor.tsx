@@ -79,6 +79,14 @@ export function QuantumEditor() {
   const themeName = mode === 'dark' ? 'nuclei-dark' : 'nuclei-light';
   const language = languageForPath(filePath, framework);
 
+  // Flows elsewhere (Explorer create, dialogs) hand the keyboard back to the code through the store.
+  const focusRequest = useEditorStore((s) => s.focusRequest);
+  useEffect(() => {
+    if (focusRequest === 0) return undefined;
+    const id = requestAnimationFrame(() => editorRef.current?.focus());
+    return () => cancelAnimationFrame(id);
+  }, [focusRequest]);
+
   // Switch the model's language when the file extension changes so
   // syntax highlighting follows the file, not the initial buffer.
   useEffect(() => {

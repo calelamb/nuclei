@@ -48,6 +48,9 @@ interface EditorState {
   kernelError: string | null;
   kernelProgress: KernelProgress | null;
   errors: EditorError[];
+  /** Bumped by requestEditorFocus; the editor focuses itself when it changes. */
+  focusRequest: number;
+  requestEditorFocus: () => void;
   setCode: (code: string) => void;
   setFramework: (framework: Framework) => void;
   setFilePath: (path: string | null) => void;
@@ -72,6 +75,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   kernelError: null,
   kernelProgress: null,
   errors: [],
+  focusRequest: 0,
   setCode: (code) => {
     // Don't re-mark as dirty if the user hasn't actually changed anything
     // (e.g. restoring the same default text).
@@ -101,4 +105,5 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   setKernelProgress: (kernelProgress) => set({ kernelProgress }),
   setErrors: (errors) => set({ errors }),
   clearErrors: () => set({ errors: [] }),
+  requestEditorFocus: () => set((s) => ({ focusRequest: s.focusRequest + 1 })),
 }));
