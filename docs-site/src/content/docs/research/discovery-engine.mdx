@@ -343,20 +343,24 @@ limits, a cooperative import blocker (network, `subprocess`, `ctypes` and
 friends) and, where the platform provides it, an OS sandbox. The interface
 states the guarantee plainly:
 
-> The sandbox blocks network access and file writes. It does not block file reads.
+> Where an OS sandbox runs, it blocks network access and file writes outside a private scratch directory, and denies file reads except an allow-list. Plain process isolation blocks nothing at the OS level. Each evaluation reports which applied.
 
 What that means, and does not:
 
 - **macOS** uses `sandbox-exec`: network and writes are denied (except a
-  private scratch directory that is deleted after the run). **File reads are
-  not blocked.** A malicious candidate could read files your user can read,
-  though it cannot send them anywhere or change anything.
-- **Linux** is wired to use `bwrap` (no network, read-only filesystem, private
-  `/tmp`). **That path has not been tested on Linux yet.** The kernel runs a
-  real probe through the wrapper before trusting it and demotes to plain
-  process isolation if it fails, and each evaluation records the isolation it
-  *actually* ran with (`sandbox-exec`, `bwrap` or `process`).
-- **Plain process isolation** has rlimits and the import blocker only. The
+  private scratch directory that is deleted after the run), and **file reads
+  are denied except for an allow-list**: the Python interpreter and virtual
+  environment, the kernel code, system libraries and the scratch directory.
+  File *metadata* (names, sizes) is still readable.
+- **Linux** is wired to use `bwrap` (no network, only the needed paths bound
+  read-only, private `/tmp`). **That path has not been tested on Linux yet.**
+  The kernel runs a real probe through the wrapper before trusting it and
+  demotes to plain process isolation if it fails, and each evaluation records
+  the isolation it *actually* ran with (`sandbox-exec`, `bwrap` or `process`)
+  together with `isolation_detail.reads` (`restricted` or `unrestricted`). The
+  interface shows that value per evaluation and never claims restricted reads
+  when it reports `unrestricted` or reports nothing.
+- **Plain process isolation** has rlimits and the import blocker only; nothing is blocked at the OS level, so reads are unrestricted. The
   blocker is defense in depth and is cooperative; a determined program can get
   around it. The process boundary is the real wall.
 - **Windows** has no OS sandbox.

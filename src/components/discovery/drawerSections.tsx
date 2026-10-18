@@ -116,6 +116,7 @@ export function EvaluationFacts({ evaluation }: { evaluation: DiscoveryEvaluatio
         ['Stage', evaluation.stage ?? '—'],
         ['Cache hit', evaluation.cache_hit === undefined ? '—' : evaluation.cache_hit ? 'yes' : 'no'],
         ['Isolation', evaluation.isolation ?? 'not reported'],
+        ['File reads', evaluation.isolation_detail?.reads ?? 'not reported'],
         ['Eval seed', evaluation.seed],
         ['Sandbox time', t.sandbox === undefined ? '—' : formatDuration(t.sandbox)],
         ['Score time', t.score === undefined ? '—' : formatDuration(t.score)],

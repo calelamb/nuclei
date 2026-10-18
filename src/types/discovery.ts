@@ -17,6 +17,12 @@ export type DiscoveryEvaluatorKind =
 export type DiscoveryStage = 'screen' | 'full' | 'confirm';
 export type DiscoveryIsolation = 'process' | 'bwrap' | 'sandbox-exec';
 
+/** What the reported isolation mode really restricted: only the OS wrappers deny file reads. */
+export type DiscoveryReads = 'restricted' | 'unrestricted';
+export interface DiscoveryIsolationDetail {
+  reads: DiscoveryReads;
+}
+
 export type ObjectiveDirection = 'minimize' | 'maximize';
 
 export interface EvaluatorObjectiveDef {
@@ -116,6 +122,8 @@ export interface DiscoveryEvaluation {
   program_key?: string;
   cache_hit?: boolean;
   isolation?: DiscoveryIsolation;
+  /** Per-evaluation read restriction; absent on older kernels (treated as unreported, never as restricted). */
+  isolation_detail?: DiscoveryIsolationDetail;
   compute?: { backend: string; method: ComputeMethod | null };
 }
 

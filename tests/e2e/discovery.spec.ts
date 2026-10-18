@@ -143,7 +143,7 @@ async function installStubKernel(page: Page): Promise<void> {
                 guardrails: [], rejection: null, failure: null, stdout: '', stderr: '',
                 timings_ms: { sandbox: 5, score: 5, total: 10 },
                 evaluator: { kind: 'trainability_frontier', version: '1.0.0', fingerprint: 'ef56'.repeat(16) },
-                seed: m.seed, stage: m.stage ?? 'full', program_key: `f-${idx}-${m.program.length}`, cache_hit: false, isolation: 'sandbox-exec',
+                seed: m.seed, stage: m.stage ?? 'full', program_key: `f-${idx}-${m.program.length}`, cache_hit: false, isolation: 'sandbox-exec', isolation_detail: { reads: 'restricted' },
               },
             });
           }
@@ -180,6 +180,7 @@ async function installStubKernel(page: Page): Promise<void> {
                 program_key: `k-${n}-${m.program.length}`,
                 cache_hit: false,
                 isolation: 'sandbox-exec',
+                isolation_detail: { reads: 'restricted' },
               },
             });
           }
@@ -232,7 +233,7 @@ test('@discovery runs a search, inspects the results and confirms the champion',
 
   await lab.getByRole('tab', { name: /^Guardrails/ }).click();
   await expect(lab.getByTestId('exploits-found-lane')).toHaveAttribute('data-state', 'empty');
-  await expect(lab.getByText('File reads are being restricted', { exact: true })).toBeVisible();
+  await expect(lab.getByText('File reads are restricted to an allow-list', { exact: true })).toBeVisible();
 
   await lab.getByRole('tab', { name: /^Overview/ }).click();
   await lab.getByRole('button', { name: /Confirm on fresh seeds/ }).click();

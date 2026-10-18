@@ -118,6 +118,7 @@ function evaluation(o: EvalOptions): DiscoveryEvaluation {
     program_key: `key-${o.id}`,
     cache_hit: o.id === 'c-0003',
     isolation: 'sandbox-exec',
+    isolation_detail: { reads: 'restricted' },
     compute: { backend: 'numpy', method: 'statevector_sampling' },
   };
 }

@@ -5,7 +5,7 @@ import { buildTrajectory, stepPath, trajectorySummary } from './trajectory';
 import { buildLineageLayout, isMoreNode, LINEAGE_MAX_LEAF_SIBLINGS, LINEAGE_ROW, lineageNeighbor, lineageSignature } from './lineageLayout';
 import { DEFAULT_FILTER, filterCandidates, sortCandidates } from './candidateTable';
 import { RED_QUEEN_EXPLAINER, SANDBOX_HONESTY } from './honesty';
-import { guardrailPassRates, isolationNote, isolationUsed, rejectionReasons } from './guardrailStats';
+import { allReadsRestricted, guardrailPassRates, isolationNote, isolationUsed, rejectionReasons } from './guardrailStats';
 
 const candidates = fixtureCandidates();
 
@@ -182,15 +182,27 @@ describe('guardrail stats', () => {
     expect(noise.passRate).toBeCloseTo(noise.pass / (noise.pass + noise.fail));
   });
   it('reports the isolation mode and states what it does not block', () => {
-    expect(isolationUsed(candidates)[0].mode).toBe('sandbox-exec');
-    expect(isolationNote('sandbox-exec')).toMatch(/file reads are being restricted/);
-    expect(isolationNote('process')).toMatch(/no OS sandbox/);
+    expect(isolationUsed(candidates)[0]).toMatchObject({ mode: 'sandbox-exec', reads: 'restricted' });
+    expect(isolationNote('sandbox-exec', 'restricted')).toMatch(/denies file reads except an allow-list/);
+    expect(isolationNote('process')).toMatch(/Nothing is blocked at the OS level/);
+  });
+  it('never claims restricted reads for evaluations that reported unrestricted or nothing', () => {
+    const strip = (reads?: 'restricted' | 'unrestricted') =>
+      candidates.map((c) => (c.evaluation ? { ...c, evaluation: { ...c.evaluation, isolation_detail: reads ? { reads } : undefined } } : c));
+    expect(isolationUsed(strip('unrestricted')).every((u) => u.reads === 'unrestricted')).toBe(true);
+    expect(isolationUsed(strip()).every((u) => u.reads === 'unreported')).toBe(true);
+    expect(allReadsRestricted(isolationUsed(candidates))).toBe(true);
+    expect(allReadsRestricted(isolationUsed(strip('unrestricted')))).toBe(false);
+    expect(allReadsRestricted(isolationUsed(strip()))).toBe(false);
+    expect(isolationNote('sandbox-exec', 'unrestricted')).toMatch(/unrestricted file reads/);
+    expect(isolationNote('sandbox-exec', 'unrestricted')).not.toMatch(/denies file reads/);
+    expect(isolationNote('sandbox-exec', 'unreported')).toMatch(/do not assume/);
   });
   it('red queen copy says instructed, not forbidden, and reuses the sandbox constant', () => {
     expect(RED_QUEEN_EXPLAINER).not.toMatch(/forbidden/);
     expect(RED_QUEEN_EXPLAINER).toMatch(/instructed not to/);
     expect(RED_QUEEN_EXPLAINER).toContain(SANDBOX_HONESTY);
-    expect(SANDBOX_HONESTY).toMatch(/blocks network access and file writes; file reads are being restricted/);
+    expect(SANDBOX_HONESTY).toMatch(/blocks network access and file writes outside a private scratch directory, and denies file reads except an allow-list/);
   });
   it('fixture run archive holds the elites', () => {
     expect(Object.values(fixtureRun().archive.islands[0]).length).toBeGreaterThan(0);
