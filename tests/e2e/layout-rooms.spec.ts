@@ -54,3 +54,19 @@ test.describe('a run that finishes without a circuit is not a failure', () => {
     await expect(page.getByText('No circuit in this file')).toBeVisible();
   });
 });
+
+test.describe('results never vanish behind an open sidebar (900x700)', () => {
+  test.use({ viewport: { width: 900, height: 700 } });
+
+  test('Explorer open, Run: the CIRCUIT tab exists and brings the circuit back', async ({ page }) => {
+    await page.goto(FIXTURE_URL);
+    await expect(page.locator('.monaco-editor')).toBeVisible();
+    await page.keyboard.press('Meta+1');
+    await page.click('.monaco-editor');
+    await page.keyboard.press('Meta+Enter');
+    const tab = page.getByRole('button', { name: /Show circuit and results/ });
+    await expect(tab).toBeVisible({ timeout: 60_000 });
+    await tab.click();
+    await expect(page.getByRole('region', { name: 'Circuit' })).toBeVisible();
+  });
+});

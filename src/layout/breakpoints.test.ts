@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   ACTIVITY_BAR_WIDTH, bandsForWidth, DIRAC_COLLAPSE_BELOW, DIRAC_RAIL_WIDTH, EDITOR_MIN_WIDTH, planRoom,
-  shouldFoldDiracForSidebar, SIDEBAR_COLLAPSE_BELOW,
+  shouldFoldDiracForSidebar, SIDEBAR_COLLAPSE_BELOW, vizRailTab,
 } from './breakpoints';
 
 describe('bandsForWidth', () => {
@@ -71,5 +71,24 @@ describe('shouldFoldDiracForSidebar (the panel opened last wins)', () => {
 
   it('does not fold Dirac when folding would not rescue the editor anyway', () => {
     expect(shouldFoldDiracForSidebar({ sidebarWidth: 600, viewport: 900, diracWidth: 320 })).toBe(false);
+  });
+});
+
+describe('vizRailTab', () => {
+  const base = { vizHasContent: true, vizFits: false, diracOpen: false, sidebarOpen: false };
+
+  it('stays away when the column fits or has nothing to show', () => {
+    expect(vizRailTab({ ...base, vizFits: true })).toBeNull();
+    expect(vizRailTab({ ...base, vizHasContent: false })).toBeNull();
+  });
+
+  it('folds Dirac when Dirac is what is in the way', () => {
+    expect(vizRailTab({ ...base, diracOpen: true, sidebarOpen: true })?.action).toBe('foldDirac');
+  });
+
+  it('closes the sidebar when only the sidebar is in the way (900px + Explorer)', () => {
+    const tab = vizRailTab({ ...base, sidebarOpen: true });
+    expect(tab?.action).toBe('closeSidebar');
+    expect(tab?.ariaLabel).toBe('Show circuit and results (closes sidebar)');
   });
 });

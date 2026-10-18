@@ -14,7 +14,7 @@ import { useShellLayout } from '../../hooks/useShellLayout';
 import { useUiFeatures } from '../../hooks/useUiFeatures';
 import { useElementSize } from '../../hooks/useElementSize';
 import { vizColumnHasContent, vizPlaceholder } from '../../layout/vizPanels';
-import { EDITOR_MIN_WIDTH, VIZ_MIN_WIDTH } from '../../layout/breakpoints';
+import { EDITOR_MIN_WIDTH, VIZ_MIN_WIDTH, vizRailTab } from '../../layout/breakpoints';
 import { DiracSidePanel } from '../dirac/DiracSidePanel';
 import { ActivityBar } from './ActivityBar';
 import type { ActivityView } from './ActivityBar';
@@ -215,6 +215,7 @@ export function PanelLayout() {
 
   const diracOpen = useDiracPanelStore((s) => s.isOpen);
   const closeDirac = useDiracPanelStore((s) => s.close);
+  const railTab = vizRailTab({ vizHasContent, vizFits, diracOpen, sidebarOpen: showSidebar });
   useRoomRetreat({ sidebarWidth, vizWanted: vizHasContent, canCollapseSidebar: !editorHidden && !fullViewOwnsArea, sidebarOpen: showSidebar });
 
   useShellLayout({
@@ -497,8 +498,13 @@ export function PanelLayout() {
                   </div>
                 </div>
 
-                {vizHasContent && !vizFits && diracOpen && (
-                  <button type="button" className="viz-rail" onClick={closeDirac} aria-label="Show circuit and results (folds Dirac)">
+                {railTab && (
+                  <button
+                    type="button"
+                    className="viz-rail"
+                    onClick={() => (railTab.action === 'foldDirac' ? closeDirac() : setActiveView(null))}
+                    aria-label={railTab.ariaLabel}
+                  >
                     <span className="viz-rail__label">CIRCUIT</span>
                   </button>
                 )}
