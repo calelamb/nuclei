@@ -1058,7 +1058,7 @@ _LAB_MESSAGE_PREFIXES = ("trainability_", "discovery_")
 
 
 def _lab_context(executor: Executor, websocket) -> "LabContext":
-    from kernel.lab_context import LabContext
+    from kernel.lab_context import LabContext, owner_for_connection
 
     async def _send_json(payload: dict) -> None:
         try:
@@ -1078,7 +1078,7 @@ def _lab_context(executor: Executor, websocket) -> "LabContext":
         executor=executor,
         send_json=_send_json,
         loop=asyncio.get_running_loop(),
-        owner=id(websocket),
+        owner=owner_for_connection(websocket),
     )
 
 
@@ -1132,8 +1132,8 @@ async def _handle_connection(websocket):
     finally:
         # Cancel any Lab jobs this connection owns so a closed window never
         # leaves a gradient sweep or discovery evaluation burning CPU.
-        from kernel.lab_context import release_owner
-        release_owner(id(websocket))
+        from kernel.lab_context import owner_for_connection, release_owner
+        release_owner(owner_for_connection(websocket))
 
 
 async def _try_serve(port: int):

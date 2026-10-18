@@ -17,7 +17,7 @@ from kernel import server  # noqa: E402
 from kernel.discovery import manager as manager_module  # noqa: E402
 from kernel.discovery.audits import runner as audit_runner  # noqa: E402
 from kernel.discovery.audits.runner import AuditManager  # noqa: E402
-from kernel.lab_context import release_owner  # noqa: E402
+from kernel.lab_context import owner_for_connection, release_owner  # noqa: E402
 from kernel.tests._discovery_audit_helpers import HONEST_SEEDS, honest_evaluation, read_seed  # noqa: E402
 from kernel.tests.test_discovery_handlers import StreamingWS, is_type  # noqa: E402
 
@@ -71,7 +71,7 @@ async def drive(messages, waits, timeout=240.0):
     finally:
         ws.close()
         await connection
-        release_owner(id(ws))
+        release_owner(owner_for_connection(ws))
     return ws
 
 
@@ -128,7 +128,7 @@ async def test_cancel_of_a_whole_run_only_counts_that_run():
             event.set()
         ws.close()
         await connection
-        release_owner(id(ws))
+        release_owner(owner_for_connection(ws))
     cancelled = [m for m in ws.sent if m["type"] == "discovery_audit_cancelled"][0]
     assert cancelled["cancelled"] == 3 and cancelled["candidate_id"] is None
 
@@ -143,14 +143,14 @@ async def test_owner_release_cancels_every_audit_it_holds():
     for i in range(3):
         ws.push(audit_msg(candidate_id=f"c{i}"))
     await ws.wait_for(lambda m: ws.count("discovery_audit_accepted") == 3)
-    assert manager.pending_count(id(ws)) == 3
+    assert manager.pending_count(owner_for_connection(ws)) == 3
     ws.close()
     await connection
-    release_owner(id(ws))  # what server._handle_connection does when the socket closes
+    release_owner(owner_for_connection(ws))  # what server._handle_connection does when the socket closes
     deadline = time.monotonic() + 15
-    while manager.pending_count(id(ws)) and time.monotonic() < deadline:
+    while manager.pending_count(owner_for_connection(ws)) and time.monotonic() < deadline:
         await asyncio.sleep(0.05)
-    assert manager.pending_count(id(ws)) == 0
+    assert manager.pending_count(owner_for_connection(ws)) == 0
     assert seen and all(event.is_set() for event in seen)
 
 
@@ -169,7 +169,7 @@ async def test_queue_cap_returns_discovery_busy():
             event.set()
         ws.close()
         await connection
-        release_owner(id(ws))
+        release_owner(owner_for_connection(ws))
     assert ws.count("discovery_audit_accepted") == 64
 
 

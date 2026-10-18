@@ -16,7 +16,7 @@ pytest.importorskip("pymatching")
 from kernel import server  # noqa: E402
 from kernel.discovery import manager as manager_module  # noqa: E402
 from kernel.discovery.manager import DiscoveryManager  # noqa: E402
-from kernel.lab_context import release_owner  # noqa: E402
+from kernel.lab_context import owner_for_connection, release_owner  # noqa: E402
 
 SEED_PATH = "kernel/discovery/seeds/qec_repetition.py"
 FAST = {"shots": {"min": 1000, "max": 6000, "max_errors": 50}}
@@ -286,7 +286,7 @@ async def test_cancel_whole_run_counts_all_candidates_of_that_run_only():
     finally:
         ws.close()
         await connection
-        release_owner(id(ws))
+        release_owner(owner_for_connection(ws))
     assert [m for m in ws.sent if m["type"] == "discovery_cancelled"][0]["cancelled"] == 3
     assert set(evaluations(ws)) == {"c0", "c1", "c2"}
     assert all(e["failure"]["code"] == "cancelled" for e in evaluations(ws).values())
@@ -302,14 +302,14 @@ async def test_owner_release_cancels_everything_it_holds():
     for i in range(3):
         ws.push(evaluate_msg("x = 1\n", candidate_id=f"c{i}"))
     await ws.wait_for(lambda m: ws.count("discovery_evaluate_accepted") == 3)
-    assert manager.pending_count(id(ws)) == 3
+    assert manager.pending_count(owner_for_connection(ws)) == 3
     ws.close()
     await connection
-    release_owner(id(ws))  # server._handle_connection does this when the socket closes
+    release_owner(owner_for_connection(ws))  # server._handle_connection does this when the socket closes
     deadline = time.monotonic() + 60
-    while manager.pending_count(id(ws)) and time.monotonic() < deadline:
+    while manager.pending_count(owner_for_connection(ws)) and time.monotonic() < deadline:
         await asyncio.sleep(0.05)
-    assert manager.pending_count(id(ws)) == 0
+    assert manager.pending_count(owner_for_connection(ws)) == 0
     assert seen and all(event.is_set() for event in seen)
 
 
@@ -325,7 +325,7 @@ async def test_queue_cap_returns_discovery_busy():
     finally:
         ws.close()
         await connection
-        release_owner(id(ws))
+        release_owner(owner_for_connection(ws))
     accepted = [m for m in ws.sent if m["type"] == "discovery_evaluate_accepted"]
     assert len(accepted) == 64
     busy = [m for m in ws.sent if m["type"] == "error"][0]
@@ -369,3 +369,80 @@ async def test_surface_code_candidate_shows_lambda_above_one_end_to_end():
     assert ev["status"] == "scored", ev["rejection"] or ev["failure"]
     lam = ev["metrics"]["lambda"][0]
     assert lam["ci95"][0] > 1 and lam["verdict"] == "suppressing"
+
+
+# --- red-team hardening: RT-L1, RT-L2, RT-M2 ---------------------------------------------------
+
+
+def test_connection_owner_is_monotonic_and_never_reused():
+    from kernel.lab_context import owner_for_connection
+
+    class Conn:
+        pass
+
+    seen = []
+    for _ in range(50):
+        conn = Conn()
+        owner = owner_for_connection(conn)
+        assert owner_for_connection(conn) == owner  # stable per connection
+        seen.append(owner)
+        del conn  # CPython may reuse id(conn); the counter must not
+    assert seen == sorted(set(seen))
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("bad", ["../etc/passwd", "a/b", "a b", "c\n1", "x" * 201, "", "ü", "a\\b", "c;rm"])
+async def test_ids_outside_the_safe_alphabet_are_invalid_request(bad):
+    ws = await session(
+        [evaluate_msg("x = 1\n", candidate_id=bad), evaluate_msg("x = 1\n", run_id=bad)],
+        [lambda m: ws_count_errors(m)],
+        timeout=30,
+    )
+    errors = [m for m in ws.sent if m["type"] == "error"]
+    assert errors and all(e["code"] == "invalid_request" for e in errors)
+    assert not [m for m in ws.sent if m["type"] == "discovery_evaluate_accepted"]
+    for e in errors:  # an unsafe id is never echoed back
+        assert e.get("candidate_id") != bad and e.get("run_id") != bad
+
+
+def ws_count_errors(message):
+    return message.get("type") == "error"
+
+
+@pytest.mark.asyncio
+async def test_confirmation_style_ids_stay_valid():
+    manager_module.set_manager(DiscoveryManager(max_workers=1, sandbox_runner=blocking_sandbox()))
+    ws = StreamingWS()
+    connection = asyncio.create_task(server.handle_message(ws))
+    try:
+        ws.push(evaluate_msg("x = 1\n", candidate_id="c-0007~confirm0", run_id="run_1.2~x"))
+        await ws.wait_for(is_type("discovery_evaluate_accepted", candidate_id="c-0007~confirm0"))
+    finally:
+        ws.close()
+        await connection
+        release_owner(owner_for_connection(ws))
+
+
+@pytest.mark.asyncio
+async def test_global_queue_cap_spans_connections():
+    manager_module.set_manager(
+        DiscoveryManager(max_workers=1, max_queued_global=5, sandbox_runner=blocking_sandbox())
+    )
+    sockets = [StreamingWS() for _ in range(3)]
+    tasks = [asyncio.create_task(server.handle_message(ws)) for ws in sockets]
+    try:
+        for n, ws in enumerate(sockets):
+            for i in range(3):  # 9 requests over 3 connections, each well under the per-owner cap
+                ws.push(evaluate_msg("x = 1\n", candidate_id=f"c{n}-{i}"))
+        for ws in sockets:
+            await ws.wait_for(lambda m: ws.count("discovery_evaluate_accepted") + ws.count("error") == 3)
+    finally:
+        for ws in sockets:
+            ws.close()
+        await asyncio.gather(*tasks)
+        for ws in sockets:
+            release_owner(owner_for_connection(ws))
+    accepted = sum(ws.count("discovery_evaluate_accepted") for ws in sockets)
+    busy = [m for ws in sockets for m in ws.sent if m["type"] == "error"]
+    assert accepted == 5
+    assert len(busy) == 4 and all(m["code"] == "discovery_busy" for m in busy)

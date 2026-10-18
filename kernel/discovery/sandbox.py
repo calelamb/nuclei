@@ -32,6 +32,12 @@ _WORKER_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "candida
 _WRAPPER_FAILURE_HINTS = ("sandbox_apply", "bwrap:", "sandbox-exec:")
 
 
+def _detail(isolation: str) -> dict[str, str]:
+    """What the reported mode really restricts: only the OS wrappers deny file reads."""
+    wrapped = isolation in (iso.MODE_BWRAP, iso.MODE_SANDBOX_EXEC)
+    return {"reads": iso.READS_RESTRICTED if wrapped else iso.READS_UNRESTRICTED}
+
+
 def _error(code: str, message: str, isolation: str, stderr: str = "") -> dict[str, Any]:
     return {
         "protocol_version": PROTOCOL_VERSION,
@@ -41,7 +47,20 @@ def _error(code: str, message: str, isolation: str, stderr: str = "") -> dict[st
         "stderr": stderr,
         "error": {"code": code, "message": message},
         "isolation": isolation,
+        "isolation_detail": _detail(isolation),
     }
+
+
+def _reject_constant(token: str):
+    raise ValueError(f"non-finite JSON constant {token}")
+
+
+def _single_document(text: str) -> Any:
+    """Exactly one JSON document: no second line, no trailing bytes, no NaN/Infinity."""
+    value, end = json.JSONDecoder(parse_constant=_reject_constant).raw_decode(text)
+    if text[end:].strip():
+        raise ValueError("trailing data after the response")
+    return value
 
 
 def _interpret(result: ProcResult, isolation: str) -> dict[str, Any]:
@@ -52,6 +71,14 @@ def _interpret(result: ProcResult, isolation: str) -> dict[str, Any]:
         return _error("cancelled", "Evaluation was cancelled.", isolation)
     if result.timed_out:
         return _error("worker_timeout", "Candidate exceeded its wall-clock budget.", isolation)
+    if result.memory_exceeded:
+        return _error(
+            "worker_memory_exceeded",
+            "Candidate worker exceeded its memory limit and was killed.",
+            isolation,
+        )
+    if result.output_overflow or len(result.stdout) > MAX_RESPONSE_BYTES:
+        return _error("response_too_large", "Worker output exceeded the byte limit; it was killed.", isolation)
     if result.returncode is not None and result.returncode < 0:
         return _error(
             "worker_killed",
@@ -59,8 +86,6 @@ def _interpret(result: ProcResult, isolation: str) -> dict[str, Any]:
             "this usually means the CPU limit was exceeded.",
             isolation,
         )
-    if len(result.stdout) > MAX_RESPONSE_BYTES:
-        return _error("response_too_large", "Worker response exceeded the byte limit.", isolation)
     text = result.stdout.decode("utf-8", "replace").strip()
     if not text:
         return _error(
@@ -70,9 +95,9 @@ def _interpret(result: ProcResult, isolation: str) -> dict[str, Any]:
             stderr_text[:512],
         )
     try:
-        response = json.loads(text)
+        response = _single_document(text)
     except ValueError:
-        return _error("worker_bad_output", "Worker response was not valid JSON.", isolation)
+        return _error("worker_bad_output", "Worker response was not exactly one valid JSON document.", isolation)
     if not isinstance(response, dict) or response.get("status") not in ("ok", "error"):
         return _error("worker_bad_output", "Worker response had an unexpected shape.", isolation)
     response.setdefault("artifacts", [])
@@ -80,6 +105,7 @@ def _interpret(result: ProcResult, isolation: str) -> dict[str, Any]:
     response.setdefault("stderr", "")
     response.setdefault("error", None)
     response["isolation"] = isolation
+    response["isolation_detail"] = _detail(isolation)
     return response
 
 
@@ -113,6 +139,7 @@ def run_candidate(
                 result = run_process(
                     command, payload, wall_seconds=wall_seconds,
                     cancel_event=cancel_event, env=minimal_env(iso.scratch_env(scratch)),
+                    max_output_bytes=MAX_RESPONSE_BYTES + 1024,
                 )
                 wrapped = attempt_info.mode != iso.MODE_PROCESS
                 if _wrapper_failed(result, wrapped):

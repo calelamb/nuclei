@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import sys
 
 import pytest
@@ -144,3 +145,144 @@ def test_run_candidate_removes_its_scratch_directory(tmp_path, monkeypatch):
     assert response["status"] == "ok"
     import os
     assert created and not any(os.path.exists(p) for p in created)
+
+
+# --- RT-H2: file reads under sandbox-exec ---------------------------------------------------
+
+READ_PROBE = (
+    "import stim\n"
+    "def build():\n"
+    "    try:\n"
+    "        data = open({path!r}).read()\n"
+    "        print('READ:' + data)\n"
+    "    except OSError as exc:\n"
+    "        print('DENIED:' + type(exc).__name__)\n"
+    "    return stim.Circuit('H 0')\n"
+)
+
+
+def _mac_info():
+    info = iso.detect_isolation()
+    if sys.platform != "darwin" or info.mode != "sandbox-exec":
+        pytest.skip(f"sandbox-exec not usable here: {info.note}")
+    return info
+
+
+def test_macos_sandbox_denies_reading_files_outside_the_allow_list(tmp_path):
+    # Regression for poc_read_exfil.py: a dummy secret OUTSIDE the allow-list must be unreadable.
+    info = _mac_info()
+    secret = tmp_path / "dummy_secret.txt"
+    secret.write_text("SK-DUMMY-TOKEN-abc123-not-a-real-secret")
+    response = run_candidate(
+        default_request("stim_circuit", READ_PROBE.format(path=str(secret)), "build", [{"args": [], "kwargs": {}}]),
+        wall_seconds=120,
+        isolation=info,
+    )
+    assert response["status"] == "ok", response
+    assert response["isolation"] == "sandbox-exec"
+    assert "SK-DUMMY-TOKEN" not in response["stdout"]
+    assert response["stdout"].startswith("DENIED:")
+
+
+def test_macos_sandbox_denies_listing_and_home_dotfiles(tmp_path):
+    info = _mac_info()
+    (tmp_path / "x.txt").write_text("hello")
+    program = (
+        "import os, stim\n"
+        "def build():\n"
+        f"    try:\n        print(os.listdir({str(tmp_path)!r}))\n"
+        "    except OSError as exc:\n        print('LIST-DENIED')\n"
+        "    for p in ('/etc/passwd', os.path.expanduser('~/.ssh/id_rsa'), '/private/etc/hosts'):\n"
+        "        try:\n            open(p).read(1); print('READ-OK', p)\n"
+        "        except OSError:\n            pass\n"
+        "    return stim.Circuit('H 0')\n"
+    )
+    response = run_candidate(
+        default_request("stim_circuit", program, "build", [{"args": [], "kwargs": {}}]),
+        wall_seconds=120, isolation=info,
+    )
+    assert response["status"] == "ok", response
+    assert "LIST-DENIED" in response["stdout"] and "READ-OK" not in response["stdout"]
+
+
+def test_macos_sandbox_still_runs_numpy_stim_qiskit_and_cirq_candidates():
+    info = _mac_info()
+    cases = [
+        ("stim_circuit", "import numpy as np, stim\ndef build():\n    np.linalg.eigh(np.eye(4))\n    return stim.Circuit('H 0')\n"),
+        ("quantum_circuit", "from qiskit import QuantumCircuit, transpile\ndef build():\n    qc = QuantumCircuit(3)\n    qc.h(0); qc.cx(0, 1); qc.cx(1, 2)\n    return transpile(qc, basis_gates=['rz', 'sx', 'cx'], optimization_level=1)\n"),
+        ("quantum_circuit", "import cirq\ndef build():\n    q = cirq.LineQubit.range(2)\n    return cirq.Circuit(cirq.H(q[0]), cirq.CNOT(q[0], q[1]))\n"),
+    ]
+    for task, program in cases:
+        if task == "quantum_circuit":
+            pytest.importorskip("qiskit")
+            pytest.importorskip("cirq")
+        response = run_candidate(
+            default_request(task, program, "build", [{"args": [], "kwargs": {}}]), wall_seconds=120, isolation=info,
+        )
+        assert response["status"] == "ok", (task, response["error"])
+        assert response["isolation"] == "sandbox-exec"
+
+
+def test_profile_text_denies_reads_by_default_and_lists_only_needed_roots():
+    profile, params = iso.mac_profile("/private/var/folders/x/scratch", ["/opt/py", "/repo/kernel"])
+    assert "(deny file-read*)" in profile
+    assert "(allow default)" in profile and "(deny network*)" in profile
+    assert profile.index("(deny file-read*)") < profile.index('(param "READ0")')
+    assert "SCRATCH=/private/var/folders/x/scratch" in params
+    assert "READ0=/opt/py" in params and "READ1=/repo/kernel" in params
+    # No blanket reads.
+    assert '(allow file-read* (subpath "/"))' not in profile
+    assert '(subpath "/Users")' not in profile and '(subpath "/private/var/folders")' not in profile
+
+
+def test_python_read_roots_cover_the_interpreter_and_kernel_but_not_home():
+    roots = iso.python_read_roots()
+    assert any(os.path.realpath(sys.prefix) == r for r in roots)
+    assert any(r.endswith(os.sep + "kernel") for r in roots)
+    assert os.path.realpath(os.path.expanduser("~")) not in roots
+
+
+def test_bwrap_argv_binds_only_what_is_needed_read_only():
+    argv = iso._bwrap_wrap(["python", "-I", "w.py"], "/tmp/nuclei-cand-abc", ["/venv", "/repo/kernel"])
+    assert argv[:4] == ["bwrap", "--unshare-net", "--unshare-pid", "--die-with-parent"]
+    binds = [argv[i + 1] for i, a in enumerate(argv) if a == "--ro-bind"]
+    assert binds == ["/venv", "/repo/kernel"]
+    # The old blanket bind of the host root is gone.
+    assert "/" not in [argv[i + 1] for i, a in enumerate(argv) if a in ("--ro-bind", "--ro-bind-try", "--bind")]
+    assert all(argv[i + 1] == argv[i + 2] for i, a in enumerate(argv) if a in ("--ro-bind", "--ro-bind-try"))
+    for private in ("/home", "/root", "/etc/passwd", "/var"):
+        assert private not in argv
+    assert argv[-3:] == ["python", "-I", "w.py"]
+    assert "--tmpfs" in argv and "--dev" in argv
+    # The scratch dir is the only writable bind, and comes after the private /tmp.
+    i = argv.index("--bind")
+    assert argv[i + 1 : i + 3] == ["/tmp/nuclei-cand-abc", "/tmp/nuclei-cand-abc"]
+    assert i > argv.index("--tmpfs")
+    assert [a for a in argv if a == "--bind"] == ["--bind"]
+    assert iso.IsolationInfo(iso.MODE_BWRAP, iso._bwrap_wrap, scratch_aware=True).command(["x"], "/tmp/s")[-1] == "x"
+
+
+def test_isolation_detail_is_honest_about_reads():
+    response = run_candidate(
+        default_request("stim_circuit", GOOD, "build", [{"args": [], "kwargs": {}}]),
+        wall_seconds=120,
+        isolation=iso.IsolationInfo(iso.MODE_PROCESS),
+    )
+    assert response["isolation"] == "process"
+    assert response["isolation_detail"] == {"reads": "unrestricted"}
+    failure = run_candidate(
+        default_request("stim_circuit", "x = (", "build", [{"args": [], "kwargs": {}}]),
+        wall_seconds=120,
+        isolation=iso.IsolationInfo(iso.MODE_PROCESS),
+    )
+    assert failure["isolation_detail"] == {"reads": "unrestricted"}
+
+
+def test_isolation_detail_reports_restricted_reads_only_when_a_wrapper_ran():
+    info = _mac_info()
+    response = run_candidate(
+        default_request("stim_circuit", GOOD, "build", [{"args": [], "kwargs": {}}]), wall_seconds=120, isolation=info,
+    )
+    assert response["isolation"] == "sandbox-exec"
+    assert response["isolation_detail"] == {"reads": "restricted"}
+    assert info.detail == {"reads": "restricted"}
