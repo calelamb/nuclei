@@ -41,3 +41,8 @@
   font: var(--font-weight-medium) var(--font-size-caption) var(--font-sans);
 }
 .circuit-more-wires:hover { color: var(--color-text-primary); }
+
+/* Results that no longer match the code: dim the graphics (spheres, bars) and keep every label at full strength.
+   The "From last run" pill already says why; text dimmed to 0.5 fell to 2:1 contrast. */
+.viz-stale { --viz-stale-graphic-opacity: 0.5; }
+.viz-stale .bloch-canvas, .viz-stale .histogram-chip__bar { opacity: var(--viz-stale-graphic-opacity); transition: opacity var(--duration-fast) var(--ease-standard); }

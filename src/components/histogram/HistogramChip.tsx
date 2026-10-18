@@ -149,6 +149,7 @@ export function HistogramChip({
             </span>
             <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 2, minWidth: 0 }}>
               <div
+                className="histogram-chip__bar"
                 style={{ height: hasHw ? 4 : 6, borderRadius: 3, background: `${colors.accent}14`, overflow: 'hidden' }}
                 title="Classical simulation"
               >
@@ -163,6 +164,7 @@ export function HistogramChip({
               </div>
               {hasHw && (
                 <div
+                  className="histogram-chip__bar"
                   style={{ height: 4, borderRadius: 3, background: `${colors.modeResearch}14`, overflow: 'hidden' }}
                   title={hwLabel ?? 'Hardware run'}
                 >

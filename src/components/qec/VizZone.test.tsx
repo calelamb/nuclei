@@ -194,3 +194,24 @@ describe('<VizZone> while Python boots', () => {
     useEditorStore.setState({ kernelProgress: null });
   });
 });
+
+describe('<VizZone> stale results (research-r-05)', () => {
+  afterEach(() => { useSimulationStore.getState().clearResult(); });
+
+  it('dims only the graphics: no opacity on the chip or the Bloch body wrapper, so labels stay readable', () => {
+    useSimulationStore.getState().beginRun('qc.h(0)');
+    useSimulationStore.getState().setResult({ probabilities: { '0': 1 }, bloch_coords: [] } as never);
+    useEditorStore.setState({ code: 'qc.h(0)\nqc.x(0)' });
+    const { getByTestId, container } = render(
+      <VizZone visible={visible({ bloch: true, histogramChip: true })} chip={<span>Top outcomes</span>} />,
+    );
+    const chip = getByTestId('viz-chip');
+    expect(chip.getAttribute('data-stale')).toBe('true');
+    expect(chip.className).toContain('viz-stale');
+    expect(chip.style.opacity).toBe('');
+    const body = container.querySelector('.viz-stale');
+    expect(body).toBeTruthy();
+    expect((body as HTMLElement).style.opacity).toBe('');
+    useEditorStore.setState({ code: 'qc.h(0)' });
+  });
+});

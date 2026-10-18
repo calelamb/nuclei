@@ -3,9 +3,6 @@ import { shortcutLabel } from '../../config/keybindings';
 import { TYPOGRAPHY } from '../../styles/tokens';
 import { Tooltip } from '../ui/Tooltip';
 
-/** Opacity of results that no longer match the code (still legible, clearly not current). */
-export const STALE_RESULT_OPACITY = 0.5;
-
 interface StaleResultNoticeProps {
   /** Replaces the default "From last run · code changed · Run ⌘↵" copy. */
   label?: string;
