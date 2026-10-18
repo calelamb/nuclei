@@ -1,9 +1,9 @@
-import { useState } from 'react';
-import { ChevronDown, ChevronUp } from 'lucide-react';
-import { useThemeStore } from '../../stores/themeStore';
+import { useId } from 'react';
+import { ChevronDown } from 'lucide-react';
+import { Menu, type MenuEntry } from '../ui/Menu';
+import { ICON_SIZE, ICON_STROKE } from '../../styles/tokens';
 import type { BackendInfo, HardwareProviderType } from '../../types/hardware';
 
-import { TYPOGRAPHY } from '../../styles/tokens';
 const PROVIDER_LABELS: Record<HardwareProviderType, string> = {
   ibm: 'IBM',
   google: 'Google',
@@ -17,172 +17,58 @@ const PROVIDER_LABELS: Record<HardwareProviderType, string> = {
   simulator: 'Sim',
 };
 
+const STATUS_DOT_COLOR: Record<BackendInfo['status'], string> = {
+  online: 'var(--color-success)',
+  maintenance: 'var(--color-warning)',
+  offline: 'var(--color-danger)',
+};
+
+const MENU_MIN_WIDTH = 300;
+
 interface BackendSelectorProps {
   backends: BackendInfo[];
   selected: string | null;
   onSelect: (name: string) => void;
+  /** Id of the visible label element; names the trigger together with its value. */
+  labelledBy?: string;
 }
 
-export function BackendSelector({ backends, selected, onSelect }: BackendSelectorProps) {
-  const colors = useThemeStore((s) => s.colors);
-  const [open, setOpen] = useState(false);
+function entryFor(b: BackendInfo): MenuEntry {
+  return {
+    id: b.name,
+    label: `${b.name} · ${PROVIDER_LABELS[b.provider]}`,
+    icon: <span aria-hidden="true" style={{ display: 'block', width: 6, height: 6, borderRadius: '50%', background: STATUS_DOT_COLOR[b.status] }} />,
+    hint: `${b.qubitCount} qubits · queue ${b.queueLength}`,
+    title: `${b.name}: ${b.status}`,
+  };
+}
 
-  const selectedBackend = backends.find((b) => b.name === selected);
+/** Backend picker on the shared Menu: aria-haspopup/expanded, arrow keys, and Escape closes only the menu. */
+export function BackendSelector({ backends, selected, onSelect, labelledBy }: BackendSelectorProps) {
+  const valueId = useId();
+  const current = backends.find((b) => b.name === selected);
+
+  const entries: MenuEntry[] = backends.length === 0
+    ? [{ id: 'none', label: 'No backends available', disabled: true }]
+    : backends.map((b) => ({ ...entryFor(b), checked: b.name === selected, onSelect: () => onSelect(b.name) }));
 
   return (
-    <div style={{ position: 'relative' }}>
-      <button
-        onClick={() => setOpen(!open)}
-        style={{
-          width: '100%',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          padding: '7px 10px',
-          background: colors.bgElevated,
-          border: `1px solid ${open ? colors.accent : colors.border}`,
-          borderRadius: 4,
-          color: selectedBackend ? colors.text : colors.textDim,
-          fontSize: 11,
-          fontFamily: TYPOGRAPHY.fontSans,
-          cursor: 'pointer',
-          gap: 6,
-        }}
-      >
-        <span
-          style={{
-            overflow: 'hidden',
-            textOverflow: 'ellipsis',
-            whiteSpace: 'nowrap',
-            minWidth: 0,
-          }}
+    <Menu
+      label="Backend"
+      entries={entries}
+      minWidth={MENU_MIN_WIDTH}
+      trigger={(p) => (
+        <button
+          {...p}
+          aria-labelledby={labelledBy ? `${labelledBy} ${valueId}` : undefined}
+          aria-label={labelledBy ? undefined : 'Backend'}
+          className="nuclei-select-trigger"
+          data-placeholder={current ? undefined : 'true'}
         >
-          {selectedBackend ? selectedBackend.name : 'Select backend...'}
-        </span>
-        {open ? <ChevronUp size={12} style={{ flexShrink: 0 }} /> : <ChevronDown size={12} style={{ flexShrink: 0 }} />}
-      </button>
-
-      {open && (
-        <div
-          style={{
-            position: 'absolute',
-            top: '100%',
-            left: 0,
-            right: 0,
-            marginTop: 4,
-            background: colors.bgElevated,
-            border: `1px solid ${colors.border}`,
-            borderRadius: 4,
-            zIndex: 20,
-            maxHeight: 240,
-            overflowY: 'auto',
-          }}
-        >
-          {backends.length === 0 ? (
-            <div
-              style={{
-                padding: '12px 10px',
-                fontSize: 11,
-                color: colors.textDim,
-                fontFamily: TYPOGRAPHY.fontSans,
-                textAlign: 'center',
-              }}
-            >
-              No backends available
-            </div>
-          ) : (
-            backends.map((b) => {
-              const isSelected = b.name === selected;
-              const statusColor =
-                b.status === 'online'
-                  ? colors.success
-                  : b.status === 'maintenance'
-                    ? colors.warning
-                    : colors.error;
-
-              return (
-                <button className="nuclei-hover-tint"
-                  key={b.name}
-                  onClick={() => {
-                    onSelect(b.name);
-                    setOpen(false);
-                  }}
-                  style={{
-                    width: '100%',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    gap: 4,
-                    padding: '8px 10px',
-                    background: isSelected ? `${colors.accent}12` : 'transparent',
-                    border: 'none',
-                    borderLeft: isSelected
-                      ? `2px solid ${colors.accent}`
-                      : '2px solid transparent',
-                    cursor: 'pointer',
-                    textAlign: 'left',
-                    borderBottom: `1px solid ${colors.border}`,
-                  }}
-                >
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, width: '100%' }}>
-                    <div
-                      style={{
-                        width: 6,
-                        height: 6,
-                        borderRadius: '50%',
-                        background: statusColor,
-                        flexShrink: 0,
-                      }}
-                    />
-                    <span
-                      style={{
-                        fontSize: 11,
-                        color: colors.text,
-                        fontFamily: TYPOGRAPHY.fontSans,
-                        flex: 1,
-                        minWidth: 0,
-                        overflow: 'hidden',
-                        textOverflow: 'ellipsis',
-                        whiteSpace: 'nowrap',
-                      }}
-                    >
-                      {b.name}
-                    </span>
-                    <span
-                      style={{
-                        fontSize: 11,
-                        fontWeight: 600,
-                        textTransform: 'uppercase',
-                        letterSpacing: 0.5,
-                        padding: '1px 5px',
-                        borderRadius: 3,
-                        background: `${colors.accent}18`,
-                        color: colors.accentText,
-                        fontFamily: TYPOGRAPHY.fontSans,
-                        flexShrink: 0,
-                      }}
-                    >
-                      {PROVIDER_LABELS[b.provider]}
-                    </span>
-                  </div>
-                  <div
-                    style={{
-                      display: 'flex',
-                      gap: 10,
-                      fontSize: 11,
-                      color: colors.textDim,
-                      fontFamily: TYPOGRAPHY.fontSans,
-                      paddingLeft: 12,
-                    }}
-                  >
-                    <span>{b.qubitCount} qubits</span>
-                    <span>Queue: {b.queueLength}</span>
-                  </div>
-                </button>
-              );
-            })
-          )}
-        </div>
+          <span id={valueId} className="nuclei-select-trigger__value">{current ? current.name : 'Select backend…'}</span>
+          <ChevronDown className="nuclei-select-trigger__chevron" size={ICON_SIZE.sm} strokeWidth={ICON_STROKE} aria-hidden="true" />
+        </button>
       )}
-    </div>
+    />
   );
 }

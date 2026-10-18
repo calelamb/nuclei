@@ -326,8 +326,8 @@ export function NewExperimentForm({ projectRoot, existing, dirtyRef: sharedDirty
       </div>
 
       <div>
-        <label style={labelStyle}>Backend</label>
-        <BackendSelector backends={backends} selected={backendName} onSelect={(n) => { markDirty(); setBackendName(n); }} />
+        <label id="exp-backend-label" style={labelStyle}>Backend</label>
+        <BackendSelector labelledBy="exp-backend-label" backends={backends} selected={backendName} onSelect={(n) => { markDirty(); setBackendName(n); }} />
       </div>
 
       <div style={{ display: 'flex', gap: 10 }}>
