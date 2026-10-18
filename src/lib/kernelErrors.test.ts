@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
-  describeKernelFailure, kernelEngineName, kernelUnavailableMessage, kernelNotConnectedMessage, kernelStartFailureTitle,
+  desktopOnlyMessage, describeKernelFailure, kernelEngineName, kernelUnavailableMessage, kernelNotConnectedMessage, kernelStartFailureTitle,
   kernelStartingMessage, kernelWaitingLabel, normalizeKernelError,
 } from './kernelErrors';
 
@@ -104,5 +104,11 @@ describe('kernelUnavailableMessage (research-r-03)', () => {
   it('ready or idle: the connection is gone', () => {
     expect(kernelUnavailableMessage('ready', { isWeb: false })).toBe("The kernel isn't connected. Check the status bar, then try again.");
     expect(kernelUnavailableMessage('idle', { isWeb: true })).toBe("Python isn't running. Check the status bar, then try again.");
+  });
+});
+
+describe('desktopOnlyMessage', () => {
+  it('names the feature and never claims the engine is down', () => {
+    expect(desktopOnlyMessage('Resource estimates')).toBe('Resource estimates run in the desktop app.');
   });
 });

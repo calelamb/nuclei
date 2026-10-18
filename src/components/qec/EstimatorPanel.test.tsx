@@ -12,6 +12,12 @@ vi.mock('../../lib/qecDecodeSender', () => ({
   requestQecEstimate: (...args: unknown[]) => estimateSpy(...args),
 }));
 
+const webBuild = vi.hoisted(() => ({ value: false }));
+vi.mock('../../platform/buildTarget', async (orig) => ({
+  ...(await orig<typeof import('../../platform/buildTarget')>()),
+  isWebBuild: () => webBuild.value,
+}));
+
 const SAMPLE: QecEstimate = {
   physical_qubits: 1_234_567,
   runtime_ns: 28_000,
@@ -27,11 +33,21 @@ const SAMPLE: QecEstimate = {
   full: { physicalCounts: { physicalQubits: 1_234_567 } },
 };
 
-afterEach(() => cleanup());
+afterEach(() => { cleanup(); webBuild.value = false; });
 beforeEach(() => {
   estimateSpy.mockClear();
   useQecEstimateStore.getState().reset();
   useEditorStore.setState({ code: 'operation Main() : Unit {}', framework: 'qsharp', filePath: 'main.qs' });
+});
+
+describe('EstimatorPanel on the web build', () => {
+  it('says it needs the desktop app, with no Run estimate button and no kernel error', () => {
+    webBuild.value = true;
+    const { getByText, queryByRole, queryByText } = render(<EstimatorPanel />);
+    expect(getByText('Resource estimates need the desktop app')).toBeTruthy();
+    expect(queryByRole('button', { name: /Run estimate/i })).toBeNull();
+    expect(queryByText(/Python isn't running/i)).toBeNull();
+  });
 });
 
 describe('EstimatorPanel', () => {

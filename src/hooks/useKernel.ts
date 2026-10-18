@@ -12,7 +12,10 @@ import { KERNEL_WS_URL } from '../config/kernel';
 import { CLOSE_UNAUTHENTICATED, KERNEL_AUTH_REJECTED_MESSAGE, KernelAuthRejectedError, openKernelConnection } from '../services/kernelSocket';
 import type { PyodideKernel } from '../platform/pyodideKernel';
 import type { PyodideRuntimeClient } from '../platform/pyodide/pyodideClient';
-import { KERNEL_NOT_RESPONDING_MESSAGE, kernelUnavailableMessage, normalizeKernelError } from '../lib/kernelErrors';
+import {
+  KERNEL_NOT_RESPONDING_MESSAGE, desktopOnlyMessage, kernelUnavailableMessage, normalizeKernelError,
+} from '../lib/kernelErrors';
+import { isWebBuild } from '../platform/buildTarget';
 import { logKernelFailureOnce } from './kernelFailureLog';
 import { shouldMarkStaleWhileReparsing, shouldReparseAfterRestart } from './restartReparse';
 import { registerKernelRetry, registerKernelStop } from '../lib/kernelControl';
@@ -46,6 +49,13 @@ const MAX_RETRIES = 15;
 const QUIET_CONNECT_ATTEMPTS = 3;
 
 export { getErrorContext } from './kernelMessageHandler';
+
+/** The error for a desktop-engine request that could not be sent: honest about the web build, else the kernel state. */
+function unavailableOrDesktopOnly(feature: string): string {
+  return isWebBuild()
+    ? desktopOnlyMessage(feature)
+    : kernelUnavailableMessage(useEditorStore.getState().kernelStatus);
+}
 
 export function useKernel() {
   const wsRef = useRef<WebSocket | null>(null);
@@ -567,7 +577,7 @@ export function useKernel() {
       }
       // No socket → no reply will ever arrive; say so instead of spinning.
       if (!sendHardware({ type: 'qec_explain', circuit_text: circuitText, analysis, request_id: requestId })) {
-        store.setError(kernelUnavailableMessage(useEditorStore.getState().kernelStatus));
+        store.setError(unavailableOrDesktopOnly('Explanations'));
       }
     },
     [sendHardware],
@@ -579,7 +589,7 @@ export function useKernel() {
       // No socket → no result will ever arrive; surface it instead of spinning
       // forever (setError also clears the pending flag).
       if (!sendHardware({ type: 'qec_estimate', code, language, options })) {
-        store.setError(kernelUnavailableMessage(useEditorStore.getState().kernelStatus));
+        store.setError(unavailableOrDesktopOnly('Resource estimates'));
       }
     },
     [sendHardware],
@@ -599,7 +609,7 @@ export function useKernel() {
         optimization_level: target.optimizationLevel,
       });
       if (!ok) {
-        useTranspileStore.getState().setError(kernelUnavailableMessage(useEditorStore.getState().kernelStatus));
+        useTranspileStore.getState().setError(unavailableOrDesktopOnly('Transpiler runs'));
       }
     },
     [sendHardware],
