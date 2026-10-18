@@ -85,8 +85,21 @@ export function GuardrailsTab({ view, onOpen }: { view: RunView; onOpen: (id: st
   const exploits = useMemo(() => selectRunExploits(view), [view]);
   const audits = useMemo(() => summarizeAudits(list), [list]);
   const runId = view.run.run_id;
+  const redQueen = view.run.spec.mutator.kind === 'red_queen';
+  // In Red Queen runs the exploits are the point of the run, so they lead.
+  const lane = (
+    <ExploitsFoundLane
+      exploits={exploits}
+      summary={audits}
+      redQueen={redQueen}
+      runStatus={view.run.status}
+      onSelectCandidate={onOpen}
+      onExport={(candidateId) => exportFixture(runId, candidateId)}
+    />
+  );
   return (
     <div className="disc-tabpanel">
+      {redQueen && lane}
       <div className="disc-two-col">
         <LabCard title="Rejection reasons" subtitle="Every rejection names the guardrail that stopped it">
           {reasons.length === 0 ? (
@@ -134,14 +147,7 @@ export function GuardrailsTab({ view, onOpen }: { view: RunView; onOpen: (id: st
         )}
       </LabCard>
 
-      <ExploitsFoundLane
-        exploits={exploits}
-        summary={audits}
-        redQueen={view.run.spec.mutator.kind === 'red_queen'}
-        runStatus={view.run.status}
-        onSelectCandidate={onOpen}
-        onExport={(candidateId) => exportFixture(runId, candidateId)}
-      />
+      {!redQueen && lane}
     </div>
   );
 }
