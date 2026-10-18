@@ -5,7 +5,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from kernel.trainability._errors import TrainabilityError
+from kernel.trainability._errors import TrainabilityError, normalize_error
 from kernel.trainability._usercode import (
     LoadedCircuit,
     declared_observable,
@@ -57,7 +57,11 @@ def inspect_code(
     """Build the ``trainability_inspected`` payload (without ``type``)."""
     if not isinstance(code, str) or not code.strip():
         raise TrainabilityError("invalid_request", "`code` must be a non-empty string.")
-    loaded = load_circuit(code, params, language)
+    try:
+        loaded = load_circuit(code, params, language)
+        declared = _declared_text(loaded)
+    except Exception as exc:
+        raise normalize_error(exc) from exc
     circuit = loaded.circuit
     return {
         "framework": circuit.framework,
@@ -66,7 +70,7 @@ def inspect_code(
         "gate_count": len(circuit.gates),
         "param_gates": param_gates(circuit),
         "sweepable_params": detect_sweepable_params(code),
-        "observable_declared": _declared_text(loaded),
+        "observable_declared": declared,
         "notes": list(circuit.notes),
     }
 
@@ -78,5 +82,8 @@ def load_for_lint(
     observable: str | None,
 ) -> tuple[ParamCircuit, PauliSum]:
     """Circuit plus the resolved observable ."""
-    loaded = load_circuit(code, params, language)
-    return loaded.circuit, resolve_observable(observable, loaded)
+    try:
+        loaded = load_circuit(code, params, language)
+        return loaded.circuit, resolve_observable(observable, loaded)
+    except Exception as exc:
+        raise normalize_error(exc) from exc
