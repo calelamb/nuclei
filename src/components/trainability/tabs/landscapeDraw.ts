@@ -36,3 +36,12 @@ export function centerPercent(axis: readonly number[]): number {
   return Math.min(100, Math.max(0, ((0 - lo) / span) * 100));
 }
 
+
+/** Axis tick labels (low, origin, high) in radians for the landscape plot. */
+export function axisTicks(axis: readonly number[]): string[] {
+  if (axis.length < 2) return ['0'];
+  const lo = axis[0];
+  const hi = axis[axis.length - 1];
+  const fmt = (v: number) => (Math.abs(v) < 1e-9 ? '0' : Number(v.toPrecision(2)).toString().replace('-', '−'));
+  return [fmt(lo), '0', fmt(hi)];
+}
