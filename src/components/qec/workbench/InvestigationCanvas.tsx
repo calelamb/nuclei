@@ -60,7 +60,7 @@ function CanvasHeader({ inspectorOpen, onToggleInspector, toggleRef }: Investiga
           ref={toggleRef}
           variant="secondary"
           aria-label={label}
-          title={label}
+          tooltip={{ label, placement: 'below' }}
           aria-controls={QEC_RESEARCH_INSPECTOR_ID}
           aria-expanded={inspectorOpen}
           onClick={onToggleInspector}

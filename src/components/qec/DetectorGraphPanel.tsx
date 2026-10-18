@@ -3,6 +3,7 @@ import { MousePointerClick } from 'lucide-react';
 import { useThemeStore } from '../../stores/themeStore';
 import { useQecStore } from '../../stores/qecStore';
 import { Button } from '../ui/Button';
+import './qecAnalysis.css';
 import { PanelHeader } from '../layout/PanelHeader';
 import { QecEmptyState } from './QecEmptyState';
 import { CircuitExplainPanel } from './CircuitExplainPanel';
@@ -151,7 +152,8 @@ export function DetectorGraphPanel({ embedded = false }: { embedded?: boolean } 
         <Button
           size="sm"
           aria-pressed={interactive}
-          variant={interactive ? 'primary' : 'secondary'}
+          variant="secondary"
+          className="qec-toggle-btn"
           onClick={() => setInteractive((v) => !v)}
           title="Toggle detectors and decode live in-app, no kernel round-trip"
           icon={<MousePointerClick size={ICON_SIZE.xs} strokeWidth={ICON_STROKE} />}

@@ -36,7 +36,7 @@ function TrayHeader({ expanded, importing, idle, onToggle }: TrayHeaderProps): R
         {!importing && panels.map((panel) => <span className="qec-tray__active-instrument" key={panel.id}><ListChecks aria-hidden="true" size={16} />{panel.title}</span>)}
       </div>
       {idle && expanded && <span className="qec-tray__idle-note"><CircleDot aria-hidden="true" size={ICON_SIZE.xs} />No active jobs</span>}
-      <IconButton className="qec-tray__toggle" aria-expanded={expanded} aria-label={`${expanded ? 'Collapse' : 'Expand'} jobs and streams`} onClick={onToggle}>
+      <IconButton className="qec-tray__toggle" aria-expanded={expanded} aria-label={`${expanded ? 'Collapse' : 'Expand'} jobs and streams`} tooltip={{ label: `${expanded ? 'Collapse' : 'Expand'} jobs and streams`, placement: 'above' }} onClick={onToggle}>
         {expanded ? <ChevronDown aria-hidden="true" size={ICON_SIZE.md} strokeWidth={ICON_STROKE} /> : <ChevronUp aria-hidden="true" size={ICON_SIZE.md} strokeWidth={ICON_STROKE} />}
       </IconButton>
     </header>

@@ -44,8 +44,8 @@ describe('a tall narrow card shows Λ under the plot instead of behind a tab (qe
   it('offers Plot | Decoders and keeps the Λ readout on the plot view', () => {
     size.current = { width: 470, height: 900 };
     const { getByRole, getByLabelText, queryByRole } = render(<QecAnalysisView embedded />);
-    expect(getByRole('radio', { name: 'Plot' })).toBeTruthy();
-    expect(queryByRole('radio', { name: 'Λ' })).toBeNull();
+    expect(getByRole('tab', { name: 'Plot' })).toBeTruthy();
+    expect(queryByRole('tab', { name: 'Λ' })).toBeNull();
     expect(getByLabelText('Error suppression factor Λ')).toBeTruthy();
   });
 });
@@ -53,7 +53,7 @@ describe('a tall narrow card shows Λ under the plot instead of behind a tab (qe
 describe('short windows show one analysis section at a time (qec-09)', () => {
   it('offers Plot | Λ | Decoders and starts on the plot at full height', () => {
     const { getByRole, queryByLabelText } = render(<QecAnalysisView embedded />);
-    expect(getByRole('radiogroup', { name: 'Analysis section' })).toBeTruthy();
+    expect(getByRole('tablist', { name: 'Analysis section' })).toBeTruthy();
     expect(getByRole('group', { name: /Plot points/ })).toBeTruthy();
     expect(queryByLabelText('Error suppression factor Λ')).toBeNull();
     expect(queryByLabelText('Decoder comparison')).toBeNull();
@@ -61,29 +61,29 @@ describe('short windows show one analysis section at a time (qec-09)', () => {
 
   it('switches to the Λ readout and to the decoder table', () => {
     const { getByRole, queryByRole, getByLabelText } = render(<QecAnalysisView embedded />);
-    fireEvent.click(getByRole('radio', { name: 'Λ' }));
+    fireEvent.click(getByRole('tab', { name: 'Λ' }));
     expect(getByLabelText('Error suppression factor Λ')).toBeTruthy();
     expect(queryByRole('group', { name: /Plot points/ })).toBeNull();
-    fireEvent.click(getByRole('radio', { name: 'Decoders' }));
+    fireEvent.click(getByRole('tab', { name: 'Decoders' }));
     expect(getByRole('table', { name: 'Decoder comparison' })).toBeTruthy();
   });
 
   it('does not repeat the Λ title inside the readout when the tab header already carries it', () => {
     const { getByRole, getByLabelText } = render(<QecAnalysisView embedded />);
-    fireEvent.click(getByRole('radio', { name: 'Λ' }));
+    fireEvent.click(getByRole('tab', { name: 'Λ' }));
     expect(getByLabelText('Error suppression factor Λ').querySelector('h3')).toBeNull();
   });
 
   it('keeps the tabs on a tall but narrow pane instead of a nested scroll (qec-r-10)', () => {
     size.current = { width: 600, height: 900 };
     const { getByRole } = render(<QecAnalysisView embedded />);
-    expect(getByRole('radiogroup', { name: 'Analysis section' })).toBeTruthy();
+    expect(getByRole('tablist', { name: 'Analysis section' })).toBeTruthy();
   });
 
   it('shows everything at once when the window is tall and wide', () => {
     size.current = { width: 900, height: 900 };
     const { queryByRole, getByRole, getByLabelText } = render(<QecAnalysisView embedded />);
-    expect(queryByRole('radiogroup', { name: 'Analysis section' })).toBeNull();
+    expect(queryByRole('tablist', { name: 'Analysis section' })).toBeNull();
     expect(getByRole('group', { name: /Plot points/ })).toBeTruthy();
     expect(getByLabelText('Error suppression factor Λ')).toBeTruthy();
     expect(getByRole('table', { name: 'Decoder comparison' })).toBeTruthy();

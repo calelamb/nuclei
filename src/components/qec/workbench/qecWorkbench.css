@@ -108,6 +108,10 @@
   display: flex; min-width: 0; align-items: center; gap: 12px;
 }
 
+/* The Study select carries a label above it: sit the preset control on the select's baseline, not the label-plus-select centre. */
+.qec-research-bar__primary { align-items: flex-end; }
+.qec-research-bar__primary .nuclei-segmented { height: var(--control-height-md); }
+
 .qec-research-bar__context {
   justify-content: space-between;
 }
@@ -222,15 +226,17 @@
   outline: var(--focus-ring-width) solid var(--focus-ring-color); outline-offset: -2px;
 }
 
-.qec-panel-pin {
-  display: inline-grid; width: 44px; height: 44px; flex: 0 0 auto; place-items: center;
-  margin-left: auto; padding: 0; border: 1px solid transparent; border-radius: 5px;
-  background: transparent; color: var(--qec-text-muted);
+.qec-panel-pin.nuclei-icon-btn {
+  position: relative; flex: 0 0 auto; margin-left: auto;
 }
 
-.qec-panel-pin:hover,
-.qec-panel-pin[aria-pressed='true'] {
-  border-color: var(--qec-selection-strong); background: var(--qec-selection); color: var(--qec-analytical-strong);
+/* The visible control is 28px beside the 16px help icon; the 44px touch target is an invisible halo. */
+.qec-panel-pin.nuclei-icon-btn::before {
+  position: absolute; inset: -8px; content: '';
+}
+
+.qec-panel-pin.nuclei-icon-btn[aria-pressed='true'] {
+  background: var(--qec-selection); color: var(--qec-analytical-strong);
 }
 
 .qec-zone-heading {

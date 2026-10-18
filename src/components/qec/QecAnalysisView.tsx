@@ -4,7 +4,7 @@ import { useQecCampaignStore } from '../../stores/qecCampaignStore';
 import { useExperimentStore } from '../../services/experimentStore';
 import { useExperimentUiStore } from '../../stores/experimentUiStore';
 import { QecCampaignActions } from './QecCampaignActions';
-import { SegmentedControl } from '../ui/SegmentedControl';
+import { Tabs } from '../ui';
 import { useElementSize } from '../../hooks/useElementSize';
 import { canStackLambda, isShortAnalysis } from '../../lib/qecAnalysisLayout';
 import { ThresholdPanel } from './ThresholdPanel';
@@ -57,8 +57,9 @@ export function QecAnalysisView({ embedded = false, actionsInHeader = false }: {
   // Λ lives under the plot when there is room; its tab would be a dead end then.
   const activeTab: AnalysisTab = lambdaBelow && tab === 'lambda' ? 'plot' : tab;
 
+  // Sections are real tabs (underline, one row of their own); the units control keeps the segmented style so the two never look alike.
   const tabSwitch = (
-    <SegmentedControl aria-label="Analysis section" value={activeTab} options={lambdaBelow ? STACKED_TABS : ANALYSIS_TABS} onChange={setTab} />
+    <Tabs aria-label="Analysis section" value={activeTab} options={lambdaBelow ? STACKED_TABS : ANALYSIS_TABS} onChange={setTab} />
   );
 
   const webOnly = isWebBuild(); // no kernel to run campaigns in the browser
@@ -149,20 +150,24 @@ export function QecAnalysisView({ embedded = false, actionsInHeader = false }: {
           <CsvMappingPreview />
           {tabbed ? (
             <>
+              {hasData && tabSwitch}
               <div style={{ flex: '1 0 auto', minHeight: PLOT_MIN_HEIGHT }}>
-                {activeTab === 'decoders'
-                  ? <DecoderWorkbench tabs={tabSwitch} />
-                  : <ThresholdPanel part={lambdaBelow ? 'all' : activeTab} tabs={tabSwitch} />}
+                {activeTab === 'decoders' && hasData
+                  ? <DecoderWorkbench />
+                  : <ThresholdPanel part={hasData ? (lambdaBelow ? 'all' : activeTab === 'decoders' ? 'plot' : activeTab) : 'all'} />}
               </div>
             </>
           ) : (
             <>
-              <div style={{ flex: '2 1 0', minHeight: PLOT_MIN_HEIGHT, borderBottom: `1px solid ${colors.border}` }}>
+              <div style={{ flex: hasData ? '2 1 0' : '1 1 0', minHeight: PLOT_MIN_HEIGHT, borderBottom: hasData ? `1px solid ${colors.border}` : undefined }}>
                 <ThresholdPanel />
               </div>
-              <div style={{ flex: '1 1 0', minHeight: TABLE_MIN_HEIGHT }}>
-                <DecoderWorkbench />
-              </div>
+              {/* Until data loads there is nothing to compare: one empty state, not one per panel. */}
+              {hasData && (
+                <div style={{ flex: '1 1 0', minHeight: TABLE_MIN_HEIGHT }}>
+                  <DecoderWorkbench />
+                </div>
+              )}
             </>
           )}
         </div>

@@ -26,7 +26,7 @@ function StudyPicker(): ReactElement {
     <label className="qec-study-picker" htmlFor="qec-active-study">
       <span>Study</span>
       <Select
-        size="lg"
+        size="md"
         className="qec-study-select"
         id="qec-active-study"
         aria-label="Active QEC Study"

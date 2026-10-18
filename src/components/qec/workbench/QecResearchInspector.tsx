@@ -19,7 +19,7 @@ function InspectorHeading({ onClose }: { onClose(): void }): ReactElement {
         <span className="qec-zone-heading__eyebrow">Contextual detail</span>
         <h2 tabIndex={-1} className="qec-inspector__title">Inspector</h2>
       </div>
-      <IconButton className="qec-inspector__close" aria-label="Close research inspector" onClick={onClose}>
+      <IconButton className="qec-inspector__close" aria-label="Close research inspector" tooltip={{ label: 'Close inspector', placement: 'below' }} onClick={onClose}>
         <X aria-hidden="true" size={ICON_SIZE.md} strokeWidth={ICON_STROKE} />
       </IconButton>
     </header>

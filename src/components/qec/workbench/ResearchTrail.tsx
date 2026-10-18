@@ -37,8 +37,8 @@ interface TrailButtonsProps { canBack: boolean; canForward: boolean; onBack(): v
 function TrailButtons({ canBack, canForward, onBack, onForward }: TrailButtonsProps): ReactElement {
   return (
     <>
-      <IconButton size="sm" aria-label="Back in research trail" title="Back" disabled={!canBack} onClick={onBack}><ChevronLeft aria-hidden="true" size={ICON_SIZE.md} strokeWidth={ICON_STROKE} /></IconButton>
-      <IconButton size="sm" aria-label="Forward in research trail" title="Forward" disabled={!canForward} onClick={onForward}><ChevronRight aria-hidden="true" size={ICON_SIZE.md} strokeWidth={ICON_STROKE} /></IconButton>
+      <IconButton size="sm" aria-label="Back in research trail" tooltip={{ label: 'Back', placement: 'below' }} disabled={!canBack} onClick={onBack}><ChevronLeft aria-hidden="true" size={ICON_SIZE.md} strokeWidth={ICON_STROKE} /></IconButton>
+      <IconButton size="sm" aria-label="Forward in research trail" tooltip={{ label: 'Forward', placement: 'below' }} disabled={!canForward} onClick={onForward}><ChevronRight aria-hidden="true" size={ICON_SIZE.md} strokeWidth={ICON_STROKE} /></IconButton>
     </>
   );
 }
@@ -52,7 +52,7 @@ export function ResearchTrail(): ReactElement {
       <span className="qec-research-trail__label">Trail</span>
       <TrailButtons canBack={state.past.length > 0} canForward={state.future.length > 0} onBack={state.back} onForward={state.forward} />
       <TrailList entries={entries} />
-      <IconButton size="sm" aria-label="Clear research trail" title="Clear trail" disabled={entries.length === 0} onClick={state.clear}><X aria-hidden="true" size={ICON_SIZE.sm} strokeWidth={ICON_STROKE} /></IconButton>
+      <IconButton size="sm" aria-label="Clear research trail" tooltip={{ label: 'Clear trail', placement: 'below' }} disabled={entries.length === 0} onClick={state.clear}><X aria-hidden="true" size={ICON_SIZE.sm} strokeWidth={ICON_STROKE} /></IconButton>
     </nav>
   );
 }
