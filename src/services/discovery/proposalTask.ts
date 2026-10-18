@@ -173,6 +173,51 @@ async function produceWithAst(ctx: RunContext, item: PlanItem, parent: Candidate
   return { kind: 'ok', produced: { program: m.program, llm: null, astOps: m.operators, regionWarning: false } };
 }
 
+/** Ask the kernel for a program's dedup key; null when unsupported or unanswered (the caller falls back). */
+async function programKeyOf(ctx: RunContext, program: string): Promise<string | null> {
+  if (ctx.control.stopped) return null;
+  const res = await ctx.kernel.programKey(program);
+  return res.ok ? res.key : null;
+}
+
+/** The candidate that already owns `key`, when it is not this one. */
+function keyedDuplicate(ctx: RunContext, key: string | null | undefined, candidateId: string): string | undefined {
+  const known = key ? ctx.seenProgramKeys.get(key) : undefined;
+  return known && known !== candidateId ? known : undefined;
+}
+
+/** Wait out an in-flight evaluation of the same key; resolves with its owner once the key is known, or undefined if it never became known. */
+async function waitForKey(ctx: RunContext, key: string, candidateId: string): Promise<string | undefined> {
+  for (;;) {
+    const known = keyedDuplicate(ctx, key, candidateId);
+    if (known) return known;
+    const claim = ctx.keyClaims.get(key);
+    if (!claim) return undefined;
+    await claim;
+  }
+}
+
+/**
+ * Only a scored or rejected program is known: a failed run says nothing about the program, so it
+ * must not blacklist it. `firstWins` keeps an earlier owner of the key.
+ */
+export function registerKey(
+  ctx: RunContext,
+  key: string | null | undefined,
+  candidateId: string,
+  evaluation: DiscoveryEvaluation | null,
+  firstWins = true,
+): void {
+  if (!key || !evaluation || (evaluation.status !== 'scored' && evaluation.status !== 'rejected')) return;
+  if (firstWins && ctx.seenProgramKeys.has(key)) return;
+  ctx.seenProgramKeys.set(key, candidateId);
+}
+
+function markDuplicate(ctx: RunContext, candidate: CandidateRecord, of: string, evaluation: DiscoveryEvaluation | null): CandidateRecord {
+  ctx.setUsage((u) => ({ ...u, proposals: { ...u.proposals, duplicate: u.proposals.duplicate + 1 } }));
+  return { ...candidate, evaluation, outcome: 'duplicate', duplicate_of: of };
+}
+
 /**
  * Usage after one kernel evaluation. `max_evaluations` is an honest compute
  * budget (CR-M2): every screen run and every full run counts, so a promoted
@@ -206,14 +251,27 @@ export async function evaluateCandidate(
       return ctx.kernel.evaluate(request(stage));
     });
 
-  const first = await run(spec.evaluation.cascade ? 'screen' : 'full');
-  if (isCancelled(first) || isTransportFailure(first)) return candidate;
-  const known = first.program_key ? ctx.seenProgramKeys.get(first.program_key) : undefined;
-  if (known && known !== candidate.id) {
-    ctx.setUsage((u) => ({ ...u, proposals: { ...u.proposals, duplicate: u.proposals.duplicate + 1 } }));
-    return { ...candidate, evaluation: first, outcome: 'duplicate', duplicate_of: known };
+  // Ask the kernel for the AST-normalised key first, so a known duplicate costs no evaluation (CR-M1).
+  const preKey = await programKeyOf(ctx, candidate.program);
+  let release: () => void = () => undefined;
+  if (preKey) {
+    const known = await waitForKey(ctx, preKey, candidate.id);
+    if (known) return markDuplicate(ctx, candidate, known, null);
+    const claim = new Promise<void>((resolve) => { release = resolve; });
+    ctx.keyClaims.set(preKey, claim);
   }
-  if (first.program_key) ctx.seenProgramKeys.set(first.program_key, candidate.id);
+  let first: DiscoveryEvaluation;
+  try {
+    first = await run(spec.evaluation.cascade ? 'screen' : 'full');
+    if (!isCancelled(first) && !isTransportFailure(first)) registerKey(ctx, preKey ?? first.program_key, candidate.id, first, true);
+  } finally {
+    if (preKey) ctx.keyClaims.delete(preKey);
+    release();
+  }
+  if (isCancelled(first) || isTransportFailure(first)) return candidate;
+  // An older kernel has no program-key request: fall back to the key the evaluation carries.
+  const knownLate = preKey ? undefined : keyedDuplicate(ctx, first.program_key, candidate.id);
+  if (knownLate) return markDuplicate(ctx, candidate, knownLate, first);
 
   if (!spec.evaluation.cascade || first.status !== 'scored') {
     noteRejection(ctx, first);

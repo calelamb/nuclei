@@ -112,6 +112,8 @@ export interface RunContext {
   candidates: Map<string, CandidateRecord>;
   seenHashes: Map<string, string>;
   seenProgramKeys: Map<string, string>;
+  /** Program keys whose first evaluation is in flight; a same-key candidate waits instead of spending an evaluation. */
+  keyClaims: Map<string, Promise<void>>;
   rejections: Array<{ guardrail: string; message: string }>;
   evalLimit: Limiter;
   llmLimit: Limiter;

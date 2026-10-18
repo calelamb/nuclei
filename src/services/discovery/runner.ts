@@ -36,7 +36,7 @@ import { awaitBatch, submitBatch } from './batch';
 import { confirmChampion } from './confirmation';
 import { buildSystemPrompt } from './prompt';
 import { emptyUsage, exhaustedBudget, llmBudgetLeft, planProposal, thresholdForIsland, type PlanItem } from './planning';
-import { countEvaluation, evaluateCandidate, runProposal } from './proposalTask';
+import { countEvaluation, evaluateCandidate, registerKey, runProposal } from './proposalTask';
 import {
   candidateIdFor, createPersister, loadCandidates, loadRunRecord, makeRunId, runPaths, type Persister,
 } from './records';
@@ -199,7 +199,7 @@ export function runDiscovery(
       control,
       signal: llmAbort.signal,
       system: redQueen ? buildRedQueenSystemPrompt(promptInput) : buildSystemPrompt(promptInput),
-      candidates, seenHashes: new Map(), seenProgramKeys: new Map(), rejections: [],
+      candidates, seenHashes: new Map(), seenProgramKeys: new Map(), keyClaims: new Map(), rejections: [],
       evalLimit: createLimiter(spec.budget.max_concurrent_evaluations),
       llmLimit: createLimiter(opts.maxLlmConcurrency ?? 4),
       getRun: () => run as RunRecord,
@@ -219,10 +219,10 @@ export function runDiscovery(
       activity: (candidateId, phase) => emit({ type: 'activity', candidateId, phase }),
       persister,
     };
-    for (const c of candidates.values()) {
+    for (const c of [...candidates.values()].sort((a, b) => a.id.localeCompare(b.id))) {
       if (c.outcome === 'invalid_proposal') continue;
       ctx.seenHashes.set(c.program_sha256, c.id);
-      if (c.evaluation?.program_key) ctx.seenProgramKeys.set(c.evaluation.program_key, c.id);
+      if (c.outcome !== 'duplicate') registerKey(ctx, c.evaluation?.program_key, c.id, c.evaluation);
       if (c.evaluation?.status === 'rejected' && c.evaluation.rejection) ctx.rejections.push(c.evaluation.rejection);
     }
     if (rctx.resumeRunId) rebuildRedQueen(ctx, [...candidates.values()]);
@@ -287,6 +287,7 @@ export function runDiscovery(
       if (evaluated.outcome === 'pending') return haltFinish();
       ctx.saveCandidate(evaluated);
       const ev = evaluated.evaluation;
+      registerKey(ctx, ev?.program_key, evaluated.id, ev);
       if (ev?.evaluator.fingerprint) setRun({ evaluator: { ...(run as RunRecord).evaluator, fingerprint: ev.evaluator.fingerprint } });
       integrate(0);
       observeSeed(ctx, evaluated);
