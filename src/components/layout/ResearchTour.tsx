@@ -30,6 +30,38 @@ interface Rect {
   height: number;
 }
 
+const EDITOR_SELECTOR = '.monaco-editor textarea, [aria-label="Editor content"]';
+const MODE_CHIP_SELECTOR = '[aria-label="Switch workspace mode"]';
+const EDITOR_WAIT_MS = 500;
+
+/**
+ * Put focus back where the person was. The editor may be mid-remount (the QEC
+ * takeover unmounts Monaco during the tour), so wait briefly for it, give up
+ * if the person has already focused something, and fall back to the mode chip.
+ */
+function restoreFocus(opener: HTMLElement | null) {
+  if (opener && document.contains(opener)) {
+    opener.focus();
+    return;
+  }
+  const deadline = performance.now() + EDITOR_WAIT_MS;
+  const attempt = () => {
+    const editor = document.querySelector<HTMLElement>(EDITOR_SELECTOR);
+    if (editor) {
+      editor.focus();
+      return;
+    }
+    const focusMoved = document.activeElement !== null && document.activeElement !== document.body;
+    if (focusMoved) return;
+    if (performance.now() >= deadline) {
+      document.querySelector<HTMLElement>(MODE_CHIP_SELECTOR)?.focus();
+      return;
+    }
+    requestAnimationFrame(attempt);
+  };
+  attempt();
+}
+
 export function ResearchTour() {
   const active = useResearchTourStore((s) => s.active);
   const step = useResearchTourStore((s) => s.step);
@@ -102,8 +134,7 @@ export function ResearchTour() {
     if (!active) return undefined;
     const opener = document.activeElement instanceof HTMLElement && document.activeElement !== document.body ? document.activeElement : null;
     return () => {
-      if (opener && document.contains(opener)) opener.focus();
-      else document.querySelector<HTMLElement>('.monaco-editor textarea, [aria-label="Editor content"]')?.focus();
+      restoreFocus(opener);
     };
   }, [active]);
 
