@@ -24,6 +24,7 @@ describe('no-project sidebar copy (qec-r-14, qec-r-21)', () => {
     const web = { getPlatform: () => 'web' } as unknown as PlatformBridge;
     render(<PlatformProvider bridge={web}><QecNoProjectNotice /></PlatformProvider>);
     expect(screen.queryByText(/Drop a sinter stats CSV/)).toBeNull();
+    expect(screen.getAllByText(/sinter stats CSV/i)).toHaveLength(1);
     expect(screen.getByText(/Studies need a project folder/)).toBeTruthy();
     expect(screen.queryByRole('button', { name: 'Open Analyze' })).toBeNull();
   });

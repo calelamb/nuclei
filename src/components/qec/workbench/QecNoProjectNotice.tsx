@@ -38,7 +38,7 @@ export function QecNoProjectNotice() {
         </div>
       )}
       <p style={dim}>{isWeb
-        ? 'Studies need a project folder, which is available in the desktop app.'
+        ? 'Analyzing a sinter stats CSV works here. Studies need a project folder, which is available in the desktop app.'
         : 'Open a project folder to create Studies.'}</p>
     </div>
   );
