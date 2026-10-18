@@ -130,7 +130,7 @@ describe('DiscoveryWorkbench', () => {
   it('Frontier definition shows the open question and the honesty text', () => {
     seedPopulated({ select: 'definition' });
     useDiscoveryStore.setState({
-      definitions: [{ ...fixtureDefinition({ evaluator: { kind: 'trainability_frontier', config: {} }, search: { archive: { descriptors: ['log2_dla_dimension', 'two_qubit_gates_per_layer'] } } }) }],
+      definitions: [{ ...fixtureDefinition({ evaluator: { kind: 'trainability_frontier', config: {} }, search: { archive: { descriptors: ['dla_fill_fraction', 'light_cone_qubits'] } } }) }],
     });
     renderOn(<DiscoveryWorkbench />);
     expect(screen.getByText(/Is every trainable ansatz classically simulable\?/)).toBeTruthy();

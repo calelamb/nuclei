@@ -108,7 +108,7 @@ function frontierEvaluation(i: number, withFeatures: boolean): DiscoveryEvaluati
     fitness: 1 + i * 0.1,
     objectives: {
       beta: { value: beta, ci95: [beta - 0.02, beta + 0.03], direction: 'minimize', label: 'beta' },
-      estimation_hardness: { value: 3 + (i % 3), direction: 'maximize', label: 'Estimation hardness' },
+      pp_exact_cost: { value: 3 + (i % 3), direction: 'maximize', label: 'Pauli-propagation exact cost (log10 strings)' },
     },
     descriptors: { log2_dla_dimension: 4 + (i % 8), two_qubit_gates_per_layer: 15 },
     metrics: {
@@ -147,7 +147,7 @@ export function frontierFixture(count = 12, withFeatures = true): FrontierFixtur
   ] as const;
   let archive = createArchive(
     axes,
-    [{ key: 'beta', label: 'beta', direction: 'minimize' }, { key: 'estimation_hardness', label: 'Hardness', direction: 'maximize' }],
+    [{ key: 'beta', label: 'beta', direction: 'minimize' }, { key: 'pp_exact_cost', label: 'Pauli-propagation exact cost (log10 strings)', direction: 'maximize' }],
     2,
   );
   const candidates: Record<string, CandidateRecord> = {};

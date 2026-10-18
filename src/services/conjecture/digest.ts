@@ -5,7 +5,7 @@
  * features the digest says so and uses objectives and descriptors only.
  *
  * Reads Frontier-evaluator fields defensively: `metrics.features`, the `beta`
- * and `estimation_hardness` objectives, and the `log2_dla_dimension` descriptor.
+ * and `pp_exact_cost` objectives (older runs on disk: `estimation_hardness`), and the `log2_dla_dimension` descriptor.
  */
 
 import type { CandidateRecord, RunRecord } from '../../types/discovery';
@@ -96,8 +96,9 @@ function featuresOf(c: CandidateRecord): Features | null {
 
 function hardnessCensored(c: CandidateRecord): boolean | null {
   const m = c.evaluation?.metrics ?? {};
-  const nested = isObject(m.estimation_hardness) ? m.estimation_hardness.censored : undefined;
-  for (const v of [m.hardness_censored, m.censored, nested]) if (typeof v === 'boolean') return v;
+  const cost = isObject(m.pp_exact_cost) ? m.pp_exact_cost.censored : undefined;
+  const legacy = isObject(m.estimation_hardness) ? m.estimation_hardness.censored : undefined;
+  for (const v of [m.hardness_censored, m.censored, cost, legacy]) if (typeof v === 'boolean') return v;
   return null;
 }
 
@@ -121,7 +122,7 @@ function eliteRow(c: CandidateRecord, rank: 'top' | 'bottom'): DigestElite {
     descriptors: Object.fromEntries(Object.entries(ev.descriptors).map(([k, v]) => [k, sig(v)])),
     beta: beta ? sig(beta.value) : null,
     beta_ci95: interval(beta?.ci95),
-    hardness: num(ev.objectives.estimation_hardness?.value),
+    hardness: num((ev.objectives.pp_exact_cost ?? ev.objectives.estimation_hardness)?.value),
     hardness_censored: hardnessCensored(c),
     log2_dla_dimension: num(ev.descriptors.log2_dla_dimension),
     scaling_points: Array.isArray(points) ? points.length : null,
