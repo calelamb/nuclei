@@ -8,7 +8,10 @@ For a cost ``C(v) = <0|U(v)† O U(v)|0>`` and parameters ``v``:
 * ``per_parameter[k]``: sample mean, *unbiased* sample variance (``ddof=1``) and ``E|g_k|``
   of ``g_k = ∂C/∂v_k``; 95% intervals are a seeded percentile bootstrap (1000 resamples of
   the samples; the bootstrap redraws *whole samples*, so parameters stay correlated).
-* ``variance_mean``: the mean of the per-parameter variances.
+* ``variance_mean``: the mean of the per-parameter variances.  For the PPE it is ``None`` (and the
+  uninformative per-parameter variances / ``gate_values`` entries are ``None``) when the run is not
+  ``complete`` or an interval is uninformative (``lo == 0 < hi`` or ``hi/lo > 2``); the truncation
+  interval is still returned.  A midpoint is never reported as an estimate.
 
 ``method``
 ----------
@@ -17,7 +20,8 @@ For a cost ``C(v) = <0|U(v)† O U(v)|0>`` and parameters ``v``:
 (``pauliprop``): no sampling noise, ``mean`` is exactly 0, and ``variance_ci95`` is the
 *rigorous truncation interval* (``interval_kind == "truncation"``).  ``auto`` uses the PPE
 when it applies and its ``variance_mean`` interval is at most 10% of the estimate wide,
-otherwise it falls back to sampling and records why in ``fallback_reason``.
+otherwise (``n <= MAX_STATEVECTOR_QUBITS``) it falls back to sampling and records why in
+``fallback_reason``; above that limit it returns ``variance_mean = None`` plus the interval.
 
 Determinism
 -----------
@@ -137,6 +141,9 @@ def _sampling_result(circuit, observable, samples, seed, init, backend, progress
 def _is_tight(res: dict) -> tuple[bool, str]:
     lo, hi = res["variance_mean_ci95"]
     width, est = hi - lo, res["variance_mean"]
+    if est is None or res["interval"]["status"] != "complete":
+        return False, (f"PPE bound width is uninformative: interval [{lo:.3g}, {hi:.3g}] (status "
+                       f"{res['interval']['status']}); {res['interval']['ppe_method']}")
     if width <= TIGHT_FRACTION * est:
         return True, ""
     pct = "inf" if est == 0 else f"{100.0 * width / est:.0f}%"
@@ -148,20 +155,26 @@ def _ppe_result(circuit, observable, init, budget, progress, cancel) -> dict[str
     if res["status"] == "cancelled":
         raise AnalysisCancelled()
     rows = [
-        {"name": r["name"], "mean": 0.0, "variance": float(r["variance"]), "abs_mean": None,
+        {"name": r["name"], "mean": 0.0, "variance": None if r["variance"] is None else float(r["variance"]),
+         "abs_mean": None,
          "variance_ci95": [float(r["interval"][0]), float(r["interval"][1])],
          "dead": bool(r["dead"]), "dead_reason": r["dead_reason"]}
         for r in res["per_parameter"]
     ]
-    var = np.array([r["variance"] for r in rows])
+    var = np.array([np.nan if r["variance"] is None else r["variance"] for r in rows])
     vm_ci = [float(res["variance_mean_interval"][0]), float(res["variance_mean_interval"][1])]
+    # The headline is a number only for a complete run with an informative interval (PH-C1); otherwise
+    # it is None and only the truncation interval is real.
+    headline = res["variance_mean"] if res["status"] == "complete" else None
     return {
         "samples": None, "init": init, "method": "ppe", "backend": "numpy", "interval_kind": "truncation",
         "interval": {"kind": "truncation", "variance_mean": vm_ci, "ppe_method": res["method"],
                      "status": res["status"], "frontier_peak": res["frontier_peak"],
                      "discarded_mass": res["discarded_mass"]},
-        "per_parameter": rows, "variance_mean": float(res["variance_mean"]), "variance_mean_ci95": vm_ci,
-        "gradient_norm_mean": None, "gradient_norm_rms": float(math.sqrt(var.sum())),
+        "per_parameter": rows, "variance_mean": None if headline is None else float(headline),
+        "variance_mean_ci95": vm_ci,
+        "gradient_norm_mean": None,
+        "gradient_norm_rms": None if headline is None else float(math.sqrt(var.sum())),
         "_variance": var, "_abs_mean": np.full(len(rows), np.nan), "_raw": res,
     }
 
@@ -176,9 +189,20 @@ def _gate_values(circuit: ParamCircuit, var: np.ndarray, abs_mean: np.ndarray) -
             if isinstance(angle, ParamRef):
                 k = index[angle.name]
                 am = None if math.isnan(abs_mean[k]) else float(abs_mean[k])
+                v = None if math.isnan(var[k]) else float(var[k])
                 out.append({"source_index": source_key(circuit, gi), "gate_index": gi,
-                            "parameter": angle.name, "variance": float(var[k]), "abs_mean": am})
+                            "parameter": angle.name, "variance": v, "abs_mean": am})
     return out
+
+
+def _unreached_note(res: dict) -> str | None:
+    """Explain a ``None`` headline so no consumer mistakes it for zero (PH-C1)."""
+    if res["method"] != "ppe" or res["variance_mean"] is not None:
+        return None
+    lo, hi = res["variance_mean_ci95"]
+    return (f"PPE did not resolve the gradient variance (status {res['interval']['status']}); only the truncation "
+            f"interval [{lo:.3g}, {hi:.3g}] is valid, so variance_mean is null.  Per-parameter variances whose "
+            "interval is uninformative are null too.")
 
 
 def _finish(res: dict, circuit, seed, notes, fallback, t0) -> dict[str, Any]:
@@ -186,7 +210,8 @@ def _finish(res: dict, circuit, seed, notes, fallback, t0) -> dict[str, Any]:
     res.pop("_raw", None)
     res["gate_values"] = _gate_values(circuit, var, abs_mean)
     res["seed"] = seed
-    res["notes"] = notes
+    note = _unreached_note(res)
+    res["notes"] = notes + ([note] if note else [])
     res["fallback_reason"] = fallback
     res["elapsed_ms"] = int(round((time.perf_counter() - t0) * 1e3))
     return res
@@ -250,7 +275,7 @@ def gradient_statistics(
             if tight or not can_sample:
                 if not tight:
                     notes.append(f"{why}; statevector sampling is unavailable above "
-                                 f"{MAX_STATEVECTOR_QUBITS} qubits, so the bounded PPE result is reported.")
+                                 f"{MAX_STATEVECTOR_QUBITS} qubits, so only the bounded PPE interval is reported.")
                 return _finish(res, circuit, seed, notes, None, t0)
             fallback = why
         else:

@@ -78,7 +78,11 @@ modulus ≤ 1).  A main-chain row discarded before the fork of ``k`` contributes
 For fixed parameters, ``<O>`` uses a single chain with weights ``cos φ`` / ``σ sin φ``;
 each discarded row contributes at most ``|w|``, so ``<O> ∈ [kept - D, kept + D]``.
 Hitting the time budget (or cancellation) stops the sweep; all remaining mass is moved to
-the discarded total so intervals stay valid.  ``method`` is ``"..._exact"`` only if nothing
+the discarded total so intervals stay valid.  A parameter whose interval is uninformative
+(``lo == 0 < hi`` or ``hi/lo > 2``, e.g. never reached by the sweep) reports ``variance = None``
+and keeps its interval; the interval midpoint is never presented as an estimate (a midpoint of
+``[0, 0.97]`` was once reported for a true value of 3e-8).  ``variance_mean`` is ``None`` when
+any per-parameter variance is.  ``method`` is ``"..._exact"`` only if nothing
 was discarded and the sweep completed.
 """
 
@@ -338,6 +342,15 @@ def _remaining_mass(chain: _Chain | None, n_params: int) -> np.ndarray:
     return np.bincount(chain.tag + 1, weights=np.abs(chain.w), minlength=n_params + 1)
 
 
+#: An interval is informative when it pins the value down to within a factor of 2 (``hi/lo <= 2``).
+INFORMATIVE_RATIO = 2.0
+
+
+def _informative(lo: float, hi: float) -> bool:
+    """True iff ``[lo, hi]`` is exact or ``0 < lo`` and ``hi/lo <= INFORMATIVE_RATIO``."""
+    return hi == lo or (lo > 0.0 and hi <= INFORMATIVE_RATIO * lo)
+
+
 def _assemble_variances(comp, n_params, final, disc, launch_d, launched, seeded, remaining, status, peak, t0,
                         diag) -> dict:
     f2 = np.zeros(n_params)
@@ -360,15 +373,18 @@ def _assemble_variances(comp, n_params, final, disc, launch_d, launched, seeded,
             hi = kept + d_k
             lo = kept if diag else kept - d_k
             lo = max(lo, 0.0)
-            est = min(max(kept, lo), hi) if complete else 0.5 * (lo + hi)
+            # Never invent a number: only an informative interval carries a point estimate (the kept
+            # mass, clamped into the interval); otherwise ``variance`` is None and only the interval is real.
+            est = min(max(kept, lo), hi) if _informative(lo, hi) else None
             dead = lo == 0.0 and hi == 0.0
             reason = "light_cone" if dead and not seeded[k] else ("annihilated" if dead else None)
-        rows.append({"param": k, "variance": float(est), "interval": [float(lo), float(hi)], "dead": bool(dead),
+        rows.append({"param": k, "variance": None if est is None else float(est), "interval": [float(lo), float(hi)], "dead": bool(dead),
                      "dead_reason": reason})
         lows.append(lo)
         highs.append(hi)
     n = max(n_params, 1)
-    mean = float(np.mean([r["variance"] for r in rows])) if rows else 0.0
+    mean = None if any(r["variance"] is None for r in rows) else (
+        float(np.mean([r["variance"] for r in rows])) if rows else 0.0)
     total_disc = float(disc.sum() + remaining.sum()) if not complete else float(disc.sum())
     exact = complete and disc.sum() == 0.0
     return {"method": _EXACT if exact else _BOUNDED, "per_parameter": rows, "variance_mean": mean,

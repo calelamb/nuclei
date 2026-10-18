@@ -346,3 +346,34 @@ def test_large_n_shallow_local_observable_within_budget(n, record_property):
     assert dt < 20.0
     dead = sum(r["dead"] for r in res["per_parameter"])
     assert dead > 0.5 * n_par  # the backward light cone of Z0Z1 is narrow
+
+
+def test_timeout_or_cancel_never_reports_midpoint_estimates():
+    """PH-C1: unreached/uninformative parameters have variance None and keep their interval."""
+    rng = np.random.default_rng(11)
+    n, n_rot = 4, 6
+    prog, _ = random_program(rng, n, n_rot, global_prob=0.3)
+    obs = rand_obs(rng, n, "sum")
+    for kwargs in ({"time_budget_s": 0.0}, {"cancel": lambda: True}):
+        res = gradient_variances(prog, n, n_rot, obs, **kwargs)
+        assert res["status"] != "complete"
+        for row in res["per_parameter"]:
+            lo, hi = row["interval"]
+            if row["variance"] is not None:       # only an informative interval may carry a number
+                assert lo > 0 and hi / lo <= 2.0 or lo == hi
+                assert lo - 1e-12 <= row["variance"] <= hi + 1e-12
+            else:
+                assert hi > lo or hi > 0
+        if any(r["variance"] is None for r in res["per_parameter"]):
+            assert res["variance_mean"] is None
+            assert res["variance_mean_interval"][1] >= res["variance_mean_interval"][0]
+
+
+def test_uninformative_truncated_interval_has_null_variance():
+    rng = np.random.default_rng(7)
+    prog, _ = random_program(rng, 5, 8, global_prob=0.3)
+    res = gradient_variances(prog, 5, 8, [(1.0, tuple((q, "Z") for q in range(5)))], max_frontier=1)
+    for row in res["per_parameter"]:
+        lo, hi = row["interval"]
+        if lo == 0 < hi:
+            assert row["variance"] is None
