@@ -6,25 +6,24 @@ import { TYPOGRAPHY } from '../../styles/tokens';
 export const STALE_RESULT_OPACITY = 0.5;
 
 /**
- * Pill laid over the top of a results panel when the code has changed since the run.
- * Absolutely positioned so appearing or clearing it never moves the panel beneath.
+ * Pill at the top of a results panel when the code has changed since the run. It sits in the
+ * flow, above the cards, so it never covers what it describes.
  */
 export function StaleResultNotice() {
   const colors = useThemeStore((s) => s.colors);
   const run = shortcutLabel('run');
   return (
-    <div
-      role="status"
-      data-testid="stale-result-notice"
-      style={{
-        position: 'absolute', top: 6, left: '50%', transform: 'translateX(-50%)', zIndex: 2,
-        maxWidth: 'calc(100% - 16px)', padding: '3px 10px', borderRadius: 999,
-        background: colors.bgElevated, border: `1px solid ${colors.border}`, color: colors.textMuted,
-        fontFamily: TYPOGRAPHY.fontSans, fontSize: 11, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
-        pointerEvents: 'none',
-      }}
-    >
-      From last run · code changed{run ? ` · Run ${run}` : ''}
+    <div data-testid="stale-result-notice" style={{ flex: '0 0 auto', display: 'flex', justifyContent: 'center', padding: '6px 8px 0', minWidth: 0 }}>
+      <div
+        role="status"
+        style={{
+          maxWidth: '100%', padding: '3px 10px', borderRadius: 999,
+          background: colors.bgElevated, border: `1px solid ${colors.border}`, color: colors.textMuted,
+          fontFamily: TYPOGRAPHY.fontSans, fontSize: 11, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+        }}
+      >
+        From last run · code changed{run ? ` · Run ${run}` : ''}
+      </div>
     </div>
   );
 }

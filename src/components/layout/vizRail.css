@@ -12,3 +12,7 @@
 /* Right-rail empty states: balanced line breaks so a lone word never wraps onto its own line. */
 .viz-empty { height: 100%; }
 .viz-empty .nuclei-empty__title, .viz-empty .nuclei-empty__body { text-wrap: pretty; }
+
+/* Boot placeholder: top-aligned where the circuit header will land, so the eye does not jump when Python is ready. */
+.viz-empty--boot { justify-content: flex-start; padding-top: var(--space-6); }
+.viz-empty--boot .nuclei-empty__body { max-width: 36ch; text-wrap: balance; }

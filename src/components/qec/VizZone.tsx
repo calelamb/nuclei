@@ -87,7 +87,7 @@ export function VizZone({
     const stage = progress && progress.kind !== 'attempts' && progress.total > 0 ? ` · ${progress.step}/${progress.total}` : '';
     return (
       <div style={COLUMN_STYLE}>
-        <EmptyState className="viz-empty" icon={<Workflow size={20} />} title="Preparing Python">
+        <EmptyState className="viz-empty viz-empty--boot" icon={<Workflow size={20} />} title="Preparing Python">
           {`Circuit and results appear when Python is ready${stage}.`}
         </EmptyState>
       </div>

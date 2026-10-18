@@ -1,5 +1,6 @@
-import { useState, useCallback, useRef } from 'react';
-import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts';
+import { useState, useCallback, useRef, type ReactNode } from 'react';
+import { BarChart, Bar, XAxis, YAxis, Tooltip, Cell } from 'recharts';
+import { useElementSize } from '../../hooks/useElementSize';
 import { useSimulationStore } from '../../stores/simulationStore';
 import { useCircuitStore } from '../../stores/circuitStore';
 import { useDebugStore } from '../../stores/debugStore';
@@ -19,8 +20,8 @@ const VIEW_OPTIONS: ReadonlyArray<SegmentedOption<HistogramViewMode>> = [
 const MANY_BARS = 8;
 /** Two outcomes in a wide slab are not 300px bars: cap them and centre in their slot. */
 const MAX_BAR_WIDTH_PX = 56;
-/** The chart renders only once its box has a size; this floor stops the zero-width warning. */
-const MIN_CHART_HEIGHT_PX = 120;
+/** Rotated outcome labels reach this far left of their tick, so the first one needs room. */
+const CROWDED_LEFT_MARGIN_PX = 44;
 const SCROLL_BAR_SLOT_PX = 30;
 
 const Y_AXIS_WIDTH = 44;
@@ -56,6 +57,19 @@ function PinnedYAxis({ ticks, max, top, bottom }: PinnedYAxisProps) {
 }
 
 /**
+ * Measures its own box and renders the chart only once that box has a real size, so recharts
+ * never sees a zero or negative width (it warns, and draws nothing useful, when it does).
+ */
+function SizedBox({ children }: { children: (width: number, height: number) => ReactNode }) {
+  const [ref, size] = useElementSize<HTMLDivElement>();
+  return (
+    <div ref={ref} style={{ width: '100%', height: '100%' }}>
+      {size.width > 0 && size.height > 0 ? children(size.width, size.height) : null}
+    </div>
+  );
+}
+
+/**
  * The recharts bar chart, shared by the run view and the debugger step view.
  * The y axis fits the data (so a 64-outcome uniform run is not a flat line),
  * ticks are whole percents, and labels tilt when there are many bars. In
@@ -84,9 +98,9 @@ function HistogramChart({ data, srDescription, scroll = false }: ChartProps) {
     />
   );
 
-  const bars = (
-    <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={MIN_CHART_HEIGHT_PX}>
-      <BarChart data={data} margin={scroll ? { ...margin, left: 16, right: 16 } : margin}>
+  const scrollMargin = { ...margin, left: crowded ? CROWDED_LEFT_MARGIN_PX : 16, right: 16 };
+  const renderBars = (width: number, height: number) => (
+      <BarChart width={width} height={height} data={data} margin={scroll ? scrollMargin : margin}>
         <XAxis
           dataKey="state"
           interval={scroll ? 0 : 'preserveStartEnd'}
@@ -111,13 +125,12 @@ function HistogramChart({ data, srDescription, scroll = false }: ChartProps) {
           ))}
         </Bar>
       </BarChart>
-    </ResponsiveContainer>
   );
 
   if (!scroll) {
     return (
       <div style={{ flex: 1, minHeight: 0, overflow: 'hidden' }} role="region" aria-label="Probability histogram" aria-description={srDescription}>
-        {bars}
+        <SizedBox>{renderBars}</SizedBox>
       </div>
     );
   }
@@ -126,7 +139,7 @@ function HistogramChart({ data, srDescription, scroll = false }: ChartProps) {
     <div className="histogram-scroll" role="region" aria-label="Probability histogram" aria-description={srDescription}>
       <PinnedYAxis ticks={axis.ticks} max={axis.max} top={margin.top} bottom={xAxisHeight + margin.bottom + scrollbarInset} />
       <div ref={barsRef} className="histogram-scroll__bars" tabIndex={0} aria-label="Scrollable outcome bars">
-        <div style={{ height: '100%', minWidth: data.length * SCROLL_BAR_SLOT_PX + CHART_MARGIN_RIGHT + 22 }}>{bars}</div>
+        <div style={{ height: '100%', minWidth: data.length * SCROLL_BAR_SLOT_PX + scrollMargin.left + scrollMargin.right }}><SizedBox>{renderBars}</SizedBox></div>
       </div>
     </div>
   );
