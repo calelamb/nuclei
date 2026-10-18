@@ -252,3 +252,113 @@ def test_cancel_unknown_job_is_not_accepted():
             return await ask(ws, {"type": "trainability_cancel", "job_id": "ghost"}, "trainability_cancelled")
 
     assert run(scenario) == {"type": "trainability_cancelled", "job_id": "ghost", "accepted": False}
+
+
+# ------------------------------------------------ CR-H2: malformed input never kills the socket
+
+
+async def _survives(ws, message: dict) -> dict:
+    """Send ``message``, expect a correlated-or-plain error, then prove the connection still answers."""
+    ws.push(message)
+    first = (await ws.wait_for(lambda m: m.get("type") in ("error", "trainability_inspected"), 30))[0]
+    ws.push({"type": "trainability_inspect", "code": QISKIT_CODE})
+    await ws.wait_type("trainability_inspected", 60)
+    return first
+
+
+@pytest.mark.parametrize("settings", [
+    {"samples": 10 ** 400},          # math.isfinite(int) overflows
+    {"lie": {"time_budget_s": 10 ** 400}},
+    {"samples": [1]}, {"samples": {"a": 1}}, {"init": [1]}, {"scaling": {"qubits": [10 ** 400]}},
+])
+def test_hostile_settings_get_an_error_or_clamp_not_a_closed_socket(settings):
+    async def scenario():
+        async with connection() as ws:
+            ws.push({"type": "trainability_start", "job_id": "h", "code": QISKIT_CODE,
+                     "analyses": ["gradients"], "settings": settings})
+            ws.push({"type": "trainability_inspect", "code": QISKIT_CODE})
+            await ws.wait_type("trainability_inspected", 60)  # the socket is still alive and answering
+            ws.push({"type": "trainability_cancel", "job_id": "h"})
+
+    # A dropped connection (code 1011) would surface as an exception from the connection task.
+    run(scenario)
+
+
+def test_normalize_settings_handles_huge_integers():
+    assert normalize_settings({"samples": 10 ** 400})["samples"] == 4096
+    assert normalize_settings({"lie": {"time_budget_s": 10 ** 400}})["lie"]["time_budget_s"] == 120.0
+    with pytest.raises(TrainabilityError):
+        normalize_settings({"samples": float("inf")})
+
+
+@pytest.mark.parametrize("msg_type", ["trainability_inspect", "trainability_lint", "trainability_start"])
+def test_lone_surrogate_code_is_an_error_envelope(msg_type):
+    async def scenario():
+        async with connection() as ws:
+            message = {"type": msg_type, "job_id": "s", "code": "x = '\ud83d'\n", "analyses": ["gradients"]}
+            return await _survives(ws, message)
+
+    reply = run(scenario)
+    assert reply["type"] == "error" and reply["code"] == "invalid_request"
+
+
+def test_unexpected_handler_exception_becomes_a_job_correlated_envelope(monkeypatch):
+    from kernel.trainability import handlers
+
+    def explode(msg):
+        raise RuntimeError("kaboom")
+
+    monkeypatch.setattr(handlers, "_build_request", explode)
+
+    async def scenario():
+        async with connection() as ws:
+            ws.push({"type": "trainability_start", "job_id": "k1", "code": QISKIT_CODE, "analyses": ["gradients"]})
+            err = (await ws.wait_for(lambda m: m.get("type") == "error", 30))[0]
+            ws.push({"type": "trainability_inspect", "code": QISKIT_CODE})
+            await ws.wait_type("trainability_inspected", 60)
+            return err
+
+    err = run(scenario)
+    assert err["phase"] == "trainability" and err["job_id"] == "k1" and "kaboom" in err["message"]
+
+
+def test_route_lab_message_last_resort_keeps_the_socket_open(monkeypatch):
+    from kernel.trainability import handlers
+
+    async def explode(msg, ctx):
+        raise RuntimeError("router-level failure")
+
+    monkeypatch.setattr(handlers, "handle", explode)
+
+    async def scenario():
+        async with connection() as ws:
+            ws.push({"type": "trainability_inspect", "code": "x", "request_id": "r-1"})
+            err = (await ws.wait_for(lambda m: m.get("type") == "error", 30))[0]
+            monkeypatch.undo()
+            ws.push({"type": "trainability_inspect", "code": QISKIT_CODE})
+            await ws.wait_type("trainability_inspected", 60)
+            return err
+
+    err = run(scenario)
+    assert err["code"] == "trainability_internal" and err["request_id"] == "r-1"
+
+
+def test_unserialisable_reply_becomes_an_error_envelope_not_silence():
+    from kernel import server
+
+    sent: list[str] = []
+
+    class WS:
+        async def send(self, raw):
+            sent.append(raw)
+
+    async def scenario():
+        ctx = server._lab_context(object(), WS())
+        await ctx.send_json({"type": "discovery_mutations", "mutations": [object()], "request_id": "m1"})
+
+    run(scenario)
+    import json
+
+    reply = json.loads(sent[0])
+    assert reply["type"] == "error" and reply["phase"] == "discovery"
+    assert reply["code"] == "serialization_failed" and reply["request_id"] == "m1"

@@ -38,10 +38,17 @@ def _clamp(value: float, bounds: tuple[float, float]) -> float:
     return min(max(value, bounds[0]), bounds[1])
 
 
+def _is_finite_number(raw: Any) -> bool:
+    """A real, finite number.  Never raises: ``math.isfinite(10**400)`` overflows."""
+    if isinstance(raw, bool) or not isinstance(raw, (int, float)):
+        return False
+    return isinstance(raw, int) or math.isfinite(raw)
+
+
 def _int(raw: Any, path: str, default: int, bounds: tuple[int, int]) -> int:
     if raw is None:
         return default
-    if isinstance(raw, bool) or not isinstance(raw, (int, float)) or not math.isfinite(raw):
+    if not _is_finite_number(raw):
         raise _bad(path, "must be a number")
     return int(_clamp(int(raw), bounds))
 
@@ -49,9 +56,12 @@ def _int(raw: Any, path: str, default: int, bounds: tuple[int, int]) -> int:
 def _float(raw: Any, path: str, default: float, bounds: tuple[float, float]) -> float:
     if raw is None:
         return default
-    if isinstance(raw, bool) or not isinstance(raw, (int, float)) or not math.isfinite(raw):
+    if not _is_finite_number(raw):
         raise _bad(path, "must be a finite number")
-    return float(_clamp(float(raw), bounds))
+    try:
+        return float(_clamp(float(raw), bounds))
+    except OverflowError:  # an integer beyond float range: clamp it as an integer
+        return float(_clamp(raw, bounds))
 
 
 def _choice(raw: Any, path: str, default: str, allowed: tuple[str, ...]) -> str:

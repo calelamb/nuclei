@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import asyncio
 import importlib
+import logging
 import time
 from typing import Any
 
@@ -19,6 +20,7 @@ from kernel.trainability.inspect import inspect_code, load_for_lint, source_line
 from kernel.trainability.jobs import get_manager
 
 LINT_TIME_BUDGET_S = 0.35  # spec: lint compute budget <= 0.5 s including conversion
+logger = logging.getLogger(__name__)
 MAX_JOB_ID_LENGTH = 128
 MAX_CODE_BYTES = 1_000_000
 
@@ -39,7 +41,11 @@ def _code(msg: dict) -> str:
     code = msg.get("code")
     if not isinstance(code, str) or not code.strip():
         raise TrainabilityError("invalid_request", "`code` must be a non-empty string.")
-    if len(code.encode("utf-8")) > MAX_CODE_BYTES:
+    try:
+        size = len(code.encode("utf-8"))
+    except UnicodeEncodeError as exc:  # a lone surrogate, e.g. a truncated emoji pair
+        raise TrainabilityError("invalid_request", "`code` is not valid Unicode text (lone surrogate).") from exc
+    if size > MAX_CODE_BYTES:
         raise TrainabilityError("invalid_request", "`code` is too large.")
     return code
 
@@ -148,6 +154,16 @@ async def _cancel(msg: dict, ctx: LabContext) -> None:
 
 
 async def handle(msg: dict, ctx: LabContext) -> None:
+    """Dispatch one ``trainability_*`` message; a bad message is an error envelope, never a dropped connection."""
+    try:
+        await _dispatch(msg, ctx)
+    except Exception as exc:  # noqa: BLE001 - last line of defence for this handler
+        logger.exception("trainability handler failed for %s", msg.get("type"))
+        job_id = msg.get("job_id") if isinstance(msg.get("job_id"), str) else None
+        await ctx.send_json(error_envelope(normalize_error(exc), job_id))
+
+
+async def _dispatch(msg: dict, ctx: LabContext) -> None:
     msg_type = msg.get("type")
     if msg_type == "trainability_inspect":
         await _run_sync(ctx, _inspect_sync, msg)
