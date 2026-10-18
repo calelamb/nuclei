@@ -39,8 +39,13 @@ SCORER_BUDGETS: dict[str, tuple[int, int]] = {
 }
 
 
+# Unfinished jobs (queued + running) across ALL connections. Per-owner limits alone let N
+# connections queue N * 64 evaluations (RT-M2).
+MAX_QUEUED_GLOBAL = 256
+
+
 class BusyError(RuntimeError):
-    """The owner already has ``MAX_QUEUED_PER_OWNER`` unfinished jobs."""
+    """The owner (or the whole kernel) has too many unfinished jobs."""
 
 
 @dataclass
@@ -85,12 +90,14 @@ class DiscoveryManager:
         self,
         *,
         max_workers: int | None = None,
+        max_queued_global: int = MAX_QUEUED_GLOBAL,
         cache: EvaluationCache | None = None,
         cache_dir: str | None = None,
         sandbox_runner=run_candidate,
         scorer_runner=run_scorer,
     ):
         self.max_workers = max_workers or max(1, min(4, (os.cpu_count() or 2) - 1))
+        self.max_queued_global = max_queued_global
         self._pool = ThreadPoolExecutor(max_workers=self.max_workers, thread_name_prefix="discovery")
         self.cache = cache if cache is not None else EvaluationCache()
         self._cache_dir = cache_dir
@@ -109,10 +116,12 @@ class DiscoveryManager:
         """Reserve a slot; raises BusyError when the owner is full. Call ``launch`` afterwards."""
         job = Job(owner=owner, request=request, emit=emit)
         with self._lock:
+            ahead = sum(len(jobs) for jobs in self._active.values())
+            if ahead >= self.max_queued_global:
+                raise BusyError(f"The kernel already has {ahead} unfinished evaluations; try again shortly.")
             owned = self._active.setdefault(owner, [])
             if len(owned) >= MAX_QUEUED_PER_OWNER:
                 raise BusyError(f"At most {MAX_QUEUED_PER_OWNER} evaluations may be queued per connection.")
-            ahead = sum(len(jobs) for jobs in self._active.values())
             owned.append(job)
         return job, max(0, ahead - self.max_workers)
 
