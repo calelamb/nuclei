@@ -76,7 +76,7 @@ test('@trainability runs the analyses and shows verdicts', async ({ page }) => {
   await page.goto(FIXTURE_URL);
   await page.getByRole('button', { name: 'Trainability Lab' }).click();
 
-  const lab = page.getByRole('region', { name: 'Trainability Lab' });
+  const lab = page.getByRole('region', { name: 'Trainability Lab', exact: true });
   await expect(lab).toBeVisible();
   await expect(lab.getByText('n = 4')).toBeVisible();
 
