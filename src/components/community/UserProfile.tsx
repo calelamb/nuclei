@@ -136,7 +136,7 @@ export function UserProfile() {
       <div
         style={{
           display: 'grid',
-          gridTemplateColumns: 'repeat(3, 1fr)',
+          gridTemplateColumns: 'repeat(3, minmax(0, 1fr))',
           gap: 8,
         }}
       >
@@ -176,9 +176,7 @@ export function UserProfile() {
                 fontSize: 11,
                 color: colors.textDim,
                 fontFamily: TYPOGRAPHY.fontSans,
-                textTransform: 'uppercase',
-                letterSpacing: 0.5,
-                fontWeight: 600,
+                fontWeight: 500,
               }}
             >
               {stat.label}
@@ -189,20 +187,7 @@ export function UserProfile() {
 
       {/* Badges */}
       <div>
-        <span
-          style={{
-            fontSize: 11,
-            fontWeight: 600,
-            textTransform: 'uppercase',
-            letterSpacing: 0.5,
-            color: colors.textMuted,
-            fontFamily: TYPOGRAPHY.fontSans,
-            display: 'block',
-            marginBottom: 8,
-          }}
-        >
-          Badges
-        </span>
+        <h3 className="nuclei-overline" style={{ marginBottom: 8 }}>Badges</h3>
         <BadgeDisplay earnedBadgeIds={badgesEarned} />
       </div>
 
@@ -229,7 +214,7 @@ export function UserProfile() {
           }}
         >
           <Upload size={14} />
-          Share Current Circuit
+          Share current circuit
         </button>
       </div>
     </div>

@@ -11,6 +11,7 @@ export { Tabs, type TabsProps, type TabOption } from './Tabs';
 export { Badge, type BadgeProps, type BadgeTone } from './Badge';
 export { Dialog, type DialogProps } from './Dialog';
 export { Menu, type MenuProps, type MenuEntry, type MenuItemEntry, type MenuTriggerProps } from './Menu';
+export { Table, Thead, Tbody, Tr, Th, Td, type TableProps } from './Table';
 export { EmptyState, type EmptyStateProps } from './EmptyState';
 
 /** Class names of the shared header recipes (styles live in ui.css). */
