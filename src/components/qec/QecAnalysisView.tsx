@@ -150,7 +150,8 @@ export function QecAnalysisView({ embedded = false, actionsInHeader = false }: {
           <CsvMappingPreview />
           {tabbed ? (
             <>
-              {hasData && tabSwitch}
+              {/* flex: none: a tall table must not squeeze the tab strip down to its border. */}
+              {hasData && <div style={{ flex: 'none', padding: '0 12px' }}>{tabSwitch}</div>}
               <div style={{ flex: '1 0 auto', minHeight: PLOT_MIN_HEIGHT }}>
                 {activeTab === 'decoders' && hasData
                   ? <DecoderWorkbench />
