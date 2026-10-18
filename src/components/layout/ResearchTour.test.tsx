@@ -3,6 +3,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { render, cleanup, fireEvent, act } from '@testing-library/react';
 import { ResearchTour } from './ResearchTour';
 import { useResearchTourStore } from '../../stores/researchTourStore';
+import { useNavigationStore } from '../../stores/navigationStore';
 
 describe('ResearchTour', () => {
   beforeEach(() => {
@@ -92,5 +93,34 @@ describe('ResearchTour', () => {
     fireEvent.keyDown(document, { key: 'Escape' });
     expect(document.activeElement).toBe(editor);
     editor.remove();
+  });
+
+  it('declares itself modal for assistive tech, since focus is held inside the card', () => {
+    render(<ResearchTour />);
+    expect(document.querySelector('[role="dialog"]')?.getAttribute('aria-modal')).toBe('true');
+  });
+
+  describe('shows the pane each step describes', () => {
+    afterEach(() => useNavigationStore.setState({ activeView: 'files' }));
+
+    it('opens the Explorer for step 1 even when Settings was showing, and puts Settings back on Done', () => {
+      useNavigationStore.setState({ activeView: 'settings' });
+      useResearchTourStore.setState({ active: false, step: 0 });
+      render(<ResearchTour />);
+      act(() => { useResearchTourStore.setState({ active: true }); });
+      expect(useNavigationStore.getState().activeView).toBe('files');
+      act(() => { useResearchTourStore.getState().dismiss(); });
+      expect(useNavigationStore.getState().activeView).toBe('settings');
+    });
+
+    it('does not undo a navigation the student made themselves during the tour', () => {
+      useNavigationStore.setState({ activeView: 'settings' });
+      useResearchTourStore.setState({ active: false, step: 0 });
+      render(<ResearchTour />);
+      act(() => { useResearchTourStore.setState({ active: true }); });
+      act(() => { useNavigationStore.getState().setActiveView('search'); });
+      act(() => { useResearchTourStore.getState().dismiss(); });
+      expect(useNavigationStore.getState().activeView).toBe('search');
+    });
   });
 });

@@ -143,7 +143,7 @@ export function Sidebar({ view, width, onWidthChange }: SidebarProps) {
   }, [width, onWidthChange]);
 
   return (
-    <div style={{
+    <div data-tour-sidebar="" style={{
       width, height: '100%',
       backgroundColor: colors.bg,
       display: 'flex', flexDirection: 'column',

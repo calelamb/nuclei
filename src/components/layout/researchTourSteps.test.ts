@@ -14,6 +14,12 @@ describe('researchTourSteps', () => {
     expect(web[0].body).toMatch(/desktop app/i);
   });
 
+  it('shows the pane each step describes, and leaves the mode chip step on whatever is open', () => {
+    const desktop = researchTourSteps({ web: false, hasProject: true, mode: 'research' });
+    expect(desktop.map((s) => s.view)).toEqual(['files', 'experiments', undefined]);
+    expect(researchTourSteps({ web: true, hasProject: false, mode: 'research' })[1].view).toBe('qec');
+  });
+
   it('does not claim Research mode while in Learn mode (shell-12)', () => {
     const steps = researchTourSteps({ web: false, hasProject: false, mode: 'learn' });
     expect(steps[2].title).not.toMatch(/you're in research mode/i);
