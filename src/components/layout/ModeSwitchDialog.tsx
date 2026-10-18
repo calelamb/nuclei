@@ -91,7 +91,7 @@ export function ModeSwitchDialog() {
             style={{
               padding: '7px 14px',
               background: 'transparent',
-              color: colors.textDim,
+              color: colors.text,
               border: `1px solid ${colors.border}`,
               borderRadius: 8,
               fontSize: 12,

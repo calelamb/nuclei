@@ -53,7 +53,11 @@ export function VerdictCard({ runId, conjecture, result, rows, ledgerError }: {
   ledgerError?: string | null;
 }) {
   const evidence = useMemo(() => rows ?? result.evidence.map((item, i) => normalizeEvidence(item, i)), [rows, result]);
-  const summary = honestSummary(result.summary, result.verdict, evidence.length || conjecture.circuits, conjecture.n_range[1]);
+  const rawSummary = honestSummary(result.summary, result.verdict, evidence.length || conjecture.circuits, conjecture.n_range[1]);
+  // The pill already says "Inconclusive"; do not repeat it as the sentence's first word.
+  const summary = result.verdict === 'inconclusive' ? rawSummary.replace(/^Inconclusive:\s*/i, '') : rawSummary;
+  // Reasons the summary already states are not repeated.
+  const reasons = result.reasons.filter((r) => !summary.toLowerCase().includes(r.toLowerCase()));
   return (
     <div className="cj-verdict" data-verdict={result.verdict} role="region" aria-label={`Verdict: ${result.verdict}`}>
       <div className="lab-row">
@@ -63,13 +67,13 @@ export function VerdictCard({ runId, conjecture, result, rows, ledgerError }: {
         </span>
       </div>
       <p className="cj-verdict__summary">{summary}</p>
-      {result.reasons.length > 0 && <p className="cj-caption">{result.reasons.join('; ')}.</p>}
+      {reasons.length > 0 && <p className="cj-caption">{reasons.join('; ')}.</p>}
       <p className="cj-caption">
         {result.verdict === 'supported'
           ? 'Supported is evidence on the circuits tested, not a proof for every circuit that fits the predicate.'
           : result.verdict === 'refuted'
             ? 'One violating held-out circuit is enough to refute the claim as stated.'
-            : 'Inconclusive: at least one circuit could not be decided within the exactness budget.'}
+            : 'At least one circuit could not be decided within the exactness budget, so no verdict either way.'}
       </p>
       {result.counterexamples.length > 0 && (
         <div className="lab-stack" style={{ gap: 'var(--space-2)' }}>

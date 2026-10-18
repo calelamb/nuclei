@@ -34,6 +34,13 @@ export function ProposalCard({ runId, proposal, job, schema, anyTestActive }: {
     if (!res.ok) setStartError(res.error);
   };
   const testBlocked = rejected || active || anyTestActive;
+  const blockedReason = rejected
+    ? 'Restore the proposal to test it.'
+    : active
+      ? 'This conjecture is being tested now.'
+      : anyTestActive
+        ? 'Another conjecture is being tested.'
+        : null;
 
   return (
     <LabCard
@@ -76,9 +83,10 @@ export function ProposalCard({ runId, proposal, job, schema, anyTestActive }: {
         )}
         {!editing && (
           <div className="cj-actions">
-            <LabButton variant="primary" icon={FlaskConical} disabled={testBlocked} title={anyTestActive && !active ? 'Another conjecture is being tested.' : rejected ? 'Restore the proposal to test it.' : undefined} onClick={() => void run()}>
+            <LabButton variant="primary" icon={FlaskConical} disabled={testBlocked} title={blockedReason ?? undefined} onClick={() => void run()}>
               {job && !active ? 'Test again' : 'Test'}
             </LabButton>
+            {blockedReason && !active && <span className="lab-muted" style={{ fontSize: 12 }} data-testid="test-blocked-reason">{blockedReason}</span>}
             {active && <LabButton icon={Square} disabled={job?.status === 'cancelling'} onClick={() => void cancel(runId, c.id)}>{job?.status === 'cancelling' ? 'Cancelling' : 'Cancel'}</LabButton>}
             {!active && proposal.decision !== 'accepted' && !rejected && <LabButton icon={Check} onClick={() => decide(runId, c.id, 'accepted')}>Accept</LabButton>}
             {!active && !rejected && <LabButton variant="ghost" icon={X} onClick={() => decide(runId, c.id, 'rejected')}>Reject</LabButton>}
