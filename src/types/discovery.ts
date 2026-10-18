@@ -137,7 +137,8 @@ export interface DiscoveryAudit {
   seed: number;
   isolation: DiscoveryIsolation;
   timings_ms: { sandbox?: number; audit?: number; total: number };
-  notes: string | null;
+  /** Free-form audit notes from the kernel (a list per the addendum §F contract). */
+  notes: string[] | null;
 }
 
 export type DiscoveryRequest =

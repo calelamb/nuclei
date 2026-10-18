@@ -26,7 +26,7 @@ const EXPLOIT: DiscoveryAudit = makeAudit({
     { id: 'reparse', label: 'Re-parse from scratch', status: 'pass', detail: null },
     { id: 'det', label: 'Deterministic under a fresh seed', status: 'fail', detail: 'observable flipped under seed 99' },
   ],
-  notes: 'Audited under depolarizing noise.',
+  notes: ['Audited under depolarizing noise.'],
 });
 
 function withAudit(id: string, patch: Partial<CandidateRecord>): CandidateRecord[] {

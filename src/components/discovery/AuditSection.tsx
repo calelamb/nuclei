@@ -74,7 +74,7 @@ function AuditBody({ audit }: { audit: DiscoveryAudit }) {
         </div>
       )}
       <AuditChecks checks={audit.checks} />
-      {audit.notes && <p className="lab-muted" style={{ margin: 0 }}>{audit.notes}</p>}
+      {audit.notes?.length ? <p className="lab-muted" style={{ margin: 0 }}>{audit.notes.join(' ')}</p> : null}
     </>
   );
 }
