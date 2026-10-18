@@ -136,11 +136,22 @@ class KernelProgram:
             return None
         return self._bk.xp.exp(1j * gp.evaluate(self._bk, v))[:, None]
 
-    def _run(self, fn_name: str, fn, values: np.ndarray, extra: Any = None):
-        """Run ``fn(v_chunk, lo, hi)`` over memory/cache-sized chunks."""
-        step = self.chunk_size(values.shape[0])
-        return [fn(self._bk.asarray(values[lo:lo + step]), lo, min(lo + step, values.shape[0]))
-                for lo in range(0, values.shape[0], step)]
+    def _jitted(self, key: Any, fn):
+        """``jax.jit`` of ``fn`` over the static op list (identity elsewhere)."""
+        if self._bk.jit is None:
+            return fn
+        if key not in self._jit:  # pragma: no cover - jax is optional
+            self._jit[key] = self._bk.jit(fn)
+        return self._jit[key]
+
+    def _run(self, fn, values: np.ndarray, initial: Any) -> list[Any]:
+        """Run ``fn(v_chunk, s0_chunk)`` over memory/cache-sized chunks."""
+        total, step = values.shape[0], self.chunk_size(values.shape[0])
+        parts = []
+        for lo in range(0, total, step):
+            hi = min(lo + step, total)
+            parts.append(fn(self._bk.asarray(values[lo:hi]), self._initial(hi - lo, initial, lo, hi)))
+        return parts
 
     # -------------------------------------------------------- public API
     def states(self, values: Any, initial: Any = None) -> np.ndarray:
@@ -149,12 +160,13 @@ class KernelProgram:
         if v.shape[0] * (BYTES_PER_AMPLITUDE << self.n_qubits) > _MAX_OUTPUT_BYTES:
             raise IrError("too_many_qubits", "requested states exceed the memory guard; use expectations()")
 
-        def chunk(vc, lo, hi):
-            s, _ = self._forward(vc, self._initial(hi - lo, initial, lo, hi), False)
+        def raw(vc, s0):
+            s, _ = self._forward(vc, s0, False)
             ph = self._phase(vc)
-            return self._bk.to_numpy(s if ph is None else s * ph)
+            return s if ph is None else s * ph
 
-        parts = self._run("states", chunk, v)
+        fn = self._jitted("states", raw)
+        parts = [self._bk.to_numpy(p) for p in self._run(fn, v, initial)]
         return parts[0] if len(parts) == 1 else np.concatenate(parts, axis=0)
 
     def expectations(self, values: Any, observable: PauliSum, initial: Any = None) -> np.ndarray:
@@ -162,11 +174,12 @@ class KernelProgram:
         v = self._check_values(values)
         plan = self._plan(observable)
 
-        def chunk(vc, lo, hi):
-            s, _ = self._forward(vc, self._initial(hi - lo, initial, lo, hi), False)
-            return self._bk.to_numpy(plan.expectation(self._bk, s))
+        def raw(vc, s0):
+            s, _ = self._forward(vc, s0, False)
+            return plan.expectation(self._bk, s)
 
-        return np.concatenate(self._run("expect", chunk, v))
+        fn = self._jitted(("expect", observable), raw)
+        return np.concatenate([self._bk.to_numpy(p) for p in self._run(fn, v, initial)])
 
     def value_and_grad(
         self, values: Any, observable: PauliSum, initial: Any = None
@@ -174,15 +187,11 @@ class KernelProgram:
         """Batched adjoint: ``(values (B,), grads (B, m))``."""
         v = self._check_values(values)
         plan = self._plan(observable)
-        m = self.n_params
-
-        def chunk(vc, lo, hi):
-            val, grad = self._vag_chunk(vc, plan, self._initial(hi - lo, initial, lo, hi))
-            return self._bk.to_numpy(val), self._bk.to_numpy(grad)
-
-        parts = self._run("vag", chunk, v)
-        return (np.concatenate([p[0] for p in parts]),
-                np.concatenate([p[1] for p in parts], axis=0).reshape(v.shape[0], m))
+        fn = self._jitted(("vag", observable), lambda vc, s0: self._vag_chunk(vc, plan, s0))
+        parts = self._run(fn, v, initial)
+        vals = np.concatenate([self._bk.to_numpy(p[0]) for p in parts])
+        grads = np.concatenate([self._bk.to_numpy(p[1]) for p in parts], axis=0)
+        return vals, grads.reshape(v.shape[0], self.n_params)
 
     def _vag_chunk(self, v: Any, plan: ObservablePlan, s0: Any):
         bk = self._bk
@@ -194,8 +203,6 @@ class KernelProgram:
         first = self._first_param_op
         for k in range(len(self.ops) - 1, first - 1, -1):
             op = self.ops[k]
-            if k == first and not op.param_idx.size:
-                break
             phi_prev, lam_prev, dgrad = op.backward(bk, phi, lam, v, auxs[k])
             if dgrad is not None and op.param_idx.size:
                 grad = bk.add_at_cols(grad, op.param_idx, dgrad)

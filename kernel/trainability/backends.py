@@ -63,8 +63,8 @@ class Backend:
     def add_at_cols(self, target: Any, idx: np.ndarray, update: Any) -> Any:
         """``target[:, idx] += update`` (``idx`` unique); functional on jax."""
         if self.name == "jax":
-            return target.at[:, idx].add(update)
-        target[:, idx] += update
+            return target.at[:, self.xp.asarray(idx)].add(update)
+        target[:, self.xp.asarray(idx)] += update
         return target
 
     def basis_zero(self, b: int, dim: int) -> Any:

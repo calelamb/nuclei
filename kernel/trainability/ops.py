@@ -74,7 +74,7 @@ class LinAngle:
         xp = bk.xp
         if self.is_constant:
             return xp.full((v.shape[0],), self.offset, dtype=xp.float64)
-        return v[:, self.idx] @ bk.asarray(self.coeff) + self.offset
+        return v[:, bk.asarray(self.idx)] @ bk.asarray(self.coeff) + self.offset
 
 
 class Op:
@@ -180,7 +180,7 @@ class DiagOp(Op):
 
     def phase(self, bk: Backend, v: Any) -> Any:
         xp = bk.xp
-        ang = v[:, self.param_idx] @ self.dev(bk, "hp", self.hp) + self.dev(bk, "phi0", self.phi0)[None, :]
+        ang = v[:, bk.asarray(self.param_idx)] @ self.dev(bk, "hp", self.hp) + self.dev(bk, "phi0", self.phi0)[None, :]
         return xp.exp(1j * ang)
 
     def forward(self, bk, s, v):

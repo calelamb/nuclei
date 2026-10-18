@@ -102,7 +102,7 @@ def _qiskit_angle(p: Any) -> Angle:
         if grad.parameters:
             raise IrError("nonlinear_parameter", f"angle '{p}' is not linear in {param.name}")
         grad = float(grad)
-    offset = p.bind({param: 0.0}, allow_unknown_parameters=True)
+    offset = p.assign(param, 0.0)
     return ParamRef(param.name, float(grad), float(offset))
 
 
