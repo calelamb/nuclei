@@ -1,7 +1,8 @@
 // @vitest-environment jsdom
 import { describe, it, expect, afterEach, beforeEach } from 'vitest';
 import { cleanup, render, screen } from '@testing-library/react';
-import { InvestigationCanvas, circuitHint } from './InvestigationCanvas';
+import { InvestigationCanvas } from './InvestigationCanvas';
+import { circuitHint } from './circuitHint';
 import { orderCanvasPanels } from './orderCanvasPanels';
 import { resolveQecPanels } from '../../../layout/qecPanelRegistry';
 import { useQecWorkbenchStore } from '../../../stores/qecWorkbenchStore';
