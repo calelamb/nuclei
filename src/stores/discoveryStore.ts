@@ -203,10 +203,14 @@ export const useDiscoveryStore = create<DiscoveryState>((set, get) => {
   ): ActionResult<{ runId: string }> {
     let runId = '';
     const onEvent = (event: RunnerEvent) => {
-      const current = live.get(runId)?.handle.current() ?? null;
+      // A run that fails synchronously (no API key, bad archive axes) emits its status before
+      // `runDiscovery` has returned the handle, so the id comes from the event itself (CR-H8).
+      const id = event.type === 'status' ? event.run.run_id : runId;
+      if (!id) return;
+      const current = live.get(id)?.handle.current() ?? null;
       set((s) => {
-        const base = s.views[runId] ?? (event.type === 'status' ? createRunView(event.run) : current ? createRunView(current) : null);
-        return base ? withView(s, runId, reduceRunEvent(base, event)) : s;
+        const base = s.views[id] ?? (event.type === 'status' ? createRunView(event.run) : current ? createRunView(current) : null);
+        return base ? withView(s, id, reduceRunEvent(base, event)) : s;
       });
     };
     const handle = runDiscovery(spec, rctx, depsFor(session), { onEvent });
@@ -227,7 +231,8 @@ export const useDiscoveryStore = create<DiscoveryState>((set, get) => {
       set((s) => ({
         liveRunIds: s.liveRunIds.filter((id) => id !== runId),
         runsByDefinition: { ...s.runsByDefinition, [rctx.definitionFile]: upsertRun(s.runsByDefinition[rctx.definitionFile], run) },
-        ...(s.views[runId] ? withView(s, runId, { ...s.views[runId], run, activity: {} }) : {}),
+        // The view may not exist yet when the run failed before its first event was routed.
+        ...withView(s, runId, { ...(s.views[runId] ?? createRunView(run)), run, activity: {} }),
       }));
     });
     return { ok: true, runId };

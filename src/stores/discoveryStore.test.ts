@@ -57,6 +57,29 @@ afterEach(() => {
   store().configure(null);
 });
 
+describe('a run that fails synchronously (CR-H8)', () => {
+  it('surfaces its error and leaves no live run or endless spinner', async () => {
+    const noKey = DEFINITION.replace('mutator: { kind: ast }', 'mutator: { kind: llm }');
+    const env = makeEnv({ ...project(), 'proj/experiments/toy.discovery.yaml': noKey });
+    const llm = createFakeLlm();
+    llm.key.value = false;
+    store().configure({ ...env, llm });
+    await store().reload('proj');
+    const res = await store().startRun('toy.discovery.yaml');
+    expect(res.ok).toBe(true);
+    if (!res.ok) return;
+    await until(() => store().liveRunIds.length === 0, 'run to finish');
+    const view = store().views[res.runId];
+    expect(view).toBeDefined();
+    expect(view.run.status).toBe('failed');
+    expect(view.run.message).toMatch(/API key/);
+    expect(store().views['']).toBeUndefined();
+    expect(selectSelectedView(store())?.run.status).toBe('failed');
+    expect(isDiscoveryRunning(store())).toBe(false);
+    expect(store().kpis[res.runId]).toBeDefined();
+  });
+});
+
 describe('definitions', () => {
   it('lists valid definitions and reports malformed ones as data', async () => {
     store().configure(makeEnv({ ...project(), 'proj/experiments/bad.discovery.yaml': 'schema: 1\ntype: discovery\n', 'proj/experiments/notes.txt': 'x' }));
