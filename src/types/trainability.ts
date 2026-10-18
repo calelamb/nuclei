@@ -238,7 +238,8 @@ export interface TrainabilityInspection {
   n_qubits: number;
   parameters: string[];
   gate_count: number;
-  param_gates: Array<{ source_index: number; parameter: string; gate: string }>;
+  /** `qubits` is additive (kernel ≥ PRD 14 final); older kernels omit it. */
+  param_gates: Array<{ source_index: number; parameter: string; gate: string; qubits?: number[] }>;
   sweepable_params: string[];
   observable_declared: string | null;
   notes: string[];
