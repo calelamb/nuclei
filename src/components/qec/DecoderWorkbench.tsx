@@ -5,6 +5,7 @@ import { useQecCampaignStore } from '../../stores/qecCampaignStore';
 import { PanelHeader } from '../layout/PanelHeader';
 import { QecEmptyState } from './QecEmptyState';
 import { decoderComparison, formatSecondsPerShot } from '../../lib/qecWorkbench';
+import { decoderTableToCsv } from '../../lib/qecExport';
 import { isWebBuild } from '../../platform/buildTarget';
 import { useQecUnits } from '../../hooks/useQecUnits';
 import { formatNoise, formatRateInterval } from '../../lib/qecPlotFormat';
@@ -35,22 +36,7 @@ export function DecoderWorkbench({ tabs }: { tabs?: ReactNode } = {}) {
   const contexts = useMemo(() => [...new Set(wb.map((w) => w.context))], [wb]);
   const showExperiment = contexts.length > 1;
 
-  const exportCsv = () => {
-    const cell = (v: string | number | null) => {
-      const t = v === null ? '' : String(v);
-      return /[",\n]/.test(t) ? `"${t.replace(/"/g, '""')}"` : t;
-    };
-    const csv =
-      'decoder,experiment,distance,noise,shots,discards,kept_shots,errors,logical_error_rate,ci_lo,ci_hi,units,ci_method,seconds_per_shot,strong_id,task_collision\n' +
-      wb
-        .map((w) => [
-          w.decoder, w.experiment, w.distance, w.noise, w.shots, w.discards, w.kept, w.errors,
-          w.rate.p, w.rate.lo, w.rate.hi, w.units, `likelihood_ratio_factor_${cmp.maxLikelihoodFactor}`, w.secondsPerShot, w.strongId, w.collides ? 'yes' : 'no',
-        ].map(cell).join(','))
-        .join('\n') +
-      '\n';
-    downloadCsv(csv, 'decoder-workbench.csv');
-  };
+  const exportCsv = () => downloadCsv(decoderTableToCsv(cmp), 'decoder-workbench.csv');
 
   const header = (
     <PanelHeader
