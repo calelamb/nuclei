@@ -31,7 +31,7 @@ describe('BrokenExperimentCard', () => {
 
   it('expands to plain-language problems, never raw validator text', () => {
     mount();
-    fireEvent.click(screen.getByRole('button', { name: /broken.experiment.yaml/ }));
+    fireEvent.click(screen.getByRole('button', { name: /broken/ }));
     expect(screen.getByText('“seed” is required but missing.')).toBeTruthy();
     expect(screen.queryByText(/Invalid input/)).toBeNull();
   });
@@ -40,16 +40,31 @@ describe('BrokenExperimentCard', () => {
     const openTab = vi.fn();
     useProjectStore.setState({ openTab });
     mount();
-    fireEvent.click(screen.getByRole('button', { name: /broken.experiment.yaml/ }));
+    fireEvent.click(screen.getByRole('button', { name: /broken/ }));
     await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Open file' })); });
     expect(openTab).toHaveBeenCalledWith({ path: '/proj/experiments/broken.experiment.yaml', content: 'name: x' });
+  });
+
+  it('shows the experiment name without the file suffix so it fits the rail', () => {
+    mount();
+    expect(screen.getByText('broken')).toBeTruthy();
+  });
+
+  it('says so when the file cannot be opened', async () => {
+    const openTab = vi.fn();
+    useProjectStore.setState({ openTab });
+    mount(vi.fn(async () => { throw new Error('denied'); }));
+    fireEvent.click(screen.getByRole('button', { name: /broken/ }));
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Open file' })); });
+    expect(screen.getByText('Could not open broken.experiment.yaml.')).toBeTruthy();
+    expect(openTab).not.toHaveBeenCalled();
   });
 
   it('hands the problems to Dirac', () => {
     const ask = vi.fn();
     useDiracPanelStore.setState({ ask });
     mount();
-    fireEvent.click(screen.getByRole('button', { name: /broken.experiment.yaml/ }));
+    fireEvent.click(screen.getByRole('button', { name: /broken/ }));
     fireEvent.click(screen.getByRole('button', { name: 'Ask Dirac to fix' }));
     expect(ask).toHaveBeenCalledWith(expect.stringContaining('“seed” is required but missing.'));
   });

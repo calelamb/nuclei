@@ -146,6 +146,7 @@
 .nuclei-broken-experiment__count { margin-left: auto; flex: none; color: var(--color-text-secondary); font-size: var(--font-size-caption); }
 .nuclei-broken-experiment__body { padding: 0 var(--space-2) var(--space-2); }
 .nuclei-broken-experiment__body ul { margin: 0 0 var(--space-2); padding-left: var(--space-4); color: var(--color-text-secondary); font-size: var(--font-size-chrome-label); line-height: 1.5; }
+.nuclei-broken-experiment__error { margin: 0 0 var(--space-2); color: var(--color-danger); font-size: var(--font-size-chrome-label); }
 .nuclei-broken-experiment__actions { display: flex; flex-wrap: wrap; gap: var(--space-2); }
 
 /* Zero runs: the EmptyState owns the space under the header, centred. */
