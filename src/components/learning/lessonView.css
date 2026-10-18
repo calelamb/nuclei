@@ -28,4 +28,4 @@
 @media (prefers-reduced-motion: reduce) { .lesson__next-check { animation: none; } }
 .lesson__next-title { font-size: var(--font-size-body); font-weight: var(--font-weight-medium); color: var(--color-text-primary); }
 /* Warning badge text over its own tint is 4.2:1 in light; darken it inside the screens this lane owns. */
-.lesson__meta .nuclei-badge--warning { --badge-text: color-mix(in srgb, var(--color-warning) 72%, var(--color-text-primary)); }
+.lesson__meta .nuclei-badge--warning { --badge-text: var(--color-warning-text); }
