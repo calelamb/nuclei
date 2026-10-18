@@ -77,3 +77,70 @@ def test_macos_sandbox_exec_blocks_network_and_writes_when_active():
     )
     assert response["isolation"] == "sandbox-exec"
     assert response["stdout"].strip() == "write-denied"
+
+
+_PROBE_SCRIPT = r"""
+import json, os, socket, sys
+scratch, outside = sys.argv[1], sys.argv[2]
+def attempt(fn):
+    try:
+        fn(); return "ok"
+    except OSError:
+        return "denied"
+def write(path):
+    with open(path, "w") as fh:
+        fh.write("x")
+print(json.dumps({
+    "inside": attempt(lambda: write(os.path.join(scratch, "inside.txt"))),
+    "outside": attempt(lambda: write(outside)),
+    "tmp_env": os.environ.get("TMPDIR") == scratch and os.environ.get("MPLCONFIGDIR") == scratch,
+    "socket": attempt(lambda: socket.create_connection(("127.0.0.1", 9), timeout=2)),
+    "bind": attempt(lambda: socket.socket().bind(("127.0.0.1", 0))),
+}))
+"""
+
+
+@pytest.mark.skipif(sys.platform != "darwin", reason="sandbox-exec is macOS only")
+def test_macos_profile_confines_writes_to_private_scratch_and_blocks_sockets(tmp_path):
+    import json
+    import os
+    import subprocess
+
+    from kernel.discovery.procrun import minimal_env
+
+    if iso.detect_isolation().mode != "sandbox-exec":
+        pytest.skip("sandbox-exec not usable here")
+    outside = str(tmp_path / "outside.txt")
+    with iso.private_scratch_dir() as scratch:
+        assert os.stat(scratch).st_mode & 0o777 == 0o700
+        assert scratch == os.path.realpath(scratch)
+        cmd = iso._sandbox_exec_wrap([sys.executable, "-c", _PROBE_SCRIPT, scratch, outside], scratch)
+        out = subprocess.run(cmd, capture_output=True, text=True, timeout=60,
+                             env=minimal_env(iso.scratch_env(scratch)))
+        report = json.loads(out.stdout.strip().splitlines()[-1])
+    assert report == {"inside": "ok", "outside": "denied", "tmp_env": True,
+                      "socket": "denied", "bind": "denied"}, (report, out.stderr)
+    assert not os.path.exists(outside)
+    assert not os.path.exists(scratch), "scratch directory must be deleted after the run"
+
+
+@pytest.mark.skipif(sys.platform != "darwin", reason="sandbox-exec is macOS only")
+def test_run_candidate_removes_its_scratch_directory(tmp_path, monkeypatch):
+    import tempfile
+
+    created: list[str] = []
+    real = tempfile.mkdtemp
+
+    def spy(*args, **kwargs):
+        path = real(*args, **kwargs)
+        created.append(path)
+        return path
+
+    monkeypatch.setattr(tempfile, "mkdtemp", spy)
+    response = run_candidate(
+        default_request("stim_circuit", GOOD, "build", [{"args": [3, 3], "kwargs": {}}]),
+        wall_seconds=60,
+    )
+    assert response["status"] == "ok"
+    import os
+    assert created and not any(os.path.exists(p) for p in created)

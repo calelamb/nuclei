@@ -5,7 +5,10 @@ The baseline is always a subprocess with rlimits and an import blocker
 
 * Linux: ``bwrap --unshare-net --unshare-pid --die-with-parent`` with a
   read-only bind of ``/`` and a private ``/tmp``.
-* macOS: ``sandbox-exec`` with a deny-network, deny-file-write profile.
+* macOS: ``sandbox-exec`` with a deny-network, deny-file-write profile. The only
+  writable location is the per-evaluation private scratch directory (mode 0700,
+  referenced by its realpath, deleted after the run), which also hosts
+  ``TMPDIR`` and ``MPLCONFIGDIR`` so Cirq/matplotlib can import.
 
 A wrapper is only used after a *runtime* probe has run the real candidate
 worker through it successfully, and it is demoted (with a recorded reason) if a
@@ -18,9 +21,11 @@ import json
 import os
 import shutil
 import sys
+import tempfile
 import threading
+from contextlib import contextmanager
 from dataclasses import dataclass, field
-from typing import Callable
+from typing import Callable, Iterator
 
 from kernel.discovery.constants import ISOLATION_ENV
 from kernel.discovery.procrun import minimal_env, python_command, run_process
@@ -37,6 +42,8 @@ _MAC_PROFILE = (
     "(deny file-write*)\n"
     '(allow file-write* (literal "/dev/null") (literal "/dev/tty") (literal "/dev/dtracehelper"))\n'
 )
+# Appended only when a scratch directory exists; ``SCRATCH`` is passed with ``-D`` as a realpath.
+_MAC_SCRATCH_RULE = '(allow file-write* (subpath (param "SCRATCH")))\n'
 
 _PROBE_REQUEST = {
     "protocol_version": 1,
@@ -53,6 +60,13 @@ class IsolationInfo:
     mode: str
     wrap: Callable[[list[str]], list[str]] = field(compare=False, default=lambda cmd: cmd)
     note: str = ""
+    scratch_aware: bool = field(compare=False, default=False)
+
+    def command(self, cmd: list[str], scratch: str | None = None) -> list[str]:
+        """Wrap ``cmd``; scratch-aware wrappers also open ``scratch`` for writing."""
+        if self.scratch_aware and scratch is not None:
+            return self.wrap(cmd, scratch)  # type: ignore[call-arg]
+        return self.wrap(cmd)
 
 
 _PROCESS = IsolationInfo(MODE_PROCESS, note="subprocess + rlimits + import blocker")
@@ -68,8 +82,29 @@ def _bwrap_wrap(cmd: list[str]) -> list[str]:
     ]
 
 
-def _sandbox_exec_wrap(cmd: list[str]) -> list[str]:
-    return ["sandbox-exec", "-p", _MAC_PROFILE, *cmd]
+def _sandbox_exec_wrap(cmd: list[str], scratch: str | None = None) -> list[str]:
+    if scratch is None:
+        return ["sandbox-exec", "-p", _MAC_PROFILE, *cmd]
+    return ["sandbox-exec", "-D", f"SCRATCH={scratch}", "-p", _MAC_PROFILE + _MAC_SCRATCH_RULE, *cmd]
+
+
+_sandbox_exec_wrap.scratch_aware = True  # type: ignore[attr-defined]
+
+
+@contextmanager
+def private_scratch_dir() -> Iterator[str]:
+    """A fresh 0700 directory (realpath, since the macOS profile matches real paths), removed on exit."""
+    path = os.path.realpath(tempfile.mkdtemp(prefix="nuclei-cand-"))
+    try:
+        os.chmod(path, 0o700)
+        yield path
+    finally:
+        shutil.rmtree(path, ignore_errors=True)
+
+
+def scratch_env(scratch: str) -> dict[str, str]:
+    """Environment entries that redirect temp and matplotlib cache writes into ``scratch``."""
+    return {"TMPDIR": scratch, "MPLCONFIGDIR": scratch}
 
 
 def _candidate_modes() -> list[tuple[str, Callable[[list[str]], list[str]]]]:
@@ -86,9 +121,13 @@ def _worker_path() -> str:
 
 def probe_wrapper(wrap: Callable[[list[str]], list[str]]) -> tuple[bool, str]:
     """Run the real worker through ``wrap``; True only on a clean ok response."""
-    command = wrap(python_command(_worker_path()))
     payload = json.dumps(_PROBE_REQUEST).encode()
-    result = run_process(command, payload, wall_seconds=PROBE_WALL_SECONDS, env=minimal_env())
+    with private_scratch_dir() as scratch:
+        info = IsolationInfo("probe", wrap, scratch_aware=getattr(wrap, "scratch_aware", False))
+        command = info.command(python_command(_worker_path()), scratch)
+        result = run_process(
+            command, payload, wall_seconds=PROBE_WALL_SECONDS, env=minimal_env(scratch_env(scratch))
+        )
     if result.spawn_error:
         return False, result.spawn_error
     try:
@@ -114,7 +153,7 @@ def detect_isolation(*, refresh: bool = False) -> IsolationInfo:
         for mode, wrap in _candidate_modes():
             ok, detail = probe_wrapper(wrap)
             if ok:
-                info = IsolationInfo(mode, wrap, detail)
+                info = IsolationInfo(mode, wrap, detail, scratch_aware=getattr(wrap, "scratch_aware", False))
                 break
             info = IsolationInfo(MODE_PROCESS, note=f"{mode} unavailable at runtime: {detail}")
         _cached = info

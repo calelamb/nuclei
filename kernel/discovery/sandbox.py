@@ -107,19 +107,20 @@ def run_candidate(
         return _error("protocol_error", f"Request exceeds {MAX_REQUEST_BYTES} bytes.", info.mode)
 
     try:
-        for attempt_info in (info, iso.IsolationInfo(iso.MODE_PROCESS)):
-            command = attempt_info.wrap(python_command(_WORKER_PATH))
-            result = run_process(
-                command, payload, wall_seconds=wall_seconds,
-                cancel_event=cancel_event, env=minimal_env(),
-            )
-            wrapped = attempt_info.mode != iso.MODE_PROCESS
-            if _wrapper_failed(result, wrapped):
-                if isolation is None:
-                    iso.demote(attempt_info, "wrapper failed at runtime")
-                continue
-            return _interpret(result, attempt_info.mode)
-        return _interpret(result, iso.MODE_PROCESS)
+        with iso.private_scratch_dir() as scratch:
+            for attempt_info in (info, iso.IsolationInfo(iso.MODE_PROCESS)):
+                command = attempt_info.command(python_command(_WORKER_PATH), scratch)
+                result = run_process(
+                    command, payload, wall_seconds=wall_seconds,
+                    cancel_event=cancel_event, env=minimal_env(iso.scratch_env(scratch)),
+                )
+                wrapped = attempt_info.mode != iso.MODE_PROCESS
+                if _wrapper_failed(result, wrapped):
+                    if isolation is None:
+                        iso.demote(attempt_info, "wrapper failed at runtime")
+                    continue
+                return _interpret(result, attempt_info.mode)
+            return _interpret(result, iso.MODE_PROCESS)
     except Exception as exc:  # noqa: BLE001 - the contract is "never raises"
         return _error("worker_no_output", f"Supervisor failure: {type(exc).__name__}: {exc}", info.mode)
 

@@ -6,7 +6,6 @@ import pytest
 
 pytest.importorskip("qiskit")
 
-from kernel.discovery import isolation as iso  # noqa: E402
 from kernel.discovery.sandbox import default_request, run_candidate  # noqa: E402
 from kernel.trainability.ir import ParamCircuit  # noqa: E402
 
@@ -66,9 +65,7 @@ def test_cirq_gate_lines_are_recovered_best_effort():
         "    c.append(cirq.CNOT(qs[0], qs[1]))\n"
         "    return c\n"
     )
-    # Process isolation: importing Cirq (matplotlib) needs a writable cache dir, which the macOS
-    # sandbox-exec profile denies. That limitation predates line tracing.
-    response = run(program, 2, isolation=iso.IsolationInfo(iso.MODE_PROCESS))
+    response = run(program, 2)
     assert response["status"] == "ok", response
     circuit = ParamCircuit.from_json(response["artifacts"][0]["artifact"]["ir"])
     assert [(g.name, g.source_line) for g in circuit.gates] == [("H", 5), ("CX", 6)]
