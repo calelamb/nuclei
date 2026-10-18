@@ -44,3 +44,18 @@ export function blochRailHeights(count: number, width: number): BlochRailHeights
 function pagesAtMin(n: number, usableWidth: number): boolean {
   return blochGridLayout({ count: n, width: usableWidth, height: BLOCH_ROW_MIN_PX }).pageCount > 1;
 }
+
+/**
+ * The height the spheres actually use when the Bloch section is offered `available` px: their grid at the
+ * layout that height produces, plus the stage padding and pager. Spheres are width-limited past a point, so
+ * a taller section would only add a dead band between them and the histogram chip.
+ */
+export function blochUsedHeight(count: number, width: number, available: number): number {
+  const n = Math.max(1, Math.floor(count));
+  const usable = Math.max(0, (width > 0 ? width : FALLBACK_RAIL_WIDTH) - STAGE_PAD_PX);
+  const pagerless = blochGridLayout({ count: n, width: usable, height: Math.max(0, available - STAGE_PAD_PX) });
+  const pager = pagerless.pageCount > 1 ? PAGER_PX : 0;
+  const grid = blochGridLayout({ count: n, width: usable, height: Math.max(0, available - STAGE_PAD_PX - pager) });
+  const used = grid.rows * grid.cellHeight + (grid.rows - 1) * GAP_PX + STAGE_PAD_PX + pager;
+  return Math.min(available, used);
+}

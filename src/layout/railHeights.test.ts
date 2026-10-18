@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { blochRailHeights } from './blochRail';
+import { blochRailHeights, blochUsedHeight } from './blochRail';
 import { circuitMinHeight } from './circuitRail';
+import { blochGridLayout } from '../lib/blochGrid';
 import { circuitWantedHeight, planRailSplit } from './railHeights';
 
 // Heights the round-4 auditors measured: svgHeight of the diagram with a classical register.
@@ -56,5 +57,49 @@ describe('planRailSplit', () => {
 
   it('falls back to the wanted height before the rail is measured', () => {
     expect(planRailSplit({ railHeight: 0, chipHeight: 0, circuitWanted: 300, circuitFloor: 96, blochMin: 164 }).circuit).toBe(300);
+  });
+});
+
+describe('planRailSplit with a bounded Bloch section (no dead band above the chip)', () => {
+  const STAGE_PAD = 16;
+  const PAGER = 32;
+
+  /** Where the rendered grid ends inside the Bloch section, as BlochPanel lays it out. */
+  function renderedGap(qubits: number, rail: number, chip: number, railWidth = 316) {
+    const { min } = blochRailHeights(qubits, railWidth);
+    const plan = planRailSplit({
+      railHeight: rail,
+      chipHeight: chip,
+      circuitWanted: circuitWantedHeight(SVG_3Q),
+      circuitFloor: Math.max(96, circuitMinHeight(qubits, rail)),
+      blochMin: min,
+      blochFit: (offered) => blochUsedHeight(qubits, railWidth, offered),
+    });
+    const usableW = railWidth - STAGE_PAD;
+    const grid = blochGridLayout({ count: qubits, width: usableW, height: plan.bloch - STAGE_PAD });
+    const pager = grid.pageCount > 1 ? PAGER : 0;
+    const gridBottom = STAGE_PAD / 2 + grid.rows * grid.cellHeight + (grid.rows - 1) * 8;
+    return { plan, gap: plan.bloch - pager - gridBottom - STAGE_PAD / 2 };
+  }
+
+  it.each([[1, 700], [2, 700], [3, 700], [1, 800], [2, 800], [3, 800]])('%i qubit(s) in a %ipx window leave at most 16px between spheres and chip', (qubits, windowH) => {
+    const rail = windowH - 24 - 24; // title/status chrome
+    const { gap, plan } = renderedGap(qubits, rail, 100);
+    expect(gap).toBeLessThanOrEqual(16);
+    expect(plan.bloch).toBeGreaterThanOrEqual(blochRailHeights(qubits, 316).min);
+  });
+
+  it('never asks the spheres for more than they can draw', () => {
+    const plan = split(1, SVG_3Q, 876, 100);
+    const bounded = planRailSplit({
+      railHeight: 876, chipHeight: 100, circuitWanted: circuitWantedHeight(SVG_3Q),
+      circuitFloor: 96, blochMin: blochRailHeights(1, 316).min, blochFit: (o) => blochUsedHeight(1, 316, o),
+    });
+    expect(bounded.bloch).toBeLessThan(plan.bloch);
+    expect(bounded.circuit).toBe(plan.circuit);
+  });
+
+  it('keeps the old behaviour (spheres absorb the slack) when no wanted height is given', () => {
+    expect(split(1, 100, 876, 100).circuit + split(1, 100, 876, 100).bloch).toBe(776);
   });
 });

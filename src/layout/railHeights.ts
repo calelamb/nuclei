@@ -22,26 +22,31 @@ export interface RailSplitInput {
   circuitFloor: number;
   /** The least the Bloch grid keeps: one full row of spheres plus its pager when it pages. */
   blochMin: number;
+  /** Maps the height offered to the Bloch section to the height its spheres use (blochUsedHeight). Omit to let it absorb all slack. */
+  blochFit?: (offered: number) => number;
 }
 
 export interface RailSplit {
   /** Explicit height for the circuit pane. */
   circuit: number;
-  /** Height left for the Bloch grid (it absorbs all slack). */
+  /** Height for the Bloch section: what the spheres can use, never less than blochMin. */
   bloch: number;
 }
 
 /**
  * Split the rail between the circuit and the Bloch spheres. The circuit shows its whole diagram
  * whenever the rail can spare it, and only gives height back (down to its floor) when the spheres
- * would otherwise drop below one row. Everything left over goes to the spheres, never to dead space.
+ * would otherwise drop below one row. Everything left over goes to the spheres up to the size their grid
+ * can use; past that the histogram chip follows them and the remainder is empty space below one block.
  * When even the floors do not fit, the rail itself scrolls, so nothing is clipped without a handle.
  */
-export function planRailSplit({ railHeight, chipHeight, circuitWanted, circuitFloor, blochMin }: RailSplitInput): RailSplit {
+export function planRailSplit({ railHeight, chipHeight, circuitWanted, circuitFloor, blochMin, blochFit }: RailSplitInput): RailSplit {
   if (railHeight <= 0) return { circuit: circuitWanted, bloch: blochMin };
   const available = Math.max(0, railHeight - chipHeight);
   // The floor itself yields (never below a header and two wires) so the spheres keep their row.
   const floor = Math.max(CIRCUIT_ABSOLUTE_MIN_PX, Math.min(circuitFloor, available - blochMin));
   const circuit = Math.max(floor, Math.min(circuitWanted, available - blochMin));
-  return { circuit, bloch: Math.max(blochMin, available - circuit) };
+  const slack = Math.max(blochMin, available - circuit);
+  // The spheres stop growing once their grid is full size: the chip then follows them directly.
+  return { circuit, bloch: blochFit ? Math.max(blochMin, Math.min(slack, blochFit(slack))) : slack };
 }
