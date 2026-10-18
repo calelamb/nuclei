@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { render, cleanup, fireEvent } from '@testing-library/react';
 import { StatusBar } from './StatusBar';
 import { PlatformProvider } from '../../platform/PlatformProvider';
@@ -63,7 +63,7 @@ describe('<StatusBar> (extracted from PanelLayout, Phase A)', () => {
     // Left slots
     expect(getByText('Qubits: —')).toBeTruthy();
     expect(getByText('Depth: —')).toBeTruthy();
-    expect(getByRole('combobox', { name: 'Layout preset' })).toBeTruthy();
+    expect(getByRole('button', { name: /^Layout preset:/ })).toBeTruthy();
     // Right slot: one truthful kernel/run item (idle until a kernel starts)
     expect(getByText('Kernel idle')).toBeTruthy();
     // Far-left mode chip carries the "Switch workspace mode" control (Phase B).
@@ -128,7 +128,7 @@ describe('StatusBar in takeover views (S-19)', () => {
     const { queryByText, queryByRole } = renderStatusBar();
     expect(queryByText(/Qubits:/)).toBeNull();
     expect(queryByText(/Depth:/)).toBeNull();
-    expect(queryByRole('combobox', { name: 'Layout preset' })).toBeNull();
+    expect(queryByRole('button', { name: /^Layout preset:/ })).toBeNull();
   });
 
   it('hides them in the QEC Workbench too', () => {
@@ -138,10 +138,20 @@ describe('StatusBar in takeover views (S-19)', () => {
     expect(queryByText(/Qubits:/)).toBeNull();
   });
 
-  it('labels the preset select so a bare "Clean" is never ambiguous', () => {
+  it('labels the preset trigger so a bare "Clean" is never ambiguous, and opens on the current preset', () => {
+    const { getByRole, getAllByRole } = renderStatusBar();
+    const trigger = getByRole('button', { name: 'Layout preset: Clean' });
+    expect(trigger.textContent).toBe('Layout: Clean');
+    fireEvent.click(trigger);
+    const checked = getAllByRole('menuitemradio').find((el) => el.getAttribute('aria-checked') === 'true');
+    expect(checked?.textContent).toContain('Clean');
+    expect(document.activeElement).toBe(checked);
+  });
+
+  it('is a menu like Level, sized to its label (no fixed-width select with a gap before the chevron)', () => {
     const { getByRole } = renderStatusBar();
-    const select = getByRole('combobox', { name: 'Layout preset' }) as HTMLSelectElement;
-    expect(select.selectedOptions[0].textContent).toBe('Layout: Clean');
+    expect(getByRole('button', { name: /^Layout preset:/ }).getAttribute('aria-haspopup')).toBe('menu');
+    expect(document.querySelector('.nuclei-statusbar-select')).toBeNull();
   });
 });
 
@@ -156,7 +166,30 @@ describe('StatusBar kernel state', () => {
     useEditorStore.getState().setKernelStatus('failed', 'Kernel rejected the session token — restart Nuclei');
     const { getByRole } = renderStatusBar();
     const chip = getByRole('button', { name: /Kernel failed/ });
-    expect(chip.getAttribute('title')).toContain('Kernel rejected the session token — restart Nuclei');
+    expect(chip.getAttribute('title')).toBeNull();
+  });
+
+  it('sends a failed-kernel click to the banner that owns Retry, and retries itself only when no banner is showing', async () => {
+    const control = await import('../../lib/kernelControl');
+    const retry = vi.fn();
+    const focusBanner = vi.fn();
+    control.registerKernelRetry(retry);
+    useEditorStore.getState().setKernelStatus('failed', 'boom');
+    const { getByRole } = renderStatusBar();
+    fireEvent.click(getByRole('button', { name: /Kernel failed/ }));
+    expect(retry).toHaveBeenCalledTimes(1); // no banner mounted: fall back to retrying
+    control.registerKernelBannerFocus(focusBanner);
+    fireEvent.click(getByRole('button', { name: /Kernel failed/ }));
+    expect(focusBanner).toHaveBeenCalledTimes(1);
+    expect(retry).toHaveBeenCalledTimes(1);
+    control.registerKernelBannerFocus(null);
+    control.registerKernelRetry(null);
+  });
+
+  it('shows the kernel state with no native title attribute (the shared tooltip carries the detail)', () => {
+    useEditorStore.setState({ kernelReady: true, kernelStatus: 'ready' });
+    const { getByText } = renderStatusBar();
+    expect(getByText(/ready/).closest('span')?.getAttribute('title')).toBeNull();
   });
 
   it('never says ready while the kernel is still loading', () => {
