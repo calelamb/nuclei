@@ -21,6 +21,13 @@ describe('HardwarePanel on the web build (rq-r3-13)', () => {
     expect(within(ibmRow).getByText('Desktop app')).toBeTruthy();
   });
 
+  it('lists the one working provider, Local Simulator, first', () => {
+    render(<PlatformProvider bridge={web}><HardwarePanel /></PlatformProvider>);
+    const sim = screen.getByText('Local Simulator');
+    const ibm = screen.getByText('IBM Quantum');
+    expect(sim.compareDocumentPosition(ibm) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
   it('uses the shared desktop-only state with one Download action', () => {
     render(<PlatformProvider bridge={web}><HardwarePanel /></PlatformProvider>);
     expect(screen.getByText('Hardware runs need the desktop app').className).toContain('nuclei-empty__title');

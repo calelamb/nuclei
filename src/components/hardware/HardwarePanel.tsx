@@ -126,7 +126,7 @@ export function HardwarePanel() {
               Provider connections and job queues need the local kernel.
             </DesktopOnlyState>
           )}
-          {providers.map((p) => {
+          {[...providers].sort((a, b) => Number(b.name === 'simulator') - Number(a.name === 'simulator')).map((p) => {
             const status = providerStatus({ provider: p.name, connected: p.connected, isWeb, cudaqInstalled });
             return (
             <div
@@ -135,16 +135,18 @@ export function HardwarePanel() {
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'space-between',
+                flexWrap: 'wrap',
+                gap: '4px 8px',
                 padding: '5px 0',
               }}
             >
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
                 <span style={{ fontSize: 12, fontWeight: 600, color: colors.text, whiteSpace: 'nowrap', ...font }}>
                   {PROVIDER_LABELS[p.name]}
                 </span>
               </div>
 
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginLeft: 'auto' }}>
                 {status.kind === 'needs-setup' && providerNeedsToken(p.name) && (
                   <Button size="sm" variant="secondary" onClick={() => setShowCredentialSetup(p.name)}>
                     Configure
