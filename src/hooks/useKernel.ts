@@ -12,7 +12,7 @@ import { CLOSE_UNAUTHENTICATED, KERNEL_AUTH_REJECTED_MESSAGE, KernelAuthRejected
 import type { PyodideKernel } from '../platform/pyodideKernel';
 import type { PyodideRuntimeClient } from '../platform/pyodide/pyodideClient';
 import { KERNEL_NOT_RESPONDING_MESSAGE, normalizeKernelError } from '../lib/kernelErrors';
-import { shouldReparseAfterRestart } from './restartReparse';
+import { shouldMarkStaleWhileReparsing, shouldReparseAfterRestart } from './restartReparse';
 import { registerKernelRetry, registerKernelStop } from '../lib/kernelControl';
 import { useHardwareStore } from '../stores/hardwareStore';
 import { useQecStore } from '../stores/qecStore';
@@ -200,6 +200,10 @@ export function useKernel() {
         // restart Python forever.
         if (restarted && shouldReparseAfterRestart(useCircuitStore.getState().previewPaused)) {
           const { code, framework, filePath } = useEditorStore.getState();
+          if (code.trim() && shouldMarkStaleWhileReparsing(useCircuitStore.getState().previewPaused)) {
+            useCircuitStore.getState().setSnapshot(null);
+            useCircuitStore.getState().setPreviewPaused(true);
+          }
           if (code.trim()) void pyodideRef.current?.send({ type: 'parse', code, language: kernelLanguageFor(framework, filePath) });
         }
         restarted = false;
