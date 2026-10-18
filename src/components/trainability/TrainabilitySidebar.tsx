@@ -65,6 +65,7 @@ export function TrainabilitySidebar() {
                         className="lab-button lab-button--ghost"
                         style={{
                           width: '100%',
+                          boxSizing: 'border-box',
                           minWidth: 0,
                           overflow: 'hidden',
                           justifyContent: 'flex-start',

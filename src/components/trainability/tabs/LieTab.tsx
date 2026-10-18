@@ -97,7 +97,7 @@ export function LieTab({ data, gradients }: { data: LieAlgebraResult; gradients?
     );
   }
 
-  const summary = `Dynamical Lie algebra dimension ${data.dimension ?? `at least ${data.dimension_lower_bound}`} out of ${formatSci(top)} (4 to the n minus 1) for ${data.n_qubits} qubits; status ${data.status}.`;
+  const summary = `Dynamical Lie algebra dimension ${data.dimension ?? `at least ${data.dimension_lower_bound}`} out of ${top < 1e15 ? formatCount(top) : formatSci(top)} (4 to the n minus 1) for ${data.n_qubits} qubits; status ${data.status}.`;
 
   return (
     <div className="lab-stack">
