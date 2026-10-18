@@ -14,7 +14,7 @@ import { ExportMenu } from './ExportMenu';
 import { useEdgeFades } from './edgeFades';
 import { fitCircuitWidth } from './fitCircuit';
 import { describeStale } from './staleCaption';
-import { hiddenWireCount } from '../../layout/circuitRail';
+import { circuitOverflows, hiddenQubitWires } from '../../layout/circuitRail';
 import { prefersReducedMotion } from '../../lib/animations';
 import { StaleResultNotice } from '../layout/StaleResultNotice';
 import { useEditorRevealStore } from '../../stores/editorRevealStore';
@@ -169,18 +169,25 @@ export function CircuitRenderer() {
   const [measureContainer, containerSize] = useElementSize<HTMLDivElement>();
   const { ref: fadeRef, onScroll: onContainerScroll, style: fadeStyle } = useEdgeFades<HTMLDivElement>();
   const scrollerRef = useRef<HTMLDivElement | null>(null);
-  const [clippedWires, setClippedWires] = useState(0);
+  const [wireStrip, setWireStrip] = useState<{ shown: boolean; hidden: number; scrolled: boolean }>({ shown: false, hidden: 0, scrolled: false });
+  const [measurePane, paneSize] = useElementSize<HTMLDivElement>();
   const qubitTotal = snapshot?.qubit_count ?? 0;
   const measureClipped = useCallback(() => {
     const el = scrollerRef.current;
     if (!el) return;
-    const next = hiddenWireCount({ scrollTop: el.scrollTop, clientHeight: el.clientHeight, scrollHeight: el.scrollHeight }, qubitTotal);
-    setClippedWires((prev) => (prev === next ? prev : next));
-  }, [qubitTotal]);
+    const shown = circuitOverflows(el.scrollHeight, paneSize.height);
+    const svg = el.querySelector('svg');
+    const drawn = Number(svg?.getAttribute('height'));
+    const natural = Number(svg?.getAttribute('viewBox')?.split(/\s+/)[3]);
+    const scale = drawn > 0 && natural > 0 ? drawn / natural : 1;
+    const hidden = shown ? hiddenQubitWires({ scrollTop: el.scrollTop, visibleHeight: el.clientHeight, scale }, qubitTotal) : 0;
+    const next = { shown, hidden, scrolled: el.scrollTop > 0 };
+    setWireStrip((prev) => (prev.shown === next.shown && prev.hidden === next.hidden && prev.scrolled === next.scrolled ? prev : next));
+  }, [qubitTotal, paneSize.height]);
   const setContainerRef = useCallback((el: HTMLDivElement | null) => { scrollerRef.current = el; measureContainer(el); fadeRef(el); }, [measureContainer, fadeRef]);
   const handleScroll = useCallback(() => { onContainerScroll(); measureClipped(); }, [onContainerScroll, measureClipped]);
   useEffect(() => { measureClipped(); }, [measureClipped, containerSize.height, containerSize.width, snapshot]);
-  const showRemainingWires = () => scrollerRef.current?.scrollTo({ top: scrollerRef.current.scrollHeight, behavior: prefersReducedMotion() ? 'auto' : 'smooth' });
+  const scrollWires = (top: number) => scrollerRef.current?.scrollTo({ top, behavior: prefersReducedMotion() ? 'auto' : 'smooth' });
   const [tooltip, setTooltip] = useState<Tooltip | null>(null);
   const [contextMenu, setContextMenu] = useState<ContextMenu | null>(null);
 
@@ -241,7 +248,7 @@ export function CircuitRenderer() {
           <ExportMenu />
         </span>
       </div>
-      <div style={{ position: 'relative', flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
+      <div ref={measurePane} style={{ position: 'relative', flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
       <div
         ref={setContainerRef}
         onScroll={handleScroll}
@@ -372,15 +379,21 @@ export function CircuitRenderer() {
         )}
       </div>
 
-      {clippedWires > 0 && (
-        <button
-          type="button"
-          className="circuit-more-wires"
-          onClick={showRemainingWires}
-          aria-label={`Show ${clippedWires} more ${clippedWires === 1 ? 'wire' : 'wires'}`}
-        >
-          +{clippedWires} {clippedWires === 1 ? 'wire' : 'wires'}
-        </button>
+      {wireStrip.shown && (
+        <div className="circuit-more-wires-strip">
+          {wireStrip.hidden > 0 ? (
+            <button
+              type="button"
+              className="circuit-more-wires"
+              onClick={() => scrollWires(scrollerRef.current?.scrollHeight ?? 0)}
+              aria-label={`Show ${wireStrip.hidden} more ${wireStrip.hidden === 1 ? 'wire' : 'wires'}`}
+            >
+              +{wireStrip.hidden} {wireStrip.hidden === 1 ? 'wire' : 'wires'}
+            </button>
+          ) : wireStrip.scrolled && (
+            <button type="button" className="circuit-more-wires" onClick={() => scrollWires(0)}>Back to top</button>
+          )}
+        </div>
       )}
       </div>
 

@@ -23,9 +23,9 @@
 .viz-results-empty__actions { display: flex; gap: var(--space-2); justify-content: center; flex-wrap: wrap; }
 .viz-results-empty .nuclei-empty__body { max-width: 28ch; text-wrap: balance; }
 
-/* Pinned over the clipped bottom edge of a squeezed circuit; selecting it scrolls the rest of the wires into view. */
+/* A strip under the diagram, never over it: selecting the pill scrolls the clipped wires into view. */
+.circuit-more-wires-strip { flex: none; display: flex; justify-content: center; align-items: center; height: 26px; }
 .circuit-more-wires {
-  position: absolute; left: 50%; bottom: var(--space-2); transform: translateX(-50%); z-index: 2;
   padding: 2px var(--space-3); border-radius: 999px; cursor: pointer;
   background: var(--color-surface-overlay); border: 1px solid var(--color-border-strong); color: var(--color-text-secondary);
   font: var(--font-weight-medium) var(--font-size-caption) var(--font-sans);
