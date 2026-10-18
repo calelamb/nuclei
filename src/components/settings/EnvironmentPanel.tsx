@@ -375,11 +375,11 @@ function IconBtn({ busy, onClick, title, children }: { colors?: C; busy?: boolea
   );
 }
 function PrimaryBtn({ busy, onClick, children }: { colors?: C; busy?: boolean; onClick: () => void; children: React.ReactNode }) {
-  return <Button variant="primary" onClick={onClick} loading={busy}>{children}</Button>;
+  return <Button variant="primary" onClick={onClick} loading={busy} keepFocus>{children}</Button>;
 }
 function GhostBtn({ busy, danger, disabled, onClick, title, children }: { colors?: C; busy?: boolean; danger?: boolean; disabled?: boolean; onClick: () => void; title?: string; children: React.ReactNode }) {
   return (
-    <Button size="sm" variant={danger ? 'danger' : 'secondary'} onClick={onClick} title={title} disabled={disabled} loading={busy}>
+    <Button size="sm" variant={danger ? 'danger' : 'secondary'} onClick={onClick} title={title} disabled={disabled} loading={busy} keepFocus>
       {children}
     </Button>
   );

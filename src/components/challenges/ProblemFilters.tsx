@@ -1,6 +1,5 @@
-import { Search } from 'lucide-react';
 import { useChallengeModeStore } from '../../stores/challengeModeStore';
-import { SegmentedControl, type SegmentedOption } from '../ui';
+import { SearchField, SegmentedControl, type SegmentedOption } from '../ui';
 import type { ChallengeDifficulty, ChallengeCategory } from '../../types/challenge';
 import './challenges.css';
 
@@ -49,16 +48,13 @@ export function ProblemFilters() {
 
   return (
     <div className="pfilters">
-      <label className="pfilters__search nuclei-field-group">
-        <Search size={14} aria-hidden="true" />
-        <input
-          className="pfilters__input nuclei-bare-input"
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-          placeholder="Search challenges..."
-          aria-label="Search challenges"
-        />
-      </label>
+      <SearchField
+        size="lg"
+        value={searchQuery}
+        onValueChange={setSearchQuery}
+        placeholder="Search challenges..."
+        aria-label="Search challenges"
+      />
 
       <div className="pfilters__row">
         <FilterGroup label="Difficulty">

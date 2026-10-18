@@ -57,6 +57,20 @@ function buildTheme(base: 'vs' | 'vs-dark', c: ColorTokens): ThemeData {
       'input.background': c.surfaceBase,
       'input.border': c.borderStrong,
       'focusBorder': c.accentQuantum,
+      // The right-click menu and any Monaco picker: the same raised surface, hairline border and accent
+      // selection as Nuclei's own menus, instead of VS Code's stock grey (#3C3C3C).
+      'menu.background': c.surfaceRaised,
+      'menu.foreground': c.textPrimary,
+      'menu.border': c.borderStrong,
+      'menu.selectionBackground': base === 'vs-dark' ? '#00B4D83B' : '#00B4D82E',
+      'menu.selectionForeground': c.textPrimary,
+      'menu.separatorBackground': c.borderStrong,
+      'quickInput.background': c.surfaceRaised,
+      'quickInput.foreground': c.textPrimary,
+      'quickInputList.focusBackground': base === 'vs-dark' ? '#00B4D83B' : '#00B4D82E',
+      'quickInputList.focusForeground': c.textPrimary,
+      'pickerGroup.foreground': c.accentQuantumText,
+      'pickerGroup.border': c.borderStrong,
       'editorGhostText.foreground': base === 'vs-dark' ? '#A578D6' : '#8B3FB8',
     },
   };

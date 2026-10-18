@@ -1,4 +1,5 @@
-import { Search } from 'lucide-react';
+import { useRef } from 'react';
+import { Button, EmptyState, SearchField } from '../ui';
 import { useGlossaryStore } from '../../stores/glossaryStore';
 import { GlossaryEntry } from './GlossaryEntry';
 import './learnSidebar.css';
@@ -22,21 +23,19 @@ interface GlossaryProps {
 export function Glossary({ variant = 'compact' }: GlossaryProps) {
   const { searchQuery, selectedTerm, filteredTerms, selectedCategory, setSearch, selectTerm, setCategory } = useGlossaryStore();
 
+  const searchRef = useRef<HTMLInputElement>(null);
+
   return (
     <div className={variant === 'page' ? 'gloss gloss--page' : 'gloss'}>
       <div className="gloss__head">
       <div className="gloss__search">
-        <label className="gloss__field nuclei-field-group">
-          <Search size={12} aria-hidden="true" />
-          <input
-            type="text"
-            placeholder="Search terms..."
-            aria-label="Search glossary terms"
-            className="gloss__input nuclei-bare-input"
-            value={searchQuery}
-            onChange={(e) => setSearch(e.target.value)}
-          />
-        </label>
+        <SearchField
+          ref={searchRef}
+          aria-label="Search glossary terms"
+          placeholder="Search terms..."
+          value={searchQuery}
+          onValueChange={setSearch}
+        />
       </div>
 
       <div className="gloss__cats" role="group" aria-label="Filter by category">
@@ -56,7 +55,16 @@ export function Glossary({ variant = 'compact' }: GlossaryProps) {
 
       <div className="gloss__list">
         {filteredTerms.length === 0 ? (
-          <div className="gloss__empty">No terms found.</div>
+          <EmptyState
+            title={searchQuery.trim() ? `No terms match "${searchQuery.trim()}"` : 'No terms in this category'}
+            action={(
+              <Button size="sm" onClick={() => { setSearch(''); setCategory('all'); searchRef.current?.focus(); }}>
+                Show all terms
+              </Button>
+            )}
+          >
+            Try a shorter word, or browse by category.
+          </EmptyState>
         ) : (
           filteredTerms.map((term) => (
             <GlossaryEntry

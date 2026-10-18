@@ -7,7 +7,9 @@
 
 import { isWebBuild } from '../platform/buildTarget';
 
-export type KeybindingGroup = 'Essential' | 'Editor' | 'Navigation' | 'View';
+export type KeybindingGroup = 'Essential' | 'Editor' | 'Navigation' | 'View' | 'Run';
+
+export type KeybindingWorkspace = 'learn' | 'research';
 
 export interface Keybinding {
   id: string;
@@ -26,6 +28,8 @@ export interface Keybinding {
   implicitShift?: boolean;
   /** The chord uses the physical Control key even on Mac (⌃M), not Command. */
   ctrl?: boolean;
+  /** Workspaces where the chord does something; omitted means both. The sheet and palette hide it elsewhere. */
+  modes?: readonly KeybindingWorkspace[];
   /** Chrome keeps this chord for itself (new window, reopen tab): a web page never receives it. */
   browserReserved?: boolean;
 }
@@ -54,8 +58,8 @@ export const KEYBINDINGS: readonly Keybinding[] = [
   { id: 'switch-workspace', key: 'm', shift: true, label: 'Switch workspace mode', group: 'Navigation', owner: 'app' },
 
   { id: 'toggle-theme', key: 't', shift: true, label: 'Toggle theme', group: 'View', owner: 'app', browserReserved: true },
-  { id: 'cycle-ui-mode', key: 'l', shift: true, label: 'Change level', group: 'View', owner: 'app' },
-  { id: 'launch', key: 'r', shift: true, label: 'Launch on hardware', group: 'View', owner: 'app' },
+  { id: 'cycle-ui-mode', key: 'l', shift: true, label: 'Change level', group: 'View', owner: 'app', modes: ['learn'] },
+  { id: 'launch', key: 'r', shift: true, label: 'Launch on hardware', group: 'Run', owner: 'app' },
 ];
 
 export interface KeyLike {
@@ -110,10 +114,25 @@ export function isBindingAvailable(binding: Keybinding, web: boolean = isWebBuil
   return !(web && binding.browserReserved);
 }
 
-/** The key hint for a binding, or undefined when the chord is unbound or unreachable (never advertise a dead key). */
-export function shortcutLabel(id: string, mac: boolean = isMacPlatform(), web: boolean = isWebBuild()): string | undefined {
+/** Whether the chord does anything in this workspace (⌘⇧L cycles the Learn level; Research has none). */
+export function isBindingInMode(binding: Keybinding, mode: KeybindingWorkspace): boolean {
+  return !binding.modes || binding.modes.includes(mode);
+}
+
+/**
+ * The key hint for a binding, or undefined when the chord is unbound or unreachable (never advertise a dead key).
+ * Pass `mode` to also hide chords that are inert in that workspace.
+ */
+export function shortcutLabel(
+  id: string,
+  mac: boolean = isMacPlatform(),
+  web: boolean = isWebBuild(),
+  mode?: KeybindingWorkspace,
+): string | undefined {
   const binding = KEYBINDINGS.find((b) => b.id === id);
-  return binding && isBindingAvailable(binding, web) ? formatKeys(binding, mac) : undefined;
+  if (!binding || !isBindingAvailable(binding, web)) return undefined;
+  if (mode && !isBindingInMode(binding, mode)) return undefined;
+  return formatKeys(binding, mac);
 }
 
 /** For tooltips: "Run simulation (⌘↵)". */

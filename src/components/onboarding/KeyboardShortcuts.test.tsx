@@ -1,8 +1,9 @@
 // @vitest-environment jsdom
 import { describe, it, expect, afterEach, beforeAll } from 'vitest';
-import { render, screen, cleanup } from '@testing-library/react';
+import { render, screen, cleanup, fireEvent } from '@testing-library/react';
 import { KeyboardShortcuts, shortcutGroups } from './KeyboardShortcuts';
 import { KEYBINDINGS } from '../../config/keybindings';
+import { useWorkspaceStore } from '../../stores/workspaceStore';
 
 beforeAll(() => {
   window.matchMedia = ((query: string) => ({
@@ -15,7 +16,7 @@ afterEach(cleanup);
 
 describe('shortcuts sheet', () => {
   it('lists every registered binding and nothing that is unbound', () => {
-    const rows = shortcutGroups(true).flatMap((g) => g.shortcuts.map((s) => s.description));
+    const rows = shortcutGroups(true, false, 'learn').flatMap((g) => g.shortcuts.map((s) => s.description));
     for (const b of KEYBINDINGS) expect(rows).toContain(b.label);
     expect(rows.join('|')).not.toMatch(/bottom panel|Step forward|Step backward/);
   });
@@ -56,5 +57,42 @@ describe('shortcuts sheet focus', () => {
     render(<KeyboardShortcuts onClose={() => {}} />);
     expect(document.activeElement).not.toBe(screen.getByRole('button', { name: 'Close shortcuts' }));
     expect(document.activeElement).toBe(screen.getByRole('dialog', { name: 'Keyboard shortcuts' }));
+  });
+});
+
+describe('shortcuts sheet by workspace', () => {
+  it('Learn lists Change level; Research omits it because the level does not exist there', () => {
+    const learn = shortcutGroups(true, false, 'learn').flatMap((g) => g.shortcuts.map((s) => s.description));
+    const research = shortcutGroups(true, false, 'research').flatMap((g) => g.shortcuts.map((s) => s.description));
+    expect(learn).toContain('Change level');
+    expect(research).not.toContain('Change level');
+    expect(research).toContain('Toggle theme');
+  });
+
+  it('files Launch on hardware under Run, not View', () => {
+    const groups = shortcutGroups(true, false, 'research');
+    expect(groups.find((g) => g.title === 'View')?.shortcuts.map((s) => s.description)).not.toContain('Launch on hardware');
+    expect(groups.find((g) => g.title === 'Run')?.shortcuts.map((s) => s.description)).toEqual(['Launch on hardware']);
+  });
+
+  it('the rendered sheet follows the live workspace', () => {
+    useWorkspaceStore.setState({ mode: 'research' });
+    render(<KeyboardShortcuts onClose={() => {}} />);
+    expect(screen.queryByText('Change level')).toBeNull();
+    cleanup();
+    useWorkspaceStore.setState({ mode: 'learn' });
+    render(<KeyboardShortcuts onClose={() => {}} />);
+    expect(screen.getByText('Change level')).toBeTruthy();
+  });
+});
+
+describe('shortcuts sheet is the shared Dialog', () => {
+  it('uses the ui Dialog surface and closes on Escape', () => {
+    let closed = 0;
+    render(<KeyboardShortcuts onClose={() => { closed += 1; }} />);
+    const dialog = screen.getByRole('dialog', { name: 'Keyboard shortcuts' });
+    expect(dialog.className).toContain('nuclei-dialog');
+    fireEvent.keyDown(document, { key: 'Escape' });
+    expect(closed).toBe(1);
   });
 });

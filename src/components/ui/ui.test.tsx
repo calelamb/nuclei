@@ -26,7 +26,7 @@ describe('Button', () => {
     expect(el.className).toContain('nuclei-btn--sm');
   });
 
-  it('is disabled and aria-busy while loading, and does not fire onClick', () => {
+  it('is disabled and aria-busy while loading by default, and does not fire onClick', () => {
     const onClick = vi.fn();
     render(<Button loading onClick={onClick}>Retry</Button>);
     const el = screen.getByRole('button', { name: /Retry/ }) as HTMLButtonElement;
@@ -34,6 +34,39 @@ describe('Button', () => {
     expect(el.getAttribute('aria-busy')).toBe('true');
     fireEvent.click(el);
     expect(onClick).not.toHaveBeenCalled();
+  });
+
+  it('with keepFocus it stays focusable while loading (aria-disabled, not disabled), is busy, and ignores clicks', () => {
+    const onClick = vi.fn();
+    render(<Button loading keepFocus onClick={onClick}>Retry</Button>);
+    const el = screen.getByRole('button', { name: /Retry/ }) as HTMLButtonElement;
+    expect(el.disabled).toBe(false);
+    expect(el.getAttribute('aria-disabled')).toBe('true');
+    expect(el.getAttribute('aria-busy')).toBe('true');
+    fireEvent.click(el);
+    expect(onClick).not.toHaveBeenCalled();
+  });
+
+  it('a busy keepFocus submit button does not submit its form', () => {
+    const onSubmit = vi.fn((e: React.FormEvent) => e.preventDefault());
+    render(<form onSubmit={onSubmit}><Button type="submit" loading keepFocus>Save</Button></form>);
+    fireEvent.click(screen.getByRole('button', { name: /Save/ }));
+    expect(onSubmit).not.toHaveBeenCalled();
+  });
+
+  it('keeps keyboard focus across a loading flip when keepFocus is set', () => {
+    const { rerender } = render(<Button keepFocus onClick={() => undefined}>Run</Button>);
+    const el = screen.getByRole('button', { name: 'Run' });
+    el.focus();
+    rerender(<Button loading keepFocus onClick={() => undefined}>Run</Button>);
+    expect(document.activeElement).toBe(el);
+    rerender(<Button keepFocus onClick={() => undefined}>Run</Button>);
+    expect(document.activeElement).toBe(el);
+  });
+
+  it('keeps the real disabled attribute for disabled', () => {
+    render(<Button disabled>Nope</Button>);
+    expect((screen.getByRole('button', { name: 'Nope' }) as HTMLButtonElement).disabled).toBe(true);
   });
 
   it('fires onClick when enabled', () => {
@@ -84,6 +117,28 @@ describe('TextInput / TextArea', () => {
   it('marks invalid inputs with aria-invalid', () => {
     render(<TextInput aria-label="Name" invalid />);
     expect(screen.getByRole('textbox', { name: 'Name' }).getAttribute('aria-invalid')).toBe('true');
+  });
+
+  it('renders without a wrapper when it has no adornments', () => {
+    const { container } = render(<TextInput aria-label="Plain" />);
+    expect(container.querySelector('.nuclei-input-wrap')).toBeNull();
+  });
+
+  it('keeps the input as the one bordered, focusable element when it has a leading icon and trailing control', () => {
+    const { container } = render(
+      <TextInput
+        aria-label="Search"
+        leadingIcon={<svg data-testid="icon" />}
+        trailing={<button type="button" aria-label="Clear">x</button>}
+      />,
+    );
+    const input = screen.getByRole('textbox', { name: 'Search' });
+    expect(input.className).toContain('nuclei-input--lead');
+    expect(input.className).toContain('nuclei-input--trail');
+    const lead = container.querySelector('.nuclei-input-wrap__lead');
+    expect(lead?.getAttribute('aria-hidden')).toBe('true');
+    expect(lead?.contains(screen.getByTestId('icon'))).toBe(true);
+    expect(screen.getByRole('button', { name: 'Clear' })).toBeTruthy();
   });
 });
 

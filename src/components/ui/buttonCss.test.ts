@@ -23,7 +23,7 @@ describe('primary button identity', () => {
   });
 
   it('has a pressed state', () => {
-    expect(rule('.nuclei-btn.nuclei-btn--primary:active:not(:disabled)')).toContain('brightness');
+    expect(rule(".nuclei-btn.nuclei-btn--primary:active:not(:disabled):not([aria-busy='true'])")).toContain('brightness');
   });
 
   it('renders disabled primary as a neutral surface, not faded teal', () => {
@@ -48,5 +48,14 @@ describe('disabled primary under the light theme (cascade)', () => {
     btn.remove();
     style.remove();
     document.documentElement.removeAttribute('data-theme');
+  });
+});
+
+describe('menu hints', () => {
+  it('keeps at least 24px (gap + margin) between a label and its hint so they do not read as one phrase', () => {
+    const item = rule('.nuclei-menu__item');
+    const hint = rule('.nuclei-menu__hint');
+    expect(item).toContain('gap: var(--space-2)');
+    expect(hint).toMatch(/margin-left:\s*var\(--space-4\)/);
   });
 });

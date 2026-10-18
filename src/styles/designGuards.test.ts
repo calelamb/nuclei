@@ -102,10 +102,53 @@ describe('design guards', () => {
     const rule = css.match(/\.nuclei-choice-card:focus-visible\s*\{([^}]*)\}/)?.[1] ?? '';
     expect(rule).toMatch(/border-color:\s*var\(--focus-ring-color\)/);
     expect(rule).not.toMatch(/border-color:\s*var\(--color-border-subtle\)/);
+    // The inset stripe takes the ring colour too, so the left edge is one colour rather than the accent inside the ring.
+    expect(rule).toMatch(/inset 3px 0 0 var\(--focus-ring-color\)/);
+    expect(rule).not.toMatch(/--choice-accent/);
   });
 
   it('balances the lines of centred empty-state copy', () => {
     const css = files.find((f) => f.rel === 'components/ui/ui.css')?.text ?? '';
     expect(css.match(/\.nuclei-empty__body\s*\{([^}]*)\}/)?.[1] ?? '').toMatch(/text-wrap:\s*balance/);
+  });
+
+  it('does not add raw <input> elements outside ui/ (use TextInput, SearchField, SecretField, Checkbox); existing ones only shrink', () => {
+    // Ratchet: the audit counted five input looks. Files below still hold range/file/radio inputs or bare-bar
+    // inputs (palette, tab rename, inline edit) that other lanes own; a count may fall, never rise.
+    const allowed: Record<string, number> = {
+      'components/ui/TextInput.tsx': 1,
+      'components/ui/Checkbox.tsx': 1,
+      'components/settings/SettingsPanel.tsx': 1, // the parse-debounce range slider
+      'components/hardware/LaunchPortal.tsx': 1,
+      'components/hardware/CredentialSetup.tsx': 1,
+      'components/layout/BottomPanel.tsx': 1,
+      'components/educator/AssignmentCreator.tsx': 2,
+      'components/educator/ClassroomPanel.tsx': 2,
+      'components/learning/InteractiveBlochSphere.tsx': 2,
+      'components/commandPalette/CommandPalette.tsx': 1,
+      'components/qec/CodeLatticePanel.tsx': 1,
+      'components/qec/QecCsvDropZone.tsx': 2,
+      'components/community/CircuitGallery.tsx': 1,
+      'components/explorer/FileExplorer.tsx': 2,
+      'components/editor/inlineEdit/InlineEditWidget.tsx': 1,
+      'components/community/UserProfile.tsx': 1,
+      'components/editor/EditorTabStrip.tsx': 1,
+      'components/qec/import/QecImportWizard.tsx': 1,
+    };
+    const over = files
+      .filter((f) => f.rel.endsWith('.tsx'))
+      .map((f) => ({ rel: f.rel, count: (f.text.match(/<input\b/g) ?? []).length }))
+      .filter((f) => f.count > (allowed[f.rel] ?? 0))
+      .map((f) => `${f.rel}: ${f.count} > ${allowed[f.rel] ?? 0}`);
+    expect(over).toEqual([]);
+  });
+
+  it('keeps search/filter fields off the hand-rolled field-group look (Glossary, Challenges use SearchField)', () => {
+    expect(offenders((f) => /^components\/(learning|challenges|settings)\//.test(f.rel) && /nuclei-field-group|nuclei-bare-input/.test(f.text))).toEqual([]);
+  });
+
+  it('gives a field group exactly one focus indicator: the wrapper ring, not the bare-input underline too', () => {
+    const css = files.find((f) => f.rel === 'components/ui/ui.css')?.text ?? '';
+    expect(css).toMatch(/\.nuclei-field-group\s*>\s*\.nuclei-bare-input:focus-visible\s*\{[^}]*box-shadow:\s*none/);
   });
 });

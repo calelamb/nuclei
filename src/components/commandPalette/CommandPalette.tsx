@@ -275,7 +275,7 @@ export interface CommandActions {
 export function buildCommands(actions: CommandActions, context: CommandContext): Command[] {
   const commands: Command[] = [];
   const mac = context.mac ?? isMacPlatform();
-  const sc = (id: string) => shortcutLabel(id, mac);
+  const sc = (id: string) => shortcutLabel(id, mac, undefined, context.mode);
 
   // Workspace + orientation.
   commands.push({ id: 'workspace-mode', label: bindingLabel('switch-workspace'), category: 'Navigate', shortcut: sc('switch-workspace'), keywords: ['learn', 'research', 'workspace'], action: actions.switchWorkspaceMode });

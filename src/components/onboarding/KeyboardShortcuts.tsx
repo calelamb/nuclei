@@ -1,15 +1,15 @@
-import { IconButton } from '../ui';
 import { X } from 'lucide-react';
-import { useMemo, useRef } from 'react';
-import { useThemeStore } from '../../stores/themeStore';
-import { EASING, DURATION, prefersReducedMotion } from '../../lib/animations';
-import { useEscapeToClose } from '../../hooks/useEscapeToClose';
-import { useFocusTrap } from '../../hooks/useFocusTrap';
-import { KEYBINDINGS, formatKeys, isBindingAvailable, isMacPlatform, shortcutLabel, type KeybindingGroup } from '../../config/keybindings';
+import { useMemo } from 'react';
+import { IconButton, Dialog } from '../ui';
+import { useWorkspaceStore } from '../../stores/workspaceStore';
+import {
+  KEYBINDINGS, formatKeys, isBindingAvailable, isBindingInMode, isMacPlatform, shortcutLabel,
+  type KeybindingGroup, type KeybindingWorkspace,
+} from '../../config/keybindings';
 import { isWebBuild } from '../../platform/buildTarget';
-
-import { TYPOGRAPHY } from '../../styles/tokens';
+import { ICON_SIZE } from '../../styles/tokens';
 import './shortcuts.css';
+
 interface KeyboardShortcutsProps {
   onClose: () => void;
 }
@@ -21,113 +21,60 @@ const EDITOR_EXTRAS: Record<string, ShortcutRow> = {
   ghost: { keys: 'Tab', description: 'Accept ghost completion' },
 };
 
-const GROUP_ORDER: KeybindingGroup[] = ['Essential', 'Editor', 'Navigation', 'View'];
+const GROUP_ORDER: KeybindingGroup[] = ['Essential', 'Editor', 'Navigation', 'View', 'Run'];
 
-/** Generated from the one keybinding registry, so the sheet matches reality. */
+/**
+ * Generated from the one keybinding registry, so the sheet matches reality: it omits chords the browser keeps
+ * for itself and chords that do nothing in the current workspace (the Learn level has no Research equivalent).
+ */
 // eslint-disable-next-line react-refresh/only-export-components
-export function shortcutGroups(mac: boolean = isMacPlatform(), web: boolean = isWebBuild()): Array<{ title: string; shortcuts: ShortcutRow[] }> {
+export function shortcutGroups(
+  mac: boolean = isMacPlatform(),
+  web: boolean = isWebBuild(),
+  mode: KeybindingWorkspace = useWorkspaceStore.getState().mode,
+): Array<{ title: string; shortcuts: ShortcutRow[] }> {
   return GROUP_ORDER.map((title) => {
-    const rows: ShortcutRow[] = KEYBINDINGS.filter((b) => b.group === title && isBindingAvailable(b, web)).map((b) => ({
-      keys: formatKeys(b, mac),
-      description: b.label,
-    }));
+    const rows: ShortcutRow[] = KEYBINDINGS
+      .filter((b) => b.group === title && isBindingAvailable(b, web) && isBindingInMode(b, mode))
+      .map((b) => ({ keys: formatKeys(b, mac), description: b.label }));
     if (title === 'Editor') rows.push(EDITOR_EXTRAS.ghost);
     return { title, shortcuts: rows };
-  });
+  }).filter((g) => g.shortcuts.length > 0);
 }
 
 export function KeyboardShortcuts({ onClose }: KeyboardShortcutsProps) {
-  const colors = useThemeStore((s) => s.colors);
-  const shadow = useThemeStore((s) => s.shadow);
-  useEscapeToClose(onClose);
-  const dialogRef = useRef<HTMLDivElement>(null);
-  useFocusTrap(dialogRef, { autoFocusSkip: '.nuclei-dialog__header' });
-  const groups = useMemo(() => shortcutGroups(), []);
+  const mode = useWorkspaceStore((s) => s.mode);
+  const groups = useMemo(() => shortcutGroups(isMacPlatform(), isWebBuild(), mode), [mode]);
   const web = isWebBuild();
 
   return (
-    <div
-      style={{
-        position: 'fixed', inset: 0, zIndex: 4500,
-        background: colors.scrim,
-        backdropFilter: 'blur(4px)',
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
-        animation: prefersReducedMotion() ? 'none' : `nuclei-fade-in ${DURATION.fast}ms`,
-      }}
-      onClick={onClose}
-      ref={dialogRef}
-      tabIndex={-1}
-      role="dialog"
-      aria-label="Keyboard shortcuts"
-      aria-modal="true"
-    >
-      <div
-        style={{
-          background: colors.bg,
-          border: `1px solid ${colors.border}`,
-          borderRadius: 12,
-          padding: 24,
-          maxWidth: 760, width: '92%',
-          maxHeight: '86vh',
-          display: 'flex', flexDirection: 'column',
-          boxShadow: shadow.lg,
-          animation: prefersReducedMotion() ? 'none' : `nuclei-slide-up ${DURATION.normal}ms ${EASING.spring}`,
-        }}
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="nuclei-dialog__header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-          <h2 style={{
-            color: colors.text, fontSize: 16, fontWeight: 600,
-            fontFamily: TYPOGRAPHY.fontSans,
-          }}>
-            Keyboard shortcuts
-          </h2>
-          <IconButton aria-label="Close shortcuts" onClick={onClose}><X size={16} /></IconButton>
-        </div>
-
-        <div className="shortcuts-groups">
-        {groups.map((group) => (
-          <div key={group.title} style={{ breakInside: 'avoid', marginBottom: 16 }}>
-            <h3 className="nuclei-overline" style={{ marginBottom: 6 }}>{group.title}</h3>
-            {group.shortcuts.map((s) => (
-              <div key={s.description} style={{
-                display: 'flex', justifyContent: 'space-between',
-                alignItems: 'center', padding: '5px 0',
-              }}>
-                <span style={{
-                  color: colors.text, fontSize: 13,
-                  fontFamily: TYPOGRAPHY.fontSans,
-                }}>
-                  {s.description}
-                </span>
-                <kbd style={{
-                  fontSize: 12,
-                  fontFamily: TYPOGRAPHY.fontMono,
-                  color: colors.textMuted,
-                  background: colors.bgPanel,
-                  padding: '2px 8px',
-                  borderRadius: 4,
-                  border: `1px solid ${colors.border}`,
-                  whiteSpace: 'nowrap',
-                }}>
-                  {s.keys}
-                </kbd>
-              </div>
-            ))}
-          </div>
-        ))}
-        </div>
-
-        <div style={{
-          color: colors.textDim, fontSize: 11,
-          fontFamily: TYPOGRAPHY.fontSans,
-          textAlign: 'center', paddingTop: 10, marginTop: 4, flexShrink: 0,
-          borderTop: `1px solid ${colors.border}`,
-        }}>
+    <Dialog
+      title="Keyboard shortcuts"
+      onClose={onClose}
+      width={760}
+      className="shortcuts-dialog"
+      zIndex={4500}
+      trailing={<IconButton size="sm" aria-label="Close shortcuts" onClick={onClose}><X size={ICON_SIZE.md} /></IconButton>}
+      footer={(
+        <p className="shortcuts-note">
           Press {shortcutLabel('palette')} to open the command palette for all commands
           {web && ' (including New file and Toggle theme, whose keys your browser keeps for itself)'}
-        </div>
+        </p>
+      )}
+    >
+      <div className="shortcuts-groups">
+        {groups.map((group) => (
+          <section key={group.title} className="shortcuts-group">
+            <h3 className="nuclei-overline shortcuts-group__title">{group.title}</h3>
+            {group.shortcuts.map((s) => (
+              <div key={s.description} className="shortcuts-row">
+                <span className="shortcuts-row__label">{s.description}</span>
+                <kbd className="shortcuts-row__keys">{s.keys}</kbd>
+              </div>
+            ))}
+          </section>
+        ))}
       </div>
-    </div>
+    </Dialog>
   );
 }

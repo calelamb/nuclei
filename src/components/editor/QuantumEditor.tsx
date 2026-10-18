@@ -16,6 +16,8 @@ import { registerPythonFormatting } from './pythonFormatting';
 import { ruffDiagnosticsToMarkers } from './ruffMarkers';
 import { InlineEditWidget } from './inlineEdit/InlineEditWidget';
 import { registerNucleiThemes } from './monacoThemes';
+import { registerNucleiEditorActions } from './nucleiEditorActions';
+import { hideStockPaletteFromContextMenu } from './monacoContextMenu';
 import { registerQsharpLanguage } from './qsharpLanguage';
 import { registerStimLanguage } from './stimLanguage';
 import { ensureQsharpLanguageService } from './qsharpLanguageService';
@@ -117,7 +119,7 @@ export function QuantumEditor() {
 
     editor.addAction({
       id: 'run-circuit',
-      label: 'Run Circuit',
+      label: 'Run circuit',
       keybindings: [monacoApi.KeyMod.CtrlCmd | monacoApi.KeyCode.Enter],
       run: () => {
         const execute = getExecute();
@@ -127,7 +129,7 @@ export function QuantumEditor() {
 
     editor.addAction({
       id: 'inline-edit',
-      label: 'Inline Edit with Dirac',
+      label: 'Inline edit with Dirac',
       keybindings: [monacoApi.KeyMod.CtrlCmd | monacoApi.KeyCode.KeyK],
       run: () => setShowInlineEdit(true),
     });
@@ -140,7 +142,7 @@ export function QuantumEditor() {
     if (isMacPlatform()) {
       editor.addAction({
         id: 'nuclei.toggleTabFocus',
-        label: 'Toggle Tab Key Moves Focus',
+        label: 'Tab key moves focus',
         keybindings: [monacoApi.KeyMod.WinCtrl | monacoApi.KeyCode.KeyM],
         run: (ed) => {
           ed.trigger('nuclei', 'editor.action.toggleTabFocusMode', null);
@@ -154,13 +156,13 @@ export function QuantumEditor() {
     // so the Dirac shortcuts must also be registered inside the editor.
     editor.addAction({
       id: 'toggle-dirac',
-      label: 'Toggle Dirac Panel',
+      label: 'Toggle Dirac panel',
       keybindings: [monacoApi.KeyMod.CtrlCmd | monacoApi.KeyCode.KeyD],
       run: () => useDiracPanelStore.getState().toggle(),
     });
     editor.addAction({
       id: 'focus-dirac',
-      label: 'Focus Dirac Input',
+      label: 'Focus Dirac input',
       keybindings: [monacoApi.KeyMod.CtrlCmd | monacoApi.KeyCode.KeyL],
       run: () => useDiracPanelStore.getState().focusInput(),
     });
@@ -169,7 +171,7 @@ export function QuantumEditor() {
     // (it owns Cmd+/ for comments and Cmd+I for suggestions), so register them here too.
     editor.addAction({
       id: 'nuclei.shortcuts',
-      label: 'Keyboard Shortcuts',
+      label: 'Keyboard shortcuts',
       keybindings: [
         monacoApi.KeyMod.CtrlCmd | monacoApi.KeyMod.Shift | monacoApi.KeyCode.Slash,
         monacoApi.KeyCode.F1,
@@ -182,6 +184,9 @@ export function QuantumEditor() {
       keybindings: [monacoApi.KeyMod.CtrlCmd | monacoApi.KeyCode.KeyI],
       run: () => useHelpOverlayStore.getState().toggleCompose(),
     });
+
+    registerNucleiEditorActions(editor, monacoApi);
+    hideStockPaletteFromContextMenu();
 
     registerGhostCompletions(monacoApi);
     // Python formatting via ruff (⇧⌥F / "Format Document"), Phase 4.

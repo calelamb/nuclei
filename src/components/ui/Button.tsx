@@ -9,8 +9,14 @@ export type ButtonSize = 'sm' | 'md' | 'lg';
 export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   variant?: ButtonVariant;
   size?: ButtonSize;
-  /** Disables the button, sets aria-busy and swaps the icon for a spinner. */
+  /** Busy state: swaps the icon for a spinner, sets aria-busy and disables the button. */
   loading?: boolean;
+  /**
+   * With `loading`: stay focusable (aria-disabled instead of `disabled`) and ignore presses, so keyboard focus
+   * is not dropped to <body> when the press that started the work disables its own button. Use it whenever the
+   * button can hold focus while it works (Run, Install, Save); leave it off for fire-and-forget buttons.
+   */
+  keepFocus?: boolean;
   /** Optional leading icon (a lucide element at ICON_SIZE.sm). */
   icon?: ReactNode;
 }
@@ -20,7 +26,7 @@ export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
  * disabled) so there are no inline style mutations or per-component hover state.
  */
 export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button(
-  { variant = 'secondary', size = 'md', loading = false, icon, className, children, disabled, type = 'button', ...rest },
+  { variant = 'secondary', size = 'md', loading = false, keepFocus = false, icon, className, children, disabled, type = 'button', onClick, ...rest },
   ref,
 ) {
   return (
@@ -28,8 +34,14 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button
       {...rest}
       ref={ref}
       type={type}
-      disabled={disabled || loading}
+      disabled={disabled || (loading && !keepFocus)}
+      aria-disabled={(loading && keepFocus) || undefined}
       aria-busy={loading || undefined}
+      onClick={(e) => {
+        // A busy keepFocus button stays focusable, so it must also refuse to submit its form.
+        if (loading && keepFocus) { e.preventDefault(); return; }
+        onClick?.(e);
+      }}
       className={cx('nuclei-btn', `nuclei-btn--${variant}`, `nuclei-btn--${size}`, className)}
     >
       {loading

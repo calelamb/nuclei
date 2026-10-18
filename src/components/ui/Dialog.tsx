@@ -51,7 +51,8 @@ export function Dialog({
 
   useEffect(() => {
     if (!initialFocus) return;
-    panelRef.current?.querySelector<HTMLElement>(initialFocus)?.focus();
+    // focusVisible keeps the ring on a target focused from code after a keyboard-opened dialog (browsers that support it).
+    panelRef.current?.querySelector<HTMLElement>(initialFocus)?.focus({ focusVisible: true } as FocusOptions);
   }, [initialFocus]);
 
   useEffect(() => {

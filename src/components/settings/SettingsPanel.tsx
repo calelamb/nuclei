@@ -1,5 +1,5 @@
-import { useContext, useEffect, useState } from 'react';
-import { RotateCcw, Sun, Moon, Monitor, Eye, EyeOff, ExternalLink } from 'lucide-react';
+import { useContext, useEffect, useRef, useState } from 'react';
+import { RotateCcw, Sun, Moon, Monitor, ExternalLink } from 'lucide-react';
 import { useThemeStore, type ThemePreference } from '../../stores/themeStore';
 import { useNavigationStore } from '../../stores/navigationStore';
 import { useUIModeStore, type UIMode } from '../../stores/uiModeStore';
@@ -9,9 +9,10 @@ import { useSimulationStore } from '../../stores/simulationStore';
 import { useDiracStore } from '../../stores/diracStore';
 import { useFrameworksStore } from '../../stores/frameworksStore';
 import { EnvironmentPanel } from './EnvironmentPanel';
-import { Button, IconButton, SegmentedControl, Select, Switch, TextInput } from '../ui';
+import { Button, IconButton, SecretField, SegmentedControl, Select, Switch, TextInput } from '../ui';
 import { WorkspaceSection, HelpSection } from './SettingsWorkspaceHelp';
 import { Section, SettingRow, RowLabelContext } from './SettingsPrimitives';
+import { onSettingsFocusRequest, takeSettingsFocusRequest } from './settingsFocus';
 import { validateApiKey } from '../../lib/apiKey';
 import { API_KEY_PRIVACY_NOTE } from '../../config/apiKeyCopy';
 
@@ -38,13 +39,15 @@ function NumberStepper({ value, min, max, step, onChange }: {
   value: number; min: number; max: number; step: number; onChange: (v: number) => void;
 }) {
   const colors = useThemeStore((s) => s.colors);
+  // Name the steppers from their row ("Decrease font size"), not a bare "Decrease".
+  const subject = (useContext(RowLabelContext) ?? 'value').toLowerCase();
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-      <IconButton size="sm" variant="secondary" aria-label="Decrease" onClick={() => onChange(Math.max(min, value - step))}>{'\u2212'}</IconButton>
+      <IconButton size="sm" variant="secondary" aria-label={`Decrease ${subject}`} onClick={() => onChange(Math.max(min, value - step))}>{'\u2212'}</IconButton>
       <span style={{ fontSize: 11, color: colors.text, minWidth: 28, textAlign: 'center', fontFamily: TYPOGRAPHY.fontSans }}>
         {value}
       </span>
-      <IconButton size="sm" variant="secondary" aria-label="Increase" onClick={() => onChange(Math.min(max, value + step))}>+</IconButton>
+      <IconButton size="sm" variant="secondary" aria-label={`Increase ${subject}`} onClick={() => onChange(Math.min(max, value + step))}>+</IconButton>
     </div>
   );
 }
@@ -96,7 +99,6 @@ function ApiKeyInput() {
   const colors = useThemeStore((s) => s.colors);
   const currentKey = useDiracStore((s) => s.apiKey);
   const [keyValue, setKeyValue] = useState(currentKey ?? '');
-  const [visible, setVisible] = useState(false);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState('');
 
@@ -124,34 +126,16 @@ function ApiKeyInput() {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-        <div style={{
-          flex: 1, display: 'flex', alignItems: 'center',
-          background: colors.bgElevated,
-          border: `1px solid ${error ? colors.error : colors.border}`,
-          borderRadius: 4, overflow: 'hidden',
-        }} className="nuclei-field-group">
-          <input
-            type={visible ? 'text' : 'password'}
-            value={keyValue}
-            onChange={(e) => handleChange(e.target.value)}
-            placeholder="sk-ant-..."
-            data-settings-autofocus=""
-            aria-label="Anthropic API key"
-            style={{
-              flex: 1, padding: '5px 8px', fontSize: 11,
-              fontFamily: TYPOGRAPHY.fontMono,
-              background: 'transparent', border: 'none',
-              color: colors.text,
-            }}
-          />
-          <IconButton
-            size="sm"
-            onClick={() => setVisible(!visible)}
-            aria-label={visible ? 'Hide API key' : 'Show API key'}
-          >
-            {visible ? <EyeOff size={12} /> : <Eye size={12} />}
-          </IconButton>
-        </div>
+        <SecretField
+          size="lg"
+          noun="API key"
+          value={keyValue}
+          invalid={Boolean(error)}
+          onChange={(e) => handleChange(e.target.value)}
+          placeholder="sk-ant-..."
+          data-settings-autofocus=""
+          aria-label="Anthropic API key"
+        />
         <Button size="lg" className="nuclei-btn--dirac" onClick={handleSave}>
           {saved ? 'Saved' : 'Save'}
         </Button>
@@ -185,6 +169,8 @@ function ApiKeyInput() {
 
 /* ── Main Panel ─────────────────────────────────────────── */
 
+const FOCUS_SETTLE_MS = 400;
+
 export function SettingsPanel() {
   const colors = useThemeStore((s) => s.colors);
   const themePreference = useThemeStore((s) => s.preference);
@@ -212,8 +198,49 @@ export function SettingsPanel() {
     if (settingsTarget) clearSettingsTarget();
   }, [settingsTarget, clearSettingsTarget]);
 
+  // Opened from the keyboard: move focus onto the first control, once the frame has settled
+  // (a closing palette hands focus back to the editor in the same tick).
+  const rootRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    let frame = 0;
+    let settleTimer = 0;
+    let stopGuard: (() => void) | null = null;
+    const focusTarget = (root: HTMLElement) =>
+      root.querySelector<HTMLElement>('button:not([disabled]), input, select');
+    // A view that mounts after Settings (the editor, from Challenges) grabs focus for itself. For a short settle window,
+    // anything outside the panel that takes focus hands it straight back, so the next Tab does not indent code.
+    const guardFocus = (root: HTMLElement) => {
+      stopGuard?.();
+      const onFocusIn = (e: FocusEvent) => {
+        if (e.target instanceof Node && !root.contains(e.target)) focusTarget(root)?.focus({ focusVisible: true } as FocusOptions);
+      };
+      document.addEventListener('focusin', onFocusIn);
+      const stop = () => {
+        window.clearTimeout(settleTimer);
+        document.removeEventListener('focusin', onFocusIn);
+        stopGuard = null;
+      };
+      settleTimer = window.setTimeout(stop, FOCUS_SETTLE_MS);
+      stopGuard = stop;
+    };
+    // The request is consumed inside the frame, not before it: a StrictMode remount (or a quick re-render) cancels
+    // the first frame, and the surviving effect must still find the request.
+    const focusFirst = () => {
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(() => {
+        const root = rootRef.current;
+        if (!root || !takeSettingsFocusRequest()) return; // a frame from an unmounted panel must not eat the request
+        focusTarget(root)?.focus({ focusVisible: true } as FocusOptions);
+        guardFocus(root);
+      });
+    };
+    focusFirst();
+    const off = onSettingsFocusRequest(focusFirst);
+    return () => { off(); cancelAnimationFrame(frame); stopGuard?.(); };
+  }, []);
+
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+    <div ref={rootRef} style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
       <div style={{ flex: 1, minHeight: 0, overflowY: 'auto' }}>
         {/* ── Appearance ── */}
         <Section id="appearance" title="Appearance" defaultOpen>
@@ -230,7 +257,7 @@ export function SettingsPanel() {
             />
           </SettingRow>
           {workspaceMode === 'learn' && (
-            <SettingRow label="UI Mode">
+            <SettingRow label="Level" hint="How much of the IDE is shown">
               <SettingSelect<UIMode>
                 value={uiMode}
                 options={[
