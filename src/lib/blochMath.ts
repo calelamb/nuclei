@@ -101,3 +101,21 @@ export function interpolateBloch(from: BlochVector, to: BlochVector, t: number):
     z: (a.z * wa + b.z * wb) * len,
   };
 }
+
+export type BlochAudience = 'learn' | 'research';
+
+/**
+ * The caption under a sphere. Researchers read the numbers ("Mixed 0.39", "Pure"); learners get the
+ * one idea that matters - this qubit is entangled - and nothing for a pure state (|r| stays in the tooltip).
+ */
+export function blochCaption(readout: BlochReadout, audience: BlochAudience, compact: boolean): string | null {
+  if (audience === 'research') return compact ? readout.short : readout.summary;
+  if (readout.kind === 'pure') return null;
+  if (readout.kind === 'mixed') return 'Entangled';
+  return compact ? readout.short : readout.summary;
+}
+
+/** Every qubit in |0>: the Bloch vectors a circuit has before it runs. */
+export function groundStateCoords(qubitCount: number): BlochVector[] {
+  return Array.from({ length: Math.max(0, Math.floor(qubitCount)) }, () => ({ x: 0, y: 0, z: 1 }));
+}

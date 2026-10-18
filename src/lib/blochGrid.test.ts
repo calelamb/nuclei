@@ -91,3 +91,15 @@ describe('balanced pages and rows', () => {
     expect(blochGridLayout({ count: 4, width: 420, height: 800 })).toMatchObject({ cols: 2, rows: 2 });
   });
 });
+
+describe('blochGridLayout roomier grids', () => {
+  it('gives two spheres a single bigger column when the box is tall', () => {
+    const g = blochGridLayout({ count: 2, width: 316, height: 520 });
+    expect(g.cols).toBe(1);
+    expect(g.cellWidth).toBeGreaterThan(200);
+  });
+
+  it('keeps two columns when the box is short', () => {
+    expect(blochGridLayout({ count: 2, width: 316, height: 200 }).cols).toBe(2);
+  });
+});

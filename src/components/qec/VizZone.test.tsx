@@ -14,7 +14,7 @@ import surface from './__fixtures__/surface_d3.json';
 import type { QecSnapshot } from '../../types/qec';
 
 // Stub the heavy panel bodies so the test focuses on VizZone's tabbing/stacking.
-vi.mock('../bloch/BlochPanel', () => ({ BlochPanel: () => <div data-testid="bloch" /> }));
+vi.mock('../bloch/BlochPanel', () => ({ BlochPanel: ({ initialQubits }: { initialQubits?: number }) => <div data-testid="bloch" data-initial={initialQubits ?? 0} /> }));
 vi.mock('./QecTimelinePanel', () => ({ QecTimelinePanel: () => <div data-testid="timeline" /> }));
 vi.mock('./CodeLatticePanel', () => ({ CodeLatticePanel: () => <div data-testid="lattice" /> }));
 vi.mock('./DetectorGraphPanel', () => ({ DetectorGraphPanel: () => <div data-testid="detector" /> }));
@@ -126,7 +126,7 @@ describe('<VizZone> results empty state (shell-r3-05/07)', () => {
     useEditorStore.setState({ errors: [{ line: 12, message: 'boom' }] });
     const { container, getByRole, queryByText } = render(<VizZone visible={visible({ circuit: true })} chip={null} />);
     expect(container.textContent).toContain('Last run failed');
-    expect(container.textContent).toContain('line 12');
+    expect(container.textContent).toContain('line\u00A012');
     expect(queryByText(/Run your circuit to see/)).toBeNull();
     fireEvent.click(getByRole('button', { name: 'Show error' }));
     expect(useBottomPanelStore.getState().collapsed).toBe(false);
@@ -152,15 +152,45 @@ describe('<VizZone> results empty state (shell-r3-05/07)', () => {
   });
 });
 
+describe('<VizZone> initial spheres in Balanced', () => {
+  it('draws no initial spheres once a run has failed', async () => {
+    const { useLayoutStore } = await import('../../stores/layoutStore');
+    const { useCircuitStore } = await import('../../stores/circuitStore');
+    useLayoutStore.setState({ preset: 'balanced' });
+    useCircuitStore.setState({ snapshot: { framework: 'qiskit', qubit_count: 2, classical_bit_count: 0, depth: 1, gates: [{ type: 'H', targets: [0], controls: [], params: [], layer: 0 }] } });
+    useSimulationStore.setState({ result: null, lastRunFailed: false });
+    const ok = render(<VizZone visible={visible({ circuit: true, bloch: true })} chip={null} />);
+    expect(ok.queryByTestId('bloch')?.getAttribute('data-initial')).toBe('2');
+    cleanup();
+    useSimulationStore.setState({ lastRunFailed: true });
+    const failed = render(<VizZone visible={visible({ circuit: true, bloch: true })} chip={null} />);
+    expect(failed.queryByTestId('bloch')?.getAttribute('data-initial') ?? '0').toBe('0');
+    useSimulationStore.setState({ lastRunFailed: false });
+    useLayoutStore.setState({ preset: 'clean' });
+  });
+});
+
 describe('<VizZone> when Python did not start (shell-r3-06)', () => {
   it('keeps the column with a calm placeholder and a Retry that restarts the kernel', async () => {
     const control = await import('../../lib/kernelControl');
     const retry = vi.fn();
     control.registerKernelRetry(retry);
     const { container, getByRole } = render(<VizZone visible={visible({})} chip={null} startFailed />);
-    expect(container.textContent).toContain("didn't start");
+    expect(container.textContent).toMatch(/(Kernel|Python) didn't start/);
+    expect(container.textContent).toContain('see the banner above for details');
     fireEvent.click(getByRole('button', { name: 'Retry' }));
     expect(retry).toHaveBeenCalledTimes(1);
     control.registerKernelRetry(null);
+  });
+});
+
+describe('<VizZone> while Python boots', () => {
+  it('puts the step in the title and keeps the body to one sentence', () => {
+    useEditorStore.setState({ kernelProgress: { step: 1, total: 3, label: 'Downloading Python', fraction: 0 } });
+    const { container } = render(<VizZone visible={visible({})} chip={null} booting />);
+    expect(container.textContent).toContain('Preparing Python (step 1 of 3)');
+    expect(container.textContent).toContain('Circuit and results appear when it');
+    expect(container.textContent).not.toMatch(/·\s*1\/3/);
+    useEditorStore.setState({ kernelProgress: null });
   });
 });

@@ -4,15 +4,21 @@ import { useThemeStore } from '../../stores/themeStore';
 import { useSimulationStore } from '../../stores/simulationStore';
 import { useQecStore } from '../../stores/qecStore';
 import { useProjectStore } from '../../stores/projectStore';
+import { useLayoutStore } from '../../stores/layoutStore';
 import { useVizZoneStore } from '../../stores/vizZoneStore';
 import { PanelReveal } from '../layout/PanelReveal';
 import { CircuitRenderer } from '../circuit/CircuitRenderer';
 import { Button, EmptyState, Tabs } from '../ui';
+import { kernelStartFailureTitle } from '../../lib/kernelErrors';
 import { retryKernel } from '../../lib/kernelControl';
 import { usePlatform } from '../../platform/PlatformProvider';
 import { useEditorStore } from '../../stores/editorStore';
 import { visibleVizPanelIds } from '../../layout/vizPanels';
 import { circuitMinHeight } from '../../layout/circuitRail';
+import { blochRailHeights } from '../../layout/blochRail';
+import { circuitWantedHeight, planRailSplit } from '../../layout/railHeights';
+import { computeCircuitGeometry } from '../circuit/geometry';
+import { fitCircuitWidth } from '../circuit/fitCircuit';
 import { useDisplaySnapshot } from '../../layout/useDisplaySnapshot';
 import { useElementSize } from '../../hooks/useElementSize';
 import { useResultStale } from '../../hooks/useResultStale';
@@ -24,6 +30,10 @@ import { QecTimelinePanel } from './QecTimelinePanel';
 import { CodeLatticePanel } from './CodeLatticePanel';
 import { DetectorGraphPanel } from './DetectorGraphPanel';
 import type { VisiblePanels, PanelId } from '../../layout/panelRegistry';
+import type { CircuitSnapshot } from '../../types/quantum';
+
+/** The results empty state keeps this much room below the circuit. */
+const EMPTY_RESULTS_MIN_PX = 240;
 
 /**
  * PRD 10 Phase D — the viz zone (right rail).
@@ -44,12 +54,20 @@ interface VizPanelDef {
   icon: LucideIcon;
   /** 'content' panels size to what they show (Bloch tiles); 'fill' panels take the rest of the rail. */
   fit: 'content' | 'fill';
-  render: () => ReactNode;
+  render: (ctx: VizRenderContext) => ReactNode;
+}
+
+/** What a panel's body needs from the zone beyond the stores it reads itself. */
+interface VizRenderContext {
+  /** Spheres on show: measured, or the starting states before a run. */
+  blochCount: number;
+  /** Qubits to draw at |0> before the first run (the Balanced preset), else 0. */
+  initialQubits: number;
 }
 
 const MAIN_VIZ_PANELS: VizPanelDef[] = [
   { id: 'circuit', title: 'Circuit', icon: Workflow, fit: 'content', render: () => <CircuitRenderer /> },
-  { id: 'bloch', title: 'Bloch Sphere', icon: Orbit, fit: 'content', render: () => <BlochRail><BlochPanel /></BlochRail> },
+  { id: 'bloch', title: 'Bloch Sphere', icon: Orbit, fit: 'content', render: ({ blochCount, initialQubits }) => <BlochRail count={blochCount}><BlochPanel initialQubits={initialQubits} /></BlochRail> },
   { id: 'qecTimeline', title: 'Timeline', icon: LayoutGrid, fit: 'fill', render: () => <QecTimelinePanel /> },
   { id: 'qecLattice', title: 'Code Lattice', icon: Grid3x3, fit: 'fill', render: () => <CodeLatticePanel /> },
   { id: 'qecDetectorGraph', title: 'Detector Graph', icon: Share2, fit: 'fill', render: () => <DetectorGraphPanel /> },
@@ -91,21 +109,35 @@ export function VizZone({
   const platform = usePlatform();
   const { snapshot: circuitSnapshot } = useDisplaySnapshot();
   const [measureColumn, columnSize] = useElementSize<HTMLDivElement>();
-  const blochCount = useSimulationStore((st) => st.result?.bloch_coords?.length ?? 0);
-  const circuitRevealStyle = {
-    ...CIRCUIT_REVEAL_STYLE,
-    minHeight: Math.max(96, circuitMinHeight(circuitSnapshot?.qubit_count ?? 1, columnSize.height)),
-  };
+  const measuredBlochCount = useSimulationStore((st) => st.result?.bloch_coords?.length ?? 0);
+  const preset = useLayoutStore((s) => s.preset);
+  // Initial |0> spheres only before any run: a failed run must show its failure state instead.
+  const lastRunFailed = useSimulationStore((st) => st.lastRunFailed);
+  const lastRunNoCircuit = useSimulationStore((st) => st.lastRunNoCircuit);
+  const noRunYet = !lastRunFailed && !lastRunNoCircuit;
+  const initialQubits = measuredBlochCount === 0 && preset === 'balanced' && noRunYet ? (circuitSnapshot?.qubit_count ?? 0) : 0;
+  const blochCount = measuredBlochCount > 0 ? measuredBlochCount : initialQubits;
+  const renderCtx: VizRenderContext = { blochCount, initialQubits };
+  const [measureChip, chipSize] = useElementSize<HTMLDivElement>();
+  const blochMin = blochCount > 0 ? blochRailHeights(blochCount, columnSize.width).min : EMPTY_RESULTS_MIN_PX;
+  const circuitHeight = useCircuitHeight({
+    snapshot: circuitSnapshot,
+    railWidth: columnSize.width,
+    railHeight: columnSize.height,
+    chipHeight: chipSize.height,
+    blochMin,
+  });
+  const circuitRevealStyle = { ...CIRCUIT_REVEAL_STYLE, height: circuitHeight };
   const circuitPanel = panels.find((p) => p.id === 'circuit');
   const statePanels = panels.filter((p) => p.id !== 'circuit');
 
   const progress = useEditorStore((st) => st.kernelProgress);
   if (booting && panels.length === 0) {
-    const stage = progress && progress.kind !== 'attempts' && progress.total > 0 ? ` · ${progress.step}/${progress.total}` : '';
+    const stage = progress && progress.kind !== 'attempts' && progress.total > 0 ? ` (step ${progress.step} of ${progress.total})` : '';
     return (
       <div style={COLUMN_STYLE}>
-        <EmptyState className="viz-empty viz-empty--boot" icon={<Workflow size={20} />} title="Preparing Python">
-          {`Circuit and results appear when Python is ready${stage}.`}
+        <EmptyState className="viz-empty viz-empty--boot" icon={<Workflow size={20} />} title={`Preparing Python${stage}`}>
+          Circuit and results appear when it&rsquo;s ready.
         </EmptyState>
       </div>
     );
@@ -116,16 +148,15 @@ export function VizZone({
   }
 
   if (startFailed && panels.length === 0) {
-    const engine = platform.getPlatform() === 'web' ? 'Python' : 'The kernel';
     return (
       <div style={COLUMN_STYLE}>
         <EmptyState
           className="viz-empty viz-empty--boot"
           icon={<Workflow size={20} />}
-          title={`${engine} didn't start`}
+          title={kernelStartFailureTitle(platform.getPlatform() === 'web')}
           action={<Button variant="secondary" size="sm" onClick={retryKernel}>Retry</Button>}
         >
-          Circuit and results appear once it is running.
+          Retry here, or see the banner above for details.
         </EmptyState>
       </div>
     );
@@ -135,8 +166,8 @@ export function VizZone({
     <div ref={measureColumn} style={COLUMN_STYLE}>
       {circuitPanel && (
         <PanelReveal when from="right" style={circuitRevealStyle}>
-          <section aria-label={circuitPanel.title} style={{ borderBottom: `1px solid ${colors.border}`, display: 'flex', flexDirection: 'column', minHeight: 0, maxHeight: '100%' }}>
-            {circuitPanel.render()}
+          <section aria-label={circuitPanel.title} style={{ borderBottom: `1px solid ${colors.border}`, display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0 }}>
+            {circuitPanel.render(renderCtx)}
           </section>
         </PanelReveal>
       )}
@@ -147,13 +178,13 @@ export function VizZone({
         // Before the first run the Bloch panel is just the shared empty state: it takes the rest of the rail so it is centred like the Clean preset's.
         const fills = p.fit === 'fill' || (p.id === 'bloch' && blochCount === 0);
         return (
-        <PanelReveal key={p.id} when from="right" style={fills ? FILL_STYLE : CONTENT_STYLE}>
+        <PanelReveal key={p.id} when from="right" style={p.id === 'bloch' ? { ...FILL_STYLE, minHeight: blochMin } : fills ? FILL_STYLE : CONTENT_STYLE}>
           <div
             className={p.id === 'bloch' && stale ? 'nuclei-stale-results' : undefined}
-            style={fills ? FILL_BODY_STYLE : CONTENT_BODY_STYLE}
+            style={p.id === 'bloch' ? FILL_BODY_STYLE_FLEX : fills ? FILL_BODY_STYLE : CONTENT_BODY_STYLE}
           >
             {p.id === 'bloch' && stale && <StaleResultNotice />}
-            {p.render()}
+            {p.render(renderCtx)}
           </div>
         </PanelReveal>
         );
@@ -162,27 +193,55 @@ export function VizZone({
       {statePanels.length > 2 && (
         <TabbedPanels
           panels={statePanels}
+          renderCtx={renderCtx}
           rememberedTab={rememberedTab}
           onSelect={(id) => setActiveTab(projectRoot, id)}
         />
       )}
-      <div style={stale ? STALE_CHIP_STYLE : CHIP_STYLE} data-stale={stale ? 'true' : undefined}>{chip}</div>
+      <div ref={measureChip} data-testid="viz-chip" style={stale ? STALE_CHIP_STYLE : CHIP_STYLE} data-stale={stale ? 'true' : undefined}>{chip}</div>
     </div>
   );
 }
 const CHIP_STYLE = { flexShrink: 0 } as const;
 const STALE_CHIP_STYLE = { opacity: STALE_RESULT_OPACITY, flexShrink: 0 } as const;
 
-const COLUMN_STYLE = { width: '100%', height: '100%', minWidth: 0, display: 'flex', flexDirection: 'column' } as const;
-// The circuit grows to its content and only yields space (scrolling inside) when the rail is short.
-const CIRCUIT_REVEAL_STYLE = { flex: '0 1 auto', minHeight: 96, display: 'flex', flexDirection: 'column' } as const;
+// When even the floors of the circuit and the spheres do not fit, the rail scrolls instead of clipping.
+const COLUMN_STYLE = { width: '100%', height: '100%', minWidth: 0, display: 'flex', flexDirection: 'column', overflowY: 'auto' } as const;
+// The circuit's height is decided by planRailSplit; it never flexes on its own.
+const CIRCUIT_REVEAL_STYLE = { flex: '0 0 auto', display: 'flex', flexDirection: 'column' } as const;
 const CONTENT_STYLE = { flex: '0 1 auto', minHeight: 0, display: 'flex', flexDirection: 'column' } as const;
 const CONTENT_BODY_STYLE = { overflow: 'hidden', position: 'relative', minHeight: 0, display: 'flex', flexDirection: 'column' } as const;
+// The QEC panels keep a 240px floor; the Bloch body fills without one (the Bloch rail carries its own minimum).
 const FILL_BODY_STYLE = { flex: 1, overflow: 'hidden', position: 'relative', minHeight: 240, display: 'flex', flexDirection: 'column' } as const;
+const FILL_BODY_STYLE_FLEX = { flex: 1, overflow: 'hidden', position: 'relative', minHeight: 0, display: 'flex', flexDirection: 'column' } as const;
 const FILL_STYLE = { flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' } as const;
 
-function TabbedPanels({ panels, rememberedTab, onSelect }: {
+/** The circuit pane's height: its whole diagram when the rail can spare it, see planRailSplit. */
+function useCircuitHeight(input: {
+  snapshot: CircuitSnapshot | null;
+  railWidth: number;
+  railHeight: number;
+  chipHeight: number;
+  blochMin: number;
+}): number {
+  const { snapshot, railWidth, railHeight, chipHeight, blochMin } = input;
+  return useMemo(() => {
+    const qubits = snapshot?.qubit_count ?? 1;
+    const geometry = snapshot ? computeCircuitGeometry(snapshot) : null;
+    const scale = geometry ? fitCircuitWidth(geometry.svgWidth, railWidth).scale : 1;
+    return planRailSplit({
+      railHeight,
+      chipHeight,
+      circuitWanted: circuitWantedHeight(geometry?.svgHeight ?? 0, scale),
+      circuitFloor: Math.max(96, circuitMinHeight(qubits, railHeight)),
+      blochMin,
+    }).circuit;
+  }, [snapshot, railWidth, railHeight, chipHeight, blochMin]);
+}
+
+function TabbedPanels({ panels, renderCtx, rememberedTab, onSelect }: {
   panels: VizPanelDef[];
+  renderCtx: VizRenderContext;
   rememberedTab: string | null;
   onSelect: (id: PanelId) => void;
 }) {
@@ -202,7 +261,7 @@ function TabbedPanels({ panels, rememberedTab, onSelect }: {
         })}
       />
       <div style={{ flex: 1, minHeight: 240, overflow: 'hidden', position: 'relative', display: 'flex', flexDirection: 'column' }}>
-        {active.render()}
+        {active.render(renderCtx)}
       </div>
     </>
   );

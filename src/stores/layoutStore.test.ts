@@ -9,7 +9,7 @@ import { useLayoutStore, type LayoutPreset } from './layoutStore';
 
 describe('useLayoutStore', () => {
   beforeEach(() => {
-    useLayoutStore.setState({ preset: 'clean', histogramChipDismissed: false, overrides: {} });
+    useLayoutStore.setState({ preset: 'clean', histogramChipDismissed: false, histogramExpanded: false, overrides: {} });
   });
 
   it("defaults to preset 'clean'", () => {
@@ -30,6 +30,14 @@ describe('useLayoutStore', () => {
     useLayoutStore.getState().dismissHistogramChip();
     useLayoutStore.getState().resetRunArtifacts();
     expect(useLayoutStore.getState().histogramChipDismissed).toBe(false);
+  });
+
+  it('expands and collapses the histogram without rewriting the preset', () => {
+    useLayoutStore.getState().setHistogramExpanded(true);
+    expect(useLayoutStore.getState().histogramExpanded).toBe(true);
+    expect(useLayoutStore.getState().preset).toBe('clean');
+    useLayoutStore.getState().setHistogramExpanded(false);
+    expect(useLayoutStore.getState().histogramExpanded).toBe(false);
   });
 
   describe('panel overrides (PRD 11 Phase A)', () => {

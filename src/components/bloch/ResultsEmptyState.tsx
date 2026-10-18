@@ -51,7 +51,7 @@ export function ResultsEmptyState() {
             </div>
           )}
         >
-          {errorLine !== null ? `The run stopped at line ${errorLine}. Nothing was plotted.` : 'The run stopped with an error. Nothing was plotted.'}
+          {errorLine !== null ? `Stopped at line\u00A0${errorLine} · nothing was plotted` : 'Stopped with an error · nothing was plotted'}
         </EmptyState>
       </div>
     );

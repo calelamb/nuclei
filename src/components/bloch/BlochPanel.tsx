@@ -5,17 +5,19 @@ import { useCircuitStore } from '../../stores/circuitStore';
 import { useDebugStore } from '../../stores/debugStore';
 import { activeDebugStep } from '../../lib/debugTrace';
 import { useThemeStore } from '../../stores/themeStore';
+import { useWorkspaceStore } from '../../stores/workspaceStore';
 import { useElementSize } from '../../hooks/useElementSize';
 import { blochGridLayout, CELL_CAPTION_PX } from '../../lib/blochGrid';
 import { IconButton } from '../ui';
 import { BlochCell } from './BlochCell';
 import { BlochStage } from './blochStage';
 import { blochPalette } from '../../lib/blochPalette';
-import type { BlochVector } from '../../lib/blochMath';
+import { groundStateCoords, type BlochVector } from '../../lib/blochMath';
 import { prefersReducedMotion } from '../../lib/animations';
 import { BlochEmptyState } from './BlochEmptyState';
 import './bloch.css';
 
+const NO_COORDS: readonly BlochVector[] = [];
 const COMPACT_CELL_PX = 250;
 /** Matches --space-2 on .bloch-panel__canvas-host. */
 const STAGE_INSET_PX = 8;
@@ -26,7 +28,7 @@ const STAGE_INSET_PX = 8;
  * to rotate each sphere, smooth transitions between states, and an explicit
  * readout when a qubit is entangled and has no single-qubit Bloch vector.
  */
-export function BlochPanel() {
+export function BlochPanel({ initialQubits = 0 }: { initialQubits?: number } = {}) {
   const result = useSimulationStore((s) => s.result);
   const stepMode = useCircuitStore((s) => s.stepMode);
   const stepIndex = useCircuitStore((s) => s.stepIndex);
@@ -35,6 +37,7 @@ export function BlochPanel() {
   const [measureRef, size] = useElementSize<HTMLDivElement>();
   const [requestedPage, setRequestedPage] = useState(0);
   const colors = useThemeStore((s) => s.colors);
+  const audience = useWorkspaceStore((s) => s.mode);
   const themeMode = useThemeStore((s) => s.mode);
   const [glFailure, setGlFailure] = useState<string | null>(null);
   const stageRef = useRef<BlochStage | null>(null);
@@ -42,9 +45,12 @@ export function BlochPanel() {
   const themeModeRef = useRef(themeMode);
   const shownRef = useRef<{ coords: readonly BlochVector[]; first: number }>({ coords: [], first: 0 });
 
+  const measured = useMemo(() => step?.bloch_coords ?? result?.bloch_coords ?? NO_COORDS, [step, result]);
+  // Before the first run the Balanced preset still shows each qubit's starting state, |0>.
+  const showInitial = measured.length === 0 && initialQubits > 0;
   const blochCoords = useMemo(
-    () => step?.bloch_coords ?? result?.bloch_coords ?? [],
-    [step, result],
+    () => (showInitial ? groundStateCoords(initialQubits) : measured),
+    [showInitial, initialQubits, measured],
   );
   const qubitCount = blochCoords.length;
 
@@ -131,7 +137,9 @@ export function BlochPanel() {
                     else viewportEls.current.delete(first + i);
                   }}
                   qubit={first + i}
-                  label={qubitCount > 1 ? `q${first + i}` : undefined}
+                  label={`q${first + i}`}
+                  audience={audience}
+                  initial={showInitial}
                   compact={layout.cellWidth < COMPACT_CELL_PX}
                   coord={coord}
                 />

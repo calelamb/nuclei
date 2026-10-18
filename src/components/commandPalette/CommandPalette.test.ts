@@ -225,8 +225,8 @@ describe('one name for every command (palette, shortcuts sheet, registry)', () =
 
   it('names the two histogram surfaces by what they are, not by where they sit', () => {
     const labels = all('research').map((c) => c.label);
-    expect(labels).toContain('Toggle Histogram chip');
-    expect(labels).toContain('Toggle Histogram tab');
+    expect(labels).toContain('Toggle histogram chip');
+    expect(labels).toContain('Toggle histogram tab');
     expect(labels.some((l) => /\(inline\)|\(bottom panel\)/.test(l))).toBe(false);
   });
 });

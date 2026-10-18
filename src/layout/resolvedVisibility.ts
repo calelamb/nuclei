@@ -12,7 +12,7 @@ import { useBottomPanelStore } from '../stores/bottomPanelStore';
  * flips what the user actually sees instead of a stale override.
  */
 export function getResolvedVisibility(): VisiblePanels {
-  const { preset, overrides } = useLayoutStore.getState();
+  const { preset, overrides, histogramExpanded } = useLayoutStore.getState();
   const { result, terminalOutput, lastRunFailed } = useSimulationStore.getState();
   const { snapshot } = selectDisplaySnapshot(useCircuitStore.getState(), useProjectStore.getState().activeTabPath ?? BUFFER_KEY);
   return resolveVisiblePanels(
@@ -24,6 +24,7 @@ export function getResolvedVisibility(): VisiblePanels {
       errorActive: lastRunFailed,
       mode: useWorkspaceStore.getState().mode,
       framework: snapshot?.framework ?? null,
+      histogramExpanded,
     },
     overrides,
   );

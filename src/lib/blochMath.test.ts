@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { blochLength, blochPurity, describeBlochState, easeOutCubic, interpolateBloch } from './blochMath';
+import { blochLength, blochPurity, describeBlochState, easeOutCubic, interpolateBloch, blochCaption } from './blochMath';
 
 describe('Bloch readout', () => {
   it('a Bell-pair qubit (r = 0) is entangled with no single-qubit state and purity 0.5', () => {
@@ -54,5 +54,23 @@ describe('easeOutCubic', () => {
     expect(easeOutCubic(1)).toBe(1);
     expect(easeOutCubic(0.5)).toBeGreaterThan(0.5);
     expect(easeOutCubic(2)).toBe(1);
+  });
+});
+
+describe('blochCaption', () => {
+  const pure = describeBlochState({ x: 0, y: 0, z: 1 });
+  const mixed = describeBlochState({ x: 0.39, y: 0, z: 0 });
+  const bell = describeBlochState({ x: 0, y: 0, z: 0 });
+
+  it('keeps the numbers for researchers', () => {
+    expect(blochCaption(pure, 'research', false)).toBe('Pure state');
+    expect(blochCaption(mixed, 'research', true)).toBe('Mixed 0.39');
+  });
+
+  it('tells learners about entanglement and says nothing for a pure state', () => {
+    expect(blochCaption(pure, 'learn', false)).toBeNull();
+    expect(blochCaption(mixed, 'learn', true)).toBe('Entangled');
+    expect(blochCaption(mixed, 'learn', false)).toBe('Entangled');
+    expect(blochCaption(bell, 'learn', false)).toBe('Entangled · no single-qubit Bloch vector');
   });
 });

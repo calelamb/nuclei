@@ -1,0 +1,9 @@
+/* The workspace chip answers the pointer: a stronger fill and a ring in the mode colour (the fill itself is capped by the 11px label's contrast). */
+.mode-chip {
+  background: var(--mode-chip-rest);
+  transition: background-color var(--duration-fast) var(--ease-standard), box-shadow var(--duration-fast) var(--ease-standard);
+}
+.mode-chip:hover {
+  background: var(--mode-chip-hover);
+  box-shadow: inset 0 0 0 1px var(--mode-chip-accent);
+}

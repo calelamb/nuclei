@@ -25,7 +25,7 @@ describe('getKernelStatusModel', () => {
       ...base, isWeb: false, kernelStatus: 'failed', kernelError: 'Port 8742 is already in use',
     });
     expect(model.tone).toBe('error');
-    expect(model.label).toBe('Kernel failed');
+    expect(model.label).toBe("Kernel didn't start");
     expect(model.detail).toContain('Port 8742 is already in use');
   });
 

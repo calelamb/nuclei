@@ -21,10 +21,17 @@ describe('circuitMinHeight', () => {
 });
 
 describe('hiddenQubitWires', () => {
-  it('counts only qubit wires below the visible bottom edge, never the classical register', () => {
+  it('counts only qubit wires below the visible bottom edge when there is no register', () => {
     // 5 qubits: wires at 24 + 52q (4px scroller padding). 200px visible shows q0..q3 (q3 at 180).
     expect(hiddenQubitWires({ scrollTop: 0, visibleHeight: 200, scale: 1 }, 5)).toBe(1);
     expect(hiddenQubitWires({ scrollTop: 0, visibleHeight: 400, scale: 1 }, 5)).toBe(0);
+  });
+
+  it('counts the classical register as a wire, so a clipped c/N row gets a +1 wire strip', () => {
+    // 6 qubits: q5 at 24 + 5*52 = 284, c/6 at 24 + 5*52 + 46.8 = 330.8; 320px visible shows q5 but cuts the register.
+    expect(hiddenQubitWires({ scrollTop: 0, visibleHeight: 320, scale: 1 }, 6)).toBe(0);
+    expect(hiddenQubitWires({ scrollTop: 0, visibleHeight: 320, scale: 1 }, 6, true)).toBe(1);
+    expect(hiddenQubitWires({ scrollTop: 0, visibleHeight: 400, scale: 1 }, 6, true)).toBe(0);
   });
 
   it('follows the scroll position and the fit scale', () => {

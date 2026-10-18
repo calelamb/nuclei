@@ -57,6 +57,8 @@ export interface VisibilityCtx {
   hasTerminalOutput: boolean;
   errorActive: boolean;
   mode: WorkspaceMode;
+  /** The chip's expand control opened the full histogram for now (a temporary override that never rewrites the preset). */
+  histogramExpanded?: boolean;
   /** Active framework (from the snapshot), used for viz-zone affinity.
    * `null` when no circuit has been parsed — affinity treats null as
    * "don't hide", preserving pre-registry behavior. */
@@ -134,7 +136,8 @@ export const PANEL_REGISTRY: readonly PanelDef[] = [
     modes: ['learn', 'research'],
     frameworks: 'any',
     order: 2,
-    defaultVisible: ({ preset, result }) => {
+    defaultVisible: ({ preset, result, histogramExpanded }) => {
+      if (histogramExpanded) return false;
       if (preset === 'full') return false;
       if (preset === 'balanced') return Boolean(result);
       return Boolean(result); // clean
@@ -147,7 +150,8 @@ export const PANEL_REGISTRY: readonly PanelDef[] = [
     modes: ['learn', 'research'],
     frameworks: 'any',
     order: 3,
-    defaultVisible: ({ preset }) => {
+    defaultVisible: ({ preset, histogramExpanded }) => {
+      if (histogramExpanded) return true;
       if (preset === 'full') return true;
       if (preset === 'balanced') return false;
       return false; // clean

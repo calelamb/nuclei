@@ -80,3 +80,29 @@ export function shouldFoldDiracForSidebar({ viewport, sidebarWidth, diracWidth }
   const editorWithRail = viewport - ACTIVITY_BAR_WIDTH - sidebarWidth - DIRAC_RAIL_WIDTH;
   return editorWithDirac < EDITOR_MIN_WIDTH && editorWithRail >= EDITOR_MIN_WIDTH;
 }
+
+export type VizRailTabAction = 'foldDirac' | 'closeSidebar';
+
+export interface VizRailTab {
+  action: VizRailTabAction;
+  ariaLabel: string;
+}
+
+export interface VizRailTabInput {
+  vizHasContent: boolean;
+  vizFits: boolean;
+  diracOpen: boolean;
+  sidebarOpen: boolean;
+}
+
+/**
+ * The always-visible handle for a circuit/results column that has stepped aside. Whatever neighbour
+ * is in the way (an open Dirac, otherwise the sidebar) is the thing the tab moves, so a Run never
+ * leaves results with no way back.
+ */
+export function vizRailTab({ vizHasContent, vizFits, diracOpen, sidebarOpen }: VizRailTabInput): VizRailTab | null {
+  if (!vizHasContent || vizFits) return null;
+  if (diracOpen) return { action: 'foldDirac', ariaLabel: 'Show circuit and results (folds Dirac)' };
+  if (sidebarOpen) return { action: 'closeSidebar', ariaLabel: 'Show circuit and results (closes sidebar)' };
+  return null;
+}

@@ -1,3 +1,4 @@
+import { kernelStartFailureTitle } from '../../lib/kernelErrors';
 import type { KernelProgress, KernelStatus } from '../../stores/editorStore';
 
 export type KernelTone = 'idle' | 'busy' | 'running' | 'ok' | 'warn' | 'error';
@@ -32,7 +33,7 @@ export function getKernelStatusModel(input: KernelStatusInput): KernelStatusMode
 
   if (input.kernelStatus === 'failed' && !input.kernelReady) {
     return {
-      label: `${engine} failed`,
+      label: kernelStartFailureTitle(input.isWeb),
       tone: 'error',
       detail: `${input.kernelError ?? 'The kernel did not start.'} Click to retry.`,
     };

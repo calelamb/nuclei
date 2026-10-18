@@ -7,7 +7,7 @@ import { useEditorStore } from '../../stores/editorStore';
 import { useBottomPanelStore, type BottomPanelTab } from '../../stores/bottomPanelStore';
 import { ProbabilityHistogram } from '../histogram/ProbabilityHistogram';
 import { TYPOGRAPHY } from '../../styles/tokens';
-import { Badge, Button, IconButton, Tabs, Tooltip } from '../ui';
+import { Badge, Button, IconButton, Tabs, TextInput, Tooltip } from '../ui';
 import './bottomPanel.css';
 
 /* ── Terminal Panel ── */
@@ -86,7 +86,7 @@ function TerminalToolbar({
   return (
     <div
       style={{
-        height: 24,
+        height: 28,
         display: 'flex',
         alignItems: 'center',
         gap: 4,
@@ -120,24 +120,13 @@ function TerminalToolbar({
         Auto-scroll
       </ToolbarButton>
 
-      <input
-        type="text"
+      <TextInput
+        size="sm"
+        className="terminal-filter"
         value={filter}
         onChange={(e) => setFilter(e.target.value)}
         placeholder="Filter"
         aria-label="Filter terminal lines"
-        style={{
-          marginLeft: 4,
-          width: 120,
-          height: 18,
-          padding: '0 6px',
-          background: colors.bgElevated,
-          border: `1px solid ${colors.border}`,
-          borderRadius: 3,
-          color: colors.text,
-          fontSize: 11,
-          fontFamily: TYPOGRAPHY.fontSans,
-        }}
       />
 
       <div style={{ flex: 1 }} />

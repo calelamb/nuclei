@@ -165,7 +165,7 @@ describe('StatusBar kernel state', () => {
   it('is a retry action that carries the error when the kernel failed', () => {
     useEditorStore.getState().setKernelStatus('failed', 'Kernel rejected the session token — restart Nuclei');
     const { getByRole } = renderStatusBar();
-    const chip = getByRole('button', { name: /Kernel failed/ });
+    const chip = getByRole('button', { name: /Kernel didn't start/ });
     expect(chip.getAttribute('title')).toBeNull();
   });
 
@@ -176,10 +176,10 @@ describe('StatusBar kernel state', () => {
     control.registerKernelRetry(retry);
     useEditorStore.getState().setKernelStatus('failed', 'boom');
     const { getByRole } = renderStatusBar();
-    fireEvent.click(getByRole('button', { name: /Kernel failed/ }));
+    fireEvent.click(getByRole('button', { name: /Kernel didn't start/ }));
     expect(retry).toHaveBeenCalledTimes(1); // no banner mounted: fall back to retrying
     control.registerKernelBannerFocus(focusBanner);
-    fireEvent.click(getByRole('button', { name: /Kernel failed/ }));
+    fireEvent.click(getByRole('button', { name: /Kernel didn't start/ }));
     expect(focusBanner).toHaveBeenCalledTimes(1);
     expect(retry).toHaveBeenCalledTimes(1);
     control.registerKernelBannerFocus(null);

@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { PREVIEW_PENDING_DELAY_MS } from '../../layout/usePreviewPending';
 import { act, cleanup, render, screen } from '@testing-library/react';
 import { CircuitRenderer } from './CircuitRenderer';
 import { useCircuitStore } from '../../stores/circuitStore';
@@ -107,5 +108,23 @@ describe('CircuitRenderer during a transient syntax error', () => {
     act(() => { useCircuitStore.getState().setError('invalid syntax'); });
     expect(screen.queryByRole('img')).toBeNull();
     expect(screen.getByRole('alert').textContent).toContain('invalid syntax');
+  });
+});
+
+describe('CircuitRenderer while the preview is slow', () => {
+  it('shows the Updating… pill and dims the diagram until the next snapshot', () => {
+    vi.useFakeTimers();
+    useEditorStore.setState({ code: 'a', kernelReady: true });
+    render(<CircuitRenderer />);
+    act(() => { useCircuitStore.getState().setSnapshot(snap); });
+    expect(screen.queryByText('Updating…')).toBeNull();
+    act(() => { useEditorStore.setState({ code: 'ab' }); });
+    act(() => { vi.advanceTimersByTime(PREVIEW_PENDING_DELAY_MS + 10); });
+    expect(screen.getByText('Updating…')).toBeTruthy();
+    expect(screen.queryByText(/qubits? · depth/)).toBeNull();
+    act(() => { useCircuitStore.getState().setSnapshot({ ...snap, qubit_count: 1 }); });
+    expect(screen.queryByText('Updating…')).toBeNull();
+    expect(screen.getByText(/1 qubit · depth/)).toBeTruthy();
+    vi.useRealTimers();
   });
 });

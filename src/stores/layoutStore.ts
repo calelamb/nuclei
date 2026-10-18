@@ -14,6 +14,8 @@ export type LayoutPreset = 'clean' | 'balanced' | 'full';
 interface LayoutStoreState {
   preset: LayoutPreset;
   histogramChipDismissed: boolean;
+  /** The chip's expand control opened the full histogram; ends when the bottom panel collapses or leaves the Histogram tab. */
+  histogramExpanded: boolean;
   /**
    * Explicit per-project panel visibility overrides (PRD 11 Phase A). An
    * entry here wins over the reveal rule (subject to framework affinity —
@@ -24,6 +26,7 @@ interface LayoutStoreState {
   overrides: Partial<Record<PanelId, boolean>>;
   setPreset(p: LayoutPreset): void;
   dismissHistogramChip(): void;
+  setHistogramExpanded(expanded: boolean): void;
   resetRunArtifacts(): void;
   /** Force a panel visible/hidden (the PanelHeader "Hide panel" action, Phase C). */
   setPanelOverride(id: PanelId, visible: boolean): void;
@@ -45,9 +48,11 @@ interface LayoutStoreState {
 export const useLayoutStore = create<LayoutStoreState>((set) => ({
   preset: 'clean',
   histogramChipDismissed: false,
+  histogramExpanded: false,
   overrides: {},
   setPreset: (preset) => set({ preset }),
   dismissHistogramChip: () => set({ histogramChipDismissed: true }),
+  setHistogramExpanded: (histogramExpanded) => set({ histogramExpanded }),
   resetRunArtifacts: () => set({ histogramChipDismissed: false }),
   setPanelOverride: (id, visible) =>
     set((state) => ({ overrides: { ...state.overrides, [id]: visible } })),

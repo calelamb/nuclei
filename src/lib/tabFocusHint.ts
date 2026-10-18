@@ -18,5 +18,5 @@ export function tabFocusHint(tabMovesFocus: boolean, mac: boolean = isMacPlatfor
 /** The status-bar form of the hint: short enough to sit beside the kernel state at any width. */
 export function compactTabFocusHint(tabMovesFocus: boolean, mac: boolean = isMacPlatform()): string {
   const key = tabFocusToggleLabel(mac);
-  return tabMovesFocus ? `Tab moves focus · ${key} to indent` : `${key}: Tab moves focus`;
+  return tabMovesFocus ? `Tab moves focus · ${key} to indent` : `Tab indents · ${key} to Tab out`;
 }

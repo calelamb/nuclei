@@ -1,5 +1,6 @@
 import { Circle, Sun, Moon, X, Command } from 'lucide-react';
 import { usePlatform } from '../../platform/PlatformProvider';
+import { usePreviewPending } from '../../layout/usePreviewPending';
 import { useDisplaySnapshot } from '../../layout/useDisplaySnapshot';
 import { useSimulationStore } from '../../stores/simulationStore';
 import { useEditorStore } from '../../stores/editorStore';
@@ -75,7 +76,7 @@ function UiLevelMenu() {
 /* ── Layout Preset Switcher: a menu like Level, so it is exactly as wide as its label ── */
 const PRESET_OPTIONS: ReadonlyArray<{ value: LayoutPreset; label: string; hint: string }> = [
   { value: 'clean', label: 'Clean', hint: 'Results appear after you run' },
-  { value: 'balanced', label: 'Balanced', hint: 'Bloch spheres shown from the start' },
+  { value: 'balanced', label: 'Balanced', hint: 'Circuit and Bloch spheres from the start, at |0>' },
   { value: 'full', label: 'Full', hint: 'Adds the Terminal and Histogram tab' },
 ];
 
@@ -133,6 +134,7 @@ function KernelDot({ color, pulse }: { color: string; pulse: boolean }) {
 /* ── Status Bar ── */
 export function StatusBar() {
   const { snapshot } = useDisplaySnapshot();
+  const previewPending = usePreviewPending();
   const isRunning = useSimulationStore((s) => s.isRunning);
   const result = useSimulationStore((s) => s.result);
   const lastRunFailed = useSimulationStore((s) => s.lastRunFailed);
@@ -210,10 +212,10 @@ export function StatusBar() {
       {/* Left side: editor stats and the layout preset only mean something while the editor is on screen. */}
       {!takeover && (
         <>
-          <span style={{ color: colors.textMuted }}>
+          <span style={{ color: colors.textMuted, opacity: previewPending ? 0.6 : 1 }}>
             Qubits: {snapshot ? snapshot.qubit_count : '—'}
           </span>
-          <span style={{ color: colors.textMuted }}>
+          <span style={{ color: colors.textMuted, opacity: previewPending ? 0.6 : 1 }}>
             Depth: {snapshot ? snapshot.depth : '—'}
           </span>
           {features.layoutPresets && <LayoutPresetSwitcher />}

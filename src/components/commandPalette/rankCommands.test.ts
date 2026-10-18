@@ -61,7 +61,7 @@ describe('rankCommands', () => {
 
   it('"terminal" finds the terminal, not every command whose letters happen to contain it', () => {
     const list = [
-      cmd('hist', 'Toggle Histogram tab'),
+      cmd('hist', 'Toggle histogram tab'),
       cmd('term', 'Toggle terminal panel'),
       cmd('est', 'Go to Resource Estimator', 'Navigate'),
     ];

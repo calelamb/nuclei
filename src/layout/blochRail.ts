@@ -44,19 +44,3 @@ export function blochRailHeights(count: number, width: number): BlochRailHeights
 function pagesAtMin(n: number, usableWidth: number): boolean {
   return blochGridLayout({ count: n, width: usableWidth, height: BLOCH_ROW_MIN_PX }).pageCount > 1;
 }
-
-/**
- * The height the grid will actually occupy inside a rail of `height` x `width`: the same layout
- * BlochPanel computes, plus the stage inset and (when the qubits page) the pager. Never more than `height`.
- */
-export function blochRailUsedHeight(count: number, width: number, height: number): number {
-  const n = Math.max(1, Math.floor(count));
-  const gridWidth = Math.max(0, width - STAGE_PAD_PX);
-  const unpaged = blochGridLayout({ count: n, width: gridWidth, height: Math.max(0, height - STAGE_PAD_PX) });
-  const paged = unpaged.pageCount > 1;
-  const layout = paged
-    ? blochGridLayout({ count: n, width: gridWidth, height: Math.max(0, height - STAGE_PAD_PX - PAGER_PX) })
-    : unpaged;
-  const grid = layout.rows * layout.cellHeight + (layout.rows - 1) * GAP_PX;
-  return Math.min(height, grid + STAGE_PAD_PX + (paged ? PAGER_PX : 0));
-}
