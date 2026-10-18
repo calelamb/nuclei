@@ -63,8 +63,6 @@ export function ExerciseBlock({
   const inactivityRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const codeRef = useRef(localCode);
   const draftTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const draftTargetRef = useRef({ lessonId, id });
-  draftTargetRef.current = { lessonId, id };
   const runTokenRef = useRef(0);
   const outputRef = useRef<string[]>([]);
   const resultRef = useRef<SimulationResult | null>(null);
@@ -169,11 +167,10 @@ export function ExerciseBlock({
   const flushDraft = useCallback(() => {
     if (draftTimerRef.current) clearTimeout(draftTimerRef.current);
     draftTimerRef.current = null;
-    const target = draftTargetRef.current;
-    if (!target.lessonId) return;
-    if (codeRef.current === starterCode) clearExerciseDraft(target.lessonId, target.id);
-    else setExerciseDraft(target.lessonId, target.id, codeRef.current);
-  }, [clearExerciseDraft, setExerciseDraft, starterCode]);
+    if (!lessonId) return;
+    if (codeRef.current === starterCode) clearExerciseDraft(lessonId, id);
+    else setExerciseDraft(lessonId, id, codeRef.current);
+  }, [clearExerciseDraft, id, lessonId, setExerciseDraft, starterCode]);
 
   useEffect(() => {
     const pending = draftTimerRef;
