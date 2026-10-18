@@ -551,6 +551,7 @@ output.
  "per_parameter": [{"name": "θ[0]", "mean": 0.0012, "variance": 0.031, "abs_mean": 0.14,
                     "variance_ci95": [0.027, 0.036]}],
  "variance_mean": 0.029, "variance_mean_ci95": [0.026, 0.033],
+ "cost_mean": 0.002, "cost_variance": 0.113, "cost_variance_ci95": [0.104, 0.123],
  "gradient_norm_mean": 0.81,
  "gate_values": [{"source_index": 3, "parameter": "θ[0]", "variance": 0.031, "abs_mean": 0.14}],
  "elapsed_ms": 412}
@@ -565,6 +566,20 @@ sampling. `method` can be forced to `"sampling"` or `"ppe"`. When the PPE
 is used, `per_parameter[].variance_ci95` is the rigorous truncation
 interval, not a bootstrap CI, and the UI labels it as such.
 
+*Revised after the physics review (PH-C1, PH-C2).* A PPE result is never
+reported as the interval midpoint. When the sweep did not finish (budget or
+cancel) or an interval is uninformative (`lo == 0 < hi`, or `hi/lo > 2`), the
+affected `per_parameter[].variance` and `gate_values[].variance` are `null`
+and keep their interval; `variance_mean` and `cost_variance` are `null` when
+any of them is, with `interval_kind: "truncation"`, the interval, and a
+`notes` entry. In `auto` mode, for n ≤ 20 an unresolved PPE falls back to
+sampling; above 20 the `null` plus the interval is the answer. The output also
+carries `cost_mean`, `cost_variance` and `cost_variance_ci95`: the mean and
+variance of the **cost** C itself over the same parameter distribution
+(sampling: empirical, bootstrap CI; PPE: exact E[C²] − E[C]² with its truncation
+interval). The Ragone prediction is about this quantity, never about the
+gradient variance `variance_mean`.
+
 `scaling_study(build: Callable[[int, int], ParamCircuit], *, qubits: list[int], layers: list[int], observable_spec: str, samples, seed, init) ->`
 ```json
 {"points": [{"n_qubits": 2, "n_layers": 4, "n_params": 16, "variance": 0.05, "variance_ci95": [0.04, 0.06]}],
@@ -578,11 +593,27 @@ interval, not a bootstrap CI, and the UI labels it as such.
 Qubit ranges go up to 128 when the PPE applies at every point, and up to
 `MAX_STATEVECTOR_QUBITS` otherwise; each point records its `method`. Fit by
 weighted least squares on log₂(Var), with weights from the CI/interval
-width. β's CI comes from a bootstrap over points. Verdicts:
-`barren_plateau` if exponential is preferred by ΔAIC ≥ 2 and β's lower CI is
-> 0.1. `polynomial` if power-law is preferred by ΔAIC ≥ 2, or β's CI includes
-≤ 0.1. Otherwise `inconclusive`, which is also forced when there are fewer
-than 4 distinct n values.
+width. Verdicts (**revised after review**; the earlier rule "β's CI includes
+≤ 0.1 means polynomial" turned a *wide* CI into a positive verdict and
+misclassified `n⁻¹` as a barren plateau 22% and `2^(−0.25n)` as polynomial
+22.5% of the time over n = 4–7):
+
+- β's CI is a *parametric* bootstrap: each log₂ Var is redrawn from its own
+  per-point standard error (the point's interval, unfloored; the fit's
+  residual scatter if a point has none) and the weighted slope is refitted.
+- `barren_plateau` if exponential is preferred by ΔAIC ≥ 2 and β's lower CI
+  bound is > 0.1.
+- `polynomial` if β's **upper** CI bound is ≤ 0.1, or the power law is
+  preferred by ΔAIC ≥ 2.
+- Otherwise `inconclusive`. This is forced when there are fewer than 4
+  distinct n values, when `n_max / n_min < 2` (`MIN_N_RATIO`), or when any
+  point has a null variance or an uninformative interval (`lo == 0` or
+  `hi/lo > 2`); such points never enter a fit and the reason is stated.
+
+Each fit also carries `verdict_reason` and `verdict_basis` (`aic_beta_lower`,
+`aic_power_law`, `beta_upper` or null). The summary prints the exponent and its
+CI as the same quantity: `Var[∂C] ∝ 2^(−0.93 n) (95% CI on the exponent −1.05
+to −0.81); …`.
 
 `lie_algebra(circuit, *, observable=None, max_dimension=4096, time_budget_s=10.0) ->`
 ```json
@@ -594,7 +625,9 @@ than 4 distinct n values.
  "fixed_gates": {"clifford": true, "handled_by": "clifford_conjugation" | "dense" | "none"},
  "purity": {"initial_state": 0.25, "observable": 1.0, "observable_in_algebra": true, "state_in_algebra": false},
  "predicted_variance": 0.0089, "prediction_applicable": true,
- "assumptions": ["Deep-circuit (approximate 2-design over e^𝔤) regime.", "𝔤 treated as simple; for reductive 𝔤 this is the leading term."],
+ "prediction_quantity": "cost_variance", "prediction_note": null,
+ "ideals": {"centre_dimension": 0, "items": [{"dimension": 28, "purity_state": 0.25, "purity_observable": 1.0}]},
+ "assumptions": ["Deep-circuit (approximate 2-design over e^𝔤) regime.", "𝔤 = centre ⊕ simple ideals; the centre is excluded and the ideals' variances add."],
  "simulability": {"kind": "g_sim_feasible" | "exponential_dla" | "unknown",
                   "summary": "dim 𝔤 = 28 = n(2n−1): free-fermion algebra. Expectations are classically simulable in poly(dim 𝔤) time (𝔤-sim, Goh et al. 2023)."},
  "elapsed_ms": 93}
@@ -618,9 +651,21 @@ than 4 distinct n values.
 - **g-purities and prediction** (Ragone et al., Nat. Commun. 15, 7172
   (2024)): with the orthonormal basis Bⱼ = Pⱼ/√2ⁿ,
   P_𝔤(O) = 2ⁿ Σ_{P∈𝔤} |c_P|² and P_𝔤(|0⟩⟨0|) = #{P ∈ 𝔤 : P ∈ {I,Z}^⊗n} / 2ⁿ.
-  The prediction Var = P_𝔤(ρ)P_𝔤(O)/dim 𝔤 is marked applicable only when the
-  observable or the state lies in 𝔤 (Pauli-string path; general path: when
-  the projection residual is < 1e-9).
+  *Revised after review (PH-H1):* for a reductive
+  𝔤 = 𝔷 ⊕ ⊕ⱼ 𝔤ⱼ the prediction is Var = Σⱼ P_𝔤ⱼ(ρ)P_𝔤ⱼ(O)/dim 𝔤ⱼ. The centre 𝔷
+  (strings commuting with the whole basis) is removed and the simple ideals are
+  the connected components of the anticommutation graph of the rest. The
+  single-ideal formula P_𝔤(ρ)P_𝔤(O)/dim 𝔤 is wrong for su(2)⊕su(16) (0.062
+  predicted, 0.336 measured) and the QAOA ring. It is marked applicable only
+  when the observable or the state lies in 𝔤 and 𝔤 has a non-central ideal.
+  The Pauli-sum path does not compute the ideal structure, so its prediction
+  is applicable only for the provably simple dim 𝔤 = 4ⁿ−1 (su(2ⁿ)); otherwise
+  `prediction_applicable` is false and `prediction_note` says why.
+- **Simulability** checks the family first: an exact dimension match to
+  su/so/sp(2ⁿ) is `exponential_dla` at every n, even when the dimension is
+  ≤ 4n² (so(8) at n = 3, su(4) at n = 2). Only then does dim 𝔤 ≤ 4n² give
+  `g_sim_feasible`, which suggests 𝔤-sim simulability and does not by itself
+  guarantee trainability.
 - **Known-result tests are required:**
   - {Xᵢ} ∪ {ZᵢZᵢ₊₁} on an open chain: dim = n(2n−1) for n = 2..6.
   - A real hardware-efficient ansatz (RY + CZ ladder, n = 3): dim = 28 (so(8)).
