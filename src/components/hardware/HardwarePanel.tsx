@@ -1,14 +1,14 @@
 import { Badge, Button, EmptyState, IconButton, Select } from '../ui';
 import { DesktopOnlyState } from './DesktopOnlyState';
 import { useState } from 'react';
-import { ChevronDown, ChevronRight, Rocket, Settings2, Trash2 } from 'lucide-react';
+import { ChevronDown, ChevronRight, RotateCcw, Rocket, Settings2, Trash2 } from 'lucide-react';
 import { useThemeStore } from '../../stores/themeStore';
 import { useHardwareStore } from '../../stores/hardwareStore';
 import { hasActiveJobForBackend } from '../../lib/hardwareJobs';
 import { useFrameworksStore } from '../../stores/frameworksStore';
 import { usePlatform } from '../../platform/PlatformProvider';
 import { ProviderStatusBadge } from './ProviderStatusBadge';
-import { providerNeedsToken, providerStatus, sortProvidersForDisplay } from './launchGating';
+import { providerNeedsToken, providerStatus, sortProvidersForDisplay, type ProviderStatus } from './launchGating';
 import { useEditorStore } from '../../stores/editorStore';
 import { retryKernel } from '../../lib/kernelControl';
 import { useSimulationStore } from '../../stores/simulationStore';
@@ -83,6 +83,18 @@ const PROVIDER_LABELS: Record<HardwareProviderType, string> = {
 
 /* ── Main HardwarePanel ── */
 
+const PANEL_SHORT_LABELS: Readonly<Record<string, string>> = {
+  'Connect to enable': 'Connect',
+  "Kernel didn't start": 'Not running',
+};
+
+/** The narrow panel needs shorter status words than the Launch dialog so a row fits on one line. */
+function panelStatus(status: ProviderStatus, inBrowser: boolean): ProviderStatus {
+  if (inBrowser) return { ...status, label: 'In your browser' };
+  const label = PANEL_SHORT_LABELS[status.label];
+  return label ? { ...status, label } : status;
+}
+
 export function HardwarePanel() {
   const colors = useThemeStore((s) => s.colors);
   const providers = useHardwareStore((s) => s.providers);
@@ -128,7 +140,7 @@ export function HardwarePanel() {
         <Section title="Providers" defaultOpen>
           {isWeb && (
             <DesktopOnlyState title="Hardware runs need the desktop app">
-              Provider connections and job queues need the desktop app.
+              Connect providers and track job queues in Nuclei for macOS, Windows or Linux.
             </DesktopOnlyState>
           )}
           {sortProvidersForDisplay(providers, (p) => statusFor(p).kind).map((p) => {
@@ -137,14 +149,16 @@ export function HardwarePanel() {
             const configurable = status.kind === 'needs-setup' && providerNeedsToken(p.name);
             return (
             <div key={p.name} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '0', height: 32 }}>
-              <div style={{ flex: '1 1 auto', minWidth: 0 }}>
-                <span title={label} style={{ display: 'block', fontSize: 12, fontWeight: 600, color: colors.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', ...font }}>
-                  {label}
-                </span>
-              </div>
-              <ProviderStatusBadge status={isWeb && p.name === 'simulator' ? { ...status, label: 'In your browser' } : status} />
+              <span title={label} style={{ flex: '0 0 auto', fontSize: 12, fontWeight: 600, color: colors.text, whiteSpace: 'nowrap', ...font }}>
+                {label}
+              </span>
+              <span style={{ flex: '1 1 0', minWidth: 0, display: 'flex', justifyContent: 'flex-end', overflow: 'hidden' }}>
+                <ProviderStatusBadge status={panelStatus(status, isWeb && p.name === 'simulator')} />
+              </span>
               {status.kind === 'unavailable' && (
-                <Button size="sm" variant="secondary" onClick={retryKernel}>Retry</Button>
+                <IconButton size="sm" aria-label="Retry" tooltip={{ label: 'Retry starting the kernel', placement: 'above' }} onClick={retryKernel}>
+                  <RotateCcw aria-hidden="true" size={ICON_SIZE.sm} strokeWidth={ICON_STROKE} />
+                </IconButton>
               )}
               {configurable && (
                 <IconButton size="sm" aria-label={`Configure ${label}`} tooltip={{ label: `Configure ${label}`, placement: 'above' }} onClick={() => setShowCredentialSetup(p.name)}>

@@ -50,6 +50,7 @@ export function ExerciseBlock({
   const isPassed = lessonId ? lessonProgress[lessonId]?.exercisesPassed?.includes(id) ?? false : false;
 
   const [localCode, setLocalCode] = useState(() => initialCode(lessonId, id, starterCode));
+  const [resetArmed, setResetArmed] = useState(false);
   const [result, setResult] = useState<SimulationResult | null>(null);
   const [output, setOutput] = useState<string[]>([]);
   const [isRunning, setIsRunning] = useState(false);
@@ -180,6 +181,7 @@ export function ExerciseBlock({
   const handleCodeChange = (value: string | undefined) => {
     codeRef.current = value ?? '';
     setLocalCode(value ?? '');
+    setResetArmed(false);
     setFeedback(null);
     if (draftTimerRef.current) clearTimeout(draftTimerRef.current);
     draftTimerRef.current = setTimeout(flushDraft, DRAFT_DEBOUNCE_MS);
@@ -189,7 +191,13 @@ export function ExerciseBlock({
     resetInactivity();
   };
 
+  const handleResetClick = () => {
+    if (!resetArmed) { setResetArmed(true); return; }
+    handleReset();
+  };
+
   const handleReset = () => {
+    setResetArmed(false);
     if (draftTimerRef.current) clearTimeout(draftTimerRef.current);
     draftTimerRef.current = null;
     codeRef.current = starterCode;
@@ -273,6 +281,15 @@ export function ExerciseBlock({
 
       <div className="demo__actions demo__actions--divided">
         <LessonRunButton isRunning={isRunning} pythonLoading={kernel.loading} progress={kernel.progress} onRun={handleRun} onCancelQueued={handleCancelQueued} />
+        <Button
+          onClick={handleResetClick}
+          onBlur={() => setResetArmed(false)}
+          disabled={localCode === starterCode}
+          icon={<RotateCcw size={12} aria-hidden="true" />}
+          title="Restore the starter code"
+        >
+          {resetArmed ? 'Discard edits?' : 'Reset'}
+        </Button>
         {hasRun && hasExpectations && !isRunning && (
           <Button onClick={checkSolution} icon={<CheckCircle size={12} aria-hidden="true" />}>Check solution</Button>
         )}
@@ -280,11 +297,6 @@ export function ExerciseBlock({
           <span className="exercise__ok"><CheckCircle size={12} aria-hidden="true" /> Ran. Compare {output.length > 0 ? 'the output above' : 'your output'} with the task.</span>
         )}
         <span className="demo__spacer" />
-        {localCode !== starterCode && (
-          <Button variant="ghost" onClick={handleReset} icon={<RotateCcw size={12} aria-hidden="true" />} title="Restore the starter code">
-            Reset
-          </Button>
-        )}
         {hintsRevealed < hints.length && (
           <Button onClick={revealHint} icon={<Lightbulb size={12} aria-hidden="true" />}>
             Show hint ({hintsRevealed}/{hints.length})
@@ -293,7 +305,7 @@ export function ExerciseBlock({
       </div>
 
       {ranEmpty && (
-        <div className="exercise__idle" role="status">Ran · no output yet. Replace the TODO lines, then Run.</div>
+        <div className="exercise__idle" role="status">Ran · no output yet. Edit the starter code, then Run.</div>
       )}
 
       {unsupported && <div className="demo__notice"><UnsupportedNotice message={unsupported} /></div>}

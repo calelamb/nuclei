@@ -23,6 +23,7 @@ test('a half-written exercise survives Glossary and back, then Reset restores th
   await expect(page.locator('.exercise').first().locator('.view-lines')).toContainText('my half-written work');
 
   await page.locator('.exercise').getByRole('button', { name: /^Reset/ }).first().click();
+  await page.locator('.exercise').getByRole('button', { name: /^Discard edits/ }).first().click();
   await expect(page.locator('.exercise').first().locator('.view-lines')).not.toContainText('my half-written work');
-  await expect(page.locator('.exercise').getByRole('button', { name: /^Reset/ })).toHaveCount(0);
+  await expect(page.locator('.exercise').getByRole('button', { name: /^Reset/ }).first()).toBeDisabled();
 });

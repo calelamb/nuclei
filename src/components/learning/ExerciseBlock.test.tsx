@@ -138,14 +138,27 @@ describe('ExerciseBlock draft persistence', () => {
     expect(draft()).toBe('print(8)');
   });
 
-  it('offers Reset only for edited code, and Reset restores the starter and drops the draft', () => {
+  it('keeps Reset in place but disabled until edited, and asks before discarding', () => {
     render(<ExerciseBlock {...props} />);
-    expect(screen.queryByRole('button', { name: /^Reset/ })).toBeNull();
+    const reset = () => screen.getByRole('button', { name: /^(Reset|Discard edits\?)/ }) as HTMLButtonElement;
+    expect(reset().disabled).toBe(true);
     fireEvent.change(screen.getByLabelText('code'), { target: { value: 'print(9)' } });
-    fireEvent.click(screen.getByRole('button', { name: /^Reset/ }));
+    expect(reset().disabled).toBe(false);
+    fireEvent.click(reset());
+    expect((screen.getByLabelText('code') as HTMLTextAreaElement).value).toBe('print(9)');
+    expect(reset().textContent).toMatch(/Discard edits\?/);
+    fireEvent.click(reset());
     expect((screen.getByLabelText('code') as HTMLTextAreaElement).value).toBe(STARTER);
     expect(draft()).toBeUndefined();
-    expect(screen.queryByRole('button', { name: /^Reset/ })).toBeNull();
+    expect(reset().disabled).toBe(true);
+  });
+
+  it('typing disarms a pending Reset confirmation', () => {
+    render(<ExerciseBlock {...props} />);
+    fireEvent.change(screen.getByLabelText('code'), { target: { value: 'print(9)' } });
+    fireEvent.click(screen.getByRole('button', { name: /^Reset/ }));
+    fireEvent.change(screen.getByLabelText('code'), { target: { value: 'print(10)' } });
+    expect(screen.getByRole('button', { name: /^Reset/ })).toBeTruthy();
   });
 });
 
