@@ -1,6 +1,7 @@
 import { lazy, Suspense, useState, useRef, useEffect, useCallback } from 'react';
 import { usePlatform } from '../../platform/PlatformProvider';
 import { ErrorBoundary } from '../ErrorBoundary';
+import { LabErrorBoundary } from '../lab/LabErrorBoundary';
 import { QuantumEditor } from '../editor/QuantumEditor';
 import { EditorTabs } from '../editor/EditorTabs';
 import { Breadcrumbs, ExperimentBreadcrumbs } from '../editor/Breadcrumbs';
@@ -830,9 +831,11 @@ export function PanelLayout() {
                 display: 'flex', flexDirection: 'column',
                 animation: 'nuclei-fade-in 200ms ease',
               }}>
-                <Suspense fallback={null}>
-                  <DiscoveryWorkbench />
-                </Suspense>
+                <LabErrorBoundary label="The Discovery Engine">
+                  <Suspense fallback={null}>
+                    <DiscoveryWorkbench />
+                  </Suspense>
+                </LabErrorBoundary>
               </div>
             )}
             {showTrainabilityMain && (
@@ -841,9 +844,11 @@ export function PanelLayout() {
                 display: 'flex', flexDirection: 'column',
                 animation: 'nuclei-fade-in 200ms ease',
               }}>
-                <Suspense fallback={null}>
-                  <TrainabilityLab />
-                </Suspense>
+                <LabErrorBoundary label="The Trainability Lab">
+                  <Suspense fallback={null}>
+                    <TrainabilityLab />
+                  </Suspense>
+                </LabErrorBoundary>
               </div>
             )}
             {showTranspilerMain && (

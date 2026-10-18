@@ -5,10 +5,14 @@ import {
   LabMeter,
   LabPill,
   LabSectionLabel,
+  formatCount,
+  formatInterval,
   formatSci,
   type LabTone,
 } from '../../lab';
-import { maxAlgebraDimension } from './lieMath';
+import { G_SIM_NOT_APPLICABLE_TEXT, gSimNotApplicable } from '../../../services/trainability/verdict';
+import { validInterval } from '../../../services/trainability/intervals';
+import { maxAlgebraDimension, ragoneComparison } from './lieMath';
 import type { GradientStatistics, LieAlgebraResult } from '../../../types/trainability';
 
 const STATUS_TONE: Record<LieAlgebraResult['status'], LabTone> = {
@@ -18,18 +22,72 @@ const STATUS_TONE: Record<LieAlgebraResult['status'], LabTone> = {
 };
 
 const SIMULABILITY: Record<LieAlgebraResult['simulability']['kind'], { tone: LabTone; label: string }> = {
-  g_sim_feasible: { tone: 'success', label: 'Trainable and classically simulable (𝔤-sim)' },
+  g_sim_feasible: { tone: 'success', label: 'Classically simulable (𝔤-sim)' },
   exponential_dla: { tone: 'danger', label: 'Exponential DLA' },
   unknown: { tone: 'neutral', label: 'Simulability unknown' },
 };
 
+/** "none" means the circuit has no fixed (non-parametrized) gates, so Clifford/non-Clifford is moot. */
+function fixedGatesKpi(fixed: LieAlgebraResult['fixed_gates']): { value: string; detail: string } {
+  if (fixed.handled_by === 'none') return { value: 'None', detail: 'no fixed gates in the circuit' };
+  return {
+    value: fixed.clifford ? 'Clifford' : 'non-Clifford',
+    detail: fixed.handled_by === 'clifford_conjugation' ? 'handled by Clifford conjugation' : 'handled densely',
+  };
+}
+
+/** A small DLA only supports a 𝔤-sim claim when the observable/state overlap 𝔤. */
+function simulabilityPill(data: LieAlgebraResult): { tone: LabTone; label: string } {
+  if (data.simulability.kind === 'g_sim_feasible' && gSimNotApplicable(data)) {
+    return { tone: 'neutral', label: G_SIM_NOT_APPLICABLE_TEXT };
+  }
+  return SIMULABILITY[data.simulability.kind];
+}
+
 const yesNo = (v: boolean | null) => (v === null ? '—' : v ? 'yes' : 'no');
+
+/**
+ * Ragone et al. predict the variance of the COST, Var[C]. Compare it with the
+ * empirical Var[C] (never with the gradient variance, which is a different
+ * quantity); the ratio appears only when both numbers exist.
+ */
+function RagoneComparison({ data, gradients }: { data: LieAlgebraResult; gradients?: GradientStatistics }) {
+  const cmp = ragoneComparison(data, gradients);
+  return (
+    <div>
+      <LabSectionLabel>Predicted vs empirical cost variance</LabSectionLabel>
+      <LabKpiStrip label="Predicted and empirical cost variance">
+        <LabKpi
+          label="Predicted Var[C] (Ragone et al.)"
+          value={cmp.predicted === null ? 'not applicable' : formatSci(cmp.predicted)}
+          detail={cmp.predicted === null ? 'needs O and ρ to overlap a simple 𝔤' : 'P𝔤(ρ) P𝔤(O) / dim 𝔤'}
+        />
+        <LabKpi
+          label="Empirical Var[C]"
+          value={cmp.empirical === null ? (gradients ? 'not measured' : 'run gradients') : formatSci(cmp.empirical)}
+          detail={
+            cmp.empirical !== null
+              ? validInterval(gradients?.cost_variance_ci95)
+                ? `95% CI ${formatInterval(gradients?.cost_variance_ci95)}`
+                : undefined
+              : gradients
+                ? 'the sampling estimator reports it; Pauli propagation does not'
+                : undefined
+          }
+        />
+        {cmp.ratio !== null && (
+          <LabKpi label="Empirical / predicted" value={`${formatSci(cmp.ratio, 2)}×`} detail="cost variance on both sides" />
+        )}
+      </LabKpiStrip>
+    </div>
+  );
+}
 
 export function LieTab({ data, gradients }: { data: LieAlgebraResult; gradients?: GradientStatistics }) {
   const top = maxAlgebraDimension(data.n_qubits);
   const dim = data.dimension ?? data.dimension_lower_bound;
-  const empirical = gradients?.variance_mean;
-  const sim = SIMULABILITY[data.simulability.kind];
+  const sim = simulabilityPill(data);
+  const simNotApplicable = data.simulability.kind === 'g_sim_feasible' && gSimNotApplicable(data);
 
   if (data.status === 'unsupported') {
     return (
@@ -39,7 +97,7 @@ export function LieTab({ data, gradients }: { data: LieAlgebraResult; gradients?
     );
   }
 
-  const summary = `Dynamical Lie algebra dimension ${data.dimension ?? `at least ${data.dimension_lower_bound}`} out of ${formatSci(top)} (4 to the n minus 1) for ${data.n_qubits} qubits; status ${data.status}.`;
+  const summary = `Dynamical Lie algebra dimension ${data.dimension ?? `at least ${data.dimension_lower_bound}`} out of ${top < 1e15 ? formatCount(top) : formatSci(top)} (4 to the n minus 1) for ${data.n_qubits} qubits; status ${data.status}.`;
 
   return (
     <div className="lab-stack">
@@ -63,7 +121,7 @@ export function LieTab({ data, gradients }: { data: LieAlgebraResult; gradients?
           label={data.dimension === null ? 'dim 𝔤 (lower bound, log scale)' : 'dim 𝔤 (log scale)'}
           value={Math.log10(Math.max(1, dim))}
           max={Math.log10(top)}
-          format={(v) => formatSci(10 ** v, 3)}
+          format={(v) => (10 ** v < 1e15 ? formatCount(10 ** v) : formatSci(10 ** v, 3))}
         />
         <p className="lab-sr-only">{summary}</p>
       </div>
@@ -76,26 +134,10 @@ export function LieTab({ data, gradients }: { data: LieAlgebraResult; gradients?
         <LabKpi label="g-purity of ρ₀" value={formatSci(data.purity.initial_state)} detail={`state in 𝔤: ${yesNo(data.purity.state_in_algebra)}`} />
         <LabKpi label="g-purity of O" value={formatSci(data.purity.observable)} detail={`observable in 𝔤: ${yesNo(data.purity.observable_in_algebra)}`} />
         <LabKpi label="Generators" value={data.generators.unique} detail={`${data.generators.count} total`} />
-        <LabKpi label="Fixed gates" value={data.fixed_gates.clifford ? 'Clifford' : 'non-Clifford'} detail={data.fixed_gates.handled_by.replace(/_/g, ' ')} />
+        <LabKpi label="Fixed gates" {...fixedGatesKpi(data.fixed_gates)} />
       </LabKpiStrip>
+      <RagoneComparison data={data} gradients={gradients} />
       <div>
-        <LabSectionLabel>Predicted vs empirical gradient variance</LabSectionLabel>
-        <LabKpiStrip label="Predicted and empirical variance">
-          <LabKpi
-            label="Predicted (Ragone et al.)"
-            value={data.prediction_applicable ? formatSci(data.predicted_variance) : 'not applicable'}
-            detail={data.prediction_applicable ? 'P𝔤(ρ) P𝔤(O) / dim 𝔤' : 'needs O or ρ in 𝔤'}
-          />
-          <LabKpi
-            label="Empirical (mean)"
-            value={empirical === undefined ? 'run gradients' : formatSci(empirical)}
-            detail={
-              empirical !== undefined && data.predicted_variance
-                ? `ratio ${formatSci(empirical / data.predicted_variance, 2)}× predicted`
-                : undefined
-            }
-          />
-        </LabKpiStrip>
         <h4 className="lab-section-label" style={{ marginTop: 'var(--space-3)' }}>Assumptions</h4>
         <ul style={{ margin: 0, paddingLeft: 'var(--space-4)', color: 'var(--color-text-secondary)' }}>
           {data.assumptions.map((a) => (
@@ -103,8 +145,11 @@ export function LieTab({ data, gradients }: { data: LieAlgebraResult; gradients?
           ))}
         </ul>
       </div>
-      <LabCallout tone={data.simulability.kind === 'g_sim_feasible' ? 'success' : data.simulability.kind === 'exponential_dla' ? 'warning' : 'info'} title="Simulability verdict">
-        {data.simulability.summary}
+      <LabCallout
+        tone={simNotApplicable ? 'info' : data.simulability.kind === 'g_sim_feasible' ? 'success' : data.simulability.kind === 'exponential_dla' ? 'warning' : 'info'}
+        title="Simulability verdict"
+      >
+        {simNotApplicable ? G_SIM_NOT_APPLICABLE_TEXT : data.simulability.summary}
       </LabCallout>
       {data.generators.examples.length > 0 && (
         <p className="lab-muted" style={{ margin: 0 }}>

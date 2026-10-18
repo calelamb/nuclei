@@ -5,6 +5,7 @@ import {
   lintSummaryFixture,
   provenanceFixture,
   resultsFixture,
+  scalingFailedPointFixture,
 } from '../../src/services/trainability/fixtures';
 
 /**
@@ -15,7 +16,7 @@ import {
  */
 const FIXTURE_URL = '/?e2eProject=lab-project&workspace=research&labKernel=ws://127.0.0.1:9777';
 
-async function installStubKernel(page: Page): Promise<void> {
+async function installStubKernel(page: Page, results: unknown = resultsFixture): Promise<void> {
   await page.addInitScript(
     (fixtures) => {
       type Listener = (event: Event | MessageEvent<string>) => void;
@@ -48,7 +49,7 @@ async function installStubKernel(page: Page): Promise<void> {
             const job_id = message.job_id;
             reply({ type: 'trainability_started', job_id });
             reply({ type: 'trainability_progress', job_id, analysis: 'gradients', fraction: 0.5, message: 'sampling' });
-            reply({ type: 'trainability_partial', job_id, analysis: 'gradients', result: fixtures.results.gradients });
+            reply({ type: 'trainability_partial', job_id, analysis: 'gradients', result: (fixtures.results as { gradients: unknown }).gradients });
             reply({
               type: 'trainability_result',
               job_id,
@@ -66,7 +67,7 @@ async function installStubKernel(page: Page): Promise<void> {
       }
       Object.defineProperty(window, 'WebSocket', { configurable: true, value: StubKernelSocket });
     },
-    { inspection: inspectionFixture, lint: lintDiagnosticsFixture, summary: lintSummaryFixture, results: resultsFixture, provenance: provenanceFixture },
+    { inspection: inspectionFixture, lint: lintDiagnosticsFixture, summary: lintSummaryFixture, results, provenance: provenanceFixture },
   );
 }
 
@@ -92,4 +93,74 @@ test('@trainability runs the analyses and shows verdicts', async ({ page }) => {
   await lab.getByRole('tab', { name: 'Landscape' }).click();
   await expect(lab.getByRole('img', { name: 'Loss landscape heatmap' })).toBeVisible();
   await expect(lab.getByRole('button', { name: /Export certificate/ })).toBeEnabled();
+});
+
+async function openLab(page: Page) {
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await page.goto(FIXTURE_URL);
+  await page.getByRole('button', { name: 'Trainability Lab' }).click();
+  const lab = page.getByRole('region', { name: 'Trainability Lab', exact: true });
+  await expect(lab).toBeVisible({ timeout: 15_000 });
+  return lab;
+}
+
+test('@trainability a failed scaling point and a null preferred model do not blank the app (UI-1)', async ({ page }) => {
+  const pageErrors: Error[] = [];
+  page.on('pageerror', (error) => pageErrors.push(error));
+  await installStubKernel(page, { ...resultsFixture, scaling: scalingFailedPointFixture });
+  const lab = await openLab(page);
+
+  await lab.getByRole('button', { name: /Run analyses/ }).click();
+  await expect(lab.getByRole('img', { name: 'Per-parameter gradient variance' })).toBeVisible();
+  await lab.getByRole('tab', { name: 'Scaling' }).click();
+
+  await expect(lab.getByRole('region', { name: 'Failed points' })).toContainText('ppe_budget_exceeded');
+  await expect(lab.getByText('No scaling model is preferred for this layer count.')).toBeVisible();
+  await expect(lab.getByText('This panel hit an error')).toHaveCount(0);
+  // The rest of the app is still there.
+  await expect(page.getByRole('button', { name: 'Trainability Lab' })).toBeVisible();
+  expect(pageErrors).toEqual([]);
+});
+
+test('@trainability tabs follow the ARIA tabs keyboard pattern', async ({ page }) => {
+  await installStubKernel(page);
+  const lab = await openLab(page);
+
+  const gradients = lab.getByRole('tab', { name: 'Gradients' });
+  await gradients.focus();
+  await page.keyboard.press('ArrowRight');
+  await expect(lab.getByRole('tab', { name: 'Scaling' })).toHaveAttribute('aria-selected', 'true');
+  await expect(lab.getByRole('tab', { name: 'Scaling' })).toBeFocused();
+  await page.keyboard.press('End');
+  await expect(lab.getByRole('tab', { name: 'Landscape' })).toHaveAttribute('aria-selected', 'true');
+  await page.keyboard.press('Home');
+  await expect(gradients).toHaveAttribute('aria-selected', 'true');
+});
+
+test('@trainability prefills the observable from the file and lets the user override it (UI-2)', async ({ page }) => {
+  await installStubKernel(page);
+  const lab = await openLab(page);
+
+  const observable = lab.getByRole('textbox', { name: 'Observable' });
+  await expect(observable).toHaveValue('preset:global_z');
+  await expect(lab.getByText('from file', { exact: true })).toBeVisible();
+  await lab.getByRole('button', { name: 'TFIM' }).click();
+  await expect(observable).toHaveValue('preset:tfim');
+  await expect(lab.getByText('from file', { exact: true })).toHaveCount(0);
+});
+
+test('@trainability interactive targets meet the size rule', async ({ page }) => {
+  await installStubKernel(page);
+  const lab = await openLab(page);
+  const heights = await lab.evaluate((root) => {
+    const h = (el: Element | null) => (el ? el.getBoundingClientRect().height : 0);
+    return {
+      run: h(Array.from(root.querySelectorAll('button')).find((b) => /Run analyses/.test(b.textContent ?? '')) ?? null),
+      tab: h(root.querySelector('[role="tab"]')),
+      preset: h(Array.from(root.querySelectorAll('button')).find((b) => b.textContent === 'TFIM') ?? null),
+    };
+  });
+  expect(heights.run).toBeGreaterThanOrEqual(32);
+  expect(heights.tab).toBeGreaterThanOrEqual(28);
+  expect(heights.preset).toBeGreaterThanOrEqual(28);
 });

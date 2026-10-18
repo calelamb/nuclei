@@ -1,8 +1,8 @@
-import { Microscope, MonitorOff } from 'lucide-react';
+import { Microscope } from 'lucide-react';
 import {
   LabCallout,
   LabCard,
-  LabEmptyState,
+  LabDesktopRequired,
   LabPill,
   LabShell,
   LabShellBody,
@@ -26,17 +26,18 @@ const STATUS_TONE: Record<TrainabilityJobStatus, LabTone> = {
   running: 'quantum',
   cancelling: 'warning',
   complete: 'success',
-  cancelled: 'warning',
+  cancelled: 'neutral',
   failed: 'danger',
 };
 
-export function TrainabilityUnavailable({ message }: { message: string }) {
+export function TrainabilityUnavailable({ reason, message }: { reason: 'web_build' | 'connect_failed'; message: string }) {
   return (
     <LabShellBody>
-      <LabEmptyState
-        icon={MonitorOff}
-        title="The Trainability Lab needs the desktop kernel"
-        body={`${message} Open Nuclei on the desktop to measure gradient variance, Lie algebras and loss landscapes. The web build cannot run these native analyses.`}
+      <LabDesktopRequired
+        feature="The Trainability Lab"
+        what="gradient variance, Lie algebras and loss landscapes"
+        reason={reason}
+        detail={message}
       />
     </LabShellBody>
   );
@@ -71,7 +72,7 @@ export function TrainabilityLab() {
         )}
       </LabToolbar>
       {unavailable ? (
-        <TrainabilityUnavailable message={unavailable.message} />
+        <TrainabilityUnavailable reason={unavailable.reason} message={unavailable.message} />
       ) : (
         <LabShellBody>
           <div className="lab-grid lab-grid--split">

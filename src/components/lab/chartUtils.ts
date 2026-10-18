@@ -56,9 +56,31 @@ export function formatPct(value: number | null | undefined, digits = 1): string 
   return `${(value * 100).toFixed(digits)}%`;
 }
 
-export function formatInterval(ci: [number, number] | null | undefined, digits = 2): string {
-  if (!ci) return '';
+/** Shared "no value" glyph, so a missing number never prints `null`/`NaN`. */
+export const NO_VALUE = '—';
+
+/** True for a two-element array of finite numbers (a usable `[lo, hi]`). */
+export function isInterval(value: unknown): value is [number, number] {
+  return Array.isArray(value) && value.length === 2 && value.every((v) => typeof v === 'number' && Number.isFinite(v));
+}
+
+/** `[lo, hi]`, or an em dash when the interval is missing or malformed. */
+export function formatInterval(ci: unknown, digits = 2): string {
+  if (!isInterval(ci)) return NO_VALUE;
   return `[${formatSci(ci[0], digits)}, ${formatSci(ci[1], digits)}]`;
+}
+
+/** An exact integer with thousands separators (4095 stays 4,095, never 4,100). */
+export function formatCount(value: number | null | undefined): string {
+  if (value === null || value === undefined || !Number.isFinite(value)) return NO_VALUE;
+  return Math.round(value).toLocaleString('en-US', { maximumFractionDigits: 0 });
+}
+
+/** Guard for interpolated strings: null, undefined and NaN become an em dash. */
+export function formatValue(value: string | number | null | undefined): string {
+  if (value === null || value === undefined) return NO_VALUE;
+  if (typeof value === 'number') return Number.isFinite(value) ? String(value) : NO_VALUE;
+  return value.length > 0 ? value : NO_VALUE;
 }
 
 export function formatDuration(ms: number | null | undefined): string {
@@ -83,6 +105,12 @@ export function seqColor(t: number): string {
   return `var(--lab-seq-${Math.round(clamped * (SEQ_STEPS - 1))})`;
 }
 
+/** Label ink (CSS var) to draw on `seqColor(t)`: black or white by luminance, >= 4.5:1. */
+export function seqInk(t: number): string {
+  const clamped = Number.isFinite(t) ? Math.min(1, Math.max(0, t)) : 0;
+  return `var(--lab-seq-ink-${Math.round(clamped * (SEQ_STEPS - 1))})`;
+}
+
 /**
  * Categorical color by FIXED slot (identity, never rank). Slots past 8 fold
  * into a neutral "other" ink rather than generating a new hue.
@@ -92,13 +120,17 @@ export function catColor(slot: number): string {
   return `var(--lab-cat-${slot + 1})`;
 }
 
-/** Read the live sequential ramp (for canvas rendering) from an element inside `.lab`. */
+/**
+ * Read the live sequential ramp (for canvas rendering) from an element inside
+ * `.lab`. lab.css is the single source of the ramp: when it cannot be read
+ * (no stylesheet, a non-browser environment) this returns an empty ramp and
+ * the caller skips drawing rather than painting stale hard-coded colors.
+ */
 export function readSeqRamp(el: Element | null): string[] {
-  const fallback = ['#0d366b', '#104281', '#184f95', '#1c5cab', '#256abf', '#3987e5', '#6da7ec', '#9ec5f4', '#cde2fb'];
-  if (!el || typeof getComputedStyle === 'undefined') return fallback;
+  if (!el || typeof getComputedStyle === 'undefined') return [];
   const style = getComputedStyle(el);
   const ramp = Array.from({ length: SEQ_STEPS }, (_, i) => style.getPropertyValue(`--lab-seq-${i}`).trim());
-  return ramp.every((c) => c.length > 0) ? ramp : fallback;
+  return ramp.every((c) => /^#[0-9a-f]{3}([0-9a-f]{3})?$/i.test(c)) ? ramp : [];
 }
 
 function hexToRgb(hex: string): [number, number, number] {

@@ -56,7 +56,7 @@ describe('ScalingTab', () => {
   it('shows the fit, β with its CI, ΔAIC and the verdict pill', () => {
     render(<ScalingTab data={scalingFixture} />);
     expect(screen.getByText('Barren plateau')).toBeTruthy();
-    expect(screen.getByLabelText('Fitted scaling law').textContent).toMatch(/β = 0\.93.*\[0\.81, 1\.05\]/);
+    expect(screen.getByLabelText('Preferred scaling model').textContent).toMatch(/exponential.*β = 0\.93.*\[0\.81, 1\.05\]/);
     expect(screen.getByText('ΔAIC')).toBeTruthy();
     expect(screen.getByText('8.3')).toBeTruthy();
     expect(screen.getByRole('img', { name: 'Gradient variance scaling with qubit count' })).toBeTruthy();
@@ -96,15 +96,16 @@ describe('LieTab', () => {
     expect(screen.getByText('so(16)')).toBeTruthy();
     expect(screen.getByText('complete')).toBeTruthy();
     expect(screen.getByText('g-purity of ρ₀')).toBeTruthy();
+    expect(screen.getByText('Predicted vs empirical cost variance')).toBeTruthy();
     expect(screen.getByText('0.0089')).toBeTruthy();
-    expect(screen.getByText('0.0115')).toBeTruthy();
+    expect(screen.getByText('0.0107')).toBeTruthy();
     expect(screen.getByText('Deep-circuit (approximate 2-design over e^𝔤) regime.')).toBeTruthy();
     expect(screen.getByText('Simulability verdict')).toBeTruthy();
   });
 
-  it('says trainable and classically simulable for a small algebra', () => {
+  it('says classically simulable (𝔤-sim) for a small algebra that overlaps the observable', () => {
     render(<LieTab data={lieSimulableFixture} />);
-    expect(screen.getByText('Trainable and classically simulable (𝔤-sim)')).toBeTruthy();
+    expect(screen.getByText('Classically simulable (𝔤-sim)')).toBeTruthy();
     expect(screen.getByText('run gradients')).toBeTruthy();
   });
 
@@ -130,6 +131,11 @@ describe('Expressibility and entanglement', () => {
     expect(screen.getByText('KL to Haar')).toBeTruthy();
     expect(screen.getAllByText(/\[0\.009, 0\.016\]/).length).toBeGreaterThan(0);
     expect(document.querySelector('figure polyline')).toBeTruthy();
+    // Zoomed to where the mass is by default; the full range is one click away.
+    const zoomed = document.querySelectorAll('figure rect').length;
+    expect(zoomed).toBeGreaterThan(0);
+    expect(zoomed).toBeLessThan(expressibilityFixture.histogram.length);
+    fireEvent.click(screen.getByRole('button', { name: 'Show full range [0, 1]' }));
     expect(document.querySelectorAll('figure rect').length).toBeGreaterThanOrEqual(expressibilityFixture.histogram.length);
   });
 

@@ -321,3 +321,76 @@ describe('selection, reveal and export', () => {
     expect(store().exportState.status).toBe('idle');
   });
 });
+
+describe('observable precedence (UI-2)', () => {
+  const sent = <T extends string>(type: T) => session.sent.filter((m) => m.type === type) as Array<{ observable?: string }>;
+
+  it('prefills the observable from the file declaration instead of forcing local_z', async () => {
+    expect(store().observable).toBe('preset:local_z');
+    expect(store().observableSource).toBe('default');
+    void store().refreshInspection(target);
+    await flush();
+    // inspectionFixture declares preset:global_z
+    expect(store().observable).toBe('preset:global_z');
+    expect(store().observableSource).toBe('file');
+    void store().refreshLint(target);
+    await flush();
+    expect(sent('trainability_lint').at(-1)?.observable).toBe('preset:global_z');
+    await store().start(target);
+    await flush();
+    expect(sent('trainability_start').at(-1)?.observable).toBe('preset:global_z');
+    expect(store().jobs[store().activeJobId as string].target.observable).toBe('preset:global_z');
+  });
+
+  it('lets the user override the file: picking a preset sticks across later inspections', async () => {
+    void store().refreshInspection(target);
+    await flush();
+    store().setObservable('preset:tfim');
+    expect(store().observableSource).toBe('user');
+    void store().refreshInspection({ ...target, code: `${FIXTURE_CODE}\n# edit` });
+    await flush();
+    expect(store().observable).toBe('preset:tfim');
+  });
+
+  it('treats clearing the field as an override: the default preset is sent, never an empty string', async () => {
+    void store().refreshInspection(target);
+    await flush();
+    store().setObservable('');
+    expect(store().observableSource).toBe('user');
+    await store().start(target);
+    await flush();
+    expect(sent('trainability_start').at(-1)?.observable).toBe('preset:local_z');
+  });
+
+  it('can go back to the file declaration, and drops it when the file stops declaring one', async () => {
+    void store().refreshInspection(target);
+    await flush();
+    store().setObservable('preset:tfim');
+    store().adoptFileObservable();
+    expect(store().observable).toBe('preset:global_z');
+    expect(store().observableSource).toBe('file');
+    // The next inspection finds no declaration: the file-sourced text falls back to the default.
+    installKernel();
+    session = createFakeSession((m, s) => {
+      if (m.type === 'trainability_inspect') s.emit({ type: 'trainability_inspected', ...inspectionFixture, observable_declared: null });
+    });
+    setTrainabilityClientFactory(async () => createTrainabilityClient(session));
+    void store().refreshInspection({ ...target, code: 'other code' });
+    await flush();
+    expect(store().observable).toBe('preset:local_z');
+    expect(store().observableSource).toBe('default');
+  });
+
+  it('refuses to start a parameter-free circuit', async () => {
+    session = createFakeSession((m, s) => {
+      if (m.type === 'trainability_inspect') {
+        s.emit({ type: 'trainability_inspected', ...inspectionFixture, parameters: [], param_gates: [] });
+      }
+    });
+    setTrainabilityClientFactory(async () => createTrainabilityClient(session));
+    void store().refreshInspection(target);
+    await flush();
+    expect(await store().start(target)).toBeNull();
+    expect(session.sent.some((m) => m.type === 'trainability_start')).toBe(false);
+  });
+});

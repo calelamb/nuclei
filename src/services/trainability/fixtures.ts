@@ -114,16 +114,53 @@ export const gradientsFixture: GradientStatistics = {
   elapsed_ms: 412,
   method: 'sampling',
   backend: 'numpy',
+  interval: { kind: 'bootstrap', level: 0.95 },
+  interval_kind: 'bootstrap',
+  cost_variance: 0.0107,
+  cost_variance_ci95: [0.0091, 0.0126],
+  cost_mean: 0.0021,
 };
 
+/** Kernel shape of a complete PPE gradients result: no sampling happened. */
 export const gradientsPpeFixture: GradientStatistics = {
   ...gradientsFixture,
   method: 'ppe',
-  interval: [0.0114, 0.0116],
-  per_parameter: gradientsFixture.per_parameter.map((p) => ({
+  samples: null,
+  gradient_norm_mean: null,
+  variance_mean_ci95: [0.0114, 0.0116],
+  interval: { kind: 'truncation', bound: 'l1' },
+  interval_kind: 'truncation',
+  per_parameter: gradientsFixture.per_parameter.map((p) => {
+    const variance = p.variance ?? 0;
+    return {
+      ...p,
+      abs_mean: null,
+      variance_ci95: [variance * 0.999, variance * 1.001] as [number, number],
+    };
+  }),
+  gate_values: gradientsFixture.gate_values.map((g) => ({ ...g, abs_mean: null })),
+  cost_variance: null,
+  cost_variance_ci95: null,
+  cost_mean: null,
+};
+
+/** A PPE run that timed out: only the truncation interval is rigorous. */
+export const gradientsPpeUnresolvedFixture: GradientStatistics = {
+  ...gradientsPpeFixture,
+  variance_mean: null,
+  variance_mean_ci95: [0, 0.968],
+  per_parameter: gradientsPpeFixture.per_parameter.map((p, i) => ({
     ...p,
-    variance_ci95: [p.variance * 0.999, p.variance * 1.001] as [number, number],
+    mean: null,
+    variance: i === 0 ? (p.variance ?? null) : null,
+    variance_ci95: i === 0 ? p.variance_ci95 : ([0, 0.968] as [number, number]),
   })),
+  gate_values: gradientsPpeFixture.gate_values.map((g, i) => ({
+    ...g,
+    variance: i === 0 ? g.variance : null,
+    variance_ci95: [0, 0.968] as [number, number],
+  })),
+  notes: ['Pauli propagation hit its budget before every parameter resolved; reporting the truncation interval only.'],
 };
 
 const SCALING_QUBITS = [2, 3, 4, 5, 6, 7, 8, 24, 48];
@@ -141,7 +178,7 @@ export const scalingFixture: ScalingStudy = {
       variance_ci95: [variance * (ppe ? 0.995 : 0.82), variance * (ppe ? 1.005 : 1.2)] as [number, number],
       method: ppe ? ('ppe' as const) : ('sampling' as const),
       backend: 'numpy',
-      ...(ppe ? { interval: [variance * 0.995, variance * 1.005] as [number, number] } : {}),
+      ...(ppe ? { interval: { kind: 'truncation' as const }, interval_kind: 'truncation' as const } : {}),
     };
   }),
   fits: [
@@ -156,6 +193,35 @@ export const scalingFixture: ScalingStudy = {
     },
   ],
   notes: [],
+};
+
+/** A study where one point failed and the fit has no preferred model (kernel shape). */
+export const scalingFailedPointFixture: ScalingStudy = {
+  ...scalingFixture,
+  points: [
+    ...scalingFixture.points.slice(0, 5),
+    {
+      n_qubits: 9,
+      n_layers: 4,
+      n_params: null,
+      variance: null,
+      variance_ci95: null,
+      method: null,
+      error: { code: 'ppe_budget_exceeded', message: 'Pauli propagation exceeded its term budget at n = 9.' },
+    },
+  ],
+  fits: [
+    {
+      n_layers: 4,
+      exponential: null,
+      power_law: null,
+      preferred: null,
+      delta_aic: null,
+      verdict: 'inconclusive',
+      summary: 'Inconclusive: 1 point failed and uninformative intervals were excluded; 5 usable n values remain.',
+    },
+  ],
+  notes: ['1 of 6 points failed.'],
 };
 
 export const scalingInconclusiveFixture: ScalingStudy = {
@@ -192,10 +258,11 @@ export const lieFixture: LieAlgebraResult = {
   fixed_gates: { clifford: true, handled_by: 'clifford_conjugation' },
   purity: { initial_state: 0.25, observable: 1.0, observable_in_algebra: true, state_in_algebra: false },
   predicted_variance: 0.0089,
+  prediction_quantity: 'cost_variance',
   prediction_applicable: true,
   assumptions: [
     'Deep-circuit (approximate 2-design over e^𝔤) regime.',
-    '𝔤 treated as simple; for reductive 𝔤 this is the leading term.',
+    '𝔤 is simple (no centre, a single ideal); otherwise the prediction is not applicable.',
   ],
   simulability: {
     kind: 'exponential_dla',

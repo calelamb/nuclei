@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react';
 import { LabKpi, LabKpiStrip, RampLegend, formatSci, readSeqRamp } from '../../lab';
-import { centerPercent, drawLandscape } from './landscapeDraw';
+import { axisTicks, centerPercent, drawLandscape } from './landscapeDraw';
 import { useThemeStore } from '../../../stores/themeStore';
 import type { LandscapeResult } from '../../../types/trainability';
 
@@ -15,6 +15,7 @@ export function LandscapeTab({ data }: { data: LandscapeResult }) {
     drawLandscape(canvas, data, readSeqRamp(canvas));
   }, [data, themeMode]);
 
+  const ticks = axisTicks(data.axis);
   const summary = `Loss landscape slice, ${data.resolution} by ${data.resolution} points over ±${formatSci(data.span, 3)} radians along two random orthonormal directions. Cost ranges from ${formatSci(data.min)} to ${formatSci(data.max)}; the value at the center is ${formatSci(data.center_value)}.`;
 
   return (
@@ -25,7 +26,33 @@ export function LandscapeTab({ data }: { data: LandscapeResult }) {
         <LabKpi label="Max" value={formatSci(data.max)} />
         <LabKpi label="Span" value={`±${formatSci(data.span, 3)}`} detail={`${data.resolution}×${data.resolution} grid`} />
       </LabKpiStrip>
-      <figure style={{ margin: 0, position: 'relative', width: '100%', maxWidth: 440 }}>
+      <div
+        style={{
+          display: 'grid',
+          gridTemplateColumns: 'auto auto minmax(0, 1fr)',
+          gridTemplateRows: 'auto auto auto',
+          columnGap: 'var(--space-2)',
+          rowGap: 'var(--space-1)',
+          width: '100%',
+          maxWidth: 720,
+        }}
+      >
+      <div
+        className="lab-chart__axis-label lab-muted"
+        style={{ gridColumn: 1, gridRow: 1, writingMode: 'vertical-rl', transform: 'rotate(180deg)', textAlign: 'center', fontSize: 11 }}
+      >
+        direction 2 (rad)
+      </div>
+      <div
+        className="lab-mono lab-muted"
+        aria-hidden
+        style={{ gridColumn: 2, gridRow: 1, display: 'flex', flexDirection: 'column', justifyContent: 'space-between', textAlign: 'right', fontSize: 10.5 }}
+      >
+        {ticks.slice().reverse().map((t) => (
+          <span key={t}>{t}</span>
+        ))}
+      </div>
+      <figure style={{ margin: 0, position: 'relative', gridColumn: 3, gridRow: 1, minWidth: 0 }}>
         <canvas
           ref={canvasRef}
           role="img"
@@ -52,6 +79,19 @@ export function LandscapeTab({ data }: { data: LandscapeResult }) {
         </svg>
         <figcaption id="trainability-landscape-summary" className="lab-sr-only">{summary}</figcaption>
       </figure>
+      <div
+        className="lab-mono lab-muted"
+        aria-hidden
+        style={{ gridColumn: 3, gridRow: 2, display: 'flex', justifyContent: 'space-between', fontSize: 10.5 }}
+      >
+        {ticks.map((t) => (
+          <span key={t}>{t}</span>
+        ))}
+      </div>
+      <div className="lab-chart__axis-label lab-muted" style={{ gridColumn: 3, gridRow: 3, textAlign: 'center', fontSize: 11 }}>
+        direction 1 (rad)
+      </div>
+      </div>
       <RampLegend label="cost" low={formatSci(data.min)} high={formatSci(data.max)} />
       <p className="lab-muted" style={{ margin: 0 }}>
         2D slice of the cost along two random orthonormal parameter directions through the center point (marked). Flat regions

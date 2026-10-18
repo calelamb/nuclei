@@ -16,7 +16,14 @@ import {
 } from '../services/trainability/client';
 import { exportCertificate, CertificateExportError } from '../services/trainability/certificateIo';
 import { codeKey } from '../services/trainability/hash';
-import { DEFAULT_OBSERVABLE, observableErrorFrom, type ObservableParseError } from '../services/trainability/observablePresets';
+import {
+  DEFAULT_OBSERVABLE,
+  effectiveObservable,
+  observableErrorFrom,
+  reconcileObservable,
+  type ObservableParseError,
+  type ObservableSource,
+} from '../services/trainability/observablePresets';
 import {
   DEFAULT_TARGET_SETTINGS,
   availableAnalyses,
@@ -67,6 +74,8 @@ interface TrainabilityState {
   unavailable: { reason: 'web_build' | 'connect_failed'; message: string } | null;
 
   observable: string;
+  /** Who wrote `observable`: the default, the file's `nuclei_observable`, or the user. */
+  observableSource: ObservableSource;
   observableError: ObservableParseError | null;
   settings: TargetSettings;
   /** Chosen analyses; `null` = follow the inspection's available set. */
@@ -87,7 +96,10 @@ interface TrainabilityState {
   revealRequest: { line: number; nonce: number } | null;
 
   setPlatform(platform: LabPlatform): void;
+  /** The user's edit or preset pick: always overrides the file's declared observable. */
   setObservable(observable: string): void;
+  /** Go back to the observable the file declares (no-op when it declares none). */
+  adoptFileObservable(): void;
   setSettings(patch: Partial<TargetSettings>): void;
   toggleAnalysis(analysis: TrainabilityAnalysis): void;
   setActiveTab(tab: TrainabilityTabId): void;
@@ -228,6 +240,7 @@ export const useTrainabilityStore = create<TrainabilityState>((set, get) => {
     platform: 'web',
     unavailable: null,
     observable: DEFAULT_OBSERVABLE,
+    observableSource: 'default',
     observableError: null,
     settings: DEFAULT_TARGET_SETTINGS,
     analysesOverride: null,
@@ -253,7 +266,13 @@ export const useTrainabilityStore = create<TrainabilityState>((set, get) => {
     },
 
     setObservable(observable) {
-      set({ observable, observableError: null });
+      set({ observable, observableSource: 'user', observableError: null });
+    },
+
+    adoptFileObservable() {
+      const declared = get().inspect.data?.observable_declared;
+      if (!declared) return;
+      set({ observable: declared.trim(), observableSource: 'file', observableError: null });
     },
 
     setSettings(patch) {
@@ -293,7 +312,16 @@ export const useTrainabilityStore = create<TrainabilityState>((set, get) => {
         const next: InspectState = result.ok
           ? { status: 'ready', data: result.value, error: null, codeKey: key }
           : { status: 'error', data: null, error: result.error.message, codeKey: key };
-        set({ inspect: next });
+        if (result.ok) {
+          // The file's declared observable prefills the field unless the user has taken it over.
+          const field = reconcileObservable(
+            { observable: get().observable, source: get().observableSource },
+            result.value.observable_declared,
+          );
+          set({ inspect: next, observable: field.observable, observableSource: field.source });
+        } else {
+          set({ inspect: next });
+        }
         return next;
       } catch (error) {
         if (seq !== inspectSeq) return get().inspect;
@@ -306,7 +334,8 @@ export const useTrainabilityStore = create<TrainabilityState>((set, get) => {
 
     async refreshLint(target) {
       if (get().unavailable) return;
-      const key = codeKey(`${target.framework}\n${target.code}\n${get().observable}`);
+      const observable = effectiveObservable(get().observable);
+      const key = codeKey(`${target.framework}\n${target.code}\n${observable}`);
       const seq = (lintSeq += 1);
       set((s) => ({ lint: { ...s.lint, status: 'loading', error: null } }));
       try {
@@ -314,7 +343,7 @@ export const useTrainabilityStore = create<TrainabilityState>((set, get) => {
         const result = await client.lint({
           code: target.code,
           language: kernelLanguageFor(target.framework, target.filePath),
-          observable: get().observable,
+          observable,
         });
         if (seq !== lintSeq) return;
         if (result.ok) {
@@ -354,6 +383,9 @@ export const useTrainabilityStore = create<TrainabilityState>((set, get) => {
       const scalingCheck = validateScaling(state.settings);
       if (analyses.includes('scaling') && (scalingCheck.qubits.error || scalingCheck.layers.error)) return null;
 
+      const observable = effectiveObservable(state.observable);
+      // A parameter-free circuit has nothing to train: never start a run that would report "low risk".
+      if (state.inspect.data && state.inspect.data.parameters.length === 0) return null;
       const settings = toKernelSettings(state.settings, analyses, state.inspect.data);
       let client: TrainabilityClient;
       try {
@@ -374,7 +406,7 @@ export const useTrainabilityStore = create<TrainabilityState>((set, get) => {
           framework: target.framework,
           nQubits: state.inspect.data?.n_qubits ?? null,
           nParameters: state.inspect.data?.parameters.length ?? null,
-          observable: state.observable,
+          observable,
         },
         analyses,
         settings,
@@ -406,7 +438,7 @@ export const useTrainabilityStore = create<TrainabilityState>((set, get) => {
           jobId,
           code: target.code,
           language: kernelLanguageFor(target.framework, target.filePath),
-          observable: state.observable,
+          observable,
           analyses,
           settings,
         },
@@ -478,6 +510,7 @@ export const useTrainabilityStore = create<TrainabilityState>((set, get) => {
       set({
         unavailable: null,
         observable: DEFAULT_OBSERVABLE,
+        observableSource: 'default',
         observableError: null,
         settings: DEFAULT_TARGET_SETTINGS,
         analysesOverride: null,

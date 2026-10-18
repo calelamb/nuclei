@@ -30,8 +30,13 @@ describe('analysisView', () => {
     expect(analysisView(failed, 'gradients')).toEqual({ kind: 'error', code: 'disconnected', message: 'gone' });
   });
 
-  it('explains cancelled and silently missing analyses', () => {
-    expect(analysisView(jobFixture({ results: {}, status: 'cancelled' }), 'gradients')).toMatchObject({ kind: 'error', code: 'cancelled' });
+  it('treats a user cancel as neutral, not as an error', () => {
+    expect(analysisView(jobFixture({ results: {}, status: 'cancelled' }), 'gradients')).toEqual({ kind: 'cancelled' });
+    const tagged = jobFixture({ results: {}, status: 'cancelled', errors: { lie: { code: 'cancelled', message: 'Cancelled by the user' } } });
+    expect(analysisView(tagged, 'lie')).toEqual({ kind: 'cancelled' });
+  });
+
+  it('explains silently missing analyses', () => {
     expect(analysisView(jobFixture({ results: {}, status: 'complete' }), 'gradients')).toMatchObject({ kind: 'error', code: 'missing' });
   });
 });

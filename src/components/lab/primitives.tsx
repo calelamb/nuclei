@@ -295,10 +295,17 @@ export function LabSegmented<T extends string>({
       className="lab-segmented"
       role="tablist"
       aria-label={label}
+      aria-orientation="horizontal"
       onKeyDown={(event) => {
         if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
+        // Leave browser/OS shortcuts (history navigation, word jumps) alone.
+        if (event.altKey || event.ctrlKey || event.metaKey || enabled.length === 0) return;
         event.preventDefault();
-        const at = enabled.findIndex((i) => i.id === value);
+        // Arrow keys move from the focused tab (the roving tabindex), which is
+        // the selected one unless the user has tabbed elsewhere in the list.
+        const focused = items.findIndex((_, i) => refs.current[i] === document.activeElement);
+        const focusedId = focused >= 0 ? items[focused].id : value;
+        const at = Math.max(0, enabled.findIndex((i) => i.id === focusedId));
         let next = at;
         if (event.key === 'ArrowRight') next = (at + 1) % enabled.length;
         if (event.key === 'ArrowLeft') next = (at - 1 + enabled.length) % enabled.length;

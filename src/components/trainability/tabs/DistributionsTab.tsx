@@ -1,10 +1,17 @@
-import { ChartFrame, LabKpi, LabKpiStrip, LegendItem, formatInterval, formatSci } from '../../lab';
+import { useState } from 'react';
+import { ChartFrame, LabButton, LabKpi, LabKpiStrip, LegendItem, formatInterval, formatSci } from '../../lab';
+import { isFullRange, zoomedFidelityDomain } from './histogramMath';
 import type { EntanglingCapabilityResult, ExpressibilityResult } from '../../../types/trainability';
 
-const FIDELITY_AXIS = { domain: [0, 1] as [number, number], nice: false, label: 'fidelity F', ticks: 5 };
 
 export function ExpressibilityPanel({ data }: { data: ExpressibilityResult }) {
-  const maxMass = Math.max(1e-6, ...data.histogram.flatMap((b) => [b.observed, b.haar]));
+  const [fullRange, setFullRange] = useState(false);
+  const zoom = zoomedFidelityDomain(data.histogram);
+  const canZoom = !isFullRange(zoom);
+  const domain: [number, number] = fullRange || !canZoom ? [0, 1] : zoom;
+  const visible = data.histogram.filter((b) => b.lo < domain[1]);
+  const fidelityAxis = { domain, nice: false, label: 'fidelity F', ticks: 5 };
+  const maxMass = Math.max(1e-6, ...visible.flatMap((b) => [b.observed, b.haar]));
   const yAxis = { domain: [0, maxMass * 1.1] as [number, number], label: 'probability per bin', nice: true };
   const summary = `Fidelity distribution of ${data.pairs} random state pairs over ${data.bins} bins compared with the Haar distribution. KL divergence ${formatSci(data.kl)}, 95% CI ${formatInterval(data.kl_ci95)}.`;
   return (
@@ -14,8 +21,18 @@ export function ExpressibilityPanel({ data }: { data: ExpressibilityResult }) {
         <LabKpi label="Idle reference" value={formatSci(data.reference.idle_kl)} detail="constant-output circuit" title={data.reference.note} />
         <LabKpi label="Pairs" value={data.pairs} detail={`${data.bins} bins, dim ${data.dimension}`} />
       </LabKpiStrip>
+      {canZoom && (
+        <div className="lab-row">
+          <LabButton size="sm" variant="ghost" aria-pressed={fullRange} onClick={() => setFullRange((v) => !v)}>
+            {fullRange ? 'Zoom to the data' : 'Show full range [0, 1]'}
+          </LabButton>
+          <span className="lab-muted">
+            {fullRange ? 'Showing F from 0 to 1.' : `Zoomed to F in [0, ${formatSci(domain[1], 2)}], where the mass is.`}
+          </span>
+        </div>
+      )}
       <ChartFrame
-        x={FIDELITY_AXIS}
+        x={fidelityAxis}
         y={yAxis}
         height={240}
         ariaLabel="Fidelity histogram against the Haar curve"
@@ -29,7 +46,7 @@ export function ExpressibilityPanel({ data }: { data: ExpressibilityResult }) {
       >
         {({ x, y, innerHeight }) => (
           <g>
-            {data.histogram.map((b) => (
+            {visible.map((b) => (
               <rect
                 key={b.lo}
                 x={x(b.lo) + 0.5}
@@ -40,7 +57,7 @@ export function ExpressibilityPanel({ data }: { data: ExpressibilityResult }) {
               />
             ))}
             <polyline
-              points={data.histogram.map((b) => `${x((b.lo + b.hi) / 2)},${y(b.haar)}`).join(' ')}
+              points={visible.map((b) => `${x((b.lo + b.hi) / 2)},${y(b.haar)}`).join(' ')}
               style={{ fill: 'none', stroke: 'var(--lab-div-pos)', strokeWidth: 2 }}
             />
           </g>

@@ -1,5 +1,6 @@
+// @vitest-environment jsdom
 import { describe, expect, it } from 'vitest';
-import { catColor, formatDuration, formatInterval, formatPct, formatSci, formatTick, interpolateRamp, paddedDomain, seqColor } from './chartUtils';
+import { catColor, formatCount, formatDuration, formatInterval, formatPct, formatSci, formatTick, formatValue, interpolateRamp, isInterval, paddedDomain, readSeqRamp, seqColor } from './chartUtils';
 
 describe('formatSci', () => {
   it('uses fixed notation in the readable band', () => {
@@ -67,5 +68,33 @@ describe('paddedDomain', () => {
   });
   it('snaps log extents to decades and ignores non-positive values', () => {
     expect(paddedDomain([2e-4, 3e-2, 0, -1], { log: true })).toEqual([1e-4, 0.1]);
+  });
+});
+
+describe('null-safe formatters', () => {
+  it('never prints null, undefined or NaN', () => {
+    expect(formatInterval(null)).toBe('—');
+    expect(formatInterval(undefined)).toBe('—');
+    expect(formatInterval([Number.NaN, 1])).toBe('—');
+    expect(formatInterval({ kind: 'truncation' })).toBe('—');
+    expect(isInterval([0, 1])).toBe(true);
+    expect(isInterval([0, null])).toBe(false);
+    expect(formatSci(null)).toBe('—');
+    expect(formatSci(Number.NaN)).toBe('—');
+    expect(formatValue(null)).toBe('—');
+    expect(formatValue(undefined)).toBe('—');
+    expect(formatValue(Number.NaN)).toBe('—');
+    expect(formatValue('')).toBe('—');
+    expect(formatValue(0)).toBe('0');
+    expect(formatValue('ok')).toBe('ok');
+  });
+  it('formats exact integers without rounding', () => {
+    expect(formatCount(4095)).toBe('4,095');
+    expect(formatCount(1048575)).toBe('1,048,575');
+    expect(formatCount(null)).toBe('—');
+  });
+  it('has no baked-in sequential ramp: an unreadable stylesheet yields an empty ramp', () => {
+    expect(readSeqRamp(null)).toEqual([]);
+    expect(readSeqRamp(document.createElement('div'))).toEqual([]);
   });
 });

@@ -43,6 +43,35 @@ export const OBSERVABLE_PRESETS: readonly ObservablePreset[] = Object.freeze([
 
 export const DEFAULT_OBSERVABLE = 'preset:local_z';
 
+/** Where the observable field's current text came from (UI-2). */
+export type ObservableSource = 'default' | 'file' | 'user';
+
+/**
+ * What to send the kernel. An emptied field is an explicit override of the
+ * file's declared observable, and falls back to the default preset rather
+ * than to the empty string (which the kernel would read as "use the file's").
+ */
+export function effectiveObservable(observable: string): string {
+  const trimmed = observable.trim();
+  return trimmed.length > 0 ? trimmed : DEFAULT_OBSERVABLE;
+}
+
+/**
+ * Reconcile the field with a fresh inspection. The user's own text always
+ * wins; otherwise the file's `nuclei_observable` prefills the field, and the
+ * default preset returns when the file stops declaring one.
+ */
+export function reconcileObservable(
+  current: { observable: string; source: ObservableSource },
+  declared: string | null | undefined,
+): { observable: string; source: ObservableSource } {
+  if (current.source === 'user') return current;
+  const text = typeof declared === 'string' ? declared.trim() : '';
+  if (text.length > 0) return { observable: text, source: 'file' };
+  if (current.source === 'file') return { observable: DEFAULT_OBSERVABLE, source: 'default' };
+  return current;
+}
+
 export function presetForSpec(spec: string): ObservablePreset | null {
   const normalized = spec.trim().toLowerCase();
   return OBSERVABLE_PRESETS.find((p) => p.spec === normalized) ?? null;
