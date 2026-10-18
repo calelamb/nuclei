@@ -1,10 +1,6 @@
-import { Orbit } from 'lucide-react';
-import { EmptyState } from '../ui';
+import { ResultsEmptyState } from './ResultsEmptyState';
 
+/** The Bloch panel's "nothing to draw" state: the same shared results empty state every preset shows. */
 export function BlochEmptyState() {
-  return (
-    <EmptyState className="viz-empty bloch-empty" icon={<Orbit size={20} />} title="No results yet">
-      Run a simulation to visualize qubit states.
-    </EmptyState>
-  );
+  return <ResultsEmptyState />;
 }

@@ -2,9 +2,13 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { render, cleanup, fireEvent, within } from '@testing-library/react';
 import { VizZone } from './VizZone';
+import { BlochEmptyState } from '../bloch/BlochEmptyState';
 import { useQecStore } from '../../stores/qecStore';
 import { useProjectStore } from '../../stores/projectStore';
 import { useVizZoneStore } from '../../stores/vizZoneStore';
+import { useSimulationStore } from '../../stores/simulationStore';
+import { useEditorStore } from '../../stores/editorStore';
+import { useBottomPanelStore } from '../../stores/bottomPanelStore';
 import type { VisiblePanels } from '../../layout/panelRegistry';
 import surface from './__fixtures__/surface_d3.json';
 import type { QecSnapshot } from '../../types/qec';
@@ -93,5 +97,64 @@ describe('<VizZone> (PRD 10 Phase D)', () => {
       />,
     );
     expect(getByTestId('lattice')).toBeTruthy();
+  });
+});
+
+describe('<VizZone> results empty state (shell-r3-05/07)', () => {
+  beforeEach(() => {
+    useSimulationStore.setState({ result: null, isRunning: false, lastRunFailed: false, lastRunNoCircuit: false });
+    useEditorStore.setState({ errors: [] });
+    useBottomPanelStore.setState({ collapsed: true });
+  });
+
+  it('Clean preset (circuit only) and Balanced preset (circuit + Bloch) show the same copy and the same Run action', () => {
+    const clean = render(<VizZone visible={visible({ circuit: true })} chip={null} />);
+    const resultsEmpty = (el: HTMLElement) => el.querySelector('.viz-results-empty .nuclei-empty')?.textContent;
+    const cleanText = resultsEmpty(clean.container);
+    expect(cleanText ?? '').toContain("Run your circuit to see each qubit's Bloch sphere and the outcome histogram.");
+    expect(within(clean.container).getByRole('button', { name: /^Run/ })).toBeTruthy();
+    cleanup();
+
+    // The Bloch panel's own empty state (Balanced / Full presets) is the same component.
+    const balanced = render(<BlochEmptyState />);
+    expect(balanced.container.querySelector('.nuclei-empty')?.textContent).toBe(cleanText);
+    expect(within(balanced.container).getByRole('button', { name: /^Run/ })).toBeTruthy();
+  });
+
+  it('a failed run says so instead of showing the first-run prompt, and offers the error and a retry', () => {
+    useSimulationStore.setState({ lastRunFailed: true });
+    useEditorStore.setState({ errors: [{ line: 12, message: 'boom' }] });
+    const { container, getByRole, queryByText } = render(<VizZone visible={visible({ circuit: true })} chip={null} />);
+    expect(container.textContent).toContain('Last run failed');
+    expect(container.textContent).toContain('line 12');
+    expect(queryByText(/Run your circuit to see/)).toBeNull();
+    fireEvent.click(getByRole('button', { name: 'Show error' }));
+    expect(useBottomPanelStore.getState().collapsed).toBe(false);
+    expect(getByRole('button', { name: /Run again/ })).toBeTruthy();
+  });
+
+  it('a clean run with no circuit says there is nothing to simulate', () => {
+    useSimulationStore.setState({ lastRunNoCircuit: true });
+    const { container } = render(<VizZone visible={visible({ circuit: true })} chip={null} />);
+    expect(container.textContent).toContain('Nothing to simulate');
+  });
+
+  it('keeps the running variant', () => {
+    useSimulationStore.setState({ isRunning: true });
+    const { container } = render(<VizZone visible={visible({ circuit: true })} chip={null} />);
+    expect(container.querySelector('.viz-results-empty')?.textContent).toContain('Running');
+  });
+});
+
+describe('<VizZone> when Python did not start (shell-r3-06)', () => {
+  it('keeps the column with a calm placeholder and a Retry that restarts the kernel', async () => {
+    const control = await import('../../lib/kernelControl');
+    const retry = vi.fn();
+    control.registerKernelRetry(retry);
+    const { container, getByRole } = render(<VizZone visible={visible({})} chip={null} startFailed />);
+    expect(container.textContent).toContain("didn't start");
+    fireEvent.click(getByRole('button', { name: 'Retry' }));
+    expect(retry).toHaveBeenCalledTimes(1);
+    control.registerKernelRetry(null);
   });
 });

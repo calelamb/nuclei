@@ -47,7 +47,7 @@ export function BlochRail({ children }: { children: ReactNode }) {
       ref={measureRef}
       data-testid="bloch-rail"
       style={{
-        flex: '0 1 auto', minHeight: count > 0 ? min : 240, height: count > 0 ? height : undefined,
+        flex: count > 0 ? '0 1 auto' : '1 1 auto', minHeight: count > 0 ? min : 240, height: count > 0 ? height : undefined,
         display: 'flex', flexDirection: 'column', overflow: 'hidden',
       }}
     >

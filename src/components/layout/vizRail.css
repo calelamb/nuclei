@@ -16,3 +16,9 @@
 /* Boot placeholder: top-aligned where the circuit header will land, so the eye does not jump when Python is ready. */
 .viz-empty--boot { justify-content: flex-start; padding-top: var(--space-6); }
 .viz-empty--boot .nuclei-empty__body { max-width: 36ch; text-wrap: balance; }
+
+/* "No results yet" fills whatever the results zone has left, so it reads the same in every layout preset. */
+.viz-results-empty { flex: 1; min-height: 0; height: 100%; display: flex; }
+.viz-results-empty .viz-empty { flex: 1; }
+.viz-results-empty__actions { display: flex; gap: var(--space-2); justify-content: center; flex-wrap: wrap; }
+.viz-results-empty .nuclei-empty__body { max-width: 28ch; text-wrap: balance; }

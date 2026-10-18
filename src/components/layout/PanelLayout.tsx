@@ -13,7 +13,7 @@ import { useRoomRetreat } from '../../layout/useRoomRetreat';
 import { useShellLayout } from '../../hooks/useShellLayout';
 import { useUiFeatures } from '../../hooks/useUiFeatures';
 import { useElementSize } from '../../hooks/useElementSize';
-import { vizColumnHasContent } from '../../layout/vizPanels';
+import { vizColumnHasContent, vizPlaceholder } from '../../layout/vizPanels';
 import { EDITOR_MIN_WIDTH, VIZ_MIN_WIDTH } from '../../layout/breakpoints';
 import { DiracSidePanel } from '../dirac/DiracSidePanel';
 import { ActivityBar } from './ActivityBar';
@@ -205,8 +205,12 @@ export function PanelLayout() {
   const vizFits = topSplitSize.width === 0 || topSplitSize.width >= EDITOR_MIN_WIDTH + VIZ_MIN_WIDTH;
   // While Python boots the column is held open (with a placeholder) so the editor does not jump width when it is ready.
   const kernelStatus = useEditorStore((s) => s.kernelStatus);
-  const booting = isWebBuild() && kernelStatus === 'connecting' && !vizHasContent;
-  const showViz = (vizHasContent || booting) && vizFits;
+  // A failed start keeps the column too (with a Retry), so the editor does not jump when the kernel recovers.
+  const kernelReady = useEditorStore((s) => s.kernelReady);
+  const placeholder = vizPlaceholder({ hasContent: vizHasContent, kernelStatus, kernelReady, isWeb: isWebBuild() });
+  const booting = placeholder === 'booting';
+  const startFailed = placeholder === 'failed';
+  const showViz = (vizHasContent || placeholder !== null) && vizFits;
 
   const diracOpen = useDiracPanelStore((s) => s.isOpen);
   const closeDirac = useDiracPanelStore((s) => s.close);
@@ -515,6 +519,7 @@ export function PanelLayout() {
                       <VizZone
                         visible={visible}
                         booting={booting}
+                        startFailed={startFailed}
                         chip={
                           <PanelReveal when={chipShown} from="bottom">
                             <div style={{ padding: '6px 10px 10px', flexShrink: 0 }}>
