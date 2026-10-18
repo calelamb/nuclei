@@ -3,6 +3,8 @@ import type { ProviderStatus, ProviderStatusKind } from './launchGating';
 
 const TONE: Record<ProviderStatusKind, BadgeTone> = {
   ready: 'success',
+  starting: 'neutral',
+  unavailable: 'danger',
   'needs-setup': 'warning',
   'desktop-only': 'neutral',
   'coming-soon': 'neutral',

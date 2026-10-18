@@ -1,14 +1,16 @@
-import { Badge, Button, EmptyState, Select } from '../ui';
+import { Badge, Button, EmptyState, IconButton, Select } from '../ui';
 import { DesktopOnlyState } from './DesktopOnlyState';
 import { useState } from 'react';
-import { ChevronDown, ChevronRight, Rocket, Trash2 } from 'lucide-react';
+import { ChevronDown, ChevronRight, Rocket, Settings2, Trash2 } from 'lucide-react';
 import { useThemeStore } from '../../stores/themeStore';
 import { useHardwareStore } from '../../stores/hardwareStore';
 import { hasActiveJobForBackend } from '../../lib/hardwareJobs';
 import { useFrameworksStore } from '../../stores/frameworksStore';
 import { usePlatform } from '../../platform/PlatformProvider';
 import { ProviderStatusBadge } from './ProviderStatusBadge';
-import { providerNeedsToken, providerStatus } from './launchGating';
+import { providerNeedsToken, providerStatus, sortProvidersForDisplay } from './launchGating';
+import { useEditorStore } from '../../stores/editorStore';
+import { retryKernel } from '../../lib/kernelControl';
 import { useSimulationStore } from '../../stores/simulationStore';
 import { JobTracker } from './JobTracker';
 import { ConnectivityMap } from './ConnectivityMap';
@@ -16,7 +18,7 @@ import { ResultsComparison } from './ResultsComparison';
 import { CredentialSetup } from './CredentialSetup';
 import type { HardwareProviderType } from '../../types/hardware';
 
-import { TYPOGRAPHY } from '../../styles/tokens';
+import { ICON_SIZE, ICON_STROKE, TYPOGRAPHY } from '../../styles/tokens';
 /* ── Section (local copy matching SettingsPanel pattern) ── */
 
 function Section({
@@ -97,6 +99,9 @@ export function HardwarePanel() {
   const simResult = useSimulationStore((s) => s.result);
   const isWeb = usePlatform().getPlatform() === 'web';
   const cudaqInstalled = useFrameworksStore((s) => s.status?.installed.includes('cuda-q') ?? false);
+  const kernelStatus = useEditorStore((s) => s.kernelStatus);
+  const statusFor = (p: { name: HardwareProviderType; connected: boolean }) =>
+    providerStatus({ provider: p.name, connected: p.connected, isWeb, cudaqInstalled, kernelStatus });
 
   const anyConnected = providers.some((p) => p.connected);
 
@@ -126,34 +131,26 @@ export function HardwarePanel() {
               Provider connections and job queues need the local kernel.
             </DesktopOnlyState>
           )}
-          {[...providers].sort((a, b) => Number(b.name === 'simulator') - Number(a.name === 'simulator')).map((p) => {
-            const status = providerStatus({ provider: p.name, connected: p.connected, isWeb, cudaqInstalled });
+          {sortProvidersForDisplay(providers, (p) => statusFor(p).kind).map((p) => {
+            const status = statusFor(p);
+            const label = PROVIDER_LABELS[p.name];
+            const configurable = status.kind === 'needs-setup' && providerNeedsToken(p.name);
             return (
-            <div
-              key={p.name}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                flexWrap: 'wrap',
-                gap: '4px 8px',
-                padding: '5px 0',
-              }}
-            >
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
-                <span style={{ fontSize: 12, fontWeight: 600, color: colors.text, whiteSpace: 'nowrap', ...font }}>
-                  {PROVIDER_LABELS[p.name]}
+            <div key={p.name} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '5px 0', minHeight: 32 }}>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <span style={{ display: 'block', fontSize: 12, fontWeight: 600, color: colors.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', ...font }}>
+                  {label}
                 </span>
               </div>
-
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginLeft: 'auto' }}>
-                {status.kind === 'needs-setup' && providerNeedsToken(p.name) && (
-                  <Button size="sm" variant="secondary" onClick={() => setShowCredentialSetup(p.name)}>
-                    Configure
-                  </Button>
-                )}
-                <ProviderStatusBadge status={isWeb && p.name === 'simulator' ? { ...status, label: 'In your browser' } : status} />
-              </div>
+              <ProviderStatusBadge status={isWeb && p.name === 'simulator' ? { ...status, label: 'In your browser' } : status} />
+              {status.kind === 'unavailable' && (
+                <Button size="sm" variant="secondary" onClick={retryKernel}>Retry</Button>
+              )}
+              {configurable && (
+                <IconButton size="sm" aria-label={`Configure ${label}`} tooltip={{ label: `Configure ${label}`, placement: 'above' }} onClick={() => setShowCredentialSetup(p.name)}>
+                  <Settings2 aria-hidden="true" size={ICON_SIZE.sm} strokeWidth={ICON_STROKE} />
+                </IconButton>
+              )}
             </div>
             );
           })}

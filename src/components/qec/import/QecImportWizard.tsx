@@ -105,7 +105,7 @@ function SourceStage({ source, probe }: { source: string; probe: AsyncState<Impo
       <dl className="qec-import-facts">
         <FieldValue label="Source" value={source} />
         <FieldValue label="Source size" value={probe.value ? formatByteSize(probe.value.sourceByteSize) : 'Not reported'} />
-        <FieldValue label="SHA-256" value={firstHash ? shortHash(firstHash) : 'Not reported'} title={firstHash} />
+        <FieldValue label="SHA-256" value={firstHash ? shortHash(firstHash) : 'Not reported'} title={firstHash ?? undefined} />
         <FieldValue label="Source spans" value="Recorded by adapter during import" />
       </dl>
       <p className="qec-import-policy"><Copy aria-hidden="true" size={16} /><strong>Copy-only import</strong><span>Original preserved; canonical data receives a project-local source copy.</span></p>

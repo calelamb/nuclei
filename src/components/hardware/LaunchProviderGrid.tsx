@@ -1,7 +1,8 @@
 import { useThemeStore } from '../../stores/themeStore';
 import { ProviderLogo } from './ProviderLogo';
 import { ProviderStatusBadge } from './ProviderStatusBadge';
-import { QSHARP_GATE_TOOLTIP, providerStatus, sortProvidersByStatus } from './launchGating';
+import { QSHARP_GATE_TOOLTIP, providerStatus, sortProvidersForDisplay } from './launchGating';
+import { useEditorStore } from '../../stores/editorStore';
 import { PROVIDERS, type ProviderMeta } from './launchProviders';
 import type { HardwareProviderType } from '../../types/hardware';
 import { TYPOGRAPHY } from '../../styles/tokens';
@@ -24,8 +25,9 @@ const PRICING_LABEL: Record<ProviderMeta['pricing'], string> = {
 /** Step one: where to run. Every card carries the same status badge the Hardware panel shows. */
 export function LaunchProviderGrid({ isWeb, cudaqInstalled, connected, qsharpBlocks, onPick }: Props) {
   const colors = useThemeStore((s) => s.colors);
-  const statusOf = (p: ProviderMeta) => providerStatus({ provider: p.name, connected: connected.has(p.name), isWeb, cudaqInstalled });
-  const ordered = sortProvidersByStatus(PROVIDERS, (p) => statusOf(p).kind);
+  const kernelStatus = useEditorStore((s) => s.kernelStatus);
+  const statusOf = (p: ProviderMeta) => providerStatus({ provider: p.name, connected: connected.has(p.name), isWeb, cudaqInstalled, kernelStatus });
+  const ordered = sortProvidersForDisplay(PROVIDERS, (p) => statusOf(p).kind);
   return (
     <div
       style={{
@@ -38,7 +40,7 @@ export function LaunchProviderGrid({ isWeb, cudaqInstalled, connected, qsharpBlo
         const status = statusOf(p);
         const qsharpBlocked = qsharpBlocks(p.name);
         // Desktop-only providers on the web are as inert as coming-soon ones; the header's Download button is the way forward.
-        const disabled = status.kind === 'coming-soon' || status.kind === 'desktop-only' || qsharpBlocked;
+        const disabled = status.kind === 'coming-soon' || status.kind === 'desktop-only' || status.kind === 'unavailable' || qsharpBlocked;
         return (
           <button
             key={p.name}

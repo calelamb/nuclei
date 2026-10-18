@@ -4,6 +4,7 @@ import { cleanup, render, screen, within } from '@testing-library/react';
 import { HardwarePanel } from './HardwarePanel';
 import { PlatformProvider } from '../../platform/PlatformProvider';
 import type { PlatformBridge } from '../../platform/bridge';
+import { useEditorStore } from '../../stores/editorStore';
 
 vi.mock('../../App', () => ({ getHardware: () => null, getExecute: () => null }));
 
@@ -32,5 +33,26 @@ describe('HardwarePanel on the web build (rq-r3-13)', () => {
     render(<PlatformProvider bridge={web}><HardwarePanel /></PlatformProvider>);
     expect(screen.getByText('Hardware runs need the desktop app').className).toContain('nuclei-empty__title');
     expect(screen.getAllByRole('button', { name: 'Download Nuclei' })).toHaveLength(1);
+  });
+});
+
+describe('HardwarePanel on desktop (research-r-04)', () => {
+  const desktop = { getPlatform: () => 'desktop' } as unknown as PlatformBridge;
+  afterEach(() => useEditorStore.setState({ kernelStatus: 'idle' }));
+
+  it("does not call the Local Simulator Ready when the kernel didn't start, and offers Retry", () => {
+    useEditorStore.setState({ kernelStatus: 'failed' });
+    render(<PlatformProvider bridge={desktop}><HardwarePanel /></PlatformProvider>);
+    const row = screen.getByText('Local Simulator').parentElement?.parentElement as HTMLElement;
+    expect(within(row).getByText("Kernel didn't start")).toBeTruthy();
+    expect(within(row).queryByText('Ready')).toBeNull();
+    expect(within(row).getByRole('button', { name: 'Retry' })).toBeTruthy();
+  });
+
+  it('keeps each provider on one row: name, status, and a Configure icon for a provider that needs a token', () => {
+    render(<PlatformProvider bridge={desktop}><HardwarePanel /></PlatformProvider>);
+    const row = screen.getByText('IBM Quantum').parentElement?.parentElement as HTMLElement;
+    expect(row.style.flexWrap).not.toBe('wrap');
+    expect(within(row).getByRole('button', { name: 'Configure IBM Quantum' })).toBeTruthy();
   });
 });
