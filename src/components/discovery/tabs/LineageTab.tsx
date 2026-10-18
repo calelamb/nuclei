@@ -80,7 +80,11 @@ const NodeLayer = memo(function NodeLayer({ layout, byId, extent, championId, se
 
 /** Lineage tree (root = seed): pan and zoom, click or Enter opens the drawer, arrow keys walk the tree. */
 export function LineageTab({ view, selectedId, onOpen }: { view: RunView; selectedId: string | null; onOpen: (id: string) => void }) {
-  const list = useMemo(() => candidateList(view), [view]);
+  const all = useMemo(() => candidateList(view), [view]);
+  const [showNoise, setShowNoise] = useState(false);
+  // Duplicates and invalid proposals never have children; hiding them keeps big trees readable.
+  const noise = useMemo(() => all.filter((c) => ['duplicate', 'invalid'].includes(candidateKind(c))).length, [all]);
+  const list = useMemo(() => (showNoise ? all : all.filter((c) => !['duplicate', 'invalid'].includes(candidateKind(c)))), [all, showNoise]);
   const signature = lineageSignature(list);
   // The layout depends on structure only; fitness updates never re-run it.
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -91,13 +95,19 @@ export function LineageTab({ view, selectedId, onOpen }: { view: RunView; select
   const svgRef = useRef<SVGSVGElement | null>(null);
   const gRef = useRef<SVGGElement | null>(null);
   const zoomRef = useRef<ZoomBehavior<SVGSVGElement, unknown> | null>(null);
+  const extentWidth = useRef(width);
+  useEffect(() => {
+    extentWidth.current = width;
+  }, [width]);
   const [cursorId, setCursorId] = useState<string | null>(view.run.champion_id ?? list[0]?.id ?? null);
   const [announcement, setAnnouncement] = useState('');
 
   useEffect(() => {
     const svg = svgRef.current;
     if (!svg) return;
+    // An explicit extent avoids d3 reading the SVG's viewBox, which not every DOM implements.
     const behavior = zoom<SVGSVGElement, unknown>()
+      .extent((): [[number, number], [number, number]] => [[0, 0], [extentWidth.current, HEIGHT]])
       .scaleExtent([0.15, 4])
       .on('zoom', (event) => gRef.current?.setAttribute('transform', event.transform.toString()));
     zoomRef.current = behavior;
@@ -161,7 +171,7 @@ export function LineageTab({ view, selectedId, onOpen }: { view: RunView; select
   }
 
   const improvements = list.filter((c) => isImprovement(c, byId)).length;
-  const summary = `Lineage tree of ${list.length} candidates rooted at the seed, ${improvements} of which beat their parent. Use the arrow keys to move between parents, children and siblings, and Enter to open a candidate. The Candidates tab lists the same data as a table.`;
+  const summary = `Lineage tree of ${list.length} candidates${noise > 0 && !showNoise ? ` (${noise} duplicates and invalid proposals hidden)` : ''} rooted at the seed, ${improvements} of which beat their parent. Use the arrow keys to move between parents, children and siblings, and Enter to open a candidate. The Candidates tab lists the same data as a table.`;
 
   return (
     <LabCard
@@ -169,6 +179,12 @@ export function LineageTab({ view, selectedId, onOpen }: { view: RunView; select
       subtitle="Root is the seed. Color is fitness, a green ring marks an improvement, hollow red is rejected."
       actions={<RampLegend low="low fitness" high="high fitness" label="Fitness" />}
     >
+      {noise > 0 && (
+        <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6, minHeight: 28, fontSize: 12, marginBottom: 'var(--space-2)' }}>
+          <input type="checkbox" checked={showNoise} onChange={(e) => setShowNoise(e.target.checked)} />
+          Show {noise} duplicate / invalid
+        </label>
+      )}
       <div ref={wrapRef} className="disc-lineage">
         <div className="disc-lineage__controls">
           <LabButton size="sm" variant="secondary" iconOnly icon={Plus} aria-label="Zoom in" onClick={() => zoomBy(1.4)} />

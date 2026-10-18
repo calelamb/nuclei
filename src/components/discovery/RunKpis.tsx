@@ -20,11 +20,11 @@ function EvaluationsTile({ kpis }: { kpis: DiscoveryKpis }) {
       <div className="disc-stack-bar" aria-hidden>
         {total > 0 && SEGMENTS.map((s) => (kpis.counts[s.key] > 0 ? <span key={s.key} style={{ flexGrow: kpis.counts[s.key], background: s.color }} /> : null))}
       </div>
-      <dl className="disc-counts">
+      <ul className="disc-inline-counts" aria-label="Evaluation outcomes">
         {SEGMENTS.map((s) => (
-          <div key={s.key}><dt>{s.label}</dt><dd>{kpis.counts[s.key]}</dd></div>
+          <li key={s.key}><b>{kpis.counts[s.key]}</b> {s.label}</li>
         ))}
-      </dl>
+      </ul>
     </div>
   );
 }
@@ -68,7 +68,7 @@ export function RunKpis({ kpis }: { kpis: DiscoveryKpis }) {
         title="The champion's primary objective, and its mean on fresh seeds once confirmed."
       />
       <EvaluationsTile kpis={kpis} />
-      <LabKpi icon={Percent} label="Acceptance rate" value={formatPct(kpis.acceptanceRate, 0)} detail="evaluated candidates that entered the archive" />
+      <LabKpi icon={Percent} label="Acceptance rate" value={formatPct(kpis.acceptanceRate, 0)} detail="entered the archive" title="Share of evaluated candidates that entered the MAP-Elites archive." />
       <LabKpi
         icon={Share2}
         label="Improvements by mutator"

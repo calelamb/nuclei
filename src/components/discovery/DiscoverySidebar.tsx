@@ -15,6 +15,7 @@ import { runTimeLabel } from '../../services/discovery/format';
 import type { RunRecord } from '../../types/discovery';
 import { EvaluatorChip, RunStatusPill } from './pills';
 import { useDiscoveryBoot } from './useDiscoveryBoot';
+import './discovery.css';
 
 const LIST_STYLE = { listStyle: 'none', margin: 0, padding: 0, display: 'grid', gap: 'var(--space-1)' } as const;
 const VISIBLE_RUNS = 4;
@@ -29,10 +30,10 @@ function RunRow({ run, selected, onSelect }: { run: RunRecord; selected: boolean
         aria-pressed={selected}
         aria-label={`Run ${runTimeLabel(run.run_id)}, ${run.status}`}
         onClick={onSelect}
-        style={{ width: '100%', justifyContent: 'flex-start', gap: 'var(--space-2)', minHeight: 28, background: selected ? 'var(--lab-quantum-soft)' : undefined }}
+        style={{ width: '100%', height: 'auto', flexWrap: 'wrap', justifyContent: 'flex-start', gap: '2px var(--space-2)', minHeight: 28, padding: '3px 8px', background: selected ? 'var(--lab-quantum-soft)' : undefined }}
       >
         <RunStatusPill status={run.status} />
-        <span className="lab-mono" style={{ flex: 1, textAlign: 'left', overflow: 'hidden', textOverflow: 'ellipsis' }}>{runTimeLabel(run.run_id)}</span>
+        <span className="lab-mono" style={{ flex: 1, textAlign: 'left', overflow: 'hidden', textOverflow: 'ellipsis' }}>{runTimeLabel(run.run_id, true)}</span>
         <span className="lab-mono lab-muted" title="Best fitness">{best === undefined ? '—' : formatSci(best, 3)}</span>
       </button>
     </li>
@@ -54,11 +55,13 @@ function DefinitionBlock({ definition, runs }: { definition: DiscoveryDefinition
         className="lab-button lab-button--ghost"
         aria-pressed={isSelected}
         onClick={() => selectDefinition(definition.fileName)}
-        style={{ width: '100%', justifyContent: 'flex-start', gap: 'var(--space-2)', minHeight: 32, background: isSelected ? 'var(--lab-quantum-soft)' : undefined }}
+        style={{ width: '100%', height: 'auto', justifyContent: 'flex-start', alignItems: 'flex-start', gap: 'var(--space-2)', minHeight: 32, padding: '6px 10px', background: isSelected ? 'var(--lab-quantum-soft)' : undefined }}
       >
-        <FileCode2 size={13} aria-hidden />
-        <span style={{ flex: 1, textAlign: 'left', overflow: 'hidden', textOverflow: 'ellipsis', fontWeight: 600 }}>{definition.spec.name}</span>
-        <EvaluatorChip kind={definition.spec.evaluator.kind} />
+        <FileCode2 size={13} aria-hidden style={{ marginTop: 3 }} />
+        <span style={{ flex: 1, minWidth: 0, display: 'grid', gap: 4, justifyItems: 'start' }}>
+          <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', fontWeight: 600, maxWidth: '100%' }}>{definition.spec.name}</span>
+          <EvaluatorChip kind={definition.spec.evaluator.kind} />
+        </span>
       </button>
       {runs.length > 0 && (
         <ul aria-label={`Runs of ${definition.spec.name}`} style={{ ...LIST_STYLE, marginLeft: 'var(--space-4)', marginTop: 2 }}>
@@ -124,7 +127,7 @@ export function DiscoverySidebar() {
   }
 
   return (
-    <LabShell label="Discovery Engine sidebar">
+    <LabShell label="Discovery Engine sidebar" className="disc-root">
       <LabShellBody>
         <div className="lab-stack">
           <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>

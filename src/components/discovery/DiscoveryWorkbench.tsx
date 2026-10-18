@@ -73,7 +73,7 @@ export function DiscoveryWorkbench() {
   const openWizard = useDiscoveryStore((s) => s.openWizard);
   const projectOpen = useDiscoveryStore((s) => s.projectRoot !== null);
   return (
-    <LabShell label="Discovery Engine">
+    <LabShell label="Discovery Engine" className="disc-root">
       <LabToolbar icon={Dna} title="Discovery Engine" subtitle="Evolutionary search with trusted evaluators">
         <LabButton variant="primary" size="md" icon={Plus} disabled={!projectOpen} onClick={openWizard}>New discovery</LabButton>
       </LabToolbar>

@@ -71,15 +71,15 @@ function DrawerBody({ view, candidate, onClose, onSelect }: { view: RunView; can
       subtitle={`Island ${candidate.island + 1}, generation ${candidate.generation}, ${candidate.mutator.toUpperCase()}`}
       actions={
         <>
-          <LabButton size="sm" icon={ExternalLink} onClick={() => void openAsFile()}>Open as file</LabButton>
-          <LabButton size="sm" icon={FileOutput} onClick={() => void doPromote()}>Promote</LabButton>
-          <LabButton size="sm" icon={RefreshCw} disabled={!canReevaluate} title={live ? 'Wait for the run to finish or stop it first' : evaluation === null ? 'Only evaluated candidates can be re-evaluated' : undefined} onClick={() => void doReevaluate()}>
+          <LabButton size="md" icon={ExternalLink} onClick={() => void openAsFile()}>Open as file</LabButton>
+          <LabButton size="md" icon={FileOutput} onClick={() => void doPromote()}>Promote</LabButton>
+          <LabButton size="md" icon={RefreshCw} disabled={!canReevaluate} title={live ? 'Wait for the run to finish or stop it first' : evaluation === null ? 'Only evaluated candidates can be re-evaluated' : undefined} onClick={() => void doReevaluate()}>
             {reevaluating ? 'Re-evaluating…' : 'Re-evaluate'}
           </LabButton>
         </>
       }
     >
-      <div className="lab-stack">
+      <div className="lab-stack disc-root">
         {notice && <LabCallout tone={notice.tone}>{notice.text}</LabCallout>}
         <FailureCallouts candidate={candidate} evaluation={shown} />
         <Section title="Lineage">

@@ -1,5 +1,5 @@
-import { useMemo } from 'react';
-import { ChartFrame, LabCallout, LabCard, LabEmptyState, formatPct } from '../../lab';
+import { useMemo, useState } from 'react';
+import { ChartFrame, LabButton, LabCallout, LabCard, LabEmptyState, formatPct } from '../../lab';
 import { guardrailPassRates, isolationNote, isolationUsed, rejectionReasons, type GuardrailPassRate, type RejectionReason } from '../../../services/discovery/guardrailStats';
 import { SANDBOX_HONESTY } from '../../../services/discovery/honesty';
 import { candidateList, type RunView } from '../../../services/discovery/runView';
@@ -29,6 +29,27 @@ function ReasonsChart({ reasons }: { reasons: RejectionReason[] }) {
         </g>
       )}
     </ChartFrame>
+  );
+}
+
+const VISIBLE_IDS = 12;
+
+function ReasonItem({ reason, onOpen }: { reason: RejectionReason; onOpen: (id: string) => void }) {
+  const [all, setAll] = useState(false);
+  const ids = all ? reason.candidateIds : reason.candidateIds.slice(0, VISIBLE_IDS);
+  return (
+    <li>
+      <div><strong>{reason.label}</strong> <span className="lab-mono lab-muted">{reason.count}×</span></div>
+      <div className="lab-muted" style={{ fontSize: 12 }}>{reason.message}</div>
+      <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', marginTop: 4 }}>
+        {ids.map((id) => (
+          <button key={id} type="button" className="lab-button lab-button--sm lab-mono" onClick={() => onOpen(id)} aria-label={`Open ${id}, rejected by ${reason.label}`}>{id}</button>
+        ))}
+        {reason.candidateIds.length > VISIBLE_IDS && (
+          <LabButton size="sm" variant="ghost" onClick={() => setAll((v) => !v)}>{all ? 'Show fewer' : `Show all ${reason.candidateIds.length}`}</LabButton>
+        )}
+      </div>
+    </li>
   );
 }
 
@@ -69,17 +90,7 @@ export function GuardrailsTab({ view, onOpen, exploits }: { view: RunView; onOpe
             <div className="lab-stack">
               <ReasonsChart reasons={reasons} />
               <ul aria-label="Rejection reasons" style={{ listStyle: 'none', margin: 0, padding: 0, display: 'grid', gap: 'var(--space-3)' }}>
-                {reasons.map((r) => (
-                  <li key={r.guardrail}>
-                    <div><strong>{r.label}</strong> <span className="lab-mono lab-muted">{r.count}×</span></div>
-                    <div className="lab-muted" style={{ fontSize: 12 }}>{r.message}</div>
-                    <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', marginTop: 4 }}>
-                      {r.candidateIds.map((id) => (
-                        <button key={id} type="button" className="lab-button lab-button--sm lab-mono" onClick={() => onOpen(id)} aria-label={`Open ${id}, rejected by ${r.label}`}>{id}</button>
-                      ))}
-                    </div>
-                  </li>
-                ))}
+                {reasons.map((r) => <ReasonItem key={r.guardrail} reason={r} onOpen={onOpen} />)}
               </ul>
             </div>
           )}

@@ -14,9 +14,10 @@ export function signed(value: number, formatter: (v: number) => string): string 
 }
 
 /** `20261018-141530-a1b2` → `2026-10-18 14:15`. */
-export function runTimeLabel(runId: string): string {
+export function runTimeLabel(runId: string, short = false): string {
   const m = /^(\d{4})(\d{2})(\d{2})-(\d{2})(\d{2})/.exec(runId);
-  return m ? `${m[1]}-${m[2]}-${m[3]} ${m[4]}:${m[5]}` : runId;
+  if (!m) return runId;
+  return short ? `${m[2]}-${m[3]} ${m[4]}:${m[5]}` : `${m[1]}-${m[2]}-${m[3]} ${m[4]}:${m[5]}`;
 }
 
 export const EVALUATOR_TITLE = {
