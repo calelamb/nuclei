@@ -44,6 +44,18 @@ def _error(code: str, message: str, isolation: str, stderr: str = "") -> dict[st
     }
 
 
+def _reject_constant(token: str):
+    raise ValueError(f"non-finite JSON constant {token}")
+
+
+def _single_document(text: str) -> Any:
+    """Exactly one JSON document: no second line, no trailing bytes, no NaN/Infinity."""
+    value, end = json.JSONDecoder(parse_constant=_reject_constant).raw_decode(text)
+    if text[end:].strip():
+        raise ValueError("trailing data after the response")
+    return value
+
+
 def _interpret(result: ProcResult, isolation: str) -> dict[str, Any]:
     stderr_text = result.stderr.decode("utf-8", "replace")
     if result.spawn_error:
@@ -70,9 +82,9 @@ def _interpret(result: ProcResult, isolation: str) -> dict[str, Any]:
             stderr_text[:512],
         )
     try:
-        response = json.loads(text)
+        response = _single_document(text)
     except ValueError:
-        return _error("worker_bad_output", "Worker response was not valid JSON.", isolation)
+        return _error("worker_bad_output", "Worker response was not exactly one valid JSON document.", isolation)
     if not isinstance(response, dict) or response.get("status") not in ("ok", "error"):
         return _error("worker_bad_output", "Worker response had an unexpected shape.", isolation)
     response.setdefault("artifacts", [])
