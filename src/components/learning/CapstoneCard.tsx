@@ -26,7 +26,7 @@ export function CapstoneCard({ project, completedCount, onStart }: CapstoneCardP
         <div className="cap-card__bar-fill" style={{ width: `${total ? (completedCount / total) * 100 : 0}%` }} />
       </div>
       <Button size="sm" variant={isStarted ? 'secondary' : 'primary'} className="cap-card__action" onClick={onStart}>
-        {isStarted ? 'Continue' : 'Start Project'}
+        {isStarted ? 'Continue' : 'Start project'}
       </Button>
     </div>
   );

@@ -53,10 +53,10 @@ export function TrackVideoShelf() {
   const videos = creator === 'all' ? CURATED_VIDEOS : CURATED_VIDEOS.filter((v) => v.creator === creator);
 
   return (
-    <section className="shelf" aria-label="Video Library">
+    <section className="shelf" aria-label="Video library">
       <div className="shelf__head">
         <div>
-          <h2 className="shelf__title">Video Library</h2>
+          <h2 className="shelf__title">Video library</h2>
           <p className="shelf__sub">Curated from 3Blue1Brown, IBM, NVIDIA, and Qiskit</p>
         </div>
         <span className="shelf__count">{videos.length} of {CURATED_VIDEOS.length} videos</span>

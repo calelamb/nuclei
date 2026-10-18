@@ -92,7 +92,7 @@ export function ExerciseBlock({
       setError(null);
       if (msg.data) {
         if (hasExpectations) {
-          // An untouched starter is shown, not graded; Check Solution grades it.
+          // An untouched starter is shown, not graded; Check solution grades it.
           if (shouldAutoGrade(codeRef.current, starterCode)) checkSolution(msg.data);
         } else {
           completeExercise(successMessage);
@@ -211,7 +211,7 @@ export function ExerciseBlock({
       <div className="demo__actions demo__actions--divided">
         <LessonRunButton isRunning={isRunning} pythonLoading={kernel.loading} stage={kernel.stage} onRun={handleRun} />
         {result && hasExpectations && (
-          <Button onClick={() => checkSolution(result)} icon={<CheckCircle size={12} aria-hidden="true" />}>Check Solution</Button>
+          <Button onClick={() => checkSolution(result)} icon={<CheckCircle size={12} aria-hidden="true" />}>Check solution</Button>
         )}
         {feedback?.success && !hasExpectations && (
           <span className="exercise__ok"><CheckCircle size={12} aria-hidden="true" /> Code ran successfully. Explore the output above.</span>
@@ -219,7 +219,7 @@ export function ExerciseBlock({
         <span className="demo__spacer" />
         {hintsRevealed < hints.length && (
           <Button onClick={revealHint} icon={<Lightbulb size={12} aria-hidden="true" />}>
-            Show Hint ({hintsRevealed}/{hints.length})
+            Show hint ({hintsRevealed}/{hints.length})
           </Button>
         )}
       </div>

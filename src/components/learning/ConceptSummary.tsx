@@ -7,7 +7,7 @@ const CATEGORY_LABELS: Readonly<Record<string, string>> = {
   gates: 'Gates',
   entanglement: 'Entanglement',
   algorithms: 'Algorithms',
-  'error-correction': 'Error Correction',
+  'error-correction': 'Error correction',
   hardware: 'Hardware',
 };
 

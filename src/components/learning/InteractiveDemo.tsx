@@ -165,7 +165,7 @@ export function InteractiveDemo({ code: initialCode, framework, description, exp
     <div className="demo">
       <div className="demo__head">
         <span className="demo__dot" aria-hidden="true" />
-        <span className="demo__kicker">Interactive Demo</span>
+        <span className="demo__kicker">Interactive demo</span>
         <span className="demo__desc">{description}</span>
       </div>
 

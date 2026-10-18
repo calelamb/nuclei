@@ -45,7 +45,7 @@ const STEPS = [
     title: 'Entanglement',
     dirac: "Now for the mind-bending part. Let's add a second qubit and entangle them using a CNOT gate. When qubits are entangled, measuring one instantly tells you about the other.",
     action: 'entangle' as const,
-    buttonLabel: 'Entangle Qubits',
+    buttonLabel: 'Entangle qubits',
   },
   {
     title: "You're Ready",

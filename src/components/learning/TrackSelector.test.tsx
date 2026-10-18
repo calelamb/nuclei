@@ -43,13 +43,13 @@ describe('TrackSelector', () => {
     fireEvent.click(screen.getByRole('tab', { name: 'Capstones' }));
     expect(screen.getByRole('tabpanel', { name: 'Capstones' })).toBeTruthy();
     fireEvent.click(screen.getByRole('tab', { name: 'Videos' }));
-    expect(screen.getByRole('region', { name: 'Video Library' })).toBeTruthy();
+    expect(screen.getByRole('region', { name: 'Video library' })).toBeTruthy();
   });
 
   it('filters the video shelf by creator with a keyboard-operable radio group', () => {
     useLearnSectionStore.setState({ section: 'videos' });
     render(<TrackSelector />);
-    const shelf = screen.getByRole('region', { name: 'Video Library' });
+    const shelf = screen.getByRole('region', { name: 'Video library' });
     const all = within(shelf).getAllByRole('button').length;
     fireEvent.click(within(shelf).getByRole('radio', { name: 'NVIDIA' }));
     const nvidia = CURATED_VIDEOS.filter((v) => v.creator === 'nvidia').length;

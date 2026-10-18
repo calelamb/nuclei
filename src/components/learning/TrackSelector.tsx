@@ -146,7 +146,7 @@ export function TrackSelector() {
         <header className="tracks__header">
           <span className="tracks__badge"><BookOpen size={20} aria-hidden="true" /></span>
           <div>
-            <h1 className="tracks__title">Learn Quantum Computing</h1>
+            <h1 className="tracks__title">Learn quantum computing</h1>
             <p className="tracks__lede">Code-first lessons with interactive demos. Watch, play, prove.</p>
           </div>
         </header>

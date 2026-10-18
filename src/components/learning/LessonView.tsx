@@ -175,7 +175,7 @@ export function LessonView({ lesson, trackId }: LessonViewProps) {
               <div className="lesson__next-title">{nextLesson.title}</div>
             </div>
             <Button variant="primary" size="lg" onClick={() => setCurrentLesson(trackId, nextLesson.id)}>
-              Next Lesson <ChevronRight size={16} aria-hidden="true" />
+              Next lesson <ChevronRight size={16} aria-hidden="true" />
             </Button>
           </div>
         )}

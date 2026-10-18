@@ -248,29 +248,29 @@ export function SettingsPanel() {
 
         {/* ── Editor ── */}
         <Section id="editor" title="Editor" defaultOpen>
-          <SettingRow label="Font Size">
+          <SettingRow label="Font size">
             <NumberStepper value={editor.fontSize} min={10} max={24} step={1}
               onChange={(v) => updateEditor({ fontSize: v })} />
           </SettingRow>
-          <SettingRow label="Tab Size">
+          <SettingRow label="Tab size">
             <SettingSelect value={String(editor.tabSize) as '2' | '4'}
               options={[{ value: '2', label: '2' }, { value: '4', label: '4' }]}
               onChange={(v) => updateEditor({ tabSize: Number(v) })} />
           </SettingRow>
-          <SettingRow label="Word Wrap">
+          <SettingRow label="Word wrap">
             <Toggle value={editor.wordWrap} onChange={(v) => updateEditor({ wordWrap: v })} />
           </SettingRow>
           <SettingRow label="Minimap">
             <Toggle value={editor.minimap} onChange={(v) => updateEditor({ minimap: v })} />
           </SettingRow>
-          <SettingRow label="Line Numbers">
+          <SettingRow label="Line numbers">
             <Toggle value={editor.lineNumbers} onChange={(v) => updateEditor({ lineNumbers: v })} />
           </SettingRow>
-          <SettingRow label="Bracket Colorization">
+          <SettingRow label="Bracket colorization">
             <Toggle value={editor.bracketPairColorization}
               onChange={(v) => updateEditor({ bracketPairColorization: v })} />
           </SettingRow>
-          <SettingRow label="Auto-Close Brackets">
+          <SettingRow label="Auto-close brackets">
             <Toggle value={editor.autoCloseBrackets}
               onChange={(v) => updateEditor({ autoCloseBrackets: v })} />
           </SettingRow>
@@ -288,25 +288,25 @@ export function SettingsPanel() {
             </span>
             <ApiKeyInput />
           </div>
-          <SettingRow label="Ghost Completions">
+          <SettingRow label="Ghost completions">
             <Toggle value={dirac.ghostCompletions}
               onChange={(v) => updateDirac({ ghostCompletions: v })} />
           </SettingRow>
-          <SettingRow label="Auto-Explain Errors">
+          <SettingRow label="Auto-explain errors">
             <Toggle value={dirac.autoExplainErrors}
               onChange={(v) => updateDirac({ autoExplainErrors: v })} />
           </SettingRow>
-          <SettingRow label="Ambient Narration"
+          <SettingRow label="Ambient narration"
             hint="Dirac comments on your circuit after you pause typing. Each comment is a paid Claude call, so it is off by default and limited to one every 10 seconds.">
             <Toggle value={dirac.ambientNarration}
               onChange={(v) => updateDirac({ ambientNarration: v })} />
           </SettingRow>
-          <SettingRow label="Extended Thinking"
+          <SettingRow label="Extended thinking"
             hint="Auto-escalate hard chat questions to deep reasoning. /think always works.">
             <Toggle value={dirac.extendedThinking}
               onChange={(v) => updateDirac({ extendedThinking: v })} />
           </SettingRow>
-          <SettingRow label="Preferred Model"
+          <SettingRow label="Preferred model"
             hint="Chat only. Auto picks per message; actions that use tools always run Sonnet.">
             <SettingSelect value={dirac.preferredModel}
               options={[
@@ -316,7 +316,7 @@ export function SettingsPanel() {
               ]}
               onChange={(v) => updateDirac({ preferredModel: v })} />
           </SettingRow>
-          <SettingRow label="Context Depth"
+          <SettingRow label="Context depth"
             hint="IDE state sent with chat. Minimal: code, circuit, errors. Standard: + results, exercise, hardware. Full: extra detail.">
             <SettingSelect value={dirac.contextDepth}
               options={[
@@ -329,7 +329,7 @@ export function SettingsPanel() {
         </Section>
 
         {/* ── Agent Hardware Autonomy ── */}
-        <Section title="Agent Hardware Autonomy">
+        <Section title="Agent hardware autonomy">
           <div style={{
             marginBottom: 8, padding: '8px 10px', borderRadius: 4,
             background: `${colors.error}12`, border: `1px solid ${colors.error}40`,
@@ -343,12 +343,12 @@ export function SettingsPanel() {
               unless you understand the cost implications.
             </span>
           </div>
-          <SettingRow label="Autonomous Hardware Submission"
+          <SettingRow label="Autonomous hardware submission"
             hint="When off, any hardware job Dirac proposes always needs your approval first.">
             <Toggle value={agentHardware.autonomousHardwareEnabled}
               onChange={(v) => updateAgentHardware({ autonomousHardwareEnabled: v })} />
           </SettingRow>
-          <SettingRow label="Max Spend"
+          <SettingRow label="Max spend"
             hint="Per-run budget ceiling for autonomous hardware jobs, in USD.">
             <CurrencyInput value={agentHardware.maxSpend}
               onChange={(v) => updateAgentHardware({ maxSpend: v })} />
@@ -360,7 +360,7 @@ export function SettingsPanel() {
 
         {/* ── Kernel ── */}
         <Section title="Kernel">
-          <SettingRow label="Default Framework">
+          <SettingRow label="Default framework">
             <SettingSelect value={kernel.defaultFramework}
               options={[
                 { value: 'qiskit', label: 'Qiskit' },
@@ -370,15 +370,15 @@ export function SettingsPanel() {
               ]}
               onChange={(v) => updateKernel({ defaultFramework: v })} />
           </SettingRow>
-          <SettingRow label="Default Shots">
+          <SettingRow label="Default shots">
             <NumberStepper value={kernel.defaultShots} min={100} max={100000} step={100}
               onChange={(v) => { updateKernel({ defaultShots: v }); setSimShots(v); }} />
           </SettingRow>
-          <SettingRow label="Auto-Parse on Type">
+          <SettingRow label="Auto-parse on type">
             <Toggle value={kernel.autoParseOnType}
               onChange={(v) => updateKernel({ autoParseOnType: v })} />
           </SettingRow>
-          <SettingRow label="Parse Debounce">
+          <SettingRow label="Parse debounce">
             <Slider value={kernel.parseDebounceMs} min={100} max={1000} step={50}
               onChange={(v) => updateKernel({ parseDebounceMs: v })}
               displayValue={`${kernel.parseDebounceMs}ms`} />
@@ -409,7 +409,7 @@ export function SettingsPanel() {
           style={{ width: '100%' }}
           onClick={() => { if (window.confirm('Reset all settings to their defaults? This cannot be undone.')) resetAll(); }}
         >
-          Reset to Defaults
+          Reset to defaults
         </Button>
       </div>
     </div>

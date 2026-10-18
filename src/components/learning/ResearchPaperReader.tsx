@@ -20,7 +20,7 @@ export function ResearchPaperReader() {
 
   return (
     <div className="paper">
-      <div className="paper__title">Research Paper Reader</div>
+      <div className="paper__title">Research paper reader</div>
       <div className="paper__lede">Paste an arXiv link or abstract and let Dirac explain it or generate a circuit from it.</div>
 
       <TextInput placeholder="Paste arXiv URL..." aria-label="arXiv URL" value={arxivUrl} onChange={(e) => setArxivUrl(e.target.value)} />

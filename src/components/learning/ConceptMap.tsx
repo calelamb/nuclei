@@ -20,7 +20,7 @@ const CATEGORY_LABELS: Record<string, string> = {
   gates: 'Gates',
   entanglement: 'Entanglement',
   algorithms: 'Algorithms',
-  'error-correction': 'Error Correction',
+  'error-correction': 'Error correction',
   hardware: 'Hardware',
 };
 
@@ -237,7 +237,7 @@ export function ConceptMap() {
                 color: getNodeColor(selectedNode.id),
                 fontWeight: 600,
               }}>
-                {conceptsMastered.includes(selectedNode.id) ? 'Mastered' : conceptsStruggling.includes(selectedNode.id) ? 'In Progress' : 'Not Started'}
+                {conceptsMastered.includes(selectedNode.id) ? 'Mastered' : conceptsStruggling.includes(selectedNode.id) ? 'In progress' : 'Not started'}
               </span>
               {selectedNode.node.exerciseIds.length > 0 && (
                 <span style={{
