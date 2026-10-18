@@ -159,7 +159,7 @@ def _ci(samples: np.ndarray, fallback: float) -> list[float]:
 
 def _inconclusive(n_layers, reason: str) -> dict[str, Any]:
     return {"n_layers": n_layers, "exponential": None, "power_law": None, "preferred": None,
-            "delta_aic": None, "verdict": "inconclusive", "verdict_reason": reason,
+            "delta_aic": None, "verdict": "inconclusive", "verdict_reason": reason, "verdict_basis": None,
             "summary": f"Inconclusive: {reason}."}
 
 
@@ -184,14 +184,19 @@ def _point_flaw(p: dict) -> str | None:
     return None
 
 
-def _verdict(preferred: str, delta: float, beta_ci: list[float]) -> tuple[str, str]:
+def _verdict(preferred: str, delta: float, beta_ci: list[float]) -> tuple[str, str, str | None]:
+    """``(verdict, reason, basis)``; ``basis`` is ``"aic_beta_lower"`` | ``"beta_upper"`` | ``"aic_power_law"``.
+
+    A ``polynomial`` with basis ``beta_upper`` rests on the bootstrap interval alone (no model-selection
+    evidence): consumers that need more than an interval, such as the Conjecture Engine, treat it as weak.
+    """
     if preferred == "exponential" and delta >= DELTA_AIC_THRESHOLD and beta_ci[0] > BETA_THRESHOLD:
-        return "barren_plateau", "exponential preferred (ΔAIC ≥ 2) and the β lower bound exceeds 0.1"
-    if beta_ci[1] <= BETA_THRESHOLD:
-        return "polynomial", "the β upper bound is at most 0.1"
+        return "barren_plateau", "exponential preferred (ΔAIC ≥ 2) and the β lower bound exceeds 0.1", "aic_beta_lower"
     if preferred == "power_law" and delta >= DELTA_AIC_THRESHOLD:
-        return "polynomial", "the power law is preferred (ΔAIC ≥ 2)"
-    return "inconclusive", "neither the β bounds nor ΔAIC separate the models"
+        return "polynomial", "the power law is preferred (ΔAIC ≥ 2)", "aic_power_law"
+    if beta_ci[1] <= BETA_THRESHOLD:
+        return "polynomial", "the β upper bound is at most 0.1", "beta_upper"
+    return "inconclusive", "neither the β bounds nor ΔAIC separate the models", None
 
 
 def _fit_group(n_layers, pts: list[dict], seed: int) -> dict[str, Any]:
@@ -220,7 +225,7 @@ def _fit_group(n_layers, pts: list[dict], seed: int) -> dict[str, Any]:
     aic_e, aic_p = _aic(rss_e, len(pts)), _aic(rss_p, len(pts))
     preferred = "exponential" if aic_e <= aic_p else "power_law"
     delta = abs(aic_e - aic_p)
-    verdict, why = _verdict(preferred, delta, beta_ci)
+    verdict, why, basis = _verdict(preferred, delta, beta_ci)
     # One convention: the exponent is −β (resp. −α) and its CI is the CI of that same exponent.
     if preferred == "exponential":
         head = (f"Var[∂C] ∝ 2^({_signed(-beta)} n) (95% CI on the exponent {_signed(-beta_ci[1])} to "
@@ -234,7 +239,7 @@ def _fit_group(n_layers, pts: list[dict], seed: int) -> dict[str, Any]:
         "n_layers": n_layers,
         "exponential": {"beta": beta, "beta_ci95": beta_ci, "log2_intercept": a_e, "r2": r2_e, "aic": aic_e},
         "power_law": {"alpha": alpha, "alpha_ci95": alpha_ci, "log2_intercept": a_p, "r2": r2_p, "aic": aic_p},
-        "preferred": preferred, "delta_aic": delta, "verdict": verdict, "verdict_reason": why,
+        "preferred": preferred, "delta_aic": delta, "verdict": verdict, "verdict_reason": why, "verdict_basis": basis,
         "summary": f"{head} preferred over {tail} (ΔAIC {delta:.1f}); {verdict.replace('_', ' ')}: {why}.",
     }
 

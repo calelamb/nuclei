@@ -39,9 +39,11 @@ def interval_outcome(lo: float, hi: float | None, op: str, value: float) -> str:
     raise ValueError(f"unsupported interval op {op!r}")
 
 
-def point_is_loose(variance: float, interval: list[float] | None, status: str | None) -> bool:
-    """True if a variance point is bounded-not-exact: truncated by a budget or relatively wide."""
-    if status not in (None, "complete"):
+def point_is_loose(variance: float | None, interval: list[float] | None, status: str | None) -> bool:
+    """True if a variance point is bounded-not-exact: truncated by a budget or relatively wide.
+
+    A ``None`` variance (an unresolved PPE point) is always loose."""
+    if variance is None or status not in (None, "complete"):
         return True
     if not interval:
         return False
@@ -49,18 +51,32 @@ def point_is_loose(variance: float, interval: list[float] | None, status: str | 
     return width > LOOSE_RELATIVE_WIDTH * max(abs(variance), 1e-300)
 
 
-def _verdict_outcome(actual: str, op: str, value: Any) -> str:
+def _verdict_outcome(actual: str, op: str, value: Any, observed: dict[str, Any]) -> tuple[str, str]:
+    """``(outcome, reason)`` of a ``verdict`` prediction.
+
+    The fit's verdict is only as strong as the evidence behind it (PH-M1): a ``polynomial`` reached through
+    the beta-interval rule alone (``fit_verdict_basis == "beta_upper"``) has no model-selection support, and a
+    ``barren_plateau`` whose beta interval, widened to the point-interval extremes, reaches 0.1 is not robust
+    to the Pauli-propagation intervals; both are indeterminate rather than meets/violates.
+    """
     wanted = value if isinstance(value, list) else [value]
     if actual == "inconclusive" and "inconclusive" not in wanted:
-        return INDETERMINATE
+        return INDETERMINATE, observed.get("fit_summary") or "the fit is inconclusive"
+    if actual == "polynomial" and observed.get("fit_verdict_basis") == "beta_upper":
+        return INDETERMINATE, ("the 'polynomial' verdict rests on the beta interval alone (no model-selection "
+                               "support), so it cannot decide a verdict prediction")
+    hull = observed.get("beta_ci95")
+    if actual == "barren_plateau" and hull is not None and hull[0] <= 0.1:
+        return INDETERMINATE, (f"the 'barren_plateau' verdict is not robust to the point intervals "
+                               f"(beta interval {hull[0]:.3g} to {hull[1]:.3g} reaches 0.1)")
     hit = actual in wanted
-    return MEETS if hit == (op != "!=") else VIOLATES
+    return (MEETS if hit == (op != "!=") else VIOLATES), ""
 
 
 def evaluate_prediction(prediction: dict[str, Any], observed: dict[str, Any]) -> tuple[str, list | str | None, str]:
     """Return ``(outcome, quantity_value, reason)`` for one circuit.
 
-    ``observed`` carries ``beta_ci95``, ``fit_verdict``, ``fit_summary``, ``max_n_interval``,
+    ``observed`` carries ``beta_ci95``, ``fit_verdict``, ``fit_verdict_basis``, ``fit_summary``, ``max_n_interval``,
     ``log2_dla_interval`` (each ``None`` when unavailable), ``loose_points`` (qubit counts with
     non-exact points), ``max_n`` and ``errors`` (point failures).
     """
@@ -87,8 +103,8 @@ def evaluate_prediction(prediction: dict[str, Any], observed: dict[str, Any]) ->
         actual = observed.get("fit_verdict")
         if actual is None:
             return INDETERMINATE, None, "no fit verdict"
-        return _verdict_outcome(actual, op, value), actual, observed.get("fit_summary", "") \
-            if actual == "inconclusive" else ""
+        outcome, why = _verdict_outcome(actual, op, value, observed)
+        return outcome, actual, why
     beta = observed.get("beta_ci95")
     if beta is None:
         return INDETERMINATE, None, observed.get("fit_summary") or "the scaling fit is undefined"
