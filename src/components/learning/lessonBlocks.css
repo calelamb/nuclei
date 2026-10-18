@@ -66,6 +66,7 @@
 .bsphere__chips { display: flex; flex-wrap: wrap; gap: var(--space-2); }
 .bsphere__chips .nuclei-btn { font-family: var(--font-mono); font-variant-ligatures: none; }
 .bsphere__chips .nuclei-btn[aria-pressed='true'] { border-color: var(--color-accent-quantum); background: color-mix(in srgb, var(--color-accent-quantum) 14%, transparent); }
+.bsphere__chips .nuclei-btn[aria-pressed='true']:hover:not(:disabled) { background: color-mix(in srgb, var(--color-accent-quantum) 22%, transparent); }
 .bsphere__gate.nuclei-btn { font-weight: var(--font-weight-semibold); }
 .bsphere__sliders { display: flex; flex-wrap: wrap; gap: var(--space-4); }
 .bsphere__slider { display: flex; align-items: center; flex: 1; gap: var(--space-2); min-width: 180px; }

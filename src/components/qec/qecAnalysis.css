@@ -40,3 +40,6 @@
   border-color: var(--color-accent-quantum); color: var(--color-accent-quantum-text);
   background: color-mix(in srgb, var(--color-accent-quantum) 14%, var(--color-surface-raised));
 }
+.qec-toggle-btn.nuclei-btn[aria-pressed='true']:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--color-accent-quantum) 22%, var(--color-surface-raised));
+}

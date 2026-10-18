@@ -233,6 +233,10 @@
 .qec-panel-pin.nuclei-icon-btn[aria-pressed='true'] {
   background: var(--qec-selection); color: var(--qec-analytical-strong);
 }
+/* Unlayered rules beat the primitives layer, so the pressed pin needs its own hover. */
+.qec-panel-pin.nuclei-icon-btn[aria-pressed='true']:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--qec-selection) 70%, var(--color-surface-overlay));
+}
 
 .qec-zone-heading {
   display: flex; min-height: 54px; flex: 0 0 auto; align-items: center;
