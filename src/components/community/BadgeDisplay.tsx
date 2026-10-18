@@ -17,7 +17,7 @@ export function BadgeDisplay({ earnedBadgeIds }: BadgeDisplayProps) {
     <div
       style={{
         display: 'grid',
-        gridTemplateColumns: 'repeat(3, minmax(0, 1fr))',
+        gridTemplateColumns: 'repeat(auto-fill, minmax(96px, 1fr))',
         gap: 8,
       }}
     >
@@ -59,7 +59,7 @@ export function BadgeDisplay({ earnedBadgeIds }: BadgeDisplayProps) {
                 color: earned ? colors.text : colors.textMuted,
                 textAlign: 'center',
                 lineHeight: 1.2,
-                overflowWrap: 'anywhere',
+                overflowWrap: 'break-word',
               }}
             >
               {badge.name}

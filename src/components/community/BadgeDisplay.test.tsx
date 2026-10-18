@@ -7,9 +7,9 @@ import { BADGES } from '../../data/community/badges';
 afterEach(cleanup);
 
 describe('BadgeDisplay', () => {
-  it('keeps the 3-column grid shrinkable so a 240px rail never clips it', () => {
+  it('flows badges into as many 96px+ columns as fit, so a 240px rail never clips or splits words', () => {
     const { container } = render(<BadgeDisplay earnedBadgeIds={[]} />);
-    expect((container.firstElementChild as HTMLElement).style.gridTemplateColumns).toBe('repeat(3, minmax(0, 1fr))');
+    expect((container.firstElementChild as HTMLElement).style.gridTemplateColumns).toBe('repeat(auto-fill, minmax(96px, 1fr))');
   });
 
   it('shows locked badges at full opacity with a lock state in the accessible name', () => {

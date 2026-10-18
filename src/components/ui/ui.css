@@ -332,6 +332,7 @@
 .nuclei-menu__item:focus, .nuclei-menu__item:hover:not(:disabled) { background: var(--color-surface-overlay) !important; }
 /* One highlight: the active row is a filled surface; the ring is a keyboard-only extra. */
 .nuclei-menu__item:focus-visible { outline: none; border-radius: var(--radius-xs); }
+.nuclei-menu[data-modality='keyboard'] .nuclei-menu__item:hover:not(:focus):not(:disabled) { background: transparent !important; } /* a parked pointer must not add a second highlight */
 .nuclei-menu[data-modality='keyboard'] .nuclei-menu__item:focus-visible { outline: var(--focus-ring-width) solid var(--focus-ring-color); outline-offset: -2px; }
 .nuclei-menu__item:disabled { color: var(--color-text-disabled); }
 .nuclei-menu__item--danger { color: var(--color-danger); }
