@@ -24,4 +24,9 @@ describe('ProbabilityBars', () => {
     const { container } = render(<ProbabilityBars probabilities={{ '0': 0 }} />);
     expect(container.firstChild).toBeNull();
   });
+
+  it('draws pinned outcomes as empty rows even at 0%', () => {
+    render(<ProbabilityBars probabilities={{ '1': 1 }} pinned={['0', '1']} />);
+    expect(screen.getAllByRole('listitem').map((r) => r.textContent)).toEqual(['|0⟩0.0%', '|1⟩100.0%']);
+  });
 });

@@ -32,4 +32,10 @@ describe('OutcomeResults (LR-04)', () => {
     expect(screen.queryByRole('radio', { name: 'Sampled' })).toBeNull();
     expect(screen.getAllByText('50.0%')).toHaveLength(2);
   });
+
+  it('shows expected outcomes that measured 0% as empty rows', () => {
+    const only1 = { probabilities: { '1': 1 }, measurements: { '1': 1024 }, shot_count: 1024 } as unknown as SimulationResult;
+    render(<OutcomeResults result={only1} expectedKets={['0', '1']} />);
+    expect(screen.getAllByRole('listitem').map((r) => r.textContent)).toEqual(['|0⟩0.0%', '|1⟩100.0%']);
+  });
 });
