@@ -53,7 +53,7 @@ export const KEYBINDINGS: readonly Keybinding[] = [
   { id: 'switch-workspace', key: 'm', shift: true, label: 'Switch Learn / Research', group: 'Navigation', owner: 'app' },
 
   { id: 'toggle-theme', key: 't', shift: true, label: 'Toggle theme', group: 'View', owner: 'app', browserReserved: true },
-  { id: 'cycle-ui-mode', key: 'l', shift: true, label: 'Cycle UI mode (Learn)', group: 'View', owner: 'app' },
+  { id: 'cycle-ui-mode', key: 'l', shift: true, label: 'Cycle level (Learn)', group: 'View', owner: 'app' },
   { id: 'launch', key: 'r', shift: true, label: 'Launch on hardware', group: 'View', owner: 'app' },
 ];
 

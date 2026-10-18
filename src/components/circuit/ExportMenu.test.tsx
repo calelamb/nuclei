@@ -2,7 +2,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { useCircuitStore } from '../../stores/circuitStore';
-import { ExportMenu, COPIED_NOTICE_MS } from './ExportMenu';
+import { ExportMenu, COPIED_NOTICE_MS, exportDisabledReason } from './ExportMenu';
 
 const copyCode = vi.fn();
 vi.mock('../../hooks/useCircuitExport', () => ({
@@ -67,5 +67,17 @@ describe('ExportMenu', () => {
     useCircuitStore.setState({ snapshot: null });
     const { container } = render(<ExportMenu />);
     expect(container.textContent).toBe('');
+  });
+});
+
+describe('exportDisabledReason', () => {
+  it('points at the failing line when there is a code error', () => {
+    expect(exportDisabledReason({ errorLine: 8, previewPaused: false })).toBe('Fix line 8 to export');
+  });
+  it('asks for a Run, not a fix, while the preview is merely paused', () => {
+    expect(exportDisabledReason({ errorLine: null, previewPaused: true })).toBe('Run the code to export');
+  });
+  it('falls back to a generic code-error hint', () => {
+    expect(exportDisabledReason({ errorLine: null, previewPaused: false })).toBe('Fix the code error to export');
   });
 });

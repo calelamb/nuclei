@@ -39,21 +39,21 @@ function lineColor(
 
 function ToolbarButton({
   onClick,
-  title,
+  label,
   active,
   children,
 }: {
   onClick: () => void;
-  title: string;
+  label: string;
   active?: boolean;
   children: React.ReactNode;
 }) {
   return (
-    <Tooltip label={title} placement="below">
+    <Tooltip label={label} placement="below">
       <button
         type="button"
         onClick={onClick}
-        aria-label={title}
+        aria-label={label}
         aria-pressed={active}
         data-active={active ? 'true' : undefined}
         className="nuclei-toolbtn"
@@ -98,23 +98,23 @@ function TerminalToolbar({
       role="toolbar"
       aria-label="Terminal toolbar"
     >
-      <ToolbarButton onClick={onClear} title="Clear terminal">
+      <ToolbarButton onClick={onClear} label="Clear terminal">
         <Trash2 size={12} />
       </ToolbarButton>
-      <ToolbarButton onClick={onCopy} title={copied ? 'Copied!' : 'Copy all output'}>
+      <ToolbarButton onClick={onCopy} label={copied ? 'Copied!' : 'Copy all output'}>
         <Copy size={12} />
         {copied && <span style={{ fontSize: 11 }}>copied</span>}
       </ToolbarButton>
       <ToolbarButton
         onClick={toggleShowTimestamps}
-        title="Toggle timestamps"
+        label="Toggle timestamps"
         active={showTimestamps}
       >
         <Clock size={12} />
       </ToolbarButton>
       <ToolbarButton
         onClick={toggleAutoScroll}
-        title="Auto-scroll to bottom"
+        label="Auto-scroll to bottom"
         active={autoScroll}
       >
         Auto-scroll

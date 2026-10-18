@@ -5,6 +5,7 @@ import { useCircuitExport } from '../../hooks/useCircuitExport';
 import { TYPOGRAPHY } from '../../styles/tokens';
 import { useDisplaySnapshot } from '../../layout/useDisplaySnapshot';
 import { useEditorStore } from '../../stores/editorStore';
+import { useCircuitStore } from '../../stores/circuitStore';
 import { Button, Menu, Tooltip, type MenuEntry } from '../ui';
 
 export const COPIED_NOTICE_MS = 1500;
@@ -16,12 +17,18 @@ const CLIPBOARD_BLOCKED = "Couldn't copy: clipboard blocked";
  * blocked clipboard instead of failing silently; image exports say so when the diagram
  * is not on screen.
  */
+export function exportDisabledReason({ errorLine, previewPaused }: { errorLine: number | null; previewPaused: boolean }): string {
+  if (errorLine !== null) return `Fix line ${errorLine} to export`;
+  return previewPaused ? 'Run the code to export' : 'Fix the code error to export';
+}
+
 export function ExportMenu() {
   const [notice, setNotice] = useState<string | null>(null);
   const [failed, setFailed] = useState(false);
   const colors = useThemeStore((s) => s.colors);
   const { snapshot, stale } = useDisplaySnapshot();
   const errorLine = useEditorStore((s) => s.errors[0]?.line ?? null);
+  const previewPaused = useCircuitStore((s) => s.previewPaused);
   const { exportQasmFile, exportSvg, exportPng, copyCodeToClipboard, copyQasmToClipboard, copyShareUrl, exportJsonSnapshot } = useCircuitExport();
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -40,7 +47,7 @@ export function ExportMenu() {
   // changes height mid-edit) but say why it is unavailable.
   if (stale) {
     return (
-      <Tooltip label={errorLine !== null ? `Fix line ${errorLine} to export` : 'Fix the code error to export'} placement="below">
+      <Tooltip label={exportDisabledReason({ errorLine, previewPaused })} placement="below">
         <span style={{ display: 'inline-flex' }}>
           <Button size="sm" icon={<ChevronDown size={12} />} className="nuclei-export-btn" disabled>Export</Button>
         </span>
