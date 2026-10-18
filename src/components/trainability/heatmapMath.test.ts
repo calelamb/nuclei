@@ -1,24 +1,17 @@
 import { describe, expect, it } from 'vitest';
 import { buildHeatmapModel, DEAD_VARIANCE, resolveGateIndex } from './heatmapMath';
-import { gradientsFixture, inspectionFixture } from '../../services/trainability/fixtures';
+import { fixtureGates, gradientsFixture, inspectionFixture } from '../../services/trainability/fixtures';
 import type { Gate } from '../../types/quantum';
 
-const gate = (type: string, layer: number, symbol: string | null, target = 0): Gate => ({
+const gates = fixtureGates;
+const gate = (type: string, layer: number, symbol: string | null): Gate => ({
   type,
-  targets: [target],
+  targets: [0],
   controls: [],
   params: [0],
   layer,
   symbols: [symbol],
 });
-
-// 9 gates, indices 0-3 and 7-8 are RY, 4-6 CZ (matches inspectionFixture).
-const gates: Gate[] = [
-  ...[0, 1, 2, 3].map((q) => gate('RY', 0, `θ[${q}]`, q)),
-  ...[0, 1, 2].map((q) => ({ type: 'CZ', targets: [q + 1], controls: [q], params: [], layer: 1 + q })),
-  gate('RY', 4, 'θ[4]', 0),
-  gate('RY', 4, 'θ[5]', 1),
-];
 
 describe('buildHeatmapModel', () => {
   it('maps overlays by source_index and tints on a log ramp', () => {

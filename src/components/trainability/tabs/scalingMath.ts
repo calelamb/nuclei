@@ -41,7 +41,7 @@ export function exponentialBand(
 ): { lower: Curve[]; upper: Curve[] } {
   const pivot = 2 ** (fit.log2_intercept - fit.beta * centroid);
   const [bLo, bHi] = fit.beta_ci95;
-  const make = (beta: number, n: number) => pivot * 2 ** (-(beta - fit.beta) * (n - centroid));
+  const make = (beta: number, n: number) => pivot * 2 ** (-beta * (n - centroid));
   const a = sampleCurve(from, to, (n) => make(bLo, n));
   const b = sampleCurve(from, to, (n) => make(bHi, n));
   // For n < centroid the larger β gives the larger value; sort per n.

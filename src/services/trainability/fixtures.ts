@@ -3,6 +3,7 @@
  * by the unit/render tests (and available to a stubbed-kernel e2e spec).
  */
 
+import type { CircuitSnapshot, Gate } from '../../types/quantum';
 import type {
   EntanglingCapabilityResult,
   ExpressibilityResult,
@@ -321,3 +322,31 @@ export function jobFixture(overrides: Partial<TrainabilityJobRecord> = {}): Trai
 }
 
 export const SCALING_FIXTURE_QUBITS = SCALING_QUBITS;
+
+const ry = (target: number, layer: number, symbol: string): Gate => ({
+  type: 'RY',
+  targets: [target],
+  controls: [],
+  params: [0],
+  layer,
+  symbols: [symbol],
+});
+
+/** Gates in `source_index` order, matching `inspectionFixture.param_gates`. */
+export const fixtureGates: Gate[] = [
+  ry(0, 0, 'θ[0]'),
+  ry(1, 0, 'θ[1]'),
+  ry(2, 0, 'θ[2]'),
+  ry(3, 0, 'θ[3]'),
+  ...[0, 1, 2].map((q): Gate => ({ type: 'CZ', targets: [q + 1], controls: [q], params: [], layer: 1 + q })),
+  ry(0, 4, 'θ[4]'),
+  ry(1, 4, 'θ[5]'),
+];
+
+export const circuitSnapshotFixture: CircuitSnapshot = {
+  framework: 'qiskit',
+  qubit_count: 4,
+  classical_bit_count: 0,
+  depth: 5,
+  gates: fixtureGates,
+};
