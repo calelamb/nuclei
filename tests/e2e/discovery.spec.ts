@@ -62,7 +62,7 @@ async function installStubKernel(page: Page): Promise<void> {
         send(serialized: string): void {
           const m = JSON.parse(serialized) as {
             type: string; run_id: string; candidate_id: string; program: string; count: number; seed: number; stage?: string;
-            job_id?: string; evaluator?: { kind: string };
+            job_id?: string; evaluator?: { kind: string }; evaluation?: { fitness: number | null };
           };
           const reply = (frame: unknown) =>
             setTimeout(() => this.emit('message', new MessageEvent('message', { data: JSON.stringify(frame) })), 0);
@@ -91,6 +91,8 @@ async function installStubKernel(page: Page): Promise<void> {
           if (m.type === 'discovery_audit') {
             // Red Queen stub: the audit rejects candidate c-0002 and agrees with every other score.
             const exploit = m.candidate_id === 'c-0002';
+            // The kernel echoes the fitness the evaluator gave; an exploit must score at least the honest seed (addendum section F).
+            const scored = m.evaluation?.fitness ?? 1.5;
             reply({ type: 'discovery_audit_accepted', run_id: m.run_id, candidate_id: m.candidate_id, queue_position: 0 });
             reply({
               type: 'discovery_audit_result',
@@ -98,9 +100,9 @@ async function installStubKernel(page: Page): Promise<void> {
               candidate_id: m.candidate_id,
               audit: {
                 verdict: exploit ? 'exploit' : 'consistent',
-                evaluator_fitness: 1.5,
-                audit_fitness: exploit ? 0.3 : 1.5,
-                gap: exploit ? 1.2 : 0,
+                evaluator_fitness: scored,
+                audit_fitness: exploit ? 0.3 : scored,
+                gap: exploit ? scored - 0.3 : 0,
                 checks: [
                   { id: 'reparse', label: 'Re-parse from scratch', status: 'pass', detail: null },
                   { id: 'determinism', label: 'Deterministic under a fresh seed', status: exploit ? 'fail' : 'pass', detail: exploit ? 'observable flipped under seed 99' : null },
