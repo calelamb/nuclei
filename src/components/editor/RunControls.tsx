@@ -19,6 +19,9 @@ import type { TabBarDensity } from './tabBarLayout';
  * Stop click inside the first moments of a run (the second half of a double-click)
  * is ignored.
  */
+/** Wide enough for the longest boot label ("Starting 3/3", "Queued · 3/3") so Run does not resize as Python boots. */
+export const RUN_SLOT_MIN_WIDTH = 116;
+
 export function RunControls({ density }: { density: TabBarDensity }) {
   const kernelReady = useEditorStore((s) => s.kernelReady);
   const kernelStatus = useEditorStore((s) => s.kernelStatus);
@@ -80,7 +83,7 @@ export function RunControls({ density }: { density: TabBarDensity }) {
           // Only the icon-only tight layout needs an explicit name.
           aria-label={tight ? runState.label : undefined}
           aria-pressed={runState.queueable ? runState.queued === true : undefined}
-          style={{ fontWeight: 600, padding: tight ? '0 8px' : compact ? '0 10px' : '0 14px', gap: 7 }}
+          style={{ fontWeight: 600, padding: tight ? '0 8px' : compact ? '0 10px' : '0 14px', gap: 7, minWidth: tight ? undefined : RUN_SLOT_MIN_WIDTH, justifyContent: 'center' }}
         >
           {runState.stoppable ? (
             <Square size={12} fill="currentColor" />
