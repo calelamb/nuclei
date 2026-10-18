@@ -41,10 +41,12 @@ describe('LessonView', () => {
 
   it('parks the lesson so the chooser can send the learner back', () => {
     useLearnStore.setState({ currentTrackId: track.id, currentLessonId: lesson.id });
+    useLearnSectionStore.setState({ section: 'concepts' });
     render(<LessonView lesson={lesson} trackId={track.id} />);
     act(() => useLearnStore.setState({ currentBlockIndex: 2 }));
     fireEvent.click(screen.getByRole('button', { name: /Tracks/ }));
     expect(useLearnSectionStore.getState().returnTo).toEqual({ trackId: track.id, lessonId: lesson.id, blockIndex: 2 });
+    expect(useLearnSectionStore.getState().section).toBe('tracks');
   });
 
   it('scrolls to the remembered block when restoring', () => {

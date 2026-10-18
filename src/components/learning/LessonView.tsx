@@ -79,7 +79,9 @@ export function LessonView({ lesson, trackId }: LessonViewProps) {
     return undefined;
   }, [lesson.id, setCurrentBlockIndex]);
 
+  const setSection = useLearnSectionStore((s) => s.setSection);
   const leaveToTracks = () => {
+    setSection('tracks');
     setReturnTo({ trackId, lessonId: lesson.id, blockIndex: currentBlockIndex });
     clearCurrentLesson();
   };

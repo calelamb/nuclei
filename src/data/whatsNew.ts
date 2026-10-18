@@ -67,7 +67,7 @@ export const WHATS_NEW: WhatsNewEntry = {
   webTagline: 'Drop a sinter CSV and get sinter-grade numbers with their uncertainty.',
   modeHeadlines: {
     learn: {
-      title: 'Dirac answers you can copy',
+      title: 'A clearer Dirac',
       tagline: 'Tables, quotes and readable formulas in Dirac replies, with a copy button on every code block.',
     },
   },

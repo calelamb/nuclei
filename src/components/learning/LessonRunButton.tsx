@@ -18,7 +18,7 @@ export function LessonRunButton({ isRunning, pythonLoading, stage, onRun }: Less
       variant="primary"
       onClick={onRun}
       loading={isRunning}
-      title={waiting && stage ? `${stage}. Your code runs as soon as Python is ready.` : undefined}
+      title={waiting ? `${stage ?? 'Python is still loading'}. Your code runs as soon as Python is ready.` : undefined}
       icon={<Play size={12} fill="currentColor" aria-hidden="true" />}
     >
       {label}
