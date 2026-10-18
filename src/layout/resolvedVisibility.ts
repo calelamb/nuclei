@@ -1,6 +1,6 @@
 import { resolveVisiblePanels, type PanelId, type VisiblePanels } from './panelRegistry';
 import { useLayoutStore } from '../stores/layoutStore';
-import { useSimulationStore } from '../stores/simulationStore';
+import { hasMeaningfulOutput, useSimulationStore } from '../stores/simulationStore';
 import { BUFFER_KEY, selectDisplaySnapshot, useCircuitStore } from '../stores/circuitStore';
 import { useProjectStore } from '../stores/projectStore';
 import { useWorkspaceStore } from '../stores/workspaceStore';
@@ -20,7 +20,7 @@ export function getResolvedVisibility(): VisiblePanels {
       preset,
       snapshot,
       result,
-      hasTerminalOutput: terminalOutput.length > 0,
+      hasTerminalOutput: hasMeaningfulOutput(terminalOutput),
       errorActive: lastRunFailed,
       mode: useWorkspaceStore.getState().mode,
       framework: snapshot?.framework ?? null,

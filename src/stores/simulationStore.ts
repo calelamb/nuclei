@@ -19,11 +19,17 @@ export interface TerminalLine {
 
 interface SimulationState {
   result: SimulationResult | null;
+  /** The code of the run in flight (set by `beginRun`), promoted to `resultCode` when its result lands. */
+  runCode: string | null;
+  /** The exact code that produced `result`; null when unknown (never reported stale). */
+  resultCode: string | null;
   isRunning: boolean;
   /** The last run ended in an error; cleared when a new run starts or a result lands. */
   lastRunFailed: boolean;
   shots: number;
   terminalOutput: TerminalLine[];
+  /** Record the code being executed so its result can later be recognised as out of date. */
+  beginRun: (code: string) => void;
   setResult: (result: SimulationResult | null) => void;
   clearResult: () => void;
   setRunning: (running: boolean) => void;
@@ -53,14 +59,32 @@ function appendCapped(buffer: TerminalLine[], additions: TerminalLine[]): Termin
   return [...trimmedBuffer, ...additions];
 }
 
+/** True when a result exists and was produced by code other than `currentCode`. */
+export function isResultStale(resultCode: string | null, currentCode: string, hasResult = true): boolean {
+  return hasResult && resultCode !== null && resultCode !== currentCode;
+}
+
+/** Whether the Terminal holds anything the user would want to read (run separators alone do not count). */
+export function hasMeaningfulOutput(lines: readonly TerminalLine[]): boolean {
+  return lines.some((l) => l.type !== 'separator');
+}
+
 export const useSimulationStore = create<SimulationState>((set) => ({
   result: null,
+  runCode: null,
+  resultCode: null,
   isRunning: false,
   lastRunFailed: false,
   shots: 1024,
   terminalOutput: [],
-  setResult: (result) => set((s) => ({ result, isRunning: false, lastRunFailed: result ? false : s.lastRunFailed })),
-  clearResult: () => set({ result: null, isRunning: false }),
+  beginRun: (runCode) => set({ runCode }),
+  setResult: (result) => set((s) => ({
+    result,
+    resultCode: result ? s.runCode : null,
+    isRunning: false,
+    lastRunFailed: result ? false : s.lastRunFailed,
+  })),
+  clearResult: () => set({ result: null, resultCode: null, isRunning: false }),
   setRunning: (isRunning) => set((s) => ({ isRunning, lastRunFailed: isRunning ? false : s.lastRunFailed })),
   setRunFailed: (lastRunFailed) => set({ lastRunFailed }),
   setShots: (shots) => set({ shots }),

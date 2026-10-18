@@ -10,6 +10,8 @@ import { Button, Tabs } from '../ui';
 import { getExecute } from '../../App';
 import { visibleVizPanelIds } from '../../layout/vizPanels';
 import { shortcutLabel } from '../../config/keybindings';
+import { useResultStale } from '../../hooks/useResultStale';
+import { StaleResultNotice, STALE_RESULT_OPACITY } from '../layout/StaleResultNotice';
 import { BlochRail } from '../layout/BlochRail';
 import { BlochPanel } from '../bloch/BlochPanel';
 import { QecTimelinePanel } from './QecTimelinePanel';
@@ -71,6 +73,7 @@ export function VizZone({
     return MAIN_VIZ_PANELS.filter((p) => ids.includes(p.id));
   }, [visible, qec]);
 
+  const stale = useResultStale();
   const circuitPanel = panels.find((p) => p.id === 'circuit');
   const statePanels = panels.filter((p) => p.id !== 'circuit');
 
@@ -88,7 +91,11 @@ export function VizZone({
 
       {statePanels.length > 0 && statePanels.length <= 2 && statePanels.map((p) => (
         <PanelReveal key={p.id} when from="right" style={p.fit === 'fill' ? FILL_STYLE : CONTENT_STYLE}>
-          <div style={p.fit === 'fill' ? FILL_BODY_STYLE : CONTENT_BODY_STYLE}>
+          <div
+            className={p.id === 'bloch' && stale ? 'nuclei-stale-results' : undefined}
+            style={p.fit === 'fill' ? FILL_BODY_STYLE : CONTENT_BODY_STYLE}
+          >
+            {p.id === 'bloch' && stale && <StaleResultNotice />}
             {p.render()}
           </div>
         </PanelReveal>
@@ -101,10 +108,11 @@ export function VizZone({
           onSelect={(id) => setActiveTab(projectRoot, id)}
         />
       )}
-      {chip}
+      <div style={stale ? STALE_CHIP_STYLE : undefined} data-stale={stale ? 'true' : undefined}>{chip}</div>
     </div>
   );
 }
+const STALE_CHIP_STYLE = { opacity: STALE_RESULT_OPACITY, flexShrink: 0 } as const;
 
 const COLUMN_STYLE = { width: '100%', height: '100%', minWidth: 0, display: 'flex', flexDirection: 'column' } as const;
 // The circuit grows to its content and only yields space (scrolling inside) when the rail is short.

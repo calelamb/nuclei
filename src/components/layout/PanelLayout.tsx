@@ -30,7 +30,7 @@ import { useModeSwitchStore } from '../../stores/modeSwitchStore';
 import { useResearchTourStore } from '../../stores/researchTourStore';
 import { DEFAULT_EDITOR_PANE_WIDTH, computeEditorPaneWidth } from './layoutMath';
 import { useDisplaySnapshot } from '../../layout/useDisplaySnapshot';
-import { useSimulationStore } from '../../stores/simulationStore';
+import { hasMeaningfulOutput, useSimulationStore } from '../../stores/simulationStore';
 import { useThemeStore } from '../../stores/themeStore';
 import { useUIModeStore } from '../../stores/uiModeStore';
 import { useLearnStore } from '../../stores/learnStore';
@@ -125,7 +125,7 @@ export function PanelLayout() {
       preset,
       snapshot,
       result,
-      hasTerminalOutput: terminalOutput.length > 0,
+      hasTerminalOutput: hasMeaningfulOutput(terminalOutput),
       errorActive: lastRunFailed,
       mode: workspaceMode,
       framework: snapshot?.framework ?? null,

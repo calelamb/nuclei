@@ -352,7 +352,8 @@ export function useKernel() {
           : 'Python is still starting. Your run is queued and will start automatically.',
         'info',
       );
-      useBottomPanelStore.getState().focusTerminal();
+      if (failed) useBottomPanelStore.getState().noteError();
+      else useBottomPanelStore.getState().noteOutput();
       return;
     }
     queuedRunRef.current = false;
@@ -373,9 +374,9 @@ export function useKernel() {
       // clearResult() resets isRunning, so it must come first: setting the
       // flag before it silently re-enabled Run while a run was in flight.
       useSimulationStore.getState().clearResult();
+      useSimulationStore.getState().beginRun(code);
       useSimulationStore.getState().setRunning(true);
       useSimulationStore.getState().addOutput(separator, 'separator');
-      useBottomPanelStore.getState().focusTerminal();
       pyodideRef.current.send({ type: 'execute', code, shots, language });
     } else {
       const ws = wsRef.current;
@@ -387,9 +388,9 @@ export function useKernel() {
       // clearResult() resets isRunning, so it must come first: setting the
       // flag before it silently re-enabled Run while a run was in flight.
       useSimulationStore.getState().clearResult();
+      useSimulationStore.getState().beginRun(code);
       useSimulationStore.getState().setRunning(true);
       useSimulationStore.getState().addOutput(separator, 'separator');
-      useBottomPanelStore.getState().focusTerminal();
       ws.send(JSON.stringify({ type: 'execute', code, shots, language }));
     }
   }, [isWeb]);

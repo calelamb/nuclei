@@ -135,12 +135,12 @@ export function handleKernelMessage(msg: KernelResponse, connectTimers: ConnectT
       // Live-preview (parse) output is noise from half-typed code: drop it.
       if (msg.phase === 'parse') break;
       useSimulationStore.getState().addOutput(msg.text, 'stdout');
-      useBottomPanelStore.getState().focusTerminal();
+      useBottomPanelStore.getState().noteOutput();
       break;
     case 'stderr':
       if (msg.phase === 'parse') break;
       useSimulationStore.getState().addOutput(msg.text, 'stderr');
-      useBottomPanelStore.getState().focusTerminal();
+      useBottomPanelStore.getState().noteOutput();
       break;
     case 'error': {
       // Resource-estimate failures belong to the Estimator panel, not the
@@ -202,7 +202,7 @@ export function handleKernelMessage(msg: KernelResponse, connectTimers: ConnectT
         useSimulationStore.getState().addOutput(`Error: ${detail}`, 'stderr');
         useSimulationStore.getState().setRunning(false);
         useSimulationStore.getState().setRunFailed(true);
-        useBottomPanelStore.getState().focusTerminal();
+        useBottomPanelStore.getState().noteError();
       }
 
       if (!isParseError && useSettingsStore.getState().dirac.autoExplainErrors) {
