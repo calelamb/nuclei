@@ -405,6 +405,7 @@ export function useKernel() {
       }
       // clearResult() resets isRunning, so it must come first: setting the
       // flag before it silently re-enabled Run while a run was in flight.
+      useSimulationStore.getState().holdResultForRun();
       useSimulationStore.getState().clearResult();
       useSimulationStore.getState().beginRun(code);
       useSimulationStore.getState().setRunning(true);
@@ -419,6 +420,7 @@ export function useKernel() {
       }
       // clearResult() resets isRunning, so it must come first: setting the
       // flag before it silently re-enabled Run while a run was in flight.
+      useSimulationStore.getState().holdResultForRun();
       useSimulationStore.getState().clearResult();
       useSimulationStore.getState().beginRun(code);
       useSimulationStore.getState().setRunning(true);

@@ -3,6 +3,7 @@ import { DIRAC_API_URL, SONNET_MODEL } from '../config/dirac';
 import { QSHARP_STYLE_GUIDE } from './qsharpStyle';
 import { useWorkspaceStore, type WorkspaceMode } from '../stores/workspaceStore';
 import { personaPreamble } from './diracPersona';
+import { describeHttpError, describeThrownError, type DiracErrorInfo } from '../lib/diracErrors';
 
 // Learn-mode text is unchanged from before PRD 09 — kept as literal
 // hardcoded strings (not derived from personaPreamble, which is a
@@ -95,7 +96,7 @@ export interface ComposeOutput {
  */
 export type ComposeResult =
   | { ok: true; code: string; explanation: string }
-  | { ok: false; error: string };
+  | { ok: false; error: string; /** Plain-language failure shared with the chat panel; absent for local failures. */ info?: DiracErrorInfo };
 
 export async function compose(input: ComposeInput): Promise<ComposeResult> {
   const apiKey = useDiracStore.getState().apiKey;
@@ -139,6 +140,7 @@ export async function compose(input: ComposeInput): Promise<ComposeResult> {
     return {
       ok: false,
       error: `Network error contacting Anthropic: ${e instanceof Error ? e.message : String(e)}`,
+      info: describeThrownError(e),
     };
   }
 
@@ -146,18 +148,18 @@ export async function compose(input: ComposeInput): Promise<ComposeResult> {
     // Parse Anthropic's error envelope — it's shaped as
     // { type: 'error', error: { type, message } } per the public API docs.
     let reason = `HTTP ${response.status}`;
+    let rawBody = '';
     try {
-      const body = await response.json();
-      const errMsg = body?.error?.message;
+      rawBody = await response.text();
+    } catch { /* body unreadable; the status alone still classifies the failure */ }
+    try {
+      const errMsg = JSON.parse(rawBody)?.error?.message;
       if (typeof errMsg === 'string' && errMsg.length > 0) reason = errMsg;
     } catch {
       // Response wasn't JSON; fall back to raw text.
-      try {
-        const txt = await response.text();
-        if (txt) reason = txt.slice(0, 280);
-      } catch { /* noop */ }
+      if (rawBody) reason = rawBody.slice(0, 280);
     }
-    return { ok: false, error: reason };
+    return { ok: false, error: reason, info: describeHttpError(response.status, rawBody) };
   }
 
   let data: unknown;

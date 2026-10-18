@@ -185,8 +185,7 @@ export class PyodideKernel {
       }
     } catch (error) {
       if (this.endedByStop(error)) {
-        this.onMessage({ type: 'output', text: 'Run stopped.\n' });
-        this.onMessage({ type: 'result', data: null });
+        this.onMessage({ type: 'result', data: null, stopped: true });
         return;
       }
       this.onMessage({ type: 'snapshot', data: null });

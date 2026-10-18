@@ -28,6 +28,8 @@ interface CircuitState {
   error: string | null;
   /** The live preview was stopped for running too long; it is not a code error and Run still works. */
   previewPaused: boolean;
+  /** Bumped every time the kernel answers the live preview (snapshot, error or pause), even with an identical answer. */
+  answerSeq: number;
   // Highlighting
   highlights: GateHighlight[];
   // Step-through mode
@@ -62,6 +64,7 @@ export const useCircuitStore = create<CircuitState>((set, get) => ({
   isLoading: false,
   error: null,
   previewPaused: false,
+  answerSeq: 0,
   highlights: [],
   stepMode: false,
   stepIndex: -1,
@@ -80,6 +83,7 @@ export const useCircuitStore = create<CircuitState>((set, get) => ({
         isLoading: false,
         error: null,
         previewPaused: false,
+        answerSeq: s.answerSeq + 1,
         highlights: [],
         stepMode: false,
         stepIndex: -1,
@@ -87,8 +91,8 @@ export const useCircuitStore = create<CircuitState>((set, get) => ({
       };
     }),
   setLoading: (isLoading) => set({ isLoading }),
-  setError: (error) => set({ error, isLoading: false, previewPaused: false }),
-  setPreviewPaused: (previewPaused) => set({ previewPaused, isLoading: false }),
+  setError: (error) => set((s) => ({ error, isLoading: false, previewPaused: false, answerSeq: s.answerSeq + 1 })),
+  setPreviewPaused: (previewPaused) => set((s) => ({ previewPaused, isLoading: false, answerSeq: s.answerSeq + 1 })),
   dropLastGood: () => set({ lastGood: null }),
   clear: () => set({
     snapshot: null,

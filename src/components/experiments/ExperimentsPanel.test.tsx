@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { render, cleanup, fireEvent } from '@testing-library/react';
+import { render, cleanup, fireEvent, screen, waitFor } from '@testing-library/react';
 import { ExperimentsPanel } from './ExperimentsPanel';
 import { useExperimentStore } from '../../services/experimentStore';
 import { useProjectStore } from '../../stores/projectStore';
@@ -112,18 +112,21 @@ describe('ExperimentsPanel', () => {
     expect((container.querySelector('#exp-shots') as HTMLInputElement).value).toBe('2048');
   });
 
-  it('asks before discarding dirty edits when switching to another experiment (research-01)', () => {
-    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(false);
+  it('asks before discarding dirty edits when switching to another experiment (research-01, research-r-07)', async () => {
+    const nativeConfirm = vi.spyOn(window, 'confirm');
     const { getByLabelText, container } = render(<ExperimentsPanel />);
     fireEvent.click(getByLabelText('Edit theta-sweep'));
     fireEvent.change(container.querySelector('#exp-shots') as HTMLInputElement, { target: { value: '555' } });
     fireEvent.click(getByLabelText('Edit depth-grid'));
-    expect(confirmSpy).toHaveBeenCalled();
+    expect(await screen.findByRole('dialog', { name: 'Discard your unsaved changes?' })).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Keep editing' }));
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
     expect((container.querySelector('#exp-name') as HTMLInputElement).value).toBe('theta-sweep');
-    confirmSpy.mockReturnValue(true);
     fireEvent.click(getByLabelText('Edit depth-grid'));
-    expect((container.querySelector('#exp-name') as HTMLInputElement).value).toBe('depth-grid');
-    confirmSpy.mockRestore();
+    fireEvent.click(await screen.findByRole('button', { name: 'Discard' }));
+    await waitFor(() => expect((container.querySelector('#exp-name') as HTMLInputElement).value).toBe('depth-grid'));
+    expect(nativeConfirm).not.toHaveBeenCalled();
+    nativeConfirm.mockRestore();
   });
 
   it('"New experiment" while editing switches to a blank form instead of closing (research-17)', () => {

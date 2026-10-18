@@ -23,20 +23,29 @@ interface SimulationState {
   runCode: string | null;
   /** The exact code that produced `result`; null when unknown (never reported stale). */
   resultCode: string | null;
+  /** The result on screen when the current run began, so Stop can put it back instead of leaving the zone empty. */
+  heldResult: { result: SimulationResult; resultCode: string | null } | null;
   isRunning: boolean;
   /** The last run ended in an error; cleared when a new run starts or a result lands. */
   lastRunFailed: boolean;
   /** The last run finished cleanly but defined no circuit (plain Python); cleared when a new run starts or a result lands. */
   lastRunNoCircuit: boolean;
+  /** The person pressed Stop on the last run; any earlier result is kept. Cleared when a new run starts or a result lands. */
+  lastRunStopped: boolean;
   shots: number;
   terminalOutput: TerminalLine[];
   /** Record the code being executed so its result can later be recognised as out of date. */
   beginRun: (code: string) => void;
   setResult: (result: SimulationResult | null) => void;
   clearResult: () => void;
+  /** Call before `clearResult` when a new run starts. */
+  holdResultForRun: () => void;
+  /** The run was stopped: bring back the result that was on screen before it began. */
+  restoreHeldResult: () => void;
   setRunning: (running: boolean) => void;
   setRunFailed: (failed: boolean) => void;
   setRunNoCircuit: (noCircuit: boolean) => void;
+  setRunStopped: (stopped: boolean) => void;
   setShots: (shots: number) => void;
   addOutput: (text: string, type?: TerminalLineType) => void;
   clearOutput: () => void;
@@ -76,27 +85,37 @@ export const useSimulationStore = create<SimulationState>((set) => ({
   result: null,
   runCode: null,
   resultCode: null,
+  heldResult: null,
   isRunning: false,
   lastRunFailed: false,
   lastRunNoCircuit: false,
+  lastRunStopped: false,
   shots: 1024,
   terminalOutput: [],
   beginRun: (runCode) => set({ runCode }),
   setResult: (result) => set((s) => ({
+    heldResult: null,
     result,
     resultCode: result ? s.runCode : null,
     isRunning: false,
     lastRunFailed: result ? false : s.lastRunFailed,
     lastRunNoCircuit: result ? false : s.lastRunNoCircuit,
+    lastRunStopped: result ? false : s.lastRunStopped,
   })),
   clearResult: () => set({ result: null, resultCode: null, isRunning: false }),
+  holdResultForRun: () => set((s) => ({ heldResult: s.result ? { result: s.result, resultCode: s.resultCode } : null })),
+  restoreHeldResult: () => set((s) => (s.heldResult
+    ? { result: s.heldResult.result, resultCode: s.heldResult.resultCode, heldResult: null }
+    : { heldResult: null })),
   setRunning: (isRunning) => set((s) => ({
     isRunning,
     lastRunFailed: isRunning ? false : s.lastRunFailed,
     lastRunNoCircuit: isRunning ? false : s.lastRunNoCircuit,
+    lastRunStopped: isRunning ? false : s.lastRunStopped,
   })),
   setRunFailed: (lastRunFailed) => set({ lastRunFailed }),
   setRunNoCircuit: (lastRunNoCircuit) => set({ lastRunNoCircuit }),
+  setRunStopped: (lastRunStopped) => set({ lastRunStopped }),
   setShots: (shots) => set({ shots }),
   addOutput: (text, type = 'stdout') => set((s) => {
     const timestamp = Date.now();

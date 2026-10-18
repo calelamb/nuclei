@@ -16,7 +16,7 @@ import { NoiseModelLibrary } from './NoiseModelLibrary';
 import { RunButton } from './RunButton';
 import { RunFeedback } from './RunFeedback';
 import { TYPOGRAPHY, ICON_SIZE, ICON_STROKE } from '../../styles/tokens';
-import { Button, EmptyState, IconButton } from '../ui';
+import { Button, EmptyState, IconButton, useConfirm } from '../ui';
 import { DesktopOnlyState } from '../hardware/DesktopOnlyState';
 import './experiments.css';
 
@@ -150,9 +150,19 @@ export function ExperimentsPanel() {
   const formDirtyRef = useRef(false);
 
   /** Opens the form on `target` (undefined = blank), asking first if the open form has unsaved edits. */
-  const openForm = (target: DiscoveredExperiment | undefined) => {
+  const { confirm, confirmDialog } = useConfirm();
+  const openForm = async (target: DiscoveredExperiment | undefined) => {
     const switching = formOpen && (editing?.fileName ?? 'new') !== (target?.fileName ?? 'new');
-    if (switching && formDirtyRef.current && !window.confirm('Discard your unsaved changes to this experiment?')) return;
+    if (switching && formDirtyRef.current) {
+      const discard = await confirm({
+        title: 'Discard your unsaved changes?',
+        description: 'This form has edits that have not been saved.',
+        confirmLabel: 'Discard',
+        cancelLabel: 'Keep editing',
+        tone: 'danger',
+      });
+      if (!discard) return;
+    }
     formDirtyRef.current = false;
     setEditing(target);
     setFormOpen(true);
@@ -198,7 +208,7 @@ export function ExperimentsPanel() {
             variant="secondary"
             className="nuclei-experiment-new"
             aria-pressed={formOpen && editing === undefined}
-            onClick={() => openForm(undefined)}
+            onClick={() => { void openForm(undefined); }}
             style={{ flex: 1, minWidth: 0 }}
             icon={<Plus size={ICON_SIZE.xs} strokeWidth={ICON_STROKE} aria-hidden="true" />}
           >
@@ -217,7 +227,7 @@ export function ExperimentsPanel() {
           <EmptyState
             icon={<FlaskConical size={ICON_SIZE.lg} strokeWidth={ICON_STROKE} />}
             title="No experiments yet"
-            action={<Button size="sm" variant="primary" onClick={() => openForm(undefined)}>New experiment</Button>}
+            action={<Button size="sm" variant="primary" onClick={() => { void openForm(undefined); }}>New experiment</Button>}
           >
             An experiment declares a parameter sweep over your circuit.
           </EmptyState>
@@ -231,7 +241,7 @@ export function ExperimentsPanel() {
             lastRun={formatLastRun(experiment, runsByExperiment)}
             selected={selectedFileName === experiment.fileName}
             onSelect={() => selectExperiment(experiment.fileName)}
-            onEdit={() => openForm(experiment)}
+            onEdit={() => { void openForm(experiment); }}
           />
         ))}
 
@@ -255,6 +265,7 @@ export function ExperimentsPanel() {
       {noiseLibOpen && (
         <NoiseModelLibrary projectRoot={projectRoot} onClose={() => setNoiseLibOpen(false)} />
       )}
+      {confirmDialog}
     </div>
   );
 }

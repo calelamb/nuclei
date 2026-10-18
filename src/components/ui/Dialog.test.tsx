@@ -22,6 +22,31 @@ function Harness({ onClose = vi.fn() }: { onClose?: () => void }) {
   );
 }
 
+describe('Dialog default close', () => {
+  it('renders a labelled Close button for a dismissible dialog and calls onClose', () => {
+    const onClose = vi.fn();
+    render(<Dialog title="Compose" onClose={onClose}><p>Body</p></Dialog>);
+    fireEvent.click(screen.getByRole('button', { name: 'Close' }));
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps focus off the Close button on open', () => {
+    render(<Dialog title="Compose" onClose={() => {}}><input aria-label="Field" /></Dialog>);
+    expect(document.activeElement).toBe(screen.getByLabelText('Field'));
+  });
+
+  it('does not add a second close when the caller supplies trailing, or when hideClose / not dismissible', () => {
+    const { unmount } = render(<Dialog title="T" onClose={() => {}} trailing={<button>Mine</button>}><p>x</p></Dialog>);
+    expect(screen.queryByRole('button', { name: 'Close' })).toBeNull();
+    unmount();
+    const second = render(<Dialog title="T" onClose={() => {}} hideClose><p>x</p></Dialog>);
+    expect(screen.queryByRole('button', { name: 'Close' })).toBeNull();
+    second.unmount();
+    render(<Dialog title="T" onClose={() => {}} dismissible={false}><p>x</p></Dialog>);
+    expect(screen.queryByRole('button', { name: 'Close' })).toBeNull();
+  });
+});
+
 describe('Dialog', () => {
   it('is a labelled modal dialog named by its visible title', () => {
     render(<Dialog title="Launch on hardware" onClose={() => {}}><p>Body</p></Dialog>);

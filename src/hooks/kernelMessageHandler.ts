@@ -121,6 +121,16 @@ export function handleKernelMessage(msg: KernelResponse, connectTimers: ConnectT
       }
       break;
     case 'result':
+      if (msg.stopped && msg.data === null) {
+        // Stop is the person's choice, not a failure: keep whatever results they already had.
+        useSimulationStore.getState().restoreHeldResult();
+        useSimulationStore.getState().setRunning(false);
+        useSimulationStore.getState().setRunStopped(true);
+        // A 'summary' line, like "Done · …": it records the stop without counting as output
+        // that would pop the Terminal open in the Balanced and Clean presets.
+        useSimulationStore.getState().addOutput('Run stopped.', 'summary');
+        break;
+      }
       useSimulationStore.getState().setResult(msg.data);
       useEditorStore.getState().clearErrors();
       if (msg.data) {

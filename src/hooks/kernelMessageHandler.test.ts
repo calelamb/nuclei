@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { beforeEach, describe, expect, it } from 'vitest';
 import { handleKernelMessage } from './kernelMessageHandler';
-import { useSimulationStore } from '../stores/simulationStore';
+import { hasMeaningfulOutput, useSimulationStore } from '../stores/simulationStore';
 import { useCircuitStore } from '../stores/circuitStore';
 import { setHardwareBackendsSender } from '../lib/hardwareBackendsSender';
 import { vi } from 'vitest';
@@ -150,5 +150,54 @@ describe('handleKernelMessage — plain-Python note ends when a circuit comes ba
     useSimulationStore.setState({ lastRunNoCircuit: true });
     handleKernelMessage({ type: 'snapshot', data: null }, {});
     expect(useSimulationStore.getState().lastRunNoCircuit).toBe(true);
+  });
+});
+
+describe('handleKernelMessage: a user Stop (research-r-02)', () => {
+  const previous = { counts: { '00': 512, '11': 512 } } as never;
+
+  beforeEach(() => {
+    useSimulationStore.setState({ result: null, resultCode: null, heldResult: { result: previous, resultCode: 'old' }, isRunning: true, lastRunFailed: false, lastRunStopped: false, terminalOutput: [] });
+  });
+
+  it('keeps the results the person already had and ends the run', () => {
+    handleKernelMessage({ type: 'result', data: null, stopped: true }, {});
+    const sim = useSimulationStore.getState();
+    expect(sim.result).toBe(previous);
+    expect(sim.resultCode).toBe('old');
+    expect(sim.isRunning).toBe(false);
+    expect(sim.lastRunStopped).toBe(true);
+  });
+
+  it('notes the stop without counting as Terminal output (stop does not open the Terminal)', () => {
+    handleKernelMessage({ type: 'result', data: null, stopped: true }, {});
+    const lines = useSimulationStore.getState().terminalOutput;
+    expect(lines.map((l) => l.text.trim())).toContain('Run stopped.');
+    expect(hasMeaningfulOutput(lines)).toBe(false);
+  });
+
+  it('a new run clears the stopped flag', () => {
+    handleKernelMessage({ type: 'result', data: null, stopped: true }, {});
+    useSimulationStore.getState().setRunning(true);
+    expect(useSimulationStore.getState().lastRunStopped).toBe(false);
+  });
+
+  it('an ordinary empty result still clears results', () => {
+    handleKernelMessage({ type: 'result', data: null }, {});
+    expect(useSimulationStore.getState().result).toBeNull();
+  });
+});
+
+describe('simulationStore hold/restore (research-r-02)', () => {
+  it('holds the on-screen result across clearResult and a landed result drops the hold', () => {
+    const prev = { counts: { '0': 1 } } as never;
+    useSimulationStore.setState({ result: prev, resultCode: 'a', heldResult: null });
+    useSimulationStore.getState().holdResultForRun();
+    useSimulationStore.getState().clearResult();
+    expect(useSimulationStore.getState().result).toBeNull();
+    useSimulationStore.getState().setResult({ counts: { '1': 1 } } as never);
+    expect(useSimulationStore.getState().heldResult).toBeNull();
+    useSimulationStore.getState().restoreHeldResult();
+    expect(useSimulationStore.getState().result).not.toBe(prev);
   });
 });

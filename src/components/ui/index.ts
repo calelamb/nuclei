@@ -12,6 +12,8 @@ export { Checkbox, type CheckboxProps } from './Checkbox';
 export { Tabs, type TabsProps, type TabOption } from './Tabs';
 export { Badge, type BadgeProps, type BadgeTone } from './Badge';
 export { Dialog, type DialogProps } from './Dialog';
+export { ConfirmDialog, type ConfirmDialogProps, type ConfirmOptions } from './ConfirmDialog';
+export { useConfirm } from './useConfirm';
 export { Menu, type MenuProps, type MenuEntry, type MenuItemEntry, type MenuTriggerProps } from './Menu';
 export { Table, Thead, Tbody, Tr, Th, Td, type TableProps } from './Table';
 export { EmptyState, type EmptyStateProps } from './EmptyState';

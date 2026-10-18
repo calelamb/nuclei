@@ -87,6 +87,24 @@ describe('DiracSidePanel', () => {
     expect(document.activeElement).toBe(screen.getByLabelText('Message Dirac'));
   });
 
+  it('keeps keyboard focus in the message box while a reply is loading (interaction-r-01)', async () => {
+    resetStores('sk-ant-test');
+    let release: (r: Response) => void = () => {};
+    vi.stubGlobal('fetch', vi.fn().mockReturnValue(new Promise<Response>((res) => { release = res; })));
+    render(<DiracSidePanel />);
+    const box = screen.getByLabelText('Message Dirac') as HTMLTextAreaElement;
+    box.focus();
+    fireEvent.change(box, { target: { value: 'hello' } });
+    await act(async () => { fireEvent.keyDown(box, { key: 'Enter' }); });
+    expect(useDiracStore.getState().isLoading).toBe(true);
+    expect(document.activeElement).toBe(box);
+    expect(box.disabled).toBe(false);
+    expect(box.getAttribute('aria-busy')).toBe('true');
+    await act(async () => { release(new Response('{}', { status: 429 })); });
+    await waitFor(() => expect(useDiracStore.getState().isLoading).toBe(false));
+    expect(document.activeElement).toBe(box);
+  });
+
   it('shows each message at its own timestamp, not the current time (learn-04)', () => {
     resetStores('sk-ant-test');
     useDiracStore.setState({

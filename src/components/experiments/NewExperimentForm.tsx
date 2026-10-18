@@ -9,6 +9,7 @@ import { useHardwareStore } from '../../stores/hardwareStore';
 import { useExperimentStore, type DiscoveredExperiment } from '../../services/experimentStore';
 import { createTauriExperimentFs } from '../../services/experimentFs';
 import { BackendSelector } from '../hardware/BackendSelector';
+import { useConfirm } from '../ui/useConfirm';
 import {
   buildSweepFromRows,
   discoverEntryFiles,
@@ -143,8 +144,18 @@ export function NewExperimentForm({ projectRoot, existing, dirtyRef: sharedDirty
     onClose();
     if (opener) queueMicrotask(() => { if (opener.isConnected) opener.focus(); });
   };
-  const handleClose = () => {
-    if (dirtyRef.current && !window.confirm('Discard your unsaved changes to this experiment?')) return;
+  const { confirm, confirmDialog } = useConfirm();
+  const handleClose = async () => {
+    if (dirtyRef.current) {
+      const discard = await confirm({
+        title: 'Discard your unsaved changes?',
+        description: 'This experiment has edits that have not been saved.',
+        confirmLabel: 'Discard',
+        cancelLabel: 'Keep editing',
+        tone: 'danger',
+      });
+      if (!discard) return;
+    }
     finish();
   };
   // Escape closes a pristine form; with edits in it, it only points at Close so nothing is lost by a stray key.
@@ -282,6 +293,7 @@ export function NewExperimentForm({ projectRoot, existing, dirtyRef: sharedDirty
     fontFamily: TYPOGRAPHY.fontSans, marginBottom: 4,
   };
   return (
+    <>
     <form
       ref={formRef}
       onSubmit={(e) => { void handleSubmit(e); }}
@@ -296,7 +308,7 @@ export function NewExperimentForm({ projectRoot, existing, dirtyRef: sharedDirty
         <span style={{ color: colors.text, fontSize: 12, fontWeight: 600 }}>
           {existing ? `Edit ${existing.spec.name}` : 'New experiment'}
         </span>
-        <Button ref={closeRef} type="button" variant="ghost" size="sm" onClick={handleClose}>Close</Button>
+        <Button ref={closeRef} type="button" variant="ghost" size="sm" onClick={() => { void handleClose(); }}>Close</Button>
       </div>
 
       <div>
@@ -305,7 +317,12 @@ export function NewExperimentForm({ projectRoot, existing, dirtyRef: sharedDirty
           id="exp-name" ref={nameRef} mono value={name}
           onChange={(e) => { markDirty('name'); setName(e.target.value); }}
           placeholder="e.g. theta-sweep"
+          invalid={Boolean(collisionText)}
+          aria-describedby={collisionText ? 'exp-name-error' : undefined}
         />
+        {collisionText && (
+          <div id="exp-name-error" role="alert" style={{ color: colors.error, fontSize: 11, marginTop: 4 }}>{collisionText}</div>
+        )}
       </div>
 
       <div>
@@ -326,8 +343,8 @@ export function NewExperimentForm({ projectRoot, existing, dirtyRef: sharedDirty
       </div>
 
       <div>
-        <label style={labelStyle}>Backend</label>
-        <BackendSelector backends={backends} selected={backendName} onSelect={(n) => { markDirty(); setBackendName(n); }} />
+        <label id="exp-backend-label" style={labelStyle}>Backend</label>
+        <BackendSelector labelledBy="exp-backend-label" backends={backends} selected={backendName} onSelect={(n) => { markDirty(); setBackendName(n); }} />
       </div>
 
       <div style={{ display: 'flex', gap: 10 }}>
@@ -415,9 +432,6 @@ export function NewExperimentForm({ projectRoot, existing, dirtyRef: sharedDirty
           {visibleIssues.map((err) => <li key={err.text}>{err.text}</li>)}
         </ul>
       )}
-      {collisionText && (
-        <div role="alert" style={{ color: colors.error, fontSize: 11 }}>{collisionText}</div>
-      )}
       {disabledReason && !collisionText && visibleIssues.length === 0 && name.trim().length > 0 && (
         <div style={{ color: colors.textDim, fontSize: 11 }}>{disabledReason}</div>
       )}
@@ -430,5 +444,7 @@ export function NewExperimentForm({ projectRoot, existing, dirtyRef: sharedDirty
       </Button>
       </div>
     </form>
+    {confirmDialog}
+    </>
   );
 }

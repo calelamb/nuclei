@@ -1,5 +1,8 @@
 import { useEffect, useId, useRef, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
+import { X } from 'lucide-react';
+import { IconButton } from './IconButton';
+import { ICON_SIZE } from '../../styles/tokens';
 import { useFocusTrap } from '../../hooks/useFocusTrap';
 import { cx } from './cx';
 
@@ -27,6 +30,8 @@ export interface DialogProps {
   className?: string;
   /** Edge-to-edge body (diff panes, long forms): the panel drops its padding; header and footer keep theirs. */
   flush?: boolean;
+  /** Suppress the default Close button (a dismissible dialog gets one unless `trailing` is set). */
+  hideClose?: boolean;
   /** Stacking order; the default sits above panels and below tooltips. */
   zIndex?: number;
 }
@@ -39,7 +44,7 @@ export interface DialogProps {
  */
 export function Dialog({
   title, description, leading, trailing, onClose, children, footer, width = 440, align = 'center',
-  dismissible = true, initialFocus, className, flush = false, zIndex = 4600,
+  dismissible = true, initialFocus, className, flush = false, hideClose = false, zIndex = 4600,
 }: DialogProps) {
   const panelRef = useRef<HTMLDivElement>(null);
   const titleId = useId();
@@ -89,7 +94,11 @@ export function Dialog({
         <div className="nuclei-dialog__header">
           {leading}
           <h2 id={titleId} className="nuclei-dialog__title">{title}</h2>
-          {trailing}
+          {trailing ?? (dismissible && !hideClose ? (
+            <IconButton size="sm" aria-label="Close" className="nuclei-dialog__close" onClick={() => onCloseRef.current()}>
+              <X size={ICON_SIZE.sm} aria-hidden="true" />
+            </IconButton>
+          ) : null)}
         </div>
         {description && <p id={descId} className="nuclei-dialog__desc">{description}</p>}
         {children && <div className="nuclei-dialog__body">{children}</div>}

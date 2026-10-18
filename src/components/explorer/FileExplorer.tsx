@@ -96,6 +96,9 @@ export function FileExplorer() {
   const [pending, setPending] = useState<CreateKind | null>(null);
   const [draft, setDraft] = useState('');
   const treeRef = useRef<HTMLDivElement>(null);
+  const rootRef = useRef<HTMLDivElement>(null);
+  // The row the first press of a double-click landed on: the tree may move between the two clicks.
+  const pressedPath = useRef<string | null>(null);
   const [focusedPath, setFocusedPath] = useState<string | null>(null);
 
   const loadRoot = useCallback(
@@ -219,7 +222,31 @@ export function FileExplorer() {
     setDraft('');
   };
 
-  const commitCreate = useCallback(async () => {
+  /** Escape from the name field: the keyboard goes back to the control that started the flow, not to <body>. */
+  const cancelCreateFromKeyboard = () => {
+    cancelCreate();
+    requestAnimationFrame(() => {
+      rootRef.current?.querySelector<HTMLElement>('[aria-label="New file, circuit or folder"]')?.focus();
+    });
+  };
+
+  const focusRow = useCallback((path: string) => {
+    setFocusedPath(path);
+    requestAnimationFrame(() => {
+      const rows = treeRef.current?.querySelectorAll<HTMLElement>('[data-tree-path]') ?? [];
+      Array.from(rows).find((r) => r.dataset.treePath === path)?.focus();
+    });
+  }, []);
+
+  /** Select, expand and focus a folder the person just created. */
+  const revealCreatedFolder = useCallback(async (path: string) => {
+    const children = await platform.listDirectory(path);
+    if (children) setChildEntries((c) => ({ ...c, [path]: children }));
+    setExpanded((e) => ({ ...e, [path]: true }));
+    focusRow(path);
+  }, [platform, focusRow]);
+
+  const commitCreate = useCallback(async (viaKeyboard = false) => {
     const raw = draft.trim();
     if (!raw || !projectRoot || !pending) {
       cancelCreate();
@@ -247,6 +274,7 @@ export function FileExplorer() {
       if (pending.kind === 'circuit') setEditorFramework(pending.framework);
       openTab({ path: `${projectRoot}/${name}`, content });
       cancelCreate();
+      if (viaKeyboard) useEditorStore.getState().requestEditorFocus();
       return;
     }
 
@@ -258,6 +286,7 @@ export function FileExplorer() {
       if (pending.kind === 'package') await platform.createFile(`${path}/__init__.py`, '');
       cancelCreate();
       await reloadTree(projectRoot);
+      if (viaKeyboard) await revealCreatedFolder(path);
       return;
     }
 
@@ -270,7 +299,8 @@ export function FileExplorer() {
     await reloadTree(projectRoot);
     openTab({ path: res.path, content });
     setFocusedPath(res.path);
-  }, [draft, pending, projectRoot, platform, reloadTree, openTab, setEditorFramework, tabs, rootEntries]);
+    if (viaKeyboard) useEditorStore.getState().requestEditorFocus();
+  }, [draft, pending, projectRoot, platform, reloadTree, revealCreatedFolder, openTab, setEditorFramework, tabs, rootEntries]);
 
   const commitRename = useCallback(
     async (oldPath: string) => {
@@ -377,7 +407,9 @@ export function FileExplorer() {
         tabIndex={rovingTabIndex(entry.path)}
         onFocus={() => setFocusedPath(entry.path)}
         onClick={() => handleOpenFile(entry.path)}
+        onMouseDown={(e) => { if (e.detail <= 1) pressedPath.current = entry.path; }}
         onDoubleClick={() => {
+          if (pressedPath.current !== entry.path) return;
           setRenameDraft(entry.name);
           setRenameTarget(entry.path);
         }}
@@ -424,14 +456,6 @@ export function FileExplorer() {
     ? focusedPath
     : visibleItems.find((i) => i.path === activeTabPath)?.path ?? visibleItems[0]?.path ?? null;
   const rovingTabIndex = (path: string): 0 | -1 => (path === tabStopPath ? 0 : -1);
-
-  const focusRow = (path: string) => {
-    setFocusedPath(path);
-    requestAnimationFrame(() => {
-      const rows = treeRef.current?.querySelectorAll<HTMLElement>('[data-tree-path]') ?? [];
-      Array.from(rows).find((r) => r.dataset.treePath === path)?.focus();
-    });
-  };
 
   const handleTreeKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
     const target = (e.target as HTMLElement).closest<HTMLElement>('[data-tree-path]');
@@ -550,7 +574,7 @@ export function FileExplorer() {
   ];
 
   return (
-    <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+    <div ref={rootRef} style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
       <div
         style={{
           padding: '6px 10px',
@@ -626,8 +650,8 @@ export function FileExplorer() {
             onChange={(value) => { setDraft(value); if (createError) setCreateError(null); }}
             onBlur={() => { if (createError) cancelCreate(); else void commitCreate(); }}
             onKeyDown={(e) => {
-              if (e.key === 'Enter') { e.preventDefault(); commitCreate(); }
-              if (e.key === 'Escape') cancelCreate();
+              if (e.key === 'Enter') { e.preventDefault(); void commitCreate(true); }
+              if (e.key === 'Escape') cancelCreateFromKeyboard();
             }}
             placeholder={pending.initial}
             style={{

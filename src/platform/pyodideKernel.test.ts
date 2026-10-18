@@ -158,7 +158,7 @@ describe('PyodideKernel — worker-backed runtime', () => {
     }
   });
 
-  it('a user stop ends the run quietly: output note and empty result, no error or wiped circuit', async () => {
+  it('a user stop ends the run quietly: just a stopped marker, no error or wiped circuit', async () => {
     const { kernel, captured, runtime } = makeKernel({ execute: 'hang' });
     await kernel.init();
     const sending = kernel.send({ type: 'execute', code: 'while True: pass', shots: 10 });
@@ -167,8 +167,7 @@ describe('PyodideKernel — worker-backed runtime', () => {
     runtime.stop();
     await sending;
     expect(captured).toEqual([
-      { type: 'output', text: 'Run stopped.\n' },
-      { type: 'result', data: null },
+      { type: 'result', data: null, stopped: true },
     ]);
   });
 

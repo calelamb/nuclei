@@ -4,6 +4,8 @@ import { useEditorStore } from '../../stores/editorStore';
 import { useDiracStore } from '../../stores/diracStore';
 import { useThemeStore } from '../../stores/themeStore';
 import { compose } from '../../services/compose';
+import type { DiracErrorInfo } from '../../lib/diracErrors';
+import { DiracErrorCard } from './DiracErrorCard';
 import { Dialog, TextInput } from '../ui';
 import { displayFrameworkName } from '../../data/starterTemplates';
 import { DiracKeyNotice } from './DiracKeyNotice';
@@ -29,6 +31,7 @@ function ComposeDialog({ onClose }: { onClose: () => void }) {
   const [intent, setIntent] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [errorInfo, setErrorInfo] = useState<DiracErrorInfo | null>(null);
   const colors = useThemeStore((s) => s.colors);
   const framework = useEditorStore((s) => s.framework);
   const currentCode = useEditorStore((s) => s.code);
@@ -40,10 +43,11 @@ function ComposeDialog({ onClose }: { onClose: () => void }) {
     if (!text || loading) return;
     setLoading(true);
     setError(null);
+    setErrorInfo(null);
     const res = await compose({ intent: text, framework, currentCode });
     setLoading(false);
     if (!res.ok) {
-      setError(res.error);
+      if (res.info) setErrorInfo(res.info); else setError(res.error);
       return;
     }
     setPreview({ intent: text, code: res.code, explanation: res.explanation });
@@ -69,7 +73,7 @@ function ComposeDialog({ onClose }: { onClose: () => void }) {
           <TextInput
             size="lg"
             value={intent}
-            onChange={(e) => { setIntent(e.target.value); if (error) setError(null); }}
+            onChange={(e) => { setIntent(e.target.value); setError(null); setErrorInfo(null); }}
             onKeyDown={(e) => {
               if (e.key === 'Enter') {
                 e.preventDefault();
@@ -78,7 +82,7 @@ function ComposeDialog({ onClose }: { onClose: () => void }) {
             }}
             placeholder="Describe what you want — e.g. 'a 3-qubit GHZ state'"
             aria-label="Describe what Dirac should compose"
-            invalid={Boolean(error)}
+            invalid={Boolean(error || errorInfo)}
           />
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 10, fontSize: 11, color: colors.textDim }}>
             {loading && (<><Loader2 className="nuclei-spin" size={12} /> Thinking…</>)}
@@ -89,6 +93,11 @@ function ComposeDialog({ onClose }: { onClose: () => void }) {
             )}
             {error && <span role="alert" style={{ color: colors.error, marginLeft: 'auto' }}>{error}</span>}
           </div>
+          {errorInfo && (
+            <div style={{ marginTop: 10 }}>
+              <DiracErrorCard error={errorInfo} onUpdateKey={onClose} />
+            </div>
+          )}
         </>
       )}
     </Dialog>
