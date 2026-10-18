@@ -40,6 +40,8 @@ interface CircuitState {
   setLoading: (loading: boolean) => void;
   setError: (error: string | null) => void;
   setPreviewPaused: (paused: boolean) => void;
+  /** Forget the latched last-good circuit (the code no longer parses *and* nothing explains why). */
+  dropLastGood: () => void;
   clear: () => void;
   // Highlight actions
   addHighlight: (h: GateHighlight) => void;
@@ -87,6 +89,7 @@ export const useCircuitStore = create<CircuitState>((set, get) => ({
   setLoading: (isLoading) => set({ isLoading }),
   setError: (error) => set({ error, isLoading: false, previewPaused: false }),
   setPreviewPaused: (previewPaused) => set({ previewPaused, isLoading: false }),
+  dropLastGood: () => set({ lastGood: null }),
   clear: () => set({
     snapshot: null,
     snapshotKey: null,

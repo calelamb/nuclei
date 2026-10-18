@@ -5,6 +5,7 @@ import { CircuitRenderer } from './CircuitRenderer';
 import { useCircuitStore } from '../../stores/circuitStore';
 import { useEditorStore } from '../../stores/editorStore';
 import { useProjectStore } from '../../stores/projectStore';
+import { useEditorRevealStore } from '../../stores/editorRevealStore';
 
 const snap = {
   framework: 'qiskit' as const, qubit_count: 2, classical_bit_count: 0, depth: 1,
@@ -62,7 +63,42 @@ describe('CircuitRenderer during a transient syntax error', () => {
       useEditorStore.getState().setErrors([{ line: 7, message: 'invalid syntax' }]);
     });
     expect(screen.getByRole('img')).toBeTruthy();
-    expect(screen.getByText(/Out of date: error on line 7/)).toBeTruthy();
+    expect(screen.getByText('Out of date · line 7')).toBeTruthy();
+  });
+
+  it('puts the caption in a pill over the diagram, not in the header row, and drops the stale qubit/depth meta', () => {
+    render(<CircuitRenderer />);
+    act(() => { useCircuitStore.getState().setSnapshot(snap); });
+    expect(screen.getByText(/2 qubits · depth 1/)).toBeTruthy();
+    act(() => {
+      useCircuitStore.getState().setSnapshot(null);
+      useCircuitStore.getState().setError('invalid syntax');
+      useEditorStore.getState().setErrors([{ line: 9, message: 'invalid syntax' }]);
+    });
+    const pill = screen.getByTestId('stale-result-notice');
+    const header = screen.getByText('Circuit').parentElement as HTMLElement;
+    expect(header.contains(pill)).toBe(false);
+    expect(screen.queryByText(/qubits · depth/)).toBeNull();
+  });
+
+  it('lets the pill jump to the line with the error', () => {
+    render(<CircuitRenderer />);
+    act(() => { useCircuitStore.getState().setSnapshot(snap); });
+    act(() => {
+      useCircuitStore.getState().setSnapshot(null);
+      useCircuitStore.getState().setError('invalid syntax');
+      useEditorStore.getState().setErrors([{ line: 9, message: 'invalid syntax' }]);
+    });
+    act(() => { screen.getByRole('button', { name: 'Out of date · line 9' }).click(); });
+    expect(useEditorRevealStore.getState().request?.line).toBe(9);
+  });
+
+  it('says nothing wrong when the code has no error but no circuit either (no "the code has an error")', () => {
+    render(<CircuitRenderer />);
+    act(() => { useCircuitStore.getState().setSnapshot(snap); });
+    act(() => { useCircuitStore.getState().setSnapshot(null); });
+    expect(screen.queryByText(/has an error/)).toBeNull();
+    expect(screen.queryByTestId('stale-result-notice')).toBeNull();
   });
 
   it('shows the error empty state when no circuit ever parsed', () => {

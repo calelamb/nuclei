@@ -50,11 +50,52 @@ function countLines(text: string): number {
   return text.split(/\r?\n/).filter((l, i, all) => l !== '' || i < all.length - 1).length;
 }
 
+const PLAIN_PYTHON_NOTE = 'Ran as plain Python. No circuit to simulate.';
+const NO_CIRCUIT_NOTE = 'The code ran, but it did not define a circuit to simulate.';
+
+/**
+ * A run that finished but defined no circuit is a clean finish, not a failure: the Terminal
+ * keeps what the code printed, gets one calm note, and the circuit pane forgets the old diagram
+ * (it no longer describes this code) without claiming the code has an error.
+ */
+function finishRunWithoutCircuit(framework: string | undefined): void {
+  const sim = useSimulationStore.getState();
+  sim.addOutput(framework ? NO_CIRCUIT_NOTE : PLAIN_PYTHON_NOTE, 'info');
+  sim.clearResult();
+  sim.setRunning(false);
+  sim.setRunFailed(false);
+  sim.setRunNoCircuit(true);
+  useCircuitStore.getState().clear();
+  useEditorStore.getState().clearErrors();
+  useBottomPanelStore.getState().noteOutput();
+}
+
+/**
+ * A parse that yields no circuit and no error (the code became plain Python) leaves the old
+ * diagram latched as "last good". A parse error arrives right behind its null snapshot, so wait a
+ * beat: if nothing explains the missing circuit by then, drop the stale diagram.
+ */
+const UNEXPLAINED_LATCH_GRACE_MS = 300;
+let latchTimer: ReturnType<typeof setTimeout> | null = null;
+
+function scheduleUnexplainedLatchDrop(): void {
+  if (latchTimer) clearTimeout(latchTimer);
+  latchTimer = setTimeout(() => {
+    latchTimer = null;
+    const circuit = useCircuitStore.getState();
+    const explained = circuit.snapshot !== null || circuit.error !== null || circuit.previewPaused
+      || useEditorStore.getState().errors.length > 0;
+    if (!explained) circuit.dropLastGood();
+  }, UNEXPLAINED_LATCH_GRACE_MS);
+}
+
 /** Route one kernel response into the stores. Pure of React: all state lives in stores. */
 export function handleKernelMessage(msg: KernelResponse, connectTimers: ConnectTimers): void {
   switch (msg.type) {
     case 'snapshot':
       useCircuitStore.getState().setSnapshot(msg.data);
+      if (latchTimer) { clearTimeout(latchTimer); latchTimer = null; }
+      if (!msg.data) scheduleUnexplainedLatchDrop();
       useEditorStore.getState().clearErrors();
       // Non-stim circuits have no QEC sidecar — drop any stale one so the
       // detector graph / lattice don't flash old data on a framework swap.
@@ -194,6 +235,11 @@ export function handleKernelMessage(msg: KernelResponse, connectTimers: ConnectT
       // the terminal shows the traceback too).
       if (msg.code === 'missing_dependency' && msg.dependency) {
         useMissingDependencyStore.getState().report(msg.dependency, msg.framework ?? null);
+      }
+
+      if (msg.phase === 'execute' && msg.code === 'no_circuit') {
+        finishRunWithoutCircuit(msg.framework);
+        break;
       }
 
       const { detail, line, shortMessage } = getErrorContext(msg);

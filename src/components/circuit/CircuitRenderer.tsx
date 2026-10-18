@@ -13,7 +13,9 @@ import { CircuitEmptyState } from './CircuitEmptyState';
 import { ExportMenu } from './ExportMenu';
 import { useEdgeFades } from './edgeFades';
 import { fitCircuitWidth } from './fitCircuit';
-import { Tooltip as UiTooltip } from '../ui';
+import { describeStale } from './staleCaption';
+import { StaleResultNotice } from '../layout/StaleResultNotice';
+import { useEditorRevealStore } from '../../stores/editorRevealStore';
 import { useElementSize } from '../../hooks/useElementSize';
 import { GateExplorerPopup } from './GateExplorerPopup';
 import type { Gate } from '../../types/quantum';
@@ -35,7 +37,6 @@ interface ContextMenu {
 
 /** The header holds a button on some frames and not others; a floor keeps the diagram from hopping. */
 const CIRCUIT_HEADER_MIN_HEIGHT = 32;
-export const PREVIEW_PAUSED_CAPTION = 'Preview paused: this code runs longer than 5 s. Press Run to execute';
 
 function StepControls() {
   const stepMode = useCircuitStore((s) => s.stepMode);
@@ -163,6 +164,7 @@ export function CircuitRenderer() {
   const explorerGateIndex = useCircuitStore((s) => s.explorerGateIndex);
   const setExplorerGateIndex = useCircuitStore((s) => s.setExplorerGateIndex);
   const colors = useThemeStore((s) => s.colors);
+  const revealLine = useEditorRevealStore((s) => s.revealLine);
 
   const [measureContainer, containerSize] = useElementSize<HTMLDivElement>();
   const { ref: fadeRef, onScroll: onContainerScroll, style: fadeStyle } = useEdgeFades<HTMLDivElement>();
@@ -196,6 +198,7 @@ export function CircuitRenderer() {
   const hasClassical = classical_bit_count > 0;
   const { columns, svgWidth, svgHeight, classicalWireY, wireStart, wireEnd } = computeCircuitGeometry(snapshot);
 
+  const stalePill = stale ? describeStale({ previewPaused, error, errorLine }) : null;
   const highlightSet = new Set(highlights.map((h) => h.gateIndex));
 
   const ariaDescription = describeCircuit(snapshot);
@@ -209,17 +212,10 @@ export function CircuitRenderer() {
           <span style={{ fontSize: 11, fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase', color: colors.textDim, fontFamily: TYPOGRAPHY.fontSans }}>
             Circuit
           </span>
-          <span style={{ fontSize: 11, color: colors.textDim, fontFamily: TYPOGRAPHY.fontSans, whiteSpace: 'nowrap' }}>
-            {qubit_count} {qubit_count === 1 ? 'qubit' : 'qubits'} · depth {depth}
-          </span>
-          {stale && (
-            <UiTooltip label={previewPaused ? PREVIEW_PAUSED_CAPTION : 'The diagram shows the last code that parsed.'} placement="below">
-              <span role="status" aria-label={previewPaused ? PREVIEW_PAUSED_CAPTION : undefined} style={{ fontSize: 11, color: colors.warning, fontFamily: TYPOGRAPHY.fontSans, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                {previewPaused
-                  ? 'Preview paused · Run to execute'
-                  : `Out of date: ${errorLine !== null ? `error on line ${errorLine}` : 'the code has an error'}`}
-              </span>
-            </UiTooltip>
+          {!stale && (
+            <span style={{ fontSize: 11, color: colors.textDim, fontFamily: TYPOGRAPHY.fontSans, whiteSpace: 'nowrap' }}>
+              {qubit_count} {qubit_count === 1 ? 'qubit' : 'qubits'} · depth {depth}
+            </span>
           )}
         </span>
         <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -227,6 +223,15 @@ export function CircuitRenderer() {
           <ExportMenu />
         </span>
       </div>
+      <div style={{ position: 'relative', flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
+      {stalePill && (
+        <StaleResultNotice
+          overlay
+          label={stalePill.label}
+          tooltip={stalePill.tooltip}
+          onActivate={stalePill.line !== null ? () => revealLine(stalePill.line as number) : undefined}
+        />
+      )}
       <div
         ref={setContainerRef}
         onScroll={onContainerScroll}
@@ -355,6 +360,8 @@ export function CircuitRenderer() {
             </button>
           </div>
         )}
+      </div>
+
       </div>
 
       {/* Step controls */}

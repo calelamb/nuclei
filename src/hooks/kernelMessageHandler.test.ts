@@ -58,6 +58,65 @@ describe('handleKernelMessage — run failure tracking', () => {
   });
 });
 
+describe('handleKernelMessage — a run that finished without a circuit', () => {
+  const noCircuit = { type: 'error', message: 'No circuit found.', phase: 'execute', code: 'no_circuit' } as const;
+
+  beforeEach(() => {
+    useSimulationStore.setState({ result: null, isRunning: true, lastRunFailed: false, lastRunNoCircuit: false, terminalOutput: [] });
+    useCircuitStore.getState().clear();
+  });
+
+  it('is a clean finish: not a failed run, no error line, one calm note in the Terminal', () => {
+    handleKernelMessage({ ...noCircuit }, {});
+    const sim = useSimulationStore.getState();
+    expect(sim.lastRunFailed).toBe(false);
+    expect(sim.lastRunNoCircuit).toBe(true);
+    expect(sim.isRunning).toBe(false);
+    expect(sim.terminalOutput.some((l) => l.type === 'stderr' || l.text.startsWith('Error'))).toBe(false);
+    expect(sim.terminalOutput.map((l) => l.text)).toContain('Ran as plain Python. No circuit to simulate.');
+  });
+
+  it('drops the previous diagram instead of calling it out of date, and sets no circuit error', () => {
+    handleKernelMessage({ type: 'snapshot', data: { framework: 'qiskit', qubit_count: 2, classical_bit_count: 0, depth: 3, gates: [{ type: 'H', targets: [0], controls: [], params: [], layer: 0 }] } as never }, {});
+    handleKernelMessage({ type: 'snapshot', data: null }, {});
+    handleKernelMessage({ ...noCircuit }, {});
+    const circuit = useCircuitStore.getState();
+    expect(circuit.snapshot).toBeNull();
+    expect(circuit.lastGood).toBeNull();
+    expect(circuit.error).toBeNull();
+  });
+
+  it('drops a latched diagram when a parse finds no circuit and no error, but keeps it for a real error', () => {
+    vi.useFakeTimers();
+    try {
+      const snap = { framework: 'qiskit', qubit_count: 1, classical_bit_count: 0, depth: 1, gates: [{ type: 'H', targets: [0], controls: [], params: [], layer: 0 }] } as never;
+      handleKernelMessage({ type: 'snapshot', data: snap }, {});
+      handleKernelMessage({ type: 'snapshot', data: null }, {});
+      handleKernelMessage({ type: 'error', message: 'invalid syntax', phase: 'parse', code: 'execution_error' }, {});
+      vi.advanceTimersByTime(500);
+      expect(useCircuitStore.getState().lastGood).not.toBeNull();
+
+      handleKernelMessage({ type: 'snapshot', data: null }, {});
+      vi.advanceTimersByTime(500);
+      expect(useCircuitStore.getState().lastGood).toBeNull();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('forgets the note when the next run starts', () => {
+    handleKernelMessage({ ...noCircuit }, {});
+    useSimulationStore.getState().setRunning(true);
+    expect(useSimulationStore.getState().lastRunNoCircuit).toBe(false);
+  });
+
+  it('still reports a genuine execute error as a failure', () => {
+    handleKernelMessage({ type: 'error', message: 'boom', phase: 'execute', code: 'execution_error' }, {});
+    expect(useSimulationStore.getState().lastRunFailed).toBe(true);
+    expect(useSimulationStore.getState().lastRunNoCircuit).toBe(false);
+  });
+});
+
 describe('handleKernelMessage — backend discovery', () => {
   it('asks the kernel for backends once when a provider connects, and not when a connect fails', () => {
     const sender = vi.fn();
