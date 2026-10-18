@@ -27,6 +27,14 @@ describe('createE2eFixtureBridge', () => {
     },
   );
 
+  it('reports the desktop platform only when the fixture opts in', () => {
+    const web = { ...baseBridge(), getPlatform: () => 'web' as const };
+    const plain = createE2eFixtureBridge(web, new URLSearchParams({ e2eProject: 'qec-project' }));
+    const desktop = createE2eFixtureBridge(web, new URLSearchParams({ e2eProject: 'qec-project', e2eDesktop: '1' }));
+    expect(plain?.getPlatform()).toBe('web');
+    expect(desktop?.getPlatform()).toBe('desktop');
+  });
+
   it('exposes only the catalogued fixture project through a virtual project root', async () => {
     const bridge = createE2eFixtureBridge(
       baseBridge(),
