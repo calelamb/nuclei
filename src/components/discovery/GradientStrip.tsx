@@ -1,5 +1,6 @@
 import { LabSectionLabel, formatSci, seqColor } from '../lab';
 import { deadGradientLines } from '../../services/discovery/gradient';
+import { describeMethod } from '../../services/discovery/format';
 import type { GradientMap } from '../../types/discovery';
 
 const DEAD_VARIANCE = 1e-8;
@@ -22,7 +23,7 @@ export function GradientStrip({ map, totalLines }: { map: GradientMap; totalLine
   const max = Math.max(...map.lines.map((l) => l.variance), 0);
   const dead = deadGradientLines(map);
   const lines = Math.max(totalLines, ...map.lines.map((l) => l.line), 1);
-  const summary = `Gradient map over ${lines} program lines (${map.method === 'pauli_propagation_exact' ? 'exact Pauli propagation' : 'statevector sampling'}, ${map.n_qubits} qubits): ${map.lines.length} lines carry parameters, ${dead.length} are dead (${(map.dead_fraction * 100).toFixed(0)}% of parameterized lines).`;
+  const summary = `Gradient map over ${lines} program lines (${describeMethod(map.method)}, ${map.n_qubits} qubits): ${map.lines.length} lines carry parameters, ${dead.length} are dead (${(map.dead_fraction * 100).toFixed(0)}% of parameterized lines).`;
   return (
     <div>
       <LabSectionLabel>Gradient map</LabSectionLabel>

@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import { Archive, FlaskConical, GitBranch, LayoutDashboard, ListTree, ShieldCheck } from 'lucide-react';
 import { LabSegmented } from '../lab';
 import { candidateKind } from '../../services/discovery/candidateView';
-import { candidateList } from '../../services/discovery/runView';
+import { useCandidateList } from './useCandidateList';
 import { useDiscoveryStore, type DiscoveryKpis, type RunView } from '../../stores/discoveryStore';
 import { CandidateDrawer } from './CandidateDrawer';
 import { RunHeader } from './RunHeader';
@@ -15,7 +15,7 @@ import { GuardrailsTab } from './tabs/GuardrailsTab';
 import { LineageTab } from './tabs/LineageTab';
 import { OverviewTab } from './tabs/OverviewTab';
 
-export type RunTab = 'overview' | 'lineage' | 'archive' | 'candidates' | 'guardrails' | 'conjectures';
+type RunTab = 'overview' | 'lineage' | 'archive' | 'candidates' | 'guardrails' | 'conjectures';
 
 const PREFIX = 'discovery-run';
 
@@ -24,7 +24,7 @@ export function RunDetail({ view, kpis, initialTab = 'overview' }: { view: RunVi
   const [tab, setTab] = useState<RunTab>(initialTab);
   const selectedCandidateId = useDiscoveryStore((s) => s.selectedCandidateId);
   const selectCandidate = useDiscoveryStore((s) => s.selectCandidate);
-  const list = useMemo(() => candidateList(view), [view]);
+  const list = useCandidateList(view);
   const rejected = useMemo(() => list.filter((c) => candidateKind(c) === 'rejected').length, [list]);
 
   return (

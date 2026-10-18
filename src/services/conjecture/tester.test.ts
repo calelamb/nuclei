@@ -24,6 +24,19 @@ describe('conjecture tester', () => {
     expect(res).toEqual({ ok: false, error: { code: 'conjecture_internal', message: 'boom' } });
   });
 
+  it('correlates the schema request by request_id and drops mismatched replies and errors (CR-M4)', async () => {
+    const session = createFakeSession();
+    const pending = createConjectureTester(session).schema();
+    await new Promise((r) => setTimeout(r, 0));
+    const id = (session.sent[0] as { request_id?: string }).request_id;
+    expect(id).toBeTruthy();
+    session.emit({ type: 'error', phase: 'discovery', code: 'conjecture_internal', message: 'not mine', request_id: 'other' });
+    session.emit({ ...FIXTURE_SCHEMA_REPLY, request_id: 'stale' });
+    session.emit({ ...FIXTURE_SCHEMA_REPLY, request_id: id });
+    const res = await pending;
+    expect(res.ok).toBe(true);
+  });
+
   it('streams started, progress, evidence and the result in order', async () => {
     const session = createFakeSession();
     const tester = createConjectureTester(session, { newJobId: ids });
@@ -50,8 +63,15 @@ describe('conjecture tester', () => {
     expect(await handle.cancel()).toBe(true);
     expect(session.sent.some((m) => m.type === 'discovery_conjecture_cancel')).toBe(true);
     session.emit({ type: 'discovery_conjecture_result', job_id: 'job-1', status: 'cancelled', result: null });
-    expect(await handle.done).toEqual({ kind: 'result', status: 'cancelled', result: null });
+    expect(await handle.done).toEqual({ kind: 'result', status: 'cancelled', result: null, error: null });
     expect(await handle.cancel()).toBe(false);
+  });
+
+  it('carries the failure error from the top level of the result message (CR-M6)', async () => {
+    const session = createFakeSession();
+    const handle = createConjectureTester(session, { newJobId: ids }).start({ conjecture: fixtureConjecture(), seed: 1 }, () => undefined);
+    session.emit({ type: 'discovery_conjecture_result', job_id: 'job-1', status: 'failed', result: null, error: { code: 'conjecture_internal', message: 'boom', path: 'n_range' } });
+    expect(await handle.done).toEqual({ kind: 'result', status: 'failed', result: null, error: { code: 'conjecture_internal', message: 'boom', path: 'n_range' } });
   });
 
   it('resolves kernel error envelopes, with the offending path', async () => {

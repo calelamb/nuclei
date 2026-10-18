@@ -12,6 +12,7 @@
 import type { Conjecture, ConjectureResponse, ConjectureResult, ConjectureSchemaInfo } from '../../types/conjecture';
 import type { KernelResponse } from '../../types/quantum';
 import { request, type LabSession } from '../lab/labSession';
+import { newRequestId, replyMatches } from '../discovery/requestId';
 import { normalizeSchemaResult } from './schema';
 
 export interface TesterError {
@@ -27,7 +28,7 @@ export type TestEvent =
   | { kind: 'evidence'; item: unknown };
 
 export type TestEnd =
-  | { kind: 'result'; status: 'complete' | 'cancelled' | 'failed'; result: ConjectureResult | null }
+  | { kind: 'result'; status: 'complete' | 'cancelled' | 'failed'; result: ConjectureResult | null; error: TesterError | null }
   | { kind: 'error'; error: TesterError }
   | { kind: 'disconnected' };
 
@@ -46,7 +47,7 @@ export interface ConjectureTester {
   onClose(handler: () => void): () => void;
 }
 
-export interface TesterOptions {
+interface TesterOptions {
   schemaTimeoutMs?: number;
   ackTimeoutMs?: number;
   cancelTimeoutMs?: number;
@@ -55,7 +56,7 @@ export interface TesterOptions {
 
 const DEFAULTS = { schemaTimeoutMs: 15_000, ackTimeoutMs: 20_000, cancelTimeoutMs: 10_000 };
 
-export function newConjectureJobId(): string {
+function newConjectureJobId(): string {
   const c = globalThis.crypto;
   if (c && typeof c.randomUUID === 'function') return `cjt-${c.randomUUID()}`;
   return `cjt-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
@@ -94,11 +95,14 @@ export function createConjectureTester(session: LabSession, options: TesterOptio
     schema() {
       return enqueue(async () => {
         try {
+          // Matched by request_id (CR-M4); an older kernel echoes none and is matched as before.
+          const requestId = newRequestId('discovery_conjecture_schema');
           const out = await request(
             session,
-            { type: 'discovery_conjecture_schema' },
-            (m): m is Extract<ConjectureResponse, { type: 'discovery_conjecture_schema_result' }> => m.type === 'discovery_conjecture_schema_result',
-            { timeoutMs: opts.schemaTimeoutMs, matchError: (e) => isDiscoveryError(e) && e.job_id === undefined },
+            { type: 'discovery_conjecture_schema', request_id: requestId },
+            (m): m is Extract<ConjectureResponse, { type: 'discovery_conjecture_schema_result' }> =>
+              m.type === 'discovery_conjecture_schema_result' && replyMatches(requestId, (m as { request_id?: unknown }).request_id),
+            { timeoutMs: opts.schemaTimeoutMs, matchError: (e) => isDiscoveryError(e) && e.job_id === undefined && replyMatches(requestId, e.request_id) },
           );
           if (!out.ok) return { ok: false as const, error: fromKernelError(out.error) };
           const info = normalizeSchemaResult(out.value);
@@ -154,7 +158,12 @@ export function createConjectureTester(session: LabSession, options: TesterOptio
             onEvent({ kind: 'evidence', item: message.item });
             return;
           case 'discovery_conjecture_result':
-            finish({ kind: 'result', status: message.status, result: message.result ?? null });
+            finish({
+              kind: 'result',
+              status: message.status,
+              result: message.result ?? null,
+              error: message.error ? { code: message.error.code, message: message.error.message, ...(message.error.path ? { path: message.error.path } : {}) } : null,
+            });
             return;
           default:
             return;

@@ -18,16 +18,17 @@
 import {
   type ArchiveAxis,
   type CandidateRecord,
+  type DiscoveryEvaluation,
   type DiscoveryEvaluatorInfo,
   type DiscoverySpec,
   type RunRecord,
   type RunStatus,
   type StopReason,
 } from '../../types/discovery';
-import { bestElite, createArchive, eliteFromEvaluation, axisFromDescriptor, insertElite } from './archive';
+import { allElites, bestElite, createArchive, uniqueByCandidate, eliteFromEvaluation, axisFromDescriptor, insertElite } from './archive';
 import { findRegion } from './diff';
 import { createAuditClient, type AuditClient } from './kernelAudit';
-import { createKernelEvaluator, type KernelEvaluator } from './kernelEval';
+import { createKernelEvaluator, isTransportFailure, type KernelEvaluator } from './kernelEval';
 import { auditIfDue, observeSeed, pendingAudits, rebuildRedQueen, runAudit } from './auditStep';
 import { EMPTY_POLICY, NO_EXPLOIT_MESSAGE, isRedQueen, redQueenConfig } from './redQueen';
 import { buildRedQueenSystemPrompt } from './redQueenPrompt';
@@ -35,13 +36,16 @@ import { awaitBatch, submitBatch } from './batch';
 import { confirmChampion } from './confirmation';
 import { buildSystemPrompt } from './prompt';
 import { emptyUsage, exhaustedBudget, llmBudgetLeft, planProposal, thresholdForIsland, type PlanItem } from './planning';
-import { evaluateCandidate, runProposal } from './proposalTask';
+import { countEvaluation, evaluateCandidate, registerKey, runProposal } from './proposalTask';
 import {
   candidateIdFor, createPersister, loadCandidates, loadRunRecord, makeRunId, runPaths, type Persister,
 } from './records';
-import { createLimiter, type DiscoveryDeps, type DiscoveryRunContext, type DiscoveryRunOptions, type RunContext, type RunControl, type RunnerEvent } from './runContext';
+import { MAX_NOTICES, createLimiter, type DiscoveryDeps, type DiscoveryRunContext, type DiscoveryRunOptions, type RunContext, type RunControl, type RunnerEvent } from './runContext';
 import { createRng, deriveSeed, restoreRng, type Rng } from './rng';
 import { migrate } from './selection';
+
+/** Candidates confirmed at the end of a run before giving up on a confirmed champion. */
+const MAX_CONFIRM_ATTEMPTS = 3;
 
 export type { DiscoveryDeps, DiscoveryRunContext, DiscoveryRunOptions, RunnerEvent } from './runContext';
 
@@ -55,10 +59,10 @@ export interface DiscoveryRunHandle {
   current(): RunRecord | null;
 }
 
-export type AxesResult = { ok: true; axes: readonly [ArchiveAxis, ArchiveAxis] } | { ok: false; message: string };
+type AxesResult = { ok: true; axes: readonly [ArchiveAxis, ArchiveAxis] } | { ok: false; message: string };
 
 /** Resolve the two archive axes from the spec (or the evaluator's first two descriptors). */
-export function resolveAxes(spec: DiscoverySpec, evaluator: DiscoveryEvaluatorInfo): AxesResult {
+function resolveAxes(spec: DiscoverySpec, evaluator: DiscoveryEvaluatorInfo): AxesResult {
   const chosen = spec.search.archive.descriptors ?? evaluator.descriptors.slice(0, 2).map((d) => d.key);
   if (chosen.length < 2) return { ok: false, message: `Evaluator ${evaluator.kind} needs two descriptors for the archive.` };
   const axes = chosen.map((key, i) => {
@@ -88,16 +92,22 @@ export function runDiscovery(
   opts: DiscoveryRunOptions = {},
 ): DiscoveryRunHandle {
   let paused = false;
+  /** When the current pause began, and the total paused time so far: neither counts as wall time (CR-M8). */
+  let pausedAt: number | null = null;
+  let pausedTotalMs = 0;
   let stopped = false;
+  /** Set when the kernel connection is lost: the run ends as failed (CR-H7). */
+  let fatal: string | null = null;
   let finished = false;
+  const llmAbort = new AbortController();
   let run: RunRecord | null = null;
   let onControlChange: () => void = () => undefined;
   const gateWaiters: Array<() => void> = [];
   const releaseGate = () => gateWaiters.splice(0).forEach((resolve) => resolve());
   const control: RunControl = {
-    get stopped() { return stopped; },
+    get stopped() { return stopped || fatal !== null; },
     get paused() { return paused; },
-    gate: () => (paused && !stopped ? new Promise<void>((resolve) => gateWaiters.push(resolve)) : Promise.resolve()),
+    gate: () => (paused && !stopped && fatal === null ? new Promise<void>((resolve) => gateWaiters.push(resolve)) : Promise.resolve()),
   };
   const startedAt = deps.clock.now();
   const runId = rctx.resumeRunId ?? makeRunId(startedAt, deriveSeed(spec.seed, startedAt.getTime()));
@@ -165,7 +175,11 @@ export function runDiscovery(
       return fail('LLM mutation needs an Anthropic API key. Add one in Settings, Dirac, or switch the mutator to hybrid or ast.');
     }
 
-    const wall = () => priorWall + (deps.clock.now().getTime() - segmentStart);
+    const wall = () => {
+      const now = deps.clock.now().getTime();
+      const pausedNow = pausedAt !== null ? now - pausedAt : 0;
+      return priorWall + Math.max(0, now - segmentStart - pausedTotalMs - pausedNow);
+    };
     const snapshot = (): RunRecord => ({ ...(run as RunRecord), usage: { ...(run as RunRecord).usage, wall_ms: wall() } });
     const persistRun = () => {
       run = { ...snapshot(), rng: rng.state(), updated_at: deps.clock.now().toISOString() };
@@ -179,14 +193,23 @@ export function runDiscovery(
 
     kernel = createKernelEvaluator({ session: deps.session, info: rctx.evaluator, sleep: deps.clock.sleep });
     const k = kernel;
+    k.onFatal((message) => {
+      if (fatal !== null || finished) return;
+      fatal = `${message} The run ended because evaluations can no longer be sent; resume it once the kernel is back.`;
+      llmAbort.abort();
+      releaseGate();
+    });
+    /** How a halted run ends: failed on a lost kernel, otherwise a user stop. */
+    const haltFinish = () => (fatal !== null ? finish('error', fatal) : finish('user'));
     auditClient = createAuditClient({ session: deps.session, sleep: deps.clock.sleep });
     const promptInput = { evaluator: rctx.evaluator, task: spec.description, entry: spec.entry };
     const ctx: RunContext = {
       spec, runId, evaluator: rctx.evaluator, deps, kernel: k, audits: auditClient,
       rq: redQueen ? { config: redQueenConfig(spec), policy: EMPTY_POLICY, started: 0, findings: [] } : null,
       control,
+      signal: llmAbort.signal,
       system: redQueen ? buildRedQueenSystemPrompt(promptInput) : buildSystemPrompt(promptInput),
-      candidates, seenHashes: new Map(), seenProgramKeys: new Map(), rejections: [],
+      candidates, seenHashes: new Map(), seenProgramKeys: new Map(), keyClaims: new Map(), rejections: [],
       evalLimit: createLimiter(spec.budget.max_concurrent_evaluations),
       llmLimit: createLimiter(opts.maxLlmConcurrency ?? 4),
       getRun: () => run as RunRecord,
@@ -200,16 +223,16 @@ export function runDiscovery(
       notice: (message) => {
         const r = run as RunRecord;
         if (r.notices.includes(message)) return;
-        setRun({ notices: [...r.notices, message].slice(-20) });
+        setRun({ notices: [...r.notices, message].slice(-MAX_NOTICES) });
         emit({ type: 'notice', message });
       },
       activity: (candidateId, phase) => emit({ type: 'activity', candidateId, phase }),
       persister,
     };
-    for (const c of candidates.values()) {
+    for (const c of [...candidates.values()].sort((a, b) => a.id.localeCompare(b.id))) {
       if (c.outcome === 'invalid_proposal') continue;
       ctx.seenHashes.set(c.program_sha256, c.id);
-      if (c.evaluation?.program_key) ctx.seenProgramKeys.set(c.evaluation.program_key, c.id);
+      if (c.outcome !== 'duplicate') registerKey(ctx, c.evaluation?.program_key, c.id, c.evaluation);
       if (c.evaluation?.status === 'rejected' && c.evaluation.rejection) ctx.rejections.push(c.evaluation.rejection);
     }
     if (rctx.resumeRunId) rebuildRedQueen(ctx, [...candidates.values()]);
@@ -222,7 +245,7 @@ export function runDiscovery(
     onControlChange = () => {
       if (finished || !run) return;
       const r = run as RunRecord;
-      if (stopped || (paused ? 'paused' : 'running') === r.status) return;
+      if (stopped || fatal !== null || (paused ? 'paused' : 'running') === r.status) return;
       setRun({ status: paused ? 'paused' : 'running' });
       persistRun();
     };
@@ -271,9 +294,10 @@ export function runDiscovery(
     if (seedRecord && seedRecord.outcome === 'pending') {
       persistRun();
       const evaluated = await evaluateSeed(ctx, seedRecord);
-      if (evaluated.outcome === 'pending') return finish('user');
+      if (evaluated.outcome === 'pending') return haltFinish();
       ctx.saveCandidate(evaluated);
       const ev = evaluated.evaluation;
+      registerKey(ctx, ev?.program_key, evaluated.id, ev);
       if (ev?.evaluator.fingerprint) setRun({ evaluator: { ...(run as RunRecord).evaluator, fingerprint: ev.evaluator.fingerprint } });
       integrate(0);
       observeSeed(ctx, evaluated);
@@ -289,14 +313,14 @@ export function runDiscovery(
     if (rctx.resumeRunId && ctx.rq) {
       const resent = await Promise.all(pendingAudits(candidates.values()).map((c) => runAudit(ctx, c)));
       for (const c of resent) if (integrated.has(c.id) && c.audit) insertCandidate(c);
-      if (stopped) return finish('user');
+      if (control.stopped) return haltFinish();
     }
 
     // ── Generations ───────────────────────────────────────────────────
     let stopReason: StopReason | null = null;
-    while (!stopped && !stopReason && (run as RunRecord).generation < spec.search.generations) {
+    while (!control.stopped && !stopReason && (run as RunRecord).generation < spec.search.generations) {
       await control.gate();
-      if (stopped) break;
+      if (control.stopped) break;
       const g = (run as RunRecord).generation + 1;
       const outcome = await runGeneration(g);
       if (outcome.interrupted) break;
@@ -315,7 +339,7 @@ export function runDiscovery(
       const patience = spec.search.early_stop_patience;
       if (!stopReason && patience > 0 && (run as RunRecord).stale_generations >= patience) stopReason = 'early_stop';
     }
-    if (stopped) return finish('user');
+    if (control.stopped) return haltFinish();
     return finish(stopReason ?? 'generations');
 
     // ── Generation ────────────────────────────────────────────────────
@@ -324,25 +348,29 @@ export function runDiscovery(
       const resumeBatch = r0.pending_batch?.generation === g ? r0.pending_batch : null;
       const orphans = [...candidates.values()].filter((c) => c.generation === g && c.mutator !== 'seed');
       const requeue = orphans.filter((c) => c.outcome === 'pending' && c.evaluation === null && !c.proposal_error);
+      // Resumed batch items go through the same cascade as fresh ones and get their own derived AST seed (CR-M8).
       const planned: PlanItem[] = (resumeBatch?.items ?? []).map((it) => ({
         candidateId: it.candidate_id, island: it.island, parentId: it.parent_id, inspirationIds: it.inspiration_ids,
-        mutator: 'llm', tier: it.tier, depth: it.depth, thinking: it.thinking, astSeed: 0, evalSeed: it.eval_seed,
-        threshold: null,
+        mutator: 'llm', tier: it.tier, depth: it.depth, thinking: it.thinking,
+        astSeed: deriveSeed(spec.seed, `ast:${it.candidate_id}`), evalSeed: it.eval_seed,
+        threshold: thresholdForIsland(spec, r0.archive, it.island, candidates),
       }));
+      // Their LLM calls were counted when the batch was submitted, before the interruption.
+      const resumedIds = new Set(planned.map((p) => p.candidateId));
       let budgetStop: StopReason | null = null;
       const target = spec.search.candidates_per_generation - orphans.length - planned.length;
       for (let n = 0; n < target; n += 1) {
         const r = run as RunRecord;
         const view = {
           usage: r.usage, wallMs: wall(),
-          plannedEvaluations: planned.length + requeue.length,
-          plannedLlmCalls: planned.filter((p) => p.mutator === 'llm').length,
+          plannedEvaluations: (planned.length + requeue.length) * (spec.evaluation.cascade ? 2 : 1),
+          plannedLlmCalls: planned.filter((p) => p.mutator === 'llm' && !resumedIds.has(p.candidateId)).length,
         };
         budgetStop = exhaustedBudget(spec, view);
         if (budgetStop) break;
         const plan = planProposal({
           spec, archive: r.archive, rng, candidateId: candidateIdFor(r.next_candidate_index),
-          proposalIndex: r.next_candidate_index, llmAvailable: deps.llm.hasKey(), llmBudgetLeft: llmBudgetLeft(spec, view),
+          proposalIndex: r.next_candidate_index, llmAvailable: deps.llm.hasKey(), llmBudgetLeft: llmBudgetLeft(spec, view), candidates,
         });
         if (plan.kind === 'stop') { budgetStop = plan.reason; break; }
         if (plan.kind === 'empty') break;
@@ -358,7 +386,7 @@ export function runDiscovery(
       if (batch === 'interrupted') return { interrupted: true, budgetStop };
       const tasks: Array<Promise<unknown>> = [
         ...requeue.map((c) =>
-          evaluateCandidate(ctx, c, thresholdForIsland(spec, frozen, c.island)).then(async (done) => {
+          evaluateCandidate(ctx, c, thresholdForIsland(spec, frozen, c.island, candidates)).then(async (done) => {
             ctx.saveCandidate(done);
             await auditIfDue(ctx, done);
           })),
@@ -366,19 +394,21 @@ export function runDiscovery(
           runProposal(ctx, item, g, batch ? { result: batch.results[item.candidateId], batchId: batch.id } : undefined)),
       ];
       await Promise.all(tasks);
-      return { interrupted: stopped, budgetStop };
+      return { interrupted: control.stopped, budgetStop };
     }
 
     async function resolveBatch(g: number, planned: PlanItem[], resuming: boolean) {
       const llmItems = planned.filter((p) => p.mutator === 'llm');
       if (!spec.mutator.batch_mode || llmItems.length === 0) return null;
+      await control.gate();
+      if (control.stopped) return 'interrupted' as const;
       if (!resuming) {
         const submitted = await submitBatch(ctx, llmItems, g);
         if (!submitted.ok) {
           ctx.notice(`Batch submit failed: ${submitted.message}`);
           return { id: '', results: {} };
         }
-        setRun({ pending_batch: submitted.pending, usage: { ...(run as RunRecord).usage, llm_calls: (run as RunRecord).usage.llm_calls + llmItems.length } });
+        setRun({ pending_batch: submitted.pending, usage: { ...(run as RunRecord).usage, llm_calls: (run as RunRecord).usage.llm_calls + submitted.pending.items.length } });
         persistRun();
       }
       const pending = (run as RunRecord).pending_batch;
@@ -390,20 +420,54 @@ export function runDiscovery(
       return { id: pending.batch_id, results: outcome };
     }
 
+    /**
+     * Confirm the champion on fresh seeds. A rejection at the confirm stage (or a non-transient failure)
+     * means it is NOT confirmed: it is marked and dropped from champion status, and the next-best archive
+     * elite is confirmed instead, up to MAX_CONFIRM_ATTEMPTS candidates in all. If none is confirmed the run
+     * ends with no champion ("no confirmed champion") and no confirmed numbers.
+     */
+    async function confirmWithFallback(first: CandidateRecord): Promise<CandidateRecord | undefined> {
+      const queue = uniqueByCandidate(allElites((run as RunRecord).archive)).map((e) => e.candidateId).filter((id) => id !== first.id);
+      const reasons: string[] = [];
+      let current: CandidateRecord | undefined = first;
+      for (let attempt = 0; current && attempt < MAX_CONFIRM_ATTEMPTS; attempt += 1) {
+        if (!current.evaluation) { current = candidates.get(queue.shift() ?? ''); continue; }
+        const confirmation = await confirmChampion(ctx, current, spec.confirm.seeds, `run:${current.id}`);
+        if (control.stopped && confirmation.n_scored < spec.confirm.seeds && !confirmation.rejection) {
+          // Stop (or a lost kernel) cut the confirmation short: a partial one would misreport the number.
+          ctx.notice('Confirmation was stopped before it finished; the champion number is unconfirmed.');
+          return current;
+        }
+        if (!confirmation.rejection) {
+          setRun({ confirmation, champion_id: current.id });
+          return current;
+        }
+        const why = `champion rejected at confirmation: ${confirmation.rejection}`;
+        reasons.push(`${current.id}: ${confirmation.rejection}`);
+        ctx.notice(`${current.id} ${why}`);
+        ctx.saveCandidate({ ...current, confirm_rejection: confirmation.rejection });
+        current = candidates.get(queue.shift() ?? '');
+      }
+      setRun({
+        champion_id: null, confirmation: null,
+        message: `no confirmed champion: ${reasons.join('; ')}`,
+      });
+      return undefined;
+    }
+
     // ── Finish ────────────────────────────────────────────────────────
     async function finish(reason: StopReason, message: string | null = null): Promise<RunRecord> {
       const r = run as RunRecord;
       const userStop = reason === 'user';
-      const failed = reason === 'seed_rejected';
+      const failed = reason === 'seed_rejected' || reason === 'error';
       const noExploits = ctx.rq !== null && !userStop && !failed && ![...candidates.values()].some((c) => c.audit?.verdict === 'exploit');
       setRun({ status: failed ? 'failed' : userStop ? 'stopped' : 'completed', stop_reason: reason, message: noExploits ? NO_EXPLOIT_MESSAGE : message });
       if (noExploits) ctx.notice(NO_EXPLOIT_MESSAGE);
       if (userStop) k.cancelRun(runId);
-      const champion = r.champion_id ? candidates.get(r.champion_id) : undefined;
+      let champion = r.champion_id ? candidates.get(r.champion_id) : undefined;
       // Red Queen champions are chosen by adversarial fitness; confirming their evaluator score on fresh seeds says nothing about robustness.
       if (champion && !userStop && !failed && !ctx.rq && spec.confirm.seeds > 0 && champion.evaluation) {
-        const confirmation = await confirmChampion(ctx, champion, spec.confirm.seeds, 'run');
-        setRun({ confirmation });
+        champion = await confirmWithFallback(champion);
       }
       if (champion && !userStop && !failed) persister.writeChampion(champion.program);
       setRun({ finished_at: deps.clock.now().toISOString() });
@@ -433,20 +497,49 @@ export function runDiscovery(
   return {
     runId,
     done,
-    pause() { if (!finished && !stopped) { paused = true; onControlChange(); } },
-    resume() { if (!finished && paused) { paused = false; releaseGate(); onControlChange(); } },
-    stop() { if (!finished && !stopped) { stopped = true; releaseGate(); kernel?.cancelRun(runId); auditClient?.cancel(runId); } },
+    pause() {
+      if (finished || stopped || paused) return;
+      paused = true;
+      pausedAt = deps.clock.now().getTime();
+      onControlChange();
+    },
+    resume() {
+      if (finished || !paused) return;
+      paused = false;
+      if (pausedAt !== null) pausedTotalMs += Math.max(0, deps.clock.now().getTime() - pausedAt);
+      pausedAt = null;
+      releaseGate();
+      onControlChange();
+    },
+    stop() { if (!finished && !stopped) { stopped = true; llmAbort.abort(); releaseGate(); kernel?.cancelRun(runId); auditClient?.cancel(runId); } },
     current: () => run,
   };
 }
 
+/**
+ * Evaluate the seed. With the cascade on, the seed is screened first too
+ * (CR-C1): its screen result is the per-island reference children are
+ * compared with, so the promotion test is like-for-like.
+ */
 async function evaluateSeed(ctx: RunContext, seed: CandidateRecord): Promise<CandidateRecord> {
   const { spec } = ctx;
-  const evaluation = await ctx.kernel.evaluate({
-    runId: ctx.runId, wireId: seed.id, evaluator: { kind: spec.evaluator.kind, config: spec.evaluator.config },
-    program: seed.program, entry: spec.entry, seed: seed.eval_seed, stage: 'full',
-  });
-  ctx.setUsage((u) => ({ ...u, evaluations: u.evaluations + 1 }));
-  if (evaluation.status === 'failed' && evaluation.failure?.code === 'cancelled') return seed;
-  return { ...seed, evaluation, outcome: 'evaluated' };
+  const run = async (stage: 'screen' | 'full') => {
+    const evaluation = await ctx.kernel.evaluate({
+      runId: ctx.runId, wireId: seed.id, evaluator: { kind: spec.evaluator.kind, config: spec.evaluator.config },
+      program: seed.program, entry: spec.entry, seed: seed.eval_seed, stage,
+    });
+    ctx.setUsage(countEvaluation);
+    return evaluation;
+  };
+  const cancelled = (e: DiscoveryEvaluation) => (e.status === 'failed' && e.failure?.code === 'cancelled') || isTransportFailure(e);
+  let screen: DiscoveryEvaluation | null = null;
+  if (spec.evaluation.cascade) {
+    screen = await run('screen');
+    if (cancelled(screen)) return seed;
+    // A seed the screen cannot score stays final: the run fails on it.
+    if (screen.status !== 'scored') return { ...seed, evaluation: screen, screen, outcome: 'evaluated' };
+  }
+  const evaluation = await run('full');
+  if (cancelled(evaluation)) return screen ? { ...seed, screen } : seed;
+  return { ...seed, evaluation, screen, outcome: 'evaluated' };
 }

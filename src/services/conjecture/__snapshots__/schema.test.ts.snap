@@ -14,10 +14,10 @@ rotation_axes (string): Axes of the parametric rotations, for example "YZ".
 params_per_qubit (number): Parameters divided by qubits.
 
 Quantities available to prediction:
-beta_upper95: Upper 95% bound of the exponential variance-decay rate beta.
-verdict: The scaling verdict (polynomial, exponential, inconclusive).
-variance_at_max_n: Gradient variance at the largest n.
-log2_dla_dimension: log2 of the dynamical Lie algebra dimension.",
+beta_upper95 (ops < <= > >=, number): Upper 95% bound of the exponential variance-decay rate beta.
+verdict (ops == != in, string): The scaling verdict (polynomial, exponential, inconclusive).
+variance_at_max_n (ops < <= > >=, number): Gradient variance at the largest n.
+log2_dla_dimension (ops < <= > >= ==, number): log2 of the dynamical Lie algebra dimension.",
   "input_schema": {
     "$defs": {
       "predicate__node": {
@@ -142,41 +142,120 @@ log2_dla_dimension: log2 of the dynamical Lie algebra dimension.",
               "type": "integer",
             },
             "prediction": {
-              "properties": {
-                "op": {
-                  "enum": [
-                    "==",
-                    "!=",
-                    "<",
-                    "<=",
-                    ">",
-                    ">=",
-                    "in",
+              "oneOf": [
+                {
+                  "properties": {
+                    "op": {
+                      "enum": [
+                        "<",
+                        "<=",
+                        ">",
+                        ">=",
+                      ],
+                      "type": "string",
+                    },
+                    "quantity": {
+                      "enum": [
+                        "beta_upper95",
+                      ],
+                      "type": "string",
+                    },
+                    "value": {
+                      "type": "number",
+                    },
+                  },
+                  "required": [
+                    "quantity",
+                    "op",
+                    "value",
                   ],
-                  "type": "string",
+                  "type": "object",
                 },
-                "quantity": {
-                  "enum": [
-                    "beta_upper95",
-                    "verdict",
-                    "variance_at_max_n",
-                    "log2_dla_dimension",
+                {
+                  "properties": {
+                    "op": {
+                      "enum": [
+                        "==",
+                        "!=",
+                        "in",
+                      ],
+                      "type": "string",
+                    },
+                    "quantity": {
+                      "enum": [
+                        "verdict",
+                      ],
+                      "type": "string",
+                    },
+                    "value": {
+                      "type": "string",
+                    },
+                  },
+                  "required": [
+                    "quantity",
+                    "op",
+                    "value",
                   ],
-                  "type": "string",
+                  "type": "object",
                 },
-                "value": {
-                  "type": [
-                    "number",
-                    "string",
+                {
+                  "properties": {
+                    "op": {
+                      "enum": [
+                        "<",
+                        "<=",
+                        ">",
+                        ">=",
+                      ],
+                      "type": "string",
+                    },
+                    "quantity": {
+                      "enum": [
+                        "variance_at_max_n",
+                      ],
+                      "type": "string",
+                    },
+                    "value": {
+                      "type": "number",
+                    },
+                  },
+                  "required": [
+                    "quantity",
+                    "op",
+                    "value",
                   ],
+                  "type": "object",
                 },
-              },
-              "required": [
-                "quantity",
-                "op",
-                "value",
+                {
+                  "properties": {
+                    "op": {
+                      "enum": [
+                        "<",
+                        "<=",
+                        ">",
+                        ">=",
+                        "==",
+                      ],
+                      "type": "string",
+                    },
+                    "quantity": {
+                      "enum": [
+                        "log2_dla_dimension",
+                      ],
+                      "type": "string",
+                    },
+                    "value": {
+                      "type": "number",
+                    },
+                  },
+                  "required": [
+                    "quantity",
+                    "op",
+                    "value",
+                  ],
+                  "type": "object",
+                },
               ],
-              "type": "object",
             },
             "statement": {
               "description": "One falsifiable sentence naming the structure, the quantity and the direction of the claim.",

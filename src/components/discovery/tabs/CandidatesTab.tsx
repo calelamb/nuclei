@@ -3,7 +3,8 @@ import { ArrowDown, ArrowUp } from 'lucide-react';
 import { LabButton, LabCard, LabEmptyState, LabInput, LabSelect, formatSci } from '../../lab';
 import { DEFAULT_FILTER, filterCandidates, sortCandidates, type CandidateFilter, type SortDir, type SortKey } from '../../../services/discovery/candidateTable';
 import { CANDIDATE_KIND_LABEL, candidateFitness, candidateKind, primaryObjectiveKey } from '../../../services/discovery/candidateView';
-import { candidateList, type RunView } from '../../../services/discovery/runView';
+import type { RunView } from '../../../services/discovery/runView';
+import { useCandidateList } from '../useCandidateList';
 import { CandidateKindPill } from '../pills';
 
 const PAGE = 100;
@@ -15,7 +16,7 @@ interface Column {
 }
 
 export function CandidatesTab({ view, selectedId, onOpen }: { view: RunView; selectedId: string | null; onOpen: (id: string) => void }) {
-  const list = useMemo(() => candidateList(view), [view]);
+  const list = useCandidateList(view);
   const objectiveKey = primaryObjectiveKey(view.run);
   const objectiveLabel = view.run.archive.objectives[0]?.label ?? 'Objective';
   const [filter, setFilter] = useState<CandidateFilter>(DEFAULT_FILTER);

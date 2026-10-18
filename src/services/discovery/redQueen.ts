@@ -83,6 +83,21 @@ export function observeScored(
 
 // ── Exploits ───────────────────────────────────────────────────────────
 
+/**
+ * Addendum §F: a candidate is an exploit only when its evaluator fitness is at
+ * least the honest seed's. A failing audit of a candidate below that bar is an
+ * audit failure, not an exploit: the audit stays visible (checks, reasons) but
+ * the verdict is downgraded to `inconclusive`, so it is not counted as an exploit
+ * and no exploit file is written. Unknown fitness on either side leaves the audit alone.
+ */
+export function gateExploit(audit: DiscoveryAudit, evaluatorFitness: number | null | undefined, seedFitness: number | null | undefined): DiscoveryAudit {
+  if (audit.verdict !== 'exploit') return audit;
+  const fitness = typeof audit.evaluator_fitness === 'number' ? audit.evaluator_fitness : evaluatorFitness;
+  if (typeof fitness !== 'number' || typeof seedFitness !== 'number' || fitness >= seedFitness) return audit;
+  const reason = `Audit failure, not an exploit: evaluator fitness ${fitness} is below the honest seed's ${seedFitness}.`;
+  return { ...audit, verdict: 'inconclusive', reasons: [reason, ...audit.reasons] };
+}
+
 export function exploitId(runId: string, candidateId: string): string {
   return `rq-${runId}-${candidateId}`;
 }
@@ -91,7 +106,7 @@ export function failedChecks(audit: DiscoveryAudit): AuditCheck[] {
   return audit.checks.filter((c) => c.status === 'fail' || c.status === 'warn');
 }
 
-export function auditNotes(audit: DiscoveryAudit): string {
+function auditNotes(audit: DiscoveryAudit): string {
   const reasons = audit.reasons.length > 0 ? ` Reasons: ${audit.reasons.join('; ')}.` : '';
   const gap = audit.gap === null ? 'unknown' : String(audit.gap);
   return `Audit verdict ${audit.verdict}: evaluator fitness ${audit.evaluator_fitness ?? 'n/a'}, audit fitness ${audit.audit_fitness ?? 'n/a'}, gap ${gap}.${reasons}${audit.notes?.length ? ` ${audit.notes.join(' ')}` : ''}`;
@@ -102,7 +117,7 @@ export function exploitTitle(candidateId: string, audit: DiscoveryAudit): string
   return `Candidate ${candidateId}: ${why}`;
 }
 
-export type DiscoveredBy = ExploitFixture['discovered_by'];
+type DiscoveredBy = ExploitFixture['discovered_by'];
 
 export function buildExploitRecord(
   spec: DiscoverySpec,

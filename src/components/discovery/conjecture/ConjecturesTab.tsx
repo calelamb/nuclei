@@ -56,6 +56,7 @@ export function ConjecturesTab({ view }: { view: RunView }) {
         error={state.proposeError}
         dropped={state.dropped}
         onPropose={() => void useConjectureStore.getState().propose(runId)}
+        onCancel={() => useConjectureStore.getState().cancelPropose(runId)}
       />
       {state.proposing && state.proposals.length === 0 && (
         <div className="lab-stack" aria-busy="true" aria-label="Waiting for proposals"><LabSkeleton height={96} /><LabSkeleton height={96} /></div>

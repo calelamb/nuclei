@@ -4,7 +4,7 @@ import { NO_EXPLOIT_MESSAGE } from './redQueen';
 import { runDiscovery, type DiscoveryRunContext, type RunnerEvent } from './runner';
 import {
   SEED_PROGRAM, TOY_EVALUATOR, createFakeKernel, createFakeLlm, createManualClock, createMemoryFs, improveValue, joinPath,
-  makeSpec, testHash, type FakeKernelOptions,
+  makeSpec, testHash, type FakeKernelOptions, type Scorer,
 } from './testkit';
 
 const ctx: DiscoveryRunContext = {
@@ -120,6 +120,32 @@ describe('Red Queen runner: audits', () => {
   });
 });
 
+describe('Red Queen runner: cascade threshold (CR-H5)', () => {
+  // Fitness grows with the IMPROVE value, so a descendant of the best elite always beats the best screen result.
+  const rising: Scorer = (program) => ({
+    fitness: 1 + improveValue(program) * 0.01,
+    descriptors: { d1: improveValue(program) % 10, d2: improveValue(program) % 90 },
+    program_key: `key:${improveValue(program)}`,
+  });
+
+  it('compares screen fitness with evaluator screen fitness, not the adversarial fitness of an exploit', async () => {
+    const { deps, fs, kernel } = setup({ auditor: exploitOnC2, scorer: rising });
+    const run = await runDiscovery(
+      rqSpec({
+        evaluation: { cascade: true, promote_if: 'island_best' },
+        red_queen: { audit_every: 'all', max_audits: 100 },
+        search: { islands: 1, generations: 3, candidates_per_generation: 3, migration_interval: 0, early_stop_patience: 0, exploration: 0 },
+      }),
+      ctx, deps,
+    ).done;
+    const files = candidatesOf(fs, run);
+    expect(files.find((c) => c.id === 'c-0002')?.audit?.verdict).toBe('exploit');
+    // The exploit sits in the archive with adversarial fitness 1000+; the threshold must not read that.
+    expect(files.some((c) => c.generation >= 2 && c.outcome === 'evaluated')).toBe(true);
+    expect(kernel.audits().some((a) => Number(a.candidate_id.slice(2)) > 3)).toBe(true);
+  });
+});
+
 describe('Red Queen runner: exploits', () => {
   it('persists each exploit in the kernel fixture format plus the audit', async () => {
     const { deps, fs } = setup({ auditor: exploitOnC2 });
@@ -173,6 +199,38 @@ describe('Red Queen runner: exploits', () => {
     expect(later.length).toBeGreaterThan(0);
     expect(later[0]).toContain('c-0002 (exploit');
     expect(later[0]).toContain('determinism check passed only under the evaluator seed');
+  });
+});
+
+describe('Red Queen runner: exploit bar (CR-M3)', () => {
+  const withSeedFitness = (seed: number, child: number): Scorer => (program) => ({
+    fitness: improveValue(program) === 0 ? seed : child + improveValue(program) * 0.001,
+    descriptors: { d1: improveValue(program) % 10, d2: improveValue(program) % 90 },
+    program_key: `key:${improveValue(program)}`,
+  });
+  const allExploits: NonNullable<FakeKernelOptions['auditor']> = () => ({
+    verdict: 'exploit', audit_fitness: 0.2, gap: 4,
+    reasons: ['determinism check failed'],
+    checks: [{ id: 'deterministic', label: 'Deterministic under a fresh seed', status: 'fail', detail: 'flipped' }],
+  });
+
+  it('a failing audit below the honest seed fitness is shown but is not an exploit and writes no exploit file', async () => {
+    const { deps, fs } = setup({ auditor: allExploits, scorer: withSeedFitness(5, 1) });
+    const run = await runDiscovery(rqSpec({ red_queen: { audit_every: 'all', max_audits: 100 } }), ctx, deps).done;
+    const files = candidatesOf(fs, run).filter((c) => c.audit);
+    expect(files.length).toBeGreaterThan(0);
+    expect(files.every((c) => c.audit?.verdict === 'inconclusive')).toBe(true);
+    expect(files[0].audit?.reasons[0]).toMatch(/audit failure, not an exploit/i);
+    expect(files[0].audit?.checks[0].status).toBe('fail');
+    expect(exploitFiles(fs, run)).toHaveLength(0);
+    expect(run.message).toBe(NO_EXPLOIT_MESSAGE);
+  });
+
+  it('at or above the honest seed fitness the same audit is an exploit', async () => {
+    const { deps, fs } = setup({ auditor: allExploits, scorer: withSeedFitness(5, 5) });
+    const run = await runDiscovery(rqSpec({ red_queen: { audit_every: 'all', max_audits: 100 } }), ctx, deps).done;
+    expect(candidatesOf(fs, run).some((c) => c.audit?.verdict === 'exploit')).toBe(true);
+    expect(exploitFiles(fs, run).length).toBeGreaterThan(0);
   });
 });
 

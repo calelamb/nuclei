@@ -1,6 +1,6 @@
 import { CheckCircle2, CircleSlash, MinusCircle, XCircle } from 'lucide-react';
 import { LabCallout, LabCode, LabPill, LabSectionLabel, formatDuration, formatInterval, formatSci } from '../lab';
-import { formatCount } from '../../services/discovery/format';
+import { describeMethod, formatCount } from '../../services/discovery/format';
 import type { CandidateRecord, DiscoveryEvaluation, GuardrailStatus } from '../../types/discovery';
 
 const GUARDRAIL_ICON: Record<GuardrailStatus, { icon: typeof CheckCircle2; color: string; label: string }> = {
@@ -120,7 +120,7 @@ export function EvaluationFacts({ evaluation }: { evaluation: DiscoveryEvaluatio
         ['Sandbox time', t.sandbox === undefined ? '—' : formatDuration(t.sandbox)],
         ['Score time', t.score === undefined ? '—' : formatDuration(t.score)],
         ['Total time', formatDuration(t.total)],
-        ['Compute', evaluation.compute ? `${evaluation.compute.backend}${evaluation.compute.method ? `, ${evaluation.compute.method}` : ''}` : '—'],
+        ['Compute', evaluation.compute ? `${evaluation.compute.backend}${evaluation.compute.method ? `, ${describeMethod(evaluation.compute.method)}` : ''}` : '—'],
         ['Evaluator', `${evaluation.evaluator.kind} ${evaluation.evaluator.version}`],
         ['Fingerprint', <code key="f" className="lab-mono" title={evaluation.evaluator.fingerprint}>{evaluation.evaluator.fingerprint.slice(0, 16)}…</code>],
       ]}

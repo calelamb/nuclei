@@ -77,7 +77,7 @@ export function buildRedQueenSystemPrompt(input: SystemPromptInput): SystemBlock
   return [{ type: 'text', text, cache_control: { type: 'ephemeral' } }];
 }
 
-export interface RedQueenUserPromptInput {
+interface RedQueenUserPromptInput {
   parent: PromptCandidate;
   inspirations: PromptCandidate[];
   rejections: RejectionReason[];
@@ -90,7 +90,7 @@ export interface RedQueenUserPromptInput {
   bestFitness: number | null;
 }
 
-export const FINDINGS_SHOWN = 8;
+const FINDINGS_SHOWN = 8;
 
 function describeFinding(f: AuditFinding): string {
   const gap = f.gap === null ? 'gap n/a' : `gap ${formatNumber(f.gap)}`;

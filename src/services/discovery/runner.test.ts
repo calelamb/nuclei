@@ -152,13 +152,15 @@ describe('cascade', () => {
     const stagesOf = (id: string) => evaluates(kernel).filter((m) => m.candidate_id === id).map((m) => (m as { stage?: string }).stage);
     expect(stagesOf(loser.id)).toEqual(['screen']);
     expect(stagesOf(winners[0].id)).toEqual(['screen', 'full']);
-    expect(stagesOf('c-0000')).toEqual(['full']);
+    expect(stagesOf('c-0000')).toEqual(['screen', 'full']);
     for (const grid of run.archive.islands) {
       for (const elite of Object.values(grid)) {
         expect(files.find((c) => c.id === elite.candidateId)!.evaluation?.stage).toBe('full');
       }
     }
-    expect(run.usage.evaluations).toBe(4);
+    // Both stages count (CR-M2): the seed ran screen + full, three children screened, two promoted.
+    expect(run.usage.evaluations).toBe(7);
+    expect(run.usage.evaluations).toBe(evaluates(kernel).length);
   });
 
   it('promotes everything with promote_if: always', async () => {
@@ -308,6 +310,81 @@ describe('pause, resume and stop', () => {
     handle.pause();
     handle.stop();
     expect(run.status).toBe('completed');
+  });
+});
+
+describe('stop aborts in-flight LLM requests (CR-H6)', () => {
+  it('Stop resolves the run even while the LLM never answers', async () => {
+    const { deps, llm, kernel } = setup();
+    const seen: AbortSignal[] = [];
+    llm.propose = (_input, signal) =>
+      new Promise((resolve) => {
+        if (signal) seen.push(signal);
+        signal?.addEventListener('abort', () => resolve({ ok: false, code: 'aborted', message: 'The request was cancelled.', usage: null, prompt_sha256: null }));
+      });
+    const handle = runDiscovery(makeSpec({ mutator: { kind: 'llm' }, confirm: { seeds: 0 } }), ctx, deps);
+    await until(() => seen.length > 0, 'first LLM request');
+    expect(evaluates(kernel).length).toBeGreaterThan(0);
+    handle.stop();
+    const run = await Promise.race([handle.done, wait(500).then(() => 'hung' as const)]);
+    expect(run).not.toBe('hung');
+    expect((run as RunRecord).status).toBe('stopped');
+    expect(seen.every((s) => s.aborted)).toBe(true);
+    expect((run as RunRecord).notices.some((n) => /LLM proposal failed/.test(n))).toBe(false);
+  });
+});
+
+describe('a closed kernel session ends the run (CR-H7)', () => {
+  /** A fake session whose close can be triggered, after which `send` throws like a dead socket. */
+  function closable(base: FakeKernel['session']) {
+    const handlers = new Set<() => void>();
+    let closed = false;
+    const session = {
+      ...base,
+      send: (m: Parameters<FakeKernel['session']['send']>[0]) => {
+        if (closed) throw new Error('WebSocket is closed');
+        return base.send(m);
+      },
+      onClose: (h: () => void) => { handlers.add(h); return () => handlers.delete(h); },
+    };
+    return { session, close: () => { closed = true; [...handlers].forEach((h) => h()); } };
+  }
+
+  it('fails the run with a clear message and stops proposing instead of burning LLM calls', async () => {
+    const { kernel, llm, fs, clock } = setup();
+    const link = closable(kernel.session);
+    const deps = { session: link.session, fs, llm, clock, hash: testHash, join: joinPath };
+    const handle = runDiscovery(makeSpec({ mutator: { kind: 'llm' }, budget: { max_llm_calls: 100 }, search: { generations: 5, candidates_per_generation: 4 }, confirm: { seeds: 0 } }), ctx, deps);
+    await until(() => handle.current()?.seed_fitness === 0, 'seed scored');
+    kernel.hold.value = true;
+    await until(() => evaluates(kernel).length >= 2, 'in-flight evaluations');
+    link.close();
+    const calls = llm.calls.length;
+    const run = await Promise.race([handle.done, wait(1000).then(() => 'hung' as const)]);
+    expect(run).not.toBe('hung');
+    const done = run as RunRecord;
+    expect(done.status).toBe('failed');
+    expect(done.stop_reason).toBe('error');
+    expect(done.message).toMatch(/kernel session closed/i);
+    await wait(30);
+    expect(llm.calls.length).toBeLessThanOrEqual(calls + 1);
+    expect(done.usage.llm_calls).toBeLessThan(12);
+    // Candidates that were in flight are not recorded as failed evaluations: they stay pending for a resume.
+    const files = candidatesOf(fs, done).filter((c) => c.mutator !== 'seed');
+    expect(files.every((c) => c.evaluation === null || c.evaluation.failure?.code !== 'session_closed')).toBe(true);
+  });
+
+  it('treats a failed send on a dead session as fatal as well', async () => {
+    const { kernel, llm, fs, clock } = setup();
+    const link = closable(kernel.session);
+    const deps = { session: link.session, fs, llm, clock, hash: testHash, join: joinPath };
+    const handle = runDiscovery(makeSpec({ confirm: { seeds: 0 } }), ctx, deps);
+    await until(() => handle.current()?.seed_fitness === 0, 'seed scored');
+    // The socket dies without onClose firing: the next send throws.
+    (link.session as { send: unknown }).send = () => { throw new Error('WebSocket is closed'); };
+    const run = await handle.done;
+    expect(run.status).toBe('failed');
+    expect(run.message).toMatch(/could not reach the kernel/i);
   });
 });
 

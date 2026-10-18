@@ -4,13 +4,17 @@ import { runTimeLabel } from '../../services/discovery/format';
 import { FRONTIER_CONTEXT, FRONTIER_HONESTY, FRONTIER_QUESTION, RED_QUEEN_EXPLAINER } from '../../services/discovery/honesty';
 import { useDiracStore } from '../../stores/diracStore';
 import { useDiscoveryStore, type DiscoveryDefinition } from '../../stores/discoveryStore';
+import type { RunRecord } from '../../types/discovery';
 import { Facts } from './drawerSections';
 import { EvaluatorChip, MutatorChip, RunStatusPill } from './pills';
 
 /** A selected definition with no run open: its settings, Start, and its past runs. */
+/** Stable empty selector result: a fresh `[]` per call would loop a zustand v5 selector. */
+const NO_RUNS: readonly RunRecord[] = [];
+
 export function DefinitionPanel({ definition }: { definition: DiscoveryDefinition }) {
   const { spec } = definition;
-  const runs = useDiscoveryStore((s) => s.runsByDefinition[definition.fileName] ?? []);
+  const runs = useDiscoveryStore((s) => s.runsByDefinition[definition.fileName] ?? NO_RUNS);
   const anyLive = useDiscoveryStore((s) => s.liveRunIds.length > 0);
   const evaluatorsError = useDiscoveryStore((s) => s.evaluatorsError);
   const starting = useDiscoveryStore((s) => s.startRun);

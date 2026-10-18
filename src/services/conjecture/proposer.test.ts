@@ -91,3 +91,26 @@ describe('conjecture proposer', () => {
     expect(JSON.stringify(buildProposeRequestBody(input()).system)).toContain('careful');
   });
 });
+
+describe('timeouts and abort (CR-H6)', () => {
+  const hanging = () =>
+    vi.fn((_url: string, init?: RequestInit) =>
+      new Promise<Response>((_resolve, reject) => {
+        init?.signal?.addEventListener('abort', () => reject(new DOMException('Aborted', 'AbortError')));
+      }));
+
+  it('fails with a typed timeout instead of hanging', async () => {
+    const f = hanging();
+    const proposer = createConjectureProposer({ getApiKey: () => 'k', hash, fetch: f as unknown as typeof fetch, requestTimeoutMs: 20 });
+    expect(await proposer.propose(input())).toMatchObject({ ok: false, code: 'timeout' });
+    expect(f.mock.calls[0][1]?.signal).toBeInstanceOf(AbortSignal);
+  });
+
+  it('aborts when the caller cancels', async () => {
+    const proposer = createConjectureProposer({ getApiKey: () => 'k', hash, fetch: hanging() as unknown as typeof fetch });
+    const controller = new AbortController();
+    const pending = proposer.propose(input(), controller.signal);
+    setTimeout(() => controller.abort(), 10);
+    expect(await pending).toMatchObject({ ok: false, code: 'aborted' });
+  });
+});

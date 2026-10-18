@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ConjectureEnv } from '../services/conjecture/env';
 import { fixtureConjecture, fixtureResult, frontierFixture, FIXTURE_SCHEMA_REPLY, FRONTIER_RUN_ID } from '../services/conjecture/fixtures';
 import type { ConjectureProposer, ProposeResult } from '../services/conjecture/proposer';
@@ -55,6 +55,45 @@ const run = () => useConjectureStore.getState().byRun[FRONTIER_RUN_ID];
 const LEDGER = '/proj/experiments/w-state-synthesis/discovery/' + FRONTIER_RUN_ID + '/conjectures.json';
 
 beforeEach(() => useConjectureStore.getState().reset());
+
+describe('conjectureStore.propose abort (CR-H6)', () => {
+  it('cancelPropose aborts the request and clears proposing without an error banner', async () => {
+    const h = boot();
+    let signal: AbortSignal | undefined;
+    const proposer: ConjectureProposer = {
+      hasKey: () => true,
+      propose: (_input, s) => new Promise((resolve) => {
+        signal = s;
+        s?.addEventListener('abort', () => resolve({ ok: false, code: 'aborted', message: 'The request was cancelled.', usage: null, prompt_sha256: null }));
+      }),
+    };
+    useConjectureStore.getState().configure({
+      fs: h.fs, join: platformJoin, hash, now: () => NOW, proposer, openSession: async () => h.session,
+    });
+    const pending = useConjectureStore.getState().propose(FRONTIER_RUN_ID);
+    await vi.waitFor(() => expect(signal).toBeDefined());
+    expect(run().proposing).toBe(true);
+    useConjectureStore.getState().cancelPropose(FRONTIER_RUN_ID);
+    expect(run().proposing).toBe(false);
+    const res = await pending;
+    expect(res.ok).toBe(false);
+    expect(signal?.aborted).toBe(true);
+    expect(run().proposing).toBe(false);
+    expect(run().proposeError).toBeNull();
+  });
+
+  it('a timeout failure clears proposing and shows the error', async () => {
+    const h = boot();
+    const proposer: ConjectureProposer = {
+      hasKey: () => true,
+      propose: async () => ({ ok: false, code: 'timeout', message: 'Anthropic did not answer', usage: null, prompt_sha256: null }),
+    };
+    useConjectureStore.getState().configure({ fs: h.fs, join: platformJoin, hash, now: () => NOW, proposer, openSession: async () => h.session });
+    await useConjectureStore.getState().propose(FRONTIER_RUN_ID);
+    expect(run().proposing).toBe(false);
+    expect(run().proposeError?.code).toBe('timeout');
+  });
+});
 
 describe('conjectureStore.propose', () => {
   it('adds drafts with proposer metadata and caches the kernel schema', async () => {
@@ -193,6 +232,70 @@ describe('conjectureStore.test', () => {
     await useConjectureStore.getState().propose(FRONTIER_RUN_ID);
     useConjectureStore.getState().decide(FRONTIER_RUN_ID, 'cj-t-1', 'rejected');
     expect((await useConjectureStore.getState().test(FRONTIER_RUN_ID, 'cj-t-1')).ok).toBe(false);
+  });
+});
+
+describe('conjectureStore ledger completeness (CR-M6)', () => {
+  it('records a cancelled test that already holds a counterexample as a refutation', async () => {
+    const refuted = { ...fixtureResult('refuted'), partial: true };
+    const h = boot((m, s) => {
+      if (m.type === 'discovery_conjecture_test') s.emit({ type: 'discovery_conjecture_started', job_id: m.job_id });
+      if (m.type === 'discovery_conjecture_cancel') {
+        s.emit({ type: 'discovery_conjecture_cancelled', job_id: m.job_id, accepted: true });
+        s.emit({ type: 'discovery_conjecture_result', job_id: m.job_id, status: 'cancelled', result: refuted });
+      }
+    });
+    await useConjectureStore.getState().propose(FRONTIER_RUN_ID);
+    const pending = useConjectureStore.getState().test(FRONTIER_RUN_ID, 'cj-t-1');
+    await new Promise((r) => setTimeout(r, 0));
+    await useConjectureStore.getState().cancel(FRONTIER_RUN_ID, 'cj-t-1');
+    await pending;
+    const entry = JSON.parse(h.fs.files.get(LEDGER)!).entries[0];
+    expect(entry).toMatchObject({ id: 'cj-t-1', outcome: 'complete' });
+    expect(entry.result.verdict).toBe('refuted');
+    expect(entry.result.counterexamples).toHaveLength(1);
+    expect(run().jobs['cj-t-1'].status).toBe('cancelled');
+    expect(run().jobs['cj-t-1'].result?.counterexamples).toHaveLength(1);
+    expect(isConjectureTestActive(useConjectureStore.getState())).toBe(false);
+  });
+
+  it('reads the failure message from the top level of the result envelope', async () => {
+    const h = boot((m, s) => {
+      if (m.type !== 'discovery_conjecture_test') return;
+      s.emit({ type: 'discovery_conjecture_started', job_id: m.job_id });
+      s.emit({ type: 'discovery_conjecture_result', job_id: m.job_id, status: 'failed', result: null, error: { code: 'conjecture_internal', message: 'Pauli propagation ran out of memory' } });
+    });
+    await useConjectureStore.getState().propose(FRONTIER_RUN_ID);
+    await useConjectureStore.getState().test(FRONTIER_RUN_ID, 'cj-t-1');
+    expect(run().jobs['cj-t-1']).toMatchObject({ status: 'failed', error: { code: 'conjecture_internal', message: 'Pauli propagation ran out of memory' } });
+    expect(JSON.parse(h.fs.files.get(LEDGER)!).entries[0]).toMatchObject({ outcome: 'failed', error: 'Pauli propagation ran out of memory' });
+  });
+
+  it('never leaves a job running when its proposal is gone: the ledger entry uses the snapshot', async () => {
+    let finish: (() => void) | null = null;
+    const h = boot((m, s) => {
+      if (m.type !== 'discovery_conjecture_test') return;
+      s.emit({ type: 'discovery_conjecture_started', job_id: m.job_id });
+      finish = () => s.emit({ type: 'discovery_conjecture_result', job_id: m.job_id, status: 'complete', result: fixtureResult('supported') });
+    });
+    await useConjectureStore.getState().propose(FRONTIER_RUN_ID);
+    const pending = useConjectureStore.getState().test(FRONTIER_RUN_ID, 'cj-t-1');
+    await new Promise((r) => setTimeout(r, 0));
+    useConjectureStore.setState((s) => ({ byRun: { ...s.byRun, [FRONTIER_RUN_ID]: { ...s.byRun[FRONTIER_RUN_ID], proposals: [] } } }));
+    finish?.();
+    await pending;
+    expect(run().jobs['cj-t-1'].status).toBe('complete');
+    expect(JSON.parse(h.fs.files.get(LEDGER)!).entries[0]).toMatchObject({ id: 'cj-t-1', outcome: 'complete' });
+  });
+
+  it('caps the proposals kept per run but never drops one with a test job', async () => {
+    const h = boot();
+    h.proposals[0] = {
+      ok: true, conjectures: Array.from({ length: 5 }, (_, i) => fixtureConjecture({ id: `cj-n-${i}` })),
+      dropped: [], model: 'claude-opus-5-5', usage: USAGE, prompt_sha256: 'f'.repeat(64),
+    };
+    for (let i = 0; i < 12; i += 1) await useConjectureStore.getState().propose(FRONTIER_RUN_ID);
+    expect(run().proposals.length).toBe(50);
   });
 });
 

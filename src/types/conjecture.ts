@@ -22,8 +22,6 @@ export interface PredicateLeaf {
 export type PredicateGroup = { all: PredicateNode[] } | { any: PredicateNode[] };
 export type PredicateNode = PredicateLeaf | PredicateGroup;
 
-export type PredictionQuantity = 'beta_upper95' | 'verdict' | 'variance_at_max_n' | 'log2_dla_dimension';
-
 export interface ConjecturePrediction {
   quantity: string;
   op: PredicateOp;
@@ -63,6 +61,10 @@ export interface ConjectureFeatureInfo {
 export interface ConjectureQuantityInfo {
   key: string;
   description: string;
+  /** The comparison operators the kernel accepts for this quantity (absent: the schema did not say). */
+  ops?: PredicateOp[];
+  /** The kind of value the kernel compares the quantity with. */
+  value_type?: 'number' | 'string';
 }
 
 export interface ConjectureLimits {
@@ -139,8 +141,6 @@ export interface ConjectureResult {
   counterexamples: Counterexample[];
   /** The normalised conjecture with kernel defaults filled in. */
   conjecture?: Record<string, unknown>;
-  /** Present on failed or cancelled results. */
-  error?: { code: string; message: string; path?: string };
   /** Evaluator fingerprint, when the kernel reports one. */
   fingerprint?: string;
 }
@@ -148,7 +148,7 @@ export interface ConjectureResult {
 // ── Protocol ─────────────────────────────────────────────────────────────
 
 export type ConjectureRequest =
-  | { type: 'discovery_conjecture_schema' }
+  | { type: 'discovery_conjecture_schema'; request_id?: string }
   | { type: 'discovery_conjecture_test'; job_id: string; conjecture: Conjecture; seed: number }
   | { type: 'discovery_conjecture_cancel'; job_id: string };
 
@@ -160,6 +160,7 @@ export type ConjectureResponse =
       families: JsonSchema;
       predicate: JsonSchema;
       limits?: Partial<ConjectureLimits>;
+      request_id?: string;
     }
   | { type: 'discovery_conjecture_started'; job_id: string }
   | { type: 'discovery_conjecture_progress'; job_id: string; fraction: number; message: string; circuit_index: number }
@@ -169,6 +170,8 @@ export type ConjectureResponse =
       job_id: string;
       status: 'complete' | 'cancelled' | 'failed';
       result: ConjectureResult | null;
+      /** On failed (and some cancelled) results the failure sits here, at the top level, not in `result`. */
+      error?: { code: string; message: string; path?: string } | null;
     }
   | { type: 'discovery_conjecture_cancelled'; job_id: string; accepted: boolean };
 

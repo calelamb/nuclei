@@ -4,7 +4,7 @@
  * inputs degrade to a whole-file replace instead of an O(n·m) table.
  */
 
-export type DiffLine = { kind: 'same' | 'add' | 'del'; text: string };
+type DiffLine = { kind: 'same' | 'add' | 'del'; text: string };
 
 const MAX_CELLS = 4_000_000;
 

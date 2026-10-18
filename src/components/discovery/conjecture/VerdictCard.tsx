@@ -85,7 +85,7 @@ export function VerdictCard({ runId, conjecture, result, rows, ledgerError }: {
       </p>
       {result.partial && (
         <LabCallout tone="warning" title="Partial result">
-          {result.error?.message ?? result.reasons.join('; ') ?? 'The test stopped early.'} The verdict covers only the circuits finished before it stopped.
+          {result.reasons.join('; ') || 'The test stopped early.'} The verdict covers only the circuits finished before it stopped.
         </LabCallout>
       )}
       {ledgerError && <LabCallout tone="warning" title="Result not saved to the ledger">{ledgerError}</LabCallout>}

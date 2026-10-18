@@ -13,7 +13,7 @@ import type { Counterexample, EvidenceRow, LedgerEntry, LedgerFile } from '../..
 import { normalizeEvidence } from './evidence';
 import { runPaths, toJson, type DiscoveryFs, type JoinFn } from '../discovery/records';
 
-export interface LedgerPaths {
+interface LedgerPaths {
   dir: string;
   json: string;
   md: string;
@@ -38,7 +38,7 @@ export function upsertEntry(ledger: LedgerFile, entry: LedgerEntry, now: string)
   return { ...ledger, updated_at: now, entries: [entry, ...rest].sort((a, b) => b.tested_at.localeCompare(a.tested_at)) };
 }
 
-export type LoadLedgerResult = { ok: true; ledger: LedgerFile; existed: boolean } | { ok: false; error: string };
+type LoadLedgerResult = { ok: true; ledger: LedgerFile; existed: boolean } | { ok: false; error: string };
 
 export async function loadLedger(fs: DiscoveryFs, paths: LedgerPaths, runId: string, now: string): Promise<LoadLedgerResult> {
   let text: string | null;

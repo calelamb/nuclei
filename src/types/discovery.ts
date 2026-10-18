@@ -74,8 +74,19 @@ export interface GradientMapLine {
   dead: boolean;
 }
 
+/**
+ * How a gradient or score was computed, as the kernel labels it. The set grows with the kernel,
+ * so a label the UI does not know is shown as is.
+ */
+export type ComputeMethod =
+  | 'statevector_sampling'
+  | 'statevector_exact'
+  | 'pauli_propagation_exact'
+  | 'pauli_propagation_bounded'
+  | 'stim_pymatching_sampling';
+
 export interface GradientMap {
-  method: 'pauli_propagation_exact' | 'statevector_sampling';
+  method: ComputeMethod;
   n_qubits: number;
   lines: GradientMapLine[];
   dead_fraction: number;
@@ -105,7 +116,7 @@ export interface DiscoveryEvaluation {
   program_key?: string;
   cache_hit?: boolean;
   isolation?: DiscoveryIsolation;
-  compute?: { backend: string; method: 'statevector_sampling' | 'pauli_propagation_exact' | null };
+  compute?: { backend: string; method: ComputeMethod | null };
 }
 
 export interface AstMutation {
@@ -134,6 +145,10 @@ export interface DiscoveryAudit {
   reasons: string[];
   evaluator: { kind: DiscoveryEvaluatorKind; version: string; fingerprint: string };
   audit_fingerprint: string;
+  /**
+   * DISPLAY ONLY. The kernel's audit seed is a 64-bit integer, which a JS number cannot hold exactly
+   * above 2^53; it must never be compared, hashed or sent back. Use `formatAuditSeed` to show it.
+   */
   seed: number;
   isolation: DiscoveryIsolation;
   timings_ms: { sandbox?: number; audit?: number; total: number };
@@ -142,7 +157,7 @@ export interface DiscoveryAudit {
 }
 
 export type DiscoveryRequest =
-  | { type: 'discovery_evaluators' }
+  | { type: 'discovery_evaluators'; request_id?: string }
   | {
       type: 'discovery_evaluate';
       run_id: string;
@@ -173,17 +188,21 @@ export type DiscoveryRequest =
       end_marker?: string;
       seed: number;
       count: number;
-    };
+      request_id?: string;
+    }
+  /** Cheap AST-normalised dedup key for a program (CR-M1); an older kernel answers `invalid_request`. */
+  | { type: 'discovery_program_key'; program: string; request_id?: string };
 
 export type DiscoveryResponse =
-  | { type: 'discovery_evaluators_result'; evaluators: DiscoveryEvaluatorInfo[] }
+  | { type: 'discovery_evaluators_result'; evaluators: DiscoveryEvaluatorInfo[]; request_id?: string }
   | { type: 'discovery_evaluate_accepted'; run_id: string; candidate_id: string; queue_position: number }
   | { type: 'discovery_evaluation'; run_id: string; candidate_id: string; evaluation: DiscoveryEvaluation }
   | { type: 'discovery_cancelled'; run_id: string; candidate_id: string | null; cancelled: number }
   | { type: 'discovery_audit_accepted'; run_id: string; candidate_id: string; queue_position: number }
   | { type: 'discovery_audit_result'; run_id: string; candidate_id: string; audit: DiscoveryAudit }
   | { type: 'discovery_audit_cancelled'; run_id: string; candidate_id: string | null; cancelled: number }
-  | { type: 'discovery_mutations'; mutations: AstMutation[] };
+  | { type: 'discovery_mutations'; mutations: AstMutation[]; request_id?: string }
+  | { type: 'discovery_program_key_result'; program_key: string; request_id?: string };
 
 export const EVOLVE_START_MARKER = '# EVOLVE-BLOCK-START';
 export const EVOLVE_END_MARKER = '# EVOLVE-BLOCK-END';
@@ -444,6 +463,8 @@ export interface CandidateRecord {
   in_archive: boolean;
   region_warning: boolean;
   reevaluations: DiscoveryEvaluation[];
+  /** Why confirmation rejected this candidate as champion; null/absent when it was not rejected. */
+  confirm_rejection?: string | null;
   /** Independent audit of this candidate (Red Queen or a manual audit). */
   audit?: DiscoveryAudit | null;
   /** True from the moment an audit is sent until its result lands; resume re-sends it. */
@@ -497,6 +518,11 @@ export interface RunConfirmation {
   objectives: ConfirmedObjective[];
   evaluations: DiscoveryEvaluation[];
   created_at: string;
+  /**
+   * Set when a confirm-stage evaluation was rejected (or failed for good): the champion is NOT
+   * confirmed, and no confirmed objective or mean is reported.
+   */
+  rejection?: string | null;
 }
 
 export interface PendingBatchItem {

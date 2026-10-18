@@ -197,6 +197,8 @@ export type KernelResponse =
       job_id?: string;
       run_id?: string;
       candidate_id?: string;
+      /** Echo of the `request_id` of a Lab sync request (discovery_*); absent from older kernels. */
+      request_id?: string;
       framework?: Framework;
       dependency?: string;
     }

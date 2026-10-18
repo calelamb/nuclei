@@ -4,9 +4,9 @@
  * Never throws; a problem becomes a notice and a skipped or invalid record.
  */
 
-import type { CandidateLlmInfo, CandidateRecord, DiscoveryEvaluation, DiscoveryStage } from '../../types/discovery';
+import type { CandidateLlmInfo, CandidateRecord, DiscoveryEvaluation, DiscoveryStage, RunUsage } from '../../types/discovery';
 import { optimisticFitness, shouldPromote } from './cascade';
-import { isCancelled, syntheticFailure } from './kernelEval';
+import { isCancelled, isTransportFailure, syntheticFailure } from './kernelEval';
 import { resolveProposal, type LlmResult } from './llmMutator';
 import type { PlanItem } from './planning';
 import { auditIfDue } from './auditStep';
@@ -80,9 +80,17 @@ async function produceWithLlm(
   if (!result) {
     const input = buildProposeInput(ctx, item, generation);
     if (!input) return { kind: 'skip' };
+    await ctx.control.gate();
+    if (ctx.control.stopped) return { kind: 'skip' };
     ctx.activity(item.candidateId, 'proposing');
-    result = await ctx.llmLimit(() => ctx.deps.llm.propose(input));
-    ctx.setUsage((u) => ({ ...u, llm_calls: u.llm_calls + 1 }));
+    result = await ctx.llmLimit(async () => {
+      // A call queued behind the limiter must not start while paused (CR-M8).
+      await ctx.control.gate();
+      if (ctx.control.stopped) return { ok: false as const, code: 'aborted' as const, message: 'The run was stopped.', usage: null, prompt_sha256: null, api_calls: 0 };
+      return ctx.deps.llm.propose(input, ctx.signal);
+    });
+    const calls = result.api_calls ?? 1;
+    ctx.setUsage((u) => ({ ...u, llm_calls: u.llm_calls + calls }));
   }
   if (result.usage) {
     const usage = result.usage;
@@ -95,6 +103,8 @@ async function produceWithLlm(
     }));
   }
   if (!result.ok) {
+    // Stop aborts the request on purpose: not a failure to report, and never a hybrid fallback.
+    if (ctx.control.stopped) return { kind: 'skip' };
     ctx.notice(`LLM proposal failed (${result.code}): ${result.message}`);
     return ctx.spec.mutator.kind === 'hybrid' ? 'fallback' : { kind: 'skip' };
   }
@@ -160,6 +170,8 @@ function baseRecord(
 }
 
 async function produceWithAst(ctx: RunContext, item: PlanItem, parent: CandidateRecord): Promise<ProduceOutcome> {
+  await ctx.control.gate();
+  if (ctx.control.stopped) return { kind: 'skip' };
   ctx.activity(item.candidateId, 'proposing');
   const res = await ctx.kernel.mutate(parent.program, item.astSeed, 1);
   if (!res.ok || res.mutations.length === 0) {
@@ -168,6 +180,60 @@ async function produceWithAst(ctx: RunContext, item: PlanItem, parent: Candidate
   }
   const m = res.mutations[0];
   return { kind: 'ok', produced: { program: m.program, llm: null, astOps: m.operators, regionWarning: false } };
+}
+
+/** Ask the kernel for a program's dedup key; null when unsupported or unanswered (the caller falls back). */
+async function programKeyOf(ctx: RunContext, program: string): Promise<string | null> {
+  if (ctx.control.stopped) return null;
+  const res = await ctx.kernel.programKey(program);
+  return res.ok ? res.key : null;
+}
+
+/** The candidate that already owns `key`, when it is not this one. */
+function keyedDuplicate(ctx: RunContext, key: string | null | undefined, candidateId: string): string | undefined {
+  const known = key ? ctx.seenProgramKeys.get(key) : undefined;
+  return known && known !== candidateId ? known : undefined;
+}
+
+/** Wait out an in-flight evaluation of the same key; resolves with its owner once the key is known, or undefined if it never became known. */
+async function waitForKey(ctx: RunContext, key: string, candidateId: string): Promise<string | undefined> {
+  for (;;) {
+    const known = keyedDuplicate(ctx, key, candidateId);
+    if (known) return known;
+    const claim = ctx.keyClaims.get(key);
+    if (!claim) return undefined;
+    await claim;
+  }
+}
+
+/**
+ * Only a scored or rejected program is known: a failed run says nothing about the program, so it
+ * must not blacklist it. `firstWins` keeps an earlier owner of the key.
+ */
+export function registerKey(
+  ctx: RunContext,
+  key: string | null | undefined,
+  candidateId: string,
+  evaluation: DiscoveryEvaluation | null,
+  firstWins = true,
+): void {
+  if (!key || !evaluation || (evaluation.status !== 'scored' && evaluation.status !== 'rejected')) return;
+  if (firstWins && ctx.seenProgramKeys.has(key)) return;
+  ctx.seenProgramKeys.set(key, candidateId);
+}
+
+function markDuplicate(ctx: RunContext, candidate: CandidateRecord, of: string, evaluation: DiscoveryEvaluation | null): CandidateRecord {
+  ctx.setUsage((u) => ({ ...u, proposals: { ...u.proposals, duplicate: u.proposals.duplicate + 1 } }));
+  return { ...candidate, evaluation, outcome: 'duplicate', duplicate_of: of };
+}
+
+/**
+ * Usage after one kernel evaluation. `max_evaluations` is an honest compute
+ * budget (CR-M2): every screen run and every full run counts, so a promoted
+ * candidate costs two.
+ */
+export function countEvaluation(usage: RunUsage): RunUsage {
+  return { ...usage, evaluations: usage.evaluations + 1 };
 }
 
 /** Evaluate through the cascade; returns the updated record (still `pending` if cancelled). */
@@ -186,22 +252,41 @@ export async function evaluateCandidate(
     seed: candidate.eval_seed,
     stage,
   });
-  const run = async (stage: DiscoveryStage): Promise<DiscoveryEvaluation> =>
-    ctx.evalLimit(async () => {
+  const run = async (stage: DiscoveryStage): Promise<DiscoveryEvaluation> => {
+    await ctx.control.gate();
+    return ctx.evalLimit(async () => {
+      // Queued evaluations wait out a pause too (CR-M8).
+      await ctx.control.gate();
       if (ctx.control.stopped) return syntheticFailure(request(stage), ctx.evaluator, 'cancelled', 'Run stopped.');
       ctx.activity(candidate.id, stage === 'screen' ? 'screening' : 'evaluating');
-      ctx.setUsage((u) => (stage === 'full' && spec.evaluation.cascade ? u : { ...u, evaluations: u.evaluations + 1 }));
+      ctx.setUsage(countEvaluation);
       return ctx.kernel.evaluate(request(stage));
     });
+  };
 
-  const first = await run(spec.evaluation.cascade ? 'screen' : 'full');
-  if (isCancelled(first)) return candidate;
-  const known = first.program_key ? ctx.seenProgramKeys.get(first.program_key) : undefined;
-  if (known && known !== candidate.id) {
-    ctx.setUsage((u) => ({ ...u, proposals: { ...u.proposals, duplicate: u.proposals.duplicate + 1 } }));
-    return { ...candidate, evaluation: first, outcome: 'duplicate', duplicate_of: known };
+  await ctx.control.gate();
+  if (ctx.control.stopped) return candidate;
+  // Ask the kernel for the AST-normalised key first, so a known duplicate costs no evaluation (CR-M1).
+  const preKey = await programKeyOf(ctx, candidate.program);
+  let release: () => void = () => undefined;
+  if (preKey) {
+    const known = await waitForKey(ctx, preKey, candidate.id);
+    if (known) return markDuplicate(ctx, candidate, known, null);
+    const claim = new Promise<void>((resolve) => { release = resolve; });
+    ctx.keyClaims.set(preKey, claim);
   }
-  if (first.program_key) ctx.seenProgramKeys.set(first.program_key, candidate.id);
+  let first: DiscoveryEvaluation;
+  try {
+    first = await run(spec.evaluation.cascade ? 'screen' : 'full');
+    if (!isCancelled(first) && !isTransportFailure(first)) registerKey(ctx, preKey ?? first.program_key, candidate.id, first, true);
+  } finally {
+    if (preKey) ctx.keyClaims.delete(preKey);
+    release();
+  }
+  if (isCancelled(first) || isTransportFailure(first)) return candidate;
+  // An older kernel has no program-key request: fall back to the key the evaluation carries.
+  const knownLate = preKey ? undefined : keyedDuplicate(ctx, first.program_key, candidate.id);
+  if (knownLate) return markDuplicate(ctx, candidate, knownLate, first);
 
   if (!spec.evaluation.cascade || first.status !== 'scored') {
     noteRejection(ctx, first);
@@ -212,7 +297,7 @@ export async function evaluateCandidate(
 
   await ctx.control.gate();
   const full = await run('full');
-  if (isCancelled(full)) return { ...candidate, screen: first };
+  if (isCancelled(full) || isTransportFailure(full)) return { ...candidate, screen: first };
   noteRejection(ctx, full);
   return { ...candidate, screen: first, evaluation: full, outcome: 'evaluated' };
 }

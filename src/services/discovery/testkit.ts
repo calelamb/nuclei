@@ -154,6 +154,10 @@ export interface FakeKernelOptions {
   mutate?: (program: string, seed: number) => AstMutation[];
   /** Answers `discovery_audit`; default is a consistent verdict. */
   auditor?: Auditor;
+  /** Answers `discovery_program_key`; without it the fake behaves like an older kernel (`invalid_request`). */
+  programKey?: (program: string) => string;
+  /** Echo `request_id` on sync replies like a current kernel (default true). */
+  echoRequestIds?: boolean;
 }
 
 export function createFakeKernel(options: FakeKernelOptions = {}): FakeKernel {
@@ -215,15 +219,21 @@ export function createFakeKernel(options: FakeKernelOptions = {}): FakeKernel {
     else setTimeout(reply, options.latencyMs ?? 0);
   };
 
+  const echo = (request_id: string | undefined) => (options.echoRequestIds === false || request_id === undefined ? {} : { request_id });
   const session: FakeKernel['session'] = {
     send(message: KernelMessage) {
       sent.push(message);
       if (message.type === 'discovery_evaluators') {
-        setTimeout(() => emit({ type: 'discovery_evaluators_result', evaluators: [TOY_EVALUATOR] }), 0);
+        setTimeout(() => emit({ type: 'discovery_evaluators_result', evaluators: [TOY_EVALUATOR], ...echo(message.request_id) }), 0);
       } else if (message.type === 'discovery_evaluate') respond(message);
       else if (message.type === 'discovery_mutate') {
         const mutations = mutate(message.program, message.seed);
-        setTimeout(() => emit({ type: 'discovery_mutations', mutations }), 0);
+        setTimeout(() => emit({ type: 'discovery_mutations', mutations, ...echo(message.request_id) }), 0);
+      } else if (message.type === 'discovery_program_key') {
+        const keyOf = options.programKey;
+        setTimeout(() => emit(keyOf
+          ? { type: 'discovery_program_key_result', program_key: keyOf(message.program), ...echo(message.request_id) }
+          : { type: 'error', phase: 'discovery', code: 'invalid_request', message: 'Unknown discovery message', ...echo(message.request_id) }), 0);
       } else if (message.type === 'discovery_audit') respondAudit(message);
       else if (message.type === 'discovery_audit_cancel') {
         cancelledAudits.add(message.run_id);

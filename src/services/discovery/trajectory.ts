@@ -7,7 +7,7 @@
 import type { CandidateMutator, CandidateRecord } from '../../types/discovery';
 import { candidateFitness, candidateKind, indexById, isImprovement, numericId, screenFitness } from './candidateView';
 
-export type TrajectoryKind = 'scored' | 'rejected' | 'failed' | 'screened_out';
+type TrajectoryKind = 'scored' | 'rejected' | 'failed' | 'screened_out';
 
 export interface TrajectoryPoint {
   id: string;
@@ -21,12 +21,12 @@ export interface TrajectoryPoint {
   improved: boolean;
 }
 
-export interface IslandStep {
+interface IslandStep {
   index: number;
   best: number;
 }
 
-export interface IslandSeries {
+interface IslandSeries {
   island: number;
   steps: IslandStep[];
 }

@@ -57,6 +57,78 @@ afterEach(() => {
   store().configure(null);
 });
 
+describe('a run that fails synchronously (CR-H8)', () => {
+  it('surfaces its error and leaves no live run or endless spinner', async () => {
+    const noKey = DEFINITION.replace('mutator: { kind: ast }', 'mutator: { kind: llm }');
+    const env = makeEnv({ ...project(), 'proj/experiments/toy.discovery.yaml': noKey });
+    const llm = createFakeLlm();
+    llm.key.value = false;
+    store().configure({ ...env, llm });
+    await store().reload('proj');
+    const res = await store().startRun('toy.discovery.yaml');
+    expect(res.ok).toBe(true);
+    if (!res.ok) return;
+    await until(() => store().liveRunIds.length === 0, 'run to finish');
+    const view = store().views[res.runId];
+    expect(view).toBeDefined();
+    expect(view.run.status).toBe('failed');
+    expect(view.run.message).toMatch(/API key/);
+    expect(store().views['']).toBeUndefined();
+    expect(selectSelectedView(store())?.run.status).toBe('failed');
+    expect(isDiscoveryRunning(store())).toBe(false);
+    expect(store().kpis[res.runId]).toBeDefined();
+  });
+});
+
+describe('KPIs are not recomputed on activity events (CR-M10)', () => {
+  it('keeps the same kpis object across activity-only updates', async () => {
+    let activityOnly = 0;
+    let kpisChangedOnActivity = 0;
+    const unsubscribe = useDiscoveryStore.subscribe((state, prev) => {
+      for (const id of Object.keys(state.views)) {
+        const now = state.views[id];
+        const before = prev.views[id];
+        if (!before || now === before) continue;
+        if (now.run === before.run && now.candidates === before.candidates && now.activity !== before.activity) {
+          activityOnly += 1;
+          if (state.kpis[id] !== prev.kpis[id]) kpisChangedOnActivity += 1;
+        }
+      }
+    });
+    const res = await store().startRun('toy.discovery.yaml');
+    expect(res.ok).toBe(true);
+    await until(() => store().liveRunIds.length === 0, 'run to finish');
+    unsubscribe();
+    expect(activityOnly).toBeGreaterThan(0);
+    expect(kpisChangedOnActivity).toBe(0);
+  });
+});
+
+describe('double Start and Resume (CR-M8)', () => {
+  it('two Start calls in the same tick launch exactly one runner', async () => {
+    const [a, b] = await Promise.all([store().startRun('toy.discovery.yaml'), store().startRun('toy.discovery.yaml')]);
+    expect([a.ok, b.ok].filter(Boolean)).toHaveLength(1);
+    expect(store().liveRunIds).toHaveLength(1);
+    await until(() => store().liveRunIds.length === 0, 'run to finish');
+    const seeds = kernel.sent.filter((m) => m.type === 'discovery_evaluate' && m.candidate_id === 'c-0000');
+    expect(seeds).toHaveLength(1);
+  });
+
+  it('two Resume calls in the same tick resume the stopped run once', async () => {
+    kernel.hold.value = true;
+    const started = await store().startRun('toy.discovery.yaml');
+    if (!started.ok) throw new Error('start failed');
+    await until(() => kernel.sent.filter((m) => m.type === 'discovery_evaluate').length >= 1, 'in flight');
+    store().stopRun(started.runId);
+    await until(() => store().liveRunIds.length === 0, 'stopped');
+    kernel.release();
+    const [a, b] = await Promise.all([store().resumeRun(started.runId), store().resumeRun(started.runId)]);
+    expect([a.ok, b.ok].filter(Boolean)).toHaveLength(1);
+    expect(store().liveRunIds).toHaveLength(1);
+    await until(() => store().liveRunIds.length === 0, 'resumed run to finish');
+  });
+});
+
 describe('definitions', () => {
   it('lists valid definitions and reports malformed ones as data', async () => {
     store().configure(makeEnv({ ...project(), 'proj/experiments/bad.discovery.yaml': 'schema: 1\ntype: discovery\n', 'proj/experiments/notes.txt': 'x' }));

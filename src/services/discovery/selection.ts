@@ -15,7 +15,7 @@ import {
 } from './archive';
 import type { Rng } from './rng';
 
-export const TOURNAMENT_SIZE = 3;
+const TOURNAMENT_SIZE = 3;
 
 /**
  * With probability `exploration` pick a uniform random elite of the island;

@@ -27,7 +27,7 @@ export interface EditSpan {
   endLine: number;
 }
 
-export type DiffErrorCode =
+type DiffErrorCode =
   | 'empty_search'
   | 'not_found'
   | 'ambiguous_match'

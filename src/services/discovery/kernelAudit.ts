@@ -7,8 +7,9 @@
 import type { DiscoveryAudit, DiscoveryEvaluation, DiscoveryEvaluatorKind } from '../../types/discovery';
 import type { KernelResponse } from '../../types/quantum';
 import type { RunnerKernelSession } from '../experimentRunner';
+import { isAmbiguousError, trackInFlight } from './kernelEval';
 
-export interface AuditRequest {
+interface AuditRequest {
   runId: string;
   candidateId: string;
   evaluator: { kind: DiscoveryEvaluatorKind; config: Record<string, unknown> };
@@ -18,7 +19,7 @@ export interface AuditRequest {
   evaluation: DiscoveryEvaluation;
 }
 
-export type AuditOutcome =
+type AuditOutcome =
   | { status: 'ok'; audit: DiscoveryAudit }
   | { status: 'cancelled' }
   | { status: 'error'; code: string; message: string };
@@ -30,9 +31,9 @@ export interface AuditClient {
   dispose(): void;
 }
 
-export const DEFAULT_AUDIT_TIMEOUT_MS = 30 * 60_000;
-export const AUDIT_BUSY_RETRIES = 5;
-export const AUDIT_BUSY_BACKOFF_MS = 500;
+const DEFAULT_AUDIT_TIMEOUT_MS = 30 * 60_000;
+const AUDIT_BUSY_RETRIES = 5;
+const AUDIT_BUSY_BACKOFF_MS = 500;
 
 interface Options {
   session: RunnerKernelSession & { onClose?: (handler: () => void) => () => void };
@@ -50,7 +51,10 @@ export function createAuditClient({ session, sleep, timeoutMs = DEFAULT_AUDIT_TI
     if (message.type === 'discovery_audit_result') {
       waiters.get(keyOf(message.run_id, message.candidate_id))?.settle({ status: 'ok', audit: message.audit });
     } else if (message.type === 'error' && message.phase === 'discovery' && message.run_id && message.candidate_id) {
-      waiters.get(keyOf(message.run_id, message.candidate_id))?.settle({
+      const key = keyOf(message.run_id, message.candidate_id);
+      // An evaluation of the same candidate is also waiting: a bare error cannot be told apart, so neither takes it.
+      if (isAmbiguousError(session, key)) return;
+      waiters.get(key)?.settle({
         status: 'error', code: message.code ?? 'kernel_error', message: message.message,
       });
     }
@@ -62,6 +66,7 @@ export function createAuditClient({ session, sleep, timeoutMs = DEFAULT_AUDIT_TI
   function attempt(request: AuditRequest): Promise<AuditOutcome> {
     const key = keyOf(request.runId, request.candidateId);
     return new Promise((resolve) => {
+      const untrack = trackInFlight(session, key, 'audit');
       const timer = setTimeout(
         () => settle({ status: 'error', code: 'audit_timeout', message: `No audit answer from the kernel within ${Math.round(timeoutMs / 1000)} s.` }),
         timeoutMs,
@@ -69,6 +74,7 @@ export function createAuditClient({ session, sleep, timeoutMs = DEFAULT_AUDIT_TI
       function settle(outcome: AuditOutcome) {
         if (waiters.get(key)?.settle !== settle) return;
         waiters.delete(key);
+        untrack();
         clearTimeout(timer);
         resolve(outcome);
       }

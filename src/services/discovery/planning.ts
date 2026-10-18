@@ -15,10 +15,10 @@ import type {
 import { islandElites } from './archive';
 import { routeModel } from './llmMutator';
 import { selectInspirations, selectParent } from './selection';
-import { promotionThreshold } from './cascade';
+import { promotionThreshold, screenReferences } from './cascade';
 import type { Rng } from './rng';
 
-export interface BudgetView {
+interface BudgetView {
   usage: RunUsage;
   /** Evaluations / LLM calls already planned in the current generation. */
   plannedEvaluations: number;
@@ -66,13 +66,26 @@ export interface PlanItem {
   threshold: number | null;
 }
 
-export function thresholdForIsland(spec: DiscoverySpec, archive: ArchiveState, island: number): number | null {
-  return spec.evaluation.cascade
-    ? promotionThreshold(spec.evaluation.promote_if, islandElites(archive, island))
-    : null;
+/** Anything with a screen-stage evaluation, as the threshold needs it. */
+export type ScreenLookup = ReadonlyMap<string, { screen: { fitness: number | null } | null }>;
+
+/**
+ * Cascade promotion threshold of one island: the median (or best) SCREEN
+ * fitness of its elites (CR-C1), never their full-stage or adversarial
+ * fitness. Null (promote everything) when no elite has a screen result.
+ */
+export function thresholdForIsland(
+  spec: DiscoverySpec,
+  archive: ArchiveState,
+  island: number,
+  candidates: ScreenLookup,
+): number | null {
+  if (!spec.evaluation.cascade) return null;
+  const references = screenReferences(islandElites(archive, island), (id) => candidates.get(id)?.screen?.fitness ?? null);
+  return promotionThreshold(spec.evaluation.promote_if, references);
 }
 
-export interface PlanInput {
+interface PlanInput {
   spec: DiscoverySpec;
   archive: ArchiveState;
   rng: Rng;
@@ -81,9 +94,11 @@ export interface PlanInput {
   proposalIndex: number;
   llmAvailable: boolean;
   llmBudgetLeft: boolean;
+  /** Candidates by id, for the screen-fitness reference of the cascade threshold. */
+  candidates: ScreenLookup;
 }
 
-export type PlanOutcome =
+type PlanOutcome =
   | { kind: 'plan'; item: PlanItem; llmFallback: 'no_key' | 'llm_budget' | null }
   | { kind: 'stop'; reason: StopReason }
   | { kind: 'empty' };
@@ -131,7 +146,7 @@ export function planProposal(input: PlanInput): PlanOutcome {
       thinking: routing.thinking,
       astSeed,
       evalSeed,
-      threshold: thresholdForIsland(spec, archive, island),
+      threshold: thresholdForIsland(spec, archive, island, input.candidates),
     },
   };
 }

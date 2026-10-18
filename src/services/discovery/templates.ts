@@ -18,7 +18,7 @@ import {
 } from '../../types/discovery';
 import { DEFAULT_RED_QUEEN } from './redQueen';
 
-export type DiscoveryTemplateId =
+type DiscoveryTemplateId =
   | 'qec-repetition-schedule'
   | 'w-state-synthesis'
   | 'tfim-ansatz'
@@ -219,7 +219,7 @@ export const DISCOVERY_TEMPLATES: readonly DiscoveryTemplate[] = [
     evaluatorKind: 'trainability_frontier',
     description:
       'Search for trainable ansatzes (low barren-plateau exponent) whose expectation values resist the Pauli-propagation estimator. A high score is a lead to investigate, not a counterexample to the simulability conjecture.',
-    evaluatorConfig: { qubits: [8, 16, 32], n_layers: 4 },
+    evaluatorConfig: { qubits: [8, 16, 32, 64], n_layers: 4 },
     archive: { descriptors: ['log2_dla_dimension', 'two_qubit_gates_per_layer'], bins: [8, 8] },
     seedProgram: FRONTIER_SEED,
   },
@@ -248,7 +248,7 @@ export interface ScaffoldMutator {
   batch_mode?: boolean;
 }
 
-export interface ScaffoldFile {
+interface ScaffoldFile {
   /** Project-relative path. */
   path: string;
   content: string;

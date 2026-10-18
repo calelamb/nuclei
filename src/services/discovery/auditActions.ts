@@ -6,14 +6,14 @@
 
 import type { CandidateRecord, DiscoveryAudit, DiscoverySpec, ExploitRecord } from '../../types/discovery';
 import { createAuditClient } from './kernelAudit';
-import { adversarialFitness, buildExploitRecord, isRedQueen, toKernelFixture } from './redQueen';
+import { adversarialFitness, buildExploitRecord, gateExploit, isRedQueen, toKernelFixture } from './redQueen';
 import { loadCandidates, runPaths, toJson, type DiscoveryFs, type JoinFn } from './records';
 import type { DiscoveryDeps, DiscoveryRunContext } from './runContext';
 
-export type AuditActionResult<T> = ({ ok: true } & T) | { ok: false; error: string };
+type AuditActionResult<T> = ({ ok: true } & T) | { ok: false; error: string };
 
 /** Where the kernel's pytest replays exploit fixtures (addendum §F). */
-export const KERNEL_EXPLOIT_DIR = ['kernel', 'tests', 'fixtures', 'exploits'] as const;
+const KERNEL_EXPLOIT_DIR = ['kernel', 'tests', 'fixtures', 'exploits'] as const;
 
 const messageOf = (e: unknown) => (e instanceof Error ? e.message : String(e));
 
@@ -40,16 +40,19 @@ export async function auditStoredCandidate(
     });
     if (outcome.status === 'cancelled') return { ok: false, error: 'The audit was cancelled.' };
     if (outcome.status === 'error') return { ok: false, error: `${outcome.code}: ${outcome.message}` };
+    // Below the honest seed's fitness a failing audit is an audit failure, not an exploit (addendum §F).
+    const seedFitness = candidates.find((c) => c.mutator === 'seed')?.evaluation?.fitness;
+    const audit = gateExploit(outcome.audit, candidate.evaluation.fitness, seedFitness);
     const next: CandidateRecord = {
-      ...candidate, audit: outcome.audit, audit_pending: false, audit_error: null, adversarial_fitness: adversarialFitness(outcome.audit),
+      ...candidate, audit, audit_pending: false, audit_error: null, adversarial_fitness: adversarialFitness(audit),
     };
     await deps.fs.writeFile(paths.candidateFile(candidateId), toJson(next));
-    if (outcome.audit.verdict === 'exploit') {
+    if (audit.verdict === 'exploit') {
       await deps.fs.mkdir(paths.exploitsDir, { recursive: true });
-      const record = buildExploitRecord(spec, runId, next, outcome.audit, isRedQueen(spec) ? 'red_queen' : 'manual_audit');
+      const record = buildExploitRecord(spec, runId, next, audit, isRedQueen(spec) ? 'red_queen' : 'manual_audit');
       await deps.fs.writeFile(paths.exploitFile(candidateId), toJson(record));
     }
-    return { ok: true, candidate: next, audit: outcome.audit };
+    return { ok: true, candidate: next, audit };
   } catch (e) {
     return { ok: false, error: messageOf(e) };
   } finally {

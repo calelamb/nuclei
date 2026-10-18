@@ -8,11 +8,11 @@ import { hierarchy, tree } from 'd3';
 import type { CandidateRecord } from '../../types/discovery';
 import { numericId } from './candidateView';
 
-export const LINEAGE_COL = 64;
-export const LINEAGE_ROW = 22;
+const LINEAGE_COL = 64;
+const LINEAGE_ROW = 22;
 const VIRTUAL_ROOT = '__lineage_root__';
 
-export interface LineageNode {
+interface LineageNode {
   id: string;
   parentId: string | null;
   x: number;
@@ -20,7 +20,7 @@ export interface LineageNode {
   depth: number;
 }
 
-export interface LineageLink {
+interface LineageLink {
   source: string;
   target: string;
 }

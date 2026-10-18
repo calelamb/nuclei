@@ -10,6 +10,13 @@ type Notice = { tone: 'success' | 'danger'; text: string } | null;
 function ConfirmedBlock({ view }: { view: RunView }) {
   const confirmation = view.run.confirmation;
   if (!confirmation) return null;
+  if (confirmation.rejection) {
+    return (
+      <LabCallout tone="danger" title="Champion rejected at confirmation">
+        Champion rejected at confirmation: {confirmation.rejection}. No confirmed numbers are reported.
+      </LabCallout>
+    );
+  }
   return (
     <section aria-label="Confirmed on fresh seeds" className="lab-stack" style={{ gap: 'var(--space-2)' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
@@ -53,7 +60,7 @@ export function ChampionCard({ view, onOpen }: { view: RunView; onOpen: (id: str
   if (!champion || !seed) {
     return (
       <LabCard title="Champion">
-        <LabEmptyState compact title="No champion yet" body={run.status === 'running' ? 'The first scored candidate becomes the champion.' : 'No candidate has been scored in this run.'} />
+        <LabEmptyState compact title="No champion yet" body={run.status === 'running' ? 'The first scored candidate becomes the champion.' : run.message?.startsWith('no confirmed champion') ? run.message : 'No candidate has been scored in this run.'} />
       </LabCard>
     );
   }

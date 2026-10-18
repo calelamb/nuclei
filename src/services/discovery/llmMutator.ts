@@ -20,6 +20,7 @@
 import { DIRAC_API_URL } from '../../config/dirac';
 import type { GradientMap, LlmUsage, ModelTier } from '../../types/discovery';
 import { applyEdits, type ApplyEditsResult, type Edit } from './diff';
+import { GuardError, LLM_BATCH_REQUEST_TIMEOUT_MS, LLM_REQUEST_TIMEOUT_MS, withGuard } from './fetchGuard';
 import { countTouchedDeadLines } from './gradient';
 import { TIER_MODEL_IDS } from './models';
 import type { SystemBlock } from './prompt';
@@ -27,14 +28,14 @@ import type { SystemBlock } from './prompt';
 export { TIER_MODEL_IDS };
 
 export const PROPOSE_TOOL_NAME = 'propose_program_edit';
-export const MAX_RATIONALE = 800;
-export const MAX_EXPECTED_EFFECT = 300;
-export const MAX_EDITS = 8;
+const MAX_RATIONALE = 800;
+const MAX_EXPECTED_EFFECT = 300;
+const MAX_EDITS = 8;
 const MAX_TOKENS = 4096;
 const THINKING_BUDGET_TOKENS = 4096;
 export const BATCH_POLL_MS = 15_000;
 
-export const PROPOSE_TOOL = {
+const PROPOSE_TOOL = {
   name: PROPOSE_TOOL_NAME,
   description:
     'Propose one small edit to the parent program as SEARCH/REPLACE pairs. Each search must be copied verbatim and match exactly once, inside the EVOLVE-BLOCK region.',
@@ -71,56 +72,64 @@ export interface ProposeInput {
   thinking: boolean;
 }
 
-export interface LlmProposal {
+interface LlmProposal {
   rationale: string;
   expected_effect: string;
   edits: Edit[];
 }
 
-export type LlmFailureCode = 'no_key' | 'network' | 'http' | 'malformed_output' | 'batch_failed' | 'batch_expired';
+type LlmFailureCode = 'no_key' | 'network' | 'http' | 'malformed_output' | 'batch_failed' | 'batch_expired' | 'aborted' | 'timeout';
 
-export interface LlmSuccess {
+interface LlmSuccess {
   ok: true;
   proposal: LlmProposal;
   model: string;
   thinking: boolean;
   usage: LlmUsage;
   prompt_sha256: string;
+  /** HTTP requests this proposal took (a thinking retry is 2); the budget counts requests. Default 1. */
+  api_calls?: number;
 }
 
-export interface LlmFailure {
+interface LlmFailure {
   ok: false;
   code: LlmFailureCode;
   message: string;
   status?: number;
   usage: LlmUsage | null;
   prompt_sha256: string | null;
+  api_calls?: number;
 }
 
 export type LlmResult = LlmSuccess | LlmFailure;
 
-export interface BatchItem {
+interface BatchItem {
   customId: string;
   input: ProposeInput;
 }
 
-export type BatchPoll = { state: 'in_progress' } | { state: 'ended' } | { state: 'error'; message: string };
+type BatchPoll = { state: 'in_progress' } | { state: 'ended' } | { state: 'error'; message: string };
 
 /** The runner's view of the model; `createLlmMutator` is the production implementation. */
 export interface DiscoveryLlm {
   hasKey(): boolean;
-  propose(input: ProposeInput): Promise<LlmResult>;
-  submitBatch(items: BatchItem[]): Promise<{ ok: true; batchId: string } | { ok: false; message: string }>;
-  pollBatch(batchId: string): Promise<BatchPoll>;
+  /** Every call takes the run's abort signal (Stop) and has its own timeout. */
+  propose(input: ProposeInput, signal?: AbortSignal): Promise<LlmResult>;
+  submitBatch(items: BatchItem[], signal?: AbortSignal): Promise<{ ok: true; batchId: string } | { ok: false; message: string }>;
+  pollBatch(batchId: string, signal?: AbortSignal): Promise<BatchPoll>;
   /** Results keyed by custom id; `prompt_sha256` is filled by the caller from its plan. */
-  batchResults(batchId: string): Promise<Record<string, LlmResult>>;
+  batchResults(batchId: string, signal?: AbortSignal): Promise<Record<string, LlmResult>>;
 }
 
-export interface LlmMutatorDeps {
+interface LlmMutatorDeps {
   getApiKey: () => string | null | undefined;
   hash: (text: string) => Promise<string>;
   fetch?: typeof fetch;
   apiUrl?: string;
+  /** Per-request timeout for messages calls (default 5 min). */
+  requestTimeoutMs?: number;
+  /** Per-request timeout for batch calls (default 90 s). */
+  batchTimeoutMs?: number;
 }
 
 // ── Pure helpers ───────────────────────────────────────────────────────
@@ -129,7 +138,7 @@ export function emptyUsage(): LlmUsage {
   return { input_tokens: 0, output_tokens: 0, cache_creation_input_tokens: 0, cache_read_input_tokens: 0 };
 }
 
-export function addUsage(a: LlmUsage, b: LlmUsage): LlmUsage {
+function addUsage(a: LlmUsage, b: LlmUsage): LlmUsage {
   return {
     input_tokens: a.input_tokens + b.input_tokens,
     output_tokens: a.output_tokens + b.output_tokens,
@@ -255,8 +264,11 @@ export function createLlmMutator(deps: LlmMutatorDeps): DiscoveryLlm {
   const fail = (
     code: LlmFailureCode,
     message: string,
-    extra: Partial<Pick<LlmFailure, 'status' | 'usage' | 'prompt_sha256'>> = {},
+    extra: Partial<Pick<LlmFailure, 'status' | 'usage' | 'prompt_sha256' | 'api_calls'>> = {},
   ): LlmFailure => ({ ok: false, code, message, usage: null, prompt_sha256: null, ...extra });
+
+  const requestTimeout = deps.requestTimeoutMs ?? LLM_REQUEST_TIMEOUT_MS;
+  const batchTimeout = deps.batchTimeoutMs ?? LLM_BATCH_REQUEST_TIMEOUT_MS;
 
   async function httpError(response: Response): Promise<string> {
     let reason = `HTTP ${response.status}`;
@@ -269,22 +281,34 @@ export function createLlmMutator(deps: LlmMutatorDeps): DiscoveryLlm {
     return reason;
   }
 
-  async function post(apiKey: string, body: unknown): Promise<{ ok: true; data: Record<string, unknown> } | LlmFailure> {
-    let response: Response;
+  const guardFailure = (e: GuardError): LlmFailure =>
+    fail(e.kind, e.kind === 'aborted' ? 'The request was cancelled.' : `Anthropic did not answer: ${e.message}`);
+
+  async function post(apiKey: string, body: unknown, signal?: AbortSignal): Promise<{ ok: true; data: Record<string, unknown> } | LlmFailure> {
     try {
-      response = await doFetch(apiUrl, { method: 'POST', headers: headers(apiKey), body: JSON.stringify(body) });
+      return await withGuard(signal, requestTimeout, async (guard) => {
+        let response: Response;
+        try {
+          response = await doFetch(apiUrl, { method: 'POST', headers: headers(apiKey), body: JSON.stringify(body), signal: guard });
+        } catch (e) {
+          if (guard.aborted) throw e;
+          return fail('network', `Network error contacting Anthropic: ${e instanceof Error ? e.message : String(e)}`);
+        }
+        if (!response.ok) return fail('http', await httpError(response), { status: response.status });
+        try {
+          return { ok: true as const, data: (await response.json()) as Record<string, unknown> };
+        } catch (e) {
+          if (guard.aborted) throw e;
+          return fail('malformed_output', 'Anthropic returned a non-JSON response.');
+        }
+      });
     } catch (e) {
-      return fail('network', `Network error contacting Anthropic: ${e instanceof Error ? e.message : String(e)}`);
-    }
-    if (!response.ok) return fail('http', await httpError(response), { status: response.status });
-    try {
-      return { ok: true, data: (await response.json()) as Record<string, unknown> };
-    } catch {
-      return fail('malformed_output', 'Anthropic returned a non-JSON response.');
+      if (e instanceof GuardError) return guardFailure(e);
+      throw e;
     }
   }
 
-  async function propose(input: ProposeInput): Promise<LlmResult> {
+  async function propose(input: ProposeInput, signal?: AbortSignal): Promise<LlmResult> {
     const apiKey = key();
     if (!apiKey) return fail('no_key', 'No Anthropic API key. Add one in Settings, Dirac.');
     const model = TIER_MODEL_IDS[input.tier];
@@ -295,15 +319,16 @@ export function createLlmMutator(deps: LlmMutatorDeps): DiscoveryLlm {
     const attempts = thinking ? 2 : 1; // forced-tool calls need no retry; auto (thinking) calls get one.
 
     for (let attempt = 0; attempt < attempts; attempt += 1) {
-      const res = await post(apiKey, buildRequestBody(input, messages));
-      if (!res.ok) return { ...res, usage: usage.input_tokens > 0 ? usage : null, prompt_sha256 };
+      const res = await post(apiKey, buildRequestBody(input, messages), signal);
+      const api_calls = attempt + 1;
+      if (!res.ok) return { ...res, usage: usage.input_tokens > 0 ? usage : null, prompt_sha256, api_calls };
       usage = addUsage(usage, toUsage(res.data.usage));
       const toolUse = findToolUse(res.data.content);
       const checked = toolUse ? validateProposal(toolUse.input) : null;
-      if (checked?.ok) return { ok: true, proposal: checked.proposal, model, thinking, usage, prompt_sha256 };
+      if (checked?.ok) return { ok: true, proposal: checked.proposal, model, thinking, usage, prompt_sha256, api_calls };
 
       const problem = checked ? checked.message : 'the reply did not call propose_program_edit';
-      if (attempt + 1 >= attempts) return fail('malformed_output', `Model output rejected: ${problem}.`, { usage, prompt_sha256 });
+      if (attempt + 1 >= attempts) return fail('malformed_output', `Model output rejected: ${problem}.`, { usage, prompt_sha256, api_calls });
       const assistant = { role: 'assistant', content: res.data.content };
       const followUp = toolUse
         ? { role: 'user', content: [{ type: 'tool_result', tool_use_id: toolUse.id, is_error: true, content: `Invalid: ${problem}. Call propose_program_edit again with valid input.` }] }
@@ -313,45 +338,56 @@ export function createLlmMutator(deps: LlmMutatorDeps): DiscoveryLlm {
     return fail('malformed_output', 'Model output rejected.', { usage, prompt_sha256 });
   }
 
-  async function submitBatch(items: BatchItem[]) {
+  const guardMessage = (e: GuardError) => (e.kind === 'aborted' ? 'The request was cancelled.' : `Anthropic did not answer: ${e.message}`);
+
+  async function submitBatch(items: BatchItem[], signal?: AbortSignal) {
     const apiKey = key();
     if (!apiKey) return { ok: false as const, message: 'No Anthropic API key. Add one in Settings, Dirac.' };
     const requests = items.map((item) => ({ custom_id: item.customId, params: buildRequestBody(item.input) }));
     try {
-      const response = await doFetch(batchUrl, { method: 'POST', headers: headers(apiKey), body: JSON.stringify({ requests }) });
-      if (!response.ok) return { ok: false as const, message: await httpError(response) };
-      const data = (await response.json()) as { id?: unknown };
-      if (typeof data.id !== 'string') return { ok: false as const, message: 'Batch response had no id.' };
-      return { ok: true as const, batchId: data.id };
+      return await withGuard(signal, batchTimeout, async (guard) => {
+        const response = await doFetch(batchUrl, { method: 'POST', headers: headers(apiKey), body: JSON.stringify({ requests }), signal: guard });
+        if (!response.ok) return { ok: false as const, message: await httpError(response) };
+        const data = (await response.json()) as { id?: unknown };
+        if (typeof data.id !== 'string') return { ok: false as const, message: 'Batch response had no id.' };
+        return { ok: true as const, batchId: data.id };
+      });
     } catch (e) {
+      if (e instanceof GuardError) return { ok: false as const, message: guardMessage(e) };
       return { ok: false as const, message: `Network error creating batch: ${e instanceof Error ? e.message : String(e)}` };
     }
   }
 
-  async function pollBatch(batchId: string): Promise<BatchPoll> {
+  async function pollBatch(batchId: string, signal?: AbortSignal): Promise<BatchPoll> {
     const apiKey = key();
     if (!apiKey) return { state: 'error', message: 'No Anthropic API key.' };
     try {
-      const response = await doFetch(`${batchUrl}/${encodeURIComponent(batchId)}`, { headers: headers(apiKey) });
-      if (!response.ok) return { state: 'error', message: await httpError(response) };
-      const data = (await response.json()) as { processing_status?: unknown };
-      return data.processing_status === 'ended' ? { state: 'ended' } : { state: 'in_progress' };
+      return await withGuard(signal, batchTimeout, async (guard) => {
+        const response = await doFetch(`${batchUrl}/${encodeURIComponent(batchId)}`, { headers: headers(apiKey), signal: guard });
+        if (!response.ok) return { state: 'error' as const, message: await httpError(response) };
+        const data = (await response.json()) as { processing_status?: unknown };
+        return data.processing_status === 'ended' ? { state: 'ended' as const } : { state: 'in_progress' as const };
+      });
     } catch (e) {
+      if (e instanceof GuardError) return { state: 'error', message: guardMessage(e) };
       return { state: 'error', message: e instanceof Error ? e.message : String(e) };
     }
   }
 
-  async function batchResults(batchId: string): Promise<Record<string, LlmResult>> {
+  async function batchResults(batchId: string, signal?: AbortSignal): Promise<Record<string, LlmResult>> {
     const apiKey = key();
     const out: Record<string, LlmResult> = {};
     if (!apiKey) return out;
     let text: string;
     try {
-      const response = await doFetch(`${batchUrl}/${encodeURIComponent(batchId)}/results`, { headers: headers(apiKey) });
-      if (!response.ok) throw new Error(await httpError(response));
-      text = await response.text();
+      text = await withGuard(signal, batchTimeout, async (guard) => {
+        const response = await doFetch(`${batchUrl}/${encodeURIComponent(batchId)}/results`, { headers: headers(apiKey), signal: guard });
+        if (!response.ok) throw new Error(await httpError(response));
+        return response.text();
+      });
     } catch (e) {
-      throw new Error(`Could not fetch batch results: ${e instanceof Error ? e.message : String(e)}`);
+      const reason = e instanceof GuardError ? guardMessage(e) : e instanceof Error ? e.message : String(e);
+      throw new Error(`Could not fetch batch results: ${reason}`);
     }
     for (const line of text.split('\n')) {
       if (!line.trim()) continue;

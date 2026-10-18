@@ -4,22 +4,26 @@ import type { Digest } from '../../../services/conjecture/digest';
 import type { ProposeBlocker, ProposeError } from '../../../services/conjecture/state';
 import type { DroppedConjecture } from '../../../services/conjecture/proposer';
 
-export function ConjectureHeader({ digest, blocker, proposing, error, dropped, onPropose }: {
+export function ConjectureHeader({ digest, blocker, proposing, error, dropped, onPropose, onCancel }: {
   digest: Digest;
   blocker: ProposeBlocker | null;
   proposing: boolean;
   error: ProposeError | null;
   dropped: DroppedConjecture[];
   onPropose: () => void;
+  onCancel?: () => void;
 }) {
   return (
     <LabCard
       title="Conjectures"
       subtitle="Falsifiable claims about which circuit structures stay trainable, each tested on held-out circuits."
       actions={
-        <LabButton variant="primary" icon={Sparkles} disabled={!!blocker || proposing} aria-describedby="cj-propose-reason" onClick={onPropose}>
-          {proposing ? 'Proposing' : 'Propose conjectures'}
-        </LabButton>
+        <div style={{ display: 'flex', gap: 'var(--space-2)' }}>
+          {proposing && onCancel && <LabButton onClick={onCancel}>Cancel</LabButton>}
+          <LabButton variant="primary" icon={Sparkles} disabled={!!blocker || proposing} aria-describedby="cj-propose-reason" onClick={onPropose}>
+            {proposing ? 'Proposing' : 'Propose conjectures'}
+          </LabButton>
+        </div>
       }
     >
       <div className="cj-stack">

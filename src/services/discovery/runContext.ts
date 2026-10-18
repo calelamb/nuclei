@@ -5,7 +5,6 @@
 
 import type {
   CandidateRecord,
-  DiscoveryEvaluation,
   DiscoveryEvaluatorInfo,
   DiscoverySpec,
   RedQueenConfig,
@@ -20,6 +19,9 @@ import type { DiscoveryLlm } from './llmMutator';
 import type { DiscoveryFs, JoinFn, Persister } from './records';
 import type { SystemBlock } from './prompt';
 import type { RunnerKernelSession } from '../experimentRunner';
+
+/** Notices kept on a run record and in a view: one cap for both. */
+export const MAX_NOTICES = 50;
 
 export interface RunnerClock {
   now(): Date;
@@ -69,13 +71,16 @@ export type Limiter = <T>(fn: () => Promise<T>) => Promise<T>;
 export function createLimiter(limit: number): Limiter {
   let active = 0;
   const waiting: Array<() => void> = [];
+  // Hand the slot straight to the next waiter (active stays counted) so a
+  // caller arriving between release and wake-up cannot take it too.
   const release = () => {
-    active -= 1;
-    waiting.shift()?.();
+    const next = waiting.shift();
+    if (next) next();
+    else active -= 1;
   };
   return async (fn) => {
     if (active >= limit) await new Promise<void>((resolve) => waiting.push(resolve));
-    active += 1;
+    else active += 1;
     try {
       return await fn();
     } finally {
@@ -85,7 +90,7 @@ export function createLimiter(limit: number): Limiter {
 }
 
 /** Red Queen bookkeeping: audit policy, budget used and what earlier audits found. */
-export interface RedQueenState {
+interface RedQueenState {
   config: RedQueenConfig;
   policy: AuditPolicyState;
   /** Audits sent so far (answered or pending), against `config.max_audits`. */
@@ -103,10 +108,14 @@ export interface RunContext {
   /** Non-null only in Red Queen mode. Replaced, never mutated in place. */
   rq: RedQueenState | null;
   control: RunControl;
+  /** Aborted when the run stops or ends fatally: cancels in-flight LLM requests. */
+  signal: AbortSignal;
   system: SystemBlock[];
   candidates: Map<string, CandidateRecord>;
   seenHashes: Map<string, string>;
   seenProgramKeys: Map<string, string>;
+  /** Program keys whose first evaluation is in flight; a same-key candidate waits instead of spending an evaluation. */
+  keyClaims: Map<string, Promise<void>>;
   rejections: Array<{ guardrail: string; message: string }>;
   evalLimit: Limiter;
   llmLimit: Limiter;
@@ -121,8 +130,4 @@ export interface RunContext {
 
 export function primaryObjective(evaluator: DiscoveryEvaluatorInfo) {
   return evaluator.objectives[0];
-}
-
-export function isFinalEvaluation(e: DiscoveryEvaluation | null): e is DiscoveryEvaluation {
-  return e !== null;
 }

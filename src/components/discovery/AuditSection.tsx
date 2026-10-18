@@ -1,5 +1,6 @@
 import { CheckCircle2, CircleSlash, MinusCircle, XCircle } from 'lucide-react';
 import { LabCallout, formatDuration, formatSci } from '../lab';
+import { formatAuditSeed } from '../../services/discovery/format';
 import { auditStatus } from '../../services/discovery/redQueen';
 import type { AuditCheck, CandidateRecord, DiscoveryAudit, GuardrailStatus } from '../../types/discovery';
 import { Facts, Section } from './drawerSections';
@@ -12,7 +13,7 @@ const CHECK_ICON: Record<GuardrailStatus, { icon: typeof CheckCircle2; color: st
   skipped: { icon: CircleSlash, color: 'var(--color-text-tertiary)', label: 'Skipped' },
 };
 
-export function AuditChecks({ checks }: { checks: readonly AuditCheck[] }) {
+function AuditChecks({ checks }: { checks: readonly AuditCheck[] }) {
   if (checks.length === 0) return <p className="lab-muted" style={{ margin: 0 }}>The audit recorded no individual checks.</p>;
   return (
     <ul aria-label="Audit checks" style={{ listStyle: 'none', margin: 0, padding: 0, display: 'grid', gap: 6 }}>
@@ -55,7 +56,7 @@ function AuditBody({ audit }: { audit: DiscoveryAudit }) {
           ['Evaluator fitness', <span key="e" className="lab-mono">{fitness(audit.evaluator_fitness)}</span>],
           ['Audit fitness', <span key="a" className="lab-mono">{fitness(audit.audit_fitness)}</span>],
           ['Gap', <span key="g" className="lab-mono">{fitness(audit.gap)}</span>],
-          ['Audit seed', audit.seed],
+          ['Audit seed', formatAuditSeed(audit.seed)],
           ['Evaluator', `${audit.evaluator.kind} ${audit.evaluator.version}`],
           ['Isolation', audit.isolation],
           ['Evaluator fingerprint', <Fingerprint key="ef" value={audit.evaluator.fingerprint} />],
