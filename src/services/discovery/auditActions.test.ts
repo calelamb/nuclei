@@ -59,6 +59,20 @@ describe('auditStoredCandidate', () => {
     return { fs, kernel, deps: { session: kernel.session, fs, llm: createFakeLlm(), clock: createManualClock(), hash: testHash, join: joinPath } };
   };
 
+  it('does not record an exploit below the honest seed fitness (CR-M3)', async () => {
+    const seed: CandidateRecord = { ...candidate, id: 'c-0000', parent_id: null, mutator: 'seed', audit: undefined, evaluation: makeEvaluation({ candidate_id: 'c-0000', fitness: 5 }) };
+    const fs = createMemoryFs({
+      [`proj/experiments/toy/discovery/${RUN}/candidates/c-0003.json`]: toJson(stored),
+      [`proj/experiments/toy/discovery/${RUN}/candidates/c-0000.json`]: toJson(seed),
+    });
+    const kernel = createFakeKernel({ auditor: () => ({ verdict: 'exploit', gap: 2, reasons: ['r'] }) });
+    const deps = { session: kernel.session, fs, llm: createFakeLlm(), clock: createManualClock(), hash: testHash, join: joinPath };
+    const res = await auditStoredCandidate(spec, ctx, deps, RUN, 'c-0003');
+    expect(res.ok && res.audit.verdict).toBe('inconclusive');
+    expect(res.ok && res.audit.reasons[0]).toMatch(/not an exploit/);
+    expect(fs.files.has(`${exploitDir}/c-0003.json`)).toBe(false);
+  });
+
   it('sends discovery_audit, stores the verdict and records an exploit', async () => {
     const { fs, kernel, deps } = make({ auditor: () => ({ verdict: 'exploit', gap: 2, reasons: ['r'] }) });
     const res = await auditStoredCandidate(spec, ctx, deps, RUN, 'c-0003');

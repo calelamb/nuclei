@@ -202,6 +202,38 @@ describe('Red Queen runner: exploits', () => {
   });
 });
 
+describe('Red Queen runner: exploit bar (CR-M3)', () => {
+  const withSeedFitness = (seed: number, child: number): Scorer => (program) => ({
+    fitness: improveValue(program) === 0 ? seed : child + improveValue(program) * 0.001,
+    descriptors: { d1: improveValue(program) % 10, d2: improveValue(program) % 90 },
+    program_key: `key:${improveValue(program)}`,
+  });
+  const allExploits: NonNullable<FakeKernelOptions['auditor']> = () => ({
+    verdict: 'exploit', audit_fitness: 0.2, gap: 4,
+    reasons: ['determinism check failed'],
+    checks: [{ id: 'deterministic', label: 'Deterministic under a fresh seed', status: 'fail', detail: 'flipped' }],
+  });
+
+  it('a failing audit below the honest seed fitness is shown but is not an exploit and writes no exploit file', async () => {
+    const { deps, fs } = setup({ auditor: allExploits, scorer: withSeedFitness(5, 1) });
+    const run = await runDiscovery(rqSpec({ red_queen: { audit_every: 'all', max_audits: 100 } }), ctx, deps).done;
+    const files = candidatesOf(fs, run).filter((c) => c.audit);
+    expect(files.length).toBeGreaterThan(0);
+    expect(files.every((c) => c.audit?.verdict === 'inconclusive')).toBe(true);
+    expect(files[0].audit?.reasons[0]).toMatch(/audit failure, not an exploit/i);
+    expect(files[0].audit?.checks[0].status).toBe('fail');
+    expect(exploitFiles(fs, run)).toHaveLength(0);
+    expect(run.message).toBe(NO_EXPLOIT_MESSAGE);
+  });
+
+  it('at or above the honest seed fitness the same audit is an exploit', async () => {
+    const { deps, fs } = setup({ auditor: allExploits, scorer: withSeedFitness(5, 5) });
+    const run = await runDiscovery(rqSpec({ red_queen: { audit_every: 'all', max_audits: 100 } }), ctx, deps).done;
+    expect(candidatesOf(fs, run).some((c) => c.audit?.verdict === 'exploit')).toBe(true);
+    expect(exploitFiles(fs, run).length).toBeGreaterThan(0);
+  });
+});
+
 describe('Red Queen runner: budgets and control', () => {
   it('respects max_audits', async () => {
     const { deps, kernel } = setup();

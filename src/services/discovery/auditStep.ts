@@ -16,6 +16,7 @@ import {
   buildExploitRecord,
   exploitTitle,
   failedChecks,
+  gateExploit,
   observeScored,
   type AuditPolicyState,
 } from './redQueen';
@@ -90,7 +91,9 @@ export async function runAudit(ctx: RunContext, candidate: CandidateRecord): Pro
   return recordAudit(ctx, candidate, outcome.audit);
 }
 
-export function recordAudit(ctx: RunContext, candidate: CandidateRecord, audit: DiscoveryAudit): CandidateRecord {
+export function recordAudit(ctx: RunContext, candidate: CandidateRecord, rawAudit: DiscoveryAudit): CandidateRecord {
+  const audit = gateExploit(rawAudit, candidate.evaluation?.fitness, ctx.getRun().seed_fitness);
+  if (audit !== rawAudit) ctx.notice(`Audit of ${candidate.id} failed but is not an exploit: ${audit.reasons[0]}`);
   const done: CandidateRecord = { ...candidate, audit, audit_pending: false, audit_error: null, adversarial_fitness: adversarialFitness(audit) };
   ctx.saveCandidate(done);
   const finding = findingOf(done);
