@@ -1,5 +1,9 @@
 import { type CSSProperties } from 'react';
-import { Shuffle, Loader2, HelpCircle } from 'lucide-react';
+import { Shuffle, Loader2, HelpCircle, Download } from 'lucide-react';
+import { Button, EmptyState } from '../ui';
+import { isWebBuild } from '../../platform/buildTarget';
+import { openExternal } from '../../lib/openExternal';
+import { DESKTOP_DOWNLOAD_URL } from '../../config/docsLinks';
 import { useThemeStore, type ThemeColors } from '../../stores/themeStore';
 import { useEditorStore } from '../../stores/editorStore';
 import { useTranspileStore } from '../../stores/transpileStore';
@@ -39,19 +43,30 @@ export function TranspilerExplorer() {
           <Shuffle size={14} /> Transpiler Explorer
         </span>
         <div style={{ flex: 1 }} />
-        <a href={DOCS} target="_blank" rel="noreferrer" title="Transpiler Explorer docs" style={iconBtn(colors)}>
+        <a href={DOCS} target="_blank" rel="noreferrer" aria-label="Transpiler docs" title="Transpiler Explorer docs" style={iconBtn(colors)}>
           <HelpCircle size={14} />
         </a>
       </div>
 
       <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: 16 }}>
-        {!isQiskit ? (
-          <Centered colors={colors}
+        {isWebBuild() ? (
+          <Centered
+            icon={<Download size={20} />}
+            title="Transpiler Explorer runs in the desktop app"
+            body="Qiskit's pass manager runs in the local kernel, which the browser build does not include."
+            action={(
+              <Button size="sm" variant="primary" onClick={() => { void openExternal(DESKTOP_DOWNLOAD_URL); }}>
+                Download Nuclei
+              </Button>
+            )}
+          />
+        ) : !isQiskit ? (
+          <Centered
             title="Transpiler Explorer needs Qiskit"
             body={`The active buffer is ${framework}. Qiskit is the only framework with an introspectable compiler, so the pass-by-pass view is Qiskit-only.`}
           />
         ) : pending ? (
-          <Centered colors={colors}
+          <Centered
             icon={<Loader2 size={20} style={{ animation: 'nuclei-spin 800ms linear infinite' }} />}
             title="Transpiling…"
             body="Running the preset pass manager and capturing each pass."
@@ -59,7 +74,7 @@ export function TranspilerExplorer() {
         ) : error ? (
           <div style={errorBox(colors)}>{error}</div>
         ) : !result ? (
-          <Centered colors={colors}
+          <Centered
             title="Choose a target and Transpile"
             body="Pick a target device and optimization level in the sidebar, then Transpile to see what the compiler does to this circuit — before vs. after, pass by pass."
           />
@@ -214,20 +229,10 @@ function Side({ colors, caption, children }: { colors: ThemeColors; caption: str
   );
 }
 
-function Centered({ colors, icon, title, body }: {
-  colors: ThemeColors; icon?: React.ReactNode; title: string; body: string;
+function Centered({ icon, title, body, action }: {
+  icon?: React.ReactNode; title: string; body: string; action?: React.ReactNode;
 }) {
-  return (
-    <div style={{
-      height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center',
-      justifyContent: 'center', textAlign: 'center', gap: 8, padding: 24,
-      color: colors.textMuted,
-    }}>
-      {icon && <div style={{ color: colors.accentText }}>{icon}</div>}
-      <div style={{ fontSize: 14, fontWeight: 600, color: colors.text }}>{title}</div>
-      <div style={{ fontSize: 13, maxWidth: 420, lineHeight: 1.5 }}>{body}</div>
-    </div>
-  );
+  return <EmptyState icon={icon} title={title} action={action}>{body}</EmptyState>;
 }
 
 function shell(colors: ThemeColors): CSSProperties {
