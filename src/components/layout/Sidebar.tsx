@@ -60,9 +60,7 @@ function CircuitInfoPanel() {
   const colors = useThemeStore((s) => s.colors);
   return (
     <div style={{ padding: 12, color: colors.textMuted, fontSize: 12, fontFamily: TYPOGRAPHY.fontSans }}>
-      <div style={{ color: colors.textDim, fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 8 }}>
-        Circuit Info
-      </div>
+      <h3 className="nuclei-overline" style={{ marginBottom: 8 }}>Circuit Info</h3>
       <div style={{ color: colors.textDim, fontSize: 11 }}>
         Run a simulation to see circuit details here.
       </div>
@@ -73,19 +71,9 @@ function CircuitInfoPanel() {
 
 
 function SidebarHeader({ title }: { title: string }) {
-  const colors = useThemeStore((s) => s.colors);
   return (
-    <div style={{
-      height: 32, display: 'flex', alignItems: 'center',
-      padding: '0 12px', flexShrink: 0,
-    }}>
-      <span style={{
-        fontSize: 11, fontWeight: 600, textTransform: 'uppercase',
-        letterSpacing: 0.5, color: colors.textMuted,
-        fontFamily: TYPOGRAPHY.fontSans,
-      }}>
-        {title}
-      </span>
+    <div className="nuclei-pane-header">
+      <h2 className="nuclei-pane-header__title nuclei-overline">{title}</h2>
     </div>
   );
 }

@@ -5,7 +5,7 @@ import { blochRailHeights } from './blochRail';
 export const HISTOGRAM_CHIP_RESERVE_PX = 96;
 
 /** Header row, padding and one wire's breathing room around the wires themselves. */
-const CIRCUIT_CHROME_PX = 56;
+const CIRCUIT_CHROME_PX = 64;
 /** The circuit is guaranteed room for this many wires when the rail is short; taller circuits scroll. */
 export const CIRCUIT_PRIORITY_WIRES = 4;
 /** On a short rail the circuit never claims more than this share, so the Bloch spheres keep a row. */

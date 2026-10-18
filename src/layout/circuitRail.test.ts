@@ -3,11 +3,11 @@ import { chipFitsRail, circuitMinHeight, hiddenWireCount } from './circuitRail';
 
 describe('circuitMinHeight', () => {
   it('guarantees four wires of a five-qubit circuit when the rail has room', () => {
-    expect(circuitMinHeight(5, 900)).toBe(56 + 4 * 46);
+    expect(circuitMinHeight(5, 900)).toBe(64 + 4 * 46);
   });
 
   it('only asks for the wires a small circuit has', () => {
-    expect(circuitMinHeight(2, 900)).toBe(56 + 2 * 46);
+    expect(circuitMinHeight(2, 900)).toBe(64 + 2 * 46);
   });
 
   it('never takes more than half of a short rail, so the Bloch spheres keep a row', () => {
@@ -15,7 +15,7 @@ describe('circuitMinHeight', () => {
   });
 
   it('falls back to the full ask before the rail is measured', () => {
-    expect(circuitMinHeight(5, 0)).toBe(56 + 4 * 46);
+    expect(circuitMinHeight(5, 0)).toBe(64 + 4 * 46);
   });
 });
 

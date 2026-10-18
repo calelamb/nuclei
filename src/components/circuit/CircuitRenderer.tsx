@@ -37,8 +37,6 @@ interface ContextMenu {
   y: number;
 }
 
-/** The header holds a button on some frames and not others; a floor keeps the diagram from hopping. */
-const CIRCUIT_HEADER_MIN_HEIGHT = 32;
 
 function StepControls() {
   const stepMode = useCircuitStore((s) => s.stepMode);
@@ -221,11 +219,9 @@ export function CircuitRenderer() {
   return (
     // The diagram never takes more than ~40% of the screen height: the Bloch spheres below need room to stay readable, and a tall circuit scrolls inside its own box.
     <div style={{ flex: '1 1 auto', minHeight: 0, maxHeight: '40vh', display: 'flex', flexDirection: 'column' }} role="region" aria-label="Circuit diagram">
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, padding: '8px 10px 0 12px', flexShrink: 0, minHeight: CIRCUIT_HEADER_MIN_HEIGHT }}>
+      <div className="nuclei-pane-header" style={{ justifyContent: 'space-between', padding: '0 10px 0 12px' }}>
         <span style={{ display: 'flex', alignItems: 'baseline', gap: 8, minWidth: 0 }}>
-          <span style={{ fontSize: 11, fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase', color: colors.textDim, fontFamily: TYPOGRAPHY.fontSans }}>
-            Circuit
-          </span>
+          <span className="nuclei-overline">Circuit</span>
           {!stale && (
             <span style={{ fontSize: 11, color: colors.textDim, fontFamily: TYPOGRAPHY.fontSans, whiteSpace: 'nowrap' }}>
               {qubit_count} {qubit_count === 1 ? 'qubit' : 'qubits'} · depth {depth}
