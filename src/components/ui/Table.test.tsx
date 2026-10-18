@@ -40,6 +40,16 @@ describe('Table', () => {
     client.mockRestore();
   });
 
+  it('is a tab stop when it overflows vertically only', () => {
+    const sw = vi.spyOn(HTMLElement.prototype, 'scrollWidth', 'get').mockReturnValue(300);
+    const cw = vi.spyOn(HTMLElement.prototype, 'clientWidth', 'get').mockReturnValue(300);
+    const sh = vi.spyOn(HTMLElement.prototype, 'scrollHeight', 'get').mockReturnValue(1600);
+    const ch = vi.spyOn(HTMLElement.prototype, 'clientHeight', 'get').mockReturnValue(180);
+    render(<Sample />);
+    expect(screen.getByRole('region', { name: 'Results' }).getAttribute('tabindex')).toBe('0');
+    sw.mockRestore(); cw.mockRestore(); sh.mockRestore(); ch.mockRestore();
+  });
+
   it('right-aligns numeric headers and cells via a class', () => {
     render(<Sample />);
     expect(screen.getByRole('columnheader', { name: 'Rate' }).className).toContain('nuclei-table__num');
