@@ -54,12 +54,14 @@ function TrayContent({ client, projectRoot }: { client: QecImportClient | null; 
   if (jobs.length === 0) return null;
   return (
     <div className="qec-tray__content">
-      <div className="qec-tray__empty"><ListChecks aria-hidden="true" size={16} /><div><strong>{jobs.length} {jobs.length === 1 ? 'job' : 'jobs'}</strong><span>Finished and cancelled jobs stay here.</span></div></div>
-      <dl className="qec-tray__summary">
-        <div><dt>Queued</dt><dd className="qec-mono">{queued}</dd></div>
-        <div><dt>Running</dt><dd className="qec-mono">{running}</dd></div>
-        <div><dt>Streams</dt><dd className="qec-mono">0</dd></div>
-      </dl>
+      <div className="qec-tray__lead">
+        <div className="qec-tray__empty"><ListChecks aria-hidden="true" size={16} /><div><strong>{jobs.length} {jobs.length === 1 ? 'job' : 'jobs'}</strong>{running === 0 && <span>Finished and cancelled jobs stay here.</span>}</div></div>
+        <dl className="qec-tray__summary">
+          <div><dt>Queued</dt><dd className="qec-mono">{queued}</dd></div>
+          <div><dt>Running</dt><dd className="qec-mono">{running}</dd></div>
+          <div><dt>Streams</dt><dd className="qec-mono">0</dd></div>
+        </dl>
+      </div>
       <ul className="qec-tray__jobs" aria-label="Durable QEC jobs">
         {jobs.map((job) => (
           <QecTrayJobCard key={job.id} job={job} client={client} onCancel={(id) => { if (client) void cancelJob(client, id); }} />

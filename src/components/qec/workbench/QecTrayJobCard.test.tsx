@@ -25,6 +25,16 @@ describe('QecTrayJobCard (rq-r3-01)', () => {
     expect(css).toMatch(/\.qec-tray__jobs > li \{[^}]*grid-template-columns: minmax\(0, 1fr\);/);
   });
 
+  it('puts Cancel in the header row beside a short, copyable job id while the job runs', () => {
+    const running: QecJobRecord = { ...JOB, status: 'running' };
+    const { container } = render(<ul><QecTrayJobCard job={running} client={{} as never} onCancel={() => undefined} /></ul>);
+    const head = container.querySelector('li > div') as HTMLElement;
+    expect(head.contains(screen.getByRole('button', { name: /^Cancel import/ }))).toBe(true);
+    expect(screen.getByText(JOB.id.slice(0, 8)).getAttribute('title')).toBe(JOB.id);
+    expect(screen.queryByText(JOB.id)).toBeNull();
+    expect(screen.getByRole('button', { name: 'Copy job id' })).toBeTruthy();
+  });
+
   it('writes the kind and status in plain words', () => {
     render(<ul><QecTrayJobCard job={JOB} client={null} onCancel={() => undefined} /></ul>);
     expect(screen.getByText('Import · complete')).toBeTruthy();

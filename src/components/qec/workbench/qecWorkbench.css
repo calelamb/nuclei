@@ -675,6 +675,8 @@
   margin-block: auto;
 }
 
+.qec-tray__lead { display: flex; flex: 0 0 auto; flex-wrap: wrap; align-items: center; gap: 10px 20px; }
+
 .qec-tray__empty {
   display: flex; align-items: center; gap: 10px; color: var(--qec-text-muted);
 }
