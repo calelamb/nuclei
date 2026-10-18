@@ -6,7 +6,8 @@ import { useThemeStore } from '../../stores/themeStore';
 import { compose } from '../../services/compose';
 import { Dialog, TextInput } from '../ui';
 import { displayFrameworkName } from '../../data/starterTemplates';
-import { DiracKeyNotice, useHasDiracKey } from './DiracKeyNotice';
+import { DiracKeyNotice } from './DiracKeyNotice';
+import { useHasDiracKey } from './diracKeyAccess';
 
 interface ComposeModalProps {
   open: boolean;

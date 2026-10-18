@@ -11,9 +11,9 @@ import { usePlatform } from '../../../platform/PlatformProvider';
 import { DIRAC_API_URL, SONNET_MODEL } from '../../../config/dirac';
 import { QSHARP_STYLE_GUIDE } from '../../../services/qsharpStyle';
 import { kernelLanguageFor } from '../../../types/quantum';
-import { DiracKeyNotice, useHasDiracKey } from '../../dirac/DiracKeyNotice';
+import { DiracKeyNotice } from '../../dirac/DiracKeyNotice';
+import { DIRAC_KEY_NOTICE_TITLE, useHasDiracKey } from '../../dirac/diracKeyAccess';
 
-import { DIRAC_KEY_NOTICE_TITLE } from '../../dirac/DiracKeyNotice';
 import { TYPOGRAPHY } from '../../../styles/tokens';
 const HISTORY_KEY = 'cmdk_history';
 const MAX_HISTORY = 20;
