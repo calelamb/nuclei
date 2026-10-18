@@ -40,3 +40,7 @@
 .launch-shots__hint { text-align: right; font-size: 12px; color: var(--color-text-secondary); }
 .launch-step__heading { margin: 0; font-size: 14px; font-weight: 600; color: var(--color-text-primary); }
 .launch-step__heading:focus { outline: none; }
+
+/* The panel stays near the top across both steps; the scrim's own top padding is trimmed for this taller dialog. */
+.nuclei-dialog-scrim--top:has(.launch-dialog) { padding-top: 6vh; }
+.launch-dialog { max-height: calc(100vh - 6vh - var(--space-4)); }

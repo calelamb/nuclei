@@ -1,7 +1,7 @@
 import { useThemeStore } from '../../stores/themeStore';
 import { ProviderLogo } from './ProviderLogo';
 import { ProviderStatusBadge } from './ProviderStatusBadge';
-import { QSHARP_GATE_TOOLTIP, providerStatus } from './launchGating';
+import { QSHARP_GATE_TOOLTIP, providerStatus, sortProvidersByStatus } from './launchGating';
 import { PROVIDERS, type ProviderMeta } from './launchProviders';
 import type { HardwareProviderType } from '../../types/hardware';
 import { TYPOGRAPHY } from '../../styles/tokens';
@@ -24,6 +24,8 @@ const PRICING_LABEL: Record<ProviderMeta['pricing'], string> = {
 /** Step one: where to run. Every card carries the same status badge the Hardware panel shows. */
 export function LaunchProviderGrid({ isWeb, cudaqInstalled, connected, qsharpBlocks, onPick }: Props) {
   const colors = useThemeStore((s) => s.colors);
+  const statusOf = (p: ProviderMeta) => providerStatus({ provider: p.name, connected: connected.has(p.name), isWeb, cudaqInstalled });
+  const ordered = sortProvidersByStatus(PROVIDERS, (p) => statusOf(p).kind);
   return (
     <div
       style={{
@@ -32,13 +34,8 @@ export function LaunchProviderGrid({ isWeb, cudaqInstalled, connected, qsharpBlo
         gap: 14,
       }}
     >
-      {PROVIDERS.map((p) => {
-        const status = providerStatus({
-          provider: p.name,
-          connected: connected.has(p.name),
-          isWeb,
-          cudaqInstalled,
-        });
+      {ordered.map((p) => {
+        const status = statusOf(p);
         const qsharpBlocked = qsharpBlocks(p.name);
         const disabled = status.kind === 'coming-soon' || qsharpBlocked;
         return (

@@ -9,7 +9,7 @@ import { useSimulationStore } from '../../stores/simulationStore';
 import { useThemeStore } from '../../stores/themeStore';
 import { useFrameworksStore } from '../../stores/frameworksStore';
 import { usePlatform } from '../../platform/PlatformProvider';
-import { getHardware } from '../../App';
+import { getExecute, getHardware } from '../../App';
 import { LaunchBackendStep } from './LaunchBackendStep';
 import { LaunchProviderGrid } from './LaunchProviderGrid';
 import {
@@ -116,6 +116,12 @@ export function LaunchModal() {
 
   const handlePickProvider = (p: ProviderMeta) => {
     if (p.comingSoon || qsharpBlocks(p.name)) return;
+    // The browser build has no hardware path: its one working provider runs the circuit right here.
+    if (isWeb && p.name === 'simulator') {
+      closeLaunch();
+      getExecute()?.();
+      return;
+    }
     lastPicked.current = p.name;
     selectProvider(p.name);
     // Account-free providers have no token step: the kernel connects them as soon as they are chosen.
@@ -167,6 +173,9 @@ export function LaunchModal() {
         </span>
       )}
       width={1040}
+      // Top-anchored so the panel does not re-centre (and jump) when step two is shorter than step one.
+      align="top"
+      className="launch-dialog"
       flush
       // Escape steps back from a provider (see the key effect above); the scrim always closes.
       onClose={closeLaunch}
