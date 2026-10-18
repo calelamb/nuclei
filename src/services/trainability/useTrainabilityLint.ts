@@ -57,12 +57,8 @@ export function useTrainabilityLint({
   const active = mode === 'research' && language === 'python' && framework !== 'qsharp' && framework !== 'stim' && !unavailable;
   const ready = monacoApi !== null && editor !== null;
 
-  const clearMarkers = () => {
-    const model = editor?.getModel();
-    if (monacoApi && model) monacoApi.editor.setModelMarkers(model, TRAINABILITY_MARKER_OWNER, []);
-  };
-  const clearRef = useRef(clearMarkers);
-  clearRef.current = clearMarkers;
+  // The model we last marked, so a file switch clears the *previous* model.
+  const markedModel = useRef<monaco.editor.ITextModel | null>(null);
 
   // Debounced inspect → lint pipeline.
   useEffect(() => {
@@ -82,13 +78,16 @@ export function useTrainabilityLint({
     return () => clearTimeout(timer);
   }, [active, ready, code, filePath, framework, observable, debounceMs]);
 
-  // Drop stale diagnostics (and markers) whenever the buffer or mode changes.
+  // Drop stale diagnostics (and markers) whenever the buffer or mode changes,
+  // and on unmount.
   useEffect(() => {
     return () => {
-      clearRef.current();
+      const model = markedModel.current;
+      if (monacoApi && model) monacoApi.editor.setModelMarkers(model, TRAINABILITY_MARKER_OWNER, []);
+      markedModel.current = null;
       if (useTrainabilityStore.getState().lint.status !== 'idle') useTrainabilityStore.getState().clearLint();
     };
-  }, [filePath, active]);
+  }, [filePath, active, monacoApi]);
 
   // Publish markers from the lint state.
   useEffect(() => {
@@ -109,8 +108,6 @@ export function useTrainabilityLint({
       lineMaxColumn: (line) => model.getLineMaxColumn(line),
     });
     monacoApi.editor.setModelMarkers(model, TRAINABILITY_MARKER_OWNER, markers);
+    markedModel.current = model;
   }, [monacoApi, editor, active, lint]);
-
-  // Unmount: always clear.
-  useEffect(() => () => clearRef.current(), []);
 }

@@ -279,6 +279,7 @@ export const useTrainabilityStore = create<TrainabilityState>((set, get) => {
       const state = get();
       if (state.unavailable) return state.inspect;
       const key = codeKey(`${target.framework}\n${target.code}`);
+      if (state.inspect.codeKey === key && state.inspect.status === 'ready') return state.inspect;
       const seq = (inspectSeq += 1);
       set((s) => ({ inspect: { ...s.inspect, status: 'loading', error: null } }));
       try {
