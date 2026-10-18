@@ -35,13 +35,13 @@ export function getKernelStatusModel(input: KernelStatusInput): KernelStatusMode
     return {
       label: kernelStartFailureTitle(input.isWeb),
       tone: 'error',
-      detail: `${input.kernelError ?? 'The kernel did not start.'} Click to retry.`,
+      detail: `${input.kernelError ?? (input.isWeb ? 'Python did not start.' : 'The kernel did not start.')} Click to retry.`,
     };
   }
 
   if (!input.kernelReady) {
     if (input.kernelStatus === 'connecting') {
-      const stage = input.kernelProgress?.label ?? (input.isWeb ? 'Loading Python' : 'Starting kernel');
+      const stage = input.kernelProgress?.label ?? (input.isWeb ? 'Preparing Python' : 'Starting kernel');
       return { label: `${stage}…`, tone: 'busy', detail: `${engine} is starting up.` };
     }
     return { label: `${engine} idle`, tone: 'idle', detail: `${engine} has not started.` };

@@ -192,9 +192,11 @@ class FixtureSession {
     return true;
   }
 
-  bridge(base: PlatformBridge): PlatformBridge {
+  bridge(base: PlatformBridge, asDesktop = false): PlatformBridge {
     return {
       ...base,
+      // Opt-in (?e2eDesktop=1): the fixture project behaves like a desktop project, so the Explorer tree renders.
+      getPlatform: () => (asDesktop ? 'desktop' : base.getPlatform()),
       startQecDataEngine: (projectRoot) => invokeQecDataFixture('qec_data_start', { projectRoot }),
       stopQecDataEngine: async () => { await invokeQecDataFixture('qec_data_stop'); },
       getStoredValue: <T>(key: string) => this.getStoredValue<T>(key),
@@ -223,5 +225,5 @@ export function createE2eFixtureBridge(
   const root = fixtureRoot(projectId);
   installQecDataInvokeFixture();
   seedFixtureSession(root, query.get('workspace'));
-  return new FixtureSession(root, project).bridge(base);
+  return new FixtureSession(root, project).bridge(base, query.get('e2eDesktop') === '1');
 }

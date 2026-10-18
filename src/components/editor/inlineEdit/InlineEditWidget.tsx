@@ -11,6 +11,8 @@ import { usePlatform } from '../../../platform/PlatformProvider';
 import { DIRAC_API_URL, SONNET_MODEL } from '../../../config/dirac';
 import { QSHARP_STYLE_GUIDE } from '../../../services/qsharpStyle';
 import { kernelLanguageFor } from '../../../types/quantum';
+import { DiracKeyNotice } from '../../dirac/DiracKeyNotice';
+import { DIRAC_KEY_NOTICE_TITLE, useHasDiracKey } from '../../dirac/diracKeyAccess';
 
 import { TYPOGRAPHY } from '../../../styles/tokens';
 const HISTORY_KEY = 'cmdk_history';
@@ -32,6 +34,8 @@ export function InlineEditWidget({ editor, monaco, onClose }: InlineEditProps) {
   const [history, setHistory] = useState<string[]>([]);
   const [historyIdx, setHistoryIdx] = useState(-1);
   const inputRef = useRef<HTMLInputElement>(null);
+  const rootRef = useRef<HTMLDivElement>(null);
+  const hasKey = useHasDiracKey();
   const colors = useThemeStore((s) => s.colors);
   const platform = usePlatform();
 
@@ -43,8 +47,15 @@ export function InlineEditWidget({ editor, monaco, onClose }: InlineEditProps) {
   }, [platform]);
 
   useEffect(() => {
-    inputRef.current?.focus();
-  }, []);
+    if (hasKey) inputRef.current?.focus();
+    else rootRef.current?.querySelector('button')?.focus();
+  }, [hasKey]);
+
+  // Closing hands the keyboard back to the editor, so typing continues where it stopped.
+  const closeAndRefocus = useCallback(() => {
+    onClose();
+    requestAnimationFrame(() => editor.focus());
+  }, [onClose, editor]);
 
   // Get position below selection
   const selection = editor.getSelection();
@@ -64,7 +75,7 @@ export function InlineEditWidget({ editor, monaco, onClose }: InlineEditProps) {
     if (!apiKey || apiKey.trim() === '') {
       setDiffResult(null);
       setLoading(false);
-      setInstruction('Set up your API key in Settings to use AI features');
+      setError(DIRAC_KEY_NOTICE_TITLE);
       return;
     }
 
@@ -132,12 +143,12 @@ export function InlineEditWidget({ editor, monaco, onClose }: InlineEditProps) {
         : selection,
       text: diffResult,
     }]);
-    onClose();
-  }, [diffResult, selection, editor, monaco, model, onClose]);
+    closeAndRefocus();
+  }, [diffResult, selection, editor, monaco, model, closeAndRefocus]);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Escape') {
-      onClose();
+      closeAndRefocus();
     } else if (e.key === 'Enter' && !diffResult) {
       e.preventDefault();
       handleSubmit();
@@ -160,7 +171,10 @@ export function InlineEditWidget({ editor, monaco, onClose }: InlineEditProps) {
   if (!model) return null;
 
   return (
-    <div style={{
+    <div
+      ref={rootRef}
+      onKeyDown={hasKey ? undefined : (e) => { if (e.key === 'Escape') closeAndRefocus(); }}
+      style={{
       position: 'absolute',
       top: widgetTop,
       left: 60,
@@ -172,6 +186,12 @@ export function InlineEditWidget({ editor, monaco, onClose }: InlineEditProps) {
       boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
       overflow: 'hidden',
     }}>
+      {!hasKey && (
+        <div style={{ padding: '10px 12px' }}>
+          <DiracKeyNotice onAddKey={onClose} />
+        </div>
+      )}
+      {hasKey && (<>
       {/* Input */}
       <div style={{ display: 'flex', alignItems: 'center', padding: '6px 10px', gap: 8 }}>
         <span style={{ color: colors.accentText, fontSize: 12, fontWeight: 600, fontFamily: TYPOGRAPHY.fontMono }}>⌘K</span>
@@ -197,7 +217,7 @@ export function InlineEditWidget({ editor, monaco, onClose }: InlineEditProps) {
 
       {/* Error */}
       {error && !loading && (
-        <div style={{ padding: '0 10px 8px', color: colors.error, fontSize: 12, fontFamily: TYPOGRAPHY.fontSans, lineHeight: 1.4 }}>
+        <div role="alert" style={{ padding: '0 10px 8px', color: colors.error, fontSize: 12, fontFamily: TYPOGRAPHY.fontSans, lineHeight: 1.4 }}>
           {error}
         </div>
       )}
@@ -223,10 +243,11 @@ export function InlineEditWidget({ editor, monaco, onClose }: InlineEditProps) {
           </div>
           <div style={{ display: 'flex', gap: 6, padding: '6px 10px', borderTop: `1px solid ${colors.border}` }}>
             <Button size="sm" variant="primary" onClick={handleAccept}>Apply ({shortcutLabel('run')})</Button>
-            <Button size="sm" onClick={onClose}>Dismiss (Esc)</Button>
+            <Button size="sm" onClick={closeAndRefocus}>Dismiss (Esc)</Button>
           </div>
         </div>
       )}
+      </>)}
     </div>
   );
 }

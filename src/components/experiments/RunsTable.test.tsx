@@ -211,7 +211,7 @@ describe('RunsTable', () => {
   it('shows a failed-start error under the header (research-02)', () => {
     useExperimentRunStore.setState({ lastError: 'Failed to connect to kernel' });
     const { getByRole } = render(<RunsTable />);
-    expect(getByRole('status').textContent).toContain("Couldn't reach the Python kernel");
+    expect(getByRole('status').textContent).toContain("The kernel isn't connected");
   });
 
   it('points the kernel error at the status bar, never a toolbar this view does not have, and offers Retry (LR-19)', () => {

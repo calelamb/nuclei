@@ -18,6 +18,18 @@ describe('LessonRunButton', () => {
     expect((busy as HTMLButtonElement).disabled).toBe(false);
   });
 
+  it('promises cancel and a toggle state only when it can cancel', () => {
+    const progress = { step: 1, total: 3, label: 'Downloading Python', fraction: 0 };
+    const { rerender } = render(<LessonRunButton isRunning pythonLoading progress={progress} onRun={() => {}} />);
+    const noCancel = screen.getByRole('button');
+    expect(noCancel.getAttribute('aria-pressed')).toBeNull();
+    expect(noCancel.getAttribute('title') ?? '').not.toMatch(/cancel/i);
+    rerender(<LessonRunButton isRunning pythonLoading progress={progress} onRun={() => {}} onCancelQueued={() => {}} />);
+    const cancellable = screen.getByRole('button');
+    expect(cancellable.getAttribute('aria-pressed')).toBe('true');
+    expect(cancellable.getAttribute('title') ?? '').toMatch(/cancel/i);
+  });
+
   it('ignores a second press while running', () => {
     let runs = 0;
     render(<LessonRunButton isRunning pythonLoading stage="Loading NumPy" onRun={() => { runs += 1; }} />);

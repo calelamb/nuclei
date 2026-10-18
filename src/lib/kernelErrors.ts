@@ -85,3 +85,25 @@ export function describeKernelFailure(error: unknown, options: { isWeb?: boolean
     docsUrl: `${DOCS_BASE}#${kind}`,
   };
 }
+
+/** The engine's name on this runtime: the browser build says Python and never "kernel". */
+export function kernelEngineName(isWeb: boolean = isWebBuild()): 'Python' | 'Kernel' {
+  return isWeb ? 'Python' : 'Kernel';
+}
+
+/** One sentence for "you asked while the engine is still booting". `again` is the follow-up the caller wants. */
+export function kernelStartingMessage(options: { isWeb?: boolean; again?: string } = {}): string {
+  const subject = options.isWeb ?? isWebBuild() ? 'Python is' : 'The kernel is';
+  return `${subject} still starting. ${options.again ?? 'Try again'} when the status bar says ready.`;
+}
+
+/** One sentence for "there is no engine connection to send this to". */
+export function kernelNotConnectedMessage(options: { isWeb?: boolean } = {}): string {
+  const subject = options.isWeb ?? isWebBuild() ? "Python isn't running" : "The kernel isn't connected";
+  return `${subject}. Check the status bar, then try again.`;
+}
+
+/** The disabled-button label while the engine boots. */
+export function kernelWaitingLabel(isWeb: boolean = isWebBuild()): string {
+  return isWeb ? 'Waiting for Python…' : 'Waiting for the kernel…';
+}

@@ -164,6 +164,6 @@ describe('ExperimentsPanel', () => {
   it('surfaces a failed sweep start instead of staying silent (research-02)', () => {
     useExperimentRunStore.setState({ active: null, lastSummary: null, lastError: 'Failed to connect to kernel' });
     const { getByRole } = render(<ExperimentsPanel />);
-    expect(getByRole('status').textContent).toContain("Couldn't reach the Python kernel");
+    expect(getByRole('status').textContent).toContain("The kernel isn't connected");
   });
 });

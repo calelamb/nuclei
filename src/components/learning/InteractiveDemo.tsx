@@ -35,6 +35,8 @@ export function InteractiveDemo({ code: initialCode, framework, description, exp
   const [unsupported, setUnsupported] = useState<string | null>(null);
   const [showOutput, setShowOutput] = useState(false);
   const localCodeRef = useRef(initialCode);
+  // Bumped on every Run and on cancel, so a Run queued behind the Python boot can be withdrawn.
+  const runTokenRef = useRef(0);
 
   const handleMessage = useCallback((msg: KernelResponse) => {
     switch (msg.type) {
@@ -89,7 +91,13 @@ export function InteractiveDemo({ code: initialCode, framework, description, exp
     void kernelSend({ type: 'parse', code: c, language: 'python' });
   }
 
+  const handleCancelQueued = () => {
+    runTokenRef.current += 1;
+    setIsRunning(false);
+  };
+
   const handleRun = () => {
+    const token = ++runTokenRef.current;
     setIsRunning(true);
     setError(null);
     setUnsupported(null);
@@ -105,7 +113,7 @@ export function InteractiveDemo({ code: initialCode, framework, description, exp
       setSnapshot(null);
     }
 
-    kernelSend(message).then(
+    kernelSend(message, { isCancelled: () => runTokenRef.current !== token }).then(
       (sent) => {
         if (!sent) {
           setError(kernel.unavailableMessage());
@@ -174,7 +182,13 @@ export function InteractiveDemo({ code: initialCode, framework, description, exp
       </div>
 
       <div className={hasBelow ? 'demo__actions demo__actions--divided' : 'demo__actions'}>
-        <LessonRunButton isRunning={isRunning} pythonLoading={kernel.loading} stage={kernel.stage} onRun={handleRun} />
+        <LessonRunButton
+          isRunning={isRunning}
+          pythonLoading={kernel.loading}
+          progress={kernel.progress}
+          onRun={handleRun}
+          onCancelQueued={handleCancelQueued}
+        />
         <Button onClick={handleReset} icon={<RotateCcw size={12} aria-hidden="true" />}>Reset</Button>
 
         {viewOptions.length > 1 && (

@@ -354,6 +354,9 @@ export function QuantumEditor() {
           wordWrap: editorSettings.wordWrap ? 'on' : 'off',
           autoClosingBrackets: editorSettings.autoCloseBrackets ? 'always' : 'never',
           inlineSuggest: { enabled: true },
+          // The panel divider already draws the edge; a second rule inside it reads as a double line.
+          overviewRulerBorder: false,
+          hideCursorInOverviewRuler: true,
         }}
         beforeMount={setupMonaco}
       />

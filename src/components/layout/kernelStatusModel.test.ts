@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { getKernelStatusModel } from './kernelStatusModel';
+import { getRunButtonState } from '../editor/runButtonState';
+import { BOOT_STAGES } from '../../platform/pyodide/workerProtocol';
 
 const base = {
   kernelStatus: 'idle' as const, kernelReady: false, kernelError: null,
@@ -16,7 +18,7 @@ describe('getKernelStatusModel', () => {
   });
 
   it('uses platform wording before any stage is reported', () => {
-    expect(getKernelStatusModel({ ...base, kernelStatus: 'connecting' }).label).toBe('Loading Python…');
+    expect(getKernelStatusModel({ ...base, kernelStatus: 'connecting' }).label).toBe('Preparing Python…');
     expect(getKernelStatusModel({ ...base, kernelStatus: 'connecting', isWeb: false }).label).toBe('Starting kernel…');
   });
 
@@ -57,5 +59,23 @@ describe('getKernelStatusModel', () => {
       ...base, kernelStatus: 'ready', kernelReady: true, lastRunFailed: true, isRunning: true,
     });
     expect(model.tone).toBe('running');
+  });
+});
+
+describe('web boot vocabulary (design-r5-02)', () => {
+  it('no web boot surface says kernel, whichever stage is reported', () => {
+    BOOT_STAGES.forEach((stage, index) => {
+      const progress = { step: index + 1, total: BOOT_STAGES.length, label: stage.label, fraction: stage.fraction };
+      const bar = getKernelStatusModel({ ...base, kernelStatus: 'connecting', kernelProgress: progress });
+      const slot = getRunButtonState({
+        kernelReady: false, kernelStatus: 'connecting', kernelProgress: progress, kernelError: null,
+        isRunning: false, engine: 'Python',
+      });
+      [bar.label, bar.detail, slot.label, slot.title].forEach((text) => expect(text).not.toMatch(/kernel/i));
+    });
+    const early = getKernelStatusModel({ ...base, kernelStatus: 'connecting' });
+    expect(`${early.label} ${early.detail}`).not.toMatch(/kernel/i);
+    const failed = getKernelStatusModel({ ...base, kernelStatus: 'failed' });
+    expect(`${failed.label} ${failed.detail}`).not.toMatch(/kernel/i);
   });
 });

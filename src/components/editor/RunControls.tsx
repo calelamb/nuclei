@@ -76,7 +76,10 @@ export function RunControls({ density }: { density: TabBarDensity }) {
           variant={canRun ? 'primary' : 'secondary'}
           onClick={handleRun}
           disabled={runState.disabled}
-          aria-label={runState.title}
+          // The visible label names the control (WCAG 2.5.3); the sentence lives in the tooltip.
+          // Only the icon-only tight layout needs an explicit name.
+          aria-label={tight ? runState.label : undefined}
+          aria-pressed={runState.queueable ? runState.queued === true : undefined}
           style={{ fontWeight: 600, padding: tight ? '0 8px' : compact ? '0 10px' : '0 14px', gap: 7 }}
         >
           {runState.stoppable ? (

@@ -23,7 +23,6 @@ import { Button, IconButton, Menu, type MenuEntry } from '../ui';
 import { useProjectStore } from '../../stores/projectStore';
 import { useEditorStore } from '../../stores/editorStore';
 import { useThemeStore } from '../../stores/themeStore';
-import { useWorkspaceStore } from '../../stores/workspaceStore';
 import { usePlatform } from '../../platform/PlatformProvider';
 import type { DirEntry } from '../../platform/bridge';
 import type { Framework } from '../../types/quantum';
@@ -35,6 +34,7 @@ import {
 import { MEMORY_PREFIX, isMemoryPath } from '../../hooks/useFileOps';
 import { DesktopOnlyState } from '../hardware/DesktopOnlyState';
 import { ExplorerNameInput } from './ExplorerNameInput';
+import { validateNewName } from './createNameValidation';
 import { flattenVisible, resolveTreeKey } from './treeNavigation';
 
 import { TYPOGRAPHY } from '../../styles/tokens';
@@ -89,9 +89,10 @@ export function FileExplorer() {
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  /** A rejected create lives beside its input; it never hides the tree. */
+  const [createError, setCreateError] = useState<string | null>(null);
   const [renameTarget, setRenameTarget] = useState<string | null>(null);
   const [renameDraft, setRenameDraft] = useState('');
-  const workspaceMode = useWorkspaceStore((s) => s.mode);
   const [pending, setPending] = useState<CreateKind | null>(null);
   const [draft, setDraft] = useState('');
   const treeRef = useRef<HTMLDivElement>(null);
@@ -207,11 +208,13 @@ export function FileExplorer() {
   );
 
   const startCreate = (c: CreateKind) => {
+    setCreateError(null);
     setPending(c);
     setDraft(c.initial);
   };
 
   const cancelCreate = () => {
+    setCreateError(null);
     setPending(null);
     setDraft('');
   };
@@ -222,64 +225,52 @@ export function FileExplorer() {
       cancelCreate();
       return;
     }
-    if (raw.includes('/') || raw.includes('\\')) {
-      setError('Names cannot contain slashes. Use the file tree to choose a location.');
-      cancelCreate();
-      return;
-    }
+    const isFileKind = pending.kind === 'file' || pending.kind === 'circuit';
+    const name = isFileKind && !raw.includes('.') ? `${raw}.py` : raw;
+    const memory = isMemoryPath(projectRoot);
+    const existingNames = memory
+      ? tabs.filter((t) => t.path.startsWith(`${projectRoot}/`)).map((t) => t.path.slice(projectRoot.length + 1))
+      : (rootEntries ?? []).map((entry) => entry.name);
+    const invalid = validateNewName({ name, existingNames });
+    if (invalid) { setCreateError(invalid); return; }
 
     // In an in-memory (unsaved) project, all "creates" produce in-memory
     // tabs only. Folders and packages don't exist as concepts until the
-    // project has a real location on disk — we block them with a hint
-    // instead of silently doing nothing. Save the project first (⌘S on
-    // any file) to promote it to a real folder, then folder/package
-    // creation works normally.
-    if (isMemoryPath(projectRoot)) {
-      if (pending.kind === 'folder' || pending.kind === 'package') {
-        setError('Save the project first (⌘S) to add folders or packages.');
-        cancelCreate();
+    // project has a real location on disk, so we block them with a hint
+    // instead of silently doing nothing.
+    if (memory) {
+      if (!isFileKind) {
+        setCreateError('Save the project first (⌘S) to add folders or packages.');
         return;
       }
-      const name = raw.endsWith('.py') || raw.includes('.') ? raw : `${raw}.py`;
-      const path = `${projectRoot}/${name}`;
       const content = pending.kind === 'circuit' ? STARTER_TEMPLATES[pending.framework] : '';
       if (pending.kind === 'circuit') setEditorFramework(pending.framework);
-      openTab({ path, content });
+      openTab({ path: `${projectRoot}/${name}`, content });
       cancelCreate();
       return;
     }
 
-    if (pending.kind === 'folder') {
-      const path = `${projectRoot}/${raw}`;
-      const res = await platform.createDirectory(path, false);
-      cancelCreate();
-      if (!res) { setError(`Couldn't create folder ${raw}.`); return; }
-      await reloadTree(projectRoot);
-      return;
-    }
-
-    if (pending.kind === 'package') {
-      const path = `${projectRoot}/${raw}`;
+    if (!isFileKind) {
+      const path = `${projectRoot}/${name}`;
+      const label = pending.kind === 'package' ? 'package' : 'folder';
       const dir = await platform.createDirectory(path, false);
-      if (!dir) { setError(`Couldn't create package ${raw}.`); cancelCreate(); return; }
-      await platform.createFile(`${path}/__init__.py`, '');
+      if (!dir) { setCreateError(`Couldn't create ${label} ${name}. Check that the name is free and the folder is writable.`); return; }
+      if (pending.kind === 'package') await platform.createFile(`${path}/__init__.py`, '');
       cancelCreate();
       await reloadTree(projectRoot);
       return;
     }
 
-    // file / circuit share the same create-a-file path
-    const name = raw.endsWith('.py') || raw.includes('.') ? raw : `${raw}.py`;
     const path = `${projectRoot}/${name}`;
     const content = pending.kind === 'circuit' ? STARTER_TEMPLATES[pending.framework] : '';
     const res = await platform.createFile(path, content);
+    if (!res) { setCreateError(`Couldn't create ${name}. A file with that name may already exist.`); return; }
     cancelCreate();
-    if (!res) { setError(`Couldn't create ${name} (already exists?).`); return; }
     if (pending.kind === 'circuit') setEditorFramework(pending.framework);
     await reloadTree(projectRoot);
     openTab({ path: res.path, content });
     setFocusedPath(res.path);
-  }, [draft, pending, projectRoot, platform, reloadTree, openTab, setEditorFramework]);
+  }, [draft, pending, projectRoot, platform, reloadTree, openTab, setEditorFramework, tabs, rootEntries]);
 
   const commitRename = useCallback(
     async (oldPath: string) => {
@@ -491,7 +482,7 @@ export function FileExplorer() {
 
   if (isWeb) {
     return (
-      <DesktopOnlyState title={`${workspaceMode === 'research' ? 'Project' : 'Lecture'} folders open in the desktop app`}>
+      <DesktopOnlyState title="Project folders open in the desktop app">
         You can still edit and simulate single files here.
       </DesktopOnlyState>
     );
@@ -630,8 +621,10 @@ export function FileExplorer() {
             ariaLabel={`${createKindLabel(pending)} name`}
             selectBaseName={pending.kind === 'file' || pending.kind === 'circuit'}
             value={draft}
-            onChange={setDraft}
-            onBlur={commitCreate}
+            invalid={createError !== null}
+            describedBy={createError ? 'explorer-create-error' : undefined}
+            onChange={(value) => { setDraft(value); if (createError) setCreateError(null); }}
+            onBlur={() => { if (createError) cancelCreate(); else void commitCreate(); }}
             onKeyDown={(e) => {
               if (e.key === 'Enter') { e.preventDefault(); commitCreate(); }
               if (e.key === 'Escape') cancelCreate();
@@ -640,7 +633,7 @@ export function FileExplorer() {
             style={{
               width: '100%',
               background: colors.bgElevated,
-              border: `1px solid ${colors.accent}`,
+              border: `1px solid ${createError ? colors.error : colors.accent}`,
               color: colors.text,
               fontSize: 12,
               padding: '4px 8px',
@@ -648,6 +641,15 @@ export function FileExplorer() {
               fontFamily: TYPOGRAPHY.fontSans,
             }}
           />
+          {createError && (
+            <div
+              id="explorer-create-error"
+              role="alert"
+              style={{ color: colors.error, fontSize: 11, lineHeight: 1.4, padding: '4px 2px 2px' }}
+            >
+              {createError}
+            </div>
+          )}
         </div>
       )}
 

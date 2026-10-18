@@ -41,5 +41,5 @@ export type WorkerResponse =
 export const BOOT_STAGES: ReadonlyArray<{ label: string; fraction: number }> = [
   { label: 'Downloading Python', fraction: 0 },
   { label: 'Loading NumPy', fraction: 0.6 },
-  { label: 'Starting kernel', fraction: 0.85 },
+  { label: 'Starting Python', fraction: 0.85 },
 ];

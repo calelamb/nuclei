@@ -3,6 +3,7 @@ import { usePlatform } from '../../platform/PlatformProvider';
 import { KERNEL_WS_URL } from '../../config/kernel';
 import { openAuthenticatedKernelSocket } from '../../services/kernelSocket';
 import type { KernelResponse } from '../../types/quantum';
+import type { BootProgress } from '../../platform/pyodide/workerProtocol';
 
 export type LessonKernelMessage = { type: string; [key: string]: unknown };
 
@@ -17,13 +18,20 @@ interface WebKernel {
   send(msg: LessonKernelMessage): Promise<void>;
 }
 
+export interface SendOptions {
+  /** Checked once the boot wait is over: a queued Run the student cancelled is dropped, not sent. */
+  isCancelled?: () => boolean;
+}
+
 export interface LessonKernel {
   /** Resolves true once the message was handed to a kernel, false when no kernel is connected (desktop only). */
-  send: (msg: LessonKernelMessage) => Promise<boolean>;
+  send: (msg: LessonKernelMessage, options?: SendOptions) => Promise<boolean>;
   /** Web only: Python is still downloading or starting; a Run is queued, not lost. */
   loading: boolean;
   /** Web only: the current boot stage, e.g. "Downloading Python". */
   stage: string | null;
+  /** Web only: the current boot stage with its step count, for the Run button. */
+  progress: BootProgress | null;
   /** What to tell the user when send() resolved false: platform-appropriate, never the desktop sentence on the web. */
   unavailableMessage: () => string;
 }
@@ -46,7 +54,7 @@ export function useLessonKernel({ onMessage, onInitError, onReady }: Options): L
   const platform = usePlatform();
   const isWeb = platform.getPlatform() === 'web';
   const [loading, setLoading] = useState(isWeb);
-  const [stage, setStage] = useState<string | null>(null);
+  const [progress, setProgress] = useState<BootProgress | null>(null);
   const wsRef = useRef<WebSocket | null>(null);
   const webRef = useRef<Promise<WebKernel | null> | null>(null);
   const handlers = useRef({ onMessage, onInitError, onReady });
@@ -80,17 +88,18 @@ export function useLessonKernel({ onMessage, onInitError, onReady }: Options): L
       if (cancelledRef.current) return null;
       offsRef.current.forEach((off) => off());
       offsRef.current = [
-        pyodideRuntime.onProgress((p) => { if (!cancelledRef.current) setStage(p?.label ?? null); }),
+        pyodideRuntime.onProgress((p) => { if (!cancelledRef.current) setProgress(p); }),
         pyodideRuntime.onState((s) => { if (!cancelledRef.current) setLoading(s !== 'ready'); }),
       ];
       setLoading(!pyodideRuntime.isReady());
+      setProgress(pyodideRuntime.currentProgress());
       const kernel = new PyodideKernel((msg) => handlers.current.onMessage(msg as KernelResponse));
       try {
         await kernel.init();
       } catch (e) {
         return fail(e);
       }
-      if (!cancelledRef.current) { setLoading(false); setStage(null); handlers.current.onReady?.(); }
+      if (!cancelledRef.current) { setLoading(false); setProgress(null); handlers.current.onReady?.(); }
       return kernel;
     })();
     webRef.current = boot;
@@ -135,7 +144,7 @@ export function useLessonKernel({ onMessage, onInitError, onReady }: Options): L
     return () => { cancelled = true; ws?.close(); };
   }, [isWeb, platform]);
 
-  const send = useCallback(async (msg: LessonKernelMessage): Promise<boolean> => {
+  const send = useCallback(async (msg: LessonKernelMessage, options?: SendOptions): Promise<boolean> => {
     if (isWeb) {
       let kernel = await webRef.current;
       if (!kernel) {
@@ -144,6 +153,7 @@ export function useLessonKernel({ onMessage, onInitError, onReady }: Options): L
         kernel = await startBoot();
       }
       if (!kernel) return false;
+      if (options?.isCancelled?.()) return true;
       await kernel.send(msg);
       return true;
     }
@@ -158,5 +168,5 @@ export function useLessonKernel({ onMessage, onInitError, onReady }: Options): L
     () => (isWeb ? lastErrorRef.current : DESKTOP_KERNEL_UNAVAILABLE),
     [isWeb],
   );
-  return { send, loading, stage, unavailableMessage };
+  return { send, loading, stage: progress?.label ?? null, progress, unavailableMessage };
 }

@@ -10,6 +10,9 @@ interface ExplorerNameInputProps {
   onBlur: () => void;
   onKeyDown: KeyboardEventHandler<HTMLInputElement>;
   placeholder?: string;
+  invalid?: boolean;
+  /** Id of the element that explains the problem (the inline alert). */
+  describedBy?: string;
   style: CSSProperties;
 }
 
@@ -18,7 +21,7 @@ interface ExplorerNameInputProps {
  * selects the base name so typing replaces `untitled` and keeps `.py`.
  */
 export function ExplorerNameInput({
-  value, ariaLabel, selectBaseName, onChange, onBlur, onKeyDown, placeholder, style,
+  value, ariaLabel, selectBaseName, onChange, onBlur, onKeyDown, placeholder, style, invalid, describedBy,
 }: ExplorerNameInputProps) {
   const attach = useCallback((el: HTMLInputElement | null) => {
     if (!el) return;
@@ -31,6 +34,8 @@ export function ExplorerNameInput({
     <input
       ref={attach}
       aria-label={ariaLabel}
+      aria-invalid={invalid ? true : undefined}
+      aria-describedby={describedBy}
       value={value}
       onChange={(e) => onChange(e.target.value)}
       onBlur={onBlur}

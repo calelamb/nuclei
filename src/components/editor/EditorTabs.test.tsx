@@ -65,14 +65,14 @@ describe('EditorTabs toolbar gating', () => {
   it('offers Run and the framework chip on a code file', () => {
     setTabs(['/proj/a.py'], '/proj/a.py');
     render(<EditorTabs />);
-    expect(screen.getByRole('button', { name: /run simulation/i })).toBeTruthy();
+    expect(screen.getByRole('button', { name: /^Run/ })).toBeTruthy();
     expect(screen.getByLabelText(/^Framework/)).toBeTruthy();
   });
 
   it('hides framework, Launch and Run on a non-code file', () => {
     setTabs(['/proj/README.md'], '/proj/README.md');
     render(<EditorTabs />);
-    expect(screen.queryByRole('button', { name: /run simulation/i })).toBeNull();
+    expect(screen.queryByRole('button', { name: /^Run/ })).toBeNull();
     expect(screen.queryByRole('button', { name: /launch on hardware/i })).toBeNull();
     expect(screen.queryByLabelText(/^Framework/)).toBeNull();
   });
@@ -85,7 +85,7 @@ describe('Run / Stop', () => {
     setTabs(['/proj/a.py'], '/proj/a.py');
     render(<EditorTabs />);
     act(() => { useSimulationStore.setState({ isRunning: true }); });
-    const stopBtn = screen.getByRole('button', { name: /stop the running program/i });
+    const stopBtn = screen.getByRole('button', { name: /^Stop/ });
     fireEvent.click(stopBtn, { detail: 2 });
     expect(stop).not.toHaveBeenCalled();
   });
@@ -98,7 +98,7 @@ describe('Run / Stop', () => {
     render(<EditorTabs />);
     act(() => { useSimulationStore.setState({ isRunning: true }); });
     vi.spyOn(performance, 'now').mockReturnValue(5000);
-    fireEvent.click(screen.getByRole('button', { name: /stop the running program/i }), { detail: 1 });
+    fireEvent.click(screen.getByRole('button', { name: /^Stop/ }), { detail: 1 });
     expect(stop).toHaveBeenCalledTimes(1);
   });
 
@@ -106,7 +106,7 @@ describe('Run / Stop', () => {
     useEditorStore.setState({ kernelReady: false, kernelStatus: 'failed', kernelError: 'boom' });
     setTabs(['/proj/a.py'], '/proj/a.py');
     render(<EditorTabs />);
-    const btn = screen.getByRole('button', { name: /boom/ }) as HTMLButtonElement;
+    const btn = screen.getByRole('button', { name: /didn't start/i }) as HTMLButtonElement;
     expect(btn.disabled).toBe(true);
   });
 });

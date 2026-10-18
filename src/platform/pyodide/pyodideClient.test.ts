@@ -121,6 +121,30 @@ describe('PyodideRuntimeClient', () => {
     expect(client.isQuietRestart()).toBe(false);
   });
 
+  it('a preview timeout kills only the preview: a Run queued behind it is re-dispatched and resolves', async () => {
+    const { client, workers } = makeClient((req, reply) => {
+      if (req.type === 'init') { reply({ id: req.id, type: 'result', value: 'ready' }); return; }
+      if (req.fn === 'nuclei_parse' && workers.length === 1) { reply({ id: req.id, type: 'started' }); return; } // hangs
+      if (workers.length === 1) return; // the first worker is busy: the execute only queues
+      reply({ id: req.id, type: 'started' });
+      reply({ id: req.id, type: 'result', value: `${req.fn}:done` });
+    });
+    await client.ensureStarted();
+
+    const preview = client.call('nuclei_parse', ['slow'], { timeoutMs: 5000, quietRestart: true });
+    const previewAssertion = expect(preview).rejects.toMatchObject({ code: 'timeout' });
+    await vi.advanceTimersByTimeAsync(10);
+    const run = client.call('nuclei_execute', ['slow', 1024, undefined], { timeoutMs: 120_000 });
+    const runResult = expect(run).resolves.toBe('nuclei_execute:done');
+
+    await vi.advanceTimersByTimeAsync(5001);
+    await previewAssertion;
+    await vi.advanceTimersByTimeAsync(50);
+    await runResult;
+    expect(workers).toHaveLength(2);
+    expect(workers[0].terminated).toBe(true);
+  });
+
   it('a timed-out Run (not a preview) is an ordinary, visible restart', async () => {
     const { client } = makeClient((req, reply) => {
       if (req.type === 'init') reply({ id: req.id, type: 'result', value: 'ready' });

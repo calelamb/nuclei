@@ -6,6 +6,7 @@ import { useEditorStore } from '../../stores/editorStore';
 import { useHardwareStore } from '../../stores/hardwareStore';
 import { useTranspileStore, SIMULATOR_TARGET_ID } from '../../stores/transpileStore';
 import { requestTranspile } from '../../lib/transpileSender';
+import { kernelNotConnectedMessage, kernelStartingMessage, kernelWaitingLabel } from '../../lib/kernelErrors';
 import { isWebBuild } from '../../platform/buildTarget';
 import { ConnectivityMap } from '../hardware/ConnectivityMap';
 import { resolveTargetRequest } from './transpileMath';
@@ -26,6 +27,8 @@ export function TranspilerControls() {
   const code = useEditorStore((s) => s.code);
   const framework = useEditorStore((s) => s.framework);
   const backends = useHardwareStore((s) => s.backends);
+  const kernelStatus = useEditorStore((s) => s.kernelStatus);
+  const kernelStarting = kernelStatus === 'connecting';
 
   const targetId = useTranspileStore((s) => s.targetId);
   const optimizationLevel = useTranspileStore((s) => s.optimizationLevel);
@@ -45,7 +48,7 @@ export function TranspilerControls() {
     const target = resolveTargetRequest(targetId, backends, optimizationLevel);
     setPending(true);
     if (!requestTranspile(code, target)) {
-      setError('The kernel is still starting. Try again when the status bar says ready.');
+      setError(kernelStatus === 'connecting' ? kernelStartingMessage() : kernelNotConnectedMessage());
     }
   };
 
@@ -83,8 +86,14 @@ export function TranspilerControls() {
 
   return (
     <div style={shell}>
-      <Button variant="primary" onClick={run} loading={pending} icon={pending ? undefined : <Shuffle size={14} />}>
-        {pending ? 'Transpiling…' : result ? 'Re-transpile' : 'Transpile'}
+      <Button
+        variant="primary"
+        onClick={run}
+        loading={pending}
+        disabled={kernelStarting}
+        icon={pending || kernelStarting ? undefined : <Shuffle size={14} />}
+      >
+        {kernelStarting ? kernelWaitingLabel() : pending ? 'Transpiling…' : result ? 'Re-transpile' : 'Transpile'}
       </Button>
 
       <label style={fieldLabel(colors)}>
