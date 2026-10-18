@@ -1,0 +1,9 @@
+/* Export while the diagram is stale: focusable (so the reason tooltip shows on keyboard focus) but visibly unavailable.
+   Component CSS is unlayered, so the hover background of the secondary Button is restated here. */
+.nuclei-btn.nuclei-export-btn--unavailable,
+.nuclei-btn.nuclei-export-btn--unavailable:hover {
+  background: var(--color-surface-raised);
+  color: var(--color-text-primary);
+  opacity: 0.5;
+  cursor: not-allowed;
+}

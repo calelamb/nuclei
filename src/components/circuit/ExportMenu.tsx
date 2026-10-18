@@ -7,6 +7,7 @@ import { useDisplaySnapshot } from '../../layout/useDisplaySnapshot';
 import { useEditorStore } from '../../stores/editorStore';
 import { exportDisabledReason } from './exportDisabledReason';
 import { useCircuitStore } from '../../stores/circuitStore';
+import './ExportMenu.css';
 import { Button, Menu, Tooltip, type MenuEntry } from '../ui';
 
 export const COPIED_NOTICE_MS = 1500;
@@ -44,9 +45,16 @@ export function ExportMenu() {
   if (stale) {
     return (
       <Tooltip label={exportDisabledReason({ errorLine, previewPaused })} placement="below">
-        <span style={{ display: 'inline-flex' }}>
-          <Button size="sm" icon={<ChevronDown size={12} />} className="nuclei-export-btn" disabled>Export</Button>
-        </span>
+        {/* A plain button with the Button primitive's classes: the primitive owns aria-disabled, and this one must be focusable. */}
+        <button
+          type="button"
+          aria-disabled="true"
+          onClick={(e) => e.preventDefault()}
+          className="nuclei-btn nuclei-btn--secondary nuclei-btn--sm nuclei-export-btn nuclei-export-btn--unavailable"
+        >
+          <ChevronDown size={12} />
+          Export
+        </button>
       </Tooltip>
     );
   }

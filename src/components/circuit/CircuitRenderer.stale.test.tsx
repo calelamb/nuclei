@@ -40,7 +40,7 @@ describe('CircuitRenderer when the live preview was paused', () => {
     expect(screen.getByText(/Preview paused/)).toBeTruthy();
   });
 
-  it('keeps the export trigger mounted (disabled) while the diagram is stale so the header never hops', () => {
+  it('keeps the export trigger mounted (unavailable) while the diagram is stale so the header never hops', () => {
     render(<CircuitRenderer />);
     act(() => { useCircuitStore.getState().setSnapshot(snap); });
     expect(screen.getByRole('button', { name: /export/i }).hasAttribute('disabled')).toBe(false);
@@ -49,7 +49,8 @@ describe('CircuitRenderer when the live preview was paused', () => {
       useCircuitStore.getState().setError('invalid syntax');
       useEditorStore.getState().setErrors([{ line: 5, message: 'invalid syntax' }]);
     });
-    expect(screen.getByRole('button', { name: /export/i }).hasAttribute('disabled')).toBe(true);
+    const exportBtn = screen.getByRole('button', { name: /export/i });
+    expect(exportBtn.getAttribute('aria-disabled')).toBe('true');
   });
 });
 

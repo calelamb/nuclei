@@ -14,7 +14,7 @@ describe('describeStale', () => {
   it('lets a pending update outrank an error from older code (interaction-r-07), but not a pause', () => {
     expect(describeStale({ ...quiet, previewPending: true, errorLine: 4 })?.label).toBe('Updating…');
     expect(describeStale({ ...quiet, previewPending: true, error: 'x' })?.label).toBe('Updating…');
-    expect(describeStale({ ...quiet, previewPending: true, previewPaused: true })?.label).toBe('Preview paused · previous code');
+    expect(describeStale({ ...quiet, previewPending: true, previewPaused: true })?.label).toBe('Preview paused');
     expect(describeStale({ ...quiet, errorLine: 4 })?.label).toBe('Out of date · line 4');
   });
 

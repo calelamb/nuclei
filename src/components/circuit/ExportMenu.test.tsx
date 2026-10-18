@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { useCircuitStore } from '../../stores/circuitStore';
 import { ExportMenu, COPIED_NOTICE_MS } from './ExportMenu';
+import { TOOLTIP_OPEN_DELAY_MS } from '../ui/Tooltip';
 import { exportDisabledReason } from './exportDisabledReason';
 
 const copyCode = vi.fn();
@@ -68,6 +69,28 @@ describe('ExportMenu', () => {
     useCircuitStore.setState({ snapshot: null });
     const { container } = render(<ExportMenu />);
     expect(container.textContent).toBe('');
+  });
+});
+
+const staleSnap = { framework: 'qiskit' as const, qubit_count: 1, classical_bit_count: 0, depth: 1, gates: [{ type: 'H', targets: [0], controls: [], params: [], layer: 0 }] };
+
+describe('ExportMenu while the diagram is stale (r7-research-04)', () => {
+  function goStale() {
+    act(() => { useCircuitStore.getState().setSnapshot(null); useCircuitStore.getState().setPreviewPaused(true); });
+  }
+
+  it('stays focusable so the reason shows on keyboard focus, and refuses to open', () => {
+    render(<ExportMenu />);
+    act(() => { useCircuitStore.getState().setSnapshot(staleSnap); });
+    goStale();
+    const trigger = screen.getByRole('button', { name: /export/i });
+    expect((trigger as HTMLButtonElement).disabled).toBe(false);
+    expect(trigger.getAttribute('aria-disabled')).toBe('true');
+    fireEvent.focus(trigger);
+    act(() => { vi.advanceTimersByTime(TOOLTIP_OPEN_DELAY_MS + 10); });
+    expect(screen.getByRole('tooltip').textContent).toBe('Run the code to export');
+    fireEvent.click(trigger);
+    expect(screen.queryByRole('menu')).toBeNull();
   });
 });
 
