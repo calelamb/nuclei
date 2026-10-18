@@ -22,7 +22,8 @@ export function QecNoProjectNotice() {
   const dim = { color: colors.textMuted, fontSize: 12, lineHeight: 1.5, margin: 0 } as const;
   // The web build has no presets: its main panel is the analysis view, so the CSV drop zone is always in front of the person.
   const analyzeHere = isWebBuild() || preset === 'analyze';
-  const showHint = csvName === null || !analyzeHere;
+  // The web build's main panel already carries the drop-CSV line in its empty state; saying it here too made it three times.
+  const showHint = !isWeb && (csvName === null || !analyzeHere);
   const hint = csvName !== null
     ? `${csvName} is loaded. Open Analyze to see it.`
     : analyzeHere

@@ -1,7 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { QEC_LIGHT_TOKENS } from './qecTokens';
 import { QEC_WORKBENCH_DIMENSIONS } from '../stores/qecWorkbenchStore';
 
 const qecStyles = readFileSync(
@@ -77,5 +76,12 @@ describe('QEC workbench CSS tokens', () => {
     expect(QEC_WORKBENCH_DIMENSIONS.tray).toEqual({ min: 180, max: 520 });
     expect(qecStyles).toMatch(/\.qec-tray--expanded\s*{[^}]*height: var\(--qec-tray-height\);/);
     expect(qecStyles).not.toMatch(/\.qec-tray--expanded\s*{[^}]*height: min\(/);
+  });
+});
+
+describe('QEC lineage mark (design-r4-04)', () => {
+  it('is neutral by default and green only for a passed check', () => {
+    expect(qecStyles).toMatch(/\.qec-lineage-state__mark \{[^}]*border: 2px solid var\(--qec-text-muted\)/);
+    expect(qecStyles).toMatch(/\.qec-lineage-state__mark\[data-state='passed'\] \{[^}]*var\(--qec-success\)/);
   });
 });

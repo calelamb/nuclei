@@ -19,10 +19,12 @@ beforeEach(() => { resetQecWorkbenchTestState(); useQecCampaignStore.getState().
 afterEach(() => { cleanup(); vi.restoreAllMocks(); });
 
 describe('no-project sidebar copy (qec-r-14, qec-r-21)', () => {
-  it('on the web the drop zone is the main panel, so say so and offer no preset switch', () => {
+  it('on the web the main panel owns the drop-CSV line, so the side note says it once and offers no preset switch', () => {
     vi.spyOn(buildTarget, 'isWebBuild').mockReturnValue(true);
-    render(<QecNoProjectNotice />);
-    expect(screen.getByText(/Drop a sinter stats CSV in the main panel/)).toBeTruthy();
+    const web = { getPlatform: () => 'web' } as unknown as PlatformBridge;
+    render(<PlatformProvider bridge={web}><QecNoProjectNotice /></PlatformProvider>);
+    expect(screen.queryByText(/Drop a sinter stats CSV/)).toBeNull();
+    expect(screen.getByText(/Studies need a project folder/)).toBeTruthy();
     expect(screen.queryByRole('button', { name: 'Open Analyze' })).toBeNull();
   });
 

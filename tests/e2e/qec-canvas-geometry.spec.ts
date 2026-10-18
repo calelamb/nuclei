@@ -204,3 +204,46 @@ test('@qec at 900px the sources fold to a rail so the canvas keeps the width and
   await page.getByRole('button', { name: 'Show sources' }).click();
   await expect(page.getByRole('heading', { name: 'Sources / Data' })).toBeVisible();
 });
+
+/** Figures are sized on purpose: the detector graph keeps a drawable canvas, the lattice stops growing, nodes are pixel-sized. */
+const FIGURE_VIEWPORTS = [{ width: 1440, height: 900 }, { width: 1100, height: 800 }, { width: 900, height: 700 }];
+const MIN_DETECTOR_CANVAS_HEIGHT = 280;
+const MAX_LATTICE_CARD_HEIGHT = 520;
+const MAX_LATTICE_NODE_PX = 24;
+const MIN_COLUMN_WIDTH = 300;
+
+for (const viewport of FIGURE_VIEWPORTS) {
+  test(`@qec detector graph keeps its floor and the lattice stays capped with pixel nodes at ${viewport.width}x${viewport.height}`, async ({ page }) => {
+    await page.setViewportSize(viewport);
+    await installEngineStub(page);
+    await page.goto(FIXTURE_URL);
+    await page.getByRole('button', { name: 'QEC Workbench' }).click();
+    await page.getByRole('radio', { name: 'Build' }).click();
+    await loadSurfaceCircuit(page);
+    await setInspector(page, false);
+    const canvas = page.locator('.qec-instrument[data-panel="detector-graph"] canvas').first();
+    await canvas.scrollIntoViewIfNeeded();
+    const canvasBox = await canvas.boundingBox();
+    expect(canvasBox?.height ?? 0, 'detector canvas height').toBeGreaterThanOrEqual(MIN_DETECTOR_CANVAS_HEIGHT - 1);
+    const lattice = page.locator('.qec-instrument[data-panel="lattice"]');
+    const latticeBox = await lattice.boundingBox();
+    expect(latticeBox?.height ?? 0, 'lattice card height').toBeLessThanOrEqual(MAX_LATTICE_CARD_HEIGHT);
+    const nodeSizes = await lattice.locator('[data-lattice-node]').evaluateAll((nodes) => nodes.map((n) => n.getBoundingClientRect().width));
+    expect(nodeSizes.length).toBeGreaterThan(0);
+    for (const size of nodeSizes) expect(size, 'lattice node size in px').toBeLessThanOrEqual(MAX_LATTICE_NODE_PX);
+  });
+}
+
+test('@qec no empty-canvas column drops under 300px at 900x700', async ({ page }) => {
+  await page.setViewportSize({ width: 900, height: 700 });
+  await installEngineStub(page);
+  await page.goto(FIXTURE_URL);
+  await page.getByRole('button', { name: 'QEC Workbench' }).click();
+  for (const preset of ['Analyze', 'Build'] as const) {
+    await page.getByRole('radio', { name: preset }).click();
+    await setInspector(page, false);
+    for (const box of await instrumentBoxes(page)) {
+      expect(box.w, `${preset}: ${box.id} width`).toBeGreaterThanOrEqual(MIN_COLUMN_WIDTH);
+    }
+  }
+});
