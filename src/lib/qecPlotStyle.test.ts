@@ -26,6 +26,69 @@ describe('palette', () => {
   });
 });
 
+/** CIEDE2000 colour difference between two #rrggbb colours (Sharma, Wu & Dalal reference formulation). */
+function deltaE2000(a: string, b: string): number {
+  const lab = (hex: string): [number, number, number] => {
+    const lin = (i: number) => {
+      const v = parseInt(hex.slice(1 + i * 2, 3 + i * 2), 16) / 255;
+      return v <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4;
+    };
+    const [r, g, bl] = [lin(0), lin(1), lin(2)];
+    const x = (0.4124564 * r + 0.3575761 * g + 0.1804375 * bl) / 0.95047;
+    const y = 0.2126729 * r + 0.7151522 * g + 0.072175 * bl;
+    const z = (0.0193339 * r + 0.119192 * g + 0.9503041 * bl) / 1.08883;
+    const f = (t: number) => (t > 216 / 24389 ? Math.cbrt(t) : (24389 / 27 * t + 16) / 116);
+    return [116 * f(y) - 16, 500 * (f(x) - f(y)), 200 * (f(y) - f(z))];
+  };
+  const rad = (d: number) => (d * Math.PI) / 180;
+  const deg = (r: number) => ((r * 180) / Math.PI + 360) % 360;
+  const [L1, a1, b1] = lab(a);
+  const [L2, a2, b2] = lab(b);
+  const Cbar = (Math.hypot(a1, b1) + Math.hypot(a2, b2)) / 2;
+  const G = 0.5 * (1 - Math.sqrt(Cbar ** 7 / (Cbar ** 7 + 25 ** 7)));
+  const [ap1, ap2] = [a1 * (1 + G), a2 * (1 + G)];
+  const [C1, C2] = [Math.hypot(ap1, b1), Math.hypot(ap2, b2)];
+  const [h1, h2] = [C1 === 0 ? 0 : deg(Math.atan2(b1, ap1)), C2 === 0 ? 0 : deg(Math.atan2(b2, ap2))];
+  const dL = L2 - L1;
+  const dC = C2 - C1;
+  let dh = h2 - h1;
+  if (C1 * C2 === 0) dh = 0;
+  else if (dh > 180) dh -= 360;
+  else if (dh < -180) dh += 360;
+  const dH = 2 * Math.sqrt(C1 * C2) * Math.sin(rad(dh / 2));
+  const Lb = (L1 + L2) / 2;
+  const Cb = (C1 + C2) / 2;
+  let hb = h1 + h2;
+  if (C1 * C2 !== 0) hb = Math.abs(h1 - h2) <= 180 ? (h1 + h2) / 2 : (h1 + h2 + (h1 + h2 < 360 ? 360 : -360)) / 2;
+  const T = 1 - 0.17 * Math.cos(rad(hb - 30)) + 0.24 * Math.cos(rad(2 * hb)) + 0.32 * Math.cos(rad(3 * hb + 6)) - 0.2 * Math.cos(rad(4 * hb - 63));
+  const dTheta = 30 * Math.exp(-(((hb - 275) / 25) ** 2));
+  const Rc = 2 * Math.sqrt(Cb ** 7 / (Cb ** 7 + 25 ** 7));
+  const Sl = 1 + (0.015 * (Lb - 50) ** 2) / Math.sqrt(20 + (Lb - 50) ** 2);
+  const Sc = 1 + 0.045 * Cb;
+  const Sh = 1 + 0.015 * Cb * T;
+  const Rt = -Math.sin(rad(2 * dTheta)) * Rc;
+  return Math.sqrt((dL / Sl) ** 2 + (dC / Sc) ** 2 + (dH / Sh) ** 2 + Rt * (dC / Sc) * (dH / Sh));
+}
+
+describe('palette separation (qec-r-30)', () => {
+  it.each(['dark', 'light'] as const)('keeps every pair among the first 6 %s colours at least 15 delta-E apart', (mode) => {
+    const colors = DISTANCE_PALETTE[mode].slice(0, 6);
+    for (let i = 0; i < colors.length; i += 1) {
+      for (let j = i + 1; j < colors.length; j += 1) {
+        expect(deltaE2000(colors[i], colors[j]), `${colors[i]} vs ${colors[j]}`).toBeGreaterThanOrEqual(15);
+      }
+    }
+  });
+
+  it.each(['dark', 'light'] as const)('reserves purple for Dirac: no purple or fuchsia slot in %s mode', (mode) => {
+    for (const c of DISTANCE_PALETTE[mode]) {
+      const [r, g, b] = [1, 3, 5].map((i) => parseInt(c.slice(i, i + 2), 16));
+      const purple = b >= r && r > g + 20;
+      expect(purple, c).toBe(false);
+    }
+  });
+});
+
 describe('buildPlotStyle', () => {
   it('gives each distance its own colour, shared across decoders', () => {
     const { byKey } = buildPlotStyle(grid(['mwpm', 'uf']), 'dark', '#999');
