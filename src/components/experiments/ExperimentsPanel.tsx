@@ -100,7 +100,7 @@ function ExperimentRow({
         <IconButton
           size="sm"
           aria-label={`Edit ${spec.name}`}
-          title="Edit experiment"
+          tooltip={{ label: 'Edit experiment' }}
           onClick={(e) => { e.stopPropagation(); onEdit(); }}
         >
           <Pencil size={ICON_SIZE.xs} strokeWidth={ICON_STROKE} />

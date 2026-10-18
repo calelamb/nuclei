@@ -253,4 +253,39 @@ describe('NewExperimentForm', () => {
     expect(getByText(/2 parameters unnamed/)).toBeTruthy();
     expect(document.querySelector('input[placeholder="theta"]')).toBeNull();
   });
+
+  describe('focus (research-r-06)', () => {
+    it('takes focus on the Name field when it opens', () => {
+      const { getByLabelText } = render(<NewExperimentForm projectRoot="/proj" onClose={vi.fn()} />);
+      expect(document.activeElement).toBe(getByLabelText('Name'));
+    });
+
+    it('returns focus to the control that opened it when it closes', async () => {
+      const opener = document.createElement('button');
+      document.body.appendChild(opener);
+      opener.focus();
+      const onClose = vi.fn();
+      const { getByText } = render(<NewExperimentForm projectRoot="/proj" onClose={onClose} />);
+      fireEvent.click(getByText('Close'));
+      expect(onClose).toHaveBeenCalledTimes(1);
+      await waitFor(() => expect(document.activeElement).toBe(opener));
+      opener.remove();
+    });
+
+    it('closes a pristine form on Escape', () => {
+      const onClose = vi.fn();
+      const { getByLabelText } = render(<NewExperimentForm projectRoot="/proj" onClose={onClose} />);
+      fireEvent.keyDown(getByLabelText('Name'), { key: 'Escape' });
+      expect(onClose).toHaveBeenCalledTimes(1);
+    });
+
+    it('does not discard edits on Escape: it moves focus to Close instead', () => {
+      const onClose = vi.fn();
+      const { getByLabelText, getByText } = render(<NewExperimentForm projectRoot="/proj" onClose={onClose} />);
+      fireEvent.change(getByLabelText('Name'), { target: { value: 'half-typed' } });
+      fireEvent.keyDown(getByLabelText('Name'), { key: 'Escape' });
+      expect(onClose).not.toHaveBeenCalled();
+      expect(document.activeElement).toBe(getByText('Close').closest('button'));
+    });
+  });
 });
