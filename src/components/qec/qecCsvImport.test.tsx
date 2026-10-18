@@ -41,6 +41,19 @@ describe('CSV drop on the empty threshold panel', () => {
     expect((await findByRole('alert')).textContent).toMatch(/missing column/);
   });
 
+  it('puts the error inside the drop-zone card, leads with a plain sentence, and links it to the picker (r7-research-05)', async () => {
+    const { getByTestId, findByRole, getByRole } = render(<QecAnalysisView />);
+    await act(async () => { dropFiles(getByTestId('csv-drop-zone'), [csvFile('not,a,sinter')]); });
+    const alert = await findByRole('alert');
+    expect(getByTestId('csv-drop-zone').contains(alert)).toBe(true);
+    expect(alert.textContent).toMatch(/This isn't a sinter stats CSV\./);
+    expect(alert.textContent).toMatch(/missing columns/);
+    const picker = getByRole('button', { name: 'Choose file…' });
+    expect(picker.getAttribute('aria-describedby')).toBe(alert.id);
+    // exactly one alert: no second copy at the top edge
+    expect(document.querySelectorAll('[role="alert"]').length).toBe(1);
+  });
+
   it('accepts a file from the picker input', async () => {
     const { getByLabelText, container } = render(<ThresholdPanel />);
     const input = getByLabelText('Choose sinter stats CSV') as HTMLInputElement;

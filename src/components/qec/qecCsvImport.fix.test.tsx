@@ -60,7 +60,7 @@ describe('CSV errors are always visible', () => {
     useQecCampaignStore.getState().finishCampaign('', parseSinterCsvDetailed(goldenCsv).rows);
     const { container, findByRole } = render(<QecAnalysisView />);
     await act(async () => { dropFiles(container.firstChild as Element, [csvFile('a,b\n1,2')]); });
-    expect((await findByRole('alert')).textContent).toMatch(/Not a sinter stats CSV/);
+    expect((await findByRole('alert')).textContent).toMatch(/isn't a sinter stats CSV/);
   });
 });
 
