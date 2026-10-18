@@ -12,6 +12,7 @@ import { CLOSE_UNAUTHENTICATED, KERNEL_AUTH_REJECTED_MESSAGE, KernelAuthRejected
 import type { PyodideKernel } from '../platform/pyodideKernel';
 import type { PyodideRuntimeClient } from '../platform/pyodide/pyodideClient';
 import { KERNEL_NOT_RESPONDING_MESSAGE, normalizeKernelError } from '../lib/kernelErrors';
+import { logKernelFailureOnce } from './kernelFailureLog';
 import { shouldMarkStaleWhileReparsing, shouldReparseAfterRestart } from './restartReparse';
 import { registerKernelRetry, registerKernelStop } from '../lib/kernelControl';
 import { useHardwareStore } from '../stores/hardwareStore';
@@ -80,7 +81,7 @@ export function useKernel() {
     useEditorStore.getState().setKernelConnected(false);
     useEditorStore.getState().setKernelReady(false);
     useEditorStore.getState().setKernelStatus('failed', KERNEL_AUTH_REJECTED_MESSAGE);
-    useSimulationStore.getState().addOutput(`Error: ${KERNEL_AUTH_REJECTED_MESSAGE}`, 'stderr');
+    logKernelFailureOnce(KERNEL_AUTH_REJECTED_MESSAGE);
   }, []);
 
   /** Surface a start/connect failure once: status chip, banner state, and the Terminal. */
@@ -91,7 +92,7 @@ export function useKernel() {
     useEditorStore.getState().setKernelConnected(false);
     useEditorStore.getState().setKernelReady(false);
     useEditorStore.getState().setKernelStatus('failed', message);
-    useSimulationStore.getState().addOutput(`Error: ${message}`, 'stderr');
+    logKernelFailureOnce(message);
     hadFailureRef.current = true;
   }, []);
 
