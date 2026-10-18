@@ -205,11 +205,11 @@ export function PanelLayout() {
     setBottomHeight((h) => Math.max(h, EXPANDED_HISTOGRAM_HEIGHT));
     setHistogramExpanded(true);
   }, [setBottomCollapsed, setBottomTab, setHistogramExpanded]);
-  const bottomTab = useBottomPanelStore((s) => s.activeTab);
-  // The expansion is temporary: collapsing the panel or leaving the Histogram tab hands the rail its chip back.
+  // The expansion is temporary: collapsing the panel hands the rail its chip back. Switching to another tab keeps
+  // it (the Histogram tab stays listed), otherwise a Terminal tab with no output would leave the panel empty.
   useEffect(() => {
-    if (histogramExpanded && (bottomCollapsed || bottomTab !== 'histogram')) setHistogramExpanded(false);
-  }, [histogramExpanded, bottomCollapsed, bottomTab, setHistogramExpanded]);
+    if (histogramExpanded && bottomCollapsed) setHistogramExpanded(false);
+  }, [histogramExpanded, bottomCollapsed, setHistogramExpanded]);
   // The chip that had focus is gone: land on the Histogram tab instead of <body>.
   useEffect(() => {
     if (!histogramExpanded) return undefined;
