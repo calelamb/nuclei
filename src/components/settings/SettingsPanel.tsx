@@ -1,5 +1,5 @@
-import { useContext, useEffect, useState } from 'react';
-import { RotateCcw, Sun, Moon, Monitor, Eye, EyeOff, ExternalLink } from 'lucide-react';
+import { useContext, useEffect, useRef, useState } from 'react';
+import { RotateCcw, Sun, Moon, Monitor, ExternalLink } from 'lucide-react';
 import { useThemeStore, type ThemePreference } from '../../stores/themeStore';
 import { useNavigationStore } from '../../stores/navigationStore';
 import { useUIModeStore, type UIMode } from '../../stores/uiModeStore';
@@ -9,9 +9,10 @@ import { useSimulationStore } from '../../stores/simulationStore';
 import { useDiracStore } from '../../stores/diracStore';
 import { useFrameworksStore } from '../../stores/frameworksStore';
 import { EnvironmentPanel } from './EnvironmentPanel';
-import { Button, IconButton, SegmentedControl, Select, Switch, TextInput } from '../ui';
+import { Button, IconButton, SecretField, SegmentedControl, Select, Switch, TextInput } from '../ui';
 import { WorkspaceSection, HelpSection } from './SettingsWorkspaceHelp';
 import { Section, SettingRow, RowLabelContext } from './SettingsPrimitives';
+import { onSettingsFocusRequest, takeSettingsFocusRequest } from './settingsFocus';
 import { validateApiKey } from '../../lib/apiKey';
 import { API_KEY_PRIVACY_NOTE } from '../../config/apiKeyCopy';
 
@@ -38,13 +39,15 @@ function NumberStepper({ value, min, max, step, onChange }: {
   value: number; min: number; max: number; step: number; onChange: (v: number) => void;
 }) {
   const colors = useThemeStore((s) => s.colors);
+  // Name the steppers from their row ("Decrease font size"), not a bare "Decrease".
+  const subject = (useContext(RowLabelContext) ?? 'value').toLowerCase();
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-      <IconButton size="sm" variant="secondary" aria-label="Decrease" onClick={() => onChange(Math.max(min, value - step))}>{'\u2212'}</IconButton>
+      <IconButton size="sm" variant="secondary" aria-label={`Decrease ${subject}`} onClick={() => onChange(Math.max(min, value - step))}>{'\u2212'}</IconButton>
       <span style={{ fontSize: 11, color: colors.text, minWidth: 28, textAlign: 'center', fontFamily: TYPOGRAPHY.fontSans }}>
         {value}
       </span>
-      <IconButton size="sm" variant="secondary" aria-label="Increase" onClick={() => onChange(Math.min(max, value + step))}>+</IconButton>
+      <IconButton size="sm" variant="secondary" aria-label={`Increase ${subject}`} onClick={() => onChange(Math.min(max, value + step))}>+</IconButton>
     </div>
   );
 }
@@ -96,7 +99,6 @@ function ApiKeyInput() {
   const colors = useThemeStore((s) => s.colors);
   const currentKey = useDiracStore((s) => s.apiKey);
   const [keyValue, setKeyValue] = useState(currentKey ?? '');
-  const [visible, setVisible] = useState(false);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState('');
 
@@ -124,34 +126,16 @@ function ApiKeyInput() {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-        <div style={{
-          flex: 1, display: 'flex', alignItems: 'center',
-          background: colors.bgElevated,
-          border: `1px solid ${error ? colors.error : colors.border}`,
-          borderRadius: 4, overflow: 'hidden',
-        }} className="nuclei-field-group">
-          <input
-            type={visible ? 'text' : 'password'}
-            value={keyValue}
-            onChange={(e) => handleChange(e.target.value)}
-            placeholder="sk-ant-..."
-            data-settings-autofocus=""
-            aria-label="Anthropic API key"
-            style={{
-              flex: 1, padding: '5px 8px', fontSize: 11,
-              fontFamily: TYPOGRAPHY.fontMono,
-              background: 'transparent', border: 'none',
-              color: colors.text,
-            }}
-          />
-          <IconButton
-            size="sm"
-            onClick={() => setVisible(!visible)}
-            aria-label={visible ? 'Hide API key' : 'Show API key'}
-          >
-            {visible ? <EyeOff size={12} /> : <Eye size={12} />}
-          </IconButton>
-        </div>
+        <SecretField
+          size="lg"
+          noun="API key"
+          value={keyValue}
+          invalid={Boolean(error)}
+          onChange={(e) => handleChange(e.target.value)}
+          placeholder="sk-ant-..."
+          data-settings-autofocus=""
+          aria-label="Anthropic API key"
+        />
         <Button size="lg" className="nuclei-btn--dirac" onClick={handleSave}>
           {saved ? 'Saved' : 'Save'}
         </Button>
@@ -212,8 +196,25 @@ export function SettingsPanel() {
     if (settingsTarget) clearSettingsTarget();
   }, [settingsTarget, clearSettingsTarget]);
 
+  // Opened from the keyboard: move focus onto the first control, once the frame has settled
+  // (a closing palette hands focus back to the editor in the same tick).
+  const rootRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    let frame = 0;
+    const focusFirst = () => {
+      if (!takeSettingsFocusRequest()) return;
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(() => {
+        rootRef.current?.querySelector<HTMLElement>('button:not([disabled]), input, select')?.focus();
+      });
+    };
+    focusFirst();
+    const off = onSettingsFocusRequest(focusFirst);
+    return () => { off(); cancelAnimationFrame(frame); };
+  }, []);
+
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+    <div ref={rootRef} style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
       <div style={{ flex: 1, minHeight: 0, overflowY: 'auto' }}>
         {/* ── Appearance ── */}
         <Section id="appearance" title="Appearance" defaultOpen>
@@ -230,7 +231,7 @@ export function SettingsPanel() {
             />
           </SettingRow>
           {workspaceMode === 'learn' && (
-            <SettingRow label="UI Mode">
+            <SettingRow label="Level" hint="Beginner shows the editor and results. Intermediate adds Explorer and hardware. Advanced adds the Dirac agent.">
               <SettingSelect<UIMode>
                 value={uiMode}
                 options={[

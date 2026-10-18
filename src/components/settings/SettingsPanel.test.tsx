@@ -8,6 +8,8 @@ import { useNavigationStore } from '../../stores/navigationStore';
 import { useWorkspaceStore } from '../../stores/workspaceStore';
 import { useHelpOverlayStore } from '../../stores/helpOverlayStore';
 import { useWhatsNewStore } from '../../stores/whatsNewStore';
+import { useUIModeStore } from '../../stores/uiModeStore';
+import { requestSettingsFocus, takeSettingsFocusRequest } from './settingsFocus';
 
 beforeAll(() => {
   window.matchMedia = ((query: string) => ({
@@ -105,5 +107,44 @@ describe('SettingsPanel', () => {
     render(<SettingsPanel />);
     expect(screen.getByText(API_KEY_PRIVACY_NOTE)).toBeTruthy();
     expect(document.body.textContent).not.toMatch(/never leaves your machine/);
+  });
+
+  it('calls the Learn level "Level" (as the status bar and palette do), not "UI Mode"', () => {
+    useWorkspaceStore.setState({ mode: 'learn' });
+    useUIModeStore.setState({ mode: 'intermediate' });
+    render(<SettingsPanel />);
+    expect(screen.getByLabelText('Level')).toBeTruthy();
+    expect(screen.queryByText('UI Mode')).toBeNull();
+  });
+
+  it('names each stepper after its row so "Decrease" is never ambiguous', () => {
+    render(<SettingsPanel />);
+    expect(screen.getByRole('button', { name: 'Decrease font size' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Increase font size' })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Decrease' })).toBeNull();
+  });
+
+  it('renders the API key as the shared 32px TextInput with the reveal toggle inside it', () => {
+    render(<SettingsPanel />);
+    const key = screen.getByLabelText('Anthropic API key');
+    expect(key.className).toContain('nuclei-input--lg');
+    expect(key.closest('.nuclei-input-wrap')?.querySelector('button')?.getAttribute('aria-label')).toBe('Show API key');
+  });
+
+  it('moves focus into Settings when it is opened from the keyboard', async () => {
+    const outside = document.createElement('textarea');
+    document.body.appendChild(outside);
+    outside.focus();
+    const { container } = render(<SettingsPanel />);
+    requestSettingsFocus();
+    await waitFor(() => expect(container.contains(document.activeElement)).toBe(true));
+    outside.remove();
+  });
+
+  it('a request made before the panel mounts is honoured on mount, and consumed once', async () => {
+    requestSettingsFocus();
+    const { container } = render(<SettingsPanel />);
+    await waitFor(() => expect(container.contains(document.activeElement)).toBe(true));
+    expect(takeSettingsFocusRequest()).toBe(false);
   });
 });

@@ -3,6 +3,7 @@ import { PanelLayout } from './components/layout/PanelLayout';
 import { PlatformProvider, usePlatform, loadBridge } from './platform/PlatformProvider';
 import { Onboarding } from './components/onboarding/Onboarding';
 import { KeyboardShortcuts } from './components/onboarding/KeyboardShortcuts';
+import { requestSettingsFocus } from './components/settings/settingsFocus';
 import { CommandPalette, buildCommands } from './components/commandPalette/CommandPalette';
 import { UpdateBanner } from './components/UpdateBanner';
 import { MissingDependencyBanner } from './components/onboarding/MissingDependencyBanner';
@@ -129,7 +130,12 @@ function AppInner() {
   const toggleDirac = useDiracPanelStore((s) => s.toggle);
   const focusDirac = useDiracPanelStore((s) => s.focusInput);
   // Workspace navigation + command-palette context (PRD 11 Phase D).
-  const navigate = useNavigationStore((s) => s.setActiveView);
+  const setActiveView = useNavigationStore((s) => s.setActiveView);
+  // Keyboard/palette navigation to Settings also moves focus into it (it would otherwise stay in the editor).
+  const navigate = useCallback((view: Parameters<typeof setActiveView>[0]) => {
+    setActiveView(view);
+    if (view === 'settings') requestSettingsFocus();
+  }, [setActiveView]);
   const workspaceMode = useWorkspaceStore((s) => s.mode);
   const experimentalFeatures = useSettingsStore((s) => s.general.experimentalFeatures);
   const experiments = useExperimentStore((s) => s.experiments);
@@ -394,7 +400,7 @@ function AppInner() {
         case 'toggle-dirac': toggleDirac(); break;
         case 'focus-dirac': focusDirac(); break;
         case 'compose': setComposeOpen((s) => !s); break;
-        case 'settings': useNavigationStore.getState().setActiveView('settings'); break;
+        case 'settings': navigate('settings'); break;
         // Open the Launch modal (submit to hardware). Separate from the plain
         // Run shortcut, which stays on the classical simulator.
         case 'launch': useHardwareStore.getState().openLaunch(); break;
@@ -431,7 +437,7 @@ function AppInner() {
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [fileOps, themeToggle, cycleMode, toggleDirac, focusDirac, setShowShortcuts, setShowCommandPalette, setComposeOpen, showOnboarding]);
+  }, [fileOps, themeToggle, cycleMode, toggleDirac, focusDirac, navigate, setShowShortcuts, setShowCommandPalette, setComposeOpen, showOnboarding]);
 
   return (
     <>
