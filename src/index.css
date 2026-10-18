@@ -40,9 +40,10 @@ button, input, select, textarea {
 }
 
 /* ── Icons: one stroke weight everywhere. CSS beats lucide's strokeWidth attribute, so per-icon props
-   cannot drift; intentional exceptions opt in with .nuclei-icon--thin (mirrors ICON_STROKE in tokens.ts). ── */
+   cannot drift; intentional exceptions opt in with .nuclei-icon--thin / .nuclei-icon--bold (check and cross marks) (mirrors ICON_STROKE in tokens.ts). ── */
 .lucide { stroke-width: 1.75; }
 .lucide.nuclei-icon--thin { stroke-width: 1.25; }
+.lucide.nuclei-icon--bold { stroke-width: 2.5; }
 
 /* ── Accessibility: one focus ring for the whole app (see --focus-ring in tokens.css) ── */
 :focus-visible {

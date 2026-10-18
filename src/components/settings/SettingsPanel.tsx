@@ -284,7 +284,7 @@ export function SettingsPanel() {
               fontFamily: TYPOGRAPHY.fontSans, display: 'block',
               marginBottom: 4,
             }}>
-              API Key
+              API key
             </span>
             <ApiKeyInput />
           </div>

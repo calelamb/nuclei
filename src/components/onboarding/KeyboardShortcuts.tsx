@@ -41,7 +41,7 @@ export function KeyboardShortcuts({ onClose }: KeyboardShortcutsProps) {
   const shadow = useThemeStore((s) => s.shadow);
   useEscapeToClose(onClose);
   const dialogRef = useRef<HTMLDivElement>(null);
-  useFocusTrap(dialogRef);
+  useFocusTrap(dialogRef, { autoFocusSkip: '.nuclei-dialog__header' });
   const groups = useMemo(() => shortcutGroups(), []);
   const web = isWebBuild();
 
@@ -75,12 +75,12 @@ export function KeyboardShortcuts({ onClose }: KeyboardShortcutsProps) {
         }}
         onClick={(e) => e.stopPropagation()}
       >
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+        <div className="nuclei-dialog__header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
           <h2 style={{
             color: colors.text, fontSize: 16, fontWeight: 600,
             fontFamily: TYPOGRAPHY.fontSans,
           }}>
-            Keyboard Shortcuts
+            Keyboard shortcuts
           </h2>
           <IconButton aria-label="Close shortcuts" onClick={onClose}><X size={16} /></IconButton>
         </div>

@@ -66,10 +66,11 @@ export function LessonView({ lesson, trackId }: LessonViewProps) {
     titleRef.current?.focus({ preventScroll: true });
     const { restore, setRestore } = useLearnSectionStore.getState();
     if (restore && restore.lessonId === lesson.id) {
-      setRestore(null);
       setCurrentBlockIndex(restore.blockIndex);
+      // Cleared only after the scroll lands, so a StrictMode remount (cleanup cancels the frame) can retry.
       const frame = requestAnimationFrame(() => {
         document.getElementById(`block-${restore.blockIndex}`)?.scrollIntoView({ block: 'start' });
+        setRestore(null);
       });
       return () => cancelAnimationFrame(frame);
     }

@@ -39,8 +39,8 @@ export const Checkbox = forwardRef<HTMLInputElement, CheckboxProps>(function Che
       />
       <span className="nuclei-checkbox__box" aria-hidden="true">
         {indeterminate
-          ? <Minus size={ICON_SIZE.xs} strokeWidth={3} />
-          : <Check size={ICON_SIZE.xs} strokeWidth={3} />}
+          ? <Minus size={ICON_SIZE.xs} className="nuclei-icon--bold" />
+          : <Check size={ICON_SIZE.xs} className="nuclei-icon--bold" />}
       </span>
       {label !== undefined && <span className="nuclei-checkbox__label">{label}</span>}
     </label>

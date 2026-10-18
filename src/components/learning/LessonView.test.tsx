@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 import { describe, it, expect, afterEach, beforeEach, vi } from 'vitest';
+import { StrictMode } from 'react';
 import { act, render, cleanup, screen, fireEvent } from '@testing-library/react';
 import { LessonView } from './LessonView';
 import { useLearnStore } from '../../stores/learnStore';
@@ -54,6 +55,16 @@ describe('LessonView', () => {
       expect(useLearnSectionStore.getState().restore).toBeNull();
       resolve();
     }));
+  });
+
+  it('still restores the reading position under StrictMode remounts', async () => {
+    useLearnSectionStore.setState({ restore: { trackId: track.id, lessonId: lesson.id, blockIndex: 1 } });
+    const scrollSpy = Element.prototype.scrollIntoView as ReturnType<typeof vi.fn>;
+    scrollSpy.mockClear?.();
+    render(<StrictMode><LessonView lesson={lesson} trackId={track.id} /></StrictMode>);
+    await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+    expect(scrollSpy).toHaveBeenCalled();
+    expect(useLearnSectionStore.getState().restore).toBeNull();
   });
 
   it('activates a block when its top crosses a line about 30% down the reader, not when a sliver is visible', () => {

@@ -73,6 +73,13 @@ describe('design guards', () => {
     expect(css).toMatch(new RegExp(`\\.lucide\\s*\\{\\s*stroke-width:\\s*${ICON_STROKE}\\s*;`));
   });
 
+  it('opts heavy glyphs in by class (nuclei-icon--bold), not by a strokeWidth prop the global rule would override', () => {
+    const owned = (f: { rel: string }) => /^components\/(ui|learning|challenges|community|settings|onboarding)\//.test(f.rel);
+    expect(offenders((f) => owned(f) && /<(Check|X|Minus)\b[^>]*strokeWidth=\{[2-9]/.test(f.text))).toEqual([]);
+    const css = files.find((f) => f.rel === 'index.css')?.text ?? '';
+    expect(css).toMatch(/\.lucide\.nuclei-icon--bold\s*\{/);
+  });
+
   it('uses the single overline tracking (0.04em) in the Learn, challenge, community, settings and onboarding trees', () => {
     const owned = (f: { rel: string }) => /^components\/(learning|challenges|community|settings|onboarding)\//.test(f.rel) && !f.rel.endsWith('KeyboardShortcuts.tsx');
     expect(offenders((f) => owned(f) && (/letterSpacing:\s*0\.[45]\b(?!\s*\w)/.test(f.text) || /letter-spacing:\s*0\.[45]px/.test(f.text)))).toEqual([]);

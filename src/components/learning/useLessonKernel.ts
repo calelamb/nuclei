@@ -9,6 +9,9 @@ export type LessonKernelMessage = { type: string; [key: string]: unknown };
 /** Shown when the desktop kernel socket is not open. Never used on the web build. */
 export const DESKTOP_KERNEL_UNAVAILABLE = 'Kernel not connected. Make sure the Python kernel is running.';
 
+/** Web fallback when the browser Python engine could not start. */
+export const WEB_KERNEL_UNAVAILABLE = "Couldn't start the browser Python engine. Check your connection or content blocker, then retry.";
+
 interface WebKernel {
   init(): Promise<void>;
   send(msg: LessonKernelMessage): Promise<void>;
@@ -21,6 +24,8 @@ export interface LessonKernel {
   loading: boolean;
   /** Web only: the current boot stage, e.g. "Downloading Python". */
   stage: string | null;
+  /** What to tell the user when send() resolved false: platform-appropriate, never the desktop sentence on the web. */
+  unavailableMessage: () => string;
 }
 
 interface Options {
@@ -47,35 +52,61 @@ export function useLessonKernel({ onMessage, onInitError, onReady }: Options): L
   const handlers = useRef({ onMessage, onInitError, onReady });
   useEffect(() => { handlers.current = { onMessage, onInitError, onReady }; });
 
-  useEffect(() => {
-    if (!isWeb) return undefined;
-    let cancelled = false;
-    const offs: Array<() => void> = [];
+  const cancelledRef = useRef(false);
+  const offsRef = useRef<Array<() => void>>([]);
+  const lastErrorRef = useRef<string>(WEB_KERNEL_UNAVAILABLE);
+
+  const startBoot = useCallback((): Promise<WebKernel | null> => {
+    const fail = (e: unknown): null => {
+      const message = e instanceof Error ? e.message : String(e);
+      lastErrorRef.current = message;
+      if (!cancelledRef.current) {
+        setLoading(false);
+        handlers.current.onInitError(message);
+      }
+      return null;
+    };
     const boot = (async (): Promise<WebKernel | null> => {
-      const [{ PyodideKernel }, { pyodideRuntime }] = await Promise.all([
-        import('../../platform/pyodideKernel'),
-        import('../../platform/pyodide/pyodideClient'),
-      ]);
-      if (cancelled) return null;
-      offs.push(pyodideRuntime.onProgress((p) => { if (!cancelled) setStage(p?.label ?? null); }));
-      offs.push(pyodideRuntime.onState((s) => { if (!cancelled) setLoading(s !== 'ready'); }));
+      let modules;
+      try {
+        modules = await Promise.all([
+          import('../../platform/pyodideKernel'),
+          import('../../platform/pyodide/pyodideClient'),
+        ]);
+      } catch (e) {
+        return fail(e);
+      }
+      const [{ PyodideKernel }, { pyodideRuntime }] = modules;
+      if (cancelledRef.current) return null;
+      offsRef.current.forEach((off) => off());
+      offsRef.current = [
+        pyodideRuntime.onProgress((p) => { if (!cancelledRef.current) setStage(p?.label ?? null); }),
+        pyodideRuntime.onState((s) => { if (!cancelledRef.current) setLoading(s !== 'ready'); }),
+      ];
       setLoading(!pyodideRuntime.isReady());
       const kernel = new PyodideKernel((msg) => handlers.current.onMessage(msg as KernelResponse));
       try {
         await kernel.init();
       } catch (e) {
-        if (!cancelled) {
-          setLoading(false);
-          handlers.current.onInitError(e instanceof Error ? e.message : String(e));
-        }
-        return null;
+        return fail(e);
       }
-      if (!cancelled) { setLoading(false); setStage(null); handlers.current.onReady?.(); }
+      if (!cancelledRef.current) { setLoading(false); setStage(null); handlers.current.onReady?.(); }
       return kernel;
     })();
     webRef.current = boot;
-    return () => { cancelled = true; offs.forEach((off) => off()); };
-  }, [isWeb]);
+    return boot;
+  }, []);
+
+  useEffect(() => {
+    if (!isWeb) return undefined;
+    cancelledRef.current = false;
+    void startBoot();
+    return () => {
+      cancelledRef.current = true;
+      offsRef.current.forEach((off) => off());
+      offsRef.current = [];
+    };
+  }, [isWeb, startBoot]);
 
   useEffect(() => {
     if (isWeb) return undefined;
@@ -106,7 +137,12 @@ export function useLessonKernel({ onMessage, onInitError, onReady }: Options): L
 
   const send = useCallback(async (msg: LessonKernelMessage): Promise<boolean> => {
     if (isWeb) {
-      const kernel = await webRef.current;
+      let kernel = await webRef.current;
+      if (!kernel) {
+        // The earlier boot failed (offline, blocked worker): Run is the retry.
+        setLoading(true);
+        kernel = await startBoot();
+      }
       if (!kernel) return false;
       await kernel.send(msg);
       return true;
@@ -116,7 +152,11 @@ export function useLessonKernel({ onMessage, onInitError, onReady }: Options): L
       return true;
     }
     return false;
-  }, [isWeb]);
+  }, [isWeb, startBoot]);
 
-  return { send, loading, stage };
+  const unavailableMessage = useCallback(
+    () => (isWeb ? lastErrorRef.current : DESKTOP_KERNEL_UNAVAILABLE),
+    [isWeb],
+  );
+  return { send, loading, stage, unavailableMessage };
 }

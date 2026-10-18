@@ -9,6 +9,8 @@ const boot = vi.hoisted(() => {
     onMessage: (() => {}) as (m: unknown) => void,
     progress: null as ((p: { label: string } | null) => void) | null,
     stateCb: null as ((s: string) => void) | null,
+    failInit: false,
+    inits: 0,
   };
   return state;
 });
@@ -27,7 +29,11 @@ vi.mock('../../platform/pyodide/pyodideClient', () => ({
 vi.mock('../../platform/pyodideKernel', () => ({
   PyodideKernel: class {
     constructor(onMessage: (m: unknown) => void) { boot.onMessage = onMessage; }
-    init() { return new Promise<void>((resolve) => { boot.resolveInit = resolve; }); }
+    init() {
+      boot.inits += 1;
+      if (boot.failInit) return Promise.reject(new Error("Couldn't start the browser Python engine. Check your connection or content blocker, then retry."));
+      return new Promise<void>((resolve) => { boot.resolveInit = resolve; });
+    }
     async send(msg: Record<string, unknown>) { boot.sent.push(msg); }
   },
 }));
@@ -36,7 +42,7 @@ import { InteractiveDemo } from './InteractiveDemo';
 
 const CODE = 'from qiskit import QuantumCircuit\nqc = QuantumCircuit(1)\nqc.h(0)';
 
-beforeEach(() => { boot.sent = []; });
+beforeEach(() => { boot.sent = []; boot.failInit = false; boot.inits = 0; });
 afterEach(cleanup);
 
 describe('InteractiveDemo on the web before Python is ready', () => {
@@ -60,5 +66,21 @@ describe('InteractiveDemo on the web before Python is ready', () => {
     await act(async () => { await Promise.resolve(); });
     await act(async () => { boot.resolveInit(); await Promise.resolve(); });
     expect(boot.sent.some((m) => m.type === 'parse')).toBe(true);
+  });
+});
+
+describe('InteractiveDemo on the web when Python fails to start', () => {
+  it('keeps the web error on Run (never the desktop sentence) and retries the boot', async () => {
+    boot.failInit = true;
+    render(<InteractiveDemo code={CODE} framework="qiskit" description="demo" />);
+    await act(async () => { await Promise.resolve(); await Promise.resolve(); });
+    expect(screen.getByText(/Couldn't start the browser Python engine/)).toBeTruthy();
+    expect(boot.inits).toBe(1);
+
+    fireEvent.click(screen.getByRole('button', { name: /^Run$/ }));
+    await act(async () => { await Promise.resolve(); await Promise.resolve(); await Promise.resolve(); });
+    expect(boot.inits).toBe(2);
+    expect(screen.queryByText(/Kernel not connected/)).toBeNull();
+    expect(screen.getByText(/Couldn't start the browser Python engine/)).toBeTruthy();
   });
 });

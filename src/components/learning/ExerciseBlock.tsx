@@ -7,7 +7,7 @@ import { Lightbulb, CheckCircle, XCircle, HelpCircle, Terminal } from 'lucide-re
 import { hasExpectedDistribution, isQuantumCode, shouldAutoGrade, validateExerciseResult } from './exerciseValidation';
 import { UnsupportedNotice } from './UnsupportedNotice';
 import { OutcomeResults } from './OutcomeResults';
-import { DESKTOP_KERNEL_UNAVAILABLE, useLessonKernel } from './useLessonKernel';
+import { useLessonKernel } from './useLessonKernel';
 import { LessonRunButton } from './LessonRunButton';
 import { Button } from '../ui';
 import '../dirac/dirac.css';
@@ -170,7 +170,7 @@ export function ExerciseBlock({
     kernelSend(message).then(
       (sent) => {
         if (!sent) {
-          setError(DESKTOP_KERNEL_UNAVAILABLE);
+          setError(kernel.unavailableMessage());
           setIsRunning(false);
         }
       },

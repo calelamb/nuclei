@@ -64,7 +64,7 @@ export function ProblemEditor({ challenge }: ProblemEditorProps) {
             fontFamily: TYPOGRAPHY.fontSans,
             marginBottom: 4,
           }}>
-            Function Contract
+            Function contract
           </div>
           <div style={{
             display: 'flex',

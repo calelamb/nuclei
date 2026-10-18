@@ -8,7 +8,7 @@ import { Button, SegmentedControl, type SegmentedOption } from '../ui';
 import { isQuantumCode } from './exerciseValidation';
 import { UnsupportedNotice } from './UnsupportedNotice';
 import { OutcomeResults } from './OutcomeResults';
-import { DESKTOP_KERNEL_UNAVAILABLE, useLessonKernel } from './useLessonKernel';
+import { useLessonKernel } from './useLessonKernel';
 import { LessonRunButton } from './LessonRunButton';
 import { formatCircuitMeta } from './outcomeDistribution';
 import './demo.css';
@@ -108,7 +108,7 @@ export function InteractiveDemo({ code: initialCode, framework, description, exp
     kernelSend(message).then(
       (sent) => {
         if (!sent) {
-          setError(DESKTOP_KERNEL_UNAVAILABLE);
+          setError(kernel.unavailableMessage());
           setIsRunning(false);
         }
       },
@@ -190,7 +190,7 @@ export function InteractiveDemo({ code: initialCode, framework, description, exp
         )}
 
         <span className="demo__spacer" />
-        <Button onClick={handleOpenInEditor} icon={<ExternalLink size={12} aria-hidden="true" />}>Open in Editor</Button>
+        <Button onClick={handleOpenInEditor} icon={<ExternalLink size={12} aria-hidden="true" />}>Open in editor</Button>
       </div>
 
       {snapshot && hasCircuit && (
