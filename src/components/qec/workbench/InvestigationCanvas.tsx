@@ -1,8 +1,9 @@
-import { Activity, ChartSpline, Clock3, Grid3x3, HelpCircle, Link2, PanelRightClose, PanelRightOpen, Share2 } from 'lucide-react';
+import { Activity, ChartSpline, Clock3, Grid3x3, HelpCircle, PanelRightClose, PanelRightOpen, Share2 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import type { CSSProperties, ReactElement, ReactNode, RefObject } from 'react';
 import { resolveQecPanels, type QecWorkbenchPanelDef, type QecWorkbenchPanelId } from '../../../layout/qecPanelRegistry';
 import { useQecStore } from '../../../stores/qecStore';
+import { useProjectStore } from '../../../stores/projectStore';
 import { useQecWorkbenchStore } from '../../../stores/qecWorkbenchStore';
 import { ICON_SIZE, ICON_STROKE } from '../../../styles/tokens';
 import { Button, IconButton } from '../../ui';
@@ -52,9 +53,6 @@ function CanvasHeader({ inspectorOpen, onToggleInspector, toggleRef }: Investiga
         <h1>Investigation Canvas</h1>
       </div>
       <div className="qec-investigation__actions">
-        <div className="qec-instrument-state" role="status" title="Selecting something in one instrument selects it in the others">
-          <Link2 aria-hidden="true" size={ICON_SIZE.sm} /><span>Selections linked</span>
-        </div>
         <IconButton
           ref={toggleRef}
           variant="secondary"
@@ -87,9 +85,20 @@ function EmptyInstrument({ panelId }: { panelId: QecWorkbenchPanelId }): ReactEl
   );
 }
 
-function circuitHint(study: unknown, count: number): string {
-  if (study === null) return 'Create a Study to attach a .stim circuit.';
-  return count > 1 ? 'Double-click a .stim file under Referenced files to open it.' : 'This Study references no .stim circuit.';
+export interface CircuitHintContext {
+  readonly projectOpen: boolean;
+  readonly studyCount: number;
+  readonly hasActiveStudy: boolean;
+  readonly circuitCount: number;
+}
+
+/** What to do next to get a circuit on the canvas, depending on how far the researcher already is. */
+export function circuitHint({ projectOpen, studyCount, hasActiveStudy, circuitCount }: CircuitHintContext): string {
+  if (!projectOpen) return 'Open a project folder to load circuits.';
+  if (!hasActiveStudy) {
+    return studyCount > 0 ? 'Choose a Study to see its circuit.' : 'Create a Study to attach a .stim circuit.';
+  }
+  return circuitCount > 1 ? 'Double-click a .stim file under Referenced files to open it.' : 'This Study references no .stim circuit.';
 }
 
 /** One click to the circuit when the active Study names exactly one; otherwise say where the files are. */
@@ -97,10 +106,15 @@ function OpenCircuitAction(): ReactElement {
   const studies = useQecStudyStore((state) => state.studies);
   const activeStudyId = useQecStudyUiStore((state) => state.activeStudyId);
   const { open, error } = useOpenSource();
+  const projectOpen = useProjectStore((state) => state.projectRoot !== null);
   const study = studies.find((entry) => entry.study.id === activeStudyId)?.study ?? null;
   const circuits = study?.sources.filter((source) => source.kind === 'stim') ?? [];
   if (circuits.length !== 1) {
-    return <span className="qec-instrument__hint">{circuitHint(study, circuits.length)}</span>;
+    return (
+      <span className="qec-instrument__hint">
+        {circuitHint({ projectOpen, studyCount: studies.length, hasActiveStudy: study !== null, circuitCount: circuits.length })}
+      </span>
+    );
   }
   const circuit = circuits[0];
   return (
