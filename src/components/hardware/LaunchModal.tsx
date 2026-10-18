@@ -8,7 +8,6 @@ import { useThemeStore } from '../../stores/themeStore';
 import { useFrameworksStore } from '../../stores/frameworksStore';
 import { usePlatform } from '../../platform/PlatformProvider';
 import { getHardware } from '../../App';
-import { requestHardwareBackends } from '../../lib/hardwareBackendsSender';
 import { LaunchBackendStep } from './LaunchBackendStep';
 import { LaunchProviderGrid } from './LaunchProviderGrid';
 import {
@@ -67,12 +66,6 @@ export function LaunchModal() {
       setShotsDraft(String(shots || DEFAULT_SHOTS));
     });
   }, [open, shots]);
-
-  // Ask the kernel what each connected provider really exposes; nothing is invented client-side.
-  const connectedKey = providers.filter((p) => p.connected).map((p) => p.name).join(',');
-  useEffect(() => {
-    if (open && !isWeb) requestHardwareBackends();
-  }, [open, isWeb, connectedKey]);
 
   // Keyboard focus follows the step: into the dialog's step two, back onto the card that opened it.
   useEffect(() => {

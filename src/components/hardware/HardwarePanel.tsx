@@ -1,10 +1,9 @@
 import { Badge, Button, EmptyState, Select } from '../ui';
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { ChevronDown, ChevronRight, Download, Rocket, Trash2 } from 'lucide-react';
 import { useThemeStore } from '../../stores/themeStore';
 import { useHardwareStore } from '../../stores/hardwareStore';
 import { hasActiveJobForBackend } from '../../lib/hardwareJobs';
-import { requestHardwareBackends } from '../../lib/hardwareBackendsSender';
 import { openExternal } from '../../lib/openExternal';
 import { DESKTOP_DOWNLOAD_URL } from '../../config/docsLinks';
 import { useFrameworksStore } from '../../stores/frameworksStore';
@@ -111,12 +110,6 @@ export function HardwarePanel() {
   const cudaqInstalled = useFrameworksStore((s) => s.status?.installed.includes('cuda-q') ?? false);
 
   const anyConnected = providers.some((p) => p.connected);
-  const connectedKey = providers.filter((p) => p.connected).map((p) => p.name).join(',');
-
-  // Backends are only ever what the kernel reports for connected providers.
-  useEffect(() => {
-    if (!isWeb) requestHardwareBackends();
-  }, [isWeb, connectedKey]);
 
   const availableBackends = backends;
   const selectedBackendInfo = availableBackends.find((b) => b.name === selectedBackend);

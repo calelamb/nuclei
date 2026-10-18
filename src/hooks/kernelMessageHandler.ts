@@ -1,3 +1,4 @@
+import { requestHardwareBackends } from '../lib/hardwareBackendsSender';
 import { useEditorStore } from '../stores/editorStore';
 import { useCircuitStore } from '../stores/circuitStore';
 import { useSimulationStore } from '../stores/simulationStore';
@@ -247,6 +248,8 @@ export function handleKernelMessage(msg: KernelResponse, connectTimers: ConnectT
       if (msg.success) {
         hw.setProviderConnected(msg.provider as never, true);
         hw.setConnectionError(msg.provider as never, null);
+        // The one place backend discovery is triggered: a provider just became usable.
+        requestHardwareBackends();
       } else {
         hw.setProviderConnected(msg.provider as never, false);
         hw.setConnectionError(
@@ -265,6 +268,7 @@ export function handleKernelMessage(msg: KernelResponse, connectTimers: ConnectT
       for (const p of msg.providers) {
         hw.setProviderConnected(p as never, true);
       }
+      if (msg.providers.length > 0) requestHardwareBackends();
       break;
     }
     case 'hardware_jobs': {
