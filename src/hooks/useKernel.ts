@@ -12,6 +12,7 @@ import { CLOSE_UNAUTHENTICATED, KERNEL_AUTH_REJECTED_MESSAGE, KernelAuthRejected
 import type { PyodideKernel } from '../platform/pyodideKernel';
 import type { PyodideRuntimeClient } from '../platform/pyodide/pyodideClient';
 import { KERNEL_NOT_RESPONDING_MESSAGE, normalizeKernelError } from '../lib/kernelErrors';
+import { shouldReparseAfterRestart } from './restartReparse';
 import { registerKernelRetry, registerKernelStop } from '../lib/kernelControl';
 import { useHardwareStore } from '../stores/hardwareStore';
 import { useQecStore } from '../stores/qecStore';
@@ -172,6 +173,7 @@ export function useKernel() {
   const watchRuntime = useCallback((runtime: PyodideRuntimeClient) => {
     runtimeSubscriptionsRef.current.forEach((off) => off());
     let wasReady = runtime.isReady();
+    let restarted = false;
     const offProgress = runtime.onProgress((progress) => {
       if (progress) useEditorStore.getState().setKernelProgress(progress);
     });
@@ -185,9 +187,18 @@ export function useKernel() {
       } else if (state === 'ready') {
         wasReady = true;
         markWebReady();
+        // A killed worker (Stop, runaway Run) forgot the circuit: parse the buffer again so the
+        // diagram matches the code. After a paused preview we do not, or a runaway loop would
+        // restart Python forever.
+        if (restarted && shouldReparseAfterRestart(useCircuitStore.getState().previewPaused)) {
+          const { code, framework, filePath } = useEditorStore.getState();
+          if (code.trim()) void pyodideRef.current?.send({ type: 'parse', code, language: kernelLanguageFor(framework, filePath) });
+        }
+        restarted = false;
       } else if (wasReady) {
         // The worker was killed (runaway code): boot a fresh one right away.
         wasReady = false;
+        restarted = true;
         runtime.ensureStarted().catch((e: unknown) => failKernel(normalizeKernelError(e)));
       }
     });

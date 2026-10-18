@@ -1,13 +1,23 @@
 import { useThemeStore } from '../../stores/themeStore';
 import { TYPOGRAPHY } from '../../styles/tokens';
 
+const PREVIEW_PAUSED_MESSAGE = 'Preview paused: this code runs longer than 5 s. Press Run to execute.';
+
 /**
  * Shown in the circuit panel until the kernel has parsed a circuit: a faint
  * ghost of what is coming (two wires, an H, a CNOT) and one line of guidance.
  * A parse error replaces the ghost with the message so it is never hidden.
  */
-export function CircuitEmptyState({ error }: { error: string | null }) {
+export function CircuitEmptyState({ error, paused = false }: { error: string | null; paused?: boolean }) {
   const colors = useThemeStore((s) => s.colors);
+
+  if (paused && !error) {
+    return (
+      <div role="status" style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
+        <span style={{ color: colors.textMuted, fontSize: 13, fontFamily: TYPOGRAPHY.fontSans, textAlign: 'center', lineHeight: 1.5 }}>{PREVIEW_PAUSED_MESSAGE}</span>
+      </div>
+    );
+  }
 
   if (error) {
     return (

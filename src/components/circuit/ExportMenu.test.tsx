@@ -47,6 +47,15 @@ describe('ExportMenu', () => {
     expect(screen.getByRole('status').textContent).toBe('');
   });
 
+  it('swaps the trigger label to Copied instead of laying a box over the diagram', async () => {
+    copyCode.mockResolvedValue(undefined);
+    render(<ExportMenu />);
+    await pick('Copy code');
+    expect(screen.getByRole('button', { name: /copied/i })).toBeTruthy();
+    act(() => { vi.advanceTimersByTime(COPIED_NOTICE_MS + 10); });
+    expect(screen.getByRole('button', { name: /export/i })).toBeTruthy();
+  });
+
   it('reports a blocked clipboard instead of swallowing the error', async () => {
     copyCode.mockRejectedValue(new Error('denied'));
     render(<ExportMenu />);

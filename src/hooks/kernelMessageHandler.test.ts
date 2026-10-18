@@ -2,6 +2,7 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { handleKernelMessage } from './kernelMessageHandler';
 import { useSimulationStore } from '../stores/simulationStore';
+import { useCircuitStore } from '../stores/circuitStore';
 
 describe('handleKernelMessage — run failure tracking', () => {
   beforeEach(() => {
@@ -29,15 +30,28 @@ describe('handleKernelMessage — run failure tracking', () => {
     expect(useSimulationStore.getState().terminalOutput).toEqual([]);
   });
 
-  it('tells the user in the Terminal when a live preview was stopped for running too long', () => {
+  it('treats a timed-out live preview as a paused preview, not an error: nothing in the Terminal, no circuit error', () => {
+    useCircuitStore.setState({ error: null, previewPaused: false });
     handleKernelMessage(
       { type: 'error', message: 'Your code ran for more than 5 seconds and was stopped. Python is restarting.', phase: 'parse', code: 'timeout' },
       {},
     );
-    const lines = useSimulationStore.getState().terminalOutput;
-    expect(lines).toHaveLength(1);
-    expect(lines[0]).toMatchObject({ type: 'info' });
-    expect(lines[0].text).toContain('stopped');
+    expect(useSimulationStore.getState().terminalOutput).toEqual([]);
     expect(useSimulationStore.getState().lastRunFailed).toBe(false);
+    expect(useCircuitStore.getState().previewPaused).toBe(true);
+    expect(useCircuitStore.getState().error).toBeNull();
+  });
+
+  it('clears the paused state when the next preview parses', () => {
+    useCircuitStore.setState({ previewPaused: true });
+    handleKernelMessage({ type: 'snapshot', data: { framework: 'qiskit', qubit_count: 1, classical_bit_count: 0, depth: 1, gates: [] } as never }, {});
+    expect(useCircuitStore.getState().previewPaused).toBe(false);
+  });
+
+  it('still reports an ordinary parse error as an error', () => {
+    useCircuitStore.setState({ error: null, previewPaused: false });
+    handleKernelMessage({ type: 'error', message: 'invalid syntax', phase: 'parse', code: 'execution_error' }, {});
+    expect(useCircuitStore.getState().error).toBe('invalid syntax');
+    expect(useCircuitStore.getState().previewPaused).toBe(false);
   });
 });

@@ -194,10 +194,9 @@ export function handleKernelMessage(msg: KernelResponse, connectTimers: ConnectT
       // belongs on the editor (marker + circuit panel), never in the Terminal,
       // and it must not cancel a run that happens to be in flight.
       const isParseError = msg.phase === 'parse';
-      // A preview that had to be killed is the one parse event worth saying out loud.
-      if (isParseError && msg.code === 'timeout') {
-        useSimulationStore.getState().addOutput(shortMessage, 'info');
-      }
+      // A preview that had to be killed is not an error and not Terminal output: the circuit
+      // panel says it paused and that Run will execute the code for real.
+      const isPreviewTimeout = isParseError && msg.code === 'timeout';
       if (!isParseError) {
         useSimulationStore.getState().addOutput(`Error: ${detail}`, 'stderr');
         useSimulationStore.getState().setRunning(false);
@@ -221,6 +220,11 @@ export function handleKernelMessage(msg: KernelResponse, connectTimers: ConnectT
           .catch(() => { /* graceful — app still works without a rewrite */ });
       }
 
+      if (isPreviewTimeout) {
+        useCircuitStore.getState().setSnapshot(null);
+        useCircuitStore.getState().setPreviewPaused(true);
+        break;
+      }
       if (msg.phase === 'parse') {
         useCircuitStore.getState().setSnapshot(null);
         useCircuitStore.getState().setError(msg.message);
