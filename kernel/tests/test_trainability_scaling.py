@@ -3,14 +3,12 @@
 from __future__ import annotations
 
 import json
-import math
 import re
 
 import numpy as np
 import pytest
 
 from kernel.tests._trainability_physics_helpers import Builder, hea_circuit, two_axis_hea
-from kernel.trainability import scaling
 from kernel.trainability._analysis_common import AnalysisError
 from kernel.trainability.scaling import fit_scaling, scaling_study
 

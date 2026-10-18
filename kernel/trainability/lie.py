@@ -52,7 +52,7 @@ from kernel.trainability._lie_dense import DENSE_MAX_QUBITS, dense_closure_budge
 from kernel.trainability._ppe_compile import ints_to_words, ops_to_ints
 from kernel.trainability._symplectic_frame import CliffordFrame
 from kernel.trainability.ir import ParamCircuit
-from kernel.trainability.symplectic import PauliArray, anticommute_matrix
+from kernel.trainability.symplectic import PauliArray
 
 __all__ = ["lie_algebra", "ints_to_ops", "generator_label"]
 
