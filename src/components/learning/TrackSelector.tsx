@@ -1,4 +1,4 @@
-import { BookOpen, ChevronRight, CheckCircle, Lock } from 'lucide-react';
+import { ArrowLeft, BookOpen, ChevronRight, CheckCircle, Lock } from 'lucide-react';
 import { useLearnStore } from '../../stores/learnStore';
 import { TRACKS } from '../../data/lessons/tracks';
 import type { Track } from '../../data/lessons/types';
@@ -7,21 +7,30 @@ import { ConceptMap } from './ConceptMap';
 import { Glossary } from './Glossary';
 import { CapstonesPanel } from './CapstonesPanel';
 import { LEARN_SECTION_LABELS, useLearnSectionStore, type LearnSection } from './learnSectionStore';
-import { Tabs, type TabOption } from '../ui';
+import { Badge, Button, Tabs, type TabOption } from '../ui';
 import './trackSelector.css';
 
 interface TrackCardProps {
   track: Track;
   completedLessons: readonly string[];
   started: boolean;
+  /** The lesson the learner was reading in this track, if they stepped out of it. */
+  inProgressLessonId?: string;
   onOpen: (trackId: string, lessonId: string) => void;
 }
 
-function TrackCard({ track, completedLessons, started, onOpen }: TrackCardProps) {
+/** "Beginner → Advanced" style labels in the data are Title Case; the UI is sentence case. */
+function sentenceCase(text: string): string {
+  return text.charAt(0).toUpperCase() + text.slice(1).toLowerCase();
+}
+
+function TrackCard({ track, completedLessons, started, inProgressLessonId, onOpen }: TrackCardProps) {
   const lessonCount = track.lessons.length;
   const hasLessons = lessonCount > 0;
   const completed = track.lessons.filter((l) => completedLessons.includes(l.id)).length;
-  const resume = track.lessons.find((l) => !completedLessons.includes(l.id)) ?? track.lessons[0];
+  const resume = track.lessons.find((l) => l.id === inProgressLessonId)
+    ?? track.lessons.find((l) => !completedLessons.includes(l.id))
+    ?? track.lessons[0];
   const allDone = hasLessons && completed === lessonCount;
 
   return (
@@ -39,7 +48,7 @@ function TrackCard({ track, completedLessons, started, onOpen }: TrackCardProps)
         <span className="track-card__desc">{track.description}</span>
         <span className="track-card__meta">
           <span>{hasLessons ? `${lessonCount} lessons` : 'Coming soon'}</span>
-          <span className="track-card__level">{track.difficulty}</span>
+          <Badge tone="neutral">{sentenceCase(track.difficulty)}</Badge>
           {started && hasLessons && (
             <>
               <span className="track-card__bar" role="progressbar" aria-label={`${track.title} progress`} aria-valuemin={0} aria-valuemax={lessonCount} aria-valuenow={completed}>
@@ -65,6 +74,7 @@ function TrackList() {
   const setCurrentLesson = useLearnStore((s) => s.setCurrentLesson);
   const completedLessons = useLearnStore((s) => s.completedLessons);
   const lessonProgress = useLearnStore((s) => s.lessonProgress);
+  const returnTo = useLearnSectionStore((s) => s.returnTo);
 
   return (
     <div className="tracks__list">
@@ -74,6 +84,7 @@ function TrackList() {
           track={track}
           completedLessons={completedLessons}
           started={track.lessons.some((l) => lessonProgress[l.id])}
+          inProgressLessonId={returnTo?.trackId === track.id ? returnTo.lessonId : undefined}
           onOpen={setCurrentLesson}
         />
       ))}
@@ -96,6 +107,34 @@ function SectionBody({ section }: { section: LearnSection }) {
   }
 }
 
+/** Shown after the learner steps out of a lesson to browse Concepts, Glossary and friends. */
+function BackToLesson() {
+  const returnTo = useLearnSectionStore((s) => s.returnTo);
+  const setReturnTo = useLearnSectionStore((s) => s.setReturnTo);
+  const setRestore = useLearnSectionStore((s) => s.setRestore);
+  const setCurrentLesson = useLearnStore((s) => s.setCurrentLesson);
+  if (!returnTo) return null;
+  const track = TRACKS.find((t) => t.id === returnTo.trackId);
+  const index = track?.lessons.findIndex((l) => l.id === returnTo.lessonId) ?? -1;
+  const lesson = index >= 0 ? track?.lessons[index] : undefined;
+  if (!track || !lesson) return null;
+  return (
+    <Button
+      className="tracks__back"
+      variant="secondary"
+      size="sm"
+      icon={<ArrowLeft size={14} aria-hidden="true" />}
+      onClick={() => {
+        setRestore(returnTo);
+        setReturnTo(null);
+        setCurrentLesson(track.id, lesson.id);
+      }}
+    >
+      Back to lesson {index + 1} · {lesson.title}
+    </Button>
+  );
+}
+
 export function TrackSelector() {
   const section = useLearnSectionStore((s) => s.section);
   const setSection = useLearnSectionStore((s) => s.setSection);
@@ -103,6 +142,7 @@ export function TrackSelector() {
   return (
     <div className="tracks">
       <div className="tracks__inner">
+        <BackToLesson />
         <header className="tracks__header">
           <span className="tracks__badge"><BookOpen size={20} aria-hidden="true" /></span>
           <div>

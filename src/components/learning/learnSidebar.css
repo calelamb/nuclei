@@ -60,7 +60,6 @@
 .gloss-entry[aria-expanded='true'] { border-color: var(--color-accent-quantum); }
 .gloss-entry__head { display: flex; align-items: center; gap: var(--space-2); margin-bottom: var(--space-1); }
 .gloss-entry__term { font-size: var(--font-size-code); font-weight: var(--font-weight-semibold); color: var(--color-text-primary); }
-.gloss-entry__cat { padding: 1px var(--space-1); border-radius: var(--radius-xs); background: color-mix(in srgb, var(--cat-color) 14%, transparent); color: var(--cat-color); font-size: var(--font-size-caption); font-weight: var(--font-weight-semibold); text-transform: capitalize; }
 .gloss-entry__def { font-size: var(--font-size-chrome-label); line-height: 1.5; color: var(--color-text-secondary); }
 .gloss-entry__def:not(.gloss-entry__def--open) { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; line-clamp: 3; overflow: hidden; }
 .gloss-entry__def--open { margin-bottom: var(--space-2); }

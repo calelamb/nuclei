@@ -1,4 +1,5 @@
 import { useRef, useEffect } from 'react';
+import { useLearnSectionStore } from './learnSectionStore';
 import { useLearnStore } from '../../stores/learnStore';
 import { getTrack } from '../../data/lessons/tracks';
 import { TextBlock } from './TextBlock';
@@ -47,6 +48,8 @@ export function LessonView({ lesson, trackId }: LessonViewProps) {
   const currentBlockIndex = useLearnStore((s) => s.currentBlockIndex);
   const completedLessons = useLearnStore((s) => s.completedLessons);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const titleRef = useRef<HTMLHeadingElement>(null);
+  const setReturnTo = useLearnSectionStore((s) => s.setReturnTo);
 
   const track = getTrack(trackId);
   const lessons = track?.lessons ?? [];
@@ -56,11 +59,28 @@ export function LessonView({ lesson, trackId }: LessonViewProps) {
   const isCompleted = completedLessons.includes(lesson.id);
   const blockCount = lesson.contentBlocks.length;
 
-  // New lesson: jump to top and reset the reading position.
+  // New lesson: land on its heading (so keyboard and screen-reader users start here, not on <body>),
+  // then either return to a remembered reading position or jump to the top.
   useEffect(() => {
+    titleRef.current?.focus({ preventScroll: true });
+    const { restore, setRestore } = useLearnSectionStore.getState();
+    if (restore && restore.lessonId === lesson.id) {
+      setRestore(null);
+      setCurrentBlockIndex(restore.blockIndex);
+      const frame = requestAnimationFrame(() => {
+        document.getElementById(`block-${restore.blockIndex}`)?.scrollIntoView({ block: 'start' });
+      });
+      return () => cancelAnimationFrame(frame);
+    }
     scrollRef.current?.scrollTo(0, 0);
     setCurrentBlockIndex(0);
+    return undefined;
   }, [lesson.id, setCurrentBlockIndex]);
+
+  const leaveToTracks = () => {
+    setReturnTo({ trackId, lessonId: lesson.id, blockIndex: currentBlockIndex });
+    clearCurrentLesson();
+  };
 
   // Scroll-spy: mark the topmost visible block as current so the nav sidebar's
   // outline follows the reader. A trigger line near the top of the viewport
@@ -91,7 +111,7 @@ export function LessonView({ lesson, trackId }: LessonViewProps) {
   return (
     <div className="lesson">
       <div className="lesson__bar">
-        <Button size="sm" variant="ghost" icon={<ArrowLeft size={14} aria-hidden="true" />} onClick={clearCurrentLesson} title="Back to all tracks">
+        <Button size="sm" variant="ghost" icon={<ArrowLeft size={14} aria-hidden="true" />} onClick={leaveToTracks} title="Back to all tracks">
           Tracks
         </Button>
 
@@ -138,7 +158,7 @@ export function LessonView({ lesson, trackId }: LessonViewProps) {
             </Badge>
             <span>~{lesson.estimatedMinutes} min</span>
           </div>
-          <h1 className="lesson__title">{lesson.title}</h1>
+          <h1 ref={titleRef} tabIndex={-1} className="lesson__title">{lesson.title}</h1>
           <p className="lesson__lede">{lesson.description}</p>
         </header>
 

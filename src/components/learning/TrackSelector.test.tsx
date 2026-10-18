@@ -9,7 +9,7 @@ import { CURATED_VIDEOS } from '../../data/videos/curatedLibrary';
 
 beforeEach(() => {
   localStorage.clear();
-  useLearnSectionStore.setState({ section: 'tracks' });
+  useLearnSectionStore.setState({ section: 'tracks', returnTo: null, restore: null });
   useLearnStore.setState({ completedLessons: [], lessonProgress: {}, currentTrackId: null, currentLessonId: null });
 });
 afterEach(cleanup);
@@ -55,5 +55,28 @@ describe('TrackSelector', () => {
     const nvidia = CURATED_VIDEOS.filter((v) => v.creator === 'nvidia').length;
     expect(within(shelf).getAllByRole('button').length).toBe(nvidia);
     expect(nvidia).toBeLessThan(all);
+  });
+
+  it('offers a way back to the lesson the learner left, and reopens it at the same spot', () => {
+    const track = TRACKS.find((t) => t.lessons.length > 2)!;
+    const lesson = track.lessons[2];
+    const setCurrentLesson = vi.fn();
+    useLearnStore.setState({ setCurrentLesson });
+    useLearnSectionStore.setState({ section: 'glossary', returnTo: { trackId: track.id, lessonId: lesson.id, blockIndex: 4 } });
+    render(<TrackSelector />);
+    fireEvent.click(screen.getByRole('button', { name: new RegExp(`Back to lesson 3.*${lesson.title}`) }));
+    expect(setCurrentLesson).toHaveBeenCalledWith(track.id, lesson.id);
+    expect(useLearnSectionStore.getState().returnTo).toBeNull();
+    expect(useLearnSectionStore.getState().restore).toEqual({ trackId: track.id, lessonId: lesson.id, blockIndex: 4 });
+  });
+
+  it('resumes a track at the lesson the learner was reading rather than the first incomplete one', () => {
+    const setCurrentLesson = vi.fn();
+    const track = TRACKS.find((t) => t.lessons.length > 2)!;
+    useLearnStore.setState({ setCurrentLesson });
+    useLearnSectionStore.setState({ returnTo: { trackId: track.id, lessonId: track.lessons[2].id, blockIndex: 0 } });
+    render(<TrackSelector />);
+    fireEvent.click(screen.getByRole('button', { name: new RegExp(track.title) }));
+    expect(setCurrentLesson).toHaveBeenCalledWith(track.id, track.lessons[2].id);
   });
 });

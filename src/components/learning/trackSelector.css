@@ -6,6 +6,7 @@
   display: grid; place-items: center; width: 40px; height: 40px; flex-shrink: 0; border-radius: var(--radius-round);
   background: color-mix(in srgb, var(--color-accent-quantum) 14%, transparent); color: var(--color-accent-quantum-text);
 }
+.tracks__title:focus { outline: none; } /* programmatic landing target, not a control */
 .tracks__title { margin: 0; font-size: var(--font-size-title); font-weight: var(--font-weight-bold); line-height: var(--line-height-title); color: var(--color-text-primary); }
 .tracks__lede { margin: var(--space-0) 0 0; font-size: var(--font-size-body); color: var(--color-text-secondary); }
 
@@ -29,10 +30,6 @@
 .track-card__title { margin-bottom: var(--space-1); font-size: var(--font-size-heading); font-weight: var(--font-weight-semibold); color: var(--color-text-primary); }
 .track-card__desc { margin-bottom: var(--space-2); font-size: var(--font-size-code); line-height: 1.45; color: var(--color-text-secondary); }
 .track-card__meta { display: flex; align-items: center; gap: var(--space-3); font-size: var(--font-size-caption); color: var(--color-text-secondary); }
-.track-card__level {
-  padding: 1px var(--space-2); border-radius: var(--radius-xs); font-weight: var(--font-weight-medium);
-  background: color-mix(in srgb, var(--color-accent-quantum) 12%, transparent); color: var(--color-text-primary);
-}
 .track-card__bar { flex: 1; max-width: 120px; height: 4px; border-radius: var(--radius-xs); background: var(--color-border-strong); overflow: hidden; }
 .track-card__bar-fill { height: 100%; background: var(--color-accent-quantum); transition: width var(--duration-slow) var(--ease-standard); }
 .track-card__chevron { flex-shrink: 0; color: var(--color-text-tertiary); transition: transform var(--duration-fast) var(--ease-standard), color var(--duration-fast) var(--ease-standard); }
@@ -72,3 +69,5 @@
 .tracks__section > .shelf { margin-top: 0; }
 /* Warning badge text over its own tint is 4.2:1 in light; darken it inside the screens this lane owns. */
 .video-card__tags .nuclei-badge--warning { --badge-text: color-mix(in srgb, var(--color-warning) 72%, var(--color-text-primary)); }
+
+.tracks__back { margin-bottom: var(--space-4); }

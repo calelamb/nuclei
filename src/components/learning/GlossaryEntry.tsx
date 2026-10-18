@@ -1,5 +1,6 @@
 import type { GlossaryTerm } from '../../data/glossary';
 import { activateOnKey } from '../../lib/a11y';
+import { Badge } from '../ui';
 import './learnSidebar.css';
 
 interface GlossaryEntryProps {
@@ -7,16 +8,6 @@ interface GlossaryEntryProps {
   isSelected: boolean;
   onClick: () => void;
 }
-
-/** Purple is reserved for Dirac, so entanglement takes the informational blue. */
-const CATEGORY_COLORS: Record<string, string> = {
-  basics: 'var(--color-success)',
-  gates: 'var(--color-accent-quantum)',
-  entanglement: 'var(--color-info)',
-  algorithms: 'var(--color-warning)',
-  'error-correction': 'var(--color-danger)',
-  hardware: 'var(--color-text-tertiary)',
-};
 
 function TagRow({ label, items }: { label: string; items: readonly string[] }) {
   if (items.length === 0) return null;
@@ -28,14 +19,18 @@ function TagRow({ label, items }: { label: string; items: readonly string[] }) {
   );
 }
 
-export function GlossaryEntry({ term, isSelected, onClick }: GlossaryEntryProps) {
-  const catColor = CATEGORY_COLORS[term.category] ?? 'var(--color-text-tertiary)';
+function categoryLabel(category: string): string {
+  const spaced = category.replace(/-/g, ' ');
+  return spaced.charAt(0).toUpperCase() + spaced.slice(1);
+}
 
+export function GlossaryEntry({ term, isSelected, onClick }: GlossaryEntryProps) {
   return (
     <div className="gloss-entry" role="button" tabIndex={0} aria-expanded={isSelected} onClick={onClick} onKeyDown={activateOnKey(onClick)}>
       <div className="gloss-entry__head">
         <span className="gloss-entry__term">{term.term}</span>
-        <span className="gloss-entry__cat" style={{ ['--cat-color' as string]: catColor }}>{term.category.replace('-', ' ')}</span>
+        {/* Categories are labels, not statuses: one neutral tone, never success/warning/danger. */}
+        <Badge tone="neutral">{categoryLabel(term.category)}</Badge>
       </div>
       <div className={isSelected ? 'gloss-entry__def gloss-entry__def--open' : 'gloss-entry__def'}>{term.plainEnglish}</div>
 
