@@ -93,7 +93,7 @@ file**.
 - **Target bar:** file name, framework chip, `n` qubits, `m` parameters, the
   sweepable params detected from `params.get("...")`. Observable field
   (monospace, Pauli-sum syntax, §5.3) with presets (Local Z, Global Z, ZZ
-  chain, TFIM). Samples and seed. Primary **Run analyses** button (⌘↵). Cancel.
+  chain, TFIM). Samples and seed. Primary **Run analyses** button (⌘⇧↵ — ⌘↵ stays the global simulator run). Cancel.
   Streaming progress.
 - **Circuit with gradient heatmap:** the circuit diagram with each
   parameterized gate tinted by gradient variance (log scale, sequential
