@@ -70,7 +70,7 @@ function CircuitInfoPanel() {
 function SidebarHeader({ title }: { title: string }) {
   return (
     <div className="nuclei-pane-header">
-      <h2 className="nuclei-pane-header__title nuclei-overline">{title}</h2>
+      <h2 className="nuclei-pane-header__title nuclei-overline" tabIndex={-1} data-nav-landing="">{title}</h2>
     </div>
   );
 }

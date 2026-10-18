@@ -4,6 +4,7 @@ import { PlatformProvider, usePlatform, loadBridge } from './platform/PlatformPr
 import { Onboarding } from './components/onboarding/Onboarding';
 import { KeyboardShortcuts } from './components/onboarding/KeyboardShortcuts';
 import { requestSettingsFocus } from './components/settings/settingsFocus';
+import { focusNavLanding } from './components/layout/focusViz';
 import { CommandPalette, buildCommands } from './components/commandPalette/CommandPalette';
 import { UpdateBanner } from './components/UpdateBanner';
 import { MissingDependencyBanner } from './components/onboarding/MissingDependencyBanner';
@@ -136,6 +137,12 @@ function AppInner() {
     setActiveView(view);
     if (view === 'settings') requestSettingsFocus();
   }, [setActiveView]);
+  // Keyboard routes (palette "Go to", Cmd+1..9) also move focus into the sidebar they open, never leaving it in the editor.
+  const navigateFromKeyboard = useCallback((view: Parameters<typeof setActiveView>[0]) => {
+    if (view === 'settings' || view === null) { navigate(view); return; }
+    setActiveView(view);
+    focusNavLanding();
+  }, [navigate, setActiveView]);
   const workspaceMode = useWorkspaceStore((s) => s.mode);
   const experimentalFeatures = useSettingsStore((s) => s.general.experimentalFeatures);
   const experiments = useExperimentStore((s) => s.experiments);
@@ -350,7 +357,7 @@ function AppInner() {
     // sweep/campaign prompts a confirm before the switch; jobs never cancel.
     switchWorkspaceMode: () => useModeSwitchStore.getState().requestToggle(),
     startResearchTour: () => useResearchTourStore.getState().start(),
-    navigate,
+    navigate: navigateFromKeyboard,
     togglePanel: togglePanelResolved,
     setLayoutPreset: (preset) => useLayoutStore.getState().setPreset(preset),
     runExperiment: (fileName: string) => {
@@ -417,7 +424,10 @@ function AppInner() {
             (v: LeftPanelId) => !bottom.has(v),
           );
           const view = topViews[Number(e.key) - 1];
-          if (view) useNavigationStore.getState().setActiveView(view);
+          if (view) {
+            useNavigationStore.getState().setActiveView(view);
+            focusNavLanding();
+          }
           break;
         }
         case 'toggle-bottom-panel': {

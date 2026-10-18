@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { focusVizLanding, VIZ_LANDING_ATTR } from './focusViz';
+import { focusNavLanding, focusVizLanding, NAV_LANDING_ATTR, VIZ_LANDING_ATTR } from './focusViz';
 
 afterEach(() => { document.body.innerHTML = ''; vi.useRealTimers(); });
 
@@ -33,5 +33,18 @@ describe('focusVizLanding', () => {
     document.body.append(section);
     await new Promise((resolve) => setTimeout(resolve, 60));
     expect(document.activeElement).toBe(document.body);
+  });
+
+  it('moves keyboard navigation focus to the sidebar heading, not leaving it in the editor', async () => {
+    const editor = document.createElement('textarea');
+    document.body.append(editor);
+    editor.focus();
+    focusNavLanding();
+    const heading = document.createElement('h2');
+    heading.tabIndex = -1;
+    heading.setAttribute(NAV_LANDING_ATTR, '');
+    document.body.append(heading);
+    await new Promise((resolve) => setTimeout(resolve, 120));
+    expect(document.activeElement).toBe(heading);
   });
 });
