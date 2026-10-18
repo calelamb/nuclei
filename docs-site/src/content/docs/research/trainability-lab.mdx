@@ -70,6 +70,10 @@ not interchangeable:
   the interval is a truncation bound that provably contains the true value,
   but it can be loose. It is labelled `pauli_propagation_bounded` and the UI
   calls the interval a truncation interval, not a confidence interval.
+  *Revised after review:* when the bound is too loose to mean anything
+  (the sweep timed out, the lower end is 0, or the upper end is more than twice
+  the lower), the Lab shows **no number**: the variance is `null` and only the
+  interval is shown. It never reports the middle of the interval.
 
 `method: auto` (the default) uses the engine when it applies and its bound is
 tight, and falls back to sampling otherwise. You can force `sampling` or `ppe`.
@@ -87,11 +91,20 @@ compared by AIC.
 | Verdict | When |
 |---------|------|
 | **Barren plateau** | The exponential model is preferred by ΔAIC ≥ 2 **and** the lower end of β's 95% interval is above 0.1 |
-| **Polynomial** | The power-law model is preferred by ΔAIC ≥ 2, **or** β's 95% interval includes values at or below 0.1 |
-| **Inconclusive** | Anything else, always when fewer than 4 distinct qubit counts were fitted, and when any point has zero variance (a log-scale fit is undefined) |
+| **Polynomial** | β's 95% interval lies entirely at or below 0.1 (its **upper** end is ≤ 0.1), **or** the power-law model is preferred by ΔAIC ≥ 2 |
+| **Inconclusive** | Anything else. Always when fewer than 4 distinct qubit counts were fitted, when the largest n is less than twice the smallest, and when any point has a zero or null variance or an uninformative interval (lower end 0, or upper end more than twice the lower) |
+
+*Revised after review.* The earlier rule called a fit polynomial whenever β's
+interval merely *included* values at or below 0.1, so a wide interval became a
+positive verdict. On synthetic data over n = 4 to 7 that called `n⁻¹` a barren
+plateau 22% of the time and `2^(−0.25n)` polynomial 22.5% of the time. Now a
+narrow range is `inconclusive`, and `polynomial` needs either a small upper
+bound or a model-selection win.
 
 *Inconclusive is a real answer.* The Lab never rounds an unclear fit up to a
-verdict. β's interval is a bootstrap over the fitted points.
+verdict. β's interval is a parametric bootstrap: each point's log-variance is
+redrawn from its own interval and the slope refitted, so the point intervals
+(sampling or Pauli-propagation truncation) carry into β.
 
 **Barren-plateau risk (the verdict rail).** The rail combines the evidence, and
 lists every item so you can see why. Measured scaling outranks theory:
@@ -131,6 +144,22 @@ next to the empirical measurement, with its stated assumptions, and is marked
 applicable only when the observable or the initial state lies in 𝔤. When it
 does not apply, the Lab says so rather than printing a number.
 
+*Revised after review.* The formula is the sum over the simple ideals of the
+algebra, Var = Σⱼ P_𝔤ⱼ(ρ) P_𝔤ⱼ(O) / dim 𝔤ⱼ, after removing the centre
+(generators that commute with everything). The single-ideal version is wrong for
+an algebra such as su(2) ⊕ su(16) (0.062 predicted, 0.336 measured). It is
+computed only where the ideals can be found exactly (Pauli-string generators)
+and for the provably simple su(2ⁿ); for other shared-parameter or multi-Pauli
+circuits the Lab reports "not applicable". The prediction is for the variance of
+the **cost** over parameter space, so it is compared with the measured cost
+variance, never with the gradient variance.
+
+**Polynomial dimension is not trainability.** A full su, so or sp of 2ⁿ is the
+exponential family even when its dimension is small (so(8) at n = 3): it is
+never reported as 𝔤-sim feasible. A genuinely polynomial dimension suggests
+𝔤-sim simulability; it does not by itself bound the purities or guarantee
+trainability.
+
 ## Lint rules
 
 Lint runs as you type with a 0.35 s compute budget and draws markers in the
@@ -141,7 +170,7 @@ are skipped, with a note, if the closure does not finish in time.
 |------|----------|------------|-----------|
 | TRN001 Global cost function | warning | An observable term acts on at least max(3, ⌈n/2⌉+1) qubits, and n ≥ 4 | [Cerezo et al., Nat. Commun. 12, 1791 (2021)](https://doi.org/10.1038/s41467-021-21728-w) |
 | TRN002 Exponentially large Lie algebra | warning | The closure is complete and its dimension matches su, so or sp of 2ⁿ, for n ≥ 4 | [Ragone et al., Nat. Commun. 15, 7172 (2024)](https://doi.org/10.1038/s41467-024-49909-3) |
-| TRN003 Polynomial Lie algebra | info | The dimension is at most 4n²: trainable, but likely 𝔤-sim simulable | [Goh et al., arXiv:2308.01432 (2023)](https://arxiv.org/abs/2308.01432) |
+| TRN003 Polynomial Lie algebra | info | The dimension is at most 4n² and is not a full su/so/sp family: the circuit is likely 𝔤-sim simulable (this does not by itself guarantee trainability) | [Goh et al., arXiv:2308.01432 (2023)](https://arxiv.org/abs/2308.01432) |
 | TRN004 Dead parameter | info | A parameterized gate's generator commutes with the observable after conjugation and nothing later changes that: it cannot affect the cost | n/a (a direct computation) |
 | TRN005 Redundant consecutive rotations | info | Two consecutive rotations about the same axis on the same qubit with independent parameters | n/a |
 | TRN006 Overparameterized circuit | info | The number of parameters is at least the algebra's dimension | [Larocca et al., Nat. Comput. Sci. 3, 542 (2023)](https://doi.org/10.1038/s43588-023-00467-6) |

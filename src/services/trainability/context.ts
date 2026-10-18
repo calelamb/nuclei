@@ -5,13 +5,14 @@
  * caller guards that (see `useDirac.buildContextBlock`).
  */
 
-import { formatSci } from '../../components/lab/chartUtils';
+import { formatInterval, formatSci, formatValue } from '../../components/lab/chartUtils';
 import type {
   TrainabilityDiagnostic,
   TrainabilityInspection,
   TrainabilityJobRecord,
 } from '../../types/trainability';
-import { deriveSimulabilityVerdict, deriveTrainabilityVerdict, primaryFit } from './verdict';
+import { isNumber } from './intervals';
+import { deriveSimulabilityVerdict, deriveTrainabilityVerdict, primaryFit, stripVerdictPrefix } from './verdict';
 
 export const CONTEXT_CAPS = Object.freeze({
   parameters: 8,
@@ -55,23 +56,31 @@ function lines(input: TrainabilityContextInput): string[] {
 
   if (!job) return out;
   out.push(`- Latest analysis: ${job.status}${input.stale ? ' (the code has changed since; results may be stale)' : ''}`);
-  const trainability = deriveTrainabilityVerdict(job.results, diagnostics);
-  out.push(`- Barren-plateau risk: ${trainability.risk}`);
+  const trainability = deriveTrainabilityVerdict(job.results, diagnostics, { nParameters: job.target.nParameters });
+  out.push(`- Barren-plateau risk: ${trainability.notApplicable ? 'not applicable (no free parameters)' : trainability.risk}`);
   const evidence = capped(trainability.evidence, CONTEXT_CAPS.evidence);
   for (const e of evidence.shown) out.push(`  - [${e.level}] ${e.text}`);
   if (evidence.note) out.push(`  -${evidence.note}`);
 
   const g = job.results.gradients;
   if (g) {
-    out.push(`- Gradients (${g.method ?? 'sampling'}, ${g.samples} samples): mean variance ${sci(g.variance_mean)}`);
-    const ranked = [...g.per_parameter].sort((a, b) => a.variance - b.variance);
+    const basis = g.method === 'ppe' ? 'exact Pauli propagation, no sampling' : `${formatValue(g.samples)} samples`;
+    out.push(
+      `- Gradients (${g.method ?? 'sampling'}, ${basis}): mean variance ${
+        isNumber(g.variance_mean) ? sci(g.variance_mean) : `unresolved (interval only ${formatInterval(g.variance_mean_ci95, 3)})`
+      }`,
+    );
+    const resolved = g.per_parameter.filter((p): p is typeof p & { variance: number } => isNumber(p.variance));
+    const ranked = [...resolved].sort((a, b) => a.variance - b.variance);
     const { shown, note } = capped(ranked, CONTEXT_CAPS.parameters);
-    out.push(`  - lowest-variance parameters${note}: ${shown.map((p) => `${p.name}=${sci(p.variance)}`).join(', ')}`);
+    if (shown.length > 0) out.push(`  - lowest-variance parameters${note}: ${shown.map((p) => `${p.name}=${sci(p.variance)}`).join(', ')}`);
+    const unresolved = g.per_parameter.length - resolved.length;
+    if (unresolved > 0) out.push(`  - ${unresolved} parameter${unresolved === 1 ? '' : 's'} unresolved (interval only)`);
   }
   const fit = primaryFit(job.results.scaling?.fits);
   if (fit) {
-    out.push(`- Scaling: ${fit.verdict.replace('_', ' ')} — ${fit.summary}`);
-    const points = job.results.scaling?.points ?? [];
+    out.push(`- Scaling: ${fit.verdict.replace('_', ' ')} — ${fit.verdict === 'inconclusive' ? stripVerdictPrefix(fit.summary) || 'no reason given' : fit.summary}`);
+    const points = (job.results.scaling?.points ?? []).filter((p) => isNumber(p.variance));
     const { shown, note } = capped(points, CONTEXT_CAPS.scalingPoints);
     out.push(`  - points${note}: ${shown.map((p) => `n=${p.n_qubits}:${sci(p.variance)}`).join(', ')}`);
   }

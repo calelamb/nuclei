@@ -26,7 +26,8 @@ def param_gates(circuit: ParamCircuit) -> list[dict[str, Any]]:
         index = gate.source_index if gate.source_index is not None else position
         for angle in gate.angles:
             if isinstance(angle, ParamRef):
-                out.append({"source_index": index, "parameter": angle.name, "gate": gate.name})
+                out.append({"source_index": index, "parameter": angle.name, "gate": gate.name,
+                            "qubits": list(gate.qubits)})
     return out
 
 

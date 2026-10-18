@@ -19,7 +19,7 @@ import {
   availableAnalyses,
   validateScaling,
 } from '../../services/trainability/settings';
-import { RUN_SHORTCUT_LABEL, overallFraction } from './targetBarMath';
+import { RUN_SHORTCUT_LABEL, overallFraction, runDisabledReason } from './targetBarMath';
 import { TRAINABILITY_ANALYSES, ACTIVE_JOB_STATUSES, type TrainabilityAnalysis, type TrainabilityMethod, type GradientInit } from '../../types/trainability';
 
 const ANALYSIS_LABELS: Record<TrainabilityAnalysis, string> = {
@@ -41,12 +41,13 @@ export function TargetBar({ onRun }: { onRun: () => void }) {
   const inspect = useTrainabilityStore((s) => s.inspect);
   const observable = useTrainabilityStore((s) => s.observable);
   const observableError = useTrainabilityStore((s) => s.observableError);
+  const observableSource = useTrainabilityStore((s) => s.observableSource);
   const settings = useTrainabilityStore((s) => s.settings);
   const unavailable = useTrainabilityStore((s) => s.unavailable);
   const jobs = useTrainabilityStore((s) => s.jobs);
   const activeJobId = useTrainabilityStore((s) => s.activeJobId);
   const analysesOverride = useTrainabilityStore((s) => s.analysesOverride);
-  const { setObservable, setSettings, toggleAnalysis, cancel } = useTrainabilityStore.getState();
+  const { setObservable, adoptFileObservable, setSettings, toggleAnalysis, cancel } = useTrainabilityStore.getState();
 
   const info = inspect.data;
   const available = availableAnalyses(info);
@@ -56,7 +57,16 @@ export function TargetBar({ onRun }: { onRun: () => void }) {
   const scalingCheck = validateScaling(settings);
   const scalingInvalid = chosen.includes('scaling') && (scalingCheck.qubits.error !== null || scalingCheck.layers.error !== null);
   const noParams = info !== null && info.parameters.length === 0;
-  const canRun = !unavailable && !running && chosen.length > 0 && !scalingInvalid && inspect.status !== 'loading' && !noParams;
+  const disabledReason = runDisabledReason({
+    unavailable: !!unavailable,
+    running,
+    chosenCount: chosen.length,
+    scalingInvalid,
+    inspecting: inspect.status === 'loading',
+    noParameters: noParams,
+  });
+  const canRun = !unavailable && !running && disabledReason === null;
+  const declared = info?.observable_declared?.trim() || null;
   const fraction = job ? overallFraction(job.analyses, job.progress) : null;
   const latest = job
     ? Object.entries(job.progress).sort((a, b) => a[1].fraction - b[1].fraction).find(([, p]) => p.fraction < 1)?.[1].message
@@ -102,7 +112,13 @@ export function TargetBar({ onRun }: { onRun: () => void }) {
             <LabField
               label="Observable"
               htmlFor="trainability-observable"
-              hint={preset ? preset.description : 'Pauli sum, e.g. 0.5*Z0*Z1 + X2'}
+              hint={
+                observable.trim() === ''
+                  ? 'Empty uses Local Z, overriding any observable the file declares.'
+                  : preset
+                    ? preset.description
+                    : 'Pauli sum, e.g. 0.5*Z0*Z1 + X2'
+              }
               error={
                 observableError
                   ? `${observableError.message}${observableError.column !== null ? ` (column ${observableError.column})` : ''}`
@@ -124,6 +140,22 @@ export function TargetBar({ onRun }: { onRun: () => void }) {
                 </div>
               )}
             </LabField>
+            {observableSource === 'file' && (
+              <div className="lab-row" style={{ marginTop: 'var(--space-1)' }}>
+                <LabPill tone="dirac" outline title="Declared by this file as nuclei_observable. Edit the field or pick a preset to override it.">
+                  from file
+                </LabPill>
+              </div>
+            )}
+            {observableSource !== 'file' && declared !== null && declared !== observable.trim() && (
+              <div className="lab-row" style={{ marginTop: 'var(--space-1)', flexWrap: 'wrap' }}>
+                <span className="lab-muted">This file declares</span>
+                <span className="lab-mono" style={{ overflowWrap: 'anywhere' }}>{declared}</span>
+                <LabButton size="sm" variant="ghost" onClick={() => adoptFileObservable()}>
+                  Use the file&apos;s
+                </LabButton>
+              </div>
+            )}
             <div className="lab-row" style={{ flexWrap: 'wrap', marginTop: 'var(--space-2)' }} role="group" aria-label="Observable presets">
               {OBSERVABLE_PRESETS.map((p) => (
                 <LabButton
@@ -202,9 +234,22 @@ export function TargetBar({ onRun }: { onRun: () => void }) {
         )}
 
         <div className="lab-row" style={{ flexWrap: 'wrap', gap: 'var(--space-3)' }}>
-          <LabButton variant="primary" icon={Play} shortcut={RUN_SHORTCUT_LABEL} disabled={!canRun} onClick={onRun}>
+          <LabButton
+            variant="primary"
+            icon={Play}
+            shortcut={RUN_SHORTCUT_LABEL}
+            disabled={!canRun}
+            aria-describedby={disabledReason ? 'trainability-run-reason' : undefined}
+            title={disabledReason ?? undefined}
+            onClick={onRun}
+          >
             Run analyses
           </LabButton>
+          {disabledReason && (
+            <span id="trainability-run-reason" className="lab-muted" style={{ flex: '1 1 220px', minWidth: 0 }}>
+              {disabledReason}
+            </span>
+          )}
           {running && (
             <LabButton variant="danger" icon={Square} disabled={job?.status === 'cancelling'} onClick={() => void cancel()}>
               {job?.status === 'cancelling' ? 'Cancelling…' : 'Cancel'}

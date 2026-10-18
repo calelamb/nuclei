@@ -52,14 +52,19 @@ def test_free_fermion_chain_has_dimension_n_times_2n_minus_1(n):
     assert res["path"] == "pauli_strings"
     assert res["classification"]["confidence"] == "exact_dimension_match"
     assert res["classification"]["label"] == f"so({2 * n})"
+    if n == 2:      # so(4) = so(2^2) is the full exponential family, even though 6 <= 4 n^2
+        assert res["simulability"]["kind"] == "exponential_dla"
+        return
     assert res["simulability"]["kind"] == "g_sim_feasible" and "Goh et al. 2023" in res["simulability"]["summary"]
+    assert "guarantee trainability" in res["simulability"]["summary"]
 
 
 def test_brickwork_ry_cz_hea_n3_is_so8_dimension_28():
     res = lie_algebra(brickwork_hea(3, 4))
     assert res["dimension"] == 28 and res["classification"]["label"] == "so(8)"
     assert res["classification"]["family"] == "so"
-    assert res["simulability"]["kind"] == "g_sim_feasible"   # 28 <= 4 n^2 = 36
+    # PH-M3: 28 <= 4 n^2 = 36, but so(8) = so(2^3) is the FULL exponential family: never g_sim_feasible
+    assert res["simulability"]["kind"] == "exponential_dla" and "so(8)" in res["simulability"]["summary"]
 
 
 def test_plain_repeated_ladder_gives_12_not_28():
@@ -315,3 +320,136 @@ def test_walk_expands_u_gate_in_time_order_and_classifies_fixed_gates():
     assert items[-1].names == ("S", "S") and items[2].names == ("S",)   # RZ(pi/2), RZ(pi); RY(0) is dropped
     rot = [i for i in items if isinstance(i, Rotation)]
     assert [r.ref.name for r in rot] == ["b", "a"]           # U = RZ(phi) RY(theta) RZ(lambda): lambda first
+
+
+# ------------------------------------------------ PH-C2: predicted COST variance vs empirical COST variance
+def _su8_xy_zz(layers: int) -> ParamCircuit:
+    b = Builder(3)
+    for _ in range(layers):
+        for q in range(3):
+            b.rot("RX", (q,))
+        for q in range(3):
+            b.rot("RY", (q,))
+        for q in range(2):
+            b.rot("RZZ", (q, q + 1))
+    return b.build()
+
+
+@pytest.mark.parametrize("name,circuit,spec,n", [
+    ("su(8)", _su8_xy_zz(40), "Z0", 3),
+    ("free-fermion so(8)", _free_fermion(4, layers=30), "Z0*Z1", 4),
+])
+def test_predicted_cost_variance_lies_in_the_empirical_cost_variance_ci(name, circuit, spec, n):
+    """The reviewer's su(8) / free-fermion cases: 0.111 vs 0.111 on the cost; the gradient variance is 2x lower."""
+    from kernel.trainability.analyses import gradient_statistics
+    obs = parse_observable(spec, n)
+    pred = lie_algebra(circuit, observable=obs)
+    assert pred["prediction_applicable"] and pred["prediction_quantity"] == "cost_variance", name
+    stats = gradient_statistics(circuit, obs, samples=3000, seed=3, method="sampling")
+    lo, hi = stats["cost_variance_ci95"]
+    assert lo <= stats["cost_variance"] <= hi
+    mid, half = stats["cost_variance"], 0.5 * (hi - lo) * (2.576 / 1.96)     # widen the 95% CI to ~99%: no flaky 1-in-20
+    assert abs(pred["predicted_variance"] - mid) <= half, (name, pred["predicted_variance"], lo, mid, hi)
+    assert abs(stats["cost_variance"] - pred["predicted_variance"]) < 0.15 * pred["predicted_variance"]
+    # the old UI compared against this, a different quantity (ratio 0.48x exactly where the theory is exact)
+    assert stats["variance_mean"] < 0.7 * stats["cost_variance"]
+
+
+# ---------------------------- PH-H1: Ragone for reductive 𝔤 (centre removed, ideals summed)
+def _deep(n, gens, layers):
+    b = Builder(n)
+    for _ in range(layers):
+        for name, qs in gens:
+            b.rot(name, qs)
+    return b.build()
+
+
+def _measured_cost_variance(c, obs, samples=4000, seed=1):
+    rng = np.random.default_rng(seed)
+    vals = rng.uniform(0, 2 * math.pi, (samples, len(c.parameters)))
+    prog = compile_circuit(c)
+    return float(np.concatenate([prog.expectations(vals[i:i + 500], obs) for i in range(0, samples, 500)]).var(ddof=1))
+
+
+def _xy_zz(qubits):
+    gens = [(a, (q,)) for q in qubits for a in ("RX", "RY")]
+    return gens + [("RZZ", (a, b)) for a, b in zip(qubits, qubits[1:])]
+
+
+@pytest.mark.parametrize("name,n,gens,layers,expected_ideals,expected", [
+    # reviewer: su(2) + su(4) predicted 0.222 vs measured 0.332 with the single-ideal formula
+    ("su(2)+su(4)", 3, [("RX", (0,)), ("RY", (0,))] + _xy_zz([1, 2]), 40, [3, 15], 1 / 3),
+    # reviewer: su(2) + su(16) predicted 0.062 vs measured 0.336
+    ("su(2)+su(16)", 5, [("RX", (0,)), ("RY", (0,))] + _xy_zz([1, 2, 3, 4]), 30, [3, 255], 1 / 3),
+    # a centre: su(2) on q0 plus an abelian RZ(q1), which commutes with everything
+    ("su(2)+u(1)", 2, [("RX", (0,)), ("RY", (0,)), ("RZ", (1,))], 20, [3], 1 / 3),
+])
+def test_ragone_sums_simple_ideals_and_drops_the_centre(name, n, gens, layers, expected_ideals, expected):
+    c = _deep(n, gens, layers)
+    obs = parse_observable("Z0", n)
+    res = lie_algebra(c, observable=obs)
+    assert res["prediction_applicable"] is True, name
+    assert sorted(i["dimension"] for i in res["ideals"]["items"]) == sorted(expected_ideals)
+    assert res["ideals"]["centre_dimension"] == (1 if name == "su(2)+u(1)" else 0)
+    assert res["predicted_variance"] == pytest.approx(expected, rel=1e-9)
+    assert _measured_cost_variance(c, obs) == pytest.approx(res["predicted_variance"], rel=0.12)
+    assert not any("treated as simple" in a or "leading term" in a for a in res["assumptions"])
+
+
+def test_ideal_decomposition_of_free_fermion_algebra_is_one_ideal_no_centre():
+    res = lie_algebra(_free_fermion(4, layers=3), observable=parse_observable("Z0*Z1", 4))
+    assert res["ideals"] == {"centre_dimension": 0, "items": [res["ideals"]["items"][0]]}
+    assert res["ideals"]["items"][0]["dimension"] == 28
+
+
+@pytest.mark.parametrize("n", [3, 4, 5])
+def test_qaoa_ring_prediction_is_never_applicable_and_wrong(n):
+    """Reviewer: the old single-ideal formula said 1.125/1.45/1.79 against a measured 0.66 (n=3)."""
+    gates = []
+    for p in range(30):
+        gates += [IrGate("RZZ", tuple(sorted((i, (i + 1) % n))), (ParamRef(f"g{p}"),)) for i in range(n)]
+        gates += [IrGate("RX", (i,), (ParamRef(f"b{p}"),)) for i in range(n)]
+    c = ParamCircuit(n, gates, [f"{k}{p}" for p in range(30) for k in ("g", "b")])
+    obs = PauliSum(tuple(PauliTerm(1.0, tuple(sorted(((i, "Z"), ((i + 1) % n, "Z"))))) for i in range(n)))
+    res = lie_algebra(c, observable=obs)
+    if res["prediction_applicable"]:
+        assert _measured_cost_variance(c, obs, samples=3000) == pytest.approx(res["predicted_variance"], rel=0.15)
+    else:
+        assert res["predicted_variance"] is None and "ideal" in res["prediction_note"]
+        assert any("ideal structure" in a for a in res["assumptions"])
+
+
+def test_pauli_sum_path_predicts_only_for_the_provably_simple_su_2n():
+    # shared-parameter generators with a full su(8): the dimension proves simplicity
+    b = Builder(3)
+    for _ in range(40):
+        for q in range(3):
+            b.rot("RX", (q,))
+            b.rot("RY", (q,))
+        b.rot("RZZ", (0, 1)).rot("RZZ", (1, 2))
+    base = b.build()
+    shared = ParamCircuit(3, [IrGate(g.name, g.qubits, (ParamRef("a" if i % 2 else "b"),)) if g.angles else g
+                              for i, g in enumerate(base.gates)], ["a", "b"])
+    res = lie_algebra(shared, observable=parse_observable("Z0", 3))
+    assert res["path"] == "pauli_sums" and res["dimension"] == 63          # dim 4^3 - 1: su(8), simple
+    assert res["prediction_applicable"] is True and res["predicted_variance"] == pytest.approx(1 / 9)
+
+
+# -------------------------------------- PH-M3: family check precedes the polynomial-dimension cap
+@pytest.mark.parametrize("n,dim", [(2, 15), (2, 6), (2, 10), (3, 28), (3, 36), (3, 63)])
+def test_full_exponential_families_are_never_g_sim_feasible_even_below_4n2(n, dim):
+    """su(4)/sp(2)/so(4) at n=2, so(8)/sp(4) at n=3 (dim <= 4n^2) were labelled g_sim_feasible."""
+    from kernel.trainability.lie import _simulability
+    cls = lie_core.classify_dimension(dim, n)
+    assert cls["family"] in ("su", "so", "sp")
+    assert _simulability("complete", dim, dim, n, cls, None)["kind"] == "exponential_dla"
+
+
+def test_su4_at_n2_is_exponential_dla_via_the_full_pipeline():
+    res = lie_algebra(two_axis_hea(2, 3), observable=parse_observable("Z0", 2))
+    assert res["dimension"] == 15 and res["simulability"]["kind"] == "exponential_dla"
+
+
+def test_polynomial_non_family_algebra_is_still_g_sim_feasible():
+    res = lie_algebra(_free_fermion(5), observable=parse_observable("Z0*Z1", 5))
+    assert res["dimension"] == 45 and res["simulability"]["kind"] == "g_sim_feasible"

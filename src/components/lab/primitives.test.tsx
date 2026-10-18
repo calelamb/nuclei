@@ -31,6 +31,41 @@ describe('LabSegmented', () => {
   });
 });
 
+describe('LabSegmented keyboard (ARIA tabs pattern)', () => {
+  const items = [
+    { id: 'a' as const, label: 'Alpha' },
+    { id: 'b' as const, label: 'Beta' },
+    { id: 'c' as const, label: 'Gamma' },
+  ];
+
+  it('moves focus with the selection and wraps around', () => {
+    const onChange = vi.fn();
+    render(<LabSegmented items={items} value="c" onChange={onChange} label="Views" />);
+    const tabs = screen.getAllByRole('tab');
+    tabs[2].focus();
+    fireEvent.keyDown(tabs[2], { key: 'ArrowRight' });
+    expect(onChange).toHaveBeenLastCalledWith('a');
+    expect(document.activeElement).toBe(tabs[0]);
+    fireEvent.keyDown(tabs[0], { key: 'ArrowLeft' });
+    expect(onChange).toHaveBeenLastCalledWith('c');
+    fireEvent.keyDown(tabs[0], { key: 'Home' });
+    expect(onChange).toHaveBeenLastCalledWith('a');
+    fireEvent.keyDown(tabs[0], { key: 'End' });
+    expect(onChange).toHaveBeenLastCalledWith('c');
+  });
+
+  it('declares a horizontal tablist and ignores modified arrow keys', () => {
+    const onChange = vi.fn();
+    render(<LabSegmented items={items} value="a" onChange={onChange} label="Views" idPrefix="v" />);
+    expect(screen.getByRole('tablist').getAttribute('aria-orientation')).toBe('horizontal');
+    const tab = screen.getAllByRole('tab')[0];
+    expect(tab.getAttribute('id')).toBe('v-tab-a');
+    expect(tab.getAttribute('aria-controls')).toBe('v-panel-a');
+    fireEvent.keyDown(tab, { key: 'ArrowRight', metaKey: true });
+    expect(onChange).not.toHaveBeenCalled();
+  });
+});
+
 describe('LabNumber', () => {
   it('commits clamped integers on blur and ignores garbage', () => {
     const onCommit = vi.fn();

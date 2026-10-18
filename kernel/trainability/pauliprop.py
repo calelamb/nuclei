@@ -163,7 +163,8 @@ def ppe_gradient_variances(
 
     Returns ``{"method", "per_parameter": [{"name", "variance", "interval": [lo, hi], "dead",
     "dead_reason"}], "variance_mean", "variance_mean_interval", "frontier_peak",
-    "discarded_mass", "elapsed_ms", "status"}`` with parameter *names* in
+    "discarded_mass", "elapsed_ms", "status", "cost_mean", "cost_variance" (None unless informative),
+    "cost_variance_interval"}`` with parameter *names* in
     ``circuit.parameters`` order.  Intervals are rigorous.  Raises :class:`PpeNotApplicable`.
     """
     prog = _require(circuit, observable, independent=True)
@@ -177,7 +178,9 @@ def ppe_gradient_variances(
          "dead": r["dead"], "dead_reason": r["dead_reason"]}
         for r in res["per_parameter"]
     ]
-    return {**{k: v for k, v in res.items() if k != "per_parameter"}, "per_parameter": rows}
+    identity = sum(float(t.coeff) for t in observable.terms if not t.ops)
+    return {**{k: v for k, v in res.items() if k != "per_parameter"}, "per_parameter": rows,
+            "cost_mean": res["cost_mean"] + identity}
 
 
 def ppe_expectation_bounds(

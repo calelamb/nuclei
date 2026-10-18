@@ -136,12 +136,24 @@ describe('trainability client: jobs', () => {
     await expect(handle.cancel()).resolves.toBe(false);
   });
 
-  it('turns a busy error before the ack into a job error', async () => {
+  it('turns a busy error (echoing the job id) before the ack into a job error', async () => {
     const session = createFakeSession();
     const client = createTrainabilityClient(session, { newJobId: () => 'job-3' });
     const handle = client.start(START, () => undefined);
-    session.emit({ type: 'error', phase: 'trainability', code: 'trainability_busy', message: 'Too many jobs' });
+    session.emit({ type: 'error', phase: 'trainability', code: 'trainability_busy', message: 'Too many jobs', job_id: 'job-3' });
     expect(await handle.done).toEqual({ kind: 'error', error: { code: 'trainability_busy', message: 'Too many jobs' } });
+  });
+
+  it('does not adopt uncorrelated errors, such as a stale lint failure, before the ack', async () => {
+    const session = createFakeSession();
+    const client = createTrainabilityClient(session, { newJobId: () => 'job-3b', ackTimeoutMs: 1000 });
+    const handle = client.start(START, () => undefined);
+    session.emit({ type: 'error', phase: 'trainability', code: 'observable_error', message: 'late lint failure' });
+    session.emit({ type: 'error', phase: 'trainability', code: 'lint_failed', message: 'x', request_id: 'trq-old' } as never);
+    session.emit({ type: 'error', phase: 'trainability', code: 'other_job', message: 'not mine', job_id: 'someone-else' });
+    session.emit({ type: 'trainability_started', job_id: 'job-3b' });
+    session.emit({ type: 'trainability_result', job_id: 'job-3b', status: 'complete', results: {}, errors: {}, elapsed_ms: 1 });
+    expect(await handle.done).toMatchObject({ kind: 'result', status: 'complete' });
   });
 
   it('turns a job-correlated error mid-run into a job error', async () => {
@@ -185,5 +197,65 @@ describe('trainability client: jobs', () => {
     session.close();
     const handle = createTrainabilityClient(session).start(START, () => undefined);
     expect(await handle.done).toMatchObject({ kind: 'error' });
+  });
+});
+
+
+describe('trainability client: request_id correlation', () => {
+  it('sends a unique request_id per sync request', async () => {
+    const session = createFakeSession((m, s) => {
+      if (m.type === 'trainability_inspect') s.emit({ type: 'trainability_inspected', ...inspectionFixture, request_id: (m as { request_id: string }).request_id });
+    });
+    const client = createTrainabilityClient(session);
+    await client.inspect({ code: 'a' });
+    await client.inspect({ code: 'b' });
+    const ids = session.sent.map((m) => (m as { request_id?: string }).request_id);
+    expect(ids[0]).toBeTruthy();
+    expect(ids[1]).toBeTruthy();
+    expect(ids[0]).not.toBe(ids[1]);
+  });
+
+  it('drops a stale lint reply echoing an older request_id and waits for its own', async () => {
+    const session = createFakeSession();
+    const client = createTrainabilityClient(session, { lintTimeoutMs: 1000, newRequestId: () => 'req-now' });
+    const pending = client.lint({ code: 'x', observable: 'preset:local_z' });
+    await vi.advanceTimersByTimeAsync(0);
+    session.emit({
+      type: 'trainability_lint_result',
+      diagnostics: lintDiagnosticsFixture,
+      summary: { ...lintSummaryFixture, observable: 'STALE' },
+      request_id: 'req-old',
+    });
+    session.emit({ type: 'trainability_lint_result', diagnostics: [], summary: lintSummaryFixture, request_id: 'req-now' });
+    const result = await pending;
+    expect(result).toEqual({ ok: true, value: { diagnostics: [], summary: lintSummaryFixture } });
+  });
+
+  it('ignores an error echoing a different request_id but resolves its own', async () => {
+    const session = createFakeSession();
+    const client = createTrainabilityClient(session, { lintTimeoutMs: 1000, newRequestId: () => 'req-now' });
+    const pending = client.lint({ code: 'x' });
+    await vi.advanceTimersByTimeAsync(0);
+    session.emit({ type: 'error', phase: 'trainability', code: 'observable_error', message: 'old', request_id: 'req-old' } as never);
+    session.emit({ type: 'error', phase: 'trainability', code: 'analysis_unavailable', message: 'mine', request_id: 'req-now' } as never);
+    expect(await pending).toEqual({ ok: false, error: { code: 'analysis_unavailable', message: 'mine' } });
+  });
+
+  it('falls back to type matching when an old kernel echoes no request_id, and strips the id from inspections', async () => {
+    const session = createFakeSession((m, s) => {
+      if (m.type === 'trainability_inspect') s.emit({ type: 'trainability_inspected', ...inspectionFixture });
+    });
+    const result = await createTrainabilityClient(session).inspect({ code: 'x' });
+    expect(result).toEqual({ ok: true, value: inspectionFixture });
+  });
+
+  it('does not leak the echoed request_id into the inspection value', async () => {
+    const session = createFakeSession((m, s) => {
+      if (m.type === 'trainability_inspect') {
+        s.emit({ type: 'trainability_inspected', ...inspectionFixture, request_id: (m as { request_id: string }).request_id });
+      }
+    });
+    const result = await createTrainabilityClient(session).inspect({ code: 'x' });
+    expect(result).toEqual({ ok: true, value: inspectionFixture });
   });
 });

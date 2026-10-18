@@ -1,11 +1,14 @@
 /**
  * PRD 14 §5.6 — Trainability kernel client. Wraps a dedicated `LabSession`:
  *
- * - `inspect` / `lint` are sync request/response. The v1.3 messages carry no
- *   correlation id, and the kernel answers one message at a time per socket,
- *   so the client serializes them (one in flight) and matches by response
- *   type. Kernel `error` envelopes with `phase: 'trainability'` resolve as
- *   values, never throws.
+ * - `inspect` / `lint` are sync request/response. Each carries a unique
+ *   `request_id`, which the kernel echoes on the reply AND on its errors; the
+ *   client matches by it and drops mismatches, so a late reply to a timed-out
+ *   request can never be taken for the answer to the next one (stale lint
+ *   markers). An old kernel echoes nothing: replies without a `request_id`
+ *   fall back to matching by type, with requests serialized (one in flight).
+ *   Kernel `error` envelopes with `phase: 'trainability'` resolve as values,
+ *   never throws.
  * - `start` acks at once and streams `progress`/`partial`/`result`, all
  *   correlated by `job_id`. The returned `done` promise never rejects: it
  *   resolves with the result, a kernel error, a timeout or a disconnect.
@@ -95,6 +98,8 @@ export interface ClientOptions {
   ackTimeoutMs?: number;
   cancelTimeoutMs?: number;
   newJobId?: () => string;
+  /** Test seam for `request_id` generation. */
+  newRequestId?: () => string;
 }
 
 const DEFAULTS = {
@@ -137,6 +142,29 @@ function isTrainabilityError(error: KernelError): boolean {
   return error.phase === 'trainability' && error.job_id === undefined;
 }
 
+/** The `request_id` the kernel echoed on a reply or an error, if any. */
+function echoedRequestId(message: KernelResponse): string | undefined {
+  const id = (message as { request_id?: unknown }).request_id;
+  return typeof id === 'string' ? id : undefined;
+}
+
+let requestCounter = 0;
+
+/** Unique per request, across clients in this page (module-scoped counter plus randomness). */
+export function newTrainabilityRequestId(): string {
+  requestCounter += 1;
+  return `trq-${requestCounter.toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
+/**
+ * True when a reply belongs to request `id`: the echoed id equals it, or
+ * (old kernel) there is no echoed id at all. A different id is a stale reply.
+ */
+export function answersRequest(message: KernelResponse, id: string): boolean {
+  const echoed = echoedRequestId(message);
+  return echoed === undefined || echoed === id;
+}
+
 function isTrainabilityResponse(message: KernelResponse): message is TrainabilityResponse {
   return typeof message.type === 'string' && message.type.startsWith('trainability_');
 }
@@ -144,6 +172,7 @@ function isTrainabilityResponse(message: KernelResponse): message is Trainabilit
 export function createTrainabilityClient(session: LabSession, options: ClientOptions = {}): TrainabilityClient {
   const opts = { ...DEFAULTS, ...options };
   const newJobId = options.newJobId ?? newTrainabilityJobId;
+  const newRequestId = options.newRequestId ?? newTrainabilityRequestId;
   // Serialize sync requests: no correlation id on the wire.
   let chain: Promise<unknown> = Promise.resolve();
   const enqueue = <T,>(task: () => Promise<T>): Promise<T> => {
@@ -156,12 +185,13 @@ export function createTrainabilityClient(session: LabSession, options: ClientOpt
     message: TrainabilityRequest,
     match: (response: KernelResponse) => response is T,
     timeoutMs: number,
+    requestId?: string,
   ): Promise<ClientResult<T>> {
     return enqueue(async () => {
       try {
         const outcome = await request(session, message, match, {
           timeoutMs,
-          matchError: isTrainabilityError,
+          matchError: (error) => isTrainabilityError(error) && (requestId === undefined || answersRequest(error, requestId)),
         });
         return outcome.ok
           ? { ok: true as const, value: outcome.value }
@@ -174,22 +204,29 @@ export function createTrainabilityClient(session: LabSession, options: ClientOpt
 
   return {
     async inspect(input) {
+      const requestId = newRequestId();
       const result = await sync(
-        { type: 'trainability_inspect', ...input },
-        (m): m is Extract<TrainabilityResponse, { type: 'trainability_inspected' }> => m.type === 'trainability_inspected',
+        { type: 'trainability_inspect', ...input, request_id: requestId },
+        (m): m is Extract<TrainabilityResponse, { type: 'trainability_inspected' }> =>
+          m.type === 'trainability_inspected' && answersRequest(m, requestId),
         opts.inspectTimeoutMs,
+        requestId,
       );
       if (!result.ok) return result;
-      const { type: _type, ...inspection } = result.value;
+      const { type: _type, request_id: _requestId, ...inspection } = result.value;
       void _type;
+      void _requestId;
       return { ok: true, value: inspection };
     },
 
     async lint(input) {
+      const requestId = newRequestId();
       const result = await sync(
-        { type: 'trainability_lint', ...input },
-        (m): m is Extract<TrainabilityResponse, { type: 'trainability_lint_result' }> => m.type === 'trainability_lint_result',
+        { type: 'trainability_lint', ...input, request_id: requestId },
+        (m): m is Extract<TrainabilityResponse, { type: 'trainability_lint_result' }> =>
+          m.type === 'trainability_lint_result' && answersRequest(m, requestId),
         opts.lintTimeoutMs,
+        requestId,
       );
       if (!result.ok) return result;
       return { ok: true, value: { diagnostics: result.value.diagnostics, summary: result.value.summary } };
@@ -216,10 +253,12 @@ export function createTrainabilityClient(session: LabSession, options: ClientOpt
       const unsubscribe = session.subscribe((message) => {
         if (finished) return;
         if (message.type === 'error') {
-          // Job-correlated errors, or an uncorrelated trainability error
-          // (e.g. `trainability_busy`) before the ack.
-          const mine = message.job_id === jobId || (message.job_id === undefined && !acked && isTrainabilityError(message));
-          if (mine) finish({ kind: 'error', error: fromKernelError(message) });
+          // Only errors tagged with THIS job's id end it. The kernel answers a
+          // rejected start (`trainability_busy`, a bad request) with the job_id
+          // echoed, and sync inspect/lint errors never carry one. Adopting an
+          // uncorrelated error would let a stale lint failure kill a running
+          // job; a start the kernel never acknowledges ends via the ack timeout.
+          if (message.job_id === jobId) finish({ kind: 'error', error: fromKernelError(message) });
           return;
         }
         if (!isTrainabilityResponse(message)) return;

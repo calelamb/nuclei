@@ -12,6 +12,7 @@ from qiskit.circuit import Parameter, ParameterVector  # noqa: E402
 from qiskit.circuit.library import UnitaryGate  # noqa: E402
 
 from kernel.discovery.evaluators import EVALUATORS, InvalidConfig, effective_config, normalize_config  # noqa: E402
+from kernel.discovery.evaluators._frontier_trainability import TRAIN_PENALTY_CAP  # noqa: E402
 from kernel.discovery.evaluators.trainability_frontier import HONESTY, SPEC  # noqa: E402
 from kernel.trainability.convert import from_object  # noqa: E402
 from kernel.trainability.ir import IrError  # noqa: E402
@@ -70,41 +71,47 @@ def test_registered_spec_contract():
     assert EVALUATORS["trainability_frontier"] is SPEC
     assert SPEC.task == "quantum_circuit" and SPEC.default_entry == "build"
     assert SPEC.entry_signature.startswith("build(n_qubits: int, n_layers: int)")
-    assert [o["key"] for o in SPEC.objectives] == ["beta", "estimation_hardness"]
-    assert [d["key"] for d in SPEC.descriptors] == ["log2_dla_dimension", "two_qubit_gates_per_layer"]
+    assert [o["key"] for o in SPEC.objectives] == ["beta", "pp_exact_cost"]
+    assert [o["label"] for o in SPEC.objectives][1] == "Pauli-propagation exact cost (log10 strings)"
+    assert [d["key"] for d in SPEC.descriptors] == [
+        "dla_fill_fraction", "light_cone_qubits", "two_qubit_gates_per_layer", "log2_dla_dimension"]
     defaults = normalize_config(SPEC, {})
     assert defaults["qubits"] == [8, 16, 32, 64] and defaults["n_layers"] == 4
-    assert defaults["observable"] == "preset:local_z" and defaults["dla_probe_qubits"] == 4
+    assert defaults["observable"] == "preset:local_z" and defaults["dla_probe_qubits"] == [4, 5, 6]
     assert defaults["max_parameters_per_qubit"] == 24
-    assert defaults["weights"] == {"trainability": 1.0, "hardness": 0.5}
+    assert defaults["weights"] == {"trainability": 1.0, "pp_cost": 0.5}
     assert defaults["estimation"]["target_width"] == 0.02 and defaults["estimation"]["max_frontier"] == 200000
 
 
 @pytest.mark.parametrize("bad", [
     {"qubits": [8]}, {"qubits": [2, 8]}, {"qubits": [8, 200]}, {"qubits": [4, 6, 8, 10, 12, 14, 16]},
     {"qubits": [16, 8]}, {"qubits": [8, 8]}, {"n_layers": 0}, {"unknown": 1}, {"observable": "Q1"},
-    {"observable": "Z40"}, {"estimation": {"max_frontier": 5}}, {"weights": {"speed": 1}},
-    {"dla_probe_qubits": 12},
+    {"observable": "Z40"}, {"estimation": {"max_frontier": 5}}, {"weights": {"speed": 1}}, {"weights": {"hardness": 1}},
+    {"dla_probe_qubits": 12}, {"dla_probe_qubits": [4]}, {"dla_probe_qubits": [5, 4]}, {"dla_probe_qubits": [4, 12]},
+    {"dla_probe_qubits": [4, 5, 6, 7]},
 ])
 def test_invalid_configs_are_rejected(bad):
     with pytest.raises(InvalidConfig):
         normalize_config(SPEC, bad)
 
 
-def test_calls_cover_every_size_plus_the_probe():
-    cfg = config({"dla_probe_qubits": 5})
-    assert SPEC.calls(cfg) == [{"args": [n, 3], "kwargs": {}} for n in [*SIZES, 5]]
+def test_calls_cover_every_size_plus_every_probe():
+    cfg = config({"dla_probe_qubits": [4, 5]})
+    assert SPEC.calls(cfg) == [{"args": [n, 3], "kwargs": {}} for n in [*SIZES, 4, 5]]
 
 
 def test_stages_screen_uses_two_sizes_and_a_tenth_of_the_frontier():
-    assert [c["args"][0] for c in SPEC.calls(config(stage="screen"))] == [4, 6, 4]
-    assert [c["args"][0] for c in SPEC.calls(config(stage="full"))] == [4, 6, 8, 10, 4]
+    assert [c["args"][0] for c in SPEC.calls(config(stage="screen"))] == [4, 6, 4, 5, 6]
+    assert [c["args"][0] for c in SPEC.calls(config(stage="full"))] == [4, 6, 8, 10, 4, 5, 6]
     full = run(seed_like, stage="full")
     screen = run(seed_like, stage="screen")
     assert full["metrics"]["settings"]["max_frontier"] == 200000
     assert screen["metrics"]["settings"]["max_frontier"] == 20000
     assert screen["metrics"]["settings"]["sizes"] == [4, 6]
-    assert screen["metrics"]["fit"]["method"] == "secant"  # 2 sizes: below the fitter's minimum of 4
+    fit = screen["metrics"]["fit"]
+    assert fit["fit_method"] == "secant"  # 2 sizes: below the fitter's minimum of 4
+    assert fit["beta_ci95"] is None and screen["objectives"]["beta"]["ci95"] is None  # never a zero-width CI
+    assert screen["objectives"]["beta"]["fit_method"] == "secant" and fit["beta_extreme_bound"][0] <= fit["beta"]
 
 
 # --- one cheating or degenerate candidate per guardrail -------------------------
@@ -155,8 +162,78 @@ def disconnected_blocks(n, layers):
     return qc
 
 
+def small_algebra(n, layers):
+    """Connected, but RY + CZ generates a polynomial-dimension algebra (20 at n = 4)."""
+    return brick_ansatz(n, layers, axes="Y")
+
+
 def single_axis_product(n, layers):
     return brick_ansatz(n, layers, entangle=False, axes="Y")
+
+
+def rich_only_at_n4(n, layers):
+    """PH-H2 (a): the exact exploit, a rich ansatz when n == 4 and a product circuit otherwise."""
+    return brick_ansatz(n, layers, entangle=(n == 4))
+
+
+def cz_dressed_product(n, layers):
+    """PH-H2 (b): a product circuit behind a CZ chain that is a no-op on |0...0>."""
+    qc = QuantumCircuit(n)
+    for q in range(n - 1):
+        qc.cz(q, q + 1)
+    return qc.compose(brick_ansatz(n, layers, entangle=False))
+
+
+def x_cx_dressed_product(n, layers):
+    """The same trick with basis-state permutations (X, CX with a known control) and S / Z phases."""
+    qc = QuantumCircuit(n)
+    qc.x(0)
+    for q in range(n - 1):
+        qc.cx(q, q + 1)
+        qc.s(q)
+        qc.cz(q, q + 1)
+    return qc.compose(brick_ansatz(n, layers, entangle=False))
+
+
+def pattern_switch_with_n(n, layers):
+    """A brick below n = 8 but a CZ star above it, with the same bond count per layer."""
+    qc = QuantumCircuit(n)
+    theta = ParameterVector("t", 2 * n * layers)
+    k = 0
+    for _ in range(layers):
+        for q in range(n):
+            qc.ry(theta[k], q)
+            qc.rz(theta[k + 1], q)
+            k += 2
+        if n < 8:
+            for start in (0, 1):
+                for q in range(start, n - 1, 2):
+                    qc.cz(q, q + 1)
+        else:
+            for q in range(1, n):
+                qc.cz(0, q)
+    return qc
+
+
+def sparse_entanglers_at_large_n(n, layers):
+    """Connected everywhere, but the entangler density collapses to a single chain for n >= 8."""
+    qc = QuantumCircuit(n)
+    theta = ParameterVector("t", 2 * n * layers)
+    k = 0
+    for _ in range(layers):
+        for q in range(n):
+            qc.ry(theta[k], q)
+            qc.rz(theta[k + 1], q)
+            k += 2
+        if n < 8:
+            for start in (0, 1):
+                for q in range(start, n - 1, 2):
+                    qc.cz(q, q + 1)
+    if n >= 8:
+        qc.cz(0, 1)
+        for q in range(1, n - 1):
+            qc.cz(q, q + 1)
+    return qc
 
 
 CASES = [
@@ -168,7 +245,13 @@ CASES = [
     (identity_like, "nontrivial_variance"),
     (product_ansatz, "nontrivial_algebra"),
     (single_axis_product, "nontrivial_algebra"),
+    (small_algebra, "nontrivial_algebra"),
     (disconnected_blocks, "nontrivial_algebra"),
+    (rich_only_at_n4, "nontrivial_algebra"),
+    (cz_dressed_product, "nontrivial_algebra"),
+    (x_cx_dressed_product, "nontrivial_algebra"),
+    (pattern_switch_with_n, "nontrivial_algebra"),
+    (sparse_entanglers_at_large_n, "nontrivial_algebra"),
 ]
 
 
@@ -190,8 +273,8 @@ def test_rejection_details_name_the_cause():
     assert "Expected exactly 6 qubits" in run(wrong_width)["rejection"]["message"]
     assert "104 free parameters exceeds the budget of 96" in run(too_many_params)["rejection"]["message"]
     assert "identity-like" in run(identity_like)["rejection"]["message"]
-    message = run(single_axis_product)["rejection"]["message"]
-    assert "<= 2n=8" in message and "classification" in message
+    message = run(small_algebra)["rejection"]["message"]
+    assert "<= 4n^2=64" in message and "classification" in message
     assert "independent blocks" in run(product_ansatz)["rejection"]["message"]
 
 
@@ -210,7 +293,7 @@ def test_no_parameters_is_nontrivial_variance_not_a_crash():
 
 
 def test_inexact_points_warn_and_downweight_but_never_fail():
-    tight = {"estimation": {"max_frontier": 100}, "n_layers": 4}
+    tight = {"estimation": {"max_frontier": 10000}, "n_layers": 4}  # n = 4, 6 exact; 8, 10 stopped
     result = run(seed_like, tight)
     assert result["status"] == "scored"
     exactness = next(g for g in result["guardrails"] if g["id"] == "exactness")
@@ -234,55 +317,57 @@ def test_scored_shape(scored):
     assert scored["status"] == "scored"
     assert [g["id"] for g in scored["guardrails"]] == IDS
     assert all(g["status"] == "pass" for g in scored["guardrails"])
-    assert set(scored["descriptors"]) == {"log2_dla_dimension", "two_qubit_gates_per_layer"}
-    assert 0 <= scored["descriptors"]["log2_dla_dimension"] <= 8
-    assert scored["descriptors"]["two_qubit_gates_per_layer"] == pytest.approx(3.0)  # n=4 brick: 3 CZ per layer
+    assert set(scored["descriptors"]) == {
+        "dla_fill_fraction", "light_cone_qubits", "two_qubit_gates_per_layer", "log2_dla_dimension"}
+    assert 0 <= scored["descriptors"]["log2_dla_dimension"] <= 12
+    assert scored["descriptors"]["dla_fill_fraction"] == pytest.approx(1.0, abs=1e-3)  # the brick fills su(64) at n = 6
+    assert scored["descriptors"]["light_cone_qubits"] == scored["metrics"]["light_cone"]["width"]
+    assert scored["descriptors"]["two_qubit_gates_per_layer"] == pytest.approx(5.0)  # largest probe n=6 brick: 5 CZ per layer
     assert scored["compute"] == {"backend": "numpy", "method": "pauli_propagation_exact"}
     m = scored["metrics"]
     assert m["honesty"] == HONESTY
-    assert HONESTY.startswith("Hardness is resistance to *this* Pauli-propagation estimator under *this* budget.")
+    assert "*Pauli propagation*" in HONESTY and "not that the circuit is classically hard" in HONESTY
+    assert "It is not a proof of classical hardness." in HONESTY
     assert [p["n_qubits"] for p in m["variance_points"]] == SIZES
     assert all(p["method"] == "pauli_propagation_exact" and p["variance_ci95"][0] <= p["variance"] * (1 + 1e-12) for p in m["variance_points"])
-    assert m["dla"]["dimension"] == 255 and m["dla"]["classification"]["label"] == "su(16)"
+    assert m["dla"]["dimension"] == 4095 and m["dla"]["classification"]["label"] == "su(64)"  # largest probe n = 6
     assert m["features"]["n_qubits"] == SIZES[-1] and m["features"]["entangler"] == "cz"
-    assert m["censored"] is m["hardness"]["censored"]
+    assert m["censored"] is m["pp_exact_cost"]["censored"]
 
 
 def test_fitness_is_the_documented_combination(scored):
     m, w = scored["metrics"], scored["metrics"]["settings"]["weights"]
     fit = m["fit"]
-    assert fit["trainability_term"] == -max(fit["beta_upper95"], 0.0)
-    expected = w["trainability"] * fit["trainability_term"] + w["hardness"] * m["hardness"]["hardness_lower"]
+    assert fit["trainability_term"] == -min(fit["decay_per_doubling"], TRAIN_PENALTY_CAP)
+    hardness = m["hardness"]
+    assert hardness["value"] == pytest.approx(min(hardness["pp_log10_strings"], m["light_cone"]["width"] * 0.30103))
+    expected = w["trainability"] * fit["trainability_term"] + w["pp_cost"] * hardness["value"]
     assert scored["fitness"] == pytest.approx(expected - m["exactness"]["penalty"])
     beta = scored["objectives"]["beta"]
-    assert beta["direction"] == "minimize" and beta["ci95"][1] == pytest.approx(fit["beta_upper95"])
-    assert scored["objectives"]["estimation_hardness"]["direction"] == "maximize"
-    assert scored["objectives"]["estimation_hardness"]["value"] == m["hardness"]["hardness_lower"]
+    assert beta["direction"] == "minimize" and beta["fit_method"] == "weighted_log_fit"
+    assert beta["ci95"][1] == pytest.approx(fit["beta_upper95"])
+    cost = scored["objectives"]["pp_exact_cost"]
+    assert cost["direction"] == "maximize" and cost["value"] == m["pp_exact_cost"]["log10_strings_lower"]
+    assert "estimation_hardness" not in scored["objectives"]
 
 
-def test_hardness_probe_is_pessimistic_over_three_points(scored):
-    hardness = scored["metrics"]["hardness"]
-    assert hardness["n_qubits"] == SIZES[-1] and len(hardness["points"]) == 3
-    assert hardness["hardness_lower"] == min(p["hardness"] for p in hardness["points"])
-    for point in hardness["points"]:
-        widths = [c["width"] for c in point["curve"]]
-        sizes = [c["max_frontier"] for c in point["curve"]]
-        assert sizes == sorted(sizes) and sizes[0] == 100
-        if not point["censored"]:
-            assert widths[-1] <= hardness["target_width"] and point["frontier_needed"] == sizes[-1]
-
-
-def test_censored_probe_reports_the_cap_not_a_measurement():
-    result = run(seed_like, {"estimation": {"max_frontier": 1000, "target_width": 1e-4}, "n_layers": 5})
-    hardness = result["metrics"]["hardness"]
-    assert result["status"] == "scored"
-    if hardness["censored"]:  # the lower bound on hardness is the cap itself
-        assert hardness["frontier_needed_lower"] == 1000 and hardness["hardness_lower"] == pytest.approx(3.0)
-        assert result["metrics"]["censored"] is True
+def test_exact_cost_is_the_untruncated_frontier_peak_at_the_largest_size(scored):
+    cost = scored["metrics"]["pp_exact_cost"]
+    assert cost["n_qubits"] == SIZES[-1] and len(cost["points"]) == 3
+    assert cost["log10_strings_lower"] == min(p["log10_strings"] for p in cost["points"])
+    assert cost["strings_lower"] == min(p["frontier_peak"] for p in cost["points"])
+    assert cost["censored"] is False and all(p["exact"] and not p["censored"] for p in cost["points"])
+    assert "needed" in cost["statement"] and "strings to compute <O> exactly" in cost["statement"]
+    l1 = SIZES[-1]  # term-normalised local_z: sum of n unit coefficients
+    assert all(-l1 <= p["interval"][0] <= p["interval"][1] <= l1 for p in cost["points"])
+    curve = cost["diagnostics"]["bound_width_curve"]
+    assert curve["role"] == "diagnostic_only" and curve["l1_bound"] == l1
+    sizes = [c["max_frontier"] for c in curve["curve"]]
+    assert sizes == sorted(sizes) and sizes[0] == 100
 
 
 def test_local_observable_may_scale_polynomially_and_still_score():
-    result = run(lambda n, layers: brick_ansatz(n, 1), {"n_layers": 1})
+    result = run(lambda n, layers: brick_ansatz(n, 2), {"n_layers": 2})
     assert result["status"] == "scored"
     assert result["metrics"]["fit"]["trainability_term"] <= 0.0
 
@@ -337,14 +422,14 @@ def test_deterministic_per_seed_and_independent_across_seeds(scored):
     assert again == scored
     other = run(seed_like, seed=4)
     assert other["metrics"]["variance_points"] == scored["metrics"]["variance_points"]  # exact PPE: no randomness
-    values = lambda r: [c["value"] for p in r["metrics"]["hardness"]["points"] for c in p["curve"]]  # noqa: E731
+    values = lambda r: [p["value"] for p in r["metrics"]["pp_exact_cost"]["points"]]  # noqa: E731
     assert values(other) != values(scored)
 
 
 def test_confirm_uses_an_independent_probe_stream_with_identical_variances(scored):
     confirm = run(seed_like, seed=3, stage="confirm")
     assert confirm["metrics"]["variance_points"] == scored["metrics"]["variance_points"]
-    values = lambda r: [c["value"] for p in r["metrics"]["hardness"]["points"] for c in p["curve"]]  # noqa: E731
+    values = lambda r: [p["value"] for p in r["metrics"]["pp_exact_cost"]["points"]]  # noqa: E731
     assert values(confirm) != values(scored)
     assert confirm["metrics"]["settings"]["stage"] == "confirm"
 

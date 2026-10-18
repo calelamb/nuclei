@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react';
-import { TrainabilityLab } from './TrainabilityLab';
+import { TrainabilityLab, TrainabilityUnavailable } from './TrainabilityLab';
 import { TrainabilitySidebar } from './TrainabilitySidebar';
 import { useCircuitStore } from '../../stores/circuitStore';
 import { useEditorStore } from '../../stores/editorStore';
@@ -17,6 +17,7 @@ import {
   circuitSnapshotFixture,
   inspectionFixture,
   jobFixture,
+  lieSimulableFixture,
   lintDiagnosticsFixture,
   lintSummaryFixture,
 } from '../../services/trainability/fixtures';
@@ -68,7 +69,8 @@ afterEach(() => {
 describe('TrainabilityLab: web build', () => {
   it('shows the friendly desktop-kernel state and no controls', () => {
     mountLab('web');
-    expect(screen.getByText('The Trainability Lab needs the desktop kernel')).toBeTruthy();
+    expect(screen.getByText('The Trainability Lab runs on the desktop app')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Download Nuclei' })).toBeTruthy();
     expect(screen.queryByRole('button', { name: /Run analyses/ })).toBeNull();
     expect(session.sent).toHaveLength(0);
   });
@@ -139,7 +141,7 @@ describe('TrainabilityLab: populated', () => {
     expect(screen.getByText('BP risk: high')).toBeTruthy();
     const evidence = screen.getByRole('list', { name: 'Evidence chain' });
     expect(within(evidence).getAllByRole('listitem').length).toBeGreaterThanOrEqual(3);
-    expect(screen.getByText('exponential dla')).toBeTruthy();
+    expect(screen.getByText('Exponential DLA')).toBeTruthy();
     expect(screen.getByRole('list', { name: 'Lint diagnostics' })).toBeTruthy();
     expect(screen.getByText('Cerezo et al., Nat. Commun. 12, 1791 (2021)').getAttribute('href')).toContain('doi.org');
     expect((screen.getByRole('button', { name: /Export certificate/ }) as HTMLButtonElement).disabled).toBe(false);
@@ -327,5 +329,154 @@ describe('TrainabilitySidebar', () => {
     fireEvent.click(within(list).getByText('hardware_efficient.py'));
     expect(useTrainabilityStore.getState().selectedJobId).toBe(job.id);
     expect(screen.getByText('/proj/experiments/x.trainability.json')).toBeTruthy();
+  });
+});
+
+describe('review fixes: target bar (UI-2, UI-3)', () => {
+  it('shows a "from file" chip for a declared observable, and drops it when the user edits', () => {
+    seed({ observable: 'preset:global_z', observableSource: 'file' });
+    mountLab();
+    expect(screen.getByText('from file')).toBeTruthy();
+    fireEvent.change(screen.getByLabelText('Observable'), { target: { value: '0.5*Z0*Z1' } });
+    expect(screen.queryByText('from file')).toBeNull();
+    expect(useTrainabilityStore.getState().observableSource).toBe('user');
+    // The file still declares preset:global_z: offer to go back.
+    expect(screen.getByText('preset:global_z')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: "Use the file's" }));
+    expect(useTrainabilityStore.getState().observable).toBe('preset:global_z');
+    expect(screen.getByText('from file')).toBeTruthy();
+  });
+
+  it('picking a preset overrides the file', () => {
+    seed({ observable: 'preset:global_z', observableSource: 'file' });
+    mountLab();
+    fireEvent.click(screen.getByRole('button', { name: 'TFIM' }));
+    expect(screen.queryByText('from file')).toBeNull();
+    expect(useTrainabilityStore.getState().observable).toBe('preset:tfim');
+  });
+
+  it('explains why Run is disabled for a circuit with no parameters', () => {
+    seed({ inspect: { status: 'ready', data: { ...inspectionFixture, parameters: [], param_gates: [] }, error: null, codeKey: 'k' } });
+    mountLab();
+    const run = screen.getByRole('button', { name: /Run analyses/ }) as HTMLButtonElement;
+    expect(run.disabled).toBe(true);
+    expect(screen.getByText(/no free parameters \(m = 0\), so there is nothing to train/)).toBeTruthy();
+    expect(run.getAttribute('aria-describedby')).toBe('trainability-run-reason');
+  });
+});
+
+describe('review fixes: verdict rail (UI-3, UI-5, low items)', () => {
+  it('shows BP risk as not applicable, never "low", for a parameter-free job', () => {
+    const base = jobFixture();
+    withJob({ ...base, target: { ...base.target, nParameters: 0 }, results: { lie: { ...lieSimulableFixture } } });
+    mountLab();
+    expect(screen.getByText('BP risk: n/a (no free parameters)')).toBeTruthy();
+    expect(screen.queryByText('BP risk: low')).toBeNull();
+  });
+
+  it('labels evidence chips with names, not raw ids like "lie"', () => {
+    withJob();
+    mountLab();
+    const evidence = screen.getByRole('list', { name: 'Evidence chain' });
+    expect(within(evidence).getAllByText('Lie algebra').length).toBeGreaterThan(0);
+    expect(within(evidence).queryByText('lie')).toBeNull();
+  });
+
+  it('renders duplicate diagnostics without React key warnings (UI-5)', () => {
+    const errors = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    withJob();
+    const dup = lintDiagnosticsFixture[1];
+    useTrainabilityStore.setState({
+      lint: { status: 'ready', diagnostics: [dup, dup, dup], summary: lintSummaryFixture, error: null, codeKey: 'k' },
+    });
+    mountLab();
+    expect(screen.getAllByText('Dead parameter')).toHaveLength(3);
+    expect(errors.mock.calls.filter((c) => String(c[0]).includes('same key'))).toHaveLength(0);
+  });
+
+  it('softens the TRN003 wording in the lint list', () => {
+    withJob();
+    useTrainabilityStore.setState({
+      lint: {
+        status: 'ready',
+        diagnostics: [
+          {
+            code: 'TRN003',
+            severity: 'info',
+            title: 'Polynomial dynamical Lie algebra',
+            message: 'dim 𝔤 = 15 ≤ 36: the circuit is trainable in the barren-plateau sense but likely classically simulable with 𝔤-sim.',
+            citation: null,
+            line: null,
+            source_indices: [],
+          },
+        ],
+        summary: lintSummaryFixture,
+        error: null,
+        codeKey: 'k',
+      },
+    });
+    mountLab();
+    const list = screen.getByRole('list', { name: 'Lint diagnostics' });
+    expect(list.textContent).not.toContain('is trainable in the barren-plateau sense');
+    expect(list.textContent).toContain('does not bound the gradient variance');
+  });
+
+  it('keeps the caveat free of literal asterisks', () => {
+    withJob();
+    mountLab();
+    expect(screen.getByText(/Hardness is resistance to this Pauli-propagation estimator/).textContent).not.toContain('*');
+  });
+
+  it('wraps the certificate path inside the rail card (no overflow)', () => {
+    withJob();
+    mountLab();
+    const note = screen.getByText(/Writes/);
+    expect(note.getAttribute('style')).toContain('overflow-wrap: anywhere');
+  });
+});
+
+describe('review fixes: cancelled analyses are neutral (medium 15)', () => {
+  it('shows "Not run (cancelled)" instead of a danger callout, and a neutral status pill', () => {
+    withJob(jobFixture({ status: 'cancelled', results: {}, provenance: null }));
+    mountLab();
+    fireEvent.click(screen.getByRole('tab', { name: 'Lie algebra' }));
+    expect(screen.getByText('Not run (cancelled)')).toBeTruthy();
+    expect(screen.queryByRole('alert')).toBeNull();
+    expect(screen.queryByText(/Lie algebra failed/)).toBeNull();
+    const pill = screen.getAllByText('cancelled')[0].closest('.lab-pill');
+    expect(pill?.className).not.toMatch(/warning|danger/);
+  });
+
+  it('keeps cancelled neutral in the sidebar too', () => {
+    const job = jobFixture({ status: 'cancelled' });
+    useTrainabilityStore.setState({ jobs: { [job.id]: job }, jobOrder: [job.id] });
+    render(<TrainabilitySidebar />);
+    const pill = screen.getByText('cancelled').closest('.lab-pill');
+    expect(pill?.className).not.toMatch(/warning|danger/);
+  });
+});
+
+describe('review fixes: web-unavailable state and sidebar (low items)', () => {
+  it('opens the releases page from the download button', async () => {
+    const open = vi.spyOn(window, 'open').mockImplementation(() => null);
+    mountLab('web');
+    fireEvent.click(screen.getByRole('button', { name: 'Download Nuclei' }));
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(open).toHaveBeenCalledWith('https://github.com/calelamb/nuclei/releases', '_blank', 'noopener,noreferrer');
+  });
+
+  it('does not tell a web user to "Run analyses from the Trainability Lab"', () => {
+    useTrainabilityStore.setState({ unavailable: { reason: 'web_build', message: 'x' } });
+    render(<TrainabilitySidebar />);
+    expect(screen.queryByText(/Run analyses from the Trainability Lab/)).toBeNull();
+    expect(screen.getByText(/Analyses need the desktop app/)).toBeTruthy();
+  });
+
+  it('shows a connect failure without a download button', () => {
+    render(<TrainabilityUnavailable reason="connect_failed" message="Could not connect to the kernel at ws://x" />);
+    expect(screen.getByText('Could not connect to the kernel at ws://x')).toBeTruthy();
+    expect(screen.getByText('The Trainability Lab could not reach the kernel')).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Download Nuclei' })).toBeNull();
   });
 });

@@ -41,7 +41,7 @@ import numpy as np
 
 from . import _symplectic_gates as _g
 from ._symplectic_gates import SUPPORTED_NAMES as _SUPPORTED_NAMES  # noqa: F401
-from ._symplectic_gates import clifford_decomposition, is_clifford_gate  # noqa: F401
+from ._symplectic_gates import clifford_decomposition, clifford_sequence, is_clifford_gate  # noqa: F401
 from ._symplectic_keys import group_rows
 
 try:  # Stim is optional.

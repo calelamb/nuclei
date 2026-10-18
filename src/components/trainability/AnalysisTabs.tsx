@@ -1,5 +1,5 @@
 import { Activity, Atom, Layers, LineChart, Mountain } from 'lucide-react';
-import { LabSegmented, type LabSegmentedItem } from '../lab';
+import { LabErrorBoundary, LabSegmented, type LabSegmentedItem } from '../lab';
 import { useTrainabilityStore } from '../../stores/trainabilityStore';
 import type { TrainabilityJobRecord, TrainabilityTabId } from '../../types/trainability';
 import { AnalysisPanel } from './AnalysisPanel';
@@ -28,6 +28,9 @@ export function AnalysisTabs({ job }: { job: TrainabilityJobRecord | null }) {
     <div className="lab-stack" style={{ gap: 'var(--space-3)' }}>
       <LabSegmented items={TAB_ITEMS} value={activeTab} onChange={setActiveTab} label="Analyses" idPrefix={ID_PREFIX} />
       <div role="tabpanel" id={`${ID_PREFIX}-panel-${activeTab}`} aria-labelledby={`${ID_PREFIX}-tab-${activeTab}`} tabIndex={0}>
+        {/* A malformed payload in one tab must not take the Lab (or the app) down:
+            the boundary resets when the tab, job or its results change. */}
+        <LabErrorBoundary label={`The ${TAB_ITEMS.find((t) => t.id === activeTab)?.label ?? 'analysis'} tab`} resetKeys={[activeTab, job?.id, job?.results]} compact>
         {activeTab === 'gradients' && (
           <AnalysisPanel view={analysisView(job, 'gradients')} title="Gradients" emptyBody="Run the analyses to see per-parameter gradient variance with confidence intervals.">
             {(data) => <GradientsTab data={data} />}
@@ -58,6 +61,7 @@ export function AnalysisTabs({ job }: { job: TrainabilityJobRecord | null }) {
             {(data) => <LandscapeTab data={data} />}
           </AnalysisPanel>
         )}
+        </LabErrorBoundary>
       </div>
     </div>
   );

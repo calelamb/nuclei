@@ -197,6 +197,54 @@ def clifford_decomposition(name: str, angles: tuple[float, ...] = ()) -> tuple[s
     return None
 
 
+#: Local-qubit step: ``(supported Clifford name, local operand indices)``.
+Step = tuple[str, tuple[int, ...]]
+
+_TWO_QUBIT_ROTATIONS = frozenset({"RZZ", "RXX", "RYY", "RZX"})
+
+
+def _rzz_steps(k: int) -> list[Step]:
+    """``RZZ(kπ/2) = CX · S^k(target) · CX`` up to a global phase (``CX Z_b CX = Z_a Z_b``)."""
+    return [("CX", (0, 1)), *[("S", (1,))] * k, ("CX", (0, 1))]
+
+
+def _two_qubit_rotation_steps(key: str, k: int) -> list[Step]:
+    """Time-ordered local steps of ``R{PQ}(kπ/2)``: conjugate ``RZZ`` into the right Pauli frame."""
+    if k == 0:
+        return []
+    core = _rzz_steps(k)
+    if key == "RZZ":
+        return core
+    if key == "RXX":
+        pre = [("H", (0,)), ("H", (1,))]
+        return [*pre, *core, *pre]
+    if key == "RZX":
+        return [("H", (1,)), *core, ("H", (1,))]
+    # RYY: W = S H maps Z -> Y, U = W RZZ W†; time order is W† (S† then H), RZZ, then W (H then S)
+    pre = [("SDG", (0,)), ("SDG", (1,)), ("H", (0,)), ("H", (1,))]
+    post = [("H", (0,)), ("H", (1,)), ("S", (0,)), ("S", (1,))]
+    return [*pre, *core, *post]
+
+
+def clifford_sequence(name: str, angles: tuple[float, ...] = ()) -> list[Step] | None:
+    """Time-ordered ``(name, local operand indices)`` steps equal (up to global phase) to the gate, or None.
+
+    Covers everything :func:`clifford_decomposition` does (acting on the gate's single qubit) and the
+    two-qubit rotations ``RZZ/RXX/RYY/RZX`` at multiples of ``π/2`` (Clifford, previously rejected).
+    """
+    key = name.strip().upper()
+    key = ALIASES.get(key, key)
+    if key in _TWO_QUBIT_ROTATIONS and len(angles) == 1:
+        k = _near_multiple(float(angles[0]), math.pi / 2)
+        return None if k is None else _two_qubit_rotation_steps(key, k)
+    seq = clifford_decomposition(name, angles)
+    if seq is None:
+        return None
+    if key in _GATE_MATRICES and key not in _ONE_QUBIT:
+        return [(key, (0, 1))]
+    return [(nm, (0,)) for nm in seq]
+
+
 def is_clifford_gate(name: str, angles: tuple[float, ...] = ()) -> bool:
-    """True for supported Cliffords and RZ/RX/RY/P at multiples of pi/2."""
-    return clifford_decomposition(name, angles) is not None
+    """True for supported Cliffords and RZ/RX/RY/P at multiples of pi/2 (and RZZ/RXX/RYY/RZX likewise)."""
+    return clifford_sequence(name, angles) is not None

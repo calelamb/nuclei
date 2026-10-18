@@ -55,10 +55,30 @@
   --lab-seq-7: #9ec5f4;
   --lab-seq-8: #cde2fb;
 
+  /* Label ink for text drawn ON a sequential step, chosen by luminance so it
+     keeps >= 4.5:1 against the step (pinned by labContrast.test.ts). */
+  --lab-seq-ink-0: #ffffff;
+  --lab-seq-ink-1: #ffffff;
+  --lab-seq-ink-2: #ffffff;
+  --lab-seq-ink-3: #ffffff;
+  --lab-seq-ink-4: #ffffff;
+  --lab-seq-ink-5: #000000;
+  --lab-seq-ink-6: #000000;
+  --lab-seq-ink-7: #000000;
+  --lab-seq-ink-8: #000000;
+
   /* Diverging (polarity): blue <-> red, neutral gray midpoint. */
   --lab-div-neg: #3987e5;
   --lab-div-mid: #383835;
   --lab-div-pos: #e66767;
+
+  /* WCAG AA (>= 4.5:1) text inks. The app tokens are tuned for the editor
+     chrome; the Lab renders 10-12 px text on raised/overlay surfaces and soft
+     tinted pills, so it re-declares the ink tokens it reads. The contrast
+     unit test (labContrast.test.ts) pins every pair below. */
+  --color-text-tertiary: #8393aa;
+  --color-danger: #f87171;
+  --lab-dirac-ink: #d4a9ec;
 
   color-scheme: dark;
   font-family: var(--font-sans);
@@ -88,9 +108,28 @@
   --lab-seq-7: #104281;
   --lab-seq-8: #0d366b;
 
+  --lab-seq-ink-0: #000000;
+  --lab-seq-ink-1: #000000;
+  --lab-seq-ink-2: #000000;
+  --lab-seq-ink-3: #000000;
+  --lab-seq-ink-4: #000000;
+  --lab-seq-ink-5: #000000;
+  --lab-seq-ink-6: #ffffff;
+  --lab-seq-ink-7: #ffffff;
+  --lab-seq-ink-8: #ffffff;
+
   --lab-div-neg: #2a78d6;
   --lab-div-mid: #f0efec;
   --lab-div-pos: #e34948;
+
+  --color-text-secondary: #4c5b70;
+  --color-text-tertiary: #475569;
+  --color-accent-quantum: #0b6580;
+  --color-success: #046548;
+  --color-warning: #92400e;
+  --color-danger: #b91c1c;
+  --color-info: #1d4ed8;
+  --lab-dirac-ink: #6b21a8;
 
   color-scheme: light;
 }
@@ -234,6 +273,8 @@
   letter-spacing: 0.07em;
   color: var(--color-text-tertiary);
   margin: 0;
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 /* ── KPI ─────────────────────────────────────────────────────────────── */
@@ -318,7 +359,7 @@
 
 .lab-pill svg { flex-shrink: 0; }
 .lab-pill--quantum { background: var(--lab-quantum-soft); color: var(--color-accent-quantum); }
-.lab-pill--dirac { background: var(--lab-dirac-soft); color: color-mix(in srgb, var(--color-accent-dirac) 70%, var(--color-text-primary)); }
+.lab-pill--dirac { background: var(--lab-dirac-soft); color: var(--lab-dirac-ink); }
 .lab-pill--success { background: var(--lab-success-soft); color: var(--color-success); }
 .lab-pill--warning { background: var(--lab-warning-soft); color: var(--color-warning); }
 .lab-pill--danger { background: var(--lab-danger-soft); color: var(--color-danger); }
@@ -367,7 +408,7 @@
 .lab-button:active:not(:disabled) { transform: translateY(0.5px); }
 .lab-button:disabled { opacity: 0.45; cursor: not-allowed; }
 
-.lab-button--sm { height: 26px; padding: 0 9px; font-size: 11.5px; }
+.lab-button--sm { height: 28px; padding: 0 9px; font-size: 11.5px; }
 .lab-button--md { height: 32px; padding: 0 14px; }
 .lab-button--icon { width: 28px; padding: 0; }
 
@@ -376,6 +417,8 @@
   border-color: var(--color-accent-quantum);
   color: var(--color-surface-base);
   font-weight: var(--font-weight-semibold);
+  /* Primary actions get the larger 32 px target, at any button size. */
+  height: 32px;
 }
 
 .lab-button--primary:hover:not(:disabled) {
@@ -416,7 +459,7 @@
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  height: 26px;
+  height: 28px;
   padding: 0 10px;
   border: 0;
   border-radius: 4px;
@@ -680,7 +723,7 @@ textarea.lab-input { height: auto; padding: 8px 10px; resize: vertical; line-hei
   white-space: nowrap;
 }
 
-.lab-table th button { all: unset; cursor: pointer; display: inline-flex; align-items: center; gap: 4px; }
+.lab-table th button { all: unset; cursor: pointer; display: inline-flex; align-items: center; gap: 4px; min-height: 28px; }
 .lab-table th button:focus-visible { outline: 2px solid var(--lab-focus); outline-offset: 2px; border-radius: 2px; }
 .lab-table td { padding: 7px 10px; border-bottom: 1px solid var(--lab-hairline); white-space: nowrap; }
 .lab-table td.lab-num, .lab-table th.lab-num { text-align: right; font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
@@ -752,3 +795,51 @@ textarea.lab-input { height: auto; padding: 8px 10px; resize: vertical; line-hei
     transition-duration: 1ms !important;
   }
 }
+
+/* ── Error state (LabErrorBoundary) ──────────────────────────────────── */
+
+.lab-error {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  gap: var(--space-2);
+  padding: var(--space-8) var(--space-6);
+  min-height: 180px;
+  color: var(--color-text-secondary);
+  background: transparent;
+}
+
+.lab-error__icon {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  background: var(--lab-danger-soft);
+  color: var(--color-danger);
+  margin-bottom: var(--space-1);
+}
+
+.lab-error__details { max-width: 60ch; width: 100%; text-align: left; font-size: 12px; }
+.lab-error__details summary { cursor: pointer; min-height: 28px; display: flex; align-items: center; }
+.lab-error__details pre { white-space: pre-wrap; overflow-wrap: anywhere; }
+
+/* ── Scroll affordance (LabScrollArea) ───────────────────────────────── */
+
+.lab-scroll { position: relative; min-width: 0; }
+.lab-scroll__viewport { overflow: auto; }
+.lab-scroll__fade {
+  position: absolute;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity var(--duration-fast) var(--ease-standard);
+}
+.lab-scroll__fade--right { top: 0; bottom: 0; right: 0; width: 28px; background: linear-gradient(90deg, transparent, var(--lab-surface-2)); }
+.lab-scroll__fade--left { top: 0; bottom: 0; left: 0; width: 28px; background: linear-gradient(270deg, transparent, var(--lab-surface-2)); }
+.lab-scroll__fade--bottom { left: 0; right: 0; bottom: 0; height: 28px; background: linear-gradient(180deg, transparent, var(--lab-surface-2)); }
+.lab-scroll[data-more-right='true'] .lab-scroll__fade--right,
+.lab-scroll[data-more-left='true'] .lab-scroll__fade--left,
+.lab-scroll[data-more-bottom='true'] .lab-scroll__fade--bottom { opacity: 1; }
+.lab-scroll__hint { margin-top: var(--space-1); font-size: 11px; color: var(--color-text-secondary); }

@@ -125,9 +125,10 @@ def _dla_rules(ctx: _Ctx, dla: dict, n_params: int) -> list[dict]:
         msg = (f"The dynamical Lie algebra has dimension {dim} = {cls['label']} (a dimension match, not a proof): "
                "the cost is expected to concentrate exponentially with n for deep circuits.")
         out.append(ctx.diag("TRN002", msg, "ragone", []))
-    if dim <= 4 * n * n:
-        msg = (f"dim 𝔤 = {dim} ≤ 4n² = {4 * n * n}: the circuit is trainable in the barren-plateau sense but "
-               "likely classically simulable with 𝔤-sim when the observable or state lies in 𝔤.")
+    if dim <= 4 * n * n and cls["family"] not in _EXPONENTIAL_FAMILIES:
+        msg = (f"dim 𝔤 = {dim} ≤ 4n² = {4 * n * n}: a polynomial-dimension algebra suggests the circuit is "
+               "classically simulable with 𝔤-sim when the observable or state lies in 𝔤. This does not by itself "
+               "guarantee trainability: the g-purities of the observable and state still decide the variance.")
         out.append(ctx.diag("TRN003", msg, "goh", []))
     if n_params >= dim:
         msg = (f"{n_params} parameters ≥ dim 𝔤 = {dim}: the circuit is in the overparameterization regime, "

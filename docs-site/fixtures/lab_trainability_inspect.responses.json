@@ -18,42 +18,66 @@
       {
         "source_index": 0,
         "parameter": "t[0]",
-        "gate": "RY"
+        "gate": "RY",
+        "qubits": [
+          0
+        ]
       },
       {
         "source_index": 1,
         "parameter": "t[1]",
-        "gate": "RY"
+        "gate": "RY",
+        "qubits": [
+          1
+        ]
       },
       {
         "source_index": 2,
         "parameter": "t[2]",
-        "gate": "RY"
+        "gate": "RY",
+        "qubits": [
+          2
+        ]
       },
       {
         "source_index": 3,
         "parameter": "t[3]",
-        "gate": "RY"
+        "gate": "RY",
+        "qubits": [
+          3
+        ]
       },
       {
         "source_index": 7,
         "parameter": "t[4]",
-        "gate": "RY"
+        "gate": "RY",
+        "qubits": [
+          0
+        ]
       },
       {
         "source_index": 8,
         "parameter": "t[5]",
-        "gate": "RY"
+        "gate": "RY",
+        "qubits": [
+          1
+        ]
       },
       {
         "source_index": 9,
         "parameter": "t[6]",
-        "gate": "RY"
+        "gate": "RY",
+        "qubits": [
+          2
+        ]
       },
       {
         "source_index": 10,
         "parameter": "t[7]",
-        "gate": "RY"
+        "gate": "RY",
+        "qubits": [
+          3
+        ]
       }
     ],
     "sweepable_params": [

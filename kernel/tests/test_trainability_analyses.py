@@ -226,3 +226,38 @@ def test_ppe_cancel_is_forwarded():
     c = hea_circuit(64, 2)
     with pytest.raises(AnalysisCancelled):
         gradient_statistics(c, parse_observable("preset:local_z", 64), method="ppe", cancel=lambda: True)
+
+
+# ------------------------------------------- PH-C1: no invented midpoint (review)
+def test_uninformative_ppe_above_statevector_limit_reports_null_headline_and_interval(monkeypatch):
+    """Reviewer's n=24 global_z brick: the PPE cannot resolve ~3e-8; the old code reported 0.48."""
+    small = {"max_frontier": 20_000, "time_budget_s": 30.0, "min_weight_abs": 0.0}
+    monkeypatch.setattr(analyses, "_AUTO_PPE", small)
+    monkeypatch.setattr(analyses, "_FORCED_PPE", small)
+    c = two_axis_hea(24, 12)
+    res = gradient_statistics(c, parse_observable("preset:global_z", 24))
+    assert res["method"] == "ppe" and res["interval_kind"] == "truncation"
+    assert res["variance_mean"] is None
+    lo, hi = res["variance_mean_ci95"]
+    assert 0.0 <= lo <= hi and res["interval"]["variance_mean"] == [lo, hi]
+    assert any("variance_mean is null" in n for n in res["notes"])
+    unresolved = [r for r in res["per_parameter"] if r["variance"] is None]
+    assert unresolved and all(r["variance_ci95"][1] > 0 for r in unresolved)
+    nulls = {r["name"] for r in unresolved}
+    assert {g["parameter"] for g in res["gate_values"] if g["variance"] is None} == nulls
+    assert res["gradient_norm_rms"] is None
+    json.dumps(res, allow_nan=False)
+
+
+def test_unresolved_ppe_falls_back_to_sampling_at_or_below_the_limit(monkeypatch):
+    monkeypatch.setattr(analyses, "_AUTO_PPE", {"max_frontier": 50, "time_budget_s": 30.0, "min_weight_abs": 0.0})
+    res = gradient_statistics(two_axis_hea(6, 4), parse_observable("preset:global_z", 6), samples=64, seed=2)
+    assert res["method"] == "sampling" and res["variance_mean"] is not None
+    assert res["fallback_reason"]
+
+
+def test_budget_exhausted_ppe_has_no_numeric_headline(monkeypatch):
+    zero = {"max_frontier": 2_000_000, "time_budget_s": 0.0, "min_weight_abs": 0.0}
+    monkeypatch.setattr(analyses, "_FORCED_PPE", zero)
+    res = gradient_statistics(two_axis_hea(5, 3), parse_observable("preset:global_z", 5), method="ppe")
+    assert res["interval"]["status"] == "budget_exhausted" and res["variance_mean"] is None

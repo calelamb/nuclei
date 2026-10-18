@@ -4,14 +4,16 @@
  * finished job. File IO lives in `certificateIo.ts`.
  */
 
-import { formatInterval, formatSci } from '../../components/lab/chartUtils';
+import { formatInterval, formatSci, formatValue } from '../../components/lab/chartUtils';
 import type {
   TrainabilityCertificateJson,
   TrainabilityDiagnostic,
   TrainabilityJobRecord,
 } from '../../types/trainability';
+import { diagnosticMessage } from './diagnosticCopy';
 import { TRAINABILITY_CITATIONS, type TrainabilityCitation } from './citations';
-import { deriveSimulabilityVerdict, deriveTrainabilityVerdict, primaryFit } from './verdict';
+import { intervalKindOf, intervalNounForKind, isNumber, methodDescription, validInterval, type IntervalSource } from './intervals';
+import { deriveSimulabilityVerdict, deriveTrainabilityVerdict, primaryFit, stripVerdictPrefix } from './verdict';
 
 export interface CertificateInput {
   job: TrainabilityJobRecord;
@@ -35,7 +37,7 @@ export function certificatePaths(fileName: string): { json: string; markdown: st
 }
 
 export function buildCertificateJson({ job, diagnostics, createdAt }: CertificateInput): TrainabilityCertificateJson {
-  const trainability = deriveTrainabilityVerdict(job.results, diagnostics);
+  const trainability = deriveTrainabilityVerdict(job.results, diagnostics, { nParameters: job.target.nParameters });
   const simulability = deriveSimulabilityVerdict(job.results);
   return {
     schema: 'nuclei.trainability.certificate/1',
@@ -70,6 +72,7 @@ export function serializeCertificateJson(doc: TrainabilityCertificateJson): stri
 
 const SIMULABILITY_LABEL = {
   g_sim_feasible: 'classically simulable via 𝔤-sim',
+  g_sim_not_applicable: 'small DLA, 𝔤-sim does not apply to this observable/state',
   exponential_dla: 'exponential DLA',
   unknown: 'unknown',
 } as const;
@@ -77,15 +80,17 @@ const SIMULABILITY_LABEL = {
 const sci = (v: number | null | undefined) => formatSci(v, 3);
 const cell = (text: string) => text.replace(/\|/g, '\\|');
 
-function methodLabel(method: string | undefined, backend: string | undefined): string {
+function methodLabel(method: string | null | undefined, backend: string | undefined): string {
   const m = method === 'ppe' ? 'Pauli propagation' : method === 'sampling' ? 'sampling' : 'unspecified';
   return backend ? `${m} (${backend})` : m;
 }
 
-/** PPE intervals are rigorous truncation intervals, never confidence intervals. */
-function intervalLabel(method: string | undefined): string {
-  return method === 'ppe' ? 'truncation interval (rigorous)' : '95% CI (bootstrap)';
+/** Interval wording follows the kernel's `interval_kind`; PPE intervals are never CIs. */
+function intervalLabel(source: IntervalSource): string {
+  return intervalNounForKind(intervalKindOf(source)).replace('rigorous truncation interval', 'truncation interval (rigorous)');
 }
+
+const UNRESOLVED = 'unresolved (interval only)';
 
 function table(header: string[], rows: string[][]): string[] {
   return [
@@ -98,16 +103,32 @@ function table(header: string[], rows: string[][]): string[] {
 function gradientsSection(job: TrainabilityJobRecord): string[] {
   const g = job.results.gradients;
   if (!g) return [];
+  const ppe = g.method === 'ppe';
+  const label = intervalLabel(g);
+  const ci = validInterval(g.variance_mean_ci95);
   const out = [
     '### Gradients',
     '',
-    `Method: ${methodLabel(g.method, g.backend)}. Samples: ${g.samples}. Initialization: ${g.init}.`,
-    `Mean variance ${sci(g.variance_mean)}, ${intervalLabel(g.method)} ${formatInterval(g.interval ?? g.variance_mean_ci95, 3)}.`,
-    `Mean gradient norm ${sci(g.gradient_norm_mean)}.`,
+    `Method: ${methodLabel(g.method, g.backend)}${ppe ? `, ${methodDescription('ppe')}` : ''}. ${
+      isNumber(g.samples) ? `Samples: ${g.samples}. ` : ''
+    }Initialization: ${g.init}.`,
+    isNumber(g.variance_mean)
+      ? `Mean variance ${sci(g.variance_mean)}, ${label} ${formatInterval(ci, 3)}.`
+      : `Mean variance unresolved: only the ${label} ${formatInterval(ci, 3)} is rigorous.`,
+    ...(isNumber(g.gradient_norm_mean) ? [`Mean gradient norm ${sci(g.gradient_norm_mean)}.`] : []),
+    ...(isNumber(g.cost_variance)
+      ? [`Empirical cost variance Var[C] ${sci(g.cost_variance)}${validInterval(g.cost_variance_ci95) ? `, 95% CI ${formatInterval(g.cost_variance_ci95, 3)}` : ''}.`]
+      : []),
+    ...(g.notes ?? []).map((n) => `Note: ${n}`),
     '',
     ...table(
-      ['Parameter', 'Var[∂C/∂θ]', intervalLabel(g.method), 'E|∂C/∂θ|'],
-      g.per_parameter.map((p) => [p.name, sci(p.variance), formatInterval(p.variance_ci95, 3), sci(p.abs_mean)]),
+      ['Parameter', 'Var[∂C/∂θ]', label, 'E|∂C/∂θ|'],
+      g.per_parameter.map((p) => [
+        p.name,
+        isNumber(p.variance) ? sci(p.variance) : UNRESOLVED,
+        formatInterval(p.variance_ci95, 3),
+        sci(p.abs_mean),
+      ]),
     ),
     '',
   ];
@@ -122,15 +143,16 @@ function scalingSection(job: TrainabilityJobRecord): string[] {
     s.points.map((p) => [
       String(p.n_qubits),
       String(p.n_layers),
-      String(p.n_params),
-      sci(p.variance),
-      formatInterval(p.interval ?? p.variance_ci95, 3),
-      intervalLabel(p.method),
-      methodLabel(p.method, p.backend),
+      formatValue(p.n_params),
+      p.error ? `failed (${p.error.code})` : isNumber(p.variance) ? sci(p.variance) : UNRESOLVED,
+      formatInterval(p.variance_ci95, 3),
+      p.error ? '—' : intervalLabel(p),
+      p.error ? '—' : methodLabel(p.method, p.backend),
     ]),
   ), ''];
   for (const fit of s.fits) {
-    out.push(`**${fit.n_layers} layers — verdict: ${fit.verdict.replace('_', ' ')}.** ${fit.summary}`);
+    const reason = fit.verdict === 'inconclusive' ? stripVerdictPrefix(fit.summary) : fit.summary;
+    out.push(`**${fit.n_layers} layers — verdict: ${fit.verdict.replace('_', ' ')}.** ${reason}`);
     if (fit.exponential) {
       out.push(
         `- Exponential: β = ${sci(fit.exponential.beta)} (95% CI ${formatInterval(fit.exponential.beta_ci95, 3)}), R² = ${sci(fit.exponential.r2)}, AIC = ${sci(fit.exponential.aic)}.`,
@@ -141,11 +163,25 @@ function scalingSection(job: TrainabilityJobRecord): string[] {
         `- Power law: α = ${sci(fit.power_law.alpha)} (95% CI ${formatInterval(fit.power_law.alpha_ci95, 3)}), R² = ${sci(fit.power_law.r2)}, AIC = ${sci(fit.power_law.aic)}.`,
       );
     }
-    out.push(`- Preferred: ${fit.preferred}; ΔAIC = ${sci(fit.delta_aic)}.`, '');
+    out.push(`- Preferred: ${fit.preferred ?? 'none'}; ΔAIC = ${sci(fit.delta_aic)}.`, '');
   }
   for (const note of s.notes ?? []) out.push(`- Note: ${note}`);
   if ((s.notes ?? []).length > 0) out.push('');
   return out;
+}
+
+/**
+ * Ragone et al. predict the variance of the COST, Var[C], not of a gradient
+ * component. State which quantity is predicted and compare like with like.
+ */
+function ragoneLine(l: NonNullable<TrainabilityJobRecord['results']['lie']>, empiricalCost: number | null | undefined): string {
+  if (!l.prediction_applicable || !isNumber(l.predicted_variance)) {
+    return 'Predicted cost variance Var[C] (Ragone et al.): not applicable here.';
+  }
+  const base = `Predicted cost variance Var[C] (Ragone et al.): ${sci(l.predicted_variance)}.`;
+  if (!isNumber(empiricalCost)) return `${base} Empirical cost variance: not measured.`;
+  const ratio = l.predicted_variance > 0 ? ` Empirical / predicted = ${sci(empiricalCost / l.predicted_variance)}.` : '';
+  return `${base} Empirical cost variance Var[C]: ${sci(empiricalCost)}.${ratio}`;
 }
 
 function lieSection(job: TrainabilityJobRecord): string[] {
@@ -162,7 +198,7 @@ function lieSection(job: TrainabilityJobRecord): string[] {
   }
   out.push(
     `g-purity: initial state ${sci(l.purity.initial_state)}, observable ${sci(l.purity.observable)}; observable in 𝔤: ${String(l.purity.observable_in_algebra)}, state in 𝔤: ${String(l.purity.state_in_algebra)}.`,
-    `Predicted variance (Ragone et al.): ${sci(l.predicted_variance)}${l.prediction_applicable ? '' : ' (not applicable here)'}.`,
+    ragoneLine(l, job.results.gradients?.cost_variance),
     `Simulability: ${l.simulability.summary}`,
     '',
     'Assumptions:',
@@ -233,7 +269,7 @@ function citationsFor(job: TrainabilityJobRecord, diagnostics: readonly Trainabi
 export function renderCertificateMarkdown(input: CertificateInput): string {
   const { job, diagnostics } = input;
   const doc = buildCertificateJson(input);
-  const trainability = deriveTrainabilityVerdict(job.results, diagnostics);
+  const trainability = deriveTrainabilityVerdict(job.results, diagnostics, { nParameters: job.target.nParameters });
   const simulability = deriveSimulabilityVerdict(job.results);
   const lines: string[] = [
     `# Trainability certificate — ${job.target.fileName}`,
@@ -246,7 +282,7 @@ export function renderCertificateMarkdown(input: CertificateInput): string {
     '',
     '## Verdicts',
     '',
-    `**Barren-plateau risk: ${trainability.risk.toUpperCase()}**`,
+    `**Barren-plateau risk: ${trainability.notApplicable ? 'N/A (no free parameters)' : trainability.risk.toUpperCase()}**`,
     '',
     ...(trainability.evidence.length > 0
       ? trainability.evidence.map((e) => `- [${e.level}] (${e.source}) ${e.text}`)
@@ -276,7 +312,7 @@ export function renderCertificateMarkdown(input: CertificateInput): string {
       '',
       ...diagnostics.map(
         (d) =>
-          `- **${d.code}** (${d.severity}) ${d.title}${d.line !== null ? ` — line ${d.line}` : ''}: ${d.message}${d.citation ? ` [${d.citation.label}](${d.citation.url})` : ''}`,
+          `- **${d.code}** (${d.severity}) ${d.title}${d.line !== null ? ` — line ${d.line}` : ''}: ${diagnosticMessage(d)}${d.citation ? ` [${d.citation.label}](${d.citation.url})` : ''}`,
       ),
       '',
     );
