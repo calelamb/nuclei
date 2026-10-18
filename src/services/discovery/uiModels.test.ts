@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { fixtureCandidates, fixtureRun } from './fixtures';
 import { candidateKind, fitnessExtent, indexById, isImprovement, normalizeFitness } from './candidateView';
 import { buildTrajectory, stepPath, trajectorySummary } from './trajectory';
-import { buildLineageLayout, lineageNeighbor, lineageSignature } from './lineageLayout';
+import { buildLineageLayout, isMoreNode, LINEAGE_MAX_LEAF_SIBLINGS, LINEAGE_ROW, lineageNeighbor, lineageSignature } from './lineageLayout';
 import { DEFAULT_FILTER, filterCandidates, sortCandidates } from './candidateTable';
 import { RED_QUEEN_EXPLAINER, SANDBOX_HONESTY } from './honesty';
 import { guardrailPassRates, isolationNote, isolationUsed, rejectionReasons } from './guardrailStats';
@@ -98,6 +98,47 @@ describe('buildLineageLayout', () => {
   it('signature changes with structure only', () => {
     expect(lineageSignature(candidates)).toBe(lineageSignature(candidates.map((c) => ({ ...c, program: 'x' }))));
     expect(lineageSignature(candidates)).not.toBe(lineageSignature(candidates.slice(1)));
+  });
+});
+
+describe('buildLineageLayout star-shaped trees', () => {
+  const base = candidates[1];
+  const id = (i: number) => `c-${String(i).padStart(4, '0')}`;
+  const star = (n: number) => [
+    { ...candidates[0], id: id(0), parent_id: null },
+    ...Array.from({ length: n }, (_, i) => ({ ...base, id: id(i + 1), parent_id: id(0) })),
+  ];
+  const minGap = (ys: number[]) => ys.sort((a, b) => a - b).reduce((m, y, i, a) => (i === 0 ? m : Math.min(m, y - a[i - 1])), Infinity);
+
+  it('collapses 60 leaf children into K nodes plus one "+N more" node', () => {
+    const layout = buildLineageLayout(star(60));
+    expect(layout.nodes).toHaveLength(1 + LINEAGE_MAX_LEAF_SIBLINGS + 1);
+    const more = layout.nodes.find((n) => isMoreNode(n.id))!;
+    expect(more.collapsed?.ids).toHaveLength(60 - LINEAGE_MAX_LEAF_SIBLINGS);
+    expect(more.parentId).toBe(id(0));
+  });
+  it('keeps a minimum sibling spacing and never overlaps nodes, collapsed or expanded', () => {
+    for (const layout of [buildLineageLayout(star(60)), buildLineageLayout(star(60), { expanded: new Set([id(0)]) })]) {
+      const column = layout.nodes.filter((n) => n.depth === 1).map((n) => n.y);
+      expect(minGap(column)).toBeGreaterThanOrEqual(LINEAGE_ROW);
+      for (const a of layout.nodes) {
+        for (const b of layout.nodes) {
+          if (a !== b) expect(Math.hypot(a.x - b.x, a.y - b.y)).toBeGreaterThanOrEqual(LINEAGE_ROW);
+        }
+      }
+    }
+    expect(buildLineageLayout(star(60), { expanded: new Set([id(0)]) }).nodes).toHaveLength(61);
+  });
+  it('never hides a child that has descendants of its own', () => {
+    const list = [...star(40), { ...base, id: id(99), parent_id: id(40) }];
+    const layout = buildLineageLayout(list);
+    expect(layout.byId.has(id(40))).toBe(true);
+    expect(layout.byId.has(id(99))).toBe(true);
+  });
+  it('lays out a 500-node star quickly', () => {
+    const started = performance.now();
+    buildLineageLayout(star(499));
+    expect(performance.now() - started).toBeLessThan(500);
   });
 });
 
