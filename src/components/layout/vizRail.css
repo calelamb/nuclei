@@ -8,3 +8,7 @@
 }
 .viz-rail:hover { background: var(--color-surface-overlay); }
 .viz-rail__label { color: var(--color-text-secondary); font: var(--font-weight-semibold) var(--font-size-caption) var(--font-sans); letter-spacing: 1px; }
+
+/* Right-rail empty states: balanced line breaks so a lone word never wraps onto its own line. */
+.viz-empty { height: 100%; }
+.viz-empty .nuclei-empty__title, .viz-empty .nuclei-empty__body { text-wrap: pretty; }

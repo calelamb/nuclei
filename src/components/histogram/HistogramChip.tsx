@@ -122,6 +122,13 @@ export function HistogramChip({
         fontFamily: TYPOGRAPHY.fontSans,
       }}
     >
+      {/* Stacked: the expand/dismiss controls ride on a header row above the outcomes (no spare row below). */}
+      {rows && (
+        <div style={{ display: 'flex', alignItems: 'center', minWidth: 0 }}>
+          <span style={{ color: colors.textDim, fontSize: 11 }}>Top outcomes</span>
+          {controls}
+        </div>
+      )}
       <div
         style={{
           display: 'flex', flexDirection: rows ? 'column' : 'row', alignItems: rows ? 'stretch' : 'center',
@@ -186,7 +193,7 @@ export function HistogramChip({
           </div>
         ))}
       </div>
-      {controls}
+      {!rows && controls}
     </div>
   );
 }

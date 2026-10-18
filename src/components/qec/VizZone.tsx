@@ -7,7 +7,8 @@ import { useProjectStore } from '../../stores/projectStore';
 import { useVizZoneStore } from '../../stores/vizZoneStore';
 import { PanelReveal } from '../layout/PanelReveal';
 import { CircuitRenderer } from '../circuit/CircuitRenderer';
-import { Button, Tabs } from '../ui';
+import { Button, EmptyState, Tabs } from '../ui';
+import { useEditorStore } from '../../stores/editorStore';
 import { getExecute } from '../../App';
 import { visibleVizPanelIds } from '../../layout/vizPanels';
 import { shortcutLabel } from '../../config/keybindings';
@@ -54,8 +55,11 @@ const MAIN_VIZ_PANELS: VizPanelDef[] = [
 export function VizZone({
   visible,
   chip,
+  booting = false,
 }: {
   visible: VisiblePanels;
+  /** Python is still starting: hold the column open with a placeholder so the editor does not jump when it is ready. */
+  booting?: boolean;
   /** The histogram-chip strip, rendered below the main panels (unchanged). */
   chip: ReactNode;
 }) {
@@ -77,6 +81,18 @@ export function VizZone({
   const stale = useResultStale();
   const circuitPanel = panels.find((p) => p.id === 'circuit');
   const statePanels = panels.filter((p) => p.id !== 'circuit');
+
+  const progress = useEditorStore((st) => st.kernelProgress);
+  if (booting && panels.length === 0) {
+    const stage = progress && progress.kind !== 'attempts' && progress.total > 0 ? ` · ${progress.step}/${progress.total}` : '';
+    return (
+      <div style={COLUMN_STYLE}>
+        <EmptyState className="viz-empty" icon={<Workflow size={20} />} title="Preparing Python">
+          {`Circuit and results appear when Python is ready${stage}.`}
+        </EmptyState>
+      </div>
+    );
+  }
 
   return (
     <div style={COLUMN_STYLE}>

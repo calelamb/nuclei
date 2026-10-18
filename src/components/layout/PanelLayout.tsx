@@ -33,6 +33,7 @@ import { useModeSwitchStore } from '../../stores/modeSwitchStore';
 import { useResearchTourStore } from '../../stores/researchTourStore';
 import { DEFAULT_EDITOR_PANE_WIDTH, computeEditorPaneWidth } from './layoutMath';
 import { useDisplaySnapshot } from '../../layout/useDisplaySnapshot';
+import { useEditorStore } from '../../stores/editorStore';
 import { hasMeaningfulOutput, useSimulationStore } from '../../stores/simulationStore';
 import { useThemeStore } from '../../stores/themeStore';
 import { useUIModeStore } from '../../stores/uiModeStore';
@@ -200,7 +201,10 @@ export function PanelLayout() {
   const latticeHasCoords = Boolean(qecSnapshot?.coords.qubits.some((c) => c !== null));
   const vizHasContent = vizColumnHasContent(visible, { latticeHasCoords }, chipShown);
   const vizFits = topSplitSize.width === 0 || topSplitSize.width >= EDITOR_MIN_WIDTH + VIZ_MIN_WIDTH;
-  const showViz = vizHasContent && vizFits;
+  // While Python boots the column is held open (with a placeholder) so the editor does not jump width when it is ready.
+  const kernelStatus = useEditorStore((s) => s.kernelStatus);
+  const booting = isWebBuild() && kernelStatus === 'connecting' && !vizHasContent;
+  const showViz = (vizHasContent || booting) && vizFits;
 
   const diracOpen = useDiracPanelStore((s) => s.isOpen);
   const closeDirac = useDiracPanelStore((s) => s.close);
@@ -508,6 +512,7 @@ export function PanelLayout() {
                     <div style={{ flex: 1, minWidth: VIZ_MIN_WIDTH, display: 'flex', flexDirection: 'column' }}>
                       <VizZone
                         visible={visible}
+                        booting={booting}
                         chip={
                           <PanelReveal when={chipShown} from="bottom">
                             <div style={{ padding: '6px 10px 10px', flexShrink: 0 }}>

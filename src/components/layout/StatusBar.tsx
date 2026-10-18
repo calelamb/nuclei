@@ -15,7 +15,7 @@ import { ModeChip } from './ModeChip';
 import { IconButton, Menu, Select, Tooltip, type MenuEntry } from '../ui';
 import { shortcutLabel } from '../../config/keybindings';
 import { useEditorFocusStore } from '../../stores/editorFocusStore';
-import { tabFocusHint } from '../../lib/tabFocusHint';
+import { compactTabFocusHint } from '../../lib/tabFocusHint';
 import { useHelpOverlayStore } from '../../stores/helpOverlayStore';
 import { useUiFeatures } from '../../hooks/useUiFeatures';
 import { getKernelStatusModel, type KernelTone } from './kernelStatusModel';
@@ -250,7 +250,7 @@ export function StatusBar() {
 
       {editorFocused && (
         <span style={{ color: colors.textDim, whiteSpace: 'nowrap' }} aria-live="off">
-          {tabFocusHint(tabMovesFocus)}
+          {compactTabFocusHint(tabMovesFocus)}
         </span>
       )}
 
