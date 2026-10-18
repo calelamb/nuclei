@@ -30,6 +30,7 @@ import time
 from typing import Any, Callable
 
 from kernel.discovery.conjecture import predicate as pred
+from kernel.discovery.conjecture.ledger import evaluator_fingerprint
 from kernel.discovery.conjecture.grammar import GrammarError, build_variant, family_observable
 from kernel.discovery.conjecture.semantics import (
     INDETERMINATE, MEETS, VIOLATES, evaluate_prediction, point_is_loose,
@@ -245,6 +246,8 @@ def assemble_result(conj: dict[str, Any], evidence: list[dict[str, Any]], *, see
         "n_circuits_tested": total, "n_range": conj["n_range"], "n_values": ns, "n_max_tested": n_max,
         "counterexamples": counterexamples, "evidence": evidence, "resampling": resampling, "seed": seed,
         "timings": {"elapsed_ms": elapsed_ms}, "conjecture": conj,
+        # Honesty principle 7: every verdict names the exact tester code that produced it.
+        "fingerprint": evaluator_fingerprint(),
     }
 
 

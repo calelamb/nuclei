@@ -287,3 +287,20 @@ def test_evaluator_fingerprint_is_stable_sha256():
     first = ledger.evaluator_fingerprint(refresh=True)
     assert len(first) == 64 and first == ledger.evaluator_fingerprint(refresh=True)
     assert "numpy" in ledger.kernel_versions()
+
+
+def test_result_carries_the_tester_fingerprint() -> None:
+    from kernel.discovery.conjecture.ledger import evaluator_fingerprint
+    from kernel.discovery.conjecture.tester import partial_result
+
+    conj = {
+        "id": "fp", "statement": "s",
+        "feature_predicate": {"all": [{"feature": "n_qubits", "op": ">=", "value": 1}]},
+        "prediction": {"quantity": "beta_upper95", "op": "<", "value": 0.2},
+        "test_family": {"family": "layered", "rotation_axes": ["Y", "Z"], "entangler": "cz", "pattern": "brick",
+                        "layers": 1, "rotations_per_qubit_per_layer": 2, "observable": "preset:local_z", "variants": 5},
+        "n_range": [4, 16], "circuits": 5, "points": 4,
+    }
+    result = partial_result(conj, [], "cancelled", seed=0)
+    assert result["fingerprint"] == evaluator_fingerprint()
+    assert len(result["fingerprint"]) == 64
