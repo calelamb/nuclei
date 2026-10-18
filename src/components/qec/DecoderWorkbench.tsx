@@ -28,7 +28,7 @@ const NARROW_TABLE_WIDTH = 720;
  * same sinter likelihood-ratio interval as the figure; decode time per shot
  * comes from sinter's timing. Exports the table as CSV.
  */
-export function DecoderWorkbench({ tabs }: { tabs?: ReactNode } = {}) {
+export function DecoderWorkbench({ tabs, showUnits = true }: { tabs?: ReactNode; showUnits?: boolean } = {}) {
   const colors = useThemeStore((s) => s.colors);
   const rowsByStrongId = useQecCampaignStore((s) => s.rowsByStrongId);
   const liveRows = useMemo(() => Object.values(rowsByStrongId), [rowsByStrongId]);
@@ -51,7 +51,7 @@ export function DecoderWorkbench({ tabs }: { tabs?: ReactNode } = {}) {
       actions={
         <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
           {tabs}
-          {wb.length > 0 && roundsKnown && <QecUnitsToggle units={units} onChange={setRequested} />}
+          {showUnits && wb.length > 0 && roundsKnown && <QecUnitsToggle units={units} onChange={setRequested} />}
           {wb.length > 0 && (
             <Button size="sm" onClick={exportCsv} title="Export the decoder table as CSV" aria-label="Export decoder table (CSV)" icon={<Download size={ICON_SIZE.xs} strokeWidth={ICON_STROKE} />}>
               CSV

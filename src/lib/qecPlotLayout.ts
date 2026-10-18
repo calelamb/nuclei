@@ -60,6 +60,35 @@ const SWATCH_W = 26;
 const SWATCH_GAP = 6;
 const ITEM_GAP = 14;
 
+/** Greedy row plan for a group's entries; the first row starts `startX` in, later rows at the left edge. */
+function planEntryRows(widths: readonly number[], startX: number, maxWidth: number): number[][] {
+  const rows: number[][] = [[]];
+  let cursor = startX;
+  widths.forEach((w, i) => {
+    const current = rows[rows.length - 1];
+    if (current.length > 0 && cursor > 0 && cursor + w > maxWidth) {
+      rows.push([i]);
+      cursor = w + ITEM_GAP;
+      return;
+    }
+    current.push(i);
+    cursor += w + ITEM_GAP;
+  });
+  return rows;
+}
+
+/** A single entry stranded on the last row reads as a mistake: hand it the previous row's last entry when that fits. */
+function avoidLoneTail(rows: number[][], widths: readonly number[], maxWidth: number): number[][] {
+  if (rows.length < 2) return rows;
+  const last = rows[rows.length - 1];
+  const previous = rows[rows.length - 2];
+  if (last.length !== 1 || previous.length < 2) return rows;
+  const moved = previous[previous.length - 1];
+  const lastRowWidth = widths[moved] + ITEM_GAP + widths[last[0]];
+  if (lastRowWidth > maxWidth) return rows;
+  return [...rows.slice(0, -2), previous.slice(0, -1), [moved, last[0]]];
+}
+
 export function layoutLegend(groups: readonly LegendGroup[], maxWidth: number): LegendLayout {
   const items: LegendItem[] = [];
   let x = 0;
@@ -80,7 +109,12 @@ export function layoutLegend(groups: readonly LegendGroup[], maxWidth: number): 
     const fitsWhole = wholeW <= maxWidth;
     if (x > 0 && (fitsWhole ? x + wholeW > maxWidth : x + headerW + firstW > maxWidth)) { row += 1; x = 0; }
     place('header', gi, -1, g.title, headerW);
-    g.entries.forEach((e, ei) => place('entry', gi, ei, e.label, SWATCH_W + SWATCH_GAP + textWidth(e.label, FONT.legend)));
+    const widths = g.entries.map((e) => entryW(e.label));
+    const rows = avoidLoneTail(planEntryRows(widths, x, maxWidth), widths, maxWidth);
+    rows.forEach((indices, rowIndex) => {
+      if (rowIndex > 0) { row += 1; x = 0; }
+      indices.forEach((ei) => place('entry', gi, ei, g.entries[ei].label, widths[ei]));
+    });
   });
   const rows = items.length === 0 ? 0 : row + 1;
   const maxItemRight = items.reduce((m, i) => Math.max(m, i.x + i.width), 0);
