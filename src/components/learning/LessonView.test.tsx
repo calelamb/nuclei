@@ -67,7 +67,7 @@ describe('LessonView completion', () => {
     useLearnStore.setState({ completedLessons: [lesson.id] });
     render(<LessonView lesson={lesson} trackId={track.id} />);
     expect(screen.getByText(/Lesson complete/).textContent).toMatch(/1 of \d+/);
-    expect(screen.getByRole('button', { name: /Next lesson/ })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Next lesson' })).toBeTruthy();
   });
 
   it('keeps the plain up-next card before the lesson is done', () => {
