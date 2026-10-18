@@ -391,32 +391,6 @@ export function SettingsPanel() {
             <Toggle value={general.animationsEnabled}
               onChange={(v) => updateGeneral({ animationsEnabled: v })} />
           </SettingRow>
-          <SettingRow label="Show Welcome on Start">
-            <Toggle value={general.showWelcomeOnStart}
-              onChange={(v) => updateGeneral({ showWelcomeOnStart: v })} />
-          </SettingRow>
-          <SettingRow label="Auto Save">
-            <Toggle value={general.autoSave}
-              onChange={(v) => updateGeneral({ autoSave: v })} />
-          </SettingRow>
-          <SettingRow label="Language">
-            <SettingSelect value={general.language}
-              options={[
-                { value: 'en', label: 'English' },
-                { value: 'es', label: 'Español' },
-                { value: 'zh', label: '中文' },
-                { value: 'ja', label: '日本語' },
-              ]}
-              onChange={(v) => updateGeneral({ language: v })} />
-          </SettingRow>
-          <SettingRow label="Anonymous Telemetry">
-            <Toggle value={general.telemetryEnabled}
-              onChange={(v) => updateGeneral({ telemetryEnabled: v })} />
-          </SettingRow>
-          <SettingRow label="Educator Mode">
-            <Toggle value={general.educatorMode}
-              onChange={(v) => updateGeneral({ educatorMode: v })} />
-          </SettingRow>
           <SettingRow label="Developer views"
             hint="Adds the Search and Circuit-inspector views to the activity bar in both modes. Everything else is chosen by workspace mode.">
             <Toggle value={general.experimentalFeatures}

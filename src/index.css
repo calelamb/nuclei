@@ -54,13 +54,20 @@ button:focus:not(:focus-visible) {
   outline: none;
 }
 
-/* ── Reduced motion: disable all animations ── */
+/* ── Reduced motion: disable all animations (OS preference or Settings › Animations off) ── */
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
   }
+}
+:root[data-reduced-motion='true'] *,
+:root[data-reduced-motion='true'] *::before,
+:root[data-reduced-motion='true'] *::after {
+  animation-duration: 0.01ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.01ms !important;
 }
 
 /* ── Keyframes ── */
