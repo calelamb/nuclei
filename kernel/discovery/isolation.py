@@ -3,12 +3,16 @@
 The baseline is always a subprocess with rlimits and an import blocker
 (``"process"``). When the platform offers more, the worker command is wrapped:
 
-* Linux: ``bwrap --unshare-net --unshare-pid --die-with-parent`` with a
-  read-only bind of ``/`` and a private ``/tmp``.
-* macOS: ``sandbox-exec`` with a deny-network, deny-file-write profile. The only
-  writable location is the per-evaluation private scratch directory (mode 0700,
+* Linux: ``bwrap --unshare-net --unshare-pid --die-with-parent`` with read-only
+  binds of ONLY the interpreter prefixes, site-packages, the repo's ``kernel/``
+  tree and the system library directories (no ``/home``, no ``/etc``), and a
+  private ``/tmp``.
+* macOS: ``sandbox-exec`` with deny-network, deny-file-write AND deny-file-read
+  (an explicit read allow-list: interpreter prefixes, site-packages, the repo's
+  ``kernel/`` tree, system libraries and the dyld cache). The only writable
+  location is the per-evaluation private scratch directory (mode 0700,
   referenced by its realpath, deleted after the run), which also hosts
-  ``TMPDIR`` and ``MPLCONFIGDIR`` so Cirq/matplotlib can import.
+  ``TMPDIR``, ``MPLCONFIGDIR`` and ``HOME`` so Cirq/matplotlib/Qiskit can import.
 
 A wrapper is only used after a *runtime* probe has run the real candidate
 worker through it successfully, and it is demoted (with a recorded reason) if a
@@ -33,17 +37,40 @@ from kernel.discovery.procrun import minimal_env, python_command, run_process
 MODE_PROCESS = "process"
 MODE_BWRAP = "bwrap"
 MODE_SANDBOX_EXEC = "sandbox-exec"
+READS_RESTRICTED = "restricted"
+READS_UNRESTRICTED = "unrestricted"
 PROBE_WALL_SECONDS = 30
 
-_MAC_PROFILE = (
+# Static part of the macOS profile. Reads are DENIED by default (RT-H2); the allow-list
+# below is the empirically minimal set a Python + numpy/stim/qiskit/cirq worker needs.
+# ``file-read-metadata`` (stat/realpath traversal) stays open: it reveals that a path
+# exists, never its contents.
+_MAC_STATIC_PROFILE = (
     "(version 1)\n"
     "(allow default)\n"
     "(deny network*)\n"
     "(deny file-write*)\n"
     '(allow file-write* (literal "/dev/null") (literal "/dev/tty") (literal "/dev/dtracehelper"))\n'
+    "(deny file-read*)\n"
+    "(allow file-read-metadata)\n"
+    '(allow file-read* (literal "/") (literal "/dev/null") (literal "/dev/urandom") (literal "/dev/random")'
+    ' (literal "/dev/dtracehelper") (literal "/dev/zero"))\n'
+    "(allow file-read* {system_roots})\n"
+)
+# Empirically (Darwin 25.5, python.org 3.12 framework build + venv, numpy/stim/qiskit/cirq) the
+# dyld shared cache needs NO file-read grant at all; these system roots are kept as
+# belt-and-braces for macOS versions that load libraries from disk. They hold system files
+# only: nothing under /Users, /private/var/folders, /Volumes or the repo.
+_MAC_SYSTEM_READ_ROOTS = (
+    "/usr/lib",
+    "/usr/share/zoneinfo",
+    "/System/Library",
+    "/System/Volumes/Preboot/Cryptexes",
+    "/private/var/db/dyld",
+    "/private/etc/localtime",
 )
 # Appended only when a scratch directory exists; ``SCRATCH`` is passed with ``-D`` as a realpath.
-_MAC_SCRATCH_RULE = '(allow file-write* (subpath (param "SCRATCH")))\n'
+_MAC_SCRATCH_RULE = '(allow file-write* (subpath (param "SCRATCH")))\n(allow file-read* (subpath (param "SCRATCH")))\n'
 
 _PROBE_REQUEST = {
     "protocol_version": 1,
@@ -61,6 +88,13 @@ class IsolationInfo:
     wrap: Callable[[list[str]], list[str]] = field(compare=False, default=lambda cmd: cmd)
     note: str = ""
     scratch_aware: bool = field(compare=False, default=False)
+    # "restricted": the wrapper denies file reads outside an allow-list; "unrestricted": the
+    # worker can read anything its user can (plain process mode). Never stronger than what ran.
+    reads: str = field(compare=False, default=READS_UNRESTRICTED)
+
+    @property
+    def detail(self) -> dict[str, str]:
+        return {"reads": self.reads}
 
     def command(self, cmd: list[str], scratch: str | None = None) -> list[str]:
         """Wrap ``cmd``; scratch-aware wrappers also open ``scratch`` for writing."""
@@ -74,18 +108,76 @@ _lock = threading.Lock()
 _cached: IsolationInfo | None = None
 
 
-def _bwrap_wrap(cmd: list[str]) -> list[str]:
-    return [
-        "bwrap", "--unshare-net", "--unshare-pid", "--die-with-parent",
-        "--ro-bind", "/", "/", "--dev", "/dev", "--proc", "/proc", "--tmpfs", "/tmp",
-        *cmd,
-    ]
+def _real(path: str) -> str:
+    return os.path.realpath(path)
 
 
-def _sandbox_exec_wrap(cmd: list[str], scratch: str | None = None) -> list[str]:
-    if scratch is None:
-        return ["sandbox-exec", "-p", _MAC_PROFILE, *cmd]
-    return ["sandbox-exec", "-D", f"SCRATCH={scratch}", "-p", _MAC_PROFILE + _MAC_SCRATCH_RULE, *cmd]
+def python_read_roots() -> list[str]:
+    """Directories the worker interpreter must read: prefixes, site-packages and ``kernel/``.
+
+    Realpaths, deduplicated, existing only. ``kernel/`` (not the whole repo) is granted
+    because the worker imports ``kernel.*``; the repo root itself is added by callers
+    as a directory-listing-only literal where the platform needs it.
+    """
+    candidates = [sys.prefix, sys.exec_prefix, sys.base_prefix, sys.base_exec_prefix, os.path.dirname(sys.executable)]
+    try:
+        import site
+
+        candidates.extend(site.getsitepackages())
+    except Exception:  # noqa: BLE001 - virtualenv's site lacks getsitepackages on old versions
+        pass
+    candidates.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))  # .../kernel
+    # Editable installs / .pth entries that live outside the prefixes.
+    candidates.extend(p for p in sys.path if p and os.path.isabs(p) and os.path.basename(p) in ("site-packages", "dist-packages"))
+    seen: list[str] = []
+    for path in candidates:
+        real = _real(path)
+        if os.path.isdir(real) and real not in seen:
+            seen.append(real)
+    return seen
+
+
+def repo_root() -> str:
+    return _real(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+
+
+def _bwrap_wrap(cmd: list[str], roots: list[str] | None = None) -> list[str]:
+    """``bwrap`` argv that binds ONLY what the worker needs, read-only (RT-H2, Linux)."""
+    argv = ["bwrap", "--unshare-net", "--unshare-pid", "--die-with-parent"]
+    for system in _LINUX_SYSTEM_RO:
+        argv += ["--ro-bind-try", system, system]
+    # Paths under /usr that are symlinks on merged-usr systems.
+    argv += ["--symlink", "usr/lib", "/lib", "--symlink", "usr/lib64", "/lib64", "--symlink", "usr/bin", "/bin"]
+    for root in roots if roots is not None else python_read_roots():
+        argv += ["--ro-bind", root, root]
+    argv += ["--dev", "/dev", "--proc", "/proc", "--tmpfs", "/tmp", *cmd]
+    return argv
+
+
+# System directories the dynamic loader, libc and the zoneinfo/locale lookups need.
+_LINUX_SYSTEM_RO = ("/usr", "/etc/ld.so.cache", "/etc/localtime", "/etc/ssl/certs", "/usr/share/zoneinfo")
+
+
+def mac_profile(scratch: str | None, roots: list[str]) -> tuple[str, list[str]]:
+    """Return (profile text, ``-D`` params) for the macOS sandbox."""
+    system = " ".join(f'(subpath "{p}")' for p in _MAC_SYSTEM_READ_ROOTS)
+    profile = _MAC_STATIC_PROFILE.format(system_roots=system)
+    params: list[str] = []
+    for index, root in enumerate(roots):
+        profile += f'(allow file-read* (subpath (param "READ{index}")))\n'
+        params += ["-D", f"READ{index}={root}"]
+    # The import system lists the repo root to find the ``kernel`` package (names only).
+    profile += '(allow file-read* (literal (param "REPO")))\n'
+    params += ["-D", f"REPO={repo_root()}"]
+    if scratch is not None:
+        profile += _MAC_SCRATCH_RULE
+        params += ["-D", f"SCRATCH={scratch}"]
+    return profile, params
+
+
+def _sandbox_exec_wrap(cmd: list[str], scratch: str | None = None, roots: list[str] | None = None) -> list[str]:
+    profile, params = mac_profile(scratch, roots if roots is not None else python_read_roots())
+    return ["sandbox-exec", *params, "-p", profile, *cmd]
 
 
 _sandbox_exec_wrap.scratch_aware = True  # type: ignore[attr-defined]
@@ -104,7 +196,7 @@ def private_scratch_dir() -> Iterator[str]:
 
 def scratch_env(scratch: str) -> dict[str, str]:
     """Environment entries that redirect temp and matplotlib cache writes into ``scratch``."""
-    return {"TMPDIR": scratch, "MPLCONFIGDIR": scratch}
+    return {"TMPDIR": scratch, "MPLCONFIGDIR": scratch, "HOME": scratch}
 
 
 def _candidate_modes() -> list[tuple[str, Callable[[list[str]], list[str]]]]:
@@ -153,7 +245,9 @@ def detect_isolation(*, refresh: bool = False) -> IsolationInfo:
         for mode, wrap in _candidate_modes():
             ok, detail = probe_wrapper(wrap)
             if ok:
-                info = IsolationInfo(mode, wrap, detail, scratch_aware=getattr(wrap, "scratch_aware", False))
+                info = IsolationInfo(
+                    mode, wrap, detail, scratch_aware=getattr(wrap, "scratch_aware", False), reads=READS_RESTRICTED,
+                )
                 break
             info = IsolationInfo(MODE_PROCESS, note=f"{mode} unavailable at runtime: {detail}")
         _cached = info

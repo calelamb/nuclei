@@ -188,7 +188,7 @@ class DiscoveryManager:
             "timings_ms": {"sandbox": 0, "score": 0, "total": 0},
             "evaluator": {"kind": req.kind, "version": version, "fingerprint": fp},
             "seed": req.seed, "stage": req.stage, "program_key": program_key(req.program),
-            "cache_hit": False, "isolation": "process",
+            "cache_hit": False, "isolation": "process", "isolation_detail": {"reads": "unrestricted"},
             "compute": {"backend": "numpy", "method": None},
         }
 
@@ -227,6 +227,7 @@ class DiscoveryManager:
         )
         timings["sandbox"] = _ms(time.monotonic() - t0)
         record["isolation"] = sandbox.get("isolation", "process")
+        record["isolation_detail"] = sandbox.get("isolation_detail", {"reads": "unrestricted"})
         record["stdout"], record["stderr"] = sandbox.get("stdout", ""), sandbox.get("stderr", "")
         if sandbox.get("status") != "ok":
             error = sandbox.get("error") or {"code": "worker_bad_output", "message": "Sandbox failed."}

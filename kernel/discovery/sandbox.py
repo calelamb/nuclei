@@ -32,6 +32,12 @@ _WORKER_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "candida
 _WRAPPER_FAILURE_HINTS = ("sandbox_apply", "bwrap:", "sandbox-exec:")
 
 
+def _detail(isolation: str) -> dict[str, str]:
+    """What the reported mode really restricts: only the OS wrappers deny file reads."""
+    wrapped = isolation in (iso.MODE_BWRAP, iso.MODE_SANDBOX_EXEC)
+    return {"reads": iso.READS_RESTRICTED if wrapped else iso.READS_UNRESTRICTED}
+
+
 def _error(code: str, message: str, isolation: str, stderr: str = "") -> dict[str, Any]:
     return {
         "protocol_version": PROTOCOL_VERSION,
@@ -41,6 +47,7 @@ def _error(code: str, message: str, isolation: str, stderr: str = "") -> dict[st
         "stderr": stderr,
         "error": {"code": code, "message": message},
         "isolation": isolation,
+        "isolation_detail": _detail(isolation),
     }
 
 
@@ -98,6 +105,7 @@ def _interpret(result: ProcResult, isolation: str) -> dict[str, Any]:
     response.setdefault("stderr", "")
     response.setdefault("error", None)
     response["isolation"] = isolation
+    response["isolation_detail"] = _detail(isolation)
     return response
 
 
