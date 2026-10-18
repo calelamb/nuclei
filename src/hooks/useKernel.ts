@@ -188,6 +188,11 @@ export function useKernel() {
     const offState = runtime.onState((state) => {
       if (!mountedRef.current) return;
       const editor = useEditorStore.getState();
+      if (state === 'booting' && runtime.isQuietRestart()) {
+        // A preview that overran was recycled: Python is "ready" as far as the user can tell, and a
+        // Run in the meantime simply waits for the new worker.
+        return;
+      }
       if (state === 'booting') {
         editor.setKernelConnected(false);
         editor.setKernelReady(false);

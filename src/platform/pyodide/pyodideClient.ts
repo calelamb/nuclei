@@ -46,6 +46,8 @@ interface Pending {
   timeoutMs: number | undefined;
   /** Receives each line of live program output for this call. */
   onOutput?: (line: string) => void;
+  /** A timeout recycles the worker without the app announcing a restart (live preview). */
+  quietRestart?: boolean;
 }
 
 export interface CallOptions {
@@ -53,6 +55,11 @@ export interface CallOptions {
   timeoutMs?: number;
   /** Called with each line the program prints while it runs (this call only). */
   onOutput?: (line: string) => void;
+  /**
+   * The call is background work (the live preview): if it overruns, the worker is recycled
+   * without a visible restart, so Run stays available and the status bar stays calm.
+   */
+  quietRestart?: boolean;
 }
 
 type ProgressListener = (progress: BootProgress | null) => void;
@@ -75,6 +82,8 @@ export class PyodideRuntimeClient {
   private lastProgress: BootProgress | null = null;
   /** True after a worker was killed: the next boot is a restart, not a first download. */
   private restarted = false;
+  /** The current teardown/boot cycle was a preview recycle, not something the user should see. */
+  private quietRestart = false;
 
   constructor(factory: WorkerFactory) {
     this.factory = factory;
@@ -86,6 +95,11 @@ export class PyodideRuntimeClient {
 
   getState(): RuntimeState {
     return this.state;
+  }
+
+  /** True while the worker is being recycled after a timed-out live-preview call. */
+  isQuietRestart(): boolean {
+    return this.quietRestart;
   }
 
   onState(listener: StateListener): () => void {
@@ -123,8 +137,10 @@ export class PyodideRuntimeClient {
         this.ready = true;
         this.setProgress(null);
         this.setState('ready');
+        this.quietRestart = false;
       },
       (error: unknown) => {
+        this.quietRestart = false;
         this.teardown();
         throw error;
       },
@@ -136,7 +152,7 @@ export class PyodideRuntimeClient {
 
   async call(fn: RuntimeFunction, args: unknown[], options: CallOptions = {}): Promise<string> {
     await this.ensureStarted();
-    return this.request({ type: 'call', fn, args }, options.timeoutMs, options.onOutput);
+    return this.request({ type: 'call', fn, args }, options.timeoutMs, options.onOutput, options.quietRestart);
   }
 
   /** Kill the worker; the next call boots a new one. In-flight calls fail as timeouts. */
@@ -153,11 +169,12 @@ export class PyodideRuntimeClient {
     body: { type: 'init' } | { type: 'call'; fn: RuntimeFunction; args: unknown[] },
     timeoutMs?: number,
     onOutput?: (line: string) => void,
+    quietRestart?: boolean,
   ): Promise<string> {
     const worker = this.ensureWorker();
     const id = this.nextId++;
     return new Promise<string>((resolve, reject) => {
-      this.pending.set(id, { resolve, reject, timer: null, timeoutMs, onOutput });
+      this.pending.set(id, { resolve, reject, timer: null, timeoutMs, onOutput, quietRestart });
       worker.postMessage({ ...body, id } as WorkerRequest);
     });
   }
@@ -205,7 +222,7 @@ export class PyodideRuntimeClient {
     if (entry.timeoutMs === undefined || entry.timer) return;
     entry.timer = setTimeout(() => {
       if (!this.pending.has(id)) return;
-      this.teardown(); // rejects everything, including this call, with a timeout
+      this.teardown('timeout', entry.quietRestart === true); // rejects everything, including this call, with a timeout
     }, entry.timeoutMs);
   }
 
@@ -228,7 +245,8 @@ export class PyodideRuntimeClient {
     return entries;
   }
 
-  private teardown(reason: 'timeout' | 'stopped' = 'timeout') {
+  private teardown(reason: 'timeout' | 'stopped' = 'timeout', quiet = false) {
+    this.quietRestart = quiet;
     const hadWorker = this.worker !== null;
     this.worker?.terminate();
     this.worker = null;
