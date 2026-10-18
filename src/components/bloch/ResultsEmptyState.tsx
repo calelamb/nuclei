@@ -5,6 +5,7 @@ import { useBottomPanelStore } from '../../stores/bottomPanelStore';
 import { shortcutLabel } from '../../config/keybindings';
 import { getExecute } from '../../App';
 import { Button, EmptyState } from '../ui';
+import { revealTerminalError } from '../../lib/revealTerminalError';
 import { resultsEmptyVariant } from './resultsEmptyVariant';
 
 const IDLE_COPY = "Run your circuit to see each qubit's Bloch sphere and the outcome histogram.";
@@ -21,6 +22,11 @@ export function ResultsEmptyState() {
   const errorLine = useEditorStore((s) => s.errors[0]?.line ?? null);
   const focusTerminal = useBottomPanelStore((s) => s.focusTerminal);
   const variant = resultsEmptyVariant({ isRunning, lastRunFailed, lastRunNoCircuit });
+  const showError = () => {
+    focusTerminal();
+    // The Terminal may only mount after it opens, so look again on the next frame.
+    if (!revealTerminalError()) requestAnimationFrame(() => { revealTerminalError(); });
+  };
   const run = () => getExecute()?.();
   const runLabel = `Run ${shortcutLabel('run') ?? ''}`.trim();
 
@@ -40,7 +46,7 @@ export function ResultsEmptyState() {
           title="Last run failed"
           action={(
             <div className="viz-results-empty__actions">
-              <Button variant="secondary" size="sm" onClick={focusTerminal}>Show error</Button>
+              <Button variant="secondary" size="sm" onClick={showError}>Show error</Button>
               <Button variant="ghost" size="sm" icon={<Play size={12} />} onClick={run}>Run again</Button>
             </div>
           )}

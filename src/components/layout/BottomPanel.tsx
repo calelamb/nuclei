@@ -205,6 +205,8 @@ function TerminalPanel() {
       />
       <div
         ref={scrollRef}
+        data-terminal-output=""
+        tabIndex={-1}
         style={{
           flex: 1,
           overflow: 'auto',
@@ -256,6 +258,7 @@ function TerminalPanel() {
           return (
             <div
               key={i}
+              data-terminal-error={isStderr ? '' : undefined}
               style={{
                 display: 'flex',
                 gap: 8,
