@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { beforeEach, describe, expect, it } from 'vitest';
 import { handleKernelMessage } from './kernelMessageHandler';
-import { useSimulationStore } from '../stores/simulationStore';
+import { hasMeaningfulOutput, useSimulationStore } from '../stores/simulationStore';
 import { useCircuitStore } from '../stores/circuitStore';
 import { setHardwareBackendsSender } from '../lib/hardwareBackendsSender';
 import { vi } from 'vitest';
@@ -167,6 +167,13 @@ describe('handleKernelMessage: a user Stop (research-r-02)', () => {
     expect(sim.resultCode).toBe('old');
     expect(sim.isRunning).toBe(false);
     expect(sim.lastRunStopped).toBe(true);
+  });
+
+  it('notes the stop without counting as Terminal output (stop does not open the Terminal)', () => {
+    handleKernelMessage({ type: 'result', data: null, stopped: true }, {});
+    const lines = useSimulationStore.getState().terminalOutput;
+    expect(lines.map((l) => l.text.trim())).toContain('Run stopped.');
+    expect(hasMeaningfulOutput(lines)).toBe(false);
   });
 
   it('a new run clears the stopped flag', () => {
