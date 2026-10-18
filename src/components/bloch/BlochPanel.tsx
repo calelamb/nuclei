@@ -5,6 +5,7 @@ import { useCircuitStore } from '../../stores/circuitStore';
 import { useDebugStore } from '../../stores/debugStore';
 import { activeDebugStep } from '../../lib/debugTrace';
 import { useThemeStore } from '../../stores/themeStore';
+import { useWorkspaceStore } from '../../stores/workspaceStore';
 import { useElementSize } from '../../hooks/useElementSize';
 import { blochGridLayout, CELL_CAPTION_PX } from '../../lib/blochGrid';
 import { IconButton } from '../ui';
@@ -35,6 +36,7 @@ export function BlochPanel() {
   const [measureRef, size] = useElementSize<HTMLDivElement>();
   const [requestedPage, setRequestedPage] = useState(0);
   const colors = useThemeStore((s) => s.colors);
+  const audience = useWorkspaceStore((s) => s.mode);
   const themeMode = useThemeStore((s) => s.mode);
   const [glFailure, setGlFailure] = useState<string | null>(null);
   const stageRef = useRef<BlochStage | null>(null);
@@ -131,7 +133,8 @@ export function BlochPanel() {
                     else viewportEls.current.delete(first + i);
                   }}
                   qubit={first + i}
-                  label={qubitCount > 1 ? `q${first + i}` : undefined}
+                  label={`q${first + i}`}
+                  audience={audience}
                   compact={layout.cellWidth < COMPACT_CELL_PX}
                   coord={coord}
                 />

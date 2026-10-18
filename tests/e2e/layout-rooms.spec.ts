@@ -67,6 +67,26 @@ test.describe('results never vanish behind an open sidebar (900x700)', () => {
     const tab = page.getByRole('button', { name: /Show circuit and results/ });
     await expect(tab).toBeVisible({ timeout: 60_000 });
     await tab.click();
-    await expect(page.getByRole('region', { name: 'Circuit' })).toBeVisible();
+    await expect(page.getByRole('region', { name: 'Circuit diagram' })).toBeVisible();
+  });
+});
+
+test.describe('the rail splits its height instead of clipping (900x700)', () => {
+  test.use({ viewport: { width: 900, height: 700 } });
+
+  test('a 3-qubit run shows every wire and the register, with the spheres below', async ({ page }) => {
+    await page.goto(FIXTURE_URL);
+    await expect(page.locator('.monaco-editor')).toBeVisible();
+    await page.click('.monaco-editor');
+    await page.keyboard.press('Meta+a');
+    await page.keyboard.press('Delete');
+    await page.keyboard.insertText('from qiskit import QuantumCircuit\nqc = QuantumCircuit(3, 3)\nqc.h(0)\nqc.cx(0, 1)\nqc.cx(1, 2)\nqc.measure([0, 1, 2], [0, 1, 2])\n');
+    await page.keyboard.press('Meta+Enter');
+    await expect(page.getByTestId('bloch-rail')).toBeVisible({ timeout: 60_000 });
+    const clipped = await page.evaluate(() => {
+      const el = document.querySelector('.circuit-renderer-container');
+      return el ? el.scrollHeight - el.clientHeight : -1;
+    });
+    expect(clipped).toBeLessThanOrEqual(0);
   });
 });

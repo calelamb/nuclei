@@ -180,10 +180,10 @@ export function CircuitRenderer() {
     const drawn = Number(svg?.getAttribute('height'));
     const natural = Number(svg?.getAttribute('viewBox')?.split(/\s+/)[3]);
     const scale = drawn > 0 && natural > 0 ? drawn / natural : 1;
-    const hidden = shown ? hiddenQubitWires({ scrollTop: el.scrollTop, visibleHeight: el.clientHeight, scale }, qubitTotal) : 0;
+    const hidden = shown ? hiddenQubitWires({ scrollTop: el.scrollTop, visibleHeight: el.clientHeight, scale }, qubitTotal, (snapshot?.classical_bit_count ?? 0) > 0) : 0;
     const next = { shown, hidden, scrolled: el.scrollTop > 0 };
     setWireStrip((prev) => (prev.shown === next.shown && prev.hidden === next.hidden && prev.scrolled === next.scrolled ? prev : next));
-  }, [qubitTotal, paneSize.height]);
+  }, [qubitTotal, snapshot?.classical_bit_count, paneSize.height]);
   const setContainerRef = useCallback((el: HTMLDivElement | null) => { scrollerRef.current = el; measureContainer(el); fadeRef(el); }, [measureContainer, fadeRef]);
   const handleScroll = useCallback(() => { onContainerScroll(); measureClipped(); }, [onContainerScroll, measureClipped]);
   useEffect(() => { measureClipped(); }, [measureClipped, containerSize.height, containerSize.width, snapshot]);
@@ -224,8 +224,8 @@ export function CircuitRenderer() {
   const fit = fitCircuitWidth(svgWidth, containerSize.width);
 
   return (
-    // The diagram never takes more than ~40% of the screen height: the Bloch spheres below need room to stay readable, and a tall circuit scrolls inside its own box.
-    <div style={{ flex: '1 1 auto', minHeight: 0, maxHeight: '40vh', display: 'flex', flexDirection: 'column' }} role="region" aria-label="Circuit diagram">
+    // The rail split (src/layout/railHeights.ts) sizes this pane; a circuit taller than its share scrolls inside its own box.
+    <div style={{ flex: '1 1 auto', minHeight: 0, display: 'flex', flexDirection: 'column' }} role="region" aria-label="Circuit diagram">
       <div className="nuclei-pane-header" style={{ justifyContent: 'space-between', padding: '0 10px 0 12px' }}>
         <span style={{ display: 'flex', alignItems: 'baseline', gap: 8, minWidth: 0 }}>
           <span className="nuclei-overline">Circuit</span>

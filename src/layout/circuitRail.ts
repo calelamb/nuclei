@@ -26,14 +26,21 @@ const WIRE_HALF_HEIGHT_PX = 8;
 
 export interface WireViewport { scrollTop: number; visibleHeight: number; scale: number }
 
-/** How many qubit wires (not the classical register) lie below the bottom edge of the scrolled diagram. */
-export function hiddenQubitWires(view: WireViewport, qubitCount: number): number {
+/** Where the classical register's double wire sits, relative to the last qubit (matches computeCircuitGeometry). */
+const CLASSICAL_WIRE_OFFSET = 0.9;
+
+/**
+ * How many wires lie below the bottom edge of the scrolled diagram: the qubit wires, plus the classical
+ * register (one wire, "c/N") when the circuit has one - it used to be clipped without any "+1 wire" hint.
+ */
+export function hiddenQubitWires(view: WireViewport, qubitCount: number, hasClassical = false): number {
   const bottom = view.scrollTop + view.visibleHeight;
+  const rowBottom = (wireIndex: number) => SCROLLER_TOP_PAD_PX + (PADDING + wireIndex * WIRE_SPACING) * view.scale + WIRE_HALF_HEIGHT_PX;
   let hidden = 0;
   for (let q = 0; q < qubitCount; q += 1) {
-    const rowBottom = SCROLLER_TOP_PAD_PX + (PADDING + q * WIRE_SPACING) * view.scale + WIRE_HALF_HEIGHT_PX;
-    if (rowBottom > bottom) hidden += 1;
+    if (rowBottom(q) > bottom) hidden += 1;
   }
+  if (hasClassical && qubitCount > 0 && rowBottom(qubitCount - 1 + CLASSICAL_WIRE_OFFSET) > bottom) hidden += 1;
   return hidden;
 }
 

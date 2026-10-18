@@ -13,6 +13,10 @@ import { usePlatform } from '../../platform/PlatformProvider';
 import { useEditorStore } from '../../stores/editorStore';
 import { visibleVizPanelIds } from '../../layout/vizPanels';
 import { circuitMinHeight } from '../../layout/circuitRail';
+import { blochRailHeights } from '../../layout/blochRail';
+import { circuitWantedHeight, planRailSplit } from '../../layout/railHeights';
+import { computeCircuitGeometry } from '../circuit/geometry';
+import { fitCircuitWidth } from '../circuit/fitCircuit';
 import { useDisplaySnapshot } from '../../layout/useDisplaySnapshot';
 import { useElementSize } from '../../hooks/useElementSize';
 import { useResultStale } from '../../hooks/useResultStale';
@@ -24,6 +28,10 @@ import { QecTimelinePanel } from './QecTimelinePanel';
 import { CodeLatticePanel } from './CodeLatticePanel';
 import { DetectorGraphPanel } from './DetectorGraphPanel';
 import type { VisiblePanels, PanelId } from '../../layout/panelRegistry';
+import type { CircuitSnapshot } from '../../types/quantum';
+
+/** The results empty state keeps this much room below the circuit. */
+const EMPTY_RESULTS_MIN_PX = 240;
 
 /**
  * PRD 10 Phase D — the viz zone (right rail).
@@ -92,10 +100,16 @@ export function VizZone({
   const { snapshot: circuitSnapshot } = useDisplaySnapshot();
   const [measureColumn, columnSize] = useElementSize<HTMLDivElement>();
   const blochCount = useSimulationStore((st) => st.result?.bloch_coords?.length ?? 0);
-  const circuitRevealStyle = {
-    ...CIRCUIT_REVEAL_STYLE,
-    minHeight: Math.max(96, circuitMinHeight(circuitSnapshot?.qubit_count ?? 1, columnSize.height)),
-  };
+  const [measureChip, chipSize] = useElementSize<HTMLDivElement>();
+  const blochMin = blochCount > 0 ? blochRailHeights(blochCount, columnSize.width).min : EMPTY_RESULTS_MIN_PX;
+  const circuitHeight = useCircuitHeight({
+    snapshot: circuitSnapshot,
+    railWidth: columnSize.width,
+    railHeight: columnSize.height,
+    chipHeight: chipSize.height,
+    blochMin,
+  });
+  const circuitRevealStyle = { ...CIRCUIT_REVEAL_STYLE, height: circuitHeight };
   const circuitPanel = panels.find((p) => p.id === 'circuit');
   const statePanels = panels.filter((p) => p.id !== 'circuit');
 
@@ -135,7 +149,7 @@ export function VizZone({
     <div ref={measureColumn} style={COLUMN_STYLE}>
       {circuitPanel && (
         <PanelReveal when from="right" style={circuitRevealStyle}>
-          <section aria-label={circuitPanel.title} style={{ borderBottom: `1px solid ${colors.border}`, display: 'flex', flexDirection: 'column', minHeight: 0, maxHeight: '100%' }}>
+          <section aria-label={circuitPanel.title} style={{ borderBottom: `1px solid ${colors.border}`, display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0 }}>
             {circuitPanel.render()}
           </section>
         </PanelReveal>
@@ -147,10 +161,10 @@ export function VizZone({
         // Before the first run the Bloch panel is just the shared empty state: it takes the rest of the rail so it is centred like the Clean preset's.
         const fills = p.fit === 'fill' || (p.id === 'bloch' && blochCount === 0);
         return (
-        <PanelReveal key={p.id} when from="right" style={fills ? FILL_STYLE : CONTENT_STYLE}>
+        <PanelReveal key={p.id} when from="right" style={p.id === 'bloch' ? { ...FILL_STYLE, minHeight: blochMin } : fills ? FILL_STYLE : CONTENT_STYLE}>
           <div
             className={p.id === 'bloch' && stale ? 'nuclei-stale-results' : undefined}
-            style={fills ? FILL_BODY_STYLE : CONTENT_BODY_STYLE}
+            style={fills || p.id === 'bloch' ? FILL_BODY_STYLE_FLEX : CONTENT_BODY_STYLE}
           >
             {p.id === 'bloch' && stale && <StaleResultNotice />}
             {p.render()}
@@ -166,20 +180,45 @@ export function VizZone({
           onSelect={(id) => setActiveTab(projectRoot, id)}
         />
       )}
-      <div style={stale ? STALE_CHIP_STYLE : CHIP_STYLE} data-stale={stale ? 'true' : undefined}>{chip}</div>
+      <div ref={measureChip} data-testid="viz-chip" style={stale ? STALE_CHIP_STYLE : CHIP_STYLE} data-stale={stale ? 'true' : undefined}>{chip}</div>
     </div>
   );
 }
 const CHIP_STYLE = { flexShrink: 0 } as const;
 const STALE_CHIP_STYLE = { opacity: STALE_RESULT_OPACITY, flexShrink: 0 } as const;
 
-const COLUMN_STYLE = { width: '100%', height: '100%', minWidth: 0, display: 'flex', flexDirection: 'column' } as const;
-// The circuit grows to its content and only yields space (scrolling inside) when the rail is short.
-const CIRCUIT_REVEAL_STYLE = { flex: '0 1 auto', minHeight: 96, display: 'flex', flexDirection: 'column' } as const;
+// When even the floors of the circuit and the spheres do not fit, the rail scrolls instead of clipping.
+const COLUMN_STYLE = { width: '100%', height: '100%', minWidth: 0, display: 'flex', flexDirection: 'column', overflowY: 'auto' } as const;
+// The circuit's height is decided by planRailSplit; it never flexes on its own.
+const CIRCUIT_REVEAL_STYLE = { flex: '0 0 auto', display: 'flex', flexDirection: 'column' } as const;
 const CONTENT_STYLE = { flex: '0 1 auto', minHeight: 0, display: 'flex', flexDirection: 'column' } as const;
 const CONTENT_BODY_STYLE = { overflow: 'hidden', position: 'relative', minHeight: 0, display: 'flex', flexDirection: 'column' } as const;
-const FILL_BODY_STYLE = { flex: 1, overflow: 'hidden', position: 'relative', minHeight: 240, display: 'flex', flexDirection: 'column' } as const;
+// A body that fills its wrapper without the 240px floor of the QEC panels (the Bloch rail carries its own minimum).
+const FILL_BODY_STYLE_FLEX = { flex: 1, overflow: 'hidden', position: 'relative', minHeight: 0, display: 'flex', flexDirection: 'column' } as const;
 const FILL_STYLE = { flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' } as const;
+
+/** The circuit pane's height: its whole diagram when the rail can spare it, see planRailSplit. */
+function useCircuitHeight(input: {
+  snapshot: CircuitSnapshot | null;
+  railWidth: number;
+  railHeight: number;
+  chipHeight: number;
+  blochMin: number;
+}): number {
+  const { snapshot, railWidth, railHeight, chipHeight, blochMin } = input;
+  return useMemo(() => {
+    const qubits = snapshot?.qubit_count ?? 1;
+    const geometry = snapshot ? computeCircuitGeometry(snapshot) : null;
+    const scale = geometry ? fitCircuitWidth(geometry.svgWidth, railWidth).scale : 1;
+    return planRailSplit({
+      railHeight,
+      chipHeight,
+      circuitWanted: circuitWantedHeight(geometry?.svgHeight ?? 0, scale),
+      circuitFloor: Math.max(96, circuitMinHeight(qubits, railHeight)),
+      blochMin,
+    }).circuit;
+  }, [snapshot, railWidth, railHeight, chipHeight, blochMin]);
+}
 
 function TabbedPanels({ panels, rememberedTab, onSelect }: {
   panels: VizPanelDef[];

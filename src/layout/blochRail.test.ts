@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { blochRailHeights, blochRailUsedHeight, BLOCH_ROW_MAX_PX, BLOCH_ROW_MIN_PX } from './blochRail';
+import { blochRailHeights, BLOCH_ROW_MAX_PX, BLOCH_ROW_MIN_PX } from './blochRail';
 
 describe('blochRailHeights', () => {
   it('gives six qubits in a narrow rail a 3x2 grid worth of rows', () => {
@@ -28,28 +28,6 @@ describe('blochRailHeights', () => {
 
   it('treats zero or negative counts as one', () => {
     expect(blochRailHeights(0, 332)).toEqual(blochRailHeights(1, 332));
-  });
-});
-
-describe('blochRailUsedHeight', () => {
-  it('is no taller than the rail it was given', () => {
-    for (const [count, width, height] of [[4, 310, 284], [3, 310, 240], [6, 332, 520], [18, 332, 400]] as const) {
-      expect(blochRailUsedHeight(count, width, height)).toBeLessThanOrEqual(height);
-    }
-  });
-
-  it('on a short rail draws one row of 3 qubits and reports only that row, not a 2-row grid', () => {
-    const used = blochRailUsedHeight(3, 310, 284);
-    expect(used).toBeLessThanOrEqual(blochRailHeights(3, 310).desired - 60);
-  });
-
-  it('on a tall rail reports the full multi-row grid', () => {
-    expect(blochRailUsedHeight(4, 310, 600)).toBeGreaterThan(284);
-  });
-
-  it('adds the pager when the qubits page', () => {
-    const paged = blochRailUsedHeight(18, 332, 400);
-    expect(paged).toBeGreaterThan(32 + 16 + 100);
   });
 });
 
