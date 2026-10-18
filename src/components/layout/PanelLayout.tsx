@@ -210,7 +210,7 @@ export function PanelLayout() {
 
   const diracOpen = useDiracPanelStore((s) => s.isOpen);
   const closeDirac = useDiracPanelStore((s) => s.close);
-  useRoomRetreat({ sidebarWidth, vizWanted: vizHasContent, canCollapseSidebar: !editorHidden && !fullViewOwnsArea });
+  useRoomRetreat({ sidebarWidth, vizWanted: vizHasContent, canCollapseSidebar: !editorHidden && !fullViewOwnsArea, sidebarOpen: showSidebar });
 
   useShellLayout({
     platform,

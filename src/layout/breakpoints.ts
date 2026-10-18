@@ -61,3 +61,22 @@ export function planRoom({ viewport, sidebarWidth, diracWidth, vizWanted }: Room
   const closeSidebar = row - sidebarWidth < need;
   return { closeSidebar, hideViz: vizWanted && row < need };
 }
+
+export interface SidebarOpenInput {
+  viewport: number;
+  sidebarWidth: number;
+  /** Dirac's open width, or null when it is already folded to its rail tab. */
+  diracWidth: number | null;
+}
+
+/**
+ * The user just opened the sidebar. When the sidebar and an open Dirac leave the editor under
+ * EDITOR_MIN_WIDTH, Dirac folds to its rail tab (the panel opened most recently wins) - but only
+ * when that rescues the editor; otherwise folding would cost Dirac for nothing.
+ */
+export function shouldFoldDiracForSidebar({ viewport, sidebarWidth, diracWidth }: SidebarOpenInput): boolean {
+  if (diracWidth === null) return false;
+  const editorWithDirac = viewport - ACTIVITY_BAR_WIDTH - sidebarWidth - diracWidth;
+  const editorWithRail = viewport - ACTIVITY_BAR_WIDTH - sidebarWidth - DIRAC_RAIL_WIDTH;
+  return editorWithDirac < EDITOR_MIN_WIDTH && editorWithRail >= EDITOR_MIN_WIDTH;
+}
