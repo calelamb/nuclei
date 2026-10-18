@@ -311,3 +311,25 @@ def test_commutation_speed_one_vs_million_n128():
     dt = time.perf_counter() - t0
     assert res.shape == (count,)
     assert dt < 0.5, f"commutation took {dt:.3f}s"
+
+
+def test_clifford_frame_matches_conjugator():
+    """CliffordFrame.map_string == CliffordConjugator on the same gate prefix (used by the PPE compiler)."""
+    from kernel.trainability._symplectic_frame import CliffordFrame
+    n = 6
+    rng = np.random.default_rng(77)
+    gates = random_clifford(rng, n, 40)
+    frame = CliffordFrame(n)
+    for name, qs in gates:
+        frame.append(name, qs)
+    labels = random_labels(rng, n, 30, phases=False)
+    expected = CliffordConjugator(gates, n, use_stim=False).conjugate(PauliArray.from_labels(labels, n)).to_labels()
+    for lab, want in zip(labels, expected):
+        x = z = 0
+        for q, ch in enumerate(lab):
+            x |= (ch in "XY") << q
+            z |= (ch in "ZY") << q
+        x2, z2, sign = frame.map_string(x, z)
+        got = ("-" if sign < 0 else "") + "".join(
+            "IXZY"[((x2 >> q) & 1) | (((z2 >> q) & 1) << 1)] for q in range(n))
+        assert got == want

@@ -146,13 +146,28 @@ class _Chain:
         return c.select(np.zeros(0, dtype=np.intp))
 
     @staticmethod
-    def concat(parts: Sequence["_Chain"]) -> "_Chain":
-        first = parts[0]
-        cat = np.concatenate
-        return _Chain(cat([p.qx for p in parts]), cat([p.qz for p in parts]),
-                      None if first.diag else cat([p.rx for p in parts]),
-                      None if first.diag else cat([p.rz for p in parts]),
-                      cat([p.w for p in parts]), cat([p.tag for p in parts]))
+    def concat(parts: Sequence["_Chain"], first_idx: np.ndarray | None = None) -> "_Chain":
+        """Concatenate chains; ``first_idx`` gathers rows of ``parts[0]`` in the same single copy."""
+        first, rest = parts[0], parts[1:]
+        m = len(first) if first_idx is None else len(first_idx)
+        total = m + sum(len(p) for p in rest)
+
+        def build(name: str) -> np.ndarray | None:
+            head = getattr(first, name)
+            if head is None:
+                return None
+            out = np.empty((total,) + head.shape[1:], dtype=head.dtype)
+            if first_idx is None:
+                out[:m] = head
+            else:
+                np.take(head, first_idx, axis=0, out=out[:m])
+            pos = m
+            for p in rest:
+                out[pos:pos + len(p)] = getattr(p, name)
+                pos += len(p)
+            return out
+
+        return _Chain(build("qx"), build("qz"), build("rx"), build("rz"), build("w"), build("tag"))
 
     def merged(self) -> "_Chain":
         if len(self) <= 1:
@@ -182,7 +197,8 @@ def _filter_exact(chain: _Chain, union: np.ndarray, final: np.ndarray, count_mai
     if done.any():
         sel = done if count_main else done & (chain.tag >= 0)
         final += np.bincount(chain.tag[sel] + 1, weights=chain.w[sel], minlength=len(final))
-    return chain.select(~(dead | done))
+    gone = dead | done
+    return chain.select(~gone) if gone.any() else chain
 
 
 class _Limits:
@@ -240,9 +256,15 @@ def _variance_step(comp: CompiledProgram, j: int, ch: _Chain) -> tuple[_Chain, b
     k_param, f2 = int(comp.rot_param[j]), float(comp.rot_freq[j]) ** 2
     a1 = _anti(px, pz, ch.qx, ch.qz)
     a2 = a1 if ch.diag else _anti(px, pz, ch.rx, ch.rz)
-    keep, both = ~a1 & ~a2, np.nonzero(a1 & a2)[0]
-    parts = [ch.select(keep)]
-    seeded = False
+    both_mask = a1 & a2
+    both = np.nonzero(both_mask)[0]
+    dying = (a1 ^ a2) if not ch.diag else None
+    if both.size == 0 and (dying is None or not dying.any()):
+        return ch, False
+    keep_idx = None if dying is None or not dying.any() else np.nonzero(~dying)[0]
+    base_w = np.where(both_mask, 0.5 * ch.w, ch.w)
+    base = _Chain(ch.qx, ch.qz, ch.rx, ch.rz, base_w, ch.tag)
+    parts, seeded = [base], False
     if both.size:
         sub = ch.select(both)
         fx, fz, s1 = _product_with_rotation(comp, j, sub.qx, sub.qz)
@@ -251,18 +273,18 @@ def _variance_step(comp: CompiledProgram, j: int, ch: _Chain) -> tuple[_Chain, b
         else:
             gx, gz, s2 = _product_with_rotation(comp, j, sub.rx, sub.rz)
             pair_sign = s1 * s2
-        stay = _Chain(sub.qx, sub.qz, sub.rx, sub.rz, 0.5 * sub.w, sub.tag)
         flip = _Chain(fx, fz, gx, gz, 0.5 * sub.w * pair_sign, sub.tag)
-        parts += [stay, flip]
+        parts.append(flip)
         main = np.nonzero(sub.tag == -1)[0]
         if main.size:
             seeded = True
+            stay = _Chain(sub.qx, sub.qz, sub.rx, sub.rz, 0.5 * sub.w, sub.tag)
             for half in (stay, flip):
                 seed = half.select(main)
                 seed.w = seed.w * f2
                 seed.tag = np.full(len(seed), k_param, np.int32)
                 parts.append(seed)
-    out = _Chain.concat(parts) if len(parts) > 1 else parts[0]
+    out = _Chain.concat(parts, keep_idx)
     return (out.merged() if both.size else out), seeded
 
 
