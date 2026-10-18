@@ -134,25 +134,16 @@ def test_qec_audit_alternate_noise_models():
     assert any("uniform" in n for n in record["notes"])
 
 
-@pytest.mark.slow
-def test_qec_audit_catches_the_distance_cheater_the_evaluator_misses():
-    """d=7 circuit with a hidden weight-5 logical: the evaluator only WARNs, the exact search fails it."""
-    from kernel.discovery.audits.exploits import load_fixtures
-
-    fixtures = {f["id"]: f for f in load_fixtures(os.path.join(os.path.dirname(__file__), "fixtures", "exploits"))}
-    fixture = fixtures["qec-distance-cheater-bus-fanout"]
-    from kernel.discovery.audits.exploits import audit_fixture, evaluate_fixture
+def test_qec_evaluator_now_rejects_the_distance_cheater_and_the_audit_agrees():
+    """d=7 circuit with a hidden weight-5 logical: the evaluator rejects it; the audit's exact search concurs."""
+    from kernel.discovery.audits.exploits import evaluate_fixture, load_fixtures
     import tempfile
 
+    fixtures = {f["id"]: f for f in load_fixtures(os.path.join(os.path.dirname(__file__), "fixtures", "exploits"))}
     with tempfile.TemporaryDirectory() as cache:
-        evaluation = evaluate_fixture(fixture, cache)
-        assert evaluation["status"] == "scored"
-        by_id = {g["id"]: g for g in evaluation["guardrails"]}
-        assert by_id["fault_distance"]["status"] == "warn"  # evaluator: "verified only up to the search bounds"
-        audit = audit_fixture(fixture, evaluation, cache)
-    assert audit["verdict"] == "exploit"
-    assert status_of(audit, "exact_fault_distance") == "fail"
-    assert any("weight 5" in r for r in audit["reasons"])
+        evaluation = evaluate_fixture(fixtures["qec-distance-cheater-bus-fanout"], cache)
+    assert evaluation["status"] == "rejected" and evaluation["rejection"]["guardrail"] == "fault_distance"
+    # the audit-side half of this (exact search finds weight 5 even when the evaluator is blind) lives in test_discovery_holes.py
 
 
 # --- state_synthesis planted exploits -----------------------------------------------------------------

@@ -168,7 +168,7 @@ async def test_evaluate_end_to_end_record_and_cache_hit(seed_program):
     assert [g["status"] for g in ev["guardrails"]] == ["pass"] * 10
     assert ev["rejection"] is None and ev["failure"] is None
     assert ev["objectives"]["logical_error_per_round"]["direction"] == "minimize"
-    assert set(ev["metrics"]) == {"per_distance", "lambda"}
+    assert set(ev["metrics"]) == {"per_distance", "lambda", "distance_verified", "distance_penalty"}
 
     # A comment-only edit shares the program_key, so the second evaluation is a cache hit.
     ws2 = await session(

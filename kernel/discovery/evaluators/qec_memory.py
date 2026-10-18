@@ -27,6 +27,11 @@ from kernel.discovery.noise import MODELS
 KIND = "qec_memory"
 VERSION = "1.0.0"
 FITNESS_FLOOR = 1e-15
+#: Fitness subtracted (in decades of LER upper bound) when any requested distance is not exactly
+#: verified: the search was bounded and the ``confirm`` stage's exact check has not (yet) cleared it.
+#: A full decade is large enough that an unverified claim cannot out-rank a verified one that is
+#: within 10x on logical error rate, and ``confirm`` removes it only by proof.
+DISTANCE_UNVERIFIED_PENALTY = 1.0
 
 DEFAULT_ALLOWED_GATES = [
     "H", "S", "S_DAG", "SQRT_X", "SQRT_X_DAG", "X", "Y", "Z", "CX", "CY", "CZ", "SWAP",
@@ -133,6 +138,7 @@ def _distance_metrics(case: Case, config: dict[str, Any], seed: int, cancel) -> 
         **summary,
         "fault_distance": case.fault.weight if case.fault else None,
         "fault_distance_method": case.fault.method if case.fault else None,
+        "distance_verified": case.distance_verified,
         "qubits": case.circuit.num_qubits,
         "detectors": case.circuit.num_detectors,
         "two_qubit_gates": two_qubit,
@@ -145,12 +151,14 @@ def _number(value: float) -> float | int:
 
 
 def _scored(per_distance: list[dict[str, Any]], guardrails: list[dict[str, Any]]) -> EvaluationCore:
+    verified = all(m["distance_verified"] for m in per_distance)
     largest = per_distance[-1]
     fitness = sum(-math.log10(max(m["ci95"][1], FITNESS_FLOOR)) for m in per_distance) / len(per_distance)
+    penalty = 0.0 if verified else DISTANCE_UNVERIFIED_PENALTY
     lambdas = [lambda_ratio(a, b) for a, b in zip(per_distance, per_distance[1:])]
     return EvaluationCore(
         status="scored",
-        fitness=fitness,
+        fitness=fitness - penalty,
         objectives={
             "logical_error_per_round": {
                 "value": largest["ler_round"], "ci95": largest["ci95"],
@@ -162,7 +170,10 @@ def _scored(per_distance: list[dict[str, Any]], guardrails: list[dict[str, Any]]
             "qubits": largest["qubits"],
             "two_qubit_gates_per_round": _number(largest["two_qubit_gates"] / largest["rounds"]),
         },
-        metrics={"per_distance": per_distance, "lambda": lambdas},
+        metrics={
+            "per_distance": per_distance, "lambda": lambdas,
+            "distance_verified": verified, "distance_penalty": penalty,
+        },
         guardrails=guardrails,
         compute={"backend": "numpy", "method": "stim_pymatching_sampling"},
     )
