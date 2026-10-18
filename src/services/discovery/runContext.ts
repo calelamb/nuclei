@@ -69,13 +69,16 @@ export type Limiter = <T>(fn: () => Promise<T>) => Promise<T>;
 export function createLimiter(limit: number): Limiter {
   let active = 0;
   const waiting: Array<() => void> = [];
+  // Hand the slot straight to the next waiter (active stays counted) so a
+  // caller arriving between release and wake-up cannot take it too.
   const release = () => {
-    active -= 1;
-    waiting.shift()?.();
+    const next = waiting.shift();
+    if (next) next();
+    else active -= 1;
   };
   return async (fn) => {
     if (active >= limit) await new Promise<void>((resolve) => waiting.push(resolve));
-    active += 1;
+    else active += 1;
     try {
       return await fn();
     } finally {
