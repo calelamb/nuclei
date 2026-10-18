@@ -28,9 +28,9 @@ interface FakeEditor {
 const harness = vi.hoisted(() => ({ focus: () => {}, blur: () => {}, options: {} as Record<string, unknown> }));
 
 function FakeMonaco({ onMount, options }: { onMount: (e: FakeEditor, m: unknown) => void; options?: Record<string, unknown> }) {
-  harness.options = options ?? {};
   // Like the real component, mount the editor once, not on every re-render.
   React.useEffect(() => {
+    harness.options = options ?? {};
     const editor: FakeEditor = {
       addAction: vi.fn(),
       onDidFocusEditorText: (cb) => { harness.focus = cb; },
