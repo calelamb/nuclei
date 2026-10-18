@@ -80,6 +80,30 @@ describe('a run that fails synchronously (CR-H8)', () => {
   });
 });
 
+describe('KPIs are not recomputed on activity events (CR-M10)', () => {
+  it('keeps the same kpis object across activity-only updates', async () => {
+    let activityOnly = 0;
+    let kpisChangedOnActivity = 0;
+    const unsubscribe = useDiscoveryStore.subscribe((state, prev) => {
+      for (const id of Object.keys(state.views)) {
+        const now = state.views[id];
+        const before = prev.views[id];
+        if (!before || now === before) continue;
+        if (now.run === before.run && now.candidates === before.candidates && now.activity !== before.activity) {
+          activityOnly += 1;
+          if (state.kpis[id] !== prev.kpis[id]) kpisChangedOnActivity += 1;
+        }
+      }
+    });
+    const res = await store().startRun('toy.discovery.yaml');
+    expect(res.ok).toBe(true);
+    await until(() => store().liveRunIds.length === 0, 'run to finish');
+    unsubscribe();
+    expect(activityOnly).toBeGreaterThan(0);
+    expect(kpisChangedOnActivity).toBe(0);
+  });
+});
+
 describe('double Start and Resume (CR-M8)', () => {
   it('two Start calls in the same tick launch exactly one runner', async () => {
     const [a, b] = await Promise.all([store().startRun('toy.discovery.yaml'), store().startRun('toy.discovery.yaml')]);

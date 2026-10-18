@@ -2,9 +2,10 @@ import { useMemo, useState } from 'react';
 import { ChartFrame, LabButton, LabCallout, LabCard, LabEmptyState, formatPct } from '../../lab';
 import { guardrailPassRates, isolationNote, isolationUsed, rejectionReasons, type GuardrailPassRate, type RejectionReason } from '../../../services/discovery/guardrailStats';
 import { SANDBOX_HONESTY } from '../../../services/discovery/honesty';
-import { candidateList, type RunView } from '../../../services/discovery/runView';
-import { summarizeAudits } from '../../../services/discovery/redQueen';
-import { selectRunExploits, useDiscoveryStore } from '../../../stores/discoveryStore';
+import type { RunView } from '../../../services/discovery/runView';
+import { useCandidateList } from '../useCandidateList';
+import { exploitsOf, summarizeAudits } from '../../../services/discovery/redQueen';
+import { useDiscoveryStore } from '../../../stores/discoveryStore';
 import { ExploitsFoundLane } from '../ExploitsFoundLane';
 
 function ReasonsChart({ reasons }: { reasons: RejectionReason[] }) {
@@ -78,13 +79,15 @@ function PassRateRow({ row }: { row: GuardrailPassRate }) {
 /** The reward-hacking log: why candidates were rejected, guardrail pass rates, and the isolation actually used. */
 export function GuardrailsTab({ view, onOpen }: { view: RunView; onOpen: (id: string) => void }) {
   const exportFixture = useDiscoveryStore((s) => s.exportExploitFixture);
-  const list = useMemo(() => candidateList(view), [view]);
+  const list = useCandidateList(view);
   const reasons = useMemo(() => rejectionReasons(list), [list]);
   const rates = useMemo(() => guardrailPassRates(list), [list]);
   const isolation = useMemo(() => isolationUsed(list), [list]);
-  const exploits = useMemo(() => selectRunExploits(view), [view]);
-  const audits = useMemo(() => summarizeAudits(list), [list]);
   const runId = view.run.run_id;
+  const spec = view.run.spec;
+  // Derived from the candidates and the spec only: usage and status events do not recompute it.
+  const exploits = useMemo(() => exploitsOf(runId, list, spec), [runId, list, spec]);
+  const audits = useMemo(() => summarizeAudits(list), [list]);
   return (
     <div className="disc-tabpanel">
       <div className="disc-two-col">

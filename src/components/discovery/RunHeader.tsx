@@ -1,9 +1,10 @@
+import { useMemo } from 'react';
 import { Pause, Play, RotateCcw, Square } from 'lucide-react';
 import { LabButton, LabMeter, formatDuration } from '../lab';
 import { useDiscoveryStore, type RunView } from '../../stores/discoveryStore';
 import { formatCount } from '../../services/discovery/format';
 import { redQueenConfig, summarizeAudits } from '../../services/discovery/redQueen';
-import { candidateList } from '../../services/discovery/runView';
+import { useCandidateList } from './useCandidateList';
 import { EvaluatorChip, MutatorChip, RunStatusPill } from './pills';
 
 const RESUMABLE = new Set(['stale', 'paused', 'stopped', 'failed']);
@@ -20,7 +21,8 @@ export function RunHeader({ view }: { view: RunView }) {
   const { spec, usage } = run;
   const mutator = spec.mutator;
   const redQueen = mutator.kind === 'red_queen';
-  const audits = redQueen ? summarizeAudits(candidateList(view)) : null;
+  const candidates = useCandidateList(view);
+  const audits = useMemo(() => (redQueen ? summarizeAudits(candidates) : null), [redQueen, candidates]);
   const resumable = !live && RESUMABLE.has(run.status) && run.stop_reason !== 'seed_rejected';
   const blocked = anyLive && !live;
   const blockedTitle = blocked ? 'Another discovery run is active. Stop it or wait for it to finish.' : undefined;

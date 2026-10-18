@@ -1,13 +1,14 @@
 import { useMemo } from 'react';
 import { LabCard, LabEmptyState } from '../../lab';
 import { buildTrajectory } from '../../../services/discovery/trajectory';
-import { candidateList, type RunView } from '../../../services/discovery/runView';
+import type { RunView } from '../../../services/discovery/runView';
+import { useCandidateList } from '../useCandidateList';
 import { ChampionCard } from '../ChampionCard';
 import { ParetoChart } from '../ParetoChart';
 import { TrajectoryChart } from '../TrajectoryChart';
 
 export function OverviewTab({ view, onOpen }: { view: RunView; onOpen: (id: string) => void }) {
-  const list = useMemo(() => candidateList(view), [view]);
+  const list = useCandidateList(view);
   const trajectory = useMemo(() => buildTrajectory(list), [list]);
   const hasPoints = trajectory.points.length > 0;
   return (

@@ -12,7 +12,8 @@ import {
   normalizeFitness,
 } from '../../../services/discovery/candidateView';
 import { buildLineageLayout, lineageNeighbor, lineageSignature, type LineageKey, type LineageLayout } from '../../../services/discovery/lineageLayout';
-import { candidateList, type RunView } from '../../../services/discovery/runView';
+import type { RunView } from '../../../services/discovery/runView';
+import { useCandidateList } from '../useCandidateList';
 import type { CandidateRecord } from '../../../types/discovery';
 
 const HEIGHT = 460;
@@ -80,7 +81,7 @@ const NodeLayer = memo(function NodeLayer({ layout, byId, extent, championId, se
 
 /** Lineage tree (root = seed): pan and zoom, click or Enter opens the drawer, arrow keys walk the tree. */
 export function LineageTab({ view, selectedId, onOpen }: { view: RunView; selectedId: string | null; onOpen: (id: string) => void }) {
-  const all = useMemo(() => candidateList(view), [view]);
+  const all = useCandidateList(view);
   const [showNoise, setShowNoise] = useState(false);
   // Duplicates and invalid proposals never have children; hiding them keeps big trees readable.
   const noise = useMemo(() => all.filter((c) => ['duplicate', 'invalid'].includes(candidateKind(c))).length, [all]);

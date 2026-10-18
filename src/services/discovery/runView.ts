@@ -44,7 +44,8 @@ export function reduceRunEvent(view: RunView, event: RunnerEvent): RunView {
       return {
         ...view,
         candidates: { ...view.candidates, [c.id]: c },
-        order: known ? view.order : [...view.order, c.id].sort(),
+        // Candidates are created in id order, so a new one is simply the newest: append, no re-sort (CR-M10).
+        order: known ? view.order : [...view.order, c.id],
         activity: c.outcome === 'pending' ? view.activity : activity,
       };
     }
@@ -63,6 +64,13 @@ export function reduceRunEvent(view: RunView, event: RunnerEvent): RunView {
   }
 }
 
-export function candidateList(view: RunView): CandidateRecord[] {
-  return view.order.map((id) => view.candidates[id]).filter((c): c is CandidateRecord => c !== undefined);
+/** Last list per `candidates` object: status, activity and notice events leave it untouched, so the list (and every memo on it) stays stable. */
+const listCache = new WeakMap<object, { order: readonly string[]; list: CandidateRecord[] }>();
+
+export function candidateList(view: Pick<RunView, 'order' | 'candidates'>): CandidateRecord[] {
+  const cached = listCache.get(view.candidates);
+  if (cached && cached.order === view.order) return cached.list;
+  const list = view.order.map((id) => view.candidates[id]).filter((c): c is CandidateRecord => c !== undefined);
+  listCache.set(view.candidates, { order: view.order, list });
+  return list;
 }

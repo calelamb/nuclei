@@ -124,11 +124,22 @@ function depsFor(session: DiscoverySession): DiscoveryDeps {
 }
 
 function withView(state: DiscoveryState, runId: string, view: RunView): Partial<DiscoveryState> {
-  const candidates = candidateList(view);
   return {
     views: { ...state.views, [runId]: view },
-    kpis: { ...state.kpis, [runId]: computeKpis(view.run, candidates) },
+    kpis: { ...state.kpis, [runId]: computeKpis(view.run, candidateList(view)) },
   };
+}
+
+/** Activity and notice events change neither the run nor the candidates, so the KPIs stay as they are (CR-M10). */
+function withViewOnly(state: DiscoveryState, runId: string, view: RunView): Partial<DiscoveryState> {
+  return { views: { ...state.views, [runId]: view } };
+}
+
+/** The final record of a run: KPIs are recomputed only when it is not the record the last status event already carried. */
+function settledView(state: DiscoveryState, runId: string, run: RunRecord): Partial<DiscoveryState> {
+  const existing = state.views[runId];
+  const view = { ...(existing ?? createRunView(run)), run, activity: {} };
+  return existing && existing.run === run ? withViewOnly(state, runId, view) : withView(state, runId, view);
 }
 
 function upsertRun(runs: RunRecord[] | undefined, run: RunRecord): RunRecord[] {
@@ -212,7 +223,9 @@ export const useDiscoveryStore = create<DiscoveryState>((set, get) => {
       const current = live.get(id)?.handle.current() ?? null;
       set((s) => {
         const base = s.views[id] ?? (event.type === 'status' ? createRunView(event.run) : current ? createRunView(current) : null);
-        return base ? withView(s, id, reduceRunEvent(base, event)) : s;
+        if (!base) return s;
+        const next = reduceRunEvent(base, event);
+        return event.type === 'activity' || event.type === 'notice' ? withViewOnly(s, id, next) : withView(s, id, next);
       });
     };
     const handle = runDiscovery(spec, rctx, depsFor(session), { onEvent });
@@ -234,7 +247,7 @@ export const useDiscoveryStore = create<DiscoveryState>((set, get) => {
         liveRunIds: s.liveRunIds.filter((id) => id !== runId),
         runsByDefinition: { ...s.runsByDefinition, [rctx.definitionFile]: upsertRun(s.runsByDefinition[rctx.definitionFile], run) },
         // The view may not exist yet when the run failed before its first event was routed.
-        ...withView(s, runId, { ...(s.views[runId] ?? createRunView(run)), run, activity: {} }),
+        ...settledView(s, runId, run),
       }));
     });
     return { ok: true, runId };
