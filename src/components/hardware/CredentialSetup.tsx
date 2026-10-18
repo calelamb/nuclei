@@ -94,8 +94,8 @@ const PROVIDER_CONFIG: Record<
       'Azure Quantum aggregates Quantinuum, IonQ, Rigetti, Pasqal, and IQM. Requires an Azure subscription and a Quantum workspace.',
     fields: [
       { key: 'subscription_id', label: 'Subscription ID', placeholder: 'xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx' },
-      { key: 'resource_group', label: 'Resource Group', placeholder: 'MyQuantumRG' },
-      { key: 'workspace_name', label: 'Workspace Name', placeholder: 'my-workspace' },
+      { key: 'resource_group', label: 'Resource group', placeholder: 'MyQuantumRG' },
+      { key: 'workspace_name', label: 'Workspace name', placeholder: 'my-workspace' },
       { key: 'location', label: 'Location', placeholder: 'eastus' },
     ],
     helpText: 'Create a workspace at portal.azure.com.',
@@ -250,16 +250,8 @@ export function CredentialSetup({ provider, onClose }: CredentialSetupProps) {
             <div className="nuclei-focus-accent" key={field.key} style={{ marginBottom: 12 }}>
               <label
                 htmlFor={`credential-${provider}-${field.key}`}
-                style={{
-                  display: 'block',
-                  fontSize: 11,
-                  fontWeight: 600,
-                  color: colors.textMuted,
-                  textTransform: 'uppercase',
-                  letterSpacing: 0.5,
-                  marginBottom: 4,
-                  ...font,
-                }}
+                className="nuclei-overline"
+                style={{ display: 'block', marginBottom: 4 }}
               >
                 {field.label}
               </label>

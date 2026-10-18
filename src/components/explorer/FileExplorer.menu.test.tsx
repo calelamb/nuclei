@@ -24,7 +24,7 @@ afterEach(cleanup);
 describe('FileExplorer New menu', () => {
   it('opens the circuit list only on click, not on hover', () => {
     setup();
-    const circuit = screen.getByRole('menuitem', { name: /New Circuit/ });
+    const circuit = screen.getByRole('menuitem', { name: /New circuit/ });
     fireEvent.mouseEnter(circuit.parentElement as HTMLElement);
     fireEvent.mouseOver(circuit);
     expect(screen.queryByRole('menuitem', { name: 'Cirq' })).toBeNull();
@@ -51,7 +51,7 @@ describe('FileExplorer New menu', () => {
     expect(document.activeElement).toBe(items[1]);
   });
 
-  it('expands New Circuit with ArrowRight and picks a framework by keyboard', () => {
+  it('expands New circuit with ArrowRight and picks a framework by keyboard', () => {
     setup();
     const menu = screen.getByRole('menu');
     fireEvent.keyDown(menu, { key: 'ArrowDown' });
@@ -60,5 +60,12 @@ describe('FileExplorer New menu', () => {
     fireEvent.click(document.activeElement as HTMLElement);
     expect(screen.queryByRole('menu')).toBeNull();
     expect((screen.getByPlaceholderText(/\.py$/) as HTMLInputElement).value).toMatch(/\.py$/);
+  });
+
+  it('writes every entry in sentence case (rq-r3-11)', () => {
+    setup();
+    const labels = screen.getAllByRole('menuitem').map((item) => item.textContent?.replace(/\.\w+$/, '').trim());
+    expect(labels).toEqual(expect.arrayContaining(['New file', 'New circuit', 'New Python package', 'New folder']));
+    expect(labels.join(' ')).not.toMatch(/New (File|Circuit|Folder|Package)/);
   });
 });
