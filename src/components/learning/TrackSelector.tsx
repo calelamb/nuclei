@@ -101,7 +101,7 @@ function SectionBody({ section }: { section: LearnSection }) {
     case 'capstones':
       return <div className="tracks__capstones"><CapstonesPanel /></div>;
     case 'glossary':
-      return <div className="tracks__glossary"><Glossary /></div>;
+      return <Glossary variant="page" />;
     case 'videos':
       return <TrackVideoShelf />;
   }

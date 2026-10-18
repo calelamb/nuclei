@@ -1,3 +1,4 @@
+import { scheduleLandingFocus } from '../onboarding/focusLanding';
 import { useMemo } from 'react';
 import { CheckCircle2, Circle, CircleDot, PanelLeftClose, PanelLeft, Network, Trophy, Library, PlayCircle } from 'lucide-react';
 import { useLearnStore } from '../../stores/learnStore';
@@ -144,6 +145,8 @@ export function LessonNavSidebar({
               }
               setSection(section);
               clearCurrentLesson();
+              // The lesson (and the link that was focused) is gone; land on the chooser heading.
+              scheduleLandingFocus();
             }}
           >
             <Icon size={12} aria-hidden="true" />

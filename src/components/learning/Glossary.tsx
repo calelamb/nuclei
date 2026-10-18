@@ -2,6 +2,7 @@ import { Search } from 'lucide-react';
 import { useGlossaryStore } from '../../stores/glossaryStore';
 import { GlossaryEntry } from './GlossaryEntry';
 import './learnSidebar.css';
+import './glossary.css';
 
 const CATEGORIES = [
   { key: 'all', label: 'All' },
@@ -13,11 +14,17 @@ const CATEGORIES = [
   { key: 'hardware', label: 'Hardware' },
 ];
 
-export function Glossary() {
+interface GlossaryProps {
+  /** `page` flows at natural height inside the chooser; `compact` fills the sidebar and scrolls its own list. */
+  variant?: 'compact' | 'page';
+}
+
+export function Glossary({ variant = 'compact' }: GlossaryProps) {
   const { searchQuery, selectedTerm, filteredTerms, selectedCategory, setSearch, selectTerm, setCategory } = useGlossaryStore();
 
   return (
-    <div className="gloss">
+    <div className={variant === 'page' ? 'gloss gloss--page' : 'gloss'}>
+      <div className="gloss__head">
       <div className="gloss__search">
         <label className="gloss__field nuclei-field-group">
           <Search size={12} aria-hidden="true" />
@@ -44,6 +51,7 @@ export function Glossary() {
             {cat.label}
           </button>
         ))}
+      </div>
       </div>
 
       <div className="gloss__list">

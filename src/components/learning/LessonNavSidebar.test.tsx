@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
-import { describe, it, expect, afterEach, beforeEach } from 'vitest';
-import { render, cleanup, screen, fireEvent } from '@testing-library/react';
+import { describe, it, expect, afterEach, beforeEach, vi } from 'vitest';
+import { render, cleanup, screen, fireEvent, act } from '@testing-library/react';
 import { LessonNavSidebar } from './LessonNavSidebar';
 import { useLearnStore } from '../../stores/learnStore';
 import { useLearnSectionStore } from './learnSectionStore';
@@ -34,5 +34,27 @@ describe('LessonNavSidebar section links (LR-05)', () => {
     render(<LessonNavSidebar collapsed={false} onToggleCollapsed={() => {}} />);
     fireEvent.click(screen.getByRole('button', { name: 'Glossary' }));
     expect(useLearnSectionStore.getState().returnTo).toEqual({ trackId: track.id, lessonId: track.lessons[0].id, blockIndex: 3 });
+  });
+});
+
+describe('keyboard entry to a chooser section', () => {
+  it('lands focus on the chooser heading instead of the body', () => {
+    vi.useFakeTimers();
+    try {
+      render(<LessonNavSidebar collapsed={false} onToggleCollapsed={() => {}} />);
+      const heading = document.createElement('h1');
+      heading.className = 'tracks__title';
+      document.body.appendChild(heading);
+
+      const link = screen.getByRole('button', { name: 'Glossary' });
+      link.focus();
+      fireEvent.click(link);
+      act(() => { vi.advanceTimersByTime(400); });
+
+      expect(document.activeElement).toBe(heading);
+      heading.remove();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

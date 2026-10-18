@@ -1,0 +1,12 @@
+/* Glossary layout. The compact variant lives in learnSidebar.css; this adds the grouped head and the page variant. */
+.gloss__head { flex-shrink: 0; }
+
+/* Page variant (Learn chooser): natural height, page is the only scroller, search stays in reach. */
+.gloss--page { height: auto; overflow: visible; }
+.gloss--page .gloss__head {
+  position: sticky; top: 0; z-index: 1;
+  padding: var(--space-3) 0 var(--space-2);
+  background: var(--color-surface-base);
+}
+.gloss--page .gloss__search, .gloss--page .gloss__cats { padding-inline: 0; }
+.gloss--page .gloss__list { flex: none; overflow: visible; padding: var(--space-2) 0 0; }
