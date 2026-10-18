@@ -10,6 +10,7 @@ import { useProjectStore } from '../../stores/projectStore';
 import { useExperimentStore } from '../../services/experimentStore';
 import { useExperimentRun } from '../../hooks/useExperimentRun';
 import { Button, IconButton } from '../ui';
+import { kernelNotConnectedMessage, kernelStartingMessage } from '../../lib/kernelErrors';
 
 const SUMMARY_VISIBLE_MS = 8000;
 
@@ -31,8 +32,8 @@ const KERNEL_UNREACHABLE = /failed to connect to kernel/i;
 function humanizeRunError(raw: string, kernelStarting: boolean): string {
   if (!KERNEL_UNREACHABLE.test(raw)) return raw;
   return kernelStarting
-    ? 'The Python kernel is still starting. Run again when the status bar says ready.'
-    : "Couldn't reach the Python kernel. Check the status bar, then retry.";
+    ? kernelStartingMessage({ again: 'Run again' })
+    : kernelNotConnectedMessage();
 }
 
 /**

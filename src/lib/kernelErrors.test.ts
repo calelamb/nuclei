@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { describeKernelFailure, kernelStartFailureTitle, normalizeKernelError } from './kernelErrors';
+import {
+  describeKernelFailure, kernelEngineName, kernelNotConnectedMessage, kernelStartFailureTitle,
+  kernelStartingMessage, kernelWaitingLabel, normalizeKernelError,
+} from './kernelErrors';
 
 describe('normalizeKernelError', () => {
   it('keeps the verbatim Rust string', () => {
@@ -56,5 +59,24 @@ describe('kernelStartFailureTitle', () => {
   it('is one phrase per runtime', () => {
     expect(kernelStartFailureTitle(true)).toBe("Python didn't start");
     expect(kernelStartFailureTitle(false)).toBe("Kernel didn't start");
+  });
+});
+
+describe('shared kernel vocabulary (research-r-02)', () => {
+  it('never says kernel on the web build', () => {
+    const web = [
+      kernelEngineName(true),
+      kernelStartingMessage({ isWeb: true }),
+      kernelNotConnectedMessage({ isWeb: true }),
+      kernelWaitingLabel(true),
+    ];
+    web.forEach((text) => expect(text).not.toMatch(/kernel/i));
+  });
+
+  it('desktop names the kernel and tells the person where to look', () => {
+    expect(kernelStartingMessage({ isWeb: false })).toBe('The kernel is still starting. Try again when the status bar says ready.');
+    expect(kernelStartingMessage({ isWeb: false, again: 'Run again' })).toMatch(/^The kernel is still starting\. Run again/);
+    expect(kernelNotConnectedMessage({ isWeb: false })).toBe("The kernel isn't connected. Check the status bar, then try again.");
+    expect(kernelWaitingLabel(false)).toBe('Waiting for the kernel…');
   });
 });

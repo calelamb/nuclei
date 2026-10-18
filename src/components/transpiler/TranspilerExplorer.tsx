@@ -1,6 +1,7 @@
 import { type CSSProperties } from 'react';
-import { Shuffle, Loader2, HelpCircle } from 'lucide-react';
-import { EmptyState, Tooltip } from '../ui';
+import { Shuffle, Loader2, HelpCircle, AlertTriangle } from 'lucide-react';
+import { Button, EmptyState, Tooltip } from '../ui';
+import { retryKernel } from '../../lib/kernelControl';
 import { DesktopOnlyState } from '../hardware/DesktopOnlyState';
 import { isWebBuild } from '../../platform/buildTarget';
 import { useThemeStore, type ThemeColors } from '../../stores/themeStore';
@@ -66,7 +67,7 @@ export function TranspilerExplorer() {
             body="Running the preset pass manager and capturing each pass."
           />
         ) : error ? (
-          <div style={errorBox(colors)}>{error}</div>
+          <TranspileError message={error} />
         ) : !result ? (
           <Centered
             title="Choose a target and Transpile"
@@ -251,11 +252,25 @@ function iconBtn(colors: ThemeColors): CSSProperties {
   };
 }
 
-function errorBox(colors: ThemeColors): CSSProperties {
-  return {
-    border: `1px solid ${colors.error}`, borderRadius: 6, padding: '10px 12px',
-    fontSize: 13, color: colors.error, lineHeight: 1.45,
-  };
+/** A failed transpile: the message in body colour, with Retry when the engine itself is down. */
+function TranspileError({ message }: { message: string }) {
+  const colors = useThemeStore((s) => s.colors);
+  const engineDown = useEditorStore((s) => !s.kernelReady);
+  return (
+    <div
+      role="alert"
+      style={{
+        display: 'flex', alignItems: 'flex-start', gap: 10, padding: '10px 12px',
+        background: colors.bgElevated, border: `1px solid ${colors.border}`,
+        borderLeft: `3px solid ${colors.error}`, borderRadius: 6,
+        fontSize: 13, color: colors.text, lineHeight: 1.45,
+      }}
+    >
+      <AlertTriangle size={14} color={colors.error} style={{ marginTop: 2, flexShrink: 0 }} />
+      <span style={{ flex: 1, minWidth: 0 }}>{message}</span>
+      {engineDown && <Button size="sm" variant="secondary" onClick={retryKernel}>Retry</Button>}
+    </div>
+  );
 }
 
 function sectionHead(colors: ThemeColors): CSSProperties {
