@@ -1,0 +1,33 @@
+schema: 1
+type: discovery
+name: w-state-synthesis
+description: Find a W-state preparation with fewer two-qubit gates.
+program: discovery/w_state.py
+entry: build
+evaluator:
+  kind: state_synthesis
+  config:
+    target: { kind: w, n_qubits: 5 }
+    fidelity_threshold: 0.999
+    cost: two_qubit_gates
+search:
+  islands: 3
+  generations: 20
+  candidates_per_generation: 6
+  archive: { descriptors: [two_qubit_gates, depth], bins: [8, 8] }
+  migration_interval: 5
+  exploration: 0.15
+  early_stop_patience: 10
+mutator:
+  kind: hybrid
+  llm_share: 0.75
+  model: sonnet
+  inspirations: 2
+budget:
+  max_evaluations: 150
+  max_llm_calls: 120
+  max_wall_minutes: 60
+  max_concurrent_evaluations: 3
+confirm: { seeds: 3 }
+seed: 7
+notes: The seed spends 3(n-1) two-qubit gates. Cheaper W-state constructions exist; can the engine find one?
