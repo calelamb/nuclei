@@ -104,5 +104,5 @@ export function vizRailTab({ vizHasContent, vizFits, diracOpen, sidebarOpen }: V
   if (!vizHasContent || vizFits) return null;
   if (diracOpen) return { action: 'foldDirac', ariaLabel: 'Show circuit and results (folds Dirac)' };
   if (sidebarOpen) return { action: 'closeSidebar', ariaLabel: 'Show circuit and results (closes sidebar)' };
-  return { action: 'closeSidebar', ariaLabel: 'Show circuit and results' };
+  return null;
 }

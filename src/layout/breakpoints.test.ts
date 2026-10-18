@@ -86,6 +86,10 @@ describe('vizRailTab', () => {
     expect(vizRailTab({ ...base, diracOpen: true, sidebarOpen: true })?.action).toBe('foldDirac');
   });
 
+  it('offers no tab when nothing is open that could make room', () => {
+    expect(vizRailTab(base)).toBeNull();
+  });
+
   it('closes the sidebar when only the sidebar is in the way (900px + Explorer)', () => {
     const tab = vizRailTab({ ...base, sidebarOpen: true });
     expect(tab?.action).toBe('closeSidebar');
