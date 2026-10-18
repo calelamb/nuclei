@@ -264,19 +264,22 @@ describe('<StatusBar> chrome (shell-r6-07, interaction-r-11)', () => {
     }
   });
 
-  it('dims Qubits and Depth while the diagram is the last good parse of broken code', () => {
+  it('quiets Qubits and Depth (tertiary token, never opacity) while the diagram is the last good parse of broken code', () => {
     const snapshot = { framework: 'qiskit', qubit_count: 2, classical_bit_count: 0, depth: 3, gates: [] } as never;
     useCircuitStore.setState({ snapshot: null, lastGood: { snapshot, key: '__buffer__' } as never, error: 'SyntaxError' });
     const { getByText } = renderStatusBar();
     const qubits = getByText(/^Qubits:/);
-    expect(qubits.style.opacity).toBe('0.6');
-    expect(getByText(/^Depth:/).style.opacity).toBe('0.6');
+    expect(qubits.style.opacity).toBe('');
+    expect(qubits.style.color).toBe('var(--color-text-tertiary)');
+    expect(getByText(/^Depth:/).style.opacity).toBe('');
+    expect(getByText(/^Depth:/).style.color).toBe('var(--color-text-tertiary)');
   });
 
   it('keeps them at full strength for a live parse', () => {
     const snapshot = { framework: 'qiskit', qubit_count: 2, classical_bit_count: 0, depth: 3, gates: [] } as never;
     useCircuitStore.setState({ snapshot, error: null });
     const { getByText } = renderStatusBar();
-    expect(getByText('Qubits: 2').style.opacity).toBe('1');
+    expect(getByText('Qubits: 2').style.opacity).toBe('');
+    expect(getByText('Qubits: 2').style.color).not.toBe('var(--color-text-tertiary)');
   });
 });
