@@ -25,7 +25,7 @@ import {
   type RunStatus,
   type StopReason,
 } from '../../types/discovery';
-import { bestElite, createArchive, eliteFromEvaluation, axisFromDescriptor, insertElite } from './archive';
+import { allElites, bestElite, createArchive, uniqueByCandidate, eliteFromEvaluation, axisFromDescriptor, insertElite } from './archive';
 import { findRegion } from './diff';
 import { createAuditClient, type AuditClient } from './kernelAudit';
 import { createKernelEvaluator, isTransportFailure, type KernelEvaluator } from './kernelEval';
@@ -43,6 +43,9 @@ import {
 import { createLimiter, type DiscoveryDeps, type DiscoveryRunContext, type DiscoveryRunOptions, type RunContext, type RunControl, type RunnerEvent } from './runContext';
 import { createRng, deriveSeed, restoreRng, type Rng } from './rng';
 import { migrate } from './selection';
+
+/** Candidates confirmed at the end of a run before giving up on a confirmed champion. */
+const MAX_CONFIRM_ATTEMPTS = 3;
 
 export type { DiscoveryDeps, DiscoveryRunContext, DiscoveryRunOptions, RunnerEvent } from './runContext';
 
@@ -417,6 +420,41 @@ export function runDiscovery(
       return { id: pending.batch_id, results: outcome };
     }
 
+    /**
+     * Confirm the champion on fresh seeds. A rejection at the confirm stage (or a non-transient failure)
+     * means it is NOT confirmed: it is marked and dropped from champion status, and the next-best archive
+     * elite is confirmed instead, up to MAX_CONFIRM_ATTEMPTS candidates in all. If none is confirmed the run
+     * ends with no champion ("no confirmed champion") and no confirmed numbers.
+     */
+    async function confirmWithFallback(first: CandidateRecord): Promise<CandidateRecord | undefined> {
+      const queue = uniqueByCandidate(allElites((run as RunRecord).archive)).map((e) => e.candidateId).filter((id) => id !== first.id);
+      const reasons: string[] = [];
+      let current: CandidateRecord | undefined = first;
+      for (let attempt = 0; current && attempt < MAX_CONFIRM_ATTEMPTS; attempt += 1) {
+        if (!current.evaluation) { current = candidates.get(queue.shift() ?? ''); continue; }
+        const confirmation = await confirmChampion(ctx, current, spec.confirm.seeds, `run:${current.id}`);
+        if (control.stopped && confirmation.n_scored < spec.confirm.seeds && !confirmation.rejection) {
+          // Stop (or a lost kernel) cut the confirmation short: a partial one would misreport the number.
+          ctx.notice('Confirmation was stopped before it finished; the champion number is unconfirmed.');
+          return current;
+        }
+        if (!confirmation.rejection) {
+          setRun({ confirmation, champion_id: current.id });
+          return current;
+        }
+        const why = `champion rejected at confirmation: ${confirmation.rejection}`;
+        reasons.push(`${current.id}: ${confirmation.rejection}`);
+        ctx.notice(`${current.id} ${why}`);
+        ctx.saveCandidate({ ...current, confirm_rejection: confirmation.rejection });
+        current = candidates.get(queue.shift() ?? '');
+      }
+      setRun({
+        champion_id: null, confirmation: null,
+        message: `no confirmed champion: ${reasons.join('; ')}`,
+      });
+      return undefined;
+    }
+
     // ── Finish ────────────────────────────────────────────────────────
     async function finish(reason: StopReason, message: string | null = null): Promise<RunRecord> {
       const r = run as RunRecord;
@@ -426,16 +464,10 @@ export function runDiscovery(
       setRun({ status: failed ? 'failed' : userStop ? 'stopped' : 'completed', stop_reason: reason, message: noExploits ? NO_EXPLOIT_MESSAGE : message });
       if (noExploits) ctx.notice(NO_EXPLOIT_MESSAGE);
       if (userStop) k.cancelRun(runId);
-      const champion = r.champion_id ? candidates.get(r.champion_id) : undefined;
+      let champion = r.champion_id ? candidates.get(r.champion_id) : undefined;
       // Red Queen champions are chosen by adversarial fitness; confirming their evaluator score on fresh seeds says nothing about robustness.
       if (champion && !userStop && !failed && !ctx.rq && spec.confirm.seeds > 0 && champion.evaluation) {
-        const confirmation = await confirmChampion(ctx, champion, spec.confirm.seeds, 'run');
-        if (control.stopped && confirmation.n_scored < spec.confirm.seeds) {
-          // Stop (or a lost kernel) cut the confirmation short: a partial one would misreport the number.
-          ctx.notice('Confirmation was stopped before it finished; the champion number is unconfirmed.');
-        } else {
-          setRun({ confirmation });
-        }
+        champion = await confirmWithFallback(champion);
       }
       if (champion && !userStop && !failed) persister.writeChampion(champion.program);
       setRun({ finished_at: deps.clock.now().toISOString() });

@@ -83,6 +83,21 @@ export function meanCi95(values: readonly number[]): { mean: number; ci95: [numb
   return { mean, ci95: [mean - half, mean + half] };
 }
 
+/** Failure codes that say nothing about the champion (transport, queueing, timeouts). */
+const TRANSIENT_FAILURES = ['cancelled', 'session_closed', 'send_failed', 'eval_timeout', 'discovery_busy'];
+
+/**
+ * Why a set of confirm-stage evaluations does not confirm the champion, or null when it does:
+ * any rejection (for example the exact fault-distance check), or a failure that is not transient.
+ */
+export function confirmationRejection(evaluations: readonly DiscoveryEvaluation[]): string | null {
+  for (const e of evaluations) {
+    if (e.status === 'rejected') return `${e.rejection?.guardrail ? `${e.rejection.guardrail}: ` : ''}${e.rejection?.message ?? 'rejected at the confirm stage'}`;
+    if (e.status === 'failed' && !TRANSIENT_FAILURES.includes(e.failure?.code ?? '')) return e.failure?.message ?? 'failed at the confirm stage';
+  }
+  return null;
+}
+
 export function summarizeConfirmation(input: {
   championId: string;
   championFitness: number;
@@ -90,6 +105,14 @@ export function summarizeConfirmation(input: {
   evaluations: readonly DiscoveryEvaluation[];
   now: string;
 }): RunConfirmation {
+  const rejection = confirmationRejection(input.evaluations);
+  if (rejection) {
+    // Never present numbers computed next to a rejected confirmation.
+    return {
+      champion_id: input.championId, seeds: [...input.seeds], n_scored: 0, fitness_mean: null, fitness_ci95: null,
+      fitness_drop: null, objectives: [], evaluations: [...input.evaluations], created_at: input.now, rejection,
+    };
+  }
   const scored = input.evaluations.filter((e) => e.status === 'scored' && e.fitness !== null);
   const objectives: ConfirmedObjective[] = [];
   const first = scored[0];

@@ -32,7 +32,7 @@ const qecScorer: Scorer = (program, stage) => {
   return {
     fitness,
     objectives: { err: { value: 0, ci95: ci, direction: 'minimize', label: 'Error' }, cost: { value: 5, direction: 'minimize', label: 'Cost' } },
-    descriptors: { d1: 2, d2: Math.max(0, value) },
+    descriptors: { d1: 2, d2: Math.max(0, value) * 30 },
     program_key: `key:${value}`,
   };
 };
@@ -134,5 +134,41 @@ describe('cascade helpers', () => {
     expect(promotionThreshold('island_best', refs)).toBe(5);
     expect(promotionThreshold('always', refs)).toBeNull();
     expect(promotionThreshold('island_median', [])).toBeNull();
+  });
+});
+
+describe('confirmation rejection (qec_memory fault-distance check)', () => {
+  const rejectedAt = (values: number[]): Scorer => (program, stage, seed, id) => {
+    const base = qecScorer(program, stage, seed, id);
+    if (stage === 'confirm' && values.includes(improveValue(program))) {
+      return { ...base, status: 'rejected', fitness: null, rejection: { guardrail: 'fault_distance', message: 'exact fault distance 3 is below the claimed 5' } };
+    }
+    return base;
+  };
+  const mutate = () => { let n = 0; return (p: string) => [{ program: p.replace(/IMPROVE = -?\d+/, `IMPROVE = ${(n += 1)}`), operators: ['x'], description: '' }]; };
+  const spec = () => makeSpec({ evaluation: { cascade: false }, search: { generations: 1, candidates_per_generation: 3, islands: 1 }, confirm: { seeds: 2 } });
+
+  it('does not confirm a champion rejected at confirm, marks it, and falls back to the next-best elite', async () => {
+    const top = 3; // the best candidate (highest IMPROVE) is the one rejected
+    const { deps, fs } = setup(rejectedAt([top]), mutate());
+    const run = await runDiscovery(spec(), ctx, deps).done;
+    const files = candidatesOf(fs, run);
+    const rejected = files.find((c) => improveValue(c.program) === top)!;
+    expect(rejected.confirm_rejection).toMatch(/fault distance/);
+    expect(run.champion_id).not.toBe(rejected.id);
+    expect(run.champion_id).not.toBeNull();
+    expect(run.confirmation?.champion_id).toBe(run.champion_id);
+    expect(run.confirmation?.rejection).toBeUndefined();
+    expect(run.confirmation?.n_scored).toBe(2);
+    expect(run.notices.join()).toMatch(/champion rejected at confirmation: fault_distance/);
+  });
+
+  it('ends with no confirmed champion and no confirmed numbers when every elite is rejected', async () => {
+    const { deps, fs } = setup(rejectedAt([0, 1, 2, 3]), mutate());
+    const run = await runDiscovery(spec(), ctx, deps).done;
+    expect(run.champion_id).toBeNull();
+    expect(run.confirmation).toBeNull();
+    expect(run.message).toMatch(/^no confirmed champion: .*fault distance/);
+    expect(fs.files.has(`proj/experiments/toy/discovery/${run.run_id}/champion.py`)).toBe(false);
   });
 });

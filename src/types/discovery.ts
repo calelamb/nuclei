@@ -463,6 +463,8 @@ export interface CandidateRecord {
   in_archive: boolean;
   region_warning: boolean;
   reevaluations: DiscoveryEvaluation[];
+  /** Why confirmation rejected this candidate as champion; null/absent when it was not rejected. */
+  confirm_rejection?: string | null;
   /** Independent audit of this candidate (Red Queen or a manual audit). */
   audit?: DiscoveryAudit | null;
   /** True from the moment an audit is sent until its result lands; resume re-sends it. */
@@ -516,6 +518,11 @@ export interface RunConfirmation {
   objectives: ConfirmedObjective[];
   evaluations: DiscoveryEvaluation[];
   created_at: string;
+  /**
+   * Set when a confirm-stage evaluation was rejected (or failed for good): the champion is NOT
+   * confirmed, and no confirmed objective or mean is reported.
+   */
+  rejection?: string | null;
 }
 
 export interface PendingBatchItem {
