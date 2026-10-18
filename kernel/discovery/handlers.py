@@ -25,6 +25,9 @@ from kernel.discovery.mutate import MutationError, mutate
 MAX_PROGRAM_BYTES = 400_000
 MAX_MUTATIONS = 64
 MAX_ID_LENGTH = 200
+# run_id / candidate_id become file names and cache keys on the frontend (RT-L2); `~` is
+# allowed because confirmation candidates look like `c-0007~confirm0`.
+_ID_RE = re.compile(r"^[A-Za-z0-9._~-]{1,200}$")
 _IDENT = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 
 
@@ -39,17 +42,21 @@ def _error(code: str, message: str, msg: dict[str, Any] | None = None) -> dict[s
     payload: dict[str, Any] = {"type": "error", "phase": "discovery", "code": code, "message": message}
     for key in ("run_id", "candidate_id"):
         value = (msg or {}).get(key)
-        if isinstance(value, str) and value:
-            payload[key] = value[:MAX_ID_LENGTH]
+        if isinstance(value, str) and _ID_RE.match(value):
+            payload[key] = value
     return payload
 
 
 def _text(msg: dict[str, Any], key: str, *, required: bool = True) -> str | None:
+    """A run/candidate id: ``[A-Za-z0-9._~-]{1,200}``; anything else is ``invalid_request``."""
     value = msg.get(key)
     if value is None and not required:
         return None
-    if not isinstance(value, str) or not value or len(value) > MAX_ID_LENGTH:
-        raise RequestError(ERR_INVALID_REQUEST, f"'{key}' must be a non-empty string (max {MAX_ID_LENGTH} chars).")
+    if not isinstance(value, str) or not _ID_RE.match(value):
+        raise RequestError(
+            ERR_INVALID_REQUEST,
+            f"'{key}' must match [A-Za-z0-9._~-] and be 1-{MAX_ID_LENGTH} characters long.",
+        )
     return value
 
 
