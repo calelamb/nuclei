@@ -8,7 +8,7 @@ import './dirac.css';
 const COPIED_RESET_MS = 2000;
 
 /** A failed Dirac turn: plain-language cause and next step, raw detail behind "Copy details". */
-export function DiracErrorCard({ error }: { error: DiracErrorInfo }) {
+export function DiracErrorCard({ error, onUpdateKey }: { error: DiracErrorInfo; /** Lets a host surface (⌘K, Compose) close itself once the key form is requested. */ onUpdateKey?: () => void }) {
   const [copied, setCopied] = useState(false);
   const requestKeyUpdate = useDiracPanelStore((s) => s.requestKeyUpdate);
 
@@ -28,7 +28,13 @@ export function DiracErrorCard({ error }: { error: DiracErrorInfo }) {
       <p className="dirac-error__message">{error.message}</p>
       <div className="dirac-error__actions">
         {error.action === 'update-key' && (
-          <Button size="sm" variant="primary" icon={<KeyRound size={14} />} onClick={requestKeyUpdate}>
+          <Button
+            size="sm"
+            variant="primary"
+            className="dirac-btn-dirac"
+            icon={<KeyRound size={14} />}
+            onClick={() => { onUpdateKey?.(); requestKeyUpdate(); }}
+          >
             Update key
           </Button>
         )}

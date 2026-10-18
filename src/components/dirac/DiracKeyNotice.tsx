@@ -1,17 +1,21 @@
 import { useThemeStore } from '../../stores/themeStore';
-import { Button } from '../ui';
+import { Button, IconButton } from '../ui';
+import { X } from 'lucide-react';
+import './dirac.css';
 import { DIRAC_KEY_NOTICE_BODY, DIRAC_KEY_NOTICE_TITLE, openDiracKeyEntry } from './diracKeyAccess';
 
 interface Props {
   /** Called after the key form is requested, so the host surface can close itself. */
   onAddKey: () => void;
+  /** When set, the notice shows a Dismiss control (a surface that is not a dialog must be closable by pointer). */
+  onDismiss?: () => void;
 }
 
 /**
  * The one "no key" state for the editor's AI surfaces (⌘K inline edit and ⌘I Compose):
  * it explains what is missing and offers the action, instead of overwriting the prompt.
  */
-export function DiracKeyNotice({ onAddKey }: Props) {
+export function DiracKeyNotice({ onAddKey, onDismiss }: Props) {
   const colors = useThemeStore((s) => s.colors);
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
@@ -24,10 +28,16 @@ export function DiracKeyNotice({ onAddKey }: Props) {
       <Button
         size="sm"
         variant="primary"
+        className="dirac-btn-dirac"
         onClick={() => { onAddKey(); openDiracKeyEntry(); }}
       >
         Add API key
       </Button>
+      {onDismiss && (
+        <IconButton size="sm" aria-label="Dismiss" tooltip={{ label: 'Dismiss', placement: 'below' }} onClick={onDismiss}>
+          <X size={14} aria-hidden="true" />
+        </IconButton>
+      )}
     </div>
   );
 }
