@@ -3,6 +3,10 @@ import { useCallback, useEffect, useRef, useState, type CSSProperties, type Reac
 
 const FADE_PX = 28;
 
+function hasMoreBeyond(el: HTMLElement): boolean {
+  return el.dataset.axis === 'x' ? hasMoreRight(el) : hasMoreBelow(el);
+}
+
 interface ScrollFadeProps {
   children: ReactNode;
   style?: CSSProperties;
@@ -17,9 +21,8 @@ export function ScrollFade({ children, style, axis = 'y', label }: ScrollFadePro
   const ref = useRef<HTMLDivElement>(null);
   const [more, setMore] = useState(false);
   const measure = useCallback(() => {
-    const el = ref.current;
-    if (el) setMore(axis === 'x' ? hasMoreRight(el) : hasMoreBelow(el));
-  }, [axis]);
+    if (ref.current) setMore(hasMoreBeyond(ref.current));
+  }, []);
   useEffect(() => {
     measure();
     const el = ref.current;
@@ -34,7 +37,7 @@ export function ScrollFade({ children, style, axis = 'y', label }: ScrollFadePro
   const region = label ? { role: 'region', 'aria-label': label, tabIndex: 0 } : {};
   return (
     <div
-      ref={ref} onScroll={measure} data-more-below={axis === 'y' ? more : undefined} data-more-right={axis === 'x' ? more : undefined}
+      ref={ref} onScroll={measure} data-axis={axis} data-more-below={axis === 'y' ? more : undefined} data-more-right={axis === 'x' ? more : undefined}
       {...region}
       style={{ ...style, ...overflow, ...(more ? { WebkitMaskImage: mask, maskImage: mask } : {}) }}
     >
